@@ -1,0 +1,159 @@
+# GoodQ .gitignore
+# Prevents sensitive data and large files from being committed
+
+# ===== SECRETS & CREDENTIALS =====
+.env
+.env.local
+.env.*.local
+*.key
+*.pem
+secrets.yaml
+*token*
+*secret*
+
+# ===== DATA & ARTIFACTS =====
+# Don't commit the actual data - too large!
+logs/
+*/logs/
+*.log
+*.jsonl
+data/
+*.db
+*.sqlite
+*.sqlite3
+*.faiss
+*.index
+
+# ===== MODEL CACHE =====
+# Models are huge (367GB) - download separately
+models/
+*.pt
+*.pth
+*.bin
+*.onnx
+*.h5
+*.pkl
+*.pickle
+
+# ===== PYTHON =====
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# ===== JUPYTER =====
+.ipynb_checkpoints
+*.ipynb
+
+# ===== VIRTUAL ENVIRONMENTS =====
+venv/
+ENV/
+env/
+.venv
+
+# ===== IDE & EDITORS =====
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# ===== ZENML =====
+.zenml/
+zenml_store/
+.zen/
+
+# ===== TEMPORARY FILES =====
+*.tmp
+*.temp
+*.bak
+*.backup
+~*
+
+# ===== WINDOWS =====
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# ===== VIDEO/AUDIO/IMAGE FILES =====
+# Don't commit media - too large
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.wmv
+*.flv
+*.mp3
+*.wav
+*.flac
+*.aac
+*.ogg
+*.m4a
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.bmp
+*.tiff
+*.webp
+
+# Exception: Keep documentation images
+!docs/**/*.png
+!docs/**/*.jpg
+!docs/**/*.svg
+
+# ===== WORKSPACE DIRECTORIES =====
+import_inbox/
+output/
+exports/
+run_exports/
+workspace/
+tmp/
+temp/
+
+# ===== TESTING =====
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# ===== DOCUMENTATION BUILD =====
+docs/_build/
+site/
+
+# ===== PACKAGE MANAGER =====
+node_modules/
+package-lock.json
+yarn.lock
+
+# ===== KEEP THESE =====
+# Explicitly include important files
+!README.md
+!QUICK_REFERENCE.md
+!*.bat
+!envs/locks/*.txt
+!docs/**/*.md
+!scripts/**/*.ps1
+!configs/**/*.yaml
+!LICENSE

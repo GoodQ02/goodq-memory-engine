@@ -1,0 +1,118 @@
+# Template config (no secrets). Copy and override locally if needed.
+
+user:
+  name: "Joes Domingo, Agent Domingo, Joe, Agent Joes, Double 007"
+  location: "Chicago, IL" 
+  values: "Accuracy, creativity, empathy, efficiency"
+  personality_traits: "Witty, friendly, professional, concise"
+
+model:
+  goodq_values: "clarity, precision, humor, loyalty"
+
+llm:
+  # Default to Ollama's OpenAI-compatible route; code auto-falls back to native /api endpoints.
+  api_url: "http://172.27.16.1:1234/v1/chat/completions"
+  model_id: "meta-llama-3.1-8b-instruct"
+
+tts:
+  engine: "elevenlabs"  # or "elevenlabs"
+  voice_id: "goT3UYdM9bhm0n2lmKQx"     # used by ElevenLabs; provide via env as ELEVENLABS_VOICE_ID
+  piper_exe: "L:\\Tools\\piper\\piper.exe"
+  voice_path: "L:\\Tools\\piper\\en_US-libritts-high.onnx"
+  out_dir: "L:\\Tools\\piper"
+
+ha:
+  url: "http://192.168.0.154:8123"
+
+tools:
+  root: "L:\\Tools"
+  piper_exe: "L:\\Tools\\piper\\piper.exe"
+  piper_voice: "L:\\Tools\\piper\\en_US-libritts-high.onnx"
+  tesseract_exe: "L:\\Tools\\tesseract\\tesseract.exe"
+  ffmpeg_exe: "L:\\Tools\\ffmpeg\\bin\\ffmpeg.exe"
+  poppler_bin: "L:\\Tools\\poppler\\bin"
+  pdftotext_exe: "L:\\Tools\\poppler\\bin\\pdftotext.exe"
+  whisper_cli: "L:\\Tools\\whisper\\whisper-cli.exe"
+  whisper_ggml_model: "L:\\Tools\\whisper\\ggml-large-v3.bin"
+
+models:
+  yolo_model_path: "L:\\models\\yolo\\yolov8n.pt"
+  lexicons:
+    # Path to the NRC Emotion Lexicon folder
+    nrc_emotion_dir: "L:\\models\\lexicons\\NRC-Emotion-Lexicon"
+
+analysis:
+  # If true, enable lexicon-based analysis. HF models remain primary; lexicon is used as fallback or when offline.
+  use_nrc_lexicon: false
+
+video:
+  scene_detect:
+    threshold: 32.0
+    min_scene_len_sec: 3.0
+    max_scenes: 500
+    entity_refine: true
+    entity_sample_rate: 1.0
+    entity_min_duration: 2.5
+    entity_max_samples: 120
+  scene_threshold: 0.3
+  # Optional per-source overrides for scene detection threshold.
+  # If provided, these take precedence over the global scene_threshold for matching videos.
+  # Matching is performed in this order:
+  #  1) by_extension: exact file extension match (e.g., ".mp4", ".mkv").
+  #  2) by_path_substring: if the full video path contains the given substring.
+  # The first match found is used.
+  scene_threshold_overrides:
+    by_extension: {}
+    #   ".mp4": 0.25
+    #   ".mkv": 0.35
+    by_path_substring: {}
+    #   "GoPro": 0.4
+    #   "ScreenRecord": 0.2
+
+tagger:
+  ner_model: "dslim/bert-base-NER"
+
+audio:
+  diarization:
+    # Which environment variable to read for PyAnnote auth
+    token_env: "PYANNOTE_TOKEN"
+    # PyAnnote pipeline id to use for speaker segmentation
+    model: "pyannote/speaker-diarization@2.1"
+  events:
+    enabled: true
+    min_confidence: 0.6
+    # Regex patterns for music/events detection (Python regex syntax)
+    patterns:
+      - label: "birthday_song"
+        regex: "\\bhappy\\s+birthday\\b"
+      - label: "christmas"
+        regex: "\\b(christmas|jingle\\s+bells|silent\\s+night|merry\\s+christmas)\\b"
+      - label: "halloween"
+        regex: "\\b(halloween|trick\\s+or\\s+treat)\\b"
+      - label: "new_year"
+        regex: "\\b(new\\s+year|countdown)\\b"
+      - label: "wedding"
+        regex: "\\b(wedding|here\\s+comes\\s+the\\s+bride)\\b"
+      - label: "applause"
+        regex: "\\b\\[?applause\\]?\\b"
+      - label: "laughter"
+        regex: "\\b\\[?laughter\\]?\\b"
+      - label: "singing"
+        regex: "\\bsinging\\b"
+  time_hints:
+    enabled: true
+    normalize_date_formats: true
+    # Extendable list of relative phrases to search
+    relative_phrases:
+      - "today"
+      - "yesterday"
+      - "tomorrow"
+      - "last night"
+      - "last week"
+      - "this morning"
+      - "this evening"
+      - "next week"
+  transcribe:
+    # faster-whisper model id (e.g., large-v3, medium, small, tiny)
+    model: "medium"
+    chunk_seconds: 10

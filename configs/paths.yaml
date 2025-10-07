@@ -1,0 +1,20 @@
+# Centralized path config. Adjust to your system.
+
+log_dir: "L:/GoodQ_Data/logs"
+output_directory: "L:/GoodQ_Data/data/output_inbox"
+db_dir: "L:/GoodQ_Data/data/memory_db"
+system_csv: "L:/GoodQ_Data/logs/GOOD_ENGINE_SYS.csv"
+input_inbox: "L:/zenml_project/smoke_inbox"
+
+# Memory indices and databases (consolidated)
+db_path: "L:/GoodQ_Data/data/memory_db/memory.db"
+faiss_index_path: "L:/GoodQ_Data/data/memory_db/faiss_text.index"
+faiss_audio_path: "L:/GoodQ_Data/data/memory_db/faiss_audio.index"
+faiss_dino_path: "L:/GoodQ_Data/data/memory_db/faiss_dino.index"
+faiss_clip_path: "L:/GoodQ_Data/data/memory_db/faiss_clip.index"
+clap_id_map_db: "L:/GoodQ_Data/data/memory_db/clap_id_map.sqlite"
+known_faces_db_path: "L:/GoodQ_Data/data/memory_db/known_faces.json"
+clip_id_map_db: "L:/GoodQ_Data/data/memory_db/clip_id_map.sqlite"
+dino_id_map_db: "L:/GoodQ_Data/data/memory_db/dino_id_map.sqlite"
+chroma_dir: "L:/GoodQ_Data/data/memory_db/chroma"
+tesseract_path: "L:/Tools/tesseract"

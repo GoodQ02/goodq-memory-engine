@@ -1,0 +1,12 @@
+torch==2.3.1
+transformers==4.43.3
+accelerate==0.33.0
+Pillow==10.2.0
+sentencepiece==0.2.0
+tokenizers==0.19.1
+timm==0.9.5
+numpy==1.26.4
+faiss-cpu==1.7.4; sys_platform == "win32"
+faiss-gpu==1.7.4; sys_platform != "win32"
+reverse_geocoder==1.5.1
+timezonefinder==6.2.0

@@ -1,0 +1,25 @@
+"""ZenML scaffold for GoodQ chat pipeline."""
+from typing import Any, Dict
+
+
+def build_goodq_chat_pipeline():
+    from zenml_project.steps.common.config_loader import load_configs
+    from zenml_project.steps.llm_chat.step import llm_chat
+    from zenml_project.steps.tts.step import tts_speak
+    from zenml_project.steps.system_metrics.step import system_metrics
+    from zenml_project.steps.home_assistant_status.step import home_assistant_status
+
+    def run(config_overrides: Dict[str, Any]) -> Dict[str, Any]:
+        cfg = load_configs(config_overrides)
+        # enrich context with system and home summaries
+        sysm = system_metrics(cfg)
+        ham = home_assistant_status(cfg)
+        cfg["context"] = {
+            "system_summary": sysm.get("summary", ""),
+            "home_summary": ham.get("summary", ""),
+        }
+        chat = llm_chat(cfg)
+        tts = tts_speak(chat, cfg)
+        return {"chat": chat, "tts": tts}
+
+    return run

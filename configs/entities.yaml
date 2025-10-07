@@ -1,0 +1,7 @@
+list:
+  - binary_sensor.archer_axe95_wan_status
+  - sensor.archer_axe95_download_speed
+  - device_tracker.the_goodcar_location
+  - sensor.the_goodcar_speed
+  - fan.desktop_fan
+

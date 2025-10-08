@@ -1,0 +1,196 @@
+╔═══════════════════════════════════════════════════════════════════════════╗
+║                     GOODQ DATA FLOW ARCHITECTURE                          ║
+╚═══════════════════════════════════════════════════════════════════════════╝
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│                          1. USER INPUT                                   │
+└─────────────────────────────────────────────────────────────────────────┘
+
+    User drops video/audio/image file
+              ↓
+    📥 L:/GoodQ_4_All/import_inbox/
+              ↓
+    🔍 Watchdog detects new file
+              ↓
+              
+┌─────────────────────────────────────────────────────────────────────────┐
+│                       2. INITIAL PROCESSING                              │
+└─────────────────────────────────────────────────────────────────────────┘
+
+    File moved to processing workspace
+              ↓
+    📂 L:/_DATA/GoodQ_Data/processing/[video_name]/
+       ├── frames/         (extracted keyframes)
+       ├── audio/          (audio segments)
+       └── metadata/       (processing config)
+              ↓
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│                      3. MULTIMODAL PIPELINE                              │
+└─────────────────────────────────────────────────────────────────────────┘
+
+    ┌──────────────────┐
+    │  VIDEO INGEST    │
+    │  • Scene detect  │
+    │  • Frame extract │
+    │  • Audio extract │
+    └────────┬─────────┘
+             │
+    ┌────────┴─────────────────────────────────────────┐
+    │                                                   │
+    ▼                                                   ▼
+┌─────────────────┐                           ┌─────────────────┐
+│  VIDEO/IMAGE    │                           │     AUDIO       │
+│  • OCR          │                           │  • Transcribe   │
+│  • Caption      │                           │  • Diarize      │
+│  • Detect obj   │                           │  • Speaker ID   │
+│  • CLIP embed   │                           │  • Music detect │
+│  • DINOv2 embed │                           │  • Emotion      │
+└─────────┬───────┘                           └────────┬────────┘
+          │                                            │
+          └────────────────┬───────────────────────────┘
+                           │
+                           ▼
+                 ┌──────────────────┐
+                 │   TEXT ANALYSIS  │
+                 │  • Sentiment     │
+                 │  • Emotion       │
+                 │  • Tags          │
+                 │  • Entities      │
+                 │  • Text embed    │
+                 └────────┬─────────┘
+                          │
+                          
+┌─────────────────────────────────────────────────────────────────────────┐
+│                        4. DATA STORAGE                                   │
+└─────────────────────────────────────────────────────────────────────────┘
+
+                          │
+          ┌───────────────┼───────────────┐
+          │               │               │
+          ▼               ▼               ▼
+    ┌──────────┐   ┌───────────┐   ┌──────────────┐
+    │ METADATA │   │  VECTORS  │   │    GRAPH     │
+    │          │   │           │   │              │
+    │ SQLite   │   │   FAISS   │   │  Neo4j-like  │
+    │ memory.db│   │ Indices   │   │ knowledge    │
+    │          │   │           │   │ graph        │
+    │ • scenes │   │ • text    │   │ • entities   │
+    │ • frames │   │ • audio   │   │ • relations  │
+    │ • audio  │   │ • dino    │   │ • temporal   │
+    │ • tags   │   │ • clip    │   │ • spatial    │
+    └────┬─────┘   └─────┬─────┘   └──────┬───────┘
+         │               │                │
+         └───────────────┴────────────────┘
+                         │
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│                     5. COMPLETION & ARCHIVAL                             │
+└─────────────────────────────────────────────────────────────────────────┘
+
+                         │
+                         ▼
+        Processing folder moved to completed/
+                         │
+                         ▼
+    📁 L:/_DATA/GoodQ_Data/completed/[video_name]/
+       └── [preserved artifacts]
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│                        6. QUERY & RETRIEVAL                              │
+└─────────────────────────────────────────────────────────────────────────┘
+
+    User Query (text/image/audio)
+              ↓
+    ┌──────────────────┐
+    │   QUERY ENGINE   │
+    │  • Embed query   │
+    │  • Vector search │
+    │  • Graph traverse│
+    │  • Rank results  │
+    └────────┬─────────┘
+             │
+             ▼
+    ┌──────────────────┐
+    │  RETRIEVAL API   │
+    │  • FastAPI       │
+    │  • REST endpoints│
+    │  • WebSocket     │
+    └────────┬─────────┘
+             │
+             ▼
+    ┌──────────────────┐
+    │   UI/CLIENT      │
+    │  • Results       │
+    │  • Thumbnails    │
+    │  • Timeline      │
+    │  • Knowledge map │
+    └──────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│                         7. EXPORT OPTIONS                                │
+└─────────────────────────────────────────────────────────────────────────┘
+
+    📦 L:/_DATA/GoodQ_Data/exports/
+       ├── video_summary.json
+       ├── knowledge_graph.cypher
+       ├── embeddings_archive.npz
+       ├── scene_gallery.html
+       └── memory_export.db
+
+
+═════════════════════════════════════════════════════════════════════════
+                         LOGGING & MONITORING
+═════════════════════════════════════════════════════════════════════════
+
+    📊 L:/_DATA/GoodQ_Data/logs/
+       ├── step_runs.jsonl           → Real-time step execution
+       ├── watchdog.log              → File monitoring
+       ├── pipeline.log              → Pipeline execution
+       └── overnight_monitor.jsonl   → Long-running analysis
+
+═════════════════════════════════════════════════════════════════════════
+                         ENVIRONMENT ISOLATION
+═════════════════════════════════════════════════════════════════════════
+
+Each step runs in isolated conda environment:
+
+    goodq_zenml              → Main pipeline coordinator
+    goodq_audio_diarize      → Audio processing
+    goodq_text_embed         → Text embeddings
+    goodq_video_scene_detect → Video analysis
+    [other_envs]             → Specialized processing
+
+Isolation flags:
+    • PYTHONNOUSERSITE=1
+    • PIP_NO_CACHE_DIR=1
+    • --no-user --isolated --no-cache-dir
+
+═════════════════════════════════════════════════════════════════════════
+                            KEY LOCATIONS
+═════════════════════════════════════════════════════════════════════════
+
+📥 Input:     L:/GoodQ_4_All/import_inbox/
+🔧 Processing: L:/_DATA/GoodQ_Data/processing/
+✅ Completed:  L:/_DATA/GoodQ_Data/completed/
+💾 Databases:  L:/_DATA/GoodQ_Data/databases/
+🔍 Vectors:    L:/_DATA/GoodQ_Data/faiss_indices/
+📊 Logs:       L:/_DATA/GoodQ_Data/logs/
+📤 Exports:    L:/_DATA/GoodQ_Data/exports/
+
+═════════════════════════════════════════════════════════════════════════
+                        PATH CONFIGURATION
+═════════════════════════════════════════════════════════════════════════
+
+All paths defined in:  L:/GoodQ_4_All/configs/paths.py
+
+Import with:
+    from configs.paths import (
+        IMPORT_INBOX,
+        PROCESSING_DIR,
+        MEMORY_DB,
+        FAISS_DIR,
+        LOGS_DIR
+    )
+
+═════════════════════════════════════════════════════════════════════════

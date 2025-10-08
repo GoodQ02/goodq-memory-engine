@@ -15,6 +15,47 @@ def load_cfg(overrides: Dict[str, Any] | None = None) -> Dict[str, Any]:
     return load_configs(overrides or {})
 
 
+def _save_memory_context(step_name: str, item: Dict[str, Any] | None, results: Dict[str, Any], cfg: Dict[str, Any]) -> None:
+    """Save step results to memory database for context enrichment."""
+    if not item or not results or not isinstance(results, dict):
+        return
+    
+    try:
+        # Import here to avoid circular dependencies
+        from zenml_project.steps.common.memory_context_writer import save_step_context
+        from zenml_project.steps.common.memory import compute_file_hash
+        
+        # Extract scene context from item
+        video_hash = item.get('video_hash')
+        scene_id = item.get('scene_id')
+        scene = item.get('scene', {})
+        
+        # If no scene_id but we have source_path, derive from that
+        if not scene_id:
+            source_path = item.get('source_path')
+            if source_path:
+                # For frames/audio clips that belong to scenes
+                # Try to construct scene_id from filename pattern
+                basename = os.path.basename(source_path)
+                if '_scene_' in basename or 'scene_' in basename:
+                    # Extract scene identifier
+                    parts = basename.split('scene_')
+                    if len(parts) > 1:
+                        scene_num = parts[1].split('.')[0].split('_')[0]
+                        scene_id = f"scene_{scene_num}"
+        
+        # If we have video context, save enriched metadata
+        if video_hash and scene_id:
+            save_step_context(cfg, video_hash, scene, scene_id, step_name, results)
+        
+    except Exception as e:
+        # Don't fail the step if context saving fails
+        # Just log the error
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning(f"Failed to save memory context for {step_name}: {e}")
+
+
 def run_step(step_name: str, item: Dict[str, Any] | None, cfg: Dict[str, Any]) -> Dict[str, Any]:
     # Map step names to callables and call signatures
     if step_name == "video_scene_detect":
@@ -161,6 +202,9 @@ def main() -> None:
                 extra = {"result_meta": {k: res.get(k) for k in meta_keys}}
         duration_ms = (time.perf_counter_ns() - start_ns) / 1_000_000.0
         log_step_run(cfg, args.step, item, duration_ms, "ok", extra=extra)
+        
+        # CRITICAL: Save step results to memory database for context enrichment
+        _save_memory_context(args.step, item, res, cfg)
 
     out = json.dumps(res, ensure_ascii=False)
     if args.out_path:

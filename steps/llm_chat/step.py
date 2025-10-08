@@ -3,8 +3,8 @@ from typing import Any, Dict
 
 import os
 import requests
-from zenml_project.steps.common.retry import request_with_retry
-from zenml_project.steps.common.memory import _connect
+from steps.steps.common.retry import request_with_retry
+from steps.steps.common.memory import _connect
 
 
 def _goodq_persona_prompt(cfg: Dict[str, Any]) -> str:

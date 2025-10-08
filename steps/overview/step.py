@@ -6,7 +6,7 @@ import sqlite3
 import time
 import json
 
-from zenml_project.lib.memory_management.diagnostics import run_all_diagnostics
+from steps.lib.memory_management.diagnostics import run_all_diagnostics
 
 
 def _tally(tokens: List[Any]) -> Dict[str, int]:

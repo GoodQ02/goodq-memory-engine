@@ -55,8 +55,8 @@ for target in paths:
         p.mkdir(parents=True, exist_ok=True)
         with open(p / 'zenml_project_local.pth', 'w', encoding='utf-8') as fh:
             # Add the parent of the repo root to sys.path so that the
-            # package 'zenml_project' (which lives at $repoRoot) can be imported
-            # as a top-level module. E.g., if repoRoot is L:\\zenml_project,
+            # package 'GoodQ_4_All' (which lives at $repoRoot) can be imported
+            # as a top-level module. E.g., if repoRoot is L:\\GoodQ_4_All,
             # we must add L:\\ to sys.path.
             fh.write(str(root.parent))
         written = True

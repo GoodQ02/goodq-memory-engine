@@ -3,7 +3,7 @@
 Quick test of memory_writer - verify it works before applying everywhere
 """
 import sys
-sys.path.insert(0, 'L:/zenml_project')
+sys.path.insert(0, 'L:/GoodQ_4_All')
 
 from steps.common.memory_writer import MemoryWriter
 import json

@@ -12,9 +12,9 @@ echo  ╚═══════════════════════�
 echo.
 
 REM Change to zenml_project directory
-cd /d L:\zenml_project
+cd /d L:\GoodQ_4_All
 if errorlevel 1 (
-    echo [ERROR] Could not change to L:\zenml_project
+    echo [ERROR] Could not change to L:\GoodQ_4_All
     pause
     exit /b 1
 )
@@ -46,7 +46,7 @@ timeout /t 2 /nobreak >nul
 
 REM Launch API server in new window
 echo [LAUNCH] Starting API server on http://localhost:8000
-start "GoodQ API Server" pwsh -NoExit -Command "cd L:\zenml_project; pwsh scripts\start_api.ps1 -Port 8000"
+start "GoodQ API Server" pwsh -NoExit -Command "cd L:\GoodQ_4_All; pwsh scripts\start_api.ps1 -Port 8000"
 timeout /t 3 /nobreak >nul
 
 REM Wait a moment for API to initialize
@@ -55,7 +55,7 @@ timeout /t 3 /nobreak >nul
 
 REM Launch Command Center dashboard in new window
 echo [LAUNCH] Starting Command Center Dashboard
-start "GoodQ Command Center" pwsh -NoExit -Command "cd L:\zenml_project; pwsh scripts\command_center.ps1"
+start "GoodQ Command Center" pwsh -NoExit -Command "cd L:\GoodQ_4_All; pwsh scripts\command_center.ps1"
 timeout /t 2 /nobreak >nul
 
 REM Open browser to API docs (optional)

@@ -7,7 +7,7 @@ from __future__ import annotations
 from typing import Any, Dict, Optional
 import logging
 
-from zenml_project.steps.common.memory import (
+from steps.steps.common.memory import (
     register_scene_bundle,
     upsert_scene,
     update_fields,

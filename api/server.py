@@ -5,7 +5,7 @@ import pathlib
 
 
 def main() -> None:
-    # Ensure repo root is on sys.path so 'zenml_project' is importable
+    # Ensure repo root is on sys.path so 'GoodQ_4_All' is importable
     here = pathlib.Path(__file__).resolve()
     repo_root = here.parents[2]  # .../zenml_project/api/server.py -> repo root
     sys.path.insert(0, str(repo_root))
@@ -17,7 +17,7 @@ def main() -> None:
         port = 8000
 
     from uvicorn import run  # type: ignore
-    from zenml_project.api.main import app
+    from steps.api.main import app
     print(f"[api] Starting FastAPI on http://{host}:{port}")
     run(app, host=host, port=port, log_level="info")
 

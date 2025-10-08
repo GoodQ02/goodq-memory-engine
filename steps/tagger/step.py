@@ -4,7 +4,7 @@ from typing import Any, Dict, List
 _NER_PIPELINES: Dict[str, Any] = {}
 
 try:
-    from zenml_project.steps.common.tag_utils import dedupe_tokens
+    from steps.steps.common.tag_utils import dedupe_tokens
 except Exception:
     def dedupe_tokens(tokens):
         seen = set()

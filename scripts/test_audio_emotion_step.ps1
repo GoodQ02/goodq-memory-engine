@@ -1,5 +1,5 @@
 Param(
-  [string]$TestAudio = 'L:\zenml_project\smoke_inbox\test.wav'
+  [string]$TestAudio = 'L:\GoodQ_4_All\smoke_inbox\test.wav'
 )
 
 Set-StrictMode -Version Latest
@@ -33,7 +33,7 @@ try {
   $testScript = @"
 import sys, json
 sys.path.insert(0, 'L:/')
-from zenml_project.steps.audio_emotion.step import audio_emotion
+from steps.steps.audio_emotion.step import audio_emotion
 
 with open('$($tempItem.Replace('\','\\'))', 'r', encoding='utf-8') as f:
     item = json.load(f)

@@ -2,7 +2,7 @@
 # Quick status check for active ingestion and processing
 
 param(
-    [string]$LogFolder = "L:\zenml_project\logs"
+    [string]$LogFolder = "L:\GoodQ_4_All\logs"
 )
 
 $ErrorActionPreference = "SilentlyContinue"
@@ -98,7 +98,7 @@ if (Test-Path $dbPath) {
 
 # 4. Import Inbox
 Write-Host "`n=== Import Inbox ===" -ForegroundColor Yellow
-$inboxPath = "L:\zenml_project\import_inbox"
+$inboxPath = "L:\GoodQ_4_All\import_inbox"
 if (Test-Path $inboxPath) {
     $videos = Get-ChildItem $inboxPath -Include *.mp4,*.avi,*.mov,*.mkv -File
     if ($videos) {

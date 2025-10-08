@@ -196,5 +196,5 @@ class PipelineAuditor:
                 print(f"... and {len(items) - 10} more\n")
 
 if __name__ == "__main__":
-    auditor = PipelineAuditor("L:/zenml_project")
+    auditor = PipelineAuditor("L:/GoodQ_4_All")
     auditor.audit_all()

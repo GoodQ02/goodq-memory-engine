@@ -55,8 +55,8 @@ def emotion_classify(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
         try:
             import torch  # type: ignore
             import json as _json  # local alias
-            from zenml_project.steps.text_embed.step import _content_fingerprint  # reuse fingerprint
-            from zenml_project.steps.common.memory import update_fields
+            from steps.steps.text_embed.step import _content_fingerprint  # reuse fingerprint
+            from steps.steps.common.memory import update_fields
             inputs = _EMO["tok"](text, return_tensors="pt", truncation=True, max_length=512).to(_EMO.get("device","cpu"))
             with torch.no_grad():
                 if _EMO.get("device") == "cuda":
@@ -92,8 +92,8 @@ def emotion_classify(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
     try:
         import torch  # type: ignore
         import json as _json  # local alias
-        from zenml_project.steps.text_embed.step import _content_fingerprint  # reuse fingerprint
-        from zenml_project.steps.common.memory import update_fields
+        from steps.steps.text_embed.step import _content_fingerprint  # reuse fingerprint
+        from steps.steps.common.memory import update_fields
         inputs = _EMO["tok"](text, return_tensors="pt", truncation=True, max_length=512).to(_EMO.get("device","cpu"))
         with torch.no_grad():
             if _EMO.get("device") == "cuda":
@@ -111,4 +111,4 @@ def emotion_classify(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
         return {"emotions": top}
     except Exception as e:
         return {"emotions": None, "emotion_meta": {"status": "error", "error": str(e)}}
-from zenml_project.steps.common.lexicon import score_nrc_emotions
+from steps.steps.common.lexicon import score_nrc_emotions

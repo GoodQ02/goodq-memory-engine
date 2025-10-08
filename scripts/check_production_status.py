@@ -9,8 +9,8 @@ from datetime import datetime
 # Paths
 STEP_RUNS_LOG = Path('L:/GoodQ_Data/logs/step_runs.jsonl')
 MEMORY_DB = Path('L:/GoodQ_Data/data/memory_db/memory.db')
-KNOWLEDGE_GRAPH_DB = Path('L:/zenml_project/data/knowledge_graph.db')
-WORKSPACE = Path('L:/zenml_project/logs/production_run')
+KNOWLEDGE_GRAPH_DB = Path('L:/GoodQ_4_All/data/knowledge_graph.db')
+WORKSPACE = Path('L:/GoodQ_4_All/logs/production_run')
 
 def count_lines(file_path: Path) -> int:
     """Count lines in a file"""

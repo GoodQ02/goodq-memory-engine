@@ -29,7 +29,7 @@ os.environ['TORCH_HOME'] = 'L:/models'
 
 from ultralytics import YOLO
 model = YOLO('L:/models/yolo/yolov8n.pt')
-img = 'L:/zenml_project/logs/ingest_full/1987_1988/frames/scene_0000.jpg'
+img = 'L:/GoodQ_4_All/logs/ingest_full/1987_1988/frames/scene_0000.jpg'
 results = model.predict(source=img, verbose=False)
 detections = []
 for r in results:
@@ -68,7 +68,7 @@ proc = BlipProcessor.from_pretrained("Salesforce/blip-image-captioning-base")
 model = BlipForConditionalGeneration.from_pretrained("Salesforce/blip-image-captioning-base").to(device)
 model.eval()
 
-img_path = 'L:/zenml_project/logs/ingest_full/1987_1988/frames/scene_0000.jpg'
+img_path = 'L:/GoodQ_4_All/logs/ingest_full/1987_1988/frames/scene_0000.jpg'
 img = Image.open(img_path).convert("RGB")
 inputs = proc(images=img, return_tensors="pt").to(device)
 out = model.generate(**inputs, max_new_tokens=32)
@@ -97,7 +97,7 @@ os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
 
 from faster_whisper import WhisperModel
 model = WhisperModel("medium", device="cuda", compute_type="float16")
-audio = 'L:/zenml_project/logs/ingest_full/1987_1988/audio/scene_0000.wav'
+audio = 'L:/GoodQ_4_All/logs/ingest_full/1987_1988/audio/scene_0000.wav'
 segments, info = model.transcribe(audio, beam_size=5, vad_filter=True)
 transcript = " ".join([seg.text for seg in segments if seg.text])
 print(f"Transcript length: {len(transcript)} chars")

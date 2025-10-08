@@ -5,7 +5,7 @@ import os
 import hashlib
 import json
 
-from zenml_project.steps.common.memory import upsert_embedding
+from steps.steps.common.memory import upsert_embedding
 
 
 _ST = None  # sentence-transformers model

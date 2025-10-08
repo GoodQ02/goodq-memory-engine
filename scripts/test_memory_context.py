@@ -11,9 +11,9 @@ from pathlib import Path
 # Add project to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from zenml_project.steps.common.config_loader import load_configs
-from zenml_project.steps.common.memory import list_scenes_for_video, get_scene_meta
-from zenml_project.steps.common.memory_context_writer import save_step_context
+from steps.steps.common.config_loader import load_configs
+from steps.steps.common.memory import list_scenes_for_video, get_scene_meta
+from steps.steps.common.memory_context_writer import save_step_context
 
 
 def check_memory_enrichment(video_hash: str, cfg: dict) -> dict:
@@ -83,7 +83,7 @@ def main():
     cfg = load_configs({})
     
     # Check if we have any video processing results
-    results_path = Path("L:/zenml_project/logs/video_ingest_results.json")
+    results_path = Path("L:/GoodQ_4_All/logs/video_ingest_results.json")
     
     if not results_path.exists():
         print("\nNo video ingest results found.")

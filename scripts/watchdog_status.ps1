@@ -6,12 +6,12 @@ param(
     [int]$RefreshSeconds = 5
 )
 
-$watchDir = "L:\zenml_project\import_inbox"
-$processingDir = "L:\zenml_project\data\processing"
-$processedDir = "L:\zenml_project\data\processed"
-$failedDir = "L:\zenml_project\data\failed"
-$stateFile = "L:\zenml_project\logs\watchdog_state.json"
-$logFile = "L:\zenml_project\logs\watchdog.log"
+$watchDir = "L:\GoodQ_4_All\import_inbox"
+$processingDir = "L:\GoodQ_4_All\data\processing"
+$processedDir = "L:\GoodQ_4_All\data\processed"
+$failedDir = "L:\GoodQ_4_All\data\failed"
+$stateFile = "L:\GoodQ_4_All\logs\watchdog_state.json"
+$logFile = "L:\GoodQ_4_All\logs\watchdog.log"
 
 function Show-Status {
     Clear-Host

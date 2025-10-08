@@ -9,7 +9,7 @@ import shutil
 from pathlib import Path
 from datetime import datetime
 
-WATCH_DIR = Path("L:/zenml_project/import_inbox")
+WATCH_DIR = Path("L:/GoodQ_4_All/import_inbox")
 TEST_SOURCE = WATCH_DIR / "sample.mp4"
 TEST_TARGET = WATCH_DIR / f"test_copy_{datetime.now().strftime('%H%M%S')}.mp4"
 

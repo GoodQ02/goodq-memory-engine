@@ -19,7 +19,7 @@ app.add_middleware(
 @app.get("/search")
 def search(q: str = Query(..., description="Search text"), topk: int = Query(50, ge=1, le=200)) -> Dict[str, Any]:
     # Import lazily so the process starts fast and errors show clearly
-    from zenml_project.cli.retrieve import search_text_index
+    from steps.cli.retrieve import search_text_index
 
     results = search_text_index(q, topk=topk)
     return results
@@ -40,7 +40,7 @@ def vector_search(
     tag: Optional[str] = Query(None, description="Filter by tag/entity"),
 ) -> Dict[str, Any]:
     # Lazy imports to keep startup fast
-    from zenml_project.steps.common.config_loader import load_configs
+    from steps.steps.common.config_loader import load_configs
     from langchain_community.embeddings import HuggingFaceEmbeddings
     from langchain_community.vectorstores import Chroma
     import os

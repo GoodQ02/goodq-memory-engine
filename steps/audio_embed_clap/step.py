@@ -59,7 +59,7 @@ def audio_embed_clap(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
         import librosa  # type: ignore
         import numpy as np  # type: ignore
         import faiss  # type: ignore
-        from zenml_project.steps.text_embed.step import _content_fingerprint
+        from steps.steps.text_embed.step import _content_fingerprint
         # resample to 48kHz mono as expected
         wave, sr = librosa.load(path, sr=48000, mono=True)
         # Prepare CLAP audio input features; ClapModel expects input_features for audio
@@ -116,7 +116,7 @@ def audio_embed_clap(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
                     pass
         # Upsert generic embedding metadata for recall
         try:
-            from zenml_project.steps.common.memory import upsert_embedding
+            from steps.steps.common.memory import upsert_embedding
             upsert_embedding(cfg, h, faiss_id, path, item.get("modality", "audio") or "audio")
         except Exception:
             pass

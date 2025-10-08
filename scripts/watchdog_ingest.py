@@ -22,18 +22,18 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s [%(levelname)s] %(message)s',
     handlers=[
-        logging.FileHandler('L:/zenml_project/logs/watchdog.log'),
+        logging.FileHandler('L:/GoodQ_4_All/logs/watchdog.log'),
         logging.StreamHandler(sys.stdout)
     ]
 )
 logger = logging.getLogger(__name__)
 
 # Configuration
-WATCH_DIR = Path("L:/zenml_project/import_inbox")
-PROCESSING_DIR = Path("L:/zenml_project/data/processing")
-PROCESSED_DIR = Path("L:/zenml_project/data/processed")
-FAILED_DIR = Path("L:/zenml_project/data/failed")
-STATE_FILE = Path("L:/zenml_project/logs/watchdog_state.json")
+WATCH_DIR = Path("L:/GoodQ_4_All/import_inbox")
+PROCESSING_DIR = Path("L:/GoodQ_4_All/data/processing")
+PROCESSED_DIR = Path("L:/GoodQ_4_All/data/processed")
+FAILED_DIR = Path("L:/GoodQ_4_All/data/failed")
+STATE_FILE = Path("L:/GoodQ_4_All/logs/watchdog_state.json")
 
 # File type configuration
 SUPPORTED_VIDEO = {'.mp4', '.avi', '.mov', '.mkv', '.wmv', '.flv', '.webm', '.m4v'}
@@ -331,7 +331,7 @@ class WatchdogProcessor:
         
         cmd = [
             sys.executable,
-            'L:/zenml_project/cli/run_ingestion.py',
+            'L:/GoodQ_4_All/cli/run_ingestion.py',
             'ingest',
             str(video_path),
             '--env', 'goodq_zenml'
@@ -345,7 +345,7 @@ class WatchdogProcessor:
                 capture_output=True,
                 text=True,
                 timeout=3600,  # 1 hour timeout
-                cwd='L:/zenml_project'
+                cwd='L:/GoodQ_4_All'
             )
             
             if result.returncode == 0:

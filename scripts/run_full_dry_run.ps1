@@ -20,7 +20,7 @@ Info 'Ingesting videos (stub) to generate per-video summaries input'
 Info 'Running ingest_multimodal ZenML pipeline'
 $zenEnv = "${EnvPrefix}_zenml"
 $pyCode = @"
-from zenml_project.pipelines.ingest_multimodal_conda import ingest_multimodal
+from steps.pipelines.ingest_multimodal_conda import ingest_multimodal
 ingest_multimodal()
 "@
 $tmpPy = [System.IO.Path]::GetTempFileName()

@@ -7,21 +7,21 @@ Prereqs:
 - Register local ZenML stack: `pwsh scripts/bootstrap_zenml.ps1`
 
 Run (example):
-    from zenml_project.pipelines.ingest_multimodal_conda import ingest_multimodal
+    from steps.pipelines.ingest_multimodal_conda import ingest_multimodal
     ingest_multimodal()
 """
 from typing import Any, Dict, List
 
 from zenml import pipeline, step
 
-from zenml_project.steps.common.config_loader import load_configs
-from zenml_project.steps.common.conda_runner import run_conda_step
-from zenml_project.steps.common.memory import append_long_term_summary, store_short_term_summary
-from zenml_project.steps.common.tag_utils import canonicalize_taxonomy
-from zenml_project.steps.discover_sources.step import discover_sources
-from zenml_project.materializers.json_materializer import JSONMaterializer
-from zenml_project.steps.video_ingest.step import video_ingest_and_summarize as _video_ingest_and_summarize
-from zenml_project.steps.overview.step import overview as _overview
+from steps.steps.common.config_loader import load_configs
+from steps.steps.common.conda_runner import run_conda_step
+from steps.steps.common.memory import append_long_term_summary, store_short_term_summary
+from steps.steps.common.tag_utils import canonicalize_taxonomy
+from steps.steps.discover_sources.step import discover_sources
+from steps.materializers.json_materializer import JSONMaterializer
+from steps.steps.video_ingest.step import video_ingest_and_summarize as _video_ingest_and_summarize
+from steps.steps.overview.step import overview as _overview
 
 
 @step(enable_cache=False, output_materializers=JSONMaterializer)

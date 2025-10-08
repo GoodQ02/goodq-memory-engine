@@ -10,15 +10,15 @@ from pathlib import Path
 # Ensure project root is in path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from zenml_project.steps.common.config_loader import load_configs
+from steps.steps.common.config_loader import load_configs
 
 
 def test_object_detection():
     """Test YOLO object detection"""
     print("\n=== Testing Object Detection (YOLO) ===")
-    from zenml_project.steps.object_detect.step import object_detect
+    from steps.steps.object_detect.step import object_detect
     
-    test_img = "L:\\zenml_project\\logs\\ingest_full\\1987_1988\\frames\\scene_0000.jpg"
+    test_img = "L:\\GoodQ_4_All\\logs\\ingest_full\\1987_1988\\frames\\scene_0000.jpg"
     if not os.path.isfile(test_img):
         print(f"❌ Test image not found: {test_img}")
         return False
@@ -42,9 +42,9 @@ def test_object_detection():
 def test_image_caption():
     """Test BLIP image captioning"""
     print("\n=== Testing Image Captioning (BLIP) ===")
-    from zenml_project.steps.image_caption.step import image_caption
+    from steps.steps.image_caption.step import image_caption
     
-    test_img = "L:\\zenml_project\\logs\\ingest_full\\1987_1988\\frames\\scene_0000.jpg"
+    test_img = "L:\\GoodQ_4_All\\logs\\ingest_full\\1987_1988\\frames\\scene_0000.jpg"
     if not os.path.isfile(test_img):
         print(f"❌ Test image not found: {test_img}")
         return False
@@ -67,9 +67,9 @@ def test_image_caption():
 def test_ocr():
     """Test OCR (EasyOCR/Tesseract)"""
     print("\n=== Testing OCR ===")
-    from zenml_project.steps.image_ocr.step import image_ocr
+    from steps.steps.image_ocr.step import image_ocr
     
-    test_img = "L:\\zenml_project\\logs\\ingest_full\\1987_1988\\frames\\scene_0000.jpg"
+    test_img = "L:\\GoodQ_4_All\\logs\\ingest_full\\1987_1988\\frames\\scene_0000.jpg"
     if not os.path.isfile(test_img):
         print(f"❌ Test image not found: {test_img}")
         return False
@@ -93,9 +93,9 @@ def test_ocr():
 def test_audio_transcription():
     """Test Whisper transcription"""
     print("\n=== Testing Audio Transcription (Whisper) ===")
-    from zenml_project.steps.audio_transcribe.step import audio_transcribe
+    from steps.steps.audio_transcribe.step import audio_transcribe
     
-    test_audio = "L:\\zenml_project\\logs\\ingest_full\\1987_1988\\audio\\scene_0000.wav"
+    test_audio = "L:\\GoodQ_4_All\\logs\\ingest_full\\1987_1988\\audio\\scene_0000.wav"
     if not os.path.isfile(test_audio):
         print(f"❌ Test audio not found: {test_audio}")
         return False
@@ -126,7 +126,7 @@ def test_audio_transcription():
 def test_sentiment():
     """Test sentiment analysis"""
     print("\n=== Testing Sentiment Analysis ===")
-    from zenml_project.steps.sentiment.step import sentiment
+    from steps.steps.sentiment.step import sentiment
     
     cfg = load_configs({})
     item = {"transcript": "This is amazing! I love this project. It works great.", "modality": "text"}
@@ -147,7 +147,7 @@ def test_sentiment():
 def test_emotion_classify():
     """Test emotion classification"""
     print("\n=== Testing Emotion Classification ===")
-    from zenml_project.steps.emotion_classify.step import emotion_classify
+    from steps.steps.emotion_classify.step import emotion_classify
     
     cfg = load_configs({})
     item = {"transcript": "I'm so excited and happy about this! This is wonderful news!", "modality": "text"}
@@ -168,7 +168,7 @@ def test_emotion_classify():
 def test_tagger():
     """Test NER tagging"""
     print("\n=== Testing Tagger (NER) ===")
-    from zenml_project.steps.tagger.step import tagger
+    from steps.steps.tagger.step import tagger
     
     cfg = load_configs({})
     item = {"transcript": "John Smith went to New York City and visited Microsoft headquarters.", "modality": "text"}
@@ -189,7 +189,7 @@ def test_tagger():
 def test_text_embed():
     """Test text embedding"""
     print("\n=== Testing Text Embedding ===")
-    from zenml_project.steps.text_embed.step import text_embed
+    from steps.steps.text_embed.step import text_embed
     
     cfg = load_configs({})
     item = {"transcript": "This is a test sentence for embedding.", "modality": "text"}

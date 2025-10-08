@@ -1,120 +1,305 @@
-# GoodQ Project Directory Structure
-## Last Updated: 2025-10-07 20:06:02
+# GoodQ Project Structure
 
-## L:\ Root Structure
+## 📁 Directory Organization
+
+### L:\ Drive Layout
 
 ```
 L:\
-├── zenml_project/          # MAIN PROJECT - ZenML-based ingestion & processing pipeline
-├── GoodQ_Data/            # → Symlink to _DATA/GoodQ_Data (project database & outputs)
-├── models/                # → Symlink to _DATA/models (AI model weights)
-├── tools/                 # → Symlink to _TOOLS/tools (external utilities)
-├── _DATA/                 # Consolidated data storage
-│   ├── GoodQ_Data/        # SQLite DB, FAISS indices, processed outputs
-│   ├── models/            # Downloaded model weights & checkpoints
-│   ├── datasets/          # Reference datasets (astronomy, etc.)
-│   └── cache/             # pip_cache & temporary data
-├── _TOOLS/                # External tooling (ExifTool, LibreOffice, Stable Diffusion, etc.)
-├── _UI/                   # User interfaces
-│   └── memory-explorer-ui/  # Svelte-based memory exploration UI
-├── _WORKSPACE/            # IDE workspace files
-│   └── zenml_project.code-workspace
-├── _ARCHIVE/              # Historical data & deprecated files
-│   ├── legacy_backups/    # Old project versions (64+ GB)
-│   ├── test_runs/         # Archived test run logs
-│   ├── deprecated_folders/  # Old unused folders
-│   └── temp_files/        # Temporary & backup files
-└── .vscode/               # VS Code settings
-
+├── GoodQ_4_All\              # Main project (GitHub repo)
+├── _DATA\                    # Runtime data (NOT in GitHub)
+├── _ARCHIVE\                 # Legacy/deprecated files
+├── models\                   # Pretrained model files
+└── tools\                    # Standalone utilities
 ```
-
-## zenml_project/ Internal Structure
-
-```
-zenml_project/
-├── pipelines/             # ZenML pipeline definitions
-├── steps/                 # Individual pipeline steps (114 files)
-├── scripts/               # Utility scripts & command center
-│   ├── command_center.ps1  # Main dashboard
-│   └── ...
-├── configs/               # Environment & pipeline configurations
-├── envs/                  # Conda environment definitions (44 files)
-│   ├── base.yml
-│   ├── goodq_zenml.yml
-│   └── ...
-├── api/                   # FastAPI server for retrieval
-│   └── server.py
-├── cli/                   # Command-line interface tools (16 files)
-├── lib/                   # Shared library code (10 files)
-├── vendor/                # Vendored dependencies (1181 files)
-│   ├── huggingface_hub/
-│   ├── requests/
-│   ├── urllib3/
-│   └── ...
-├── materializers/         # ZenML materializers
-├── docs/                  # ALL PROJECT DOCUMENTATION
-│   ├── AGENTS.md          # Agent instructions
-│   ├── README.md          # Project overview
-│   ├── TROUBLESHOOTING.md
-│   ├── GITHUB_SETUP_GUIDE.md
-│   ├── PROJECT_STATUS.md
-│   ├── System-Blueprint.txt  # 30MB+ comprehensive system design
-│   └── ...
-├── logs/                  # Pipeline execution logs (organized by run)
-│   ├── ingest_lite_*/
-│   ├── dedupe_test/
-│   └── ...
-├── import_inbox/          # Videos/media to be processed
-├── smoke_inbox/           # Test samples for quick validation
-└── [Core Files]
-    ├── README.md          # Main project README
-    ├── LICENSE
-    ├── .gitignore
-    ├── .env.local         # Local environment variables
-    ├── config.yaml        # Main configuration
-    ├── __init__.py
-    ├── LAUNCH_GOODQ.bat   # Main launcher
-    ├── LAUNCH_GOODQ_SIMPLE.bat
-    └── STOP_GOODQ.bat
-```
-
-## Key Features of This Organization
-
-### 1. **Symlinks for Compatibility**
-   - Existing scripts reference L:\GoodQ_Data, L:\models, L:\tools
-   - Symlinks maintain backward compatibility without code changes
-   - Actual data stored in organized _DATA/ and _TOOLS/ folders
-
-### 2. **Clean Separation**
-   - **Production code**: zenml_project/
-   - **Data & assets**: _DATA/
-   - **External tools**: _TOOLS/
-   - **Archives**: _ARCHIVE/
-
-### 3. **Environment Isolation**
-   - 44 environment files in nvs/ for true isolation
-   - Vendored dependencies in endor/ to prevent version conflicts
-   - Isolated pip installations with strict flags
-
-### 4. **Documentation Centralization**
-   - All docs moved to zenml_project/docs/
-   - Easy to find and maintain
-   - Includes historical context & troubleshooting
-
-## Folder Size Summary (Approximate)
-
-- _ARCHIVE/legacy_backups/: 64+ GB
-- zenml_project/vendor/: ~500 MB
-- _DATA/GoodQ_Data/: Variable (depends on processed content)
-- _DATA/models/: Variable (depends on downloaded models)
-- _TOOLS/: ~10+ GB (Stable Diffusion, LibreOffice, etc.)
-
-## Next Steps for Maintenance
-
-1. **Regular log cleanup**: Archive old logs from zenml_project/logs/
-2. **Monitor _DATA/cache/**: Clear old pip caches periodically
-3. **Backup strategy**: _ARCHIVE/ can be moved to HDD for long-term storage
-4. **Git tracking**: Only zenml_project/ needs version control
 
 ---
-*Generated by GoodQ project reorganization*
+
+## 🎯 GoodQ_4_All\ (Project Root)
+
+**Purpose**: Source code, configuration, and documentation (tracked in GitHub)
+
+```
+GoodQ_4_All\
+├── api\                      # FastAPI REST server
+│   ├── main.py              # API entry point
+│   ├── server.py            # Server configuration
+│   └── routes\              # API endpoints
+│
+├── configs\                  # Configuration files
+│   ├── paths.py             # ⭐ Central path configuration
+│   ├── models_pinned.json   # Locked model versions
+│   └── datasets_pinned.json # Locked dataset versions
+│
+├── docs\                     # Documentation
+│   ├── README.md            # Project overview
+│   ├── AGENTS.md            # AI agent instructions
+│   ├── PROJECT_STRUCTURE.md # This file
+│   ├── HISTORY.md           # Development history
+│   └── diagrams\            # Architecture diagrams
+│
+├── envs\                     # Conda environment definitions
+│   ├── goodq_zenml.yml      # Main pipeline environment
+│   ├── audio_emotion.yml    # Audio processing environment
+│   └── [other_envs].yml     # Isolated step environments
+│
+├── pipelines\                # ZenML pipeline definitions
+│   ├── ingest_multimodal.py # Main ingestion pipeline
+│   └── goodq_chat.py        # Chat/retrieval pipeline
+│
+├── scripts\                  # Utility scripts
+│   ├── system_readiness_check.py  # Verify system setup
+│   ├── check_production_status.py # Monitor ingestion
+│   ├── watchdog_ingest.py         # File watcher
+│   ├── command_center.ps1         # Dashboard
+│   └── [various_utilities].py/ps1
+│
+├── steps\                    # ZenML pipeline steps
+│   ├── common\              # Shared utilities
+│   │   ├── config_loader.py
+│   │   ├── memory.py
+│   │   └── memory_writer.py
+│   ├── video_ingest\        # Video processing
+│   ├── audio_transcribe\    # Audio processing
+│   ├── image_caption\       # Image analysis
+│   ├── sentiment\           # Sentiment analysis
+│   ├── knowledge_graph\     # Graph construction
+│   └── [other_steps]\       # Additional processing steps
+│
+├── import_inbox\            # 📥 Drop folder for new media
+│   └── [user_drops_files_here]
+│
+├── .gitignore
+├── README.md
+└── requirements.txt
+```
+
+---
+
+## 💾 _DATA\GoodQ_Data\ (Runtime Data)
+
+**Purpose**: All runtime data, outputs, and artifacts (NOT tracked in GitHub)
+
+```
+_DATA\GoodQ_Data\
+├── databases\               # SQLite databases
+│   ├── memory.db           # Scene metadata & embeddings
+│   └── knowledge_graph.db  # Semantic relationships
+│
+├── cache\                   # Model & library caches
+│   ├── huggingface\        # HF_HOME
+│   └── torch\              # TORCH_HOME
+│
+├── faiss_indices\           # Vector search indices
+│   ├── text\               # Text embeddings
+│   ├── audio\              # Audio embeddings
+│   ├── dino\               # Visual embeddings (DINOv2)
+│   └── clip\               # Multimodal embeddings
+│
+├── processing\              # Active ingestion workspace
+│   └── [video_name]\
+│       ├── frames\         # Extracted keyframes
+│       ├── audio\          # Audio segments
+│       └── metadata\       # Processing metadata
+│
+├── completed\               # Finished ingestions
+│   ├── 1987_1988_run1\     # Example: completed video
+│   ├── st_thomas_lost_tapes\
+│   └── [other_videos]\
+│
+├── exports\                 # Final output exports
+│   └── [export_packages]\
+│
+└── logs\                    # Centralized logging
+    ├── step_runs.jsonl     # Step execution log
+    ├── watchdog.log        # File watcher log
+    ├── pipeline.log        # Pipeline execution log
+    └── overnight_monitor.jsonl
+```
+
+---
+
+## 🗄️ _ARCHIVE\ (Legacy Files)
+
+**Purpose**: Deprecated code and old test runs (for reference only)
+
+```
+_ARCHIVE\
+├── old_tests\               # Legacy test folders
+│   ├── dedupe_test\
+│   ├── ingest_lite*\
+│   └── [various_old_runs]\
+│
+└── deprecated_scripts\      # Old/unused scripts
+```
+
+---
+
+## 🤖 models\ (Pretrained Models)
+
+**Purpose**: Local copies of pretrained models for offline use
+
+```
+models\
+├── whisper\
+├── sentiment\
+└── [other_models]\
+```
+
+---
+
+## 🔧 tools\ (Standalone Utilities)
+
+**Purpose**: External tools and utilities
+
+```
+tools\
+└── [various_utilities]\
+```
+
+---
+
+## 🔑 Key Design Principles
+
+### 1. **Single Source of Truth**
+- All paths defined in `GoodQ_4_All/configs/paths.py`
+- Import and use centralized paths: `from configs.paths import DATABASE_DIR`
+
+### 2. **Separation of Concerns**
+- **Code** (GoodQ_4_All): Version controlled in GitHub
+- **Data** (_DATA): Local only, not in GitHub
+- **Archive** (_ARCHIVE): Historical reference only
+
+### 3. **Environment Isolation**
+- Each step has its own conda environment when needed
+- Strict isolation flags prevent dependency bleed:
+  - `PYTHONNOUSERSITE=1`
+  - `PIP_NO_CACHE_DIR=1`
+  - `--no-user --isolated --no-cache-dir`
+
+### 4. **Data Flow**
+
+```
+import_inbox/           # User drops files here
+     ↓
+processing/            # Active processing
+     ↓
+databases/            # Metadata storage
+faiss_indices/        # Vector storage
+     ↓
+completed/            # Archived results
+     ↓
+exports/              # Final outputs
+```
+
+### 5. **Logging Strategy**
+- All logs in `_DATA/GoodQ_Data/logs/`
+- JSONL format for structured logs
+- Easy to parse and analyze
+- Not buried in deep folder hierarchies
+
+---
+
+## 🚀 Quick Reference
+
+### Find a Path
+```python
+from configs.paths import (
+    MEMORY_DB,              # Database file
+    PROCESSING_DIR,         # Active workspace
+    IMPORT_INBOX,           # User drop folder
+    LOGS_DIR,               # Centralized logs
+    get_processing_dir('video_name')  # Video workspace
+)
+```
+
+### Check System Status
+```powershell
+# Run readiness check
+conda run -n goodq_zenml python scripts/system_readiness_check.py
+
+# Check production status
+conda run -n goodq_zenml python scripts/check_production_status.py
+
+# View dashboard
+.\scripts\command_center.ps1
+```
+
+### Start Services
+```batch
+LAUNCH_GOODQ.bat        # Start command center + API
+START_WATCHDOG.bat      # Start file watcher
+CHECK_WATCHDOG.bat      # Check watcher status
+STOP_GOODQ.bat          # Stop all services
+```
+
+---
+
+## 📊 Data Lifecycle
+
+### Ingestion Workflow
+1. User drops file in `import_inbox/`
+2. Watchdog detects file
+3. Processing begins in `processing/[video_name]/`
+4. Metadata stored in `databases/memory.db`
+5. Embeddings stored in `faiss_indices/`
+6. Knowledge graph built in `databases/knowledge_graph.db`
+7. Completed files moved to `completed/[video_name]/`
+8. Exports created in `exports/`
+
+### Log Tracking
+- Real-time: `logs/step_runs.jsonl` (append-only)
+- Watchdog: `logs/watchdog.log`
+- Pipeline: `logs/pipeline.log`
+- Monitoring: `logs/overnight_monitor.jsonl`
+
+---
+
+## 🔒 Locked Versions
+
+### Package Versions
+- Locked in `envs/[env_name].yml`
+- Pinned with exact versions or hashes
+- Verified by `system_readiness_check.py`
+
+### Model Versions
+- Defined in `configs/models_pinned.json`
+- Includes revision hashes
+- Prevents automatic updates
+
+### Dataset Versions
+- Defined in `configs/datasets_pinned.json`
+- Includes commit hashes
+- Ensures reproducibility
+
+---
+
+## 🆘 Troubleshooting
+
+### Path Issues
+- **Problem**: Script can't find files
+- **Solution**: Check `configs/paths.py` and ensure `ensure_directories()` was called
+
+### Import Errors
+- **Problem**: Module not found
+- **Solution**: Verify conda environment is activated and `PYTHONPATH` if needed
+
+### Data Not Showing
+- **Problem**: Dashboard shows no data
+- **Solution**: Check `_DATA/GoodQ_Data/databases/` and `processing/` folders
+
+### Logs Missing
+- **Problem**: Can't find logs
+- **Solution**: All logs now in `_DATA/GoodQ_Data/logs/` (not project root)
+
+---
+
+## 📈 Future Expansion
+
+This structure is designed to grow:
+- New steps: Add to `steps/`
+- New pipelines: Add to `pipelines/`
+- New models: Update `configs/models_pinned.json`
+- New data types: Extend `processing/` structure
+
+The modular design ensures each component can evolve independently while maintaining system coherence.

@@ -14,17 +14,17 @@ def build_ingest_multimodal_pipeline():
     Replace with `@pipeline` and actual `@step` decorated functions once ZenML
     is installed and the stack is configured.
     """
-    from zenml_project.steps.discover_sources.step import discover_sources
-    from zenml_project.steps.audio_transcribe.step import audio_transcribe
-    from zenml_project.steps.image_ocr.step import image_ocr
-    from zenml_project.steps.image_caption.step import image_caption
-    from zenml_project.steps.object_detect.step import object_detect
-    from zenml_project.steps.face_embed.step import face_embed
-    from zenml_project.steps.text_embed.step import text_embed
-    from zenml_project.steps.emotion_classify.step import emotion_classify
-    from zenml_project.steps.tagger.step import tagger
-    from zenml_project.steps.home_assistant_status.step import home_assistant_status
-    from zenml_project.steps.system_metrics.step import system_metrics
+    from steps.steps.discover_sources.step import discover_sources
+    from steps.steps.audio_transcribe.step import audio_transcribe
+    from steps.steps.image_ocr.step import image_ocr
+    from steps.steps.image_caption.step import image_caption
+    from steps.steps.object_detect.step import object_detect
+    from steps.steps.face_embed.step import face_embed
+    from steps.steps.text_embed.step import text_embed
+    from steps.steps.emotion_classify.step import emotion_classify
+    from steps.steps.tagger.step import tagger
+    from steps.steps.home_assistant_status.step import home_assistant_status
+    from steps.steps.system_metrics.step import system_metrics
 
     def run(config: Dict[str, Any]) -> Dict[str, Any]:
         batch = discover_sources(config)

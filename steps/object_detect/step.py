@@ -13,11 +13,17 @@ def _load_yolo(cfg: Dict[str, Any]):
         return _YOLO
     try:
         from ultralytics import YOLO  # type: ignore
+        # Try multiple config paths
         model_path = (
-            cfg.get("models", {}).get("yolo_model_path")
+            cfg.get("models", {}).get("external_models", {}).get("yolo_v8n", {}).get("local_path")
+            or cfg.get("models", {}).get("yolo_model_path")
             or cfg.get("config", {}).get("models", {}).get("yolo_model_path")
             or "yolov8n.pt"
         )
+        # If local_path is relative, make it absolute to L:/models
+        if model_path and not os.path.isabs(model_path):
+            model_base = os.environ.get("HF_HOME") or os.environ.get("TORCH_HOME") or "L:/models"
+            model_path = os.path.join(model_base, model_path)
         _YOLO = YOLO(model_path)
     except Exception:
         _YOLO = None

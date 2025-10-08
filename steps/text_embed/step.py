@@ -20,6 +20,11 @@ def _load_st() -> Any:
         from sentence_transformers import SentenceTransformer  # type: ignore
         import torch  # type: ignore
 
+        # Ensure HF_HOME is set for model caching
+        os.environ.setdefault("HF_HOME", "L:/models")
+        os.environ.setdefault("TORCH_HOME", "L:/models")
+        os.environ.setdefault("TRANSFORMERS_CACHE", "L:/models/transformers")
+
         device = "cuda" if getattr(torch, "cuda", None) and torch.cuda.is_available() else "cpu"
         _ST = SentenceTransformer("all-MiniLM-L6-v2", device=device)
     except Exception:

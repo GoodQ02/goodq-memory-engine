@@ -20,6 +20,15 @@ def run_conda_step(env_name: str, step_name: str, item: Dict[str, Any], cfg: Dic
             json.dump(item, f, ensure_ascii=False)
         with open(cfg_path, "w", encoding="utf-8") as f:
             json.dump(cfg, f, ensure_ascii=False)
+        
+        # Build environment variables for model caching
+        env = os.environ.copy()
+        env.setdefault("HF_HOME", "L:/models")
+        env.setdefault("TORCH_HOME", "L:/models")
+        env.setdefault("TRANSFORMERS_CACHE", "L:/models/transformers")
+        env.setdefault("HF_DATASETS_CACHE", "L:/models/datasets")
+        env.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
+        
         cmd = [
             "conda",
             "run",
@@ -47,7 +56,7 @@ def run_conda_step(env_name: str, step_name: str, item: Dict[str, Any], cfg: Dic
         except Exception:
             timeout_s = None
         try:
-            subprocess.run(cmd, check=True, capture_output=True, timeout=timeout_s)
+            subprocess.run(cmd, check=True, capture_output=True, timeout=timeout_s, env=env)
         except subprocess.TimeoutExpired:
             return {"_error": f"{step_name} timeout in {env_name}", "advisory": "partial_results"}
         except subprocess.CalledProcessError as e:

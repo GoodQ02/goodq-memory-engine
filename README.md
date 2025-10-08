@@ -28,6 +28,8 @@
 - [What is GoodQ?](#what-is-goodq)
 - [Key Features](#key-features)
 - [Quick Start](#quick-start)
+- [Automatic Ingestion (Watchdog)](#automatic-ingestion-watchdog)
+- [Knowledge Graph](#knowledge-graph)
 - [Architecture](#architecture)
 - [Documentation](#documentation)
 - [Performance](#performance)
@@ -37,6 +39,284 @@
 - [Troubleshooting](#troubleshooting)
 - [Contributing](#contributing)
 - [License](#license)
+
+---
+
+---
+
+## 🚀 Quick Start
+
+### 1. Launch the Full System
+```batch
+LAUNCH_GOODQ.bat
+```
+This opens three windows:
+- **Command Center**: Real-time dashboard with GPU stats, DB/FAISS status, memory snapshots
+- **API Server**: FastAPI on http://localhost:8000 for retrieval and chat endpoints
+- **Documentation**: Auto-opens http://localhost:8000/docs in your browser
+
+### 2. Automatic File Processing (Watchdog)
+```batch
+START_WATCHDOG.bat
+```
+Drop files into `import_inbox/` and they'll be automatically processed. Supports:
+- **Video**: `.mp4`, `.avi`, `.mov`, `.mkv`, `.wmv`, `.flv`, `.webm`
+- **Audio**: `.mp3`, `.wav`, `.flac`, `.m4a`, `.aac`, `.ogg`
+- **Images**: `.jpg`, `.png`, `.bmp`, `.gif`, `.tiff`, `.webp`
+- **Documents**: `.pdf`, `.txt`, `.md`, `.doc`, `.docx`
+
+Monitor progress:
+```batch
+MONITOR_WATCHDOG.bat  # Live updates every 5 seconds
+CHECK_WATCHDOG.bat    # One-time status check
+```
+
+### 3. Manual Processing
+```batch
+conda activate goodq_zenml
+python cli\run_ingestion.py ingest path\to\video.mp4
+```
+
+---
+
+## 🔍 Automatic Ingestion (Watchdog)
+
+### What is the Watchdog?
+
+The GoodQ Watchdog is an automatic file monitoring system that watches `import_inbox/` and processes new files immediately. Think of it as a "hot folder" for your AI pipeline – drop in a video, and processing begins automatically.
+
+### Features
+
+- **Automatic Detection**: Scans every 2 seconds for new files
+- **Smart Deduplication**: Uses SHA-256 hashing to avoid reprocessing identical files
+- **File Stability**: Waits 3 seconds after file stops changing before processing
+- **Queue Management**: Processes files sequentially to ensure system stability
+- **Status Tracking**: Maintains registry of all processed files with timestamps and status
+- **Error Handling**: Failed files moved to `data/failed/` with detailed error logs
+
+### Quick Start
+
+**1. Start the Watchdog**
+```batch
+START_WATCHDOG.bat
+```
+
+**2. Drop Files**
+Simply drag and drop files into:
+```
+L:\zenml_project\import_inbox\
+```
+
+**3. Monitor Progress**
+```batch
+MONITOR_WATCHDOG.bat  # Live dashboard (updates every 5 seconds)
+CHECK_WATCHDOG.bat    # One-time status snapshot
+```
+
+### File Flow
+
+```
+import_inbox/video.mp4
+         ↓
+    [Detected & Queued]
+         ↓
+data/processing/video.mp4  (temporary copy)
+         ↓
+    [Run Pipeline]
+         ↓
+  ┌─────┴─────┐
+  │           │
+Success      Failure
+  │           │
+  ↓           ↓
+data/processed/  data/failed/
+PROCESSED_video  FAILED_video
+```
+
+### Supported File Types
+
+| Type | Extensions |
+|------|------------|
+| **Video** | `.mp4`, `.avi`, `.mov`, `.mkv`, `.wmv`, `.flv`, `.webm`, `.m4v` |
+| **Audio** | `.mp3`, `.wav`, `.flac`, `.m4a`, `.aac`, `.ogg`, `.wma` |
+| **Image** | `.jpg`, `.jpeg`, `.png`, `.bmp`, `.gif`, `.tiff`, `.webp` |
+| **Document** | `.pdf`, `.txt`, `.md`, `.doc`, `.docx` |
+
+### Status Dashboard
+
+The `CHECK_WATCHDOG.bat` shows:
+- Watchdog running status (PID, CPU, memory)
+- File counts (inbox, processing, processed, failed)
+- Recent inbox files with sizes
+- All-time statistics from registry
+- Recent log activity
+
+### Logs & Registry
+
+- **Activity Log**: `logs/watchdog.log` - All watchdog activity and errors
+- **State Registry**: `logs/watchdog_state.json` - Hash registry of all processed files
+- **Step Logs**: `L:/GoodQ_Data/logs/step_runs.jsonl` - Per-step pipeline execution
+
+### How Deduplication Works
+
+1. When a file becomes stable, compute its SHA-256 hash
+2. Check `logs/watchdog_state.json` for this hash
+3. If found → Mark as `PROCESSED_` and skip
+4. If not found → Process and add hash to registry
+
+This means:
+- Renaming doesn't fool the system (content hash is checked)
+- Copying the same video multiple times only processes once
+- Different files with the same name are processed separately
+
+### Advanced Usage
+
+**Test the Watchdog**
+```batch
+conda activate goodq_zenml
+python scripts\test_watchdog.py
+```
+
+**Configuration** (edit `scripts/watchdog_ingest.py`):
+```python
+POLL_INTERVAL = 2.0      # Scan frequency (seconds)
+STABILITY_WAIT = 3.0     # Wait for file to stabilize
+MAX_WORKERS = 1          # Concurrent processors
+```
+
+**View Live Logs**
+```powershell
+Get-Content L:\zenml_project\logs\watchdog.log -Wait -Tail 20
+```
+
+### Integration Tips
+
+- The watchdog is **separate from LAUNCH_GOODQ.bat** to avoid auto-processing on startup
+- Start it when you're ready to drop files for processing
+- Leave it running in the background for continuous processing
+- Use `MONITOR_WATCHDOG.bat` to track progress without checking the console
+
+### Troubleshooting
+
+**Files not detected?**
+- Verify file extension is supported
+- Check `logs/watchdog.log` for errors
+- Ensure watch directory exists: `L:\zenml_project\import_inbox`
+
+**Processing fails?**
+- Check `data/failed/` for failed files
+- Review error in `logs/watchdog.log`
+- Try manual processing to see full error:
+  ```batch
+  conda activate goodq_zenml
+  python cli\run_ingestion.py ingest path\to\file.mp4
+  ```
+
+**Files stuck in processing?**
+- Check if watchdog process is still running
+- Look for errors in `logs/watchdog.log`
+- Restart watchdog if needed
+
+📖 **Full Documentation**: See [docs/WATCHDOG_GUIDE.md](docs/WATCHDOG_GUIDE.md) and [docs/diagrams/watchdog_flow.md](docs/diagrams/watchdog_flow.md)
+
+---
+
+## 🕸️ Knowledge Graph
+
+### What is the Knowledge Graph?
+
+The Knowledge Graph creates semantic relationships between all entities detected in your media. Instead of treating each frame or scene in isolation, it connects people, objects, locations, emotions, and events into a queryable network.
+
+### Key Capabilities
+
+- **Entity Tracking**: Track people, objects, and concepts across scenes and time
+- **Relationship Discovery**: Automatic detection of co-occurrence, temporal, and semantic relationships
+- **Semantic Search**: Find content based on complex criteria (e.g., "scenes with happy emotions and people at the beach")
+- **Temporal Narratives**: Get story-like summaries of time periods with key entities and events
+- **Scene Similarity**: Find related scenes based on shared entities and context
+
+### Quick Start
+
+**View Graph Statistics**
+```bash
+conda activate goodq_zenml
+python cli/graph_query.py stats
+```
+
+**Find All Appearances of a Person**
+```bash
+python cli/graph_query.py find-person "John"
+```
+
+**Get Full Context for a Scene**
+```bash
+python cli/graph_query.py scene-context scene_0042
+```
+
+**Search by Multiple Criteria**
+```bash
+python cli/graph_query.py search --objects person dog --emotions happy --min-confidence 0.7
+```
+
+**Track Concept Over Time**
+```bash
+python cli/graph_query.py track-concept "birthday"
+```
+
+**Get Temporal Narrative**
+```bash
+python cli/graph_query.py story 0 60  # Get story from 0-60 seconds
+```
+
+### How It Works
+
+1. **During Ingestion**: The pipeline extracts entities (people, objects, emotions, locations) from each scene
+2. **Graph Construction**: The `build_knowledge_graph` step creates nodes for entities and edges for relationships
+3. **Automatic Linking**: Entities are linked to media with timestamps and confidence scores
+4. **Relationship Building**:
+   - **Co-occurrence**: Entities appearing together in same scene
+   - **Temporal**: Entities appearing in adjacent time windows
+   - **Semantic**: Domain-specific relationships (person-location, object-emotion, etc.)
+
+### Graph Schema
+
+- **Nodes**: Entities (person, object, location, concept, event, emotion)
+- **Edges**: Relationships (co_occurs, located_in, has_emotion, interacts_with, etc.)
+- **Media Nodes**: Links to actual video scenes/audio with timestamps
+- **Temporal Events**: Time-based occurrences with participating entities
+
+### Advanced Queries
+
+**Python API**
+```python
+from lib.graph_query import GraphQuery
+
+with GraphQuery('data/knowledge_graph.db') as gq:
+    # Find related scenes
+    related = gq.find_related_scenes('scene_0042', max_results=5)
+    
+    # Get scene context with all entities
+    context = gq.get_scene_context('scene_0042')
+    
+    # Search by criteria
+    results = gq.search_by_multiple_criteria({
+        'objects': ['person', 'car'],
+        'emotions': ['happy'],
+        'time_range': (0, 100),
+        'min_confidence': 0.7
+    })
+```
+
+### Testing
+
+**Run Knowledge Graph Tests**
+```bash
+python scripts/test_knowledge_graph.py
+```
+
+This creates a test database and validates all query patterns.
+
+📖 **Full Documentation**: See [docs/knowledge_graph.md](docs/knowledge_graph.md)
 
 ---
 
@@ -100,6 +380,15 @@
 - `envs/<step>/requirements.txt` – per-step dependency pins; GPU-enabled envs include `image_caption`, `object_detect`, `audio_transcribe`, `audio_diarize`, `audio_emotion`, `face_embed`.
 - `scripts/enable_cuda.ps1` – installs CUDA wheels for every GPU env; use `-Verify` to confirm.
 - Run `scripts/prepare_step_envs.ps1 -EnvPrefix goodq -LinkProject` to create/update envs and drop `.pth` files pointing to `L:/` so `zenml_project` imports resolve.
+
+## Model Lockdown & Version Pinning
+- `configs/model_registry.yaml` – **Central registry** pinning all models to exact commit SHAs and file hashes, preventing version drift.
+- `scripts/pin_model_versions.py` – Fetches latest commit SHAs from HuggingFace Hub and updates registry with real versions.
+- `scripts/verify_model_lockdown.py` – Verifies all models are properly pinned and assets match expected hashes.
+- `scripts/bootstrap_models.py` – Downloads models respecting registry pins for reproducibility.
+- **Security**: SHA256 verification for external assets, explicit auth tokens for gated models, offline mode support.
+- **Policy**: `auto_update: false` ensures no surprise breaking changes; all updates require manual approval.
+- See [docs/MODEL_LOCKDOWN.md](docs/MODEL_LOCKDOWN.md) for complete documentation.
 
 ## Quickstart
 1. **Optional reset**: `pwsh scripts/reset_goodq_envs.ps1 -EnvPrefix goodq -Force -ClearTemp`

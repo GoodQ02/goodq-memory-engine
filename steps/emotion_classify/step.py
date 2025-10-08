@@ -13,6 +13,11 @@ def _load_emotion():
         import torch  # type: ignore
         from transformers import AutoTokenizer, AutoModelForSequenceClassification  # type: ignore
 
+        # Ensure HF_HOME is set for model caching
+        os.environ.setdefault("HF_HOME", "L:/models")
+        os.environ.setdefault("TORCH_HOME", "L:/models")
+        os.environ.setdefault("TRANSFORMERS_CACHE", "L:/models/transformers")
+
         name = "cardiffnlp/twitter-roberta-base-emotion-multilabel-latest"
         tok = AutoTokenizer.from_pretrained(name)
         model = AutoModelForSequenceClassification.from_pretrained(name)

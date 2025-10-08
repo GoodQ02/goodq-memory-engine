@@ -28,10 +28,17 @@ def ensure_env(target_models_dir: Path) -> None:
     os.environ['HF_HUB_ENABLE_HF_TRANSFER'] = '1'
 
 
-def snapshot(model_id: str, auth_token: str | None = None) -> Dict[str, str]:
+def snapshot(model_id: str, auth_token: str | None = None, revision: str | None = None) -> Dict[str, str]:
+    """
+    Download a model snapshot from HuggingFace Hub.
+    
+    Args:
+        model_id: Model ID (may include @revision)
+        auth_token: HuggingFace auth token
+        revision: Explicit revision (commit SHA, tag, or branch). Overrides @revision in model_id.
+    """
     repo_id = model_id
-    revision = None
-    if '@' in model_id:
+    if '@' in model_id and revision is None:
         repo_id, revision = model_id.split('@', 1)
     try:
         from huggingface_hub import snapshot_download  # type: ignore
@@ -45,7 +52,7 @@ def snapshot(model_id: str, auth_token: str | None = None) -> Dict[str, str]:
             local_dir_use_symlinks=False,
             token=auth_token,
         )
-        return {"model": model_id, "status": "ok", "path": local_dir}
+        return {"model": model_id, "status": "ok", "path": local_dir, "revision": revision or "default"}
     except Exception as exc:  # pragma: no cover
         return {"model": model_id, "status": "error", "error": str(exc)}
 
@@ -66,6 +73,19 @@ def download_yolo_n() -> Dict[str, str]:
         return {"asset": "yolov8n.pt", "status": "error", "error": str(exc)}
 
 
+def load_registry(repo_root: Path) -> Dict | None:
+    """Load model registry if it exists."""
+    try:
+        import yaml  # type: ignore
+        registry_path = repo_root / "configs" / "model_registry.yaml"
+        if registry_path.exists():
+            with open(registry_path, 'r', encoding='utf-8') as f:
+                return yaml.safe_load(f)
+    except Exception:
+        pass
+    return None
+
+
 def main() -> None:
     # Resolve project root (scripts/..)
     script_dir = Path(__file__).resolve().parent
@@ -80,6 +100,21 @@ def main() -> None:
     hf_token = os.environ.get("HF_TOKEN")
     pyannote_token = os.environ.get("PYANNOTE_TOKEN") or hf_token
 
+    # Load registry for pinned versions
+    registry = load_registry(repo_root)
+    pinned_models = {}
+    
+    if registry and 'huggingface_models' in registry:
+        print("[bootstrap] Using model_registry.yaml for version pinning")
+        for model_key, model_info in registry['huggingface_models'].items():
+            repo_id = model_info.get('repo_id')
+            revision = model_info.get('revision')
+            if repo_id and revision:
+                pinned_models[repo_id] = revision
+    else:
+        print("[bootstrap] WARNING: model_registry.yaml not found, using latest versions")
+
+    # Fallback list (if registry doesn't exist)
     wanted: List[str] = [
         # Image caption (primary + fallback)
         "Salesforce/blip-image-captioning-base",
@@ -104,8 +139,20 @@ def main() -> None:
 
     results: List[Dict[str, str]] = []
     for mid in wanted:
-        token = pyannote_token if mid.startswith('pyannote/') else hf_token
-        results.append(snapshot(mid, token))
+        # Strip any existing @revision
+        repo_id = mid.split('@')[0] if '@' in mid else mid
+        
+        # Use pinned revision if available
+        revision = pinned_models.get(repo_id)
+        
+        # Determine auth token
+        token = pyannote_token if repo_id.startswith('pyannote/') else hf_token
+        
+        # Download with pinned revision
+        result = snapshot(mid, token, revision)
+        if revision:
+            result['pinned_revision'] = revision
+        results.append(result)
 
     results.append(download_yolo_n())
 
@@ -114,6 +161,8 @@ def main() -> None:
     report_path = out_dir / "bootstrap_models_report.json"
     report = {
         "models_dir": str(models_root),
+        "registry_loaded": registry is not None,
+        "pinned_models_count": len(pinned_models),
         "env": {
             "HF_HOME": os.environ.get("HF_HOME"),
             "TORCH_HOME": os.environ.get("TORCH_HOME"),

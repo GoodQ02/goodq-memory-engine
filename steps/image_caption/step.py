@@ -15,6 +15,11 @@ def _load_blip() -> None:
         import torch  # type: ignore
         from transformers import BlipProcessor, BlipForConditionalGeneration  # type: ignore
 
+        # Ensure HF_HOME is set for model caching
+        os.environ.setdefault("HF_HOME", "L:/models")
+        os.environ.setdefault("TORCH_HOME", "L:/models")
+        os.environ.setdefault("TRANSFORMERS_CACHE", "L:/models/transformers")
+        
         device = "cuda" if getattr(torch, "cuda", None) and torch.cuda.is_available() else "cpu"
         proc = BlipProcessor.from_pretrained("Salesforce/blip-image-captioning-base")
         model = BlipForConditionalGeneration.from_pretrained("Salesforce/blip-image-captioning-base").to(device)

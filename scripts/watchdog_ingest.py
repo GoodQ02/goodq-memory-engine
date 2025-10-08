@@ -1,0 +1,456 @@
+#!/usr/bin/env python3
+"""
+GoodQ Watchdog - Automatic File Ingestion Monitor
+Monitors import_inbox for new files and automatically processes them.
+"""
+
+from __future__ import annotations
+import sys
+import time
+import hashlib
+import shutil
+import logging
+from pathlib import Path
+from datetime import datetime
+from typing import Optional, Set, Dict, List
+from queue import Queue, Empty
+from threading import Thread, Event, Lock
+import json
+
+# Setup logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(message)s',
+    handlers=[
+        logging.FileHandler('L:/zenml_project/logs/watchdog.log'),
+        logging.StreamHandler(sys.stdout)
+    ]
+)
+logger = logging.getLogger(__name__)
+
+# Configuration
+WATCH_DIR = Path("L:/zenml_project/import_inbox")
+PROCESSING_DIR = Path("L:/zenml_project/data/processing")
+PROCESSED_DIR = Path("L:/zenml_project/data/processed")
+FAILED_DIR = Path("L:/zenml_project/data/failed")
+STATE_FILE = Path("L:/zenml_project/logs/watchdog_state.json")
+
+# File type configuration
+SUPPORTED_VIDEO = {'.mp4', '.avi', '.mov', '.mkv', '.wmv', '.flv', '.webm', '.m4v'}
+SUPPORTED_AUDIO = {'.mp3', '.wav', '.flac', '.m4a', '.aac', '.ogg', '.wma'}
+SUPPORTED_IMAGE = {'.jpg', '.jpeg', '.png', '.bmp', '.gif', '.tiff', '.webp'}
+SUPPORTED_DOCUMENT = {'.pdf', '.txt', '.md', '.doc', '.docx'}
+
+# Processing configuration
+POLL_INTERVAL = 2.0  # seconds
+STABILITY_WAIT = 3.0  # wait for file to stop changing
+MAX_WORKERS = 1  # process one at a time for now
+REPROCESS_ON_START = False  # don't reprocess files already marked as processed
+
+
+class FileState:
+    """Track file processing state"""
+    def __init__(self, path: Path):
+        self.path = path
+        self.size = path.stat().st_size if path.exists() else 0
+        self.mtime = path.stat().st_mtime if path.exists() else 0
+        self.hash: Optional[str] = None
+        self.last_check = time.time()
+        self.stable = False
+        
+    def is_stable(self) -> bool:
+        """Check if file has stopped changing"""
+        if not self.path.exists():
+            return False
+        current_size = self.path.stat().st_size
+        current_mtime = self.path.stat().st_mtime
+        
+        if current_size == self.size and current_mtime == self.mtime:
+            elapsed = time.time() - self.last_check
+            return elapsed >= STABILITY_WAIT
+        
+        # File changed, reset
+        self.size = current_size
+        self.mtime = current_mtime
+        self.last_check = time.time()
+        return False
+    
+    def compute_hash(self) -> str:
+        """Compute SHA256 hash of file"""
+        if self.hash:
+            return self.hash
+        sha256 = hashlib.sha256()
+        with open(self.path, 'rb') as f:
+            for chunk in iter(lambda: f.read(8192), b''):
+                sha256.update(chunk)
+        self.hash = sha256.hexdigest()
+        return self.hash
+
+
+class ProcessedRegistry:
+    """Track which files have been processed"""
+    def __init__(self, state_file: Path):
+        self.state_file = state_file
+        self.lock = Lock()
+        self.processed: Dict[str, Dict] = {}
+        self.load()
+    
+    def load(self):
+        """Load processed file registry"""
+        if self.state_file.exists():
+            try:
+                with open(self.state_file, 'r') as f:
+                    self.processed = json.load(f)
+                logger.info(f"Loaded {len(self.processed)} processed file records")
+            except Exception as e:
+                logger.error(f"Failed to load state file: {e}")
+                self.processed = {}
+    
+    def save(self):
+        """Save processed file registry"""
+        with self.lock:
+            try:
+                self.state_file.parent.mkdir(parents=True, exist_ok=True)
+                with open(self.state_file, 'w') as f:
+                    json.dump(self.processed, f, indent=2)
+            except Exception as e:
+                logger.error(f"Failed to save state file: {e}")
+    
+    def is_processed(self, file_hash: str) -> bool:
+        """Check if file hash has been processed"""
+        with self.lock:
+            return file_hash in self.processed
+    
+    def mark_processed(self, file_hash: str, original_name: str, status: str = 'success'):
+        """Mark file as processed"""
+        with self.lock:
+            self.processed[file_hash] = {
+                'original_name': original_name,
+                'status': status,
+                'timestamp': datetime.now().isoformat()
+            }
+            self.save()
+    
+    def mark_failed(self, file_hash: str, original_name: str, error: str):
+        """Mark file as failed"""
+        with self.lock:
+            self.processed[file_hash] = {
+                'original_name': original_name,
+                'status': 'failed',
+                'error': error,
+                'timestamp': datetime.now().isoformat()
+            }
+            self.save()
+
+
+class WatchdogProcessor:
+    """Main watchdog processor"""
+    def __init__(self):
+        self.watch_dir = WATCH_DIR
+        self.processing_dir = PROCESSING_DIR
+        self.processed_dir = PROCESSED_DIR
+        self.failed_dir = FAILED_DIR
+        self.registry = ProcessedRegistry(STATE_FILE)
+        self.queue = Queue()
+        self.shutdown = Event()
+        self.file_states: Dict[str, FileState] = {}
+        
+        # Ensure directories exist
+        self.processing_dir.mkdir(parents=True, exist_ok=True)
+        self.processed_dir.mkdir(parents=True, exist_ok=True)
+        self.failed_dir.mkdir(parents=True, exist_ok=True)
+        
+        logger.info(f"Watching directory: {self.watch_dir}")
+    
+    def get_file_type(self, path: Path) -> Optional[str]:
+        """Determine file type"""
+        ext = path.suffix.lower()
+        if ext in SUPPORTED_VIDEO:
+            return 'video'
+        elif ext in SUPPORTED_AUDIO:
+            return 'audio'
+        elif ext in SUPPORTED_IMAGE:
+            return 'image'
+        elif ext in SUPPORTED_DOCUMENT:
+            return 'document'
+        return None
+    
+    def scan_directory(self) -> List[Path]:
+        """Scan watch directory for new files"""
+        if not self.watch_dir.exists():
+            logger.warning(f"Watch directory does not exist: {self.watch_dir}")
+            return []
+        
+        files = []
+        for item in self.watch_dir.iterdir():
+            if item.is_file() and not item.name.startswith('.'):
+                # Check if supported file type
+                if self.get_file_type(item):
+                    files.append(item)
+        return files
+    
+    def monitor_loop(self):
+        """Main monitoring loop"""
+        logger.info("Starting file monitor...")
+        
+        while not self.shutdown.is_set():
+            try:
+                # Scan for files
+                files = self.scan_directory()
+                
+                # Update file states
+                current_paths = {str(f) for f in files}
+                
+                # Remove states for files that no longer exist
+                to_remove = [p for p in self.file_states.keys() if p not in current_paths]
+                for p in to_remove:
+                    del self.file_states[p]
+                
+                # Check each file
+                for file_path in files:
+                    path_str = str(file_path)
+                    
+                    # Create or update file state
+                    if path_str not in self.file_states:
+                        self.file_states[path_str] = FileState(file_path)
+                        logger.info(f"New file detected: {file_path.name}")
+                    
+                    state = self.file_states[path_str]
+                    
+                    # Check if file is stable
+                    if state.is_stable() and not state.stable:
+                        state.stable = True
+                        logger.info(f"File stable: {file_path.name} ({state.size} bytes)")
+                        
+                        # Compute hash and check if already processed
+                        file_hash = state.compute_hash()
+                        
+                        if self.registry.is_processed(file_hash):
+                            logger.info(f"File already processed (hash: {file_hash[:8]}...), skipping: {file_path.name}")
+                            # Optionally mark the file to avoid repeated checks
+                            self.mark_file_processed(file_path)
+                        else:
+                            # Add to processing queue
+                            self.queue.put((file_path, file_hash))
+                            logger.info(f"Queued for processing: {file_path.name}")
+                
+                time.sleep(POLL_INTERVAL)
+                
+            except Exception as e:
+                logger.error(f"Error in monitor loop: {e}", exc_info=True)
+                time.sleep(POLL_INTERVAL)
+    
+    def mark_file_processed(self, file_path: Path):
+        """Mark file as processed by renaming"""
+        try:
+            new_name = f"PROCESSED_{file_path.name}"
+            new_path = file_path.parent / new_name
+            if not new_path.exists():
+                file_path.rename(new_path)
+                logger.debug(f"Marked as processed: {new_name}")
+        except Exception as e:
+            logger.error(f"Failed to rename processed file: {e}")
+    
+    def process_file(self, file_path: Path, file_hash: str) -> bool:
+        """Process a single file"""
+        file_type = self.get_file_type(file_path)
+        logger.info(f"Processing {file_type}: {file_path.name}")
+        
+        # Move to processing directory
+        processing_path = self.processing_dir / file_path.name
+        try:
+            shutil.copy2(file_path, processing_path)
+            logger.debug(f"Copied to processing: {processing_path}")
+        except Exception as e:
+            logger.error(f"Failed to copy file: {e}")
+            self.registry.mark_failed(file_hash, file_path.name, str(e))
+            return False
+        
+        # Call ingestion pipeline
+        success = False
+        error_msg = None
+        
+        try:
+            if file_type == 'video':
+                success = self.ingest_video(processing_path)
+            elif file_type == 'audio':
+                success = self.ingest_audio(processing_path)
+            elif file_type == 'image':
+                success = self.ingest_image(processing_path)
+            elif file_type == 'document':
+                success = self.ingest_document(processing_path)
+            else:
+                error_msg = f"Unsupported file type: {file_type}"
+                logger.error(error_msg)
+        except Exception as e:
+            error_msg = str(e)
+            logger.error(f"Processing failed: {e}", exc_info=True)
+        
+        # Handle result
+        if success:
+            logger.info(f"✓ Successfully processed: {file_path.name}")
+            self.registry.mark_processed(file_hash, file_path.name, 'success')
+            
+            # Move original to processed
+            processed_path = self.processed_dir / f"PROCESSED_{file_path.name}"
+            try:
+                file_path.rename(processed_path)
+                logger.debug(f"Moved to processed: {processed_path}")
+            except Exception as e:
+                logger.error(f"Failed to move to processed: {e}")
+            
+            # Clean up processing copy
+            try:
+                processing_path.unlink(missing_ok=True)
+            except Exception as e:
+                logger.error(f"Failed to clean up processing file: {e}")
+                
+        else:
+            logger.error(f"✗ Failed to process: {file_path.name}")
+            self.registry.mark_failed(file_hash, file_path.name, error_msg or 'Unknown error')
+            
+            # Move to failed
+            failed_path = self.failed_dir / f"FAILED_{file_path.name}"
+            try:
+                file_path.rename(failed_path)
+                logger.debug(f"Moved to failed: {failed_path}")
+            except Exception as e:
+                logger.error(f"Failed to move to failed: {e}")
+            
+            # Clean up processing copy
+            try:
+                processing_path.unlink(missing_ok=True)
+            except Exception as e:
+                logger.error(f"Failed to clean up processing file: {e}")
+        
+        return success
+    
+    def ingest_video(self, video_path: Path) -> bool:
+        """Ingest video file via CLI"""
+        import subprocess
+        
+        cmd = [
+            sys.executable,
+            'L:/zenml_project/cli/run_ingestion.py',
+            'ingest',
+            str(video_path),
+            '--env', 'goodq_zenml'
+        ]
+        
+        logger.debug(f"Running: {' '.join(cmd)}")
+        
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=3600,  # 1 hour timeout
+                cwd='L:/zenml_project'
+            )
+            
+            if result.returncode == 0:
+                logger.info("Video ingestion completed successfully")
+                return True
+            else:
+                logger.error(f"Video ingestion failed with code {result.returncode}")
+                logger.error(f"STDOUT: {result.stdout}")
+                logger.error(f"STDERR: {result.stderr}")
+                return False
+                
+        except subprocess.TimeoutExpired:
+            logger.error("Video ingestion timed out")
+            return False
+        except Exception as e:
+            logger.error(f"Video ingestion error: {e}", exc_info=True)
+            return False
+    
+    def ingest_audio(self, audio_path: Path) -> bool:
+        """Ingest audio file"""
+        # TODO: Implement audio ingestion
+        logger.warning("Audio ingestion not yet implemented")
+        return False
+    
+    def ingest_image(self, image_path: Path) -> bool:
+        """Ingest image file"""
+        # TODO: Implement image ingestion
+        logger.warning("Image ingestion not yet implemented")
+        return False
+    
+    def ingest_document(self, doc_path: Path) -> bool:
+        """Ingest document file"""
+        # TODO: Implement document ingestion
+        logger.warning("Document ingestion not yet implemented")
+        return False
+    
+    def worker_loop(self):
+        """Worker thread to process queued files"""
+        logger.info("Starting worker thread...")
+        
+        while not self.shutdown.is_set():
+            try:
+                # Get next file from queue (with timeout)
+                try:
+                    file_path, file_hash = self.queue.get(timeout=1.0)
+                except Empty:
+                    continue
+                
+                # Process the file
+                self.process_file(file_path, file_hash)
+                
+                # Mark task as done
+                self.queue.task_done()
+                
+            except Exception as e:
+                logger.error(f"Error in worker loop: {e}", exc_info=True)
+    
+    def run(self):
+        """Start the watchdog"""
+        logger.info("=" * 60)
+        logger.info("GoodQ Watchdog Starting")
+        logger.info("=" * 60)
+        logger.info(f"Watch directory: {self.watch_dir}")
+        logger.info(f"Poll interval: {POLL_INTERVAL}s")
+        logger.info(f"Stability wait: {STABILITY_WAIT}s")
+        logger.info(f"Workers: {MAX_WORKERS}")
+        logger.info("=" * 60)
+        
+        # Start worker threads
+        workers = []
+        for i in range(MAX_WORKERS):
+            worker = Thread(target=self.worker_loop, name=f"Worker-{i}", daemon=True)
+            worker.start()
+            workers.append(worker)
+        
+        # Start monitor thread
+        monitor = Thread(target=self.monitor_loop, name="Monitor", daemon=True)
+        monitor.start()
+        
+        # Main thread waits
+        try:
+            while True:
+                time.sleep(1)
+        except KeyboardInterrupt:
+            logger.info("\nShutdown requested...")
+            self.shutdown.set()
+            
+            # Wait for queue to empty
+            logger.info("Waiting for queue to empty...")
+            self.queue.join()
+            
+            # Wait for threads
+            logger.info("Waiting for threads to finish...")
+            monitor.join(timeout=5)
+            for worker in workers:
+                worker.join(timeout=5)
+            
+            logger.info("Watchdog stopped")
+
+
+def main():
+    """Main entry point"""
+    watchdog = WatchdogProcessor()
+    watchdog.run()
+
+
+if __name__ == '__main__':
+    main()

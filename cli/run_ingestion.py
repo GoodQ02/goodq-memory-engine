@@ -19,6 +19,13 @@ from zenml_project.steps.common.tag_utils import canonicalize_taxonomy
 from zenml_project.steps.common.tool_paths import resolve_ffmpeg
 from zenml_project.steps.common.step_logger import log_step_run
 
+# Knowledge graph integration
+try:
+    from lib.knowledge_graph import KnowledgeGraph
+    KNOWLEDGE_GRAPH_AVAILABLE = True
+except ImportError:
+    KNOWLEDGE_GRAPH_AVAILABLE = False
+
 APP = typer.Typer(help='Scene-first ingestion orchestrator for GoodQ')
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_MODELS_DIR = Path(os.environ.get('HF_HOME', 'L:/models'))
@@ -50,6 +57,204 @@ AUDIO_PIPELINE_STEPS = [
     'tagger',
     'audio_embed_clap',
 ]
+
+
+
+def _build_knowledge_graph_from_results(results: List[Dict[str, Any]], cfg: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Build knowledge graph from ingestion results"""
+    if not KNOWLEDGE_GRAPH_AVAILABLE:
+        if VERBOSE:
+            typer.echo('[kg] Knowledge graph module not available, skipping')
+        return None
+    
+    try:
+        data_dir = Path(cfg.get('data_dir', 'data'))
+        graph_db_path = data_dir / 'knowledge_graph.db'
+        graph_db_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        if VERBOSE:
+            typer.echo(f'[kg] Building knowledge graph at {graph_db_path}')
+        
+        with KnowledgeGraph(str(graph_db_path)) as kg:
+            for video_result in results:
+                video_path = video_result.get('video_path', '')
+                scenes = video_result.get('scenes', [])
+                
+                for scene in scenes:
+                    scene_idx = scene.get('index', 0)
+                    scene_id = scene.get('scene_id', f'scene_{scene_idx:04d}')
+                    start_time = scene.get('start', 0.0)
+                    end_time = scene.get('end', start_time)
+                    
+                    # Add media node for this scene
+                    media_props = {
+                        'duration': end_time - start_time,
+                        'confidence': scene.get('confidence', 0.0),
+                        'video_path': video_path
+                    }
+                    media_id = kg.add_media_node(
+                        media_type='video_scene',
+                        media_path=video_path,
+                        scene_id=scene_id,
+                        timestamp_start=start_time,
+                        timestamp_end=end_time,
+                        properties=media_props
+                    )
+                    
+                    # Process keyframe data
+                    keyframe = scene.get('keyframe')
+                    if isinstance(keyframe, dict):
+                        _process_keyframe_entities(kg, keyframe, media_id, start_time)
+                    
+                    # Process audio data
+                    audio = scene.get('audio')
+                    if isinstance(audio, dict):
+                        _process_audio_entities(kg, audio, media_id, start_time)
+                    
+                    # Create temporal event for scene
+                    kg.add_temporal_event(
+                        event_type='scene_change',
+                        timestamp=start_time,
+                        duration=end_time - start_time,
+                        properties={'scene_id': scene_id, 'confidence': scene.get('confidence', 0.0)}
+                    )
+            
+            # Build relationships
+            _build_kg_relationships(kg)
+            
+            # Get statistics
+            stats = kg.get_statistics()
+            
+            if VERBOSE:
+                typer.echo(f'[kg] Knowledge graph complete: {stats}')
+            
+            return {
+                'graph_db_path': str(graph_db_path),
+                'statistics': stats,
+                'status': 'success'
+            }
+    
+    except Exception as exc:
+        if VERBOSE:
+            typer.echo(f'[kg] Knowledge graph build failed: {exc}', err=True)
+        return {'status': 'failed', 'error': str(exc)}
+
+
+def _process_keyframe_entities(kg: Any, keyframe: Dict[str, Any], media_id: int, timestamp: float) -> None:
+    """Extract and add entities from keyframe data"""
+    # Objects detected
+    detections = keyframe.get('detections', [])
+    if isinstance(detections, list):
+        for det in detections:
+            if isinstance(det, dict):
+                label = det.get('label', det.get('class'))
+                confidence = det.get('confidence', det.get('score', 0.0))
+                if label and confidence > 0.3:
+                    entity_id = kg.add_node('object', label, {'confidence': confidence}, timestamp)
+                    kg.link_node_to_media(entity_id, media_id, confidence)
+    
+    # Tags
+    tags = keyframe.get('tags', [])
+    if isinstance(tags, list):
+        for tag in tags:
+            if isinstance(tag, str):
+                entity_id = kg.add_node('concept', tag, {}, timestamp)
+                kg.link_node_to_media(entity_id, media_id, 0.5)
+    
+    # Emotions
+    emotions = keyframe.get('emotions', [])
+    if isinstance(emotions, list):
+        for emotion in emotions:
+            if isinstance(emotion, str):
+                entity_id = kg.add_node('emotion', emotion, {}, timestamp)
+                kg.link_node_to_media(entity_id, media_id, 0.5)
+    
+    # OCR text locations
+    ocr_text = keyframe.get('ocr_text')
+    if ocr_text:
+        entity_id = kg.add_node('concept', 'text_overlay', {'text': ocr_text[:100]}, timestamp)
+        kg.link_node_to_media(entity_id, media_id, 0.8)
+
+
+def _process_audio_entities(kg: Any, audio: Dict[str, Any], media_id: int, timestamp: float) -> None:
+    """Extract and add entities from audio data"""
+    # Transcript
+    transcript = audio.get('transcript')
+    if transcript:
+        entity_id = kg.add_node('concept', 'speech', {'transcript': transcript[:100]}, timestamp)
+        kg.link_node_to_media(entity_id, media_id, 0.9)
+    
+    # Speaker diarization
+    speakers = audio.get('speakers', [])
+    if isinstance(speakers, list):
+        for speaker in speakers:
+            if isinstance(speaker, dict):
+                speaker_id = speaker.get('speaker', speaker.get('label'))
+                if speaker_id:
+                    entity_id = kg.add_node('person', f'speaker_{speaker_id}', {}, timestamp)
+                    kg.link_node_to_media(entity_id, media_id, 0.7)
+    
+    # Audio emotions
+    audio_emotion = audio.get('audio_emotion')
+    if audio_emotion:
+        if isinstance(audio_emotion, str):
+            entity_id = kg.add_node('emotion', audio_emotion, {}, timestamp)
+            kg.link_node_to_media(entity_id, media_id, 0.6)
+        elif isinstance(audio_emotion, dict):
+            top_emotion = audio_emotion.get('top_emotion')
+            if top_emotion:
+                entity_id = kg.add_node('emotion', top_emotion, {}, timestamp)
+                kg.link_node_to_media(entity_id, media_id, 0.6)
+    
+    # Tags from audio
+    tags = audio.get('tags', [])
+    if isinstance(tags, list):
+        for tag in tags:
+            if isinstance(tag, str):
+                entity_id = kg.add_node('concept', tag, {}, timestamp)
+                kg.link_node_to_media(entity_id, media_id, 0.5)
+
+
+def _build_kg_relationships(kg: Any) -> None:
+    """Build co-occurrence, temporal, and semantic relationships"""
+    # Co-occurrence: entities appearing together in same media
+    cursor = kg.conn.cursor()
+    cursor.execute("""
+        SELECT e1.id, e2.id, COUNT(*) as co_count
+        FROM node_media nm1
+        JOIN node_media nm2 ON nm1.media_id = nm2.media_id
+        JOIN nodes e1 ON nm1.node_id = e1.id
+        JOIN nodes e2 ON nm2.node_id = e2.id
+        WHERE e1.id < e2.id
+        GROUP BY e1.id, e2.id
+        HAVING co_count >= 2
+    """)
+    
+    for row in cursor.fetchall():
+        kg.add_edge(
+            row[0], row[1], 'co_occurs',
+            weight=float(row[2]),
+            properties={'count': row[2]}
+        )
+    
+    # Temporal: entities in adjacent time windows (within 10 seconds)
+    cursor.execute("""
+        SELECT DISTINCT n1.id, n2.id
+        FROM media_nodes m1
+        JOIN media_nodes m2 ON ABS(m1.timestamp_start - m2.timestamp_start) <= 10
+        JOIN node_media nm1 ON m1.id = nm1.media_id
+        JOIN node_media nm2 ON m2.id = nm2.media_id
+        JOIN nodes n1 ON nm1.node_id = n1.id
+        JOIN nodes n2 ON nm2.node_id = n2.id
+        WHERE n1.id < n2.id
+        AND m1.id != m2.id
+    """)
+    
+    for row in cursor.fetchall():
+        kg.add_edge(
+            row[0], row[1], 'temporal_proximity',
+            weight=0.5
+        )
 
 
 
@@ -658,6 +863,12 @@ def run(
             'scene_meta': detection_meta,
             'scenes': scene_outputs,
         })
+
+    # Build knowledge graph from results
+    kg_result = _build_knowledge_graph_from_results(results, cfg)
+    if kg_result and kg_result.get('status') == 'success':
+        if VERBOSE:
+            typer.echo(f"[kg] Knowledge graph built successfully: {kg_result.get('statistics', {})}")
 
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(results, ensure_ascii=False, indent=2), encoding='utf-8')

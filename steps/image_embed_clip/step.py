@@ -55,7 +55,7 @@ def image_embed_clip(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
             index.hnsw.efConstruction = 200
             index.hnsw.efSearch = 50
         # stable ID from content fingerprint
-        from steps.steps.text_embed.step import _content_fingerprint
+        from GoodQ_4_All.steps.text_embed.step import _content_fingerprint
         h = _content_fingerprint(item)
         try:
             import numpy as np  # type: ignore
@@ -89,7 +89,7 @@ def image_embed_clip(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
                     pass
         # Upsert generic embedding metadata for recall
         try:
-            from steps.steps.common.memory import upsert_embedding
+            from GoodQ_4_All.steps.common.memory import upsert_embedding
             upsert_embedding(cfg, h, faiss_id, path, item.get("modality", "image") or "image")
         except Exception:
             pass

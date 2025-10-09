@@ -7,7 +7,7 @@ import pathlib
 def main() -> None:
     # Ensure repo root is on sys.path so 'GoodQ_4_All' is importable
     here = pathlib.Path(__file__).resolve()
-    repo_root = here.parents[2]  # .../zenml_project/api/server.py -> repo root
+    repo_root = here.parents[2]  # .../GoodQ_4_All/api/server.py -> repo root
     sys.path.insert(0, str(repo_root))
 
     host = os.environ.get("GOODQ_API_HOST", "0.0.0.0")

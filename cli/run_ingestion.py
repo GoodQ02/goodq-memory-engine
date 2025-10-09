@@ -13,11 +13,11 @@ from pathlib import Path
 import re
 import typer
 
-from zenml_project.steps.common.config_loader import load_configs
-from zenml_project.steps.common.memory import ensure_scene, register_scene_bundle, scene_has_materialized, get_scene_meta, list_scenes_for_video
-from zenml_project.steps.common.tag_utils import canonicalize_taxonomy
-from zenml_project.steps.common.tool_paths import resolve_ffmpeg
-from zenml_project.steps.common.step_logger import log_step_run
+from GoodQ_4_All.steps.common.config_loader import load_configs
+from GoodQ_4_All.steps.common.memory import ensure_scene, register_scene_bundle, scene_has_materialized, get_scene_meta, list_scenes_for_video
+from GoodQ_4_All.steps.common.tag_utils import canonicalize_taxonomy
+from GoodQ_4_All.steps.common.tool_paths import resolve_ffmpeg
+from GoodQ_4_All.steps.common.step_logger import log_step_run
 
 # Knowledge graph integration
 try:
@@ -318,7 +318,7 @@ def _run_step(env_name: str, step_name: str, payload: Dict[str, Any], cfg_json: 
         in_path.write_text(json.dumps(payload, ensure_ascii=False), encoding='utf-8')
         cmd = [
             'conda', 'run', '-n', env_name,
-            'python', '-m', 'zenml_project.cli.step_runner',
+            'python', '-m', 'GoodQ_4_All.cli.step_runner',
             '--step', step_name,
             '--in', str(in_path),
             '--out', str(out_path),

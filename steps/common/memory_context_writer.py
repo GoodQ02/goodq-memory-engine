@@ -7,7 +7,7 @@ from __future__ import annotations
 from typing import Any, Dict, Optional
 import logging
 
-from steps.steps.common.memory import (
+from GoodQ_4_All.steps.common.memory import (
     register_scene_bundle,
     upsert_scene,
     update_fields,

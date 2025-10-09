@@ -236,7 +236,7 @@ def audio_transcribe(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
     chunk_seconds = float(tx_cfg.get("chunk_seconds") or 10)
     chunk_seconds = max(1.0, chunk_seconds)
 
-    from steps.steps.common.tool_paths import resolve_ffmpeg
+    from GoodQ_4_All.steps.common.tool_paths import resolve_ffmpeg
 
     ffmpeg_path = resolve_ffmpeg(cfg) or "ffmpeg"
 

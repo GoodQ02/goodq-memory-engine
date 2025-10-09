@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Cache readiness checker for zenml_project assets and models."""
+"""Cache readiness checker for GoodQ_4_All assets and models."""
 from __future__ import annotations
 
 import argparse
@@ -181,7 +181,7 @@ def summarize(report: Dict[str, Dict[str, str]]) -> int:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Verify cached models/assets for zenml_project")
+    parser = argparse.ArgumentParser(description="Verify cached models/assets for GoodQ_4_All")
     parser.add_argument("--json", action="store_true", help="Output JSON report")
     parser.add_argument("--auto-fix", action="store_true", help="Attempt to re-fetch missing caches")
     return parser.parse_args()

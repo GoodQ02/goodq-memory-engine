@@ -11,7 +11,7 @@ os.environ.setdefault('PYTHONNOUSERSITE', '0')
 
 
 def load_cfg(overrides: Dict[str, Any] | None = None) -> Dict[str, Any]:
-    from zenml_project.steps.common.config_loader import load_configs
+    from GoodQ_4_All.steps.common.config_loader import load_configs
     return load_configs(overrides or {})
 
 
@@ -22,8 +22,8 @@ def _save_memory_context(step_name: str, item: Dict[str, Any] | None, results: D
     
     try:
         # Import here to avoid circular dependencies
-        from zenml_project.steps.common.memory_context_writer import save_step_context
-        from zenml_project.steps.common.memory import compute_file_hash
+        from GoodQ_4_All.steps.common.memory_context_writer import save_step_context
+        from GoodQ_4_All.steps.common.memory import compute_file_hash
         
         # Extract scene context from item
         video_hash = item.get('video_hash')
@@ -59,102 +59,102 @@ def _save_memory_context(step_name: str, item: Dict[str, Any] | None, results: D
 def run_step(step_name: str, item: Dict[str, Any] | None, cfg: Dict[str, Any]) -> Dict[str, Any]:
     # Map step names to callables and call signatures
     if step_name == "video_scene_detect":
-        from zenml_project.steps.video_scene_detect.step import video_scene_detect
+        from GoodQ_4_All.steps.video_scene_detect.step import video_scene_detect
         assert item is not None
         return video_scene_detect(item, cfg)
 
     if step_name == "audio_transcribe":
-        from zenml_project.steps.audio_transcribe.step import audio_transcribe
+        from GoodQ_4_All.steps.audio_transcribe.step import audio_transcribe
         assert item is not None
         return audio_transcribe(item, cfg)
     if step_name == "image_ocr":
-        from zenml_project.steps.image_ocr.step import image_ocr
+        from GoodQ_4_All.steps.image_ocr.step import image_ocr
         assert item is not None
         return image_ocr(item, cfg)
     if step_name == "image_caption":
-        from zenml_project.steps.image_caption.step import image_caption
+        from GoodQ_4_All.steps.image_caption.step import image_caption
         assert item is not None
         return image_caption(item, cfg)
     if step_name == "object_detect":
-        from zenml_project.steps.object_detect.step import object_detect
+        from GoodQ_4_All.steps.object_detect.step import object_detect
         assert item is not None
         return object_detect(item, cfg)
     if step_name == "object_track":
-        from zenml_project.steps.object_track.step import object_track
+        from GoodQ_4_All.steps.object_track.step import object_track
         assert item is not None
         return object_track(item, cfg)
     if step_name == "object_track_yolo":
-        from zenml_project.steps.object_track_yolo.step import object_track_yolo
+        from GoodQ_4_All.steps.object_track_yolo.step import object_track_yolo
         assert item is not None
         return object_track_yolo(item, cfg)
     if step_name == "face_embed":
-        from zenml_project.steps.face_embed.step import face_embed
+        from GoodQ_4_All.steps.face_embed.step import face_embed
         assert item is not None
         return face_embed(item, cfg)
     if step_name == "text_embed":
-        from zenml_project.steps.text_embed.step import text_embed
+        from GoodQ_4_All.steps.text_embed.step import text_embed
         assert item is not None
         return text_embed(item, cfg)
     if step_name == "pdf_text":
-        from zenml_project.steps.pdf_text.step import pdf_to_text
+        from GoodQ_4_All.steps.pdf_text.step import pdf_to_text
         assert item is not None
         return pdf_to_text(item, cfg)
     if step_name == "image_exif":
-        from zenml_project.steps.image_exif.step import image_exif
+        from GoodQ_4_All.steps.image_exif.step import image_exif
         assert item is not None
         return image_exif(item, cfg)
     if step_name == "image_embed_dino":
-        from zenml_project.steps.image_embed_dino.step import image_embed_dino
+        from GoodQ_4_All.steps.image_embed_dino.step import image_embed_dino
         assert item is not None
         return image_embed_dino(item, cfg)
     if step_name == "image_embed_clip":
-        from zenml_project.steps.image_embed_clip.step import image_embed_clip
+        from GoodQ_4_All.steps.image_embed_clip.step import image_embed_clip
         assert item is not None
         return image_embed_clip(item, cfg)
     if step_name == "audio_embed_clap":
-        from zenml_project.steps.audio_embed_clap.step import audio_embed_clap
+        from GoodQ_4_All.steps.audio_embed_clap.step import audio_embed_clap
         assert item is not None
         return audio_embed_clap(item, cfg)
     if step_name == "emotion_classify":
-        from zenml_project.steps.emotion_classify.step import emotion_classify
+        from GoodQ_4_All.steps.emotion_classify.step import emotion_classify
         assert item is not None
         return emotion_classify(item, cfg)
     if step_name == "sentiment":
-        from zenml_project.steps.sentiment.step import sentiment
+        from GoodQ_4_All.steps.sentiment.step import sentiment
         assert item is not None
         return sentiment(item, cfg)
     if step_name == "home_assistant_status":
-        from zenml_project.steps.home_assistant_status.step import home_assistant_status
+        from GoodQ_4_All.steps.home_assistant_status.step import home_assistant_status
         return home_assistant_status(cfg)
     if step_name == "system_metrics":
-        from zenml_project.steps.system_metrics.step import system_metrics
+        from GoodQ_4_All.steps.system_metrics.step import system_metrics
         return system_metrics(cfg)
     if step_name == "audio_diarize":
-        from zenml_project.steps.audio_diarize.step import audio_diarize
+        from GoodQ_4_All.steps.audio_diarize.step import audio_diarize
         assert item is not None
         return audio_diarize(item, cfg)
     if step_name == "audio_speaker_merge":
-        from zenml_project.steps.audio_speaker_merge.step import audio_speaker_merge
+        from GoodQ_4_All.steps.audio_speaker_merge.step import audio_speaker_merge
         assert item is not None
         return audio_speaker_merge(item, cfg)
     if step_name == "audio_emotion":
-        from zenml_project.steps.audio_emotion.step import audio_emotion
+        from GoodQ_4_All.steps.audio_emotion.step import audio_emotion
         assert item is not None
         return audio_emotion(item, cfg)
     if step_name == "audio_metadata":
-        from zenml_project.steps.audio_metadata.step import audio_metadata
+        from GoodQ_4_All.steps.audio_metadata.step import audio_metadata
         assert item is not None
         return audio_metadata(item, cfg)
     if step_name == "audio_music_events":
-        from zenml_project.steps.audio_music_events.step import audio_music_events
+        from GoodQ_4_All.steps.audio_music_events.step import audio_music_events
         assert item is not None
         return audio_music_events(item, cfg)
     if step_name == "audio_time_hints":
-        from zenml_project.steps.audio_time_hints.step import audio_time_hints
+        from GoodQ_4_All.steps.audio_time_hints.step import audio_time_hints
         assert item is not None
         return audio_time_hints(item, cfg)
     if step_name == "tagger":
-        from zenml_project.steps.tagger.step import tagger
+        from GoodQ_4_All.steps.tagger.step import tagger
         assert item is not None
         return tagger(item, cfg)
     raise SystemExit(f"Unknown step: {step_name}")
@@ -186,7 +186,7 @@ def main() -> None:
     else:
         cfg = load_cfg(overrides)
     # Measure and log duration
-    from zenml_project.steps.common.step_logger import log_step_run
+    from GoodQ_4_All.steps.common.step_logger import log_step_run
     start_ns = time.perf_counter_ns()
     try:
         res = run_step(args.step, item, cfg)

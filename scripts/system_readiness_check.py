@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""System readiness checker for the zenml_project stack."""
+"""System readiness checker for the GoodQ_4_All stack."""
 from __future__ import annotations
 
 import argparse
@@ -371,7 +371,7 @@ def print_report(report: Dict[str, Any]) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Check system readiness for zenml_project")
+    parser = argparse.ArgumentParser(description="Check system readiness for GoodQ_4_All")
     parser.add_argument("--json", action="store_true", help="Output report as JSON")
     args = parser.parse_args()
 

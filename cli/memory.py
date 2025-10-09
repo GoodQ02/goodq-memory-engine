@@ -5,10 +5,10 @@ from typing import Optional
 
 import typer
 
-from zenml_project.steps.common.config_loader import load_configs
-from zenml_project.lib.memory_management.diagnostics import run_all_diagnostics, check_schema_drift
-from zenml_project.lib.memory_management.utils import create_memory_backup
-from zenml_project.lib.memory_management.migrate import migrate_database
+from GoodQ_4_All.steps.common.config_loader import load_configs
+from GoodQ_4_All.lib.memory_management.diagnostics import run_all_diagnostics, check_schema_drift
+from GoodQ_4_All.lib.memory_management.utils import create_memory_backup
+from GoodQ_4_All.lib.memory_management.migrate import migrate_database
 from typing import Any, Dict
 
 app = typer.Typer(add_completion=False, help="GoodQ memory management CLI")
@@ -257,7 +257,7 @@ def register_scene_bundle_cmd(bundle: Path = typer.Argument(..., help="Path to J
         raise typer.BadParameter("bundle must include video_hash and scene")
 
     cfg = load_configs({})
-    from zenml_project.steps.common.memory import ensure_scene, register_scene_bundle
+    from GoodQ_4_All.steps.common.memory import ensure_scene, register_scene_bundle
 
     scene_id = payload.get("scene_id")
     scene_start = float(scene.get("start", 0.0) or 0.0)
@@ -276,7 +276,9 @@ def register_scene_bundle_cmd(bundle: Path = typer.Argument(..., help="Path to J
         audio=payload.get("audio"),
         errors=payload.get("errors"),
     )
-    typer.echo(json.dumps(result, ensure_ascii=False, indent=2))def main() -> None:
+    typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
+
+def main() -> None:
     app()
 
 

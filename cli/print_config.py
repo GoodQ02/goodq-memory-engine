@@ -1,6 +1,6 @@
 from __future__ import annotations
 import json
-from zenml_project.steps.common.config_loader import load_configs
+from GoodQ_4_All.steps.common.config_loader import load_configs
 
 
 def main() -> None:

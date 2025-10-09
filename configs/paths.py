@@ -58,8 +58,8 @@ ENVS_DIR = PROJECT_ROOT / "envs"
 # ==============================================================================
 # EXTERNAL DIRECTORIES
 # ==============================================================================
-MODELS_DIR = Path("L:/models")
-TOOLS_DIR = Path("L:/tools")
+MODELS_DIR = Path("L:/_DATA/models")
+TOOLS_DIR = Path("L:/_TOOLS")
 ARCHIVE_DIR = Path("L:/_ARCHIVE")
 
 # ==============================================================================
@@ -105,7 +105,7 @@ def set_environment_variables():
 # LEGACY PATH MAPPING (for migration)
 # ==============================================================================
 LEGACY_PATHS = {
-    "zenml_project": PROJECT_ROOT,
+    "GoodQ_4_All": PROJECT_ROOT,
     "old_logs": ARCHIVE_DIR / "old_tests",
     "old_data": ARCHIVE_DIR / "old_data"
 }

@@ -129,7 +129,7 @@ function Show-LastScenePeek {
 }
 function Show-LatestExport {
   H1 'Latest Export'
-  $base = 'L:\\GoodQ_Data\\logs\\run_exports'
+  $base = 'L:\\_DATA\\GoodQ_Data\\exports'
   if (-not (Test-Path $base)) { Warn 'No export directory found'; return }
   $dir = Get-ChildItem -LiteralPath $base -Directory | Sort-Object LastWriteTime -Descending | Select-Object -First 1
   if (-not $dir) { Warn 'No exports yet'; return }

@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import Any, Dict, Optional
 
-from steps.steps.common.tool_paths import resolve_tesseract
+from GoodQ_4_All.steps.common.tool_paths import resolve_tesseract
 
 
 def image_ocr(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:

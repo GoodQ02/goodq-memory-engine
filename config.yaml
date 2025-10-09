@@ -64,12 +64,12 @@ model:
   workplace: The GoodPlace, a creative sanctuary for innovation and healing, Chicago,
     Illinois
 paths:
-  log_dir: L:/GoodQ_Data/logs
-  output_directory: L:/GoodQ_Data/data/output_inbox
-  db_dir: L:/GoodQ_Data/data/memory_db
-  csv_path: L:/GoodQ_Data/logs/GOOD_ENGINE_SYS.csv
+  log_dir: L:/_DATA/GoodQ_Data/logs
+  output_directory: L:/_DATA/GoodQ_Data/data/output_inbox
+  db_dir: L:/_DATA/GoodQ_Data/data/memory_db
+  csv_path: L:/_DATA/GoodQ_Data/logs/GOOD_ENGINE_SYS.csv
   nas_path: G:/Logs
-  config_dir: L:/GoodQ_Data/config
+  config_dir: L:/_DATA/GoodQ_Data/config
 llm:
   api_url: http://localhost:1234/v1/chat/completions
   model_id: LM_STUDIO_GOODQ
@@ -99,4 +99,4 @@ devices:
   nas: UGREEN NAS with 44TB of HDD storage and 8TB of flash storage
   network: 2.5Gbps Ethernet connected to Tp-Link Archer AXE7800 with 2.5Gbps Ethernet,
     Wi-Fi 6E fallback
-  config: L:/zenml_project/config/config.yaml
+  config: L:/GoodQ_4_All/config/config.yaml

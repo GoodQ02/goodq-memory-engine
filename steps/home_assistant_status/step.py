@@ -3,7 +3,7 @@ import os
 from typing import Any, Dict, List
 
 import requests
-from steps.steps.common.retry import request_with_retry
+from GoodQ_4_All.steps.common.retry import request_with_retry
 
 
 def _summarize_entity(entity: Dict[str, Any]) -> str:

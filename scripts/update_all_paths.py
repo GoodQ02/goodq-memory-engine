@@ -10,7 +10,7 @@ REPLACEMENTS = [
     
     # Old project name - backslash  
     ('L:\\GoodQ_4_All', 'L:\\GoodQ_4_All'),
-    ('L:\\\\zenml_project', 'L:\\\\GoodQ_4_All'),
+    ('L:\\\\GoodQ_4_All', 'L:\\\\GoodQ_4_All'),
     
     # Quoted references
     ('"GoodQ_4_All"', '"GoodQ_4_All"'),

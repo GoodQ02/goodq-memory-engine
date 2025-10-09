@@ -6,8 +6,8 @@ import json
 import os
 import subprocess
 
-from steps.steps.common.memory import append_long_term_summary, store_short_term_summary
-from steps.steps.common.tag_utils import canonicalize_taxonomy
+from GoodQ_4_All.steps.common.memory import append_long_term_summary, store_short_term_summary
+from GoodQ_4_All.steps.common.tag_utils import canonicalize_taxonomy
 
 
 def _default(val, d):

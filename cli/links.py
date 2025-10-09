@@ -3,8 +3,8 @@ import argparse
 import json
 from typing import Any, Dict
 
-from zenml_project.steps.common.config_loader import load_configs
-from zenml_project.steps.common.memory import insert_link, upsert_scene, upsert_segment
+from GoodQ_4_All.steps.common.config_loader import load_configs
+from GoodQ_4_All.steps.common.memory import insert_link, upsert_scene, upsert_segment
 
 
 def main() -> None:

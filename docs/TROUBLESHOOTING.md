@@ -295,3 +295,65 @@ Include:
 ---
 
 *Last reviewed: October 6, 2025*
+
+---
+
+### Issue 5: ImportError - AppleFrameworkLoader
+
+**Error:**
+```
+Could not import runpy module
+ImportError: cannot import name 'AppleFrameworkLoader' from 'importlib._bootstrap_external'
+```
+
+**Status:** ✅ **FIXED** (October 8, 2025)
+
+**Cause:** Base conda Python's runpy module corruption affecting `python -m pip` calls.
+
+**Solution Applied:**
+- All GoodQ scripts now use `pip` directly instead of `python -m pip`
+- Scripts updated: enable_cuda.ps1, fix_audio_emotion.ps1, index_to_chroma.ps1, lock_envs.ps1, prepare_step_envs.ps1, start_api.ps1
+
+**If Issue Persists:**
+```powershell
+# Option A: Update base conda
+conda update -n base conda python -y
+
+# Option B: Reinstall Miniconda
+# Download from: https://docs.conda.io/en/latest/miniconda.html
+```
+
+---
+
+### Issue 6: goodq_face_embed Environment Failures
+
+**Error:**
+```
+ERROR: Cannot install torch==2.3.1 and facenet-pytorch==2.6.0
+ERROR: Failed building wheel for dlib
+```
+
+**Status:** ⚠️ **KNOWN ISSUE** - Non-critical (face embedding optional)
+
+**Causes:**
+1. **Dependency Conflict:** facenet-pytorch 2.6.0 requires torch<2.3.0, but GoodQ needs 2.3.1 for CUDA 12.1
+2. **Build Requirement:** dlib requires CMake for Windows compilation
+
+**Workaround:** Environment temporarily excluded from CUDA enablement. Other envs work normally.
+
+**Permanent Fix Options:**
+
+**Option A: Install CMake** (Recommended)
+```powershell
+# 1. Download from https://cmake.org/download/
+# 2. Add CMake to system PATH
+# 3. Run repair script
+L:\goodq4all\scripts\emergency_conda_repair.ps1
+```
+
+**Option B: Use Alternative**
+Replace face-recognition with `insightface`, `deepface`, or `mediapipe` (no CMake needed)
+
+**More Info:** See `L:\goodq4all\envs\face_embed\KNOWN_ISSUES.md`
+
+---

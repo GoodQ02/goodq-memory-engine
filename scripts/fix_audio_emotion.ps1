@@ -33,13 +33,13 @@ try {
   $env:PIP_DISABLE_PIP_VERSION_CHECK = '1'
   
   Write-Info "Upgrading pip in isolated mode..."
-  & conda run -n $EnvName python -m pip install --upgrade pip --no-cache-dir --no-user --isolated
+  & conda run -n $EnvName pip install --upgrade pip --no-cache-dir --no-user --isolated
   if ($LASTEXITCODE -ne 0) {
     Fail "pip upgrade failed"
   }
   
   Write-Info "Installing requirements..."
-  & conda run -n $EnvName python -m pip install -r $reqFile --no-cache-dir --no-user --isolated --upgrade-strategy only-if-needed
+  & conda run -n $EnvName pip install -r $reqFile --no-cache-dir --no-user --isolated --upgrade-strategy only-if-needed
   if ($LASTEXITCODE -ne 0) {
     Fail "Requirements install failed"
   }

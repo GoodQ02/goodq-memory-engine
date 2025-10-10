@@ -1,5 +1,5 @@
 Param(
-  [string[]]$GpuEnvs = @('goodq_image_caption','goodq_object_detect','goodq_audio_transcribe','goodq_audio_emotion','goodq_face_embed','goodq_audio_diarize'),
+  [string[]]$GpuEnvs = @('goodq_image_caption','goodq_object_detect','goodq_audio_transcribe','goodq_audio_emotion','goodq_audio_diarize'),  # Removed goodq_face_embed temporarily
   [switch]$Verify,
   [string]$CudaChannel = 'cu121',
   [string]$Torch = '2.3.1',
@@ -31,7 +31,8 @@ foreach ($envName in $GpuEnvs) {
   $prevNoUser = $env:PYTHONNOUSERSITE; $prevNoCache = $env:PIP_NO_CACHE_DIR; $prevDisable = $env:PIP_DISABLE_PIP_VERSION_CHECK
   try {
     $env:PYTHONNOUSERSITE='1'; $env:PIP_NO_CACHE_DIR='1'; $env:PIP_DISABLE_PIP_VERSION_CHECK='1'
-    & conda run -n $envName python -m pip install --upgrade pip --no-cache-dir --no-user --isolated
+    # Use pip directly (not python -m pip) to avoid runpy dependency
+    & conda run -n $envName pip install --upgrade pip --no-cache-dir --no-user --isolated
   } finally {
     if ($null -ne $prevNoUser) { $env:PYTHONNOUSERSITE=$prevNoUser } else { Remove-Item Env:PYTHONNOUSERSITE -ErrorAction SilentlyContinue }
     if ($null -ne $prevNoCache) { $env:PIP_NO_CACHE_DIR=$prevNoCache } else { Remove-Item Env:PIP_NO_CACHE_DIR -ErrorAction SilentlyContinue }
@@ -52,7 +53,8 @@ foreach ($envName in $GpuEnvs) {
   $prevNoUser = $env:PYTHONNOUSERSITE; $prevNoCache = $env:PIP_NO_CACHE_DIR; $prevDisable = $env:PIP_DISABLE_PIP_VERSION_CHECK
   try {
     $env:PYTHONNOUSERSITE='1'; $env:PIP_NO_CACHE_DIR='1'; $env:PIP_DISABLE_PIP_VERSION_CHECK='1'
-    & conda run -n $envName python -m pip install --no-cache-dir --no-user --isolated @packages
+    # Use pip directly (not python -m pip) to avoid runpy dependency
+    & conda run -n $envName pip install --no-cache-dir --no-user --isolated @packages
   } finally {
     if ($null -ne $prevNoUser) { $env:PYTHONNOUSERSITE=$prevNoUser } else { Remove-Item Env:PYTHONNOUSERSITE -ErrorAction SilentlyContinue }
     if ($null -ne $prevNoCache) { $env:PIP_NO_CACHE_DIR=$prevNoCache } else { Remove-Item Env:PIP_NO_CACHE_DIR -ErrorAction SilentlyContinue }

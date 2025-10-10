@@ -44,8 +44,8 @@ if (-not ($check | Out-String).Trim().StartsWith('OK')) {
   $prevNoUser=$env:PYTHONNOUSERSITE; $prevNoCache=$env:PIP_NO_CACHE_DIR; $prevDisable=$env:PIP_DISABLE_PIP_VERSION_CHECK
   try {
     $env:PYTHONNOUSERSITE='1'; $env:PIP_NO_CACHE_DIR='1'; $env:PIP_DISABLE_PIP_VERSION_CHECK='1'
-    & conda run -n goodq_text_embed python -m pip install --upgrade pip --no-cache-dir --no-user --isolated
-    & conda run -n goodq_text_embed python -m pip install -r $req --no-cache-dir --no-user --isolated --upgrade-strategy only-if-needed
+    & conda run -n goodq_text_embed pip install --upgrade pip --no-cache-dir --no-user --isolated
+    & conda run -n goodq_text_embed pip install -r $req --no-cache-dir --no-user --isolated --upgrade-strategy only-if-needed
   } finally {
     if ($null -ne $prevNoUser) { $env:PYTHONNOUSERSITE=$prevNoUser } else { Remove-Item Env:PYTHONNOUSERSITE -ErrorAction SilentlyContinue }
     if ($null -ne $prevNoCache) { $env:PIP_NO_CACHE_DIR=$prevNoCache } else { Remove-Item Env:PIP_NO_CACHE_DIR -ErrorAction SilentlyContinue }

@@ -101,9 +101,9 @@ function Ensure-CondaEnv {
       $env:PIP_NO_CACHE_DIR = '1'            # avoid cache bleed across envs
       $env:PIP_DISABLE_PIP_VERSION_CHECK = '1'
       # Upgrade pip inside the env in isolated mode with no user writes
-      & conda run -n $Name python -m pip install --upgrade pip --no-cache-dir --no-user --isolated
+      & conda run -n $Name pip install --upgrade pip --no-cache-dir --no-user --isolated
       # Install env requirements in isolated mode with no user writes
-      & conda run -n $Name python -m pip install -r $ReqFile --no-cache-dir --no-user --isolated --upgrade-strategy only-if-needed
+      & conda run -n $Name pip install -r $ReqFile --no-cache-dir --no-user --isolated --upgrade-strategy only-if-needed
     } finally {
       if ($null -ne $prevNoUser) { $env:PYTHONNOUSERSITE = $prevNoUser } else { Remove-Item Env:PYTHONNOUSERSITE -ErrorAction SilentlyContinue }
       if ($null -ne $prevNoCache) { $env:PIP_NO_CACHE_DIR = $prevNoCache } else { Remove-Item Env:PIP_NO_CACHE_DIR -ErrorAction SilentlyContinue }
@@ -130,8 +130,8 @@ Write-Note 'Installing zenml into the ZenML env'
 try {
   $prevNoUser=$env:PYTHONNOUSERSITE; $prevNoCache=$env:PIP_NO_CACHE_DIR; $prevDisable=$env:PIP_DISABLE_PIP_VERSION_CHECK
   $env:PYTHONNOUSERSITE='1'; $env:PIP_NO_CACHE_DIR='1'; $env:PIP_DISABLE_PIP_VERSION_CHECK='1'
-  & conda run -n $zenEnv python -m pip install --upgrade pip --no-cache-dir --no-user --isolated
-  & conda run -n $zenEnv python -m pip install "zenml>=0.65" "openai>=1.40" "openai-agents>=0.1" "nest_asyncio>=1.6" "typer>=0.9.0" --no-cache-dir --no-user --isolated --upgrade-strategy only-if-needed
+  & conda run -n $zenEnv pip install --upgrade pip --no-cache-dir --no-user --isolated
+  & conda run -n $zenEnv pip install "zenml>=0.65" "openai>=1.40" "openai-agents>=0.1" "nest_asyncio>=1.6" "typer>=0.9.0" --no-cache-dir --no-user --isolated --upgrade-strategy only-if-needed
 } finally {
   if ($null -ne $prevNoUser) { $env:PYTHONNOUSERSITE=$prevNoUser } else { Remove-Item Env:PYTHONNOUSERSITE -ErrorAction SilentlyContinue }
   if ($null -ne $prevNoCache) { $env:PIP_NO_CACHE_DIR=$prevNoCache } else { Remove-Item Env:PIP_NO_CACHE_DIR -ErrorAction SilentlyContinue }
@@ -150,8 +150,8 @@ try {
     $prevNoUser=$env:PYTHONNOUSERSITE; $prevNoCache=$env:PIP_NO_CACHE_DIR; $prevDisable=$env:PIP_DISABLE_PIP_VERSION_CHECK
     try {
       $env:PYTHONNOUSERSITE='1'; $env:PIP_NO_CACHE_DIR='1'; $env:PIP_DISABLE_PIP_VERSION_CHECK='1'
-      & conda run -n $apiEnv python -m pip install --upgrade pip --no-cache-dir --no-user --isolated
-      & conda run -n $apiEnv python -m pip install -r $apiReq --no-cache-dir --no-user --isolated --upgrade-strategy only-if-needed
+      & conda run -n $apiEnv pip install --upgrade pip --no-cache-dir --no-user --isolated
+      & conda run -n $apiEnv pip install -r $apiReq --no-cache-dir --no-user --isolated --upgrade-strategy only-if-needed
     } finally {
       if ($null -ne $prevNoUser) { $env:PYTHONNOUSERSITE=$prevNoUser } else { Remove-Item Env:PYTHONNOUSERSITE -ErrorAction SilentlyContinue }
       if ($null -ne $prevNoCache) { $env:PIP_NO_CACHE_DIR=$prevNoCache } else { Remove-Item Env:PIP_NO_CACHE_DIR -ErrorAction SilentlyContinue }

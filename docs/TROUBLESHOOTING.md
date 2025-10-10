@@ -65,7 +65,7 @@ conda not found on PATH
 
 **Fix:**
 1. Open **Anaconda PowerShell Prompt** (not regular PowerShell/CMD)
-2. Navigate to `L:\zenml_project`
+2. Navigate to `L:\goodq4all`
 3. Run the launcher from there
 
 **Alternative:**
@@ -174,7 +174,7 @@ pwsh scripts/prepare_step_envs.ps1 -EnvPrefix goodq -Steps <step> -LinkProject
 ```powershell
 # Full cleanup
 .\STOP_GOODQ.bat
-Remove-Item L:\zenml_project\logs\*.tmp -Force -ErrorAction SilentlyContinue
+Remove-Item L:\goodq4all\logs\*.tmp -Force -ErrorAction SilentlyContinue
 timeout /t 3
 
 # Fresh start
@@ -225,7 +225,7 @@ Get-Process | Where-Object { $_.ProcessName -like "*python*" } | Stop-Process -F
 
 # 2. Clear temp files
 Remove-Item $env:TEMP\__conda_tmp_* -Force -ErrorAction SilentlyContinue
-Remove-Item L:\zenml_project\logs\*.tmp -Force -ErrorAction SilentlyContinue
+Remove-Item L:\goodq4all\logs\*.tmp -Force -ErrorAction SilentlyContinue
 
 # 3. Verify conda
 conda --version
@@ -249,7 +249,7 @@ pwsh scripts/run_full_dry_run.ps1
 # Check syntax
 $errors = $null
 [System.Management.Automation.Language.Parser]::ParseFile(
-    "L:\zenml_project\scripts\command_center.ps1",
+    "L:\goodq4all\scripts\command_center.ps1",
     [ref]$null, [ref]$errors
 )
 $errors

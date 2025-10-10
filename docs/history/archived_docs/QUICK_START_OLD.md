@@ -3,7 +3,7 @@
 
 ## 🚀 One-Click Launch
 ```batch
-L:\zenml_project\LAUNCH_GOODQ.bat
+L:\goodq4all\LAUNCH_GOODQ.bat
 ```
 This opens:
 - Command Center Dashboard (PowerShell)
@@ -14,19 +14,19 @@ This opens:
 
 | What you need | Where it is |
 |--------------|-------------|
-| **Main code** | L:\zenml_project\ |
+| **Main code** | L:\goodq4all\ |
 | **Database & outputs** | L:\GoodQ_Data\ (→ _DATA\GoodQ_Data\) |
 | **AI models** | L:\models\ (→ _DATA\models\) |
-| **Documentation** | L:\zenml_project\docs\ |
-| **Scripts** | L:\zenml_project\scripts\ |
-| **Environment configs** | L:\zenml_project\envs\ |
+| **Documentation** | L:\goodq4all\docs\ |
+| **Scripts** | L:\goodq4all\scripts\ |
+| **Environment configs** | L:\goodq4all\envs\ |
 | **Old backups** | L:\_ARCHIVE\ |
 
 ## 🔧 Common Tasks
 
 ### Run a pipeline
 ```bash
-cd L:\zenml_project
+cd L:\goodq4all
 conda activate goodq_zenml
 python cli/run_ingestion.py --video "path/to/video.mp4"
 ```
@@ -56,7 +56,7 @@ python .\scripts\test_smart_memory.py
 
 1. **Backward Compatible**: All scripts work unchanged (via symlinks)
 2. **Easy to Navigate**: Clear separation of code, data, tools, archives
-3. **Ready for Git**: Only zenml_project/ needs version control
+3. **Ready for Git**: Only goodq4all/ needs version control
 4. **Clean Workspace**: Archives and caches organized separately
 
 ## 🔄 Environment Isolation
@@ -76,7 +76,7 @@ Active environments:
 
 ## 📖 Full Documentation
 
-See L:\zenml_project\docs\ for:
+See L:\goodq4all\docs\ for:
 - AGENTS.md - AI agent instructions
 - TROUBLESHOOTING.md - Common issues & fixes
 - GITHUB_SETUP_GUIDE.md - Git repository setup
@@ -86,7 +86,7 @@ See L:\zenml_project\docs\ for:
 ## 🎯 Next Steps
 
 1. Review L:\PROJECT_STRUCTURE.md for complete directory map
-2. Check L:\zenml_project\docs\PROJECT_STATUS.md for current progress
+2. Check L:\goodq4all\docs\PROJECT_STATUS.md for current progress
 3. Run verification: .\scripts\verify_project_readiness.ps1
 
 ---

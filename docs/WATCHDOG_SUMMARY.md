@@ -183,7 +183,7 @@ One-time snapshot of current state
 
 **Log Tailing**:
 ```powershell
-Get-Content L:\zenml_project\logs\watchdog.log -Wait -Tail 20
+Get-Content L:\goodq4all\logs\watchdog.log -Wait -Tail 20
 ```
 
 ---
@@ -222,7 +222,7 @@ Main Thread
 
 ### Directory Structure
 ```
-zenml_project/
+goodq4all/
 ├── import_inbox/              # Drop files here for processing
 ├── data/
 │   ├── processing/            # Temp location during processing
@@ -277,10 +277,10 @@ zenml_project/
 
 ```python
 # Directories
-WATCH_DIR = Path("L:/zenml_project/import_inbox")
-PROCESSING_DIR = Path("L:/zenml_project/data/processing")
-PROCESSED_DIR = Path("L:/zenml_project/data/processed")
-FAILED_DIR = Path("L:/zenml_project/data/failed")
+WATCH_DIR = Path("L:/goodq4all/import_inbox")
+PROCESSING_DIR = Path("L:/goodq4all/data/processing")
+PROCESSED_DIR = Path("L:/goodq4all/data/processed")
+FAILED_DIR = Path("L:/goodq4all/data/failed")
 
 # Timing
 POLL_INTERVAL = 2.0          # Directory scan frequency (seconds)
@@ -331,7 +331,7 @@ REM Start the watchdog
 START_WATCHDOG.bat
 
 REM Drop files into inbox
-copy myVideo.mp4 L:\zenml_project\import_inbox\
+copy myVideo.mp4 L:\goodq4all\import_inbox\
 
 REM Check status
 CHECK_WATCHDOG.bat
@@ -348,13 +348,13 @@ REM Drop files, watch them process in real-time
 ### Checking Logs
 ```powershell
 # View recent activity
-Get-Content L:\zenml_project\logs\watchdog.log -Tail 50
+Get-Content L:\goodq4all\logs\watchdog.log -Tail 50
 
 # Follow live
-Get-Content L:\zenml_project\logs\watchdog.log -Wait -Tail 20
+Get-Content L:\goodq4all\logs\watchdog.log -Wait -Tail 20
 
 # Check registry
-Get-Content L:\zenml_project\logs\watchdog_state.json | ConvertFrom-Json
+Get-Content L:\goodq4all\logs\watchdog_state.json | ConvertFrom-Json
 ```
 
 ---
@@ -371,7 +371,7 @@ Get-Content L:\zenml_project\logs\watchdog_state.json | ConvertFrom-Json
 **Option 1: Add to LAUNCH_GOODQ.bat**
 ```batch
 REM Add before "Press any key to close"
-start "GoodQ Watchdog" /MIN cmd /k "call conda activate goodq_zenml && python L:\zenml_project\scripts\watchdog_ingest.py"
+start "GoodQ Watchdog" /MIN cmd /k "call conda activate goodq_zenml && python L:\goodq4all\scripts\watchdog_ingest.py"
 ```
 
 **Option 2: Windows Startup**

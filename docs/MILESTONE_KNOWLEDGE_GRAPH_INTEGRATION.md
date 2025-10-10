@@ -86,7 +86,7 @@ Successfully integrated a comprehensive knowledge graph system that creates rich
 ### New Structure
 ```
 L:\
-├── zenml_project/          # Main application
+├── goodq4all/          # Main application
 │   ├── api/                # FastAPI retrieval server
 │   ├── cli/                # Command-line tools
 │   ├── configs/            # Configuration (model registry, etc)

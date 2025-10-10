@@ -104,13 +104,13 @@ pwsh scripts/enable_cuda.ps1 -Env goodq_<step>
 
 | Item | Path |
 |------|------|
-| **Config** | `L:/zenml_project/configs/config_open.yaml` |
+| **Config** | `L:/goodq4all/configs/config_open.yaml` |
 | **Logs** | `L:/GoodQ_Data/logs/step_runs.jsonl` |
 | **Database** | `L:/GoodQ_Data/data/memory_db/memory.db` |
 | **FAISS Indices** | `L:/GoodQ_Data/data/memory_db/*.index` |
 | **Models** | `L:/models/` |
-| **Lock Files** | `L:/zenml_project/envs/locks/*.lock.txt` |
-| **Scripts** | `L:/zenml_project/scripts/` |
+| **Lock Files** | `L:/goodq4all/envs/locks/*.lock.txt` |
+| **Scripts** | `L:/goodq4all/scripts/` |
 
 ---
 
@@ -214,7 +214,7 @@ pwsh scripts/reconcile_indices.ps1
 ### Daily Processing
 ```powershell
 1. pwsh scripts/mission_health_check.ps1 -EnvPrefix goodq
-2. Copy videos to L:/zenml_project/import_inbox
+2. Copy videos to L:/goodq4all/import_inbox
 3. pwsh scripts/ingest_videos_lite.ps1 -InputDir import_inbox -VerboseSteps
 4. pwsh scripts/command_center.ps1  # Monitor
 5. Move processed videos to archive

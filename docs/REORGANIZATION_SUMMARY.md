@@ -7,7 +7,7 @@
 ### 1. Created Organized Top-Level Structure
 ```
 L:\
-├── zenml_project/          # Main project (untouched - still works!)
+├── goodq4all/          # Main project (untouched - still works!)
 ├── GoodQ_Data/            # → Symlink to _DATA/GoodQ_Data
 ├── models/                # → Symlink to _DATA/models  
 ├── tools/                 # → Symlink to _TOOLS/tools
@@ -39,8 +39,8 @@ L:\
 - **temp_files/** - Backup files, tmp_check.py, etc.
 - **.stversions/** - Syncthing version history
 
-#### Within `zenml_project/`
-Moved to `zenml_project/docs/`:
+#### Within `goodq4all/`
+Moved to `goodq4all/docs/`:
 - AGENTS.md
 - BUGFIX_HEREDOC.md
 - COMMAND_CENTER_SUCCESS.md
@@ -67,12 +67,12 @@ All existing scripts continue to work without modification:
 - **QUICK_START.md** - Getting started guide
 - **REORGANIZATION_SUMMARY.md** - This file!
 
-All saved in both `L:\` root and `L:\zenml_project\docs\`
+All saved in both `L:\` root and `L:\goodq4all\docs\`
 
 ## Benefits Achieved
 
 ### ✅ Clean Separation
-- Production code in `zenml_project/`
+- Production code in `goodq4all/`
 - Data in `_DATA/`
 - Tools in `_TOOLS/`
 - Archives in `_ARCHIVE/`
@@ -88,7 +88,7 @@ All saved in both `L:\` root and `L:\zenml_project\docs\`
 - Documentation centralized
 
 ### ✅ Git-Ready
-- Only `zenml_project/` needs version control
+- Only `goodq4all/` needs version control
 - Clear `.gitignore` in place
 - Data & caches excluded
 
@@ -117,10 +117,10 @@ All environments verified with:
 - `PYTHONNOUSERSITE=1` - No user site pollution
 - `PIP_NO_CACHE_DIR=1` - No shared cache
 - Isolated pip with `--no-user --isolated --upgrade-strategy only-if-needed`
-- Vendored dependencies in `zenml_project/vendor/` (1181 files)
+- Vendored dependencies in `goodq4all/vendor/` (1181 files)
 
 ## File Count Summary
-- **zenml_project/**: 2,376 files
+- **goodq4all/**: 2,376 files
 - **steps/**: 114 files
 - **cli/**: 16 files
 - **scripts/**: 46 files
@@ -139,10 +139,10 @@ move L:\_ARCHIVE E:\GoodQ_Archives\
 ### 2. Start Working
 ```batch
 # One-click launch
-L:\zenml_project\LAUNCH_GOODQ.bat
+L:\goodq4all\LAUNCH_GOODQ.bat
 
 # Or manually
-cd L:\zenml_project
+cd L:\goodq4all
 conda activate goodq_zenml
 python cli/run_ingestion.py --video "path/to/video.mp4"
 ```
@@ -150,7 +150,7 @@ python cli/run_ingestion.py --video "path/to/video.mp4"
 ### 3. Explore Documentation
 - Start with: `L:\QUICK_START.md`
 - Full structure: `L:\PROJECT_STRUCTURE.md`
-- Project docs: `L:\zenml_project\docs\`
+- Project docs: `L:\goodq4all\docs\`
 
 ### 4. Push to GitHub
 Everything is organized and ready for your first commit to:

@@ -69,7 +69,7 @@ try {
 $errors = $null
 $tokens = $null
 $ast = [System.Management.Automation.Language.Parser]::ParseFile(
-    "L:\zenml_project\scripts\command_center.ps1", 
+    "L:\goodq4all\scripts\command_center.ps1", 
     [ref]$tokens, 
     [ref]$errors
 )

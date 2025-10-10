@@ -70,7 +70,7 @@
 ## 📁 Project Structure
 
 ```
-L:/zenml_project/
+L:/goodq4all/
 ├── LAUNCH_GOODQ.bat ⭐ ONE-CLICK LAUNCHER
 ├── LAUNCH_GOODQ_SIMPLE.bat
 ├── STOP_GOODQ.bat

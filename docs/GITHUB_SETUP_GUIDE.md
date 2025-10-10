@@ -23,7 +23,7 @@
 
 ```powershell
 # Navigate to project
-cd L:\zenml_project
+cd L:\goodq4all
 
 # Initialize git
 git init

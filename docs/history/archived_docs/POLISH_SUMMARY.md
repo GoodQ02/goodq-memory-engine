@@ -62,7 +62,7 @@ Device: NVIDIA GeForce RTX 4070 Ti SUPER
 All environments follow strict isolation with no dependency bleed:
 - Python 3.10 base (compatible with PyTorch 2.3.1)
 - Per-env requirements with pinned versions
-- `.pth` linking for zenml_project imports
+- `.pth` linking for goodq4all imports
 - Isolated pip installs with no user site access
 
 ---

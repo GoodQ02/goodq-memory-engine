@@ -107,7 +107,7 @@ START_WATCHDOG.bat
 **2. Drop Files**
 Simply drag and drop files into:
 ```
-L:\zenml_project\import_inbox\
+L:\goodq4all\import_inbox\
 ```
 
 **3. Monitor Progress**
@@ -158,7 +158,7 @@ The `CHECK_WATCHDOG.bat` shows:
 
 - **Activity Log**: `logs/watchdog.log` - All watchdog activity and errors
 - **State Registry**: `logs/watchdog_state.json` - Hash registry of all processed files
-- **Step Logs**: `L:/GoodQ_Data/logs/step_runs.jsonl` - Per-step pipeline execution
+- **Step Logs**: `L:\_DATA\GoodQ_Data\logs\step_runs.jsonl` - Per-step pipeline execution
 
 ### How Deduplication Works
 
@@ -189,7 +189,7 @@ MAX_WORKERS = 1          # Concurrent processors
 
 **View Live Logs**
 ```powershell
-Get-Content L:\zenml_project\logs\watchdog.log -Wait -Tail 20
+Get-Content L:\goodq4all\logs\watchdog.log -Wait -Tail 20
 ```
 
 ### Integration Tips
@@ -204,7 +204,7 @@ Get-Content L:\zenml_project\logs\watchdog.log -Wait -Tail 20
 **Files not detected?**
 - Verify file extension is supported
 - Check `logs/watchdog.log` for errors
-- Ensure watch directory exists: `L:\zenml_project\import_inbox`
+- Ensure watch directory exists: `L:\goodq4all\import_inbox`
 
 **Processing fails?**
 - Check `data/failed/` for failed files
@@ -328,9 +328,9 @@ This creates a test database and validates all query patterns.
 - Model and dataset caches now cover the full foundation set: `scripts\download_datasets.py` prefetches sentiment/NLP corpora, math & science benchmarks, geospatial/astronomy references, and baseline ASR datasets into `L:/models/hf/datasets`, and recognises category-specific vendor directories for advanced corpora (COCO, Common Voice, MMLU, etc.).
 - The CLI orchestrator ships with "smart memory": before processing a scene it checks SQLite for existing keyframe/audio hashes and reuses stored manifests to skip detection when the video hash matches; every downstream step is logged as `status="skipped"` with `extra.reason="dedupe"` when artifacts already exist, and metadata is reused.
 - Every run carries a digital fingerprint. `run_ingestion.py` stamps a UUID, pipeline name, start timestamp, optional git SHA, and a scene manifest hash into `logs/_resolved_config.json`, and those fields propagate to every `step_runs.jsonl` entry.
-- Step telemetry is centralized under `L:/GoodQ_Data/logs`, now enriched with run metadata so audits can trace skipped vs materialized work across replays.
+- Step telemetry is centralized under `L:\_DATA\GoodQ_Data/logs`, now enriched with run metadata so audits can trace skipped vs materialized work across replays.
 - Lite ingestion continues end-to-end; the only outstanding blocker is adding `hf_transfer` (or vendoring the SER weights) inside `goodq_audio_emotion` so the audio emotion step no longer short-circuits.
-- Legacy `GoodQ_Pipeline` stays reference-only while storage now lives under `L:/GoodQ_Data` alongside `zenml_project`.
+- Legacy `GoodQ_Pipeline` stays reference-only while storage now lives under `L:\_DATA\GoodQ_Data` alongside `goodq4all`.
 
 ## Readiness & Caches
 - `python scripts/system_readiness_check.py` – verifies env vars, tool paths, CUDA availability, PyAnnote auth, and Hugging Face access. It auto-corrects `HF_HOME/TORCH_HOME/HF_HUB_ENABLE_HF_TRANSFER` for the run and records any fallbacks in the report.
@@ -341,7 +341,7 @@ This creates a test database and validates all query patterns.
 
 ## Open Issues
 - **Audio emotion classification**: install `pip install hf_transfer` inside `goodq_audio_emotion` (or vendor the wheel) so Transformers can stream `superb/hubert-large-superb-er` or `ehcalabres/wav2vec2-lg-xlsr-en-speech-emotion-recognition` without timing out.
-- **Runtime monitoring**: continue tailing `L:/GoodQ_Data/logs/step_runs.jsonl` during long runs – if ingestion pauses, the log will reveal which step is waiting on downloads.
+- **Runtime monitoring**: continue tailing `L:\_DATA\GoodQ_Data/logs/step_runs.jsonl` during long runs – if ingestion pauses, the log will reveal which step is waiting on downloads.
 - **Validation plan**: once audio emotion loads cleanly, rerun `pwsh scripts/ingest_videos_lite.ps1 -InputDir import_inbox -MaxFrames 10 -MaxSegments 3` to confirm end-to-end persistence, then graduate to the full orchestrator smoke.
 
 ## Why GoodQ Exists
@@ -358,7 +358,7 @@ This creates a test database and validates all query patterns.
 
 ## Architecture Overview
 - ZenML pipelines coordinate per-step Conda environments for isolation and reproducibility.
-- Step runner (`zenml_project.cli.step_runner`) loads items/config JSON, executes a step, and writes results back to disk so PowerShell orchestrators remain simple.
+- Step runner (`goodq4all.cli.step_runner`) loads items/config JSON, executes a step, and writes results back to disk so PowerShell orchestrators remain simple.
 - Persistence layer uses SQLite (`memory.db`) plus FAISS indices for text/image/audio, with ID maps to reconcile embeddings and raw assets.
 - Short-term run summaries and long-term compressed history live side-by-side in `memory.db::summaries`, mirroring the Context Engineering guidance used in the original GoodQ stack.
 
@@ -382,7 +382,7 @@ This creates a test database and validates all query patterns.
 ## Environment Layout
 - `envs/<step>/requirements.txt` – per-step dependency pins; GPU-enabled envs include `image_caption`, `object_detect`, `audio_transcribe`, `audio_diarize`, `audio_emotion`, `face_embed`.
 - `scripts/enable_cuda.ps1` – installs CUDA wheels for every GPU env; use `-Verify` to confirm.
-- Run `scripts/prepare_step_envs.ps1 -EnvPrefix goodq -LinkProject` to create/update envs and drop `.pth` files pointing to `L:/` so `zenml_project` imports resolve.
+- Run `scripts/prepare_step_envs.ps1 -EnvPrefix goodq -LinkProject` to create/update envs and drop `.pth` files pointing to `L:/` so `goodq4all` imports resolve.
 
 ## Model Lockdown & Version Pinning
 - `configs/model_registry.yaml` – **Central registry** pinning all models to exact commit SHAs and file hashes, preventing version drift.
@@ -413,7 +413,7 @@ This creates a test database and validates all query patterns.
 - `scripts/launch_goodq.bat` – Windows launcher for full-stack mission runs.
 
 ## Artifacts & Logs
-- Ingestion logs live under `L:/GoodQ_Data/logs` until the ZenML artifact store migration completes.
+- Ingestion logs live under `L:\_DATA\GoodQ_Data/logs` until the ZenML artifact store migration completes.
 - Lite/full runs emit per-step JSON outputs (`logs/step_runs.jsonl`) and bundle exports (`logs/run_exports/YYMMDD_HHMMSS`).
 - Audio/text/image embeddings are written to SQLite (`memory.db`) and FAISS indices defined in `configs/paths.yaml`.
 - CLAP ID maps keep FAISS IDs aligned with content fingerprints for auditability.
@@ -426,11 +426,11 @@ This creates a test database and validates all query patterns.
 ## Historical Context
 - The original GoodQ_o2-B repository (now archived) introduced the mission-oriented UX, dual TTS, system monitoring, and Home Assistant hooks.
 - Its documentation, changelogs, and requirements have been consolidated into `L:/legacy` so the active ZenML project stays lean while preserving institutional knowledge.
-- You can still explore experimental modules (LLM orchestration, trend analytics, mission logging) inside the legacy archive; port relevant ideas into `zenml_project` as needed.
+- You can still explore experimental modules (LLM orchestration, trend analytics, mission logging) inside the legacy archive; port relevant ideas into `goodq4all` as needed.
 
 ## Recent Highlights & Next Steps
 - Conda envs rebuilt under `C:/Users/jdben/miniconda3`; installer scripts now target this base and relink the repo automatically.
-- `system_readiness_check.py` and `cache_readiness_check.py` both report **GREEN**; vendor modules live under `zenml_project/vendor` to satisfy non-conda imports.
+- `system_readiness_check.py` and `cache_readiness_check.py` both report **GREEN**; vendor modules live under `goodq4all/vendor` to satisfy non-conda imports.
 - Lite ingestion (`scripts/ingest_videos_lite.ps1 -VerboseSteps`) runs end-to-end without hangs: diarization, transcription, audio emotion, CLAP, and text pipelines all complete.
 - Step telemetry captures `run_id`, pipeline metadata, canonical IDs, and raises an `improbable_duration` flag when GPU-heavy steps finish suspiciously fast.
 - Pip/models/dataset caches are centralized (`L:/pip_cache`, `L:/models`), avoiding writes to the system drive and speeding up reruns.

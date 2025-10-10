@@ -50,7 +50,7 @@
 - Environment variables: `PYTHONNOUSERSITE=1`, `PIP_NO_CACHE_DIR=1`
 
 #### Storage & Memory
-- SQLite memory database: `L:\zenml_project\data\memory\goodq_memory.db`
+- SQLite memory database: `L:\goodq4all\data\memory\goodq_memory.db`
 - FAISS indices: text, DINO, CLIP, audio embeddings
 - Knowledge graph: Entities, relationships, co-occurrence tracking
 - Workspace artifacts: Frames, audio clips, transcripts
@@ -115,7 +115,7 @@ API Retrieval + Command Center Visualization
 
 ```
 L:\
-├── zenml_project/                 # Main project
+├── goodq4all/                 # Main project
 │   ├── api/                       # FastAPI server
 │   ├── cli/                       # Command-line tools
 │   ├── configs/                   # Pipeline configurations

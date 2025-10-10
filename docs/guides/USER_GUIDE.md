@@ -27,7 +27,7 @@ Before starting, verify your system meets requirements:
 
 ```powershell
 # Check system readiness
-cd L:\zenml_project
+cd L:\goodq4all
 python scripts\system_readiness_check.py
 
 # Check model cache
@@ -40,7 +40,7 @@ python scripts\cache_readiness_check.py
 
 1. **Place a video in the inbox:**
    ```powershell
-   Copy-Item "C:\Users\...\your_video.mp4" L:\zenml_project\smoke_inbox\
+   Copy-Item "C:\Users\...\your_video.mp4" L:\goodq4all\smoke_inbox\
    ```
 
 2. **Run lite ingestion (quick test):**
@@ -387,7 +387,7 @@ pwsh scripts\set_env_vars.ps1 -Vars @{PYANNOTE_TOKEN="hf_..."} -Persist
 Get-Command ffmpeg
 
 # If not found, update config
-# Edit L:\zenml_project\configs\config_open.yaml
+# Edit L:\goodq4all\configs\config_open.yaml
 # tools:
 #   ffmpeg_exe: "L:\\Tools\\ffmpeg\\bin\\ffmpeg.exe"
 ```
@@ -446,7 +446,7 @@ video:
 
 **Audio emotion models (in step code):**
 ```python
-# Edit zenml_project/steps/audio_emotion/step.py
+# Edit goodq4all/steps/audio_emotion/step.py
 candidates = [
     "superb/hubert-large-superb-er",  # Default
     "ehcalabres/wav2vec2-lg-xlsr-en-speech-emotion-recognition",  # Alternative
@@ -461,7 +461,7 @@ candidates = [
 Get-ChildItem "L:\Videos\archive" -Filter *.mp4 | ForEach-Object {
     Write-Host "Processing $($_.Name)..." -ForegroundColor Cyan
     
-    Copy-Item $_.FullName L:\zenml_project\import_inbox\
+    Copy-Item $_.FullName L:\goodq4all\import_inbox\
     
     pwsh scripts\ingest_videos_lite.ps1 `
         -InputDir import_inbox `
@@ -471,7 +471,7 @@ Get-ChildItem "L:\Videos\archive" -Filter *.mp4 | ForEach-Object {
     Move-Item $_.FullName "L:\Videos\processed\"
     
     # Clean inbox
-    Remove-Item L:\zenml_project\import_inbox\* -Force
+    Remove-Item L:\goodq4all\import_inbox\* -Force
 }
 ```
 
@@ -582,12 +582,12 @@ Copy-Item G:\Backups\GoodQ\current\* E:\GoodQ_Backup\$(Get-Date -Format 'yyyy-MM
 
 | Item | Path |
 |------|------|
-| Config | `L:\zenml_project\configs\config_open.yaml` |
+| Config | `L:\goodq4all\configs\config_open.yaml` |
 | Logs | `L:\GoodQ_Data\logs\` |
 | Database | `L:\GoodQ_Data\data\memory_db\memory.db` |
 | FAISS | `L:\GoodQ_Data\data\memory_db\*.index` |
 | Models | `L:\models\` |
-| Scripts | `L:\zenml_project\scripts\` |
+| Scripts | `L:\goodq4all\scripts\` |
 
 ### Environment Variables
 

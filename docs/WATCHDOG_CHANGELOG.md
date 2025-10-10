@@ -139,7 +139,7 @@ Complete implementation of automatic file ingestion system for GoodQ project.
 ### Directory Structure
 
 ```
-zenml_project/
+goodq4all/
 ├── import_inbox/              # Drop files here
 ├── data/
 │   ├── processing/            # Temp during processing

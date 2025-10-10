@@ -250,7 +250,7 @@ graph TD
     B4 --> C4[transformers CUDA]
     B5 --> C5[sentence-transformers CPU]
     
-    B1 -.pth link.- D[L:/ zenml_project]
+    B1 -.pth link.- D[L:/ goodq4all]
     B2 -.pth link.- D
     B3 -.pth link.- D
     B4 -.pth link.- D

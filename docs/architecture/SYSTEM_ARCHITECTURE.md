@@ -382,8 +382,8 @@ pip install -r requirements.txt `
 
 **Project Linking:**
 ```python
-# zenml_project_local.pth in site-packages
-L:\  # Parent of zenml_project for imports
+# goodq4all_local.pth in site-packages
+L:\  # Parent of goodq4all for imports
 ```
 
 ### Environment Matrix

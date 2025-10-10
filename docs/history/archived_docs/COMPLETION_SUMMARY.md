@@ -167,7 +167,7 @@
 ## 📁 File Structure Created
 
 ```
-L:/zenml_project/
+L:/goodq4all/
 ├── docs/
 │   ├── architecture/
 │   │   └── SYSTEM_ARCHITECTURE.md ✨ NEW

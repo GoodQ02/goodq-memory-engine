@@ -46,7 +46,7 @@ This will:
 
 Simply drag and drop files into:
 ```
-L:\zenml_project\import_inbox\
+L:\goodq4all\import_inbox\
 ```
 
 ### 3. Monitor Progress
@@ -92,7 +92,7 @@ PROCESSED_video.mp4  FAILED_video.mp4
 ## Directory Structure
 
 ```
-zenml_project/
+goodq4all/
 ├── import_inbox/          # Drop files here
 ├── data/
 │   ├── processing/        # Temp files during processing
@@ -168,12 +168,12 @@ This creates a test copy of `sample.mp4` that you can use to test the watchdog.
 
 ### View Live Logs
 ```powershell
-Get-Content L:\zenml_project\logs\watchdog.log -Wait -Tail 20
+Get-Content L:\goodq4all\logs\watchdog.log -Wait -Tail 20
 ```
 
 ### Check Processed Files
 ```powershell
-Get-Content L:\zenml_project\logs\watchdog_state.json | ConvertFrom-Json
+Get-Content L:\goodq4all\logs\watchdog_state.json | ConvertFrom-Json
 ```
 
 ### View Queue Status
@@ -192,7 +192,7 @@ To add it to the launch sequence, edit `LAUNCH_GOODQ.bat`:
 
 ```batch
 REM Add before "Press any key to close"
-start "GoodQ Watchdog" /MIN cmd /k "call conda activate goodq_zenml && python L:\zenml_project\scripts\watchdog_ingest.py"
+start "GoodQ Watchdog" /MIN cmd /k "call conda activate goodq_zenml && python L:\goodq4all\scripts\watchdog_ingest.py"
 ```
 
 ## Troubleshooting
@@ -201,21 +201,21 @@ start "GoodQ Watchdog" /MIN cmd /k "call conda activate goodq_zenml && python L:
 
 1. Check watch directory exists:
    ```powershell
-   Test-Path L:\zenml_project\import_inbox
+   Test-Path L:\goodq4all\import_inbox
    ```
 
 2. Verify file type is supported (check extensions)
 
 3. Check logs:
    ```powershell
-   Get-Content L:\zenml_project\logs\watchdog.log -Tail 50
+   Get-Content L:\goodq4all\logs\watchdog.log -Tail 50
    ```
 
 ### Files Not Processing
 
 1. Check if already processed:
    ```powershell
-   Get-Content L:\zenml_project\logs\watchdog_state.json | ConvertFrom-Json
+   Get-Content L:\goodq4all\logs\watchdog_state.json | ConvertFrom-Json
    ```
 
 2. Check for errors in log

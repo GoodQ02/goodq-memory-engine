@@ -162,7 +162,7 @@ conda run -n goodq_zenml python -m goodq4all.cli.memory list-scenes
 - `L:\Tools\` - External tools (FFmpeg, Whisper, Tesseract)
 
 ### GitHub Repository
-- **URL**: https://github.com/JoesDomingo/GoodQ_4_All
+- **URL**: https://github.com/JoesDomingo/goodq4all
 - **Local**: `L:\goodq4all\`
 
 ---
@@ -217,7 +217,7 @@ conda run -n goodq_zenml python -m goodq4all.cli.memory list-scenes
 - **Logs**: `L:\_DATA\GoodQ_Data\logs\`
 
 ### Development
-- **GitHub**: https://github.com/JoesDomingo/GoodQ_4_All
+- **GitHub**: https://github.com/JoesDomingo/goodq4all
 - **Issues**: Create GitHub issues for bugs/features
 
 ---

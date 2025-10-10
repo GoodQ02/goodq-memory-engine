@@ -129,7 +129,7 @@ def safe_step_wrapper(func):
 
 Create unified memory writer:
 ```python
-# L:\zenml_project\steps\common\memory_writer.py
+# L:\goodq4all\steps\common\memory_writer.py
 
 class MemoryWriter:
     """Centralized database persistence"""
@@ -159,7 +159,7 @@ class MemoryWriter:
 **Estimated Time:** 2-3 hours
 
 ```python
-# L:\zenml_project\steps\common\safe_access.py
+# L:\goodq4all\steps\common\safe_access.py
 
 def safe_get(obj, path, default=None):
     """Safely access nested dict/object attributes"""
@@ -184,7 +184,7 @@ nested = safe_get(data, 'meta.audio.duration', 0.0)
 **Estimated Time:** 2 hours
 
 ```python
-# L:\zenml_project\steps\common\decorators.py
+# L:\goodq4all\steps\common\decorators.py
 
 def handle_step_errors(default_return=None, log_errors=True):
     """Decorator for robust error handling"""

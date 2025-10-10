@@ -329,7 +329,7 @@ L:\ (Project Drive)
 │  │  └─ audio.index
 │  └─ exports/
 │
-├─ zenml_project/
+├─ goodq4all/
 │  ├─ data/
 │  │  ├─ knowledge_graph.db
 │  │  └─ production_kg.db

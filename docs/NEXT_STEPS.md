@@ -191,7 +191,7 @@ Build FastAPI/Next.js interface:
 **Unit Tests:**
 ```powershell
 # TODO: Add pytest suite
-pytest zenml_project/steps/*/test_*.py
+pytest goodq4all/steps/*/test_*.py
 ```
 
 **Integration Tests:**
@@ -211,8 +211,8 @@ pwsh scripts/benchmark_pipeline.ps1
 **Linting:**
 ```powershell
 # Python
-black zenml_project/ --check
-ruff check zenml_project/
+black goodq4all/ --check
+ruff check goodq4all/
 
 # PowerShell
 Invoke-ScriptAnalyzer -Path scripts/ -Recurse
@@ -220,7 +220,7 @@ Invoke-ScriptAnalyzer -Path scripts/ -Recurse
 
 **Type Checking:**
 ```powershell
-mypy zenml_project/ --strict
+mypy goodq4all/ --strict
 ```
 
 ---
@@ -339,10 +339,10 @@ python scripts/cache_readiness_check.py --verbose
 
 ### Community & Help
 
-- **Project Docs:** `L:/zenml_project/README.md`
-- **Polish Summary:** `L:/zenml_project/POLISH_SUMMARY.md`
-- **Architecture:** `L:/zenml_project/System-Blueprint.txt`
-- **Agent Guidelines:** `L:/zenml_project/AGENTS.md`
+- **Project Docs:** `L:/goodq4all/README.md`
+- **Polish Summary:** `L:/goodq4all/POLISH_SUMMARY.md`
+- **Architecture:** `L:/goodq4all/System-Blueprint.txt`
+- **Agent Guidelines:** `L:/goodq4all/AGENTS.md`
 
 ---
 

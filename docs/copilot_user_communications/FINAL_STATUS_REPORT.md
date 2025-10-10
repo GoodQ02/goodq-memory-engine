@@ -187,17 +187,17 @@ When you wake up, follow `MORNING_CHECKLIST.md` to:
 
 1. **Check Production Ingestion**
    ```powershell
-   conda run -n goodq_zenml python L:\zenml_project\scripts\check_production_status.py
+   conda run -n goodq_zenml python L:\goodq4all\scripts\check_production_status.py
    ```
 
 2. **Analyze Knowledge Graph**
    ```powershell
-   conda run -n goodq_zenml python L:\zenml_project\scripts\check_memory_db.py
+   conda run -n goodq_zenml python L:\goodq4all\scripts\check_memory_db.py
    ```
 
 3. **Test System**
    ```batch
-   L:\zenml_project\LAUNCH_GOODQ.bat
+   L:\goodq4all\LAUNCH_GOODQ.bat
    ```
 
 4. **Plan Next Phase**

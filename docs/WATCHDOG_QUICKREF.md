@@ -19,7 +19,7 @@ Drop files in `import_inbox/`, watchdog auto-processes them.
 ## Drop Zone
 
 ```
-L:\zenml_project\import_inbox\
+L:\goodq4all\import_inbox\
 ```
 
 ---
@@ -79,24 +79,24 @@ Get-Process python | Where-Object {$_.CommandLine -like '*watchdog*'}
 
 ### View Live Logs
 ```powershell
-Get-Content L:\zenml_project\logs\watchdog.log -Wait -Tail 20
+Get-Content L:\goodq4all\logs\watchdog.log -Wait -Tail 20
 ```
 
 ### Check Registry
 ```powershell
-Get-Content L:\zenml_project\logs\watchdog_state.json | ConvertFrom-Json
+Get-Content L:\goodq4all\logs\watchdog_state.json | ConvertFrom-Json
 ```
 
 ### Count Files
 ```powershell
 # Inbox
-(Get-ChildItem L:\zenml_project\import_inbox -File).Count
+(Get-ChildItem L:\goodq4all\import_inbox -File).Count
 
 # Processed
-(Get-ChildItem L:\zenml_project\data\processed -File).Count
+(Get-ChildItem L:\goodq4all\data\processed -File).Count
 
 # Failed
-(Get-ChildItem L:\zenml_project\data\failed -File).Count
+(Get-ChildItem L:\goodq4all\data\failed -File).Count
 ```
 
 ---

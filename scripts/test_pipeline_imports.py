@@ -11,7 +11,7 @@ print("=" * 70)
 # Test configuration loading
 print("\n📋 Testing configuration modules...")
 try:
-    from GoodQ_4_All.configs import paths
+    from goodq4all.configs import paths
     print("  ✓ paths module loaded")
     paths.ensure_directories()
     print("  ✓ directories ensured")
@@ -24,10 +24,10 @@ except Exception as e:
 # Test common utilities
 print("\n🔧 Testing common utilities...")
 try:
-    from GoodQ_4_All.steps.common.config_loader import load_configs
+    from goodq4all.steps.common.config_loader import load_configs
     print("  ✓ config_loader imported")
     
-    from GoodQ_4_All.steps.common import memory
+    from goodq4all.steps.common import memory
     print("  ✓ memory module imported")
 except Exception as e:
     print(f"  ✗ Error: {e}")
@@ -45,7 +45,7 @@ step_modules = [
 
 for module_name in step_modules:
     try:
-        module = __import__(f"GoodQ_4_All.steps.{module_name}.step", fromlist=[''])
+        module = __import__(f"goodq4all.steps.{module_name}.step", fromlist=[''])
         print(f"  ✓ {module_name} imported")
     except Exception as e:
         print(f"  ⚠ {module_name}: {str(e)[:60]}")
@@ -53,7 +53,7 @@ for module_name in step_modules:
 # Test API modules
 print("\n🌐 Testing API modules...")
 try:
-    from GoodQ_4_All.api import server
+    from goodq4all.api import server
     print("  ✓ api.server imported")
 except Exception as e:
     print(f"  ⚠ api.server: {str(e)[:60]}")
@@ -63,7 +63,7 @@ print("\n💻 Testing CLI modules...")
 cli_modules = ["memory", "retrieve", "run_ingestion"]
 for module_name in cli_modules:
     try:
-        module = __import__(f"GoodQ_4_All.cli.{module_name}", fromlist=[''])
+        module = __import__(f"goodq4all.cli.{module_name}", fromlist=[''])
         print(f"  ✓ cli.{module_name} imported")
     except Exception as e:
         print(f"  ⚠ cli.{module_name}: {str(e)[:60]}")
@@ -71,13 +71,13 @@ for module_name in cli_modules:
 # Test library modules
 print("\n📚 Testing library modules...")
 try:
-    from GoodQ_4_All.lib.memory_management.diagnostics import run_all_diagnostics
+    from goodq4all.lib.memory_management.diagnostics import run_all_diagnostics
     print("  ✓ memory_management.diagnostics imported")
 except Exception as e:
     print(f"  ⚠ memory_management.diagnostics: {str(e)[:60]}")
 
 try:
-    from GoodQ_4_All.lib.knowledge_graph import KnowledgeGraphBuilder
+    from goodq4all.lib.knowledge_graph import KnowledgeGraphBuilder
     print("  ✓ knowledge_graph imported")
 except Exception as e:
     print(f"  ⚠ knowledge_graph: {str(e)[:60]}")

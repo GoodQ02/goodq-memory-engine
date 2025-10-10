@@ -5,7 +5,7 @@ import os
 import hashlib
 import json
 
-from GoodQ_4_All.steps.common.memory import upsert_embedding
+from goodq4all.steps.common.memory import upsert_embedding
 
 
 _ST = None  # sentence-transformers model

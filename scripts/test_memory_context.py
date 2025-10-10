@@ -83,7 +83,7 @@ def main():
     cfg = load_configs({})
     
     # Check if we have any video processing results
-    results_path = Path("L:/GoodQ_4_All/logs/video_ingest_results.json")
+    results_path = Path("L:/goodq4all/logs/video_ingest_results.json")
     
     if not results_path.exists():
         print("\nNo video ingest results found.")

@@ -11,7 +11,7 @@ def check_memory_db():
     possible_paths = [
         Path("L:/GoodQ_Data/memory.db"),
         Path("L:/_DATA/GoodQ_Data/data/memory_db/memory.db"),
-        Path("L:/GoodQ_4_All/data/memory.db"),
+        Path("L:/goodq4all/data/memory.db"),
     ]
     
     db_path = None

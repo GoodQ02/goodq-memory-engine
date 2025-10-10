@@ -1,9 +1,11 @@
 """
-ZenML pipeline definition (scaffold) for multimodal ingestion.
+DEPRECATED: Legacy scaffold pipeline for multimodal ingestion.
 
-This file intentionally avoids importing zenml at import-time to keep the
-scaffold runnable without ZenML installed. Replace placeholders when ZenML is
-set up and registered with a conda step operator.
+This file is kept for reference only. The production pipeline is now:
+    pipelines/ingest_multimodal_conda.py
+
+DO NOT USE THIS FILE. It contains placeholder code and is not functional.
+Use cli/run_ingestion.py or the ZenML pipeline in ingest_multimodal_conda.py instead.
 """
 from typing import Any, Dict, List
 

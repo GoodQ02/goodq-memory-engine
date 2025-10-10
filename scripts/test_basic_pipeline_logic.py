@@ -5,8 +5,8 @@ import sys
 sys.path.insert(0, 'L:/')
 
 from pathlib import Path
-from GoodQ_4_All.configs.paths import *
-from GoodQ_4_All.steps.common.config_loader import load_configs
+from goodq4all.configs.paths import *
+from goodq4all.steps.common.config_loader import load_configs
 
 print("=" * 70)
 print("Testing Basic Pipeline Logic")
@@ -54,7 +54,7 @@ except Exception as e:
 # Test 3: Check knowledge graph
 print("\n🕸️  Test 3: Knowledge graph...")
 try:
-    from GoodQ_4_All.lib.knowledge_graph import KnowledgeGraphBuilder
+    from goodq4all.lib.knowledge_graph import KnowledgeGraphBuilder
     
     kg_path = KNOWLEDGE_GRAPH_DB
     kg_path.parent.mkdir(parents=True, exist_ok=True)
@@ -120,7 +120,7 @@ critical_steps = [
 available_steps = []
 for step_name in critical_steps:
     try:
-        module = __import__(f"GoodQ_4_All.steps.{step_name}.step", fromlist=[''])
+        module = __import__(f"goodq4all.steps.{step_name}.step", fromlist=[''])
         available_steps.append(step_name)
         print(f"  ✓ {step_name}")
     except Exception as e:

@@ -21,7 +21,7 @@ def check_paths():
     
     # Check paths.py
     print("\n📁 Checking paths.py configuration...")
-    from GoodQ_4_All.configs.paths import (
+    from goodq4all.configs.paths import (
         PROJECT_ROOT, DATA_ROOT, DATABASE_DIR, MEMORY_DB,
         KNOWLEDGE_GRAPH_DB, LOGS_DIR, MODELS_DIR, TOOLS_DIR
     )
@@ -43,7 +43,7 @@ def check_paths():
     
     # Check paths.yaml
     print("\n📄 Checking paths.yaml configuration...")
-    paths_yaml_file = Path("L:/GoodQ_4_All/configs/paths.yaml")
+    paths_yaml_file = Path("L:/goodq4all/configs/paths.yaml")
     if paths_yaml_file.exists():
         paths_yaml = load_yaml(paths_yaml_file)
         for key, value in paths_yaml.items():
@@ -56,7 +56,7 @@ def check_paths():
     
     # Check config.yaml
     print("\n⚙️  Checking config.yaml configuration...")
-    config_file = Path("L:/GoodQ_4_All/config.yaml")
+    config_file = Path("L:/goodq4all/config.yaml")
     if config_file.exists():
         config = load_yaml(config_file)
         if 'paths' in config:

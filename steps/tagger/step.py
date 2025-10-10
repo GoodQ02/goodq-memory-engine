@@ -4,7 +4,7 @@ from typing import Any, Dict, List
 _NER_PIPELINES: Dict[str, Any] = {}
 
 try:
-    from GoodQ_4_All.steps.common.tag_utils import dedupe_tokens
+    from goodq4all.steps.common.tag_utils import dedupe_tokens
 except Exception:
     def dedupe_tokens(tokens):
         seen = set()

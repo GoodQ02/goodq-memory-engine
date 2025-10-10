@@ -19,8 +19,8 @@ if errorlevel 1 (
 )
 
 echo [WATCHDOG] Environment activated: goodq_zenml
-echo [WATCHDOG] Monitoring: L:\GoodQ_4_All\import_inbox
-echo [WATCHDOG] Log file: L:\GoodQ_4_All\logs\watchdog.log
+echo [WATCHDOG] Monitoring: L:\goodq4all\import_inbox
+echo [WATCHDOG] Log file: L:\goodq4all\logs\watchdog.log
 echo.
 echo Drop files into import_inbox to process them automatically!
 echo Press Ctrl+C to stop the watchdog
@@ -29,6 +29,6 @@ echo ═════════════════════════
 echo.
 
 REM Run watchdog
-python L:\GoodQ_4_All\scripts\watchdog_ingest.py
+python L:\goodq4all\scripts\watchdog_ingest.py
 
 pause

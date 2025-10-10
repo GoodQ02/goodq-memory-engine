@@ -8,7 +8,7 @@ import os
 # ==============================================================================
 # PROJECT ROOT
 # ==============================================================================
-PROJECT_ROOT = Path("L:/GoodQ_4_All")
+PROJECT_ROOT = Path("L:/goodq4all")
 
 # ==============================================================================
 # DATA DIRECTORIES (Not in GitHub - local only)
@@ -105,7 +105,7 @@ def set_environment_variables():
 # LEGACY PATH MAPPING (for migration)
 # ==============================================================================
 LEGACY_PATHS = {
-    "GoodQ_4_All": PROJECT_ROOT,
+    "goodq4all": PROJECT_ROOT,
     "old_logs": ARCHIVE_DIR / "old_tests",
     "old_data": ARCHIVE_DIR / "old_data"
 }

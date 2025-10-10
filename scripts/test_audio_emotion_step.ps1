@@ -1,5 +1,5 @@
 Param(
-  [string]$TestAudio = 'L:\GoodQ_4_All\smoke_inbox\test.wav'
+  [string]$TestAudio = 'L:\goodq4all\smoke_inbox\test.wav'
 )
 
 Set-StrictMode -Version Latest

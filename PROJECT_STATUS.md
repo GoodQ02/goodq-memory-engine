@@ -14,7 +14,7 @@ The GoodQ project has been successfully reorganized into a production-ready, ind
 ## ✅ Completed (October 8, 2025)
 
 ### Major Reorganization
-- ✅ Renamed project from `zenml_project` to `GoodQ_4_All`
+- ✅ Renamed project from `zenml_project` to `goodq4all`
 - ✅ Established centralized data structure (`_DATA/GoodQ_Data/`)
 - ✅ Created single source of truth for paths (`configs/paths.py`)
 - ✅ Updated 51 files with new paths
@@ -45,14 +45,14 @@ The GoodQ project has been successfully reorganized into a production-ready, ind
 
 ```
 L:\
-├── GoodQ_4_All\              # Code (GitHub repo) ⭐
+├── goodq4all\              # Code (GitHub repo) ⭐
 ├── _DATA\GoodQ_Data\         # Runtime data (local)
 ├── _ARCHIVE\                 # Legacy files
 ├── models\                   # Pretrained models
 └── tools\                    # External utilities
 ```
 
-**GitHub**: https://github.com/JoesDomingo/GoodQ_4_All
+**GitHub**: https://github.com/JoesDomingo/goodq4all
 
 ---
 
@@ -96,7 +96,7 @@ CHECK_WATCHDOG.bat      # Check watcher status
 ```
 
 ### Ingest Media
-1. Drop file in `L:/GoodQ_4_All/import_inbox/`
+1. Drop file in `L:/goodq4all/import_inbox/`
 2. Watchdog auto-processes
 3. Check `L:/_DATA/GoodQ_Data/processing/` for progress
 4. Results in `completed/` when done

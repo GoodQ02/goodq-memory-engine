@@ -77,10 +77,10 @@ print(json.dumps(result))
   }
 }
 
-Smoke-Import -envName "${EnvPrefix}_text_embed" -modules @('faiss','sqlite3','sentence_transformers','GoodQ_4_All')
-Smoke-Import -envName "${EnvPrefix}_image_caption" -modules @('torch','transformers','GoodQ_4_All')
-Smoke-Import -envName "${EnvPrefix}_audio_transcribe" -modules @('torch','faster_whisper','GoodQ_4_All')
-Smoke-Import -envName "${EnvPrefix}_zenml" -modules @('zenml','openai','openai_agents','GoodQ_4_All')
+Smoke-Import -envName "${EnvPrefix}_text_embed" -modules @('faiss','sqlite3','sentence_transformers','goodq4all')
+Smoke-Import -envName "${EnvPrefix}_image_caption" -modules @('torch','transformers','goodq4all')
+Smoke-Import -envName "${EnvPrefix}_audio_transcribe" -modules @('torch','faster_whisper','goodq4all')
+Smoke-Import -envName "${EnvPrefix}_zenml" -modules @('zenml','openai','openai_agents','goodq4all')
 
 if ($SmokeAll) {
   Info 'Running sanity suite (lightweight)'

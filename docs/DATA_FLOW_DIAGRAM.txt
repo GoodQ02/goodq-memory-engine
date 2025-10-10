@@ -8,7 +8,7 @@
 
     User drops video/audio/image file
               ↓
-    📥 L:/GoodQ_4_All/import_inbox/
+    📥 L:/goodq4all/import_inbox/
               ↓
     🔍 Watchdog detects new file
               ↓
@@ -170,7 +170,7 @@ Isolation flags:
                             KEY LOCATIONS
 ═════════════════════════════════════════════════════════════════════════
 
-📥 Input:     L:/GoodQ_4_All/import_inbox/
+📥 Input:     L:/goodq4all/import_inbox/
 🔧 Processing: L:/_DATA/GoodQ_Data/processing/
 ✅ Completed:  L:/_DATA/GoodQ_Data/completed/
 💾 Databases:  L:/_DATA/GoodQ_Data/databases/
@@ -182,7 +182,7 @@ Isolation flags:
                         PATH CONFIGURATION
 ═════════════════════════════════════════════════════════════════════════
 
-All paths defined in:  L:/GoodQ_4_All/configs/paths.py
+All paths defined in:  L:/goodq4all/configs/paths.py
 
 Import with:
     from configs.paths import (

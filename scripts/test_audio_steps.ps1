@@ -21,7 +21,7 @@ $outPath = Join-Path $tmpDir 'out.json'
 $cfgPath = Join-Path $tmpDir 'cfg.json'
 
 $item = @{
-  source_path = 'L:\\GoodQ_4_All\\import_inbox\\test_me.mp3'
+  source_path = 'L:\\goodq4all\\import_inbox\\test_me.mp3'
   modality = 'audio'
   transcript = 'We sang happy birthday last night at 7:30 pm. Merry Christmas everyone!'
   transcript_meta = @{ segments = @(@{ start = 10.5; end = 14.0; text = 'happy birthday everyone' }) }

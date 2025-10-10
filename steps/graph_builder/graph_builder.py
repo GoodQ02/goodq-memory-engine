@@ -258,13 +258,14 @@ def _process_emotions(kg, scene: Dict, media_id: int, timestamp: float):
 
 
 def _process_locations(kg, scene: Dict, media_id: int, timestamp: float):
-    """Extract and add location entities"""
-    # This could be enhanced with:
-    # - GPS data from EXIF
-    # - Location recognition from images
-    # - Location mentions in text
+    """Extract and add location entities
     
-    # Placeholder for location extraction
+    Future enhancements:
+    - GPS data extraction from EXIF metadata
+    - Vision-based location recognition
+    - NLP-based location extraction from transcripts
+    """
+    # Extract locations from scene metadata if available
     locations = scene.get('locations', [])
     for location in locations:
         node_id = kg.add_node(
@@ -274,6 +275,7 @@ def _process_locations(kg, scene: Dict, media_id: int, timestamp: float):
             timestamp=timestamp
         )
         kg.link_node_to_media(node_id, media_id, confidence=location.get('confidence', 0.5))
+
 
 
 def _build_cooccurrence_edges(kg):
@@ -378,9 +380,11 @@ def _build_semantic_edges(kg):
 
 
 def _extract_concepts(text: str) -> List[str]:
-    """Extract concepts from text (simplified)"""
-    # This is a placeholder - could be enhanced with NLP
-    # For now, extract common nouns and entities
+    """Extract key concepts from text using simple heuristics
+    
+    Future enhancement: Replace with proper NLP (spaCy, BERT-based NER)
+    Current: Uses capitalization patterns and word length filters
+    """
     concepts = []
     
     # Simple extraction based on capitalization and common patterns
@@ -393,8 +397,11 @@ def _extract_concepts(text: str) -> List[str]:
 
 
 def _extract_mentions(text: str) -> List[str]:
-    """Extract entity mentions from text (simplified)"""
-    # Placeholder for NER - would use spaCy or similar
+    """Extract entity mentions from text using pattern matching
+    
+    Future enhancement: Integrate spaCy NER or similar NLP library
+    Current: Uses simple capitalization heuristic for proper nouns
+    """
     mentions = []
     
     # Simple pattern matching for now

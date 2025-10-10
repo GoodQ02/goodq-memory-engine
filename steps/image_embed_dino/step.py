@@ -35,7 +35,7 @@ def image_embed_dino(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
         import torch  # type: ignore
         import numpy as np  # type: ignore
         from PIL import Image  # type: ignore
-        from GoodQ_4_All.steps.text_embed.step import _content_fingerprint
+        from goodq4all.steps.text_embed.step import _content_fingerprint
         import faiss  # type: ignore
 
         img = Image.open(path).convert("RGB")
@@ -60,7 +60,7 @@ def image_embed_dino(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
             index.hnsw.efSearch = 50
 
         # stable ID from content fingerprint
-        from GoodQ_4_All.steps.text_embed.step import _content_fingerprint
+        from goodq4all.steps.text_embed.step import _content_fingerprint
         h = _content_fingerprint(item)
         try:
             import numpy as np  # type: ignore
@@ -94,7 +94,7 @@ def image_embed_dino(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
                     pass
         # Upsert generic embedding metadata for recall
         try:
-            from GoodQ_4_All.steps.common.memory import upsert_embedding
+            from goodq4all.steps.common.memory import upsert_embedding
             upsert_embedding(cfg, h, faiss_id, path, item.get("modality", "image") or "image")
         except Exception:
             pass

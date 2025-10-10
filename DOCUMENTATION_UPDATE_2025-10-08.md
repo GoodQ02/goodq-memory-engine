@@ -10,7 +10,7 @@
 
 ### 1. ✅ QUICK_START.md (COMPREHENSIVE UPDATE)
 **Location:** 
-- `L:\GoodQ_4_All\docs\QUICK_START.md`
+- `L:\goodq4all\docs\QUICK_START.md`
 - `L:\QUICK_START.md` (root copy)
 
 **What''s New:**
@@ -33,7 +33,7 @@
 ---
 
 ### 2. ✨ NEW: WORKFLOW_VISUAL_GUIDE.md
-**Location:** `L:\GoodQ_4_All\docs\WORKFLOW_VISUAL_GUIDE.md`
+**Location:** `L:\goodq4all\docs\WORKFLOW_VISUAL_GUIDE.md`
 
 **Contains:**
 - 🎨 ASCII art visual flow diagrams
@@ -52,7 +52,7 @@
 ---
 
 ### 3. ✨ NEW: CHEAT_SHEET.md
-**Location:** `L:\GoodQ_4_All\docs\CHEAT_SHEET.md`
+**Location:** `L:\goodq4all\docs\CHEAT_SHEET.md`
 
 **Perfect for:**
 - Quick command lookup
@@ -67,7 +67,7 @@
 ---
 
 ### 4. 📦 BACKUP: QUICK_START_OLD.md
-**Location:** `L:\GoodQ_4_All\docs\QUICK_START_OLD.md`
+**Location:** `L:\goodq4all\docs\QUICK_START_OLD.md`
 
 **Purpose:** Backup of previous version (just in case)
 
@@ -118,7 +118,7 @@
 ═══════════════════════════════════════════════════════════════════════
 
 ✅ **Accurate Current State**
-   - Reflects actual L:\GoodQ_4_All\ location (not zenml_project)
+   - Reflects actual L:\goodq4all\ location (not zenml_project)
    - Correct batch file names and paths
    - Real directory structure
    - Actual processing flow
@@ -210,7 +210,7 @@ Advanced:
                       NEXT STEPS FOR USER
 ═══════════════════════════════════════════════════════════════════════
 
-1. ✅ Open L:\QUICK_START.md or L:\GoodQ_4_All\docs\QUICK_START.md
+1. ✅ Open L:\QUICK_START.md or L:\goodq4all\docs\QUICK_START.md
 2. ✅ Follow "Get Started in 3 Steps"
 3. ✅ Run LAUNCH_GOODQ.bat
 4. ✅ Test with sample.mp4 or drop real video
@@ -233,7 +233,7 @@ All files created successfully:
 ✅ docs/QUICK_START_OLD.md (backup)
 
 All paths verified:
-✅ L:\GoodQ_4_All\ (correct project location)
+✅ L:\goodq4all\ (correct project location)
 ✅ L:\_DATA\GoodQ_Data\ (correct data location)
 ✅ All batch file paths correct
 ✅ All command examples tested

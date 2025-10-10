@@ -12,7 +12,7 @@
 - Directory structure created
 
 ### ✅ Import System
-- All Python modules use correct `GoodQ_4_All` imports
+- All Python modules use correct `goodq4all` imports
 - 41 files updated with correct import paths
 - All critical modules import successfully
 - No syntax errors detected
@@ -40,7 +40,7 @@
 
 ### Directory Alignment
 ```
-L:/GoodQ_4_All/          ← Project code (GitHub)
+L:/goodq4all/          ← Project code (GitHub)
 L:/_DATA/GoodQ_Data/     ← Runtime data
 L:/_DATA/models/         ← Model files
 L:/_TOOLS/               ← External tools
@@ -87,13 +87,13 @@ Step Runs Log:
 
 #### 1. Pre-Test Status Check
 ```bash
-cd L:\GoodQ_4_All
+cd L:\goodq4all
 conda run -n goodq_zenml python scripts\check_production_status.py
 ```
 
 #### 2. Launch Full System (Recommended)
 ```batch
-L:\GoodQ_4_All\LAUNCH_GOODQ.bat
+L:\goodq4all\LAUNCH_GOODQ.bat
 ```
 This will:
 - Clear port 8000
@@ -107,12 +107,12 @@ This will:
 Get-Content L:\_DATA\GoodQ_Data\logs\step_runs.jsonl -Wait
 
 # Check Command Center status
-L:\GoodQ_4_All\scripts\command_center.ps1
+L:\goodq4all\scripts\command_center.ps1
 ```
 
 #### 4. Start Ingestion
 ```bash
-conda run -n goodq_zenml python -m GoodQ_4_All.cli.run_ingestion L:\GoodQ_4_All\import_inbox\1987_1988.mp4
+conda run -n goodq_zenml python -m goodq4all.cli.run_ingestion L:\goodq4all\import_inbox\1987_1988.mp4
 ```
 
 #### 5. Post-Test Analysis
@@ -124,7 +124,7 @@ conda run -n goodq_zenml python scripts\check_production_status.py
 conda run -n goodq_zenml python scripts\test_knowledge_graph.py
 
 # View memory diagnostics
-conda run -n goodq_zenml python -m GoodQ_4_All.cli.memory diagnostics
+conda run -n goodq_zenml python -m goodq4all.cli.memory diagnostics
 ```
 
 ## Expected Outputs

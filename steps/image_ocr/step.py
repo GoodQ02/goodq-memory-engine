@@ -1,13 +1,14 @@
 from __future__ import annotations
 from typing import Any, Dict, Optional
 
-from GoodQ_4_All.steps.common.tool_paths import resolve_tesseract
+from goodq4all.steps.common.tool_paths import resolve_tesseract
 
 
 def image_ocr(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
-    """Tesseract OCR if available, else placeholder.
-
-    This keeps behavior safe if pytesseract/Pillow are not installed.
+    """Extract text from images using Tesseract OCR.
+    
+    Gracefully handles missing dependencies (pytesseract/Pillow).
+    Returns None for ocr_text if extraction fails or tools unavailable.
     """
     text: Optional[str] = None
     try:

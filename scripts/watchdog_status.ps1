@@ -6,12 +6,12 @@ param(
     [int]$RefreshSeconds = 5
 )
 
-$watchDir = "L:\GoodQ_4_All\import_inbox"
-$processingDir = "L:\GoodQ_4_All\data\processing"
-$processedDir = "L:\GoodQ_4_All\data\processed"
-$failedDir = "L:\GoodQ_4_All\data\failed"
-$stateFile = "L:\GoodQ_4_All\logs\watchdog_state.json"
-$logFile = "L:\GoodQ_4_All\logs\watchdog.log"
+$watchDir = "L:\goodq4all\import_inbox"
+$processingDir = "L:\goodq4all\data\processing"
+$processedDir = "L:\goodq4all\data\processed"
+$failedDir = "L:\goodq4all\data\failed"
+$stateFile = "L:\goodq4all\logs\watchdog_state.json"
+$logFile = "L:\goodq4all\logs\watchdog.log"
 
 function Show-Status {
     Clear-Host

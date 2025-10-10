@@ -1,6 +1,6 @@
 # GitHub Repository Setup Guide
 
-**Repository Name:** `GoodQ_4_All`  
+**Repository Name:** `goodq4all`  
 **Visibility:** Private  
 **Date:** October 6, 2025
 
@@ -11,7 +11,7 @@
 ### 1. Create Repository on GitHub
 
 1. Go to https://github.com/new
-2. Repository name: `GoodQ_4_All`
+2. Repository name: `goodq4all`
 3. Description: "Privacy-first, desktop-native AI companion for multimodal content processing"
 4. Visibility: ✅ **Private**
 5. ❌ Do NOT initialize with README (we have one)
@@ -29,7 +29,7 @@ cd L:\zenml_project
 git init
 
 # Add remote
-git remote add origin https://github.com/YOUR_USERNAME/GoodQ_4_All.git
+git remote add origin https://github.com/YOUR_USERNAME/goodq4all.git
 
 # Verify
 git remote -v
@@ -93,7 +93,7 @@ Check that these key files are on GitHub:
 
 ### ✅ INCLUDED (Source Code & Docs)
 ```
-GoodQ_4_All/
+goodq4all/
 ├── .gitignore
 ├── README.md
 ├── LAUNCH_GOODQ.bat
@@ -279,7 +279,7 @@ git lfs track "*.bin"
 ### Multiple Remotes
 To add backup remote:
 ```powershell
-git remote add backup https://gitlab.com/YOUR_USERNAME/GoodQ_4_All.git
+git remote add backup https://gitlab.com/YOUR_USERNAME/goodq4all.git
 git push backup main
 ```
 
@@ -306,6 +306,6 @@ Repository is ready when:
 
 ---
 
-**Ready to upload!** Follow the steps above to create your `GoodQ_4_All` repository.
+**Ready to upload!** Follow the steps above to create your `goodq4all` repository.
 
 *Guide created: October 6, 2025*

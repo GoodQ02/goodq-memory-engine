@@ -5,11 +5,11 @@
                          🚀 GETTING STARTED
 ═══════════════════════════════════════════════════════════════════════
 
-START SYSTEM         L:\GoodQ_4_All\LAUNCH_GOODQ.bat
-START WATCHDOG       L:\GoodQ_4_All\START_WATCHDOG.bat
-STOP ALL             L:\GoodQ_4_All\STOP_GOODQ.bat (or close windows)
+START SYSTEM         L:\goodq4all\LAUNCH_GOODQ.bat
+START WATCHDOG       L:\goodq4all\START_WATCHDOG.bat
+STOP ALL             L:\goodq4all\STOP_GOODQ.bat (or close windows)
 
-DROP FILES HERE      L:\GoodQ_4_All\import_inbox\
+DROP FILES HERE      L:\goodq4all\import_inbox\
 API DOCS             http://localhost:8000/docs
 
 ═══════════════════════════════════════════════════════════════════════
@@ -32,7 +32,7 @@ Get-Content L:\_DATA\GoodQ_Data\logs\step_runs.jsonl -Wait
 pwsh scripts\watchdog_status.ps1
 
 # View recent logs
-Get-Content L:\GoodQ_4_All\logs\watchdog.log -Tail 50
+Get-Content L:\goodq4all\logs\watchdog.log -Tail 50
 
 ═══════════════════════════════════════════════════════════════════════
                        🎬 MANUAL PROCESSING
@@ -40,7 +40,7 @@ Get-Content L:\GoodQ_4_All\logs\watchdog.log -Tail 50
 
 # Activate environment first
 conda activate goodq_zenml
-cd L:\GoodQ_4_All
+cd L:\goodq4all
 
 # Process one video
 python cli\run_ingestion.py --video "path\to\video.mp4"
@@ -95,7 +95,7 @@ nvidia-smi
 taskkill /F /IM python.exe
 
 # Rebuild environment (if corrupted)
-cd L:\GoodQ_4_All\envs
+cd L:\goodq4all\envs
 pwsh create_all_envs.ps1
 
 # Clean database (DANGER - deletes all data!)
@@ -105,8 +105,8 @@ Remove-Item L:\_DATA\GoodQ_Data\databases\*.db
                         📂 KEY LOCATIONS
 ═══════════════════════════════════════════════════════════════════════
 
-Project Code         L:\GoodQ_4_All\
-Drop Files           L:\GoodQ_4_All\import_inbox\
+Project Code         L:\goodq4all\
+Drop Files           L:\goodq4all\import_inbox\
 Databases            L:\_DATA\GoodQ_Data\databases\
 Logs                 L:\_DATA\GoodQ_Data\logs\
 Models               L:\_DATA\models\
@@ -169,7 +169,7 @@ MODEL_LOCKDOWN.md            - Version control details
 
 ═══════════════════════════════════════════════════════════════════════
 
-GitHub: https://github.com/JoesDomingo/GoodQ_4_All
+GitHub: https://github.com/JoesDomingo/goodq4all
 Status: Production Ready ✅
 Version: 1.0.0
 

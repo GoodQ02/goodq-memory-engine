@@ -6,8 +6,8 @@ import subprocess
 import tempfile
 from typing import Any, Dict, List, Optional
 
-from GoodQ_4_All.steps.common.config_loader import load_configs
-from GoodQ_4_All.steps.discover_sources.step import discover_sources
+from goodq4all.steps.common.config_loader import load_configs
+from goodq4all.steps.discover_sources.step import discover_sources
 
 
 def _run_step(env: str, step: str, item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
@@ -20,7 +20,7 @@ def _run_step(env: str, step: str, item: Dict[str, Any], cfg: Dict[str, Any]) ->
         with open(cfg_p, 'w', encoding='utf-8') as f:
             json.dump(cfg, f)
         cmd = [
-            'conda','run','-n',env,'python','-m','GoodQ_4_All.cli.step_runner',
+            'conda','run','-n',env,'python','-m','goodq4all.cli.step_runner',
             '--step',step,'--in',in_p,'--out',out_p,'--cfg',cfg_p
         ]
         subprocess.run(cmd, check=True, capture_output=True)

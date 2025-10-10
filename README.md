@@ -1,6 +1,8 @@
-# GoodQ - Desktop AI Companion
+# goodq4all - Desktop AI Companion
 
-**Version 1.3.0** | **Status: Production-Ready** | **Last Updated: October 8, 2025**
+**Version 1.4.0** | **Status: Production-Ready** | **Last Updated: October 8, 2025**
+
+> **Project Renamed**: Formerly `GoodQ_4_All`, now `goodq4all` for consistency with GitHub naming conventions.
 
 > Privacy-first, multimodal AI companion inspired by Q from James Bond. Process video, audio, images, and text entirely on your local hardware with enterprise-grade observability and knowledge graph integration.
 

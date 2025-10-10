@@ -49,7 +49,7 @@ def check_status():
         status["errors"].append("Memory database not found")
     
     # Check knowledge graph
-    kg_db = Path("L:/GoodQ_4_All/data/production_knowledge_graph.db")
+    kg_db = Path("L:/goodq4all/data/production_knowledge_graph.db")
     if kg_db.exists():
         conn = sqlite3.connect(str(kg_db))
         c = conn.cursor()
@@ -66,8 +66,8 @@ def check_status():
     
     # Check recent file activity
     data_dirs = [
-        Path("L:/GoodQ_4_All/logs/production_run"),
-        Path("L:/GoodQ_4_All/logs/ingest_full"),
+        Path("L:/goodq4all/logs/production_run"),
+        Path("L:/goodq4all/logs/ingest_full"),
     ]
     
     for data_dir in data_dirs:
@@ -85,7 +85,7 @@ def check_status():
 
 def main():
     """Main monitoring loop"""
-    output_file = Path("L:/GoodQ_4_All/logs/overnight_monitor.jsonl")
+    output_file = Path("L:/goodq4all/logs/overnight_monitor.jsonl")
     
     print("🌙 Starting overnight monitoring...")
     print(f"   Logging to: {output_file}")

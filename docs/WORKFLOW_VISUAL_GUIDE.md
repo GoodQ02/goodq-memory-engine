@@ -80,7 +80,7 @@ Option B: MANUAL
 
 ┌────────────────────────────────────┐
 │  conda activate goodq_zenml        │
-│  cd L:\GoodQ_4_All                 │
+│  cd L:\goodq4all                 │
 │  python cli\run_ingestion.py \    │
 │    --video "path\to\video.mp4"     │
 └────────────┬───────────────────────┘
@@ -337,15 +337,15 @@ Each environment:
 ═══════════════════════════════════════════════════════════════════════
 
 🚀 Launchers
-   L:\GoodQ_4_All\LAUNCH_GOODQ.bat       - Start everything
-   L:\GoodQ_4_All\START_WATCHDOG.bat     - Auto-processing
-   L:\GoodQ_4_All\STOP_GOODQ.bat         - Stop services
+   L:\goodq4all\LAUNCH_GOODQ.bat       - Start everything
+   L:\goodq4all\START_WATCHDOG.bat     - Auto-processing
+   L:\goodq4all\STOP_GOODQ.bat         - Stop services
 
 📥 Input
-   L:\GoodQ_4_All\import_inbox\          - Drop files here
+   L:\goodq4all\import_inbox\          - Drop files here
 
 🔧 Scripts
-   L:\GoodQ_4_All\scripts\
+   L:\goodq4all\scripts\
       command_center.ps1                 - Dashboard
       verify_project_readiness.ps1       - Health check
       check_production_status.py         - Status report

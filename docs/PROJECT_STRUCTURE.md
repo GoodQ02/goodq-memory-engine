@@ -6,7 +6,7 @@
 
 ```
 L:\
-├── GoodQ_4_All\              # Main project (GitHub repo)
+├── goodq4all\              # Main project (GitHub repo)
 ├── _DATA\                    # Runtime data (NOT in GitHub)
 ├── _ARCHIVE\                 # Legacy/deprecated files
 ├── models\                   # Pretrained model files
@@ -15,12 +15,12 @@ L:\
 
 ---
 
-## 🎯 GoodQ_4_All\ (Project Root)
+## 🎯 goodq4all\ (Project Root)
 
 **Purpose**: Source code, configuration, and documentation (tracked in GitHub)
 
 ```
-GoodQ_4_All\
+goodq4all\
 ├── api\                      # FastAPI REST server
 │   ├── main.py              # API entry point
 │   ├── server.py            # Server configuration
@@ -162,11 +162,11 @@ tools\
 ## 🔑 Key Design Principles
 
 ### 1. **Single Source of Truth**
-- All paths defined in `GoodQ_4_All/configs/paths.py`
+- All paths defined in `goodq4all/configs/paths.py`
 - Import and use centralized paths: `from configs.paths import DATABASE_DIR`
 
 ### 2. **Separation of Concerns**
-- **Code** (GoodQ_4_All): Version controlled in GitHub
+- **Code** (goodq4all): Version controlled in GitHub
 - **Data** (_DATA): Local only, not in GitHub
 - **Archive** (_ARCHIVE): Historical reference only
 

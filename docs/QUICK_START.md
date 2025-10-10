@@ -9,7 +9,7 @@
 ### Step 1: Launch the System
 Double-click the batch file or run from command line:
 ```batch
-L:\GoodQ_4_All\LAUNCH_GOODQ.bat
+L:\goodq4all\LAUNCH_GOODQ.bat
 ```
 
 **This automatically starts:**
@@ -29,9 +29,9 @@ L:\GoodQ_4_All\LAUNCH_GOODQ.bat
 #### Option A: Automatic Watchdog (Recommended)
 1. Start the watchdog service:
    ```batch
-   L:\GoodQ_4_All\START_WATCHDOG.bat
+   L:\goodq4all\START_WATCHDOG.bat
    ```
-2. Drop video files into: `L:\GoodQ_4_All\import_inbox\`
+2. Drop video files into: `L:\goodq4all\import_inbox\`
 3. Files are automatically processed in queue
 4. Processed files are renamed with `_INGESTED` suffix
 
@@ -41,8 +41,8 @@ L:\GoodQ_4_All\LAUNCH_GOODQ.bat
 conda activate goodq_zenml
 
 # Process a single video
-cd L:\GoodQ_4_All
-python cli\run_ingestion.py --video "L:\GoodQ_4_All\import_inbox\your_video.mp4"
+cd L:\goodq4all
+python cli\run_ingestion.py --video "L:\goodq4all\import_inbox\your_video.mp4"
 ```
 
 ---
@@ -63,18 +63,18 @@ The Command Center shows real-time status:
 Get-Content L:\_DATA\GoodQ_Data\logs\step_runs.jsonl -Wait
 
 # Check ingestion status
-cd L:\GoodQ_4_All
+cd L:\goodq4all
 conda run -n goodq_zenml python scripts\check_production_status.py
 ```
 
 #### Monitor Watchdog (if using automatic mode)
 ```bash
 # Check watchdog status
-cd L:\GoodQ_4_All
+cd L:\goodq4all
 pwsh scripts\watchdog_status.ps1
 
 # View watchdog logs
-Get-Content L:\GoodQ_4_All\logs\watchdog.log -Tail 50
+Get-Content L:\goodq4all\logs\watchdog.log -Tail 50
 ```
 
 ---
@@ -83,7 +83,7 @@ Get-Content L:\GoodQ_4_All\logs\watchdog.log -Tail 50
 
 ### Project Code (Version Controlled)
 ```
-L:\GoodQ_4_All\              ← Main project (GitHub synced)
+L:\goodq4all\              ← Main project (GitHub synced)
 ├── api\                     ← FastAPI server
 ├── cli\                     ← Command-line tools
 ├── pipelines\               ← ZenML pipelines
@@ -118,7 +118,7 @@ L:\_ARCHIVE\                 ← Legacy files & backups
 ### System Health Checks
 ```bash
 # Full environment verification (run first!)
-cd L:\GoodQ_4_All
+cd L:\goodq4all
 pwsh scripts\verify_project_readiness.ps1
 
 # Check current processing status
@@ -159,7 +159,7 @@ python cli\memory.py --export --output "export.json"
 ### Stop Services
 ```batch
 # Stop all GoodQ services
-L:\GoodQ_4_All\STOP_GOODQ.bat
+L:\goodq4all\STOP_GOODQ.bat
 
 # Or just close the PowerShell windows
 ```
@@ -281,7 +281,7 @@ LAUNCH_GOODQ.bat
 START_WATCHDOG.bat
 
 # 3. Drop your video into import_inbox
-#    Copy: family_vacation_1987.mp4 → L:\GoodQ_4_All\import_inbox\
+#    Copy: family_vacation_1987.mp4 → L:\goodq4all\import_inbox\
 
 # 4. Watch processing in Command Center
 #    - Scenes detected
@@ -313,7 +313,7 @@ python cli\graph_query.py --entity "beach"
 
 ### Run System Verification
 ```bash
-cd L:\GoodQ_4_All
+cd L:\goodq4all
 pwsh scripts\verify_project_readiness.ps1
 ```
 
@@ -348,7 +348,7 @@ pwsh -Command "Get-NetTCPConnection -LocalPort 8000 | ForEach-Object { Stop-Proc
 ### Environment Issues
 ```bash
 # Rebuild environments
-cd L:\GoodQ_4_All\envs
+cd L:\goodq4all\envs
 pwsh create_all_envs.ps1
 ```
 
@@ -361,7 +361,7 @@ pwsh create_all_envs.ps1
 ### Watchdog Not Processing
 ```bash
 # Check watchdog logs
-Get-Content L:\GoodQ_4_All\logs\watchdog.log -Tail 50
+Get-Content L:\goodq4all\logs\watchdog.log -Tail 50
 
 # Restart watchdog
 # Close existing window, run START_WATCHDOG.bat again
@@ -403,7 +403,7 @@ For more help, see **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)**
 
 ---
 
-**Repository:** https://github.com/JoesDomingo/GoodQ_4_All  
+**Repository:** https://github.com/JoesDomingo/goodq4all  
 **License:** See LICENSE file  
 **Status:** Production Ready ✅
 

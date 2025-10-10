@@ -1,6 +1,6 @@
 Param(
   [string]$Drive = 'L:',
-  [string[]]$Keep = @('GoodQ_4_All','GoodQ_Data','GoodQ_Pipeline','models','Tools','datasets','logs'),
+  [string[]]$Keep = @('goodq4all','GoodQ_Data','GoodQ_Pipeline','models','Tools','datasets','logs'),
   [switch]$Force,
   [switch]$DryRun,
   [switch]$Verbose

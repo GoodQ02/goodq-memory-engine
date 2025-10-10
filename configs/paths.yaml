@@ -4,7 +4,7 @@ log_dir: "L:/_DATA/GoodQ_Data/logs"
 output_directory: "L:/_DATA/GoodQ_Data/data/output_inbox"
 db_dir: "L:/_DATA/GoodQ_Data/data/memory_db"
 system_csv: "L:/_DATA/GoodQ_Data/logs/GOOD_ENGINE_SYS.csv"
-input_inbox: "L:/GoodQ_4_All/smoke_inbox"
+input_inbox: "L:/goodq4all/smoke_inbox"
 
 # Memory indices and databases (consolidated)
 db_path: "L:/_DATA/GoodQ_Data/data/memory_db/memory.db"

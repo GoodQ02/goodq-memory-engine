@@ -36,7 +36,7 @@ def run_conda_step(env_name: str, step_name: str, item: Dict[str, Any], cfg: Dic
             env_name,
             "python",
             "-m",
-            "GoodQ_4_All.cli.step_runner",
+            "goodq4all.cli.step_runner",
             "--step",
             step_name,
             "--in",

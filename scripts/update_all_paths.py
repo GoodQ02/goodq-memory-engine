@@ -6,33 +6,33 @@ from pathlib import Path
 # Simple string replacements (no regex to avoid escape issues)
 REPLACEMENTS = [
     # Old project name - forward slash
-    ('L:/GoodQ_4_All', 'L:/GoodQ_4_All'),
+    ('L:/goodq4all', 'L:/goodq4all'),
     
     # Old project name - backslash  
-    ('L:\\GoodQ_4_All', 'L:\\GoodQ_4_All'),
-    ('L:\\\\GoodQ_4_All', 'L:\\\\GoodQ_4_All'),
+    ('L:\\goodq4all', 'L:\\goodq4all'),
+    ('L:\\\\goodq4all', 'L:\\\\goodq4all'),
     
     # Quoted references
-    ('"GoodQ_4_All"', '"GoodQ_4_All"'),
-    ("'GoodQ_4_All'", "'GoodQ_4_All'"),
+    ('"goodq4all"', '"goodq4all"'),
+    ("'goodq4all'", "'goodq4all'"),
     
     # Specific path updates - databases
-    ('L:/GoodQ_4_All/data/memory.db', 'L:/_DATA/GoodQ_Data/databases/memory.db'),
-    ('L:/GoodQ_4_All/data/knowledge_graph.db', 'L:/_DATA/GoodQ_Data/databases/knowledge_graph.db'),
-    ('L:/GoodQ_4_All/data/production_knowledge_graph.db', 'L:/_DATA/GoodQ_Data/databases/production_knowledge_graph.db'),
+    ('L:/goodq4all/data/memory.db', 'L:/_DATA/GoodQ_Data/databases/memory.db'),
+    ('L:/goodq4all/data/knowledge_graph.db', 'L:/_DATA/GoodQ_Data/databases/knowledge_graph.db'),
+    ('L:/goodq4all/data/production_knowledge_graph.db', 'L:/_DATA/GoodQ_Data/databases/production_knowledge_graph.db'),
     
     # Logs
-    ('L:/GoodQ_4_All/logs/watchdog.log', 'L:/_DATA/GoodQ_Data/logs/watchdog.log'),
-    ('L:/GoodQ_4_All/logs/production_run', 'L:/_DATA/GoodQ_Data/processing/production_run'),
-    ('L:/GoodQ_4_All/logs/ingest_full', 'L:/_DATA/GoodQ_Data/completed/ingest_full'),
-    ('L:/GoodQ_4_All/logs/overnight_monitor.jsonl', 'L:/_DATA/GoodQ_Data/logs/overnight_monitor.jsonl'),
-    ('L:/GoodQ_4_All/logs/watchdog_state.json', 'L:/_DATA/GoodQ_Data/logs/watchdog_state.json'),
-    ('L:/GoodQ_4_All/logs/video_ingest_results.json', 'L:/_DATA/GoodQ_Data/logs/video_ingest_results.json'),
+    ('L:/goodq4all/logs/watchdog.log', 'L:/_DATA/GoodQ_Data/logs/watchdog.log'),
+    ('L:/goodq4all/logs/production_run', 'L:/_DATA/GoodQ_Data/processing/production_run'),
+    ('L:/goodq4all/logs/ingest_full', 'L:/_DATA/GoodQ_Data/completed/ingest_full'),
+    ('L:/goodq4all/logs/overnight_monitor.jsonl', 'L:/_DATA/GoodQ_Data/logs/overnight_monitor.jsonl'),
+    ('L:/goodq4all/logs/watchdog_state.json', 'L:/_DATA/GoodQ_Data/logs/watchdog_state.json'),
+    ('L:/goodq4all/logs/video_ingest_results.json', 'L:/_DATA/GoodQ_Data/logs/video_ingest_results.json'),
     
     # Processing directories
-    ('L:/GoodQ_4_All/data/processing', 'L:/_DATA/GoodQ_Data/processing'),
-    ('L:/GoodQ_4_All/data/processed', 'L:/_DATA/GoodQ_Data/completed'),
-    ('L:/GoodQ_4_All/data/failed', 'L:/_DATA/GoodQ_Data/processing/failed'),
+    ('L:/goodq4all/data/processing', 'L:/_DATA/GoodQ_Data/processing'),
+    ('L:/goodq4all/data/processed', 'L:/_DATA/GoodQ_Data/completed'),
+    ('L:/goodq4all/data/failed', 'L:/_DATA/GoodQ_Data/processing/failed'),
     
     # Import statements (for Python files)
     ('from steps.', 'from steps.'),
@@ -63,7 +63,7 @@ def main():
     print("Updating All Project Paths")
     print("=" * 70)
     
-    project_root = Path("L:/GoodQ_4_All")
+    project_root = Path("L:/goodq4all")
     
     # Directories to update
     dirs_to_update = [

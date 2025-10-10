@@ -19,7 +19,7 @@ collaboration.
 
 BEFORE                          →  AFTER
 ─────────────────────────────────────────────────────────────────────
-zenml_project/                  →  GoodQ_4_All/
+zenml_project/                  →  goodq4all/
   └─ logs/ (20+ mixed folders)  →  (clean, no logs)
   └─ data/ (scattered)          →  (removed - see _DATA/)
   └─ hardcoded paths            →  configs/paths.py
@@ -41,7 +41,7 @@ zenml_project/                  →  GoodQ_4_All/
 ───────────────────────────────────────────────────────────────────────
 
 L:\
-├── GoodQ_4_All\              ← GitHub repo (code only)
+├── goodq4all\              ← GitHub repo (code only)
 │   ├── api\                  FastAPI server
 │   ├── configs\              Configuration + paths.py ⭐
 │   ├── docs\                 Complete documentation
@@ -145,7 +145,7 @@ System Readiness Check:  ✅ PASSED (YELLOW - expected)
 Git Status:              ✅ COMMITTED & PUSHED
   • Commit hash:         1bd1077
   • Branch:              main
-  • Remote:              github.com/JoesDomingo/GoodQ_4_All
+  • Remote:              github.com/JoesDomingo/goodq4all
 
 ───────────────────────────────────────────────────────────────────────
  📚 DOCUMENTATION CREATED

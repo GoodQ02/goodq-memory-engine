@@ -18,7 +18,7 @@ def test_object_detection():
     print("\n=== Testing Object Detection (YOLO) ===")
     from steps.steps.object_detect.step import object_detect
     
-    test_img = "L:\\GoodQ_4_All\\logs\\ingest_full\\1987_1988\\frames\\scene_0000.jpg"
+    test_img = "L:\\goodq4all\\logs\\ingest_full\\1987_1988\\frames\\scene_0000.jpg"
     if not os.path.isfile(test_img):
         print(f"❌ Test image not found: {test_img}")
         return False
@@ -44,7 +44,7 @@ def test_image_caption():
     print("\n=== Testing Image Captioning (BLIP) ===")
     from steps.steps.image_caption.step import image_caption
     
-    test_img = "L:\\GoodQ_4_All\\logs\\ingest_full\\1987_1988\\frames\\scene_0000.jpg"
+    test_img = "L:\\goodq4all\\logs\\ingest_full\\1987_1988\\frames\\scene_0000.jpg"
     if not os.path.isfile(test_img):
         print(f"❌ Test image not found: {test_img}")
         return False
@@ -69,7 +69,7 @@ def test_ocr():
     print("\n=== Testing OCR ===")
     from steps.steps.image_ocr.step import image_ocr
     
-    test_img = "L:\\GoodQ_4_All\\logs\\ingest_full\\1987_1988\\frames\\scene_0000.jpg"
+    test_img = "L:\\goodq4all\\logs\\ingest_full\\1987_1988\\frames\\scene_0000.jpg"
     if not os.path.isfile(test_img):
         print(f"❌ Test image not found: {test_img}")
         return False
@@ -95,7 +95,7 @@ def test_audio_transcription():
     print("\n=== Testing Audio Transcription (Whisper) ===")
     from steps.steps.audio_transcribe.step import audio_transcribe
     
-    test_audio = "L:\\GoodQ_4_All\\logs\\ingest_full\\1987_1988\\audio\\scene_0000.wav"
+    test_audio = "L:\\goodq4all\\logs\\ingest_full\\1987_1988\\audio\\scene_0000.wav"
     if not os.path.isfile(test_audio):
         print(f"❌ Test audio not found: {test_audio}")
         return False

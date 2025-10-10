@@ -2,7 +2,7 @@
 import sys
 sys.path.insert(0, 'L:/')
 
-from GoodQ_4_All.configs.paths import *
+from goodq4all.configs.paths import *
 import os
 
 print("=" * 70)

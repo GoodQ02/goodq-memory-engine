@@ -99,4 +99,4 @@ devices:
   nas: UGREEN NAS with 44TB of HDD storage and 8TB of flash storage
   network: 2.5Gbps Ethernet connected to Tp-Link Archer AXE7800 with 2.5Gbps Ethernet,
     Wi-Fi 6E fallback
-  config: L:/GoodQ_4_All/config/config.yaml
+  config: L:/goodq4all/config/config.yaml

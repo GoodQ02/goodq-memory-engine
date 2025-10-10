@@ -1,4 +1,12 @@
-"""ZenML scaffold for GoodQ chat pipeline."""
+"""
+FUTURE FEATURE: GoodQ chat pipeline for conversational interface.
+
+This is a placeholder for future chat/conversation functionality.
+Current focus is on ingestion pipeline (ingest_multimodal_conda.py).
+
+Status: NOT IMPLEMENTED
+Priority: LOW - Implement after core ingestion is stable
+"""
 from typing import Any, Dict
 
 

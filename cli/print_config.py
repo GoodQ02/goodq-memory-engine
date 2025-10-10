@@ -1,6 +1,6 @@
 from __future__ import annotations
 import json
-from GoodQ_4_All.steps.common.config_loader import load_configs
+from goodq4all.steps.common.config_loader import load_configs
 
 
 def main() -> None:

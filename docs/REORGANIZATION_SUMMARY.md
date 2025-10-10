@@ -154,7 +154,7 @@ python cli/run_ingestion.py --video "path/to/video.mp4"
 
 ### 4. Push to GitHub
 Everything is organized and ready for your first commit to:
-https://github.com/JoesDomingo/GoodQ_4_All
+https://github.com/JoesDomingo/goodq4all
 
 ## Notes for Future
 

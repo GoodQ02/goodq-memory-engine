@@ -12,7 +12,7 @@ Your GoodQ project now includes **comprehensive, production-ready documentation*
 ### Three Main Guides
 
 #### 1. 📖 **QUICK_START.md** - The Complete Guide
-**Location:** `L:\QUICK_START.md` and `L:\GoodQ_4_All\docs\QUICK_START.md`  
+**Location:** `L:\QUICK_START.md` and `L:\goodq4all\docs\QUICK_START.md`  
 **Size:** 11 KB (~600 lines)
 
 **Perfect for:** First-time users and comprehensive reference
@@ -41,7 +41,7 @@ Open guide → See "Get Started in 3 Steps" → Run LAUNCH_GOODQ.bat
 ---
 
 #### 2. 🎨 **WORKFLOW_VISUAL_GUIDE.md** - See the Flow
-**Location:** `L:\GoodQ_4_All\docs\WORKFLOW_VISUAL_GUIDE.md`  
+**Location:** `L:\goodq4all\docs\WORKFLOW_VISUAL_GUIDE.md`  
 **Size:** 19 KB (~500 lines)
 
 **Perfect for:** Visual learners and understanding architecture
@@ -71,7 +71,7 @@ Drop Video → Scene Detection → Extract Frames + Audio
 ---
 
 #### 3. 📋 **CHEAT_SHEET.md** - Quick Command Reference
-**Location:** `L:\GoodQ_4_All\docs\CHEAT_SHEET.md`  
+**Location:** `L:\goodq4all\docs\CHEAT_SHEET.md`  
 **Size:** 10 KB (~250 lines)
 
 **Perfect for:** Quick lookups and copy-paste commands
@@ -117,7 +117,7 @@ Drop Video → Scene Detection → Extract Frames + Audio
 ## ✅ What Makes These Guides Special
 
 ### 1. **Accurate & Current**
-- ✅ Reflects actual project structure (`L:\GoodQ_4_All\`)
+- ✅ Reflects actual project structure (`L:\goodq4all\`)
 - ✅ Correct batch file names and paths
 - ✅ Real command examples that work
 - ✅ Updated for current processing flow
@@ -267,13 +267,13 @@ Users can now:
 
 ```
 Main Guide:          L:\QUICK_START.md
-                     L:\GoodQ_4_All\docs\QUICK_START.md
+                     L:\goodq4all\docs\QUICK_START.md
 
-Visual Guide:        L:\GoodQ_4_All\docs\WORKFLOW_VISUAL_GUIDE.md
+Visual Guide:        L:\goodq4all\docs\WORKFLOW_VISUAL_GUIDE.md
 
-Cheat Sheet:         L:\GoodQ_4_All\docs\CHEAT_SHEET.md
+Cheat Sheet:         L:\goodq4all\docs\CHEAT_SHEET.md
 
-All Documentation:   L:\GoodQ_4_All\docs\
+All Documentation:   L:\goodq4all\docs\
 ```
 
 ---
@@ -300,7 +300,7 @@ If users need help:
 
 ---
 
-**Repository:** https://github.com/JoesDomingo/GoodQ_4_All  
+**Repository:** https://github.com/JoesDomingo/goodq4all  
 **Status:** ✅ Production Ready  
 **Documentation:** ✅ Complete  
 **Version:** 1.0.0

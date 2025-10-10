@@ -6,7 +6,7 @@ import sqlite3
 import time
 import json
 
-from GoodQ_4_All.lib.memory_management.diagnostics import run_all_diagnostics
+from goodq4all.lib.memory_management.diagnostics import run_all_diagnostics
 
 
 def _tally(tokens: List[Any]) -> Dict[str, int]:

@@ -2,7 +2,7 @@
 
 **Commit:** `8605a3a`  
 **Branch:** `main`  
-**Repository:** https://github.com/JoesDomingo/GoodQ_4_All  
+**Repository:** https://github.com/JoesDomingo/goodq4all  
 **Date:** October 8, 2025  
 **Time:** ~1:00 AM
 
@@ -295,7 +295,7 @@ From scattered experiments and placeholder code to a production-ready, knowledge
 
 ## 🔗 Repository
 
-**Live at:** https://github.com/JoesDomingo/GoodQ_4_All  
+**Live at:** https://github.com/JoesDomingo/goodq4all  
 **Branch:** main  
 **Commit:** 8605a3a  
 **Status:** Private  

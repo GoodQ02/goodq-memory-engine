@@ -3,8 +3,8 @@ from typing import Any, Dict
 
 import os
 import requests
-from GoodQ_4_All.steps.common.retry import request_with_retry
-from GoodQ_4_All.steps.common.memory import _connect
+from goodq4all.steps.common.retry import request_with_retry
+from goodq4all.steps.common.memory import _connect
 
 
 def _goodq_persona_prompt(cfg: Dict[str, Any]) -> str:

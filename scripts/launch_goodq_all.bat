@@ -42,12 +42,12 @@ start "GoodQ Command Center" "%PS_EXE%" -NoProfile -ExecutionPolicy Bypass -File
 
 
 echo [golden] Creating memory backup snapshot...
-conda run -n goodq_text_embed python -m zenml_project.cli.memory backup
+conda run -n goodq_text_embed python -m goodq4all.cli.memory backup
 
 echo [golden] Generating final memory health report...
 for /f "delims=" %%R in ('powershell -NoProfile -Command "Get-Date -Format yyyyMMdd_HHmmss"') do set TS=%%R
 set REPORT=L:\GoodQ_Data\logs\memory_health_report_%%TS%%.json
-conda run -n goodq_text_embed python -m zenml_project.cli.memory health-check --output-file "%REPORT%"
+conda run -n goodq_text_embed python -m goodq4all.cli.memory health-check --output-file "%REPORT%"
 echo [golden] All systems go. Windows will stay open for each service.
 
 :done

@@ -50,7 +50,7 @@ elseif ($Mode -eq 'pipeline') {
   $pyCode = @"
 import sys
 sys.path.insert(0, r"$normalizedRepoRoot")
-from steps.pipelines.ingest_multimodal_conda import ingest_multimodal
+from pipelines.ingest_multimodal_conda import ingest_multimodal
 ingest_multimodal()
 "@
   $tmpPy = [System.IO.Path]::GetTempFileName()

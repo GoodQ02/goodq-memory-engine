@@ -232,7 +232,7 @@ function Show-RetrievePreview {
   $query = $env:GOODQ_CC_QUERY
   if (-not $query) { $query = 'test' }
   try {
-    $out = & conda run -n goodq_text_embed python -m zenml_project.cli.retrieve --text "$query" --topk 3
+    $out = & conda run -n goodq_text_embed python -m goodq4all.cli.retrieve --text "$query" --topk 3
     $j = $out | ConvertFrom-Json
     if (-not $j -or -not ($j.PSObject.Properties.Name -contains 'matches') -or -not $j.matches) { 
       Warn 'No matches'; return 

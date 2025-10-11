@@ -73,7 +73,7 @@ Write-Info "Workspace: $workspacePath"
 Write-Info "Output: $outputPath"
 
 $pythonArgs = @(
-  '-m','zenml_project.cli.run_ingestion',
+  '-m','goodq4all.cli.run_ingestion',
   '--input-dir', $inputPath,
   '--workspace', $workspacePath,
   '--output', $outputPath
@@ -124,7 +124,7 @@ Write-Ok "Ingestion completed successfully. Results: $outputPath"
 
 if ($RunHealthCheck) {
   Write-Info 'Running memory health-check'
-  $healthCmd = @('conda','run','-n','goodq_text_embed','python','-m','zenml_project.cli.memory','health-check')
+  $healthCmd = @('conda','run','-n','goodq_text_embed','python','-m','goodq4all.cli.memory','health-check')
   $healthExe = $healthCmd[0]
   $healthArgs = if ($healthCmd.Count -gt 1) { $healthCmd[1..($healthCmd.Count - 1)] } else { @() }
   & $healthExe @$healthArgs

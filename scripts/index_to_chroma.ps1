@@ -29,4 +29,4 @@ try {
 }
 
 Write-Host "[chroma] Building / updating collection..." -ForegroundColor Cyan
-& conda run -n $envName python -m zenml_project.cli.chroma_store --collection $Collection --limit $Limit
+& conda run -n $envName python -m goodq4all.cli.chroma_store --collection $Collection --limit $Limit

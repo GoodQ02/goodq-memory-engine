@@ -53,7 +53,7 @@ for target in paths:
     try:
         p = pathlib.Path(target)
         p.mkdir(parents=True, exist_ok=True)
-        with open(p / 'zenml_project_local.pth', 'w', encoding='utf-8') as fh:
+        with open(p / 'goodq4all_local.pth', 'w', encoding='utf-8') as fh:
             # Add the parent of the repo root to sys.path so that the
             # package 'goodq4all' (which lives at $repoRoot) can be imported
             # as a top-level module. E.g., if repoRoot is L:\\goodq4all,
@@ -64,7 +64,7 @@ for target in paths:
     except Exception:
         continue
 if not written:
-    raise RuntimeError('Unable to create .pth link for zenml_project')
+    raise RuntimeError('Unable to create .pth link for goodq4all')
 "@
   try {
     $tmp = [System.IO.Path]::GetTempFileName()

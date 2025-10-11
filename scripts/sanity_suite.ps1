@@ -56,7 +56,7 @@ try {
   $in = Join-Path $outDir 'ocr_in.json'
   $out = Join-Path $outDir 'ocr_out.json'
   ($item | ConvertTo-Json) | Set-Content -LiteralPath $in -Encoding UTF8
-  & conda run -n "${EnvPrefix}_image_caption" python -m zenml_project.cli.step_runner --step image_ocr --in $in --out $out --verbose | Out-Null
+  & conda run -n "${EnvPrefix}_image_caption" python -m goodq4all.cli.step_runner --step image_ocr --in $in --out $out --verbose | Out-Null
   $j = Get-Content -Raw -LiteralPath $out | ConvertFrom-Json
   Ok ("OCR ok; text length {0}" -f ((($j.ocr_text) ? $j.ocr_text.Length : 0)))
 } catch { Warn "OCR smoke failed: $_" }
@@ -67,7 +67,7 @@ try {
   $in = Join-Path $outDir 'am_in.json'
   $out = Join-Path $outDir 'am_out.json'
   ($item | ConvertTo-Json) | Set-Content -LiteralPath $in -Encoding UTF8
-  & conda run -n "${EnvPrefix}_audio_metadata" python -m zenml_project.cli.step_runner --step audio_metadata --in $in --out $out --verbose | Out-Null
+  & conda run -n "${EnvPrefix}_audio_metadata" python -m goodq4all.cli.step_runner --step audio_metadata --in $in --out $out --verbose | Out-Null
   $j = Get-Content -Raw -LiteralPath $out | ConvertFrom-Json
   Ok ("Audio meta ok; duration {0}s" -f ($j.audio_meta.duration_sec))
 } catch { Warn "Audio metadata smoke failed: $_" }

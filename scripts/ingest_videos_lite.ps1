@@ -68,7 +68,7 @@ Write-Info "Ingesting from $inputPath"
 Write-Info "Workspace: $workspacePath"
 
 $pythonArgs = @(
-  '-m','zenml_project.cli.run_ingestion',
+  '-m','goodq4all.cli.run_ingestion',
   '--input-dir', $inputPath,
   '--workspace', $workspacePath,
   '--output', $outputPath

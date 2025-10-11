@@ -329,12 +329,28 @@ class WatchdogProcessor:
         """Ingest video file via CLI"""
         import subprocess
         
+        # Create temporary input dir with just this video
+        temp_input = Path("L:/goodq4all/data/processing/current_video")
+        temp_input.mkdir(parents=True, exist_ok=True)
+        
+        # Copy video to temp location
+        temp_video = temp_input / video_path.name
+        try:
+            if temp_video.exists():
+                temp_video.unlink()
+            shutil.copy2(video_path, temp_video)
+        except Exception as e:
+            logger.error(f"Failed to copy video to temp dir: {e}")
+            return False
+        
+        # Use conda run to execute in correct environment
         cmd = [
-            sys.executable,
-            'L:/goodq4all/cli/run_ingestion.py',
-            'ingest',
-            str(video_path),
-            '--env', 'goodq_zenml'
+            'conda', 'run', '-n', 'goodq_zenml',
+            'python', '-m', 'goodq4all.cli.run_ingestion',
+            '--input-dir', str(temp_input),
+            '--workspace', f'L:/goodq4all/logs/watchdog_{datetime.now().strftime("%Y%m%d_%H%M%S")}',
+            '--output', f'L:/goodq4all/logs/watchdog_{datetime.now().strftime("%Y%m%d_%H%M%S")}_results.json',
+            '--verbose'
         ]
         
         logger.debug(f"Running: {' '.join(cmd)}")
@@ -344,24 +360,48 @@ class WatchdogProcessor:
                 cmd,
                 capture_output=True,
                 text=True,
-                timeout=3600,  # 1 hour timeout
+                timeout=7200,  # 2 hour timeout for large videos
                 cwd='L:/goodq4all'
             )
             
             if result.returncode == 0:
                 logger.info("Video ingestion completed successfully")
+                # Clean up temp directory
+                try:
+                    temp_video.unlink(missing_ok=True)
+                    temp_input.rmdir()
+                except Exception as e:
+                    logger.warning(f"Failed to clean up temp directory: {e}")
                 return True
             else:
                 logger.error(f"Video ingestion failed with code {result.returncode}")
                 logger.error(f"STDOUT: {result.stdout}")
                 logger.error(f"STDERR: {result.stderr}")
+                # Clean up temp directory
+                try:
+                    temp_video.unlink(missing_ok=True)
+                    temp_input.rmdir()
+                except Exception as e:
+                    logger.warning(f"Failed to clean up temp directory: {e}")
                 return False
                 
         except subprocess.TimeoutExpired:
             logger.error("Video ingestion timed out")
+            # Clean up temp directory
+            try:
+                temp_video.unlink(missing_ok=True)
+                temp_input.rmdir()
+            except Exception as e:
+                logger.warning(f"Failed to clean up temp directory: {e}")
             return False
         except Exception as e:
             logger.error(f"Video ingestion error: {e}", exc_info=True)
+            # Clean up temp directory
+            try:
+                temp_video.unlink(missing_ok=True)
+                temp_input.rmdir()
+            except Exception as e:
+                logger.warning(f"Failed to clean up temp directory: {e}")
             return False
     
     def ingest_audio(self, audio_path: Path) -> bool:

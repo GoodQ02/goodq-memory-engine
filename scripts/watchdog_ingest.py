@@ -354,6 +354,11 @@ class WatchdogProcessor:
             '--verbose'
         ]
         
+        # Dynamic timeout based on file size (roughly 1 hour per GB for safety)
+        file_size_gb = video_path.stat().st_size / (1024**3)
+        timeout_seconds = max(10800, int(file_size_gb * 3600))  # At least 3 hours, +1hr per GB
+        logger.info(f"Setting timeout to {timeout_seconds}s ({timeout_seconds/3600:.1f}h) for {file_size_gb:.2f}GB file")
+        
         logger.debug(f"Running: {' '.join(cmd)}")
         
         try:
@@ -361,7 +366,7 @@ class WatchdogProcessor:
                 cmd,
                 capture_output=True,
                 text=True,
-                timeout=7200,  # 2 hour timeout for large videos
+                timeout=timeout_seconds,
                 cwd='L:/goodq4all'
             )
             

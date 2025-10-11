@@ -1,20 +1,21 @@
-# Centralized path config. Adjust to your system.
+# Centralized path config - UNIFIED structure
+# All project data consolidated under L:\goodq4all
 
-log_dir: "L:/_DATA/GoodQ_Data/logs"
-output_directory: "L:/_DATA/GoodQ_Data/data/output_inbox"
-db_dir: "L:/_DATA/GoodQ_Data/data/memory_db"
-system_csv: "L:/_DATA/GoodQ_Data/logs/GOOD_ENGINE_SYS.csv"
-input_inbox: "L:/goodq4all/smoke_inbox"
+log_dir: "L:/goodq4all/logs"
+output_directory: "L:/goodq4all/data/output"
+db_dir: "L:/goodq4all/data"
+system_csv: "L:/goodq4all/logs/system_metrics.csv"
+input_inbox: "L:/goodq4all/import_inbox"
 
-# Memory indices and databases (consolidated)
-db_path: "L:/_DATA/GoodQ_Data/data/memory_db/memory.db"
-faiss_index_path: "L:/_DATA/GoodQ_Data/faiss_indices/text/faiss_text.index"
-faiss_audio_path: "L:/_DATA/GoodQ_Data/faiss_indices/audio/faiss_audio.index"
-faiss_dino_path: "L:/_DATA/GoodQ_Data/faiss_indices/dino/faiss_dino.index"
-faiss_clip_path: "L:/_DATA/GoodQ_Data/faiss_indices/clip/faiss_clip.index"
-clap_id_map_db: "L:/_DATA/GoodQ_Data/databases/clap_id_map.sqlite"
-known_faces_db_path: "L:/_DATA/GoodQ_Data/databases/known_faces.json"
-clip_id_map_db: "L:/_DATA/GoodQ_Data/databases/clip_id_map.sqlite"
-dino_id_map_db: "L:/_DATA/GoodQ_Data/databases/dino_id_map.sqlite"
-chroma_dir: "L:/_DATA/GoodQ_Data/databases/chroma"
-tesseract_path: "L:/_TOOLS/tesseract"
+# Memory indices and databases (consolidated under L:\goodq4all\data)
+db_path: "L:/goodq4all/data/memory.db"
+faiss_index_path: "L:/goodq4all/data/faiss_indices/text/faiss_text.index"
+faiss_audio_path: "L:/goodq4all/data/faiss_indices/audio/faiss_audio.index"
+faiss_dino_path: "L:/goodq4all/data/faiss_indices/dino/faiss_dino.index"
+faiss_clip_path: "L:/goodq4all/data/faiss_indices/clip/faiss_clip.index"
+clap_id_map_db: "L:/goodq4all/data/databases/clap_id_map.sqlite"
+known_faces_db_path: "L:/goodq4all/data/databases/known_faces.json"
+clip_id_map_db: "L:/goodq4all/data/databases/clip_id_map.sqlite"
+dino_id_map_db: "L:/goodq4all/data/databases/dino_id_map.sqlite"
+chroma_dir: "L:/goodq4all/data/databases/chroma"
+tesseract_path: "L:/Tools/tesseract"

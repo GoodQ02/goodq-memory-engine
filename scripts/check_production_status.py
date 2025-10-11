@@ -6,9 +6,9 @@ import json
 from pathlib import Path
 from datetime import datetime
 
-# Paths
-STEP_RUNS_LOG = Path('L:/GoodQ_Data/logs/step_runs.jsonl')
-MEMORY_DB = Path('L:/GoodQ_Data/data/memory_db/memory.db')
+# Paths - UNIFIED structure
+STEP_RUNS_LOG = Path('L:/goodq4all/logs/steps.jsonl')
+MEMORY_DB = Path('L:/goodq4all/data/memory.db')
 KNOWLEDGE_GRAPH_DB = Path('L:/goodq4all/data/knowledge_graph.db')
 WORKSPACE = Path('L:/goodq4all/logs/production_run')
 

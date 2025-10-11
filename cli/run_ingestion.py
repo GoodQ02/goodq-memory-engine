@@ -595,6 +595,7 @@ def run(
     max_scenes: int = typer.Option(0, help='Maximum scenes per video (0 = all)'),
     scene_threshold: Optional[float] = typer.Option(None, help='Override PySceneDetect content threshold'),
     min_scene_seconds: Optional[float] = typer.Option(None, help='Minimum scene length in seconds'),
+    force_reprocess: bool = typer.Option(False, '--force', help='Force reprocessing even if scenes already exist in database'),
     verbose: bool = typer.Option(False, '--verbose', help='Emit per-step progress messages'),
     step_timeout: Optional[int] = typer.Option(None, '--step-timeout', help='Abort a step if it exceeds this many seconds'),
 ) -> None:
@@ -634,6 +635,9 @@ def run(
         cfg['run'] = existing_run
     else:
         cfg['run'] = run_context
+    
+    # Add force_reprocess flag to config
+    cfg['force_reprocess'] = force_reprocess
     cfg_json = _write_cfg_snapshot(cfg, workspace)
 
     ffmpeg = resolve_ffmpeg(cfg) or 'ffmpeg'
@@ -734,8 +738,10 @@ def run(
             frame_error: Optional[str] = None
             audio_error: Optional[str] = None
 
-            skip_frame = bool(materialized.get('keyframe')) if isinstance(materialized, dict) else False
-            skip_audio = bool(materialized.get('audio')) if isinstance(materialized, dict) else False
+            # Check if we should skip based on dedupe (unless force_reprocess is enabled)
+            force = cfg.get('force_reprocess', False)
+            skip_frame = bool(materialized.get('keyframe')) if isinstance(materialized, dict) and not force else False
+            skip_audio = bool(materialized.get('audio')) if isinstance(materialized, dict) and not force else False
 
             if skip_frame:
                 keyframe_meta = existing_meta.get('keyframe')

@@ -350,6 +350,7 @@ class WatchdogProcessor:
             '--input-dir', str(temp_input),
             '--workspace', f'L:/goodq4all/logs/watchdog_{datetime.now().strftime("%Y%m%d_%H%M%S")}',
             '--output', f'L:/goodq4all/logs/watchdog_{datetime.now().strftime("%Y%m%d_%H%M%S")}_results.json',
+            '--force',  # Force reprocessing to ensure complete AI analysis
             '--verbose'
         ]
         

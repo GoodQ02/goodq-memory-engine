@@ -1,8 +1,8 @@
-# GoodQ4All Scripts Directory
+﻿# GoodQ4All Scripts Directory
 
 This directory contains the core operational scripts for GoodQ4All.
 
-## 🚀 Launch Scripts (BAT files in root)
+## ðŸš€ Launch Scripts (BAT files in root)
 
 **Primary Launch:**
 - `LAUNCH_GOODQ.bat` - Main launcher with health checks, CUDA setup, and services
@@ -17,7 +17,7 @@ This directory contains the core operational scripts for GoodQ4All.
 - `STOP_GOODQ.bat` - Stop all GoodQ services
 - `RUN_HEALTH_CHECK.bat` - Run system health check
 
-## 📋 Active Scripts
+## ðŸ“‹ Active Scripts
 
 ### System Management
 - `prepare_step_envs.ps1` - Create/update all conda environments
@@ -70,18 +70,18 @@ This directory contains the core operational scripts for GoodQ4All.
 - `organize_l_drive.ps1` - Organize L:\ drive structure
 - `start_api.ps1` - Start FastAPI server
 
-## 📦 Model Pinning
+## ðŸ“¦ Model Pinning
 
 Run these in order to lock down models:
 1. `PIN_MODEL_VERSIONS.bat` - Pin all model versions
 2. `VERIFY_MODEL_LOCKDOWN.bat` - Verify pins are in place
 
-## 🗃️ Archived Scripts
+## ðŸ—ƒï¸ Archived Scripts
 
 Obsolete scripts are archived in `_archive/old_scripts_*` directories.
 These are kept for reference but not actively used.
 
-## 💡 Quick Reference
+## ðŸ’¡ Quick Reference
 
 **First Time Setup:**
 `powershell

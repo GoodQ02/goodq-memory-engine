@@ -288,7 +288,7 @@ class WatchdogProcessor:
         
         # Handle result
         if success:
-            logger.info(f"✓ Successfully processed: {file_path.name}")
+            logger.info(f"[OK] Successfully processed: {file_path.name}")
             self.registry.mark_processed(file_hash, file_path.name, 'success')
             
             # Move original to processed
@@ -306,7 +306,7 @@ class WatchdogProcessor:
                 logger.error(f"Failed to clean up processing file: {e}")
                 
         else:
-            logger.error(f"✗ Failed to process: {file_path.name}")
+            logger.error(f"[FAIL] Failed to process: {file_path.name}")
             self.registry.mark_failed(file_hash, file_path.name, error_msg or 'Unknown error')
             
             # Move to failed

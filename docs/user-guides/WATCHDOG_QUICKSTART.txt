@@ -1,0 +1,49 @@
+╔══════════════════════════════════════════════════════════════╗
+║                  GOODQ WATCHDOG QUICK START                  ║
+╚══════════════════════════════════════════════════════════════╝
+
+📂 DROP FILES HERE: L:\goodq4all\import_inbox\
+
+🚀 START WATCHDOG:
+   Double-click: START_WATCHDOG.bat
+   - Monitors import_inbox folder
+   - Automatically processes new files
+   - Runs in background
+
+📊 CHECK STATUS (One-Time):
+   Double-click: CHECK_WATCHDOG_STATUS.bat
+   - Shows current file counts
+   - Displays recent activity
+   - Press any key to close
+
+📈 LIVE MONITOR (Auto-Refresh):
+   Double-click: MONITOR_WATCHDOG.bat
+   - Updates every 5 seconds
+   - Shows live processing progress
+   - Ctrl+C to stop
+
+📋 FILE LOCATIONS AFTER PROCESSING:
+   ✓ Success → import_inbox/.processed/
+   ✗ Failed  → import_inbox/.failed/
+   ⏳ Active → import_inbox/.processing/
+
+📝 LOGS:
+   Main log: logs\watchdog.log
+   Results:  logs\watchdog_YYYYMMDD_HHMMSS_results.json
+
+🎯 SUPPORTED FILE TYPES:
+   Video:    .mp4, .avi, .mov, .mkv, .wmv, .flv, .webm
+   Audio:    .mp3, .wav, .flac, .ogg, .m4a, .aac
+   Image:    .jpg, .jpeg, .png, .gif, .bmp, .tiff, .webp
+   Document: .pdf, .txt, .doc, .docx
+
+⚡ QUICK WORKFLOW:
+   1. START_WATCHDOG.bat (leave running)
+   2. Drop files into import_inbox\
+   3. MONITOR_WATCHDOG.bat (watch progress)
+   4. Find processed files in .processed\ folder
+
+🛑 STOP WATCHDOG:
+   Press Ctrl+C in the watchdog window
+
+💡 TIP: Leave watchdog running and just drop files!

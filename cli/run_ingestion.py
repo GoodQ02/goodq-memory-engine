@@ -464,6 +464,11 @@ def _process_frame(
         'video_hash': video_hash,
         'scene_index': scene_index,
         'timestamp': frame_timestamp,
+        'scene': {
+            'start': start,
+            'end': start + duration,
+            'duration': duration,
+        },
     }
 
     def merge(env_name: str, step_name: str) -> None:
@@ -523,6 +528,11 @@ def _process_audio(
         'source_path': str(audio_path),
         'scene_id': scene_id,
         'video_hash': video_hash,
+        'scene': {
+            'start': start,
+            'end': end,
+            'duration': end - start,
+        },
     }
 
     def merge(env_name: str, step_name: str) -> None:

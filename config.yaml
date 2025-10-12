@@ -67,6 +67,7 @@ paths:
   log_dir: L:/_DATA/GoodQ_Data/logs
   output_directory: L:/_DATA/GoodQ_Data/data/output_inbox
   db_dir: L:/_DATA/GoodQ_Data/data/memory_db
+    db_path: L:/_DATA/GoodQ_Data/data/memory_db/goodq.db
   csv_path: L:/_DATA/GoodQ_Data/logs/GOOD_ENGINE_SYS.csv
   nas_path: G:/Logs
   config_dir: L:/_DATA/GoodQ_Data/config

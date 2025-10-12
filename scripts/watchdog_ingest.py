@@ -329,16 +329,22 @@ class WatchdogProcessor:
         """Ingest video file via CLI"""
         import subprocess
         
-        # Create temporary input dir with just this video
-        temp_input = Path("L:/goodq4all/data/processing/current_video")
+        # Create a stable input directory for this specific video
+        # Use video hash to ensure uniqueness and avoid cleanup issues
+        import hashlib
+        video_hash = hashlib.sha256(video_path.name.encode()).hexdigest()[:16]
+        temp_input = Path(f"L:/goodq4all/data/processing/video_{video_hash}")
         temp_input.mkdir(parents=True, exist_ok=True)
         
-        # Copy video to temp location
+        # Copy video to temp location (must stay there for entire ingestion)
         temp_video = temp_input / video_path.name
         try:
             if temp_video.exists():
+                logger.debug(f"Temp video already exists, removing: {temp_video}")
                 temp_video.unlink()
+            logger.info(f"📋 Copying asset to processing area: {video_path.name}")
             shutil.copy2(video_path, temp_video)
+            logger.debug(f"✓ Copy complete: {temp_video}")
         except Exception as e:
             logger.error(f"Failed to copy video to temp dir: {e}")
             return False
@@ -372,43 +378,39 @@ class WatchdogProcessor:
             )
             
             if result.returncode == 0:
-                logger.info("Video ingestion completed successfully")
-                # Clean up temp directory
+                logger.info("✅ Mission complete: Video ingestion successful")
+                # Clean up temp directory ONLY on success
                 try:
+                    logger.debug(f"Cleaning up temp files: {temp_input}")
                     temp_video.unlink(missing_ok=True)
+                    # Remove any other files that might have been created
+                    for f in temp_input.iterdir():
+                        if f.is_file():
+                            f.unlink()
                     temp_input.rmdir()
+                    logger.debug("✓ Cleanup complete")
                 except Exception as e:
                     logger.warning(f"Failed to clean up temp directory: {e}")
                 return True
             else:
-                logger.error(f"Video ingestion failed with code {result.returncode}")
-                logger.error(f"STDOUT: {result.stdout}")
-                logger.error(f"STDERR: {result.stderr}")
-                # Clean up temp directory
-                try:
-                    temp_video.unlink(missing_ok=True)
-                    temp_input.rmdir()
-                except Exception as e:
-                    logger.warning(f"Failed to clean up temp directory: {e}")
+                logger.error(f"❌ Mission failed: Video ingestion returned code {result.returncode}")
+                if result.stdout:
+                    logger.error(f"STDOUT: {result.stdout}")
+                if result.stderr:
+                    logger.error(f"STDERR: {result.stderr}")
+                # Keep temp files for debugging on failure
+                logger.warning(f"Temp files preserved for debugging: {temp_input}")
                 return False
                 
         except subprocess.TimeoutExpired:
-            logger.error("Video ingestion timed out")
-            # Clean up temp directory
-            try:
-                temp_video.unlink(missing_ok=True)
-                temp_input.rmdir()
-            except Exception as e:
-                logger.warning(f"Failed to clean up temp directory: {e}")
+            logger.error(f"⏱️  Mission timeout: Video ingestion exceeded {timeout_seconds}s")
+            # Keep temp files for debugging on timeout
+            logger.warning(f"Temp files preserved for debugging: {temp_input}")
             return False
         except Exception as e:
-            logger.error(f"Video ingestion error: {e}", exc_info=True)
-            # Clean up temp directory
-            try:
-                temp_video.unlink(missing_ok=True)
-                temp_input.rmdir()
-            except Exception as e:
-                logger.warning(f"Failed to clean up temp directory: {e}")
+            logger.error(f"❌ Mission error: {e}", exc_info=True)
+            # Keep temp files for debugging on error
+            logger.warning(f"Temp files preserved for debugging: {temp_input}")
             return False
     
     def ingest_audio(self, audio_path: Path) -> bool:

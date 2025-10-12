@@ -666,6 +666,9 @@ def run(
 
     for video_path in videos:
         typer.echo(f'Processing video: {video_path.name}')
+        typer.echo(f'  Full path: {video_path}')
+        typer.echo(f'  Exists: {video_path.exists()}')
+        typer.echo(f'  Size: {video_path.stat().st_size / 1024**2:.2f} MB' if video_path.exists() else '  Size: N/A')
         video_hash = _compute_sha256(video_path)
         scene_overrides: Dict[str, Any] = {}
         if max_scenes:
@@ -778,10 +781,16 @@ def run(
                     extra={'component': 'frame_text'},
                 )
             else:
-                try:
-                    frame_info = _process_frame(cfg_json, ffmpeg, video_path, scene, frame_dir, video_hash, scene_id)
-                except Exception as exc:  # noqa: BLE001
-                    frame_error = str(exc)
+                # Validate video file exists before extraction
+                if not video_path.exists():
+                    frame_error = f"Video file not found at {video_path} during frame extraction"
+                    typer.echo(f'[ERROR] {frame_error}', err=True)
+                else:
+                    try:
+                        frame_info = _process_frame(cfg_json, ffmpeg, video_path, scene, frame_dir, video_hash, scene_id)
+                    except Exception as exc:  # noqa: BLE001
+                        frame_error = str(exc)
+                        typer.echo(f'[ERROR] Frame extraction failed for scene {scene_index}: {frame_error}', err=True)
 
             if skip_audio:
                 audio_meta = existing_meta.get('audio')
@@ -808,10 +817,16 @@ def run(
                     extra={'component': 'audio_transcript'},
                 )
             else:
-                try:
-                    audio_info = _process_audio(cfg_json, ffmpeg, video_path, scene, audio_dir, video_hash, scene_id)
-                except Exception as exc:  # noqa: BLE001
-                    audio_error = str(exc)
+                # Validate video file exists before extraction
+                if not video_path.exists():
+                    audio_error = f"Video file not found at {video_path} during audio extraction"
+                    typer.echo(f'[ERROR] {audio_error}', err=True)
+                else:
+                    try:
+                        audio_info = _process_audio(cfg_json, ffmpeg, video_path, scene, audio_dir, video_hash, scene_id)
+                    except Exception as exc:  # noqa: BLE001
+                        audio_error = str(exc)
+                        typer.echo(f'[ERROR] Audio extraction failed for scene {scene_index}: {audio_error}', err=True)
 
             error_payload = {}
             if frame_error:
@@ -885,6 +900,40 @@ def run(
     if kg_result and kg_result.get('status') == 'success':
         if VERBOSE:
             typer.echo(f"[kg] Knowledge graph built successfully: {kg_result.get('statistics', {})}")
+
+    # Report errors
+    total_scenes = 0
+    scenes_with_errors = 0
+    frame_errors = 0
+    audio_errors = 0
+    
+    for result in results:
+        for scene in result.get('scenes', []):
+            total_scenes += 1
+            errors = scene.get('errors', {})
+            if errors:
+                scenes_with_errors += 1
+                if 'frame' in errors:
+                    frame_errors += 1
+                if 'audio' in errors:
+                    audio_errors += 1
+    
+    if scenes_with_errors > 0:
+        error_rate = (scenes_with_errors / total_scenes * 100) if total_scenes > 0 else 0
+        typer.echo(f'\n[WARNING] Extraction errors occurred:', err=True)
+        typer.echo(f'  Total scenes: {total_scenes}', err=True)
+        typer.echo(f'  Scenes with errors: {scenes_with_errors} ({error_rate:.1f}%)', err=True)
+        typer.echo(f'  Frame extraction errors: {frame_errors}', err=True)
+        typer.echo(f'  Audio extraction errors: {audio_errors}', err=True)
+        
+        # Fail if more than 50% of scenes have errors
+        if error_rate > 50:
+            typer.echo(f'\n[CRITICAL] Over 50% of scenes failed extraction - this indicates a serious problem!', err=True)
+            typer.echo(f'Common causes:', err=True)
+            typer.echo(f'  - Video file was deleted or moved during processing', err=True)
+            typer.echo(f'  - Incorrect file path', err=True)
+            typer.echo(f'  - FFmpeg not available or broken', err=True)
+            raise typer.Exit(code=1)
 
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(results, ensure_ascii=False, indent=2), encoding='utf-8')

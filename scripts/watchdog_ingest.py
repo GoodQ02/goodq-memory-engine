@@ -354,10 +354,11 @@ class WatchdogProcessor:
             '--verbose'
         ]
         
-        # Dynamic timeout based on file size (roughly 1 hour per GB for safety)
+        # Dynamic timeout based on file size (2 hours per GB for safety on complex analysis)
         file_size_gb = video_path.stat().st_size / (1024**3)
-        timeout_seconds = max(10800, int(file_size_gb * 3600))  # At least 3 hours, +1hr per GB
-        logger.info(f"Setting timeout to {timeout_seconds}s ({timeout_seconds/3600:.1f}h) for {file_size_gb:.2f}GB file")
+        timeout_seconds = max(14400, int(file_size_gb * 7200))  # At least 4 hours, +2hrs per GB
+        logger.info(f"⏱️  Mission timeout: {timeout_seconds}s ({timeout_seconds/3600:.1f}h) for {file_size_gb:.2f}GB asset")
+        logger.info(f"🎬 Asset: {video_path.name}")
         
         logger.debug(f"Running: {' '.join(cmd)}")
         

@@ -11,16 +11,13 @@ echo ║     Analyzing ingestion results for silent failures...       ║
 echo ╚════════════════════════════════════════════════════════════════╝
 echo.
 
-REM Activate conda environment
-call conda activate goodq_zenml
+REM Run validation script using conda run
+conda run -n goodq_zenml python L:\goodq4all\scripts\validate_ingestion_output.py
 if errorlevel 1 (
-    echo [ERROR] Failed to activate goodq_zenml environment
+    echo [ERROR] Failed to run validation
     pause
     exit /b 1
 )
-
-REM Run validation script
-python L:\goodq4all\scripts\validate_ingestion_output.py
 
 REM Check exit code
 if errorlevel 1 (

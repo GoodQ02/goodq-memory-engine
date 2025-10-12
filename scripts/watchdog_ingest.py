@@ -17,15 +17,19 @@ from queue import Queue, Empty
 from threading import Thread, Event, Lock
 import json
 
-# Setup logging
+# Setup logging with UTF-8 encoding
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s [%(levelname)s] %(message)s',
     handlers=[
-        logging.FileHandler('L:/goodq4all/logs/watchdog.log'),
+        logging.FileHandler('L:/goodq4all/logs/watchdog.log', encoding='utf-8'),
         logging.StreamHandler(sys.stdout)
     ]
 )
+# Force UTF-8 for StreamHandler
+for handler in logging.root.handlers:
+    if isinstance(handler, logging.StreamHandler) and handler.stream == sys.stdout:
+        handler.stream.reconfigure(encoding='utf-8')
 logger = logging.getLogger(__name__)
 
 # Configuration

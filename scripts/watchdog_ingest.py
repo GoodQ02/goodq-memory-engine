@@ -17,19 +17,26 @@ from queue import Queue, Empty
 from threading import Thread, Event, Lock
 import json
 
-# Setup logging with UTF-8 encoding
+# Setup logging with UTF-8 encoding for file, ASCII for console
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s [%(levelname)s] %(message)s',
     handlers=[
-        logging.FileHandler('L:/goodq4all/logs/watchdog.log', encoding='utf-8'),
-        logging.StreamHandler(sys.stdout)
+        logging.FileHandler('L:/goodq4all/logs/watchdog.log', encoding='utf-8')
     ]
 )
-# Force UTF-8 for StreamHandler
-for handler in logging.root.handlers:
-    if isinstance(handler, logging.StreamHandler) and handler.stream == sys.stdout:
-        handler.stream.reconfigure(encoding='utf-8')
+# Add console handler with ASCII-safe encoding
+console_handler = logging.StreamHandler(sys.stdout)
+console_handler.setFormatter(logging.Formatter('%(asctime)s [%(levelname)s] %(message)s'))
+# Remove emojis for console output on Windows
+class ASCIIFilter(logging.Filter):
+    def filter(self, record):
+        # Remove emojis for console
+        if hasattr(record, 'msg'):
+            record.msg = str(record.msg).encode('ascii', 'replace').decode('ascii')
+        return True
+console_handler.addFilter(ASCIIFilter())
+logging.root.addHandler(console_handler)
 logger = logging.getLogger(__name__)
 
 # Configuration

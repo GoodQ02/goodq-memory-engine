@@ -369,7 +369,7 @@ def audio_transcribe(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
                 "start": start,
                 "end": end,
                 "speaker": speaker,
-                "status": "ok" if transcript else "empty",
+                "status": "ok" if transcript else "failed",
                 "engine": result.get("engine"),
                 "text": transcript,
                 "segments": seg_list,
@@ -438,9 +438,11 @@ def audio_transcribe(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
     flat_segments = normalized_segments
 
     full_text = " ".join(part.strip() for part in full_text_parts if part)
-    status = "ok" if full_text else "partial"
+    status = "ok" if full_text else "failed"
     if all(c.get("status") == "error" for c in chunk_reports):
         status = "error"
+    elif all(c.get("status") in ("failed", "error", "empty") for c in chunk_reports):
+        status = "failed"
 
     meta = {
         "status": status,

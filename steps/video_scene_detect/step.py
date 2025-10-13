@@ -13,26 +13,26 @@ def _load_params(cfg: Dict[str, Any], item: Dict[str, Any]) -> Dict[str, Any]:
     video_cfg = (cfg.get('video', {}) or {}).get('scene_detect', {}) or {}
     overrides = item.get('scene_detect') if isinstance(item.get('scene_detect'), dict) else {}
     params = {
-        'threshold': float(overrides.get('threshold', video_cfg.get('threshold', 27.0))),
-        'min_scene_len_sec': float(overrides.get('min_scene_len_sec', video_cfg.get('min_scene_len_sec', 2.0))),
+        'threshold': float(overrides.get('threshold', video_cfg.get('threshold', 15.0))),  # ✅ Default 15.0 for home movies
+        'min_scene_len_sec': float(overrides.get('min_scene_len_sec', video_cfg.get('min_scene_len_sec', 1.5))),  # ✅ Default 1.5s
         'max_scenes': int(overrides.get('max_scenes', video_cfg.get('max_scenes', 0))),
         'entity_refine': bool(overrides.get('entity_refine', video_cfg.get('entity_refine', True))),
-        'entity_sample_rate': float(overrides.get('entity_sample_rate', video_cfg.get('entity_sample_rate', 1.0))),
+        'entity_sample_rate': float(overrides.get('entity_sample_rate', video_cfg.get('entity_sample_rate', 0.5))),  # ✅ Default 0.5
         'entity_min_duration': float(overrides.get('entity_min_duration', video_cfg.get('entity_min_duration', 2.0))),
-        'entity_max_samples': int(overrides.get('entity_max_samples', video_cfg.get('entity_max_samples', 90))),
+        'entity_max_samples': int(overrides.get('entity_max_samples', video_cfg.get('entity_max_samples', 300))),  # ✅ Default 300
     }
     if params['min_scene_len_sec'] <= 0:
         params['min_scene_len_sec'] = 0.5
     if params['threshold'] <= 0:
-        params['threshold'] = 27.0
+        params['threshold'] = 15.0  # ✅ Fallback to 15.0 instead of 27.0
     if params['max_scenes'] < 0:
         params['max_scenes'] = 0
     if params['entity_sample_rate'] <= 0:
-        params['entity_sample_rate'] = 1.0
+        params['entity_sample_rate'] = 0.5  # ✅ Fallback to 0.5
     if params['entity_min_duration'] <= 0:
         params['entity_min_duration'] = 1.0
     if params['entity_max_samples'] <= 0:
-        params['entity_max_samples'] = 90
+        params['entity_max_samples'] = 300  # ✅ Fallback to 300
     return params
 
 

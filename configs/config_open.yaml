@@ -47,13 +47,13 @@ analysis:
 
 video:
   scene_detect:
-    threshold: 32.0
-    min_scene_len_sec: 3.0
-    max_scenes: 500
+    threshold: 15.0              # ✅ OPTIMIZED: Lower threshold for home movies (subtle changes)
+    min_scene_len_sec: 1.5       # ✅ OPTIMIZED: Catch quick cuts in home videos
+    max_scenes: 0                # ✅ OPTIMIZED: No cap - long videos can have 500+ scenes
     entity_refine: true
-    entity_sample_rate: 1.0
-    entity_min_duration: 2.5
-    entity_max_samples: 120
+    entity_sample_rate: 0.5      # ✅ OPTIMIZED: Every other frame for efficiency
+    entity_min_duration: 2.0     # ✅ OPTIMIZED: Must appear for 2s
+    entity_max_samples: 300      # ✅ OPTIMIZED: Track across long videos
   scene_threshold: 0.3
   # Optional per-source overrides for scene detection threshold.
   # If provided, these take precedence over the global scene_threshold for matching videos.
@@ -78,6 +78,8 @@ audio:
     token_env: "PYANNOTE_TOKEN"
     # PyAnnote pipeline id to use for speaker segmentation
     model: "pyannote/speaker-diarization@2.1"
+    min_speakers: 1              # ✅ At least one speaker
+    max_speakers: 10             # ✅ Family gatherings can have many voices
   events:
     enabled: true
     min_confidence: 0.6
@@ -114,5 +116,47 @@ audio:
       - "next week"
   transcribe:
     # faster-whisper model id (e.g., large-v3, medium, small, tiny)
-    model: "medium"
-    chunk_seconds: 10
+    model: "medium"              # ✅ Best balance for English home videos
+    chunk_seconds: 30            # ✅ OPTIMIZED: Larger chunks = better context, less overhead
+    language: "en"               # ✅ Explicit language helps accuracy
+    beam_size: 5                 # ✅ More accurate transcription
+    vad_filter: true             # ✅ Skip silence
+    initial_prompt: "Home video recording with family conversations, background music, and ambient sounds."  # ✅ Context for Whisper
+
+# ============================================================
+# FAISS Vector Index Configuration
+# ============================================================
+faiss:
+  index_type: "Flat"             # Start with Flat for accuracy; upgrade to IVF when >50k embeddings
+  metric: "cosine"               # Cosine similarity for semantic search
+  normalize: true                # Normalize vectors before indexing
+
+# ============================================================
+# Memory Database Management
+# ============================================================
+memory:
+  max_summaries_per_video: 5000  # Limit per video to prevent runaway growth
+  retention_days: 365            # Archive data older than 1 year
+  auto_vacuum: true              # Automatically optimize database
+  vacuum_interval_days: 30       # Run VACUUM every 30 days
+
+# ============================================================
+# Processing Optimization
+# ============================================================
+processing:
+  batch_size_images: 8           # Process 8 frames at once on GPU
+  batch_size_audio: 4            # Process 4 audio chunks at once
+  max_workers: 1                 # Parallel workers (start with 1 for stability)
+  gpu_memory_fraction: 0.8       # Reserve 20% GPU memory for system
+  enable_amp: false              # Automatic Mixed Precision (enable if models support it)
+
+# ============================================================
+# Knowledge Graph Configuration
+# ============================================================
+knowledge_graph:
+  enabled: true
+  min_confidence: 0.6            # Minimum confidence for relationships
+  max_hops: 3                    # Maximum relationship depth
+  entity_deduplication: true     # Merge similar entities
+  similarity_threshold: 0.85     # For entity matching
+

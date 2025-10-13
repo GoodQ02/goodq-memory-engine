@@ -95,5 +95,5 @@ def image_embed_clip(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
             pass
         return {"clip_meta": {"status": "ok", "index_path": index_path, "faiss_id": faiss_id}}
     except Exception as e:
-        return {"clip_meta": {"status": "error"
-        print(f"[ERROR] CLIP embedding failed: {str(e)}"), "error": str(e)}}
+        print(f"[ERROR] CLIP embedding failed: {str(e)}")
+        return {"clip_meta": {"status": "error", "error": str(e)}}

@@ -28,13 +28,39 @@ logging.basicConfig(
 # Add console handler with ASCII-safe encoding
 console_handler = logging.StreamHandler(sys.stdout)
 console_handler.setFormatter(logging.Formatter('%(asctime)s [%(levelname)s] %(message)s'))
-# Remove emojis for console output on Windows
+
+# ASCII filter to replace emojis with text equivalents
 class ASCIIFilter(logging.Filter):
+    # Map emojis to ASCII equivalents for Windows console
+    EMOJI_MAP = {
+        '📋': '[CLIPBOARD]',
+        '⏱️': '[TIMER]',
+        '🎬': '[VIDEO]',
+        '✓': '[OK]',
+        '✅': '[SUCCESS]',
+        '❌': '[ERROR]',
+        '⚠️': '[WARN]',
+        '📊': '[STATS]',
+        '🎯': '[TARGET]',
+        '💾': '[SAVE]',
+        '🔍': '[SEARCH]',
+        '📁': '[FOLDER]',
+        '🎥': '[CAMERA]',
+        '🎤': '[MIC]',
+        '🎵': '[MUSIC]',
+        '🖼️': '[IMAGE]',
+        '📄': '[DOC]',
+        '🔊': '[AUDIO]',
+    }
+    
     def filter(self, record):
-        # Remove emojis for console
         if hasattr(record, 'msg'):
-            record.msg = str(record.msg).encode('ascii', 'replace').decode('ascii')
+            msg = str(record.msg)
+            for emoji, replacement in self.EMOJI_MAP.items():
+                msg = msg.replace(emoji, replacement)
+            record.msg = msg
         return True
+
 console_handler.addFilter(ASCIIFilter())
 logging.root.addHandler(console_handler)
 logger = logging.getLogger(__name__)

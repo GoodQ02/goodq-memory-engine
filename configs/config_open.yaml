@@ -1,162 +1,116 @@
-# Template config (no secrets). Copy and override locally if needed.
-
 user:
-  name: "Joes Domingo, Agent Domingo, Joe, Agent Joes, Double 007"
-  location: "Chicago, IL" 
-  values: "Accuracy, creativity, empathy, efficiency"
-  personality_traits: "Witty, friendly, professional, concise"
-
+  name: Joes Domingo, Agent Domingo, Joe, Agent Joes, Double 007
+  location: Chicago, IL
+  values: Accuracy, creativity, empathy, efficiency
+  personality_traits: Witty, friendly, professional, concise
 model:
-  goodq_values: "clarity, precision, humor, loyalty"
-
+  goodq_values: clarity, precision, humor, loyalty
 llm:
-  # Default to Ollama's OpenAI-compatible route; code auto-falls back to native /api endpoints.
-  api_url: "http://172.27.16.1:1234/v1/chat/completions"
-  model_id: "meta-llama-3.1-8b-instruct"
-
+  api_url: http://172.27.16.1:1234/v1/chat/completions
+  model_id: meta-llama-3.1-8b-instruct
 tts:
-  engine: "elevenlabs"  # or "elevenlabs"
-  voice_id: "goT3UYdM9bhm0n2lmKQx"     # used by ElevenLabs; provide via env as ELEVENLABS_VOICE_ID
-  piper_exe: "L:\\Tools\\piper\\piper.exe"
-  voice_path: "L:\\Tools\\piper\\en_US-libritts-high.onnx"
-  out_dir: "L:\\Tools\\piper"
-
+  engine: elevenlabs
+  voice_id: goT3UYdM9bhm0n2lmKQx
+  piper_exe: L:\Tools\piper\piper.exe
+  voice_path: L:\Tools\piper\en_US-libritts-high.onnx
+  out_dir: L:\Tools\piper
 ha:
-  url: "http://192.168.0.154:8123"
-
+  url: http://192.168.0.154:8123
 tools:
-  root: "L:\\Tools"
-  piper_exe: "L:\\Tools\\piper\\piper.exe"
-  piper_voice: "L:\\Tools\\piper\\en_US-libritts-high.onnx"
-  tesseract_exe: "L:\\Tools\\tesseract\\tesseract.exe"
-  ffmpeg_exe: "L:\\Tools\\ffmpeg\\bin\\ffmpeg.exe"
-  poppler_bin: "L:\\Tools\\poppler\\bin"
-  pdftotext_exe: "L:\\Tools\\poppler\\bin\\pdftotext.exe"
-  whisper_cli: "L:\\Tools\\whisper\\whisper-cli.exe"
-  whisper_ggml_model: "L:\\Tools\\whisper\\ggml-large-v3.bin"
-
+  root: L:\Tools
+  piper_exe: L:\Tools\piper\piper.exe
+  piper_voice: L:\Tools\piper\en_US-libritts-high.onnx
+  tesseract_exe: L:\Tools\tesseract\tesseract.exe
+  ffmpeg_exe: L:\Tools\ffmpeg\bin\ffmpeg.exe
+  poppler_bin: L:\Tools\poppler\bin
+  pdftotext_exe: L:\Tools\poppler\bin\pdftotext.exe
+  whisper_cli: L:\Tools\whisper\whisper-cli.exe
+  whisper_ggml_model: L:\Tools\whisper\ggml-large-v3.bin
 models:
-  yolo_model_path: "L:\\models\\yolo\\yolov8n.pt"
+  yolo_model_path: L:\models\yolo\yolov8n.pt
   lexicons:
-    # Path to the NRC Emotion Lexicon folder
-    nrc_emotion_dir: "L:\\models\\lexicons\\NRC-Emotion-Lexicon"
-
+    nrc_emotion_dir: L:\models\lexicons\NRC-Emotion-Lexicon
 analysis:
-  # If true, enable lexicon-based analysis. HF models remain primary; lexicon is used as fallback or when offline.
   use_nrc_lexicon: false
-
 video:
   scene_detect:
-    threshold: 15.0              # ✅ OPTIMIZED: Lower threshold for home movies (subtle changes)
-    min_scene_len_sec: 1.5       # ✅ OPTIMIZED: Catch quick cuts in home videos
-    max_scenes: 0                # ✅ OPTIMIZED: No cap - long videos can have 500+ scenes
-    entity_refine: true
-    entity_sample_rate: 0.5      # ✅ OPTIMIZED: Every other frame for efficiency
-    entity_min_duration: 2.0     # ✅ OPTIMIZED: Must appear for 2s
-    entity_max_samples: 300      # ✅ OPTIMIZED: Track across long videos
+    threshold: 15.0
+    min_scene_len_sec: 5.0
+    max_scenes: 100
+    entity_refine: false
+    entity_sample_rate: 0.25
+    entity_min_duration: 2.0
+    entity_max_samples: 30
   scene_threshold: 0.3
-  # Optional per-source overrides for scene detection threshold.
-  # If provided, these take precedence over the global scene_threshold for matching videos.
-  # Matching is performed in this order:
-  #  1) by_extension: exact file extension match (e.g., ".mp4", ".mkv").
-  #  2) by_path_substring: if the full video path contains the given substring.
-  # The first match found is used.
   scene_threshold_overrides:
     by_extension: {}
-    #   ".mp4": 0.25
-    #   ".mkv": 0.35
     by_path_substring: {}
-    #   "GoPro": 0.4
-    #   "ScreenRecord": 0.2
-
 tagger:
-  ner_model: "dslim/bert-base-NER"
-
+  ner_model: dslim/bert-base-NER
 audio:
   diarization:
-    # Which environment variable to read for PyAnnote auth
-    token_env: "PYANNOTE_TOKEN"
-    # PyAnnote pipeline id to use for speaker segmentation
-    model: "pyannote/speaker-diarization@2.1"
-    min_speakers: 1              # ✅ At least one speaker
-    max_speakers: 10             # ✅ Family gatherings can have many voices
+    token_env: PYANNOTE_TOKEN
+    model: pyannote/speaker-diarization@2.1
+    min_speakers: 1
+    max_speakers: 10
   events:
     enabled: true
     min_confidence: 0.6
-    # Regex patterns for music/events detection (Python regex syntax)
     patterns:
-      - label: "birthday_song"
-        regex: "\\bhappy\\s+birthday\\b"
-      - label: "christmas"
-        regex: "\\b(christmas|jingle\\s+bells|silent\\s+night|merry\\s+christmas)\\b"
-      - label: "halloween"
-        regex: "\\b(halloween|trick\\s+or\\s+treat)\\b"
-      - label: "new_year"
-        regex: "\\b(new\\s+year|countdown)\\b"
-      - label: "wedding"
-        regex: "\\b(wedding|here\\s+comes\\s+the\\s+bride)\\b"
-      - label: "applause"
-        regex: "\\b\\[?applause\\]?\\b"
-      - label: "laughter"
-        regex: "\\b\\[?laughter\\]?\\b"
-      - label: "singing"
-        regex: "\\bsinging\\b"
+    - label: birthday_song
+      regex: \bhappy\s+birthday\b
+    - label: christmas
+      regex: \b(christmas|jingle\s+bells|silent\s+night|merry\s+christmas)\b
+    - label: halloween
+      regex: \b(halloween|trick\s+or\s+treat)\b
+    - label: new_year
+      regex: \b(new\s+year|countdown)\b
+    - label: wedding
+      regex: \b(wedding|here\s+comes\s+the\s+bride)\b
+    - label: applause
+      regex: \b\[?applause\]?\b
+    - label: laughter
+      regex: \b\[?laughter\]?\b
+    - label: singing
+      regex: \bsinging\b
   time_hints:
     enabled: true
     normalize_date_formats: true
-    # Extendable list of relative phrases to search
     relative_phrases:
-      - "today"
-      - "yesterday"
-      - "tomorrow"
-      - "last night"
-      - "last week"
-      - "this morning"
-      - "this evening"
-      - "next week"
+    - today
+    - yesterday
+    - tomorrow
+    - last night
+    - last week
+    - this morning
+    - this evening
+    - next week
   transcribe:
-    # faster-whisper model id (e.g., large-v3, medium, small, tiny)
-    model: "medium"              # ✅ Best balance for English home videos
-    chunk_seconds: 30            # ✅ OPTIMIZED: Larger chunks = better context, less overhead
-    language: "en"               # ✅ Explicit language helps accuracy
-    beam_size: 5                 # ✅ More accurate transcription
-    vad_filter: true             # ✅ Skip silence
-    initial_prompt: "Home video recording with family conversations, background music, and ambient sounds."  # ✅ Context for Whisper
-
-# ============================================================
-# FAISS Vector Index Configuration
-# ============================================================
+    model: medium
+    chunk_seconds: 30
+    language: en
+    beam_size: 5
+    vad_filter: true
+    initial_prompt: Home video recording with family conversations, background music,
+      and ambient sounds.
 faiss:
-  index_type: "Flat"             # Start with Flat for accuracy; upgrade to IVF when >50k embeddings
-  metric: "cosine"               # Cosine similarity for semantic search
-  normalize: true                # Normalize vectors before indexing
-
-# ============================================================
-# Memory Database Management
-# ============================================================
+  index_type: Flat
+  metric: cosine
+  normalize: true
 memory:
-  max_summaries_per_video: 5000  # Limit per video to prevent runaway growth
-  retention_days: 365            # Archive data older than 1 year
-  auto_vacuum: true              # Automatically optimize database
-  vacuum_interval_days: 30       # Run VACUUM every 30 days
-
-# ============================================================
-# Processing Optimization
-# ============================================================
+  max_summaries_per_video: 5000
+  retention_days: 365
+  auto_vacuum: true
+  vacuum_interval_days: 30
 processing:
-  batch_size_images: 8           # Process 8 frames at once on GPU
-  batch_size_audio: 4            # Process 4 audio chunks at once
-  max_workers: 1                 # Parallel workers (start with 1 for stability)
-  gpu_memory_fraction: 0.8       # Reserve 20% GPU memory for system
-  enable_amp: false              # Automatic Mixed Precision (enable if models support it)
-
-# ============================================================
-# Knowledge Graph Configuration
-# ============================================================
+  batch_size_images: 8
+  batch_size_audio: 4
+  max_workers: 1
+  gpu_memory_fraction: 0.8
+  enable_amp: false
 knowledge_graph:
   enabled: true
-  min_confidence: 0.6            # Minimum confidence for relationships
-  max_hops: 3                    # Maximum relationship depth
-  entity_deduplication: true     # Merge similar entities
-  similarity_threshold: 0.85     # For entity matching
-
+  min_confidence: 0.6
+  max_hops: 3
+  entity_deduplication: true
+  similarity_threshold: 0.85

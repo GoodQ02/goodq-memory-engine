@@ -190,7 +190,30 @@ def _transcribe_chunk_fw(chunk_path: str, offset: float, model: Any) -> Optional
     if model is None:
         return None
     try:
-        segments, info = model.transcribe(chunk_path, beam_size=5, vad_filter=True)
+        # Optimized Whisper settings for better transcription quality
+        # - beam_size=5: balanced quality/speed
+        # - vad_filter=True: removes silence
+        # - vad_parameters: tuned for home videos with background noise
+        # - word_timestamps=True: enables word-level timing
+        # - condition_on_previous_text=True: better context for long audio
+        segments, info = model.transcribe(
+            chunk_path,
+            beam_size=5,
+            vad_filter=True,
+            vad_parameters={
+                "threshold": 0.4,  # Lower threshold for quiet speech
+                "min_speech_duration_ms": 250,  # Catch short utterances
+                "max_speech_duration_s": float('inf'),  # Allow long segments
+                "min_silence_duration_ms": 500,  # Shorter silence = more captures
+                "speech_pad_ms": 400  # Padding around speech
+            },
+            word_timestamps=True,
+            condition_on_previous_text=True,
+            temperature=[0.0, 0.2, 0.4, 0.6, 0.8, 1.0],  # Fallback temperatures
+            compression_ratio_threshold=2.4,
+            logprob_threshold=-1.0,
+            no_speech_threshold=0.6
+        )
         seg_list: List[Dict[str, Any]] = []
         text_parts: List[str] = []
         for seg in segments:
@@ -222,7 +245,8 @@ def _transcribe_chunk_fw(chunk_path: str, offset: float, model: Any) -> Optional
             "duration": float(getattr(info, "duration", 0.0) or 0.0),
         }
         return meta
-    except Exception:
+    except Exception as e:
+        print(f"[WARN] Whisper transcription error: {str(e)}")
         return None
 
 

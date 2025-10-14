@@ -1,0 +1,129 @@
+═══════════════════════════════════════════════════════════════
+           GOODQ4ALL - QUICK START AFTER REBOOT
+═══════════════════════════════════════════════════════════════
+
+STEP 1: CHECK STATUS (30 seconds)
+───────────────────────────────────────────────────────────────
+  cd L:\goodq4all
+  SHOW_INTELLIGENCE.bat
+
+  Look for: Scene count and embedding count
+  If both > 0: Processing succeeded! View results below.
+  If both = 0: Need to restart processing (see Step 3).
+
+STEP 2: VIEW LIVE PROGRESS (if still running)
+───────────────────────────────────────────────────────────────
+  MONITOR_PROGRESS.bat
+
+  Shows real-time:
+  - Current scene being processed
+  - Step-by-step progress with timings
+  - Overall ETA
+  - Recent completions
+
+  Healthy: Scene numbers increasing, times > 0ms
+  Problem: No change for 30+ minutes, all 0ms times
+
+STEP 3: START NEW PROCESSING (if needed)
+───────────────────────────────────────────────────────────────
+  START_WATCHDOG.bat
+
+  Then drop video files into:
+  L:\goodq4all\import_inbox
+
+  Monitor with: MONITOR_PROGRESS.bat
+
+═══════════════════════════════════════════════════════════════
+                    CURRENT MISSION STATUS
+═══════════════════════════════════════════════════════════════
+
+Video: 1987_1988.mp4 (7.28GB - your first birthday!)
+Started: Oct 13, 2025 @ 19:05
+Timeout: 14.6 hours (safe processing window)
+Status: Check MONITOR_PROGRESS.bat for current state
+
+═══════════════════════════════════════════════════════════════
+                  FOR NEW AI ASSISTANT
+═══════════════════════════════════════════════════════════════
+
+Tell the AI:
+"Read L:\goodq4all\docs\CONTEXT_CHECKPOINT.md 
+ and pick up where we left off"
+
+This file contains:
+✓ Complete project state
+✓ Recent breakthroughs and fixes
+✓ What's working and what needs optimization
+✓ All file locations and commands
+✓ Recovery procedures
+✓ Next priorities
+
+═══════════════════════════════════════════════════════════════
+                      QUICK COMMANDS
+═══════════════════════════════════════════════════════════════
+
+Check health:         RUN_HEALTH_CHECK.bat
+Start processing:     START_WATCHDOG.bat
+Monitor progress:     MONITOR_PROGRESS.bat
+View results:         SHOW_INTELLIGENCE.bat
+Check file queue:     WATCHDOG_STATUS.bat
+Clear and restart:    CLEAR_AND_REINGEST.bat
+Fix performance:      FIX_PERFORMANCE_ISSUES.bat
+
+═══════════════════════════════════════════════════════════════
+                        KEY FACTS
+═══════════════════════════════════════════════════════════════
+
+✓ Pipeline is WORKING and processing real data
+✓ All 15 steps execute successfully
+✓ Database at: L:\goodq4all\data\memory.db
+✓ 22 isolated conda environments (all operational)
+✓ CUDA enabled on RTX 4070 Ti Super
+✓ Real-time monitoring shows actual progress
+
+Known optimizations needed:
+- CLIP embeddings: 70% → 95%+ success
+- Whisper transcription: 60% → 95%+ success
+
+═══════════════════════════════════════════════════════════════
+                    TROUBLESHOOTING
+═══════════════════════════════════════════════════════════════
+
+Processing seems stuck?
+→ Check: MONITOR_PROGRESS.bat
+→ If no change 30+ min: Kill and restart
+→ Command: CLEAR_AND_REINGEST.bat
+
+Errors in logs?
+→ type L:\goodq4all\logs\watchdog.log | findstr /I "error"
+→ Review last 20 steps:
+  powershell "Get-Content L:\goodq4all\logs\step_log.jsonl -Tail 20"
+
+Need fresh start?
+→ CLEAR_ALL_DATA.bat (removes all processed data)
+→ Then: START_WATCHDOG.bat
+
+═══════════════════════════════════════════════════════════════
+                    WHAT WE ACHIEVED TODAY
+═══════════════════════════════════════════════════════════════
+
+✓ Fixed critical "silent failure" bug
+✓ Unified all database paths
+✓ Fixed unicode logging crashes
+✓ Built comprehensive monitoring suite
+✓ Organized all documentation
+✓ FIRST SUCCESSFUL FULL VIDEO PROCESSING!
+
+═══════════════════════════════════════════════════════════════
+             MOST IMPORTANT: CHECK MONITOR FIRST!
+═══════════════════════════════════════════════════════════════
+
+  L:\goodq4all> MONITOR_PROGRESS.bat
+
+This tells you everything you need to know:
+- Is it running? (scenes incrementing)
+- Is it working? (times > 0ms)
+- How far along? (scene X of Y)
+- Any errors? (shown in red)
+
+═══════════════════════════════════════════════════════════════

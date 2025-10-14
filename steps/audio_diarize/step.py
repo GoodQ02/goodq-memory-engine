@@ -12,7 +12,7 @@ def _resolve_device() -> str:
         import torch  # type: ignore
 
         return "cuda" if getattr(torch, "cuda", None) and torch.cuda.is_available() else "cpu"
-    except Exception:
+    except Exception as e:
         return "cpu"
 
 
@@ -22,18 +22,20 @@ def _load_pipeline(model_id: str, device: str, auth_token: Optional[str]):
         return _PIPELINES[key]
     try:
         from pyannote.audio import Pipeline  # type: ignore
-    except Exception:
+    except Exception as e:
         _PIPELINES[key] = None
+        print(f'[WARN] _load_pipeline returning None')
         return None
     try:
         pipeline = Pipeline.from_pretrained(model_id, use_auth_token=auth_token)
         if device == "cuda":
             try:
                 pipeline.to("cuda")
-            except Exception:
+            except Exception as e:
+                print(f'[ERROR] Exception in step.py line 34: {str(e)}')
                 pass
         _PIPELINES[key] = pipeline
-    except Exception:
+    except Exception as e:
         _PIPELINES[key] = None
     return _PIPELINES[key]
 
@@ -51,7 +53,7 @@ def _format_segments(diarization) -> List[Dict[str, Any]]:
                 "end": max(start, end),
                 "speaker": str(speaker),
             })
-    except Exception:
+    except Exception as e:
         return []
     segments.sort(key=lambda s: s.get("start", 0.0))
     return segments

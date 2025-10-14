@@ -89,7 +89,11 @@ def audio_emotion(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
             {"label": str(entry.get("label", "")), "score": float(entry.get("score", 0.0))}
             for entry in (result or [])
         ][:5]
-        meta = {"status": "ok", "model": _AEMO.get("model_id"), "device": _AEMO.get("device")}
+        # Status is "ok" only if we got results, otherwise "failed"
+        status = "ok" if top else "failed"
+        meta = {"status": status, "model": _AEMO.get("model_id"), "device": _AEMO.get("device")}
+        if not top:
+            print(f'[WARN] audio_emotion: No emotions detected in {path}')
         return {"audio_emotion": top, "audio_emotion_meta": meta}
     except Exception as exc:
         return {"audio_emotion": None, "audio_emotion_meta": {"status": "error", "error": str(exc)}}

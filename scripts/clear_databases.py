@@ -6,8 +6,8 @@ from pathlib import Path
 import shutil
 
 # Database paths
-MEMORY_DB = Path('L:/GoodQ_Data/data/memory_db/memory.db')
-KNOWLEDGE_GRAPH_DB = Path('L:/goodq4all/data/knowledge_graph.db')
+MEMORY_DB = Path('L:/goodq4all/data/memory.db')
+KNOWLEDGE_GRAPH_DB = Path('L:/goodq4all/L:/goodq4all/data/knowledge_graph.db')
 CLAP_ID_MAP = Path('L:/GoodQ_Data/data/memory_db/clap_id_map.sqlite')
 
 # FAISS indices

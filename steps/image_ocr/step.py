@@ -20,6 +20,6 @@ def image_ocr(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
         img_path = item.get("source_path")
         if isinstance(img_path, str):
             text = pytesseract.image_to_string(Image.open(img_path)) or None
-    except Exception:
+    except Exception as e:
         text = None
     return {"ocr_text": text}

@@ -9,7 +9,7 @@ from datetime import datetime
 # Paths - UNIFIED structure
 STEP_RUNS_LOG = Path('L:/goodq4all/logs/steps.jsonl')
 MEMORY_DB = Path('L:/goodq4all/data/memory.db')
-KNOWLEDGE_GRAPH_DB = Path('L:/goodq4all/data/knowledge_graph.db')
+KNOWLEDGE_GRAPH_DB = Path('L:/goodq4all/L:/goodq4all/data/knowledge_graph.db')
 WORKSPACE = Path('L:/goodq4all/logs/production_run')
 
 def count_lines(file_path: Path) -> int:

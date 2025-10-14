@@ -18,7 +18,7 @@ REPLACEMENTS = [
     
     # Specific path updates - databases
     ('L:/goodq4all/data/memory.db', 'L:/_DATA/GoodQ_Data/databases/memory.db'),
-    ('L:/goodq4all/data/knowledge_graph.db', 'L:/_DATA/GoodQ_Data/databases/knowledge_graph.db'),
+    ('L:/goodq4all/L:/goodq4all/data/knowledge_graph.db', 'L:/_DATA/GoodQ_Data/databases/knowledge_graph.db'),
     ('L:/goodq4all/data/production_knowledge_graph.db', 'L:/_DATA/GoodQ_Data/databases/production_knowledge_graph.db'),
     
     # Logs

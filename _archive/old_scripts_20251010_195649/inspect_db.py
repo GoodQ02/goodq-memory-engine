@@ -2,7 +2,7 @@
 import sqlite3
 import json
 
-db_path = 'L:/GoodQ_Data/data/memory_db/memory.db'
+db_path = 'L:/goodq4all/data/memory.db'
 conn = sqlite3.connect(db_path)
 cursor = conn.cursor()
 

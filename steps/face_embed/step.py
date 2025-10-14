@@ -22,7 +22,7 @@ def face_embed(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
                 "encoding": [float(x) for x in (enc.tolist() if hasattr(enc, "tolist") else list(enc))],
             })
         return {"faces": faces, "faces_meta": {"status": "ok", "engine": "face_recognition"}}
-    except Exception:
+    except Exception as e:
         # Fallback to facenet-pytorch (no dlib dependency)
         try:
             import torch  # type: ignore

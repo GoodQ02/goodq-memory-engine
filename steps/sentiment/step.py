@@ -25,7 +25,7 @@ def _load():
         model = AutoModelForSequenceClassification.from_pretrained(name)
         device = "cuda" if getattr(torch, "cuda", None) and torch.cuda.is_available() else "cpu"
         _SENT.update({"tok": tok, "model": model.to(device).eval(), "device": device})
-    except Exception:
+    except Exception as e:
         _SENT.update({"tok": None, "model": None})
 
 
@@ -66,10 +66,11 @@ def sentiment(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
             score = float(probs[idx])
             try:
                 update_fields(cfg, _content_fingerprint(item), sentiment_label=label, sentiment_score=score)
-            except Exception:
+            except Exception as e:
+                print(f'[ERROR] Exception in step.py line 69: {str(e)}')
                 pass
             return {"sentiment": {"label": label, "score": score}, "sentiment_meta": {"engine": "hf"}}
-        except Exception:
+        except Exception as e:
             # Fall through to lexicon/rule-based options
             pass
 
@@ -77,7 +78,7 @@ def sentiment(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
     if use_nrc_cfg or offline:
         try:
             res = score_nrc_sentiment(text, cfg)
-        except Exception:
+        except Exception as e:
             res = None
         if res:
             label, score = res

@@ -1,7 +1,7 @@
 """Quick database check"""
 import sqlite3
 
-db_path = r'L:\GoodQ_Data\data\memory_db\memory.db'
+db_path = r'L:/goodq4all/data/memory.db'
 
 conn = sqlite3.connect(db_path)
 cursor = conn.cursor()

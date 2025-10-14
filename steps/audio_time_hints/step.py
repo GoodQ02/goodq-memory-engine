@@ -44,7 +44,8 @@ def _collect_time_hints(text: str) -> Dict[str, Any]:
                 iso = dt.date().isoformat()
             if iso and iso not in hints["explicit_dates"]:
                 hints["explicit_dates"].append(iso)
-        except Exception:
+        except Exception as e:
+            print(f'[ERROR] Exception in step.py line 47: {str(e)}')
             continue
 
     # month names and weekdays

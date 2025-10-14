@@ -19,7 +19,8 @@ def _resolve_elevenlabs_voice_id(api_key: str) -> Optional[str]:
         data = r.json() or {}
         voices = data.get("voices") or []
         return (voices[0].get("voice_id") if voices else None)
-    except Exception:
+    except Exception as e:
+        print(f'[WARN] _resolve_elevenlabs_voice_id returning None')
         return None
 
 
@@ -27,6 +28,7 @@ def _elevenlabs_tts(text: str, voice_id: str, api_key: str) -> Optional[str]:
     if not voice_id:
         voice_id = _resolve_elevenlabs_voice_id(api_key) or ""
         if not voice_id:
+            print(f'[WARN] _elevenlabs_tts returning None')
             return None
     try:
         url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}/stream"
@@ -40,7 +42,8 @@ def _elevenlabs_tts(text: str, voice_id: str, api_key: str) -> Optional[str]:
                 if chunk:
                     f.write(chunk)
         return path
-    except Exception:
+    except Exception as e:
+        print(f'[WARN] _elevenlabs_tts returning None')
         return None
 
 
@@ -55,7 +58,8 @@ def _piper_tts(text: str, piper_exe: str, voice_path: str, out_dir: str) -> Opti
         proc.stdin.close()
         proc.wait(timeout=30)
         return out_path if os.path.isfile(out_path) else None
-    except Exception:
+    except Exception as e:
+        print(f'[WARN] _piper_tts returning None')
         return None
 
 

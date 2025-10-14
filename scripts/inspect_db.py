@@ -32,4 +32,4 @@ def inspect_db(db_path, name):
 
 if __name__ == "__main__":
     inspect_db("L:/goodq4all/data/memory.db", "Memory Database")
-    inspect_db("L:/goodq4all/data/knowledge_graph.db", "Knowledge Graph")
+    inspect_db("L:/goodq4all/L:/goodq4all/data/knowledge_graph.db", "Knowledge Graph")

@@ -30,7 +30,7 @@ def _load_emotion():
             "surprise","neutral",
         ]
         _EMO.update({"model": model, "tok": tok, "labels": labels, "device": device})
-    except Exception:
+    except Exception as e:
         _EMO.update({"model": None, "tok": None, "labels": []})
 
 
@@ -69,17 +69,19 @@ def emotion_classify(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
             top = [{"label": l, "score": float(s)} for l, s in pairs[:5]]
             try:
                 update_fields(cfg, _content_fingerprint(item), emotions_json=_json.dumps(top))
-            except Exception:
+            except Exception as e:
+                print(f'[ERROR] Exception in step.py line 72: {str(e)}')
                 pass
             return {"emotions": top, "emotion_meta": {"engine": "hf"}}
-        except Exception:
+        except Exception as e:
+            print(f'[ERROR] Exception in step.py line 76: {str(e)}')
             pass
 
     # NRC lexicon fallback when configured or offline
     if use_nrc_cfg or offline:
         try:
             scr = score_nrc_emotions(text, cfg)
-        except Exception:
+        except Exception as e:
             scr = None
         if scr:
             pairs = sorted(scr.items(), key=lambda x: x[1], reverse=True)
@@ -106,7 +108,8 @@ def emotion_classify(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
         top = [{"label": l, "score": float(s)} for l, s in pairs[:5]]
         try:
             update_fields(cfg, _content_fingerprint(item), emotions_json=_json.dumps(top))
-        except Exception:
+        except Exception as e:
+            print(f'[ERROR] Exception in step.py line 111: {str(e)}')
             pass
         return {"emotions": top}
     except Exception as e:

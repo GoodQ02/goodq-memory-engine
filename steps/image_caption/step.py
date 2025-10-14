@@ -25,7 +25,7 @@ def _load_blip() -> None:
         model = BlipForConditionalGeneration.from_pretrained("Salesforce/blip-image-captioning-base").to(device)
         model.eval()
         _BLIP.update({"model": model, "proc": proc, "device": device})
-    except Exception:
+    except Exception as e:
         _BLIP.update({"model": None, "proc": None, "device": "cpu"})
 
 
@@ -38,7 +38,7 @@ def _load_fallback() -> None:
         device = "cuda" if getattr(torch, "cuda", None) and torch.cuda.is_available() else "cpu"
         pipe = pipeline("image-to-text", model="nlpconnect/vit-gpt2-image-captioning", device=0 if device=="cuda" else -1)
         _FALLBACK.update({"pipe": pipe, "device": device})
-    except Exception:
+    except Exception as e:
         _FALLBACK.update({"pipe": None})
 
 

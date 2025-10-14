@@ -29,6 +29,7 @@ def discover_sources(cfg: Dict[str, Any]) -> List[Dict[str, Any]]:
                     "unknown"
                 )
                 items.append({"source_path": path, "filename": name, "modality": modality})
-            except Exception:
+            except Exception as e:
+                print(f'[ERROR] Exception in step.py line 32: {str(e)}')
                 continue
     return items

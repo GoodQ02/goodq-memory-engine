@@ -23,7 +23,7 @@ class MemoryWriter:
             # Try to find memory DB in standard locations
             possible_paths = [
                 Path("L:/GoodQ_Data/memory.db"),
-                Path("L:/_DATA/GoodQ_Data/data/memory_db/memory.db"),
+                Path("L:/goodq4all/data/memory.db"),
                 Path("L:/goodq4all/data/memory.db"),
             ]
             for p in possible_paths:
@@ -242,6 +242,7 @@ class MemoryWriter:
             ''', (scene_id,)).fetchone()
             
             if not row:
+                print(f'[WARN] get_scene returning None')
                 return None
             
             result = dict(row)

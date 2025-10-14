@@ -20,7 +20,8 @@ def _find_nrc_file(dir_path: str) -> Optional[str]:
         for name in os.listdir(dir_path):
             if name.lower().endswith('.txt') and 'nrc' in name.lower():
                 return os.path.join(dir_path, name)
-    except Exception:
+    except Exception as e:
+        print(f'[WARN] _find_nrc_file returning None')
         return None
     return None
 
@@ -38,9 +39,11 @@ def load_nrc(cfg: Dict[str, Any]) -> Tuple[Optional[Dict[str, Dict[str, int]]], 
 
     dir_path = _cfg_get(cfg, 'config.models.lexicons.nrc_emotion_dir')
     if not dir_path or not os.path.isdir(dir_path):
+        print(f'[WARN] load_nrc: NRC directory not found or invalid: {dir_path}')
         return None, tuple()
     file_path = _find_nrc_file(dir_path)
     if not file_path or not os.path.isfile(file_path):
+        print(f'[WARN] load_nrc: NRC file not found in {dir_path}')
         return None, tuple()
 
     emotions_set = []
@@ -60,7 +63,8 @@ def load_nrc(cfg: Dict[str, Any]) -> Tuple[Optional[Dict[str, Dict[str, int]]], 
                     continue
                 try:
                     val = int(assoc)
-                except Exception:
+                except Exception as e:
+                    print(f'[ERROR] Exception in lexicon.py line 64: {str(e)}')
                     continue
                 if emo not in emotions_set:
                     emotions_set.append(emo)
@@ -69,7 +73,8 @@ def load_nrc(cfg: Dict[str, Any]) -> Tuple[Optional[Dict[str, Dict[str, int]]], 
                     d = {}
                     lex[w] = d
                 d[emo] = val
-    except Exception:
+    except Exception as e:
+        print(f'[ERROR] load_nrc: Failed to load lexicon: {str(e)}')
         return None, tuple()
 
     _NRC_CACHE.update({"path": dir_path, "lex": lex, "emotions": tuple(emotions_set)})
@@ -83,6 +88,7 @@ def _tokenize(text: str) -> List[str]:
 def score_nrc_emotions(text: str, cfg: Dict[str, Any]) -> Optional[Dict[str, float]]:
     lex, emotions = load_nrc(cfg)
     if not lex:
+        print(f'[WARN] score_nrc_emotions returning None')
         return None
     counts: Dict[str, int] = {e: 0 for e in emotions}
     tokens = _tokenize(text)
@@ -103,6 +109,7 @@ def score_nrc_sentiment(text: str, cfg: Dict[str, Any]) -> Optional[Tuple[str, f
     # Derive a polarity from NRC positive/negative categories if present
     emo_scores = score_nrc_emotions(text, cfg)
     if not emo_scores:
+        print(f'[WARN] score_nrc_sentiment returning None')
         return None
     pos = emo_scores.get('positive', 0.0)
     neg = emo_scores.get('negative', 0.0)

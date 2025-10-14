@@ -141,12 +141,14 @@ def _sha256(path: str) -> Optional[str]:
             for chunk in iter(lambda: f.read(1024 * 1024), b""):
                 h.update(chunk)
         return h.hexdigest()
-    except Exception:
+    except Exception as e:
+        print(f'[WARN] _sha256 returning None')
         return None
 
 
 def _faiss_ntotal_via_env(env_name: str, index_path: Optional[str]) -> Optional[int]:
     if not index_path or not os.path.isfile(index_path):
+        print(f'[WARN] _faiss_ntotal_via_env returning None')
         return None
     code = (
         "import faiss,sys; p=sys.argv[1]; "
@@ -161,19 +163,22 @@ def _faiss_ntotal_via_env(env_name: str, index_path: Optional[str]) -> Optional[
         )
         s = (out.stdout or "").strip()
         return int(s) if s.isdigit() else None
-    except Exception:
+    except Exception as e:
+        print(f'[WARN] _faiss_ntotal_via_env returning None')
         return None
 
 
 def _coerce_float(value: Any) -> Optional[float]:
     try:
         if value is None:
+            print(f'[WARN] _coerce_float returning None')
             return None
         if isinstance(value, (int, float)):
             return float(value)
         if isinstance(value, str) and value.strip():
             return float(value.strip())
-    except Exception:
+    except Exception as e:
+        print(f'[WARN] _coerce_float returning None')
         return None
     return None
 
@@ -380,7 +385,8 @@ def video_ingest_and_summarize(cfg: Dict[str, Any]) -> Dict[str, Any]:
     scene_thresh = None
     try:
         scene_thresh = float(((cfg.get("config", {}) or {}).get("video", {}) or {}).get("scene_threshold"))
-    except Exception:
+    except Exception as e:
+        print(f'[ERROR] Exception in step.py line 388: {str(e)}')
         pass
     args = ["pwsh", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", os.path.join(repo_root, "scripts", "ingest_videos.ps1")]
     if scene_thresh is not None:
@@ -389,7 +395,7 @@ def video_ingest_and_summarize(cfg: Dict[str, Any]) -> Dict[str, Any]:
     args.extend(["-MaxFrames", "50"])  # safe default; configurable later
     try:
         subprocess.run(args, check=True, cwd=repo_root)
-    except Exception:
+    except Exception as e:
         # proceed to look for last results even if process non-zero
         pass
     out_path = os.path.join(repo_root, "logs", "video_ingest_results.json")
@@ -398,7 +404,7 @@ def video_ingest_and_summarize(cfg: Dict[str, Any]) -> Dict[str, Any]:
         try:
             with open(out_path, "r", encoding="utf-8") as f:
                 results = json.load(f)
-        except Exception:
+        except Exception as e:
             results = []
     mutated = False
     summaries = []
@@ -448,11 +454,13 @@ def video_ingest_and_summarize(cfg: Dict[str, Any]) -> Dict[str, Any]:
                     r2 = cur.fetchone()
                     embeds_count = int(r2[0]) if r2 else 0
                 con.close()
-        except Exception:
+        except Exception as e:
+            print(f'[ERROR] Exception in step.py line 457: {str(e)}')
             pass
         # Count id_map contributions for frames (CLIP/DINO) and for audio (CLAP)
         def _count_map(dbfile: Optional[str], table: str, key: str, values: List[str]) -> Optional[int]:
             if not dbfile or not os.path.isfile(dbfile) or not values:
+                print(f'[WARN] video_ingest_and_summarize returning None')
                 return None
             try:
                 con = sqlite3.connect(dbfile)
@@ -462,7 +470,8 @@ def video_ingest_and_summarize(cfg: Dict[str, Any]) -> Dict[str, Any]:
                 c = cur.fetchone()
                 con.close()
                 return int(c[0]) if c else 0
-            except Exception:
+            except Exception as e:
+                print(f'[WARN] video_ingest_and_summarize returning None')
                 return None
 
         clip_count = _count_map(clip_map_db, "clip_id_map", "hash", frame_hashes)
@@ -542,7 +551,8 @@ def video_ingest_and_summarize(cfg: Dict[str, Any]) -> Dict[str, Any]:
         try:
             with open(out_path, "w", encoding="utf-8") as f:
                 json.dump(results, f, ensure_ascii=False, indent=2)
-        except Exception:
+        except Exception as e:
+            print(f'[ERROR] Exception in step.py line 554: {str(e)}')
             pass
     try:
         store_short_term_summary(cfg, {"video_summaries": summaries}, category="video_ingest")
@@ -563,6 +573,7 @@ def video_ingest_and_summarize(cfg: Dict[str, Any]) -> Dict[str, Any]:
             category="video_ingest",
             fields=["video_summaries"],
         )
-    except Exception:
+    except Exception as e:
+        print(f'[ERROR] Exception in step.py line 576: {str(e)}')
         pass
     return {"results_path": out_path, "video_summaries": summaries}

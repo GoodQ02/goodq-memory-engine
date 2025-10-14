@@ -10,7 +10,7 @@ def _convert_gps(info: Dict[int, Any]) -> Optional[Dict[str, float]]:
     def _r2f(r):
         try:
             return float(r[0]) / float(r[1])
-        except Exception:
+        except Exception as e:
             return float(r)
 
     try:
@@ -20,6 +20,7 @@ def _convert_gps(info: Dict[int, Any]) -> Optional[Dict[str, float]]:
         lat = gps.get("GPSLatitude")
         lon = gps.get("GPSLongitude")
         if not lat or not lon:
+            print(f'[WARN] _convert_gps returning None')
             return None
         lat_deg = _r2f(lat[0]) + _r2f(lat[1]) / 60.0 + _r2f(lat[2]) / 3600.0
         lon_deg = _r2f(lon[0]) + _r2f(lon[1]) / 60.0 + _r2f(lon[2]) / 3600.0
@@ -28,7 +29,8 @@ def _convert_gps(info: Dict[int, Any]) -> Optional[Dict[str, float]]:
         if lon_ref == "W":
             lon_deg = -lon_deg
         return {"lat": lat_deg, "lon": lon_deg}
-    except Exception:
+    except Exception as e:
+        print(f'[WARN] _convert_gps returning None')
         return None
 
 
@@ -54,7 +56,8 @@ def image_exif(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
                     out["place"] = {"city": r0.get("name"), "country": r0.get("cc")}
                     # Place tags
                     out["place_tags"] = [t for t in (r0.get("name"), r0.get("cc")) if t]
-            except Exception:
+            except Exception as e:
+                print(f'[ERROR] Exception in step.py line 59: {str(e)}')
                 pass
             # Timezone estimate
             try:
@@ -63,7 +66,8 @@ def image_exif(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
                 tz = tf.timezone_at(lng=gps["lon"], lat=gps["lat"])  # type: ignore[arg-type]
                 if tz:
                     out["timezone"] = tz
-            except Exception:
+            except Exception as e:
+                print(f'[ERROR] Exception in step.py line 69: {str(e)}')
                 pass
         # Color/brightness descriptors
         try:
@@ -79,8 +83,9 @@ def image_exif(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
             hex_colors = ["#%02x%02x%02x" % c for c in colors]
             out["brightness"] = brightness
             out["dominant_colors"] = hex_colors
-        except Exception:
+        except Exception as e:
+            print(f'[ERROR] Exception in step.py line 86: {str(e)}')
             pass
         return out
-    except Exception:
+    except Exception as e:
         return {"exif": None}

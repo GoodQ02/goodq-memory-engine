@@ -1,225 +1,240 @@
-# GoodQ4All Documentation Index
-**Last Updated**: October 8, 2025
+# 📚 GoodQ4All Documentation Index
+**Last Updated**: 2025-10-13  
+**Version**: 2.0.0 - Clean & Organized Edition  
+**Status**: ✅ Production Ready
 
-## 📚 Quick Links
+---
 
-### Getting Started
-- **[QUICK_START.md](QUICK_START.md)** - 5-minute setup guide
-- **[INSTALLATION.md](../README.md#installation)** - Detailed installation instructions
-- **[WELCOME_BACK.md](../WELCOME_BACK.md)** - Morning checklist for returning users
+## 🎯 Quick Navigation
 
-### User Guides
+| You Want To... | Go Here |
+|----------------|---------|
+| **Start using GoodQ** | [Quick Start Guide](QUICK_START.md) |
+| **Understand the system** | [User Guide](guides/USER_GUIDE.md) |
+| **Find a command** | [Quick Reference](QUICK_REFERENCE.md) |
+| **See what's next** | [Roadmap](ROADMAP.md) |
+| **Fix a problem** | [Troubleshooting Guide](TROUBLESHOOTING.md) |
+| **Deep dive technical** | [Technical Documentation](#-technical-documentation) |
+
+---
+
+## 📖 Documentation Structure
+
+### 🚀 Getting Started
+- **[QUICK_START.md](QUICK_START.md)** - Get running in 5 minutes
+- **[CHEAT_SHEET.md](CHEAT_SHEET.md)** - Common commands at a glance
+- **[../README.md](../README.md)** - Project overview and installation
+
+### 📘 User Guides
+- **[guides/USER_GUIDE.md](guides/USER_GUIDE.md)** - Complete usage guide
+- **[WATCHDOG_GUIDE.md](WATCHDOG_GUIDE.md)** - Automatic file ingestion
 - **[WORKFLOW_VISUAL_GUIDE.md](WORKFLOW_VISUAL_GUIDE.md)** - Visual workflow diagrams
-- **[DATA_FLOW_DIAGRAM.txt](DATA_FLOW_DIAGRAM.txt)** - System data flow
-- **[CHEAT_SHEET.md](CHEAT_SHEET.md)** - Quick reference commands
 
-### Architecture & Design
-- **[PROJECT_STRUCTURE.md](PROJECT_STRUCTURE.md)** - Complete directory structure
-- **[REORGANIZATION_COMPLETE.md](REORGANIZATION_COMPLETE.md)** - Recent restructuring details
-- **[KNOWLEDGE_GRAPH_IMPLEMENTATION.md](../KNOWLEDGE_GRAPH_IMPLEMENTATION.md)** - Graph database design
+### 📋 Reference
+- **[QUICK_REFERENCE.md](QUICK_REFERENCE.md)** - Command reference
+- **[WATCHDOG_QUICKREF.md](WATCHDOG_QUICKREF.md)** - Watchdog quick ref
+- **[reference/SCRIPTS_GUIDE.md](reference/SCRIPTS_GUIDE.md)** - Script documentation
+- **[reference/QUICK_REFERENCE_SETTINGS.md](reference/QUICK_REFERENCE_SETTINGS.md)** - Settings reference
+- **[reference/FIXES_QUICK_REFERENCE.txt](reference/FIXES_QUICK_REFERENCE.txt)** - Recent fixes summary
+- **[reference/PERFORMANCE_SUMMARY.txt](reference/PERFORMANCE_SUMMARY.txt)** - Performance stats
 
-### Development
-- **[SESSION_SUMMARY.md](SESSION_SUMMARY.md)** - Latest development session notes
-- **[OVERNIGHT_AUDIT_SUMMARY.md](../OVERNIGHT_AUDIT_SUMMARY.md)** - Code audit results
-- **[LINT_CLEAN_SESSION.md](../LINT_CLEAN_SESSION.md)** - Linting and cleanup notes
+### 🔧 Technical Documentation
+- **[technical/KNOWLEDGE_GRAPH_IMPLEMENTATION.md](technical/KNOWLEDGE_GRAPH_IMPLEMENTATION.md)** - Graph architecture
+- **[technical/MODEL_LOCKDOWN_IMPLEMENTATION.md](technical/MODEL_LOCKDOWN_IMPLEMENTATION.md)** - Dependency management
+- **[technical/LOCKDOWN_STATUS.md](technical/LOCKDOWN_STATUS.md)** - Current lockdown state
+- **[technical/DATA_STRUCTURE.md](technical/DATA_STRUCTURE.md)** - Data schemas
+- **[technical/PERFORMANCE_FIXES.md](technical/PERFORMANCE_FIXES.md)** - Performance optimizations
+- **[technical/ISSUE_RESOLUTION_20251012.md](technical/ISSUE_RESOLUTION_20251012.md)** - Recent bug fixes
 
-### Operations
-- **[PROJECT_STATUS.md](../PROJECT_STATUS.md)** - Current project status
-- **[READY_FOR_PRODUCTION_TEST.md](../READY_FOR_PRODUCTION_TEST.md)** - Production readiness checklist
-- **[MORNING_CHECKLIST.md](../MORNING_CHECKLIST.md)** - Daily operational checklist
+### 📊 Diagrams & Architecture
+- **[diagrams/PIPELINE_FLOW.md](diagrams/PIPELINE_FLOW.md)** - End-to-end pipeline flow
+- **[diagrams/DATA_FLOW_DIAGRAM.md](diagrams/DATA_FLOW_DIAGRAM.md)** - Data flow architecture
+- **[diagrams/knowledge_graph_architecture.md](diagrams/knowledge_graph_architecture.md)** - Graph database design
+- **[diagrams/watchdog_flow.md](diagrams/watchdog_flow.md)** - Watchdog system flow
+- **[knowledge_graph.md](knowledge_graph.md)** - Knowledge graph overview
 
-### API & Integration
+### 📈 Project Management
+- **[ROADMAP.md](ROADMAP.md)** - Current and future objectives
+- **[AUDIT_REPORT.md](AUDIT_REPORT.md)** - System audit results
+- **[CRITICAL_FIXES_APPLIED.md](CRITICAL_FIXES_APPLIED.md)** - Critical fixes log
+- **[project_management/SETTINGS_AUDIT_REPORT.md](project_management/SETTINGS_AUDIT_REPORT.md)** - Settings audit
+- **[project_management/SETTINGS_OPTIMIZED.md](project_management/SETTINGS_OPTIMIZED.md)** - Optimized settings
+- **[project_management/AUDIT_REPORT.md](project_management/AUDIT_REPORT.md)** - Project audit
+- **[project_management/status_reports/](project_management/status_reports/)** - Historical status reports
+
+### 📜 History & Archives
+- **[history/PROJECT_HISTORY.md](history/PROJECT_HISTORY.md)** - Development timeline
+- **[project-history/CHANGELOG.md](project-history/CHANGELOG.md)** - Version changelog
+- **[history/README_pre_github.md](history/README_pre_github.md)** - Pre-GitHub state
+- **[project-history/PROJECT_RENAME_COMPLETE.md](project-history/PROJECT_RENAME_COMPLETE.md)** - Rename from zenml_project
+- **[history/archived_docs/](history/archived_docs/)** - Archived documentation
+
+### 🛠️ Troubleshooting & Support
+- **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** - Common issues and solutions
+- **[TROUBLESHOOTING_EMPTY_ANALYSIS.md](TROUBLESHOOTING_EMPTY_ANALYSIS.md)** - Empty analysis debugging
+- **[WATCHDOG_CHANGELOG.md](WATCHDOG_CHANGELOG.md)** - Watchdog version history
+
+### 🔐 Setup & Integration
 - **[GITHUB_SETUP_GUIDE.md](GITHUB_SETUP_GUIDE.md)** - GitHub repository setup
-- **API Documentation** - Available at `http://localhost:8000/docs` when server is running
+- **[MODEL_LOCKDOWN.md](MODEL_LOCKDOWN.md)** - Model versioning guide
+- **[MODEL_LOCKDOWN_QUICK_REF.md](MODEL_LOCKDOWN_QUICK_REF.md)** - Lockdown quick reference
 
-### Migration & History
-- **[RENAME_MIGRATION_LOG.md](../RENAME_MIGRATION_LOG.md)** - Project rename from GoodQ_4_All to goodq4all
-- **[DOCUMENTATION_COMPLETE_2025-10-08.md](DOCUMENTATION_COMPLETE_2025-10-08.md)** - Documentation milestone
-- **[REORGANIZATION_SUMMARY.md](REORGANIZATION_SUMMARY.md)** - L:\ drive reorganization
-
----
-
-## 📖 Documentation by Topic
-
-### Setup & Installation
-1. System requirements and prerequisites
-2. Environment setup (22 isolated conda envs)
-3. Model and dataset caching
-4. GPU configuration (CUDA 12.1)
-
-### Core Concepts
-- **Multimodal Ingestion**: Video, audio, image, and text processing
-- **Knowledge Graph**: Entity relationships and temporal connections
-- **Memory Context**: Smart deduplication and metadata preservation
-- **Vector Embeddings**: FAISS indices for retrieval
-
-### Pipeline Architecture
-- **Scene Detection**: PySceneDetect boundary detection
-- **Audio Processing**: Whisper transcription, speaker diarization
-- **Image Analysis**: BLIP2 captioning, YOLO object detection, OCR
-- **Text Processing**: Sentiment, emotion, entity extraction
-- **Embedding Generation**: CLIP, DiNO, CLAP, sentence-transformers
-
-### Data Storage
-- **SQLite**: Memory database for structured metadata
-- **FAISS**: Vector indices for similarity search
-- **Neo4j-style Graph**: Knowledge graph in SQLite
-- **File System**: Organized workspace for artifacts
-
-### API & Tools
-- **FastAPI Server**: RESTful API on port 8000
-- **Command Center**: PowerShell dashboard for monitoring
-- **Watchdog**: Automatic file ingestion
-- **CLI Tools**: Memory management, retrieval, diagnostics
+### 💬 Development Communications
+- **[copilot_user_communications/](copilot_user_communications/)** - Agent/user session logs
+- **[MISSION_BRIEFS/](MISSION_BRIEFS/)** - Mission-specific briefings
 
 ---
 
-## 🗂️ Document Organization
+## 🗂️ Project Structure
 
-### Root Level (`L:\goodq4all\`)
-- `README.md` - Main project documentation
-- `PROJECT_STATUS.md` - Current status and health
-- `LAUNCH_GOODQ.bat` - One-click launcher
-- `START_WATCHDOG.bat` - Automatic ingestion
-- `STOP_GOODQ.bat` - Shutdown script
-
-### Documentation Folder (`L:\goodq4all\docs\`)
-- **Guides**: Step-by-step tutorials
-- **Reference**: Technical specifications
-- **Architecture**: System design documents
-- **Operations**: Daily checklists and procedures
-
-### Scripts Folder (`L:\goodq4all\scripts\`)
-- Health checks and diagnostics
-- Testing and validation
-- Monitoring and status tools
-- Maintenance utilities
-
----
-
-## 🔧 Command Reference
-
-### Launch Commands
-```bash
-# Full system launch
-L:\goodq4all\LAUNCH_GOODQ.bat
-
-# Start watchdog only
-L:\goodq4all\START_WATCHDOG.bat
-
-# Manual ingestion
-conda run -n goodq_zenml python -m goodq4all.cli.run_ingestion <video_path>
-
-# System health check
-conda run -n goodq_zenml python scripts\system_readiness_check.py
+### Root Directory (`L:\goodq4all\`)
+```
+L:\goodq4all\
+├── README.md                   # Main project documentation
+├── MISSION_SUCCESS_REPORT.md  # Latest status (2025-10-13)
+├── *.bat                       # 9 active batch scripts
+├── configs/                    # Configuration files
+├── docs/                       # All documentation (this folder)
+├── scripts/                    # Utility scripts
+├── steps/                      # Pipeline step implementations
+├── pipelines/                  # ZenML pipeline definitions
+├── envs/                       # Environment definitions (22 isolated envs)
+├── api/                        # FastAPI server
+├── vendor/                     # Third-party code
+├── import_inbox/               # Drop files here for processing
+├── data/                       # Databases and indices
+└── logs/                       # Processing logs
 ```
 
-### Monitoring Commands
-```bash
-# Command center dashboard
-cd L:\goodq4all
-pwsh scripts\command_center.ps1
-
-# Check production status
-conda run -n goodq_zenml python scripts\check_production_status.py
-
-# Monitor watchdog
-pwsh scripts\watchdog_status.ps1 -Follow
+### Data Storage (`L:\`)
 ```
-
-### Database Commands
-```bash
-# Memory diagnostics
-conda run -n goodq_zenml python -m goodq4all.cli.memory diagnostics
-
-# Clear databases (DESTRUCTIVE)
-conda run -n goodq_zenml python scripts\clear_databases.py
-
-# View scenes
-conda run -n goodq_zenml python -m goodq4all.cli.memory list-scenes
+L:\
+├── goodq4all/                  # Main project (GitHub-tracked)
+├── _DATA\GoodQ_Data\          # Persistent data storage
+│   ├── memory.db              # SQLite database
+│   ├── faiss_indices/         # Vector indices
+│   ├── knowledge_graph.db     # Graph database
+│   └── logs/                  # Processing logs
+├── _ARCHIVE/                  # Archived files
+├── models/                    # HuggingFace cache
+└── Tools/                     # External tools
 ```
 
 ---
 
-## 📊 Key Files & Locations
+## 🎬 Active Batch Scripts
 
-### Configuration
-- `configs/config.yaml` - Main configuration
-- `configs/paths.yaml` - Path mappings
-- `.env` - Environment variables (create from template)
+Located in `L:\goodq4all\`:
 
-### Data Storage
-- `L:\_DATA\GoodQ_Data\` - Persistent data
-  - `memory.db` - SQLite memory database
-  - `faiss_indices/` - Vector indices
-  - `exports/` - Export artifacts
-- `L:\_WORKSPACE\` - Processing workspace
-  - `logs/` - Ingestion run logs
-  - `temp/` - Temporary processing files
-
-### Models & Assets
-- `L:\models\` - HuggingFace cache (HF_HOME, TORCH_HOME)
-- `L:\Tools\` - External tools (FFmpeg, Whisper, Tesseract)
-
-### GitHub Repository
-- **URL**: https://github.com/JoesDomingo/goodq4all
-- **Local**: `L:\goodq4all\`
+| Script | Purpose | When to Use |
+|--------|---------|-------------|
+| **LAUNCH_GOODQ.bat** | Start full system | Daily launch |
+| **START_WATCHDOG.bat** | Auto file processing | When adding multiple files |
+| **STOP_GOODQ.bat** | Shutdown services | End of session |
+| **CHECK_STATUS.bat** | Quick status check | Anytime |
+| **MONITOR_PROGRESS.bat** | Live processing monitor | During ingestion |
+| **QUERY_DATABASE.bat** | Database query tool | Data inspection |
+| **SHOW_INTELLIGENCE.bat** | View collected data | After processing |
+| **CLEAN_AND_RETEST.bat** | Fresh start | Troubleshooting |
+| **FIX_PERFORMANCE.bat** | Apply optimizations | After updates |
 
 ---
 
-## 🎯 Common Tasks
+## 🚀 Common Workflows
 
 ### First Time Setup
-1. Read [QUICK_START.md](QUICK_START.md)
-2. Run `scripts\system_readiness_check.py`
-3. Execute `LAUNCH_GOODQ.bat`
+1. Read [Quick Start Guide](QUICK_START.md)
+2. Run `LAUNCH_GOODQ.bat`
+3. Drop a test video in `import_inbox/`
+4. Watch `MONITOR_PROGRESS.bat`
 
-### Daily Operations
-1. Review [MORNING_CHECKLIST.md](../MORNING_CHECKLIST.md)
-2. Check Command Center dashboard
-3. Review overnight ingestion logs
-
-### Adding New Media
-1. Drop files in `import_inbox/` (if watchdog running)
-2. OR manually: `python -m goodq4all.cli.run_ingestion <path>`
-3. Monitor progress in Command Center
+### Daily Use
+1. Run `LAUNCH_GOODQ.bat`
+2. Drop media files in `import_inbox/`
+3. Review results with `SHOW_INTELLIGENCE.bat`
+4. Query data with `QUERY_DATABASE.bat`
 
 ### Troubleshooting
-1. Check system readiness: `scripts\system_readiness_check.py`
-2. Review logs in `L:\_DATA\GoodQ_Data\logs\`
-3. Verify databases: `python -m goodq4all.cli.memory diagnostics`
+1. Check [Troubleshooting Guide](TROUBLESHOOTING.md)
+2. Run `CHECK_STATUS.bat`
+3. Review logs in `L:\_DATA\GoodQ_Data\logs\`
+4. Try `CLEAN_AND_RETEST.bat` if needed
 
 ---
 
-## 📝 Version History
+## 📊 Key Concepts
 
-### v1.4.0 (October 8, 2025)
-- **Project Rename**: `GoodQ_4_All` → `goodq4all`
-- Unified naming convention
-- Updated all imports and paths
-- Documentation reorganization
+### Multimodal Processing Pipeline
+1. **Scene Detection** - PySceneDetect identifies scene boundaries
+2. **Frame Analysis** - BLIP2 captioning, YOLO detection, OCR
+3. **Audio Processing** - Whisper transcription, speaker diarization
+4. **Text Analysis** - Sentiment, emotion, entity extraction
+5. **Embedding** - CLIP, DiNO, CLAP vector generation
+6. **Storage** - SQLite metadata + FAISS vectors + Knowledge graph
 
-### v1.3.0 (October 7-8, 2025)
-- Knowledge graph implementation
-- Memory context system with deduplication
-- Model and dataset lockdown
-- One-click launcher
-- Watchdog auto-ingestion
-- 22 isolated environments
+### Knowledge Graph
+- **Nodes**: Entities (people, objects, locations, concepts)
+- **Edges**: Relationships (appears_with, mentioned_in, located_at)
+- **Temporal**: Time-based connections across scenes
+- **Multimodal**: Links across video, audio, text
+
+### Memory System
+- **Smart Deduplication** - Perceptual hashing prevents duplicate processing
+- **Context Preservation** - Maintains original metadata
+- **Drift Detection** - Monitors database/index sync
 
 ---
 
-## 🆘 Support & Resources
+## 🆘 Support Resources
 
-### Internal Resources
-- **Command Center**: Real-time system monitoring
+### When Something Goes Wrong
+1. **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** - Start here
+2. **Logs**: `L:\_DATA\GoodQ_Data\logs\watchdog.log`
+3. **Status**: Run `CHECK_STATUS.bat`
+4. **Database**: Run `QUERY_DATABASE.bat`
+
+### For Deep Technical Issues
+1. **[technical/](technical/)** - Technical documentation
+2. **[AUDIT_REPORT.md](AUDIT_REPORT.md)** - System audit
+3. **[CRITICAL_FIXES_APPLIED.md](CRITICAL_FIXES_APPLIED.md)** - Recent fixes
+
+### Development History
+1. **[history/PROJECT_HISTORY.md](history/PROJECT_HISTORY.md)** - Full timeline
+2. **[project-history/CHANGELOG.md](project-history/CHANGELOG.md)** - Version history
+3. **[copilot_user_communications/](copilot_user_communications/)** - Session logs
+
+---
+
+## 📝 Recent Updates
+
+### 2025-10-13: Documentation Cleanup
+- ✅ Consolidated 11 status reports into archive
+- ✅ Archived 12 outdated batch files
+- ✅ Moved reference materials to proper folders
+- ✅ Created clean root directory structure
+- ✅ Updated this index
+
+### 2025-10-13: Critical Fixes Applied
+- ✅ Fixed CLIP embedding syntax error
+- ✅ Optimized Whisper transcription settings
+- ✅ Standardized UTF-8 logging
+- ✅ Enhanced error handling in all steps
+
+### 2025-10-12: Performance Optimization
+- ✅ Tuned scene detection thresholds
+- ✅ Optimized audio processing timeouts
+- ✅ Enhanced memory management
+- ✅ Improved logging clarity
+
+---
+
+## 🎯 Quick Links
+
+- **GitHub**: https://github.com/JoesDomingo/GoodQ_4_All
 - **API Docs**: http://localhost:8000/docs (when running)
-- **Logs**: `L:\_DATA\GoodQ_Data\logs\`
-
-### Development
-- **GitHub**: https://github.com/JoesDomingo/goodq4all
-- **Issues**: Create GitHub issues for bugs/features
+- **Local Root**: `L:\goodq4all\`
+- **Data Storage**: `L:\_DATA\GoodQ_Data\`
 
 ---
 
-**Navigation**: [← Back to Main README](../README.md) | [Quick Start →](QUICK_START.md)
+**Navigation**: [← Back to README](../README.md) | [Quick Start →](QUICK_START.md) | [User Guide →](guides/USER_GUIDE.md)

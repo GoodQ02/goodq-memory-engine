@@ -1,7 +1,7 @@
 """Quick check of memory DB content."""
 import sqlite3
 
-conn = sqlite3.connect('L:/_DATA/GoodQ_Data/data/memory_db/memory.db')
+conn = sqlite3.connect('L:/goodq4all/data/memory.db')
 cur = conn.cursor()
 
 print('=== Memory DB Status ===')

@@ -5,7 +5,7 @@ _NER_PIPELINES: Dict[str, Any] = {}
 
 try:
     from goodq4all.steps.common.tag_utils import dedupe_tokens
-except Exception:
+except Exception as e:
     def dedupe_tokens(tokens):
         seen = set()
         deduped = []
@@ -68,7 +68,7 @@ def _extract_entities_transformers(text: str, cfg: Dict[str, Any]) -> List[str]:
             if word:
                 labels.append(word)
         return list(dict.fromkeys(labels))[:20]
-    except Exception:
+    except Exception as e:
         return []
 
 

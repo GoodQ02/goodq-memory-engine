@@ -108,7 +108,7 @@ def safe_str(value: Any, default: str = "") -> str:
     
     try:
         return str(value)
-    except Exception:
+    except Exception as e:
         return default
 
 

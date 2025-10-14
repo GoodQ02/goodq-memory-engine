@@ -4,9 +4,11 @@ from typing import Any, Iterable, List, Optional, Sequence
 
 def _normalize_token(token: Any) -> Optional[str]:
     if token is None:
+        print(f'[WARN] _normalize_token returning None')
         return None
     text = str(token).strip()
     if not text:
+        print(f'[WARN] _normalize_token returning None')
         return None
     return text
 

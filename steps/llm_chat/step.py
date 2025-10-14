@@ -63,7 +63,8 @@ def llm_chat(cfg: Dict[str, Any]) -> Dict[str, Any]:
                   prev = context_block.get('activities') or ''
                   context_block['activities'] = (prev + f" Advisories: {top_adv}").strip()
           con.close()
-    except Exception:
+    except Exception as e:
+      print(f'[ERROR] Exception in step.py line 66: {str(e)}')
       pass
     if context_block:
         sys_sum = context_block.get("system_summary", "")
@@ -131,6 +132,7 @@ def llm_chat(cfg: Dict[str, Any]) -> Dict[str, Any]:
                 content2 = j2.get("response", "")
                 if content2:
                     return {"text": content2, "prompt_snapshot": {**prompt_snapshot, "api_url": gen_url}}
-        except Exception:
+        except Exception as e:
+            print(f'[ERROR] Exception in step.py line 135: {str(e)}')
             pass
         return {"error": err, "prompt_snapshot": prompt_snapshot}

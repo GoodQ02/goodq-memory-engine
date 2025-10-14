@@ -59,7 +59,7 @@ def _detect_with_scenedetect(path: str, threshold: float, min_scene_len_sec: flo
     scene_manager = SceneManager(stats_manager=stats_manager)
     try:
         frame_rate = float(video.frame_rate) if getattr(video, 'frame_rate', None) else None
-    except Exception:
+    except Exception as e:
         frame_rate = None
     if frame_rate and frame_rate > 0:
         min_len_frames = max(1, int(round(frame_rate * min_scene_len_sec)))
@@ -73,25 +73,25 @@ def _detect_with_scenedetect(path: str, threshold: float, min_scene_len_sec: flo
     scores: List[float] = []
     try:
         duration = float(video.duration) if getattr(video, 'duration', None) else None
-    except Exception:
+    except Exception as e:
         duration = None
     for idx, (start_time, end_time) in enumerate(scene_list):
         start_sec = float(start_time.get_seconds() or 0.0)
         end_sec = float(end_time.get_seconds() or start_sec)
         try:
             metrics = stats_manager.get_metrics(start_time)
-        except TypeError:
+        except TypeError as e:
             try:
                 metrics = stats_manager.get_metrics(start_time, ['content_val'])
-            except Exception:
+            except Exception as e:
                 metrics = None
-        except Exception:
+        except Exception as e:
             metrics = None
         score = 0.0
         if metrics:
             try:
                 score = float(metrics.get('content_val', 0.0) or 0.0)
-            except Exception:
+            except Exception as e:
                 score = 0.0
         scores.append(score)
         scenes.append(
@@ -112,7 +112,8 @@ def _detect_with_scenedetect(path: str, threshold: float, min_scene_len_sec: flo
         entry.pop('score', None)
     try:
         video.release()
-    except Exception:
+    except Exception as e:
+        print(f'[ERROR] Exception in step.py line 115: {str(e)}')
         pass
     return {'scenes': scenes, 'duration': duration}
 
@@ -141,6 +142,7 @@ def _ensure_detectors() -> Tuple[Optional[Any], Optional[Any]]:  # type: ignore[
         if cascade_path and os.path.isfile(cascade_path):
             _FACE_CASCADE = cv2.CascadeClassifier(cascade_path)
         else:
+            print(f'[WARN] _ensure_detectors: Face cascade not found at {cascade_path}')
             _FACE_CASCADE = None
     return _HOG_PEOPLE, _FACE_CASCADE  # type: ignore
 

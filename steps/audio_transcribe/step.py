@@ -19,7 +19,7 @@ def _load_fw_model(model_id: str, device: str, compute_type: str) -> Any:
         from faster_whisper import WhisperModel  # type: ignore
 
         model = WhisperModel(model_id, device=device, compute_type=compute_type)
-    except Exception:
+    except Exception as e:
         model = None
     _FW_CACHE[key] = model
     return model
@@ -34,13 +34,15 @@ def _audio_duration(path: str) -> Optional[float]:
             return float(info.duration)
         if getattr(info, "frames", None) and getattr(info, "samplerate", None):
             return float(info.frames) / float(info.samplerate)
-    except Exception:
+    except Exception as e:
+        print(f'[ERROR] Exception in step.py line 37: {str(e)}')
         pass
     try:
         import librosa  # type: ignore
 
         return float(librosa.get_duration(filename=path))
-    except Exception:
+    except Exception as e:
+        print(f'[WARN] _audio_duration returning None')
         return None
 
 
@@ -71,7 +73,8 @@ def _build_chunks(item: Dict[str, Any], cfg: Dict[str, Any], duration: Optional[
             try:
                 start = float(seg.get("start", 0.0) or 0.0)
                 end = float(seg.get("end", start) or start)
-            except Exception:
+            except Exception as e:
+                print(f'[ERROR] Exception in step.py line 76: {str(e)}')
                 continue
             speaker = seg.get("speaker")
             chunks.extend(_split_range(max(0.0, start), max(start, end), chunk_seconds, speaker))
@@ -101,12 +104,14 @@ def _slice_to_wav(src_path: str, start: float, end: float, ffmpeg_path: Optional
             raise ValueError("empty slice")
         sf.write(tmp_path, data, sr)
         return tmp_path
-    except Exception:
+    except Exception as e:
         if ffmpeg_path is None:
             try:
                 os.remove(tmp_path)
-            except Exception:
+            except Exception as e:
+                print(f'[ERROR] Exception in step.py line 111: {str(e)}')
                 pass
+            print(f'[WARN] _slice_to_wav returning None')
             return None
         try:
             cmd = [
@@ -125,11 +130,13 @@ def _slice_to_wav(src_path: str, start: float, end: float, ffmpeg_path: Optional
             ]
             subprocess.run(cmd, check=True)
             return tmp_path
-        except Exception:
+        except Exception as e:
             try:
                 os.remove(tmp_path)
-            except Exception:
+            except Exception as e:
+                print(f'[ERROR] Exception in step.py line 136: {str(e)}')
                 pass
+            print(f'[WARN] _slice_to_wav returning None')
             return None
 
 
@@ -163,31 +170,34 @@ def _transcribe_chunk_whisper_cli(chunk_path: str, offset: float, whisper_cli: s
                     text = seg.get("text", "") or ""
                     segments.append({"start": start, "end": end, "text": text})
                 transcript = " ".join(s.get("text", "").strip() for s in segments if s.get("text")) or None
-            except Exception:
+            except Exception as e:
                 segments = []
         if transcript is None and os.path.isfile(txt_path):
             try:
                 with open(txt_path, "r", encoding="utf-8") as f:
                     transcript = f.read().strip() or None
-            except Exception:
+            except Exception as e:
                 transcript = None
         return {
             "transcript": transcript,
             "segments": segments,
             "engine": "whisper.cpp",
         }
-    except Exception:
+    except Exception as e:
+        print(f'[WARN] _transcribe_chunk_whisper_cli returning None')
         return None
     finally:
         for ext in (".json", ".txt", ".srt", ".tsv"):
             try:
                 os.remove(out_prefix + ext)
-            except Exception:
+            except Exception as e:
+                print(f'[ERROR] Exception in step.py line 193: {str(e)}')
                 pass
 
 
 def _transcribe_chunk_fw(chunk_path: str, offset: float, model: Any) -> Optional[Dict[str, Any]]:
     if model is None:
+        print(f'[WARN] _transcribe_chunk_fw returning None')
         return None
     try:
         # Optimized Whisper settings for better transcription quality
@@ -277,7 +287,7 @@ def audio_transcribe(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
         import torch  # type: ignore
 
         use_cuda = bool(getattr(torch, "cuda", None) and torch.cuda.is_available())
-    except Exception:
+    except Exception as e:
         use_cuda = False
     device = "cuda" if use_cuda else "cpu"
     model_id = str(tx_cfg.get("model") or "medium")
@@ -344,11 +354,11 @@ def audio_transcribe(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
                     seg_copy = dict(seg)
                     try:
                         seg_copy["start"] = float(seg_copy.get("start", start) or start)
-                    except Exception:
+                    except Exception as e:
                         seg_copy["start"] = start
                     try:
                         seg_copy["end"] = float(seg_copy.get("end", end) or end)
-                    except Exception:
+                    except Exception as e:
                         seg_copy["end"] = end
                     text_val = seg_copy.get("text")
                     seg_copy["text"] = str(text_val).strip() if text_val is not None else (transcript or "")
@@ -368,11 +378,11 @@ def audio_transcribe(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
                             w_copy = dict(w)
                             try:
                                 w_copy["start"] = float(w_copy.get("start", seg_copy["start"]) or seg_copy["start"])
-                            except Exception:
+                            except Exception as e:
                                 w_copy["start"] = seg_copy["start"]
                             try:
                                 w_copy["end"] = float(w_copy.get("end", seg_copy["end"]) or seg_copy["end"])
-                            except Exception:
+                            except Exception as e:
                                 w_copy["end"] = seg_copy["end"]
                             if "word" in w_copy and w_copy["word"] is not None:
                                 w_copy["word"] = str(w_copy["word"])
@@ -402,7 +412,8 @@ def audio_transcribe(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
         finally:
             try:
                 os.remove(tmp_chunk)
-            except Exception:
+            except Exception as e:
+                print(f'[ERROR] Exception in step.py line 415: {str(e)}')
                 pass
 
     normalized_segments: List[Dict[str, Any]] = []
@@ -412,11 +423,11 @@ def audio_transcribe(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
             continue
         try:
             start_val = float(seg.get("start", 0.0) or 0.0)
-        except Exception:
+        except Exception as e:
             start_val = 0.0
         try:
             end_val = float(seg.get("end", start_val) or start_val)
-        except Exception:
+        except Exception as e:
             end_val = start_val
         text_val = seg.get("text")
         text_str = str(text_val).strip() if text_val is not None else ""
@@ -443,11 +454,11 @@ def audio_transcribe(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
                 continue
             try:
                 start_val = float(report.get("start") or 0.0)
-            except Exception:
+            except Exception as e:
                 start_val = 0.0
             try:
                 end_val = float(report.get("end") or start_val)
-            except Exception:
+            except Exception as e:
                 end_val = start_val
             seg_obj = {
                 "start": start_val,
@@ -465,6 +476,8 @@ def audio_transcribe(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
     status = "ok" if full_text else "failed"
     if all(c.get("status") == "error" for c in chunk_reports):
         status = "error"
+    elif all(c.get("status") in ("failed", "error", "empty") for c in chunk_reports):
+        status = "failed"
     elif all(c.get("status") in ("failed", "error", "empty") for c in chunk_reports):
         status = "failed"
 

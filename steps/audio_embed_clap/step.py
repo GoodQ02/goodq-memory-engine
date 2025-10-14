@@ -21,7 +21,7 @@ def _load() -> None:
         proc = AutoProcessor.from_pretrained("laion/clap-htsat-unfused", local_files_only=True)
         model = ClapModel.from_pretrained("laion/clap-htsat-unfused", local_files_only=True).to(device).eval()
         _CLAP.update({"model": model, "proc": proc, "device": device})
-    except Exception:
+    except Exception as e:
         _CLAP.update({"model": None, "proc": None})
 
 
@@ -43,7 +43,8 @@ def _ensure_clap_map(db_path: str) -> None:
     finally:
         try:
             con.close()  # type: ignore
-        except Exception:
+        except Exception as e:
+            print(f'[ERROR] Exception in step.py line 46: {str(e)}')
             pass
 
 
@@ -91,7 +92,7 @@ def audio_embed_clap(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
             uid = np.array([int(h[:16], 16) % (2**63 - 1)], dtype='int64')
             index.add_with_ids(feats.astype("float32"), uid)
             faiss_id = int(uid[0])
-        except Exception:
+        except Exception as e:
             index.add(feats.astype("float32"))
             # best-effort: last ID is ntotal-1 but only valid for flat add
             faiss_id = getattr(index, 'ntotal', 0) - 1
@@ -107,18 +108,21 @@ def audio_embed_clap(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
                         "INSERT OR REPLACE INTO clap_id_map(faiss_id, hash, source_path, created_at) VALUES (?,?,?,?)",
                         (faiss_id, h, path, datetime.utcnow().isoformat()),
                     )
-            except Exception:
+            except Exception as e:
+                print(f'[ERROR] Exception in step.py line 111: {str(e)}')
                 pass
             finally:
                 try:
                     con.close()  # type: ignore
-                except Exception:
+                except Exception as e:
+                    print(f'[ERROR] Exception in step.py line 117: {str(e)}')
                     pass
         # Upsert generic embedding metadata for recall
         try:
             from goodq4all.steps.common.memory import upsert_embedding
             upsert_embedding(cfg, h, faiss_id, path, item.get("modality", "audio") or "audio")
-        except Exception:
+        except Exception as e:
+            print(f'[ERROR] Exception in step.py line 124: {str(e)}')
             pass
         return {"clap_meta": {"status": "ok", "index_path": index_path, "faiss_id": faiss_id}}
     except Exception as e:

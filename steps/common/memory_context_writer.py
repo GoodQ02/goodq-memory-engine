@@ -296,7 +296,8 @@ def ensure_frame_hash_in_embeddings(
         import json
         try:
             emotions_json = json.dumps(emotions, ensure_ascii=False)
-        except Exception:
+        except Exception as e:
+            print(f'[ERROR] Exception in memory_context_writer.py line 299: {str(e)}')
             pass
     
     # Update embedding record with context

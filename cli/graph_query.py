@@ -15,7 +15,7 @@ from lib.graph_query import GraphQuery
 
 
 @click.group()
-@click.option('--graph-db', default='data/knowledge_graph.db', help='Path to knowledge graph database')
+@click.option('--graph-db', default='L:/goodq4all/data/knowledge_graph.db', help='Path to knowledge graph database')
 @click.pass_context
 def cli(ctx, graph_db):
     """Query the GoodQ Knowledge Graph"""

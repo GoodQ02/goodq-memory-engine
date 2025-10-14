@@ -29,12 +29,13 @@ def _tally(tokens: List[Any]) -> Dict[str, int]:
 def _safe_int(x: Optional[int]) -> int:
     try:
         return int(x or 0)
-    except Exception:
+    except Exception as e:
         return 0
 
 
 def _get_faiss_ntotal(env_name: str, index_path: Optional[str]) -> Optional[int]:
     if not index_path or not os.path.isfile(index_path):
+        print(f'[WARN] _get_faiss_ntotal returning None')
         return None
     import subprocess
     code = "import faiss,sys; print(faiss.read_index(sys.argv[1]).ntotal)"
@@ -45,7 +46,8 @@ def _get_faiss_ntotal(env_name: str, index_path: Optional[str]) -> Optional[int]
         ], capture_output=True, text=True, check=True)
         s = (out.stdout or "").strip()
         return int(s) if s.isdigit() else None
-    except Exception:
+    except Exception as e:
+        print(f'[WARN] _get_faiss_ntotal returning None')
         return None
 
 
@@ -59,7 +61,8 @@ def _db_counts(db_path: Optional[str]) -> Dict[str, int]:
         cur.execute("SELECT COUNT(*) FROM embeddings"); counts["embeddings"] = _safe_int(cur.fetchone()[0])
         cur.execute("SELECT COUNT(*) FROM links"); counts["links"] = _safe_int(cur.fetchone()[0])
         con.close()
-    except Exception:
+    except Exception as e:
+        print(f'[ERROR] Exception in step.py line 64: {str(e)}')
         pass
     return counts
 
@@ -76,9 +79,10 @@ def overview(results: List[Dict[str, Any]] | None, video_summary: Dict[str, Any]
                 os.makedirs(log_dir, exist_ok=True)
                 with open(os.path.join(log_dir, "memory_health_report.json"), "w", encoding="utf-8") as f:
                     json.dump(memory_health, f, ensure_ascii=False, indent=2)
-        except Exception:
+        except Exception as e:
+            print(f'[ERROR] Exception in step.py line 82: {str(e)}')
             pass
-    except Exception:
+    except Exception as e:
         memory_health = {"status": "error", "error": "diagnostics_failed"}
     # DB / FAISS status
     dbp = paths.get("db_path")
@@ -123,7 +127,8 @@ def overview(results: List[Dict[str, Any]] | None, video_summary: Dict[str, Any]
                     music_counts = _tally([ev.get("label") for ev in (it.get("music_events") or []) if isinstance(ev, dict)])
                     for lbl, cnt in music_counts.items():
                         music_events_counts[lbl] = music_events_counts.get(lbl, 0) + cnt
-                except Exception:
+                except Exception as e:
+                    print(f'[ERROR] Exception in step.py line 130: {str(e)}')
                     pass
                 try:
                     th = it.get("time_hints") or {}
@@ -142,7 +147,8 @@ def overview(results: List[Dict[str, Any]] | None, video_summary: Dict[str, Any]
                         time_explicit_dates[lbl] = time_explicit_dates.get(lbl, 0) + cnt
                     for lbl, cnt in clock_counts.items():
                         time_clock[lbl] = time_clock.get(lbl, 0) + cnt
-                except Exception:
+                except Exception as e:
+                    print(f'[ERROR] Exception in step.py line 150: {str(e)}')
                     pass
 
     # Aggregate advisories across videos, plus scenes/segments

@@ -20,7 +20,7 @@ def _fingerprint_item(item: Optional[Dict[str, Any]]) -> str:
             return h.hexdigest()
         h.update(repr(item).encode("utf-8", errors="ignore"))
         return h.hexdigest()
-    except Exception:
+    except Exception as e:
         return ""
 
 
@@ -74,7 +74,7 @@ def log_step_run(
         jsonl = os.path.join(log_dir, "step_runs.jsonl")
         try:
             env_name = os.environ.get("CONDA_DEFAULT_ENV") or ""
-        except Exception:
+        except Exception as e:
             env_name = ""
 
         run_cfg = cfg.get("run") if isinstance(cfg, dict) else None
@@ -121,5 +121,6 @@ def log_step_run(
 
         with open(jsonl, "a", encoding="utf-8") as jf:
             jf.write(json.dumps(entry, ensure_ascii=False) + "\n")
-    except Exception:
+    except Exception as e:
+        print(f'[ERROR] Exception in step_logger.py line 124: {str(e)}')
         return

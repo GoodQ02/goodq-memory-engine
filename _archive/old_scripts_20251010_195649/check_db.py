@@ -1,7 +1,7 @@
 import sqlite3
 import sys
 
-db_path = sys.argv[1] if len(sys.argv) > 1 else "L:/_DATA/GoodQ_Data/data/memory_db/memory.db"
+db_path = sys.argv[1] if len(sys.argv) > 1 else "L:/goodq4all/data/memory.db"
 
 try:
     conn = sqlite3.connect(db_path)

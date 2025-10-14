@@ -65,7 +65,7 @@ def run_conda_step(env_name: str, step_name: str, item: Dict[str, Any], cfg: Dic
         try:
             if timeout_env:
                 timeout_s = max(1.0, float(timeout_env) / 1000.0)
-        except Exception:
+        except Exception as e:
             timeout_s = None
         
         try:

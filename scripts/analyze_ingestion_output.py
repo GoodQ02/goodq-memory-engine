@@ -9,7 +9,7 @@ print("GOODQ INGESTION ANALYSIS")
 print("=" * 70)
 
 # Connect to memory DB
-db_path = 'L:/_DATA/GoodQ_Data/data/memory_db/memory.db'
+db_path = 'L:/goodq4all/data/memory.db'
 conn = sqlite3.connect(db_path)
 cur = conn.cursor()
 

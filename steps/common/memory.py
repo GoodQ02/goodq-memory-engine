@@ -33,7 +33,8 @@ def _connect(db_path: str) -> sqlite3.Connection:
         if 'scene_id' not in cols:
             conn.execute("ALTER TABLE embeddings ADD COLUMN scene_id TEXT")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_embeddings_scene ON embeddings(scene_id)")
-    except Exception:
+    except Exception as e:
+        print(f'[ERROR] Exception in memory.py line 36: {str(e)}')
         pass
     conn.execute(
         """
@@ -182,12 +183,14 @@ def compute_file_hash(path: Optional[str]) -> Optional[str]:
 
     if not path:
 
+        print(f'[WARN] compute_file_hash returning None')
         return None
 
     file_path = Path(path)
 
     if not file_path.exists() or not file_path.is_file():
 
+        print(f'[WARN] compute_file_hash returning None')
         return None
 
     digest = hashlib.sha256()
@@ -242,7 +245,7 @@ def upsert_link(cfg: Dict[str, Any], parent_hash: Optional[str], child_hash: Opt
 
                 meta_payload = json.dumps(meta, ensure_ascii=False)
 
-            except Exception:
+            except Exception as e:
 
                 meta_payload = json.dumps({'value': str(meta)}, ensure_ascii=False)
 
@@ -394,7 +397,8 @@ def store_short_term_summary(cfg: Dict[str, Any], summary: Dict[str, Any], *, ca
                     "DELETE FROM summaries WHERE summary_type='short_term' AND created_at < datetime('now', ?)",
                     (f"-{ttl_h} hours",),
                 )
-            except Exception:
+            except Exception as e:
+                print(f'[ERROR] Exception in memory.py line 400: {str(e)}')
                 pass
             conn.execute(
                 "DELETE FROM summaries WHERE summary_type=? AND category=?",
@@ -450,7 +454,8 @@ def append_long_term_summary(
                 for k in keys:
                     deltas.append({"tag": k, "delta": int(curm.get(k,0) - prevm.get(k,0))})
                 payload["deltas"] = {"top_tags": deltas}
-        except Exception:
+        except Exception as e:
+            print(f'[ERROR] Exception in memory.py line 457: {str(e)}')
             pass
         data = json.dumps(payload, ensure_ascii=False)
         with conn:
@@ -513,7 +518,7 @@ def upsert_scene(cfg: Dict[str, Any], video_hash: str, start: float, end: float,
 
                     merged_meta.update(existing)
 
-        except Exception:
+        except Exception as e:
 
             pass
 
@@ -574,7 +579,7 @@ def upsert_segment(cfg: Dict[str, Any], video_hash: str, start: float, end: floa
 
                     merged_meta.update(existing)
 
-        except Exception:
+        except Exception as e:
 
             pass
 
@@ -606,16 +611,18 @@ def upsert_segment(cfg: Dict[str, Any], video_hash: str, start: float, end: floa
 def get_scene_meta(cfg: Dict[str, Any], scene_id: str) -> Optional[Dict[str, Any]]:
     db_path = (cfg.get("paths", {}) or {}).get("db_path")
     if not db_path:
+        print(f'[WARN] get_scene_meta returning None')
         return None
     conn = _connect(db_path)
     try:
         cur = conn.execute("SELECT meta FROM scenes WHERE id=?", (scene_id,))
         row = cur.fetchone()
         if not row:
+            print(f'[WARN] get_scene_meta returning None')
             return None
         try:
             meta = json.loads(row[0]) if row[0] else None
-        except Exception:
+        except Exception as e:
             meta = None
         return meta if isinstance(meta, dict) else None
     finally:
@@ -633,7 +640,7 @@ def scene_has_materialized(cfg: Dict[str, Any], scene_id: str, components: Optio
             if isinstance(comp, dict):
                 h = comp.get('hash')
                 present = isinstance(h, str) and len(h) > 0
-        except Exception:
+        except Exception as e:
             present = False
         result[c] = present
     return result
@@ -657,7 +664,7 @@ def list_scenes_for_video(cfg: Dict[str, Any], video_hash: str) -> Dict[str, Any
         if meta_json:
             try:
                 meta = json.loads(meta_json)
-            except Exception:
+            except Exception as e:
                 meta = {}
         if detection_meta is None and isinstance(meta, dict):
             det = meta.get('detection')

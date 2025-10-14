@@ -20,7 +20,8 @@ def load_configs(overrides: Dict[str, Any] | None = None) -> Dict[str, Any]:
         env_path = os.path.join(repo_root, ".env.local")
         if os.path.isfile(env_path):
             load_dotenv(env_path)
-    except Exception:
+    except Exception as e:
+        print(f'[ERROR] Exception in config_loader.py line 23: {str(e)}')
         pass
 
     base_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "configs")

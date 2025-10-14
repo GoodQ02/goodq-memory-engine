@@ -27,7 +27,7 @@ def _load_st() -> Any:
 
         device = "cuda" if getattr(torch, "cuda", None) and torch.cuda.is_available() else "cpu"
         _ST = SentenceTransformer("all-MiniLM-L6-v2", device=device)
-    except Exception:
+    except Exception as e:
         _ST = None
     return _ST
 
@@ -36,14 +36,16 @@ def _open_faiss(path: str):
     global _FAISS
     try:
         import faiss  # type: ignore
-    except Exception:
+    except Exception as e:
+        print(f'[ERROR] _open_faiss: Cannot import faiss: {str(e)}')
         return None, None
     os.makedirs(os.path.dirname(path), exist_ok=True)
     index = None
     if os.path.isfile(path):
         try:
             index = faiss.read_index(path)
-        except Exception:
+        except Exception as e:
+            print(f'[WARN] _open_faiss: Could not read existing index: {str(e)}')
             index = None
     if index is None:
         # HNSW index for cosine similarity
@@ -69,7 +71,7 @@ def _content_fingerprint(item: Dict[str, Any]) -> str:
             with open(src, "rb") as f:
                 for chunk in iter(lambda: f.read(1024 * 1024), b""):
                     h.update(chunk)
-        except Exception:
+        except Exception as e:
             h.update((src or "").encode("utf-8", errors="ignore"))
     else:
         h.update(repr(item).encode("utf-8", errors="ignore"))
@@ -82,6 +84,7 @@ def _gather_text(item: Dict[str, Any]) -> Optional[str]:
         v = item.get(k)
         if isinstance(v, str) and v.strip():
             return v
+    print(f'[WARN] _gather_text returning None')
     return None
 
 
@@ -110,13 +113,14 @@ def text_embed(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
             uid_int = int(_content_fingerprint(item)[:16], 16) % (2**63 - 1)
             index.add_with_ids(vec.astype("float32"), np.array([uid_int], dtype="int64"))
             ids = [uid_int]
-        except Exception:
+        except Exception as e:
             index.add(vec.astype("float32"))
         faiss.write_index(index, index_path)
         # persist mapping for recall/linking
         try:
             upsert_embedding(cfg, _content_fingerprint(item), (ids or [None])[0], item.get("source_path", ""), item.get("modality", ""))
-        except Exception:
+        except Exception as e:
+            print(f'[ERROR] Exception in step.py line 120: {str(e)}')
             pass
         return {"embedding_meta": {"status": "ok", "engine": "all-MiniLM-L6-v2", "index_path": index_path, "ids": ids}}
     except Exception as e:

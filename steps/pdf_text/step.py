@@ -24,7 +24,8 @@ def _pdftotext(pdf_path: str, poppler_bin: Optional[str]) -> Optional[str]:
         )
         if proc.returncode == 0:
             return proc.stdout
-    except Exception:
+    except Exception as e:
+        print(f'[WARN] _pdftotext returning None')
         return None
     return None
 

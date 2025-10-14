@@ -25,7 +25,7 @@ def _load_yolo(cfg: Dict[str, Any]):
             model_base = os.environ.get("HF_HOME") or os.environ.get("TORCH_HOME") or "L:/models"
             model_path = os.path.join(model_base, model_path)
         _YOLO = YOLO(model_path)
-    except Exception:
+    except Exception as e:
         _YOLO = None
     return _YOLO
 
@@ -34,12 +34,13 @@ def _run_yolo(model, path: str, device: str | None = None):
     try:
         # Prefer explicit predict API so we can choose device
         return model.predict(source=path, device=device, verbose=False)
-    except Exception:
+    except Exception as e:
         # Fallback to callable interface
         if device:
             try:
                 model.to(device)
-            except Exception:
+            except Exception as e:
+                print(f'[ERROR] Exception in step.py line 42: {str(e)}')
                 pass
         return model(path)
 
@@ -81,7 +82,7 @@ def object_detect(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
                     continue
                 try:
                     x1, y1, x2, y2 = [float(v) for v in xyxy[0].tolist()]
-                except Exception:
+                except Exception as e:
                     vals = getattr(xyxy, "tolist", lambda: [])()
                     if vals and len(vals[0]) == 4:
                         x1, y1, x2, y2 = [float(v) for v in vals[0]]

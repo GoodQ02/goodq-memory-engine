@@ -11,7 +11,8 @@ def _file_times(path: str) -> Dict[str, str]:
         ctime = _dt.datetime.utcfromtimestamp(getattr(st, 'st_ctime', 0.0) or 0.0).isoformat()
         mtime = _dt.datetime.utcfromtimestamp(getattr(st, 'st_mtime', 0.0) or 0.0).isoformat()
         return {"created_utc": ctime, "modified_utc": mtime}
-    except Exception:
+    except Exception as e:
+        print('[WARN] _file_times returning empty dict')
         return {}
 
 
@@ -20,6 +21,7 @@ def _mutagen_tags(path: str) -> Dict[str, Any]:
         import mutagen  # type: ignore
         f = mutagen.File(path, easy=True)
         if not f or not getattr(f, 'tags', None):
+            print('[WARN] _mutagen_tags returning empty dict')
             return {}
         tags: Dict[str, Any] = {}
         for k, v in (f.tags or {}).items():
@@ -28,7 +30,8 @@ def _mutagen_tags(path: str) -> Dict[str, Any]:
                     tags[k] = v[0]
                 else:
                     tags[k] = v
-            except Exception:
+            except Exception as e:
+                print(f'[ERROR] Exception in step.py line 33: {str(e)}')
                 continue
         loc_keys = [k for k in tags.keys() if 'gps' in k.lower() or 'location' in k.lower() or 'geotag' in k.lower()]
 
@@ -50,7 +53,8 @@ def _mutagen_tags(path: str) -> Dict[str, Any]:
                         dt = _dt.datetime.strptime(s[:10], fmt)
                         out.append(dt.date().isoformat())
                         break
-                    except Exception:
+                    except Exception as e:
+                        print(f'[ERROR] Exception in step.py line 56: {str(e)}')
                         continue
             return out
 
@@ -64,7 +68,8 @@ def _mutagen_tags(path: str) -> Dict[str, Any]:
         if time_hints.get("raw") or time_hints.get("normalized"):
             out["tag_time_hints"] = time_hints
         return out
-    except Exception:
+    except Exception as e:
+        print('[WARN] _mutagen_tags returning empty dict')
         return {}
 
 
@@ -80,7 +85,8 @@ def _probe_audio(path: str) -> Dict[str, Any]:
         if getattr(info, 'channels', None):
             meta['channels'] = int(info.channels)
         return meta
-    except Exception:
+    except Exception as e:
+        print(f'[ERROR] Exception in step.py line 88: {str(e)}')
         pass
     try:
         import librosa  # type: ignore
@@ -90,7 +96,8 @@ def _probe_audio(path: str) -> Dict[str, Any]:
         sr = None
         try:
             sr = librosa.get_samplerate(path)
-        except Exception:
+        except Exception as e:
+            print(f'[ERROR] Exception in step.py line 99: {str(e)}')
             pass
         if sr:
             meta['sample_rate'] = int(sr)
@@ -99,10 +106,11 @@ def _probe_audio(path: str) -> Dict[str, Any]:
                 import soundfile as sf  # type: ignore
                 with sf.SoundFile(path) as sfh:
                     meta['channels'] = int(sfh.channels)
-            except Exception:
+            except Exception as e:
+                print(f'[ERROR] Exception in step.py line 109: {str(e)}')
                 pass
         return meta
-    except Exception:
+    except Exception as e:
         return meta
 
 

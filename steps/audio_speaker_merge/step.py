@@ -43,11 +43,11 @@ def audio_speaker_merge(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, 
             continue
         try:
             s_start = float(seg.get("start") or 0.0)
-        except Exception:
+        except Exception as e:
             s_start = 0.0
         try:
             s_end = float(seg.get("end") or s_start)
-        except Exception:
+        except Exception as e:
             s_end = s_start
         best_speaker = seg.get("speaker")
         best_ov = 0.0
@@ -56,11 +56,11 @@ def audio_speaker_merge(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, 
                 continue
             try:
                 d_start = float(d.get("start") or 0.0)
-            except Exception:
+            except Exception as e:
                 d_start = 0.0
             try:
                 d_end = float(d.get("end") or d_start)
-            except Exception:
+            except Exception as e:
                 d_end = d_start
             ov = _overlap(s_start, s_end, d_start, d_end)
             if ov > best_ov:

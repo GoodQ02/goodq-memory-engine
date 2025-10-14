@@ -9,16 +9,19 @@ def _read_csv_latest(path: str) -> Optional[Dict[str, Any]]:
     try:
         import chardet  # type: ignore
         import pandas as pd  # type: ignore
-    except Exception:
+    except Exception as e:
+        print(f'[WARN] _read_csv_latest returning None')
         return None
     try:
         with open(path, "rb") as f:
             encoding = chardet.detect(f.read()).get("encoding", "utf-8")
         df = pd.read_csv(path, encoding=encoding)
         if df is None or df.empty:
+            print(f'[WARN] _read_csv_latest returning None')
             return None
         return df.iloc[-1].to_dict()
-    except Exception:
+    except Exception as e:
+        print(f'[WARN] _read_csv_latest returning None')
         return None
 
 
@@ -36,9 +39,11 @@ def _collect_psutil() -> Dict[str, Any]:
                 du = psutil.disk_usage(drive)
                 data[f"disk_{drive[0]}_used_gb"] = du.used / (1024 ** 3)
                 data[f"disk_{drive[0]}_total_gb"] = du.total / (1024 ** 3)
-            except Exception:
+            except Exception as e:
+                print(f'[ERROR] Exception in step.py line 42: {str(e)}')
                 continue
-    except Exception:
+    except Exception as e:
+        print(f'[ERROR] Exception in step.py line 45: {str(e)}')
         pass
     return data
 
@@ -59,7 +64,8 @@ def _collect_nvidia() -> Dict[str, Any]:
                 data["gpu_load_pct"] = float(fields[1])
                 data["gpu_vram_used_mb"] = float(fields[2])
                 data["gpu_vram_total_mb"] = float(fields[3])
-    except Exception:
+    except Exception as e:
+        print(f'[ERROR] Exception in step.py line 67: {str(e)}')
         pass
     return data
 
@@ -71,19 +77,22 @@ def _summarize_row(row: Dict[str, Any]) -> str:
             f = float(row["Core Temperatures (avg) [°F]"])
             c = (f - 32.0) * 5.0 / 9.0
             parts.append(f"CPU {f:.1f}°F/{c:.1f}°C @ {float(row['Total CPU Usage [%]']):.0f}%")
-        except Exception:
+        except Exception as e:
+            print(f'[ERROR] Exception in step.py line 80: {str(e)}')
             pass
     if "GPU Temperature [°F]" in row and "GPU Core Load [%]" in row:
         try:
             f = float(row["GPU Temperature [°F]"])
             c = (f - 32.0) * 5.0 / 9.0
             parts.append(f"GPU {c:.1f}°C @ {float(row['GPU Core Load [%]']):.0f}%")
-        except Exception:
+        except Exception as e:
+            print(f'[ERROR] Exception in step.py line 88: {str(e)}')
             pass
     if "Physical Memory Used [MB]" in row and "Physical Memory Load [%]" in row:
         try:
             parts.append(f"RAM {float(row['Physical Memory Used [MB]'])/1024:.1f}GB ({float(row['Physical Memory Load [%]']):.0f}%)")
-        except Exception:
+        except Exception as e:
+            print(f'[ERROR] Exception in step.py line 94: {str(e)}')
             pass
     return "; ".join(parts)
 

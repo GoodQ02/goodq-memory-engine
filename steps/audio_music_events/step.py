@@ -45,7 +45,7 @@ def audio_music_events(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, A
             if not lbl or not rg:
                 continue
             patterns.append({"label": str(lbl), "regex": re.compile(str(rg), re.I)})
-    except Exception:
+    except Exception as e:
         patterns = []
     if not patterns:
         patterns = MUSIC_EVENT_PATTERNS

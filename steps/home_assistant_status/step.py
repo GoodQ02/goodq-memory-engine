@@ -32,7 +32,8 @@ def home_assistant_status(cfg: Dict[str, Any]) -> Dict[str, Any]:
         try:
             r = request_with_retry("GET", f"{base_url}/api/states/{ent}", headers=headers, timeout=3)
             results.append(r.json())
-        except Exception:
+        except Exception as e:
+            print(f'[ERROR] Exception in step.py line 35: {str(e)}')
             continue
     summary = "; ".join(_summarize_entity(e) for e in results)
     return {"status": "ok", "results": results, "summary": ("Home: " + summary) if summary else ""}

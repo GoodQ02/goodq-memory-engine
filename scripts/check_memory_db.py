@@ -10,7 +10,7 @@ def check_memory_db():
     # Try multiple possible locations
     possible_paths = [
         Path("L:/GoodQ_Data/memory.db"),
-        Path("L:/_DATA/GoodQ_Data/data/memory_db/memory.db"),
+        Path("L:/goodq4all/data/memory.db"),
         Path("L:/goodq4all/data/memory.db"),
     ]
     

@@ -17,7 +17,7 @@ def object_track_yolo(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, An
             path = fr.get("source_path") or ""
             try:
                 img = cv2.imread(path)
-            except Exception:
+            except Exception as e:
                 img = None
             dets = []
             for obj in (fr.get("objects") or []):
@@ -45,7 +45,7 @@ def object_track_yolo(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, An
         top = sorted(by_label.items(), key=lambda kv: kv[1], reverse=True)[:10]
         top_tracked = [{"label": k, "count": v} for k, v in top]
         return {"tracks": {"count": len(tracks_count), "top_tracked": top_tracked}}
-    except Exception:
+    except Exception as e:
         # Fallback to lightweight IoU association if heavy deps unavailable
         def _iou(a: List[float], b: List[float]) -> float:
             ax1, ay1, ax2, ay2 = a

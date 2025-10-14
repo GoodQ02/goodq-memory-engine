@@ -3,7 +3,7 @@ import time
 import sqlite3
 from pathlib import Path
 
-DB_PATH = Path('L:/GoodQ_Data/data/memory_db/memory.db')
+DB_PATH = Path('L:/goodq4all/data/memory.db')
 STEP_LOG = Path('L:/GoodQ_Data/logs/step_runs.jsonl')
 
 last_scene_count = 0

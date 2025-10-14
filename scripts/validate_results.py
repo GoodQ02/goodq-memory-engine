@@ -23,11 +23,8 @@ def validate_result_file(result_path: Path) -> dict:
     except Exception as e:
         return {"file": str(result_path), "error": f"Failed to load: {e}", "issues": []}
     
-    # Handle both list and dict formats
-    if isinstance(data, list):
-        scenes = data
-    else:
-        scenes = data.get("scenes", [])
+    # Check scenes
+    scenes = data.get("scenes", [])
     for i, scene in enumerate(scenes):
         scene_id = f"Scene {i}"
         

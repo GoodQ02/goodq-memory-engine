@@ -3,7 +3,7 @@
 import sqlite3
 import os
 
-db_path = r'L:\_DATA\GoodQ_Data\memory\goodq.db'
+db_path = r'L:\goodq4all\data\memory.db'
 
 if not os.path.exists(db_path):
     print(f"❌ Database does not exist: {db_path}")

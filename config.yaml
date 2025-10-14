@@ -65,13 +65,15 @@ model:
   workplace: The GoodPlace, a creative sanctuary for innovation and healing, Chicago,
     Illinois
 paths:
-  log_dir: L:/_DATA/GoodQ_Data/logs
-  output_directory: L:/_DATA/GoodQ_Data/data/output_inbox
-  db_dir: L:/_DATA/GoodQ_Data/data/memory_db
-  db_path: L:/_DATA/GoodQ_Data/data/memory_db/goodq.db
-  csv_path: L:/_DATA/GoodQ_Data/logs/GOOD_ENGINE_SYS.csv
+  log_dir: L:/goodq4all/logs
+  output_directory: L:/goodq4all/output
+  db_dir: L:/goodq4all/data
+  db_path: L:/goodq4all/data/memory.db
+  knowledge_graph_db: L:/goodq4all/data/knowledge_graph.db
+  faiss_dir: L:/goodq4all/data/faiss
+  csv_path: L:/goodq4all/logs/system_metrics.csv
   nas_path: G:/Logs
-  config_dir: L:/_DATA/GoodQ_Data/config
+  config_dir: L:/goodq4all/configs
 llm:
   api_url: http://localhost:1234/v1/chat/completions
   model_id: LM_STUDIO_GOODQ

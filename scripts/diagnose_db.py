@@ -4,7 +4,7 @@ from pathlib import Path
 
 db_paths = [
     Path("L:/goodq4all/data/memory.db"),
-    Path("L:/_DATA/GoodQ_Data/data/memory_db/memory.db"),
+    Path("L:/goodq4all/data/memory.db"),
 ]
 
 for db_path in db_paths:

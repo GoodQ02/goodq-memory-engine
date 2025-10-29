@@ -90,6 +90,10 @@ def image_embed_clip(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
                     print(f'[ERROR] Exception in step.py line 89: {str(e)}')
                     pass
         # Upsert generic embedding metadata for recall
+        # NOTE: CLIP uses modality="image" (not "clip") by design.
+        # This allows CLIP and DINO embeddings to be queried together as visual content.
+        # To distinguish: check clip_id_map.sqlite or the specific FAISS index used.
+        # See docs/ARCHITECTURE_REFERENCE.md for full explanation.
         try:
             from goodq4all.steps.common.memory import upsert_embedding
             upsert_embedding(cfg, h, faiss_id, path, item.get("modality", "image") or "image")

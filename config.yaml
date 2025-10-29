@@ -189,3 +189,9 @@ knowledge_graph:
     temporal_linking: true
     spatial_linking: true
     semantic_linking: true
+config:
+  tools:
+    whisper_cli: L:/Tools/whisper/whisper-cli.exe
+    whisper_ggml_model: L:/Tools/whisper/ggml-large-v3.bin
+    ffmpeg: L:/Tools/ffmpeg/bin/ffmpeg.exe
+    tesseract: L:/Tools/tesseract/tesseract.exe

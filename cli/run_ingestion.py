@@ -679,7 +679,13 @@ def run(
             scene_overrides['min_scene_len_sec'] = min_scene_seconds
 
         stored_manifest = list_scenes_for_video(cfg, video_hash)
-        reuse_scenes = bool(stored_manifest.get('scenes'))
+        force_redetect = cfg.get('force_reprocess', False)
+        reuse_scenes = bool(stored_manifest.get('scenes')) and not force_redetect
+        
+        if force_redetect and stored_manifest.get('scenes'):
+            if VERBOSE:
+                typer.echo(f'[INFO] Force reprocess enabled - ignoring {len(stored_manifest.get("scenes", []))} stored scenes, will re-detect')
+        
         if reuse_scenes:
             stored_scenes = []
             for stored in stored_manifest['scenes']:

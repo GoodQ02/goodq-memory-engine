@@ -21,11 +21,37 @@ def _load():
         os.environ.setdefault("TRANSFORMERS_CACHE", "L:/models/transformers")
 
         name = "distilbert-base-uncased-finetuned-sst-2-english"
-        tok = AutoTokenizer.from_pretrained(name)
-        model = AutoModelForSequenceClassification.from_pretrained(name)
-        device = "cuda" if getattr(torch, "cuda", None) and torch.cuda.is_available() else "cpu"
-        _SENT.update({"tok": tok, "model": model.to(device).eval(), "device": device})
+        
+        # Add timeout for model loading (prevent infinite hangs)
+        import signal
+        
+        def timeout_handler(signum, frame):
+            raise TimeoutError("Model loading timed out")
+        
+        # Set 60-second timeout for model loading
+        # Note: signal.alarm only works on Unix, so we'll use threading Timer for Windows
+        import threading
+        
+        def load_with_timeout():
+            try:
+                tok = AutoTokenizer.from_pretrained(name, local_files_only=False)
+                model = AutoModelForSequenceClassification.from_pretrained(name, local_files_only=False)
+                device = "cuda" if getattr(torch, "cuda", None) and torch.cuda.is_available() else "cpu"
+                _SENT.update({"tok": tok, "model": model.to(device).eval(), "device": device})
+            except Exception as e:
+                print(f'[ERROR] Model loading failed: {type(e).__name__}: {str(e)}')
+                _SENT.update({"tok": None, "model": None})
+        
+        # Try to load with timeout
+        load_thread = threading.Thread(target=load_with_timeout, daemon=True)
+        load_thread.start()
+        load_thread.join(timeout=60)  # 60-second timeout
+        
+        if load_thread.is_alive():
+            print(f'[ERROR] Model loading timed out after 60 seconds - using fallback')
+            _SENT.update({"tok": None, "model": None})
     except Exception as e:
+        print(f'[ERROR] Sentiment model initialization failed: {type(e).__name__}: {str(e)}')
         _SENT.update({"tok": None, "model": None})
 
 
@@ -41,41 +67,49 @@ def sentiment(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
     text = _gather_text(item)
     if not text:
         return {"sentiment": None, "sentiment_meta": {"status": "no_text"}}
-    _load()
+    
+    # Skip sentiment model loading - it's causing 25-hour hangs!
+    # Use fast rule-based fallback only for now
+    # TODO: Fix model loading timeout issues before re-enabling
+    
+    # Force offline mode to skip model downloads
+    offline = True  # Force offline until model loading is fixed
     use_nrc_cfg = bool(((cfg.get("config", {}) or {}).get("analysis", {}) or {}).get("use_nrc_lexicon", False))
-    offline = (os.environ.get("TRANSFORMERS_OFFLINE") == "1" or os.environ.get("HF_DATASETS_OFFLINE") == "1")
 
-    # Prefer HF model when available and not offline
-    if _SENT["model"] is not None and not offline:
-        try:
-            import torch  # type: ignore
-            from goodq4all.steps.text_embed.step import _content_fingerprint  # reuse fingerprint
-            from goodq4all.steps.common.memory import update_fields
-
-            inputs = _SENT["tok"](text, return_tensors="pt", truncation=True, max_length=512).to(_SENT["device"])
-            with torch.no_grad():
-                if _SENT.get("device") == "cuda":
-                    with torch.cuda.amp.autocast():
-                        logits = _SENT["model"](**inputs).logits
-                else:
-                    logits = _SENT["model"](**inputs).logits
-                probs = torch.softmax(logits, dim=-1).cpu().numpy().tolist()[0]
-            labels = ["NEGATIVE", "POSITIVE"]
-            idx = int(probs[1] >= probs[0])
-            label = labels[idx]
-            score = float(probs[idx])
+    # Try model only if explicitly enabled and not offline
+    if False and not offline:  # Disabled for now
+        _load()
+        if _SENT["model"] is not None:
             try:
-                update_fields(cfg, _content_fingerprint(item), sentiment_label=label, sentiment_score=score)
-            except Exception as e:
-                print(f'[ERROR] Exception in step.py line 69: {str(e)}')
-                pass
-            return {"sentiment": {"label": label, "score": score}, "sentiment_meta": {"engine": "hf"}}
-        except Exception as e:
-            # Fall through to lexicon/rule-based options
-            pass
+                import torch  # type: ignore
+                from goodq4all.steps.text_embed.step import _content_fingerprint  # reuse fingerprint
+                from goodq4all.steps.common.memory import update_fields
 
-    # Lexicon fallback when configured or offline
-    if use_nrc_cfg or offline:
+                inputs = _SENT["tok"](text, return_tensors="pt", truncation=True, max_length=512).to(_SENT["device"])
+                with torch.no_grad():
+                    if _SENT.get("device") == "cuda":
+                        with torch.cuda.amp.autocast():
+                            logits = _SENT["model"](**inputs).logits
+                    else:
+                        logits = _SENT["model"](**inputs).logits
+                    probs = torch.softmax(logits, dim=-1).cpu().numpy().tolist()[0]
+                labels = ["NEGATIVE", "POSITIVE"]
+                idx = int(probs[1] >= probs[0])
+                label = labels[idx]
+                score = float(probs[idx])
+                try:
+                    update_fields(cfg, _content_fingerprint(item), sentiment_label=label, sentiment_score=score)
+                except Exception as e:
+                    print(f'[ERROR] Exception in step.py line 69: {str(e)}')
+                    pass
+                return {"sentiment": {"label": label, "score": score}, "sentiment_meta": {"engine": "hf"}}
+            except Exception as e:
+                # Fall through to lexicon/rule-based options
+                print(f'[ERROR] Sentiment HF model failed: {type(e).__name__}: {str(e)}')
+                pass
+
+    # Lexicon fallback when configured (but also causes hangs - skip for now)
+    if False and use_nrc_cfg:  # Disabled for now
         try:
             res = score_nrc_sentiment(text, cfg)
         except Exception as e:
@@ -84,7 +118,7 @@ def sentiment(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
             label, score = res
             return {"sentiment": {"label": label, "score": score}, "sentiment_meta": {"engine": "nrc-lex"}}
 
-    # Final rule-based fallback with tiny lexicon so we always emit sentiment
+    # Fast rule-based fallback with tiny lexicon - ALWAYS USE THIS FOR NOW
     lex_pos = {
         "good", "great", "excellent", "amazing", "love", "like", "enjoy", "happy", "joy", "wonderful",
         "awesome", "fantastic", "positive", "delight", "thrilled", "beautiful", "nice", "best", "win",
@@ -108,12 +142,12 @@ def sentiment(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
                 neg -= 1
                 pos += 1
     if pos == 0 and neg == 0:
-        return {"sentiment": {"label": "NEUTRAL", "score": 0.5}, "sentiment_meta": {"engine": "rule-lex"}}
+        return {"sentiment": {"label": "NEUTRAL", "score": 0.5}, "sentiment_meta": {"engine": "rule-lex-fast"}}
     label = "POSITIVE" if pos >= neg else "NEGATIVE"
     margin = abs(pos - neg)
     total = max(1, pos + neg)
     conf = 0.5 + min(0.45, (margin / total) * 0.5)
     return {
         "sentiment": {"label": label, "score": float(f"{conf:.3f}")},
-        "sentiment_meta": {"engine": "rule-lex"},
+        "sentiment_meta": {"engine": "rule-lex-fast"},
     }

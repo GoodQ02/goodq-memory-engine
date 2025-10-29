@@ -6,6 +6,17 @@ import hashlib
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
+# Import GoodQ mission logger
+try:
+    from lib.goodq_logger import get_goodq_logger
+    from lib.mission_components import get_component_name, format_duration
+    MISSION_LOGGER_AVAILABLE = True
+except ImportError:
+    MISSION_LOGGER_AVAILABLE = False
+    get_goodq_logger = None
+    get_component_name = None
+    format_duration = None
+
 
 def _fingerprint_item(item: Optional[Dict[str, Any]]) -> str:
     try:
@@ -47,6 +58,32 @@ def log_step_run(
     *,
     extra: Optional[Dict[str, Any]] = None,
 ) -> None:
+    """
+    Log step execution with Q Branch mission styling
+    Maintains CSV/JSONL compatibility while adding mission-styled console output
+    """
+    # Mission-styled console logging (if available)
+    if MISSION_LOGGER_AVAILABLE:
+        try:
+            component = get_component_name(step_name)
+            logger = get_goodq_logger(step_name, component=component)
+            
+            duration_s = duration_ms / 1000.0
+            duration_str = format_duration(duration_s)
+            
+            if status == "ok":
+                logger.mission_complete(step_name, duration=duration_s)
+            elif status == "skipped":
+                reason = (extra or {}).get('reason', 'unknown')
+                logger.info(f"Operation bypassed - {reason} [{duration_str}]")
+            elif status == "error":
+                logger.error(f"Operation failed - {error[:100] if error else 'Unknown error'} [{duration_str}]")
+            else:
+                logger.info(f"Status: {status} [{duration_str}]")
+        except Exception:
+            pass  # Don't let mission logging break actual logging
+    
+    # Original CSV/JSONL logging (preserved for compatibility)
     try:
         log_dir = (cfg.get("paths", {}) or {}).get("log_dir") or ""
         if not log_dir:

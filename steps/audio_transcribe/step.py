@@ -26,6 +26,7 @@ def _load_fw_model(model_id: str, device: str, compute_type: str) -> Any:
 
 
 def _audio_duration(path: str) -> Optional[float]:
+    """Get audio duration using soundfile or librosa fallback."""
     try:
         import soundfile as sf  # type: ignore
 
@@ -34,15 +35,26 @@ def _audio_duration(path: str) -> Optional[float]:
             return float(info.duration)
         if getattr(info, "frames", None) and getattr(info, "samplerate", None):
             return float(info.frames) / float(info.samplerate)
-    except Exception as e:
-        print(f'[ERROR] Exception in step.py line 37: {str(e)}')
+    except ImportError:
+        # soundfile not available, try librosa
         pass
+    except Exception as e:
+        print(f'[DEBUG] soundfile failed for {path}: {type(e).__name__}: {str(e)}')
+        pass
+    
     try:
         import librosa  # type: ignore
-
         return float(librosa.get_duration(filename=path))
+    except ImportError:
+        print(f'[ERROR] Neither soundfile nor librosa available for duration detection')
+        return None
     except Exception as e:
-        print(f'[WARN] _audio_duration returning None')
+        print(f'[ERROR] Audio duration detection failed for {path}')
+        print(f'[ERROR] Exception: {type(e).__name__}: {str(e)}')
+        if os.path.isfile(path):
+            print(f'[ERROR] File exists, size: {os.path.getsize(path)} bytes')
+        else:
+            print(f'[ERROR] File does not exist: {path}')
         return None
 
 
@@ -87,10 +99,15 @@ def _build_chunks(item: Dict[str, Any], cfg: Dict[str, Any], duration: Optional[
 
 
 def _slice_to_wav(src_path: str, start: float, end: float, ffmpeg_path: Optional[str]) -> Optional[str]:
+    """Slice audio file from start to end time, using soundfile or ffmpeg fallback."""
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
     tmp_path = tmp.name
     tmp.close()
     duration = max(0.1, end - start)
+    
+    # Check if debug mode is enabled
+    debug_mode = os.environ.get('GOODQ_DEBUG_KEEP_TEMP', '').lower() == 'true'
+    
     try:
         import soundfile as sf  # type: ignore
 
@@ -103,16 +120,28 @@ def _slice_to_wav(src_path: str, start: float, end: float, ffmpeg_path: Optional
         if data.size == 0:
             raise ValueError("empty slice")
         sf.write(tmp_path, data, sr)
+        if debug_mode:
+            print(f'[DEBUG] Sliced audio with soundfile: {tmp_path} ({data.size} samples)')
         return tmp_path
+    except ImportError:
+        # soundfile not available, try ffmpeg
+        if debug_mode:
+            print(f'[DEBUG] soundfile not available, trying ffmpeg')
+        pass
     except Exception as e:
+        print(f'[DEBUG] soundfile slicing failed: {type(e).__name__}: {str(e)}')
         if ffmpeg_path is None:
+            print(f'[ERROR] Audio slicing failed: {type(e).__name__}: {str(e)}')
+            print(f'[ERROR] soundfile unavailable and no ffmpeg path configured')
+            print(f'[ERROR] Source: {src_path}, slice: {start:.2f}s-{end:.2f}s')
             try:
                 os.remove(tmp_path)
-            except Exception as e:
-                print(f'[ERROR] Exception in step.py line 111: {str(e)}')
+            except:
                 pass
-            print(f'[WARN] _slice_to_wav returning None')
             return None
+    
+    # Try ffmpeg fallback
+    if ffmpeg_path:
         try:
             cmd = [
                 ffmpeg_path,
@@ -128,16 +157,39 @@ def _slice_to_wav(src_path: str, start: float, end: float, ffmpeg_path: Optional
                 src_path,
                 tmp_path,
             ]
-            subprocess.run(cmd, check=True)
+            if debug_mode:
+                print(f'[DEBUG] Running ffmpeg: {" ".join(cmd)}')
+            result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+            
+            # Verify output file was created
+            if not os.path.isfile(tmp_path) or os.path.getsize(tmp_path) == 0:
+                raise ValueError(f"ffmpeg produced empty or missing file")
+            
+            if debug_mode:
+                print(f'[DEBUG] ffmpeg slice created: {tmp_path} ({os.path.getsize(tmp_path)} bytes)')
             return tmp_path
+        except subprocess.CalledProcessError as e:
+            print(f'[ERROR] ffmpeg slicing failed with code {e.returncode}')
+            print(f'[ERROR] Command: {" ".join(cmd)}')
+            print(f'[ERROR] Stderr: {e.stderr}')
+            print(f'[ERROR] Source: {src_path}, slice: {start:.2f}s-{end:.2f}s')
         except Exception as e:
-            try:
+            print(f'[ERROR] Audio slicing failed: {type(e).__name__}: {str(e)}')
+            print(f'[ERROR] Source: {src_path}, slice: {start:.2f}s-{end:.2f}s')
+    else:
+        print(f'[ERROR] Audio slicing failed: no ffmpeg available')
+        print(f'[ERROR] Source: {src_path}, slice: {start:.2f}s-{end:.2f}s')
+    
+    # Clean up on failure
+    try:
+        if os.path.isfile(tmp_path):
+            if debug_mode:
+                print(f'[DEBUG] Keeping failed temp file for inspection: {tmp_path}')
+            else:
                 os.remove(tmp_path)
-            except Exception as e:
-                print(f'[ERROR] Exception in step.py line 136: {str(e)}')
-                pass
-            print(f'[WARN] _slice_to_wav returning None')
-            return None
+    except:
+        pass
+    return None
 
 
 def _transcribe_chunk_whisper_cli(chunk_path: str, offset: float, whisper_cli: str, whisper_model: str) -> Optional[Dict[str, Any]]:
@@ -163,14 +215,31 @@ def _transcribe_chunk_whisper_cli(chunk_path: str, offset: float, whisper_cli: s
             try:
                 with open(json_path, "r", encoding="utf-8") as f:
                     data = _json.load(f)
-                iterable = data if isinstance(data, list) else data.get("segments") or []
+                # whisper.cpp uses "transcription" key, OpenAI API uses "segments"
+                if isinstance(data, list):
+                    iterable = data
+                elif "transcription" in data:
+                    iterable = data["transcription"]
+                elif "segments" in data:
+                    iterable = data["segments"]
+                else:
+                    iterable = []
+                
                 for seg in iterable:
-                    start = float(seg.get("start", 0.0) or 0.0) + offset
-                    end = float(seg.get("end", 0.0) or 0.0) + offset
+                    # whisper.cpp format: {"offsets": {"from": ms, "to": ms}, "text": "..."}
+                    # OpenAI format: {"start": sec, "end": sec, "text": "..."}
+                    if "offsets" in seg:
+                        # Convert milliseconds to seconds
+                        start = float(seg["offsets"].get("from", 0)) / 1000.0 + offset
+                        end = float(seg["offsets"].get("to", 0)) / 1000.0 + offset
+                    else:
+                        start = float(seg.get("start", 0.0) or 0.0) + offset
+                        end = float(seg.get("end", 0.0) or 0.0) + offset
                     text = seg.get("text", "") or ""
                     segments.append({"start": start, "end": end, "text": text})
                 transcript = " ".join(s.get("text", "").strip() for s in segments if s.get("text")) or None
             except Exception as e:
+                print(f'[ERROR] JSON parsing failed: {str(e)}')
                 segments = []
         if transcript is None and os.path.isfile(txt_path):
             try:
@@ -184,14 +253,25 @@ def _transcribe_chunk_whisper_cli(chunk_path: str, offset: float, whisper_cli: s
             "engine": "whisper.cpp",
         }
     except Exception as e:
-        print(f'[WARN] _transcribe_chunk_whisper_cli returning None')
+        print(f'[ERROR] Whisper CLI transcription failed: {type(e).__name__}: {str(e)}')
+        print(f'[ERROR] Chunk: {chunk_path}')
+        if os.path.isfile(chunk_path):
+            print(f'[ERROR] Chunk size: {os.path.getsize(chunk_path)} bytes')
+        import traceback
+        print(f'[DEBUG] Traceback: {traceback.format_exc()}')
         return None
     finally:
+        # Clean up temp files (but keep in debug mode for inspection)
+        debug_mode = os.environ.get('GOODQ_DEBUG_KEEP_TEMP', '').lower() == 'true'
         for ext in (".json", ".txt", ".srt", ".tsv"):
             try:
-                os.remove(out_prefix + ext)
-            except Exception as e:
-                print(f'[ERROR] Exception in step.py line 193: {str(e)}')
+                fpath = out_prefix + ext
+                if os.path.isfile(fpath):
+                    if debug_mode:
+                        print(f'[DEBUG] Keeping whisper output for inspection: {fpath}')
+                    else:
+                        os.remove(fpath)
+            except:
                 pass
 
 
@@ -410,10 +490,15 @@ def audio_transcribe(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
             }
             chunk_reports.append(chunk_entry)
         finally:
+            # Clean up temp chunk file (but keep in debug mode)
+            debug_mode = os.environ.get('GOODQ_DEBUG_KEEP_TEMP', '').lower() == 'true'
             try:
-                os.remove(tmp_chunk)
-            except Exception as e:
-                print(f'[ERROR] Exception in step.py line 415: {str(e)}')
+                if os.path.isfile(tmp_chunk):
+                    if debug_mode:
+                        print(f'[DEBUG] Keeping chunk for inspection: {tmp_chunk}')
+                    else:
+                        os.remove(tmp_chunk)
+            except:
                 pass
 
     normalized_segments: List[Dict[str, Any]] = []

@@ -37,7 +37,7 @@ def run_conda_step(env_name: str, step_name: str, item: Dict[str, Any], cfg: Dic
         env.setdefault("HF_HOME", "L:/models")
         env.setdefault("TORCH_HOME", "L:/models")
         env.setdefault("TRANSFORMERS_CACHE", "L:/models/transformers")
-        env.setdefault("HF_DATASETS_CACHE", "L:/models/datasets")
+        env.setdefault("HF_DATASETS_CACHE", "L:/models/hf/datasets")  # Fixed: correct path
         env.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
         
         cmd = [

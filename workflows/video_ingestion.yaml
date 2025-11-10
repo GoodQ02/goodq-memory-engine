@@ -1,0 +1,182 @@
+name: video_ingestion
+description: Complete video ingestion and analysis pipeline with LLM integration
+version: 2.0
+
+steps:
+  - name: scene_detection
+    agent: scene_detector
+    description: Detect scene boundaries in video
+    inputs:
+      video_path: $video_path
+    outputs:
+      - scenes
+      - scene_count
+    required: true
+    timeout_seconds: 300
+    retry_on_failure: true
+    max_retries: 2
+
+  - name: frame_extraction
+    agent: frame_extractor
+    description: Extract keyframes from detected scenes
+    inputs:
+      video_path: $video_path
+      scenes: $scenes
+    outputs:
+      - frames
+      - frame_paths
+    required: true
+    timeout_seconds: 300
+
+  - name: object_detection
+    agent: object_detector
+    description: Detect objects in extracted frames
+    inputs:
+      frames: $frames
+      frame_paths: $frame_paths
+    outputs:
+      - objects
+      - object_detections
+    required: false
+    timeout_seconds: 600
+    fallback_on_error: skip
+
+  - name: face_detection
+    agent: face_detector
+    description: Detect and recognize faces
+    inputs:
+      frames: $frames
+      frame_paths: $frame_paths
+    outputs:
+      - faces
+      - face_embeddings
+    required: false
+    timeout_seconds: 600
+
+  - name: audio_transcription
+    agent: audio_transcriber
+    description: Transcribe audio to text
+    inputs:
+      video_path: $video_path
+    outputs:
+      - transcription
+      - segments
+      - speakers
+    required: true
+    timeout_seconds: 900
+    retry_on_failure: true
+
+  - name: emotion_analysis
+    agent: emotion_analyzer
+    description: Analyze emotions from faces and audio
+    inputs:
+      video_path: $video_path
+      faces: $faces
+      transcription: $transcription
+    outputs:
+      - emotions
+      - emotion_timeline
+    required: false
+    timeout_seconds: 600
+
+  - name: scene_summarization
+    agent: llm_summarizer
+    description: Generate LLM summaries for each scene
+    inputs:
+      task: summarize_scene
+      scenes: $scenes
+      objects: $objects
+      faces: $faces
+      transcription: $transcription
+    outputs:
+      - scene_summaries
+    required: true
+    timeout_seconds: 600
+    llm_enabled: true
+
+  - name: video_summarization
+    agent: llm_summarizer
+    description: Generate overall video summary
+    inputs:
+      task: summarize_video
+      scene_summaries: $scene_summaries
+      transcription: $transcription
+      video_info: $video_info
+    outputs:
+      - video_summary
+    required: true
+    timeout_seconds: 300
+    llm_enabled: true
+
+  - name: entity_extraction
+    agent: llm_summarizer
+    description: Extract named entities using LLM
+    inputs:
+      task: extract_entities
+      text: $transcription
+      context: $video_summary
+    outputs:
+      - entities
+    required: true
+    timeout_seconds: 300
+    llm_enabled: true
+
+  - name: relationship_extraction
+    agent: llm_summarizer
+    description: Extract relationships between entities
+    inputs:
+      task: extract_relationships
+      entities: $entities
+      context: $video_summary
+    outputs:
+      - relationships
+    required: true
+    timeout_seconds: 300
+    llm_enabled: true
+
+  - name: emotion_arc_analysis
+    agent: llm_summarizer
+    description: Analyze emotional arc of video
+    inputs:
+      task: analyze_emotion_arc
+      scenes: $scene_summaries
+      emotions_by_scene: $emotion_timeline
+      transcription: $transcription
+    outputs:
+      - emotional_arc
+    required: false
+    timeout_seconds: 300
+    llm_enabled: true
+
+  - name: knowledge_graph_update
+    agent: kg_updater
+    description: Update knowledge graph with all extracted data
+    inputs:
+      video_path: $video_path
+      scenes: $scenes
+      objects: $objects
+      faces: $faces
+      transcription: $transcription
+      emotions: $emotions
+      entities: $entities
+      relationships: $relationships
+      video_summary: $video_summary
+      scene_summaries: $scene_summaries
+      emotional_arc: $emotional_arc
+    outputs:
+      - kg_update_status
+      - nodes_created
+      - edges_created
+    required: true
+    timeout_seconds: 300
+
+error_handling:
+  strategy: self_heal_then_continue
+  max_heal_attempts: 3
+  fallback_to_manual: true
+  log_all_errors: true
+
+monitoring:
+  health_check_interval: 60
+  report_progress: true
+  log_level: INFO

@@ -74,16 +74,34 @@ paths:
   csv_path: L:/goodq4all/logs/system_metrics.csv
   nas_path: G:/Logs
   config_dir: L:/goodq4all/configs
+  faiss_index_path: L:/goodq4all/data/faiss_indices/text/faiss_text_index.bin
+  faiss_clip_path: L:/goodq4all/data/faiss_indices/clip/faiss_clip_index.bin
+  faiss_dino_path: L:/goodq4all/data/faiss_indices/dino/faiss_dino_index.bin
+  faiss_audio_path: L:/goodq4all/data/faiss_indices/audio/faiss_audio_index.bin
+  clip_id_map_db: L:/goodq4all/data/databases/clip_id_map.sqlite
+  dino_id_map_db: L:/goodq4all/data/databases/dino_id_map.sqlite
+  clap_id_map_db: L:/goodq4all/data/databases/clap_id_map.sqlite
 llm:
   api_url: http://localhost:1234/v1/chat/completions
   model_id: LM_STUDIO_GOODQ
+  enabled: true
+  timeout: 30
+  features:
+    scene_summarization: true
+    video_summarization: true
+    relationship_extraction: true
+    emotion_arc_analysis: true
+    self_healing: false
+  temperature: 0.3
+  max_tokens: 200
+  batch_size: 5
 tts:
-  elevenlabs_voice_id: 4YYIPFl9wE5c4L2eu2Gb
+  elevenlabs_voice_id: ${ELEVENLABS_VOICE_ID}
   piper_voice: joe
   last_used_voice: moviephone
 home_assistant:
   url: http://192.168.0.154:8123
-  token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiI0NTAzNDU1OWFlNGM0YmQ5ODhmNmVlYjhlMjI1YWI3ZCIsImlhdCI6MTc1MTA4NjgzMSwiZXhwIjoyMDY2NDQ2ODMxfQ.0bFd5MGzXEsQmZBzO3x2PIqSZ__Rex7t9dl_t5ui9KI
+  token: ${HA_TOKEN}
 system:
   cpu_model: Intel Core i7-13700KF
   gpu_model: NVIDIA GeForce RTX 4070 Ti
@@ -105,10 +123,17 @@ devices:
     Wi-Fi 6E fallback
   config: L:/goodq4all/config/config.yaml
 video:
-  scene_detection:
-    threshold: 27.0
-    min_scene_len: 1.0
+  scene_detect:  # NOTE: Code uses 'scene_detect' not 'scene_detection'
+    threshold: 30.0
+    min_scene_len_sec: 300.0  # 5 minutes minimum per scene
     adaptive: true
+    entity_refine: false  # DISABLED: This was causing 2-second scene splits!
+    entity_min_duration: 300.0  # If re-enabled, require 5min segments
+  scene_detection:  # Keep for backwards compatibility
+    threshold: 30.0
+    min_scene_len_sec: 300.0
+    adaptive: true
+    entity_refine: false
   frame_extraction:
     method: scene_middle
     max_frames_per_scene: 1

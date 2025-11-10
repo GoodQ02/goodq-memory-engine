@@ -1,0 +1,33 @@
+========================================
+GOODQ CURRENT STATUS CHECK
+========================================
+
+API Server:      ✓ RUNNING
+                 http://localhost:3000
+
+Database:        ✓ EXISTS
+  - Scenes:      102
+  - Embeddings:  277
+  - Entities:    59
+
+Watchdog:        ✗ NOT RUNNING
+
+Inbox Files:     2 waiting
+
+========================================
+HOW TO ACCESS
+========================================
+
+1. Web UI:       http://localhost:3000
+2. Dashboard:    http://localhost:3000/dashboard.html
+3. API Docs:     http://localhost:3000/docs
+
+========================================
+QUICK ACTIONS
+========================================
+
+Start Everything:     START_FULL_GOODQ.bat
+Start API Only:       LAUNCH_WEB_INTERFACE_FIXED_V2.bat
+Start Watchdog:       START_WATCHDOG.bat
+
+========================================

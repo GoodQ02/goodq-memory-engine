@@ -5,6 +5,13 @@ import os
 import sys
 from typing import Any, Dict, List
 import time
+from pathlib import Path
+
+# Add PARENT of repo root to Python path so "goodq4all.steps" can be imported
+REPO_ROOT = Path(__file__).resolve().parents[1]
+PARENT_DIR = REPO_ROOT.parent
+if str(PARENT_DIR) not in sys.path:
+    sys.path.insert(0, str(PARENT_DIR))
 
 # Ensure per-env site-packages take precedence; ignore user site packages
 os.environ.setdefault('PYTHONNOUSERSITE', '0')
@@ -175,8 +182,13 @@ def main() -> None:
             overrides = json.load(f)
 
     if args.cfg and os.path.isfile(args.cfg):
-        with open(args.cfg, "r", encoding="utf-8") as f:
-            cfg = json.load(f)
+        # Try JSON first, fallback to YAML loading
+        try:
+            with open(args.cfg, "r", encoding="utf-8") as f:
+                cfg = json.load(f)
+        except json.JSONDecodeError:
+            # Not JSON, load using config_loader which handles YAML
+            cfg = load_cfg(overrides)
     else:
         cfg = load_cfg(overrides)
     # Measure and log duration

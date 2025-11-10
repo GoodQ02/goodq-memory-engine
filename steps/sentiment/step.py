@@ -19,37 +19,16 @@ def _load():
         os.environ.setdefault("HF_HOME", "L:/models")
         os.environ.setdefault("TORCH_HOME", "L:/models")
         os.environ.setdefault("TRANSFORMERS_CACHE", "L:/models/transformers")
+        # Disable hf_transfer to avoid dependency issues
+        os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "0"
 
         name = "distilbert-base-uncased-finetuned-sst-2-english"
         
-        # Add timeout for model loading (prevent infinite hangs)
-        import signal
-        
-        def timeout_handler(signum, frame):
-            raise TimeoutError("Model loading timed out")
-        
-        # Set 60-second timeout for model loading
-        # Note: signal.alarm only works on Unix, so we'll use threading Timer for Windows
-        import threading
-        
-        def load_with_timeout():
-            try:
-                tok = AutoTokenizer.from_pretrained(name, local_files_only=False)
-                model = AutoModelForSequenceClassification.from_pretrained(name, local_files_only=False)
-                device = "cuda" if getattr(torch, "cuda", None) and torch.cuda.is_available() else "cpu"
-                _SENT.update({"tok": tok, "model": model.to(device).eval(), "device": device})
-            except Exception as e:
-                print(f'[ERROR] Model loading failed: {type(e).__name__}: {str(e)}')
-                _SENT.update({"tok": None, "model": None})
-        
-        # Try to load with timeout
-        load_thread = threading.Thread(target=load_with_timeout, daemon=True)
-        load_thread.start()
-        load_thread.join(timeout=60)  # 60-second timeout
-        
-        if load_thread.is_alive():
-            print(f'[ERROR] Model loading timed out after 60 seconds - using fallback')
-            _SENT.update({"tok": None, "model": None})
+        # Direct loading without timeout - models are cached now
+        tok = AutoTokenizer.from_pretrained(name)
+        model = AutoModelForSequenceClassification.from_pretrained(name)
+        device = "cuda" if getattr(torch, "cuda", None) and torch.cuda.is_available() else "cpu"
+        _SENT.update({"tok": tok, "model": model.to(device).eval(), "device": device})
     except Exception as e:
         print(f'[ERROR] Sentiment model initialization failed: {type(e).__name__}: {str(e)}')
         _SENT.update({"tok": None, "model": None})
@@ -68,16 +47,12 @@ def sentiment(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
     if not text:
         return {"sentiment": None, "sentiment_meta": {"status": "no_text"}}
     
-    # Skip sentiment model loading - it's causing 25-hour hangs!
-    # Use fast rule-based fallback only for now
-    # TODO: Fix model loading timeout issues before re-enabling
-    
-    # Force offline mode to skip model downloads
-    offline = True  # Force offline until model loading is fixed
+    # Re-enabled sentiment model now that it's cached and HF_TRANSFER is disabled
+    offline = (os.environ.get("TRANSFORMERS_OFFLINE") == "1" or os.environ.get("HF_DATASETS_OFFLINE") == "1")
     use_nrc_cfg = bool(((cfg.get("config", {}) or {}).get("analysis", {}) or {}).get("use_nrc_lexicon", False))
 
-    # Try model only if explicitly enabled and not offline
-    if False and not offline:  # Disabled for now
+    # Try model first when available and not offline
+    if not offline:
         _load()
         if _SENT["model"] is not None:
             try:
@@ -108,7 +83,7 @@ def sentiment(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
                 print(f'[ERROR] Sentiment HF model failed: {type(e).__name__}: {str(e)}')
                 pass
 
-    # Lexicon fallback when configured (but also causes hangs - skip for now)
+    # Lexicon fallback when configured or HF failed
     if False and use_nrc_cfg:  # Disabled for now
         try:
             res = score_nrc_sentiment(text, cfg)
@@ -118,7 +93,7 @@ def sentiment(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
             label, score = res
             return {"sentiment": {"label": label, "score": score}, "sentiment_meta": {"engine": "nrc-lex"}}
 
-    # Fast rule-based fallback with tiny lexicon - ALWAYS USE THIS FOR NOW
+    # Fast rule-based fallback with tiny lexicon
     lex_pos = {
         "good", "great", "excellent", "amazing", "love", "like", "enjoy", "happy", "joy", "wonderful",
         "awesome", "fantastic", "positive", "delight", "thrilled", "beautiful", "nice", "best", "win",

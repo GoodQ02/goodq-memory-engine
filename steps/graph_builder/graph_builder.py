@@ -60,7 +60,7 @@ def build_knowledge_graph(
             # Extract and add entities from various sources
             _process_objects(kg, scene, media_id, start_time)
             _process_faces(kg, scene, media_id, start_time)
-            _process_text(kg, scene, media_id, start_time)
+            _process_text(kg, scene, media_id, start_time, config)
             _process_audio(kg, scene, media_id, start_time)
             _process_emotions(kg, scene, media_id, start_time)
             _process_locations(kg, scene, media_id, start_time)
@@ -85,6 +85,10 @@ def build_knowledge_graph(
         # Build semantic relationships
         _build_semantic_edges(kg)
         
+        # Analyze emotional arc across scenes (LLM-powered)
+        if config.get('llm', {}).get('enabled', False):
+            _analyze_and_add_emotional_arc(kg, scenes, analysis_results.get('media_id'), config)
+        
         # Get statistics
         stats = kg.get_statistics()
         
@@ -99,7 +103,8 @@ def build_knowledge_graph(
 
 def _process_objects(kg, scene: Dict, media_id: int, timestamp: float):
     """Extract and add object entities"""
-    detections = scene.get('detections', [])
+    # Handle both 'detections' and 'objects' fields
+    detections = scene.get('detections', []) or scene.get('objects', [])
     
     for det in detections:
         label = det.get('label', 'unknown')
@@ -150,7 +155,7 @@ def _process_faces(kg, scene: Dict, media_id: int, timestamp: float):
         )
 
 
-def _process_text(kg, scene: Dict, media_id: int, timestamp: float):
+def _process_text(kg, scene: Dict, media_id: int, timestamp: float, cfg: Dict[str, Any] = None):
     """Extract and add text/concept entities"""
     # OCR text
     ocr_text = scene.get('ocr_text', '')
@@ -186,6 +191,10 @@ def _process_text(kg, scene: Dict, media_id: int, timestamp: float):
             timestamp=timestamp
         )
         kg.link_node_to_media(node_id, media_id, confidence=0.9)
+    
+    # LLM-enhanced entity extraction
+    if cfg and cfg.get('llm', {}).get('enabled', False):
+        _process_llm_entities(kg, scene, media_id, timestamp, cfg)
 
 
 def _process_audio(kg, scene: Dict, media_id: int, timestamp: float):
@@ -411,3 +420,116 @@ def _extract_mentions(text: str) -> List[str]:
             mentions.append(word)
     
     return list(set(mentions))
+
+
+def _process_llm_entities(kg, scene: Dict, media_id: int, timestamp: float, cfg: Dict[str, Any]):
+    """Use LLM to extract and enrich entities from scene data"""
+    try:
+        from .llm_enrichment import extract_entities_with_llm, generate_scene_narrative
+        
+        # Gather text for entity extraction
+        text_sources = []
+        
+        audio = scene.get('audio', {})
+        if audio.get('transcript'):
+            text_sources.append(audio['transcript'])
+        
+        if scene.get('caption'):
+            text_sources.append(scene['caption'])
+        
+        if scene.get('ocr_text'):
+            text_sources.append(scene['ocr_text'])
+        
+        combined_text = " ".join(text_sources)
+        
+        if not combined_text or len(combined_text) < 20:
+            return
+        
+        # Build context for LLM
+        context = {
+            'objects': scene.get('objects', []),
+            'emotions': scene.get('emotions', []),
+            'sentiment': scene.get('sentiment', {}),
+            'audio': audio
+        }
+        
+        # Extract entities using LLM
+        llm_entities = extract_entities_with_llm(combined_text, context, cfg)
+        
+        # Add extracted entities to knowledge graph
+        for entity_type, entities in llm_entities.items():
+            for entity in entities:
+                name = entity.get('name', '').strip()
+                if not name:
+                    continue
+                
+                confidence = entity.get('confidence', 0.7)
+                
+                # Map entity types to node types
+                node_type_map = {
+                    'people': 'person',
+                    'locations': 'location',
+                    'objects': 'object',
+                    'events': 'event',
+                    'topics': 'topic',
+                    'temporal_references': 'temporal_ref'
+                }
+                
+                node_type = node_type_map.get(entity_type, 'entity')
+                
+                # Add node with LLM-extracted metadata
+                properties = {k: v for k, v in entity.items() if k not in ['name', 'confidence']}
+                properties['llm_extracted'] = True
+                
+                node_id = kg.add_node(
+                    node_type=node_type,
+                    name=name,
+                    properties=properties,
+                    timestamp=timestamp
+                )
+                
+                # Link to media
+                kg.link_node_to_media(
+                    node_id=node_id,
+                    media_id=media_id,
+                    confidence=confidence,
+                    context={'extraction_method': 'llm', 'timestamp': timestamp}
+                )
+        
+        # Generate and store scene narrative
+        narrative = generate_scene_narrative(scene, cfg)
+        if narrative:
+            node_id = kg.add_node(
+                node_type='narrative',
+                name='scene_narrative',
+                properties={'content': narrative, 'llm_generated': True},
+                timestamp=timestamp
+            )
+            kg.link_node_to_media(node_id, media_id, confidence=0.9)
+        
+        logger.info(f"LLM enrichment added {sum(len(v) for v in llm_entities.values())} entities")
+        
+    except ImportError:
+        logger.warning("LLM enrichment module not available")
+    except Exception as e:
+        logger.error(f"LLM entity processing failed: {e}")
+
+
+def _analyze_and_add_emotional_arc(kg, scenes: List[Dict], video_media_id: Optional[int], cfg: Dict[str, Any]):
+    """Analyze emotional arc across all scenes and add to knowledge graph"""
+    try:
+        from .emotion_arc_analyzer import analyze_emotional_arc, add_emotional_arc_to_kg
+        
+        # Analyze emotional arc
+        arc_analysis = analyze_emotional_arc(scenes, cfg)
+        
+        if arc_analysis and video_media_id:
+            # Add to knowledge graph
+            add_emotional_arc_to_kg(kg, arc_analysis, video_media_id, cfg)
+        elif arc_analysis:
+            logger.warning("Emotional arc generated but no video_media_id provided")
+        
+    except ImportError:
+        logger.warning("Emotion arc analyzer module not available")
+    except Exception as e:
+        logger.error(f"Emotional arc analysis failed: {e}")

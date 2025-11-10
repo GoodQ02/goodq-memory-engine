@@ -118,7 +118,10 @@ def text_embed(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
         faiss.write_index(index, index_path)
         # persist mapping for recall/linking
         try:
-            upsert_embedding(cfg, _content_fingerprint(item), (ids or [None])[0], item.get("source_path", ""), item.get("modality", ""))
+            scene_id = item.get("scene_id") or item.get("scene_index")
+            if scene_id is not None and not isinstance(scene_id, str):
+                scene_id = f"scene_{int(scene_id):04d}"
+            upsert_embedding(cfg, _content_fingerprint(item), (ids or [None])[0], item.get("source_path", ""), item.get("modality", ""), scene_id=scene_id)
         except Exception as e:
             print(f'[ERROR] Exception in step.py line 120: {str(e)}')
             pass

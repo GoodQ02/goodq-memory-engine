@@ -120,7 +120,10 @@ def audio_embed_clap(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
         # Upsert generic embedding metadata for recall
         try:
             from goodq4all.steps.common.memory import upsert_embedding
-            upsert_embedding(cfg, h, faiss_id, path, item.get("modality", "audio") or "audio")
+            scene_id = item.get("scene_id") or item.get("scene_index")
+            if scene_id is not None and not isinstance(scene_id, str):
+                scene_id = f"scene_{int(scene_id):04d}"
+            upsert_embedding(cfg, h, faiss_id, path, item.get("modality", "audio") or "audio", scene_id=scene_id)
         except Exception as e:
             print(f'[ERROR] Exception in step.py line 124: {str(e)}')
             pass

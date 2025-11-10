@@ -4,30 +4,55 @@ import hashlib
 import json
 import os
 import subprocess
+import sys
 import tempfile
 import time
 import uuid
 from datetime import datetime
 from pathlib import Path
 
+# Add repo root to path for imports
+REPO_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO_ROOT))
+
 import re
 import typer
 
-from goodq4all.steps.common.config_loader import load_configs
-from goodq4all.steps.common.memory import ensure_scene, register_scene_bundle, scene_has_materialized, get_scene_meta, list_scenes_for_video
-from goodq4all.steps.common.tag_utils import canonicalize_taxonomy
-from goodq4all.steps.common.tool_paths import resolve_ffmpeg
-from goodq4all.steps.common.step_logger import log_step_run
+from steps.common.config_loader import load_configs
+from steps.common.memory import ensure_scene, register_scene_bundle, scene_has_materialized, get_scene_meta, list_scenes_for_video
+from steps.common.tag_utils import canonicalize_taxonomy
+from steps.common.tool_paths import resolve_ffmpeg, resolve_conda
+from steps.common.step_logger import log_step_run
+
+# Progress tracking
+try:
+    from steps.common.progress_tracker import get_tracker, step_context, update_step
+    PROGRESS_TRACKING_AVAILABLE = True
+except ImportError:
+    PROGRESS_TRACKING_AVAILABLE = False
+    # Fallback stubs
+    class DummyTracker:
+        def step_context(self, *args, **kwargs):
+            from contextlib import contextmanager
+            @contextmanager
+            def dummy():
+                yield self
+            return dummy()
+    def get_tracker():
+        return DummyTracker()
+    def update_step(*args, **kwargs):
+        pass
+    step_context = lambda *args, **kwargs: DummyTracker().step_context(*args, **kwargs)
 
 # Knowledge graph integration
 try:
     from lib.knowledge_graph import KnowledgeGraph
+    from lib.kg_realtime_integration import update_kg_for_scene, build_scene_relationships
     KNOWLEDGE_GRAPH_AVAILABLE = True
 except ImportError:
     KNOWLEDGE_GRAPH_AVAILABLE = False
 
 APP = typer.Typer(help='Scene-first ingestion orchestrator for GoodQ')
-REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_MODELS_DIR = Path(os.environ.get('HF_HOME', 'L:/models'))
 
 # Populated by CLI options at runtime
@@ -150,8 +175,26 @@ def _process_keyframe_entities(kg: Any, keyframe: Dict[str, Any], media_id: int,
                 label = det.get('label', det.get('class'))
                 confidence = det.get('confidence', det.get('score', 0.0))
                 if label and confidence > 0.3:
+                    bbox = det.get('bbox', [])
                     entity_id = kg.add_node('object', label, {'confidence': confidence}, timestamp)
-                    kg.link_node_to_media(entity_id, media_id, confidence)
+                    kg.link_node_to_media(entity_id, media_id, confidence, {'bbox': bbox})
+    
+    # Faces detected
+    faces = keyframe.get('faces', [])
+    if isinstance(faces, list):
+        for idx, face in enumerate(faces):
+            if isinstance(face, dict):
+                confidence = face.get('confidence', face.get('score', 1.0))
+                bbox = face.get('bbox', [])
+                face_id = face.get('identity', f'unknown_{idx}')
+                entity_id = kg.add_node('person', f'face_{face_id}', {'face_detected': True}, timestamp)
+                kg.link_node_to_media(entity_id, media_id, confidence, {'bbox': bbox, 'face_index': idx})
+    
+    # Caption/Description
+    caption = keyframe.get('caption')
+    if caption and isinstance(caption, str):
+        entity_id = kg.add_node('description', 'scene_caption', {'text': caption}, timestamp)
+        kg.link_node_to_media(entity_id, media_id, 0.9)
     
     # Tags
     tags = keyframe.get('tags', [])
@@ -160,6 +203,14 @@ def _process_keyframe_entities(kg: Any, keyframe: Dict[str, Any], media_id: int,
             if isinstance(tag, str):
                 entity_id = kg.add_node('concept', tag, {}, timestamp)
                 kg.link_node_to_media(entity_id, media_id, 0.5)
+    
+    # Entities (named entities)
+    entities = keyframe.get('entities', [])
+    if isinstance(entities, list):
+        for entity in entities:
+            if isinstance(entity, str):
+                entity_id = kg.add_node('entity', entity, {}, timestamp)
+                kg.link_node_to_media(entity_id, media_id, 0.7)
     
     # Emotions
     emotions = keyframe.get('emotions', [])
@@ -181,20 +232,33 @@ def _process_audio_entities(kg: Any, audio: Dict[str, Any], media_id: int, times
     # Transcript
     transcript = audio.get('transcript')
     if transcript:
-        entity_id = kg.add_node('concept', 'speech', {'transcript': transcript[:100]}, timestamp)
+        entity_id = kg.add_node('concept', 'speech', {'transcript': transcript[:200]}, timestamp)
         kg.link_node_to_media(entity_id, media_id, 0.9)
     
-    # Speaker diarization
-    speakers = audio.get('speakers', [])
-    if isinstance(speakers, list):
-        for speaker in speakers:
-            if isinstance(speaker, dict):
-                speaker_id = speaker.get('speaker', speaker.get('label'))
-                if speaker_id:
-                    entity_id = kg.add_node('person', f'speaker_{speaker_id}', {}, timestamp)
-                    kg.link_node_to_media(entity_id, media_id, 0.7)
+    # Sentiment
+    sentiment = audio.get('sentiment')
+    if isinstance(sentiment, dict):
+        label = sentiment.get('label')
+        score = sentiment.get('score', 0.5)
+        if label:
+            entity_id = kg.add_node('sentiment', label.lower(), {'score': score}, timestamp)
+            kg.link_node_to_media(entity_id, media_id, score)
     
-    # Audio emotions
+    # Emotions from audio (can be dict with scores or list)
+    emotions = audio.get('emotions')
+    if emotions:
+        if isinstance(emotions, dict):
+            for emotion_name, emotion_score in emotions.items():
+                if emotion_score > 0.3:
+                    entity_id = kg.add_node('emotion', emotion_name, {'score': emotion_score}, timestamp)
+                    kg.link_node_to_media(entity_id, media_id, emotion_score)
+        elif isinstance(emotions, list):
+            for emotion in emotions:
+                if isinstance(emotion, str):
+                    entity_id = kg.add_node('emotion', emotion, {}, timestamp)
+                    kg.link_node_to_media(entity_id, media_id, 0.6)
+    
+    # Audio emotion (fallback/alternative field)
     audio_emotion = audio.get('audio_emotion')
     if audio_emotion:
         if isinstance(audio_emotion, str):
@@ -205,6 +269,65 @@ def _process_audio_entities(kg: Any, audio: Dict[str, Any], media_id: int, times
             if top_emotion:
                 entity_id = kg.add_node('emotion', top_emotion, {}, timestamp)
                 kg.link_node_to_media(entity_id, media_id, 0.6)
+    
+    # Speaker transcripts (detailed speaker segments)
+    speaker_transcript = audio.get('speaker_transcript', [])
+    if isinstance(speaker_transcript, list):
+        for segment in speaker_transcript:
+            if isinstance(segment, dict):
+                speaker_id = segment.get('speaker')
+                text = segment.get('text', '')
+                if speaker_id:
+                    entity_id = kg.add_node('person', f'speaker_{speaker_id}', {'transcript_sample': text[:100]}, timestamp)
+                    kg.link_node_to_media(entity_id, media_id, 0.8, {
+                        'start': segment.get('start'),
+                        'end': segment.get('end'),
+                        'text': text
+                    })
+    
+    # Fallback: Speaker diarization (if speaker_transcript not available)
+    if not speaker_transcript:
+        speakers = audio.get('speakers', [])
+        if isinstance(speakers, list):
+            for speaker in speakers:
+                if isinstance(speaker, str):
+                    entity_id = kg.add_node('person', f'speaker_{speaker}', {}, timestamp)
+                    kg.link_node_to_media(entity_id, media_id, 0.7)
+                elif isinstance(speaker, dict):
+                    speaker_id = speaker.get('speaker', speaker.get('label'))
+                    if speaker_id:
+                        entity_id = kg.add_node('person', f'speaker_{speaker_id}', {}, timestamp)
+                        kg.link_node_to_media(entity_id, media_id, 0.7)
+    
+    # Entities (named entities from transcript)
+    entities = audio.get('entities', [])
+    if isinstance(entities, list):
+        for entity in entities:
+            if isinstance(entity, str):
+                entity_id = kg.add_node('entity', entity, {}, timestamp)
+                kg.link_node_to_media(entity_id, media_id, 0.7)
+    
+    # Music events
+    music_events = audio.get('music_events', [])
+    if isinstance(music_events, list):
+        for event in music_events:
+            if isinstance(event, dict):
+                event_type = event.get('type', 'music')
+                confidence = event.get('confidence', 0.5)
+                entity_id = kg.add_node('audio_event', f'music_{event_type}', {'confidence': confidence}, timestamp)
+                kg.link_node_to_media(entity_id, media_id, confidence, {
+                    'start': event.get('start'),
+                    'end': event.get('end')
+                })
+    
+    # Time hints (temporal context)
+    time_hints = audio.get('time_hints', {})
+    if isinstance(time_hints, dict):
+        for hint_type, hints in time_hints.items():
+            if isinstance(hints, list) and hints:
+                for hint in hints:
+                    entity_id = kg.add_node('temporal_context', f'{hint_type}_{hint}', {}, timestamp)
+                    kg.link_node_to_media(entity_id, media_id, 0.6)
     
     # Tags from audio
     tags = audio.get('tags', [])
@@ -305,7 +428,9 @@ def _base_env() -> Dict[str, str]:
     env.setdefault('HF_HUB_ENABLE_HF_TRANSFER', '1')
     env.setdefault('HF_HOME', str(DEFAULT_MODELS_DIR))
     env.setdefault('TORCH_HOME', str(DEFAULT_MODELS_DIR))
-    env.setdefault('PYTHONPATH', str(REPO_ROOT.parent))
+    # CRITICAL FIX: Add PARENT of REPO_ROOT to PYTHONPATH so "goodq4all.steps" module can be imported
+    # (REPO_ROOT is L:\goodq4all, we need L:\ in the path)
+    env['PYTHONPATH'] = str(REPO_ROOT.parent)
     return env
 
 
@@ -316,14 +441,28 @@ def _run_step(env_name: str, step_name: str, payload: Dict[str, Any], cfg_json: 
         in_path = tmp_dir / 'input.json'
         out_path = tmp_dir / 'output.json'
         in_path.write_text(json.dumps(payload, ensure_ascii=False), encoding='utf-8')
+        
+        # Resolve conda path to handle subprocess PATH issues on Windows
+        conda_exe = resolve_conda()
+        
         cmd = [
-            'conda', 'run', '-n', env_name,
-            'python', '-m', 'goodq4all.cli.step_runner',
+            conda_exe, 'run', '-n', env_name,
+            '--no-capture-output',  # Let output flow through
+            'python', str(REPO_ROOT / 'cli' / 'step_runner.py'),  # Use absolute path instead of -m
             '--step', step_name,
             '--in', str(in_path),
             '--out', str(out_path),
             '--cfg', str(cfg_json),
         ]
+        
+        # CRITICAL: Ensure PYTHONPATH is available in conda env
+        work_env['CONDA_PREFIX_1'] = work_env.get('CONDA_PREFIX', '')
+        # Ensure PYTHONPATH points to L:\ (parent of goodq4all) so goodq4all.steps can be imported
+        parent_dir = str(REPO_ROOT.parent)
+        if 'PYTHONPATH' not in work_env or parent_dir not in work_env['PYTHONPATH']:
+            existing_path = work_env.get('PYTHONPATH', '')
+            work_env['PYTHONPATH'] = f"{parent_dir};{existing_path}" if existing_path else parent_dir
+        
         start_ts = time.perf_counter()
         if VERBOSE:
             typer.echo(f'[step] -> {step_name} ({env_name})')
@@ -669,6 +808,14 @@ def run(
         typer.echo(f'  Full path: {video_path}')
         typer.echo(f'  Exists: {video_path.exists()}')
         typer.echo(f'  Size: {video_path.stat().st_size / 1024**2:.2f} MB' if video_path.exists() else '  Size: N/A')
+        
+        # Initialize progress tracking
+        if PROGRESS_TRACKING_AVAILABLE:
+            tracker = get_tracker()
+            # Estimate total steps: scene detection + processing each scene (image+audio pipeline)
+            estimated_steps = 3  # scene detection, scene processing, finalization
+            tracker.start_processing(video_path.name, total_steps=estimated_steps)
+        
         video_hash = _compute_sha256(video_path)
         scene_overrides: Dict[str, Any] = {}
         if max_scenes:
@@ -721,8 +868,17 @@ def run(
                 extra={'component': 'scene_detect'},
             )
         else:
+            if PROGRESS_TRACKING_AVAILABLE:
+                tracker = get_tracker()
+                tracker.update_step("Scene Detection", 1, {"scenes_to_detect": "analyzing video"})
+            
             detection = _detect_scenes(cfg_json, video_path, scene_overrides)
             scenes = detection.get('scenes', [])
+            
+            if PROGRESS_TRACKING_AVAILABLE:
+                tracker = get_tracker()
+                tracker.update_step("Scene Detection Complete", 2, {"scenes_found": len(scenes)})
+            
             detection_meta = detection.get('meta') or {}
             manifest_hasher = hashlib.sha256()
             for seg in scenes:
@@ -737,10 +893,18 @@ def run(
         audio_dir = _ensure_dir(video_workspace / 'audio')
 
         scene_outputs: List[Dict[str, Any]] = []
-        for scene in scenes:
+        total_scenes = len(scenes)
+        typer.echo(f'\n=== Processing {total_scenes} scenes for {video_path.name} ===\n')
+        
+        for scene_num, scene in enumerate(scenes, 1):
             scene_start = float(scene.get('start', 0.0) or 0.0)
             scene_end = float(scene.get('end', scene_start) or scene_start)
             scene_index = scene.get('index')
+            scene_duration = scene.get('duration', scene_end - scene_start)
+            
+            # Progress logging
+            typer.echo(f'[Scene {scene_num}/{total_scenes}] Processing scene {scene_index}: {scene_start:.1f}s - {scene_end:.1f}s (duration: {scene_duration:.1f}s)')
+            
             meta_payload: Dict[str, Any] = {
                 'index': scene_index,
                 'duration': scene.get('duration'),
@@ -793,7 +957,9 @@ def run(
                     typer.echo(f'[ERROR] {frame_error}', err=True)
                 else:
                     try:
+                        typer.echo(f'  [EXTRACT] Extracting keyframe...')
                         frame_info = _process_frame(cfg_json, ffmpeg, video_path, scene, frame_dir, video_hash, scene_id)
+                        typer.echo(f'  [OK] Keyframe processed')
                     except Exception as exc:  # noqa: BLE001
                         frame_error = str(exc)
                         typer.echo(f'[ERROR] Frame extraction failed for scene {scene_index}: {frame_error}', err=True)
@@ -829,7 +995,9 @@ def run(
                     typer.echo(f'[ERROR] {audio_error}', err=True)
                 else:
                     try:
+                        typer.echo(f'  [EXTRACT] Extracting audio...')
                         audio_info = _process_audio(cfg_json, ffmpeg, video_path, scene, audio_dir, video_hash, scene_id)
+                        typer.echo(f'  [OK] Audio processed')
                     except Exception as exc:  # noqa: BLE001
                         audio_error = str(exc)
                         typer.echo(f'[ERROR] Audio extraction failed for scene {scene_index}: {audio_error}', err=True)
@@ -850,6 +1018,29 @@ def run(
                 audio=audio_info,
                 errors=error_payload or None,
             )
+
+            # Update knowledge graph in real-time
+            if KNOWLEDGE_GRAPH_AVAILABLE and cfg.get('knowledge_graph', {}).get('enabled', True):
+                kg_scene_data = {
+                    'index': scene.get('index'),
+                    'start': scene.get('start'),
+                    'end': scene.get('end'),
+                    'keyframe': frame_info.get('data') if frame_info else None,
+                    'audio': audio_info.get('data') if audio_info else None,
+                }
+                try:
+                    kg_stats = update_kg_for_scene(
+                        kg_scene_data,
+                        scene_id,
+                        video_hash,
+                        str(video_path),
+                        cfg
+                    )
+                    if VERBOSE and kg_stats:
+                        typer.echo(f'[kg] Scene {scene_index}: {kg_stats.get("entities_resolved", 0)} entities resolved')
+                except Exception as kg_error:
+                    if VERBOSE:
+                        typer.echo(f'[kg] Warning: KG update failed for scene {scene_index}: {kg_error}')
 
             scene_record: Dict[str, Any] = {
                 'scene_id': scene_id,
@@ -906,6 +1097,37 @@ def run(
     if kg_result and kg_result.get('status') == 'success':
         if VERBOSE:
             typer.echo(f"[kg] Knowledge graph built successfully: {kg_result.get('statistics', {})}")
+
+    # Generate LLM summaries for videos (if enabled)
+    llm_config = cfg.get('llm', {})
+    if llm_config.get('enabled') and llm_config.get('features', {}).get('video_summarization'):
+        if VERBOSE:
+            typer.echo('[llm] Generating video summaries...')
+        
+        try:
+            from steps.video_summarizer.step import run_step as run_video_summarizer
+            
+            for result in results:
+                video_hash = result.get('video_hash')
+                if video_hash and VERBOSE:
+                    typer.echo(f'[llm] Summarizing video {video_hash[:16]}...')
+                
+                summary_result = run_video_summarizer(cfg, video_hash)
+                
+                if summary_result.get('success'):
+                    result['video_summary'] = summary_result.get('summary')
+                    result['video_summary_method'] = summary_result.get('method')
+                    if VERBOSE:
+                        typer.echo(f'[llm] [OK] Video summary generated ({summary_result.get("method")} method)')
+                else:
+                    if VERBOSE:
+                        typer.echo(f'[llm] ✗ Video summary failed: {summary_result.get("error")}')
+        except ImportError as e:
+            if VERBOSE:
+                typer.echo(f'[llm] Video summarizer not available: {e}')
+        except Exception as e:
+            if VERBOSE:
+                typer.echo(f'[llm] Video summarization error: {e}')
 
     # Report errors
     total_scenes = 0

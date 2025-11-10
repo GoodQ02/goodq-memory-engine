@@ -27,3 +27,22 @@ def resolve_tesseract(cfg: Dict[str, Any]) -> Optional[str]:
 def resolve_ffmpeg(cfg: Dict[str, Any]) -> Optional[str]:
     return cfg_get(cfg, 'config.tools.ffmpeg_exe')
 
+
+def resolve_conda() -> str:
+    """
+    Resolve the full path to conda executable.
+    
+    Uses centralized Python path configuration.
+    
+    Returns:
+        Full path to conda.exe or conda.bat
+    """
+    from config.python_paths import get_conda_exe
+    
+    conda_exe = get_conda_exe()
+    if conda_exe and conda_exe.exists():
+        return str(conda_exe)
+    
+    # Fallback to 'conda' and hope it's in PATH
+    return 'conda'
+

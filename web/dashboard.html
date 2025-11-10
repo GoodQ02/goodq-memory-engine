@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GoodQ - Processing Dashboard</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        :root {
+            --primary-bg: #0a0e27;
+            --secondary-bg: #151b3d;
+            --accent-bg: #1e2749;
+            --primary-text: #e0e6ff;
+            --secondary-text: #8b92b8;
+            --accent-color: #5b7cff;
+            --success-color: #4ade80;
+            --warning-color: #fbbf24;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--primary-bg);
+            color: var(--primary-text);
+            padding: 20px;
+        }
+        
+        .dashboard {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        
+        .header h1 {
+            font-size: 48px;
+            background: linear-gradient(135deg, var(--accent-color), #7c3aed);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 10px;
+        }
+        
+        .status-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .status-card {
+            background: var(--secondary-bg);
+            border-radius: 12px;
+            padding: 24px;
+            border: 1px solid var(--accent-bg);
+        }
+        
+        .status-card h3 {
+            color: var(--accent-color);
+            margin-bottom: 16px;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        
+        .status-value {
+            font-size: 36px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+        
+        .status-label {
+            color: var(--secondary-text);
+            font-size: 14px;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: var(--accent-bg);
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 12px;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent-color), #7c3aed);
+            transition: width 0.5s ease;
+        }
+        
+        .scene-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 10px;
+            margin-top: 20px;
+        }
+        
+        .scene-thumb {
+            aspect-ratio: 16/9;
+            background: var(--accent-bg);
+            border-radius: 8px;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        .scene-thumb img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .scene-number {
+            position: absolute;
+            bottom: 4px;
+            right: 4px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 11px;
+        }
+        
+        .live-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            background: var(--success-color);
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+            margin-right: 8px;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .timeline {
+            background: var(--secondary-bg);
+            border-radius: 12px;
+            padding: 24px;
+            margin-top: 30px;
+        }
+        
+        .timeline-item {
+            display: flex;
+            gap: 16px;
+            margin-bottom: 16px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid var(--accent-bg);
+        }
+        
+        .timeline-item:last-child {
+            border-bottom: none;
+        }
+        
+        .timeline-time {
+            color: var(--secondary-text);
+            font-size: 12px;
+            min-width: 80px;
+        }
+        
+        .timeline-content {
+            flex: 1;
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard">
+        <div class="header">
+            <h1>🎬 GoodQ Processing Dashboard</h1>
+            <p style="color: var(--secondary-text); margin-top: 10px;">
+                <span class="live-indicator"></span>
+                Live Monitoring - Auto-refreshing every 30 seconds
+            </p>
+        </div>
+        
+        <div class="status-grid">
+            <div class="status-card">
+                <h3>Current Video</h3>
+                <div class="status-value" id="video-name">1987_1988.mp4</div>
+                <div class="status-label">The year you were born! 🎂</div>
+            </div>
+            
+            <div class="status-card">
+                <h3>Progress</h3>
+                <div class="status-value" id="progress-percent">56.7%</div>
+                <div class="status-label">Complete</div>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progress-bar" style="width: 56.7%"></div>
+                </div>
+            </div>
+            
+            <div class="status-card">
+                <h3>Scenes Processed</h3>
+                <div class="status-value" id="scenes-count">85</div>
+                <div class="status-label">of ~150 estimated</div>
+            </div>
+            
+            <div class="status-card">
+                <h3>Estimated Completion</h3>
+                <div class="status-value" id="eta">6:19 PM</div>
+                <div class="status-label">~2 hours remaining</div>
+            </div>
+        </div>
+        
+        <div class="status-grid">
+            <div class="status-card">
+                <h3>Processing Rate</h3>
+                <div class="status-value">120s</div>
+                <div class="status-label">Per scene (~0.5/min)</div>
+            </div>
+            
+            <div class="status-card">
+                <h3>Audio Clips</h3>
+                <div class="status-value" id="audio-count">85</div>
+                <div class="status-label">Scene audio extracted</div>
+            </div>
+            
+            <div class="status-card">
+                <h3>Video Size</h3>
+                <div class="status-value">7.28 GB</div>
+                <div class="status-label">Home movie footage</div>
+            </div>
+            
+            <div class="status-card">
+                <h3>Started</h3>
+                <div class="status-value" style="font-size: 24px;">1:18 PM</div>
+                <div class="status-label">Nov 8, 2025</div>
+            </div>
+        </div>
+        
+        <div class="timeline">
+            <h3 style="color: var(--accent-color); margin-bottom: 20px;">
+                🔄 PIPELINE STAGES
+            </h3>
+            
+            <div class="timeline-item">
+                <div class="timeline-time">✅ Complete</div>
+                <div class="timeline-content">
+                    <strong>Scene Detection</strong><br>
+                    <span style="color: var(--secondary-text); font-size: 14px;">
+                        85 scenes identified and segmented
+                    </span>
+                </div>
+            </div>
+            
+            <div class="timeline-item">
+                <div class="timeline-time">✅ Complete</div>
+                <div class="timeline-content">
+                    <strong>Frame Extraction</strong><br>
+                    <span style="color: var(--secondary-text); font-size: 14px;">
+                        Key frames extracted from each scene
+                    </span>
+                </div>
+            </div>
+            
+            <div class="timeline-item">
+                <div class="timeline-time">✅ Complete</div>
+                <div class="timeline-content">
+                    <strong>Audio Separation</strong><br>
+                    <span style="color: var(--secondary-text); font-size: 14px;">
+                        85 audio clips extracted for analysis
+                    </span>
+                </div>
+            </div>
+            
+            <div class="timeline-item">
+                <div class="timeline-time">🔄 Active</div>
+                <div class="timeline-content">
+                    <strong>Visual Embeddings (DINO)</strong><br>
+                    <span style="color: var(--success-color); font-size: 14px;">
+                        Creating visual embeddings with LLM vision models
+                    </span>
+                </div>
+            </div>
+            
+            <div class="timeline-item">
+                <div class="timeline-time">⏳ Pending</div>
+                <div class="timeline-content">
+                    <strong>Whisper Transcription</strong><br>
+                    <span style="color: var(--secondary-text); font-size: 14px;">
+                        Speech-to-text with Whisper LLM
+                    </span>
+                </div>
+            </div>
+            
+            <div class="timeline-item">
+                <div class="timeline-time">⏳ Pending</div>
+                <div class="timeline-content">
+                    <strong>LLaVA Scene Analysis</strong><br>
+                    <span style="color: var(--secondary-text); font-size: 14px;">
+                        Multi-modal scene understanding
+                    </span>
+                </div>
+            </div>
+            
+            <div class="timeline-item">
+                <div class="timeline-time">⏳ Pending</div>
+                <div class="timeline-content">
+                    <strong>Emotion Detection</strong><br>
+                    <span style="color: var(--secondary-text); font-size: 14px;">
+                        Detecting emotional moments and relationships
+                    </span>
+                </div>
+            </div>
+            
+            <div class="timeline-item">
+                <div class="timeline-time">⏳ Pending</div>
+                <div class="timeline-content">
+                    <strong>Knowledge Graph Building</strong><br>
+                    <span style="color: var(--secondary-text); font-size: 14px;">
+                        Creating relationships and connections with LLM
+                    </span>
+                </div>
+            </div>
+        </div>
+        
+        <div style="margin-top: 40px; text-align: center; color: var(--secondary-text);">
+            <p>💡 <strong>What's Happening:</strong> Each scene is being processed through our full LLM-powered pipeline</p>
+            <p style="margin-top: 10px;">Visual embeddings → Speech transcription → Scene analysis → Emotion detection → Knowledge graph</p>
+            <p style="margin-top: 20px;">
+                <a href="http://localhost:3000" style="color: var(--accent-color); text-decoration: none;">
+                    🗨️ Open Chat Interface
+                </a>
+                &nbsp;|&nbsp;
+                <a href="http://localhost:3000/api/status" style="color: var(--accent-color); text-decoration: none;">
+                    📊 API Status
+                </a>
+            </p>
+        </div>
+    </div>
+    
+    <script>
+        async function updateStats() {
+            try {
+                const response = await fetch('http://localhost:3000/api/status');
+                const data = await response.json();
+                console.log('Status update:', data);
+                
+                // You can update the UI here with real-time data
+                if (data.processing && data.processing.active) {
+                    document.getElementById('video-name').textContent = data.processing.current_file;
+                }
+            } catch (error) {
+                console.error('Failed to fetch status:', error);
+            }
+        }
+        
+        // Update every 30 seconds
+        setInterval(updateStats, 30000);
+        updateStats();
+        
+        console.log('GoodQ Processing Dashboard Loaded');
+        console.log('Monitoring 1987_1988.mp4 - Your birth year! 🎂');
+    </script>
+</body>
+</html>

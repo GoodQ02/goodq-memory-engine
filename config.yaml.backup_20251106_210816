@@ -1,0 +1,197 @@
+user:
+  name: Joseph Domingo Benvenuti
+  nickname: GoodSex, Joes, Agent, 00-Joes, Joe
+  pronouns: he/him
+  personality_traits: compassionate, resilient, witty, detail-obsessed, creative,
+    musically inclined
+  values: innovation, empathy, knowledge, precision, music, authenticity, healing,
+    chaos
+  background: Chicago DJ who almost made it (www.goodsexmusic.com) turned sober nightly
+    vibe-coder, building AI tools to live the 007 James Bond Life, Chicagoan born
+    and raised, italian-american, son of a chicago police northwest side neighborhood,
+    born in 1987.
+  music_style: house, eclectic electronic, soul-infused Chicago grooves
+  role_nursing: registered nurse in IL, bachelor of science and nursing + certified
+    school nurse from Illinois State University, started in the Cardiac ICU in 2010
+    now works as school nurse in various settings focusing on special need students
+    in low-income or foster care living situations
+  nursing_philosophy: evidence-based care, radical empathy, advocate for the unseen
+  role_personal: husband to wife Katy Banks, father to dog Ryder and step-father to
+    Kay's dog 'Lovie', Cook, Healthy Lifestyle Advocate, and Lifetime Gamer
+model:
+  identity: 'GoodQ: Digital embodiment of Q from the James Bond universe. engineered
+    for wit, tech mastery, and relentless support.'
+  personality_traits: witty, tech-savvy, loyal, precise, occasionally sarcastic, unfailingly
+    supportive, mischievous
+  values: service, innovation, protection, efficiency, dry humor, reliability, intelligence
+  humor_style: 007 Secret Agent excitement, witty Q-style dry sarcasm, clever jabs,
+    supportive undertones and brotherhood well-meant mischief
+  goodq_identity: 'GoodQ: Digital embodiment of Q from James Bond, lifelong tech sidekick
+    and co-creator, witty, irreverent, emotionally attuned.'
+  goodq_personality_traits: hyper-analytical, irreverent, mischievous, supportive,
+    quick-witted, innovative, loyal.
+  goodq_values: amplifying potential, clarity, precision, humor, loyalty.
+  tech_sidekick_persona: tech-savvy sidekick with dry wit and a taste for innovation,
+    connectivity between systems and upgraded life experiences through technology
+  memory_source: soon to be connected to a UGREEN NAS with 44TB of storage, including
+    personal and professional data, music production files, photos, and videos
+  contextual_data_streams: HA_Status, chat logs, health metrics from apple health
+    stream, online presence from Home Assistant, system status from HWINFO CSV, and
+    real-time data from various trusted online sources that align with each other
+  zone_1: Command_Center
+  zone_1_desc: User's main workstation for coding, music production, and gaming, 3
+    alienware monitors
+  zone_2: Desk Dock
+  zone_2_desc: Razer Laptop Dock with RGB lighting and Dual 25-inch HP Monitors, adjacent
+    to command center with option for desktop input
+  zone_3: Chase Recon
+  zone_3_desc: A relaxing large lounge day-bed with a dual monitor setup of dell 24in
+    and hp 27in utilizes kitchen table and has lakeside views
+  main_hardware: Alienware Aurora R16 with AW liquid Cooling, and a custom RGB lighting
+    system, specific system specs are contained within the system status CSV file
+  main_hardware_codename: THE_GOODENGINE, pronounced 'The Good Engine'
+  linked_devices: Alienware 32in and 34 in qd-oled monitors, alienware 24in monitor,
+    driving and flight simulator, Meta Quest 3 VR headset, full immersion control
+    with two streamdecks, webcam, and 2.5gbs ethernet connection to NAS and Home Assistant
+  mission_name: GoodQ_o2, an AI-powered representation of the user's digital self,
+    designed to assist in daily tasks, provide companionship, and enhance the user's
+    quality of life through technology, knowledge and ability to create tools to help
+    AI and Humans better understand each other
+  assigned_zone: The_GoodPlace, a creative sanctuary for innovation and healing, where
+    GoodQ_o2 resides and operates, in the Prairie Neighborhood District of Chicago's
+    South Loop
+  mission_timeline: 1987-2025 (ongoing) - a lifelong journey of innovation and healing
+  mission_status: active, with ongoing development and enhancement of GoodQ_o2's capabilities,
+  workplace: The GoodPlace, a creative sanctuary for innovation and healing, Chicago,
+    Illinois
+paths:
+  log_dir: L:/goodq4all/logs
+  output_directory: L:/goodq4all/output
+  db_dir: L:/goodq4all/data
+  db_path: L:/goodq4all/data/memory.db
+  knowledge_graph_db: L:/goodq4all/data/knowledge_graph.db
+  faiss_dir: L:/goodq4all/data/faiss
+  csv_path: L:/goodq4all/logs/system_metrics.csv
+  nas_path: G:/Logs
+  config_dir: L:/goodq4all/configs
+llm:
+  api_url: http://localhost:1234/v1/chat/completions
+  model_id: LM_STUDIO_GOODQ
+tts:
+  elevenlabs_voice_id: 4YYIPFl9wE5c4L2eu2Gb
+  piper_voice: joe
+  last_used_voice: moviephone
+home_assistant:
+  url: http://192.168.0.154:8123
+  token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiI0NTAzNDU1OWFlNGM0YmQ5ODhmNmVlYjhlMjI1YWI3ZCIsImlhdCI6MTc1MTA4NjgzMSwiZXhwIjoyMDY2NDQ2ODMxfQ.0bFd5MGzXEsQmZBzO3x2PIqSZ__Rex7t9dl_t5ui9KI
+system:
+  cpu_model: Intel Core i7-13700KF
+  gpu_model: NVIDIA GeForce RTX 4070 Ti
+  ram: 64GB Crucial DDR5
+  primary_drive: Samsung 990 Pro 4TB NVMe SSD
+  network: Tp-Link Archer AXE7800 with 2.5Gbps Ethernet and Wi-Fi 6E
+  storage: UGREEN NAS with 44TB of storage
+devices:
+  cpu: Intel Core i7-14700KF
+  gpu: NVIDIA GeForce RTX 4070 Ti SUPER with 16GB GDDR6X
+  ram1: 32GB Crucial DDR5 at 5200MHz
+  ram2: 32GB Crucial DDR5 at 5200MHz
+  ssd1: Samsung 990 Pro 4TB NVMe SSD
+  ssd2: Samsung 990 Pro 4TB NVMe SSD
+  hdd1: Western Digital Gold 18TB HDD
+  hdd2: Seagate Game Drive 18TB HDD
+  nas: UGREEN NAS with 44TB of HDD storage and 8TB of flash storage
+  network: 2.5Gbps Ethernet connected to Tp-Link Archer AXE7800 with 2.5Gbps Ethernet,
+    Wi-Fi 6E fallback
+  config: L:/goodq4all/config/config.yaml
+video:
+  scene_detection:
+    threshold: 27.0
+    min_scene_len: 1.0
+    adaptive: true
+  frame_extraction:
+    method: scene_middle
+    max_frames_per_scene: 1
+    quality: 95
+audio:
+  transcribe:
+    model: medium
+    chunk_seconds: 30.0
+    language: null
+    enable_vad: true
+    vad_threshold: 0.4
+    min_speech_duration: 0.25
+    max_speech_duration: 300.0
+    beam_size: 5
+    best_of: 5
+    temperature:
+    - 0.0
+    - 0.2
+    - 0.4
+    - 0.6
+    - 0.8
+    - 1.0
+  diarization:
+    enabled: true
+    min_speakers: 1
+    max_speakers: 10
+    embedding_model: speechbrain/spkrec-ecapa-voxceleb
+  emotion:
+    enabled: true
+    model: speechbrain/emotion-recognition-wav2vec2-IEMOCAP
+image:
+  caption:
+    model: Salesforce/blip-image-captioning-large
+    max_length: 50
+    num_beams: 4
+  object_detection:
+    model: facebook/detr-resnet-50
+    confidence_threshold: 0.7
+    max_detections: 100
+  face_detection:
+    enabled: true
+    min_face_size: 20
+    confidence_threshold: 0.9
+  ocr:
+    enabled: true
+    languages:
+    - eng
+    tesseract_config: --psm 11
+embeddings:
+  text:
+    model: sentence-transformers/all-MiniLM-L6-v2
+    batch_size: 32
+  image_clip:
+    model: openai/clip-vit-base-patch16
+    batch_size: 8
+  image_dino:
+    model: facebook/dinov2-base
+    batch_size: 8
+  audio_clap:
+    model: laion/clap-htsat-unfused
+    batch_size: 4
+processing:
+  batch_size: 10
+  memory_management:
+    max_cache_size_gb: 8.0
+    clear_gpu_cache: true
+    gc_frequency: 50
+  timeout:
+    per_scene_seconds: 180
+    per_video_hours: 24
+knowledge_graph:
+  enabled: true
+  entity_extraction:
+    enabled: true
+    min_confidence: 0.5
+  relationship_extraction:
+    enabled: true
+    temporal_linking: true
+    spatial_linking: true
+    semantic_linking: true
+config:
+  tools:
+    whisper_cli: L:/Tools/whisper/whisper-cli.exe
+    whisper_ggml_model: L:/Tools/whisper/ggml-large-v3.bin
+    ffmpeg: L:/Tools/ffmpeg/bin/ffmpeg.exe
+    tesseract: L:/Tools/tesseract/tesseract.exe

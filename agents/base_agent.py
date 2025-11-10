@@ -1,12 +1,16 @@
-# Copyright (c) Microsoft. All rights reserved.
 """Base agent class for GoodQ agents."""
 
 import asyncio
 import json
 import subprocess
+import sys
 from pathlib import Path
 from typing import Any, Dict, Optional
 from abc import ABC, abstractmethod
+
+# Add parent directory to path for config imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from config.python_paths import get_conda_run_command
 
 
 class BaseAgent(ABC):
@@ -31,11 +35,9 @@ class BaseAgent(ABC):
         """Execute a script in the agent's conda environment."""
         args_json = json.dumps(args)
         
-        cmd = [
-            "conda", "run", "-n", self.conda_env,
-            "python", script_path,
-            args_json
-        ]
+        # Use centralized conda path configuration
+        conda_cmd = get_conda_run_command(self.conda_env)
+        cmd = conda_cmd + ["python", script_path, args_json]
         
         proc = await asyncio.create_subprocess_exec(
             *cmd,

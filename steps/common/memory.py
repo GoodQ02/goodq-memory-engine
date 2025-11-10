@@ -342,10 +342,35 @@ def register_scene_bundle(
             if audio_data.get('transcript_meta') is not None:
                 audio_meta['transcript_meta'] = audio_data.get('transcript_meta')
             scene_meta['audio'] = audio_meta
-            diarization = audio_data.get('diarization') or []
+            # FIX: Use speaker_transcript (has text) instead of diarization (speaker labels only)
+            diarization = audio_data.get('speaker_transcript') or audio_data.get('diarization') or []
 
     upsert_scene(cfg, video_hash, scene_start, scene_end, scene_meta)
     upsert_link(cfg, video_hash, scene_id, 'scene_of', timestamp=scene_start, meta={'duration': scene_duration, 'index': scene_index})
+    
+    # Generate and save scene summary
+    try:
+        from goodq4all.steps.common.scene_summarizer import generate_scene_summary
+        summary_text = generate_scene_summary(scene_meta, cfg, use_llm=False)  # Start with template only
+        if summary_text:
+            summary_data = {
+                'scene_id': scene_id,
+                'summary': summary_text,
+                'index': scene_index,
+                'start': scene_start,
+                'end': scene_end,
+                'duration': scene_duration
+            }
+            # Use append_long_term_summary to avoid deletion of previous summaries
+            append_long_term_summary(
+                cfg, 
+                summary_data, 
+                category='scene_summary',
+                fields=['scene_id', 'summary', 'index', 'start', 'end', 'duration'],
+                max_entries=1000  # Allow many scene summaries
+            )
+    except Exception as e:
+        print(f'[WARN] Failed to generate scene summary: {e}')
 
     if frame_hash:
         upsert_link(cfg, scene_id, frame_hash, 'keyframe_of', meta={'path': frame.get('path') if isinstance(frame, dict) else None})
@@ -553,6 +578,11 @@ def upsert_segment(cfg: Dict[str, Any], video_hash: str, start: float, end: floa
 
     if not db_path:
 
+        return ""
+    
+    # Validate segment times
+    if not (0 <= start < end):
+        print(f'[WARN] Invalid segment times: start={start}, end={end}. Skipping.')
         return ""
 
     sid = _make_id("segment", [video_hash, f"{start:.3f}", f"{end:.3f}", speaker or ""])

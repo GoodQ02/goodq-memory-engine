@@ -290,8 +290,16 @@ class WatchdogProcessor:
     
     def process_file(self, file_path: Path, file_hash: str) -> bool:
         """Process a single file"""
+        # Import progress tracker
+        sys.path.insert(0, str(Path(__file__).parent.parent))
+        from steps.common.progress_tracker import start_processing, finish_processing, add_error
+        
         file_type = self.get_file_type(file_path)
         logger.info(f"Processing {file_type}: {file_path.name}")
+        
+        # Start progress tracking
+        total_steps = 20  # Estimate for video processing
+        start_processing(file_path.name, total_steps)
         
         # Move to processing directory
         processing_path = self.processing_dir / file_path.name
@@ -300,6 +308,8 @@ class WatchdogProcessor:
             logger.debug(f"Copied to processing: {processing_path}")
         except Exception as e:
             logger.error(f"Failed to copy file: {e}")
+            add_error(f"Failed to copy file: {e}", "file_copy")
+            finish_processing("failed")
             self.registry.mark_failed(file_hash, file_path.name, str(e))
             return False
         
@@ -326,6 +336,7 @@ class WatchdogProcessor:
         # Handle result
         if success:
             logger.info(f"[OK] Successfully processed: {file_path.name}")
+            finish_processing("completed")
             self.registry.mark_processed(file_hash, file_path.name, 'success')
             
             # Move original to processed
@@ -344,6 +355,8 @@ class WatchdogProcessor:
                 
         else:
             logger.error(f"[FAIL] Failed to process: {file_path.name}")
+            add_error(error_msg or 'Unknown error', "processing")
+            finish_processing("failed")
             self.registry.mark_failed(file_hash, file_path.name, error_msg or 'Unknown error')
             
             # Move to failed
@@ -386,10 +399,11 @@ class WatchdogProcessor:
             logger.error(f"Failed to copy video to temp dir: {e}")
             return False
         
-        # Use conda run to execute in correct environment
+        # Use direct Python call (already running in correct environment)
+        import sys
+        python_exe = sys.executable
         cmd = [
-            'conda', 'run', '-n', 'goodq_zenml',
-            'python', '-m', 'goodq4all.cli.run_ingestion',
+            python_exe, '-m', 'cli.run_ingestion',
             '--input-dir', str(temp_input),
             '--workspace', f'L:/goodq4all/logs/watchdog_{datetime.now().strftime("%Y%m%d_%H%M%S")}',
             '--output', f'L:/goodq4all/logs/watchdog_{datetime.now().strftime("%Y%m%d_%H%M%S")}_results.json',

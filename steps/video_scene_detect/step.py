@@ -11,22 +11,26 @@ except Exception:  # pragma: no cover - optional guard
 
 def _load_params(cfg: Dict[str, Any], item: Dict[str, Any]) -> Dict[str, Any]:
     # Try both 'scene_detect' and 'scene_detection' for backwards compatibility
-    video_cfg = (cfg.get('video', {}) or {})
+    # Config can be nested under 'config' key or at root level
+    if 'config' in cfg and 'video' in cfg['config']:
+        video_cfg = (cfg['config'].get('video', {}) or {})
+    else:
+        video_cfg = (cfg.get('video', {}) or {})
     scene_cfg = video_cfg.get('scene_detect', video_cfg.get('scene_detection', {})) or {}
     overrides = item.get('scene_detect') if isinstance(item.get('scene_detect'), dict) else {}
     params = {
-        'threshold': float(overrides.get('threshold', scene_cfg.get('threshold', 27.0))),  # Default 27.0 to avoid over-segmentation
-        'min_scene_len_sec': float(overrides.get('min_scene_len_sec', scene_cfg.get('min_scene_len_sec', scene_cfg.get('min_scene_len', 3.0)))),  # Default 3.0s minimum
+        'threshold': float(overrides.get('threshold', scene_cfg.get('threshold', 30.0))),  # Default 30.0 to avoid over-segmentation
+        'min_scene_len_sec': float(overrides.get('min_scene_len_sec', scene_cfg.get('min_scene_len_sec', scene_cfg.get('min_scene_len', 300.0)))),  # Default 300.0s (5 minutes) minimum
         'max_scenes': int(overrides.get('max_scenes', scene_cfg.get('max_scenes', 0))),
-        'entity_refine': bool(overrides.get('entity_refine', scene_cfg.get('entity_refine', True))),
+        'entity_refine': bool(overrides.get('entity_refine', scene_cfg.get('entity_refine', False))),  # CRITICAL: Default FALSE to prevent 2-second scene splits
         'entity_sample_rate': float(overrides.get('entity_sample_rate', scene_cfg.get('entity_sample_rate', 0.5))),
-        'entity_min_duration': float(overrides.get('entity_min_duration', scene_cfg.get('entity_min_duration', 2.0))),
+        'entity_min_duration': float(overrides.get('entity_min_duration', scene_cfg.get('entity_min_duration', 300.0))),  # Match min_scene_len_sec default
         'entity_max_samples': int(overrides.get('entity_max_samples', scene_cfg.get('entity_max_samples', 300))),
     }
     if params['min_scene_len_sec'] <= 0:
-        params['min_scene_len_sec'] = 0.5
+        params['min_scene_len_sec'] = 300.0  # Fallback to 5 minutes
     if params['threshold'] <= 0:
-        params['threshold'] = 27.0  # Fallback to 27.0 to avoid over-segmentation
+        params['threshold'] = 30.0  # Fallback to 30.0 to avoid over-segmentation
     if params['max_scenes'] < 0:
         params['max_scenes'] = 0
     if params['entity_sample_rate'] <= 0:
@@ -342,6 +346,10 @@ def _refine_scenes_with_entities(
             new_scene['strategy'] = 'entity_refine'
             new_scene['sub_index'] = seg_idx
             refined.append(new_scene)
+    
+    # Re-index all scenes sequentially after refinement
+    for new_idx, scene in enumerate(refined):
+        scene['index'] = new_idx
 
     entity_meta['scene_count'] = len(refined)
     entity_meta['status'] = 'ok'
@@ -374,7 +382,8 @@ def video_scene_detect(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, A
         error_msg = str(exc)
 
     entity_meta = {'status': 'disabled'}
-    if params.get('entity_refine', True) and scenes:
+    # CRITICAL: Respect the config setting - default to FALSE to avoid scene over-segmentation
+    if params.get('entity_refine', False) and scenes:
         refined_scenes, entity_meta = _refine_scenes_with_entities(path, scenes, params)
         scenes = refined_scenes
 

@@ -101,7 +101,10 @@ def image_embed_dino(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
         # See docs/ARCHITECTURE_REFERENCE.md for full explanation.
         try:
             from goodq4all.steps.common.memory import upsert_embedding
-            upsert_embedding(cfg, h, faiss_id, path, item.get("modality", "image") or "image")
+            scene_id = item.get("scene_id") or item.get("scene_index")
+            if scene_id is not None and not isinstance(scene_id, str):
+                scene_id = f"scene_{int(scene_id):04d}"
+            upsert_embedding(cfg, h, faiss_id, path, item.get("modality", "image") or "image", scene_id=scene_id)
         except Exception as e:
             print(f'[ERROR] Exception in step.py line 101: {str(e)}')
             pass

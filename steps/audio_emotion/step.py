@@ -10,8 +10,8 @@ _AEMO: Dict[str, Any] = {"pipe": None, "device": "cpu", "model_id": None}
 HF_HOME = Path(os.environ.get("HF_HOME", "L:/models"))
 os.environ.setdefault("HF_HOME", str(HF_HOME))
 os.environ.setdefault("TORCH_HOME", os.environ.get("TORCH_HOME") or str(HF_HOME))
-if not os.environ.get("HF_HUB_ENABLE_HF_TRANSFER"):
-    os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
+# Disable hf_transfer to avoid dependency issues
+os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "0"
 
 
 def _cache_snapshot_exists(model_id: str) -> bool:
@@ -35,7 +35,7 @@ def _load() -> None:
         return
     try:
         import torch  # type: ignore
-        from transformers import pipeline, ClapModel, AutoProcessor  # type: ignore
+        from transformers import pipeline  # type: ignore
     except Exception as exc:
         _AEMO.update({"pipe": None, "model_id": None, "error": str(exc)})
         return
@@ -51,14 +51,10 @@ def _load() -> None:
             errors[model_id] = f"cache_missing:{HF_HOME}"
             continue
         try:
-            processor = AutoProcessor.from_pretrained(model_id, local_files_only=True)
-            model = ClapModel.from_pretrained(model_id, local_files_only=True)
-            model = model.to(device).eval()
+            # Use the correct pipeline - these are audio-classification models, not CLAP
             pipe = pipeline(
                 "audio-classification",
-                model=model,
-                feature_extractor=processor,
-                framework="pt",
+                model=model_id,
                 device=0 if device == "cuda" else -1,
             )
             _AEMO.update({"pipe": pipe, "device": device, "model_id": model_id, "error": None})

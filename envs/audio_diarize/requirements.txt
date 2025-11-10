@@ -1,8 +1,19 @@
+# Core dependencies
 numpy>=1.24,<2
 soundfile==0.12.1
+
+# PyTorch (explicitly specified for reproducibility)
+# Note: These versions are compatible with pyannote.audio>=3.3.2
+torch==2.5.1
+torchaudio==2.5.1
+torchvision==0.20.1
+
+# Audio processing
 whisperx==3.3.0
 pyannote.audio>=3.3.2
 ffmpeg-python==0.2.0
+
+# Utilities
 dill==0.3.8
 typing-extensions==4.13.2
 cryptography==42.0.8

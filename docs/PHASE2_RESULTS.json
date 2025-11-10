@@ -1,0 +1,175 @@
+{
+  "phase": 2,
+  "video_hash": "a6800419ecab0bc73bf6afd9c2f8b4472712907656335094544b6bfb5358fd47",
+  "timestamp": "1762609135.1741283",
+  "context_analysis": {
+    "total_scenes": 16,
+    "analyzed": 16,
+    "failed": 0,
+    "skipped": 0
+  },
+  "intelligent_tagging": {
+    "total_scenes": 16,
+    "tagged": 16,
+    "failed": 0,
+    "skipped": 0,
+    "llm_used": 16,
+    "fallback_used": 0
+  },
+  "emotional_arc": {
+    "success": true,
+    "video_hash": "a6800419ecab0bc73bf6afd9c2f8b4472712907656335094544b6bfb5358fd47",
+    "arc_data": {
+      "overall_arc": "Steady neutral tone throughout",
+      "key_transitions": [],
+      "dominant_emotions": [
+        "neutral"
+      ],
+      "emotional_journey": "The video maintains a consistent neutral emotional tone without any significant shifts or changes."
+    }
+  },
+  "relationship_mapping": {
+    "success": true,
+    "video_hash": "a6800419ecab0bc73bf6afd9c2f8b4472712907656335094544b6bfb5358fd47",
+    "relationship_data": {
+      "entities": [
+        "SPEAKER_00",
+        "SPEAKER_01",
+        "chair",
+        "person",
+        "person1",
+        "person2",
+        "unseen_person",
+        "unspecified_person"
+      ],
+      "relationships": [
+        {
+          "scene": 0,
+          "entities": [
+            "SPEAKER_00",
+            "SPEAKER_01"
+          ],
+          "type": "discussion",
+          "timestamp": 0.0
+        },
+        {
+          "scene": 1,
+          "entities": [
+            "person1",
+            "person2"
+          ],
+          "type": "interacting",
+          "timestamp": 2.0
+        },
+        {
+          "scene": 2,
+          "entities": [
+            "SPEAKER_00",
+            "SPEAKER_01"
+          ],
+          "type": "conversation",
+          "timestamp": 5.072
+        },
+        {
+          "scene": 4,
+          "entities": [
+            "SPEAKER_00",
+            "SPEAKER_01"
+          ],
+          "type": "conversation",
+          "timestamp": 10.01
+        },
+        {
+          "scene": 5,
+          "entities": [
+            "person",
+            "chair"
+          ],
+          "type": "near",
+          "timestamp": 12.01
+        },
+        {
+          "scene": 6,
+          "entities": [
+            "SPEAKER_00",
+            "SPEAKER_01"
+          ],
+          "type": "conversation",
+          "timestamp": 14.014
+        },
+        {
+          "scene": 7,
+          "entities": [
+            "SPEAKER_00",
+            "SPEAKER_01"
+          ],
+          "type": "interaction",
+          "timestamp": 17.584
+        },
+        {
+          "scene": 9,
+          "entities": [
+            "SPEAKER_00"
+          ],
+          "type": "self-speaking",
+          "timestamp": 23.521
+        },
+        {
+          "scene": 10,
+          "entities": [
+            "SPEAKER_00",
+            "person1"
+          ],
+          "type": "conversation",
+          "timestamp": 25.792
+        },
+        {
+          "scene": 11,
+          "entities": [
+            "SPEAKER_00",
+            "unspecified_person"
+          ],
+          "type": "discussion",
+          "timestamp": 29.162
+        },
+        {
+          "scene": 13,
+          "entities": [
+            "person1",
+            "person2"
+          ],
+          "type": "interacting",
+          "timestamp": 37.137
+        },
+        {
+          "scene": 14,
+          "entities": [
+            "SPEAKER_00",
+            "unseen_person"
+          ],
+          "type": "conversation",
+          "timestamp": 39.137
+        },
+        {
+          "scene": 15,
+          "entities": [
+            "SPEAKER_00",
+            "SPEAKER_01"
+          ],
+          "type": "interaction",
+          "timestamp": 41.608
+        }
+      ],
+      "interaction_patterns": {
+        "discussion": 2,
+        "interacting": 2,
+        "conversation": 5,
+        "near": 1,
+        "interaction": 2,
+        "self-speaking": 1
+      },
+      "total_entities": 8,
+      "total_interactions": 13
+    }
+  }
+}

@@ -1,0 +1,119 @@
+================================================================================
+                    GOODQ4ALL PROJECT STRUCTURE SANITY CHECK
+================================================================================
+
+CORE PIPELINE ARCHITECTURE:
+--------------------------------------------------------------------------------
+The GoodQ system uses ZenML for orchestration with isolated Conda environments.
+
+KEY FOLDERS AND THEIR ROLES:
+────────────────────────────────────────────────────────────────────────────────
+
+📁 /steps/                    ← THE ACTUAL PIPELINE LOGIC LIVES HERE
+   - Each subfolder is a ZenML step (e.g., video_ingest/, audio_transcribe/)
+   - Contains step.py with the actual processing code
+   - These are the REAL workers that do the heavy lifting
+   - Each step has its own conda environment defined in /envs/
+
+📁 /pipelines/                 ← PIPELINE DEFINITIONS (Orchestration)
+   - ingest_multimodal_conda.py = THE PRODUCTION PIPELINE
+   - Defines the ZenML @pipeline that wires steps together
+   - Uses conda_runner to delegate each step to its isolated env
+
+📁 /scripts/                   ← UTILITY & HELPER SCRIPTS
+   - NOT the main pipeline - just tools/utilities
+   - watchdog_ingest.py = file monitor that triggers ingestion
+   - Various diagnostic, monitoring, and maintenance scripts
+   - This is a "catch-all" for scripts that don't fit elsewhere
+
+📁 /cli/                       ← COMMAND-LINE INTERFACES
+   - run_ingestion.py = THE MAIN ENTRY POINT for ingestion
+   - This is what actually runs the pipeline
+   - Provides typer CLI for running steps individually or full pipeline
+
+📁 /envs/                      ← CONDA ENVIRONMENT DEFINITIONS
+   - YAML files defining isolated environments for each step
+   - Ensures no dependency conflicts between steps
+
+📁 /zenml_store/              ← ZenML METADATA STORAGE
+   - Internal ZenML database and artifacts
+   - Don't modify directly
+
+
+EXECUTION FLOW:
+────────────────────────────────────────────────────────────────────────────────
+
+1. USER ACTION:
+   - Drops video in import_inbox/
+   - OR manually runs: python cli/run_ingestion.py <video>
+
+2. WATCHDOG (optional automation):
+   - scripts/watchdog_ingest.py monitors import_inbox
+   - Detects new files and triggers cli/run_ingestion.py
+
+3. INGESTION ORCHESTRATOR (cli/run_ingestion.py):
+   - Coordinates the entire scene-first pipeline
+   - For each video:
+     a) Extract scenes (video_scene_detect step)
+     b) For each scene, run all pipeline steps
+     c) Build knowledge graph from results
+
+4. ZENML PIPELINE (pipelines/ingest_multimodal_conda.py):
+   - Alternative orchestration method using ZenML
+   - Wires together steps defined in /steps/
+   - Each step runs in its isolated conda environment
+
+
+CURRENT ISSUE - SCENE DETECTION HANGS:
+────────────────────────────────────────────────────────────────────────────────
+
+PROBLEM: Pipeline freezes during scene detection, creates 2-second scenes
+
+ROOT CAUSE: Config settings for scene detection are too sensitive
+
+LOCATION OF SCENE DETECTION:
+- /steps/video_scene_detect/step.py = actual detection logic
+- /config.yaml = configuration (threshold, min_scene_length, etc.)
+
+WHERE PROCESSING HAPPENS:
+- cli/run_ingestion.py calls scene detection FIRST
+- Then processes each scene through the pipeline
+- This is the "scene-first" approach mentioned in docs
+
+
+ANSWER TO YOUR QUESTION:
+────────────────────────────────────────────────────────────────────────────────
+
+Q: "Did a coding agent start remaking scripts in /scripts folder?"
+
+A: PARTIALLY YES - scripts/ contains some duplicate/overlapping tools:
+   - watchdog_ingest.py (file monitor)
+   - monitor_*.py (various monitoring tools)
+   - check_*.py (diagnostic utilities)
+   - Some may be outdated or redundant
+
+   BUT the REAL pipeline logic is in:
+   - /steps/ (the workers)
+   - /pipelines/ (the orchestrator)
+   - /cli/run_ingestion.py (the entry point)
+
+Q: "Is /scripts just a catch-all or is the pipeline defined there?"
+
+A: CATCH-ALL for utilities. The pipeline is defined in:
+   - /pipelines/ingest_multimodal_conda.py (ZenML orchestration)
+   - /cli/run_ingestion.py (Direct CLI orchestration - THIS IS PRODUCTION)
+
+
+RECOMMENDATION:
+────────────────────────────────────────────────────────────────────────────────
+
+To fix the scene detection issue and run a clean test:
+
+1. Fix config.yaml scene detection settings
+2. Use cli/run_ingestion.py as the entry point (NOT scripts/)
+3. Monitor via: python scripts/monitor_ingestion_progress.py
+4. Check results in output/ directory
+
+The /scripts folder can be cleaned up later, but it's NOT blocking pipeline work.
+
+================================================================================

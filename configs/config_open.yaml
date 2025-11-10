@@ -6,8 +6,17 @@ user:
 model:
   goodq_values: clarity, precision, humor, loyalty
 llm:
-  api_url: http://172.27.16.1:1234/v1/chat/completions
-  model_id: meta-llama-3.1-8b-instruct
+  api_url: http://localhost:1234/v1/chat/completions
+  model_id: qwen2.5-7b-instruct
+  timeout: 30
+  temperature: 0.5
+  features:
+    scene_summarization: true
+    video_summarization: true
+    intelligent_tagging: true
+    context_analysis: true
+    emotional_arc_analysis: true
+    relationship_mapping: true
 tts:
   engine: elevenlabs
   voice_id: goT3UYdM9bhm0n2lmKQx
@@ -34,13 +43,13 @@ analysis:
   use_nrc_lexicon: false
 video:
   scene_detect:
-    threshold: 15.0
-    min_scene_len_sec: 5.0
+    threshold: 30.0
+    min_scene_len_sec: 300.0  # 5 minutes minimum per scene
     max_scenes: 100
-    entity_refine: false
+    entity_refine: false  # CRITICAL: Keep FALSE to prevent scene over-segmentation
     entity_sample_rate: 0.25
-    entity_min_duration: 2.0
-    entity_max_samples: 30
+    entity_min_duration: 300.0  # Match min_scene_len_sec to ensure consistency
+    entity_max_samples: 300
   scene_threshold: 0.3
   scene_threshold_overrides:
     by_extension: {}

@@ -1,7 +1,17 @@
 from __future__ import annotations
 from typing import Any, Dict, List
 import os
+import logging
 
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Import score_nrc_emotions at module level
+try:
+    from goodq4all.steps.common.lexicon import score_nrc_emotions
+except ImportError:
+    from steps.common.lexicon import score_nrc_emotions
 
 _EMO = {"model": None, "tok": None, "labels": []}
 
@@ -17,6 +27,8 @@ def _load_emotion():
         os.environ.setdefault("HF_HOME", "L:/models")
         os.environ.setdefault("TORCH_HOME", "L:/models")
         os.environ.setdefault("TRANSFORMERS_CACHE", "L:/models/transformers")
+        # Disable hf_transfer to avoid dependency issues
+        os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "0"
 
         name = "cardiffnlp/twitter-roberta-base-emotion-multilabel-latest"
         tok = AutoTokenizer.from_pretrained(name)
@@ -69,12 +81,13 @@ def emotion_classify(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
             top = [{"label": l, "score": float(s)} for l, s in pairs[:5]]
             try:
                 update_fields(cfg, _content_fingerprint(item), emotions_json=_json.dumps(top))
+                logger.info(f"Successfully updated emotions for item: {item.get('path', 'unknown')[:50]}")
             except Exception as e:
-                print(f'[ERROR] Exception in step.py line 72: {str(e)}')
-                pass
+                logger.error(f'Failed to update_fields for emotions: {str(e)}', exc_info=True)
+                # Still return the data even if DB update fails
             return {"emotions": top, "emotion_meta": {"engine": "hf"}}
         except Exception as e:
-            print(f'[ERROR] Exception in step.py line 76: {str(e)}')
+            logger.error(f'Emotion classification failed: {str(e)}', exc_info=True)
             pass
 
     # NRC lexicon fallback when configured or offline
@@ -108,10 +121,10 @@ def emotion_classify(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
         top = [{"label": l, "score": float(s)} for l, s in pairs[:5]]
         try:
             update_fields(cfg, _content_fingerprint(item), emotions_json=_json.dumps(top))
+            logger.info(f"Successfully updated emotions (fallback path) for item: {item.get('path', 'unknown')[:50]}")
         except Exception as e:
-            print(f'[ERROR] Exception in step.py line 111: {str(e)}')
-            pass
+            logger.error(f'Failed to update_fields for emotions (fallback): {str(e)}', exc_info=True)
+            # Still return the data even if DB update fails
         return {"emotions": top}
     except Exception as e:
         return {"emotions": None, "emotion_meta": {"status": "error", "error": str(e)}}
-from goodq4all.steps.common.lexicon import score_nrc_emotions

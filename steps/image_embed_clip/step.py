@@ -37,12 +37,18 @@ def image_embed_clip(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
         from PIL import Image  # type: ignore
         import faiss  # type: ignore
         img = Image.open(path).convert("RGB")
-        ipt = _CLIP["proc"](images=img, return_tensors="pt").to(_CLIP["device"])
-        if _CLIP["device"] == "cuda":
-            with torch.cuda.amp.autocast():
-                out = _CLIP["model"](**ipt).image_embeds
-        else:
-            out = _CLIP["model"](**ipt).image_embeds
+        # FIXED: Use proper CLIP processor with image input
+        ipt = _CLIP["proc"](images=img, return_tensors="pt", padding=True)
+        # Move inputs to device
+        ipt = {k: v.to(_CLIP["device"]) for k, v in ipt.items()}
+        
+        # Get image embeddings with correct method
+        with torch.no_grad():
+            if _CLIP["device"] == "cuda":
+                with torch.cuda.amp.autocast():
+                    out = _CLIP["model"].get_image_features(**ipt)
+            else:
+                out = _CLIP["model"].get_image_features(**ipt)
         feats = out.detach().cpu().numpy().astype("float32")
         index_path = (cfg.get("paths", {}) or {}).get("faiss_clip_path")
         if not index_path:
@@ -96,7 +102,10 @@ def image_embed_clip(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
         # See docs/ARCHITECTURE_REFERENCE.md for full explanation.
         try:
             from goodq4all.steps.common.memory import upsert_embedding
-            upsert_embedding(cfg, h, faiss_id, path, item.get("modality", "image") or "image")
+            scene_id = item.get("scene_id") or item.get("scene_index")
+            if scene_id is not None and not isinstance(scene_id, str):
+                scene_id = f"scene_{int(scene_id):04d}"
+            upsert_embedding(cfg, h, faiss_id, path, item.get("modality", "image") or "image", scene_id=scene_id)
         except Exception as e:
             print(f'[ERROR] Exception in step.py line 96: {str(e)}')
             pass

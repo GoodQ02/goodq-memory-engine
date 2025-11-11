@@ -221,30 +221,6 @@ async def get_status():
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/api/progress")
-async def get_progress():
-    """Get real-time processing progress"""
-    try:
-        progress_file = Path("L:/goodq4all/logs/progress.json")
-        
-        if not progress_file.exists():
-            return {
-                "status": "idle",
-                "message": "No active processing",
-                "timestamp": datetime.now().isoformat()
-            }
-        
-        with open(progress_file, 'r', encoding='utf-8') as f:
-            progress_data = json.load(f)
-        
-        return progress_data
-    
-    except Exception as e:
-        print(f"Error in get_progress: {e}")
-        tb.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
-
-
 @app.get("/api/scenes")
 async def get_scenes(limit: int = 100, offset: int = 0):
     """Get real scene data from memory.db"""
@@ -318,7 +294,7 @@ async def get_scenes(limit: int = 100, offset: int = 0):
 
 
 @app.get("/api/scene/{scene_id}")
-async def get_scene_detail(scene_id: int):
+async def get_scene_detail(scene_id: str):
     """Get detailed information about a specific scene"""
     try:
         if not MEMORY_DB.exists():
@@ -327,7 +303,8 @@ async def get_scene_detail(scene_id: int):
         conn = sqlite3.connect(str(MEMORY_DB))
         cursor = conn.cursor()
 
-        # Get scene data
+        # Get scene data - scene_id can be hash string or index number
+        # Try as direct ID first (hash)
         cursor.execute("""
             SELECT id, video_hash, start, end, meta, created_at
             FROM scenes
@@ -377,9 +354,9 @@ async def get_scene_detail(scene_id: int):
             
             # Try to find entities linked to this scene
             kg_cursor.execute("""
-                SELECT DISTINCT n.node_id, n.name, n.node_type, n.properties
+                SELECT DISTINCT n.id, n.name, n.node_type, n.properties
                 FROM nodes n
-                JOIN edges e ON (n.node_id = e.source_id OR n.node_id = e.target_id)
+                JOIN edges e ON (n.id = e.source_id OR n.id = e.target_id)
                 LIMIT 20
             """)
             
@@ -426,14 +403,14 @@ async def get_entities(limit: int = 100, entity_type: Optional[str] = None):
         # Build query
         if entity_type:
             cursor.execute("""
-                SELECT node_id, name, node_type, properties
+                SELECT id, name, node_type, properties
                 FROM nodes
                 WHERE node_type = ?
                 LIMIT ?
             """, (entity_type, limit))
         else:
             cursor.execute("""
-                SELECT node_id, name, node_type, properties
+                SELECT id, name, node_type, properties
                 FROM nodes
                 LIMIT ?
             """, (limit,))
@@ -857,37 +834,41 @@ async def get_progress():
         # Try to load progress from file
         progress_file = LOGS_DIR / "progress.json"
         if progress_file.exists():
-            with open(progress_file, 'r') as f:
+            with open(progress_file, 'r', encoding='utf-8') as f:
                 progress_data = json.load(f)
                 return {
                     "has_progress": True,
-                    "data": progress_data
+                    "data": progress_data,
+                    "timestamp": datetime.now().isoformat()
                 }
         else:
             return {
                 "has_progress": False,
                 "data": {
                     "status": "idle",
-                    "file": None,
-                    "step": None,
+                    "current_file": None,
+                    "current_step": None,
                     "progress_percent": 0,
-                    "completed_steps": 0,
+                    "steps_completed": [],
                     "total_steps": 0
-                }
+                },
+                "timestamp": datetime.now().isoformat()
             }
     except Exception as e:
         print(f"Error loading progress: {e}")
+        tb.print_exc()
         return {
             "has_progress": False,
             "error": str(e),
             "data": {
                 "status": "error",
-                "file": None,
-                "step": None,
+                "current_file": None,
+                "current_step": None,
                 "progress_percent": 0,
-                "completed_steps": 0,
+                "steps_completed": [],
                 "total_steps": 0
-            }
+            },
+            "timestamp": datetime.now().isoformat()
         }
 
 

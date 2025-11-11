@@ -69,7 +69,7 @@ def run_conda_step(env_name: str, step_name: str, item: Dict[str, Any], cfg: Dic
             timeout_s = None
         
         try:
-            result = subprocess.run(cmd, check=True, capture_output=True, timeout=timeout_s, env=env, text=True)
+            result = subprocess.run(cmd, check=True, capture_output=True, timeout=timeout_s, env=env, text=True, encoding='utf-8', errors='replace')
         except subprocess.TimeoutExpired as e:
             error_msg = f"⏱️  Mission timeout: {step_name} in {env_name} (exceeded {timeout_s}s)"
             logger.error(error_msg)

@@ -472,6 +472,8 @@ def _run_step(env_name: str, step_name: str, payload: Dict[str, Any], cfg_json: 
                 cwd=str(REPO_ROOT),
                 capture_output=True,
                 text=True,
+                encoding='utf-8',
+                errors='replace',
                 env=work_env,
                 timeout=STEP_TIMEOUT,
             )
@@ -545,7 +547,7 @@ def _extract_keyframe(ffmpeg: str, video_path: Path, scene: Dict[str, Any], dest
         '-y',
         str(outfile),
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True)
+    result = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', errors='replace')
     if result.returncode != 0:
         raise RuntimeError(f"ffmpeg failed to extract keyframe: {result.stderr}")
     if not outfile.exists():
@@ -573,7 +575,7 @@ def _extract_audio_chunk(ffmpeg: str, video_path: Path, scene: Dict[str, Any], d
         '-y',
         str(outfile),
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True)
+    result = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', errors='replace')
     if result.returncode != 0:
         raise RuntimeError(f"ffmpeg failed to extract audio chunk: {result.stderr}")
     if not outfile.exists():

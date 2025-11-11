@@ -159,7 +159,7 @@ def _slice_to_wav(src_path: str, start: float, end: float, ffmpeg_path: Optional
             ]
             if debug_mode:
                 print(f'[DEBUG] Running ffmpeg: {" ".join(cmd)}')
-            result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+            result = subprocess.run(cmd, check=True, capture_output=True, text=True, encoding='utf-8', errors='replace')
             
             # Verify output file was created
             if not os.path.isfile(tmp_path) or os.path.getsize(tmp_path) == 0:

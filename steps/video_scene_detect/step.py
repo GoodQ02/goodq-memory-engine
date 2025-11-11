@@ -357,6 +357,13 @@ def _refine_scenes_with_entities(
 
 
 def video_scene_detect(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
+    # Import progress tracker
+    try:
+        from steps.common.progress_tracker import get_tracker
+        tracker = get_tracker()
+    except:
+        tracker = None
+    
     path = item.get('source_path')
     if not isinstance(path, str) or not os.path.isfile(path):
         return {
@@ -366,30 +373,57 @@ def video_scene_detect(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, A
                 'reason': 'source_path not found',
             },
         }
+    
+    filename = os.path.basename(path)
     params = _load_params(cfg, item)
+    
+    # Update progress
+    if tracker:
+        tracker.update_step("video_scene_detect", 2, {
+            "details": f"Detecting scenes (threshold={params['threshold']}, min_len={params['min_scene_len_sec']}s)"
+        })
+    
+    print(f"[SCENE] Detecting scenes in {filename}")
+    print(f"[SCENE] Parameters: threshold={params['threshold']}, min_scene_len={params['min_scene_len_sec']}s")
+    
     try:
         detection = _detect_with_scenedetect(path, params['threshold'], params['min_scene_len_sec'])
         scenes = detection.get('scenes', [])
         if not scenes:
             scenes = _fallback_single_scene(detection.get('duration'))
             status = 'fallback_single_scene'
+            print(f"[SCENE] No scenes detected, using fallback single scene")
         else:
             status = 'ok'
+            print(f"[SCENE] Detected {len(scenes)} scenes")
         error_msg = None
     except Exception as exc:
+        print(f"[ERROR] Scene detection failed: {exc}")
         scenes = _fallback_single_scene(None)
         status = 'error'
         error_msg = str(exc)
+        if tracker:
+            tracker.add_error(f"Scene detection failed: {str(exc)}", "video_scene_detect")
 
     entity_meta = {'status': 'disabled'}
     # CRITICAL: Respect the config setting - default to FALSE to avoid scene over-segmentation
     if params.get('entity_refine', False) and scenes:
+        print(f"[SCENE] Refining scenes with entity detection")
         refined_scenes, entity_meta = _refine_scenes_with_entities(path, scenes, params)
         scenes = refined_scenes
+        print(f"[SCENE] Refined to {len(scenes)} scenes")
 
     max_scenes = params['max_scenes']
     if max_scenes and len(scenes) > max_scenes:
         scenes = scenes[:max_scenes]
+        print(f"[SCENE] Truncated to {max_scenes} scenes")
+    
+    # Update progress with results
+    if tracker:
+        tracker.complete_step("video_scene_detect", {
+            "scene_count": len(scenes),
+            "status": status
+        })
 
     meta = {
         'status': status,

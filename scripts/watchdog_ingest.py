@@ -16,6 +16,7 @@ from typing import Optional, Set, Dict, List
 from queue import Queue, Empty
 from threading import Thread, Event, Lock
 import json
+import os
 
 # Setup logging with UTF-8 encoding for file, ASCII for console
 logging.basicConfig(
@@ -402,11 +403,16 @@ class WatchdogProcessor:
         # Use direct Python call (already running in correct environment)
         import sys
         python_exe = sys.executable
+        
+        # Set per-step timeout (600s = 10min per step, enough for diarization on 5min scenes)
+        step_timeout = 600
+        
         cmd = [
             python_exe, '-m', 'cli.run_ingestion',
             '--input-dir', str(temp_input),
             '--workspace', f'L:/goodq4all/logs/watchdog_{datetime.now().strftime("%Y%m%d_%H%M%S")}',
             '--output', f'L:/goodq4all/logs/watchdog_{datetime.now().strftime("%Y%m%d_%H%M%S")}_results.json',
+            '--step-timeout', str(step_timeout),  # Add per-step timeout
             '--force',  # Force reprocessing to ensure complete AI analysis
             '--verbose'
         ]
@@ -424,6 +430,8 @@ class WatchdogProcessor:
                 cmd,
                 capture_output=True,
                 text=True,
+                encoding='utf-8',
+                errors='replace',
                 timeout=timeout_seconds,
                 cwd='L:/goodq4all'
             )
@@ -547,9 +555,47 @@ class WatchdogProcessor:
 
 
 def main():
-    """Main entry point"""
-    watchdog = WatchdogProcessor()
-    watchdog.run()
+    """Main entry point with file lock to prevent multiple instances"""
+    lockfile = Path('L:/goodq4all/data/.watchdog.lock')
+    lockfile.parent.mkdir(parents=True, exist_ok=True)
+    
+    # Try to create lock file exclusively
+    try:
+        # On Windows, open with exclusive access
+        lock_handle = os.open(str(lockfile), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        os.write(lock_handle, str(os.getpid()).encode())
+        os.close(lock_handle)
+    except FileExistsError:
+        # Check if existing lock is from a dead process
+        try:
+            with open(lockfile, 'r') as f:
+                old_pid = int(f.read().strip())
+            # Check if process still exists
+            import psutil
+            if psutil.pid_exists(old_pid):
+                logger.error(f"Watchdog already running (PID {old_pid}). Exiting.")
+                sys.exit(1)
+            else:
+                # Dead process, remove stale lock
+                logger.warning(f"Removing stale lock from dead process {old_pid}")
+                lockfile.unlink()
+                # Try again
+                lock_handle = os.open(str(lockfile), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+                os.write(lock_handle, str(os.getpid()).encode())
+                os.close(lock_handle)
+        except Exception as e:
+            logger.error(f"Failed to acquire lock: {e}")
+            sys.exit(1)
+    
+    try:
+        watchdog = WatchdogProcessor()
+        watchdog.run()
+    finally:
+        # Remove lock on exit
+        try:
+            lockfile.unlink(missing_ok=True)
+        except:
+            pass
 
 
 if __name__ == '__main__':

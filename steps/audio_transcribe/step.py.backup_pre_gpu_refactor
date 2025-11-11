@@ -363,28 +363,19 @@ def audio_transcribe(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
     whisper_cli = tools_cfg.get("whisper_cli")
     whisper_model_path = tools_cfg.get("whisper_ggml_model")
 
-    # Configure GPU using centralized manager (Phase 3)
     try:
-        from gpu_config import setup_step_gpu, GPUManager
-    except ImportError:
-        try:
-            from goodq4all.gpu_config import setup_step_gpu, GPUManager
-        except ImportError:
-            def setup_step_gpu(step_name):
-                return {"device": "cpu", "step_name": step_name}
-    
-    gpu_config = setup_step_gpu("audio_transcribe")
-    device = gpu_config["device"]
+        import torch  # type: ignore
+
+        use_cuda = bool(getattr(torch, "cuda", None) and torch.cuda.is_available())
+    except Exception as e:
+        use_cuda = False
+    device = "cuda" if use_cuda else "cpu"
     model_id = str(tx_cfg.get("model") or "medium")
     compute_type = "float16" if device == "cuda" else "int8"
 
     os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
     os.environ.setdefault("HF_HOME", os.environ.get("HF_HOME") or "L:/models")
     os.environ.setdefault("TORCH_HOME", os.environ.get("TORCH_HOME") or "L:/models")
-    
-    import logging
-    logger = logging.getLogger(__name__)
-    logger.info(f"✅ Whisper configured on {device} (GPU config: {gpu_config.get('memory_fraction', 0):.1%} memory)")
 
     fw_model = _load_fw_model(model_id, device, compute_type)
 

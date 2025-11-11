@@ -7,45 +7,43 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Import GPU manager for centralized GPU configuration
-try:
-    from gpu_config import setup_step_gpu, GPUManager
-except ImportError:
-    try:
-        from goodq4all.gpu_config import setup_step_gpu, GPUManager
-    except ImportError:
-        # Fallback if GPU manager not available
-        def setup_step_gpu(step_name):
-            return {"device": "cpu", "step_name": step_name}
-        class GPUManager:
-            @staticmethod
-            def clear_cache():
-                pass
-
 # Import score_nrc_emotions at module level
 try:
     from goodq4all.steps.common.lexicon import score_nrc_emotions
 except ImportError:
     from steps.common.lexicon import score_nrc_emotions
 
-_EMO = {"model": None, "tok": None, "labels": [], "device": "cpu"}
+_EMO = {"model": None, "tok": None, "labels": []}
 
 
 def _load_emotion():
     if _EMO["model"] is not None:
         return
-    
-    # Configure GPU using centralized manager (Phase 3)
-    gpu_config = setup_step_gpu("emotion_classify")
-    device = gpu_config["device"]
-    
     try:
         import torch  # type: ignore
         from transformers import AutoTokenizer, AutoModelForSequenceClassification  # type: ignore
 
+        # GPU Isolation - Phase 2
+        os.environ.setdefault("CUDA_VISIBLE_DEVICES", "0")
+        
+        # Ensure HF_HOME is set for model caching
+        os.environ.setdefault("HF_HOME", "L:/models")
+        os.environ.setdefault("TORCH_HOME", "L:/models")
+        os.environ.setdefault("TRANSFORMERS_CACHE", "L:/models/transformers")
+        # Disable hf_transfer to avoid dependency issues
+        os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "0"
+
         name = "cardiffnlp/twitter-roberta-base-emotion-multilabel-latest"
         tok = AutoTokenizer.from_pretrained(name)
         model = AutoModelForSequenceClassification.from_pretrained(name)
+        device = "cuda" if getattr(torch, "cuda", None) and torch.cuda.is_available() else "cpu"
+        
+        # Set memory fraction for this process (30% of GPU)
+        if device == "cuda":
+            torch.cuda.set_per_process_memory_fraction(0.3, 0)
+            # Enable memory efficient settings
+            torch.backends.cudnn.benchmark = False
+            torch.backends.cudnn.deterministic = True
         
         model = model.to(device).eval()
         labels = [
@@ -55,13 +53,10 @@ def _load_emotion():
             "surprise","neutral",
         ]
         _EMO.update({"model": model, "tok": tok, "labels": labels, "device": device})
-        logger.info(f"✅ Emotion model loaded on {device} (GPU config: {gpu_config['memory_fraction']:.1%} memory)")
+        logger.info(f"Emotion model loaded on {device} with memory fraction 0.3")
     except Exception as e:
-        logger.error(f"❌ Failed to load emotion model: {str(e)}")
-        logger.info("⚠️  Falling back to CPU mode")
-        _EMO.update({"model": None, "tok": None, "labels": [], "device": "cpu"})
-        # Clear any partial GPU allocations
-        GPUManager.clear_cache()
+        logger.error(f"Failed to load emotion model: {str(e)}")
+        _EMO.update({"model": None, "tok": None, "labels": []})
 
 
 def _gather_text(item: Dict[str, Any]) -> str:

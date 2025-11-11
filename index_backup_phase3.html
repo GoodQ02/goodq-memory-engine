@@ -824,227 +824,6 @@
             color: var(--secondary-text);
             font-style: italic;
         }
-
-        /* Modal Styles */
-        .modal-overlay {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0, 0, 0, 0.85);
-            z-index: 1000;
-            backdrop-filter: blur(8px);
-        }
-
-        .modal-overlay.active {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .modal-content {
-            background: var(--secondary-bg);
-            border: 1px solid var(--border-color);
-            border-radius: 12px;
-            max-width: 900px;
-            max-height: 90vh;
-            width: 90%;
-            overflow: hidden;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .modal-header {
-            padding: 20px 24px;
-            border-bottom: 1px solid var(--border-color);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .modal-title {
-            font-size: 20px;
-            font-weight: 600;
-            color: var(--primary-text);
-        }
-
-        .modal-close {
-            background: none;
-            border: none;
-            color: var(--secondary-text);
-            font-size: 24px;
-            cursor: pointer;
-            padding: 0;
-            width: 32px;
-            height: 32px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 4px;
-            transition: all 0.2s;
-        }
-
-        .modal-close:hover {
-            background: var(--accent-bg);
-            color: var(--primary-text);
-        }
-
-        .modal-body {
-            padding: 24px;
-            overflow-y: auto;
-            flex: 1;
-        }
-
-        .detail-section {
-            margin-bottom: 24px;
-        }
-
-        .detail-section-title {
-            font-size: 14px;
-            font-weight: 600;
-            color: var(--accent-color);
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            margin-bottom: 12px;
-        }
-
-        .detail-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 12px;
-            margin-bottom: 16px;
-        }
-
-        .detail-item {
-            background: var(--accent-bg);
-            padding: 12px;
-            border-radius: 6px;
-            border: 1px solid var(--border-color);
-        }
-
-        .detail-label {
-            font-size: 11px;
-            color: var(--secondary-text);
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            margin-bottom: 4px;
-        }
-
-        .detail-value {
-            font-size: 14px;
-            color: var(--primary-text);
-            font-weight: 500;
-        }
-
-        .transcript-box {
-            background: var(--accent-bg);
-            border: 1px solid var(--border-color);
-            border-radius: 6px;
-            padding: 16px;
-            font-size: 14px;
-            line-height: 1.6;
-            color: var(--primary-text);
-            max-height: 200px;
-            overflow-y: auto;
-        }
-
-        .emotion-grid {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-        }
-
-        .emotion-tag {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            padding: 6px 12px;
-            background: var(--accent-bg);
-            border: 1px solid var(--border-color);
-            border-radius: 16px;
-            font-size: 12px;
-        }
-
-        .emotion-score {
-            background: var(--accent-color);
-            color: white;
-            padding: 2px 6px;
-            border-radius: 10px;
-            font-size: 10px;
-            font-weight: 600;
-        }
-
-        .entity-list {
-            display: grid;
-            gap: 8px;
-        }
-
-        .entity-item {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            padding: 10px;
-            background: var(--accent-bg);
-            border: 1px solid var(--border-color);
-            border-radius: 6px;
-        }
-
-        .entity-type-badge {
-            padding: 4px 8px;
-            background: var(--accent-color);
-            color: white;
-            border-radius: 4px;
-            font-size: 10px;
-            font-weight: 600;
-            text-transform: uppercase;
-        }
-
-        .entity-name {
-            flex: 1;
-            font-size: 13px;
-            color: var(--primary-text);
-            font-weight: 500;
-        }
-
-        .scene-filters {
-            display: flex;
-            gap: 12px;
-            margin-bottom: 16px;
-            flex-wrap: wrap;
-        }
-
-        .filter-input {
-            flex: 1;
-            min-width: 250px;
-            padding: 10px 14px;
-            background: var(--accent-bg);
-            border: 1px solid var(--border-color);
-            border-radius: 6px;
-            color: var(--primary-text);
-            font-size: 14px;
-        }
-
-        .filter-input:focus {
-            outline: none;
-            border-color: var(--accent-color);
-        }
-
-        .filter-select {
-            padding: 10px 14px;
-            background: var(--accent-bg);
-            border: 1px solid var(--border-color);
-            border-radius: 6px;
-            color: var(--primary-text);
-            font-size: 14px;
-            cursor: pointer;
-        }
-
-        .filter-select:focus {
-            outline: none;
-            border-color: var(--accent-color);
-        }
     </style>
 </head>
 <body>
@@ -1180,22 +959,9 @@
                     <div class="card">
                         <div class="card-header">
                             <div>
-                                <div class="card-title">Memory Explorer</div>
+                                <div class="card-title">Scene Explorer</div>
                                 <div class="card-subtitle" id="sceneCount">Loading...</div>
                             </div>
-                            <button class="btn btn-primary" onclick="loadScenes()">Refresh</button>
-                        </div>
-                        <div class="scene-filters">
-                            <input type="text" class="filter-input" id="sceneSearchInput" placeholder="Search scenes (title, transcript, emotions...)" onkeyup="filterScenes()">
-                            <select class="filter-select" id="emotionFilter" onchange="filterScenes()">
-                                <option value="">All Emotions</option>
-                            </select>
-                            <select class="filter-select" id="sortFilter" onchange="sortScenes()">
-                                <option value="time-asc">Time (Old → New)</option>
-                                <option value="time-desc">Time (New → Old)</option>
-                                <option value="duration-desc">Duration (Long → Short)</option>
-                                <option value="duration-asc">Duration (Short → Long)</option>
-                            </select>
                         </div>
                         <div class="scene-list" id="sceneList"></div>
                     </div>
@@ -1251,19 +1017,6 @@
                         <div id="processList"></div>
                     </div>
                 </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Scene Detail Modal -->
-    <div class="modal-overlay" id="sceneModal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <div class="modal-title" id="modalTitle">Scene Details</div>
-                <button class="modal-close" onclick="closeSceneModal()">&times;</button>
-            </div>
-            <div class="modal-body" id="modalBody">
-                <!-- Content loaded dynamically -->
             </div>
         </div>
     </div>
@@ -1443,41 +1196,32 @@
 
                 document.getElementById('sceneCount').textContent = `${data.total} scenes total`;
 
-                allScenes = data.scenes;
-
-                // Populate emotion filter
-                const emotions = new Set();
-                data.scenes.forEach(scene => {
-                    if (scene.emotions) {
-                        scene.emotions.forEach(e => {
-                            const label = typeof e === 'object' ? e.label : e;
-                            emotions.add(label);
-                        });
-                    }
-                });
-
-                const emotionFilter = document.getElementById('emotionFilter');
-                if (emotionFilter) {
-                    const currentValue = emotionFilter.value;
-                    emotionFilter.innerHTML = '<option value="">All Emotions</option>' +
-                        Array.from(emotions).sort().map(emotion => 
-                            `<option value="${emotion.toLowerCase()}">${emotion}</option>`
-                        ).join('');
-                    emotionFilter.value = currentValue;
-                }
-
+                const container = document.getElementById('sceneList');
+                
                 if (data.scenes.length === 0) {
-                    document.getElementById('sceneList').innerHTML = 
-                        '<div class="empty-state"><div class="empty-state-icon">🎬</div><div>No scenes processed yet</div></div>';
+                    container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🎬</div><div>No scenes processed yet</div></div>';
                     return;
                 }
 
-                renderScenes(data.scenes);
+                container.innerHTML = data.scenes.map(scene => `
+                    <div class="scene-item" onclick="showSceneDetail('${scene.id}')">
+                        <div class="scene-header">
+                            <div class="scene-number">Scene ${scene.scene_number}</div>
+                            <div class="scene-time">${formatTime(scene.start)} - ${formatTime(scene.end)} (${formatDuration(scene.duration)})</div>
+                        </div>
+                        <div class="scene-summary">${scene.summary || scene.caption || 'No description'}</div>
+                        ${scene.transcript ? `<div style="font-size: 12px; color: var(--secondary-text); margin-top: 5px;">💬 ${scene.transcript.substring(0, 100)}${scene.transcript.length > 100 ? '...' : ''}</div>` : ''}
+                        ${scene.emotions && scene.emotions.length > 0 ? `
+                            <div class="scene-meta">
+                                ${scene.emotions.slice(0, 5).map(e => `<span class="meta-tag">${e.label || e}</span>`).join('')}
+                            </div>
+                        ` : ''}
+                    </div>
+                `).join('');
 
             } catch (error) {
                 console.error('Error loading scenes:', error);
-                document.getElementById('sceneList').innerHTML = 
-                    '<div class="empty-state"><div class="empty-state-icon">⚠️</div><div>Error loading scenes</div></div>';
+                document.getElementById('sceneList').innerHTML = '<div class="empty-state"><div class="empty-state-icon">⚠️</div><div>Error loading scenes</div></div>';
             }
         }
 
@@ -2159,234 +1903,10 @@
             return div.innerHTML;
         }
 
-        // Store scenes data for filtering/sorting
-        let allScenes = [];
-
-        // Enhanced Scene Detail Modal
-        async function showSceneDetail(sceneId) {
-            try {
-                const response = await fetch(`${API_BASE}/scene/${sceneId}`);
-                const scene = await response.json();
-
-                document.getElementById('modalTitle').textContent = `Scene ${scene.scene_number || scene.id}`;
-
-                const modalBody = document.getElementById('modalBody');
-                modalBody.innerHTML = `
-                    <!-- Time Information -->
-                    <div class="detail-section">
-                        <div class="detail-section-title">Time & Duration</div>
-                        <div class="detail-grid">
-                            <div class="detail-item">
-                                <div class="detail-label">Start Time</div>
-                                <div class="detail-value">${formatTime(scene.start)}</div>
-                            </div>
-                            <div class="detail-item">
-                                <div class="detail-label">End Time</div>
-                                <div class="detail-value">${formatTime(scene.end)}</div>
-                            </div>
-                            <div class="detail-item">
-                                <div class="detail-label">Duration</div>
-                                <div class="detail-value">${formatDuration(scene.duration)}</div>
-                            </div>
-                            <div class="detail-item">
-                                <div class="detail-label">Scene Number</div>
-                                <div class="detail-value">#${scene.scene_number || 'Unknown'}</div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Summary/Caption -->
-                    ${scene.summary || scene.caption ? `
-                    <div class="detail-section">
-                        <div class="detail-section-title">Summary</div>
-                        <div class="transcript-box">${escapeHtml(scene.summary || scene.caption)}</div>
-                    </div>
-                    ` : ''}
-
-                    <!-- Transcript -->
-                    ${scene.transcript ? `
-                    <div class="detail-section">
-                        <div class="detail-section-title">Transcript</div>
-                        <div class="transcript-box">${escapeHtml(scene.transcript)}</div>
-                    </div>
-                    ` : ''}
-
-                    <!-- Emotions -->
-                    ${scene.emotions && scene.emotions.length > 0 ? `
-                    <div class="detail-section">
-                        <div class="detail-section-title">Emotions Detected</div>
-                        <div class="emotion-grid">
-                            ${scene.emotions.map(emotion => {
-                                const label = typeof emotion === 'object' ? emotion.label : emotion;
-                                const score = typeof emotion === 'object' ? emotion.score : null;
-                                return `
-                                    <div class="emotion-tag">
-                                        ${label}
-                                        ${score ? `<span class="emotion-score">${(score * 100).toFixed(0)}%</span>` : ''}
-                                    </div>
-                                `;
-                            }).join('')}
-                        </div>
-                    </div>
-                    ` : ''}
-
-                    <!-- Entities -->
-                    ${scene.entities && scene.entities.length > 0 ? `
-                    <div class="detail-section">
-                        <div class="detail-section-title">Entities Found</div>
-                        <div class="entity-list">
-                            ${scene.entities.map(entity => `
-                                <div class="entity-item">
-                                    <div class="entity-type-badge">${entity.type || 'unknown'}</div>
-                                    <div class="entity-name">${escapeHtml(entity.name || entity)}</div>
-                                </div>
-                            `).join('')}
-                        </div>
-                    </div>
-                    ` : ''}
-
-                    <!-- Technical Details -->
-                    <div class="detail-section">
-                        <div class="detail-section-title">Technical Data</div>
-                        <div class="detail-grid">
-                            <div class="detail-item">
-                                <div class="detail-label">Scene ID</div>
-                                <div class="detail-value" style="font-size: 11px; word-break: break-all;">${scene.id}</div>
-                            </div>
-                            ${scene.file_path ? `
-                            <div class="detail-item">
-                                <div class="detail-label">Source File</div>
-                                <div class="detail-value" style="font-size: 11px;">${scene.file_path.split('/').pop()}</div>
-                            </div>
-                            ` : ''}
-                            ${scene.has_audio !== undefined ? `
-                            <div class="detail-item">
-                                <div class="detail-label">Audio</div>
-                                <div class="detail-value">${scene.has_audio ? '✓ Yes' : '✗ No'}</div>
-                            </div>
-                            ` : ''}
-                            ${scene.face_count !== undefined ? `
-                            <div class="detail-item">
-                                <div class="detail-label">Faces</div>
-                                <div class="detail-value">${scene.face_count}</div>
-                            </div>
-                            ` : ''}
-                        </div>
-                    </div>
-
-                    <!-- Embeddings -->
-                    ${scene.embeddings && Object.keys(scene.embeddings).length > 0 ? `
-                    <div class="detail-section">
-                        <div class="detail-section-title">Embeddings</div>
-                        <div class="detail-grid">
-                            ${Object.entries(scene.embeddings).map(([type, has]) => `
-                                <div class="detail-item">
-                                    <div class="detail-label">${type.toUpperCase()}</div>
-                                    <div class="detail-value">${has ? '✓ Available' : '✗ Not available'}</div>
-                                </div>
-                            `).join('')}
-                        </div>
-                    </div>
-                    ` : ''}
-                `;
-
-                document.getElementById('sceneModal').classList.add('active');
-            } catch (error) {
-                console.error('Error loading scene detail:', error);
-                alert('Failed to load scene details. Please try again.');
-            }
-        }
-
-        function closeSceneModal() {
-            document.getElementById('sceneModal').classList.remove('active');
-        }
-
-        // Close modal on overlay click
-        document.addEventListener('DOMContentLoaded', () => {
-            document.getElementById('sceneModal').addEventListener('click', (e) => {
-                if (e.target.id === 'sceneModal') {
-                    closeSceneModal();
-                }
-            });
-        });
-
-        // Filter and Sort Functions
-        function filterScenes() {
-            const searchTerm = document.getElementById('sceneSearchInput').value.toLowerCase();
-            const emotionFilter = document.getElementById('emotionFilter').value.toLowerCase();
-
-            const filtered = allScenes.filter(scene => {
-                // Search filter
-                const matchesSearch = !searchTerm || 
-                    (scene.summary && scene.summary.toLowerCase().includes(searchTerm)) ||
-                    (scene.caption && scene.caption.toLowerCase().includes(searchTerm)) ||
-                    (scene.transcript && scene.transcript.toLowerCase().includes(searchTerm)) ||
-                    (scene.emotions && scene.emotions.some(e => {
-                        const label = typeof e === 'object' ? e.label : e;
-                        return label.toLowerCase().includes(searchTerm);
-                    }));
-
-                // Emotion filter
-                const matchesEmotion = !emotionFilter ||
-                    (scene.emotions && scene.emotions.some(e => {
-                        const label = typeof e === 'object' ? e.label : e;
-                        return label.toLowerCase() === emotionFilter;
-                    }));
-
-                return matchesSearch && matchesEmotion;
-            });
-
-            renderScenes(filtered);
-        }
-
-        function sortScenes() {
-            const sortBy = document.getElementById('sortFilter').value;
-            
-            const sorted = [...allScenes].sort((a, b) => {
-                switch(sortBy) {
-                    case 'time-asc':
-                        return (a.start || 0) - (b.start || 0);
-                    case 'time-desc':
-                        return (b.start || 0) - (a.start || 0);
-                    case 'duration-asc':
-                        return (a.duration || 0) - (b.duration || 0);
-                    case 'duration-desc':
-                        return (b.duration || 0) - (a.duration || 0);
-                    default:
-                        return 0;
-                }
-            });
-
-            allScenes = sorted;
-            filterScenes(); // Re-apply filters with new sort order
-        }
-
-        function renderScenes(scenes) {
-            const container = document.getElementById('sceneList');
-            
-            if (scenes.length === 0) {
-                container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🎬</div><div>No scenes match your filters</div></div>';
-                return;
-            }
-
-            container.innerHTML = scenes.map(scene => `
-                <div class="scene-item" onclick="showSceneDetail('${scene.id}')">
-                    <div class="scene-header">
-                        <div class="scene-number">Scene ${scene.scene_number}</div>
-                        <div class="scene-time">${formatTime(scene.start)} - ${formatTime(scene.end)} (${formatDuration(scene.duration)})</div>
-                    </div>
-                    <div class="scene-summary">${scene.summary || scene.caption || 'No description'}</div>
-                    ${scene.transcript ? `<div style="font-size: 12px; color: var(--secondary-text); margin-top: 5px;">💬 ${scene.transcript.substring(0, 100)}${scene.transcript.length > 100 ? '...' : ''}</div>` : ''}
-                    ${scene.emotions && scene.emotions.length > 0 ? `
-                        <div class="scene-meta">
-                            ${scene.emotions.slice(0, 5).map(e => {
-                                const label = typeof e === 'object' ? e.label : e;
-                                return `<span class="meta-tag">${label}</span>`;
-                            }).join('')}
-                        </div>
-                    ` : ''}
-                </div>
-            `).join('');
+        function showSceneDetail(sceneId) {
+            console.log('Show scene detail:', sceneId);
+            // TODO: Implement scene detail modal
+            alert(`Scene detail view coming soon!\nScene ID: ${sceneId}`);
         }
 
         // Cleanup on page unload

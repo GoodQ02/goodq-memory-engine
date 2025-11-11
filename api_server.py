@@ -571,6 +571,397 @@ async def get_analytics():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/analytics/memories")
+async def get_memories_analytics():
+    """Comprehensive memory analytics with real data"""
+    try:
+        analytics = {
+            "overview": {
+                "total_scenes": 0,
+                "total_segments": 0,
+                "total_embeddings": 0,
+                "total_duration": 0.0,
+                "processing_time": 0
+            },
+            "emotions": {
+                "distribution": {},
+                "timeline": [],
+                "dominant_emotions": []
+            },
+            "content": {
+                "transcription_coverage": 0.0,
+                "audio_coverage": 0.0,
+                "visual_coverage": 0.0
+            },
+            "temporal": {
+                "by_date": [],
+                "by_duration": []
+            },
+            "quality": {
+                "scenes_with_transcripts": 0,
+                "scenes_with_emotions": 0,
+                "scenes_with_audio": 0,
+                "average_scene_duration": 0.0
+            },
+            "timestamp": datetime.now().isoformat()
+        }
+        
+        if MEMORY_DB.exists():
+            conn = sqlite3.connect(str(MEMORY_DB))
+            cursor = conn.cursor()
+            
+            # Overall counts
+            cursor.execute("SELECT COUNT(*) FROM scenes")
+            analytics["overview"]["total_scenes"] = cursor.fetchone()[0]
+            
+            cursor.execute("SELECT COUNT(*) FROM segments")
+            analytics["overview"]["total_segments"] = cursor.fetchone()[0]
+            
+            cursor.execute("SELECT COUNT(*) FROM embeddings")
+            analytics["overview"]["total_embeddings"] = cursor.fetchone()[0]
+            
+            # Scene duration statistics
+            cursor.execute("SELECT start, end, meta FROM scenes")
+            scenes_data = cursor.fetchall()
+            
+            emotion_counts = defaultdict(int)
+            total_duration = 0.0
+            scenes_with_transcript = 0
+            scenes_with_emotion = 0
+            scenes_with_audio = 0
+            
+            for start, end, meta_json in scenes_data:
+                if start is not None and end is not None:
+                    duration = float(end) - float(start)
+                    total_duration += duration
+                
+                if meta_json:
+                    try:
+                        meta = json.loads(meta_json)
+                        
+                        # Count coverage
+                        if meta.get("transcript"):
+                            scenes_with_transcript += 1
+                        if meta.get("emotions") or meta.get("dominant_emotion"):
+                            scenes_with_emotion += 1
+                        if meta.get("audio"):
+                            scenes_with_audio += 1
+                        
+                        # Emotion distribution
+                        emotions = meta.get("emotions", [])
+                        for emotion in emotions:
+                            if isinstance(emotion, dict) and "label" in emotion:
+                                emotion_counts[emotion["label"]] += 1
+                        
+                        # Check dominant emotion
+                        dom_emotion = meta.get("dominant_emotion", {})
+                        if isinstance(dom_emotion, dict) and "label" in dom_emotion:
+                            emotion_counts[dom_emotion["label"]] += 1
+                            
+                    except:
+                        pass
+            
+            analytics["overview"]["total_duration"] = total_duration
+            analytics["emotions"]["distribution"] = dict(emotion_counts)
+            analytics["emotions"]["dominant_emotions"] = [
+                {"emotion": k, "count": v}
+                for k, v in sorted(emotion_counts.items(), key=lambda x: x[1], reverse=True)[:10]
+            ]
+            
+            # Quality metrics
+            total_scenes = analytics["overview"]["total_scenes"]
+            if total_scenes > 0:
+                analytics["quality"]["scenes_with_transcripts"] = scenes_with_transcript
+                analytics["quality"]["scenes_with_emotions"] = scenes_with_emotion
+                analytics["quality"]["scenes_with_audio"] = scenes_with_audio
+                analytics["quality"]["average_scene_duration"] = total_duration / total_scenes
+                analytics["content"]["transcription_coverage"] = (scenes_with_transcript / total_scenes) * 100
+                analytics["content"]["audio_coverage"] = (scenes_with_audio / total_scenes) * 100
+                analytics["content"]["visual_coverage"] = 100.0  # All scenes have visual
+            
+            conn.close()
+        
+        return analytics
+        
+    except Exception as e:
+        print(f"Error in get_memories_analytics: {e}")
+        tb.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/analytics/knowledge-graph")
+async def get_kg_analytics():
+    """Knowledge graph analytics with real data"""
+    try:
+        analytics = {
+            "overview": {
+                "total_entities": 0,
+                "total_relationships": 0,
+                "entity_types": {},
+                "relationship_types": {}
+            },
+            "network": {
+                "nodes": [],
+                "edges": [],
+                "clusters": []
+            },
+            "top_entities": [],
+            "connectivity": {
+                "most_connected": [],
+                "average_connections": 0.0,
+                "isolated_entities": 0
+            },
+            "timestamp": datetime.now().isoformat()
+        }
+        
+        if KG_DB.exists():
+            conn = sqlite3.connect(str(KG_DB))
+            cursor = conn.cursor()
+            
+            # Overall counts
+            cursor.execute("SELECT COUNT(*) FROM nodes")
+            analytics["overview"]["total_entities"] = cursor.fetchone()[0]
+            
+            cursor.execute("SELECT COUNT(*) FROM edges")
+            analytics["overview"]["total_relationships"] = cursor.fetchone()[0]
+            
+            # Entity type distribution
+            cursor.execute("""
+                SELECT node_type, COUNT(*) as count
+                FROM nodes
+                GROUP BY node_type
+                ORDER BY count DESC
+            """)
+            entity_types = {}
+            for node_type, count in cursor.fetchall():
+                entity_types[node_type or "unknown"] = count
+            analytics["overview"]["entity_types"] = entity_types
+            
+            # Relationship type distribution
+            cursor.execute("""
+                SELECT edge_type, COUNT(*) as count
+                FROM edges
+                GROUP BY edge_type
+                ORDER BY count DESC
+            """)
+            rel_types = {}
+            for edge_type, count in cursor.fetchall():
+                rel_types[edge_type or "unknown"] = count
+            analytics["overview"]["relationship_types"] = rel_types
+            
+            # Most connected entities
+            cursor.execute("""
+                SELECT n.id, n.name, n.node_type, COUNT(e.id) as connection_count
+                FROM nodes n
+                LEFT JOIN edges e ON (n.id = e.source_id OR n.id = e.target_id)
+                GROUP BY n.id, n.name, n.node_type
+                ORDER BY connection_count DESC
+                LIMIT 20
+            """)
+            
+            total_connections = 0
+            entity_count = 0
+            isolated_count = 0
+            
+            for node_id, name, node_type, conn_count in cursor.fetchall():
+                analytics["connectivity"]["most_connected"].append({
+                    "id": node_id,
+                    "name": name,
+                    "type": node_type,
+                    "connections": conn_count
+                })
+                analytics["top_entities"].append({
+                    "name": name,
+                    "type": node_type,
+                    "connections": conn_count
+                })
+                total_connections += conn_count
+                entity_count += 1
+                if conn_count == 0:
+                    isolated_count += 1
+            
+            if entity_count > 0:
+                analytics["connectivity"]["average_connections"] = total_connections / entity_count
+            analytics["connectivity"]["isolated_entities"] = isolated_count
+            
+            # Get sample of network for visualization (limit to prevent overload)
+            cursor.execute("""
+                SELECT id, name, node_type
+                FROM nodes
+                LIMIT 50
+            """)
+            for node_id, name, node_type in cursor.fetchall():
+                analytics["network"]["nodes"].append({
+                    "id": node_id,
+                    "label": name,
+                    "type": node_type
+                })
+            
+            cursor.execute("""
+                SELECT source_id, target_id, edge_type
+                FROM edges
+                LIMIT 100
+            """)
+            for source_id, target_id, edge_type in cursor.fetchall():
+                analytics["network"]["edges"].append({
+                    "source": source_id,
+                    "target": target_id,
+                    "type": edge_type
+                })
+            
+            conn.close()
+        
+        return analytics
+        
+    except Exception as e:
+        print(f"Error in get_kg_analytics: {e}")
+        tb.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/analytics/timeline")
+async def get_timeline_analytics():
+    """Temporal timeline analytics"""
+    try:
+        analytics = {
+            "events": [],
+            "clusters": [],
+            "date_range": {
+                "earliest": None,
+                "latest": None
+            },
+            "statistics": {
+                "total_events": 0,
+                "average_events_per_day": 0.0
+            },
+            "timestamp": datetime.now().isoformat()
+        }
+        
+        if UNIFIED_DB.exists():
+            conn = sqlite3.connect(str(UNIFIED_DB))
+            cursor = conn.cursor()
+            
+            # Get temporal timeline events
+            cursor.execute("""
+                SELECT id, event_type, timestamp, video_hash, scene_id, description, properties
+                FROM temporal_timeline
+                ORDER BY timestamp
+            """)
+            
+            events = []
+            earliest_time = None
+            latest_time = None
+            
+            for event_id, event_type, event_timestamp, video_hash, scene_id, description, properties_json in cursor.fetchall():
+                event_data = {
+                    "id": event_id,
+                    "type": event_type,
+                    "time": event_timestamp,
+                    "video_hash": video_hash,
+                    "scene_id": scene_id,
+                    "description": description
+                }
+                
+                if properties_json:
+                    try:
+                        event_data["metadata"] = json.loads(properties_json)
+                    except:
+                        pass
+                
+                events.append(event_data)
+                
+                # Track date range
+                if event_timestamp:
+                    if earliest_time is None or event_timestamp < earliest_time:
+                        earliest_time = event_timestamp
+                    if latest_time is None or event_timestamp > latest_time:
+                        latest_time = event_timestamp
+            
+            analytics["events"] = events
+            analytics["statistics"]["total_events"] = len(events)
+            analytics["date_range"]["earliest"] = earliest_time
+            analytics["date_range"]["latest"] = latest_time
+            
+            conn.close()
+        
+        return analytics
+        
+    except Exception as e:
+        print(f"Error in get_timeline_analytics: {e}")
+        tb.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/analytics/embeddings")
+async def get_embeddings_analytics():
+    """Embedding analytics - FAISS indices status"""
+    try:
+        analytics = {
+            "indices": {
+                "text": {"status": "inactive", "count": 0, "dimension": 0},
+                "clip": {"status": "inactive", "count": 0, "dimension": 0},
+                "dino": {"status": "inactive", "count": 0, "dimension": 0},
+                "audio": {"status": "inactive", "count": 0, "dimension": 0}
+            },
+            "total_embeddings": 0,
+            "coverage": {
+                "text_coverage": 0.0,
+                "visual_coverage": 0.0,
+                "audio_coverage": 0.0
+            },
+            "timestamp": datetime.now().isoformat()
+        }
+        
+        # Check FAISS indices
+        if FAISS_DIR.exists():
+            index_types = ["text", "clip", "dino", "audio"]
+            
+            for idx_type in index_types:
+                idx_path = FAISS_DIR / idx_type / f"faiss_{idx_type}.index"
+                if idx_path.exists():
+                    analytics["indices"][idx_type]["status"] = "active"
+                    
+                    # Try to get index size
+                    try:
+                        import faiss
+                        index = faiss.read_index(str(idx_path))
+                        analytics["indices"][idx_type]["count"] = index.ntotal
+                        analytics["indices"][idx_type]["dimension"] = index.d
+                        analytics["total_embeddings"] += index.ntotal
+                    except:
+                        pass
+        
+        # Get embedding counts from database
+        if MEMORY_DB.exists():
+            conn = sqlite3.connect(str(MEMORY_DB))
+            cursor = conn.cursor()
+            
+            cursor.execute("SELECT COUNT(*) FROM embeddings")
+            db_embedding_count = cursor.fetchone()[0]
+            
+            # If FAISS count is 0, use DB count
+            if analytics["total_embeddings"] == 0:
+                analytics["total_embeddings"] = db_embedding_count
+            
+            # Get scene count for coverage calculation
+            cursor.execute("SELECT COUNT(*) FROM scenes")
+            scene_count = cursor.fetchone()[0]
+            
+            if scene_count > 0:
+                analytics["coverage"]["text_coverage"] = min(100.0, (db_embedding_count / scene_count) * 100)
+                analytics["coverage"]["visual_coverage"] = min(100.0, (db_embedding_count / scene_count) * 100)
+                analytics["coverage"]["audio_coverage"] = min(100.0, (db_embedding_count / scene_count) * 100)
+            
+            conn.close()
+        
+        return analytics
+        
+    except Exception as e:
+        print(f"Error in get_embeddings_analytics: {e}")
+        tb.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/api/chat")
 async def chat(message: ChatMessage):
     """Chat with real LLM integration"""
@@ -803,6 +1194,233 @@ async def get_processes():
             "processes": processes,
             "timestamp": datetime.now().isoformat()
         }
+
+
+@app.get("/api/pipeline-engines")
+async def get_pipeline_engines():
+    """Get status of all pipeline engines/tools"""
+    try:
+        # Define all pipeline engines with their categories
+        engines = {
+            "ingest": {
+                "name": "Video Ingestion",
+                "status": "idle",
+                "category": "Input",
+                "step": "video_ingest",
+                "description": "Initial video file handling"
+            },
+            "scene_detect": {
+                "name": "Scene Detection",
+                "status": "idle",
+                "category": "Video",
+                "step": "video_scene_detect",
+                "description": "PySceneDetect - content-aware scene segmentation"
+            },
+            "face_embed": {
+                "name": "Face Recognition",
+                "status": "idle",
+                "category": "Vision",
+                "step": "face_embed",
+                "description": "DeepFace - facial embedding & recognition"
+            },
+            "object_detect": {
+                "name": "Object Detection",
+                "status": "idle",
+                "category": "Vision",
+                "step": "object_detect",
+                "description": "YOLO - object detection in scenes"
+            },
+            "object_track": {
+                "name": "Object Tracking",
+                "status": "idle",
+                "category": "Vision",
+                "step": "object_track_yolo",
+                "description": "YOLO - track objects across frames"
+            },
+            "clip_embed": {
+                "name": "CLIP Embeddings",
+                "status": "idle",
+                "category": "Vision",
+                "step": "image_embed_clip",
+                "description": "OpenAI CLIP - semantic image understanding"
+            },
+            "dino_embed": {
+                "name": "DINO Embeddings",
+                "status": "idle",
+                "category": "Vision",
+                "step": "image_embed_dino",
+                "description": "Meta DINO - visual feature extraction"
+            },
+            "caption": {
+                "name": "Image Captioning",
+                "status": "idle",
+                "category": "Vision",
+                "step": "image_caption",
+                "description": "BLIP - generate scene descriptions"
+            },
+            "ocr": {
+                "name": "Text Recognition (OCR)",
+                "status": "idle",
+                "category": "Vision",
+                "step": "image_ocr",
+                "description": "EasyOCR - extract text from frames"
+            },
+            "transcribe": {
+                "name": "Speech-to-Text",
+                "status": "idle",
+                "category": "Audio",
+                "step": "audio_transcribe",
+                "description": "Whisper - audio transcription"
+            },
+            "diarize": {
+                "name": "Speaker Diarization",
+                "status": "idle",
+                "category": "Audio",
+                "step": "audio_diarize",
+                "description": "PyAnnote - identify who spoke when"
+            },
+            "speaker_merge": {
+                "name": "Speaker Merging",
+                "status": "idle",
+                "category": "Audio",
+                "step": "audio_speaker_merge",
+                "description": "Merge & label speaker segments"
+            },
+            "audio_embed": {
+                "name": "Audio Embeddings (CLAP)",
+                "status": "idle",
+                "category": "Audio",
+                "step": "audio_embed_clap",
+                "description": "LAION CLAP - audio semantic encoding"
+            },
+            "audio_emotion": {
+                "name": "Audio Emotion",
+                "status": "idle",
+                "category": "Audio",
+                "step": "audio_emotion",
+                "description": "Detect emotional tone in speech"
+            },
+            "music_events": {
+                "name": "Music Detection",
+                "status": "idle",
+                "category": "Audio",
+                "step": "audio_music_events",
+                "description": "Identify music segments"
+            },
+            "text_embed": {
+                "name": "Text Embeddings",
+                "status": "idle",
+                "category": "NLP",
+                "step": "text_embed",
+                "description": "Sentence transformers - semantic text encoding"
+            },
+            "emotion_classify": {
+                "name": "Emotion Classification",
+                "status": "idle",
+                "category": "NLP",
+                "step": "emotion_classify",
+                "description": "Classify emotional content in text"
+            },
+            "sentiment": {
+                "name": "Sentiment Analysis",
+                "status": "idle",
+                "category": "NLP",
+                "step": "sentiment",
+                "description": "Analyze sentiment polarity"
+            },
+            "llm_summary": {
+                "name": "LLM Scene Summarization",
+                "status": "idle",
+                "category": "LLM",
+                "step": "video_summarizer",
+                "description": "LM Studio - generate intelligent summaries"
+            },
+            "llm_chat": {
+                "name": "LLM Chat Interface",
+                "status": "idle",
+                "category": "LLM",
+                "step": "llm_chat",
+                "description": "Interactive AI conversation"
+            },
+            "graph_builder": {
+                "name": "Knowledge Graph",
+                "status": "idle",
+                "category": "Integration",
+                "step": "graph_builder",
+                "description": "Build entity relationships"
+            },
+            "tagger": {
+                "name": "Auto-Tagger",
+                "status": "idle",
+                "category": "Integration",
+                "step": "tagger",
+                "description": "Generate semantic tags"
+            }
+        }
+        
+        # Check watchdog log to see which engines are active
+        watchdog_log = LOGS_DIR / "watchdog.log"
+        progress_file = LOGS_DIR / "progress.json"
+        
+        current_step = None
+        current_file = None
+        
+        # Get current step from progress file
+        if progress_file.exists():
+            try:
+                with open(progress_file, 'r', encoding='utf-8') as f:
+                    progress_data = json.load(f)
+                    current_step = progress_data.get('current_step', '')
+                    current_file = progress_data.get('current_file')
+            except:
+                pass
+        
+        # Mark active engines based on current step
+        if current_step:
+            # Normalize step name for better matching
+            step_normalized = current_step.lower().replace(' ', '_')
+            
+            for engine_id, engine_data in engines.items():
+                step_key = engine_data['step'].lower()
+                
+                # Check various matching patterns
+                if (step_key in step_normalized or 
+                    step_normalized in step_key or
+                    engine_data['name'].lower().replace(' ', '_') in step_normalized or
+                    step_normalized in engine_data['name'].lower().replace(' ', '_')):
+                    engines[engine_id]['status'] = 'active'
+                    engines[engine_id]['processing_file'] = current_file
+        
+        # Check if any processing is happening
+        processing_active = False
+        if watchdog_log.exists():
+            try:
+                with open(watchdog_log, 'r', encoding='utf-8', errors='ignore') as f:
+                    lines = f.readlines()
+                    for line in reversed(lines[-50:]):
+                        if "Processing video:" in line:
+                            processing_active = True
+                            break
+                        elif "Successfully processed:" in line or "Failed to process:" in line:
+                            processing_active = False
+                            break
+            except:
+                pass
+        
+        return {
+            "engines": engines,
+            "processing_active": processing_active,
+            "current_step": current_step,
+            "current_file": current_file,
+            "total_engines": len(engines),
+            "active_engines": sum(1 for e in engines.values() if e['status'] == 'active'),
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        print(f"Error in get_pipeline_engines: {e}")
+        tb.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/api/processes/{process_name}/{action}")

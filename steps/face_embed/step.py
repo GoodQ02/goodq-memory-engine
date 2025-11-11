@@ -31,7 +31,17 @@ def face_embed(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
             from torchvision import transforms  # type: ignore
             from facenet_pytorch import MTCNN, InceptionResnetV1  # type: ignore
 
+            # GPU Isolation - Phase 2
+            os.environ.setdefault("CUDA_VISIBLE_DEVICES", "0")
+            
             device = "cuda" if getattr(torch, "cuda", None) and torch.cuda.is_available() else "cpu"
+            
+            # Set memory fraction for this process (20% of GPU)
+            if device == "cuda":
+                torch.cuda.set_per_process_memory_fraction(0.2, 0)
+                torch.backends.cudnn.benchmark = False
+                torch.backends.cudnn.deterministic = True
+            
             mtcnn = MTCNN(keep_all=True, device=device)
             resnet = InceptionResnetV1(pretrained='vggface2').eval().to(device)
 

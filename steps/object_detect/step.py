@@ -12,7 +12,12 @@ def _load_yolo(cfg: Dict[str, Any]):
     if _YOLO is not None:
         return _YOLO
     try:
+        import os
         from ultralytics import YOLO  # type: ignore
+        
+        # GPU Isolation - Phase 2
+        os.environ.setdefault("CUDA_VISIBLE_DEVICES", "0")
+        
         # Try multiple config paths
         model_path = (
             cfg.get("models", {}).get("external_models", {}).get("yolo_v8n", {}).get("local_path")
@@ -24,8 +29,20 @@ def _load_yolo(cfg: Dict[str, Any]):
         if model_path and not os.path.isabs(model_path):
             model_base = os.environ.get("HF_HOME") or os.environ.get("TORCH_HOME") or "L:/models"
             model_path = os.path.join(model_base, model_path)
+        
         _YOLO = YOLO(model_path)
+        
+        # Set GPU memory limits if available
+        try:
+            import torch
+            if torch.cuda.is_available():
+                torch.cuda.set_per_process_memory_fraction(0.3, 0)
+                print(f"[INFO] YOLO model loaded with GPU memory fraction 0.3")
+        except Exception as e:
+            print(f"[WARN] Could not set GPU memory fraction for YOLO: {str(e)}")
+            
     except Exception as e:
+        print(f"[ERROR] Failed to load YOLO model: {str(e)}")
         _YOLO = None
     return _YOLO
 

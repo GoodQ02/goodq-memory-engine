@@ -20,14 +20,26 @@ def _load_st() -> Any:
         from sentence_transformers import SentenceTransformer  # type: ignore
         import torch  # type: ignore
 
+        # GPU Isolation - Phase 2
+        os.environ.setdefault("CUDA_VISIBLE_DEVICES", "0")
+        
         # Ensure HF_HOME is set for model caching
         os.environ.setdefault("HF_HOME", "L:/models")
         os.environ.setdefault("TORCH_HOME", "L:/models")
         os.environ.setdefault("TRANSFORMERS_CACHE", "L:/models/transformers")
 
         device = "cuda" if getattr(torch, "cuda", None) and torch.cuda.is_available() else "cpu"
+        
+        # Set memory fraction for this process (15% of GPU)
+        if device == "cuda":
+            torch.cuda.set_per_process_memory_fraction(0.15, 0)
+            torch.backends.cudnn.benchmark = False
+            torch.backends.cudnn.deterministic = True
+        
         _ST = SentenceTransformer("all-MiniLM-L6-v2", device=device)
+        print(f"[INFO] SentenceTransformer model loaded on {device} with memory fraction 0.15")
     except Exception as e:
+        print(f"[ERROR] Failed to load SentenceTransformer: {str(e)}")
         _ST = None
     return _ST
 

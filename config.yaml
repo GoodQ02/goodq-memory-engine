@@ -204,6 +204,21 @@ processing:
   timeout:
     per_scene_seconds: 180
     per_video_hours: 24
+  gpu:
+    enabled: true
+    device_id: 0
+    use_isolation: true
+    memory_fractions:
+      emotion_classify: 0.30
+      face_embed: 0.20
+      image_embed_clip: 0.25
+      image_embed_dino: 0.25
+      audio_embed_clap: 0.20
+      text_embed: 0.15
+      object_detect: 0.30
+      default: 0.20
+    deterministic: true
+    benchmark: false
 knowledge_graph:
   enabled: true
   entity_extraction:

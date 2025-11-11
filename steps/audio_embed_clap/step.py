@@ -16,12 +16,25 @@ def _load() -> None:
     try:
         import torch  # type: ignore
         from transformers import ClapModel, AutoProcessor  # type: ignore
+        
+        # GPU Isolation - Phase 2
+        os.environ.setdefault("CUDA_VISIBLE_DEVICES", "0")
+        
         device = "cuda" if getattr(torch, "cuda", None) and torch.cuda.is_available() else "cpu"
+        
+        # Set memory fraction for this process (20% of GPU)
+        if device == "cuda":
+            torch.cuda.set_per_process_memory_fraction(0.2, 0)
+            torch.backends.cudnn.benchmark = False
+            torch.backends.cudnn.deterministic = True
+        
         # Prefer local caches; processor prepares input_features for audio
         proc = AutoProcessor.from_pretrained("laion/clap-htsat-unfused", local_files_only=True)
         model = ClapModel.from_pretrained("laion/clap-htsat-unfused", local_files_only=True).to(device).eval()
         _CLAP.update({"model": model, "proc": proc, "device": device})
+        print(f"[INFO] CLAP model loaded on {device} with memory fraction 0.2")
     except Exception as e:
+        print(f"[ERROR] Failed to load CLAP model: {str(e)}")
         _CLAP.update({"model": None, "proc": None})
 
 

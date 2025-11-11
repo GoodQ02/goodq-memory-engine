@@ -16,11 +16,24 @@ def _load() -> None:
     try:
         import torch  # type: ignore
         from transformers import AutoModel, AutoProcessor  # type: ignore
+        
+        # GPU Isolation - Phase 2
+        os.environ.setdefault("CUDA_VISIBLE_DEVICES", "0")
+        
         device = "cuda" if getattr(torch, "cuda", None) and torch.cuda.is_available() else "cpu"
+        
+        # Set memory fraction for this process (25% of GPU)
+        if device == "cuda":
+            torch.cuda.set_per_process_memory_fraction(0.25, 0)
+            torch.backends.cudnn.benchmark = False
+            torch.backends.cudnn.deterministic = True
+        
         proc = AutoProcessor.from_pretrained("facebook/dinov2-base")
         model = AutoModel.from_pretrained("facebook/dinov2-base").to(device).eval()
         _DINO.update({"model": model, "proc": proc, "device": device})
+        print(f"[INFO] DINO model loaded on {device} with memory fraction 0.25")
     except Exception as e:
+        print(f"[ERROR] Failed to load DINO model: {str(e)}")
         _DINO.update({"model": None, "proc": None})
 
 

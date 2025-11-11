@@ -23,6 +23,9 @@ def _load_emotion():
         import torch  # type: ignore
         from transformers import AutoTokenizer, AutoModelForSequenceClassification  # type: ignore
 
+        # GPU Isolation - Phase 2
+        os.environ.setdefault("CUDA_VISIBLE_DEVICES", "0")
+        
         # Ensure HF_HOME is set for model caching
         os.environ.setdefault("HF_HOME", "L:/models")
         os.environ.setdefault("TORCH_HOME", "L:/models")
@@ -34,6 +37,14 @@ def _load_emotion():
         tok = AutoTokenizer.from_pretrained(name)
         model = AutoModelForSequenceClassification.from_pretrained(name)
         device = "cuda" if getattr(torch, "cuda", None) and torch.cuda.is_available() else "cpu"
+        
+        # Set memory fraction for this process (30% of GPU)
+        if device == "cuda":
+            torch.cuda.set_per_process_memory_fraction(0.3, 0)
+            # Enable memory efficient settings
+            torch.backends.cudnn.benchmark = False
+            torch.backends.cudnn.deterministic = True
+        
         model = model.to(device).eval()
         labels = [
             "admiration","amusement","anger","annoyance","approval","caring","confusion","curiosity","desire",
@@ -42,7 +53,9 @@ def _load_emotion():
             "surprise","neutral",
         ]
         _EMO.update({"model": model, "tok": tok, "labels": labels, "device": device})
+        logger.info(f"Emotion model loaded on {device} with memory fraction 0.3")
     except Exception as e:
+        logger.error(f"Failed to load emotion model: {str(e)}")
         _EMO.update({"model": None, "tok": None, "labels": []})
 
 

@@ -16,11 +16,24 @@ def _load() -> None:
     try:
         import torch  # type: ignore
         from transformers import CLIPModel, CLIPProcessor  # type: ignore
+        
+        # GPU Isolation - Phase 2
+        os.environ.setdefault("CUDA_VISIBLE_DEVICES", "0")
+        
         device = "cuda" if getattr(torch, "cuda", None) and torch.cuda.is_available() else "cpu"
+        
+        # Set memory fraction for this process (25% of GPU)
+        if device == "cuda":
+            torch.cuda.set_per_process_memory_fraction(0.25, 0)
+            torch.backends.cudnn.benchmark = False
+            torch.backends.cudnn.deterministic = True
+        
         proc = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch16")
         model = CLIPModel.from_pretrained("openai/clip-vit-base-patch16").to(device).eval()
         _CLIP.update({"model": model, "proc": proc, "device": device})
+        print(f"[INFO] CLIP model loaded on {device} with memory fraction 0.25")
     except Exception as e:
+        print(f"[ERROR] Failed to load CLIP model: {str(e)}")
         _CLIP.update({"model": None, "proc": None})
 
 

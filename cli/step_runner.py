@@ -191,6 +191,43 @@ def main() -> None:
             cfg = load_cfg(overrides)
     else:
         cfg = load_cfg(overrides)
+    
+    # Initialize GPU management for this step
+    try:
+        from goodq4all.common.gpu_manager import initialize_gpu_for_step
+        import yaml
+        
+        # Load GPU config
+        gpu_config_path = REPO_ROOT / 'config' / 'gpu_config.yaml'
+        if gpu_config_path.exists():
+            with open(gpu_config_path, 'r') as f:
+                gpu_cfg = yaml.safe_load(f) or {}
+        else:
+            gpu_cfg = {}
+        
+        # Get memory fraction for this step
+        step_mem_fractions = gpu_cfg.get('step_memory_fractions', {})
+        memory_fraction = step_mem_fractions.get(args.step, step_mem_fractions.get('default', 0.5))
+        
+        # Get determinism setting
+        deterministic = gpu_cfg.get('gpu', {}).get('deterministic', False)
+        
+        # Initialize GPU
+        gpu_manager = initialize_gpu_for_step(
+            step_name=args.step,
+            memory_fraction=memory_fraction,
+            enable_determinism=deterministic
+        )
+        
+        # Clear cache if configured
+        if gpu_cfg.get('memory', {}).get('clear_cache_before_step', True):
+            gpu_manager.clear_cache()
+            
+    except Exception as e:
+        import logging
+        logging.warning(f"Could not initialize GPU manager: {e}")
+        gpu_manager = None
+    
     # Measure and log duration
     from goodq4all.steps.common.step_logger import log_step_run
     start_ns = time.perf_counter_ns()
@@ -215,6 +252,22 @@ def main() -> None:
         except Exception as save_exc:
             import logging
             logging.warning(f"Failed to save context for step {args.step}: {save_exc}")
+        
+        # Clear GPU cache after step if configured
+        if gpu_manager is not None:
+            try:
+                gpu_cfg_reload = yaml.safe_load(open(REPO_ROOT / 'config' / 'gpu_config.yaml', 'r')) if (REPO_ROOT / 'config' / 'gpu_config.yaml').exists() else {}
+                if gpu_cfg_reload.get('memory', {}).get('clear_cache_after_step', True):
+                    gpu_manager.clear_cache()
+                    
+                # Log final memory stats
+                if gpu_cfg_reload.get('memory', {}).get('log_memory_stats', True):
+                    stats = gpu_manager.get_memory_stats()
+                    if stats.get('cuda_available'):
+                        import logging
+                        logging.info(f"[{args.step}] Final GPU Memory: {stats['allocated_gb']}/{stats['total_gb']} GB ({stats['utilization_pct']}%)")
+            except Exception as e:
+                pass
 
     out = json.dumps(res, ensure_ascii=False)
     if args.out_path:

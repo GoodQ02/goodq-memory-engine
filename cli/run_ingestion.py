@@ -431,6 +431,15 @@ def _base_env() -> Dict[str, str]:
     # CRITICAL FIX: Add PARENT of REPO_ROOT to PYTHONPATH so "goodq4all.steps" module can be imported
     # (REPO_ROOT is L:\goodq4all, we need L:\ in the path)
     env['PYTHONPATH'] = str(REPO_ROOT.parent)
+    
+    # GPU Resource Management - Pin to GPU 0
+    env['CUDA_VISIBLE_DEVICES'] = '0'
+    
+    # Enable deterministic CUDA operations for reproducibility (optional)
+    # Uncomment if reproducibility is needed (slight performance cost)
+    # env['CUBLAS_WORKSPACE_CONFIG'] = ':4096:8'
+    # env['PYTHONHASHSEED'] = '1337'
+    
     return env
 
 

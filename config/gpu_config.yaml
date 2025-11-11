@@ -1,0 +1,61 @@
+# GPU Resource Management Configuration
+# Controls GPU allocation and memory usage for pipeline steps
+
+# Global GPU settings
+gpu:
+  # Which GPU to use (0-based index)
+  device_id: 0
+  
+  # Enable deterministic algorithms (slower but reproducible)
+  deterministic: false
+  
+  # Enable exclusive GPU mode (requires admin rights)
+  exclusive_mode: false
+
+# Per-step memory allocation (fraction of total GPU memory)
+step_memory_fractions:
+  # Scene detection - moderate memory
+  video_scene_detect: 0.6
+  
+  # Audio processing - low memory
+  audio_transcribe: 0.4
+  audio_diarize: 0.5
+  audio_emotion: 0.4
+  audio_embed_clap: 0.5
+  
+  # Image processing - moderate to high memory
+  image_caption: 0.6
+  image_ocr: 0.4
+  image_embed_dino: 0.7
+  image_embed_clip: 0.7
+  object_detect: 0.6
+  face_embed: 0.6
+  
+  # Text embedding - low memory
+  text_embed: 0.4
+  
+  # Emotion/sentiment - low memory
+  emotion_classify: 0.4
+  sentiment: 0.3
+  
+  # Default for unlisted steps
+  default: 0.5
+
+# Memory management
+memory:
+  # Clear GPU cache before each step
+  clear_cache_before_step: true
+  
+  # Clear GPU cache after each step
+  clear_cache_after_step: true
+  
+  # Log memory stats before/after each step
+  log_memory_stats: true
+
+# Performance monitoring
+monitoring:
+  # Enable CUDA profiling (adds overhead)
+  enable_profiling: false
+  
+  # Log GPU utilization every N seconds (0 = disable)
+  log_interval_seconds: 0

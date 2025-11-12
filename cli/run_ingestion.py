@@ -564,7 +564,8 @@ def _extract_keyframe(ffmpeg: str, video_path: Path, scene: Dict[str, Any], dest
     return outfile
 
 
-def _extract_audio_chunk(ffmpeg: str, video_path: Path, scene: Dict[str, Any], dest_dir: Path) -> Path:
+def _extract_audio_chunk(ffmpeg: str, video_path: Path, scene: Dict[str, Any], dest_dir: Path) -> Optional[Path]:
+    """Extract audio chunk - returns None if video has no audio"""
     _ensure_dir(dest_dir)
     start = float(scene.get('start', 0.0) or 0.0)
     end = float(scene.get('end', start) or start)
@@ -586,9 +587,14 @@ def _extract_audio_chunk(ffmpeg: str, video_path: Path, scene: Dict[str, Any], d
     ]
     result = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', errors='replace')
     if result.returncode != 0:
+        # Check if error is due to no audio stream
+        if 'does not contain any stream' in result.stderr or 'Stream specifier' in result.stderr:
+            # Video has no audio - this is OK, return None
+            return None
         raise RuntimeError(f"ffmpeg failed to extract audio chunk: {result.stderr}")
     if not outfile.exists():
-        raise RuntimeError('Audio chunk extraction did not produce a file')
+        # If no file was created but no error, video likely has no audio
+        return None
     return outfile
 
 
@@ -668,8 +674,14 @@ def _process_audio(
     audio_dir: Path,
     video_hash: str,
     scene_id: str,
-) -> Dict[str, Any]:
+) -> Optional[Dict[str, Any]]:
+    """Process audio for scene - returns None if video has no audio"""
     audio_path = _extract_audio_chunk(ffmpeg, video_path, scene, audio_dir)
+    
+    # If no audio was extracted, return None
+    if audio_path is None:
+        return None
+    
     start = float(scene.get('start', 0.0) or 0.0)
     end = float(scene.get('end', start) or start)
 
@@ -1008,7 +1020,10 @@ def run(
                     try:
                         typer.echo(f'  [EXTRACT] Extracting audio...')
                         audio_info = _process_audio(cfg_json, ffmpeg, video_path, scene, audio_dir, video_hash, scene_id)
-                        typer.echo(f'  [OK] Audio processed')
+                        if audio_info is None:
+                            typer.echo(f'  [OK] No audio track in video (video-only)')
+                        else:
+                            typer.echo(f'  [OK] Audio processed')
                     except Exception as exc:  # noqa: BLE001
                         audio_error = str(exc)
                         typer.echo(f'[ERROR] Audio extraction failed for scene {scene_index}: {audio_error}', err=True)

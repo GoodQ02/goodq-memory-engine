@@ -1,4 +1,7 @@
 from __future__ import annotations
+# Audio-specific GPU optimization
+from goodq4all.steps.common.audio_gpu_optimizer import get_audio_gpu_optimizer
+
 from typing import Any, Dict, List, Optional, Tuple
 
 import json as _json
@@ -6,21 +9,58 @@ import math
 import os
 import subprocess
 import tempfile
+import time
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 _FW_CACHE: Dict[Tuple[str, str, str], Any] = {}  # (model_id, device, compute_type) -> model
 
 
-def _load_fw_model(model_id: str, device: str, compute_type: str) -> Any:
+def _load_fw_model(model_id: str, device: str, compute_type: str, duration_minutes: float = None) -> Any:
+    """Load faster-whisper model with GPU optimization"""
     key = (model_id, device, compute_type)
     if key in _FW_CACHE:
         return _FW_CACHE[key]
+    
     try:
         from faster_whisper import WhisperModel  # type: ignore
-
-        model = WhisperModel(model_id, device=device, compute_type=compute_type)
+        
+        # Initialize GPU optimizer
+        optimizer = get_audio_gpu_optimizer()
+        
+        # Configure GPU for transcription
+        if device == "cuda":
+            gpu_config = optimizer.configure_for_transcription(duration_minutes)
+            logger.info(f"[TRANSCRIBE] GPU configured: {gpu_config.memory_fraction*100:.0f}% VRAM, {gpu_config.compute_type} precision")
+            
+            # Warmup GPU
+            optimizer.warmup_gpu()
+            
+            # Use optimized compute type from config
+            compute_type = gpu_config.compute_type
+        
+        logger.info(f"[TRANSCRIBE] Loading Whisper model '{model_id}' on {device} ({compute_type})...")
+        load_start = time.time()
+        
+        model = WhisperModel(
+            model_id, 
+            device=device, 
+            compute_type=compute_type,
+            num_workers=2 if device == "cuda" else 1,  # Parallel processing on GPU
+        )
+        
+        load_time = time.time() - load_start
+        logger.info(f"[TRANSCRIBE] Model loaded in {load_time:.1f}s")
+        
+        if device == "cuda":
+            optimizer.print_memory_stats()
+        
     except Exception as e:
+        logger.error(f"[TRANSCRIBE] Model load failed: {e}")
         model = None
+    
     _FW_CACHE[key] = model
     return model
 
@@ -341,9 +381,16 @@ def _transcribe_chunk_fw(chunk_path: str, offset: float, model: Any) -> Optional
 
 
 def audio_transcribe(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Transcribe audio using Whisper with GPU optimization.
+    Tracks performance metrics for continuous optimization.
+    """
     path = item.get("source_path")
     if not isinstance(path, str) or not os.path.isfile(path):
         return {"transcript": None, "transcript_meta": {"status": "no_file"}}
+
+    # Initialize GPU optimizer
+    optimizer = get_audio_gpu_optimizer()
 
     cfg_audio = (cfg.get("audio", {}) or {})
     tx_cfg = (cfg_audio.get("transcribe", {}) or {})
@@ -355,6 +402,8 @@ def audio_transcribe(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
     ffmpeg_path = resolve_ffmpeg(cfg) or "ffmpeg"
 
     duration = _audio_duration(path)
+    duration_minutes = (duration / 60.0) if duration else None
+    
     chunks = _build_chunks(item, cfg, duration, chunk_seconds)
     if not chunks:
         return {"transcript": None, "transcript_meta": {"status": "no_chunks"}}
@@ -363,30 +412,30 @@ def audio_transcribe(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
     whisper_cli = tools_cfg.get("whisper_cli")
     whisper_model_path = tools_cfg.get("whisper_ggml_model")
 
-    # Configure GPU using centralized manager (Phase 3)
+    # Detect device
     try:
-        from gpu_config import setup_step_gpu, GPUManager
-    except ImportError:
-        try:
-            from goodq4all.gpu_config import setup_step_gpu, GPUManager
-        except ImportError:
-            def setup_step_gpu(step_name):
-                return {"device": "cpu", "step_name": step_name}
+        import torch
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+    except:
+        device = "cpu"
     
-    gpu_config = setup_step_gpu("audio_transcribe")
-    device = gpu_config["device"]
     model_id = str(tx_cfg.get("model") or "medium")
-    compute_type = "float16" if device == "cuda" else "int8"
+    
+    # Get GPU config and optimal compute type
+    if device == "cuda":
+        gpu_config = optimizer.configure_for_transcription(duration_minutes)
+        compute_type = gpu_config.compute_type
+        logger.info(f"[TRANSCRIBE] Starting on GPU with {compute_type} precision")
+    else:
+        compute_type = "int8"
+        logger.info("[TRANSCRIBE] Starting on CPU")
 
     os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
     os.environ.setdefault("HF_HOME", os.environ.get("HF_HOME") or "L:/models")
     os.environ.setdefault("TORCH_HOME", os.environ.get("TORCH_HOME") or "L:/models")
     
-    import logging
-    logger = logging.getLogger(__name__)
-    logger.info(f"✅ Whisper configured on {device} (GPU config: {gpu_config.get('memory_fraction', 0):.1%} memory)")
-
-    fw_model = _load_fw_model(model_id, device, compute_type)
+    # Load model with duration hint for optimal configuration
+    fw_model = _load_fw_model(model_id, device, compute_type, duration_minutes)
 
     if not (whisper_cli and whisper_model_path and os.path.isfile(str(whisper_cli)) and os.path.isfile(str(whisper_model_path))):
         whisper_cli = None
@@ -394,11 +443,22 @@ def audio_transcribe(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
     full_text_parts: List[str] = []
     chunk_reports: List[Dict[str, Any]] = []
     flat_segments: List[Dict[str, Any]] = []
+    
+    total_start = time.time()
+    total_audio_duration = 0.0
 
-    for chunk in chunks:
+    logger.info(f"[TRANSCRIBE] Processing {len(chunks)} chunks...")
+
+    for idx, chunk in enumerate(chunks):
         start = float(chunk["start"])
         end = float(chunk["end"])
         speaker = chunk.get("speaker")
+        chunk_duration = end - start
+        total_audio_duration += chunk_duration
+        
+        if (idx + 1) % 10 == 0:
+            logger.info(f"[TRANSCRIBE] Progress: {idx+1}/{len(chunks)} chunks")
+        
         tmp_chunk = _slice_to_wav(path, start, end, ffmpeg_path)
         if not tmp_chunk:
             chunk_reports.append({
@@ -409,12 +469,18 @@ def audio_transcribe(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
                 "error": "slice_failed",
             })
             continue
+        
         try:
+            chunk_start = time.time()
+            
             result = None
             if whisper_cli:
                 result = _transcribe_chunk_whisper_cli(tmp_chunk, start, whisper_cli, whisper_model_path)
             if result is None:
                 result = _transcribe_chunk_fw(tmp_chunk, start, fw_model)
+            
+            chunk_elapsed = time.time() - chunk_start
+            
             if result is None:
                 chunk_reports.append({
                     "start": start,
@@ -424,6 +490,11 @@ def audio_transcribe(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
                     "error": "transcribe_failed",
                 })
                 continue
+            
+            # Record performance
+            if device == "cuda":
+                optimizer.record_performance("transcribe_chunk", chunk_elapsed, chunk_duration)
+            
             transcript = result.get("transcript")
             if isinstance(transcript, str):
                 transcript = transcript.strip()
@@ -498,18 +569,42 @@ def audio_transcribe(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
                 "segments": seg_list,
             }
             chunk_reports.append(chunk_entry)
+            
+            # Clear GPU cache periodically
+            if device == "cuda" and (idx + 1) % 20 == 0:
+                optimizer.clear_cache()
+                
         finally:
             # Clean up temp chunk file (but keep in debug mode)
             debug_mode = os.environ.get('GOODQ_DEBUG_KEEP_TEMP', '').lower() == 'true'
             try:
                 if os.path.isfile(tmp_chunk):
                     if debug_mode:
-                        print(f'[DEBUG] Keeping chunk for inspection: {tmp_chunk}')
+                        logger.debug(f'Keeping chunk for inspection: {tmp_chunk}')
                     else:
                         os.remove(tmp_chunk)
             except:
                 pass
-
+    
+    total_elapsed = time.time() - total_start
+    
+    # Calculate overall performance
+    if total_audio_duration > 0 and total_elapsed > 0:
+        overall_realtime = total_audio_duration / total_elapsed
+        logger.info(f"[TRANSCRIBE] ✓ Completed in {total_elapsed:.1f}s ({overall_realtime:.2f}x realtime)")
+        
+        if device == "cuda":
+            optimizer.print_memory_stats()
+            
+            # Get optimization suggestions
+            suggestions = optimizer.optimize_for_next_run()
+            if suggestions.get("recommendation"):
+                logger.info(f"[TRANSCRIBE] GPU optimization: {suggestions['recommendation']}")
+                
+            # Record overall performance
+            optimizer.record_performance("transcribe_full", total_elapsed, total_audio_duration)
+    
+    # Rest of the function remains the same...
     normalized_segments: List[Dict[str, Any]] = []
     seen_segments = set()
     for seg in flat_segments:
@@ -574,6 +669,9 @@ def audio_transcribe(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
         status = "failed"
     elif all(c.get("status") in ("failed", "error", "empty") for c in chunk_reports):
         status = "failed"
+    
+    # Get GPU stats for metadata
+    gpu_stats = optimizer.get_memory_stats() if device == "cuda" else {}
 
     meta = {
         "status": status,
@@ -583,6 +681,10 @@ def audio_transcribe(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
         "duration": duration,
         "used_cli": bool(whisper_cli),
         "device": device,
+        "processing_time": total_elapsed,
+        "realtime_factor": (total_audio_duration / total_elapsed) if total_elapsed > 0 else 0,
+        "gpu_memory_peak_gb": gpu_stats.get("allocated_gb"),
+        "gpu_utilization": gpu_stats.get("utilization"),
     }
     if flat_segments:
         meta["segments"] = flat_segments

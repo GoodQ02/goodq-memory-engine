@@ -28,7 +28,7 @@ echo ===========================================================================
 echo  Step 1/7: Audio Diarization Environment
 echo ================================================================================
 echo.
-call conda activate audio_diarize || goto :error
+call conda activate goodq_audio_diarize || goto :error
 
 REM Uninstall CPU-only PyTorch
 echo Removing CPU-only PyTorch...
@@ -50,7 +50,7 @@ echo ===========================================================================
 echo  Step 2/7: Audio Transcription Environment
 echo ================================================================================
 echo.
-call conda activate audio_transcribe || goto :error
+call conda activate goodq_audio_transcribe || goto :error
 
 echo Removing CPU-only PyTorch...
 pip uninstall -y torch
@@ -69,7 +69,7 @@ echo ===========================================================================
 echo  Step 3/7: Emotion Classification Environment
 echo ================================================================================
 echo.
-call conda activate emotion_classify || goto :error
+call conda activate goodq_emotion_classify || goto :error
 
 echo Removing CPU-only PyTorch...
 pip uninstall -y torch torchvision
@@ -88,7 +88,7 @@ echo ===========================================================================
 echo  Step 4/7: Face Embedding Environment
 echo ================================================================================
 echo.
-call conda activate face_embed || goto :error
+call conda activate goodq_face_embed || goto :error
 
 echo Removing CPU-only PyTorch...
 pip uninstall -y torch torchvision
@@ -107,7 +107,7 @@ echo ===========================================================================
 echo  Step 5/7: Text Embedding Environment
 echo ================================================================================
 echo.
-call conda activate text_embed || goto :error
+call conda activate goodq_text_embed || goto :error
 
 REM Check if torch is in requirements
 pip list | findstr torch
@@ -132,7 +132,7 @@ echo ===========================================================================
 echo  Step 6/7: Object Detection Environment
 echo ================================================================================
 echo.
-call conda activate object_detect || goto :error
+call conda activate goodq_object_detect || goto :error
 
 pip list | findstr torch
 if errorlevel 1 (

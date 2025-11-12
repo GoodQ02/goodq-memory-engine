@@ -1,9 +1,16 @@
 from __future__ import annotations
+# GPU Configuration - Auto-configured on import
+from goodq4all.steps.common.gpu_config import configure_gpu, get_device, clear_cache, print_memory_stats
+# Audio-specific GPU optimization
+from goodq4all.steps.common.audio_gpu_optimizer import get_audio_gpu_optimizer
+
+
 from typing import Any, Dict, List, Optional, Tuple
 import os
 import tempfile
 import subprocess
 import math
+import time
 
 
 _PIPELINES: Dict[Tuple[str, str], Any] = {}
@@ -19,37 +26,62 @@ def _resolve_device() -> str:
         return "cpu"
 
 
-def _load_pipeline(model_id: str, device: str, auth_token: Optional[str]):
-    """Load and cache PyAnnote pipeline with warmup"""
+def _load_pipeline(model_id: str, device: str, auth_token: Optional[str], duration_minutes: float = None):
+    """Load and cache PyAnnote pipeline with GPU optimization and warmup"""
     global _MODEL_WARMED_UP
     
     key = (model_id, device)
     if key in _PIPELINES:
         return _PIPELINES[key]
+    
     try:
         from pyannote.audio import Pipeline  # type: ignore
     except Exception as e:
         _PIPELINES[key] = None
-        print(f'[WARN] _load_pipeline returning None')
+        print(f'[WARN] _load_pipeline returning None - PyAnnote not available')
         return None
+    
     try:
+        # Initialize audio GPU optimizer
+        optimizer = get_audio_gpu_optimizer()
+        
+        # Configure GPU for diarization workload
+        if device == "cuda":
+            gpu_config = optimizer.configure_for_diarization(duration_minutes)
+            print(f"[DIARIZE] GPU configured: {gpu_config.memory_fraction*100:.0f}% VRAM allocation")
+            
+            # Warmup GPU kernels
+            if not _MODEL_WARMED_UP:
+                optimizer.warmup_gpu()
+        
         print(f"[DIARIZE] Loading model {model_id} on {device}...")
+        start_load = time.time()
+        
         pipeline = Pipeline.from_pretrained(model_id, use_auth_token=auth_token)
+        
         if device == "cuda":
             try:
-                pipeline.to("cuda")
-                print(f"[DIARIZE] Model loaded on GPU")
+                pipeline.to(torch.device("cuda"))
+                load_time = time.time() - start_load
+                print(f"[DIARIZE] Model loaded on GPU in {load_time:.1f}s")
+                optimizer.print_memory_stats()
             except Exception as e:
                 print(f'[ERROR] Failed to move model to GPU: {str(e)}')
+                device = "cpu"
                 pass
+        else:
+            load_time = time.time() - start_load
+            print(f"[DIARIZE] Model loaded on CPU in {load_time:.1f}s")
         
         # Warmup: Run on small dummy audio to initialize CUDA kernels
         if device == "cuda" and not _MODEL_WARMED_UP:
             try:
-                print("[DIARIZE] Warming up GPU model (first run)...")
+                print("[DIARIZE] Warming up model (first run)...")
                 import numpy as np
                 import soundfile as sf
                 import tempfile
+                
+                warmup_start = time.time()
                 
                 # Create 1-second silent audio
                 warmup_audio = np.zeros((16000,), dtype=np.float32)
@@ -59,7 +91,8 @@ def _load_pipeline(model_id: str, device: str, auth_token: Optional[str]):
                 
                 try:
                     _ = pipeline(tmp.name)
-                    print("[DIARIZE] Warmup complete")
+                    warmup_time = time.time() - warmup_start
+                    print(f"[DIARIZE] Model warmup complete in {warmup_time:.1f}s")
                     _MODEL_WARMED_UP = True
                 except:
                     pass
@@ -69,12 +102,16 @@ def _load_pipeline(model_id: str, device: str, auth_token: Optional[str]):
                 except:
                     pass
             except Exception as warmup_exc:
-                print(f"[WARN] Warmup failed: {str(warmup_exc)}")
+                print(f"[WARN] Model warmup failed: {str(warmup_exc)}")
         
         _PIPELINES[key] = pipeline
+        
     except Exception as e:
         print(f"[ERROR] Failed to load pipeline: {str(e)}")
+        import traceback
+        print(f"[ERROR] Traceback: {traceback.format_exc()}")
         _PIPELINES[key] = None
+    
     return _PIPELINES[key]
 
 
@@ -212,10 +249,11 @@ def _format_segments(diarization, offset: float = 0.0) -> List[Dict[str, Any]]:
 
 def audio_diarize(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Speaker diarization via PyAnnote pipeline with intelligent chunking.
+    Speaker diarization via PyAnnote pipeline with intelligent chunking and GPU optimization.
     
     For long audio files (>10 minutes), splits into chunks to prevent hanging.
     Merges speaker labels across chunks for consistent speaker IDs.
+    Optimizes GPU usage based on file duration and available VRAM.
     """
     import time
     
@@ -225,6 +263,9 @@ def audio_diarize(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
         tracker = get_tracker()
     except:
         tracker = None
+    
+    # Initialize GPU optimizer
+    optimizer = get_audio_gpu_optimizer()
     
     path = item.get("source_path")
     if not isinstance(path, str) or not os.path.isfile(path):
@@ -247,11 +288,7 @@ def audio_diarize(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
         return {"diarization": None, "diarize_meta": {"status": "unavailable", "engine": "pyannote", "reason": "no_auth"}}
 
     device = _resolve_device()
-    pipeline = _load_pipeline(model_id, device, auth_token)
-    if pipeline is None:
-        print("[WARN] Failed to load PyAnnote pipeline, skipping diarization")
-        return {"diarization": None, "diarize_meta": {"status": "unavailable", "engine": "pyannote"}}
-
+    
     # Get FFmpeg path
     try:
         from steps.common.tool_paths import resolve_ffmpeg
@@ -267,6 +304,13 @@ def audio_diarize(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
         # Get audio duration
         duration = _get_audio_duration(path)
         file_size_mb = os.path.getsize(path) / (1024 * 1024)
+        duration_minutes = (duration / 60.0) if duration else None
+        
+        # Load pipeline with duration hint for optimal GPU configuration
+        pipeline = _load_pipeline(model_id, device, auth_token, duration_minutes)
+        if pipeline is None:
+            print("[WARN] Failed to load PyAnnote pipeline, skipping diarization")
+            return {"diarization": None, "diarize_meta": {"status": "unavailable", "engine": "pyannote"}}
         
         # Dynamic chunking strategy based on file duration
         # Shorter chunks for very long files reduce memory pressure
@@ -300,6 +344,10 @@ def audio_diarize(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
                 "details": f"Analyzing speakers ({file_size_mb:.1f}MB, {num_chunks if use_chunking else 1} chunks)"
             })
         
+        # Print GPU stats before processing
+        if device == "cuda":
+            optimizer.print_memory_stats()
+        
         start_time = time.time()
         
         if use_chunking:
@@ -332,11 +380,7 @@ def audio_diarize(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
                 try:
                     # Clear GPU cache between chunks
                     if device == "cuda":
-                        try:
-                            import torch
-                            torch.cuda.empty_cache()
-                        except:
-                            pass
+                        optimizer.clear_cache()
                     
                     # Run diarization on chunk with timing
                     chunk_start_time = time.time()
@@ -356,8 +400,14 @@ def audio_diarize(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
                     realtime_factor = chunk_duration / chunk_elapsed if chunk_elapsed > 0 else 0
                     print(f"[DIARIZE] Chunk {chunk_idx+1} complete: {len(chunk_segments)} segments in {chunk_elapsed:.1f}s ({realtime_factor:.2f}x realtime)")
                     
+                    # Record performance for optimization
+                    if device == "cuda":
+                        optimizer.record_performance("diarize_chunk", chunk_elapsed, chunk_duration)
+                    
                 except Exception as chunk_exc:
                     print(f"[WARN] Chunk {chunk_idx+1} failed: {str(chunk_exc)}")
+                    import traceback
+                    print(f"[WARN] Traceback: {traceback.format_exc()}")
                     continue
             
             # Clean up temp files
@@ -385,11 +435,24 @@ def audio_diarize(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
         
         elapsed = time.time() - start_time
         
+        # Record performance for optimization
+        if device == "cuda" and duration:
+            optimizer.record_performance("diarize_full", elapsed, duration)
+        
         # Performance metrics
         realtime_factor = (duration / elapsed) if (duration and elapsed > 0) else 0
         avg_speed = f"{realtime_factor:.2f}x realtime" if realtime_factor > 0 else "N/A"
         
         print(f"[DIARIZE] ✓ Completed in {elapsed:.1f}s ({elapsed/60:.1f}min) - {avg_speed}")
+        
+        # Print final GPU stats
+        if device == "cuda":
+            optimizer.print_memory_stats()
+            
+            # Get optimization suggestions
+            suggestions = optimizer.optimize_for_next_run()
+            if suggestions.get("recommendation"):
+                print(f"[DIARIZE] GPU optimization suggestion: {suggestions['recommendation']}")
         
         if not segments:
             print("[DIARIZE] No speakers detected")
@@ -416,7 +479,11 @@ def audio_diarize(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
                 "processing_time": f"{elapsed:.1f}s ({elapsed/60:.1f}min)",
                 "speed": avg_speed,
                 "chunked": use_chunking,
+                "device": device,
             })
+        
+        # Get GPU memory stats for metadata
+        gpu_stats = optimizer.get_memory_stats() if device == "cuda" else {}
         
         meta = {
             "status": "ok",
@@ -430,6 +497,8 @@ def audio_diarize(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
             "chunked": use_chunking,
             "chunk_count": num_chunks if use_chunking else 1,
             "chunk_size_minutes": chunk_size_minutes if use_chunking else None,
+            "gpu_memory_peak_gb": gpu_stats.get("allocated_gb"),
+            "gpu_utilization": gpu_stats.get("utilization"),
         }
         return {"diarization": segments, "diarize_meta": meta}
         

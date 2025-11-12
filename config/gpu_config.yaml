@@ -17,9 +17,9 @@ step_memory_fractions:
   # Scene detection - moderate memory
   video_scene_detect: 0.6
   
-  # Audio processing - low memory
+  # Audio processing - optimized for speed
   audio_transcribe: 0.4
-  audio_diarize: 0.5
+  audio_diarize: 0.75  # Increased from 0.5 for faster processing
   audio_emotion: 0.4
   audio_embed_clap: 0.5
   

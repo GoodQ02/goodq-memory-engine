@@ -161,6 +161,7 @@ audio:
     min_speakers: 1
     max_speakers: 10
     embedding_model: speechbrain/spkrec-ecapa-voxceleb
+    chunk_size_minutes: 10.0  # Split long audio into chunks (prevents hanging)
   emotion:
     enabled: true
     model: speechbrain/emotion-recognition-wav2vec2-IEMOCAP

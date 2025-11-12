@@ -1,305 +1,172 @@
-# GoodQ Project Structure
+# GoodQ4All Project Structure
 
-## 📁 Directory Organization
+Last Updated: 2025-11-12
 
-### L:\ Drive Layout
-
-```
-L:\
-├── goodq4all\              # Main project (GitHub repo)
-├── _DATA\                    # Runtime data (NOT in GitHub)
-├── _ARCHIVE\                 # Legacy/deprecated files
-├── models\                   # Pretrained model files
-└── tools\                    # Standalone utilities
-```
-
----
-
-## 🎯 goodq4all\ (Project Root)
-
-**Purpose**: Source code, configuration, and documentation (tracked in GitHub)
+## Directory Organization
 
 ```
-goodq4all\
-├── api\                      # FastAPI REST server
-│   ├── main.py              # API entry point
-│   ├── server.py            # Server configuration
-│   └── routes\              # API endpoints
+goodq4all/
 │
-├── configs\                  # Configuration files
-│   ├── paths.py             # ⭐ Central path configuration
-│   ├── models_pinned.json   # Locked model versions
-│   └── datasets_pinned.json # Locked dataset versions
+├── 📄 Core Files (Root Directory)
+│   ├── INSTALL.bat              # Windows installer launcher
+│   ├── INSTALL.md               # Installation guide
+│   ├── LAUNCH_GOODQ.bat         # Main system launcher
+│   ├── README.md                # Project overview
+│   ├── LICENSE                  # License file
+│   ├── config.yaml              # Main configuration
+│   ├── .gitignore               # Git ignore rules
+│   ├── .env.local               # Local environment variables (not in git)
+│   ├── .env.local.template      # Environment template
+│   ├── .env.agents              # Agent configurations
+│   ├── .env.model_cache         # Model cache settings
+│   │
+│   ├── api_server.py            # FastAPI backend server
+│   ├── index.html               # Main web interface
+│   ├── analytics_dashboard.py   # Analytics engine
+│   ├── analytics_engine.py      # Analytics processing
+│   ├── analytics_cli.py         # Analytics CLI
+│   └── analytics_query.py       # Analytics queries
 │
-├── docs\                     # Documentation
-│   ├── README.md            # Project overview
-│   ├── AGENTS.md            # AI agent instructions
-│   ├── PROJECT_STRUCTURE.md # This file
-│   ├── HISTORY.md           # Development history
-│   └── diagrams\            # Architecture diagrams
+├── 📁 agents/                   # AI Agent Definitions
+│   ├── agent_definitions.py     # Agent classes and configurations
+│   ├── agent_tools.py           # Agent tool implementations
+│   └── coordinator.py           # Multi-agent coordinator
 │
-├── envs\                     # Conda environment definitions
-│   ├── goodq_zenml.yml      # Main pipeline environment
-│   ├── audio_emotion.yml    # Audio processing environment
-│   └── [other_envs].yml     # Isolated step environments
+├── 📁 api/                      # API Components
+│   ├── routes/                  # API route handlers
+│   ├── models/                  # Pydantic models
+│   └── middleware/              # API middleware
 │
-├── pipelines\                # ZenML pipeline definitions
-│   ├── ingest_multimodal.py # Main ingestion pipeline
-│   └── goodq_chat.py        # Chat/retrieval pipeline
+├── 📁 cli/                      # Command Line Interface
+│   └── commands/                # CLI command implementations
 │
-├── scripts\                  # Utility scripts
-│   ├── system_readiness_check.py  # Verify system setup
-│   ├── check_production_status.py # Monitor ingestion
-│   ├── watchdog_ingest.py         # File watcher
-│   ├── command_center.ps1         # Dashboard
-│   └── [various_utilities].py/ps1
+├── 📁 common/                   # Shared Utilities
+│   ├── constants.py             # Global constants
+│   ├── exceptions.py            # Custom exceptions
+│   └── utils.py                 # Utility functions
 │
-├── steps\                    # ZenML pipeline steps
-│   ├── common\              # Shared utilities
-│   │   ├── config_loader.py
-│   │   ├── memory.py
-│   │   └── memory_writer.py
-│   ├── video_ingest\        # Video processing
-│   ├── audio_transcribe\    # Audio processing
-│   ├── image_caption\       # Image analysis
-│   ├── sentiment\           # Sentiment analysis
-│   ├── knowledge_graph\     # Graph construction
-│   └── [other_steps]\       # Additional processing steps
+├── 📁 config/                   # Configuration Files
+│   ├── config.yaml.backup_*     # Configuration backups
+│   └── settings/                # Environment-specific settings
 │
-├── import_inbox\            # 📥 Drop folder for new media
-│   └── [user_drops_files_here]
+├── 📁 data/                     # Data Storage
+│   ├── videos.db                # Main SQLite database
+│   ├── processing/              # Temporary processing files
+│   │   └── video_*/             # Per-video processing directories
+│   ├── embeddings/              # FAISS index storage
+│   │   ├── text_embeddings/
+│   │   ├── clip_embeddings/
+│   │   ├── dino_embeddings/
+│   │   └── audio_embeddings/
+│   ├── faces/                   # Face detection outputs
+│   └── clips/                   # Video clip extractions
 │
-├── .gitignore
-├── README.md
-└── requirements.txt
+├── 📁 docs/                     # Documentation
+│   ├── INSTALL.md               # Installation guide
+│   ├── QUICK_START_GUIDE.md     # Quick start guide
+│   ├── ARCHITECTURE.md          # System architecture
+│   ├── GPU_QUICK_START.md       # GPU configuration
+│   ├── SCENE_ANALYSIS_REPORT.md # Scene analysis documentation
+│   ├── agent-communications/    # Agent communication logs
+│   └── Phase Reports/           # Development phase documentation
+│
+├── 📁 envs/                     # Conda Environments
+│   ├── goodq_zenml.yaml         # Main environment spec
+│   ├── vision_env.yaml          # Vision processing environment
+│   ├── audio_env.yaml           # Audio processing environment
+│   └── graph_env.yaml           # Graph processing environment
+│
+├── 📁 import_inbox/             # Video Import Directory
+│   └── (drop videos here for automatic processing)
+│
+├── 📁 logs/                     # Application Logs
+│   ├── api_server.log           # API server logs
+│   ├── watchdog.log             # Watchdog logs
+│   ├── pipeline_*.log           # Pipeline execution logs
+│   └── analytics.log            # Analytics logs
+│
+├── 📁 output/                   # Processed Outputs
+│   ├── scenes/                  # Extracted scene data
+│   ├── transcripts/             # Transcription outputs
+│   ├── summaries/               # Generated summaries
+│   └── knowledge_graphs/        # Knowledge graph exports
+│
+├── 📁 pipelines/                # ZenML Pipeline Definitions
+│   ├── video_ingestion_pipeline.py      # Main ingestion pipeline
+│   ├── scene_detection_pipeline.py      # Scene detection
+│   ├── audio_processing_pipeline.py     # Audio processing
+│   ├── vision_processing_pipeline.py    # Vision processing
+│   └── knowledge_graph_pipeline.py      # Knowledge graph building
+│
+├── 📁 scripts/                  # Utility Scripts
+│   ├── backup/                  # Backup files
+│   ├── diagnostics/             # Diagnostic Tools
+│   ├── setup/                   # Setup Scripts
+│   └── utilities/               # Utility Scripts
+│
+├── 📁 smoke_inbox/              # Test Video Directory
+│   └── sample.mp4               # Sample test video
+│
+├── 📁 steps/                    # ZenML Pipeline Steps
+│   ├── video_scout.py           # Initial video analysis
+│   ├── scene_detect.py          # Scene detection
+│   ├── audio_extract.py         # Audio extraction
+│   ├── audio_diarize.py         # Speaker diarization
+│   ├── audio_transcribe.py      # Transcription
+│   ├── frame_extract.py         # Frame extraction
+│   ├── vision_analyze.py        # Vision analysis
+│   ├── face_detect.py           # Face detection
+│   ├── embed_*.py               # Various embedding steps
+│   ├── entity_extract.py        # Entity extraction
+│   ├── knowledge_graph.py       # Knowledge graph building
+│   └── sentiment_analysis.py   # Sentiment analysis
+│
+├── 📁 tests/                    # Test Files
+│   └── test_*.py                # Unit and integration tests
+│
+├── 📁 web/                      # Web Interface Components
+│   ├── backup/                  # UI backups
+│   ├── static/                  # Static assets
+│   └── templates/               # HTML templates
+│
+└── 📁 zenml_store/              # ZenML Metadata Store
 ```
 
----
+## Key Files and Their Purpose
 
-## 💾 _DATA\GoodQ_Data\ (Runtime Data)
+### Core System Files
 
-**Purpose**: All runtime data, outputs, and artifacts (NOT tracked in GitHub)
+- **LAUNCH_GOODQ.bat**: Main entry point - starts API server, watchdog, and opens UI
+- **api_server.py**: FastAPI backend serving the web interface and processing APIs
+- **index.html**: Main web UI with chat, analytics, and visualization
+- **config.yaml**: Central configuration for all system components
 
-```
-_DATA\GoodQ_Data\
-├── databases\               # SQLite databases
-│   ├── memory.db           # Scene metadata & embeddings
-│   └── knowledge_graph.db  # Semantic relationships
-│
-├── cache\                   # Model & library caches
-│   ├── huggingface\        # HF_HOME
-│   └── torch\              # TORCH_HOME
-│
-├── faiss_indices\           # Vector search indices
-│   ├── text\               # Text embeddings
-│   ├── audio\              # Audio embeddings
-│   ├── dino\               # Visual embeddings (DINOv2)
-│   └── clip\               # Multimodal embeddings
-│
-├── processing\              # Active ingestion workspace
-│   └── [video_name]\
-│       ├── frames\         # Extracted keyframes
-│       ├── audio\          # Audio segments
-│       └── metadata\       # Processing metadata
-│
-├── completed\               # Finished ingestions
-│   ├── 1987_1988_run1\     # Example: completed video
-│   ├── st_thomas_lost_tapes\
-│   └── [other_videos]\
-│
-├── exports\                 # Final output exports
-│   └── [export_packages]\
-│
-└── logs\                    # Centralized logging
-    ├── step_runs.jsonl     # Step execution log
-    ├── watchdog.log        # File watcher log
-    ├── pipeline.log        # Pipeline execution log
-    └── overnight_monitor.jsonl
+### Configuration Files
+
+- **.env.local**: Local environment variables (paths, API keys, etc.)
+- **.env.agents**: Agent-specific configuration
+- **.env.model_cache**: Model caching settings
+- **config.yaml**: Main YAML configuration
+
+### Data Flow
+
+1. **import_inbox/** → Videos dropped here are detected by watchdog
+2. **data/processing/** → Temporary processing workspace
+3. **data/videos.db** → SQLite database with all metadata
+4. **data/embeddings/** → FAISS vector indices
+5. **output/** → Final processed outputs
+
+## Cleanup Guidelines
+
+### Regular Maintenance
+
+Run monthly:
+```bash
+python scripts/utilities/QUICK_CLEAN.py
 ```
 
----
-
-## 🗄️ _ARCHIVE\ (Legacy Files)
-
-**Purpose**: Deprecated code and old test runs (for reference only)
-
-```
-_ARCHIVE\
-├── old_tests\               # Legacy test folders
-│   ├── dedupe_test\
-│   ├── ingest_lite*\
-│   └── [various_old_runs]\
-│
-└── deprecated_scripts\      # Old/unused scripts
-```
-
----
-
-## 🤖 models\ (Pretrained Models)
-
-**Purpose**: Local copies of pretrained models for offline use
-
-```
-models\
-├── whisper\
-├── sentiment\
-└── [other_models]\
-```
-
----
-
-## 🔧 tools\ (Standalone Utilities)
-
-**Purpose**: External tools and utilities
-
-```
-tools\
-└── [various_utilities]\
-```
-
----
-
-## 🔑 Key Design Principles
-
-### 1. **Single Source of Truth**
-- All paths defined in `goodq4all/configs/paths.py`
-- Import and use centralized paths: `from configs.paths import DATABASE_DIR`
-
-### 2. **Separation of Concerns**
-- **Code** (goodq4all): Version controlled in GitHub
-- **Data** (_DATA): Local only, not in GitHub
-- **Archive** (_ARCHIVE): Historical reference only
-
-### 3. **Environment Isolation**
-- Each step has its own conda environment when needed
-- Strict isolation flags prevent dependency bleed:
-  - `PYTHONNOUSERSITE=1`
-  - `PIP_NO_CACHE_DIR=1`
-  - `--no-user --isolated --no-cache-dir`
-
-### 4. **Data Flow**
-
-```
-import_inbox/           # User drops files here
-     ↓
-processing/            # Active processing
-     ↓
-databases/            # Metadata storage
-faiss_indices/        # Vector storage
-     ↓
-completed/            # Archived results
-     ↓
-exports/              # Final outputs
-```
-
-### 5. **Logging Strategy**
-- All logs in `_DATA/GoodQ_Data/logs/`
-- JSONL format for structured logs
-- Easy to parse and analyze
-- Not buried in deep folder hierarchies
-
----
-
-## 🚀 Quick Reference
-
-### Find a Path
-```python
-from configs.paths import (
-    MEMORY_DB,              # Database file
-    PROCESSING_DIR,         # Active workspace
-    IMPORT_INBOX,           # User drop folder
-    LOGS_DIR,               # Centralized logs
-    get_processing_dir('video_name')  # Video workspace
-)
-```
-
-### Check System Status
-```powershell
-# Run readiness check
-conda run -n goodq_zenml python scripts/system_readiness_check.py
-
-# Check production status
-conda run -n goodq_zenml python scripts/check_production_status.py
-
-# View dashboard
-.\scripts\command_center.ps1
-```
-
-### Start Services
-```batch
-LAUNCH_GOODQ.bat        # Start command center + API
-START_WATCHDOG.bat      # Start file watcher
-CHECK_WATCHDOG.bat      # Check watcher status
-STOP_GOODQ.bat          # Stop all services
-```
-
----
-
-## 📊 Data Lifecycle
-
-### Ingestion Workflow
-1. User drops file in `import_inbox/`
-2. Watchdog detects file
-3. Processing begins in `processing/[video_name]/`
-4. Metadata stored in `databases/memory.db`
-5. Embeddings stored in `faiss_indices/`
-6. Knowledge graph built in `databases/knowledge_graph.db`
-7. Completed files moved to `completed/[video_name]/`
-8. Exports created in `exports/`
-
-### Log Tracking
-- Real-time: `logs/step_runs.jsonl` (append-only)
-- Watchdog: `logs/watchdog.log`
-- Pipeline: `logs/pipeline.log`
-- Monitoring: `logs/overnight_monitor.jsonl`
-
----
-
-## 🔒 Locked Versions
-
-### Package Versions
-- Locked in `envs/[env_name].yml`
-- Pinned with exact versions or hashes
-- Verified by `system_readiness_check.py`
-
-### Model Versions
-- Defined in `configs/models_pinned.json`
-- Includes revision hashes
-- Prevents automatic updates
-
-### Dataset Versions
-- Defined in `configs/datasets_pinned.json`
-- Includes commit hashes
-- Ensures reproducibility
-
----
-
-## 🆘 Troubleshooting
-
-### Path Issues
-- **Problem**: Script can't find files
-- **Solution**: Check `configs/paths.py` and ensure `ensure_directories()` was called
-
-### Import Errors
-- **Problem**: Module not found
-- **Solution**: Verify conda environment is activated and `PYTHONPATH` if needed
-
-### Data Not Showing
-- **Problem**: Dashboard shows no data
-- **Solution**: Check `_DATA/GoodQ_Data/databases/` and `processing/` folders
-
-### Logs Missing
-- **Problem**: Can't find logs
-- **Solution**: All logs now in `_DATA/GoodQ_Data/logs/` (not project root)
-
----
-
-## 📈 Future Expansion
-
-This structure is designed to grow:
-- New steps: Add to `steps/`
-- New pipelines: Add to `pipelines/`
-- New models: Update `configs/models_pinned.json`
-- New data types: Extend `processing/` structure
-
-The modular design ensures each component can evolve independently while maintaining system coherence.
+This will:
+- Archive old backups
+- Clean temporary processing files
+- Rotate logs
+- Remove orphaned data

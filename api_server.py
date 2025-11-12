@@ -1361,6 +1361,7 @@ async def get_pipeline_engines():
         # Check watchdog log to see which engines are active
         watchdog_log = LOGS_DIR / "watchdog.log"
         progress_file = LOGS_DIR / "progress.json"
+        step_runs_file = LOGS_DIR / "step_runs.jsonl"
         
         current_step = None
         current_file = None
@@ -1370,9 +1371,64 @@ async def get_pipeline_engines():
             try:
                 with open(progress_file, 'r', encoding='utf-8') as f:
                     progress_data = json.load(f)
-                    current_step = progress_data.get('current_step', '')
-                    current_file = progress_data.get('current_file')
-            except:
+                    # Handle both old and new progress.json formats
+                    current_step = progress_data.get('step') or progress_data.get('current_step', '')
+                    current_file = progress_data.get('file') or progress_data.get('current_file')
+                    # Only show as active if status is processing
+                    if progress_data.get('status') == 'completed':
+                        current_step = None
+                        current_file = None
+            except Exception as e:
+                print(f"⚠ Error reading progress file: {e}")
+                pass
+        
+        # Also check step_runs.jsonl for the most recent step (more real-time)
+        if step_runs_file.exists() and not current_step:
+            try:
+                # Read the last line to get the most recent step
+                with open(step_runs_file, 'rb') as f:
+                    f.seek(0, 2)  # Go to end
+                    file_size = f.tell()
+                    if file_size > 0:
+                        # Read last few KB to get recent steps
+                        chunk_size = min(8192, file_size)
+                        f.seek(max(0, file_size - chunk_size))
+                        lines = f.read().decode('utf-8', errors='ignore').strip().split('\n')
+                        
+                        # Get the last valid JSON line
+                        for line in reversed(lines):
+                            if line.strip():
+                                try:
+                                    step_data = json.loads(line)
+                                    # Check if this step ran in the last 60 seconds
+                                    step_time = datetime.fromisoformat(step_data.get('ts', ''))
+                                    time_diff = (datetime.now() - step_time).total_seconds()
+                                    
+                                    if time_diff < 60:  # Active if ran in last minute
+                                        current_step = step_data.get('step')
+                                        # Extract filename from source_path if available
+                                        source = step_data.get('source_path', '')
+                                        if source:
+                                            # Extract video name from watchdog log path structure
+                                            # Path format: L:\goodq4all\logs\watchdog_YYYYMMDD_HHMMSS\VIDEO_NAME\...
+                                            import re
+                                            match = re.search(r'watchdog_\d+_\d+[/\\]([^/\\]+)[/\\]', source)
+                                            if match:
+                                                current_file = match.group(1)
+                                            else:
+                                                # Try alternative: just get the immediate parent directory name
+                                                parts = source.replace('\\', '/').split('/')
+                                                if len(parts) > 3:
+                                                    # Look for .mp4 in path parts
+                                                    for part in parts:
+                                                        if '.mp4' in part.lower():
+                                                            current_file = part
+                                                            break
+                                    break
+                                except:
+                                    continue
+            except Exception as e:
+                print(f"⚠ Error reading step_runs.jsonl: {e}")
                 pass
         
         # Mark active engines based on current step

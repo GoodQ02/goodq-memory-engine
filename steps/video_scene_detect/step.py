@@ -57,6 +57,25 @@ def _fallback_single_scene(duration: Optional[float]) -> List[Dict[str, Any]]:
 
 
 def _detect_with_scenedetect(path: str, threshold: float, min_scene_len_sec: float) -> Dict[str, Any]:
+    """
+    Scene detection with GPU acceleration when available
+    Falls back to CPU-based PySceneDetect if GPU fails
+    """
+    # Try GPU acceleration first
+    try:
+        import torch
+        if torch.cuda.is_available():
+            print("[SCENE] Using GPU-accelerated scene detection")
+            from .gpu_scene_detect import detect_scenes_gpu
+            result = detect_scenes_gpu(path, threshold, min_scene_len_sec)
+            return result
+        else:
+            print("[SCENE] GPU not available, using CPU-based detection")
+    except Exception as e:
+        print(f"[SCENE] GPU detection failed ({str(e)}), falling back to CPU")
+    
+    # Fallback to CPU-based PySceneDetect
+    print("[SCENE] Using CPU-based PySceneDetect")
     from scenedetect import open_video, SceneManager, StatsManager
     from scenedetect.detectors import ContentDetector
 

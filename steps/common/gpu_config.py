@@ -41,7 +41,7 @@ def configure_gpu(step_name=None, force_fraction=None):
     
     # GPU configuration per step (fraction of total VRAM)
     GPU_CONFIGS = {
-        "video_scene_detect": 0.15,      # Lightweight OpenCV
+        "video_scene_detect": 0.20,      # GPU-accelerated frame difference + histogram
         "audio_transcribe": 0.25,        # Whisper medium
         "audio_diarize": 0.35,           # PyAnnote + embeddings
         "face_embed": 0.20,              # FaceNet

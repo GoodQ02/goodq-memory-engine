@@ -1,0 +1,423 @@
+"""
+GoodQ4All - WSL2 Audio Setup (User-Space Only)
+Installs everything in user space without venv or sudo
+"""
+
+import subprocess
+import sys
+from pathlib import Path
+
+class UserSpaceWSL2Setup:
+    def __init__(self):
+        result = subprocess.run(
+            ["wsl", "-d", "Ubuntu", "--", "whoami"],
+            capture_output=True,
+            text=True
+        )
+        wsl_user = result.stdout.strip()
+        self.wsl_home = f"/home/{wsl_user}"
+        self.workspace = f"{self.wsl_home}/goodq_audio"
+        
+    def print_header(self, text):
+        print("\n" + "="*80)
+        print(f"  {text}")
+        print("="*80 + "\n")
+        
+    def wsl_cmd(self, command, timeout=None):
+        """Run command in WSL2"""
+        try:
+            result = subprocess.run(
+                ["wsl", "-d", "Ubuntu", "--", "bash", "-c", command],
+                capture_output=True,
+                text=True,
+                timeout=timeout
+            )
+            return result.stdout, result.stderr, result.returncode
+        except subprocess.TimeoutExpired:
+            return "", "Timeout", -1
+            
+    def check_system(self):
+        """Check WSL2 system"""
+        self.print_header("System Check")
+        
+        print("[1/3] WSL2...")
+        result = subprocess.run(["wsl", "--list", "--verbose"], capture_output=True)
+        try:
+            output = result.stdout.decode('utf-16le')
+        except:
+            output = result.stdout.decode('utf-8', errors='ignore')
+        if "Ubuntu" in output and "Running" in output:
+            print("  ✓ Running")
+        else:
+            return False
+            
+        print("\n[2/3] GPU...")
+        out, err, code = self.wsl_cmd("nvidia-smi --query-gpu=name --format=csv,noheader")
+        if code == 0:
+            print(f"  ✓ {out.strip()}")
+        else:
+            print("  ⚠ No GPU (will use CPU)")
+            
+        print("\n[3/3] Python & pip...")
+        out, err, code = self.wsl_cmd("python3 --version && pip3 --version")
+        if code == 0:
+            for line in out.strip().split('\n'):
+                print(f"  ✓ {line}")
+        else:
+            return False
+            
+        return True
+        
+    def create_workspace(self):
+        """Create workspace"""
+        self.print_header("Creating Workspace")
+        
+        dirs = [
+            self.workspace,
+            f"{self.workspace}/scripts",
+            f"{self.workspace}/models",
+            f"{self.workspace}/queue_in",
+            f"{self.workspace}/queue_out"
+        ]
+        
+        for d in dirs:
+            self.wsl_cmd(f"mkdir -p {d}")
+        print("  ✓ Workspace created")
+        return True
+        
+    def install_packages(self):
+        """Install Python packages in user space"""
+        self.print_header("Installing Python Packages")
+        
+        packages = [
+            ("torch", "PyTorch with CUDA"),
+            ("faster-whisper", "Fast Whisper transcription"),
+            ("openai-whisper", "OpenAI Whisper (fallback)"),
+            ("librosa", "Audio processing"),
+            ("soundfile", "Audio I/O"),
+            ("scipy", "Scientific computing"),
+            ("numpy", "Numerical operations")
+        ]
+        
+        print("Installing packages (this may take 10-15 minutes)...")
+        print("Using --user flag to install in user space\n")
+        
+        for i, (pkg, desc) in enumerate(packages, 1):
+            print(f"[{i}/{len(packages)}] {desc}...")
+            
+            if pkg == "torch":
+                cmd = "pip3 install --user torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121"
+            else:
+                cmd = f"pip3 install --user {pkg}"
+                
+            out, err, code = self.wsl_cmd(cmd, timeout=600)
+            
+            if code == 0 or "Requirement already satisfied" in out or "Requirement already satisfied" in err:
+                print(f"  ✓ Installed")
+            else:
+                print(f"  ⚠ Issue (may still work): {err[:100]}")
+                
+        print("\nVerifying installations...")
+        test_cmd = """python3 -c "
+import torch
+import whisper
+import librosa
+print(f'PyTorch: {torch.__version__}')
+print(f'CUDA Available: {torch.cuda.is_available()}')
+if torch.cuda.is_available():
+    print(f'GPU: {torch.cuda.get_device_name(0)}')
+print(f'Whisper: OK')
+print(f'Librosa: {librosa.__version__}')
+" 2>&1"""
+        
+        out, err, code = self.wsl_cmd(test_cmd)
+        if code == 0:
+            for line in out.strip().split('\n'):
+                print(f"  ✓ {line}")
+        else:
+            print(f"  ⚠ Verification had issues: {err[:200]}")
+            
+        return True
+        
+    def create_scripts(self):
+        """Create processing scripts"""
+        self.print_header("Creating Processing Scripts")
+        
+        # Simple processor
+        processor = '''#!/usr/bin/env python3
+"""Simple Audio Processor for GoodQ"""
+import sys
+import json
+import torch
+from pathlib import Path
+
+try:
+    from faster_whisper import WhisperModel
+    USE_FASTER = True
+except:
+    import whisper
+    USE_FASTER = False
+
+def process_audio(audio_path, output_path):
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    print(f"Device: {device}")
+    print(f"Processing: {Path(audio_path).name}")
+    
+    if USE_FASTER:
+        model = WhisperModel("base", device=device)
+        segments, info = model.transcribe(audio_path, beam_size=5, vad_filter=True)
+        
+        result = {
+            "language": info.language,
+            "duration": info.duration,
+            "segments": [
+                {"start": s.start, "end": s.end, "text": s.text}
+                for s in segments
+            ]
+        }
+    else:
+        model = whisper.load_model("base", device=device)
+        result_data = model.transcribe(audio_path)
+        result = {
+            "language": result_data["language"],
+            "duration": None,
+            "segments": [
+                {"start": s["start"], "end": s["end"], "text": s["text"]}
+                for s in result_data["segments"]
+            ]
+        }
+    
+    Path(output_path).write_text(json.dumps(result, indent=2))
+    print(f"Output: {output_path}")
+    print(f"Segments: {len(result['segments'])}")
+    return result
+
+if __name__ == "__main__":
+    if len(sys.argv) < 3:
+        print("Usage: process.py <input_audio> <output_json>")
+        sys.exit(1)
+    process_audio(sys.argv[1], sys.argv[2])
+'''
+        
+        script_path = f"{self.workspace}/scripts/process.py"
+        # Write via WSL
+        safe_script = processor.replace("'", "'\\''")
+        cmd = f"cat > {script_path} <<'SCRIPT_END'\n{processor}\nSCRIPT_END"
+        self.wsl_cmd(cmd)
+        self.wsl_cmd(f"chmod +x {script_path}")
+        print(f"  ✓ Created processing script")
+        
+        return True
+        
+    def create_bridge(self):
+        """Create Windows bridge"""
+        self.print_header("Creating Windows-WSL2 Bridge")
+        
+        result = subprocess.run(
+            ["wsl", "-d", "Ubuntu", "--", "whoami"],
+            capture_output=True,
+            text=True
+        )
+        wsl_user = result.stdout.strip()
+        
+        bridge_code = f'''"""
+GoodQ4All WSL2 Audio Bridge
+Simple interface to WSL2 audio processing
+"""
+
+import subprocess
+import json
+import time
+from pathlib import Path
+
+class WSL2AudioBridge:
+    """Bridge to WSL2 audio processing"""
+    
+    def __init__(self):
+        self.workspace = "/home/{wsl_user}/goodq_audio"
+        self.wsl_user = "{wsl_user}"
+        
+    def wsl_path(self, windows_path):
+        """Convert Windows path to WSL path"""
+        p = str(windows_path).replace("\\\\", "/")
+        if len(p) > 1 and p[1] == ":":
+            drive = p[0].lower()
+            rest = p[2:].replace("\\\\", "/")
+            return f"/mnt/{{drive}}{{rest}}"
+        return p
+        
+    def windows_path(self, wsl_path):
+        """Convert WSL path to Windows path"""
+        if wsl_path.startswith("/mnt/"):
+            parts = wsl_path[5:].split("/", 1)
+            drive = parts[0].upper()
+            rest = parts[1] if len(parts) > 1 else ""
+            return f"{{drive}}:\\\\{{rest.replace('/', '\\\\')}}"
+        return wsl_path
+        
+    def process_audio(self, audio_file, output_file=None, timeout=600):
+        """
+        Process audio file using WSL2
+        
+        Args:
+            audio_file: Path to audio file on Windows
+            output_file: Optional output path (auto-generated if None)
+            timeout: Processing timeout in seconds
+            
+        Returns:
+            dict: Processing results with transcription segments
+        """
+        audio_path = Path(audio_file)
+        if not audio_path.exists():
+            raise FileNotFoundError(f"Audio file not found: {{audio_file}}")
+            
+        # Convert to WSL path
+        wsl_input = self.wsl_path(audio_path)
+        
+        # Set output path
+        if output_file is None:
+            output_file = audio_path.parent / f"{{audio_path.stem}}_transcript.json"
+        wsl_output = self.wsl_path(output_file)
+        
+        # Build command
+        cmd = (
+            f"python3 {{self.workspace}}/scripts/process.py "
+            f"'{{wsl_input}}' '{{wsl_output}}'"
+        )
+        
+        print(f"Processing: {{audio_path.name}}")
+        print(f"Output: {{output_file}}")
+        
+        # Execute in WSL2
+        try:
+            result = subprocess.run(
+                ["wsl", "-d", "Ubuntu", "--", "bash", "-c", cmd],
+                capture_output=True,
+                text=True,
+                timeout=timeout
+            )
+            
+            if result.returncode != 0:
+                raise RuntimeError(f"Processing failed: {{result.stderr}}")
+                
+            # Read results
+            if Path(output_file).exists():
+                with open(output_file) as f:
+                    return json.load(f)
+            else:
+                raise RuntimeError("Output file not created")
+                
+        except subprocess.TimeoutExpired:
+            raise TimeoutError(f"Processing timeout after {{timeout}}s")
+            
+    def check_status(self):
+        """Check if WSL2 audio is ready"""
+        test_cmd = f"test -f {{self.workspace}}/scripts/process.py && python3 -c 'import torch; print(torch.cuda.is_available())'"
+        result = subprocess.run(
+            ["wsl", "-d", "Ubuntu", "--", "bash", "-c", test_cmd],
+            capture_output=True,
+            text=True
+        )
+        return result.returncode == 0
+        
+    def get_info(self):
+        """Get WSL2 audio system info"""
+        info_cmd = """python3 -c "
+import torch
+print(f'Device: {{\"cuda\" if torch.cuda.is_available() else \"cpu\"}}')
+if torch.cuda.is_available():
+    print(f'GPU: {{torch.cuda.get_device_name(0)}}')
+    print(f'VRAM: {{torch.cuda.get_device_properties(0).total_memory / 1e9:.1f}}GB')
+" 2>&1"""
+        
+        result = subprocess.run(
+            ["wsl", "-d", "Ubuntu", "--", "bash", "-c", info_cmd],
+            capture_output=True,
+            text=True
+        )
+        return result.stdout if result.returncode == 0 else "Not available"
+
+# Example usage
+if __name__ == "__main__":
+    bridge = WSL2AudioBridge()
+    
+    print("="*60)
+    print("  GoodQ4All WSL2 Audio Bridge")
+    print("="*60)
+    print()
+    print("Status:", "Ready" if bridge.check_status() else "Not Ready")
+    print()
+    print("System Info:")
+    print(bridge.get_info())
+    print()
+    print("="*60)
+    print()
+    print("Usage:")
+    print("  from wsl2_audio_bridge import WSL2AudioBridge")
+    print("  bridge = WSL2AudioBridge()")
+    print("  result = bridge.process_audio('path/to/audio.wav')")
+    print("  print(result['segments'])")
+'''
+        
+        bridge_path = Path("L:/goodq4all/wsl2_audio_bridge.py")
+        with open(bridge_path, 'w') as f:
+            f.write(bridge_code)
+        print(f"  ✓ Created {bridge_path}")
+        
+        return True
+        
+    def run(self):
+        """Execute setup"""
+        print("="*80)
+        print("  GoodQ4All - WSL2 Audio Setup (User-Space)")
+        print("="*80)
+        print("\nThis will install audio processing in WSL2 user space")
+        print("No sudo required - all packages installed with --user flag")
+        print("\nFeatures:")
+        print("  ✓ GPU-accelerated Whisper transcription")
+        print("  ✓ Faster-Whisper for speed")
+        print("  ✓ Librosa for audio processing")
+        print("  ✓ Windows-WSL2 bridge for integration")
+        print("\nEstimated time: 10-15 minutes")
+        print("\nPress ENTER to continue or CTRL+C to cancel...")
+        input()
+        
+        steps = [
+            ("System Check", self.check_system),
+            ("Workspace", self.create_workspace),
+            ("Python Packages", self.install_packages),
+            ("Processing Scripts", self.create_scripts),
+            ("Windows Bridge", self.create_bridge)
+        ]
+        
+        for name, func in steps:
+            try:
+                if not func():
+                    print(f"\n✗ {name} failed!")
+                    return False
+            except Exception as e:
+                print(f"\n✗ Exception in {name}: {e}")
+                import traceback
+                traceback.print_exc()
+                return False
+                
+        self.print_header("Setup Complete!")
+        
+        print("Test the installation:")
+        print("  python wsl2_audio_bridge.py")
+        print()
+        print("Use in your pipeline:")
+        print("  from wsl2_audio_bridge import WSL2AudioBridge")
+        print("  bridge = WSL2AudioBridge()")
+        print("  result = bridge.process_audio('sample.wav')")
+        print("  for seg in result['segments']:")
+        print("      print(f\"{seg['start']:.1f}s: {seg['text']}\")")
+        print()
+        print("Next: Integrate with GoodQ pipeline steps")
+        
+        return True
+
+if __name__ == "__main__":
+    setup = UserSpaceWSL2Setup()
+    success = setup.run()
+    sys.exit(0 if success else 1)

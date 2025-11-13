@@ -117,6 +117,73 @@ class CommandRequest(BaseModel):
     args: Optional[Dict[str, Any]] = None
 
 
+def get_gpu_status():
+    """Get real-time GPU status including memory usage"""
+    try:
+        import subprocess
+        
+        # Query GPU info
+        result = subprocess.run([
+            'nvidia-smi',
+            '--query-gpu=index,name,utilization.gpu,utilization.memory,memory.used,memory.total,temperature.gpu',
+            '--format=csv,noheader,nounits'
+        ], capture_output=True, text=True, timeout=5)
+        
+        if result.returncode == 0:
+            lines = result.stdout.strip().split('\n')
+            gpus = []
+            for line in lines:
+                parts = [p.strip() for p in line.split(',')]
+                if len(parts) >= 7:
+                    gpus.append({
+                        'index': int(parts[0]),
+                        'name': parts[1],
+                        'utilization_gpu': float(parts[2]),
+                        'utilization_memory': float(parts[3]),
+                        'memory_used_mb': float(parts[4]),
+                        'memory_total_mb': float(parts[5]),
+                        'temperature': float(parts[6]) if parts[6] != '[N/A]' else None
+                    })
+            
+            # Get compute processes
+            proc_result = subprocess.run([
+                'nvidia-smi',
+                '--query-compute-apps=pid,process_name,used_memory',
+                '--format=csv,noheader'
+            ], capture_output=True, text=True, timeout=5)
+            
+            processes = []
+            if proc_result.returncode == 0:
+                for line in proc_result.stdout.strip().split('\n'):
+                    if line and '[N/A]' not in line:
+                        parts = [p.strip() for p in line.split(',')]
+                        if len(parts) >= 3:
+                            try:
+                                processes.append({
+                                    'pid': int(parts[0]),
+                                    'name': parts[1],
+                                    'memory_mb': float(parts[2].replace(' MiB', ''))
+                                })
+                            except:
+                                pass
+            
+            return {
+                'available': True,
+                'gpus': gpus,
+                'compute_processes': processes,
+                'total_gpus': len(gpus)
+            }
+        else:
+            return {'available': False, 'error': 'nvidia-smi failed'}
+            
+    except FileNotFoundError:
+        return {'available': False, 'error': 'nvidia-smi not found'}
+    except subprocess.TimeoutExpired:
+        return {'available': False, 'error': 'nvidia-smi timeout'}
+    except Exception as e:
+        return {'available': False, 'error': str(e)}
+
+
 # ============================================================================
 # REAL DATA ENDPOINTS - ALL FUNCTIONAL
 # ============================================================================
@@ -1468,6 +1535,9 @@ async def get_pipeline_engines():
             except:
                 pass
         
+        # Get GPU status
+        gpu_status = get_gpu_status()
+        
         return {
             "engines": engines,
             "processing_active": processing_active,
@@ -1475,6 +1545,7 @@ async def get_pipeline_engines():
             "current_file": current_file,
             "total_engines": len(engines),
             "active_engines": sum(1 for e in engines.values() if e['status'] == 'active'),
+            "gpu_status": gpu_status,
             "timestamp": datetime.now().isoformat()
         }
         

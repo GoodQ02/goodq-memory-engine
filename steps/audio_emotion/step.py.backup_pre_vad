@@ -83,33 +83,7 @@ def audio_emotion(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
 
     try:
         import librosa  # type: ignore
-        
-        # VAD Preprocessing - filter silence before emotion detection
-        vad_enabled = cfg.get("vad_enabled", True)
-        audio_path_to_use = path
-        
-        if vad_enabled:
-            try:
-                from steps.common.vad_preprocessor import preprocess_audio_with_vad
-                print(f"[AUDIO_EMOTION] Running VAD preprocessing on {path}")
-                
-                vad_path, vad_segments = preprocess_audio_with_vad(
-                    path,
-                    threshold=0.5,
-                    min_speech_duration_ms=400,
-                    min_silence_duration_ms=200,
-                    extract_to_file=True
-                )
-                
-                if vad_path and vad_segments:
-                    audio_path_to_use = vad_path
-                    print(f"[AUDIO_EMOTION] Using VAD-filtered audio ({len(vad_segments)} segments)")
-                else:
-                    print(f"[AUDIO_EMOTION] VAD found no speech, using original audio")
-            except Exception as vad_exc:
-                print(f"[AUDIO_EMOTION] VAD failed: {vad_exc}, using original audio")
-        
-        wave, _ = librosa.load(audio_path_to_use, sr=16000, mono=True)
+        wave, _ = librosa.load(path, sr=16000, mono=True)
         result: List[Dict[str, Any]] = _AEMO["pipe"]({"array": wave, "sampling_rate": 16000})  # type: ignore
         top = [
             {"label": str(entry.get("label", "")), "score": float(entry.get("score", 0.0))}

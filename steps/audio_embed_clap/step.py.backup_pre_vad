@@ -78,34 +78,8 @@ def audio_embed_clap(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
         import numpy as np  # type: ignore
         import faiss  # type: ignore
         from goodq4all.steps.text_embed.step import _content_fingerprint
-        
-        # VAD Preprocessing - filter silence before embedding
-        vad_enabled = cfg.get("vad_enabled", True)
-        audio_path_to_use = path
-        
-        if vad_enabled:
-            try:
-                from steps.common.vad_preprocessor import preprocess_audio_with_vad
-                print(f"[AUDIO_CLAP] Running VAD preprocessing on {path}")
-                
-                vad_path, vad_segments = preprocess_audio_with_vad(
-                    path,
-                    threshold=0.5,
-                    min_speech_duration_ms=400,
-                    min_silence_duration_ms=200,
-                    extract_to_file=True
-                )
-                
-                if vad_path and vad_segments:
-                    audio_path_to_use = vad_path
-                    print(f"[AUDIO_CLAP] Using VAD-filtered audio ({len(vad_segments)} segments)")
-                else:
-                    print(f"[AUDIO_CLAP] VAD found no speech, using original audio")
-            except Exception as vad_exc:
-                print(f"[AUDIO_CLAP] VAD failed: {vad_exc}, using original audio")
-        
         # resample to 48kHz mono as expected
-        wave, sr = librosa.load(audio_path_to_use, sr=48000, mono=True)
+        wave, sr = librosa.load(path, sr=48000, mono=True)
         # Prepare CLAP audio input features; ClapModel expects input_features for audio
         batch = _CLAP["proc"](audios=wave, sampling_rate=48000, return_tensors="pt")
         input_features = batch.get("input_features")

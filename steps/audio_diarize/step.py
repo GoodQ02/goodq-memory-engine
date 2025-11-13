@@ -300,20 +300,76 @@ def audio_diarize(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
     vad_merge_gap = float(dz_cfg.get("vad_merge_gap_seconds", 1.0))
     
     # Get FFmpeg path
+    ffmpeg_path = None
     try:
         from steps.common.tool_paths import resolve_ffmpeg
         ffmpeg_path = resolve_ffmpeg(cfg)
     except:
-        tools_cfg = ((cfg.get("config", {}) or {}).get("tools", {}) or {})
-        ffmpeg_path = tools_cfg.get("ffmpeg", "ffmpeg")
+        pass
     
     if not ffmpeg_path:
-        ffmpeg_path = "ffmpeg"
+        # Try config.tools.ffmpeg
+        tools_cfg = ((cfg.get("config", {}) or {}).get("tools", {}) or {})
+        ffmpeg_path = tools_cfg.get("ffmpeg")
+    
+    if not ffmpeg_path:
+        # Fallback to known location
+        fallback_path = "L:/Tools/ffmpeg/bin/ffmpeg.exe"
+        if os.path.exists(fallback_path):
+            ffmpeg_path = fallback_path
+        else:
+            ffmpeg_path = "ffmpeg"  # Hope it's in PATH
+    
+    print(f"[DIARIZE] Using ffmpeg: {ffmpeg_path}")
 
     try:
-        # Get audio duration
-        duration = _get_audio_duration(path)
-        file_size_mb = os.path.getsize(path) / (1024 * 1024)
+        # Check if input is a video file - if so, extract audio first
+        video_extensions = {'.mp4', '.mov', '.avi', '.mkv', '.flv', '.wmv', '.webm'}
+        file_ext = os.path.splitext(path)[1].lower()
+        audio_path = path
+        temp_audio_file = None
+        
+        if file_ext in video_extensions:
+            print(f"[DIARIZE] Input is video file, extracting audio track...")
+            # Create temp audio file
+            temp_audio_file = tempfile.NamedTemporaryFile(delete=False, suffix=".wav", prefix="goodq_audio_")
+            temp_audio_path = temp_audio_file.name
+            temp_audio_file.close()
+            
+            # Extract audio with ffmpeg
+            extract_cmd = [
+                ffmpeg_path, '-i', path,
+                '-vn',  # No video
+                '-acodec', 'pcm_s16le',  # PCM 16-bit
+                '-ar', '16000',  # 16kHz for diarization
+                '-ac', '1',  # Mono
+                temp_audio_path, '-y'  # Overwrite
+            ]
+            
+            try:
+                result = subprocess.run(extract_cmd, capture_output=True, text=True, timeout=300)
+                if result.returncode != 0:
+                    print(f"[ERROR] Audio extraction failed: {result.stderr}")
+                    return {"diarization": None, "diarize_meta": {"status": "extraction_failed"}}
+                
+                if not os.path.exists(temp_audio_path) or os.path.getsize(temp_audio_path) == 0:
+                    print(f"[ERROR] Audio extraction produced empty file")
+                    return {"diarization": None, "diarize_meta": {"status": "extraction_failed"}}
+                
+                audio_path = temp_audio_path
+                print(f"[DIARIZE] ✓ Audio extracted to: {os.path.basename(audio_path)}")
+            except Exception as e:
+                print(f"[ERROR] Audio extraction exception: {str(e)}")
+                if temp_audio_file and os.path.exists(temp_audio_path):
+                    try:
+                        os.remove(temp_audio_path)
+                    except:
+                        pass
+                return {"diarization": None, "diarize_meta": {"status": "extraction_failed"}}
+        
+        # Get audio duration (from extracted audio or original audio file)
+        duration = _get_audio_duration(audio_path)
+        file_size_mb = os.path.getsize(audio_path) / (1024 * 1024)
         duration_minutes = (duration / 60.0) if duration else None
         
         # VAD Preprocessing (if enabled)
@@ -331,7 +387,7 @@ def audio_diarize(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
                 
                 vad_start = time.time()
                 vad_audio_path, vad_segments = preprocess_audio_with_vad(
-                    path,
+                    audio_path,  # Use extracted audio path
                     threshold=vad_threshold,
                     min_speech_duration_ms=vad_min_speech_ms,
                     min_silence_duration_ms=vad_min_silence_ms,
@@ -348,11 +404,11 @@ def audio_diarize(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
                     print(f"[DIARIZE] Estimated time savings: {vad_savings['time_saved']/60*1.5:.1f}-{vad_savings['time_saved']/60*2:.1f} minutes")
                     
                     # Use VAD-filtered audio for diarization
-                    path = vad_audio_path
+                    audio_path = vad_audio_path  # Update audio_path
                     duration = vad_savings['speech_duration']
                     duration_minutes = duration / 60.0
                 else:
-                    print("[DIARIZE] VAD preprocessing did not produce output, using original audio")
+                    print("[DIARIZE] VAD preprocessing did not produce output, using extracted audio")
                     
             except Exception as vad_exc:
                 print(f"[DIARIZE] WARN: VAD preprocessing failed: {str(vad_exc)}")
@@ -423,8 +479,8 @@ def audio_diarize(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
                         "details": f"Processing chunk {chunk_idx+1}/{num_chunks} ({chunk_start/60:.1f}-{chunk_end/60:.1f}min)"
                     })
                 
-                # Extract chunk
-                chunk_path = _extract_audio_chunk(path, chunk_start, chunk_duration, ffmpeg_path)
+                # Extract chunk from audio_path (which may be extracted or VAD-filtered audio)
+                chunk_path = _extract_audio_chunk(audio_path, chunk_start, chunk_duration, ffmpeg_path)
                 if not chunk_path:
                     print(f"[WARN] Failed to extract chunk {chunk_idx+1}, skipping")
                     continue
@@ -490,8 +546,8 @@ def audio_diarize(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
             print(f"[DIARIZE] Merge complete in {merge_elapsed:.1f}s")
             
         else:
-            # Process entire file
-            diarization = pipeline(path)
+            # Process entire file (audio_path may be extracted or VAD-filtered)
+            diarization = pipeline(audio_path)
             segments = _format_segments(diarization)
         
         elapsed = time.time() - start_time
@@ -563,12 +619,28 @@ def audio_diarize(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
             "vad_enabled": vad_enabled and vad_savings is not None,
             "vad_savings": vad_savings,
         }
+        # Cleanup temp audio file if we created one
+        if temp_audio_file and os.path.exists(temp_audio_file.name):
+            try:
+                os.remove(temp_audio_file.name)
+                print(f"[DIARIZE] Cleaned up temp audio file")
+            except:
+                pass
+        
         return {"diarization": segments, "diarize_meta": meta}
         
     except Exception as exc:
         import traceback
         print(f"[ERROR] Diarization failed: {type(exc).__name__}: {str(exc)}")
         print(f"[ERROR] Traceback: {traceback.format_exc()}")
+        
+        # Cleanup temp audio file on error
+        if temp_audio_file and os.path.exists(temp_audio_file.name):
+            try:
+                os.remove(temp_audio_file.name)
+            except:
+                pass
+        
         if tracker:
             tracker.add_error(f"Diarization failed: {str(exc)}", "audio_diarize")
         return {"diarization": None, "diarize_meta": {"status": "error", "engine": "pyannote", "error": str(exc)}}

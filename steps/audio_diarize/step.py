@@ -249,7 +249,10 @@ def _format_segments(diarization, offset: float = 0.0) -> List[Dict[str, Any]]:
 
 def audio_diarize(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Speaker diarization via PyAnnote pipeline with intelligent chunking and GPU optimization.
+    Speaker diarization via PyAnnote pipeline with VAD preprocessing and GPU optimization.
+    
+    Uses Silero VAD to filter out silence and non-speech content before diarization.
+    This dramatically reduces processing time and improves accuracy.
     
     For long audio files (>10 minutes), splits into chunks to prevent hanging.
     Merges speaker labels across chunks for consistent speaker IDs.
@@ -289,6 +292,13 @@ def audio_diarize(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
 
     device = _resolve_device()
     
+    # VAD Configuration
+    vad_enabled = dz_cfg.get("vad_enabled", True)  # Enable by default
+    vad_threshold = float(dz_cfg.get("vad_threshold", 0.5))  # 0.5 is balanced, 0.6-0.7 for stricter
+    vad_min_speech_ms = int(dz_cfg.get("vad_min_speech_ms", 400))
+    vad_min_silence_ms = int(dz_cfg.get("vad_min_silence_ms", 200))
+    vad_merge_gap = float(dz_cfg.get("vad_merge_gap_seconds", 1.0))
+    
     # Get FFmpeg path
     try:
         from steps.common.tool_paths import resolve_ffmpeg
@@ -305,6 +315,50 @@ def audio_diarize(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
         duration = _get_audio_duration(path)
         file_size_mb = os.path.getsize(path) / (1024 * 1024)
         duration_minutes = (duration / 60.0) if duration else None
+        
+        # VAD Preprocessing (if enabled)
+        vad_audio_path = None
+        vad_segments = None
+        vad_savings = None
+        
+        if vad_enabled:
+            try:
+                from steps.audio_diarize.vad_preprocessor import preprocess_audio_with_vad, calculate_time_savings
+                
+                print("[DIARIZE] Running VAD preprocessing to filter silence and noise...")
+                if tracker:
+                    tracker.update_step("audio_diarize", 3, {"details": "Running voice activity detection..."})
+                
+                vad_start = time.time()
+                vad_audio_path, vad_segments = preprocess_audio_with_vad(
+                    path,
+                    threshold=vad_threshold,
+                    min_speech_duration_ms=vad_min_speech_ms,
+                    min_silence_duration_ms=vad_min_silence_ms,
+                    merge_gap_seconds=vad_merge_gap,
+                    extract_to_file=True,
+                )
+                vad_elapsed = time.time() - vad_start
+                
+                if vad_audio_path and vad_segments:
+                    # Calculate time savings
+                    vad_savings = calculate_time_savings(duration, vad_segments)
+                    print(f"[DIARIZE] VAD complete in {vad_elapsed:.1f}s")
+                    print(f"[DIARIZE] Reduced audio from {duration/60:.1f}min to {vad_savings['speech_duration']/60:.1f}min ({vad_savings['reduction_percent']:.1f}% reduction)")
+                    print(f"[DIARIZE] Estimated time savings: {vad_savings['time_saved']/60*1.5:.1f}-{vad_savings['time_saved']/60*2:.1f} minutes")
+                    
+                    # Use VAD-filtered audio for diarization
+                    path = vad_audio_path
+                    duration = vad_savings['speech_duration']
+                    duration_minutes = duration / 60.0
+                else:
+                    print("[DIARIZE] VAD preprocessing did not produce output, using original audio")
+                    
+            except Exception as vad_exc:
+                print(f"[DIARIZE] WARN: VAD preprocessing failed: {str(vad_exc)}")
+                print("[DIARIZE] Continuing with original audio (no VAD filtering)")
+                import traceback
+                print(traceback.format_exc())
         
         # Load pipeline with duration hint for optimal GPU configuration
         pipeline = _load_pipeline(model_id, device, auth_token, duration_minutes)
@@ -418,6 +472,13 @@ def audio_diarize(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
                 except:
                     pass
             
+            # Clean up VAD temp file if it exists
+            if vad_audio_path and os.path.isfile(vad_audio_path):
+                try:
+                    os.remove(vad_audio_path)
+                except:
+                    pass
+            
             # Merge chunks
             if tracker:
                 tracker.update_step("audio_diarize", 90, {"details": f"Merging {len(chunk_results)} chunks..."})
@@ -499,6 +560,8 @@ def audio_diarize(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
             "chunk_size_minutes": chunk_size_minutes if use_chunking else None,
             "gpu_memory_peak_gb": gpu_stats.get("allocated_gb"),
             "gpu_utilization": gpu_stats.get("utilization"),
+            "vad_enabled": vad_enabled and vad_savings is not None,
+            "vad_savings": vad_savings,
         }
         return {"diarization": segments, "diarize_meta": meta}
         

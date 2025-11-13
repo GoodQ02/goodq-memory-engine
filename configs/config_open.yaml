@@ -62,6 +62,12 @@ audio:
     model: pyannote/speaker-diarization@2.1
     min_speakers: 1
     max_speakers: 10
+    # VAD (Voice Activity Detection) Preprocessing - Dramatically reduces processing time
+    vad_enabled: true  # Enable Silero VAD to filter silence/noise before diarization
+    vad_threshold: 0.5  # 0.5=balanced, 0.6-0.7=stricter (ignores faint noise)
+    vad_min_speech_ms: 400  # Minimum speech segment duration (ms)
+    vad_min_silence_ms: 200  # Minimum silence between segments (ms)
+    vad_merge_gap_seconds: 1.0  # Merge segments closer than this (seconds)
   events:
     enabled: true
     min_confidence: 0.6

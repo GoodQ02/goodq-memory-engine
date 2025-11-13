@@ -42,6 +42,14 @@ except ImportError as e:
     print(f"⚠ LLM client import failed: {e}")
     LLMClient = None
 
+# Import Process Manager
+try:
+    from lib.process_manager import ProcessManager
+    print("✓ Process Manager module imported")
+except ImportError as e:
+    print(f"⚠ Process Manager import failed: {e}")
+    ProcessManager = None
+
 app = FastAPI(title="GoodQ API", version="2.0.0-production")
 
 # Enable CORS
@@ -1149,51 +1157,48 @@ async def get_command_center():
 
 @app.get("/api/processes")
 async def get_processes():
-    """Get process status from process manager"""
+    """Get comprehensive process and GPU status"""
     try:
-        from process_manager import ProcessManager
-        
-        pm = ProcessManager()
-        processes = {}
-        
-        for name, proc_info in pm.processes.items():
-            processes[name] = proc_info.to_dict()
-        
-        return {
-            "processes": processes,
-            "timestamp": datetime.now().isoformat()
-        }
+        if ProcessManager:
+            pm = ProcessManager()
+            return pm.get_pipeline_processes()
+        else:
+            # Fallback - basic process check
+            processes = {
+                "core_processes": {
+                    "watchdog": {
+                        "name": "Watchdog (Ingestion Monitor)",
+                        "status": "unknown",
+                        "pid": None
+                    },
+                    "api_server": {
+                        "name": "API Server",
+                        "status": "running",
+                        "pid": os.getpid()
+                    }
+                },
+                "step_engines": {},
+                "gpu_status": {"available": False, "error": "ProcessManager not available"},
+                "timestamp": datetime.now().isoformat()
+            }
+            
+            # Try to find watchdog process
+            for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+                try:
+                    cmdline = ' '.join(proc.info.get('cmdline', []))
+                    if 'watchdog_ingest.py' in cmdline:
+                        processes["core_processes"]["watchdog"]["status"] = "running"
+                        processes["core_processes"]["watchdog"]["pid"] = proc.info['pid']
+                        break
+                except:
+                    pass
+            
+            return processes
         
     except Exception as e:
-        # Fallback - check manually
-        processes = {
-            "watchdog": {
-                "name": "watchdog",
-                "status": "unknown",
-                "pid": None
-            },
-            "api_server": {
-                "name": "api_server",
-                "status": "running",
-                "pid": os.getpid()
-            }
-        }
-        
-        # Try to find watchdog process
-        for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
-            try:
-                cmdline = proc.info.get('cmdline', [])
-                if cmdline and 'watchdog' in ' '.join(cmdline):
-                    processes["watchdog"]["status"] = "running"
-                    processes["watchdog"]["pid"] = proc.info['pid']
-                    break
-            except:
-                pass
-        
-        return {
-            "processes": processes,
-            "timestamp": datetime.now().isoformat()
-        }
+        print(f"Error in get_processes: {e}")
+        tb.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/pipeline-engines")

@@ -1453,6 +1453,8 @@
             color: var(--secondary-text);
         }
     </style>
+    <!-- D3.js for Knowledge Graph visualization -->
+    <script src="https://d3js.org/d3.v7.min.js"></script>
 </head>
 <body>
     <div class="container">
@@ -3876,6 +3878,11 @@
                 
                 // Render engine cards
                 const engineCards = Object.entries(engines).map(([key, engine]) => {
+                    // Null check for engine
+                    if (!engine) {
+                        return '';
+                    }
+                    
                     let statusClass = 'ready';
                     let statusText = 'READY';
                     

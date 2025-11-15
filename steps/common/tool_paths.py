@@ -37,7 +37,7 @@ def resolve_conda() -> str:
     Returns:
         Full path to conda.exe or conda.bat
     """
-    from config.python_paths import get_conda_exe
+    from configs.python_paths import get_conda_exe
     
     conda_exe = get_conda_exe()
     if conda_exe and conda_exe.exists():

@@ -2264,6 +2264,7 @@ async def get_knowledge_graph(limit: int = 50):
         
         # Get edges (relationships)
         node_ids = [n["id"] for n in nodes]
+        node_id_set = set(node_ids)  # For fast lookup
         edges = []
         
         if node_ids:
@@ -2275,25 +2276,27 @@ async def get_knowledge_graph(limit: int = 50):
                     SELECT source_entity_id, target_entity_id, relationship_type, properties
                     FROM cross_video_relationships
                     WHERE source_entity_id IN ({placeholders}) 
-                    OR target_entity_id IN ({placeholders})
+                    AND target_entity_id IN ({placeholders})
                     LIMIT ?
                 """
                 cursor.execute(query, node_ids + node_ids + [limit * 2])
                 
                 for source, target, rel_type, props_json in cursor.fetchall():
-                    props = {}
-                    if props_json:
-                        try:
-                            props = json.loads(props_json)
-                        except:
-                            pass
-                    
-                    edges.append({
-                        "source": source,
-                        "target": target,
-                        "type": rel_type,
-                        "properties": props
-                    })
+                    # Double-check both nodes exist (safety check)
+                    if source in node_id_set and target in node_id_set:
+                        props = {}
+                        if props_json:
+                            try:
+                                props = json.loads(props_json)
+                            except:
+                                pass
+                        
+                        edges.append({
+                            "source": source,
+                            "target": target,
+                            "type": rel_type,
+                            "properties": props
+                        })
         
         conn.close()
         

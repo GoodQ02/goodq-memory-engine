@@ -2874,6 +2874,19 @@
             const width = container.clientWidth;
             const height = container.clientHeight;
             
+            // Validate data
+            if (!network || !network.nodes || network.nodes.length === 0) {
+                const svgElement = document.getElementById('knowledgeGraphSvg');
+                svgElement.innerHTML = '<text x="50%" y="50%" text-anchor="middle" fill="var(--secondary-text)">No graph data</text>';
+                return;
+            }
+            
+            // Ensure edges reference valid nodes
+            const nodeIds = new Set(network.nodes.map(n => n.id));
+            const validEdges = (network.edges || []).filter(e => 
+                nodeIds.has(e.source) && nodeIds.has(e.target)
+            );
+            
             // Clear existing
             const svgElement = document.getElementById('knowledgeGraphSvg');
             svgElement.innerHTML = '';
@@ -2897,9 +2910,9 @@
                 .domain(['PERSON', 'LOCATION', 'ORGANIZATION', 'EVENT', 'THING', 'EMOTION'])
                 .range(['#5b7cff', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#ef4444']);
             
-            // Create force simulation
+            // Create force simulation with validated edges
             graphSimulation = d3.forceSimulation(network.nodes)
-                .force('link', d3.forceLink(network.edges)
+                .force('link', d3.forceLink(validEdges)
                     .id(d => d.id)
                     .distance(100))
                 .force('charge', d3.forceManyBody().strength(-300))
@@ -2909,7 +2922,7 @@
             // Draw links
             const link = g.append('g')
                 .selectAll('line')
-                .data(network.edges)
+                .data(validEdges)
                 .join('line')
                 .attr('class', 'graph-link')
                 .style('stroke', '#2a3558')

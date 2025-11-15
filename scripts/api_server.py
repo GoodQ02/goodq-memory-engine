@@ -31,8 +31,9 @@ from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 import uvicorn
 
-# Add project to path
-sys.path.insert(0, str(Path(__file__).parent))
+# Add project root to path
+PROJECT_ROOT = Path(__file__).parent.parent
+sys.path.insert(0, str(PROJECT_ROOT))
 
 # Import LLM client
 try:
@@ -62,7 +63,7 @@ app.add_middleware(
 )
 
 # Configuration
-BASE_DIR = Path(__file__).parent
+BASE_DIR = PROJECT_ROOT
 OUTPUT_DIR = BASE_DIR / "output"
 DATA_DIR = BASE_DIR / "data"
 LOGS_DIR = BASE_DIR / "logs"

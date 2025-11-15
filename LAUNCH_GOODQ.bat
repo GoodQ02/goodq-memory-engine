@@ -93,7 +93,7 @@ echo ===========================================================================
 echo.
 
 echo [1/3] Starting API Server...
-start "GoodQ API Server" cmd /k "title GoodQ API Server && cd /d L:\goodq4all && conda run --no-capture-output -n goodq_zenml python api_server.py"
+start "GoodQ API Server" cmd /k "title GoodQ API Server && cd /d L:\goodq4all && conda run --no-capture-output -n goodq_zenml python scripts/api_server.py"
 echo       Waiting for server to initialize...
 timeout /t 5 /nobreak >nul
 
@@ -144,7 +144,7 @@ echo ===========================================================================
 echo.
 
 cd /d "L:\goodq4all"
-conda run --no-capture-output -n goodq_zenml python api_server.py
+conda run --no-capture-output -n goodq_zenml python scripts/api_server.py
 
 goto end
 

@@ -1,0 +1,22 @@
+{
+  "timestamp": "2025-11-15T05:02:55.154186",
+  "tests": {
+    "wsl2_bridge": "PASS",
+    "transcription": "PASS",
+    "databases": "PASS",
+    "gpu": "PASS",
+    "model_cache": "PASS"
+  },
+  "overall_status": "READY",
+  "database_status": {
+    "memory.db": "OK (6 tables)",
+    "knowledge_graph.db": "OK (7 tables)",
+    "unified_goodq.db": "OK (11 tables)"
+  },
+  "gpu_info": {
+    "name": "NVIDIA GeForce RTX 4070 Ti SUPER",
+    "vram_gb": 17.170956288,
+    "cuda_version": "11.8"
+  },
+  "cached_models": 17
+}

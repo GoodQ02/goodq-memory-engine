@@ -384,11 +384,62 @@ def audio_transcribe(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
     """
     Transcribe audio using Whisper with GPU optimization.
     Tracks performance metrics for continuous optimization.
+    
+    Tries WSL2 GPU acceleration first (2-5x faster), falls back to Windows if unavailable.
     """
     path = item.get("source_path")
     if not isinstance(path, str) or not os.path.isfile(path):
         return {"transcript": None, "transcript_meta": {"status": "no_file"}}
 
+    # Try WSL2 acceleration first (if available and enabled)
+    cfg_audio = (cfg.get("audio", {}) or {})
+    tx_cfg = (cfg_audio.get("transcribe", {}) or {})
+    use_wsl = tx_cfg.get("use_wsl2", True)  # Default: enabled
+    
+    if use_wsl:
+        try:
+            from wsl2_audio_bridge import WSL2AudioBridge
+            bridge = WSL2AudioBridge()
+            
+            if bridge.check_status():
+                logger.info(f"[TRANSCRIBE] Using WSL2 GPU acceleration")
+                start_time = time.time()
+                
+                wsl_result = bridge.process_audio(path)
+                
+                if wsl_result.get("status") == "success":
+                    elapsed = time.time() - start_time
+                    duration = wsl_result.get("duration", 0)
+                    logger.info(f"[TRANSCRIBE] WSL2 completed in {elapsed:.1f}s ({duration/elapsed:.1f}x realtime)")
+                    
+                    # Convert WSL output to pipeline format
+                    segments = wsl_result.get("segments", [])
+                    full_text = " ".join(seg.get("text", "") for seg in segments)
+                    
+                    return {
+                        "transcript": full_text.strip() if full_text else None,
+                        "segments": segments,
+                        "language": wsl_result.get("language"),
+                        "transcript_meta": {
+                            "status": "success",
+                            "method": "wsl2_gpu",
+                            "duration": duration,
+                            "processing_time": elapsed,
+                            "realtime_factor": duration / elapsed if elapsed > 0 else 0
+                        }
+                    }
+                else:
+                    logger.warning(f"[TRANSCRIBE] WSL2 failed: {wsl_result.get('error')}, falling back to Windows")
+            else:
+                logger.info(f"[TRANSCRIBE] WSL2 not ready, using Windows processing")
+        except ImportError:
+            logger.info(f"[TRANSCRIBE] WSL2 bridge not installed, using Windows processing")
+        except Exception as e:
+            logger.warning(f"[TRANSCRIBE] WSL2 error: {e}, falling back to Windows")
+    
+    # Windows processing (original code)
+    logger.info(f"[TRANSCRIBE] Using Windows processing")
+    
     # Initialize GPU optimizer
     optimizer = get_audio_gpu_optimizer()
 

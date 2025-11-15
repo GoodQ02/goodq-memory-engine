@@ -52,19 +52,10 @@ class WSL2AudioBridge:
         # Convert to WSL path
         wsl_input = self.wsl_path(audio_path)
         
-        # Set output path
-        if output_file is None:
-            output_file = audio_path.parent / f"{audio_path.stem}_transcript.json"
-        wsl_output = self.wsl_path(output_file)
-        
-        # Build command
-        cmd = (
-            f"python3 {self.workspace}/scripts/process.py "
-            f"'{wsl_input}' '{wsl_output}'"
-        )
+        # Build command - use the process.sh wrapper (handles cuDNN paths)
+        cmd = f"{self.workspace}/scripts/process.sh '{wsl_input}'"
         
         print(f"Processing: {audio_path.name}")
-        print(f"Output: {output_file}")
         
         # Execute in WSL2
         try:
@@ -78,35 +69,33 @@ class WSL2AudioBridge:
             if result.returncode != 0:
                 raise RuntimeError(f"Processing failed: {result.stderr}")
                 
-            # Read results
-            if Path(output_file).exists():
-                with open(output_file) as f:
-                    return json.load(f)
-            else:
-                raise RuntimeError("Output file not created")
+            # Parse JSON output from process.py
+            output = json.loads(result.stdout)
+            
+            if output.get("status") != "success":
+                raise RuntimeError(f"Processing error: {output.get('error', 'Unknown error')}")
+            
+            return output
                 
         except subprocess.TimeoutExpired:
             raise TimeoutError(f"Processing timeout after {timeout}s")
+        except json.JSONDecodeError as e:
+            raise RuntimeError(f"Invalid JSON output: {e}\nOutput: {result.stdout}")
             
     def check_status(self):
         """Check if WSL2 audio is ready"""
-        test_cmd = f"test -f {self.workspace}/scripts/process.py && python3 -c 'import torch; print(torch.cuda.is_available())'"
+        test_cmd = f"test -x {self.workspace}/scripts/process.sh && {self.workspace}/venv/bin/python3 -c 'import torch; print(torch.cuda.is_available())' 2>&1"
         result = subprocess.run(
             ["wsl", "-d", "Ubuntu", "--", "bash", "-c", test_cmd],
             capture_output=True,
             text=True
         )
-        return result.returncode == 0
+        # Check if process.sh exists and CUDA is available
+        return result.returncode == 0 and "True" in result.stdout
         
     def get_info(self):
         """Get WSL2 audio system info"""
-        info_cmd = """python3 -c "
-import torch
-print(f'Device: {"cuda" if torch.cuda.is_available() else "cpu"}')
-if torch.cuda.is_available():
-    print(f'GPU: {torch.cuda.get_device_name(0)}')
-    print(f'VRAM: {torch.cuda.get_device_properties(0).total_memory / 1e9:.1f}GB')
-" 2>&1"""
+        info_cmd = f"{self.workspace}/venv/bin/python3 -c \"import torch; print(f'Device: {{\\\"cuda\\\" if torch.cuda.is_available() else \\\"cpu\\\"}}'); import sys; sys.stdout.flush(); print(f'GPU: {{torch.cuda.get_device_name(0)}}') if torch.cuda.is_available() else None; print(f'VRAM: {{torch.cuda.get_device_properties(0).total_memory / 1e9:.1f}}GB') if torch.cuda.is_available() else None\" 2>&1"
         
         result = subprocess.run(
             ["wsl", "-d", "Ubuntu", "--", "bash", "-c", info_cmd],

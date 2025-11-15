@@ -199,6 +199,7 @@ async def serve_index():
 
 
 @app.get("/api/status")
+@app.head("/api/status")
 async def get_status():
     """Get real-time system status from actual logs and databases"""
     try:

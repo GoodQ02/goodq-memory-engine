@@ -3989,13 +3989,17 @@
             }
             
             // Pipeline Health (based on engines)
-            const response = await fetch(`${API_BASE}/pipeline-engines`);
-            const engines = await response.json();
-            const hasErrors = Object.values(engines).some(e => e.status === 'error');
-            if (hasErrors) {
-                setHealthStatus('pipelineHealth', 'degraded');
-            } else {
-                setHealthStatus('pipelineHealth', 'healthy');
+            try {
+                const response = await fetch(`${API_BASE}/pipeline-engines`);
+                const engines = await response.json();
+                const hasErrors = Object.values(engines).some(e => e && e.status === 'error');
+                if (hasErrors) {
+                    setHealthStatus('pipelineHealth', 'degraded');
+                } else {
+                    setHealthStatus('pipelineHealth', 'healthy');
+                }
+            } catch {
+                setHealthStatus('pipelineHealth', 'down');
             }
         }
         

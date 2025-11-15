@@ -320,9 +320,107 @@ def get_bridge() -> WSL2AudioBridge:
 
 
 def transcribe_wsl2(audio_path: str, **kwargs) -> Dict[str, Any]:
-    """Transcribe audio using WSL2"""
-    bridge = get_bridge()
-    return bridge.transcribe(audio_path, **kwargs)
+    """
+    Transcribe audio using WSL2 direct script approach
+    
+    This bypasses the service queue and calls the script directly
+    """
+    # Convert Windows path to WSL path
+    if audio_path.startswith("L:\\") or audio_path.startswith("L:/"):
+        wsl_path = audio_path.replace("L:\\", "/mnt/l/").replace("L:/", "/mnt/l/").replace("\\", "/")
+    elif audio_path.startswith("C:\\") or audio_path.startswith("C:/"):
+        wsl_path = audio_path.replace("C:\\", "/mnt/c/").replace("C:/", "/mnt/c/").replace("\\", "/")
+    else:
+        wsl_path = audio_path
+    
+    logger.info(f"Transcribing via WSL2: {audio_path}")
+    logger.info(f"  WSL path: {wsl_path}")
+    
+    try:
+        # Build command
+        cmd = ["wsl", "~/goodq_audio/scripts/process.sh", wsl_path]
+        
+        # Add options
+        if kwargs.get('no_diarization', False):
+            cmd.append("--no-diarization")
+        if 'model' in kwargs:
+            cmd.extend(["--model", kwargs['model']])
+        
+        timeout = kwargs.get('timeout', 3600)
+        
+        # Run command
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=timeout
+        )
+        
+        if result.returncode != 0:
+            logger.error(f"WSL2 transcription failed with code {result.returncode}")
+            logger.error(f"STDERR: {result.stderr}")
+            return {
+                "status": "error",
+                "error": f"Transcription failed: {result.stderr}"
+            }
+        
+        # Parse JSON from last line of stdout
+        lines = result.stdout.strip().split('\n')
+        json_line = lines[-1]
+        
+        data = json.loads(json_line)
+        
+        if data.get('status') != 'success':
+            return data
+        
+        # Convert to expected format
+        segments = data.get('segments', [])
+        formatted_segments = []
+        full_text = []
+        
+        for seg in segments:
+            formatted_segments.append({
+                "start": seg['start'],
+                "end": seg['end'],
+                "text": seg['text'].strip(),
+                "speaker": seg.get('speaker', 'SPEAKER_00'),
+                "confidence": seg.get('confidence', 1.0),
+                "words": []  # Not provided by current implementation
+            })
+            full_text.append(seg['text'].strip())
+        
+        return {
+            "status": "success",
+            "full_text": " ".join(full_text),
+            "transcription": formatted_segments,
+            "info": {
+                "language": data.get('language', 'unknown'),
+                "language_probability": 1.0,  # Not provided
+                "duration": data.get('duration', 0),
+                "speakers_detected": data.get('speakers_detected', 1),
+                "rtf": 0.0  # Not provided
+            }
+        }
+        
+    except subprocess.TimeoutExpired:
+        logger.error(f"WSL2 transcription timed out after {timeout}s")
+        return {
+            "status": "error",
+            "error": f"Transcription timed out after {timeout}s"
+        }
+    except json.JSONDecodeError as e:
+        logger.error(f"Failed to parse WSL2 output: {e}")
+        logger.error(f"Output was: {result.stdout}")
+        return {
+            "status": "error",
+            "error": f"Failed to parse output: {e}"
+        }
+    except Exception as e:
+        logger.error(f"WSL2 transcription failed: {e}")
+        return {
+            "status": "error",
+            "error": str(e)
+        }
 
 
 def diarize_wsl2(audio_path: str, **kwargs) -> Dict[str, Any]:

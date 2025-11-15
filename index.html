@@ -2262,7 +2262,9 @@
             document.querySelectorAll('.nav-item').forEach(item => {
                 item.classList.remove('active');
             });
-            event.target.closest('.nav-item').classList.add('active');
+            if (event && event.target) {
+                event.target.closest('.nav-item').classList.add('active');
+            }
 
             // Show view
             document.querySelectorAll('.view').forEach(view => {
@@ -4010,13 +4012,6 @@
             document.getElementById('commandCenterLogs').innerHTML = '';
         }
         
-        async function refreshCommandCenter() {
-                console.error('Error loading pipeline engines:', error);
-                document.getElementById('pipelineEnginesContainer').innerHTML = 
-                    '<div style="color: var(--error-color);">Failed to load pipeline engines</div>';
-            }
-        }
-
         // Command Center
         async function refreshCommandCenter() {
             try {

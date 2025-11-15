@@ -28,7 +28,85 @@ def search(q: str = Query(..., description="Search text"), topk: int = Query(50,
 # Optional root
 @app.get("/")
 def root() -> Dict[str, Any]:
-    return {"status": "ok", "endpoints": ["/search?q=..."]}
+    return {"status": "ok", "endpoints": ["/search?q=...", "/api/status", "/api/engines", "/api/scenes", "/api/knowledge_graph"]}
+
+
+@app.get("/api/status")
+def get_status() -> Dict[str, Any]:
+    """System status endpoint"""
+    return {
+        "status": "active",
+        "version": "1.4.0",
+        "components": {
+            "api": "running",
+            "pipeline": "ready",
+            "wsl_audio": "available"
+        }
+    }
+
+
+@app.get("/api/engines")
+def get_engines() -> Dict[str, Any]:
+    """Get pipeline engine status"""
+    import subprocess
+    import shutil
+    
+    engines = []
+    
+    # Check WSL audio processing
+    wsl_script = r"~/goodq_audio/scripts/process.sh"
+    wsl_available = shutil.which("wsl") is not None
+    
+    engines.append({
+        "name": "WSL Audio Transcription",
+        "type": "transcription",
+        "status": "ready" if wsl_available else "unavailable",
+        "gpu": True,
+        "details": "Faster-Whisper with speaker diarization"
+    })
+    
+    # Check ffmpeg
+    ffmpeg_path = shutil.which("ffmpeg")
+    engines.append({
+        "name": "FFmpeg",
+        "type": "video_processing",
+        "status": "ready" if ffmpeg_path else "unavailable",
+        "gpu": False,
+        "details": f"Path: {ffmpeg_path}" if ffmpeg_path else "Not found"
+    })
+    
+    # Check Python environment
+    engines.append({
+        "name": "Python Pipeline",
+        "type": "orchestration",
+        "status": "ready",
+        "gpu": False,
+        "details": f"Python {sys.version.split()[0]}"
+    })
+    
+    # Check LLM (if LMStudio is running)
+    try:
+        import requests
+        resp = requests.get("http://localhost:1234/v1/models", timeout=2)
+        if resp.status_code == 200:
+            models = resp.json().get("data", [])
+            engines.append({
+                "name": "LMStudio",
+                "type": "llm",
+                "status": "ready",
+                "gpu": True,
+                "details": f"{len(models)} models loaded"
+            })
+    except:
+        engines.append({
+            "name": "LMStudio",
+            "type": "llm",
+            "status": "unavailable",
+            "gpu": True,
+            "details": "Not running or unreachable"
+        })
+    
+    return {"engines": engines}
 
 
 @app.get("/vector_search")
@@ -90,3 +168,51 @@ def vector_search(
             break
 
     return {"matches": matches, "persist_dir": persist_dir}
+
+
+@app.get("/api/scenes")
+def get_scenes() -> Dict[str, Any]:
+    """Get detected scenes from video processing"""
+    import json
+    from pathlib import Path
+    
+    # Look for scenes in data/output
+    scenes_dir = Path("L:/goodq4all/data/output")
+    all_scenes = []
+    
+    if scenes_dir.exists():
+        for scene_file in scenes_dir.glob("**/scenes.json"):
+            try:
+                with open(scene_file, 'r') as f:
+                    data = json.load(f)
+                    scenes = data.get("scenes", [])
+                    for scene in scenes:
+                        scene["source_file"] = str(scene_file.parent.name)
+                        all_scenes.append(scene)
+            except:
+                continue
+    
+    return {"scenes": all_scenes, "total": len(all_scenes)}
+
+
+@app.get("/api/knowledge_graph")
+def get_knowledge_graph() -> Dict[str, Any]:
+    """Get knowledge graph data"""
+    import json
+    from pathlib import Path
+    
+    # Look for entity data
+    kg_file = Path("L:/goodq4all/data/output/knowledge_graph.json")
+    
+    if kg_file.exists():
+        try:
+            with open(kg_file, 'r') as f:
+                return json.load(f)
+        except:
+            pass
+    
+    # Return empty graph structure
+    return {
+        "nodes": [],
+        "links": []
+    }

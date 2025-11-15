@@ -185,6 +185,9 @@
 
         .view {
             display: none;
+            height: calc(100vh - 60px);
+            overflow-y: auto;
+            overflow-x: hidden;
         }
 
         .view.active {
@@ -2033,48 +2036,10 @@
                     </div>
                 </div>
 
-                <!-- Command Center View -->
+                <!-- Command Center View (Consolidated) -->
                 <div class="view" id="view-command-center">
-                    <!-- Pipeline Engines Status -->
-                    <div class="card" style="margin-bottom: 20px;">
-                        <div class="card-header">
-                            <div>
-                                <div class="card-title">⚙️ Pipeline Engines</div>
-                                <div class="card-subtitle" id="engineSubtitle">Real-time processing step status</div>
-                            </div>
-                            <div style="display: flex; gap: 10px; align-items: center;">
-                                <label style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--secondary-text);">
-                                    <input type="checkbox" id="autoRefreshEngines" onchange="toggleEngineAutoRefresh(this.checked)" checked>
-                                    Auto-refresh (5s)
-                                </label>
-                                <button class="btn btn-primary" onclick="refreshPipelineEngines()">Refresh</button>
-                            </div>
-                        </div>
-                        <div id="pipelineEnginesContainer" style="padding: 20px;">
-                            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 15px;" id="engineGrid"></div>
-                        </div>
-                    </div>
-                    
-                    <!-- System Controls -->
+                    <!-- System Health & Quick Actions Row -->
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
-                        <!-- Quick Actions -->
-                        <div class="card">
-                            <div class="card-header">
-                                <div class="card-title">🎮 Quick Actions</div>
-                            </div>
-                            <div style="padding: 20px; display: flex; flex-direction: column; gap: 10px;">
-                                <button class="btn" onclick="testPipeline()" style="width: 100%; justify-content: center;">
-                                    🧪 Test Pipeline
-                                </button>
-                                <button class="btn" onclick="clearCache()" style="width: 100%; justify-content: center;">
-                                    🗑️ Clear Cache
-                                </button>
-                                <button class="btn" onclick="rebuildIndices()" style="width: 100%; justify-content: center;">
-                                    🔄 Rebuild Indices
-                                </button>
-                            </div>
-                        </div>
-                        
                         <!-- System Health -->
                         <div class="card">
                             <div class="card-header">
@@ -2099,26 +2064,26 @@
                                 </div>
                             </div>
                         </div>
-                    </div>
-                    
-                    <!-- Live Logs -->
-                    <div class="card">
-                        <div class="card-header">
-                            <div>
-                                <div class="card-title">📜 System Logs</div>
-                                <div class="card-subtitle">Recent activity</div>
+                        
+                        <!-- Quick Actions -->
+                        <div class="card">
+                            <div class="card-header">
+                                <div class="card-title">🎮 Quick Actions</div>
                             </div>
-                            <div style="display: flex; gap: 10px;">
-                                <button class="btn" onclick="clearLogs()" style="font-size: 11px; padding: 6px 10px;">Clear</button>
-                                <button class="btn btn-primary" onclick="refreshCommandCenter()">Refresh</button>
+                            <div style="padding: 20px; display: flex; flex-direction: column; gap: 10px;">
+                                <button class="btn" onclick="testPipeline()" style="width: 100%; justify-content: center;">
+                                    🧪 Test Pipeline
+                                </button>
+                                <button class="btn" onclick="clearCache()" style="width: 100%; justify-content: center;">
+                                    🗑️ Clear Cache
+                                </button>
+                                <button class="btn" onclick="rebuildIndices()" style="width: 100%; justify-content: center;">
+                                    🔄 Rebuild Indices
+                                </button>
                             </div>
                         </div>
-                        <div class="log-container" id="commandCenterLogs" style="max-height: 400px; overflow-y: auto;"></div>
                     </div>
-                </div>
-
-                <!-- Processes View -->
-                <div class="view" id="view-processes">
+                    
                     <!-- GPU Status -->
                     <div class="card" style="margin-bottom: 20px;">
                         <div class="card-header">
@@ -2154,26 +2119,8 @@
                         </div>
                     </div>
                     
-                    <!-- Processing Engines -->
-                    <div class="card" style="margin-bottom: 20px;">
-                        <div class="card-header">
-                            <div>
-                                <div class="card-title">⚙️ Processing Engines</div>
-                                <div class="card-subtitle" id="processSubtitle">Active pipeline steps</div>
-                            </div>
-                            <div style="display: flex; gap: 10px;">
-                                <label style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--secondary-text);">
-                                    <input type="checkbox" id="autoRefreshProcesses" onchange="toggleProcessAutoRefresh(this.checked)" checked>
-                                    Auto-refresh (3s)
-                                </label>
-                                <button class="btn btn-primary" onclick="refreshProcesses()">Refresh</button>
-                            </div>
-                        </div>
-                        <div id="processList" style="padding: 20px;"></div>
-                    </div>
-                    
                     <!-- WSL2 Audio Processing -->
-                    <div class="card">
+                    <div class="card" style="margin-bottom: 20px;">
                         <div class="card-header">
                             <div>
                                 <div class="card-title">🔊 WSL2 Audio Processing</div>
@@ -2201,6 +2148,62 @@
                                 <pre id="wslTestOutput" style="font-size: 11px; color: var(--secondary-text); white-space: pre-wrap; margin: 0;"></pre>
                             </div>
                         </div>
+                    </div>
+                    
+                    <!-- Pipeline Engines Status -->
+                    <div class="card" style="margin-bottom: 20px;">
+                        <div class="card-header">
+                            <div>
+                                <div class="card-title">⚙️ Pipeline Engines</div>
+                                <div class="card-subtitle" id="engineSubtitle">Real-time processing step status</div>
+                            </div>
+                            <div style="display: flex; gap: 10px; align-items: center;">
+                                <label style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--secondary-text);">
+                                    <input type="checkbox" id="autoRefreshEngines" onchange="toggleEngineAutoRefresh(this.checked)" checked>
+                                    Auto-refresh (5s)
+                                </label>
+                                <button class="btn btn-primary" onclick="refreshPipelineEngines()">Refresh</button>
+                            </div>
+                        </div>
+                        <div id="pipelineEnginesContainer" style="padding: 20px;">
+                            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 15px;" id="engineGrid"></div>
+                        </div>
+                    </div>
+                    
+                    <!-- Live Logs -->
+                    <div class="card">
+                        <div class="card-header">
+                            <div>
+                                <div class="card-title">📜 System Logs</div>
+                                <div class="card-subtitle">Recent activity</div>
+                            </div>
+                            <div style="display: flex; gap: 10px;">
+                                <button class="btn" onclick="clearLogs()" style="font-size: 11px; padding: 6px 10px;">Clear</button>
+                                <button class="btn btn-primary" onclick="refreshCommandCenter()">Refresh</button>
+                            </div>
+                        </div>
+                        <div class="log-container" id="commandCenterLogs" style="max-height: 400px; overflow-y: auto;"></div>
+                    </div>
+                </div>
+
+                <!-- Pipeline Engines View (Dedicated) -->
+                <div class="view" id="view-processes">
+                    <!-- Processing Engines -->
+                    <div class="card" style="margin-bottom: 20px;">
+                        <div class="card-header">
+                            <div>
+                                <div class="card-title">⚙️ Processing Engines</div>
+                                <div class="card-subtitle" id="processSubtitle">Active pipeline steps</div>
+                            </div>
+                            <div style="display: flex; gap: 10px;">
+                                <label style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--secondary-text);">
+                                    <input type="checkbox" id="autoRefreshProcesses" onchange="toggleProcessAutoRefresh(this.checked)" checked>
+                                    Auto-refresh (3s)
+                                </label>
+                                <button class="btn btn-primary" onclick="refreshProcesses()">Refresh</button>
+                            </div>
+                        </div>
+                        <div id="processList" style="padding: 20px;"></div>
                     </div>
                 </div>
             </div>

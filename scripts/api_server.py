@@ -296,9 +296,215 @@ async def get_status():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# Cache WSL2 status (check once, cache for 5 minutes)
+_wsl2_status_cache = None
+_wsl2_status_cache_time = None
+
+@app.get("/api/wsl2-status")
+async def get_wsl2_status():
+    """Get WSL2 GPU acceleration status (cached)"""
+    global _wsl2_status_cache, _wsl2_status_cache_time
+    
+    try:
+        # Return cached result if less than 5 minutes old
+        if _wsl2_status_cache is not None and _wsl2_status_cache_time is not None:
+            cache_age = (datetime.now() - _wsl2_status_cache_time).total_seconds()
+            if cache_age < 300:  # 5 minutes
+                return _wsl2_status_cache
+        
+        wsl2_data = {
+            "available": False,
+            "active": False,
+            "gpu_name": None,
+            "performance_boost": None,
+            "method": "windows"
+        }
+        
+        # Check if WSL2 bridge is available
+        try:
+            from wsl2_audio_bridge import WSL2AudioBridge
+            bridge = WSL2AudioBridge()
+            
+            if bridge.check_status():
+                wsl2_data["available"] = True
+                wsl2_data["active"] = True
+                wsl2_data["method"] = "wsl2_gpu"
+                
+                # Get GPU info
+                gpu_info = bridge.get_info()
+                if "GPU:" in gpu_info:
+                    for line in gpu_info.split('\n'):
+                        if line.startswith("GPU:"):
+                            wsl2_data["gpu_name"] = line.replace("GPU:", "").strip()
+                            break
+                
+                # Estimate performance boost
+                wsl2_data["performance_boost"] = "2-5x faster"
+        except:
+            pass
+        
+        # Cache the result
+        _wsl2_status_cache = wsl2_data
+        _wsl2_status_cache_time = datetime.now()
+        
+        return wsl2_data
+        
+    except Exception as e:
+        print(f"Error in get_wsl2_status: {e}")
+        return {
+            "available": False,
+            "active": False,
+            "gpu_name": None,
+            "performance_boost": None,
+            "method": "windows"
+        }
+
+
+@app.get("/api/recent-activity")
+async def get_recent_activity(limit: int = 10):
+    """Get recent processing activity"""
+    try:
+        activities = []
+        
+        # Check for recently processed scenes
+        if MEMORY_DB.exists():
+            conn = sqlite3.connect(str(MEMORY_DB))
+            cursor = conn.cursor()
+            
+            # Get recent scenes grouped by video
+            cursor.execute("""
+                SELECT video_hash, COUNT(*) as scene_count, MIN(created_at) as first_seen, MAX(created_at) as last_seen
+                FROM scenes
+                GROUP BY video_hash
+                ORDER BY last_seen DESC
+                LIMIT ?
+            """, (limit,))
+            
+            for row in cursor.fetchall():
+                video_hash, scene_count, first_seen, last_seen = row
+                activities.append({
+                    "type": "ingestion",
+                    "video_hash": video_hash,
+                    "scenes": scene_count,
+                    "timestamp": last_seen,
+                    "status": "completed"
+                })
+            
+            conn.close()
+        
+        # Check watchdog log for recent activity
+        watchdog_log = LOGS_DIR / "watchdog.log"
+        if watchdog_log.exists():
+            try:
+                with open(watchdog_log, 'r', encoding='utf-8', errors='ignore') as f:
+                    lines = f.readlines()
+                    for line in reversed(lines[-50:]):
+                        if "Successfully processed:" in line:
+                            # Extract filename
+                            parts = line.split("Successfully processed:")
+                            if len(parts) > 1:
+                                filename = parts[1].strip()
+                                timestamp = line.split('[INFO]')[0].strip() if '[INFO]' in line else None
+                                # Only add if not already in activities
+                                if not any(a.get('filename') == filename for a in activities):
+                                    activities.append({
+                                        "type": "success",
+                                        "filename": filename,
+                                        "timestamp": timestamp,
+                                        "status": "completed"
+                                    })
+            except Exception as e:
+                print(f"Error reading watchdog log: {e}")
+        
+        return {
+            "activities": activities[:limit],
+            "total": len(activities)
+        }
+        
+    except Exception as e:
+        print(f"Error in get_recent_activity: {e}")
+        return {"activities": [], "total": 0}
+
+
+@app.get("/api/queue")
+async def get_queue_status():
+    """Get ingestion queue status"""
+    try:
+        import_inbox = DATA_DIR.parent / "import_inbox"
+        processing_dir = DATA_DIR / "processing"
+        processed_dir = DATA_DIR / "processed"
+        failed_dir = DATA_DIR / "failed"
+        
+        queue_data = {
+            "inbox": {
+                "count": 0,
+                "files": [],
+                "total_size_mb": 0
+            },
+            "processing": {
+                "count": 0,
+                "files": []
+            },
+            "processed": {
+                "count": 0
+            },
+            "failed": {
+                "count": 0
+            }
+        }
+        
+        # Check inbox
+        if import_inbox.exists():
+            video_exts = {'.mp4', '.mov', '.avi', '.mkv', '.webm'}
+            inbox_files = [f for f in import_inbox.iterdir() if f.suffix.lower() in video_exts]
+            queue_data["inbox"]["count"] = len(inbox_files)
+            queue_data["inbox"]["files"] = [
+                {
+                    "name": f.name,
+                    "size_mb": round(f.stat().st_size / (1024**2), 2)
+                } for f in inbox_files[:10]  # Limit to 10 for display
+            ]
+            queue_data["inbox"]["total_size_mb"] = round(
+                sum(f.stat().st_size for f in inbox_files) / (1024**2), 2
+            )
+        
+        # Check processing
+        if processing_dir.exists():
+            processing_items = list(processing_dir.iterdir())
+            queue_data["processing"]["count"] = len(processing_items)
+            queue_data["processing"]["files"] = [d.name for d in processing_items[:5]]
+        
+        # Check processed
+        if processed_dir.exists():
+            queue_data["processed"]["count"] = len(list(processed_dir.iterdir()))
+        
+        # Check failed
+        if failed_dir.exists():
+            queue_data["failed"]["count"] = len(list(failed_dir.iterdir()))
+        
+        return queue_data
+        
+    except Exception as e:
+        print(f"Error in get_queue_status: {e}")
+        return {
+            "inbox": {"count": 0, "files": [], "total_size_mb": 0},
+            "processing": {"count": 0, "files": []},
+            "processed": {"count": 0},
+            "failed": {"count": 0}
+        }
+
+
 @app.get("/api/scenes")
-async def get_scenes(limit: int = 100, offset: int = 0):
-    """Get real scene data from memory.db"""
+async def get_scenes(
+    limit: int = 100, 
+    offset: int = 0,
+    search: Optional[str] = None,
+    min_duration: Optional[float] = None,
+    max_duration: Optional[float] = None,
+    has_audio: Optional[bool] = None,
+    has_video: Optional[bool] = None
+):
+    """Get real scene data from memory.db with search and filtering"""
     try:
         if not MEMORY_DB.exists():
             return {"scenes": [], "total": 0, "limit": limit, "offset": offset}
@@ -306,17 +512,43 @@ async def get_scenes(limit: int = 100, offset: int = 0):
         conn = sqlite3.connect(str(MEMORY_DB))
         cursor = conn.cursor()
 
-        # Get total count
-        cursor.execute("SELECT COUNT(*) FROM scenes")
+        # Build WHERE clause for filters
+        where_clauses = []
+        params = []
+        
+        if search:
+            # Search in transcript and caption via meta JSON
+            where_clauses.append("(meta LIKE ? OR meta LIKE ?)")
+            params.extend([f'%{search}%', f'%{search}%'])
+        
+        if min_duration is not None:
+            where_clauses.append("(end - start) >= ?")
+            params.append(min_duration)
+        
+        if max_duration is not None:
+            where_clauses.append("(end - start) <= ?")
+            params.append(max_duration)
+        
+        if has_audio is not None:
+            audio_filter = '%"audio"%' if has_audio else ''
+            if has_audio:
+                where_clauses.append("meta LIKE ?")
+                params.append(audio_filter)
+        
+        where_sql = " AND ".join(where_clauses) if where_clauses else "1=1"
+
+        # Get total count with filters
+        cursor.execute(f"SELECT COUNT(*) FROM scenes WHERE {where_sql}", params)
         total = cursor.fetchone()[0]
 
-        # Get scenes with proper column names
-        cursor.execute("""
+        # Get scenes with filters
+        cursor.execute(f"""
             SELECT id, video_hash, start, end, meta, created_at
             FROM scenes
+            WHERE {where_sql}
             ORDER BY created_at DESC
             LIMIT ? OFFSET ?
-        """, (limit, offset))
+        """, params + [limit, offset])
 
         scenes = []
         for row in cursor.fetchall():
@@ -359,6 +591,12 @@ async def get_scenes(limit: int = 100, offset: int = 0):
             "total": total,
             "limit": limit,
             "offset": offset,
+            "filters_applied": {
+                "search": search,
+                "min_duration": min_duration,
+                "max_duration": max_duration,
+                "has_audio": has_audio
+            },
             "timestamp": datetime.now().isoformat()
         }
 
@@ -912,6 +1150,7 @@ async def get_timeline_analytics():
             "timestamp": datetime.now().isoformat()
         }
         
+        # Try temporal_timeline first
         if UNIFIED_DB.exists():
             conn = sqlite3.connect(str(UNIFIED_DB))
             cursor = conn.cursor()
@@ -959,6 +1198,56 @@ async def get_timeline_analytics():
             
             conn.close()
         
+        # Fallback: use scenes if no temporal_timeline data
+        if len(analytics["events"]) == 0 and MEMORY_DB.exists():
+            conn = sqlite3.connect(str(MEMORY_DB))
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                SELECT id, video_hash, start, end, meta, created_at
+                FROM scenes
+                ORDER BY created_at
+                LIMIT 200
+            """)
+            
+            events = []
+            for scene_id, video_hash, start, end, meta_json, created_at in cursor.fetchall():
+                meta = {}
+                if meta_json:
+                    try:
+                        meta = json.loads(meta_json)
+                    except:
+                        pass
+                
+                # Create timeline event from scene
+                event_data = {
+                    "id": f"scene_{scene_id}",
+                    "type": "scene",
+                    "time": created_at,
+                    "video_hash": video_hash,
+                    "scene_id": scene_id,
+                    "description": meta.get("summary") or meta.get("caption") or f"Scene {meta.get('index', scene_id)}",
+                    "start": start,
+                    "end": end,
+                    "duration": (end - start) if (end and start) else 0,
+                    "emotions": meta.get("emotions", []),
+                    "transcript": meta.get("transcript", "")
+                }
+                
+                events.append(event_data)
+                
+                # Track date range
+                if created_at:
+                    if analytics["date_range"]["earliest"] is None or created_at < analytics["date_range"]["earliest"]:
+                        analytics["date_range"]["earliest"] = created_at
+                    if analytics["date_range"]["latest"] is None or created_at > analytics["date_range"]["latest"]:
+                        analytics["date_range"]["latest"] = created_at
+            
+            analytics["events"] = events
+            analytics["statistics"]["total_events"] = len(events)
+            
+            conn.close()
+        
         return analytics
         
     except Exception as e:
@@ -969,7 +1258,7 @@ async def get_timeline_analytics():
 
 @app.get("/api/analytics/embeddings")
 async def get_embeddings_analytics():
-    """Embedding analytics - FAISS indices status"""
+    """Embedding analytics - FAISS indices status and sample embeddings for visualization"""
     try:
         analytics = {
             "indices": {
@@ -984,6 +1273,7 @@ async def get_embeddings_analytics():
                 "visual_coverage": 0.0,
                 "audio_coverage": 0.0
             },
+            "samples": [],  # Sample embeddings for visualization
             "timestamp": datetime.now().isoformat()
         }
         
@@ -1006,10 +1296,51 @@ async def get_embeddings_analytics():
                     except:
                         pass
         
-        # Get embedding counts from database
+        # Get embedding samples from database for visualization
         if MEMORY_DB.exists():
             conn = sqlite3.connect(str(MEMORY_DB))
             cursor = conn.cursor()
+            
+            # Get sample embeddings with their metadata
+            cursor.execute("""
+                SELECT e.hash, e.scene_id, e.modality, e.sentiment_label, s.meta
+                FROM embeddings e
+                LEFT JOIN scenes s ON e.scene_id = s.id
+                LIMIT 50
+            """)
+            
+            samples = []
+            for emb_hash, scene_id, modality, sentiment_label, meta_json in cursor.fetchall():
+                # Parse metadata for labels
+                meta = {}
+                if meta_json:
+                    try:
+                        meta = json.loads(meta_json)
+                    except:
+                        pass
+                
+                # Get label from metadata
+                label = meta.get("summary") or meta.get("caption") or f"Scene {scene_id}"
+                emotions = meta.get("emotions", [])
+                dominant_emotion = sentiment_label or emotions[0] if emotions else None
+                if isinstance(dominant_emotion, dict):
+                    dominant_emotion = dominant_emotion.get("label", "neutral")
+                
+                # Parse scene_id to int if possible
+                try:
+                    scene_id_int = int(scene_id) if scene_id else 0
+                except:
+                    scene_id_int = hash(scene_id) % 1000 if scene_id else 0
+                
+                samples.append({
+                    "id": emb_hash,
+                    "scene_id": scene_id_int,
+                    "type": modality or "unknown",
+                    "label": label[:50],  # Truncate for display
+                    "emotion": dominant_emotion or "neutral"
+                })
+            
+            analytics["samples"] = samples
             
             cursor.execute("SELECT COUNT(*) FROM embeddings")
             db_embedding_count = cursor.fetchone()[0]
@@ -1832,6 +2163,78 @@ async def get_entities(limit: int = 100, entity_type: Optional[str] = None):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/entities/{entity_id}/relationships")
+async def get_entity_relationships(entity_id: int):
+    """Get relationships for a specific entity"""
+    try:
+        if not UNIFIED_DB.exists():
+            return {"relationships": [], "properties": {}}
+        
+        conn = sqlite3.connect(str(UNIFIED_DB))
+        cursor = conn.cursor()
+        
+        # Get entity properties
+        cursor.execute("SELECT canonical_name, entity_type, properties FROM global_entities WHERE id = ?", (entity_id,))
+        entity_row = cursor.fetchone()
+        
+        properties = {}
+        if entity_row and entity_row[2]:
+            try:
+                properties = json.loads(entity_row[2])
+            except:
+                pass
+        
+        # Get relationships where this entity is entity1
+        cursor.execute("""
+            SELECT r.relationship_type, e.canonical_name, e.entity_type
+            FROM cross_video_relationships r
+            LEFT JOIN global_entities e ON r.entity2_id = e.id
+            WHERE r.entity1_id = ?
+            LIMIT 50
+        """, (entity_id,))
+        
+        relationships = []
+        for rel_type, target_name, target_type in cursor.fetchall():
+            if target_name:  # Only add if target exists
+                relationships.append({
+                    "type": rel_type,
+                    "target_name": target_name,
+                    "target_type": target_type,
+                    "direction": "outgoing"
+                })
+        
+        # Get relationships where this entity is entity2
+        cursor.execute("""
+            SELECT r.relationship_type, e.canonical_name, e.entity_type
+            FROM cross_video_relationships r
+            LEFT JOIN global_entities e ON r.entity1_id = e.id
+            WHERE r.entity2_id = ?
+            LIMIT 50
+        """, (entity_id,))
+        
+        for rel_type, source_name, source_type in cursor.fetchall():
+            if source_name:  # Only add if source exists
+                relationships.append({
+                    "type": rel_type,
+                    "target_name": source_name,
+                    "target_type": source_type,
+                    "direction": "incoming"
+                })
+        
+        conn.close()
+        
+        return {
+            "relationships": relationships,
+            "properties": properties,
+            "count": len(relationships)
+        }
+        
+    except Exception as e:
+        print(f"Error in get_entity_relationships: {e}")
+        tb.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/api/knowledge-graph")
 async def get_knowledge_graph(limit: int = 50):
     """Get knowledge graph nodes and edges for visualization"""
@@ -1841,6 +2244,12 @@ async def get_knowledge_graph(limit: int = 50):
         
         conn = sqlite3.connect(str(UNIFIED_DB))
         cursor = conn.cursor()
+        
+        # Check if table exists
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='global_entities'")
+        if not cursor.fetchone():
+            conn.close()
+            return {"nodes": [], "edges": []}
         
         # Get nodes (entities) - use correct column names
         cursor.execute("SELECT id, canonical_name, entity_type FROM global_entities LIMIT ?", (limit,))
@@ -1854,46 +2263,50 @@ async def get_knowledge_graph(limit: int = 50):
         
         # Get edges (relationships)
         node_ids = [n["id"] for n in nodes]
+        edges = []
+        
         if node_ids:
-            placeholders = ','.join(['?' for _ in node_ids])
-            query = f"""
-                SELECT source_entity_id, target_entity_id, relationship_type, properties
-                FROM cross_video_relationships
-                WHERE source_entity_id IN ({placeholders}) 
-                OR target_entity_id IN ({placeholders})
-                LIMIT ?
-            """
-            cursor.execute(query, node_ids + node_ids + [limit * 2])
-            
-            edges = []
-            for source, target, rel_type, props_json in cursor.fetchall():
-                props = {}
-                if props_json:
-                    try:
-                        props = json.loads(props_json)
-                    except:
-                        pass
+            # Check if relationships table exists
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='cross_video_relationships'")
+            if cursor.fetchone():
+                placeholders = ','.join(['?' for _ in node_ids])
+                query = f"""
+                    SELECT source_entity_id, target_entity_id, relationship_type, properties
+                    FROM cross_video_relationships
+                    WHERE source_entity_id IN ({placeholders}) 
+                    OR target_entity_id IN ({placeholders})
+                    LIMIT ?
+                """
+                cursor.execute(query, node_ids + node_ids + [limit * 2])
                 
-                edges.append({
-                    "source": source,
-                    "target": target,
-                    "type": rel_type,
-                    "properties": props
-                })
-        else:
-            edges = []
+                for source, target, rel_type, props_json in cursor.fetchall():
+                    props = {}
+                    if props_json:
+                        try:
+                            props = json.loads(props_json)
+                        except:
+                            pass
+                    
+                    edges.append({
+                        "source": source,
+                        "target": target,
+                        "type": rel_type,
+                        "properties": props
+                    })
         
         conn.close()
         
         return {
             "nodes": nodes,
-            "edges": edges
+            "edges": edges,
+            "links": edges  # D3.js compatibility
         }
         
     except Exception as e:
         print(f"Error in get_knowledge_graph: {e}")
         tb.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
+        # Return empty graph instead of 500
+        return {"nodes": [], "edges": [], "links": []}
 
 
 @app.post("/api/processes/start_ingestion")

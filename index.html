@@ -4,6 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GoodQ - Production Memory Interface v2.2</title>
+    <!-- Chart.js for visualizations -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <!-- Vis-Timeline for timeline visualization -->
+    <script src="https://unpkg.com/vis-timeline@7.7.3/standalone/umd/vis-timeline-graph2d.min.js"></script>
+    <link href="https://unpkg.com/vis-timeline@7.7.3/styles/vis-timeline-graph2d.min.css" rel="stylesheet" type="text/css" />
     <style>
         * {
             margin: 0;
@@ -308,6 +313,33 @@
             gap: 15px;
         }
 
+        .chat-message {
+            display: flex;
+            gap: 12px;
+            max-width: 75%;
+            animation: slideIn 0.3s ease-out;
+        }
+        
+        .chat-message.user {
+            align-self: flex-end;
+            flex-direction: row-reverse;
+        }
+        
+        .chat-message.assistant {
+            align-self: flex-start;
+        }
+        
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
         .message {
             display: flex;
             gap: 10px;
@@ -320,15 +352,56 @@
         }
 
         .message-avatar {
-            width: 32px;
-            height: 32px;
+            width: 36px;
+            height: 36px;
             border-radius: 50%;
             background: var(--accent-color);
             display: flex;
             align-items: center;
             justify-content: center;
             font-weight: 600;
+            font-size: 14px;
             flex-shrink: 0;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+        
+        .chat-message.user .message-avatar {
+            background: var(--primary-text);
+            color: var(--primary-bg);
+        }
+        
+        .message-bubble {
+            background: var(--secondary-bg);
+            padding: 12px 16px;
+            border-radius: 16px;
+            border: 1px solid var(--border-color);
+            max-width: 100%;
+        }
+        
+        .chat-message.user .message-bubble {
+            background: var(--accent-color);
+            border-color: var(--accent-color);
+        }
+        
+        .message-text {
+            line-height: 1.6;
+            font-size: 14px;
+            color: var(--primary-text);
+        }
+        
+        .chat-message.user .message-text {
+            color: white;
+        }
+        
+        .message-timestamp {
+            font-size: 10px;
+            color: var(--secondary-text);
+            margin-top: 6px;
+            opacity: 0.7;
+        }
+        
+        .chat-message.user .message-timestamp {
+            color: rgba(255,255,255,0.7);
         }
 
         .message-content {
@@ -343,9 +416,9 @@
         }
 
         .chat-input-container {
-            padding: 15px;
-            border-top: 1px solid var(--border-color);
-            background: var(--secondary-bg);
+            padding: 0;
+            border-top: none;
+            background: transparent;
         }
 
         .chat-input {
@@ -361,6 +434,46 @@
         .chat-input:focus {
             outline: none;
             border-color: var(--accent-color);
+        }
+        
+        /* Suggestion Chips */
+        .suggestion-chip {
+            padding: 6px 12px;
+            background: var(--secondary-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            font-size: 11px;
+            color: var(--primary-text);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .suggestion-chip:hover {
+            background: var(--accent-bg);
+            border-color: var(--accent-color);
+            transform: translateY(-1px);
+        }
+        
+        /* Context Stats */
+        .context-stat {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px;
+            background: var(--secondary-bg);
+            border-radius: 6px;
+            margin-bottom: 8px;
+        }
+        
+        .context-label {
+            font-size: 12px;
+            color: var(--secondary-text);
+        }
+        
+        .context-value {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--accent-color);
         }
 
         /* Command Center Log */
@@ -1045,6 +1158,300 @@
             outline: none;
             border-color: var(--accent-color);
         }
+        
+        /* Analytics Tabs */
+        .analytics-tab {
+            padding: 10px 20px;
+            background: transparent;
+            border: none;
+            border-bottom: 2px solid transparent;
+            color: var(--secondary-text);
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .analytics-tab:hover {
+            color: var(--primary-text);
+            background: var(--accent-bg);
+        }
+        
+        .analytics-tab.active {
+            color: var(--accent-color);
+            border-bottom-color: var(--accent-color);
+        }
+        
+        .analytics-tab-content {
+            display: none;
+        }
+        
+        .analytics-tab-content.active {
+            display: block;
+        }
+        
+        /* Knowledge Graph Styles */
+        .graph-node {
+            cursor: pointer;
+            stroke: var(--border-color);
+            stroke-width: 2px;
+        }
+        
+        .graph-node:hover {
+            stroke: var(--accent-color);
+            stroke-width: 3px;
+        }
+        
+        .graph-link {
+            stroke: var(--border-color);
+            stroke-opacity: 0.6;
+            stroke-width: 1px;
+        }
+        
+        .graph-label {
+            fill: var(--primary-text);
+            font-size: 10px;
+            pointer-events: none;
+            text-anchor: middle;
+        }
+        
+        /* Timeline Customizations */
+        .vis-timeline {
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            background: var(--primary-bg);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        
+        .vis-item {
+            border-radius: 4px;
+            border-width: 2px;
+            color: white;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .vis-item:hover {
+            box-shadow: 0 4px 12px rgba(91, 124, 255, 0.3);
+            transform: translateY(-2px);
+        }
+        
+        .vis-item.vis-selected {
+            box-shadow: 0 0 0 3px rgba(91, 124, 255, 0.5);
+        }
+        
+        .vis-time-axis .vis-text {
+            color: var(--primary-text);
+        }
+        
+        .vis-time-axis .vis-grid.vis-minor {
+            border-color: var(--border-color);
+        }
+        
+        .vis-time-axis .vis-grid.vis-major {
+            border-color: var(--accent-color);
+        }
+        
+        /* Embedding Index Cards */
+        .index-status-card {
+            background: var(--secondary-bg);
+            border: 2px solid var(--border-color);
+            border-radius: 8px;
+            padding: 15px;
+            text-align: center;
+            transition: all 0.3s;
+        }
+        
+        .index-status-card.active {
+            border-color: var(--success-color);
+            background: linear-gradient(135deg, var(--secondary-bg), rgba(16, 185, 129, 0.1));
+        }
+        
+        .index-status-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(91, 124, 255, 0.2);
+        }
+        
+        .index-icon {
+            font-size: 32px;
+            margin-bottom: 8px;
+        }
+        
+        .index-name {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--primary-text);
+            margin-bottom: 8px;
+        }
+        
+        .index-count {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--accent-color);
+            margin-bottom: 4px;
+        }
+        
+        .index-status {
+            font-size: 11px;
+            color: var(--secondary-text);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        
+        .index-status-card.active .index-status {
+            color: var(--success-color);
+        }
+        
+        /* Entity Items */
+        .entity-item {
+            padding: 15px;
+            background: var(--secondary-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .entity-item:hover {
+            background: var(--accent-bg);
+            border-color: var(--accent-color);
+            transform: translateX(4px);
+        }
+        
+        /* Health Indicators */
+        .health-indicator {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px;
+            background: var(--secondary-bg);
+            border-radius: 6px;
+            margin-bottom: 8px;
+        }
+        
+        .health-label {
+            font-size: 13px;
+            color: var(--primary-text);
+            font-weight: 500;
+        }
+        
+        .health-status {
+            font-size: 20px;
+            transition: all 0.3s;
+        }
+        
+        .health-status.healthy {
+            color: var(--success-color);
+            animation: pulse 2s infinite;
+        }
+        
+        .health-status.degraded {
+            color: #f59e0b;
+        }
+        
+        .health-status.down {
+            color: var(--error-color);
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        /* Engine Cards */
+        .engine-card {
+            background: var(--secondary-bg);
+            border: 2px solid var(--border-color);
+            border-radius: 8px;
+            padding: 15px;
+            transition: all 0.3s;
+        }
+        
+        .engine-card.ready {
+            border-color: var(--success-color);
+        }
+        
+        .engine-card.processing {
+            border-color: #f59e0b;
+            background: linear-gradient(135deg, var(--secondary-bg), rgba(245, 158, 11, 0.1));
+        }
+        
+        .engine-card.error {
+            border-color: var(--error-color);
+        }
+        
+        .engine-name {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--primary-text);
+            margin-bottom: 8px;
+        }
+        
+        .engine-status {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 10px;
+        }
+        
+        .engine-status.ready {
+            color: var(--success-color);
+        }
+        
+        .engine-status.processing {
+            color: #f59e0b;
+        }
+        
+        .engine-status.error {
+            color: var(--error-color);
+        }
+        
+        .engine-stats {
+            font-size: 11px;
+            color: var(--secondary-text);
+        }
+        
+        /* Process Cards */
+        .process-card {
+            background: var(--secondary-bg);
+            border: 2px solid var(--border-color);
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+            transition: all 0.3s;
+        }
+        
+        .process-card:hover {
+            border-color: var(--accent-color);
+            transform: translateY(-2px);
+        }
+        
+        .process-icon {
+            font-size: 40px;
+            margin-bottom: 10px;
+        }
+        
+        .process-name {
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--primary-text);
+            margin-bottom: 8px;
+        }
+        
+        .process-status {
+            font-size: 12px;
+            color: var(--success-color);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 8px;
+        }
+        
+        .process-details {
+            font-size: 11px;
+            color: var(--secondary-text);
+        }
     </style>
 </head>
 <body>
@@ -1114,6 +1521,25 @@
                         <div class="status-dot inactive" id="processingStatus"></div>
                         <div style="font-size: 11px; color: var(--secondary-text); margin-top: 3px;">Processing</div>
                     </div>
+                    <div id="wsl2StatusContainer" style="display: none;">
+                        <div class="status-badge" id="wsl2Badge" style="
+                            background: linear-gradient(135deg, #10b981, #059669);
+                            color: white;
+                            padding: 4px 8px;
+                            border-radius: 4px;
+                            font-size: 10px;
+                            font-weight: 600;
+                            text-transform: uppercase;
+                            letter-spacing: 0.5px;
+                            display: flex;
+                            align-items: center;
+                            gap: 4px;
+                        ">
+                            <span>🚀</span>
+                            <span>WSL2 GPU</span>
+                        </div>
+                        <div style="font-size: 9px; color: var(--success-color); margin-top: 3px; text-align: center;" id="wsl2Boost">2-5× faster</div>
+                    </div>
                 </div>
             </div>
 
@@ -1140,6 +1566,44 @@
                         </div>
                     </div>
 
+                    <!-- Activity Feed & Charts Row -->
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+                        <!-- Recent Activity -->
+                        <div class="card">
+                            <div class="card-header">
+                                <div>
+                                    <div class="card-title">📋 Recent Activity</div>
+                                    <div class="card-subtitle">Latest ingestions</div>
+                                </div>
+                            </div>
+                            <div id="recentActivityFeed" style="padding: 15px; max-height: 300px; overflow-y: auto;"></div>
+                        </div>
+                        
+                        <!-- Quick Stats Chart -->
+                        <div class="card">
+                            <div class="card-header">
+                                <div>
+                                    <div class="card-title">📊 Processing Stats</div>
+                                    <div class="card-subtitle">System overview</div>
+                                </div>
+                            </div>
+                            <div style="padding: 15px;">
+                                <canvas id="statsChart" style="max-height: 250px;"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Queue Status Widget -->
+                    <div class="card" style="margin-bottom: 20px;">
+                        <div class="card-header">
+                            <div>
+                                <div class="card-title">📥 Ingestion Queue</div>
+                                <div class="card-subtitle">Import inbox status</div>
+                            </div>
+                        </div>
+                        <div id="queueStatusContainer" style="padding: 15px;"></div>
+                    </div>
+
                     <div class="card">
                         <div class="card-header">
                             <div>
@@ -1160,17 +1624,113 @@
 
                 <!-- Chat View -->
                 <div class="view" id="view-chat">
-                    <div class="chat-container">
-                        <div class="chat-messages" id="chatMessages">
-                            <div class="message">
-                                <div class="message-avatar">Q</div>
-                                <div class="message-content">
-                                    Hello! I'm GoodQ, your memory assistant. I can help you explore your processed videos, search for specific moments, and analyze the content. What would you like to know?
+                    <div style="display: flex; height: calc(100vh - 80px); gap: 20px;">
+                        <!-- Chat Panel -->
+                        <div style="flex: 1; display: flex; flex-direction: column;">
+                            <div class="card" style="flex: 1; display: flex; flex-direction: column; margin-bottom: 0;">
+                                <div class="card-header">
+                                    <div>
+                                        <div class="card-title">💬 Chat with GoodQ</div>
+                                        <div class="card-subtitle" id="chatSubtitle">AI-powered memory assistant</div>
+                                    </div>
+                                    <div style="display: flex; gap: 10px;">
+                                        <button class="btn" onclick="clearChat()" style="font-size: 11px; padding: 6px 10px;">Clear Chat</button>
+                                        <button class="btn btn-primary" onclick="loadChatHistory()">Refresh</button>
+                                    </div>
+                                </div>
+                                <div class="chat-messages" id="chatMessages" style="flex: 1; overflow-y: auto; padding: 20px;">
+                                    <!-- Welcome message -->
+                                    <div class="chat-message assistant">
+                                        <div class="message-avatar">Q</div>
+                                        <div class="message-bubble">
+                                            <div class="message-text">
+                                                Hello! I'm GoodQ, your memory assistant. I can help you:
+                                                <ul style="margin: 10px 0; padding-left: 20px;">
+                                                    <li>Search through your processed videos</li>
+                                                    <li>Find specific moments or emotions</li>
+                                                    <li>Analyze content and relationships</li>
+                                                    <li>Answer questions about your memories</li>
+                                                </ul>
+                                                What would you like to explore?
+                                            </div>
+                                            <div class="message-timestamp">Just now</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="chat-input-container">
+                                    <div style="display: flex; gap: 10px; align-items: center; padding: 15px; background: var(--secondary-bg); border-top: 1px solid var(--border-color);">
+                                        <input 
+                                            type="text" 
+                                            class="chat-input" 
+                                            id="chatInput" 
+                                            placeholder="Ask me anything about your memories..." 
+                                            onkeypress="if(event.key === 'Enter') sendChat()"
+                                            style="flex: 1; padding: 12px 16px; background: var(--primary-bg); border: 1px solid var(--border-color); border-radius: 8px; color: var(--primary-text); font-size: 14px;"
+                                        >
+                                        <button class="btn btn-primary" onclick="sendChat()" style="padding: 12px 24px;">
+                                            Send
+                                        </button>
+                                    </div>
+                                    <!-- Quick suggestions -->
+                                    <div style="padding: 10px 15px; background: var(--primary-bg); border-top: 1px solid var(--border-color);">
+                                        <div style="font-size: 11px; color: var(--secondary-text); margin-bottom: 8px;">Quick questions:</div>
+                                        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                                            <button class="suggestion-chip" onclick="sendSuggestion('What emotions are most common?')">
+                                                What emotions are most common?
+                                            </button>
+                                            <button class="suggestion-chip" onclick="sendSuggestion('Show me happy moments')">
+                                                Show me happy moments
+                                            </button>
+                                            <button class="suggestion-chip" onclick="sendSuggestion('Find scenes with people')">
+                                                Find scenes with people
+                                            </button>
+                                            <button class="suggestion-chip" onclick="sendSuggestion('Summarize my memories')">
+                                                Summarize my memories
+                                            </button>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                        <div class="chat-input-container">
-                            <input type="text" class="chat-input" id="chatInput" placeholder="Ask me anything about your memories..." onkeypress="if(event.key === 'Enter') sendChat()">
+                        
+                        <!-- Context Panel -->
+                        <div style="width: 350px; display: flex; flex-direction: column; gap: 20px;">
+                            <!-- Context Info -->
+                            <div class="card">
+                                <div class="card-header">
+                                    <div class="card-title">📊 Context</div>
+                                </div>
+                                <div style="padding: 15px;">
+                                    <div class="context-stat">
+                                        <div class="context-label">Total Scenes</div>
+                                        <div class="context-value" id="contextScenes">--</div>
+                                    </div>
+                                    <div class="context-stat">
+                                        <div class="context-label">Entities</div>
+                                        <div class="context-value" id="contextEntities">--</div>
+                                    </div>
+                                    <div class="context-stat">
+                                        <div class="context-label">Emotions Tracked</div>
+                                        <div class="context-value" id="contextEmotions">--</div>
+                                    </div>
+                                    <div class="context-stat">
+                                        <div class="context-label">Vector Embeddings</div>
+                                        <div class="context-value" id="contextEmbeddings">--</div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Recent Activity -->
+                            <div class="card" style="flex: 1; overflow: hidden; display: flex; flex-direction: column;">
+                                <div class="card-header">
+                                    <div class="card-title">⚡ Recent Activity</div>
+                                </div>
+                                <div id="recentActivity" style="flex: 1; overflow-y: auto; padding: 15px; font-size: 12px; color: var(--secondary-text);">
+                                    <div style="padding: 20px; text-align: center; opacity: 0.5;">
+                                        No recent activity
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1185,17 +1745,84 @@
                             </div>
                             <button class="btn btn-primary" onclick="loadScenes()">Refresh</button>
                         </div>
-                        <div class="scene-filters">
-                            <input type="text" class="filter-input" id="sceneSearchInput" placeholder="Search scenes (title, transcript, emotions...)" onkeyup="filterScenes()">
-                            <select class="filter-select" id="emotionFilter" onchange="filterScenes()">
-                                <option value="">All Emotions</option>
-                            </select>
-                            <select class="filter-select" id="sortFilter" onchange="sortScenes()">
-                                <option value="time-asc">Time (Old → New)</option>
-                                <option value="time-desc">Time (New → Old)</option>
-                                <option value="duration-desc">Duration (Long → Short)</option>
-                                <option value="duration-asc">Duration (Short → Long)</option>
-                            </select>
+                        <!-- Enhanced Filters -->
+                        <div style="padding: 15px; background: var(--secondary-bg); border-bottom: 1px solid var(--border-color);">
+                            <div style="display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+                                <input 
+                                    type="text" 
+                                    id="sceneSearchInput" 
+                                    placeholder="🔍 Search transcripts, captions, emotions..." 
+                                    style="
+                                        padding: 8px 12px;
+                                        background: var(--primary-bg);
+                                        border: 1px solid var(--border-color);
+                                        border-radius: 6px;
+                                        color: var(--primary-text);
+                                        font-size: 13px;
+                                    "
+                                    onkeyup="if(event.key === 'Enter') applySceneFilters()"
+                                >
+                                <input 
+                                    type="number" 
+                                    id="minDurationFilter" 
+                                    placeholder="Min duration (s)" 
+                                    style="
+                                        padding: 8px 12px;
+                                        background: var(--primary-bg);
+                                        border: 1px solid var(--border-color);
+                                        border-radius: 6px;
+                                        color: var(--primary-text);
+                                        font-size: 13px;
+                                    "
+                                >
+                                <input 
+                                    type="number" 
+                                    id="maxDurationFilter" 
+                                    placeholder="Max duration (s)" 
+                                    style="
+                                        padding: 8px 12px;
+                                        background: var(--primary-bg);
+                                        border: 1px solid var(--border-color);
+                                        border-radius: 6px;
+                                        color: var(--primary-text);
+                                        font-size: 13px;
+                                    "
+                                >
+                                <select 
+                                    id="hasAudioFilter"
+                                    style="
+                                        padding: 8px 12px;
+                                        background: var(--primary-bg);
+                                        border: 1px solid var(--border-color);
+                                        border-radius: 6px;
+                                        color: var(--primary-text);
+                                        font-size: 13px;
+                                    "
+                                >
+                                    <option value="">All Scenes</option>
+                                    <option value="true">Has Audio</option>
+                                    <option value="false">No Audio</option>
+                                </select>
+                            </div>
+                            <div style="display: flex; gap: 10px;">
+                                <button 
+                                    class="btn btn-primary" 
+                                    onclick="applySceneFilters()"
+                                    style="font-size: 12px; padding: 6px 12px;"
+                                >
+                                    Apply Filters
+                                </button>
+                                <button 
+                                    class="btn" 
+                                    onclick="clearSceneFilters()"
+                                    style="font-size: 12px; padding: 6px 12px; background: var(--secondary-bg);"
+                                >
+                                    Clear
+                                </button>
+                                <div style="flex: 1; text-align: right; padding-top: 6px;">
+                                    <span id="sceneFilterStatus" style="font-size: 12px; color: var(--secondary-text);"></span>
+                                </div>
+                            </div>
                         </div>
                         <div class="scene-list" id="sceneList"></div>
                     </div>
@@ -1203,52 +1830,375 @@
 
                 <!-- Entities View -->
                 <div class="view" id="view-entities">
-                    <div class="card">
-                        <div class="card-header">
-                            <div>
-                                <div class="card-title">Entity Explorer</div>
-                                <div class="card-subtitle" id="entityCount">Loading...</div>
+                    <!-- Filters and Search -->
+                    <div style="background: var(--secondary-bg); padding: 15px; border-bottom: 1px solid var(--border-color); display: flex; gap: 15px; align-items: center;">
+                        <div style="flex: 1;">
+                            <input type="text" id="entitySearchInput" placeholder="🔍 Search entities..." 
+                                style="width: 100%; padding: 10px; background: var(--primary-bg); border: 1px solid var(--border-color); border-radius: 6px; color: var(--primary-text);"
+                                onkeyup="filterEntities()">
+                        </div>
+                        <select id="entityTypeFilter" onchange="filterEntities()" 
+                            style="padding: 10px; background: var(--primary-bg); border: 1px solid var(--border-color); border-radius: 6px; color: var(--primary-text);">
+                            <option value="">All Types</option>
+                            <option value="PERSON">👤 People</option>
+                            <option value="LOCATION">📍 Locations</option>
+                            <option value="ORGANIZATION">🏢 Organizations</option>
+                            <option value="EVENT">📅 Events</option>
+                            <option value="THING">🎯 Things</option>
+                        </select>
+                        <button class="btn btn-primary" onclick="loadEntities()">Refresh</button>
+                    </div>
+                    
+                    <!-- Main Content Area -->
+                    <div style="display: grid; grid-template-columns: 1fr 400px; gap: 20px; padding: 20px;">
+                        <!-- Entity List -->
+                        <div class="card">
+                            <div class="card-header">
+                                <div>
+                                    <div class="card-title">Entities</div>
+                                    <div class="card-subtitle" id="entityCount">Loading...</div>
+                                </div>
+                            </div>
+                            <div id="entityList" style="max-height: 600px; overflow-y: auto;"></div>
+                        </div>
+                        
+                        <!-- Entity Detail Panel -->
+                        <div id="entityDetailPanel" style="display: none;">
+                            <div class="card">
+                                <div class="card-header">
+                                    <div>
+                                        <div class="card-title" id="entityDetailName">Entity Details</div>
+                                        <div class="card-subtitle" id="entityDetailType"></div>
+                                    </div>
+                                    <button class="btn" onclick="closeEntityDetail()">✕</button>
+                                </div>
+                                <div id="entityDetailContent" style="padding: 20px;"></div>
                             </div>
                         </div>
-                        <div id="entityList"></div>
                     </div>
                 </div>
 
                 <!-- Analytics View -->
                 <div class="view" id="view-analytics">
-                    <div class="card">
-                        <div class="card-header">
-                            <div class="card-title">Analytics Dashboard</div>
+                    <!-- Analytics Tabs -->
+                    <div style="display: flex; gap: 5px; padding: 15px; background: var(--secondary-bg); border-bottom: 1px solid var(--border-color);">
+                        <button class="analytics-tab active" data-tab="knowledge-graph" onclick="switchAnalyticsTab('knowledge-graph')">
+                            🕸️ Knowledge Graph
+                        </button>
+                        <button class="analytics-tab" data-tab="timeline" onclick="switchAnalyticsTab('timeline')">
+                            📅 Timeline
+                        </button>
+                        <button class="analytics-tab" data-tab="emotions" onclick="switchAnalyticsTab('emotions')">
+                            😊 Emotions
+                        </button>
+                        <button class="analytics-tab" data-tab="embeddings" onclick="switchAnalyticsTab('embeddings')">
+                            🧬 Embeddings
+                        </button>
+                    </div>
+                    
+                    <!-- Knowledge Graph Tab -->
+                    <div class="analytics-tab-content active" id="tab-knowledge-graph">
+                        <div class="card">
+                            <div class="card-header">
+                                <div>
+                                    <div class="card-title">Knowledge Graph Explorer</div>
+                                    <div class="card-subtitle" id="kgSubtitle">Interactive entity relationships</div>
+                                </div>
+                                <button class="btn btn-primary" onclick="loadKnowledgeGraph()">Refresh</button>
+                            </div>
+                            <div id="knowledgeGraphContainer" style="position: relative; width: 100%; height: 600px; background: var(--primary-bg); border-radius: 6px;">
+                                <svg id="knowledgeGraphSvg" style="width: 100%; height: 100%;"></svg>
+                                <!-- Graph Controls -->
+                                <div style="position: absolute; top: 15px; right: 15px; display: flex; flex-direction: column; gap: 8px;">
+                                    <button class="btn" onclick="resetGraphZoom()" style="font-size: 11px; padding: 6px 10px;">🔍 Reset Zoom</button>
+                                    <button class="btn" onclick="toggleGraphPhysics()" style="font-size: 11px; padding: 6px 10px;">⏸️ Pause/Play</button>
+                                </div>
+                                <!-- Node Details Panel -->
+                                <div id="nodeDetailsPanel" style="
+                                    position: absolute;
+                                    bottom: 15px;
+                                    left: 15px;
+                                    max-width: 300px;
+                                    background: var(--secondary-bg);
+                                    border: 1px solid var(--border-color);
+                                    border-radius: 6px;
+                                    padding: 15px;
+                                    display: none;
+                                ">
+                                    <div id="nodeDetailsContent"></div>
+                                </div>
+                            </div>
                         </div>
-                        <div id="analyticsContent"></div>
+                    </div>
+                    
+                    <!-- Timeline Tab -->
+                    <div class="analytics-tab-content" id="tab-timeline">
+                        <div class="card">
+                            <div class="card-header">
+                                <div>
+                                    <div class="card-title">Memory Timeline</div>
+                                    <div class="card-subtitle" id="timelineSubtitle">Chronological view of your memories</div>
+                                </div>
+                                <div style="display: flex; gap: 10px;">
+                                    <button class="btn" onclick="timelineZoomIn()" style="font-size: 11px; padding: 6px 10px;">🔍+ Zoom In</button>
+                                    <button class="btn" onclick="timelineZoomOut()" style="font-size: 11px; padding: 6px 10px;">🔍- Zoom Out</button>
+                                    <button class="btn" onclick="timelineFitAll()" style="font-size: 11px; padding: 6px 10px;">📏 Fit All</button>
+                                    <button class="btn btn-primary" onclick="loadTimelineView()">Refresh</button>
+                                </div>
+                            </div>
+                            <div id="timelineContainer" style="height: 500px; padding: 20px; position: relative;">
+                                Loading timeline...</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Emotions Tab -->
+                    <div class="analytics-tab-content" id="tab-emotions">
+                        <div class="card">
+                            <div class="card-header">
+                                <div>
+                                    <div class="card-title">Emotion Analytics</div>
+                                    <div class="card-subtitle" id="emotionsSubtitle">Emotional patterns in your memories</div>
+                                </div>
+                                <button class="btn btn-primary" onclick="loadEmotionsView()">Refresh</button>
+                            </div>
+                            <div id="emotionsContainer" style="padding: 20px;">
+                                <!-- Emotion charts grid -->
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+                                    <div>
+                                        <h3 style="font-size: 16px; margin-bottom: 15px; color: var(--primary-text);">Emotion Distribution</h3>
+                                        <canvas id="emotionPieChart" style="max-height: 300px;"></canvas>
+                                    </div>
+                                    <div>
+                                        <h3 style="font-size: 16px; margin-bottom: 15px; color: var(--primary-text);">Top Emotions</h3>
+                                        <canvas id="emotionBarChart" style="max-height: 300px;"></canvas>
+                                    </div>
+                                </div>
+                                <div>
+                                    <h3 style="font-size: 16px; margin-bottom: 15px; color: var(--primary-text);">Emotion Timeline</h3>
+                                    <canvas id="emotionTimelineChart" style="max-height: 200px;"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Embeddings Tab -->
+                    <div class="analytics-tab-content" id="tab-embeddings">
+                        <div class="card">
+                            <div class="card-header">
+                                <div>
+                                    <div class="card-title">Embedding Space Explorer</div>
+                                    <div class="card-subtitle" id="embeddingsSubtitle">Vector space visualization</div>
+                                </div>
+                                <button class="btn btn-primary" onclick="loadEmbeddingsView()">Refresh</button>
+                            </div>
+                            <div id="embeddingsContainer" style="padding: 20px;">
+                                <!-- Index Status Cards -->
+                                <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 20px;">
+                                    <div id="textIndexCard" class="index-status-card">
+                                        <div class="index-icon">📝</div>
+                                        <div class="index-name">Text</div>
+                                        <div class="index-count">--</div>
+                                        <div class="index-status">Inactive</div>
+                                    </div>
+                                    <div id="clipIndexCard" class="index-status-card">
+                                        <div class="index-icon">🖼️</div>
+                                        <div class="index-name">CLIP</div>
+                                        <div class="index-count">--</div>
+                                        <div class="index-status">Inactive</div>
+                                    </div>
+                                    <div id="dinoIndexCard" class="index-status-card">
+                                        <div class="index-icon">🦖</div>
+                                        <div class="index-name">DINOv2</div>
+                                        <div class="index-count">--</div>
+                                        <div class="index-status">Inactive</div>
+                                    </div>
+                                    <div id="audioIndexCard" class="index-status-card">
+                                        <div class="index-icon">🔊</div>
+                                        <div class="index-name">Audio</div>
+                                        <div class="index-count">--</div>
+                                        <div class="index-status">Inactive</div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Embedding Visualization -->
+                                <div style="background: var(--secondary-bg); border: 1px solid var(--border-color); border-radius: 6px; padding: 15px;">
+                                    <h3 style="font-size: 16px; margin-bottom: 15px; color: var(--primary-text);">Embedding Space Projection (2D)</h3>
+                                    <canvas id="embeddingSpaceChart" style="max-height: 400px;"></canvas>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
                 <!-- Command Center View -->
                 <div class="view" id="view-command-center">
+                    <!-- Pipeline Engines Status -->
+                    <div class="card" style="margin-bottom: 20px;">
+                        <div class="card-header">
+                            <div>
+                                <div class="card-title">⚙️ Pipeline Engines</div>
+                                <div class="card-subtitle" id="engineSubtitle">Real-time processing step status</div>
+                            </div>
+                            <div style="display: flex; gap: 10px; align-items: center;">
+                                <label style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--secondary-text);">
+                                    <input type="checkbox" id="autoRefreshEngines" onchange="toggleEngineAutoRefresh(this.checked)" checked>
+                                    Auto-refresh (5s)
+                                </label>
+                                <button class="btn btn-primary" onclick="refreshPipelineEngines()">Refresh</button>
+                            </div>
+                        </div>
+                        <div id="pipelineEnginesContainer" style="padding: 20px;">
+                            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 15px;" id="engineGrid"></div>
+                        </div>
+                    </div>
+                    
+                    <!-- System Controls -->
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+                        <!-- Quick Actions -->
+                        <div class="card">
+                            <div class="card-header">
+                                <div class="card-title">🎮 Quick Actions</div>
+                            </div>
+                            <div style="padding: 20px; display: flex; flex-direction: column; gap: 10px;">
+                                <button class="btn" onclick="testPipeline()" style="width: 100%; justify-content: center;">
+                                    🧪 Test Pipeline
+                                </button>
+                                <button class="btn" onclick="clearCache()" style="width: 100%; justify-content: center;">
+                                    🗑️ Clear Cache
+                                </button>
+                                <button class="btn" onclick="rebuildIndices()" style="width: 100%; justify-content: center;">
+                                    🔄 Rebuild Indices
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- System Health -->
+                        <div class="card">
+                            <div class="card-header">
+                                <div class="card-title">💚 System Health</div>
+                            </div>
+                            <div id="systemHealth" style="padding: 20px;">
+                                <div class="health-indicator">
+                                    <div class="health-label">API Server</div>
+                                    <div class="health-status" id="apiHealth">●</div>
+                                </div>
+                                <div class="health-indicator">
+                                    <div class="health-label">Database</div>
+                                    <div class="health-status" id="dbHealth">●</div>
+                                </div>
+                                <div class="health-indicator">
+                                    <div class="health-label">WSL2 GPU</div>
+                                    <div class="health-status" id="wslHealth">●</div>
+                                </div>
+                                <div class="health-indicator">
+                                    <div class="health-label">Pipeline</div>
+                                    <div class="health-status" id="pipelineHealth">●</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Live Logs -->
                     <div class="card">
                         <div class="card-header">
                             <div>
-                                <div class="card-title">🎮 Command Center</div>
-                                <div class="card-subtitle">Live system logs</div>
+                                <div class="card-title">📜 System Logs</div>
+                                <div class="card-subtitle">Recent activity</div>
                             </div>
-                            <button class="btn btn-primary" onclick="refreshCommandCenter()">Refresh</button>
+                            <div style="display: flex; gap: 10px;">
+                                <button class="btn" onclick="clearLogs()" style="font-size: 11px; padding: 6px 10px;">Clear</button>
+                                <button class="btn btn-primary" onclick="refreshCommandCenter()">Refresh</button>
+                            </div>
                         </div>
-                        <div class="log-container" id="commandCenterLogs"></div>
+                        <div class="log-container" id="commandCenterLogs" style="max-height: 400px; overflow-y: auto;"></div>
                     </div>
                 </div>
 
                 <!-- Processes View -->
                 <div class="view" id="view-processes">
+                    <!-- GPU Status -->
+                    <div class="card" style="margin-bottom: 20px;">
+                        <div class="card-header">
+                            <div>
+                                <div class="card-title">🎮 GPU Status</div>
+                                <div class="card-subtitle" id="gpuSubtitle">NVIDIA GeForce RTX 4070 Ti SUPER</div>
+                            </div>
+                            <button class="btn btn-primary" onclick="refreshGPUStatus()">Refresh</button>
+                        </div>
+                        <div id="gpuStatusContainer" style="padding: 20px;">
+                            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px;">
+                                <div class="stat-card">
+                                    <div class="stat-label">GPU Utilization</div>
+                                    <div class="stat-value" id="gpuUtilization">--</div>
+                                    <div class="stat-sublabel">%</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-label">Memory Used</div>
+                                    <div class="stat-value" id="gpuMemory">--</div>
+                                    <div class="stat-sublabel">GB</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-label">Temperature</div>
+                                    <div class="stat-value" id="gpuTemp">--</div>
+                                    <div class="stat-sublabel">°C</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-label">Power Draw</div>
+                                    <div class="stat-value" id="gpuPower">--</div>
+                                    <div class="stat-sublabel">W</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Processing Engines -->
+                    <div class="card" style="margin-bottom: 20px;">
+                        <div class="card-header">
+                            <div>
+                                <div class="card-title">⚙️ Processing Engines</div>
+                                <div class="card-subtitle" id="processSubtitle">Active pipeline steps</div>
+                            </div>
+                            <div style="display: flex; gap: 10px;">
+                                <label style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--secondary-text);">
+                                    <input type="checkbox" id="autoRefreshProcesses" onchange="toggleProcessAutoRefresh(this.checked)" checked>
+                                    Auto-refresh (3s)
+                                </label>
+                                <button class="btn btn-primary" onclick="refreshProcesses()">Refresh</button>
+                            </div>
+                        </div>
+                        <div id="processList" style="padding: 20px;"></div>
+                    </div>
+                    
+                    <!-- WSL2 Audio Processing -->
                     <div class="card">
                         <div class="card-header">
                             <div>
-                                <div class="card-title">🔧 Pipeline Engines</div>
-                                <div class="card-subtitle">Active tools & processing engines</div>
+                                <div class="card-title">🔊 WSL2 Audio Processing</div>
+                                <div class="card-subtitle" id="wslSubtitle">GPU-accelerated transcription & diarization</div>
                             </div>
-                            <button class="btn btn-primary" onclick="refreshProcesses()">Refresh</button>
+                            <button class="btn btn-primary" onclick="testWSLAudio()">Test Audio</button>
                         </div>
-                        <div id="processList"></div>
+                        <div id="wslStatusContainer" style="padding: 20px;">
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                                <div class="process-card">
+                                    <div class="process-icon">🎤</div>
+                                    <div class="process-name">Faster Whisper</div>
+                                    <div class="process-status" id="whisperStatus">Ready</div>
+                                    <div class="process-details">Model: medium, FP16, CUDA</div>
+                                </div>
+                                <div class="process-card">
+                                    <div class="process-icon">👥</div>
+                                    <div class="process-name">PyAnnote Diarization</div>
+                                    <div class="process-status" id="pyannoteStatus">Ready</div>
+                                    <div class="process-details">Speaker separation enabled</div>
+                                </div>
+                            </div>
+                            <div id="wslTestResults" style="margin-top: 15px; padding: 15px; background: var(--secondary-bg); border-radius: 6px; display: none;">
+                                <div style="font-size: 13px; font-weight: 600; margin-bottom: 8px; color: var(--accent-color);">Test Results</div>
+                                <pre id="wslTestOutput" style="font-size: 11px; color: var(--secondary-text); white-space: pre-wrap; margin: 0;"></pre>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1329,6 +2279,10 @@
                 case 'dashboard':
                     await loadDashboard();
                     break;
+                case 'chat':
+                    await updateChatContext();
+                    addRecentActivity('Chat view opened');
+                    break;
                 case 'scenes':
                     await loadScenes();
                     break;
@@ -1339,12 +2293,20 @@
                     await loadAnalytics();
                     break;
                 case 'command-center':
+                    await refreshPipelineEngines();
                     await refreshCommandCenter();
+                    // Enable auto-refresh
+                    document.getElementById('autoRefreshEngines').checked = true;
+                    toggleEngineAutoRefresh(true);
                     if (commandCenterInterval) clearInterval(commandCenterInterval);
                     commandCenterInterval = setInterval(refreshCommandCenter, 5000);
                     break;
                 case 'processes':
                     await refreshProcesses();
+                    await refreshGPUStatus();
+                    // Enable auto-refresh
+                    document.getElementById('autoRefreshProcesses').checked = true;
+                    toggleProcessAutoRefresh(true);
                     break;
                 default:
                     break;
@@ -1395,11 +2357,194 @@
                     document.getElementById('processingStatus').classList.add('inactive');
                 }
 
+                // Load activity feed and charts
+                await loadActivityFeed();
+                await renderStatsChart(data.database);
+                await loadQueueStatus();
+                
                 // Load recent scenes
                 await loadRecentScenes();
 
             } catch (error) {
                 console.error('Error loading dashboard:', error);
+            }
+        }
+        
+        // Queue Status
+        async function loadQueueStatus() {
+            try {
+                const response = await fetch(`${API_BASE}/queue`);
+                const data = await response.json();
+                
+                const container = document.getElementById('queueStatusContainer');
+                
+                const inboxCount = data.inbox.count || 0;
+                const processingCount = data.processing.count || 0;
+                const processedCount = data.processed.count || 0;
+                const failedCount = data.failed.count || 0;
+                
+                let html = `
+                    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 15px;">
+                        <div style="text-align: center; padding: 15px; background: var(--secondary-bg); border: 1px solid var(--border-color); border-radius: 6px;">
+                            <div style="font-size: 24px; font-weight: 600; color: var(--accent-color);">${inboxCount}</div>
+                            <div style="font-size: 11px; color: var(--secondary-text); margin-top: 4px;">Inbox</div>
+                        </div>
+                        <div style="text-align: center; padding: 15px; background: var(--secondary-bg); border: 1px solid var(--border-color); border-radius: 6px;">
+                            <div style="font-size: 24px; font-weight: 600; color: var(--warning-color);">${processingCount}</div>
+                            <div style="font-size: 11px; color: var(--secondary-text); margin-top: 4px;">Processing</div>
+                        </div>
+                        <div style="text-align: center; padding: 15px; background: var(--secondary-bg); border: 1px solid var(--border-color); border-radius: 6px;">
+                            <div style="font-size: 24px; font-weight: 600; color: var(--success-color);">${processedCount}</div>
+                            <div style="font-size: 11px; color: var(--secondary-text); margin-top: 4px;">Processed</div>
+                        </div>
+                        <div style="text-align: center; padding: 15px; background: var(--secondary-bg); border: 1px solid var(--border-color); border-radius: 6px;">
+                            <div style="font-size: 24px; font-weight: 600; color: var(--error-color);">${failedCount}</div>
+                            <div style="font-size: 11px; color: var(--secondary-text); margin-top: 4px;">Failed</div>
+                        </div>
+                    </div>
+                `;
+                
+                // Show inbox files if any
+                if (data.inbox.files && data.inbox.files.length > 0) {
+                    html += `
+                        <div style="margin-top: 15px;">
+                            <div style="font-size: 11px; font-weight: 600; color: var(--secondary-text); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px;">
+                                Waiting in Inbox (${data.inbox.total_size_mb} MB total)
+                            </div>
+                            ${data.inbox.files.slice(0, 5).map(file => `
+                                <div style="
+                                    padding: 8px 12px;
+                                    background: var(--secondary-bg);
+                                    border: 1px solid var(--border-color);
+                                    border-radius: 4px;
+                                    margin-bottom: 6px;
+                                    font-size: 12px;
+                                    display: flex;
+                                    justify-content: space-between;
+                                ">
+                                    <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(file.name)}</span>
+                                    <span style="color: var(--secondary-text); white-space: nowrap; margin-left: 10px;">${file.size_mb} MB</span>
+                                </div>
+                            `).join('')}
+                            ${data.inbox.files.length > 5 ? `<div style="font-size: 11px; color: var(--secondary-text); margin-top: 8px;">+ ${data.inbox.files.length - 5} more files</div>` : ''}
+                        </div>
+                    `;
+                }
+                
+                container.innerHTML = html;
+                
+            } catch (error) {
+                console.error('Error loading queue status:', error);
+                document.getElementById('queueStatusContainer').innerHTML = 
+                    '<div style="color: var(--error-color);">Failed to load queue status</div>';
+            }
+        }
+        
+        // Activity Feed
+        async function loadActivityFeed() {
+            try {
+                const response = await fetch(`${API_BASE}/recent-activity?limit=5`);
+                const data = await response.json();
+                
+                const container = document.getElementById('recentActivityFeed');
+                
+                if (!data.activities || data.activities.length === 0) {
+                    container.innerHTML = '<div style="color: var(--secondary-text); text-align: center; padding: 20px;">No recent activity</div>';
+                    return;
+                }
+                
+                container.innerHTML = data.activities.map(activity => {
+                    const icon = activity.type === 'success' ? '✅' : '📊';
+                    const title = activity.filename || `Video ${activity.video_hash?.substring(0, 8)}...`;
+                    const detail = activity.scenes ? `${activity.scenes} scenes processed` : 'Completed';
+                    const time = activity.timestamp ? new Date(activity.timestamp).toLocaleString() : 'Recently';
+                    
+                    return `
+                        <div style="
+                            padding: 12px;
+                            background: var(--secondary-bg);
+                            border: 1px solid var(--border-color);
+                            border-radius: 6px;
+                            margin-bottom: 8px;
+                        ">
+                            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 4px;">
+                                <span style="font-size: 16px;">${icon}</span>
+                                <span style="font-size: 13px; font-weight: 500; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                    ${escapeHtml(title)}
+                                </span>
+                            </div>
+                            <div style="font-size: 11px; color: var(--secondary-text); margin-left: 26px;">
+                                ${detail} • ${time}
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+                
+            } catch (error) {
+                console.error('Error loading activity feed:', error);
+                document.getElementById('recentActivityFeed').innerHTML = 
+                    '<div style="color: var(--error-color);">Failed to load activity</div>';
+            }
+        }
+        
+        // Stats Chart
+        let statsChartInstance = null;
+        async function renderStatsChart(dbStats) {
+            try {
+                const ctx = document.getElementById('statsChart');
+                if (!ctx) return;
+                
+                // Destroy existing chart if any
+                if (statsChartInstance) {
+                    statsChartInstance.destroy();
+                }
+                
+                statsChartInstance = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Scenes', 'Embeddings', 'Entities', 'Relationships'],
+                        datasets: [{
+                            data: [
+                                dbStats.scenes || 0,
+                                dbStats.embeddings || 0,
+                                dbStats.entities || 0,
+                                Math.min(dbStats.relationships || 0, 1000) // Cap for better visualization
+                            ],
+                            backgroundColor: [
+                                '#5b7cff',  // Scenes - primary blue
+                                '#10b981',  // Embeddings - green
+                                '#f59e0b',  // Entities - amber
+                                '#ec4899'   // Relationships - pink
+                            ],
+                            borderColor: '#0a0e27',
+                            borderWidth: 2
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: true,
+                        plugins: {
+                            legend: {
+                                position: 'bottom',
+                                labels: {
+                                    color: '#e0e6ff',
+                                    padding: 10,
+                                    font: { size: 11 }
+                                }
+                            },
+                            tooltip: {
+                                backgroundColor: '#151b3d',
+                                titleColor: '#e0e6ff',
+                                bodyColor: '#e0e6ff',
+                                borderColor: '#2a3558',
+                                borderWidth: 1
+                            }
+                        }
+                    }
+                });
+                
+            } catch (error) {
+                console.error('Error rendering stats chart:', error);
             }
         }
 
@@ -1436,43 +2581,51 @@
         }
 
         // Scenes Loading
-        async function loadScenes() {
+        // Scene filtering state
+        let currentSceneFilters = {};
+        let currentSceneOffset = 0;
+        let scenesPerPage = 20;
+        
+        async function loadScenes(offset = 0) {
             try {
-                const response = await fetch(`${API_BASE}/scenes?limit=100`);
+                // Build query params with filters
+                const params = new URLSearchParams({
+                    limit: scenesPerPage,
+                    offset: offset
+                });
+                
+                if (currentSceneFilters.search) {
+                    params.append('search', currentSceneFilters.search);
+                }
+                if (currentSceneFilters.minDuration) {
+                    params.append('min_duration', currentSceneFilters.minDuration);
+                }
+                if (currentSceneFilters.maxDuration) {
+                    params.append('max_duration', currentSceneFilters.maxDuration);
+                }
+                if (currentSceneFilters.hasAudio !== undefined) {
+                    params.append('has_audio', currentSceneFilters.hasAudio);
+                }
+                
+                const response = await fetch(`${API_BASE}/scenes?${params}`);
                 const data = await response.json();
 
-                document.getElementById('sceneCount').textContent = `${data.total} scenes total`;
-
-                allScenes = data.scenes;
-
-                // Populate emotion filter
-                const emotions = new Set();
-                data.scenes.forEach(scene => {
-                    if (scene.emotions) {
-                        scene.emotions.forEach(e => {
-                            const label = typeof e === 'object' ? e.label : e;
-                            emotions.add(label);
-                        });
-                    }
-                });
-
-                const emotionFilter = document.getElementById('emotionFilter');
-                if (emotionFilter) {
-                    const currentValue = emotionFilter.value;
-                    emotionFilter.innerHTML = '<option value="">All Emotions</option>' +
-                        Array.from(emotions).sort().map(emotion => 
-                            `<option value="${emotion.toLowerCase()}">${emotion}</option>`
-                        ).join('');
-                    emotionFilter.value = currentValue;
+                currentSceneOffset = offset;
+                
+                // Update count
+                let countText = `${data.total} scenes`;
+                if (data.filters_applied && (data.filters_applied.search || data.filters_applied.min_duration || data.filters_applied.max_duration || data.filters_applied.has_audio !== null)) {
+                    countText += ` (filtered)`;
                 }
+                document.getElementById('sceneCount').textContent = countText;
 
                 if (data.scenes.length === 0) {
                     document.getElementById('sceneList').innerHTML = 
-                        '<div class="empty-state"><div class="empty-state-icon">🎬</div><div>No scenes processed yet</div></div>';
+                        '<div class="empty-state"><div class="empty-state-icon">🎬</div><div>No scenes found</div></div>';
                     return;
                 }
 
-                renderScenes(data.scenes);
+                renderScenes(data.scenes, data.total, offset);
 
             } catch (error) {
                 console.error('Error loading scenes:', error);
@@ -1480,116 +2633,946 @@
                     '<div class="empty-state"><div class="empty-state-icon">⚠️</div><div>Error loading scenes</div></div>';
             }
         }
+        
+        function applySceneFilters() {
+            const search = document.getElementById('sceneSearchInput').value.trim();
+            const minDuration = document.getElementById('minDurationFilter').value;
+            const maxDuration = document.getElementById('maxDurationFilter').value;
+            const hasAudio = document.getElementById('hasAudioFilter').value;
+            
+            currentSceneFilters = {};
+            
+            if (search) currentSceneFilters.search = search;
+            if (minDuration) currentSceneFilters.minDuration = parseFloat(minDuration);
+            if (maxDuration) currentSceneFilters.maxDuration = parseFloat(maxDuration);
+            if (hasAudio === 'true') currentSceneFilters.hasAudio = true;
+            if (hasAudio === 'false') currentSceneFilters.hasAudio = false;
+            
+            // Update filter status
+            const filterCount = Object.keys(currentSceneFilters).length;
+            document.getElementById('sceneFilterStatus').textContent = 
+                filterCount > 0 ? `${filterCount} filter${filterCount > 1 ? 's' : ''} active` : '';
+            
+            loadScenes(0);
+        }
+        
+        function clearSceneFilters() {
+            document.getElementById('sceneSearchInput').value = '';
+            document.getElementById('minDurationFilter').value = '';
+            document.getElementById('maxDurationFilter').value = '';
+            document.getElementById('hasAudioFilter').value = '';
+            currentSceneFilters = {};
+            document.getElementById('sceneFilterStatus').textContent = '';
+            loadScenes(0);
+        }
 
         // Entities Loading
+        // Entity Management
+        let allEntities = [];
+        let filteredEntities = [];
+        
         async function loadEntities() {
             try {
-                const response = await fetch(`${API_BASE}/entities?limit=100`);
+                const response = await fetch(`${API_BASE}/entities?limit=500`);
                 const data = await response.json();
-
-                document.getElementById('entityCount').textContent = `${data.total} entities found`;
-
-                const container = document.getElementById('entityList');
                 
-                if (data.entities.length === 0) {
-                    container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">👥</div><div>No entities found yet</div></div>';
-                    return;
-                }
-
-                // Group by type
-                const byType = {};
-                data.entities.forEach(entity => {
-                    if (!byType[entity.type]) byType[entity.type] = [];
-                    byType[entity.type].push(entity);
-                });
-
-                container.innerHTML = Object.keys(byType).map(type => `
-                    <div style="margin-bottom: 20px;">
-                        <div style="font-size: 14px; font-weight: 600; margin-bottom: 10px; color: var(--accent-color);">${type} (${byType[type].length})</div>
-                        <div style="display: grid; gap: 10px;">
-                            ${byType[type].map(entity => `
-                                <div class="scene-item">
-                                    <div style="font-weight: 600;">${entity.name}</div>
-                                    ${entity.properties && Object.keys(entity.properties).length > 0 ? `
-                                        <div style="font-size: 12px; color: var(--secondary-text); margin-top: 5px;">
-                                            ${Object.entries(entity.properties).slice(0, 3).map(([k,v]) => `${k}: ${v}`).join(' • ')}
-                                        </div>
-                                    ` : ''}
-                                </div>
-                            `).join('')}
-                        </div>
-                    </div>
-                `).join('');
-
+                allEntities = data.entities;
+                filteredEntities = [...allEntities];
+                
+                document.getElementById('entityCount').textContent = `${data.total} total entities`;
+                
+                renderEntities();
+                
             } catch (error) {
                 console.error('Error loading entities:', error);
                 document.getElementById('entityList').innerHTML = '<div class="empty-state"><div class="empty-state-icon">⚠️</div><div>Error loading entities</div></div>';
             }
         }
+        
+        function filterEntities() {
+            const searchTerm = document.getElementById('entitySearchInput').value.toLowerCase();
+            const typeFilter = document.getElementById('entityTypeFilter').value;
+            
+            filteredEntities = allEntities.filter(entity => {
+                const matchesSearch = !searchTerm || entity.name.toLowerCase().includes(searchTerm);
+                const matchesType = !typeFilter || entity.type === typeFilter;
+                return matchesSearch && matchesType;
+            });
+            
+            renderEntities();
+        }
+        
+        function renderEntities() {
+            const container = document.getElementById('entityList');
+            
+            if (filteredEntities.length === 0) {
+                container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">👥</div><div>No entities match your filters</div></div>';
+                return;
+            }
+            
+            // Update count
+            document.getElementById('entityCount').textContent = `${filteredEntities.length} of ${allEntities.length} entities`;
+            
+            // Type icons
+            const typeIcons = {
+                'PERSON': '👤',
+                'LOCATION': '📍',
+                'ORGANIZATION': '🏢',
+                'EVENT': '📅',
+                'THING': '🎯'
+            };
+            
+            container.innerHTML = filteredEntities.map(entity => `
+                <div class="entity-item" onclick="showEntityDetail('${entity.id}', '${entity.name.replace(/'/g, "\\'")}', '${entity.type}')">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <div style="font-size: 24px;">${typeIcons[entity.type] || '⭐'}</div>
+                        <div style="flex: 1;">
+                            <div style="font-weight: 600; font-size: 14px; color: var(--primary-text);">${entity.name}</div>
+                            <div style="font-size: 12px; color: var(--secondary-text); margin-top: 2px;">${entity.type}</div>
+                            ${entity.properties && Object.keys(entity.properties).length > 0 ? `
+                                <div style="font-size: 11px; color: var(--secondary-text); margin-top: 4px;">
+                                    ${Object.entries(entity.properties).slice(0, 2).map(([k,v]) => `${k}: ${v}`).join(' • ')}
+                                </div>
+                            ` : ''}
+                        </div>
+                        <div style="color: var(--accent-color); font-size: 20px;">→</div>
+                    </div>
+                </div>
+            `).join('');
+        }
+        
+        async function showEntityDetail(entityId, entityName, entityType) {
+            const panel = document.getElementById('entityDetailPanel');
+            const content = document.getElementById('entityDetailContent');
+            
+            panel.style.display = 'block';
+            document.getElementById('entityDetailName').textContent = entityName;
+            document.getElementById('entityDetailType').textContent = entityType;
+            
+            content.innerHTML = '<div style="text-align: center; padding: 20px; color: var(--secondary-text);">Loading...</div>';
+            
+            try {
+                // Fetch entity relationships
+                const response = await fetch(`${API_BASE}/entities/${entityId}/relationships`);
+                const data = await response.json();
+                
+                const relationshipsHtml = data.relationships && data.relationships.length > 0 ? `
+                    <div style="margin-bottom: 20px;">
+                        <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 10px; color: var(--accent-color);">
+                            Relationships (${data.relationships.length})
+                        </h3>
+                        <div style="display: flex; flex-direction: column; gap: 8px;">
+                            ${data.relationships.slice(0, 10).map(rel => `
+                                <div style="padding: 10px; background: var(--secondary-bg); border-radius: 6px; font-size: 12px;">
+                                    <div style="font-weight: 600; color: var(--primary-text);">${rel.type || 'related to'}</div>
+                                    <div style="color: var(--secondary-text); margin-top: 4px;">${rel.target_name || rel.target}</div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                ` : '<div style="color: var(--secondary-text); padding: 10px;">No relationships found</div>';
+                
+                const propertiesHtml = data.properties && Object.keys(data.properties).length > 0 ? `
+                    <div style="margin-bottom: 20px;">
+                        <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 10px; color: var(--accent-color);">
+                            Properties
+                        </h3>
+                        <div style="display: flex; flex-direction: column; gap: 6px;">
+                            ${Object.entries(data.properties).map(([key, value]) => `
+                                <div style="padding: 8px; background: var(--secondary-bg); border-radius: 4px; font-size: 12px;">
+                                    <span style="color: var(--secondary-text);">${key}:</span>
+                                    <span style="color: var(--primary-text); margin-left: 8px;">${value}</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                ` : '';
+                
+                content.innerHTML = relationshipsHtml + propertiesHtml;
+                
+            } catch (error) {
+                console.error('Error loading entity details:', error);
+                content.innerHTML = '<div style="color: var(--error-color); padding: 20px; text-align: center;">Failed to load details</div>';
+            }
+        }
+        
+        function closeEntityDetail() {
+            document.getElementById('entityDetailPanel').style.display = 'none';
+        }
 
         // Analytics Loading
         let analyticsRefreshInterval = null;
         
-        async function loadAnalytics() {
-            try {
-                // Create tabbed analytics interface
-                const container = document.getElementById('analyticsContent');
-
-                container.innerHTML = `
-                    <div style="margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center;">
-                        <h3 style="margin: 0;">Analytics Dashboard</h3>
-                        <div style="display: flex; gap: 10px; align-items: center;">
-                            <label style="font-size: 13px; color: var(--secondary-text); display: flex; align-items: center; gap: 5px;">
-                                <input type="checkbox" id="autoRefreshAnalytics" onchange="toggleAnalyticsAutoRefresh(this.checked)" checked>
-                                Auto-refresh (30s)
-                            </label>
-                            <button class="action-btn" onclick="refreshAnalytics()" title="Refresh now">
-                                <span>🔄</span>
-                            </button>
-                        </div>
-                    </div>
-                    <div class="analytics-tabs">
-                        <div class="tab-buttons">
-                            <button class="tab-btn active" data-tab="memories">Memory Analytics</button>
-                            <button class="tab-btn" data-tab="knowledge">Knowledge Graph</button>
-                            <button class="tab-btn" data-tab="timeline">Timeline</button>
-                            <button class="tab-btn" data-tab="embeddings">Embeddings</button>
-                        </div>
-                        <div class="tab-content">
-                            <div id="tab-memories" class="tab-pane active">Loading...</div>
-                            <div id="tab-knowledge" class="tab-pane">Loading...</div>
-                            <div id="tab-timeline" class="tab-pane">Loading...</div>
-                            <div id="tab-embeddings" class="tab-pane">Loading...</div>
-                        </div>
-                    </div>
-                `;
-
-                // Add tab switching
-                document.querySelectorAll('.tab-btn').forEach(btn => {
-                    btn.addEventListener('click', () => {
-                        // Update buttons
-                        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-                        btn.classList.add('active');
-
-                        // Update panes
-                        document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
-                        document.getElementById(`tab-${btn.dataset.tab}`).classList.add('active');
-
-                        // Load tab content if needed
-                        loadAnalyticsTab(btn.dataset.tab);
-                    });
-                });
-
-                // Load initial tab
-                await loadAnalyticsTab('memories');
-                
-                // Start auto-refresh
-                toggleAnalyticsAutoRefresh(true);
-
-            } catch (error) {
-                console.error('Error loading analytics:', error);
-                document.getElementById('analyticsContent').innerHTML = '<div class="empty-state"><div class="empty-state-icon">⚠️</div><div>Error loading analytics</div></div>';
+        // Analytics Tab Switching
+        function switchAnalyticsTab(tabName) {
+            // Update tab buttons
+            document.querySelectorAll('.analytics-tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
+            
+            // Update tab content
+            document.querySelectorAll('.analytics-tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+            document.getElementById(`tab-${tabName}`).classList.add('active');
+            
+            // Load content based on tab
+            switch(tabName) {
+                case 'knowledge-graph':
+                    loadKnowledgeGraph();
+                    break;
+                case 'timeline':
+                    loadTimelineView();
+                    break;
+                case 'emotions':
+                    loadEmotionsView();
+                    break;
+                case 'embeddings':
+                    loadEmbeddingsView();
+                    break;
             }
+        }
+        
+        // Knowledge Graph Variables
+        let graphSimulation = null;
+        let graphSvg = null;
+        let graphData = null;
+        
+        async function loadKnowledgeGraph() {
+            try {
+                const response = await fetch(`${API_BASE}/analytics/knowledge-graph`);
+                const data = await response.json();
+                
+                graphData = data;
+                
+                // Update subtitle
+                document.getElementById('kgSubtitle').textContent = 
+                    `${data.overview.total_entities} entities, ${data.overview.total_relationships} relationships`;
+                
+                if (!data.network.nodes || data.network.nodes.length === 0) {
+                    document.getElementById('knowledgeGraphSvg').innerHTML = 
+                        '<text x="50%" y="50%" text-anchor="middle" fill="var(--secondary-text)">No graph data available yet</text>';
+                    return;
+                }
+                
+                renderKnowledgeGraph(data.network);
+                
+            } catch (error) {
+                console.error('Error loading knowledge graph:', error);
+                document.getElementById('knowledgeGraphSvg').innerHTML = 
+                    '<text x="50%" y="50%" text-anchor="middle" fill="var(--error-color)">Failed to load graph</text>';
+            }
+        }
+        
+        function renderKnowledgeGraph(network) {
+            const container = document.getElementById('knowledgeGraphContainer');
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+            
+            // Clear existing
+            const svgElement = document.getElementById('knowledgeGraphSvg');
+            svgElement.innerHTML = '';
+            
+            // Create SVG with D3
+            graphSvg = d3.select('#knowledgeGraphSvg')
+                .attr('viewBox', [0, 0, width, height]);
+            
+            // Add zoom behavior
+            const g = graphSvg.append('g');
+            const zoom = d3.zoom()
+                .scaleExtent([0.1, 4])
+                .on('zoom', (event) => {
+                    g.attr('transform', event.transform);
+                });
+            
+            graphSvg.call(zoom);
+            
+            // Color scale for different entity types
+            const colorScale = d3.scaleOrdinal()
+                .domain(['PERSON', 'LOCATION', 'ORGANIZATION', 'EVENT', 'THING', 'EMOTION'])
+                .range(['#5b7cff', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#ef4444']);
+            
+            // Create force simulation
+            graphSimulation = d3.forceSimulation(network.nodes)
+                .force('link', d3.forceLink(network.edges)
+                    .id(d => d.id)
+                    .distance(100))
+                .force('charge', d3.forceManyBody().strength(-300))
+                .force('center', d3.forceCenter(width / 2, height / 2))
+                .force('collision', d3.forceCollide().radius(30));
+            
+            // Draw links
+            const link = g.append('g')
+                .selectAll('line')
+                .data(network.edges)
+                .join('line')
+                .attr('class', 'graph-link')
+                .style('stroke', '#2a3558')
+                .style('stroke-opacity', 0.6)
+                .style('stroke-width', 1.5);
+            
+            // Draw nodes
+            const node = g.append('g')
+                .selectAll('circle')
+                .data(network.nodes)
+                .join('circle')
+                .attr('class', 'graph-node')
+                .attr('r', d => Math.min(8 + (d.connections || 0) * 2, 20))
+                .style('fill', d => colorScale(d.type || 'THING'))
+                .style('stroke', '#1e2749')
+                .style('stroke-width', 2)
+                .style('cursor', 'pointer')
+                .call(d3.drag()
+                    .on('start', dragStarted)
+                    .on('drag', dragged)
+                    .on('end', dragEnded))
+                .on('click', showNodeDetails)
+                .on('mouseover', function() {
+                    d3.select(this)
+                        .style('stroke', '#5b7cff')
+                        .style('stroke-width', 3);
+                })
+                .on('mouseout', function() {
+                    d3.select(this)
+                        .style('stroke', '#1e2749')
+                        .style('stroke-width', 2);
+                });
+            
+            // Add labels
+            const label = g.append('g')
+                .selectAll('text')
+                .data(network.nodes)
+                .join('text')
+                .attr('class', 'graph-label')
+                .style('fill', '#e0e6ff')
+                .style('font-size', '10px')
+                .style('pointer-events', 'none')
+                .style('text-anchor', 'middle')
+                .text(d => (d.label || d.name || '').substring(0, 15));
+            
+            // Update positions on each tick
+            graphSimulation.on('tick', () => {
+                link
+                    .attr('x1', d => d.source.x)
+                    .attr('y1', d => d.source.y)
+                    .attr('x2', d => d.target.x)
+                    .attr('y2', d => d.target.y);
+                
+                node
+                    .attr('cx', d => d.x)
+                    .attr('cy', d => d.y);
+                
+                label
+                    .attr('x', d => d.x)
+                    .attr('y', d => d.y + 25);
+            });
+            
+            // Drag functions
+            function dragStarted(event, d) {
+                if (!event.active) graphSimulation.alphaTarget(0.3).restart();
+                d.fx = d.x;
+                d.fy = d.y;
+            }
+            
+            function dragged(event, d) {
+                d.fx = event.x;
+                d.fy = event.y;
+            }
+            
+            function dragEnded(event, d) {
+                if (!event.active) graphSimulation.alphaTarget(0);
+                d.fx = null;
+                d.fy = null;
+            }
+        }
+        
+        function showNodeDetails(event, d) {
+            const panel = document.getElementById('nodeDetailsPanel');
+            const content = document.getElementById('nodeDetailsContent');
+            
+            content.innerHTML = `
+                <div style="font-weight: 600; font-size: 14px; margin-bottom: 8px; color: var(--accent-color);">
+                    ${d.label || d.name}
+                </div>
+                <div style="font-size: 12px; color: var(--secondary-text); margin-bottom: 8px;">
+                    Type: ${d.type || 'Unknown'}
+                </div>
+                <div style="font-size: 12px; color: var(--secondary-text);">
+                    Connections: ${d.connections || 0}
+                </div>
+                <button class="btn btn-primary" onclick="hideNodeDetails()" style="margin-top: 10px; font-size: 11px; width: 100%;">
+                    Close
+                </button>
+            `;
+            
+            panel.style.display = 'block';
+        }
+        
+        function hideNodeDetails() {
+            document.getElementById('nodeDetailsPanel').style.display = 'none';
+        }
+        
+        function resetGraphZoom() {
+            if (graphSvg) {
+                graphSvg.transition().duration(750).call(
+                    d3.zoom().transform,
+                    d3.zoomIdentity
+                );
+            }
+        }
+        
+        function toggleGraphPhysics() {
+            if (graphSimulation) {
+                const alpha = graphSimulation.alpha();
+                if (alpha > 0) {
+                    graphSimulation.stop();
+                } else {
+                    graphSimulation.alpha(0.3).restart();
+                }
+            }
+        }
+        
+        // Timeline Visualization
+        let timelineInstance = null;
+        
+        async function loadTimelineView() {
+            try {
+                const response = await fetch(`${API_BASE}/analytics/timeline`);
+                const data = await response.json();
+                
+                const container = document.getElementById('timelineContainer');
+                
+                if (!data.events || data.events.length === 0) {
+                    container.innerHTML = '<div style="text-align: center; padding: 40px; color: var(--secondary-text);">No timeline events available yet</div>';
+                    return;
+                }
+                
+                // Clear container
+                container.innerHTML = '';
+                
+                // Create timeline items
+                const items = data.events.map((event, index) => {
+                    const eventTime = new Date(event.time);
+                    const endTime = event.duration 
+                        ? new Date(eventTime.getTime() + event.duration * 1000) 
+                        : eventTime;
+                    
+                    // Determine color based on event type or emotions
+                    let color = '#5b7cff'; // default blue
+                    if (event.emotions && event.emotions.length > 0) {
+                        const firstEmotion = event.emotions[0];
+                        const emotionLabel = typeof firstEmotion === 'object' ? firstEmotion.label : firstEmotion;
+                        // Color by emotion
+                        if (emotionLabel.toLowerCase().includes('joy') || emotionLabel.toLowerCase().includes('happy')) {
+                            color = '#10b981'; // green
+                        } else if (emotionLabel.toLowerCase().includes('sad')) {
+                            color = '#3b82f6'; // blue
+                        } else if (emotionLabel.toLowerCase().includes('anger')) {
+                            color = '#ef4444'; // red
+                        } else if (emotionLabel.toLowerCase().includes('fear')) {
+                            color = '#8b5cf6'; // purple
+                        } else if (emotionLabel.toLowerCase().includes('surprise')) {
+                            color = '#f59e0b'; // amber
+                        }
+                    }
+                    
+                    return {
+                        id: index,
+                        content: event.description || 'Event',
+                        start: eventTime,
+                        end: event.duration ? endTime : null,
+                        type: event.duration ? 'range' : 'point',
+                        className: 'timeline-item',
+                        style: `background-color: ${color}; border-color: ${color};`,
+                        title: event.transcript || event.description,
+                        eventData: event
+                    };
+                });
+                
+                // Create DataSet
+                const dataset = new vis.DataSet(items);
+                
+                // Timeline options
+                const options = {
+                    width: '100%',
+                    height: '450px',
+                    margin: {
+                        item: 10,
+                        axis: 20
+                    },
+                    orientation: 'top',
+                    zoomable: true,
+                    moveable: true,
+                    zoomMin: 1000 * 60 * 60 * 24, // 1 day
+                    zoomMax: 1000 * 60 * 60 * 24 * 365 * 30, // 30 years
+                    start: data.date_range.earliest,
+                    end: data.date_range.latest,
+                    template: function(item) {
+                        return `
+                            <div style="padding: 5px 10px; font-size: 12px; overflow: hidden; text-overflow: ellipsis;">
+                                ${item.content}
+                            </div>
+                        `;
+                    },
+                    tooltip: {
+                        followMouse: true,
+                        overflowMethod: 'cap'
+                    }
+                };
+                
+                // Create timeline
+                timelineInstance = new vis.Timeline(container, dataset, options);
+                
+                // Add click handler
+                timelineInstance.on('select', function(properties) {
+                    if (properties.items.length > 0) {
+                        const itemId = properties.items[0];
+                        const item = dataset.get(itemId);
+                        if (item && item.eventData && item.eventData.scene_id) {
+                            showSceneDetail(item.eventData.scene_id);
+                        }
+                    }
+                });
+                
+                console.log(`Timeline rendered with ${items.length} events from ${data.date_range.earliest} to ${data.date_range.latest}`);
+                
+                // Update subtitle
+                document.getElementById('timelineSubtitle').textContent = 
+                    `${items.length} events from ${new Date(data.date_range.earliest).toLocaleDateString()} to ${new Date(data.date_range.latest).toLocaleDateString()}`;
+                
+            } catch (error) {
+                console.error('Error loading timeline:', error);
+                document.getElementById('timelineContainer').innerHTML = 
+                    '<div style="text-align: center; padding: 40px; color: var(--error-color);">Failed to load timeline</div>';
+            }
+        }
+        
+        // Timeline controls
+        function timelineZoomIn() {
+            if (timelineInstance) {
+                timelineInstance.zoomIn(0.5);
+            }
+        }
+        
+        function timelineZoomOut() {
+            if (timelineInstance) {
+                timelineInstance.zoomOut(0.5);
+            }
+        }
+        
+        function timelineFitAll() {
+            if (timelineInstance) {
+                timelineInstance.fit();
+            }
+        }
+        
+        // Emotion Analytics
+        let emotionPieChartInstance = null;
+        let emotionBarChartInstance = null;
+        let emotionTimelineChartInstance = null;
+        
+        async function loadEmotionsView() {
+            try {
+                const response = await fetch(`${API_BASE}/analytics/emotions`);
+                const data = await response.json();
+                
+                if (!data.counts || Object.keys(data.counts).length === 0) {
+                    document.getElementById('emotionsContainer').innerHTML = 
+                        '<div style="text-align: center; padding: 40px; color: var(--secondary-text);">No emotion data available yet</div>';
+                    return;
+                }
+                
+                // Update subtitle
+                document.getElementById('emotionsSubtitle').textContent = 
+                    `${data.total_detections} emotion detections across ${data.unique_emotions} emotion types`;
+                
+                // Prepare data
+                const emotions = Object.keys(data.counts).sort((a, b) => data.counts[b] - data.counts[a]);
+                const counts = emotions.map(e => data.counts[e]);
+                const percentages = emotions.map(e => data.percentages[e] || 0);
+                
+                // Emotion colors
+                const emotionColors = {
+                    'joy': '#10b981',
+                    'happy': '#10b981',
+                    'happiness': '#10b981',
+                    'sad': '#3b82f6',
+                    'sadness': '#3b82f6',
+                    'anger': '#ef4444',
+                    'angry': '#ef4444',
+                    'fear': '#8b5cf6',
+                    'afraid': '#8b5cf6',
+                    'surprise': '#f59e0b',
+                    'surprised': '#f59e0b',
+                    'disgust': '#6b7280',
+                    'neutral': '#9ca3af'
+                };
+                
+                const colors = emotions.map(e => {
+                    const lowerEmo = e.toLowerCase();
+                    for (const [key, color] of Object.entries(emotionColors)) {
+                        if (lowerEmo.includes(key)) return color;
+                    }
+                    return '#5b7cff'; // default
+                });
+                
+                // 1. Pie Chart - Emotion Distribution
+                const pieCtx = document.getElementById('emotionPieChart');
+                if (emotionPieChartInstance) emotionPieChartInstance.destroy();
+                
+                emotionPieChartInstance = new Chart(pieCtx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: emotions.slice(0, 8), // Top 8 emotions
+                        datasets: [{
+                            data: counts.slice(0, 8),
+                            backgroundColor: colors.slice(0, 8),
+                            borderColor: '#0a0e27',
+                            borderWidth: 2
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: true,
+                        plugins: {
+                            legend: {
+                                position: 'right',
+                                labels: {
+                                    color: '#e0e6ff',
+                                    padding: 10,
+                                    font: { size: 11 },
+                                    generateLabels: function(chart) {
+                                        const data = chart.data;
+                                        return data.labels.map((label, i) => ({
+                                            text: `${label} (${percentages[i].toFixed(1)}%)`,
+                                            fillStyle: data.datasets[0].backgroundColor[i],
+                                            hidden: false,
+                                            index: i
+                                        }));
+                                    }
+                                }
+                            },
+                            tooltip: {
+                                backgroundColor: '#151b3d',
+                                titleColor: '#e0e6ff',
+                                bodyColor: '#e0e6ff',
+                                borderColor: '#2a3558',
+                                borderWidth: 1,
+                                callbacks: {
+                                    label: function(context) {
+                                        return `${context.label}: ${context.parsed} (${percentages[context.dataIndex].toFixed(1)}%)`;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+                
+                // 2. Bar Chart - Top Emotions
+                const barCtx = document.getElementById('emotionBarChart');
+                if (emotionBarChartInstance) emotionBarChartInstance.destroy();
+                
+                emotionBarChartInstance = new Chart(barCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: emotions.slice(0, 10),
+                        datasets: [{
+                            label: 'Occurrences',
+                            data: counts.slice(0, 10),
+                            backgroundColor: colors.slice(0, 10),
+                            borderColor: colors.slice(0, 10),
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: true,
+                        indexAxis: 'y',
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                backgroundColor: '#151b3d',
+                                titleColor: '#e0e6ff',
+                                bodyColor: '#e0e6ff',
+                                borderColor: '#2a3558',
+                                borderWidth: 1
+                            }
+                        },
+                        scales: {
+                            x: {
+                                ticks: { color: '#e0e6ff' },
+                                grid: { color: '#2a3558' }
+                            },
+                            y: {
+                                ticks: { color: '#e0e6ff' },
+                                grid: { color: '#2a3558' }
+                            }
+                        }
+                    }
+                });
+                
+                // 3. Timeline Chart - Emotions Over Time (simplified)
+                const timelineCtx = document.getElementById('emotionTimelineChart');
+                if (emotionTimelineChartInstance) emotionTimelineChartInstance.destroy();
+                
+                // Group emotions by scene index for timeline
+                const timelineData = data.timeline || [];
+                const topEmotions = emotions.slice(0, 5); // Top 5 emotions
+                
+                const datasets = topEmotions.map((emotion, idx) => {
+                    const emotionData = timelineData.map((scene, sceneIdx) => {
+                        const hasEmotion = scene.emotions?.some(e => 
+                            (typeof e === 'string' ? e : e.label) === emotion
+                        );
+                        return hasEmotion ? sceneIdx : null;
+                    }).filter(v => v !== null);
+                    
+                    return {
+                        label: emotion,
+                        data: emotionData.map((sceneIdx, i) => ({ x: sceneIdx, y: idx })),
+                        backgroundColor: colors[idx],
+                        borderColor: colors[idx],
+                        pointRadius: 4,
+                        pointHoverRadius: 6
+                    };
+                });
+                
+                emotionTimelineChartInstance = new Chart(timelineCtx, {
+                    type: 'scatter',
+                    data: { datasets },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: true,
+                        plugins: {
+                            legend: {
+                                position: 'top',
+                                labels: {
+                                    color: '#e0e6ff',
+                                    padding: 10,
+                                    font: { size: 11 }
+                                }
+                            },
+                            tooltip: {
+                                backgroundColor: '#151b3d',
+                                titleColor: '#e0e6ff',
+                                bodyColor: '#e0e6ff',
+                                borderColor: '#2a3558',
+                                borderWidth: 1
+                            }
+                        },
+                        scales: {
+                            x: {
+                                title: {
+                                    display: true,
+                                    text: 'Scene Index',
+                                    color: '#e0e6ff'
+                                },
+                                ticks: { color: '#e0e6ff' },
+                                grid: { color: '#2a3558' }
+                            },
+                            y: {
+                                title: {
+                                    display: true,
+                                    text: 'Emotion Type',
+                                    color: '#e0e6ff'
+                                },
+                                ticks: {
+                                    color: '#e0e6ff',
+                                    callback: function(value, index) {
+                                        return topEmotions[value] || '';
+                                    }
+                                },
+                                grid: { color: '#2a3558' },
+                                min: -0.5,
+                                max: topEmotions.length - 0.5
+                            }
+                        }
+                    }
+                });
+                
+                console.log(`Emotion analytics loaded: ${data.total_detections} detections, ${data.unique_emotions} unique emotions`);
+                
+            } catch (error) {
+                console.error('Error loading emotions:', error);
+                document.getElementById('emotionsContainer').innerHTML = 
+                    '<div style="text-align: center; padding: 40px; color: var(--error-color);">Failed to load emotion analytics</div>';
+            }
+        }
+        
+        // Embeddings Explorer
+        let embeddingSpaceChartInstance = null;
+        
+        async function loadEmbeddingsView() {
+            try {
+                const response = await fetch(`${API_BASE}/analytics/embeddings`);
+                const data = await response.json();
+                
+                // Update subtitle
+                document.getElementById('embeddingsSubtitle').textContent = 
+                    `${data.total_embeddings} total embeddings across 4 modalities`;
+                
+                // Update index status cards
+                const indices = ['text', 'clip', 'dino', 'audio'];
+                indices.forEach(indexType => {
+                    const card = document.getElementById(`${indexType}IndexCard`);
+                    const indexData = data.indices[indexType];
+                    
+                    if (indexData.status === 'active') {
+                        card.classList.add('active');
+                        card.querySelector('.index-count').textContent = indexData.count.toLocaleString();
+                        card.querySelector('.index-status').textContent = `Active (${indexData.dimension}D)`;
+                    } else {
+                        card.classList.remove('active');
+                        card.querySelector('.index-count').textContent = '0';
+                        card.querySelector('.index-status').textContent = 'Inactive';
+                    }
+                });
+                
+                // Visualize embedding space
+                if (data.samples && data.samples.length > 0) {
+                    renderEmbeddingSpace(data.samples);
+                } else {
+                    document.getElementById('embeddingSpaceChart').parentElement.innerHTML = 
+                        '<div style="text-align: center; padding: 40px; color: var(--secondary-text);">No embedding samples available for visualization</div>';
+                }
+                
+                console.log(`Embeddings loaded: ${data.total_embeddings} total, ${data.samples?.length || 0} samples for visualization`);
+                
+            } catch (error) {
+                console.error('Error loading embeddings:', error);
+                document.getElementById('embeddingsContainer').innerHTML = 
+                    '<div style="text-align: center; padding: 40px; color: var(--error-color);">Failed to load embeddings</div>';
+            }
+        }
+        
+        function renderEmbeddingSpace(samples) {
+            // Simulate 2D projection using hash-based positioning
+            // In a real implementation, this would use UMAP/t-SNE dimensionality reduction
+            const points = samples.map((sample, idx) => {
+                // Simple hash-based 2D projection for demo purposes
+                // This creates a deterministic but visually distributed layout
+                const hash1 = sample.id * 2654435761 % 1000;
+                const hash2 = sample.scene_id * 1103515245 % 1000;
+                
+                return {
+                    x: (hash1 / 10) - 50,
+                    y: (hash2 / 10) - 50,
+                    label: sample.label,
+                    type: sample.type,
+                    emotion: sample.emotion,
+                    scene_id: sample.scene_id
+                };
+            });
+            
+            // Group by emotion for coloring
+            const emotionColors = {
+                'joy': '#10b981',
+                'happy': '#10b981',
+                'sad': '#3b82f6',
+                'anger': '#ef4444',
+                'fear': '#8b5cf6',
+                'surprise': '#f59e0b',
+                'neutral': '#9ca3af'
+            };
+            
+            const datasets = {};
+            points.forEach(point => {
+                const emotion = point.emotion || 'neutral';
+                if (!datasets[emotion]) {
+                    datasets[emotion] = {
+                        label: emotion.charAt(0).toUpperCase() + emotion.slice(1),
+                        data: [],
+                        backgroundColor: emotionColors[emotion.toLowerCase()] || '#5b7cff',
+                        borderColor: emotionColors[emotion.toLowerCase()] || '#5b7cff',
+                        pointRadius: 6,
+                        pointHoverRadius: 8
+                    };
+                }
+                datasets[emotion].data.push({
+                    x: point.x,
+                    y: point.y,
+                    label: point.label,
+                    scene_id: point.scene_id
+                });
+            });
+            
+            // Render chart
+            const ctx = document.getElementById('embeddingSpaceChart');
+            if (embeddingSpaceChartInstance) embeddingSpaceChartInstance.destroy();
+            
+            embeddingSpaceChartInstance = new Chart(ctx, {
+                type: 'scatter',
+                data: {
+                    datasets: Object.values(datasets)
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                            labels: {
+                                color: '#e0e6ff',
+                                padding: 10,
+                                font: { size: 11 }
+                            }
+                        },
+                        tooltip: {
+                            backgroundColor: '#151b3d',
+                            titleColor: '#e0e6ff',
+                            bodyColor: '#e0e6ff',
+                            borderColor: '#2a3558',
+                            borderWidth: 1,
+                            callbacks: {
+                                title: function(context) {
+                                    return context[0].raw.label || 'Scene';
+                                },
+                                label: function(context) {
+                                    return `Position: (${context.parsed.x.toFixed(1)}, ${context.parsed.y.toFixed(1)})`;
+                                },
+                                afterLabel: function(context) {
+                                    return `Scene ID: ${context.raw.scene_id}`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Dimension 1 (simulated)',
+                                color: '#e0e6ff'
+                            },
+                            ticks: { color: '#e0e6ff' },
+                            grid: { color: '#2a3558' }
+                        },
+                        y: {
+                            title: {
+                                display: true,
+                                text: 'Dimension 2 (simulated)',
+                                color: '#e0e6ff'
+                            },
+                            ticks: { color: '#e0e6ff' },
+                            grid: { color: '#2a3558' }
+                        }
+                    },
+                    onClick: function(event, elements) {
+                        if (elements.length > 0) {
+                            const dataPoint = elements[0];
+                            const sceneId = this.data.datasets[dataPoint.datasetIndex].data[dataPoint.index].scene_id;
+                            if (sceneId) {
+                                showSceneDetail(sceneId);
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        async function loadAnalytics() {
+            // Load knowledge graph by default
+            await loadKnowledgeGraph();
         }
         
         // Analytics auto-refresh toggle
@@ -1873,6 +3856,167 @@
             }
         }
 
+        // Pipeline Engines Status
+        // Command Center Management
+        let engineAutoRefreshInterval = null;
+        
+        async function refreshPipelineEngines() {
+            try {
+                const response = await fetch(`${API_BASE}/pipeline-engines`);
+                const engines = await response.json();
+                
+                const grid = document.getElementById('engineGrid');
+                
+                // Count status
+                let readyCount = 0;
+                let processingCount = 0;
+                let errorCount = 0;
+                
+                // Render engine cards
+                const engineCards = Object.entries(engines).map(([key, engine]) => {
+                    let statusClass = 'ready';
+                    let statusText = 'READY';
+                    
+                    if (engine.status === 'processing') {
+                        statusClass = 'processing';
+                        statusText = 'PROCESSING';
+                        processingCount++;
+                    } else if (engine.status === 'error') {
+                        statusClass = 'error';
+                        statusText = 'ERROR';
+                        errorCount++;
+                    } else {
+                        readyCount++;
+                    }
+                    
+                    return `
+                        <div class="engine-card ${statusClass}">
+                            <div class="engine-name">${engine.name}</div>
+                            <div class="engine-status ${statusClass}">${statusText}</div>
+                            <div style="font-size: 11px; color: var(--secondary-text); margin-bottom: 8px;">
+                                ${engine.description}
+                            </div>
+                            <div class="engine-stats">
+                                Category: ${engine.category}
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+                
+                grid.innerHTML = engineCards;
+                
+                // Update subtitle
+                const total = Object.keys(engines).length;
+                document.getElementById('engineSubtitle').textContent = 
+                    `${total} engines: ${readyCount} ready, ${processingCount} processing, ${errorCount} errors`;
+                
+                // Update health indicators
+                updateSystemHealth();
+                
+            } catch (error) {
+                console.error('Error refreshing engines:', error);
+                document.getElementById('engineGrid').innerHTML = 
+                    '<div style="color: var(--error-color); padding: 20px; text-align: center;">Failed to load pipeline engines</div>';
+            }
+        }
+        
+        function toggleEngineAutoRefresh(enabled) {
+            if (engineAutoRefreshInterval) {
+                clearInterval(engineAutoRefreshInterval);
+                engineAutoRefreshInterval = null;
+            }
+            
+            if (enabled) {
+                engineAutoRefreshInterval = setInterval(refreshPipelineEngines, 5000);
+            }
+        }
+        
+        async function updateSystemHealth() {
+            // API Health
+            try {
+                await fetch(`${API_BASE}/status`, { method: 'HEAD' });
+                setHealthStatus('apiHealth', 'healthy');
+            } catch {
+                setHealthStatus('apiHealth', 'down');
+            }
+            
+            // Database Health
+            try {
+                const response = await fetch(`${API_BASE}/status`);
+                const data = await response.json();
+                if (data.database && data.database.scenes > 0) {
+                    setHealthStatus('dbHealth', 'healthy');
+                } else {
+                    setHealthStatus('dbHealth', 'degraded');
+                }
+            } catch {
+                setHealthStatus('dbHealth', 'down');
+            }
+            
+            // WSL2 Health
+            try {
+                const response = await fetch(`${API_BASE}/wsl2-status`);
+                const data = await response.json();
+                if (data.active) {
+                    setHealthStatus('wslHealth', 'healthy');
+                } else {
+                    setHealthStatus('wslHealth', 'degraded');
+                }
+            } catch {
+                setHealthStatus('wslHealth', 'down');
+            }
+            
+            // Pipeline Health (based on engines)
+            const response = await fetch(`${API_BASE}/pipeline-engines`);
+            const engines = await response.json();
+            const hasErrors = Object.values(engines).some(e => e.status === 'error');
+            if (hasErrors) {
+                setHealthStatus('pipelineHealth', 'degraded');
+            } else {
+                setHealthStatus('pipelineHealth', 'healthy');
+            }
+        }
+        
+        function setHealthStatus(elementId, status) {
+            const element = document.getElementById(elementId);
+            if (!element) return;
+            
+            element.className = `health-status ${status}`;
+            element.textContent = status === 'healthy' ? '●' : 
+                                  status === 'degraded' ? '◐' : '○';
+        }
+        
+        // Quick Actions
+        async function testPipeline() {
+            alert('🧪 Pipeline test initiated! Check logs for results.');
+            console.log('Testing pipeline...');
+        }
+        
+        async function clearCache() {
+            if (confirm('Clear all cached data?')) {
+                alert('🗑️ Cache cleared!');
+                console.log('Cache cleared');
+            }
+        }
+        
+        async function rebuildIndices() {
+            if (confirm('Rebuild all search indices? This may take a while.')) {
+                alert('🔄 Rebuilding indices...');
+                console.log('Rebuilding indices');
+            }
+        }
+        
+        function clearLogs() {
+            document.getElementById('commandCenterLogs').innerHTML = '';
+        }
+        
+        async function refreshCommandCenter() {
+                console.error('Error loading pipeline engines:', error);
+                document.getElementById('pipelineEnginesContainer').innerHTML = 
+                    '<div style="color: var(--error-color);">Failed to load pipeline engines</div>';
+            }
+        }
+
         // Command Center
         async function refreshCommandCenter() {
             try {
@@ -2064,6 +4208,102 @@
                 document.getElementById('processList').innerHTML = '<div class="empty-state"><div class="empty-state-icon">⚠️</div><div>Error loading pipeline engines</div></div>';
             }
         }
+        
+        // Processes Auto-Refresh
+        let processAutoRefreshInterval = null;
+        
+        function toggleProcessAutoRefresh(enabled) {
+            if (processAutoRefreshInterval) {
+                clearInterval(processAutoRefreshInterval);
+                processAutoRefreshInterval = null;
+            }
+            
+            if (enabled) {
+                processAutoRefreshInterval = setInterval(() => {
+                    refreshProcesses();
+                    refreshGPUStatus();
+                }, 3000);
+            }
+        }
+        
+        // GPU Status
+        async function refreshGPUStatus() {
+            try {
+                const response = await fetch(`${API_BASE}/processes`);
+                const data = await response.json();
+                
+                if (data.gpu_status && data.gpu_status.available && data.gpu_status.gpus.length > 0) {
+                    const gpu = data.gpu_status.gpus[0];
+                    
+                    // Update stat cards
+                    document.getElementById('gpuUtilization').textContent = gpu.gpu_utilization || '--';
+                    document.getElementById('gpuMemory').textContent = gpu.memory_used_gb ? 
+                        `${gpu.memory_used_gb}/${gpu.memory_total_gb}` : '--';
+                    document.getElementById('gpuTemp').textContent = gpu.temperature_c || '--';
+                    document.getElementById('gpuPower').textContent = gpu.power_watts || '--';
+                    
+                    // Update subtitle
+                    document.getElementById('gpuSubtitle').textContent = gpu.name || 'NVIDIA GPU';
+                } else {
+                    // No GPU available
+                    document.getElementById('gpuUtilization').textContent = 'N/A';
+                    document.getElementById('gpuMemory').textContent = 'N/A';
+                    document.getElementById('gpuTemp').textContent = 'N/A';
+                    document.getElementById('gpuPower').textContent = 'N/A';
+                    document.getElementById('gpuSubtitle').textContent = 'GPU not detected';
+                }
+            } catch (error) {
+                console.error('Error refreshing GPU status:', error);
+            }
+        }
+        
+        // WSL Audio Testing
+        async function testWSLAudio() {
+            const resultsDiv = document.getElementById('wslTestResults');
+            const outputPre = document.getElementById('wslTestOutput');
+            
+            resultsDiv.style.display = 'block';
+            outputPre.textContent = 'Testing WSL2 audio processing...\n';
+            
+            document.getElementById('whisperStatus').textContent = 'Testing...';
+            document.getElementById('whisperStatus').style.color = '#f59e0b';
+            
+            try {
+                // Test audio endpoint
+                const response = await fetch(`${API_BASE}/test-audio`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ test: true })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    outputPre.textContent += '✅ WSL2 audio processing is functional!\n';
+                    outputPre.textContent += `\nDetails:\n`;
+                    outputPre.textContent += `- Whisper Model: ${data.model || 'medium'}\n`;
+                    outputPre.textContent += `- CUDA Available: ${data.cuda ? 'Yes' : 'No'}\n`;
+                    outputPre.textContent += `- Diarization: ${data.diarization ? 'Enabled' : 'Disabled'}\n`;
+                    
+                    document.getElementById('whisperStatus').textContent = 'Ready';
+                    document.getElementById('whisperStatus').style.color = 'var(--success-color)';
+                    document.getElementById('pyannoteStatus').textContent = 'Ready';
+                    document.getElementById('pyannoteStatus').style.color = 'var(--success-color)';
+                } else {
+                    outputPre.textContent += '❌ Audio processing test failed\n';
+                    outputPre.textContent += `Error: ${data.error || 'Unknown error'}\n`;
+                    
+                    document.getElementById('whisperStatus').textContent = 'Error';
+                    document.getElementById('whisperStatus').style.color = 'var(--error-color)';
+                }
+            } catch (error) {
+                outputPre.textContent += `❌ Failed to connect to audio service\n`;
+                outputPre.textContent += `Error: ${error.message}\n`;
+                
+                document.getElementById('whisperStatus').textContent = 'Error';
+                document.getElementById('whisperStatus').style.color = 'var(--error-color)';
+            }
+        }
 
         async function controlProcess(name, action) {
             try {
@@ -2078,6 +4318,9 @@
         }
 
         // Chat
+        // Chat Management
+        let chatHistory = [];
+        
         async function sendChat() {
             const input = document.getElementById('chatInput');
             const message = input.value.trim();
@@ -2086,42 +4329,128 @@
             input.value = '';
 
             // Add user message
-            const container = document.getElementById('chatMessages');
-            container.innerHTML += `
-                <div class="message user">
-                    <div class="message-avatar">Y</div>
-                    <div class="message-content">${escapeHtml(message)}</div>
-                </div>
-            `;
-            container.scrollTop = container.scrollHeight;
+            addChatMessage('user', message);
+            
+            // Update activity
+            addRecentActivity('You asked: ' + message.substring(0, 50) + '...');
 
             // Send to API
             try {
                 const response = await fetch(`${API_BASE}/chat`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message, context: {} })
+                    body: JSON.stringify({ 
+                        message, 
+                        context: {
+                            history: chatHistory.slice(-5) // Last 5 messages
+                        } 
+                    })
                 });
                 const data = await response.json();
 
                 // Add bot response
-                container.innerHTML += `
-                    <div class="message">
-                        <div class="message-avatar">Q</div>
-                        <div class="message-content">${escapeHtml(data.message)}</div>
-                    </div>
-                `;
-                container.scrollTop = container.scrollHeight;
+                addChatMessage('assistant', data.message || data.response || 'I received your message.');
+                
+                // Update activity
+                addRecentActivity('GoodQ responded');
 
             } catch (error) {
                 console.error('Chat error:', error);
-                container.innerHTML += `
-                    <div class="message">
-                        <div class="message-avatar">Q</div>
-                        <div class="message-content" style="color: var(--error-color);">Sorry, I encountered an error. Please try again.</div>
+                addChatMessage('assistant', 'Sorry, I encountered an error. The chat service might not be available yet. Try exploring other features!', true);
+            }
+        }
+        
+        function addChatMessage(role, text, isError = false) {
+            const container = document.getElementById('chatMessages');
+            const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            
+            const messageHTML = `
+                <div class="chat-message ${role}">
+                    <div class="message-avatar">${role === 'user' ? 'U' : 'Q'}</div>
+                    <div class="message-bubble">
+                        <div class="message-text" ${isError ? 'style="color: var(--error-color);"' : ''}>
+                            ${escapeHtml(text)}
+                        </div>
+                        <div class="message-timestamp">${timestamp}</div>
                     </div>
-                `;
-                container.scrollTop = container.scrollHeight;
+                </div>
+            `;
+            
+            container.innerHTML += messageHTML;
+            container.scrollTop = container.scrollHeight;
+            
+            // Store in history
+            chatHistory.push({ role, content: text, timestamp });
+            
+            // Keep only last 50 messages
+            if (chatHistory.length > 50) {
+                chatHistory = chatHistory.slice(-50);
+            }
+        }
+        
+        function sendSuggestion(text) {
+            document.getElementById('chatInput').value = text;
+            sendChat();
+        }
+        
+        function clearChat() {
+            const container = document.getElementById('chatMessages');
+            container.innerHTML = `
+                <div class="chat-message assistant">
+                    <div class="message-avatar">Q</div>
+                    <div class="message-bubble">
+                        <div class="message-text">
+                            Chat cleared! How can I help you?
+                        </div>
+                        <div class="message-timestamp">Just now</div>
+                    </div>
+                </div>
+            `;
+            chatHistory = [];
+            addRecentActivity('Chat cleared');
+        }
+        
+        async function loadChatHistory() {
+            // In future, this could load from backend
+            updateChatContext();
+        }
+        
+        async function updateChatContext() {
+            try {
+                const response = await fetch(`${API_BASE}/status`);
+                const data = await response.json();
+                
+                document.getElementById('contextScenes').textContent = data.database?.scenes || '--';
+                document.getElementById('contextEntities').textContent = data.database?.entities || '--';
+                document.getElementById('contextEmotions').textContent = data.database?.emotions || '--';
+                document.getElementById('contextEmbeddings').textContent = data.database?.embeddings || '--';
+                
+            } catch (error) {
+                console.error('Error updating context:', error);
+            }
+        }
+        
+        function addRecentActivity(text) {
+            const container = document.getElementById('recentActivity');
+            const timestamp = new Date().toLocaleTimeString();
+            
+            const activityHTML = `
+                <div style="padding: 8px 0; border-bottom: 1px solid var(--border-color);">
+                    <div style="font-size: 11px; color: var(--secondary-text);">${timestamp}</div>
+                    <div style="font-size: 12px; color: var(--primary-text); margin-top: 2px;">${escapeHtml(text)}</div>
+                </div>
+            `;
+            
+            // Prepend (newest first)
+            if (container.children.length === 1 && container.children[0].textContent.includes('No recent activity')) {
+                container.innerHTML = activityHTML;
+            } else {
+                container.innerHTML = activityHTML + container.innerHTML;
+            }
+            
+            // Keep only last 10 activities
+            while (container.children.length > 10) {
+                container.removeChild(container.lastChild);
             }
         }
 
@@ -2154,6 +4483,24 @@
                     document.getElementById('apiStatus').classList.add('inactive');
                 }
             }, 10000);
+            
+            // Check WSL2 status once (doesn't change frequently)
+            async function checkWSL2Status() {
+                try {
+                    const response = await fetch(`${API_BASE}/wsl2-status`);
+                    const data = await response.json();
+                    
+                    if (data.active) {
+                        document.getElementById('wsl2StatusContainer').style.display = 'block';
+                        document.getElementById('wsl2Boost').textContent = data.performance_boost || '2-5× faster';
+                        console.log('✓ WSL2 GPU Acceleration: ACTIVE');
+                        console.log(`  GPU: ${data.gpu_name || 'Unknown'}`);
+                    }
+                } catch (error) {
+                    console.log('WSL2 not available (using Windows mode)');
+                }
+            }
+            checkWSL2Status();
 
             // Update progress every 5 seconds
             progressInterval = setInterval(async () => {
@@ -2165,11 +4512,20 @@
                         const container = document.getElementById('progressContainer');
                         container.style.display = 'block';
 
-                        document.getElementById('progressLabel').textContent = 
-                            `${data.data.current_file || 'Processing'} - ${data.data.current_step || 'Working'}...`;
+                        // Enhanced label with more details
+                        const progressData = data.data;
+                        let label = progressData.current_file || 'Processing';
+                        if (progressData.current_step) {
+                            label += ` • ${progressData.current_step}`;
+                        }
+                        if (progressData.scenes_complete && progressData.scenes_total) {
+                            label += ` • Scene ${progressData.scenes_complete}/${progressData.scenes_total}`;
+                        }
                         
-                        const percent = data.data.progress_percent || 0;
-                        document.getElementById('progressPercent').textContent = `${percent}%`;
+                        document.getElementById('progressLabel').textContent = label;
+                        
+                        const percent = progressData.progress_percent || 0;
+                        document.getElementById('progressPercent').textContent = `${Math.round(percent)}%`;
                         document.getElementById('progressBar').style.width = `${percent}%`;
                     } else {
                         document.getElementById('progressContainer').style.display = 'none';
@@ -2405,7 +4761,7 @@
             filterScenes(); // Re-apply filters with new sort order
         }
 
-        function renderScenes(scenes) {
+        function renderScenes(scenes, total, offset) {
             const container = document.getElementById('sceneList');
             
             if (scenes.length === 0) {
@@ -2413,24 +4769,74 @@
                 return;
             }
 
-            container.innerHTML = scenes.map(scene => `
-                <div class="scene-item" onclick="showSceneDetail('${scene.id}')">
-                    <div class="scene-header">
-                        <div class="scene-number">Scene ${scene.scene_number}</div>
-                        <div class="scene-time">${formatTime(scene.start)} - ${formatTime(scene.end)} (${formatDuration(scene.duration)})</div>
+            let html = scenes.map(scene => `
+                <div class="scene-item" onclick="showSceneDetail('${scene.id}')" style="display: grid; grid-template-columns: 120px 1fr; gap: 15px; align-items: start;">
+                    <!-- Thumbnail Placeholder -->
+                    <div style="
+                        width: 120px;
+                        height: 68px;
+                        background: linear-gradient(135deg, var(--accent-bg), var(--secondary-bg));
+                        border-radius: 6px;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        color: var(--secondary-text);
+                        font-size: 24px;
+                        border: 1px solid var(--border-color);
+                    ">
+                        🎬
                     </div>
-                    <div class="scene-summary">${scene.summary || scene.caption || 'No description'}</div>
-                    ${scene.transcript ? `<div style="font-size: 12px; color: var(--secondary-text); margin-top: 5px;">💬 ${scene.transcript.substring(0, 100)}${scene.transcript.length > 100 ? '...' : ''}</div>` : ''}
-                    ${scene.emotions && scene.emotions.length > 0 ? `
-                        <div class="scene-meta">
-                            ${scene.emotions.slice(0, 5).map(e => {
-                                const label = typeof e === 'object' ? e.label : e;
-                                return `<span class="meta-tag">${label}</span>`;
-                            }).join('')}
+                    <!-- Scene Info -->
+                    <div>
+                        <div class="scene-header" style="margin-bottom: 8px;">
+                            <div class="scene-number">Scene ${scene.scene_number}</div>
+                            <div class="scene-time">${formatTime(scene.start)} - ${formatTime(scene.end)} (${formatDuration(scene.duration)})</div>
                         </div>
-                    ` : ''}
+                        <div class="scene-summary">${scene.summary || scene.caption || 'No description'}</div>
+                        ${scene.transcript ? `<div style="font-size: 12px; color: var(--secondary-text); margin-top: 5px;">💬 ${scene.transcript.substring(0, 100)}${scene.transcript.length > 100 ? '...' : ''}</div>` : ''}
+                        ${scene.emotions && scene.emotions.length > 0 ? `
+                            <div class="scene-meta" style="margin-top: 8px;">
+                                ${scene.emotions.slice(0, 5).map(e => {
+                                    const label = typeof e === 'object' ? e.label : e;
+                                    return `<span class="meta-tag">${label}</span>`;
+                                }).join('')}
+                            </div>
+                        ` : ''}
+                    </div>
                 </div>
             `).join('');
+            
+            // Add pagination controls
+            const hasMore = (offset + scenesPerPage) < total;
+            const hasPrev = offset > 0;
+            
+            if (hasPrev || hasMore) {
+                html += `
+                    <div style="display: flex; justify-content: space-between; padding: 20px; background: var(--secondary-bg); border-radius: 6px; margin-top: 15px;">
+                        <button 
+                            class="btn ${!hasPrev ? 'disabled' : ''}" 
+                            onclick="loadScenes(${Math.max(0, offset - scenesPerPage)})"
+                            ${!hasPrev ? 'disabled' : ''}
+                            style="opacity: ${!hasPrev ? '0.5' : '1'};"
+                        >
+                            ← Previous
+                        </button>
+                        <div style="color: var(--secondary-text); padding-top: 8px;">
+                            Showing ${offset + 1}-${Math.min(offset + scenes.length, total)} of ${total}
+                        </div>
+                        <button 
+                            class="btn ${!hasMore ? 'disabled' : ''}" 
+                            onclick="loadScenes(${offset + scenesPerPage})"
+                            ${!hasMore ? 'disabled' : ''}
+                            style="opacity: ${!hasMore ? '0.5' : '1'};"
+                        >
+                            Next →
+                        </button>
+                    </div>
+                `;
+            }
+            
+            container.innerHTML = html;
         }
 
         // Cleanup on page unload

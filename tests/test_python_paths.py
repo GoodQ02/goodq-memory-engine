@@ -7,9 +7,9 @@ import sys
 from pathlib import Path
 
 # Add project root to path
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from config.python_paths import get_config, validate_env, get_env_python, get_conda_exe
+from configs.python_paths import get_config, validate_env, get_env_python, get_conda_exe
 import logging
 
 logging.basicConfig(

@@ -10,7 +10,7 @@ from abc import ABC, abstractmethod
 
 # Add parent directory to path for config imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from config.python_paths import get_conda_run_command
+from configs.python_paths import get_conda_run_command
 
 
 class BaseAgent(ABC):

@@ -17,7 +17,7 @@ from typing import Dict, List, Optional, Any
 import logging
 
 # Import centralized path configuration
-from config.python_paths import get_conda_exe, get_env_python
+from configs.python_paths import get_conda_exe, get_env_python
 
 # Setup logging
 logging.basicConfig(

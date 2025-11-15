@@ -179,13 +179,15 @@
         /* Content Area */
         .content-area {
             flex: 1;
-            overflow-y: auto;
+            overflow: hidden;
             padding: 20px;
+            display: flex;
+            flex-direction: column;
         }
 
         .view {
             display: none;
-            height: calc(100vh - 60px);
+            flex: 1;
             overflow-y: auto;
             overflow-x: hidden;
         }
@@ -1885,24 +1887,27 @@
 
                 <!-- Analytics View -->
                 <div class="view" id="view-analytics">
-                    <!-- Analytics Tabs -->
-                    <div style="display: flex; gap: 5px; padding: 15px; background: var(--secondary-bg); border-bottom: 1px solid var(--border-color);">
-                        <button class="analytics-tab active" data-tab="knowledge-graph" onclick="switchAnalyticsTab('knowledge-graph')">
-                            🕸️ Knowledge Graph
-                        </button>
-                        <button class="analytics-tab" data-tab="timeline" onclick="switchAnalyticsTab('timeline')">
-                            📅 Timeline
-                        </button>
-                        <button class="analytics-tab" data-tab="emotions" onclick="switchAnalyticsTab('emotions')">
-                            😊 Emotions
-                        </button>
-                        <button class="analytics-tab" data-tab="embeddings" onclick="switchAnalyticsTab('embeddings')">
-                            🧬 Embeddings
-                        </button>
-                    </div>
-                    
-                    <!-- Knowledge Graph Tab -->
-                    <div class="analytics-tab-content active" id="tab-knowledge-graph">
+                    <div style="display: flex; flex-direction: column; height: 100%;">
+                        <!-- Analytics Tabs -->
+                        <div style="display: flex; gap: 5px; padding: 15px; background: var(--secondary-bg); border-bottom: 1px solid var(--border-color); flex-shrink: 0;">
+                            <button class="analytics-tab active" data-tab="knowledge-graph" onclick="switchAnalyticsTab('knowledge-graph')">
+                                🕸️ Knowledge Graph
+                            </button>
+                            <button class="analytics-tab" data-tab="timeline" onclick="switchAnalyticsTab('timeline')">
+                                📅 Timeline
+                            </button>
+                            <button class="analytics-tab" data-tab="emotions" onclick="switchAnalyticsTab('emotions')">
+                                😊 Emotions
+                            </button>
+                            <button class="analytics-tab" data-tab="embeddings" onclick="switchAnalyticsTab('embeddings')">
+                                🧬 Embeddings
+                            </button>
+                        </div>
+                        
+                        <!-- Tab Content Container -->
+                        <div style="flex: 1; overflow-y: auto; padding: 20px;">
+                            <!-- Knowledge Graph Tab -->
+                            <div class="analytics-tab-content active" id="tab-knowledge-graph">
                         <div class="card">
                             <div class="card-header">
                                 <div>
@@ -2034,10 +2039,11 @@
                             </div>
                         </div>
                     </div>
-                </div>
+                </div><!-- End tab content container -->
+            </div>
 
-                <!-- Command Center View (Consolidated) -->
-                <div class="view" id="view-command-center">
+            <!-- Command Center View (Consolidated) -->
+            <div class="view" id="view-command-center">
                     <!-- System Health & Quick Actions Row -->
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
                         <!-- System Health -->

@@ -121,7 +121,7 @@ if %ERRORLEVEL%==0 (
 
 REM Check 8: API server file exists
 echo [8/8] Checking Core Files...
-if exist "L:\goodq4all\api_server.py" (
+if exist "L:\goodq4all\scripts\api_server.py" (
     if exist "L:\goodq4all\scripts\watchdog_ingest.py" (
         echo       [PASS] Core scripts present
         set /a PASS_COUNT+=1

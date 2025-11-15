@@ -82,8 +82,8 @@ echo [PASS] Log directories OK
 echo.
 
 echo [TEST 6] Verifying API server file...
-if not exist "api_server.py" (
-    echo [FAIL] api_server.py not found
+if not exist "scripts\api_server.py" (
+    echo [FAIL] scripts\api_server.py not found
     pause
     exit /b 1
 )

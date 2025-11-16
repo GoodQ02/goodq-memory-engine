@@ -44,11 +44,11 @@ analysis:
 video:
   scene_detect:
     threshold: 30.0
-    min_scene_len_sec: 300.0  # 5 minutes minimum per scene
+    min_scene_len_sec: 300.0
     max_scenes: 100
-    entity_refine: false  # CRITICAL: Keep FALSE to prevent scene over-segmentation
+    entity_refine: false
     entity_sample_rate: 0.25
-    entity_min_duration: 300.0  # Match min_scene_len_sec to ensure consistency
+    entity_min_duration: 300.0
     entity_max_samples: 300
   scene_threshold: 0.3
   scene_threshold_overrides:
@@ -62,12 +62,11 @@ audio:
     model: pyannote/speaker-diarization@2.1
     min_speakers: 1
     max_speakers: 10
-    # VAD (Voice Activity Detection) Preprocessing - Dramatically reduces processing time
-    vad_enabled: true  # Enable Silero VAD to filter silence/noise before diarization
-    vad_threshold: 0.5  # 0.5=balanced, 0.6-0.7=stricter (ignores faint noise)
-    vad_min_speech_ms: 400  # Minimum speech segment duration (ms)
-    vad_min_silence_ms: 200  # Minimum silence between segments (ms)
-    vad_merge_gap_seconds: 1.0  # Merge segments closer than this (seconds)
+    vad_enabled: true
+    vad_threshold: 0.5
+    vad_min_speech_ms: 400
+    vad_min_silence_ms: 200
+    vad_merge_gap_seconds: 1.0
   events:
     enabled: true
     min_confidence: 0.6
@@ -129,3 +128,6 @@ knowledge_graph:
   max_hops: 3
   entity_deduplication: true
   similarity_threshold: 0.85
+steps:
+  audio_extraction:
+    skip_on_error: true

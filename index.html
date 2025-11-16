@@ -4362,29 +4362,39 @@
             // Update activity
             addRecentActivity('You asked: ' + message.substring(0, 50) + '...');
 
-            // Send to API
+            // Send to Control Agent API
             try {
-                const response = await fetch(`${API_BASE}/chat`, {
+                // Build context from recent chat history
+                const contextStr = chatHistory.slice(-3).map(m => `${m.role}: ${m.content}`).join('\n');
+                
+                const response = await fetch(`${API_BASE}/chat/control-agent`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ 
                         message, 
-                        context: {
-                            history: chatHistory.slice(-5) // Last 5 messages
-                        } 
+                        context: contextStr || null
                     })
                 });
                 const data = await response.json();
 
-                // Add bot response
-                addChatMessage('assistant', data.message || data.response || 'I received your message.');
-                
-                // Update activity
-                addRecentActivity('GoodQ responded');
+                if (data.success) {
+                    // Add Control Agent response
+                    const botMessage = data.response || 'I received your message.';
+                    addChatMessage('assistant', botMessage);
+                    
+                    // Update activity with model info
+                    const modelInfo = data.model ? ` (via ${data.model})` : '';
+                    addRecentActivity(`Control Agent responded${modelInfo}`);
+                } else {
+                    // Handle error response
+                    addChatMessage('assistant', data.response || 'Sorry, I encountered an error.', true);
+                    addRecentActivity('Control Agent error');
+                }
 
             } catch (error) {
                 console.error('Chat error:', error);
-                addChatMessage('assistant', 'Sorry, I encountered an error. The chat service might not be available yet. Try exploring other features!', true);
+                addChatMessage('assistant', '⚠️ Control Agent unavailable. Please ensure vLLM or Ollama is running in WSL.\n\nTry: wsl ~/vllm_server/scripts/start_all_servers.sh', true);
+                addRecentActivity('Chat error');
             }
         }
         

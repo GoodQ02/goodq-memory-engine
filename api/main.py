@@ -1,9 +1,10 @@
 from __future__ import annotations
 from typing import Any, Dict
 
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, Query, Body
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional, List, Any, Dict
+from pydantic import BaseModel
 
 app = FastAPI(title="GoodQ Retrieval API", version="0.1.0")
 
@@ -216,3 +217,59 @@ def get_knowledge_graph() -> Dict[str, Any]:
         "nodes": [],
         "links": []
     }
+
+
+class ChatRequest(BaseModel):
+    message: str
+    context: Optional[str] = None
+
+
+@app.post("/api/chat/control-agent")
+def chat_with_control_agent(request: ChatRequest) -> Dict[str, Any]:
+    """Chat with the Control Agent for pipeline diagnostics and help"""
+    try:
+        # Import Control Agent
+        from agents.control_agent import ControlAgent
+        from lib.llm_client import LLMClient
+        
+        # Initialize LLM client
+        llm = LLMClient()
+        
+        # Build context-aware prompt
+        system_prompt = """You are the GoodQ4All Control Agent, an AI assistant that helps users:
+- Diagnose pipeline errors and failures
+- Recommend configuration changes
+- Explain system status and logs
+- Suggest optimization strategies
+- Answer questions about the video processing pipeline
+
+Be concise, technical, and actionable. Format responses with markdown."""
+        
+        # Add context if provided
+        user_message = request.message
+        if request.context:
+            user_message = f"Context: {request.context}\n\nQuestion: {request.message}"
+        
+        # Get response from LLM
+        response = llm.chat(
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_message}
+            ],
+            max_tokens=500,
+            temperature=0.7
+        )
+        
+        return {
+            "success": True,
+            "response": response,
+            "model": llm.get_active_model(),
+            "timestamp": __import__('datetime').datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e),
+            "response": "Control Agent is currently unavailable. Please check that vLLM or Ollama is running."
+        }

@@ -902,10 +902,10 @@ def run(
     if CONTROL_AGENT_AVAILABLE:
         try:
             control_agent = ControlAgent()
-            control_agent.start_monitoring()
-            logger.info("[CONTROL] Control Agent initialized and monitoring started")
+            # Control Agent auto-starts monitoring in __init__
+            typer.echo("[CONTROL] Control Agent initialized and monitoring")
         except Exception as e:
-            logger.warning(f"[CONTROL] Failed to initialize Control Agent: {e}")
+            typer.echo(f"[CONTROL] Failed to initialize Control Agent: {e}", err=True)
             control_agent = None
 
     for video_path in videos:

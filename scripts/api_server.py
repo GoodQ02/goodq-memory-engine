@@ -37,7 +37,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 # Import LLM client
 try:
-    from llm_client import LLMClient
+    from lib.llm_client import LLMClient
     print("✓ LLM client module imported")
 except ImportError as e:
     print(f"⚠ LLM client import failed: {e}")
@@ -110,7 +110,7 @@ class QueryRequest(BaseModel):
 
 class ChatMessage(BaseModel):
     message: str
-    context: Optional[Dict[str, Any]] = None
+    context: Optional[Any] = None  # Can be dict or string
 
 
 class CommandRequest(BaseModel):

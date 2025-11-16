@@ -1,0 +1,45 @@
+# Quick Windows Test Script
+# Save as test_vllm.ps1 and run from PowerShell
+
+Write-Host "Testing vLLM from Windows..." -ForegroundColor Cyan
+
+# Test 1: Can we reach the port?
+Write-Host "`n1. Testing port 8003 connectivity..." -ForegroundColor Yellow
+try {
+    $response = Invoke-WebRequest -Uri "http://localhost:8003/v1/models" -UseBasicParsing -TimeoutSec 5
+    Write-Host "   ✅ Port 8003 is reachable!" -ForegroundColor Green
+    Write-Host "   Response:" -ForegroundColor Gray
+    $response.Content | ConvertFrom-Json | ConvertTo-Json -Depth 3
+} catch {
+    Write-Host "   ❌ Cannot reach port 8003" -ForegroundColor Red
+    Write-Host "   Error: $($_.Exception.Message)" -ForegroundColor Red
+}
+
+# Test 2: Try a chat completion
+Write-Host "`n2. Testing chat completion..." -ForegroundColor Yellow
+$body = @{
+    model = "/mnt/l/_DATA/models/llm/huggingface/Llama-3.2-1B-Instruct"
+    messages = @(
+        @{
+            role = "user"
+            content = "Say: Test successful"
+        }
+    )
+    max_tokens = 10
+} | ConvertTo-Json
+
+try {
+    $response = Invoke-RestMethod -Uri "http://localhost:8003/v1/chat/completions" `
+        -Method Post `
+        -Body $body `
+        -ContentType "application/json" `
+        -TimeoutSec 30
+    
+    Write-Host "   ✅ Chat completion works!" -ForegroundColor Green
+    Write-Host "   Response: $($response.choices[0].message.content)" -ForegroundColor Gray
+} catch {
+    Write-Host "   ❌ Chat completion failed" -ForegroundColor Red
+    Write-Host "   Error: $($_.Exception.Message)" -ForegroundColor Red
+}
+
+Write-Host "`nDone!" -ForegroundColor Cyan

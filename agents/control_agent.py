@@ -98,6 +98,23 @@ class ControlAgent:
                 peak_gpu_usage_mb REAL,
                 file_size_mb REAL,
                 config_snapshot TEXT,
+                notes TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
+        # Table: File processing tracking (Phase 3)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS file_tracking (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                filename TEXT UNIQUE NOT NULL,
+                file_type TEXT,
+                size_bytes INTEGER,
+                status TEXT,
+                detected_at TEXT,
+                processing_started_at TEXT,
+                processing_completed_at TEXT,
+                error_message TEXT,
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP
             )
         """)
@@ -439,6 +456,160 @@ Keep it concise and technical. Focus on actionable solutions.
             return {
                 "status": "success",
                 "analysis": analysis
+            }
+    
+    # ========================================================================
+    # Phase 3: Pipeline Integration Callbacks
+    # ========================================================================
+    
+    def on_file_detected(self, filename: str, file_type: str, size_bytes: int):
+        """Callback when a new file is detected in the watch directory"""
+        print(f"[Control Agent] File detected: {filename} ({file_type}, {size_bytes / 1024**2:.1f} MB)")
+        
+        # Store in memory for tracking
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT OR IGNORE INTO file_tracking (filename, file_type, size_bytes, status, detected_at)
+            VALUES (?, ?, ?, 'detected', ?)
+        """, (filename, file_type, size_bytes, datetime.now().isoformat()))
+        conn.commit()
+        conn.close()
+    
+    def on_processing_start(self, filename: str, file_type: str):
+        """Callback when processing starts for a file"""
+        print(f"[Control Agent] Processing started: {filename}")
+        
+        # Update tracking
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE file_tracking
+            SET status = 'processing', processing_started_at = ?
+            WHERE filename = ?
+        """, (datetime.now().isoformat(), filename))
+        conn.commit()
+        conn.close()
+    
+    def on_processing_complete(self, filename: str, success: bool, error: str = None):
+        """Callback when processing completes (success or failure)"""
+        status = "completed" if success else "failed"
+        print(f"[Control Agent] Processing {status}: {filename}")
+        
+        # Update tracking
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE file_tracking
+            SET status = ?, processing_completed_at = ?, error_message = ?
+            WHERE filename = ?
+        """, (status, datetime.now().isoformat(), error, filename))
+        conn.commit()
+        conn.close()
+        
+        # If failed, trigger analysis
+        if not success and error:
+            print(f"[Control Agent] Analyzing failure for {filename}")
+            self.record_error(
+                error_type="ProcessingFailure",
+                error_msg=error,
+                context={'filename': filename, 'file_type': 'unknown'},
+                step="ingestion"
+            )
+    
+    def analyze_error(self, error: str, context: Dict[str, Any] = None) -> Dict[str, Any]:
+        """
+        Analyze an error using AI and provide diagnosis with recommendations
+        
+        Args:
+            error: The error message or exception
+            context: Additional context (step name, file info, system state, etc.)
+        
+        Returns:
+            Dictionary with diagnosis, root_cause, recommended_action, confidence
+        """
+        context = context or {}
+        
+        # Build prompt for LLM
+        prompt = f"""You are an expert in debugging data processing pipelines.
+
+ERROR: {error}
+
+CONTEXT:
+{json.dumps(context, indent=2)}
+
+Please analyze this error and provide:
+1. A brief diagnosis (1-2 sentences)
+2. The root cause
+3. Recommended action to fix it
+4. Confidence level (low/medium/high)
+
+Format your response as JSON:
+{{
+  "diagnosis": "...",
+  "root_cause": "...",
+  "recommended_action": "...",
+  "confidence": "high/medium/low",
+  "changes": "specific changes to make (if applicable)"
+}}"""
+        
+        try:
+            # Use LLM client to get diagnosis
+            response = self.llm.chat(
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.3,  # Lower temperature for more deterministic diagnostics
+                max_tokens=500
+            )
+            
+            # LLM client returns a dict with 'content' key
+            if isinstance(response, dict):
+                response_text = response.get('content', str(response))
+            else:
+                response_text = str(response)
+            
+            response_text = response_text.strip()
+            
+            # Extract JSON if wrapped in markdown code blocks
+            if "```json" in response_text:
+                response_text = response_text.split("```json")[1].split("```")[0].strip()
+            elif "```" in response_text:
+                response_text = response_text.split("```")[1].split("```")[0].strip()
+            
+            try:
+                diagnosis = json.loads(response_text)
+            except json.JSONDecodeError:
+                # Fallback: create structure from raw response
+                diagnosis = {
+                    "diagnosis": response_text[:200],
+                    "root_cause": "See diagnosis",
+                    "recommended_action": "manual_investigation",
+                    "confidence": "low",
+                    "raw_response": response_text
+                }
+            
+            # Record this analysis
+            self.record_error(
+                error_type=context.get('step', 'Unknown'),
+                error_msg=error,
+                context=context,
+                step=context.get('step', 'pipeline'),
+                fix_attempted=diagnosis.get('recommended_action', 'None'),
+                successful=False  # Not applied yet
+            )
+            
+            return diagnosis
+            
+        except Exception as e:
+            print(f"[Control Agent] LLM diagnosis failed: {e}")
+            import traceback
+            traceback.print_exc()
+            # Fallback diagnosis
+            return {
+                "diagnosis": f"Unable to get AI diagnosis: {str(e)}",
+                "root_cause": "LLM service unavailable or error in analysis",
+                "recommended_action": "check_llm_service",
+                "confidence": "low",
+                "error": str(e)
             }
 
 

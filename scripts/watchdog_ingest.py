@@ -2,6 +2,7 @@
 """
 GoodQ Watchdog - Automatic File Ingestion Monitor
 Monitors import_inbox for new files and automatically processes them.
+Now with AI-powered Control Agent integration for intelligent orchestration.
 """
 
 from __future__ import annotations
@@ -17,6 +18,18 @@ from queue import Queue, Empty
 from threading import Thread, Event, Lock
 import json
 import os
+
+# Add repo root to path for imports
+REPO_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO_ROOT))
+
+# Import Control Agent
+try:
+    from agents.control_agent import ControlAgent
+    CONTROL_AGENT_AVAILABLE = True
+except ImportError:
+    CONTROL_AGENT_AVAILABLE = False
+    logger.warning("Control Agent not available - running without AI orchestration")
 
 # Setup logging with UTF-8 encoding for file, ASCII for console
 logging.basicConfig(
@@ -193,6 +206,15 @@ class WatchdogProcessor:
         self.shutdown = Event()
         self.file_states: Dict[str, FileState] = {}
         
+        # Initialize Control Agent if available
+        self.control_agent = None
+        if CONTROL_AGENT_AVAILABLE:
+            try:
+                self.control_agent = ControlAgent()
+                logger.info("🤖 Control Agent initialized - AI orchestration enabled")
+            except Exception as e:
+                logger.warning(f"Failed to initialize Control Agent: {e}")
+        
         # Ensure directories exist
         self.processing_dir.mkdir(parents=True, exist_ok=True)
         self.processed_dir.mkdir(parents=True, exist_ok=True)
@@ -290,13 +312,17 @@ class WatchdogProcessor:
             logger.error(f"Failed to rename processed file: {e}")
     
     def process_file(self, file_path: Path, file_hash: str) -> bool:
-        """Process a single file"""
+        """Process a single file with AI Control Agent monitoring"""
         # Import progress tracker
         sys.path.insert(0, str(Path(__file__).parent.parent))
         from steps.common.progress_tracker import start_processing, finish_processing, add_error
         
         file_type = self.get_file_type(file_path)
         logger.info(f"Processing {file_type}: {file_path.name}")
+        
+        # Notify Control Agent of new file
+        if self.control_agent:
+            self.control_agent.on_file_detected(file_path.name, file_type, file_path.stat().st_size)
         
         # Start progress tracking
         total_steps = 20  # Estimate for video processing
@@ -312,6 +338,15 @@ class WatchdogProcessor:
             add_error(f"Failed to copy file: {e}", "file_copy")
             finish_processing("failed")
             self.registry.mark_failed(file_hash, file_path.name, str(e))
+            
+            # Let Control Agent analyze the failure
+            if self.control_agent:
+                diagnosis = self.control_agent.analyze_error(
+                    error=str(e),
+                    context={'step': 'file_copy', 'file': file_path.name}
+                )
+                logger.info(f"🤖 AI Diagnosis: {diagnosis.get('diagnosis', 'No diagnosis available')}")
+            
             return False
         
         # Call ingestion pipeline
@@ -319,6 +354,10 @@ class WatchdogProcessor:
         error_msg = None
         
         try:
+            # Notify Control Agent that processing is starting
+            if self.control_agent:
+                self.control_agent.on_processing_start(file_path.name, file_type)
+            
             if file_type == 'video':
                 success = self.ingest_video(processing_path)
             elif file_type == 'audio':
@@ -333,12 +372,28 @@ class WatchdogProcessor:
         except Exception as e:
             error_msg = str(e)
             logger.error(f"Processing failed: {e}", exc_info=True)
+            
+            # Let Control Agent analyze the failure
+            if self.control_agent:
+                diagnosis = self.control_agent.analyze_error(
+                    error=str(e),
+                    context={'step': 'ingestion', 'file': file_path.name, 'file_type': file_type}
+                )
+                logger.info(f"🤖 AI Diagnosis: {diagnosis.get('diagnosis', 'Processing error')}")
+                
+                # Check if Control Agent recommends a retry strategy
+                if diagnosis.get('recommended_action') == 'retry_with_changes':
+                    logger.info(f"🤖 AI Recommendation: {diagnosis.get('changes', 'No specific changes suggested')}")
         
         # Handle result
         if success:
             logger.info(f"[OK] Successfully processed: {file_path.name}")
             finish_processing("completed")
             self.registry.mark_processed(file_hash, file_path.name, 'success')
+            
+            # Notify Control Agent of success
+            if self.control_agent:
+                self.control_agent.on_processing_complete(file_path.name, success=True)
             
             # Move original to processed
             processed_path = self.processed_dir / f"PROCESSED_{file_path.name}"
@@ -359,6 +414,10 @@ class WatchdogProcessor:
             add_error(error_msg or 'Unknown error', "processing")
             finish_processing("failed")
             self.registry.mark_failed(file_hash, file_path.name, error_msg or 'Unknown error')
+            
+            # Notify Control Agent of failure
+            if self.control_agent:
+                self.control_agent.on_processing_complete(file_path.name, success=False, error=error_msg)
             
             # Move to failed
             failed_path = self.failed_dir / f"FAILED_{file_path.name}"

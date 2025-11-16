@@ -24,6 +24,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from lib.llm_client import LLMClient
 from agents.config_healer import ConfigHealer
 from agents.recovery_db import RecoveryDatabase
+from agents.recovery_strategies import RecoveryStrategies
 
 
 class ControlAgent:
@@ -52,6 +53,11 @@ class ControlAgent:
         # Initialize Recovery Database (Phase 2)
         self.recovery_db = RecoveryDatabase(
             db_path=self.data_dir / "recovery.db"
+        )
+        
+        # Initialize Recovery Strategies (Phase 3)
+        self.recovery_strategies = RecoveryStrategies(
+            db_path=self.data_dir / "control_memory.db"
         )
         
         # Setup directories
@@ -859,6 +865,196 @@ Format your response as JSON:
                 })
         
         return suggestions
+
+
+
+    # ============================================================================
+    # PHASE 3: SELF-HEALING & LEARNING METHODS
+    # ============================================================================
+    
+    def auto_heal_failure(
+        self,
+        error: Exception,
+        step_name: str,
+        context: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """
+        Automatically attempt to heal a failure using learned strategies.
+        
+        This is the main entry point for Phase 3 self-healing.
+        
+        Args:
+            error: The exception that occurred
+            step_name: Name of the failed step
+            context: Additional context about the failure
+            
+        Returns:
+            Dict with healing results
+        """
+        print(f"\n🚑 AUTO-HEAL: Analyzing failure in step '{step_name}'...")
+        
+        start_time = time.time()
+        error_message = str(error)
+        error_type = type(error).__name__
+        
+        # Get recommended strategy from knowledge base
+        strategy = self.recovery_strategies.get_recommended_strategy(error_message)
+        
+        result = {
+            'strategy_found': strategy is not None,
+            'error_type': error_type,
+            'error_message': error_message,
+            'step_name': step_name,
+            'success': False,
+            'recovery_time_seconds': 0,
+            'strategy_applied': None,
+            'recommendation': None
+        }
+        
+        if not strategy:
+            print(f"   ⚠️  No known strategy for this error type")
+            llm_suggestion = self._get_llm_recovery_suggestion(error_message, step_name, context)
+            result['recommendation'] = llm_suggestion
+            
+            self.recovery_strategies.record_recovery_attempt(
+                error_type=error_type,
+                error_message=error_message,
+                strategy_applied={'action': 'none', 'reason': 'no_known_strategy'},
+                outcome='failed',
+                success=False,
+                step_name=step_name,
+                context=context
+            )
+            return result
+        
+        print(f"   💡 Found strategy: {strategy.get('pattern_name', 'unknown')}")
+        print(f"   📊 Confidence: {strategy.get('confidence', 0)*100:.1f}%")
+        
+        result['strategy_applied'] = strategy
+        
+        try:
+            recovery_success = self._execute_recovery_strategy(
+                strategy=strategy,
+                step_name=step_name,
+                error=error,
+                context=context
+            )
+            
+            result['success'] = recovery_success
+            result['recovery_time_seconds'] = time.time() - start_time
+            
+            self.recovery_strategies.record_recovery_attempt(
+                error_type=error_type,
+                error_message=error_message,
+                strategy_applied=strategy,
+                outcome='success' if recovery_success else 'failed',
+                success=recovery_success,
+                step_name=step_name,
+                context=context,
+                duration_seconds=result['recovery_time_seconds']
+            )
+            
+            if recovery_success:
+                print(f"   ✅ Recovery successful in {result['recovery_time_seconds']:.2f}s")
+            else:
+                print(f"   ❌ Recovery failed")
+                result['recommendation'] = self._get_llm_recovery_suggestion(error_message, step_name, context)
+        
+        except Exception as recovery_error:
+            print(f"   ❌ Recovery exception: {recovery_error}")
+            result['success'] = False
+            result['recovery_error'] = str(recovery_error)
+        
+        return result
+    
+    def _execute_recovery_strategy(self, strategy: Dict[str, Any], step_name: str, error: Exception, context: Optional[Dict[str, Any]] = None) -> bool:
+        """Execute a recovery strategy"""
+        action = strategy.get('action', '')
+        params = strategy.get('params', {})
+        
+        print(f"   🔧 Executing action: {action}")
+        
+        if action == 'reduce_batch_size':
+            return self._heal_reduce_batch_size(step_name, params)
+        elif action == 'skip_audio_steps':
+            return self._heal_skip_audio_steps(step_name, params)
+        elif action == 'partition_audio':
+            return self._heal_partition_audio(step_name, params)
+        elif action == 'downgrade_model':
+            return self._heal_downgrade_model(step_name, params)
+        elif action == 'retry_with_backoff':
+            return self._heal_retry_with_backoff(step_name, params)
+        elif action == 'switch_to_cpu':
+            return self._heal_switch_to_cpu(step_name, params)
+        else:
+            print(f"   ⚠️  Unknown action: {action}")
+            return False
+    
+    def _heal_reduce_batch_size(self, step_name: str, params: Dict) -> bool:
+        """Reduce batch size to avoid memory errors"""
+        print(f"      Reducing batch size for {step_name}")
+        changes = {f'{step_name}.batch_size': params.get('batch_size', 'half')}
+        success, msg = self.healer.apply_healing_action('reduce_batch_size', {'step': step_name, 'params': params})
+        return success
+    
+    def _heal_skip_audio_steps(self, step_name: str, params: Dict) -> bool:
+        """Skip audio processing for silent/corrupted audio"""
+        print(f"      Marking {step_name} as skippable")
+        success, msg = self.healer.apply_healing_action('skip_step', {'step': step_name, 'params': params})
+        return success
+    
+    def _heal_partition_audio(self, step_name: str, params: Dict) -> bool:
+        """Partition long audio into chunks"""
+        chunk_size = params.get('chunk_size_minutes', 20)
+        print(f"      Enabling audio partitioning ({chunk_size} min chunks)")
+        success, msg = self.healer.apply_healing_action('partition_audio', {'step': step_name, 'chunk_size': chunk_size})
+        return success
+    
+    def _heal_downgrade_model(self, step_name: str, params: Dict) -> bool:
+        """Downgrade to smaller/faster model"""
+        to_model = params.get('to', 'medium')
+        print(f"      Downgrading model to: {to_model}")
+        success, msg = self.healer.apply_healing_action('downgrade_model', {'step': step_name, 'to_model': to_model})
+        return success
+    
+    def _heal_retry_with_backoff(self, step_name: str, params: Dict) -> bool:
+        """Enable retry with exponential backoff"""
+        max_retries = params.get('max_retries', 3)
+        print(f"      Enabling retry ({max_retries} attempts)")
+        success, msg = self.healer.apply_healing_action('enable_retry', {'step': step_name, 'max_retries': max_retries})
+        return success
+    
+    def _heal_switch_to_cpu(self, step_name: str, params: Dict) -> bool:
+        """Switch step to CPU fallback"""
+        print(f"      Switching to CPU fallback")
+        success, msg = self.healer.apply_healing_action('switch_to_cpu', {'step': step_name})
+        return success
+    
+    def _get_llm_recovery_suggestion(self, error_message: str, step_name: str, context: Optional[Dict[str, Any]] = None) -> str:
+        """Get LLM suggestion for recovery"""
+        prompt = f"Analyze this error and suggest recovery: Step={step_name}, Error={error_message}"
+        try:
+            response = self.llm.chat([{"role": "user", "content": prompt}])
+            return response
+        except Exception as e:
+            return f"LLM unavailable: {e}"
+    
+    def learn_from_success(self, step_name: str, execution_time_seconds: float, config_used: Dict[str, Any], context: Optional[Dict[str, Any]] = None):
+        """Learn from successful executions"""
+        self.recovery_strategies.record_recovery_attempt(
+            error_type='success',
+            error_message=f'Successful execution of {step_name}',
+            strategy_applied={'action': 'normal_execution', 'config': config_used},
+            outcome='success',
+            success=True,
+            step_name=step_name,
+            context=context,
+            duration_seconds=execution_time_seconds
+        )
+    
+    def get_learning_statistics(self) -> Dict[str, Any]:
+        """Get statistics about what the agent has learned"""
+        return self.recovery_strategies.get_statistics()
 
 
 def main():

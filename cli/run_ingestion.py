@@ -497,14 +497,77 @@ def _run_step(env_name: str, step_name: str, payload: Dict[str, Any], cfg_json: 
         except subprocess.TimeoutExpired as exc:
             if VERBOSE:
                 typer.echo(f'[step] !! {step_name} ({env_name}) timed out after {STEP_TIMEOUT}s', err=True)
+            
+            # PHASE 3: Attempt auto-healing for timeout
+            if CONTROL_AGENT_AVAILABLE:
+                try:
+                    agent = ControlAgent()
+                    healing_result = agent.auto_heal_failure(
+                        error=exc,
+                        step_name=step_name,
+                        context={'env': env_name, 'timeout': STEP_TIMEOUT}
+                    )
+                    
+                    if healing_result['success']:
+                        typer.echo(f"[heal] ✅ Timeout healed, retrying step...", err=True)
+                        # Retry the step after healing
+                        return _run_step_subprocess(step_name, env_name, inputs, meta, models_root)
+                    else:
+                        typer.echo(f"[heal] ❌ Could not heal timeout: {healing_result.get('recommendation', 'No strategy')}", err=True)
+                except Exception as heal_error:
+                    typer.echo(f"[heal] ⚠️ Healing failed: {heal_error}", err=True)
+            
             raise RuntimeError(f"Step {step_name} timed out after {STEP_TIMEOUT}s") from exc
+        
         if result.returncode != 0:
             stderr = result.stderr.strip()
             stdout = result.stdout.strip()
-            raise RuntimeError(f"Step {step_name} failed ({env_name})`nSTDOUT: {stdout}`nSTDERR: {stderr}")
+            error_msg = f"Step {step_name} failed ({env_name})\nSTDOUT: {stdout}\nSTDERR: {stderr}"
+            
+            # PHASE 3: Attempt auto-healing for step failure
+            if CONTROL_AGENT_AVAILABLE:
+                try:
+                    agent = ControlAgent()
+                    healing_result = agent.auto_heal_failure(
+                        error=RuntimeError(error_msg),
+                        step_name=step_name,
+                        context={
+                            'env': env_name,
+                            'returncode': result.returncode,
+                            'stdout': stdout[:500],  # First 500 chars
+                            'stderr': stderr[:500]
+                        }
+                    )
+                    
+                    if healing_result['success']:
+                        typer.echo(f"[heal] ✅ Step failure healed, retrying...", err=True)
+                        # Retry the step after healing
+                        return _run_step_subprocess(step_name, env_name, inputs, meta, models_root)
+                    else:
+                        typer.echo(f"[heal] ❌ Could not heal failure", err=True)
+                        if healing_result.get('recommendation'):
+                            typer.echo(f"[heal] 💡 Suggestion: {healing_result['recommendation'][:200]}", err=True)
+                except Exception as heal_error:
+                    typer.echo(f"[heal] ⚠️ Healing attempt failed: {heal_error}", err=True)
+            
+            raise RuntimeError(error_msg)
         duration = time.perf_counter() - start_ts
         if VERBOSE:
             typer.echo(f'[step] <- {step_name} ({env_name}) [{duration:.1f}s]')
+        
+        # PHASE 3: Learn from successful execution
+        if CONTROL_AGENT_AVAILABLE:
+            try:
+                agent = ControlAgent()
+                agent.learn_from_success(
+                    step_name=step_name,
+                    execution_time_seconds=duration,
+                    config_used={'env': env_name, 'timeout': STEP_TIMEOUT},
+                    context={'models_root': str(models_root)}
+                )
+            except Exception:
+                pass  # Don't fail on learning errors
+        
         if out_path.exists():
             output = out_path.read_text(encoding='utf-8').strip()
             return json.loads(output) if output else {}

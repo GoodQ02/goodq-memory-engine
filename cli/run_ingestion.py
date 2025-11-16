@@ -44,6 +44,14 @@ except ImportError:
         pass
     step_context = lambda *args, **kwargs: DummyTracker().step_context(*args, **kwargs)
 
+# Control Agent integration
+try:
+    from agents.control_agent import ControlAgent
+    CONTROL_AGENT_AVAILABLE = True
+except ImportError:
+    CONTROL_AGENT_AVAILABLE = False
+    ControlAgent = None
+
 # Knowledge graph integration
 try:
     from lib.knowledge_graph import KnowledgeGraph
@@ -825,6 +833,17 @@ def run(
         videos = videos[:max_videos]
 
     results: List[Dict[str, Any]] = []
+    
+    # Initialize Control Agent if available
+    control_agent = None
+    if CONTROL_AGENT_AVAILABLE:
+        try:
+            control_agent = ControlAgent()
+            control_agent.start_monitoring()
+            logger.info("[CONTROL] Control Agent initialized and monitoring started")
+        except Exception as e:
+            logger.warning(f"[CONTROL] Failed to initialize Control Agent: {e}")
+            control_agent = None
 
     for video_path in videos:
         typer.echo(f'Processing video: {video_path.name}')
@@ -1192,6 +1211,26 @@ def run(
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(results, ensure_ascii=False, indent=2), encoding='utf-8')
     typer.echo(f'Wrote results to {output}')
+    
+    # Generate Control Agent final report
+    if control_agent:
+        try:
+            control_agent.stop_monitoring()
+            report_path = workspace / "control_agent_report.md"
+            control_agent.generate_report(str(report_path))
+            logger.info(f"[CONTROL] Final report generated: {report_path}")
+            
+            # Display key insights
+            if VERBOSE:
+                insights = control_agent.get_insights()
+                if insights:
+                    typer.echo("\n" + "="*80)
+                    typer.echo("🤖 CONTROL AGENT INSIGHTS")
+                    typer.echo("="*80)
+                    typer.echo(insights)
+                    typer.echo("="*80 + "\n")
+        except Exception as e:
+            logger.warning(f"[CONTROL] Failed to generate final report: {e}")
 
 
 if __name__ == '__main__':

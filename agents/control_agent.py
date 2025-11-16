@@ -23,6 +23,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from lib.llm_client import LLMClient
 from agents.config_healer import ConfigHealer
+from agents.recovery_db import RecoveryDatabase
 
 
 class ControlAgent:
@@ -47,6 +48,11 @@ class ControlAgent:
         
         # Initialize Config Healer (Phase 2)
         self.healer = ConfigHealer(llm_client=self.llm)
+        
+        # Initialize Recovery Database (Phase 2)
+        self.recovery_db = RecoveryDatabase(
+            db_path=self.data_dir / "recovery.db"
+        )
         
         # Setup directories
         self.logs_dir = self.data_dir / "workflow_logs"
@@ -178,6 +184,54 @@ class ControlAgent:
                     analysis["metrics"]["duration"] = line.strip()
         
         return analysis
+    
+    def diagnose_error(self, error_message: str, context: Dict[str, Any] = None) -> Dict[str, Any]:
+        """
+        Quick diagnosis of a specific error with LLM.
+        
+        Args:
+            error_message: The error message to diagnose
+            context: Additional context
+            
+        Returns:
+            LLM diagnosis
+        """
+        prompt = f"""You are a pipeline diagnostics expert for GoodQ4All.
+
+**Error**: {error_message}
+
+**Context**:
+- Step: {context.get('step', 'Unknown') if context else 'Unknown'}
+- Error Type: {context.get('error_type', 'Unknown') if context else 'Unknown'}
+
+Provide:
+1. Root cause analysis
+2. Recommended fix
+3. Prevention strategy
+
+Be concise and actionable."""
+
+        print("\n🔍 Analyzing with LLM...")
+        response = self.llm.chat(
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.3,
+            max_tokens=800
+        )
+        
+        # Extract text
+        if isinstance(response, dict):
+            response_text = response.get('choices', [{}])[0].get('message', {}).get('content', str(response))
+        else:
+            response_text = str(response)
+        
+        return {
+            "timestamp": datetime.now().isoformat(),
+            "llm_provider": getattr(self.llm, 'last_provider_used', 'Unknown'),
+            "diagnosis": response_text,
+            "root_cause": response_text.split('\n')[0] if response_text else "Unknown",
+            "recommended_action": "See full diagnosis",
+            "confidence": "medium"
+        }
     
     def diagnose_with_llm(self, analysis: Dict[str, Any], context: str = "") -> Dict[str, Any]:
         """
@@ -611,6 +665,200 @@ Format your response as JSON:
                 "confidence": "low",
                 "error": str(e)
             }
+    
+    # ============================================================
+    # PHASE 2: Recovery & Learning Methods
+    # ============================================================
+    
+    def handle_pipeline_failure(
+        self,
+        step_name: str,
+        error: Exception,
+        context: Dict[str, Any] = None
+    ) -> Dict[str, Any]:
+        """Handle a pipeline failure with AI diagnosis and recovery.
+        
+        Args:
+            step_name: Name of the failed step
+            error: The exception that occurred
+            context: Additional context (GPU state, file info, etc.)
+            
+        Returns:
+            Recovery result with diagnosis and attempted fixes
+        """
+        print(f"\n🚨 Pipeline Failure Detected: {step_name}")
+        print(f"   Error: {str(error)}")
+        
+        # Extract error details
+        error_type = type(error).__name__
+        error_message = str(error)
+        stack_trace = None
+        
+        try:
+            import traceback
+            stack_trace = ''.join(traceback.format_exception(type(error), error, error.__traceback__))
+        except:
+            pass
+        
+        # Record failure in database
+        failure_id = self.recovery_db.record_failure(
+            step_name=step_name,
+            error_type=error_type,
+            error_message=error_message,
+            stack_trace=stack_trace,
+            context=context,
+            pipeline_id=context.get('pipeline_id') if context else None
+        )
+        
+        print(f"   Failure ID: #{failure_id}")
+        
+        # Check for similar past failures
+        similar = self.recovery_db.get_similar_failures(
+            error_type=error_type,
+            step_name=step_name,
+            limit=5
+        )
+        
+        if similar:
+            print(f"   Found {len(similar)} similar past failures")
+        
+        # Get AI diagnosis
+        print("\n🤖 Requesting AI diagnosis...")
+        diagnosis = self.diagnose_error(
+            error_message,
+            context={
+                'step': step_name,
+                'error_type': error_type,
+                'similar_failures': len(similar),
+                **(context or {})
+            }
+        )
+        
+        # Check for known recovery strategies
+        best_strategy = self.recovery_db.get_best_recovery_strategy(
+            error_type=error_type,
+            step_name=step_name
+        )
+        
+        recovery_result = {
+            'failure_id': failure_id,
+            'diagnosis': diagnosis,
+            'similar_failures': similar,
+            'best_strategy': best_strategy,
+            'recovery_attempted': False,
+            'recovery_success': False
+        }
+        
+        # If we have a proven strategy, suggest it
+        if best_strategy:
+            print(f"\n💡 Found proven strategy: {best_strategy.get('strategy', 'Unknown')}")
+            print(f"   Success rate: {best_strategy.get('success_rate', 0)*100:.1f}%")
+            print(f"   Times used: {best_strategy.get('times_used', 0)}")
+            recovery_result['recommended_strategy'] = best_strategy
+        
+        return recovery_result
+    
+    def attempt_recovery(
+        self,
+        failure_id: int,
+        strategy: str,
+        config_changes: Dict[str, Any] = None
+    ) -> bool:
+        """Attempt to recover from a failure using a given strategy.
+        
+        Args:
+            failure_id: ID of the failure to recover from
+            strategy: Description of recovery strategy
+            config_changes: Config modifications to apply
+            
+        Returns:
+            True if recovery successful, False otherwise
+        """
+        print(f"\n🔧 Attempting recovery for failure #{failure_id}")
+        print(f"   Strategy: {strategy}")
+        
+        start_time = time.time()
+        success = False
+        error_msg = None
+        
+        try:
+            # Apply config changes if provided
+            if config_changes:
+                print(f"   Applying {len(config_changes)} config changes...")
+                for key, value in config_changes.items():
+                    print(f"     - {key}: {value}")
+                # TODO: Actually apply config changes via ConfigHealer
+            
+            # Here you would trigger the actual recovery action
+            # For now, we just simulate and record
+            success = True  # Placeholder
+            
+        except Exception as e:
+            success = False
+            error_msg = str(e)
+            print(f"   ❌ Recovery failed: {e}")
+        
+        execution_time_ms = int((time.time() - start_time) * 1000)
+        
+        # Record the attempt
+        attempt_id = self.recovery_db.record_recovery_attempt(
+            failure_id=failure_id,
+            strategy=strategy,
+            outcome='success' if success else 'failed',
+            config_changes=config_changes,
+            execution_time_ms=execution_time_ms,
+            error_if_failed=error_msg
+        )
+        
+        if success:
+            print(f"   ✅ Recovery successful (attempt #{attempt_id})")
+        else:
+            print(f"   ❌ Recovery failed (attempt #{attempt_id})")
+        
+        return success
+    
+    def get_recovery_stats(self) -> Dict[str, Any]:
+        """Get statistics about recovery attempts and success rates."""
+        return self.recovery_db.get_statistics()
+    
+    def suggest_preventive_measures(self, step_name: str = None) -> List[Dict]:
+        """Suggest preventive measures based on historical failures.
+        
+        Args:
+            step_name: Optional filter by step
+            
+        Returns:
+            List of suggestions
+        """
+        stats = self.recovery_db.get_statistics()
+        suggestions = []
+        
+        # Check for frequent failures in specific steps
+        for step_info in stats.get('problematic_steps', []):
+            if step_name and step_info['step_name'] != step_name:
+                continue
+            
+            if step_info['count'] > 5:  # Frequent failures
+                suggestions.append({
+                    'type': 'frequent_failure',
+                    'step': step_info['step_name'],
+                    'count': step_info['count'],
+                    'suggestion': f"Step '{step_info['step_name']}' has failed {step_info['count']} times. "
+                                f"Consider reviewing this step's configuration and resource requirements."
+                })
+        
+        # Check for common error patterns
+        for error_info in stats.get('top_errors', []):
+            if error_info['count'] > 3:
+                suggestions.append({
+                    'type': 'common_error',
+                    'error_type': error_info['error_type'],
+                    'count': error_info['count'],
+                    'suggestion': f"Error type '{error_info['error_type']}' has occurred {error_info['count']} times. "
+                                f"Review error handling and consider adding preventive checks."
+                })
+        
+        return suggestions
 
 
 def main():

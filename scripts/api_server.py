@@ -1438,6 +1438,83 @@ async def chat(message: ChatMessage):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/api/chat/control-agent")
+async def control_agent_chat(message: ChatMessage):
+    """Chat with Control Agent - specialized for pipeline diagnostics and troubleshooting"""
+    try:
+        print(f"[CONTROL AGENT CHAT] Received: {message.message}")
+        
+        # Try to import Control Agent
+        try:
+            from agents.control_agent import ControlAgent
+            control_agent = ControlAgent()
+            
+            # Use Control Agent's LLM for diagnostic responses
+            if hasattr(control_agent, 'llm') and control_agent.llm:
+                print("[CONTROL AGENT] Using AI for diagnostic response...")
+                
+                # Build context from system state
+                context = {
+                    "type": "user_query",
+                    "query": message.message,
+                    "timestamp": datetime.now().isoformat()
+                }
+                
+                # Get AI response
+                response = control_agent.llm.chat(
+                    f"You are the GoodQ Control Agent, an AI that helps troubleshoot and optimize the video processing pipeline. "
+                    f"The user asks: {message.message}\n\n"
+                    f"Provide helpful, actionable guidance about pipeline operations, errors, or optimization.",
+                    context
+                )
+                
+                if response:
+                    return {
+                        "message": response,
+                        "context": {
+                            "agent": "control_agent",
+                            "llm_used": True,
+                            "model": control_agent.llm.model if hasattr(control_agent.llm, 'model') else "unknown",
+                            "timestamp": datetime.now().isoformat()
+                        }
+                    }
+        except Exception as agent_error:
+            print(f"[CONTROL AGENT] Error: {agent_error}")
+        
+        # Fallback: Use regular LLM
+        if llm and hasattr(llm, 'available') and llm.available:
+            print("[CONTROL AGENT] Using fallback LLM...")
+            response = llm.chat(
+                f"You are the GoodQ Control Agent. Help with: {message.message}",
+                {"role": "control_agent"}
+            )
+            if response:
+                return {
+                    "message": response,
+                    "context": {
+                        "agent": "control_agent_fallback",
+                        "llm_used": True,
+                        "timestamp": datetime.now().isoformat()
+                    }
+                }
+        
+        # Final fallback
+        return {
+            "message": "Control Agent is currently offline. LLM services are not available.",
+            "context": {
+                "agent": "control_agent",
+                "llm_used": False,
+                "error": "No LLM available",
+                "timestamp": datetime.now().isoformat()
+            }
+        }
+        
+    except Exception as e:
+        print(f"Error in control agent chat: {e}")
+        tb.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/api/command")
 async def execute_command(cmd: CommandRequest):
     """Execute system commands"""

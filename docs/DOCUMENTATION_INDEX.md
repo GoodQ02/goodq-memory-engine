@@ -73,6 +73,7 @@ When you need to understand the current state of the system and its evolution, r
 - **[project_management/status_reports/](project_management/status_reports/)** - Historical status reports
 - **[audits/AUDIT_INDEX.md](audits/AUDIT_INDEX.md)** - Full audits, diagnostics, and reports index
 - **[SHIP_PROFILE.md](SHIP_PROFILE.md)** - Shipping profile and supported surface
+- **[RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md)** - Pre-release validation and mission launch checklist
 
 ### 📜 History & Archives
 - **[history/PROJECT_HISTORY.md](history/PROJECT_HISTORY.md)** - Development timeline

@@ -61,6 +61,7 @@ For deeper dives into specific areas:
 - GPU / LLM / WSL2 / Watchdog: `docs/GPU_LLM_WSL_INDEX.md`, `docs/WATCHDOG_INDEX.md`
 - Analytics: `docs/ANALYTICS_INDEX.md`
 - Troubleshooting & fixes: `docs/TROUBLESHOOTING_INDEX.md`
+- Release validation: `docs/RELEASE_CHECKLIST.md`
 
 ---
 

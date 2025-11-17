@@ -1,5 +1,7 @@
 # 🚀 GoodQ4All - Quick Start Card
 
+> Role: High-speed launch card for operators. For full setup, edge cases, and troubleshooting, see `docs/user-guides/QUICK_START_CLEAN.md` and the supported entrypoints in `docs/SHIP_PROFILE.md`.
+
 ## Launch System (30 seconds)
 
 ```batch

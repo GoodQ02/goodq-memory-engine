@@ -1,5 +1,7 @@
 # 🚀 GoodQ4All Launch Instructions
 
+> Role: Detailed launch/runbook for the desktop companion. For the canonical Quick Start, see `docs/user-guides/QUICK_START_CLEAN.md`; for the official shipping surface and supported entrypoints, see `docs/SHIP_PROFILE.md`.
+
 ## Current Status: ✅ READY TO LAUNCH
 
 All systems have been audited and optimized. The system is clean and ready for production testing.

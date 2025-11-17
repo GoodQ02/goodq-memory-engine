@@ -69,6 +69,10 @@
 
 - `docs/CODE_CLEANUP_INDEX.md` – Index of lower-usage/legacy scripts for manual review.
 
+### Validation & Release
+
+- `docs/RELEASE_CHECKLIST.md` – Standard operating procedure for pre-release validation and mission launch.
+
 ---
 
 ## Environments Considered In-Scope

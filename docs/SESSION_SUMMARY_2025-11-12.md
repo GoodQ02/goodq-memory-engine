@@ -2,6 +2,8 @@
 **Date:** 2025-11-12
 **Status:** Major Progress Achieved ✅
 
+> Snapshot: This document summarizes a single optimization and cleanup session. For the canonical, up-to-date system status, use `docs/CURRENT_SYSTEM_STATUS.md` plus the latest entries in `docs/project-history/CHANGELOG.md`.
+
 ---
 
 ## 🎯 Completed This Session

@@ -52,6 +52,27 @@ Build a resilient, modular, ADHD/OCD‑friendly local agent for a multi‑role W
 - Resilience: Use retries with backoff; provide offline fallbacks where possible.
 - Handoff: Summarize changes, how to verify, and next steps.
 
+### Documentation Reading Order
+
+- Timeline first: Read `docs/project-history/CHANGELOG.md` (newest entries first) to understand recent changes.
+- Current state: Confirm with `docs/CURRENT_SYSTEM_STATUS.md` before making assumptions about behavior.
+- Architecture: Use `docs/ARCHITECTURE_REFERENCE.md` as the canonical source; use `docs/COMPREHENSIVE_ARCHITECTURE_RESEARCH_2025-11-15.md` as deep background.
+- User experience: For how humans interact with the system, read `docs/user-guides/QUICK_START_CLEAN.md` and `docs/guides/USER_GUIDE.md`.
+- Agent & session context: For narrative context and historical session logs, see `docs/AGENT_COMMS_INDEX.md` and the Copilot/release session summaries referenced there.
+
+### Key Workspace Indexes (For Agents)
+
+- Docs map: `docs/DOCUMENTATION_INDEX.md` – Top-level navigation for all documentation.
+- Shipping surface: `docs/SHIP_PROFILE.md` – Supported commands, environments, and entrypoints.
+- Environments: `docs/ENVIRONMENT_INDEX.md` – Mapping from env names to roles.
+- Phases & milestones: `docs/phases/PHASE_INDEX.md` – Phase reports and completion docs.
+- Audits & diagnostics: `docs/audits/AUDIT_INDEX.md` – Audits, test reports, and health checks.
+- GPU / LLM / WSL2 / Watchdog: `docs/GPU_LLM_WSL_INDEX.md` – GPU, LLM, WSL2, and Watchdog overview.
+- Analytics: `docs/ANALYTICS_INDEX.md` – Analytics dashboards, queries, and scripts.
+- Troubleshooting & fixes: `docs/TROUBLESHOOTING_INDEX.md` – Troubleshooting guides and fix reports.
+- Agent comms: `docs/AGENT_COMMS_INDEX.md` – Agent/Copilot communications and session logs.
+- Code cleanup map: `docs/CODE_CLEANUP_INDEX.md` – Lower-usage scripts and legacy utilities for future review.
+
 ## Security & Data Handling
 
 - Secrets: Only from `.env.local`; never log or hardcode keys.
@@ -105,4 +126,3 @@ Build a resilient, modular, ADHD/OCD‑friendly local agent for a multi‑role W
 
 - Do: Propose a plan, minimize scope, keep logs clear, use mocks, handle failures clearly.
 - Don’t: Expose secrets, assume constant network, introduce global side effects, or bypass approvals.
-

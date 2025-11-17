@@ -1,5 +1,7 @@
 # 🚀 GOODQ4ALL - QUICK START GUIDE
 
+> Note: For the canonical, most up-to-date Quick Start, see `docs/user-guides/QUICK_START_CLEAN.md`. This document is kept for historical context and live run snapshots.
+
 ## System is LIVE and RUNNING! 🎉
 
 ### Currently Active:

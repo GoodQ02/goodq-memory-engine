@@ -2,6 +2,8 @@
 ║                  GOODQ WATCHDOG QUICK START                  ║
 ╚══════════════════════════════════════════════════════════════╝
 
+NOTE: This is a text-mode quickstart helper and may reflect an earlier directory layout. For the canonical, up-to-date Watchdog behavior and paths, always prefer `docs/WATCHDOG_GUIDE.md`, `docs/WATCHDOG_QUICKREF.md`, and `docs/WATCHDOG_INDEX.md`.
+
 📂 DROP FILES HERE: L:\goodq4all\import_inbox\
 
 🚀 START WATCHDOG:

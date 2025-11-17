@@ -1,5 +1,7 @@
 # Troubleshooting: Empty Analysis Fields (No Tags, Captions, Transcripts)
 
+> Role: Specialized troubleshooting guide for “empty analysis / no output” situations where scenes exist but tags/captions/transcripts/emotions are missing. Use alongside the main `docs/TROUBLESHOOTING.md` for full coverage.
+
 ## Problem Description
 
 After ingesting videos, the database shows scenes and embeddings, but all AI analysis fields are empty:

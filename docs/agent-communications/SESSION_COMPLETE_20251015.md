@@ -3,6 +3,8 @@
 **Duration:** ~2 hours  
 **Status:** ✅ MISSION SUCCESS
 
+> Snapshot: Agent-facing summary of a specific diagnostic and fix session. For the canonical, up-to-date system status, rely on `docs/CURRENT_SYSTEM_STATUS.md` and the newest entries in `docs/project-history/CHANGELOG.md`.
+
 ---
 
 ## Session Overview

@@ -1,6 +1,8 @@
 ========================================
-GOODQ CURRENT STATUS CHECK
+GOODQ CURRENT STATUS CHECK (LEGACY SNAPSHOT)
 ========================================
+
+NOTE: This file is a historical status check. For the canonical, up-to-date system status, always use docs/CURRENT_SYSTEM_STATUS.md and the latest entries in docs/project-history/CHANGELOG.md.
 
 API Server:      ✓ RUNNING
                  http://localhost:3000

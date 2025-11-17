@@ -2,6 +2,8 @@
 **Date**: November 13, 2025  
 **Status**: ✅ **PRODUCTION SUCCESS**  
 
+> Snapshot: This document summarizes the GPU scene detection implementation session. For the canonical, up-to-date system status, use `docs/CURRENT_SYSTEM_STATUS.md` and the newest entries in `docs/project-history/CHANGELOG.md`.
+
 ## 🎯 Problem Statement
 
 User reported that scene detection was **stalling and freezing** the entire pipeline, preventing any videos from completing ingestion. The system would get stuck at scene detection, consuming 100% CPU and never completing.

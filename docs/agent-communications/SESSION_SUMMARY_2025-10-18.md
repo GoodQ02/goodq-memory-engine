@@ -4,6 +4,8 @@
 **Session Duration:** ~2 hours  
 **Status:** ✅ **CRITICAL BUG FIXED - READY FOR PRODUCTION TEST**
 
+> Snapshot: Internal session summary for a specific bug-fix window. For current status, agents should consult `docs/CURRENT_SYSTEM_STATUS.md` and the latest items in `docs/project-history/CHANGELOG.md`.
+
 ---
 
 ## 🐛 Bug Fixed: Scene Detection Loop Only Processed 1 Scene

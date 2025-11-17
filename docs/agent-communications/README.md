@@ -1,14 +1,14 @@
 # Agent Communications Index
 
-This directory contains agent-generated reports, updates, and communications documenting the development process.
+> Role: Overview of agent-generated reports, updates, and communications. Most files here are historical snapshots; for current technical behavior and status, rely on the canonical docs and indexes in `docs/` (architecture, phases, audits, GPU/LLM/WSL, Watchdog, troubleshooting).
 
 ## Organization
 
-- **Build Reports**: Status updates, completion summaries
-- **Audit Logs**: System audits, cleanup reports, verification logs
-- **Implementation Notes**: Feature implementation documentation
-- **Session Summaries**: End-of-session reports and next steps
-- **Diagnostic Reports**: Error analysis, troubleshooting summaries
+- **Build Reports**: Status updates, completion summaries.
+- **Audit Logs**: System audits, cleanup reports, verification logs.
+- **Implementation Notes**: Feature implementation documentation.
+- **Session Summaries**: End-of-session reports and next steps.
+- **Diagnostic Reports**: Error analysis, troubleshooting summaries.
 
 ## Contents
 

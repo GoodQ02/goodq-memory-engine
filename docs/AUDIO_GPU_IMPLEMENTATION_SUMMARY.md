@@ -1,5 +1,7 @@
 # Audio Pipeline GPU Optimization - Implementation Summary
 
+> Role: Canonical implementation summary for audio pipeline GPU optimization (diarization + transcription). For configuration and environment setup, see `docs/GPU_SETUP.md` and `docs/GPU_OPTIMIZATION_GUIDE.md`.
+
 ## 🎯 Objective
 
 Optimize audio processing (speaker diarization + transcription) with GPU acceleration to achieve **2-5x speedup** without compromising stability or accuracy.

@@ -1,5 +1,7 @@
 # VAD & GPU Optimization - COMPLETE ✅
 
+> Role: Canonical completion report for the combined VAD + GPU optimization work across audio steps. For implementation details see `docs/AUDIO_GPU_OPTIMIZATION.md`; for broader GPU context see `docs/GPU_OPTIMIZATION_GUIDE.md`.
+
 ## Executive Summary
 
 **Voice Activity Detection (VAD) has been FULLY IMPLEMENTED** across the entire GoodQ4All audio processing pipeline, eliminating wasted GPU cycles on silence and background noise.

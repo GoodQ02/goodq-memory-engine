@@ -1,6 +1,8 @@
 # 🎯 GOODQ SYSTEM STATUS REPORT
 ## Generated: 2025-11-10 21:45 UTC
 
+> Canonical status: This document is the primary source of truth for the current GoodQ system state. Treat other status reports and session summaries (for example `FINAL_SYSTEM_STATUS.md`, `PRODUCTION_SYSTEM_STATUS.md`, and `SESSION_SUMMARY_*.md`) as historical snapshots. Always pair this file with the latest entries in `docs/project-history/CHANGELOG.md` when reasoning about behavior.
+
 ## ✅ SYSTEM HEALTH: OPERATIONAL
 
 ### 📊 DATABASE STATISTICS

@@ -3,6 +3,8 @@
 **Duration:** ~4 hours comprehensive troubleshooting  
 **Status:** ✅ **ALL CRITICAL ISSUES RESOLVED**
 
+> Snapshot: Release-focused record of a specific post-restart recovery session. For the canonical, up-to-date system status, use `docs/CURRENT_SYSTEM_STATUS.md` and the newest entries in `docs/project-history/CHANGELOG.md`.
+
 ---
 
 ## 🎯 Mission Accomplished

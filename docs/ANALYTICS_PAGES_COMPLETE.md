@@ -1,5 +1,7 @@
 # Analytics Pages - Phase Complete ✓
 
+> Role: Implementation summary for the analytics pages and `/api/analytics/*` endpoints as of Phase 7. For how to drive analytics via CLI and queries, see `docs/ANALYTICS_QUICK_REFERENCE.md` and `docs/ANALYTICS_INDEX.md`.
+
 ## Summary
 Successfully wired in comprehensive analytics pages with **100% real data streams** - NO placeholders or mock data.
 

@@ -1,5 +1,7 @@
 # GPU Setup Guide
 
+> Role: Canonical GPU setup guide for GoodQ4All. Use this document to understand how GPU support is configured across environments. For runtime management patterns, see `docs/GPU_MANAGEMENT_GUIDE.md` and `docs/GPU_OPTIMIZATION_GUIDE.md`.
+
 ## Overview
 
 GoodQ4All pipeline uses GPU acceleration for compute-intensive tasks. This guide explains how to properly configure GPU support across all pipeline steps.

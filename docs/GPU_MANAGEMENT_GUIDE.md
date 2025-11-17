@@ -1,5 +1,7 @@
 # GPU Management Quick Reference
 
+> Role: Canonical reference for GPU management helpers and configuration APIs (for example `gpu_config.py` / `GPUManager`). For environment setup, see `docs/GPU_SETUP.md`; for end-to-end optimization guidance, see `docs/GPU_OPTIMIZATION_GUIDE.md`.
+
 ## Basic Usage
 
 ### In Pipeline Steps

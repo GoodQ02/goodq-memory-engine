@@ -1,5 +1,7 @@
 # GPU Pipeline Optimization Guide
 
+> Role: Canonical end-to-end GPU optimization guide. Start here when tuning GPU performance; use `docs/GPU_SETUP.md` for installation/enablement and `docs/GPU_MANAGEMENT_GUIDE.md` for management API details.
+
 ## Overview
 
 The GoodQ4All pipeline has been fully optimized for GPU acceleration. This guide explains the GPU configuration system and how to optimize performance.

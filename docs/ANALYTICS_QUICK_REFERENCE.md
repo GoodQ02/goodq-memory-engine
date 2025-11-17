@@ -1,5 +1,7 @@
 # GoodQ Analytics Quick Reference Guide
 
+> Role: Canonical quick reference for the analytics system (dashboards, queries, and configuration). For implementation status of web analytics pages, see `docs/ANALYTICS_PAGES_COMPLETE.md`; for related scripts and reports, see `docs/ANALYTICS_INDEX.md`.
+
 ## Overview
 The GoodQ Analytics system provides comprehensive insights into your video library through multi-modal analysis, LLM-powered insights, and interactive querying.
 

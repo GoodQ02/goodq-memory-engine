@@ -2,6 +2,8 @@
 **Date**: 2025-11-09  
 **Time**: 23:35 UTC
 
+> Snapshot: This report captures the system state at the end of a specific session on 2025-11-09. For the most up-to-date status, always refer to `docs/CURRENT_SYSTEM_STATUS.md` and the latest entries in `docs/project-history/CHANGELOG.md`.
+
 ## ✅ SYSTEM OPERATIONAL
 
 ### Core Infrastructure

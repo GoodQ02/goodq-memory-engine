@@ -1,5 +1,7 @@
 # GoodQ Watchdog - Automatic File Ingestion
 
+> Role: This is the primary, canonical user guide for the Watchdog automatic ingestion system. For quick commands, see `docs/WATCHDOG_QUICKREF.md`; for architecture diagrams, see `docs/diagrams/watchdog_flow.md`; for a high-level overview, see `docs/WATCHDOG_SUMMARY.md`. All other Watchdog docs should be read as supporting or historical context.
+
 ## Overview
 
 The GoodQ Watchdog is an automatic file monitoring and ingestion system that watches the `import_inbox` folder for new files and automatically processes them through the appropriate pipeline.

@@ -4,6 +4,8 @@
 **Scope:** Full repository deep-dive analysis  
 **Location:** L:\goodq4all\
 
+> Role: This document is a deep-dive research snapshot of the architecture as of 2025-11-15. For the canonical, always-current architecture reference (schemas and conventions), agents and users should prefer `docs/ARCHITECTURE_REFERENCE.md` and use this file as background context.
+
 ---
 
 ## 📋 EXECUTIVE SUMMARY

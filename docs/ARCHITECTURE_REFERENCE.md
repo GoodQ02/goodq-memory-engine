@@ -2,6 +2,8 @@
 **Last Updated:** 2025-10-15  
 **Purpose:** Definitive reference for data structures, conventions, and storage patterns
 
+> Role: This document is the primary, canonical architecture reference for GoodQ4All. For a longer narrative and full-system research view, see `docs/COMPREHENSIVE_ARCHITECTURE_RESEARCH_2025-11-15.md`. Agents should rely on this file first when reasoning about schemas, storage, and component responsibilities.
+
 ---
 
 ## Table of Contents

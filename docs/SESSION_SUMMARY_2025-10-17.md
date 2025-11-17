@@ -3,6 +3,8 @@
 **Agent**: GitHub Copilot CLI  
 **Status**: ✅ **ALL FIXES COMPLETE**
 
+> Snapshot: This document captures a single troubleshooting session on 2025-10-17. For the canonical, up-to-date system status, use `docs/CURRENT_SYSTEM_STATUS.md` and the latest entries in `docs/project-history/CHANGELOG.md`.
+
 ---
 
 ## Executive Summary

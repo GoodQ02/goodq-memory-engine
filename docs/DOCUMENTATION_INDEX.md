@@ -16,6 +16,15 @@
 | **Fix a problem** | [Troubleshooting Guide](TROUBLESHOOTING.md) |
 | **Deep dive technical** | [Technical Documentation](#-technical-documentation) |
 
+### 🤖 For Agents: Reading Order
+
+When you need to understand the current state of the system and its evolution, read in this order:
+
+1. **Latest timeline:** `docs/project-history/CHANGELOG.md` (newest entries first)
+2. **Current ground truth:** `docs/CURRENT_SYSTEM_STATUS.md`
+3. **Architecture:** `docs/ARCHITECTURE_REFERENCE.md` → `docs/COMPREHENSIVE_ARCHITECTURE_RESEARCH_2025-11-15.md`
+4. **User-facing behavior:** `docs/user-guides/QUICK_START_CLEAN.md` and `docs/guides/USER_GUIDE.md`
+
 ---
 
 ## 📖 Documentation Structure
@@ -27,16 +36,17 @@
 
 ### 📘 User Guides
 - **[guides/USER_GUIDE.md](guides/USER_GUIDE.md)** - Complete usage guide
-- **[WATCHDOG_GUIDE.md](WATCHDOG_GUIDE.md)** - Automatic file ingestion
+- **[WATCHDOG_GUIDE.md](WATCHDOG_GUIDE.md)** - Automatic file ingestion (see also WATCHDOG_INDEX.md)
 - **[WORKFLOW_VISUAL_GUIDE.md](WORKFLOW_VISUAL_GUIDE.md)** - Visual workflow diagrams
 
 ### 📋 Reference
-- **[QUICK_REFERENCE.md](QUICK_REFERENCE.md)** - Command reference
+- **[QUICK_REFERENCE.md](QUICK_REFERENCE.md)** - Command reference (see also reference/QUICK_INDEX.md)
 - **[WATCHDOG_QUICKREF.md](WATCHDOG_QUICKREF.md)** - Watchdog quick ref
 - **[reference/SCRIPTS_GUIDE.md](reference/SCRIPTS_GUIDE.md)** - Script documentation
-- **[reference/QUICK_REFERENCE_SETTINGS.md](reference/QUICK_REFERENCE_SETTINGS.md)** - Settings reference
+- **[reference/QUICK_REFERENCE_SETTINGS.md](reference/QUICK_REFERENCE_SETTINGS.md)** - Settings reference (see also reference/QUICK_INDEX.md)
 - **[reference/FIXES_QUICK_REFERENCE.txt](reference/FIXES_QUICK_REFERENCE.txt)** - Recent fixes summary
 - **[reference/PERFORMANCE_SUMMARY.txt](reference/PERFORMANCE_SUMMARY.txt)** - Performance stats
+- **[ANALYTICS_INDEX.md](ANALYTICS_INDEX.md)** - Analytics system overview and tools index
 
 ### 🔧 Technical Documentation
 - **[technical/KNOWLEDGE_GRAPH_IMPLEMENTATION.md](technical/KNOWLEDGE_GRAPH_IMPLEMENTATION.md)** - Graph architecture
@@ -61,16 +71,23 @@
 - **[project_management/SETTINGS_OPTIMIZED.md](project_management/SETTINGS_OPTIMIZED.md)** - Optimized settings
 - **[project_management/AUDIT_REPORT.md](project_management/AUDIT_REPORT.md)** - Project audit
 - **[project_management/status_reports/](project_management/status_reports/)** - Historical status reports
+- **[audits/AUDIT_INDEX.md](audits/AUDIT_INDEX.md)** - Full audits, diagnostics, and reports index
+- **[SHIP_PROFILE.md](SHIP_PROFILE.md)** - Shipping profile and supported surface
 
 ### 📜 History & Archives
 - **[history/PROJECT_HISTORY.md](history/PROJECT_HISTORY.md)** - Development timeline
 - **[project-history/CHANGELOG.md](project-history/CHANGELOG.md)** - Version changelog
-- **[history/README_pre_github.md](history/README_pre_github.md)** - Pre-GitHub state
 - **[project-history/PROJECT_RENAME_COMPLETE.md](project-history/PROJECT_RENAME_COMPLETE.md)** - Rename from zenml_project
 - **[history/archived_docs/](history/archived_docs/)** - Archived documentation
 
+### 🎬 Phases & Milestones
+- **[phases/PHASE_INDEX.md](phases/PHASE_INDEX.md)** - All phase reports and milestones
+
+### ⚙️ GPU, LLM & WSL2
+- **[GPU_LLM_WSL_INDEX.md](GPU_LLM_WSL_INDEX.md)** - GPU, LLM/vLLM, WSL2 and watchdog overview
+
 ### 🛠️ Troubleshooting & Support
-- **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** - Common issues and solutions
+- **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** - Common issues and solutions (see also TROUBLESHOOTING_INDEX.md)
 - **[TROUBLESHOOTING_EMPTY_ANALYSIS.md](TROUBLESHOOTING_EMPTY_ANALYSIS.md)** - Empty analysis debugging
 - **[WATCHDOG_CHANGELOG.md](WATCHDOG_CHANGELOG.md)** - Watchdog version history
 
@@ -80,7 +97,7 @@
 - **[MODEL_LOCKDOWN_QUICK_REF.md](MODEL_LOCKDOWN_QUICK_REF.md)** - Lockdown quick reference
 
 ### 💬 Development Communications
-- **[copilot_user_communications/](copilot_user_communications/)** - Agent/user session logs
+- **[copilot_user_communications/](copilot_user_communications/)** - Agent/user session logs (see also AGENT_COMMS_INDEX.md)
 - **[MISSION_BRIEFS/](MISSION_BRIEFS/)** - Mission-specific briefings
 
 ---

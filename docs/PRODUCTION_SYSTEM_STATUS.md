@@ -2,6 +2,8 @@
 **Generated:** 2025-11-09 03:23 UTC  
 **Status:** ✅ OPERATIONAL - API LIVE, UI FUNCTIONAL, REAL DATA STREAMS ACTIVE
 
+> Snapshot: This report captures production status at a specific time. For the canonical, current view of the system, use `docs/CURRENT_SYSTEM_STATUS.md` together with the latest entries in `docs/project-history/CHANGELOG.md`.
+
 ---
 
 ## 🎯 CURRENT STATE

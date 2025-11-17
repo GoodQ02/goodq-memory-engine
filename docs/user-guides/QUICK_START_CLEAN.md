@@ -1,6 +1,8 @@
 # GoodQ4All Quick Start Guide
 **Last Updated:** October 10, 2025
 
+> Canonical quickstart: This is the primary, up-to-date Quick Start for GoodQ4All. Older quickstart documents (for example `docs/QUICK_START.md` and `docs/QUICK_START_GUIDE.md`) should be treated as secondary and may be out of date. Agents and users should start here.
+
 ## 🚀 Quick Launch
 
 ### First Time Setup

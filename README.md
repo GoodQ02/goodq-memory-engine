@@ -1,10 +1,10 @@
-# goodq4all - Desktop AI Companion
+# goodq4all – Local Intelligence, Q‑Style
 
-**Version 1.4.0** | **Status: Production-Ready** | **Last Updated: October 8, 2025**
+**Version 1.4.0** | **Status:** Production‑Ready (with active enhancements)  
+**Last Major Architecture Review:** 2025‑11‑15
 
-> **Project Renamed**: Formerly `GoodQ_4_All`, now `goodq4all` for consistency with GitHub naming conventions.
-
-> Privacy-first, multimodal AI companion inspired by Q from James Bond. Process video, audio, images, and text entirely on your local hardware with enterprise-grade observability and knowledge graph integration.
+> **Cover Identity:** Formerly `GoodQ_4_All`, now `goodq4all` for consistency with GitHub and deployment scripts.  
+> **Real Mission:** A privacy‑first, multimodal “Q from MI6” companion that turns decades of personal video, audio, images, and text into a durable, queryable memory system – running entirely on your own hardware.
 
 [![Production Ready](https://img.shields.io/badge/status-production--ready-brightgreen)]()
 [![Python 3.10](https://img.shields.io/badge/python-3.10-blue)]()
@@ -13,16 +13,17 @@
 
 ---
 
-## ✨ Highlights
+## Mission Briefing
 
-🎉 **October 8, 2025 - Knowledge Graph & Production Testing Complete!**
-- ✅ **Knowledge Graph Implementation**: Full graph database with entity relationships, co-occurrence tracking, and temporal connections
-- ✅ **Memory Context System**: Smart deduplication with comprehensive metadata preservation
-- ✅ **Model Lockdown**: All models, datasets, and checkpoints pinned with commit hashes and revisions
-- ✅ **One-Click Launcher**: LAUNCH_GOODQ.bat deploys Command Center, API server, and documentation
-- ✅ **Watchdog Auto-Ingestion**: Drop files into import_inbox for automatic processing
-- ✅ **Production Testing**: Full-scale ingestion of 1987-1988 home movie in progress
-- ✅ **22 Isolated Environments**: Perfect dependency isolation with zero conflicts
+goodq4all ingests long‑form home media, extracts scenes, voices, faces, emotions, and entities, and builds a unified knowledge graph and analytics layer you can interrogate like a field agent’s briefing room.
+
+- 100% **local processing** (no cloud dependency) with GPU‑accelerated vision, audio, and analytics.
+- **Knowledge graph** across scenes and videos with cross‑video timelines and relationship networks.
+- **LLM integration** via vLLM/Ollama + a production LLM client, for summaries and interactive querying.
+- **Watchdog** hot‑folder ingestion – drop files into `import_inbox/` and the system quietly does the rest.
+- **22+ isolated environments** for models and steps, coordinated through a hardened orchestration layer.
+
+For a deep architecture dossier, see `docs/ARCHITECTURE_REFERENCE.md` and `docs/COMPREHENSIVE_ARCHITECTURE_RESEARCH_2025-11-15.md`.
 
 ---
 
@@ -42,6 +43,44 @@
 - [Troubleshooting](#troubleshooting)
 - [Contributing](#contributing)
 - [License](#license)
+
+---
+
+## 🧭 Where to Start (Docs & Status)
+
+- **Docs index:** `docs/DOCUMENTATION_INDEX.md` – full map of project documentation.
+- **Shipping surface:** `docs/SHIP_PROFILE.md` – supported commands, environments, and entrypoints.
+- **Quickstart (canonical):** `docs/user-guides/QUICK_START_CLEAN.md` – most up-to-date Quick Start.
+- **Current status:** `docs/CURRENT_SYSTEM_STATUS.md` – current system health snapshot.
+- **Timeline:** `docs/project-history/CHANGELOG.md` – chronological project history.
+
+For deeper dives into specific areas:
+
+- Phases & milestones: `docs/phases/PHASE_INDEX.md`
+- Audits & diagnostics: `docs/audits/AUDIT_INDEX.md`
+- GPU / LLM / WSL2 / Watchdog: `docs/GPU_LLM_WSL_INDEX.md`, `docs/WATCHDOG_INDEX.md`
+- Analytics: `docs/ANALYTICS_INDEX.md`
+- Troubleshooting & fixes: `docs/TROUBLESHOOTING_INDEX.md`
+
+---
+
+## Capabilities (At a Glance)
+
+- **Multimodal ingestion**
+  - GPU‑accelerated scene detection and frame extraction.
+  - Audio diarization (PyAnnote), Whisper transcription, audio emotion and embeddings.
+  - Vision stack: BLIP captions, YOLO object detection, face embeddings, CLIP/DINO embeddings, OCR.
+- **Durable memory & knowledge graph**
+  - `memory.db` and `knowledge_graph.db` for scenes, entities, relationships, and summaries.
+  - `unified_goodq.db` for cross‑video entities, timelines, and relationship networks.
+- **Search, analytics, and chat**
+  - FAISS‑backed vector search across text, vision, and audio.
+  - `/api/analytics/*` endpoints and dashboards for scenes, entities, timelines, and embeddings.
+  - LLM‑powered scene and video summaries plus interactive querying via a production `llm_client`.
+- **Operational hardening**
+  - Scene dedupe and content‑addressable storage for reruns.
+  - Model lockdown (pinned versions) and environment isolation.
+  - Health checks, system readiness scripts, and rich logging for every step.
 
 ---
 

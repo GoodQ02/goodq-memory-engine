@@ -1,5 +1,7 @@
 # GoodQ v2.2 - Quick Start Guide
 
+> Note: This guide reflects a specific historical configuration (GoodQ v2.2). For the canonical, up-to-date Quick Start, agents and users should follow `docs/user-guides/QUICK_START_CLEAN.md`.
+
 ## 🚀 System is LIVE and READY!
 
 Your GoodQ system is now fully operational with a production-grade web interface showing real data from your pipeline.

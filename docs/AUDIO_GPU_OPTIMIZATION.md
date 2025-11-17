@@ -1,5 +1,7 @@
 # Audio Pipeline GPU Optimization Guide
 
+> Role: Detailed canonical guide for audio-specific GPU optimization (beyond the implementation summary in `docs/AUDIO_GPU_IMPLEMENTATION_SUMMARY.md`). Start here when tuning diarization/transcription performance.
+
 ## Overview
 
 This document explains the GPU optimization system for audio processing in GoodQ4All, specifically for speaker diarization and transcription.

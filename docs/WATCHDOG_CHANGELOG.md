@@ -1,5 +1,7 @@
 # Watchdog System - Development Changelog
 
+> Role: Canonical development history for the Watchdog system. Use this file to understand when features were introduced or changed. For current behavior, see `docs/WATCHDOG_GUIDE.md` and `docs/diagrams/watchdog_flow.md`.
+
 ## Version 1.0.0 - October 7, 2025
 
 ### Overview

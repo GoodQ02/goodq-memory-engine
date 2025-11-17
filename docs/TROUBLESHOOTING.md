@@ -1,5 +1,7 @@
 # GoodQ Troubleshooting Guide
 
+> Role: Canonical troubleshooting guide for GoodQ4All. Start here for common issues when launching or running services; use `docs/TROUBLESHOOTING_INDEX.md` to locate subsystem-specific fix reports when symptoms match.
+
 **Last Updated:** October 6, 2025
 
 Quick fixes for common issues when launching GoodQ services.

@@ -4,6 +4,8 @@
 **Status**: ✅ Complete and Operational  
 **Version**: 1.0.0
 
+> Role: High-level implementation and performance summary for the Watchdog system as of version 1.0.0. For current usage and configuration, rely on `docs/WATCHDOG_GUIDE.md` and `docs/WATCHDOG_QUICKREF.md`; for chronology, see `docs/WATCHDOG_CHANGELOG.md`.
+
 ---
 
 ## Executive Summary

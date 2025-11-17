@@ -1,5 +1,7 @@
 # GoodQ Watchdog - Quick Reference Card
 
+> Role: Quick command and operations reference for the Watchdog system. For full explanations, edge cases, and troubleshooting, use `docs/WATCHDOG_GUIDE.md` and `docs/WATCHDOG_INDEX.md`.
+
 ## One-Line Summary
 Drop files in `import_inbox/`, watchdog auto-processes them.
 

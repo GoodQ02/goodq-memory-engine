@@ -1,6 +1,8 @@
 # GoodQ Development Session Summary
 ## October 7-8, 2025
 
+> Snapshot: User-facing summary of a specific development session. For the canonical, up-to-date system status, refer to `docs/CURRENT_SYSTEM_STATUS.md` and the most recent entries in `docs/project-history/CHANGELOG.md`.
+
 ### 🎯 Major Achievements
 
 #### 1. **Knowledge Graph Implementation** ✅

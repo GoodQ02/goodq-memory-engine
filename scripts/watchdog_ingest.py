@@ -13,23 +13,16 @@ import shutil
 import logging
 from pathlib import Path
 from datetime import datetime
-from typing import Optional, Set, Dict, List
+from typing import Optional, Set, Dict, List, Any
 from queue import Queue, Empty
 from threading import Thread, Event, Lock
 import json
 import os
+import uuid
 
 # Add repo root to path for imports
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
-
-# Import Control Agent
-try:
-    from agents.control_agent import ControlAgent
-    CONTROL_AGENT_AVAILABLE = True
-except ImportError:
-    CONTROL_AGENT_AVAILABLE = False
-    logger.warning("Control Agent not available - running without AI orchestration")
 
 # Setup logging with UTF-8 encoding for file, ASCII for console
 logging.basicConfig(
@@ -42,6 +35,7 @@ logging.basicConfig(
 # Add console handler with ASCII-safe encoding
 console_handler = logging.StreamHandler(sys.stdout)
 console_handler.setFormatter(logging.Formatter('%(asctime)s [%(levelname)s] %(message)s'))
+
 
 # ASCII filter to replace emojis with text equivalents
 class ASCIIFilter(logging.Filter):
@@ -75,9 +69,18 @@ class ASCIIFilter(logging.Filter):
             record.msg = msg
         return True
 
+
 console_handler.addFilter(ASCIIFilter())
 logging.root.addHandler(console_handler)
 logger = logging.getLogger(__name__)
+
+# Import Control Agent
+try:
+    from agents.control_agent import ControlAgent
+    CONTROL_AGENT_AVAILABLE = True
+except ImportError:
+    CONTROL_AGENT_AVAILABLE = False
+    logger.warning("Control Agent not available - running without AI orchestration")
 
 # Configuration
 WATCH_DIR = Path("L:/goodq4all/import_inbox")
@@ -221,6 +224,39 @@ class WatchdogProcessor:
         self.failed_dir.mkdir(parents=True, exist_ok=True)
         
         logger.info(f"Watching directory: {self.watch_dir}")
+    
+    def _build_run_config(self, pipeline_name: str) -> Dict[str, Any]:
+        """Load configs and attach a run context for mission logging."""
+        from steps.common.config_loader import load_configs
+        import subprocess
+
+        cfg: Dict[str, Any] = load_configs({})
+        run_context: Dict[str, Any] = {
+            'id': str(uuid.uuid4()),
+            'pipeline': pipeline_name,
+            'started_at': datetime.utcnow().isoformat(),
+            'timer_unit': 'ms',
+        }
+
+        try:
+            git_proc = subprocess.run(
+                ['git', '-C', str(REPO_ROOT), 'rev-parse', 'HEAD'],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if git_proc.returncode == 0 and git_proc.stdout.strip():
+                run_context['git_sha'] = git_proc.stdout.strip()
+        except Exception:
+            pass
+
+        existing_run = cfg.get('run') if isinstance(cfg, dict) else None
+        if isinstance(existing_run, dict):
+            existing_run.update(run_context)
+            cfg['run'] = existing_run
+        else:
+            cfg['run'] = run_context
+        return cfg
     
     def get_file_type(self, path: Path) -> Optional[str]:
         """Determine file type"""
@@ -532,22 +568,297 @@ class WatchdogProcessor:
             return False
     
     def ingest_audio(self, audio_path: Path) -> bool:
-        """Ingest audio file"""
-        # TODO: Implement audio ingestion
-        logger.warning("Audio ingestion not yet implemented")
-        return False
+        """Ingest standalone audio file via conda step runner pipeline."""
+        from steps.common.conda_runner import run_conda_step, StepExecutionError
+        from steps.common.tag_utils import canonicalize_taxonomy
+
+        audio_hash = hashlib.sha256(audio_path.name.encode()).hexdigest()[:16]
+        temp_input = Path(f"L:/goodq4all/data/processing/audio_{audio_hash}")
+        temp_input.mkdir(parents=True, exist_ok=True)
+
+        temp_audio = temp_input / audio_path.name
+        try:
+            if temp_audio.exists():
+                logger.debug(f"Temp audio already exists, removing: {temp_audio}")
+                temp_audio.unlink()
+            logger.info(f"📋 Copying asset to processing area: {audio_path.name}")
+            shutil.copy2(audio_path, temp_audio)
+            logger.debug(f"✓ Copy complete: {temp_audio}")
+        except Exception as e:
+            logger.error(f"Failed to copy audio to temp dir: {e}")
+            return False
+
+        file_size_gb = audio_path.stat().st_size / (1024**3)
+        timeout_seconds = max(28800, int(file_size_gb * 10800))
+        logger.info(f"⏱️  Mission timeout: {timeout_seconds}s ({timeout_seconds/3600:.1f}h) for {file_size_gb:.2f}GB asset")
+        logger.info(f"🔊 Asset: {audio_path.name}")
+        start_time = time.time()
+
+        # Per-step timeout for conda runner (10 minutes)
+        os.environ["GOODQ_STEP_TIMEOUT_MS"] = str(600_000)
+
+        cfg = self._build_run_config("watchdog_audio_ingest")
+        item: Dict[str, Any] = {
+            "modality": "audio",
+            "source_path": str(temp_audio),
+            "filename": audio_path.name,
+        }
+
+        def _check_timeout() -> bool:
+            if time.time() - start_time > timeout_seconds:
+                logger.error(f"⏱️  Mission timeout: Audio ingestion exceeded {timeout_seconds}s")
+                return False
+            return True
+
+        success = True
+        try:
+            step_plan = [
+                ("goodq_audio_transcribe", "audio_transcribe"),
+                ("goodq_audio_embed", "audio_embed_clap"),
+                ("goodq_audio_emotion", "audio_emotion"),
+                ("goodq_audio_metadata", "audio_metadata"),
+                ("goodq_audio_metadata", "audio_time_hints"),
+                ("goodq_audio_metadata", "audio_music_events"),
+                ("goodq_text_embed", "text_embed"),
+                ("goodq_sentiment", "sentiment"),
+                ("goodq_emotion_classify", "emotion_classify"),
+                ("goodq_emotion_classify", "tagger"),
+            ]
+
+            for env_name, step_name in step_plan:
+                if not _check_timeout():
+                    success = False
+                    break
+                logger.info(f"[AUDIO] Running step {step_name} in {env_name}")
+                result = run_conda_step(env_name, step_name, item, cfg)
+                if isinstance(result, dict):
+                    item.update(result)
+
+            if success:
+                canonicalize_taxonomy(item)
+        except StepExecutionError as e:
+            logger.error(f"❌ Mission failed during audio pipeline: {e}")
+            success = False
+        except Exception as e:
+            logger.error(f"❌ Mission error during audio pipeline: {e}", exc_info=True)
+            success = False
+        finally:
+            if success:
+                try:
+                    logger.debug(f"Cleaning up temp files: {temp_input}")
+                    temp_audio.unlink(missing_ok=True)
+                    for f in temp_input.iterdir():
+                        if f.is_file():
+                            f.unlink()
+                    temp_input.rmdir()
+                    logger.debug("✓ Cleanup complete")
+                except Exception as e:
+                    logger.warning(f"Failed to clean up temp directory: {e}")
+            else:
+                logger.warning(f"Temp files preserved for debugging: {temp_input}")
+
+        return success
     
     def ingest_image(self, image_path: Path) -> bool:
-        """Ingest image file"""
-        # TODO: Implement image ingestion
-        logger.warning("Image ingestion not yet implemented")
-        return False
+        """Ingest image file via conda step runner pipeline."""
+        from steps.common.conda_runner import run_conda_step, StepExecutionError
+        from steps.common.tag_utils import canonicalize_taxonomy
+
+        image_hash = hashlib.sha256(image_path.name.encode()).hexdigest()[:16]
+        temp_input = Path(f"L:/goodq4all/data/processing/image_{image_hash}")
+        temp_input.mkdir(parents=True, exist_ok=True)
+
+        temp_image = temp_input / image_path.name
+        try:
+            if temp_image.exists():
+                logger.debug(f"Temp image already exists, removing: {temp_image}")
+                temp_image.unlink()
+            logger.info(f"📋 Copying asset to processing area: {image_path.name}")
+            shutil.copy2(image_path, temp_image)
+            logger.debug(f"✓ Copy complete: {temp_image}")
+        except Exception as e:
+            logger.error(f"Failed to copy image to temp dir: {e}")
+            return False
+
+        file_size_gb = image_path.stat().st_size / (1024**3)
+        timeout_seconds = max(28800, int(file_size_gb * 10800))
+        logger.info(f"⏱️  Mission timeout: {timeout_seconds}s ({timeout_seconds/3600:.1f}h) for {file_size_gb:.2f}GB asset")
+        logger.info(f"🖼️ Asset: {image_path.name}")
+        start_time = time.time()
+
+        os.environ["GOODQ_STEP_TIMEOUT_MS"] = str(600_000)
+
+        cfg = self._build_run_config("watchdog_image_ingest")
+        item: Dict[str, Any] = {
+            "modality": "image",
+            "source_path": str(temp_image),
+            "filename": image_path.name,
+        }
+
+        def _check_timeout() -> bool:
+            if time.time() - start_time > timeout_seconds:
+                logger.error(f"⏱️  Mission timeout: Image ingestion exceeded {timeout_seconds}s")
+                return False
+            return True
+
+        success = True
+        try:
+            step_plan = [
+                ("goodq_image_caption", "image_ocr"),
+                ("goodq_image_caption", "image_caption"),
+                ("goodq_object_detect", "object_detect"),
+                ("goodq_face_embed", "face_embed"),
+                ("goodq_image_caption", "image_exif"),
+                ("goodq_image_caption", "image_embed_dino"),
+                ("goodq_image_caption", "image_embed_clip"),
+                ("goodq_text_embed", "text_embed"),
+                ("goodq_sentiment", "sentiment"),
+                ("goodq_emotion_classify", "emotion_classify"),
+                ("goodq_emotion_classify", "tagger"),
+            ]
+
+            for env_name, step_name in step_plan:
+                if not _check_timeout():
+                    success = False
+                    break
+                logger.info(f"[IMAGE] Running step {step_name} in {env_name}")
+                result = run_conda_step(env_name, step_name, item, cfg)
+                if isinstance(result, dict):
+                    item.update(result)
+
+            if success:
+                canonicalize_taxonomy(item)
+        except StepExecutionError as e:
+            logger.error(f"❌ Mission failed during image pipeline: {e}")
+            success = False
+        except Exception as e:
+            logger.error(f"❌ Mission error during image pipeline: {e}", exc_info=True)
+            success = False
+        finally:
+            if success:
+                try:
+                    logger.debug(f"Cleaning up temp files: {temp_input}")
+                    temp_image.unlink(missing_ok=True)
+                    for f in temp_input.iterdir():
+                        if f.is_file():
+                            f.unlink()
+                    temp_input.rmdir()
+                    logger.debug("✓ Cleanup complete")
+                except Exception as e:
+                    logger.warning(f"Failed to clean up temp directory: {e}")
+            else:
+                logger.warning(f"Temp files preserved for debugging: {temp_input}")
+
+        return success
     
     def ingest_document(self, doc_path: Path) -> bool:
-        """Ingest document file"""
-        # TODO: Implement document ingestion
-        logger.warning("Document ingestion not yet implemented")
-        return False
+        """Ingest document file (PDF / text) via conda step runner pipeline."""
+        from steps.common.conda_runner import run_conda_step, StepExecutionError
+        from steps.common.tag_utils import canonicalize_taxonomy
+
+        ext = doc_path.suffix.lower()
+        if ext not in {'.pdf', '.txt', '.md'}:
+            logger.warning(f"Document ingestion not implemented for extension: {ext}")
+            return False
+
+        doc_hash = hashlib.sha256(doc_path.name.encode()).hexdigest()[:16]
+        temp_input = Path(f"L:/goodq4all/data/processing/doc_{doc_hash}")
+        temp_input.mkdir(parents=True, exist_ok=True)
+
+        temp_doc = temp_input / doc_path.name
+        try:
+            if temp_doc.exists():
+                logger.debug(f"Temp document already exists, removing: {temp_doc}")
+                temp_doc.unlink()
+            logger.info(f"📋 Copying asset to processing area: {doc_path.name}")
+            shutil.copy2(doc_path, temp_doc)
+            logger.debug(f"✓ Copy complete: {temp_doc}")
+        except Exception as e:
+            logger.error(f"Failed to copy document to temp dir: {e}")
+            return False
+
+        file_size_gb = doc_path.stat().st_size / (1024**3)
+        timeout_seconds = max(28800, int(file_size_gb * 10800))
+        logger.info(f"⏱️  Mission timeout: {timeout_seconds}s ({timeout_seconds/3600:.1f}h) for {file_size_gb:.2f}GB asset")
+        logger.info(f"📄 Asset: {doc_path.name}")
+        start_time = time.time()
+
+        os.environ["GOODQ_STEP_TIMEOUT_MS"] = str(600_000)
+
+        modality = 'pdf' if ext == '.pdf' else 'text'
+        cfg = self._build_run_config("watchdog_document_ingest")
+        item: Dict[str, Any] = {
+            "modality": modality,
+            "source_path": str(temp_doc),
+            "filename": doc_path.name,
+        }
+
+        def _check_timeout() -> bool:
+            if time.time() - start_time > timeout_seconds:
+                logger.error(f"⏱️  Mission timeout: Document ingestion exceeded {timeout_seconds}s")
+                return False
+            return True
+
+        success = True
+        try:
+            # For PDFs, first extract text via pdf_text
+            if ext == '.pdf':
+                logger.info("[DOC] Running step pdf_text in goodq_text_embed")
+                pdf_result = run_conda_step("goodq_text_embed", "pdf_text", item, cfg)
+                if isinstance(pdf_result, dict):
+                    item.update(pdf_result)
+                    pdf_text = pdf_result.get("pdf_text")
+                    if isinstance(pdf_text, str) and pdf_text.strip():
+                        item["frame_text"] = pdf_text
+            else:
+                # For plain text / markdown, read content directly
+                try:
+                    text_content = temp_doc.read_text(encoding="utf-8", errors="ignore")
+                except Exception as e:
+                    logger.error(f"Failed to read document text: {e}")
+                    return False
+                item["frame_text"] = text_content
+
+            step_plan = [
+                ("goodq_text_embed", "text_embed"),
+                ("goodq_sentiment", "sentiment"),
+                ("goodq_emotion_classify", "emotion_classify"),
+                ("goodq_emotion_classify", "tagger"),
+            ]
+
+            for env_name, step_name in step_plan:
+                if not _check_timeout():
+                    success = False
+                    break
+                logger.info(f"[DOC] Running step {step_name} in {env_name}")
+                result = run_conda_step(env_name, step_name, item, cfg)
+                if isinstance(result, dict):
+                    item.update(result)
+
+            if success:
+                canonicalize_taxonomy(item)
+        except StepExecutionError as e:
+            logger.error(f"❌ Mission failed during document pipeline: {e}")
+            success = False
+        except Exception as e:
+            logger.error(f"❌ Mission error during document pipeline: {e}", exc_info=True)
+            success = False
+        finally:
+            if success:
+                try:
+                    logger.debug(f"Cleaning up temp files: {temp_input}")
+                    temp_doc.unlink(missing_ok=True)
+                    for f in temp_input.iterdir():
+                        if f.is_file():
+                            f.unlink()
+                    temp_input.rmdir()
+                    logger.debug("✓ Cleanup complete")
+                except Exception as e:
+                    logger.warning(f"Failed to clean up temp directory: {e}")
+            else:
+                logger.warning(f"Temp files preserved for debugging: {temp_input}")
+
+        return success
     
     def worker_loop(self):
         """Worker thread to process queued files"""

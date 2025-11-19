@@ -43,12 +43,34 @@ class ProgressTracker:
             self._save()
             logger.info(f"[PROGRESS] Started processing: {filename}")
     
-    def update_step(self, step_name: str, details: Optional[Dict[str, Any]] = None):
-        """Update current step and increment progress"""
+    def update_step(self, step_name: str, sub_progress: Optional[float] = None, details: Optional[Dict[str, Any]] = None):
+        """
+        Update current step with optional sub-progress
+        
+        Args:
+            step_name: Name of the current step
+            sub_progress: Optional 0-100 progress within this step (for granular tracking)
+            details: Optional dict of step details
+        """
         with self.lock:
-            self.current_step = step_name
-            self.completed_steps += 1
-            self.progress_percent = (self.completed_steps / self.total_steps) * 100
+            # Only increment step counter if step name changed
+            if self.current_step != step_name:
+                self.current_step = step_name
+                self.completed_steps += 1
+            
+            # Calculate progress
+            if sub_progress is not None:
+                # Use sub-progress for granular within-step tracking
+                base_progress = ((self.completed_steps - 1) / self.total_steps) * 100
+                step_weight = (1 / self.total_steps) * 100
+                self.progress_percent = base_progress + (step_weight * (sub_progress / 100))
+            else:
+                # Standard step-based progress
+                self.progress_percent = (self.completed_steps / self.total_steps) * 100
+            
+            # Clamp to 0-100
+            self.progress_percent = max(0, min(100, self.progress_percent))
+            
             if details:
                 self.step_details[step_name] = details
             self._save()

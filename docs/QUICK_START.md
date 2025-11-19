@@ -1,156 +1,214 @@
-# 🚀 GOODQ4ALL - QUICK START GUIDE
+# 🚀 GoodQ4All - Quick Start Card
 
-> Note: For the canonical, most up-to-date Quick Start, see `docs/user-guides/QUICK_START_CLEAN.md`. This document is kept for historical context and live run snapshots.
+> Role: High-speed launch card for operators. For full setup, edge cases, and troubleshooting, see `docs/user-guides/QUICK_START_CLEAN.md` and the supported entrypoints in `docs/SHIP_PROFILE.md`.
 
-## System is LIVE and RUNNING! 🎉
+## Launch System (30 seconds)
 
-### Currently Active:
-✅ Web Interface: **http://localhost:8000** (OPEN NOW IN YOUR BROWSER!)  
-✅ Real-Time Monitor: Running in background  
-✅ Processing: 1987_1988.mp4 (39 scenes completed so far)
-
----
-
-## Access Your System
-
-### WEB INTERFACE (Main Way to Interact)
-**URL**: http://localhost:8000
-
-**What You Can Do:**
-- 💬 Ask questions about your videos (once processing completes)
-- 📊 View real-time processing statistics
-- 🎬 See list of processed videos
-- 📋 Check processing logs
-- ⚙️ Monitor system status
-
-**Current Stats (Live):**
-- Scenes: 39
-- Segments: 47
-- Embeddings: 110
-- Status: Processing 1987_1988.mp4
-
----
-
-## Quick Commands
-
-### Check Status
-```
-Visit: http://localhost:8000/api/status
-```
-
-### View Logs
-Click "📋 View Logs" button in the web interface sidebar
-
-### Monitor Processing
-The real-time monitor is running in a separate window, tracking:
-- Database growth
-- Processing activity
-- Potential stalls
-
----
-
-## What's Happening Right Now
-
-Your system is processing **1987_1988.mp4** - your family home movie from the year you were born!
-
-**Progress:**
-- ✅ Scene Detection: Complete (39 scenes found)
-- 🔄 Visual Analysis: In progress (BLIP2, YOLO, CLIP, DINO)
-- 🔄 Audio Transcription: In progress (Whisper, diarization, emotion)
-- ⏳ Knowledge Graph: Waiting for multimodal data
-- ⏳ Cross-Video Linking: Will happen after KG population
-
-**Estimated Time to Complete:** 3-5 hours for full pipeline
-
----
-
-## Try These Queries (Once Processing Completes)
-
-Open http://localhost:8000 and ask:
-- "How many scenes have been processed?"
-- "What's the current status?"
-- "Show me the logs"
-- "List all videos"
-
-**After Full Processing:**
-- "Who appears in the 1987_1988 video?"
-- "What emotions were detected?"
-- "Find moments of laughter"
-- "Show me scenes with children"
-- "What was happening in 1987?"
-
----
-
-## System Control
-
-### Start Web Interface
 ```batch
-L:\goodq4all\LAUNCH_WEB_INTERFACE.bat
-```
-
-### Start Full System (Monitor + Web)
-```batch
-L:\goodq4all\START_FULL_SYSTEM_TEST.bat
-```
-
-### Quick Status Check
-```batch
-conda activate goodq_zenml
-python L:\goodq4all\check_ingestion_status.py
+1. Double-click: LAUNCH_GOODQ.bat
+2. Press: 1 (Launch Complete System)
+3. Wait: 10 seconds
+4. Check: Browser opens to http://localhost:3000
 ```
 
 ---
 
-## Important Files
+## Verify It's Working (60 seconds)
 
-- **Web Interface**: http://localhost:8000
-- **API Docs**: http://localhost:8000/docs  
-- **Full Report**: `L:\goodq4all\PRODUCTION_VALIDATION_COMPLETE.md`
-- **Monitor Script**: `L:\goodq4all\monitor_ingestion_realtime.py`
-- **Main Interface**: `L:\goodq4all\web_interface.py`
+✅ **Two command windows open:**
+- "GoodQ API Server" → Shows HTTP requests
+- "GoodQ Watchdog" → Shows processing logs
+
+✅ **Watchdog window shows:**
+```
+[INFO] New file detected: 01. 1987 - 1988.mp4
+[INFO] Queued for processing: 01. 1987 - 1988.mp4
+[INFO] Processing video: 01. 1987 - 1988.mp4
+```
+
+✅ **UI shows:**
+- System Status: Active (green)
+- Progress bar appears at top
+- Command Center logs streaming
+- Pipeline Engines lighting up
 
 ---
 
-## What Makes This Special
+## Monitor Progress (ongoing)
 
-🔒 **100% Private** - All processing happens on your machine  
-🧠 **AI-Powered** - LLMs analyze every aspect of your videos  
-🎯 **Multi-Modal** - Video, audio, text all understood together  
-🕸️ **Knowledge Graph** - Entities and relationships across all videos  
-⚡ **Real-Time** - Live monitoring and updates  
-💬 **Natural Language** - Just ask questions like talking to a person  
-🎬 **Your Memories** - Processing videos from the year you were born!
+### **Command Center Tab**
+Live logs, updates every 2s:
+```
+[TIMER] Step: video_scene_detect
+[INFO] Scene 12/45 detected
+[GPU] Using CUDA device 0
+```
+
+### **Pipeline Engines Tab**
+Color-coded engine status:
+- 🟢 Green = Active (currently processing)
+- ⚪ Gray = Idle (waiting)
+
+### **Progress Bar** (top of screen)
+```
+Processing: 01. 1987 - 1988.mp4 | Step: Audio Transcription | 45%
+```
+
+### **Chat Tab**
+Ask questions:
+```
+You: "What step are we on?"
+Q: "Currently running audio transcription (step 4/12)"
+
+You: "How many scenes detected?"
+Q: "Found 127 scenes, 45 processed so far"
+```
 
 ---
 
-## Next Steps
+## Expected Timeline
 
-1. **Keep the web interface open** - http://localhost:8000
-2. **Watch the stats update** every 10 seconds
-3. **Let the ingestion complete** (check back in 3-5 hours)
-4. **Start asking questions** about your 1987-1988 memories!
+| Time | What's Happening |
+|------|------------------|
+| **0-5min** | Scene Detection starting |
+| **5-30min** | Scene Detection (GPU active) |
+| **30min-2hr** | Audio Transcription (per scene) |
+| **2-3hr** | Audio Diarization + Face Recognition |
+| **3-4hr** | Emotion + Embeddings (CLIP/DINO) |
+| **4-5hr** | Knowledge Graph Building |
+
+**Total: ~2.5-5 hours for 4.5-hour video**
+
+---
+
+## GPU Activity Check
+
+### **In UI:**
+- Go to **Pipeline Engines** tab
+- Active engines show 🟢 green
+- Recent activity in Command Center logs
+
+### **In System:**
+```powershell
+# Open PowerShell and run:
+nvidia-smi
+
+# You should see:
+# python.exe using 8-12GB VRAM
+```
+
+---
+
+## Stop System
+
+### **Method 1: Launcher Menu**
+```
+1. Run LAUNCH_GOODQ.bat again
+2. Select: 5 (Stop All Services)
+```
+
+### **Method 2: Close Windows**
+- Close "GoodQ API Server" window
+- Close "GoodQ Watchdog" window
+
+### **Method 3: Force Kill**
+```powershell
+Stop-Process -Name python -Force
+```
+
+---
+
+## After Processing Completes
+
+✅ **Check Results:**
+
+1. **Scene Explorer** → 100+ scenes with thumbnails
+2. **Analytics** → Emotion charts, entity graphs
+3. **Knowledge Graph** → Relationship visualization
+4. **Memories** → Timeline of moments
+5. **Chat** → Query: "Show me happy scenes"
+
+✅ **Database Populated:**
+```
+data/unified_goodq.db  → Main database
+data/faiss_indices/    → Vector search
+output/                → Generated artifacts
+```
+
+---
+
+## Common Issues
+
+### ❌ "Nothing happens"
+**Fix:** Check API Server window for errors. Should see:
+```
+INFO: Application startup complete.
+INFO: Uvicorn running on http://0.0.0.0:3000
+```
+
+### ❌ "GPU not showing"
+**Fix:** This is normal until processing starts. Wait for scene detection to begin.
+
+### ❌ "Video not detected"
+**Fix:** Check watchdog window. Should show:
+```
+[INFO] Watching directory: L:\goodq4all\import_inbox
+```
+Verify video is in `import_inbox` folder.
+
+### ❌ "Processing stuck"
+**Fix:** Check Command Center tab. If truly stuck:
+1. Stop services (Option 5)
+2. Check `logs/watchdog.log` for errors
+3. Restart system
+
+---
+
+## Pro Tips
+
+💡 Keep both command windows visible  
+💡 Don't close windows until complete  
+💡 Check Command Center for real-time status  
+💡 Chat tab can answer questions  
+💡 GPU indicators only show when actively processing  
+💡 First run takes longer (model loading)  
+💡 Subsequent videos process faster  
+
+---
+
+## Key URLs
+
+| Endpoint | Purpose |
+|----------|---------|
+| http://localhost:3000 | Main UI |
+| http://localhost:3000/api/status | System health JSON |
+| http://localhost:3000/api/progress | Current progress JSON |
+| http://localhost:3000/api/pipeline-engines | Engine status JSON |
+
+---
+
+## Files To Watch
+
+| File | What It Shows |
+|------|---------------|
+| `logs/command_center.log` | Unified system log |
+| `logs/progress.json` | Current processing state |
+| `logs/watchdog.log` | File monitoring activity |
+| `logs/step_runs.jsonl` | Step execution history |
 
 ---
 
 ## Need Help?
 
-- Check the full report: `PRODUCTION_VALIDATION_COMPLETE.md`
-- View system status: http://localhost:8000/api/status
-- Check logs via the web interface
-- Monitor is watching for stalls automatically
+1. Check `LAUNCH_INSTRUCTIONS.md` for detailed guide
+2. Check `AUDIT_COMPLETE.md` for system status
+3. Check Command Center tab for live logs
+4. Ask in Chat: "What's the current status?"
 
 ---
 
-## 🎉 Congratulations!
+**Status: ✅ READY TO LAUNCH**
 
-You now have a **production-grade, AI-powered family memory intelligence system** running on your computer, processing your family's first home movies from 1987-1988.
+Run `LAUNCH_GOODQ.bat` and select option 1!
 
-This is not just technology - this is your history becoming searchable, understandable, and preserved forever.
-
-**Welcome to the future of personal memory preservation!** 🚀
-
----
-
-**Last Updated**: November 8, 2025 14:42 MST  
-**System Status**: ✅ FULLY OPERATIONAL  
-**Current Task**: Processing 1987_1988.mp4 (39/~200 scenes)
+🎬 Your home movies → 🧠 Intelligent memory system

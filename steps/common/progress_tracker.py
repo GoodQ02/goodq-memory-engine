@@ -73,7 +73,9 @@ class ProgressTracker:
         with self._write_lock:
             self.current_state["current_step"] = step_name
             self.current_state["current_step_index"] = step_index
-            self.current_state["progress_percent"] = int((step_index / max(self.current_state["total_steps"], 1)) * 100)
+            # Calculate progress, capping at 100%
+            raw_progress = int((step_index / max(self.current_state["total_steps"], 1)) * 100)
+            self.current_state["progress_percent"] = min(raw_progress, 100)
             self.current_state["updated_at"] = datetime.now().isoformat()
             if details:
                 self.current_state["details"].update(details)

@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GoodQ - Production Memory Interface v2.2</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>">
     <!-- Chart.js for visualizations -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <!-- Vis-Timeline for timeline visualization -->
@@ -953,6 +954,7 @@
             bottom: 0;
             background: rgba(0, 0, 0, 0.85);
             z-index: 1000;
+            -webkit-backdrop-filter: blur(8px);
             backdrop-filter: blur(8px);
         }
 
@@ -1797,6 +1799,8 @@
                                 >
                                 <select 
                                     id="hasAudioFilter"
+                                    title="Filter scenes by audio presence"
+                                    aria-label="Filter scenes by audio presence"
                                     style="
                                         padding: 8px 12px;
                                         background: var(--primary-bg);
@@ -1844,7 +1848,10 @@
                                 style="width: 100%; padding: 10px; background: var(--primary-bg); border: 1px solid var(--border-color); border-radius: 6px; color: var(--primary-text);"
                                 onkeyup="filterEntities()">
                         </div>
-                        <select id="entityTypeFilter" onchange="filterEntities()" 
+                        <select id="entityTypeFilter" 
+                            onchange="filterEntities()" 
+                            title="Filter entities by type"
+                            aria-label="Filter entities by type"
                             style="padding: 10px; background: var(--primary-bg); border: 1px solid var(--border-color); border-radius: 6px; color: var(--primary-text);">
                             <option value="">All Types</option>
                             <option value="PERSON">👤 People</option>
@@ -2332,15 +2339,18 @@
                 const response = await fetch(`${API_BASE}/status`);
                 const data = await response.json();
 
-                // Update stats
-                document.getElementById('stat-scenes').textContent = data.database.scenes;
-                document.getElementById('stat-embeddings').textContent = data.database.embeddings;
-                document.getElementById('stat-entities').textContent = data.database.entities;
-                document.getElementById('stat-relationships').textContent = data.database.relationships;
+                // Update stats (with safe defaults)
+                document.getElementById('stat-scenes').textContent = data.database?.scenes || 0;
+                document.getElementById('stat-embeddings').textContent = data.database?.embeddings || 0;
+                document.getElementById('stat-entities').textContent = data.database?.entities || 0;
+                document.getElementById('stat-relationships').textContent = data.database?.relationships || 0;
 
                 // Update last update time
                 const updateTime = new Date(data.timestamp).toLocaleTimeString();
                 document.getElementById('lastUpdate').textContent = `Last updated: ${updateTime}`;
+                
+                // Update GPU status on dashboard
+                await refreshGPUStatus();
 
                 // Update system status
                 const statusContent = document.getElementById('systemStatusContent');
@@ -2354,10 +2364,10 @@
                         <div>
                             <div style="font-size: 12px; color: var(--secondary-text); margin-bottom: 5px;">FAISS Indices</div>
                             <div style="font-size: 14px;">
-                                ${data.faiss.text ? '✓' : '✗'} Text &nbsp;
-                                ${data.faiss.clip ? '✓' : '✗'} CLIP &nbsp;
-                                ${data.faiss.dino ? '✓' : '✗'} DINO &nbsp;
-                                ${data.faiss.audio ? '✓' : '✗'} Audio
+                                ${data.faiss?.text ? '✓' : '✗'} Text &nbsp;
+                                ${data.faiss?.clip ? '✓' : '✗'} CLIP &nbsp;
+                                ${data.faiss?.dino ? '✓' : '✗'} DINO &nbsp;
+                                ${data.faiss?.audio ? '✓' : '✗'} Audio
                             </div>
                         </div>
                     </div>
@@ -2861,7 +2871,7 @@
                 
                 // Update subtitle
                 document.getElementById('kgSubtitle').textContent = 
-                    `${data.overview.total_entities} entities, ${data.overview.total_relationships} relationships`;
+                    `${data.overview?.total_entities || 0} entities, ${data.overview?.total_relationships || 0} relationships`;
                 
                 if (!data.network.nodes || data.network.nodes.length === 0) {
                     document.getElementById('knowledgeGraphSvg').innerHTML = 
@@ -3442,9 +3452,9 @@
                 const indices = ['text', 'clip', 'dino', 'audio'];
                 indices.forEach(indexType => {
                     const card = document.getElementById(`${indexType}IndexCard`);
-                    const indexData = data.indices[indexType];
+                    const indexData = data.indices?.[indexType];
                     
-                    if (indexData.status === 'active') {
+                    if (indexData && indexData.status === 'active') {
                         card.classList.add('active');
                         card.querySelector('.index-count').textContent = indexData.count.toLocaleString();
                         card.querySelector('.index-status').textContent = `Active (${indexData.dimension}D)`;
@@ -3888,10 +3898,11 @@
         
         async function refreshPipelineEngines() {
             try {
-                const response = await fetch(`${API_BASE}/pipeline-engines`);
+                const response = await fetch(`${API_BASE}/pipeline-engines?_t=${Date.now()}`);
                 const data = await response.json();
                 
                 console.log('Pipeline engines data:', data);
+                console.log('First engine:', Object.values(data)[0]);
                 
                 const grid = document.getElementById('engineGrid');
                 
@@ -4056,47 +4067,25 @@
                 const response = await fetch(`${API_BASE}/command-center`);
                 const data = await response.json();
 
-                // Update health indicators
-                if (data.health) {
-                    const apiHealth = document.getElementById('apiHealth');
-                    const dbHealth = document.getElementById('dbHealth');
-                    const wslHealth = document.getElementById('wslHealth');
-                    const pipelineHealth = document.getElementById('pipelineHealth');
-                    
-                    if (apiHealth) {
-                        apiHealth.textContent = '●';
-                        apiHealth.style.color = data.health.api ? '#4caf50' : '#f44336';
-                    }
-                    if (dbHealth) {
-                        dbHealth.textContent = '●';
-                        dbHealth.style.color = data.health.database ? '#4caf50' : '#f44336';
-                    }
-                    if (wslHealth) {
-                        wslHealth.textContent = '●';
-                        wslHealth.style.color = data.health.wsl ? '#4caf50' : '#ff9800';
-                    }
-                    if (pipelineHealth) {
-                        pipelineHealth.textContent = '●';
-                        pipelineHealth.style.color = data.health.pipeline ? '#4caf50' : '#ff9800';
-                    }
-                }
-
-                // Update logs if container exists
                 const container = document.getElementById('commandCenterLogs');
-                if (container && data.logs && data.logs.length > 0) {
-                    // Render logs
-                    container.innerHTML = data.logs.map(log => `
-                        <div class="log-line ${log.level}">
-                            ${log.timestamp ? `<span style="color: #666;">[${log.timestamp}]</span> ` : ''}
-                            ${log.message}
-                        </div>
-                    `).join('');
-
-                    // ALWAYS scroll to bottom to show most recent logs
-                    setTimeout(() => {
-                        container.scrollTop = container.scrollHeight;
-                    }, 100);
+                
+                if (data.logs.length === 0) {
+                    container.innerHTML = '<div style="color: var(--secondary-text);">No logs available</div>';
+                    return;
                 }
+
+                // Render logs
+                container.innerHTML = data.logs.map(log => `
+                    <div class="log-line ${log.level}">
+                        ${log.timestamp ? `<span style="color: #666;">[${log.timestamp}]</span> ` : ''}
+                        ${log.message}
+                    </div>
+                `).join('');
+
+                // ALWAYS scroll to bottom to show most recent logs
+                setTimeout(() => {
+                    container.scrollTop = container.scrollHeight;
+                }, 100);
 
             } catch (error) {
                 console.error('Error loading command center:', error);

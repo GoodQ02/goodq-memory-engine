@@ -1460,21 +1460,30 @@ async def control_agent_chat(message: ChatMessage):
                     "timestamp": datetime.now().isoformat()
                 }
                 
-                # Get AI response
-                response = control_agent.llm.chat(
-                    f"You are the GoodQ Control Agent, an AI that helps troubleshoot and optimize the video processing pipeline. "
-                    f"The user asks: {message.message}\n\n"
-                    f"Provide helpful, actionable guidance about pipeline operations, errors, or optimization.",
-                    context
-                )
+                # Get AI response using proper message format
+                messages = [
+                    {
+                        "role": "system",
+                        "content": "You are the GoodQ Control Agent, an AI assistant that helps troubleshoot and optimize the video processing pipeline. Provide helpful, actionable guidance about pipeline operations, errors, or optimization."
+                    },
+                    {
+                        "role": "user",
+                        "content": message.message
+                    }
+                ]
+                response = control_agent.llm.chat(messages, prefer_speed=True)
                 
                 if response:
+                    # Extract message from OpenAI-compatible response
+                    response_text = response.get("choices", [{}])[0].get("message", {}).get("content", "")
+                    model_used = response.get("model", "unknown")
+                    
                     return {
-                        "message": response,
+                        "message": response_text,
                         "context": {
                             "agent": "control_agent",
                             "llm_used": True,
-                            "model": control_agent.llm.model if hasattr(control_agent.llm, 'model') else "unknown",
+                            "model": model_used,
                             "timestamp": datetime.now().isoformat()
                         }
                     }
@@ -1484,16 +1493,28 @@ async def control_agent_chat(message: ChatMessage):
         # Fallback: Use regular LLM
         if llm and hasattr(llm, 'available') and llm.available:
             print("[CONTROL AGENT] Using fallback LLM...")
-            response = llm.chat(
-                f"You are the GoodQ Control Agent. Help with: {message.message}",
-                {"role": "control_agent"}
-            )
+            messages = [
+                {
+                    "role": "system",
+                    "content": "You are the GoodQ Control Agent. Help troubleshoot and optimize the video processing pipeline."
+                },
+                {
+                    "role": "user",
+                    "content": message.message
+                }
+            ]
+            response = llm.chat(messages, prefer_speed=True)
             if response:
+                # Extract message from OpenAI-compatible response
+                response_text = response.get("choices", [{}])[0].get("message", {}).get("content", "")
+                model_used = response.get("model", "unknown")
+                
                 return {
-                    "message": response,
+                    "message": response_text,
                     "context": {
                         "agent": "control_agent_fallback",
                         "llm_used": True,
+                        "model": model_used,
                         "timestamp": datetime.now().isoformat()
                     }
                 }

@@ -227,8 +227,8 @@ def _merge_speaker_segments(chunks: List[Dict[str, Any]], threshold: float = 0.5
     return merged
 
 
-def _format_segments(diarization, offset: float = 0.0) -> List[Dict[str, Any]]:
-    """Format diarization segments with time offset"""
+def _format_segments(diarization, offset: float = 0.0, overlap_regions=None) -> List[Dict[str, Any]]:
+    """Format diarization segments with time offset and overlap flags"""
     segments: List[Dict[str, Any]] = []
     if diarization is None:
         return segments
@@ -236,10 +236,25 @@ def _format_segments(diarization, offset: float = 0.0) -> List[Dict[str, Any]]:
         for turn, _, speaker in diarization.itertracks(yield_label=True):
             start = float(getattr(turn, "start", 0.0) or 0.0) + offset
             end = float(getattr(turn, "end", 0.0) or 0.0) + offset
+            
+            # Check if segment has overlapped speech
+            has_overlap = False
+            if overlap_regions:
+                for overlap in overlap_regions:
+                    overlap_start = float(getattr(overlap, "start", 0.0) or 0.0)
+                    overlap_end = float(getattr(overlap, "end", 0.0) or 0.0)
+                    # Check if overlap intersects with this segment
+                    if (overlap_start <= start < overlap_end or 
+                        overlap_start < end <= overlap_end or
+                        (start <= overlap_start and overlap_end <= end)):
+                        has_overlap = True
+                        break
+            
             segments.append({
                 "start": max(0.0, start),
                 "end": max(start, end),
                 "speaker": str(speaker),
+                "has_overlap": has_overlap,  # NEW: Flag for overlapped speech
             })
     except Exception as e:
         return []
@@ -416,6 +431,62 @@ def audio_diarize(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
                 import traceback
                 print(traceback.format_exc())
         
+        # OSD: Overlapped Speech Detection (NEW!)
+        overlap_regions = None
+        osd_enabled = dz_cfg.get("osd_enabled", True)
+        
+        if osd_enabled and device == "cuda":  # OSD works best on GPU
+            try:
+                from pyannote.audio.pipelines import OverlappedSpeechDetection
+                
+                print("[DIARIZE] Running overlapped speech detection...")
+                if tracker:
+                    tracker.update_step("audio_diarize", 4, {"details": "Detecting overlapped speech..."})
+                
+                osd_start = time.time()
+                
+                # Initialize OSD pipeline
+                osd = OverlappedSpeechDetection(segmentation="pyannote/segmentation-3.0")
+                osd_pipeline = osd.instantiate({
+                    "onset": float(dz_cfg.get("osd_onset", 0.5)),
+                    "offset": float(dz_cfg.get("osd_offset", 0.5)),
+                    "min_duration_on": float(dz_cfg.get("osd_min_duration", 0.1)),
+                    "min_duration_off": 0.1,
+                })
+                
+                # Move to GPU
+                import torch
+                osd_pipeline.to(torch.device("cuda"))
+                
+                # Detect overlaps
+                overlap_regions = osd_pipeline(audio_path)
+                
+                # Convert to list for easier processing
+                overlap_list = list(overlap_regions)
+                osd_elapsed = time.time() - osd_start
+                
+                total_overlap_duration = sum(
+                    (overlap.end - overlap.start) for overlap in overlap_list
+                )
+                
+                print(f"[DIARIZE] OSD complete in {osd_elapsed:.1f}s")
+                print(f"[DIARIZE] Detected {len(overlap_list)} overlapped speech regions ({total_overlap_duration:.1f}s total)")
+                
+                if len(overlap_list) > 0:
+                    print(f"[DIARIZE] This indicates multi-speaker conversation with cross-talk")
+                
+            except ImportError as import_exc:
+                print(f"[DIARIZE] WARN: OSD not available - pyannote.audio may need update: {str(import_exc)}")
+                overlap_regions = None
+            except Exception as osd_exc:
+                print(f"[DIARIZE] WARN: OSD failed: {str(osd_exc)}")
+                print("[DIARIZE] Continuing without overlap detection")
+                import traceback
+                print(traceback.format_exc())
+                overlap_regions = None
+        elif osd_enabled and device == "cpu":
+            print("[DIARIZE] OSD skipped (requires GPU for performance)")
+        
         # Load pipeline with duration hint for optimal GPU configuration
         pipeline = _load_pipeline(model_id, device, auth_token, duration_minutes)
         if pipeline is None:
@@ -472,10 +543,10 @@ def audio_diarize(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
                 
                 print(f"[DIARIZE] Chunk {chunk_idx+1}/{num_chunks}: {chunk_start/60:.1f}-{chunk_end/60:.1f}min ({chunk_duration/60:.1f}min)")
                 
-                # Update progress
+                # Update progress with sub-progress
                 if tracker:
-                    progress = int((chunk_idx / num_chunks) * 85) + 5  # 5-90%
-                    tracker.update_step("audio_diarize", progress, {
+                    sub_progress = (chunk_idx / num_chunks) * 100  # 0-100% within this step
+                    tracker.update_step("audio_diarize", sub_progress, {
                         "details": f"Processing chunk {chunk_idx+1}/{num_chunks} ({chunk_start/60:.1f}-{chunk_end/60:.1f}min)"
                     })
                 
@@ -496,7 +567,7 @@ def audio_diarize(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
                     chunk_start_time = time.time()
                     chunk_diarization = pipeline(chunk_path)
                     chunk_elapsed = time.time() - chunk_start_time
-                    chunk_segments = _format_segments(chunk_diarization, offset=chunk_start)
+                    chunk_segments = _format_segments(chunk_diarization, offset=chunk_start, overlap_regions=overlap_regions)
                     
                     chunk_results.append({
                         "chunk_idx": chunk_idx,
@@ -548,7 +619,30 @@ def audio_diarize(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
         else:
             # Process entire file (audio_path may be extracted or VAD-filtered)
             diarization = pipeline(audio_path)
-            segments = _format_segments(diarization)
+            
+            # Resegmentation: Refine boundaries (NEW!)
+            if device == "cuda" and dz_cfg.get("resegment_enabled", True):
+                try:
+                    from pyannote.audio.pipelines import Resegmentation
+                    
+                    print("[DIARIZE] Refining speaker boundaries with resegmentation...")
+                    reseg_start = time.time()
+                    
+                    reseg = Resegmentation(
+                        segmentation="pyannote/segmentation-3.0",
+                        device=torch.device("cuda")
+                    )
+                    diarization = reseg(audio_path, diarization)
+                    
+                    reseg_elapsed = time.time() - reseg_start
+                    print(f"[DIARIZE] Resegmentation complete in {reseg_elapsed:.1f}s")
+                    
+                except ImportError as import_exc:
+                    print(f"[DIARIZE] WARN: Resegmentation not available: {str(import_exc)}")
+                except Exception as reseg_exc:
+                    print(f"[DIARIZE] WARN: Resegmentation failed: {str(reseg_exc)}, using original")
+            
+            segments = _format_segments(diarization, overlap_regions=overlap_regions)
         
         elapsed = time.time() - start_time
         
@@ -602,6 +696,15 @@ def audio_diarize(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
         # Get GPU memory stats for metadata
         gpu_stats = optimizer.get_memory_stats() if device == "cuda" else {}
         
+        # Count overlapped segments (NEW)
+        overlap_count = sum(1 for seg in segments if seg.get("has_overlap", False))
+        total_overlap_duration = sum(
+            (seg["end"] - seg["start"]) for seg in segments if seg.get("has_overlap", False)
+        )
+        
+        if overlap_count > 0:
+            print(f"[DIARIZE] ⚠️  {overlap_count} segments have overlapped speech ({total_overlap_duration:.1f}s total)")
+        
         meta = {
             "status": "ok",
             "engine": "pyannote",
@@ -618,6 +721,11 @@ def audio_diarize(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
             "gpu_utilization": gpu_stats.get("utilization"),
             "vad_enabled": vad_enabled and vad_savings is not None,
             "vad_savings": vad_savings,
+            "osd_enabled": osd_enabled,  # NEW
+            "overlap_detected": overlap_count > 0,  # NEW  
+            "overlap_segment_count": overlap_count,  # NEW
+            "overlap_duration_seconds": round(total_overlap_duration, 2),  # NEW
+            "resegment_enabled": dz_cfg.get("resegment_enabled", True),  # NEW
         }
         # Cleanup temp audio file if we created one
         if temp_audio_file and os.path.exists(temp_audio_file.name):

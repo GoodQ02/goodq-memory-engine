@@ -181,58 +181,125 @@
             </p>
         </div>
         
-        <div class="status-grid">
-            <div class="status-card">
-                <h3>Current Video</h3>
-                <div class="status-value" id="video-name">1987_1988.mp4</div>
-                <div class="status-label">The year you were born! 🎂</div>
-            </div>
+        <!-- MODEL HEALTH STATUS SECTION -->
+        <div class="timeline" style="margin-bottom: 30px;">
+            <h3 style="color: var(--accent-color); margin-bottom: 20px;">
+                🤖 LLM MODEL HEALTH STATUS
+            </h3>
             
-            <div class="status-card">
-                <h3>Progress</h3>
-                <div class="status-value" id="progress-percent">56.7%</div>
-                <div class="status-label">Complete</div>
-                <div class="progress-bar">
-                    <div class="progress-fill" id="progress-bar" style="width: 56.7%"></div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 16px;">
+                <!-- vLLM Status Card -->
+                <div class="status-card" style="background: var(--accent-bg);">
+                    <h3 style="margin-bottom: 12px;">⚡ vLLM (WSL)</h3>
+                    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+                        <span id="vllm-indicator" class="live-indicator" style="background: var(--warning-color);"></span>
+                        <span id="vllm-status" style="font-size: 18px; font-weight: 600;">Checking...</span>
+                    </div>
+                    <div style="color: var(--secondary-text); font-size: 13px;" id="vllm-detail">
+                        Loading health data...
+                    </div>
+                </div>
+                
+                <!-- Ollama Status Card -->
+                <div class="status-card" style="background: var(--accent-bg);">
+                    <h3 style="margin-bottom: 12px;">🦙 Ollama</h3>
+                    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+                        <span id="ollama-indicator" class="live-indicator" style="background: var(--warning-color);"></span>
+                        <span id="ollama-status" style="font-size: 18px; font-weight: 600;">Checking...</span>
+                    </div>
+                    <div style="color: var(--secondary-text); font-size: 13px;" id="ollama-detail">
+                        Loading health data...
+                    </div>
+                </div>
+                
+                <!-- Overall Status Card -->
+                <div class="status-card" style="background: var(--accent-bg);">
+                    <h3 style="margin-bottom: 12px;">📊 Overall</h3>
+                    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+                        <span id="overall-indicator" class="live-indicator" style="background: var(--warning-color);"></span>
+                        <span id="overall-status" style="font-size: 18px; font-weight: 600;">Checking...</span>
+                    </div>
+                    <div style="color: var(--secondary-text); font-size: 13px;" id="overall-detail">
+                        Loading health data...
+                    </div>
                 </div>
             </div>
             
-            <div class="status-card">
-                <h3>Scenes Processed</h3>
-                <div class="status-value" id="scenes-count">85</div>
-                <div class="status-label">of ~150 estimated</div>
-            </div>
-            
-            <div class="status-card">
-                <h3>Estimated Completion</h3>
-                <div class="status-value" id="eta">6:19 PM</div>
-                <div class="status-label">~2 hours remaining</div>
+            <!-- Detailed Model List (Collapsible) -->
+            <div style="margin-top: 20px;">
+                <button id="toggle-models" onclick="toggleModelDetails()" style="
+                    background: var(--secondary-bg);
+                    color: var(--accent-color);
+                    border: 1px solid var(--accent-bg);
+                    padding: 8px 16px;
+                    border-radius: 6px;
+                    cursor: pointer;
+                    font-size: 13px;
+                    font-weight: 600;
+                ">
+                    🔽 Show All Models
+                </button>
+                
+                <div id="model-details" style="display: none; margin-top: 16px;">
+                    <div id="model-list" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px;">
+                        <!-- Models will be inserted here dynamically -->
+                    </div>
+                </div>
             </div>
         </div>
         
         <div class="status-grid">
             <div class="status-card">
+                <h3>Current Video</h3>
+                <div class="status-value" id="video-name">Loading...</div>
+                <div class="status-label" id="video-label">Checking status...</div>
+            </div>
+            
+            <div class="status-card">
+                <h3>Progress</h3>
+                <div class="status-value" id="progress-percent">0%</div>
+                <div class="status-label" id="progress-step">Initializing</div>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progress-bar" style="width: 0%"></div>
+                </div>
+            </div>
+            
+            <div class="status-card">
+                <h3>Scenes Processed</h3>
+                <div class="status-value" id="scenes-count">0</div>
+                <div class="status-label" id="scenes-label">Detecting scenes</div>
+            </div>
+            
+            <div class="status-card">
                 <h3>Processing Rate</h3>
-                <div class="status-value">120s</div>
-                <div class="status-label">Per scene (~0.5/min)</div>
+                <div class="status-value" id="processing-rate">--</div>
+                <div class="status-label" id="rate-label">Calculating...</div>
+            </div>
+        </div>
+        
+        <div class="status-grid">
+            <div class="status-card">
+                <h3>Frames Extracted</h3>
+                <div class="status-value" id="frames-count">0</div>
+                <div class="status-label">Key frames</div>
             </div>
             
             <div class="status-card">
                 <h3>Audio Clips</h3>
-                <div class="status-value" id="audio-count">85</div>
+                <div class="status-value" id="audio-count">0</div>
                 <div class="status-label">Scene audio extracted</div>
             </div>
             
             <div class="status-card">
                 <h3>Video Size</h3>
-                <div class="status-value">7.28 GB</div>
-                <div class="status-label">Home movie footage</div>
+                <div class="status-value" id="video-size">-- GB</div>
+                <div class="status-label">Current file</div>
             </div>
             
             <div class="status-card">
                 <h3>Started</h3>
-                <div class="status-value" style="font-size: 24px;">1:18 PM</div>
-                <div class="status-label">Nov 8, 2025</div>
+                <div class="status-value" style="font-size: 24px;" id="started-time">--</div>
+                <div class="status-label" id="started-date">Not started</div>
             </div>
         </div>
         
@@ -241,42 +308,42 @@
                 🔄 PIPELINE STAGES
             </h3>
             
-            <div class="timeline-item">
-                <div class="timeline-time">✅ Complete</div>
+            <div class="timeline-item" id="stage-scene-detection">
+                <div class="timeline-time">⏳ Pending</div>
                 <div class="timeline-content">
                     <strong>Scene Detection</strong><br>
-                    <span style="color: var(--secondary-text); font-size: 14px;">
-                        85 scenes identified and segmented
+                    <span style="color: var(--secondary-text); font-size: 14px;" id="stage-scene-detail">
+                        Waiting to start...
                     </span>
                 </div>
             </div>
             
-            <div class="timeline-item">
-                <div class="timeline-time">✅ Complete</div>
+            <div class="timeline-item" id="stage-frame-extraction">
+                <div class="timeline-time">⏳ Pending</div>
                 <div class="timeline-content">
                     <strong>Frame Extraction</strong><br>
-                    <span style="color: var(--secondary-text); font-size: 14px;">
-                        Key frames extracted from each scene
+                    <span style="color: var(--secondary-text); font-size: 14px;" id="stage-frame-detail">
+                        Waiting for scenes...
                     </span>
                 </div>
             </div>
             
-            <div class="timeline-item">
-                <div class="timeline-time">✅ Complete</div>
+            <div class="timeline-item" id="stage-audio-separation">
+                <div class="timeline-time">⏳ Pending</div>
                 <div class="timeline-content">
                     <strong>Audio Separation</strong><br>
-                    <span style="color: var(--secondary-text); font-size: 14px;">
-                        85 audio clips extracted for analysis
+                    <span style="color: var(--secondary-text); font-size: 14px;" id="stage-audio-detail">
+                        Waiting for scenes...
                     </span>
                 </div>
             </div>
             
-            <div class="timeline-item">
-                <div class="timeline-time">🔄 Active</div>
+            <div class="timeline-item" id="stage-embeddings">
+                <div class="timeline-time">⏳ Pending</div>
                 <div class="timeline-content">
-                    <strong>Visual Embeddings (DINO)</strong><br>
-                    <span style="color: var(--success-color); font-size: 14px;">
-                        Creating visual embeddings with LLM vision models
+                    <strong>Visual Embeddings</strong><br>
+                    <span style="color: var(--secondary-text); font-size: 14px;" id="stage-embed-detail">
+                        Waiting for frames...
                     </span>
                 </div>
             </div>
@@ -338,27 +405,304 @@
     </div>
     
     <script>
-        async function updateStats() {
+        let modelsExpanded = false;
+        
+        async function updateModelHealth() {
             try {
-                const response = await fetch('http://localhost:3000/api/status');
+                const response = await fetch('/api/engines');
                 const data = await response.json();
-                console.log('Status update:', data);
+                console.log('Model health update:', data);
                 
-                // You can update the UI here with real-time data
-                if (data.processing && data.processing.active) {
-                    document.getElementById('video-name').textContent = data.processing.current_file;
+                // Update vLLM status
+                const vllmIndicator = document.getElementById('vllm-indicator');
+                const vllmStatus = document.getElementById('vllm-status');
+                const vllmDetail = document.getElementById('vllm-detail');
+                
+                if (data.vllm.status === 'healthy') {
+                    vllmIndicator.style.background = 'var(--success-color)';
+                    vllmStatus.textContent = '✅ Healthy';
+                    vllmStatus.style.color = 'var(--success-color)';
+                } else if (data.vllm.status === 'degraded') {
+                    vllmIndicator.style.background = 'var(--warning-color)';
+                    vllmStatus.textContent = '⚠️ Degraded';
+                    vllmStatus.style.color = 'var(--warning-color)';
+                } else {
+                    vllmIndicator.style.background = '#ef4444';
+                    vllmStatus.textContent = '❌ Down';
+                    vllmStatus.style.color = '#ef4444';
                 }
+                vllmDetail.textContent = `${data.vllm.healthy}/${data.vllm.total} models online`;
+                
+                // Update Ollama status
+                const ollamaIndicator = document.getElementById('ollama-indicator');
+                const ollamaStatus = document.getElementById('ollama-status');
+                const ollamaDetail = document.getElementById('ollama-detail');
+                
+                if (data.ollama.status === 'healthy') {
+                    ollamaIndicator.style.background = 'var(--success-color)';
+                    ollamaStatus.textContent = '✅ Healthy';
+                    ollamaStatus.style.color = 'var(--success-color)';
+                } else if (data.ollama.status === 'degraded') {
+                    ollamaIndicator.style.background = 'var(--warning-color)';
+                    ollamaStatus.textContent = '⚠️ Degraded';
+                    ollamaStatus.style.color = 'var(--warning-color)';
+                } else {
+                    ollamaIndicator.style.background = '#ef4444';
+                    ollamaStatus.textContent = '❌ Down';
+                    ollamaStatus.style.color = '#ef4444';
+                }
+                ollamaDetail.textContent = `${data.ollama.healthy}/${data.ollama.total} models online`;
+                
+                // Update Overall status
+                const overallIndicator = document.getElementById('overall-indicator');
+                const overallStatus = document.getElementById('overall-status');
+                const overallDetail = document.getElementById('overall-detail');
+                
+                if (data.overall.status === 'healthy') {
+                    overallIndicator.style.background = 'var(--success-color)';
+                    overallStatus.textContent = '✅ All Systems Online';
+                    overallStatus.style.color = 'var(--success-color)';
+                } else if (data.overall.status === 'degraded') {
+                    overallIndicator.style.background = 'var(--warning-color)';
+                    overallStatus.textContent = '⚠️ Partial Availability';
+                    overallStatus.style.color = 'var(--warning-color)';
+                } else {
+                    overallIndicator.style.background = '#ef4444';
+                    overallStatus.textContent = '❌ System Down';
+                    overallStatus.style.color = '#ef4444';
+                }
+                overallDetail.textContent = `${data.overall.healthy}/${data.overall.total} total models`;
+                
+                // If models are expanded, update detailed view
+                if (modelsExpanded) {
+                    await updateModelDetails();
+                }
+                
             } catch (error) {
-                console.error('Failed to fetch status:', error);
+                console.error('Failed to fetch model health:', error);
+                
+                // Show error state
+                document.getElementById('vllm-status').textContent = '❌ API Error';
+                document.getElementById('ollama-status').textContent = '❌ API Error';
+                document.getElementById('overall-status').textContent = '❌ API Error';
+                document.getElementById('vllm-detail').textContent = 'Health API not reachable';
+                document.getElementById('ollama-detail').textContent = 'Health API not reachable';
+                document.getElementById('overall-detail').textContent = 'Start with: python api/health_status.py';
             }
         }
         
-        // Update every 30 seconds
-        setInterval(updateStats, 30000);
+        async function updateModelDetails() {
+            try {
+                const response = await fetch('/api/engines');
+                const data = await response.json();
+                
+                const modelList = document.getElementById('model-list');
+                modelList.innerHTML = '';
+                
+                data.models.forEach(model => {
+                    const modelCard = document.createElement('div');
+                    modelCard.style.cssText = `
+                        background: var(--secondary-bg);
+                        border: 1px solid var(--accent-bg);
+                        border-radius: 8px;
+                        padding: 12px;
+                        font-size: 13px;
+                    `;
+                    
+                    const statusColor = model.is_healthy ? 'var(--success-color)' : '#ef4444';
+                    const statusIcon = model.is_healthy ? '✅' : '❌';
+                    const backendColor = model.backend === 'vllm' ? '#5b7cff' : '#f97316';
+                    
+                    modelCard.innerHTML = `
+                        <div style="display: flex; align-items: start; justify-content: space-between; margin-bottom: 8px;">
+                            <div style="font-weight: 600; color: var(--primary-text);">${model.name}</div>
+                            <span style="font-size: 16px;">${statusIcon}</span>
+                        </div>
+                        <div style="color: var(--secondary-text); font-size: 11px; margin-bottom: 6px;">
+                            <span style="background: ${backendColor}; padding: 2px 6px; border-radius: 3px; text-transform: uppercase; font-weight: 600;">
+                                ${model.backend}
+                            </span>
+                            <span style="margin-left: 6px;">Port ${model.port}</span>
+                        </div>
+                        <div style="color: var(--secondary-text); font-size: 11px; margin-bottom: 4px;">
+                            ${model.is_healthy ? 
+                                `Response: ${model.response_time_ms}ms` : 
+                                `Failures: ${model.consecutive_failures}`
+                            }
+                        </div>
+                        <div style="color: var(--secondary-text); font-size: 11px;">
+                            ${model.vram_gb}GB VRAM • ${model.tokens_per_sec} tok/s
+                        </div>
+                        ${!model.is_healthy && model.last_error ? `
+                            <div style="color: #ef4444; font-size: 10px; margin-top: 6px; padding: 4px; background: rgba(239, 68, 68, 0.1); border-radius: 4px;">
+                                ${model.last_error.substring(0, 80)}${model.last_error.length > 80 ? '...' : ''}
+                            </div>
+                        ` : ''}
+                    `;
+                    
+                    modelList.appendChild(modelCard);
+                });
+                
+            } catch (error) {
+                console.error('Failed to fetch model details:', error);
+            }
+        }
+        
+        function toggleModelDetails() {
+            modelsExpanded = !modelsExpanded;
+            const detailsDiv = document.getElementById('model-details');
+            const toggleBtn = document.getElementById('toggle-models');
+            
+            if (modelsExpanded) {
+                detailsDiv.style.display = 'block';
+                toggleBtn.textContent = '🔼 Hide Model Details';
+                updateModelDetails();
+            } else {
+                detailsDiv.style.display = 'none';
+                toggleBtn.textContent = '🔽 Show All Models';
+            }
+        }
+        
+        async function updateStats() {
+            try {
+                const response = await fetch('/api/processing/stats');
+                const data = await response.json();
+                console.log('Processing stats:', data);
+
+                // Update current video
+                const videoName = data.current_video.name || 'No active processing';
+                document.getElementById('video-name').textContent = videoName;
+                
+                // Special message for 1987-1988 video
+                if (videoName.includes('1987') && videoName.includes('1988')) {
+                    document.getElementById('video-label').textContent = 'The year you were born! 🎂';
+                } else if (data.status === 'idle') {
+                    document.getElementById('video-label').textContent = 'Ready for processing';
+                } else {
+                    document.getElementById('video-label').textContent = 'Processing home movie';
+                }
+
+                // Update progress
+                const progressPercent = data.current_video.progress_percent || 0;
+                document.getElementById('progress-percent').textContent = progressPercent + '%';
+                document.getElementById('progress-bar').style.width = progressPercent + '%';
+                document.getElementById('progress-step').textContent = data.current_video.current_step || 'Idle';
+
+                // Update scenes
+                const scenesCount = data.scenes.detected || 0;
+                document.getElementById('scenes-count').textContent = scenesCount;
+                document.getElementById('scenes-label').textContent = scenesCount > 0 ? 'scenes detected' : 'detecting scenes';
+
+                // Update frames
+                document.getElementById('frames-count').textContent = data.scenes.frames_extracted || 0;
+
+                // Update audio clips
+                document.getElementById('audio-count').textContent = data.scenes.audio_clips || 0;
+
+                // Update video size
+                const videoSizeGB = data.current_video.size_gb || 0;
+                document.getElementById('video-size').textContent = videoSizeGB > 0 ? videoSizeGB + ' GB' : '-- GB';
+
+                // Update processing rate
+                const rate = data.processing_rate;
+                if (rate.seconds_per_scene > 0) {
+                    document.getElementById('processing-rate').textContent = Math.round(rate.seconds_per_scene) + 's';
+                    document.getElementById('rate-label').textContent = `Per scene (~${rate.scenes_per_minute.toFixed(1)}/min)`;
+                } else {
+                    document.getElementById('processing-rate').textContent = '--';
+                    document.getElementById('rate-label').textContent = 'Calculating...';
+                }
+
+                // Update timestamps
+                if (data.timestamps.started_at) {
+                    const startedDate = new Date(data.timestamps.started_at);
+                    document.getElementById('started-time').textContent = startedDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+                    document.getElementById('started-date').textContent = startedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                } else {
+                    document.getElementById('started-time').textContent = '--';
+                    document.getElementById('started-date').textContent = 'Not started';
+                }
+
+                // Update pipeline stages based on current step
+                const currentStep = data.current_video.current_step || '';
+                updatePipelineStages(currentStep, scenesCount, data.scenes.frames_extracted, data.scenes.audio_clips);
+
+            } catch (error) {
+                console.error('Failed to fetch processing stats:', error);
+                // Show offline state
+                document.getElementById('video-name').textContent = 'API Offline';
+                document.getElementById('video-label').textContent = 'Processing API not reachable';
+            }
+        }
+
+        function updatePipelineStages(currentStep, scenesCount, framesCount, audioCount) {
+            const stages = {
+                'scene': document.getElementById('stage-scene-detection'),
+                'frame': document.getElementById('stage-frame-extraction'),
+                'audio': document.getElementById('stage-audio-separation'),
+                'embed': document.getElementById('stage-embeddings')
+            };
+
+            // Scene Detection
+            if (scenesCount > 0 || currentStep.toLowerCase().includes('scene')) {
+                const time = stages.scene.querySelector('.timeline-time');
+                const detail = document.getElementById('stage-scene-detail');
+                if (currentStep.toLowerCase().includes('complete') || scenesCount > 0) {
+                    time.textContent = '✅ Complete';
+                    detail.textContent = `${scenesCount} scenes identified and segmented`;
+                } else {
+                    time.textContent = '🔄 Active';
+                    detail.textContent = 'Analyzing video for scene changes...';
+                }
+            }
+
+            // Frame Extraction
+            if (framesCount > 0) {
+                const time = stages.frame.querySelector('.timeline-time');
+                const detail = document.getElementById('stage-frame-detail');
+                time.textContent = '✅ Complete';
+                detail.textContent = `${framesCount} key frames extracted`;
+            } else if (scenesCount > 0) {
+                const time = stages.frame.querySelector('.timeline-time');
+                const detail = document.getElementById('stage-frame-detail');
+                time.textContent = '🔄 Active';
+                detail.textContent = 'Extracting key frames from scenes...';
+            }
+
+            // Audio Separation
+            if (audioCount > 0) {
+                const time = stages.audio.querySelector('.timeline-time');
+                const detail = document.getElementById('stage-audio-detail');
+                time.textContent = '✅ Complete';
+                detail.textContent = `${audioCount} audio clips extracted for analysis`;
+            } else if (scenesCount > 0) {
+                const time = stages.audio.querySelector('.timeline-time');
+                const detail = document.getElementById('stage-audio-detail');
+                time.textContent = '🔄 Active';
+                detail.textContent = 'Separating audio tracks...';
+            }
+
+            // Embeddings (starts after frames are ready)
+            if (framesCount > 0 && audioCount > 0) {
+                const time = stages.embed.querySelector('.timeline-time');
+                const detail = document.getElementById('stage-embed-detail');
+                time.textContent = '🔄 Active';
+                detail.textContent = 'Creating visual embeddings with LLM vision models';
+            }
+        }
+        
+        // Update model health every 10 seconds
+        setInterval(updateModelHealth, 10000);
+        updateModelHealth();
+        
+        // Update processing stats every 5 seconds for real-time feel
+        setInterval(updateStats, 5000);
         updateStats();
         
-        console.log('GoodQ Processing Dashboard Loaded');
-        console.log('Monitoring 1987_1988.mp4 - Your birth year! 🎂');
+        console.log('🚀 GoodQ Processing Dashboard Loaded');
+        console.log('✅ Model health monitoring active - vLLM + Ollama');
+        console.log('✅ Real-time processing stats active');
+        console.log('📊 Refreshing every 5 seconds');
     </script>
 </body>
 </html>

@@ -162,6 +162,22 @@ audio:
     max_speakers: 10
     embedding_model: speechbrain/spkrec-ecapa-voxceleb
     chunk_size_minutes: 10.0  # Split long audio into chunks (prevents hanging)
+    
+    # VAD Settings (Voice Activity Detection)
+    vad_enabled: true  # Pre-filter silence before diarization
+    vad_threshold: 0.5  # 0.3-0.7, higher = stricter (0.5 balanced)
+    vad_min_speech_ms: 400  # Minimum speech segment duration
+    vad_min_silence_ms: 200  # Minimum silence duration to split
+    vad_merge_gap_seconds: 1.0  # Merge segments with gaps < this
+    
+    # OSD Settings (Overlapped Speech Detection) - NEW!
+    osd_enabled: true  # Detect when 2+ speakers talk simultaneously
+    osd_onset: 0.5  # Threshold for overlap detection start (0.0-1.0)
+    osd_offset: 0.5  # Threshold for overlap detection end (0.0-1.0)
+    osd_min_duration: 0.1  # Minimum overlap duration in seconds
+    
+    # Resegmentation Settings - NEW!
+    resegment_enabled: true  # Refine speaker boundaries after diarization
   emotion:
     enabled: true
     model: speechbrain/emotion-recognition-wav2vec2-IEMOCAP

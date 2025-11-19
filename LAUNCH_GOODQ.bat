@@ -11,12 +11,12 @@ color 0B
 
 echo.
 echo ================================================================================
-echo   _____                 _  _____ _  _    ___   _ _ 
-echo  ^|  __ \               ^| ^|^|  _  ^| ^|^| ^|  / _ \ ^| ^| ^|
-echo  ^| ^|  \/ ___   ___   __^| ^|^| ^|/' ^|_^|^|_^| / /_\ \^| ^| ^|
-echo  ^| ^| __ / _ \ / _ \ / _` ^|^|  /^| ^| _^| ^|^|  _  ^|^| ^| ^|
-echo  ^| ^|_\ \ (_) ^| (_) ^| (_^| ^|\ ^|_/ /^|_^|^|_^|^| ^| ^| ^|^| ^| ^|
-echo   \____/\___/ \___/ \__,_^| \___/  \___/\_^| ^|_/\_\_^|
+echo   _____                 _  ____    _  _    ___   _ _ 
+echo  ^|  __ \               ^| ^|/ __ \  ^| ^|^| ^|  / _ \ ^| ^| ^|
+echo  ^| ^|  \/ ___   ___   __^| ^| ^|  ^| ^|_^|^|_^| / /_\ \^| ^| ^|
+echo  ^| ^| __ / _ \ / _ \ / _` ^| ^|  ^| ^| _^| ^|^|  _  ^|^| ^| ^|
+echo  ^| ^|_\ \ (_) ^| (_) ^| (_^| ^| ^|__^| ^|_^|^|_^|^| ^| ^| ^|^| ^| ^|
+echo   \____/\___/ \___/ \__,_^|\____/ \___/\_^| ^|_/\_\_^|
 echo.
 echo  Personal Memory ^& Knowledge Assistant
 echo  Version 2.0 - Production Ready
@@ -53,9 +53,10 @@ echo  Launch Menu
 echo ================================================================================
 echo.
 echo  1. Launch Complete System (Recommended)
-echo     - API Server (port 3000)
-echo     - Watchdog (auto-ingestion)  
-echo     - Web Interface
+echo     - Unified API Server (all endpoints on port 3000)
+echo     - Watchdog (auto-ingestion)
+echo     - WSL vLLM Service
+echo     - Web Interfaces (2 tabs)
 echo.
 echo  2. Launch API Server Only
 echo     - For manual video processing or UI testing
@@ -92,39 +93,55 @@ echo  Launching Complete System
 echo ================================================================================
 echo.
 
-echo [1/3] Starting API Server...
-start "GoodQ API Server" cmd /k "title GoodQ API Server && cd /d L:\goodq4all && conda run --no-capture-output -n goodq_zenml python scripts/api_server.py"
+echo [1/3] Starting Unified API Server...
+start "GoodQ API Server" cmd /k "title GoodQ API Server && cd /d L:\goodq4all\api && uvicorn main:app --host 0.0.0.0 --port 3000 --reload"
 echo       Waiting for server to initialize...
-timeout /t 5 /nobreak >nul
+timeout /t 8 /nobreak >nul
 
 echo [2/3] Starting Watchdog (Auto-Ingestion)...
-start "GoodQ Watchdog" cmd /k "title GoodQ Watchdog && cd /d L:\goodq4all && conda run --no-capture-output -n goodq_zenml python scripts/watchdog_ingest.py"
+start "GoodQ Watchdog" cmd /k "title GoodQ Watchdog && cd /d L:\goodq4all && python scripts\watchdog_ingest.py"
 echo       Waiting for watchdog to initialize...
 timeout /t 3 /nobreak >nul
 
-echo [3/3] Opening Web Interface...
+echo [3/3] Checking WSL vLLM Service Status...
+echo       vLLM service managed by systemd (check WSL terminal for status)
+timeout /t 1 /nobreak >nul
+
+echo [4/4] Opening Web Interfaces...
 start http://localhost:3000
+timeout /t 1 /nobreak >nul
+start http://localhost:3000/dashboard.html
 
 echo.
 echo ================================================================================
 echo  System Launched Successfully!
 echo ================================================================================
 echo.
-echo  � Web Interface:    http://localhost:3000
-echo  � API Endpoint:     http://localhost:3000/api
-echo  � Progress Monitor: http://localhost:3000/api/progress
+echo  🌐 Main Interface:      http://localhost:3000
+echo  📊 Dashboard:           http://localhost:3000/dashboard.html
+echo  🔌 API Endpoint:        http://localhost:3000/api
+echo  💚 Health API:          http://localhost:3000/api/health
+echo  📈 Processing API:      http://localhost:3000/api/processing/stats
+echo  🤖 vLLM (WSL):          http://localhost:8003/v1
+echo  🦙 Ollama:              http://localhost:11434/v1
 echo.
 echo  Active Services:
-echo    ? API Server      (GoodQ API Server window)
-echo    ? Watchdog        (GoodQ Watchdog window)
-echo    ? Web Interface   (Browser)
+echo    ✓ Unified API Server  (GoodQ API Server window - port 3000)
+echo    ✓ Watchdog            (GoodQ Watchdog window)
+echo    ✓ vLLM Server         (WSL - systemd service)
+echo    ✓ Web Interfaces      (2 Browser tabs)
+echo.
+echo  LLM Models Available:
+echo    ? Llama-1B-Speed     (vLLM - port 8003)
+echo    ? Phi4-Ollama        (Ollama - port 11434)
 echo.
 echo  Drop videos in: L:\goodq4all\import_inbox
 echo  They will be auto-processed by the watchdog
 echo.
 echo  To Stop Services:
 echo    - Run this launcher again and select option 5
-echo    - Or close the "GoodQ API Server" and "GoodQ Watchdog" windows
+echo    - Or close all "GoodQ" windows
+echo    - WSL vLLM runs as systemd service (persists)
 echo.
 echo ================================================================================
 echo.
@@ -226,14 +243,19 @@ echo  Stopping All GoodQ Services
 echo ================================================================================
 echo.
 
-echo Stopping processes...
+echo Stopping Windows processes...
 
 REM Kill processes by window title
 taskkill /FI "WINDOWTITLE eq GoodQ API Server*" /F >nul 2>&1
 taskkill /FI "WINDOWTITLE eq GoodQ Watchdog*" /F >nul 2>&1
+taskkill /FI "WINDOWTITLE eq GoodQ Health API*" /F >nul 2>&1
+taskkill /FI "WINDOWTITLE eq GoodQ Processing API*" /F >nul 2>&1
 
 echo.
-echo [?] All GoodQ services stopped
+echo [?] All Windows GoodQ services stopped
+echo.
+echo NOTE: WSL vLLM service runs independently via systemd
+echo       To stop vLLM, run: wsl sudo systemctl stop vllm-llama1b.service
 echo.
 echo ================================================================================
 pause

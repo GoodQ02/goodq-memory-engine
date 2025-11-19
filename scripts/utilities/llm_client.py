@@ -1,36 +1,53 @@
 """
 LLM Integration Module for GoodQ
-Connects to LM Studio for intelligent responses
+Connects to multiple LLM endpoints with intelligent fallback
 """
 import requests
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 
 class LLMClient:
-    def __init__(self, base_url: str = "http://localhost:1234/v1"):
-        self.base_url = base_url
-        self.model = None
-        self.available = self._check_availability()
+    def __init__(self, endpoints: List[Dict[str, str]] = None):
+        """
+        Initialize with multiple endpoints in priority order
+        endpoints = [{"url": "http://localhost:8003/v1", "name": "vLLM"}, ...]
+        """
+        if endpoints is None:
+            # Default endpoints in priority order: vLLM (fast) -> Ollama -> LM Studio
+            endpoints = [
+                {"url": "http://localhost:8003/v1", "name": "vLLM-Llama-1B"},
+                {"url": "http://localhost:11434/v1", "name": "Ollama-Phi4"},
+                {"url": "http://localhost:1234/v1", "name": "LM-Studio"}
+            ]
         
-    def _check_availability(self) -> bool:
-        """Check if LM Studio is running and has models loaded"""
-        try:
-            response = requests.get(f"{self.base_url}/models", timeout=2)
-            if response.ok:
-                data = response.json()
-                models = data.get('data', [])
-                if models:
-                    # Use first available model
-                    self.model = models[0]['id']
-                    print(f"✓ LM Studio connected! Using model: {self.model}")
-                    return True
-            return False
-        except Exception as e:
-            print(f"⚠ LM Studio not available: {e}")
-            return False
+        self.endpoints = endpoints
+        self.model = None
+        self.active_endpoint = None
+        self.available = self._find_healthy_endpoint()
+        
+    def _find_healthy_endpoint(self) -> bool:
+        """Find first healthy endpoint with available models"""
+        for endpoint in self.endpoints:
+            try:
+                response = requests.get(f"{endpoint['url']}/models", timeout=2)
+                if response.ok:
+                    data = response.json()
+                    models = data.get('data', [])
+                    if models:
+                        # Found a healthy endpoint!
+                        self.active_endpoint = endpoint
+                        self.model = models[0]['id']
+                        print(f"✓ {endpoint['name']} connected! Using model: {self.model}")
+                        return True
+            except Exception as e:
+                # Silently try next endpoint
+                pass
+        
+        print(f"⚠ No healthy LLM endpoints available")
+        return False
     
     def chat(self, message: str, context: Dict[str, Any] = None) -> str:
-        """Send a chat message to LM Studio"""
-        if not self.available:
+        """Send a chat message to active LLM endpoint"""
+        if not self.available or not self.active_endpoint:
             return None
             
         try:
@@ -68,7 +85,7 @@ Be conversational, helpful, and HONEST. When discussing memories or data:
                         context_str += f"- {key}: {value}\n"
                 system_prompt += context_str
             
-            # Call LM Studio
+            # Call active endpoint
             payload = {
                 "model": self.model,
                 "messages": [
@@ -81,7 +98,7 @@ Be conversational, helpful, and HONEST. When discussing memories or data:
             }
             
             response = requests.post(
-                f"{self.base_url}/chat/completions",
+                f"{self.active_endpoint['url']}/chat/completions",
                 json=payload,
                 timeout=30
             )
@@ -90,9 +107,13 @@ Be conversational, helpful, and HONEST. When discussing memories or data:
                 data = response.json()
                 return data['choices'][0]['message']['content']
             else:
-                print(f"LM Studio error: {response.status_code}")
+                print(f"{self.active_endpoint['name']} error: {response.status_code}")
+                # Try to reconnect to a different endpoint
+                self.available = self._find_healthy_endpoint()
                 return None
                 
         except Exception as e:
-            print(f"Error calling LM Studio: {e}")
+            print(f"Error calling {self.active_endpoint['name']}: {e}")
+            # Try to reconnect to a different endpoint
+            self.available = self._find_healthy_endpoint()
             return None

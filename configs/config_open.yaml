@@ -6,10 +6,12 @@ user:
 model:
   goodq_values: clarity, precision, humor, loyalty
 llm:
-  api_url: http://localhost:1234/v1/chat/completions
-  model_id: qwen2.5-7b-instruct
+  # Unified API endpoint (main.py serves all LLM routes)
+  api_url: http://localhost:3000/api/chat
+  # Model selection handled by LLMClient fallback chain
+  model_id: auto  # Uses best available: vLLM Llama-1B or Ollama Phi4
   timeout: 30
-  temperature: 0.5
+  temperature: 0.7
   features:
     scene_summarization: true
     video_summarization: true
@@ -26,19 +28,19 @@ tts:
 ha:
   url: http://192.168.0.154:8123
 tools:
-  root: L:\Tools
-  piper_exe: L:\Tools\piper\piper.exe
-  piper_voice: L:\Tools\piper\en_US-libritts-high.onnx
-  tesseract_exe: L:\Tools\tesseract\tesseract.exe
-  ffmpeg_exe: L:\Tools\ffmpeg\bin\ffmpeg.exe
-  poppler_bin: L:\Tools\poppler\bin
-  pdftotext_exe: L:\Tools\poppler\bin\pdftotext.exe
-  whisper_cli: L:\Tools\whisper\whisper-cli.exe
-  whisper_ggml_model: L:\Tools\whisper\ggml-large-v3.bin
+  root: L:\_TOOLS
+  piper_exe: L:\_TOOLS\piper\piper.exe
+  piper_voice: L:\_TOOLS\piper\en_US-libritts-high.onnx
+  tesseract_exe: L:\_TOOLS\tesseract\tesseract.exe
+  ffmpeg_exe: L:\_TOOLS\ffmpeg\bin\ffmpeg.exe
+  poppler_bin: L:\_TOOLS\poppler\bin
+  pdftotext_exe: L:\_TOOLS\poppler\bin\pdftotext.exe
+  whisper_cli: L:\_TOOLS\whisper\whisper-cli.exe
+  whisper_ggml_model: L:\_TOOLS\whisper\ggml-large-v3.bin
 models:
-  yolo_model_path: L:\models\yolo\yolov8n.pt
+  yolo_model_path: L:\_DATA\models\vision\yolo\yolov8n.pt
   lexicons:
-    nrc_emotion_dir: L:\models\lexicons\NRC-Emotion-Lexicon
+    nrc_emotion_dir: L:\_DATA\models\lexicons\NRC-Emotion-Lexicon
 analysis:
   use_nrc_lexicon: false
 video:

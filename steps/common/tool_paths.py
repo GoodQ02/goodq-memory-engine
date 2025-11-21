@@ -1,5 +1,6 @@
 from __future__ import annotations
 import os
+import shutil
 from typing import Any, Dict, Optional
 
 
@@ -25,7 +26,14 @@ def resolve_tesseract(cfg: Dict[str, Any]) -> Optional[str]:
 
 
 def resolve_ffmpeg(cfg: Dict[str, Any]) -> Optional[str]:
-    return cfg_get(cfg, 'config.tools.ffmpeg_exe')
+    configured = cfg_get(cfg, 'config.tools.ffmpeg_exe')
+    if configured and os.path.isfile(configured):
+        return configured
+    # Fallback: use ffmpeg on PATH if available
+    ffmpeg_path = shutil.which("ffmpeg")
+    if ffmpeg_path:
+        return ffmpeg_path
+    return configured
 
 
 def resolve_conda() -> str:
@@ -45,4 +53,3 @@ def resolve_conda() -> str:
     
     # Fallback to 'conda' and hope it's in PATH
     return 'conda'
-

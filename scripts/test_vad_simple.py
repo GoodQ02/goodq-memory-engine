@@ -50,7 +50,7 @@ def test_vad_on_audio(audio_path):
         temp_audio = temp_file.name
         temp_file.close()
         
-        ffmpeg_path = r"L:\Tools\ffmpeg\bin\ffmpeg.exe"
+        ffmpeg_path = r"L:\_TOOLS\ffmpeg\bin\ffmpeg.exe"
         if not os.path.exists(ffmpeg_path):
             ffmpeg_path = "ffmpeg"
         

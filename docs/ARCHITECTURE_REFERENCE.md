@@ -484,10 +484,10 @@ External tools are configured explicitly in `config.yaml`:
 ```yaml
 config:
   tools:
-    whisper_cli: L:/Tools/whisper/whisper-cli.exe
-    whisper_ggml_model: L:/Tools/whisper/ggml-large-v3.bin
-    ffmpeg: L:/Tools/ffmpeg/bin/ffmpeg.exe
-    tesseract: L:/Tools/tesseract/tesseract.exe
+    whisper_cli: L:/_TOOLS/whisper/whisper-cli.exe
+    whisper_ggml_model: L:/_TOOLS/whisper/ggml-large-v3.bin
+    ffmpeg: L:/_TOOLS/ffmpeg/bin/ffmpeg.exe
+    tesseract: L:/_TOOLS/tesseract/tesseract.exe
 ```
 
 **Why explicit paths?**

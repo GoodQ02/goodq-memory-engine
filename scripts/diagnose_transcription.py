@@ -11,8 +11,8 @@ def main():
     print("=" * 80)
     
     # Configuration
-    whisper_cli = Path("L:/Tools/whisper/whisper-cli.exe")
-    whisper_model = Path("L:/Tools/whisper/ggml-large-v3.bin")
+    whisper_cli = Path("L:/_TOOLS/whisper/whisper-cli.exe")
+    whisper_model = Path("L:/_TOOLS/whisper/ggml-large-v3.bin")
     
     # Find a test audio file
     workspace = Path("L:/goodq4all/logs")

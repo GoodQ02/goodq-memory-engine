@@ -381,9 +381,9 @@ llm:
 - No dependency conflicts
 
 **Key Tools:**
-- FFmpeg: `L:/Tools/ffmpeg/bin/ffmpeg.exe`
-- Whisper: `L:/Tools/whisper/whisper-cli.exe` + `ggml-large-v3.bin`
-- Tesseract OCR: `L:/Tools/tesseract/tesseract.exe`
+- FFmpeg: `L:/_TOOLS/ffmpeg/bin/ffmpeg.exe`
+- Whisper: `L:/_TOOLS/whisper/whisper-cli.exe` + `ggml-large-v3.bin`
+- Tesseract OCR: `L:/_TOOLS/tesseract/tesseract.exe`
 
 ---
 

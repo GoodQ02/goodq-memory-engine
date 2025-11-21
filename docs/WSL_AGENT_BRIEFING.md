@@ -54,7 +54,6 @@ C:\Users\jdben\.wslconfig             # WSL network config (CREATED)
 ├── scripts/
 │   ├── start_qwen.sh                 # Port 8000
 │   ├── start_phi.sh                  # Port 8001
-│   ├── start_llama1b.sh              # Port 8003 (FASTEST)
 │   ├── start_llama3b.sh              # Port 8004
 │   ├── start_llama11b.sh             # Port 8005 (Vision)
 │   └── test_models.sh                # Test all models
@@ -82,10 +81,10 @@ C:\Users\jdben\.wslconfig             # WSL network config (CREATED)
 - **Available Models:**
   - Port 8000: Qwen 2.5 7B (quality)
   - Port 8001: Phi-3.5 Mini (long context)
-  - Port 8003: Llama 1B (speed - 178 tok/s) ⭐ RECOMMENDED
+  - Port 8005: Llama 1B (speed - 178 tok/s) ⭐ RECOMMENDED
   - Port 8004: Llama 3B (balanced)
-  - Port 8005: Llama 11B Vision (multimodal)
-- **Start:** `~/vllm_server/scripts/start_llama1b.sh`
+  - Port 8005: Llama 11B Vision (multimodal) [if used]
+- **Start:** `~/vllm_server/scripts/start_llama1b.sh` (ensure it uses --port 8005)
 
 ### 3. Audio Processing (Port: N/A - CLI tool)
 - **Status:** Operational
@@ -155,7 +154,7 @@ C:\Users\jdben\.wslconfig             # WSL network config (CREATED)
 
 3. **Test from Windows**
    - Windows agent will run: `python L:\goodq4all\scripts\test_llm_client.py`
-   - Should connect to: vLLM (8003) → Ollama (11434) → LMStudio (1234)
+   - Should connect to: vLLM (8005) → Ollama (11434) → LMStudio (1234)
 
 4. **Monitor Logs**
    ```bash
@@ -239,12 +238,12 @@ Audio processing docs in `~/goodq_audio/`:
 
 **Steps:**
 1. Activate vLLM environment
-2. Start Llama 1B server on port 8003
+2. Start Llama 1B server on port 8005
 3. Verify it's responding to API calls
 4. Report back status so Windows agent can test connectivity
 
 **Expected Result:**
-- vLLM server running on port 8003
+- vLLM server running on port 8005
 - Windows LLM client successfully connects
 - Fallback chain verified (vLLM → Ollama → LMStudio)
 

@@ -33,7 +33,7 @@ Both vLLM and Ollama are now running as production-grade systemd services with f
 
 | Service | Port | Status | Auto-Start | Background | Type |
 |---------|------|--------|------------|------------|------|
-| **vLLM Llama-1B** | 8003 | ✅ Running | ✅ Enabled | ✅ Yes | systemd |
+| **vLLM Llama-1B** | 8005 | ✅ Running | ✅ Enabled | ✅ Yes | systemd |
 | **Ollama Phi-4** | 11434 | ✅ Running | ✅ Enabled | ✅ Yes | systemd |
 
 ### ⚡ Performance Specs
@@ -42,7 +42,7 @@ Both vLLM and Ollama are now running as production-grade systemd services with f
 - Speed: 178 tokens/second
 - VRAM: 2.3 GB
 - Context: 131K tokens
-- Binding: 0.0.0.0:8003 (Windows-accessible)
+- Binding: 0.0.0.0:8005 (Windows-accessible)
 - Service: `vllm-llama1b.service`
 
 **Ollama Phi-4 (Fallback)**:
@@ -139,7 +139,7 @@ systemctl status vllm-llama1b ollama --no-pager
 ### Quick Health Check
 ```powershell
 # Test vLLM
-curl http://localhost:8003/v1/models
+curl http://localhost:8005/v1/models
 
 # Test Ollama
 curl http://localhost:11434/v1/models
@@ -262,7 +262,7 @@ LLM Client (lib/llm_client.py)
 │   PRIMARY ✅         │   FALLBACK ✅        │
 │  vLLM Llama-1B       │  Ollama Phi-4        │
 │  systemd service     │  systemd service     │
-│  Port 8003           │  Port 11434          │
+│  Port 8005           │  Port 11434          │
 │  178 tok/s ⚡        │  70 tok/s            │
 │  Auto-start ✅       │  Auto-start ✅       │
 │  Background ✅       │  Background ✅       │

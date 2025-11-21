@@ -49,7 +49,7 @@
 
 | Model | Port | Status | Last Run |
 |-------|------|--------|----------|
-| Llama-1B-Speed | 8003 | ❌ Not running | Nov 16 01:15 |
+| Llama-1B-Speed | 8005 | ❌ Not running | Nov 16 01:15 |
 | Llama-3B-Balanced | 8004 | ❌ Not running | Nov 15 20:57 |
 | Phi-3.5-LongContext | 8001 | ❌ Not running | Nov 15 23:18 |
 | Qwen-7B-Quality | 8000 | ❌ Not running | Never started |
@@ -150,7 +150,7 @@ Invoke-WebRequest http://localhost:11434/v1/models
 
 ## 🛠️ Fix Plan
 
-### Fix 1: Start vLLM Llama-1B Server (Primary Model)
+### Fix 1: Start vLLM Llama-1B Server (Primary Model, now 8005)
 
 **Command**:
 ```bash
@@ -166,7 +166,7 @@ wsl bash -c "cd ~/vllm_server && source activate.sh && ./scripts/start_llama1b.s
 **Verification**:
 ```powershell
 # From Windows
-curl http://localhost:8003/v1/models
+curl http://localhost:8005/v1/models
 ```
 
 ---

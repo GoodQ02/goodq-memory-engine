@@ -16,27 +16,28 @@ if errorlevel 1 (
     exit /b 1
 )
 
+REM Preferred: systemd services (ensure sudoers allows NOPASSWD for these commands)
 echo WSL is running
-echo.
-echo Starting vLLM servers...
-echo.
+echo Starting vLLM via systemd (if available)...
+wsl sudo systemctl start vllm-llama1b
+wsl sudo systemctl start ollama
 
-REM Start Llama 1B (Speed - Port 8003)
-echo [1/2] Starting Llama-3.2-1B (Ultra-Fast: 178 tok/s)...
-wsl ~/vllm_server/scripts/start_llama1b.sh
-timeout /t 3 /nobreak >nul
-
-REM Start Llama 3B (Balanced - Port 8004)
-echo [2/2] Starting Llama-3.2-3B (Balanced: 82 tok/s)...
-wsl ~/vllm_server/scripts/start_llama3b.sh
-timeout /t 3 /nobreak >nul
+REM Fallback: only start per-user scripts if systemd service is NOT active
+wsl sudo systemctl is-active --quiet vllm-llama1b
+if NOT "%ERRORLEVEL%"=="0" (
+    echo Systemd not active; starting vLLM via per-user scripts...
+    wsl ~/vllm_server/scripts/start_llama1b.sh
+    timeout /t 2 /nobreak >nul
+    wsl ~/vllm_server/scripts/start_llama3b.sh
+    timeout /t 2 /nobreak >nul
+)
 
 echo.
 echo ========================================
 echo vLLM Servers Starting...
 echo ========================================
 echo.
-echo Llama 1B (Speed):     http://localhost:8003/v1
+echo Llama 1B (Speed):     http://localhost:8005/v1
 echo Llama 3B (Balanced):  http://localhost:8004/v1
 echo Ollama (Fallback):    http://localhost:11434/v1
 echo.

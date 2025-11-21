@@ -80,7 +80,7 @@ Get detailed health status for all LLM models.
   "models": [
     {
       "name": "Llama-1B-Speed",
-      "endpoint": "http://localhost:8003/v1",
+      "endpoint": "http://localhost:8005/v1",
       "status": "healthy",
       "response_time_ms": 10,
       "last_check": "2025-11-19T04:30:00Z"
@@ -475,7 +475,7 @@ GOODQ_API_HOST=0.0.0.0
 GOODQ_API_PORT=3000
 
 # LLM Endpoints
-VLLM_ENDPOINT=http://localhost:8003/v1
+VLLM_ENDPOINT=http://localhost:8005/v1
 OLLAMA_ENDPOINT=http://localhost:11434/v1
 
 # WSL2

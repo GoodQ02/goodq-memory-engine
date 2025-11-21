@@ -22,9 +22,9 @@ llm:
 tts:
   engine: elevenlabs
   voice_id: goT3UYdM9bhm0n2lmKQx
-  piper_exe: L:\Tools\piper\piper.exe
-  voice_path: L:\Tools\piper\en_US-libritts-high.onnx
-  out_dir: L:\Tools\piper
+  piper_exe: L:\_TOOLS\piper\piper.exe
+  voice_path: L:\_TOOLS\piper\en_US-libritts-high.onnx
+  out_dir: L:\_TOOLS\piper
 ha:
   url: http://192.168.0.154:8123
 tools:

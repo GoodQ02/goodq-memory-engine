@@ -460,18 +460,18 @@ def get_engines() -> Dict[str, Any]:
     """Get pipeline engine status"""
     engines = {}
     
-    # vLLM check
+    # vLLM check (port 8005)
     try:
         import requests
-        resp = requests.get("http://localhost:8003/v1/models", timeout=2)
+        resp = requests.get("http://localhost:8005/v1/models", timeout=2)
         if resp.status_code == 200:
             engines["vllm_llama1b"] = {
                 "name": "vLLM Llama-1B",
                 "category": "LLM Inference",
-                "description": "Llama 1B Speed model on port 8003",
+                "description": "Llama 1B Speed model on port 8005",
                 "status": "ready",
                 "gpu": True,
-                "port": 8003
+                "port": 8005
             }
         else:
             raise Exception("unhealthy")
@@ -482,7 +482,7 @@ def get_engines() -> Dict[str, Any]:
             "description": "Not running",
             "status": "unavailable",
             "gpu": True,
-            "port": 8003
+            "port": 8005
         }
     
     # Ollama check

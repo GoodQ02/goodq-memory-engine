@@ -350,7 +350,7 @@ def register_scene_bundle(
     
     # Generate and save scene summary
     try:
-        from goodq4all.steps.common.scene_summarizer import generate_scene_summary
+        from steps.common.scene_summarizer import generate_scene_summary
         summary_text = generate_scene_summary(scene_meta, cfg, use_llm=False)  # Start with template only
         if summary_text:
             summary_data = {

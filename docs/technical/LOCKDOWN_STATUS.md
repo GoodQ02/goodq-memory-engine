@@ -55,9 +55,9 @@ Status: PASSED - All models properly pinned!
 
 | Tool | Path | Status |
 |------|------|--------|
-| FFmpeg | L:\Tools\ffmpeg\bin\ffmpeg.exe | ✅ Found |
-| Tesseract OCR | L:\Tools\tesseract\tesseract.exe | ✅ Found |
-| Poppler PDF | L:\Tools\poppler\bin | ✅ Found |
+| FFmpeg | L:\_TOOLS\ffmpeg\bin\ffmpeg.exe | ✅ Found |
+| Tesseract OCR | L:\_TOOLS\tesseract\tesseract.exe | ✅ Found |
+| Poppler PDF | L:\_TOOLS\poppler\bin | ✅ Found |
 
 ## Update Policy
 

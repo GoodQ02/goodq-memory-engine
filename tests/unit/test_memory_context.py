@@ -11,9 +11,9 @@ from pathlib import Path
 # Add project to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from steps.steps.common.config_loader import load_configs
-from steps.steps.common.memory import list_scenes_for_video, get_scene_meta
-from steps.steps.common.memory_context_writer import save_step_context
+from steps.common.config_loader import load_configs
+from steps.common.memory import list_scenes_for_video, get_scene_meta
+from steps.common.memory_context_writer import save_step_context
 
 
 def check_memory_enrichment(video_hash: str, cfg: dict) -> dict:

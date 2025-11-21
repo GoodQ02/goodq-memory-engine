@@ -35,6 +35,11 @@ class PythonPathConfig:
                     self._conda_exe = self._conda_base / 'Scripts' / 'conda.bat'
             else:
                 self._conda_exe = self._conda_base / 'bin' / 'conda'
+                if not self._conda_exe.exists():
+                    # WSL using Windows conda under /mnt/c
+                    self._conda_exe = self._conda_base / 'Scripts' / 'conda.exe'
+                if not self._conda_exe.exists():
+                    self._conda_exe = self._conda_base / 'condabin' / 'conda.bat'
                 
             if not self._conda_exe.exists():
                 logger.error(f"Conda executable not found at {self._conda_exe}")
@@ -83,6 +88,14 @@ class PythonPathConfig:
                 Path('/opt/miniconda3'),
                 Path('/opt/anaconda3'),
             ]
+
+        # WSL-specific: look for Windows miniconda under /mnt/c
+        if platform.system() == 'Linux' and ('WSL' in platform.release() or os.environ.get('WSL_DISTRO_NAME')):
+            common_paths.extend([
+                Path('/mnt/c/Users/jdben/miniconda3'),
+                Path('/mnt/c/Users/Administrator/miniconda3'),
+                Path('/mnt/c/ProgramData/miniconda3'),
+            ])
         
         for path in common_paths:
             if path.exists() and path.is_dir():
@@ -91,7 +104,12 @@ class PythonPathConfig:
                     if not conda_exe.exists():
                         conda_exe = path / 'Scripts' / 'conda.bat'
                 else:
+                    # WSL/Unix: try standard bin/conda, otherwise Windows-style Scripts/conda.exe under /mnt/c
                     conda_exe = path / 'bin' / 'conda'
+                    if not conda_exe.exists():
+                        conda_exe = path / 'Scripts' / 'conda.exe'
+                    if not conda_exe.exists():
+                        conda_exe = path / 'condabin' / 'conda.bat'
                     
                 if conda_exe.exists():
                     return path

@@ -19,7 +19,7 @@ function monitor-all() {
     echo ""
     
     echo -e "${YELLOW}API Endpoints:${NC}"
-    curl -s http://localhost:8003/v1/models > /dev/null 2>&1 && echo -e "  ✅ vLLM @ localhost:8003" || echo -e "  ❌ vLLM @ localhost:8003"
+    curl -s http://localhost:8005/v1/models > /dev/null 2>&1 && echo -e "  ✅ vLLM @ localhost:8005" || echo -e "  ❌ vLLM @ localhost:8005"
     curl -s http://localhost:11434/v1/models > /dev/null 2>&1 && echo -e "  ✅ Ollama @ localhost:11434" || echo -e "  ❌ Ollama @ localhost:11434"
     echo ""
     
@@ -44,7 +44,7 @@ function monitor-ports() {
     echo -e "${BLUE}=== Port Usage ===${NC}"
     echo ""
     echo -e "${YELLOW}GoodQ4All Ports:${NC}"
-    sudo netstat -tlnp 2>/dev/null | grep -E ':(8000|8001|8003|8004|8005|11434)' || echo "  No services detected"
+    sudo netstat -tlnp 2>/dev/null | grep -E ':(8000|8001|8004|8005|11434)' || echo "  No services detected"
     echo ""
 }
 

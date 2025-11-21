@@ -11,7 +11,7 @@ echo   GoodQ4All - Critical Issues Fix
 echo ================================================================================
 echo.
 echo This will fix:
-echo   1. Add FFmpeg to PATH (found at L:\_TOOLS\tools\ffmpeg\bin)
+echo   1. Add FFmpeg to PATH (found at L:\_TOOLS\ffmpeg\bin)
 echo   2. Fix PyAnnote GPU transfer API
 echo   3. Update scene detection configuration
 echo   4. Validate all fixes
@@ -25,14 +25,14 @@ echo   Step 1: Adding FFmpeg to PATH
 echo ================================================================================
 echo.
 
-setx PATH "%PATH%;L:\_TOOLS\tools\ffmpeg\bin"
+setx PATH "%PATH%;L:\_TOOLS\ffmpeg\bin"
 
 if errorlevel 1 (
     echo [WARNING] Failed to permanently add FFmpeg to PATH
     echo You may need to run this script as Administrator
     echo.
     echo Adding to current session only...
-    set "PATH=%PATH%;L:\_TOOLS\tools\ffmpeg\bin"
+    set "PATH=%PATH%;L:\_TOOLS\ffmpeg\bin"
 )
 
 REM Verify FFmpeg
@@ -54,7 +54,7 @@ echo   Step 2: Fixing PyAnnote GPU Transfer
 echo ================================================================================
 echo.
 
-python scripts\fix_pyannote_gpu.py
+python fix_pyannote_gpu.py
 
 if errorlevel 1 (
     echo [ERROR] PyAnnote fix failed
@@ -68,7 +68,7 @@ echo   Step 3: Updating Scene Detection Configuration
 echo ================================================================================
 echo.
 
-python scripts\fix_scene_detection_config.py
+python fix_scene_detection_config.py
 
 if errorlevel 1 (
     echo [ERROR] Scene detection config fix failed

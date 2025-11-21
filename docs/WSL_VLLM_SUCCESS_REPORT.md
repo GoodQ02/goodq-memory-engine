@@ -96,7 +96,7 @@ source venv/bin/activate
 python -m vllm.entrypoints.openai.api_server \
     --model /mnt/l/_DATA/models/llm/huggingface/Llama-3.2-1B-Instruct \
     --host 0.0.0.0 \
-    --port 8003 \
+    --port 8005 \
     --gpu-memory-utilization 0.7 \
     --max-model-len 8192
 ```
@@ -127,7 +127,7 @@ sudo systemctl restart ollama
    python -m vllm.entrypoints.openai.api_server \
        --model /mnt/l/_DATA/models/llm/huggingface/Llama-3.2-1B-Instruct \
        --host 0.0.0.0 \
-       --port 8003 \
+       --port 8005 \
        --gpu-memory-utilization 0.7 \
        --max-model-len 8192
    ```

@@ -4,14 +4,14 @@
 Write-Host "Testing vLLM from Windows..." -ForegroundColor Cyan
 
 # Test 1: Can we reach the port?
-Write-Host "`n1. Testing port 8003 connectivity..." -ForegroundColor Yellow
+Write-Host "`n1. Testing port 8005 connectivity..." -ForegroundColor Yellow
 try {
-    $response = Invoke-WebRequest -Uri "http://localhost:8003/v1/models" -UseBasicParsing -TimeoutSec 5
-    Write-Host "   ✅ Port 8003 is reachable!" -ForegroundColor Green
+    $response = Invoke-WebRequest -Uri "http://localhost:8005/v1/models" -UseBasicParsing -TimeoutSec 5
+    Write-Host "   ✅ Port 8005 is reachable!" -ForegroundColor Green
     Write-Host "   Response:" -ForegroundColor Gray
     $response.Content | ConvertFrom-Json | ConvertTo-Json -Depth 3
 } catch {
-    Write-Host "   ❌ Cannot reach port 8003" -ForegroundColor Red
+    Write-Host "   ❌ Cannot reach port 8005" -ForegroundColor Red
     Write-Host "   Error: $($_.Exception.Message)" -ForegroundColor Red
 }
 
@@ -29,7 +29,7 @@ $body = @{
 } | ConvertTo-Json
 
 try {
-    $response = Invoke-RestMethod -Uri "http://localhost:8003/v1/chat/completions" `
+    $response = Invoke-RestMethod -Uri "http://localhost:8005/v1/chat/completions" `
         -Method Post `
         -Body $body `
         -ContentType "application/json" `

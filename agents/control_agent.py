@@ -75,6 +75,14 @@ class ControlAgent:
         print(f"   Config Healer: Armed and ready")
         print(f"   Memory DB: {self.db_path}")
         print(f"   Reports: {self.reports_dir}")
+
+    def start_monitoring(self) -> None:
+        """
+        Placeholder for backward compatibility.
+        Older callers expect this to start background monitoring;
+        current implementation initializes everything in __init__.
+        """
+        return None
     
     def _init_memory_db(self):
         """Initialize SQLite memory database for learning"""

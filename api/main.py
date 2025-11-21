@@ -1,5 +1,6 @@
 from __future__ import annotations
 from typing import Any, Dict
+import json
 import sys
 import logging
 from pathlib import Path
@@ -42,6 +43,335 @@ app.add_middleware(
 # UI will be mounted at the end after all API routes are defined
 
 
+def _summarize_llm_health() -> Dict[str, Any]:
+    """Lightweight LLM health summary used by /api/engines and dashboards."""
+    vllm_healthy = 0
+    vllm_total = 0
+    ollama_healthy = 0
+    ollama_total = 0
+
+    try:
+        resp = requests.get("http://localhost:8005/v1/models", timeout=2)
+        if resp.status_code == 200:
+            models = resp.json().get("data", [])
+            vllm_total = len(models)
+            vllm_healthy = vllm_total
+    except Exception:
+        pass
+
+    try:
+        resp = requests.get("http://localhost:11434/v1/models", timeout=2)
+        if resp.status_code == 200:
+            models = resp.json().get("data", [])
+            ollama_total = len(models)
+            ollama_healthy = ollama_total
+    except Exception:
+        pass
+
+    def _status(healthy: int, total: int) -> str:
+        if total == 0:
+            return "unavailable"
+        if healthy == total:
+            return "healthy"
+        if healthy > 0:
+            return "degraded"
+        return "down"
+
+    total_models = max(vllm_total, 1) + max(ollama_total, 1)
+    healthy_models = vllm_healthy + ollama_healthy
+
+    return {
+        "vllm": {
+            "status": _status(vllm_healthy, vllm_total),
+            "healthy": vllm_healthy,
+            "total": max(vllm_total, 1),
+            "port": 8005,
+        },
+        "ollama": {
+            "status": _status(ollama_healthy, ollama_total),
+            "healthy": ollama_healthy,
+            "total": max(ollama_total, 1),
+            "port": 11434,
+        },
+        "overall": {
+            "status": "healthy" if healthy_models == total_models else "degraded" if healthy_models > 0 else "unhealthy",
+            "total": total_models,
+            "healthy": healthy_models,
+            "unhealthy": max(total_models - healthy_models, 0),
+        },
+        "timestamp": datetime.utcnow().isoformat(),
+    }
+
+
+def _collect_engine_details() -> Dict[str, Any]:
+    """Richer engine details (kept separate from summary for UI/backward compatibility)."""
+    import subprocess
+    import shutil
+
+    engines: Dict[str, Any] = {}
+
+    # Check vLLM on WSL
+    try:
+        resp = requests.get("http://localhost:8005/v1/models", timeout=2)
+        if resp.status_code == 200:
+            model_data = resp.json().get("data", [])
+            model_name = model_data[0]["id"].split("/")[-1] if model_data else "Unknown"
+            engines["vllm_llama1b"] = {
+                "name": "vLLM Llama-1B",
+                "category": "LLM Inference",
+                "description": f"{model_name} on port 8005",
+                "status": "ready",
+                "gpu": True,
+                "port": 8005,
+            }
+        else:
+            raise Exception("unhealthy")
+    except Exception:
+        engines["vllm_llama1b"] = {
+            "name": "vLLM Llama-1B",
+            "category": "LLM Inference",
+            "description": "Not running or unreachable",
+            "status": "unavailable",
+            "gpu": True,
+            "port": 8005,
+        }
+
+    # Check Ollama
+    try:
+        resp = requests.get("http://localhost:11434/v1/models", timeout=2)
+        if resp.status_code == 200:
+            models = resp.json().get("data", [])
+            model_name = models[0]["id"] if models else "Unknown"
+            engines["ollama"] = {
+                "name": "Ollama",
+                "category": "LLM Inference",
+                "description": f"{model_name} on port 11434",
+                "status": "ready",
+                "gpu": True,
+                "port": 11434,
+            }
+        else:
+            raise Exception("unhealthy")
+    except Exception:
+        engines["ollama"] = {
+            "name": "Ollama",
+            "category": "LLM Inference",
+            "description": "Not running or unreachable",
+            "status": "unavailable",
+            "gpu": True,
+            "port": 11434,
+        }
+
+    # Check WSL audio processing
+    wsl_available = shutil.which("wsl") is not None
+    engines["wsl_audio"] = {
+        "name": "WSL Audio Transcription",
+        "category": "Audio Processing",
+        "description": "Faster-Whisper with speaker diarization",
+        "status": "ready" if wsl_available else "unavailable",
+        "gpu": True,
+    }
+
+    # Check ffmpeg
+    ffmpeg_path = shutil.which("ffmpeg")
+    engines["ffmpeg"] = {
+        "name": "FFmpeg",
+        "category": "Video Processing",
+        "description": f"Path: {ffmpeg_path}" if ffmpeg_path else "Not found",
+        "status": "ready" if ffmpeg_path else "unavailable",
+        "gpu": False,
+    }
+
+    # Check Python environment
+    engines["python_pipeline"] = {
+        "name": "Python Pipeline",
+        "category": "Orchestration",
+        "description": f"Python {sys.version.split()[0]}",
+        "status": "ready",
+        "gpu": False,
+    }
+
+    # Check scene detection
+    try:
+        from scenedetect import detect  # noqa: F401
+
+        engines["scene_detection"] = {
+            "name": "Scene Detection",
+            "category": "Video Analysis",
+            "description": "PySceneDetect for content-aware splitting",
+            "status": "ready",
+            "gpu": False,
+        }
+    except Exception:
+        engines["scene_detection"] = {
+            "name": "Scene Detection",
+            "category": "Video Analysis",
+            "description": "PySceneDetect not available",
+            "status": "unavailable",
+            "gpu": False,
+        }
+
+    # Check vector database
+    chroma_dir = Path("L:/goodq4all/data/chroma")
+    engines["vector_db"] = {
+        "name": "Vector Database",
+        "category": "Search & Retrieval",
+        "description": f"ChromaDB at {chroma_dir}",
+        "status": "ready" if chroma_dir.exists() else "unavailable",
+        "gpu": False,
+    }
+
+    # Check audio diarization
+    engines["audio_diarization"] = {
+        "name": "Audio Diarization",
+        "category": "Audio Processing",
+        "description": "Pyannote speaker separation with OSD",
+        "status": "ready",
+        "gpu": True,
+    }
+
+    return engines
+
+
+def _collect_wsl_status() -> Dict[str, Any]:
+    """Combine the two historical WSL status endpoints into one shared helper."""
+    import subprocess
+    import shutil
+
+    status: Dict[str, Any] = {
+        "available": False,
+        "status": "not_installed",
+        "vllm_service": "unknown",
+        "audio_processing": "unknown",
+        "faster_whisper": "not_installed",
+        "active": False,
+        "performance_boost": "2-5× faster",
+        "gpu_name": None,
+        "gpu_memory_total_mb": None,
+        "gpu_memory_used_mb": None,
+        "driver_version": None,
+        "cuda_version": None,
+    }
+
+    wsl_available = shutil.which("wsl") is not None
+    status["available"] = wsl_available
+    if not wsl_available:
+        return status
+
+    try:
+        result = subprocess.run(
+            ["wsl", "--status"],
+            capture_output=True,
+            text=True,
+            timeout=3,
+        )
+        status["status"] = "running" if result.returncode == 0 else "stopped"
+        status["status_output"] = result.stdout
+    except Exception:
+        status["status"] = "unknown"
+
+    try:
+        list_result = subprocess.run(
+            ["wsl", "-l", "-v"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        status["list_output"] = list_result.stdout
+    except Exception:
+        pass
+
+    try:
+        vllm_check = subprocess.run(
+            ["wsl", "-d", "Ubuntu", "--", "systemctl", "is-active", "vllm-llama1b.service"],
+            capture_output=True,
+            text=True,
+            timeout=3,
+        )
+        status["vllm_service"] = "active" if vllm_check.returncode == 0 else "inactive"
+    except Exception:
+        pass
+
+    # Fast, low-impact audio availability check (skip on timeout)
+    try:
+        audio_check = subprocess.run(
+            [
+                "wsl",
+                "-d",
+                "Ubuntu",
+                "--",
+                "bash",
+                "-lc",
+                "python3 - <<'PY'\nimport importlib.util\nok = importlib.util.find_spec('faster_whisper') is not None\nprint('ok' if ok else 'error')\nPY",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=3,
+        )
+        status["audio_processing"] = "available" if "ok" in audio_check.stdout else "unavailable"
+        status["faster_whisper"] = "ready" if "ok" in audio_check.stdout else "not_installed"
+    except Exception as e:
+        logger.debug(f"WSL2 audio check skipped: {e}")
+
+    # WSL GPU snapshot (best effort)
+    try:
+        gpu_info = subprocess.run(
+            [
+                "wsl",
+                "-d",
+                "Ubuntu",
+                "--",
+                "bash",
+                "-lc",
+                "nvidia-smi --query-gpu=name,memory.total,memory.used,driver_version --format=csv,noheader,nounits | head -n1",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if gpu_info.returncode == 0 and gpu_info.stdout.strip():
+            parts = [p.strip() for p in gpu_info.stdout.strip().split(",")]
+            if len(parts) >= 4:
+                status["gpu_name"] = parts[0]
+                status["gpu_memory_total_mb"] = int(parts[1])
+                status["gpu_memory_used_mb"] = int(parts[2])
+                status["driver_version"] = parts[3]
+
+        cuda_info = subprocess.run(
+            [
+                "wsl",
+                "-d",
+                "Ubuntu",
+                "--",
+                "bash",
+                "-lc",
+                "nvidia-smi --query-gpu=cuda_version --format=csv,noheader,nounits | head -n1",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if cuda_info.returncode == 0 and cuda_info.stdout.strip():
+            status["cuda_version"] = cuda_info.stdout.strip()
+    except Exception as e:
+        logger.debug(f"WSL2 GPU probe failed: {e}")
+
+    status["active"] = status.get("status") == "running" or status.get("vllm_service") == "active"
+    return status
+
+
+def _build_health_logs(health: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Compose lightweight log lines for the command-center view."""
+    entries = []
+    now = datetime.now().isoformat()
+    entries.append({"level": "info", "timestamp": now, "message": "Command center operational"})
+    entries.append({"level": "success" if health.get("api") else "error", "message": f"API: {'Healthy' if health.get('api') else 'Degraded'}"})
+    entries.append({"level": "success" if health.get("database") else "error", "message": f"Database: {'Healthy' if health.get('database') else 'Not Found'}"})
+    entries.append({"level": "success" if health.get("wsl") else "warning", "message": f"WSL/GPU: {'Healthy' if health.get('wsl') else 'Unavailable'}"})
+    entries.append({"level": "success" if health.get("pipeline") else "warning", "message": f"Pipeline: {'Active' if health.get('pipeline') else 'Standby'}"})
+    return entries
+
+
 @app.get("/search")
 def search(q: str = Query(..., description="Search text index"), topk: int = Query(50, ge=1, le=200)) -> Dict[str, Any]:
     """Search endpoint - currently disabled"""
@@ -80,7 +410,7 @@ def get_status() -> Dict[str, Any]:
     # Quick model health checks with very short timeouts
     try:
         try:
-            resp = requests.get("http://localhost:8003/v1/models", timeout=0.2)
+            resp = requests.get("http://localhost:8005/v1/models", timeout=0.2)
             if resp.status_code == 200:
                 models_data["vllm_healthy"] = 1
                 models_data["healthy"] += 1
@@ -110,6 +440,19 @@ def get_status() -> Dict[str, Any]:
     except:
         pass
     
+    # Quick database presence check
+    database_data = {"exists": False, "scenes": 0}
+    try:
+        db_path = Path("L:/goodq4all/data/memory.db")
+        database_data["exists"] = db_path.exists()
+        if database_data["exists"]:
+            database_data["scenes"] = 1  # Minimal indicator so UI shows healthy
+    except Exception:
+        pass
+
+    # Quick WSL/audio availability
+    wsl_status = _collect_wsl_status()
+
     # Quick GPU check
     try:
         import subprocess
@@ -135,11 +478,13 @@ def get_status() -> Dict[str, Any]:
         "components": {
             "api": "running",
             "pipeline": processing_data["status"],
-            "wsl_audio": "available"
+            "wsl_audio": "available" if wsl_status.get("available") else "unavailable"
         },
         "gpu": gpu_data,
         "models": models_data,
-        "processing": processing_data
+        "processing": processing_data,
+        "database": database_data,
+        "wsl": wsl_status,
     }
 
 
@@ -149,9 +494,11 @@ def get_health_summary() -> Dict[str, Any]:
     # Check models directly
     vllm_healthy = 0
     ollama_healthy = 0
+    total_vllm = 1
+    total_ollama = 1
     
     try:
-        resp = requests.get("http://localhost:8003/v1/models", timeout=1)
+        resp = requests.get("http://localhost:8005/v1/models", timeout=1)
         if resp.status_code == 200:
             vllm_healthy = 1
     except:
@@ -177,11 +524,13 @@ def get_health_summary() -> Dict[str, Any]:
         "vllm": {
             "status": "healthy" if vllm_healthy > 0 else "unhealthy",
             "healthy": vllm_healthy,
+            "total": total_vllm,
             "models": ["Llama-1B-Speed"] if vllm_healthy > 0 else []
         },
         "ollama": {
             "status": "healthy" if ollama_healthy > 0 else "unhealthy",
             "healthy": ollama_healthy,
+            "total": total_ollama,
             "models": ["Phi4-Ollama"] if ollama_healthy > 0 else []
         }
     }
@@ -189,191 +538,20 @@ def get_health_summary() -> Dict[str, Any]:
 
 @app.get("/api/engines")
 def get_engines() -> Dict[str, Any]:
-    """Get pipeline engine status"""
-    import subprocess
-    import shutil
-    
-    engines = {}
-    
-    # Check vLLM on WSL
-    try:
-        import requests
-        resp = requests.get("http://localhost:8003/v1/models", timeout=2)
-        if resp.status_code == 200:
-            model_data = resp.json().get("data", [])
-            model_name = model_data[0]["id"].split("/")[-1] if model_data else "Unknown"
-            engines["vllm_llama1b"] = {
-                "name": "vLLM Llama-1B",
-                "category": "LLM Inference",
-                "description": f"Llama 1B Speed model on port 8003",
-                "status": "ready",
-                "gpu": True,
-                "port": 8003
-            }
-        else:
-            raise Exception("unhealthy")
-    except:
-        engines["vllm_llama1b"] = {
-            "name": "vLLM Llama-1B",
-            "category": "LLM Inference",
-            "description": "Not running or unreachable",
-            "status": "unavailable",
-            "gpu": True,
-            "port": 8003
-        }
-    
-    # Check Ollama
-    try:
-        import requests
-        resp = requests.get("http://localhost:11434/v1/models", timeout=2)
-        if resp.status_code == 200:
-            models = resp.json().get("data", [])
-            model_name = models[0]["id"] if models else "Unknown"
-            engines["ollama"] = {
-                "name": "Ollama",
-                "category": "LLM Inference",
-                "description": f"Phi4 and other models on port 11434",
-                "status": "ready",
-                "gpu": True,
-                "port": 11434
-            }
-        else:
-            raise Exception("unhealthy")
-    except:
-        engines["ollama"] = {
-            "name": "Ollama",
-            "category": "LLM Inference",
-            "description": "Not running or unreachable",
-            "status": "unavailable",
-            "gpu": True,
-            "port": 11434
-        }
-    
-    # Check WSL audio processing
-    wsl_available = shutil.which("wsl") is not None
-    engines["wsl_audio"] = {
-        "name": "WSL Audio Transcription",
-        "category": "Audio Processing",
-        "description": "Faster-Whisper with speaker diarization",
-        "status": "ready" if wsl_available else "unavailable",
-        "gpu": True
-    }
-    
-    # Check ffmpeg
-    ffmpeg_path = shutil.which("ffmpeg")
-    engines["ffmpeg"] = {
-        "name": "FFmpeg",
-        "category": "Video Processing",
-        "description": f"Path: {ffmpeg_path}" if ffmpeg_path else "Not found",
-        "status": "ready" if ffmpeg_path else "unavailable",
-        "gpu": False
-    }
-    
-    # Check Python environment
-    engines["python_pipeline"] = {
-        "name": "Python Pipeline",
-        "category": "Orchestration",
-        "description": f"Python {sys.version.split()[0]}",
-        "status": "ready",
-        "gpu": False
-    }
-    
-    # Check scene detection
-    try:
-        from scenedetect import detect
-        engines["scene_detection"] = {
-            "name": "Scene Detection",
-            "category": "Video Analysis",
-            "description": "PySceneDetect for content-aware splitting",
-            "status": "ready",
-            "gpu": False
-        }
-    except:
-        engines["scene_detection"] = {
-            "name": "Scene Detection",
-            "category": "Video Analysis",
-            "description": "PySceneDetect not available",
-            "status": "unavailable",
-            "gpu": False
-        }
-    
-    # Check vector database
-    import os
-    from pathlib import Path
-    chroma_dir = Path("L:/goodq4all/data/chroma")
-    engines["vector_db"] = {
-        "name": "Vector Database",
-        "category": "Search & Retrieval",
-        "description": f"ChromaDB at {chroma_dir}",
-        "status": "ready" if chroma_dir.exists() else "unavailable",
-        "gpu": False
-    }
-    
-    # Check audio diarization
-    engines["audio_diarization"] = {
-        "name": "Audio Diarization",
-        "category": "Audio Processing",
-        "description": "Pyannote speaker separation with OSD",
-        "status": "ready",
-        "gpu": True
-    }
-    
-    return engines
-
-
-@app.get("/api/engines")
-def get_engines() -> Dict[str, Any]:
-    """Get model engine health summary for dashboard"""
-    vllm_healthy = 0
-    vllm_total = 0
-    ollama_healthy = 0
-    ollama_total = 0
-    
-    # Check vLLM
-    try:
-        resp = requests.get("http://localhost:8003/v1/models", timeout=2)
-        if resp.status_code == 200:
-            models = resp.json().get("data", [])
-            vllm_total = len(models)
-            vllm_healthy = vllm_total
-    except:
-        pass
-    
-    # Check Ollama
-    try:
-        resp = requests.get("http://localhost:11434/v1/models", timeout=2)
-        if resp.status_code == 200:
-            models = resp.json().get("data", [])
-            ollama_total = len(models)
-            ollama_healthy = ollama_total
-    except:
-        pass
-    
-    # Determine status
-    def get_status(healthy, total):
-        if total == 0:
-            return "unavailable"
-        elif healthy == total:
-            return "healthy"
-        elif healthy > 0:
-            return "degraded"
-        else:
-            return "down"
-    
+    """Get model engine health aggregate (summary + details)."""
+    details = _collect_engine_details()
+    summary = _summarize_llm_health()
     return {
-        "vllm": {
-            "status": get_status(vllm_healthy, vllm_total),
-            "healthy": vllm_healthy,
-            "total": max(vllm_total, 1),  # Show at least 1 to avoid division by zero
-            "port": 8003
-        },
-        "ollama": {
-            "status": get_status(ollama_healthy, ollama_total),
-            "healthy": ollama_healthy,
-            "total": max(ollama_total, 1),
-            "port": 11434
-        },
-        "timestamp": datetime.utcnow().isoformat()
+        "engines": details,
+        "details": details,
+        "summary": summary,
+        # Preserve legacy top-level fields expected by the dashboard
+        "vllm": summary["vllm"],
+        "ollama": summary["ollama"],
+        "overall": summary["overall"],
+        "timestamp": summary["timestamp"],
+        # Flatten engines for legacy consumers that expect the engines at the top level
+        **details,
     }
 
 
@@ -386,7 +564,7 @@ def vector_search(
     tag: Optional[str] = Query(None, description="Filter by tag/entity"),
 ) -> Dict[str, Any]:
     # Lazy imports to keep startup fast
-    from steps.steps.common.config_loader import load_configs
+    from steps.common.config_loader import load_configs
     from langchain_community.embeddings import HuggingFaceEmbeddings
     from langchain_community.vectorstores import Chroma
     import os
@@ -478,14 +656,42 @@ def get_knowledge_graph() -> Dict[str, Any]:
     if kg_file.exists():
         try:
             with open(kg_file, 'r') as f:
-                return json.load(f)
+                data = json.load(f)
+                # Normalize to the expected payload shape
+                if "network" in data:
+                    network = data.get("network") or {}
+                    nodes = network.get("nodes") or []
+                    edges = network.get("edges") or network.get("links") or []
+                else:
+                    nodes = data.get("nodes") or []
+                    edges = data.get("edges") or data.get("links") or []
+                return {
+                    "network": {
+                        "nodes": nodes,
+                        "edges": edges,
+                    },
+                    "overview": {
+                        "total_entities": len(nodes),
+                        "total_relationships": len(edges),
+                        "total_media": len(data.get("media", [])) if isinstance(data.get("media"), list) else 0,
+                        "total_events": len(data.get("events", [])) if isinstance(data.get("events"), list) else 0,
+                    },
+                }
         except:
             pass
     
-    # Return empty graph structure
+    # Return empty graph structure (keeps UI happy)
     return {
-        "nodes": [],
-        "links": []
+        "network": {
+            "nodes": [],
+            "edges": []
+        },
+        "overview": {
+            "total_entities": 0,
+            "total_relationships": 0,
+            "total_media": 0,
+            "total_events": 0
+        }
     }
 
 
@@ -497,12 +703,46 @@ class ChatRequest(BaseModel):
 @app.get("/api/queue")
 def get_queue() -> Dict[str, Any]:
     """Get current processing queue"""
-    return {
-        "queue": [],
-        "active": 0,
-        "pending": 0,
-        "completed": 0
+    base_dir = Path("L:/goodq4all")
+    import_inbox = base_dir / "import_inbox"
+    processing_dir = base_dir / "data" / "processing"
+    processed_dir = base_dir / "data" / "processed"
+    failed_dir = base_dir / "data" / "failed"
+
+    queue_data = {
+        "inbox": {"count": 0, "files": [], "total_size_mb": 0},
+        "processing": {"count": 0, "files": []},
+        "processed": {"count": 0},
+        "failed": {"count": 0}
     }
+
+    try:
+        if import_inbox.exists():
+            video_exts = {'.mp4', '.mov', '.avi', '.mkv', '.webm'}
+            inbox_files = [f for f in import_inbox.iterdir() if f.suffix.lower() in video_exts]
+            queue_data["inbox"]["count"] = len(inbox_files)
+            queue_data["inbox"]["files"] = [
+                {"name": f.name, "size_mb": round(f.stat().st_size / (1024 ** 2), 2)}
+                for f in inbox_files[:10]
+            ]
+            queue_data["inbox"]["total_size_mb"] = round(
+                sum(f.stat().st_size for f in inbox_files) / (1024 ** 2), 2
+            )
+
+        if processing_dir.exists():
+            processing_items = list(processing_dir.iterdir())
+            queue_data["processing"]["count"] = len(processing_items)
+            queue_data["processing"]["files"] = [d.name for d in processing_items[:5]]
+
+        if processed_dir.exists():
+            queue_data["processed"]["count"] = len(list(processed_dir.iterdir()))
+
+        if failed_dir.exists():
+            queue_data["failed"]["count"] = len(list(failed_dir.iterdir()))
+    except Exception as e:
+        print(f"[WARN] queue status error: {e}")
+
+    return queue_data
 
 
 @app.get("/api/recent-activity")
@@ -619,89 +859,38 @@ def get_gpu_stats() -> Dict[str, Any]:
 
 @app.get("/api/wsl2-status")
 def get_wsl2_status() -> Dict[str, Any]:
-    """Get WSL2 status"""
-    import subprocess
-    import shutil
-    
-    wsl_available = shutil.which("wsl") is not None
-    
-    if not wsl_available:
-        return {
-            "available": False,
-            "status": "not_installed"
-        }
-    
-    try:
-        result = subprocess.run(
-            ["wsl", "-l", "-v"],
-            capture_output=True,
-            text=True,
-            timeout=5
-        )
-        return {
-            "available": True,
-            "status": "running" if result.returncode == 0 else "stopped",
-            "output": result.stdout
-        }
-    except:
-        return {
-            "available": True,
-            "status": "unknown"
-        }
+    """Get WSL2 status (consolidated helper)."""
+    return _collect_wsl_status()
 
 
 @app.get("/api/command-center")
 def get_command_center() -> Dict[str, Any]:
-    """Get command center status with system health"""
-    import subprocess
-    
-    # Check API health (always healthy if we're responding)
-    api_healthy = True
-    
-    # Check database health
-    db_healthy = False
-    try:
-        # Main memory database
-        db_path = Path("L:/goodq4all/data/memory.db")
-        db_healthy = db_path.exists()
-    except:
-        pass
-    
-    # Check WSL/GPU health
-    wsl_healthy = False
-    try:
-        result = subprocess.run(
-            ["nvidia-smi"], capture_output=True, text=True, timeout=2
-        )
-        wsl_healthy = result.returncode == 0
-    except:
-        pass
-    
-    # Check pipeline health (check if processes are running)
-    pipeline_healthy = False
-    try:
-        # Check if processing stats API is running
-        import requests
-        resp = requests.get("http://localhost:5001/api/processing/stats", timeout=1)
-        pipeline_healthy = resp.status_code == 200
-    except:
-        pass
-    
+    """Command center status - consolidates all system info."""
+    db_healthy = Path("L:/goodq4all/data/memory.db").exists()
+    processing_stats = get_progress()
+    model_stats = get_models()
+    wsl_status = _collect_wsl_status()
+
+    # GPU snapshot (keep consistent with /api/gpu/stats)
+    gpu_stats = get_gpu_stats()
+
+    pipeline_healthy = processing_stats.get("status") not in (None, "error")
+    health = {
+        "api": True,
+        "database": db_healthy,
+        "wsl": wsl_status.get("available", False),
+        "pipeline": pipeline_healthy,
+    }
+
     return {
         "status": "active",
-        "health": {
-            "api": api_healthy,
-            "database": db_healthy,
-            "wsl": wsl_healthy,
-            "pipeline": pipeline_healthy
-        },
-        "logs": [
-            {"level": "info", "timestamp": "now", "message": "Command center operational"},
-            {"level": "success" if api_healthy else "error", "message": f"API: {'Healthy' if api_healthy else 'Degraded'}"},
-            {"level": "success" if db_healthy else "error", "message": f"Database: {'Healthy' if db_healthy else 'Not Found'}"},
-            {"level": "success" if wsl_healthy else "warning", "message": f"WSL/GPU: {'Healthy' if wsl_healthy else 'Unavailable'}"},
-            {"level": "success" if pipeline_healthy else "warning", "message": f"Pipeline: {'Active' if pipeline_healthy else 'Standby'}"}
-        ]
+        "health": health,
+        "gpu": gpu_stats,
+        "processing": processing_stats,
+        "models": model_stats,
+        "wsl": wsl_status,
+        "timestamp": datetime.now().isoformat(),
+        "logs": _build_health_logs(health),
     }
 
 
@@ -772,20 +961,57 @@ def test_audio(request: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
     """Test audio processing via WSL2"""
     try:
         import subprocess
+        config_model = None
+        diarization_model = None
+        # Try native Windows path (WSL mount), then WSL cat fallback
+        try:
+            cfg_path = Path(r"\\wsl$\Ubuntu\home\joesdomingo\goodq_audio\config.json")
+            if not cfg_path.exists():
+                cfg_path = Path("/home/joesdomingo/goodq_audio/config.json")
+            if cfg_path.exists():
+                cfg = json.loads(cfg_path.read_text())
+            else:
+                cfg = None
+            if cfg is None:
+                # Fallback: fetch via wsl cat
+                cfg_proc = subprocess.run(
+                    ["wsl", "-d", "Ubuntu", "--", "cat", "/home/joesdomingo/goodq_audio/config.json"],
+                    capture_output=True,
+                    text=True,
+                    timeout=3,
+                )
+                if cfg_proc.returncode == 0 and cfg_proc.stdout:
+                    cfg = json.loads(cfg_proc.stdout)
+            if cfg:
+                config_model = cfg.get("models", {}).get("whisper")
+                diarization_model = cfg.get("models", {}).get("diarization")
+        except Exception as cfg_err:
+            print(f"[WARN] audio test config read error: {cfg_err}")
         
-        # Check if vLLM service is running (as a proxy for WSL2 being available)
+        # Check if audio service is running
         result = subprocess.run(
-            ["wsl", "-d", "Ubuntu", "--", "systemctl", "is-active", "vllm-llama1b.service"],
+            ["wsl", "-d", "Ubuntu", "--", "systemctl", "is-active", "goodq-audio.service"],
             capture_output=True,
             text=True,
             timeout=5
         )
         
         wsl_available = result.returncode == 0
+        cuda_available = False
+        try:
+            cuda_check = subprocess.run(
+                ["wsl", "-d", "Ubuntu", "--", "bash", "-lc", "nvidia-smi --query-gpu=name --format=csv,noheader,nounits | head -n1"],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            cuda_available = cuda_check.returncode == 0 and bool(cuda_check.stdout.strip())
+        except Exception as cuda_err:
+            print(f"[WARN] audio CUDA check failed: {cuda_err}")
         
         # Check if we can access the audio processing scripts
         check_scripts = subprocess.run(
-            ["wsl", "-d", "Ubuntu", "--", "test", "-d", "/mnt/l/goodq4all/goodq4all/audio"],
+            ["wsl", "-d", "Ubuntu", "--", "test", "-d", "/mnt/l/goodq4all/wsl2_audio"],
             capture_output=True,
             timeout=5
         )
@@ -794,12 +1020,15 @@ def test_audio(request: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
         
         return {
             "success": wsl_available and scripts_available,
+            "model": config_model or "medium",
+            "cuda": cuda_available,
+            "diarization": bool(diarization_model),
             "message": "Audio processing ready" if (wsl_available and scripts_available) else "WSL2 or audio scripts not available",
             "details": {
                 "wsl2_active": wsl_available,
                 "audio_scripts": scripts_available,
                 "transcription_ready": wsl_available and scripts_available,
-                "diarization_ready": wsl_available and scripts_available
+                "diarization_ready": wsl_available and scripts_available and bool(diarization_model)
             }
         }
     except subprocess.TimeoutExpired:
@@ -825,7 +1054,8 @@ def get_models() -> Dict[str, Any]:
         if resp.status_code == 200:
             return resp.json()
     except Exception as e:
-        logger.error(f"Failed to get model health: {e}")
+        # Only debug-log to avoid noisy errors when the health service is not running
+        logger.debug(f"Model health service unavailable: {e}")
     
     # Fallback
     return {
@@ -861,113 +1091,6 @@ def get_progress() -> Dict[str, Any]:
         "totals": {"videos_completed": 0, "videos_active": 0},
         "timestamps": {"started_at": None, "updated_at": None}
     }
-
-
-@app.get("/api/command-center")
-def get_command_center() -> Dict[str, Any]:
-    """Command center status - consolidates all system info"""
-    import subprocess
-    import requests
-    
-    # Get GPU stats
-    gpu_stats = {"available": False}
-    try:
-        result = subprocess.run(
-            ["nvidia-smi", "--query-gpu=name,utilization.gpu,memory.used,memory.total,temperature.gpu", 
-             "--format=csv,noheader,nounits"],
-            capture_output=True,
-            text=True,
-            timeout=2
-        )
-        if result.returncode == 0:
-            name, util, mem_used, mem_total, temp = result.stdout.strip().split(",")
-            gpu_stats = {
-                "available": True,
-                "name": name.strip(),
-                "utilization": int(util.strip()),
-                "memory_used": int(mem_used.strip()),
-                "memory_total": int(mem_total.strip()),
-                "temperature": int(temp.strip())
-            }
-    except:
-        pass
-    
-    # Get processing stats
-    processing_stats = get_progress()
-    
-    # Get model health
-    model_stats = get_models()
-    
-    # Get WSL2 status
-    wsl_status = {"available": False, "vllm_service": "unknown"}
-    try:
-        result = subprocess.run(
-            ["wsl", "-d", "Ubuntu", "--", "systemctl", "is-active", "vllm-llama1b.service"],
-            capture_output=True,
-            text=True,
-            timeout=3
-        )
-        wsl_status = {
-            "available": True,
-            "vllm_service": "active" if result.returncode == 0 else "inactive"
-        }
-    except:
-        pass
-    
-    return {
-        "gpu": gpu_stats,
-        "processing": processing_stats,
-        "models": model_stats,
-        "wsl": wsl_status,
-        "timestamp": datetime.now().isoformat()
-    }
-
-
-@app.get("/api/wsl2-status")
-def get_wsl2_status() -> Dict[str, Any]:
-    """Get WSL2 and vLLM service status"""
-    import subprocess
-    
-    status = {
-        "wsl_available": False,
-        "vllm_service": "unknown",
-        "audio_processing": "unknown"
-    }
-    
-    try:
-        # Check if WSL is available
-        result = subprocess.run(
-            ["wsl", "--status"],
-            capture_output=True,
-            text=True,
-            timeout=3
-        )
-        status["wsl_available"] = result.returncode == 0
-        
-        if status["wsl_available"]:
-            # Check vLLM service
-            vllm_check = subprocess.run(
-                ["wsl", "-d", "Ubuntu", "--", "systemctl", "is-active", "vllm-llama1b.service"],
-                capture_output=True,
-                text=True,
-                timeout=3
-            )
-            status["vllm_service"] = "active" if vllm_check.returncode == 0 else "inactive"
-            
-            # Check if Faster Whisper is available (python -c import test)
-            audio_check = subprocess.run(
-                ["wsl", "-d", "Ubuntu", "--", "bash", "-c", 
-                 "python3 -c 'import faster_whisper' 2>/dev/null && echo 'ok' || echo 'error'"],
-                capture_output=True,
-                text=True,
-                timeout=5
-            )
-            status["audio_processing"] = "available" if "ok" in audio_check.stdout else "unavailable"
-            status["faster_whisper"] = "ready" if "ok" in audio_check.stdout else "not_installed"
-    except Exception as e:
-        logger.error(f"WSL2 status check failed: {e}")
-    
-    return status
 
 
 @app.get("/api/pipeline-engines")

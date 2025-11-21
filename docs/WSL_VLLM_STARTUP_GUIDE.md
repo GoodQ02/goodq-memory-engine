@@ -24,7 +24,7 @@ source venv/bin/activate
 python -m vllm.entrypoints.openai.api_server \
     --model /mnt/l/_DATA/models/llm/huggingface/Llama-3.2-1B-Instruct \
     --host 0.0.0.0 \
-    --port 8003 \
+    --port 8005 \
     --gpu-memory-utilization 0.7 \
     --max-model-len 8192
 ```
@@ -32,7 +32,7 @@ python -m vllm.entrypoints.openai.api_server \
 **Expected output**:
 - Model loading progress (30-60 seconds)
 - "INFO: Application startup complete"
-- "INFO: Uvicorn running on http://0.0.0.0:8003"
+- "INFO: Uvicorn running on http://0.0.0.0:8005"
 
 **Leave this terminal open** - vLLM runs in foreground.
 
@@ -69,7 +69,7 @@ ss -tlnp | grep 11434
 
 ```powershell
 # Test vLLM
-curl http://localhost:8003/v1/models
+curl http://localhost:8005/v1/models
 
 # Test Ollama
 curl http://localhost:11434/v1/models
@@ -103,10 +103,10 @@ journalctl -u ollama -n 50 --no-pager
 ### Port already in use
 ```bash
 # Find what's using the port
-lsof -i:8003
+lsof -i:8005
 
 # Kill old vLLM process
-pkill -f "vllm.*8003"
+pkill -f "vllm.*8005"
 ```
 
 ---

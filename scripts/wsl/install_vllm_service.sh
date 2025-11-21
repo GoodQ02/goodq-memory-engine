@@ -29,7 +29,7 @@ User=joesdomingo
 WorkingDirectory=/home/joesdomingo/vllm_server
 Environment="PATH=/home/joesdomingo/vllm_server/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 Environment="CUDA_VISIBLE_DEVICES=0"
-ExecStart=/home/joesdomingo/vllm_server/venv/bin/python -m vllm.entrypoints.openai.api_server --model /mnt/l/_DATA/models/llm/huggingface/Llama-3.2-1B-Instruct --host 0.0.0.0 --port 8003 --gpu-memory-utilization 0.7 --max-model-len 8192
+ExecStart=/home/joesdomingo/vllm_server/venv/bin/python -m vllm.entrypoints.openai.api_server --model /mnt/l/_DATA/models/llm/huggingface/Llama-3.2-1B-Instruct --host 0.0.0.0 --port 8005 --gpu-memory-utilization 0.7 --max-model-len 8192
 Restart=on-failure
 RestartSec=10
 StandardOutput=append:/home/joesdomingo/vllm_server/logs/vllm-service.log
@@ -88,7 +88,7 @@ echo "Testing in 30 seconds..."
 sleep 30
 
 echo "Testing endpoint..."
-if curl -s http://localhost:8003/v1/models > /dev/null 2>&1; then
+if curl -s http://localhost:8005/v1/models > /dev/null 2>&1; then
     echo "✅ vLLM service is responding!"
 else
     echo "⚠️  Service may still be loading. Check with:"

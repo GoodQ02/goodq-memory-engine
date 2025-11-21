@@ -26,6 +26,24 @@ echo.
 REM Navigate to project directory
 cd /d "L:\goodq4all"
 
+REM Prefer local virtual environment if present
+set "PYTHON_CMD=python"
+set "UVICORN_CMD="
+if exist ".venv\Scripts\python.exe" (
+    set "PYTHON_CMD=.venv\Scripts\python.exe"
+)
+
+REM Always launch uvicorn via python -m so PATH is not required
+set "UVICORN_CMD=%PYTHON_CMD% -m uvicorn"
+
+REM Ensure uvicorn is installed for the selected interpreter
+%PYTHON_CMD% -m uvicorn --version >nul 2>&1
+if errorlevel 1 (
+    echo [INFO] uvicorn missing; installing into the selected Python environment...
+    %PYTHON_CMD% -m pip install --upgrade pip >nul 2>&1
+    %PYTHON_CMD% -m pip install "uvicorn[standard]" fastapi starlette >nul
+)
+
 REM Check for running processes
 echo [Checking for running processes...]
 tasklist /FI "WINDOWTITLE eq GoodQ API Server*" 2>NUL | find /I /N "python.exe">NUL
@@ -94,12 +112,31 @@ echo ===========================================================================
 echo.
 
 echo [1/3] Starting Unified API Server...
-start "GoodQ API Server" cmd /k "title GoodQ API Server && cd /d L:\goodq4all\api && uvicorn main:app --host 0.0.0.0 --port 3000 --reload"
+start "GoodQ API Server" cmd /k "title GoodQ API Server && cd /d L:\goodq4all\api && %UVICORN_CMD% main:app --host 0.0.0.0 --port 3000 --reload"
 echo       Waiting for server to initialize...
 timeout /t 8 /nobreak >nul
 
+REM Auto-start vLLM services in WSL if available
+echo [WSL] Checking WSL/vLLM status...
+wsl --status >nul 2>&1
+if "%ERRORLEVEL%"=="0" (
+    echo       WSL detected, attempting to start vLLM services...
+    REM Preferred: start systemd services (passwordless via sudoers for set-and-forget)
+    wsl sudo systemctl start vllm-llama1b >nul 2>&1
+    wsl sudo systemctl start ollama >nul 2>&1
+    REM Fallback: only start per-user scripts if systemd service is NOT active
+    wsl sudo systemctl is-active --quiet vllm-llama1b
+    if NOT "%ERRORLEVEL%"=="0" (
+        echo       Systemd service not active; falling back to user scripts...
+        wsl ~/vllm_server/scripts/start_llama1b.sh >nul 2>&1
+        wsl ~/vllm_server/scripts/start_llama3b.sh >nul 2>&1
+    )
+) else (
+    echo       WSL not detected; skipping vLLM auto-start
+)
+
 echo [2/3] Starting Watchdog (Auto-Ingestion)...
-start "GoodQ Watchdog" cmd /k "title GoodQ Watchdog && cd /d L:\goodq4all && python scripts\watchdog_ingest.py"
+start "GoodQ Watchdog" cmd /k "title GoodQ Watchdog && cd /d L:\goodq4all && %PYTHON_CMD% scripts\watchdog_ingest.py"
 echo       Waiting for watchdog to initialize...
 timeout /t 3 /nobreak >nul
 
@@ -122,7 +159,7 @@ echo  📊 Dashboard:           http://localhost:3000/dashboard.html
 echo  🔌 API Endpoint:        http://localhost:3000/api
 echo  💚 Health API:          http://localhost:3000/api/health
 echo  📈 Processing API:      http://localhost:3000/api/processing/stats
-echo  🤖 vLLM (WSL):          http://localhost:8003/v1
+echo  🤖 vLLM (WSL):          http://localhost:8005/v1
 echo  🦙 Ollama:              http://localhost:11434/v1
 echo.
 echo  Active Services:
@@ -132,7 +169,7 @@ echo    ✓ vLLM Server         (WSL - systemd service)
 echo    ✓ Web Interfaces      (2 Browser tabs)
 echo.
 echo  LLM Models Available:
-echo    ? Llama-1B-Speed     (vLLM - port 8003)
+echo    ? Llama-1B-Speed     (vLLM - port 8005)
 echo    ? Phi4-Ollama        (Ollama - port 11434)
 echo.
 echo  Drop videos in: L:\goodq4all\import_inbox
@@ -160,8 +197,8 @@ echo.
 echo ================================================================================
 echo.
 
-cd /d "L:\goodq4all"
-conda run --no-capture-output -n goodq_zenml python scripts/api_server.py
+cd /d "L:\goodq4all\api"
+%UVICORN_CMD% main:app --host 0.0.0.0 --port 3000 --reload
 
 goto end
 
@@ -180,7 +217,7 @@ echo ===========================================================================
 echo.
 
 cd /d "L:\goodq4all"
-conda run --no-capture-output -n goodq_zenml python scripts/watchdog_ingest.py
+%PYTHON_CMD% scripts\watchdog_ingest.py
 
 goto end
 

@@ -329,7 +329,7 @@ def audio_diarize(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
     
     if not ffmpeg_path:
         # Fallback to known location
-        fallback_path = "L:/Tools/ffmpeg/bin/ffmpeg.exe"
+        fallback_path = "L:/_TOOLS/ffmpeg/bin/ffmpeg.exe"
         if os.path.exists(fallback_path):
             ffmpeg_path = fallback_path
         else:

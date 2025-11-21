@@ -76,9 +76,9 @@ External Model Assets
 
 System Tools
 ================================================================================
-✓ ffmpeg                    (L:\Tools\ffmpeg\bin\ffmpeg.exe)
-✓ tesseract                 (L:\Tools\tesseract\tesseract.exe)
-✓ poppler                   (L:\Tools\poppler\bin)
+✓ ffmpeg                    (L:\_TOOLS\ffmpeg\bin\ffmpeg.exe)
+✓ tesseract                 (L:\_TOOLS\tesseract\tesseract.exe)
+✓ poppler                   (L:\_TOOLS\poppler\bin)
 
 ────────────────────────────────────────────────────────────────
 Summary:

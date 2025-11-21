@@ -272,7 +272,7 @@ print(f'Transcript failures: {failed}/{len(scenes)}')
 
 ### Test Whisper.cpp Directly
 ```bash
-cd L:\Tools\whisper
+cd L:\_TOOLS\whisper
 .\whisper-cli.exe -m ggml-large-v3.bin -f L:\goodq4all\logs\watchdog_20251014_024332\1987_1988\audio\scene_0001.wav -oj -of test_output
 cat test_output.json
 ```

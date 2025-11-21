@@ -146,7 +146,7 @@ else:
 ```python
 # lib/llm_client.py
 MODELS = [
-    {"name": "Llama-1B-Speed", "url": "localhost:8003"},    # vLLM - 178 tok/s ⚡
+    {"name": "Llama-1B-Speed", "url": "localhost:8005"},    # vLLM - 178 tok/s ⚡
     {"name": "Ollama-Phi4", "url": "localhost:11434"},       # Ollama - 70 tok/s
     {"name": "LMStudio", "url": "localhost:1234"}            # Fallback
 ]

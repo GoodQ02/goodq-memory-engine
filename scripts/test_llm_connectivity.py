@@ -44,7 +44,7 @@ def main():
     print("-" * 70)
     
     endpoints = [
-        ("http://localhost:8003/v1", "Llama-1B-Speed"),
+        ("http://localhost:8005/v1", "Llama-1B-Speed"),
         ("http://localhost:8004/v1", "Llama-3B-Balanced"),
         ("http://localhost:8001/v1", "Phi-3.5-LongContext"),
         ("http://localhost:8000/v1", "Qwen-Quality"),

@@ -163,21 +163,21 @@ system_tools:
   ffmpeg:
     name: "FFmpeg"
     version: "6.1"
-    binary_path: "L:/Tools/ffmpeg/bin/ffmpeg.exe"
+    binary_path: "L:/_TOOLS/ffmpeg/bin/ffmpeg.exe"
     required: true
     verify_command: "ffmpeg -version"
     
   tesseract:
     name: "Tesseract OCR"
     version: "5.3.0"
-    binary_path: "L:/Tools/tesseract/tesseract.exe"
+    binary_path: "L:/_TOOLS/tesseract/tesseract.exe"
     required: true
     verify_command: "tesseract --version"
     
   poppler:
     name: "Poppler PDF Tools"
     version: "23.08.0"
-    binary_path: "L:/Tools/poppler/bin"
+    binary_path: "L:/_TOOLS/poppler/bin"
     required: true
     verify_command: "pdftotext -v"
 

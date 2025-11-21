@@ -11,11 +11,11 @@ from typing import Any, Dict
 
 
 def build_goodq_chat_pipeline():
-    from steps.steps.common.config_loader import load_configs
-    from steps.steps.llm_chat.step import llm_chat
-    from steps.steps.tts.step import tts_speak
-    from steps.steps.system_metrics.step import system_metrics
-    from steps.steps.home_assistant_status.step import home_assistant_status
+    from steps.common.config_loader import load_configs
+    from steps.llm_chat.step import llm_chat
+    from steps.tts.step import tts_speak
+    from steps.system_metrics.step import system_metrics
+    from steps.home_assistant_status.step import home_assistant_status
 
     def run(config_overrides: Dict[str, Any]) -> Dict[str, Any]:
         cfg = load_configs(config_overrides)

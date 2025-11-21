@@ -18,7 +18,7 @@ def fix_file(file_path):
         pattern1 = r'\.to\(["\']cuda["\']\)'
         if re.search(pattern1, content):
             content = re.sub(pattern1, '.to(torch.device("cuda"))', content)
-            changes.append("  - Fixed .to(torch.device("cuda")) -> .to(torch.device('cuda'))")
+            changes.append('  - Fixed .to(torch.device("cuda")) -> .to(torch.device("cuda"))')
             
             # Ensure torch is imported
             if 'import torch' not in content:
@@ -33,7 +33,7 @@ def fix_file(file_path):
         pattern2 = r'\.to\(["\']cpu["\']\)'
         if re.search(pattern2, content):
             content = re.sub(pattern2, '.to(torch.device("cpu"))', content)
-            changes.append("  - Fixed .to(torch.device("cpu")) -> .to(torch.device('cpu'))")
+            changes.append('  - Fixed .to(torch.device("cpu")) -> .to(torch.device("cpu"))')
         
         if content != original_content:
             with open(file_path, 'w', encoding='utf-8') as f:

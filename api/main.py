@@ -1043,7 +1043,7 @@ Be concise, technical, and actionable. Format responses with markdown."""
 
 
 # Mount static files LAST (catch-all for UI)
-UI_DIR = Path(__file__).parent.parent  # Root goodq4all directory contains HTML files
+UI_DIR = Path(__file__).parent.parent / "web"  # web directory contains HTML files
 if UI_DIR.exists():
     app.mount("/", StaticFiles(directory=str(UI_DIR), html=True), name="ui")
     logger.info(f"✓ Serving UI from: {UI_DIR}")

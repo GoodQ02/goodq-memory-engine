@@ -410,19 +410,41 @@
         async function updateModelHealth() {
             try {
                 const response = await fetch('/api/engines');
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 const data = await response.json();
                 console.log('Model health update:', data);
+
+                // Normalize payload with safe defaults
+                const totalFallback = { status: 'unavailable', healthy: 0, total: 0 };
+                const summary = (data && data.summary) || {};
+                const toTotal = (obj) => {
+                    if (!obj) return totalFallback;
+                    const healthy = obj.healthy || 0;
+                    const total = (Number.isFinite(obj.total) && obj.total > 0)
+                        ? obj.total
+                        : Math.max(healthy, 1);  // assume at least one configured model
+                    return {
+                        status: obj.status || 'unavailable',
+                        healthy,
+                        total,
+                    };
+                };
+
+                // Prefer summary counts (they include healthy/total), fall back to engine entries
+                const vllm = toTotal((summary && summary.vllm) || (data && data.vllm) || null);
+                const ollama = toTotal((summary && summary.ollama) || (data && data.ollama) || null);
+                const overall = toTotal((summary && summary.overall) || (data && data.overall) || null);
                 
                 // Update vLLM status
                 const vllmIndicator = document.getElementById('vllm-indicator');
                 const vllmStatus = document.getElementById('vllm-status');
                 const vllmDetail = document.getElementById('vllm-detail');
                 
-                if (data.vllm.status === 'healthy') {
+                if (vllm.status === 'healthy') {
                     vllmIndicator.style.background = 'var(--success-color)';
                     vllmStatus.textContent = '✅ Healthy';
                     vllmStatus.style.color = 'var(--success-color)';
-                } else if (data.vllm.status === 'degraded') {
+                } else if (vllm.status === 'degraded') {
                     vllmIndicator.style.background = 'var(--warning-color)';
                     vllmStatus.textContent = '⚠️ Degraded';
                     vllmStatus.style.color = 'var(--warning-color)';
@@ -431,18 +453,18 @@
                     vllmStatus.textContent = '❌ Down';
                     vllmStatus.style.color = '#ef4444';
                 }
-                vllmDetail.textContent = `${data.vllm.healthy}/${data.vllm.total} models online`;
+                vllmDetail.textContent = `${vllm.healthy}/${vllm.total || 0} models online`;
                 
                 // Update Ollama status
                 const ollamaIndicator = document.getElementById('ollama-indicator');
                 const ollamaStatus = document.getElementById('ollama-status');
                 const ollamaDetail = document.getElementById('ollama-detail');
                 
-                if (data.ollama.status === 'healthy') {
+                if (ollama.status === 'healthy') {
                     ollamaIndicator.style.background = 'var(--success-color)';
                     ollamaStatus.textContent = '✅ Healthy';
                     ollamaStatus.style.color = 'var(--success-color)';
-                } else if (data.ollama.status === 'degraded') {
+                } else if (ollama.status === 'degraded') {
                     ollamaIndicator.style.background = 'var(--warning-color)';
                     ollamaStatus.textContent = '⚠️ Degraded';
                     ollamaStatus.style.color = 'var(--warning-color)';
@@ -451,18 +473,18 @@
                     ollamaStatus.textContent = '❌ Down';
                     ollamaStatus.style.color = '#ef4444';
                 }
-                ollamaDetail.textContent = `${data.ollama.healthy}/${data.ollama.total} models online`;
+                ollamaDetail.textContent = `${ollama.healthy}/${ollama.total || 0} models online`;
                 
                 // Update Overall status
                 const overallIndicator = document.getElementById('overall-indicator');
                 const overallStatus = document.getElementById('overall-status');
                 const overallDetail = document.getElementById('overall-detail');
                 
-                if (data.overall.status === 'healthy') {
+                if (overall.status === 'healthy') {
                     overallIndicator.style.background = 'var(--success-color)';
                     overallStatus.textContent = '✅ All Systems Online';
                     overallStatus.style.color = 'var(--success-color)';
-                } else if (data.overall.status === 'degraded') {
+                } else if (overall.status === 'degraded') {
                     overallIndicator.style.background = 'var(--warning-color)';
                     overallStatus.textContent = '⚠️ Partial Availability';
                     overallStatus.style.color = 'var(--warning-color)';
@@ -471,11 +493,11 @@
                     overallStatus.textContent = '❌ System Down';
                     overallStatus.style.color = '#ef4444';
                 }
-                overallDetail.textContent = `${data.overall.healthy}/${data.overall.total} total models`;
+                overallDetail.textContent = `${overall.healthy}/${overall.total || 0} total models`;
                 
                 // If models are expanded, update detailed view
                 if (modelsExpanded) {
-                    await updateModelDetails();
+                    await updateModelDetails(data);
                 }
                 
             } catch (error) {
@@ -491,15 +513,20 @@
             }
         }
         
-        async function updateModelDetails() {
+        async function updateModelDetails(prefetchedData) {
             try {
-                const response = await fetch('/api/engines');
-                const data = await response.json();
+                let data = prefetchedData;
+                if (!data) {
+                    const response = await fetch('/api/engines');
+                    data = await response.json();
+                }
                 
                 const modelList = document.getElementById('model-list');
                 modelList.innerHTML = '';
-                
-                data.models.forEach(model => {
+                const modelEntries = data.details || data.engines || {};
+                Object.values(modelEntries).forEach(model => {
+                    // Only render things with a name/status
+                    if (!model || !model.name) return;
                     const modelCard = document.createElement('div');
                     modelCard.style.cssText = `
                         background: var(--secondary-bg);
@@ -509,9 +536,12 @@
                         font-size: 13px;
                     `;
                     
-                    const statusColor = model.is_healthy ? 'var(--success-color)' : '#ef4444';
-                    const statusIcon = model.is_healthy ? '✅' : '❌';
-                    const backendColor = model.backend === 'vllm' ? '#5b7cff' : '#f97316';
+                    const isHealthy = (model.status || '').toLowerCase() === 'ready' || (model.status || '').toLowerCase() === 'healthy';
+                    const statusIcon = isHealthy ? '✅' : '❌';
+                    const backend = model.category || model.backend || 'engine';
+                    const backendColor = (backend.toLowerCase().includes('llm') || backend === 'vllm') ? '#5b7cff'
+                                         : backend.toLowerCase().includes('pipeline') ? '#f97316'
+                                         : '#6b7280';
                     
                     modelCard.innerHTML = `
                         <div style="display: flex; align-items: start; justify-content: space-between; margin-bottom: 8px;">
@@ -520,20 +550,14 @@
                         </div>
                         <div style="color: var(--secondary-text); font-size: 11px; margin-bottom: 6px;">
                             <span style="background: ${backendColor}; padding: 2px 6px; border-radius: 3px; text-transform: uppercase; font-weight: 600;">
-                                ${model.backend}
+                                ${backend}
                             </span>
-                            <span style="margin-left: 6px;">Port ${model.port}</span>
+                            ${model.port ? `<span style="margin-left: 6px;">Port ${model.port}</span>` : ''}
                         </div>
                         <div style="color: var(--secondary-text); font-size: 11px; margin-bottom: 4px;">
-                            ${model.is_healthy ? 
-                                `Response: ${model.response_time_ms}ms` : 
-                                `Failures: ${model.consecutive_failures}`
-                            }
+                            ${model.description || 'Status: ' + (model.status || 'unknown')}
                         </div>
-                        <div style="color: var(--secondary-text); font-size: 11px;">
-                            ${model.vram_gb}GB VRAM • ${model.tokens_per_sec} tok/s
-                        </div>
-                        ${!model.is_healthy && model.last_error ? `
+                        ${!isHealthy && model.last_error ? `
                             <div style="color: #ef4444; font-size: 10px; margin-top: 6px; padding: 4px; background: rgba(239, 68, 68, 0.1); border-radius: 4px;">
                                 ${model.last_error.substring(0, 80)}${model.last_error.length > 80 ? '...' : ''}
                             </div>
@@ -566,11 +590,16 @@
         async function updateStats() {
             try {
                 const response = await fetch('/api/processing/stats');
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 const data = await response.json();
                 console.log('Processing stats:', data);
+                const current = data.current_video || {};
+                const scenes = data.scenes || {};
+                const rate = data.processing_rate || { seconds_per_scene: 0, scenes_per_minute: 0 };
+                const timestamps = data.timestamps || {};
 
                 // Update current video
-                const videoName = data.current_video.name || 'No active processing';
+                const videoName = current.name || (data.status === 'idle' ? 'No video in queue' : 'Preparing video...');
                 document.getElementById('video-name').textContent = videoName;
                 
                 // Special message for 1987-1988 video
@@ -583,39 +612,39 @@
                 }
 
                 // Update progress
-                const progressPercent = data.current_video.progress_percent || 0;
+                const progressPercent = current.progress_percent || 0;
                 document.getElementById('progress-percent').textContent = progressPercent + '%';
                 document.getElementById('progress-bar').style.width = progressPercent + '%';
-                document.getElementById('progress-step').textContent = data.current_video.current_step || 'Idle';
+                document.getElementById('progress-step').textContent = current.current_step || (data.status === 'idle' ? 'Idle' : 'Starting...');
 
                 // Update scenes
-                const scenesCount = data.scenes.detected || 0;
+                const scenesCount = scenes.detected || 0;
                 document.getElementById('scenes-count').textContent = scenesCount;
                 document.getElementById('scenes-label').textContent = scenesCount > 0 ? 'scenes detected' : 'detecting scenes';
 
                 // Update frames
-                document.getElementById('frames-count').textContent = data.scenes.frames_extracted || 0;
+                document.getElementById('frames-count').textContent = scenes.frames_extracted || 0;
 
                 // Update audio clips
-                document.getElementById('audio-count').textContent = data.scenes.audio_clips || 0;
+                document.getElementById('audio-count').textContent = scenes.audio_clips || 0;
 
                 // Update video size
-                const videoSizeGB = data.current_video.size_gb || 0;
+                const videoSizeGB = current.size_gb || 0;
                 document.getElementById('video-size').textContent = videoSizeGB > 0 ? videoSizeGB + ' GB' : '-- GB';
 
                 // Update processing rate
-                const rate = data.processing_rate;
-                if (rate.seconds_per_scene > 0) {
+                if (rate.seconds_per_scene && rate.seconds_per_scene > 0) {
                     document.getElementById('processing-rate').textContent = Math.round(rate.seconds_per_scene) + 's';
-                    document.getElementById('rate-label').textContent = `Per scene (~${rate.scenes_per_minute.toFixed(1)}/min)`;
+                    const spm = rate.scenes_per_minute ? rate.scenes_per_minute.toFixed(1) : '0.0';
+                    document.getElementById('rate-label').textContent = `Per scene (~${spm}/min)`;
                 } else {
                     document.getElementById('processing-rate').textContent = '--';
                     document.getElementById('rate-label').textContent = 'Calculating...';
                 }
 
                 // Update timestamps
-                if (data.timestamps.started_at) {
-                    const startedDate = new Date(data.timestamps.started_at);
+                if (timestamps.started_at) {
+                    const startedDate = new Date(timestamps.started_at);
                     document.getElementById('started-time').textContent = startedDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
                     document.getElementById('started-date').textContent = startedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
                 } else {
@@ -624,8 +653,8 @@
                 }
 
                 // Update pipeline stages based on current step
-                const currentStep = data.current_video.current_step || '';
-                updatePipelineStages(currentStep, scenesCount, data.scenes.frames_extracted, data.scenes.audio_clips);
+                const currentStep = current.current_step || '';
+                updatePipelineStages(currentStep, scenesCount, scenes.frames_extracted || 0, scenes.audio_clips || 0);
 
             } catch (error) {
                 console.error('Failed to fetch processing stats:', error);

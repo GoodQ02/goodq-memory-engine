@@ -510,6 +510,33 @@
             color: #fbbf24;
         }
 
+        .terminal-log {
+            background: #0a0f1c;
+            color: #8efc97;
+            border: 1px solid rgba(16, 185, 129, 0.4);
+            box-shadow: 0 0 12px rgba(16, 185, 129, 0.2);
+            border-radius: 8px;
+            padding: 12px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            text-shadow: 0 0 6px rgba(34, 197, 94, 0.5);
+            overflow: hidden;
+        }
+
+        .terminal-text {
+            white-space: pre-wrap;
+            margin: 0;
+            line-height: 1.35;
+        }
+
+        .log-section-title {
+            font-size: 12px;
+            color: var(--secondary-text);
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            margin-bottom: 6px;
+        }
+
         /* Buttons */
         .btn {
             padding: 8px 16px;
@@ -2197,6 +2224,11 @@
                         </div>
                         <div class="log-container" id="commandCenterLogs" style="max-height: 400px; overflow-y: auto;"></div>
                     </div>
+
+                    <!-- Memory Tiers -->
+                    <div class="card">
+                        <div id="memoryStatsCard"></div>
+                    </div>
                 </div>
 
                 <!-- Pipeline Engines View (Dedicated) -->
@@ -2242,6 +2274,7 @@
         let statusInterval;
         let progressInterval;
         let commandCenterInterval;
+        let memoryInterval;
 
         // Initialize on page load
         document.addEventListener('DOMContentLoaded', async () => {
@@ -2351,6 +2384,7 @@
                 
                 // Update GPU status on dashboard
                 await refreshGPUStatus();
+                await refreshMemoryStats();
 
                 // Update system status
                 const statusContent = document.getElementById('systemStatusContent');
@@ -3921,6 +3955,7 @@
                         return '';
                     }
                     
+                    const isQdrant = (engine.name || key).toLowerCase().includes('qdrant') || (engine.category || '').toLowerCase().includes('vector');
                     let statusClass = 'ready';
                     let statusText = 'READY';
                     
@@ -3937,7 +3972,7 @@
                     }
                     
                     return `
-                        <div class="engine-card ${statusClass}">
+                        <div class="engine-card ${statusClass}" style="${isQdrant ? 'box-shadow: 0 0 12px rgba(34,197,94,0.35); border: 1px solid rgba(34,197,94,0.5);' : ''}">
                             <div class="engine-name">${engine.name || key}</div>
                             <div class="engine-status ${statusClass}">${statusText}</div>
                             <div style="font-size: 11px; color: var(--secondary-text); margin-bottom: 8px;">
@@ -3945,6 +3980,7 @@
                             </div>
                             <div class="engine-stats">
                                 Category: ${engine.category || 'General'}
+                                ${engine.port ? `<span style="margin-left:8px; color: var(--secondary-text);">Port ${engine.port}</span>` : ''}
                             </div>
                         </div>
                     `;
@@ -4064,31 +4100,111 @@
         // Command Center
         async function refreshCommandCenter() {
             try {
-                const response = await fetch(`${API_BASE}/command-center`);
-                const data = await response.json();
+                const [ccResp, wdResp] = await Promise.all([
+                    fetch(`${API_BASE}/command-center`),
+                    fetch(`${API_BASE}/logs/watchdog`)
+                ]);
+                const ccData = ccResp.ok ? await ccResp.json() : { logs: [] };
+                const wdData = wdResp.ok ? await wdResp.json() : { lines: [], available: false };
 
                 const container = document.getElementById('commandCenterLogs');
-                
-                if (data.logs.length === 0) {
-                    container.innerHTML = '<div style="color: var(--secondary-text);">No logs available</div>';
-                    return;
+                let html = '';
+
+                // Watchdog tail (matrix/terminal style)
+                if (wdData.lines && wdData.lines.length > 0) {
+                    html += `
+                        <div class="log-section-title">watchdog.log (last ${wdData.lines.length} lines)</div>
+                        <div class="terminal-log">
+                            <pre class="terminal-text">${wdData.lines.slice(-200).map(line => line.replace(/</g,'&lt;')).join('\\n')}</pre>
+                        </div>
+                        <div style="height: 10px;"></div>
+                    `;
                 }
 
-                // Render logs
-                container.innerHTML = data.logs.map(log => `
-                    <div class="log-line ${log.level}">
-                        ${log.timestamp ? `<span style="color: #666;">[${log.timestamp}]</span> ` : ''}
-                        ${log.message}
-                    </div>
-                `).join('');
+                // Health/status logs
+                if (ccData.logs && ccData.logs.length > 0) {
+                    html += `
+                        <div class="log-section-title">System health</div>
+                        ${ccData.logs.map(log => `
+                            <div class="log-line ${log.level || ''}">
+                                ${log.timestamp ? `<span style="color: #666;">[${log.timestamp}]</span> ` : ''}
+                                ${log.message}
+                            </div>
+                        `).join('')}
+                    `;
+                }
 
-                // ALWAYS scroll to bottom to show most recent logs
+                if (!html) {
+                    html = '<div style="color: var(--secondary-text);">No logs available</div>';
+                }
+
+                container.innerHTML = html;
+
+                // Scroll to bottom to show most recent logs
                 setTimeout(() => {
                     container.scrollTop = container.scrollHeight;
                 }, 100);
 
             } catch (error) {
                 console.error('Error loading command center:', error);
+            }
+        }
+
+        // Memory stats card
+        async function refreshMemoryStats() {
+            try {
+                const response = await fetch(`${API_BASE}/memory/stats?_t=${Date.now()}`);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const data = await response.json();
+                const card = document.getElementById('memoryStatsCard');
+                if (!card) return;
+                card.innerHTML = `
+                    <div class="card-header">
+                        <div>
+                            <div class="card-title">🧠 Memory Tiers</div>
+                            <div class="card-subtitle">FAISS, Qdrant, routing</div>
+                        </div>
+                        <button class="btn btn-primary" onclick="refreshMemoryStats()" style="font-size: 11px; padding: 6px 10px;">Refresh</button>
+                    </div>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; padding: 15px;">
+                        <div class="index-card index-active">
+                            <div class="index-header">
+                                <div class="index-name">FAISS</div>
+                                <div class="index-status">✓</div>
+                            </div>
+                            <div class="index-details">
+                                <div class="index-detail"><span class="index-detail-label">Text:</span> <span class="index-detail-value">${data.faiss.text_vectors}</span></div>
+                                <div class="index-detail"><span class="index-detail-label">Image:</span> <span class="index-detail-value">${data.faiss.clip_vectors}</span></div>
+                                <div class="index-detail"><span class="index-detail-label">Audio:</span> <span class="index-detail-value">${data.faiss.audio_vectors}</span></div>
+                            </div>
+                        </div>
+                        <div class="index-card ${data.qdrant.available ? 'index-active' : 'index-inactive'}">
+                            <div class="index-header">
+                                <div class="index-name">Qdrant</div>
+                                <div class="index-status ${data.qdrant.available ? 'index-active' : 'index-inactive'}">${data.qdrant.available ? '✓' : '○'}</div>
+                            </div>
+                            ${data.qdrant.available ? `
+                            <div class="index-details">
+                                <div class="index-detail"><span class="index-detail-label">Collections:</span> <span class="index-detail-value">${data.qdrant.collections}</span></div>
+                            </div>
+                            ` : '<div class="index-inactive-msg">Not reachable</div>'}
+                        </div>
+                        <div class="index-card index-active">
+                            <div class="index-header">
+                                <div class="index-name">Routing</div>
+                                <div class="index-status">→</div>
+                            </div>
+                            <div class="index-details">
+                                <div class="index-detail"><span class="index-detail-label">Reads:</span> <span class="index-detail-value">${(data.routing.read_priority || []).join(' › ') || 'n/a'}</span></div>
+                                <div class="index-detail"><span class="index-detail-label">Writes:</span> <span class="index-detail-value">${(data.routing.write_targets || []).join(' + ') || 'n/a'}</span></div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } catch (error) {
+                console.error('Error loading memory stats:', error);
+                const card = document.getElementById('memoryStatsCard');
+                if (card) card.innerHTML = '<div style="color: var(--error-color); padding: 20px;">Failed to load memory stats</div>';
             }
         }
 
@@ -4589,6 +4705,15 @@
                     console.error('Progress update error:', error);
                 }
             }, 5000);
+
+            // Memory stats refresh (dashboard only)
+            if (memoryInterval) clearInterval(memoryInterval);
+            memoryInterval = setInterval(() => {
+                const dashboardView = document.getElementById('view-dashboard');
+                if (dashboardView && dashboardView.classList.contains('active')) {
+                    refreshMemoryStats();
+                }
+            }, 15000);
         }
 
         // Utility Functions

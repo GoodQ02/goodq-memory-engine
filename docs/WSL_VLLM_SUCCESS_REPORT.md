@@ -15,7 +15,7 @@
 
 ### vLLM Llama-1B (Primary)
 - **Status**: ✅ HEALTHY
-- **Port**: 8003
+- **Port**: 8005
 - **Binding**: 0.0.0.0 (Windows-accessible)
 - **Model**: /mnt/l/_DATA/models/llm/huggingface/Llama-3.2-1B-Instruct
 - **Response Time**: 10s (first request, normal for cold start)
@@ -77,7 +77,7 @@ LLM Client (lib/llm_client.py)
 ┌─────────────────┬─────────────────┐
 │   PRIMARY ✅    │   FALLBACK ✅   │
 │  vLLM Llama-1B  │  Ollama Phi-4   │
-│  Port 8003      │  Port 11434     │
+│  Port 8005      │  Port 11434     │
 │  178 tok/s      │  70 tok/s       │
 │  15.3 GB VRAM   │  2.8 GB VRAM    │
 └─────────────────┴─────────────────┘

@@ -85,6 +85,31 @@ For deeper dives into specific areas:
 
 ---
 
+## Requirements
+
+- Windows 11 + WSL2 (Ubuntu) recommended; tested on RTX 40‑series GPUs.
+- CUDA 12.1 drivers; vLLM and Ollama if using local LLMs.
+- Miniconda for isolated Python envs per step.
+- FAISS pinned to 1.9.0 on py3.12 (set via installer for WSL).
+
+### WSL Pipeline Bootstrap (“00Q” Installer)
+- Run inside WSL from the repo root:
+  ```bash
+  cd /mnt/l/goodq4all
+  python3 scripts/install_pipeline_wsl.py
+  ```
+- The 00Q field kit self-heals all pipeline envs, pins CUDA 12.1 torch stacks, installs FAISS 1.9.0 for py3.12 envs, and runs torch/FAISS smoke tests with 00Q-style logging. Safe to rerun anytime.
+
+### Windows Pipeline Bootstrap (“00Q” Installer)
+- Run inside Windows PowerShell (from repo root):
+  ```powershell
+  cd L:\goodq4all
+  powershell -ExecutionPolicy Bypass -File scripts\install_pipeline_windows.ps1
+  ```
+- Creates/fixes all pipeline envs, installs requirements (no-deps), pins CUDA 12.1 torch stacks, installs FAISS 1.9.0, and runs torch/FAISS smoke tests with 00Q-style logging. Idempotent; rerun to self-heal.
+
+---
+
 ---
 
 ## 🚀 Quick Start

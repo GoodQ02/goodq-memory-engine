@@ -7,6 +7,7 @@ from pathlib import Path
 from datetime import datetime
 import threading
 import requests
+from collections import deque
 
 from fastapi import FastAPI, Query, Body
 from fastapi.middleware.cors import CORSMiddleware
@@ -171,6 +172,31 @@ def _collect_engine_details() -> Dict[str, Any]:
         "status": "ready" if wsl_available else "unavailable",
         "gpu": True,
     }
+
+    # Check Qdrant vector DB (optional)
+    try:
+        resp = requests.get("http://localhost:6335/collections", timeout=2)
+        if resp.status_code == 200:
+            collections = resp.json().get("result", {}).get("collections", [])
+            engines["qdrant"] = {
+                "name": "Qdrant",
+                "category": "Vector DB",
+                "description": f"{len(collections)} collections @ 6335",
+                "status": "ready",
+                "gpu": False,
+                "port": 6335,
+            }
+        else:
+            raise Exception("unhealthy")
+    except Exception:
+        engines["qdrant"] = {
+            "name": "Qdrant",
+            "category": "Vector DB",
+            "description": "Not reachable on 6335",
+            "status": "unavailable",
+            "gpu": False,
+            "port": 6335,
+        }
 
     # Check ffmpeg
     ffmpeg_path = shutil.which("ffmpeg")
@@ -1070,6 +1096,135 @@ def get_models() -> Dict[str, Any]:
     }
 
 
+def _local_progress_stats() -> Dict[str, Any]:
+    """Best-effort processing stats based on local progress.json and filesystem."""
+    progress_file = Path("L:/goodq4all/logs/progress.json")
+    processing_dir = Path("L:/goodq4all/data/processing")
+    processed_dir = Path("L:/goodq4all/data/processed")
+
+    progress = {}
+    try:
+        if progress_file.exists():
+            progress = json.loads(progress_file.read_text(encoding="utf-8"))
+    except Exception as e:
+        logger.debug(f"progress.json read failed: {e}")
+
+    details = progress.get("details", {}) if isinstance(progress, dict) else {}
+
+    def _count_files(p: Path) -> int:
+        try:
+            return len([f for f in p.iterdir() if f.is_file()])
+        except Exception:
+            return 0
+
+    current_name = progress.get("current_file") if isinstance(progress, dict) else None
+    status = progress.get("status") if isinstance(progress, dict) else None
+    if not status:
+        status = "active" if _count_files(processing_dir) > 0 else "idle"
+
+    return {
+        "status": status,
+        "current_video": {
+            "name": current_name,
+            "size_gb": details.get("video_size_gb", 0),
+            "progress_percent": progress.get("progress_percent", 0) if isinstance(progress, dict) else 0,
+            "current_step": progress.get("current_step", "Idle") if isinstance(progress, dict) else "Idle",
+        },
+        "scenes": {
+            "detected": details.get("scenes_detected", 0) or details.get("scenes_found", 0) or 0,
+            "frames_extracted": details.get("frames_extracted", 0),
+            "audio_clips": details.get("audio_clips", 0),
+        },
+        "processing_rate": {
+            "scenes_per_minute": 0,
+            "seconds_per_scene": 0,
+        },
+        "totals": {
+            "videos_completed": _count_files(processed_dir),
+            "videos_active": _count_files(processing_dir),
+        },
+        "timestamps": {
+            "started_at": progress.get("started_at") if isinstance(progress, dict) else None,
+            "updated_at": progress.get("updated_at") if isinstance(progress, dict) else datetime.utcnow().isoformat(),
+        },
+    }
+
+
+def _faiss_count(path: str) -> int:
+    try:
+        import faiss  # type: ignore
+    except Exception:
+        return 0
+    if not os.path.isfile(path):
+        return 0
+    try:
+        idx = faiss.read_index(path)
+        return int(getattr(idx, "ntotal", 0))
+    except Exception:
+        return 0
+
+
+@app.get("/api/memory/stats")
+def get_memory_stats() -> Dict[str, Any]:
+    """Lightweight memory stats across tiers (faiss/qdrant)."""
+    cfg = {}
+    try:
+        from steps.common.config_loader import load_configs
+        cfg = load_configs({})
+    except Exception:
+        cfg = {}
+
+    paths = (cfg.get("paths") or {}) if isinstance(cfg, dict) else {}
+    memory_cfg = (cfg.get("memory") or {}) if isinstance(cfg, dict) else {}
+
+    faiss_info = {
+        "text_vectors": _faiss_count(paths.get("faiss_index_path") or ""),
+        "clip_vectors": _faiss_count(paths.get("faiss_clip_path") or ""),
+        "audio_vectors": _faiss_count(paths.get("faiss_audio_path") or ""),
+    }
+
+    qdrant_info = {"available": False, "collections": 0}
+    try:
+        r = requests.get("http://localhost:6335/collections", timeout=2)
+        if r.status_code == 200:
+            colls = r.json().get("result", {}).get("collections", []) or []
+            qdrant_info["available"] = True
+            qdrant_info["collections"] = len(colls)
+    except Exception:
+        pass
+
+    return {
+        "faiss": faiss_info,
+        "qdrant": qdrant_info,
+        "routing": {
+            "read_priority": (memory_cfg.get("routing") or {}).get("read_priority") or [],
+            "write_targets": (memory_cfg.get("routing") or {}).get("write_targets") or [],
+        },
+    }
+
+
+@app.get("/api/logs/watchdog")
+def get_watchdog_logs(lines: int = 200) -> Dict[str, Any]:
+    """Tail the watchdog log for the command center UI."""
+    log_path = Path("L:/goodq4all/logs/watchdog.log")
+    result: Dict[str, Any] = {
+        "available": log_path.exists(),
+        "path": str(log_path),
+        "lines": []
+    }
+    if not log_path.exists():
+        return result
+    try:
+        dq = deque(maxlen=lines)
+        with log_path.open("r", encoding="utf-8", errors="ignore") as f:
+            for line in f:
+                dq.append(line.rstrip("\n"))
+        result["lines"] = list(dq)
+    except Exception as e:
+        result["error"] = str(e)
+    return result
+
+
 @app.get("/api/processing/stats")
 @app.get("/api/progress")
 def get_progress() -> Dict[str, Any]:
@@ -1082,15 +1237,8 @@ def get_progress() -> Dict[str, Any]:
     except Exception as e:
         logger.debug(f"Processing stats API unavailable: {e}")
     
-    # Fallback - return idle state
-    return {
-        "status": "idle",
-        "current_video": {"name": None, "progress_percent": 0, "current_step": "Idle"},
-        "scenes": {"detected": 0, "frames_extracted": 0, "audio_clips": 0},
-        "processing_rate": {"scenes_per_minute": 0, "seconds_per_scene": 0},
-        "totals": {"videos_completed": 0, "videos_active": 0},
-        "timestamps": {"started_at": None, "updated_at": None}
-    }
+    # Fallback - return local snapshot based on progress.json and filesystem
+    return _local_progress_stats()
 
 
 @app.get("/api/pipeline-engines")

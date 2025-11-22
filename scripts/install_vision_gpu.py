@@ -8,12 +8,18 @@ import sys
 import time
 import os
 
+# Prefer a WSL/Unix-friendly conda hook so we don't hit "Run 'conda init' before 'conda activate'"
+CONDA_SH = os.path.expanduser("~/miniconda3/etc/profile.d/conda.sh")
+
 def run_command(cmd, env_name=None):
     """Run a command and return success status"""
     try:
         if env_name:
-            # Activate environment first
-            activate_cmd = f"conda activate {env_name} && {cmd}"
+            # Use bash -lc with an explicit conda hook to avoid "Run 'conda init' before 'conda activate'"
+            if os.path.isfile(CONDA_SH):
+                activate_cmd = f"bash -lc 'source \"{CONDA_SH}\" && conda activate {env_name} && {cmd}'"
+            else:
+                activate_cmd = f"conda activate {env_name} && {cmd}"
             result = subprocess.run(
                 activate_cmd,
                 shell=True,
@@ -55,10 +61,12 @@ def install_torch_for_env(env_name, retry_count=3):
         print("  [2/4] Removing existing PyTorch...")
         run_command("pip uninstall -y torch torchvision torchaudio", env_name)
         
-        # Step 3: Install CUDA PyTorch (latest stable)
-        print("  [3/4] Installing CUDA PyTorch...")
+        # Step 3: Install CUDA PyTorch (pinned, CUDA 12.1 to match working stack)
+        print("  [3/4] Installing CUDA PyTorch (cu121, pinned)...")
         success, stdout, stderr = run_command(
-            "pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cu118",
+            "pip install --no-cache-dir "
+            "torch==2.3.1+cu121 torchvision==0.18.1+cu121 torchaudio==2.3.1 "
+            "--extra-index-url https://download.pytorch.org/whl/cu121",
             env_name
         )
         

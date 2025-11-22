@@ -22,7 +22,7 @@ Production-grade LLM infrastructure with intelligent failover, health monitoring
         │   WSL (vLLM)      │  │  Ollama         │
         │  ┌──────────────┐ │  │  (Fallback)     │
         │  │ Llama 1B     │ │  │  Port: 11434    │
-        │  │ Port: 8003   │ │  │  Model: Phi-4   │
+        │  │ Port: 8005   │ │  │  Model: Phi-4   │
         │  │ 178 tok/s ⚡ │ │  │  70 tok/s       │
         │  └──────────────┘ │  └─────────────────┘
         │  ┌──────────────┐ │
@@ -81,8 +81,8 @@ print(response['choices'][0]['message']['content'])
 
 | Model | Port | Speed | VRAM | Context | Best For |
 |-------|------|-------|------|---------|----------|
-| **Llama-1B-Speed** | 8003 | 178 tok/s ⚡ | 2.3 GB | 131K | Primary, fastest |
-| **Llama-3B-Balanced** | 8004 | 82 tok/s | 6.1 GB | 131K | Quality/speed balance |
+| **Llama-1B-Speed** | 8005 | 178 tok/s ⚡ | 2.3 GB | 131K | Primary, fastest |
+| **Llama-3B-Balanced** | 8006 | 82 tok/s | 6.1 GB | 131K | (optional) |
 | **Phi-3.5-LongContext** | 8001 | 73 tok/s | 8.7 GB | 131K | Long conversations |
 | **Phi4-Ollama** (fallback) | 11434 | 70 tok/s | 2.8 GB | 8K | Reliability |
 

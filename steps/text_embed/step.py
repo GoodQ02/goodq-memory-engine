@@ -7,6 +7,8 @@ import json
 import logging
 
 from goodq4all.steps.common.memory import upsert_embedding
+from steps.common.memory_router import MemoryRouter
+from steps.common.memory_stores import build_text_stores
 
 logger = logging.getLogger(__name__)
 
@@ -116,34 +118,33 @@ def text_embed(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
     if model is None:
         return {"embedding_meta": {"status": "unavailable", "engine": "sentence-transformers"}}
 
-    index_path = (cfg.get("paths", {}) or {}).get("faiss_index_path") or ""
-    if not index_path:
-        return {"embedding_meta": {"status": "no_index_path"}}
-
     try:
         vec = model.encode([text], normalize_embeddings=True)
-        index, faiss = _open_faiss(index_path)
-        if index is None or faiss is None:
-            return {"embedding_meta": {"status": "faiss_unavailable"}}
-        ids = None
-        try:
-            # Some faiss builds support add_with_ids; if not, fallback
-            import numpy as np  # type: ignore
-            uid_int = int(_content_fingerprint(item)[:16], 16) % (2**63 - 1)
-            index.add_with_ids(vec.astype("float32"), np.array([uid_int], dtype="int64"))
-            ids = [uid_int]
-        except Exception as e:
-            index.add(vec.astype("float32"))
-        faiss.write_index(index, index_path)
-        # persist mapping for recall/linking
+        vector_list = vec.astype("float32")[0].tolist()
+
+        # Route writes via MemoryRouter (faiss + qdrant as configured)
+        stores = build_text_stores(cfg)
+        router = MemoryRouter(stores)
+        payload = {
+            "id": _content_fingerprint(item),
+            "vector": vector_list,
+            "payload": {
+                "source_path": item.get("source_path"),
+                "modality": item.get("modality", "text"),
+                "scene_id": item.get("scene_id") or item.get("scene_index"),
+            },
+        }
+        router.insert([payload])
+
+        # Persist mapping for recall/linking (FAISS id if available is not tracked here)
         try:
             scene_id = item.get("scene_id") or item.get("scene_index")
             if scene_id is not None and not isinstance(scene_id, str):
                 scene_id = f"scene_{int(scene_id):04d}"
-            upsert_embedding(cfg, _content_fingerprint(item), (ids or [None])[0], item.get("source_path", ""), item.get("modality", ""), scene_id=scene_id)
+            upsert_embedding(cfg, payload["id"], None, item.get("source_path", ""), item.get("modality", ""), scene_id=scene_id)
         except Exception as e:
-            print(f'[ERROR] Exception in step.py line 120: {str(e)}')
-            pass
-        return {"embedding_meta": {"status": "ok", "engine": "all-MiniLM-L6-v2", "index_path": index_path, "ids": ids}}
+            print(f'[ERROR] Exception in text_embed upsert_embedding: {str(e)}')
+
+        return {"embedding_meta": {"status": "ok", "engine": "all-MiniLM-L6-v2"}}
     except Exception as e:
         return {"embedding_meta": {"status": "error", "error": str(e)}}

@@ -111,10 +111,25 @@ echo  Launching Complete System
 echo ================================================================================
 echo.
 
+echo [0/4] Ensuring required directories exist...
+for %%d in ("L:\goodq4all\logs" "L:\goodq4all\data" "L:\goodq4all\data\processing" "L:\goodq4all\data\processed" "L:\goodq4all\data\databases\chroma") do (
+    if not exist %%d (
+        mkdir %%d >nul 2>&1
+        echo       Created %%d
+    )
+)
+echo       Directories ready.
+echo.
+
 echo [1/3] Starting Unified API Server...
 start "GoodQ API Server" cmd /k "title GoodQ API Server && cd /d L:\goodq4all\api && %UVICORN_CMD% main:app --host 0.0.0.0 --port 3000 --reload"
 echo       Waiting for server to initialize...
 timeout /t 8 /nobreak >nul
+
+echo [1a/3] Starting Processing Stats Service...
+start "GoodQ Processing Stats" cmd /k "title GoodQ Processing Stats && cd /d L:\goodq4all\api && %PYTHON_CMD% processing_stats.py"
+echo       Waiting for stats service...
+timeout /t 3 /nobreak >nul
 
 REM Auto-start vLLM services in WSL if available
 echo [WSL] Checking WSL/vLLM status...

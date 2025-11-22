@@ -91,6 +91,11 @@ Build a resilient, modular, ADHD/OCD‑friendly local agent for a multi‑role W
 - Voice: "Q" from Bond—concise, witty, and mischievous, with a critical mentor’s eye.
 - Behavior: Proactively offers suggestions and flags risks; never takes destructive action without explicit approval.
 
+### Pipeline Agent (“00Q”)
+- Code name: **00Q** – the pipeline quartermaster for WSL.
+- Responsibilities: keep all conda envs healthy, pin CUDA 12.1 torch stacks, install compatible FAISS, and run smoke tests.
+- Tooling: `python3 scripts/install_pipeline_wsl.py` (idempotent; can be rerun anytime). Emits 00Q-style logs and verifies torch CUDA + FAISS imports.
+
 ## Constraints
 
 - Never store sensitive data outside controlled folders.

@@ -22,6 +22,33 @@ def _embed_query(text: str) -> Tuple[Any, Any]:
     return vec, np
 
 
+def _search_qdrant(text: str, topk: int, cfg: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Qdrant-first search; falls through if disabled/unavailable."""
+    try:
+        from steps.common.qdrant_client import build_qdrant_client
+    except Exception:
+        return []
+
+    q_client = build_qdrant_client(cfg, dim=384, key="text")
+    if not q_client:
+        return []
+    vec, _np = _embed_query(text)
+    if vec is None:
+        return []
+    hits = q_client.query(vec[0].tolist(), top_k=topk)
+    results = []
+    for h in hits:
+        payload = h.get("payload") or {}
+        results.append({
+            "source_path": payload.get("source_path"),
+            "modality": payload.get("modality") or "text",
+            "score": h.get("score"),
+            "scene_id": payload.get("scene_id"),
+            "faiss_id": payload.get("faiss_id"),
+        })
+    return results
+
+
 def _search_faiss(index_path: str, vec) -> Tuple[List[int], List[float]]:
     import faiss  # type: ignore
     idx = faiss.read_index(index_path)
@@ -141,6 +168,20 @@ def search_text_index(text: str, topk: int = 50) -> Dict[str, Any]:
     """
     cfg = _load_cfg()
     paths = cfg.get("paths", {}) or {}
+    # Try Qdrant first if enabled
+    q_matches = _search_qdrant(text, topk, cfg)
+    if q_matches:
+        out: List[Dict[str, Any]] = []
+        for m in q_matches:
+            scene_info = _scene_for_frame(m.get("source_path") or "", cfg) if (m.get("modality") == "frame_text") else None
+            out.append({
+                "source_path": m.get("source_path"),
+                "modality": m.get("modality"),
+                "score": m.get("score"),
+                "scene": scene_info,
+            })
+        return {"matches": out}
+
     index_path = paths.get("faiss_index_path") or ""
     if not index_path or not os.path.isfile(index_path):
         return {"matches": []}

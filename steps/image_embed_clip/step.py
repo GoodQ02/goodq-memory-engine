@@ -22,6 +22,9 @@ except ImportError:
             def clear_cache():
                 pass
 
+from goodq4all.steps.text_embed.step import _content_fingerprint
+from steps.common.qdrant_client import build_qdrant_client
+
 
 _CLIP = {"model": None, "proc": None, "device": "cpu"}
 
@@ -86,7 +89,6 @@ def image_embed_clip(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
             index.hnsw.efConstruction = 200
             index.hnsw.efSearch = 50
         # stable ID from content fingerprint
-        from goodq4all.steps.text_embed.step import _content_fingerprint
         h = _content_fingerprint(item)
         try:
             import numpy as np  # type: ignore
@@ -97,6 +99,22 @@ def image_embed_clip(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
             index.add(feats.astype("float32"))
             faiss_id = getattr(index, 'ntotal', 0) - 1
         faiss.write_index(index, index_path)
+
+        # Optional Qdrant dual-write
+        try:
+            q_client = build_qdrant_client(cfg, dim=feats.shape[1], key="image")
+            if q_client:
+                q_client.upsert([{
+                    "id": h,
+                    "vector": feats[0].tolist(),
+                    "payload": {
+                        "source_path": path,
+                        "modality": "image",
+                        "faiss_id": faiss_id,
+                    }
+                }])
+        except Exception:
+            pass
         # map table
         map_db = (cfg.get("paths", {}) or {}).get("clip_id_map_db")
         if map_db:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 # GPU Configuration - Auto-configured on import
 from goodq4all.steps.common.gpu_config import configure_gpu, get_device, clear_cache, print_memory_stats
+from steps.common.qdrant_client import build_qdrant_client
 
 
 from typing import Any, Dict, Optional
@@ -140,6 +141,22 @@ def audio_embed_clap(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
             # best-effort: last ID is ntotal-1 but only valid for flat add
             faiss_id = getattr(index, 'ntotal', 0) - 1
         faiss.write_index(index, index_path)
+
+        # Optional Qdrant dual-write
+        try:
+            q_client = build_qdrant_client(cfg, dim=feats.shape[1], key="audio")
+            if q_client:
+                q_client.upsert([{
+                    "id": h,
+                    "vector": feats[0].tolist(),
+                    "payload": {
+                        "source_path": path,
+                        "modality": "audio",
+                        "faiss_id": faiss_id,
+                    }
+                }])
+        except Exception:
+            pass
         # Map FAISS ID -> fingerprint/source in dedicated SQLite
         map_db = (cfg.get("paths", {}) or {}).get("clap_id_map_db")
         if map_db:

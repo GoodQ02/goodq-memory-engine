@@ -118,20 +118,42 @@ devices:
   ssd2: Samsung 990 Pro 4TB NVMe SSD
   hdd1: Western Digital Gold 18TB HDD
   hdd2: Seagate Game Drive 18TB HDD
+qdrant:
+  enabled: true
+  host: http://localhost:6335
+  collections:
+    text: goodq_text
+    image: goodq_image
+    audio: goodq_audio
+memory:
+  routing:
+    read_priority: [qdrant, faiss, chroma]
+    write_targets: [faiss, qdrant]
+  dims:
+    text: 384          # all-MiniLM-L6-v2
+    image: 512         # CLIP-ViT-B/32
+    audio: 512         # CLAP
+  tiers:
+    chroma:
+      enabled: false   # enable if/when short-term RAM cache is wired
+    faiss:
+      enabled: true
+    qdrant:
+      enabled: true
   nas: UGREEN NAS with 44TB of HDD storage and 8TB of flash storage
   network: 2.5Gbps Ethernet connected to Tp-Link Archer AXE7800 with 2.5Gbps Ethernet,
     Wi-Fi 6E fallback
   config: L:/goodq4all/config/config.yaml
 video:
   scene_detect:  # NOTE: Code uses 'scene_detect' not 'scene_detection'
-    threshold: 30.0
-    min_scene_len_sec: 300.0  # 5 minutes minimum per scene
+    threshold: 20.0
+    min_scene_len_sec: 60.0  # shorter scenes for faster progress
     adaptive: true
     entity_refine: false  # DISABLED: This was causing 2-second scene splits!
-    entity_min_duration: 300.0  # If re-enabled, require 5min segments
+    entity_min_duration: 60.0  # If re-enabled, require 1min segments
   scene_detection:  # Keep for backwards compatibility
-    threshold: 30.0
-    min_scene_len_sec: 300.0
+    threshold: 20.0
+    min_scene_len_sec: 60.0
     adaptive: true
     entity_refine: false
   frame_extraction:
@@ -141,7 +163,7 @@ video:
 audio:
   transcribe:
     model: medium
-    chunk_seconds: 30.0
+    chunk_seconds: 20.0
     language: null
     enable_vad: true
     vad_threshold: 0.4

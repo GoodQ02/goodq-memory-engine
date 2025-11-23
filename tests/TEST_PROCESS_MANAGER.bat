@@ -109,7 +109,7 @@ echo.
 echo   Start System:  START_GOODQ_SYSTEM.bat
 echo   Stop System:   STOP_GOODQ_SYSTEM.bat  
 echo   Check Status:  STATUS_CHECK.bat
-echo   Web UI:        http://localhost:3000 (after starting)
+echo   Web UI:        http://localhost:30000 (after starting)
 echo.
 echo ================================================================================
 

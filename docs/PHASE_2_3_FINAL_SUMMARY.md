@@ -8,7 +8,7 @@ The Analytics page is now **100% functional** with live data streaming from your
 
 ## ✅ What You Can Do Right Now
 
-### Open the UI at http://localhost:3000
+### Open the UI at http://localhost:30000
 
 1. **Click "Analytics" in the sidebar**
 2. **See 4 tabs with real data:**
@@ -78,7 +78,7 @@ SQLite DBs → FastAPI → JavaScript → Live UI Updates
 You asked for Phase 2.3 to be done "comprehensively 100%" - **that's delivered.**
 
 ### Ready for Your Testing:
-1. Open http://localhost:3000
+1. Open http://localhost:30000
 2. Navigate to Analytics
 3. Try all 4 tabs
 4. Toggle auto-refresh on/off
@@ -107,9 +107,9 @@ You asked for Phase 2.3 to be done "comprehensively 100%" - **that's delivered.*
 
 ```powershell
 # Test the analytics endpoints
-Invoke-WebRequest http://localhost:3000/api/analytics/memories
-Invoke-WebRequest http://localhost:3000/api/analytics/knowledge-graph
-Invoke-WebRequest http://localhost:3000/api/analytics/embeddings
+Invoke-WebRequest http://localhost:30000/api/analytics/memories
+Invoke-WebRequest http://localhost:30000/api/analytics/knowledge-graph
+Invoke-WebRequest http://localhost:30000/api/analytics/embeddings
 ```
 
 All should return 200 OK with JSON data.

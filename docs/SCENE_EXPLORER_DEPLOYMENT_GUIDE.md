@@ -36,11 +36,11 @@ All files have been created and updated. The Scene Explorer is **100% ready** to
 
 ### **Option 1: Direct URL**
 ```
-http://localhost:3000/scenes.html
+http://localhost:30000/scenes.html
 ```
 
 ### **Option 2: Via Main Interface**
-1. Go to `http://localhost:3000`
+1. Go to `http://localhost:30000`
 2. Hard refresh: `Ctrl+Shift+R` or `Ctrl+F5`
 3. Look for **🎬 Scenes** in left sidebar (under "Views")
 4. Click it!
@@ -57,8 +57,8 @@ The server may not have loaded the new `scenes.html` route yet.
 1. Go to CMD window running the server
 2. Press `Ctrl+C` to stop
 3. Run: `LAUNCH_WEB_INTERFACE_FIXED_V2.bat`
-4. Wait for: `Interface will be available at: http://localhost:3000`
-5. Go to `http://localhost:3000` in browser
+4. Wait for: `Interface will be available at: http://localhost:30000`
+5. Go to `http://localhost:30000` in browser
 6. Hard refresh: `Ctrl+F5`
 7. Click **🎬 Scenes**
 

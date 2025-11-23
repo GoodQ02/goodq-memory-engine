@@ -175,7 +175,7 @@ GoodQ4All v1.4.0 has successfully completed all 12 development phases with a per
 
 2. **Open Web UI**:
    ```
-   http://localhost:3000
+   http://localhost:30000
    ```
 
 3. **Verify Systems**:
@@ -216,7 +216,7 @@ GoodQ4All v1.4.0 has successfully completed all 12 development phases with a per
    ```
 
 4. **Verify**:
-   - Open http://localhost:3000
+   - Open http://localhost:30000
    - Check all 12 views load
    - Verify GPU detected
    - Test audio processing

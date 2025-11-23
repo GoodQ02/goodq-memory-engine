@@ -117,7 +117,7 @@ python -c "import json; data=json.load(open('L:/zenml_project/logs/full_validati
 python -c "from zenml_project.api.retrieval import search_multimodal; results=search_multimodal('family gathering', top_k=5); print(f'Found {len(results)} results')"
 
 # Test API endpoint
-curl http://localhost:8000/retrieve?query=family+gathering&top_k=5
+curl http://localhost:30000/retrieve?query=family+gathering&top_k=5
 ```
 
 ## Expected Output Examples

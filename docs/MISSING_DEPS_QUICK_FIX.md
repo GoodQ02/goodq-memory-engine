@@ -78,7 +78,7 @@ conda activate goodq_zenml
 python api_server.py
 ```
 
-Then open browser to: **http://localhost:3000**
+Then open browser to: **http://localhost:30000**
 
 ---
 
@@ -110,7 +110,7 @@ Now we're adding web serving capability to the existing environment.
 
 1. **Double-click:** `FIX_ENVIRONMENT_COMPLETE.bat` (wait ~2 min)
 2. **Double-click:** `LAUNCH_WEB_INTERFACE_FIXED_V2.bat`
-3. **Open browser:** http://localhost:3000
+3. **Open browser:** http://localhost:30000
 4. **Done!** 🎉
 
 ---

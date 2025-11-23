@@ -48,7 +48,7 @@
 - 3-tier database architecture (memory, knowledge graph, unified)
 - 4 FAISS vector indices for multimodal similarity search
 - LLM integration at multiple pipeline stages
-- Production-ready web interface on port 3000
+- Production-ready web interface on port 30000
 
 ---
 
@@ -200,7 +200,7 @@ llm:
 **Components Analyzed:**
 
 **Backend (api_server.py):**
-- ✅ FastAPI server on port 3000
+- ✅ FastAPI server on port 30000
 - ✅ Endpoints: /, /api/status, /api/scenes, /api/chat, /api/command, /api/command-center
 - ✅ CORS enabled for all origins
 - ✅ Static file serving
@@ -325,7 +325,7 @@ Get-Content L:\goodq4all\config.yaml | Select-String "min_scene_len_sec"
 - Live log ticker (last 10 lines from watchdog.log)
 - Auto-refresh every 5 seconds
 
-**Access:** http://localhost:3000 → Click "🔴 Command Center"
+**Access:** http://localhost:30000 → Click "🔴 Command Center"
 
 ---
 
@@ -504,7 +504,7 @@ Get-Content L:\goodq4all\config.yaml | Select-String "min_scene_len_sec"
 **Configuration:**
 - [x] Scene detection settings corrected
 - [x] LLM integration verified
-- [x] Port configuration validated (3000 for API, 1234 for LLM)
+- [x] Port configuration validated (30000 for API, 1234 for LLM)
 
 **Data Integrity:**
 - [x] Current database stats recorded
@@ -661,7 +661,7 @@ Get-Content L:\goodq4all\config.yaml | Select-String "min_scene_len_sec"
    - Check "Expected Results" for what to expect
 
 3. **Monitoring:**
-   - Access Command Center at http://localhost:3000
+   - Access Command Center at http://localhost:30000
    - Check database stats regularly
    - Review processing logs
 
@@ -690,7 +690,7 @@ Get-Content L:\goodq4all\config.yaml | Select-String "min_scene_len_sec"
 - ✅ Scene Explorer operational (102 scenes displayed)
 - ✅ Command Center live (real-time updates every 5s)
 - ✅ Chat interface functional (LLM integrated)
-- ✅ API server ready (port 3000)
+- ✅ API server ready (port 30000)
 
 **Knowledge Transfer:**
 - ✅ Zero guesswork - everything validated
@@ -798,7 +798,7 @@ START_WATCHDOG.bat
 python check_ingestion_status.py
 
 # Access UI
-http://localhost:3000
+http://localhost:30000
 ```
 
 **Database Queries:**

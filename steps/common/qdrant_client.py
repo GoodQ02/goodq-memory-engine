@@ -98,7 +98,7 @@ def build_qdrant_client(cfg: Dict[str, Any], dim: int, key: str) -> Optional[Qdr
     qcfg = (cfg.get("qdrant") or {}) if cfg else {}
     if not qcfg.get("enabled", False):
         return None
-    host = qcfg.get("host", "http://localhost:6335")
+    host = qcfg.get("host", "http://localhost:36335")
     collections = qcfg.get("collections", {}) or {}
     collection = collections.get(key, f"goodq_{key}")
     return QdrantClient(QdrantConfig(host=host, collection=collection, dim=dim, enabled=True))

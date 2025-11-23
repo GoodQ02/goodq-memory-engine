@@ -178,12 +178,12 @@ python lib\process_manager.py
 
 ### 2. API Endpoint Test
 ```bash
-curl http://localhost:3000/api/processes
+curl http://localhost:30000/api/processes
 ```
 ✅ **Result:** Real-time GPU metrics and process status
 
 ### 3. UI Integration Test
-1. Open http://localhost:3000
+1. Open http://localhost:30000
 2. Navigate to "Pipeline Engines"
 3. Verify GPU card displays
 4. Verify all 6 engines are listed

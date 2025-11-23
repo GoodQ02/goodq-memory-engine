@@ -62,7 +62,7 @@
 - [ ] Open second terminal and run: `nvidia-smi -l 1`
   - [ ] Verify GPU memory usage increases during processing
   - [ ] Check GPU utilization reaches 60-90%
-- [ ] Monitor UI (http://localhost:3000)
+- [ ] Monitor UI (http://localhost:30000)
   - [ ] Wait for processing to complete
   - [ ] Check "Scenes" tab for detected faces
   - [ ] Check "Analytics" for emotions and objects

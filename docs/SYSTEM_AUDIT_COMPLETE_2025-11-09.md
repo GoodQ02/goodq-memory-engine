@@ -235,7 +235,7 @@ INPUT (import_inbox/)
 ### **Current Implementation:**
 
 **API Server (FastAPI):**
-- **Port:** 3000
+- **Port:** 30000
 - **Endpoints:**
   - `/` - Main UI
   - `/api/status` - System status
@@ -283,7 +283,7 @@ INPUT (import_inbox/)
    - Auto-refreshes every 5 seconds
    - Scrollable for full history
 
-**Access:** http://localhost:3000 → Click "🔴 Command Center"
+**Access:** http://localhost:30000 → Click "🔴 Command Center"
 
 ---
 
@@ -600,9 +600,9 @@ min_scene_len_sec: 300.0  # CORRECT - 5 minutes in seconds
 
 ### 2. **UI Port Consistency** ✅ VERIFIED
 
-**All components use port 3000:**
-- API Server: ✅ Port 3000
-- Frontend: ✅ Served from port 3000
+**All components use port 30000:**
+- API Server: ✅ Port 30000
+- Frontend: ✅ Served from port 30000
 - LLM Studio: Separate port 1234 (correct)
 
 ---
@@ -703,7 +703,7 @@ min_scene_len_sec: 300.0  # CORRECT - 5 minutes in seconds
 - ✅ Scene summarization active
 
 **Web Interface:**
-- ✅ API server running (port 3000)
+- ✅ API server running (port 30000)
 - ✅ Frontend pages loading
 - ✅ Command Center live
 - ✅ Scene Explorer functional

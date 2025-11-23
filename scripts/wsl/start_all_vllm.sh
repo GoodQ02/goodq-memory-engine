@@ -119,17 +119,17 @@ sleep 2
 # Start servers (in order of resource usage - smallest first)
 MODELS_DIR="/mnt/l/_DATA/models/llm/huggingface"
 
-# 1. Llama 1B - Speed (Port 8005) - 2.3 GB VRAM - ALWAYS START (PRIMARY)
-start_vllm_server "Llama-1B-Speed" 8005 \
+# 1. Llama 1B - Speed (Port 38005) - 2.3 GB VRAM - ALWAYS START (PRIMARY)
+start_vllm_server "Llama-1B-Speed" 38005 \
     "$MODELS_DIR/Llama-3.2-1B-Instruct" 0.35 8192
 
 # Check current VRAM usage before starting additional models
 CURRENT_VRAM=$(nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits | head -1)
 echo -e "${BLUE}Current VRAM usage: ${CURRENT_VRAM} MB${NC}"
 
-# 2. Llama 3B - Balanced (Port 8004) - 6 GB VRAM - START IF ENOUGH VRAM
+# 2. Llama 3B - Balanced (Port 38004) - 6 GB VRAM - START IF ENOUGH VRAM
 if [ "$CURRENT_VRAM" -lt 6000 ]; then
-    start_vllm_server "Llama-3B-Balanced" 8004 \
+    start_vllm_server "Llama-3B-Balanced" 38004 \
         "$MODELS_DIR/Llama-3.2-3B-Instruct" 0.35 8192 || echo -e "${YELLOW}⚠️  Llama 3B failed, continuing...${NC}"
 else
     echo -e "${YELLOW}⚠️  Skipping Llama 3B - insufficient VRAM (${CURRENT_VRAM}MB used)${NC}"
@@ -138,9 +138,9 @@ fi
 # Update VRAM check
 CURRENT_VRAM=$(nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits | head -1)
 
-# 3. Phi-3.5 Mini - Long Context (Port 8001) - 7 GB VRAM - OPTIONAL
+# 3. Phi-3.5 Mini - Long Context (Port 38001) - 7 GB VRAM - OPTIONAL
 if [ "$CURRENT_VRAM" -lt 10000 ]; then
-    start_vllm_server "Phi-3.5-LongContext" 8001 \
+    start_vllm_server "Phi-3.5-LongContext" 38001 \
         "$MODELS_DIR/Phi-3.5-mini-instruct" 0.30 131072 || echo -e "${YELLOW}⚠️  Phi-3.5 failed, continuing...${NC}"
 else
     echo -e "${YELLOW}⚠️  Skipping Phi-3.5 - insufficient VRAM (${CURRENT_VRAM}MB used)${NC}"
@@ -168,9 +168,9 @@ check_server() {
     fi
 }
 
-check_server 8005 "Llama-1B-Speed      "
-check_server 8004 "Llama-3B-Balanced   "
-check_server 8001 "Phi-3.5-LongContext "
+check_server 38005 "Llama-1B-Speed      "
+check_server 38004 "Llama-3B-Balanced   "
+check_server 38001 "Phi-3.5-LongContext "
 
 echo ""
 echo -e "${BLUE}📈 GPU Status:${NC}"
@@ -178,10 +178,10 @@ nvidia-smi --query-gpu=name,memory.used,memory.total,utilization.gpu --format=cs
 
 echo ""
 echo -e "${BLUE}🔗 Endpoints:${NC}"
-echo -e "  Primary (Speed):    http://localhost:8005/v1/"
-echo -e "  Balanced:           http://localhost:8004/v1/"
-echo -e "  Long Context:       http://localhost:8001/v1/"
-echo -e "  Ollama Fallback:    http://localhost:11434/v1/"
+echo -e "  Primary (Speed):    http://localhost:38005/v1/"
+echo -e "  Balanced:           http://localhost:38004/v1/"
+echo -e "  Long Context:       http://localhost:38001/v1/"
+echo -e "  Ollama Fallback:    http://localhost:31434/v1/"
 
 echo ""
 echo -e "${BLUE}📝 Logs:${NC}"

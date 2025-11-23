@@ -52,7 +52,7 @@ def _summarize_llm_health() -> Dict[str, Any]:
     ollama_total = 0
 
     try:
-        resp = requests.get("http://localhost:8005/v1/models", timeout=2)
+        resp = requests.get("http://localhost:38005/v1/models", timeout=2)
         if resp.status_code == 200:
             models = resp.json().get("data", [])
             vllm_total = len(models)
@@ -61,7 +61,7 @@ def _summarize_llm_health() -> Dict[str, Any]:
         pass
 
     try:
-        resp = requests.get("http://localhost:11434/v1/models", timeout=2)
+        resp = requests.get("http://localhost:31434/v1/models", timeout=2)
         if resp.status_code == 200:
             models = resp.json().get("data", [])
             ollama_total = len(models)
@@ -86,13 +86,13 @@ def _summarize_llm_health() -> Dict[str, Any]:
             "status": _status(vllm_healthy, vllm_total),
             "healthy": vllm_healthy,
             "total": max(vllm_total, 1),
-            "port": 8005,
+            "port": 38005,
         },
         "ollama": {
             "status": _status(ollama_healthy, ollama_total),
             "healthy": ollama_healthy,
             "total": max(ollama_total, 1),
-            "port": 11434,
+            "port": 31434,
         },
         "overall": {
             "status": "healthy" if healthy_models == total_models else "degraded" if healthy_models > 0 else "unhealthy",
@@ -113,17 +113,17 @@ def _collect_engine_details() -> Dict[str, Any]:
 
     # Check vLLM on WSL
     try:
-        resp = requests.get("http://localhost:8005/v1/models", timeout=2)
+        resp = requests.get("http://localhost:38005/v1/models", timeout=2)
         if resp.status_code == 200:
             model_data = resp.json().get("data", [])
             model_name = model_data[0]["id"].split("/")[-1] if model_data else "Unknown"
             engines["vllm_llama1b"] = {
                 "name": "vLLM Llama-1B",
                 "category": "LLM Inference",
-                "description": f"{model_name} on port 8005",
+                "description": f"{model_name} on port 38005",
                 "status": "ready",
                 "gpu": True,
-                "port": 8005,
+                "port": 38005,
             }
         else:
             raise Exception("unhealthy")
@@ -134,22 +134,22 @@ def _collect_engine_details() -> Dict[str, Any]:
             "description": "Not running or unreachable",
             "status": "unavailable",
             "gpu": True,
-            "port": 8005,
+            "port": 38005,
         }
 
     # Check Ollama
     try:
-        resp = requests.get("http://localhost:11434/v1/models", timeout=2)
+        resp = requests.get("http://localhost:31434/v1/models", timeout=2)
         if resp.status_code == 200:
             models = resp.json().get("data", [])
             model_name = models[0]["id"] if models else "Unknown"
             engines["ollama"] = {
                 "name": "Ollama",
                 "category": "LLM Inference",
-                "description": f"{model_name} on port 11434",
+                "description": f"{model_name} on port 31434",
                 "status": "ready",
                 "gpu": True,
-                "port": 11434,
+                "port": 31434,
             }
         else:
             raise Exception("unhealthy")
@@ -160,7 +160,7 @@ def _collect_engine_details() -> Dict[str, Any]:
             "description": "Not running or unreachable",
             "status": "unavailable",
             "gpu": True,
-            "port": 11434,
+            "port": 31434,
         }
 
     # Check WSL audio processing
@@ -175,16 +175,16 @@ def _collect_engine_details() -> Dict[str, Any]:
 
     # Check Qdrant vector DB (optional)
     try:
-        resp = requests.get("http://localhost:6335/collections", timeout=2)
+        resp = requests.get("http://localhost:36335/collections", timeout=2)
         if resp.status_code == 200:
             collections = resp.json().get("result", {}).get("collections", [])
             engines["qdrant"] = {
                 "name": "Qdrant",
                 "category": "Vector DB",
-                "description": f"{len(collections)} collections @ 6335",
+                "description": f"{len(collections)} collections @ 36335",
                 "status": "ready",
                 "gpu": False,
-                "port": 6335,
+                "port": 36335,
             }
         else:
             raise Exception("unhealthy")
@@ -192,10 +192,10 @@ def _collect_engine_details() -> Dict[str, Any]:
         engines["qdrant"] = {
             "name": "Qdrant",
             "category": "Vector DB",
-            "description": "Not reachable on 6335",
+            "description": "Not reachable on 36335",
             "status": "unavailable",
             "gpu": False,
-            "port": 6335,
+            "port": 36335,
         }
 
     # Check ffmpeg
@@ -436,7 +436,7 @@ def get_status() -> Dict[str, Any]:
     # Quick model health checks with very short timeouts
     try:
         try:
-            resp = requests.get("http://localhost:8005/v1/models", timeout=0.2)
+            resp = requests.get("http://localhost:38005/v1/models", timeout=0.2)
             if resp.status_code == 200:
                 models_data["vllm_healthy"] = 1
                 models_data["healthy"] += 1
@@ -444,7 +444,7 @@ def get_status() -> Dict[str, Any]:
             pass
         
         try:
-            resp = requests.get("http://localhost:11434/v1/models", timeout=0.2)
+            resp = requests.get("http://localhost:31434/v1/models", timeout=0.2)
             if resp.status_code == 200:
                 models_data["ollama_healthy"] = 1
                 models_data["healthy"] += 1
@@ -524,14 +524,14 @@ def get_health_summary() -> Dict[str, Any]:
     total_ollama = 1
     
     try:
-        resp = requests.get("http://localhost:8005/v1/models", timeout=1)
+        resp = requests.get("http://localhost:38005/v1/models", timeout=1)
         if resp.status_code == 200:
             vllm_healthy = 1
     except:
         pass
     
     try:
-        resp = requests.get("http://localhost:11434/v1/models", timeout=1)
+        resp = requests.get("http://localhost:31434/v1/models", timeout=1)
         if resp.status_code == 200:
             ollama_healthy = 1
     except:
@@ -1185,7 +1185,7 @@ def get_memory_stats() -> Dict[str, Any]:
 
     qdrant_info = {"available": False, "collections": 0}
     try:
-        r = requests.get("http://localhost:6335/collections", timeout=2)
+        r = requests.get("http://localhost:36335/collections", timeout=2)
         if r.status_code == 200:
             colls = r.json().get("result", {}).get("collections", []) or []
             qdrant_info["available"] = True

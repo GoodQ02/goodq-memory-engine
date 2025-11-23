@@ -33,8 +33,8 @@ Both vLLM and Ollama are now running as production-grade systemd services with f
 
 | Service | Port | Status | Auto-Start | Background | Type |
 |---------|------|--------|------------|------------|------|
-| **vLLM Llama-1B** | 8005 | ✅ Running | ✅ Enabled | ✅ Yes | systemd |
-| **Ollama Phi-4** | 11434 | ✅ Running | ✅ Enabled | ✅ Yes | systemd |
+| **vLLM Llama-1B** | 38005 | ✅ Running | ✅ Enabled | ✅ Yes | systemd |
+| **Ollama Phi-4** | 31434 | ✅ Running | ✅ Enabled | ✅ Yes | systemd |
 
 ### ⚡ Performance Specs
 
@@ -42,14 +42,14 @@ Both vLLM and Ollama are now running as production-grade systemd services with f
 - Speed: 178 tokens/second
 - VRAM: 2.3 GB
 - Context: 131K tokens
-- Binding: 0.0.0.0:8005 (Windows-accessible)
+- Binding: 0.0.0.0:38005 (Windows-accessible)
 - Service: `vllm-llama1b.service`
 
 **Ollama Phi-4 (Fallback)**:
 - Speed: 70 tokens/second  
 - VRAM: 2.8 GB
 - Context: 16K tokens
-- Binding: 0.0.0.0:11434 (Windows-accessible)
+- Binding: 0.0.0.0:31434 (Windows-accessible)
 - Service: `ollama.service`
 
 ---
@@ -139,10 +139,10 @@ systemctl status vllm-llama1b ollama --no-pager
 ### Quick Health Check
 ```powershell
 # Test vLLM
-curl http://localhost:8005/v1/models
+curl http://localhost:38005/v1/models
 
 # Test Ollama
-curl http://localhost:11434/v1/models
+curl http://localhost:31434/v1/models
 
 # Run full LLM client test
 python L:\goodq4all\scripts\test_llm_client.py
@@ -231,7 +231,7 @@ python L:\goodq4all\scripts\test_llm_client.py
 ### Additional Models
 If you want to start other models:
 1. Copy `vllm-llama1b.service` to `vllm-llama3b.service`
-2. Change port to 8004
+2. Change port to 38004
 3. Change model path to Llama-3B
 4. Enable and start
 
@@ -262,7 +262,7 @@ LLM Client (lib/llm_client.py)
 │   PRIMARY ✅         │   FALLBACK ✅        │
 │  vLLM Llama-1B       │  Ollama Phi-4        │
 │  systemd service     │  systemd service     │
-│  Port 8005           │  Port 11434          │
+│  Port 38005           │  Port 31434          │
 │  178 tok/s ⚡        │  70 tok/s            │
 │  Auto-start ✅       │  Auto-start ✅       │
 │  Background ✅       │  Background ✅       │

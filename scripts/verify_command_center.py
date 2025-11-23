@@ -13,12 +13,12 @@ print()
 
 # Test API endpoint
 try:
-    response = requests.get("http://localhost:3000/api/command-center")
+    response = requests.get("http://localhost:30000/api/command-center")
     response.raise_for_status()
     data = response.json()
     
     print("✅ API Endpoint: OPERATIONAL")
-    print(f"   URL: http://localhost:3000/api/command-center")
+    print(f"   URL: http://localhost:30000/api/command-center")
     print()
     
     print("📊 SYSTEM STATUS")
@@ -67,7 +67,7 @@ try:
     print("✅ COMMAND CENTER IS FULLY OPERATIONAL")
     print("=" * 80)
     print()
-    print("🌐 Access the UI at: http://localhost:3000")
+    print("🌐 Access the UI at: http://localhost:30000")
     print("🔴 Click 'Command Center' in the sidebar to view the dashboard")
     print()
     

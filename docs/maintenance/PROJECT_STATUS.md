@@ -290,7 +290,7 @@ This structure isn't just organized - it's designed to:
 4. Check `completed/` folder when done
 
 ### Exploring Results
-1. Query API: `http://localhost:8000/docs`
+1. Query API: `http://localhost:30000/docs`
 2. Check databases: `L:/_DATA/GoodQ_Data/databases/`
 3. View logs: `L:/_DATA/GoodQ_Data/logs/`
 

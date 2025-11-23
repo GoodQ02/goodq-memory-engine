@@ -98,10 +98,10 @@ start "GoodQ Test API" /MIN cmd /c "cd /d L:\goodq4all && conda run --no-capture
 timeout /t 8 /nobreak >nul
 
 echo Testing API connectivity...
-curl -s http://localhost:3000/api/status >nul 2>&1
+curl -s http://localhost:30000/api/status >nul 2>&1
 if %ERRORLEVEL% EQU 0 (
     echo [✓] API server responding
-    curl -s http://localhost:3000/api/status
+    curl -s http://localhost:30000/api/status
 ) else (
     echo [✗] API server not responding
 )
@@ -121,7 +121,7 @@ echo.
 echo  Next steps:
 echo    1. Run LAUNCH_GOODQ.bat to start the full system
 echo    2. Drop a video in L:\goodq4all\import_inbox
-echo    3. Open http://localhost:3000 to monitor progress
+echo    3. Open http://localhost:30000 to monitor progress
 echo.
 echo ================================================================================
 pause

@@ -25,7 +25,7 @@ L:\goodq4all\LAUNCH_GOODQ.bat
 
 ### ✅ Proper Process Isolation
 - Each service in its own window with clear title
-- "GoodQ API Server" - Port 3000
+- "GoodQ API Server" - Port 30000
 - "GoodQ Watchdog" - Auto-ingestion monitor
 
 ## Quick Start
@@ -39,7 +39,7 @@ L:\goodq4all\LAUNCH_GOODQ.bat
 1. Run `LAUNCH_GOODQ.bat`
 2. Select option 1 (Complete System)
 3. Drop videos in `L:\goodq4all\import_inbox`
-4. Monitor at http://localhost:3000
+4. Monitor at http://localhost:30000
 
 ### Stopping
 - Option A: Run `LAUNCH_GOODQ.bat` → Option 5 (Stop All)
@@ -69,7 +69,7 @@ Archived to: `L:\_ARCHIVE\old_launchers_[timestamp]`
 ### API Not Responding
 **Check:** 
 ```
-curl http://localhost:3000/api/status
+curl http://localhost:30000/api/status
 ```
 **Fix:** Make sure API Server window is still open
 
@@ -84,7 +84,7 @@ curl http://localhost:3000/api/status
 LAUNCH_GOODQ.bat (Master Control)
     │
     ├─► GoodQ API Server (api_server.py)
-    │   └─► Port 3000
+    │   └─► Port 30000
     │   └─► Serves UI + REST API
     │
     ├─► GoodQ Watchdog (scripts/watchdog_ingest.py)
@@ -93,7 +93,7 @@ LAUNCH_GOODQ.bat (Master Control)
     │   └─► Uses lock file to prevent duplicates
     │
     └─► Web Browser
-        └─► http://localhost:3000
+        └─► http://localhost:30000
         └─► Real-time UI updates
 ```
 
@@ -110,7 +110,7 @@ LAUNCH_GOODQ.bat (Master Control)
 ## Status Monitoring
 
 ### Via UI
-- Open http://localhost:3000
+- Open http://localhost:30000
 - Check "Command Center" for live logs
 - Check "Scenes" for processed content
 - Check "Analytics" for statistics
@@ -118,13 +118,13 @@ LAUNCH_GOODQ.bat (Master Control)
 ### Via API
 ```bash
 # System status
-curl http://localhost:3000/api/status
+curl http://localhost:30000/api/status
 
 # Progress
-curl http://localhost:3000/api/progress
+curl http://localhost:30000/api/progress
 
 # Database stats
-curl http://localhost:3000/api/analytics/database
+curl http://localhost:30000/api/analytics/database
 ```
 
 ### Via Log Files

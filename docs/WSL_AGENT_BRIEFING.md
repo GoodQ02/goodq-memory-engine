@@ -53,9 +53,9 @@ C:\Users\jdben\.wslconfig             # WSL network config (CREATED)
 │   └── models.yaml                   # Model registry
 ├── scripts/
 │   ├── start_qwen.sh                 # Port 8000
-│   ├── start_phi.sh                  # Port 8001
-│   ├── start_llama3b.sh              # Port 8004
-│   ├── start_llama11b.sh             # Port 8005 (Vision)
+│   ├── start_phi.sh                  # Port 38001
+│   ├── start_llama3b.sh              # Port 38004
+│   ├── start_llama11b.sh             # Port 38005 (Vision)
 │   └── test_models.sh                # Test all models
 └── logs/                             # Service logs
 
@@ -66,25 +66,25 @@ C:\Users\jdben\.wslconfig             # WSL network config (CREATED)
 
 ## 🚀 Services Currently Deployed
 
-### 1. Ollama (Port 11434)
+### 1. Ollama (Port 31434)
 - **Status:** Running as systemd service
 - **Model Loaded:** phi4 (8.4 GB, 70 tok/s)
-- **API:** http://localhost:11434/v1/ (OpenAI-compatible)
+- **API:** http://localhost:31434/v1/ (OpenAI-compatible)
 - **Control:**
   ```bash
   sudo systemctl status ollama
   sudo systemctl start/stop/restart ollama
   ```
 
-### 2. vLLM Servers (Ports 8000-8005)
+### 2. vLLM Servers (Ports 38000-38006)
 - **Status:** Ready to start on-demand
 - **Available Models:**
-  - Port 8000: Qwen 2.5 7B (quality)
-  - Port 8001: Phi-3.5 Mini (long context)
-  - Port 8005: Llama 1B (speed - 178 tok/s) ⭐ RECOMMENDED
-  - Port 8004: Llama 3B (balanced)
-  - Port 8005: Llama 11B Vision (multimodal) [if used]
-- **Start:** `~/vllm_server/scripts/start_llama1b.sh` (ensure it uses --port 8005)
+  - Port 38000: Qwen 2.5 7B (quality)
+  - Port 38001: Phi-3.5 Mini (long context)
+  - Port 38005: Llama 1B (speed - 178 tok/s) ⭐ RECOMMENDED
+  - Port 38004: Llama 3B (balanced)
+  - Port 38006: Llama 11B Vision (multimodal) [if used]
+- **Start:** `~/vllm_server/scripts/start_llama1b.sh` (ensure it uses --port 38005)
 
 ### 3. Audio Processing (Port: N/A - CLI tool)
 - **Status:** Operational
@@ -149,12 +149,12 @@ C:\Users\jdben\.wslconfig             # WSL network config (CREATED)
 
 2. **Verify Server Running**
    ```bash
-   curl http://localhost:8003/v1/models
+   curl http://localhost:38005/v1/models
    ```
 
 3. **Test from Windows**
    - Windows agent will run: `python L:\goodq4all\scripts\test_llm_client.py`
-   - Should connect to: vLLM (8005) → Ollama (11434) → LMStudio (1234)
+   - Should connect to: vLLM (38005) → Ollama (31434) → LMStudio (1234)
 
 4. **Monitor Logs**
    ```bash
@@ -182,10 +182,10 @@ C:\Users\jdben\.wslconfig             # WSL network config (CREATED)
 ```bash
 # Ollama
 sudo systemctl status ollama
-curl http://localhost:11434/v1/models
+curl http://localhost:31434/v1/models
 
 # vLLM (if running)
-curl http://localhost:8003/v1/models
+curl http://localhost:38005/v1/models
 
 # Audio processing test
 ~/goodq_audio/scripts/process.sh /mnt/l/goodq4all/data/test_audio.mp3
@@ -238,12 +238,12 @@ Audio processing docs in `~/goodq_audio/`:
 
 **Steps:**
 1. Activate vLLM environment
-2. Start Llama 1B server on port 8005
+2. Start Llama 1B server on port 38005
 3. Verify it's responding to API calls
 4. Report back status so Windows agent can test connectivity
 
 **Expected Result:**
-- vLLM server running on port 8005
+- vLLM server running on port 38005
 - Windows LLM client successfully connects
 - Fallback chain verified (vLLM → Ollama → LMStudio)
 
@@ -260,7 +260,7 @@ When reporting status, please include:
 Example:
 ```
 ✅ Llama 1B vLLM server started
-   Port: 8003
+   Port: 38005
    Model loaded: 12.3 seconds
    API responding: Yes
    Ready for Windows connection test

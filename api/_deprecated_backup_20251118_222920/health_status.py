@@ -150,7 +150,7 @@ def get_health_status():
             "models": [
                 {
                     "name": "Llama-1B-Speed",
-                    "endpoint": "http://localhost:8003/v1",
+                    "endpoint": "http://localhost:38005/v1",
                     "backend": "vllm",
                     "is_healthy": true,
                     "response_time_ms": 150,

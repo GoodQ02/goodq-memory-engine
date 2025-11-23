@@ -35,4 +35,4 @@ Files available:
 - api_server.py (FastAPI application)
 - Various .bat launchers (but they're failing on missing deps)
 
-Goal: Get http://localhost:3000 running with the GoodQ web interface.
+Goal: Get http://localhost:30000 running with the GoodQ web interface.

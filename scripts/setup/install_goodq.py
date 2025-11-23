@@ -298,7 +298,7 @@ def main():
         1. Review and edit .env.local if needed
         2. Start LM Studio with a model loaded
         3. Run: LAUNCH_GOODQ.bat
-        4. Open: http://localhost:3000
+        4. Open: http://localhost:30000
         5. Drop a video in import_inbox/
         
         For help, see INSTALL.md and docs/QUICK_START_GUIDE.md

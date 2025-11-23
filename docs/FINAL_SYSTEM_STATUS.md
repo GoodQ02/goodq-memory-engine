@@ -7,7 +7,7 @@
 ## ✅ SYSTEM OPERATIONAL
 
 ### Core Infrastructure
-- **API Server**: ✓ Running on port 3000
+- **API Server**: ✓ Running on port 30000
 - **LLM Connection**: ✓ Connected to LM Studio (qwen/qwen3-vl-4b)
 - **Database**: ✓ All databases operational
 - **FAISS Indices**: ✓ All 4 indices present (text, clip, dino, audio)
@@ -125,7 +125,7 @@ Relationships:  37
 
 ```powershell
 # Test API
-Invoke-RestMethod -Uri "http://localhost:3000/api/status"
+Invoke-RestMethod -Uri "http://localhost:30000/api/status"
 
 # Check databases
 sqlite3 "L:\goodq4all\data\memory.db" "SELECT COUNT(*) FROM scenes"

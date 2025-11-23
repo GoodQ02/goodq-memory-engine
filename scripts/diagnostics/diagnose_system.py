@@ -229,7 +229,7 @@ def check_api_server():
         import urllib.request
         import urllib.error
         
-        url = "http://localhost:3000/api/status"
+        url = "http://localhost:30000/api/status"
         
         try:
             with urllib.request.urlopen(url, timeout=5) as response:
@@ -245,7 +245,7 @@ def check_api_server():
                 return True
         except urllib.error.URLError:
             print("  ✗ API server not responding")
-            print("      URL: http://localhost:3000")
+            print("      URL: http://localhost:30000")
             return False
     except Exception as e:
         print(f"  ✗ Error checking API: {e}")

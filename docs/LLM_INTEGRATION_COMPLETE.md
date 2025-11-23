@@ -40,11 +40,11 @@ You'll see:
 ✓ LM Studio connected! Using model: qwen/qwen3-vl-4b
 LLM Status: CONNECTED
 INFO:     Started server process [XXXX]
-INFO:     Uvicorn running on http://0.0.0.0:3000
+INFO:     Uvicorn running on http://0.0.0.0:30000
 ```
 
 ### Step 3: Chat with REAL AI
-Open http://localhost:3000 and ask:
+Open http://localhost:30000 and ask:
 - "How long until processing is done?"
 - "What's in my videos?"
 - "Tell me about my memories"

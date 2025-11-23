@@ -82,7 +82,7 @@ Windows: C:\Users\jdben\.cache\lm-studio\models\
 ```bash
 # Serve multiple models on different ports
 vllm serve Qwen/Qwen2.5-7B-Instruct --port 8000 --gpu-memory-utilization 0.5
-vllm serve microsoft/phi-4 --port 8001 --gpu-memory-utilization 0.3
+vllm serve microsoft/phi-4 --port 38001 --gpu-memory-utilization 0.3
 vllm serve nomic-ai/nomic-embed-text-v1.5 --port 8002 --gpu-memory-utilization 0.2
 ```
 
@@ -127,8 +127,8 @@ mkdir -p ~/models/vllm
 vllm serve microsoft/phi-4 --port 8000 --max-model-len 4096
 
 # Test OpenAI-compatible API
-curl http://localhost:8000/v1/models
-curl -X POST http://localhost:8000/v1/chat/completions \
+curl http://localhost:30000/v1/models
+curl -X POST http://localhost:30000/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
     "model": "microsoft/phi-4",
@@ -154,7 +154,7 @@ def benchmark_inference(url, model, prompt):
 
 # Compare LM Studio vs vLLM
 lmstudio_latency = benchmark_inference("http://localhost:1234", "phi-4", "Summarize...")
-vllm_latency = benchmark_inference("http://localhost:8000", "microsoft/phi-4", "Summarize...")
+vllm_latency = benchmark_inference("http://localhost:30000", "microsoft/phi-4", "Summarize...")
 ```
 
 ---
@@ -183,9 +183,9 @@ class UnifiedLLMClient:
     
     def __init__(self, preferred_provider: LLMProvider = LLMProvider.VLLM):
         self.providers = {
-            LLMProvider.VLLM: "http://localhost:8000/v1",
+            LLMProvider.VLLM: "http://localhost:30000/v1",
             LLMProvider.LMSTUDIO: "http://localhost:1234/v1",
-            LLMProvider.OLLAMA: "http://localhost:11434/v1"
+            LLMProvider.OLLAMA: "http://localhost:31434/v1"
         }
         self.preferred = preferred_provider
         self.active_provider = None
@@ -329,7 +329,7 @@ vllm_models:
     
   qwen-2.5-7b:
     hf_id: "Qwen/Qwen2.5-7B-Instruct"
-    vllm_port: 8001
+    vllm_port: 38001
     gpu_memory: 0.4
     max_tokens: 32768
     use_case: ["long_context", "analysis"]
@@ -428,9 +428,9 @@ class SceneSummarizer:
 
 # LLM Configuration
 LLM_PROVIDER=vllm  # Options: vllm, lmstudio, ollama
-VLLM_BASE_URL=http://localhost:8000/v1
+VLLM_BASE_URL=http://localhost:30000/v1
 LMSTUDIO_BASE_URL=http://localhost:1234/v1
-OLLAMA_BASE_URL=http://localhost:11434/v1
+OLLAMA_BASE_URL=http://localhost:31434/v1
 
 # Model Selection
 LLM_CHAT_MODEL=microsoft/phi-4
@@ -545,7 +545,7 @@ class LLMHealthMonitor:
     
     def __init__(self):
         self.providers = {
-            "vllm": "http://localhost:8000/v1",
+            "vllm": "http://localhost:30000/v1",
             "lmstudio": "http://localhost:1234/v1"
         }
         self.status = {}

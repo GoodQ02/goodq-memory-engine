@@ -1,6 +1,6 @@
 Param(
   [Alias('Host')][string]$BindAddress = '0.0.0.0',
-  [int]$Port = 8000
+  [int]$Port = 30000
 )
 
 Set-StrictMode -Version Latest

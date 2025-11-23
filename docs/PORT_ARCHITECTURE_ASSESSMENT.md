@@ -10,13 +10,13 @@
 ### Production Ports (Active)
 | Service | Port | Location | Status | Notes |
 |---------|------|----------|--------|-------|
-| **GoodQ API Server** | 3000 | Windows | ✅ Active | Primary user interface, FastAPI |
-| **vLLM Llama-1B** | 8003 | WSL | ✅ Active | Primary LLM (178 tok/s) |
-| **vLLM Llama-3B** | 8004 | WSL | Available | Optional balanced model |
-| **vLLM Phi-3.5** | 8001 | WSL | Available | Optional long-context |
-| **vLLM Qwen-7B** | 8000 | WSL | Available | Quality model |
-| **vLLM Llama-11B-Vision** | 8005 | WSL | Available | Multimodal model |
-| **Ollama** | 11434 | WSL | ✅ Active | Fallback LLM (Phi-4) |
+| **GoodQ API Server** | 30000 | Windows | ✅ Active | Primary user interface, FastAPI |
+| **vLLM Llama-1B** | 38005 | WSL | ✅ Active | Primary LLM (178 tok/s) |
+| **vLLM Llama-3B** | 38004 | WSL | Available | Optional balanced model |
+| **vLLM Phi-3.5** | 38001 | WSL | Available | Optional long-context |
+| **vLLM Qwen-7B** | 38000 | WSL | Available | Quality model |
+| **vLLM Llama-11B-Vision** | 38006 | WSL | Available | Multimodal model |
+| **Ollama** | 31434 | WSL | ✅ Active | Fallback LLM (Phi-4) |
 | **LM Studio** | 1234 | Windows | Legacy | Not actively used |
 
 ### Legacy/Deprecated Ports
@@ -32,16 +32,16 @@
 ### ✅ GOOD NEWS: Port Architecture is Already Clean
 
 1. **No Port Conflicts Detected**
-   - API Server (3000) doesn't conflict with any LLM ports
-   - vLLM ports (8000-8005) are isolated in WSL
-   - Ollama (11434) is unique
+   - API Server (30000) doesn't conflict with any LLM ports
+   - vLLM ports (38000-38006) are isolated in WSL
+   - Ollama (31434) is unique
    - Legacy ports (5000, 8000) are archived, not active
 
 2. **Logical Port Ranges Already Established**
-   - 3000: User-facing API/UI
+   - 30000: User-facing API/UI
    - 1234: LM Studio (legacy)
-   - 8000-8005: vLLM model servers (WSL)
-   - 11434: Ollama (standard port)
+   - 38000-38006: vLLM model servers (WSL)
+   - 31434: Ollama (standard port)
 
 3. **WSL Networking Already Configured**
    - `.wslconfig` with `networkingMode=mirrored` exists
@@ -115,8 +115,8 @@ The localhost issues you're experiencing are likely:
 **PRIORITY 1: Verify Current State**
 ```bash
 # Test vLLM connectivity
-curl http://localhost:8003/v1/models
-curl http://localhost:8003/v1/chat/completions -X POST -H "Content-Type: application/json" \
+curl http://localhost:38005/v1/models
+curl http://localhost:38005/v1/chat/completions -X POST -H "Content-Type: application/json" \
   -d '{"model": "/mnt/l/_DATA/models/llm/huggingface/Llama-3.2-1B-Instruct", "messages": [{"role": "user", "content": "test"}]}'
 
 # Test from Windows
@@ -153,14 +153,14 @@ wsl bash -c "~/vllm_server/scripts/start_llama1b.sh"
 These files have **inconsistent documentation** (not actual config issues):
 
 #### Docs with Wrong Port References (for docs only, not config):
-- Some docs still reference `localhost:8000` for API (should be 3000)
+- Some docs still reference `localhost:8000` for API (should be 30000)
 - Some docs reference old LM Studio integration (1234) instead of vLLM
 
 #### Quick Fix: Doc Updates Only
 ```bash
 # These are documentation corrections, not port changes:
-- Update remaining docs that say "port 8000" for API → "port 3000"
-- Update LLM docs to emphasize vLLM (8003) as primary, not LM Studio (1234)
+- Update remaining docs that say "port 8000" for API → "port 30000"
+- Update LLM docs to emphasize vLLM (38005) as primary, not LM Studio (1234)
 - Add WSL port table to architecture docs
 ```
 

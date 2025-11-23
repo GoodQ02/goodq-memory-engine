@@ -3,7 +3,7 @@
 ## ✅ API SERVER IS WORKING!
 
 The diagnostic shows:
-- ✓ API running on port 3000
+- ✓ API running on port 30000
 - ✓ Endpoints responding correctly
 - ✓ Database has 102 scenes
 - ✓ Chat endpoint works perfectly
@@ -13,7 +13,7 @@ The diagnostic shows:
 ## 🔧 ACCESSING THE UI CORRECTLY
 
 ### ✅ **CORRECT WAY:**
-Open your browser to: **http://localhost:3000**
+Open your browser to: **http://localhost:30000**
 
 The API server serves the UI at the root URL.
 
@@ -27,7 +27,7 @@ Why? Relative URLs (`/api/chat`) don't work from `file://` protocol.
 ## 🧪 TEST THE CONNECTION
 
 ### 1. Open Browser
-Navigate to: **http://localhost:3000**
+Navigate to: **http://localhost:30000**
 
 ### 2. Open Browser Console
 Press **F12** → Go to "Console" tab
@@ -52,7 +52,7 @@ If you see errors, copy them and we'll fix them.
 ## 🤖 LLM INTEGRATION STATUS
 
 ### Current Setup:
-- **API Server:** ✅ Running (FastAPI on port 3000)
+- **API Server:** ✅ Running (FastAPI on port 30000)
 - **Database:** ✅ Has data (102 scenes, 277 embeddings)
 - **Knowledge Graph:** ✅ Has data (59 entities, 943 relationships)
 - **Chat Endpoint:** ✅ Responds with database queries
@@ -124,7 +124,7 @@ START_WATCHDOG.bat
 1. Start watchdog: `START_WATCHDOG.bat`
 2. Watchdog sees files and queues them
 3. Processing begins automatically
-4. Monitor progress at: http://localhost:3000/dashboard.html
+4. Monitor progress at: http://localhost:30000/dashboard.html
 
 ---
 
@@ -162,10 +162,10 @@ LAUNCH_GOODQ.bat
 
 | Component | Status | Notes |
 |-----------|--------|-------|
-| API Server | ✅ Running | Port 3000 |
+| API Server | ✅ Running | Port 30000 |
 | Database | ✅ Has Data | 102 scenes |
 | Knowledge Graph | ✅ Has Data | 59 entities |
-| Web UI | ✅ Available | http://localhost:3000 |
+| Web UI | ✅ Available | http://localhost:30000 |
 | LLM Agent | ⚠️ Not Connected | Basic queries only |
 | Watchdog | ⚠️ Not Running | Files won't auto-process |
 | Local LLM | ❓ Unknown | Need to check if running |
@@ -175,7 +175,7 @@ LAUNCH_GOODQ.bat
 ## ✅ IMMEDIATE ACTIONS
 
 ### 1. Access UI Correctly
-**Open:** http://localhost:3000 (NOT file://)
+**Open:** http://localhost:30000 (NOT file://)
 
 ### 2. Test Chat
 Type: "How many scenes do I have?"
@@ -200,7 +200,7 @@ START_WATCHDOG.bat
 
 ### UI Shows "Error: API failed to fetch"
 **Check:**
-- Are you at `http://localhost:3000`? (not `file://`)
+- Are you at `http://localhost:30000`? (not `file://`)
 - Is API server still running?
 - Check browser console for actual error
 
@@ -219,4 +219,4 @@ START_WATCHDOG.bat
 
 ---
 
-**Next:** Tell me what you see when you open http://localhost:3000 and try to chat!
+**Next:** Tell me what you see when you open http://localhost:30000 and try to chat!

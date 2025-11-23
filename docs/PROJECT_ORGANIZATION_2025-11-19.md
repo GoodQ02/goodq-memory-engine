@@ -39,7 +39,7 @@ L:\goodq4all\
 ├── __init__.py                ✅ Python package marker
 ├── config.json                📝 Legacy config (to be migrated)
 ├── config.yaml                📝 Active config
-├── api/                       🔌 All API endpoints (Port 3000)
+├── api/                       🔌 All API endpoints (Port 30000)
 │   ├── main.py               ✅ Unified API server
 │   ├── health_status.py      ⚠️  Deprecated (shows warning)
 │   └── processing_api.py     ⚠️  Deprecated (shows warning)
@@ -61,12 +61,12 @@ L:\goodq4all\
 **Functionality:**
 1. ✅ Displays ASCII banner
 2. ✅ Checks WSL vLLM service status
-3. ✅ Launches Main API Server (port 3000)
+3. ✅ Launches Main API Server (port 30000)
 4. ✅ Launches Health API (port 5050)
 5. ✅ Launches Processing API (port 5001)
 6. ✅ Opens browser windows:
-   - Main Interface: http://localhost:3000
-   - Processing Dashboard: http://localhost:3000/dashboard.html
+   - Main Interface: http://localhost:30000
+   - Processing Dashboard: http://localhost:30000/dashboard.html
 7. ✅ Displays service status with endpoints
 
 **Validated Script Paths:**
@@ -75,10 +75,10 @@ L:\goodq4all\
 - ✅ `L:\goodq4all\api\processing_api.py` - EXISTS
 
 **Browser Endpoints:**
-- 🌐 http://localhost:3000 - Main UI
-- 🌐 http://localhost:3000/dashboard.html - Processing Dashboard
-- 🌐 http://localhost:8003 - vLLM API (WSL)
-- 🌐 http://localhost:11434 - Ollama API
+- 🌐 http://localhost:30000 - Main UI
+- 🌐 http://localhost:30000/dashboard.html - Processing Dashboard
+- 🌐 http://localhost:38005 - vLLM API (WSL)
+- 🌐 http://localhost:31434 - Ollama API
 
 ---
 
@@ -100,7 +100,7 @@ L:\goodq4all\
 
 ### Port Mapping
 ```
-Port 3000  → Main API Server (FastAPI/Uvicorn)
+Port 30000  → Main API Server (FastAPI/Uvicorn)
             ├── /api/status
             ├── /api/engines
             ├── /api/processes
@@ -122,10 +122,10 @@ Port 5050  → Health Status API (Flask)
 Port 5001  → Processing Stats API (Flask)
             └── /api/processing/stats
 
-Port 8003  → vLLM Llama-1B (WSL/systemd)
+Port 38005  → vLLM Llama-1B (WSL/systemd)
             └── /v1/* (OpenAI compatible)
 
-Port 11434 → Ollama Phi4 (Windows service)
+Port 31434 → Ollama Phi4 (Windows service)
             └── /v1/* (OpenAI compatible)
 ```
 
@@ -159,7 +159,7 @@ Port 11434 → Ollama Phi4 (Windows service)
 
 ### ✅ Ready for Use
 - Main launcher (`LAUNCH_GOODQ.bat`)
-- Unified API server (port 3000)
+- Unified API server (port 30000)
 - Web interface (index.html, dashboard.html)
 - LLM integration (vLLM + Ollama)
 - GPU monitoring

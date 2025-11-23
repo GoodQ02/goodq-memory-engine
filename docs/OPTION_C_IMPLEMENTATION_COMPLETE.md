@@ -179,7 +179,7 @@ START_GOODQ_SYSTEM.bat
 
 ### Test 5: API Endpoints
 ```bash
-curl http://localhost:3000/api/processes
+curl http://localhost:30000/api/processes
 ✅ PASS - Returns process status (after API server running)
 ```
 
@@ -213,7 +213,7 @@ curl http://localhost:3000/api/processes
 START_GOODQ_SYSTEM.bat
 
 # Work in browser
-http://localhost:3000
+http://localhost:30000
 
 # Evening - Stop system
 STOP_GOODQ_SYSTEM.bat
@@ -234,7 +234,7 @@ python process_manager.py restart watchdog
 
 ### Scenario 3: Production Monitoring
 
-1. Open http://localhost:3000
+1. Open http://localhost:30000
 2. Click "⚙️ Process Control"
 3. Monitor real-time status
 4. View logs inline

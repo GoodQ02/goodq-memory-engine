@@ -33,12 +33,12 @@ FIXED ISSUES:
    - Chat area properly shows/hides
 
 API SERVER STATUS:
-✅ Running on http://localhost:3000
+✅ Running on http://localhost:30000
 ✅ LM Studio connected with model: qwen/qwen3-vl-4b
 ✅ All endpoints functional
 
 NEXT TESTING STEPS:
-1. Open http://localhost:3000 in browser
+1. Open http://localhost:30000 in browser
 2. Click Scene Explorer → verify scenes load
 3. Click a scene → verify detail modal opens
 4. Go to Command Center → verify logs scroll to bottom

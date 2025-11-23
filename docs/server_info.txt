@@ -9,7 +9,7 @@ Binding: 0.0.0.0:8000 (all interfaces)
 
 URLs to try in your browser:
 1. http://127.0.0.1:8000
-2. http://localhost:8000
+2. http://localhost:30000
 3. http://0.0.0.0:8000
 
 Server is responding correctly with HTTP 200 OK
@@ -30,7 +30,7 @@ TROUBLESHOOTING STEPS FOR BROWSER:
 
 2. TRY DIFFERENT URLs:
    - http://127.0.0.1:8000 (recommended)
-   - http://localhost:8000
+   - http://localhost:30000
 
 3. DISABLE BROWSER EXTENSIONS:
    - Some extensions block local connections

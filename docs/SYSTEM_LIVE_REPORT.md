@@ -11,7 +11,7 @@
 ### ✅ **OPERATIONAL COMPONENTS**
 
 1. **API Server** 
-   - ✅ Running on http://localhost:3000
+   - ✅ Running on http://localhost:30000
    - ✅ PID: 51936
    - ✅ All endpoints responding
 
@@ -33,7 +33,7 @@
    - ✅ Chat endpoint functional
 
 5. **Web Interface**
-   - ✅ Served at http://localhost:3000
+   - ✅ Served at http://localhost:30000
    - ✅ Command Center dashboard active
    - ✅ Scene Explorer functional
    - ✅ Chat interface with real LLM responses
@@ -88,7 +88,7 @@ scene_detect:
 
 ### 1. **Main Web UI**
 ```
-http://localhost:3000
+http://localhost:30000
 ```
 - Chat with GoodQ (LLM-powered)
 - Browse memories
@@ -107,7 +107,7 @@ Click "🔴 Command Center" in the sidebar
 
 ### 3. **Scene Explorer**
 ```
-http://localhost:3000/scenes.html
+http://localhost:30000/scenes.html
 ```
 - Browse all detected scenes
 - View scene details
@@ -148,12 +148,12 @@ L:\goodq4all\START_SYSTEM_CLEAN.bat
 
 ### Check Status
 ```powershell
-Invoke-RestMethod http://localhost:3000/api/status
+Invoke-RestMethod http://localhost:30000/api/status
 ```
 
 ### View Command Center Data
 ```powershell
-Invoke-RestMethod http://localhost:3000/api/command-center
+Invoke-RestMethod http://localhost:30000/api/command-center
 ```
 
 ### Check Database Counts

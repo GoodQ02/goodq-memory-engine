@@ -71,7 +71,7 @@ from goodq4all.steps.audio_transcribe import transcribe_step
 #### `/goodq4all/api/` - Web API Server
 **Status:** ✅ ACTIVE - Consolidated to main.py
 **Purpose:** FastAPI endpoints for UI and external integrations
-**Port:** 3000 (unified)
+**Port:** 30000 (unified)
 **Recent Changes:** All endpoints migrated to `/api/main.py`
 
 #### `/goodq4all/configs/` - Configuration

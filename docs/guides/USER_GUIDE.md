@@ -320,13 +320,13 @@ pwsh scripts\start_api.ps1
 **Query endpoints:**
 ```powershell
 # Search by text
-Invoke-RestMethod -Uri "http://localhost:8000/search/text" `
+Invoke-RestMethod -Uri "http://localhost:30000/search/text" `
     -Method POST `
     -Body (@{ query = "sunset beach" } | ConvertTo-Json) `
     -ContentType "application/json"
 
 # Get scene details
-Invoke-RestMethod -Uri "http://localhost:8000/scenes/abc123..."
+Invoke-RestMethod -Uri "http://localhost:30000/scenes/abc123..."
 ```
 
 ---

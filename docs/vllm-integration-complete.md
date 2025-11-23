@@ -17,7 +17,7 @@ LLM Client (L:\goodq4all\lib\llm_client.py)
 ┌─────────────────┬──────────────────┐
 │   PRIMARY       │    FALLBACK      │
 │   vLLM (WSL)    │  Ollama (WSL)    │
-│   Port 8003     │  Port 11434      │
+│   Port 38005     │  Port 31434      │
 │   178 tok/s     │  70 tok/s        │
 └─────────────────┴──────────────────┘
 ```
@@ -34,12 +34,12 @@ LLM Client (L:\goodq4all\lib\llm_client.py)
 
 | Model | Backend | Port | Speed | VRAM | Context | Status |
 |-------|---------|------|-------|------|---------|--------|
-| Llama-3.2-1B | vLLM | 8003 | 178 tok/s | 2.3 GB | 131K | ✅ Active |
-| Llama-3.2-3B | vLLM | 8004 | 82 tok/s | 6.1 GB | 131K | Available |
-| Phi-3.5-Mini | vLLM | 8001 | 73 tok/s | 8.7 GB | 128K | Available |
-| Llama-3.2-11B-Vision | vLLM | 8005 | 50 tok/s | 13 GB | 131K | Available |
+| Llama-3.2-1B | vLLM | 38005 | 178 tok/s | 2.3 GB | 131K | ✅ Active |
+| Llama-3.2-3B | vLLM | 38004 | 82 tok/s | 6.1 GB | 131K | Available |
+| Phi-3.5-Mini | vLLM | 38001 | 73 tok/s | 8.7 GB | 128K | Available |
+| Llama-3.2-11B-Vision | vLLM | 38005 | 50 tok/s | 13 GB | 131K | Available |
 | Qwen-2.5-7B | vLLM | 8000 | 55 tok/s | 14.2 GB | 32K | Available |
-| Phi-4 | Ollama | 11434 | 70 tok/s | 8.4 GB | 16K | ✅ Active |
+| Phi-4 | Ollama | 31434 | 70 tok/s | 8.4 GB | 16K | ✅ Active |
 
 ### 3. Windows Integration (`L:\goodq4all\lib\llm_client.py`)
 - **Automatic health checking** with 5-minute cache
@@ -155,8 +155,8 @@ for line in response.iter_lines():
 - Automatic port forwarding via WSL
 
 ### Ports in Use
-- `8000-8005`: vLLM model servers
-- `11434`: Ollama server
+- `8000-38005`: vLLM model servers
+- `31434`: Ollama server
 - `1234`: LMStudio (legacy, not actively used)
 
 ## Maintenance
@@ -172,7 +172,7 @@ source activate.sh
 ### Check Health
 ```bash
 # From Windows
-curl http://localhost:8003/v1/models
+curl http://localhost:38005/v1/models
 ```
 
 ### Monitor GPU
@@ -265,7 +265,7 @@ sudo systemctl stop ollama
 cat /etc/wsl.conf
 
 # Check if port is accessible
-curl http://localhost:8003/v1/models
+curl http://localhost:38005/v1/models
 
 # Restart WSL if needed (from PowerShell)
 wsl --shutdown

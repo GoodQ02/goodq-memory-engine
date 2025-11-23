@@ -48,17 +48,17 @@ The `llm_client.py` provides a unified, production-ready interface for all LLM i
 
 | Model                  | Port | Speed       | VRAM  | Use Case           |
 |------------------------|------|-------------|-------|--------------------|
-| Llama-1B-Speed         | 8003 | 178 tok/s ⚡ | 2.3GB | Real-time chat     |
-| Llama-3B-Balanced      | 8004 | 82 tok/s    | 6.1GB | Balanced quality   |
-| Phi-3.5-LongContext    | 8001 | 73 tok/s    | 8.7GB | Long conversations |
-| Llama-11B-Vision       | 8005 | 50 tok/s    | 13GB  | Image analysis     |
+| Llama-1B-Speed         | 38005 | 178 tok/s ⚡ | 2.3GB | Real-time chat     |
+| Llama-3B-Balanced      | 38004 | 82 tok/s    | 6.1GB | Balanced quality   |
+| Phi-3.5-LongContext    | 38001 | 73 tok/s    | 8.7GB | Long conversations |
+| Llama-11B-Vision       | 38005 | 50 tok/s    | 13GB  | Image analysis     |
 | Qwen-Quality           | 8000 | 55 tok/s    | 14GB  | Complex reasoning  |
 
 ### Fallback: Ollama (Windows)
 
 | Model         | Port  | Speed     | VRAM  | Use Case    |
 |---------------|-------|-----------|-------|-------------|
-| Phi4-Ollama   | 11434 | 70 tok/s  | 8.4GB | Development |
+| Phi4-Ollama   | 31434 | 70 tok/s  | 8.4GB | Development |
 
 ---
 
@@ -464,8 +464,8 @@ for item in items:
 ```bash
 # In WSL
 cd ~/vllm_server
-./scripts/start_llama1b.sh  # Port 8003
-./scripts/start_phi.sh      # Port 8001
+./scripts/start_llama1b.sh  # Port 38005
+./scripts/start_phi.sh      # Port 38001
 ```
 
 ---

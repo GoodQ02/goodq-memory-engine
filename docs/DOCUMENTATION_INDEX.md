@@ -249,7 +249,7 @@ Located in `L:\goodq4all\`:
 ## 🎯 Quick Links
 
 - **GitHub**: https://github.com/JoesDomingo/GoodQ_4_All
-- **API Docs**: http://localhost:8000/docs (when running)
+- **API Docs**: http://localhost:30000/docs (when running)
 - **Local Root**: `L:\goodq4all\`
 - **Data Storage**: `L:\_DATA\GoodQ_Data\`
 

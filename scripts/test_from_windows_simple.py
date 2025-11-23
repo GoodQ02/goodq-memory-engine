@@ -6,8 +6,8 @@ print("Testing Windows → vLLM connectivity...")
 print("=" * 60)
 
 urls = [
-    "http://localhost:8005/v1/models",
-    "http://127.0.0.1:8005/v1/models",
+    "http://localhost:38005/v1/models",
+    "http://127.0.0.1:38005/v1/models",
 ]
 
 for url in urls:
@@ -34,4 +34,4 @@ print("❌ Could not connect to vLLM")
 print("\nTroubleshooting:")
 print("  1. Check Windows Firewall")
 print("  2. Try: wsl --shutdown (then restart)")
-print("  3. Verify from WSL: curl http://localhost:8005/v1/models")
+print("  3. Verify from WSL: curl http://localhost:38005/v1/models")

@@ -62,7 +62,7 @@ steps\            - ZenML step implementations
 📊 MONITORING & STATUS
 ═══════════════════════════════════════════════════════════════════
 
-API Docs:         http://localhost:8000/docs
+API Docs:         http://localhost:30000/docs
 Command Center:   Launched in separate PowerShell window
 Watchdog Logs:    L:\goodq4all\logs\watchdog.log
 Ingestion Logs:   L:\goodq4all\logs\ingest_full\

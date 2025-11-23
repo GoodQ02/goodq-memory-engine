@@ -8,7 +8,7 @@
 1. Double-click: LAUNCH_GOODQ.bat
 2. Press: 1 (Launch Complete System)
 3. Wait: 10 seconds
-4. Check: Browser opens to http://localhost:3000
+4. Check: Browser opens to http://localhost:30000
 ```
 
 ---
@@ -143,7 +143,7 @@ output/                → Generated artifacts
 **Fix:** Check API Server window for errors. Should see:
 ```
 INFO: Application startup complete.
-INFO: Uvicorn running on http://0.0.0.0:3000
+INFO: Uvicorn running on http://0.0.0.0:30000
 ```
 
 ### ❌ "GPU not showing"
@@ -180,10 +180,10 @@ Verify video is in `import_inbox` folder.
 
 | Endpoint | Purpose |
 |----------|---------|
-| http://localhost:3000 | Main UI |
-| http://localhost:3000/api/status | System health JSON |
-| http://localhost:3000/api/progress | Current progress JSON |
-| http://localhost:3000/api/pipeline-engines | Engine status JSON |
+| http://localhost:30000 | Main UI |
+| http://localhost:30000/api/status | System health JSON |
+| http://localhost:30000/api/progress | Current progress JSON |
+| http://localhost:30000/api/pipeline-engines | Engine status JSON |
 
 ---
 

@@ -222,7 +222,7 @@ python cli\graph_query.py --entity "beach"
 
 ### API Access
 ```
-http://localhost:8000/docs
+http://localhost:30000/docs
 ```
 - Interactive FastAPI documentation
 

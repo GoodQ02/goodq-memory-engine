@@ -148,7 +148,7 @@ Relationships: 37
 
 ### 1. Open the UI
 ```
-http://localhost:3000
+http://localhost:30000
 ```
 
 ### 2. Navigate to Scenes
@@ -250,7 +250,7 @@ This is a known Windows console issue - doesn't affect functionality.
 
 The Phase 3 implementation is **complete and tested**. All features are functional with your actual family home movie data. The interface provides a rich, intuitive way to explore your processed memories with full detail views.
 
-**Open http://localhost:3000 and click on "🎬 Scenes" to experience it!**
+**Open http://localhost:30000 and click on "🎬 Scenes" to experience it!**
 
 ---
 

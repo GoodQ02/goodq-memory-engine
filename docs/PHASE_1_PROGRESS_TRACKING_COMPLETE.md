@@ -50,7 +50,7 @@
 - **FAISS Indices:** Text, CLIP, DINO ready
 
 ### ✅ API Server Running
-- **URL:** http://localhost:3000
+- **URL:** http://localhost:30000
 - **Status:** Responding to requests
 - **Endpoints:** `/api/status`, `/api/progress`, `/api/scenes`, etc.
 
@@ -248,7 +248,7 @@ Starts API server and runs ingestion with progress tracking
 conda run -n goodq_zenml python monitor_progress.py
 
 # Terminal 2: View in browser
-start http://localhost:3000
+start http://localhost:30000
 
 # Watch both simultaneously as processing continues
 ```
@@ -269,16 +269,16 @@ conda run -n goodq_zenml python diagnose_system.py
 ### Test 3: API Endpoints
 ```powershell
 # Check progress
-curl http://localhost:3000/api/progress | ConvertFrom-Json
+curl http://localhost:30000/api/progress | ConvertFrom-Json
 
 # Check status
-curl http://localhost:3000/api/status | ConvertFrom-Json
+curl http://localhost:30000/api/status | ConvertFrom-Json
 
 # Get scenes
-curl http://localhost:3000/api/scenes | ConvertFrom-Json
+curl http://localhost:30000/api/scenes | ConvertFrom-Json
 
 # Get entities
-curl http://localhost:3000/api/entities | ConvertFrom-Json
+curl http://localhost:30000/api/entities | ConvertFrom-Json
 ```
 
 ---

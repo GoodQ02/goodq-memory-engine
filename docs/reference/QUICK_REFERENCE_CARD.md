@@ -82,9 +82,9 @@ pwsh scripts\watchdog_status.ps1 -Follow
 
 ## 🌐 Web Interfaces
 
-- **API Docs**: http://localhost:8000/docs
-- **API Server**: http://localhost:8000
-- **Retrieve**: http://localhost:8000/retrieve?q=your+query
+- **API Docs**: http://localhost:30000/docs
+- **API Server**: http://localhost:30000
+- **Retrieve**: http://localhost:30000/retrieve?q=your+query
 
 ---
 
@@ -121,7 +121,7 @@ conda run -n goodq_zenml python scripts\check_production_status.py
 conda run -n goodq_zenml python -m goodq4all.cli.retrieve "dancing"
 
 # Via API (when running)
-curl "http://localhost:8000/retrieve?q=dancing"
+curl "http://localhost:30000/retrieve?q=dancing"
 ```
 
 ---

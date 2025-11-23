@@ -8,7 +8,7 @@ Successfully created a comprehensive "Pipeline Engines" view in the GoodQ4All UI
 
 ### ✅ API Endpoint Test
 ```
-GET http://localhost:3000/api/pipeline-engines
+GET http://localhost:30000/api/pipeline-engines
 Status: 200 OK
 Response: 22 engines tracked, real-time status working
 ```
@@ -110,7 +110,7 @@ Engine Status: Scene Detection (Video) - ACTIVE ⚡
 ## 🚀 How to Use
 
 1. **Access UI:**  
-   Open http://localhost:3000 in browser
+   Open http://localhost:30000 in browser
 
 2. **Navigate:**  
    Click "Pipeline Engines" (🔧) in left sidebar
@@ -139,14 +139,14 @@ Engine Status: Scene Detection (Video) - ACTIVE ⚡
 
 ```powershell
 # Test API endpoint
-Invoke-WebRequest "http://localhost:3000/api/pipeline-engines" | ConvertFrom-Json
+Invoke-WebRequest "http://localhost:30000/api/pipeline-engines" | ConvertFrom-Json
 
 # Check active engines
-$data = (Invoke-WebRequest "http://localhost:3000/api/pipeline-engines").Content | ConvertFrom-Json
+$data = (Invoke-WebRequest "http://localhost:30000/api/pipeline-engines").Content | ConvertFrom-Json
 Write-Host "Active: $($data.active_engines)/$($data.total_engines)"
 
 # View UI
-Start-Process "http://localhost:3000"
+Start-Process "http://localhost:30000"
 ```
 
 ## 📝 Files Modified

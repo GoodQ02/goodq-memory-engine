@@ -25,7 +25,7 @@ In `steps/video_scene_detect/step.py`, the hardcoded default fallback was set to
 
 ### 4. Restarted System
 - Stopped all processes
-- Restarted API server (PID 39208) on port 3000
+- Restarted API server (PID 39208) on port 30000
 - Restarted watchdog (PID 28060)
 
 ## Current Status
@@ -46,7 +46,7 @@ video:
 - **Current Scenes**: 0 (still processing)
 
 ### System Health
-- ✅ API Server: Running on http://localhost:3000
+- ✅ API Server: Running on http://localhost:30000
 - ✅ Watchdog: Active and processing
 - ✅ Database: Connected (0 scenes, 0 segments, 0 embeddings)
 - ✅ LLM: Enabled (http://localhost:1234)
@@ -83,7 +83,7 @@ With a 7.28GB video file and 5-minute minimum scenes:
 
 1. ✓ Wait for first scene to be created (~10-30 minutes)
 2. ✓ Verify scene duration is >= 5 minutes
-3. ✓ Check UI at http://localhost:3000
+3. ✓ Check UI at http://localhost:30000
 4. ✓ Monitor progress with monitoring scripts
 
 ## Files Modified

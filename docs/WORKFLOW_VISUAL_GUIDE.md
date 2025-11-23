@@ -386,6 +386,6 @@ Factors affecting speed:
 
 For detailed steps, see QUICK_START.md
 For troubleshooting, see docs/TROUBLESHOOTING.md
-For API usage, see http://localhost:8000/docs
+For API usage, see http://localhost:30000/docs
 
 ═══════════════════════════════════════════════════════════════════════

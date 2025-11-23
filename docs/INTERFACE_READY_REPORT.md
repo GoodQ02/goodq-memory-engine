@@ -8,10 +8,10 @@
 ## 🚀 What We Fixed
 
 ### 1. **Server Configuration Issues**
-- ✅ API server was configured to run on port 3000
+- ✅ API server was configured to run on port 30000
 - ✅ Simple HTTP server was on port 5000 (serving static files)
 - ✅ HTML interface was pointing to port 8000 (incorrect)
-- **FIX**: Updated HTML to use correct endpoint `http://localhost:3000/api`
+- **FIX**: Updated HTML to use correct endpoint `http://localhost:30000/api`
 
 ### 2. **API Endpoint Mismatch**
 - ✅ HTML was sending `{query: message, mode: 'natural'}`
@@ -60,7 +60,7 @@
 
 ## 🌐 Access the Interface
 
-**URL**: http://localhost:3000
+**URL**: http://localhost:30000
 
 ### Available Features:
 1. **💬 Chat Interface** - Ask questions about your content
@@ -111,7 +111,7 @@
 ### Current Running Services
 
 ```
-✓ FastAPI Server: http://0.0.0.0:3000 (API + Web Interface)
+✓ FastAPI Server: http://0.0.0.0:30000 (API + Web Interface)
 ✓ Static File Server: http://localhost:5000 (backup/alternative access)
 ```
 
@@ -125,7 +125,7 @@
 3. Port conflicts and firewall blocks
 
 ### Resolution Steps:
-1. Identified port mismatch (HTML → 8000, API → 3000)
+1. Identified port mismatch (HTML → 8000, API → 30000)
 2. Fixed API request/response format mismatches
 3. Added missing `/api/command` endpoint
 4. Enhanced chat endpoint with real database queries
@@ -142,7 +142,7 @@ The main breakthrough was when Windows Firewall prompted for Python network acce
 
 ### To Continue Testing:
 
-1. **Refresh your browser** at http://localhost:3000
+1. **Refresh your browser** at http://localhost:30000
 2. **Test the chat** - type questions and verify responses
 3. **Check the console** (F12) for any errors
 4. **Try navigation** - click through different sections

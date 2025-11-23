@@ -30,7 +30,7 @@ Phase 3 integrates the AI Control Agent directly into the GoodQ4All ingestion pi
                         ▼
 ┌──────────────────────────────────────────────────────────────┐
 │                   LLM Service Layer (WSL)                     │
-│  vLLM (Port 8003) → Ollama (Port 11434) → LMStudio (1234)   │
+│  vLLM (Port 38005) → Ollama (Port 31434) → LMStudio (1234)   │
 └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -215,8 +215,8 @@ python scripts\watchdog_ingest.py --no-ai-control
 
 Control Agent uses the LLM client with automatic fallback:
 
-1. **Primary**: vLLM Llama-3.2-1B (localhost:8003) - 178 tok/s
-2. **Fallback**: Ollama Phi-4 (localhost:11434) - 70 tok/s
+1. **Primary**: vLLM Llama-3.2-1B (localhost:38005) - 178 tok/s
+2. **Fallback**: Ollama Phi-4 (localhost:31434) - 70 tok/s
 3. **Last Resort**: LMStudio (localhost:1234)
 
 No configuration needed - it auto-discovers available services.

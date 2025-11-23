@@ -7,7 +7,7 @@ model:
   goodq_values: clarity, precision, humor, loyalty
 llm:
   # Unified API endpoint (main.py serves all LLM routes)
-  api_url: http://localhost:3000/api/chat
+  api_url: http://localhost:30000/api/chat
   # Model selection handled by LLMClient fallback chain
   model_id: auto  # Uses best available: vLLM Llama-1B or Ollama Phi4
   timeout: 30

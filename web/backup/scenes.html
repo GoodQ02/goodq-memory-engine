@@ -274,7 +274,7 @@
         // Load scenes on page load
         async function loadScenes() {
             try {
-                const response = await fetch('http://localhost:3000/api/scenes?limit=1000');
+                const response = await fetch('http://localhost:30000/api/scenes?limit=1000');
                 const data = await response.json();
                 
                 allScenes = data.scenes || [];
@@ -320,7 +320,7 @@
 
         async function showSceneDetail(sceneId) {
             try {
-                const response = await fetch(`http://localhost:3000/api/scene/${sceneId}`);
+                const response = await fetch(`http://localhost:30000/api/scene/${sceneId}`);
                 
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}: ${response.statusText}`);

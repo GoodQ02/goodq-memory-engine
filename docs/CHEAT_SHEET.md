@@ -10,7 +10,7 @@ START WATCHDOG       L:\goodq4all\START_WATCHDOG.bat
 STOP ALL             L:\goodq4all\STOP_GOODQ.bat (or close windows)
 
 DROP FILES HERE      L:\goodq4all\import_inbox\
-API DOCS             http://localhost:8000/docs
+API DOCS             http://localhost:30000/docs
 
 ═══════════════════════════════════════════════════════════════════════
                         📊 STATUS & MONITORING
@@ -72,12 +72,12 @@ python cli\memory.py --export --output "my_export.json"
                          🌐 API ENDPOINTS
 ═══════════════════════════════════════════════════════════════════════
 
-GET  http://localhost:8000/health
-POST http://localhost:8000/retrieve
-GET  http://localhost:8000/docs              (interactive)
+GET  http://localhost:30000/health
+POST http://localhost:30000/retrieve
+GET  http://localhost:30000/docs              (interactive)
 
 # Example API call
-curl -X POST http://localhost:8000/retrieve `
+curl -X POST http://localhost:30000/retrieve `
   -H "Content-Type: application/json" `
   -d ''{"query": "sunset beach", "top_k": 5}''
 

@@ -58,7 +58,7 @@ Your GoodQ4All pipeline was **completely stuck** processing tiny 2-second scenes
    - Should see: "Scene detection complete: 1-2 scenes" (not 18+!)
    
 4. **Verify in UI**:
-   - Open http://localhost:3000
+   - Open http://localhost:30000
    - Check Scene Explorer
    - Each scene should be 300+ seconds (5+ minutes)
 

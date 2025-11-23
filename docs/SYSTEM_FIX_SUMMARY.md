@@ -96,7 +96,7 @@ conda activate goodq_zenml
 python api_server.py
 ```
 
-Then open browser to: **http://localhost:3000**
+Then open browser to: **http://localhost:30000**
 
 ---
 
@@ -110,10 +110,10 @@ After restart, verify these work:
 
 ### Test 2: Web Interface Launch
 **Double-click:** `L:\goodq4all\LAUNCH_WEB_INTERFACE_FIXED.bat`  
-**Expected:** Server starts, opens on port 3000
+**Expected:** Server starts, opens on port 30000
 
 ### Test 3: Browser Access
-**Open:** http://localhost:3000  
+**Open:** http://localhost:30000  
 **Expected:** GoodQ chat interface loads
 
 ---

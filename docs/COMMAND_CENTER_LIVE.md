@@ -58,7 +58,7 @@
 ### How to Use
 
 1. **Access Command Center:**
-   - Open http://localhost:3000
+   - Open http://localhost:30000
    - Click "🔴 Command Center" in the sidebar
    - Dashboard loads automatically
 
@@ -166,4 +166,4 @@
 
 The Command Center is now **LIVE and FUNCTIONAL**. This serves as your "canary in the coal mine" - a real-time view into system health and processing status. All wires are connected, data is flowing, and you can see exactly what's happening at any moment.
 
-**Refresh your browser at http://localhost:3000 and click "🔴 Command Center" to see it in action!**
+**Refresh your browser at http://localhost:30000 and click "🔴 Command Center" to see it in action!**

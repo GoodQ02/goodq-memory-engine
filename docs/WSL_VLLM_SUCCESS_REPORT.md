@@ -15,7 +15,7 @@
 
 ### vLLM Llama-1B (Primary)
 - **Status**: ✅ HEALTHY
-- **Port**: 8005
+- **Port**: 38005
 - **Binding**: 0.0.0.0 (Windows-accessible)
 - **Model**: /mnt/l/_DATA/models/llm/huggingface/Llama-3.2-1B-Instruct
 - **Response Time**: 10s (first request, normal for cold start)
@@ -29,7 +29,7 @@
 
 ### Ollama Phi-4 (Fallback)
 - **Status**: ✅ HEALTHY  
-- **Port**: 11434
+- **Port**: 31434
 - **Binding**: 0.0.0.0 (Windows-accessible) ← FIXED!
 - **Model**: phi4:latest
 - **Response Time**: 2ms
@@ -77,7 +77,7 @@ LLM Client (lib/llm_client.py)
 ┌─────────────────┬─────────────────┐
 │   PRIMARY ✅    │   FALLBACK ✅   │
 │  vLLM Llama-1B  │  Ollama Phi-4   │
-│  Port 8005      │  Port 11434     │
+│  Port 38005      │  Port 31434     │
 │  178 tok/s      │  70 tok/s       │
 │  15.3 GB VRAM   │  2.8 GB VRAM    │
 └─────────────────┴─────────────────┘
@@ -96,7 +96,7 @@ source venv/bin/activate
 python -m vllm.entrypoints.openai.api_server \
     --model /mnt/l/_DATA/models/llm/huggingface/Llama-3.2-1B-Instruct \
     --host 0.0.0.0 \
-    --port 8005 \
+    --port 38005 \
     --gpu-memory-utilization 0.7 \
     --max-model-len 8192
 ```
@@ -107,7 +107,7 @@ python -m vllm.entrypoints.openai.api_server \
 ```bash
 sudo mkdir -p /etc/systemd/system/ollama.service.d/
 echo '[Service]' | sudo tee /etc/systemd/system/ollama.service.d/override.conf
-echo 'Environment="OLLAMA_HOST=0.0.0.0:11434"' | sudo tee -a /etc/systemd/system/ollama.service.d/override.conf
+echo 'Environment="OLLAMA_HOST=0.0.0.0:31434"' | sudo tee -a /etc/systemd/system/ollama.service.d/override.conf
 sudo systemctl daemon-reload
 sudo systemctl restart ollama
 ```
@@ -127,7 +127,7 @@ sudo systemctl restart ollama
    python -m vllm.entrypoints.openai.api_server \
        --model /mnt/l/_DATA/models/llm/huggingface/Llama-3.2-1B-Instruct \
        --host 0.0.0.0 \
-       --port 8005 \
+       --port 38005 \
        --gpu-memory-utilization 0.7 \
        --max-model-len 8192
    ```

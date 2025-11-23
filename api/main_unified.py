@@ -9,7 +9,7 @@ Single FastAPI server consolidating all endpoints:
 - WSL status
 - UI serving
 
-Port: 3000
+Port: 30000
 Author: GoodQ4All Team
 Date: 2025-11-18
 """
@@ -460,18 +460,18 @@ def get_engines() -> Dict[str, Any]:
     """Get pipeline engine status"""
     engines = {}
     
-    # vLLM check (port 8005)
+    # vLLM check (port 38005)
     try:
         import requests
-        resp = requests.get("http://localhost:8005/v1/models", timeout=2)
+        resp = requests.get("http://localhost:38005/v1/models", timeout=2)
         if resp.status_code == 200:
             engines["vllm_llama1b"] = {
                 "name": "vLLM Llama-1B",
                 "category": "LLM Inference",
-                "description": "Llama 1B Speed model on port 8005",
+                "description": "Llama 1B Speed model on port 38005",
                 "status": "ready",
                 "gpu": True,
-                "port": 8005
+                "port": 38005
             }
         else:
             raise Exception("unhealthy")
@@ -482,21 +482,21 @@ def get_engines() -> Dict[str, Any]:
             "description": "Not running",
             "status": "unavailable",
             "gpu": True,
-            "port": 8005
+            "port": 38005
         }
     
     # Ollama check
     try:
         import requests
-        resp = requests.get("http://localhost:11434/v1/models", timeout=2)
+        resp = requests.get("http://localhost:31434/v1/models", timeout=2)
         if resp.status_code == 200:
             engines["ollama"] = {
                 "name": "Ollama",
                 "category": "LLM Inference",
-                "description": "Phi4 on port 11434",
+                "description": "Phi4 on port 31434",
                 "status": "ready",
                 "gpu": True,
-                "port": 11434
+                "port": 31434
             }
         else:
             raise Exception("unhealthy")
@@ -507,7 +507,7 @@ def get_engines() -> Dict[str, Any]:
             "description": "Not running",
             "status": "unavailable",
             "gpu": True,
-            "port": 11434
+            "port": 31434
         }
     
     # WSL audio
@@ -691,7 +691,7 @@ if __name__ == "__main__":
     logger.info("=" * 80)
     logger.info("🚀 GoodQ4All Unified API Server Starting...")
     logger.info("=" * 80)
-    logger.info(f"📡 Port: 3000")
+    logger.info(f"📡 Port: 30000")
     logger.info(f"🎨 UI Directory: {UI_DIR}")
     logger.info(f"💾 Data Directory: L:/goodq4all/data")
     logger.info("=" * 80)
@@ -699,7 +699,7 @@ if __name__ == "__main__":
     uvicorn.run(
         "main_unified:app",
         host="0.0.0.0",
-        port=3000,
+        port=30000,
         reload=True,
         reload_dirs=["L:/goodq4all/api"]
     )

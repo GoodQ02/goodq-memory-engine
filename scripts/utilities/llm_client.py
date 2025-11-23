@@ -9,13 +9,13 @@ class LLMClient:
     def __init__(self, endpoints: List[Dict[str, str]] = None):
         """
         Initialize with multiple endpoints in priority order
-        endpoints = [{"url": "http://localhost:8005/v1", "name": "vLLM"}, {"url": "http://localhost:11434/v1", "name": "Ollama"}]
+        endpoints = [{"url": "http://localhost:38005/v1", "name": "vLLM"}, {"url": "http://localhost:31434/v1", "name": "Ollama"}]
         """
         if endpoints is None:
             # Default endpoints in priority order: vLLM (fast) -> Ollama -> LM Studio
             endpoints = [
-                {"url": "http://localhost:8005/v1", "name": "vLLM-Llama-1B"},
-                {"url": "http://localhost:11434/v1", "name": "Ollama-Phi4"},
+                {"url": "http://localhost:38005/v1", "name": "vLLM-Llama-1B"},
+                {"url": "http://localhost:31434/v1", "name": "Ollama-Phi4"},
                 {"url": "http://localhost:1234/v1", "name": "LM-Studio"}
             ]
         

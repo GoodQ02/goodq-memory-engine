@@ -13,7 +13,7 @@ The GoodQ4All system is **fully operational** and successfully processing real f
 ### 🎯 Mission Accomplished
 
 1. ✅ **End-to-End Validation System Created**
-2. ✅ **Production Web Interface Deployed** (http://localhost:8000)
+2. ✅ **Production Web Interface Deployed** (http://localhost:30000)
 3. ✅ **Real-Time Monitoring Active**
 4. ✅ **Live Ingestion Confirmed** (39 scenes processed from 1987_1988.mp4)
 5. ✅ **Full LLM Integration Operational**
@@ -42,8 +42,8 @@ The GoodQ4All system is **fully operational** and successfully processing real f
 ### Infrastructure Deployed
 
 **Web Interface** (NEW - Production Grade)
-- URL: http://localhost:8000
-- API Docs: http://localhost:8000/docs
+- URL: http://localhost:30000
+- API Docs: http://localhost:30000/docs
 - Real-time status dashboard
 - Natural language query interface
 - System control panel
@@ -263,7 +263,7 @@ Processing Results (In Progress):
 
 ### Immediate (Next 3-5 Hours)
 1. **Let Current Ingestion Complete**
-   - Monitor progress via web interface (http://localhost:8000)
+   - Monitor progress via web interface (http://localhost:30000)
    - 1987_1988.mp4 should complete with ~200+ scenes
    - sample.mp4 will process after (already completed once before)
 
@@ -334,13 +334,13 @@ L:\goodq4all\START_FULL_SYSTEM_TEST.bat
 This launches:
 - Real-time monitor (tracks ingestion)
 - Web interface (for queries and control)
-- Opens browser to http://localhost:8000
+- Opens browser to http://localhost:30000
 
 **Option 2: Web Interface Only**
 ```batch
 L:\goodq4all\LAUNCH_WEB_INTERFACE.bat
 ```
-Then visit: http://localhost:8000
+Then visit: http://localhost:30000
 
 **Option 3: Monitor Only**
 ```batch
@@ -350,7 +350,7 @@ python L:\goodq4all\monitor_ingestion_realtime.py
 
 ### Using the Web Interface
 
-1. **Open your browser** to http://localhost:8000
+1. **Open your browser** to http://localhost:30000
 2. **Check status** in the top-right (green = ready, yellow = processing)
 3. **Select query mode** in the left sidebar
 4. **Type your question** in the input box
@@ -481,10 +481,10 @@ The system is currently processing your first family home movie from the year yo
 
 ## System URLs
 
-- **Web Interface**: http://localhost:8000
-- **API Documentation**: http://localhost:8000/docs
-- **System Status API**: http://localhost:8000/api/status
-- **OpenAPI Schema**: http://localhost:8000/openapi.json
+- **Web Interface**: http://localhost:30000
+- **API Documentation**: http://localhost:30000/docs
+- **System Status API**: http://localhost:30000/api/status
+- **OpenAPI Schema**: http://localhost:30000/openapi.json
 
 ---
 

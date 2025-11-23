@@ -110,7 +110,7 @@ LAUNCH_GOODQ.bat (Master Control)
         ├─► Option 1: Complete System
         │   ├─► Start API Server (window: "GoodQ API Server")
         │   ├─► Start Watchdog (window: "GoodQ Watchdog")
-        │   └─► Open http://localhost:3000
+        │   └─► Open http://localhost:30000
         │
         ├─► Option 2: API Server Only
         │   └─► Start API Server in foreground
@@ -203,7 +203,7 @@ watchdog_ingest.py
 1. Double-click: L:\goodq4all\LAUNCH_GOODQ.bat
 2. Select option 1 (Complete System)
 3. Wait for services to start
-4. Browser opens to http://localhost:3000
+4. Browser opens to http://localhost:30000
 ```
 
 ### Processing Videos
@@ -211,7 +211,7 @@ watchdog_ingest.py
 1. Drop video in L:\goodq4all\import_inbox\
 2. Watchdog detects file
 3. Pipeline starts automatically
-4. Monitor at http://localhost:3000
+4. Monitor at http://localhost:30000
 ```
 
 ### Stopping System

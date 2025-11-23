@@ -72,7 +72,7 @@
 
 ## How to Use
 
-1. Open http://localhost:3000 in your browser
+1. Open http://localhost:30000 in your browser
 2. Click "Pipeline Engines" in the left sidebar (🔧 icon)
 3. View all engines organized by category
 4. Watch active engines update in real-time during processing
@@ -89,7 +89,7 @@
 
 ```bash
 # Test the endpoint
-curl http://localhost:3000/api/pipeline-engines
+curl http://localhost:30000/api/pipeline-engines
 
 # Expected response includes:
 {

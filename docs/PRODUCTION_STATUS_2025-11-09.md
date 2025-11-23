@@ -17,7 +17,7 @@ We have successfully completed a comprehensive system audit and are now in **PRO
    - Knowledge graph database structure in place
 
 2. **API Server** ✓ RUNNING
-   - FastAPI server on port 3000
+   - FastAPI server on port 30000
    - LLM client connected to LM Studio (qwen/qwen3-vl-4b)
    - Real-time endpoints responding:
      - `/api/status` - System status
@@ -39,7 +39,7 @@ We have successfully completed a comprehensive system audit and are now in **PRO
 
 5. **Web Interface** ✓ EXISTS
    - Located at: `L:\goodq4all\index.html`
-   - Served at: `http://localhost:3000`
+   - Served at: `http://localhost:30000`
    - Features sidebar navigation, search, status indicators
    - Multiple views: Chat, Scenes, Knowledge Graph, Memories, Analytics
 

@@ -399,7 +399,7 @@ transcription: present
 
 ### 5. API Test
 ```bash
-curl http://localhost:8000/api/search?q=person
+curl http://localhost:30000/api/search?q=person
 
 Expected:
 {

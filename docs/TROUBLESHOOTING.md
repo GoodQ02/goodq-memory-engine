@@ -132,7 +132,7 @@ Get-Job | Where-Object { $_.Name -like "*GoodQ*" }
 Get-NetTCPConnection -LocalPort 8000 -ErrorAction SilentlyContinue
 
 # Test API
-Invoke-WebRequest http://localhost:8000/health
+Invoke-WebRequest http://localhost:30000/health
 ```
 
 ### Check Logs
@@ -191,7 +191,7 @@ timeout /t 3
 You should see:
 - ✅ API Server window opens
 - ✅ Command Center window opens
-- ✅ Browser opens to http://localhost:8000/docs
+- ✅ Browser opens to http://localhost:30000/docs
 - ✅ No red error messages in either window
 
 ### Command Center Display

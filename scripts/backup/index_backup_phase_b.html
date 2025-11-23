@@ -1163,7 +1163,7 @@
 
             // Fetch process status
             try {
-                const response = await fetch('http://localhost:3000/api/processes');
+                const response = await fetch('http://localhost:30000/api/processes');
                 const data = await response.json();
 
                 // Ensure processes exists
@@ -1319,7 +1319,7 @@
 
         async function startProcess(name) {
             try {
-                const response = await fetch(`http://localhost:3000/api/processes/${name}/start`, { method: 'POST' });
+                const response = await fetch(`http://localhost:30000/api/processes/${name}/start`, { method: 'POST' });
                 const data = await response.json();
                 console.log(`Started ${name}:`, data);
                 setTimeout(refreshProcesses, 1000);  // Refresh after 1 second
@@ -1332,7 +1332,7 @@
         async function stopProcess(name) {
             if (!confirm(`Are you sure you want to stop ${name}?`)) return;
             try {
-                const response = await fetch(`http://localhost:3000/api/processes/${name}/stop`, { method: 'POST' });
+                const response = await fetch(`http://localhost:30000/api/processes/${name}/stop`, { method: 'POST' });
                 const data = await response.json();
                 console.log(`Stopped ${name}:`, data);
                 setTimeout(refreshProcesses, 1000);
@@ -1344,7 +1344,7 @@
 
         async function restartProcess(name) {
             try {
-                const response = await fetch(`http://localhost:3000/api/processes/${name}/restart`, { method: 'POST' });
+                const response = await fetch(`http://localhost:30000/api/processes/${name}/restart`, { method: 'POST' });
                 const data = await response.json();
                 console.log(`Restarted ${name}:`, data);
                 setTimeout(refreshProcesses, 2000);
@@ -1360,7 +1360,7 @@
                 // Show and load logs
                 logsDiv.style.display = 'block';
                 try {
-                    const response = await fetch(`http://localhost:3000/api/processes/${name}/logs?lines=50`);
+                    const response = await fetch(`http://localhost:30000/api/processes/${name}/logs?lines=50`);
                     const data = await response.json();
                     const logContent = logsDiv.querySelector('div');
                     logContent.innerHTML = data.lines.map(line => 
@@ -1384,7 +1384,7 @@
             const processes = ['api_server', 'watchdog'];
             for (const name of processes) {
                 try {
-                    await fetch(`http://localhost:3000/api/processes/${name}/start`, { method: 'POST' });
+                    await fetch(`http://localhost:30000/api/processes/${name}/start`, { method: 'POST' });
                 } catch (error) {
                     console.error(`Failed to start ${name}:`, error);
                 }
@@ -1397,7 +1397,7 @@
             const processes = ['api_server', 'watchdog', 'analytics'];
             for (const name of processes) {
                 try {
-                    await fetch(`http://localhost:3000/api/processes/${name}/stop`, { method: 'POST' });
+                    await fetch(`http://localhost:30000/api/processes/${name}/stop`, { method: 'POST' });
                 } catch (error) {
                     console.error(`Failed to stop ${name}:`, error);
                 }
@@ -1557,7 +1557,7 @@
         });
 
         // API Configuration
-        const API_BASE = 'http://localhost:3000/api';
+        const API_BASE = 'http://localhost:30000/api';
         let statusUpdateInterval;
 
         // Connect to API and update status

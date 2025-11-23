@@ -154,7 +154,7 @@ L:\goodq4all\START_WATCHDOG.bat
 
 ### Monitoring Points
 1. **Command Center:** Real-time dashboard
-2. **API Server:** http://localhost:8000
+2. **API Server:** http://localhost:30000
 3. **Step Logs:** `L:\_DATA\GoodQ_Data\logs\step_runs.jsonl`
 4. **Processing:** Watch directory growth
 5. **Knowledge Graph:** Entity/relationship creation

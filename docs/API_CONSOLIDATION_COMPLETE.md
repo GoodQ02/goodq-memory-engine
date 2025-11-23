@@ -5,7 +5,7 @@
 
 ## Summary
 
-All API endpoints have been successfully consolidated into a **single unified API server** running on **port 3000**.
+All API endpoints have been successfully consolidated into a **single unified API server** running on **port 30000**.
 
 ---
 
@@ -14,17 +14,17 @@ All API endpoints have been successfully consolidated into a **single unified AP
 ### Before (Fragmented)
 - `health_status.py` → Port 5050
 - `processing_stats.py` → Port 5001  
-- `main.py` → Port 3000
+- `main.py` → Port 30000
 - Multiple servers, port conflicts, confusing architecture
 
 ### After (Unified)
-- **`api/main.py`** → Port 3000 (ALL endpoints)
+- **`api/main.py`** → Port 30000 (ALL endpoints)
 - Single source of truth
 - Clean, maintainable, production-ready
 
 ---
 
-## 📍 All Endpoints (Port 3000)
+## 📍 All Endpoints (Port 30000)
 
 ### Core
 - `GET /` → Redirects to `/index.html`
@@ -74,15 +74,15 @@ Select option 1
 ```
 
 This starts:
-- ✅ Unified API Server (port 3000)
+- ✅ Unified API Server (port 30000)
 - ✅ Watchdog (auto-ingestion)
-- ✅ WSL vLLM Service (port 8003)
+- ✅ WSL vLLM Service (port 38005)
 - ✅ Web Interfaces (2 browser tabs)
 
 ### Option 2: API Server Only
 ```batch
 cd L:\goodq4all\api
-uvicorn main:app --host 0.0.0.0 --port 3000 --reload
+uvicorn main:app --host 0.0.0.0 --port 30000 --reload
 ```
 
 ---
@@ -91,12 +91,12 @@ uvicorn main:app --host 0.0.0.0 --port 3000 --reload
 
 | Service | URL |
 |---------|-----|
-| **Main UI** | http://localhost:3000 |
-| **Dashboard** | http://localhost:3000/dashboard.html |
-| **API Docs** | http://localhost:3000/api/status |
-| **Health Check** | http://localhost:3000/api/health/summary |
-| **vLLM (WSL)** | http://localhost:8003/v1 |
-| **Ollama** | http://localhost:11434/v1 |
+| **Main UI** | http://localhost:30000 |
+| **Dashboard** | http://localhost:30000/dashboard.html |
+| **API Docs** | http://localhost:30000/api/status |
+| **Health Check** | http://localhost:30000/api/health/summary |
+| **vLLM (WSL)** | http://localhost:38005/v1 |
+| **Ollama** | http://localhost:31434/v1 |
 
 ---
 
@@ -118,24 +118,24 @@ All functionality has been migrated to `api/main.py`.
 
 ### Test API Server
 ```bash
-curl http://localhost:3000/api/status
+curl http://localhost:30000/api/status
 ```
 
 ### Test Health Endpoints
 ```bash
-curl http://localhost:3000/api/health/summary
-curl http://localhost:3000/api/health/gpu
+curl http://localhost:30000/api/health/summary
+curl http://localhost:30000/api/health/gpu
 ```
 
 ### Test Processing Stats
 ```bash
-curl http://localhost:3000/api/processing/stats
+curl http://localhost:30000/api/processing/stats
 ```
 
 ### Test LLM Models
 ```bash
-curl http://localhost:8003/v1/models    # vLLM
-curl http://localhost:11434/v1/models   # Ollama
+curl http://localhost:38005/v1/models    # vLLM
+curl http://localhost:31434/v1/models   # Ollama
 ```
 
 ---
@@ -157,7 +157,7 @@ curl http://localhost:11434/v1/models   # Ollama
 
 ## 🎓 Architecture Benefits
 
-### Single Port (3000)
+### Single Port (30000)
 - No port conflicts
 - Easy firewall configuration
 - Simple to remember
@@ -214,7 +214,7 @@ pip install -r requirements.txt
 - ✅ Auto-ingestion pipeline
 - ✅ Full observability
 
-**All accessible from a single entry point: http://localhost:3000**
+**All accessible from a single entry point: http://localhost:30000**
 
 ---
 

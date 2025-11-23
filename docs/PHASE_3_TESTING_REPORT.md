@@ -8,7 +8,7 @@
 
 ### 1. Accessibility Test
 ```
-✓ UI is accessible at http://localhost:3000
+✓ UI is accessible at http://localhost:30000
 ✓ Status: 200 OK
 ✓ Content size: 97,074 bytes
 ✓ No loading errors
@@ -257,7 +257,7 @@ Some scenes have minimal data in metadata.
    - Verify all scenes get full metadata
 
 3. **Test UI Live**
-   - Open http://localhost:3000
+   - Open http://localhost:30000
    - Click "🎬 Scenes" in sidebar
    - Try all filters and sorting
    - Click scene cards to test modal
@@ -314,4 +314,4 @@ While the pipeline has some processing issues to resolve (crashes, encoding), th
 
 **Ready for your testing!**
 
-Open http://localhost:3000 and explore your memories! 🎬✨
+Open http://localhost:30000 and explore your memories! 🎬✨

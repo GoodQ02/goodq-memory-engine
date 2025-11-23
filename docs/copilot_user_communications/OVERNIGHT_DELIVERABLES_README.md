@@ -136,7 +136,7 @@ python scripts/check_memory_db.py
 python scripts/check_production_status.py
 
 # Query via API
-curl http://localhost:8000/api/search?q=person
+curl http://localhost:30000/api/search?q=person
 ```
 
 ---

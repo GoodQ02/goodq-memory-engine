@@ -130,7 +130,7 @@ These should ONLY be called by the master launcher or process_manager:
 1. Run `LAUNCH_GOODQ_SYSTEM.bat`
 2. Choose Option 1 (Complete System)
 3. Wait for all 3 services to start
-4. Access UI at http://localhost:3000
+4. Access UI at http://localhost:30000
 
 ### For Developers/Testing:
 1. Run individual components via menu options
@@ -139,7 +139,7 @@ These should ONLY be called by the master launcher or process_manager:
 
 ### Current State Check:
 ```bash
-# No processes running on port 3000
+# No processes running on port 30000
 # Watchdog last ran at 23:02:26 and crashed
 # Need clean restart with proper process management
 ```

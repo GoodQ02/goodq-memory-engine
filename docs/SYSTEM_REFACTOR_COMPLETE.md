@@ -14,7 +14,7 @@ Successfully completed comprehensive system refactoring, consolidating all API e
 ## ✅ Completed Fixes
 
 ### Phase 1: API Consolidation
-- ✅ Merged all endpoints into `/api/main.py` (single port 3000)
+- ✅ Merged all endpoints into `/api/main.py` (single port 30000)
 - ✅ Deprecated separate `health_status.py` and `processing_stats.py`
 - ✅ Removed port conflicts (5050, 5001 no longer needed)
 - ✅ Updated all UI endpoints to use unified API
@@ -39,10 +39,10 @@ Successfully completed comprehensive system refactoring, consolidating all API e
 
 ### Phase 5: Service Verification
 - ✅ **Watchdog Service**: Running (`scripts/watchdog_ingest.py`)
-- ✅ **vLLM Service (WSL)**: Active systemd service on port 8003
-- ✅ **Ollama Service**: Running on port 11434
-- ✅ **Unified API Server**: Running on port 3000
-- ✅ **Web Interface**: Accessible at `http://localhost:3000/`
+- ✅ **vLLM Service (WSL)**: Active systemd service on port 38005
+- ✅ **Ollama Service**: Running on port 31434
+- ✅ **Unified API Server**: Running on port 30000
+- ✅ **Web Interface**: Accessible at `http://localhost:30000/`
 
 ---
 
@@ -53,20 +53,20 @@ Successfully completed comprehensive system refactoring, consolidating all API e
 ┌─────────────────────────────────────┐
 │  Windows Host (L:/goodq4all)        │
 ├─────────────────────────────────────┤
-│  ✓ Unified API Server (port 3000)   │
+│  ✓ Unified API Server (port 30000)   │
 │  ✓ Watchdog Auto-Ingestion          │
-│  ✓ Ollama (port 11434)              │
+│  ✓ Ollama (port 31434)              │
 └─────────────────────────────────────┘
 
 ┌─────────────────────────────────────┐
 │  WSL2 Ubuntu                         │
 ├─────────────────────────────────────┤
-│  ✓ vLLM systemd service (port 8003) │
+│  ✓ vLLM systemd service (port 38005) │
 │  ✓ GPU-accelerated inference        │
 └─────────────────────────────────────┘
 ```
 
-### API Endpoints (All on port 3000)
+### API Endpoints (All on port 30000)
 ```
 GET  /                              → Main dashboard (index.html)
 GET  /dashboard.html                → Processing dashboard
@@ -117,7 +117,7 @@ GET  /api/analytics/knowledge-graph → KG analytics
    Active: active (running) since Mon 2025-11-17 20:43:20
    Memory: 2.5G (peak: 4.3G)
    Model: /mnt/l/_DATA/models/llm/huggingface/Llama-3.2-1B-Instruct
-   Port: 8003
+   Port: 38005
 ```
 
 ### ✅ Database Verification
@@ -165,7 +165,7 @@ L:\goodq4all\LAUNCH_GOODQ.bat
 ```
 
 This launches:
-- Unified API Server (port 3000)
+- Unified API Server (port 30000)
 - Watchdog auto-ingestion
 - Web interfaces (2 browser tabs)
 - WSL vLLM service check
@@ -203,7 +203,7 @@ pip install -e .
 
 ### Issue: Port conflicts (5050, 5001)
 **Status:** ✅ RESOLVED  
-**Solution:** All endpoints consolidated to port 3000
+**Solution:** All endpoints consolidated to port 30000
 
 ### Issue: Database path mismatches
 **Status:** ✅ RESOLVED  
@@ -226,7 +226,7 @@ pip install -e .
 
 ## 🎓 Best Practices Applied
 
-1. ✅ Single source of truth for APIs (port 3000)
+1. ✅ Single source of truth for APIs (port 30000)
 2. ✅ Centralized configuration management
 3. ✅ Proper path abstraction (no hardcoded paths)
 4. ✅ Graceful degradation (fallback to Ollama if vLLM unavailable)

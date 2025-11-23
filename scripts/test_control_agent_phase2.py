@@ -75,7 +75,7 @@ Stack trace:
             "name": "Connection Timeout (Unknown Pattern)",
             "error": """
 TimeoutError: Connection to model server timed out after 45 seconds
-No response from http://localhost:8000/v1/chat/completions
+No response from http://localhost:30000/v1/chat/completions
             """,
             "context": {
                 "step_name": "llm_analysis",

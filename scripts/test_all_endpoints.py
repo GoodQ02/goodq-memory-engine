@@ -8,7 +8,7 @@ import json
 from typing import Dict, Any, List
 from datetime import datetime
 
-API_BASE = "http://localhost:3000/api"
+API_BASE = "http://localhost:30000/api"
 
 # Color codes for output
 GREEN = "\033[92m"

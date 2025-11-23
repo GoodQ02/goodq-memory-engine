@@ -18,7 +18,7 @@ User=joesdomingo
 WorkingDirectory=/home/joesdomingo/vllm_server
 Environment="PATH=/home/joesdomingo/vllm_server/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 Environment="CUDA_VISIBLE_DEVICES=0"
-ExecStart=/home/joesdomingo/vllm_server/venv/bin/python -m vllm.entrypoints.openai.api_server --model /mnt/l/_DATA/models/llm/huggingface/Llama-3.2-1B-Instruct --host 0.0.0.0 --port 8005 --gpu-memory-utilization 0.7 --max-model-len 8192
+ExecStart=/home/joesdomingo/vllm_server/venv/bin/python -m vllm.entrypoints.openai.api_server --model /mnt/l/_DATA/models/llm/huggingface/Llama-3.2-1B-Instruct --host 0.0.0.0 --port 38005 --gpu-memory-utilization 0.7 --max-model-len 8192
 Restart=on-failure
 RestartSec=10
 StandardOutput=append:/home/joesdomingo/vllm_server/logs/vllm-service.log
@@ -82,7 +82,7 @@ Expected output:
 
 In PowerShell:
 ```powershell
-curl http://localhost:8003/v1/models
+curl http://localhost:38005/v1/models
 ```
 
 ---
@@ -134,7 +134,7 @@ Service writes to:
 journalctl -u vllm-llama1b -n 50 --no-pager
 
 # Check if port is in use
-lsof -i:8003
+lsof -i:38005
 
 # Verify service file
 systemctl cat vllm-llama1b
@@ -154,7 +154,7 @@ source venv/bin/activate
 python -m vllm.entrypoints.openai.api_server \
     --model /mnt/l/_DATA/models/llm/huggingface/Llama-3.2-1B-Instruct \
     --host 0.0.0.0 \
-    --port 8005 \
+    --port 38005 \
     --gpu-memory-utilization 0.7 \
     --max-model-len 8192
 ```
@@ -184,7 +184,7 @@ sudo systemctl restart vllm-llama1b
 
 ```bash
 # Stop any running vLLM first
-pkill -f 'vllm.*8005'
+pkill -f 'vllm.*38005'
 
 # Create service file
 sudo tee /etc/systemd/system/vllm-llama1b.service > /dev/null << 'EOF'
@@ -198,7 +198,7 @@ User=joesdomingo
 WorkingDirectory=/home/joesdomingo/vllm_server
 Environment="PATH=/home/joesdomingo/vllm_server/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 Environment="CUDA_VISIBLE_DEVICES=0"
-ExecStart=/home/joesdomingo/vllm_server/venv/bin/python -m vllm.entrypoints.openai.api_server --model /mnt/l/_DATA/models/llm/huggingface/Llama-3.2-1B-Instruct --host 0.0.0.0 --port 8005 --gpu-memory-utilization 0.7 --max-model-len 8192
+ExecStart=/home/joesdomingo/vllm_server/venv/bin/python -m vllm.entrypoints.openai.api_server --model /mnt/l/_DATA/models/llm/huggingface/Llama-3.2-1B-Instruct --host 0.0.0.0 --port 38005 --gpu-memory-utilization 0.7 --max-model-len 8192
 Restart=on-failure
 RestartSec=10
 StandardOutput=append:/home/joesdomingo/vllm_server/logs/vllm-service.log
@@ -221,7 +221,7 @@ sleep 30
 sudo systemctl status vllm-llama1b.service
 
 # Test
-curl http://localhost:8005/v1/models
+curl http://localhost:38005/v1/models
 ```
 
 ---

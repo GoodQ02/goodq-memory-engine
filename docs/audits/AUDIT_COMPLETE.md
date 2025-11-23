@@ -137,7 +137,7 @@ You were checking the UI **while no processes were running**. The pipeline engin
 1. Double-click `LAUNCH_GOODQ.bat`
 2. Select option **1** (Launch Complete System)
 3. Wait for windows to open
-4. Browser will open to http://localhost:3000
+4. Browser will open to http://localhost:30000
 
 ### **Method 2: PowerShell**
 ```powershell
@@ -253,7 +253,7 @@ LAUNCH_GOODQ.bat → Option 1
 ### **2. Verify Launch**
 Check for these indicators:
 - ✅ Two command windows open (API Server + Watchdog)
-- ✅ Browser opens to http://localhost:3000
+- ✅ Browser opens to http://localhost:30000
 - ✅ UI shows "System Status: Active"
 - ✅ Watchdog window shows "New file detected: 01. 1987 - 1988.mp4"
 

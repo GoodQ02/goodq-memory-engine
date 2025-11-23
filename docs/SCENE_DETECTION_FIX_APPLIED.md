@@ -164,13 +164,13 @@ python -c "import sqlite3; conn=sqlite3.connect('L:/goodq4all/data/memory.db'); 
 
 2. **Web Interface:**
 ```
-http://localhost:3000/scenes.html
+http://localhost:30000/scenes.html
 # Should show much fewer scenes with longer durations
 ```
 
 3. **Command Center:**
 ```
-http://localhost:3000
+http://localhost:30000
 # Click "🔴 Command Center" to see updated stats
 ```
 

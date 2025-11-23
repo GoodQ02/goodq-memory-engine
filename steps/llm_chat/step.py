@@ -110,7 +110,7 @@ def llm_chat(cfg: Dict[str, Any]) -> Dict[str, Any]:
         # Fallback: try Ollama native chat endpoint if OpenAI route not available
         err = str(e)
         try:
-            if ("11434" in api_url or "ollama" in api_url) and ("/v1" in api_url or "chat/completions" in api_url):
+            if ("31434" in api_url or "ollama" in api_url) and ("/v1" in api_url or "chat/completions" in api_url):
                 # Map to /api/chat
                 from urllib.parse import urlparse, urlunparse
 

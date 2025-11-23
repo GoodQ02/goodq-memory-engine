@@ -80,7 +80,7 @@ Status: Scene detection complete, processing scenes
 
 ### 🟢 SERVICES RUNNING
 ```
-✓ API Server (http://localhost:3000)
+✓ API Server (http://localhost:30000)
 ✓ Watchdog (Auto-ingestion)
 ✓ Progress Tracking (Real-time updates)
 ```
@@ -140,7 +140,7 @@ conda run -n goodq_zenml python diagnose_system.py
 ### Option 3: Web Interface
 ```
 1. Start API server
-2. Open browser to: http://localhost:3000
+2. Open browser to: http://localhost:30000
 3. View real-time progress in UI
 ```
 
@@ -183,7 +183,7 @@ Completed Steps:
 
 ### API Progress Endpoint
 ```powershell
-curl http://localhost:3000/api/progress | ConvertFrom-Json
+curl http://localhost:30000/api/progress | ConvertFrom-Json
 ```
 
 **Returns:**
@@ -338,7 +338,7 @@ Look at `updated_at` timestamp in progress.json
 ### Issue: API server not responding
 **Check:**
 ```powershell
-curl http://localhost:3000/api/status
+curl http://localhost:30000/api/status
 ```
 
 **Solution:**
@@ -364,7 +364,7 @@ conda run -n goodq_zenml python api_server.py
 python monitor_progress.py
 
 # Terminal 2: Check API
-curl http://localhost:3000/api/progress
+curl http://localhost:30000/api/progress
 
 # Should match and update in real-time
 ```
@@ -380,7 +380,7 @@ python diagnose_system.py
 
 ### Test 3: UI Verification
 ```
-1. Open http://localhost:3000
+1. Open http://localhost:30000
 2. Check progress bar (should show %)
 3. Navigate between pages
 4. Verify data appears (even if limited)

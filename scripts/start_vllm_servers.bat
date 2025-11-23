@@ -37,9 +37,9 @@ echo ========================================
 echo vLLM Servers Starting...
 echo ========================================
 echo.
-echo Llama 1B (Speed):     http://localhost:8005/v1
-echo Llama 3B (Balanced):  http://localhost:8004/v1
-echo Ollama (Fallback):    http://localhost:11434/v1
+echo Llama 1B (Speed):     http://localhost:38005/v1
+echo Llama 3B (Balanced):  http://localhost:38004/v1
+echo Ollama (Fallback):    http://localhost:31434/v1
 echo.
 echo Servers are starting in the background.
 echo It may take 30-60 seconds for models to fully load.

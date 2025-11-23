@@ -6,7 +6,7 @@
 ## 🚀 SYSTEM IS LIVE AND PROCESSING!
 
 ### ✅ Infrastructure Complete
-1. **API Server** - Running on port 3000
+1. **API Server** - Running on port 30000
    - FastAPI backend serving real-time data
    - WebSocket support for live updates
    - Endpoints: /api/status, /api/videos, /api/chat, /api/search
@@ -97,7 +97,7 @@ L:\goodq4all\output\
 ## 🌐 User Interfaces
 
 ### 1. Chat Interface
-- **URL:** http://localhost:8000/index.html
+- **URL:** http://localhost:30000/index.html
 - **Features:**
   - Natural language chat with LLM
   - Search across all videos
@@ -105,7 +105,7 @@ L:\goodq4all\output\
   - Tool integration (TTS, STT)
 
 ### 2. Processing Dashboard
-- **URL:** http://localhost:8000/dashboard.html
+- **URL:** http://localhost:30000/dashboard.html
 - **Features:**
   - Live processing statistics
   - Progress visualization
@@ -113,7 +113,7 @@ L:\goodq4all\output\
   - ETA calculations
 
 ### 3. API Documentation
-- **URL:** http://localhost:3000/docs
+- **URL:** http://localhost:30000/docs
 - **Features:**
   - Interactive API explorer
   - All endpoints documented
@@ -251,7 +251,7 @@ Output Directory (queryable via API/UI)
 
 ### Chat with Your Memories (Once Processing Completes):
 ```
-1. Open: http://localhost:8000/index.html
+1. Open: http://localhost:30000/index.html
 2. Ask: "What happened in 1987?"
 3. Ask: "Show me happy moments"
 4. Ask: "Who was in this video?"
@@ -260,7 +260,7 @@ Output Directory (queryable via API/UI)
 
 ### Monitor Processing:
 ```
-1. Open: http://localhost:8000/dashboard.html
+1. Open: http://localhost:30000/dashboard.html
 2. Watch: Real-time progress updates
 3. Track: Pipeline stages
 ```
@@ -268,13 +268,13 @@ Output Directory (queryable via API/UI)
 ### API Access:
 ```bash
 # Check status
-curl http://localhost:3000/api/status
+curl http://localhost:30000/api/status
 
 # List videos
-curl http://localhost:3000/api/videos
+curl http://localhost:30000/api/videos
 
 # Get video details (after processing)
-curl http://localhost:3000/api/videos/[video-id]
+curl http://localhost:30000/api/videos/[video-id]
 ```
 
 ---

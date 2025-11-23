@@ -149,7 +149,7 @@ L:\zenml_project\LAUNCH_GOODQ.bat
   1. Main launcher (brief instructions)
   2. Command Center dashboard (refreshes every 10 seconds)
   3. API server (runs on localhost:8000)
-- Browser opens to API docs (http://localhost:8000/docs)
+- Browser opens to API docs (http://localhost:30000/docs)
 - No error messages
 
 ---

@@ -133,7 +133,7 @@ audio:
 joesdomingo@GOOD-REACTOR:~/vllm_server$ python -m vllm.entrypoints.openai.api_server \
     --model /mnt/l/_DATA/models/llm/huggingface/Llama-3.2-1B-Instruct \
     --host 0.0.0.0 \
-    --port 8003 \
+    --port 38005 \
     --gpu-memory-utilization 0.7
 ```
 
@@ -142,7 +142,7 @@ joesdomingo@GOOD-REACTOR:~/vllm_server$ python -m vllm.entrypoints.openai.api_se
 - ✅ CUDA available in WSL2 (vLLM uses GPU)
 - ✅ L: drive mounted at /mnt/l
 - ✅ GPU accessible from WSL2
-- ✅ Services running (vLLM on port 8003)
+- ✅ Services running (vLLM on port 38005)
 
 **Recommendation Verification**: ✅ **FULLY IMPLEMENTED**
 

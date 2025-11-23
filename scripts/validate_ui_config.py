@@ -13,7 +13,7 @@ def validate_ui_config():
     base_dir = Path("L:/goodq4all")
     
     # Expected configuration
-    EXPECTED_PORT = "3000"
+    EXPECTED_PORT = "30000"
     EXPECTED_API_BASE = f"http://localhost:{EXPECTED_PORT}/api"
     
     # Files to check

@@ -13,7 +13,7 @@ The GoodQ4All system is now **FULLY FUNCTIONAL** with real data streams, live LL
 ## ✅ System Components
 
 ### 1. API Server (`api_server.py`)
-- **Status:** ✅ Running on port 3000
+- **Status:** ✅ Running on port 30000
 - **LLM Integration:** ✅ Connected to LM Studio (qwen/qwen3-vl-4b)
 - **Database Connections:** ✅ All databases accessible
 - **Endpoints:** ✅ All functional
@@ -33,7 +33,7 @@ WS   /ws                  - WebSocket for real-time updates
 ```
 
 ### 2. Web Interface (`index.html`)
-- **Status:** ✅ Accessible at http://localhost:3000
+- **Status:** ✅ Accessible at http://localhost:30000
 - **Features:**
   - ✅ Real-time scene explorer
   - ✅ Command center with live logs
@@ -161,7 +161,7 @@ To process your 1987_1988.mp4 family video:
    ```
 
 3. **Monitor progress:**
-   - Open UI: http://localhost:3000
+   - Open UI: http://localhost:30000
    - Click "Command Center" to watch live logs
    - Scene count will update in real-time
 
@@ -212,8 +212,8 @@ API Server (FastAPI) ← LM Studio (LLM)
 
 ## 📞 System Access
 
-- **Web UI:** http://localhost:3000
-- **API Docs:** http://localhost:3000/docs (FastAPI auto-docs)
+- **Web UI:** http://localhost:30000
+- **API Docs:** http://localhost:30000/docs (FastAPI auto-docs)
 - **LM Studio:** Running with qwen3-vl-4b model
 - **Logs:** L:\goodq4all\logs\
 

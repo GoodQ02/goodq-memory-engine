@@ -146,8 +146,8 @@ else:
 ```python
 # lib/llm_client.py
 MODELS = [
-    {"name": "Llama-1B-Speed", "url": "localhost:8005"},    # vLLM - 178 tok/s ⚡
-    {"name": "Ollama-Phi4", "url": "localhost:11434"},       # Ollama - 70 tok/s
+    {"name": "Llama-1B-Speed", "url": "localhost:38005"},    # vLLM - 178 tok/s ⚡
+    {"name": "Ollama-Phi4", "url": "localhost:31434"},       # Ollama - 70 tok/s
     {"name": "LMStudio", "url": "localhost:1234"}            # Fallback
 ]
 ```
@@ -159,10 +159,10 @@ cd ~/vllm_server
 source venv/bin/activate
 
 # Start fastest model
-./scripts/start_llama1b.sh  # Port 8003
+./scripts/start_llama1b.sh  # Port 38005
 
 # Or start Phi-3.5 for long context
-./scripts/start_phi.sh      # Port 8001
+./scripts/start_phi.sh      # Port 38001
 ```
 
 ---

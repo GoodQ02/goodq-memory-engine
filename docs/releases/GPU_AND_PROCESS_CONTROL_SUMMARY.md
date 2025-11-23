@@ -164,12 +164,12 @@ python lib\process_manager.py
 
 ### Test 2: API Endpoint
 ```bash
-curl http://localhost:3000/api/processes
+curl http://localhost:30000/api/processes
 ```
 **Result:** ✅ Real-time GPU status and process list
 
 ### Test 3: UI Integration
-1. Open `http://localhost:3000`
+1. Open `http://localhost:30000`
 2. Click "Pipeline Engines" in sidebar
 3. Watch GPU card display
 4. See all 6 engines listed
@@ -257,7 +257,7 @@ All other environments already had required CUDA libraries.
 ### System Health Check
 - ✅ **GPU Drivers:** 581.80 (NVIDIA GeForce RTX 4070 Ti SUPER)
 - ✅ **CUDA Availability:** All 6 environments verified
-- ✅ **API Server:** Running on port 3000
+- ✅ **API Server:** Running on port 30000
 - ✅ **Process Monitoring:** Active and reporting
 - ✅ **UI Integration:** Fully wired and auto-refreshing
 - ✅ **Git Commit:** Pushed to `main` branch

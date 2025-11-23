@@ -9,7 +9,7 @@
 
 #### What We Did:
 - ✅ Successfully launched vLLM server in WSL2 with GPU acceleration
-- ✅ Configured Llama-3.2-1B-Instruct on port 8003
+- ✅ Configured Llama-3.2-1B-Instruct on port 38005
 - ✅ Created systemd service for auto-start (set it and forget it!)
 - ✅ Verified cross-platform communication (WSL ↔ Windows)
 
@@ -19,7 +19,7 @@ Service: vllm-llama1b.service
 Location: /etc/systemd/system/vllm-llama1b.service
 Status: ✅ Active and running
 Auto-start: ✅ Enabled (survives reboots)
-Port: 8003
+Port: 38005
 Model: Llama-3.2-1B-Instruct
 GPU Memory: 0.7 utilization
 Max Tokens: 8192
@@ -43,7 +43,7 @@ tail -f ~/vllm_server/logs/vllm-service-error.log
 #### Test Results:
 ```bash
 # From Windows PowerShell
-curl http://localhost:8003/v1/models
+curl http://localhost:38005/v1/models
 # ✅ Returns: Llama-3.2-1B-Instruct model info
 
 # Persists across WSL terminal restarts ✅
@@ -91,7 +91,7 @@ curl http://localhost:8003/v1/models
                           ↓
 ┌──────────────┬──────────────┬──────────────────────────┐
 │   vLLM WSL   │    Ollama    │   Other vLLM Models      │
-│   Port 8003  │  Port 11434  │   (8000,8001,8004,8005)  │
+│   Port 38005  │  Port 31434  │   (8000,38001,38004,38005)  │
 │   ✅ ONLINE  │  ✅ ONLINE   │   ⚠️ Not started         │
 └──────────────┴──────────────┴──────────────────────────┘
 ```
@@ -99,11 +99,11 @@ curl http://localhost:8003/v1/models
 #### Current Model Status:
 | Model Name          | Backend | Port  | Status | Response Time | Throughput |
 |---------------------|---------|-------|--------|---------------|------------|
-| Llama-1B-Speed      | vLLM    | 8003  | ✅ UP  | 1.4ms        | 178 tok/s  |
-| Phi4-Ollama         | Ollama  | 11434 | ✅ UP  | 3.4ms        | 70 tok/s   |
-| Llama-3B-Balanced   | vLLM    | 8004  | ❌ DOWN| -            | -          |
-| Phi-3.5-LongContext | vLLM    | 8001  | ❌ DOWN| -            | -          |
-| Llama-11B-Vision    | vLLM    | 8005  | ❌ DOWN| -            | -          |
+| Llama-1B-Speed      | vLLM    | 38005  | ✅ UP  | 1.4ms        | 178 tok/s  |
+| Phi4-Ollama         | Ollama  | 31434 | ✅ UP  | 3.4ms        | 70 tok/s   |
+| Llama-3B-Balanced   | vLLM    | 38004  | ❌ DOWN| -            | -          |
+| Phi-3.5-LongContext | vLLM    | 38001  | ❌ DOWN| -            | -          |
+| Llama-11B-Vision    | vLLM    | 38005  | ❌ DOWN| -            | -          |
 | Qwen-Quality        | vLLM    | 8000  | ❌ DOWN| -            | -          |
 
 **Overall Status: ⚠️ DEGRADED (2/6 models online)**
@@ -175,8 +175,8 @@ L:\goodq4all\configs\audio_config.yaml
 
 ### High Priority:
 1. **Launch Additional vLLM Models** (if GPU memory allows)
-   - Consider Llama-3B-Balanced (port 8004) for better quality
-   - Or Phi-3.5-LongContext (port 8001) for long conversations
+   - Consider Llama-3B-Balanced (port 38004) for better quality
+   - Or Phi-3.5-LongContext (port 38001) for long conversations
 
 2. **Create vLLM Launch Scripts**
    - Similar to systemd but for multiple models
@@ -228,10 +228,10 @@ python api\processing_api.py
 ### Test Integration:
 ```bash
 # Test vLLM
-curl http://localhost:8003/v1/models
+curl http://localhost:38005/v1/models
 
 # Test Ollama
-curl http://localhost:11434/v1/models
+curl http://localhost:31434/v1/models
 
 # Test Health API
 curl http://localhost:5050/api/health/summary

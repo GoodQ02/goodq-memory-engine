@@ -34,7 +34,7 @@
 ```bash
 L:\goodq4all\START_HEALTH_API.bat
 ```
-- Monitors vLLM (localhost:8003) and Ollama (localhost:11434)
+- Monitors vLLM (localhost:38005) and Ollama (localhost:31434)
 - Runs on port 5050
 
 ### 2. Start Processing Stats API
@@ -184,7 +184,7 @@ curl http://localhost:5050/api/health
            │    │              │
     ┌──────▼─┐ ┌▼────────┐   ┌▼─────────────────────┐
     │ vLLM   │ │ Ollama  │   │ File System          │
-    │ :8003  │ │ :11434  │   │ - progress.json      │
+    │ :38005  │ │ :31434  │   │ - progress.json      │
     └────────┘ └─────────┘   │ - /data/processing/  │
                               │ - /output/           │
                               └──────────────────────┘

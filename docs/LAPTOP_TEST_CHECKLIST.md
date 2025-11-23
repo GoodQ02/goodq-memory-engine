@@ -83,11 +83,11 @@
 - [ ] **API server starts**
   ```powershell
   python api_server.py
-  # Expected: Uvicorn running on http://0.0.0.0:3000
+  # Expected: Uvicorn running on http://0.0.0.0:30000
   ```
 
 - [ ] **API responding**
-  - Open browser: http://localhost:3000/api/status
+  - Open browser: http://localhost:30000/api/status
   - Expected: JSON response with system status
 
 - [ ] **Watchdog starts**
@@ -97,7 +97,7 @@
   ```
 
 - [ ] **Web UI accessible**
-  - Open browser: http://localhost:3000
+  - Open browser: http://localhost:30000
   - Expected: GoodQ interface loads
 
 ---
@@ -114,7 +114,7 @@
   - Expected: "New file detected: video.mp4"
 
 - [ ] **Processing starts**
-  - Monitor: http://localhost:3000 (Command Center)
+  - Monitor: http://localhost:30000 (Command Center)
   - Expected: See pipeline steps executing
 
 - [ ] **Scene detection completes**
@@ -267,10 +267,10 @@ MAX_CONCURRENT_GPU_TASKS = 1
 $env:Path += ";C:\Users\YOUR_USERNAME\miniconda3\Scripts"
 ```
 
-### Issue: "Port 3000 already in use"
+### Issue: "Port 30000 already in use"
 ```powershell
 # Find and kill process
-netstat -ano | findstr :3000
+netstat -ano | findstr :30000
 taskkill /PID <PID> /F
 ```
 

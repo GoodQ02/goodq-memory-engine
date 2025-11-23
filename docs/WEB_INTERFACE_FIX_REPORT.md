@@ -8,8 +8,8 @@ The web interface was showing "Error: API failed to fetch" when attempting to in
 ## Root Causes Found
 
 ### 1. Port Mismatch ❌
-- **Frontend was calling:** `http://localhost:3000/api`
-- **Backend was running on:** `http://localhost:8000`
+- **Frontend was calling:** `http://localhost:30000/api`
+- **Backend was running on:** `http://localhost:30000`
 - **Impact:** All API calls were failing with connection refused
 
 ### 2. Request Payload Mismatch ❌
@@ -32,7 +32,7 @@ The web interface was showing "Error: API failed to fetch" when attempting to in
 ### ✅ Frontend Fixes (index.html)
 1. **Changed API base URL** (Line 872)
    ```javascript
-   const API_BASE = 'http://localhost:8000/api';  // Was 3000
+   const API_BASE = 'http://localhost:30000/api';  // Was 30000
    ```
 
 2. **Fixed chat request payload** (Line 787-790)
@@ -83,7 +83,7 @@ The web interface was showing "Error: API failed to fetch" when attempting to in
 - **Process ID:** 41740
 - **Port:** 8000
 - **Status:** Running and accepting connections
-- **URL:** http://localhost:8000
+- **URL:** http://localhost:30000
 
 ### 🟢 API Endpoints Verified
 All endpoints tested successfully via PowerShell:
@@ -128,7 +128,7 @@ All endpoints tested successfully via PowerShell:
    GoodQ Chat Interface v2.0.1
    ========================================
    ✓ Interface loaded successfully
-   ✓ Backend API endpoint: http://localhost:8000/api
+   ✓ Backend API endpoint: http://localhost:30000/api
    ✓ Testing API connection...
    ✓ API connection successful!
    ```
@@ -203,11 +203,11 @@ The current system has **placeholder responses**. To enable full LLM processing:
 Test-NetConnection -ComputerName localhost -Port 8000
 
 # Test status endpoint
-Invoke-RestMethod -Uri http://localhost:8000/api/status
+Invoke-RestMethod -Uri http://localhost:30000/api/status
 
 # Test chat endpoint
 $body = @{ query = "How many scenes?"; mode = "natural" } | ConvertTo-Json
-Invoke-RestMethod -Uri http://localhost:8000/api/chat -Method POST -Body $body -ContentType "application/json"
+Invoke-RestMethod -Uri http://localhost:30000/api/chat -Method POST -Body $body -ContentType "application/json"
 ```
 
 ## Summary

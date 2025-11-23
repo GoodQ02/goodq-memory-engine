@@ -9,7 +9,7 @@ import json
 from datetime import datetime
 from pathlib import Path
 
-API_BASE = "http://localhost:3000/api"
+API_BASE = "http://localhost:30000/api"
 
 def test_endpoint(name, url, expected_keys):
     """Test an analytics endpoint"""

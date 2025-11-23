@@ -200,7 +200,7 @@ cd L:\goodq4all
 python api_server.py
 
 # Access UI
-Open browser to: http://localhost:3000
+Open browser to: http://localhost:30000
 ```
 
 ### Key Features
@@ -281,6 +281,6 @@ The system is now ready for comprehensive production testing with real home movi
 
 **Status:** 🟢 PRODUCTION READY
 
-**Access URL:** http://localhost:3000
+**Access URL:** http://localhost:30000
 
 **Next Phase:** Begin full-scale ingestion and user acceptance testing!

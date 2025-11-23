@@ -9,7 +9,7 @@
 ### Phase 1: API Consolidation ✓
 - **All API endpoints consolidated into `api/main.py`**
 - Removed duplicate endpoints from separate services
-- Unified port: `3000` for all API routes
+- Unified port: `30000` for all API routes
 
 ### Phase 2: Endpoint Validation ✓
 - Verified all 30+ API endpoints are functional
@@ -30,7 +30,7 @@
 |------|--------|--------------|-------|
 | `web/index.html` | ✅ **ALIGNED** | `/api/*` | Main multi-tab interface |
 | `web/dashboard.html` | ✅ **ALIGNED** | `/api/*` | Processing monitor |
-| `web/scenes.html` | ⚠️ **NEEDS UPDATE** | `http://localhost:3000/api/scenes` | Should use relative paths |
+| `web/scenes.html` | ⚠️ **NEEDS UPDATE** | `http://localhost:30000/api/scenes` | Should use relative paths |
 
 ### 📦 Backup Files (Archived)
 - `web/backup/index_production_v2.html` - Previous version
@@ -39,7 +39,7 @@
 
 ---
 
-## 🔌 API ENDPOINTS (All on Port 3000)
+## 🔌 API ENDPOINTS (All on Port 30000)
 
 ### Core Endpoints ✓
 ```
@@ -129,20 +129,20 @@ GET  /api/scene/{id}             → Scene details
 
 ### Services Required
 ```
-1. Main API Server (Port 3000)    → python -m uvicorn api.main:app --host 0.0.0.0 --port 3000 --reload
-2. vLLM Server (WSL, Port 8003)   → systemctl status vllm-llama1b
-3. Ollama (Port 11434)            → ollama serve
+1. Main API Server (Port 30000)    → python -m uvicorn api.main:app --host 0.0.0.0 --port 30000 --reload
+2. vLLM Server (WSL, Port 38005)   → systemctl status vllm-llama1b
+3. Ollama (Port 31434)            → ollama serve
 ```
 
 ### Access Points
 ```
-🌐 Main Interface:      http://localhost:3000
-📊 Dashboard:           http://localhost:3000/dashboard.html
-🔬 Scenes:              http://localhost:3000/scenes.html
-🔧 API Endpoint:        http://localhost:3000/api
-💚 Health Check:        http://localhost:3000/api/status
-🤖 vLLM (WSL):          http://localhost:8003/v1
-🦙 Ollama:              http://localhost:11434/v1
+🌐 Main Interface:      http://localhost:30000
+📊 Dashboard:           http://localhost:30000/dashboard.html
+🔬 Scenes:              http://localhost:30000/scenes.html
+🔧 API Endpoint:        http://localhost:30000/api
+💚 Health Check:        http://localhost:30000/api/status
+🤖 vLLM (WSL):          http://localhost:38005/v1
+🦙 Ollama:              http://localhost:31434/v1
 ```
 
 ---
@@ -150,9 +150,9 @@ GET  /api/scene/{id}             → Scene details
 ## 🔍 VALIDATION CHECKLIST
 
 ### API Health
-- [x] Main API responds on port 3000
-- [x] vLLM responds on port 8003 (WSL)
-- [x] Ollama responds on port 11434
+- [x] Main API responds on port 30000
+- [x] vLLM responds on port 38005 (WSL)
+- [x] Ollama responds on port 31434
 - [x] All endpoints return valid JSON
 - [x] CORS configured for local development
 
@@ -178,26 +178,26 @@ GET  /api/scene/{id}             → Scene details
 ## 📝 NOTES
 
 ### What Changed
-- **Before:** 3 separate API servers (5050, 5001, 3000)
-- **After:** 1 unified API server (3000 only)
+- **Before:** 3 separate API servers (5050, 5001, 30000)
+- **After:** 1 unified API server (30000 only)
 - **Benefit:** Simpler architecture, fewer moving parts, easier debugging
 
 ### Breaking Changes
 - Old health API endpoints (port 5050) deprecated
 - Old processing API endpoints (port 5001) deprecated
-- All clients must use port 3000 now
+- All clients must use port 30000 now
 
 ### Migration Path
 1. Stop old health_status.py and processing_stats.py services
 2. Start unified main.py API server
-3. Update any external clients to use port 3000
+3. Update any external clients to use port 30000
 4. Clear browser cache to avoid stale endpoints
 
 ---
 
 ## 🎉 SUCCESS METRICS
 
-- ✅ Single port (3000) for all API traffic
+- ✅ Single port (30000) for all API traffic
 - ✅ All UI files use relative API paths
 - ✅ LLM chat functional (vLLM + Ollama)
 - ✅ Real-time GPU monitoring

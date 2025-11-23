@@ -20,7 +20,7 @@ LAUNCH_GOODQ.bat
 
 This opens **3 windows**:
 1. **Launcher** - Shows startup progress
-2. **API Server** - FastAPI running on http://localhost:8000
+2. **API Server** - FastAPI running on http://localhost:30000
 3. **Command Center** - Real-time dashboard
 
 ### Drop Files for Processing
@@ -51,7 +51,7 @@ STOP_GOODQ.bat
 | Memory database | `L:\_DATA\GoodQ_Data\databases\memory.db` |
 | Vector indices | `L:\_DATA\GoodQ_Data\faiss_indices\` |
 | Knowledge graph | `L:\_DATA\GoodQ_Data\graph\` |
-| API docs | http://localhost:8000/docs |
+| API docs | http://localhost:30000/docs |
 
 ## 🔧 Troubleshooting
 
@@ -143,7 +143,7 @@ Get-Content L:\_DATA\GoodQ_Data\logs\watchdog.log -Tail 50
 
 ## 🌐 API Usage
 
-Once running, visit: http://localhost:8000/docs
+Once running, visit: http://localhost:30000/docs
 
 Example queries:
 ```python
@@ -151,13 +151,13 @@ import requests
 
 # Search by text
 response = requests.post(
-    "http://localhost:8000/retrieve",
+    "http://localhost:30000/retrieve",
     json={"query": "birthday party", "modality": "text", "top_k": 5}
 )
 
 # Get video summary
 response = requests.get(
-    "http://localhost:8000/video/my_video_name"
+    "http://localhost:30000/video/my_video_name"
 )
 ```
 

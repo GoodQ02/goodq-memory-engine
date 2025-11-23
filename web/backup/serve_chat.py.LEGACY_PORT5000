@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Simple HTTP server for GoodQ chat interface on port 3000"""
+"""Simple HTTP server for GoodQ chat interface on port 30000"""
 import http.server
 import socketserver
 import os

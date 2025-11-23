@@ -97,7 +97,7 @@ L:\goodq4all\LAUNCH_GOODQ.bat
 ```
 This will:
 - Clear port 8000
-- Start API server on http://localhost:8000
+- Start API server on http://localhost:30000
 - Launch Command Center Dashboard
 - Open API documentation
 
@@ -155,8 +155,8 @@ conda run -n goodq_zenml python -m goodq4all.cli.memory diagnostics
    - Processing artifacts
 
 2. **API Server**
-   - Health endpoint: http://localhost:8000/health
-   - Docs: http://localhost:8000/docs
+   - Health endpoint: http://localhost:30000/health
+   - Docs: http://localhost:30000/docs
 
 3. **File System**
    - Watch `processing/` directory growth

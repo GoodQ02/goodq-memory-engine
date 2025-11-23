@@ -128,7 +128,7 @@ LAUNCH_GOODQ.bat
 # Select option 1
 ```
 **Starts:**
-- API Server (port 3000)
+- API Server (port 30000)
 - Watchdog (auto-ingestion)
 - Web Interface (browser)
 
@@ -210,13 +210,13 @@ scripts\PRE_LAUNCH_CHECK.bat
    ```
 
 3. **Test UI**
-   - Open http://localhost:3000
+   - Open http://localhost:30000
    - Verify all tabs load
    - Check dashboard statistics
 
 4. **Test Processing**
    - Drop a video in `import_inbox\`
-   - Monitor progress at http://localhost:3000/api/progress
+   - Monitor progress at http://localhost:30000/api/progress
    - Check results in dashboard
 
 ---

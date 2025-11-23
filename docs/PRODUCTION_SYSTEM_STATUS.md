@@ -10,13 +10,13 @@
 
 ### ✅ **What's Working RIGHT NOW**
 
-1. **API Server** - RUNNING on `http://localhost:3000`
+1. **API Server** - RUNNING on `http://localhost:30000`
    - Production-grade FastAPI backend
    - Real-time database queries
    - No placeholders - all data is REAL
    - Endpoints functional: `/api/status`, `/api/scenes`, `/api/entities`, `/api/analytics`, `/api/chat`
 
-2. **Web UI** - ACCESSIBLE at `http://localhost:3000`
+2. **Web UI** - ACCESSIBLE at `http://localhost:30000`
    - Chat interface with LM Studio integration  
    - Scene explorer showing REAL scene data from memory.db
    - System status dashboard
@@ -218,7 +218,7 @@ python scripts\watchdog_ingest.py  # In another terminal
 ```
 
 ### 2. Access the UI
-- Open browser: `http://localhost:3000`
+- Open browser: `http://localhost:30000`
 - Click "Chat" to interact with GoodQ
 - Click "Scene Explorer" to browse processed scenes
 - Click "Analytics" to see emotion/entity stats
@@ -231,7 +231,7 @@ python scripts\watchdog_ingest.py  # In another terminal
 ### 4. Query the Data
 - Use chat interface: "How many scenes?"
 - Use analytics dashboard for visualizations
-- Direct API queries: `http://localhost:3000/api/scenes`
+- Direct API queries: `http://localhost:30000/api/scenes`
 
 ---
 
@@ -239,8 +239,8 @@ python scripts\watchdog_ingest.py  # In another terminal
 
 ### API Not Starting
 ```bash
-# Check if port 3000 is in use
-netstat -ano | findstr :3000
+# Check if port 30000 is in use
+netstat -ano | findstr :30000
 
 # Kill process if needed
 taskkill /PID <PID> /F

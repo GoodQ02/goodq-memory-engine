@@ -23,7 +23,7 @@
   - qwen/qwen3-vl-4b  
   - text-embedding-nomic-embed-text-v1.5
   
-✗ Ollama (localhost:11434) - NOT RUNNING
+✗ Ollama (localhost:31434) - NOT RUNNING
 
 ✓ OpenAI API - API KEY CONFIGURED
 ```

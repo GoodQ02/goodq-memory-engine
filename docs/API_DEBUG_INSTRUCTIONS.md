@@ -8,7 +8,7 @@
 ## Quick Test:
 
 ### Step 1: Open Debug Page
-Navigate to: **http://localhost:3000/test_chat_debug.html**
+Navigate to: **http://localhost:30000/test_chat_debug.html**
 
 ### Step 2: Click Button 2
 "Test Chat (hardcoded)" - uses exact same query as you typed
@@ -55,7 +55,7 @@ app.add_middleware(
 
 ## Manual Test (Bypass UI Completely):
 
-**Open browser console on http://localhost:3000 and paste:**
+**Open browser console on http://localhost:30000 and paste:**
 ```javascript
 fetch('/api/chat', {
     method: 'POST',

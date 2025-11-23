@@ -196,12 +196,12 @@ fetch('/api/scenes/SCENE_ID/emotions').then(r => r.json()).then(console.log)
 
 ### **3. Access Scene Explorer**
 ```
-http://localhost:3000/scenes.html
+http://localhost:30000/scenes.html
 ```
 
 Or click "Scenes" in the sidebar from:
 ```
-http://localhost:3000
+http://localhost:30000
 ```
 
 ---

@@ -15,15 +15,15 @@ A comprehensive audit of all GoodQ UI configuration files to ensure port consist
 ## 📊 Results
 
 ### **Before Audit:**
-- ❌ 3 different servers on 3 different ports (3000, 5000, 8000)
+- ❌ 3 different servers on 3 different ports (30000, 5000, 8000)
 - ❌ Frontend files pointing to different endpoints
 - ❌ Batch launchers using wrong ports
 - ❌ Confusion about which server to use
 - ❌ No automated validation
 
 ### **After Audit:**
-- ✅ 1 production server on port 3000
-- ✅ All 7 active files aligned to port 3000
+- ✅ 1 production server on port 30000
+- ✅ All 7 active files aligned to port 30000
 - ✅ 2 legacy servers archived
 - ✅ 15 port references - all correct
 - ✅ Automated validator created and passing
@@ -52,7 +52,7 @@ A comprehensive audit of all GoodQ UI configuration files to ensure port consist
 
 ### **Production Stack:**
 ```
-api_server.py (Port 3000)
+api_server.py (Port 30000)
     ├── Serves: index.html (main chat UI)
     ├── Serves: dashboard.html (processing monitor)
     ├── Serves: test_api.html (endpoint tester)
@@ -66,9 +66,9 @@ api_server.py (Port 3000)
 ```
 
 ### **Launchers Updated:**
-- `LAUNCH_GOODQ.bat` → Starts api_server.py on 3000
-- `LAUNCH_WEB_INTERFACE.bat` → Starts api_server.py on 3000  
-- `START_FULL_SYSTEM_TEST.bat` → Starts api_server.py on 3000
+- `LAUNCH_GOODQ.bat` → Starts api_server.py on 30000
+- `LAUNCH_WEB_INTERFACE.bat` → Starts api_server.py on 30000  
+- `START_FULL_SYSTEM_TEST.bat` → Starts api_server.py on 30000
 
 ---
 
@@ -79,8 +79,8 @@ api_server.py (Port 3000)
 
 **Current Status:**
 ```
-✓ Expected API Port: 3000
-✓ Expected API Base: http://localhost:3000/api
+✓ Expected API Port: 30000
+✓ Expected API Base: http://localhost:30000/api
 
 VALIDATION RESULTS
 ✅ CORRECT (7 files)
@@ -88,7 +88,7 @@ VALIDATION RESULTS
 
 ✅ ALL FILES VALIDATED SUCCESSFULLY!
    • 7 files checked
-   • All using port 3000
+   • All using port 30000
    • Ready for production use
 ```
 
@@ -97,11 +97,11 @@ VALIDATION RESULTS
 ## 📋 Files Modified
 
 ### **Updated:**
-1. ✏️ `test_api.html` - Port 8000 → 3000
-2. ✏️ `LAUNCH_GOODQ.bat` - Port 8000 → 3000 + use api_server.py
-3. ✏️ `LAUNCH_WEB_INTERFACE.bat` - Port 8000 → 3000 + use api_server.py
-4. ✏️ `START_FULL_SYSTEM_TEST.bat` - Port 8000 → 3000 + use api_server.py
-5. ✏️ `dashboard.html` - Chat link port 8000 → 3000
+1. ✏️ `test_api.html` - Port 8000 → 30000
+2. ✏️ `LAUNCH_GOODQ.bat` - Port 8000 → 30000 + use api_server.py
+3. ✏️ `LAUNCH_WEB_INTERFACE.bat` - Port 8000 → 30000 + use api_server.py
+4. ✏️ `START_FULL_SYSTEM_TEST.bat` - Port 8000 → 30000 + use api_server.py
+5. ✏️ `dashboard.html` - Chat link port 8000 → 30000
 
 ### **Archived:**
 6. 🗄️ `web_interface.py` → `web_interface.py.LEGACY_PORT8000`
@@ -121,15 +121,15 @@ VALIDATION RESULTS
 ```batch
 L:\goodq4all\LAUNCH_WEB_INTERFACE.bat
 ```
-Opens: `http://localhost:3000`
+Opens: `http://localhost:30000`
 
 ### **Full System:**
 ```batch
 L:\goodq4all\LAUNCH_GOODQ.bat
 ```
 Opens:
-- API Server: `http://localhost:3000`
-- API Docs: `http://localhost:3000/docs`
+- API Server: `http://localhost:30000`
+- API Docs: `http://localhost:30000/docs`
 - Command Center Dashboard
 
 ### **Manual:**
@@ -144,10 +144,10 @@ python api_server.py
 ## 🧪 Testing Checklist
 
 - [ ] Run validator: `python validate_ui_config.py` ✅ PASSING
-- [ ] Start API server on port 3000 ✅ READY
+- [ ] Start API server on port 30000 ✅ READY
 - [ ] Test endpoints via test_api.html ⏳ PENDING
-- [ ] Test main UI at localhost:3000 ⏳ PENDING
-- [ ] Test dashboard at localhost:3000/dashboard.html ⏳ PENDING
+- [ ] Test main UI at localhost:30000 ⏳ PENDING
+- [ ] Test dashboard at localhost:30000/dashboard.html ⏳ PENDING
 - [ ] Verify no console errors ⏳ PENDING
 
 ---

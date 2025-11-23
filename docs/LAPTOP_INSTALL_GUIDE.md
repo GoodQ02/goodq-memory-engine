@@ -146,7 +146,7 @@ conda activate goodq_zenml
 python scripts\watchdog_ingest.py
 
 # Terminal 3: Open UI
-start http://localhost:3000
+start http://localhost:30000
 ```
 
 ---
@@ -161,7 +161,7 @@ copy "C:\path\to\your\video.mp4" ".\import_inbox\"
 python monitor_progress.py
 ```
 
-Or watch in the UI at http://localhost:3000
+Or watch in the UI at http://localhost:30000
 
 ---
 
@@ -201,8 +201,8 @@ conda env update -f envs\goodq_zenml.yml --prune
 ### Issue: "API server not responding"
 **Solution:**
 ```powershell
-# Check if port 3000 is already in use
-netstat -ano | findstr :3000
+# Check if port 30000 is already in use
+netstat -ano | findstr :30000
 
 # Kill process if needed
 taskkill /PID <PID> /F
@@ -233,7 +233,7 @@ MAX_CONCURRENT_GPU_TASKS = 1  # Reduce from 2
 copy videos\*.mp4 import_inbox\
 
 # Monitor
-# Open browser: http://localhost:3000
+# Open browser: http://localhost:30000
 
 # Stop
 # Ctrl+C in all terminals

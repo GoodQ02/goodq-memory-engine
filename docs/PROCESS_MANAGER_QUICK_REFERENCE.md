@@ -10,7 +10,7 @@ TEST_PROCESS_MANAGER.bat
 START_GOODQ_SYSTEM.bat
 
 # Open browser
-http://localhost:3000
+http://localhost:30000
 
 # Stop system  
 STOP_GOODQ_SYSTEM.bat
@@ -50,7 +50,7 @@ python process_manager.py stop-all
 
 ### Web UI (Visual)
 1. Start system: `START_GOODQ_SYSTEM.bat`
-2. Open: http://localhost:3000
+2. Open: http://localhost:30000
 3. Click: **⚙️ Process Control**
 4. Use buttons to control processes
 
@@ -69,8 +69,8 @@ python process_manager.py stop-all
 # View the error
 python process_manager.py logs api_server
 
-# Check if port 3000 is in use
-netstat -ano | findstr :3000
+# Check if port 30000 is in use
+netstat -ano | findstr :30000
 
 # Reset everything
 STOP_GOODQ_SYSTEM.bat
@@ -98,7 +98,7 @@ python process_manager.py status
 python process_manager.py start api_server
 
 # Wait 5 seconds, then try
-http://localhost:3000
+http://localhost:30000
 ```
 
 ## 📁 Important Files
@@ -121,7 +121,7 @@ L:\goodq4all\
 
 ## 🌐 Web UI Navigation
 
-After starting system (http://localhost:3000):
+After starting system (http://localhost:30000):
 
 - **💬 Chat** - Talk to GoodQ assistant
 - **🎬 Scene Explorer** - Browse processed scenes  
@@ -140,7 +140,7 @@ After starting system (http://localhost:3000):
 START_GOODQ_SYSTEM.bat
 
 # Work in browser all day
-http://localhost:3000
+http://localhost:30000
 
 # Evening
 STOP_GOODQ_SYSTEM.bat
@@ -156,10 +156,10 @@ python process_manager.py stop watchdog
 ### Tip 3: Monitoring
 ```bash
 # Keep Command Center open while processing
-http://localhost:3000 → Click "🔴 Command Center"
+http://localhost:30000 → Click "🔴 Command Center"
 
 # Real-time log viewing
-http://localhost:3000 → Click "⚙️ Process Control" → Click "Logs"
+http://localhost:30000 → Click "⚙️ Process Control" → Click "Logs"
 ```
 
 ### Tip 4: Quick Health Check
@@ -181,17 +181,17 @@ STATUS_CHECK.bat
 After starting system:
 
 - [ ] Status check shows processes running
-- [ ] Can access http://localhost:3000
+- [ ] Can access http://localhost:30000
 - [ ] Process Control view loads
 - [ ] Can view logs in UI
 - [ ] Command Center shows live data
 
 ## 📞 Quick Reference URLs
 
-- Main UI: http://localhost:3000
-- API Docs: http://localhost:3000/docs
-- Process Status: http://localhost:3000/api/processes
-- Command Center: http://localhost:3000/api/command-center
+- Main UI: http://localhost:30000
+- API Docs: http://localhost:30000/docs
+- Process Status: http://localhost:30000/api/processes
+- Command Center: http://localhost:30000/api/command-center
 
 ---
 

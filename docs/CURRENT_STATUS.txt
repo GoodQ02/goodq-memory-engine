@@ -5,7 +5,7 @@ GOODQ CURRENT STATUS CHECK (LEGACY SNAPSHOT)
 NOTE: This file is a historical status check. For the canonical, up-to-date system status, always use docs/CURRENT_SYSTEM_STATUS.md and the latest entries in docs/project-history/CHANGELOG.md.
 
 API Server:      ✓ RUNNING
-                 http://localhost:3000
+                 http://localhost:30000
 
 Database:        ✓ EXISTS
   - Scenes:      102
@@ -20,9 +20,9 @@ Inbox Files:     2 waiting
 HOW TO ACCESS
 ========================================
 
-1. Web UI:       http://localhost:3000
-2. Dashboard:    http://localhost:3000/dashboard.html
-3. API Docs:     http://localhost:3000/docs
+1. Web UI:       http://localhost:30000
+2. Dashboard:    http://localhost:30000/dashboard.html
+3. API Docs:     http://localhost:30000/docs
 
 ========================================
 QUICK ACTIONS

@@ -12,9 +12,9 @@ def main() -> None:
 
     host = os.environ.get("GOODQ_API_HOST", "0.0.0.0")
     try:
-        port = int(os.environ.get("GOODQ_API_PORT", "8000"))
+    port = int(os.environ.get("GOODQ_API_PORT", "30000"))
     except Exception:
-        port = 8000
+        port = 30000
 
     from uvicorn import run  # type: ignore
     from goodq4all.api.main import app

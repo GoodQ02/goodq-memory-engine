@@ -49,11 +49,11 @@
 
 | Model | Port | Status | Last Run |
 |-------|------|--------|----------|
-| Llama-1B-Speed | 8005 | ✅ Running (systemd) | Nov 16 01:15 |
-| Llama-3B-Balanced | 8004 | ❌ Not running | Nov 15 20:57 |
-| Phi-3.5-LongContext | 8001 | ❌ Not running | Nov 15 23:18 |
-| Qwen-7B-Quality | 8000 | ❌ Not running | Never started |
-| Llama-11B-Vision | 8005 | ❌ Not running | Never started |
+| Llama-1B-Speed | 38005 | ✅ Running (systemd) | Nov 16 01:15 |
+| Llama-3B-Balanced | 38004 | ❌ Not running | Nov 15 20:57 |
+| Phi-3.5-LongContext | 38001 | ❌ Not running | Nov 15 23:18 |
+| Qwen-7B-Quality | 38000 | ❌ Not running | Never started |
+| Llama-11B-Vision | 38006 | ❌ Not running | Never started |
 
 **Evidence from Last Run** (llama1b.log from Nov 16):
 ```
@@ -76,17 +76,17 @@
 
 **Current Behavior**:
 ```bash
-LISTEN 0  4096  0.0.0.0:11434  0.0.0.0:*
+LISTEN 0  4096  0.0.0.0:31434  0.0.0.0:*
 ```
 
 **Problem**: 
 - Ollama binds to `127.0.0.1` (localhost only)
-- Windows can't connect to `localhost:11434` from outside WSL
+- Windows can't connect to `localhost:31434` from outside WSL
 - WSL mirrored networking requires services to bind to `0.0.0.0` or `[::]`
 
 **Why It Works Inside WSL But Not From Windows**:
-- Inside WSL: `curl http://localhost:11434` → Works ✅
-- From Windows: `curl http://localhost:11434` → Timeout ❌
+- Inside WSL: `curl http://localhost:31434` → Works ✅
+- From Windows: `curl http://localhost:31434` → Timeout ❌
 - Mirrored mode forwards ports but Ollama isn't listening on the right interface
 
 **Root Cause**: Missing `OLLAMA_HOST` environment variable in systemd service
@@ -119,28 +119,28 @@ The most recent log (`llama1b.log`) shows successful activity from **Nov 16 00:4
 
 **From Inside WSL** (works):
 ```bash
-$ curl http://localhost:11434/v1/models
+$ curl http://localhost:31434/v1/models
 {"object":"list","data":[{"id":"phi4:latest",...}]}
 ```
 
 **From Windows** (fails):
 ```powershell
-Invoke-WebRequest http://localhost:11434/v1/models
+Invoke-WebRequest http://localhost:31434/v1/models
 # Error: The request was canceled due to timeout
 ```
 
 **Technical Explanation**:
-- Ollama binds to `0.0.0.0:11434` (IPv4 loopback)
+- Ollama binds to `0.0.0.0:31434` (IPv4 loopback)
 - In WSL, `localhost` resolves to `127.0.0.1` → works
 - WSL mirrored networking forwards ports BUT...
 - Services must bind to `0.0.0.0` (all interfaces) for Windows to access
-- Ollama needs `OLLAMA_HOST=0.0.0.0:11434` environment variable
+- Ollama needs `OLLAMA_HOST=0.0.0.0:31434` environment variable
 
 ---
 
 ## 🛠️ Fix Plan
 
-### Fix 1: Start vLLM Llama-1B Server (Primary Model, now 8005)
+### Fix 1: Start vLLM Llama-1B Server (Primary Model, now 38005)
 
 **Command**:
 ```bash
@@ -148,7 +148,7 @@ wsl bash -c "cd ~/vllm_server && source activate.sh && ./scripts/start_llama1b.s
 ```
 
 **Expected Output**:
-- Server starts on port 8005
+- Server starts on port 38005
 - Loads model (takes ~30 seconds)
 - Begins accepting requests
 - Log file created at `~/vllm_server/logs/llama1b.log`
@@ -156,7 +156,7 @@ wsl bash -c "cd ~/vllm_server && source activate.sh && ./scripts/start_llama1b.s
 **Verification**:
 ```powershell
 # From Windows
-curl http://localhost:8005/v1/models
+curl http://localhost:38005/v1/models
 ```
 
 ---
@@ -172,7 +172,7 @@ wsl bash -c "sudo systemctl edit ollama --full"
 ```ini
 [Service]
 Environment="PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/snap/bin"
-Environment="OLLAMA_HOST=0.0.0.0:11434"  # <-- ADD THIS LINE
+Environment="OLLAMA_HOST=0.0.0.0:31434"  # <-- ADD THIS LINE
 ExecStart=/usr/local/bin/ollama serve
 ```
 
@@ -184,11 +184,11 @@ wsl bash -c "sudo systemctl daemon-reload && sudo systemctl restart ollama"
 **Verification**:
 ```bash
 # Check new binding
-wsl bash -c "ss -tlnp | grep 11434"
-# Should show: 0.0.0.0:11434 instead of 0.0.0.0:11434
+wsl bash -c "ss -tlnp | grep 31434"
+# Should show: 0.0.0.0:31434 instead of 0.0.0.0:31434
 
 # Test from Windows
-curl http://localhost:11434/v1/models
+curl http://localhost:31434/v1/models
 ```
 
 ---
@@ -208,7 +208,7 @@ nohup ./scripts/start_llama1b.sh > /dev/null 2>&1 &
 **Add to .bashrc**:
 ```bash
 # Auto-start vLLM if not already running
-if [ -z "$(pgrep -f 'vllm.*8005')" ]; then
+if [ -z "$(pgrep -f 'vllm.*38005')" ]; then
     bash ~/.wsl_startup.sh
 fi
 ```
@@ -219,20 +219,20 @@ fi
 
 ### Listening Ports
 ```
-LISTEN  0.0.0.0:8005   vLLM Llama-1B
-LISTEN  0.0.0.0:11434  Ollama
+LISTEN  0.0.0.0:38005   vLLM Llama-1B
+LISTEN  0.0.0.0:31434  Ollama
 ```
 
 ### Windows Connectivity
 ```powershell
 # All should return 200 OK
-curl http://localhost:8005/v1/models  # vLLM
-curl http://localhost:11434/v1/models # Ollama
+curl http://localhost:38005/v1/models  # vLLM
+curl http://localhost:31434/v1/models # Ollama
 ```
 
 ### LLM Client Behavior
-1. Primary: vLLM Llama-1B (8005) - 178 tok/s ⚡
-2. Fallback: Ollama Phi-4 (11434) - 70 tok/s
+1. Primary: vLLM Llama-1B (38005) - 178 tok/s ⚡
+2. Fallback: Ollama Phi-4 (31434) - 70 tok/s
 3. Last resort: LM Studio (1234) - if running
 
 ---
@@ -265,14 +265,14 @@ wsl bash -c "cd ~/vllm_server && source activate.sh && ./scripts/start_llama1b.s
 # 2. Wait 30 seconds for model to load
 
 # 3. Test from Windows
-curl http://localhost:8005/v1/models
+curl http://localhost:38005/v1/models
 
 # 4. Fix Ollama (requires sudo password)
-wsl bash -c "echo 'Environment=\"OLLAMA_HOST=0.0.0.0:11434\"' | sudo tee -a /etc/systemd/system/ollama.service.d/override.conf"
+wsl bash -c "echo 'Environment=\"OLLAMA_HOST=0.0.0.0:31434\"' | sudo tee -a /etc/systemd/system/ollama.service.d/override.conf"
 wsl bash -c "sudo systemctl daemon-reload && sudo systemctl restart ollama"
 
 # 5. Test Ollama
-curl http://localhost:11434/v1/models
+curl http://localhost:31434/v1/models
 
 # 6. Run full LLM client test
 python L:\goodq4all\scripts\test_llm_client.py
@@ -283,8 +283,8 @@ python L:\goodq4all\scripts\test_llm_client.py
 ## ✅ Success Criteria
 
 After fixes, you should see:
-- ✅ vLLM responding on port 8005 from Windows
-- ✅ Ollama responding on port 11434 from Windows
+- ✅ vLLM responding on port 38005 from Windows
+- ✅ Ollama responding on port 31434 from Windows
 - ✅ LLM client health checks passing
 - ✅ Chat completions working with 178 tok/s
 - ✅ Failover chain operational
@@ -323,7 +323,7 @@ wsl bash -c "sudo systemctl restart ollama"
 Get-NetFirewallRule | Where-Object {$_.DisplayName -like "*WSL*"}
 
 # Check port forwarding
-wsl bash -c "ss -tlnp | grep -E '8005|11434'"
+wsl bash -c "ss -tlnp | grep -E '38005|31434'"
 
 # Restart WSL networking
 wsl --shutdown

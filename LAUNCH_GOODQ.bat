@@ -71,7 +71,7 @@ echo  Launch Menu
 echo ================================================================================
 echo.
 echo  1. Launch Complete System (Recommended)
-echo     - Unified API Server (all endpoints on port 3000)
+echo     - Unified API Server (all endpoints on port 30000)
 echo     - Watchdog (auto-ingestion)
 echo     - WSL vLLM Service
 echo     - Web Interfaces (2 tabs)
@@ -122,7 +122,7 @@ echo       Directories ready.
 echo.
 
 echo [1/3] Starting Unified API Server...
-start "GoodQ API Server" cmd /k "title GoodQ API Server && cd /d L:\goodq4all\api && %UVICORN_CMD% main:app --host 0.0.0.0 --port 3000 --reload"
+start "GoodQ API Server" cmd /k "title GoodQ API Server && cd /d L:\goodq4all\api && %UVICORN_CMD% main:app --host 0.0.0.0 --port 30000 --reload"
 echo       Waiting for server to initialize...
 timeout /t 8 /nobreak >nul
 
@@ -160,32 +160,32 @@ echo       vLLM service managed by systemd (check WSL terminal for status)
 timeout /t 1 /nobreak >nul
 
 echo [4/4] Opening Web Interfaces...
-start http://localhost:3000
+start http://localhost:30000
 timeout /t 1 /nobreak >nul
-start http://localhost:3000/dashboard.html
+start http://localhost:30000/dashboard.html
 
 echo.
 echo ================================================================================
 echo  System Launched Successfully!
 echo ================================================================================
 echo.
-echo  🌐 Main Interface:      http://localhost:3000
-echo  📊 Dashboard:           http://localhost:3000/dashboard.html
-echo  🔌 API Endpoint:        http://localhost:3000/api
-echo  💚 Health API:          http://localhost:3000/api/health
-echo  📈 Processing API:      http://localhost:3000/api/processing/stats
-echo  🤖 vLLM (WSL):          http://localhost:8005/v1
-echo  🦙 Ollama:              http://localhost:11434/v1
+echo  🌐 Main Interface:      http://localhost:30000
+echo  📊 Dashboard:           http://localhost:30000/dashboard.html
+echo  🔌 API Endpoint:        http://localhost:30000/api
+echo  💚 Health API:          http://localhost:30000/api/health
+echo  📈 Processing API:      http://localhost:30000/api/processing/stats
+echo  🤖 vLLM (WSL):          http://localhost:38005/v1
+echo  🦙 Ollama:              http://localhost:31434/v1
 echo.
 echo  Active Services:
-echo    ✓ Unified API Server  (GoodQ API Server window - port 3000)
+echo    ✓ Unified API Server  (GoodQ API Server window - port 30000)
 echo    ✓ Watchdog            (GoodQ Watchdog window)
 echo    ✓ vLLM Server         (WSL - systemd service)
 echo    ✓ Web Interfaces      (2 Browser tabs)
 echo.
 echo  LLM Models Available:
-echo    ? Llama-1B-Speed     (vLLM - port 8005)
-echo    ? Phi4-Ollama        (Ollama - port 11434)
+echo    ? Llama-1B-Speed     (vLLM - port 38005)
+echo    ? Phi4-Ollama        (Ollama - port 31434)
 echo.
 echo  Drop videos in: L:\goodq4all\import_inbox
 echo  They will be auto-processed by the watchdog
@@ -206,14 +206,14 @@ echo ===========================================================================
 echo  Launching API Server Only
 echo ================================================================================
 echo.
-echo  Starting on http://localhost:3000...
+echo  Starting on http://localhost:30000...
 echo  Press Ctrl+C to stop
 echo.
 echo ================================================================================
 echo.
 
 cd /d "L:\goodq4all\api"
-%UVICORN_CMD% main:app --host 0.0.0.0 --port 3000 --reload
+%UVICORN_CMD% main:app --host 0.0.0.0 --port 30000 --reload
 
 goto end
 
@@ -262,12 +262,12 @@ if "%ERRORLEVEL%"=="0" (
 
 echo.
 echo Checking API server connectivity...
-curl -s http://localhost:3000/api/status >nul 2>&1
+curl -s http://localhost:30000/api/status >nul 2>&1
 if "%ERRORLEVEL%"=="0" (
-    echo [?] API Server:  RESPONDING at http://localhost:3000
+    echo [?] API Server:  RESPONDING at http://localhost:30000
     echo.
     echo Current Status:
-    curl -s http://localhost:3000/api/status
+    curl -s http://localhost:30000/api/status
 ) else (
     echo [!] API Server:  NOT RESPONDING
 )

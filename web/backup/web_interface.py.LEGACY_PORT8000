@@ -1112,9 +1112,9 @@ if __name__ == "__main__":
     print("\n" + "="*80)
     print("GoodQ4All Web Interface Starting...")
     print("="*80)
-    print(f"Interface URL: http://localhost:8000")
-    print(f"API Documentation: http://localhost:8000/docs")
-    print(f"System Status: http://localhost:8000/api/status")
+    print(f"Interface URL: http://localhost:30000")
+    print(f"API Documentation: http://localhost:30000/docs")
+    print(f"System Status: http://localhost:30000/api/status")
     print("="*80 + "\n")
     
     uvicorn.run(

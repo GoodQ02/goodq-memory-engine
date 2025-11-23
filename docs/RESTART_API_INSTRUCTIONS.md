@@ -18,12 +18,12 @@ LAUNCH_WEB_INTERFACE_FIXED_V2.bat
 ## After Restart:
 
 ### Test 1: Debug Page
-http://localhost:3000/test_chat_debug.html
+http://localhost:30000/test_chat_debug.html
 - Should load now (was "not found" before)
 - Click button 2 to test chat
 
 ### Test 2: Main UI
-http://localhost:3000
+http://localhost:30000
 - Press F12 (console)
 - Paste this and press Enter:
 ```javascript

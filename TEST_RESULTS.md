@@ -30,12 +30,12 @@
 
 ### 2. **API Servers Not Responding**
 - **Issue:** All API endpoints timing out (3s)
-  - `http://localhost:3000/api/status` - Timeout
-  - `http://localhost:3000/api/gpu-stats` - 404 Not Found
-  - `http://localhost:3000/api/health/summary` - Timeout
-  - `http://localhost:3000/api/processing/stats` - Timeout
-  - `http://localhost:8003/v1/models` - Timeout (vLLM)
-  - `http://localhost:11434/v1/models` - Timeout (Ollama)
+  - `http://localhost:30000/api/status` - Timeout
+  - `http://localhost:30000/api/gpu-stats` - 404 Not Found
+  - `http://localhost:30000/api/health/summary` - Timeout
+  - `http://localhost:30000/api/processing/stats` - Timeout
+  - `http://localhost:38005/v1/models` - Timeout (vLLM)
+  - `http://localhost:31434/v1/models` - Timeout (Ollama)
 - **Impact:** Dashboard cannot load data, LLM chat unavailable
 - **Status:** Servers may not be started via launch_goodq.bat
 
@@ -119,7 +119,7 @@
 3. **Stale Process** (PID 31900, running since 11/17)
    - Kill: `Stop-Process -Id 31900 -Force`
 
-4. **Main API Server** (port 3000) - Status unknown, needs fresh launch
+4. **Main API Server** (port 30000) - Status unknown, needs fresh launch
 
 ---
 
@@ -143,7 +143,7 @@ wsl -d Ubuntu -- systemctl --user start vllm-llama1b
 wsl -d Ubuntu -- systemctl --user status vllm-llama1b
 
 # Test endpoint
-curl http://localhost:8003/v1/models
+curl http://localhost:38005/v1/models
 ```
 
 ### Step 3: Start Ollama
@@ -157,7 +157,7 @@ Start-Service Ollama
 # Start-Process ollama -ArgumentList "serve"
 
 # Verify
-curl http://localhost:11434/api/tags
+curl http://localhost:31434/api/tags
 ```
 
 ### Step 4: Launch GoodQ Stack
@@ -169,13 +169,13 @@ cd L:\goodq4all
 ### Step 5: Verify Full Stack
 ```powershell
 # Test all endpoints
-curl http://localhost:3000/api/status
-curl http://localhost:3000/api/health/summary
-curl http://localhost:8003/v1/models
-curl http://localhost:11434/v1/models
+curl http://localhost:30000/api/status
+curl http://localhost:30000/api/health/summary
+curl http://localhost:38005/v1/models
+curl http://localhost:31434/v1/models
 
 # Open browser
-Start-Process "http://localhost:3000"
+Start-Process "http://localhost:30000"
 ```
 
 ---

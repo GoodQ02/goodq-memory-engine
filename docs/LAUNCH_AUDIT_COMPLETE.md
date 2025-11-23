@@ -239,7 +239,7 @@ LAUNCH_GOODQ.bat
 ```
 
 **This starts:**
-1. API Server (http://localhost:3000)
+1. API Server (http://localhost:30000)
 2. Watchdog (auto-ingestion)
 3. Web Interface (browser opens automatically)
 
@@ -335,7 +335,7 @@ All launch scripts have been validated, paths corrected, and comprehensive testi
 1. Launch system with `LAUNCH_GOODQ.bat`
 2. Start LM Studio with a model
 3. Drop videos in `import_inbox/`
-4. Monitor at http://localhost:3000
+4. Monitor at http://localhost:30000
 5. Explore insights through the UI
 
 **Ready to process! 🎬**

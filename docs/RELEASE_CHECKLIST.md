@@ -98,7 +98,7 @@ cd ~/vllm_server
 source venv/bin/activate
 ./scripts/start_llama1b.sh
 
-curl http://localhost:8003/v1/models
+curl http://localhost:38005/v1/models
 ```
 
 On Windows:

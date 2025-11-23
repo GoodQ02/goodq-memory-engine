@@ -7,9 +7,9 @@
 
 | Component | Status | PID | Details |
 |-----------|--------|-----|---------|
-| **API Server** | ✅ Running | 42836 | http://localhost:3000 |
+| **API Server** | ✅ Running | 42836 | http://localhost:30000 |
 | **Watchdog** | ✅ Running | Multiple | Processing videos |
-| **Web Interface** | ✅ Available | - | http://localhost:3000 |
+| **Web Interface** | ✅ Available | - | http://localhost:30000 |
 
 ---
 
@@ -86,15 +86,15 @@ From `memory.db`:
 
 ### Web Interface
 ```
-http://localhost:3000
+http://localhost:30000
 ```
 
 ### API Endpoints
 ```
-http://localhost:3000/api/status
-http://localhost:3000/api/scenes
-http://localhost:3000/api/chat
-http://localhost:3000/docs (API documentation)
+http://localhost:30000/api/status
+http://localhost:30000/api/scenes
+http://localhost:30000/api/chat
+http://localhost:30000/docs (API documentation)
 ```
 
 ---
@@ -181,7 +181,7 @@ type L:\goodq4all\logs\watchdog.log
 
 The only remaining issue is the scene detection creating very short scenes (2 seconds instead of 5 minutes), but this is a parameter tuning issue and doesn't block functionality. The system is ready for use and will continue processing the video in the background.
 
-**You can now access the interface at http://localhost:3000 and interact with your data!**
+**You can now access the interface at http://localhost:30000 and interact with your data!**
 
 ---
 

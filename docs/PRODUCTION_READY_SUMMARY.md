@@ -7,9 +7,9 @@
 ## 🏆 ACCOMPLISHMENTS
 
 ### ✅ Infrastructure Complete
-- **WSL2 + vLLM Integration:** Llama-3.2-1B serving on port 8003 (systemd auto-start)
-- **Ollama Integration:** Phi4 model serving on port 11434
-- **Unified API Server:** Single FastAPI server on port 3000 (all endpoints consolidated)
+- **WSL2 + vLLM Integration:** Llama-3.2-1B serving on port 38005 (systemd auto-start)
+- **Ollama Integration:** Phi4 model serving on port 31434
+- **Unified API Server:** Single FastAPI server on port 30000 (all endpoints consolidated)
 - **GPU Acceleration:** CUDA-enabled audio processing (Faster Whisper + PyAnnote)
 - **Auto-Launch System:** `LAUNCH_GOODQ.bat` starts entire stack
 
@@ -39,17 +39,17 @@ L:\goodq4all\LAUNCH_GOODQ.bat
 ```
 
 This automatically:
-1. Starts Main API Server (port 3000)
-2. Checks WSL vLLM Service (port 8003)
-3. Verifies Ollama (port 11434)
-4. Opens browser to `http://localhost:3000`
+1. Starts Main API Server (port 30000)
+2. Checks WSL vLLM Service (port 38005)
+3. Verifies Ollama (port 31434)
+4. Opens browser to `http://localhost:30000`
 5. Opens processing dashboard
 
 ### Manual Launch (if needed)
 ```powershell
 # Terminal 1: Main API
 cd L:\goodq4all
-python -m uvicorn api.main:app --host 0.0.0.0 --port 3000 --reload
+python -m uvicorn api.main:app --host 0.0.0.0 --port 30000 --reload
 
 # Terminal 2 (WSL): vLLM (auto-starts via systemd)
 sudo systemctl status vllm-llama1b
@@ -64,13 +64,13 @@ ollama serve
 
 | Service | URL | Status |
 |---------|-----|--------|
-| **Main Dashboard** | http://localhost:3000 | ✅ LIVE |
-| **Processing Monitor** | http://localhost:3000/dashboard.html | ✅ LIVE |
-| **Scenes Viewer** | http://localhost:3000/scenes.html | ✅ LIVE |
-| **API Documentation** | http://localhost:3000/api | ✅ LIVE |
-| **Health Check** | http://localhost:3000/api/status | ✅ LIVE |
-| **vLLM (WSL)** | http://localhost:8003/v1/models | ✅ LIVE |
-| **Ollama** | http://localhost:11434/v1/models | ✅ LIVE |
+| **Main Dashboard** | http://localhost:30000 | ✅ LIVE |
+| **Processing Monitor** | http://localhost:30000/dashboard.html | ✅ LIVE |
+| **Scenes Viewer** | http://localhost:30000/scenes.html | ✅ LIVE |
+| **API Documentation** | http://localhost:30000/api | ✅ LIVE |
+| **Health Check** | http://localhost:30000/api/status | ✅ LIVE |
+| **vLLM (WSL)** | http://localhost:38005/v1/models | ✅ LIVE |
+| **Ollama** | http://localhost:31434/v1/models | ✅ LIVE |
 
 ---
 
@@ -78,9 +78,9 @@ ollama serve
 
 ### Port Allocation (Final)
 ```
-3000  - Main API Server (FastAPI) - ALL UI endpoints
-8003  - vLLM Llama-1B (WSL2 systemd service)
-11434 - Ollama Phi4 (Windows service)
+30000  - Main API Server (FastAPI) - ALL UI endpoints
+38005  - vLLM Llama-1B (WSL2 systemd service)
+31434 - Ollama Phi4 (Windows service)
 ```
 
 ### API Organization
@@ -120,8 +120,8 @@ web/
 ### LLM Models
 | Model | Type | Port | Status | Auto-Start |
 |-------|------|------|--------|------------|
-| **Llama-3.2-1B** | vLLM | 8003 | ✅ HEALTHY | ✅ systemd |
-| **Phi4** | Ollama | 11434 | ✅ HEALTHY | ⚠️  Manual |
+| **Llama-3.2-1B** | vLLM | 38005 | ✅ HEALTHY | ✅ systemd |
+| **Phi4** | Ollama | 31434 | ✅ HEALTHY | ⚠️  Manual |
 
 ### Pipeline Engines
 | Engine | Category | Status | GPU |

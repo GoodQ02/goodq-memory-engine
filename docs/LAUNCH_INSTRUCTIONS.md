@@ -17,7 +17,7 @@ All systems have been audited and optimized. The system is clean and ready for p
 3. **Wait:** System will open:
    - API Server window
    - Watchdog window  
-   - Web browser at http://localhost:3000
+   - Web browser at http://localhost:30000
 
 ### **Option 2: Launch from PowerShell**
 
@@ -57,7 +57,7 @@ The `/api/pipeline-engines` endpoint checks:
 
 ## 🔍 Monitoring Your Run
 
-### **Web Interface** (http://localhost:3000)
+### **Web Interface** (http://localhost:30000)
 
 | Tab | What To Watch |
 |-----|---------------|
@@ -105,7 +105,7 @@ Get-Process | Where-Object {$_.MainWindowTitle -like "*GoodQ*"}
 Should see: `GoodQ API Server` and `GoodQ Watchdog`
 
 ### 2. API Responding
-Visit: http://localhost:3000/api/status  
+Visit: http://localhost:30000/api/status  
 Should return JSON with `"status": "active"`
 
 ### 3. Video Detection

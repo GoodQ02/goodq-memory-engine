@@ -180,8 +180,8 @@ GitHub:
   • Branch: main
 
 API:
-  • Server: http://localhost:8000
-  • Docs: http://localhost:8000/docs
+  • Server: http://localhost:30000
+  • Docs: http://localhost:30000/docs
 
 ─────────────────────────────────────────────────────────────────────────
 

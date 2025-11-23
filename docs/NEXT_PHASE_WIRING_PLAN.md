@@ -211,8 +211,8 @@ socket.on('processing_update', (data) => {
 Before proceeding, verify:
 
 - [x] Health API running (port 5050)
-- [x] vLLM running (port 8003)
-- [x] Ollama running (port 11434)
+- [x] vLLM running (port 38005)
+- [x] Ollama running (port 31434)
 - [x] Dashboard displaying model health
 - [ ] Located processing data source
 - [ ] Understood data format

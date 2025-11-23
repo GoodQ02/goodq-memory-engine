@@ -298,8 +298,8 @@ LAUNCH_GOODQ.bat
 
 This starts:
 - Command Center dashboard (real-time monitoring)
-- FastAPI server (http://localhost:8000)
-- API documentation (http://localhost:8000/docs)
+- FastAPI server (http://localhost:30000)
+- API documentation (http://localhost:30000/docs)
 
 ### Start Automatic Processing
 ```batch

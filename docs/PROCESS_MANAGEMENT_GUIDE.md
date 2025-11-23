@@ -60,7 +60,7 @@ python process_manager.py stop-all
 ### Method 3: Web UI
 
 1. Start the API server (if not running)
-2. Open http://localhost:3000
+2. Open http://localhost:30000
 3. Click "⚙️ Process Control" in the sidebar
 4. Use the buttons to start/stop/restart processes
 5. View live logs by clicking "Logs" button
@@ -146,7 +146,7 @@ Get recent log lines for a process.
 
 1. Check logs: `python process_manager.py logs <process_name>`
 2. Verify Python environment: `C:\Users\jdben\miniconda3\envs\goodq_zenml\python.exe --version`
-3. Check for port conflicts (API server uses port 3000)
+3. Check for port conflicts (API server uses port 30000)
 4. Ensure working directory exists and is accessible
 
 ### Process Won't Stop
@@ -248,7 +248,7 @@ def check_health(self, name: str) -> bool:
     # Custom health check (e.g., HTTP ping for API server)
     if name == 'api_server':
         try:
-            response = requests.get('http://localhost:3000/api/status', timeout=2)
+            response = requests.get('http://localhost:30000/api/status', timeout=2)
             return response.status_code == 200
         except:
             return False
@@ -267,7 +267,7 @@ The process manager integrates seamlessly with the GoodQ4All video processing pi
 ### Typical Workflow
 
 1. Start system: `START_GOODQ_SYSTEM.bat`
-2. Open UI: http://localhost:3000
+2. Open UI: http://localhost:30000
 3. Drop video in `import_inbox/`
 4. Watchdog detects and processes automatically
 5. Monitor progress in Command Center
@@ -288,7 +288,7 @@ The process manager integrates seamlessly with the GoodQ4All video processing pi
 For issues or questions:
 1. Check logs in `L:\goodq4all\logs\`
 2. Review this documentation
-3. Check API status: http://localhost:3000/api/status
+3. Check API status: http://localhost:30000/api/status
 4. Reset system state if needed
 
 ---

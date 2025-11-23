@@ -36,14 +36,14 @@ Create a "Q from James Bond" AI companion that can:
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                    USER INTERFACES                           │
-│  • Web UI (index.html) - Port 3000                          │
+│  • Web UI (index.html) - Port 30000                          │
 │  • CLI (run_ingestion.py) - Command line                    │
 │  • Watchdog - Auto-ingestion from import_inbox              │
 └────────────────────────┬────────────────────────────────────┘
                          │
 ┌────────────────────────┴────────────────────────────────────┐
 │                    API LAYER                                 │
-│  • FastAPI Server (api_server.py) - Port 3000              │
+│  • FastAPI Server (api_server.py) - Port 30000              │
 │  • WebSocket for real-time updates                          │
 │  • LLM Integration (LM Studio/Ollama)                       │
 │  • RESTful endpoints for all data access                    │
@@ -430,7 +430,7 @@ CREATE TABLE dino_id_map (
 | Provider | Model | Purpose | Port |
 |----------|-------|---------|------|
 | **LM Studio** | qwen/qwen3-vl-4b | Scene summarization, chat, relationship extraction | 1234 |
-| **Ollama** | (configurable) | Alternative LLM backend | 11434 |
+| **Ollama** | (configurable) | Alternative LLM backend | 31434 |
 | **OpenAI API** | (compatible) | Cloud LLM option | - |
 
 ---
@@ -937,7 +937,7 @@ These are irreplaceable family memories that can be:
 1. **Documentation:** L:\goodq4all\docs\
 2. **Logs:** L:\goodq4all\logs\
 3. **Config:** L:\goodq4all\config.yaml
-4. **Status:** http://localhost:3000/api/status
+4. **Status:** http://localhost:30000/api/status
 
 ### Diagnostics
 ```bash

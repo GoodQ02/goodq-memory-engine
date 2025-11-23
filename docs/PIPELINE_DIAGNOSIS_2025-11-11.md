@@ -19,7 +19,7 @@ The pipeline is **WORKING CORRECTLY** on small files but **FAILING on large file
 ### Current Status
 - ✅ Small file test (1MB sample.mp4): **SUCCESS**
 - ❌ Large file test (7.28GB home movies): **CRASH** (insufficient resources)
-- ✅ API Server running on port 3000
+- ✅ API Server running on port 30000
 - ❌ Watchdog crashes repeatedly on large files
 - ⚠️ UI showing stale data from successful small-file run
 

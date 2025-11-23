@@ -120,8 +120,8 @@ LAUNCH_GOODQ.bat
 ```
 This opens three windows:
 - **Command Center**: Real-time dashboard with GPU stats, DB/FAISS status, memory snapshots
-- **API Server**: FastAPI on http://localhost:8000 for retrieval and chat endpoints
-- **Documentation**: Auto-opens http://localhost:8000/docs in your browser
+- **API Server**: FastAPI on http://localhost:30000 for retrieval and chat endpoints
+- **Documentation**: Auto-opens http://localhost:30000/docs in your browser
 
 ### 2. Automatic File Processing (Watchdog)
 ```batch

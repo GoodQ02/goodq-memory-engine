@@ -26,7 +26,7 @@
 |-----------|--------|-------|
 | API Server | ⚠️ Not running | Start with `python api_server.py` |
 | Watchdog | ⚠️ Not running | Start with `python scripts\watchdog_ingest.py` |
-| Web UI | ✅ Ready | Available at http://localhost:3000 |
+| Web UI | ✅ Ready | Available at http://localhost:30000 |
 | LM Studio | ⚠️ External | User must start separately |
 | Databases | ✅ Initialized | 27 scenes, 232 nodes, 4504 edges |
 | FAISS | ✅ Initialized | All embeddings indexed |
@@ -84,7 +84,7 @@ cd goodq4all
 
 ### 4. Open Browser
 ```
-http://localhost:3000
+http://localhost:30000
 ```
 
 ---

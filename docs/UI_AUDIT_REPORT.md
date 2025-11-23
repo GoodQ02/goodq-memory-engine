@@ -9,7 +9,7 @@
 ### Critical Issues Found: 3
 
 1. **PORT MISMATCH**: Three different servers configured on three different ports
-2. **FRONTEND CONFUSION**: index.html points to port 3000, but docs say 8000
+2. **FRONTEND CONFUSION**: index.html points to port 30000, but docs say 8000
 3. **BATCH FILE INCONSISTENCY**: Launch scripts point to port 8000
 
 ---
@@ -20,7 +20,7 @@
 
 | File | Port | Purpose | Status |
 |------|------|---------|--------|
-| `api_server.py` | **3000** | FastAPI production backend | ✅ Correct |
+| `api_server.py` | **30000** | FastAPI production backend | ✅ Correct |
 | `web_interface.py` | **8000** | Alternative FastAPI backend | ⚠️ Duplicate |
 | `serve_chat.py` | **5000** | Simple HTTP static file server | ⚠️ Legacy |
 
@@ -28,9 +28,9 @@
 
 | File | API Endpoint | Status |
 |------|--------------|--------|
-| `index.html` | `http://localhost:3000/api` | ✅ Correct (line 889) |
-| `dashboard.html` | `http://localhost:3000/api/status` | ✅ Correct |
-| `test_api.html` | `http://localhost:8000/api` | ❌ **WRONG PORT** |
+| `index.html` | `http://localhost:30000/api` | ✅ Correct (line 889) |
+| `dashboard.html` | `http://localhost:30000/api/status` | ✅ Correct |
+| `test_api.html` | `http://localhost:30000/api` | ❌ **WRONG PORT** |
 
 ### Batch Files:
 
@@ -46,7 +46,7 @@
 
 ### **Primary Production Stack:**
 ```
-api_server.py → Port 3000 (FastAPI)
+api_server.py → Port 30000 (FastAPI)
   ↓
 index.html (main UI)
 dashboard.html (processing dashboard)
@@ -61,43 +61,43 @@ dashboard.html (processing dashboard)
 ## 📝 REQUIRED CHANGES
 
 ### 1. Fix test_api.html
-**Line 26:** Change from port 8000 to 3000
+**Line 26:** Change from port 8000 to 30000
 ```javascript
-const API_BASE = 'http://localhost:3000/api';  // Was: 8000
+const API_BASE = 'http://localhost:30000/api';  // Was: 8000
 ```
 
 ### 2. Fix LAUNCH_GOODQ.bat
-**Lines 51-58, 81-82:** Change all port 8000 references to 3000
+**Lines 51-58, 81-82:** Change all port 8000 references to 30000
 
 ### 3. Fix LAUNCH_WEB_INTERFACE.bat
-Update to launch api_server.py on port 3000
+Update to launch api_server.py on port 30000
 
 ### 4. Fix START_FULL_SYSTEM_TEST.bat
-**Lines 34, 36, 46:** Change port 8000 to 3000
+**Lines 34, 36, 46:** Change port 8000 to 30000
 
 ---
 
 ## ✅ ALREADY CORRECT
 
 ### Files with proper configuration:
-- ✅ `api_server.py` - Port 3000 (line 563)
-- ✅ `index.html` - Points to localhost:3000/api (line 889)
-- ✅ `dashboard.html` - Points to localhost:3000 (checks status correctly)
+- ✅ `api_server.py` - Port 30000 (line 563)
+- ✅ `index.html` - Points to localhost:30000/api (line 889)
+- ✅ `dashboard.html` - Points to localhost:30000 (checks status correctly)
 
 ---
 
 ## 🔧 ACTION PLAN
 
 ### Phase 1: Fix Critical Issues (Now)
-1. Update `test_api.html` → port 3000
-2. Update `LAUNCH_GOODQ.bat` → port 3000
-3. Update `LAUNCH_WEB_INTERFACE.bat` → port 3000
-4. Update `START_FULL_SYSTEM_TEST.bat` → port 3000
+1. Update `test_api.html` → port 30000
+2. Update `LAUNCH_GOODQ.bat` → port 30000
+3. Update `LAUNCH_WEB_INTERFACE.bat` → port 30000
+4. Update `START_FULL_SYSTEM_TEST.bat` → port 30000
 
 ### Phase 2: Clean Up (Next)
 1. Archive or remove `web_interface.py`
 2. Archive or remove `serve_chat.py`
-3. Update all documentation to reference port 3000 only
+3. Update all documentation to reference port 30000 only
 
 ### Phase 3: Validate (After fixes)
 1. Start `api_server.py`
@@ -112,7 +112,7 @@ Update to launch api_server.py on port 3000
 
 | Port | Service | Status |
 |------|---------|--------|
-| **3000** | **Production API (api_server.py)** | ✅ **PRIMARY** |
+| **30000** | **Production API (api_server.py)** | ✅ **PRIMARY** |
 | 5000 | (unused - archive serve_chat.py) | ⚠️ Remove |
 | 8000 | (unused - archive web_interface.py) | ⚠️ Remove |
 
@@ -120,16 +120,16 @@ Update to launch api_server.py on port 3000
 
 ## 🚨 CONSISTENCY RULES GOING FORWARD
 
-1. **ONE API SERVER ONLY**: `api_server.py` on port 3000
-2. **ALL FRONTENDS** point to `http://localhost:3000/api`
-3. **ALL LAUNCHERS** start api_server.py on port 3000
+1. **ONE API SERVER ONLY**: `api_server.py` on port 30000
+2. **ALL FRONTENDS** point to `http://localhost:30000/api`
+3. **ALL LAUNCHERS** start api_server.py on port 30000
 4. **NO DUPLICATE SERVERS** - remove alternatives
 
 ---
 
 ## 📌 NOTES
 
-### Why Port 3000?
+### Why Port 30000?
 - `api_server.py` is the most complete implementation
 - Has all endpoints (chat, command, status, search, videos)
 - Serves static files directly (no need for separate server)
@@ -151,7 +151,7 @@ Update to launch api_server.py on port 3000
 ## ✅ VALIDATION CHECKLIST
 
 After fixes, verify:
-- [ ] api_server.py starts on port 3000
+- [ ] api_server.py starts on port 30000
 - [ ] index.html loads and connects to API
 - [ ] dashboard.html loads and shows stats
 - [ ] test_api.html runs tests successfully

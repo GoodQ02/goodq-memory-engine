@@ -77,8 +77,8 @@ agent.generate_report(analysis, diagnosis)
 - Report generation ✓
 
 ⏳ **Pending**: vLLM server must be running for LLM analysis
-- Start Llama-1B on port 8003 (WSL)
-- Or use Ollama fallback on port 11434
+- Start Llama-1B on port 38005 (WSL)
+- Or use Ollama fallback on port 31434
 
 ---
 

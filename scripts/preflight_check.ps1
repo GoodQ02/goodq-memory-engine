@@ -60,8 +60,8 @@ $LLMConfig = @{
         ProcessName = "ollama"
         ExecutablePath = "$env:USERPROFILE\AppData\Local\Programs\Ollama\ollama.exe"
         ServiceName = "OllamaService"
-        APIEndpoint = "http://localhost:11434/api/tags"
-        APIPort = 11434
+        APIEndpoint = "http://localhost:31434/api/tags"
+        APIPort = 31434
         Required = $false
         Priority = 2
     }
@@ -388,7 +388,7 @@ if ($activeLLM -eq "LMStudio") {
     Write-Host "    • Endpoint:        http://localhost:1234/v1/chat/completions" -ForegroundColor White
     Write-Host "    • Status:          $(if(Test-APIEndpoint $LLMConfig.LMStudio.APIEndpoint){'Online'}else{'Starting...'})" -ForegroundColor $(if(Test-APIEndpoint $LLMConfig.LMStudio.APIEndpoint){"Green"}else{"Yellow"})
 } elseif ($activeLLM -eq "Ollama") {
-    Write-Host "    • Endpoint:        http://localhost:11434/api" -ForegroundColor White
+    Write-Host "    • Endpoint:        http://localhost:31434/api" -ForegroundColor White
     Write-Host "    • Status:          $(if(Test-APIEndpoint $LLMConfig.Ollama.APIEndpoint){'Online'}else{'Starting...'})" -ForegroundColor $(if(Test-APIEndpoint $LLMConfig.Ollama.APIEndpoint){"Green"}else{"Yellow"})
 } elseif ($activeLLM -eq "OpenAI") {
     Write-Host "    • Provider:        OpenAI Cloud API" -ForegroundColor White

@@ -173,7 +173,7 @@ if ($testsFailed -eq 0) {
     Write-Host ""
     Write-Host "  Next steps:" -ForegroundColor Cyan
     Write-Host "    1. Start system: .\LAUNCH_GOODQ.bat" -ForegroundColor White
-    Write-Host "    2. Open UI: http://localhost:3000" -ForegroundColor White
+    Write-Host "    2. Open UI: http://localhost:30000" -ForegroundColor White
     Write-Host "    3. Add videos to import_inbox\" -ForegroundColor White
     Write-Host ""
 } elseif ($testsFailed -le 2) {

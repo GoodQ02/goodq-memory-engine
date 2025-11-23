@@ -138,7 +138,7 @@ python scripts/check_memory_db.py
 python -m pipelines.ingest 1987_1988.mp4
 
 # Validate via API
-curl http://localhost:8000/api/search?q=...
+curl http://localhost:30000/api/search?q=...
 ```
 
 ### Step 5: Celebrate! (∞ hours)

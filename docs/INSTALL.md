@@ -148,12 +148,12 @@ python scripts/diagnostics/audit_gpu_steps.py
 
 ### Port Already in Use
 
-If port 3000 is in use, edit `config.yaml`:
+If port 30000 is in use, edit `config.yaml`:
 
 ```yaml
 api:
   host: "0.0.0.0"
-  port: 3000  # Change to another port
+  port: 30000  # Change to another port
 ```
 
 ### Database Issues
@@ -182,7 +182,7 @@ python tests/test_sample.py
 
 1. Place a video file in `import_inbox/`
 2. The watchdog will automatically detect and process it
-3. Monitor progress at http://localhost:3000
+3. Monitor progress at http://localhost:30000
 
 ### 3. Explore the Interface
 

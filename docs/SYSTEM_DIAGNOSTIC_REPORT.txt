@@ -99,9 +99,9 @@ After disabling Windows Store aliases and restarting:
         Expected: Shows conda and python versions
         
 [ ] 5. Double-click: LAUNCH_WEB_INTERFACE_FIXED.bat
-        Expected: Starts server on port 3000
+        Expected: Starts server on port 30000
         
-[ ] 6. Open browser: http://localhost:3000
+[ ] 6. Open browser: http://localhost:30000
         Expected: GoodQ interface loads
 
 ========================================

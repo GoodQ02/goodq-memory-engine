@@ -113,7 +113,7 @@ Replaced all Unicode characters with ASCII equivalents in `L:\goodq4all\cli\run_
 ### ✅ Working Components
 
 1. **API Server** (`api_server.py`)
-   - Responds on http://localhost:3000
+   - Responds on http://localhost:30000
    - Provides real-time status updates
    - Serves database statistics
 
@@ -280,7 +280,7 @@ All Python path references verified and corrected:
 ### Monitoring
 - Logs: `L:\goodq4all\logs\watchdog.log`
 - Command Center: Live streaming via UI
-- API Status: `http://localhost:3000/api/status`
+- API Status: `http://localhost:30000/api/status`
 
 ---
 

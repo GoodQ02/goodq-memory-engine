@@ -69,7 +69,7 @@ curl http://localhost:5050/api/health
   "models": [
     {
       "name": "Llama-1B-Speed",
-      "endpoint": "http://localhost:8003/v1",
+      "endpoint": "http://localhost:38005/v1",
       "backend": "vllm",
       "is_healthy": true,
       "response_time_ms": 150.2,
@@ -148,7 +148,7 @@ Simple API health check
 ┌────────────┐     ┌────────────────┐
 │   vLLM     │     │    Ollama      │
 │   (WSL)    │     │   (Windows)    │
-│ Port 8003  │     │  Port 11434    │
+│ Port 38005  │     │  Port 31434    │
 │   etc.     │     │                │
 └────────────┘     └────────────────┘
 ```
@@ -263,17 +263,17 @@ Embed dashboard in monitoring setup → Auto-refresh keeps you informed → No m
 Based on your last test run:
 
 ### vLLM (WSL)
-- ✅ **Llama-1B-Speed** (Port 8003) - **HEALTHY** ✅
+- ✅ **Llama-1B-Speed** (Port 38005) - **HEALTHY** ✅
   - Running via systemd service
   - Auto-starts on WSL boot
   - Response time: ~150ms
-- ❌ Llama-3B-Balanced (Port 8004) - Down
-- ❌ Phi-3.5-LongContext (Port 8001) - Down
-- ❌ Llama-11B-Vision (Port 8005) - Down
+- ❌ Llama-3B-Balanced (Port 38004) - Down
+- ❌ Phi-3.5-LongContext (Port 38001) - Down
+- ❌ Llama-11B-Vision (Port 38005) - Down
 - ❌ Qwen-Quality (Port 8000) - Down
 
 ### Ollama (Windows)
-- ✅ **Phi4-Ollama** (Port 11434) - **HEALTHY** ✅
+- ✅ **Phi4-Ollama** (Port 31434) - **HEALTHY** ✅
   - Running as Windows service
   - Always available
 
@@ -288,8 +288,8 @@ Based on your last test run:
 
 ### Phase 2A: Start More vLLM Models
 Create systemd services for other models (like you did for Llama-1B):
-- Llama-3B-Balanced (Port 8004)
-- Phi-3.5-LongContext (Port 8001)
+- Llama-3B-Balanced (Port 38004)
+- Phi-3.5-LongContext (Port 38001)
 - etc.
 
 ### Phase 2B: Add More Dashboard Features

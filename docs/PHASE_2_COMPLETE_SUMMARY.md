@@ -59,7 +59,7 @@
 
 ### Backend (Fully Functional)
 - ✅ **Watchdog**: Running, monitoring import_inbox
-- ✅ **API Server**: Running on port 3000
+- ✅ **API Server**: Running on port 30000
 - ✅ **Scene Detection**: Working perfectly (5-min scenes)
 - ✅ **Audio Diarization**: Optimized, stable, fast
 - ✅ **Progress Tracking**: Real-time updates

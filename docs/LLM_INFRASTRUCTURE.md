@@ -21,18 +21,18 @@ Production-grade LLM infrastructure with intelligent failover, health monitoring
         ┌──────────▼────────┐  ┌──────▼──────────┐
         │   WSL (vLLM)      │  │  Ollama         │
         │  ┌──────────────┐ │  │  (Fallback)     │
-        │  │ Llama 1B     │ │  │  Port: 11434    │
-        │  │ Port: 8005   │ │  │  Model: Phi-4   │
+        │  │ Llama 1B     │ │  │  Port: 31434    │
+        │  │ Port: 38005   │ │  │  Model: Phi-4   │
         │  │ 178 tok/s ⚡ │ │  │  70 tok/s       │
         │  └──────────────┘ │  └─────────────────┘
         │  ┌──────────────┐ │
         │  │ Llama 3B     │ │
-        │  │ Port: 8004   │ │
+        │  │ Port: 38004   │ │
         │  │ (Optional)   │ │
         │  └──────────────┘ │
         │  ┌──────────────┐ │
         │  │ Phi-3.5      │ │
-        │  │ Port: 8001   │ │
+        │  │ Port: 38001   │ │
         │  │ (Optional)   │ │
         │  └──────────────┘ │
         └───────────────────┘
@@ -81,10 +81,10 @@ print(response['choices'][0]['message']['content'])
 
 | Model | Port | Speed | VRAM | Context | Best For |
 |-------|------|-------|------|---------|----------|
-| **Llama-1B-Speed** | 8005 | 178 tok/s ⚡ | 2.3 GB | 131K | Primary, fastest |
-| **Llama-3B-Balanced** | 8006 | 82 tok/s | 6.1 GB | 131K | (optional) |
-| **Phi-3.5-LongContext** | 8001 | 73 tok/s | 8.7 GB | 131K | Long conversations |
-| **Phi4-Ollama** (fallback) | 11434 | 70 tok/s | 2.8 GB | 8K | Reliability |
+| **Llama-1B-Speed** | 38005 | 178 tok/s ⚡ | 2.3 GB | 131K | Primary, fastest |
+| **Llama-3B-Balanced** | 38004 | 82 tok/s | 6.1 GB | 131K | (optional) |
+| **Phi-3.5-LongContext** | 38001 | 73 tok/s | 8.7 GB | 131K | Long conversations |
+| **Phi4-Ollama** (fallback) | 31434 | 70 tok/s | 2.8 GB | 8K | Reliability |
 
 ## LLMClient Features
 
@@ -155,14 +155,14 @@ wsl bash -c "~/vllm_server/scripts/start_phi.sh"
 
 ## Performance
 
-### Llama 1B (Primary - Port 8003)
+### Llama 1B (Primary - Port 38005)
 - **Speed**: 178 tokens/second (fastest!)
 - **VRAM**: 2.3 GB (very efficient)
 - **Latency**: ~140ms first token
 - **Concurrent**: Can run with audio processing
 - **Use Case**: Real-time chat, fast responses
 
-### Phi4 Ollama (Fallback - Port 11434)
+### Phi4 Ollama (Fallback - Port 31434)
 - **Speed**: 70 tokens/second
 - **VRAM**: 2.8 GB
 - **Latency**: ~300ms
@@ -175,7 +175,7 @@ wsl bash -c "~/vllm_server/scripts/start_phi.sh"
 
 **Check if port is in use:**
 ```bash
-wsl bash -c "lsof -i:8003"
+wsl bash -c "lsof -i:38005"
 ```
 
 **Kill and restart:**
@@ -187,7 +187,7 @@ wsl bash -c "pkill -f 'vllm.entrypoints' && ~/vllm_server/scripts/start_llama1b.
 
 **Check WSL networking:**
 ```bash
-wsl bash -c "curl http://localhost:8003/v1/models"
+wsl bash -c "curl http://localhost:38005/v1/models"
 ```
 
 **Verify .wslconfig:**
@@ -213,8 +213,8 @@ wsl bash -c "nvidia-smi"
 **Stop optional models:**
 ```bash
 # Keep only Llama 1B (primary)
-wsl bash -c "pkill -f 'port 8004'"  # Stop Llama 3B
-wsl bash -c "pkill -f 'port 8001'"  # Stop Phi-3.5
+wsl bash -c "pkill -f 'port 38004'"  # Stop Llama 3B
+wsl bash -c "pkill -f 'port 38001'"  # Stop Phi-3.5
 ```
 
 ## Configuration

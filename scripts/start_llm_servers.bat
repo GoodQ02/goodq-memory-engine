@@ -62,10 +62,10 @@ echo  LLM Infrastructure Ready
 echo ========================================================================
 echo.
 echo  Available Endpoints:
-echo    - Llama 1B (Speed):      http://localhost:8005/v1/
-echo    - Llama 3B (Balanced):   http://localhost:8004/v1/
-echo    - Phi-3.5 (Long Context): http://localhost:8001/v1/
-echo    - Ollama (Fallback):     http://localhost:11434/v1/
+echo    - Llama 1B (Speed):      http://localhost:38005/v1/
+echo    - Llama 3B (Balanced):   http://localhost:38004/v1/
+echo    - Phi-3.5 (Long Context): http://localhost:38001/v1/
+echo    - Ollama (Fallback):     http://localhost:31434/v1/
 echo.
 echo  Monitor:  wsl bash -c "watch -n 2 'nvidia-smi'"
 echo  Logs:     wsl bash -c "tail -f ~/vllm_server/logs/*.log"

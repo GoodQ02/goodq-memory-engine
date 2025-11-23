@@ -106,5 +106,5 @@ Write-Host ""
 Write-Host "Next steps:" -ForegroundColor Cyan
 Write-Host "  1. Place your video file in: L:\goodq4all\data\import_inbox\" -ForegroundColor White
 Write-Host "  2. Launch server: .\scripts\launch_server.bat" -ForegroundColor White
-Write-Host "  3. Open browser: http://localhost:3000" -ForegroundColor White
+Write-Host "  3. Open browser: http://localhost:30000" -ForegroundColor White
 Write-Host ""

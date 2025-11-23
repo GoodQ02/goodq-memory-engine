@@ -1,18 +1,18 @@
 # GoodQ4All Unified API Documentation
 
 **Version:** 2.0  
-**Base URL:** `http://localhost:3000`  
+**Base URL:** `http://localhost:30000`  
 **Last Updated:** 2025-11-19
 
 ---
 
 ## 🎯 Overview
 
-The GoodQ4All API is a unified FastAPI server that consolidates all system endpoints into a single, production-ready interface running on **port 3000**.
+The GoodQ4All API is a unified FastAPI server that consolidates all system endpoints into a single, production-ready interface running on **port 30000**.
 
 ### Key Features
 
-- ✅ **Single Port Architecture** - All endpoints on port 3000
+- ✅ **Single Port Architecture** - All endpoints on port 30000
 - ✅ **Real-time Health Monitoring** - GPU, LLM, and system status
 - ✅ **Processing Pipeline Status** - Video processing and scene analytics
 - ✅ **LLM Chat Integration** - Multi-model chat with fallback
@@ -25,7 +25,7 @@ The GoodQ4All API is a unified FastAPI server that consolidates all system endpo
 ## 🏗️ Architecture
 
 ```
-Port 3000 (Unified API)
+Port 30000 (Unified API)
 ├── /                          → Main interface (index.html)
 ├── /dashboard.html            → Processing dashboard
 ├── /api/health/*              → Health monitoring
@@ -80,14 +80,14 @@ Get detailed health status for all LLM models.
   "models": [
     {
       "name": "Llama-1B-Speed",
-      "endpoint": "http://localhost:8005/v1",
+      "endpoint": "http://localhost:38005/v1",
       "status": "healthy",
       "response_time_ms": 10,
       "last_check": "2025-11-19T04:30:00Z"
     },
     {
       "name": "Phi4-Ollama",
-      "endpoint": "http://localhost:11434/v1",
+      "endpoint": "http://localhost:31434/v1",
       "status": "healthy",
       "response_time_ms": 2,
       "last_check": "2025-11-19T04:30:00Z"
@@ -267,7 +267,7 @@ Get command center status (pipeline engines, system controls).
       "category": "LLM Inference",
       "status": "ready",
       "gpu": true,
-      "port": 8003,
+      "port": 38005,
       "description": "Llama 1B Speed model"
     },
     "ollama": {
@@ -275,7 +275,7 @@ Get command center status (pipeline engines, system controls).
       "category": "LLM Inference",
       "status": "ready",
       "gpu": false,
-      "port": 11434,
+      "port": 31434,
       "description": "Phi4 via Ollama"
     },
     "wsl_audio": {
@@ -330,7 +330,7 @@ Get WSL2 integration status.
   "services": {
     "vllm": {
       "status": "active",
-      "port": 8003,
+      "port": 38005,
       "uptime": "2h 15m"
     },
     "audio_processing": {
@@ -430,20 +430,20 @@ All endpoints return consistent error responses:
 
 ```bash
 cd L:\goodq4all\api
-uvicorn main:app --host 0.0.0.0 --port 3000 --reload
+uvicorn main:app --host 0.0.0.0 --port 30000 --reload
 ```
 
 ### Test Endpoints
 
 ```bash
 # Health check
-curl http://localhost:3000/api/health/summary
+curl http://localhost:30000/api/health/summary
 
 # GPU status
-curl http://localhost:3000/api/gpu
+curl http://localhost:30000/api/gpu
 
 # Processing stats
-curl http://localhost:3000/api/processing/stats
+curl http://localhost:30000/api/processing/stats
 ```
 
 ---
@@ -472,11 +472,11 @@ Environment variables (optional):
 ```bash
 # API Configuration
 GOODQ_API_HOST=0.0.0.0
-GOODQ_API_PORT=3000
+GOODQ_API_PORT=30000
 
 # LLM Endpoints
-VLLM_ENDPOINT=http://localhost:8005/v1
-OLLAMA_ENDPOINT=http://localhost:11434/v1
+VLLM_ENDPOINT=http://localhost:38005/v1
+OLLAMA_ENDPOINT=http://localhost:31434/v1
 
 # WSL2
 WSL_DISTRIBUTION=Ubuntu-22.04
@@ -488,7 +488,7 @@ WSL_DISTRIBUTION=Ubuntu-22.04
 
 ### Version 2.0 (2025-11-19)
 - ✅ Consolidated all APIs into single unified server
-- ✅ Migrated from ports 5050/5001 to single port 3000
+- ✅ Migrated from ports 5050/5001 to single port 30000
 - ✅ Added comprehensive health monitoring
 - ✅ Integrated LLM chat endpoints
 - ✅ Added WSL2 status and testing
@@ -505,11 +505,11 @@ WSL_DISTRIBUTION=Ubuntu-22.04
 
 ### API Server Won't Start
 
-**Issue:** Port 3000 already in use  
+**Issue:** Port 30000 already in use  
 **Solution:** 
 ```bash
-# Find process using port 3000
-netstat -ano | findstr :3000
+# Find process using port 30000
+netstat -ano | findstr :30000
 
 # Kill process
 taskkill /PID <PID> /F
@@ -527,7 +527,7 @@ wsl -d Ubuntu-22.04 -- systemctl status vllm-llama1b
 wsl -d Ubuntu-22.04 -- sudo systemctl restart vllm-llama1b
 
 # Check Ollama
-curl http://localhost:11434/v1/models
+curl http://localhost:31434/v1/models
 ```
 
 ### GPU Not Detected

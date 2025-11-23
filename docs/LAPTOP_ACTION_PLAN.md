@@ -78,9 +78,9 @@ python -c "from common.db_utils import init_all_databases; init_all_databases()"
 ```
 
 **What should happen**:
-- Terminal 1: API server starts on port 3000
+- Terminal 1: API server starts on port 30000
 - Terminal 2: Watchdog starts monitoring import_inbox
-- Browser: Opens http://localhost:3000 automatically
+- Browser: Opens http://localhost:30000 automatically
 
 ### Step 9: Test with Sample Video (2-5 minutes)
 ```powershell
@@ -99,7 +99,7 @@ copy "C:\path\to\test.mp4" "import_inbox\"
 
 Your installation is successful if:
 
-1. ✅ UI loads at http://localhost:3000
+1. ✅ UI loads at http://localhost:30000
 2. ✅ Command Center shows live logs
 3. ✅ Sample video processes without errors
 4. ✅ Scene Explorer shows detected scenes
@@ -130,7 +130,7 @@ copy "L:\_DATA\FAMILY_FEAST\*.mp4" "C:\Projects\Goodq4all\import_inbox\"
 .\LAUNCH_GOODQ.bat
 # Select option 1
 
-# Open UI: http://localhost:3000
+# Open UI: http://localhost:30000
 # Watch progress in Command Center
 ```
 
@@ -212,9 +212,9 @@ $env:Path += ";C:\Users\$env:USERNAME\miniconda3\Scripts"
 # Process one video at a time
 ```
 
-### "Port 3000 already in use"
+### "Port 30000 already in use"
 ```powershell
-netstat -ano | findstr :3000
+netstat -ano | findstr :30000
 taskkill /PID <PID_NUMBER> /F
 ```
 

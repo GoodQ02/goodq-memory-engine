@@ -11,7 +11,7 @@ Your GoodQ system is now fully operational with a production-grade web interface
 ## ✅ What's Working NOW
 
 ### 1. **Web Interface** 
-- **URL:** http://localhost:3000
+- **URL:** http://localhost:30000
 - **Status:** ✅ RUNNING
 - **Real-time updates:** Every 10 seconds
 
@@ -175,7 +175,7 @@ When a video is processing, you'll see:
 ## 🎯 Next Steps
 
 ### Immediate Actions
-1. ✅ Open http://localhost:3000 in browser
+1. ✅ Open http://localhost:30000 in browser
 2. ✅ Explore all 7 interface sections
 3. ✅ Check Command Center logs
 4. ✅ Review current 25 scenes
@@ -199,7 +199,7 @@ When a video is processing, you'll see:
 ### UI Won't Load
 ```batch
 # Check if API server is running
-curl http://localhost:3000/api/status
+curl http://localhost:30000/api/status
 
 # If not, start it:
 cd L:\goodq4all
@@ -244,7 +244,7 @@ Your GoodQ system is:
 - ✅ Data wired correctly
 - ✅ Real-time monitoring active
 
-**Access now:** http://localhost:3000
+**Access now:** http://localhost:30000
 
 **Questions?** Check `PHASE_2_2_COMPLETE.md` for technical details.
 

@@ -2494,7 +2494,7 @@ if __name__ == "__main__":
     print("="*80)
     print(f"Base Directory: {BASE_DIR}")
     print(f"Output Directory: {OUTPUT_DIR}")
-    print(f"Server will be available at: http://localhost:3000")
+    print(f"Server will be available at: http://localhost:30000")
     print("="*80 + "\n")
     
-    uvicorn.run(app, host="0.0.0.0", port=3000, log_level="info")
+    uvicorn.run(app, host="0.0.0.0", port=30000, log_level="info")

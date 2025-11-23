@@ -131,8 +131,8 @@
 
 ### 🚀 RUNNING PROCESSES
 - Python processes: 7 active (API server, analytics, monitoring)
-- API Server: ✅ Running on http://localhost:3000
-- Web Interface: ✅ Available at http://localhost:3000
+- API Server: ✅ Running on http://localhost:30000
+- Web Interface: ✅ Available at http://localhost:30000
 
 ---
 

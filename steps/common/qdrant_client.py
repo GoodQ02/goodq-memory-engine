@@ -18,6 +18,7 @@ class QdrantClient:
         self.cfg = cfg
         self.session = requests.Session()
         self._collection_ready = False
+        self._points_cached: Optional[int] = None
 
     def ensure_collection(self) -> bool:
         if self._collection_ready:
@@ -91,7 +92,25 @@ class QdrantClient:
             return []
 
     def stats(self) -> Dict[str, Any]:
-        return {"collection": self.cfg.collection, "host": self.cfg.host, "enabled": self.cfg.enabled}
+        info: Dict[str, Any] = {"collection": self.cfg.collection, "host": self.cfg.host, "enabled": self.cfg.enabled}
+        if not self.cfg.enabled:
+            info["available"] = False
+            return info
+        try:
+            if self.ensure_collection():
+                r = self.session.get(f"{self.cfg.host}/collections/{self.cfg.collection}", timeout=3)
+                if r.status_code == 200:
+                    res = r.json().get("result", {}) or {}
+                    points = res.get("points_count") or res.get("vectors_count") or 0
+                    self._points_cached = points
+                    info.update({"available": True, "vectors": points, "dim": self.cfg.dim, "distance": self.cfg.distance})
+                    return info
+        except Exception:
+            pass
+        info["available"] = False
+        if self._points_cached is not None:
+            info["vectors"] = self._points_cached
+        return info
 
 
 def build_qdrant_client(cfg: Dict[str, Any], dim: int, key: str) -> Optional[QdrantClient]:

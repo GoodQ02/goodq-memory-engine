@@ -17,6 +17,9 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from typing import Optional, List, Any, Dict
 from pydantic import BaseModel
 
+from steps.common.config_loader import load_configs
+from steps.common.memory_manager import build_memory_router
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -42,6 +45,9 @@ app.add_middleware(
 )
 
 # UI will be mounted at the end after all API routes are defined
+
+_CFG = load_configs({})
+_MEMORY_ROUTER = build_memory_router(_CFG)
 
 
 def _summarize_llm_health() -> Dict[str, Any]:
@@ -102,6 +108,20 @@ def _summarize_llm_health() -> Dict[str, Any]:
         },
         "timestamp": datetime.utcnow().isoformat(),
     }
+
+
+@app.get("/api/memory/stats")
+def memory_stats() -> Dict[str, Any]:
+    """Tiered memory stats across chroma/faiss/qdrant."""
+    stats = _MEMORY_ROUTER.stats()
+    chroma_vecs = stats["tiers"].get("chroma", {}).get("vectors", 0)
+    faiss_vecs = stats["tiers"].get("faiss", {}).get("vectors", 0)
+    qdrant_vecs = stats["tiers"].get("qdrant", {}).get("vectors", 0)
+    warnings = []
+    if chroma_vecs and faiss_vecs == 0 and qdrant_vecs == 0:
+        warnings.append("Chroma has items but FAISS/Qdrant are empty; consider promoting.")
+    stats["warnings"] = warnings
+    return stats
 
 
 def _collect_engine_details() -> Dict[str, Any]:

@@ -32,6 +32,9 @@ class MemoryConfig:
     read_priority: List[str]
     write_targets: List[str]
     dims: MemoryDims
+    ttl_seconds: int = 900  # for tier-0 ephemeral cache
+    promote_min_hits: int = 3  # hits before promoting from tier-0 to tier-1/2
+    max_ephemeral_items: int = 512
 
     def expected_dim_for_modality(self, modality: Optional[str]) -> Optional[int]:
         """Map modality name to expected embedding dimension."""

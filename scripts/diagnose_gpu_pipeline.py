@@ -247,7 +247,7 @@ def main():
     if results.get("GPU Availability") and not any("CUDA" in str(p) for p in results.get("CUDA Processes", "")):
         print("• GPU is available but not being used - check step GPU configuration")
         print("• Verify CUDA_VISIBLE_DEVICES is set correctly")
-        print("• Check that models are being moved to GPU with .to(torch.device("cuda"))")
+        print("• Check that models are being moved to GPU with .to(torch.device('cuda'))")
     
     if results.get("Python Processes") and not results.get("CUDA Processes"):
         print("• Python processes running but not using GPU")

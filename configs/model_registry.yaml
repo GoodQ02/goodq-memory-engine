@@ -1,203 +1,152 @@
-# GoodQ Model Registry - Pin all models, datasets, and external assets
-# This file locks down exact versions to prevent drift across environments
-
-# HuggingFace Models with commit SHA pinning
 huggingface_models:
-  # Image Captioning
   blip_caption:
-    repo_id: "Salesforce/blip-image-captioning-base"
-    revision: "2227ac38c9f16105c1f2efb4412d42bee68b8b63"  # Pin to specific commit
-    model_type: "vision-to-text"
+    repo_id: Salesforce/blip-image-captioning-base
+    revision: 82a37760796d32b1411fe092ab5d4e227313294b
+    model_type: vision-to-text
     required: true
-    
   vit_gpt2_caption:
-    repo_id: "nlpconnect/vit-gpt2-image-captioning"
-    revision: "d6c4b2a8e84bb9d46cfa41bcb1ad63fdc23e8f78"
-    model_type: "vision-to-text"
+    repo_id: nlpconnect/vit-gpt2-image-captioning
+    revision: dc68f91c06a1ba6f15268e5b9c13ae7a7c514084
+    model_type: vision-to-text
     required: false
-    fallback_for: "blip_caption"
-    
-  # Image Embeddings
+    fallback_for: blip_caption
   clip_vit:
-    repo_id: "openai/clip-vit-base-patch16"
-    revision: "3d74acf9a28c67ebb6e3086e9c6fe8ff4f3c6e5b"
-    model_type: "multimodal-embedding"
+    repo_id: openai/clip-vit-base-patch16
+    revision: 57c216476eefef5ab752ec549e440a49ae4ae5f3
+    model_type: multimodal-embedding
     required: true
-    
   dinov2:
-    repo_id: "facebook/dinov2-base"
-    revision: "4b1f91f4ab0cf72baa7f93a3e0a7e22d01b5f3cf"
-    model_type: "vision-embedding"
+    repo_id: facebook/dinov2-base
+    revision: f9e44c814b77203eaa57a6bdbbd535f21ede1415
+    model_type: vision-embedding
     required: true
-    
-  # Text Embeddings
   sentence_transformer:
-    repo_id: "sentence-transformers/all-MiniLM-L6-v2"
-    revision: "8b3219a92973c328a8e22fadcfa821b5dc75636a"
-    model_type: "text-embedding"
+    repo_id: sentence-transformers/all-MiniLM-L6-v2
+    revision: 8b3219a92973c328a8e22fadcfa821b5dc75636a
+    model_type: text-embedding
     required: true
-    
-  # Audio Models
   clap_audio:
-    repo_id: "laion/clap-htsat-unfused"
-    revision: "973b6e5389df55f83f89d3db39bba48b5f37f3a9"
-    model_type: "audio-embedding"
+    repo_id: laion/clap-htsat-unfused
+    revision: 8fa0f1c6d0433df6e97c127f64b2a1d6c0dcda8a
+    model_type: audio-embedding
     required: true
-    
-  # Speech/Diarization
   pyannote_diarization:
-    repo_id: "pyannote/speaker-diarization"
-    revision: "2.1"  # Use tagged release
-    model_type: "audio-diarization"
+    repo_id: pyannote/speaker-diarization
+    revision: '2.1'
+    model_type: audio-diarization
     required: true
     requires_auth: true
-    auth_token_env: "PYANNOTE_TOKEN"
-    
+    auth_token_env: PYANNOTE_TOKEN
   pyannote_segmentation:
-    repo_id: "pyannote/segmentation"
-    revision: "2.1.1"
-    model_type: "audio-segmentation"
+    repo_id: pyannote/segmentation
+    revision: 2.1.1
+    model_type: audio-segmentation
     required: true
     requires_auth: true
-    
-  # Whisper Models
   whisper_large_v3:
-    repo_id: "openai/whisper-large-v3"
-    revision: "e445c1e9f2327e0cb6dc0cc5e7c0b1e1d8e7e7e7"
-    model_type: "speech-to-text"
+    repo_id: openai/whisper-large-v3
+    revision: 06f233fe06e710322aca913c1bc4249a0d71fce1
+    model_type: speech-to-text
     required: false
-    
   faster_whisper_large_v3:
-    repo_id: "Systran/faster-whisper-large-v3"
-    revision: "8687a7b7e6e8e7e7e7e7e7e7e7e7e7e7e7e7e7e7"
-    model_type: "speech-to-text"
+    repo_id: Systran/faster-whisper-large-v3
+    revision: edaa852ec7e145841d8ffdb056a99866b5f0a478
+    model_type: speech-to-text
     required: true
-    
   faster_whisper_medium:
-    repo_id: "Systran/faster-whisper-medium"
-    revision: "c5f8b45e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e"
-    model_type: "speech-to-text"
+    repo_id: Systran/faster-whisper-medium
+    revision: 08e178d48790749d25932bbc082711ddcfdfbc4f
+    model_type: speech-to-text
     required: true
-    
   faster_whisper_tiny:
-    repo_id: "Systran/faster-whisper-tiny"
-    revision: "d5e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7"
-    model_type: "speech-to-text"
+    repo_id: Systran/faster-whisper-tiny
+    revision: d90ca5fe260221311c53c58e660288d3deb8d356
+    model_type: speech-to-text
     required: false
-    
-  # Emotion Recognition
   hubert_emotion:
-    repo_id: "superb/hubert-large-superb-er"
-    revision: "4b7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e"
-    model_type: "audio-classification"
+    repo_id: superb/hubert-large-superb-er
+    revision: ef1a2ebfd7cfc424dc7f0fbcdc406e8b794d63bb
+    model_type: audio-classification
     required: true
-    
   wav2vec2_emotion:
-    repo_id: "ehcalabres/wav2vec2-lg-xlsr-en-speech-emotion-recognition"
-    revision: "5e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e"
-    model_type: "audio-classification"
+    repo_id: ehcalabres/wav2vec2-lg-xlsr-en-speech-emotion-recognition
+    revision: b520c9c46a719e36e1b9a91cad2cb5d0668757d8
+    model_type: audio-classification
     required: true
-    
-  # NER/Tagging
   bert_ner:
-    repo_id: "dslim/bert-base-NER"
-    revision: "6e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e"
-    model_type: "token-classification"
+    repo_id: dslim/bert-base-NER
+    revision: 6e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e
+    model_type: token-classification
     required: true
-
-# External Model Assets (non-HuggingFace)
 external_models:
   yolo_v8n:
-    name: "YOLOv8n Object Detection"
-    source_url: "https://github.com/ultralytics/assets/releases/download/v8.2.0/yolov8n.pt"
-    version: "8.2.0"
-    sha256: "f59b3d833e2ff32e194b5bb8e08d211dc7c5bdf144b90d2c8412c47ccfc83b36"
-    local_path: "yolo/yolov8n.pt"
+    name: YOLOv8n Object Detection
+    source_url: https://github.com/ultralytics/assets/releases/download/v8.2.0/yolov8n.pt
+    version: 8.2.0
+    sha256: f59b3d833e2ff32e194b5bb8e08d211dc7c5bdf144b90d2c8412c47ccfc83b36
+    local_path: yolo/yolov8n.pt
     file_size_bytes: 6549796
     required: true
-    model_type: "object-detection"
-    
+    model_type: object-detection
   whisper_ggml_large_v3:
-    name: "Whisper GGML Large v3"
-    source_url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3.bin"
-    version: "large-v3"
-    sha256: "placeholder_not_yet_downloaded"
-    local_path: "whisper/ggml-large-v3.bin"
+    name: Whisper GGML Large v3
+    source_url: https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3.bin
+    version: large-v3
+    sha256: placeholder_not_yet_downloaded
+    local_path: whisper/ggml-large-v3.bin
     file_size_bytes: 3089474048
     required: false
-    model_type: "speech-to-text"
-    notes: "Optional - only needed for whisper.cpp CLI alternative (not currently used)"
-
-# Lexicons and Static Assets
+    model_type: speech-to-text
+    notes: Optional - only needed for whisper.cpp CLI alternative (not currently used)
 lexicons:
   nrc_emotion:
-    name: "NRC Emotion Lexicon"
-    source_url: "http://sentiment.nrc.ca/lexicons-for-research/"
-    version: "v0.92"
-    local_path: "lexicons/NRC-Emotion-Lexicon"
+    name: NRC Emotion Lexicon
+    source_url: http://sentiment.nrc.ca/lexicons-for-research/
+    version: v0.92
+    local_path: lexicons/NRC-Emotion-Lexicon
     required: false
     files:
-      - "NRC-Emotion-Lexicon-v0.92.txt"
-      - "NRC-Emotion-Lexicon-Wordlevel-v0.92.txt"
-    license: "Research Use Only"
-    
+    - NRC-Emotion-Lexicon-v0.92.txt
+    - NRC-Emotion-Lexicon-Wordlevel-v0.92.txt
+    license: Research Use Only
   vader_lexicon:
-    name: "VADER Sentiment Lexicon"
-    source: "nltk.sentiment.vader"
-    version: "3.3.2"
+    name: VADER Sentiment Lexicon
+    source: nltk.sentiment.vader
+    version: 3.3.2
     required: false
-    notes: "Bundled with NLTK, no separate download needed"
-
-# Datasets (if any are vendored/pinned)
-datasets:
-  # Add any datasets that should be pinned here
-  # example:
-  #   name: "Example Dataset"
-  #   source: "huggingface"
-  #   dataset_id: "username/dataset-name"
-  #   revision: "main"
-  #   split: "train"
-
-# System Tools (external binaries)
+    notes: Bundled with NLTK, no separate download needed
+datasets: null
 system_tools:
   ffmpeg:
-    name: "FFmpeg"
-    version: "6.1"
-    binary_path: "L:/_TOOLS/ffmpeg/bin/ffmpeg.exe"
+    name: FFmpeg
+    version: '6.1'
+    binary_path: L:/_TOOLS/ffmpeg/bin/ffmpeg.exe
     required: true
-    verify_command: "ffmpeg -version"
-    
+    verify_command: ffmpeg -version
   tesseract:
-    name: "Tesseract OCR"
-    version: "5.3.0"
-    binary_path: "L:/_TOOLS/tesseract/tesseract.exe"
+    name: Tesseract OCR
+    version: 5.3.0
+    binary_path: L:/_TOOLS/tesseract/tesseract.exe
     required: true
-    verify_command: "tesseract --version"
-    
+    verify_command: tesseract --version
   poppler:
-    name: "Poppler PDF Tools"
-    version: "23.08.0"
-    binary_path: "L:/_TOOLS/poppler/bin"
+    name: Poppler PDF Tools
+    version: 23.08.0
+    binary_path: L:/_TOOLS/poppler/bin
     required: true
-    verify_command: "pdftotext -v"
-
-# Verification Settings
+    verify_command: pdftotext -v
 verification:
-  check_sha256: true  # Verify file integrity using SHA256
-  check_file_size: true  # Verify file size matches expected
-  allow_cache: true  # Allow using cached models if hash matches
-  offline_mode: false  # If true, never download, only use local cache
-  
-# Update Policy
+  check_sha256: true
+  check_file_size: true
+  allow_cache: true
+  offline_mode: false
 update_policy:
-  auto_update: false  # Never auto-update models
-  security_updates_only: false  # Only update for security patches
-  manual_approval_required: true  # Require explicit approval for updates
-  check_for_updates: false  # Don't check for newer versions
-  
-# Backup and Snapshot
+  auto_update: false
+  security_updates_only: false
+  manual_approval_required: true
+  check_for_updates: false
 backup:
   enabled: true
-  snapshot_on_install: true  # Create snapshot before installing/updating
-  snapshot_dir: "L:/models/snapshots"
+  snapshot_on_install: true
+  snapshot_dir: L:/models/snapshots
   retention_days: 90

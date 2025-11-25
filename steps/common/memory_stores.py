@@ -1,10 +1,102 @@
 from __future__ import annotations
 
 import os
+import time
 from typing import Any, Dict, List, Optional
 
 from steps.common.memory_store import MemoryStore
 from steps.common.qdrant_client import QdrantClient, build_qdrant_client
+
+
+class ChromaMemory(MemoryStore):
+    """Lightweight in-memory store for short-term embeddings."""
+
+    def __init__(self, dim: int, ttl_seconds: int = 900, max_items: int = 512):
+        self.dim = dim
+        self.ttl_seconds = ttl_seconds
+        self.max_items = max_items
+        self._items: List[Dict[str, Any]] = []
+        self._hits = 0
+        self._misses = 0
+        self._evicted = 0
+
+    def _purge_expired(self) -> None:
+        now = time.time()
+        before = len(self._items)
+        self._items = [it for it in self._items if now - it.get("ts", now) <= self.ttl_seconds]
+        self._evicted += max(0, before - len(self._items))
+        if len(self._items) > self.max_items:
+            # drop oldest
+            drop = len(self._items) - self.max_items
+            self._items = self._items[drop:]
+            self._evicted += drop
+
+    def insert(self, vectors: List[Dict[str, Any]]) -> bool:
+        if not vectors:
+            return False
+        self._purge_expired()
+        now = time.time()
+        for v in vectors:
+            vec = v.get("vector")
+            if not isinstance(vec, list) or len(vec) != self.dim:
+                continue
+            item = dict(v)
+            item["ts"] = now
+            item["hits"] = 0
+            self._items.append(item)
+        self._purge_expired()
+        return True
+
+    def query(self, query_vector: List[float], top_k: int = 5, filter: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        import numpy as np  # type: ignore
+
+        self._purge_expired()
+        if not query_vector or len(query_vector) != self.dim or not self._items:
+            self._misses += 1
+            return []
+        q = np.array(query_vector, dtype="float32")
+        scores = []
+        for item in self._items:
+            vec = np.array(item["vector"], dtype="float32")
+            denom = (np.linalg.norm(q) * np.linalg.norm(vec)) or 1e-9
+            sim = float(np.dot(q, vec) / denom)
+            scores.append(sim)
+        order = np.argsort(scores)[::-1][:top_k]
+        results: List[Dict[str, Any]] = []
+        for idx in order:
+            item = self._items[int(idx)]
+            # basic filter support on payload keys
+            if filter and isinstance(filter, dict):
+                payload = item.get("payload") or {}
+                ok = all(payload.get(k) == v for k, v in filter.items())
+                if not ok:
+                    continue
+            item["hits"] = item.get("hits", 0) + 1
+            results.append(
+                {
+                    "id": item.get("id"),
+                    "score": float(scores[int(idx)]),
+                    "payload": item.get("payload") or {},
+                }
+            )
+        if results:
+            self._hits += 1
+        else:
+            self._misses += 1
+        return results
+
+    def stats(self) -> Dict[str, Any]:
+        self._purge_expired()
+        return {
+            "available": True,
+            "vectors": len(self._items),
+            "dim": self.dim,
+            "hits": self._hits,
+            "misses": self._misses,
+            "evicted": self._evicted,
+            "ttl_seconds": self.ttl_seconds,
+            "max_items": self.max_items,
+        }
 
 
 class FaissMemory(MemoryStore):
@@ -102,7 +194,10 @@ def build_text_stores(cfg: Dict[str, Any]) -> Dict[str, MemoryStore]:
     paths = (cfg.get("paths") or {}) if isinstance(cfg, dict) else {}
     memory_cfg = (cfg.get("memory") or {}) if isinstance(cfg, dict) else {}
     dims_cfg = (memory_cfg.get("dims") or {})
+    ttl_seconds = memory_cfg.get("ttl_seconds", 900)
+    max_ephemeral = memory_cfg.get("max_ephemeral_items", 512)
     text_dim = dims_cfg.get("text", 384)
+    stores["chroma"] = ChromaMemory(text_dim, ttl_seconds=ttl_seconds, max_items=max_ephemeral)
     faiss_path = paths.get("faiss_index_path") or ""
     if faiss_path:
         stores["faiss"] = FaissMemory(faiss_path, text_dim)

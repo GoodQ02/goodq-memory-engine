@@ -18,6 +18,10 @@ class MemoryRouter:
             write_targets=["faiss", "qdrant"],
             dims=MemoryDims(),
         )
+        self._hits: Dict[str, int] = {k: 0 for k in stores.keys()}
+        self._misses: Dict[str, int] = {k: 0 for k in stores.keys()}
+        self._promotions: int = 0
+        self._evictions: int = 0
 
     def _filter_vectors_for_store(self, vectors: List[Dict[str, Any]], store: MemoryStore) -> List[Dict[str, Any]]:
         """Drop vectors that don't match the expected dimension for the store/modality."""
@@ -65,9 +69,18 @@ class MemoryRouter:
                     continue
                 hits = store.query(query_vector, top_k=top_k, filter=filter)
                 if hits:
+                    self._hits[tier] = self._hits.get(tier, 0) + 1
+                    # Promotion: if we hit tier-0, push to higher tiers
+                    if tier == "chroma":
+                        promote_targets = [t for t in self.config.write_targets if t != "chroma"]
+                        if promote_targets:
+                            promoted = self.insert([{"vector": h.get("vector", query_vector), "payload": h.get("payload", {})} for h in hits])
+                            if any(promoted.values()):
+                                self._promotions += 1
                     return hits
             except Exception:
-                continue
+                pass
+            self._misses[tier] = self._misses.get(tier, 0) + 1
         return []
 
     def stats(self) -> Dict[str, Any]:
@@ -80,5 +93,9 @@ class MemoryRouter:
         out["routing"] = {
             "read_priority": self.config.read_priority,
             "write_targets": self.config.write_targets,
+            "hits": self._hits,
+            "misses": self._misses,
+            "promotions": self._promotions,
+            "evictions": self._evictions,
         }
         return out

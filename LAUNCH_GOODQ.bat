@@ -29,6 +29,7 @@ cd /d "L:\goodq4all"
 REM Prefer local virtual environment if present
 set "PYTHON_CMD=python"
 set "UVICORN_CMD="
+set "PYTHONPATH=L:\goodq4all"
 if exist ".venv\Scripts\python.exe" (
     set "PYTHON_CMD=.venv\Scripts\python.exe"
 )

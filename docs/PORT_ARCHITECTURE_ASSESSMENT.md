@@ -33,7 +33,7 @@
 
 1. **No Port Conflicts Detected**
    - API Server (30000) doesn't conflict with any LLM ports
-   - vLLM ports (38000-38006) are isolated in WSL
+   - vLLM ports (38000-38006) are isolated in WSL (use `sudo scripts/wsl/update_vllm_service_port.sh` to retarget the systemd unit to 38005 if needed)
    - Ollama (31434) is unique
    - Legacy ports (5000, 8000) are archived, not active
 

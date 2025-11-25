@@ -5,15 +5,30 @@ Central source of truth for all project paths.
 from pathlib import Path
 import os
 
+
+def drive_path(win_path: str) -> Path:
+    """
+    Translate Windows-style paths (e.g., L:/foo) to platform-specific paths.
+    - On Windows: return the given path unchanged.
+    - On WSL/Linux: map drive letters to /mnt/<drive_letter>/...
+    """
+    if os.name == "nt":
+        return Path(win_path)
+    if len(win_path) >= 3 and win_path[1:3] == ":/":
+        drive = win_path[0].lower()
+        rest = win_path[3:]
+        return Path(f"/mnt/{drive}") / rest
+    return Path(win_path)
+
 # ==============================================================================
 # PROJECT ROOT
 # ==============================================================================
-PROJECT_ROOT = Path("L:/goodq4all")
+PROJECT_ROOT = drive_path("L:/goodq4all")
 
 # ==============================================================================
 # DATA DIRECTORIES (Not in GitHub - local only)
 # ==============================================================================
-DATA_ROOT = Path("L:/_DATA/GoodQ_Data")
+DATA_ROOT = drive_path("L:/_DATA/GoodQ_Data")
 
 # Databases
 DATABASE_DIR = DATA_ROOT / "databases"
@@ -58,9 +73,9 @@ ENVS_DIR = PROJECT_ROOT / "envs"
 # ==============================================================================
 # EXTERNAL DIRECTORIES
 # ==============================================================================
-MODELS_DIR = Path("L:/_DATA/models")
-TOOLS_DIR = Path("L:/_TOOLS")
-ARCHIVE_DIR = Path("L:/_ARCHIVE")
+MODELS_DIR = drive_path("L:/_DATA/models")
+TOOLS_DIR = drive_path("L:/_TOOLS")
+ARCHIVE_DIR = drive_path("L:/_ARCHIVE")
 
 # ==============================================================================
 # HELPER FUNCTIONS

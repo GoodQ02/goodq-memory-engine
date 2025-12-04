@@ -8,6 +8,8 @@ from datetime import datetime
 import threading
 import requests
 from collections import deque
+import glob
+import glob
 
 from fastapi import FastAPI, Query, Body
 from fastapi.middleware.cors import CORSMiddleware
@@ -56,6 +58,8 @@ def _summarize_llm_health() -> Dict[str, Any]:
     vllm_total = 0
     ollama_healthy = 0
     ollama_total = 0
+    ollama_port = 31434  # preferred normalized port
+    ollama_fallback_port = 11434  # default Ollama port
 
     try:
         resp = requests.get("http://localhost:38005/v1/models", timeout=2)
@@ -66,14 +70,26 @@ def _summarize_llm_health() -> Dict[str, Any]:
     except Exception:
         pass
 
-    try:
-        resp = requests.get("http://localhost:31434/v1/models", timeout=2)
-        if resp.status_code == 200:
-            models = resp.json().get("data", [])
-            ollama_total = len(models)
-            ollama_healthy = ollama_total
-    except Exception:
-        pass
+    def _probe_ollama(port: int):
+        try:
+            resp = requests.get(f"http://localhost:{port}/v1/models", timeout=2)
+            if resp.status_code == 200:
+                models = resp.json().get("data", [])
+                total = len(models)
+                return True, total, total
+        except Exception:
+            pass
+        return False, 0, 0
+
+    # Prefer normalized port; fall back to Ollama default if down
+    ok, t, h = _probe_ollama(ollama_port)
+    if ok:
+        ollama_total, ollama_healthy = t, h
+    else:
+        ok, t, h = _probe_ollama(ollama_fallback_port)
+        if ok:
+            ollama_total, ollama_healthy = t, h
+            ollama_port = ollama_fallback_port
 
     def _status(healthy: int, total: int) -> str:
         if total == 0:
@@ -1130,6 +1146,11 @@ def _local_progress_stats() -> Dict[str, Any]:
         logger.debug(f"progress.json read failed: {e}")
 
     details = progress.get("details", {}) if isinstance(progress, dict) else {}
+    raw_details_str = ""
+    if isinstance(details, dict):
+        raw_details_str = details.get("details") or details.get("status") or ""
+    elif isinstance(details, str):
+        raw_details_str = details
 
     def _count_files(p: Path) -> int:
         try:
@@ -1142,13 +1163,16 @@ def _local_progress_stats() -> Dict[str, Any]:
     if not status:
         status = "active" if _count_files(processing_dir) > 0 else "idle"
 
-    return {
+    stats = {
         "status": status,
         "current_video": {
             "name": current_name,
             "size_gb": details.get("video_size_gb", 0),
             "progress_percent": progress.get("progress_percent", 0) if isinstance(progress, dict) else 0,
             "current_step": progress.get("current_step", "Idle") if isinstance(progress, dict) else "Idle",
+            "current_step_index": progress.get("current_step_index"),
+            "total_steps": progress.get("total_steps"),
+            "details": raw_details_str,
         },
         "scenes": {
             "detected": details.get("scenes_detected", 0) or details.get("scenes_found", 0) or 0,
@@ -1167,7 +1191,102 @@ def _local_progress_stats() -> Dict[str, Any]:
             "started_at": progress.get("started_at") if isinstance(progress, dict) else None,
             "updated_at": progress.get("updated_at") if isinstance(progress, dict) else datetime.utcnow().isoformat(),
         },
+        "raw_progress": progress if isinstance(progress, dict) else {},
     }
+    # Enrich with latest run snapshot from logs if available
+    latest = _latest_run_snapshot()
+    if latest.get("available"):
+        if not stats["current_video"]["name"]:
+            stats["current_video"]["name"] = latest.get("video")
+        if stats["scenes"]["detected"] == 0 and latest.get("scenes", 0) > 0:
+            stats["scenes"]["detected"] = latest.get("scenes", 0)
+            stats["scenes"]["frames_extracted"] = latest.get("frames", 0)
+            stats["scenes"]["audio_clips"] = latest.get("audio", 0)
+        stats["latest_run"] = latest
+    stats["log_tail"] = _tail_log(Path("logs/watchdog.log"))
+    return stats
+
+
+def _latest_run_snapshot(limit: int = 12) -> Dict[str, Any]:
+    """
+    Inspect logs/watchdog_* folders for the most recent run and return summary counts.
+    """
+    runs = sorted(Path("logs").glob("watchdog_*"), key=lambda p: p.stat().st_mtime, reverse=True)
+    if not runs:
+        return {"available": False}
+    run_dir = next((r for r in runs if r.is_dir()), None)
+    if not run_dir:
+        return {"available": False}
+
+    subdirs = [d for d in run_dir.iterdir() if d.is_dir() and not d.name.startswith("_")]
+    video_dir = subdirs[0] if subdirs else run_dir
+
+    frames = sorted(video_dir.glob("frames/*.jpg"))
+    audio = sorted(video_dir.glob("audio/*.wav"))
+
+    return {
+        "available": True,
+        "run_id": run_dir.name,
+        "video": video_dir.name,
+        "scenes": len({f.stem.split('_')[1] for f in frames}) if frames else 0,
+        "frames": len(frames),
+        "audio": len(audio),
+        "run_path": str(run_dir),
+        "log_tail": _tail_log(run_dir / "watchdog.log", lines=100) if (run_dir / "watchdog.log").exists() else [],
+    }
+
+
+def _latest_run_preview(limit: int = 12) -> Dict[str, Any]:
+    """
+    Inspect logs/watchdog_* folders and return a quick preview of the most recent run.
+    Exposes scene thumbnails/audio clips so the dashboard can show real artifacts.
+    """
+    runs = sorted(Path("logs").glob("watchdog_*"), key=lambda p: p.stat().st_mtime, reverse=True)
+    if not runs:
+        return {"available": False}
+    run_dir = next((r for r in runs if r.is_dir()), None)
+    if not run_dir:
+        return {"available": False}
+
+    # Pick first video folder inside the run (e.g., "01. 1987 - 1988")
+    subdirs = [d for d in run_dir.iterdir() if d.is_dir() and not d.name.startswith("_")]
+    video_dir = subdirs[0] if subdirs else run_dir
+
+    frames = sorted(video_dir.glob("frames/*.jpg"))
+    audio = sorted(video_dir.glob("audio/*.wav"))
+    thumbs = frames[:limit]
+
+    def to_url(p: Path) -> str:
+        rel = p.relative_to(Path("logs"))
+        return f"/logs/{rel.as_posix()}"
+
+    return {
+        "available": True,
+        "run_id": run_dir.name,
+        "video": video_dir.name,
+        "scenes": len({f.stem.split('_')[1] for f in frames}) if frames else 0,
+        "frames": len(frames),
+        "audio": len(audio),
+        "thumbnails": [{"url": to_url(p), "name": p.name} for p in thumbs],
+        "run_path": str(run_dir),
+    }
+
+def _tail_log(path: Path, lines: int = 50) -> List[str]:
+    if not path.exists():
+        return []
+    dq: deque[str] = deque(maxlen=lines)
+    try:
+        with path.open("r", encoding="utf-8", errors="ignore") as f:
+            for line in f:
+                dq.append(line.rstrip("\n"))
+    except Exception:
+        return []
+    return list(dq)
+
+
+@app.get("/api/runs/latest/preview")
+def latest_run_preview(limit: int = 12) -> Dict[str, Any]:
+    return _latest_run_preview(limit=limit)
 
 
 def _faiss_count(path: str) -> int:
@@ -1220,6 +1339,7 @@ def get_memory_stats() -> Dict[str, Any]:
             "read_priority": (memory_cfg.get("routing") or {}).get("read_priority") or [],
             "write_targets": (memory_cfg.get("routing") or {}).get("write_targets") or [],
         },
+        "latest_run": _latest_run_preview(limit=12),
     }
 
 
@@ -1253,12 +1373,18 @@ def get_progress() -> Dict[str, Any]:
         import requests
         resp = requests.get("http://localhost:5001/api/processing/stats", timeout=2)
         if resp.status_code == 200:
-            return resp.json()
+            data = resp.json()
+            data["latest_run"] = _latest_run_snapshot()
+            data["log_tail"] = _tail_log(Path("logs/watchdog.log"))
+            return data
     except Exception as e:
         logger.debug(f"Processing stats API unavailable: {e}")
     
     # Fallback - return local snapshot based on progress.json and filesystem
-    return _local_progress_stats()
+    stats = _local_progress_stats()
+    stats["latest_run"] = _latest_run_snapshot()
+    stats["log_tail"] = _tail_log(Path("logs/watchdog.log"))
+    return stats
 
 
 @app.get("/api/pipeline-engines")
@@ -1334,6 +1460,13 @@ Be concise, technical, and actionable. Format responses with markdown."""
 
 
 # Mount static files LAST (catch-all for UI)
+LOG_DIR = Path("logs").resolve()
+if LOG_DIR.exists():
+    app.mount("/logs", StaticFiles(directory=str(LOG_DIR)), name="logs")
+    logger.info(f"✓ Serving logs from: {LOG_DIR}")
+else:
+    logger.warning(f"Logs directory not found: {LOG_DIR}")
+
 UI_DIR = Path(__file__).parent.parent / "web"  # web directory contains HTML files
 if UI_DIR.exists():
     app.mount("/", StaticFiles(directory=str(UI_DIR), html=True), name="ui")

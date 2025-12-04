@@ -60,15 +60,21 @@ class AudioService:
     """WSL2 Audio Processing Service"""
     
     def __init__(self, config_path: str = "~/goodq_audio/config.json"):
-        self.config_path = os.path.expanduser(config_path)
-        self.config = self._load_config()
+        # === Q-BRANCH SELF-ANCHORING ===
+        # Anchor base_dir to the location of this file, not $HOME, not CWD.
+        self.base_dir = Path(__file__).resolve().parent
         
-        self.base_dir = Path.home() / "goodq_audio"
-        self.queue_dir = self.base_dir / self.config['queue_dir']
-        self.output_dir = self.base_dir / self.config['output_dir']
-        self.logs_dir = self.base_dir / self.config['logs_dir']
-        
-        # Ensure directories exist
+        # Config path within repo
+        self.config_path = self.base_dir / "config.json"
+
+        # Validate/load JSON
+        self.config = self._load_config_safely()
+
+        # Auto-create expected directories (failsafe)
+        self.queue_dir = self.base_dir / self.config.get("queue_dir", "queue_in")
+        self.output_dir = self.base_dir / self.config.get("output_dir", "queue_out")
+        self.logs_dir = self.base_dir / self.config.get("logs_dir", "logs")
+
         for d in [self.queue_dir, self.output_dir, self.logs_dir]:
             d.mkdir(parents=True, exist_ok=True)
         
@@ -86,10 +92,33 @@ class AudioService:
         
         logger.info("Audio service initialized")
     
-    def _load_config(self) -> Dict:
-        """Load configuration"""
-        with open(self.config_path, 'r') as f:
-            return json.load(f)
+    def _load_config_safely(self):
+        """
+        Loads config.json with failsafe behavior:
+        - Validates JSON
+        - Guarantees a dict
+        - Fixes double-object / merge errors
+        """
+
+        if not self.config_path.exists():
+            raise FileNotFoundError(f"Config not found: {self.config_path}")
+
+        text = self.config_path.read_text().strip()
+
+        # If config accidentally has multiple JSON objects, split and take first valid
+        if text.count("{") > 1:
+            # Try to extract the first valid object
+            candidate = text.split("}{")[0] + "}"
+            try:
+                return json.loads(candidate)
+            except Exception:
+                pass  # fall through to normal load
+
+        # Normal JSON load
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError as e:
+            raise RuntimeError(f"Invalid JSON in {self.config_path}: {e}")
     
     def _setup_gpu(self):
         """Configure GPU"""
@@ -164,7 +193,7 @@ class AudioService:
                 logger.info(f"Loading diarization model: {diarization_model}")
                 self.diarization_pipeline = Pipeline.from_pretrained(
                     diarization_model,
-                    use_auth_token=hf_token
+                    token=hf_token
                 )
                 if torch.cuda.is_available():
                     self.diarization_pipeline.to(torch.device("cuda"))

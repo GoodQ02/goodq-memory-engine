@@ -302,6 +302,14 @@
                 <div class="status-label" id="started-date">Not started</div>
             </div>
         </div>
+
+        <div class="status-card" style="margin-top: 20px; background: var(--secondary-bg); border: 1px solid var(--accent-bg);">
+            <h3 style="margin-bottom: 12px;">Latest Scenes</h3>
+            <div id="latest-scenes-meta" style="color: var(--secondary-text); font-size: 14px; margin-bottom: 10px;">
+                Loading recent run...
+            </div>
+            <div id="latest-scenes-grid" class="scene-grid"></div>
+        </div>
         
         <div class="timeline">
             <h3 style="color: var(--accent-color); margin-bottom: 20px;">
@@ -571,6 +579,40 @@
                 console.error('Failed to fetch model details:', error);
             }
         }
+
+        async function updateLatestRun() {
+            try {
+                const response = await fetch('/api/runs/latest/preview');
+                if (!response.ok) return;
+                const data = await response.json();
+                const meta = document.getElementById('latest-scenes-meta');
+                const grid = document.getElementById('latest-scenes-grid');
+                grid.innerHTML = '';
+
+                if (!data.available) {
+                    meta.textContent = 'No recent runs found.';
+                    return;
+                }
+
+                meta.textContent = `Run ${data.run_id} • ${data.video} • Scenes: ${data.scenes} • Frames: ${data.frames} • Audio: ${data.audio}`;
+
+                (data.thumbnails || []).forEach((thumb, idx) => {
+                    const wrapper = document.createElement('div');
+                    wrapper.className = 'scene-thumb';
+                    const img = document.createElement('img');
+                    img.src = thumb.url;
+                    img.alt = thumb.name || `scene_${idx}`;
+                    const badge = document.createElement('div');
+                    badge.className = 'scene-number';
+                    badge.textContent = `#${idx + 1}`;
+                    wrapper.appendChild(img);
+                    wrapper.appendChild(badge);
+                    grid.appendChild(wrapper);
+                });
+            } catch (err) {
+                console.error('Failed to load latest run preview', err);
+            }
+        }
         
         function toggleModelDetails() {
             modelsExpanded = !modelsExpanded;
@@ -597,9 +639,10 @@
                 const scenes = data.scenes || {};
                 const rate = data.processing_rate || { seconds_per_scene: 0, scenes_per_minute: 0 };
                 const timestamps = data.timestamps || {};
+                const latest = data.latest_run || {};
 
                 // Update current video
-                const videoName = current.name || (data.status === 'idle' ? 'No video in queue' : 'Preparing video...');
+                const videoName = current.name || latest.video || (data.status === 'idle' ? 'No video in queue' : 'Preparing video...');
                 document.getElementById('video-name').textContent = videoName;
                 
                 // Special message for 1987-1988 video
@@ -618,15 +661,15 @@
                 document.getElementById('progress-step').textContent = current.current_step || (data.status === 'idle' ? 'Idle' : 'Starting...');
 
                 // Update scenes
-                const scenesCount = scenes.detected || 0;
+                const scenesCount = scenes.detected || latest.scenes || 0;
                 document.getElementById('scenes-count').textContent = scenesCount;
                 document.getElementById('scenes-label').textContent = scenesCount > 0 ? 'scenes detected' : 'detecting scenes';
 
                 // Update frames
-                document.getElementById('frames-count').textContent = scenes.frames_extracted || 0;
+                document.getElementById('frames-count').textContent = scenes.frames_extracted || latest.frames || 0;
 
                 // Update audio clips
-                document.getElementById('audio-count').textContent = scenes.audio_clips || 0;
+                document.getElementById('audio-count').textContent = scenes.audio_clips || latest.audio || 0;
 
                 // Update video size
                 const videoSizeGB = current.size_gb || 0;
@@ -727,6 +770,10 @@
         // Update processing stats every 5 seconds for real-time feel
         setInterval(updateStats, 5000);
         updateStats();
+
+        // Update latest run preview every 10 seconds
+        setInterval(updateLatestRun, 10000);
+        updateLatestRun();
         
         console.log('🚀 GoodQ Processing Dashboard Loaded');
         console.log('✅ Model health monitoring active - vLLM + Ollama');

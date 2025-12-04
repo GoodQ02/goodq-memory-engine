@@ -5,6 +5,7 @@ import sqlite3
 from datetime import datetime
 import os
 import logging
+import sys
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +28,31 @@ from steps.common.qdrant_client import build_qdrant_client
 
 
 _CLIP = {"model": None, "proc": None, "device": "cpu"}
+
+
+def _debug_env() -> None:
+    """
+    Lightweight one-shot debug writer to capture interpreter/path for import issues.
+    """
+    try:
+        lines = [
+            "=== DEBUG: image_embed_clip start ===",
+            f"PID: {os.getpid()}",
+            f"sys.executable: {sys.executable}",
+            "sys.path (first 10):",
+        ]
+        lines.extend(f"  {p}" for p in sys.path[:10])
+        try:
+            import steps  # noqa: F401
+            lines.append(f"steps module: {getattr(steps, '__file__', 'NO __file__')}")
+        except Exception as e:  # pragma: no cover - diagnostics only
+            lines.append(f"FAILED to import steps: {repr(e)}")
+        log_path = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "..", "logs", "debug_image_embed_clip_env.log"))
+        os.makedirs(os.path.dirname(log_path), exist_ok=True)
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write("\n".join(lines) + "\n\n")
+    except Exception:
+        pass
 
 
 def _load() -> None:
@@ -53,6 +79,7 @@ def _load() -> None:
 
 
 def image_embed_clip(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
+    _debug_env()
     path = item.get("source_path")
     if not isinstance(path, str) or not os.path.isfile(path):
         return {"clip_meta": {"status": "no_file"}}

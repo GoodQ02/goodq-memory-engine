@@ -49,6 +49,7 @@ eggs/
 .eggs/
 lib/
 lib64/
+!goodq4all/lib/
 parts/
 sdist/
 var/

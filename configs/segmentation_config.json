@@ -1,0 +1,44 @@
+{
+  "segmentation": {
+    "enabled": true,
+    "mode": "phased",
+    "description": "Phased Segmentation Engine configuration for audio/video preprocessing",
+    
+    "vad": {
+      "aggressiveness": 3,
+      "frame_duration_ms": 30,
+      "padding_duration_ms": 300,
+      "comment": "WebRTC VAD settings - aggressiveness 0-3, higher = more aggressive"
+    },
+    
+    "pyannote": {
+      "enabled": false,
+      "min_duration_off": 0.0,
+      "min_duration_on": 0.0,
+      "model": "pyannote/segmentation",
+      "comment": "Pyannote speaker segmentation (requires GPU, HuggingFace token)"
+    },
+    
+    "chunking": {
+      "min_chunk_duration": 1.0,
+      "max_chunk_duration": 40.0,
+      "chunk_padding_ms": 250,
+      "chunk_overlap_ms": 500,
+      "comment": "Smart chunk builder - merge short, split long, add padding"
+    },
+    
+    "audio_normalization": {
+      "target_sample_rate": 16000,
+      "target_channels": 1,
+      "target_bit_depth": 16,
+      "comment": "Audio format for segmentation - 16kHz mono 16-bit for optimal compatibility"
+    },
+    
+    "paths": {
+      "output_base": "L:/_DATA/GoodQ_Data/processing",
+      "chunk_subdir": "chunks",
+      "audio_subdir": "audio",
+      "metadata_subdir": "metadata"
+    }
+  }
+}

@@ -1,0 +1,44 @@
+# Phase 4: Heavy Audio Processing Configuration
+# 
+# Controls GPU-accelerated audio processing for segmented chunks.
+# All processing routes through WSL2 audio bridge.
+
+audio:
+  # Transcription settings (Faster-Whisper via WSL2)
+  transcribe:
+    language: null  # null = auto-detect, or specify: "en", "es", "fr", etc.
+    task: "transcribe"  # "transcribe" or "translate" (to English)
+    beam_size: 5  # Beam search size (1-10, higher = more accurate but slower)
+    
+  # Diarization settings (Pyannote via WSL2)
+  diarize:
+    timeout: 7200  # 2 hours for full diarization
+    
+  # Per-chunk processing timeout
+  chunk_timeout: 600  # 10 minutes per chunk
+  
+  # Parallel processing
+  max_parallel_chunks: 2  # How many chunks to process simultaneously
+                          # Increase if GPU memory allows
+                          # Decrease if running out of VRAM
+  
+  # Future extension points (not yet implemented)
+  # embeddings:
+  #   model: "clap-laion-music"  # CLAP model for audio embeddings
+  #   
+  # emotion:
+  #   enabled: true
+  #   
+  # music_detection:
+  #   enabled: true
+  #   threshold: 0.5
+
+# WSL2 Bridge settings (inherited from wsl2_audio/bridge_config.json)
+# These are documented here for reference but should be modified in bridge_config.json
+
+# wsl2_bridge:
+#   windows_queue_dir: "L:\\goodq4all\\wsl2_audio\\queue"
+#   windows_output_dir: "L:\\goodq4all\\wsl2_audio\\output"
+#   wsl_home_dir: "/home/$USER/goodq_audio"
+#   timeout_seconds: 3600
+#   poll_interval: 1.0

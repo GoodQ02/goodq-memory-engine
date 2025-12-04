@@ -4,7 +4,7 @@
 ### *Your Personal Intelligence Agency*
 
 **Classified Status:** `PRODUCTION-READY` | **Clearance Level:** `LOCAL-ONLY`  
-**Last System Update:** December 4, 2025
+**Last System Update:** December 4, 2025 | **Latest:** Phased Segmentation Engine + Environment Consolidation
 
 [![Production Ready](https://img.shields.io/badge/status-production--ready-00C853?style=for-the-badge)]()
 [![Python 3.10](https://img.shields.io/badge/python-3.10-3776AB?style=for-the-badge&logo=python&logoColor=white)]()
@@ -51,6 +51,10 @@ Turn **raw media chaos** into **actionable intelligence**:
 <td width="50%">
 
 ### 🎙️ Audio Intelligence
+- **Phased Segmentation Engine** – 6-stage intelligent audio/video processing
+  - WebRTC-VAD pre-segmentation (CPU-efficient)
+  - PyAnnote smart segmentation (GPU-optimized)
+  - Adaptive chunk building with overlap windows
 - **Speech Transcription** – Faster-Whisper with GPU acceleration
 - **Speaker Diarization** – PyAnnote multi-speaker identification
 - **Audio Embeddings** – CLAP for semantic audio search
@@ -154,7 +158,17 @@ CHECK_WATCHDOG.bat    # One-time status snapshot
 
 ### Recent Architecture Improvements (Dec 2025)
 
-**Environment Consolidation:** Unified 6 specialized environments into `goodq_core`
+**🚀 Phased Segmentation Engine (NEW):**
+- **Phase 0:** Pre-normalization (audio extraction, format standardization)
+- **Phase 1:** WebRTC-VAD segmentation (CPU-efficient speech detection)
+- **Phase 2:** PyAnnote smart segmentation (GPU speaker boundaries)
+- **Phase 3:** Adaptive chunk builder (merge/split/pad/overlap)
+- **Phase 4:** Heavy audio processing (transcribe, diarize, embed, emotion)
+- **Phase 5:** Video scene integration (harmonized multi-modal timeline)
+
+**Impact:** Eliminates GPU memory spikes, processes large videos in chunks, preserves segment context with overlap windows.
+
+**🔧 Environment Consolidation:** Unified 6 specialized environments into `goodq_core`
 - ✅ Faster pipeline initialization (reduced conda overhead)
 - ✅ Better GPU memory management (single CUDA context)
 - ✅ Simpler maintenance (one environment for all Windows GPU steps)
@@ -162,7 +176,9 @@ CHECK_WATCHDOG.bat    # One-time status snapshot
 
 **Impact:** 12 processing steps now run in unified environment, ~30GB disk space savings potential.
 
-📖 **Technical Details:** [`docs/guides/CONSOLIDATION_EXPLAINED.md`](docs/guides/CONSOLIDATION_EXPLAINED.md)
+📖 **Technical Details:** 
+- [`docs/reports/PHASED_SEGMENTATION_ENGINE_IMPLEMENTATION_REPORT.md`](docs/reports/PHASED_SEGMENTATION_ENGINE_IMPLEMENTATION_REPORT.md)
+- [`docs/status-reports/ENVIRONMENT_CONSOLIDATION_COMPLETE.md`](docs/status-reports/ENVIRONMENT_CONSOLIDATION_COMPLETE.md)
 
 ---
 
@@ -226,24 +242,30 @@ python cli/graph_query.py scene-context scene_0042
 ```
 goodq4all/
 ├── 📂 pipelines/              # Processing pipelines
-│   ├── ingest_multimodal_conda.py    # Main production pipeline
+│   ├── ingest_multimodal_conda.py    # Main production pipeline (consolidated)
 │   └── goodq_chat.py                  # LLM chat interface
 ├── 📂 goodq4all/              # Core library
-│   ├── steps/                 # Processing steps (vision, audio, text)
+│   ├── steps/                 # Processing steps
+│   │   ├── audio/            # Audio processing (WSL2 bridge + segmentation)
+│   │   ├── video/            # Video scene detection
+│   │   ├── image/            # Vision, OCR, captioning, embeddings
+│   │   └── text/             # Text embeddings, sentiment, emotion
 │   ├── lib/                   # Utilities (graph, memory, search)
 │   └── cli/                   # Command-line tools
 ├── 📂 configs/                # Configuration files
 │   ├── config_open.yaml       # Primary runtime settings
 │   ├── paths.yaml             # File system paths
-│   └── model_registry.yaml    # Model version lockdown
+│   ├── model_registry.yaml    # Model version lockdown
+│   └── segmentation_config.yaml  # Phased segmentation thresholds
 ├── 📂 scripts/                # Automation & utilities
 │   ├── watchdog_ingest.py     # Automatic file monitoring
 │   ├── system_readiness_check.py    # Pre-flight validation
 │   └── command_center.ps1     # Interactive dashboard
 ├── 📂 docs/                   # Comprehensive documentation
-│   ├── guides/                # User guides
+│   ├── guides/                # User guides (GPU, WSL2, LLM)
 │   ├── technical/             # Technical references
 │   ├── status-reports/        # System status & updates
+│   ├── reports/               # Implementation reports
 │   └── archive/               # Historical documentation
 └── 📂 data/                   # Runtime data
     ├── memory.db              # Main memory database
@@ -265,10 +287,20 @@ goodq4all/
 
 ### Software Stack
 
-- **Python:** 3.10 (managed via Miniconda)
-- **CUDA:** 12.1 drivers
-- **WSL2:** Ubuntu (for audio processing stack)
-- **Optional:** vLLM, Ollama, or LM Studio for LLM features
+**Windows GPU Environment (`goodq_core`):**
+- **Python:** 3.10
+- **PyTorch:** 2.5.1+cu121
+- **CUDA:** 12.1
+- **Key Libraries:** transformers 4.45.2, opencv-python 4.10.0, librosa 0.10.2
+
+**WSL2 Audio Environment (`~/goodq_audio/venv`):**
+- **Python:** 3.10
+- **PyTorch:** 2.1.0+cu118
+- **Faster-Whisper:** GPU-accelerated
+- **PyAnnote:** Diarization + segmentation models
+
+**Optional LLM Stack:**
+- vLLM (WSL2), Ollama, or LM Studio for natural language queries
 
 ### Quick Install
 
@@ -397,20 +429,23 @@ scripts\command_center.ps1  # Interactive dashboard
 
 | Document | Description |
 |----------|-------------|
-| **[Quick Start](docs/guides/QUICK_START_CLEAN.md)** | Get running in minutes |
-| **[Installation Guide](docs/guides/INSTALLATION.md)** | Detailed setup instructions |
-| **[Watchdog Guide](docs/guides/WATCHDOG_GUIDE.md)** | Automatic file processing |
-| **[Knowledge Graph](docs/guides/KNOWLEDGE_GRAPH.md)** | Entity relationship queries |
-| **[Consolidation Explained](docs/guides/CONSOLIDATION_EXPLAINED.md)** | Recent architecture improvements |
+| **[Quick Start](docs/QUICK_START.md)** | Get running in minutes |
+| **[Installation Guide](docs/guides/general/INSTALL.md)** | Detailed setup instructions |
+| **[Watchdog Guide](docs/guides/watchdog/WATCHDOG_GUIDE.md)** | Automatic file processing |
+| **[GPU Setup](docs/guides/gpu/GPU_SETUP.md)** | Windows GPU configuration |
+| **[WSL2 Audio Setup](docs/guides/wsl2/START_HERE_WSL2.md)** | Audio processing stack |
+| **[Consolidation Explained](docs/guides/CONSOLIDATION_EXPLAINED.md)** | Environment unification |
 
 ### 🔧 Technical References
 
 | Document | Description |
 |----------|-------------|
-| **[Architecture Reference](docs/technical/ARCHITECTURE_REFERENCE.md)** | System design deep dive |
+| **[System Architecture](docs/architecture/SYSTEM_ARCHITECTURE.md)** | System design deep dive |
+| **[Phased Segmentation](docs/reports/PHASED_SEGMENTATION_ENGINE_IMPLEMENTATION_REPORT.md)** | New audio/video engine |
 | **[Model Lockdown](docs/technical/MODEL_LOCKDOWN.md)** | Version pinning strategy |
-| **[API Documentation](http://localhost:30000/docs)** | Interactive API explorer |
-| **[Troubleshooting](docs/technical/TROUBLESHOOTING.md)** | Common issues & solutions |
+| **[Pipeline Flow](docs/architecture/diagrams/PIPELINE_FLOW.md)** | Visual workflow diagrams |
+| **[API Documentation](http://localhost:30000/docs)** | Interactive API explorer (when running) |
+| **[Troubleshooting](docs/TROUBLESHOOTING.md)** | Common issues & solutions |
 
 ### 📊 Status & Reports
 

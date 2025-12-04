@@ -1,6 +1,7 @@
 # 🎯 START HERE - GoodQ4All Complete Navigation Guide
 
 **Created:** 2025-12-02  
+**Updated:** 2025-12-04 (Phased Segmentation Engine + Environment Consolidation)  
 **Purpose:** Single entry point for all project navigation (humans & AI)  
 **Status:** ✅ Complete & Current
 
@@ -9,22 +10,25 @@
 ## 🚀 Quick Start (Choose Your Path)
 
 ### 👤 **I'm a Human User**
-1. **New to GoodQ?** → [Quick Start Guide](user-guides/QUICK_START_CLEAN.md)
-2. **Need current status?** → [System Status](CURRENT_SYSTEM_STATUS_2025-12-02.md)
-3. **Something broken?** → [Troubleshooting](TROUBLESHOOTING.md)
-4. **Want the timeline?** → [Master Timeline](MASTER_DOCUMENTATION_TIMELINE.md)
+1. **New to GoodQ?** → [Quick Start Guide](QUICK_START.md)
+2. **Need current status?** → [System Status](status-reports/CURRENT_SYSTEM_STATUS_2025-12-02.md)
+3. **Latest updates?** → [Recent Reports](reports/PHASED_SEGMENTATION_ENGINE_IMPLEMENTATION_REPORT.md)
+4. **Something broken?** → [Troubleshooting](TROUBLESHOOTING.md)
+5. **Want the timeline?** → [Master Timeline](status-reports/MASTER_DOCUMENTATION_TIMELINE.md)
 
 ### 🤖 **I'm an AI Agent**
-1. **First time?** → Read order below (2 min orientation)
-2. **Returning?** → [Current Status](CURRENT_SYSTEM_STATUS_2025-12-02.md) + [Recent Logs](../logs/step_runs.jsonl)
-3. **Debugging?** → [Troubleshooting Index](TROUBLESHOOTING_INDEX.md)
-4. **Need context?** → [Deep Analysis](PROJECT_DEEP_ANALYSIS_2025-12-02.md)
+1. **First time?** → Read [AGENTS.md](AGENTS.md) then order below (5 min orientation)
+2. **Returning?** → [Current Status](status-reports/CURRENT_SYSTEM_STATUS_2025-12-02.md) + [Recent Reports](reports/)
+3. **Latest changes?** → [Consolidation](status-reports/ENVIRONMENT_CONSOLIDATION_COMPLETE.md) + [Segmentation](reports/PHASED_SEGMENTATION_ENGINE_IMPLEMENTATION_REPORT.md)
+4. **Debugging?** → [Troubleshooting](TROUBLESHOOTING.md)
+5. **Need context?** → [Architecture](architecture/SYSTEM_ARCHITECTURE.md)
 
 ### 🛠️ **I'm a Developer**
-1. **Architecture?** → [Architecture Reference](ARCHITECTURE_REFERENCE.md)
-2. **Add feature?** → [Deep Analysis](PROJECT_DEEP_ANALYSIS_2025-12-02.md) + code in `steps/`, `lib/`
-3. **Run pipeline?** → [Ship Profile](SHIP_PROFILE.md) + [Release Checklist](RELEASE_CHECKLIST.md)
-4. **Fix bug?** → [Current Status](CURRENT_SYSTEM_STATUS_2025-12-02.md) + relevant logs
+1. **Architecture?** → [System Architecture](architecture/SYSTEM_ARCHITECTURE.md) + [Project Structure](architecture/PROJECT_STRUCTURE.md)
+2. **Latest changes?** → [Consolidation Report](status-reports/ENVIRONMENT_CONSOLIDATION_COMPLETE.md)
+3. **Add feature?** → Code in `goodq4all/steps/`, `goodq4all/lib/`, follow existing patterns
+4. **Run pipeline?** → [Quick Start](QUICK_START.md) + [Watchdog Guide](guides/watchdog/WATCHDOG_GUIDE.md)
+5. **Fix bug?** → [Current Status](status-reports/CURRENT_SYSTEM_STATUS_2025-12-02.md) + relevant logs
 
 ---
 

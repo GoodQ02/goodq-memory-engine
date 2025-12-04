@@ -268,29 +268,52 @@ def merge_vad_and_pyannote(
         raise ValueError(f"Unknown merge strategy: {merge_strategy}")
 
 
+# Compatibility aliases for orchestrator
+def segment_with_pyannote(audio_path: str, config: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    """
+    Wrapper for orchestrator compatibility
+    Runs pyannote segmentation and returns segments list
+    """
+    import tempfile
+    with tempfile.TemporaryDirectory() as tmpdir:
+        result = run_pyannote_segmentation(audio_path, [], tmpdir, config)
+        return result.get('segments', [])
+
+
+def enhance_segments_with_pyannote(
+    vad_segments: List[Dict[str, Any]],
+    pyannote_segments: List[Dict[str, Any]]
+) -> List[Dict[str, Any]]:
+    """
+    Wrapper for orchestrator compatibility
+    Merges VAD and Pyannote segments
+    """
+    return merge_vad_and_pyannote(vad_segments, pyannote_segments)
+
+
 if __name__ == '__main__':
     # Test/demo mode
     import sys
-    
+
     if len(sys.argv) < 3:
         print("Usage: python phase2_pyannote.py <audio.wav> <output_dir> [vad_manifest.json]")
         sys.exit(1)
-    
+
     audio_path = sys.argv[1]
     output_dir = sys.argv[2]
     vad_manifest = sys.argv[3] if len(sys.argv) > 3 else None
-    
+
     # Load VAD segments if provided
     vad_segments = []
     if vad_manifest and os.path.exists(vad_manifest):
         with open(vad_manifest, 'r') as f:
             vad_data = json.load(f)
             vad_segments = vad_data.get('segments', [])
-    
+
     # Run segmentation
     logging.basicConfig(level=logging.INFO)
     result = run_pyannote_segmentation(audio_path, vad_segments, output_dir)
-    
+
     print(f"\n✓ Pyannote segmentation complete")
     print(f"  Segments: {result['num_segments']}")
     print(f"  Speaker changes: {len(result['speaker_changes'])}")

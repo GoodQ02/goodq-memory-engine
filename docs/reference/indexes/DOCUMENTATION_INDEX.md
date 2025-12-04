@@ -1,7 +1,16 @@
 # 📚 GoodQ4All Documentation Index
-**Last Updated**: 2025-10-13  
-**Version**: 2.0.0 - Clean & Organized Edition  
-**Status**: ✅ Production Ready
+**Last Updated**: 2025-12-02  
+**Version**: 3.0.0 - Timeline & Organization Edition  
+**Status**: ✅ Reorganized & Current
+
+---
+
+## 🆕 What's New (Dec 2, 2025)
+
+- ✅ **Master Timeline Created** - Complete chronological index of all 367 docs
+- ✅ **Current Status Updated** - Fresh system status report
+- ✅ **Archives Organized** - 11 old status reports + 6 session summaries archived
+- ✅ **Clear Navigation** - Improved AI & human orientation
 
 ---
 
@@ -9,21 +18,25 @@
 
 | You Want To... | Go Here |
 |----------------|---------|
-| **Start using GoodQ** | [Quick Start Guide](QUICK_START.md) |
-| **Understand the system** | [User Guide](guides/USER_GUIDE.md) |
+| **📅 See timeline** | [**Master Documentation Timeline**](MASTER_DOCUMENTATION_TIMELINE.md) ⭐ NEW |
+| **📊 Current status** | [**Current System Status**](CURRENT_SYSTEM_STATUS_2025-12-02.md) ⭐ UPDATED |
+| **Start using GoodQ** | [Quick Start Guide](user-guides/QUICK_START_CLEAN.md) |
+| **Understand the system** | [Architecture Reference](ARCHITECTURE_REFERENCE.md) |
 | **Find a command** | [Quick Reference](QUICK_REFERENCE.md) |
 | **See what's next** | [Roadmap](ROADMAP.md) |
 | **Fix a problem** | [Troubleshooting Guide](TROUBLESHOOTING.md) |
 | **Deep dive technical** | [Technical Documentation](#-technical-documentation) |
 
-### 🤖 For Agents: Reading Order
+### 🤖 For AI Agents: Reading Order (UPDATED Dec 2, 2025)
 
 When you need to understand the current state of the system and its evolution, read in this order:
 
-1. **Latest timeline:** `docs/project-history/CHANGELOG.md` (newest entries first)
-2. **Current ground truth:** `docs/CURRENT_SYSTEM_STATUS.md`
-3. **Architecture:** `docs/ARCHITECTURE_REFERENCE.md` → `docs/COMPREHENSIVE_ARCHITECTURE_RESEARCH_2025-11-15.md`
-4. **User-facing behavior:** `docs/user-guides/QUICK_START_CLEAN.md` and `docs/guides/USER_GUIDE.md`
+1. **📅 Master timeline:** [`MASTER_DOCUMENTATION_TIMELINE.md`](MASTER_DOCUMENTATION_TIMELINE.md) (complete chronology)
+2. **📊 Current ground truth:** [`CURRENT_SYSTEM_STATUS_2025-12-02.md`](CURRENT_SYSTEM_STATUS_2025-12-02.md) (latest state)
+3. **🏗️ Architecture:** [`ARCHITECTURE_REFERENCE.md`](ARCHITECTURE_REFERENCE.md) (schemas, paths, conventions)
+4. **🚀 Shipping surface:** [`SHIP_PROFILE.md`](SHIP_PROFILE.md) (supported commands & environments)
+5. **📜 Version history:** [`project-history/CHANGELOG.md`](project-history/CHANGELOG.md) (semantic versioning)
+6. **📖 User behavior:** [`user-guides/QUICK_START_CLEAN.md`](user-guides/QUICK_START_CLEAN.md) (canonical quick start)
 
 ---
 
@@ -77,9 +90,11 @@ When you need to understand the current state of the system and its evolution, r
 
 ### 📜 History & Archives
 - **[history/PROJECT_HISTORY.md](history/PROJECT_HISTORY.md)** - Development timeline
-- **[project-history/CHANGELOG.md](project-history/CHANGELOG.md)** - Version changelog
+- **[project-history/CHANGELOG.md](project-history/CHANGELOG.md)** - Version changelog (⚠️ needs Nov-Dec updates)
 - **[project-history/PROJECT_RENAME_COMPLETE.md](project-history/PROJECT_RENAME_COMPLETE.md)** - Rename from zenml_project
-- **[history/archived_docs/](history/archived_docs/)** - Archived documentation
+- **[history/archived_docs/](history/archived_docs/)** - Archived documentation (general)
+- **[history/status_reports_archive/](history/status_reports_archive/)** - Archived status reports (11 files) 🆕
+- **[history/session_summaries_archive/](history/session_summaries_archive/)** - Archived session summaries (6 files) 🆕
 
 ### 🎬 Phases & Milestones
 - **[phases/PHASE_INDEX.md](phases/PHASE_INDEX.md)** - All phase reports and milestones

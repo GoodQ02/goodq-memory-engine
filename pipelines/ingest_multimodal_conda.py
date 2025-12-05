@@ -69,6 +69,10 @@ def process_items_step(items: List[Dict[str, Any]], cfg: Dict[str, Any]) -> List
             enriched.update(din)
             cli = run_conda_step("goodq_core", "image_embed_clip", enriched, cfg)
             enriched.update(cli)
+        if mod == "video":
+            # Phase 5: Video scene detection aligned with audio segmentation
+            scene_result = run_conda_step("goodq_core", "video_scene_segmentation", enriched, cfg)
+            enriched.update(scene_result)
         if mod == "pdf":
             p = run_conda_step("goodq_core", "pdf_text", enriched, cfg)
             enriched.update(p)

@@ -39,6 +39,15 @@
       "chunk_subdir": "chunks",
       "audio_subdir": "audio",
       "metadata_subdir": "metadata"
+    },
+    
+    "phase5": {
+      "enabled": true,
+      "scene_threshold": 30.0,
+      "min_scene_len_sec": 2.0,
+      "use_gpu": true,
+      "alignment_tolerance": 0.5,
+      "comment": "GPU-accelerated chunk-level scene detection on goodq_core (CUDA 12.1)"
     }
   }
 }

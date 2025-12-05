@@ -158,6 +158,15 @@ def run_step(step_name: str, item: Dict[str, Any] | None, cfg: Dict[str, Any]) -
         from goodq4all.steps.tagger.step import tagger
         assert item is not None
         return tagger(item, cfg)
+    if step_name == "video_scene_segmentation":
+        from goodq4all.steps.audio.segmentation.phase5_video_scene_integration import process_video_chunks_with_scenes
+        assert item is not None
+        # Extract required inputs from item
+        video_path = item.get('path') or item.get('file_path')
+        audio_segments = item.get('audio_segments', [])
+        output_dir = item.get('output_dir', cfg.get('processing_dir', 'L:/_DATA/GoodQ_Data/processing'))
+        # Call Phase 5 processor
+        return process_video_chunks_with_scenes(video_path, audio_segments, output_dir, cfg)
     raise SystemExit(f"Unknown step: {step_name}")
 
 

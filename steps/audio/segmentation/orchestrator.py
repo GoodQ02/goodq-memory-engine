@@ -12,9 +12,9 @@ from pathlib import Path
 # Import all phase modules
 from .phase0_normalization import normalize_media, extract_metadata
 from .phase1_vad_segmentation import segment_with_webrtc_vad
-from .phase2_pyannote_segmentation import segment_with_pyannote, enhance_segments_with_pyannote
-from .phase3_smart_chunking import build_smart_chunks, save_chunk_wavs
-from .phase4_audio_processing import process_chunks_with_wsl2, AudioProcessingConfig
+from .phase2_pyannote import segment_with_pyannote, enhance_segments_with_pyannote
+from .phase3_chunk_builder import run_phase3_chunk_builder
+from .phase4_audio_processor import Phase4AudioProcessor, process_segmented_audio
 from .phase5_video_scene_integration import (
     process_video_chunks_with_scenes,
     upgrade_analysis_for_legacy_scene_detect

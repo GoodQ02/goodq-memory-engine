@@ -133,3 +133,19 @@ knowledge_graph:
 steps:
   audio_extraction:
     skip_on_error: true
+
+# Phase 6: Scene Visual Embeddings & Multimodal Fusion
+phase6:
+  enabled: true
+  frame_sampling_strategy: uniform  # Options: uniform, keyframe, middle
+  frames_per_scene: 3
+  pooling_strategy: mean  # Options: mean, max, concat, attention
+  max_gpu_batch_size: 8
+  clip_collection: goodq_clip_scenes
+  dino_collection: goodq_dino_scenes
+  retrieval:
+    enable: true
+    fusion_weights:
+      text: 0.5
+      visual: 0.4
+      audio: 0.1

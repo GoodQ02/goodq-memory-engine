@@ -167,6 +167,18 @@ def run_step(step_name: str, item: Dict[str, Any] | None, cfg: Dict[str, Any]) -
         output_dir = item.get('output_dir', cfg.get('processing_dir', 'L:/_DATA/GoodQ_Data/processing'))
         # Call Phase 5 processor
         return process_video_chunks_with_scenes(video_path, audio_segments, output_dir, cfg)
+    
+    # Phase 6: Scene Visual Embeddings
+    if step_name == "scene_visual_embeddings":
+        from goodq4all.steps.video.scene_visual_embeddings import run_scene_visual_embeddings
+        assert item is not None
+        return run_scene_visual_embeddings(item, cfg)
+    
+    if step_name == "cross_modal_harmonization":
+        from goodq4all.steps.video.cross_modal_harmonizer import run_cross_modal_harmonization
+        assert item is not None
+        return run_cross_modal_harmonization(item, cfg)
+    
     raise SystemExit(f"Unknown step: {step_name}")
 
 

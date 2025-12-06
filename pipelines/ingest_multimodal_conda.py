@@ -73,6 +73,15 @@ def process_items_step(items: List[Dict[str, Any]], cfg: Dict[str, Any]) -> List
             # Phase 5: Video scene detection aligned with audio segmentation
             scene_result = run_conda_step("goodq_core", "video_scene_segmentation", enriched, cfg)
             enriched.update(scene_result)
+            
+            # Phase 6: Scene visual embeddings & cross-modal harmonization
+            phase6_cfg = cfg.get('phase6', {})
+            if phase6_cfg.get('enabled', True):
+                vis_out = run_conda_step("goodq_core", "scene_visual_embeddings", enriched, cfg)
+                enriched.update(vis_out)
+                
+                harmonized = run_conda_step("goodq_core", "cross_modal_harmonization", enriched, cfg)
+                enriched.update(harmonized)
         if mod == "pdf":
             p = run_conda_step("goodq_core", "pdf_text", enriched, cfg)
             enriched.update(p)

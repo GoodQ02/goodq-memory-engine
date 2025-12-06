@@ -51,12 +51,19 @@ def load_configs(overrides: Dict[str, Any] | None = None) -> Dict[str, Any]:
         pass
 
     base_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "configs")
-    config_open = _read_yaml(os.path.join(base_dir, "config_open.yaml"))
-    paths = _normalize_paths(_read_yaml(os.path.join(base_dir, "paths.yaml")))
-    entities = _read_yaml(os.path.join(base_dir, "entities.yaml"))
-    model_registry = _read_yaml(os.path.join(base_dir, "model_registry.yaml"))
-
-    cfg = {"config": config_open, "paths": paths, "entities": entities, "models": model_registry}
+    
+    # Load unified config.yaml (primary configuration file)
+    unified_config_path = os.path.join(base_dir, "config.yaml")
+    if os.path.isfile(unified_config_path):
+        cfg = _normalize_paths(_read_yaml(unified_config_path))
+    else:
+        # Fallback to legacy config files for backwards compatibility
+        config_open = _read_yaml(os.path.join(base_dir, "config_open.yaml"))
+        paths = _normalize_paths(_read_yaml(os.path.join(base_dir, "paths.yaml")))
+        entities = _read_yaml(os.path.join(base_dir, "entities.yaml"))
+        model_registry = _read_yaml(os.path.join(base_dir, "model_registry.yaml"))
+        cfg = {"config": config_open, "paths": paths, "entities": entities, "models": model_registry}
+    
     if overrides:
         # shallow merge only; keep deterministic and explicit
         for k, v in overrides.items():

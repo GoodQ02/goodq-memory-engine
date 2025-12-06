@@ -217,6 +217,19 @@ segmentation:
     alignment_tolerance: 0.5
 
 # ============================================================================
+# VIDEO PROCESSING CONFIGURATION
+# ============================================================================
+video:
+  scene_detect:
+    threshold: 30.0
+    min_scene_len_sec: 300.0
+    max_scenes: 0
+    entity_refine: false
+    entity_sample_rate: 0.5
+    entity_min_duration: 300.0
+    entity_max_samples: 300
+
+# ============================================================================
 # PHASE 6: SCENE VISUAL EMBEDDINGS & CROSS-MODAL FUSION
 # ============================================================================
 phase6:

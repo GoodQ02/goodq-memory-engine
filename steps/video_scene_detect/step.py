@@ -11,11 +11,15 @@ except Exception:  # pragma: no cover - optional guard
 
 def _load_params(cfg: Dict[str, Any], item: Dict[str, Any]) -> Dict[str, Any]:
     # Try both 'scene_detect' and 'scene_detection' for backwards compatibility
-    # Config can be nested under 'config' key or at root level
-    if 'config' in cfg and 'video' in cfg['config']:
+    # Config can be nested under 'config' key (legacy) or at root level (unified config.yaml)
+    
+    # First try unified config.yaml format (root level)
+    video_cfg = cfg.get('video', {}) or {}
+    
+    # If not found, try legacy format (nested under 'config')
+    if not video_cfg and 'config' in cfg:
         video_cfg = (cfg['config'].get('video', {}) or {})
-    else:
-        video_cfg = (cfg.get('video', {}) or {})
+    
     scene_cfg = video_cfg.get('scene_detect', video_cfg.get('scene_detection', {})) or {}
     overrides = item.get('scene_detect') if isinstance(item.get('scene_detect'), dict) else {}
     params = {

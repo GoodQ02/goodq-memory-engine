@@ -426,7 +426,24 @@ def _ensure_dir(path: Path) -> Path:
 
 def _write_cfg_snapshot(cfg: Dict[str, Any], workspace: Path) -> Path:
     cfg_path = workspace / '_resolved_config.json'
-    cfg_path.write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding='utf-8')
+    
+    # Convert config to JSON-serializable format
+    def make_json_serializable(obj):
+        # Handle typer OptionInfo objects - extract the actual default value
+        if hasattr(obj, 'default'):
+            return make_json_serializable(obj.default)
+        elif isinstance(obj, dict):
+            return {k: make_json_serializable(v) for k, v in obj.items()}
+        elif isinstance(obj, (list, tuple)):
+            return [make_json_serializable(item) for item in obj]
+        elif isinstance(obj, (str, int, float, bool, type(None))):
+            return obj
+        else:
+            # For other non-serializable objects, convert to string as last resort
+            return str(obj)
+    
+    serializable_cfg = make_json_serializable(cfg)
+    cfg_path.write_text(json.dumps(serializable_cfg, ensure_ascii=False, indent=2), encoding='utf-8')
     return cfg_path
 
 
@@ -453,11 +470,28 @@ def _base_env() -> Dict[str, str]:
 
 def _run_step(env_name: str, step_name: str, payload: Dict[str, Any], cfg_json: Path) -> Dict[str, Any]:
     work_env = _base_env()
+    
+    # Convert payload to JSON-serializable format
+    def make_json_serializable(obj):
+        # Handle typer OptionInfo objects - extract the actual default value
+        if hasattr(obj, 'default'):
+            return make_json_serializable(obj.default)
+        elif isinstance(obj, dict):
+            return {k: make_json_serializable(v) for k, v in obj.items()}
+        elif isinstance(obj, (list, tuple)):
+            return [make_json_serializable(item) for item in obj]
+        elif isinstance(obj, (str, int, float, bool, type(None))):
+            return obj
+        else:
+            # For other non-serializable objects, convert to string as last resort
+            return str(obj)
+    
     tmp_dir = Path(tempfile.mkdtemp(prefix='ingest_step_'))
     try:
         in_path = tmp_dir / 'input.json'
         out_path = tmp_dir / 'output.json'
-        in_path.write_text(json.dumps(payload, ensure_ascii=False), encoding='utf-8')
+        serializable_payload = make_json_serializable(payload)
+        in_path.write_text(json.dumps(serializable_payload, ensure_ascii=False), encoding='utf-8')
         
         # Resolve conda path to handle subprocess PATH issues on Windows
         conda_exe = resolve_conda()
@@ -842,7 +876,11 @@ def run(
 ) -> None:
     global VERBOSE, STEP_TIMEOUT
     VERBOSE = verbose
-    STEP_TIMEOUT = step_timeout
+    # Ensure step_timeout is an int or None, not an OptionInfo object
+    if hasattr(step_timeout, 'default'):
+        STEP_TIMEOUT = step_timeout.default
+    else:
+        STEP_TIMEOUT = step_timeout if isinstance(step_timeout, (int, type(None))) else None
     input_dir = input_dir.resolve()
     workspace = workspace.resolve()
     output = output.resolve()

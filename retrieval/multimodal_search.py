@@ -78,7 +78,7 @@ class MultimodalSearchEngine:
         if collection in self._qdrant_clients:
             return self._qdrant_clients[collection]
         
-        from goodq4all.steps.common.qdrant_client import QdrantClient, QdrantConfig
+        from steps.common.qdrant_client import QdrantClient, QdrantConfig
         
         # Determine dimension based on collection type
         dim = 512 if 'clip' in collection else 384  # CLIP: 512, SBERT: 384, DINO: 768

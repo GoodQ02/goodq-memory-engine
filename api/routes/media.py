@@ -32,7 +32,7 @@ def get_data_loader():
 async def get_scene_frame(
     video_id: str = PathParam(..., description="Video identifier"),
     scene_id: int = PathParam(..., description="Scene identifier"),
-    frame_index: int = PathParam(0, description="Frame index (0 for representative)")
+    frame_index: int = PathParam(..., description="Frame index (0 for representative)")
 ):
     """
     Retrieve a specific frame from a scene.

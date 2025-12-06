@@ -22,6 +22,9 @@ from pydantic import BaseModel
 from steps.common.config_loader import load_configs
 from steps.common.memory_manager import build_memory_router
 
+# Import Phase 7 API routes
+from api.routes import search, scenes, timeline, media, system
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -45,6 +48,13 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Mount Phase 7 API routers
+app.include_router(search.router)
+app.include_router(scenes.router)
+app.include_router(timeline.router)
+app.include_router(media.router)
+app.include_router(system.router)
 
 # UI will be mounted at the end after all API routes are defined
 

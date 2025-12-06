@@ -274,3 +274,20 @@ config:
     whisper_ggml_model: L:/_TOOLS/whisper/ggml-large-v3.bin
     ffmpeg: L:/_TOOLS/ffmpeg/bin/ffmpeg.exe
     tesseract: L:/_TOOLS/tesseract/tesseract.exe
+
+# Phase 7: API and UI Configuration
+api:
+  enabled: true
+  host: 127.0.0.1
+  port: 8000
+  reload: true
+  log_level: info
+
+ui:
+  enabled: true
+  static_dir: L:/goodq4all/ui/static
+  
+phase7:
+  api_enabled: true
+  ui_enabled: true
+  multimodal_search: true

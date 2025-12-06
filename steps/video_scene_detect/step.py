@@ -10,31 +10,68 @@ except Exception:  # pragma: no cover - optional guard
 
 
 def _load_params(cfg: Dict[str, Any], item: Dict[str, Any]) -> Dict[str, Any]:
-    # Try both 'scene_detect' and 'scene_detection' for backwards compatibility
-    # Config can be nested under 'config' key (legacy) or at root level (unified config.yaml)
+    """
+    Load scene detection parameters with robust fallback handling.
+    Supports multiple config formats and prevents None/invalid values.
+    """
     
-    # First try unified config.yaml format (root level)
-    video_cfg = cfg.get('video', {}) or {}
+    # Try unified config.yaml format (root level)
+    video_cfg = cfg.get('video', {})
+    if video_cfg is None:
+        video_cfg = {}
     
     # If not found, try legacy format (nested under 'config')
     if not video_cfg and 'config' in cfg:
-        video_cfg = (cfg['config'].get('video', {}) or {})
+        video_cfg = cfg['config'].get('video', {})
+        if video_cfg is None:
+            video_cfg = {}
     
-    scene_cfg = video_cfg.get('scene_detect', video_cfg.get('scene_detection', {})) or {}
-    overrides = item.get('scene_detect') if isinstance(item.get('scene_detect'), dict) else {}
+    # Get scene config - try both naming conventions
+    scene_cfg = video_cfg.get('scene_detect', video_cfg.get('scene_detection', {}))
+    if scene_cfg is None:
+        scene_cfg = {}
+    
+    # Get overrides from item
+    overrides = item.get('scene_detect', {})
+    if not isinstance(overrides, dict):
+        overrides = {}
+    
+    # Robust parameter extraction with proper None handling
+    def safe_get(override_val, cfg_val, default_val):
+        """Get value with None-safe fallback chain."""
+        if override_val is not None:
+            return override_val
+        if cfg_val is not None:
+            return cfg_val
+        return default_val
+    
+    threshold_val = safe_get(
+        overrides.get('threshold'),
+        scene_cfg.get('threshold'),
+        30.0
+    )
+    
+    min_scene_val = safe_get(
+        overrides.get('min_scene_len_sec'),
+        scene_cfg.get('min_scene_len_sec') or scene_cfg.get('min_scene_len'),
+        300.0
+    )
+    
     params = {
-        'threshold': float(overrides.get('threshold', scene_cfg.get('threshold', 30.0))),  # Default 30.0 to avoid over-segmentation
-        'min_scene_len_sec': float(overrides.get('min_scene_len_sec', scene_cfg.get('min_scene_len_sec', scene_cfg.get('min_scene_len', 300.0)))),  # Default 300.0s (5 minutes) minimum
-        'max_scenes': int(overrides.get('max_scenes', scene_cfg.get('max_scenes', 0))),
-        'entity_refine': bool(overrides.get('entity_refine', scene_cfg.get('entity_refine', False))),  # CRITICAL: Default FALSE to prevent 2-second scene splits
-        'entity_sample_rate': float(overrides.get('entity_sample_rate', scene_cfg.get('entity_sample_rate', 0.5))),
-        'entity_min_duration': float(overrides.get('entity_min_duration', scene_cfg.get('entity_min_duration', 300.0))),  # Match min_scene_len_sec default
-        'entity_max_samples': int(overrides.get('entity_max_samples', scene_cfg.get('entity_max_samples', 300))),
+        'threshold': float(threshold_val),
+        'min_scene_len_sec': float(min_scene_val),
+        'max_scenes': int(safe_get(overrides.get('max_scenes'), scene_cfg.get('max_scenes'), 0)),
+        'entity_refine': bool(safe_get(overrides.get('entity_refine'), scene_cfg.get('entity_refine'), False)),
+        'entity_sample_rate': float(safe_get(overrides.get('entity_sample_rate'), scene_cfg.get('entity_sample_rate'), 0.5)),
+        'entity_min_duration': float(safe_get(overrides.get('entity_min_duration'), scene_cfg.get('entity_min_duration'), 300.0)),
+        'entity_max_samples': int(safe_get(overrides.get('entity_max_samples'), scene_cfg.get('entity_max_samples'), 300)),
     }
+    
+    # Final safety checks
     if params['min_scene_len_sec'] <= 0:
-        params['min_scene_len_sec'] = 300.0  # Fallback to 5 minutes
+        params['min_scene_len_sec'] = 300.0
     if params['threshold'] <= 0:
-        params['threshold'] = 30.0  # Fallback to 30.0 to avoid over-segmentation
+        params['threshold'] = 30.0
     if params['max_scenes'] < 0:
         params['max_scenes'] = 0
     if params['entity_sample_rate'] <= 0:

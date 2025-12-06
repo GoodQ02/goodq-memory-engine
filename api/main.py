@@ -1477,7 +1477,7 @@ if LOG_DIR.exists():
 else:
     logger.warning(f"Logs directory not found: {LOG_DIR}")
 
-UI_DIR = Path(__file__).parent.parent / "web"  # web directory contains HTML files
+UI_DIR = Path(__file__).parent.parent / "ui"  # ui directory contains HTML files
 if UI_DIR.exists():
     app.mount("/", StaticFiles(directory=str(UI_DIR), html=True), name="ui")
     logger.info(f"✓ Serving UI from: {UI_DIR}")

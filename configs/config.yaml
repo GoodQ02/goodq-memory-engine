@@ -1,0 +1,290 @@
+# GoodQ4All Master Configuration
+# Unified configuration for all phases of the multimodal ingestion pipeline
+# Last updated: 2025-12-06
+
+# ============================================================================
+# USER & MODEL IDENTITY
+# ============================================================================
+user:
+  name: Joseph Domingo Benvenuti
+  nickname: GoodSex, Joes, Agent, 00-Joes, Joe
+  pronouns: he/him
+  personality_traits: compassionate, resilient, witty, detail-obsessed, creative, musically inclined
+  values: innovation, empathy, knowledge, precision, music, authenticity, healing, chaos
+  background: Chicago DJ who almost made it (www.goodsexmusic.com) turned sober nightly vibe-coder
+  music_style: house, eclectic electronic, soul-infused Chicago grooves
+  role_nursing: registered nurse in IL, bachelor of science and nursing + certified school nurse
+  nursing_philosophy: evidence-based care, radical empathy, advocate for the unseen
+  role_personal: husband to wife Katy Banks, father to dog Ryder and step-father to Kay's dog 'Lovie'
+
+model:
+  identity: 'GoodQ: Digital embodiment of Q from the James Bond universe'
+  personality_traits: witty, tech-savvy, loyal, precise, occasionally sarcastic, supportive, mischievous
+  values: service, innovation, protection, efficiency, dry humor, reliability, intelligence
+  humor_style: 007 Secret Agent excitement, witty Q-style dry sarcasm, clever jabs
+  tech_sidekick_persona: tech-savvy sidekick with dry wit and taste for innovation
+  zone_1: Command_Center
+  zone_1_desc: User's main workstation for coding, music production, and gaming
+  zone_2: Desk Dock
+  zone_2_desc: Razer Laptop Dock with RGB lighting and Dual 25-inch HP Monitors
+  zone_3: Chase Recon
+  zone_3_desc: Relaxing large lounge day-bed with dual monitor setup and lakeside views
+  main_hardware: Alienware Aurora R16
+  main_hardware_codename: THE_GOODENGINE
+  mission_name: GoodQ_o2
+  assigned_zone: The_GoodPlace
+  workplace: The GoodPlace, Chicago, Illinois
+
+# ============================================================================
+# PATHS
+# ============================================================================
+paths:
+  # Core directories
+  log_dir: L:/goodq4all/logs
+  output_directory: L:/goodq4all/output
+  db_dir: L:/goodq4all/data
+  db_path: L:/goodq4all/data/memory.db
+  knowledge_graph_db: L:/goodq4all/data/knowledge_graph.db
+  faiss_dir: L:/goodq4all/data/faiss
+  config_dir: L:/goodq4all/configs
+  
+  # Data paths
+  data_root: L:/_DATA/GoodQ_Data
+  import_inbox: L:/_DATA/GoodQ_Data/import_inbox
+  processing: L:/_DATA/GoodQ_Data/processing
+  models_cache: L:/_DATA/models
+  
+  # Segmentation output paths
+  chunk_subdir: chunks
+  audio_subdir: audio
+  video_subdir: video
+  metadata_subdir: metadata
+  
+  # External paths
+  csv_path: L:/goodq4all/logs/system_metrics.csv
+  nas_path: G:/Logs
+
+# ============================================================================
+# LLM & TTS
+# ============================================================================
+llm:
+  api_url: http://localhost:1234/v1/chat/completions
+  model_id: LM_STUDIO_GOODQ
+
+tts:
+  elevenlabs_voice_id: 4YYIPFl9wE5c4L2eu2Gb
+  piper_voice: joe
+  last_used_voice: moviephone
+
+# ============================================================================
+# HOME ASSISTANT
+# ============================================================================
+home_assistant:
+  url: http://192.168.0.154:8123
+  token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiI0NTAzNDU1OWFlNGM0YmQ5ODhmNmVlYjhlMjI1YWI3ZCIsImlhdCI6MTc1MTA4NjgzMSwiZXhwIjoyMDY2NDQ2ODMxfQ.0bFd5MGzXEsQmZBzO3x2PIqSZ__Rex7t9dl_t5ui9KI
+
+# ============================================================================
+# SYSTEM HARDWARE
+# ============================================================================
+system:
+  cpu: Intel Core i7-14700KF
+  gpu: NVIDIA GeForce RTX 4070 Ti SUPER with 16GB GDDR6X
+  ram1: 32GB Crucial DDR5 at 5200MHz
+  ram2: 32GB Crucial DDR5 at 5200MHz
+  ssd1: Samsung 990 Pro 4TB NVMe SSD
+  ssd2: Samsung 990 Pro 4TB NVMe SSD
+  network: Tp-Link Archer AXE7800 with 2.5Gbps Ethernet and Wi-Fi 6E
+  storage: UGREEN NAS with 44TB of storage
+
+# ============================================================================
+# GPU CONFIGURATION
+# ============================================================================
+gpu:
+  enabled: true
+  cuda_version: "12.1"
+  torch_version: "2.5.1+cu121"
+  primary_env: goodq_core
+  memory_fraction: 0.85
+  allow_growth: true
+
+# ============================================================================
+# ENVIRONMENT ROUTING
+# ============================================================================
+envs:
+  # Unified Windows GPU environment (CUDA 12.1)
+  core: goodq_core
+  
+  # WSL2 Audio lab (separate Linux GPU runtime)
+  audio_transcribe: goodq_audio_transcribe
+  audio_embed: goodq_audio_embed
+  audio_emotion: goodq_audio_emotion
+  audio_metadata: goodq_audio_metadata
+  
+  # Legacy (deprecated but preserved for rollback)
+  video_scene_detect: goodq_video_scene_detect
+
+# ============================================================================
+# QDRANT VECTOR DATABASE
+# ============================================================================
+qdrant:
+  host: http://localhost:6333
+  collections:
+    clip: goodq_clip
+    dino: goodq_dino
+    text: goodq_text
+    audio: goodq_audio
+  embedding_dims:
+    clip: 512
+    dino: 768
+    text: 384
+    audio: 512
+
+# ============================================================================
+# PHASED SEGMENTATION ENGINE (Phases 0-5)
+# ============================================================================
+segmentation:
+  enabled: true
+  mode: phased
+  
+  # Phase 0: Pre-Normalization
+  phase0:
+    target_sample_rate: 16000
+    channels: 1
+    bit_depth: 16
+    codec: pcm_s16le
+  
+  # Phase 1: WebRTC-VAD Segmentation
+  phase1:
+    aggressiveness: 3
+    frame_duration_ms: 30
+    min_speech_duration: 0.3
+    min_silence_duration: 0.5
+    padding_duration: 0.1
+  
+  # Phase 2: Pyannote Segmentation
+  phase2:
+    enabled: false
+    min_duration_off: 0.0
+    min_duration_on: 0.0
+    model: pyannote/segmentation
+    device: cuda
+    use_auth_token: null
+  
+  # Phase 3: Smart Chunk Building
+  phase3:
+    min_chunk_duration: 1.0
+    max_chunk_duration: 40.0
+    target_chunk_duration: 20.0
+    chunk_padding_ms: 250
+    chunk_overlap_ms: 500
+    merge_threshold: 2.0
+  
+  # Phase 4: Heavy Audio Processing (WSL2)
+  phase4:
+    enable_transcription: true
+    enable_diarization: true
+    enable_embeddings: true
+    enable_emotion: true
+    enable_music_detection: true
+    
+    # Whisper settings
+    whisper_model: medium
+    language: null
+    beam_size: 5
+    best_of: 5
+    temperature: 0.0
+    
+    # Diarization
+    min_speakers: null
+    max_speakers: null
+    diarize_timeout: 7200
+    chunk_timeout: 600
+    max_parallel_chunks: 2
+    
+    # CLAP embeddings
+    clap_model: laion/clap-htsat-fused
+    
+    # Emotion detection
+    emotion_model: ehcalabres/wav2vec2-lg-xlsr-en-speech-emotion-recognition
+  
+  # Phase 5: Video Scene Detection
+  phase5:
+    enabled: true
+    scene_threshold: 30.0
+    min_scene_len_sec: 2.0
+    use_gpu: true
+    batch_size: 32
+    alignment_tolerance: 0.5
+
+# ============================================================================
+# PHASE 6: SCENE VISUAL EMBEDDINGS & CROSS-MODAL FUSION
+# ============================================================================
+phase6:
+  enabled: true
+  
+  # Frame extraction strategy
+  frame_sampling_strategy: uniform
+  frames_per_scene: 3
+  
+  # GPU batch settings
+  max_gpu_batch_size: 8
+  
+  # Collections
+  clip_collection: goodq_clip
+  dino_collection: goodq_dino
+  
+  # Retrieval settings
+  retrieval:
+    enable: true
+    fusion_weights:
+      text: 0.5
+      visual: 0.4
+      audio: 0.1
+
+# ============================================================================
+# API CONFIGURATION
+# ============================================================================
+api:
+  enabled: true
+  host: 127.0.0.1
+  port: 8000
+  reload: true
+  cors_enabled: false
+  max_upload_size: 5368709120  # 5GB
+
+# ============================================================================
+# UI CONFIGURATION
+# ============================================================================
+ui:
+  enabled: true
+  serve_from: L:/goodq4all/ui
+  theme: dark
+
+# ============================================================================
+# PIPELINE SETTINGS
+# ============================================================================
+pipeline:
+  parallel_processing: false
+  max_workers: 4
+  save_intermediate: true
+  cleanup_temp_files: false
+  retry_on_failure: true
+  max_retries: 3
+
+# ============================================================================
+# OUTPUT SETTINGS
+# ============================================================================
+output:
+  save_chunks: true
+  save_manifests: true
+  save_embeddings: true
+  compression: false
+
+# ============================================================================
+# LOGGING
+# ============================================================================
+logging:
+  level: INFO
+  save_logs: true
+  verbose: true
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"

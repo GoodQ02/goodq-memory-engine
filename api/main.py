@@ -19,8 +19,8 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from typing import Optional, List, Any, Dict
 from pydantic import BaseModel
 
-from steps.common.config_loader import load_configs
-from steps.common.memory_manager import build_memory_router
+from goodq4all.steps.common.config_loader import load_configs
+from goodq4all.steps.common.memory_manager import build_memory_router
 
 # Import Phase 7 API routes
 from api.routes import search, scenes, timeline, media, system
@@ -636,7 +636,7 @@ def vector_search(
     tag: Optional[str] = Query(None, description="Filter by tag/entity"),
 ) -> Dict[str, Any]:
     # Lazy imports to keep startup fast
-    from steps.common.config_loader import load_configs
+    from goodq4all.steps.common.config_loader import load_configs
     from langchain_community.embeddings import HuggingFaceEmbeddings
     from langchain_community.vectorstores import Chroma
     import os
@@ -1318,7 +1318,7 @@ def get_memory_stats() -> Dict[str, Any]:
     """Lightweight memory stats across tiers (faiss/qdrant)."""
     cfg = {}
     try:
-        from steps.common.config_loader import load_configs
+        from goodq4all.steps.common.config_loader import load_configs
         cfg = load_configs({})
     except Exception:
         cfg = {}

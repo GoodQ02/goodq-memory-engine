@@ -159,7 +159,7 @@ def run_step(step_name: str, item: Dict[str, Any] | None, cfg: Dict[str, Any]) -
         assert item is not None
         return tagger(item, cfg)
     if step_name == "video_scene_segmentation":
-        from goodq4all.steps.audio.segmentation.phase5_video_scene_integration import process_video_chunks_with_scenes
+        from goodq4all.steps.audio.segmentation.phase5_video_scene_integration_video_scene_integration import process_video_chunks_with_scenes
         assert item is not None
         # Extract required inputs from item
         video_path = item.get('path') or item.get('file_path')

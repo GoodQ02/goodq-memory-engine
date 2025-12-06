@@ -7,8 +7,8 @@ import json
 import logging
 
 from goodq4all.steps.common.memory import upsert_embedding
-from steps.common.memory_router import MemoryRouter
-from steps.common.memory_stores import build_text_stores
+from goodq4all.steps.common.memory_router import MemoryRouter
+from goodq4all.steps.common.memory_stores import build_text_stores
 
 logger = logging.getLogger(__name__)
 

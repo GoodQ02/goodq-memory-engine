@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from typing import Dict
 
-from steps.common.memory_router import MemoryRouter
-from steps.common.memory_store import MemoryConfig, MemoryDims
-from steps.common.memory_stores import build_text_stores
+from goodq4all.steps.common.memory_router import MemoryRouter
+from goodq4all.steps.common.memory_store import MemoryConfig, MemoryDims
+from goodq4all.steps.common.memory_stores import build_text_stores
 
 
 def build_memory_router(cfg: Dict) -> MemoryRouter:

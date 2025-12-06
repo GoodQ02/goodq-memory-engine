@@ -24,7 +24,7 @@ except ImportError:
                 pass
 
 from goodq4all.steps.text_embed.step import _content_fingerprint
-from steps.common.qdrant_client import build_qdrant_client
+from goodq4all.steps.common.qdrant_client import build_qdrant_client
 
 
 _CLIP = {"model": None, "proc": None, "device": "cpu"}

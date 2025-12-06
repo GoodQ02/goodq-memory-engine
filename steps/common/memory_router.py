@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from steps.common.memory_store import MemoryStore, MemoryConfig, MemoryDims
+from goodq4all.steps.common.memory_store import MemoryStore, MemoryConfig, MemoryDims
 
 
 class MemoryRouter:

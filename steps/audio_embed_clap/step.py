@@ -1,7 +1,7 @@
 from __future__ import annotations
 # GPU Configuration - Auto-configured on import
 from goodq4all.steps.common.gpu_config import configure_gpu, get_device, clear_cache, print_memory_stats
-from steps.common.qdrant_client import build_qdrant_client
+from goodq4all.steps.common.qdrant_client import build_qdrant_client
 
 
 from typing import Any, Dict, Optional

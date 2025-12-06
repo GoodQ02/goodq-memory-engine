@@ -18,15 +18,15 @@ sys.path.insert(0, str(REPO_ROOT))
 import re
 import typer
 
-from goodq4all.steps.common.config_loader import load_configs
-from goodq4all.steps.common.memory import ensure_scene, register_scene_bundle, scene_has_materialized, get_scene_meta, list_scenes_for_video
-from goodq4all.steps.common.tag_utils import canonicalize_taxonomy
-from goodq4all.steps.common.tool_paths import resolve_ffmpeg, resolve_conda
-from goodq4all.steps.common.step_logger import log_step_run
+from steps.common.config_loader import load_configs
+from steps.common.memory import ensure_scene, register_scene_bundle, scene_has_materialized, get_scene_meta, list_scenes_for_video
+from steps.common.tag_utils import canonicalize_taxonomy
+from steps.common.tool_paths import resolve_ffmpeg, resolve_conda
+from steps.common.step_logger import log_step_run
 
 # Progress tracking
 try:
-    from goodq4all.steps.common.progress_tracker import get_tracker, step_context, update_step
+    from steps.common.progress_tracker import get_tracker, step_context, update_step
     PROGRESS_TRACKING_AVAILABLE = True
 except ImportError:
     PROGRESS_TRACKING_AVAILABLE = False

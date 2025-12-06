@@ -1,40 +1,36 @@
 """
-ZenML pipeline that orchestrates multimodal ingestion while delegating each
-heavy step to its own Conda environment via the CLI step runner.
+DEPRECATED: This file used ZenML which is NO LONGER USED.
 
-Prereqs:
-- Prepare envs: `pwsh scripts/prepare_step_envs.ps1`
-- Register local ZenML stack: `pwsh scripts/bootstrap_zenml.ps1`
+For actual ingestion, use:
+- pipelines/direct_ingestion.py (pure Python, no ZenML)
+- cli/run_ingestion.py (scene-based ingestion CLI)
 
-Run (example):
-    from steps.pipelines.ingest_multimodal_conda import ingest_multimodal
-    ingest_multimodal()
+This file is kept for reference only.
 """
 from typing import Any, Dict, List
 
-from zenml import pipeline, step
+# ZenML REMOVED - imports below are deprecated
+# from zenml import pipeline, step
 
 from goodq4all.steps.common.config_loader import load_configs
 from goodq4all.steps.common.conda_runner import run_conda_step
 from goodq4all.steps.common.memory import append_long_term_summary, store_short_term_summary
 from goodq4all.steps.common.tag_utils import canonicalize_taxonomy
 from goodq4all.steps.discover_sources.step import discover_sources
-from materializers.json_materializer import JSONMaterializer
+# REMOVED: from materializers.json_materializer import JSONMaterializer
 from goodq4all.steps.video_ingest.step import video_ingest_and_summarize as _video_ingest_and_summarize
 from goodq4all.steps.overview.step import overview as _overview
 
 
-@step(enable_cache=False, output_materializers=JSONMaterializer)
+# ZenML decorators REMOVED
 def load_config_step() -> Dict[str, Any]:
     return load_configs({})
 
 
-@step(enable_cache=False, output_materializers=JSONMaterializer)
 def discover_sources_step(cfg: Dict[str, Any]) -> List[Dict[str, Any]]:
     return discover_sources(cfg)
 
 
-@step(enable_cache=False, output_materializers=JSONMaterializer)
 def process_items_step(items: List[Dict[str, Any]], cfg: Dict[str, Any]) -> List[Dict[str, Any]]:
     out: List[Dict[str, Any]] = []
     for it in items:
@@ -99,7 +95,6 @@ def process_items_step(items: List[Dict[str, Any]], cfg: Dict[str, Any]) -> List
     return out
 
 
-@step(enable_cache=False, output_materializers=JSONMaterializer)
 def summarize_results_step(results: List[Dict[str, Any]], cfg: Dict[str, Any]) -> Dict[str, Any]:
     mods: Dict[str, int] = {}
     frames_total = 0
@@ -132,20 +127,19 @@ def summarize_results_step(results: List[Dict[str, Any]], cfg: Dict[str, Any]) -
     return summary
 
 
-@pipeline(enable_cache=False)
+# DEPRECATED: ZenML pipeline removed
 def ingest_multimodal():
-    cfg = load_config_step()
-    items = discover_sources_step(cfg)
-    results = process_items_step(items, cfg)
-    _ = summarize_results_step(results, cfg)
-    vids = video_ingest_and_summarize_step(cfg)
-    _ = overview_step(results, vids, cfg)
-@step(enable_cache=False, output_materializers=JSONMaterializer)
+    """
+    DEPRECATED: Use pipelines/direct_ingestion.py instead.
+    This ZenML-based pipeline is no longer used.
+    """
+    raise NotImplementedError("Use pipelines/direct_ingestion.py for ingestion")
+
+
 def video_ingest_and_summarize_step(cfg: Dict[str, Any]) -> Dict[str, Any]:
     return _video_ingest_and_summarize(cfg)
 
 
-@step(enable_cache=False, output_materializers=JSONMaterializer)
 def overview_step(results: List[Dict[str, Any]], video_summary: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
     overview = _overview(results, video_summary, cfg)
     try:

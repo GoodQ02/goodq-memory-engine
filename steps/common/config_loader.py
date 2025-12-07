@@ -38,6 +38,11 @@ def _normalize_paths(obj: Any) -> Any:
 
 
 def load_configs(overrides: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    """
+    Load and validate the canonical GoodQ4All configuration.
+    Uses Pydantic validation to ensure schema compliance.
+    Returns a dictionary for backwards compatibility with existing code.
+    """
     # Optional: load a local .env.local file for secrets (no-ops if dotenv not installed)
     try:
         from dotenv import load_dotenv  # type: ignore
@@ -47,25 +52,35 @@ def load_configs(overrides: Dict[str, Any] | None = None) -> Dict[str, Any]:
         if os.path.isfile(env_path):
             load_dotenv(env_path)
     except Exception as e:
-        print(f'[ERROR] Exception in config_loader.py line 23: {str(e)}')
+        print(f'[WARN] Could not load .env.local: {str(e)}')
         pass
 
     base_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "configs")
     
     # Load unified config.yaml (primary configuration file)
     unified_config_path = os.path.join(base_dir, "config.yaml")
-    if os.path.isfile(unified_config_path):
-        cfg = _normalize_paths(_read_yaml(unified_config_path))
-    else:
-        # Fallback to legacy config files for backwards compatibility
-        config_open = _read_yaml(os.path.join(base_dir, "config_open.yaml"))
-        paths = _normalize_paths(_read_yaml(os.path.join(base_dir, "paths.yaml")))
-        entities = _read_yaml(os.path.join(base_dir, "entities.yaml"))
-        model_registry = _read_yaml(os.path.join(base_dir, "model_registry.yaml"))
-        cfg = {"config": config_open, "paths": paths, "entities": entities, "models": model_registry}
+    if not os.path.isfile(unified_config_path):
+        raise FileNotFoundError(f"Canonical config not found: {unified_config_path}")
     
+    raw_cfg = _normalize_paths(_read_yaml(unified_config_path))
+    
+    # Apply overrides before validation
     if overrides:
-        # shallow merge only; keep deterministic and explicit
-        for k, v in overrides.items():
-            cfg[k] = v
-    return cfg
+        # Deep merge for nested overrides
+        def deep_merge(base, override):
+            for k, v in override.items():
+                if k in base and isinstance(base[k], dict) and isinstance(v, dict):
+                    deep_merge(base[k], v)
+                else:
+                    base[k] = v
+        deep_merge(raw_cfg, overrides)
+    
+    # Validate against Pydantic schema
+    try:
+        from config_schema import GoodQConfig
+        validated = GoodQConfig.model_validate(raw_cfg)
+        return validated.model_dump()
+    except Exception as e:
+        print(f"[ERROR] Config validation failed: {str(e)}")
+        print("[WARN] Falling back to unvalidated config (not recommended)")
+        return raw_cfg

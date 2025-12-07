@@ -158,3 +158,9 @@ yarn.lock
 !scripts/**/*.ps1
 !configs/**/*.yaml
 !LICENSE
+
+# ===== ARCHIVE DIRECTORIES =====
+# Archive deprecated code but not the large binary artifacts
+archive/deprecated_*/
+archive/**/raw/
+archive/**/legacy_data/

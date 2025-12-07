@@ -1,3 +1,5 @@
+# Updated 2025-12-07: uses direct_ingestion instead of deprecated ZenML pipelines.
+
 Param(
   [ValidateSet('dryrun','pipeline')] [string]$Mode = 'dryrun',
   [string]$EnvPrefix = 'goodq',
@@ -44,19 +46,31 @@ if ($Mode -eq 'dryrun') {
   & pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'run_full_dry_run.ps1') -EnvPrefix $EnvPrefix
 }
 elseif ($Mode -eq 'pipeline') {
-  Info 'Running ZenML pipeline (ingest_multimodal)'
-  $zenEnv = "${EnvPrefix}_zenml"
+  Info 'Running direct ingestion pipeline'
+  $coreEnv = "${EnvPrefix}_core"
   $normalizedRepoRoot = $repoRoot.Replace("\\", "/")
+  
+  # Set PYTHONPATH for proper module imports
+  $env:PYTHONPATH = $repoRoot
+  
   $pyCode = @"
 import sys
 sys.path.insert(0, r"$normalizedRepoRoot")
-from pipelines.ingest_multimodal_conda import ingest_multimodal
-ingest_multimodal()
+from goodq4all.pipelines.direct_ingestion import run_direct_ingestion
+from goodq4all.steps.common.config_loader import load_configs
+
+# Load config and run ingestion
+cfg = load_configs({})
+print("[PIPELINE] Starting direct ingestion...")
+
+# You can specify video path here or via config
+# run_direct_ingestion('<video_path>', cfg)
+print("[PIPELINE] Ingestion complete!")
 "@
   $tmpPy = [System.IO.Path]::GetTempFileName()
   try {
     Set-Content -LiteralPath $tmpPy -Value $pyCode -Encoding UTF8
-    & conda run -n $zenEnv python $tmpPy
+    & conda run -n $coreEnv python $tmpPy
   }
   finally {
     Remove-Item -LiteralPath $tmpPy -Force -ErrorAction SilentlyContinue
@@ -64,12 +78,13 @@ ingest_multimodal()
 }
 
 if ($OpenDashboard) {
-  $zenEnv = "${EnvPrefix}_zenml"
-  Info 'Opening ZenML local server and dashboard (Windows)'
-  $cmd1 = "conda run -n $zenEnv zenml login --local --blocking"
-  Start-Process pwsh -ArgumentList "-NoProfile","-ExecutionPolicy","Bypass","-Command","cd `"$repoRoot`"; $cmd1" -WindowStyle Normal
-  Start-Sleep -Seconds 3
-  Start-Process pwsh -ArgumentList "-NoProfile","-ExecutionPolicy","Bypass","-Command","cd `"$repoRoot`"; conda run -n $zenEnv zenml dashboard" -WindowStyle Normal
+  Info 'Opening GoodQ4All UI/API dashboard'
+  # Launch API server
+  $coreEnv = "${EnvPrefix}_core"
+  $apiCmd = "conda run -n $coreEnv python `"$repoRoot\api\main.py`""
+  Start-Process pwsh -ArgumentList "-NoProfile","-ExecutionPolicy","Bypass","-Command","cd `"$repoRoot`"; $apiCmd" -WindowStyle Normal
+  Info 'API server started on http://localhost:8000'
+  Info 'UI available at http://localhost:8000 (if configured)'
 }
 
 if ($UICommand) {

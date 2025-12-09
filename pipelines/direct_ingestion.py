@@ -75,13 +75,28 @@ def run_direct_ingestion(video_path: str | Path, cfg: Dict[str, Any] | None = No
         
         print(f"[INGEST] ✅ Ingestion complete for {video_path.name}")
         
-        # Generate video_id (same logic as scene ingestion)
-        video_id = video_path.stem
+        # Read the actual result JSON to get the correct video_id and paths
+        output_json = Path(f"logs/direct_ingest_{video_path.stem}.json")
+        actual_video_id = None
+        actual_processing_dir = None
         
-        # Use the configured processing directory
-        processing_dir = processing_root / video_id
+        if output_json.exists():
+            import json
+            with open(output_json, 'r') as f:
+                ingestion_results = json.load(f)
+                # The ingestion creates one result per video
+                if isinstance(ingestion_results, list) and len(ingestion_results) > 0:
+                    first_result = ingestion_results[0]
+                    actual_video_id = first_result.get('video_id')
+                    # Reconstruct processing dir from workspace + video_id
+                    if actual_video_id:
+                        actual_processing_dir = processing_root / actual_video_id
         
-        # Build temporal index path from configured processing location
+        # Fallback to stem-based ID if we couldn't read from JSON
+        video_id = actual_video_id if actual_video_id else video_path.stem
+        processing_dir = actual_processing_dir if actual_processing_dir else (processing_root / video_id)
+        
+        # Build temporal index path from actual processing location
         temporal_index_path = processing_dir / "temporal_index.json"
         
         # Return complete result with video_id and temporal_index for downstream validation

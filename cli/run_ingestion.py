@@ -1315,7 +1315,12 @@ def run(
                 harmonization_result = _run_step('goodq_core', 'cross_modal_harmonization', phase6_item, cfg_json)
                 if isinstance(harmonization_result, dict):
                     phase6_item.update(harmonization_result)
-                    video_result['temporal_index'] = harmonization_result.get('temporal_index')
+                    # Load temporal index from file if path provided
+                    temporal_index_path = harmonization_result.get('temporal_index_path')
+                    if temporal_index_path and os.path.exists(temporal_index_path):
+                        with open(temporal_index_path, 'r', encoding='utf-8') as f:
+                            video_result['temporal_index'] = json.load(f)
+                    video_result['temporal_index_path'] = temporal_index_path
                     video_result['phase6_complete'] = True
                     typer.echo('[PHASE 6b] ✅ Harmonization complete')
                     

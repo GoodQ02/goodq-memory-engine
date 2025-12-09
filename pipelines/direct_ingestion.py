@@ -43,6 +43,10 @@ def run_direct_ingestion(video_path: str | Path, cfg: Dict[str, Any] | None = No
     from goodq4all.cli.run_ingestion import run as scene_ingest_run
     import typer
     
+    # Get processing directory from config
+    processing_root = Path(cfg.get('paths', {}).get('processing', 'L:/_DATA/GoodQ_Data/processing'))
+    processing_root.mkdir(parents=True, exist_ok=True)
+    
     # Call the existing scene ingestion (which works without ZenML)
     try:
         # Create a temporary directory with just this video to ensure only it gets processed
@@ -60,7 +64,7 @@ def run_direct_ingestion(video_path: str | Path, cfg: Dict[str, Any] | None = No
             scene_ingest_run(
                 input_dir=temp_inbox,
                 output=Path(f"logs/direct_ingest_{video_path.stem}.json"),
-                workspace=Path(f"logs/direct_ingest_workspace"),
+                workspace=processing_root,  # Use configured processing directory
                 max_videos=1,  # Process only this video
                 verbose=True,
             )
@@ -73,11 +77,12 @@ def run_direct_ingestion(video_path: str | Path, cfg: Dict[str, Any] | None = No
         
         # Generate video_id (same logic as scene ingestion)
         video_id = video_path.stem
-        processing_root = Path(cfg.get("paths", {}).get("processing_root", "L:/_DATA/GoodQ_Data/processing"))
+        
+        # Use the configured processing directory
         processing_dir = processing_root / video_id
         
-        # Build temporal index path
-        temporal_index_path = processing_dir / "metadata" / "temporal_index.json"
+        # Build temporal index path from configured processing location
+        temporal_index_path = processing_dir / "temporal_index.json"
         
         # Return complete result with video_id and temporal_index for downstream validation
         result = {
@@ -85,8 +90,8 @@ def run_direct_ingestion(video_path: str | Path, cfg: Dict[str, Any] | None = No
             "video_path": str(video_path),
             "video_id": video_id,
             "video_name": video_path.name,
-            "processing_dir": str(processing_dir),
-            "temporal_index_path": str(temporal_index_path) if temporal_index_path.exists() else None
+            "processing_dir": str(processing_dir.absolute()),
+            "temporal_index_path": str(temporal_index_path.absolute()) if temporal_index_path.exists() else None
         }
         
         # Optionally embed temporal index content if it exists

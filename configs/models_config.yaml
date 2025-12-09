@@ -17,7 +17,7 @@ models:
   # Balanced model (Ollama)
   phi4_ollama:
     name: "Phi4-Ollama"
-    base_url: "http://localhost:31434/v1"
+    base_url: "http://localhost:11434/v1"
     model_id: "phi4"
     engine: "ollama"
     category: "balanced"
@@ -40,6 +40,7 @@ strategies:
 
 # Health check settings
 health:
+  enabled: false  # Disable healthchecks during ingestion
   check_interval_seconds: 30
   timeout_seconds: 10
   retry_attempts: 3

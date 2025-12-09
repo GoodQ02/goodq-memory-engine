@@ -754,13 +754,13 @@ def _process_frame(
         if isinstance(result, dict):
             item.update(result)
 
-    merge('goodq_image_caption', 'image_ocr')
-    merge('goodq_image_caption', 'image_caption')
-    merge('goodq_object_detect', 'object_detect')
-    merge('goodq_face_embed', 'face_embed')
-    merge('goodq_image_caption', 'image_embed_dino')
-    merge('goodq_image_caption', 'image_embed_clip')
-    merge('goodq_emotion_classify', 'tagger')
+    merge('goodq_core', 'image_ocr')
+    merge('goodq_core', 'image_caption')
+    merge('goodq_core', 'object_detect')
+    merge('goodq_core', 'face_embed')
+    merge('goodq_core', 'image_embed_dino')
+    merge('goodq_core', 'image_embed_clip')
+    merge('goodq_core', 'tagger')
 
     frame_text_parts: List[str] = []
     if isinstance(item.get('ocr_text'), str):
@@ -776,7 +776,7 @@ def _process_frame(
             'scene_id': scene_id,
             'video_hash': video_hash,
         }
-        _run_step('goodq_text_embed', 'text_embed', text_payload, cfg_json)
+        _run_step('goodq_core', 'text_embed', text_payload, cfg_json)
         item['frame_text'] = frame_text
 
     canonicalize_taxonomy(item)
@@ -841,11 +841,11 @@ def _process_audio(
             'scene_id': scene_id,
             'video_hash': video_hash,
         }
-        _run_step('goodq_text_embed', 'text_embed', text_payload, cfg_json)
+        _run_step('goodq_core', 'text_embed', text_payload, cfg_json)
 
-    merge('goodq_sentiment', 'sentiment')
-    merge('goodq_emotion_classify', 'emotion_classify')
-    merge('goodq_emotion_classify', 'tagger')
+    merge('goodq_core', 'sentiment')
+    merge('goodq_core', 'emotion_classify')
+    merge('goodq_core', 'tagger')
     merge('goodq_audio_embed', 'audio_embed_clap')
 
     canonicalize_taxonomy(item)

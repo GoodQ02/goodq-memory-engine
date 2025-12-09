@@ -1255,6 +1255,8 @@ def run(
         video_result = {
             'video_path': str(video_path),
             'video_hash': video_hash,
+            'video_id': video_hash,  # Use video_hash as video_id for consistency
+            'video_name': video_path.name,
             'scene_meta': detection_meta,
             'scenes': scene_outputs,
         }
@@ -1421,7 +1423,8 @@ def run(
                 control_agent.stop_monitoring()
             
             report_path = workspace / "control_agent_report.md"
-            control_agent.generate_report(str(report_path))
+            # Generate report with empty diagnosis if not tracking issues
+            control_agent.generate_report(str(report_path), diagnosis="")
             typer.echo(f"[CONTROL] Final report generated: {report_path}")
             
             # Display key insights

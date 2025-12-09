@@ -70,7 +70,18 @@ def run_direct_ingestion(video_path: str | Path, cfg: Dict[str, Any] | None = No
                 shutil.rmtree(temp_inbox)
         
         print(f"[INGEST] ✅ Ingestion complete for {video_path.name}")
-        return {"status": "success", "video_path": str(video_path)}
+        
+        # Generate video_id (same logic as scene ingestion)
+        video_id = video_path.stem
+        
+        # Return complete result with video_id for downstream validation
+        return {
+            "status": "success", 
+            "video_path": str(video_path),
+            "video_id": video_id,
+            "video_name": video_path.name,
+            "processing_dir": str(Path(cfg.get("paths", {}).get("processing_root", "L:/_DATA/GoodQ_Data/processing")) / video_id)
+        }
         
     except Exception as e:
         print(f"[INGEST] ❌ Ingestion failed: {e}")

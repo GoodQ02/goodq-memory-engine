@@ -488,15 +488,15 @@ def get_engines() -> Dict[str, Any]:
     # Ollama check
     try:
         import requests
-        resp = requests.get("http://localhost:31434/v1/models", timeout=2)
+        resp = requests.get("http://localhost:11434/v1/models", timeout=2)
         if resp.status_code == 200:
             engines["ollama"] = {
                 "name": "Ollama",
                 "category": "LLM Inference",
-                "description": "Phi4 on port 31434",
+                "description": "Phi4 on port 11434",
                 "status": "ready",
                 "gpu": True,
-                "port": 31434
+                "port": 11434
             }
         else:
             raise Exception("unhealthy")
@@ -507,7 +507,7 @@ def get_engines() -> Dict[str, Any]:
             "description": "Not running",
             "status": "unavailable",
             "gpu": True,
-            "port": 31434
+            "port": 11434
         }
     
     # WSL audio

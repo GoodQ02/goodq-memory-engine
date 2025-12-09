@@ -68,8 +68,17 @@ paths:
 # LLM & TTS
 # ============================================================================
 llm:
+  # LM Studio (primary for chat/dialogue)
   api_url: http://localhost:1234/v1/chat/completions
   model_id: LM_STUDIO_GOODQ
+  
+  # vLLM Server (WSL2, high-performance inference)
+  vllm_url: http://localhost:38005/v1
+  vllm_model: meta-llama/Llama-3.2-1B-Instruct
+  
+  # Ollama (WSL2, fallback LLM)
+  ollama_url: http://localhost:11434/v1
+  ollama_model: phi4:latest
 
 tts:
   elevenlabs_voice_id: 4YYIPFl9wE5c4L2eu2Gb

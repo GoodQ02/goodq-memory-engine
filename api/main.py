@@ -68,8 +68,7 @@ def _summarize_llm_health() -> Dict[str, Any]:
     vllm_total = 0
     ollama_healthy = 0
     ollama_total = 0
-    ollama_port = 31434  # preferred normalized port
-    ollama_fallback_port = 11434  # default Ollama port
+    ollama_port = 11434  # default Ollama port in WSL2
 
     try:
         resp = requests.get("http://localhost:38005/v1/models", timeout=2)
@@ -91,15 +90,10 @@ def _summarize_llm_health() -> Dict[str, Any]:
             pass
         return False, 0, 0
 
-    # Prefer normalized port; fall back to Ollama default if down
+    # Check Ollama on default WSL2 port
     ok, t, h = _probe_ollama(ollama_port)
     if ok:
         ollama_total, ollama_healthy = t, h
-    else:
-        ok, t, h = _probe_ollama(ollama_fallback_port)
-        if ok:
-            ollama_total, ollama_healthy = t, h
-            ollama_port = ollama_fallback_port
 
     def _status(healthy: int, total: int) -> str:
         if total == 0:
@@ -124,7 +118,7 @@ def _summarize_llm_health() -> Dict[str, Any]:
             "status": _status(ollama_healthy, ollama_total),
             "healthy": ollama_healthy,
             "total": max(ollama_total, 1),
-            "port": 31434,
+            "port": 11434,
         },
         "overall": {
             "status": "healthy" if healthy_models == total_models else "degraded" if healthy_models > 0 else "unhealthy",
@@ -185,17 +179,17 @@ def _collect_engine_details() -> Dict[str, Any]:
 
     # Check Ollama
     try:
-        resp = requests.get("http://localhost:31434/v1/models", timeout=2)
+        resp = requests.get("http://localhost:11434/v1/models", timeout=2)
         if resp.status_code == 200:
             models = resp.json().get("data", [])
             model_name = models[0]["id"] if models else "Unknown"
             engines["ollama"] = {
                 "name": "Ollama",
                 "category": "LLM Inference",
-                "description": f"{model_name} on port 31434",
+                "description": f"{model_name} on port 11434",
                 "status": "ready",
                 "gpu": True,
-                "port": 31434,
+                "port": 11434,
             }
         else:
             raise Exception("unhealthy")
@@ -206,7 +200,7 @@ def _collect_engine_details() -> Dict[str, Any]:
             "description": "Not running or unreachable",
             "status": "unavailable",
             "gpu": True,
-            "port": 31434,
+            "port": 11434,
         }
 
     # Check WSL audio processing
@@ -490,7 +484,7 @@ def get_status() -> Dict[str, Any]:
             pass
         
         try:
-            resp = requests.get("http://localhost:31434/v1/models", timeout=0.2)
+            resp = requests.get("http://localhost:11434/v1/models", timeout=0.2)
             if resp.status_code == 200:
                 models_data["ollama_healthy"] = 1
                 models_data["healthy"] += 1
@@ -577,7 +571,7 @@ def get_health_summary() -> Dict[str, Any]:
         pass
     
     try:
-        resp = requests.get("http://localhost:31434/v1/models", timeout=1)
+        resp = requests.get("http://localhost:11434/v1/models", timeout=1)
         if resp.status_code == 200:
             ollama_healthy = 1
     except:

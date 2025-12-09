@@ -48,7 +48,7 @@ def main():
         ("http://localhost:38004/v1", "Llama-3B-Balanced"),
         ("http://localhost:38001/v1", "Phi-3.5-LongContext"),
         ("http://localhost:38000/v1", "Qwen-Quality"),
-        ("http://localhost:31434/v1", "Ollama-Fallback"),
+        ("http://localhost:11434/v1", "Ollama-Fallback"),
     ]
     
     results = []

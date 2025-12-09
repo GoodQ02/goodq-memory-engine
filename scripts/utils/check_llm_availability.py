@@ -41,9 +41,9 @@ class LLMChecker:
         },
         'ollama': {
             'name': 'Ollama',
-            'url': 'http://localhost:31434/api/tags',
-            'chat_url': 'http://localhost:31434/api/generate',
-            'port': 31434,
+            'url': 'http://localhost:11434/api/tags',
+            'chat_url': 'http://localhost:11434/api/generate',
+            'port': 11434,
             'priority': 2,
             'required': False,
         },

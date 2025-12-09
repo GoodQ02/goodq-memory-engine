@@ -45,13 +45,29 @@ def run_direct_ingestion(video_path: str | Path, cfg: Dict[str, Any] | None = No
     
     # Call the existing scene ingestion (which works without ZenML)
     try:
-        scene_ingest_run(
-            input_dir=video_path.parent,
-            output=Path(f"logs/direct_ingest_{video_path.stem}.json"),
-            workspace=Path(f"logs/direct_ingest_workspace"),
-            max_videos=1,  # Process only this video
-            verbose=True,
-        )
+        # Create a temporary directory with just this video to ensure only it gets processed
+        import shutil
+        temp_inbox = Path(f"logs/temp_inbox_{video_path.stem}")
+        temp_inbox.mkdir(parents=True, exist_ok=True)
+        
+        # Symlink the video file
+        temp_video = temp_inbox / video_path.name
+        if temp_video.exists():
+            temp_video.unlink()
+        temp_video.symlink_to(video_path.absolute())
+        
+        try:
+            scene_ingest_run(
+                input_dir=temp_inbox,
+                output=Path(f"logs/direct_ingest_{video_path.stem}.json"),
+                workspace=Path(f"logs/direct_ingest_workspace"),
+                max_videos=1,  # Process only this video
+                verbose=True,
+            )
+        finally:
+            # Cleanup temp directory
+            if temp_inbox.exists():
+                shutil.rmtree(temp_inbox)
         
         print(f"[INGEST] ✅ Ingestion complete for {video_path.name}")
         return {"status": "success", "video_path": str(video_path)}

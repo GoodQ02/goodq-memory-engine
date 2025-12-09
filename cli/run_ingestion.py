@@ -2,6 +2,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional, Set
 import hashlib
 import json
+import logging
 import os
 import subprocess
 import sys
@@ -10,6 +11,9 @@ import time
 import uuid
 from datetime import datetime
 from pathlib import Path
+
+# Setup logger
+logger = logging.getLogger(__name__)
 
 # Add repo root to path for imports
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -1412,10 +1416,13 @@ def run(
     # Generate Control Agent final report
     if control_agent:
         try:
-            control_agent.stop_monitoring()
+            # Stop monitoring if method exists
+            if hasattr(control_agent, 'stop_monitoring'):
+                control_agent.stop_monitoring()
+            
             report_path = workspace / "control_agent_report.md"
             control_agent.generate_report(str(report_path))
-            logger.info(f"[CONTROL] Final report generated: {report_path}")
+            typer.echo(f"[CONTROL] Final report generated: {report_path}")
             
             # Display key insights
             if VERBOSE:
@@ -1427,7 +1434,7 @@ def run(
                     typer.echo(insights)
                     typer.echo("="*80 + "\n")
         except Exception as e:
-            logger.warning(f"[CONTROL] Failed to generate final report: {e}")
+            typer.echo(f"[CONTROL] Failed to generate final report: {e}")
 
 
 if __name__ == '__main__':

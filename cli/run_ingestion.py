@@ -1424,8 +1424,13 @@ def run(
             
             report_path = workspace / "control_agent_report.md"
             # Generate report with empty diagnosis if not tracking issues
-            control_agent.generate_report(str(report_path), diagnosis="")
-            typer.echo(f"[CONTROL] Final report generated: {report_path}")
+            try:
+                control_agent.generate_report(str(report_path), diagnosis={})
+                typer.echo(f"[CONTROL] Final report generated: {report_path}")
+            except TypeError:
+                # Fallback if signature doesn't match
+                control_agent.generate_report(str(report_path))
+                typer.echo(f"[CONTROL] Final report generated: {report_path}")
             
             # Display key insights
             if VERBOSE:

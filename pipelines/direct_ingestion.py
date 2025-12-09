@@ -73,15 +73,32 @@ def run_direct_ingestion(video_path: str | Path, cfg: Dict[str, Any] | None = No
         
         # Generate video_id (same logic as scene ingestion)
         video_id = video_path.stem
+        processing_root = Path(cfg.get("paths", {}).get("processing_root", "L:/_DATA/GoodQ_Data/processing"))
+        processing_dir = processing_root / video_id
         
-        # Return complete result with video_id for downstream validation
-        return {
+        # Build temporal index path
+        temporal_index_path = processing_dir / "metadata" / "temporal_index.json"
+        
+        # Return complete result with video_id and temporal_index for downstream validation
+        result = {
             "status": "success", 
             "video_path": str(video_path),
             "video_id": video_id,
             "video_name": video_path.name,
-            "processing_dir": str(Path(cfg.get("paths", {}).get("processing_root", "L:/_DATA/GoodQ_Data/processing")) / video_id)
+            "processing_dir": str(processing_dir),
+            "temporal_index_path": str(temporal_index_path) if temporal_index_path.exists() else None
         }
+        
+        # Optionally embed temporal index content if it exists
+        if temporal_index_path.exists():
+            try:
+                import json
+                with open(temporal_index_path, 'r') as f:
+                    result["temporal_index"] = json.load(f)
+            except Exception as e:
+                print(f"[INGEST] Warning: Could not load temporal_index.json: {e}")
+        
+        return result
         
     except Exception as e:
         print(f"[INGEST] ❌ Ingestion failed: {e}")

@@ -67,6 +67,25 @@ DEFAULT_MODELS_DIR = Path(os.environ.get('HF_HOME', 'L:/models'))
 VERBOSE: bool = False
 STEP_TIMEOUT: Optional[int] = None
 
+
+def run_ingestion(video_path: str, cfg: Optional[Dict] = None):
+    """
+    Main ingestion entrypoint - runs direct_ingestion pipeline
+    
+    Args:
+        video_path: Path to video file to ingest
+        cfg: Optional config dict (will load from config.yaml if not provided)
+    
+    Returns:
+        Dict containing ingestion results
+    """
+    from pipelines.direct_ingestion import run_direct_ingestion
+    
+    if cfg is None:
+        cfg = load_configs({})
+    
+    return run_direct_ingestion(video_path, cfg)
+
 IMAGE_PIPELINE_STEPS = [
     'image_ocr',
     'image_caption',

@@ -106,12 +106,17 @@ def test_artifacts(result: Dict[str, Any], cfg: Dict[str, Any]):
         print("❌ No result to verify")
         return False
     
-    video_id = result.get('video_id')
-    if not video_id:
-        print("❌ No video_id in result")
-        return False
+    # Use processing_dir from result if available, otherwise construct from video_name (not hash)
+    processing_dir_str = result.get('processing_dir')
+    if not processing_dir_str:
+        video_name = result.get('video_name') or result.get('video_id')
+        if not video_name:
+            print("❌ No video_name or video_id in result")
+            return False
+        processing_dir = Path(cfg['paths']['processing']) / video_name
+    else:
+        processing_dir = Path(processing_dir_str)
     
-    processing_dir = Path(cfg['paths']['processing']) / video_id
     print(f"📁 Processing dir: {processing_dir}")
     
     artifacts_to_check = [
@@ -142,12 +147,17 @@ def test_temporal_index_structure(result: Dict[str, Any], cfg: Dict[str, Any]):
         print("❌ No result to verify")
         return False
     
-    video_id = result.get('video_id')
-    if not video_id:
-        print("❌ No video_id in result")
-        return False
+    # Use processing_dir from result if available, otherwise construct from video_name
+    processing_dir_str = result.get('processing_dir')
+    if not processing_dir_str:
+        video_name = result.get('video_name') or result.get('video_id')
+        if not video_name:
+            print("❌ No video_name or video_id in result")
+            return False
+        processing_dir = Path(cfg['paths']['processing']) / video_name
+    else:
+        processing_dir = Path(processing_dir_str)
     
-    processing_dir = Path(cfg['paths']['processing']) / video_id
     temporal_index_path = processing_dir / "temporal_index.json"
     
     if not temporal_index_path.exists():

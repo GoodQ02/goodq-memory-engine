@@ -106,30 +106,39 @@ def test_artifacts(result: Dict[str, Any], cfg: Dict[str, Any]):
         print("❌ No result to verify")
         return False
     
-    # Use processing_dir from result if available, otherwise construct from video_name (not hash)
-    processing_dir_str = result.get('processing_dir')
-    if not processing_dir_str:
-        video_name = result.get('video_name') or result.get('video_id')
-        if not video_name:
-            print("❌ No video_name or video_id in result")
-            return False
-        processing_dir = Path(cfg['paths']['processing']) / video_name
-    else:
-        processing_dir = Path(processing_dir_str)
+    # CRITICAL: Always use video_name (the filename), NOT video_id (which is a hash)
+    video_name = result.get('video_name')
+    if not video_name:
+        print("❌ No video_name in result")
+        print(f"   Available keys: {list(result.keys())}")
+        return False
+    
+    # Construct processing directory from video_name
+    processing_dir = Path(cfg['paths']['processing']) / video_name
     
     print(f"📁 Processing dir: {processing_dir}")
     
+    # Check if directory exists first
+    if not processing_dir.exists():
+        print(f"❌ Processing directory does not exist!")
+        return False
+    
     artifacts_to_check = [
-        ("Scene Manifest", processing_dir / "scene_manifest.json"),  # Fixed: NOT in video/ subdirectory
+        ("Scene Manifest", processing_dir / "scene_manifest.json"),
         ("Temporal Index", processing_dir / "temporal_index.json"),
-        ("Audio Files", processing_dir / "audio"),  # Fixed: check audio directory exists, not specific file
+        ("Audio Directory", processing_dir / "audio"),
+        ("Frames Directory", processing_dir / "frames"),
     ]
     
     all_found = True
     for name, path in artifacts_to_check:
         if path.exists():
-            size = path.stat().st_size
-            print(f"✅ {name}: {path.name} ({size:,} bytes)")
+            if path.is_file():
+                size = path.stat().st_size
+                print(f"✅ {name}: {size:,} bytes")
+            else:
+                file_count = len(list(path.glob("*")))
+                print(f"✅ {name}: {file_count} files")
         else:
             print(f"❌ {name}: NOT FOUND - {path}")
             all_found = False
@@ -147,21 +156,21 @@ def test_temporal_index_structure(result: Dict[str, Any], cfg: Dict[str, Any]):
         print("❌ No result to verify")
         return False
     
-    # Use processing_dir from result if available, otherwise construct from video_name
-    processing_dir_str = result.get('processing_dir')
-    if not processing_dir_str:
-        video_name = result.get('video_name') or result.get('video_id')
-        if not video_name:
-            print("❌ No video_name or video_id in result")
-            return False
-        processing_dir = Path(cfg['paths']['processing']) / video_name
-    else:
-        processing_dir = Path(processing_dir_str)
+    # CRITICAL: Use video_name (the filename), NOT video_id (which is a hash)
+    video_name = result.get('video_name')
+    if not video_name:
+        print("❌ No video_name in result")
+        return False
     
+    processing_dir = Path(cfg['paths']['processing']) / video_name
     temporal_index_path = processing_dir / "temporal_index.json"
     
     if not temporal_index_path.exists():
         print(f"❌ Temporal index not found: {temporal_index_path}")
+        # List what files DO exist to help debug
+        if processing_dir.exists():
+            files = list(processing_dir.glob("*.json"))
+            print(f"   Files in {processing_dir}: {[f.name for f in files]}")
         return False
     
     try:

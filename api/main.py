@@ -19,8 +19,8 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from typing import Optional, List, Any, Dict
 from pydantic import BaseModel
 
-from goodq4all.steps.common.config_loader import load_configs
-from goodq4all.steps.common.memory_manager import build_memory_router
+from steps.common.config_loader import load_configs
+from steps.common.memory_manager import build_memory_router
 
 # Import Phase 7 API routes
 from api.routes import search, scenes, timeline, media, system

@@ -2,8 +2,8 @@
 import sys
 sys.path.insert(0, 'L:\\goodq4all')
 
-from goodq4all.pipelines.direct_ingestion import run_direct_ingestion
-from goodq4all.steps.common.config_loader import load_configs
+from pipelines.direct_ingestion import run_direct_ingestion
+from steps.common.config_loader import load_configs
 
 # Load config
 cfg = load_configs({})

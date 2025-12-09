@@ -1229,12 +1229,91 @@ def run(
 
             scene_outputs.append(scene_record)
 
-        results.append({
+        video_result = {
             'video_path': str(video_path),
             'video_hash': video_hash,
             'scene_meta': detection_meta,
             'scenes': scene_outputs,
-        })
+        }
+        
+        # ============================================================
+        # PHASE 6: VISUAL EMBEDDINGS + MULTIMODAL HARMONIZATION
+        # ============================================================
+        phase6_enabled = cfg.get('phase6', {}).get('enabled', True)
+        if phase6_enabled and scene_outputs:
+            typer.echo(f'\n=== Starting Phase 6: Visual Embeddings & Harmonization ===\n')
+            
+            # Create phase6_item with required structure
+            phase6_item = {
+                'video_id': video_hash,
+                'video_path': str(video_path),
+                'processing_dir': str(video_workspace),
+                'scene_manifest_path': str(video_workspace / 'scene_manifest.json'),
+                'scenes': scene_outputs,
+                'video_hash': video_hash,
+            }
+            
+            # Write scene_manifest.json for Phase 6 to consume
+            scene_manifest = {
+                'video_id': video_hash,
+                'video_path': str(video_path),
+                'scenes': [
+                    {
+                        'scene_id': s.get('scene_id'),
+                        'index': s.get('index'),
+                        'start': s.get('start'),
+                        'end': s.get('end'),
+                        'duration': s.get('duration'),
+                        'confidence': s.get('confidence'),
+                        'keyframe': s.get('keyframe', {}),
+                        'audio': s.get('audio', {}),
+                    }
+                    for s in scene_outputs
+                ]
+            }
+            scene_manifest_path = video_workspace / 'scene_manifest.json'
+            scene_manifest_path.write_text(
+                json.dumps(scene_manifest, ensure_ascii=False, indent=2),
+                encoding='utf-8'
+            )
+            
+            try:
+                # Phase 6a: Scene Visual Embeddings (CLIP + DINO)
+                typer.echo('[PHASE 6a] Generating scene visual embeddings...')
+                embeddings_result = _run_step('goodq_core', 'scene_visual_embeddings', phase6_item, cfg_json)
+                if isinstance(embeddings_result, dict):
+                    phase6_item.update(embeddings_result)
+                    typer.echo('[PHASE 6a] ✅ Visual embeddings complete')
+                
+                # Phase 6b: Cross-Modal Harmonization
+                typer.echo('[PHASE 6b] Running multimodal harmonization...')
+                harmonization_result = _run_step('goodq_core', 'cross_modal_harmonization', phase6_item, cfg_json)
+                if isinstance(harmonization_result, dict):
+                    phase6_item.update(harmonization_result)
+                    video_result['temporal_index'] = harmonization_result.get('temporal_index')
+                    video_result['phase6_complete'] = True
+                    typer.echo('[PHASE 6b] ✅ Harmonization complete')
+                    
+                    # Write temporal index if provided
+                    temporal_index = harmonization_result.get('temporal_index')
+                    if temporal_index:
+                        temporal_index_path = video_workspace / 'temporal_index.json'
+                        temporal_index_path.write_text(
+                            json.dumps(temporal_index, ensure_ascii=False, indent=2),
+                            encoding='utf-8'
+                        )
+                        typer.echo(f'[PHASE 6] ✅ Temporal index written: {temporal_index_path}')
+                
+            except Exception as phase6_error:
+                typer.echo(f'[PHASE 6] ❌ Phase 6 failed: {phase6_error}', err=True)
+                video_result['phase6_error'] = str(phase6_error)
+                video_result['phase6_complete'] = False
+        else:
+            if not phase6_enabled:
+                typer.echo('[PHASE 6] Skipped (disabled in config)')
+            video_result['phase6_complete'] = False
+        
+        results.append(video_result)
 
     # Build knowledge graph from results
     kg_result = _build_knowledge_graph_from_results(results, cfg)

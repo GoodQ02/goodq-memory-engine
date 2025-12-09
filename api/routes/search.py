@@ -10,8 +10,8 @@ from pydantic import BaseModel
 
 from api.utils.response_models import SearchResponse, SearchResult
 from api.utils.loaders import DataLoader
-from goodq4all.retrieval.multimodal_search import MultimodalSearchEngine
-from goodq4all.steps.common.config_loader import load_configs
+from retrieval.multimodal_search import MultimodalSearchEngine
+from steps.common.config_loader import load_configs
 
 logger = logging.getLogger(__name__)
 

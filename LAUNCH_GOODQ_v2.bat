@@ -88,7 +88,7 @@ start "GoodQ API Server" cmd /k "title GoodQ API && cd /d L:\goodq4all && set PY
 timeout /t 5 /nobreak >nul
 
 echo [3/4] Starting Watchdog (Auto-Ingestion)...
-start "GoodQ Watchdog" cmd /k "title GoodQ Watchdog && cd /d L:\goodq4all && set PYTHONPATH=L:\goodq4all && %PYTHON_CMD% -m cli.watchdog"
+start "GoodQ Watchdog" cmd /k "title GoodQ Watchdog && cd /d L:\goodq4all && set PYTHONPATH=L:\goodq4all && %PYTHON_CMD% scripts\watchdog_ingest.py"
 timeout /t 3 /nobreak >nul
 
 echo [4/4] Starting WSL vLLM (if available)...
@@ -140,7 +140,7 @@ echo.
 
 cd /d "L:\goodq4all"
 set PYTHONPATH=L:\goodq4all
-%PYTHON_CMD% -m cli.watchdog
+%PYTHON_CMD% scripts\watchdog_ingest.py
 
 goto end
 

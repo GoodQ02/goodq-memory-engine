@@ -70,7 +70,7 @@ class ControlAgent:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._init_memory_db()
         
-        print(f"🧠 Control Agent initialized (Phase 2: Auto-Healing)")
+        print("[CONTROL AGENT] Initialized (Phase 2: Auto-Healing)")
         print(f"   LLM Client: Ready ({len(self.llm.MODELS)} models configured)")
         print(f"   Config Healer: Armed and ready")
         print(f"   Memory DB: {self.db_path}")
@@ -1068,7 +1068,7 @@ Format your response as JSON:
 def main():
     """CLI entry point"""
     print("=" * 70)
-    print("🧠 GoodQ4All Control Agent - Phase 1: Observer")
+    print("[CONTROL AGENT] GoodQ4All Control Agent - Phase 1: Observer")
     print("=" * 70)
     
     agent = ControlAgent()

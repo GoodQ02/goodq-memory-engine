@@ -79,7 +79,7 @@ class ConfigHealer:
         self.config_path = self.config_dir / "config_open.yaml"
         self.gpu_config_path = self.config_dir / "gpu_config.yaml"
         
-        print(f"🔧 Config Healer initialized")
+        print("[CONFIG HEALER] Initialized")
         print(f"   Config: {self.config_path}")
         print(f"   Backup: {self.backup_dir}")
     

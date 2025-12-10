@@ -1,12 +1,12 @@
 <div align="center">
 
 # 🎯 GoodQ4All
-### *Your Personal Intelligence Agency*
+### *Your Personal Multimodal Memory Engine*
 
-**Classified Status:** `PRODUCTION-READY` | **Clearance Level:** `LOCAL-ONLY`  
-**Last System Update:** December 4, 2025 | **Latest:** Phased Segmentation Engine + Environment Consolidation
+**System Status:** `✅ OPERATIONAL` | **Privacy Level:** `🔒 100% LOCAL`  
+**Last Major Update:** December 10, 2025 | **Latest:** Phase 6 Visual Embeddings + Full Pipeline Activation
 
-[![Production Ready](https://img.shields.io/badge/status-production--ready-00C853?style=for-the-badge)]()
+[![Fully Operational](https://img.shields.io/badge/status-fully--operational-00C853?style=for-the-badge)]()
 [![Python 3.10](https://img.shields.io/badge/python-3.10-3776AB?style=for-the-badge&logo=python&logoColor=white)]()
 [![CUDA 12.1](https://img.shields.io/badge/CUDA-12.1-76B900?style=for-the-badge&logo=nvidia&logoColor=white)]()
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)]()
@@ -15,52 +15,64 @@
 
 ---
 
-## 🕵️ Mission Briefing
+## 🚀 What is GoodQ4All?
 
-> *"The world is full of obvious things which nobody by any chance ever observes."*  
-> — Sherlock Holmes
+> *"Your memories are precious. They should be searchable, private, and永存."*
 
-**GoodQ4All** is your personal Q from MI6 – a privacy-first, GPU-accelerated intelligence system that transforms decades of personal media into a queryable, semantic memory bank. Like a field agent's briefing room, it extracts, analyzes, and connects the hidden patterns in your videos, audio recordings, images, and documents – **all running locally on your hardware**.
+**GoodQ4All** transforms your entire media library—videos, photos, audio, documents—into an intelligent, searchable memory system that runs **100% locally on your hardware**. No cloud. No subscriptions. No surveillance.
 
-### 🎯 The Mission
+### ✨ What Can It Do For You?
 
-Turn **raw media chaos** into **actionable intelligence**:
-- 🎥 **Multimodal Analysis** – Extract scenes, voices, faces, emotions, objects, and entities from any media
-- 🧠 **Semantic Memory** – Build a knowledge graph connecting people, events, locations, and concepts across time
-- 🔍 **Intelligent Search** – Query your entire archive semantically: *"Find all birthday celebrations with cake"*
-- 🤖 **LLM Integration** – Ask questions in natural language, get AI-powered summaries and insights
-- 🔒 **Zero-Trust Privacy** – 100% local processing, no cloud dependency, your data never leaves your hardware
+**Turn years of media into instant answers:**
+
+- 🔍 **"Find all videos where my dad is talking about his childhood"** → Instant results with timestamps
+- 🎂 **"Show me every birthday celebration from the last decade"** → Visual timeline with faces, cakes, decorations detected
+- 🏖️ **"Which beach trips had the best weather?"** → Scene analysis with emotion detection
+- 👨‍👩‍👧 **"Track my daughter's growth from baby to teenager"** → Face recognition across thousands of photos/videos
+- 📚 **"What did I say about machine learning in 2019?"** → Full transcript search with speaker diarization
+
+### 🎯 Core Capabilities
+
+- 🎥 **Video Intelligence** – Automatic scene detection, object recognition, face tracking, OCR
+- 🎙️ **Audio Intelligence** – Speech-to-text, speaker identification, emotion analysis, music detection  
+- 🖼️ **Visual Understanding** – Image captioning, CLIP/DINO embeddings for semantic search
+- 📝 **Text Analysis** – Sentiment, emotion, entity recognition across transcripts and documents
+- 🕸️ **Knowledge Graphs** – Automatic relationship discovery between people, places, events
+- 🤖 **AI Search** – Natural language queries powered by local LLMs
+- 🔒 **Privacy First** – Zero cloud dependency, all processing on YOUR hardware
 
 ---
 
-## ⚡ Field Capabilities
+## ⚡ Complete Processing Pipeline
 
 <table>
 <tr>
 <td width="50%">
 
-### 🎬 Vision Intelligence
-- **Scene Detection** – GPU-accelerated frame extraction
-- **Image Captioning** – BLIP AI descriptions
-- **Object Detection** – YOLOv8 for people, objects, activities
-- **Face Recognition** – Track individuals across videos
-- **OCR** – Extract text from images and videos
-- **Visual Embeddings** – CLIP & DINOv2 for semantic search
+### 🎬 Vision Intelligence (Phase 0-2)
+- **Scene Detection** – Automatic video segmentation using adaptive thresholds
+- **Keyframe Extraction** – Representative frames from each scene
+- **Image Captioning** – BLIP2-generated natural language descriptions  
+- **Object Detection** – YOLOv8 identifies people, objects, activities
+- **Face Recognition** – Track individuals across your entire archive
+- **OCR** – Extract text from videos, images, and PDFs
+- **Visual Embeddings** – CLIP & DINOv2 for semantic similarity search
 
 </td>
 <td width="50%">
 
-### 🎙️ Audio Intelligence
-- **Phased Segmentation Engine** – 6-stage intelligent audio/video processing
-  - WebRTC-VAD pre-segmentation (CPU-efficient)
-  - PyAnnote smart segmentation (GPU-optimized)
-  - Adaptive chunk building with overlap windows
+### 🎙️ Audio Intelligence (Phase 1-4)
+- **Phased Segmentation Engine** – Multi-stage intelligent processing:
+  - **Phase 1:** WebRTC-VAD pre-segmentation (CPU-efficient)
+  - **Phase 2:** PyAnnote smart boundaries (GPU-optimized)
+  - **Phase 3:** Adaptive chunk builder with overlap
+  - **Phase 4:** Heavy processing (transcribe, diarize, embed)
 - **Speech Transcription** – Faster-Whisper with GPU acceleration
-- **Speaker Diarization** – PyAnnote multi-speaker identification
+- **Speaker Diarization** – Multi-speaker identification and tracking
 - **Audio Embeddings** – CLAP for semantic audio search
 - **Emotion Detection** – Wav2Vec2 emotional analysis
-- **Music Detection** – Identify music vs speech segments
-- **Temporal Anchoring** – Precise timestamp alignment
+- **Music Detection** – Separate speech from background audio
+- **Temporal Anchoring** – Frame-accurate timestamp alignment
 
 </td>
 </tr>
@@ -68,20 +80,24 @@ Turn **raw media chaos** into **actionable intelligence**:
 <td width="50%">
 
 ### 📝 Text Intelligence
-- **Semantic Embeddings** – Sentence transformers for search
-- **Sentiment Analysis** – Positive/negative/neutral detection
-- **Emotion Classification** – Fine-grained emotional states
-- **Entity Recognition** – NER for people, places, organizations
-- **PDF Processing** – Extract and analyze document text
+- **Semantic Embeddings** – Sentence transformers for contextual search
+- **Sentiment Analysis** – Positive/negative/neutral classification
+- **Emotion Classification** – Fine-grained emotional state detection
+- **Entity Recognition** – Extract people, places, organizations
+- **PDF Processing** – Full document text extraction and indexing
+- **Keyword Extraction** – Automatic tagging and categorization
 
 </td>
 <td width="50%">
 
-### 🕸️ Knowledge Graph
-- **Entity Tracking** – Follow people and concepts across media
-- **Relationship Discovery** – Automatic co-occurrence detection
-- **Temporal Narratives** – Story-like summaries of time periods
-- **Cross-Video Search** – Find patterns across your entire archive
+### 🕸️ Knowledge Graph & Integration (Phase 5-6)
+- **Phase 5: Temporal Alignment** – Scene-to-audio synchronization
+- **Phase 6: Visual Embeddings** – Scene-level CLIP/DINO encoding
+- **Cross-Modal Harmonization** – Unified multimodal timeline
+- **Entity Tracking** – Follow concepts across media types
+- **Relationship Discovery** – Automatic co-occurrence patterns
+- **Temporal Narratives** – Story-like summaries of events
+- **Vector Search** – FAISS-powered similarity matching
 - **Context Enrichment** – Multi-dimensional scene understanding
 
 </td>
@@ -90,150 +106,227 @@ Turn **raw media chaos** into **actionable intelligence**:
 
 ---
 
-## 🚀 Quick Start (30 Seconds to Launch)
+## 🚀 Quick Start (Ready in 60 Seconds)
 
-### 1️⃣ Launch Mission Control
-
-```batch
-LAUNCH_GOODQ.bat
-```
-
-Opens three synchronized windows:
-- **📊 Command Center** – Real-time GPU stats, pipeline monitoring
-- **🌐 API Server** – FastAPI on `http://localhost:30000`
-- **📖 Interactive Docs** – Auto-opens in your browser
-
-### 2️⃣ Start Automatic Processing
+### Option 1: Automatic Processing (Recommended)
 
 ```batch
-START_WATCHDOG.bat
+# Double-click to start the watchdog
+LAUNCH_GOODQ_v2.bat
 ```
 
-Drop files into `import_inbox/` and walk away. The system handles:
-- ✅ Video (`.mp4`, `.avi`, `.mov`, `.mkv`, `.webm`)
-- ✅ Audio (`.mp3`, `.wav`, `.flac`, `.m4a`)
-- ✅ Images (`.jpg`, `.png`, `.bmp`, `.gif`, `.webp`)
-- ✅ Documents (`.pdf`, `.txt`, `.md`, `.docx`)
+**That's it!** Now just:
+1. Drop any media files into `import_inbox/`
+2. Walk away - GoodQ4All handles everything automatically
+3. Search your memories via API at `http://localhost:30000/docs`
 
-### 3️⃣ Monitor Operations
+**Supported Formats:**
+- 📹 Video: `.mp4`, `.avi`, `.mov`, `.mkv`, `.webm`, `.flv`
+- 🎵 Audio: `.mp3`, `.wav`, `.flac`, `.m4a`, `.ogg`
+- 🖼️ Images: `.jpg`, `.png`, `.bmp`, `.gif`, `.webp`, `.tiff`
+- 📄 Documents: `.pdf`, `.txt`, `.md`, `.docx`
+
+### Option 2: Manual Single-File Processing
 
 ```batch
-MONITOR_WATCHDOG.bat  # Live dashboard (updates every 5s)
-CHECK_WATCHDOG.bat    # One-time status snapshot
+# Activate environment
+conda activate goodq_core
+
+# Process a single file
+python cli/run_ingestion.py "path/to/your/video.mp4"
 ```
+
+### Option 3: Test the System
+
+```batch
+# Run full validation suite
+test_system.bat
+```
+
+This will:
+- ✅ Check all dependencies
+- ✅ Validate configuration
+- ✅ Process sample.mp4 through full pipeline (Phases 0-6)
+- ✅ Verify temporal index generation
+- ✅ Test multimodal retrieval engine
 
 ---
 
-## 🏗️ System Architecture
+## 🏗️ System Architecture (December 2025)
 
-### The Intelligence Stack
+### The Complete Intelligence Stack
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    MISSION CONTROL                          │
-│  Command Center • API Server • Watchdog Monitor             │
+│                   USER INTERFACE LAYER                       │
+│   🌐 FastAPI Server  •  📊 Status Dashboard  •  🔍 Search UI │
 └──────────────────────┬──────────────────────────────────────┘
                        │
                        ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                  PROCESSING PIPELINE                         │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
-│  │   Windows    │  │   WSL2       │  │  Unified     │      │
-│  │   GPU Core   │  │   Audio      │  │  LLM Server  │      │
-│  │              │  │   Stack      │  │              │      │
-│  │ • Vision     │  │ • Whisper    │  │ • vLLM       │      │
-│  │ • Text       │  │ • Diarize    │  │ • Ollama     │      │
-│  │ • Embeddings │  │ • Emotion    │  │ • LM Studio  │      │
-│  │ • Detection  │  │ • CLAP       │  │              │      │
-│  └──────────────┘  └──────────────┘  └──────────────┘      │
+│                 PROCESSING ORCHESTRATOR                      │
+│  🤖 Control Agent (Auto-Healing) • ⚡ Direct Ingestion       │
+│  📁 Watchdog (Auto-Ingest) • 🔧 Config Healer                │
 └──────────────────────┬──────────────────────────────────────┘
                        │
+        ┌──────────────┼──────────────┐
+        ▼              ▼              ▼
+┌──────────────┐ ┌──────────────┐ ┌──────────────┐
+│   Windows    │ │   WSL2       │ │  Unified     │
+│   GPU Core   │ │   Audio      │ │  goodq_core  │
+│ (CUDA 12.1)  │ │   Stack      │ │  Environment │
+├──────────────┤ ├──────────────┤ ├──────────────┤
+│• Scene Detect│ │• Whisper     │ │• Image OCR   │
+│• Face Embed  │ │• Diarization │ │• Captioning  │
+│• CLIP/DINO   │ │• Audio Emotion│ │• Object Det  │
+│• YOLOv8      │ │• CLAP Embed  │ │• Text Embed  │
+│• BLIP Caption│ │• VAD Segment │ │• Sentiment   │
+│• Tesseract   │ │• Music Detect│ │• Emotion     │
+└──────────────┘ └──────────────┘ └──────────────┘
+        │              │              │
+        └──────────────┼──────────────┘
                        ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                  INTELLIGENCE LAYER                          │
-│  Knowledge Graph • FAISS Indices • Memory Database           │
-│  Entity Relationships • Temporal Events • Semantic Search    │
+│              PHASE 5-6: HARMONIZATION LAYER                  │
+│  🎬 Temporal Alignment  •  🌈 Visual Embeddings              │
+│  🎭 Cross-Modal Fusion  •  📊 Knowledge Graph Builder        │
+└──────────────────────┬──────────────────────────────────────┘
+                       ▼
+┌─────────────────────────────────────────────────────────────┐
+│                  INTELLIGENCE STORAGE                        │
+│  💾 Knowledge Graph (SQLite) • 🔍 FAISS Vector Indices       │
+│  📈 Temporal Index (JSON) • 🗃️ Scene Manifests              │
+│  🎯 Entity Relationships • ⏱️ Event Timelines               │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### Recent Architecture Improvements (Dec 2025)
+### Recent Breakthrough: Environment Consolidation (Dec 2025)
 
-**🚀 Phased Segmentation Engine (NEW):**
-- **Phase 0:** Pre-normalization (audio extraction, format standardization)
-- **Phase 1:** WebRTC-VAD segmentation (CPU-efficient speech detection)
-- **Phase 2:** PyAnnote smart segmentation (GPU speaker boundaries)
-- **Phase 3:** Adaptive chunk builder (merge/split/pad/overlap)
-- **Phase 4:** Heavy audio processing (transcribe, diarize, embed, emotion)
-- **Phase 5:** Video scene integration (harmonized multi-modal timeline)
+**Before:** 6 separate conda environments = slow init, GPU thrashing, 80GB+ disk  
+**After:** Unified `goodq_core` environment = instant startup, stable memory, 30GB savings
 
-**Impact:** Eliminates GPU memory spikes, processes large videos in chunks, preserves segment context with overlap windows.
+**Consolidated Into goodq_core:**
+- ✅ `goodq_image_caption` → goodq_core
+- ✅ `goodq_object_detect` → goodq_core  
+- ✅ `goodq_face_embed` → goodq_core
+- ✅ `goodq_text_embed` → goodq_core
+- ✅ `goodq_sentiment` → goodq_core
+- ✅ `goodq_emotion_classify` → goodq_core
 
-**🔧 Environment Consolidation:** Unified 6 specialized environments into `goodq_core`
-- ✅ Faster pipeline initialization (reduced conda overhead)
-- ✅ Better GPU memory management (single CUDA context)
-- ✅ Simpler maintenance (one environment for all Windows GPU steps)
-- ✅ Audio/Video isolation preserved (WSL2 stack untouched)
+**Still Isolated (by design):**
+- 🎙️ WSL2 Audio Stack (~/goodq_audio/venv) - Different CUDA/Python requirements
+- 🎬 Video Scene Detect (goodq_video_scene_detect) - Legacy CUDA 11.8 support
 
-**Impact:** 12 processing steps now run in unified environment, ~30GB disk space savings potential.
+### Pipeline Flow: Zero → Production
 
-📖 **Technical Details:** 
-- [`docs/reports/PHASED_SEGMENTATION_ENGINE_IMPLEMENTATION_REPORT.md`](docs/reports/PHASED_SEGMENTATION_ENGINE_IMPLEMENTATION_REPORT.md)
-- [`docs/status-reports/ENVIRONMENT_CONSOLIDATION_COMPLETE.md`](docs/status-reports/ENVIRONMENT_CONSOLIDATION_COMPLETE.md)
+```
+📁 import_inbox/video.mp4
+    ↓
+🔍 Watchdog Detection (SHA-256 dedup)
+    ↓
+📋 Phase 0: Extract Metadata + Normalize Audio
+    ↓
+🎙️ Phase 1: VAD Segmentation (WebRTC)
+    ↓
+🎭 Phase 2: Pyannote Speaker Boundaries
+    ↓
+✂️ Phase 3: Smart Chunk Builder (overlap + padding)
+    ↓
+🗣️ Phase 4: Heavy Audio (transcribe, diarize, emotion, embed)
+    ↓
+🎬 Phase 5: Scene Detection + Temporal Alignment
+    ↓
+🌈 Phase 6a: Visual Embeddings (CLIP + DINO per scene)
+    ↓
+🔗 Phase 6b: Cross-Modal Harmonization
+    ↓
+📊 Knowledge Graph Builder
+    ↓
+✅ data/processed/PROCESSED_video.mp4
+```
 
 ---
 
-## 🧠 Intelligence Features
+## 🧠 Real-World Use Cases
 
-### Automatic Watchdog Ingestion
+### 🎥 Family Archive Preservation
 
-The GoodQ Watchdog monitors `import_inbox/` and processes new files automatically:
+**The Problem:** You have 20 years of family videos scattered across hard drives, phones, and cloud storage. Finding that one special moment? Impossible.
 
-- **🔍 Smart Detection** – Scans every 2 seconds for new files
-- **🔐 SHA-256 Deduplication** – Never reprocess identical content
-- **⏱️ Stability Checking** – Waits for files to finish copying
-- **📊 Queue Management** – Sequential processing for stability
-- **🔄 Error Recovery** – Failed files moved to `data/failed/` with logs
-
-**File Flow:**
+**The Solution:**
 ```
-import_inbox/video.mp4
-    ↓ [Detected & Queued]
-data/processing/video.mp4
-    ↓ [Full Pipeline]
-    ├─ ✅ Success → data/processed/PROCESSED_video
-    └─ ❌ Failure → data/failed/FAILED_video + error log
+1. Drop all videos into import_inbox/
+2. Wait for processing (runs overnight)
+3. Search: "Find all videos where grandma is laughing"
+   → Instant results with exact timestamps
+4. Search: "Show me Christmas mornings from 2010-2020"
+   → Chronological timeline with detected decorations, presents, emotions
 ```
 
-### Knowledge Graph Queries
+**What GoodQ4All Extracts:**
+- 👤 Every face (grandma, dad, kids growing up)
+- 🗣️ Every voice (speaker diarization identifies who's talking)
+- 🎂 Every object (birthday cakes, Christmas trees, beach toys)
+- 😊 Every emotion (happiness during celebrations, excitement opening presents)
+- 📍 Every location (OCR on signs, landmarks in background)
+- 🎵 Every song (music detection, temporal markers)
 
-The knowledge graph creates semantic relationships between all detected entities:
+### 📚 Research & Academia
 
-**Track a person across videos:**
-```bash
-python cli/graph_query.py find-person "John"
+**The Problem:** You have hundreds of hours of interview recordings, lectures, and conference talks. Manual transcription and organization would take months.
+
+**The Solution:**
+```
+Search: "What did Professor Smith say about quantum entanglement?"
+  → Full transcript + timestamp + speaker identification
+
+Search: "Find all discussions where the terms 'machine learning' and 'ethics' appear together"
+  → Cross-video knowledge graph query
+
+Search: "Show me visual presentations about neural networks"
+  → OCR from PowerPoint slides + scene detection
 ```
 
-**Search by multiple criteria:**
-```bash
-python cli/graph_query.py search --objects person dog --emotions happy --min-confidence 0.7
+### 🏢 Legal & Compliance
+
+**The Problem:** Depositions, client meetings, courtroom proceedings need to be indexed and searchable for case preparation.
+
+**The Solution:**
+- Full speech-to-text transcription with timestamp precision
+- Speaker identification for multi-party conversations
+- Emotion analysis to detect stress, deception indicators
+- Visual evidence extraction from video recordings
+- Timeline reconstruction for event sequencing
+- Entity tracking across all case-related media
+
+### 🎨 Creative Professionals
+
+**The Problem:** Video editors, filmmakers, content creators need to find specific clips from terabytes of raw footage.
+
+**The Solution:**
+```
+Search: "Find all sunset shots from outdoor filming"
+  → Scene detection + object recognition
+
+Search: "Show me takes where the actor showed genuine surprise"
+  → Emotion detection on faces
+
+Search: "Get all B-roll with cars in motion"
+  → Object tracking + motion analysis
 ```
 
-**Get temporal narrative:**
-```bash
-python cli/graph_query.py story 0 60  # Story from 0-60 seconds
-```
+### 🏥 Personal Health Journey
 
-**Find related scenes:**
-```bash
-python cli/graph_query.py scene-context scene_0042
-```
+**The Problem:** Tracking health progress, medical consultations, therapy sessions over time.
 
-### LLM-Powered Analysis
+**The Solution:**
+- Record doctor visits → automatic transcription
+- Track physical therapy sessions → emotion + motion analysis
+- Voice journals → sentiment trends over time
+- Progress photos → facial analysis, posture changes
+- Medical document OCR → searchable health records
 
-- **Scene Summaries** – AI-generated descriptions of video segments
-- **Video Summaries** – Comprehensive overviews of entire videos
-- **Interactive Chat** – Query your archive in natural language
-- **Relationship Analysis** – Discover connections across your media library
+**Privacy Note:** ALL processing is local. Your health data NEVER leaves your computer.
 
 ---
 

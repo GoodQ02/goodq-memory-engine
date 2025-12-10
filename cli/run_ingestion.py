@@ -565,13 +565,13 @@ def _run_step(env_name: str, step_name: str, payload: Dict[str, Any], cfg_json: 
                     )
 
                     if healing_result.get('success'):
-                        typer.echo("[heal] ✅ Timeout healed, retrying step...", err=True)
+                        typer.echo("[heal] [PASS] Timeout healed, retrying step...", err=True)
                         # Retry the step with the same payload after healing actions
                         return _run_step(env_name, step_name, payload, cfg_json)
                     else:
-                        typer.echo(f"[heal] ❌ Could not heal timeout: {healing_result.get('recommendation', 'No strategy')}", err=True)
+                        typer.echo(f"[heal] [FAIL] Could not heal timeout: {healing_result.get('recommendation', 'No strategy')}", err=True)
                 except Exception as heal_error:
-                    typer.echo(f"[heal] ⚠️ Healing failed: {heal_error}", err=True)
+                    typer.echo(f"[heal] [WARN] Healing failed: {heal_error}", err=True)
 
             raise RuntimeError(f"Step {step_name} timed out after {STEP_TIMEOUT}s") from exc
         
@@ -595,15 +595,15 @@ def _run_step(env_name: str, step_name: str, payload: Dict[str, Any], cfg_json: 
                     )
 
                     if healing_result.get('success'):
-                        typer.echo("[heal] ✅ Step failure healed, retrying...", err=True)
+                        typer.echo("[heal] [PASS] Step failure healed, retrying...", err=True)
                         # Retry the same step after healing actions
                         return _run_step(env_name, step_name, payload, cfg_json)
                     else:
-                        typer.echo("[heal] ❌ Could not heal failure", err=True)
+                        typer.echo("[heal] [FAIL] Could not heal failure", err=True)
                         if healing_result.get('recommendation'):
-                            typer.echo(f"[heal] 💡 Suggestion: {healing_result['recommendation'][:200]}", err=True)
+                            typer.echo(f"[heal] [SYMBOL] Suggestion: {healing_result['recommendation'][:200]}", err=True)
                 except Exception as heal_error:
-                    typer.echo(f"[heal] ⚠️ Healing attempt failed: {heal_error}", err=True)
+                    typer.echo(f"[heal] [WARN] Healing attempt failed: {heal_error}", err=True)
 
             raise RuntimeError(error_msg)
         duration = time.perf_counter() - start_ts
@@ -1308,7 +1308,7 @@ def run(
                 embeddings_result = _run_step('goodq_core', 'scene_visual_embeddings', phase6_item, cfg_json)
                 if isinstance(embeddings_result, dict):
                     phase6_item.update(embeddings_result)
-                    typer.echo('[PHASE 6a] ✅ Visual embeddings complete')
+                    typer.echo('[PHASE 6a] [PASS] Visual embeddings complete')
                 
                 # Phase 6b: Cross-Modal Harmonization
                 typer.echo('[PHASE 6b] Running multimodal harmonization...')
@@ -1322,7 +1322,7 @@ def run(
                             video_result['temporal_index'] = json.load(f)
                     video_result['temporal_index_path'] = temporal_index_path
                     video_result['phase6_complete'] = True
-                    typer.echo('[PHASE 6b] ✅ Harmonization complete')
+                    typer.echo('[PHASE 6b] [PASS] Harmonization complete')
                     
                     # Write temporal index if provided
                     temporal_index = harmonization_result.get('temporal_index')
@@ -1332,10 +1332,10 @@ def run(
                             json.dumps(temporal_index, ensure_ascii=False, indent=2),
                             encoding='utf-8'
                         )
-                        typer.echo(f'[PHASE 6] ✅ Temporal index written: {temporal_index_path}')
+                        typer.echo(f'[PHASE 6] [PASS] Temporal index written: {temporal_index_path}')
                 
             except Exception as phase6_error:
-                typer.echo(f'[PHASE 6] ❌ Phase 6 failed: {phase6_error}', err=True)
+                typer.echo(f'[PHASE 6] [FAIL] Phase 6 failed: {phase6_error}', err=True)
                 video_result['phase6_error'] = str(phase6_error)
                 video_result['phase6_complete'] = False
         else:
@@ -1374,7 +1374,7 @@ def run(
                         typer.echo(f'[llm] [OK] Video summary generated ({summary_result.get("method")} method)')
                 else:
                     if VERBOSE:
-                        typer.echo(f'[llm] ✗ Video summary failed: {summary_result.get("error")}')
+                        typer.echo(f'[llm] [FAIL] Video summary failed: {summary_result.get("error")}')
         except ImportError as e:
             if VERBOSE:
                 typer.echo(f'[llm] Video summarizer not available: {e}')
@@ -1442,7 +1442,7 @@ def run(
                 insights = control_agent.get_insights()
                 if insights:
                     typer.echo("\n" + "="*80)
-                    typer.echo("🤖 CONTROL AGENT INSIGHTS")
+                    typer.echo("[BOT] CONTROL AGENT INSIGHTS")
                     typer.echo("="*80)
                     typer.echo(insights)
                     typer.echo("="*80 + "\n")

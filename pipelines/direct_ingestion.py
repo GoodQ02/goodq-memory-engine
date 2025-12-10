@@ -73,7 +73,7 @@ def run_direct_ingestion(video_path: str | Path, cfg: Dict[str, Any] | None = No
             if temp_inbox.exists():
                 shutil.rmtree(temp_inbox)
         
-        print(f"[INGEST] ✅ Ingestion complete for {video_path.name}")
+        print(f"[INGEST] [PASS] Ingestion complete for {video_path.name}")
         
         # Read the actual result JSON to get the correct video_id and paths
         output_json = Path(f"logs/direct_ingest_{video_path.stem}.json")
@@ -133,7 +133,7 @@ def run_direct_ingestion(video_path: str | Path, cfg: Dict[str, Any] | None = No
         return result
         
     except Exception as e:
-        print(f"[INGEST] ❌ Ingestion failed: {e}")
+        print(f"[INGEST] [FAIL] Ingestion failed: {e}")
         raise
 
 

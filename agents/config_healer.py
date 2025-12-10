@@ -125,7 +125,7 @@ class ConfigHealer:
             }
             
         except Exception as e:
-            print(f"⚠️  LLM diagnosis failed: {e}")
+            print(f"[WARN]  LLM diagnosis failed: {e}")
             return {
                 "pattern_matched": None,
                 "error": str(e),
@@ -396,15 +396,15 @@ CONFIDENCE: high/medium/low
                 
                 if success:
                     report["success"] = True
-                    print(f"✅ Healing applied: {message}")
+                    print(f"[PASS] Healing applied: {message}")
                     break  # Try one action at a time
                 else:
-                    print(f"❌ Healing failed: {message}")
+                    print(f"[FAIL] Healing failed: {message}")
         
         # If needs LLM review
         elif diagnosis.get("needs_manual_review") or diagnosis.get("needs_llm"):
             report["recommendation"] = diagnosis.get("llm_diagnosis", "Manual review needed")
-            print(f"🤔 Manual review recommended")
+            print(f"[SYMBOL] Manual review recommended")
             if "llm_diagnosis" in diagnosis:
                 print(f"   LLM says: {diagnosis['llm_diagnosis'][:200]}...")
         
@@ -434,7 +434,7 @@ def main():
         
         report = healer.auto_heal(test["log"], test["context"])
         
-        print(f"\n📊 Healing Report:")
+        print(f"\n[SYMBOL] Healing Report:")
         print(json.dumps(report, indent=2))
 
 

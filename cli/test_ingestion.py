@@ -23,11 +23,11 @@ def test_config_loading():
     try:
         from goodq4all.steps.common.config_loader import load_configs
         cfg = load_configs({})
-        print("✅ Config loaded successfully")
+        print("[PASS] Config loaded successfully")
         print(f"   Config keys: {list(cfg.keys())}")
         return True, cfg
     except Exception as e:
-        print(f"❌ Config loading failed: {e}")
+        print(f"[FAIL] Config loading failed: {e}")
         return False, None
 
 
@@ -52,9 +52,9 @@ def test_step_imports():
         try:
             module = __import__(module_path, fromlist=[func_name])
             func = getattr(module, func_name)
-            print(f"✅ {name}: {module_path}.{func_name}")
+            print(f"[PASS] {name}: {module_path}.{func_name}")
         except Exception as e:
-            print(f"❌ {name}: Failed - {e}")
+            print(f"[FAIL] {name}: Failed - {e}")
             all_passed = False
     
     return all_passed
@@ -69,28 +69,28 @@ def test_sample_ingestion(cfg: Dict[str, Any]):
     sample_video = REPO_ROOT / "import_inbox" / "sample.mp4"
     
     if not sample_video.exists():
-        print(f"❌ Sample video not found: {sample_video}")
+        print(f"[FAIL] Sample video not found: {sample_video}")
         return False, None
     
-    print(f"📹 Video: {sample_video}")
+    print(f"[VIDEO] Video: {sample_video}")
     print(f"   Size: {sample_video.stat().st_size / (1024*1024):.2f} MB")
     
     try:
         from goodq4all.pipelines.direct_ingestion import run_direct_ingestion
         
-        print("\n⏳ Starting ingestion...")
+        print("\n[WAIT] Starting ingestion...")
         start_time = time.time()
         
         result = run_direct_ingestion(str(sample_video), cfg)
         
         elapsed = time.time() - start_time
-        print(f"\n✅ Ingestion completed in {elapsed:.1f} seconds")
+        print(f"\n[PASS] Ingestion completed in {elapsed:.1f} seconds")
         print(f"   Result keys: {list(result.keys())}")
         
         return True, result
         
     except Exception as e:
-        print(f"\n❌ Ingestion failed: {e}")
+        print(f"\n[FAIL] Ingestion failed: {e}")
         import traceback
         traceback.print_exc()
         return False, None
@@ -103,24 +103,24 @@ def test_artifacts(result: Dict[str, Any], cfg: Dict[str, Any]):
     print("="*80)
     
     if not result:
-        print("❌ No result to verify")
+        print("[FAIL] No result to verify")
         return False
     
     # CRITICAL: Always use video_name (the filename), NOT video_id (which is a hash)
     video_name = result.get('video_name')
     if not video_name:
-        print("❌ No video_name in result")
+        print("[FAIL] No video_name in result")
         print(f"   Available keys: {list(result.keys())}")
         return False
     
     # Construct processing directory from video_name
     processing_dir = Path(cfg['paths']['processing']) / video_name
     
-    print(f"📁 Processing dir: {processing_dir}")
+    print(f"[DIR] Processing dir: {processing_dir}")
     
     # Check if directory exists first
     if not processing_dir.exists():
-        print(f"❌ Processing directory does not exist!")
+        print(f"[FAIL] Processing directory does not exist!")
         return False
     
     artifacts_to_check = [
@@ -135,12 +135,12 @@ def test_artifacts(result: Dict[str, Any], cfg: Dict[str, Any]):
         if path.exists():
             if path.is_file():
                 size = path.stat().st_size
-                print(f"✅ {name}: {size:,} bytes")
+                print(f"[PASS] {name}: {size:,} bytes")
             else:
                 file_count = len(list(path.glob("*")))
-                print(f"✅ {name}: {file_count} files")
+                print(f"[PASS] {name}: {file_count} files")
         else:
-            print(f"❌ {name}: NOT FOUND - {path}")
+            print(f"[FAIL] {name}: NOT FOUND - {path}")
             all_found = False
     
     return all_found
@@ -153,20 +153,20 @@ def test_temporal_index_structure(result: Dict[str, Any], cfg: Dict[str, Any]):
     print("="*80)
     
     if not result:
-        print("❌ No result to verify")
+        print("[FAIL] No result to verify")
         return False
     
     # CRITICAL: Use video_name (the filename), NOT video_id (which is a hash)
     video_name = result.get('video_name')
     if not video_name:
-        print("❌ No video_name in result")
+        print("[FAIL] No video_name in result")
         return False
     
     processing_dir = Path(cfg['paths']['processing']) / video_name
     temporal_index_path = processing_dir / "temporal_index.json"
     
     if not temporal_index_path.exists():
-        print(f"❌ Temporal index not found: {temporal_index_path}")
+        print(f"[FAIL] Temporal index not found: {temporal_index_path}")
         # List what files DO exist to help debug
         if processing_dir.exists():
             files = list(processing_dir.glob("*.json"))
@@ -177,7 +177,7 @@ def test_temporal_index_structure(result: Dict[str, Any], cfg: Dict[str, Any]):
         with open(temporal_index_path, 'r') as f:
             temporal_index = json.load(f)
         
-        print(f"✅ Temporal index loaded")
+        print(f"[PASS] Temporal index loaded")
         print(f"   Video ID: {temporal_index.get('video_id')}")
         print(f"   Scenes: {len(temporal_index.get('scenes', []))}")
         print(f"   Phase 5 complete: {temporal_index.get('phase5_complete', False)}")
@@ -191,12 +191,12 @@ def test_temporal_index_structure(result: Dict[str, Any], cfg: Dict[str, Any]):
             required_keys = ['start', 'end', 'scene_id']
             missing_keys = [k for k in required_keys if k not in scene_0]
             if missing_keys:
-                print(f"   ⚠️  Missing keys: {missing_keys}")
+                print(f"   [WARN]  Missing keys: {missing_keys}")
         
         return True
         
     except Exception as e:
-        print(f"❌ Failed to load/parse temporal index: {e}")
+        print(f"[FAIL] Failed to load/parse temporal index: {e}")
         return False
 
 
@@ -209,7 +209,7 @@ def test_retrieval(cfg: Dict[str, Any]):
     try:
         from goodq4all.retrieval.multimodal_search import MultimodalSearchEngine
         
-        print("🔍 Initializing search engine...")
+        print("[SEARCH] Initializing search engine...")
         engine = MultimodalSearchEngine(cfg)
         
         test_queries = ["baby", "walking", "birthday"]
@@ -219,16 +219,16 @@ def test_retrieval(cfg: Dict[str, Any]):
             results = engine.search_multimodal(query, top_k=3)
             
             if results:
-                print(f"   ✅ Found {len(results)} results")
+                print(f"   [PASS] Found {len(results)} results")
                 for i, res in enumerate(results[:2], 1):
                     print(f"      {i}. Scene {res.get('scene_id')}, Score: {res.get('score', 0):.3f}")
             else:
-                print(f"   ⚠️  No results found")
+                print(f"   [WARN]  No results found")
         
         return True
         
     except Exception as e:
-        print(f"❌ Retrieval failed: {e}")
+        print(f"[FAIL] Retrieval failed: {e}")
         import traceback
         traceback.print_exc()
         return False
@@ -243,7 +243,7 @@ def main():
     # Test 1: Config
     config_ok, cfg = test_config_loading()
     if not config_ok:
-        print("\n❌ CRITICAL: Config loading failed. Cannot proceed.")
+        print("\n[FAIL] CRITICAL: Config loading failed. Cannot proceed.")
         return 1
     
     # Test 2: Imports
@@ -283,7 +283,7 @@ def main():
     total = len(tests)
     
     for name, ok in tests:
-        status = "✅ PASS" if ok else "❌ FAIL"
+        status = "[PASS] PASS" if ok else "[FAIL] FAIL"
         print(f"{status}: {name}")
     
     print(f"\n{'='*80}")
@@ -291,10 +291,10 @@ def main():
     print(f"{'='*80}\n")
     
     if passed == total:
-        print("🎉 ALL TESTS PASSED! GoodQ4All is fully operational.")
+        print("[SYMBOL] ALL TESTS PASSED! GoodQ4All is fully operational.")
         return 0
     else:
-        print("⚠️  Some tests failed. Review output above for details.")
+        print("[WARN]  Some tests failed. Review output above for details.")
         return 1
 
 

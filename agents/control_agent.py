@@ -155,7 +155,7 @@ class ControlAgent:
         
         conn.commit()
         conn.close()
-        print("   ✓ Memory database initialized")
+        print("   [OK] Memory database initialized")
     
     def analyze_logs(self, log_file: Path) -> Dict[str, Any]:
         """
@@ -225,7 +225,7 @@ Provide:
 
 Be concise and actionable."""
 
-        print("\n🔍 Analyzing with LLM...")
+        print("\n[SEARCH] Analyzing with LLM...")
         response = self.llm.chat(
             messages=[{"role": "user", "content": prompt}],
             temperature=0.3,
@@ -262,7 +262,7 @@ Be concise and actionable."""
         prompt = self._build_diagnostic_prompt(analysis, context)
         
         # Query LLM
-        print("\n🔍 Analyzing with LLM...")
+        print("\n[SEARCH] Analyzing with LLM...")
         response = self.llm.chat(
             messages=[{"role": "user", "content": prompt}],
             temperature=0.3,  # Lower temp for more consistent analysis
@@ -434,7 +434,7 @@ Keep it concise and technical. Focus on actionable solutions.
 
 ---
 
-## 📊 Execution Summary
+## [SYMBOL] Execution Summary
 
 - **Log File**: `{analysis.get('log_file', 'N/A')}`
 - **Errors Found**: {len(analysis.get('errors', []))}
@@ -442,7 +442,7 @@ Keep it concise and technical. Focus on actionable solutions.
 
 ---
 
-## 🔍 LLM Diagnosis
+## [SEARCH] LLM Diagnosis
 
 **Severity**: {diagnosis['parsed']['severity'].upper()}  
 **Confidence**: {diagnosis['parsed']['confidence']}%
@@ -458,7 +458,7 @@ Keep it concise and technical. Focus on actionable solutions.
 
 ---
 
-## 📋 Detailed Findings
+## [SYMBOL] Detailed Findings
 
 """
         
@@ -476,7 +476,7 @@ Keep it concise and technical. Focus on actionable solutions.
 
 ---
 
-## 🤖 Full LLM Response
+## [BOT] Full LLM Response
 
 ```
 {diagnosis['raw_response']}
@@ -491,7 +491,7 @@ Keep it concise and technical. Focus on actionable solutions.
         with open(output_path, 'w', encoding='utf-8') as f:
             f.write(report)
         
-        print(f"\n📄 Report saved: {output_path}")
+        print(f"\n[SYMBOL] Report saved: {output_path}")
         return output_path
     
     def monitor_latest_run(self) -> Dict[str, Any]:
@@ -503,7 +503,7 @@ Keep it concise and technical. Focus on actionable solutions.
             return {"error": "No log files found"}
         
         latest_log = log_files[-1]
-        print(f"📂 Analyzing: {latest_log.name}")
+        print(f"[SYMBOL] Analyzing: {latest_log.name}")
         
         # Analyze
         analysis = self.analyze_logs(latest_log)
@@ -520,7 +520,7 @@ Keep it concise and technical. Focus on actionable solutions.
                 "report": str(report_path)
             }
         else:
-            print("✅ No errors found in latest run")
+            print("[PASS] No errors found in latest run")
             return {
                 "status": "success",
                 "analysis": analysis
@@ -700,7 +700,7 @@ Format your response as JSON:
         Returns:
             Recovery result with diagnosis and attempted fixes
         """
-        print(f"\n🚨 Pipeline Failure Detected: {step_name}")
+        print(f"\n[SYMBOL] Pipeline Failure Detected: {step_name}")
         print(f"   Error: {str(error)}")
         
         # Extract error details
@@ -737,7 +737,7 @@ Format your response as JSON:
             print(f"   Found {len(similar)} similar past failures")
         
         # Get AI diagnosis
-        print("\n🤖 Requesting AI diagnosis...")
+        print("\n[BOT] Requesting AI diagnosis...")
         diagnosis = self.diagnose_error(
             error_message,
             context={
@@ -765,7 +765,7 @@ Format your response as JSON:
         
         # If we have a proven strategy, suggest it
         if best_strategy:
-            print(f"\n💡 Found proven strategy: {best_strategy.get('strategy', 'Unknown')}")
+            print(f"\n[SYMBOL] Found proven strategy: {best_strategy.get('strategy', 'Unknown')}")
             print(f"   Success rate: {best_strategy.get('success_rate', 0)*100:.1f}%")
             print(f"   Times used: {best_strategy.get('times_used', 0)}")
             recovery_result['recommended_strategy'] = best_strategy
@@ -788,7 +788,7 @@ Format your response as JSON:
         Returns:
             True if recovery successful, False otherwise
         """
-        print(f"\n🔧 Attempting recovery for failure #{failure_id}")
+        print(f"\n[CONFIG] Attempting recovery for failure #{failure_id}")
         print(f"   Strategy: {strategy}")
         
         start_time = time.time()
@@ -810,7 +810,7 @@ Format your response as JSON:
         except Exception as e:
             success = False
             error_msg = str(e)
-            print(f"   ❌ Recovery failed: {e}")
+            print(f"   [FAIL] Recovery failed: {e}")
         
         execution_time_ms = int((time.time() - start_time) * 1000)
         
@@ -825,9 +825,9 @@ Format your response as JSON:
         )
         
         if success:
-            print(f"   ✅ Recovery successful (attempt #{attempt_id})")
+            print(f"   [PASS] Recovery successful (attempt #{attempt_id})")
         else:
-            print(f"   ❌ Recovery failed (attempt #{attempt_id})")
+            print(f"   [FAIL] Recovery failed (attempt #{attempt_id})")
         
         return success
     
@@ -899,7 +899,7 @@ Format your response as JSON:
         Returns:
             Dict with healing results
         """
-        print(f"\n🚑 AUTO-HEAL: Analyzing failure in step '{step_name}'...")
+        print(f"\n[SYMBOL] AUTO-HEAL: Analyzing failure in step '{step_name}'...")
         
         start_time = time.time()
         error_message = str(error)
@@ -920,7 +920,7 @@ Format your response as JSON:
         }
         
         if not strategy:
-            print(f"   ⚠️  No known strategy for this error type")
+            print(f"   [WARN]  No known strategy for this error type")
             llm_suggestion = self._get_llm_recovery_suggestion(error_message, step_name, context)
             result['recommendation'] = llm_suggestion
             
@@ -935,8 +935,8 @@ Format your response as JSON:
             )
             return result
         
-        print(f"   💡 Found strategy: {strategy.get('pattern_name', 'unknown')}")
-        print(f"   📊 Confidence: {strategy.get('confidence', 0)*100:.1f}%")
+        print(f"   [SYMBOL] Found strategy: {strategy.get('pattern_name', 'unknown')}")
+        print(f"   [SYMBOL] Confidence: {strategy.get('confidence', 0)*100:.1f}%")
         
         result['strategy_applied'] = strategy
         
@@ -963,13 +963,13 @@ Format your response as JSON:
             )
             
             if recovery_success:
-                print(f"   ✅ Recovery successful in {result['recovery_time_seconds']:.2f}s")
+                print(f"   [PASS] Recovery successful in {result['recovery_time_seconds']:.2f}s")
             else:
-                print(f"   ❌ Recovery failed")
+                print(f"   [FAIL] Recovery failed")
                 result['recommendation'] = self._get_llm_recovery_suggestion(error_message, step_name, context)
         
         except Exception as recovery_error:
-            print(f"   ❌ Recovery exception: {recovery_error}")
+            print(f"   [FAIL] Recovery exception: {recovery_error}")
             result['success'] = False
             result['recovery_error'] = str(recovery_error)
         
@@ -980,7 +980,7 @@ Format your response as JSON:
         action = strategy.get('action', '')
         params = strategy.get('params', {})
         
-        print(f"   🔧 Executing action: {action}")
+        print(f"   [CONFIG] Executing action: {action}")
         
         if action == 'reduce_batch_size':
             return self._heal_reduce_batch_size(step_name, params)
@@ -995,7 +995,7 @@ Format your response as JSON:
         elif action == 'switch_to_cpu':
             return self._heal_switch_to_cpu(step_name, params)
         else:
-            print(f"   ⚠️  Unknown action: {action}")
+            print(f"   [WARN]  Unknown action: {action}")
             return False
     
     def _heal_reduce_batch_size(self, step_name: str, params: Dict) -> bool:
@@ -1077,12 +1077,12 @@ def main():
     result = agent.monitor_latest_run()
     
     if result.get('status') == 'errors_found':
-        print("\n⚠️  Issues detected - diagnostic report generated")
+        print("\n[WARN]  Issues detected - diagnostic report generated")
         print(f"   View report: {result['report']}")
     elif result.get('status') == 'success':
-        print("\n✅ Latest pipeline run completed successfully")
+        print("\n[PASS] Latest pipeline run completed successfully")
     else:
-        print(f"\n❌ {result.get('error', 'Unknown error')}")
+        print(f"\n[FAIL] {result.get('error', 'Unknown error')}")
 
 
 if __name__ == "__main__":

@@ -38,9 +38,9 @@ def check_environment():
     for mod in critical_modules:
         try:
             __import__(mod)
-            print(f"  ✅ {mod}")
+            print(f"  [PASS] {mod}")
         except ImportError:
-            print(f"  ❌ {mod} - NOT INSTALLED")
+            print(f"  [FAIL] {mod} - NOT INSTALLED")
 
 
 def check_config():
@@ -52,16 +52,16 @@ def check_config():
     config_path = REPO_ROOT / "configs" / "config.yaml"
     
     if not config_path.exists():
-        print(f"❌ config.yaml not found at {config_path}")
+        print(f"[FAIL] config.yaml not found at {config_path}")
         return None
     
-    print(f"✅ Config file: {config_path}")
+    print(f"[PASS] Config file: {config_path}")
     
     try:
         from goodq4all.steps.common.config_loader import load_configs
         cfg = load_configs({})
         
-        print("✅ Config loads successfully")
+        print("[PASS] Config loads successfully")
         print(f"\nTop-level keys:")
         for key in sorted(cfg.keys()):
             print(f"  - {key}")
@@ -69,7 +69,7 @@ def check_config():
         return cfg
         
     except Exception as e:
-        print(f"❌ Config loading failed: {e}")
+        print(f"[FAIL] Config loading failed: {e}")
         return None
 
 
@@ -80,7 +80,7 @@ def check_directories(cfg: Dict[str, Any] | None):
     print("="*80)
     
     if not cfg:
-        print("⚠️  Cannot check directories without config")
+        print("[WARN]  Cannot check directories without config")
         return
     
     paths_to_check = []
@@ -97,18 +97,18 @@ def check_directories(cfg: Dict[str, Any] | None):
     
     for name, path_str in paths_to_check:
         if not path_str:
-            print(f"⚠️  {name}: Not configured")
+            print(f"[WARN]  {name}: Not configured")
             continue
         
         path = Path(path_str)
         if path.exists():
             if path.is_dir():
                 file_count = len(list(path.glob('*')))
-                print(f"✅ {name}: {path} ({file_count} items)")
+                print(f"[PASS] {name}: {path} ({file_count} items)")
             else:
-                print(f"⚠️  {name}: {path} (exists but not a directory)")
+                print(f"[WARN]  {name}: {path} (exists but not a directory)")
         else:
-            print(f"❌ {name}: {path} (does not exist)")
+            print(f"[FAIL] {name}: {path} (does not exist)")
 
 
 def check_recent_ingestions(cfg: Dict[str, Any] | None):
@@ -118,13 +118,13 @@ def check_recent_ingestions(cfg: Dict[str, Any] | None):
     print("="*80)
     
     if not cfg or 'paths' not in cfg:
-        print("⚠️  Cannot check without config paths")
+        print("[WARN]  Cannot check without config paths")
         return
     
     processing_root = Path(cfg['paths'].get('processing', 'L:/_DATA/GoodQ_Data/processing'))
     
     if not processing_root.exists():
-        print(f"❌ Processing directory does not exist: {processing_root}")
+        print(f"[FAIL] Processing directory does not exist: {processing_root}")
         return
     
     video_dirs = [d for d in processing_root.iterdir() if d.is_dir()]
@@ -150,28 +150,28 @@ def check_recent_ingestions(cfg: Dict[str, Any] | None):
                 with open(temporal_index, 'r') as f:
                     ti = json.load(f)
                 scene_count = len(ti.get('scenes', []))
-                phase5 = "✅" if ti.get('phase5_complete') else "❌"
-                phase6 = "✅" if ti.get('phase6_complete') else "❌"
+                phase5 = "[PASS]" if ti.get('phase5_complete') else "[FAIL]"
+                phase6 = "[PASS]" if ti.get('phase6_complete') else "[FAIL]"
                 status_items.append(f"{scene_count} scenes, P5:{phase5}, P6:{phase6}")
             except:
                 status_items.append("temporal_index (parse error)")
         else:
-            status_items.append("❌ no temporal_index")
+            status_items.append("[FAIL] no temporal_index")
         
         if scene_manifest.exists():
-            status_items.append("✅ scene_manifest")
+            status_items.append("[PASS] scene_manifest")
         else:
-            status_items.append("❌ no scene_manifest")
+            status_items.append("[FAIL] no scene_manifest")
         
-        print(f"  📹 {video_id}")
+        print(f"  [VIDEO] {video_id}")
         print(f"     {', '.join(status_items)}")
 
 
 def main():
     """Run system status checks."""
-    print("\n" + "🟦"*40)
+    print("\n" + "==="*40)
     print("GOODQ4ALL SYSTEM STATUS DASHBOARD")
-    print("🟦"*40)
+    print("==="*40)
     
     check_environment()
     cfg = check_config()

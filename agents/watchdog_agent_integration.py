@@ -73,7 +73,7 @@ async def process_queue(queue: asyncio.Queue):
             result = await process_video_with_agents(video_path)
             
             if result['status'] == 'complete':
-                logger.info(f"✓ Successfully processed: {path.name}")
+                logger.info(f"[SYMBOL] Successfully processed: {path.name}")
                 processed_videos.add(video_path)
                 
                 # Move to completed
@@ -86,7 +86,7 @@ async def process_queue(queue: asyncio.Queue):
                     logger.info(f"Moved to completed: {new_path}")
             
             elif result['status'] == 'failed':
-                logger.error(f"✗ Processing failed: {path.name}")
+                logger.error(f"[SYMBOL] Processing failed: {path.name}")
                 
                 # Move to failed
                 failed_dir = Path("L:/goodq4all/import_inbox/_failed")

@@ -32,21 +32,21 @@ def test_path_configuration():
     # Test 1: Conda base
     print("[TEST 1] Conda Base Installation")
     print(f"  Location: {config.conda_base}")
-    print(f"  Status: {'✓ Found' if config.conda_base else '✗ Not found'}")
+    print(f"  Status: {'[SYMBOL] Found' if config.conda_base else '[SYMBOL] Not found'}")
     print()
     
     # Test 2: Conda executable
     print("[TEST 2] Conda Executable")
     conda_exe = get_conda_exe()
     print(f"  Path: {conda_exe}")
-    print(f"  Exists: {'✓ Yes' if (conda_exe and conda_exe.exists()) else '✗ No'}")
+    print(f"  Exists: {'[SYMBOL] Yes' if (conda_exe and conda_exe.exists()) else '[SYMBOL] No'}")
     print()
     
     # Test 3: Main environment (goodq_zenml)
     print("[TEST 3] GoodQ ZenML Environment")
     zenml_python = get_env_python('goodq_zenml')
     print(f"  Python: {zenml_python}")
-    print(f"  Valid: {'✓ Yes' if validate_env('goodq_zenml') else '✗ No'}")
+    print(f"  Valid: {'[SYMBOL] Yes' if validate_env('goodq_zenml') else '[SYMBOL] No'}")
     print()
     
     # Test 4: All environments
@@ -66,7 +66,7 @@ def test_path_configuration():
     
     print("  Required environments:")
     for env in required_envs:
-        status = '✓' if validate_env(env) else '✗'
+        status = '[SYMBOL]' if validate_env(env) else '[SYMBOL]'
         python_path = get_env_python(env)
         print(f"    {status} {env}")
         if python_path:
@@ -91,32 +91,32 @@ def test_path_configuration():
     all_tests_pass = True
     
     if not conda_exe or not conda_exe.exists():
-        print("  ✗ Conda executable not found")
+        print("  [SYMBOL] Conda executable not found")
         all_tests_pass = False
     else:
-        print("  ✓ Conda executable found")
+        print("  [SYMBOL] Conda executable found")
     
     if not validate_env('goodq_zenml'):
-        print("  ✗ Main environment (goodq_zenml) not valid")
+        print("  [SYMBOL] Main environment (goodq_zenml) not valid")
         all_tests_pass = False
     else:
-        print("  ✓ Main environment (goodq_zenml) valid")
+        print("  [SYMBOL] Main environment (goodq_zenml) valid")
     
     missing_envs = [env for env in required_envs if not validate_env(env)]
     if missing_envs:
-        print(f"  ⚠ Missing {len(missing_envs)} required environments:")
+        print(f"  [SYMBOL] Missing {len(missing_envs)} required environments:")
         for env in missing_envs:
             print(f"     - {env}")
     else:
-        print("  ✓ All required environments present")
+        print("  [SYMBOL] All required environments present")
     
     print()
     
     if all_tests_pass:
-        print("  ✓ ALL TESTS PASSED")
+        print("  [SYMBOL] ALL TESTS PASSED")
         return 0
     else:
-        print("  ✗ SOME TESTS FAILED")
+        print("  [SYMBOL] SOME TESTS FAILED")
         return 1
 
 

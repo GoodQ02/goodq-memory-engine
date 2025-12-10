@@ -13,20 +13,20 @@ print("="*80)
 print(f"Completed: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 print("="*80)
 
-print("\n" + "🎯 PRIMARY OBJECTIVES")
+print("\n" + "[TARGET] PRIMARY OBJECTIVES")
 print("-" * 80)
 objectives = [
-    ("Fix scene_id propagation in embedding steps", "✅ COMPLETE"),
-    ("Link all embeddings to their source scenes", "✅ COMPLETE"),
-    ("Populate knowledge graph with entities", "✅ COMPLETE"),
-    ("Create multi-modal FAISS indices", "✅ COMPLETE"),
-    ("Enable cross-modal retrieval", "✅ COMPLETE"),
+    ("Fix scene_id propagation in embedding steps", "[OK] COMPLETE"),
+    ("Link all embeddings to their source scenes", "[OK] COMPLETE"),
+    ("Populate knowledge graph with entities", "[OK] COMPLETE"),
+    ("Create multi-modal FAISS indices", "[OK] COMPLETE"),
+    ("Enable cross-modal retrieval", "[OK] COMPLETE"),
 ]
 
 for objective, status in objectives:
     print(f"{status}: {objective}")
 
-print("\n" + "📊 FINAL METRICS")
+print("\n" + "[STATS] FINAL METRICS")
 print("-" * 80)
 
 # Memory DB
@@ -103,7 +103,7 @@ for idx_type in ['text', 'clip', 'dino', 'audio']:
     else:
         print(f"  {idx_type:10s}: MISSING")
 
-print("\n" + "🔧 FIXES APPLIED")
+print("\n" + "[CONFIG] FIXES APPLIED")
 print("-" * 80)
 
 fixes = [
@@ -117,9 +117,9 @@ fixes = [
 ]
 
 for fix in fixes:
-    print(f"  ✓ {fix}")
+    print(f"  [SYMBOL] {fix}")
 
-print("\n" + "✨ KEY IMPROVEMENTS")
+print("\n" + "[SYMBOL] KEY IMPROVEMENTS")
 print("-" * 80)
 
 improvements = [
@@ -133,7 +133,7 @@ improvements = [
 for metric, change, description in improvements:
     print(f"  {metric:25s} {change:15s} - {description}")
 
-print("\n" + "🧪 VERIFICATION TESTS")
+print("\n" + "[SYMBOL] VERIFICATION TESTS")
 print("-" * 80)
 
 tests = [
@@ -145,10 +145,10 @@ tests = [
 ]
 
 for test, result, details in tests:
-    symbol = "✅" if result == "PASS" else "✗"
+    symbol = "[OK]" if result == "PASS" else "[SYMBOL]"
     print(f"  {symbol} {test:30s} {result:6s} - {details}")
 
-print("\n" + "📈 PERFORMANCE IMPACT")
+print("\n" + "[SYMBOL] PERFORMANCE IMPACT")
 print("-" * 80)
 
 print("""
@@ -170,7 +170,7 @@ After Phase 2:
     * "Retrieve audio segments with speaker X"
 """)
 
-print("\n" + "🚀 NEXT STEPS")
+print("\n" + "[LAUNCH] NEXT STEPS")
 print("-" * 80)
 
 next_steps = [
@@ -185,5 +185,5 @@ for i, step in enumerate(next_steps, 1):
     print(f"  {i}. {step}")
 
 print("\n" + "="*80)
-print("✅ PHASE 2 COMPLETE - ALL OBJECTIVES ACHIEVED!")
+print("[OK] PHASE 2 COMPLETE - ALL OBJECTIVES ACHIEVED!")
 print("="*80)

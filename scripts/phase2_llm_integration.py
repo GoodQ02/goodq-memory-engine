@@ -80,11 +80,11 @@ def apply_context_analysis_to_scenes(cfg: Dict[str, Any], video_hash: str = None
                 )
                 
                 stats['analyzed'] += 1
-                logger.info(f"  ✓ Context added: {len(context_data.get('key_moments', []))} key moments, "
+                logger.info(f"  [SYMBOL] Context added: {len(context_data.get('key_moments', []))} key moments, "
                            f"{len(context_data.get('context_tags', []))} tags")
             else:
                 stats['failed'] += 1
-                logger.warning(f"  ✗ Context analysis failed for scene {scene_id}")
+                logger.warning(f"  [SYMBOL] Context analysis failed for scene {scene_id}")
                 
         except Exception as e:
             logger.error(f"Error processing scene {scene_id}: {e}")
@@ -170,12 +170,12 @@ def apply_intelligent_tagging(cfg: Dict[str, Any], video_hash: str = None) -> Di
                 else:
                     stats['fallback_used'] += 1
                 
-                logger.info(f"  ✓ Tags: {len(tag_result.get('tags', []))}, "
+                logger.info(f"  [SYMBOL] Tags: {len(tag_result.get('tags', []))}, "
                            f"Entities: {len(tag_result.get('entities', []))}, "
                            f"Method: {tag_result.get('method')}")
             else:
                 stats['failed'] += 1
-                logger.warning(f"  ✗ Tagging failed for scene {scene_id}")
+                logger.warning(f"  [SYMBOL] Tagging failed for scene {scene_id}")
                 
         except Exception as e:
             logger.error(f"Error tagging scene {scene_id}: {e}")
@@ -245,7 +245,7 @@ def apply_emotional_arc_analysis(cfg: Dict[str, Any], video_hash: str = None) ->
             }),))
             conn.commit()
             
-            logger.info("\n✓ Emotional Arc Analysis Complete:")
+            logger.info("\n[SYMBOL] Emotional Arc Analysis Complete:")
             logger.info(f"  Overall Arc: {arc_data.get('overall_arc', 'N/A')}")
             logger.info(f"  Dominant Emotions: {', '.join(arc_data.get('dominant_emotions', []))}")
             logger.info(f"  Key Transitions: {len(arc_data.get('key_transitions', []))}")
@@ -314,7 +314,7 @@ def apply_relationship_mapping(cfg: Dict[str, Any], video_hash: str = None) -> D
             }),))
             conn.commit()
             
-            logger.info("\n✓ Relationship Map Complete:")
+            logger.info("\n[SYMBOL] Relationship Map Complete:")
             logger.info(f"  Entities: {relationship_data.get('total_entities', 0)}")
             logger.info(f"  Interactions: {relationship_data.get('total_interactions', 0)}")
             logger.info(f"  Interaction Types: {list(relationship_data.get('interaction_patterns', {}).keys())}")
@@ -359,11 +359,11 @@ def run_phase2_integration(video_hash: str = None) -> Dict[str, Any]:
         llm_url = cfg.get('config', {}).get('llm', {}).get('api_url', 'http://localhost:1234/v1/models')
         response = requests.get(llm_url.replace('/chat/completions', '/models'), timeout=5)
         if response.status_code == 200:
-            logger.info("  ✓ LLM endpoint accessible")
+            logger.info("  [SYMBOL] LLM endpoint accessible")
         else:
-            logger.warning(f"  ⚠ LLM endpoint returned status {response.status_code}")
+            logger.warning(f"  [SYMBOL] LLM endpoint returned status {response.status_code}")
     except Exception as e:
-        logger.error(f"  ✗ LLM not accessible: {e}")
+        logger.error(f"  [SYMBOL] LLM not accessible: {e}")
         return {'error': 'LLM not available'}
     
     results = {
@@ -398,7 +398,7 @@ def run_phase2_integration(video_hash: str = None) -> Dict[str, Any]:
     logger.info("="*80)
     logger.info(f"Context Analysis: {context_stats.get('analyzed', 0)} scenes")
     logger.info(f"Intelligent Tagging: {tagging_stats.get('tagged', 0)} scenes ({tagging_stats.get('llm_used', 0)} via LLM)")
-    logger.info(f"Emotional Arc: {'✓' if arc_results.get('success') else '✗'}")
+    logger.info(f"Emotional Arc: {'[SYMBOL]' if arc_results.get('success') else '[SYMBOL]'}")
     logger.info(f"Relationship Map: {relationship_results.get('relationship_data', {}).get('total_entities', 0)} entities, "
                 f"{relationship_results.get('relationship_data', {}).get('total_interactions', 0)} interactions")
     

@@ -25,7 +25,7 @@ def verify_embedding_steps():
         file_path = Path(step_path)
         
         if not file_path.exists():
-            print(f"  ✗ File not found: {step_path}")
+            print(f"  [SYMBOL] File not found: {step_path}")
             all_good = False
             continue
         
@@ -36,17 +36,17 @@ def verify_embedding_steps():
         has_scene_id_param = 'scene_id=scene_id' in content
         has_upsert = 'upsert_embedding' in content
         
-        print(f"  scene_id extraction: {'✓' if has_scene_id_extract else '✗'}")
-        print(f"  scene_id parameter:  {'✓' if has_scene_id_param else '✗'}")
-        print(f"  upsert_embedding:    {'✓' if has_upsert else '✗'}")
+        print(f"  scene_id extraction: {'[SYMBOL]' if has_scene_id_extract else '[SYMBOL]'}")
+        print(f"  scene_id parameter:  {'[SYMBOL]' if has_scene_id_param else '[SYMBOL]'}")
+        print(f"  upsert_embedding:    {'[SYMBOL]' if has_upsert else '[SYMBOL]'}")
         
         if has_upsert and (has_scene_id_extract and has_scene_id_param):
-            print(f"  Status: ✓ GOOD")
+            print(f"  Status: [SYMBOL] GOOD")
         elif has_upsert and not (has_scene_id_extract or has_scene_id_param):
-            print(f"  Status: ✗ NEEDS FIX - missing scene_id support")
+            print(f"  Status: [SYMBOL] NEEDS FIX - missing scene_id support")
             all_good = False
         elif has_upsert:
-            print(f"  Status: ⚠ PARTIAL - some scene_id support")
+            print(f"  Status: [SYMBOL] PARTIAL - some scene_id support")
             all_good = False
         else:
             print(f"  Status: ℹ No upsert_embedding (may not need scene_id)")
@@ -63,7 +63,7 @@ def verify_config_paths():
     
     config_file = Path("L:/goodq4all/config.yaml")
     if not config_file.exists():
-        print("✗ config.yaml not found!")
+        print("[SYMBOL] config.yaml not found!")
         return False
     
     with open(config_file) as f:
@@ -86,13 +86,13 @@ def verify_config_paths():
     for key, expected in required_paths.items():
         actual = paths.get(key)
         if actual == expected:
-            print(f"✓ {key:20s}: {actual}")
+            print(f"[SYMBOL] {key:20s}: {actual}")
         elif actual:
-            print(f"⚠ {key:20s}: {actual}")
+            print(f"[SYMBOL] {key:20s}: {actual}")
             print(f"    Expected: {expected}")
             all_good = False
         else:
-            print(f"✗ {key:20s}: MISSING")
+            print(f"[SYMBOL] {key:20s}: MISSING")
             print(f"    Expected: {expected}")
             all_good = False
     
@@ -106,7 +106,7 @@ def verify_graph_builder():
     
     gb_file = Path("L:/goodq4all/steps/graph_builder/graph_builder.py")
     if not gb_file.exists():
-        print("✗ graph_builder.py not found!")
+        print("[SYMBOL] graph_builder.py not found!")
         return False
     
     content = gb_file.read_text()
@@ -126,7 +126,7 @@ def verify_graph_builder():
     
     all_good = True
     for check_name, check_result in checks.items():
-        status = "✓" if check_result else "✗"
+        status = "[SYMBOL]" if check_result else "[SYMBOL]"
         print(f"{status} {check_name}")
         if not check_result:
             all_good = False
@@ -149,13 +149,13 @@ def main():
     print("="*80)
     
     for component, passed in results.items():
-        status = "✓ PASS" if passed else "✗ FAIL"
+        status = "[SYMBOL] PASS" if passed else "[SYMBOL] FAIL"
         print(f"{status}: {component}")
     
     all_passed = all(results.values())
     
     if all_passed:
-        print("\n✓ ALL VERIFICATIONS PASSED!")
+        print("\n[SYMBOL] ALL VERIFICATIONS PASSED!")
         print("\nReady to proceed with:")
         print("  1. Clean previous sample.mp4 data")
         print("  2. Re-ingest sample.mp4 with fixed pipeline")
@@ -163,7 +163,7 @@ def main():
         print("  4. Verify knowledge graph has all entity types")
         return 0
     else:
-        print("\n✗ SOME VERIFICATIONS FAILED")
+        print("\n[SYMBOL] SOME VERIFICATIONS FAILED")
         print("\nPlease review the issues above before proceeding.")
         return 1
 

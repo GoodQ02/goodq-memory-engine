@@ -101,9 +101,9 @@ def clean_old_processing():
                     shutil.rmtree(item)
                     items_cleaned += 1
                     total_size += size
-                    logger.info(f"  ✓ Deleted: {item.name}")
+                    logger.info(f"  [SYMBOL] Deleted: {item.name}")
                 except Exception as e:
-                    logger.error(f"  ✗ Failed to delete {item.name}: {e}")
+                    logger.error(f"  [SYMBOL] Failed to delete {item.name}: {e}")
             else:
                 items_cleaned += 1
                 total_size += size

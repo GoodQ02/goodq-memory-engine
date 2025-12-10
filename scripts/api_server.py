@@ -38,17 +38,17 @@ sys.path.insert(0, str(PROJECT_ROOT))
 # Import LLM client
 try:
     from lib.llm_client import LLMClient
-    print("✓ LLM client module imported")
+    print("[SYMBOL] LLM client module imported")
 except ImportError as e:
-    print(f"⚠ LLM client import failed: {e}")
+    print(f"[SYMBOL] LLM client import failed: {e}")
     LLMClient = None
 
 # Import Process Manager
 try:
     from lib.process_manager import ProcessManager
-    print("✓ Process Manager module imported")
+    print("[SYMBOL] Process Manager module imported")
 except ImportError as e:
-    print(f"⚠ Process Manager import failed: {e}")
+    print(f"[SYMBOL] Process Manager import failed: {e}")
     ProcessManager = None
 
 app = FastAPI(title="GoodQ API", version="2.0.0-production")
@@ -90,11 +90,11 @@ llm = None
 if LLMClient:
     try:
         llm = LLMClient()
-        print(f"LLM Status: {'✓ CONNECTED' if llm.available else '⚠ OFFLINE (using fallback)'}")
+        print(f"LLM Status: {'[SYMBOL] CONNECTED' if llm.available else '[SYMBOL] OFFLINE (using fallback)'}")
         if llm.available:
             print(f"Model: {llm.model}")
     except Exception as e:
-        print(f"❌ LLM initialization failed: {e}")
+        print(f"[FAIL] LLM initialization failed: {e}")
         llm = None
 
 if not llm or not (hasattr(llm, 'available') and llm.available):
@@ -1882,7 +1882,7 @@ async def get_pipeline_engines():
                         current_step = None
                         current_file = None
             except Exception as e:
-                print(f"⚠ Error reading progress file: {e}")
+                print(f"[SYMBOL] Error reading progress file: {e}")
                 pass
         
         # Also check step_runs.jsonl for the most recent step (more real-time)
@@ -1931,7 +1931,7 @@ async def get_pipeline_engines():
                                 except:
                                     continue
             except Exception as e:
-                print(f"⚠ Error reading step_runs.jsonl: {e}")
+                print(f"[SYMBOL] Error reading step_runs.jsonl: {e}")
                 pass
         
         # Mark active engines based on current step

@@ -73,7 +73,7 @@ def test_gpu_scene_detection():
     print(f"  Reserved: {torch.cuda.memory_reserved(0) / 1024**2:.2f} MB")
     
     print("\n" + "="*80)
-    print("✓ GPU Scene Detection Test Complete!")
+    print("[SYMBOL] GPU Scene Detection Test Complete!")
     print("="*80)
 
 if __name__ == "__main__":

@@ -17,25 +17,25 @@ def check_gpu_availability():
     
     try:
         import torch
-        print(f"✓ PyTorch version: {torch.__version__}")
-        print(f"✓ CUDA available: {torch.cuda.is_available()}")
+        print(f"[SYMBOL] PyTorch version: {torch.__version__}")
+        print(f"[SYMBOL] CUDA available: {torch.cuda.is_available()}")
         if torch.cuda.is_available():
-            print(f"✓ CUDA version: {torch.version.cuda}")
-            print(f"✓ Device count: {torch.cuda.device_count()}")
-            print(f"✓ Current device: {torch.cuda.current_device()}")
-            print(f"✓ Device name: {torch.cuda.get_device_name(0)}")
-            print(f"✓ Device capability: {torch.cuda.get_device_capability(0)}")
+            print(f"[SYMBOL] CUDA version: {torch.version.cuda}")
+            print(f"[SYMBOL] Device count: {torch.cuda.device_count()}")
+            print(f"[SYMBOL] Current device: {torch.cuda.current_device()}")
+            print(f"[SYMBOL] Device name: {torch.cuda.get_device_name(0)}")
+            print(f"[SYMBOL] Device capability: {torch.cuda.get_device_capability(0)}")
             mem_total = torch.cuda.get_device_properties(0).total_memory / 1e9
             mem_alloc = torch.cuda.memory_allocated(0) / 1e9
             mem_reserved = torch.cuda.memory_reserved(0) / 1e9
-            print(f"✓ Total VRAM: {mem_total:.2f} GB")
-            print(f"✓ Allocated: {mem_alloc:.2f} GB ({mem_alloc/mem_total*100:.1f}%)")
-            print(f"✓ Reserved: {mem_reserved:.2f} GB ({mem_reserved/mem_total*100:.1f}%)")
+            print(f"[SYMBOL] Total VRAM: {mem_total:.2f} GB")
+            print(f"[SYMBOL] Allocated: {mem_alloc:.2f} GB ({mem_alloc/mem_total*100:.1f}%)")
+            print(f"[SYMBOL] Reserved: {mem_reserved:.2f} GB ({mem_reserved/mem_total*100:.1f}%)")
         else:
-            print("✗ CUDA not available!")
+            print("[SYMBOL] CUDA not available!")
             return False
     except Exception as e:
-        print(f"✗ Error checking PyTorch: {e}")
+        print(f"[SYMBOL] Error checking PyTorch: {e}")
         return False
     
     return True
@@ -53,7 +53,7 @@ def check_nvidia_smi():
         )
         print(result.stdout.strip())
     except Exception as e:
-        print(f"✗ Error running nvidia-smi: {e}")
+        print(f"[SYMBOL] Error running nvidia-smi: {e}")
         return False
     
     return True
@@ -71,11 +71,11 @@ def check_cuda_processes():
         )
         output = result.stdout.strip()
         if not output or "pid" in output.lower() and len(output.split('\n')) <= 1:
-            print("⚠ No CUDA processes currently running!")
+            print("[SYMBOL] No CUDA processes currently running!")
         else:
             print(output)
     except Exception as e:
-        print(f"✗ Error checking CUDA processes: {e}")
+        print(f"[SYMBOL] Error checking CUDA processes: {e}")
         return False
     
     return True
@@ -95,7 +95,7 @@ def check_python_processes():
             pass
     
     if not python_procs:
-        print("⚠ No Python processes running!")
+        print("[SYMBOL] No Python processes running!")
         return False
     
     for proc in python_procs:
@@ -153,12 +153,12 @@ def check_step_configs():
     for step_name in gpu_steps:
         step_dir = steps_dir / step_name
         if not step_dir.exists():
-            print(f"⚠ {step_name}: Directory not found")
+            print(f"[SYMBOL] {step_name}: Directory not found")
             continue
         
         step_file = step_dir / "step.py"
         if not step_file.exists():
-            print(f"⚠ {step_name}: step.py not found")
+            print(f"[SYMBOL] {step_name}: step.py not found")
             continue
         
         # Check for GPU usage in code
@@ -167,8 +167,8 @@ def check_step_configs():
         has_device = 'device' in code.lower()
         
         print(f"\n{step_name}:")
-        print(f"  CUDA references: {'✓' if has_cuda else '✗'}")
-        print(f"  Device references: {'✓' if has_device else '✗'}")
+        print(f"  CUDA references: {'[SYMBOL]' if has_cuda else '[SYMBOL]'}")
+        print(f"  Device references: {'[SYMBOL]' if has_device else '[SYMBOL]'}")
     
     return True
 
@@ -191,7 +191,7 @@ def check_current_processing():
                     size_mb = item.stat().st_size / 1024 / 1024
                     print(f"  {item.name}: {size_mb:.1f} MB")
         else:
-            print("⚠ Processing directory is empty")
+            print("[SYMBOL] Processing directory is empty")
     
     # Check watchdog log
     watchdog_log = base_dir / "logs" / "watchdog.log"
@@ -224,7 +224,7 @@ def main():
         try:
             results[name] = check_func()
         except Exception as e:
-            print(f"\n✗ Error in {name}: {e}")
+            print(f"\n[SYMBOL] Error in {name}: {e}")
             results[name] = False
     
     # Summary
@@ -233,7 +233,7 @@ def main():
     print("="*80)
     
     for name, result in results.items():
-        status = "✓ PASS" if result else "✗ FAIL"
+        status = "[SYMBOL] PASS" if result else "[SYMBOL] FAIL"
         print(f"{status}: {name}")
     
     # Recommendations

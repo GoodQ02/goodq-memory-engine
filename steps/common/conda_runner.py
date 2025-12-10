@@ -71,11 +71,11 @@ def run_conda_step(env_name: str, step_name: str, item: Dict[str, Any], cfg: Dic
         try:
             result = subprocess.run(cmd, check=True, capture_output=True, timeout=timeout_s, env=env, text=True, encoding='utf-8', errors='replace')
         except subprocess.TimeoutExpired as e:
-            error_msg = f"⏱️  Mission timeout: {step_name} in {env_name} (exceeded {timeout_s}s)"
+            error_msg = f"[TIMER]  Mission timeout: {step_name} in {env_name} (exceeded {timeout_s}s)"
             logger.error(error_msg)
             raise StepExecutionError(error_msg) from e
         except subprocess.CalledProcessError as e:
-            error_msg = f"❌ Mission failed: {step_name} in {env_name} (exit code {e.returncode})"
+            error_msg = f"[FAIL] Mission failed: {step_name} in {env_name} (exit code {e.returncode})"
             if e.stderr:
                 error_msg += f"\nSTDERR: {e.stderr.strip()}"
             if e.stdout:
@@ -84,7 +84,7 @@ def run_conda_step(env_name: str, step_name: str, item: Dict[str, Any], cfg: Dic
             raise StepExecutionError(error_msg) from e
         
         if not os.path.isfile(out_path):
-            error_msg = f"❌ Mission failed: {step_name} produced no output file"
+            error_msg = f"[FAIL] Mission failed: {step_name} produced no output file"
             logger.error(error_msg)
             raise StepExecutionError(error_msg)
         
@@ -92,15 +92,15 @@ def run_conda_step(env_name: str, step_name: str, item: Dict[str, Any], cfg: Dic
             with open(out_path, "r", encoding="utf-8") as f:
                 result_data = json.load(f)
         except json.JSONDecodeError as e:
-            error_msg = f"❌ Mission failed: {step_name} produced invalid JSON"
+            error_msg = f"[FAIL] Mission failed: {step_name} produced invalid JSON"
             logger.error(error_msg)
             raise StepExecutionError(error_msg) from e
         
         # Check for error markers in result
         if isinstance(result_data, dict) and "_error" in result_data:
-            error_msg = f"❌ Mission failed: {step_name} returned error: {result_data['_error']}"
+            error_msg = f"[FAIL] Mission failed: {step_name} returned error: {result_data['_error']}"
             logger.error(error_msg)
             raise StepExecutionError(error_msg)
         
-        logger.debug(f"✓ Mission complete: {step_name}")
+        logger.debug(f"[SYMBOL] Mission complete: {step_name}")
         return result_data

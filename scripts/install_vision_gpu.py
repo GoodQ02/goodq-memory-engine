@@ -71,7 +71,7 @@ def install_torch_for_env(env_name, retry_count=3):
         )
         
         if not success:
-            print(f"  ❌ Installation failed: {stderr[:200]}")
+            print(f"  [FAIL] Installation failed: {stderr[:200]}")
             continue
         
         # Step 4: Verify installation
@@ -82,13 +82,13 @@ def install_torch_for_env(env_name, retry_count=3):
         )
         
         if success:
-            print(f"\n✅ {env_name} - CUDA PyTorch installed successfully!")
+            print(f"\n[OK] {env_name} - CUDA PyTorch installed successfully!")
             print(stdout)
             return True
         else:
-            print(f"  ❌ Verification failed: {stderr[:200]}")
+            print(f"  [FAIL] Verification failed: {stderr[:200]}")
     
-    print(f"\n❌ {env_name} - Failed after {retry_count} attempts")
+    print(f"\n[FAIL] {env_name} - Failed after {retry_count} attempts")
     return False
 
 def main():
@@ -125,30 +125,30 @@ def main():
     failed = [env for env, success in results.items() if not success]
     
     if successful:
-        print(f"\n✅ Successful ({len(successful)}):")
+        print(f"\n[OK] Successful ({len(successful)}):")
         for env in successful:
             print(f"   - {env}")
     
     if failed:
-        print(f"\n❌ Failed ({len(failed)}):")
+        print(f"\n[FAIL] Failed ({len(failed)}):")
         for env in failed:
             print(f"   - {env}")
     
     print("\n" + "="*80)
     
     if len(successful) == len(vision_envs):
-        print("🎉 All vision environments configured successfully!")
+        print("[SYMBOL] All vision environments configured successfully!")
         return 0
     else:
-        print("⚠️  Some environments failed. Check errors above.")
+        print("[WARN]  Some environments failed. Check errors above.")
         return 1
 
 if __name__ == "__main__":
     try:
         sys.exit(main())
     except KeyboardInterrupt:
-        print("\n\n❌ Installation cancelled by user")
+        print("\n\n[FAIL] Installation cancelled by user")
         sys.exit(1)
     except Exception as e:
-        print(f"\n\n❌ Unexpected error: {e}")
+        print(f"\n\n[FAIL] Unexpected error: {e}")
         sys.exit(1)

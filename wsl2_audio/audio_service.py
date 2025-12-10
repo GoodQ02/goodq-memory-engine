@@ -163,7 +163,7 @@ class AudioService:
                 compute_type=compute_type,
                 num_workers=4
             )
-            logger.info("✓ Whisper model loaded")
+            logger.info("[SYMBOL] Whisper model loaded")
         except Exception as e:
             logger.error(f"Failed to load Whisper: {e}")
         
@@ -178,7 +178,7 @@ class AudioService:
             )
             self.vad_get_speech_timestamps = vad_utils[0]
             self.vad_collect_chunks = vad_utils[4]
-            logger.info("✓ Silero VAD loaded")
+            logger.info("[SYMBOL] Silero VAD loaded")
         except Exception as e:
             logger.error(f"Failed to load VAD: {e}")
         
@@ -197,7 +197,7 @@ class AudioService:
                 )
                 if torch.cuda.is_available():
                     self.diarization_pipeline.to(torch.device("cuda"))
-                logger.info("✓ Diarization pipeline loaded")
+                logger.info("[SYMBOL] Diarization pipeline loaded")
             else:
                 logger.warning("No HuggingFace token provided, diarization unavailable")
         except Exception as e:

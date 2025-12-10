@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-🎯 Configuration Values Test
+[TARGET] Configuration Values Test
 Validates that settings are being loaded correctly
 """
 import sys
@@ -16,7 +16,7 @@ from steps.common.config_loader import load_configs
 def test_config_values():
     """Test that all critical settings have correct values"""
     print("=" * 70)
-    print("🔍 GoodQ Configuration Values Test")
+    print("[SEARCH] GoodQ Configuration Values Test")
     print("=" * 70)
     print()
     
@@ -25,7 +25,7 @@ def test_config_values():
     paths = result.get('paths', {})
     
     # Test Video Settings
-    print("📹 VIDEO SETTINGS:")
+    print("[VIDEO] VIDEO SETTINGS:")
     scene_detect = cfg.get('video', {}).get('scene_detect', {})
     threshold = scene_detect.get('threshold', 'NOT SET')
     min_scene = scene_detect.get('min_scene_len_sec', 'NOT SET')
@@ -39,13 +39,13 @@ def test_config_values():
     
     # Validate
     if threshold == 15.0:
-        print("   ✅ Scene threshold is CORRECT (15.0 for home movies)")
+        print("   [OK] Scene threshold is CORRECT (15.0 for home movies)")
     else:
-        print(f"   ❌ Scene threshold is WRONG (expected 15.0, got {threshold})")
+        print(f"   [FAIL] Scene threshold is WRONG (expected 15.0, got {threshold})")
     print()
     
     # Test Audio Settings
-    print("🎵 AUDIO SETTINGS:")
+    print("[AUDIO] AUDIO SETTINGS:")
     audio = cfg.get('audio', {})
     transcribe = audio.get('transcribe', {})
     chunk_seconds = transcribe.get('chunk_seconds', 'NOT SET')
@@ -57,52 +57,52 @@ def test_config_values():
     print(f"   Language: {language}")
     
     if chunk_seconds == 30:
-        print("   ✅ Chunk seconds is CORRECT (30 for efficiency)")
+        print("   [OK] Chunk seconds is CORRECT (30 for efficiency)")
     else:
-        print(f"   ⚠️  Chunk seconds could be optimized (expected 30, got {chunk_seconds})")
+        print(f"   [WARN]  Chunk seconds could be optimized (expected 30, got {chunk_seconds})")
     print()
     
     # Test New Settings
-    print("⚙️  NEW CONFIGURATION SECTIONS:")
+    print("[SYMBOL]️  NEW CONFIGURATION SECTIONS:")
     
     faiss = cfg.get('faiss', {})
     if faiss:
         print(f"   FAISS Index Type: {faiss.get('index_type', 'NOT SET')}")
         print(f"   FAISS Metric: {faiss.get('metric', 'NOT SET')}")
-        print("   ✅ FAISS configuration found")
+        print("   [OK] FAISS configuration found")
     else:
-        print("   ⚠️  FAISS configuration missing")
+        print("   [WARN]  FAISS configuration missing")
     print()
     
     memory = cfg.get('memory', {})
     if memory:
         print(f"   Max Summaries/Video: {memory.get('max_summaries_per_video', 'NOT SET')}")
         print(f"   Retention Days: {memory.get('retention_days', 'NOT SET')}")
-        print("   ✅ Memory management configuration found")
+        print("   [OK] Memory management configuration found")
     else:
-        print("   ⚠️  Memory management configuration missing")
+        print("   [WARN]  Memory management configuration missing")
     print()
     
     processing = cfg.get('processing', {})
     if processing:
         print(f"   Image Batch Size: {processing.get('batch_size_images', 'NOT SET')}")
         print(f"   Max Workers: {processing.get('max_workers', 'NOT SET')}")
-        print("   ✅ Processing optimization configuration found")
+        print("   [OK] Processing optimization configuration found")
     else:
-        print("   ⚠️  Processing optimization configuration missing")
+        print("   [WARN]  Processing optimization configuration missing")
     print()
     
     kg = cfg.get('knowledge_graph', {})
     if kg:
         print(f"   KG Enabled: {kg.get('enabled', 'NOT SET')}")
         print(f"   Min Confidence: {kg.get('min_confidence', 'NOT SET')}")
-        print("   ✅ Knowledge graph configuration found")
+        print("   [OK] Knowledge graph configuration found")
     else:
-        print("   ⚠️  Knowledge graph configuration missing")
+        print("   [WARN]  Knowledge graph configuration missing")
     print()
     
     print("=" * 70)
-    print("🎯 Configuration Test Complete")
+    print("[TARGET] Configuration Test Complete")
     print("=" * 70)
 
 

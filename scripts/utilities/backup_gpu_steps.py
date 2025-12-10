@@ -27,7 +27,7 @@ for step_name in STEPS_TO_REFACTOR:
     print(f"{'='*80}")
     
     if not os.path.exists(step_file):
-        print(f"❌ File not found: {step_file}")
+        print(f"[FAIL] File not found: {step_file}")
         continue
     
     # Create backup
@@ -36,9 +36,9 @@ for step_name in STEPS_TO_REFACTOR:
     
     with open(backup_file, 'w', encoding='utf-8') as f:
         f.write(original_content)
-    print(f"✅ Backup created: {backup_file}")
+    print(f"[OK] Backup created: {backup_file}")
 
 print(f"\n{'='*80}")
-print("✅ All backups created successfully!")
+print("[OK] All backups created successfully!")
 print("Ready for manual refactoring")
 print(f"{'='*80}")

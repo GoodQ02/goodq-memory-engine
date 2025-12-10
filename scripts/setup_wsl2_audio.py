@@ -51,7 +51,7 @@ class WSL2AudioSetup:
         if not ubuntu_running:
             self.errors.append("WSL2 Ubuntu is not running")
             return False
-        print("  ✓ WSL2 Ubuntu is running")
+        print("  [SYMBOL] WSL2 Ubuntu is running")
         
         # Check CUDA in WSL2
         print("\n[2/5] Checking CUDA availability in WSL2...")
@@ -59,7 +59,7 @@ class WSL2AudioSetup:
         if code != 0:
             self.errors.append(f"CUDA not available in WSL2: {stderr}")
             return False
-        print(f"  ✓ GPU detected: {stdout.strip()}")
+        print(f"  [SYMBOL] GPU detected: {stdout.strip()}")
         
         # Check Python
         print("\n[3/5] Checking Python in WSL2...")
@@ -67,7 +67,7 @@ class WSL2AudioSetup:
         if code != 0:
             self.warnings.append("Python3 not found, will install")
         else:
-            print(f"  ✓ {stdout.strip()}")
+            print(f"  [SYMBOL] {stdout.strip()}")
             
         # Check pip
         print("\n[4/5] Checking pip in WSL2...")
@@ -75,7 +75,7 @@ class WSL2AudioSetup:
         if code != 0:
             self.warnings.append("pip3 not found, will install")
         else:
-            print(f"  ✓ {stdout.strip()}")
+            print(f"  [SYMBOL] {stdout.strip()}")
             
         # Check disk space
         print("\n[5/5] Checking disk space...")
@@ -107,7 +107,7 @@ class WSL2AudioSetup:
         if code != 0:
             self.errors.append(f"apt-get update failed: {stderr}")
             return False
-        print("  ✓ Package lists updated")
+        print("  [SYMBOL] Package lists updated")
         
         print("\n[2/3] Installing system packages...")
         package_str = " ".join(packages)
@@ -116,12 +116,12 @@ class WSL2AudioSetup:
         if code != 0:
             self.errors.append(f"Package installation failed: {stderr}")
             return False
-        print(f"  ✓ Installed {len(packages)} packages")
+        print(f"  [SYMBOL] Installed {len(packages)} packages")
         
         print("\n[3/3] Verifying FFmpeg...")
         stdout, stderr, code = self.run_wsl_command("ffmpeg -version | head -1")
         if code == 0:
-            print(f"  ✓ {stdout.strip()}")
+            print(f"  [SYMBOL] {stdout.strip()}")
         else:
             self.warnings.append("FFmpeg verification failed")
             
@@ -145,12 +145,12 @@ class WSL2AudioSetup:
         for i, dir_path in enumerate(dirs, 1):
             print(f"[{i}/{len(dirs)}] Creating {dir_path}...")
             self.run_wsl_command(f"mkdir -p {dir_path}")
-        print("  ✓ Workspace structure created")
+        print("  [SYMBOL] Workspace structure created")
         
         # Create mount point for Windows data
         print("\n[MOUNT] Creating mount point for L: drive...")
         self.run_wsl_command("mkdir -p /mnt/l")
-        print("  ✓ Mount point ready")
+        print("  [SYMBOL] Mount point ready")
         
         return True
         
@@ -161,7 +161,7 @@ class WSL2AudioSetup:
         print("[1/2] Checking for existing CUDA installation...")
         stdout, stderr, code = self.run_wsl_command("nvcc --version")
         if code == 0:
-            print(f"  ✓ CUDA already installed: {stdout.strip()}")
+            print(f"  [SYMBOL] CUDA already installed: {stdout.strip()}")
             return True
             
         print("\n[2/2] Installing CUDA toolkit...")
@@ -189,7 +189,7 @@ class WSL2AudioSetup:
         if code != 0:
             self.errors.append(f"venv creation failed: {stderr}")
             return False
-        print(f"  ✓ Virtual environment created at {venv_path}")
+        print(f"  [SYMBOL] Virtual environment created at {venv_path}")
         
         print("\n[2/4] Upgrading pip...")
         cmd = f"{venv_path}/bin/pip install --upgrade pip setuptools wheel"
@@ -197,7 +197,7 @@ class WSL2AudioSetup:
         if code != 0:
             self.warnings.append("pip upgrade had issues")
         else:
-            print("  ✓ pip upgraded")
+            print("  [SYMBOL] pip upgraded")
             
         print("\n[3/4] Installing PyTorch with CUDA support...")
         print("  This will download ~2.5GB, please wait...")
@@ -206,13 +206,13 @@ class WSL2AudioSetup:
         if code != 0:
             self.errors.append(f"PyTorch installation failed: {stderr}")
             return False
-        print("  ✓ PyTorch with CUDA installed")
+        print("  [SYMBOL] PyTorch with CUDA installed")
         
         print("\n[4/4] Verifying CUDA availability...")
         test_cmd = f"{venv_path}/bin/python -c 'import torch; print(f\"CUDA: {{torch.cuda.is_available()}}\"); print(f\"Device: {{torch.cuda.get_device_name(0) if torch.cuda.is_available() else None}}\")'"
         stdout, stderr, code = self.run_wsl_command(test_cmd)
         if code == 0:
-            print(f"  ✓ {stdout.strip()}")
+            print(f"  [SYMBOL] {stdout.strip()}")
         else:
             self.errors.append("CUDA not available in PyTorch")
             return False
@@ -244,16 +244,16 @@ class WSL2AudioSetup:
             stdout, stderr, code = self.run_wsl_command(f"{venv_pip} install {package}")
             if code != 0:
                 self.warnings.append(f"Failed to install {package}: {stderr[:100]}")
-                print(f"  ⚠ Installation issue (may still work)")
+                print(f"  [SYMBOL] Installation issue (may still work)")
             else:
-                print(f"  ✓ {package} installed")
+                print(f"  [SYMBOL] {package} installed")
                 
         # Install Silero VAD from torch hub
         print(f"\n[{len(packages)+1}/{len(packages)+1}] Setting up Silero VAD...")
         test_cmd = f"{self.wsl_workspace}/venv/bin/python -c \"import torch; model, utils = torch.hub.load('snakers4/silero-vad', 'silero_vad', onnx=False); print('Silero VAD loaded successfully')\""
         stdout, stderr, code = self.run_wsl_command(test_cmd)
         if code == 0:
-            print("  ✓ Silero VAD ready")
+            print("  [SYMBOL] Silero VAD ready")
         else:
             self.warnings.append("Silero VAD setup had issues")
             
@@ -359,7 +359,7 @@ if __name__ == "__main__":
         cmd = f"cat > {script_path} << 'SCRIPT_EOF'\n{processor_script}\nSCRIPT_EOF"
         self.run_wsl_command(cmd)
         self.run_wsl_command(f"chmod +x {script_path}")
-        print(f"  ✓ Created {script_path}")
+        print(f"  [SYMBOL] Created {script_path}")
         
         # Queue watcher script
         watcher_script = '''#!/usr/bin/env python3
@@ -445,13 +445,13 @@ if __name__ == "__main__":
         cmd = f"cat > {watcher_path} << 'SCRIPT_EOF'\n{watcher_script}\nSCRIPT_EOF"
         self.run_wsl_command(cmd)
         self.run_wsl_command(f"chmod +x {watcher_path}")
-        print(f"  ✓ Created {watcher_path}")
+        print(f"  [SYMBOL] Created {watcher_path}")
         
         # Install watchdog
         print("\n[3/3] Installing watchdog package...")
         venv_pip = f"{self.wsl_workspace}/venv/bin/pip"
         self.run_wsl_command(f"{venv_pip} install watchdog")
-        print("  ✓ Watchdog installed")
+        print("  [SYMBOL] Watchdog installed")
         
         return True
         
@@ -567,7 +567,7 @@ class WSL2AudioBridge:
         print(f"[1/2] Creating bridge module at {bridge_path}...")
         with open(bridge_path, 'w') as f:
             f.write(bridge_code)
-        print("  ✓ Bridge module created")
+        print("  [SYMBOL] Bridge module created")
         
         # Test script
         test_code = '''"""Test WSL2 Audio Bridge"""
@@ -587,17 +587,17 @@ def test_bridge():
     # Check status
     print("\\n[1/3] Checking WSL2 audio watcher status...")
     if bridge.check_wsl_status():
-        print("  ✓ WSL2 audio watcher is running")
+        print("  [SYMBOL] WSL2 audio watcher is running")
     else:
-        print("  ⚠ WSL2 audio watcher not running")
+        print("  [SYMBOL] WSL2 audio watcher not running")
         print("  Starting watcher...")
         bridge.start_wsl_watcher()
         import time
         time.sleep(3)
         if bridge.check_wsl_status():
-            print("  ✓ Watcher started successfully")
+            print("  [SYMBOL] Watcher started successfully")
         else:
-            print("  ✗ Failed to start watcher")
+            print("  [SYMBOL] Failed to start watcher")
             return False
             
     # Path conversion test
@@ -606,11 +606,11 @@ def test_bridge():
     wsl_path = bridge.wsl_path(win_path)
     print(f"  Windows: {win_path}")
     print(f"  WSL2:    {wsl_path}")
-    print("  ✓ Path conversion working")
+    print("  [SYMBOL] Path conversion working")
     
     print("\\n[3/3] Bridge ready for audio processing")
     print("\\n" + "="*80)
-    print("  ✓ All tests passed!")
+    print("  [SYMBOL] All tests passed!")
     print("="*80)
     return True
 
@@ -622,7 +622,7 @@ if __name__ == "__main__":
         print(f"\n[2/2] Creating test script at {test_path}...")
         with open(test_path, 'w') as f:
             f.write(test_code)
-        print("  ✓ Test script created")
+        print("  [SYMBOL] Test script created")
         
         return True
         
@@ -639,17 +639,17 @@ if __name__ == "__main__":
         print(f"    - Output: {self.wsl_workspace}/queue_out")
         
         if self.warnings:
-            print(f"\n⚠ Warnings ({len(self.warnings)}):")
+            print(f"\n[SYMBOL] Warnings ({len(self.warnings)}):")
             for warning in self.warnings:
                 print(f"  - {warning}")
                 
         if self.errors:
-            print(f"\n✗ Errors ({len(self.errors)}):")
+            print(f"\n[SYMBOL] Errors ({len(self.errors)}):")
             for error in self.errors:
                 print(f"  - {error}")
             return False
         else:
-            print("\n✓ No errors detected")
+            print("\n[SYMBOL] No errors detected")
             
         print("\nNext steps:")
         print("  1. Test the bridge: python test_wsl2_bridge.py")
@@ -689,14 +689,14 @@ if __name__ == "__main__":
         for name, func in steps:
             try:
                 if not func():
-                    print(f"\n✗ {name} failed!")
+                    print(f"\n[SYMBOL] {name} failed!")
                     if self.errors:
                         print("Errors:")
                         for error in self.errors[-3:]:
                             print(f"  - {error}")
                     return False
             except Exception as e:
-                print(f"\n✗ Exception in {name}: {e}")
+                print(f"\n[SYMBOL] Exception in {name}: {e}")
                 self.errors.append(f"{name}: {str(e)}")
                 return False
                 

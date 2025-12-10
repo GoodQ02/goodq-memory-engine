@@ -172,7 +172,7 @@ def main():
             return 1
     
     print(f"\n{'=' * 80}")
-    print("DIAGNOSTIC COMPLETE: ALL TESTS PASSED ✓")
+    print("DIAGNOSTIC COMPLETE: ALL TESTS PASSED [SYMBOL]")
     print("=" * 80)
     print("\nWhisper.cpp is working correctly.")
     print("If pipeline transcription still fails, the issue is in:")

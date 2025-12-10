@@ -37,13 +37,13 @@ def test_llm_availability():
             timeout=5
         )
         if response.status_code == 200:
-            print("✅ LLM is available and responding")
+            print("[OK] LLM is available and responding")
             return True
         else:
-            print(f"❌ LLM returned status {response.status_code}")
+            print(f"[FAIL] LLM returned status {response.status_code}")
             return False
     except Exception as e:
-        print(f"❌ LLM not available: {e}")
+        print(f"[FAIL] LLM not available: {e}")
         return False
 
 
@@ -70,7 +70,7 @@ def test_llm_entity_extraction():
         entities = extract_entities_with_llm(test_text, test_context, cfg)
         
         if entities:
-            print(f"✅ Extracted {sum(len(v) for v in entities.values())} entities")
+            print(f"[OK] Extracted {sum(len(v) for v in entities.values())} entities")
             for entity_type, entity_list in entities.items():
                 if entity_list:
                     print(f"   - {entity_type}: {len(entity_list)} found")
@@ -78,11 +78,11 @@ def test_llm_entity_extraction():
                         print(f"     • {entity.get('name', 'unknown')} (confidence: {entity.get('confidence', 0):.2f})")
             return True
         else:
-            print("⚠️  No entities extracted (LLM may be processing)")
+            print("[WARN]  No entities extracted (LLM may be processing)")
             return False
             
     except Exception as e:
-        print(f"❌ Entity extraction failed: {e}")
+        print(f"[FAIL] Entity extraction failed: {e}")
         import traceback
         traceback.print_exc()
         return False
@@ -120,15 +120,15 @@ def test_scene_narrative_generation():
         narrative = generate_scene_narrative(test_scene, cfg)
         
         if narrative:
-            print(f"✅ Generated narrative ({len(narrative)} chars):")
+            print(f"[OK] Generated narrative ({len(narrative)} chars):")
             print(f"   \"{narrative}\"")
             return True
         else:
-            print("⚠️  No narrative generated")
+            print("[WARN]  No narrative generated")
             return False
             
     except Exception as e:
-        print(f"❌ Narrative generation failed: {e}")
+        print(f"[FAIL] Narrative generation failed: {e}")
         import traceback
         traceback.print_exc()
         return False
@@ -177,18 +177,18 @@ def test_emotional_arc_analysis():
         arc_analysis = analyze_emotional_arc(test_scenes, cfg)
         
         if arc_analysis:
-            print(f"✅ Generated emotional arc analysis:")
+            print(f"[OK] Generated emotional arc analysis:")
             print(f"   Overall Arc: {arc_analysis.get('overall_arc', 'N/A')[:100]}...")
             print(f"   Key Moments: {len(arc_analysis.get('key_moments', []))}")
             print(f"   Themes: {', '.join(arc_analysis.get('emotional_themes', []))}")
             print(f"   Turning Points: {len(arc_analysis.get('turning_points', []))}")
             return True
         else:
-            print("⚠️  No emotional arc generated")
+            print("[WARN]  No emotional arc generated")
             return False
             
     except Exception as e:
-        print(f"❌ Emotional arc analysis failed: {e}")
+        print(f"[FAIL] Emotional arc analysis failed: {e}")
         import traceback
         traceback.print_exc()
         return False
@@ -262,7 +262,7 @@ def test_knowledge_graph_integration():
             cursor.execute("SELECT COUNT(*) FROM nodes WHERE node_type = 'emotional_moment'")
             moment_count = cursor.fetchone()[0]
             
-            print(f"✅ Knowledge graph integration successful:")
+            print(f"[OK] Knowledge graph integration successful:")
             print(f"   - Emotional arc nodes: {arc_count}")
             print(f"   - Theme nodes: {theme_count}")
             print(f"   - Key moment nodes: {moment_count}")
@@ -274,7 +274,7 @@ def test_knowledge_graph_integration():
             return arc_count > 0 and theme_count > 0
             
     except Exception as e:
-        print(f"❌ Knowledge graph integration failed: {e}")
+        print(f"[FAIL] Knowledge graph integration failed: {e}")
         import traceback
         traceback.print_exc()
         return False
@@ -288,7 +288,7 @@ def check_sample_database():
     
     db_path = Path("L:/_DATA/GoodQ_Data/goodq_memory.db")
     if not db_path.exists():
-        print("❌ Memory database not found")
+        print("[FAIL] Memory database not found")
         return False
     
     try:
@@ -298,7 +298,7 @@ def check_sample_database():
         # Check for scenes
         c.execute("SELECT COUNT(*) FROM scenes")
         scene_count = c.fetchone()[0]
-        print(f"\n📊 Scenes in database: {scene_count}")
+        print(f"\n[STATS] Scenes in database: {scene_count}")
         
         if scene_count > 0:
             # Check if scenes have LLM-enhanced data
@@ -308,7 +308,7 @@ def check_sample_database():
             row = c.fetchone()
             if row:
                 meta = json.loads(row[0])
-                print(f"✅ Sample scene data available")
+                print(f"[OK] Sample scene data available")
                 
                 # Check for various data types
                 has_transcript = bool(meta.get('audio', {}).get('transcript'))
@@ -316,21 +316,21 @@ def check_sample_database():
                 has_emotions = bool(meta.get('emotions'))
                 has_caption = bool(meta.get('caption'))
                 
-                print(f"   - Transcript: {'✅' if has_transcript else '❌'}")
-                print(f"   - Sentiment: {'✅' if has_sentiment else '❌'}")
-                print(f"   - Emotions: {'✅' if has_emotions else '❌'}")
-                print(f"   - Caption: {'✅' if has_caption else '❌'}")
+                print(f"   - Transcript: {'[OK]' if has_transcript else '[FAIL]'}")
+                print(f"   - Sentiment: {'[OK]' if has_sentiment else '[FAIL]'}")
+                print(f"   - Emotions: {'[OK]' if has_emotions else '[FAIL]'}")
+                print(f"   - Caption: {'[OK]' if has_caption else '[FAIL]'}")
         
         conn.close()
         return scene_count > 0
         
     except Exception as e:
-        print(f"❌ Database check failed: {e}")
+        print(f"[FAIL] Database check failed: {e}")
         return False
 
 
 if __name__ == "__main__":
-    print("\n🚀 Starting Phase 3 LLM Integration Tests\n")
+    print("\n[LAUNCH] Starting Phase 3 LLM Integration Tests\n")
     
     results = {
         'llm_availability': test_llm_availability(),
@@ -352,24 +352,24 @@ if __name__ == "__main__":
     total = len(results)
     
     for test_name, result in results.items():
-        status = "✅ PASS" if result else "❌ FAIL"
+        status = "[OK] PASS" if result else "[FAIL] FAIL"
         print(f"{status} - {test_name.replace('_', ' ').title()}")
     
-    print(f"\n📊 Results: {passed}/{total} tests passed")
+    print(f"\n[STATS] Results: {passed}/{total} tests passed")
     
     if has_sample_data:
-        print("\n✅ Sample data available for LLM enhancement")
+        print("\n[OK] Sample data available for LLM enhancement")
     else:
-        print("\n⚠️  No sample data found - run ingestion first")
+        print("\n[WARN]  No sample data found - run ingestion first")
     
     print("\n" + "="*80)
     
     if passed == total:
-        print("🎉 ALL TESTS PASSED - Phase 3 LLM Integration Complete!")
+        print("[SYMBOL] ALL TESTS PASSED - Phase 3 LLM Integration Complete!")
     elif passed >= total * 0.6:
-        print("⚠️  PARTIAL SUCCESS - Some tests passed, review failures above")
+        print("[WARN]  PARTIAL SUCCESS - Some tests passed, review failures above")
     else:
-        print("❌ TESTS FAILED - Review errors and ensure LLM is running")
+        print("[FAIL] TESTS FAILED - Review errors and ensure LLM is running")
     
     print("="*80)
     

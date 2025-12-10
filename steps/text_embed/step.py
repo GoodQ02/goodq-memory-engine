@@ -44,10 +44,10 @@ def _load_st() -> Any:
         from sentence_transformers import SentenceTransformer  # type: ignore
         
         _ST = SentenceTransformer("all-MiniLM-L6-v2", device=device)
-        logger.info(f"✅ SentenceTransformer loaded on {device} (GPU config: {gpu_config['memory_fraction']:.1%} memory)")
+        logger.info(f"[OK] SentenceTransformer loaded on {device} (GPU config: {gpu_config['memory_fraction']:.1%} memory)")
     except Exception as e:
-        logger.error(f"❌ Failed to load SentenceTransformer: {str(e)}")
-        logger.info("⚠️  Falling back to CPU mode")
+        logger.error(f"[FAIL] Failed to load SentenceTransformer: {str(e)}")
+        logger.info("[WARN]  Falling back to CPU mode")
         _ST = None
         GPUManager.clear_cache()
     return _ST

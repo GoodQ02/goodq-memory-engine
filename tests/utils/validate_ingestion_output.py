@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-🔍 Mission Intel: Ingestion Output Validator
+[SEARCH] Mission Intel: Ingestion Output Validator
 Analyzes ingestion results to detect silent failures, missing data, and quality issues.
 """
 from __future__ import annotations
@@ -29,15 +29,15 @@ def log_section(title: str):
 
 
 def log_success(msg: str):
-    print(f"{Colors.SUCCESS}✓{Colors.END} {msg}")
+    print(f"{Colors.SUCCESS}[SYMBOL]{Colors.END} {msg}")
 
 
 def log_warning(msg: str):
-    print(f"{Colors.WARNING}⚠{Colors.END} {msg}")
+    print(f"{Colors.WARNING}[SYMBOL]{Colors.END} {msg}")
 
 
 def log_error(msg: str):
-    print(f"{Colors.FAIL}✗{Colors.END} {msg}")
+    print(f"{Colors.FAIL}[SYMBOL]{Colors.END} {msg}")
 
 
 def log_info(msg: str):
@@ -100,16 +100,16 @@ def check_memory_db(db_path: Path) -> Dict[str, Any]:
         }
         
         if scene_count == 0:
-            log_error("❌ CRITICAL: No scenes found in database!")
+            log_error("[FAIL] CRITICAL: No scenes found in database!")
             result['status'] = 'empty'
         elif embedding_count == 0:
-            log_error("❌ CRITICAL: No embeddings found in database!")
+            log_error("[FAIL] CRITICAL: No embeddings found in database!")
             result['status'] = 'no_embeddings'
         elif error_count > 0 or error_steps:
-            log_warning("⚠️  Database contains errors but has some data")
+            log_warning("[WARN]  Database contains errors but has some data")
             result['status'] = 'partial'
         else:
-            log_success("✓ Database appears healthy")
+            log_success("[SYMBOL] Database appears healthy")
         
         return result
         
@@ -291,12 +291,12 @@ def check_workspace_artifacts(workspace: Path) -> Dict[str, Any]:
     }
     
     if not frame_files and not audio_files:
-        log_error("❌ CRITICAL: No extracted artifacts found!")
+        log_error("[FAIL] CRITICAL: No extracted artifacts found!")
         result['status'] = 'empty'
     elif len(frame_files) < len(audio_files) * 0.5:
-        log_warning("⚠️  Significantly fewer frames than audio clips")
+        log_warning("[WARN]  Significantly fewer frames than audio clips")
     else:
-        log_success("✓ Artifacts extracted successfully")
+        log_success("[SYMBOL] Artifacts extracted successfully")
     
     return result
 
@@ -305,7 +305,7 @@ def main():
     """Run comprehensive validation"""
     print(f"\n{Colors.BOLD}{Colors.HEADER}")
     print("╔════════════════════════════════════════════════════════════════╗")
-    print("║        🔍 Mission Intel: Ingestion Output Validator          ║")
+    print("║        [SEARCH] Mission Intel: Ingestion Output Validator          ║")
     print("║        Detecting Silent Failures & Quality Issues            ║")
     print("╚════════════════════════════════════════════════════════════════╝")
     print(Colors.END)
@@ -369,24 +369,24 @@ def main():
     
     # Print summary
     if critical_failures:
-        print(f"\n{Colors.FAIL}{Colors.BOLD}❌ MISSION FAILED - Critical Issues Detected:{Colors.END}")
+        print(f"\n{Colors.FAIL}{Colors.BOLD}[FAIL] MISSION FAILED - Critical Issues Detected:{Colors.END}")
         for failure in critical_failures:
             print(f"  • {failure}")
     
     if warnings:
-        print(f"\n{Colors.WARNING}⚠️  Warnings:{Colors.END}")
+        print(f"\n{Colors.WARNING}[WARN]  Warnings:{Colors.END}")
         for warning in warnings:
             print(f"  • {warning}")
     
     if all_ok and not warnings:
-        print(f"\n{Colors.SUCCESS}{Colors.BOLD}✓ MISSION SUCCESS - All Systems Operational{Colors.END}")
+        print(f"\n{Colors.SUCCESS}{Colors.BOLD}[SYMBOL] MISSION SUCCESS - All Systems Operational{Colors.END}")
         print(f"  • {results['memory_db']['scenes']} scenes processed")
         print(f"  • {results['memory_db']['embeddings']} embeddings created")
         print(f"  • {results['artifacts']['frames']} frames extracted")
         print(f"  • {results['artifacts']['audio']} audio clips processed")
         print(f"  • {results['knowledge_graph']['nodes']} knowledge graph entities")
     elif all_ok:
-        print(f"\n{Colors.SUCCESS}✓ MISSION PARTIAL SUCCESS{Colors.END}")
+        print(f"\n{Colors.SUCCESS}[SYMBOL] MISSION PARTIAL SUCCESS{Colors.END}")
         print("  Pipeline completed with warnings but produced usable output")
     
     # Export detailed report

@@ -55,7 +55,7 @@ def configure_env(env_name):
     
     env_path = get_env_path(env_name)
     if not env_path:
-        print(f"✗ Could not find environment path for {env_name}")
+        print(f"[SYMBOL] Could not find environment path for {env_name}")
         return False
     
     # Create activation script directories if they don't exist
@@ -76,29 +76,29 @@ def configure_env(env_name):
         deactivate_content = '@echo off\nset "PYTHONPATH=%PYTHONPATH:L:\\;=%"\n'
         deactivate_script.write_text(deactivate_content)
         
-        print(f"✓ Created activation script: {activate_script}")
-        print(f"✓ Created deactivation script: {deactivate_script}")
+        print(f"[SYMBOL] Created activation script: {activate_script}")
+        print(f"[SYMBOL] Created deactivation script: {deactivate_script}")
         
         # Test the import
         test_result = subprocess.run(
             ['conda', 'run', '-n', env_name, 'python', '-c', 
-             'from goodq4all.steps.common import config_loader; print("✓ Import successful")'],
+             'from goodq4all.steps.common import config_loader; print("[SYMBOL] Import successful")'],
             capture_output=True,
             text=True,
             timeout=30
         )
         
         if test_result.returncode == 0:
-            print(f"✓ Test import successful in {env_name}")
+            print(f"[SYMBOL] Test import successful in {env_name}")
             return True
         else:
-            print(f"⚠ Warning: Activation script created but test import failed")
+            print(f"[SYMBOL] Warning: Activation script created but test import failed")
             print(f"   This is normal - activate the environment manually to test")
             # Still return True as the script was created
             return True
             
     except Exception as e:
-        print(f"✗ Error configuring {env_name}: {e}")
+        print(f"[SYMBOL] Error configuring {env_name}: {e}")
         return False
 
 def main():
@@ -120,17 +120,17 @@ def main():
     print("\n" + "="*60)
     print("Configuration Summary")
     print("="*60)
-    print(f"\n✓ Successful: {len(successes)}/{len(ENVS)}")
+    print(f"\n[SYMBOL] Successful: {len(successes)}/{len(ENVS)}")
     for env in successes:
         print(f"  - {env}")
     
     if failures:
-        print(f"\n✗ Failed: {len(failures)}/{len(ENVS)}")
+        print(f"\n[SYMBOL] Failed: {len(failures)}/{len(ENVS)}")
         for env in failures:
             print(f"  - {env}")
         return 1
     else:
-        print("\n🎉 All environments configured successfully!")
+        print("\n[SYMBOL] All environments configured successfully!")
         print("\nℹ️  Note: The PYTHONPATH will be active when you:")
         print("   1. Activate the environment with 'conda activate <env_name>'")
         print("   2. Run scripts with 'conda run -n <env_name> python script.py'")

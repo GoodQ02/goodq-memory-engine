@@ -45,8 +45,8 @@ avg_text_length = (total_text_length / segments_with_text) if segments_with_text
 coverage = (segments_with_text / len(segments) * 100) if segments else 0
 
 print("STATISTICS:")
-print(f"  ✓ Segments with text:    {segments_with_text} ({coverage:.1f}%)")
-print(f"  ✗ Segments without text: {segments_without_text}")
+print(f"  [SYMBOL] Segments with text:    {segments_with_text} ({coverage:.1f}%)")
+print(f"  [SYMBOL] Segments without text: {segments_without_text}")
 print(f"  Unique speakers found:  {len(speakers_found)}")
 print(f"  Average text length:    {avg_text_length:.1f} characters")
 print(f"  Total transcript chars:  {total_text_length}")
@@ -115,17 +115,17 @@ print("VERDICT:")
 print("="*100 + "\n")
 
 if segments_with_text == len(segments) and segments_with_text > 0:
-    print("  ✅ PHASE 1 FIX SUCCESSFUL!")
-    print(f"  ✅ All {segments_with_text} segments have text stored correctly")
-    print("  ✅ Segment-to-scene relationships intact")
-    print("  ✅ Speaker attribution preserved")
+    print("  [OK] PHASE 1 FIX SUCCESSFUL!")
+    print(f"  [OK] All {segments_with_text} segments have text stored correctly")
+    print("  [OK] Segment-to-scene relationships intact")
+    print("  [OK] Speaker attribution preserved")
 elif segments_with_text > 0:
-    print(f"  ⚠️  PARTIAL SUCCESS")
-    print(f"  ✅ {segments_with_text} segments have text ({coverage:.1f}%)")
-    print(f"  ⚠️  {segments_without_text} segments missing text")
+    print(f"  [WARN]  PARTIAL SUCCESS")
+    print(f"  [OK] {segments_with_text} segments have text ({coverage:.1f}%)")
+    print(f"  [WARN]  {segments_without_text} segments missing text")
 else:
-    print("  ❌ FIX NOT WORKING")
-    print("  ❌ No segments have text stored")
+    print("  [FAIL] FIX NOT WORKING")
+    print("  [FAIL] No segments have text stored")
 
 print("\n" + "="*100 + "\n")
 

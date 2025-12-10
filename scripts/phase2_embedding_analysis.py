@@ -69,12 +69,12 @@ def analyze_sample_mp4_processing():
                         has_sentiment = 'sentiment' in scene_data
                         has_emotions = 'emotions' in scene_data
                         
-                        print(f"    Caption: {'✓' if has_caption else '✗'}")
-                        print(f"    OCR: {'✓' if has_ocr else '✗'}")
-                        print(f"    Transcript: {'✓' if has_transcript else '✗'}")
-                        print(f"    Objects: {'✓' if has_objects else '✗'}")
-                        print(f"    Sentiment: {'✓' if has_sentiment else '✗'}")
-                        print(f"    Emotions: {'✓' if has_emotions else '✗'}")
+                        print(f"    Caption: {'[SYMBOL]' if has_caption else '[SYMBOL]'}")
+                        print(f"    OCR: {'[SYMBOL]' if has_ocr else '[SYMBOL]'}")
+                        print(f"    Transcript: {'[SYMBOL]' if has_transcript else '[SYMBOL]'}")
+                        print(f"    Objects: {'[SYMBOL]' if has_objects else '[SYMBOL]'}")
+                        print(f"    Sentiment: {'[SYMBOL]' if has_sentiment else '[SYMBOL]'}")
+                        print(f"    Emotions: {'[SYMBOL]' if has_emotions else '[SYMBOL]'}")
                         
                         # Check embedding status issues
                         for emb_type, meta in [('CLIP', clip_meta), ('DINO', dino_meta), 
@@ -102,9 +102,9 @@ def analyze_sample_mp4_processing():
         idx_path = faiss_dir / idx_type / idx_file
         if idx_path.exists():
             size_mb = idx_path.stat().st_size / 1024 / 1024
-            print(f"  {idx_type:10s}: ✓ ({size_mb:.2f} MB) - {idx_path}")
+            print(f"  {idx_type:10s}: [SYMBOL] ({size_mb:.2f} MB) - {idx_path}")
         else:
-            print(f"  {idx_type:10s}: ✗ MISSING - {idx_path}")
+            print(f"  {idx_type:10s}: [SYMBOL] MISSING - {idx_path}")
             issues.append(f"Missing FAISS index: {idx_path}")
     
     # 3. Check memory.db embeddings
@@ -219,7 +219,7 @@ def analyze_sample_mp4_processing():
         for i, issue in enumerate(issues, 1):
             print(f"  {i}. {issue}")
     else:
-        print("\n✓ No issues found!")
+        print("\n[SYMBOL] No issues found!")
     
     return issues
 

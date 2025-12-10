@@ -48,24 +48,24 @@ class FastWSL2Setup:
             output = result.stdout.decode('utf-8', errors='ignore')
             
         if "Ubuntu" in output and "Running" in output:
-            print("  ✓ WSL2 Ubuntu running")
+            print("  [SYMBOL] WSL2 Ubuntu running")
         else:
-            print("  ✗ WSL2 Ubuntu not running")
+            print("  [SYMBOL] WSL2 Ubuntu not running")
             return False
             
         print("\n[2/3] GPU Access...")
         out, err, code = self.wsl_cmd("nvidia-smi --query-gpu=name --format=csv,noheader")
         if code == 0:
-            print(f"  ✓ {out.strip()}")
+            print(f"  [SYMBOL] {out.strip()}")
         else:
             self.warnings.append("GPU not accessible (will use CPU)")
             
         print("\n[3/3] Python...")
         out, err, code = self.wsl_cmd("python3 --version")
         if code == 0:
-            print(f"  ✓ {out.strip()}")
+            print(f"  [SYMBOL] {out.strip()}")
         else:
-            print("  ✗ Python3 not found")
+            print("  [SYMBOL] Python3 not found")
             return False
             
         return True
@@ -86,7 +86,7 @@ class FastWSL2Setup:
         
         for d in dirs:
             self.wsl_cmd(f"mkdir -p {d}")
-        print("  ✓ Workspace created")
+        print("  [SYMBOL] Workspace created")
         return True
         
     def setup_venv(self):
@@ -101,15 +101,15 @@ class FastWSL2Setup:
             # Try with --system-site-packages if regular fails
             out, err, code = self.wsl_cmd(f"python3 -m venv --system-site-packages {venv}")
             if code != 0:
-                print(f"  ✗ Failed: {err}")
+                print(f"  [SYMBOL] Failed: {err}")
                 return False
-        print("  ✓ Virtual environment created")
+        print("  [SYMBOL] Virtual environment created")
         
         pip = f"{venv}/bin/pip"
         
         print("\n[2/5] Upgrading pip...")
         self.wsl_cmd(f"{pip} install --upgrade pip -q")
-        print("  ✓ pip upgraded")
+        print("  [SYMBOL] pip upgraded")
         
         print("\n[3/5] Installing PyTorch with CUDA...")
         print("  (This downloads ~2.5GB, may take 5-10 minutes)")
@@ -117,9 +117,9 @@ class FastWSL2Setup:
             f"{pip} install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121 -q"
         )
         if code != 0:
-            print(f"  ⚠ Warning: {err[:200]}")
+            print(f"  [SYMBOL] Warning: {err[:200]}")
         else:
-            print("  ✓ PyTorch installed")
+            print("  [SYMBOL] PyTorch installed")
             
         print("\n[4/5] Installing audio libraries...")
         packages = [
@@ -133,7 +133,7 @@ class FastWSL2Setup:
         for pkg in packages:
             print(f"  Installing {pkg}...")
             self.wsl_cmd(f"{pip} install {pkg} -q")
-        print("  ✓ Audio libraries installed")
+        print("  [SYMBOL] Audio libraries installed")
         
         print("\n[5/5] Verifying CUDA...")
         test_cmd = f"{venv}/bin/python -c 'import torch; print(\"CUDA Available:\", torch.cuda.is_available())'"
@@ -197,7 +197,7 @@ if __name__ == "__main__":
         cmd = f"cat > {script_path} << 'EOF'\n{script}\nEOF"
         self.wsl_cmd(cmd)
         self.wsl_cmd(f"chmod +x {script_path}")
-        print(f"  ✓ Created {script_path}")
+        print(f"  [SYMBOL] Created {script_path}")
         
         return True
         
@@ -285,7 +285,7 @@ if __name__ == "__main__":
         bridge_path = Path("L:/goodq4all/wsl2_audio_bridge.py")
         with open(bridge_path, 'w') as f:
             f.write(bridge)
-        print(f"  ✓ Created {bridge_path}")
+        print(f"  [SYMBOL] Created {bridge_path}")
         
         # Test script
         test = '''"""Test WSL2 Bridge"""
@@ -302,7 +302,7 @@ print("Bridge Status:", "Ready" if bridge.check_status() else "Not Ready")
         test_path = Path("L:/goodq4all/test_wsl2_bridge.py")
         with open(test_path, 'w') as f:
             f.write(test)
-        print(f"  ✓ Created {test_path}")
+        print(f"  [SYMBOL] Created {test_path}")
         
         return True
         
@@ -332,10 +332,10 @@ print("Bridge Status:", "Ready" if bridge.check_status() else "Not Ready")
         for name, func in steps:
             try:
                 if not func():
-                    print(f"\n✗ {name} failed!")
+                    print(f"\n[SYMBOL] {name} failed!")
                     return False
             except Exception as e:
-                print(f"\n✗ Exception in {name}: {e}")
+                print(f"\n[SYMBOL] Exception in {name}: {e}")
                 return False
                 
         self.print_header("Setup Complete!")

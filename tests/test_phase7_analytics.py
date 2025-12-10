@@ -39,7 +39,7 @@ def main():
     dashboard = AnalyticsDashboard(config)
     dashboard_path = Path('output/analytics_dashboard.md')
     dashboard.generate_dashboard(dashboard_path)
-    print(f"✓ Dashboard generated: {dashboard_path}")
+    print(f"[SYMBOL] Dashboard generated: {dashboard_path}")
     
     # Show dashboard stats
     with sqlite3.connect(config['paths']['db_path']) as conn:
@@ -82,7 +82,7 @@ def main():
     export_report_to_file(report, json_path)
     export_markdown_report(report, md_path)
     
-    print(f"✓ Analytics report generated")
+    print(f"[SYMBOL] Analytics report generated")
     print(f"  - JSON: {json_path}")
     print(f"  - Markdown: {md_path}")
     
@@ -210,12 +210,12 @@ def main():
     print(f"\n{'='*70}")
     print(" PHASE 7 ANALYTICS - COMPLETE")
     print(f"{'='*70}")
-    print(f"\n✓ Dashboard generation: WORKING")
-    print(f"✓ Comprehensive analytics: WORKING")
-    print(f"✓ LLM insights generation: WORKING ({len(insights)} insights)")
-    print(f"✓ Query interface: WORKING")
-    print(f"✓ Relationship analysis: WORKING ({len(co_occurs)} relationships)")
-    print(f"✓ Temporal analysis: WORKING ({len(scene_durations)} scenes)")
+    print(f"\n[SYMBOL] Dashboard generation: WORKING")
+    print(f"[SYMBOL] Comprehensive analytics: WORKING")
+    print(f"[SYMBOL] LLM insights generation: WORKING ({len(insights)} insights)")
+    print(f"[SYMBOL] Query interface: WORKING")
+    print(f"[SYMBOL] Relationship analysis: WORKING ({len(co_occurs)} relationships)")
+    print(f"[SYMBOL] Temporal analysis: WORKING ({len(scene_durations)} scenes)")
     
     print(f"\nOutput Files Generated:")
     print(f"  1. {dashboard_path}")
@@ -228,16 +228,16 @@ def main():
     
     # Generate capabilities summary
     print(f"\nANALYTICS CAPABILITIES:")
-    print(f"  ✓ Multi-modal data aggregation")
-    print(f"  ✓ Emotional journey tracking")
-    print(f"  ✓ Content discovery (objects, people, themes)")
-    print(f"  ✓ Relationship network analysis")
-    print(f"  ✓ Temporal pattern detection")
-    print(f"  ✓ LLM-powered insights generation")
-    print(f"  ✓ Natural language query interface")
-    print(f"  ✓ Interactive dashboards")
-    print(f"  ✓ Export to JSON and Markdown")
-    print(f"  ✓ Knowledge graph visualization")
+    print(f"  [SYMBOL] Multi-modal data aggregation")
+    print(f"  [SYMBOL] Emotional journey tracking")
+    print(f"  [SYMBOL] Content discovery (objects, people, themes)")
+    print(f"  [SYMBOL] Relationship network analysis")
+    print(f"  [SYMBOL] Temporal pattern detection")
+    print(f"  [SYMBOL] LLM-powered insights generation")
+    print(f"  [SYMBOL] Natural language query interface")
+    print(f"  [SYMBOL] Interactive dashboards")
+    print(f"  [SYMBOL] Export to JSON and Markdown")
+    print(f"  [SYMBOL] Knowledge graph visualization")
     
     print(f"\nREADY FOR PRODUCTION USE!")
     print(f"Next: Process family videos (1987_1988) with full analytics\n")

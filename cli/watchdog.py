@@ -42,7 +42,7 @@ class ASCIIFilter(logging.Filter):
     # Map emojis to ASCII equivalents for Windows console
     EMOJI_MAP = {
         '[SYMBOL]': '[CLIPBOARD]',
-        '⏱️': '[TIMER]',
+        '[TIMER]': '[TIMER]',
         '[SYMBOL]': '[VIDEO]',
         '[OK]': '[OK]',
         '[PASS]': '[SUCCESS]',
@@ -502,7 +502,7 @@ class WatchdogProcessor:
         # Dynamic timeout based on file size (3 hours per GB, min 8 hours for thorough processing)
         file_size_gb = video_path.stat().st_size / (1024**3)
         timeout_seconds = max(28800, int(file_size_gb * 10800))  # At least 8 hours, +3hrs per GB
-        logger.info(f"⏱️  Mission timeout: {timeout_seconds}s ({timeout_seconds/3600:.1f}h) for {file_size_gb:.2f}GB asset")
+        logger.info(f"[TIMER]  Mission timeout: {timeout_seconds}s ({timeout_seconds/3600:.1f}h) for {file_size_gb:.2f}GB asset")
         logger.info(f"[SYMBOL] Asset: {video_path.name}")
         
         try:
@@ -545,7 +545,7 @@ class WatchdogProcessor:
                 return False
                 
         except subprocess.TimeoutExpired:
-            logger.error(f"⏱️  Mission timeout: Video ingestion exceeded {timeout_seconds}s")
+            logger.error(f"[TIMER]  Mission timeout: Video ingestion exceeded {timeout_seconds}s")
             # Keep temp files for debugging on timeout
             logger.warning(f"Temp files preserved for debugging: {temp_input}")
             return False
@@ -578,7 +578,7 @@ class WatchdogProcessor:
 
         file_size_gb = audio_path.stat().st_size / (1024**3)
         timeout_seconds = max(28800, int(file_size_gb * 10800))
-        logger.info(f"⏱️  Mission timeout: {timeout_seconds}s ({timeout_seconds/3600:.1f}h) for {file_size_gb:.2f}GB asset")
+        logger.info(f"[TIMER]  Mission timeout: {timeout_seconds}s ({timeout_seconds/3600:.1f}h) for {file_size_gb:.2f}GB asset")
         logger.info(f"[SYMBOL] Asset: {audio_path.name}")
         start_time = time.time()
 
@@ -594,7 +594,7 @@ class WatchdogProcessor:
 
         def _check_timeout() -> bool:
             if time.time() - start_time > timeout_seconds:
-                logger.error(f"⏱️  Mission timeout: Audio ingestion exceeded {timeout_seconds}s")
+                logger.error(f"[TIMER]  Mission timeout: Audio ingestion exceeded {timeout_seconds}s")
                 return False
             return True
 
@@ -670,7 +670,7 @@ class WatchdogProcessor:
 
         file_size_gb = image_path.stat().st_size / (1024**3)
         timeout_seconds = max(28800, int(file_size_gb * 10800))
-        logger.info(f"⏱️  Mission timeout: {timeout_seconds}s ({timeout_seconds/3600:.1f}h) for {file_size_gb:.2f}GB asset")
+        logger.info(f"[TIMER]  Mission timeout: {timeout_seconds}s ({timeout_seconds/3600:.1f}h) for {file_size_gb:.2f}GB asset")
         logger.info(f"[SYMBOL]️ Asset: {image_path.name}")
         start_time = time.time()
 
@@ -685,7 +685,7 @@ class WatchdogProcessor:
 
         def _check_timeout() -> bool:
             if time.time() - start_time > timeout_seconds:
-                logger.error(f"⏱️  Mission timeout: Image ingestion exceeded {timeout_seconds}s")
+                logger.error(f"[TIMER]  Mission timeout: Image ingestion exceeded {timeout_seconds}s")
                 return False
             return True
 
@@ -767,7 +767,7 @@ class WatchdogProcessor:
 
         file_size_gb = doc_path.stat().st_size / (1024**3)
         timeout_seconds = max(28800, int(file_size_gb * 10800))
-        logger.info(f"⏱️  Mission timeout: {timeout_seconds}s ({timeout_seconds/3600:.1f}h) for {file_size_gb:.2f}GB asset")
+        logger.info(f"[TIMER]  Mission timeout: {timeout_seconds}s ({timeout_seconds/3600:.1f}h) for {file_size_gb:.2f}GB asset")
         logger.info(f"[SYMBOL] Asset: {doc_path.name}")
         start_time = time.time()
 
@@ -783,7 +783,7 @@ class WatchdogProcessor:
 
         def _check_timeout() -> bool:
             if time.time() - start_time > timeout_seconds:
-                logger.error(f"⏱️  Mission timeout: Document ingestion exceeded {timeout_seconds}s")
+                logger.error(f"[TIMER]  Mission timeout: Document ingestion exceeded {timeout_seconds}s")
                 return False
             return True
 

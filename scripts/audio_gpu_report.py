@@ -70,15 +70,15 @@ def generate_report():
             recommendation = suggestions.get("recommendation", "maintain")
             
             if recommendation == "increase":
-                print("  ✅ GPU is underutilized - can increase memory allocation")
+                print("  [OK] GPU is underutilized - can increase memory allocation")
                 print(f"     Recommended diarization: {suggestions.get('diarization', 0)*100:.0f}%")
                 print(f"     Recommended transcription: {suggestions.get('transcription', 0)*100:.0f}%")
             elif recommendation == "decrease":
-                print("  ⚠️  GPU near capacity - should decrease memory allocation")
+                print("  [WARN]  GPU near capacity - should decrease memory allocation")
                 print(f"     Recommended diarization: {suggestions.get('diarization', 0)*100:.0f}%")
                 print(f"     Recommended transcription: {suggestions.get('transcription', 0)*100:.0f}%")
             else:
-                print("  ✅ GPU utilization is optimal - maintain current settings")
+                print("  [OK] GPU utilization is optimal - maintain current settings")
                 print(f"     Current diarization: {suggestions.get('diarization', 0)*100:.0f}%")
                 print(f"     Current transcription: {suggestions.get('transcription', 0)*100:.0f}%")
     

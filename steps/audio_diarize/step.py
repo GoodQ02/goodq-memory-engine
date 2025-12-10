@@ -372,7 +372,7 @@ def audio_diarize(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
                     return {"diarization": None, "diarize_meta": {"status": "extraction_failed"}}
                 
                 audio_path = temp_audio_path
-                print(f"[DIARIZE] ✓ Audio extracted to: {os.path.basename(audio_path)}")
+                print(f"[DIARIZE] [SYMBOL] Audio extracted to: {os.path.basename(audio_path)}")
             except Exception as e:
                 print(f"[ERROR] Audio extraction exception: {str(e)}")
                 if temp_audio_file and os.path.exists(temp_audio_path):
@@ -654,7 +654,7 @@ def audio_diarize(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
         realtime_factor = (duration / elapsed) if (duration and elapsed > 0) else 0
         avg_speed = f"{realtime_factor:.2f}x realtime" if realtime_factor > 0 else "N/A"
         
-        print(f"[DIARIZE] ✓ Completed in {elapsed:.1f}s ({elapsed/60:.1f}min) - {avg_speed}")
+        print(f"[DIARIZE] [SYMBOL] Completed in {elapsed:.1f}s ({elapsed/60:.1f}min) - {avg_speed}")
         
         # Print final GPU stats
         if device == "cuda":
@@ -703,7 +703,7 @@ def audio_diarize(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
         )
         
         if overlap_count > 0:
-            print(f"[DIARIZE] ⚠️  {overlap_count} segments have overlapped speech ({total_overlap_duration:.1f}s total)")
+            print(f"[DIARIZE] [WARN]  {overlap_count} segments have overlapped speech ({total_overlap_duration:.1f}s total)")
         
         meta = {
             "status": "ok",

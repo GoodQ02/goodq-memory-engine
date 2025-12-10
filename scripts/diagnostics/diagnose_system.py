@@ -21,7 +21,7 @@ def check_section(title):
 
 def check_status(msg, condition):
     """Print status check result"""
-    symbol = "✓" if condition else "✗"
+    symbol = "[SYMBOL]" if condition else "[SYMBOL]"
     status = "OK" if condition else "FAIL"
     print(f"  [{symbol}] {msg}: {status}")
     return condition
@@ -47,9 +47,9 @@ def check_python_processes():
     
     if found_processes:
         for proc in found_processes:
-            print(f"  ✓ {proc['name']} (PID: {proc['pid']}, Uptime: {proc['uptime']})")
+            print(f"  [SYMBOL] {proc['name']} (PID: {proc['pid']}, Uptime: {proc['uptime']})")
     else:
-        print("  ⚠ No GoodQ processes found running")
+        print("  [SYMBOL] No GoodQ processes found running")
     
     return found_processes
 
@@ -138,7 +138,7 @@ def check_video_files():
     inbox = Path("L:/goodq4all/import_inbox")
     
     if not inbox.exists():
-        print("  ✗ Import inbox not found")
+        print("  [SYMBOL] Import inbox not found")
         return []
     
     video_exts = {'.mp4', '.avi', '.mov', '.mkv', '.wmv'}
@@ -147,14 +147,14 @@ def check_video_files():
         videos.extend(inbox.glob(f'*{ext}'))
     
     if videos:
-        print(f"  ✓ Found {len(videos)} video(s):")
+        print(f"  [SYMBOL] Found {len(videos)} video(s):")
         for video in videos[:5]:  # Show first 5
             size_gb = video.stat().st_size / (1024**3)
             print(f"      - {video.name} ({size_gb:.2f} GB)")
         if len(videos) > 5:
             print(f"      ... and {len(videos)-5} more")
     else:
-        print("  ⚠ No videos found in import inbox")
+        print("  [SYMBOL] No videos found in import inbox")
     
     return videos
 
@@ -166,7 +166,7 @@ def check_progress():
     progress_file = Path("L:/goodq4all/logs/progress.json")
     
     if not progress_file.exists():
-        print("  ⚠ No active processing (progress.json not found)")
+        print("  [SYMBOL] No active processing (progress.json not found)")
         return None
     
     try:
@@ -185,13 +185,13 @@ def check_progress():
         
         errors = progress.get('errors', [])
         if errors:
-            print(f"  ⚠ Errors: {len(errors)}")
+            print(f"  [SYMBOL] Errors: {len(errors)}")
             for error in errors[-2:]:
                 print(f"      - {error.get('message', 'Unknown')}")
         
         return progress
     except Exception as e:
-        print(f"  ✗ Error reading progress: {e}")
+        print(f"  [SYMBOL] Error reading progress: {e}")
         return None
 
 
@@ -216,9 +216,9 @@ def check_logs():
                         line = line.strip()[:100]
                         print(f"      {line}")
             except Exception as e:
-                print(f"  ✗ Error reading {name}: {e}")
+                print(f"  [SYMBOL] Error reading {name}: {e}")
         else:
-            print(f"  ⚠ {name} not found")
+            print(f"  [SYMBOL] {name} not found")
 
 
 def check_api_server():
@@ -234,7 +234,7 @@ def check_api_server():
         try:
             with urllib.request.urlopen(url, timeout=5) as response:
                 data = json.loads(response.read())
-                print("  ✓ API server is responding")
+                print("  [SYMBOL] API server is responding")
                 print(f"      Status: {data.get('status', 'unknown')}")
                 
                 db_stats = data.get('database', {})
@@ -244,11 +244,11 @@ def check_api_server():
                 
                 return True
         except urllib.error.URLError:
-            print("  ✗ API server not responding")
+            print("  [SYMBOL] API server not responding")
             print("      URL: http://localhost:30000")
             return False
     except Exception as e:
-        print(f"  ✗ Error checking API: {e}")
+        print(f"  [SYMBOL] Error checking API: {e}")
         return False
 
 

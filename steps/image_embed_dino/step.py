@@ -41,10 +41,10 @@ def _load() -> None:
         proc = AutoProcessor.from_pretrained("facebook/dinov2-base")
         model = AutoModel.from_pretrained("facebook/dinov2-base").to(device).eval()
         _DINO.update({"model": model, "proc": proc, "device": device})
-        logger.info(f"✅ DINO model loaded on {device} (GPU config: {gpu_config['memory_fraction']:.1%} memory)")
+        logger.info(f"[OK] DINO model loaded on {device} (GPU config: {gpu_config['memory_fraction']:.1%} memory)")
     except Exception as e:
-        logger.error(f"❌ Failed to load DINO model: {str(e)}")
-        logger.info("⚠️  Falling back to CPU mode")
+        logger.error(f"[FAIL] Failed to load DINO model: {str(e)}")
+        logger.info("[WARN]  Falling back to CPU mode")
         _DINO.update({"model": None, "proc": None, "device": "cpu"})
         GPUManager.clear_cache()
 

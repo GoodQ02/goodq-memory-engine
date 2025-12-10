@@ -70,7 +70,7 @@ def monitor_processing():
                 proc_dirs = [d for d in processing_dir.iterdir() if d.is_dir()]
                 
                 if proc_dirs:
-                    print(get_color("📹 ACTIVE PROCESSING:", 'cyan'))
+                    print(get_color("[VIDEO] ACTIVE PROCESSING:", 'cyan'))
                     print()
                     
                     for proc_dir in proc_dirs:
@@ -123,7 +123,7 @@ def monitor_processing():
                             
                             print()
                 else:
-                    print(get_color("✅ No active processing", 'green'))
+                    print(get_color("[OK] No active processing", 'green'))
                     print()
             
             # Check output directory
@@ -131,7 +131,7 @@ def monitor_processing():
                 output_videos = [d for d in output_dir.iterdir() if d.is_dir()]
                 
                 if output_videos:
-                    print(get_color(f"✅ COMPLETED VIDEOS: {len(output_videos)}", 'green'))
+                    print(get_color(f"[OK] COMPLETED VIDEOS: {len(output_videos)}", 'green'))
                     print()
                     
                     for video_dir in sorted(output_videos, key=lambda x: x.stat().st_mtime, reverse=True)[:5]:
@@ -153,7 +153,7 @@ def monitor_processing():
                     print()
             
             # Check logs for recent activity
-            print(get_color("📊 RECENT LOG ACTIVITY:", 'cyan'))
+            print(get_color("[STATS] RECENT LOG ACTIVITY:", 'cyan'))
             print()
             
             log_files = {
@@ -186,7 +186,7 @@ def monitor_processing():
             
     except KeyboardInterrupt:
         print()
-        print(get_color("\n✅ Monitoring stopped", 'green'))
+        print(get_color("\n[OK] Monitoring stopped", 'green'))
         print()
 
 if __name__ == "__main__":

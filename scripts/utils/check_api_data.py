@@ -10,7 +10,7 @@ def check_database(db_path):
     print('='*60)
     
     if not db_path.exists():
-        print("❌ Database not found")
+        print("[FAIL] Database not found")
         return
     
     conn = sqlite3.connect(str(db_path))
@@ -20,7 +20,7 @@ def check_database(db_path):
     cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
     tables = [row[0] for row in cursor.fetchall()]
     
-    print(f"\n📊 Tables ({len(tables)}):")
+    print(f"\n[STATS] Tables ({len(tables)}):")
     for table in tables:
         cursor.execute(f"SELECT COUNT(*) FROM {table}")
         count = cursor.fetchone()[0]
@@ -46,7 +46,7 @@ def check_output_directory():
     for dir_path in [output_dir, data_output]:
         if dir_path.exists():
             items = list(dir_path.iterdir())
-            print(f"\n📁 {dir_path}:")
+            print(f"\n[DIR] {dir_path}:")
             if items:
                 for item in items[:10]:
                     if item.is_dir():
@@ -58,7 +58,7 @@ def check_output_directory():
             else:
                 print("  (empty)")
         else:
-            print(f"\n📁 {dir_path}: ❌ Not found")
+            print(f"\n[DIR] {dir_path}: [FAIL] Not found")
 
 if __name__ == "__main__":
     base_dir = Path("L:/goodq4all")
@@ -78,5 +78,5 @@ if __name__ == "__main__":
     check_output_directory()
     
     print(f"\n{'='*60}")
-    print("✓ Data check complete!")
+    print("[SYMBOL] Data check complete!")
     print('='*60)

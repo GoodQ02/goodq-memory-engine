@@ -67,7 +67,7 @@ class RealTimeGPUMonitor:
     
     def monitor_thread(self, interval=2):
         """Background thread that samples GPU stats"""
-        print(f"🔍 GPU Monitor started (sampling every {interval}s)")
+        print(f"[SEARCH] GPU Monitor started (sampling every {interval}s)")
         
         while self.monitoring:
             stats = self.get_gpu_stats()
@@ -107,14 +107,14 @@ class RealTimeGPUMonitor:
         self.monitoring = False
         if hasattr(self, 'monitor_thread_obj'):
             self.monitor_thread_obj.join(timeout=5)
-        print("\n🛑 GPU Monitor stopped")
+        print("\n[SYMBOL] GPU Monitor stopped")
     
     def update_current_step(self, step_name):
         """Update the current step being monitored"""
         if step_name != self.current_step:
             old_step = self.current_step
             self.current_step = step_name
-            print(f"\n\n🔄 Step changed: {old_step} → {step_name}")
+            print(f"\n\n[SYNC] Step changed: {old_step} → {step_name}")
     
     def analyze_step_usage(self, step_name):
         """Analyze GPU usage for a specific step"""
@@ -214,7 +214,7 @@ class RealTimeGPUMonitor:
         with open(report_file, 'w') as f:
             json.dump(report_data, f, indent=2)
         
-        print(f"\n✓ Detailed report saved: {report_file}")
+        print(f"\n[SYMBOL] Detailed report saved: {report_file}")
         
         return step_analyses
     
@@ -234,7 +234,7 @@ class RealTimeGPUMonitor:
             "python", str(self.base_dir / "scripts" / "watchdog_ingest.py")
         ]
         
-        print("🚀 Starting pipeline...")
+        print("[LAUNCH] Starting pipeline...")
         process = subprocess.Popen(
             watchdog_cmd,
             cwd=str(self.base_dir),
@@ -244,7 +244,7 @@ class RealTimeGPUMonitor:
             bufsize=1
         )
         
-        print(f"✓ Pipeline started (PID: {process.pid})\n")
+        print(f"[SYMBOL] Pipeline started (PID: {process.pid})\n")
         
         # Monitor output and detect steps
         try:
@@ -263,7 +263,7 @@ class RealTimeGPUMonitor:
                 time.sleep(0.1)
         
         except KeyboardInterrupt:
-            print("\n\n⚠ Interrupted by user")
+            print("\n\n[SYMBOL] Interrupted by user")
             process.terminate()
         
         finally:
@@ -277,7 +277,7 @@ class RealTimeGPUMonitor:
                 process.kill()
         
         # Generate report
-        print("\n\n📊 Generating usage report...")
+        print("\n\n[STATS] Generating usage report...")
         analyses = self.generate_report()
         
         return analyses

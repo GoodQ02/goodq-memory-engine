@@ -46,7 +46,7 @@ class PipelineTest:
         }
         self.test_results.append(result)
         
-        status_emoji = "✅" if status == "PASS" else "❌" if status == "FAIL" else "⚠️"
+        status_emoji = "[OK]" if status == "PASS" else "[FAIL]" if status == "FAIL" else "[WARN]"
         logger.info(f"{status_emoji} {test_name}: {status} {details}")
     
     def test_gpu_availability(self):
@@ -347,11 +347,11 @@ class PipelineTest:
         total = len(self.test_results)
         
         logger.info(f"Total Tests: {total}")
-        logger.info(f"✅ Passed: {passed}")
-        logger.info(f"❌ Failed: {failed}")
-        logger.info(f"⚠️  Warnings: {warned}")
+        logger.info(f"[OK] Passed: {passed}")
+        logger.info(f"[FAIL] Failed: {failed}")
+        logger.info(f"[WARN]  Warnings: {warned}")
         logger.info(f"⏭️  Skipped: {skipped}")
-        logger.info(f"⏱️  Duration: {elapsed_time:.2f}s")
+        logger.info(f"[TIMER]  Duration: {elapsed_time:.2f}s")
         
         # GPU Stats
         stats = self.gpu_manager.get_gpu_stats()
@@ -369,9 +369,9 @@ class PipelineTest:
         
         logger.info("\n" + "="*80)
         if failed == 0:
-            logger.info("✅ ALL TESTS PASSED!")
+            logger.info("[OK] ALL TESTS PASSED!")
         else:
-            logger.info(f"❌ {failed} TEST(S) FAILED - Review logs above")
+            logger.info(f"[FAIL] {failed} TEST(S) FAILED - Review logs above")
         logger.info("="*80 + "\n")
         
         return failed == 0

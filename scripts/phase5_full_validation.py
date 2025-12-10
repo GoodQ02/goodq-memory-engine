@@ -28,13 +28,13 @@ def print_header(msg):
     print(f"{Colors.HEADER}{Colors.BOLD}{'='*70}{Colors.ENDC}\n")
 
 def print_success(msg):
-    print(f"{Colors.OKGREEN}✓ {msg}{Colors.ENDC}")
+    print(f"{Colors.OKGREEN}[SYMBOL] {msg}{Colors.ENDC}")
 
 def print_warning(msg):
-    print(f"{Colors.WARNING}⚠ {msg}{Colors.ENDC}")
+    print(f"{Colors.WARNING}[SYMBOL] {msg}{Colors.ENDC}")
 
 def print_error(msg):
-    print(f"{Colors.FAIL}✗ {msg}{Colors.ENDC}")
+    print(f"{Colors.FAIL}[SYMBOL] {msg}{Colors.ENDC}")
 
 def print_info(msg):
     print(f"{Colors.OKCYAN}→ {msg}{Colors.ENDC}")

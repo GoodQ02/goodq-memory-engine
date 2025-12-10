@@ -55,10 +55,10 @@ def _load_emotion():
             "surprise","neutral",
         ]
         _EMO.update({"model": model, "tok": tok, "labels": labels, "device": device})
-        logger.info(f"✅ Emotion model loaded on {device} (GPU config: {gpu_config['memory_fraction']:.1%} memory)")
+        logger.info(f"[OK] Emotion model loaded on {device} (GPU config: {gpu_config['memory_fraction']:.1%} memory)")
     except Exception as e:
-        logger.error(f"❌ Failed to load emotion model: {str(e)}")
-        logger.info("⚠️  Falling back to CPU mode")
+        logger.error(f"[FAIL] Failed to load emotion model: {str(e)}")
+        logger.info("[WARN]  Falling back to CPU mode")
         _EMO.update({"model": None, "tok": None, "labels": [], "device": "cpu"})
         # Clear any partial GPU allocations
         GPUManager.clear_cache()

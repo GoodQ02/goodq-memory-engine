@@ -42,7 +42,7 @@ class PipelineOptimizationRunner:
     
     def cleanup_processing(self):
         """Clean up any existing processing state"""
-        print("\n🧹 Cleaning up previous processing state...")
+        print("\n[SYMBOL] Cleaning up previous processing state...")
         
         # Clear processing directory
         processing_dir = self.base_dir / "data" / "processing"
@@ -51,7 +51,7 @@ class PipelineOptimizationRunner:
             for item in processing_dir.iterdir():
                 if item.is_dir():
                     shutil.rmtree(item)
-                    print(f"  ✓ Removed: {item.name}")
+                    print(f"  [SYMBOL] Removed: {item.name}")
         
         # Clear GPU cache
         try:
@@ -59,11 +59,11 @@ class PipelineOptimizationRunner:
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
                 torch.cuda.synchronize()
-                print("  ✓ Cleared CUDA cache")
+                print("  [SYMBOL] Cleared CUDA cache")
         except:
             pass
         
-        print("✓ Cleanup complete\n")
+        print("[SYMBOL] Cleanup complete\n")
     
     def wait_for_gpu_idle(self, max_wait=30):
         """Wait for GPU to be idle"""
@@ -73,12 +73,12 @@ class PipelineOptimizationRunner:
         while time.time() - start < max_wait:
             stats = self.optimizer.get_gpu_stats()
             if stats and stats['gpu_utilization'] < 10:
-                print(f"✓ GPU idle ({stats['gpu_utilization']}% utilization)")
+                print(f"[SYMBOL] GPU idle ({stats['gpu_utilization']}% utilization)")
                 time.sleep(2)  # Extra buffer
                 return True
             time.sleep(1)
         
-        print("⚠ GPU did not become idle, continuing anyway...")
+        print("[SYMBOL] GPU did not become idle, continuing anyway...")
         return False
     
     def run_single_test(self, test_number, video_path):
@@ -95,7 +95,7 @@ class PipelineOptimizationRunner:
         self.wait_for_gpu_idle()
         
         # Start baseline monitoring
-        print("📊 Capturing baseline GPU state...")
+        print("[STATS] Capturing baseline GPU state...")
         baseline = self.optimizer.get_gpu_stats()
         
         # Copy video to import inbox
@@ -111,14 +111,14 @@ class PipelineOptimizationRunner:
         test_video_name = f"test_{test_number}_{video_path.name}"
         dest = inbox / test_video_name
         
-        print(f"📁 Copying test video: {video_path.name}")
+        print(f"[DIR] Copying test video: {video_path.name}")
         print(f"   → {dest}")
         shutil.copy2(video_path, dest)
         
-        print(f"✓ Video ready for processing\n")
+        print(f"[SYMBOL] Video ready for processing\n")
         
         # Start watchdog (pipeline)
-        print("🚀 Starting pipeline...")
+        print("[LAUNCH] Starting pipeline...")
         watchdog_cmd = [
             "conda", "run", "-n", "goodq_zenml", "--no-capture-output",
             "python", str(self.base_dir / "scripts" / "watchdog_ingest.py")
@@ -134,7 +134,7 @@ class PipelineOptimizationRunner:
             bufsize=1
         )
         
-        print(f"✓ Pipeline started (PID: {process.pid})")
+        print(f"[SYMBOL] Pipeline started (PID: {process.pid})")
         print(f"⏱ Monitoring GPU usage...\n")
         
         # Monitor GPU usage throughout processing
@@ -182,7 +182,7 @@ class PipelineOptimizationRunner:
                                     # Start new step
                                     current_step = step
                                     samples = []
-                                    print(f"\n🔄 Step detected: {step}\n")
+                                    print(f"\n[SYNC] Step detected: {step}\n")
                                 break
                 
                 # Sample GPU at intervals
@@ -218,7 +218,7 @@ class PipelineOptimizationRunner:
                     self.optimizer.print_analysis(analysis)
             
         except KeyboardInterrupt:
-            print("\n⚠ Test interrupted by user")
+            print("\n[SYMBOL] Test interrupted by user")
         finally:
             # Stop process if still running
             if process.poll() is None:
@@ -253,7 +253,7 @@ class PipelineOptimizationRunner:
     def optimize_from_results(self):
         """Analyze all test results and optimize GPU allocations"""
         if not self.all_test_results:
-            print("⚠ No test results to analyze")
+            print("[SYMBOL] No test results to analyze")
             return
         
         print(f"\n{'╔'+'═'*78+'╗'}")
@@ -296,7 +296,7 @@ class PipelineOptimizationRunner:
             }
             
             current = self.optimizer.gpu_configs.get(step, {}).get("fraction", 0.20)
-            change = "➚" if optimal_fraction > current else "➘" if optimal_fraction < current else "="
+            change = "[SYMBOL]" if optimal_fraction > current else "[SYMBOL]" if optimal_fraction < current else "="
             
             print(f"{step:20s}: {current*100:5.1f}% → {optimal_fraction*100:5.1f}% {change}  "
                   f"(peak: {max_peak:5.1f}%, util: {avg_util:5.1f}%)")
@@ -311,7 +311,7 @@ class PipelineOptimizationRunner:
         with open(config_file, 'w') as f:
             json.dump(optimized_configs, f, indent=2)
         
-        print(f"\n✓ Optimized configuration saved: {config_file}")
+        print(f"\n[SYMBOL] Optimized configuration saved: {config_file}")
         
         return optimized_configs
     
@@ -326,7 +326,7 @@ class PipelineOptimizationRunner:
         # Find test video
         self.test_video = self.find_test_video()
         if not self.test_video:
-            print("\n❌ No test video found!")
+            print("\n[FAIL] No test video found!")
             print("Please place a video in one of these locations:")
             print("  - L:/goodq4all/import_inbox/sample.mp4")
             print("  - L:/_DATA/FAMILY_FEAST/*.mp4")
@@ -341,14 +341,14 @@ class PipelineOptimizationRunner:
             
             # After each test (except last), optimize and regenerate configs
             if i < self.test_iterations:
-                print(f"\n🔧 Optimizing configurations for next test...")
+                print(f"\n[CONFIG] Optimizing configurations for next test...")
                 analyses = list(test_result['step_analyses'].values())
                 if analyses:
                     updates = self.optimizer.update_gpu_configs(analyses)
                     if updates:
-                        print(f"✓ Updated {len(updates)} step configurations")
+                        print(f"[SYMBOL] Updated {len(updates)} step configurations")
                     else:
-                        print("✓ Configurations already optimal")
+                        print("[SYMBOL] Configurations already optimal")
                 
                 # Wait before next test
                 print(f"\n⏸ Waiting 30s before next test...\n")
@@ -362,7 +362,7 @@ class PipelineOptimizationRunner:
         optimized = self.optimize_from_results()
         
         # Generate final GPU config files
-        print(f"\n🔧 Generating optimized GPU configuration files...")
+        print(f"\n[CONFIG] Generating optimized GPU configuration files...")
         self.optimizer.generate_all_configs()
         
         # Save comprehensive results
@@ -380,7 +380,7 @@ class PipelineOptimizationRunner:
         with open(results_file, 'w') as f:
             json.dump(final_results, f, indent=2)
         
-        print(f"\n✓ Complete results saved: {results_file}")
+        print(f"\n[SYMBOL] Complete results saved: {results_file}")
         
         # Print summary
         print(f"\n{'╔'+'═'*78+'╗'}")
@@ -389,7 +389,7 @@ class PipelineOptimizationRunner:
         print(f"Total tests run: {len(self.all_test_results)}")
         print(f"Steps optimized: {len(optimized)}")
         print(f"Results saved: {results_file}")
-        print(f"\n🎉 GPU pipeline is now optimized for production use!")
+        print(f"\n[SYMBOL] GPU pipeline is now optimized for production use!")
         print(f"\nNext steps:")
         print(f"  1. Review optimization results in: {results_file}")
         print(f"  2. GPU configs have been updated in each env directory")

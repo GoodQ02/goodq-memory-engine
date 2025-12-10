@@ -55,11 +55,11 @@ if result.get('faces'):
     success, stdout, stderr = run_cmd(f'conda run -n goodq_face_embed python -c "{test_script}"')
     
     if success and "Status: ok" in stdout:
-        print("✅ Face detection working")
+        print("[OK] Face detection working")
         print(stdout)
         return True
     else:
-        print("❌ Face detection failed")
+        print("[FAIL] Face detection failed")
         print("STDOUT:", stdout)
         print("STDERR:", stderr)
         return False
@@ -92,11 +92,11 @@ if result.get('emotions'):
     success, stdout, stderr = run_cmd(f'conda run -n goodq_emotion_classify python -c "{test_script}"')
     
     if success and "emotions detected" in stdout.lower():
-        print("✅ Emotion classification working")
+        print("[OK] Emotion classification working")
         print(stdout)
         return True
     else:
-        print("❌ Emotion classification failed")
+        print("[FAIL] Emotion classification failed")
         print("STDOUT:", stdout)
         print("STDERR:", stderr)
         return False
@@ -128,11 +128,11 @@ if result.get('objects'):
     success, stdout, stderr = run_cmd(f'conda run -n goodq_object_detect python -c "{test_script}"')
     
     if success:
-        print("✅ Object detection working")
+        print("[OK] Object detection working")
         print(stdout)
         return True
     else:
-        print("❌ Object detection failed")
+        print("[FAIL] Object detection failed")
         print("STDOUT:", stdout)
         print("STDERR:", stderr)
         return False
@@ -173,10 +173,10 @@ if result.get('clip_meta', {}).get('faiss_id') is not None:
     
     clip_ok = success and "Status: ok" in stdout
     if clip_ok:
-        print("  ✅ CLIP embedding working")
+        print("  [OK] CLIP embedding working")
         print("  " + stdout.replace("\n", "\n  "))
     else:
-        print("  ❌ CLIP embedding failed")
+        print("  [FAIL] CLIP embedding failed")
         print("  STDOUT:", stdout)
         print("  STDERR:", stderr)
     
@@ -209,10 +209,10 @@ if result.get('dino_meta', {}).get('faiss_id') is not None:
     
     dino_ok = success and "Status: ok" in stdout
     if dino_ok:
-        print("  ✅ DINO embedding working")
+        print("  [OK] DINO embedding working")
         print("  " + stdout.replace("\n", "\n  "))
     else:
-        print("  ❌ DINO embedding failed")
+        print("  [FAIL] DINO embedding failed")
         print("  STDOUT:", stdout)
         print("  STDERR:", stderr)
     
@@ -244,11 +244,11 @@ if result.get('caption'):
     success, stdout, stderr = run_cmd(f'conda run -n goodq_text_embed python -c "{test_script}"')
     
     if success and result.get('caption'):
-        print("✅ Image captioning working")
+        print("[OK] Image captioning working")
         print(stdout)
         return True
     else:
-        print("❌ Image captioning failed")
+        print("[FAIL] Image captioning failed")
         print("STDOUT:", stdout)
         print("STDERR:", stderr)
         return False
@@ -274,9 +274,9 @@ if torch.cuda.is_available():
     
     print(f"GPU Memory Allocated: {torch.cuda.memory_allocated()/1024**2:.1f} MB")
     print(f"GPU Memory Cached: {torch.cuda.memory_reserved()/1024**2:.1f} MB")
-    print("✅ GPU tensor operations working")
+    print("[OK] GPU tensor operations working")
 else:
-    print("❌ CUDA not available")
+    print("[FAIL] CUDA not available")
 """
     
     # Test in each vision environment
@@ -289,13 +289,13 @@ else:
         
         cuda_available = "CUDA Available: True" in stdout
         if cuda_available:
-            print(f"    ✅ GPU active")
+            print(f"    [OK] GPU active")
             # Extract memory info
             for line in stdout.split('\n'):
                 if 'Device Name:' in line or 'Memory' in line:
                     print(f"    {line.strip()}")
         else:
-            print(f"    ❌ GPU not available")
+            print(f"    [FAIL] GPU not available")
             if stderr:
                 print(f"    Error: {stderr[:100]}")
         
@@ -303,10 +303,10 @@ else:
     
     all_ok = all(results.values())
     if all_ok:
-        print("\n✅ All environments have GPU access")
+        print("\n[OK] All environments have GPU access")
     else:
         failed = [env for env, ok in results.items() if not ok]
-        print(f"\n❌ Environments without GPU: {', '.join(failed)}")
+        print(f"\n[FAIL] Environments without GPU: {', '.join(failed)}")
     
     return all_ok
 
@@ -345,9 +345,9 @@ def check_model_caching():
         for model_dir in models_to_check:
             model_path = cache_dir / "transformers" / model_dir
             if model_path.exists():
-                print(f"  ✅ {model_dir.replace('models--', '')}")
+                print(f"  [OK] {model_dir.replace('models--', '')}")
             else:
-                print(f"  ❌ {model_dir.replace('models--', '')} (not cached)")
+                print(f"  [FAIL] {model_dir.replace('models--', '')} (not cached)")
     
     return True
 
@@ -365,7 +365,7 @@ def generate_report(results):
     
     print("\nDetailed Results:")
     for test_name, passed in results.items():
-        status = "✅ PASS" if passed else "❌ FAIL"
+        status = "[OK] PASS" if passed else "[FAIL] FAIL"
         print(f"  {status}: {test_name}")
     
     # Recommendations
@@ -374,16 +374,16 @@ def generate_report(results):
     print("="*80)
     
     if results.get("GPU Utilization"):
-        print("  ✅ GPU acceleration is working correctly")
+        print("  [OK] GPU acceleration is working correctly")
     else:
-        print("  ⚠️  Consider running run_vision_optimization.bat to enable GPU")
+        print("  [WARN]  Consider running run_vision_optimization.bat to enable GPU")
     
     if passed == total_tests:
-        print("  ✅ All vision components are functional")
+        print("  [OK] All vision components are functional")
         print("  ℹ️  Ready for production ingestion")
     else:
         failed_tests = [name for name, ok in results.items() if not ok]
-        print(f"  ⚠️  Failed tests need attention: {', '.join(failed_tests)}")
+        print(f"  [WARN]  Failed tests need attention: {', '.join(failed_tests)}")
     
     # Save report
     report_path = Path("L:/goodq4all/output/vision_audit_report.txt")
@@ -396,7 +396,7 @@ def generate_report(results):
         for test_name, result in results.items():
             f.write(f"{'PASS' if result else 'FAIL'}: {test_name}\n")
     
-    print(f"\n📄 Report saved to: {report_path}")
+    print(f"\n[SYMBOL] Report saved to: {report_path}")
 
 def main():
     print("="*80)
@@ -414,7 +414,7 @@ def main():
     # Check test data exists
     test_frame = Path("L:/goodq4all/test_data/sample_frame.jpg")
     if not test_frame.exists():
-        print(f"\n⚠️  Test image not found at {test_frame}")
+        print(f"\n[WARN]  Test image not found at {test_frame}")
         print("Creating test data directory...")
         test_frame.parent.mkdir(parents=True, exist_ok=True)
         print("Please add a sample image to test_data/sample_frame.jpg")

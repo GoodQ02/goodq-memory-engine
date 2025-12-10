@@ -46,17 +46,17 @@ class GPUConfigTuner:
     def adjust_step(self, step_name, new_fraction):
         """Adjust allocation for a specific step"""
         if step_name not in self.steps:
-            print(f"❌ Unknown step: {step_name}")
+            print(f"[FAIL] Unknown step: {step_name}")
             return False
         
         if not (0.05 <= new_fraction <= 0.80):
-            print(f"❌ Fraction must be between 0.05 and 0.80 (got {new_fraction})")
+            print(f"[FAIL] Fraction must be between 0.05 and 0.80 (got {new_fraction})")
             return False
         
         old_fraction = self.steps[step_name]
         self.steps[step_name] = new_fraction
         
-        print(f"✓ Updated {step_name}:")
+        print(f"[SYMBOL] Updated {step_name}:")
         print(f"  {old_fraction*100:.1f}% → {new_fraction*100:.1f}%")
         print(f"  {old_fraction*16:.2f} GB → {new_fraction*16:.2f} GB")
         
@@ -92,8 +92,8 @@ class GPUConfigTuner:
         # Write new config
         self.config_file.write_text(new_content, encoding='utf-8')
         
-        print(f"\n✓ Configuration saved to: {self.config_file}")
-        print(f"✓ Backup saved to: {backup_file}")
+        print(f"\n[SYMBOL] Configuration saved to: {self.config_file}")
+        print(f"[SYMBOL] Backup saved to: {backup_file}")
     
     def interactive_mode(self):
         """Interactive configuration mode"""
@@ -119,18 +119,18 @@ class GPUConfigTuner:
                     continue
                 elif cmd == "save":
                     self.save_config()
-                    print("\n✓ Changes saved! Restart pipeline for changes to take effect.")
+                    print("\n[SYMBOL] Changes saved! Restart pipeline for changes to take effect.")
                     break
                 elif cmd == "reset":
                     self.__init__()
-                    print("\n✓ Reset to defaults")
+                    print("\n[SYMBOL] Reset to defaults")
                 elif cmd == "exit":
-                    print("\n👋 Exiting without saving")
+                    print("\n[SYMBOL] Exiting without saving")
                     break
                 elif cmd.startswith("set "):
                     parts = cmd.split()
                     if len(parts) != 3:
-                        print("❌ Usage: set <step_name> <percent>")
+                        print("[FAIL] Usage: set <step_name> <percent>")
                         continue
                     
                     step_name = parts[1]
@@ -139,12 +139,12 @@ class GPUConfigTuner:
                         fraction = percent / 100.0
                         self.adjust_step(step_name, fraction)
                     except ValueError:
-                        print(f"❌ Invalid percentage: {parts[2]}")
+                        print(f"[FAIL] Invalid percentage: {parts[2]}")
                 else:
-                    print(f"❌ Unknown command: {cmd}")
+                    print(f"[FAIL] Unknown command: {cmd}")
                     
             except KeyboardInterrupt:
-                print("\n\n👋 Interrupted")
+                print("\n\n[SYMBOL] Interrupted")
                 break
             except EOFError:
                 break
@@ -152,7 +152,7 @@ class GPUConfigTuner:
     def apply_recommendations(self, report_file):
         """Apply recommendations from optimization report"""
         if not Path(report_file).exists():
-            print(f"❌ Report file not found: {report_file}")
+            print(f"[FAIL] Report file not found: {report_file}")
             return
         
         with open(report_file) as f:

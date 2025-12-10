@@ -1467,13 +1467,13 @@ Be concise, technical, and actionable. Format responses with markdown."""
 LOG_DIR = Path("logs").resolve()
 if LOG_DIR.exists():
     app.mount("/logs", StaticFiles(directory=str(LOG_DIR)), name="logs")
-    logger.info(f"✓ Serving logs from: {LOG_DIR}")
+    logger.info(f"[SYMBOL] Serving logs from: {LOG_DIR}")
 else:
     logger.warning(f"Logs directory not found: {LOG_DIR}")
 
 UI_DIR = Path(__file__).parent.parent / "ui"  # ui directory contains HTML files
 if UI_DIR.exists():
     app.mount("/", StaticFiles(directory=str(UI_DIR), html=True), name="ui")
-    logger.info(f"✓ Serving UI from: {UI_DIR}")
+    logger.info(f"[SYMBOL] Serving UI from: {UI_DIR}")
 else:
     logger.warning(f"UI directory not found: {UI_DIR}")

@@ -60,7 +60,7 @@ def test_llm_entity_extraction_standalone():
         entities = extract_entities_with_llm(test_text, test_context, cfg)
         
         if entities:
-            print(f"✅ SUCCESS: Extracted {sum(len(v) for v in entities.values())} entities")
+            print(f"[OK] SUCCESS: Extracted {sum(len(v) for v in entities.values())} entities")
             for entity_type, entity_list in entities.items():
                 if entity_list:
                     print(f"\n   {entity_type.upper()}:")
@@ -70,11 +70,11 @@ def test_llm_entity_extraction_standalone():
                         print(f"     • {name} (confidence: {conf:.2f})")
             return True, entities
         else:
-            print("⚠️  WARNING: No entities extracted")
+            print("[WARN]  WARNING: No entities extracted")
             return False, {}
             
     except Exception as e:
-        print(f"❌ FAILED: {e}")
+        print(f"[FAIL] FAILED: {e}")
         import traceback
         traceback.print_exc()
         return False, {}
@@ -116,16 +116,16 @@ def test_scene_narrative_standalone():
         narrative = generate_scene_narrative(test_scene, cfg)
         
         if narrative:
-            print(f"✅ SUCCESS: Generated narrative ({len(narrative)} chars)")
+            print(f"[OK] SUCCESS: Generated narrative ({len(narrative)} chars)")
             print(f"\n   NARRATIVE:")
             print(f"   \"{narrative}\"")
             return True, narrative
         else:
-            print("⚠️  WARNING: No narrative generated")
+            print("[WARN]  WARNING: No narrative generated")
             return False, None
             
     except Exception as e:
-        print(f"❌ FAILED: {e}")
+        print(f"[FAIL] FAILED: {e}")
         import traceback
         traceback.print_exc()
         return False, None
@@ -178,7 +178,7 @@ def test_emotional_arc_standalone():
         arc_analysis = analyze_emotional_arc(test_scenes, cfg)
         
         if arc_analysis:
-            print(f"✅ SUCCESS: Generated emotional arc analysis")
+            print(f"[OK] SUCCESS: Generated emotional arc analysis")
             print(f"\n   OVERALL ARC:")
             print(f"   {arc_analysis.get('overall_arc', 'N/A')}")
             print(f"\n   KEY MOMENTS: {len(arc_analysis.get('key_moments', []))}")
@@ -188,11 +188,11 @@ def test_emotional_arc_standalone():
             print(f"   TURNING POINTS: {len(arc_analysis.get('turning_points', []))}")
             return True, arc_analysis
         else:
-            print("⚠️  WARNING: No emotional arc generated")
+            print("[WARN]  WARNING: No emotional arc generated")
             return False, None
             
     except Exception as e:
-        print(f"❌ FAILED: {e}")
+        print(f"[FAIL] FAILED: {e}")
         import traceback
         traceback.print_exc()
         return False, None
@@ -226,16 +226,16 @@ def test_llm_direct_call():
         if response.status_code == 200:
             result = response.json()
             content = result.get('choices', [{}])[0].get('message', {}).get('content', '')
-            print(f"✅ SUCCESS: LLM responded")
+            print(f"[OK] SUCCESS: LLM responded")
             print(f"\n   RESPONSE:")
             print(f"   {content}")
             return True, content
         else:
-            print(f"❌ FAILED: Status {response.status_code}")
+            print(f"[FAIL] FAILED: Status {response.status_code}")
             return False, None
             
     except Exception as e:
-        print(f"❌ FAILED: {e}")
+        print(f"[FAIL] FAILED: {e}")
         return False, None
 
 
@@ -267,22 +267,22 @@ if __name__ == "__main__":
     total = len(results)
     
     for test_name, result in results.items():
-        status = "✅ PASS" if result else "❌ FAIL"
+        status = "[OK] PASS" if result else "[FAIL] FAIL"
         print(f"{status} - {test_name.replace('_', ' ').title()}")
     
-    print(f"\n📊 Results: {passed}/{total} tests passed ({100*passed//total}%)")
+    print(f"\n[STATS] Results: {passed}/{total} tests passed ({100*passed//total}%)")
     
     if passed == total:
-        print("\n🎉 ALL TESTS PASSED!")
-        print("\n✅ Phase 3 LLM integration is functional:")
+        print("\n[SYMBOL] ALL TESTS PASSED!")
+        print("\n[OK] Phase 3 LLM integration is functional:")
         print("   • Entity extraction working")
         print("   • Scene narrative generation working")
         print("   • Emotional arc analysis working")
-        print("\n📝 Next step: Integrate into pipeline for actual video processing")
+        print("\n[NOTE] Next step: Integrate into pipeline for actual video processing")
     elif passed >= 2:
-        print("\n⚠️  PARTIAL SUCCESS - Core functionality working")
+        print("\n[WARN]  PARTIAL SUCCESS - Core functionality working")
     else:
-        print("\n❌ TESTS FAILED - Review LLM configuration")
+        print("\n[FAIL] TESTS FAILED - Review LLM configuration")
     
     print("="*80)
     

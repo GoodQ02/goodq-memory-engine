@@ -41,21 +41,21 @@ def test_lm_studio_connectivity():
         if response.status_code == 200:
             models = response.json()
             model_list = models.get('data', [])
-            print(f"✅ LM Studio is running")
+            print(f"[OK] LM Studio is running")
             print(f"   Available models: {len(model_list)}")
             for model in model_list:
                 model_id = model.get('id', 'unknown')
                 print(f"   - {model_id}")
             return True
         else:
-            print(f"❌ LM Studio returned status {response.status_code}")
+            print(f"[FAIL] LM Studio returned status {response.status_code}")
             return False
     except requests.ConnectionError:
-        print("❌ Cannot connect to LM Studio at http://localhost:1234")
+        print("[FAIL] Cannot connect to LM Studio at http://localhost:1234")
         print("   Make sure LM Studio is running with a model loaded")
         return False
     except Exception as e:
-        print(f"❌ Error connecting to LM Studio: {e}")
+        print(f"[FAIL] Error connecting to LM Studio: {e}")
         return False
 
 
@@ -72,7 +72,7 @@ def test_scene_summarization():
         row = c.fetchone()
         
         if not row:
-            print("❌ No scenes found in database")
+            print("[FAIL] No scenes found in database")
             conn.close()
             return False
         
@@ -83,37 +83,37 @@ def test_scene_summarization():
         from steps.common.scene_summarizer import generate_scene_summary
         
         # Generate both LLM and template summaries
-        print(f"\n📊 Testing scene {scene_meta.get('index', 0)}...")
+        print(f"\n[STATS] Testing scene {scene_meta.get('index', 0)}...")
         print(f"   Duration: {scene_meta.get('duration', 0):.1f}s")
         print(f"   Caption: {scene_meta.get('caption', 'N/A')[:60]}...")
         
         llm_summary = generate_scene_summary(scene_meta, cfg, use_llm=True)
         template_summary = generate_scene_summary(scene_meta, cfg, use_llm=False)
         
-        print(f"\n🤖 LLM Summary ({len(llm_summary)} chars):")
+        print(f"\n[BOT] LLM Summary ({len(llm_summary)} chars):")
         print(f"   {llm_summary}")
         
-        print(f"\n📝 Template Summary ({len(template_summary)} chars):")
+        print(f"\n[NOTE] Template Summary ({len(template_summary)} chars):")
         print(f"   {template_summary[:200]}...")
         
         # Check if LLM produced different output
         if llm_summary and llm_summary != template_summary:
             # Check if it's actually from LLM (shorter, more narrative)
             if len(llm_summary) < len(template_summary) * 0.8:
-                print("\n✅ LLM generated unique, concise summary")
+                print("\n[OK] LLM generated unique, concise summary")
                 return True
             else:
-                print("\n⚠️  LLM summary detected but seems like fallback")
+                print("\n[WARN]  LLM summary detected but seems like fallback")
                 return True
         else:
-            print("\n❌ LLM summary matches template (possible fallback)")
+            print("\n[FAIL] LLM summary matches template (possible fallback)")
             return False
             
     except ImportError as e:
-        print(f"❌ Import error: {e}")
+        print(f"[FAIL] Import error: {e}")
         return False
     except Exception as e:
-        print(f"❌ Scene summarization test failed: {e}")
+        print(f"[FAIL] Scene summarization test failed: {e}")
         import traceback
         traceback.print_exc()
         return False
@@ -134,7 +134,7 @@ def test_video_summarization():
         row = c.fetchone()
         
         if not row:
-            print("❌ No videos found in database")
+            print("[FAIL] No videos found in database")
             conn.close()
             return False
         
@@ -146,7 +146,7 @@ def test_video_summarization():
         c.execute("SELECT MAX(end) FROM scenes WHERE video_hash=?", (video_hash,))
         duration = c.fetchone()[0] or 0
         
-        print(f"\n📹 Testing video: {video_path}")
+        print(f"\n[VIDEO] Testing video: {video_path}")
         print(f"   Hash: {video_hash[:16]}...")
         print(f"   Duration: {duration:.1f}s")
         
@@ -158,7 +158,7 @@ def test_video_summarization():
         conn.close()
         
         if scene_summary_count == 0:
-            print("\n⚠️  No scene summaries available, generating video summary may be limited")
+            print("\n[WARN]  No scene summaries available, generating video summary may be limited")
         
         from steps.video_summarizer.step import run_step
         
@@ -168,8 +168,8 @@ def test_video_summarization():
             summary = result['summary']
             method = result.get('method', 'unknown')
             
-            print(f"\n✅ Video summary generated (method: {method})")
-            print(f"\n📄 Video Summary ({len(summary)} chars):")
+            print(f"\n[OK] Video summary generated (method: {method})")
+            print(f"\n[SYMBOL] Video Summary ({len(summary)} chars):")
             print(f"   {summary}")
             
             # Verify it was stored
@@ -180,21 +180,21 @@ def test_video_summarization():
             conn.close()
             
             if stored_row:
-                print("\n✅ Video summary stored in database")
+                print("\n[OK] Video summary stored in database")
                 return True
             else:
-                print("\n❌ Video summary not found in database")
+                print("\n[FAIL] Video summary not found in database")
                 return False
         else:
-            print(f"\n❌ Video summarization failed: {result.get('error', 'Unknown error')}")
+            print(f"\n[FAIL] Video summarization failed: {result.get('error', 'Unknown error')}")
             return False
             
     except ImportError as e:
-        print(f"❌ Import error: {e}")
+        print(f"[FAIL] Import error: {e}")
         print("   Make sure video_summarizer step module exists")
         return False
     except Exception as e:
-        print(f"❌ Video summarization test failed: {e}")
+        print(f"[FAIL] Video summarization test failed: {e}")
         import traceback
         traceback.print_exc()
         return False
@@ -213,16 +213,16 @@ def test_database_queries():
         # Check scene summaries
         c.execute("SELECT COUNT(*) FROM summaries WHERE category='scene_summary'")
         scene_count = c.fetchone()[0]
-        print(f"\n📊 Scene summaries in database: {scene_count}")
+        print(f"\n[STATS] Scene summaries in database: {scene_count}")
         
         # Check video summaries
         c.execute("SELECT COUNT(*) FROM summaries WHERE category='video_summary'")
         video_count = c.fetchone()[0]
-        print(f"📊 Video summaries in database: {video_count}")
+        print(f"[STATS] Video summaries in database: {video_count}")
         
         # Sample a few scene summaries
         if scene_count > 0:
-            print(f"\n🔍 Sample scene summaries (first 3):")
+            print(f"\n[SEARCH] Sample scene summaries (first 3):")
             c.execute("""
                 SELECT content FROM summaries 
                 WHERE category='scene_summary' 
@@ -237,14 +237,14 @@ def test_database_queries():
         conn.close()
         
         if scene_count > 0 or video_count > 0:
-            print("\n✅ LLM-generated content is queryable from database")
+            print("\n[OK] LLM-generated content is queryable from database")
             return True
         else:
-            print("\n⚠️  No LLM summaries found in database yet")
+            print("\n[WARN]  No LLM summaries found in database yet")
             return False
             
     except Exception as e:
-        print(f"❌ Database query test failed: {e}")
+        print(f"[FAIL] Database query test failed: {e}")
         return False
 
 
@@ -262,7 +262,7 @@ def run_all_tests():
     results['lm_studio'] = test_lm_studio_connectivity()
     
     if not results['lm_studio']:
-        print("\n⚠️  Skipping remaining tests - LM Studio not available")
+        print("\n[WARN]  Skipping remaining tests - LM Studio not available")
         return results
     
     # Test 2: Scene summarization
@@ -283,20 +283,20 @@ def run_all_tests():
     passed = sum(1 for v in results.values() if v)
     
     for test_name, passed_test in results.items():
-        status = "✅ PASS" if passed_test else "❌ FAIL"
+        status = "[OK] PASS" if passed_test else "[FAIL] FAIL"
         print(f"{status} - {test_name}")
     
     print(f"\n{'='*80}")
     print(f"TOTAL: {passed}/{total} tests passed")
     
     if passed == total:
-        print("\n🎉 ALL TESTS PASSED - LLM Integration is working!")
+        print("\n[SYMBOL] ALL TESTS PASSED - LLM Integration is working!")
         return True
     elif passed > 0:
-        print("\n⚠️  PARTIAL SUCCESS - Some LLM features working")
+        print("\n[WARN]  PARTIAL SUCCESS - Some LLM features working")
         return False
     else:
-        print("\n❌ ALL TESTS FAILED - LLM Integration needs attention")
+        print("\n[FAIL] ALL TESTS FAILED - LLM Integration needs attention")
         return False
 
 

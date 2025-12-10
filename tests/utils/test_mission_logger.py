@@ -240,7 +240,7 @@ def run_all_tests():
             passed += 1
         except Exception as e:
             failed += 1
-            print(f"\n{MissionColors.ERROR}✗ Test failed: {test_func.__name__}{MissionColors.END}")
+            print(f"\n{MissionColors.ERROR}[SYMBOL] Test failed: {test_func.__name__}{MissionColors.END}")
             print(f"{MissionColors.ERROR}  Error: {e}{MissionColors.END}\n")
     
     # Summary
@@ -255,10 +255,10 @@ def run_all_tests():
         print(f"  {MissionColors.ERROR}Failed: {failed}{MissionColors.END}")
     
     if failed == 0:
-        print(f"\n{MissionColors.SUCCESS}✓ ALL SYSTEMS GO - MISSION LOGGER OPERATIONAL{MissionColors.END}\n")
+        print(f"\n{MissionColors.SUCCESS}[SYMBOL] ALL SYSTEMS GO - MISSION LOGGER OPERATIONAL{MissionColors.END}\n")
         return 0
     else:
-        print(f"\n{MissionColors.ERROR}✗ SYSTEM CHECK FAILED - REVIEW ERRORS ABOVE{MissionColors.END}\n")
+        print(f"\n{MissionColors.ERROR}[SYMBOL] SYSTEM CHECK FAILED - REVIEW ERRORS ABOVE{MissionColors.END}\n")
         return 1
 
 

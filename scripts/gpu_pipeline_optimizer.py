@@ -90,7 +90,7 @@ class GPUOptimizer:
                 "timestamp": datetime.now().isoformat()
             }
         except Exception as e:
-            print(f"❌ Failed to get GPU stats: {e}")
+            print(f"[FAIL] Failed to get GPU stats: {e}")
             return None
     
     def get_process_gpu_usage(self):
@@ -116,7 +116,7 @@ class GPUOptimizer:
                         })
             return processes
         except Exception as e:
-            print(f"❌ Failed to get process GPU usage: {e}")
+            print(f"[FAIL] Failed to get process GPU usage: {e}")
             return []
     
     def generate_gpu_config_file(self, step_name, test_run=1):
@@ -148,11 +148,11 @@ if torch.cuda.is_available():
     # Clear cache before starting
     torch.cuda.empty_cache()
     
-    print(f"✓ GPU configured: Device {{config['device']}}, Memory fraction: {{config['fraction']}}")
-    print(f"✓ Available VRAM: {{torch.cuda.get_device_properties(0).total_memory / 1024**3:.2f}} GB")
-    print(f"✓ Allocated limit: {{torch.cuda.get_device_properties(0).total_memory * {config['fraction']} / 1024**3:.2f}} GB")
+    print(f"[SYMBOL] GPU configured: Device {{config['device']}}, Memory fraction: {{config['fraction']}}")
+    print(f"[SYMBOL] Available VRAM: {{torch.cuda.get_device_properties(0).total_memory / 1024**3:.2f}} GB")
+    print(f"[SYMBOL] Allocated limit: {{torch.cuda.get_device_properties(0).total_memory * {config['fraction']} / 1024**3:.2f}} GB")
 else:
-    print("⚠ CUDA not available - using CPU")
+    print("[SYMBOL] CUDA not available - using CPU")
 """
         
         # Save to step's env directory
@@ -160,10 +160,10 @@ else:
         if env_dir.exists():
             config_file = env_dir / "gpu_config.py"
             config_file.write_text(gpu_config_content)
-            print(f"✓ Generated GPU config for {step_name}: {config['fraction']*100:.0f}% VRAM")
+            print(f"[SYMBOL] Generated GPU config for {step_name}: {config['fraction']*100:.0f}% VRAM")
             return config_file
         else:
-            print(f"⚠ Environment directory not found: {env_dir}")
+            print(f"[SYMBOL] Environment directory not found: {env_dir}")
             return None
     
     def monitor_pipeline_step(self, step_name, duration=60, interval=2):
@@ -293,7 +293,7 @@ else:
         with open(filename, 'w') as f:
             json.dump(self.test_results, f, indent=2)
         
-        print(f"✓ Test results saved: {filename}")
+        print(f"[SYMBOL] Test results saved: {filename}")
     
     def update_gpu_configs(self, analyses):
         """Update GPU configurations based on analysis results"""
@@ -313,7 +313,7 @@ else:
                     "new": new_fraction,
                     "action": rec['action']
                 })
-                print(f"✓ Updated {step}: {old_fraction*100:.0f}% → {new_fraction*100:.0f}%")
+                print(f"[SYMBOL] Updated {step}: {old_fraction*100:.0f}% → {new_fraction*100:.0f}%")
         
         return updated
     
@@ -326,7 +326,7 @@ else:
         for step_name in self.gpu_configs.keys():
             self.generate_gpu_config_file(step_name)
         
-        print(f"\n✓ All GPU configurations generated")
+        print(f"\n[SYMBOL] All GPU configurations generated")
     
     def run_optimization_cycle(self, video_path, test_number=1):
         """Run a full optimization cycle"""
@@ -341,7 +341,7 @@ else:
         
         # Start pipeline and monitor
         # (This would integrate with your actual pipeline launch)
-        print(f"\n⚠ Note: Actual pipeline execution to be integrated")
+        print(f"\n[SYMBOL] Note: Actual pipeline execution to be integrated")
         print(f"   For now, this monitors any running GPU processes\n")
         
         # Monitor for a period

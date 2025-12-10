@@ -25,13 +25,13 @@ def print_header(text):
     print(f"{Colors.HEADER}{'=' * 80}{Colors.ENDC}\n")
 
 def print_success(text):
-    print(f"{Colors.OKGREEN}✓ {text}{Colors.ENDC}")
+    print(f"{Colors.OKGREEN}[SYMBOL] {text}{Colors.ENDC}")
 
 def print_warning(text):
-    print(f"{Colors.WARNING}⚠ {text}{Colors.ENDC}")
+    print(f"{Colors.WARNING}[SYMBOL] {text}{Colors.ENDC}")
 
 def print_error(text):
-    print(f"{Colors.FAIL}✗ {text}{Colors.ENDC}")
+    print(f"{Colors.FAIL}[SYMBOL] {text}{Colors.ENDC}")
 
 def print_info(text):
     print(f"{Colors.OKCYAN}ℹ {text}{Colors.ENDC}")
@@ -292,7 +292,7 @@ def main():
     if run_verification():
         print_header("Installation Complete!")
         print("""
-        ✓ GoodQ4All is ready to use!
+        [SYMBOL] GoodQ4All is ready to use!
         
         Next steps:
         1. Review and edit .env.local if needed

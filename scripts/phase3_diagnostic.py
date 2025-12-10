@@ -62,9 +62,9 @@ for idx, scene_data in enumerate(scenes[:5]):  # Check first 5 scenes
         print(f"  Frame Link: {path}")
         print(f"  Expected: scene_{scene_index:04d}.jpg")
         if f"scene_{scene_index:04d}" not in path:
-            print(f"  ❌ MISMATCH!")
+            print(f"  [FAIL] MISMATCH!")
     else:
-        print(f"  ❌ NO FRAME LINK FOUND")
+        print(f"  [FAIL] NO FRAME LINK FOUND")
     
     # Get audio link
     cursor.execute("""
@@ -80,9 +80,9 @@ for idx, scene_data in enumerate(scenes[:5]):  # Check first 5 scenes
         print(f"  Audio Link: {path}")
         print(f"  Expected: scene_{scene_index:04d}.wav")
         if f"scene_{scene_index:04d}" not in path:
-            print(f"  ❌ MISMATCH!")
+            print(f"  [FAIL] MISMATCH!")
     else:
-        print(f"  ❌ NO AUDIO LINK FOUND")
+        print(f"  [FAIL] NO AUDIO LINK FOUND")
 
 # Issue 2: Check for duplicate embeddings
 print("\n" + "="*80)
@@ -114,7 +114,7 @@ if duplicates:
         for emb_hash, scene_id in entries:
             print(f"    Hash: {emb_hash[:16]}... Scene: {scene_id[:16] if scene_id else 'NULL'}...")
 else:
-    print("\n✓ No duplicate embeddings found")
+    print("\n[SYMBOL] No duplicate embeddings found")
 
 # Issue 3: Check for invalid speaker segments
 print("\n" + "="*80)
@@ -141,9 +141,9 @@ if invalid_segments:
     for seg_id, start, end, speaker in invalid_segments[:10]:  # Show first 10
         print(f"  Segment {seg_id[:16]}... Speaker: {speaker}")
         print(f"    Time: {start:.2f}s -> {end:.2f}s (duration: {end-start:.2f}s)")
-        print(f"    ❌ INVALID: end <= start")
+        print(f"    [FAIL] INVALID: end <= start")
 else:
-    print("\n✓ No invalid segments found")
+    print("\n[SYMBOL] No invalid segments found")
 
 # Issue 4: Check scene index consistency
 print("\n" + "="*80)
@@ -163,9 +163,9 @@ if index_issues:
     print(f"\nFound {len(index_issues)} scenes with index mismatches:")
     for db_idx, meta_index, start, end in index_issues[:10]:
         print(f"  DB position {db_idx}: meta.index={meta_index}, time={start:.2f}s-{end:.2f}s")
-        print(f"    ❌ MISMATCH")
+        print(f"    [FAIL] MISMATCH")
 else:
-    print("\n✓ All scene indices are consistent")
+    print("\n[SYMBOL] All scene indices are consistent")
 
 # Summary
 print("\n" + "="*80)

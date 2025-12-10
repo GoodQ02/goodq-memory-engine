@@ -64,13 +64,13 @@ except Exception as e:
             print(result.stdout)
             return True
         else:
-            print(f"✗ Test failed:")
+            print(f"[SYMBOL] Test failed:")
             print(result.stderr)
             return False
             
     except Exception as e:
         script_path.unlink(missing_ok=True)
-        print(f"✗ Error testing {env_name}: {e}")
+        print(f"[SYMBOL] Error testing {env_name}: {e}")
         return False
 
 

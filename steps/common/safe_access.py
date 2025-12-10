@@ -266,4 +266,4 @@ if __name__ == "__main__":
     assert metadata['sample_rate'] == 44100
     assert metadata['missing_field'] == 'default'
     
-    print("✅ All tests passed!")
+    print("[OK] All tests passed!")

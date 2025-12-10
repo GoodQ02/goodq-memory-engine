@@ -74,7 +74,7 @@ def optimize_environment(env_name, config):
     # Check if environment exists
     success, stdout, stderr = run_cmd(f"conda env list")
     if env_name not in stdout:
-        print(f"❌ Environment {env_name} not found. Skipping...")
+        print(f"[FAIL] Environment {env_name} not found. Skipping...")
         return False
     
     # Activate and upgrade PyTorch with CUDA
@@ -82,9 +82,9 @@ def optimize_environment(env_name, config):
     cmd = f'conda run -n {env_name} pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118 --upgrade --force-reinstall'
     success, stdout, stderr = run_cmd(cmd)
     if not success:
-        print(f"❌ Failed to install PyTorch: {stderr}")
+        print(f"[FAIL] Failed to install PyTorch: {stderr}")
         return False
-    print("✅ PyTorch with CUDA installed")
+    print("[OK] PyTorch with CUDA installed")
     
     # Install environment-specific packages
     print("\n[2/4] Installing vision-specific packages...")
@@ -95,9 +95,9 @@ def optimize_environment(env_name, config):
         cmd = f'conda run -n {env_name} pip install {package} --upgrade'
         success, stdout, stderr = run_cmd(cmd)
         if success:
-            print(f"  ✅ {package}")
+            print(f"  [OK] {package}")
         else:
-            print(f"  ⚠️  {package} (may need manual install)")
+            print(f"  [WARN]  {package} (may need manual install)")
     
     # Verify CUDA availability
     print("\n[3/4] Verifying CUDA support...")
@@ -113,10 +113,10 @@ if torch.cuda.is_available():
     cmd = f'conda run -n {env_name} python -c "{verify_script}"'
     success, stdout, stderr = run_cmd(cmd)
     if success and "CUDA Available: True" in stdout:
-        print("✅ CUDA verification passed")
+        print("[OK] CUDA verification passed")
         print(stdout)
     else:
-        print("❌ CUDA not available")
+        print("[FAIL] CUDA not available")
         print(stderr)
         return False
     
@@ -129,7 +129,7 @@ from facenet_pytorch import MTCNN, InceptionResnetV1
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 mtcnn = MTCNN(device=device)
 model = InceptionResnetV1(pretrained='vggface2').to(device).eval()
-print(f"✅ FaceNet loaded on {device}")
+print(f"[OK] FaceNet loaded on {device}")
 """
     elif "emotion" in env_name:
         test_script = """
@@ -137,7 +137,7 @@ import torch
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 model = AutoModelForSequenceClassification.from_pretrained('cardiffnlp/twitter-roberta-base-emotion-multilabel-latest').to(device)
-print(f"✅ Emotion model loaded on {device}")
+print(f"[OK] Emotion model loaded on {device}")
 """
     elif "object_detect" in env_name:
         test_script = """
@@ -145,27 +145,27 @@ import torch
 from ultralytics import YOLO
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 model = YOLO('yolov8n.pt')
-print(f"✅ YOLO loaded, device will be set at runtime")
+print(f"[OK] YOLO loaded, device will be set at runtime")
 """
     elif "ocr" in env_name:
         test_script = """
 import torch
 import easyocr
 reader = easyocr.Reader(['en'], gpu=torch.cuda.is_available())
-print(f"✅ EasyOCR configured for GPU: {torch.cuda.is_available()}")
+print(f"[OK] EasyOCR configured for GPU: {torch.cuda.is_available()}")
 """
     else:
-        print("⚠️  No model test available for this environment")
+        print("[WARN]  No model test available for this environment")
         return True
     
     cmd = f'conda run -n {env_name} python -c "{test_script}"'
     success, stdout, stderr = run_cmd(cmd)
     if success:
         print(stdout)
-        print(f"\n✅ {env_name} optimization complete!\n")
+        print(f"\n[OK] {env_name} optimization complete!\n")
         return True
     else:
-        print(f"❌ Model loading failed: {stderr}")
+        print(f"[FAIL] Model loading failed: {stderr}")
         return False
 
 def update_gpu_config():
@@ -176,7 +176,7 @@ def update_gpu_config():
     
     config_path = Path("L:/goodq4all/gpu_config.py")
     if not config_path.exists():
-        print("❌ gpu_config.py not found")
+        print("[FAIL] gpu_config.py not found")
         return False
     
     # Read current config
@@ -207,7 +207,7 @@ def update_gpu_config():
     with open(config_path, 'w') as f:
         f.writelines(new_lines)
     
-    print("✅ GPU configuration updated")
+    print("[OK] GPU configuration updated")
     return True
 
 def run_vision_benchmark():
@@ -219,7 +219,7 @@ def run_vision_benchmark():
     # Create test image if needed
     test_image_path = Path("L:/goodq4all/test_data/sample_frame.jpg")
     if not test_image_path.exists():
-        print("⚠️  Test image not found, skipping benchmark")
+        print("[WARN]  Test image not found, skipping benchmark")
         return
     
     benchmarks = []
@@ -339,19 +339,19 @@ def main():
     
     print(f"\nSuccessful: {len(successful)}/{len(VISION_ENVS)}")
     for env in successful:
-        print(f"  ✅ {env}")
+        print(f"  [OK] {env}")
     
     if failed:
         print(f"\nFailed: {len(failed)}")
         for env in failed:
-            print(f"  ❌ {env}")
+            print(f"  [FAIL] {env}")
     
     # Run benchmark if all successful
     if len(successful) == len(VISION_ENVS):
-        print("\n🎉 All environments optimized successfully!")
+        print("\n[SYMBOL] All environments optimized successfully!")
         run_vision_benchmark()
     else:
-        print(f"\n⚠️  Some environments failed. Check errors above.")
+        print(f"\n[WARN]  Some environments failed. Check errors above.")
     
     input("\nPress ENTER to exit...")
 

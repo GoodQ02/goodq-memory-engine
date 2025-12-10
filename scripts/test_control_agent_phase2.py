@@ -19,7 +19,7 @@ def test_auto_healing():
     """Test auto-healing with simulated errors"""
     
     print("="*70)
-    print("🧪 CONTROL AGENT PHASE 2 - AUTO-HEALING TEST")
+    print("[SYMBOL] CONTROL AGENT PHASE 2 - AUTO-HEALING TEST")
     print("="*70)
     print()
     
@@ -91,12 +91,12 @@ No response from http://localhost:30000/v1/chat/completions
         print(f"TEST {i}/{len(test_cases)}: {test_case['name']}")
         print(f"{'='*70}\n")
         
-        print(f"🔴 Simulated Error:")
+        print(f"[SYMBOL] Simulated Error:")
         print(test_case['error'].strip())
         print()
         
         # Attempt auto-healing
-        print(f"🔧 Attempting auto-heal...")
+        print(f"[CONFIG] Attempting auto-heal...")
         print()
         
         healing_report = agent.healer.auto_heal(
@@ -106,14 +106,14 @@ No response from http://localhost:30000/v1/chat/completions
         
         # Display results
         if healing_report.get('success'):
-            print(f"✅ AUTO-HEALING SUCCESSFUL!")
+            print(f"[OK] AUTO-HEALING SUCCESSFUL!")
             for action in healing_report['actions_taken']:
                 if action['success']:
-                    print(f"   ✓ {action['action']}: {action['message']}")
+                    print(f"   [SYMBOL] {action['action']}: {action['message']}")
         else:
-            print(f"⚠️  Manual review required")
+            print(f"[WARN]  Manual review required")
             if 'recommendation' in healing_report:
-                print(f"\n💡 LLM Recommendation:")
+                print(f"\n[TIP] LLM Recommendation:")
                 print(f"   {healing_report['recommendation'][:300]}...")
         
         # Record in agent memory
@@ -137,7 +137,7 @@ No response from http://localhost:30000/v1/chat/completions
     
     # Summary
     print("\n" + "="*70)
-    print("📊 TEST SUMMARY")
+    print("[STATS] TEST SUMMARY")
     print("="*70)
     
     total_tests = len(results)
@@ -150,19 +150,19 @@ No response from http://localhost:30000/v1/chat/completions
     
     print("\nDetailed Results:")
     for r in results:
-        status = "✅ HEALED" if r['healed'] else "⚠️  MANUAL"
+        status = "[OK] HEALED" if r['healed'] else "[WARN]  MANUAL"
         print(f"  {status} | {r['test']} ({r['actions']} actions)")
     
     print("\n" + "="*70)
-    print("🎯 Phase 2 Testing Complete!")
+    print("[TARGET] Phase 2 Testing Complete!")
     print("="*70)
     print("\nThe Control Agent can now:")
-    print("  ✓ Diagnose errors using pattern matching")
-    print("  ✓ Automatically apply safe healing actions")
-    print("  ✓ Consult LLM for unknown error patterns")
-    print("  ✓ Track healing attempts in memory")
-    print("  ✓ Backup configs before modifications")
-    print("\nNext: Integrate with live pipeline monitoring! 🚀")
+    print("  [SYMBOL] Diagnose errors using pattern matching")
+    print("  [SYMBOL] Automatically apply safe healing actions")
+    print("  [SYMBOL] Consult LLM for unknown error patterns")
+    print("  [SYMBOL] Track healing attempts in memory")
+    print("  [SYMBOL] Backup configs before modifications")
+    print("\nNext: Integrate with live pipeline monitoring! [LAUNCH]")
     print()
 
 

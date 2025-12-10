@@ -44,10 +44,10 @@ def _load_blip() -> None:
         proc = BlipProcessor.from_pretrained("Salesforce/blip-image-captioning-base")
         model = BlipForConditionalGeneration.from_pretrained("Salesforce/blip-image-captioning-base").to(device).eval()
         _BLIP.update({"model": model, "proc": proc, "device": device})
-        logger.info(f"✅ BLIP model loaded on {device} (GPU config: {gpu_config['memory_fraction']:.1%} memory)")
+        logger.info(f"[OK] BLIP model loaded on {device} (GPU config: {gpu_config['memory_fraction']:.1%} memory)")
     except Exception as e:
-        logger.error(f"❌ Failed to load BLIP model: {str(e)}")
-        logger.info("⚠️  Falling back to CPU mode")
+        logger.error(f"[FAIL] Failed to load BLIP model: {str(e)}")
+        logger.info("[WARN]  Falling back to CPU mode")
         _BLIP.update({"model": None, "proc": None, "device": "cpu"})
         GPUManager.clear_cache()
 
@@ -66,9 +66,9 @@ def _load_fallback() -> None:
         
         pipe = pipeline("image-to-text", model="nlpconnect/vit-gpt2-image-captioning", device=0 if device=="cuda" else -1)
         _FALLBACK.update({"pipe": pipe, "device": device})
-        logger.info(f"✅ Fallback caption model loaded on {device}")
+        logger.info(f"[OK] Fallback caption model loaded on {device}")
     except Exception as e:
-        logger.error(f"❌ Failed to load fallback model: {str(e)}")
+        logger.error(f"[FAIL] Failed to load fallback model: {str(e)}")
         _FALLBACK.update({"pipe": None})
         GPUManager.clear_cache()
 
@@ -91,7 +91,7 @@ def image_caption(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
             text = (out[0].get("generated_text") if out else None) or None
             return {"caption": text, "caption_meta": {"status": "ok", "engine": "vit-gpt2"}}
         except Exception as e:
-            logger.error(f"❌ Fallback captioning failed: {str(e)}")
+            logger.error(f"[FAIL] Fallback captioning failed: {str(e)}")
             GPUManager.clear_cache()
             return {"caption": None, "caption_meta": {"status": "error", "error": str(e)}}
 
@@ -112,6 +112,6 @@ def image_caption(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
         text = _BLIP["proc"].decode(out[0], skip_special_tokens=True)
         return {"caption": text, "caption_meta": {"status": "ok", "engine": "blip"}}
     except Exception as e:
-        logger.error(f"❌ Image captioning failed: {str(e)}")
+        logger.error(f"[FAIL] Image captioning failed: {str(e)}")
         GPUManager.clear_cache()
         return {"caption": None, "caption_meta": {"status": "error", "error": str(e)}}

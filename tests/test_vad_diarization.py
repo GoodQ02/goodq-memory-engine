@@ -70,7 +70,7 @@ def test_vad_preprocessing():
         print(f"\nVAD completed in {elapsed:.1f}s")
         
         if vad_audio_path and vad_segments:
-            print(f"\n✓ VAD preprocessing successful!")
+            print(f"\n[SYMBOL] VAD preprocessing successful!")
             print(f"  Speech-only audio: {vad_audio_path}")
             print(f"  Speech segments: {len(vad_segments)}")
             
@@ -89,11 +89,11 @@ def test_vad_preprocessing():
             
             return True
         else:
-            print("\n✗ VAD preprocessing did not produce output")
+            print("\n[SYMBOL] VAD preprocessing did not produce output")
             return False
             
     except Exception as e:
-        print(f"\n✗ ERROR: {str(e)}")
+        print(f"\n[SYMBOL] ERROR: {str(e)}")
         import traceback
         traceback.print_exc()
         return False
@@ -165,7 +165,7 @@ def test_full_diarization():
         meta = result.get('diarize_meta', {})
         
         if diarization:
-            print(f"\n✓ Diarization successful!")
+            print(f"\n[SYMBOL] Diarization successful!")
             print(f"  Segments: {len(diarization)}")
             print(f"  Speakers: {meta.get('speaker_count', 'unknown')}")
             print(f"  Device: {meta.get('device', 'unknown')}")
@@ -182,13 +182,13 @@ def test_full_diarization():
             
             return True
         else:
-            print(f"\n✗ Diarization failed")
+            print(f"\n[SYMBOL] Diarization failed")
             print(f"  Status: {meta.get('status', 'unknown')}")
             print(f"  Reason: {meta.get('reason', 'unknown')}")
             return False
             
     except Exception as e:
-        print(f"\n✗ ERROR: {str(e)}")
+        print(f"\n[SYMBOL] ERROR: {str(e)}")
         import traceback
         traceback.print_exc()
         return False
@@ -213,14 +213,14 @@ if __name__ == "__main__":
     print("="*80)
     print("Test Summary")
     print("="*80)
-    print(f"VAD Preprocessing: {'✓ PASS' if vad_ok else '✗ FAIL'}")
-    print(f"Full Diarization: {'✓ PASS' if diarize_ok else '✗ FAIL'}")
+    print(f"VAD Preprocessing: {'[SYMBOL] PASS' if vad_ok else '[SYMBOL] FAIL'}")
+    print(f"Full Diarization: {'[SYMBOL] PASS' if diarize_ok else '[SYMBOL] FAIL'}")
     
     if vad_ok and diarize_ok:
-        print("\n✓ All tests passed!")
+        print("\n[SYMBOL] All tests passed!")
         print("\nVAD preprocessing is working correctly and will dramatically")
         print("reduce diarization time by filtering out silence and noise.")
     else:
-        print("\n✗ Some tests failed - check errors above")
+        print("\n[SYMBOL] Some tests failed - check errors above")
     
     print()

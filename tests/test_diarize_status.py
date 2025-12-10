@@ -17,45 +17,45 @@ print(f"  Version: {sys.version}")
 print("\n[2/5] PyTorch Check...")
 try:
     import torch
-    print(f"  ✓ PyTorch: {torch.__version__}")
-    print(f"  ✓ CUDA Available: {torch.cuda.is_available()}")
+    print(f"  [SYMBOL] PyTorch: {torch.__version__}")
+    print(f"  [SYMBOL] CUDA Available: {torch.cuda.is_available()}")
     if torch.cuda.is_available():
-        print(f"  ✓ GPU: {torch.cuda.get_device_name(0)}")
-        print(f"  ✓ Memory: {torch.cuda.get_device_properties(0).total_memory / 1024**3:.1f}GB")
+        print(f"  [SYMBOL] GPU: {torch.cuda.get_device_name(0)}")
+        print(f"  [SYMBOL] Memory: {torch.cuda.get_device_properties(0).total_memory / 1024**3:.1f}GB")
 except Exception as e:
-    print(f"  ✗ PyTorch error: {e}")
+    print(f"  [SYMBOL] PyTorch error: {e}")
 
 # Test 3: Check PyAnnote
 print("\n[3/5] PyAnnote Check...")
 try:
     from pyannote.audio import Pipeline
-    print("  ✓ pyannote.audio is installed")
+    print("  [SYMBOL] pyannote.audio is installed")
     pyannote_available = True
 except ImportError as e:
-    print(f"  ✗ pyannote.audio not installed: {e}")
+    print(f"  [SYMBOL] pyannote.audio not installed: {e}")
     pyannote_available = False
 
 # Test 4: Check Whisper
 print("\n[4/5] Whisper Check...")
 try:
     import whisper
-    print("  ✓ Whisper is installed")
+    print("  [SYMBOL] Whisper is installed")
 except ImportError:
-    print("  ✗ Whisper not installed")
+    print("  [SYMBOL] Whisper not installed")
 
 # Test 5: Check our step code
 print("\n[5/5] GoodQ Step Code Check...")
 try:
     sys.path.insert(0, str(Path(__file__).parent.parent))
     from steps.audio_diarize import step
-    print("  ✓ audio_diarize step module exists")
+    print("  [SYMBOL] audio_diarize step module exists")
 except Exception as e:
-    print(f"  ✗ Failed to import step: {e}")
+    print(f"  [SYMBOL] Failed to import step: {e}")
 
 # Summary
 print("\n" + "="*80)
 if pyannote_available:
-    print("STATUS: ✓ Ready for diarization testing")
+    print("STATUS: [SYMBOL] Ready for diarization testing")
 else:
-    print("STATUS: ✗ Missing pyannote.audio - installation needed")
+    print("STATUS: [SYMBOL] Missing pyannote.audio - installation needed")
 print("="*80)

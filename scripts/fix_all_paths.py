@@ -42,11 +42,11 @@ def fix_file(filepath):
         if modified:
             with open(filepath, 'w', encoding='utf-8') as f:
                 f.write(content)
-            print(f"✅ Fixed: {filepath}")
+            print(f"[OK] Fixed: {filepath}")
             return True
         return False
     except Exception as e:
-        print(f"❌ Error fixing {filepath}: {e}")
+        print(f"[FAIL] Error fixing {filepath}: {e}")
         return False
 
 def main():
@@ -78,7 +78,7 @@ def main():
     
     print()
     print("=" * 80)
-    print(f"✅ COMPLETE: Fixed {fixed_count} files")
+    print(f"[OK] COMPLETE: Fixed {fixed_count} files")
     print("=" * 80)
 
 if __name__ == "__main__":

@@ -36,10 +36,10 @@ def test_initialization():
         client = LLMClient()
         assert client is not None, "Client should not be None"
         assert len(client.MODELS) > 0, "Client should have models configured"
-        logger.info(f"✓ Client initialized with {len(client.MODELS)} models")
+        logger.info(f"[SYMBOL] Client initialized with {len(client.MODELS)} models")
         return True, client
     except Exception as e:
-        logger.error(f"✗ Initialization failed: {e}")
+        logger.error(f"[SYMBOL] Initialization failed: {e}")
         return False, None
 
 
@@ -59,7 +59,7 @@ def test_health_checks(client):
         logger.info(f"Health check complete: {healthy_count}/{total_count} models healthy")
         
         for name, health in status.items():
-            status_icon = "✓" if health.is_healthy else "✗"
+            status_icon = "[SYMBOL]" if health.is_healthy else "[SYMBOL]"
             if health.is_healthy:
                 logger.info(f"{status_icon} {name}: {health.response_time_ms:.0f}ms")
             else:
@@ -67,7 +67,7 @@ def test_health_checks(client):
         
         return healthy_count > 0
     except Exception as e:
-        logger.error(f"✗ Health check failed: {e}")
+        logger.error(f"[SYMBOL] Health check failed: {e}")
         return False
 
 
@@ -84,44 +84,44 @@ def test_model_selection(client):
     try:
         model = client.select_model(prefer_speed=True)
         if model:
-            logger.info(f"✓ Fastest model: {model.name} ({model.tokens_per_sec} tok/s)")
+            logger.info(f"[SYMBOL] Fastest model: {model.name} ({model.tokens_per_sec} tok/s)")
             tests_passed += 1
         else:
-            logger.warning("✗ No model selected for speed preference")
+            logger.warning("[SYMBOL] No model selected for speed preference")
     except Exception as e:
-        logger.error(f"✗ Speed selection failed: {e}")
+        logger.error(f"[SYMBOL] Speed selection failed: {e}")
     
     # Test 3.2: Select quality model
     try:
         model = client.select_model(prefer_quality=True)
         if model:
-            logger.info(f"✓ Quality model: {model.name} ({model.vram_gb}GB VRAM)")
+            logger.info(f"[SYMBOL] Quality model: {model.name} ({model.vram_gb}GB VRAM)")
             tests_passed += 1
         else:
-            logger.warning("✗ No model selected for quality preference")
+            logger.warning("[SYMBOL] No model selected for quality preference")
     except Exception as e:
-        logger.error(f"✗ Quality selection failed: {e}")
+        logger.error(f"[SYMBOL] Quality selection failed: {e}")
     
     # Test 3.3: Select by capability
     try:
         model = client.select_model(capabilities=["chat"])
         if model:
-            logger.info(f"✓ Chat model: {model.name}")
+            logger.info(f"[SYMBOL] Chat model: {model.name}")
             tests_passed += 1
         else:
-            logger.warning("✗ No chat model selected")
+            logger.warning("[SYMBOL] No chat model selected")
     except Exception as e:
-        logger.error(f"✗ Capability selection failed: {e}")
+        logger.error(f"[SYMBOL] Capability selection failed: {e}")
     
     # Test 3.4: Select specific model (if available)
     try:
         # Try to select Llama-1B-Speed if healthy
         model = client.select_model(model_name="Llama-1B-Speed")
         if model:
-            logger.info(f"✓ Specific model: {model.name}")
+            logger.info(f"[SYMBOL] Specific model: {model.name}")
             tests_passed += 1
         else:
-            logger.warning("✗ Llama-1B-Speed not available (may be offline)")
+            logger.warning("[SYMBOL] Llama-1B-Speed not available (may be offline)")
             tests_passed += 1  # Don't fail if offline
     except Exception as e:
         logger.warning(f"! Specific model selection: {e}")
@@ -159,13 +159,13 @@ def test_chat_basic(client):
         assert len(response["choices"]) > 0, "Response should have at least one choice"
         
         content = response["choices"][0]["message"]["content"]
-        logger.info(f"✓ Chat response received in {elapsed:.2f}s")
+        logger.info(f"[SYMBOL] Chat response received in {elapsed:.2f}s")
         logger.info(f"  Model: {response.get('model', 'unknown')}")
         logger.info(f"  Response: {content[:100]}...")
         
         return True
     except Exception as e:
-        logger.error(f"✗ Chat failed: {e}")
+        logger.error(f"[SYMBOL] Chat failed: {e}")
         return False
 
 
@@ -194,7 +194,7 @@ def test_chat_with_failover(client):
         )
         
         assert response is not None, "Failover should still provide response"
-        logger.info(f"✓ Failover successful - response received")
+        logger.info(f"[SYMBOL] Failover successful - response received")
         
         return True
     except Exception as e:
@@ -203,7 +203,7 @@ def test_chat_with_failover(client):
             logger.warning(f"! All models unavailable - failover cannot proceed")
             logger.warning("  This is expected if vLLM servers are not running")
             return True  # Don't fail the test
-        logger.error(f"✗ Failover failed: {e}")
+        logger.error(f"[SYMBOL] Failover failed: {e}")
         return False
 
 
@@ -221,14 +221,14 @@ def test_status_endpoint(client):
         assert "models_healthy" in status, "Status should include healthy count"
         assert "health_status" in status, "Status should include health details"
         
-        logger.info(f"✓ Status report generated")
+        logger.info(f"[SYMBOL] Status report generated")
         logger.info(f"  Total models: {status['models_total']}")
         logger.info(f"  Healthy: {status['models_healthy']}")
         logger.info(f"  Unhealthy: {status['models_unhealthy']}")
         
         return True
     except Exception as e:
-        logger.error(f"✗ Status check failed: {e}")
+        logger.error(f"[SYMBOL] Status check failed: {e}")
         return False
 
 
@@ -243,11 +243,11 @@ def test_singleton_pattern(client):
         client2 = get_client()
         
         assert client1 is client2, "get_client() should return same instance"
-        logger.info("✓ Singleton pattern working correctly")
+        logger.info("[SYMBOL] Singleton pattern working correctly")
         
         return True
     except Exception as e:
-        logger.error(f"✗ Singleton test failed: {e}")
+        logger.error(f"[SYMBOL] Singleton test failed: {e}")
         return False
 
 
@@ -268,7 +268,7 @@ def run_all_tests():
     results.append(("Initialization", passed))
     
     if not client:
-        print("\n❌ CRITICAL: Client initialization failed - cannot continue")
+        print("\n[FAIL] CRITICAL: Client initialization failed - cannot continue")
         return False
     
     # Test 2: Health Checks
@@ -307,17 +307,17 @@ def run_all_tests():
     total_count = len(results)
     
     for test_name, passed in results:
-        status = "✓ PASS" if passed else "✗ FAIL"
+        status = "[SYMBOL] PASS" if passed else "[SYMBOL] FAIL"
         print(f"{status:8s} - {test_name}")
     
     print("="*70)
     print(f"RESULTS: {passed_count}/{total_count} tests passed")
     
     if passed_count == total_count:
-        print("🎉 ALL TESTS PASSED - LLM CLIENT IS PRODUCTION READY!")
+        print("[SYMBOL] ALL TESTS PASSED - LLM CLIENT IS PRODUCTION READY!")
         return True
     else:
-        print(f"⚠️  {total_count - passed_count} test(s) failed")
+        print(f"[WARN]  {total_count - passed_count} test(s) failed")
         return False
 
 

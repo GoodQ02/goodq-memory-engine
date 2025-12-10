@@ -27,14 +27,14 @@ def test_integration():
     # Load config
     print("1. Loading configuration...")
     cfg = load_configs({})
-    print("   ✅ Config loaded")
+    print("   [OK] Config loaded")
     print()
     
     # Prepare test item
     test_audio = r"L:\_DATA\GoodQ_Data\temp\test_chunk.wav"
     
     if not Path(test_audio).exists():
-        print(f"   ❌ Test audio not found: {test_audio}")
+        print(f"   [FAIL] Test audio not found: {test_audio}")
         return False
     
     print(f"2. Testing audio file: {Path(test_audio).name}")
@@ -53,10 +53,10 @@ def test_integration():
         result = audio_transcribe(item, cfg)
         
         if not result:
-            print("   ❌ No result returned")
+            print("   [FAIL] No result returned")
             return False
         
-        print("   ✅ Transcription complete!")
+        print("   [OK] Transcription complete!")
         print()
         
         # Analyze results
@@ -94,7 +94,7 @@ def test_integration():
         
         all_passed = True
         for check, passed in checks.items():
-            status = "✅" if passed else "❌"
+            status = "[OK]" if passed else "[FAIL]"
             print(f"   {status} {check}")
             if not passed:
                 all_passed = False
@@ -102,15 +102,15 @@ def test_integration():
         print()
         print("="*70)
         if all_passed:
-            print("  ✅ ALL TESTS PASSED - INTEGRATION SUCCESSFUL!")
+            print("  [OK] ALL TESTS PASSED - INTEGRATION SUCCESSFUL!")
         else:
-            print("  ⚠️  SOME TESTS FAILED - CHECK RESULTS ABOVE")
+            print("  [WARN]  SOME TESTS FAILED - CHECK RESULTS ABOVE")
         print("="*70)
         
         return all_passed
         
     except Exception as e:
-        print(f"   ❌ Error during transcription: {e}")
+        print(f"   [FAIL] Error during transcription: {e}")
         import traceback
         traceback.print_exc()
         return False

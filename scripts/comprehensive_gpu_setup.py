@@ -92,7 +92,7 @@ def setup_pytorch_gpu(env_name, config):
         env_name,
         f"pip uninstall -y {' '.join(uninstall_packages)}"
     )
-    print("  ✓ Uninstalled" if "Successfully" in stdout or "not installed" in stderr else "  ⚠️  May not have been installed")
+    print("  [SYMBOL] Uninstalled" if "Successfully" in stdout or "not installed" in stderr else "  [WARN]  May not have been installed")
     
     # Step 2: Install CUDA-enabled PyTorch
     print("\n[2/4] Installing PyTorch with CUDA support...")
@@ -108,11 +108,11 @@ def setup_pytorch_gpu(env_name, config):
     success, stdout, stderr = run_in_conda_env(env_name, install_cmd, timeout=900)
     
     if not success:
-        print(f"  ❌ Installation failed!")
+        print(f"  [FAIL] Installation failed!")
         print(f"  Error: {stderr[:200]}")
         return False
     
-    print("  ✓ Installed PyTorch with CUDA")
+    print("  [SYMBOL] Installed PyTorch with CUDA")
     
     # Step 3: Verify CUDA availability
     print("\n[3/4] Verifying CUDA...")
@@ -135,12 +135,12 @@ print(f"GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1024**3:
     script_path.unlink(missing_ok=True)
     
     if not success or "ERROR" in stdout:
-        print(f"  ❌ CUDA verification failed!")
+        print(f"  [FAIL] CUDA verification failed!")
         print(f"  {stderr}")
         return False
     
     for line in stdout.strip().split('\n'):
-        print(f"  ✓ {line}")
+        print(f"  [SYMBOL] {line}")
     
     # Step 4: Configure GPU memory limits
     print("\n[4/4] Configuring GPU memory limits...")
@@ -152,7 +152,7 @@ print(f"Memory limit set to {config['gpu_memory_fraction']*100:.0f}% of GPU 0")
 # Test allocation
 try:
     test_tensor = torch.randn(100, 100).cuda()
-    print("✓ GPU memory allocation test successful")
+    print("[SYMBOL] GPU memory allocation test successful")
     del test_tensor
     torch.cuda.empty_cache()
 except Exception as e:
@@ -167,9 +167,9 @@ except Exception as e:
     
     if success:
         for line in stdout.strip().split('\n'):
-            print(f"  ✓ {line}")
+            print(f"  [SYMBOL] {line}")
     else:
-        print(f"  ⚠️  Warning: Memory limit configuration may have issues")
+        print(f"  [WARN]  Warning: Memory limit configuration may have issues")
         print(f"  {stderr}")
     
     return True
@@ -220,7 +220,7 @@ def configure_gpu_memory():
     
     config_path = Path("L:/goodq4all/gpu_config.py")
     config_path.write_text(config_content)
-    print(f"\n✅ Created GPU configuration file: {config_path}")
+    print(f"\n[OK] Created GPU configuration file: {config_path}")
     return config_path
 
 
@@ -245,21 +245,21 @@ def main():
     
     # Check conda
     if not check_conda():
-        print("\n❌ Error: conda not found!")
+        print("\n[FAIL] Error: conda not found!")
         print("Please run this from Anaconda Prompt or ensure conda is in PATH")
         return 1
     
-    print("\n✅ conda found")
+    print("\n[OK] conda found")
     
     # Show what will be configured
-    print(f"\n📋 Will configure {len(GPU_ENVIRONMENTS)} environments for GPU:")
+    print(f"\n[LOG] Will configure {len(GPU_ENVIRONMENTS)} environments for GPU:")
     print(f"\n{'Environment':<30} {'Description':<35} {'GPU Memory'}")
     print("-" * 80)
     for env_name, config in GPU_ENVIRONMENTS.items():
         mem_pct = f"{config['gpu_memory_fraction']*100:.0f}%"
         print(f"{env_name:<30} {config['description']:<35} {mem_pct}")
     
-    print("\n⚠️  This will:")
+    print("\n[WARN]  This will:")
     print("  • Install PyTorch with CUDA 12.x support")
     print("  • Configure GPU memory limits for each environment")
     print("  • Create gpu_config.py for runtime GPU management")
@@ -276,13 +276,13 @@ def main():
         try:
             if setup_pytorch_gpu(env_name, config):
                 success_count += 1
-                print(f"\n✅ {env_name} configured successfully\n")
+                print(f"\n[OK] {env_name} configured successfully\n")
             else:
                 failed_envs.append(env_name)
-                print(f"\n❌ {env_name} configuration failed\n")
+                print(f"\n[FAIL] {env_name} configuration failed\n")
         except Exception as e:
             failed_envs.append(env_name)
-            print(f"\n❌ {env_name} failed with exception: {e}\n")
+            print(f"\n[FAIL] {env_name} failed with exception: {e}\n")
     
     # Create configuration file
     config_path = create_gpu_config_file()
@@ -291,19 +291,19 @@ def main():
     print("\n" + "="*80)
     print("Setup Summary")
     print("="*80)
-    print(f"\n✅ Successful: {success_count}/{len(GPU_ENVIRONMENTS)}")
+    print(f"\n[OK] Successful: {success_count}/{len(GPU_ENVIRONMENTS)}")
     
     if failed_envs:
-        print(f"❌ Failed: {', '.join(failed_envs)}")
-        print("\n⚠️  Some environments failed. The pipeline may still work with CPU fallback.")
+        print(f"[FAIL] Failed: {', '.join(failed_envs)}")
+        print("\n[WARN]  Some environments failed. The pipeline may still work with CPU fallback.")
     else:
-        print("\n🎉 All environments configured successfully!")
+        print("\n[SYMBOL] All environments configured successfully!")
     
-    print("\n📝 Next Steps:")
+    print("\n[NOTE] Next Steps:")
     print("  1. Run: python scripts\\test_gpu_allocation.py")
     print("  2. Check GPU usage during pipeline: nvidia-smi -l 1")
     print(f"  3. GPU config file created: {config_path}")
-    print("\n💡 Each step will automatically use the configured GPU memory limits")
+    print("\n[TIP] Each step will automatically use the configured GPU memory limits")
     
     return 0 if not failed_envs else 1
 
@@ -312,10 +312,10 @@ if __name__ == '__main__':
     try:
         sys.exit(main())
     except KeyboardInterrupt:
-        print("\n\n❌ Setup cancelled by user")
+        print("\n\n[FAIL] Setup cancelled by user")
         sys.exit(1)
     except Exception as e:
-        print(f"\n\n❌ Setup failed: {e}")
+        print(f"\n\n[FAIL] Setup failed: {e}")
         import traceback
         traceback.print_exc()
         sys.exit(1)

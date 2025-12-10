@@ -14,9 +14,9 @@ def test_audio_processing():
     # Check status
     print("1. Checking bridge status...")
     if not bridge.check_status():
-        print("   ❌ Bridge not ready!")
+        print("   [FAIL] Bridge not ready!")
         return False
-    print("   ✅ Bridge ready")
+    print("   [OK] Bridge ready")
     print()
     
     # Process test audio
@@ -26,7 +26,7 @@ def test_audio_processing():
     try:
         result = bridge.process_audio(test_file)
         
-        print("   ✅ Processing successful!")
+        print("   [OK] Processing successful!")
         print()
         print("3. Results:")
         print(f"   - Language: {result['language']}")
@@ -43,13 +43,13 @@ def test_audio_processing():
         
         print()
         print("="*60)
-        print("  ✅ ALL TESTS PASSED!")
+        print("  [OK] ALL TESTS PASSED!")
         print("="*60)
         
         return True
         
     except Exception as e:
-        print(f"   ❌ Processing failed: {e}")
+        print(f"   [FAIL] Processing failed: {e}")
         import traceback
         traceback.print_exc()
         return False

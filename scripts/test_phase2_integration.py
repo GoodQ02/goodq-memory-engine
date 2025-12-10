@@ -46,16 +46,16 @@ def test_llm_connectivity():
     
     try:
         client = LLMClient()
-        logger.info(f"✓ LLMClient initialized with {len(client.models)} models")
+        logger.info(f"[SYMBOL] LLMClient initialized with {len(client.models)} models")
         
         # Test health check
         healthy_models = client.check_health()
-        logger.info(f"✓ Health check complete: {len(healthy_models)} healthy models")
+        logger.info(f"[SYMBOL] Health check complete: {len(healthy_models)} healthy models")
         
         if healthy_models:
             logger.info(f"  Primary model: {healthy_models[0]['name']}")
         else:
-            logger.warning("  ⚠ No healthy models available!")
+            logger.warning("  [SYMBOL] No healthy models available!")
             return False
         
         # Test chat completion
@@ -63,13 +63,13 @@ def test_llm_connectivity():
             {"role": "user", "content": "Say 'Control Agent Test Successful' if you can read this."}
         ], max_tokens=20)
         
-        logger.info(f"✓ Chat completion successful")
+        logger.info(f"[SYMBOL] Chat completion successful")
         logger.info(f"  Response: {response[:100]}...")
         
         return True
         
     except Exception as e:
-        logger.error(f"✗ LLM connectivity test failed: {e}")
+        logger.error(f"[SYMBOL] LLM connectivity test failed: {e}")
         return False
 
 
@@ -81,7 +81,7 @@ def test_control_agent_init():
     
     try:
         agent = ControlAgent()
-        logger.info("✓ Control Agent initialized successfully")
+        logger.info("[SYMBOL] Control Agent initialized successfully")
         logger.info(f"  Logs directory: {agent.logs_dir}")
         logger.info(f"  Recovery DB: {agent.recovery_db.db_path}")
         logger.info(f"  LLM enabled: {agent.llm is not None}")
@@ -89,7 +89,7 @@ def test_control_agent_init():
         return True
         
     except Exception as e:
-        logger.error(f"✗ Control Agent initialization failed: {e}")
+        logger.error(f"[SYMBOL] Control Agent initialization failed: {e}")
         return False
 
 
@@ -116,15 +116,15 @@ Stack trace:
         test_log_path.parent.mkdir(parents=True, exist_ok=True)
         test_log_path.write_text(test_log)
         
-        logger.info("✓ Test log created")
+        logger.info("[SYMBOL] Test log created")
         
         # Analyze with LLM (if available)
         if agent.llm:
             diagnosis = agent.analyze_error(test_log)
-            logger.info("✓ Error analysis completed")
+            logger.info("[SYMBOL] Error analysis completed")
             logger.info(f"  Diagnosis: {diagnosis[:200]}...")
         else:
-            logger.info("  ⚠ LLM not available, skipping AI analysis")
+            logger.info("  [SYMBOL] LLM not available, skipping AI analysis")
         
         # Clean up
         test_log_path.unlink(missing_ok=True)
@@ -132,7 +132,7 @@ Stack trace:
         return True
         
     except Exception as e:
-        logger.error(f"✗ Log analysis test failed: {e}")
+        logger.error(f"[SYMBOL] Log analysis test failed: {e}")
         return False
 
 
@@ -154,16 +154,16 @@ def test_recovery_database():
             metadata={"vram_before": "15.5GB", "vram_after": "12.2GB"}
         )
         
-        logger.info("✓ Recovery recorded in database")
+        logger.info("[SYMBOL] Recovery recorded in database")
         
         # Query similar errors
         similar = agent.recovery_db.get_similar_errors("CUDA_OOM")
-        logger.info(f"✓ Query successful: found {len(similar)} similar errors")
+        logger.info(f"[SYMBOL] Query successful: found {len(similar)} similar errors")
         
         return True
         
     except Exception as e:
-        logger.error(f"✗ Recovery database test failed: {e}")
+        logger.error(f"[SYMBOL] Recovery database test failed: {e}")
         return False
 
 
@@ -178,23 +178,23 @@ def test_monitoring():
         
         # Start monitoring
         agent.start_monitoring()
-        logger.info("✓ Monitoring started")
+        logger.info("[SYMBOL] Monitoring started")
         
         # Simulate some activity
         time.sleep(2)
         
         # Stop monitoring
         agent.stop_monitoring()
-        logger.info("✓ Monitoring stopped")
+        logger.info("[SYMBOL] Monitoring stopped")
         
         # Check stats
         stats = agent.get_stats()
-        logger.info(f"✓ Stats collected: {len(stats)} metrics")
+        logger.info(f"[SYMBOL] Stats collected: {len(stats)} metrics")
         
         return True
         
     except Exception as e:
-        logger.error(f"✗ Monitoring test failed: {e}")
+        logger.error(f"[SYMBOL] Monitoring test failed: {e}")
         return False
 
 
@@ -211,20 +211,20 @@ def test_report_generation():
         report_path = Path("logs/test_control_report.md")
         agent.generate_report(str(report_path))
         
-        logger.info(f"✓ Report generated: {report_path}")
+        logger.info(f"[SYMBOL] Report generated: {report_path}")
         logger.info(f"  Size: {report_path.stat().st_size} bytes")
         
         # Verify content
         content = report_path.read_text()
         if "Control Agent Report" in content:
-            logger.info("✓ Report contains expected header")
+            logger.info("[SYMBOL] Report contains expected header")
         else:
-            logger.warning("  ⚠ Report format unexpected")
+            logger.warning("  [SYMBOL] Report format unexpected")
         
         return True
         
     except Exception as e:
-        logger.error(f"✗ Report generation test failed: {e}")
+        logger.error(f"[SYMBOL] Report generation test failed: {e}")
         return False
 
 
@@ -239,11 +239,11 @@ def test_pipeline_integration():
         from cli.run_ingestion import CONTROL_AGENT_AVAILABLE
         
         if not CONTROL_AGENT_AVAILABLE:
-            logger.error("✗ Control Agent not available in pipeline")
+            logger.error("[SYMBOL] Control Agent not available in pipeline")
             return False
         
-        logger.info("✓ Control Agent available in pipeline")
-        logger.info("✓ Integration hooks in place")
+        logger.info("[SYMBOL] Control Agent available in pipeline")
+        logger.info("[SYMBOL] Integration hooks in place")
         
         # Test would require actual ingestion run
         logger.info("  Note: Full integration test requires running actual ingestion")
@@ -251,14 +251,14 @@ def test_pipeline_integration():
         return True
         
     except Exception as e:
-        logger.error(f"✗ Pipeline integration test failed: {e}")
+        logger.error(f"[SYMBOL] Pipeline integration test failed: {e}")
         return False
 
 
 def run_all_tests():
     """Run all Phase 2 tests"""
     logger.info("\n" + "="*80)
-    logger.info("🚀 PHASE 2 CONTROL AGENT INTEGRATION TEST SUITE")
+    logger.info("[LAUNCH] PHASE 2 CONTROL AGENT INTEGRATION TEST SUITE")
     logger.info("="*80)
     logger.info(f"Started at: {datetime.now().isoformat()}")
     logger.info("")
@@ -284,14 +284,14 @@ def run_all_tests():
     
     # Summary
     logger.info("\n" + "="*80)
-    logger.info("📊 TEST SUMMARY")
+    logger.info("[STATS] TEST SUMMARY")
     logger.info("="*80)
     
     passed = sum(1 for _, success in results if success)
     total = len(results)
     
     for name, success in results:
-        status = "✓ PASS" if success else "✗ FAIL"
+        status = "[SYMBOL] PASS" if success else "[SYMBOL] FAIL"
         logger.info(f"  {status}: {name}")
     
     logger.info("")

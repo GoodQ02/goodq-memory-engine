@@ -25,9 +25,9 @@ kg_backup_path = kg_path.parent / f"knowledge_graph_backup_{timestamp}.db"
 
 print(f"[1/6] Creating backups...")
 shutil.copy2(db_path, backup_path)
-print(f"      ✓ memory.db → {backup_path.name}")
+print(f"      [SYMBOL] memory.db → {backup_path.name}")
 shutil.copy2(kg_path, kg_backup_path)
-print(f"      ✓ knowledge_graph.db → {kg_backup_path.name}")
+print(f"      [SYMBOL] knowledge_graph.db → {kg_backup_path.name}")
 print()
 
 # Clear processing directories
@@ -36,10 +36,10 @@ if processing_dir.exists():
     for item in processing_dir.iterdir():
         if item.is_dir():
             shutil.rmtree(item)
-            print(f"      ✓ Removed {item.name}")
+            print(f"      [SYMBOL] Removed {item.name}")
         elif item.is_file():
             item.unlink()
-            print(f"      ✓ Removed {item.name}")
+            print(f"      [SYMBOL] Removed {item.name}")
 print()
 
 # Get current data stats
@@ -66,10 +66,10 @@ deleted_segments = cursor.rowcount
 cursor.execute("DELETE FROM links")
 deleted_links = cursor.rowcount
 conn.commit()
-print(f"      ✓ Deleted {deleted_scenes} scenes")
-print(f"      ✓ Deleted {deleted_embeddings} embeddings")
-print(f"      ✓ Deleted {deleted_segments} segments")
-print(f"      ✓ Deleted {deleted_links} links")
+print(f"      [SYMBOL] Deleted {deleted_scenes} scenes")
+print(f"      [SYMBOL] Deleted {deleted_embeddings} embeddings")
+print(f"      [SYMBOL] Deleted {deleted_segments} segments")
+print(f"      [SYMBOL] Deleted {deleted_links} links")
 conn.close()
 print()
 
@@ -85,7 +85,7 @@ cursor_kg.execute("DELETE FROM temporal_events")
 cursor_kg.execute("DELETE FROM event_nodes")
 conn_kg.commit()
 conn_kg.close()
-print(f"      ✓ Knowledge graph cleared")
+print(f"      [SYMBOL] Knowledge graph cleared")
 print()
 
 # Move videos back to import_inbox if needed
@@ -94,7 +94,7 @@ import_inbox = Path("L:/goodq4all/import_inbox")
 video_file = import_inbox / "1987_1988.mp4"
 
 if video_file.exists():
-    print(f"      ✓ Video ready: {video_file.name} ({video_file.stat().st_size / 1e9:.2f} GB)")
+    print(f"      [SYMBOL] Video ready: {video_file.name} ({video_file.stat().st_size / 1e9:.2f} GB)")
 else:
     # Check if it's in processed or failed
     processed_video = processed_dir / "PROCESSED_1987_1988.mp4"
@@ -102,12 +102,12 @@ else:
     
     if processed_video.exists():
         shutil.move(str(processed_video), str(video_file))
-        print(f"      ✓ Moved from processed: {video_file.name}")
+        print(f"      [SYMBOL] Moved from processed: {video_file.name}")
     elif failed_video.exists():
         shutil.move(str(failed_video), str(video_file))
-        print(f"      ✓ Moved from failed: {video_file.name}")
+        print(f"      [SYMBOL] Moved from failed: {video_file.name}")
     else:
-        print(f"      ⚠️  WARNING: Could not find 1987_1988.mp4")
+        print(f"      [WARN]  WARNING: Could not find 1987_1988.mp4")
 
 print()
 print("=" * 80)

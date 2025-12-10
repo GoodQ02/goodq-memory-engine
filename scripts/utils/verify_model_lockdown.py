@@ -184,11 +184,11 @@ def print_results(results: List[Dict[str, Any]], title: str) -> Dict[str, int]:
         
         # Color code by status
         if status == 'ok':
-            icon = f"{Colors.GREEN}✓{Colors.RESET}"
+            icon = f"{Colors.GREEN}[SYMBOL]{Colors.RESET}"
         elif status == 'warning':
-            icon = f"{Colors.YELLOW}⚠{Colors.RESET}"
+            icon = f"{Colors.YELLOW}[SYMBOL]{Colors.RESET}"
         else:
-            icon = f"{Colors.RED}✗{Colors.RESET}"
+            icon = f"{Colors.RED}[SYMBOL]{Colors.RESET}"
         
         print(f"{icon} {result.get('key', result.get('name', 'unknown'))}")
         
@@ -213,16 +213,16 @@ def main() -> None:
     registry_check = check_registry_file()
     
     if not registry_check['exists']:
-        print(f"{Colors.RED}✗ Model registry not found!{Colors.RESET}")
+        print(f"{Colors.RED}[SYMBOL] Model registry not found!{Colors.RESET}")
         print(f"  Expected: {registry_check['path']}")
         sys.exit(1)
     
     if not registry_check['valid']:
-        print(f"{Colors.RED}✗ Model registry is invalid!{Colors.RESET}")
+        print(f"{Colors.RED}[SYMBOL] Model registry is invalid!{Colors.RESET}")
         print(f"  Error: {registry_check.get('error')}")
         sys.exit(1)
     
-    print(f"{Colors.GREEN}✓ Model registry found{Colors.RESET}")
+    print(f"{Colors.GREEN}[SYMBOL] Model registry found{Colors.RESET}")
     print(f"  Path: {registry_check['path']}")
     print(f"  HuggingFace models: {registry_check['models_count']}")
     print(f"  External models: {registry_check.get('external_count', 0)}")
@@ -259,9 +259,9 @@ def main() -> None:
     
     # Print summary
     print(f"\n{Colors.BOLD}{'Summary':-^80}{Colors.RESET}")
-    print(f"  {Colors.GREEN}✓ OK:       {all_counts['ok']}{Colors.RESET}")
-    print(f"  {Colors.YELLOW}⚠ Warning:  {all_counts['warning']}{Colors.RESET}")
-    print(f"  {Colors.RED}✗ Error:    {all_counts['error']}{Colors.RESET}")
+    print(f"  {Colors.GREEN}[SYMBOL] OK:       {all_counts['ok']}{Colors.RESET}")
+    print(f"  {Colors.YELLOW}[SYMBOL] Warning:  {all_counts['warning']}{Colors.RESET}")
+    print(f"  {Colors.RED}[SYMBOL] Error:    {all_counts['error']}{Colors.RESET}")
     
     # Check update policy
     update_policy = registry.get('update_policy', {})
@@ -279,7 +279,7 @@ def main() -> None:
         print(f"{Colors.YELLOW}Lockdown verification PASSED with {all_counts['warning']} warning(s){Colors.RESET}")
         sys.exit(0)
     else:
-        print(f"{Colors.GREEN}✓ Lockdown verification PASSED - All models properly pinned!{Colors.RESET}")
+        print(f"{Colors.GREEN}[SYMBOL] Lockdown verification PASSED - All models properly pinned!{Colors.RESET}")
         sys.exit(0)
 
 

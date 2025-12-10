@@ -54,7 +54,7 @@ def run_in_conda_env(env_name, command):
         )
         
         if result.returncode != 0:
-            print(f"  ❌ Command failed:")
+            print(f"  [FAIL] Command failed:")
             if result.stderr:
                 print(f"  {result.stderr}")
             if result.stdout:
@@ -64,20 +64,20 @@ def run_in_conda_env(env_name, command):
         if result.stdout:
             # Show important output
             for line in result.stdout.split('\n'):
-                if '✓' in line or 'CUDA' in line or 'Successfully' in line:
+                if '[SYMBOL]' in line or 'CUDA' in line or 'Successfully' in line:
                     print(f"  {line}")
         
-        print(f"  ✓ Success")
+        print(f"  [SYMBOL] Success")
         return True
         
     except subprocess.TimeoutExpired:
-        print(f"  ❌ Command timed out (>10 minutes)")
+        print(f"  [FAIL] Command timed out (>10 minutes)")
         return False
     except FileNotFoundError:
-        print(f"  ❌ Error: conda not found. Make sure conda is in your PATH")
+        print(f"  [FAIL] Error: conda not found. Make sure conda is in your PATH")
         return False
     except Exception as e:
-        print(f"  ❌ Error: {e}")
+        print(f"  [FAIL] Error: {e}")
         return False
 
 
@@ -117,7 +117,7 @@ def setup_environment(env_name, config):
     verify_cmd = 'python -c "import torch; print(f\'CUDA Available: {torch.cuda.is_available()}\'); print(f\'CUDA Version: {torch.version.cuda}\'); print(f\'Device: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else \\\'N/A\\\'}\')"'
     
     if not run_in_conda_env(env_name, verify_cmd):
-        print("  ⚠️  Warning: CUDA verification failed, but installation may have succeeded")
+        print("  [WARN]  Warning: CUDA verification failed, but installation may have succeeded")
         return True  # Don't fail on verification - sometimes it's just the command syntax
     
     return True
@@ -144,18 +144,18 @@ def main():
     
     # Check conda
     if not check_conda_available():
-        print("\n❌ Error: conda not found!")
+        print("\n[FAIL] Error: conda not found!")
         print("Please ensure conda is installed and in your PATH")
         print("Try running this from Anaconda Prompt or Miniconda Prompt")
         return 1
     
-    print("\n✓ conda found")
+    print("\n[SYMBOL] conda found")
     print(f"\nThis will install PyTorch with CUDA 12.x support in {len(GPU_ENVIRONMENTS)} environments")
     print("\nEnvironments to update:")
     for env in GPU_ENVIRONMENTS.keys():
         print(f"  - {env}")
     
-    print("\n⚠️  This may take 15-20 minutes depending on internet speed...")
+    print("\n[WARN]  This may take 15-20 minutes depending on internet speed...")
     print("="*80)
     
     response = input("\nPress ENTER to continue or CTRL+C to cancel...")
@@ -166,10 +166,10 @@ def main():
     for env_name, config in GPU_ENVIRONMENTS.items():
         if setup_environment(env_name, config):
             success_count += 1
-            print(f"\n✅ {env_name} configured successfully")
+            print(f"\n[OK] {env_name} configured successfully")
         else:
             failed_envs.append(env_name)
-            print(f"\n❌ {env_name} configuration failed")
+            print(f"\n[FAIL] {env_name} configuration failed")
     
     # Summary
     print("\n" + "="*80)
@@ -179,16 +179,16 @@ def main():
     
     if failed_envs:
         print(f"Failed: {', '.join(failed_envs)}")
-        print("\n⚠️  Some environments failed. You can:")
+        print("\n[WARN]  Some environments failed. You can:")
         print("  1. Try running the failed environments manually")
         print("  2. Check your internet connection")
         print("  3. Verify conda environments exist")
         return 1
     else:
-        print("\n✅ All environments configured successfully!")
-        print("\n🚀 GPU acceleration is now enabled for:")
+        print("\n[OK] All environments configured successfully!")
+        print("\n[LAUNCH] GPU acceleration is now enabled for:")
         for env in GPU_ENVIRONMENTS.keys():
-            print(f"  ✓ {env}")
+            print(f"  [SYMBOL] {env}")
         print("\nNext steps:")
         print("  1. Run: python scripts\\check_gpu_status.py")
         print("  2. Test the pipeline with a video file")
@@ -200,10 +200,10 @@ if __name__ == '__main__':
     try:
         sys.exit(main())
     except KeyboardInterrupt:
-        print("\n\n❌ Setup cancelled by user")
+        print("\n\n[FAIL] Setup cancelled by user")
         sys.exit(1)
     except Exception as e:
-        print(f"\n\n❌ Setup failed: {e}")
+        print(f"\n\n[FAIL] Setup failed: {e}")
         import traceback
         traceback.print_exc()
         sys.exit(1)

@@ -68,7 +68,7 @@ def fix_step_gpu_imports():
     print()
     
     if total_allocation > 1.0:
-        print(f"⚠️  WARNING: Total allocation exceeds 100%!")
+        print(f"[WARN]  WARNING: Total allocation exceeds 100%!")
         print(f"   This is OK since steps run sequentially, not concurrently")
         print()
     
@@ -208,7 +208,7 @@ def update_step_gpu_config(step_name, memory_fraction):
     step_path = Path(f"L:/goodq4all/steps/{step_name}/step.py")
     
     if not step_path.exists():
-        print(f"  ⚠️  Step not found: {step_path}")
+        print(f"  [WARN]  Step not found: {step_path}")
         return False
     
     # Read current content
@@ -216,7 +216,7 @@ def update_step_gpu_config(step_name, memory_fraction):
     
     # Check if already has GPU config
     if "from goodq4all.steps.common.gpu_config import" in content:
-        print(f"  ✓ {step_name} already has GPU config")
+        print(f"  [SYMBOL] {step_name} already has GPU config")
         return True
     
     # Add GPU config import at top
@@ -241,7 +241,7 @@ from goodq4all.steps.common.gpu_config import configure_gpu, get_device, clear_c
     # Write back
     step_path.write_text('\n'.join(lines), encoding='utf-8')
     
-    print(f"  ✓ Updated {step_name} with GPU config")
+    print(f"  [SYMBOL] Updated {step_name} with GPU config")
     return True
 
 def create_test_script():
@@ -279,7 +279,7 @@ def test_gpu_pipeline():
         print("\\n2. Testing audio diarization allocation...")
         config = configure_gpu("audio_diarize", force_fraction=0.30)
         if config.get("available"):
-            print(f"   ✓ Allocated {config['allocated_gb']:.2f} GB for diarization")
+            print(f"   [SYMBOL] Allocated {config['allocated_gb']:.2f} GB for diarization")
             print_memory_stats()
         
         print("\\n3. Clearing cache...")
@@ -288,7 +288,7 @@ def test_gpu_pipeline():
         print("\\n4. Testing transcription allocation...")
         config = configure_gpu("audio_transcribe", force_fraction=0.25)
         if config.get("available"):
-            print(f"   ✓ Allocated {config['allocated_gb']:.2f} GB for transcription")
+            print(f"   [SYMBOL] Allocated {config['allocated_gb']:.2f} GB for transcription")
         
         print("\\n5. Final memory check...")
         stats = guard.check_memory()
@@ -297,13 +297,13 @@ def test_gpu_pipeline():
             print(f"   Used: {stats['reserved_pct']*100:.1f}%")
         
         print("\\n" + "="*80)
-        print("✓ GPU allocation test complete!")
+        print("[SYMBOL] GPU allocation test complete!")
         print("="*80)
         
         return True
         
     except Exception as e:
-        print(f"\\n✗ Test failed: {e}")
+        print(f"\\n[SYMBOL] Test failed: {e}")
         import traceback
         traceback.print_exc()
         return False
@@ -354,7 +354,7 @@ def main():
     create_test_script()
     
     print("\n" + "="*80)
-    print("✓ GPU Allocation Fix Complete!")
+    print("[SYMBOL] GPU Allocation Fix Complete!")
     print("="*80)
     print()
     print("Next Steps:")

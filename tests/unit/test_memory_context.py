@@ -112,7 +112,7 @@ def main():
     # Check enrichment
     stats = check_memory_enrichment(video_hash, cfg)
     
-    print(f"\n📊 Enrichment Statistics:")
+    print(f"\n[STATS] Enrichment Statistics:")
     print(f"   Total Scenes: {stats['total_scenes']}")
     print(f"   With Caption: {stats['with_caption']} ({stats['with_caption']/max(stats['total_scenes'],1)*100:.1f}%)")
     print(f"   With Objects: {stats['with_objects']} ({stats['with_objects']/max(stats['total_scenes'],1)*100:.1f}%)")
@@ -123,7 +123,7 @@ def main():
     print(f"   With Tags: {stats['with_tags']} ({stats['with_tags']/max(stats['total_scenes'],1)*100:.1f}%)")
     print(f"   With Entities: {stats['with_entities']} ({stats['with_entities']/max(stats['total_scenes'],1)*100:.1f}%)")
     
-    print(f"\n📝 Scene Details:")
+    print(f"\n[NOTE] Scene Details:")
     for detail in stats['scenes_detail'][:5]:  # Show first 5
         print(f"\n   Scene {detail['scene_id']} ({detail['start']:.1f}s - {detail['end']:.1f}s):")
         enrichments = []
@@ -147,7 +147,7 @@ def main():
         if enrichments:
             print(f"      Enriched with: {', '.join(enrichments)}")
         else:
-            print(f"      ⚠️  No enrichment data")
+            print(f"      [WARN]  No enrichment data")
     
     if stats['total_scenes'] > 5:
         print(f"\n   ... and {stats['total_scenes'] - 5} more scenes")
@@ -160,7 +160,7 @@ def main():
     ]))
     
     if enriched_count == 0:
-        print("❌ FAILED: No scenes have enriched context")
+        print("[FAIL] FAILED: No scenes have enriched context")
         print("\nThis indicates the memory context writer is not being called.")
         print("Check that:")
         print("  1. Steps are running successfully")
@@ -168,14 +168,14 @@ def main():
         print("  3. Memory database is writable")
         return 1
     elif enriched_count < stats['total_scenes']:
-        print(f"⚠️  PARTIAL: {enriched_count}/{stats['total_scenes']} scenes have enrichment")
+        print(f"[WARN]  PARTIAL: {enriched_count}/{stats['total_scenes']} scenes have enrichment")
         print("\nSome scenes are missing context. This may be normal if:")
         print("  - Processing is still ongoing")
         print("  - Some steps failed or were skipped")
         print("  - Not all modalities are present (e.g., no audio)")
         return 0
     else:
-        print(f"✅ SUCCESS: All {stats['total_scenes']} scenes have enriched context!")
+        print(f"[OK] SUCCESS: All {stats['total_scenes']} scenes have enriched context!")
         return 0
 
 

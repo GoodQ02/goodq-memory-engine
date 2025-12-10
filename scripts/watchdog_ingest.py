@@ -41,24 +41,24 @@ console_handler.setFormatter(logging.Formatter('%(asctime)s [%(levelname)s] %(me
 class ASCIIFilter(logging.Filter):
     # Map emojis to ASCII equivalents for Windows console
     EMOJI_MAP = {
-        '📋': '[CLIPBOARD]',
-        '⏱️': '[TIMER]',
-        '🎬': '[VIDEO]',
-        '✓': '[OK]',
-        '✅': '[SUCCESS]',
-        '❌': '[ERROR]',
-        '⚠️': '[WARN]',
-        '📊': '[STATS]',
-        '🎯': '[TARGET]',
-        '💾': '[SAVE]',
-        '🔍': '[SEARCH]',
-        '📁': '[FOLDER]',
-        '🎥': '[CAMERA]',
-        '🎤': '[MIC]',
-        '🎵': '[MUSIC]',
-        '🖼️': '[IMAGE]',
-        '📄': '[DOC]',
-        '🔊': '[AUDIO]',
+        '[LOG]': '[CLIPBOARD]',
+        '[TIMER]': '[TIMER]',
+        '[SCENE]': '[VIDEO]',
+        '[SYMBOL]': '[OK]',
+        '[OK]': '[SUCCESS]',
+        '[FAIL]': '[ERROR]',
+        '[WARN]': '[WARN]',
+        '[STATS]': '[STATS]',
+        '[TARGET]': '[TARGET]',
+        '[SAVE]': '[SAVE]',
+        '[SEARCH]': '[SEARCH]',
+        '[DIR]': '[FOLDER]',
+        '[SYMBOL]': '[CAMERA]',
+        '[SYMBOL]': '[MIC]',
+        '[AUDIO]': '[MUSIC]',
+        '[IMAGE]': '[IMAGE]',
+        '[SYMBOL]': '[DOC]',
+        '[SYMBOL]': '[AUDIO]',
     }
     
     def filter(self, record):
@@ -214,7 +214,7 @@ class WatchdogProcessor:
         if CONTROL_AGENT_AVAILABLE:
             try:
                 self.control_agent = ControlAgent()
-                logger.info("🤖 Control Agent initialized - AI orchestration enabled")
+                logger.info("[BOT] Control Agent initialized - AI orchestration enabled")
             except Exception as e:
                 logger.warning(f"Failed to initialize Control Agent: {e}")
         
@@ -381,7 +381,7 @@ class WatchdogProcessor:
                     error=str(e),
                     context={'step': 'file_copy', 'file': file_path.name}
                 )
-                logger.info(f"🤖 AI Diagnosis: {diagnosis.get('diagnosis', 'No diagnosis available')}")
+                logger.info(f"[BOT] AI Diagnosis: {diagnosis.get('diagnosis', 'No diagnosis available')}")
             
             return False
         
@@ -415,11 +415,11 @@ class WatchdogProcessor:
                     error=str(e),
                     context={'step': 'ingestion', 'file': file_path.name, 'file_type': file_type}
                 )
-                logger.info(f"🤖 AI Diagnosis: {diagnosis.get('diagnosis', 'Processing error')}")
+                logger.info(f"[BOT] AI Diagnosis: {diagnosis.get('diagnosis', 'Processing error')}")
                 
                 # Check if Control Agent recommends a retry strategy
                 if diagnosis.get('recommended_action') == 'retry_with_changes':
-                    logger.info(f"🤖 AI Recommendation: {diagnosis.get('changes', 'No specific changes suggested')}")
+                    logger.info(f"[BOT] AI Recommendation: {diagnosis.get('changes', 'No specific changes suggested')}")
         
         # Handle result
         if success:
@@ -488,9 +488,9 @@ class WatchdogProcessor:
             if temp_video.exists():
                 logger.debug(f"Temp video already exists, removing: {temp_video}")
                 temp_video.unlink()
-            logger.info(f"📋 Copying asset to processing area: {video_path.name}")
+            logger.info(f"[LOG] Copying asset to processing area: {video_path.name}")
             shutil.copy2(video_path, temp_video)
-            logger.debug(f"✓ Copy complete: {temp_video}")
+            logger.debug(f"[SYMBOL] Copy complete: {temp_video}")
         except Exception as e:
             logger.error(f"Failed to copy video to temp dir: {e}")
             return False
@@ -515,8 +515,8 @@ class WatchdogProcessor:
         # Dynamic timeout based on file size (3 hours per GB, min 8 hours for thorough processing)
         file_size_gb = video_path.stat().st_size / (1024**3)
         timeout_seconds = max(28800, int(file_size_gb * 10800))  # At least 8 hours, +3hrs per GB
-        logger.info(f"⏱️  Mission timeout: {timeout_seconds}s ({timeout_seconds/3600:.1f}h) for {file_size_gb:.2f}GB asset")
-        logger.info(f"🎬 Asset: {video_path.name}")
+        logger.info(f"[TIMER]  Mission timeout: {timeout_seconds}s ({timeout_seconds/3600:.1f}h) for {file_size_gb:.2f}GB asset")
+        logger.info(f"[SCENE] Asset: {video_path.name}")
         
         logger.debug(f"Running: {' '.join(cmd)}")
         
@@ -532,7 +532,7 @@ class WatchdogProcessor:
             )
             
             if result.returncode == 0:
-                logger.info("✅ Mission complete: Video ingestion successful")
+                logger.info("[OK] Mission complete: Video ingestion successful")
                 # Clean up temp directory ONLY on success
                 try:
                     logger.debug(f"Cleaning up temp files: {temp_input}")
@@ -542,12 +542,12 @@ class WatchdogProcessor:
                         if f.is_file():
                             f.unlink()
                     temp_input.rmdir()
-                    logger.debug("✓ Cleanup complete")
+                    logger.debug("[SYMBOL] Cleanup complete")
                 except Exception as e:
                     logger.warning(f"Failed to clean up temp directory: {e}")
                 return True
             else:
-                logger.error(f"❌ Mission failed: Video ingestion returned code {result.returncode}")
+                logger.error(f"[FAIL] Mission failed: Video ingestion returned code {result.returncode}")
                 if result.stdout:
                     logger.error(f"STDOUT: {result.stdout}")
                 if result.stderr:
@@ -557,12 +557,12 @@ class WatchdogProcessor:
                 return False
                 
         except subprocess.TimeoutExpired:
-            logger.error(f"⏱️  Mission timeout: Video ingestion exceeded {timeout_seconds}s")
+            logger.error(f"[TIMER]  Mission timeout: Video ingestion exceeded {timeout_seconds}s")
             # Keep temp files for debugging on timeout
             logger.warning(f"Temp files preserved for debugging: {temp_input}")
             return False
         except Exception as e:
-            logger.error(f"❌ Mission error: {e}", exc_info=True)
+            logger.error(f"[FAIL] Mission error: {e}", exc_info=True)
             # Keep temp files for debugging on error
             logger.warning(f"Temp files preserved for debugging: {temp_input}")
             return False
@@ -581,17 +581,17 @@ class WatchdogProcessor:
             if temp_audio.exists():
                 logger.debug(f"Temp audio already exists, removing: {temp_audio}")
                 temp_audio.unlink()
-            logger.info(f"📋 Copying asset to processing area: {audio_path.name}")
+            logger.info(f"[LOG] Copying asset to processing area: {audio_path.name}")
             shutil.copy2(audio_path, temp_audio)
-            logger.debug(f"✓ Copy complete: {temp_audio}")
+            logger.debug(f"[SYMBOL] Copy complete: {temp_audio}")
         except Exception as e:
             logger.error(f"Failed to copy audio to temp dir: {e}")
             return False
 
         file_size_gb = audio_path.stat().st_size / (1024**3)
         timeout_seconds = max(28800, int(file_size_gb * 10800))
-        logger.info(f"⏱️  Mission timeout: {timeout_seconds}s ({timeout_seconds/3600:.1f}h) for {file_size_gb:.2f}GB asset")
-        logger.info(f"🔊 Asset: {audio_path.name}")
+        logger.info(f"[TIMER]  Mission timeout: {timeout_seconds}s ({timeout_seconds/3600:.1f}h) for {file_size_gb:.2f}GB asset")
+        logger.info(f"[SYMBOL] Asset: {audio_path.name}")
         start_time = time.time()
 
         # Per-step timeout for conda runner (10 minutes)
@@ -606,7 +606,7 @@ class WatchdogProcessor:
 
         def _check_timeout() -> bool:
             if time.time() - start_time > timeout_seconds:
-                logger.error(f"⏱️  Mission timeout: Audio ingestion exceeded {timeout_seconds}s")
+                logger.error(f"[TIMER]  Mission timeout: Audio ingestion exceeded {timeout_seconds}s")
                 return False
             return True
 
@@ -637,10 +637,10 @@ class WatchdogProcessor:
             if success:
                 canonicalize_taxonomy(item)
         except StepExecutionError as e:
-            logger.error(f"❌ Mission failed during audio pipeline: {e}")
+            logger.error(f"[FAIL] Mission failed during audio pipeline: {e}")
             success = False
         except Exception as e:
-            logger.error(f"❌ Mission error during audio pipeline: {e}", exc_info=True)
+            logger.error(f"[FAIL] Mission error during audio pipeline: {e}", exc_info=True)
             success = False
         finally:
             if success:
@@ -651,7 +651,7 @@ class WatchdogProcessor:
                         if f.is_file():
                             f.unlink()
                     temp_input.rmdir()
-                    logger.debug("✓ Cleanup complete")
+                    logger.debug("[SYMBOL] Cleanup complete")
                 except Exception as e:
                     logger.warning(f"Failed to clean up temp directory: {e}")
             else:
@@ -673,17 +673,17 @@ class WatchdogProcessor:
             if temp_image.exists():
                 logger.debug(f"Temp image already exists, removing: {temp_image}")
                 temp_image.unlink()
-            logger.info(f"📋 Copying asset to processing area: {image_path.name}")
+            logger.info(f"[LOG] Copying asset to processing area: {image_path.name}")
             shutil.copy2(image_path, temp_image)
-            logger.debug(f"✓ Copy complete: {temp_image}")
+            logger.debug(f"[SYMBOL] Copy complete: {temp_image}")
         except Exception as e:
             logger.error(f"Failed to copy image to temp dir: {e}")
             return False
 
         file_size_gb = image_path.stat().st_size / (1024**3)
         timeout_seconds = max(28800, int(file_size_gb * 10800))
-        logger.info(f"⏱️  Mission timeout: {timeout_seconds}s ({timeout_seconds/3600:.1f}h) for {file_size_gb:.2f}GB asset")
-        logger.info(f"🖼️ Asset: {image_path.name}")
+        logger.info(f"[TIMER]  Mission timeout: {timeout_seconds}s ({timeout_seconds/3600:.1f}h) for {file_size_gb:.2f}GB asset")
+        logger.info(f"[IMAGE] Asset: {image_path.name}")
         start_time = time.time()
 
         os.environ["GOODQ_STEP_TIMEOUT_MS"] = str(600_000)
@@ -697,7 +697,7 @@ class WatchdogProcessor:
 
         def _check_timeout() -> bool:
             if time.time() - start_time > timeout_seconds:
-                logger.error(f"⏱️  Mission timeout: Image ingestion exceeded {timeout_seconds}s")
+                logger.error(f"[TIMER]  Mission timeout: Image ingestion exceeded {timeout_seconds}s")
                 return False
             return True
 
@@ -729,10 +729,10 @@ class WatchdogProcessor:
             if success:
                 canonicalize_taxonomy(item)
         except StepExecutionError as e:
-            logger.error(f"❌ Mission failed during image pipeline: {e}")
+            logger.error(f"[FAIL] Mission failed during image pipeline: {e}")
             success = False
         except Exception as e:
-            logger.error(f"❌ Mission error during image pipeline: {e}", exc_info=True)
+            logger.error(f"[FAIL] Mission error during image pipeline: {e}", exc_info=True)
             success = False
         finally:
             if success:
@@ -743,7 +743,7 @@ class WatchdogProcessor:
                         if f.is_file():
                             f.unlink()
                     temp_input.rmdir()
-                    logger.debug("✓ Cleanup complete")
+                    logger.debug("[SYMBOL] Cleanup complete")
                 except Exception as e:
                     logger.warning(f"Failed to clean up temp directory: {e}")
             else:
@@ -770,17 +770,17 @@ class WatchdogProcessor:
             if temp_doc.exists():
                 logger.debug(f"Temp document already exists, removing: {temp_doc}")
                 temp_doc.unlink()
-            logger.info(f"📋 Copying asset to processing area: {doc_path.name}")
+            logger.info(f"[LOG] Copying asset to processing area: {doc_path.name}")
             shutil.copy2(doc_path, temp_doc)
-            logger.debug(f"✓ Copy complete: {temp_doc}")
+            logger.debug(f"[SYMBOL] Copy complete: {temp_doc}")
         except Exception as e:
             logger.error(f"Failed to copy document to temp dir: {e}")
             return False
 
         file_size_gb = doc_path.stat().st_size / (1024**3)
         timeout_seconds = max(28800, int(file_size_gb * 10800))
-        logger.info(f"⏱️  Mission timeout: {timeout_seconds}s ({timeout_seconds/3600:.1f}h) for {file_size_gb:.2f}GB asset")
-        logger.info(f"📄 Asset: {doc_path.name}")
+        logger.info(f"[TIMER]  Mission timeout: {timeout_seconds}s ({timeout_seconds/3600:.1f}h) for {file_size_gb:.2f}GB asset")
+        logger.info(f"[SYMBOL] Asset: {doc_path.name}")
         start_time = time.time()
 
         os.environ["GOODQ_STEP_TIMEOUT_MS"] = str(600_000)
@@ -795,7 +795,7 @@ class WatchdogProcessor:
 
         def _check_timeout() -> bool:
             if time.time() - start_time > timeout_seconds:
-                logger.error(f"⏱️  Mission timeout: Document ingestion exceeded {timeout_seconds}s")
+                logger.error(f"[TIMER]  Mission timeout: Document ingestion exceeded {timeout_seconds}s")
                 return False
             return True
 
@@ -838,10 +838,10 @@ class WatchdogProcessor:
             if success:
                 canonicalize_taxonomy(item)
         except StepExecutionError as e:
-            logger.error(f"❌ Mission failed during document pipeline: {e}")
+            logger.error(f"[FAIL] Mission failed during document pipeline: {e}")
             success = False
         except Exception as e:
-            logger.error(f"❌ Mission error during document pipeline: {e}", exc_info=True)
+            logger.error(f"[FAIL] Mission error during document pipeline: {e}", exc_info=True)
             success = False
         finally:
             if success:
@@ -852,7 +852,7 @@ class WatchdogProcessor:
                         if f.is_file():
                             f.unlink()
                     temp_input.rmdir()
-                    logger.debug("✓ Cleanup complete")
+                    logger.debug("[SYMBOL] Cleanup complete")
                 except Exception as e:
                     logger.warning(f"Failed to clean up temp directory: {e}")
             else:

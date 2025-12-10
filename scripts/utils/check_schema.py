@@ -12,7 +12,7 @@ tables = c.fetchall()
 for table in tables:
     table_name = table[0]
     if table_name != 'sqlite_sequence':
-        print(f'\n📋 Table: {table_name}')
+        print(f'\n[LOG] Table: {table_name}')
         c.execute(f'PRAGMA table_info({table_name})')
         columns = c.fetchall()
         for col in columns:
@@ -27,6 +27,6 @@ for table in tables:
 c.execute('SELECT * FROM scenes ORDER BY rowid DESC LIMIT 1')
 row = c.fetchone()
 if row:
-    print(f'\n📊 Latest scene: {row}')
+    print(f'\n[STATS] Latest scene: {row}')
 
 conn.close()

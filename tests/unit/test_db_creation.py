@@ -17,27 +17,27 @@ print("=" * 70)
 
 # Load config
 cfg = load_configs()
-print(f"\n✓ Config loaded")
+print(f"\n[SYMBOL] Config loaded")
 
 # Check if db_path is configured
 db_path = cfg.get('paths', {}).get('db_path')
 if not db_path:
-    print("\n❌ CRITICAL: db_path not found in config!")
+    print("\n[FAIL] CRITICAL: db_path not found in config!")
     print("   Config paths:", cfg.get('paths', {}))
     sys.exit(1)
 
-print(f"✓ db_path configured: {db_path}")
+print(f"[SYMBOL] db_path configured: {db_path}")
 
 # Check if directory exists
 db_dir = os.path.dirname(db_path)
 if not os.path.exists(db_dir):
-    print(f"\n❌ Database directory does not exist: {db_dir}")
+    print(f"\n[FAIL] Database directory does not exist: {db_dir}")
     sys.exit(1)
 
-print(f"✓ Database directory exists: {db_dir}")
+print(f"[SYMBOL] Database directory exists: {db_dir}")
 
 # Try to create a test scene
-print(f"\n📝 Creating test scene...")
+print(f"\n[NOTE] Creating test scene...")
 test_scene_id = "test_scene_001"
 test_video_path = "L:/goodq4all/import_inbox/sample.mp4"
 
@@ -51,31 +51,31 @@ try:
         end_time=10.0,
         confidence=0.95
     )
-    print(f"✓ Scene created successfully!")
+    print(f"[SYMBOL] Scene created successfully!")
     print(f"  Scene hash: {scene_hash}")
 except Exception as e:
-    print(f"\n❌ Failed to create scene: {e}")
+    print(f"\n[FAIL] Failed to create scene: {e}")
     import traceback
     traceback.print_exc()
     sys.exit(1)
 
 # Verify database was created
 if not os.path.exists(db_path):
-    print(f"\n❌ Database file was NOT created at {db_path}")
+    print(f"\n[FAIL] Database file was NOT created at {db_path}")
     sys.exit(1)
 
-print(f"✓ Database file created: {db_path}")
+print(f"[SYMBOL] Database file created: {db_path}")
 print(f"  Size: {os.path.getsize(db_path)} bytes")
 
 # Check tables
 conn = sqlite3.connect(db_path)
 cur = conn.cursor()
 tables = [t[0] for t in cur.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()]
-print(f"✓ Tables in database: {', '.join(tables)}")
+print(f"[SYMBOL] Tables in database: {', '.join(tables)}")
 
 # Check scene count
 scene_count = cur.execute("SELECT COUNT(*) FROM scenes").fetchone()[0]
-print(f"✓ Scenes in database: {scene_count}")
+print(f"[SYMBOL] Scenes in database: {scene_count}")
 
 conn.close()
 

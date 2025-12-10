@@ -91,24 +91,24 @@ def main():
         try:
             success, message = test_func()
             if success:
-                print("✓ PASS")
+                print("[SYMBOL] PASS")
                 print(f"  {message}")
             else:
-                print("✗ FAIL")
+                print("[SYMBOL] FAIL")
                 print(f"  {message}")
                 all_passed = False
         except Exception as e:
-            print("✗ ERROR")
+            print("[SYMBOL] ERROR")
             print(f"  {str(e)}")
             all_passed = False
         print()
     
     print("="*80)
     if all_passed:
-        print("  ✓ All critical fixes validated successfully!")
+        print("  [SYMBOL] All critical fixes validated successfully!")
         print("  System is ready for production testing.")
     else:
-        print("  ✗ Some fixes failed validation")
+        print("  [SYMBOL] Some fixes failed validation")
         print("  Please review errors above.")
     print("="*80)
     

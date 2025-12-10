@@ -52,19 +52,19 @@ def main():
         success, result = test_conda_activation(env_name)
         
         if success:
-            print("✓ PASS")
+            print("[SYMBOL] PASS")
             print(f"  Python: {result}")
         else:
-            print("✗ FAIL")
+            print("[SYMBOL] FAIL")
             print(f"  Error: {result}")
             all_passed = False
         print()
     
     print("="*80)
     if all_passed:
-        print("  ✓ All environments validated successfully!")
+        print("  [SYMBOL] All environments validated successfully!")
     else:
-        print("  ✗ Some environments failed validation")
+        print("  [SYMBOL] Some environments failed validation")
         print("  Please check conda environment installation")
     print("="*80)
     

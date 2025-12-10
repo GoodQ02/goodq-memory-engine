@@ -63,7 +63,7 @@ class EndpointTester:
             
             self.results.append(result)
             
-            status_icon = f"{GREEN}✓{RESET}" if result["success"] else f"{RED}✗{RESET}"
+            status_icon = f"{GREEN}[SYMBOL]{RESET}" if result["success"] else f"{RED}[SYMBOL]{RESET}"
             print(f"{status_icon} {name:40} {resp.status_code}")
             if missing_fields:
                 print(f"   {YELLOW}Missing fields: {', '.join(missing_fields)}{RESET}")
@@ -79,7 +79,7 @@ class EndpointTester:
                 "error": str(e)
             }
             self.results.append(result)
-            print(f"{RED}✗{RESET} {name:40} ERROR: {str(e)[:50]}")
+            print(f"{RED}[SYMBOL]{RESET} {name:40} ERROR: {str(e)[:50]}")
             return result
     
     def print_summary(self):
@@ -110,14 +110,14 @@ class EndpointTester:
 
 def main():
     print("="*80)
-    print("🔍 GoodQ4All - Phase 2: Endpoint Validation")
+    print("[SEARCH] GoodQ4All - Phase 2: Endpoint Validation")
     print("="*80)
     print()
     
     tester = EndpointTester()
     
     # Core Status Endpoints
-    print("📊 Core Status Endpoints")
+    print("[STATS] Core Status Endpoints")
     print("-"*80)
     tester.test("Status", f"{API_BASE}/status", required_fields=["status", "version", "components", "gpu", "models"])
     tester.test("Progress", f"{API_BASE}/progress", required_fields=["status", "current_video"])
@@ -126,7 +126,7 @@ def main():
     print()
     
     # Engine & Process Endpoints
-    print("⚙️  Engine & Process Endpoints")
+    print("[SYMBOL]️  Engine & Process Endpoints")
     print("-"*80)
     tester.test("Pipeline Engines", f"{API_BASE}/pipeline-engines")
     tester.test("Legacy Engines", f"{API_BASE}/engines")
@@ -136,7 +136,7 @@ def main():
     print()
     
     # Data & Search Endpoints
-    print("📁 Data & Search Endpoints")
+    print("[DIR] Data & Search Endpoints")
     print("-"*80)
     tester.test("Scenes", f"{API_BASE}/scenes")
     tester.test("Entities", f"{API_BASE}/entities")
@@ -144,7 +144,7 @@ def main():
     print()
     
     # Analytics Endpoints
-    print("📈 Analytics Endpoints")
+    print("[SYMBOL] Analytics Endpoints")
     print("-"*80)
     tester.test("Analytics: Knowledge Graph", f"{API_BASE}/analytics/knowledge-graph")
     tester.test("Analytics: Timeline", f"{API_BASE}/analytics/timeline")
@@ -153,13 +153,13 @@ def main():
     print()
     
     # Model & LLM Endpoints
-    print("🤖 Model & LLM Endpoints")
+    print("[BOT] Model & LLM Endpoints")
     print("-"*80)
     tester.test("Models", f"{API_BASE}/models")
     print()
     
     # Action Endpoints (POST)
-    print("🎬 Action Endpoints")
+    print("[SCENE] Action Endpoints")
     print("-"*80)
     tester.test("Test Audio", f"{API_BASE}/test-audio", method="POST", data={})
     tester.test("Control Agent Chat", f"{API_BASE}/chat/control-agent", method="POST", 
@@ -184,7 +184,7 @@ def main():
             "results": tester.results
         }, f, indent=2)
     
-    print(f"\n📄 Detailed results saved to: {results_file}")
+    print(f"\n[SYMBOL] Detailed results saved to: {results_file}")
 
 
 if __name__ == "__main__":

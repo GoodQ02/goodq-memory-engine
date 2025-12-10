@@ -43,7 +43,7 @@ class GPUManager:
         try:
             # 1. Pin GPU access - only see specified GPU
             os.environ['CUDA_VISIBLE_DEVICES'] = str(self.gpu_id)
-            logger.info(f"✓ Set CUDA_VISIBLE_DEVICES={self.gpu_id}")
+            logger.info(f"[SYMBOL] Set CUDA_VISIBLE_DEVICES={self.gpu_id}")
             
             # 2. Check if CUDA is available
             if not torch.cuda.is_available():
@@ -57,7 +57,7 @@ class GPUManager:
                     self.memory_fraction, 
                     0  # Always 0 since we set CUDA_VISIBLE_DEVICES
                 )
-                logger.info(f"✓ Set memory fraction to {self.memory_fraction*100:.0f}%")
+                logger.info(f"[SYMBOL] Set memory fraction to {self.memory_fraction*100:.0f}%")
             except Exception as e:
                 logger.warning(f"Could not set memory fraction: {e}")
             
@@ -72,7 +72,7 @@ class GPUManager:
             self._log_gpu_info()
             
             self._initialized = True
-            logger.info("✓ GPU manager initialized successfully")
+            logger.info("[SYMBOL] GPU manager initialized successfully")
             return True
             
         except Exception as e:
@@ -96,7 +96,7 @@ class GPUManager:
             # Enable deterministic algorithms
             torch.use_deterministic_algorithms(True, warn_only=True)
             
-            logger.info("✓ Enabled deterministic mode")
+            logger.info("[SYMBOL] Enabled deterministic mode")
         except Exception as e:
             logger.warning(f"Could not enable full determinism: {e}")
     
@@ -163,7 +163,7 @@ class GPUManager:
                 text=True
             )
             if result.returncode == 0:
-                logger.info(f"✓ Set GPU to {mode} mode")
+                logger.info(f"[SYMBOL] Set GPU to {mode} mode")
                 return True
             else:
                 logger.warning(f"Could not set GPU mode: {result.stderr}")

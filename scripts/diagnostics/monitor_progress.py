@@ -62,11 +62,11 @@ def display_progress(progress_data):
     
     # Status bar
     status_symbol = {
-        "idle": "⚪",
+        "idle": "[SYMBOL]",
         "processing": "🟢",
-        "completed": "✅",
-        "failed": "❌"
-    }.get(status, "⚪")
+        "completed": "[OK]",
+        "failed": "[FAIL]"
+    }.get(status, "[SYMBOL]")
     
     print(f"Status: {status_symbol} {status.upper()}")
     print(f"File: {current_file}")
@@ -105,7 +105,7 @@ def display_progress(progress_data):
                     elif "scenes" in result:
                         result_str = f" ({result['scenes']} scenes)"
                 
-                print(f"  ✓ {timestamp} - {step_name}{result_str}")
+                print(f"  [SYMBOL] {timestamp} - {step_name}{result_str}")
             print()
         
         # Details
@@ -128,7 +128,7 @@ def display_progress(progress_data):
             msg = error.get("message", "Unknown error")
             step = error.get("step", "")
             timestamp = format_timestamp(error.get("timestamp", ""))
-            print(f"  ❌ {timestamp} [{step}] {msg}")
+            print(f"  [FAIL] {timestamp} [{step}] {msg}")
         print()
     
     if warnings:
@@ -138,7 +138,7 @@ def display_progress(progress_data):
             msg = warning.get("message", "Unknown warning")
             step = warning.get("step", "")
             timestamp = format_timestamp(warning.get("timestamp", ""))
-            print(f"  ⚠️  {timestamp} [{step}] {msg}")
+            print(f"  [WARN]  {timestamp} [{step}] {msg}")
         print()
     
     print("=" * 80)
@@ -170,7 +170,7 @@ def main():
                 print("  GoodQ Pipeline Progress Monitor")
                 print("=" * 80)
                 print()
-                print("⚪ Status: IDLE")
+                print("[SYMBOL] Status: IDLE")
                 print(f"Waiting for progress file: {progress_file}")
                 print()
                 print("=" * 80)

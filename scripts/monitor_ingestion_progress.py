@@ -116,7 +116,7 @@ def check_watchdog_log() -> Dict:
 
 def monitor_loop(refresh_interval: int = 5):
     """Main monitoring loop"""
-    print("🎯 GoodQ Mission Progress Monitor")
+    print("[TARGET] GoodQ Mission Progress Monitor")
     print("=" * 70)
     print()
     
@@ -129,16 +129,16 @@ def monitor_loop(refresh_interval: int = 5):
             # Header
             elapsed = (datetime.now() - start_time).total_seconds()
             print("━" * 70)
-            print(f"🎯 GoodQ MISSION PROGRESS MONITOR")
-            print(f"⏱️  Mission Duration: {format_duration(elapsed)}")
-            print(f"🔄 Refreshing every {refresh_interval}s (Ctrl+C to stop)")
+            print(f"[TARGET] GoodQ MISSION PROGRESS MONITOR")
+            print(f"[TIMER]  Mission Duration: {format_duration(elapsed)}")
+            print(f"[SYNC] Refreshing every {refresh_interval}s (Ctrl+C to stop)")
             print("━" * 70)
             print()
             
             # Watchdog status
             wd_status = check_watchdog_log()
-            status_icon = {"idle": "⏸️", "processing": "⚡", "error": "❌", "not_running": "💤"}
-            print(f"📡 Watchdog Status: {status_icon.get(wd_status['status'], '❓')} {wd_status['status'].upper()}")
+            status_icon = {"idle": "⏸️", "processing": "[FAST]", "error": "[FAIL]", "not_running": "[SYMBOL]"}
+            print(f"[SYMBOL] Watchdog Status: {status_icon.get(wd_status['status'], '[SYMBOL]')} {wd_status['status'].upper()}")
             
             if wd_status.get('current_file'):
                 print(f"   Current Asset: {wd_status['current_file']}")
@@ -151,23 +151,23 @@ def monitor_loop(refresh_interval: int = 5):
             # Workspace progress
             workspace = get_latest_workspace()
             if workspace:
-                print(f"📂 Active Workspace: {workspace.name}")
+                print(f"[SYMBOL] Active Workspace: {workspace.name}")
                 scene_stats = count_scenes(workspace)
                 print(f"   Videos: {scene_stats['videos']}")
                 print(f"   Scenes Extracted: {scene_stats['scenes']}")
                 print(f"   Frames: {scene_stats['frames']}")
                 print(f"   Audio Clips: {scene_stats['audio']}")
             else:
-                print("📂 No active workspace found")
+                print("[SYMBOL] No active workspace found")
             
             print()
             
             # Database status
             db_stats = check_database()
             if 'error' in db_stats:
-                print(f"💾 Database: ❌ Error - {db_stats['error']}")
+                print(f"[SAVE] Database: [FAIL] Error - {db_stats['error']}")
             else:
-                print(f"💾 Memory Database:")
+                print(f"[SAVE] Memory Database:")
                 print(f"   Embeddings: {db_stats['embeddings']}")
                 print(f"   Scenes: {db_stats['scenes']}")
                 print(f"   Links: {db_stats['links']}")
@@ -180,7 +180,7 @@ def monitor_loop(refresh_interval: int = 5):
             time.sleep(refresh_interval)
             
     except KeyboardInterrupt:
-        print("\n\n🛑 Monitor stopped by user")
+        print("\n\n[SYMBOL] Monitor stopped by user")
         sys.exit(0)
 
 if __name__ == "__main__":

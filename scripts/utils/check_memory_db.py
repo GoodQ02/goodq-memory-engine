@@ -22,7 +22,7 @@ def check_memory_db():
     
     
     if not db_path.exists():
-        print("❌ Memory database not found at", db_path)
+        print("[FAIL] Memory database not found at", db_path)
         return
     
     print("="*70)
@@ -38,7 +38,7 @@ def check_memory_db():
     
     # Get all tables
     tables = [r[0] for r in c.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()]
-    print(f"📋 Tables: {', '.join(tables)}")
+    print(f"[LOG] Tables: {', '.join(tables)}")
     print()
     
     # Check each table
@@ -56,7 +56,7 @@ def check_memory_db():
     
     # Detailed scene inspection
     if 'scenes' in tables:
-        print("🎬 SCENE DETAILS")
+        print("[SCENE] SCENE DETAILS")
         print("-" * 70)
         scenes = c.execute('''
             SELECT video_id, scene_id, start_time, end_time, 
@@ -74,7 +74,7 @@ def check_memory_db():
             print()
     
     # Check for actual analysis data
-    print("🔍 ANALYSIS DATA CHECK")
+    print("[SEARCH] ANALYSIS DATA CHECK")
     print("-" * 70)
     
     # Check if scenes have captions

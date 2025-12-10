@@ -149,7 +149,7 @@ def main():
     print("MISSION: SANITIZE DATABASES")
     print("=" * 70)
     print("\n[BRIEFING] Preparing to clean all databases for fresh ingestion")
-    print("\n⚠️  WARNING: This will delete ALL processed data!")
+    print("\n[WARN]  WARNING: This will delete ALL processed data!")
     print("   Backups will be created before deletion.\n")
     
     response = input("Proceed with database sanitization? (yes/no): ")
@@ -175,48 +175,48 @@ def main():
     result = clean_memory_db(memory_db)
     results["memory_db"] = result
     if result["status"] == "success":
-        print(f"  ✓ Deleted {result['total_deleted']} rows across {len(result['tables'])} tables")
-        print(f"  ✓ Backup: {result['backup']}")
+        print(f"  [SYMBOL] Deleted {result['total_deleted']} rows across {len(result['tables'])} tables")
+        print(f"  [SYMBOL] Backup: {result['backup']}")
     else:
-        print(f"  ⚠️  {result['message']}")
+        print(f"  [WARN]  {result['message']}")
     
     # Clean FAISS indices
     print("\n[TARGET] FAISS Indices")
     result = clean_faiss_indices(faiss_dir)
     results["faiss"] = result
     if result["status"] == "success":
-        print(f"  ✓ Deleted {result['files_deleted']} index files")
-        print(f"  ✓ Freed {result['bytes_freed']:,} bytes")
-        print(f"  ✓ Backup: {result['backup']}")
+        print(f"  [SYMBOL] Deleted {result['files_deleted']} index files")
+        print(f"  [SYMBOL] Freed {result['bytes_freed']:,} bytes")
+        print(f"  [SYMBOL] Backup: {result['backup']}")
     else:
-        print(f"  ⚠️  {result['message']}")
+        print(f"  [WARN]  {result['message']}")
     
     # Clean knowledge graph
     print("\n[TARGET] Knowledge Graph")
     result = clean_knowledge_graph(kg_db)
     results["knowledge_graph"] = result
     if result["status"] == "success":
-        print(f"  ✓ Deleted knowledge graph database")
-        print(f"  ✓ Freed {result['bytes_freed']:,} bytes")
-        print(f"  ✓ Backup: {result['backup']}")
+        print(f"  [SYMBOL] Deleted knowledge graph database")
+        print(f"  [SYMBOL] Freed {result['bytes_freed']:,} bytes")
+        print(f"  [SYMBOL] Backup: {result['backup']}")
     else:
-        print(f"  ⚠️  {result['message']}")
+        print(f"  [WARN]  {result['message']}")
     
     # Archive logs
     print("\n[TARGET] Log Files")
     result = archive_logs(log_dir)
     results["logs"] = result
     if result["status"] == "success":
-        print(f"  ✓ Archived {result['files_archived']} log files")
-        print(f"  ✓ Archive: {result['archive_location']}")
+        print(f"  [SYMBOL] Archived {result['files_archived']} log files")
+        print(f"  [SYMBOL] Archive: {result['archive_location']}")
     else:
-        print(f"  ⚠️  {result['message']}")
+        print(f"  [WARN]  {result['message']}")
     
     print("\n" + "=" * 70)
     print("[MISSION COMPLETE] Database sanitization successful")
     print("=" * 70)
     print("\nSystem is ready for fresh ingestion of:")
-    print("  📼 1987_1988.mp4")
+    print("  [SYMBOL] 1987_1988.mp4")
     print("\nAll backups have been preserved for recovery if needed.")
     print("\n[Q] \"Now then, Agent. Time for a proper intelligence gathering mission.\"")
     

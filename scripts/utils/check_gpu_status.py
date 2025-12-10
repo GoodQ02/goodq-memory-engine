@@ -24,18 +24,18 @@ def check_nvidia_driver():
         
         if result.returncode == 0:
             driver_info = result.stdout.strip().split(',')
-            print(f"✓ Driver Version: {driver_info[0].strip()}")
-            print(f"✓ GPU Model: {driver_info[1].strip()}")
-            print(f"✓ Total Memory: {driver_info[2].strip()} MiB")
+            print(f"[SYMBOL] Driver Version: {driver_info[0].strip()}")
+            print(f"[SYMBOL] GPU Model: {driver_info[1].strip()}")
+            print(f"[SYMBOL] Total Memory: {driver_info[2].strip()} MiB")
             return True
         else:
-            print("❌ nvidia-smi command failed")
+            print("[FAIL] nvidia-smi command failed")
             return False
     except FileNotFoundError:
-        print("❌ nvidia-smi not found - NVIDIA drivers may not be installed")
+        print("[FAIL] nvidia-smi not found - NVIDIA drivers may not be installed")
         return False
     except Exception as e:
-        print(f"❌ Error checking drivers: {e}")
+        print(f"[FAIL] Error checking drivers: {e}")
         return False
 
 
@@ -48,13 +48,13 @@ def check_cuda_availability():
     try:
         import torch
         
-        print(f"✓ PyTorch Version: {torch.__version__}")
+        print(f"[SYMBOL] PyTorch Version: {torch.__version__}")
         
         if torch.cuda.is_available():
-            print(f"✓ CUDA Available: Yes")
-            print(f"✓ CUDA Version: {torch.version.cuda}")
-            print(f"✓ cuDNN Version: {torch.backends.cudnn.version()}")
-            print(f"✓ Device Count: {torch.cuda.device_count()}")
+            print(f"[SYMBOL] CUDA Available: Yes")
+            print(f"[SYMBOL] CUDA Version: {torch.version.cuda}")
+            print(f"[SYMBOL] cuDNN Version: {torch.backends.cudnn.version()}")
+            print(f"[SYMBOL] Device Count: {torch.cuda.device_count()}")
             
             for i in range(torch.cuda.device_count()):
                 props = torch.cuda.get_device_properties(i)
@@ -65,7 +65,7 @@ def check_cuda_availability():
             
             return True
         else:
-            print("❌ CUDA Available: No")
+            print("[FAIL] CUDA Available: No")
             print("\nPossible reasons:")
             print("  - PyTorch was installed without CUDA support (CPU-only version)")
             print("  - CUDA libraries are not installed or not in PATH")
@@ -75,12 +75,12 @@ def check_cuda_availability():
             return False
             
     except ImportError:
-        print("❌ PyTorch not installed in this environment")
+        print("[FAIL] PyTorch not installed in this environment")
         print("\nInstall with:")
         print("  pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124")
         return False
     except Exception as e:
-        print(f"❌ Error checking CUDA: {e}")
+        print(f"[FAIL] Error checking CUDA: {e}")
         return False
 
 
@@ -106,10 +106,10 @@ def check_gpu_utilization():
             print(f"Power Draw: {power.strip()}W")
             return True
         else:
-            print("❌ Could not get GPU utilization")
+            print("[FAIL] Could not get GPU utilization")
             return False
     except Exception as e:
-        print(f"❌ Error checking utilization: {e}")
+        print(f"[FAIL] Error checking utilization: {e}")
         return False
 
 
@@ -139,10 +139,10 @@ def check_running_processes():
                 print("No compute processes currently using GPU")
             return True
         else:
-            print("❌ Could not get GPU processes")
+            print("[FAIL] Could not get GPU processes")
             return False
     except Exception as e:
-        print(f"❌ Error checking processes: {e}")
+        print(f"[FAIL] Error checking processes: {e}")
         return False
 
 
@@ -165,7 +165,7 @@ def check_environment_variables():
     for var in vars_to_check:
         value = os.environ.get(var)
         if value:
-            print(f"✓ {var}: {value}")
+            print(f"[SYMBOL] {var}: {value}")
         else:
             print(f"  {var}: (not set)")
     
@@ -195,16 +195,16 @@ def main():
     total = len(results)
     
     for check_name, result in results:
-        status = "✓ PASS" if result else "❌ FAIL"
+        status = "[SYMBOL] PASS" if result else "[FAIL] FAIL"
         print(f"{status}: {check_name}")
     
     print(f"\nPassed: {passed}/{total}")
     
     if passed == total:
-        print("\n✅ All checks passed! GPU is ready for use.")
+        print("\n[OK] All checks passed! GPU is ready for use.")
         return 0
     else:
-        print("\n❌ Some checks failed. Review output above for details.")
+        print("\n[FAIL] Some checks failed. Review output above for details.")
         print("\nNext steps:")
         print("  1. If NVIDIA drivers failed: Install latest drivers from nvidia.com")
         print("  2. If CUDA failed: Run scripts\\setup_gpu_environments.bat")

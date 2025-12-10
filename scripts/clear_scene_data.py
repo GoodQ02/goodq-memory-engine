@@ -26,4 +26,4 @@ conn.commit()
 print("Reset processing status for 1987_1988.mp4")
 
 conn.close()
-print("\n✓ Database cleared and ready for reprocessing!")
+print("\n[SYMBOL] Database cleared and ready for reprocessing!")

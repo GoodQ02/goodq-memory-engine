@@ -103,7 +103,7 @@ class PhasedSegmentationEngine:
                 'metadata': metadata
             }
             self.timings['phase0'] = time.time() - start_time
-            print(f"✓ Phase 0 complete in {self.timings['phase0']:.2f}s")
+            print(f"[SYMBOL] Phase 0 complete in {self.timings['phase0']:.2f}s")
         else:
             print("\n[PHASE 0] SKIPPED")
             
@@ -128,7 +128,7 @@ class PhasedSegmentationEngine:
                 'vad_path': vad_path
             }
             self.timings['phase1'] = time.time() - start_time
-            print(f"✓ Phase 1 complete in {self.timings['phase1']:.2f}s")
+            print(f"[SYMBOL] Phase 1 complete in {self.timings['phase1']:.2f}s")
             print(f"  Detected {len(vad_segments)} VAD segments")
         else:
             print("\n[PHASE 1] SKIPPED")
@@ -161,7 +161,7 @@ class PhasedSegmentationEngine:
                 'pyannote_path': pyannote_path
             }
             self.timings['phase2'] = time.time() - start_time
-            print(f"✓ Phase 2 complete in {self.timings['phase2']:.2f}s")
+            print(f"[SYMBOL] Phase 2 complete in {self.timings['phase2']:.2f}s")
             print(f"  Enhanced {len(enhanced_segments)} segments with Pyannote data")
         else:
             print("\n[PHASE 2] SKIPPED")
@@ -197,7 +197,7 @@ class PhasedSegmentationEngine:
                 'chunks_path': chunks_path
             }
             self.timings['phase3'] = time.time() - start_time
-            print(f"✓ Phase 3 complete in {self.timings['phase3']:.2f}s")
+            print(f"[SYMBOL] Phase 3 complete in {self.timings['phase3']:.2f}s")
             print(f"  Created {len(smart_chunks)} smart chunks")
         else:
             print("\n[PHASE 3] SKIPPED")
@@ -220,7 +220,7 @@ class PhasedSegmentationEngine:
             
             self.phase_results['phase4'] = audio_results
             self.timings['phase4'] = time.time() - start_time
-            print(f"✓ Phase 4 complete in {self.timings['phase4']:.2f}s")
+            print(f"[SYMBOL] Phase 4 complete in {self.timings['phase4']:.2f}s")
             print(f"  Processed {len(audio_results.get('transcriptions', []))} chunks")
         else:
             print("\n[PHASE 4] SKIPPED")
@@ -242,7 +242,7 @@ class PhasedSegmentationEngine:
             
             self.phase_results['phase5'] = scene_results
             self.timings['phase5'] = time.time() - start_time
-            print(f"✓ Phase 5 complete in {self.timings['phase5']:.2f}s")
+            print(f"[SYMBOL] Phase 5 complete in {self.timings['phase5']:.2f}s")
             print(f"  Detected {scene_results.get('total_scenes', 0)} video scenes")
         else:
             print("\n[PHASE 5] SKIPPED")
@@ -286,7 +286,7 @@ class PhasedSegmentationEngine:
                 'validation': validation
             }
             self.timings['phase6'] = time.time() - start_time
-            print(f"✓ Phase 6 complete in {self.timings['phase6']:.2f}s")
+            print(f"[SYMBOL] Phase 6 complete in {self.timings['phase6']:.2f}s")
         else:
             print("\n[PHASE 6] SKIPPED")
         
@@ -301,7 +301,7 @@ class PhasedSegmentationEngine:
             print(f"  {phase}: {duration:.2f}s ({duration/total_time*100:.1f}%)")
         
         if 'phase6' in self.phase_results:
-            print(f"\n✓ Segmentation manifest: {self.phase_results['phase6']['manifest_path']}")
+            print(f"\n[SYMBOL] Segmentation manifest: {self.phase_results['phase6']['manifest_path']}")
         
         return {
             'phase_results': self.phase_results,

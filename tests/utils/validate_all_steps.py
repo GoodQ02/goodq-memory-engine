@@ -312,9 +312,9 @@ class StepValidator:
         if not success:
             result["overall_status"] = "FAIL"
             result["critical_failures"].append("Environment missing")
-            print(f"    ❌ FAIL: {msg}")
+            print(f"    [FAIL] FAIL: {msg}")
             return result
-        print(f"    ✅ PASS: {msg}")
+        print(f"    [OK] PASS: {msg}")
         
         # Test 2: Step file exists and valid
         print("  [2/8] Testing step file...")
@@ -323,7 +323,7 @@ class StepValidator:
         if not success:
             result["overall_status"] = "FAIL"
             result["critical_failures"].append("Step file invalid")
-        print(f"    {'✅' if success else '❌'} {'PASS' if success else 'FAIL'}: {msg}")
+        print(f"    {'[OK]' if success else '[FAIL]'} {'PASS' if success else 'FAIL'}: {msg}")
         
         # Test 3: Permissions
         print("  [3/8] Testing file permissions...")
@@ -332,7 +332,7 @@ class StepValidator:
         if not success:
             result["overall_status"] = "FAIL"
             result["critical_failures"].append("Permission denied")
-        print(f"    {'✅' if success else '❌'} {'PASS' if success else 'FAIL'}: {msg}")
+        print(f"    {'[OK]' if success else '[FAIL]'} {'PASS' if success else 'FAIL'}: {msg}")
         
         # Test 4: Required imports
         print("  [4/8] Testing library imports...")
@@ -341,7 +341,7 @@ class StepValidator:
         if not success:
             result["overall_status"] = "FAIL"
             result["critical_failures"].append("Import failure")
-        print(f"    {'✅' if success else '❌'} {'PASS' if success else 'FAIL'}: {msg}")
+        print(f"    {'[OK]' if success else '[FAIL]'} {'PASS' if success else 'FAIL'}: {msg}")
         
         # Test 5: CUDA availability (if required)
         print("  [5/8] Testing CUDA availability...")
@@ -350,16 +350,16 @@ class StepValidator:
         if not success and step_config["requires_gpu"]:
             result["overall_status"] = "FAIL"
             result["critical_failures"].append("CUDA unavailable")
-        print(f"    {'✅' if success else '❌'} {'PASS' if success else 'FAIL'}: {msg}")
+        print(f"    {'[OK]' if success else '[FAIL]'} {'PASS' if success else 'FAIL'}: {msg}")
         
         # Test 6: Model cache
         print("  [6/8] Testing model cache configuration...")
         success, msg = self.test_model_cache(step_config["env"], step_config["test_type"])
         result["tests"]["model_cache"] = {"status": "PASS" if success else "WARN", "message": msg}
         if not success:
-            print(f"    ⚠️  WARN: {msg}")
+            print(f"    [WARN]  WARN: {msg}")
         else:
-            print(f"    ✅ PASS: {msg}")
+            print(f"    [OK] PASS: {msg}")
         
         # Test 7: Database access
         print("  [7/8] Testing database access...")
@@ -368,7 +368,7 @@ class StepValidator:
         if not success:
             result["overall_status"] = "FAIL"
             result["critical_failures"].append("Database inaccessible")
-        print(f"    {'✅' if success else '❌'} {'PASS' if success else 'FAIL'}: {msg}")
+        print(f"    {'[OK]' if success else '[FAIL]'} {'PASS' if success else 'FAIL'}: {msg}")
         
         # Test 8: Step syntax validation
         print("  [8/8] Testing step syntax...")
@@ -382,7 +382,7 @@ class StepValidator:
         if not syntax_valid:
             result["overall_status"] = "FAIL"
             result["critical_failures"].append("Syntax error")
-        print(f"    {'✅' if syntax_valid else '❌'} {'PASS' if syntax_valid else 'FAIL'}: {result['tests']['syntax']['message']}")
+        print(f"    {'[OK]' if syntax_valid else '[FAIL]'} {'PASS' if syntax_valid else 'FAIL'}: {result['tests']['syntax']['message']}")
         
         return result
     
@@ -402,9 +402,9 @@ class StepValidator:
         report.append(f"                 {failed}/{len(results)} FAILED")
         
         if failed == 0:
-            report.append("\n✅ ALL STEPS VALIDATED SUCCESSFULLY!")
+            report.append("\n[OK] ALL STEPS VALIDATED SUCCESSFULLY!")
         else:
-            report.append(f"\n⚠️  {failed} STEP(S) REQUIRE ATTENTION")
+            report.append(f"\n[WARN]  {failed} STEP(S) REQUIRE ATTENTION")
         
         # Summary table
         report.append("\n" + "-"*100)
@@ -415,7 +415,7 @@ class StepValidator:
         
         for r in results:
             issues = ", ".join(r["critical_failures"]) if r["critical_failures"] else "None"
-            status_icon = "✅" if r["overall_status"] == "PASS" else "❌"
+            status_icon = "[OK]" if r["overall_status"] == "PASS" else "[FAIL]"
             report.append(f"{r['step_name']:<25} {r['env']:<25} {status_icon} {r['overall_status']:<8} {issues}")
         
         # Detailed results
@@ -433,7 +433,7 @@ class StepValidator:
             
             report.append("\nTest Results:")
             for test_name, test_result in r["tests"].items():
-                status_icon = "✅" if test_result["status"] == "PASS" else ("⚠️" if test_result["status"] == "WARN" else "❌")
+                status_icon = "[OK]" if test_result["status"] == "PASS" else ("[WARN]" if test_result["status"] == "WARN" else "[FAIL]")
                 report.append(f"  {status_icon} {test_name}: {test_result['status']} - {test_result['message']}")
             
             report.append("-"*100)
@@ -464,14 +464,14 @@ class StepValidator:
         with open(report_path, 'w', encoding='utf-8') as f:
             f.write(report)
         
-        print(f"\n📄 Report saved to: {report_path}")
+        print(f"\n[SYMBOL] Report saved to: {report_path}")
         
         # Save JSON results
         json_path = self.project_root / "logs" / "step_validation_report.json"
         with open(json_path, 'w', encoding='utf-8') as f:
             json.dump(results, f, indent=2)
         
-        print(f"📄 JSON results saved to: {json_path}")
+        print(f"[SYMBOL] JSON results saved to: {json_path}")
         
         return results
 

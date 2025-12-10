@@ -642,7 +642,7 @@ def audio_transcribe(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
     # Calculate overall performance
     if total_audio_duration > 0 and total_elapsed > 0:
         overall_realtime = total_audio_duration / total_elapsed
-        logger.info(f"[TRANSCRIBE] ✓ Completed in {total_elapsed:.1f}s ({overall_realtime:.2f}x realtime)")
+        logger.info(f"[TRANSCRIBE] [SYMBOL] Completed in {total_elapsed:.1f}s ({overall_realtime:.2f}x realtime)")
         
         if device == "cuda":
             optimizer.print_memory_stats()

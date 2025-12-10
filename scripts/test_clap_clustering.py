@@ -55,14 +55,14 @@ def extract_clap_chunks(audio_path: str, window_seconds: float = 2.0, overlap_ra
     print("\nLoading audio...")
     y, sr = librosa.load(audio_path, sr=48000)
     duration = len(y) / sr
-    print(f"✅ Loaded: {duration:.1f}s @ {sr}Hz")
+    print(f"[OK] Loaded: {duration:.1f}s @ {sr}Hz")
     
     # Load CLAP model
     print("\nLoading CLAP model...")
     clap_model, clap_proc = _load_clap()
     if clap_model is None:
         raise RuntimeError("Failed to load CLAP model!")
-    print("✅ CLAP model loaded")
+    print("[OK] CLAP model loaded")
     
     # Calculate chunk parameters
     window_samples = int(window_seconds * sr)
@@ -84,7 +84,7 @@ def extract_clap_chunks(audio_path: str, window_seconds: float = 2.0, overlap_ra
         try:
             batch = clap_proc(audios=[chunk], sampling_rate=sr, return_tensors="pt")
             if 'input_features' not in batch:
-                print(f"⚠️  Warning: No input_features for chunk at {start_time:.1f}s")
+                print(f"[WARN]  Warning: No input_features for chunk at {start_time:.1f}s")
                 continue
             
             features = batch['input_features'].to('cuda' if torch.cuda.is_available() else 'cpu')
@@ -101,10 +101,10 @@ def extract_clap_chunks(audio_path: str, window_seconds: float = 2.0, overlap_ra
                 print(f"  Extracted {len(embeddings)} chunks... ({end_time:.1f}s)")
         
         except Exception as e:
-            print(f"⚠️  Error at {start_time:.1f}s: {e}")
+            print(f"[WARN]  Error at {start_time:.1f}s: {e}")
             continue
     
-    print(f"\n✅ Extracted {len(embeddings)} CLAP embeddings")
+    print(f"\n[OK] Extracted {len(embeddings)} CLAP embeddings")
     print(f"   Embedding shape: {embeddings[0].shape if embeddings else 'N/A'}")
     
     return np.array(embeddings), timestamps
@@ -155,7 +155,7 @@ def cluster_clap_embeddings(embeddings: np.ndarray, min_speakers: int = 2, max_s
             print(f"  {n_speakers} speakers: FAILED ({e})")
             continue
     
-    print(f"\n✅ Best clustering: {best_n} speakers (silhouette={best_score:.3f})")
+    print(f"\n[OK] Best clustering: {best_n} speakers (silhouette={best_score:.3f})")
     
     # Print speaker distribution
     unique, counts = np.unique(best_labels, return_counts=True)
@@ -190,9 +190,9 @@ def run_pyannote_diarization(audio_path: str):
         # Move to GPU if available
         if torch.cuda.is_available():
             pipeline = pipeline.to(torch.device("cuda"))
-            print("✅ Pipeline on GPU")
+            print("[OK] Pipeline on GPU")
         else:
-            print("⚠️  Pipeline on CPU")
+            print("[WARN]  Pipeline on CPU")
         
         print(f"\nRunning diarization on {audio_path}...")
         diarization = pipeline(audio_path)
@@ -208,7 +208,7 @@ def run_pyannote_diarization(audio_path: str):
                 'speaker': speaker,
             })
         
-        print(f"✅ Diarization complete")
+        print(f"[OK] Diarization complete")
         print(f"   Detected speakers: {len(speakers)}")
         print(f"   Total segments: {len(segments)}")
         
@@ -223,7 +223,7 @@ def run_pyannote_diarization(audio_path: str):
         return diarization, speakers, segments
     
     except Exception as e:
-        print(f"❌ PyAnnote failed: {e}")
+        print(f"[FAIL] PyAnnote failed: {e}")
         return None, set(), []
 
 
@@ -334,16 +334,16 @@ def visualize_comparison(clap_labels, timestamps, pyannote_segments, output_path
     
     if output_path:
         plt.savefig(output_path, dpi=150, bbox_inches='tight')
-        print(f"✅ Saved visualization to: {output_path}")
+        print(f"[OK] Saved visualization to: {output_path}")
     else:
-        print("✅ Displaying visualization...")
+        print("[OK] Displaying visualization...")
         plt.show()
 
 
 def main():
     """Main validation script"""
     print(f"\n{'='*70}")
-    print("🔬 PHASE 1: CLAP PRE-EMBEDDING VALIDATION TEST")
+    print("[SYMBOL] PHASE 1: CLAP PRE-EMBEDDING VALIDATION TEST")
     print(f"{'='*70}")
     print("\nThis test compares CLAP embeddings vs PyAnnote diarization")
     print("to see if CLAP can improve speaker clustering.")
@@ -351,7 +351,7 @@ def main():
     
     # Get audio file
     if len(sys.argv) < 2:
-        print("❌ Usage: python scripts/test_clap_clustering.py <audio_file.wav>")
+        print("[FAIL] Usage: python scripts/test_clap_clustering.py <audio_file.wav>")
         print("\nExample:")
         print("  python scripts/test_clap_clustering.py L:/test_audio/noisy_meeting.wav")
         sys.exit(1)
@@ -359,7 +359,7 @@ def main():
     audio_path = sys.argv[1]
     
     if not Path(audio_path).exists():
-        print(f"❌ Audio file not found: {audio_path}")
+        print(f"[FAIL] Audio file not found: {audio_path}")
         sys.exit(1)
     
     # Run validation
@@ -368,7 +368,7 @@ def main():
         embeddings, timestamps = extract_clap_chunks(audio_path)
         
         if len(embeddings) == 0:
-            print("❌ No CLAP embeddings extracted!")
+            print("[FAIL] No CLAP embeddings extracted!")
             sys.exit(1)
         
         # Step 2: Cluster CLAP embeddings
@@ -378,7 +378,7 @@ def main():
         diarization, speakers, segments = run_pyannote_diarization(audio_path)
         
         if diarization is None:
-            print("⚠️  PyAnnote failed, skipping comparison")
+            print("[WARN]  PyAnnote failed, skipping comparison")
             return
         
         # Step 4: Compare results
@@ -393,7 +393,7 @@ def main():
         
         # Final summary
         print(f"\n{'='*70}")
-        print("✅ VALIDATION COMPLETE!")
+        print("[OK] VALIDATION COMPLETE!")
         print(f"{'='*70}")
         print("\nSummary:")
         print(f"  Audio: {Path(audio_path).name}")
@@ -405,29 +405,29 @@ def main():
         print(f"\n{'='*70}")
         
         # Decision guidance
-        print("\n🎯 WHAT THIS MEANS:")
+        print("\n[TARGET] WHAT THIS MEANS:")
         print(f"{'='*70}")
         
         speaker_diff = abs(comparison['clap_speakers'] - comparison['pyannote_speakers'])
         
         if speaker_diff == 0 and comparison['coverage'] > 95:
-            print("✅ CLAP and PyAnnote agree closely (>95% agreement)")
+            print("[OK] CLAP and PyAnnote agree closely (>95% agreement)")
             print("   → Current pipeline is optimal!")
             print("   → No need for Phase 2 integration")
         elif speaker_diff <= 1 and comparison['coverage'] > 80:
-            print("⚠️  CLAP shows similar results to PyAnnote (80-95% agreement)")
+            print("[WARN]  CLAP shows similar results to PyAnnote (80-95% agreement)")
             print("   → CLAP may offer marginal improvement")
             print("   → Consider Phase 2 if accuracy critical")
         else:
-            print("🎯 CLAP shows different patterns than PyAnnote!")
+            print("[TARGET] CLAP shows different patterns than PyAnnote!")
             print(f"   → Speaker difference: {speaker_diff}")
             print(f"   → Agreement: {comparison['coverage']:.1f}%")
-            print("   → ✨ PROCEED TO PHASE 2! CLAP may improve accuracy!")
+            print("   → [SYMBOL] PROCEED TO PHASE 2! CLAP may improve accuracy!")
         
         print(f"{'='*70}\n")
     
     except Exception as e:
-        print(f"\n❌ Validation failed: {e}")
+        print(f"\n[FAIL] Validation failed: {e}")
         import traceback
         traceback.print_exc()
         sys.exit(1)

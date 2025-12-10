@@ -41,8 +41,8 @@ def validate_ui_config():
     print("=" * 80)
     print("GoodQ UI Configuration Validator")
     print("=" * 80)
-    print(f"\n✓ Expected API Port: {EXPECTED_PORT}")
-    print(f"✓ Expected API Base: {EXPECTED_API_BASE}\n")
+    print(f"\n[SYMBOL] Expected API Port: {EXPECTED_PORT}")
+    print(f"[SYMBOL] Expected API Base: {EXPECTED_API_BASE}\n")
     
     for filename, (file_type, category) in files_to_check.items():
         filepath = base_dir / filename
@@ -94,25 +94,25 @@ def validate_ui_config():
     print("-" * 80)
     
     if results["correct"]:
-        print(f"\n✅ CORRECT ({len(results['correct'])} files):")
+        print(f"\n[OK] CORRECT ({len(results['correct'])} files):")
         for item in results["correct"]:
-            print(f"   ✓ {item['file']:<35} Port {item['port']} ({item['occurrences']} refs)")
+            print(f"   [SYMBOL] {item['file']:<35} Port {item['port']} ({item['occurrences']} refs)")
     
     if results["incorrect"]:
-        print(f"\n❌ INCORRECT ({len(results['incorrect'])} files):")
+        print(f"\n[FAIL] INCORRECT ({len(results['incorrect'])} files):")
         for item in results["incorrect"]:
             ports_str = ", ".join(item['wrong_ports'])
-            print(f"   ✗ {item['file']:<35} Wrong port(s): {ports_str} ({item['occurrences']} refs)")
+            print(f"   [SYMBOL] {item['file']:<35} Wrong port(s): {ports_str} ({item['occurrences']} refs)")
     
     if results["warnings"]:
-        print(f"\n⚠️  WARNINGS ({len(results['warnings'])}):")
+        print(f"\n[WARN]  WARNINGS ({len(results['warnings'])}):")
         for warning in results["warnings"]:
-            print(f"   ⚠  {warning}")
+            print(f"   [SYMBOL]  {warning}")
     
     if results["errors"]:
-        print(f"\n🚨 ERRORS ({len(results['errors'])}):")
+        print(f"\n[SYMBOL] ERRORS ({len(results['errors'])}):")
         for error in results["errors"]:
-            print(f"   🚨 {error}")
+            print(f"   [SYMBOL] {error}")
     
     # Summary
     print("\n" + "=" * 80)
@@ -122,17 +122,17 @@ def validate_ui_config():
     total_checked = len(results["correct"]) + len(results["incorrect"])
     
     if len(results["incorrect"]) == 0 and len(results["errors"]) == 0:
-        print("✅ ALL FILES VALIDATED SUCCESSFULLY!")
+        print("[OK] ALL FILES VALIDATED SUCCESSFULLY!")
         print(f"   • {total_checked} files checked")
         print(f"   • All using port {EXPECTED_PORT}")
         print(f"   • Ready for production use")
         return True
     else:
-        print("❌ VALIDATION FAILED")
+        print("[FAIL] VALIDATION FAILED")
         print(f"   • {len(results['correct'])} files correct")
         print(f"   • {len(results['incorrect'])} files need fixing")
         print(f"   • {len(results['errors'])} errors encountered")
-        print(f"\n📝 Action Required: Fix the incorrect files listed above")
+        print(f"\n[NOTE] Action Required: Fix the incorrect files listed above")
         return False
 
 if __name__ == "__main__":

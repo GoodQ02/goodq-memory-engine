@@ -76,7 +76,7 @@ def main():
         if file_path.is_file():
             modified, changes = fix_file(file_path)
             if modified:
-                print(f"✓ Fixed: {file_path.relative_to(project_root)}")
+                print(f"[SYMBOL] Fixed: {file_path.relative_to(project_root)}")
                 for change in changes:
                     print(change)
                 print()
@@ -84,9 +84,9 @@ def main():
     
     print("="*80)
     if fixed_count > 0:
-        print(f"  ✓ Fixed {fixed_count} files")
+        print(f"  [SYMBOL] Fixed {fixed_count} files")
     else:
-        print("  ✓ No files needed fixing (already correct)")
+        print("  [SYMBOL] No files needed fixing (already correct)")
     print("="*80)
 
 

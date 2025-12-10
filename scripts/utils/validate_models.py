@@ -20,7 +20,7 @@ def test_object_detection():
     
     test_img = "L:\\goodq4all\\logs\\ingest_full\\1987_1988\\frames\\scene_0000.jpg"
     if not os.path.isfile(test_img):
-        print(f"❌ Test image not found: {test_img}")
+        print(f"[FAIL] Test image not found: {test_img}")
         return False
     
     cfg = load_configs({})
@@ -31,11 +31,11 @@ def test_object_detection():
     print(f"Detected {len(objects)} objects")
     if objects:
         print(f"Sample object: {objects[0]}")
-        print("✅ Object detection WORKING")
+        print("[OK] Object detection WORKING")
         return True
     else:
         meta = result.get("detect_meta", {})
-        print(f"❌ No objects detected. Meta: {meta}")
+        print(f"[FAIL] No objects detected. Meta: {meta}")
         return False
 
 
@@ -46,7 +46,7 @@ def test_image_caption():
     
     test_img = "L:\\goodq4all\\logs\\ingest_full\\1987_1988\\frames\\scene_0000.jpg"
     if not os.path.isfile(test_img):
-        print(f"❌ Test image not found: {test_img}")
+        print(f"[FAIL] Test image not found: {test_img}")
         return False
     
     cfg = load_configs({})
@@ -56,11 +56,11 @@ def test_image_caption():
     caption = result.get("caption")
     print(f"Caption: {caption}")
     if caption and isinstance(caption, str) and len(caption) > 0:
-        print("✅ Image captioning WORKING")
+        print("[OK] Image captioning WORKING")
         return True
     else:
         meta = result.get("caption_meta", {})
-        print(f"❌ No caption generated. Meta: {meta}")
+        print(f"[FAIL] No caption generated. Meta: {meta}")
         return False
 
 
@@ -71,7 +71,7 @@ def test_ocr():
     
     test_img = "L:\\goodq4all\\logs\\ingest_full\\1987_1988\\frames\\scene_0000.jpg"
     if not os.path.isfile(test_img):
-        print(f"❌ Test image not found: {test_img}")
+        print(f"[FAIL] Test image not found: {test_img}")
         return False
     
     cfg = load_configs({})
@@ -83,10 +83,10 @@ def test_ocr():
     meta = result.get("ocr_meta", {})
     print(f"OCR Meta: {meta}")
     if ocr_text:
-        print("✅ OCR found text")
+        print("[OK] OCR found text")
         return True
     else:
-        print("⚠️  No text found (might be normal for this image)")
+        print("[WARN]  No text found (might be normal for this image)")
         return None  # Not necessarily a failure
 
 
@@ -97,7 +97,7 @@ def test_audio_transcription():
     
     test_audio = "L:\\goodq4all\\logs\\ingest_full\\1987_1988\\audio\\scene_0000.wav"
     if not os.path.isfile(test_audio):
-        print(f"❌ Test audio not found: {test_audio}")
+        print(f"[FAIL] Test audio not found: {test_audio}")
         return False
     
     cfg = load_configs({})
@@ -112,10 +112,10 @@ def test_audio_transcription():
     print(f"Chunks processed: {len(meta.get('chunks', []))}")
     
     if transcript and len(transcript) > 0:
-        print("✅ Transcription WORKING")
+        print("[OK] Transcription WORKING")
         return True
     else:
-        print("❌ No transcript generated")
+        print("[FAIL] No transcript generated")
         if meta.get('chunks'):
             print("Chunk details:")
             for i, chunk in enumerate(meta['chunks'][:3]):
@@ -137,10 +137,10 @@ def test_sentiment():
     print(f"Sentiment: {sent}")
     print(f"Meta: {meta}")
     if sent and sent.get("label"):
-        print("✅ Sentiment analysis WORKING")
+        print("[OK] Sentiment analysis WORKING")
         return True
     else:
-        print("❌ No sentiment generated")
+        print("[FAIL] No sentiment generated")
         return False
 
 
@@ -158,10 +158,10 @@ def test_emotion_classify():
     print(f"Emotions: {emotions}")
     print(f"Meta: {meta}")
     if emotions and len(emotions) > 0:
-        print("✅ Emotion classification WORKING")
+        print("[OK] Emotion classification WORKING")
         return True
     else:
-        print("❌ No emotions generated")
+        print("[FAIL] No emotions generated")
         return False
 
 
@@ -179,10 +179,10 @@ def test_tagger():
     print(f"Tags: {tags}")
     print(f"Entities: {entities}")
     if tags or entities:
-        print("✅ Tagger WORKING")
+        print("[OK] Tagger WORKING")
         return True
     else:
-        print("❌ No tags/entities generated")
+        print("[FAIL] No tags/entities generated")
         return False
 
 
@@ -198,10 +198,10 @@ def test_text_embed():
     meta = result.get("embedding_meta", {})
     print(f"Embedding Meta: {meta}")
     if meta.get("status") == "ok":
-        print("✅ Text embedding WORKING")
+        print("[OK] Text embedding WORKING")
         return True
     else:
-        print(f"❌ Text embedding failed: {meta.get('status')}")
+        print(f"[FAIL] Text embedding failed: {meta.get('status')}")
         return False
 
 
@@ -232,20 +232,20 @@ def main():
     
     for name, result in results.items():
         if result is True:
-            status = "✅ PASS"
+            status = "[OK] PASS"
         elif result is False:
-            status = "❌ FAIL"
+            status = "[FAIL] FAIL"
         else:
-            status = "⚠️  SKIP"
+            status = "[WARN]  SKIP"
         print(f"{status}: {name}")
     
     print(f"\nTotal: {passed} passed, {failed} failed, {skipped} skipped")
     
     if failed > 0:
-        print("\n⚠️  Some models are not producing output. Check configuration and model files.")
+        print("\n[WARN]  Some models are not producing output. Check configuration and model files.")
         return 1
     else:
-        print("\n✅ All critical models are working!")
+        print("\n[OK] All critical models are working!")
         return 0
 
 

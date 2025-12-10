@@ -1,5 +1,5 @@
 """
-🔍 Comprehensive Exception Handler Audit for GoodQ
+[SEARCH] Comprehensive Exception Handler Audit for GoodQ
 
 This script finds ALL exception handling patterns that might hide errors:
 1. Bare except: clauses
@@ -110,7 +110,7 @@ class ExceptionAuditor:
     def audit_all(self):
         """Audit all Python files in the directory."""
         python_files = list(self.base_path.rglob("*.py"))
-        print(f"\n🔍 Auditing {len(python_files)} Python files in {self.base_path}")
+        print(f"\n[SEARCH] Auditing {len(python_files)} Python files in {self.base_path}")
         print("="*70)
         
         for filepath in python_files:
@@ -123,20 +123,20 @@ class ExceptionAuditor:
     def print_report(self):
         """Print a detailed report of findings."""
         print("\n" + "="*70)
-        print("📊 EXCEPTION HANDLING AUDIT REPORT")
+        print("[STATS] EXCEPTION HANDLING AUDIT REPORT")
         print("="*70 + "\n")
         
         total_issues = sum(len(v) for v in self.findings.values())
         
         if total_issues == 0:
-            print("✅ No exception handling issues found!\n")
+            print("[OK] No exception handling issues found!\n")
             return
         
-        print(f"⚠️  Found {total_issues} potential issues\n")
+        print(f"[WARN]  Found {total_issues} potential issues\n")
         
         # Report by category
         if self.findings['bare_except']:
-            print(f"\n🚨 BARE EXCEPT CLAUSES ({len(self.findings['bare_except'])})")
+            print(f"\n[SYMBOL] BARE EXCEPT CLAUSES ({len(self.findings['bare_except'])})")
             print("   Catches all exceptions including KeyboardInterrupt!")
             print("-"*70)
             for item in self.findings['bare_except'][:5]:  # Show first 5
@@ -146,7 +146,7 @@ class ExceptionAuditor:
                 print(f"   ... and {len(self.findings['bare_except']) - 5} more")
         
         if self.findings['silent_handler']:
-            print(f"\n⚠️  SILENT EXCEPTION HANDLERS ({len(self.findings['silent_handler'])})")
+            print(f"\n[WARN]  SILENT EXCEPTION HANDLERS ({len(self.findings['silent_handler'])})")
             print("   Catches exceptions but doesn't log them")
             print("-"*70)
             for item in self.findings['silent_handler'][:5]:
@@ -156,7 +156,7 @@ class ExceptionAuditor:
                 print(f"   ... and {len(self.findings['silent_handler']) - 5} more")
         
         if self.findings['unused_exception']:
-            print(f"\n💤 UNUSED EXCEPTION VARIABLES ({len(self.findings['unused_exception'])})")
+            print(f"\n[SYMBOL] UNUSED EXCEPTION VARIABLES ({len(self.findings['unused_exception'])})")
             print("   Exception caught but never used or logged")
             print("-"*70)
             for item in self.findings['unused_exception'][:5]:
@@ -166,7 +166,7 @@ class ExceptionAuditor:
                 print(f"   ... and {len(self.findings['unused_exception']) - 5} more")
         
         if self.findings['silent_return']:
-            print(f"\n🤐 SILENT RETURNS ({len(self.findings['silent_return'])})")
+            print(f"\n[SYMBOL] SILENT RETURNS ({len(self.findings['silent_return'])})")
             print("   Functions return None/empty without logging why")
             print("-"*70)
             for item in self.findings['silent_return'][:5]:
@@ -175,7 +175,7 @@ class ExceptionAuditor:
                 print(f"   ... and {len(self.findings['silent_return']) - 5} more")
         
         if self.findings['hardcoded_ok']:
-            print(f"\n✅ HARDCODED 'OK' STATUS ({len(self.findings['hardcoded_ok'])})")
+            print(f"\n[OK] HARDCODED 'OK' STATUS ({len(self.findings['hardcoded_ok'])})")
             print("   Status set to 'ok' without validation")
             print("-"*70)
             for item in self.findings['hardcoded_ok'][:5]:
@@ -185,7 +185,7 @@ class ExceptionAuditor:
                 print(f"   ... and {len(self.findings['hardcoded_ok']) - 5} more")
         
         print("\n" + "="*70)
-        print("💡 RECOMMENDATIONS")
+        print("[TIP] RECOMMENDATIONS")
         print("="*70)
         print("1. Replace bare 'except:' with 'except Exception as e:'")
         print("2. Add logging: print(f'[ERROR] {func_name}: {str(e)}')")
@@ -214,7 +214,7 @@ def main():
         
         with open(args.export, 'w', encoding='utf-8') as f:
             json.dump(output, f, indent=2)
-        print(f"📄 Findings exported to: {args.export}")
+        print(f"[SYMBOL] Findings exported to: {args.export}")
 
 
 if __name__ == "__main__":

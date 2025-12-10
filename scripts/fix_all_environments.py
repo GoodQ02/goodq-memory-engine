@@ -102,7 +102,7 @@ def main():
         if file_path.is_file():
             modified, changes = fix_file(file_path, dry_run=False)
             if modified:
-                print(f"✓ Fixed: {file_path.relative_to(project_root)}")
+                print(f"[SYMBOL] Fixed: {file_path.relative_to(project_root)}")
                 for change in changes:
                     print(change)
                 print()
@@ -124,9 +124,9 @@ def main():
     print("Available environments:")
     for env_name in ENV_MAPPING.values():
         if env_name in env_list:
-            print(f"  ✓ {env_name}")
+            print(f"  [SYMBOL] {env_name}")
         else:
-            print(f"  ✗ {env_name} - MISSING!")
+            print(f"  [SYMBOL] {env_name} - MISSING!")
     
     print()
     print("="*80)

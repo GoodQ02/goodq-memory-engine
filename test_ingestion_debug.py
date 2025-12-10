@@ -16,16 +16,16 @@ print(f"Current directory: {os.getcwd()}")
 print("\n[2/5] Attempting imports...")
 try:
     from goodq4all.pipelines.direct_ingestion import run_direct_ingestion
-    print("[✓] Imported run_direct_ingestion")
+    print("[[SYMBOL]] Imported run_direct_ingestion")
 except Exception as e:
-    print(f"[✗] Failed to import run_direct_ingestion: {e}")
+    print(f"[[SYMBOL]] Failed to import run_direct_ingestion: {e}")
     sys.exit(1)
 
 try:
     from goodq4all.steps.common.config_loader import load_configs
-    print("[✓] Imported load_configs")
+    print("[[SYMBOL]] Imported load_configs")
 except Exception as e:
-    print(f"[✗] Failed to import load_configs: {e}")
+    print(f"[[SYMBOL]] Failed to import load_configs: {e}")
     sys.exit(1)
 
 print("\n[3/5] Checking video file...")
@@ -34,20 +34,20 @@ print(f"Target: {video_path}")
 
 if os.path.exists(video_path):
     size_mb = os.path.getsize(video_path) / (1024*1024)
-    print(f"[✓] Video file exists ({size_mb:.2f} MB)")
+    print(f"[[SYMBOL]] Video file exists ({size_mb:.2f} MB)")
 else:
-    print("[✗] Video file NOT FOUND")
+    print("[[SYMBOL]] Video file NOT FOUND")
     sys.exit(1)
 
 print("\n[4/5] Loading configuration...")
 try:
     cfg = load_configs({})
-    print(f"[✓] Configuration loaded")
+    print(f"[[SYMBOL]] Configuration loaded")
     print(f"    Config type: {type(cfg)}")
     if hasattr(cfg, 'keys'):
         print(f"    Config keys (sample): {list(cfg.keys())[:5]}")
 except Exception as e:
-    print(f"[✗] Failed to load config: {e}")
+    print(f"[[SYMBOL]] Failed to load config: {e}")
     import traceback
     traceback.print_exc()
     sys.exit(1)
@@ -58,7 +58,7 @@ try:
     result = run_direct_ingestion(video_path, cfg)
     print("-"*80)
     print("\n" + "="*80)
-    print("✓✓✓ INGESTION COMPLETED SUCCESSFULLY! ✓✓✓")
+    print("[SYMBOL] INGESTION COMPLETED SUCCESSFULLY! [SYMBOL]")
     print("="*80)
     print(f"\nResult type: {type(result)}")
     if isinstance(result, dict):
@@ -70,7 +70,7 @@ try:
 except Exception as e:
     print("-"*80)
     print("\n" + "="*80)
-    print("✗✗✗ INGESTION FAILED ✗✗✗")
+    print("[SYMBOL] INGESTION FAILED [SYMBOL]")
     print("="*80)
     print(f"\nError: {e}")
     print("\nFull traceback:")

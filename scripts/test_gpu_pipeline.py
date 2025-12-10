@@ -30,7 +30,7 @@ def test_gpu_pipeline():
         print("\n2. Testing audio diarization allocation...")
         config = configure_gpu("audio_diarize", force_fraction=0.30)
         if config.get("available"):
-            print(f"   ✓ Allocated {config['allocated_gb']:.2f} GB for diarization")
+            print(f"   [SYMBOL] Allocated {config['allocated_gb']:.2f} GB for diarization")
             print_memory_stats()
         
         print("\n3. Clearing cache...")
@@ -39,7 +39,7 @@ def test_gpu_pipeline():
         print("\n4. Testing transcription allocation...")
         config = configure_gpu("audio_transcribe", force_fraction=0.25)
         if config.get("available"):
-            print(f"   ✓ Allocated {config['allocated_gb']:.2f} GB for transcription")
+            print(f"   [SYMBOL] Allocated {config['allocated_gb']:.2f} GB for transcription")
         
         print("\n5. Final memory check...")
         stats = guard.check_memory()
@@ -48,13 +48,13 @@ def test_gpu_pipeline():
             print(f"   Used: {stats['reserved_pct']*100:.1f}%")
         
         print("\n" + "="*80)
-        print("✓ GPU allocation test complete!")
+        print("[SYMBOL] GPU allocation test complete!")
         print("="*80)
         
         return True
         
     except Exception as e:
-        print(f"\n✗ Test failed: {e}")
+        print(f"\n[SYMBOL] Test failed: {e}")
         import traceback
         traceback.print_exc()
         return False

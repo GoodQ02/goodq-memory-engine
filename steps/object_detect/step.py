@@ -50,10 +50,10 @@ def _load_yolo(cfg: Dict[str, Any]):
             model_path = os.path.join(model_base, model_path)
         
         _YOLO = YOLO(model_path)
-        logger.info(f"✅ YOLO model loaded on {_YOLO_DEVICE} (GPU config: {gpu_config['memory_fraction']:.1%} memory)")
+        logger.info(f"[OK] YOLO model loaded on {_YOLO_DEVICE} (GPU config: {gpu_config['memory_fraction']:.1%} memory)")
             
     except Exception as e:
-        logger.error(f"❌ Failed to load YOLO model: {str(e)}")
+        logger.error(f"[FAIL] Failed to load YOLO model: {str(e)}")
         _YOLO = None
         GPUManager.clear_cache()
     return _YOLO

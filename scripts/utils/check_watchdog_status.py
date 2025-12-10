@@ -178,13 +178,13 @@ def main():
     
     # Recommendations
     if not is_running and inbox_files:
-        print("\n  💡 Tip: You have files waiting. Run START_WATCHDOG.bat to process them.")
+        print("\n  [TIP] Tip: You have files waiting. Run START_WATCHDOG.bat to process them.")
     elif is_running and not inbox_files:
-        print("\n  ✓ Watchdog is running and inbox is empty.")
+        print("\n  [SYMBOL] Watchdog is running and inbox is empty.")
     elif is_running and inbox_files:
         print(f"\n  ⏳ Watchdog is processing {len(inbox_files)} file(s)...")
     else:
-        print("\n  ✓ All clear! Drop files into import_inbox to process them.")
+        print("\n  [SYMBOL] All clear! Drop files into import_inbox to process them.")
     
     print()
 

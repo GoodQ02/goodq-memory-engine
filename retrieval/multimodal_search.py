@@ -55,7 +55,7 @@ class MultimodalSearchEngine:
             model = CLIPModel.from_pretrained("openai/clip-vit-base-patch16").eval()
             
             self._clip_model = {'model': model, 'processor': processor}
-            logger.info("✅ CLIP model loaded for text encoding")
+            logger.info("[OK] CLIP model loaded for text encoding")
         except Exception as e:
             logger.error(f"Failed to load CLIP model: {e}")
     
@@ -69,7 +69,7 @@ class MultimodalSearchEngine:
             
             model = SentenceTransformer('all-MiniLM-L6-v2')
             self._text_model = model
-            logger.info("✅ Text embedding model loaded")
+            logger.info("[OK] Text embedding model loaded")
         except Exception as e:
             logger.error(f"Failed to load text model: {e}")
     
@@ -330,7 +330,7 @@ def main():
     )
     
     # Display results
-    print(f"\n🔍 Search results for: '{args.query}'\n")
+    print(f"\n[SEARCH] Search results for: '{args.query}'\n")
     print("=" * 80)
     
     for idx, result in enumerate(results, 1):

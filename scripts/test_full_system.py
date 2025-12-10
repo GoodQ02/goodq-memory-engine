@@ -35,14 +35,14 @@ def test_full_system():
         bridge = WSL2AudioBridge()
         
         if bridge.check_status():
-            print("✅ WSL2 bridge operational")
+            print("[OK] WSL2 bridge operational")
             print(f"   GPU: {bridge.get_info().strip()}")
             results["tests"]["wsl2_bridge"] = "PASS"
         else:
-            print("❌ WSL2 bridge not ready")
+            print("[FAIL] WSL2 bridge not ready")
             results["tests"]["wsl2_bridge"] = "FAIL"
     except Exception as e:
-        print(f"❌ WSL2 bridge error: {e}")
+        print(f"[FAIL] WSL2 bridge error: {e}")
         results["tests"]["wsl2_bridge"] = "ERROR"
     print()
     
@@ -64,21 +64,21 @@ def test_full_system():
             transcript = result.get("transcript")
             
             if method == "wsl2_gpu" and transcript:
-                print(f"✅ Transcription successful (WSL2 GPU)")
+                print(f"[OK] Transcription successful (WSL2 GPU)")
                 print(f"   Method: {method}")
                 print(f"   Text: {transcript[:60]}...")
                 results["tests"]["transcription"] = "PASS"
             elif transcript:
-                print(f"⚠️  Transcription successful (fallback method: {method})")
+                print(f"[WARN]  Transcription successful (fallback method: {method})")
                 results["tests"]["transcription"] = "PASS_FALLBACK"
             else:
-                print(f"❌ Transcription failed")
+                print(f"[FAIL] Transcription failed")
                 results["tests"]["transcription"] = "FAIL"
         else:
-            print(f"⚠️  Test audio not found: {test_audio}")
+            print(f"[WARN]  Test audio not found: {test_audio}")
             results["tests"]["transcription"] = "SKIP"
     except Exception as e:
-        print(f"❌ Transcription error: {e}")
+        print(f"[FAIL] Transcription error: {e}")
         results["tests"]["transcription"] = "ERROR"
     print()
     
@@ -103,15 +103,15 @@ def test_full_system():
                 tables = cursor.fetchall()
                 conn.close()
                 db_status[name] = f"OK ({len(tables)} tables)"
-                print(f"✅ {name}: {len(tables)} tables")
+                print(f"[OK] {name}: {len(tables)} tables")
             else:
                 db_status[name] = "MISSING"
-                print(f"⚠️  {name}: not found")
+                print(f"[WARN]  {name}: not found")
         
         results["tests"]["databases"] = "PASS" if all("OK" in v for v in db_status.values()) else "PARTIAL"
         results["database_status"] = db_status
     except Exception as e:
-        print(f"❌ Database error: {e}")
+        print(f"[FAIL] Database error: {e}")
         results["tests"]["databases"] = "ERROR"
     print()
     
@@ -125,7 +125,7 @@ def test_full_system():
         if cuda_available:
             gpu_name = torch.cuda.get_device_name(0)
             gpu_mem = torch.cuda.get_device_properties(0).total_memory / 1e9
-            print(f"✅ CUDA available")
+            print(f"[OK] CUDA available")
             print(f"   GPU: {gpu_name}")
             print(f"   VRAM: {gpu_mem:.1f}GB")
             results["tests"]["gpu"] = "PASS"
@@ -135,10 +135,10 @@ def test_full_system():
                 "cuda_version": torch.version.cuda
             }
         else:
-            print(f"⚠️  CUDA not available (CPU mode)")
+            print(f"[WARN]  CUDA not available (CPU mode)")
             results["tests"]["gpu"] = "FALLBACK"
     except Exception as e:
-        print(f"❌ GPU check error: {e}")
+        print(f"[FAIL] GPU check error: {e}")
         results["tests"]["gpu"] = "ERROR"
     print()
     
@@ -148,11 +148,11 @@ def test_full_system():
     model_dir = Path(r"L:\models\hub")
     if model_dir.exists():
         models = list(model_dir.glob("models--*"))
-        print(f"✅ Model cache: {len(models)} models")
+        print(f"[OK] Model cache: {len(models)} models")
         results["tests"]["model_cache"] = "PASS"
         results["cached_models"] = len(models)
     else:
-        print(f"⚠️  Model cache not found")
+        print(f"[WARN]  Model cache not found")
         results["tests"]["model_cache"] = "MISSING"
     print()
     
@@ -172,18 +172,18 @@ def test_full_system():
     print()
     
     for test_name, status in test_results.items():
-        symbol = "✅" if status == "PASS" else "⚠️" if status in ["PARTIAL", "SKIP", "PASS_FALLBACK"] else "❌"
+        symbol = "[OK]" if status == "PASS" else "[WARN]" if status in ["PARTIAL", "SKIP", "PASS_FALLBACK"] else "[FAIL]"
         print(f"{symbol} {test_name}: {status}")
     
     print()
     print("="*80)
     
     if failed == 0:
-        print("  ✅ ALL CRITICAL TESTS PASSED - SYSTEM READY FOR PRODUCTION")
+        print("  [OK] ALL CRITICAL TESTS PASSED - SYSTEM READY FOR PRODUCTION")
         results["overall_status"] = "READY"
         exit_code = 0
     else:
-        print("  ❌ SOME TESTS FAILED - REVIEW REQUIRED")
+        print("  [FAIL] SOME TESTS FAILED - REVIEW REQUIRED")
         results["overall_status"] = "ISSUES"
         exit_code = 1
     

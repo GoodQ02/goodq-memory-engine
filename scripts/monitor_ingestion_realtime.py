@@ -151,10 +151,10 @@ class IngestionMonitor:
         
         print()
         if self.stall_counter > 0:
-            print(f"⚠️  WARNING: No progress detected for {self.stall_counter * 30} seconds")
+            print(f"[WARN]  WARNING: No progress detected for {self.stall_counter * 30} seconds")
             print(f"   ({self.max_stall_checks - self.stall_counter} checks until stall alert)")
         else:
-            print("✅ System is processing normally")
+            print("[OK] System is processing normally")
         
         print()
         print("=" * 80)

@@ -47,22 +47,22 @@ class UserSpaceWSL2Setup:
         except:
             output = result.stdout.decode('utf-8', errors='ignore')
         if "Ubuntu" in output and "Running" in output:
-            print("  ✓ Running")
+            print("  [SYMBOL] Running")
         else:
             return False
             
         print("\n[2/3] GPU...")
         out, err, code = self.wsl_cmd("nvidia-smi --query-gpu=name --format=csv,noheader")
         if code == 0:
-            print(f"  ✓ {out.strip()}")
+            print(f"  [SYMBOL] {out.strip()}")
         else:
-            print("  ⚠ No GPU (will use CPU)")
+            print("  [SYMBOL] No GPU (will use CPU)")
             
         print("\n[3/3] Python & pip...")
         out, err, code = self.wsl_cmd("python3 --version && pip3 --version")
         if code == 0:
             for line in out.strip().split('\n'):
-                print(f"  ✓ {line}")
+                print(f"  [SYMBOL] {line}")
         else:
             return False
             
@@ -82,7 +82,7 @@ class UserSpaceWSL2Setup:
         
         for d in dirs:
             self.wsl_cmd(f"mkdir -p {d}")
-        print("  ✓ Workspace created")
+        print("  [SYMBOL] Workspace created")
         return True
         
     def install_packages(self):
@@ -113,9 +113,9 @@ class UserSpaceWSL2Setup:
             out, err, code = self.wsl_cmd(cmd, timeout=600)
             
             if code == 0 or "Requirement already satisfied" in out or "Requirement already satisfied" in err:
-                print(f"  ✓ Installed")
+                print(f"  [SYMBOL] Installed")
             else:
-                print(f"  ⚠ Issue (may still work): {err[:100]}")
+                print(f"  [SYMBOL] Issue (may still work): {err[:100]}")
                 
         print("\nVerifying installations...")
         test_cmd = """python3 -c "
@@ -133,9 +133,9 @@ print(f'Librosa: {librosa.__version__}')
         out, err, code = self.wsl_cmd(test_cmd)
         if code == 0:
             for line in out.strip().split('\n'):
-                print(f"  ✓ {line}")
+                print(f"  [SYMBOL] {line}")
         else:
-            print(f"  ⚠ Verification had issues: {err[:200]}")
+            print(f"  [SYMBOL] Verification had issues: {err[:200]}")
             
         return True
         
@@ -205,7 +205,7 @@ if __name__ == "__main__":
         cmd = f"cat > {script_path} <<'SCRIPT_END'\n{processor}\nSCRIPT_END"
         self.wsl_cmd(cmd)
         self.wsl_cmd(f"chmod +x {script_path}")
-        print(f"  ✓ Created processing script")
+        print(f"  [SYMBOL] Created processing script")
         
         return True
         
@@ -362,7 +362,7 @@ if __name__ == "__main__":
         bridge_path = Path("L:/goodq4all/wsl2_audio_bridge.py")
         with open(bridge_path, 'w') as f:
             f.write(bridge_code)
-        print(f"  ✓ Created {bridge_path}")
+        print(f"  [SYMBOL] Created {bridge_path}")
         
         return True
         
@@ -374,10 +374,10 @@ if __name__ == "__main__":
         print("\nThis will install audio processing in WSL2 user space")
         print("No sudo required - all packages installed with --user flag")
         print("\nFeatures:")
-        print("  ✓ GPU-accelerated Whisper transcription")
-        print("  ✓ Faster-Whisper for speed")
-        print("  ✓ Librosa for audio processing")
-        print("  ✓ Windows-WSL2 bridge for integration")
+        print("  [SYMBOL] GPU-accelerated Whisper transcription")
+        print("  [SYMBOL] Faster-Whisper for speed")
+        print("  [SYMBOL] Librosa for audio processing")
+        print("  [SYMBOL] Windows-WSL2 bridge for integration")
         print("\nEstimated time: 10-15 minutes")
         print("\nPress ENTER to continue or CTRL+C to cancel...")
         input()
@@ -393,10 +393,10 @@ if __name__ == "__main__":
         for name, func in steps:
             try:
                 if not func():
-                    print(f"\n✗ {name} failed!")
+                    print(f"\n[SYMBOL] {name} failed!")
                     return False
             except Exception as e:
-                print(f"\n✗ Exception in {name}: {e}")
+                print(f"\n[SYMBOL] Exception in {name}: {e}")
                 import traceback
                 traceback.print_exc()
                 return False

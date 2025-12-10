@@ -49,9 +49,9 @@ result = subprocess.run(cmd, cwd='L:/goodq4all')
 print(f"\nExit code: {result.returncode}")
 
 if result.returncode == 0:
-    print("✓ Ingestion completed successfully")
+    print("[SYMBOL] Ingestion completed successfully")
 else:
-    print("✗ Ingestion failed (as expected if errors > 50%)")
+    print("[SYMBOL] Ingestion failed (as expected if errors > 50%)")
 
 # Cleanup
 try:

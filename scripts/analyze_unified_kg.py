@@ -25,7 +25,7 @@ def analyze_unified_kg(db_path: str):
     cursor = conn.cursor()
     
     # 1. Video Registry
-    print("📹 VIDEO REGISTRY")
+    print("[VIDEO] VIDEO REGISTRY")
     print("-" * 80)
     videos = cursor.execute("""
         SELECT video_hash, video_path, year, month, day, duration, scene_count
@@ -40,13 +40,13 @@ def analyze_unified_kg(db_path: str):
         if video['day']:
             year_str += f"-{video['day']:02d}"
         
-        print(f"  📼 {Path(video['video_path']).name}")
+        print(f"  [SYMBOL] {Path(video['video_path']).name}")
         print(f"     Date: {year_str}")
         print(f"     Duration: {video['duration']:.1f}s | Scenes: {video['scene_count']}")
         print()
     
     # 2. Global Entities
-    print("🌐 GLOBAL ENTITIES")
+    print("[SYMBOL] GLOBAL ENTITIES")
     print("-" * 80)
     entity_stats = cursor.execute("""
         SELECT entity_type, COUNT(*) as count
@@ -74,7 +74,7 @@ def analyze_unified_kg(db_path: str):
     print()
     
     # 4. Cross-Video Relationships
-    print("🔗 CROSS-VIDEO RELATIONSHIPS")
+    print("[SYMBOL] CROSS-VIDEO RELATIONSHIPS")
     print("-" * 80)
     
     total_rels = cursor.execute("SELECT COUNT(*) FROM cross_video_relationships").fetchone()[0]
@@ -92,7 +92,7 @@ def analyze_unified_kg(db_path: str):
     print()
     
     # 5. Strongest Relationships
-    print("💪 STRONGEST RELATIONSHIPS (top 10)")
+    print("[SYMBOL] STRONGEST RELATIONSHIPS (top 10)")
     print("-" * 80)
     
     strong_rels = cursor.execute("""
@@ -115,7 +115,7 @@ def analyze_unified_kg(db_path: str):
     print()
     
     # 6. Timeline Events
-    print("📅 TIMELINE")
+    print("[SYMBOL] TIMELINE")
     print("-" * 80)
     
     timeline_count = cursor.execute("SELECT COUNT(*) FROM temporal_timeline").fetchone()[0]
@@ -134,7 +134,7 @@ def analyze_unified_kg(db_path: str):
     print()
     
     # 7. Year Coverage
-    print("📆 YEAR COVERAGE")
+    print("[SYMBOL] YEAR COVERAGE")
     print("-" * 80)
     
     year_stats = cursor.execute("""
@@ -155,7 +155,7 @@ def analyze_unified_kg(db_path: str):
     # 8. Themes (if any)
     theme_count = cursor.execute("SELECT COUNT(*) FROM thematic_index").fetchone()[0]
     if theme_count > 0:
-        print("🎨 THEMES")
+        print("[UI] THEMES")
         print("-" * 80)
         
         themes = cursor.execute("""
@@ -170,7 +170,7 @@ def analyze_unified_kg(db_path: str):
         print()
     
     # 9. Sample Queries
-    print("🔍 SAMPLE QUERIES")
+    print("[SEARCH] SAMPLE QUERIES")
     print("-" * 80)
     
     # Query 1: Find all people
@@ -226,7 +226,7 @@ def main():
     db_path = Path("L:/_DATA/GoodQ_Data/unified_goodq.db")
     
     if not db_path.exists():
-        print(f"❌ Unified KG database not found at {db_path}")
+        print(f"[FAIL] Unified KG database not found at {db_path}")
         print("Run build_unified_kg.py first!")
         return
     

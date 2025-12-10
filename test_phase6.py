@@ -101,7 +101,7 @@ def test_phase6():
         with open(temporal_index_path) as f:
             temporal_index = json.load(f)
         
-        print(f"\n[TEST] ✅ Temporal index created!")
+        print(f"\n[TEST] [OK] Temporal index created!")
         print(f"[TEST] Path: {temporal_index_path}")
         print(f"[TEST] Total scenes: {temporal_index.get('total_scenes', 0)}")
         print(f"[TEST] Total segments: {len(temporal_index.get('segments', []))}")
@@ -123,7 +123,7 @@ def test_phase6():
             print(f"  Has audio: {seg.get('has_audio', False)}")
             print(f"  Has transcript: {seg.get('has_transcript', False)}")
     else:
-        print(f"\n[TEST] ❌ Temporal index NOT created")
+        print(f"\n[TEST] [FAIL] Temporal index NOT created")
     
     print("\n" + "="*80)
     print("[TEST] Phase 6 test complete!")

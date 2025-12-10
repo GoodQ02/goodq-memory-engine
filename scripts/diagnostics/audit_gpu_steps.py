@@ -62,10 +62,10 @@ print("=" * 80)
 print("GPU STEP AUDIT RESULTS")
 print("=" * 80)
 
-print(f"\n📊 Total GPU Steps: {len(set(results['gpu_steps']))}")
-print(f"💻 Total CPU Steps: {len(results['cpu_steps'])}")
-print(f"✅ Using GPUManager: {len(results['already_using_gpumanager'])}")
-print(f"🔧 Needs Refactor: {len(results['needs_refactor'])}")
+print(f"\n[STATS] Total GPU Steps: {len(set(results['gpu_steps']))}")
+print(f"[SYMBOL] Total CPU Steps: {len(results['cpu_steps'])}")
+print(f"[OK] Using GPUManager: {len(results['already_using_gpumanager'])}")
+print(f"[CONFIG] Needs Refactor: {len(results['needs_refactor'])}")
 
 print("\n" + "=" * 80)
 print("STEPS THAT NEED REFACTORING")
@@ -78,7 +78,7 @@ for step in results["needs_refactor"]:
         status.append("uses torch")
     if step["uses_gpu"]:
         status.append("GPU detected")
-    print(f"\n🔧 {step['step']}")
+    print(f"\n[CONFIG] {step['step']}")
     print(f"   Status: {', '.join(status)}")
     print(f"   File: {step['file']}")
 
@@ -86,12 +86,12 @@ print("\n" + "=" * 80)
 print("STEPS ALREADY USING GPUMANAGER")
 print("=" * 80)
 for step in results["already_using_gpumanager"]:
-    print(f"✅ {step['step']}")
+    print(f"[OK] {step['step']}")
 
 # Save to file
 with open('GPU_AUDIT_RESULTS.json', 'w') as f:
     json.dump(results, f, indent=2)
 
 print("\n" + "=" * 80)
-print("✅ Audit complete! Results saved to GPU_AUDIT_RESULTS.json")
+print("[OK] Audit complete! Results saved to GPU_AUDIT_RESULTS.json")
 print("=" * 80)

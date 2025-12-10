@@ -120,7 +120,7 @@ class IngestionMonitor:
                     minutes = (elapsed % 3600) // 60
                     seconds = elapsed % 60
                     
-                    print(f"\n[{hours:02d}:{minutes:02d}:{seconds:02d}] ✓ PROGRESS DETECTED")
+                    print(f"\n[{hours:02d}:{minutes:02d}:{seconds:02d}] [SYMBOL] PROGRESS DETECTED")
                     print(f"  Rate: {rate:.1f} rows/minute")
                     
                     for table, count in sorted(stats.items()):
@@ -136,7 +136,7 @@ class IngestionMonitor:
                     stall_time += self.check_interval
                     
                     if stall_time >= self.stall_threshold:
-                        print(f"\n[{elapsed}s] ⚠ ALERT: STALL DETECTED ({stall_time}s without progress)")
+                        print(f"\n[{elapsed}s] [SYMBOL] ALERT: STALL DETECTED ({stall_time}s without progress)")
                         
                         # Check for errors
                         errors = self.check_watchdog_log()

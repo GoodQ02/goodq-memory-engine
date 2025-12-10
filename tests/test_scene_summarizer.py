@@ -82,7 +82,7 @@ if result:
     print(f"Summaries after: {after_count}")
     
     if after_count > 0:
-        print("✅ Summary storage SUCCESSFUL!")
+        print("[OK] Summary storage SUCCESSFUL!")
         
         # Retrieve and display
         c.execute("SELECT content FROM summaries WHERE category='scene_summary_test' ORDER BY id DESC LIMIT 1")
@@ -91,7 +91,7 @@ if result:
             stored_data = json.loads(stored[0])
             print(f"\nStored summary: {stored_data.get('summary', 'N/A')}")
     else:
-        print("⚠️ Summary storage FAILED!")
+        print("[WARN] Summary storage FAILED!")
     
 else:
     print("No scenes found in database!")

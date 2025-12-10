@@ -51,17 +51,17 @@ def run_command(cmd, env_name=None):
         )
         
         if result.returncode != 0:
-            print(f"  ❌ Command failed:")
+            print(f"  [FAIL] Command failed:")
             print(f"  {result.stderr}")
             return False
         
-        print(f"  ✓ Success")
+        print(f"  [SYMBOL] Success")
         return True
     except subprocess.TimeoutExpired:
-        print(f"  ❌ Command timed out")
+        print(f"  [FAIL] Command timed out")
         return False
     except Exception as e:
-        print(f"  ❌ Error: {e}")
+        print(f"  [FAIL] Error: {e}")
         return False
 
 
@@ -102,7 +102,7 @@ def setup_environment(env_name, config):
         # Install CUDA-enabled versions
         f"pip install {' '.join(install_packages)} --index-url {cuda_index}",
         # Verify CUDA works
-        "python -c \"import torch; assert torch.cuda.is_available(), 'CUDA not available!'; print(f'✓ CUDA {torch.version.cuda} on {torch.cuda.get_device_name(0)}')\"" 
+        "python -c \"import torch; assert torch.cuda.is_available(), 'CUDA not available!'; print(f'[SYMBOL] CUDA {torch.version.cuda} on {torch.cuda.get_device_name(0)}')\"" 
     ]
     
     return activate_and_run(env_name, commands)
@@ -125,10 +125,10 @@ def main():
     for env_name, config in GPU_ENVIRONMENTS.items():
         if setup_environment(env_name, config):
             success_count += 1
-            print(f"✓ {env_name} configured successfully")
+            print(f"[SYMBOL] {env_name} configured successfully")
         else:
             failed_envs.append(env_name)
-            print(f"❌ {env_name} configuration failed")
+            print(f"[FAIL] {env_name} configuration failed")
     
     # Summary
     print("\n" + "="*80)
@@ -138,10 +138,10 @@ def main():
     
     if failed_envs:
         print(f"Failed: {', '.join(failed_envs)}")
-        print("\n❌ Some environments failed. Check errors above.")
+        print("\n[FAIL] Some environments failed. Check errors above.")
         return 1
     else:
-        print("\n✅ All environments configured successfully!")
+        print("\n[OK] All environments configured successfully!")
         print("\nGPU acceleration is now enabled for:")
         for env in GPU_ENVIRONMENTS.keys():
             print(f"  - {env}")
@@ -154,8 +154,8 @@ if __name__ == '__main__':
     try:
         sys.exit(main())
     except KeyboardInterrupt:
-        print("\n\n❌ Setup cancelled by user")
+        print("\n\n[FAIL] Setup cancelled by user")
         sys.exit(1)
     except Exception as e:
-        print(f"\n\n❌ Setup failed: {e}")
+        print(f"\n\n[FAIL] Setup failed: {e}")
         sys.exit(1)

@@ -37,7 +37,7 @@ def check_python_processes():
             
         return python_procs
     except ImportError:
-        print("⚠ psutil not available, cannot check processes")
+        print("[SYMBOL] psutil not available, cannot check processes")
         return []
 
 def check_gpu_usage():
@@ -79,10 +79,10 @@ def check_database():
     db_path = Path("L:/goodq4all/output/knowledge.db")
     
     if not db_path.exists():
-        print(f"✗ Database not found: {db_path}")
+        print(f"[SYMBOL] Database not found: {db_path}")
         return
     
-    print(f"✓ Database found: {db_path}")
+    print(f"[SYMBOL] Database found: {db_path}")
     print(f"  Size: {db_path.stat().st_size / 1024 / 1024:.2f} MB")
     
     try:
@@ -117,7 +117,7 @@ def check_database():
         conn.close()
         
     except sqlite3.Error as e:
-        print(f"✗ Database error: {e}")
+        print(f"[SYMBOL] Database error: {e}")
 
 def check_processing_status():
     """Check current processing status"""
@@ -151,11 +151,11 @@ def check_processing_status():
     # Check for lock files
     locks = list(Path("L:/goodq4all").rglob("*.lock"))
     if locks:
-        print(f"\n⚠ Found {len(locks)} lock files:")
+        print(f"\n[SYMBOL] Found {len(locks)} lock files:")
         for lock in locks:
             print(f"  - {lock}")
     else:
-        print("\n✓ No lock files found")
+        print("\n[SYMBOL] No lock files found")
 
 def check_logs():
     """Check recent log entries"""

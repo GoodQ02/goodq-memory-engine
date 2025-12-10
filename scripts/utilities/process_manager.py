@@ -183,7 +183,7 @@ class ProcessManager:
             with open(pid_file, 'w') as f:
                 f.write(str(process.pid))
             
-            logger.info(f"✓ Started {name} (PID {process.pid})")
+            logger.info(f"[SYMBOL] Started {name} (PID {process.pid})")
             self.save_state()
             
             return True
@@ -220,12 +220,12 @@ class ProcessManager:
             # Wait for process to exit
             try:
                 process.wait(timeout=timeout)
-                logger.info(f"✓ Stopped {name}")
+                logger.info(f"[SYMBOL] Stopped {name}")
             except psutil.TimeoutExpired:
                 logger.warning(f"Process {name} did not stop gracefully, killing...")
                 process.kill()
                 process.wait(timeout=5)
-                logger.info(f"✓ Killed {name}")
+                logger.info(f"[SYMBOL] Killed {name}")
             
             # Clean up
             proc_info.pid = None

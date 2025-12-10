@@ -21,15 +21,15 @@ def check_gpu():
     """Check GPU availability and memory"""
     print_header("GPU Status Check")
     if torch.cuda.is_available():
-        print(f"✓ CUDA Available: {torch.cuda.get_device_name(0)}")
-        print(f"✓ CUDA Version: {torch.version.cuda}")
+        print(f"[SYMBOL] CUDA Available: {torch.cuda.get_device_name(0)}")
+        print(f"[SYMBOL] CUDA Version: {torch.version.cuda}")
         mem_allocated = torch.cuda.memory_allocated(0) / 1024**3
         mem_reserved = torch.cuda.memory_reserved(0) / 1024**3
         mem_total = torch.cuda.get_device_properties(0).total_memory / 1024**3
-        print(f"✓ GPU Memory: {mem_allocated:.2f}GB allocated, {mem_reserved:.2f}GB reserved, {mem_total:.2f}GB total")
+        print(f"[SYMBOL] GPU Memory: {mem_allocated:.2f}GB allocated, {mem_reserved:.2f}GB reserved, {mem_total:.2f}GB total")
         return True
     else:
-        print("✗ CUDA not available")
+        print("[SYMBOL] CUDA not available")
         return False
 
 def test_pyannote_import():
@@ -37,10 +37,10 @@ def test_pyannote_import():
     print_header("PyAnnote Import Test")
     try:
         from pyannote.audio import Pipeline
-        print("✓ pyannote.audio imported successfully")
+        print("[SYMBOL] pyannote.audio imported successfully")
         return True
     except Exception as e:
-        print(f"✗ Failed to import pyannote.audio: {e}")
+        print(f"[SYMBOL] Failed to import pyannote.audio: {e}")
         return False
 
 def test_model_loading():
@@ -55,16 +55,16 @@ def test_model_loading():
             use_auth_token=os.getenv("HF_TOKEN")
         )
         elapsed = time.time() - start
-        print(f"✓ Model loaded in {elapsed:.2f}s")
+        print(f"[SYMBOL] Model loaded in {elapsed:.2f}s")
         
         # Move to GPU
         if torch.cuda.is_available():
             pipeline.to(torch.device("cuda"))
-            print("✓ Model moved to GPU")
+            print("[SYMBOL] Model moved to GPU")
         
         return True, pipeline
     except Exception as e:
-        print(f"✗ Failed to load model: {e}")
+        print(f"[SYMBOL] Failed to load model: {e}")
         return False, None
 
 def test_short_audio(pipeline):
@@ -83,7 +83,7 @@ def test_short_audio(pipeline):
         ], capture_output=True)
     
     if not test_audio.exists():
-        print("✗ Could not create test audio")
+        print("[SYMBOL] Could not create test audio")
         return False
     
     try:
@@ -108,15 +108,15 @@ def test_short_audio(pipeline):
         
         # Print results
         num_speakers = len(set([segment.label for segment in diarization.itertracks(yield_label=True)[1]]))
-        print(f"✓ Diarization complete in {elapsed:.2f}s")
-        print(f"✓ Detected {num_speakers} speaker(s)")
+        print(f"[SYMBOL] Diarization complete in {elapsed:.2f}s")
+        print(f"[SYMBOL] Detected {num_speakers} speaker(s)")
         
         for turn, _, speaker in diarization.itertracks(yield_label=True):
             print(f"  [{turn.start:.1f}s - {turn.end:.1f}s] {speaker}")
         
         return True
     except Exception as e:
-        print(f"✗ Diarization failed: {e}")
+        print(f"[SYMBOL] Diarization failed: {e}")
         import traceback
         traceback.print_exc()
         return False
@@ -143,13 +143,13 @@ def test_chunk_processing():
             ], capture_output=True)
         
         if not test_audio.exists():
-            print("✗ Could not create test audio")
+            print("[SYMBOL] Could not create test audio")
             return False
         
         # Load audio
         audio, sr = librosa.load(str(test_audio), sr=16000, mono=True)
         duration = len(audio) / sr
-        print(f"✓ Loaded {duration:.1f}s audio")
+        print(f"[SYMBOL] Loaded {duration:.1f}s audio")
         
         # Split into 30s chunks
         chunk_size = 30 * sr
@@ -158,7 +158,7 @@ def test_chunk_processing():
             chunk = audio[i:i+chunk_size]
             chunks.append(chunk)
         
-        print(f"✓ Split into {len(chunks)} chunks")
+        print(f"[SYMBOL] Split into {len(chunks)} chunks")
         
         # Process each chunk (simulated)
         total_time = 0
@@ -171,12 +171,12 @@ def test_chunk_processing():
             total_time += elapsed
             print(f"  Chunk {i+1}/{len(chunks)}: {chunk_duration:.1f}s audio processed in {elapsed:.2f}s")
         
-        print(f"✓ Total processing time: {total_time:.2f}s")
-        print(f"✓ Average: {total_time/len(chunks):.2f}s per chunk")
+        print(f"[SYMBOL] Total processing time: {total_time:.2f}s")
+        print(f"[SYMBOL] Average: {total_time/len(chunks):.2f}s per chunk")
         
         return True
     except Exception as e:
-        print(f"✗ Chunk processing test failed: {e}")
+        print(f"[SYMBOL] Chunk processing test failed: {e}")
         import traceback
         traceback.print_exc()
         return False
@@ -209,7 +209,7 @@ def main():
     # Summary
     print_header("Test Summary")
     for test, passed in results.items():
-        status = "✓ PASS" if passed else "✗ FAIL"
+        status = "[SYMBOL] PASS" if passed else "[SYMBOL] FAIL"
         print(f"{status}: {test}")
     
     total = len(results)
@@ -217,10 +217,10 @@ def main():
     print(f"\nPassed: {passed}/{total}")
     
     if passed == total:
-        print("\n🎉 All tests passed! Audio pipeline is ready.")
+        print("\n[SYMBOL] All tests passed! Audio pipeline is ready.")
         return 0
     else:
-        print("\n⚠️ Some tests failed. Review errors above.")
+        print("\n[WARN] Some tests failed. Review errors above.")
         return 1
 
 if __name__ == "__main__":

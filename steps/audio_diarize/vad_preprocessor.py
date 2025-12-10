@@ -43,7 +43,7 @@ def _load_vad_model():
             'collect_chunks': collect_chunks,
         }
         
-        print("[VAD] ✓ Model loaded successfully")
+        print("[VAD] [SYMBOL] Model loaded successfully")
         return model, _VAD_UTILS
         
     except Exception as e:
@@ -122,7 +122,7 @@ def detect_speech_segments(
         total_audio_duration = len(wav) / sampling_rate
         speech_ratio = total_speech_duration / total_audio_duration if total_audio_duration > 0 else 0
         
-        print(f"[VAD] ✓ Found {len(segments)} speech segments")
+        print(f"[VAD] [SYMBOL] Found {len(segments)} speech segments")
         print(f"[VAD] Total speech: {total_speech_duration/60:.1f}min of {total_audio_duration/60:.1f}min ({speech_ratio*100:.1f}%)")
         
         return segments
@@ -191,7 +191,7 @@ def extract_speech_only_audio(
             return False
         
         output_duration = len(speech_audio) / sampling_rate
-        print(f"[VAD] ✓ Saved speech-only audio: {output_duration/60:.1f}min ({os.path.getsize(output_path)/(1024*1024):.1f}MB)")
+        print(f"[VAD] [SYMBOL] Saved speech-only audio: {output_duration/60:.1f}min ({os.path.getsize(output_path)/(1024*1024):.1f}MB)")
         
         return True
         

@@ -20,22 +20,22 @@ for env in envs_to_check:
     try:
         result = subprocess.run(
             ['conda', 'run', '-n', env, 'python', '-c', 
-             'import sys; import os; sys.path.insert(0, "L:/goodq4all"); import goodq4all; print("✓ goodq4all module found")'],
+             'import sys; import os; sys.path.insert(0, "L:/goodq4all"); import goodq4all; print("[SYMBOL] goodq4all module found")'],
             capture_output=True,
             text=True,
             timeout=30
         )
         if result.returncode == 0:
-            print(f"  ✓ SUCCESS: {result.stdout.strip()}")
+            print(f"  [SYMBOL] SUCCESS: {result.stdout.strip()}")
         else:
-            print(f"  ✗ FAILED:")
+            print(f"  [SYMBOL] FAILED:")
             if result.stderr:
                 # Show only the relevant error
                 for line in result.stderr.split('\n'):
                     if 'ModuleNotFoundError' in line or 'ImportError' in line or 'Error' in line:
                         print(f"    {line}")
     except Exception as e:
-        print(f"  ✗ ERROR: {e}")
+        print(f"  [SYMBOL] ERROR: {e}")
 
 print("\n" + "=" * 80)
 print("Diagnostic complete")

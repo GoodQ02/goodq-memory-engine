@@ -226,9 +226,9 @@ def extract_scene_frames(
         if frames:
             scene_frames[scene_id] = frames
             total_extracted += len(frames)
-            logger.info(f"  ✓ Extracted {len(frames)} frames")
+            logger.info(f"  [SYMBOL] Extracted {len(frames)} frames")
         else:
-            logger.warning(f"  ✗ No frames extracted for scene {scene_id}")
+            logger.warning(f"  [SYMBOL] No frames extracted for scene {scene_id}")
     
     logger.info(f"Total frames extracted: {total_extracted} from {len(scenes)} scenes")
     

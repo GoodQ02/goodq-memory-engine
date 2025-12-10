@@ -437,7 +437,7 @@ class PipelineFlowValidator:
             self.validation_results['steps'][step] = {}
         self.validation_results['steps'][step]['status'] = 'SUCCESS'
         self.validation_results['steps'][step]['message'] = message
-        logger.info(f"✓ {step}: {message}")
+        logger.info(f"[SYMBOL] {step}: {message}")
     
     def _add_warning(self, step: str, message: str):
         """Record a warning"""
@@ -446,7 +446,7 @@ class PipelineFlowValidator:
         self.validation_results['steps'][step]['status'] = 'WARNING'
         self.validation_results['steps'][step]['message'] = message
         self.validation_results['warnings'].append(f"{step}: {message}")
-        logger.warning(f"⚠ {step}: {message}")
+        logger.warning(f"[SYMBOL] {step}: {message}")
     
     def _add_error(self, step: str, message: str):
         """Record an error"""
@@ -455,7 +455,7 @@ class PipelineFlowValidator:
         self.validation_results['steps'][step]['status'] = 'ERROR'
         self.validation_results['steps'][step]['message'] = message
         self.validation_results['errors'].append(f"{step}: {message}")
-        logger.error(f"✗ {step}: {message}")
+        logger.error(f"[SYMBOL] {step}: {message}")
     
     def _determine_overall_status(self):
         """Determine overall validation status"""
@@ -499,7 +499,7 @@ def main():
     print(f"Warnings: {len(results['warnings'])}")
     print("\nStep Status:")
     for step, data in results['steps'].items():
-        status_symbol = "✓" if data['status'] == 'SUCCESS' else "⚠" if data['status'] == 'WARNING' else "✗"
+        status_symbol = "[SYMBOL]" if data['status'] == 'SUCCESS' else "[SYMBOL]" if data['status'] == 'WARNING' else "[SYMBOL]"
         print(f"  {status_symbol} {step}: {data['status']}")
     print("="*60)
 

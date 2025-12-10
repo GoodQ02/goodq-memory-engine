@@ -48,7 +48,7 @@ class PythonPathConfig:
             self._cache_env_pythons()
             
             self._initialized = True
-            logger.info(f"✓ Python paths initialized (conda: {self._conda_base})")
+            logger.info(f"[SYMBOL] Python paths initialized (conda: {self._conda_base})")
             return True
             
         except Exception as e:

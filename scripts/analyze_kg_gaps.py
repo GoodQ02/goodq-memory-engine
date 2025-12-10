@@ -46,31 +46,31 @@ print("="*60)
 
 print("""
 FROM KEYFRAME (_process_keyframe_entities):
-  ✓ detections/objects -> 'object' nodes
-  ✓ tags -> 'concept' nodes  
-  ✓ emotions -> 'emotion' nodes
-  ✓ ocr_text -> 'concept' node with 'text_overlay'
+  [SYMBOL] detections/objects -> 'object' nodes
+  [SYMBOL] tags -> 'concept' nodes  
+  [SYMBOL] emotions -> 'emotion' nodes
+  [SYMBOL] ocr_text -> 'concept' node with 'text_overlay'
   
-  ✗ faces NOT EXTRACTED
-  ✗ face_count NOT USED
-  ✗ caption NOT EXTRACTED
-  ✗ sentiment NOT EXTRACTED (from keyframe)
-  ✗ entities NOT EXTRACTED
-  ✗ detections details (bbox, confidence) NOT FULLY USED
+  [SYMBOL] faces NOT EXTRACTED
+  [SYMBOL] face_count NOT USED
+  [SYMBOL] caption NOT EXTRACTED
+  [SYMBOL] sentiment NOT EXTRACTED (from keyframe)
+  [SYMBOL] entities NOT EXTRACTED
+  [SYMBOL] detections details (bbox, confidence) NOT FULLY USED
 
 FROM AUDIO (_process_audio_entities):
-  ✓ transcript -> 'concept' node with 'speech'
-  ✓ speakers -> 'person' nodes
-  ✓ audio_emotion -> 'emotion' nodes
-  ✓ tags -> 'concept' nodes
+  [SYMBOL] transcript -> 'concept' node with 'speech'
+  [SYMBOL] speakers -> 'person' nodes
+  [SYMBOL] audio_emotion -> 'emotion' nodes
+  [SYMBOL] tags -> 'concept' nodes
   
-  ✗ sentiment NOT EXTRACTED (from audio)
-  ✗ transcript_segments NOT EXTRACTED
-  ✗ speaker_transcript NOT EXTRACTED
-  ✗ diarization details NOT EXTRACTED
-  ✗ music_events NOT EXTRACTED
-  ✗ time_hints NOT EXTRACTED
-  ✗ audio_features NOT EXTRACTED
+  [SYMBOL] sentiment NOT EXTRACTED (from audio)
+  [SYMBOL] transcript_segments NOT EXTRACTED
+  [SYMBOL] speaker_transcript NOT EXTRACTED
+  [SYMBOL] diarization details NOT EXTRACTED
+  [SYMBOL] music_events NOT EXTRACTED
+  [SYMBOL] time_hints NOT EXTRACTED
+  [SYMBOL] audio_features NOT EXTRACTED
 """)
 
 print("\n" + "="*60)

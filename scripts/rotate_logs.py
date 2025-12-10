@@ -160,13 +160,13 @@ def rotate_logs():
                     
                     # Remove original
                     shutil.rmtree(log_dir)
-                    logger.info(f"  ✓ Archived and removed: {log_dir.name}")
+                    logger.info(f"  [SYMBOL] Archived and removed: {log_dir.name}")
                     
                     archived_count += 1
                     total_size += original_size
                     compressed_size += comp_size
                 else:
-                    logger.error(f"  ✗ Failed to compress {log_dir.name}")
+                    logger.error(f"  [SYMBOL] Failed to compress {log_dir.name}")
             else:
                 logger.info(f"  [DRY RUN] Would archive and remove: {log_dir.name}")
                 archived_count += 1

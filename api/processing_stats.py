@@ -186,5 +186,5 @@ def health_check():
     })
 
 if __name__ == '__main__':
-    logger.info("🚀 Starting Processing Stats API on port 5001...")
+    logger.info("[LAUNCH] Starting Processing Stats API on port 5001...")
     app.run(host='0.0.0.0', port=5001, debug=False)

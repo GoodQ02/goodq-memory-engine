@@ -17,10 +17,10 @@ print("=" * 80)
 # Check if sample.mp4 exists
 sample_path = Path("L:/goodq4all/import_inbox/sample.mp4")
 if not sample_path.exists():
-    print(f"\n❌ Sample file not found: {sample_path}")
+    print(f"\n[FAIL] Sample file not found: {sample_path}")
     sys.exit(1)
 
-print(f"\n✅ Sample file found: {sample_path.name}")
+print(f"\n[OK] Sample file found: {sample_path.name}")
 print(f"   Size: {sample_path.stat().st_size / 1024**2:.2f} MB")
 
 # Clear existing data for clean test
@@ -51,7 +51,7 @@ if db_path.exists():
     conn.commit()
     conn.close()
     
-    print(f"   ✓ Cleared old summaries")
+    print(f"   [SYMBOL] Cleared old summaries")
 
 # Run ingestion pipeline with verbose output
 print("\n" + "=" * 80)
@@ -85,9 +85,9 @@ try:
     elapsed_time = time.time() - start_time
     
     if result.returncode == 0:
-        print(f"   ✓ Pipeline completed successfully in {elapsed_time:.1f}s")
+        print(f"   [SYMBOL] Pipeline completed successfully in {elapsed_time:.1f}s")
     else:
-        print(f"   ❌ Pipeline failed with exit code {result.returncode}")
+        print(f"   [FAIL] Pipeline failed with exit code {result.returncode}")
         print(f"\nSTDOUT:\n{result.stdout}")
         print(f"\nSTDERR:\n{result.stderr}")
         sys.exit(1)
@@ -100,10 +100,10 @@ try:
                 print(f"     {line.strip()}")
                 
 except subprocess.TimeoutExpired:
-    print(f"   ❌ Pipeline timed out after 300 seconds")
+    print(f"   [FAIL] Pipeline timed out after 300 seconds")
     sys.exit(1)
 except Exception as e:
-    print(f"   ❌ Pipeline error: {e}")
+    print(f"   [FAIL] Pipeline error: {e}")
     sys.exit(1)
 
 # Verify results in database
@@ -175,18 +175,18 @@ tests = []
 test1_pass = scene_summary_count >= scene_count * 0.8  # Allow 20% failure
 tests.append(("Scene summaries generated", test1_pass))
 if test1_pass:
-    print(f"✅ Scene summaries: {scene_summary_count}/{scene_count}")
+    print(f"[OK] Scene summaries: {scene_summary_count}/{scene_count}")
 else:
-    print(f"❌ Scene summaries: {scene_summary_count}/{scene_count} (expected >= {int(scene_count * 0.8)})")
+    print(f"[FAIL] Scene summaries: {scene_summary_count}/{scene_count} (expected >= {int(scene_count * 0.8)})")
     all_tests_passed = False
 
 # Test 2: Video summary generated
 test2_pass = video_summary_count > 0
 tests.append(("Video summary generated", test2_pass))
 if test2_pass:
-    print(f"✅ Video summary generated")
+    print(f"[OK] Video summary generated")
 else:
-    print(f"❌ No video summary found")
+    print(f"[FAIL] No video summary found")
     all_tests_passed = False
 
 # Test 3: LLM method used (if summaries exist)
@@ -194,9 +194,9 @@ if video_summary_count > 0:
     test3_pass = video_method == 'llm'
     tests.append(("LLM method used", test3_pass))
     if test3_pass:
-        print(f"✅ LLM method confirmed")
+        print(f"[OK] LLM method confirmed")
     else:
-        print(f"⚠️  Template fallback used (LLM may not be available)")
+        print(f"[WARN]  Template fallback used (LLM may not be available)")
         # Don't fail for this - LLM might be offline
 else:
     test3_pass = False
@@ -207,9 +207,9 @@ if scene_summary_count > 0:
     test4_pass = len(sample_summary) > 50 and len(sample_summary) < 500
     tests.append(("Scene summaries are concise", test4_pass))
     if test4_pass:
-        print(f"✅ Scene summaries are concise (50-500 chars)")
+        print(f"[OK] Scene summaries are concise (50-500 chars)")
     else:
-        print(f"⚠️  Scene summary length unusual: {len(sample_summary)} chars")
+        print(f"[WARN]  Scene summary length unusual: {len(sample_summary)} chars")
 else:
     test4_pass = False
     tests.append(("Scene summaries are concise", test4_pass))
@@ -218,9 +218,9 @@ if video_summary_count > 0:
     test5_pass = len(video_summary) > 200
     tests.append(("Video summary is comprehensive", test5_pass))
     if test5_pass:
-        print(f"✅ Video summary is comprehensive ({len(video_summary)} chars)")
+        print(f"[OK] Video summary is comprehensive ({len(video_summary)} chars)")
     else:
-        print(f"⚠️  Video summary too short: {len(video_summary)} chars")
+        print(f"[WARN]  Video summary too short: {len(video_summary)} chars")
 else:
     test5_pass = False
     tests.append(("Video summary is comprehensive", test5_pass))
@@ -232,7 +232,7 @@ total = len(tests)
 print(f"FINAL SCORE: {passed}/{total} tests passed")
 
 if passed >= 3:  # At least scene summaries and video summary
-    print("\n🎉 LLM INTEGRATION IS WORKING!")
+    print("\n[SYMBOL] LLM INTEGRATION IS WORKING!")
     print("\nNext steps:")
     print("  1. Test with 1987_1988 family video")
     print("  2. Review summaries for quality and accuracy")
@@ -240,7 +240,7 @@ if passed >= 3:  # At least scene summaries and video summary
     print("  4. Enable additional LLM features (relationship extraction, emotion arc)")
     sys.exit(0)
 else:
-    print("\n❌ LLM INTEGRATION NEEDS ATTENTION")
+    print("\n[FAIL] LLM INTEGRATION NEEDS ATTENTION")
     print("\nTroubleshooting:")
     print("  - Check if LM Studio is running (http://localhost:1234)")
     print("  - Verify config.yaml has llm.enabled=true")

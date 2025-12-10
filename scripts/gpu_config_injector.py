@@ -140,7 +140,7 @@ from steps.common.gpu_config import configure_gpu, get_device, clear_cache, prin
         print(f"Steps directory: {self.steps_dir}")
         print(f"Target steps: {len(self.gpu_steps)}")
         if dry_run:
-            print("\n⚠ DRY RUN MODE - No files will be modified")
+            print("\n[SYMBOL] DRY RUN MODE - No files will be modified")
         print("=" * 80)
         print()
         
@@ -155,16 +155,16 @@ from steps.common.gpu_config import configure_gpu, get_device, clear_cache, prin
             step_file = step_dir / "step.py"
             
             if not step_file.exists():
-                print(f"⚠ {step_name:25s} - step.py not found")
+                print(f"[SYMBOL] {step_name:25s} - step.py not found")
                 results["skipped"].append(step_name)
                 continue
             
-            print(f"📁 {step_name:25s}", end=" - ")
+            print(f"[DIR] {step_name:25s}", end=" - ")
             
             try:
                 # Check if already has import
                 if self.check_has_gpu_import(step_file):
-                    print("✓ Already configured")
+                    print("[SYMBOL] Already configured")
                     results["skipped"].append(step_name)
                     continue
                 
@@ -172,7 +172,7 @@ from steps.common.gpu_config import configure_gpu, get_device, clear_cache, prin
                     # Inject import
                     success, msg = self.inject_import(step_file)
                     if success:
-                        print(f"✅ {msg}")
+                        print(f"[OK] {msg}")
                         results["success"].append(step_name)
                     else:
                         print(f"⏭ {msg}")
@@ -182,7 +182,7 @@ from steps.common.gpu_config import configure_gpu, get_device, clear_cache, prin
                     results["success"].append(step_name)
                     
             except Exception as e:
-                print(f"❌ Error: {e}")
+                print(f"[FAIL] Error: {e}")
                 results["failed"].append(step_name)
         
         # Print summary
@@ -190,9 +190,9 @@ from steps.common.gpu_config import configure_gpu, get_device, clear_cache, prin
         print("=" * 80)
         print("Summary")
         print("=" * 80)
-        print(f"✅ Success: {len(results['success'])}")
+        print(f"[OK] Success: {len(results['success'])}")
         print(f"⏭ Skipped: {len(results['skipped'])}")
-        print(f"❌ Failed: {len(results['failed'])}")
+        print(f"[FAIL] Failed: {len(results['failed'])}")
         
         if results["success"]:
             print(f"\nSuccessfully injected:")
@@ -200,7 +200,7 @@ from steps.common.gpu_config import configure_gpu, get_device, clear_cache, prin
                 print(f"  • {step}")
         
         if results["failed"]:
-            print(f"\n❌ Failed:")
+            print(f"\n[FAIL] Failed:")
             for step in results["failed"]:
                 print(f"  • {step}")
         
@@ -226,24 +226,24 @@ from steps.common.gpu_config import configure_gpu, get_device, clear_cache, prin
             step_file = step_dir / "step.py"
             
             if not step_file.exists():
-                print(f"⚠ {step_name:25s} - step.py not found")
+                print(f"[SYMBOL] {step_name:25s} - step.py not found")
                 results["not_found"].append(step_name)
                 continue
             
             if self.check_has_gpu_import(step_file):
-                print(f"✅ {step_name:25s} - GPU config present")
+                print(f"[OK] {step_name:25s} - GPU config present")
                 results["configured"].append(step_name)
             else:
-                print(f"❌ {step_name:25s} - GPU config MISSING")
+                print(f"[FAIL] {step_name:25s} - GPU config MISSING")
                 results["missing"].append(step_name)
         
         print()
         print("=" * 80)
         print("Verification Summary")
         print("=" * 80)
-        print(f"✅ Configured: {len(results['configured'])}/{len(self.gpu_steps)}")
-        print(f"❌ Missing: {len(results['missing'])}")
-        print(f"⚠ Not found: {len(results['not_found'])}")
+        print(f"[OK] Configured: {len(results['configured'])}/{len(self.gpu_steps)}")
+        print(f"[FAIL] Missing: {len(results['missing'])}")
+        print(f"[SYMBOL] Not found: {len(results['not_found'])}")
         print("=" * 80)
         
         return results

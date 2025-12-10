@@ -22,11 +22,11 @@ c.execute('SELECT COUNT(*) FROM summaries')
 summaries_count = c.fetchone()[0]
 
 print(f'\n[DATABASE COUNTS]')
-print(f'  Scenes: {scenes_count} {"✅" if scenes_count == 16 else "⚠️"}')
-print(f'  Segments: {segments_count} ✅')
-print(f'  Embeddings: {emb_count} ✅')
-print(f'  Links: {links_count} ✅')
-print(f'  Summaries: {summaries_count} {"✅" if summaries_count > 0 else "⚠️ MISSING!"}')
+print(f'  Scenes: {scenes_count} {"[OK]" if scenes_count == 16 else "[WARN]"}')
+print(f'  Segments: {segments_count} [OK]')
+print(f'  Embeddings: {emb_count} [OK]')
+print(f'  Links: {links_count} [OK]')
+print(f'  Summaries: {summaries_count} {"[OK]" if summaries_count > 0 else "[WARN] MISSING!"}')
 
 # Sample scene
 c.execute('SELECT id, start, end, meta FROM scenes LIMIT 1')
@@ -43,9 +43,9 @@ has_emotions = bool(meta_dict.get('emotions'))
 has_caption = bool(meta_dict.get('caption'))
 
 print(f'\n[SCENE DATA COMPLETENESS]')
-print(f'  Transcript: {"✅" if has_transcript else "❌"}')
-print(f'  Emotions: {"✅" if has_emotions else "❌"}')
-print(f'  Caption: {"✅" if has_caption else "❌"}')
+print(f'  Transcript: {"[OK]" if has_transcript else "[FAIL]"}')
+print(f'  Emotions: {"[OK]" if has_emotions else "[FAIL]"}')
+print(f'  Caption: {"[OK]" if has_caption else "[FAIL]"}')
 
 if has_transcript:
     print(f'  Sample transcript: {meta_dict["transcript"][:80]}...')
@@ -69,7 +69,7 @@ for rel, cnt in c.fetchall():
 print('\n' + '='*80)
 print('CRITICAL ISSUE IDENTIFIED')
 print('='*80)
-print(f'⚠️ SUMMARIES TABLE IS EMPTY: {summaries_count}/16 generated')
+print(f'[WARN] SUMMARIES TABLE IS EMPTY: {summaries_count}/16 generated')
 print(f'   The summarization pipeline step is NOT executing or NOT saving results!')
 print('\n' + '='*80)
 

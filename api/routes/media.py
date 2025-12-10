@@ -23,7 +23,7 @@ def get_data_loader():
     
     if _data_loader is None:
         _data_loader = DataLoader()
-        logger.info("✅ Data loader initialized for media")
+        logger.info("[OK] Data loader initialized for media")
     
     return _data_loader
 

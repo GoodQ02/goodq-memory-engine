@@ -8,23 +8,23 @@ from pathlib import Path
 
 # Emoji to ASCII mapping
 EMOJI_MAP = {
-    '🔧': '[CONFIG]',
-    '🧠': '[AI]',
-    '✓': '[OK]',
-    '✅': '[PASS]',
-    '✗': '[FAIL]',
-    '❌': '[FAIL]',
-    '⚠️': '[WARN]',
+    '[CONFIG]': '[CONFIG]',
+    '[AI]': '[AI]',
+    '[SYMBOL]': '[OK]',
+    '[OK]': '[PASS]',
+    '[SYMBOL]': '[FAIL]',
+    '[FAIL]': '[FAIL]',
+    '[WARN]': '[WARN]',
     '⏳': '[WAIT]',
-    '📹': '[VIDEO]',
-    '📁': '[DIR]',
-    '🔍': '[SEARCH]',
-    '🟩': '===',
-    '🟦': '===',
-    '🟥': '===',
-    '🤖': '[BOT]',
+    '[VIDEO]': '[VIDEO]',
+    '[DIR]': '[DIR]',
+    '[SEARCH]': '[SEARCH]',
+    '[PASS]': '===',
+    '[INFO]': '===',
+    '[ERROR]': '===',
+    '[BOT]': '[BOT]',
     '⭐': '*',
-    '🎯': '[TARGET]',
+    '[TARGET]': '[TARGET]',
 }
 
 # Files to fix (Python files only, skip vendor)

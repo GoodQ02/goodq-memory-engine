@@ -114,21 +114,21 @@ def configure_gpu(step_name=None, force_fraction=None):
                 "cudnn_benchmark": True
             }
         else:
-            print(f"⚠ CUDA not available for {step_name} - using CPU")
+            print(f"[SYMBOL] CUDA not available for {step_name} - using CPU")
             return {
                 "available": False,
                 "device": "cpu"
             }
             
     except ImportError:
-        print(f"⚠ PyTorch not installed for {step_name} - GPU config skipped")
+        print(f"[SYMBOL] PyTorch not installed for {step_name} - GPU config skipped")
         return {
             "available": False,
             "device": "cpu",
             "reason": "pytorch_not_installed"
         }
     except Exception as e:
-        print(f"⚠ GPU configuration failed for {step_name}: {e}")
+        print(f"[SYMBOL] GPU configuration failed for {step_name}: {e}")
         return {
             "available": False,
             "device": "cpu",

@@ -238,16 +238,16 @@ def main():
     
     all_passed = True
     for test_name, passed in results.items():
-        status = "✓ PASS" if passed else "✗ FAIL"
+        status = "[SYMBOL] PASS" if passed else "[SYMBOL] FAIL"
         print(f"{status}: {test_name}")
         if not passed:
             all_passed = False
     
     print("\n" + "="*80)
     if all_passed:
-        print("ALL TESTS PASSED ✓")
+        print("ALL TESTS PASSED [SYMBOL]")
     else:
-        print("SOME TESTS FAILED ✗")
+        print("SOME TESTS FAILED [SYMBOL]")
     print("="*80)
     
     return all_passed

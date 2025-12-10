@@ -138,7 +138,7 @@ def run_scene_visual_embeddings(item: Dict[str, Any], cfg: Dict[str, Any]) -> Di
         
         if clip_points:
             clip_client.upsert(clip_points)
-            logger.info(f"  ✓ Stored {len(clip_points)} CLIP scene embeddings")
+            logger.info(f"  [SYMBOL] Stored {len(clip_points)} CLIP scene embeddings")
         
         # Store DINO embeddings
         dino_collection = phase6_cfg.get('dino_collection', 'goodq_dino_scenes')
@@ -165,7 +165,7 @@ def run_scene_visual_embeddings(item: Dict[str, Any], cfg: Dict[str, Any]) -> Di
         
         if dino_points:
             dino_client.upsert(dino_points)
-            logger.info(f"  ✓ Stored {len(dino_points)} DINO scene embeddings")
+            logger.info(f"  [SYMBOL] Stored {len(dino_points)} DINO scene embeddings")
     
     # === STEP 6: Update Scene Manifest ===
     # Add embedding IDs to scene metadata
@@ -200,7 +200,7 @@ def run_scene_visual_embeddings(item: Dict[str, Any], cfg: Dict[str, Any]) -> Di
     with open(scene_manifest_path, 'w', encoding='utf-8') as f:
         json.dump(scene_data, f, indent=2)
     
-    logger.info(f"[PHASE6] ✅ Complete! Processed {len(pooled_clip)} scenes with visual embeddings")
+    logger.info(f"[PHASE6] [OK] Complete! Processed {len(pooled_clip)} scenes with visual embeddings")
     
     return {
         "phase6_status": "complete",

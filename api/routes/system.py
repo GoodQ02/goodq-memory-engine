@@ -27,7 +27,7 @@ def get_data_loader():
     
     if _data_loader is None:
         _data_loader = DataLoader()
-        logger.info("✅ Data loader initialized for system")
+        logger.info("[OK] Data loader initialized for system")
     
     return _data_loader
 

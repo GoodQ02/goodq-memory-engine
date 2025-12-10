@@ -19,12 +19,12 @@ def check_status():
         
         # Get table list
         tables = cursor.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
-        print(f"📊 Database Tables: {[t[0] for t in tables]}\n")
+        print(f"[STATS] Database Tables: {[t[0] for t in tables]}\n")
         
         # Check scenes
         try:
             scene_count = cursor.execute("SELECT COUNT(*) FROM scenes").fetchone()[0]
-            print(f"🎬 Total Scenes: {scene_count}")
+            print(f"[SCENE] Total Scenes: {scene_count}")
             
             if scene_count > 0:
                 # Get latest scenes
@@ -36,12 +36,12 @@ def check_status():
                 cols = [description[0] for description in cursor.description]
                 print(f"   Scene columns: {cols}")
         except Exception as e:
-            print(f"❌ Error checking scenes: {e}")
+            print(f"[FAIL] Error checking scenes: {e}")
         
         # Check workflow executions
         try:
             exec_count = cursor.execute("SELECT COUNT(*) FROM workflow_executions").fetchone()[0]
-            print(f"\n📝 Workflow Executions: {exec_count}")
+            print(f"\n[NOTE] Workflow Executions: {exec_count}")
             
             if exec_count > 0:
                 cursor.execute("SELECT * FROM workflow_executions ORDER BY id DESC LIMIT 1")
@@ -51,10 +51,10 @@ def check_status():
                     exec_dict = dict(zip(cols, latest_exec))
                     print(f"   Latest execution: {exec_dict}")
         except Exception as e:
-            print(f"❌ Error checking executions: {e}")
+            print(f"[FAIL] Error checking executions: {e}")
         
         # Check all tables for record counts
-        print("\n📋 All Table Counts:")
+        print("\n[LOG] All Table Counts:")
         for table in tables:
             try:
                 count = cursor.execute(f"SELECT COUNT(*) FROM {table[0]}").fetchone()[0]
@@ -64,10 +64,10 @@ def check_status():
         
         conn.close()
     else:
-        print("❌ Database not found!")
+        print("[FAIL] Database not found!")
     
     # Check processing directory
-    print("\n📁 Processing Directory:")
+    print("\n[DIR] Processing Directory:")
     processing_paths = [
         "L:/_DATA/GoodQ_Data/processing",
         "L:/goodq4all/output/processing",
@@ -86,7 +86,7 @@ def check_status():
             print(f"   {proc_path}: Not found")
     
     # Check output directory
-    print("\n📤 Output Directory:")
+    print("\n[SYMBOL] Output Directory:")
     output_path = Path("L:/goodq4all/output")
     if output_path.exists():
         for item in output_path.iterdir():
@@ -95,7 +95,7 @@ def check_status():
                 print(f"   {item.name}/: {file_count} items")
     
     # Check workspace
-    print("\n🔧 Workspace Artifacts:")
+    print("\n[CONFIG] Workspace Artifacts:")
     workspace_paths = [
         "L:/_DATA/GoodQ_Data/workspace",
         "L:/goodq4all/.zen/workspace"
@@ -111,7 +111,7 @@ def check_status():
                 print(f"     Latest: {recent_run.name} ({datetime.fromtimestamp(recent_run.stat().st_mtime)})")
     
     # Check import inbox
-    print("\n📬 Import Inbox:")
+    print("\n[SYMBOL] Import Inbox:")
     inbox = Path("L:/goodq4all/import_inbox")
     if inbox.exists():
         for f in inbox.iterdir():

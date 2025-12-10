@@ -13,7 +13,7 @@ from datetime import datetime
 
 def clear_databases():
     """Clear all databases for clean test"""
-    print("🧹 Clearing databases for clean test...")
+    print("[SYMBOL] Clearing databases for clean test...")
     
     db_paths = [
         Path("L:/_DATA/GoodQ_Data/memory.db"),
@@ -26,9 +26,9 @@ def clear_databases():
         if db_path.exists():
             try:
                 db_path.unlink()
-                print(f"   ✓ Deleted: {db_path.name}")
+                print(f"   [SYMBOL] Deleted: {db_path.name}")
             except Exception as e:
-                print(f"   ✗ Failed to delete {db_path.name}: {e}")
+                print(f"   [SYMBOL] Failed to delete {db_path.name}: {e}")
     
     # Clear FAISS indices
     faiss_dir = Path("L:/_DATA/GoodQ_Data/faiss_indices")
@@ -36,17 +36,17 @@ def clear_databases():
         for index_file in faiss_dir.rglob("*.index"):
             try:
                 index_file.unlink()
-                print(f"   ✓ Deleted FAISS index: {index_file.name}")
+                print(f"   [SYMBOL] Deleted FAISS index: {index_file.name}")
             except Exception as e:
-                print(f"   ✗ Failed to delete {index_file.name}: {e}")
+                print(f"   [SYMBOL] Failed to delete {index_file.name}: {e}")
     
     print()
 
 def run_ingestion(video_path: Path, workspace: Path) -> bool:
     """Run ingestion and return success status"""
     
-    print(f"🎬 Starting ingestion: {video_path.name}")
-    print(f"📂 Workspace: {workspace}")
+    print(f"[SCENE] Starting ingestion: {video_path.name}")
+    print(f"[SYMBOL] Workspace: {workspace}")
     print()
     
     cmd = [
@@ -59,7 +59,7 @@ def run_ingestion(video_path: Path, workspace: Path) -> bool:
         '--verbose'
     ]
     
-    print(f"🔧 Command: {' '.join(cmd)}")
+    print(f"[CONFIG] Command: {' '.join(cmd)}")
     print()
     print("=" * 70)
     print("MISSION LOG (real-time output)")
@@ -79,27 +79,27 @@ def run_ingestion(video_path: Path, workspace: Path) -> bool:
         elapsed = time.time() - start_time
         print()
         print("=" * 70)
-        print(f"⏱️  Mission completed in {elapsed:.1f}s ({elapsed/60:.1f}m)")
+        print(f"[TIMER]  Mission completed in {elapsed:.1f}s ({elapsed/60:.1f}m)")
         print("=" * 70)
         print()
         
         return result.returncode == 0
         
     except subprocess.TimeoutExpired:
-        print("\n❌ TIMEOUT: Mission exceeded 30 minutes")
+        print("\n[FAIL] TIMEOUT: Mission exceeded 30 minutes")
         return False
     except Exception as e:
-        print(f"\n❌ ERROR: {e}")
+        print(f"\n[FAIL] ERROR: {e}")
         return False
 
 def check_results(workspace: Path):
     """Check results and report findings"""
-    print("📊 MISSION DEBRIEF:")
+    print("[STATS] MISSION DEBRIEF:")
     print("=" * 70)
     print()
     
     # Check workspace artifacts
-    print("🗂️  Workspace Artifacts:")
+    print("[SYMBOL]️  Workspace Artifacts:")
     frames = list(workspace.rglob("*.jpg"))
     audio = list(workspace.rglob("*.wav"))
     print(f"   Frames extracted: {len(frames)}")
@@ -124,15 +124,15 @@ def check_results(workspace: Path):
         
         print(f"   Status breakdown:")
         for status, count in sorted(statuses.items()):
-            icon = "✓" if status == "ok" else "✗" if status == "error" else "⚠"
+            icon = "[SYMBOL]" if status == "ok" else "[SYMBOL]" if status == "error" else "[SYMBOL]"
             print(f"      {icon} {status}: {count}")
     else:
-        print("   ❌ step_log.jsonl NOT FOUND")
+        print("   [FAIL] step_log.jsonl NOT FOUND")
     
     print()
     
     # Check database
-    print("💾 Memory Database:")
+    print("[SAVE] Memory Database:")
     db_path = Path("L:/_DATA/GoodQ_Data/memory.db")
     if db_path.exists():
         try:
@@ -167,32 +167,32 @@ def check_results(workspace: Path):
             
             conn.close()
         except Exception as e:
-            print(f"   ❌ Error reading database: {e}")
+            print(f"   [FAIL] Error reading database: {e}")
     else:
-        print("   ❌ memory.db NOT FOUND")
+        print("   [FAIL] memory.db NOT FOUND")
     
     print()
     
     # Check FAISS indices
-    print("🔍 FAISS Indices:")
+    print("[SEARCH] FAISS Indices:")
     faiss_dir = Path("L:/_DATA/GoodQ_Data/faiss_indices")
     if faiss_dir.exists():
         for index_type in ['text', 'audio', 'dino', 'clip']:
             index_file = faiss_dir / index_type / f"faiss_{index_type}.index"
             if index_file.exists():
                 size_mb = index_file.stat().st_size / (1024**2)
-                print(f"   ✓ {index_type}: {size_mb:.2f} MB")
+                print(f"   [SYMBOL] {index_type}: {size_mb:.2f} MB")
             else:
-                print(f"   ✗ {index_type}: MISSING")
+                print(f"   [SYMBOL] {index_type}: MISSING")
     else:
-        print("   ❌ FAISS directory not found")
+        print("   [FAIL] FAISS directory not found")
     
     print()
     print("=" * 70)
 
 def main():
     print("━" * 70)
-    print("🎯 GoodQ CLEAN TEST RUN")
+    print("[TARGET] GoodQ CLEAN TEST RUN")
     print("━" * 70)
     print()
     
@@ -202,7 +202,7 @@ def main():
     # Step 2: Run ingestion on sample.mp4
     video_path = Path("L:/goodq4all/import_inbox/sample.mp4")
     if not video_path.exists():
-        print(f"❌ Test video not found: {video_path}")
+        print(f"[FAIL] Test video not found: {video_path}")
         sys.exit(1)
     
     workspace = Path(f"L:/goodq4all/logs/clean_test_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
@@ -216,9 +216,9 @@ def main():
     # Step 4: Final verdict
     print()
     if success:
-        print("✅ MISSION SUCCESS: Clean test run completed")
+        print("[OK] MISSION SUCCESS: Clean test run completed")
     else:
-        print("❌ MISSION FAILED: Check logs above for errors")
+        print("[FAIL] MISSION FAILED: Check logs above for errors")
     
     print()
 

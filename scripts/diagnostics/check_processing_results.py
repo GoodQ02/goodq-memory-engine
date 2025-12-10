@@ -5,7 +5,7 @@ from pathlib import Path
 
 db_path = Path("data/memory.db")
 if not db_path.exists():
-    print("❌ Database not found")
+    print("[FAIL] Database not found")
     exit(1)
 
 conn = sqlite3.connect(str(db_path))
@@ -71,9 +71,9 @@ print(f"Max:     {max_dur:.1f}s ({max_dur/60:.1f} minutes)")
 
 # Check if scene lengths are good (should be ~300s = 5 minutes)
 if avg_dur >= 180:  # At least 3 minutes
-    print("✅ Scene detection working correctly (5-minute scenes)")
+    print("[OK] Scene detection working correctly (5-minute scenes)")
 else:
-    print("⚠️ Scenes are too short (should be ~300s)")
+    print("[WARN] Scenes are too short (should be ~300s)")
 
 # Check for diarization segments
 cursor.execute('''
@@ -97,7 +97,7 @@ if new_seg_count > 0:
     avg_seg_dur, speaker_count = cursor.fetchone()
     print(f"Average segment duration: {avg_seg_dur:.1f}s")
     print(f"Unique speakers detected: {speaker_count}")
-    print("✅ Audio diarization completed successfully")
+    print("[OK] Audio diarization completed successfully")
 
 conn.close()
 

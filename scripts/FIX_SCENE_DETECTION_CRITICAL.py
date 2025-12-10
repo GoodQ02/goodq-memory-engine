@@ -69,11 +69,11 @@ try:
 except:
     pass
 conn.commit()
-print("  ✓ Cleared all scenes")
+print("  [SYMBOL] Cleared all scenes")
 
 # Check if cleared
 remaining = cur.execute("SELECT COUNT(*) FROM scenes").fetchone()[0]
-print(f"  ✓ Remaining scenes: {remaining}")
+print(f"  [SYMBOL] Remaining scenes: {remaining}")
 conn.close()
 
 # Step 3: Kill stuck processes
@@ -84,7 +84,7 @@ result = subprocess.run(
     capture_output=True
 )
 time.sleep(2)
-print("  ✓ Killed stuck processes")
+print("  [SYMBOL] Killed stuck processes")
 
 # Step 4: Clear processing cache
 print("\n[4/6] Clearing processing cache...")
@@ -95,15 +95,15 @@ if processing_dir.exists():
         if item.is_dir():
             try:
                 shutil.rmtree(item)
-                print(f"  ✓ Removed {item.name}")
+                print(f"  [SYMBOL] Removed {item.name}")
             except Exception as e:
-                print(f"  ⚠ Could not remove {item.name}: {e}")
+                print(f"  [SYMBOL] Could not remove {item.name}: {e}")
         elif item.is_file() and item.suffix in ['.mp4', '.avi', '.mov', '.mkv']:
             try:
                 item.unlink()
-                print(f"  ✓ Removed {item.name}")
+                print(f"  [SYMBOL] Removed {item.name}")
             except Exception as e:
-                print(f"  ⚠ Could not remove {item.name}: {e}")
+                print(f"  [SYMBOL] Could not remove {item.name}: {e}")
 
 # Step 5: Verify config
 print("\n[5/6] Verifying config.yaml has correct settings...")
@@ -120,9 +120,9 @@ print(f"  Config min_scene_len_sec: {min_scene}s")
 print(f"  Config threshold: {threshold}")
 
 if min_scene == 300.0:
-    print("  ✓ Config is CORRECT (300 seconds)")
+    print("  [SYMBOL] Config is CORRECT (300 seconds)")
 else:
-    print(f"  ✗ Config is WRONG! Should be 300, is {min_scene}")
+    print(f"  [SYMBOL] Config is WRONG! Should be 300, is {min_scene}")
     print("  Updating config...")
     if 'video' not in config:
         config['video'] = {}
@@ -133,7 +133,7 @@ else:
     
     with open(config_path, 'w') as f:
         yaml.dump(config, f, default_flow_style=False, sort_keys=False)
-    print("  ✓ Config updated")
+    print("  [SYMBOL] Config updated")
 
 # Step 6: Ready to restart
 print("\n[6/6] System ready for clean reprocess")

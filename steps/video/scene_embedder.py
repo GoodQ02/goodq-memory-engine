@@ -46,9 +46,9 @@ def _load_clip_model():
             "device": device
         })
         
-        logger.info(f"✅ CLIP model loaded on {device}")
+        logger.info(f"[OK] CLIP model loaded on {device}")
     except Exception as e:
-        logger.error(f"❌ Failed to load CLIP model: {e}")
+        logger.error(f"[FAIL] Failed to load CLIP model: {e}")
         _MODELS["clip"].update({"model": None, "processor": None, "device": "cpu"})
 
 
@@ -79,9 +79,9 @@ def _load_dino_model():
             "device": device
         })
         
-        logger.info(f"✅ DINO model loaded on {device}")
+        logger.info(f"[OK] DINO model loaded on {device}")
     except Exception as e:
-        logger.error(f"❌ Failed to load DINO model: {e}")
+        logger.error(f"[FAIL] Failed to load DINO model: {e}")
         _MODELS["dino"].update({"model": None, "processor": None, "device": "cpu"})
 
 

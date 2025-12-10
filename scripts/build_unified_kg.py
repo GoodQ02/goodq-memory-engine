@@ -172,9 +172,9 @@ def build_unified_knowledge_graph(config: Dict[str, Any], videos: List[Dict[str,
                     metadata=video
                 )
                 results['videos_registered'] += 1
-                logger.info(f"  ✓ Registered: {video['video_hash']} (year: {video.get('year', 'unknown')})")
+                logger.info(f"  [SYMBOL] Registered: {video['video_hash']} (year: {video.get('year', 'unknown')})")
             except Exception as e:
-                logger.error(f"  ✗ Failed to register {video['video_hash']}: {e}")
+                logger.error(f"  [SYMBOL] Failed to register {video['video_hash']}: {e}")
                 results['errors'].append(str(e))
         
         # Step 2: Resolve entities across videos
@@ -194,7 +194,7 @@ def build_unified_knowledge_graph(config: Dict[str, Any], videos: List[Dict[str,
         )
         
         results['entities_resolved'] = entity_results['stats']
-        logger.info(f"  ✓ Entity resolution complete: {entity_results['stats']}")
+        logger.info(f"  [SYMBOL] Entity resolution complete: {entity_results['stats']}")
         
         # Step 3: Build temporal timeline
         logger.info("\n" + "=" * 80)
@@ -206,7 +206,7 @@ def build_unified_knowledge_graph(config: Dict[str, Any], videos: List[Dict[str,
         
         results['timeline_built'] = True
         results['timeline_stats'] = timeline['stats']
-        logger.info(f"  ✓ Timeline built: {timeline['stats']}")
+        logger.info(f"  [SYMBOL] Timeline built: {timeline['stats']}")
         
         # Step 4: Build cross-video relationships
         logger.info("\n" + "=" * 80)
@@ -215,7 +215,7 @@ def build_unified_knowledge_graph(config: Dict[str, Any], videos: List[Dict[str,
         
         relationships_created = build_cross_video_relationships(unified_kg, entity_results)
         results['relationships_created'] = relationships_created
-        logger.info(f"  ✓ Created {relationships_created} cross-video relationships")
+        logger.info(f"  [SYMBOL] Created {relationships_created} cross-video relationships")
         
         # Step 5: Extract themes across videos
         logger.info("\n" + "=" * 80)
@@ -224,7 +224,7 @@ def build_unified_knowledge_graph(config: Dict[str, Any], videos: List[Dict[str,
         
         themes_extracted = extract_cross_video_themes(unified_kg, config)
         results['themes_extracted'] = themes_extracted
-        logger.info(f"  ✓ Extracted {themes_extracted} themes")
+        logger.info(f"  [SYMBOL] Extracted {themes_extracted} themes")
         
         # Get final statistics
         logger.info("\n" + "=" * 80)
@@ -407,15 +407,15 @@ def main():
     logger.info(f"\nResults saved to: {results_path}")
     
     logger.info("\n" + "=" * 80)
-    logger.info("✅ PHASE 8: UNIFIED KNOWLEDGE GRAPH COMPLETE")
+    logger.info("[OK] PHASE 8: UNIFIED KNOWLEDGE GRAPH COMPLETE")
     logger.info("=" * 80)
     
     if results.get('errors'):
-        logger.warning(f"\n⚠️  Completed with {len(results['errors'])} errors")
+        logger.warning(f"\n[WARN]  Completed with {len(results['errors'])} errors")
         for error in results['errors']:
             logger.warning(f"  - {error}")
     else:
-        logger.info("\n🎉 No errors encountered!")
+        logger.info("\n[SYMBOL] No errors encountered!")
 
 
 if __name__ == "__main__":

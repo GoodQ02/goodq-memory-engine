@@ -69,13 +69,13 @@ def run_fix(fix_name: str, fix_config: dict) -> bool:
                 timeout=300
             )
             if result.returncode == 0:
-                print(f"  ✅ Success")
+                print(f"  [OK] Success")
             else:
-                print(f"  ⚠️ Warning: exit code {result.returncode}")
+                print(f"  [WARN] Warning: exit code {result.returncode}")
                 if result.stderr:
                     print(f"  Error output: {result.stderr[:500]}")
         except Exception as e:
-            print(f"  ❌ Failed: {e}")
+            print(f"  [FAIL] Failed: {e}")
             return False
     
     return True

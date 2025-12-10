@@ -314,7 +314,7 @@ if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
     result = run_pyannote_segmentation(audio_path, vad_segments, output_dir)
 
-    print(f"\n✓ Pyannote segmentation complete")
+    print(f"\n[SYMBOL] Pyannote segmentation complete")
     print(f"  Segments: {result['num_segments']}")
     print(f"  Speaker changes: {len(result['speaker_changes'])}")
     print(f"  Overlaps: {len(result['overlap_regions'])}")

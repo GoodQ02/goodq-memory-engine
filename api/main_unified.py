@@ -108,7 +108,7 @@ def get_llm_client():
                     from llm_client import LLMClient
                     logger.info("Initializing LLM client...")
                     _llm_client = LLMClient()
-                    logger.info(f"✓ LLM client initialized with {len(_llm_client.MODELS)} models")
+                    logger.info(f"[SYMBOL] LLM client initialized with {len(_llm_client.MODELS)} models")
                 except Exception as e:
                     logger.error(f"Failed to initialize LLM client: {e}")
                     _llm_client = None
@@ -689,11 +689,11 @@ if __name__ == "__main__":
     import uvicorn
     
     logger.info("=" * 80)
-    logger.info("🚀 GoodQ4All Unified API Server Starting...")
+    logger.info("[LAUNCH] GoodQ4All Unified API Server Starting...")
     logger.info("=" * 80)
-    logger.info(f"📡 Port: 30000")
-    logger.info(f"🎨 UI Directory: {UI_DIR}")
-    logger.info(f"💾 Data Directory: L:/_DATA/GoodQ_Data")
+    logger.info(f"[SYMBOL] Port: 30000")
+    logger.info(f"[UI] UI Directory: {UI_DIR}")
+    logger.info(f"[SAVE] Data Directory: L:/_DATA/GoodQ_Data")
     logger.info("=" * 80)
     
     uvicorn.run(

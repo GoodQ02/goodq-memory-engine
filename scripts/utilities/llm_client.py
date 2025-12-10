@@ -36,13 +36,13 @@ class LLMClient:
                         # Found a healthy endpoint!
                         self.active_endpoint = endpoint
                         self.model = models[0]['id']
-                        print(f"✓ {endpoint['name']} connected! Using model: {self.model}")
+                        print(f"[SYMBOL] {endpoint['name']} connected! Using model: {self.model}")
                         return True
             except Exception as e:
                 # Silently try next endpoint
                 pass
         
-        print(f"⚠ No healthy LLM endpoints available")
+        print(f"[SYMBOL] No healthy LLM endpoints available")
         return False
     
     def chat(self, message: str, context: Dict[str, Any] = None) -> str:

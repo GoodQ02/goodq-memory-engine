@@ -31,14 +31,14 @@ def main():
     
     # Check if already enabled
     if 'step_wsl2' in content:
-        print("✓ WSL2 audio steps already enabled in pipeline")
+        print("[SYMBOL] WSL2 audio steps already enabled in pipeline")
         print()
         return 0
     
     # Create backup
     print(f"[1/2] Creating backup: {backup_file.name}")
     shutil.copy2(pipeline_file, backup_file)
-    print("✓ Backup created")
+    print("[SYMBOL] Backup created")
     print()
     
     # Apply changes
@@ -61,7 +61,7 @@ def main():
     with open(pipeline_file, 'w', encoding='utf-8') as f:
         f.write(content)
     
-    print("✓ Pipeline updated")
+    print("[SYMBOL] Pipeline updated")
     print()
     
     print("="*80)

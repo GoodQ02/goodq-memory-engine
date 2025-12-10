@@ -41,9 +41,9 @@ new_code = '''        # persist mapping for recall/linking
 if old_code in content:
     content = content.replace(old_code, new_code)
     text_embed_file.write_text(content)
-    print("  ✓ Fixed text_embed step")
+    print("  [SYMBOL] Fixed text_embed step")
 else:
-    print("  ⚠ text_embed already updated or pattern not found")
+    print("  [SYMBOL] text_embed already updated or pattern not found")
 
 # Issue 2: Fix scene_id in image_embed_clip
 print("\n[2/6] Fixing scene_id propagation in image_embed_clip step...")
@@ -71,9 +71,9 @@ new_code = '''        try:
 if old_code in content:
     content = content.replace(old_code, new_code)
     clip_file.write_text(content)
-    print("  ✓ Fixed image_embed_clip step")
+    print("  [SYMBOL] Fixed image_embed_clip step")
 else:
-    print("  ⚠ image_embed_clip already updated or pattern not found")
+    print("  [SYMBOL] image_embed_clip already updated or pattern not found")
 
 # Issue 3: Fix scene_id in audio_embed_clap
 print("\n[3/6] Fixing scene_id propagation in audio_embed_clap step...")
@@ -101,9 +101,9 @@ new_code = '''        try:
 if old_code in content:
     content = content.replace(old_code, new_code)
     clap_file.write_text(content)
-    print("  ✓ Fixed audio_embed_clap step")
+    print("  [SYMBOL] Fixed audio_embed_clap step")
 else:
-    print("  ⚠ audio_embed_clap already updated or pattern not found")
+    print("  [SYMBOL] audio_embed_clap already updated or pattern not found")
 
 # Issue 4: Check/fix image_embed_dino as well
 print("\n[4/6] Checking image_embed_dino step...")
@@ -114,7 +114,7 @@ if dino_file.exists():
     
     # Check if it has upsert_embedding call
     if 'upsert_embedding' in content and 'scene_id' not in content:
-        print("  ⚠ DINO step needs scene_id fix - attempting to fix...")
+        print("  [SYMBOL] DINO step needs scene_id fix - attempting to fix...")
         
         # Find and fix the upsert_embedding call
         import re
@@ -137,11 +137,11 @@ if dino_file.exists():
         new_content = re.sub(pattern, replacer, content)
         if new_content != content:
             dino_file.write_text(new_content)
-            print("  ✓ Fixed image_embed_dino step")
+            print("  [SYMBOL] Fixed image_embed_dino step")
         else:
-            print("  ⚠ Could not auto-fix DINO - manual review needed")
+            print("  [SYMBOL] Could not auto-fix DINO - manual review needed")
     elif 'scene_id' in content:
-        print("  ✓ DINO step already has scene_id support")
+        print("  [SYMBOL] DINO step already has scene_id support")
     else:
         print("  ℹ DINO step doesn't use upsert_embedding")
 else:
@@ -172,13 +172,13 @@ if 'detections = scene.get(\'detections\'' in content:
         if old_func in content:
             content = content.replace(old_func, new_func)
             kg_builder.write_text(content)
-            print("  ✓ Enhanced graph builder to handle 'objects' field")
+            print("  [SYMBOL] Enhanced graph builder to handle 'objects' field")
         else:
-            print("  ⚠ Could not find exact pattern - manual review needed")
+            print("  [SYMBOL] Could not find exact pattern - manual review needed")
     else:
-        print("  ✓ Graph builder already handles 'objects' field")
+        print("  [SYMBOL] Graph builder already handles 'objects' field")
 else:
-    print("  ⚠ Graph builder structure different than expected")
+    print("  [SYMBOL] Graph builder structure different than expected")
 
 # Issue 6: Verify FAISS index configuration in config.yaml
 print("\n[6/6] Verifying FAISS index paths in configuration...")
@@ -215,11 +215,11 @@ if config_file.exists():
     if paths_updated:
         with open(config_file, 'w') as f:
             yaml.dump(config, f, default_flow_style=False, sort_keys=False)
-        print("  ✓ Configuration updated")
+        print("  [SYMBOL] Configuration updated")
     else:
-        print("  ✓ Configuration already correct")
+        print("  [SYMBOL] Configuration already correct")
 else:
-    print("  ⚠ config.yaml not found")
+    print("  [SYMBOL] config.yaml not found")
 
 print("\n" + "="*80)
 print("PHASE 2 FIXES COMPLETE!")

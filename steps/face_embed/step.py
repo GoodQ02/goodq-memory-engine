@@ -55,7 +55,7 @@ def face_embed(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
             mtcnn = MTCNN(keep_all=True, device=device)
             resnet = InceptionResnetV1(pretrained='vggface2').eval().to(device)
             
-            logger.info(f"✅ FaceNet loaded on {device} (GPU config: {gpu_config['memory_fraction']:.1%} memory)")
+            logger.info(f"[OK] FaceNet loaded on {device} (GPU config: {gpu_config['memory_fraction']:.1%} memory)")
 
             img = Image.open(path).convert("RGB")
             boxes, _ = mtcnn.detect(img)
@@ -70,6 +70,6 @@ def face_embed(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
                     faces.append({"bbox": [x1, y1, x2, y2], "encoding": emb})
             return {"faces": faces, "faces_meta": {"status": "ok", "engine": "facenet-pytorch"}}
         except Exception as e2:
-            logger.error(f"❌ Face detection failed: {str(e2)}")
+            logger.error(f"[FAIL] Face detection failed: {str(e2)}")
             GPUManager.clear_cache()
             return {"faces": [], "faces_meta": {"status": "error", "error": str(e2)}}

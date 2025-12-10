@@ -41,15 +41,15 @@ def install_in_env(env_name):
         )
         
         if result.returncode == 0:
-            print(f"✓ SUCCESS: goodq4all installed in {env_name}")
+            print(f"[SYMBOL] SUCCESS: goodq4all installed in {env_name}")
             return True
         else:
-            print(f"✗ FAILED: {env_name}")
+            print(f"[SYMBOL] FAILED: {env_name}")
             if result.stderr:
                 print(f"Error: {result.stderr[:200]}")
             return False
     except Exception as e:
-        print(f"✗ ERROR installing in {env_name}: {e}")
+        print(f"[SYMBOL] ERROR installing in {env_name}: {e}")
         return False
 
 def main():
@@ -70,17 +70,17 @@ def main():
     print("\n" + "="*60)
     print("Installation Summary")
     print("="*60)
-    print(f"\n✓ Successful: {len(successes)}/{len(ENVS)}")
+    print(f"\n[SYMBOL] Successful: {len(successes)}/{len(ENVS)}")
     for env in successes:
         print(f"  - {env}")
     
     if failures:
-        print(f"\n✗ Failed: {len(failures)}/{len(ENVS)}")
+        print(f"\n[SYMBOL] Failed: {len(failures)}/{len(ENVS)}")
         for env in failures:
             print(f"  - {env}")
         return 1
     else:
-        print("\n🎉 All environments configured successfully!")
+        print("\n[SYMBOL] All environments configured successfully!")
         return 0
 
 if __name__ == "__main__":

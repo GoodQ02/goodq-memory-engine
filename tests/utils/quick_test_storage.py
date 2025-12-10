@@ -17,7 +17,7 @@ def test_memory_writer():
     
     try:
         writer = MemoryWriter()
-        print(f"✅ Connected to database: {writer.db_path}")
+        print(f"[OK] Connected to database: {writer.db_path}")
         print()
         
         # Test 1: Create a scene
@@ -29,7 +29,7 @@ def test_memory_writer():
             end_time=10.5,
             metadata={'test': True, 'created_by': 'quick_test'}
         )
-        print(f"  {'✅' if success else '❌'} Scene created")
+        print(f"  {'[OK]' if success else '[FAIL]'} Scene created")
         print()
         
         # Test 2: Add caption
@@ -39,7 +39,7 @@ def test_memory_writer():
             "A person standing in a sunlit room",
             confidence=0.87
         )
-        print(f"  {'✅' if success else '❌'} Caption added")
+        print(f"  {'[OK]' if success else '[FAIL]'} Caption added")
         print()
         
         # Test 3: Add objects
@@ -50,7 +50,7 @@ def test_memory_writer():
             {'label': 'window', 'confidence': 0.92, 'bbox': [50, 50, 250, 300]}
         ]
         success = writer.save_objects("test_scene_0000", objects)
-        print(f"  {'✅' if success else '❌'} Objects added")
+        print(f"  {'[OK]' if success else '[FAIL]'} Objects added")
         print()
         
         # Test 4: Add OCR text
@@ -60,7 +60,7 @@ def test_memory_writer():
             "Welcome Home",
             regions=[{'text': 'Welcome', 'bbox': [100, 50, 200, 80]}]
         )
-        print(f"  {'✅' if success else '❌'} OCR text added")
+        print(f"  {'[OK]' if success else '[FAIL]'} OCR text added")
         print()
         
         # Test 5: Add transcription
@@ -75,7 +75,7 @@ def test_memory_writer():
             'confidence': 0.94
         }
         success = writer.save_transcription("test_scene_0000", transcription)
-        print(f"  {'✅' if success else '❌'} Transcription added")
+        print(f"  {'[OK]' if success else '[FAIL]'} Transcription added")
         print()
         
         # Test 6: Add sentiment
@@ -86,7 +86,7 @@ def test_memory_writer():
             'details': {'positive': 0.89, 'neutral': 0.10, 'negative': 0.01}
         }
         success = writer.save_sentiment("test_scene_0000", sentiment)
-        print(f"  {'✅' if success else '❌'} Sentiment added")
+        print(f"  {'[OK]' if success else '[FAIL]'} Sentiment added")
         print()
         
         # Test 7: Add emotions
@@ -98,7 +98,7 @@ def test_memory_writer():
             'sadness': 0.02
         }
         success = writer.save_emotions("test_scene_0000", emotions)
-        print(f"  {'✅' if success else '❌'} Emotions added")
+        print(f"  {'[OK]' if success else '[FAIL]'} Emotions added")
         print()
         
         # Test 8: Batch save
@@ -110,7 +110,7 @@ def test_memory_writer():
             'custom_field': 'custom value'
         }
         success = writer.save_analysis_batch("test_scene_0000", batch_results)
-        print(f"  {'✅' if success else '❌'} Batch save completed")
+        print(f"  {'[OK]' if success else '[FAIL]'} Batch save completed")
         print()
         
         # Test 9: Retrieve and verify
@@ -118,7 +118,7 @@ def test_memory_writer():
         scene = writer.get_scene("test_scene_0000")
         
         if scene:
-            print("✅ Scene retrieved successfully!")
+            print("[OK] Scene retrieved successfully!")
             print()
             print("Scene Data:")
             print("-" * 70)
@@ -150,18 +150,18 @@ def test_memory_writer():
             }
             
             for field, present in checks.items():
-                print(f"  {'✅' if present else '❌'} {field}")
+                print(f"  {'[OK]' if present else '[FAIL]'} {field}")
             
             print()
             
             # Check if all present
             if all(checks.values()):
-                print("🎉 ALL TESTS PASSED! Memory writer is working perfectly.")
+                print("[SYMBOL] ALL TESTS PASSED! Memory writer is working perfectly.")
             else:
-                print("⚠️  Some fields missing - review above")
+                print("[WARN]  Some fields missing - review above")
                 
         else:
-            print("❌ Failed to retrieve scene")
+            print("[FAIL] Failed to retrieve scene")
             
         print()
         print("="*70)
@@ -171,7 +171,7 @@ def test_memory_writer():
         return True
         
     except Exception as e:
-        print(f"❌ Test failed with error: {e}")
+        print(f"[FAIL] Test failed with error: {e}")
         import traceback
         traceback.print_exc()
         return False

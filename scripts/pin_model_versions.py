@@ -117,11 +117,11 @@ def main() -> None:
                     model_info['revision'] = latest_sha
                     updated_count += 1
                 elif current_revision != latest_sha:
-                    print(f"  ⚠ Revision differs from latest (not updating, use manual review)")
+                    print(f"  [SYMBOL] Revision differs from latest (not updating, use manual review)")
                 else:
-                    print(f"  ✓ Already pinned to latest")
+                    print(f"  [SYMBOL] Already pinned to latest")
             else:
-                print(f"  ✗ Could not fetch latest commit")
+                print(f"  [SYMBOL] Could not fetch latest commit")
         
         print(f"\nUpdated {updated_count} model(s) with placeholder revisions")
     
@@ -134,7 +134,7 @@ def main() -> None:
             verification = verify_external_model(model_info, models_dir)
             
             if verification['exists']:
-                print(f"  ✓ Found: {verification['path']}")
+                print(f"  [SYMBOL] Found: {verification['path']}")
                 print(f"    Size: {verification['file_size']:,} bytes")
                 
                 # Update registry with actual values
@@ -144,17 +144,17 @@ def main() -> None:
                         print(f"    → Updating placeholder SHA256")
                         model_info['sha256'] = verification['sha256']
                     elif current_hash != verification['sha256']:
-                        print(f"    ⚠ SHA256 mismatch!")
+                        print(f"    [SYMBOL] SHA256 mismatch!")
                         print(f"      Expected: {current_hash}")
                         print(f"      Actual:   {verification['sha256']}")
                     else:
-                        print(f"    ✓ SHA256 verified")
+                        print(f"    [SYMBOL] SHA256 verified")
                 
                 if verification['file_size'] != model_info.get('file_size_bytes', 0):
                     print(f"    → Updating file_size_bytes")
                     model_info['file_size_bytes'] = verification['file_size']
             else:
-                print(f"  ✗ Not found: {verification['path']}")
+                print(f"  [SYMBOL] Not found: {verification['path']}")
                 print(f"    Download from: {model_info.get('source_url')}")
     
     # Save updated registry

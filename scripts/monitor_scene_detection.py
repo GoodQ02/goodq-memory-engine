@@ -51,7 +51,7 @@ try:
         print(f"\r[{timestamp}] Scenes: {scene_count}", end='')
         
         if scene_count > last_scene_count:
-            print(f"\n\n📊 Scene Stats:")
+            print(f"\n\n[STATS] Scene Stats:")
             if stats[0] > 0:
                 print(f"   Total: {stats[0]}")
                 print(f"   Average duration: {stats[1]/60:.2f} minutes")
@@ -60,11 +60,11 @@ try:
                 
                 # Check if any scenes are < 5 minutes
                 if stats[2] < 300:
-                    print(f"   ⚠️  WARNING: Minimum scene is {stats[2]/60:.2f} minutes (expected >= 5 min)")
+                    print(f"   [WARN]  WARNING: Minimum scene is {stats[2]/60:.2f} minutes (expected >= 5 min)")
                 else:
-                    print(f"   ✓ All scenes meet 5-minute minimum!")
+                    print(f"   [SYMBOL] All scenes meet 5-minute minimum!")
                 
-                print(f"\n📋 Latest scenes:")
+                print(f"\n[LOG] Latest scenes:")
                 for scene in latest:
                     dur_min = scene[4] / 60
                     print(f"   - {scene[0][:8]}... | {scene[2]/60:.1f}m - {scene[3]/60:.1f}m | Duration: {dur_min:.2f} min")
@@ -75,8 +75,8 @@ try:
         time.sleep(5)
         
 except KeyboardInterrupt:
-    print("\n\n✓ Monitor stopped")
+    print("\n\n[SYMBOL] Monitor stopped")
     sys.exit(0)
 except Exception as e:
-    print(f"\n\n❌ Error: {e}")
+    print(f"\n\n[FAIL] Error: {e}")
     sys.exit(1)

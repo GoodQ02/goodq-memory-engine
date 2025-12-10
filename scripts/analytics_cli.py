@@ -76,7 +76,7 @@ Examples:
         dashboard = AnalyticsDashboard(config)
         output_path = Path(args.output)
         dashboard.generate_dashboard(output_path)
-        print(f"\n✓ Dashboard generated: {output_path}")
+        print(f"\n[SYMBOL] Dashboard generated: {output_path}")
         
     elif args.command == 'analyze':
         from analytics_engine import AnalyticsEngine, export_markdown_report, export_report_to_file
@@ -93,12 +93,12 @@ Examples:
         if not args.md_only:
             json_path = output_dir / f"{video_name}_analytics.json"
             export_report_to_file(report, json_path)
-            print(f"✓ JSON report: {json_path}")
+            print(f"[SYMBOL] JSON report: {json_path}")
         
         if not args.json_only:
             md_path = output_dir / f"{video_name}_analytics.md"
             export_markdown_report(report, md_path)
-            print(f"✓ Markdown report: {md_path}")
+            print(f"[SYMBOL] Markdown report: {md_path}")
         
         # Show summary
         print(f"\nSummary:")

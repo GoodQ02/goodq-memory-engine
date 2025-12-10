@@ -354,6 +354,6 @@ if __name__ == "__main__":
         config
     )
     
-    print(f"\n✅ Phase 4 Complete!")
+    print(f"\n[OK] Phase 4 Complete!")
     print(f"Processed {len(result.get('segments', []))} segments")
     print(f"Output: {args.output}/metadata/segmentation_enhanced.json")

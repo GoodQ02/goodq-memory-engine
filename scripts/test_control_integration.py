@@ -14,16 +14,16 @@ def test_imports():
     
     try:
         from agents.control_agent import ControlAgent
-        print("✓ ControlAgent imported")
+        print("[SYMBOL] ControlAgent imported")
     except Exception as e:
-        print(f"✗ ControlAgent import failed: {e}")
+        print(f"[SYMBOL] ControlAgent import failed: {e}")
         return False
     
     try:
         from lib.llm_client import LLMClient
-        print("✓ LLMClient imported")
+        print("[SYMBOL] LLMClient imported")
     except Exception as e:
-        print(f"✗ LLMClient import failed: {e}")
+        print(f"[SYMBOL] LLMClient import failed: {e}")
         return False
     
     return True
@@ -35,13 +35,13 @@ def test_control_agent_init():
     try:
         from agents.control_agent import ControlAgent
         agent = ControlAgent()
-        print(f"✓ Control Agent initialized successfully")
+        print(f"[SYMBOL] Control Agent initialized successfully")
         print(f"  - LLM Client: {agent.llm is not None}")
         print(f"  - Config Healer: {agent.config_healer is not None}")
         print(f"  - Memory DB: {agent.memory_db_path.exists()}")
         return True
     except Exception as e:
-        print(f"✗ Control Agent init failed: {e}")
+        print(f"[SYMBOL] Control Agent init failed: {e}")
         import traceback
         traceback.print_exc()
         return False
@@ -55,7 +55,7 @@ def test_llm_health():
         client = LLMClient()
         
         healthy_models = [m for m in client.models if client.health_status.get(m, {}).get('healthy', False)]
-        print(f"✓ LLM Client initialized")
+        print(f"[SYMBOL] LLM Client initialized")
         print(f"  - Total models: {len(client.models)}")
         print(f"  - Healthy models: {len(healthy_models)}")
         
@@ -63,11 +63,11 @@ def test_llm_health():
             print(f"  - Primary model: {healthy_models[0]}")
             return True
         else:
-            print(f"  ⚠ No healthy models found - orchestrator will run without LLM")
+            print(f"  [SYMBOL] No healthy models found - orchestrator will run without LLM")
             return True  # Still OK, agent can work without LLM
             
     except Exception as e:
-        print(f"✗ LLM health check failed: {e}")
+        print(f"[SYMBOL] LLM health check failed: {e}")
         import traceback
         traceback.print_exc()
         return False
@@ -95,16 +95,16 @@ def main():
     print("=" * 70)
     
     for name, passed in results:
-        status = "✓ PASS" if passed else "✗ FAIL"
+        status = "[SYMBOL] PASS" if passed else "[SYMBOL] FAIL"
         print(f"{status}: {name}")
     
     all_passed = all(r[1] for r in results)
     
     if all_passed:
-        print("\n🎉 All tests passed! Control Agent integration is ready.")
+        print("\n[SYMBOL] All tests passed! Control Agent integration is ready.")
         return 0
     else:
-        print("\n⚠ Some tests failed. Check errors above.")
+        print("\n[SYMBOL] Some tests failed. Check errors above.")
         return 1
 
 if __name__ == "__main__":

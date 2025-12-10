@@ -33,4 +33,4 @@ after_count = c.fetchone()[0]
 print(f'Scenes remaining: {after_count}')
 
 conn.close()
-print('\n✓ Database cleared and ready for reprocessing with 5-minute scenes!')
+print('\n[SYMBOL] Database cleared and ready for reprocessing with 5-minute scenes!')

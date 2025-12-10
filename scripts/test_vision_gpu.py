@@ -13,14 +13,14 @@ def test_gpu():
         # Test tensor on GPU
         try:
             x = torch.rand(3, 3).cuda()
-            print(f"✓ GPU tensor creation successful")
+            print(f"[SYMBOL] GPU tensor creation successful")
             print(f"  Device: {x.device}")
             return 0
         except Exception as e:
-            print(f"✗ GPU tensor creation failed: {e}")
+            print(f"[SYMBOL] GPU tensor creation failed: {e}")
             return 1
     else:
-        print("✗ CUDA not available")
+        print("[SYMBOL] CUDA not available")
         return 1
 
 if __name__ == "__main__":

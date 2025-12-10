@@ -20,15 +20,15 @@ def main():
     # Initialize bridge
     print("[1/3] Initializing bridge...")
     bridge = WSL2AudioBridge()
-    print("✓ Bridge initialized")
+    print("[SYMBOL] Bridge initialized")
     print()
     
     # Check if service is running
     print("[2/3] Checking WSL2 service...")
     if bridge._is_wsl_service_running():
-        print("✓ WSL2 audio service is running")
+        print("[SYMBOL] WSL2 audio service is running")
     else:
-        print("✗ WSL2 audio service is NOT running")
+        print("[SYMBOL] WSL2 audio service is NOT running")
         print()
         print("To start the service, open WSL2 and run:")
         print("  cd ~/goodq_audio")
@@ -59,13 +59,13 @@ def main():
                 break
     
     if not audio_file:
-        print("✗ No test audio file found")
+        print("[SYMBOL] No test audio file found")
         print("  Please place an audio file in one of these locations:")
         for p in test_paths:
             print(f"    {p}")
         return
     
-    print(f"✓ Found test file: {audio_file}")
+    print(f"[SYMBOL] Found test file: {audio_file}")
     print()
     
     # Test transcription
@@ -95,7 +95,7 @@ def main():
     print()
     
     if result.get('status') == 'success':
-        print(f"✓ Transcription successful!")
+        print(f"[SYMBOL] Transcription successful!")
         print()
         print(f"Processing time: {elapsed:.1f}s")
         
@@ -120,7 +120,7 @@ def main():
         print(f"Total segments: {len(result.get('transcription', []))}")
         
     else:
-        print(f"✗ Transcription failed")
+        print(f"[SYMBOL] Transcription failed")
         print(f"Status: {result.get('status')}")
         print(f"Error: {result.get('error')}")
     

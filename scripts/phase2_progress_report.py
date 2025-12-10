@@ -11,7 +11,7 @@ print(f"PHASE 2 PROGRESS REPORT - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 print("="*80)
 
 # Memory DB Analysis
-print("\n📊 MEMORY.DB STATUS")
+print("\n[STATS] MEMORY.DB STATUS")
 print("-" * 80)
 
 conn = sqlite3.connect('L:/_DATA/GoodQ_Data/memory.db')
@@ -27,9 +27,9 @@ with_scene_id = cur.fetchone()[0]
 cur.execute("SELECT COUNT(DISTINCT scene_id) FROM embeddings WHERE scene_id IS NOT NULL")
 unique_scenes = cur.fetchone()[0]
 
-print(f"✓ Total Embeddings: {total_emb}")
-print(f"✓ With scene_id: {with_scene_id} ({with_scene_id/total_emb*100:.1f}%)")
-print(f"✓ Unique Scenes Linked: {unique_scenes}")
+print(f"[SYMBOL] Total Embeddings: {total_emb}")
+print(f"[SYMBOL] With scene_id: {with_scene_id} ({with_scene_id/total_emb*100:.1f}%)")
+print(f"[SYMBOL] Unique Scenes Linked: {unique_scenes}")
 
 # By modality
 print("\nEmbeddings by Modality:")
@@ -40,12 +40,12 @@ for row in cur.fetchall():
 # Scenes
 cur.execute("SELECT COUNT(*) FROM scenes")
 scene_count = cur.fetchone()[0]
-print(f"\n✓ Total Scenes: {scene_count}")
+print(f"\n[SYMBOL] Total Scenes: {scene_count}")
 
 # Links
 cur.execute("SELECT COUNT(*) FROM links")
 link_count = cur.fetchone()[0]
-print(f"✓ Total Links: {link_count}")
+print(f"[SYMBOL] Total Links: {link_count}")
 
 cur.execute("SELECT relation, COUNT(*) FROM links GROUP BY relation")
 print("\nLinks by Relation:")
@@ -55,13 +55,13 @@ for row in cur.fetchall():
 # Segments
 cur.execute("SELECT COUNT(*) FROM segments")
 segment_count = cur.fetchone()[0]
-print(f"\n✓ Total Segments: {segment_count}")
+print(f"\n[SYMBOL] Total Segments: {segment_count}")
 
 conn.close()
 
 # Knowledge Graph Analysis
 print("\n" + "="*80)
-print("🔗 KNOWLEDGE GRAPH STATUS")
+print("[SYMBOL] KNOWLEDGE GRAPH STATUS")
 print("-" * 80)
 
 conn = sqlite3.connect('L:/_DATA/GoodQ_Data/knowledge_graph.db')
@@ -100,7 +100,7 @@ conn.close()
 
 # FAISS Index Status
 print("\n" + "="*80)
-print("💾 FAISS INDEX STATUS")
+print("[SAVE] FAISS INDEX STATUS")
 print("-" * 80)
 
 faiss_dir = Path("L:/_DATA/GoodQ_Data/faiss_indices")
@@ -110,13 +110,13 @@ for idx_name in indices:
     idx_file = faiss_dir / idx_name / f"faiss_{idx_name}_index.bin"
     if idx_file.exists():
         size_mb = idx_file.stat().st_size / 1024 / 1024
-        print(f"✓ {idx_name:10s}: {size_mb:6.2f} MB - {idx_file}")
+        print(f"[SYMBOL] {idx_name:10s}: {size_mb:6.2f} MB - {idx_file}")
     else:
-        print(f"✗ {idx_name:10s}: MISSING")
+        print(f"[SYMBOL] {idx_name:10s}: MISSING")
 
 # Overall Assessment
 print("\n" + "="*80)
-print("📈 PHASE 2 ASSESSMENT")
+print("[SYMBOL] PHASE 2 ASSESSMENT")
 print("="*80)
 
 fixes_working = []
@@ -124,9 +124,9 @@ issues_remaining = []
 
 # Check 1: Scene ID linkage
 if with_scene_id > 0:
-    fixes_working.append(f"✓ Scene ID linkage working ({with_scene_id}/{total_emb} embeddings)")
+    fixes_working.append(f"[SYMBOL] Scene ID linkage working ({with_scene_id}/{total_emb} embeddings)")
 else:
-    issues_remaining.append("✗ Scene ID linkage not working")
+    issues_remaining.append("[SYMBOL] Scene ID linkage not working")
 
 # Check 2: Multiple modalities
 modalities_found = set()
@@ -139,36 +139,36 @@ for row in cur.fetchall():
 conn.close()
 
 if len(modalities_found) >= 3:
-    fixes_working.append(f"✓ Multi-modal embeddings ({len(modalities_found)} modalities)")
+    fixes_working.append(f"[SYMBOL] Multi-modal embeddings ({len(modalities_found)} modalities)")
 else:
-    issues_remaining.append(f"⚠ Limited modalities ({len(modalities_found)} found)")
+    issues_remaining.append(f"[SYMBOL] Limited modalities ({len(modalities_found)} found)")
 
 # Check 3: Knowledge graph
 if node_count > 0:
-    fixes_working.append(f"✓ Knowledge graph populated ({node_count} nodes, {edge_count} edges)")
+    fixes_working.append(f"[SYMBOL] Knowledge graph populated ({node_count} nodes, {edge_count} edges)")
 else:
-    issues_remaining.append("⚠ Knowledge graph empty (may still be processing)")
+    issues_remaining.append("[SYMBOL] Knowledge graph empty (may still be processing)")
 
 # Check 4: FAISS indices
 faiss_count = sum(1 for idx in indices if (faiss_dir / idx / f"faiss_{idx}_index.bin").exists())
 if faiss_count >= 3:
-    fixes_working.append(f"✓ FAISS indices created ({faiss_count}/{len(indices)})")
+    fixes_working.append(f"[SYMBOL] FAISS indices created ({faiss_count}/{len(indices)})")
 else:
-    issues_remaining.append(f"⚠ Some FAISS indices missing ({faiss_count}/{len(indices)})")
+    issues_remaining.append(f"[SYMBOL] Some FAISS indices missing ({faiss_count}/{len(indices)})")
 
-print("\n✅ WORKING:")
+print("\n[OK] WORKING:")
 for item in fixes_working:
     print(f"   {item}")
 
 if issues_remaining:
-    print("\n⚠️  REMAINING ISSUES:")
+    print("\n[WARN]  REMAINING ISSUES:")
     for item in issues_remaining:
         print(f"   {item}")
 
 print("\n" + "="*80)
 expected_scenes = 16  # sample.mp4 has 16 scenes
 if scene_count >= expected_scenes:
-    print(f"✅ PROCESSING COMPLETE: {scene_count}/{expected_scenes} scenes processed")
+    print(f"[OK] PROCESSING COMPLETE: {scene_count}/{expected_scenes} scenes processed")
 else:
     print(f"⏳ PROCESSING IN PROGRESS: {scene_count}/{expected_scenes} scenes processed")
     print(f"   Estimated {(expected_scenes - scene_count) * 90} seconds remaining")

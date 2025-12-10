@@ -15,22 +15,22 @@ for url in urls:
     try:
         response = requests.get(url, timeout=5)
         if response.status_code == 200:
-            print(f"  ✅ SUCCESS!")
+            print(f"  [OK] SUCCESS!")
             data = response.json()
             model = data['data'][0]['id'].split('/')[-1]
             print(f"  Model: {model}")
             sys.exit(0)
         else:
-            print(f"  ❌ HTTP {response.status_code}")
+            print(f"  [FAIL] HTTP {response.status_code}")
     except requests.exceptions.ConnectionError as e:
-        print(f"  ❌ Connection refused or blocked")
+        print(f"  [FAIL] Connection refused or blocked")
     except requests.exceptions.Timeout:
-        print(f"  ❌ Timeout (server not responding)")
+        print(f"  [FAIL] Timeout (server not responding)")
     except Exception as e:
-        print(f"  ❌ Error: {e}")
+        print(f"  [FAIL] Error: {e}")
 
 print("\n" + "=" * 60)
-print("❌ Could not connect to vLLM")
+print("[FAIL] Could not connect to vLLM")
 print("\nTroubleshooting:")
 print("  1. Check Windows Firewall")
 print("  2. Try: wsl --shutdown (then restart)")

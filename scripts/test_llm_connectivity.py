@@ -19,19 +19,19 @@ def test_endpoint(url, name, timeout=5):
     try:
         response = requests.get(f"{url}/models", timeout=timeout)
         if response.status_code == 200:
-            print(f"✅ {name:25s} - ONLINE  ({url})")
+            print(f"[OK] {name:25s} - ONLINE  ({url})")
             return True
         else:
-            print(f"❌ {name:25s} - ERROR {response.status_code}  ({url})")
+            print(f"[FAIL] {name:25s} - ERROR {response.status_code}  ({url})")
             return False
     except requests.exceptions.ConnectionError:
-        print(f"❌ {name:25s} - CONNECTION REFUSED  ({url})")
+        print(f"[FAIL] {name:25s} - CONNECTION REFUSED  ({url})")
         return False
     except requests.exceptions.Timeout:
-        print(f"❌ {name:25s} - TIMEOUT  ({url})")
+        print(f"[FAIL] {name:25s} - TIMEOUT  ({url})")
         return False
     except Exception as e:
-        print(f"❌ {name:25s} - ERROR: {e}")
+        print(f"[FAIL] {name:25s} - ERROR: {e}")
         return False
 
 def main():
@@ -66,7 +66,7 @@ def main():
     
     try:
         client = LLMClient()
-        print(f"✅ LLMClient initialized")
+        print(f"[OK] LLMClient initialized")
         print(f"   - {len(client.MODELS)} models configured")
         healthy = client.get_healthy_models()
         print(f"   - {len(healthy)} models healthy: {[m.name for m in healthy]}")
@@ -79,20 +79,20 @@ def main():
         )
         
         if response:
-            print(f"✅ Chat successful!")
+            print(f"[OK] Chat successful!")
             # Response is a dict with 'choices' key
             content = response.get('choices', [{}])[0].get('message', {}).get('content', str(response))
             print(f"   Response: {content[:150]}...")
             print("\n" + "="*70)
-            print("🎉 LLM Infrastructure is OPERATIONAL!")
+            print("[SYMBOL] LLM Infrastructure is OPERATIONAL!")
             print("="*70)
             return 0
         else:
-            print(f"❌ Chat failed - no healthy models")
+            print(f"[FAIL] Chat failed - no healthy models")
             return 1
             
     except Exception as e:
-        print(f"❌ LLMClient error: {e}")
+        print(f"[FAIL] LLMClient error: {e}")
         import traceback
         traceback.print_exc()
         return 1

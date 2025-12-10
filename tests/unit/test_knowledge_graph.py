@@ -189,7 +189,7 @@ def main():
         # Test queries
         test_queries(test_db)
         
-        print("\n✓ Knowledge graph implementation validated successfully!")
+        print("\n[SYMBOL] Knowledge graph implementation validated successfully!")
         print(f"\nTest database created at: {test_db}")
         print("\nYou can now query it with:")
         print(f"  python cli/graph_query.py --graph-db {test_db} stats")
@@ -199,7 +199,7 @@ def main():
         return 0
         
     except Exception as e:
-        print(f"\n✗ Error during testing: {e}")
+        print(f"\n[SYMBOL] Error during testing: {e}")
         import traceback
         traceback.print_exc()
         return 1

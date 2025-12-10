@@ -14,13 +14,13 @@ def test_wsl_audio_processing():
     test_file = Path(r"L:\_DATA\GoodQ_Data\temp\test_chunk.wav")
     
     if not test_file.exists():
-        print(f"❌ Test file not found: {test_file}")
+        print(f"[FAIL] Test file not found: {test_file}")
         return False
     
     # Convert Windows path to WSL path
     wsl_path = f"/mnt/l/L:/_DATA/GoodQ_Data/temp/test_chunk.wav"
     
-    print(f"🧪 Testing WSL audio processing...")
+    print(f"[SYMBOL] Testing WSL audio processing...")
     print(f"   File: {test_file}")
     print(f"   WSL Path: {wsl_path}")
     
@@ -34,7 +34,7 @@ def test_wsl_audio_processing():
         )
         
         if result.returncode != 0:
-            print(f"❌ Processing failed with code {result.returncode}")
+            print(f"[FAIL] Processing failed with code {result.returncode}")
             print(f"   STDERR: {result.stderr}")
             return False
         
@@ -45,7 +45,7 @@ def test_wsl_audio_processing():
         data = json.loads(json_line)
         
         if data.get('status') != 'success':
-            print(f"❌ Processing returned error: {data.get('error')}")
+            print(f"[FAIL] Processing returned error: {data.get('error')}")
             return False
         
         segments = data.get('segments', [])
@@ -53,7 +53,7 @@ def test_wsl_audio_processing():
         duration = data.get('duration', 0)
         speakers = data.get('speakers_detected', 0)
         
-        print(f"✅ Processing successful!")
+        print(f"[OK] Processing successful!")
         print(f"   Language: {language}")
         print(f"   Duration: {duration}s")
         print(f"   Segments: {len(segments)}")
@@ -63,14 +63,14 @@ def test_wsl_audio_processing():
         return True
         
     except subprocess.TimeoutExpired:
-        print(f"❌ Processing timed out after 120s")
+        print(f"[FAIL] Processing timed out after 120s")
         return False
     except json.JSONDecodeError as e:
-        print(f"❌ Failed to parse JSON output: {e}")
+        print(f"[FAIL] Failed to parse JSON output: {e}")
         print(f"   Output: {result.stdout}")
         return False
     except Exception as e:
-        print(f"❌ Unexpected error: {e}")
+        print(f"[FAIL] Unexpected error: {e}")
         return False
 
 if __name__ == "__main__":

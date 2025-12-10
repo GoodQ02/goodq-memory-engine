@@ -31,14 +31,14 @@ def test_vad_basic():
         print("\n[1/3] Loading Silero VAD model...")
         start = time.time()
         model, utils = get_vad_model()
-        print(f"✓ Model loaded in {time.time() - start:.2f}s")
+        print(f"[SYMBOL] Model loaded in {time.time() - start:.2f}s")
         
         # Find a test audio file
         test_files = list(Path(project_root / "data" / "processing").rglob("*.wav"))
         test_files.extend(list(Path(project_root / "_DATA" / "FAMILY_FEAST").rglob("*.mp4"))[:1])
         
         if not test_files:
-            print("✗ No test audio files found")
+            print("[SYMBOL] No test audio files found")
             return False
         
         test_file = str(test_files[0])
@@ -56,16 +56,16 @@ def test_vad_basic():
         elapsed = time.time() - start
         
         if vad_path and segments:
-            print(f"✓ VAD completed in {elapsed:.2f}s")
+            print(f"[SYMBOL] VAD completed in {elapsed:.2f}s")
             print(f"  - Found {len(segments)} speech segments")
             print(f"  - Output: {vad_path}")
             return True
         else:
-            print("✗ VAD failed to produce output")
+            print("[SYMBOL] VAD failed to produce output")
             return False
             
     except Exception as e:
-        print(f"✗ VAD test failed: {e}")
+        print(f"[SYMBOL] VAD test failed: {e}")
         import traceback
         traceback.print_exc()
         return False
@@ -93,11 +93,11 @@ def test_gpu_detection():
                 print(f"    - Compute: {props.major}.{props.minor}")
             return True
         else:
-            print("✗ CUDA not available")
+            print("[SYMBOL] CUDA not available")
             return False
             
     except Exception as e:
-        print(f"✗ GPU test failed: {e}")
+        print(f"[SYMBOL] GPU test failed: {e}")
         return False
 
 
@@ -113,7 +113,7 @@ def test_audio_emotion_with_vad():
         # Find test audio
         test_files = list(Path(project_root / "_DATA" / "FAMILY_FEAST").rglob("*.mp4"))[:1]
         if not test_files:
-            print("✗ No test files found")
+            print("[SYMBOL] No test files found")
             return False
         
         test_file = str(test_files[0])
@@ -146,14 +146,14 @@ def test_audio_emotion_with_vad():
         
         if elapsed_with_vad < elapsed_without_vad:
             speedup = elapsed_without_vad / elapsed_with_vad
-            print(f"\n✓ VAD provided {speedup:.2f}x speedup!")
+            print(f"\n[SYMBOL] VAD provided {speedup:.2f}x speedup!")
         else:
-            print(f"\n⚠ VAD was slower (overhead for short audio)")
+            print(f"\n[SYMBOL] VAD was slower (overhead for short audio)")
         
         return True
         
     except Exception as e:
-        print(f"✗ Audio emotion test failed: {e}")
+        print(f"[SYMBOL] Audio emotion test failed: {e}")
         import traceback
         traceback.print_exc()
         return False
@@ -169,7 +169,7 @@ def test_memory_usage():
         import torch
         
         if not torch.cuda.is_available():
-            print("✗ CUDA not available")
+            print("[SYMBOL] CUDA not available")
             return False
         
         print("\nGPU Memory Stats:")
@@ -187,7 +187,7 @@ def test_memory_usage():
         return True
         
     except Exception as e:
-        print(f"✗ Memory test failed: {e}")
+        print(f"[SYMBOL] Memory test failed: {e}")
         return False
 
 
@@ -210,15 +210,15 @@ def main():
     print("=" * 80)
     
     for test_name, passed in results.items():
-        status = "✓ PASS" if passed else "✗ FAIL"
+        status = "[SYMBOL] PASS" if passed else "[SYMBOL] FAIL"
         print(f"  {test_name:25s} {status}")
     
     all_passed = all(results.values())
     print()
     if all_passed:
-        print("✓ All tests PASSED!")
+        print("[SYMBOL] All tests PASSED!")
     else:
-        print("✗ Some tests FAILED")
+        print("[SYMBOL] Some tests FAILED")
     
     print("=" * 80)
     return all_passed

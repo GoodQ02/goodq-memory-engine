@@ -86,7 +86,7 @@ def apply_optimizations():
     if changes:
         print("[APPLIED] Performance optimizations:")
         for change in changes:
-            print(f"  ✓ {change}")
+            print(f"  [SYMBOL] {change}")
         return True
     else:
         print("[INFO] No changes needed - already optimized")

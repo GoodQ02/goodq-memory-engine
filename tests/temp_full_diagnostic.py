@@ -44,7 +44,7 @@ if result:
         if has_audio_meta:
             print(f"\n  Audio metadata: {meta.get('audio', 'N/A')[:200]}")
         else:
-            print("\n  ⚠️ NO AUDIO DATA FOUND IN METADATA")
+            print("\n  [WARN] NO AUDIO DATA FOUND IN METADATA")
 
 conn.close()
 
@@ -73,7 +73,7 @@ if workspace.exists():
         audio_files = list(audio_dir.glob('*.wav'))
         print(f"  Audio files: {len(audio_files)}")
         if len(audio_files) == 0:
-            print(f"    ⚠️ NO AUDIO FILES FOUND - This is the problem!")
+            print(f"    [WARN] NO AUDIO FILES FOUND - This is the problem!")
         for f in audio_files:
             print(f"    - {f.name} ({f.stat().st_size} bytes)")
 
@@ -121,7 +121,7 @@ for pattern in audio_log_patterns:
             print(f"  (empty file)")
 
 if not audio_logs_found:
-    print("\n⚠️ NO AUDIO PROCESSING LOGS FOUND - Audio steps likely never ran!")
+    print("\n[WARN] NO AUDIO PROCESSING LOGS FOUND - Audio steps likely never ran!")
 
 # 6. Check configuration
 print("\n\n### CONFIGURATION CHECK ###")
@@ -141,14 +141,14 @@ print("\n" + "=" * 100)
 print("DIAGNOSTIC SUMMARY")
 print("=" * 100)
 
-print("\n📊 KEY FINDINGS:")
-print("1. ✅ Scene detection worked - 1 scene found (0-2s)")
-print("2. ✅ Keyframe extraction worked - 1 frame image created")
-print("3. ✅ Image analysis worked - caption and objects detected")
-print("4. ✅ Image embeddings created - CLIP and DINO vectors in FAISS")
-print("5. ❌ AUDIO PROCESSING DID NOT RUN - No WAV files, no transcripts, no audio embeddings")
+print("\n[STATS] KEY FINDINGS:")
+print("1. [OK] Scene detection worked - 1 scene found (0-2s)")
+print("2. [OK] Keyframe extraction worked - 1 frame image created")
+print("3. [OK] Image analysis worked - caption and objects detected")
+print("4. [OK] Image embeddings created - CLIP and DINO vectors in FAISS")
+print("5. [FAIL] AUDIO PROCESSING DID NOT RUN - No WAV files, no transcripts, no audio embeddings")
 
-print("\n🔍 ROOT CAUSE ANALYSIS:")
+print("\n[SEARCH] ROOT CAUSE ANALYSIS:")
 print("The audio processing step appears to have been skipped or failed silently.")
 print("Possible causes:")
 print("  A) Audio processing was skipped due to deduplication logic (scene already 'materialized')")
@@ -156,7 +156,7 @@ print("  B) Audio extraction failed silently without proper error logging")
 print("  C) Audio processing agents crashed or timed out")
 print("  D) The run was interrupted before audio processing could begin")
 
-print("\n🎯 NEXT STEPS:")
+print("\n[TARGET] NEXT STEPS:")
 print("1. Check if 'skip_audio' flag was set to True during processing")
 print("2. Run ingestion again with --force flag to bypass deduplication")
 print("3. Check conda environments for audio processing steps")

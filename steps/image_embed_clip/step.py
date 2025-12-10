@@ -70,10 +70,10 @@ def _load() -> None:
         proc = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch16")
         model = CLIPModel.from_pretrained("openai/clip-vit-base-patch16").to(device).eval()
         _CLIP.update({"model": model, "proc": proc, "device": device})
-        logger.info(f"✅ CLIP model loaded on {device} (GPU config: {gpu_config['memory_fraction']:.1%} memory)")
+        logger.info(f"[OK] CLIP model loaded on {device} (GPU config: {gpu_config['memory_fraction']:.1%} memory)")
     except Exception as e:
-        logger.error(f"❌ Failed to load CLIP model: {str(e)}")
-        logger.info("⚠️  Falling back to CPU mode")
+        logger.error(f"[FAIL] Failed to load CLIP model: {str(e)}")
+        logger.info("[WARN]  Falling back to CPU mode")
         _CLIP.update({"model": None, "proc": None, "device": "cpu"})
         GPUManager.clear_cache()
 

@@ -46,16 +46,16 @@ def test_gpu_config():
         if torch.cuda.is_available():
             print("\n4. Tensor Allocation Test:\n")
             test_tensor = torch.randn(1000, 1000).to(device)
-            print(f"   ✓ Successfully allocated tensor on {device}")
+            print(f"   [SYMBOL] Successfully allocated tensor on {device}")
             print(f"   Tensor shape: {test_tensor.shape}")
             print_memory_stats()
             del test_tensor
             clear_cache()
-            print(f"   ✓ Tensor freed, cache cleared")
+            print(f"   [SYMBOL] Tensor freed, cache cleared")
         else:
             print("\n4. CUDA not available - skipping tensor test")
     except Exception as e:
-        print(f"\n4. ❌ Tensor allocation failed: {e}")
+        print(f"\n4. [FAIL] Tensor allocation failed: {e}")
     
     print("\n" + "="*80)
     print("GPU Configuration Test Complete")

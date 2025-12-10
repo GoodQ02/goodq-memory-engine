@@ -48,7 +48,7 @@ def test_face_embed_gpu():
         boxes, _ = mtcnn.detect(img)
         elapsed = time.time() - start
         
-        print(f"✅ Face detection: {elapsed*1000:.1f}ms on {device}")
+        print(f"[OK] Face detection: {elapsed*1000:.1f}ms on {device}")
         
         if device == "cuda":
             mem_info = GPUManager.get_memory_info()
@@ -58,7 +58,7 @@ def test_face_embed_gpu():
         return True
         
     except Exception as e:
-        print(f"❌ Face embedding test failed: {e}")
+        print(f"[FAIL] Face embedding test failed: {e}")
         return False
 
 def test_emotion_classify_gpu():
@@ -106,7 +106,7 @@ def test_emotion_classify_gpu():
                 outputs = model(**inputs)
         elapsed = time.time() - start
         
-        print(f"✅ Emotion classification: {elapsed*1000:.1f}ms on {device}")
+        print(f"[OK] Emotion classification: {elapsed*1000:.1f}ms on {device}")
         
         if device == "cuda":
             mem_info = GPUManager.get_memory_info()
@@ -116,7 +116,7 @@ def test_emotion_classify_gpu():
         return True
         
     except Exception as e:
-        print(f"❌ Emotion classification test failed: {e}")
+        print(f"[FAIL] Emotion classification test failed: {e}")
         return False
 
 def main():
@@ -142,14 +142,14 @@ def main():
     
     print(f"\nPassed: {passed}/{total}")
     for component, success in results.items():
-        status = "✅" if success else "❌"
+        status = "[OK]" if success else "[FAIL]"
         print(f"  {status} {component}")
     
     if passed == total:
-        print("\n🎉 All vision components GPU-enabled and functional!")
+        print("\n[SYMBOL] All vision components GPU-enabled and functional!")
         sys.exit(0)
     else:
-        print(f"\n⚠️  {total - passed} component(s) failed")
+        print(f"\n[WARN]  {total - passed} component(s) failed")
         sys.exit(1)
 
 if __name__ == "__main__":

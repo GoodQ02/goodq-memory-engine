@@ -111,7 +111,7 @@ for idx in range(10):
     """, (f"%scene_{idx:04d}%",))
     count = cursor.fetchone()[0]
     if count == 0:
-        print(f"⚠ Scene {idx:04d}: NO EMBEDDINGS")
+        print(f"[SYMBOL] Scene {idx:04d}: NO EMBEDDINGS")
     else:
         # Break down by modality
         cursor.execute("""
@@ -122,7 +122,7 @@ for idx in range(10):
         """, (f"%scene_{idx:04d}%",))
         modalities = cursor.fetchall()
         modality_str = ", ".join([f"{m[0]}:{m[1]}" for m in modalities])
-        print(f"✓ Scene {idx:04d}: {count} embeddings ({modality_str})")
+        print(f"[SYMBOL] Scene {idx:04d}: {count} embeddings ({modality_str})")
 
 conn.close()
 
@@ -143,12 +143,12 @@ for scene_num in range(10):
     found = False
     for path in possible_paths:
         if os.path.exists(path):
-            print(f"✓ {scene_str}: Found at {path}")
+            print(f"[SYMBOL] {scene_str}: Found at {path}")
             found = True
             break
     
     if not found:
-        print(f"✗ {scene_str}: No transcription file found")
+        print(f"[SYMBOL] {scene_str}: No transcription file found")
 
 print("\n\n=== CHECKING FOR ANALYSIS OUTPUT FILES ===")
 # Check for image analysis outputs
@@ -164,7 +164,7 @@ for scene_num in range(10):
     found = False
     for path in possible_paths:
         if os.path.exists(path):
-            print(f"✓ {scene_str}: Found at {path}")
+            print(f"[SYMBOL] {scene_str}: Found at {path}")
             with open(path, 'r') as f:
                 data = json.load(f)
                 print(f"   Keys: {list(data.keys())}")
@@ -172,4 +172,4 @@ for scene_num in range(10):
             break
     
     if not found:
-        print(f"✗ {scene_str}: No analysis file found")
+        print(f"[SYMBOL] {scene_str}: No analysis file found")

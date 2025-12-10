@@ -15,7 +15,7 @@ def main():
     config_file = project_root / "config.json"
     
     if not config_file.exists():
-        print(f"⚠️  Config file not found: {config_file}")
+        print(f"[WARN]  Config file not found: {config_file}")
         print("  Creating new configuration...")
         config = {}
     else:
@@ -50,7 +50,7 @@ def main():
     with open(config_file, 'w') as f:
         json.dump(config, f, indent=2)
     
-    print(f"✓ Configuration saved to: {config_file}")
+    print(f"[SYMBOL] Configuration saved to: {config_file}")
     
     # Also check if there's a scene detection step config
     scene_detect_config = project_root / "steps" / "video_scene_detect" / "config.json"
@@ -66,11 +66,11 @@ def main():
         with open(scene_detect_config, 'w') as f:
             json.dump(step_config, f, indent=2)
         
-        print(f"✓ Step configuration updated: {scene_detect_config}")
+        print(f"[SYMBOL] Step configuration updated: {scene_detect_config}")
     
     print()
     print("="*80)
-    print("  ✓ Scene detection configured for 5-minute minimum scenes")
+    print("  [SYMBOL] Scene detection configured for 5-minute minimum scenes")
     print("="*80)
 
 

@@ -6,8 +6,8 @@ This script implements Silero VAD preprocessing for ALL audio processing steps
 to eliminate wasted GPU cycles on silence and background noise.
 
 Steps to update:
-1. audio_diarize - DONE ✓
-2. audio_transcribe - DONE (uses Whisper's VAD) ✓  
+1. audio_diarize - DONE [SYMBOL]
+2. audio_transcribe - DONE (uses Whisper's VAD) [SYMBOL]  
 3. audio_emotion - NEEDS VAD
 4. audio_embed_clap - NEEDS VAD
 5. audio_music_events - NEEDS VAD
@@ -56,7 +56,7 @@ def check_vad_implementation():
             
         content = step_file.read_text()
         has_vad = ("vad" in content.lower() or "silero" in content.lower())
-        results[step_name] = "✓ HAS VAD" if has_vad else "✗ NEEDS VAD"
+        results[step_name] = "[SYMBOL] HAS VAD" if has_vad else "[SYMBOL] NEEDS VAD"
     
     for step_name, status in results.items():
         print(f"  {step_name:25s} {status}")
@@ -73,7 +73,7 @@ def create_shared_vad_module():
     
     # Check if already exists
     if vad_module_path.exists():
-        print(f"✓ VAD module already exists: {vad_module_path}")
+        print(f"[SYMBOL] VAD module already exists: {vad_module_path}")
         return True
     
     vad_code = '''"""
@@ -241,7 +241,7 @@ def calculate_time_savings(original_duration: float, vad_segments: List[Dict]) -
     
     print(f"Creating shared VAD module: {vad_module_path}")
     vad_module_path.write_text(vad_code)
-    print("✓ VAD module created successfully")
+    print("[SYMBOL] VAD module created successfully")
     return True
 
 
@@ -250,7 +250,7 @@ def implement_vad_in_step(step_name: str):
     
     step_file = project_root / "steps" / step_name / "step.py"
     if not step_file.exists():
-        print(f"✗ Step file not found: {step_file}")
+        print(f"[SYMBOL] Step file not found: {step_file}")
         return False
     
     content = step_file.read_text()
@@ -265,7 +265,7 @@ def implement_vad_in_step(step_name: str):
     # Implementation depends on step - create a backup first
     backup_file = step_file.with_suffix('.py.backup_pre_vad')
     backup_file.write_text(content)
-    print(f"    ✓ Backup created: {backup_file.name}")
+    print(f"    [SYMBOL] Backup created: {backup_file.name}")
     
     # TODO: Add VAD implementation based on step type
     print(f"    ! Manual implementation required for {step_name}")
@@ -300,7 +300,7 @@ def main():
     ]
     
     if not steps_needing_vad:
-        print("  ✓ All audio steps already have VAD!")
+        print("  [SYMBOL] All audio steps already have VAD!")
     else:
         for step_name in steps_needing_vad:
             implement_vad_in_step(step_name)

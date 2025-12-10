@@ -15,7 +15,7 @@ print("="*80)
 db_path = Path("L:/_DATA/GoodQ_Data/goodq_memory.db")
 
 if not db_path.exists():
-    print("\n❌ Database not found. Run ingestion first:")
+    print("\n[FAIL] Database not found. Run ingestion first:")
     print("   python scripts/comprehensive_clean_run.py")
     sys.exit(1)
 
@@ -28,10 +28,10 @@ print("-" * 80)
 
 c.execute("SELECT COUNT(*) FROM scenes")
 scene_count = c.fetchone()[0]
-print(f"📊 Total scenes: {scene_count}")
+print(f"[STATS] Total scenes: {scene_count}")
 
 if scene_count == 0:
-    print("❌ No scenes found. Run ingestion first.")
+    print("[FAIL] No scenes found. Run ingestion first.")
     conn.close()
     sys.exit(1)
 
@@ -40,18 +40,18 @@ c.execute("SELECT meta FROM scenes LIMIT 1")
 row = c.fetchone()
 if row:
     meta = json.loads(row[0])
-    print("\n✅ Current scene metadata includes:")
+    print("\n[OK] Current scene metadata includes:")
     has_items = []
     if meta.get('audio', {}).get('transcript'):
-        has_items.append("✓ Transcript")
+        has_items.append("[SYMBOL] Transcript")
     if meta.get('sentiment'):
-        has_items.append("✓ Sentiment")
+        has_items.append("[SYMBOL] Sentiment")
     if meta.get('emotions'):
-        has_items.append("✓ Emotions")
+        has_items.append("[SYMBOL] Emotions")
     if meta.get('caption'):
-        has_items.append("✓ Visual caption")
+        has_items.append("[SYMBOL] Visual caption")
     if meta.get('objects'):
-        has_items.append("✓ Object detection")
+        has_items.append("[SYMBOL] Object detection")
     
     for item in has_items:
         print(f"   {item}")
@@ -69,13 +69,13 @@ if kg_path.exists():
     kg_c.execute("SELECT node_type, COUNT(*) as count FROM nodes GROUP BY node_type ORDER BY count DESC")
     node_types = kg_c.fetchall()
     
-    print(f"📊 Knowledge graph nodes by type:")
+    print(f"[STATS] Knowledge graph nodes by type:")
     for node_type, count in node_types:
         print(f"   {node_type}: {count}")
     
     kg_conn.close()
 else:
-    print("⚠️  Knowledge graph not yet created")
+    print("[WARN]  Knowledge graph not yet created")
 
 # Show what Phase 3 will add
 print("\n[3] Phase 3 LLM Enhancements Preview")
@@ -84,7 +84,7 @@ print("-" * 80)
 print("""
 When Phase 3 integration is active, you will see:
 
-📝 NEW NODE TYPES in Knowledge Graph:
+[NOTE] NEW NODE TYPES in Knowledge Graph:
    • narrative - Natural language scene descriptions
    • emotional_arc - Overall emotional journey
    • theme - Extracted themes (emotional, topical)
@@ -95,19 +95,19 @@ When Phase 3 integration is active, you will see:
    • topic - Discussion topics identified
    • temporal_ref - Time references extracted
 
-🧠 ENHANCED SCENE METADATA:
+[AI] ENHANCED SCENE METADATA:
    • Contextualized entity extraction
    • Natural language narratives
    • Relationship inference between entities
    • Thematic tagging
 
-🎭 VIDEO-LEVEL ANALYSIS:
+[SYMBOL] VIDEO-LEVEL ANALYSIS:
    • Emotional arc with key moments
    • Turning point identification
    • Theme extraction across scenes
    • Overall narrative structure
 
-📊 SAMPLE OUTPUT:
+[STATS] SAMPLE OUTPUT:
    Scene 3 narrative: "Two friends discuss their band experience at a 
    table. The conversation is warm and nostalgic, with excitement building
    as they recall their best performance in Seattle."
@@ -135,33 +135,33 @@ if config_path.exists():
     llm_enabled = cfg.get('llm', {}).get('enabled', False)
     features = cfg.get('llm', {}).get('features', {})
     
-    print(f"✅ LLM Enabled: {llm_enabled}")
-    print(f"✅ Scene Summarization: {features.get('scene_summarization', False)}")
-    print(f"✅ Video Summarization: {features.get('video_summarization', False)}")
-    print(f"✅ Relationship Extraction: {features.get('relationship_extraction', False)}")
-    print(f"✅ Emotion Arc Analysis: {features.get('emotion_arc_analysis', False)}")
+    print(f"[OK] LLM Enabled: {llm_enabled}")
+    print(f"[OK] Scene Summarization: {features.get('scene_summarization', False)}")
+    print(f"[OK] Video Summarization: {features.get('video_summarization', False)}")
+    print(f"[OK] Relationship Extraction: {features.get('relationship_extraction', False)}")
+    print(f"[OK] Emotion Arc Analysis: {features.get('emotion_arc_analysis', False)}")
 else:
-    print("❌ Config file not found")
+    print("[FAIL] Config file not found")
 
 print("\n[5] Next Steps")
 print("-" * 80)
 print("""
 To activate Phase 3 LLM integration:
 
-1. ✅ DONE - LLM modules created
-2. ✅ DONE - Knowledge graph updated  
-3. ✅ DONE - Config features enabled
-4. ✅ DONE - Standalone tests passed (4/4)
+1. [OK] DONE - LLM modules created
+2. [OK] DONE - Knowledge graph updated  
+3. [OK] DONE - Config features enabled
+4. [OK] DONE - Standalone tests passed (4/4)
 
-5. 🔄 READY - Run full pipeline test:
+5. [SYNC] READY - Run full pipeline test:
    python scripts/comprehensive_clean_run.py
    
-6. 🔍 VERIFY - Check logs for LLM calls:
+6. [SEARCH] VERIFY - Check logs for LLM calls:
    - Look for "LLM enrichment added X entities"
    - Look for "Generated emotional arc analysis"
    - Check knowledge graph for new node types
    
-7. 📊 ANALYZE - Query enhanced knowledge graph:
+7. [STATS] ANALYZE - Query enhanced knowledge graph:
    - Check for narrative nodes
    - Verify emotional arc data
    - Examine LLM-extracted entities

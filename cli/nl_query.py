@@ -281,7 +281,7 @@ def main():
     kg_path = Path(cfg.get('data_dir', 'data')) / 'knowledge_graph.db'
     
     if not kg_path.exists():
-        print(f"❌ Knowledge graph not found at {kg_path}")
+        print(f"[FAIL] Knowledge graph not found at {kg_path}")
         print("Run ingestion first to build the knowledge graph.")
         return
     
@@ -301,7 +301,7 @@ def main():
     
     while True:
         try:
-            query = input("\n🔍 Query: ").strip()
+            query = input("\n[SEARCH] Query: ").strip()
             
             if not query:
                 continue
@@ -315,17 +315,17 @@ def main():
                 continue
             
             # Execute query
-            print("\n💭 Processing...")
+            print("\n[SYMBOL] Processing...")
             response = qi.query(query)
-            print(f"\n📊 Answer:\n{response}\n")
+            print(f"\n[STATS] Answer:\n{response}\n")
             
         except KeyboardInterrupt:
             break
         except Exception as e:
-            print(f"\n❌ Error: {e}")
+            print(f"\n[FAIL] Error: {e}")
     
     qi.close()
-    print("\n👋 Goodbye!\n")
+    print("\n[SYMBOL] Goodbye!\n")
 
 
 if __name__ == '__main__':

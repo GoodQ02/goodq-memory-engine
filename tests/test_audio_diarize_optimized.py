@@ -22,7 +22,7 @@ def test_short_audio():
     # Find a test video
     test_video = r"L:\goodq4all\smoke_inbox\sample.mp4"
     if not os.path.exists(test_video):
-        print(f"⚠️ Test video not found: {test_video}")
+        print(f"[WARN] Test video not found: {test_video}")
         return False
     
     config = load_config()
@@ -38,20 +38,20 @@ def test_short_audio():
     print(f"\n{'='*80}")
     print(f"RESULTS:")
     print(f"{'='*80}")
-    print(f"⏱️  Processing time: {elapsed:.1f}s ({elapsed/60:.1f}min)")
+    print(f"[TIMER]  Processing time: {elapsed:.1f}s ({elapsed/60:.1f}min)")
     
     meta = result.get("diarize_meta", {})
     if meta.get("status") == "ok":
-        print(f"✅ Status: Success")
-        print(f"📊 Segments: {meta.get('segment_count', 0)}")
-        print(f"👥 Speakers: {meta.get('speaker_count', 0)}")
-        print(f"🚀 Speed: {meta.get('realtime_factor', 0):.2f}x realtime")
-        print(f"🔧 Chunked: {meta.get('chunked', False)}")
-        print(f"💻 Device: {meta.get('device', 'unknown')}")
+        print(f"[OK] Status: Success")
+        print(f"[STATS] Segments: {meta.get('segment_count', 0)}")
+        print(f"[SYMBOL] Speakers: {meta.get('speaker_count', 0)}")
+        print(f"[LAUNCH] Speed: {meta.get('realtime_factor', 0):.2f}x realtime")
+        print(f"[CONFIG] Chunked: {meta.get('chunked', False)}")
+        print(f"[SYMBOL] Device: {meta.get('device', 'unknown')}")
         return True
     else:
-        print(f"❌ Status: {meta.get('status', 'unknown')}")
-        print(f"⚠️  Reason: {meta.get('reason', 'N/A')}")
+        print(f"[FAIL] Status: {meta.get('status', 'unknown')}")
+        print(f"[WARN]  Reason: {meta.get('reason', 'N/A')}")
         return False
 
 def test_medium_audio():
@@ -63,13 +63,13 @@ def test_medium_audio():
     # Look for a medium-length video
     test_dir = r"L:\_DATA\FAMILY_FEAST"
     if not os.path.exists(test_dir):
-        print(f"⚠️ Test directory not found: {test_dir}")
+        print(f"[WARN] Test directory not found: {test_dir}")
         return False
     
     # Find first video
     videos = [f for f in os.listdir(test_dir) if f.lower().endswith(('.mp4', '.avi', '.mov'))]
     if not videos:
-        print(f"⚠️ No videos found in {test_dir}")
+        print(f"[WARN] No videos found in {test_dir}")
         return False
     
     test_video = os.path.join(test_dir, videos[0])
@@ -86,22 +86,22 @@ def test_medium_audio():
     print(f"\n{'='*80}")
     print(f"RESULTS:")
     print(f"{'='*80}")
-    print(f"⏱️  Processing time: {elapsed:.1f}s ({elapsed/60:.1f}min)")
+    print(f"[TIMER]  Processing time: {elapsed:.1f}s ({elapsed/60:.1f}min)")
     
     meta = result.get("diarize_meta", {})
     if meta.get("status") == "ok":
-        print(f"✅ Status: Success")
-        print(f"📊 Segments: {meta.get('segment_count', 0)}")
-        print(f"👥 Speakers: {meta.get('speaker_count', 0)}")
-        print(f"🚀 Speed: {meta.get('realtime_factor', 0):.2f}x realtime")
-        print(f"🔧 Chunked: {meta.get('chunked', False)}")
-        print(f"📦 Chunks: {meta.get('chunk_count', 0)}")
+        print(f"[OK] Status: Success")
+        print(f"[STATS] Segments: {meta.get('segment_count', 0)}")
+        print(f"[SYMBOL] Speakers: {meta.get('speaker_count', 0)}")
+        print(f"[LAUNCH] Speed: {meta.get('realtime_factor', 0):.2f}x realtime")
+        print(f"[CONFIG] Chunked: {meta.get('chunked', False)}")
+        print(f"[SYMBOL] Chunks: {meta.get('chunk_count', 0)}")
         print(f"⏲️  Chunk size: {meta.get('chunk_size_minutes', 0):.0f} minutes")
-        print(f"💻 Device: {meta.get('device', 'unknown')}")
+        print(f"[SYMBOL] Device: {meta.get('device', 'unknown')}")
         return True
     else:
-        print(f"❌ Status: {meta.get('status', 'unknown')}")
-        print(f"⚠️  Reason: {meta.get('reason', 'N/A')}")
+        print(f"[FAIL] Status: {meta.get('status', 'unknown')}")
+        print(f"[WARN]  Reason: {meta.get('reason', 'N/A')}")
         return False
 
 def check_gpu_config():
@@ -112,7 +112,7 @@ def check_gpu_config():
     
     gpu_config_path = os.path.join(os.path.dirname(__file__), "config", "gpu_config.yaml")
     if not os.path.exists(gpu_config_path):
-        print("❌ GPU config not found")
+        print("[FAIL] GPU config not found")
         return False
     
     with open(gpu_config_path, 'r') as f:
@@ -122,11 +122,11 @@ def check_gpu_config():
     print(f"audio_diarize memory fraction: {diarize_mem}")
     
     if diarize_mem >= 0.75:
-        print("✅ GPU memory optimized (>=75%)")
+        print("[OK] GPU memory optimized (>=75%)")
     elif diarize_mem >= 0.65:
-        print("⚠️  GPU memory moderate (65-74%)")
+        print("[WARN]  GPU memory moderate (65-74%)")
     else:
-        print("❌ GPU memory low (<65%) - consider increasing")
+        print("[FAIL] GPU memory low (<65%) - consider increasing")
     
     # Check CUDA availability
     try:
@@ -134,13 +134,13 @@ def check_gpu_config():
         if torch.cuda.is_available():
             gpu_name = torch.cuda.get_device_name(0)
             gpu_mem = torch.cuda.get_device_properties(0).total_memory / (1024**3)
-            print(f"✅ GPU available: {gpu_name} ({gpu_mem:.1f} GB)")
+            print(f"[OK] GPU available: {gpu_name} ({gpu_mem:.1f} GB)")
             return True
         else:
-            print("⚠️  No GPU available - will use CPU (slower)")
+            print("[WARN]  No GPU available - will use CPU (slower)")
             return False
     except ImportError:
-        print("⚠️  PyTorch not available - cannot check GPU")
+        print("[WARN]  PyTorch not available - cannot check GPU")
         return False
 
 def main():
@@ -160,7 +160,7 @@ def main():
     try:
         results.append(("Short Audio", test_short_audio()))
     except Exception as e:
-        print(f"❌ Test failed: {str(e)}")
+        print(f"[FAIL] Test failed: {str(e)}")
         results.append(("Short Audio", False))
     
     # Test 2: Medium audio (optional - might take a while)
@@ -170,7 +170,7 @@ def main():
         try:
             results.append(("Medium Audio", test_medium_audio()))
         except Exception as e:
-            print(f"❌ Test failed: {str(e)}")
+            print(f"[FAIL] Test failed: {str(e)}")
             results.append(("Medium Audio", False))
     
     # Summary
@@ -179,20 +179,20 @@ def main():
     print("="*80)
     
     for test_name, passed in results:
-        status = "✅ PASSED" if passed else "❌ FAILED"
+        status = "[OK] PASSED" if passed else "[FAIL] FAILED"
         print(f"{test_name}: {status}")
     
     all_passed = all(result[1] for result in results)
     
     if all_passed:
-        print("\n🎉 ALL TESTS PASSED!")
+        print("\n[SYMBOL] ALL TESTS PASSED!")
         print("\nPhase 2.1 optimizations validated:")
-        print("✅ GPU memory increased to 75%")
-        print("✅ Dynamic chunk sizing implemented")
-        print("✅ Model warmup working")
-        print("✅ Performance metrics tracking")
+        print("[OK] GPU memory increased to 75%")
+        print("[OK] Dynamic chunk sizing implemented")
+        print("[OK] Model warmup working")
+        print("[OK] Performance metrics tracking")
     else:
-        print("\n⚠️  SOME TESTS FAILED")
+        print("\n[WARN]  SOME TESTS FAILED")
         print("Check logs above for details")
     
     return all_passed

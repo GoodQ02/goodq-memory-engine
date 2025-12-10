@@ -33,7 +33,7 @@ subprocess.run(['powershell', '-Command',
     'Get-Process | Where-Object { $_.ProcessName -like "*python*" } | Stop-Process -Force -ErrorAction SilentlyContinue'],
     capture_output=True)
 time.sleep(2)
-print("  ✓ Processes killed\n")
+print("  [SYMBOL] Processes killed\n")
 
 # STEP 2: Check database state
 print("[2/10] Checking database state...")
@@ -56,17 +56,17 @@ conn = sqlite3.connect('L:/_DATA/GoodQ_Data/memory.db')
 c = conn.cursor()
 try:
     c.execute('DELETE FROM scenes')
-    print('  ✓ Cleared scenes table')
+    print('  [SYMBOL] Cleared scenes table')
 except Exception as e:
     print(f'  Note: scenes table - {e}')
 try:
     c.execute('DELETE FROM scene_entities')
-    print('  ✓ Cleared scene_entities')
+    print('  [SYMBOL] Cleared scene_entities')
 except:
     pass
 try:
     c.execute('DELETE FROM embeddings WHERE scene_id IS NOT NULL')
-    print('  ✓ Cleared scene embeddings')
+    print('  [SYMBOL] Cleared scene embeddings')
 except:
     pass
 conn.commit()
@@ -86,16 +86,16 @@ if processing_dir.exists():
         if item.is_dir():
             try:
                 shutil.rmtree(item)
-                print(f"  ✓ Removed {item.name}")
+                print(f"  [SYMBOL] Removed {item.name}")
             except Exception as e:
-                print(f"  ⚠ Could not remove {item.name}: {e}")
+                print(f"  [SYMBOL] Could not remove {item.name}: {e}")
         elif item.is_file() and item.suffix in ['.mp4', '.avi', '.mov', '.mkv']:
             try:
                 item.unlink()
-                print(f"  ✓ Removed {item.name}")
+                print(f"  [SYMBOL] Removed {item.name}")
             except Exception as e:
-                print(f"  ⚠ Could not remove {item.name}: {e}")
-print("  ✓ Processing cache cleared\n")
+                print(f"  [SYMBOL] Could not remove {item.name}: {e}")
+print("  [SYMBOL] Processing cache cleared\n")
 
 # STEP 5: Verify config.yaml
 print("[5/10] Verifying config.yaml...")
@@ -111,9 +111,9 @@ print(f"  Config min_scene_len_sec: {min_scene}s")
 print(f"  Config threshold: {threshold}")
 
 if min_scene == 300.0 and threshold == 30.0:
-    print("  ✓ Config is CORRECT (300s min, 30.0 threshold)\n")
+    print("  [SYMBOL] Config is CORRECT (300s min, 30.0 threshold)\n")
 else:
-    print(f"  ✗ Config needs fixing!")
+    print(f"  [SYMBOL] Config needs fixing!")
     print(f"  Updating config...")
     if 'video' not in config:
         config['video'] = {}
@@ -124,7 +124,7 @@ else:
     
     with open(config_path, 'w') as f:
         yaml.dump(config, f, default_flow_style=False, sort_keys=False)
-    print("  ✓ Config updated\n")
+    print("  [SYMBOL] Config updated\n")
 
 # STEP 6: Check for sample.mp4
 print("[6/10] Checking for sample.mp4...")
@@ -132,14 +132,14 @@ sample_inbox = Path("L:/goodq4all/import_inbox/sample.mp4")
 sample_smoke = Path("L:/goodq4all/smoke_inbox/sample.mp4")
 
 if sample_inbox.exists():
-    print(f"  ✓ sample.mp4 found in import_inbox ({sample_inbox.stat().st_size} bytes)")
+    print(f"  [SYMBOL] sample.mp4 found in import_inbox ({sample_inbox.stat().st_size} bytes)")
 elif sample_smoke.exists():
-    print(f"  ✓ sample.mp4 found in smoke_inbox")
+    print(f"  [SYMBOL] sample.mp4 found in smoke_inbox")
     print(f"  Copying to import_inbox...")
     shutil.copy2(sample_smoke, sample_inbox)
-    print(f"  ✓ Copied to import_inbox")
+    print(f"  [SYMBOL] Copied to import_inbox")
 else:
-    print(f"  ✗ sample.mp4 not found!")
+    print(f"  [SYMBOL] sample.mp4 not found!")
     print(f"  Please place sample.mp4 in import_inbox or smoke_inbox")
     exit(1)
 print()
@@ -154,11 +154,11 @@ print()
 
 # STEP 8: Ready to launch
 print("[8/10] System is CLEAN and READY")
-print("  ✓ All processes killed")
-print("  ✓ Database scenes cleared") 
-print("  ✓ Processing cache cleared")
-print("  ✓ Config verified (300s scenes)")
-print("  ✓ sample.mp4 ready")
+print("  [SYMBOL] All processes killed")
+print("  [SYMBOL] Database scenes cleared") 
+print("  [SYMBOL] Processing cache cleared")
+print("  [SYMBOL] Config verified (300s scenes)")
+print("  [SYMBOL] sample.mp4 ready")
 print()
 
 print("="*80)

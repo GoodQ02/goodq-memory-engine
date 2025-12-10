@@ -25,9 +25,9 @@ for img_path in images:
     
     if status == "ok":
         success_count += 1
-        print(f"✓ {os.path.basename(img_path)} -> FAISS ID: {clip_meta.get('faiss_id')}")
+        print(f"[SYMBOL] {os.path.basename(img_path)} -> FAISS ID: {clip_meta.get('faiss_id')}")
     else:
-        print(f"✗ {os.path.basename(img_path)} -> Error: {clip_meta.get('error')}")
+        print(f"[SYMBOL] {os.path.basename(img_path)} -> Error: {clip_meta.get('error')}")
 
 print("="*60)
 print(f"\nResults: {success_count}/{len(images)} successful")
@@ -36,13 +36,13 @@ print(f"\nResults: {success_count}/{len(images)} successful")
 index_path = cfg.get("paths", {}).get("faiss_clip_path")
 if os.path.exists(index_path):
     idx = faiss.read_index(index_path)
-    print(f"✓ CLIP index created successfully")
+    print(f"[SYMBOL] CLIP index created successfully")
     print(f"  Path: {index_path}")
     print(f"  Vectors: {idx.ntotal}")
     print(f"  Dimension: {idx.d}")
     print(f"  Size: {os.path.getsize(index_path)/1024:.2f} KB")
 else:
-    print(f"✗ Index not created")
+    print(f"[SYMBOL] Index not created")
 
 # Check ID map
 map_db = cfg.get("paths", {}).get("clip_id_map_db")
@@ -52,9 +52,9 @@ if os.path.exists(map_db):
     cur = conn.cursor()
     cur.execute("SELECT COUNT(*) FROM clip_id_map")
     count = cur.fetchone()[0]
-    print(f"✓ ID map database created")
+    print(f"[SYMBOL] ID map database created")
     print(f"  Path: {map_db}")
     print(f"  Entries: {count}")
     conn.close()
 else:
-    print(f"✗ ID map not created")
+    print(f"[SYMBOL] ID map not created")

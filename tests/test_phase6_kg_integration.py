@@ -113,7 +113,7 @@ def test_kg_database_structure():
     
     kg_path = Path('data/knowledge_graph.db')
     if not kg_path.exists():
-        print(f"\n❌ Knowledge graph database not found at {kg_path}")
+        print(f"\n[FAIL] Knowledge graph database not found at {kg_path}")
         return 0
     
     conn = sqlite3.connect(str(kg_path))
@@ -151,7 +151,7 @@ def test_kg_stats():
     
     kg_path = Path('data/knowledge_graph.db')
     if not kg_path.exists():
-        print(f"\n❌ Knowledge graph not found")
+        print(f"\n[FAIL] Knowledge graph not found")
         return 0
     
     with KnowledgeGraph(str(kg_path)) as kg:
@@ -185,7 +185,7 @@ def test_llm_extracted_entities():
     
     kg_path = Path('data/knowledge_graph.db')
     if not kg_path.exists():
-        print(f"\n❌ Knowledge graph not found")
+        print(f"\n[FAIL] Knowledge graph not found")
         return 0
     
     conn = sqlite3.connect(str(kg_path))
@@ -218,7 +218,7 @@ def test_cross_modal_linking():
     
     kg_path = Path('data/knowledge_graph.db')
     if not kg_path.exists():
-        print(f"\n❌ Knowledge graph not found")
+        print(f"\n[FAIL] Knowledge graph not found")
         return 0
     
     conn = sqlite3.connect(str(kg_path))
@@ -253,37 +253,37 @@ def main():
     try:
         results['entity_extraction'] = test_entity_extraction()
     except Exception as e:
-        print(f"\n❌ Entity extraction test failed: {e}")
+        print(f"\n[FAIL] Entity extraction test failed: {e}")
         results['entity_extraction'] = 0
     
     try:
         results['entity_resolution'] = test_entity_resolution()
     except Exception as e:
-        print(f"\n❌ Entity resolution test failed: {e}")
+        print(f"\n[FAIL] Entity resolution test failed: {e}")
         results['entity_resolution'] = 0
     
     try:
         results['db_structure'] = test_kg_database_structure()
     except Exception as e:
-        print(f"\n❌ Database structure test failed: {e}")
+        print(f"\n[FAIL] Database structure test failed: {e}")
         results['db_structure'] = 0
     
     try:
         results['kg_stats'] = test_kg_stats()
     except Exception as e:
-        print(f"\n❌ KG stats test failed: {e}")
+        print(f"\n[FAIL] KG stats test failed: {e}")
         results['kg_stats'] = 0
     
     try:
         results['llm_entities'] = test_llm_extracted_entities()
     except Exception as e:
-        print(f"\n❌ LLM entities test failed: {e}")
+        print(f"\n[FAIL] LLM entities test failed: {e}")
         results['llm_entities'] = 0
     
     try:
         results['cross_modal'] = test_cross_modal_linking()
     except Exception as e:
-        print(f"\n❌ Cross-modal linking test failed: {e}")
+        print(f"\n[FAIL] Cross-modal linking test failed: {e}")
         results['cross_modal'] = 0
     
     # Summary
@@ -295,20 +295,20 @@ def main():
     passed_tests = sum(1 for v in results.values() if v > 0)
     
     for test_name, result in results.items():
-        status = "✅ PASS" if result > 0 else "❌ FAIL"
+        status = "[OK] PASS" if result > 0 else "[FAIL] FAIL"
         print(f"{status} - {test_name}: {result}")
     
     print(f"\nTests Passed: {passed_tests}/{total_tests}")
     
     if passed_tests == total_tests:
-        print("\n🎉 All Phase 6 tests passed!")
+        print("\n[SYMBOL] All Phase 6 tests passed!")
         print("\nNext Steps:")
         print("  1. Run full ingestion on sample.mp4 with KG integration")
         print("  2. Verify real-time entity extraction during processing")
         print("  3. Test natural language queries against KG")
         print("  4. Implement relationship inference with LLM")
     else:
-        print("\n⚠️ Some tests failed - review errors above")
+        print("\n[WARN] Some tests failed - review errors above")
     
     return passed_tests == total_tests
 

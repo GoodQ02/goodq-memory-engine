@@ -34,9 +34,9 @@ def test_vad_on_audio(audio_path):
             trust_repo=True
         )
         (get_speech_timestamps, save_audio, read_audio, VADIterator, collect_chunks) = utils
-        print("✓ Model loaded successfully")
+        print("[SYMBOL] Model loaded successfully")
     except Exception as e:
-        print(f"✗ ERROR loading model: {str(e)}")
+        print(f"[SYMBOL] ERROR loading model: {str(e)}")
         return False
     
     # Extract audio from video if needed
@@ -67,10 +67,10 @@ def test_vad_on_audio(audio_path):
                 temp_audio,
             ]
             subprocess.run(cmd, check=True, capture_output=True)
-            print(f"✓ Audio extracted to temp file (first 10 minutes for testing)")
+            print(f"[SYMBOL] Audio extracted to temp file (first 10 minutes for testing)")
             audio_path = temp_audio
         except Exception as e:
-            print(f"✗ ERROR extracting audio: {str(e)}")
+            print(f"[SYMBOL] ERROR extracting audio: {str(e)}")
             if temp_audio and os.path.exists(temp_audio):
                 os.remove(temp_audio)
             return False
@@ -80,9 +80,9 @@ def test_vad_on_audio(audio_path):
     try:
         wav = read_audio(audio_path, sampling_rate=16000)
         duration = len(wav) / 16000
-        print(f"✓ Audio loaded: {duration/60:.1f} minutes ({len(wav)} samples)")
+        print(f"[SYMBOL] Audio loaded: {duration/60:.1f} minutes ({len(wav)} samples)")
     except Exception as e:
-        print(f"✗ ERROR reading audio: {str(e)}")
+        print(f"[SYMBOL] ERROR reading audio: {str(e)}")
         if temp_audio and os.path.exists(temp_audio):
             os.remove(temp_audio)
         return False
@@ -103,10 +103,10 @@ def test_vad_on_audio(audio_path):
         )
         
         elapsed = time.time() - start_time
-        print(f"✓ VAD completed in {elapsed:.1f}s")
+        print(f"[SYMBOL] VAD completed in {elapsed:.1f}s")
         
         if not speech_timestamps:
-            print("⚠ WARNING: No speech detected!")
+            print("[SYMBOL] WARNING: No speech detected!")
             return True
         
         # Calculate statistics
@@ -115,7 +115,7 @@ def test_vad_on_audio(audio_path):
         silence_duration = duration - speech_duration
         reduction_percent = (silence_duration / duration * 100) if duration > 0 else 0
         
-        print(f"\n✓ Speech Detection Results:")
+        print(f"\n[SYMBOL] Speech Detection Results:")
         print(f"  Segments found: {len(speech_timestamps)}")
         print(f"  Total duration: {duration/60:.1f} minutes")
         print(f"  Speech duration: {speech_duration/60:.1f} minutes ({speech_ratio*100:.1f}%)")
@@ -124,7 +124,7 @@ def test_vad_on_audio(audio_path):
         print(f"  Time saved (est.): {silence_duration/60*1.5:.1f}-{silence_duration/60*2:.1f} minutes")
         
     except Exception as e:
-        print(f"✗ ERROR during VAD: {str(e)}")
+        print(f"[SYMBOL] ERROR during VAD: {str(e)}")
         import traceback
         traceback.print_exc()
         return False
@@ -139,7 +139,7 @@ def test_vad_on_audio(audio_path):
         output_size_mb = os.path.getsize(output_path) / (1024*1024)
         size_reduction = (1 - output_size_mb / file_size_mb) * 100
         
-        print(f"✓ Saved speech-only audio:")
+        print(f"[SYMBOL] Saved speech-only audio:")
         print(f"  File: {output_path}")
         print(f"  Size: {output_size_mb:.1f}MB (original: {file_size_mb:.1f}MB)")
         print(f"  Size reduction: {size_reduction:.1f}%")
@@ -147,20 +147,20 @@ def test_vad_on_audio(audio_path):
         # Clean up
         print(f"\nCleaning up temp files...")
         os.remove(output_path)
-        print(f"✓ Removed {output_path}")
+        print(f"[SYMBOL] Removed {output_path}")
         
         if temp_audio and os.path.exists(temp_audio):
             os.remove(temp_audio)
-            print(f"✓ Removed temp audio extraction")
+            print(f"[SYMBOL] Removed temp audio extraction")
         
     except Exception as e:
-        print(f"✗ ERROR extracting audio: {str(e)}")
+        print(f"[SYMBOL] ERROR extracting audio: {str(e)}")
         import traceback
         traceback.print_exc()
         return False
     
     print("\n" + "="*80)
-    print("✓ VAD TEST PASSED!")
+    print("[SYMBOL] VAD TEST PASSED!")
     print("="*80)
     print("\nSilero VAD is working correctly and will dramatically reduce")
     print("diarization time by filtering out silence and background noise.")

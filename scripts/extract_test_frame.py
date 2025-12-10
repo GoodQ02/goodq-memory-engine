@@ -24,7 +24,7 @@ def extract_frame():
             video_files.extend(list(vdir.glob("*.mov")))
     
     if not video_files:
-        print("❌ No video files found in:")
+        print("[FAIL] No video files found in:")
         for vdir in video_dirs:
             print(f"   {vdir}")
         print("\nPlease place a video file in one of these directories")
@@ -32,7 +32,7 @@ def extract_frame():
     
     # Use first video
     video_path = video_files[0]
-    print(f"📹 Using video: {video_path.name}")
+    print(f"[VIDEO] Using video: {video_path.name}")
     
     # Output path
     output_dir = Path("L:/goodq4all/test_data")
@@ -43,12 +43,12 @@ def extract_frame():
     try:
         subprocess.run(["ffmpeg", "-version"], capture_output=True, check=True)
     except:
-        print("❌ FFmpeg not found. Please install FFmpeg:")
+        print("[FAIL] FFmpeg not found. Please install FFmpeg:")
         print("   winget install ffmpeg")
         return False
     
     # Extract frame at 10 seconds
-    print(f"⏱️  Extracting frame at 10 seconds...")
+    print(f"[TIMER]  Extracting frame at 10 seconds...")
     cmd = [
         "ffmpeg",
         "-ss", "10",  # Seek to 10 seconds
@@ -63,20 +63,20 @@ def extract_frame():
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
         
         if output_path.exists():
-            print(f"✅ Frame extracted successfully!")
-            print(f"📄 Saved to: {output_path}")
-            print(f"📏 File size: {output_path.stat().st_size / 1024:.1f} KB")
+            print(f"[OK] Frame extracted successfully!")
+            print(f"[SYMBOL] Saved to: {output_path}")
+            print(f"[SYMBOL] File size: {output_path.stat().st_size / 1024:.1f} KB")
             return True
         else:
-            print("❌ Frame extraction failed")
+            print("[FAIL] Frame extraction failed")
             print("STDERR:", result.stderr)
             return False
             
     except subprocess.TimeoutExpired:
-        print("❌ Extraction timed out")
+        print("[FAIL] Extraction timed out")
         return False
     except Exception as e:
-        print(f"❌ Error: {str(e)}")
+        print(f"[FAIL] Error: {str(e)}")
         return False
 
 def main():
@@ -93,7 +93,7 @@ def main():
         print("  > run_vision_audit.bat")
         print("="*80)
     else:
-        print("\n⚠️  Manual extraction required:")
+        print("\n[WARN]  Manual extraction required:")
         print("1. Open a video in VLC or similar")
         print("2. Pause at any frame")
         print("3. Take a screenshot")

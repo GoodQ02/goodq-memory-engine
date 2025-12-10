@@ -258,7 +258,7 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
     with open(temporal_index_path, 'w', encoding='utf-8') as f:
         json.dump(temporal_index, f, indent=2)
     
-    logger.info(f"[HARMONIZER] ✅ Created temporal index with {len(unified_segments)} multimodal segments")
+    logger.info(f"[HARMONIZER] [OK] Created temporal index with {len(unified_segments)} multimodal segments")
     logger.info(f"  Saved: {temporal_index_path}")
     
     return {

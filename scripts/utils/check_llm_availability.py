@@ -267,7 +267,7 @@ class LLMChecker:
             
             if LOGGER_AVAILABLE and MissionColors:
                 color = MissionColors.SUCCESS if available else MissionColors.WARNING
-                symbol = "✓" if available else "✗"
+                symbol = "[SYMBOL]" if available else "[SYMBOL]"
                 print(f"{color}{symbol} {name:15s} - {status.upper()}{MissionColors.END}")
             else:
                 symbol = "[OK]" if available else "[--]"

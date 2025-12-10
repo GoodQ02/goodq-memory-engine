@@ -54,9 +54,9 @@ def env_exists(env: str) -> bool:
 
 def ensure_env(env: str, py_version: str) -> None:
     if env_exists(env):
-        print(f"✅ Env present: {env}")
+        print(f"[OK] Env present: {env}")
         return
-    print(f"➡️  Creating env {env} (python={py_version})")
+    print(f"[SYMBOL]️  Creating env {env} (python={py_version})")
     result = run_conda(f"conda create -y -n {env} python={py_version}")
     if result.returncode != 0:
         raise RuntimeError(f"Failed to create env {env}: {result.stderr.strip()}")
@@ -64,10 +64,10 @@ def ensure_env(env: str, py_version: str) -> None:
 
 def install_requirements(env: str, req_path: str, skip_pkgs: Set[str] | None = None) -> None:
     if not os.path.isfile(req_path):
-        print(f"⚠️  Skip requirements (missing): {req_path}")
+        print(f"[WARN]  Skip requirements (missing): {req_path}")
         return
     skip_pkgs = skip_pkgs or set()
-    print(f"➡️  Installing requirements for {env} from {req_path}")
+    print(f"[SYMBOL]️  Installing requirements for {env} from {req_path}")
 
     # Filter out problematic pins (e.g., faiss* incompatible with py3.12) into a temp file
     with open(req_path, "r", encoding="utf-8") as f:
@@ -80,7 +80,7 @@ def install_requirements(env: str, req_path: str, skip_pkgs: Set[str] | None = N
             continue
         name = stripped.split("==")[0].split(">=")[0].split(" ")[0]
         if any(name.lower().startswith(pfx) for pfx in skip_pkgs):
-            print(f"   ⚠️  Skipping pinned package in {env}: {stripped}")
+            print(f"   [WARN]  Skipping pinned package in {env}: {stripped}")
             continue
         filtered.append(line)
 
@@ -101,7 +101,7 @@ def install_requirements(env: str, req_path: str, skip_pkgs: Set[str] | None = N
 
 
 def install_torch(env: str) -> None:
-    print(f"➡️  Installing CUDA 12.1 torch stack for {env}")
+    print(f"[SYMBOL]️  Installing CUDA 12.1 torch stack for {env}")
     cmds = [
         "pip uninstall -y torch torchvision torchaudio",
         (
@@ -122,7 +122,7 @@ def install_torch(env: str) -> None:
         res = run_in_env(env, cmd)
         if res.returncode != 0:
             raise RuntimeError(f"Torch step failed for {env}: {res.stderr.strip()}")
-    print(f"✅ Torch stack OK for {env}")
+    print(f"[OK] Torch stack OK for {env}")
 
 
 ENV_CONFIG: List[Dict[str, str]] = [
@@ -223,7 +223,7 @@ def main() -> int:
                 install_torch(name)
             smoke_test(name)
         except Exception as exc:  # noqa: BLE001
-            agent_log(f"❌ {name}: {exc}")
+            agent_log(f"[FAIL] {name}: {exc}")
             continue
     print("\nDone.")
     return 0

@@ -42,11 +42,11 @@ def test_error_recognition():
     for error_msg in test_errors:
         strategy = strategies.get_recommended_strategy(error_msg)
         if strategy:
-            print(f"\n✅ Error: {error_msg[:50]}...")
+            print(f"\n[OK] Error: {error_msg[:50]}...")
             print(f"   Strategy: {strategy.get('action', 'unknown')}")
             print(f"   Confidence: {strategy.get('confidence', 0)*100:.1f}%")
         else:
-            print(f"\n❌ Error: {error_msg[:50]}...")
+            print(f"\n[FAIL] Error: {error_msg[:50]}...")
             print(f"   No strategy found")
     
     return True
@@ -61,7 +61,7 @@ def test_auto_healing():
     agent = ControlAgent()
     
     # Simulate a CUDA OOM error
-    print("\n📝 Simulating CUDA OOM error...")
+    print("\n[NOTE] Simulating CUDA OOM error...")
     try:
         raise RuntimeError("CUDA out of memory. Tried to allocate 2.50 GiB")
     except RuntimeError as e:
@@ -94,7 +94,7 @@ def test_learning_from_success():
     agent = ControlAgent()
     
     # Simulate successful executions
-    print("\n📊 Recording successful executions...")
+    print("\n[STATS] Recording successful executions...")
     
     successful_steps = [
         ('audio_transcribe', 45.2, {'model': 'whisper-medium', 'batch_size': 16}),
@@ -108,7 +108,7 @@ def test_learning_from_success():
             execution_time_seconds=duration,
             config_used=config
         )
-        print(f"  ✅ Recorded: {step_name} ({duration}s)")
+        print(f"  [OK] Recorded: {step_name} ({duration}s)")
     
     return True
 
@@ -122,18 +122,18 @@ def test_statistics():
     agent = ControlAgent()
     stats = agent.get_learning_statistics()
     
-    print(f"\n📊 Overall Statistics:")
+    print(f"\n[STATS] Overall Statistics:")
     print(f"  Total attempts: {stats['total_attempts']}")
     print(f"  Successful: {stats['successful_attempts']}")
     print(f"  Success rate: {stats['overall_success_rate']*100:.1f}%")
     
     if stats.get('top_patterns'):
-        print(f"\n🏆 Top Patterns:")
+        print(f"\n[SYMBOL] Top Patterns:")
         for pattern in stats['top_patterns'][:5]:
             print(f"  - {pattern['pattern']}: {pattern['success_rate']*100:.1f}% ({pattern['attempts']} attempts)")
     
     if stats.get('by_error_type'):
-        print(f"\n📋 By Error Type:")
+        print(f"\n[LOG] By Error Type:")
         for error_type, data in list(stats['by_error_type'].items())[:5]:
             print(f"  - {error_type}: {data['successful']}/{data['total']} successful")
     
@@ -149,7 +149,7 @@ def test_similar_errors():
     strategies = RecoveryStrategies()
     
     # Look for similar CUDA errors
-    print("\n🔍 Looking for similar CUDA OOM errors...")
+    print("\n[SEARCH] Looking for similar CUDA OOM errors...")
     similar = strategies.get_similar_past_errors(
         error_type='RuntimeError',
         limit=3,
@@ -177,7 +177,7 @@ def test_pattern_learning():
     strategies = RecoveryStrategies()
     
     # Learn a new pattern
-    print("\n📚 Teaching agent a new pattern...")
+    print("\n[SYMBOL] Teaching agent a new pattern...")
     strategies.learn_new_pattern(
         pattern_name="ffmpeg_codec_error",
         error_regex=r"(?i)ffmpeg.*codec.*not found|unsupported codec",
@@ -187,17 +187,17 @@ def test_pattern_learning():
         }
     )
     
-    print("  ✅ New pattern learned: ffmpeg_codec_error")
+    print("  [OK] New pattern learned: ffmpeg_codec_error")
     
     # Test if it can recognize it
     test_error = "FFmpeg error: Codec 'hevc_nvenc' not found"
     strategy = strategies.get_recommended_strategy(test_error)
     
     if strategy:
-        print(f"\n  ✅ Pattern recognized!")
+        print(f"\n  [OK] Pattern recognized!")
         print(f"     Action: {strategy.get('action', 'unknown')}")
     else:
-        print(f"\n  ❌ Pattern not recognized")
+        print(f"\n  [FAIL] Pattern not recognized")
     
     return True
 

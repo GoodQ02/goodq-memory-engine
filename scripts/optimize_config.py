@@ -213,7 +213,7 @@ def main():
     if audit["issues"]:
         print("\n[ISSUES FOUND]")
         for issue in audit["issues"]:
-            print(f"  ⚠ {issue}")
+            print(f"  [SYMBOL] {issue}")
     
     if audit["recommendations"]:
         print("\n[RECOMMENDATIONS]")

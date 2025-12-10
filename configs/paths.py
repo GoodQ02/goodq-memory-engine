@@ -131,10 +131,10 @@ if __name__ == "__main__":
     print("GoodQ Project Paths Configuration")
     print("=" * 70)
     
-    print("\n📁 PROJECT ROOT:")
+    print("\n[DIR] PROJECT ROOT:")
     print(f"   {PROJECT_ROOT}")
     
-    print("\n💾 DATA DIRECTORIES:")
+    print("\n[SAVE] DATA DIRECTORIES:")
     print(f"   Root:       {DATA_ROOT}")
     print(f"   Databases:  {DATABASE_DIR}")
     print(f"   Cache:      {CACHE_DIR}")
@@ -144,20 +144,20 @@ if __name__ == "__main__":
     print(f"   Exports:    {EXPORTS_DIR}")
     print(f"   Logs:       {LOGS_DIR}")
     
-    print("\n📋 KEY FILES:")
+    print("\n[LOG] KEY FILES:")
     print(f"   Memory DB:  {MEMORY_DB}")
     print(f"   Graph DB:   {KNOWLEDGE_GRAPH_DB}")
     print(f"   Step Log:   {STEP_RUNS_LOG}")
     
-    print("\n🔧 EXTERNAL:")
+    print("\n[CONFIG] EXTERNAL:")
     print(f"   Models:     {MODELS_DIR}")
     print(f"   Tools:      {TOOLS_DIR}")
     print(f"   Archive:    {ARCHIVE_DIR}")
     
-    print("\n✓ Creating directories...")
+    print("\n[SYMBOL] Creating directories...")
     ensure_directories()
-    print("✓ All directories ready!")
+    print("[SYMBOL] All directories ready!")
     
-    print("\n✓ Setting environment variables...")
+    print("\n[SYMBOL] Setting environment variables...")
     set_environment_variables()
-    print("✓ Environment configured!")
+    print("[SYMBOL] Environment configured!")

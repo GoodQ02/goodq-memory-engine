@@ -30,7 +30,7 @@ def get_search_engine():
     if _search_engine is None:
         _config = load_configs({})
         _search_engine = MultimodalSearchEngine(_config)
-        logger.info("✅ Search engine initialized")
+        logger.info("[OK] Search engine initialized")
     
     return _search_engine
 
@@ -41,7 +41,7 @@ def get_data_loader():
     
     if _data_loader is None:
         _data_loader = DataLoader()
-        logger.info("✅ Data loader initialized")
+        logger.info("[OK] Data loader initialized")
     
     return _data_loader
 

@@ -6,7 +6,7 @@ import sys
 import json
 from pathlib import Path
 
-print("🧪 GOODQ_CORE CONSOLIDATION TEST\n")
+print("[SYMBOL] GOODQ_CORE CONSOLIDATION TEST\n")
 print("=" * 70)
 
 # Test 1: Import all required modules
@@ -25,9 +25,9 @@ all_passed = True
 for module, name in modules_to_test:
     try:
         __import__(module)
-        print(f"   ✅ {name}")
+        print(f"   [OK] {name}")
     except Exception as e:
-        print(f"   ❌ {name}: {e}")
+        print(f"   [FAIL] {name}: {e}")
         all_passed = False
 
 # Test 2: GPU availability
@@ -35,13 +35,13 @@ print("\n2. Testing GPU availability...")
 try:
     import torch
     if torch.cuda.is_available():
-        print(f"   ✅ CUDA available: {torch.version.cuda}")
-        print(f"   ✅ GPU: {torch.cuda.get_device_name(0)}")
-        print(f"   ✅ PyTorch: {torch.__version__}")
+        print(f"   [OK] CUDA available: {torch.version.cuda}")
+        print(f"   [OK] GPU: {torch.cuda.get_device_name(0)}")
+        print(f"   [OK] PyTorch: {torch.__version__}")
     else:
-        print("   ⚠️  CUDA not available (CPU mode)")
+        print("   [WARN]  CUDA not available (CPU mode)")
 except Exception as e:
-    print(f"   ❌ GPU test failed: {e}")
+    print(f"   [FAIL] GPU test failed: {e}")
     all_passed = False
 
 # Test 3: Model loading capability
@@ -52,10 +52,10 @@ try:
     tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
     test_text = "Test sentence"
     tokens = tokenizer(test_text, return_tensors="pt")
-    print(f"   ✅ Transformers model loading works")
-    print(f"   ✅ Tokenized '{test_text}' into {len(tokens['input_ids'][0])} tokens")
+    print(f"   [OK] Transformers model loading works")
+    print(f"   [OK] Tokenized '{test_text}' into {len(tokens['input_ids'][0])} tokens")
 except Exception as e:
-    print(f"   ⚠️  Model loading test skipped: {e}")
+    print(f"   [WARN]  Model loading test skipped: {e}")
 
 # Test 4: Step compatibility check
 print("\n4. Testing step compatibility...")
@@ -90,8 +90,8 @@ except:
 
 print("\n" + "=" * 70)
 if all_passed:
-    print("✅ ALL TESTS PASSED - goodq_core is ready!")
+    print("[OK] ALL TESTS PASSED - goodq_core is ready!")
     sys.exit(0)
 else:
-    print("⚠️  SOME TESTS FAILED - review above")
+    print("[WARN]  SOME TESTS FAILED - review above")
     sys.exit(1)

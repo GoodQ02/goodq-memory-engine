@@ -28,7 +28,7 @@ def analyze_database():
     print("-"*80)
     c.execute("SELECT COUNT(*) FROM scenes")
     scene_count = c.fetchone()[0]
-    print(f"Total scenes: {scene_count} {'✅' if scene_count == 16 else '⚠️'}")
+    print(f"Total scenes: {scene_count} {'[OK]' if scene_count == 16 else '[WARN]'}")
     
     if scene_count > 0:
         c.execute("SELECT id, start, end, meta FROM scenes ORDER BY start")
@@ -44,7 +44,7 @@ def analyze_database():
             if meta_dict:
                 print(f"           Meta keys: {list(meta_dict.keys())}")
             else:
-                print(f"           ⚠️ NO METADATA")
+                print(f"           [WARN] NO METADATA")
     
     # 2. SEGMENTS
     print("\n[2] SEGMENTS ANALYSIS")
@@ -86,14 +86,14 @@ def analyze_database():
         print(f"  {link_type}: {count}")
     
     # 5. SUMMARIES - CRITICAL
-    print("\n[5] SUMMARIES ANALYSIS ⚠️ CRITICAL")
+    print("\n[5] SUMMARIES ANALYSIS [WARN] CRITICAL")
     print("-"*80)
     c.execute("SELECT COUNT(*) FROM summaries")
     summary_count = c.fetchone()[0]
     print(f"Total summaries: {summary_count}")
     
     if summary_count == 0:
-        print(f"⚠️ CRITICAL ISSUE: Expected 16 summaries (1 per scene), found {summary_count}")
+        print(f"[WARN] CRITICAL ISSUE: Expected 16 summaries (1 per scene), found {summary_count}")
         print(f"   This indicates the summarization pipeline step is NOT executing!")
     else:
         c.execute("SELECT summary_type, category, content FROM summaries")
@@ -108,17 +108,17 @@ def analyze_database():
     c.execute("SELECT COUNT(*) FROM scenes WHERE meta IS NULL OR meta = ''")
     empty_meta = c.fetchone()[0]
     if empty_meta > 0:
-        print(f"⚠️ {empty_meta} scenes missing metadata")
+        print(f"[WARN] {empty_meta} scenes missing metadata")
     else:
-        print(f"✅ All scenes have metadata")
+        print(f"[OK] All scenes have metadata")
     
     # Check for segment text
     c.execute("SELECT COUNT(*) FROM segments WHERE meta IS NULL OR meta = ''")
     empty_segment_meta = c.fetchone()[0]
     if empty_segment_meta > 0:
-        print(f"⚠️ {empty_segment_meta} segments missing metadata/text")
+        print(f"[WARN] {empty_segment_meta} segments missing metadata/text")
     else:
-        print(f"✅ All segments have metadata")
+        print(f"[OK] All segments have metadata")
     
     # Check embedding distribution
     c.execute("SELECT COUNT(DISTINCT source_id) FROM embeddings WHERE source_type = 'scene'")
@@ -166,7 +166,7 @@ def analyze_database():
             transcript_files = list(transcripts_dir.glob("*.json"))
             print(f"  Transcript files: {len(transcript_files)}")
         else:
-            print(f"  ⚠️ No transcripts directory found")
+            print(f"  [WARN] No transcripts directory found")
         
         # Emotions
         emotions_dir = workspace / "emotions"
@@ -174,7 +174,7 @@ def analyze_database():
             emotion_files = list(emotions_dir.glob("*.json"))
             print(f"  Emotion files: {len(emotion_files)}")
         else:
-            print(f"  ⚠️ No emotions directory found")
+            print(f"  [WARN] No emotions directory found")
         
         # Vision analysis
         vision_dir = workspace / "vision"
@@ -182,7 +182,7 @@ def analyze_database():
             vision_files = list(vision_dir.glob("*.json"))
             print(f"  Vision files: {len(vision_files)}")
         else:
-            print(f"  ⚠️ No vision directory found")
+            print(f"  [WARN] No vision directory found")
     
     # SUMMARY
     print("\n" + "="*80)
@@ -200,11 +200,11 @@ def analyze_database():
         issues.append(f"{empty_segment_meta} segments missing metadata")
     
     if issues:
-        print("⚠️ ISSUES FOUND:")
+        print("[WARN] ISSUES FOUND:")
         for issue in issues:
             print(f"  - {issue}")
     else:
-        print("✅ All checks passed!")
+        print("[OK] All checks passed!")
     
     print("\nNext steps:")
     if summary_count == 0:

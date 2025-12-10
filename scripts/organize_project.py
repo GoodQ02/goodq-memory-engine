@@ -111,13 +111,13 @@ def organize_files():
                 new_path = dest_path / filename
                 try:
                     if new_path.exists():
-                        print(f"⚠️  Skipping {filename} - already exists in {dest_dir}")
+                        print(f"[WARN]  Skipping {filename} - already exists in {dest_dir}")
                     else:
                         shutil.move(str(file_path), str(new_path))
                         moved_files.append((filename, dest_dir))
-                        print(f"✓ Moved {filename} → {dest_dir}/")
+                        print(f"[SYMBOL] Moved {filename} → {dest_dir}/")
                 except Exception as e:
-                    print(f"❌ Error moving {filename}: {e}")
+                    print(f"[FAIL] Error moving {filename}: {e}")
                 
                 break  # Only move to first matching destination
     

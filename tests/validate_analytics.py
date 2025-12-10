@@ -22,12 +22,12 @@ def test_endpoint(name, url, expected_keys):
         response = requests.get(url, timeout=10)
         
         if response.status_code != 200:
-            print(f"❌ FAILED - Status Code: {response.status_code}")
+            print(f"[FAIL] FAILED - Status Code: {response.status_code}")
             print(f"   Error: {response.text}")
             return False
         
         data = response.json()
-        print(f"✓ Status: {response.status_code} OK")
+        print(f"[SYMBOL] Status: {response.status_code} OK")
         
         # Check for expected keys
         missing_keys = []
@@ -36,9 +36,9 @@ def test_endpoint(name, url, expected_keys):
                 missing_keys.append(key)
         
         if missing_keys:
-            print(f"⚠ Missing keys: {', '.join(missing_keys)}")
+            print(f"[SYMBOL] Missing keys: {', '.join(missing_keys)}")
         else:
-            print(f"✓ All expected keys present: {', '.join(expected_keys)}")
+            print(f"[SYMBOL] All expected keys present: {', '.join(expected_keys)}")
         
         # Display key metrics
         print("\nKey Metrics:")
@@ -73,19 +73,19 @@ def test_endpoint(name, url, expected_keys):
             print(f"  • Audio Coverage: {data['coverage']['audio_coverage']:.1f}%")
             print(f"  • FAISS Indices Active:")
             for idx_name, idx_data in data['indices'].items():
-                status_icon = "✓" if idx_data['status'] == 'active' else "○"
+                status_icon = "[SYMBOL]" if idx_data['status'] == 'active' else "○"
                 print(f"    {status_icon} {idx_name.upper()}: {idx_data['status']}")
                 if idx_data['status'] == 'active':
                     print(f"       Vectors: {idx_data['count']}, Dimension: {idx_data['dimension']}")
         
-        print(f"\n✓ {name} - PASSED")
+        print(f"\n[SYMBOL] {name} - PASSED")
         return True
         
     except requests.exceptions.RequestException as e:
-        print(f"❌ FAILED - Network Error: {e}")
+        print(f"[FAIL] FAILED - Network Error: {e}")
         return False
     except Exception as e:
-        print(f"❌ FAILED - Error: {e}")
+        print(f"[FAIL] FAILED - Error: {e}")
         return False
 
 
@@ -133,19 +133,19 @@ def main():
     total = len(results)
     
     for result in results:
-        status = "✓ PASSED" if result["passed"] else "✗ FAILED"
+        status = "[SYMBOL] PASSED" if result["passed"] else "[SYMBOL] FAILED"
         print(f"{status} - {result['name']}")
     
     print("-"*60)
     print(f"Results: {passed}/{total} tests passed ({passed/total*100:.1f}%)")
     
     if passed == total:
-        print("\n🎉 ALL ANALYTICS ENDPOINTS VALIDATED!")
-        print("✓ Real data streams confirmed")
-        print("✓ No placeholders or mock data")
-        print("✓ Production ready")
+        print("\n[SYMBOL] ALL ANALYTICS ENDPOINTS VALIDATED!")
+        print("[SYMBOL] Real data streams confirmed")
+        print("[SYMBOL] No placeholders or mock data")
+        print("[SYMBOL] Production ready")
     else:
-        print("\n⚠ Some tests failed. Please review errors above.")
+        print("\n[SYMBOL] Some tests failed. Please review errors above.")
     
     print("="*60)
     

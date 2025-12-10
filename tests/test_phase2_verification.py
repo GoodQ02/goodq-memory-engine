@@ -23,26 +23,26 @@ def test_phase2_integration():
     scenes = [json.loads(row[0]) for row in c.fetchall()]
     
     scenes_with_context = sum(1 for s in scenes if s.get('context_analyzed'))
-    print(f"  ✓ Scenes with context: {scenes_with_context}/{len(scenes)}")
+    print(f"  [SYMBOL] Scenes with context: {scenes_with_context}/{len(scenes)}")
     
     if scenes_with_context > 0:
         sample = next(s for s in scenes if s.get('context_analyzed'))
         ctx = sample.get('context', {})
-        print(f"  ✓ Sample narrative: {ctx.get('narrative_summary', 'N/A')[:60]}...")
-        print(f"  ✓ Sample tags: {ctx.get('context_tags', [])}")
+        print(f"  [SYMBOL] Sample narrative: {ctx.get('narrative_summary', 'N/A')[:60]}...")
+        print(f"  [SYMBOL] Sample tags: {ctx.get('context_tags', [])}")
     
     # Test 2: Check intelligent tagging
     print("\n[TEST 2] Intelligent Tagging")
     scenes_with_llm_tags = sum(1 for s in scenes if s.get('llm_tags_applied'))
     llm_used = sum(1 for s in scenes if s.get('tagging_method') == 'llm')
     
-    print(f"  ✓ Scenes with LLM tags: {scenes_with_llm_tags}/{len(scenes)}")
-    print(f"  ✓ LLM tagging used: {llm_used}/{scenes_with_llm_tags}")
+    print(f"  [SYMBOL] Scenes with LLM tags: {scenes_with_llm_tags}/{len(scenes)}")
+    print(f"  [SYMBOL] LLM tagging used: {llm_used}/{scenes_with_llm_tags}")
     
     if scenes_with_llm_tags > 0:
         sample = next(s for s in scenes if s.get('llm_tags_applied'))
-        print(f"  ✓ Sample tags: {sample.get('tags', [])}")
-        print(f"  ✓ Sample themes: {sample.get('themes', [])}")
+        print(f"  [SYMBOL] Sample tags: {sample.get('tags', [])}")
+        print(f"  [SYMBOL] Sample themes: {sample.get('themes', [])}")
     
     # Test 3: Check emotional arc
     print("\n[TEST 3] Emotional Arc Analysis")
@@ -52,11 +52,11 @@ def test_phase2_integration():
     if arc_row:
         arc_data = json.loads(arc_row[0])
         arc = arc_data.get('arc_data', {})
-        print(f"  ✓ Overall arc: {arc.get('overall_arc', 'N/A')}")
-        print(f"  ✓ Dominant emotions: {arc.get('dominant_emotions', [])}")
-        print(f"  ✓ Transitions: {len(arc.get('key_transitions', []))}")
+        print(f"  [SYMBOL] Overall arc: {arc.get('overall_arc', 'N/A')}")
+        print(f"  [SYMBOL] Dominant emotions: {arc.get('dominant_emotions', [])}")
+        print(f"  [SYMBOL] Transitions: {len(arc.get('key_transitions', []))}")
     else:
-        print("  ✗ No emotional arc found")
+        print("  [SYMBOL] No emotional arc found")
     
     # Test 4: Check relationship mapping
     print("\n[TEST 4] Relationship Mapping")
@@ -66,19 +66,19 @@ def test_phase2_integration():
     if rel_row:
         rel_data = json.loads(rel_row[0])
         rel_map = rel_data.get('relationship_data', {})
-        print(f"  ✓ Total entities: {rel_map.get('total_entities', 0)}")
-        print(f"  ✓ Total interactions: {rel_map.get('total_interactions', 0)}")
-        print(f"  ✓ Interaction types: {list(rel_map.get('interaction_patterns', {}).keys())}")
+        print(f"  [SYMBOL] Total entities: {rel_map.get('total_entities', 0)}")
+        print(f"  [SYMBOL] Total interactions: {rel_map.get('total_interactions', 0)}")
+        print(f"  [SYMBOL] Interaction types: {list(rel_map.get('interaction_patterns', {}).keys())}")
     else:
-        print("  ✗ No relationship map found")
+        print("  [SYMBOL] No relationship map found")
     
     # Test 5: Verify relationships in context
     print("\n[TEST 5] Scene-Level Relationships")
     scenes_with_rels = sum(1 for s in scenes if s.get('context', {}).get('relationships'))
     total_rels = sum(len(s.get('context', {}).get('relationships', [])) for s in scenes)
     
-    print(f"  ✓ Scenes with relationships: {scenes_with_rels}/{len(scenes)}")
-    print(f"  ✓ Total relationships: {total_rels}")
+    print(f"  [SYMBOL] Scenes with relationships: {scenes_with_rels}/{len(scenes)}")
+    print(f"  [SYMBOL] Total relationships: {total_rels}")
     
     conn.close()
     
@@ -97,9 +97,9 @@ def test_phase2_integration():
     ])
     
     if all_tests_pass:
-        print("✅ ALL TESTS PASSED - Phase 2 fully operational")
+        print("[OK] ALL TESTS PASSED - Phase 2 fully operational")
     else:
-        print("⚠️  Some tests failed - review output above")
+        print("[WARN]  Some tests failed - review output above")
     
     return all_tests_pass
 

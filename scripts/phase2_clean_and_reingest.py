@@ -53,13 +53,13 @@ def clean_sample_data():
                 cur.execute("DELETE FROM segments WHERE id LIKE '%sample%'")
                 
                 conn.commit()
-                print(f"  ✓ Cleaned memory.db")
+                print(f"  [SYMBOL] Cleaned memory.db")
             else:
-                print("  ✓ No sample.mp4 data found in memory.db")
+                print("  [SYMBOL] No sample.mp4 data found in memory.db")
             
             conn.close()
         except Exception as e:
-            print(f"  ✗ Error cleaning memory.db: {e}")
+            print(f"  [SYMBOL] Error cleaning memory.db: {e}")
     else:
         print("  ℹ memory.db not found")
     
@@ -108,13 +108,13 @@ def clean_sample_data():
                     """)
                     
                     conn.commit()
-                    print(f"  ✓ Cleaned knowledge_graph.db")
+                    print(f"  [SYMBOL] Cleaned knowledge_graph.db")
             else:
-                print("  ✓ No sample.mp4 data found in knowledge_graph.db")
+                print("  [SYMBOL] No sample.mp4 data found in knowledge_graph.db")
             
             conn.close()
         except Exception as e:
-            print(f"  ✗ Error cleaning knowledge_graph.db: {e}")
+            print(f"  [SYMBOL] Error cleaning knowledge_graph.db: {e}")
     else:
         print("  ℹ knowledge_graph.db not found")
     
@@ -131,9 +131,9 @@ def clean_sample_data():
             for sample_dir in sample_dirs:
                 try:
                     shutil.rmtree(sample_dir)
-                    print(f"  ✓ Removed {sample_dir}")
+                    print(f"  [SYMBOL] Removed {sample_dir}")
                 except Exception as e:
-                    print(f"  ✗ Error removing {sample_dir}: {e}")
+                    print(f"  [SYMBOL] Error removing {sample_dir}: {e}")
         else:
             print("  ℹ No sample processing directories found")
     else:
@@ -151,9 +151,9 @@ def clean_sample_data():
                         shutil.rmtree(sample_output)
                     else:
                         sample_output.unlink()
-                    print(f"  ✓ Removed {sample_output}")
+                    print(f"  [SYMBOL] Removed {sample_output}")
                 except Exception as e:
-                    print(f"  ✗ Error removing {sample_output}: {e}")
+                    print(f"  [SYMBOL] Error removing {sample_output}: {e}")
         else:
             print("  ℹ No sample output files found")
     else:
@@ -178,10 +178,10 @@ def verify_sample_file():
     for location in possible_locations:
         if location.exists():
             size_mb = location.stat().st_size / 1024 / 1024
-            print(f"✓ Found: {location} ({size_mb:.2f} MB)")
+            print(f"[SYMBOL] Found: {location} ({size_mb:.2f} MB)")
             return location
     
-    print("✗ sample.mp4 not found in expected locations:")
+    print("[SYMBOL] sample.mp4 not found in expected locations:")
     for loc in possible_locations:
         print(f"  - {loc}")
     return None
@@ -198,7 +198,7 @@ def main():
     sample_file = verify_sample_file()
     
     if not sample_file:
-        print("\n✗ Cannot proceed: sample.mp4 not found!")
+        print("\n[SYMBOL] Cannot proceed: sample.mp4 not found!")
         print("\nPlease ensure sample.mp4 is in L:/goodq4all/import_inbox/")
         return 1
     

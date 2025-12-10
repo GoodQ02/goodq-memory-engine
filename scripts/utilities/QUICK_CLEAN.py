@@ -17,7 +17,7 @@ subprocess.run(['powershell', '-Command',
     'Get-Process | Where-Object { $_.ProcessName -like "*python*" } | Stop-Process -Force -ErrorAction SilentlyContinue'],
     capture_output=True)
 time.sleep(2)
-print("  ✓ Done")
+print("  [SYMBOL] Done")
 
 # Check and clear database
 print("\n[2/5] Clearing database scenes...")
@@ -27,7 +27,7 @@ try:
     c.execute('DELETE FROM scenes')
     conn.commit()
     remaining = c.execute('SELECT COUNT(*) FROM scenes').fetchone()[0]
-    print(f"  ✓ Scenes cleared (remaining: {remaining})")
+    print(f"  [SYMBOL] Scenes cleared (remaining: {remaining})")
     conn.close()
 except Exception as e:
     print(f"  Note: {e}")
@@ -44,7 +44,7 @@ if processing_dir.exists():
                 item.unlink()
         except:
             pass
-print("  ✓ Done")
+print("  [SYMBOL] Done")
 
 # Verify config
 print("\n[4/5] Verifying config...")
@@ -55,21 +55,21 @@ threshold = config.get('video', {}).get('scene_detect', {}).get('threshold', 0)
 print(f"  min_scene_len_sec: {min_scene}s")
 print(f"  threshold: {threshold}")
 if min_scene == 300.0:
-    print("  ✓ Config correct")
+    print("  [SYMBOL] Config correct")
 else:
-    print("  ✗ Config needs 300.0")
+    print("  [SYMBOL] Config needs 300.0")
 
 # Check sample
 print("\n[5/5] Checking sample.mp4...")
 if Path("L:/goodq4all/import_inbox/sample.mp4").exists():
     size = Path("L:/goodq4all/import_inbox/sample.mp4").stat().st_size
-    print(f"  ✓ Found in import_inbox ({size} bytes)")
+    print(f"  [SYMBOL] Found in import_inbox ({size} bytes)")
 elif Path("L:/goodq4all/smoke_inbox/sample.mp4").exists():
-    print("  ✓ Found in smoke_inbox")
+    print("  [SYMBOL] Found in smoke_inbox")
     shutil.copy2("L:/goodq4all/smoke_inbox/sample.mp4", "L:/goodq4all/import_inbox/sample.mp4")
-    print("  ✓ Copied to import_inbox")
+    print("  [SYMBOL] Copied to import_inbox")
 else:
-    print("  ✗ Not found")
+    print("  [SYMBOL] Not found")
 
 print("\n" + "="*80)
 print("CLEAN COMPLETE - Ready for watchdog")

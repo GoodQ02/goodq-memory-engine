@@ -79,18 +79,26 @@ def run_direct_ingestion(video_path: str | Path, cfg: Dict[str, Any] | None = No
         output_json = Path(f"logs/direct_ingest_{video_path.stem}.json")
         actual_video_id = None
         actual_processing_dir = None
+        video_hash = None
         
         if output_json.exists():
             import json
             with open(output_json, 'r') as f:
                 ingestion_results = json.load(f)
-                # The ingestion creates one result per video
+                # Handle both list and dict formats
                 if isinstance(ingestion_results, list) and len(ingestion_results) > 0:
-                    first_result = ingestion_results[0]
-                    actual_video_id = first_result.get('video_id')
-                    # Reconstruct processing dir from workspace + video_id
-                    if actual_video_id:
-                        actual_processing_dir = processing_root / actual_video_id
+                    ingestion_results = ingestion_results[0]
+                
+                # Extract video_id and hash from the JSON structure
+                actual_video_id = ingestion_results.get('video_id')
+                
+                # Get the actual hash-based directory from scene data
+                if 'scenes' in ingestion_results and len(ingestion_results['scenes']) > 0:
+                    first_scene = ingestion_results['scenes'][0]
+                    if 'raw' in first_scene and 'video_hash' in first_scene['raw']:
+                        video_hash = first_scene['raw']['video_hash']
+                        # The REAL processing directory uses the hash
+                        actual_processing_dir = processing_root / video_hash
         
         # Fallback to stem-based ID if we couldn't read from JSON
         video_id = actual_video_id if actual_video_id else video_path.stem
@@ -98,6 +106,9 @@ def run_direct_ingestion(video_path: str | Path, cfg: Dict[str, Any] | None = No
         
         # Build temporal index path from actual processing location
         temporal_index_path = processing_dir / "temporal_index.json"
+        if not temporal_index_path.exists():
+            # Also check in metadata subdirectory
+            temporal_index_path = processing_dir / "metadata" / "temporal_index.json"
         
         # Return complete result with video_id and temporal_index for downstream validation
         result = {
@@ -105,6 +116,7 @@ def run_direct_ingestion(video_path: str | Path, cfg: Dict[str, Any] | None = No
             "video_path": str(video_path),
             "video_id": video_id,
             "video_name": video_path.name,
+            "video_hash": video_hash,
             "processing_dir": str(processing_dir.absolute()),
             "temporal_index_path": str(temporal_index_path.absolute()) if temporal_index_path.exists() else None
         }

@@ -69,7 +69,10 @@ DEFAULT_MODELS_DIR = Path(os.environ.get('HF_HOME', 'L:/models'))
 
 # Populated by CLI options at runtime
 VERBOSE: bool = False
-STEP_TIMEOUT: Optional[int] = None
+# Timeout per step in seconds - prevents infinite hangs
+# Audio steps (diarize, transcribe) can take 5-10 min for long scenes
+# Image steps should complete in <30s
+STEP_TIMEOUT: Optional[int] = 1800  # 30 minutes max per step
 
 
 def run_ingestion(video_path: str, cfg: Optional[Dict] = None):

@@ -13,7 +13,7 @@ from steps.common.memory import append_long_term_summary
 # Configuration
 cfg = {
     'paths': {
-        'db_path': 'L:/goodq4all/data/memory.db'
+        'db_path': 'L:/_DATA/GoodQ_Data/memory.db'
     },
     'llm': {
         'api_url': 'http://localhost:1234/v1/chat/completions'

@@ -54,7 +54,7 @@ def test_full_system():
         from steps.common.config_loader import load_configs
         
         cfg = load_configs({})
-        test_audio = r"L:\goodq4all\data\temp\test_chunk.wav"
+        test_audio = r"L:\_DATA\GoodQ_Data\temp\test_chunk.wav"
         
         if Path(test_audio).exists():
             item = {"source_path": test_audio, "modality": "audio"}
@@ -89,9 +89,9 @@ def test_full_system():
         import sqlite3
         
         dbs = {
-            "memory.db": r"L:\goodq4all\data\memory.db",
-            "knowledge_graph.db": r"L:\goodq4all\data\knowledge_graph.db",
-            "unified_goodq.db": r"L:\goodq4all\data\unified_goodq.db"
+            "memory.db": r"L:\_DATA\GoodQ_Data\memory.db",
+            "knowledge_graph.db": r"L:\_DATA\GoodQ_Data\knowledge_graph.db",
+            "unified_goodq.db": r"L:\_DATA\GoodQ_Data\unified_goodq.db"
         }
         
         db_status = {}

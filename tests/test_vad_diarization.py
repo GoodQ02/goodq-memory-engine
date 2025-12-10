@@ -20,7 +20,7 @@ def test_vad_preprocessing():
     # Find a test audio file
     test_files = [
         r"L:\goodq4all\import_inbox\01. 1987 - 1988.mp4",
-        r"L:\goodq4all\data\processing\sample.mp4",
+        r"L:\_DATA\GoodQ_Data\processing\sample.mp4",
     ]
     
     audio_path = None
@@ -128,7 +128,7 @@ def test_full_diarization():
     # Find test audio
     test_files = [
         r"L:\goodq4all\import_inbox\01. 1987 - 1988.mp4",
-        r"L:\goodq4all\data\processing\sample.mp4",
+        r"L:\_DATA\GoodQ_Data\processing\sample.mp4",
     ]
     
     audio_path = None

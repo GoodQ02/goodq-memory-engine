@@ -1,6 +1,6 @@
 import sqlite3
 
-conn = sqlite3.connect('L:/goodq4all/data/memory.db')
+conn = sqlite3.connect('L:/_DATA/GoodQ_Data/memory.db')
 cur = conn.cursor()
 
 print('=== SCENES TABLE SCHEMA ===')

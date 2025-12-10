@@ -286,7 +286,7 @@ def check_sample_database():
     print("SAMPLE.MP4 DATABASE CHECK")
     print("="*80)
     
-    db_path = Path("L:/goodq4all/data/goodq_memory.db")
+    db_path = Path("L:/_DATA/GoodQ_Data/goodq_memory.db")
     if not db_path.exists():
         print("❌ Memory database not found")
         return False

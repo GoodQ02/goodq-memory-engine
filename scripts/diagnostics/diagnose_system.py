@@ -59,9 +59,9 @@ def check_databases():
     check_section("Database Status")
     
     db_paths = {
-        "Memory DB": Path("L:/goodq4all/data/memory.db"),
-        "Knowledge Graph": Path("L:/goodq4all/data/knowledge_graph.db"),
-        "Unified DB": Path("L:/goodq4all/data/unified_goodq.db"),
+        "Memory DB": Path("L:/_DATA/GoodQ_Data/memory.db"),
+        "Knowledge Graph": Path("L:/_DATA/GoodQ_Data/knowledge_graph.db"),
+        "Unified DB": Path("L:/_DATA/GoodQ_Data/unified_goodq.db"),
     }
     
     results = {}
@@ -111,7 +111,7 @@ def check_faiss_indices():
     """Check FAISS index status"""
     check_section("FAISS Indices")
     
-    faiss_dir = Path("L:/goodq4all/data/faiss_indices")
+    faiss_dir = Path("L:/_DATA/GoodQ_Data/faiss_indices")
     indices = {
         "Text": faiss_dir / "text" / "faiss_text.index",
         "CLIP": faiss_dir / "clip" / "faiss_clip.index",

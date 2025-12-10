@@ -37,7 +37,7 @@ print("  ✓ Processes killed\n")
 
 # STEP 2: Check database state
 print("[2/10] Checking database state...")
-conn = sqlite3.connect('L:/goodq4all/data/memory.db')
+conn = sqlite3.connect('L:/_DATA/GoodQ_Data/memory.db')
 c = conn.cursor()
 tables = c.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
 print(f"  Tables: {[t[0] for t in tables]}")
@@ -52,7 +52,7 @@ print()
 
 # STEP 3: Clear ALL scene data
 print("[3/10] Clearing ALL scene data...")
-conn = sqlite3.connect('L:/goodq4all/data/memory.db')
+conn = sqlite3.connect('L:/_DATA/GoodQ_Data/memory.db')
 c = conn.cursor()
 try:
     c.execute('DELETE FROM scenes')
@@ -80,7 +80,7 @@ print()
 
 # STEP 4: Clear processing cache
 print("[4/10] Clearing processing cache...")
-processing_dir = Path("L:/goodq4all/data/processing")
+processing_dir = Path("L:/_DATA/GoodQ_Data/processing")
 if processing_dir.exists():
     for item in processing_dir.iterdir():
         if item.is_dir():

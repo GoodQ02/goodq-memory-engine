@@ -12,7 +12,7 @@ print("PHASE 3: PIPELINE INTEGRATION VALIDATION")
 print("="*80)
 
 # Check what we have in the database from sample.mp4
-db_path = Path("L:/goodq4all/data/goodq_memory.db")
+db_path = Path("L:/_DATA/GoodQ_Data/goodq_memory.db")
 
 if not db_path.exists():
     print("\n❌ Database not found. Run ingestion first:")
@@ -60,7 +60,7 @@ if row:
 print("\n[2] Checking Knowledge Graph...")
 print("-" * 80)
 
-kg_path = Path("L:/goodq4all/data/knowledge_graph.db")
+kg_path = Path("L:/_DATA/GoodQ_Data/knowledge_graph.db")
 if kg_path.exists():
     kg_conn = sqlite3.connect(str(kg_path))
     kg_c = kg_conn.cursor()

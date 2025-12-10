@@ -18,7 +18,7 @@ CORS(app)
 
 # Paths
 PROGRESS_FILE = Path("L:/goodq4all/logs/progress.json")
-PROCESSING_DIR = Path("L:/goodq4all/data/processing")
+PROCESSING_DIR = Path("L:/_DATA/GoodQ_Data/processing")
 OUTPUT_DIR = Path("L:/goodq4all/output")
 LOGS_DIR = Path("L:/goodq4all/logs")
 

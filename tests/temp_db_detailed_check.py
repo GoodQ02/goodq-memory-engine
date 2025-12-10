@@ -1,7 +1,7 @@
 import sqlite3
 import json
 
-conn = sqlite3.connect('L:/goodq4all/data/memory.db')
+conn = sqlite3.connect('L:/_DATA/GoodQ_Data/memory.db')
 c = conn.cursor()
 
 print('='*60)
@@ -65,7 +65,7 @@ print('CHECKING FAISS INDICES')
 print('='*60)
 
 import os
-faiss_dir = 'L:/goodq4all/data/faiss_indices'
+faiss_dir = 'L:/_DATA/GoodQ_Data/faiss_indices'
 for root, dirs, files in os.walk(faiss_dir):
     for f in files:
         path = os.path.join(root, f)

@@ -67,20 +67,20 @@ model:
 paths:
   log_dir: /mnt/l/goodq4all/logs
   output_directory: /mnt/l/goodq4all/output
-  db_dir: /mnt/l/goodq4all/data
-  db_path: /mnt/l/goodq4all/data/memory.db
-  knowledge_graph_db: /mnt/l/goodq4all/data/knowledge_graph.db
-  faiss_dir: /mnt/l/goodq4all/data/faiss
+  db_dir: /mnt/l/L:/_DATA/GoodQ_Data
+  db_path: /mnt/l/L:/_DATA/GoodQ_Data/memory.db
+  knowledge_graph_db: /mnt/l/L:/_DATA/GoodQ_Data/knowledge_graph.db
+  faiss_dir: /mnt/l/L:/_DATA/GoodQ_Data/faiss
   csv_path: /mnt/l/goodq4all/logs/system_metrics.csv
   nas_path: /mnt/g/Logs
   config_dir: /mnt/l/goodq4all/configs
-  faiss_index_path: /mnt/l/goodq4all/data/faiss_indices/text/faiss_text.index
-  faiss_clip_path: /mnt/l/goodq4all/data/faiss_indices/clip/faiss_clip.index
-  faiss_dino_path: /mnt/l/goodq4all/data/faiss_indices/dino/faiss_dino.index
-  faiss_audio_path: /mnt/l/goodq4all/data/faiss_indices/audio/faiss_audio.index
-  clip_id_map_db: /mnt/l/goodq4all/data/databases/clip_id_map.sqlite
-  dino_id_map_db: /mnt/l/goodq4all/data/databases/dino_id_map.sqlite
-  clap_id_map_db: /mnt/l/goodq4all/data/databases/clap_id_map.sqlite
+  faiss_index_path: /mnt/l/L:/_DATA/GoodQ_Data/faiss_indices/text/faiss_text.index
+  faiss_clip_path: /mnt/l/L:/_DATA/GoodQ_Data/faiss_indices/clip/faiss_clip.index
+  faiss_dino_path: /mnt/l/L:/_DATA/GoodQ_Data/faiss_indices/dino/faiss_dino.index
+  faiss_audio_path: /mnt/l/L:/_DATA/GoodQ_Data/faiss_indices/audio/faiss_audio.index
+  clip_id_map_db: /mnt/l/L:/_DATA/GoodQ_Data/databases/clip_id_map.sqlite
+  dino_id_map_db: /mnt/l/L:/_DATA/GoodQ_Data/databases/dino_id_map.sqlite
+  clap_id_map_db: /mnt/l/L:/_DATA/GoodQ_Data/databases/clap_id_map.sqlite
 llm:
   api_url: http://localhost:1234/v1/chat/completions
   model_id: LM_STUDIO_GOODQ

@@ -224,7 +224,7 @@ class PipelineFlowValidator:
         step_name = "database"
         logger.info(f"Validating: {step_name}")
         
-        db_path = Path(self.config.get('paths', {}).get('db_path', 'L:/goodq4all/data/memory.db'))
+        db_path = Path(self.config.get('paths', {}).get('db_path', 'L:/_DATA/GoodQ_Data/memory.db'))
         
         if not db_path.exists():
             self._add_error(step_name, f"Database not found: {db_path}")
@@ -274,7 +274,7 @@ class PipelineFlowValidator:
         logger.info(f"Validating: {step_name}")
         
         kg_path = Path(self.config.get('paths', {}).get('knowledge_graph_db', 
-                                                         'L:/goodq4all/data/knowledge_graph.db'))
+                                                         'L:/_DATA/GoodQ_Data/knowledge_graph.db'))
         
         if not kg_path.exists():
             self._add_warning(step_name, "Knowledge graph not yet created")

@@ -20,7 +20,7 @@ def test_recovery_database():
     print("🧪 Testing Recovery Database")
     print("=" * 70)
     
-    db = RecoveryDatabase(db_path="L:/goodq4all/data/test_recovery.db")
+    db = RecoveryDatabase(db_path="L:/_DATA/GoodQ_Data/test_recovery.db")
     
     # Test 1: Record a failure
     print("\n1️⃣ Recording test failure...")

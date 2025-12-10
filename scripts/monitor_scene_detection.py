@@ -5,7 +5,7 @@ import time
 import sys
 from datetime import datetime
 
-db_path = 'L:/goodq4all/data/memory.db'
+db_path = 'L:/_DATA/GoodQ_Data/memory.db'
 
 print("=" * 80)
 print("  GoodQ Scene Detection Monitor")

@@ -42,7 +42,7 @@ def main():
     print("[3/3] Looking for test audio...")
     
     test_paths = [
-        Path("L:/goodq4all/data/processing"),
+        Path("L:/_DATA/GoodQ_Data/processing"),
         Path("L:/goodq4all/import_inbox"),
         Path("L:/_DATA/FAMILY_FEAST")
     ]

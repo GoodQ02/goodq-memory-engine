@@ -28,7 +28,7 @@ print("\n" + "=" * 80)
 print("STEP 1: Clearing existing data for clean test")
 print("=" * 80)
 
-db_path = Path("L:/goodq4all/data/memory.db")
+db_path = Path("L:/_DATA/GoodQ_Data/memory.db")
 if db_path.exists():
     conn = sqlite3.connect(str(db_path))
     c = conn.cursor()

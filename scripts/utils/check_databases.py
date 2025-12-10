@@ -4,7 +4,7 @@ from pathlib import Path
 # Check memory.db
 print("=== Checking memory.db ===")
 try:
-    conn = sqlite3.connect('L:/goodq4all/data/memory.db')
+    conn = sqlite3.connect('L:/_DATA/GoodQ_Data/memory.db')
     cur = conn.cursor()
     
     # List tables
@@ -54,7 +54,7 @@ except Exception as e:
 
 print("\n=== Checking knowledge_graph.db ===")
 try:
-    conn = sqlite3.connect('L:/goodq4all/data/knowledge_graph.db')
+    conn = sqlite3.connect('L:/_DATA/GoodQ_Data/knowledge_graph.db')
     cur = conn.cursor()
     
     # List tables

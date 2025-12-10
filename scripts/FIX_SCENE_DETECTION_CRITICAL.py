@@ -34,7 +34,7 @@ print("="*80)
 
 # Step 1: Show current problem
 print("\n[1/6] Current scene statistics:")
-conn = sqlite3.connect('L:/goodq4all/data/memory.db')
+conn = sqlite3.connect('L:/_DATA/GoodQ_Data/memory.db')
 cur = conn.cursor()
 
 stats = cur.execute('''
@@ -88,7 +88,7 @@ print("  ✓ Killed stuck processes")
 
 # Step 4: Clear processing cache
 print("\n[4/6] Clearing processing cache...")
-processing_dir = Path("L:/goodq4all/data/processing")
+processing_dir = Path("L:/_DATA/GoodQ_Data/processing")
 if processing_dir.exists():
     import shutil
     for item in processing_dir.iterdir():

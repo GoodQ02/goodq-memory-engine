@@ -23,8 +23,8 @@ class MemoryWriter:
             # Try to find memory DB in standard locations
             possible_paths = [
                 Path("L:/GoodQ_Data/memory.db"),
-                Path("L:/goodq4all/data/memory.db"),
-                Path("L:/goodq4all/data/memory.db"),
+                Path("L:/_DATA/GoodQ_Data/memory.db"),
+                Path("L:/_DATA/GoodQ_Data/memory.db"),
             ]
             for p in possible_paths:
                 if p.exists():

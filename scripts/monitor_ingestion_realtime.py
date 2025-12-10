@@ -10,9 +10,9 @@ from pathlib import Path
 from datetime import datetime
 import sys
 
-DB_PATH = Path("L:/goodq4all/data/memory.db")
+DB_PATH = Path("L:/_DATA/GoodQ_Data/memory.db")
 LOG_PATH = Path("L:/goodq4all/logs/watchdog.log")
-PROCESSING_PATH = Path("L:/goodq4all/data/processing")
+PROCESSING_PATH = Path("L:/_DATA/GoodQ_Data/processing")
 
 class IngestionMonitor:
     def __init__(self):

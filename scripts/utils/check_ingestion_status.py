@@ -12,7 +12,7 @@ def check_status():
     print(f"Timestamp: {datetime.now()}\n")
     
     # Check database
-    db_path = Path("L:/goodq4all/data/memory.db")
+    db_path = Path("L:/_DATA/GoodQ_Data/memory.db")
     if db_path.exists():
         conn = sqlite3.connect(str(db_path))
         cursor = conn.cursor()
@@ -71,7 +71,7 @@ def check_status():
     processing_paths = [
         "L:/_DATA/GoodQ_Data/processing",
         "L:/goodq4all/output/processing",
-        "L:/goodq4all/data/processing"
+        "L:/_DATA/GoodQ_Data/processing"
     ]
     
     for proc_path in processing_paths:

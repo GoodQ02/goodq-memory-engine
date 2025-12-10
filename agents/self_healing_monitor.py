@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 class SelfHealingMonitor:
     """Monitors pipeline health and applies automatic fixes."""
     
-    def __init__(self, db_path: str = "L:/goodq4all/data/memory.db"):
+    def __init__(self, db_path: str = "L:/_DATA/GoodQ_Data/memory.db"):
         self.db_path = Path(db_path)
         self.config = self._load_config()
         self.llm_config = self.config.get('llm', {})

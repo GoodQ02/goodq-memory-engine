@@ -14,7 +14,7 @@ def clean_sample_data():
     print("CLEANING PREVIOUS sample.mp4 DATA")
     print("="*80)
     
-    data_dir = Path("L:/goodq4all/data")
+    data_dir = Path("L:/_DATA/GoodQ_Data")
     
     # 1. Clean memory.db entries for sample.mp4
     print("\n[1/5] Cleaning memory.db...")
@@ -171,7 +171,7 @@ def verify_sample_file():
     
     possible_locations = [
         Path("L:/goodq4all/import_inbox/sample.mp4"),
-        Path("L:/goodq4all/data/testing/sample.mp4"),
+        Path("L:/_DATA/GoodQ_Data/testing/sample.mp4"),
         Path("L:/goodq4all/sample.mp4"),
     ]
     

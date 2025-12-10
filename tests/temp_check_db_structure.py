@@ -2,7 +2,7 @@ import sqlite3
 from pathlib import Path
 
 # Check memory.db
-db_path = Path("L:/goodq4all/data/memory.db")
+db_path = Path("L:/_DATA/GoodQ_Data/memory.db")
 print(f"=== Checking {db_path} ===")
 print(f"Size: {db_path.stat().st_size:,} bytes\n")
 
@@ -31,7 +31,7 @@ for table in tables:
 conn.close()
 
 # Check knowledge_graph.db
-db_path2 = Path("L:/goodq4all/data/knowledge_graph.db")
+db_path2 = Path("L:/_DATA/GoodQ_Data/knowledge_graph.db")
 print(f"\n=== Checking {db_path2} ===")
 print(f"Size: {db_path2.stat().st_size:,} bytes\n")
 

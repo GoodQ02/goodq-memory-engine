@@ -11,14 +11,14 @@ def test_wsl_audio_processing():
     """Test WSL audio processing with a real file"""
     
     # Find a test audio file
-    test_file = Path(r"L:\goodq4all\data\temp\test_chunk.wav")
+    test_file = Path(r"L:\_DATA\GoodQ_Data\temp\test_chunk.wav")
     
     if not test_file.exists():
         print(f"❌ Test file not found: {test_file}")
         return False
     
     # Convert Windows path to WSL path
-    wsl_path = f"/mnt/l/goodq4all/data/temp/test_chunk.wav"
+    wsl_path = f"/mnt/l/L:/_DATA/GoodQ_Data/temp/test_chunk.wav"
     
     print(f"🧪 Testing WSL audio processing...")
     print(f"   File: {test_file}")

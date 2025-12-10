@@ -16,10 +16,10 @@ def clear_databases():
     print("🧹 Clearing databases for clean test...")
     
     db_paths = [
-        Path("L:/goodq4all/data/memory.db"),
-        Path("L:/goodq4all/data/databases/clap_id_map.sqlite"),
-        Path("L:/goodq4all/data/databases/clip_id_map.sqlite"),
-        Path("L:/goodq4all/data/databases/dino_id_map.sqlite"),
+        Path("L:/_DATA/GoodQ_Data/memory.db"),
+        Path("L:/_DATA/GoodQ_Data/databases/clap_id_map.sqlite"),
+        Path("L:/_DATA/GoodQ_Data/databases/clip_id_map.sqlite"),
+        Path("L:/_DATA/GoodQ_Data/databases/dino_id_map.sqlite"),
     ]
     
     for db_path in db_paths:
@@ -31,7 +31,7 @@ def clear_databases():
                 print(f"   ✗ Failed to delete {db_path.name}: {e}")
     
     # Clear FAISS indices
-    faiss_dir = Path("L:/goodq4all/data/faiss_indices")
+    faiss_dir = Path("L:/_DATA/GoodQ_Data/faiss_indices")
     if faiss_dir.exists():
         for index_file in faiss_dir.rglob("*.index"):
             try:
@@ -133,7 +133,7 @@ def check_results(workspace: Path):
     
     # Check database
     print("💾 Memory Database:")
-    db_path = Path("L:/goodq4all/data/memory.db")
+    db_path = Path("L:/_DATA/GoodQ_Data/memory.db")
     if db_path.exists():
         try:
             conn = sqlite3.connect(db_path)
@@ -175,7 +175,7 @@ def check_results(workspace: Path):
     
     # Check FAISS indices
     print("🔍 FAISS Indices:")
-    faiss_dir = Path("L:/goodq4all/data/faiss_indices")
+    faiss_dir = Path("L:/_DATA/GoodQ_Data/faiss_indices")
     if faiss_dir.exists():
         for index_type in ['text', 'audio', 'dino', 'clip']:
             index_file = faiss_dir / index_type / f"faiss_{index_type}.index"

@@ -31,7 +31,7 @@ def test_integration():
     print()
     
     # Prepare test item
-    test_audio = r"L:\goodq4all\data\temp\test_chunk.wav"
+    test_audio = r"L:\_DATA\GoodQ_Data\temp\test_chunk.wav"
     
     if not Path(test_audio).exists():
         print(f"   ❌ Test audio not found: {test_audio}")

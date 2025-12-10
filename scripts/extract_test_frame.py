@@ -13,7 +13,7 @@ def extract_frame():
     video_dirs = [
         Path("L:/_DATA/FAMILY_FEAST"),
         Path("L:/goodq4all/import_inbox"),
-        Path("L:/goodq4all/data/processing")
+        Path("L:/_DATA/GoodQ_Data/processing")
     ]
     
     video_files = []

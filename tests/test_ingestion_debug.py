@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 
 # Test with sample video
-sample_video = Path("L:/goodq4all/data/testing/test_input/sample.mp4")
+sample_video = Path("L:/_DATA/GoodQ_Data/testing/test_input/sample.mp4")
 if not sample_video.exists():
     print(f"Sample video not found: {sample_video}")
     sys.exit(1)
@@ -15,7 +15,7 @@ if not sample_video.exists():
 print(f"[OK] Found sample video: {sample_video}")
 
 # Create temp directory
-temp_dir = Path("L:/goodq4all/data/processing/test_debug")
+temp_dir = Path("L:/_DATA/GoodQ_Data/processing/test_debug")
 temp_dir.mkdir(parents=True, exist_ok=True)
 
 # Copy sample to temp

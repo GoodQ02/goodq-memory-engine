@@ -278,7 +278,7 @@ def _collect_engine_details() -> Dict[str, Any]:
         }
 
     # Check vector database
-    chroma_dir = Path("L:/goodq4all/data/chroma")
+    chroma_dir = Path("L:/_DATA/GoodQ_Data/chroma")
     engines["vector_db"] = {
         "name": "Vector Database",
         "category": "Search & Retrieval",
@@ -509,7 +509,7 @@ def get_status() -> Dict[str, Any]:
     # Quick database presence check
     database_data = {"exists": False, "scenes": 0}
     try:
-        db_path = Path("L:/goodq4all/data/memory.db")
+        db_path = Path("L:/_DATA/GoodQ_Data/memory.db")
         database_data["exists"] = db_path.exists()
         if database_data["exists"]:
             database_data["scenes"] = 1  # Minimal indicator so UI shows healthy
@@ -637,7 +637,7 @@ def vector_search(
 
     cfg = load_configs({})
     paths = cfg.get("paths", {}) or {}
-    persist_dir = paths.get("chroma_dir") or "L:/goodq4all/data/databases/chroma"
+    persist_dir = paths.get("chroma_dir") or "L:/_DATA/GoodQ_Data/databases/chroma"
 
     emb = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
     vectordb = Chroma(collection_name="goodq", persist_directory=persist_dir, embedding_function=emb)
@@ -689,7 +689,7 @@ def get_scenes() -> Dict[str, Any]:
     from pathlib import Path
     
     # Look for scenes in data/output
-    scenes_dir = Path("L:/goodq4all/data/output")
+    scenes_dir = Path("L:/_DATA/GoodQ_Data/output")
     all_scenes = []
     
     if scenes_dir.exists():
@@ -715,9 +715,9 @@ def get_knowledge_graph() -> Dict[str, Any]:
     
     # Look for entity data
     # Primary KG database (SQLite)
-    kg_db = Path("L:/goodq4all/data/knowledge_graph.db")
+    kg_db = Path("L:/_DATA/GoodQ_Data/knowledge_graph.db")
     # Legacy JSON export (fallback)
-    kg_file = Path("L:/goodq4all/data/output/knowledge_graph.json")
+    kg_file = Path("L:/_DATA/GoodQ_Data/output/knowledge_graph.json")
     
     if kg_file.exists():
         try:
@@ -932,7 +932,7 @@ def get_wsl2_status() -> Dict[str, Any]:
 @app.get("/api/command-center")
 def get_command_center() -> Dict[str, Any]:
     """Command center status - consolidates all system info."""
-    db_healthy = Path("L:/goodq4all/data/memory.db").exists()
+    db_healthy = Path("L:/_DATA/GoodQ_Data/memory.db").exists()
     processing_stats = get_progress()
     model_stats = get_models()
     wsl_status = _collect_wsl_status()
@@ -1139,8 +1139,8 @@ def get_models() -> Dict[str, Any]:
 def _local_progress_stats() -> Dict[str, Any]:
     """Best-effort processing stats based on local progress.json and filesystem."""
     progress_file = Path("L:/goodq4all/logs/progress.json")
-    processing_dir = Path("L:/goodq4all/data/processing")
-    processed_dir = Path("L:/goodq4all/data/processed")
+    processing_dir = Path("L:/_DATA/GoodQ_Data/processing")
+    processed_dir = Path("L:/_DATA/GoodQ_Data/processed")
 
     progress = {}
     try:

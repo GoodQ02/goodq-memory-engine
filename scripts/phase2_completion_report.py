@@ -30,7 +30,7 @@ print("\n" + "📊 FINAL METRICS")
 print("-" * 80)
 
 # Memory DB
-conn = sqlite3.connect('L:/goodq4all/data/memory.db')
+conn = sqlite3.connect('L:/_DATA/GoodQ_Data/memory.db')
 cur = conn.cursor()
 
 cur.execute("SELECT COUNT(*) FROM embeddings")
@@ -69,7 +69,7 @@ print(f"  Links: {links}")
 conn.close()
 
 # Knowledge Graph
-conn = sqlite3.connect('L:/goodq4all/data/knowledge_graph.db')
+conn = sqlite3.connect('L:/_DATA/GoodQ_Data/knowledge_graph.db')
 cur = conn.cursor()
 
 cur.execute("SELECT COUNT(*) FROM nodes")
@@ -94,7 +94,7 @@ conn.close()
 
 # FAISS Indices
 print(f"\nFAISS Indices:")
-faiss_dir = Path("L:/goodq4all/data/faiss_indices")
+faiss_dir = Path("L:/_DATA/GoodQ_Data/faiss_indices")
 for idx_type in ['text', 'clip', 'dino', 'audio']:
     idx_file = faiss_dir / idx_type / f"faiss_{idx_type}.index"
     if idx_file.exists():

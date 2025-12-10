@@ -51,7 +51,7 @@ def count_scenes(workspace: Path) -> Dict:
 
 def check_database() -> Dict:
     """Check memory database status"""
-    db_path = Path("L:/goodq4all/data/memory.db")
+    db_path = Path("L:/_DATA/GoodQ_Data/memory.db")
     if not db_path.exists():
         return {"embeddings": 0, "scenes": 0, "links": 0}
     

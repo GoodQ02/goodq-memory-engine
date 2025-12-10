@@ -8,7 +8,7 @@ from pathlib import Path
 cfg = load_configs({})
 
 # Test scene detection
-video_path = Path('L:/goodq4all/data/processing/video_c13c0423a28e2c54/1987_1988.mp4')
+video_path = Path('L:/_DATA/GoodQ_Data/processing/video_c13c0423a28e2c54/1987_1988.mp4')
 
 print(f'Testing scene detection on: {video_path.name}')
 print('This will take a few minutes...\n')

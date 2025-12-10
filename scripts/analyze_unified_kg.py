@@ -223,7 +223,7 @@ def analyze_unified_kg(db_path: str):
 
 def main():
     """Main entry point"""
-    db_path = Path("L:/goodq4all/data/unified_goodq.db")
+    db_path = Path("L:/_DATA/GoodQ_Data/unified_goodq.db")
     
     if not db_path.exists():
         print(f"❌ Unified KG database not found at {db_path}")

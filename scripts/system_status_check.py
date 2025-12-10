@@ -39,7 +39,7 @@ else:
 
 # 2. Check database
 print(f"\n🗄️  Database Status:")
-db_path = Path('L:/goodq4all/data/memory.db')
+db_path = Path('L:/_DATA/GoodQ_Data/memory.db')
 if db_path.exists():
     conn = sqlite3.connect(str(db_path))
     c = conn.cursor()

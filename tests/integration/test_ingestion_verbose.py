@@ -16,7 +16,7 @@ print(f"Testing ingestion with: {test_video.name}")
 print(f"Size: {test_video.stat().st_size / 1024:.2f} KB\n")
 
 # Create temp test directory
-test_input = Path("L:/goodq4all/data/testing/test_input")
+test_input = Path("L:/_DATA/GoodQ_Data/testing/test_input")
 test_input.mkdir(parents=True, exist_ok=True)
 
 # Copy video

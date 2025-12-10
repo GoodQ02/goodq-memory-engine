@@ -196,14 +196,14 @@ if config_file.exists():
     
     paths_updated = False
     expected_paths = {
-        'db_path': 'L:/goodq4all/data/memory.db',
-        'faiss_index_path': 'L:/goodq4all/data/faiss_indices/text/faiss_text_index.bin',
-        'faiss_clip_path': 'L:/goodq4all/data/faiss_indices/clip/faiss_clip_index.bin',
-        'faiss_dino_path': 'L:/goodq4all/data/faiss_indices/dino/faiss_dino_index.bin',
-        'faiss_audio_path': 'L:/goodq4all/data/faiss_indices/audio/faiss_audio_index.bin',
-        'clip_id_map_db': 'L:/goodq4all/data/databases/clip_id_map.sqlite',
-        'dino_id_map_db': 'L:/goodq4all/data/databases/dino_id_map.sqlite',
-        'clap_id_map_db': 'L:/goodq4all/data/databases/clap_id_map.sqlite',
+        'db_path': 'L:/_DATA/GoodQ_Data/memory.db',
+        'faiss_index_path': 'L:/_DATA/GoodQ_Data/faiss_indices/text/faiss_text_index.bin',
+        'faiss_clip_path': 'L:/_DATA/GoodQ_Data/faiss_indices/clip/faiss_clip_index.bin',
+        'faiss_dino_path': 'L:/_DATA/GoodQ_Data/faiss_indices/dino/faiss_dino_index.bin',
+        'faiss_audio_path': 'L:/_DATA/GoodQ_Data/faiss_indices/audio/faiss_audio_index.bin',
+        'clip_id_map_db': 'L:/_DATA/GoodQ_Data/databases/clip_id_map.sqlite',
+        'dino_id_map_db': 'L:/_DATA/GoodQ_Data/databases/dino_id_map.sqlite',
+        'clap_id_map_db': 'L:/_DATA/GoodQ_Data/databases/clap_id_map.sqlite',
     }
     
     for key, expected_path in expected_paths.items():

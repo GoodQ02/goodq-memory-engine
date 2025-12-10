@@ -1,7 +1,7 @@
 import sqlite3
 import json
 
-conn = sqlite3.connect('L:/goodq4all/data/memory.db')
+conn = sqlite3.connect('L:/_DATA/GoodQ_Data/memory.db')
 c = conn.cursor()
 c.execute('SELECT meta FROM scenes LIMIT 1')
 meta = json.loads(c.fetchone()[0])

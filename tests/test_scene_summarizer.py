@@ -16,7 +16,7 @@ print("="*80)
 from steps.common.scene_summarizer import generate_scene_summary_template, generate_scene_summary
 
 # Get a real scene from the database
-conn = sqlite3.connect('L:/goodq4all/data/memory.db')
+conn = sqlite3.connect('L:/_DATA/GoodQ_Data/memory.db')
 c = conn.cursor()
 
 c.execute("SELECT id, meta FROM scenes LIMIT 1")
@@ -43,7 +43,7 @@ if result:
     
     cfg = {
         'paths': {
-            'db_path': 'L:/goodq4all/data/memory.db'
+            'db_path': 'L:/_DATA/GoodQ_Data/memory.db'
         },
         'llm': {
             'api_url': 'http://localhost:1234/v1/chat/completions'

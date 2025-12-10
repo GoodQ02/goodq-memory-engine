@@ -22,7 +22,7 @@ def test_gpu_scene_detection():
         print(f"  VRAM: {torch.cuda.get_device_properties(0).total_memory / 1024**3:.2f} GB")
     
     # Test video path
-    test_video = Path("L:/goodq4all/data/processing")
+    test_video = Path("L:/_DATA/GoodQ_Data/processing")
     if test_video.exists():
         videos = list(test_video.rglob("*.mp4"))
         if videos:
@@ -33,7 +33,7 @@ def test_gpu_scene_detection():
         test_video = None
     
     if not test_video or not test_video.exists():
-        print("\n[ERROR] No test video found in L:/goodq4all/data/processing")
+        print("\n[ERROR] No test video found in L:/_DATA/GoodQ_Data/processing")
         print("Please place a video file in the import_inbox and let it start processing")
         return
     

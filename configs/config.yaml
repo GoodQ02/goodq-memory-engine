@@ -42,10 +42,10 @@ paths:
   # Core directories
   log_dir: L:/goodq4all/logs
   output_directory: L:/goodq4all/output
-  db_dir: L:/goodq4all/data
-  db_path: L:/goodq4all/data/memory.db
-  knowledge_graph_db: L:/goodq4all/data/knowledge_graph.db
-  faiss_dir: L:/goodq4all/data/faiss
+  db_dir: L:/_DATA/GoodQ_Data
+  db_path: L:/_DATA/GoodQ_Data/memory.db
+  knowledge_graph_db: L:/_DATA/GoodQ_Data/knowledge_graph.db
+  faiss_dir: L:/_DATA/GoodQ_Data/faiss
   config_dir: L:/goodq4all/configs
   
   # Data paths

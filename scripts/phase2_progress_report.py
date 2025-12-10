@@ -14,7 +14,7 @@ print("="*80)
 print("\n📊 MEMORY.DB STATUS")
 print("-" * 80)
 
-conn = sqlite3.connect('L:/goodq4all/data/memory.db')
+conn = sqlite3.connect('L:/_DATA/GoodQ_Data/memory.db')
 cur = conn.cursor()
 
 # Total counts
@@ -64,7 +64,7 @@ print("\n" + "="*80)
 print("🔗 KNOWLEDGE GRAPH STATUS")
 print("-" * 80)
 
-conn = sqlite3.connect('L:/goodq4all/data/knowledge_graph.db')
+conn = sqlite3.connect('L:/_DATA/GoodQ_Data/knowledge_graph.db')
 cur = conn.cursor()
 
 cur.execute("SELECT COUNT(*) FROM nodes")
@@ -103,7 +103,7 @@ print("\n" + "="*80)
 print("💾 FAISS INDEX STATUS")
 print("-" * 80)
 
-faiss_dir = Path("L:/goodq4all/data/faiss_indices")
+faiss_dir = Path("L:/_DATA/GoodQ_Data/faiss_indices")
 indices = ['text', 'clip', 'dino', 'audio']
 
 for idx_name in indices:
@@ -130,7 +130,7 @@ else:
 
 # Check 2: Multiple modalities
 modalities_found = set()
-conn = sqlite3.connect('L:/goodq4all/data/memory.db')
+conn = sqlite3.connect('L:/_DATA/GoodQ_Data/memory.db')
 cur = conn.cursor()
 cur.execute("SELECT DISTINCT modality FROM embeddings")
 for row in cur.fetchall():

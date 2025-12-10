@@ -84,9 +84,9 @@ except ImportError:
 
 # Configuration
 WATCH_DIR = Path("L:/goodq4all/import_inbox")
-PROCESSING_DIR = Path("L:/goodq4all/data/processing")
-PROCESSED_DIR = Path("L:/goodq4all/data/processed")
-FAILED_DIR = Path("L:/goodq4all/data/failed")
+PROCESSING_DIR = Path("L:/_DATA/GoodQ_Data/processing")
+PROCESSED_DIR = Path("L:/_DATA/GoodQ_Data/processed")
+FAILED_DIR = Path("L:/_DATA/GoodQ_Data/failed")
 STATE_FILE = Path("L:/goodq4all/logs/watchdog_state.json")
 
 # File type configuration
@@ -479,7 +479,7 @@ class WatchdogProcessor:
         # Use video hash to ensure uniqueness and avoid cleanup issues
         import hashlib
         video_hash = hashlib.sha256(video_path.name.encode()).hexdigest()[:16]
-        temp_input = Path(f"L:/goodq4all/data/processing/video_{video_hash}")
+        temp_input = Path(f"L:/_DATA/GoodQ_Data/processing/video_{video_hash}")
         temp_input.mkdir(parents=True, exist_ok=True)
         
         # Copy video to temp location (must stay there for entire ingestion)
@@ -573,7 +573,7 @@ class WatchdogProcessor:
         from steps.common.tag_utils import canonicalize_taxonomy
 
         audio_hash = hashlib.sha256(audio_path.name.encode()).hexdigest()[:16]
-        temp_input = Path(f"L:/goodq4all/data/processing/audio_{audio_hash}")
+        temp_input = Path(f"L:/_DATA/GoodQ_Data/processing/audio_{audio_hash}")
         temp_input.mkdir(parents=True, exist_ok=True)
 
         temp_audio = temp_input / audio_path.name
@@ -665,7 +665,7 @@ class WatchdogProcessor:
         from steps.common.tag_utils import canonicalize_taxonomy
 
         image_hash = hashlib.sha256(image_path.name.encode()).hexdigest()[:16]
-        temp_input = Path(f"L:/goodq4all/data/processing/image_{image_hash}")
+        temp_input = Path(f"L:/_DATA/GoodQ_Data/processing/image_{image_hash}")
         temp_input.mkdir(parents=True, exist_ok=True)
 
         temp_image = temp_input / image_path.name
@@ -762,7 +762,7 @@ class WatchdogProcessor:
             return False
 
         doc_hash = hashlib.sha256(doc_path.name.encode()).hexdigest()[:16]
-        temp_input = Path(f"L:/goodq4all/data/processing/doc_{doc_hash}")
+        temp_input = Path(f"L:/_DATA/GoodQ_Data/processing/doc_{doc_hash}")
         temp_input.mkdir(parents=True, exist_ok=True)
 
         temp_doc = temp_input / doc_path.name
@@ -926,7 +926,7 @@ class WatchdogProcessor:
 
 def main():
     """Main entry point with file lock to prevent multiple instances"""
-    lockfile = Path('L:/goodq4all/data/.watchdog.lock')
+    lockfile = Path('L:/_DATA/GoodQ_Data/.watchdog.lock')
     lockfile.parent.mkdir(parents=True, exist_ok=True)
     
     # Try to create lock file exclusively

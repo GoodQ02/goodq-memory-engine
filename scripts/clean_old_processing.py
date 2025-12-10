@@ -23,7 +23,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Configuration
-PROCESSING_DIR = Path("L:/goodq4all/data/processing")
+PROCESSING_DIR = Path("L:/_DATA/GoodQ_Data/processing")
 MAX_AGE_HOURS = 48
 DRY_RUN = False  # Set to True to see what would be deleted without actually deleting
 

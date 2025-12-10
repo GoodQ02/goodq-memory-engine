@@ -36,7 +36,7 @@ def load_config():
     if 'unified_knowledge_graph' not in config:
         config['unified_knowledge_graph'] = {
             'enabled': True,
-            'db_path': 'L:/goodq4all/data/unified_goodq.db',
+            'db_path': 'L:/_DATA/GoodQ_Data/unified_goodq.db',
             'entity_resolution': {
                 'face_similarity_threshold': 0.85,
                 'voice_similarity_threshold': 0.80,

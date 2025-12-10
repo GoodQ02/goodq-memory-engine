@@ -11,9 +11,9 @@ from datetime import datetime
 
 # Paths
 WATCH_DIR = Path("L:/goodq4all/import_inbox")
-PROCESSING_DIR = Path("L:/goodq4all/data/processing")
-PROCESSED_DIR = Path("L:/goodq4all/data/processed")
-FAILED_DIR = Path("L:/goodq4all/data/failed")
+PROCESSING_DIR = Path("L:/_DATA/GoodQ_Data/processing")
+PROCESSED_DIR = Path("L:/_DATA/GoodQ_Data/processed")
+FAILED_DIR = Path("L:/_DATA/GoodQ_Data/failed")
 STATE_FILE = Path("L:/goodq4all/logs/watchdog_state.json")
 LOG_FILE = Path("L:/goodq4all/logs/watchdog.log")
 

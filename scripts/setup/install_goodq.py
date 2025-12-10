@@ -98,7 +98,7 @@ def create_directories():
         "import_inbox",
         "output",
         "logs",
-        "data/processing",
+        "L:/_DATA/GoodQ_Data/processing",
         "data/embeddings",
         "data/faces",
         "data/clips",

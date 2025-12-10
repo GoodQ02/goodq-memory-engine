@@ -16,7 +16,7 @@ def analyze_sample_mp4_processing():
     print("="*80)
     
     # Paths
-    data_dir = Path("L:/goodq4all/data")
+    data_dir = Path("L:/_DATA/GoodQ_Data")
     memory_db = data_dir / "memory.db"
     kg_db = data_dir / "knowledge_graph.db"
     processing_dir = data_dir / "processing"

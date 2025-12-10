@@ -12,11 +12,11 @@ print("=" * 80)
 print()
 
 # Paths
-db_path = Path("L:/goodq4all/data/memory.db")
-kg_path = Path("L:/goodq4all/data/knowledge_graph.db")
-processing_dir = Path("L:/goodq4all/data/processing")
-processed_dir = Path("L:/goodq4all/data/processed")
-failed_dir = Path("L:/goodq4all/data/failed")
+db_path = Path("L:/_DATA/GoodQ_Data/memory.db")
+kg_path = Path("L:/_DATA/GoodQ_Data/knowledge_graph.db")
+processing_dir = Path("L:/_DATA/GoodQ_Data/processing")
+processed_dir = Path("L:/_DATA/GoodQ_Data/processed")
+failed_dir = Path("L:/_DATA/GoodQ_Data/failed")
 
 # Create backup
 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")

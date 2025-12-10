@@ -135,7 +135,7 @@ def check_processing_status():
             print(f"  - {f.name} ({size_mb:.1f} MB)")
     
     # Check processing directory
-    processing = Path("L:/goodq4all/data/processing")
+    processing = Path("L:/_DATA/GoodQ_Data/processing")
     if processing.exists():
         files = list(processing.glob("*.mp4"))
         dirs = [d for d in processing.iterdir() if d.is_dir()]

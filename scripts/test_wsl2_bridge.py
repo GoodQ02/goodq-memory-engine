@@ -20,7 +20,7 @@ def test_audio_processing():
     print()
     
     # Process test audio
-    test_file = r"L:\goodq4all\data\temp\test_chunk.wav"
+    test_file = r"L:\_DATA\GoodQ_Data\temp\test_chunk.wav"
     print(f"2. Processing test audio: {test_file}")
     
     try:

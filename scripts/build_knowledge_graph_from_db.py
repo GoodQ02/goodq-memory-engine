@@ -77,7 +77,7 @@ def build_kg_from_scenes(scenes: List[Dict[str, Any]], config: Dict[str, Any]):
     
     # Get knowledge graph path
     kg_path = Path(config.get('paths', {}).get('knowledge_graph_db', 
-                                                'L:/goodq4all/data/knowledge_graph.db'))
+                                                'L:/_DATA/GoodQ_Data/knowledge_graph.db'))
     kg_path.parent.mkdir(parents=True, exist_ok=True)
     
     logger.info(f"Building knowledge graph at: {kg_path}")
@@ -205,7 +205,7 @@ def main():
     config = load_config()
     
     # Get database path
-    db_path = config.get('paths', {}).get('db_path', 'L:/goodq4all/data/memory.db')
+    db_path = config.get('paths', {}).get('db_path', 'L:/_DATA/GoodQ_Data/memory.db')
     
     # Fetch scenes
     scenes = fetch_scenes_from_db(db_path)

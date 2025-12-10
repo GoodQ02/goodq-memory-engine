@@ -175,7 +175,7 @@ if __name__ == "__main__":
     # Find test audio file
     test_files = [
         r"L:\goodq4all\import_inbox\01. 1987 - 1988.mp4",
-        r"L:\goodq4all\data\processing\sample.mp4",
+        r"L:\_DATA\GoodQ_Data\processing\sample.mp4",
         r"L:\_DATA\FAMILY_FEAST\01. 1987 - 1988.mp4",
     ]
     

@@ -37,7 +37,7 @@ def check_database(db_path):
 def check_output_directory():
     """Check what's in the output directory"""
     output_dir = Path("L:/goodq4all/output")
-    data_output = Path("L:/goodq4all/data/output")
+    data_output = Path("L:/_DATA/GoodQ_Data/output")
     
     print(f"\n{'='*60}")
     print("Output Directories")

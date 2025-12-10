@@ -44,11 +44,11 @@ def check_file_structure():
     print_header("1. FILE STRUCTURE VALIDATION")
     
     required_dirs = [
-        "L:/goodq4all/data",
-        "L:/goodq4all/data/databases",
-        "L:/goodq4all/data/faiss_indices",
-        "L:/goodq4all/data/processing",
-        "L:/goodq4all/data/output",
+        "L:/_DATA/GoodQ_Data",
+        "L:/_DATA/GoodQ_Data/databases",
+        "L:/_DATA/GoodQ_Data/faiss_indices",
+        "L:/_DATA/GoodQ_Data/processing",
+        "L:/_DATA/GoodQ_Data/output",
         "L:/goodq4all/logs",
         "L:/goodq4all/import_inbox",
         "L:/goodq4all/steps",
@@ -63,8 +63,8 @@ def check_file_structure():
     
     # Check critical files
     critical_files = [
-        "L:/goodq4all/data/memory.db",
-        "L:/goodq4all/data/knowledge_graph.db",
+        "L:/_DATA/GoodQ_Data/memory.db",
+        "L:/_DATA/GoodQ_Data/knowledge_graph.db",
         "L:/goodq4all/configs/paths.yaml",
     ]
     
@@ -82,7 +82,7 @@ def check_databases():
     
     # Check memory.db
     try:
-        conn = sqlite3.connect("L:/goodq4all/data/memory.db")
+        conn = sqlite3.connect("L:/_DATA/GoodQ_Data/memory.db")
         c = conn.cursor()
         
         # Check tables
@@ -114,7 +114,7 @@ def check_databases():
     
     # Check knowledge_graph.db
     try:
-        conn = sqlite3.connect("L:/goodq4all/data/knowledge_graph.db")
+        conn = sqlite3.connect("L:/_DATA/GoodQ_Data/knowledge_graph.db")
         c = conn.cursor()
         
         c.execute("SELECT COUNT(*) FROM nodes")
@@ -142,10 +142,10 @@ def check_faiss_indices():
     print_header("3. FAISS INDICES CHECK")
     
     indices = [
-        "L:/goodq4all/data/faiss_indices/text/faiss_text.index",
-        "L:/goodq4all/data/faiss_indices/audio/faiss_audio.index",
-        "L:/goodq4all/data/faiss_indices/clip/faiss_clip.index",
-        "L:/goodq4all/data/faiss_indices/dino/faiss_dino.index",
+        "L:/_DATA/GoodQ_Data/faiss_indices/text/faiss_text.index",
+        "L:/_DATA/GoodQ_Data/faiss_indices/audio/faiss_audio.index",
+        "L:/_DATA/GoodQ_Data/faiss_indices/clip/faiss_clip.index",
+        "L:/_DATA/GoodQ_Data/faiss_indices/dino/faiss_dino.index",
     ]
     
     for idx_path in indices:
@@ -253,7 +253,7 @@ def check_processing_state():
             print(f"  - {f.name}")
     
     # Check processing
-    processing = Path("L:/goodq4all/data/processing")
+    processing = Path("L:/_DATA/GoodQ_Data/processing")
     if processing.exists():
         files = list(processing.glob("*"))
         print_info(f"Currently processing: {len(files)} files")
@@ -261,7 +261,7 @@ def check_processing_state():
             print(f"  - {f.name}")
     
     # Check processed
-    processed = Path("L:/goodq4all/data/processed")
+    processed = Path("L:/_DATA/GoodQ_Data/processed")
     if processed.exists():
         files = list(processed.glob("*"))
         print_info(f"Processed: {len(files)} files")
@@ -272,7 +272,7 @@ def check_data_linkage():
     
     try:
         # Check if scenes have embeddings
-        conn = sqlite3.connect("L:/goodq4all/data/memory.db")
+        conn = sqlite3.connect("L:/_DATA/GoodQ_Data/memory.db")
         c = conn.cursor()
         
         c.execute("SELECT COUNT(*) FROM scenes")

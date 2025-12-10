@@ -22,7 +22,7 @@ print("  ✓ Done")
 # Check and clear database
 print("\n[2/5] Clearing database scenes...")
 try:
-    conn = sqlite3.connect('L:/goodq4all/data/memory.db')
+    conn = sqlite3.connect('L:/_DATA/GoodQ_Data/memory.db')
     c = conn.cursor()
     c.execute('DELETE FROM scenes')
     conn.commit()
@@ -34,7 +34,7 @@ except Exception as e:
 
 # Clear processing cache
 print("\n[3/5] Clearing processing cache...")
-processing_dir = Path("L:/goodq4all/data/processing")
+processing_dir = Path("L:/_DATA/GoodQ_Data/processing")
 if processing_dir.exists():
     for item in processing_dir.iterdir():
         try:

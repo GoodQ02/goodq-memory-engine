@@ -89,9 +89,9 @@ HEALTH_CACHE_TTL = 5  # seconds
 
 # Paths configuration
 PROGRESS_FILE = Path("L:/goodq4all/logs/progress.json")
-PROCESSING_DIR = Path("L:/goodq4all/data/processing")
+PROCESSING_DIR = Path("L:/_DATA/GoodQ_Data/processing")
 OUTPUT_DIR = Path("L:/goodq4all/output")
-CHROMA_DIR = Path("L:/goodq4all/data/chroma")
+CHROMA_DIR = Path("L:/_DATA/GoodQ_Data/chroma")
 UI_DIR = Path("L:/goodq4all/_UI")
 
 # ==============================================================================
@@ -693,7 +693,7 @@ if __name__ == "__main__":
     logger.info("=" * 80)
     logger.info(f"📡 Port: 30000")
     logger.info(f"🎨 UI Directory: {UI_DIR}")
-    logger.info(f"💾 Data Directory: L:/goodq4all/data")
+    logger.info(f"💾 Data Directory: L:/_DATA/GoodQ_Data")
     logger.info("=" * 80)
     
     uvicorn.run(

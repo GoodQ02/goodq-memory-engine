@@ -1,6 +1,6 @@
 import sqlite3
 
-db_path = 'L:/goodq4all/data/memory.db'
+db_path = 'L:/_DATA/GoodQ_Data/memory.db'
 conn = sqlite3.connect(db_path)
 c = conn.cursor()
 

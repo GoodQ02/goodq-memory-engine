@@ -495,22 +495,9 @@ class WatchdogProcessor:
             logger.error(f"Failed to copy video to temp dir: {e}")
             return False
         
-        # Use direct Python call (already running in correct environment)
-        import sys
-        python_exe = sys.executable
-        
-        # Set per-step timeout (600s = 10min per step, enough for diarization on 5min scenes)
-        step_timeout = 600
-        
-        cmd = [
-            python_exe, '-m', 'cli.run_ingestion',
-            '--input-dir', str(temp_input),
-            '--workspace', f'L:/goodq4all/logs/watchdog_{datetime.now().strftime("%Y%m%d_%H%M%S")}',
-            '--output', f'L:/goodq4all/logs/watchdog_{datetime.now().strftime("%Y%m%d_%H%M%S")}_results.json',
-            '--step-timeout', str(step_timeout),  # Add per-step timeout
-            '--force',  # Force reprocessing to ensure complete AI analysis
-            '--verbose'
-        ]
+        # Use direct Python function call (no subprocess, better output visibility)
+        from pipelines.direct_ingestion import run_direct_ingestion
+        from steps.common.config_loader import load_configs
         
         # Dynamic timeout based on file size (3 hours per GB, min 8 hours for thorough processing)
         file_size_gb = video_path.stat().st_size / (1024**3)
@@ -518,18 +505,19 @@ class WatchdogProcessor:
         logger.info(f"⏱️  Mission timeout: {timeout_seconds}s ({timeout_seconds/3600:.1f}h) for {file_size_gb:.2f}GB asset")
         logger.info(f"🎬 Asset: {video_path.name}")
         
-        logger.debug(f"Running: {' '.join(cmd)}")
-        
         try:
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                encoding='utf-8',
-                errors='replace',
-                timeout=timeout_seconds,
-                cwd='L:/goodq4all'
-            )
+            cfg = load_configs({})
+            result_dict = run_direct_ingestion(str(temp_video), cfg)
+            
+            # Simulate subprocess result for compatibility
+            class Result:
+                def __init__(self, success):
+                    self.returncode = 0 if success else 1
+                    self.stdout = ""
+                    self.stderr = ""
+            
+            success = result_dict.get('status') == 'success'
+            result = Result(success)
             
             if result.returncode == 0:
                 logger.info("✅ Mission complete: Video ingestion successful")

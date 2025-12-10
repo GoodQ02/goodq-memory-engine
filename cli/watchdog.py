@@ -488,9 +488,32 @@ class WatchdogProcessor:
             if temp_video.exists():
                 logger.debug(f"Temp video already exists, removing: {temp_video}")
                 temp_video.unlink()
-            logger.info(f"[SYMBOL] Copying asset to processing area: {video_path.name}")
-            shutil.copy2(video_path, temp_video)
-            logger.debug(f"[OK] Copy complete: {temp_video}")
+            
+            file_size_mb = video_path.stat().st_size / (1024**2)
+            logger.info(f"[COPY] Copying {file_size_mb:.1f}MB to processing area: {video_path.name}")
+            logger.info(f"[COPY] From: {video_path}")
+            logger.info(f"[COPY] To: {temp_video}")
+            
+            # For large files, copy with progress
+            if file_size_mb > 100:
+                import shutil
+                with open(video_path, 'rb') as fsrc:
+                    with open(temp_video, 'wb') as fdst:
+                        copied = 0
+                        chunk_size = 1024 * 1024 * 10  # 10MB chunks
+                        while True:
+                            chunk = fsrc.read(chunk_size)
+                            if not chunk:
+                                break
+                            fdst.write(chunk)
+                            copied += len(chunk)
+                            progress_pct = (copied / video_path.stat().st_size) * 100
+                            if copied % (chunk_size * 10) == 0:  # Log every 100MB
+                                logger.info(f"[COPY] Progress: {progress_pct:.1f}% ({copied/(1024**2):.1f}MB)")
+            else:
+                shutil.copy2(video_path, temp_video)
+            
+            logger.info(f"[OK] Copy complete: {temp_video}")
         except Exception as e:
             logger.error(f"Failed to copy video to temp dir: {e}")
             return False

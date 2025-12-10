@@ -236,9 +236,9 @@ def test_retrieval(cfg: Dict[str, Any]):
 
 def main():
     """Run all tests."""
-    print("\n" + "🟩"*40)
+    print("\n" + "="*80)
     print("GOODQ4ALL END-TO-END VALIDATION SUITE")
-    print("🟩"*40)
+    print("="*80)
     
     # Test 1: Config
     config_ok, cfg = test_config_loading()

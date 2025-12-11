@@ -217,21 +217,21 @@ Get-Content '$($latestLog.FullName)' -Wait -Tail 50 | ForEach-Object {
     }
 }
 
-function Start-WatchdogService {
-    Write-Host "  Starting file watchdog..." -ForegroundColor $Cyan
+function Start-IngestionService {
+    Write-Host "  Starting ingestion pipeline..." -ForegroundColor $Cyan
     
     if (!$DryRun) {
-        $watchdogCmd = "python -m cli.run_ingestion watch --inbox-path `"$script:InboxPath`""
+        $ingestCmd = "python -m cli.run_ingestion run --input-dir `"$script:InboxPath`" --verbose"
         
         Start-Process powershell -ArgumentList @(
             "-NoExit",
             "-Command",
-            "cd '$script:RootDir'; `$host.UI.RawUI.WindowTitle='GoodQ4All - Watchdog'; $watchdogCmd"
+            "cd '$script:RootDir'; `$host.UI.RawUI.WindowTitle='GoodQ4All - Ingestion Monitor'; $ingestCmd"
         )
         
-        Write-StatusLine "Watchdog" "Launched - monitoring $script:InboxPath" "SUCCESS"
+        Write-StatusLine "Ingestion" "Launched - processing from $script:InboxPath" "SUCCESS"
     } else {
-        Write-StatusLine "Watchdog" "Skipped (dry run)" "INFO"
+        Write-StatusLine "Ingestion" "Skipped (dry run)" "INFO"
     }
 }
 
@@ -285,7 +285,7 @@ function Main {
     Write-Header "LAUNCHING SERVICES"
     
     Start-LogMonitor
-    Start-WatchdogService
+    Start-IngestionService
     
     # SUMMARY
     Write-Header "GOODQ4ALL IS RUNNING"
@@ -294,9 +294,8 @@ function Main {
     Write-Host "  Inbox Path:    $script:InboxPath" -ForegroundColor $Cyan
     Write-Host "  Logs:          $script:LogDir" -ForegroundColor $Cyan
     Write-Host ""
-    Write-Host "  Drop video files into the inbox to begin processing" -ForegroundColor $Green
-    Write-Host ""
-    Write-Host "Press Ctrl+C in watchdog window to stop" -ForegroundColor $Gray
+    Write-Host "  The ingestion pipeline is now processing videos from the inbox" -ForegroundColor $Green
+    Write-Host "  Watch the 'Ingestion Monitor' window for live progress" -ForegroundColor $Green
     Write-Host ""
     
     if (!$DryRun) {

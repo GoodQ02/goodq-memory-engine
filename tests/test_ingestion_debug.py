@@ -1,65 +1,79 @@
-#!/usr/bin/env python3
 """
-Debug ingestion pipeline issues
+Debug ingestion test - First Memory Run
 """
-import subprocess
 import sys
-from pathlib import Path
+import os
 
-# Test with sample video
-sample_video = Path("L:/_DATA/GoodQ_Data/testing/test_input/sample.mp4")
-if not sample_video.exists():
-    print(f"Sample video not found: {sample_video}")
+print("="*80)
+print("GOODQ4ALL - FIRST MEMORY RUN - DEBUG TEST")
+print("="*80)
+
+print("\n[1/5] Checking Python environment...")
+print(f"Python version: {sys.version}")
+print(f"Python executable: {sys.executable}")
+print(f"Current directory: {os.getcwd()}")
+
+print("\n[2/5] Attempting imports...")
+try:
+    from goodq4all.pipelines.direct_ingestion import run_direct_ingestion
+    print("[[SYMBOL]] Imported run_direct_ingestion")
+except Exception as e:
+    print(f"[[SYMBOL]] Failed to import run_direct_ingestion: {e}")
     sys.exit(1)
-    
-print(f"[OK] Found sample video: {sample_video}")
-
-# Create temp directory
-temp_dir = Path("L:/_DATA/GoodQ_Data/processing/test_debug")
-temp_dir.mkdir(parents=True, exist_ok=True)
-
-# Copy sample to temp
-import shutil
-temp_video = temp_dir / "test.mp4"
-shutil.copy2(sample_video, temp_video)
-
-# Try running ingestion with verbose output
-cmd = [
-    sys.executable, '-m', 'cli.run_ingestion',
-    '--input-dir', str(temp_dir),
-    '--workspace', 'L:/goodq4all/logs/test_debug_run',
-    '--output', 'L:/goodq4all/logs/test_debug_run_results.json',
-    '--step-timeout', '600',
-    '--force',
-    '--verbose'
-]
-
-print("=" * 80)
-print("Running ingestion test...")
-print("=" * 80)
-print(f"Command: {' '.join(cmd)}")
-print("=" * 80)
 
 try:
-    result = subprocess.run(
-        cmd,
-        cwd='L:/goodq4all',
-        capture_output=False,  # Let output stream to console
-        text=True,
-        timeout=1800  # 30 min max
-    )
-    
-    print("=" * 80)
-    print(f"Exit code: {result.returncode}")
-    
-    if result.returncode == 0:
-        print("[SUCCESS]")
-    else:
-        print(f"[FAILED] with code {result.returncode}")
-        
-except subprocess.TimeoutExpired:
-    print("[TIMEOUT] after 30 minutes")
+    from goodq4all.steps.common.config_loader import load_configs
+    print("[[SYMBOL]] Imported load_configs")
 except Exception as e:
-    print(f"[ERROR] {e}")
+    print(f"[[SYMBOL]] Failed to import load_configs: {e}")
+    sys.exit(1)
+
+print("\n[3/5] Checking video file...")
+video_path = r"L:\goodq4all\import_inbox\01. 1987 - 1988.mp4"
+print(f"Target: {video_path}")
+
+if os.path.exists(video_path):
+    size_mb = os.path.getsize(video_path) / (1024*1024)
+    print(f"[[SYMBOL]] Video file exists ({size_mb:.2f} MB)")
+else:
+    print("[[SYMBOL]] Video file NOT FOUND")
+    sys.exit(1)
+
+print("\n[4/5] Loading configuration...")
+try:
+    cfg = load_configs({})
+    print(f"[[SYMBOL]] Configuration loaded")
+    print(f"    Config type: {type(cfg)}")
+    if hasattr(cfg, 'keys'):
+        print(f"    Config keys (sample): {list(cfg.keys())[:5]}")
+except Exception as e:
+    print(f"[[SYMBOL]] Failed to load config: {e}")
     import traceback
     traceback.print_exc()
+    sys.exit(1)
+
+print("\n[5/5] Running ingestion pipeline...")
+print("-"*80)
+try:
+    result = run_direct_ingestion(video_path, cfg)
+    print("-"*80)
+    print("\n" + "="*80)
+    print("[SYMBOL] INGESTION COMPLETED SUCCESSFULLY! [SYMBOL]")
+    print("="*80)
+    print(f"\nResult type: {type(result)}")
+    if isinstance(result, dict):
+        print(f"Result keys: {list(result.keys())}")
+        if 'video_id' in result:
+            print(f"Video ID: {result['video_id']}")
+        if 'processing_dir' in result:
+            print(f"Processing dir: {result['processing_dir']}")
+except Exception as e:
+    print("-"*80)
+    print("\n" + "="*80)
+    print("[SYMBOL] INGESTION FAILED [SYMBOL]")
+    print("="*80)
+    print(f"\nError: {e}")
+    print("\nFull traceback:")
+    import traceback
+    traceback.print_exc()
+    sys.exit(1)

@@ -61,7 +61,7 @@ PIPELINE_LOG = LOGS_DIR / "pipeline.log"
 # ==============================================================================
 # PROJECT DIRECTORIES (In GitHub repo)
 # ==============================================================================
-IMPORT_INBOX = PROJECT_ROOT / "import_inbox"
+IMPORT_INBOX = DATA_ROOT / "import_inbox"  # Fixed: moved to DATA_ROOT (was PROJECT_ROOT)
 CONFIGS_DIR = PROJECT_ROOT / "configs"
 SCRIPTS_DIR = PROJECT_ROOT / "scripts"
 PIPELINES_DIR = PROJECT_ROOT / "pipelines"

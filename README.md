@@ -4,7 +4,7 @@
 ### *Your Personal Multimodal Memory Engine*
 
 **System Status:** `✅ OPERATIONAL` | **Privacy Level:** `🔒 100% LOCAL`  
-**Last Major Update:** December 10, 2025 | **Latest:** Phase 6 Visual Embeddings + Full Pipeline Activation
+**Last Major Update:** December 11, 2025 | **Latest:** Qdrant Integration + Phase 6b Fix + Production Launcher
 
 [![Fully Operational](https://img.shields.io/badge/status-fully--operational-00C853?style=for-the-badge)]()
 [![Python 3.10](https://img.shields.io/badge/python-3.10-3776AB?style=for-the-badge&logo=python&logoColor=white)]()
@@ -108,17 +108,29 @@
 
 ## 🚀 Quick Start (Ready in 60 Seconds)
 
-### Option 1: Automatic Processing (Recommended)
+### Option 1: Production Launch (Recommended)
 
 ```batch
-# Double-click to start the watchdog
-LAUNCH_GOODQ_v2.bat
+# Double-click the production launcher
+LAUNCH_GOODQ.bat
+
+# Or run with PowerShell for full diagnostics
+.\LAUNCH_GOODQ.ps1
 ```
 
-**That's it!** Now just:
-1. Drop any media files into `import_inbox/`
-2. Walk away - GoodQ4All handles everything automatically
-3. Search your memories via API at `http://localhost:30000/docs`
+**What it does:**
+- ✅ Validates all dependencies & models
+- ✅ Checks API keys (OpenAI, HuggingFace, etc.)
+- ✅ Starts Qdrant vector database service
+- ✅ Launches file watchdog on `L:\_DATA\GoodQ_Data\import_inbox`
+- ✅ Runs comprehensive health checks with auto-healing
+- ✅ Opens live monitoring dashboard with progress bars
+- ✅ Self-diagnoses and fixes common issues
+
+**Then just:**
+1. Drop any media files into `L:\_DATA\GoodQ_Data\import_inbox\`
+2. Watch real-time processing in the monitoring window
+3. Query your memories via API at `http://localhost:30000/docs`
 
 **Supported Formats:**
 - 📹 Video: `.mp4`, `.avi`, `.mov`, `.mkv`, `.webm`, `.flv`
@@ -194,14 +206,22 @@ This will:
                        ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                  INTELLIGENCE STORAGE                        │
-│  💾 Knowledge Graph (SQLite) • 🔍 FAISS Vector Indices       │
+│  🗄️ Qdrant Vector DB (Multimodal) • 💾 Knowledge Graph      │
 │  📈 Temporal Index (JSON) • 🗃️ Scene Manifests              │
 │  🎯 Entity Relationships • ⏱️ Event Timelines               │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### Recent Breakthrough: Environment Consolidation (Dec 2025)
+### Recent Breakthrough: Qdrant Integration + Unified Architecture (Dec 2025)
 
+**Latest Updates (Dec 11, 2025):**
+- 🗄️ **Qdrant Vector Database** - Full multimodal vector search with metadata filtering
+- 🔧 **Phase 6b Fixed** - Temporal index now correctly generated for all ingestions
+- 🚀 **Production Launcher** - One-click startup with health checks and auto-healing
+- 📁 **Unified Data Root** - All processing now under `L:\_DATA\GoodQ_Data`
+- 🧹 **Legacy Cleanup** - FAISS deprecated, duplicate DBs archived, paths unified
+
+**Environment Consolidation (Dec 2025):**
 **Before:** 6 separate conda environments = slow init, GPU thrashing, 80GB+ disk  
 **After:** Unified `goodq_core` environment = instant startup, stable memory, 30GB savings
 

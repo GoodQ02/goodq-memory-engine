@@ -1299,7 +1299,9 @@ def run(
                     for s in scene_outputs
                 ]
             }
-            scene_manifest_path = video_workspace / 'scene_manifest.json'
+            # Phase 5 writes scene manifest into a canonical /video/ directory
+            scene_manifest_path = video_workspace / 'video' / 'scene_manifest.json'
+            scene_manifest_path.parent.mkdir(parents=True, exist_ok=True)
             scene_manifest_path.write_text(
                 json.dumps(scene_manifest, ensure_ascii=False, indent=2),
                 encoding='utf-8'
@@ -1318,24 +1320,33 @@ def run(
                 harmonization_result = _run_step('goodq_core', 'cross_modal_harmonization', phase6_item, cfg_json)
                 if isinstance(harmonization_result, dict):
                     phase6_item.update(harmonization_result)
-                    # Load temporal index from file if path provided
-                    temporal_index_path = harmonization_result.get('temporal_index_path')
-                    if temporal_index_path and os.path.exists(temporal_index_path):
-                        with open(temporal_index_path, 'r', encoding='utf-8') as f:
-                            video_result['temporal_index'] = json.load(f)
-                    video_result['temporal_index_path'] = temporal_index_path
-                    video_result['phase6_complete'] = True
-                    typer.echo('[PHASE 6b] [PASS] Harmonization complete')
                     
-                    # Write temporal index if provided
-                    temporal_index = harmonization_result.get('temporal_index')
-                    if temporal_index:
-                        temporal_index_path = video_workspace / 'temporal_index.json'
-                        temporal_index_path.write_text(
-                            json.dumps(temporal_index, ensure_ascii=False, indent=2),
-                            encoding='utf-8'
-                        )
-                        typer.echo(f'[PHASE 6] [PASS] Temporal index written: {temporal_index_path}')
+                    # Warn if harmonizer skipped
+                    if harmonization_result.get('harmonization_status') == 'skipped':
+                        reason = harmonization_result.get('reason', 'unknown')
+                        typer.echo(f"[PHASE 6b] [WARN] Harmonization skipped: {reason}", err=True)
+                        video_result['phase6_complete'] = False
+                        video_result['phase6_skipped'] = True
+                        video_result['phase6_skip_reason'] = reason
+                    else:
+                        # Load temporal index from file if path provided
+                        temporal_index_path = harmonization_result.get('temporal_index_path')
+                        if temporal_index_path and os.path.exists(temporal_index_path):
+                            with open(temporal_index_path, 'r', encoding='utf-8') as f:
+                                video_result['temporal_index'] = json.load(f)
+                        video_result['temporal_index_path'] = temporal_index_path
+                        video_result['phase6_complete'] = True
+                        typer.echo('[PHASE 6b] [PASS] Harmonization complete')
+                        
+                        # Write temporal index if provided
+                        temporal_index = harmonization_result.get('temporal_index')
+                        if temporal_index:
+                            temporal_index_path = video_workspace / 'temporal_index.json'
+                            temporal_index_path.write_text(
+                                json.dumps(temporal_index, ensure_ascii=False, indent=2),
+                                encoding='utf-8'
+                            )
+                            typer.echo(f'[PHASE 6] [PASS] Temporal index written: {temporal_index_path}')
                 
             except Exception as phase6_error:
                 typer.echo(f'[PHASE 6] [FAIL] Phase 6 failed: {phase6_error}', err=True)

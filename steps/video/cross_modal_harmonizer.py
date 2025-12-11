@@ -127,11 +127,20 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
     # === LOAD ALL DATA SOURCES ===
     
     # Load scene manifest (Phase 5 + Phase 6)
+    # Preferred canonical location
     scene_manifest_path = os.path.join(processing_dir, 'video', 'scene_manifest.json')
+    
+    # Fallback for older or mismatched pipelines
+    if not os.path.exists(scene_manifest_path):
+        alt_path = os.path.join(processing_dir, 'scene_manifest.json')
+        if os.path.exists(alt_path):
+            logger.warning(f"[HARMONIZER] Using fallback scene_manifest.json at: {alt_path}")
+            scene_manifest_path = alt_path
+    
     scene_data = load_json_safe(scene_manifest_path)
     
     if not scene_data:
-        logger.warning("No scene manifest found, skipping harmonization")
+        logger.warning(f"[HARMONIZER] No scene manifest found at {scene_manifest_path}, skipping harmonization")
         return {"harmonization_status": "skipped", "reason": "no_scene_manifest"}
     
     scenes = scene_data.get('scenes', [])

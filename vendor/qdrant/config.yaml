@@ -1,0 +1,30 @@
+storage:
+  # Where Qdrant stores its data
+  storage_path: L:/_DATA/qdrant_storage
+
+service:
+  # HTTP API
+  http_port: 6333
+  # gRPC API
+  grpc_port: 6334
+  # Bind to localhost only (security)
+  host: 127.0.0.1
+  # Enable CORS for local development
+  enable_cors: true
+
+# Performance tuning for your RTX 4070 Ti SUPER
+optimizer:
+  # Number of segments to keep in memory
+  memmap_threshold: 50000
+  # Indexing threshold
+  indexing_threshold: 20000
+  # Flush interval (seconds)
+  flush_interval_sec: 5
+
+# Resource limits
+storage:
+  # Use mmap for large datasets
+  on_disk_payload: true
+
+# Logging
+log_level: INFO

@@ -136,6 +136,7 @@ envs:
 # QDRANT VECTOR DATABASE
 # ============================================================================
 qdrant:
+  enabled: true
   host: http://localhost:6333
   collections:
     clip: goodq_clip

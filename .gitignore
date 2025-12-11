@@ -164,3 +164,8 @@ yarn.lock
 archive/deprecated_*/
 archive/**/raw/
 archive/**/legacy_data/
+
+# ===== QDRANT STORAGE =====
+# Don't commit Qdrant database files - regenerate on install
+vendor/qdrant/storage/
+vendor/qdrant/*.log

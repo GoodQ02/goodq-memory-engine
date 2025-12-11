@@ -75,12 +75,16 @@ def load_configs(overrides: Dict[str, Any] | None = None) -> Dict[str, Any]:
                     base[k] = v
         deep_merge(raw_cfg, overrides)
     
-    # Validate against Pydantic schema
+    # Validate against Pydantic schema (optional - graceful degradation)
     try:
         from config_schema import GoodQConfig
         validated = GoodQConfig.model_validate(raw_cfg)
         return validated.model_dump()
+    except ImportError:
+        # Schema validation not available - use raw config (expected for now)
+        logger.debug("Config schema not found, using unvalidated config")
+        pass
     except Exception as e:
-        print(f"[ERROR] Config validation failed: {str(e)}")
-        print("[WARN] Falling back to unvalidated config (not recommended)")
-        return raw_cfg
+        logger.warning(f"Config validation failed: {str(e)}")
+    
+    return raw_cfg

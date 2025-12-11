@@ -12,7 +12,7 @@ import hashlib
 import shutil
 import logging
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Set, Dict, List, Any
 from queue import Queue, Empty
 from threading import Thread, Event, Lock
@@ -234,7 +234,7 @@ class WatchdogProcessor:
         run_context: Dict[str, Any] = {
             'id': str(uuid.uuid4()),
             'pipeline': pipeline_name,
-            'started_at': datetime.utcnow().isoformat(),
+            'started_at': datetime.now(timezone.utc).isoformat(),
             'timer_unit': 'ms',
         }
 

@@ -9,7 +9,7 @@ import sys
 import tempfile
 import time
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 # Setup logger
@@ -920,7 +920,7 @@ def run(
     run_context = {
         'id': str(uuid.uuid4()),
         'pipeline': 'scene_ingest_cli',
-        'started_at': datetime.utcnow().isoformat(),
+        'started_at': datetime.now(timezone.utc).isoformat(),
         'timer_unit': 'ms',
     }
     try:

@@ -221,7 +221,7 @@ function Start-IngestionService {
     Write-Host "  Starting ingestion pipeline..." -ForegroundColor $Cyan
     
     if (!$DryRun) {
-        $ingestCmd = "python -m cli.run_ingestion run --input-dir `"$script:InboxPath`" --verbose"
+        $ingestCmd = "python -m cli.run_ingestion --input-dir `"$script:InboxPath`" --verbose"
         
         Start-Process powershell -ArgumentList @(
             "-NoExit",

@@ -42,7 +42,8 @@ class ControlAgent:
     def __init__(self, data_dir: Path = None):
         """Initialize the Control Agent"""
         self.root = Path(__file__).parent.parent
-        self.data_dir = data_dir or self.root / "data"
+        # Use canonical data root from config
+        self.data_dir = data_dir or Path("L:/_DATA/GoodQ_Data")
         
         # Initialize LLM client with fallback chain
         self.llm = LLMClient()

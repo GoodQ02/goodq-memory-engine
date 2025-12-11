@@ -20,7 +20,7 @@ class RecoveryStrategies:
     
     def __init__(self, db_path: Optional[Path] = None):
         if db_path is None:
-            db_path = Path(__file__).parent.parent / "data" / "control_memory.db"
+            db_path = Path("L:/_DATA/GoodQ_Data") / "control_memory.db"
         
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)

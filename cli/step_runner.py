@@ -65,7 +65,7 @@ def run_step(step_name: str, item: Dict[str, Any] | None, cfg: Dict[str, Any]) -
         return video_scene_detect(item, cfg)
 
     if step_name == "audio_transcribe":
-        from goodq4all.steps.audio_transcribe.step import audio_transcribe
+        from goodq4all.steps.audio_transcribe.step_wsl2 import audio_transcribe
         assert item is not None
         return audio_transcribe(item, cfg)
     if step_name == "image_ocr":
@@ -131,7 +131,7 @@ def run_step(step_name: str, item: Dict[str, Any] | None, cfg: Dict[str, Any]) -
         from goodq4all.steps.system_metrics.step import system_metrics
         return system_metrics(cfg)
     if step_name == "audio_diarize":
-        from goodq4all.steps.audio_diarize.step import audio_diarize
+        from goodq4all.steps.audio_diarize.step_wsl2 import audio_diarize
         assert item is not None
         return audio_diarize(item, cfg)
     if step_name == "audio_speaker_merge":

@@ -82,9 +82,9 @@ def load_configs(overrides: Dict[str, Any] | None = None) -> Dict[str, Any]:
         return validated.model_dump()
     except ImportError:
         # Schema validation not available - use raw config (expected for now)
-        logger.debug("Config schema not found, using unvalidated config")
         pass
     except Exception as e:
-        logger.warning(f"Config validation failed: {str(e)}")
+        print(f"[WARN] Config validation failed: {str(e)}")
+        print("[WARN] Falling back to unvalidated config (not recommended)")
     
     return raw_cfg

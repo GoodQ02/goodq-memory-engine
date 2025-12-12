@@ -4,7 +4,8 @@
 param(
     [switch]$DryRun,
     [switch]$SkipHealthCheck,
-    [switch]$Verbose
+    [switch]$Verbose,
+    [switch]$ForceReprocess
 )
 
 $ErrorActionPreference = "Stop"
@@ -221,7 +222,11 @@ function Start-IngestionService {
     Write-Host "  Starting ingestion pipeline..." -ForegroundColor $Cyan
     
     if (!$DryRun) {
+        # Build ingestion command with optional force flag
         $ingestCmd = "python -m cli.run_ingestion --input-dir `"$script:InboxPath`" --verbose"
+        if ($ForceReprocess) {
+            $ingestCmd += " --force"
+        }
         
         Start-Process powershell -ArgumentList @(
             "-NoExit",

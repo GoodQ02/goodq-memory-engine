@@ -13,10 +13,10 @@ import logging
 import sys
 from pathlib import Path
 
-# Add wsl2_audio to path
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / 'wsl2_audio'))
+# Add scripts to path for bridge import
+sys.path.insert(0, str(Path(__file__).parent.parent.parent / 'scripts'))
 
-from audio_bridge import WSL2AudioBridge
+from wsl2_audio_bridge import WSL2AudioBridge
 
 logger = logging.getLogger(__name__)
 
@@ -35,18 +35,15 @@ def audio_diarize_wsl2(audio_path: str, **kwargs) -> dict:
     logger.info(f"[WSL2] Running GPU-accelerated diarization: {audio_path}")
     
     bridge = WSL2AudioBridge()
-    
-    job_spec = {
-        'task': 'diarize',
-        'audio_path': str(audio_path),
-        'params': kwargs
-    }
-    
-    result = bridge.submit_job(job_spec)
+    result = bridge.process_audio(audio_path, timeout=kwargs.get('timeout', 600))
     
     if result.get('status') == 'success':
-        logger.info(f"[WSL2] Diarization complete - {len(result.get('speakers', []))} speakers found")
-        return result
+        logger.info(f"[WSL2] Diarization complete")
+        # Extract diarization data from result
+        return {
+            'speakers': result.get('speakers', []),
+            'speaker_segments': result.get('speaker_segments', [])
+        }
     else:
         error_msg = result.get('error', 'Unknown error')
         logger.error(f"[WSL2] Diarization failed: {error_msg}")
@@ -67,33 +64,30 @@ def audio_transcribe_wsl2(audio_path: str, **kwargs) -> dict:
     logger.info(f"[WSL2] Running GPU-accelerated transcription: {audio_path}")
     
     bridge = WSL2AudioBridge()
-    
-    job_spec = {
-        'task': 'transcribe',
-        'audio_path': str(audio_path),
-        'params': {
-            'model': kwargs.get('model', 'large-v3'),
-            'language': kwargs.get('language', 'en'),
-            **kwargs
-        }
-    }
-    
-    result = bridge.submit_job(job_spec)
+    result = bridge.process_audio(audio_path, timeout=kwargs.get('timeout', 3600))
     
     if result.get('status') == 'success':
-        transcript = result.get('transcript', '')
+        transcript = result.get('full_text', '')
         word_count = len(transcript.split())
         logger.info(f"[WSL2] Transcription complete - {word_count} words")
-        return result
+        return {
+            'transcript': transcript,
+            'full_text': transcript,
+            'segments': result.get('segments', []),
+            'words': result.get('words', [])
+        }
     else:
         error_msg = result.get('error', 'Unknown error')
         logger.error(f"[WSL2] Transcription failed: {error_msg}")
-        return {'error': error_msg, 'transcript': ''}
+        return {'error': error_msg, 'transcript': '', 'full_text': ''}
 
 
 def audio_emotion_wsl2(audio_path: str, **kwargs) -> dict:
     """
     GPU-accelerated emotion detection via WSL2
+    
+    Note: Emotion detection not yet implemented in WSL2 stack
+    Returns placeholder for now
     
     Args:
         audio_path: Path to audio file
@@ -102,26 +96,14 @@ def audio_emotion_wsl2(audio_path: str, **kwargs) -> dict:
     Returns:
         dict with emotion labels and confidence scores
     """
-    logger.info(f"[WSL2] Running GPU-accelerated emotion detection: {audio_path}")
+    logger.warning(f"[WSL2] Emotion detection not yet implemented - returning placeholder")
     
-    bridge = WSL2AudioBridge()
-    
-    job_spec = {
-        'task': 'emotion',
-        'audio_path': str(audio_path),
-        'params': kwargs
+    # TODO: Implement emotion detection in WSL2 stack
+    return {
+        'status': 'success',
+        'emotions': {},
+        'note': 'Emotion detection not yet implemented in WSL2 stack'
     }
-    
-    result = bridge.submit_job(job_spec)
-    
-    if result.get('status') == 'success':
-        emotions = result.get('emotions', {})
-        logger.info(f"[WSL2] Emotion detection complete - {len(emotions)} segments")
-        return result
-    else:
-        error_msg = result.get('error', 'Unknown error')
-        logger.error(f"[WSL2] Emotion detection failed: {error_msg}")
-        return {'error': error_msg, 'emotions': {}}
 
 
 # Provide backwards-compatible function names

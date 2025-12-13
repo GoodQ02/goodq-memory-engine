@@ -9,6 +9,16 @@ import os
 import json
 import logging
 from pathlib import Path
+import sys
+
+# Add lib to path for entity_extractor
+sys.path.insert(0, str(Path(__file__).parent.parent.parent / 'lib'))
+try:
+    from entity_extractor import extract_entities
+    ENTITY_EXTRACTION_AVAILABLE = True
+except ImportError:
+    ENTITY_EXTRACTION_AVAILABLE = False
+    logger.warning("Entity extractor not available")
 
 logger = logging.getLogger(__name__)
 
@@ -191,6 +201,21 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
         # Extract keywords from transcripts
         keywords = extract_keywords_from_transcript(scene_transcripts, top_k=5)
         
+        # Extract entities from all text sources
+        scene_entities = []
+        if ENTITY_EXTRACTION_AVAILABLE:
+            full_transcript = ' '.join(seg.get('text', '') for seg in scene_transcripts)
+            caption_text = scene.get('caption', '')
+            ocr_text = scene.get('ocr_text', '')
+            tags = scene.get('tags', [])
+            
+            scene_entities = extract_entities(
+                transcription=full_transcript,
+                caption=caption_text,
+                ocr_text=ocr_text,
+                tags=tags
+            )
+        
         # Get speaker IDs (from diarization)
         speaker_ids = []
         for speaker in speakers:
@@ -218,6 +243,7 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
             
             # Semantic content
             'keywords': keywords,
+            'entities': scene_entities,  # NEW: Extracted entities
             'transcript_segments': [seg.get('text', '') for seg in scene_transcripts],
             'full_transcript': ' '.join(seg.get('text', '') for seg in scene_transcripts),
             
@@ -238,6 +264,20 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
     
     # === CREATE TEMPORAL INDEX ===
     
+    # Aggregate all entities across segments
+    all_entities = []
+    entity_counts = {}
+    for seg in unified_segments:
+        for entity in seg.get('entities', []):
+            all_entities.append(entity)
+            entity_text = entity.get('text', '').lower()
+            entity_type = entity.get('type', 'UNKNOWN')
+            key = f"{entity_text}:{entity_type}"
+            entity_counts[key] = entity_counts.get(key, 0) + 1
+    
+    # Get top entities
+    top_entities = sorted(entity_counts.items(), key=lambda x: x[1], reverse=True)[:20]
+    
     temporal_index = {
         'version': 1,
         'video_id': video_id,
@@ -247,6 +287,14 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
         
         # Multimodal segments
         'segments': unified_segments,
+        
+        # Extracted entities
+        'total_entities': len(all_entities),
+        'unique_entities': len(entity_counts),
+        'top_entities': [
+            {'entity': k.split(':')[0], 'type': k.split(':')[1], 'count': v}
+            for k, v in top_entities
+        ],
         
         # Global metadata
         'has_visual_embeddings': any(s.get('has_visual_embeddings') for s in unified_segments),

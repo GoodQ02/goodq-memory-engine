@@ -33,14 +33,15 @@ class WSL2AudioBridge:
             return f"{drive}:\\{rest.replace('/', '\\')}"
         return wsl_path
         
-    def process_audio(self, audio_file, output_file=None, timeout=600):
+    def process_audio(self, audio_file, output_file=None, timeout=None, audio_duration=None):
         """
         Process audio file using WSL2
         
         Args:
             audio_file: Path to audio file on Windows
             output_file: Optional output path (auto-generated if None)
-            timeout: Processing timeout in seconds
+            timeout: Processing timeout in seconds (auto-calculated if None)
+            audio_duration: Audio duration in seconds (for timeout calculation)
             
         Returns:
             dict: Processing results with transcription segments
@@ -49,11 +50,23 @@ class WSL2AudioBridge:
         if not audio_path.exists():
             raise FileNotFoundError(f"Audio file not found: {audio_file}")
             
+        # Calculate dynamic timeout based on audio duration
+        # Formula: base_overhead + (duration * processing_factor)
+        if timeout is None:
+            if audio_duration:
+                # 60s base + 2x duration (conservative for full pipeline)
+                timeout = max(120, int(60 + (audio_duration * 2)))
+            else:
+                timeout = 600  # Default 10min fallback
+            
         # Convert to WSL path
         wsl_input = self.wsl_path(audio_path)
         
-        # Build command - use the process.sh wrapper (handles cuDNN paths)
-        cmd = f"{self.workspace}/scripts/process.sh '{wsl_input}'"
+        # Output directory for results
+        wsl_output = f"{self.workspace}/output"
+        
+        # Build command - use CUDA environment setup (includes venv + cuDNN paths)
+        cmd = f"source {self.workspace}/setup_cuda_env.sh && python3 {self.workspace}/scripts/process_audio.py '{wsl_input}' '{wsl_output}'"
         
         print(f"Processing: {audio_path.name}")
         
@@ -67,9 +80,12 @@ class WSL2AudioBridge:
             )
             
             if result.returncode != 0:
-                raise RuntimeError(f"Processing failed: {result.stderr}")
+                raise RuntimeError(f"Processing failed:\nSTDOUT: {result.stdout}\nSTDERR: {result.stderr}")
                 
             # Parse JSON output from process.py
+            if not result.stdout.strip():
+                raise RuntimeError(f"No output from script.\nSTDERR: {result.stderr}")
+                
             output = json.loads(result.stdout)
             
             if output.get("status") != "success":
@@ -84,18 +100,18 @@ class WSL2AudioBridge:
             
     def check_status(self):
         """Check if WSL2 audio is ready"""
-        test_cmd = f"test -x {self.workspace}/scripts/process.sh && {self.workspace}/venv/bin/python3 -c 'import torch; print(torch.cuda.is_available())' 2>&1"
+        test_cmd = f"source {self.workspace}/setup_cuda_env.sh && python3 -c 'import torch; print(torch.cuda.is_available())' 2>&1"
         result = subprocess.run(
             ["wsl", "-d", "Ubuntu", "--", "bash", "-c", test_cmd],
             capture_output=True,
             text=True
         )
-        # Check if process.sh exists and CUDA is available
+        # Check if CUDA environment works
         return result.returncode == 0 and "True" in result.stdout
         
     def get_info(self):
         """Get WSL2 audio system info"""
-        info_cmd = f"{self.workspace}/venv/bin/python3 -c \"import torch; print(f'Device: {{\\\"cuda\\\" if torch.cuda.is_available() else \\\"cpu\\\"}}'); import sys; sys.stdout.flush(); print(f'GPU: {{torch.cuda.get_device_name(0)}}') if torch.cuda.is_available() else None; print(f'VRAM: {{torch.cuda.get_device_properties(0).total_memory / 1e9:.1f}}GB') if torch.cuda.is_available() else None\" 2>&1"
+        info_cmd = f"source {self.workspace}/setup_cuda_env.sh && python3 -c \"import torch; print(f'Device: {{\\\"cuda\\\" if torch.cuda.is_available() else \\\"cpu\\\"}}'); import sys; sys.stdout.flush(); print(f'GPU: {{torch.cuda.get_device_name(0)}}') if torch.cuda.is_available() else None; print(f'VRAM: {{torch.cuda.get_device_properties(0).total_memory / 1e9:.1f}}GB') if torch.cuda.is_available() else None\" 2>&1"
         
         result = subprocess.run(
             ["wsl", "-d", "Ubuntu", "--", "bash", "-c", info_cmd],

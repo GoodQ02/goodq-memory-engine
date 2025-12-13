@@ -5,8 +5,9 @@ set -euo pipefail
 AUDIO_FILE="$1"
 OUTPUT_DIR="$2"
 
-# Activate venv
-source ~/goodq_audio/venv/bin/activate
+# Activate CUDA environment (includes venv + cuDNN library paths)
+# Redirect setup messages to /dev/null to keep stdout clean for JSON
+source ~/goodq_audio/setup_cuda_env.sh >/dev/null 2>&1
 
 # Run full audio classification pipeline
 python3 << 'PYTHON_EOF'

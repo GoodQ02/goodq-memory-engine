@@ -834,28 +834,31 @@ def _process_audio(
 
     merge('goodq_audio_metadata', 'audio_metadata')
     
-    # WSL2 GPU-accelerated audio processing
-    from steps.audio.audio_wsl2_bridge import audio_diarize_wsl2, audio_transcribe_wsl2, audio_emotion_wsl2
-    
-    # Diarization
-    diarize_result = audio_diarize_wsl2(str(audio_path), scene_id=scene_id)
-    if isinstance(diarize_result, dict):
-        item.update(diarize_result)
-    
-    # Transcription
-    transcribe_result = audio_transcribe_wsl2(str(audio_path), scene_id=scene_id)
-    if isinstance(transcribe_result, dict):
-        item.update(transcribe_result)
-    
-    # Legacy steps for speaker merge and timing (keep these for now)
-    merge('goodq_audio_transcribe', 'audio_speaker_merge')
-    merge('goodq_audio_transcribe', 'audio_music_events')
-    merge('goodq_audio_transcribe', 'audio_time_hints')
-    
-    # Emotion detection
-    emotion_result = audio_emotion_wsl2(str(audio_path), scene_id=scene_id)
-    if isinstance(emotion_result, dict):
-        item.update(emotion_result)
+    # WSL2 GPU-accelerated audio processing (only if audio exists)
+    if audio_path and audio_path.exists():
+        from steps.audio.audio_wsl2_bridge import audio_diarize_wsl2, audio_transcribe_wsl2, audio_emotion_wsl2
+        
+        # Diarization
+        diarize_result = audio_diarize_wsl2(str(audio_path), scene_id=scene_id)
+        if isinstance(diarize_result, dict):
+            item.update(diarize_result)
+        
+        # Transcription
+        transcribe_result = audio_transcribe_wsl2(str(audio_path), scene_id=scene_id)
+        if isinstance(transcribe_result, dict):
+            item.update(transcribe_result)
+        
+        # Legacy steps for speaker merge and timing (keep these for now)
+        merge('goodq_audio_transcribe', 'audio_speaker_merge')
+        merge('goodq_audio_transcribe', 'audio_music_events')
+        merge('goodq_audio_transcribe', 'audio_time_hints')
+        
+        # Emotion detection
+        emotion_result = audio_emotion_wsl2(str(audio_path), scene_id=scene_id)
+        if isinstance(emotion_result, dict):
+            item.update(emotion_result)
+    else:
+        logger.info(f"[AUDIO] No audio stream in scene {scene_id}, skipping audio processing")
 
     transcript = item.get('transcript') if isinstance(item.get('transcript'), str) else ''
     if transcript:

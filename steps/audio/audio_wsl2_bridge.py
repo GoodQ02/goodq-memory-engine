@@ -35,7 +35,12 @@ def audio_diarize_wsl2(audio_path: str, **kwargs) -> dict:
     logger.info(f"[WSL2] Running GPU-accelerated diarization: {audio_path}")
     
     bridge = WSL2AudioBridge()
-    result = bridge.process_audio(audio_path, timeout=kwargs.get('timeout', 600))
+    
+    # Get audio duration for dynamic timeout if available
+    audio_duration = kwargs.get('duration', None)
+    timeout = kwargs.get('timeout', None)
+    
+    result = bridge.process_audio(audio_path, timeout=timeout, audio_duration=audio_duration)
     
     if result.get('status') == 'success':
         logger.info(f"[WSL2] Diarization complete")

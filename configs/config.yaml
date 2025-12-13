@@ -220,8 +220,9 @@ segmentation:
   # Phase 5: Video Scene Detection
   phase5:
     enabled: true
-    scene_threshold: 30.0
-    min_scene_len_sec: 2.0
+    scene_threshold: 27.0  # Lower = more sensitive to changes = shorter scenes
+    min_scene_len_sec: 30.0  # Minimum 30s scenes for meaningful audio analysis
+    max_scene_len_sec: 300.0  # Maximum 5min scenes - force split longer scenes
     use_gpu: true
     batch_size: 32
     alignment_tolerance: 0.5
@@ -232,7 +233,8 @@ segmentation:
 video:
   scene_detect:
     threshold: 30.0
-    min_scene_len_sec: 300.0
+    min_scene_len_sec: 30.0  # Optimized for GPU processing
+    max_scene_len_sec: 300.0  # Force split scenes > 5min
     max_scenes: 0
     entity_refine: false
     entity_sample_rate: 0.5

@@ -344,7 +344,12 @@ L:\goodq4all\                   # Project root
 │   ├── queue_in\
 │   ├── queue_out\
 │   └── output\
-├── vendor\qdrant\              # ✅ Qdrant binary
+├── vendor\                     # ✅ Vendored dependencies for bootstrap
+│   ├── qdrant\                 # Qdrant Windows service binary
+│   ├── huggingface_hub\        # Offline model downloads
+│   ├── requests\               # HTTP client
+│   ├── pyyaml\                 # Config parsing
+│   └── ...                     # Supporting libs (tqdm, certifi, etc.)
 ├── api\                        # ⊘ FastAPI (scaffolded, not deployed)
 ├── ui\                         # ⊘ Web UI (frontend exists)
 └── retrieval\                  # ⊘ Multimodal search (built, not wired)

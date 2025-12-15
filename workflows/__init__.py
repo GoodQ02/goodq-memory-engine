@@ -1,1 +1,0 @@
-"""GoodQ Agent System"""

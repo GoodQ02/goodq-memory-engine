@@ -284,7 +284,7 @@ L:\_DATA\GoodQ_Data\              # ✅ Unified data root
 ├── knowledge_graph.db            # Entity relationships
 └── qdrant\                       # Vector storage (port 36335)
 
-logs\scene_ingest\                # ✅ Scene artifacts
+logs\scene_ingest\                # ✅ Scene artifacts (actual location)
 └── <video_name>\
     ├── audio\                    # scene_0000.wav to scene_0029.wav
     └── video\                    # scene_0000.jpg to scene_0029.jpg
@@ -296,6 +296,8 @@ logs\scene_ingest\                # ✅ Scene artifacts
 ├── queue_out\                    # Service output
 └── output\                       # result.json (38KB verified)
 ```
+
+> ℹ️ **Note:** There is a known config/runtime inconsistency where `config.yaml` specifies `processing: L:\_DATA\GoodQ_Data\processing\` but artifacts actually land in `logs\scene_ingest\`. This is non-breaking and fully documented. See [`docs/technical/ARTIFACT_LOCATION_CONTRACT.md`](../technical/ARTIFACT_LOCATION_CONTRACT.md) for details.
 
 ### Database Details
 

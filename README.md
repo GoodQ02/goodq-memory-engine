@@ -278,7 +278,7 @@ This will:
 | **Scene bundles** | Stored in `memory.db` via `register_scene_bundle()` | Code evidence |
 | **Qdrant vectors** | `http://localhost:36335` (collections: goodq_text, goodq_image, goodq_audio) | config.yaml |
 
-⚠️ **Note:** Config specifies `processing: L:/_DATA/GoodQ_Data/processing` but actual artifacts land in `logs/scene_ingest/`. This is documented drift, not a bug. Both locations serve different purposes.
+⚠️ **Note:** Config specifies `processing: L:/_DATA/GoodQ_Data/processing` but actual artifacts land in `logs/scene_ingest/`. This is a known, non-breaking inconsistency documented in [`docs/technical/ARTIFACT_LOCATION_CONTRACT.md`](docs/technical/ARTIFACT_LOCATION_CONTRACT.md).
 
 ### The Complete Intelligence Stack
 

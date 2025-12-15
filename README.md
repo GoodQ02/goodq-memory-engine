@@ -17,7 +17,7 @@
 
 ## 🚀 What is GoodQ4All?
 
-> *"Your memories are precious. They should be searchable, private, and永存."*
+> *"Your memories are precious. They should be searchable, private, and永存 (eternal)."*
 
 **GoodQ4All** transforms your entire media library—videos, photos, audio, documents—into an intelligent, searchable memory system that runs **100% locally on your hardware**. No cloud. No subscriptions. No surveillance.
 

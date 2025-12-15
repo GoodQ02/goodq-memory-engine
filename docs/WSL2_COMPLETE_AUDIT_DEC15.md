@@ -159,13 +159,13 @@ C:\Users\jdben\AppData\Local\Programs\Ollama\
 L:\goodq4all\vendor\qdrant\
 ├── qdrant.exe (62.26 MB) ✅ TRACKED IN REPO
 ├── config/
-│   └── config.yaml (port 36335, data path)
+│   └── config.yaml (port 6333, data path)
 └── storage/ (vector data) ❌ EXCLUDED via .gitignore
 ```
 
 **Architecture:**
 - **Service:** Windows service (manual start)
-- **Port:** 36335 (localhost only)
+- **Port:** 6333 (localhost only)
 - **Collections:** 3 collections (text_384, image_clip_512_dino_768, audio_512)
 - **Purpose:** Vector similarity search, replaces FAISS
 - **Storage:** `L:\_DATA\GoodQ_Data\qdrant_storage\`

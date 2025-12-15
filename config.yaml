@@ -120,7 +120,7 @@ devices:
   hdd2: Seagate Game Drive 18TB HDD
 qdrant:
   enabled: true
-  host: http://localhost:36335
+  host: http://localhost:6333
   collections:
     text: goodq_text
     image: goodq_image

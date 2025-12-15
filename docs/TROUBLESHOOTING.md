@@ -29,11 +29,11 @@ python scripts/system_readiness_check.py
 python scripts/cache_readiness_check.py
 
 # Verify Qdrant is running
-Invoke-WebRequest http://localhost:36335/health
+Invoke-WebRequest http://localhost:6333/health
 ```
 
 **Common Causes:**
-- Qdrant service not started (Port 36335)
+- Qdrant service not started (Port 6333)
 - Missing conda environment (`goodq_core`)
 - Missing HuggingFace token for WSL2 audio
 
@@ -90,7 +90,7 @@ nano config.json
 **Error:**
 ```
 [ERROR] Failed to connect to Qdrant
-Connection refused (port 36335)
+Connection refused (port 6333)
 ```
 
 **Fix:**
@@ -109,10 +109,10 @@ cd L:\goodq4all\vendor\qdrant
 **Verify Collections:**
 ```powershell
 # Test connection
-Invoke-WebRequest http://localhost:36335/health
+Invoke-WebRequest http://localhost:6333/health
 
 # Check collections exist
-Invoke-WebRequest http://localhost:36335/collections
+Invoke-WebRequest http://localhost:6333/collections
 ```
 
 **Initialize if needed:**
@@ -263,7 +263,7 @@ python scripts/cache_readiness_check.py
 
 # Verify all services
 # 1. Qdrant
-Invoke-WebRequest http://localhost:36335/health
+Invoke-WebRequest http://localhost:6333/health
 
 # 2. WSL2 Audio Service
 wsl ps aux | grep audio_service
@@ -279,7 +279,7 @@ nvidia-smi
 ```powershell
 # Check Qdrant
 Get-Process qdrant -ErrorAction SilentlyContinue
-Invoke-WebRequest http://localhost:36335/collections
+Invoke-WebRequest http://localhost:6333/collections
 
 # Check WSL2 Audio
 wsl pgrep -f audio_service
@@ -315,7 +315,7 @@ Get-Item "L:\_DATA\GoodQ_Data\memory.db" | Select-Object Name, Length, LastWrite
 Get-Item "L:\_DATA\GoodQ_Data\knowledge_graph.db" | Select-Object Name, Length, LastWriteTime
 
 # Qdrant collections
-Invoke-WebRequest http://localhost:36335/collections | ConvertFrom-Json
+Invoke-WebRequest http://localhost:6333/collections | ConvertFrom-Json
 ```
 
 ### Check Scene Artifacts
@@ -641,8 +641,8 @@ For comprehensive troubleshooting of specific components:
 **Common Qdrant Issues:**
 - Connection refused → Start service with `START_QDRANT.bat`
 - Collections missing → Run `INIT_QDRANT.bat`
-- Slow queries → Check collection size with `http://localhost:36335/collections`
-- Port conflict → Qdrant uses 36335 (not 6333)
+- Slow queries → Check collection size with `http://localhost:6333/collections`
+- Port conflict → Qdrant uses standard port 6333
 
 ### GPU Configuration
 - **[GPU_SETUP.md](guides/gpu/GPU_SETUP.md)** - GPU configuration for Windows
@@ -683,7 +683,7 @@ python scripts/system_readiness_check.py
 python scripts/cache_readiness_check.py
 
 # Check services
-Invoke-WebRequest http://localhost:36335/health  # Qdrant
+Invoke-WebRequest http://localhost:6333/health  # Qdrant
 wsl ps aux | grep audio_service                   # WSL2 Audio
 nvidia-smi                                         # GPU Status
 `
@@ -731,14 +731,14 @@ Before reporting issues, verify:
   - [ ] 100GB+ free disk space
 
 - [ ] **Services Running**
-  - [ ] Qdrant on port 36335 (`Invoke-WebRequest http://localhost:36335/health`)
+  - [ ] Qdrant on port 6333 (`Invoke-WebRequest http://localhost:6333/health`)
   - [ ] WSL2 audio service (`wsl ps aux | grep audio_service`)
   - [ ] GPU accessible (`nvidia-smi` shows CUDA 12.1/12.8)
 
 - [ ] **Environment Configured**
   - [ ] goodq_core conda environment exists (`conda env list | grep goodq_core`)
   - [ ] HuggingFace token configured in WSL2 (`wsl cat ~/.config/config.json`)
-  - [ ] Qdrant collections initialized (`Invoke-WebRequest http://localhost:36335/collections`)
+  - [ ] Qdrant collections initialized (`Invoke-WebRequest http://localhost:6333/collections`)
 
 - [ ] **Data Paths Exist**
   - [ ] `L:\_DATA\GoodQ_Data\` directory exists

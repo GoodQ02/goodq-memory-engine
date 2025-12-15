@@ -145,7 +145,7 @@ Phase 6 represents the final major subsystem required to complete GoodQ4All's mu
 #### ✅ **Qdrant Integration**
 - **Location:** `goodq4all/steps/common/qdrant_client.py`
 - **Config:** `config.yaml` lines 121-142
-- **Host:** `http://localhost:36335`
+- **Host:** `http://localhost:6333`
 - **Collections:**
   - `goodq_text` (384-dim)
   - `goodq_image` (512-dim)

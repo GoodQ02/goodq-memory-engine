@@ -69,7 +69,7 @@
 ### Consistency
 - All dates: Dec 14-15, 2025
 - All paths: L:\_DATA\GoodQ_Data\, logs\scene_ingest\
-- All ports: Qdrant 36335 (not 8000, 6333)
+- All ports: Qdrant 6333 (not 8000, 6333)
 - All environments: Unified goodq_core
 - All status symbols: ✅ ⊘ ⚠️ consistent
 
@@ -108,7 +108,7 @@
 
 - [x] All dates current (Dec 14-15, 2025)
 - [x] All paths verified (L:\_DATA\GoodQ_Data\)
-- [x] All ports correct (36335 not 8000)
+- [x] All ports correct (6333 not 8000)
 - [x] All services documented (Qdrant, WSL2, GPU)
 - [x] All metrics from Dec 14 test
 - [x] All commands working

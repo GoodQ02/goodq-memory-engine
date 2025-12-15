@@ -88,14 +88,14 @@
 
 ### Step 4: Configuration (1 min) ✅ Current
 - ✅ **[config.yaml](../config.yaml)** - Primary runtime configuration
-  - Qdrant: port 36335, 3 collections (text, image, audio)
+  - Qdrant: port 6333, 3 collections (text, image, audio)
   - WSL2 audio: dual architecture (queue + direct)
   - GPU: RTX 4070 Ti SUPER 16GB, CUDA 12.8
   - Paths: `L:\_DATA\GoodQ_Data\` for data, `logs/scene_ingest/` for artifacts
 
 ### Step 5: Subsystem Deep Dives (as needed)
 - ✅ **WSL2 Audio:** [START_HERE_WSL2.md](guides/wsl2/START_HERE_WSL2.md) - Dual architecture, PID 177 service
-- ✅ **Qdrant:** [QDRANT_SETUP.md](guides/QDRANT_SETUP.md) - Port 36335, 3 collections
+- ✅ **Qdrant:** [QDRANT_SETUP.md](guides/QDRANT_SETUP.md) - Port 6333, 3 collections
 - ✅ **GPU:** [GPU_LLM_WSL_INDEX.md](guides/gpu/GPU_LLM_WSL_INDEX.md) - 85% util normal, CUDA 12.8
 - ✅ **Troubleshooting:** [TROUBLESHOOTING.md](TROUBLESHOOTING.md) - 7 issues, 25+ diagnostic commands
 
@@ -107,7 +107,7 @@
   ```
 - ✅ Verify services:
   ```powershell
-  Invoke-WebRequest http://localhost:36335/health  # Qdrant
+  Invoke-WebRequest http://localhost:6333/health  # Qdrant
   wsl ps aux | grep audio_service                   # WSL2 (PID 177)
   nvidia-smi                                         # GPU (85% util)
   ```
@@ -163,7 +163,7 @@ L:\goodq4all\
 │   ├── process_audio.py    - Direct invocation
 │   ├── queue_in/           - Service input
 │   └── queue_out/          - Service output
-├── vendor/qdrant/   - ✅ Qdrant binary (port 36335)
+├── vendor/qdrant/   - ✅ Qdrant binary (port 6333)
 ├── configs/         - Configuration
 │   └── config.yaml         - PRIMARY CONFIG
 ├── L:\_DATA\GoodQ_Data/  - ✅ Unified data root
@@ -192,7 +192,7 @@ L:\goodq4all\
 
 # Services should show:
 # - System health check passed
-# - Qdrant service started on port 36335
+# - Qdrant service started on port 6333
 # - Watchdog monitoring: L:\_DATA\GoodQ_Data\import_inbox
 ```
 
@@ -215,7 +215,7 @@ python scripts\system_readiness_check.py
 python scripts\cache_readiness_check.py
 
 # Verify services
-Invoke-WebRequest http://localhost:36335/health  # Qdrant
+Invoke-WebRequest http://localhost:6333/health  # Qdrant
 wsl ps aux | grep audio_service                   # WSL2 (should show PID 177)
 nvidia-smi                                         # GPU (85% util normal)
 ```
@@ -238,7 +238,7 @@ wsl tail -f ~/goodq_audio/logs/audio_service.log  # WSL2 audio logs
 1. Check [TROUBLESHOOTING.md](TROUBLESHOOTING.md) - Covers 7 common issues with fixes
 2. Review [README: System Status](../README.md#-system-status-whats-live-vs-whats-next) - What's operational
 3. Check artifacts: `Get-ChildItem "logs\scene_ingest\" -Directory`
-4. Verify services: Qdrant (36335), WSL2 audio (PID 177), GPU (nvidia-smi)
+4. Verify services: Qdrant (6333), WSL2 audio (PID 177), GPU (nvidia-smi)
 5. Review logs: `wsl tail -f ~/goodq_audio/logs/audio_service.log`
 
 **Docs:** [TROUBLESHOOTING.md](TROUBLESHOOTING.md) ✅ Dec 14, [QUICK_START.md](QUICK_START.md) ✅ Dec 14
@@ -285,20 +285,20 @@ scene_info = kg.get_scene_context('scene_0042')
 
 ### Working with Qdrant ✅ New
 **Vector Database:**
-- **Port:** 36335 (not 6333)
+- **Port:** 6333 (standard Qdrant port)
 - **Collections:** goodq_text, goodq_image, goodq_audio
 - **Status:** ✅ OPERATIONAL (Dec 14 verified)
 
 **Testing:**
 ```powershell
 # Health check
-Invoke-WebRequest http://localhost:36335/health
+Invoke-WebRequest http://localhost:6333/health
 
 # List collections
-Invoke-WebRequest http://localhost:36335/collections
+Invoke-WebRequest http://localhost:6333/collections
 
 # View collection details
-Invoke-WebRequest http://localhost:36335/collections/goodq_text
+Invoke-WebRequest http://localhost:6333/collections/goodq_text
 ```
 
 **Docs:** [QDRANT_SETUP.md](guides/QDRANT_SETUP.md) ✅, [QDRANT_QUICKREF.md](QDRANT_QUICKREF.md) ✅
@@ -353,7 +353,7 @@ These files organize other documentation:
 ### Triple Database Architecture ✅ Updated
 1. **memory.db** - Scene bundles, metadata (`L:\_DATA\GoodQ_Data\memory.db`)
 2. **knowledge_graph.db** - Entity relationships (`L:\_DATA\GoodQ_Data\knowledge_graph.db`)
-3. **Qdrant** - Vector storage (port 36335, 3 collections: text, image, audio)
+3. **Qdrant** - Vector storage (port 6333, 3 collections: text, image, audio)
 
 **Deprecated:** FAISS indices (replaced by Qdrant), unified_goodq.db (consolidated into memory.db)
 
@@ -499,7 +499,7 @@ You now have complete navigation of the entire project:
 - ✅ Removed outdated Nov 28 failure references
 - ✅ Updated paths: L:\_DATA\GoodQ_Data\ (unified data root)
 - ✅ Updated architecture: Scene-first, unified goodq_core environment
-- ✅ Updated services: Qdrant port 36335, WSL2 audio PID 177, GPU 85% util
+- ✅ Updated services: Qdrant port 6333, WSL2 audio PID 177, GPU 85% util
 - ✅ Added status symbols: ✅ (operational), ⊘ (latent), ⚠️ (needs update)
 - ✅ Linked to updated docs: README.md, QUICK_START.md, TROUBLESHOOTING.md
 - ✅ Deprecated references: ZenML, FAISS as primary, 6 separate envs, port 8000

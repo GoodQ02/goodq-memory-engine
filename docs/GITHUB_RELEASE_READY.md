@@ -75,7 +75,7 @@
 
 **Verified Accurate:**
 - ✅ Paths: L:\_DATA\GoodQ_Data\, logs/scene_ingest/
-- ✅ Ports: Qdrant 36335
+- ✅ Ports: Qdrant 6333
 - ✅ Environment: Unified goodq_core
 - ✅ Services: WSL2 PID 177, GPU 85% util
 - ✅ Metrics: 30 scenes, 52 segments, 2 speakers

@@ -76,7 +76,7 @@
 **After:** Current paths with status table:
 - `L:\_DATA\GoodQ_Data\import_inbox\` ✅ Active
 - `logs\scene_ingest\<video>\` ✅ Verified
-- Qdrant port 36335 ✅ Operational
+- Qdrant port 6333 ✅ Operational
 - WSL2 output path ✅ Confirmed
 
 #### 4. Troubleshooting (ENHANCED)
@@ -159,7 +159,7 @@
 
 ### Accuracy
 - All paths verified: `L:\_DATA\GoodQ_Data\`, `logs\scene_ingest\`
-- All ports verified: Qdrant 36335, no references to 8000
+- All ports verified: Qdrant 6333, no references to 8000
 - All services verified: WSL2 PID 177, GPU 85% util
 - All commands tested: PowerShell diagnostics work
 
@@ -285,7 +285,7 @@
 ### Documentation Accuracy
 - [x] All dates updated to Dec 14-15, 2025
 - [x] All paths point to current locations
-- [x] All ports verified (36335 not 8000)
+- [x] All ports verified (6333 not 8000)
 - [x] All services documented (Qdrant, WSL2 PID 177, GPU)
 - [x] All metrics from Dec 14 verification
 - [x] All commands tested and working

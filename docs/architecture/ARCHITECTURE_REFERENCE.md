@@ -152,7 +152,7 @@ CREATE TABLE relationships (
 **Replaces:** FAISS indices (deprecated Oct 2025)
 
 ### Connection Details
-- **URL:** http://localhost:36335
+- **URL:** http://localhost:6333
 - **Status:** ✅ Operational (Dec 14 verified)
 - **Storage:** `L:\_DATA\GoodQ_Data\qdrant\`
 
@@ -237,19 +237,19 @@ CREATE TABLE relationships (
 
 **Health Check:**
 ```powershell
-Invoke-WebRequest http://localhost:36335/health
+Invoke-WebRequest http://localhost:6333/health
 ```
 
 **List Collections:**
 ```powershell
-Invoke-WebRequest http://localhost:36335/collections
+Invoke-WebRequest http://localhost:6333/collections
 ```
 
 **Query Example (Python):**
 ```python
 from qdrant_client import QdrantClient
 
-client = QdrantClient(url="http://localhost:36335")
+client = QdrantClient(url="http://localhost:6333")
 
 # Search text embeddings
 results = client.search(
@@ -408,8 +408,8 @@ Get-Item "L:\_DATA\GoodQ_Data\*.db" | Select-Object Name, Length, LastWriteTime
 
 **Check Qdrant:**
 ```powershell
-Invoke-WebRequest http://localhost:36335/health
-Invoke-WebRequest http://localhost:36335/collections
+Invoke-WebRequest http://localhost:6333/health
+Invoke-WebRequest http://localhost:6333/collections
 ```
 
 **Check Scene Artifacts:**
@@ -455,7 +455,7 @@ LIMIT 10;
 **Qdrant (HTTP API):**
 ```powershell
 # Collection stats
-Invoke-WebRequest http://localhost:36335/collections/goodq_text | ConvertFrom-Json
+Invoke-WebRequest http://localhost:6333/collections/goodq_text | ConvertFrom-Json
 ```
 
 ---

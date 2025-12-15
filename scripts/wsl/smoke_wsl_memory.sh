@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # One-stop smoke test + light self-heal for GoodQ memory stack on WSL.
-# - Verifies env vars, vLLM (38005), Qdrant (36335), FAISS env, FAISS index size
+# - Verifies env vars, vLLM (38005), Qdrant (6333), FAISS env, FAISS index size
 # - Starts Qdrant if down (sudo required)
 # - Installs missing python deps in goodq_faiss if needed
 #
@@ -9,7 +9,7 @@ set -euo pipefail
 
 ROOT="/mnt/l/goodq4all"
 ENV_FAISS="goodq_faiss"
-QDRANT_PORT=36335
+QDRANT_PORT=6333
 VLLM_PORT=38005
 CONDA_BIN="${CONDA_BIN:-$HOME/miniconda3/bin/conda}"
 PY_BIN="${PY_BIN:-$HOME/miniconda3/envs/${ENV_FAISS}/bin/python}"

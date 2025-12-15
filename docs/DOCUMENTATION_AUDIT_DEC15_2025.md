@@ -104,7 +104,7 @@ Complete documentation refresh based on dual forensic audits (Windows + WSL2) co
 ### Software Stack (Verified)
 - **Windows:** `goodq_core` conda environment (unified)
 - **WSL2:** `~/goodq_audio/venv` Python virtual environment
-- **Qdrant:** Port 36335 (Windows service mode)
+- **Qdrant:** Port 6333 (Windows service mode)
 - **Audio Service:** PID 177 (WSL2 daemon, active)
 
 ### Active Pipeline (Verified)

@@ -41,14 +41,14 @@ cd L:\goodq4all
 
 **What Happens:**
 1. System health check (models, dependencies, services)
-2. Qdrant vector database starts (port 36335)
+2. Qdrant vector database starts (port 6333)
 3. WSL2 audio service verified (PID 177)
 4. Watchdog begins monitoring `L:\_DATA\GoodQ_Data\import_inbox\`
 
 **Expected Output:**
 ```
 [INFO] System health check passed
-[INFO] Qdrant service started on port 36335
+[INFO] Qdrant service started on port 6333
 [INFO] WSL2 audio service active (PID 177)
 [INFO] Watchdog monitoring: L:\_DATA\GoodQ_Data\import_inbox
 [INFO] Processing pipeline ready
@@ -83,7 +83,7 @@ Get-ChildItem "logs\scene_ingest\your_video\" -Recurse
 Get-Item "L:\_DATA\GoodQ_Data\*.db" | Select-Object Name, Length, LastWriteTime
 
 # Check Qdrant collections
-Invoke-WebRequest http://localhost:36335/collections
+Invoke-WebRequest http://localhost:6333/collections
 ```
 
 ---
@@ -96,7 +96,7 @@ Invoke-WebRequest http://localhost:36335/collections
 | **Scene artifacts** | `logs\scene_ingest\<video>\audio\` & `video\` | ✅ Verified |
 | **Memory database** | `L:\_DATA\GoodQ_Data\memory.db` | ✅ Operational |
 | **Knowledge graph** | `L:\_DATA\GoodQ_Data\knowledge_graph.db` | ✅ Operational |
-| **Vector database** | http://localhost:36335 (Qdrant) | ✅ Port verified |
+| **Vector database** | http://localhost:6333 (Qdrant) | ✅ Port verified |
 | **WSL2 audio output** | `\\wsl.localhost\Ubuntu\home\<user>\goodq_audio\output\` | ✅ Confirmed |
 
 ### Data Structure
@@ -124,7 +124,7 @@ python scripts\system_readiness_check.py
 python scripts\cache_readiness_check.py
 
 # Check services
-Invoke-WebRequest http://localhost:36335/health  # Qdrant
+Invoke-WebRequest http://localhost:6333/health  # Qdrant
 wsl ps aux | grep audio_service                   # WSL2 (should show PID 177)
 nvidia-smi                                         # GPU status
 ```
@@ -256,7 +256,7 @@ python -c "import torch; torch.cuda.empty_cache()"
 - [ ] **Check disk space** (~50GB per hour of video)
 - [ ] **Run health checks** (`python scripts\system_readiness_check.py`)
 - [ ] **Verify GPU available** (`nvidia-smi`)
-- [ ] **Check services running** (Qdrant 36335, WSL2 audio PID 177)
+- [ ] **Check services running** (Qdrant 6333, WSL2 audio PID 177)
 - [ ] **Close other GPU-heavy apps** (leave ~4GB VRAM free)
 
 ### During Processing
@@ -269,7 +269,7 @@ python -c "import torch; torch.cuda.empty_cache()"
 ### After Processing
 - [ ] **Verify completion** (all scenes processed)
 - [ ] **Check databases** (`Get-Item "L:\_DATA\GoodQ_Data\*.db"`)
-- [ ] **Test Qdrant** (`Invoke-WebRequest http://localhost:36335/collections`)
+- [ ] **Test Qdrant** (`Invoke-WebRequest http://localhost:6333/collections`)
 - [ ] **Review knowledge graph** (database should have grown)
 - [ ] **Move processed videos** (optional: archive originals)
 
@@ -280,7 +280,7 @@ python -c "import torch; torch.cuda.empty_cache()"
 ### System Won't Start
 ```powershell
 # Check Qdrant
-Invoke-WebRequest http://localhost:36335/health
+Invoke-WebRequest http://localhost:6333/health
 # If fails: cd vendor\qdrant && .\qdrant.exe
 
 # Check WSL2 audio

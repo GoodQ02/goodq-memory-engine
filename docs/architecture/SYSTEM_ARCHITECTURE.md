@@ -17,7 +17,7 @@ GoodQ4All is a **local, GPU-accelerated multimodal AI pipeline** that processes 
 - ✅ GPU: RTX 4070 Ti SUPER 16GB, 85% utilization (stable)
 - ✅ CUDA: 12.1 (Windows), 12.8 (WSL2)
 - ✅ Environment: Unified `goodq_core` (Python 3.10)
-- ✅ Vector DB: Qdrant (port 36335)
+- ✅ Vector DB: Qdrant (port 6333)
 - ✅ Audio: WSL2 GPU-accelerated (PID 177 service)
 
 ---
@@ -52,7 +52,7 @@ Comprehensive telemetry:
 - Scene artifacts: `logs/scene_ingest/<video>/audio/` & `video/`
 - Memory DB: `L:\_DATA\GoodQ_Data\memory.db`
 - Knowledge Graph: `L:\_DATA\GoodQ_Data\knowledge_graph.db`
-- Vector DB: Qdrant on port 36335
+- Vector DB: Qdrant on port 6333
 
 ### 5. Privacy-First
 - All processing local (no cloud)
@@ -90,7 +90,7 @@ Comprehensive telemetry:
 ┌──────────────────────────┴──────────────────────────────────┐
 │                ✅ Memory Layer                               │
 │  SQLite: memory.db · knowledge_graph.db                     │
-│  Qdrant: goodq_text · goodq_image · goodq_audio (port 36335)│
+│  Qdrant: goodq_text · goodq_image · goodq_audio (port 6333)│
 │  ⚠️ (FAISS deprecated - migrated to Qdrant)                 │
 └──────────────────────────┬──────────────────────────────────┘
                            │
@@ -160,7 +160,7 @@ Input Video (dropped in import_inbox)
         │
         └─→ ✅ Post-Processing
             ├─→ register_scene_bundle() → memory.db
-            └─→ Qdrant insertion → http://localhost:36335
+            └─→ Qdrant insertion → http://localhost:6333
                 ├─→ goodq_text (transcript embeddings)
                 ├─→ goodq_image (CLIP + DINO embeddings)
                 └─→ goodq_audio (CLAP embeddings)
@@ -282,7 +282,7 @@ L:\_DATA\GoodQ_Data\              # ✅ Unified data root
 ├── import_inbox\                 # Drop videos here
 ├── memory.db                     # Scene bundles & metadata
 ├── knowledge_graph.db            # Entity relationships
-└── qdrant\                       # Vector storage (port 36335)
+└── qdrant\                       # Vector storage (port 6333)
 
 logs\scene_ingest\                # ✅ Scene artifacts (actual location)
 └── <video_name>\
@@ -322,7 +322,7 @@ logs\scene_ingest\                # ✅ Scene artifacts (actual location)
 **Integration:** Real-time insertion via `lib/kg_realtime_integration.py:109`  
 **Status:** ✅ Operational (Dec 14 verified)
 
-#### 3. Qdrant Vector Database (Port 36335)
+#### 3. Qdrant Vector Database (Port 6333)
 **Purpose:** Semantic search across modalities
 
 **Collections:**
@@ -330,7 +330,7 @@ logs\scene_ingest\                # ✅ Scene artifacts (actual location)
 - `goodq_image` - Visual embeddings (CLIP + DINO)
 - `goodq_audio` - Audio embeddings (CLAP)
 
-**API:** http://localhost:36335  
+**API:** http://localhost:6333  
 **Status:** ✅ Operational (Dec 14 verified)
 
 ### ⚠️ Deprecated Storage
@@ -755,7 +755,7 @@ python scripts\system_readiness_check.py
 python scripts\cache_readiness_check.py
 
 # Service verification
-Invoke-WebRequest http://localhost:36335/health  # Qdrant
+Invoke-WebRequest http://localhost:6333/health  # Qdrant
 wsl ps aux | grep audio_service                   # WSL2 (PID 177)
 nvidia-smi                                         # GPU status
 \\\
@@ -779,7 +779,7 @@ Get-ChildItem "logs\scene_ingest\<video>\" -Recurse
 Get-Item "L:\_DATA\GoodQ_Data\*.db" | Select-Object Name, Length, LastWriteTime
 
 # Check Qdrant collections
-Invoke-WebRequest http://localhost:36335/collections
+Invoke-WebRequest http://localhost:6333/collections
 \\\
 
 ---

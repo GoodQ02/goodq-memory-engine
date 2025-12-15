@@ -26,7 +26,7 @@
 
 **Key Changes:**
 - All paths updated to L:\_DATA\GoodQ_Data\
-- Qdrant port 36335 (not 6333 or 8000)
+- Qdrant port 6333 (not 6333 or 8000)
 - WSL2 audio PID 177 documented
 - GPU 85% utilization as normal
 - Unified goodq_core environment (not 22 envs)
@@ -62,7 +62,7 @@
 - Forensic verification date: Dec 14, 2025
 - Operational metrics: 30 scenes, 52 segments, 85% GPU
 - Architecture documented: Scene-first, unified env, dual audio
-- Services documented: Qdrant 36335, WSL2 PID 177, GPU specs
+- Services documented: Qdrant 6333, WSL2 PID 177, GPU specs
 - Troubleshooting: 7 issues, 25+ diagnostic commands
 
 **Status:** Priority 1 & 2 (4/5 files) COMPLETE as of Dec 15, 2025

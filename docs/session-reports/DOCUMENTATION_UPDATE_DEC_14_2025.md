@@ -76,7 +76,7 @@ Comprehensive documentation update based on forensic analysis of live operationa
 | Emotion Classes | 8 | Wav2Vec2 model output |
 | Memory DB | L:\_DATA\GoodQ_Data\memory.db | Verified exists |
 | Knowledge Graph DB | L:\_DATA\GoodQ_Data\knowledge_graph.db | Verified exists |
-| Qdrant Port | 36335 | config.yaml + verified active |
+| Qdrant Port | 6333 | config.yaml + verified active |
 | Scene Audio Chunks | logs/scene_ingest/<video>/audio/ | Confirmed live |
 | Scene Keyframes | logs/scene_ingest/<video>/video/ | Confirmed live |
 
@@ -119,7 +119,7 @@ Per-Scene Loop:
   ↓
 Post-Processing:
   ├─ register_scene_bundle() → memory.db
-  └─ Qdrant insertion → http://localhost:36335
+  └─ Qdrant insertion → http://localhost:6333
 ```
 
 ### Dual Audio Architecture (Both Active)
@@ -209,7 +209,7 @@ Post-Processing:
 - ✅ Dual audio architecture (queue-based + direct)
 - ✅ Entity extraction operational status (Dec 13-14 fixes)
 - ✅ Knowledge graph real-time insertion
-- ✅ Qdrant vector database (port 36335, 3 collections)
+- ✅ Qdrant vector database (port 6333, 3 collections)
 - ✅ Unified goodq_core environment
 - ✅ Scene-first architecture (30 scenes typical)
 - ✅ WSL2 audio service (PID 177, daemon mode)

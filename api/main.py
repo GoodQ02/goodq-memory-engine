@@ -215,16 +215,16 @@ def _collect_engine_details() -> Dict[str, Any]:
 
     # Check Qdrant vector DB (optional)
     try:
-        resp = requests.get("http://localhost:36335/collections", timeout=2)
+        resp = requests.get("http://localhost:6333/collections", timeout=2)
         if resp.status_code == 200:
             collections = resp.json().get("result", {}).get("collections", [])
             engines["qdrant"] = {
                 "name": "Qdrant",
                 "category": "Vector DB",
-                "description": f"{len(collections)} collections @ 36335",
+                "description": f"{len(collections)} collections @ 6333",
                 "status": "ready",
                 "gpu": False,
-                "port": 36335,
+                "port": 6333,
             }
         else:
             raise Exception("unhealthy")
@@ -232,10 +232,10 @@ def _collect_engine_details() -> Dict[str, Any]:
         engines["qdrant"] = {
             "name": "Qdrant",
             "category": "Vector DB",
-            "description": "Not reachable on 36335",
+            "description": "Not reachable on 6333",
             "status": "unavailable",
             "gpu": False,
-            "port": 36335,
+            "port": 6333,
         }
 
     # Check ffmpeg
@@ -1328,7 +1328,7 @@ def get_memory_stats() -> Dict[str, Any]:
 
     qdrant_info = {"available": False, "collections": 0}
     try:
-        r = requests.get("http://localhost:36335/collections", timeout=2)
+        r = requests.get("http://localhost:6333/collections", timeout=2)
         if r.status_code == 200:
             colls = r.json().get("result", {}).get("collections", []) or []
             qdrant_info["available"] = True

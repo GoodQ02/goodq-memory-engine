@@ -88,7 +88,7 @@ gpu:
 
 # Qdrant Configuration
 qdrant:
-  url: "http://localhost:36335"
+  url: "http://localhost:6333"
   collections:
     - goodq_text
     - goodq_image
@@ -384,7 +384,7 @@ cd L:\goodq4all\vendor\qdrant
 .\qdrant.exe --config-path ..\..\configs\qdrant_config.yaml
 
 # Verify connection
-curl http://localhost:36335/collections
+curl http://localhost:6333/collections
 ```
 
 ### ❌ HuggingFace Authentication Failed
@@ -468,7 +468,7 @@ copy test_input\sample.mp4 L:\_DATA\GoodQ_Data\import_inbox\
 ✅ Scene keyframes: logs\scene_ingest\sample\video\scene_0000.jpg to scene_0029.jpg
 ✅ Memory DB updated: L:\_DATA\GoodQ_Data\memory.db (30 scenes registered)
 ✅ Knowledge graph populated: L:\_DATA\GoodQ_Data\knowledge_graph.db (entities + relationships)
-✅ Qdrant collections populated: http://localhost:36335/collections
+✅ Qdrant collections populated: http://localhost:6333/collections
 ✅ WSL2 transcription: \\wsl.localhost\Ubuntu\home\<user>\goodq_audio\output\result.json
 ```
 

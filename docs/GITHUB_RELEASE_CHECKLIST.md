@@ -131,7 +131,7 @@
 - [x] No old "L:/goodq4all/data/" references
 
 **Ports:**
-- [x] Qdrant: 36335 (not 8000 or 6333)
+- [x] Qdrant: 6333 (not 8000 or 6333)
 - [x] No references to removed services
 
 **Environment:**

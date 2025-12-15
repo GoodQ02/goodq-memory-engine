@@ -259,7 +259,7 @@ This will:
         │
         └─ Post-Processing:
             ├─ register_scene_bundle() → L:\_DATA\GoodQ_Data\memory.db
-            └─ Qdrant insertion → http://localhost:36335 (collections: text, image, audio)
+            └─ Qdrant insertion → http://localhost:6333 (collections: text, image, audio)
 
 ✅ Pipeline Status: FULLY OPERATIONAL (Verified Dec 14, 2025)
 ✅ Test Results: 30 scenes processed with full multimodal extraction
@@ -276,7 +276,7 @@ This will:
 | **Memory DB** | `L:\_DATA\GoodQ_Data\memory.db` | config.yaml + verified |
 | **Knowledge Graph DB** | `L:\_DATA\GoodQ_Data\knowledge_graph.db` | config.yaml + logs |
 | **Scene bundles** | Stored in `memory.db` via `register_scene_bundle()` | Code evidence |
-| **Qdrant vectors** | `http://localhost:36335` (collections: goodq_text, goodq_image, goodq_audio) | config.yaml |
+| **Qdrant vectors** | `http://localhost:6333` (collections: goodq_text, goodq_image, goodq_audio) | config.yaml |
 
 ⚠️ **Note:** Config specifies `processing: L:/_DATA/GoodQ_Data/processing` but actual artifacts land in `logs/scene_ingest/`. This is a known, non-breaking inconsistency documented in [`docs/technical/ARTIFACT_LOCATION_CONTRACT.md`](docs/technical/ARTIFACT_LOCATION_CONTRACT.md).
 
@@ -326,7 +326,7 @@ This will:
                        ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                  INTELLIGENCE STORAGE                        │
-│  ✅ Qdrant Vector DB (http://localhost:36335)               │
+│  ✅ Qdrant Vector DB (http://localhost:6333)               │
 │     - goodq_text, goodq_image, goodq_audio collections       │
 │  ✅ Memory Database (L:\_DATA\GoodQ_Data\memory.db)         │
 │  ✅ Knowledge Graph (L:\_DATA\GoodQ_Data\knowledge_graph.db)│
@@ -538,7 +538,7 @@ goodq4all/
     ├── knowledge_graph.db     # ✅ Entity relationships (verified)
     ├── import_inbox/          # Watchdog input directory
     ├── processing/            # ⚠️ Config says artifacts go here (but they don't)
-    └── qdrant/                # Vector database storage (port 36335)
+    └── qdrant/                # Vector database storage (port 6333)
 
 ✅ = Actively used in production pipeline
 ⊘ = Built and complete, but not yet wired to main flow

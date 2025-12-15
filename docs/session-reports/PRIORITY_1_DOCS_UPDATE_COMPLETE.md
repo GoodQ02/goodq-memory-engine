@@ -12,7 +12,7 @@
 
 **Previous State:**
 - Last Updated: October 6, 2025
-- Outdated port references (8000 instead of 36335)
+- Outdated port references (8000 instead of 6333)
 - No WSL2 audio troubleshooting
 - No Qdrant troubleshooting
 - No entity extraction fixes documented
@@ -23,7 +23,7 @@
 - **New Issues Added:**
   1. System Won't Start (health checks, Qdrant, HF token)
   2. WSL2 Audio Service Not Running (PID 177, GPU access, token verification)
-  3. Qdrant Connection Failed (port 36335, collections, initialization)
+  3. Qdrant Connection Failed (port 6333, collections, initialization)
   4. CUDA Out of Memory (85% utilization normal, 12-14GB expected)
   5. Processing Stuck on Scene (artifact checks, WSL2 verification)
   6. Entity Extraction Errors (Dec 13-14 fixes documented)
@@ -44,7 +44,7 @@
 **Key Improvements:**
 - All commands updated for current architecture
 - WSL2 audio service commands (PID check, restart, logs)
-- Qdrant port 36335 (not 6333 or 8000)
+- Qdrant port 6333 (not 6333 or 8000)
 - Unified goodq_core environment (not 6 separate envs)
 - Actual file paths (L:\_DATA\GoodQ_Data\, logs\scene_ingest\)
 - Links to 15+ detailed subsystem guides
@@ -92,7 +92,7 @@
 |------------|----------|---------|
 | **Service Startup** | ✅ Complete | System health, Qdrant, WSL2 audio, HF token |
 | **WSL2 Audio** | ✅ Complete | Service status, PID check, GPU access, logs, restart |
-| **Qdrant** | ✅ Complete | Connection, collections, initialization, port 36335 |
+| **Qdrant** | ✅ Complete | Connection, collections, initialization, port 6333 |
 | **GPU Issues** | ✅ Complete | Out of memory, utilization (85% normal), clear cache |
 | **Processing Stuck** | ✅ Complete | Scene artifacts, WSL2 check, GPU verification, restart |
 | **Entity Extraction** | ✅ Complete | Dec 13-14 fixes, field verification, code version check |
@@ -115,7 +115,7 @@
 
 ### Added/Updated
 - ✅ WSL2 audio service troubleshooting (7 new scenarios)
-- ✅ Qdrant vector database (connection, collections, port 36335)
+- ✅ Qdrant vector database (connection, collections, port 6333)
 - ✅ Entity extraction fixes (Dec 13-14 documented)
 - ✅ Knowledge graph verification (real-time insertion checks)
 - ✅ GPU utilization guidance (85% normal, 12-14GB expected)
@@ -147,9 +147,9 @@
 - Connection refused (service not started)
 - Collections missing (INIT_QDRANT.bat not run)
 - Slow queries (collection size check)
-- Port conflict (36335 not 6333)
-- Health check (http://localhost:36335/health)
-- Collection verification (http://localhost:36335/collections)
+- Port conflict (6333 not 6333)
+- Health check (http://localhost:6333/health)
+- Collection verification (http://localhost:6333/collections)
 
 **Linked Guides:** QDRANT_SETUP.md, QDRANT_QUICKREF.md
 
@@ -229,7 +229,7 @@ Created standardized diagnostic collection commands:
 
 ### Verification Checklist
 - [ ] System Requirements Met (GPU, RAM, Windows 11 + WSL2, disk space)
-- [ ] Services Running (Qdrant 36335, WSL2 audio, GPU accessible)
+- [ ] Services Running (Qdrant 6333, WSL2 audio, GPU accessible)
 - [ ] Environment Configured (goodq_core, HF token, Qdrant collections)
 - [ ] Data Paths Exist (L:\_DATA\GoodQ_Data\, logs\scene_ingest\, WSL2 ~/goodq_audio/)
 - [ ] Recent Updates Applied (Dec 14 code, entity extraction fixes, doc sync)
@@ -273,7 +273,7 @@ Listed with specific metrics:
 
 ### AI Agent Experience
 - **Before:** Would try outdated solutions (port 8000, multiple envs, old paths)
-- **After:** Has current architecture (port 36335, goodq_core, actual paths), verification checklist
+- **After:** Has current architecture (port 6333, goodq_core, actual paths), verification checklist
 
 ### Support Efficiency
 - **Before:** Users report "it's not working" with no diagnostic info
@@ -317,7 +317,7 @@ Listed with specific metrics:
 
 ### Integration Insights
 1. **Every Integration Needs Troubleshooting** – WSL2, Qdrant, GPU all have dedicated sections
-2. **Ports Matter** – Wrong port (8000 vs 36335) causes confusion
+2. **Ports Matter** – Wrong port (8000 vs 6333) causes confusion
 3. **Service Status Critical** – PID checks, health endpoints must be documented
 4. **Expected Values** – "85% GPU utilization is normal" prevents panic
 5. **Known Issues** – Document drift, not hide it

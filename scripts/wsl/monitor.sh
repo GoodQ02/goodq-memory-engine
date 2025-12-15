@@ -44,7 +44,7 @@ function monitor-ports() {
     echo -e "${BLUE}=== Port Usage ===${NC}"
     echo ""
     echo -e "${YELLOW}GoodQ4All Ports:${NC}"
-    sudo netstat -tlnp 2>/dev/null | grep -E ':(38000|38001|38004|38005|31434|36335)' || echo "  No services detected"
+    sudo netstat -tlnp 2>/dev/null | grep -E ':(38000|38001|38004|38005|31434|6333)' || echo "  No services detected"
     echo ""
 }
 

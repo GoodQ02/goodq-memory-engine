@@ -17,7 +17,7 @@
 **What It Does:**
 - ✅ Validates all dependencies & models (auto-healing)
 - ✅ Checks API keys (OpenAI, HuggingFace)
-- ✅ Starts Qdrant vector database service (port 36335)
+- ✅ Starts Qdrant vector database service (port 6333)
 - ✅ Launches watchdog on `L:\_DATA\GoodQ_Data\import_inbox`
 - ✅ Opens monitoring dashboard with live progress
 
@@ -28,7 +28,7 @@
 ✅ **Command Window Shows:**
 ```
 [INFO] System health check passed
-[INFO] Qdrant service started on port 36335
+[INFO] Qdrant service started on port 6333
 [INFO] Watchdog monitoring: L:\_DATA\GoodQ_Data\import_inbox
 [INFO] Processing pipeline ready
 ```
@@ -158,7 +158,7 @@ Stop-Process -Name python -Force
 
 1. **Memory Database** → `L:\_DATA\GoodQ_Data\memory.db` (scene bundles, metadata)
 2. **Knowledge Graph** → `L:\_DATA\GoodQ_Data\knowledge_graph.db` (entity relationships)
-3. **Qdrant Vectors** → http://localhost:36335 (goodq_text, goodq_image, goodq_audio)
+3. **Qdrant Vectors** → http://localhost:6333 (goodq_text, goodq_image, goodq_audio)
 4. **Scene Artifacts** → `logs/scene_ingest/<video>/` (audio chunks + keyframes)
 5. **WSL2 Output** → `\\wsl.localhost\Ubuntu\home\<user>\goodq_audio\output\result.json`
 
@@ -183,7 +183,7 @@ logs/scene_ingest/<video>/
 **Fix:** Check command window for errors. Should see:
 ```
 [INFO] System health check passed
-[INFO] Qdrant service started on port 36335
+[INFO] Qdrant service started on port 6333
 [INFO] Watchdog monitoring active
 ```
 
@@ -235,7 +235,7 @@ python audio_service.py
 | `L:\_DATA\GoodQ_Data\import_inbox\` | Drop videos here | ✅ Active |
 | `L:\_DATA\GoodQ_Data\memory.db` | Scene metadata | ✅ Operational |
 | `L:\_DATA\GoodQ_Data\knowledge_graph.db` | Entity relationships | ✅ Operational |
-| `http://localhost:36335` | Qdrant vector DB | ✅ Port verified |
+| `http://localhost:6333` | Qdrant vector DB | ✅ Port verified |
 | `logs/scene_ingest/<video>/` | Scene artifacts | ✅ Confirmed live |
 | `\\wsl.localhost\Ubuntu\home\<user>\goodq_audio\` | WSL2 audio stack | ✅ PID 177 running |
 

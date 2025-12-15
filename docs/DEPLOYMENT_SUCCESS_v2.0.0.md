@@ -101,7 +101,7 @@
 **Qdrant Vector Database:**
 - Replaced FAISS indices
 - 3 collections: text (384-d), image (512-d CLIP + 768-d DINO), audio (512-d)
-- Port 36335 (operational)
+- Port 6333 (operational)
 - ✅ Verified: Dec 14, 2025
 
 **Cross-Modal Entity Extraction:**

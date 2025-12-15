@@ -398,6 +398,89 @@ def register_scene_bundle(
                     overlap_meta['speaker'] = seg.get('speaker')
                 upsert_link(cfg, scene_id, seg_id, 'overlaps', meta=overlap_meta)
 
+    # Insert embeddings into vector memory (Qdrant/FAISS)
+    try:
+        from steps.common.memory_manager import build_memory_router
+        router = build_memory_router(cfg)
+        
+        points = []
+        
+        # Extract image embeddings (CLIP, DINO)
+        if isinstance(frame, dict) and isinstance(frame.get('data'), dict):
+            frame_data = frame['data']
+            
+            if 'clip_embedding' in frame_data and isinstance(frame_data['clip_embedding'], list):
+                points.append({
+                    'id': f"{scene_id}_clip",
+                    'vector': frame_data['clip_embedding'],
+                    'payload': {
+                        'scene_id': scene_id,
+                        'video_hash': video_hash,
+                        'modality': 'clip',
+                        'start': scene_start,
+                        'end': scene_end,
+                        'timestamp': frame_timestamp,
+                    }
+                })
+            
+            if 'dino_embedding' in frame_data and isinstance(frame_data['dino_embedding'], list):
+                points.append({
+                    'id': f"{scene_id}_dino",
+                    'vector': frame_data['dino_embedding'],
+                    'payload': {
+                        'scene_id': scene_id,
+                        'video_hash': video_hash,
+                        'modality': 'dino',
+                        'start': scene_start,
+                        'end': scene_end,
+                        'timestamp': frame_timestamp,
+                    }
+                })
+        
+        # Extract audio embeddings (CLAP)
+        if isinstance(audio, dict) and isinstance(audio.get('data'), dict):
+            audio_data = audio['data']
+            
+            if 'clap_embedding' in audio_data and isinstance(audio_data['clap_embedding'], list):
+                points.append({
+                    'id': f"{scene_id}_clap",
+                    'vector': audio_data['clap_embedding'],
+                    'payload': {
+                        'scene_id': scene_id,
+                        'video_hash': video_hash,
+                        'modality': 'clap',
+                        'start': audio_start,
+                        'end': audio_end,
+                        'transcript': audio_data.get('transcript', ''),
+                    }
+                })
+        
+        # Extract text embeddings
+        if isinstance(frame, dict) and isinstance(frame.get('data'), dict):
+            frame_data = frame['data']
+            
+            if 'text_embedding' in frame_data and isinstance(frame_data['text_embedding'], list):
+                points.append({
+                    'id': f"{scene_id}_text",
+                    'vector': frame_data['text_embedding'],
+                    'payload': {
+                        'scene_id': scene_id,
+                        'video_hash': video_hash,
+                        'modality': 'text',
+                        'start': scene_start,
+                        'end': scene_end,
+                        'text': frame_data.get('ocr_text', '') or frame_data.get('caption', ''),
+                    }
+                })
+        
+        if points:
+            results = router.insert(points)
+            success_count = sum(1 for v in results.values() if v)
+            print(f'[VECTOR] Inserted {success_count}/{len(points)} embeddings for scene {scene_id}')
+        
+    except Exception as e:
+        print(f'[WARN] Failed to insert vectors for scene {scene_id}: {e}')
+    
     return {
         'scene_id': scene_id,
         'frame_hash': frame_hash,

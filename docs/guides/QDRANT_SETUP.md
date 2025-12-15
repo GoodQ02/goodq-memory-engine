@@ -79,7 +79,7 @@ Then in another terminal:
 INIT_QDRANT.bat
 ```
 
-Access dashboard: **http://localhost:6333/dashboard**
+Access dashboard: **http://127.0.0.1:6333/dashboard**
 
 ### Option 2: Install as Windows Service (Recommended)
 
@@ -123,7 +123,7 @@ services.msc
 # Look for "GoodQ4All - Qdrant Vector Database"
 ```
 
-Or visit: **http://localhost:6333/health**
+Or visit: **http://127.0.0.1:6333/health**
 
 ### Uninstall Service
 
@@ -179,7 +179,7 @@ log_level: INFO
 ```yaml
 qdrant:
   enabled: true  # ← Enables Qdrant integration
-  host: http://localhost:6333
+  host: http://127.0.0.1:6333
   collections:
     clip: goodq_clip
     dino: goodq_dino
@@ -200,7 +200,7 @@ qdrant:
 
 ```powershell
 # Test health endpoint
-Invoke-RestMethod -Uri http://localhost:6333/health
+Invoke-RestMethod -Uri http://127.0.0.1:6333/health
 
 # Expected output:
 # status
@@ -211,7 +211,7 @@ Invoke-RestMethod -Uri http://localhost:6333/health
 ### 2. List Collections
 
 ```powershell
-$response = Invoke-RestMethod -Uri http://localhost:6333/collections
+$response = Invoke-RestMethod -Uri http://127.0.0.1:6333/collections
 $response.result.collections
 ```
 

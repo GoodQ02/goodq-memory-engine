@@ -116,7 +116,7 @@ def run_scene_visual_embeddings(item: Dict[str, Any], cfg: Dict[str, Any]) -> Di
         # Store CLIP embeddings
         clip_collection = phase6_cfg.get('clip_collection', 'goodq_clip_scenes')
         clip_client = QdrantClient(QdrantConfig(
-            host=cfg.get('qdrant_host', 'http://localhost:6333'),
+            host=cfg.get('qdrant_host', 'http://127.0.0.1:6333'),
             collection=clip_collection,
             dim=512,
             distance='Cosine'
@@ -143,7 +143,7 @@ def run_scene_visual_embeddings(item: Dict[str, Any], cfg: Dict[str, Any]) -> Di
         # Store DINO embeddings
         dino_collection = phase6_cfg.get('dino_collection', 'goodq_dino_scenes')
         dino_client = QdrantClient(QdrantConfig(
-            host=cfg.get('qdrant_host', 'http://localhost:6333'),
+            host=cfg.get('qdrant_host', 'http://127.0.0.1:6333'),
             collection=dino_collection,
             dim=768,
             distance='Cosine'

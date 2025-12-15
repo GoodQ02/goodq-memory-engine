@@ -137,7 +137,7 @@ envs:
 # ============================================================================
 qdrant:
   enabled: true
-  host: http://localhost:6333
+  host: http://127.0.0.1:6333
   collections:
     clip: goodq_clip
     dino: goodq_dino

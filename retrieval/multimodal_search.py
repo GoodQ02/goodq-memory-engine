@@ -28,7 +28,7 @@ class MultimodalSearchEngine:
             config: GoodQ configuration dict
         """
         self.config = config
-        self.qdrant_host = config.get('qdrant_host', 'http://localhost:6333')
+        self.qdrant_host = config.get('qdrant_host', 'http://127.0.0.1:6333')
         self.data_root = config.get('data_root', 'L:/_DATA/GoodQ_Data')
         
         # Fusion weights

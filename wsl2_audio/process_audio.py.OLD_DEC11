@@ -2,13 +2,11 @@
 """
 GoodQ Audio Processing Script - Full Classification
 GPU-accelerated audio analysis with Whisper, Pyannote, and Wav2Vec2
-Memory-optimized: Models loaded sequentially with cleanup between steps
 """
 
 import sys
 import json
 import os
-import gc
 import traceback
 from pathlib import Path
 
@@ -39,24 +37,8 @@ except ImportError:
     TRANSFORMERS_AVAILABLE = False
 
 
-def clear_gpu_memory():
-    """Clear GPU memory cache and run garbage collection"""
-    if torch.cuda.is_available():
-        torch.cuda.empty_cache()
-    gc.collect()
-
-
-def get_gpu_memory_info():
-    """Get current GPU memory usage"""
-    if torch.cuda.is_available():
-        allocated = torch.cuda.memory_allocated(0) / (1024**2)  # MB
-        reserved = torch.cuda.memory_reserved(0) / (1024**2)    # MB
-        return {"allocated_mb": allocated, "reserved_mb": reserved}
-    return {"allocated_mb": 0, "reserved_mb": 0}
-
-
 def process_audio(audio_file, output_dir):
-    """Process audio file with full classification pipeline - Memory optimized"""
+    """Process audio file with full classification pipeline"""
     
     result = {
         "status": "processing",
@@ -79,10 +61,9 @@ def process_audio(audio_file, output_dir):
     if device == "cuda":
         result["gpu_name"] = torch.cuda.get_device_name(0)
         result["gpu_memory_mb"] = torch.cuda.get_device_properties(0).total_memory // (1024**2)
-        result["initial_gpu_memory"] = get_gpu_memory_info()
     
     try:
-        # Load audio ONCE and keep in memory (small footprint)
+        # Load audio
         waveform, sr = torchaudio.load(audio_file)
         result["sample_rate"] = sr
         result["duration_seconds"] = waveform.shape[1] / sr
@@ -93,7 +74,6 @@ def process_audio(audio_file, output_dir):
             waveform = torch.mean(waveform, dim=0, keepdim=True)
         
         # === STEP 1: TRANSCRIPTION (Faster-Whisper) ===
-        print("Processing: Transcription...", file=sys.stderr)
         try:
             whisper_model = WhisperModel("base", device=device, compute_type=compute_type)
             segments, info = whisper_model.transcribe(audio_file, language="en", beam_size=5)
@@ -116,50 +96,30 @@ def process_audio(audio_file, output_dir):
             result["language_probability"] = float(info.language_probability)
             result["transcription_status"] = "success"
             
-            # Clean up Whisper model
-            del whisper_model
-            clear_gpu_memory()
-            if device == "cuda":
-                result["after_whisper_gpu_memory"] = get_gpu_memory_info()
-            
         except Exception as e:
             result["transcription_status"] = "error"
             result["transcription_error"] = str(e)
-            # Ensure cleanup even on error
-            try:
-                del whisper_model
-            except:
-                pass
-            clear_gpu_memory()
         
         # === STEP 2: SPEAKER DIARIZATION (Pyannote - optional) ===
-        print("Processing: Diarization...", file=sys.stderr)
         if DIARIZATION_AVAILABLE:
             try:
                 hf_token = os.getenv("HUGGINGFACE_TOKEN", "")
                 if hf_token:
                     diarization_pipeline = DiarizationPipeline.from_pretrained(
                         "pyannote/speaker-diarization-3.1",
-                        token=hf_token
+                        use_auth_token=hf_token
                     )
                     diarization_pipeline.to(torch.device(device))
                     
-                    diarization_result = diarization_pipeline(audio_file)
-                    
-                    # Handle new pyannote API - DiarizeOutput object
-                    # The actual annotation is in the speaker_diarization attribute
-                    if hasattr(diarization_result, 'speaker_diarization'):
-                        diarization = diarization_result.speaker_diarization
-                    else:
-                        diarization = diarization_result
+                    diarization = diarization_pipeline(audio_file)
                     
                     speakers = []
                     diarization_segments = []
-                    for segment, track, speaker in diarization.itertracks(yield_label=True):
+                    for turn, _, speaker in diarization.itertracks(yield_label=True):
                         speakers.append(speaker)
                         diarization_segments.append({
-                            "start": float(segment.start),
-                            "end": float(segment.end),
+                            "start": float(turn.start),
+                            "end": float(turn.end),
                             "speaker": speaker
                         })
                     
@@ -167,34 +127,17 @@ def process_audio(audio_file, output_dir):
                     result["speaker_count"] = len(set(speakers))
                     result["diarization"] = diarization_segments
                     result["diarization_status"] = "success"
-                    
-                    # Clean up diarization pipeline
-                    del diarization_pipeline
-                    del diarization_result
-                    del diarization
-                    clear_gpu_memory()
-                    if device == "cuda":
-                        result["after_diarization_gpu_memory"] = get_gpu_memory_info()
                 else:
                     result["diarization_status"] = "skipped"
                     result["diarization_note"] = "HUGGINGFACE_TOKEN not set"
             except Exception as e:
                 result["diarization_status"] = "error"
                 result["diarization_error"] = str(e)
-                # Ensure cleanup even on error
-                try:
-                    del diarization_pipeline
-                except:
-                    pass
-                clear_gpu_memory()
         else:
             result["diarization_status"] = "unavailable"
             result["diarization_note"] = "pyannote.audio not installed"
         
         # === STEP 3: EMOTION CLASSIFICATION (Wav2Vec2 - optional) ===
-        # Use CPU for emotion model to save GPU memory
-        print("Processing: Emotion classification...", file=sys.stderr)
-        emotion_device = "cpu"  # Force CPU to save GPU memory
         if TRANSFORMERS_AVAILABLE:
             try:
                 emotion_model = Wav2Vec2ForSequenceClassification.from_pretrained(
@@ -203,7 +146,7 @@ def process_audio(audio_file, output_dir):
                 emotion_extractor = Wav2Vec2FeatureExtractor.from_pretrained(
                     "ehcalabres/wav2vec2-lg-xlsr-en-speech-emotion-recognition"
                 )
-                emotion_model.to(emotion_device)
+                emotion_model.to(device)
                 
                 # Resample if needed
                 if sr != 16000:
@@ -218,7 +161,7 @@ def process_audio(audio_file, output_dir):
                     return_tensors="pt",
                     padding=True
                 )
-                inputs = {k: v.to(emotion_device) for k, v in inputs.items()}
+                inputs = {k: v.to(device) for k, v in inputs.items()}
                 
                 with torch.no_grad():
                     logits = emotion_model(**inputs).logits
@@ -233,29 +176,14 @@ def process_audio(audio_file, output_dir):
                 }
                 result["emotion_status"] = "success"
                 
-                # Clean up emotion model
-                del emotion_model
-                del emotion_extractor
-                clear_gpu_memory()
-                if device == "cuda":
-                    result["after_emotion_gpu_memory"] = get_gpu_memory_info()
-                
             except Exception as e:
                 result["emotion_status"] = "error"
                 result["emotion_error"] = str(e)
-                # Ensure cleanup even on error
-                try:
-                    del emotion_model
-                    del emotion_extractor
-                except:
-                    pass
-                clear_gpu_memory()
         else:
             result["emotion_status"] = "unavailable"
             result["emotion_note"] = "transformers not installed"
         
         # === STEP 4: AUDIO FEATURES ===
-        print("Processing: Audio features...", file=sys.stderr)
         try:
             # Energy/Volume
             energy = torch.mean(torch.abs(waveform)).item()
@@ -273,7 +201,6 @@ def process_audio(audio_file, output_dir):
             result["features_error"] = str(e)
         
         # === STEP 5: EMBEDDINGS (Wav2Vec2 - optional) ===
-        print("Processing: Embeddings...", file=sys.stderr)
         if TRANSFORMERS_AVAILABLE:
             try:
                 embed_model = Wav2Vec2Model.from_pretrained("facebook/wav2vec2-base-960h")
@@ -285,8 +212,7 @@ def process_audio(audio_file, output_dir):
                 else:
                     waveform_16k = waveform
                 
-                embed_extractor = Wav2Vec2FeatureExtractor.from_pretrained("facebook/wav2vec2-base-960h")
-                inputs = embed_extractor(
+                inputs = Wav2Vec2FeatureExtractor.from_pretrained("facebook/wav2vec2-base-960h")(
                     waveform_16k.numpy().flatten(),
                     sampling_rate=16000,
                     return_tensors="pt",
@@ -303,32 +229,12 @@ def process_audio(audio_file, output_dir):
                 result["embedding_dim"] = len(embedding_vector)
                 result["embeddings_status"] = "success"
                 
-                # Clean up embedding model
-                del embed_model
-                del embed_extractor
-                clear_gpu_memory()
-                if device == "cuda":
-                    result["after_embeddings_gpu_memory"] = get_gpu_memory_info()
-                
             except Exception as e:
                 result["embeddings_status"] = "error"
                 result["embeddings_error"] = str(e)
-                # Ensure cleanup even on error
-                try:
-                    del embed_model
-                    del embed_extractor
-                except:
-                    pass
-                clear_gpu_memory()
         else:
             result["embeddings_status"] = "unavailable"
             result["embeddings_note"] = "transformers not installed"
-        
-        # Final cleanup
-        print("Processing complete. Final cleanup...", file=sys.stderr)
-        clear_gpu_memory()
-        if device == "cuda":
-            result["final_gpu_memory"] = get_gpu_memory_info()
         
         # Final status
         result["status"] = "success"

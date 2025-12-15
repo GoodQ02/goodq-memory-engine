@@ -1,0 +1,35 @@
+# vLLM Server Configuration
+
+server:
+  host: "0.0.0.0"
+  port: 8000
+  timeout: 600
+  log_level: "info"
+
+model:
+  # Default model settings - override with CLI args
+  dtype: "auto"  # or "float16", "bfloat16", "float32"
+  gpu_memory_utilization: 0.90  # Use 90% of GPU memory
+  max_model_len: 4096  # Max context length
+  tensor_parallel_size: 1  # Number of GPUs
+  
+engine:
+  max_num_seqs: 256  # Max concurrent sequences
+  max_num_batched_tokens: 8192
+  enable_prefix_caching: true
+  disable_log_stats: false
+
+api:
+  # OpenAI-compatible API settings
+  served_model_name: null  # Use model path name
+  response_role: "assistant"
+  enable_auto_tool_choice: false
+  tool_call_parser: null
+
+# Quantization settings (optional)
+# quantization: "awq"  # or "gptq", "squeezellm"
+# load_format: "auto"  # or "pt", "safetensors", "npcache"
+
+# For GGUF models (requires llama.cpp backend)
+# gguf:
+#   kv_cache_dtype: "auto"

@@ -1,0 +1,55 @@
+╔═══════════════════════════════════════════════════════════════╗
+║         GoodQ4All LLM Infrastructure - Quick Reference        ║
+╚═══════════════════════════════════════════════════════════════╝
+
+🟢 CURRENTLY RUNNING
+────────────────────────────────────────────────────────────────
+✅ vLLM Llama 1B     → http://localhost:8003 (178 tok/s)
+✅ Ollama Phi4       → http://localhost:11434 (fallback)
+
+🔧 WSL COMMANDS
+────────────────────────────────────────────────────────────────
+Test all services:     ~/vllm_server/scripts/test_debug.sh
+Check status:          ~/vllm_server/scripts/status_all.sh
+Monitor GPU:           nvidia-smi
+View logs:             tail -f ~/vllm_server/logs/llama1b.log
+
+Start Llama 1B:        ~/vllm_server/scripts/start_llama1b.sh
+Stop all vLLM:         pkill -f vllm.entrypoints
+Restart everything:    pkill -f vllm.entrypoints && sleep 3 && \
+                       ~/vllm_server/scripts/start_llama1b.sh
+
+💻 WINDOWS TESTING
+────────────────────────────────────────────────────────────────
+Test vLLM:            curl http://localhost:8003/v1/models
+Test Ollama:          curl http://localhost:11434/v1/models
+
+Run Control Agent:    cd L:\goodq4all
+                      python scripts\run_control_agent.py
+
+Test LLM Client:      python -c "from lib.llm_client import LLMClient; \
+                      c=LLMClient(); print(c.chat([{'role':'user', \
+                      'content':'test'}]))"
+
+📊 CURRENT STATUS
+────────────────────────────────────────────────────────────────
+GPU: RTX 4070 Ti SUPER (16 GB)
+VRAM Used: 15.7 GB (vLLM allocated, normal)
+VRAM Free: 298 MB
+Utilization: 6% (idle)
+
+🆘 IF SOMETHING BREAKS
+────────────────────────────────────────────────────────────────
+pkill -f vllm.entrypoints
+sleep 5
+~/vllm_server/scripts/start_llama1b.sh
+~/vllm_server/scripts/test_debug.sh
+
+📍 KEY FILES
+────────────────────────────────────────────────────────────────
+Test guide:           ~/vllm_server/TEST_DEBUG_GUIDE.md
+Windows LLM client:   L:\goodq4all\lib\llm_client.py
+Control agent:        L:\goodq4all\scripts\run_control_agent.py
+Logs directory:       ~/vllm_server/logs/
+
+🎯 READY FOR TESTING! Report any errors you encounter.

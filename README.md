@@ -851,8 +851,11 @@ scripts\command_center.ps1  # Interactive dashboard
 | Document | Description |
 |----------|-------------|
 | **[System Architecture](docs/architecture/SYSTEM_ARCHITECTURE.md)** | System design deep dive |
+| **[Memory & Storage](docs/architecture/MEMORY_STORAGE.md)** | Database architecture (SQLite, Qdrant, FAISS) |
 | **[Phased Segmentation](docs/reports/PHASED_SEGMENTATION_ENGINE_IMPLEMENTATION_REPORT.md)** | New audio/video engine |
 | **[Model Lockdown](docs/technical/MODEL_LOCKDOWN.md)** | Version pinning strategy |
+| **[Qdrant Setup](docs/guides/QDRANT_SETUP.md)** | Vector database installation & configuration |
+| **[Qdrant Quick Reference](docs/QDRANT_QUICKREF.md)** | Common Qdrant commands & queries |
 | **[Pipeline Flow](docs/architecture/diagrams/PIPELINE_FLOW.md)** | Visual workflow diagrams |
 | **[API Documentation](http://localhost:30000/docs)** | Interactive API explorer (when running) |
 | **[Troubleshooting](docs/TROUBLESHOOTING.md)** | Common issues & solutions |

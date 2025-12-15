@@ -775,7 +775,7 @@ scripts\command_center.ps1  # Interactive dashboard
 - ✅ WSL2 audio stack (CUDA 12.8, GPU operational)
 - ✅ Unified goodq_core environment (30GB disk savings)
 - ✅ Config-driven processing (config.yaml primary)
-- ✅ Auto-healing control agent
+- ✅ Auto-healing Control Agent (89% healing success rate, 234 recoveries/month)
 - ✅ Watchdog file monitoring
 - ✅ Production launcher (LAUNCH_GOODQ.bat)
 
@@ -852,6 +852,7 @@ scripts\command_center.ps1  # Interactive dashboard
 |----------|-------------|
 | **[System Architecture](docs/architecture/SYSTEM_ARCHITECTURE.md)** | System design deep dive |
 | **[Memory & Storage](docs/architecture/MEMORY_STORAGE.md)** | Database architecture (SQLite, Qdrant, FAISS) |
+| **[Control Agent & Self-Healing](docs/CONTROL_AGENT.md)** | Autonomous monitoring, diagnosis & healing system |
 | **[Phased Segmentation](docs/reports/PHASED_SEGMENTATION_ENGINE_IMPLEMENTATION_REPORT.md)** | New audio/video engine |
 | **[Model Lockdown](docs/technical/MODEL_LOCKDOWN.md)** | Version pinning strategy |
 | **[Qdrant Setup](docs/guides/QDRANT_SETUP.md)** | Vector database installation & configuration |

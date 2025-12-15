@@ -1,0 +1,76 @@
+╔══════════════════════════════════════════════════════════════════════╗
+║             HUGGINGFACE TOKEN - QUICK REFERENCE                      ║
+╚══════════════════════════════════════════════════════════════════════╝
+
+🎯 ONE-TIME SETUP (Do this now)
+────────────────────────────────────────────────────────────────────────
+
+1. Accept model agreements:
+   
+   → https://huggingface.co/pyannote/speaker-diarization-3.1
+     Click "Agree and access repository"
+   
+   → https://huggingface.co/pyannote/speaker-diarization-community-1  
+     Click "Agree and access repository"
+
+2. Wait 2-5 minutes for access to propagate
+
+3. Verify:
+   source ~/goodq_audio/setup_cuda_env.sh
+   python3 ~/goodq_audio/check_hf_token.py
+
+✅ DAILY USAGE
+────────────────────────────────────────────────────────────────────────
+
+Always activate environment with:
+  source ~/goodq_audio/setup_cuda_env.sh
+
+This automatically:
+  ✓ Sets up CUDA libraries
+  ✓ Activates virtual environment  
+  ✓ Exports HuggingFace token
+
+Then run your scripts:
+  ./scripts/process.sh audio.wav output/
+
+🔍 VERIFICATION COMMANDS
+────────────────────────────────────────────────────────────────────────
+
+# Check token is set
+source ~/goodq_audio/setup_cuda_env.sh
+python3 -c "import os; print('SET' if os.getenv('HUGGINGFACE_TOKEN') else 'NOT_SET')"
+
+# Full diagnostic
+python3 ~/goodq_audio/check_hf_token.py
+
+# Test pyannote loading
+python3 -c "from pyannote.audio import Pipeline; Pipeline.from_pretrained('pyannote/speaker-diarization-3.1')"
+
+📝 IMPORTANT NOTES
+────────────────────────────────────────────────────────────────────────
+
+• Token is stored by huggingface-cli (not in code)
+• Token is auto-exported by setup_cuda_env.sh
+• All diagnostic messages go to stderr (won't pollute JSON)
+• Model access is one-time setup per HF account
+
+📚 DOCUMENTATION FILES
+────────────────────────────────────────────────────────────────────────
+
+  ~/goodq_audio/HF_TOKEN_SETUP.md     - Full documentation
+  ~/goodq_audio/check_hf_token.py     - Diagnostic tool
+  ~/goodq_audio/CUDA_SETUP.md         - CUDA configuration
+
+🆘 TROUBLESHOOTING
+────────────────────────────────────────────────────────────────────────
+
+If diarization fails:
+  1. Run: python3 ~/goodq_audio/check_hf_token.py
+  2. Follow the instructions in the output
+  3. Accept model agreements if needed
+  4. Wait a few minutes and retry
+
+If token is not found:
+  1. Run: huggingface-cli whoami
+  2. If not logged in: huggingface-cli login
+  3. Re-source: source ~/goodq_audio/setup_cuda_env.sh

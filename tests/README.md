@@ -1,8 +1,8 @@
 # GoodQ4All Test Suite
 
-**Created:** November 7, 2025  
-**Purpose:** Organized test suite for GoodQ4All project  
-**Structure:** Unit, Integration, and Utility tests
+**Last Updated:** December 15, 2025  
+**Purpose:** Comprehensive test suite for GoodQ4All multimodal AI pipeline  
+**Status:** Operational with organized structure
 
 ---
 
@@ -10,34 +10,71 @@
 
 ```
 tests/
-├── README.md           # This file
-├── __init__.py         # Python package marker
-├── unit/               # Unit tests (isolated component testing)
-│   ├── __init__.py
+├── README.md                          # This file
+├── __init__.py                        # Python package marker
+│
+├── unit/                              # Unit tests (isolated components)
 │   ├── test_db_creation.py
 │   ├── test_memory_context.py
 │   ├── test_config_values.py
 │   └── test_knowledge_graph.py
-├── integration/        # Integration tests (multi-component testing)
-│   ├── __init__.py
+│
+├── integration/                       # Integration tests (multi-component)
 │   ├── test_watchdog.py
 │   ├── test_ingestion_verbose.py
 │   ├── test_scene_comprehensive.py
 │   └── verify_clip.py
-└── utils/              # Test utilities and validation scripts
-    ├── __init__.py
-    ├── test_hf_auth.py
-    ├── test_clean_run.py
-    ├── test_mission_logger.py
-    ├── quick_test_storage.py
-    ├── validate_ingestion_output.py
-    ├── validate_results.py
-    └── validate_all_steps.py
+│
+├── utils/                             # Test utilities and validators
+│   ├── test_hf_auth.py
+│   ├── test_clean_run.py
+│   ├── test_mission_logger.py
+│   ├── quick_test_storage.py
+│   ├── validate_ingestion_output.py
+│   ├── validate_results.py
+│   └── validate_all_steps.py
+│
+├── legacy/                            # Historical diagnostic scripts
+│   └── temp_*.py                      # Moved Dec 15, 2025
+│
+└── Current Test Scripts:
+    ├── test_ingestion.py              # Quick ingestion test
+    ├── run_test_ingestion.py          # Full pipeline test
+    ├── test_phase*.py                 # Phase-specific validation
+    ├── test_audio_*.py                # Audio pipeline tests
+    ├── test_entities.py               # Entity extraction tests
+    ├── test_kg_build.py               # Knowledge graph tests
+    └── test_wsl_audio.py              # WSL2 audio bridge test
 ```
 
 ---
 
-## Test Categories
+## Quick Start
+
+### Run Full Pipeline Test
+```bash
+cd L:\goodq4all
+python tests\run_test_ingestion.py
+```
+
+### Test Audio Processing (WSL2)
+```bash
+python tests\test_wsl_audio.py
+```
+
+### Validate Knowledge Graph
+```bash
+python tests\test_kg_build.py
+```
+
+### Test Entity Extraction
+```bash
+python tests\test_entities.py
+```
+
+---
+
+## Active Test Categories
 
 ### Unit Tests (`tests/unit/`)
 
@@ -123,9 +160,11 @@ Testing and validation utilities for development and debugging.
 
 #### quick_test_storage.py
 - **Purpose:** Quick validation of storage systems
-- **Coverage:** DB connectivity, FAISS indices, file access
-- **Dependencies:** SQLite, FAISS
+- **Coverage:** DB connectivity, Qdrant vector store, file access
+- **Dependencies:** SQLite, Qdrant
 - **Run:** `python tests/utils/quick_test_storage.py`
+
+**Note:** References to FAISS are historical - system now uses Qdrant exclusively.
 
 #### validate_ingestion_output.py
 - **Purpose:** Validate ingestion pipeline output
@@ -142,12 +181,31 @@ Testing and validation utilities for development and debugging.
 #### validate_all_steps.py
 - **Purpose:** Validate all pipeline steps independently
 - **Coverage:** Each step's functionality, environment isolation
-- **Dependencies:** All 22 environments
+- **Dependencies:** goodq_core unified environment
 - **Run:** `python tests/utils/validate_all_steps.py`
+
+**Note:** Now uses unified goodq_core environment instead of 22 separate environments.
 
 ---
 
 ## Running Tests
+
+### Quick Pipeline Tests
+```bash
+cd L:\goodq4all
+
+# Full ingestion pipeline test
+python tests\run_test_ingestion.py
+
+# WSL2 audio processing test
+python tests\test_wsl_audio.py
+
+# Entity extraction validation
+python tests\test_entities.py
+
+# Knowledge graph build test
+python tests\test_kg_build.py
+```
 
 ### Individual Tests
 ```bash
@@ -215,9 +273,9 @@ mkdir L:\goodq4all\tests\data
 ## Test Environment
 
 ### Required Environments
-Tests use the existing Conda environments:
-- `goodq_zenml` - Main orchestration
-- Environment-specific tests use their respective envs
+Tests use the unified Conda environment:
+- `goodq_core` - Unified processing environment (all vision/audio steps)
+- WSL2 Ubuntu environment for audio processing (separate)
 
 ### Environment Variables
 Tests require:
@@ -376,14 +434,15 @@ python -c "import goodq4all; print('OK')"
 
 ## Migration Notes
 
-**Moved from:** Various locations (scripts/, root/)  
-**Moved on:** November 7, 2025  
-**Reason:** Organizational cleanup Phase 2
+**Organizational Updates:**
+- **Dec 15, 2025:** Moved temp_*.py diagnostic scripts to `legacy/` folder
+- **Nov 7, 2025:** Organized tests into unit/integration/utils structure
 
 **Previous Locations:**
 - `scripts/test_*.py` → `tests/unit/` or `tests/integration/`
 - Root `test_*.py` → `tests/integration/`
 - Root `verify_*.py` → `tests/integration/`
+- One-off diagnostics → `tests/legacy/`
 
 **Import Changes:**
 Old imports may need updating:
@@ -403,14 +462,15 @@ from scripts.some_module import function
 ## Related Documentation
 
 - **Main README:** `L:\goodq4all\README.md`
-- **Architecture:** `L:\goodq4all\docs\ARCHITECTURE_REFERENCE.md`
-- **Script Audit:** `L:\goodq4all\docs\SCRIPT_AUDIT_REPORT_2025-11-07.md`
-- **Contributing:** `L:\goodq4all\CONTRIBUTING.md` (to be created)
+- **Architecture:** `docs/ARCHITECTURE.md`
+- **Setup Guide:** `docs/SETUP.md`
+- **CLI Guide:** `docs/CLI_GUIDE.md`
+- **Knowledge Graph:** `docs/KNOWLEDGE_GRAPH.md`
 
 ---
 
 **Maintained by:** GoodQ Development Team  
-**Last Updated:** November 7, 2025  
+**Last Updated:** December 15, 2025  
 **Review Schedule:** Monthly
 
 ---

@@ -1,0 +1,12 @@
+[
+  {
+    "user_prompt": "Hello, who are you?",
+    "ai_response": "I'm an AI assistant.",
+    "summary": "User greeted AI."
+  },
+  {
+    "user_prompt": "What can you do?",
+    "ai_response": "I can help with many tasks.",
+    "summary": "User asked about AI capabilities."
+  }
+]

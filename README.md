@@ -596,6 +596,21 @@ goodq4all/
 - **CUDA:** 12.1 (Windows) / 12.8 (WSL2)
 - **Key Libraries:** transformers 4.45.2, opencv-python 4.10.0, librosa 0.10.2
 - **Unified Environment:** Consolidates 6 former environments into one (30GB disk savings)
+- **Architecture:** Micro-environment loader system (see `envs/` directory)
+  - Each processing module (CLIP, YOLO, BLIP, etc.) has isolated environment specs
+  - Single conda environment with dynamic activation via `goodq_core` loader
+  - Prevents dependency conflicts while maintaining fast startup
+
+**Micro-Environments in `envs/` folder:**
+- `image_caption/` - BLIP2 captioning
+- `object_detect/` - YOLOv8 detection
+- `face_embed/` - InsightFace recognition
+- `ocr/` - Tesseract text extraction
+- `video_scene_detect/` - Scene boundary detection
+- `sentiment/`, `text_embed/`, `tagger/` - Text processing
+- ...and 15+ more specialized environments
+
+📦 **See:** [`docs/guides/CONSOLIDATION_EXPLAINED.md`](docs/guides/CONSOLIDATION_EXPLAINED.md) for architecture details
 
 **WSL2 Audio Environment (`~/goodq_audio/venv`):**
 - **Python:** 3.10
@@ -643,7 +658,8 @@ python scripts\cache_readiness_check.py
 LAUNCH_GOODQ.bat
 ```
 
-📖 **Detailed Setup:** See [`docs/guides/INSTALLATION.md`](docs/guides/INSTALLATION.md)
+📖 **Detailed Setup:** See [`docs/guides/general/INSTALL.md`](docs/guides/general/INSTALL.md)  
+📦 **Environment Reference:** See [`docs/guides/general/CONSOLIDATION_EXPLAINED.md`](docs/guides/CONSOLIDATION_EXPLAINED.md)
 
 ---
 
@@ -652,30 +668,34 @@ LAUNCH_GOODQ.bat
 ### Process a Single Video
 
 ```bash
-conda activate goodq_zenml
-python cli/run_ingestion.py ingest path/to/video.mp4
+conda activate goodq_core
+python -m cli.run_ingestion --input-dir "L:\_DATA\GoodQ_Data\import_inbox"
 ```
 
-### Batch Process Multiple Files
+### Batch Process with Watchdog
 
 ```bash
-python cli/run_ingestion.py ingest path/to/videos/*.mp4
+# Auto-monitor inbox for new videos
+python -m cli.watchdog --input-dir "L:\_DATA\GoodQ_Data\import_inbox"
+
+# Or use launcher
+LAUNCH_GOODQ.bat  # Select option 1
 ```
 
 ### Query Knowledge Graph
 
 ```bash
-# Find all scenes with a specific person
-python cli/graph_query.py find-person "Alice"
+# Find entities in knowledge graph
+python -m lib.kg_query find-entity --name "Alice"
 
-# Search by semantic criteria
-python cli/graph_query.py search --objects "birthday cake" --emotions "happy"
+# Search by scene metadata
+python -m cli.search_scenes --emotion "happy" --objects "birthday cake"
 
 # Get scene context
-python cli/graph_query.py scene-context scene_id_0123
+python -m cli.get_scene --scene-id "scene_0000"
 ```
 
-### Interactive Chat
+### Interactive Search (Future)
 
 ```bash
 conda activate goodq_zenml

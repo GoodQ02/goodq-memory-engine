@@ -54,10 +54,10 @@ class WSL2AudioBridge:
         # Formula: base_overhead + (duration * processing_factor)
         if timeout is None:
             if audio_duration:
-                # 60s base + 2x duration (conservative for full pipeline)
-                timeout = max(120, int(60 + (audio_duration * 2)))
+                # 120s base + 4x duration (for transcription + diarization + emotion + embeddings)
+                timeout = max(300, int(120 + (audio_duration * 4)))
             else:
-                timeout = 600  # Default 10min fallback
+                timeout = 1200  # Default 20min fallback
             
         # Convert to WSL path
         wsl_input = self.wsl_path(audio_path)

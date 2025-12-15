@@ -45,6 +45,19 @@ class EntityExtractor:
         self.family_names = self._load_family_names()
         self.entity_cache = {}
         
+        # Stopwords to filter out (common words that aren't names)
+        self.stopwords = {
+            'okay', 'ok', 'yes', 'no', 'yeah', 'yep', 'nope',
+            'thank', 'thanks', 'please', 'hey', 'hi', 'hello',
+            'can', 'could', 'would', 'should', 'will', 'shall',
+            'does', 'do', 'did', 'done',
+            'what', 'where', 'when', 'why', 'who', 'how',
+            'the', 'a', 'an', 'and', 'or', 'but',
+            'you', 'i', 'me', 'my', 'your', 'he', 'she', 'it', 'they',
+            'emotion', 'sentiment', 'man', 'woman', 'person',
+            'hose', 'mathias',  # Add specific false positives as found
+        }
+        
     def _load_family_names(self) -> Set[str]:
         """Load known family member names from config"""
         # These should come from your config.yaml user section
@@ -77,6 +90,21 @@ class EntityExtractor:
         Returns:
             List of extracted entities with provenance
         """
+        # Flatten nested data structures if present
+        if 'keyframe' in scene_data and isinstance(scene_data['keyframe'], dict):
+            keyframe = scene_data['keyframe']
+            # Merge keyframe data to top level
+            for key, value in keyframe.items():
+                if key not in scene_data:
+                    scene_data[key] = value
+        
+        if 'audio' in scene_data and isinstance(scene_data['audio'], dict):
+            audio = scene_data['audio']
+            # Merge audio data to top level
+            for key, value in audio.items():
+                if key not in scene_data:
+                    scene_data[key] = value
+        
         entities = []
         
         # 1. Extract from visual data
@@ -97,7 +125,18 @@ class EntityExtractor:
         # 6. Extract from face detections
         entities.extend(self._extract_from_faces(scene_data, scene_id))
         
+        # Debug logging
         logger.info(f"[ENTITY] Extracted {len(entities)} entities from scene {scene_id}")
+        if entities:
+            entity_names = [e.name for e in entities[:5]]  # First 5
+            logger.info(f"[ENTITY] Sample entities: {entity_names}")
+        else:
+            # Log what data we had available
+            has_transcript = bool(scene_data.get('transcript') or scene_data.get('transcription'))
+            has_caption = bool(scene_data.get('caption'))
+            has_ocr = bool(scene_data.get('ocr_text'))
+            has_objects = bool(scene_data.get('objects') or scene_data.get('detected_objects'))
+            logger.warning(f"[ENTITY] No entities found. Data available: transcript={has_transcript}, caption={has_caption}, ocr={has_ocr}, objects={has_objects}")
         
         return entities
     
@@ -119,16 +158,15 @@ class EntityExtractor:
         """Extract entities from audio transcription and speaker data"""
         entities = []
         
-        # From Whisper transcription
-        if "transcription" in scene_data:
-            transcript = scene_data.get("transcription", "")
-            if isinstance(transcript, dict):
-                transcript = transcript.get("text", "")
-            
-            if transcript:
-                entities.extend(self._extract_names_from_text(
-                    transcript, scene_id, "audio", "transcription"
-                ))
+        # From Whisper transcription - check both 'transcript' (WSL2 output) and 'transcription' (legacy)
+        transcript_text = scene_data.get("transcript") or scene_data.get("transcription", "")
+        if isinstance(transcript_text, dict):
+            transcript_text = transcript_text.get("text", "")
+        
+        if transcript_text and isinstance(transcript_text, str) and transcript_text.strip():
+            entities.extend(self._extract_names_from_text(
+                transcript_text, scene_id, "audio", "transcription"
+            ))
         
         # From speaker diarization
         if "speakers" in scene_data:
@@ -174,8 +212,9 @@ class EntityExtractor:
         """Extract object entities from YOLO/detection"""
         entities = []
         
-        if "detected_objects" in scene_data:
-            objects = scene_data["detected_objects"]
+        # Check both 'objects' (actual field name from step) and 'detected_objects' (legacy)
+        objects = scene_data.get("objects") or scene_data.get("detected_objects", [])
+        if objects:
             for obj in objects:
                 if isinstance(obj, dict):
                     obj_name = obj.get("class", obj.get("label", "unknown"))
@@ -259,6 +298,10 @@ class EntityExtractor:
         # Check for family names
         for name in self.family_names:
             if name in text_lower:
+                # Skip if it's a stopword
+                if name.lower() in self.stopwords:
+                    continue
+                    
                 entities.append(ExtractedEntity(
                     entity_id=f"{scene_id}_{modality}_{name}",
                     entity_type="person",

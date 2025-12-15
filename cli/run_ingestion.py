@@ -834,29 +834,46 @@ def _process_audio(
 
     merge('goodq_audio_metadata', 'audio_metadata')
     
-    # WSL2 GPU-accelerated audio processing (only if audio exists)
+    # WSL2 GPU-accelerated UNIFIED audio processing (only if audio exists)
     if audio_path and audio_path.exists():
-        from steps.audio.audio_wsl2_bridge import audio_diarize_wsl2, audio_transcribe_wsl2, audio_emotion_wsl2
+        from steps.audio.audio_wsl2_bridge import audio_unified_wsl2
         
-        # Diarization
-        diarize_result = audio_diarize_wsl2(str(audio_path), scene_id=scene_id)
-        if isinstance(diarize_result, dict):
-            item.update(diarize_result)
-        
-        # Transcription
-        transcribe_result = audio_transcribe_wsl2(str(audio_path), scene_id=scene_id)
-        if isinstance(transcribe_result, dict):
-            item.update(transcribe_result)
+        # Single unified call gets transcription, diarization, emotion, embeddings
+        unified_result = audio_unified_wsl2(str(audio_path), scene_id=scene_id, duration=end-start)
+        if isinstance(unified_result, dict):
+            item.update(unified_result)
         
         # Legacy steps for speaker merge and timing (keep these for now)
         merge('goodq_audio_transcribe', 'audio_speaker_merge')
         merge('goodq_audio_transcribe', 'audio_music_events')
         merge('goodq_audio_transcribe', 'audio_time_hints')
         
-        # Emotion detection
-        emotion_result = audio_emotion_wsl2(str(audio_path), scene_id=scene_id)
-        if isinstance(emotion_result, dict):
-            item.update(emotion_result)
+        # Write compatibility JSON files for harmonizer
+        # The harmonizer expects separate transcript.json and diarization.json files
+        video_processing_dir = audio_dir.parent  # Go up from audio/ to processing/<video>/
+        audio_output_dir = video_processing_dir / 'audio'
+        audio_output_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Write transcript.json
+        if item.get('segments') or item.get('transcript'):
+            transcript_json = {
+                'segments': item.get('segments', []),
+                'full_text': item.get('transcript', ''),
+                'language': item.get('language', 'en')
+            }
+            import json
+            with open(audio_output_dir / 'transcript.json', 'w', encoding='utf-8') as f:
+                json.dump(transcript_json, f, indent=2, ensure_ascii=False)
+            logger.info(f"[AUDIO] Wrote transcript.json with {len(item.get('segments', []))} segments")
+        
+        # Write diarization.json
+        if item.get('speaker_segments'):
+            diarization_json = {
+                'speakers': item.get('speakers', []),
+                'segments': item.get('speaker_segments', [])
+            }
+            with open(audio_output_dir / 'diarization.json', 'w', encoding='utf-8') as f:
+                json.dump(diarization_json, f, indent=2, ensure_ascii=False)
     else:
         logger.info(f"[AUDIO] No audio stream in scene {scene_id}, skipping audio processing")
 
@@ -1153,6 +1170,8 @@ def run(
                         typer.echo(f'[ERROR] Frame extraction failed for scene {scene_index}: {frame_error}', err=True)
 
             if skip_audio:
+                if VERBOSE:
+                    typer.echo(f'[DEBUG] Skipping audio (using cached data)')
                 audio_meta = existing_meta.get('audio')
                 if isinstance(audio_meta, dict):
                     audio_info = audio_meta
@@ -1183,12 +1202,16 @@ def run(
                     typer.echo(f'[ERROR] {audio_error}', err=True)
                 else:
                     try:
+                        if VERBOSE:
+                            typer.echo(f'[DEBUG] Processing audio (not skipped, force={force})')
                         typer.echo(f'  [EXTRACT] Extracting audio...')
                         audio_info = _process_audio(cfg_json, ffmpeg, video_path, scene, audio_dir, video_hash, scene_id)
                         if audio_info is None:
                             typer.echo(f'  [OK] No audio track in video (video-only)')
                         else:
                             typer.echo(f'  [OK] Audio processed')
+                            if VERBOSE:
+                                typer.echo(f'[DEBUG] audio_info returned with keys: {list(audio_info.keys())}')
                     except Exception as exc:  # noqa: BLE001
                         audio_error = str(exc)
                         typer.echo(f'[ERROR] Audio extraction failed for scene {scene_index}: {audio_error}', err=True)
@@ -1212,12 +1235,42 @@ def run(
 
             # Update knowledge graph in real-time
             if KNOWLEDGE_GRAPH_AVAILABLE and cfg.get('knowledge_graph', {}).get('enabled', True):
+                # Extract all data for entity extraction
+                frame_data = frame_info.get('data', {}) if frame_info else {}
+                # Audio data is nested in 'data' key from _process_audio return
+                # DEBUG: Check what audio_info contains
+                if VERBOSE:
+                    typer.echo(f'[DEBUG] audio_info is None: {audio_info is None}')
+                    if audio_info:
+                        typer.echo(f'[DEBUG] audio_info keys: {list(audio_info.keys())}')
+                        typer.echo(f'[DEBUG] audio_info["data"] type: {type(audio_info.get("data"))}')
+                
+                audio_data = audio_info.get('data', {}) if audio_info else {}
+                
+                # DEBUG: Check what audio_data contains
+                if VERBOSE:
+                    typer.echo(f'[DEBUG] audio_data keys: {list(audio_data.keys())}')
+                    typer.echo(f'[DEBUG] has transcript: {bool(audio_data.get("transcript"))}')
+                    typer.echo(f'[DEBUG] has full_text: {bool(audio_data.get("full_text"))}')
+                    if audio_data.get('transcript'):
+                        typer.echo(f'[DEBUG] transcript preview: {str(audio_data.get("transcript"))[:50]}...')
+                
                 kg_scene_data = {
                     'index': scene.get('index'),
                     'start': scene.get('start'),
                     'end': scene.get('end'),
-                    'keyframe': frame_info.get('data') if frame_info else None,
-                    'audio': audio_info.get('data') if audio_info else None,
+                    # Flatten for entity extractor access
+                    'transcript': audio_data.get('transcript') or audio_data.get('full_text'),
+                    'caption': frame_data.get('caption'),
+                    'ocr_text': frame_data.get('ocr_text'),
+                    'objects': frame_data.get('objects'),
+                    'tags': frame_data.get('tags'),
+                    'emotion': audio_data.get('emotion'),
+                    'speakers': audio_data.get('speakers'),
+                    'diarization': audio_data.get('diarization'),
+                    # Keep full data for other uses
+                    'keyframe': frame_data,
+                    'audio': audio_data,
                 }
                 try:
                     kg_stats = update_kg_for_scene(

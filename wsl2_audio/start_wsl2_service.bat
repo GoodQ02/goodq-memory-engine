@@ -24,7 +24,7 @@ echo [INFO] This will run in the background
 echo.
 
 REM Start the service in WSL2
-start "GoodQ WSL2 Audio Service" wsl bash -c "cd ~/goodq_audio && source venv/bin/activate && python3 /mnt/l/goodq4all/wsl2_audio/audio_service.py"
+start "GoodQ WSL2 Audio Service" wsl bash -c "cd ~/goodq_audio && source setup_cuda_env.sh && python3 /mnt/l/goodq4all/wsl2_audio/audio_service.py"
 
 timeout /t 3 /nobreak >nul
 

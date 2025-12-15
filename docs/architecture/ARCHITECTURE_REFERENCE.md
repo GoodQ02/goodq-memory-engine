@@ -1,103 +1,74 @@
 # 🏗️ GoodQ4All Architecture Reference
-**Last Updated:** 2025-10-15  
-**Purpose:** Definitive reference for data structures, conventions, and storage patterns
 
-> Role: This document is the primary, canonical architecture reference for GoodQ4All. For a longer narrative and full-system research view, see `docs/COMPREHENSIVE_ARCHITECTURE_RESEARCH_2025-11-15.md`. Agents should rely on this file first when reasoning about schemas, storage, and component responsibilities.
+**Last Updated:** December 15, 2025  
+**Status:** ✅ Updated with Dec 14, 2025 Forensic Verification  
+**Purpose:** Definitive reference for data structures, storage patterns, and operational architecture
+
+> **Note:** This document reflects the current operational system. FAISS has been replaced by Qdrant. ZenML orchestration removed. Unified `goodq_core` environment now standard. For full system narrative, see [SYSTEM_ARCHITECTURE.md](SYSTEM_ARCHITECTURE.md).
 
 ---
 
 ## Table of Contents
-1. [Database Schema](#database-schema)
-2. [FAISS Index Architecture](#faiss-index-architecture)
-3. [Embedding Storage Conventions](#embedding-storage-conventions)
-4. [ID Map Architecture](#id-map-architecture)
-5. [Knowledge Graph Schema](#knowledge-graph-schema)
-6. [File System Layout](#file-system-layout)
+1. [Database Schema](#database-schema) - memory.db, knowledge_graph.db
+2. [Qdrant Vector Storage](#qdrant-vector-storage) - Replaces FAISS
+3. [Storage Conventions](#storage-conventions) - Paths, artifacts, WSL2
+4. [Knowledge Graph Schema](#knowledge-graph-schema) - Entity relationships
+5. [File System Layout](#file-system-layout) - Current verified paths
+6. [Deprecated Components](#deprecated-components) - FAISS, ZenML, old envs
 
 ---
 
-## Database Schema
+## Database Schema (Dec 14, 2025)
 
 ### Primary Database: `memory.db`
 
-**Location:** `L:\goodq4all\data\memory.db`
+**Location:** `L:\_DATA\GoodQ_Data\memory.db` ✅ Verified  
+**Purpose:** Scene bundles, metadata, processing state
 
-#### Tables
+#### Core Tables
 
-**1. embeddings**
+**1. scene_bundles**
 ```sql
-CREATE TABLE embeddings (
-    hash TEXT PRIMARY KEY,          -- Content fingerprint (SHA256)
-    faiss_id INTEGER,                -- ID in FAISS index (can be NULL)
-    source_path TEXT,                -- Original file path
-    modality TEXT,                   -- 'image', 'audio', 'frame_text', 'audio_transcript'
-    scene_id TEXT,                   -- Optional reference to scenes table
-    created_at TEXT,                 -- ISO timestamp
-    sentiment_label TEXT,            -- Optional sentiment label
-    sentiment_score REAL,            -- Optional sentiment score
-    emotions_json TEXT               -- Optional JSON emotions data
+CREATE TABLE scene_bundles (
+    scene_id TEXT PRIMARY KEY,          -- Unique scene identifier
+    video_name TEXT,                    -- Source video filename
+    scene_index INTEGER,                -- Scene number (0-29 typical)
+    start_time REAL,                    -- Start timestamp in seconds
+    end_time REAL,                      -- End timestamp in seconds
+    duration REAL,                      -- Scene duration
+    keyframe_path TEXT,                 -- logs/scene_ingest/<video>/video/scene_XXXX.jpg
+    audio_path TEXT,                    -- logs/scene_ingest/<video>/audio/scene_XXXX.wav
+    transcript TEXT,                    -- Whisper transcription
+    caption TEXT,                       -- BLIP2 image caption
+    ocr_text TEXT,                      -- Tesseract OCR output
+    objects TEXT,                       -- JSON list of detected objects (YOLO)
+    metadata_json TEXT,                 -- Extended metadata
+    created_at TEXT,                    -- ISO timestamp
+    processed BOOLEAN DEFAULT 0         -- Processing completion flag
 );
 ```
 
 **Key Points:**
-- `hash` is SHA256 of content (stable across runs)
-- `modality` groups embeddings by type (see conventions below)
-- `faiss_id` links to vector in FAISS index
-- Can have multiple embeddings for same source_path with different modalities
+- Registered via `register_scene_bundle()` in `cli/run_ingestion.py`
+- Each scene (0-29) gets one bundle entry
+- Artifact paths point to `logs/scene_ingest/`
+- Status: ✅ Operational (Dec 14 verified)
 
-**2. scenes**
+**2. embeddings** (if still used)
 ```sql
-CREATE TABLE scenes (
-    id TEXT PRIMARY KEY,             -- Scene hash
-    video_hash TEXT,                 -- Parent video hash
-    start REAL,                      -- Start time in seconds
-    end REAL,                        -- End time in seconds
-    meta TEXT,                       -- JSON metadata
-    created_at TEXT                  -- ISO timestamp
+CREATE TABLE embeddings (
+    hash TEXT PRIMARY KEY,              -- Content fingerprint (SHA256)
+    scene_id TEXT,                      -- Reference to scene_bundles
+    modality TEXT,                      -- 'clip', 'dino', 'clap', 'text'
+    embedding_type TEXT,                -- Model used (e.g., 'clip-vit-base')
+    dimensions INTEGER,                 -- Vector dimensionality
+    created_at TEXT                     -- ISO timestamp
 );
 ```
 
-**Meta JSON Structure:**
-```json
-{
-  "index": 0,
-  "duration": 2.0,
-  "confidence": 0.5,
-  "detection": {...},
-  "caption": "a woman sitting at a table",
-  "caption_meta": {...},
-  "objects": [{...}],
-  "keyframe": {...},
-  "audio": {...},
-  "diarization": [{...}],
-  "transcript_meta": {...}
-}
-```
+**Note:** Embeddings primarily stored in Qdrant now, this may be legacy/backup.
 
-**3. segments**
-```sql
-CREATE TABLE segments (
-    id TEXT PRIMARY KEY,             -- Segment hash
-    video_hash TEXT,                 -- Parent video hash
-    start REAL,                      -- Start time in seconds
-    end REAL,                        -- End time in seconds
-    speaker TEXT,                    -- Speaker ID (e.g., "SPEAKER_00")
-    meta TEXT,                       -- JSON metadata
-    created_at TEXT                  -- ISO timestamp
-);
-```
-
-**Purpose:** Audio diarization segments (who spoke when)
-
-**4. links**
-```sql
-CREATE TABLE links (
-    parent_hash TEXT,                -- Source hash
-    child_hash TEXT,                 -- Target hash
-    relation TEXT,                   -- Relationship type
-    timestamp REAL,                  -- When created
-    meta TEXT,                       -- JSON metadata
-    created_at TEXT                  -- ISO timestamp
+---
 );
 ```
 
@@ -118,494 +89,391 @@ CREATE TABLE summaries (
 
 ---
 
-## FAISS Index Architecture
+### Secondary Database: `knowledge_graph.db`
 
-### Index Locations
+**Location:** `L:\_DATA\GoodQ_Data\knowledge_graph.db` ✅ Verified  
+**Purpose:** Entity relationships, cross-modal resolution
 
+#### Core Tables
+
+**1. entities**
+```sql
+CREATE TABLE entities (
+    entity_id TEXT PRIMARY KEY,         -- Unique entity identifier
+    entity_type TEXT,                   -- 'person', 'place', 'organization'
+    name TEXT,                          -- Canonical entity name
+    confidence REAL,                    -- Extraction confidence (0-1)
+    first_seen TEXT,                    -- ISO timestamp
+    last_seen TEXT,                     -- ISO timestamp
+    mention_count INTEGER DEFAULT 1,    -- Number of mentions
+    metadata_json TEXT                  -- Extended attributes
+);
 ```
-L:\goodq4all\data\faiss_indices\
-├── text\
-│   └── faiss_text.index          # Sentence embeddings
+
+**2. mentions**
+```sql
+CREATE TABLE mentions (
+    mention_id TEXT PRIMARY KEY,        -- Unique mention identifier
+    entity_id TEXT,                     -- Foreign key to entities
+    scene_id TEXT,                      -- Scene where mentioned
+    source TEXT,                        -- 'transcript', 'caption', 'ocr', 'objects'
+    timestamp REAL,                     -- Scene timestamp
+    context TEXT,                       -- Surrounding text/context
+    created_at TEXT,                    -- ISO timestamp
+    FOREIGN KEY (entity_id) REFERENCES entities(entity_id)
+);
+```
+
+**3. relationships**
+```sql
+CREATE TABLE relationships (
+    relationship_id TEXT PRIMARY KEY,   -- Unique relationship identifier
+    entity_a_id TEXT,                   -- First entity
+    entity_b_id TEXT,                   -- Second entity
+    relationship_type TEXT,             -- 'co-occurs', 'mentions', 'related'
+    strength REAL,                      -- Relationship strength (0-1)
+    first_seen TEXT,                    -- ISO timestamp
+    scenes_json TEXT,                   -- JSON list of scene_ids
+    FOREIGN KEY (entity_a_id) REFERENCES entities(entity_id),
+    FOREIGN KEY (entity_b_id) REFERENCES entities(entity_id)
+);
+```
+
+**Integration:**
+- Real-time insertion via `lib/kg_realtime_integration.py:109`
+- Entity extraction from `steps/video/entity_extractor.py:370`
+- Cross-modal resolution: transcript + caption + OCR + objects
+- Status: ✅ Operational (Dec 14 verified)
+
+---
+
+## Qdrant Vector Storage (Dec 14, 2025)
+
+**Replaces:** FAISS indices (deprecated Oct 2025)
+
+### Connection Details
+- **URL:** http://localhost:36335
+- **Status:** ✅ Operational (Dec 14 verified)
+- **Storage:** `L:\_DATA\GoodQ_Data\qdrant\`
+
+### Collections
+
+**1. goodq_text**
+```python
+{
+    "name": "goodq_text",
+    "vectors": {
+        "size": 384,                    # SBERT all-MiniLM-L6-v2
+        "distance": "Cosine"
+    },
+    "payload_schema": {
+        "scene_id": "keyword",
+        "source": "keyword",            # 'transcript', 'ocr', 'caption'
+        "text": "text",
+        "timestamp": "float",
+        "video_name": "keyword"
+    }
+}
+```
+
+**Sources:** Transcripts, OCR text, captions  
+**Model:** sentence-transformers/all-MiniLM-L6-v2  
+**Dimensions:** 384
+
+**2. goodq_image**
+```python
+{
+    "name": "goodq_image",
+    "vectors": {
+        "clip": {
+            "size": 512,                # CLIP ViT-B/16
+            "distance": "Cosine"
+        },
+        "dino": {
+            "size": 768,                # DINOv2-base
+            "distance": "Cosine"
+        }
+    },
+    "payload_schema": {
+        "scene_id": "keyword",
+        "keyframe_path": "keyword",
+        "caption": "text",
+        "objects": "keyword[]",
+        "timestamp": "float",
+        "video_name": "keyword"
+    }
+}
+```
+
+**Sources:** Keyframe images  
+**Models:** CLIP (512-d) + DINO (768-d) as named vectors  
+**Status:** Multi-vector support for dual embeddings
+
+**3. goodq_audio**
+```python
+{
+    "name": "goodq_audio",
+    "vectors": {
+        "size": 512,                    # CLAP
+        "distance": "Cosine"
+    },
+    "payload_schema": {
+        "scene_id": "keyword",
+        "audio_path": "keyword",
+        "transcript": "text",
+        "speaker": "keyword",
+        "emotion": "keyword",
+        "timestamp": "float",
+        "video_name": "keyword"
+    }
+}
+```
+
+**Sources:** Scene audio clips  
+**Model:** laion/clap-htsat-unfused  
+**Dimensions:** 512
+
+### Querying Qdrant
+
+**Health Check:**
+```powershell
+Invoke-WebRequest http://localhost:36335/health
+```
+
+**List Collections:**
+```powershell
+Invoke-WebRequest http://localhost:36335/collections
+```
+
+**Query Example (Python):**
+```python
+from qdrant_client import QdrantClient
+
+client = QdrantClient(url="http://localhost:36335")
+
+# Search text embeddings
+results = client.search(
+    collection_name="goodq_text",
+    query_vector=embed_text("person with dog"),
+    limit=10
+)
+
+# Search images with CLIP
+results = client.search(
+    collection_name="goodq_image",
+    query_vector=embed_image("image.jpg"),
+    using="clip",
+    limit=10
+)
+```
+
+---
+
+## Storage Conventions (Dec 14, 2025)
+
+### Artifact Locations
+
+**Scene Artifacts (Verified Dec 14):**
+```
+logs\scene_ingest\<video_name>\
 ├── audio\
-│   └── faiss_audio.index         # CLAP audio embeddings
-├── clip\
-│   └── (index location TBD)      # CLIP image embeddings
-└── dino\
-    └── faiss_dino.index          # DINO image embeddings
+│   ├── scene_0000.wav
+│   ├── scene_0001.wav
+│   └── scene_0029.wav          # 30 scenes typical
+└── video\
+    ├── scene_0000.jpg
+    ├── scene_0001.jpg
+    └── scene_0029.jpg
 ```
 
-### Index Types
+**⚠️ Config Drift:** Config specifies `processing/` but actual location is `logs/scene_ingest/`  
+**Status:** Documented, not a bug - artifacts reliably land in `logs/scene_ingest/`
 
-**1. Text Index** (`faiss_text.index`)
-- **Model:** sentence-transformers/all-MiniLM-L6-v2
-- **Dimensions:** 384
-- **Index Type:** HNSW (Hierarchical Navigable Small World)
-- **Sources:** OCR text, captions, transcripts
-
-**2. Audio Index** (`faiss_audio.index`)
-- **Model:** laion/clap-htsat-unfused
-- **Dimensions:** 512
-- **Index Type:** HNSW
-- **Sources:** Audio clips from scenes
-
-**3. DINO Index** (`faiss_dino.index`)
-- **Model:** facebook/dinov2-base
-- **Dimensions:** 768
-- **Index Type:** HNSW
-- **Sources:** Keyframe images
-
-**4. CLIP Index** (location TBD)
-- **Model:** openai/clip-vit-base-patch16
-- **Dimensions:** 512
-- **Expected:** May share DINO index or separate location
-- **Investigation needed**
-
-### FAISS ID Assignment
-
-IDs are generated in two ways:
-
-**Method 1: Content-Based (Stable)**
-```python
-# Generate stable ID from content hash
-uid = np.array([int(hash[:16], 16) % (2**63 - 1)], dtype='int64')
-index.add_with_ids(embedding, uid)
+**WSL2 Audio Output:**
+```
+\\wsl.localhost\Ubuntu\home\<user>\goodq_audio\
+├── output\
+│   └── result.json             # 38KB verified Dec 14
+├── queue_in\                   # Service input
+├── queue_out\                  # Service output
+└── logs\
+    └── audio_service.log       # Service daemon logs
 ```
 
-**Method 2: Sequential (Auto-increment)**
-```python
-# Let FAISS assign next ID
-index.add(embedding)
-faiss_id = index.ntotal - 1
+**Data Root:**
+```
+L:\_DATA\GoodQ_Data\
+├── import_inbox\               # Drop videos here
+├── memory.db                   # Scene bundles
+├── knowledge_graph.db          # Entity relationships
+└── qdrant\                     # Vector storage
+```
+
+### File Naming Conventions
+
+**Scene Files:**
+- Pattern: `scene_XXXX.{wav,jpg}` where XXXX is zero-padded scene index
+- Example: `scene_0000.wav`, `scene_0029.jpg`
+
+**Video Names:**
+- Source filename becomes video identifier
+- Spaces preserved in artifact paths
+- Hash used for DB lookups
+
+---
+
+## File System Layout (Dec 14, 2025 Verified)
+
+```
+L:\goodq4all\                   # Project root
+├── cli\
+│   ├── run_ingestion.py        # ✅ PRIMARY ENTRY POINT (1541 lines)
+│   └── watchdog.py             # ✅ Canonical watchdog
+├── steps\
+│   ├── audio\                  # Legacy audio steps (⚠️ cleanup planned)
+│   ├── video\
+│   │   └── entity_extractor.py # ✅ Entity extraction (line 370)
+│   ├── image\                  # Vision models
+│   └── common\                 # Shared utilities
+├── lib\
+│   ├── kg_realtime_integration.py  # ✅ KG updates (line 109)
+│   └── knowledge_graph.py      # Graph manager
+├── wsl2_audio\                 # ✅ WSL2 audio stack
+│   ├── audio_service.py        # Daemon (PID 177)
+│   ├── process_audio.py        # Direct invocation
+│   ├── queue_in\
+│   ├── queue_out\
+│   └── output\
+├── vendor\qdrant\              # ✅ Qdrant binary
+├── api\                        # ⊘ FastAPI (scaffolded, not deployed)
+├── ui\                         # ⊘ Web UI (frontend exists)
+└── retrieval\                  # ⊘ Multimodal search (built, not wired)
+
+L:\_DATA\GoodQ_Data\            # ✅ Unified data root
+├── import_inbox\               # ✅ Drop videos here
+├── memory.db                   # ✅ Scene bundles
+├── knowledge_graph.db          # ✅ Entity relationships
+└── qdrant\                     # ✅ Vector storage
+
+logs\scene_ingest\              # ✅ Scene artifacts
+└── <video_name>\
+    ├── audio\                  # scene_XXXX.wav
+    └── video\                  # scene_XXXX.jpg
+```
+
+**Legend:** ✅ Operational | ⊘ Latent (built, not wired) | ⚠️ Cleanup planned
+
+---
+
+## Deprecated Components
+
+### ⚠️ No Longer Used (Dec 2025)
+
+**FAISS Indices:**
+- **Replaced by:** Qdrant vector database
+- **Migration:** Complete (Oct 2025)
+- **Old Location:** `L:\goodq4all\data\faiss_indices\`
+- **Note:** May still exist on disk but not actively used
+
+**ZenML Orchestration:**
+- **Replaced by:** Direct invocation via `cli/run_ingestion.py`
+- **Removal Date:** Nov 2025
+- **Note:** References may exist in old docs
+
+**Multiple Conda Environments:**
+- **Replaced by:** Unified `goodq_core` environment
+- **Old Envs:** goodq_image_caption, goodq_object_detect, goodq_ocr, goodq_audio_*
+- **Consolidation Date:** Dec 2025
+- **Savings:** ~30GB disk space
+
+**Old Data Paths:**
+- **Deprecated:** `L:\goodq4all\data\`, `L:\GoodQ_Data\`
+- **Current:** `L:\_DATA\GoodQ_Data\` (unified root)
+
+---
+
+## Quick Reference
+
+### Diagnostic Commands
+
+**Check Databases:**
+```powershell
+Get-Item "L:\_DATA\GoodQ_Data\*.db" | Select-Object Name, Length, LastWriteTime
+```
+
+**Check Qdrant:**
+```powershell
+Invoke-WebRequest http://localhost:36335/health
+Invoke-WebRequest http://localhost:36335/collections
+```
+
+**Check Scene Artifacts:**
+```powershell
+Get-ChildItem "logs\scene_ingest\" -Directory
+Get-ChildItem "logs\scene_ingest\<video>\audio\" | Measure-Object
+```
+
+**Check WSL2 Audio:**
+```powershell
+wsl ps aux | grep audio_service                   # Should show PID 177
+wsl tail -f ~/goodq_audio/logs/audio_service.log
+```
+
+### Common Queries
+
+**SQLite (memory.db):**
+```sql
+-- Count scenes
+SELECT COUNT(*) FROM scene_bundles;
+
+-- Recent scenes
+SELECT scene_id, video_name, created_at 
+FROM scene_bundles 
+ORDER BY created_at DESC 
+LIMIT 10;
+```
+
+**SQLite (knowledge_graph.db):**
+```sql
+-- Entity counts by type
+SELECT entity_type, COUNT(*) 
+FROM entities 
+GROUP BY entity_type;
+
+-- Top mentioned entities
+SELECT name, mention_count 
+FROM entities 
+ORDER BY mention_count DESC 
+LIMIT 10;
+```
+
+**Qdrant (HTTP API):**
+```powershell
+# Collection stats
+Invoke-WebRequest http://localhost:36335/collections/goodq_text | ConvertFrom-Json
 ```
 
 ---
 
-## Embedding Storage Conventions
+## Related Documentation
 
-### Modality Types
+**Core Documentation (✅ Updated Dec 14-15, 2025):**
+- [SYSTEM_ARCHITECTURE.md](SYSTEM_ARCHITECTURE.md) - System design, pipeline flow
+- [README.md](../../README.md) - System overview with forensic verification
+- [QUICK_START.md](../QUICK_START.md) - Fast launch guide
+- [TROUBLESHOOTING.md](../TROUBLESHOOTING.md) - 7 issues, 25+ commands
 
-**Critical Convention:** Modalities group embeddings by semantic type, NOT by model.
-
-| Modality | Description | Models | Source |
-|----------|-------------|---------|--------|
-| `image` | Visual embeddings | CLIP, DINO | Keyframe images |
-| `audio` | Audio embeddings | CLAP | Scene audio clips |
-| `frame_text` | Text from frames | Sentence transformer | OCR text |
-| `audio_transcript` | Speech text | Sentence transformer | Transcripts |
-
-### IMPORTANT: DINO/CLIP Share `modality="image"`
-
-**This is by design, not a bug!**
-
-Both DINO and CLIP embeddings are stored with `modality="image"` because:
-1. They represent the same semantic concept (visual content)
-2. Can be queried together for image similarity
-3. Different models provide complementary views of same content
-
-**How to distinguish:**
-- Check the FAISS index file used
-- Check the ID map database (dino_id_map.sqlite vs clip_id_map.sqlite)
-- Check metadata in `embeddings.meta` JSON field (if present)
-
-**Example Query:**
-```sql
--- All visual embeddings (both CLIP and DINO)
-SELECT * FROM embeddings WHERE modality='image';
-
--- DINO embeddings specifically
-SELECT e.* FROM embeddings e
-JOIN dino_id_map_db.dino_id_map d ON e.hash = d.hash;
-```
+**Subsystem Guides:**
+- [Qdrant Setup](../guides/QDRANT_SETUP.md) - Vector database initialization
+- [WSL2 Audio](../guides/wsl2/START_HERE_WSL2.md) - Dual architecture details
+- [GPU Configuration](../guides/gpu/GPU_SETUP.md) - GPU optimization
 
 ---
 
-## ID Map Architecture
-
-### Overview
-
-ID maps provide bidirectional lookups between:
-- Content hash (SHA256)
-- FAISS ID (integer)
-- Source path (file location)
-
-### Storage: SQLite, Not JSON
-
-**Location:** `L:\goodq4all\data\databases\`
-
-```
-databases\
-├── clap_id_map.sqlite     # Audio (CLAP) ID map
-├── dino_id_map.sqlite     # Image (DINO) ID map
-└── (clip_id_map TBD)      # Image (CLIP) ID map (if separate)
-```
-
-**Schema:**
-```sql
-CREATE TABLE {model}_id_map (
-    faiss_id INTEGER PRIMARY KEY,
-    hash TEXT,
-    source_path TEXT,
-    created_at TEXT
-);
-```
-
-**Example:**
-```sql
--- Look up FAISS ID from hash
-SELECT faiss_id FROM dino_id_map WHERE hash='abc123...';
-
--- Look up source file from FAISS ID
-SELECT source_path FROM clap_id_map WHERE faiss_id=42;
-
--- Count total embeddings
-SELECT COUNT(*) FROM dino_id_map;
-```
-
-### Why SQLite Instead of JSON?
-
-1. **Fast lookups** - Indexed queries vs full file scan
-2. **Concurrent access** - Multiple processes can read
-3. **Atomic updates** - No corruption from partial writes
-4. **Queryable** - Standard SQL instead of custom parsing
-5. **Scalable** - Handles millions of entries efficiently
-
-### ID Map Usage Pattern
-
-```python
-# Store embedding
-hash = sha256(content)
-faiss_id = index.ntotal
-index.add(embedding)
-
-# Record in ID map
-conn = sqlite3.connect('databases/dino_id_map.sqlite')
-conn.execute(
-    "INSERT INTO dino_id_map (faiss_id, hash, source_path, created_at) VALUES (?,?,?,?)",
-    (faiss_id, hash, path, datetime.now().isoformat())
-)
-
-# Also store in main database
-conn2 = sqlite3.connect('data/memory.db')
-conn2.execute(
-    "INSERT INTO embeddings (hash, faiss_id, source_path, modality) VALUES (?,?,?,?)",
-    (hash, faiss_id, path, 'image')
-)
-```
-
-**Note:** Data is stored in BOTH locations for redundancy and different access patterns.
+**Last Updated:** December 15, 2025  
+**Status:** ✅ Forensically Verified (Dec 14, 2025)  
+**Architecture Version:** 2.0 (Qdrant, Unified Env, Dual Audio)
 
 ---
 
-## Knowledge Graph Schema
-
-### Database: `knowledge_graph.db`
-
-**Location:** `L:\goodq4all\data\knowledge_graph.db`
-
-#### Tables
-
-**1. nodes** - Entities extracted from content
-```sql
-CREATE TABLE nodes (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    entity_text TEXT,               -- Entity name/text
-    entity_type TEXT,               -- PERSON, LOCATION, DATE, etc.
-    confidence REAL,                -- Extraction confidence
-    created_at TEXT
-);
-```
-
-**2. edges** - Relationships between entities
-```sql
-CREATE TABLE edges (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    source_node_id INTEGER,         -- Foreign key to nodes
-    target_node_id INTEGER,         -- Foreign key to nodes
-    relation_type TEXT,             -- Relationship type
-    confidence REAL,
-    created_at TEXT
-);
-```
-
-**3. media_nodes** - Scenes/segments as graph nodes
-```sql
-CREATE TABLE media_nodes (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    scene_id TEXT,                  -- Reference to scenes table
-    media_type TEXT,                -- 'scene', 'segment', etc.
-    timestamp REAL,                 -- Time in video
-    created_at TEXT
-);
-```
-
-**4. node_media** - Links entities to media
-```sql
-CREATE TABLE node_media (
-    node_id INTEGER,                -- Foreign key to nodes
-    media_node_id INTEGER,          -- Foreign key to media_nodes
-    created_at TEXT
-);
-```
-
-**5. temporal_events** - Time-based events
-```sql
-CREATE TABLE temporal_events (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    event_type TEXT,                -- Event type
-    timestamp REAL,                 -- When it occurred
-    scene_id TEXT,                  -- Reference to scene
-    metadata TEXT,                  -- JSON additional data
-    created_at TEXT
-);
-```
-
-### Graph Query Patterns
-
-**Find all entities in a scene:**
-```sql
-SELECT n.* FROM nodes n
-JOIN node_media nm ON n.id = nm.node_id
-JOIN media_nodes mn ON nm.media_node_id = mn.id
-WHERE mn.scene_id = 'scene_hash';
-```
-
-**Find scenes mentioning an entity:**
-```sql
-SELECT mn.scene_id FROM media_nodes mn
-JOIN node_media nm ON mn.id = nm.media_node_id
-JOIN nodes n ON nm.node_id = n.id
-WHERE n.entity_text = 'John';
-```
-
-**Find co-occurring entities:**
-```sql
-SELECT n1.entity_text, n2.entity_text, COUNT(*) as co_occurrences
-FROM nodes n1
-JOIN node_media nm1 ON n1.id = nm1.node_id
-JOIN node_media nm2 ON nm1.media_node_id = nm2.media_node_id
-JOIN nodes n2 ON nm2.node_id = n2.id
-WHERE n1.id < n2.id
-GROUP BY n1.id, n2.id
-ORDER BY co_occurrences DESC;
-```
-
----
-
-## File System Layout
-
-### Directory Structure
-
-```
-L:\goodq4all\
-├── data\                          # All persistent data
-│   ├── memory.db                  # Main database
-│   ├── knowledge_graph.db         # Knowledge graph
-│   ├── databases\                 # ID map SQLite files
-│   │   ├── clap_id_map.sqlite
-│   │   └── dino_id_map.sqlite
-│   ├── faiss_indices\             # Vector indices
-│   │   ├── text\
-│   │   ├── audio\
-│   │   ├── clip\
-│   │   └── dino\
-│   ├── processing\                # Temp processing area
-│   ├── processed\                 # Completed videos
-│   └── backups\                   # Database backups
-├── logs\                          # All logging
-│   ├── watchdog.log               # Main log
-│   ├── step_runs.jsonl            # Step execution log
-│   └── watchdog_YYYYMMDD_HHMMSS\  # Per-run workspaces
-├── steps\                         # Processing steps
-│   ├── audio_transcribe\
-│   ├── image_caption\
-│   ├── object_detect\
-│   └── ...
-├── import_inbox\                  # Drop videos here
-└── config.yaml                    # Main configuration
-```
-
-### Workspace Pattern
-
-Each processing run creates a workspace:
-
-```
-logs/watchdog_20251014_024332/
-└── 1987_1988/                     # Video name (sanitized)
-    ├── frames/                    # Extracted keyframes
-    │   ├── scene_0000.jpg
-    │   ├── scene_0001.jpg
-    │   └── ...
-    └── audio/                     # Extracted audio
-        ├── scene_0000.wav
-        ├── scene_0001.wav
-        └── ...
-```
-
-**Cleanup:** Workspaces are kept for debugging but can be cleared.
-
----
-
-## Data Flow Diagram
-
-```
-Video File (import_inbox/)
-    ↓
-[Scene Detection]
-    ↓
-├─→ Frames (workspace/frames/)
-│     ↓
-│   [Image Processing]
-│     ├─→ Captions → memory.db
-│     ├─→ Objects → memory.db
-│     ├─→ OCR → memory.db
-│     ├─→ CLIP → faiss_indices/clip/ + databases/clip_id_map.sqlite + memory.db
-│     └─→ DINO → faiss_indices/dino/ + databases/dino_id_map.sqlite + memory.db
-│
-└─→ Audio (workspace/audio/)
-      ↓
-    [Audio Processing]
-      ├─→ Diarization → segments table
-      ├─→ Transcription → scenes.meta
-      ├─→ Emotions → scenes.meta
-      └─→ CLAP → faiss_indices/audio/ + databases/clap_id_map.sqlite + memory.db
-            ↓
-    [Knowledge Graph]
-      └─→ Entities & Relations → knowledge_graph.db
-```
-
----
-
-## Configuration Conventions
-
-### Tool Paths
-
-External tools are configured explicitly in `config.yaml`:
-
-```yaml
-config:
-  tools:
-    whisper_cli: L:/_TOOLS/whisper/whisper-cli.exe
-    whisper_ggml_model: L:/_TOOLS/whisper/ggml-large-v3.bin
-    ffmpeg: L:/_TOOLS/ffmpeg/bin/ffmpeg.exe
-    tesseract: L:/_TOOLS/tesseract/tesseract.exe
-```
-
-**Why explicit paths?**
-- No ambiguity about which binary is used
-- Portable across machines
-- Auditable and verifiable
-- No PATH pollution
-
-### Model Paths
-
-Models are cached at:
-- **Hugging Face:** `L:/models/hub/`
-- **Custom models:** `L:/models/{model_type}/`
-
-Set via environment variables:
-```bash
-HF_HOME=L:/models
-TORCH_HOME=L:/models
-```
-
----
-
-## Performance Characteristics
-
-### Database Sizes (Typical)
-
-| Database | Size per Hour | Notes |
-|----------|---------------|-------|
-| memory.db | ~10-50 KB | Metadata only, no embeddings |
-| knowledge_graph.db | ~5-20 KB | Entities and relations |
-| FAISS indices | ~1-5 MB | Actual vector data |
-| ID map SQLite | ~100-500 KB | Lookup tables |
-| Workspace files | ~1-2 MB | Temporary, can be cleared |
-
-### Query Performance
-
-| Operation | Time | Notes |
-|-----------|------|-------|
-| FAISS k-NN search (k=10) | ~10-50ms | HNSW index |
-| SQLite scene lookup | ~1-5ms | Indexed |
-| Knowledge graph query | ~10-100ms | Depends on complexity |
-| Full text search | ~50-200ms | No full-text index yet |
-
----
-
-## Best Practices
-
-### 1. Content Hashing
-Always use SHA256 for content fingerprints:
-```python
-import hashlib
-hash = hashlib.sha256(content).hexdigest()
-```
-
-### 2. Modality Naming
-Use semantic names, not model names:
-- ✅ `modality='image'` for visual content
-- ❌ `modality='dino'` or `modality='clip'`
-
-### 3. ID Map Updates
-Always update both memory.db and ID map SQLite:
-```python
-# Update ID map
-conn1.execute("INSERT INTO dino_id_map ...")
-# Update main database
-conn2.execute("INSERT INTO embeddings ...")
-```
-
-### 4. FAISS Index Management
-- Use HNSW for datasets > 10K vectors
-- Set `efConstruction=200` for quality
-- Set `efSearch=50` for balance
-- Rebuild index if size doubles
-
-### 5. Database Backups
-Backup before major operations:
-```bash
-cp data/memory.db data/backups/memory_$(date +%Y%m%d).db
-```
-
----
-
-## Troubleshooting
-
-### "DINO embeddings missing"
-- Check `databases/dino_id_map.sqlite`
-- Query with JOIN, not direct modality filter
-- DINO uses `modality='image'`, not `modality='dino'`
-
-### "FAISS index not found"
-- Check index file exists in `data/faiss_indices/{type}/`
-- Verify file is not 0 bytes
-- Check index was written with `faiss.write_index()`
-
-### "Duplicate entries"
-- Content hash should be unique per modality
-- Check if same file processed twice
-- Use `INSERT OR REPLACE` for idempotency
-
----
-
-## Future Enhancements
-
-### Planned
-- [ ] CLIP/DINO index consolidation
-- [ ] Full-text search with FTS5
-- [ ] Graph query language (Cypher-like)
-- [ ] Index compression for storage
-- [ ] Distributed index sharding
-
-### Under Consideration
-- [ ] PostgreSQL migration for scale
-- [ ] Redis cache layer
-- [ ] Time-series database for metrics
-- [ ] Neo4j for knowledge graph
-
----
-
-**Last Updated:** 2025-10-15  
-**Maintainer:** GoodQ Development Team  
-**Status:** Living Document (update as architecture evolves)
+*"The architecture is the map. The code is the territory. Both must be true."*

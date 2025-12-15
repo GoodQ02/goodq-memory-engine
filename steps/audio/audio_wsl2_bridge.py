@@ -72,14 +72,15 @@ def audio_transcribe_wsl2(audio_path: str, **kwargs) -> dict:
     result = bridge.process_audio(audio_path, timeout=kwargs.get('timeout', 3600))
     
     if result.get('status') == 'success':
-        transcript = result.get('full_text', '')
-        word_count = len(transcript.split())
+        # process_audio.py returns 'transcription', not 'full_text'
+        transcript = result.get('transcription', '') or result.get('full_text', '')
+        word_count = len(transcript.split()) if transcript else 0
         logger.info(f"[WSL2] Transcription complete - {word_count} words")
         return {
             'transcript': transcript,
             'full_text': transcript,
-            'segments': result.get('segments', []),
-            'words': result.get('words', [])
+            'segments': result.get('segments', []) or result.get('word_timestamps', []),
+            'words': result.get('words', []) or result.get('word_timestamps', [])
         }
     else:
         error_msg = result.get('error', 'Unknown error')
@@ -91,8 +92,8 @@ def audio_emotion_wsl2(audio_path: str, **kwargs) -> dict:
     """
     GPU-accelerated emotion detection via WSL2
     
-    Note: Emotion detection not yet implemented in WSL2 stack
-    Returns placeholder for now
+    NOTE: This function is DEPRECATED. Emotion detection is now handled
+    by the unified process_audio.py script in WSL2.
     
     Args:
         audio_path: Path to audio file
@@ -101,13 +102,13 @@ def audio_emotion_wsl2(audio_path: str, **kwargs) -> dict:
     Returns:
         dict with emotion labels and confidence scores
     """
-    logger.warning(f"[WSL2] Emotion detection not yet implemented - returning placeholder")
+    logger.debug("[WSL2] Emotion detection handled by unified audio processor")
     
-    # TODO: Implement emotion detection in WSL2 stack
+    # Emotion detection now handled by process_audio.py
     return {
         'status': 'success',
         'emotions': {},
-        'note': 'Emotion detection not yet implemented in WSL2 stack'
+        'note': 'Handled by unified WSL2 audio processor'
     }
 
 
@@ -115,3 +116,90 @@ def audio_emotion_wsl2(audio_path: str, **kwargs) -> dict:
 audio_diarize = audio_diarize_wsl2
 audio_transcribe = audio_transcribe_wsl2
 audio_emotion = audio_emotion_wsl2
+
+
+def audio_unified_wsl2(audio_path: str, scene_id: str = None, duration: float = None, **kwargs) -> dict:
+    """
+    UNIFIED WSL2 Audio Processing - Single call for ALL audio intelligence
+    
+    Replaces the old multi-step audio chain with ONE GPU-accelerated WSL2 call
+    that returns:
+    - Transcription + word timestamps
+    - Speaker diarization (if HF token available)
+    - Emotion classification
+    - Audio features (energy, volume, etc.)
+    - Wav2Vec2 embeddings (768-dim)
+    
+    Args:
+        audio_path: Path to audio file
+        scene_id: Scene identifier for output organization
+        duration: Audio duration in seconds (for dynamic timeout)
+        **kwargs: Additional parameters
+        
+    Returns:
+        dict with ALL audio data unified
+    """
+    logger.info(f"[WSL2] Running UNIFIED GPU-accelerated audio processing: {audio_path}")
+    
+    bridge = WSL2AudioBridge()
+    
+    # Dynamic timeout based on duration
+    # ~2-3 seconds per second of audio (transcription + diarization + emotion)
+    if duration:
+        timeout = max(600, int(duration * 3) + 120)  # At least 10 min, or 3x duration + 2min buffer
+    else:
+        timeout = kwargs.get('timeout', 1800)  # Default 30 min
+    
+    result = bridge.process_audio(audio_path, timeout=timeout, audio_duration=duration)
+    
+    if result.get('status') == 'success':
+        transcript = result.get('transcription', '')
+        word_count = len(transcript.split()) if transcript else 0
+        speaker_count = result.get('speaker_count', 0)
+        emotion = result.get('emotion', 'unknown')
+        
+        logger.info(f"[WSL2] Unified processing complete - {word_count} words, {speaker_count} speakers, emotion: {emotion}")
+        
+        # Return unified structure that matches entity extractor expectations
+        return {
+            # Transcription
+            'transcript': transcript,
+            'full_text': transcript,
+            'word_timestamps': result.get('word_timestamps', []),
+            'language': result.get('language'),
+            'language_probability': result.get('language_probability'),
+            
+            # Diarization
+            'speakers': result.get('speakers', []),
+            'speaker_count': speaker_count,
+            'diarization': result.get('diarization', []),
+            'speaker_segments': result.get('diarization', []),
+            
+            # Emotion
+            'emotion': emotion,
+            'emotion_scores': result.get('emotion_scores', {}),
+            'audio_emotion': emotion,  # Duplicate for compatibility
+            
+            # Features
+            'energy': result.get('energy'),
+            'duration': result.get('duration_seconds'),
+            
+            # Embeddings
+            'embeddings': result.get('embeddings', []),
+            'embedding_dim': result.get('embedding_dim', 768),
+            
+            # Status
+            'wsl2_unified': True,
+            'gpu_used': result.get('device') == 'cuda',
+            'gpu_name': result.get('gpu_name'),
+        }
+    else:
+        error_msg = result.get('error', 'Unknown error')
+        logger.error(f"[WSL2] Unified processing failed: {error_msg}")
+        return {
+            'error': error_msg,
+            'transcript': '',
+            'full_text': '',
+            'wsl2_unified': True,
+            'status': 'error'
+        }

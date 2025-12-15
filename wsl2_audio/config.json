@@ -2,6 +2,7 @@
   "queue_dir": "queue_in",
   "output_dir": "queue_out",
   "logs_dir": "logs",
+  "huggingface_token": "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",
   "gpu": {
     "device": "cuda",
     "memory_fraction": 0.8,

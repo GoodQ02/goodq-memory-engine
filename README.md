@@ -872,6 +872,7 @@ scripts\command_center.ps1  # Interactive dashboard
 |----------|-------------|
 | **[System Architecture](docs/architecture/SYSTEM_ARCHITECTURE.md)** | System design deep dive |
 | **[Memory & Storage](docs/architecture/MEMORY_STORAGE.md)** | Database architecture (SQLite, Qdrant, FAISS) |
+| **[Logging & Resilience](docs/technical/LOGGING_AND_RESILIENCE.md)** | Logging system, error handling & graceful degradation |
 | **[Control Agent & Self-Healing](docs/CONTROL_AGENT.md)** | Autonomous monitoring, diagnosis & healing system |
 | **[Phased Segmentation](docs/reports/PHASED_SEGMENTATION_ENGINE_IMPLEMENTATION_REPORT.md)** | New audio/video engine |
 | **[Model Lockdown](docs/technical/MODEL_LOCKDOWN.md)** | Version pinning strategy |

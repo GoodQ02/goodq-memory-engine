@@ -1,18 +1,23 @@
 # GoodQ Pipeline Flow Diagrams
 
+**Last Updated:** December 15, 2025  
+**Status:** ✅ Production Verified
+
 ## 📊 Visual Architecture Reference
 
 This document contains ASCII and Mermaid diagrams for the GoodQ pipeline architecture. View these diagrams in a Markdown-compatible viewer or use Mermaid Live Editor.
 
+**Evidence Source:** Forensic code analysis of `cli/run_ingestion.py`, verified active processing logs (Dec 14-15, 2025)
+
 ---
 
-## 🎬 Complete Pipeline Flow
+## 🎬 Complete Pipeline Flow (Current Production)
 
 ```mermaid
 graph TD
     A[Input Video] --> B{Video Hash Check}
     B -->|Exists| C[Load Scene Manifest]
-    B -->|New| D[Scene Detection ffmpeg]
+    B -->|New| D[Scene Detection PySceneDetect]
     D --> E[Create Scene Manifest]
     
     C --> F[Process Scenes]
@@ -20,46 +25,49 @@ graph TD
     
     F --> G{For Each Scene}
     
-    G --> H[Image Pipeline]
-    G --> I[Audio Pipeline]
+    G --> H[Visual Pipeline]
+    G --> I[Audio Pipeline WSL2]
     
-    H --> H1[Extract Keyframes]
+    H --> H1[Extract Keyframe]
     H1 --> H2[OCR Tesseract]
     H1 --> H3[Caption BLIP]
-    H1 --> H4[Detect YOLO]
+    H1 --> H4[Object Detect YOLO]
     H1 --> H5[Face Embed]
     H1 --> H6[CLIP Embed]
     H1 --> H7[DINO Embed]
-    H2 --> H8[NER Tag]
-    H3 --> H8
+    H1 --> H8[Tagger WD14]
     
-    I --> I1[Extract Audio]
-    I1 --> I2[Metadata]
-    I1 --> I3[Diarize PyAnnote]
-    I3 --> I4[Transcribe Whisper]
-    I4 --> I5[Speaker Merge]
-    I5 --> I6[Time Hints]
-    I5 --> I7[Music Events]
-    I5 --> I8[Speech Emotion]
-    I5 --> I9[Text Sentiment]
-    I5 --> I10[Text Emotion]
-    I5 --> I11[NER Tag]
-    I1 --> I12[CLAP Embed]
+    I --> I1[Extract Audio Chunk]
+    I1 --> I2[audio_unified_wsl2]
+    I2 --> I3[Transcription Whisper]
+    I2 --> I4[Diarization Pyannote]
+    I2 --> I5[Emotion Detection]
+    I2 --> I6[Audio Embeddings]
+    I1 --> I7[Metadata]
+    I1 --> I8[CLAP Embed]
     
-    H8 --> J[Memory Integration]
-    I11 --> J
-    H5 --> J
-    H6 --> J
-    H7 --> J
-    I12 --> J
+    H2 --> J[Entity Extraction]
+    H3 --> J
+    H4 --> J
+    I3 --> J
     
-    J --> K[SQLite Store]
-    J --> L[FAISS Index]
-    J --> M[ID Maps]
+    J --> K[Cross-Modal Resolution]
+    K --> L[Knowledge Graph Update]
     
-    K --> N[Query & Retrieval]
-    L --> N
-    M --> N
+    L --> M[Memory Storage]
+    H5 --> M
+    H6 --> M
+    H7 --> M
+    I6 --> M
+    I8 --> M
+    
+    M --> N[SQLite memory.db]
+    M --> O[SQLite knowledge_graph.db]
+    M --> P[Qdrant Vectors]
+    
+    N --> Q[Query & Retrieval]
+    O --> Q
+    P --> Q
 ```
 
 ---
@@ -100,123 +108,140 @@ graph TD
 
 ---
 
-## 🖼️ Image Pipeline Detail
+## 🖼️ Visual Pipeline Detail (Production)
 
 ```mermaid
 flowchart LR
-    A[Keyframe] --> B[OCR]
-    A --> C[Caption]
-    A --> D[Object Detect]
-    A --> E[Face Detect]
+    A[Keyframe JPG] --> B[OCR Tesseract]
+    A --> C[Caption BLIP]
+    A --> D[Object Detect YOLO]
+    A --> E[Face Embed]
     A --> F[CLIP Embed]
     A --> G[DINO Embed]
+    A --> H[Tagger WD14]
     
-    B --> H[Text Output]
-    C --> H
-    D --> I[Bounding Boxes]
-    E --> J[Face Vectors]
-    F --> K[Vision-Language Vectors]
-    G --> L[Visual Feature Vectors]
+    B --> I[Text Output]
+    C --> I
+    D --> J[objects field]
+    E --> K[Face Vectors 512d]
+    F --> L[CLIP Vectors 512d]
+    G --> M[DINO Vectors 768d]
+    H --> N[Aesthetic Tags]
     
-    H --> M[NER Tagging]
-    M --> N[Entities]
+    I --> O[Entity Extractor]
+    J --> O
     
-    I --> O[Object Labels]
-    J --> P[Known Faces DB]
-    K --> Q[FAISS CLIP Index]
-    L --> R[FAISS DINO Index]
-    N --> S[SQLite]
-    O --> S
-    P --> S
+    O --> P[Entities List]
+    
+    P --> Q[Knowledge Graph]
+    K --> R[Qdrant]
+    L --> R
+    M --> R
+    J --> S[memory.db scene_data]
+    N --> S
 ```
+
+**Artifact Locations (Verified Dec 15, 2025):**
+- Keyframes: `L:\goodq4all\logs\scene_ingest\<video_name>\video\scene_XXXX.jpg`
+- Stored in: `memory.db` (scene_bundles table) + Qdrant collections
 
 ---
 
-## 🎵 Audio Pipeline Detail
+## 🎵 Audio Pipeline Detail (WSL2 Unified - Production)
 
 ```mermaid
 flowchart TD
-    A[Audio Segment] --> B[Metadata Extraction]
-    A --> C[Speaker Diarization]
+    A[Scene Audio WAV] --> B[WSL2: audio_unified_wsl2]
     
-    B --> D[Duration, SR, Format]
-    C --> E[Speaker Segments]
+    B --> C[Whisper large-v3]
+    B --> D[Pyannote 3.1 Diarization]
+    B --> E[Silero VAD]
+    B --> F[Emotion Wav2Vec2]
     
-    E --> F[Transcription Whisper]
-    F --> G[Text + Timestamps]
+    C --> G[Transcript + Timestamps]
+    D --> H[Speaker Segments]
+    E --> I[Voice Activity]
+    F --> J[8-class Emotion]
     
-    G --> H[Speaker Merge]
-    H --> I[Consolidated Segments]
+    G --> K[result.json]
+    H --> K
+    I --> K
+    J --> K
     
-    I --> J[Time Hints]
-    I --> K[Music Events]
-    I --> L[Speech Emotion]
-    I --> M[Text Sentiment]
-    I --> N[Text Emotion]
-    I --> O[NER Tagging]
+    K --> L[Embeddings 768d]
+    K --> M[Audio Features]
     
-    A --> P[CLAP Embedding]
+    A --> N[Windows: CLAP Embed]
     
-    J --> Q[Temporal Refs]
-    K --> R[Event Labels]
-    L --> S[Emotion Labels]
-    M --> T[Sentiment Scores]
-    N --> U[Emotion Scores]
-    O --> V[Entities]
-    P --> W[Audio Vectors]
+    L --> O[Qdrant Audio]
+    N --> O
     
-    D --> X[SQLite]
-    Q --> X
-    R --> X
-    S --> X
-    T --> X
-    U --> X
-    V --> X
-    W --> Y[FAISS Audio Index]
+    G --> P[Entity Extractor]
+    P --> Q[Knowledge Graph]
+    
+    K --> R[memory.db scene_data]
 ```
+
+**Artifact Locations (Verified Dec 15, 2025):**
+- Audio chunks: `L:\goodq4all\logs\scene_ingest\<video_name>\audio\scene_XXXX.wav`
+- WSL2 output: `\\wsl.localhost\Ubuntu\home\joesdomingo\goodq_audio\output\result.json`
+- GPU: RTX 4070 Ti SUPER 16GB, CUDA 12.8
+- Models loaded: Whisper medium (service) / large-v3 (direct), Pyannote 3.1, Silero VAD, Wav2Vec2 emotion
 
 ---
 
-## 💾 Memory Layer Architecture
+## 💾 Memory Layer Architecture (Production)
 
 ```mermaid
 graph TB
-    subgraph "Memory Layer"
-        A[SQLite Database] --> A1[scenes table]
+    subgraph "Persistent Storage"
+        A[memory.db] --> A1[scenes table]
         A --> A2[assets table]
         A --> A3[scene_bundles table]
-        A --> A4[summaries table]
+        A --> A4[video_metadata table]
         
-        B[FAISS Indices] --> B1[Text Index 384d]
-        B --> B2[CLIP Index 512d]
-        B --> B3[DINO Index 768d]
-        B --> B4[Audio Index 512d]
+        B[knowledge_graph.db] --> B1[entities table]
+        B --> B2[relationships table]
+        B --> B3[entity_mentions table]
+        B --> B4[cross_references table]
         
-        C[ID Maps] --> C1[clip_id_map.sqlite]
-        C --> C2[dino_id_map.sqlite]
-        C --> C3[clap_id_map.sqlite]
+        C[Qdrant Collections] --> C1[text_embeddings]
+        C --> C2[clip_embeddings]
+        C --> C3[dino_embeddings]
+        C --> C4[audio_embeddings]
     end
     
     subgraph "Query Layer"
-        D[Semantic Search] --> B1
-        D --> B2
-        D --> B3
-        D --> B4
+        D[Semantic Search] --> C1
+        D --> C2
+        D --> C3
+        D --> C4
         
         E[Metadata Query] --> A1
         E --> A2
         E --> A3
         
-        F[ID Resolution] --> C1
-        F --> C2
-        F --> C3
+        F[Graph Traversal] --> B1
+        F --> B2
+        F --> B3
+        
+        G[Cross-Modal] --> A
+        G --> B
+        G --> C
     end
     
-    B1 -.Link.- C1
-    B2 -.Link.- C1
-    B3 -.Link.- C2
-    B4 -.Link.- C3
+    C1 -.payload.scene_id.- A1
+    C2 -.payload.scene_id.- A1
+    C3 -.payload.scene_id.- A1
+    C4 -.payload.scene_id.- A1
+    B3 -.scene_id.- A1
 ```
+
+**Database Locations (Verified Dec 15, 2025):**
+- memory.db: `L:\_DATA\GoodQ_Data\memory.db`
+- knowledge_graph.db: `L:\_DATA\GoodQ_Data\knowledge_graph.db`
+- Qdrant: `localhost:6333` (Windows service, no Docker)
+- Vector dimensions: text=384d, CLIP=512d, DINO=768d, audio=512d
 
 ---
 
@@ -513,3 +538,4 @@ graph LR
 - GitHub (native Mermaid rendering)
 - [Mermaid Live Editor](https://mermaid.live)
 - Any Markdown viewer with Mermaid support
+

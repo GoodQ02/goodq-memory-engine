@@ -56,8 +56,9 @@
 
 ### 📖 **Reference Documents** (Mostly Current)
 15. **[CHEAT_SHEET.md](CHEAT_SHEET.md)** - Command quick reference
-16. **[QDRANT_QUICKREF.md](QDRANT_QUICKREF.md)** - Qdrant quick reference ✅ Current
-17. **[guides/watchdog/WATCHDOG_GUIDE.md](guides/watchdog/WATCHDOG_GUIDE.md)** - Watchdog system guide
+16. **[reference/quick-refs/CLI_COMMANDS_REFERENCE.md](reference/quick-refs/CLI_COMMANDS_REFERENCE.md)** - Complete CLI documentation ✅ Dec 15, 2025
+17. **[QDRANT_QUICKREF.md](QDRANT_QUICKREF.md)** - Qdrant quick reference ✅ Current
+18. **[guides/watchdog/WATCHDOG_GUIDE.md](guides/watchdog/WATCHDOG_GUIDE.md)** - Watchdog system guide
 
 ---
 

@@ -76,8 +76,8 @@ def _summarize_llm_health() -> Dict[str, Any]:
             models = resp.json().get("data", [])
             vllm_total = len(models)
             vllm_healthy = vllm_total
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"vLLM health check failed: {e}")
 
     def _probe_ollama(port: int):
         try:
@@ -86,8 +86,8 @@ def _summarize_llm_health() -> Dict[str, Any]:
                 models = resp.json().get("data", [])
                 total = len(models)
                 return True, total, total
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Ollama probe on port {port} failed: {e}")
         return False, 0, 0
 
     # Check Ollama on default WSL2 port
@@ -167,7 +167,8 @@ def _collect_engine_details() -> Dict[str, Any]:
             }
         else:
             raise Exception("unhealthy")
-    except Exception:
+    except Exception as e:
+        logger.debug(f"vLLM engine check failed: {e}")
         engines["vllm_llama1b"] = {
             "name": "vLLM Llama-1B",
             "category": "LLM Inference",
@@ -193,7 +194,8 @@ def _collect_engine_details() -> Dict[str, Any]:
             }
         else:
             raise Exception("unhealthy")
-    except Exception:
+    except Exception as e:
+        logger.debug(f"Ollama engine check failed: {e}")
         engines["ollama"] = {
             "name": "Ollama",
             "category": "LLM Inference",
@@ -228,7 +230,8 @@ def _collect_engine_details() -> Dict[str, Any]:
             }
         else:
             raise Exception("unhealthy")
-    except Exception:
+    except Exception as e:
+        logger.debug(f"Qdrant engine check failed: {e}")
         engines["qdrant"] = {
             "name": "Qdrant",
             "category": "Vector DB",
@@ -268,7 +271,8 @@ def _collect_engine_details() -> Dict[str, Any]:
             "status": "ready",
             "gpu": False,
         }
-    except Exception:
+    except Exception as e:
+        logger.debug(f"Scene detection check failed: {e}")
         engines["scene_detection"] = {
             "name": "Scene Detection",
             "category": "Video Analysis",
@@ -333,7 +337,8 @@ def _collect_wsl_status() -> Dict[str, Any]:
         )
         status["status"] = "running" if result.returncode == 0 else "stopped"
         status["status_output"] = result.stdout
-    except Exception:
+    except Exception as e:
+        logger.debug(f"WSL status check failed: {e}")
         status["status"] = "unknown"
 
     try:
@@ -355,8 +360,8 @@ def _collect_wsl_status() -> Dict[str, Any]:
             timeout=3,
         )
         status["vllm_service"] = "active" if vllm_check.returncode == 0 else "inactive"
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"vLLM service check failed: {e}")
 
     # Fast, low-impact audio availability check (skip on timeout)
     try:
@@ -480,18 +485,18 @@ def get_status() -> Dict[str, Any]:
             if resp.status_code == 200:
                 models_data["vllm_healthy"] = 1
                 models_data["healthy"] += 1
-        except:
-            pass
+        except Exception as e:
+            logger.debug(f"vLLM quick health check failed: {e}")
         
         try:
             resp = requests.get("http://localhost:11434/v1/models", timeout=0.2)
             if resp.status_code == 200:
                 models_data["ollama_healthy"] = 1
                 models_data["healthy"] += 1
-        except:
-            pass
-    except:
-        pass
+        except Exception as e:
+            logger.debug(f"Ollama quick health check failed: {e}")
+    except Exception as e:
+        logger.debug(f"Model health checks failed: {e}")
     
     # Quick processing check
     try:
@@ -567,15 +572,15 @@ def get_health_summary() -> Dict[str, Any]:
         resp = requests.get("http://localhost:38005/v1/models", timeout=1)
         if resp.status_code == 200:
             vllm_healthy = 1
-    except:
-        pass
+    except Exception as e:
+        logger.debug(f"vLLM health summary check failed: {e}")
     
     try:
         resp = requests.get("http://localhost:11434/v1/models", timeout=1)
         if resp.status_code == 200:
             ollama_healthy = 1
-    except:
-        pass
+    except Exception as e:
+        logger.debug(f"Ollama health summary check failed: {e}")
     
     total = 2
     healthy = vllm_healthy + ollama_healthy
@@ -701,7 +706,8 @@ def get_scenes() -> Dict[str, Any]:
                     for scene in scenes:
                         scene["source_file"] = str(scene_file.parent.name)
                         all_scenes.append(scene)
-            except:
+            except Exception as e:
+                logger.debug(f"Failed to read scene file {scene_file}: {e}")
                 continue
     
     return {"scenes": all_scenes, "total": len(all_scenes)}
@@ -806,7 +812,7 @@ def get_queue() -> Dict[str, Any]:
         if failed_dir.exists():
             queue_data["failed"]["count"] = len(list(failed_dir.iterdir()))
     except Exception as e:
-        print(f"[WARN] queue status error: {e}")
+        logger.warning(f"Queue status error: {e}")
 
     return queue_data
 
@@ -1052,7 +1058,7 @@ def test_audio(request: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
                 config_model = cfg.get("models", {}).get("whisper")
                 diarization_model = cfg.get("models", {}).get("diarization")
         except Exception as cfg_err:
-            print(f"[WARN] audio test config read error: {cfg_err}")
+            logger.warning(f"Audio test config read error: {cfg_err}")
         
         # Check if audio service is running
         result = subprocess.run(
@@ -1073,7 +1079,7 @@ def test_audio(request: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
             )
             cuda_available = cuda_check.returncode == 0 and bool(cuda_check.stdout.strip())
         except Exception as cuda_err:
-            print(f"[WARN] audio CUDA check failed: {cuda_err}")
+            logger.warning(f"Audio CUDA check failed: {cuda_err}")
         
         # Check if we can access the audio processing scripts
         check_scripts = subprocess.run(
@@ -1283,7 +1289,8 @@ def _tail_log(path: Path, lines: int = 50) -> List[str]:
         with path.open("r", encoding="utf-8", errors="ignore") as f:
             for line in f:
                 dq.append(line.rstrip("\n"))
-    except Exception:
+    except Exception as e:
+        logger.debug(f"Failed to tail log {path}: {e}")
         return []
     return list(dq)
 
@@ -1314,7 +1321,8 @@ def get_memory_stats() -> Dict[str, Any]:
     try:
         from goodq4all.steps.common.config_loader import load_configs
         cfg = load_configs({})
-    except Exception:
+    except Exception as e:
+        logger.debug(f"Config loading failed for memory stats: {e}")
         cfg = {}
 
     paths = (cfg.get("paths") or {}) if isinstance(cfg, dict) else {}

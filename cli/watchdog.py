@@ -247,8 +247,8 @@ class WatchdogProcessor:
             )
             if git_proc.returncode == 0 and git_proc.stdout.strip():
                 run_context['git_sha'] = git_proc.stdout.strip()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Failed to get git SHA: {e}")
 
         existing_run = cfg.get('run') if isinstance(cfg, dict) else None
         if isinstance(existing_run, dict):
@@ -975,8 +975,8 @@ def main():
         # Remove lock on exit
         try:
             lockfile.unlink(missing_ok=True)
-        except:
-            pass
+        except Exception as e:
+            logger.debug(f"Failed to remove lockfile: {e}")
 
 
 if __name__ == '__main__':

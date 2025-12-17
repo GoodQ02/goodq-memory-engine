@@ -129,8 +129,12 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
     video_path = item.get('source_path')
     video_id = item.get('id', Path(video_path).stem if video_path else 'unknown')
     
-    data_root = cfg.get('data_root', 'L:/_DATA/GoodQ_Data')
-    processing_dir = os.path.join(data_root, 'processing', video_id)
+    paths_cfg = (cfg.get('paths') or {}) if isinstance(cfg, dict) else {}
+    processing_root = paths_cfg.get('processing')
+    if not processing_root:
+        data_root = paths_cfg.get('data_root', 'L:/_DATA/GoodQ_Data')
+        processing_root = os.path.join(data_root, 'processing')
+    processing_dir = os.path.join(processing_root, str(video_id))
     
     logger.info(f"[HARMONIZER] Starting cross-modal fusion for {video_id}")
     

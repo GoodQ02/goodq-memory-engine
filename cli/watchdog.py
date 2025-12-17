@@ -199,7 +199,8 @@ class ProcessedRegistry:
 
 class WatchdogProcessor:
     """Main watchdog processor"""
-    def __init__(self):
+    def __init__(self, cfg: Dict[str, Any]):
+        self._cfg_base = cfg
         self.watch_dir = WATCH_DIR
         self.processing_dir = PROCESSING_DIR
         self.processed_dir = PROCESSED_DIR
@@ -227,10 +228,9 @@ class WatchdogProcessor:
     
     def _build_run_config(self, pipeline_name: str) -> Dict[str, Any]:
         """Load configs and attach a run context for mission logging."""
-        from steps.common.config_loader import load_configs
         import subprocess
 
-        cfg: Dict[str, Any] = load_configs({})
+        cfg: Dict[str, Any] = dict(self._cfg_base) if isinstance(self._cfg_base, dict) else {}
         run_context: Dict[str, Any] = {
             'id': str(uuid.uuid4()),
             'pipeline': pipeline_name,
@@ -252,8 +252,9 @@ class WatchdogProcessor:
 
         existing_run = cfg.get('run') if isinstance(cfg, dict) else None
         if isinstance(existing_run, dict):
-            existing_run.update(run_context)
-            cfg['run'] = existing_run
+            run_copy = dict(existing_run)
+            run_copy.update(run_context)
+            cfg['run'] = run_copy
         else:
             cfg['run'] = run_context
         return cfg
@@ -520,7 +521,6 @@ class WatchdogProcessor:
         
         # Use direct Python function call (no subprocess, better output visibility)
         from pipelines.direct_ingestion import run_direct_ingestion
-        from steps.common.config_loader import load_configs
         
         # Dynamic timeout based on file size (3 hours per GB, min 8 hours for thorough processing)
         file_size_gb = video_path.stat().st_size / (1024**3)
@@ -529,7 +529,7 @@ class WatchdogProcessor:
         logger.info(f"[SYMBOL] Asset: {video_path.name}")
         
         try:
-            cfg = load_configs({})
+            cfg = self._build_run_config("watchdog_video_ingest")
             result_dict = run_direct_ingestion(str(temp_video), cfg)
             
             # Simulate subprocess result for compatibility
@@ -969,7 +969,9 @@ def main():
             sys.exit(1)
     
     try:
-        watchdog = WatchdogProcessor()
+        from steps.common.config_loader import load_configs
+        cfg = load_configs({})
+        watchdog = WatchdogProcessor(cfg)
         watchdog.run()
     finally:
         # Remove lock on exit

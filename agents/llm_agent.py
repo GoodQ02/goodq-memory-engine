@@ -19,25 +19,18 @@ logger = logging.getLogger(__name__)
 class LLMAgent(BaseAgent):
     """Agent that provides LLM capabilities via LM Studio."""
     
-    def __init__(self, config: Dict = None):
+    def __init__(self, cfg: Dict[str, Any]):
         super().__init__(
             name="LLMAgent",
             conda_env="base"  # LLM calls don't need special env
         )
-        self.config = config or self._load_config()
+        self.config = cfg
         self.llm_config = self.config.get('llm', {})
         self.api_url = self.llm_config.get('api_url', 'http://localhost:1234/v1/chat/completions')
         self.model_id = self.llm_config.get('model_id', 'LM_STUDIO_GOODQ')
         self.timeout = self.llm_config.get('timeout', 30)
         self.temperature = self.llm_config.get('temperature', 0.3)
         self.max_tokens = self.llm_config.get('max_tokens', 500)
-        
-    def _load_config(self) -> Dict:
-        """Load configuration."""
-        import yaml
-        config_path = Path("L:/goodq4all/config.yaml")
-        with open(config_path, 'r') as f:
-            return yaml.safe_load(f)
     
     async def initialize(self):
         """Initialize LLM agent - check if LM Studio is available."""

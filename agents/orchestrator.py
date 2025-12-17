@@ -18,20 +18,14 @@ logger = logging.getLogger(__name__)
 class AgentOrchestrator:
     """Orchestrates multi-agent workflows with self-healing capabilities."""
     
-    def __init__(self, config_path: str = "L:/goodq4all/config.yaml"):
-        self.config_path = Path(config_path)
-        self.config = self._load_config()
-        self.db_path = Path(self.config['paths']['db_path'])
-        self.log_dir = Path(self.config['paths']['log_dir'])
+    def __init__(self, cfg: Dict[str, Any]):
+        self.config = cfg
+        paths = (self.config.get("paths") or {}) if isinstance(self.config, dict) else {}
+        self.db_path = Path(paths.get("db_path") or "L:/_DATA/GoodQ_Data/memory.db")
+        self.log_dir = Path(paths.get("log_dir") or "L:/goodq4all/logs")
         self.agents = {}
         self.workflow_history = []
         
-    def _load_config(self) -> Dict:
-        """Load configuration from YAML."""
-        import yaml
-        with open(self.config_path, 'r') as f:
-            return yaml.safe_load(f)
-    
     async def register_agent(self, agent_name: str, agent_instance):
         """Register an agent with the orchestrator."""
         logger.info(f"Registering agent: {agent_name}")

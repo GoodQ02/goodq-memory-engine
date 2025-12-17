@@ -6,10 +6,12 @@ Connects existing pipeline steps to the agent orchestrator
 import asyncio
 import logging
 from pathlib import Path
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 import sys
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from steps.common.config_loader import load_configs
 
 from agents.orchestrator import AgentOrchestrator
 from agents.llm_agent import LLMAgent
@@ -17,6 +19,15 @@ from agents.base_agent import BaseAgent
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+_CFG: Optional[Dict[str, Any]] = None
+
+
+def _get_cfg() -> Dict[str, Any]:
+    global _CFG
+    if _CFG is None:
+        _CFG = load_configs({})
+    return _CFG
 
 
 class PipelineStepAgent(BaseAgent):
@@ -51,13 +62,14 @@ class PipelineStepAgent(BaseAgent):
             raise Exception(result['stderr'])
 
 
-async def setup_pipeline_agents() -> AgentOrchestrator:
+async def setup_pipeline_agents(cfg: Optional[Dict[str, Any]] = None) -> AgentOrchestrator:
     """Set up all pipeline agents."""
     
-    orchestrator = AgentOrchestrator()
+    cfg = cfg or _get_cfg()
+    orchestrator = AgentOrchestrator(cfg)
     
     # Register LLM agent
-    llm_agent = LLMAgent()
+    llm_agent = LLMAgent(cfg)
     await orchestrator.register_agent('llm_analyzer', llm_agent)
     await orchestrator.register_agent('llm_summarizer', llm_agent)
     
@@ -152,6 +164,7 @@ async def check_agent_health() -> Dict[str, Any]:
 async def main():
     """Test agent setup."""
     import json
+    _get_cfg()
     
     print("Setting up agents...")
     orchestrator = await setup_pipeline_agents()

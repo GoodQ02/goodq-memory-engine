@@ -61,6 +61,20 @@ app.include_router(system.router)
 _CFG = load_configs({})
 _MEMORY_ROUTER = build_memory_router(_CFG)
 
+# Enforce CONFIG_LOADING_CONTRACT: reuse the already-loaded cfg in submodules.
+# (api/routes/search.py lazily calls load_configs() otherwise; keep it lazy but non-reloading.)
+try:
+    search._config = _CFG  # type: ignore[attr-defined]
+    search.load_configs = lambda overrides=None: _CFG  # type: ignore[assignment]
+except Exception as e:
+    logger.debug(f"Search route config injection failed: {e}")
+
+try:
+    from api.utils import loaders as api_loaders
+    api_loaders.configure_from_cfg(_CFG)
+except Exception as e:
+    logger.debug(f"DataLoader config injection failed: {e}")
+
 
 def _summarize_llm_health() -> Dict[str, Any]:
     """Lightweight LLM health summary used by /api/engines and dashboards."""
@@ -635,12 +649,11 @@ def vector_search(
     tag: Optional[str] = Query(None, description="Filter by tag/entity"),
 ) -> Dict[str, Any]:
     # Lazy imports to keep startup fast
-    from goodq4all.steps.common.config_loader import load_configs
     from langchain_community.embeddings import HuggingFaceEmbeddings
     from langchain_community.vectorstores import Chroma
     import os
 
-    cfg = load_configs({})
+    cfg = _CFG
     paths = cfg.get("paths", {}) or {}
     persist_dir = paths.get("chroma_dir") or "L:/_DATA/GoodQ_Data/databases/chroma"
 
@@ -1317,13 +1330,7 @@ def _faiss_count(path: str) -> int:
 @app.get("/api/memory/stats")
 def get_memory_stats() -> Dict[str, Any]:
     """Lightweight memory stats across tiers (faiss/qdrant)."""
-    cfg = {}
-    try:
-        from goodq4all.steps.common.config_loader import load_configs
-        cfg = load_configs({})
-    except Exception as e:
-        logger.debug(f"Config loading failed for memory stats: {e}")
-        cfg = {}
+    cfg = _CFG
 
     paths = (cfg.get("paths") or {}) if isinstance(cfg, dict) else {}
     memory_cfg = (cfg.get("memory") or {}) if isinstance(cfg, dict) else {}

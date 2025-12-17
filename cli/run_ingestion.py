@@ -954,7 +954,8 @@ def run(
 
     _ensure_dir(workspace)
 
-    cfg = load_configs({})
+    base_cfg = load_configs({})
+    cfg: Dict[str, Any] = dict(base_cfg) if isinstance(base_cfg, dict) else {}
     run_context = {
         'id': str(uuid.uuid4()),
         'pipeline': 'scene_ingest_cli',
@@ -974,14 +975,18 @@ def run(
         pass
     existing_run = cfg.get('run') if isinstance(cfg, dict) else None
     if isinstance(existing_run, dict):
-        existing_run.update(run_context)
-        cfg['run'] = existing_run
+        run_copy = dict(existing_run)
+        run_copy.update(run_context)
+        cfg['run'] = run_copy
     else:
         cfg['run'] = run_context
     
     # Add force_reprocess flag to config
     cfg['force_reprocess'] = force_reprocess
     cfg_json = _write_cfg_snapshot(cfg, workspace)
+
+    paths_cfg = (cfg.get('paths') or {}) if isinstance(cfg, dict) else {}
+    processing_root = Path(paths_cfg.get('processing', 'L:/_DATA/GoodQ_Data/processing')).resolve()
 
     ffmpeg = resolve_ffmpeg(cfg) or 'ffmpeg'
 
@@ -1094,6 +1099,7 @@ def run(
             detection['meta'] = detection_meta
 
         video_workspace = _ensure_dir(workspace / video_path.stem)
+        processing_dir = _ensure_dir(processing_root / video_path.stem)
         frame_dir = _ensure_dir(video_workspace / 'frames')
         audio_dir = _ensure_dir(video_workspace / 'audio')
 
@@ -1347,10 +1353,12 @@ def run(
             
             # Create phase6_item with required structure
             phase6_item = {
+                'id': video_path.stem,
+                'source_path': str(video_path),
                 'video_id': video_hash,
                 'video_path': str(video_path),
-                'processing_dir': str(video_workspace),
-                'scene_manifest_path': str(video_workspace / 'scene_manifest.json'),
+                'processing_dir': str(processing_dir),
+                'scene_manifest_path': str(processing_dir / 'video' / 'scene_manifest.json'),
                 'scenes': scene_outputs,
                 'video_hash': video_hash,
             }
@@ -1374,7 +1382,7 @@ def run(
                 ]
             }
             # Phase 5 writes scene manifest into a canonical /video/ directory
-            scene_manifest_path = video_workspace / 'video' / 'scene_manifest.json'
+            scene_manifest_path = processing_dir / 'video' / 'scene_manifest.json'
             scene_manifest_path.parent.mkdir(parents=True, exist_ok=True)
             scene_manifest_path.write_text(
                 json.dumps(scene_manifest, ensure_ascii=False, indent=2),

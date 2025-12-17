@@ -14,22 +14,20 @@ import time
 
 logger = logging.getLogger(__name__)
 
+from steps.common.config_loader import load_configs
+
 
 class SelfHealingMonitor:
     """Monitors pipeline health and applies automatic fixes."""
     
-    def __init__(self, db_path: str = "L:/_DATA/GoodQ_Data/memory.db"):
-        self.db_path = Path(db_path)
-        self.config = self._load_config()
+    def __init__(self, cfg: Dict[str, Any], db_path: str | None = None):
+        self.config = cfg
+        paths = (self.config.get("paths") or {}) if isinstance(self.config, dict) else {}
+        resolved_db_path = db_path or (paths.get("db_path") if isinstance(paths, dict) else None) or "L:/_DATA/GoodQ_Data/memory.db"
+        self.db_path = Path(resolved_db_path)
         self.llm_config = self.config.get('llm', {})
         self.healing_history = []
         self.patterns = self._load_error_patterns()
-        
-    def _load_config(self) -> Dict:
-        """Load configuration."""
-        import yaml
-        with open("L:/goodq4all/config.yaml", 'r') as f:
-            return yaml.safe_load(f)
     
     def _load_error_patterns(self) -> List[Dict]:
         """Load known error patterns and their fixes."""
@@ -299,7 +297,7 @@ class SelfHealingMonitor:
         from agents.llm_agent import LLMAgent
         
         try:
-            llm = LLMAgent()
+            llm = LLMAgent(self.config)
             await llm.initialize()
             
             result = await llm.execute({
@@ -327,7 +325,8 @@ class SelfHealingMonitor:
 
 async def run_monitor():
     """Run the self-healing monitor."""
-    monitor = SelfHealingMonitor()
+    cfg = load_configs({})
+    monitor = SelfHealingMonitor(cfg)
     await monitor.monitor_and_heal(check_interval=60)
 
 

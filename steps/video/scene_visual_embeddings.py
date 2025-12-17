@@ -51,16 +51,25 @@ def run_scene_visual_embeddings(item: Dict[str, Any], cfg: Dict[str, Any]) -> Di
     
     # Determine processing directory
     video_id = item.get('id', Path(video_path).stem)
-    data_root = cfg.get('data_root', 'L:/_DATA/GoodQ_Data')
-    processing_dir = os.path.join(data_root, 'processing', video_id)
+    paths_cfg = (cfg.get('paths') or {}) if isinstance(cfg, dict) else {}
+    processing_root = paths_cfg.get('processing')
+    if not processing_root:
+        data_root = paths_cfg.get('data_root', 'L:/_DATA/GoodQ_Data')
+        processing_root = os.path.join(data_root, 'processing')
+    processing_dir = os.path.join(processing_root, str(video_id))
     os.makedirs(processing_dir, exist_ok=True)
     
     # Load scene manifest from Phase 5
     scene_manifest_path = os.path.join(processing_dir, 'video', 'scene_manifest.json')
     if not os.path.exists(scene_manifest_path):
-        logger.warning(f"Scene manifest not found: {scene_manifest_path}")
-        logger.info("Phase 6 requires Phase 5 scene detection to run first")
-        return {"phase6_status": "skipped", "reason": "no_scene_manifest"}
+        alt_path = os.path.join(processing_dir, 'scene_manifest.json')
+        if os.path.exists(alt_path):
+            logger.warning(f"[PHASE6] Using legacy scene_manifest.json at: {alt_path}")
+            scene_manifest_path = alt_path
+        else:
+            logger.warning(f"Scene manifest not found: {scene_manifest_path}")
+            logger.info("Phase 6 requires Phase 5 scene detection to run first")
+            return {"phase6_status": "skipped", "reason": "no_scene_manifest"}
     
     with open(scene_manifest_path, 'r', encoding='utf-8') as f:
         scene_data = json.load(f)

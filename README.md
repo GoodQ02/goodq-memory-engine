@@ -211,6 +211,19 @@ This will:
 
 ---
 
+## Runtime Entry Points (Verified)
+
+| Component | Entry point | Run |
+| --- | --- | --- |
+| Full system launcher (recommended) | `LAUNCH_GOODQ.bat` / `LAUNCH_GOODQ.ps1` | `LAUNCH_GOODQ.bat` or `.\LAUNCH_GOODQ.ps1` |
+| Ingestion pipeline (scene-first) | `cli/run_ingestion.py` | `python -m cli.run_ingestion --input-dir "L:\_DATA\GoodQ_Data\import_inbox"` |
+| Watchdog (auto-ingest) | `cli/watchdog.py` | `python -m cli.watchdog --input-dir "L:\_DATA\GoodQ_Data\import_inbox"` |
+| Retrieval API (FastAPI) | `scripts/start_api.ps1` | `.\scripts\start_api.ps1 -Port 30000` |
+| WSL2 audio service (daemon) | `wsl2_audio/start_wsl2_service.bat` | `wsl2_audio\start_wsl2_service.bat` |
+| WSL2 LLM servers (vLLM/Ollama) | `scripts/start_vllm_servers.bat` | `scripts\start_vllm_servers.bat` (or `scripts\start_llm_servers.bat`) |
+
+---
+
 ## 🏗️ System Architecture (December 14, 2025 – Forensically Verified)
 
 ### Complete Golden Path Dataflow (Evidence-Based)

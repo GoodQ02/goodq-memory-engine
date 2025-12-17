@@ -11,19 +11,41 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
+_DEFAULT_PROCESSING_ROOT: Optional[Path] = None
+
+
+def configure_from_cfg(cfg: Dict[str, Any]) -> None:
+    """Configure loader roots from canonical runtime config (api/main.py owns cfg loading)."""
+    global _DEFAULT_PROCESSING_ROOT
+    try:
+        paths_cfg = (cfg.get("paths") or {}) if isinstance(cfg, dict) else {}
+        processing_root = paths_cfg.get("processing")
+        if processing_root:
+            _DEFAULT_PROCESSING_ROOT = Path(processing_root)
+    except Exception:
+        return
+
 
 class DataLoader:
     """Centralized data loading for API endpoints."""
     
-    def __init__(self, data_root: str = "L:/_DATA/GoodQ_Data"):
+    def __init__(self, data_root: str = "L:/_DATA/GoodQ_Data", processing_root: Optional[str] = None):
         """
         Initialize data loader.
         
         Args:
             data_root: Root directory for processed data
+            processing_root: Optional override for processing root directory
         """
-        self.data_root = Path(data_root)
-        self.processing_dir = self.data_root / "processing"
+        if processing_root is None and _DEFAULT_PROCESSING_ROOT is not None:
+            self.processing_dir = _DEFAULT_PROCESSING_ROOT
+            self.data_root = self.processing_dir.parent
+        elif processing_root:
+            self.processing_dir = Path(processing_root)
+            self.data_root = self.processing_dir.parent
+        else:
+            self.data_root = Path(data_root)
+            self.processing_dir = self.data_root / "processing"
         self.completed_dir = self.data_root / "completed"
     
     def load_temporal_index(self, video_id: str) -> Optional[Dict[str, Any]]:
@@ -67,7 +89,11 @@ class DataLoader:
         path = self.processing_dir / video_id / "video" / "scene_manifest.json"
         
         if not path.exists():
-            path = self.completed_dir / video_id / "video" / "scene_manifest.json"
+            alt_path = self.processing_dir / video_id / "scene_manifest.json"
+            if alt_path.exists():
+                path = alt_path
+            else:
+                path = self.completed_dir / video_id / "video" / "scene_manifest.json"
         
         if not path.exists():
             logger.warning(f"Scene manifest not found for video: {video_id}")

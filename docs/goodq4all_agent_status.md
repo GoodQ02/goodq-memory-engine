@@ -17,7 +17,7 @@ Audit Status: CLOSED (2025-12-16)
 | Face Detection | ❌ Disabled | facenet_pytorch not installed |
 | Knowledge Graph | ✅ Complete | ~1300+ nodes |
 | Vector Storage (Qdrant) | ✅ Wired | Port 6333 reachable |
-| Phase 6b Harmonization | ⏸️ Gated | Manifest persistence |
+| Phase 6b Harmonization | ✅ Operational | Validated via single-video smoke test (2025-12-17) |
 | Final Report | ⚠️ Broken | Type error; non-critical |
 
 ## Storage & Memory Health

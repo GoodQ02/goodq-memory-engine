@@ -208,20 +208,27 @@ def extract_scene_frames(
     scene_frames = {}
     total_extracted = 0
     
-    for scene in scenes:
+    for scene_idx, scene in enumerate(scenes):
         scene_id = scene.get('id', scene.get('scene_id', 0))
         start = scene.get('start', 0.0)
         end = scene.get('end', start + 1.0)
-        
+
         logger.info(f"Extracting frames for scene {scene_id}: {start:.2f}s - {end:.2f}s")
+
+        # scene_id may be a string (e.g., a hash); filenames expect an int id.
+        scene_id_for_filename = scene.get('index', scene_id)
+        try:
+            scene_id_for_filename = int(scene_id_for_filename)
+        except (TypeError, ValueError):
+            scene_id_for_filename = scene_idx
         
         # Select extraction strategy
         if strategy == 'middle':
-            frames = extract_frames_middle(video_path, start, end, frames_dir, scene_id)
+            frames = extract_frames_middle(video_path, start, end, frames_dir, scene_id_for_filename)
         elif strategy == 'keyframe':
-            frames = extract_keyframe_candidates(video_path, start, end, frames_dir, scene_id, frames_per_scene)
+            frames = extract_keyframe_candidates(video_path, start, end, frames_dir, scene_id_for_filename, frames_per_scene)
         else:  # uniform (default)
-            frames = extract_frames_uniform(video_path, start, end, frames_per_scene, frames_dir, scene_id)
+            frames = extract_frames_uniform(video_path, start, end, frames_per_scene, frames_dir, scene_id_for_filename)
         
         if frames:
             scene_frames[scene_id] = frames

@@ -58,7 +58,7 @@ def check_config():
     print(f"[PASS] Config file: {config_path}")
     
     try:
-        from goodq4all.steps.common.config_loader import load_configs
+        from steps.common.config_loader import load_configs
         cfg = load_configs({})
         
         print("[PASS] Config loads successfully")

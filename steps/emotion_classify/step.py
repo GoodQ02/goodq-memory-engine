@@ -12,7 +12,7 @@ try:
     from gpu_config import setup_step_gpu, GPUManager
 except ImportError:
     try:
-        from goodq4all.gpu_config import setup_step_gpu, GPUManager
+        from gpu_config import setup_step_gpu, GPUManager
     except ImportError:
         # Fallback if GPU manager not available
         def setup_step_gpu(step_name):
@@ -24,7 +24,7 @@ except ImportError:
 
 # Import score_nrc_emotions at module level
 try:
-    from goodq4all.steps.common.lexicon import score_nrc_emotions
+    from steps.common.lexicon import score_nrc_emotions
 except ImportError:
     from steps.common.lexicon import score_nrc_emotions
 
@@ -85,8 +85,8 @@ def emotion_classify(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
         try:
             import torch  # type: ignore
             import json as _json  # local alias
-            from goodq4all.steps.text_embed.step import _content_fingerprint  # reuse fingerprint
-            from goodq4all.steps.common.memory import update_fields
+            from steps.text_embed.step import _content_fingerprint  # reuse fingerprint
+            from steps.common.memory import update_fields
             inputs = _EMO["tok"](text, return_tensors="pt", truncation=True, max_length=512).to(_EMO.get("device","cpu"))
             with torch.no_grad():
                 if _EMO.get("device") == "cuda":
@@ -125,8 +125,8 @@ def emotion_classify(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
     try:
         import torch  # type: ignore
         import json as _json  # local alias
-        from goodq4all.steps.text_embed.step import _content_fingerprint  # reuse fingerprint
-        from goodq4all.steps.common.memory import update_fields
+        from steps.text_embed.step import _content_fingerprint  # reuse fingerprint
+        from steps.common.memory import update_fields
         inputs = _EMO["tok"](text, return_tensors="pt", truncation=True, max_length=512).to(_EMO.get("device","cpu"))
         with torch.no_grad():
             if _EMO.get("device") == "cuda":

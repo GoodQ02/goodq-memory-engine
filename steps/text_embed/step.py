@@ -6,9 +6,9 @@ import hashlib
 import json
 import logging
 
-from goodq4all.steps.common.memory import upsert_embedding
-from goodq4all.steps.common.memory_router import MemoryRouter
-from goodq4all.steps.common.memory_stores import build_text_stores
+from steps.common.memory import upsert_embedding
+from steps.common.memory_router import MemoryRouter
+from steps.common.memory_stores import build_text_stores
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +17,7 @@ try:
     from gpu_config import setup_step_gpu, GPUManager
 except ImportError:
     try:
-        from goodq4all.gpu_config import setup_step_gpu, GPUManager
+        from gpu_config import setup_step_gpu, GPUManager
     except ImportError:
         def setup_step_gpu(step_name):
             return {"device": "cpu", "step_name": step_name}

@@ -12,7 +12,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 from lib.knowledge_graph import KnowledgeGraph
-from goodq4all.steps.common.config_loader import load_configs
+from steps.common.config_loader import load_configs
 
 
 class KnowledgeGraphNLQuery:

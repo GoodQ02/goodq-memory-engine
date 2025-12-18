@@ -4,8 +4,8 @@ from typing import Any, Dict, List
 
 
 def main() -> None:
-    from goodq4all.steps.common.config_loader import load_configs
-    from goodq4all.steps.discover_sources.step import discover_sources
+    from steps.common.config_loader import load_configs
+    from steps.discover_sources.step import discover_sources
 
     cfg = load_configs({})
     items: List[Dict[str, Any]] = discover_sources(cfg)
@@ -14,4 +14,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

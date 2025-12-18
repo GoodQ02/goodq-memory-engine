@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Tuple
 
 
 def _load_cfg() -> Dict[str, Any]:
-    from goodq4all.steps.common.config_loader import load_configs
+    from steps.common.config_loader import load_configs
     return load_configs({})
 
 

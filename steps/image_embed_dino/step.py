@@ -13,7 +13,7 @@ try:
     from gpu_config import setup_step_gpu, GPUManager
 except ImportError:
     try:
-        from goodq4all.gpu_config import setup_step_gpu, GPUManager
+        from gpu_config import setup_step_gpu, GPUManager
     except ImportError:
         def setup_step_gpu(step_name):
             return {"device": "cpu", "step_name": step_name}
@@ -60,7 +60,7 @@ def image_embed_dino(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
         import torch  # type: ignore
         import numpy as np  # type: ignore
         from PIL import Image  # type: ignore
-        from goodq4all.steps.text_embed.step import _content_fingerprint
+        from steps.text_embed.step import _content_fingerprint
         import faiss  # type: ignore
 
         img = Image.open(path).convert("RGB")
@@ -85,7 +85,7 @@ def image_embed_dino(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
             index.hnsw.efSearch = 50
 
         # stable ID from content fingerprint
-        from goodq4all.steps.text_embed.step import _content_fingerprint
+        from steps.text_embed.step import _content_fingerprint
         h = _content_fingerprint(item)
         try:
             import numpy as np  # type: ignore
@@ -125,7 +125,7 @@ def image_embed_dino(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
         # To distinguish: check dino_id_map.sqlite or the specific FAISS index used.
         # See docs/ARCHITECTURE_REFERENCE.md for full explanation.
         try:
-            from goodq4all.steps.common.memory import upsert_embedding
+            from steps.common.memory import upsert_embedding
             scene_id = item.get("scene_id") or item.get("scene_index")
             if scene_id is not None and not isinstance(scene_id, str):
                 scene_id = f"scene_{int(scene_id):04d}"

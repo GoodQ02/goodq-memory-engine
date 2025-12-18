@@ -1,8 +1,8 @@
 from __future__ import annotations
 # GPU Configuration - Auto-configured on import
-from goodq4all.steps.common.gpu_config import configure_gpu, get_device, clear_cache, print_memory_stats
+from steps.common.gpu_config import configure_gpu, get_device, clear_cache, print_memory_stats
 # Audio-specific GPU optimization
-from goodq4all.steps.common.audio_gpu_optimizer import get_audio_gpu_optimizer
+from steps.common.audio_gpu_optimizer import get_audio_gpu_optimizer
 
 
 from typing import Any, Dict, List, Optional, Tuple

@@ -6,8 +6,8 @@ import subprocess
 import tempfile
 from typing import Any, Dict, List, Optional
 
-from goodq4all.steps.common.config_loader import load_configs
-from goodq4all.steps.discover_sources.step import discover_sources
+from steps.common.config_loader import load_configs
+from steps.discover_sources.step import discover_sources
 
 
 def _run_step(env: str, step: str, item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:

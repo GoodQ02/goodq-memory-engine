@@ -1,7 +1,7 @@
 from __future__ import annotations
 # GPU Configuration - Auto-configured on import
-from goodq4all.steps.common.gpu_config import configure_gpu, get_device, clear_cache, print_memory_stats
-from goodq4all.steps.common.qdrant_client import build_qdrant_client
+from steps.common.gpu_config import configure_gpu, get_device, clear_cache, print_memory_stats
+from steps.common.qdrant_client import build_qdrant_client
 
 
 from typing import Any, Dict, Optional
@@ -78,7 +78,7 @@ def audio_embed_clap(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
         import librosa  # type: ignore
         import numpy as np  # type: ignore
         import faiss  # type: ignore
-        from goodq4all.steps.text_embed.step import _content_fingerprint
+        from steps.text_embed.step import _content_fingerprint
         
         # VAD Preprocessing - filter silence before embedding
         vad_enabled = cfg.get("vad_enabled", True)
@@ -179,7 +179,7 @@ def audio_embed_clap(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
                     pass
         # Upsert generic embedding metadata for recall
         try:
-            from goodq4all.steps.common.memory import upsert_embedding
+            from steps.common.memory import upsert_embedding
             scene_id = item.get("scene_id") or item.get("scene_index")
             if scene_id is not None and not isinstance(scene_id, str):
                 scene_id = f"scene_{int(scene_id):04d}"

@@ -25,7 +25,7 @@ def _load_clip_model():
         return
     
     try:
-        from goodq4all.gpu_config import setup_step_gpu
+        from gpu_config import setup_step_gpu
     except ImportError:
         def setup_step_gpu(name):
             return {"device": "cpu", "step_name": name}
@@ -58,7 +58,7 @@ def _load_dino_model():
         return
     
     try:
-        from goodq4all.gpu_config import setup_step_gpu
+        from gpu_config import setup_step_gpu
     except ImportError:
         def setup_step_gpu(name):
             return {"device": "cpu", "step_name": name}

@@ -21,7 +21,7 @@ def test_config_loading():
     print("="*80)
     
     try:
-        from goodq4all.steps.common.config_loader import load_configs
+        from steps.common.config_loader import load_configs
         cfg = load_configs({})
         print("[PASS] Config loaded successfully")
         print(f"   Config keys: {list(cfg.keys())}")
@@ -76,7 +76,7 @@ def test_sample_ingestion(cfg: Dict[str, Any]):
     print(f"   Size: {sample_video.stat().st_size / (1024*1024):.2f} MB")
     
     try:
-        from goodq4all.pipelines.direct_ingestion import run_direct_ingestion
+        from pipelines.direct_ingestion import run_direct_ingestion
         
         print("\n[WAIT] Starting ingestion...")
         start_time = time.time()
@@ -207,7 +207,7 @@ def test_retrieval(cfg: Dict[str, Any]):
     print("="*80)
     
     try:
-        from goodq4all.retrieval.multimodal_search import MultimodalSearchEngine
+        from retrieval.multimodal_search import MultimodalSearchEngine
         
         print("[SEARCH] Initializing search engine...")
         engine = MultimodalSearchEngine(cfg)

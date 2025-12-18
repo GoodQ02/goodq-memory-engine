@@ -2,7 +2,7 @@ from __future__ import annotations
 from typing import Any, Dict
 import os
 
-from goodq4all.steps.common.lexicon import score_nrc_sentiment
+from steps.common.lexicon import score_nrc_sentiment
 
 
 _SENT = {"tok": None, "model": None, "device": "cpu"}
@@ -57,8 +57,8 @@ def sentiment(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
         if _SENT["model"] is not None:
             try:
                 import torch  # type: ignore
-                from goodq4all.steps.text_embed.step import _content_fingerprint  # reuse fingerprint
-                from goodq4all.steps.common.memory import update_fields
+                from steps.text_embed.step import _content_fingerprint  # reuse fingerprint
+                from steps.common.memory import update_fields
 
                 inputs = _SENT["tok"](text, return_tensors="pt", truncation=True, max_length=512).to(_SENT["device"])
                 with torch.no_grad():

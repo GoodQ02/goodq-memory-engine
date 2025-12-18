@@ -32,10 +32,10 @@ def run_scene_visual_embeddings(item: Dict[str, Any], cfg: Dict[str, Any]) -> Di
     Returns:
         Dict with scene embedding metadata
     """
-    from goodq4all.steps.video.scene_frame_extractor import extract_scene_frames
-    from goodq4all.steps.video.scene_embedder import embed_scene_frames
-    from goodq4all.steps.video.embedding_pooler import pool_multiple_scenes
-    from goodq4all.steps.common.qdrant_client import QdrantClient, QdrantConfig
+    from steps.video.scene_frame_extractor import extract_scene_frames
+    from steps.video.scene_embedder import embed_scene_frames
+    from steps.video.embedding_pooler import pool_multiple_scenes
+    from steps.common.qdrant_client import QdrantClient, QdrantConfig
     
     # Get Phase 6 config
     phase6_cfg = cfg.get('phase6', {})

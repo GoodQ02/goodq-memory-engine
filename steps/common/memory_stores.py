@@ -4,8 +4,8 @@ import os
 import time
 from typing import Any, Dict, List, Optional
 
-from goodq4all.steps.common.memory_store import MemoryStore
-from goodq4all.steps.common.qdrant_client import QdrantClient, build_qdrant_client
+from steps.common.memory_store import MemoryStore
+from steps.common.qdrant_client import QdrantClient, build_qdrant_client
 
 
 class ChromaMemory(MemoryStore):

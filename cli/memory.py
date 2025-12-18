@@ -5,10 +5,10 @@ from typing import Optional
 
 import typer
 
-from goodq4all.steps.common.config_loader import load_configs
-from goodq4all.lib.memory_management.diagnostics import run_all_diagnostics, check_schema_drift
-from goodq4all.lib.memory_management.utils import create_memory_backup
-from goodq4all.lib.memory_management.migrate import migrate_database
+from steps.common.config_loader import load_configs
+from lib.memory_management.diagnostics import run_all_diagnostics, check_schema_drift
+from lib.memory_management.utils import create_memory_backup
+from lib.memory_management.migrate import migrate_database
 from typing import Any, Dict
 
 app = typer.Typer(add_completion=False, help="GoodQ memory management CLI")
@@ -257,7 +257,7 @@ def register_scene_bundle_cmd(bundle: Path = typer.Argument(..., help="Path to J
         raise typer.BadParameter("bundle must include video_hash and scene")
 
     cfg = load_configs({})
-    from goodq4all.steps.common.memory import ensure_scene, register_scene_bundle
+    from steps.common.memory import ensure_scene, register_scene_bundle
 
     scene_id = payload.get("scene_id")
     scene_start = float(scene.get("start", 0.0) or 0.0)

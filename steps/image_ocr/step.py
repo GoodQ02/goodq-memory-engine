@@ -1,11 +1,11 @@
 from __future__ import annotations
 # GPU Configuration - Auto-configured on import
-from goodq4all.steps.common.gpu_config import configure_gpu, get_device, clear_cache, print_memory_stats
+from steps.common.gpu_config import configure_gpu, get_device, clear_cache, print_memory_stats
 
 
 from typing import Any, Dict, Optional
 
-from goodq4all.steps.common.tool_paths import resolve_tesseract
+from steps.common.tool_paths import resolve_tesseract
 
 
 def image_ocr(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:

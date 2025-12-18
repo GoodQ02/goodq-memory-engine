@@ -5,7 +5,7 @@ import os
 import tempfile
 import requests
 import subprocess
-from goodq4all.steps.common.tool_paths import resolve_piper
+from steps.common.tool_paths import resolve_piper
 
 
 def _resolve_elevenlabs_voice_id(api_key: str) -> Optional[str]:

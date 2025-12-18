@@ -14,7 +14,7 @@ try:
     from gpu_config import setup_step_gpu, GPUManager
 except ImportError:
     try:
-        from goodq4all.gpu_config import setup_step_gpu, GPUManager
+        from gpu_config import setup_step_gpu, GPUManager
     except ImportError:
         def setup_step_gpu(step_name):
             return {"device": "cpu", "step_name": step_name}
@@ -23,8 +23,8 @@ except ImportError:
             def clear_cache():
                 pass
 
-from goodq4all.steps.text_embed.step import _content_fingerprint
-from goodq4all.steps.common.qdrant_client import build_qdrant_client
+from steps.text_embed.step import _content_fingerprint
+from steps.common.qdrant_client import build_qdrant_client
 
 
 _CLIP = {"model": None, "proc": None, "device": "cpu"}
@@ -171,7 +171,7 @@ def image_embed_clip(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
         # To distinguish: check clip_id_map.sqlite or the specific FAISS index used.
         # See docs/ARCHITECTURE_REFERENCE.md for full explanation.
         try:
-            from goodq4all.steps.common.memory import upsert_embedding
+            from steps.common.memory import upsert_embedding
             scene_id = item.get("scene_id") or item.get("scene_index")
             if scene_id is not None and not isinstance(scene_id, str):
                 scene_id = f"scene_{int(scene_id):04d}"

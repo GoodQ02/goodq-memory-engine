@@ -28,6 +28,42 @@ from steps.common.tag_utils import canonicalize_taxonomy
 from steps.common.tool_paths import resolve_ffmpeg, resolve_conda
 from steps.common.step_logger import log_step_run
 
+
+def _patch_typer_help_for_click_8_2() -> None:
+    """
+    Typer 0.9.0 + Click 8.2.x: rich help calls `param.make_metavar()` without ctx.
+    Click 8.2 requires `make_metavar(self, ctx)`, causing `--help` to crash on Py3.13.
+    Patch is safe and affects help rendering only.
+    """
+    try:
+        import inspect
+        import click
+    except Exception:
+        return
+
+    make_metavar = getattr(click.core.Parameter, "make_metavar", None)
+    if make_metavar is None or getattr(make_metavar, "_goodq_patched", False):
+        return
+    try:
+        sig = inspect.signature(make_metavar)
+    except Exception:
+        return
+    if "ctx" not in sig.parameters:
+        return
+
+    orig = make_metavar
+
+    def _make_metavar_compat(self, ctx=None):  # type: ignore[no-untyped-def]
+        if ctx is None:
+            ctx = click.get_current_context(silent=True)
+            if ctx is None:
+                ctx = click.Context(click.Command("goodq"))
+        return orig(self, ctx)
+
+    _make_metavar_compat._goodq_patched = True  # type: ignore[attr-defined]
+    click.core.Parameter.make_metavar = _make_metavar_compat  # type: ignore[assignment]
+
+
 # Progress tracking
 try:
     from steps.common.progress_tracker import get_tracker, step_context, update_step
@@ -934,7 +970,7 @@ def run(
     max_scenes: int = typer.Option(0, help='Maximum scenes per video (0 = all)'),
     scene_threshold: Optional[float] = typer.Option(None, help='Override PySceneDetect content threshold'),
     min_scene_seconds: Optional[float] = typer.Option(None, help='Minimum scene length in seconds'),
-    force_reprocess: bool = typer.Option(False, '--force', help='Force reprocessing even if scenes already exist in database'),
+    force_reprocess: bool = typer.Option(False, '--force', '--force-reprocess', help='Force reprocessing even if scenes already exist in database'),
     verbose: bool = typer.Option(False, '--verbose', help='Emit per-step progress messages'),
     step_timeout: Optional[int] = typer.Option(None, '--step-timeout', help='Abort a step if it exceeds this many seconds'),
 ) -> None:
@@ -1454,7 +1490,7 @@ def run(
             typer.echo('[llm] Generating video summaries...')
         
         try:
-            from goodq4all.steps.video_summarizer.step import run_step as run_video_summarizer
+            from steps.video_summarizer.step import run_step as run_video_summarizer
             
             for result in results:
                 video_hash = result.get('video_hash')
@@ -1547,6 +1583,7 @@ def run(
 
 
 if __name__ == '__main__':
+    _patch_typer_help_for_click_8_2()
     APP()
 
 

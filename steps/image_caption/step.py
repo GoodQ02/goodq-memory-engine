@@ -10,7 +10,7 @@ try:
     from gpu_config import setup_step_gpu, GPUManager
 except ImportError:
     try:
-        from goodq4all.gpu_config import setup_step_gpu, GPUManager
+        from gpu_config import setup_step_gpu, GPUManager
     except ImportError:
         def setup_step_gpu(step_name):
             return {"device": "cpu", "step_name": step_name}

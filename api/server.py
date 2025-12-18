@@ -17,7 +17,7 @@ def main() -> None:
         port = 30000
 
     from uvicorn import run  # type: ignore
-    from goodq4all.api.main import app
+    from api.main import app
     print(f"[api] Starting FastAPI on http://{host}:{port}")
     run(app, host=host, port=port, log_level="info")
 

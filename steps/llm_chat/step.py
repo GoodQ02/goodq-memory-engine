@@ -1,14 +1,14 @@
 from __future__ import annotations
 # GPU Configuration - Auto-configured on import
-from goodq4all.steps.common.gpu_config import configure_gpu, get_device, clear_cache, print_memory_stats
+from steps.common.gpu_config import configure_gpu, get_device, clear_cache, print_memory_stats
 
 
 from typing import Any, Dict
 
 import os
 import requests
-from goodq4all.steps.common.retry import request_with_retry
-from goodq4all.steps.common.memory import _connect
+from steps.common.retry import request_with_retry
+from steps.common.memory import _connect
 
 
 def _goodq_persona_prompt(cfg: Dict[str, Any]) -> str:

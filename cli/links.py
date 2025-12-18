@@ -3,8 +3,8 @@ import argparse
 import json
 from typing import Any, Dict
 
-from goodq4all.steps.common.config_loader import load_configs
-from goodq4all.steps.common.memory import insert_link, upsert_scene, upsert_segment
+from steps.common.config_loader import load_configs
+from steps.common.memory import insert_link, upsert_scene, upsert_segment
 
 
 def main() -> None:

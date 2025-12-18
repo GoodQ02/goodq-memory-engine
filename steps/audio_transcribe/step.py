@@ -1,6 +1,6 @@
 from __future__ import annotations
 # Audio-specific GPU optimization
-from goodq4all.steps.common.audio_gpu_optimizer import get_audio_gpu_optimizer
+from steps.common.audio_gpu_optimizer import get_audio_gpu_optimizer
 
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -448,7 +448,7 @@ def audio_transcribe(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
     chunk_seconds = float(tx_cfg.get("chunk_seconds") or 10)
     chunk_seconds = max(1.0, chunk_seconds)
 
-    from goodq4all.steps.common.tool_paths import resolve_ffmpeg
+    from steps.common.tool_paths import resolve_ffmpeg
 
     ffmpeg_path = resolve_ffmpeg(cfg) or "ffmpeg"
 

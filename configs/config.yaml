@@ -46,6 +46,7 @@ paths:
   db_path: L:/_DATA/GoodQ_Data/memory.db
   knowledge_graph_db: L:/_DATA/GoodQ_Data/knowledge_graph.db
   faiss_dir: L:/_DATA/GoodQ_Data/faiss
+  faiss_audio_path: L:/_DATA/GoodQ_Data/faiss/goodq_audio.index
   config_dir: L:/goodq4all/configs
   
   # Data paths

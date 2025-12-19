@@ -44,7 +44,11 @@ def _load_st() -> Any:
         from sentence_transformers import SentenceTransformer  # type: ignore
         
         _ST = SentenceTransformer("all-MiniLM-L6-v2", device=device)
-        logger.info(f"[OK] SentenceTransformer loaded on {device} (GPU config: {gpu_config['memory_fraction']:.1%} memory)")
+        mem_fraction = gpu_config.get("memory_fraction")
+        if isinstance(mem_fraction, (int, float)):
+            logger.info(f"[OK] SentenceTransformer loaded on {device} (GPU config: {mem_fraction:.1%} memory)")
+        else:
+            logger.info(f"[OK] SentenceTransformer loaded on {device}")
     except Exception as e:
         logger.error(f"[FAIL] Failed to load SentenceTransformer: {str(e)}")
         logger.info("[WARN]  Falling back to CPU mode")
@@ -101,7 +105,7 @@ def _content_fingerprint(item: Dict[str, Any]) -> str:
 
 def _gather_text(item: Dict[str, Any]) -> Optional[str]:
     # Pull text from known fields in priority order
-    for k in ("frame_text", "transcript", "ocr_text", "caption"):
+    for k in ("frame_text", "transcript", "text", "ocr_text", "caption"):
         v = item.get(k)
         if isinstance(v, str) and v.strip():
             return v

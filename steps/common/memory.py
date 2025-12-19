@@ -474,6 +474,16 @@ def register_scene_bundle(
                 })
         
         if points:
+            if os.environ.get("GOODQ_VECTOR_DEBUG", "").strip().lower() in ("1", "true", "yes", "y", "on"):
+                try:
+                    mods: Dict[str, int] = {}
+                    for p in points:
+                        payload = p.get("payload") if isinstance(p.get("payload"), dict) else {}
+                        mod = payload.get("modality") or payload.get("model") or "unknown"
+                        mods[str(mod)] = mods.get(str(mod), 0) + 1
+                    print(f"[VECTOR_DEBUG] scene_vectors scene_id={scene_id} total={len(points)} by_modality={mods}")
+                except Exception:
+                    pass
             results = router.insert(points)
             success_count = sum(1 for v in results.values() if v)
             print(f'[VECTOR] Inserted {success_count}/{len(points)} embeddings for scene {scene_id}')

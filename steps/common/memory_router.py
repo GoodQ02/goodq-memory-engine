@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from typing import Any, Dict, List, Optional
 
 from steps.common.memory_store import MemoryStore, MemoryConfig, MemoryDims
@@ -44,17 +45,43 @@ class MemoryRouter:
         return filtered
 
     def insert(self, vectors: List[Dict[str, Any]]) -> Dict[str, bool]:
+        debug = os.environ.get("GOODQ_VECTOR_DEBUG", "").strip().lower() in ("1", "true", "yes", "y", "on")
         results: Dict[str, bool] = {}
+        if debug:
+            try:
+                modalities: Dict[str, int] = {}
+                for v in vectors or []:
+                    if not isinstance(v, dict):
+                        continue
+                    mod = v.get("modality") or (v.get("payload") or {}).get("modality") or (v.get("payload") or {}).get("model") or "unknown"
+                    modalities[str(mod)] = modalities.get(str(mod), 0) + 1
+                print(
+                    f"[VECTOR_DEBUG] router.insert vectors={len(vectors or [])} targets={self.config.write_targets}"
+                    f" stores={list(self.stores.keys())} modalities={modalities}"
+                )
+            except Exception:
+                pass
         for target in self.config.write_targets:
             store = self.stores.get(target)
             if not store:
                 results[target] = False
+                if debug:
+                    print(f"[VECTOR_DEBUG] router.target missing target={target}")
                 continue
             try:
                 payload = self._filter_vectors_for_store(vectors, store)
+                if debug:
+                    print(
+                        f"[VECTOR_DEBUG] router.target target={target} store={store.__class__.__name__}"
+                        f" dim={getattr(store, 'dim', None)} filtered={len(payload)}"
+                    )
                 results[target] = store.insert(payload) if payload else False
+                if debug:
+                    print(f"[VECTOR_DEBUG] router.target result target={target} ok={results[target]}")
             except Exception:
                 results[target] = False
+                if debug:
+                    print(f"[VECTOR_DEBUG] router.target exception target={target}")
         return results
 
     def query(self, query_vector: List[float], top_k: int = 5, filter: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:

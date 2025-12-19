@@ -100,9 +100,10 @@ class ChromaMemory(MemoryStore):
 
 
 class FaissMemory(MemoryStore):
-    def __init__(self, index_path: str, dim: int):
+    def __init__(self, index_path: str, dim: int, db_path: Optional[str] = None):
         self.index_path = index_path
         self.dim = dim
+        self.db_path = db_path
 
     def _load_index(self):
         import faiss  # type: ignore
@@ -159,6 +160,12 @@ class FaissMemory(MemoryStore):
             out = []
             for i, s in zip(ids, scores):
                 out.append({"id": int(i), "score": float(s), "payload": {}})
+            try:
+                from steps.common.memory_provenance import attach_provenance_to_hits
+
+                attach_provenance_to_hits(self.db_path, out)
+            except Exception:
+                pass
             return out
         except Exception:
             return []
@@ -200,7 +207,7 @@ def build_text_stores(cfg: Dict[str, Any]) -> Dict[str, MemoryStore]:
     stores["chroma"] = ChromaMemory(text_dim, ttl_seconds=ttl_seconds, max_items=max_ephemeral)
     faiss_path = paths.get("faiss_index_path") or ""
     if faiss_path:
-        stores["faiss"] = FaissMemory(faiss_path, text_dim)
+        stores["faiss"] = FaissMemory(faiss_path, text_dim, db_path=paths.get("db_path"))
     q_client = None
     try:
         q_client = build_qdrant_client(cfg, dim=text_dim, key="text")

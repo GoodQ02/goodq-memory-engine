@@ -138,16 +138,77 @@ def text_embed(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
                 "scene_id": item.get("scene_id") or item.get("scene_index"),
             },
         }
-        router.insert([payload])
+        router_results = router.insert([payload])
 
         # Persist mapping for recall/linking (FAISS id if available is not tracked here)
+        embedding_ok = False
+        embedding_reason = None
         try:
             scene_id = item.get("scene_id") or item.get("scene_index")
             if scene_id is not None and not isinstance(scene_id, str):
                 scene_id = f"scene_{int(scene_id):04d}"
             upsert_embedding(cfg, payload["id"], None, item.get("source_path", ""), item.get("modality", ""), scene_id=scene_id)
+            embedding_ok = True
         except Exception as e:
+            embedding_reason = f"exception:{type(e).__name__}"
             print(f'[ERROR] Exception in text_embed upsert_embedding: {str(e)}')
+
+        try:
+            from steps.common.memory_commit_events import MemoryCommitEvent, emit_memory_commit_event, utc_now_iso
+
+            scene_id = item.get("scene_id") or item.get("scene_index")
+            if scene_id is not None and not isinstance(scene_id, str):
+                scene_id = f"scene_{int(scene_id):04d}"
+            elif scene_id is not None:
+                scene_id = str(scene_id)
+
+            qdrant_ref = None
+            try:
+                q_store = stores.get("qdrant")
+                q_client = getattr(q_store, "client", None)
+                qdrant_ref = getattr(getattr(q_client, "cfg", None), "collection", None)
+            except Exception:
+                qdrant_ref = None
+
+            faiss_ref = None
+            try:
+                f_store = stores.get("faiss")
+                faiss_ref = getattr(f_store, "index_path", None)
+            except Exception:
+                faiss_ref = None
+
+            targets = {}
+            for target, ok in (router_results or {}).items():
+                present = target in (stores or {})
+                ref = qdrant_ref if target == "qdrant" else faiss_ref if target == "faiss" else None
+                reason = None
+                if not present:
+                    reason = "store_missing"
+                elif not ok:
+                    reason = "insert_failed_or_filtered"
+                targets[str(target)] = {"attempted": bool(present), "committed": bool(ok), "ref": ref, "reason": reason, "count": 1}
+            targets["sqlite_embeddings"] = {
+                "attempted": True,
+                "committed": bool(embedding_ok),
+                "ref": (cfg.get("paths", {}) or {}).get("db_path"),
+                "reason": embedding_reason,
+            }
+            emit_memory_commit_event(
+                cfg,
+                MemoryCommitEvent(
+                    ts_utc=utc_now_iso(),
+                    scene_id=scene_id,
+                    video_id=str(item.get("video_id")) if item.get("video_id") is not None else None,
+                    modality=str((payload.get("payload") or {}).get("modality") or "text") or "text",
+                    model="all-MiniLM-L6-v2",
+                    embedding_id=str(payload.get("id")) if payload.get("id") is not None else None,
+                    component="text_embed",
+                    targets=targets,
+                    details={"text_len": len(text) if isinstance(text, str) else None, "source_path": item.get("source_path")},
+                ),
+            )
+        except Exception:
+            pass
 
         return {"embedding_meta": {"status": "ok", "engine": "all-MiniLM-L6-v2"}}
     except Exception as e:

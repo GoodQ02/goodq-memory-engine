@@ -8,7 +8,7 @@ import logging
 from fastapi import APIRouter, Query, HTTPException, Body
 from pydantic import BaseModel
 
-from api.utils.response_models import SearchResponse, SearchResult
+from api.utils.response_models import SearchResponse, SearchResult, confidence_stub
 from api.utils.loaders import DataLoader
 from retrieval.multimodal_search import MultimodalSearchEngine
 from steps.common.config_loader import load_configs
@@ -90,7 +90,9 @@ async def search_multimodal(request: MultimodalSearchRequest = Body(...)):
                 transcript=payload.get('transcript'),
                 keywords=payload.get('keywords', []),
                 objects=payload.get('objects', []),
-                context=result.get('scene_context')
+                context=result.get('scene_context'),
+                provenance=result.get("provenance") if isinstance(result.get("provenance"), dict) else None,
+                confidence=result.get("confidence") if isinstance(result.get("confidence"), dict) else confidence_stub(),
             )
             
             search_results.append(search_result)
@@ -144,7 +146,9 @@ async def search_text(
                 video_id=payload.get('video_id'),
                 scene_id=payload.get('scene_id'),
                 transcript=payload.get('transcript'),
-                keywords=payload.get('keywords', [])
+                keywords=payload.get('keywords', []),
+                provenance=result.get("provenance") if isinstance(result.get("provenance"), dict) else None,
+                confidence=result.get("confidence") if isinstance(result.get("confidence"), dict) else confidence_stub(),
             )
             
             search_results.append(search_result)
@@ -192,7 +196,9 @@ async def search_visual(
                 scene_id=payload.get('scene_id'),
                 representative_frame=payload.get('representative_frame'),
                 objects=payload.get('objects', []),
-                keywords=payload.get('keywords', [])
+                keywords=payload.get('keywords', []),
+                provenance=result.get("provenance") if isinstance(result.get("provenance"), dict) else None,
+                confidence=result.get("confidence") if isinstance(result.get("confidence"), dict) else confidence_stub(),
             )
             
             search_results.append(search_result)

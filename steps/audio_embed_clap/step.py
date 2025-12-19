@@ -121,6 +121,33 @@ def audio_embed_clap(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
         feats = out.detach().cpu().numpy().astype("float32")
         index_path = (cfg.get("paths", {}) or {}).get("faiss_audio_path")
         if not index_path:
+            try:
+                from steps.common.memory_commit_events import MemoryCommitEvent, emit_memory_commit_event, utc_now_iso
+
+                scene_id = item.get("scene_id") or item.get("scene_index")
+                if scene_id is not None and not isinstance(scene_id, str):
+                    scene_id = f"scene_{int(scene_id):04d}"
+                elif scene_id is not None:
+                    scene_id = str(scene_id)
+                emit_memory_commit_event(
+                    cfg,
+                    MemoryCommitEvent(
+                        ts_utc=utc_now_iso(),
+                        scene_id=scene_id,
+                        video_id=str(item.get("video_id")) if item.get("video_id") is not None else None,
+                        modality=str(item.get("modality") or "audio") or "audio",
+                        model="laion/clap-htsat-unfused",
+                        embedding_id=None,
+                        component="audio_embed_clap",
+                        attempted=False,
+                        committed=False,
+                        reason="no_index_path",
+                        targets={"faiss": {"attempted": False, "committed": False, "ref": None, "reason": "no_index_path"}},
+                        details={"source_path": path},
+                    ),
+                )
+            except Exception:
+                pass
             return {"clap_meta": {"status": "no_index_path"}}
         os.makedirs(os.path.dirname(index_path), exist_ok=True)
         if os.path.isfile(index_path):
@@ -141,12 +168,19 @@ def audio_embed_clap(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
             # best-effort: last ID is ntotal-1 but only valid for flat add
             faiss_id = getattr(index, 'ntotal', 0) - 1
         faiss.write_index(index, index_path)
+        faiss_ok = True
 
         # Optional Qdrant dual-write
+        qdrant_attempted = False
+        qdrant_ok = False
+        qdrant_reason = None
+        qdrant_collection = None
         try:
             q_client = build_qdrant_client(cfg, dim=feats.shape[1], key="audio")
             if q_client:
-                q_client.upsert([{
+                qdrant_collection = getattr(getattr(q_client, "cfg", None), "collection", None)
+                qdrant_attempted = True
+                qdrant_ok = bool(q_client.upsert([{
                     "id": h,
                     "vector": feats[0].tolist(),
                     "payload": {
@@ -154,11 +188,18 @@ def audio_embed_clap(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
                         "modality": "audio",
                         "faiss_id": faiss_id,
                     }
-                }])
-        except Exception:
+                }]))
+                if not qdrant_ok:
+                    qdrant_reason = "upsert_failed"
+        except Exception as e:
+            qdrant_attempted = True
+            qdrant_ok = False
+            qdrant_reason = f"exception:{type(e).__name__}"
             pass
         # Map FAISS ID -> fingerprint/source in dedicated SQLite
         map_db = (cfg.get("paths", {}) or {}).get("clap_id_map_db")
+        map_ok = False
+        map_reason = None
         if map_db:
             try:
                 _ensure_clap_map(map_db)
@@ -168,7 +209,9 @@ def audio_embed_clap(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
                         "INSERT OR REPLACE INTO clap_id_map(faiss_id, hash, source_path, created_at) VALUES (?,?,?,?)",
                         (faiss_id, h, path, datetime.utcnow().isoformat()),
                     )
+                map_ok = True
             except Exception as e:
+                map_reason = f"exception:{type(e).__name__}"
                 print(f'[ERROR] Exception in step.py line 111: {str(e)}')
                 pass
             finally:
@@ -178,14 +221,53 @@ def audio_embed_clap(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
                     print(f'[ERROR] Exception in step.py line 117: {str(e)}')
                     pass
         # Upsert generic embedding metadata for recall
+        embedding_ok = False
+        embedding_reason = None
         try:
             from steps.common.memory import upsert_embedding
             scene_id = item.get("scene_id") or item.get("scene_index")
             if scene_id is not None and not isinstance(scene_id, str):
                 scene_id = f"scene_{int(scene_id):04d}"
             upsert_embedding(cfg, h, faiss_id, path, item.get("modality", "audio") or "audio", scene_id=scene_id)
+            embedding_ok = True
         except Exception as e:
+            embedding_reason = f"exception:{type(e).__name__}"
             print(f'[ERROR] Exception in step.py line 124: {str(e)}')
+            pass
+
+        try:
+            from steps.common.memory_commit_events import MemoryCommitEvent, emit_memory_commit_event, utc_now_iso
+
+            scene_id = item.get("scene_id") or item.get("scene_index")
+            if scene_id is not None and not isinstance(scene_id, str):
+                scene_id = f"scene_{int(scene_id):04d}"
+            elif scene_id is not None:
+                scene_id = str(scene_id)
+            emit_memory_commit_event(
+                cfg,
+                MemoryCommitEvent(
+                    ts_utc=utc_now_iso(),
+                    scene_id=scene_id,
+                    video_id=str(item.get("video_id")) if item.get("video_id") is not None else None,
+                    modality=str(item.get("modality") or "audio") or "audio",
+                    model="laion/clap-htsat-unfused",
+                    embedding_id=h,
+                    component="audio_embed_clap",
+                    targets={
+                        "faiss": {"attempted": True, "committed": bool(faiss_ok), "ref": index_path, "reason": None if faiss_ok else "write_failed"},
+                        "qdrant": {"attempted": bool(qdrant_attempted), "committed": bool(qdrant_ok), "ref": qdrant_collection, "reason": qdrant_reason},
+                        "sqlite_map": {"attempted": bool(map_db), "committed": bool(map_ok), "ref": map_db, "reason": map_reason},
+                        "sqlite_embeddings": {
+                            "attempted": True,
+                            "committed": bool(embedding_ok),
+                            "ref": (cfg.get("paths", {}) or {}).get("db_path"),
+                            "reason": embedding_reason,
+                        },
+                    },
+                    details={"faiss_id": faiss_id, "source_path": path},
+                ),
+            )
+        except Exception:
             pass
         return {"clap_meta": {"status": "ok", "index_path": index_path, "faiss_id": faiss_id}}
     except Exception as e:

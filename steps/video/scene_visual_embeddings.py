@@ -146,7 +146,38 @@ def run_scene_visual_embeddings(item: Dict[str, Any], cfg: Dict[str, Any]) -> Di
             })
         
         if clip_points:
-            clip_client.upsert(clip_points)
+            clip_ok = clip_client.upsert(clip_points)
+            try:
+                from steps.common.memory_commit_events import MemoryCommitEvent, emit_memory_commit_events, utc_now_iso
+                ts_utc = utc_now_iso()
+                emit_memory_commit_events(
+                    cfg,
+                    [
+                        MemoryCommitEvent(
+                            ts_utc=ts_utc,
+                            scene_id=str((p.get("payload") or {}).get("scene_id")) if (p.get("payload") or {}).get("scene_id") is not None else None,
+                            video_id=str((p.get("payload") or {}).get("video_id")) if (p.get("payload") or {}).get("video_id") is not None else None,
+                            modality="clip",
+                            model="clip",
+                            embedding_id=str(p.get("id")) if p.get("id") is not None else None,
+                            component="scene_visual_embeddings.clip",
+                            targets={
+                                "qdrant": {
+                                    "attempted": True,
+                                    "committed": bool(clip_ok),
+                                    "ref": clip_collection,
+                                    "reason": None if clip_ok else "upsert_failed",
+                                    "count": len(clip_points),
+                                }
+                            },
+                            details={"host": getattr(getattr(clip_client, "cfg", None), "host", None)},
+                        )
+                        for p in clip_points
+                        if isinstance(p, dict)
+                    ],
+                )
+            except Exception:
+                pass
             logger.info(f"  [SYMBOL] Stored {len(clip_points)} CLIP scene embeddings")
         
         # Store DINO embeddings
@@ -173,7 +204,38 @@ def run_scene_visual_embeddings(item: Dict[str, Any], cfg: Dict[str, Any]) -> Di
             })
         
         if dino_points:
-            dino_client.upsert(dino_points)
+            dino_ok = dino_client.upsert(dino_points)
+            try:
+                from steps.common.memory_commit_events import MemoryCommitEvent, emit_memory_commit_events, utc_now_iso
+                ts_utc = utc_now_iso()
+                emit_memory_commit_events(
+                    cfg,
+                    [
+                        MemoryCommitEvent(
+                            ts_utc=ts_utc,
+                            scene_id=str((p.get("payload") or {}).get("scene_id")) if (p.get("payload") or {}).get("scene_id") is not None else None,
+                            video_id=str((p.get("payload") or {}).get("video_id")) if (p.get("payload") or {}).get("video_id") is not None else None,
+                            modality="dino",
+                            model="dino",
+                            embedding_id=str(p.get("id")) if p.get("id") is not None else None,
+                            component="scene_visual_embeddings.dino",
+                            targets={
+                                "qdrant": {
+                                    "attempted": True,
+                                    "committed": bool(dino_ok),
+                                    "ref": dino_collection,
+                                    "reason": None if dino_ok else "upsert_failed",
+                                    "count": len(dino_points),
+                                }
+                            },
+                            details={"host": getattr(getattr(dino_client, "cfg", None), "host", None)},
+                        )
+                        for p in dino_points
+                        if isinstance(p, dict)
+                    ],
+                )
+            except Exception:
+                pass
             logger.info(f"  [SYMBOL] Stored {len(dino_points)} DINO scene embeddings")
     
     # === STEP 6: Update Scene Manifest ===

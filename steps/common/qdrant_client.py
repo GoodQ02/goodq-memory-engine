@@ -18,6 +18,7 @@ class QdrantConfig:
     dim: int
     distance: str = "Cosine"
     enabled: bool = True
+    db_path: Optional[str] = None
 
 
 class QdrantClient:
@@ -182,7 +183,7 @@ class QdrantClient:
             if r.status_code != 200:
                 return []
             res = r.json().get("result", []) or []
-            return [
+            hits = [
                 {
                     "id": hit.get("id"),
                     "score": hit.get("score"),
@@ -190,6 +191,13 @@ class QdrantClient:
                 }
                 for hit in res
             ]
+            try:
+                from steps.common.memory_provenance import attach_provenance_to_hits
+
+                attach_provenance_to_hits(getattr(self.cfg, "db_path", None), hits)
+            except Exception:
+                pass
+            return hits
         except Exception:
             return []
 
@@ -226,4 +234,5 @@ def build_qdrant_client(cfg: Dict[str, Any], dim: int, key: str) -> Optional[Qdr
     host = qcfg.get("host", "http://localhost:6333")
     collections = qcfg.get("collections", {}) or {}
     collection = collections.get(key, f"goodq_{key}")
-    return QdrantClient(QdrantConfig(host=host, collection=collection, dim=dim, enabled=True))
+    db_path = ((cfg.get("paths") or {}) if isinstance(cfg, dict) else {}).get("db_path")
+    return QdrantClient(QdrantConfig(host=host, collection=collection, dim=dim, enabled=True, db_path=db_path))

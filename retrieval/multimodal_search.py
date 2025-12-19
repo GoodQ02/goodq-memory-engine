@@ -79,6 +79,9 @@ class MultimodalSearchEngine:
             return self._qdrant_clients[collection]
         
         from steps.common.qdrant_client import QdrantClient, QdrantConfig
+
+        paths = (self.config.get("paths") or {}) if isinstance(self.config, dict) else {}
+        db_path = paths.get("db_path") if isinstance(paths, dict) else None
         
         # Determine dimension based on collection type
         dim = 512 if 'clip' in collection else 384  # CLIP: 512, SBERT: 384, DINO: 768
@@ -89,7 +92,8 @@ class MultimodalSearchEngine:
             host=self.qdrant_host,
             collection=collection,
             dim=dim,
-            distance='Cosine'
+            distance='Cosine',
+            db_path=db_path,
         ))
         
         self._qdrant_clients[collection] = client

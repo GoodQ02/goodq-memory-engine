@@ -7,6 +7,16 @@ from typing import List, Dict, Any, Optional
 from pydantic import BaseModel, Field
 
 
+def confidence_stub() -> Dict[str, Any]:
+    return {
+        "intrinsic": None,
+        "source": None,
+        "temporal": None,
+        "consistency": None,
+        "overall": None,
+    }
+
+
 class SceneResponse(BaseModel):
     """Scene metadata response."""
     scene_id: int
@@ -36,6 +46,8 @@ class SearchResult(BaseModel):
     keywords: List[str] = Field(default_factory=list)
     objects: List[str] = Field(default_factory=list)
     context: Optional[Dict[str, Any]] = None
+    provenance: Optional[Dict[str, Any]] = None
+    confidence: Dict[str, Any] = Field(default_factory=confidence_stub)
 
 
 class SearchResponse(BaseModel):
@@ -45,6 +57,7 @@ class SearchResponse(BaseModel):
     results: List[SearchResult]
     modalities_searched: List[str]
     fusion_weights: Optional[Dict[str, float]] = None
+    confidence: Dict[str, Any] = Field(default_factory=confidence_stub)
 
 
 class TimelineSegment(BaseModel):

@@ -82,6 +82,13 @@ class MultimodalSearchEngine:
 
         paths = (self.config.get("paths") or {}) if isinstance(self.config, dict) else {}
         db_path = paths.get("db_path") if isinstance(paths, dict) else None
+        log_retrieval = True
+        try:
+            from steps.common.retrieval_events import retrieval_events_enabled
+
+            log_retrieval = retrieval_events_enabled(self.config, default=True)
+        except Exception:
+            log_retrieval = True
         
         # Determine dimension based on collection type
         dim = 512 if 'clip' in collection else 384  # CLIP: 512, SBERT: 384, DINO: 768
@@ -94,6 +101,7 @@ class MultimodalSearchEngine:
             dim=dim,
             distance='Cosine',
             db_path=db_path,
+            log_retrieval_events=log_retrieval,
         ))
         
         self._qdrant_clients[collection] = client

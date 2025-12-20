@@ -19,6 +19,8 @@ class QdrantConfig:
     distance: str = "Cosine"
     enabled: bool = True
     db_path: Optional[str] = None
+    log_dir: Optional[str] = None
+    log_retrieval_events: bool = True
 
 
 class QdrantClient:
@@ -197,6 +199,65 @@ class QdrantClient:
                 attach_provenance_to_hits(getattr(self.cfg, "db_path", None), hits)
             except Exception:
                 pass
+            try:
+                from steps.common.retrieval_events import (
+                    RetrievalEvent,
+                    emit_retrieval_events,
+                    normalize_retrieval_context,
+                    utc_now_iso,
+                )
+
+                context = normalize_retrieval_context(os.environ.get("GOODQ_RETRIEVAL_CONTEXT"))
+                ts = utc_now_iso()
+                events: List[RetrievalEvent] = []
+                for h in hits:
+                    if not isinstance(h, dict):
+                        continue
+                    score = h.get("score")
+                    try:
+                        score_f = float(score) if score is not None else None
+                    except Exception:
+                        score_f = None
+                    payload = h.get("payload") if isinstance(h.get("payload"), dict) else {}
+                    prov = h.get("provenance") if isinstance(h.get("provenance"), dict) else {}
+                    scene_id = payload.get("scene_id") if payload else None
+                    modality = payload.get("modality") if payload else None
+                    model = payload.get("model") if payload else None
+                    if scene_id is None and prov:
+                        scene_id = prov.get("scene_id")
+                    if modality is None and prov:
+                        modality = prov.get("modality")
+                    if model is None and prov:
+                        model = prov.get("model")
+                    if modality is None and isinstance(payload.get("model"), str):
+                        modality = payload.get("model")
+                    embedding_id = h.get("id")
+                    embedding_id_s = str(embedding_id) if embedding_id is not None else None
+                    events.append(
+                        RetrievalEvent(
+                            ts_utc=ts,
+                            store="qdrant",
+                            retrieval_context=context,
+                            embedding_id=embedding_id_s,
+                            scene_id=str(scene_id) if scene_id is not None else None,
+                            modality=str(modality) if modality is not None else None,
+                            model=str(model) if model is not None else None,
+                            score=score_f,
+                            details={
+                                "store_type": "qdrant",
+                                "store_ref": self.cfg.collection,
+                                "collection": self.cfg.collection,
+                            },
+                        )
+                    )
+                emit_retrieval_events(
+                    getattr(self.cfg, "db_path", None),
+                    events,
+                    enabled=getattr(self.cfg, "log_retrieval_events", True),
+                    log_dir=getattr(self.cfg, "log_dir", None),
+                )
+            except Exception:
+                pass
             return hits
         except Exception:
             return []
@@ -234,5 +295,24 @@ def build_qdrant_client(cfg: Dict[str, Any], dim: int, key: str) -> Optional[Qdr
     host = qcfg.get("host", "http://localhost:6333")
     collections = qcfg.get("collections", {}) or {}
     collection = collections.get(key, f"goodq_{key}")
-    db_path = ((cfg.get("paths") or {}) if isinstance(cfg, dict) else {}).get("db_path")
-    return QdrantClient(QdrantConfig(host=host, collection=collection, dim=dim, enabled=True, db_path=db_path))
+    paths = (cfg.get("paths") or {}) if isinstance(cfg, dict) else {}
+    db_path = paths.get("db_path")
+    log_dir = paths.get("log_dir")
+    log_retrieval = True
+    try:
+        from steps.common.retrieval_events import retrieval_events_enabled
+
+        log_retrieval = retrieval_events_enabled(cfg, default=True)
+    except Exception:
+        log_retrieval = True
+    return QdrantClient(
+        QdrantConfig(
+            host=host,
+            collection=collection,
+            dim=dim,
+            enabled=True,
+            db_path=db_path,
+            log_dir=log_dir if isinstance(log_dir, str) else None,
+            log_retrieval_events=log_retrieval,
+        )
+    )

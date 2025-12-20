@@ -160,6 +160,11 @@ def _ensure_schema(conn: sqlite3.Connection, db_path: str) -> None:
     cache_key = (db_path, _SCHEMA_VERSION)
     if cache_key in _SCHEMA_INITIALIZED:
         return
+    try:
+        # Best-effort: favor WAL for low-contention, append-only event writes.
+        conn.execute("PRAGMA journal_mode=WAL")
+    except Exception:
+        pass
     conn.executescript(_SCHEMA_SQL)
     try:
         cur = conn.execute("PRAGMA table_info('memory_commit_events')")
@@ -173,6 +178,17 @@ def _ensure_schema(conn: sqlite3.Connection, db_path: str) -> None:
 
 def _cfg_paths(cfg: Any) -> Dict[str, Any]:
     return (cfg.get("paths") or {}) if isinstance(cfg, dict) else {}
+
+def _configure_conn(conn: sqlite3.Connection, *, busy_timeout_ms: int) -> None:
+    try:
+        conn.execute(f"PRAGMA busy_timeout={int(busy_timeout_ms)}")
+    except Exception:
+        pass
+    try:
+        # Best-effort: reduce fsync pressure for observability-only writes.
+        conn.execute("PRAGMA synchronous=NORMAL")
+    except Exception:
+        pass
 
 
 def emit_memory_commit_event(cfg: Dict[str, Any], event: Union[MemoryCommitEvent, Dict[str, Any]]) -> None:
@@ -217,6 +233,7 @@ def emit_memory_commit_events(cfg: Dict[str, Any], events: Sequence[Union[Memory
     try:
         conn = sqlite3.connect(db_path, timeout=0.2, check_same_thread=False)
         try:
+            _configure_conn(conn, busy_timeout_ms=200)
             _ensure_schema(conn, db_path)
             rows = [ev.to_row() for ev in normalized]
             with conn:
@@ -249,9 +266,13 @@ def emit_memory_commit_events(cfg: Dict[str, Any], events: Sequence[Union[Memory
                 conn.close()
             except Exception:
                 pass
-    except Exception:
+    except Exception as exc:
         # Never block ingestion on observability writes.
-        return
+        if debug:
+            try:
+                print(f"[VECTOR_DEBUG] commit_events.sqlite_failed err={exc}")
+            except Exception:
+                pass
 
     # Optional JSONL mirror (debuggable, append-only)
     if not _truthy_env("GOODQ_COMMIT_EVENTS_JSONL", default=True):

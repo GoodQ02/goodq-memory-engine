@@ -11,6 +11,17 @@ GoodQ4All uses a **hybrid memory architecture** combining relational databases (
 
 ---
 
+## Memory Integrity Doctrine (Do Not Break)
+
+- **Confidence is not policy.** Confidence fields are metadata only and must not directly gate, refuse, or rerank retrieval without an explicit policy layer and approval.
+- **Audit absence is not evidence.** `memory_commit_events` / `retrieval_events` are best-effort observability; missing rows can mean disabled logging or a non-blocking write failure, not “nothing happened”.
+- **Provenance is a pointer.** Provenance on a retrieval hit is a best-effort link back to commit evidence; treat it as traceability, not ground truth.
+- **Identity is composite; the ID namespace must never change.** Retrieval correlation relies on `embedding_id` when available, otherwise fallback identity (`scene_id` + `modality` + `model`); the deterministic UUID namespace used for Qdrant point IDs is part of storage identity and changing it risks duplicate/mismatched memories.
+- **“Committed” is per-target truth.** `targets_json` is authoritative per store; row-level `committed=true` means **all attempted targets** succeeded, not that every possible store contains the memory.
+- **Privacy:** `retrieval_events` must never record raw user queries; `retrieval_context` is an origin label (e.g., `api.search`) and `details_json` must remain sanitized.
+
+---
+
 ## Active Storage Systems
 
 ### 1. **Memory Database (SQLite)**
@@ -24,10 +35,36 @@ GoodQ4All uses a **hybrid memory architecture** combining relational databases (
 - `scenes` - Scene boundaries and temporal data (start/end times, scene_id)
 - `scene_results` - Processing results for each scene (JSON payloads)
 - `processing_log` - Audit trail of all processing operations
+- `memory_commit_events` - Append-only record of memory write attempts (attempted/committed + per-target details)
+- `retrieval_events` - Append-only record of retrieval hits returned (store + score + best-effort identity)
 
 **Access Pattern:** Read/write during ingestion, read-heavy during retrieval
 
 **Evidence:** Confirmed in `config.yaml` and active in `cli/run_ingestion.py`
+
+---
+
+## Observability Event System (Integrity-Only)
+
+### `memory_commit_events` (writes)
+- **Intent:** auditable record that a memory write was attempted and whether it committed per target store.
+- **Committed semantics:** `targets_json` is authoritative per store; row-level `committed=true` means **all attempted targets** succeeded.
+- **Non-blocking:** emission is best-effort; failures must not stop ingestion.
+- **Fallback mirror:** optional JSONL append at `cfg['paths']['log_dir']/memory_commit_events.jsonl`.
+
+### `retrieval_events` (reads)
+- **Intent:** auditable record of hits returned by retrieval (observability only; not reinforcement).
+- **Privacy:** never record raw user queries in events; `retrieval_context` is a sanitized origin label.
+- **Context taxonomy (conventional):** `human.ui.search`, `human.cli.retrieve`, `system.healthcheck`, `system.dashboard`, `agent.reasoning`, `unknown`.
+- **Identity:** `details_json` includes `store_type` and `store_ref` (e.g., Qdrant collection / FAISS index); future joins must use `(store, store_ref, embedding_id)` rather than ID alone.
+- **Fallback mirror:** on SQLite lock/busy, best-effort JSONL append at `cfg['paths']['log_dir']/retrieval_events.jsonl`.
+
+### Derived rollups (no history deletion)
+- `retrieval_events_daily` and `observability_rollup_state` are additive summaries computed on-demand via `python -m cli.observability_rollup`.
+
+### Smoke checks
+- `python -m cli.observability_health`
+- `python -m cli.observability_rollup`
 
 ---
 

@@ -64,20 +64,22 @@
 5. Handoff: what changed, how to verify, next steps (optional).
 
 ## Documentation Reading Order (authoritative)
-- docs/CURRENT_SYSTEM_STATUS.md
-- docs/SYSTEM_ARCHITECTURE.md
-- docs/MEMORY_STORAGE.md
-- docs/VISION_PIPELINE.md
-- docs/WATCHDOG_SYSTEM.md
+- docs/goodq4all_agent_status.md
+- docs/SYSTEM_SNAPSHOT.md
+- docs/architecture/SYSTEM_ARCHITECTURE.md
+- docs/architecture/MEMORY_STORAGE.md
+- docs/components/VISION_PIPELINE.md
+- docs/systems/WATCHDOG_SYSTEM.md
 - docs/CONTROL_AGENT.md
-- docs/PHASE_6_MULTIMODAL_FUSION.md
-- docs/CLI_REFERENCE.md
-- docs/LIB_COMPONENTS.md
+- docs/PHASE6_MULTIMODAL_FUSION.md
+- docs/CLI-REFERENCE.md
+- docs/technical/LIB_COMPONENTS.md
 - Do not contradict these without explicit instruction.
 
 ## Security and Data Handling
 - Secrets: `.env.local` only; never in logs, code, or docs.
 - PII/PHI must be redacted unless required and documented.
+- Privacy: never log raw queries in `retrieval_events`.
 - No telemetry or "phone home" behavior.
 
 ## Approvals and Boundaries

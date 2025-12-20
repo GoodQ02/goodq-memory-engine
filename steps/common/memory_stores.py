@@ -11,10 +11,22 @@ from steps.common.qdrant_client import QdrantClient, build_qdrant_client
 class ChromaMemory(MemoryStore):
     """Lightweight in-memory store for short-term embeddings."""
 
-    def __init__(self, dim: int, ttl_seconds: int = 900, max_items: int = 512):
+    def __init__(
+        self,
+        dim: int,
+        ttl_seconds: int = 900,
+        max_items: int = 512,
+        *,
+        db_path: Optional[str] = None,
+        log_dir: Optional[str] = None,
+        log_retrieval_events: bool = True,
+    ):
         self.dim = dim
         self.ttl_seconds = ttl_seconds
         self.max_items = max_items
+        self.db_path = db_path
+        self.log_dir = log_dir
+        self.log_retrieval_events = log_retrieval_events
         self._items: List[Dict[str, Any]] = []
         self._hits = 0
         self._misses = 0
@@ -83,6 +95,48 @@ class ChromaMemory(MemoryStore):
             self._hits += 1
         else:
             self._misses += 1
+        try:
+            from steps.common.retrieval_events import (
+                RetrievalEvent,
+                emit_retrieval_events,
+                normalize_retrieval_context,
+                utc_now_iso,
+            )
+
+            context = normalize_retrieval_context(os.environ.get("GOODQ_RETRIEVAL_CONTEXT"))
+            ts = utc_now_iso()
+            events: List[RetrievalEvent] = []
+            for h in results:
+                if not isinstance(h, dict):
+                    continue
+                payload = h.get("payload") if isinstance(h.get("payload"), dict) else {}
+                scene_id = payload.get("scene_id") if payload else None
+                modality = payload.get("modality") if payload else None
+                model = payload.get("model") if payload else None
+                if modality is None and isinstance(payload.get("model"), str):
+                    modality = payload.get("model")
+                embedding_id = h.get("id")
+                embedding_id_s = str(embedding_id) if embedding_id is not None else None
+                events.append(
+                    RetrievalEvent(
+                        ts_utc=ts,
+                        store="chroma",
+                        retrieval_context=context,
+                        embedding_id=embedding_id_s,
+                        scene_id=str(scene_id) if scene_id is not None else None,
+                        modality=str(modality) if modality is not None else None,
+                        model=str(model) if model is not None else None,
+                        score=h.get("score") if isinstance(h.get("score"), (int, float)) else None,
+                        details={
+                            "store_type": "chroma",
+                            "store_ref": "chroma_memory",
+                            "ttl_seconds": self.ttl_seconds,
+                        },
+                    )
+                )
+            emit_retrieval_events(self.db_path, events, enabled=self.log_retrieval_events, log_dir=self.log_dir)
+        except Exception:
+            pass
         return results
 
     def stats(self) -> Dict[str, Any]:
@@ -100,10 +154,20 @@ class ChromaMemory(MemoryStore):
 
 
 class FaissMemory(MemoryStore):
-    def __init__(self, index_path: str, dim: int, db_path: Optional[str] = None):
+    def __init__(
+        self,
+        index_path: str,
+        dim: int,
+        db_path: Optional[str] = None,
+        *,
+        log_dir: Optional[str] = None,
+        log_retrieval_events: bool = True,
+    ):
         self.index_path = index_path
         self.dim = dim
         self.db_path = db_path
+        self.log_dir = log_dir
+        self.log_retrieval_events = log_retrieval_events
 
     def _load_index(self):
         import faiss  # type: ignore
@@ -166,6 +230,60 @@ class FaissMemory(MemoryStore):
                 attach_provenance_to_hits(self.db_path, out)
             except Exception:
                 pass
+            try:
+                from steps.common.retrieval_events import (
+                    RetrievalEvent,
+                    emit_retrieval_events,
+                    normalize_retrieval_context,
+                    utc_now_iso,
+                )
+
+                context = normalize_retrieval_context(os.environ.get("GOODQ_RETRIEVAL_CONTEXT"))
+                ts = utc_now_iso()
+                events: List[RetrievalEvent] = []
+                for h in out:
+                    if not isinstance(h, dict):
+                        continue
+                    score = h.get("score")
+                    try:
+                        score_f = float(score) if score is not None else None
+                    except Exception:
+                        score_f = None
+                    payload = h.get("payload") if isinstance(h.get("payload"), dict) else {}
+                    prov = h.get("provenance") if isinstance(h.get("provenance"), dict) else {}
+                    scene_id = payload.get("scene_id") if payload else None
+                    modality = payload.get("modality") if payload else None
+                    model = payload.get("model") if payload else None
+                    if scene_id is None and prov:
+                        scene_id = prov.get("scene_id")
+                    if modality is None and prov:
+                        modality = prov.get("modality")
+                    if model is None and prov:
+                        model = prov.get("model")
+                    if modality is None and isinstance(payload.get("model"), str):
+                        modality = payload.get("model")
+                    embedding_id = h.get("id")
+                    embedding_id_s = str(embedding_id) if embedding_id is not None else None
+                    events.append(
+                        RetrievalEvent(
+                            ts_utc=ts,
+                            store="faiss",
+                            retrieval_context=context,
+                            embedding_id=embedding_id_s,
+                            scene_id=str(scene_id) if scene_id is not None else None,
+                            modality=str(modality) if modality is not None else None,
+                            model=str(model) if model is not None else None,
+                            score=score_f,
+                            details={
+                                "store_type": "faiss",
+                                "store_ref": os.path.basename(self.index_path) if self.index_path else None,
+                                "index_path": self.index_path,
+                            },
+                        )
+                    )
+                emit_retrieval_events(self.db_path, events, enabled=self.log_retrieval_events, log_dir=self.log_dir)
+            except Exception:
+                pass
             return out
         except Exception:
             return []
@@ -204,10 +322,30 @@ def build_text_stores(cfg: Dict[str, Any]) -> Dict[str, MemoryStore]:
     ttl_seconds = memory_cfg.get("ttl_seconds", 900)
     max_ephemeral = memory_cfg.get("max_ephemeral_items", 512)
     text_dim = dims_cfg.get("text", 384)
-    stores["chroma"] = ChromaMemory(text_dim, ttl_seconds=ttl_seconds, max_items=max_ephemeral)
+    log_retrieval = True
+    try:
+        from steps.common.retrieval_events import retrieval_events_enabled
+
+        log_retrieval = retrieval_events_enabled(cfg, default=True)
+    except Exception:
+        log_retrieval = True
+    stores["chroma"] = ChromaMemory(
+        text_dim,
+        ttl_seconds=ttl_seconds,
+        max_items=max_ephemeral,
+        db_path=paths.get("db_path"),
+        log_dir=paths.get("log_dir"),
+        log_retrieval_events=log_retrieval,
+    )
     faiss_path = paths.get("faiss_index_path") or ""
     if faiss_path:
-        stores["faiss"] = FaissMemory(faiss_path, text_dim, db_path=paths.get("db_path"))
+        stores["faiss"] = FaissMemory(
+            faiss_path,
+            text_dim,
+            db_path=paths.get("db_path"),
+            log_dir=paths.get("log_dir"),
+            log_retrieval_events=log_retrieval,
+        )
     q_client = None
     try:
         q_client = build_qdrant_client(cfg, dim=text_dim, key="text")

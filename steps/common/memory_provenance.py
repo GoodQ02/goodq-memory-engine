@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
+from datetime import datetime, timezone
 import json
+import math
 import os
 import sqlite3
 import uuid
@@ -122,6 +124,39 @@ def _normalize_confidence(confidence: Any) -> Dict[str, Any]:
             if k in confidence:
                 stub[k] = confidence.get(k)
     return stub
+
+
+def _parse_ts_utc(ts_utc: Any) -> Optional[datetime]:
+    if not isinstance(ts_utc, str) or not ts_utc.strip():
+        return None
+    s = ts_utc.strip()
+    try:
+        dt = datetime.fromisoformat(s)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(timezone.utc)
+    except Exception:
+        return None
+
+
+def _temporal_confidence(ts_utc: Any, *, now_utc: datetime) -> Tuple[Optional[float], Optional[str]]:
+    commit_ts = _parse_ts_utc(ts_utc)
+    if commit_ts is None:
+        return None, None
+    try:
+        age_seconds = max(0.0, (now_utc - commit_ts).total_seconds())
+        half_life_days = 30.0
+        half_life_seconds = half_life_days * 86400.0
+        # Smooth exponential decay (no thresholds; never gates behavior).
+        value = math.exp(-math.log(2.0) * age_seconds / max(1.0, half_life_seconds))
+        value = float(f"{value:.4f}")
+        age_days = age_seconds / 86400.0
+        explanation = (
+            f"exp_decay(ts_utc_age_days={age_days:.1f}, half_life_days={half_life_days:g}, source=provenance.ts_utc)"
+        )
+        return value, explanation
+    except Exception:
+        return None, None
 
 
 def _row_to_provenance(row: sqlite3.Row) -> Dict[str, Any]:
@@ -428,6 +463,29 @@ def attach_provenance_to_hits(db_path: Optional[str], hits: List[Dict[str, Any]]
                         hit["provenance"] = ev
                         hit["confidence"] = ev.get("confidence") or hit.get("confidence")
                         break
+        except Exception:
+            pass
+
+        # 4) Read-time temporal confidence (best-effort; no persistence; no ranking impact)
+        try:
+            now_utc = datetime.now(timezone.utc)
+            for hit in hits:
+                if not isinstance(hit, dict):
+                    continue
+                confidence = hit.get("confidence")
+                if not isinstance(confidence, dict):
+                    continue
+                if confidence.get("temporal") is not None:
+                    continue
+                prov = hit.get("provenance")
+                if not isinstance(prov, dict):
+                    continue
+                temporal, explanation = _temporal_confidence(prov.get("ts_utc"), now_utc=now_utc)
+                if temporal is None:
+                    continue
+                confidence["temporal"] = temporal
+                if isinstance(explanation, str) and explanation.strip():
+                    confidence.setdefault("temporal_explanation", explanation)
         except Exception:
             pass
 

@@ -7,6 +7,7 @@ REM Usage: start_llm_servers.bat
 REM ============================================================================
 
 setlocal EnableDelayedExpansion
+call "%~dp0_lib\\interpreter_bindings.bat"
 
 echo.
 echo ========================================================================
@@ -23,13 +24,13 @@ if errorlevel 1 (
 )
 
 echo [1/4] Copying startup script to WSL...
-wsl bash -c "mkdir -p ~/goodq4all/scripts/wsl"
-wsl bash -c "cp /mnt/l/goodq4all/scripts/wsl/start_all_vllm.sh ~/goodq4all/scripts/wsl/"
-wsl bash -c "chmod +x ~/goodq4all/scripts/wsl/start_all_vllm.sh"
+wsl -d %GOODQ_WSL_DISTRO% -- bash -c "mkdir -p ~/goodq4all/scripts/wsl"
+wsl -d %GOODQ_WSL_DISTRO% -- bash -c "cp /mnt/l/goodq4all/scripts/wsl/start_all_vllm.sh ~/goodq4all/scripts/wsl/"
+wsl -d %GOODQ_WSL_DISTRO% -- bash -c "chmod +x ~/goodq4all/scripts/wsl/start_all_vllm.sh"
 
 echo [2/4] Starting vLLM servers in WSL...
 echo.
-wsl bash -c "~/goodq4all/scripts/wsl/start_all_vllm.sh"
+wsl -d %GOODQ_WSL_DISTRO% -- bash -c "~/goodq4all/scripts/wsl/start_all_vllm.sh"
 
 if errorlevel 1 (
     echo.
@@ -45,7 +46,7 @@ timeout /t 5 /nobreak >nul
 echo [4/4] Testing connectivity from Windows...
 echo.
 
-python L:\goodq4all\scripts\test_llm_connectivity.py
+"%CONDA_EXE%" run -n goodq_core python L:\goodq4all\scripts\test_llm_connectivity.py
 
 if errorlevel 1 (
     echo.

@@ -10,6 +10,9 @@ Param(
 
 $ErrorActionPreference = 'Stop'
 
+. (Join-Path $PSScriptRoot "_lib\\interpreter_bindings.ps1")
+$condaExe = Get-GoodQCondaExe
+
 # Mission colors for Q Branch styling
 function Write-Mission($msg, $type = "info") {
     $timestamp = Get-Date -Format "HH:mm:ss"
@@ -279,7 +282,7 @@ Write-Header "System Health Verification"
 
 # Run unified health check
 Write-Mission "Running comprehensive health check..." "info"
-$healthCheckOutput = & conda run -n goodq_zenml python scripts\unified_health_check.py --auto-heal 2>&1 | Out-String
+$healthCheckOutput = & $condaExe run -n goodq_zenml python scripts\unified_health_check.py --auto-heal 2>&1 | Out-String
 
 # Parse health check status
 $healthStatus = "UNKNOWN"
@@ -325,7 +328,7 @@ if ($condaCheck) {
 
 # Check Python (zenml environment)
 Write-Mission "Verifying Python environment (goodq_zenml)..." "info"
-$pythonTest = & conda run -n goodq_zenml python --version 2>&1
+$pythonTest = & $condaExe run -n goodq_zenml python --version 2>&1
 if ($LASTEXITCODE -eq 0) {
     Write-Mission "Python environment active: $pythonTest" "success"
 } else {

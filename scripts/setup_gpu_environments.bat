@@ -4,6 +4,8 @@ REM GPU Environment Setup Script
 REM Installs PyTorch with CUDA support in all GPU-capable step environments
 REM ================================================================================
 
+call "%~dp0_lib\\interpreter_bindings.bat"
+
 echo.
 echo ================================================================================
 echo  GoodQ4All - GPU Environment Setup
@@ -28,19 +30,19 @@ echo ===========================================================================
 echo  Step 1/7: Audio Diarization Environment
 echo ================================================================================
 echo.
-call conda activate goodq_audio_diarize || goto :error
+"%CONDA_EXE%" run -n goodq_audio_diarize python --version >nul 2>&1 || goto :error
 
 REM Uninstall CPU-only PyTorch
 echo Removing CPU-only PyTorch...
-pip uninstall -y torch torchaudio torchvision
+"%CONDA_EXE%" run -n goodq_audio_diarize pip uninstall -y torch torchaudio torchvision
 
 REM Install CUDA-enabled PyTorch 2.5.1 (matches requirements)
 echo Installing PyTorch 2.5.1 with CUDA 12.4...
-pip install torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1 --index-url https://download.pytorch.org/whl/cu124
+"%CONDA_EXE%" run -n goodq_audio_diarize pip install torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1 --index-url https://download.pytorch.org/whl/cu124
 
 REM Verify CUDA is available
 echo Testing CUDA availability...
-python -c "import torch; assert torch.cuda.is_available(), 'CUDA not available!'; print(f'✓ CUDA {torch.version.cuda} available on {torch.cuda.get_device_name(0)}')"
+"%CONDA_EXE%" run -n goodq_audio_diarize python -c "import torch; assert torch.cuda.is_available(), 'CUDA not available!'; print(f'✓ CUDA {torch.version.cuda} available on {torch.cuda.get_device_name(0)}')"
 if errorlevel 1 goto :error
 
 echo ✓ Audio diarization environment configured
@@ -50,16 +52,16 @@ echo ===========================================================================
 echo  Step 2/7: Audio Transcription Environment
 echo ================================================================================
 echo.
-call conda activate goodq_audio_transcribe || goto :error
+"%CONDA_EXE%" run -n goodq_audio_transcribe python --version >nul 2>&1 || goto :error
 
 echo Removing CPU-only PyTorch...
-pip uninstall -y torch
+"%CONDA_EXE%" run -n goodq_audio_transcribe pip uninstall -y torch
 
 echo Installing PyTorch 2.3.1 with CUDA 12.1...
-pip install torch==2.3.1 --index-url https://download.pytorch.org/whl/cu121
+"%CONDA_EXE%" run -n goodq_audio_transcribe pip install torch==2.3.1 --index-url https://download.pytorch.org/whl/cu121
 
 echo Testing CUDA availability...
-python -c "import torch; assert torch.cuda.is_available(), 'CUDA not available!'; print(f'✓ CUDA {torch.version.cuda} available on {torch.cuda.get_device_name(0)}')"
+"%CONDA_EXE%" run -n goodq_audio_transcribe python -c "import torch; assert torch.cuda.is_available(), 'CUDA not available!'; print(f'✓ CUDA {torch.version.cuda} available on {torch.cuda.get_device_name(0)}')"
 if errorlevel 1 goto :error
 
 echo ✓ Audio transcription environment configured
@@ -69,16 +71,16 @@ echo ===========================================================================
 echo  Step 3/7: Emotion Classification Environment
 echo ================================================================================
 echo.
-call conda activate goodq_emotion_classify || goto :error
+"%CONDA_EXE%" run -n goodq_emotion_classify python --version >nul 2>&1 || goto :error
 
 echo Removing CPU-only PyTorch...
-pip uninstall -y torch torchvision
+"%CONDA_EXE%" run -n goodq_emotion_classify pip uninstall -y torch torchvision
 
 echo Installing PyTorch 2.3.1 with CUDA 12.1...
-pip install torch==2.3.1 torchvision==0.18.1 --index-url https://download.pytorch.org/whl/cu121
+"%CONDA_EXE%" run -n goodq_emotion_classify pip install torch==2.3.1 torchvision==0.18.1 --index-url https://download.pytorch.org/whl/cu121
 
 echo Testing CUDA availability...
-python -c "import torch; assert torch.cuda.is_available(), 'CUDA not available!'; print(f'✓ CUDA {torch.version.cuda} available on {torch.cuda.get_device_name(0)}')"
+"%CONDA_EXE%" run -n goodq_emotion_classify python -c "import torch; assert torch.cuda.is_available(), 'CUDA not available!'; print(f'✓ CUDA {torch.version.cuda} available on {torch.cuda.get_device_name(0)}')"
 if errorlevel 1 goto :error
 
 echo ✓ Emotion classification environment configured
@@ -88,16 +90,16 @@ echo ===========================================================================
 echo  Step 4/7: Face Embedding Environment
 echo ================================================================================
 echo.
-call conda activate goodq_face_embed || goto :error
+"%CONDA_EXE%" run -n goodq_face_embed python --version >nul 2>&1 || goto :error
 
 echo Removing CPU-only PyTorch...
-pip uninstall -y torch torchvision
+"%CONDA_EXE%" run -n goodq_face_embed pip uninstall -y torch torchvision
 
 echo Installing PyTorch 2.3.1 with CUDA 12.1...
-pip install torch==2.3.1 torchvision==0.18.1 --index-url https://download.pytorch.org/whl/cu121
+"%CONDA_EXE%" run -n goodq_face_embed pip install torch==2.3.1 torchvision==0.18.1 --index-url https://download.pytorch.org/whl/cu121
 
 echo Testing CUDA availability...
-python -c "import torch; assert torch.cuda.is_available(), 'CUDA not available!'; print(f'✓ CUDA {torch.version.cuda} available on {torch.cuda.get_device_name(0)}')"
+"%CONDA_EXE%" run -n goodq_face_embed python -c "import torch; assert torch.cuda.is_available(), 'CUDA not available!'; print(f'✓ CUDA {torch.version.cuda} available on {torch.cuda.get_device_name(0)}')"
 if errorlevel 1 goto :error
 
 echo ✓ Face embedding environment configured
@@ -107,21 +109,21 @@ echo ===========================================================================
 echo  Step 5/7: Text Embedding Environment
 echo ================================================================================
 echo.
-call conda activate goodq_text_embed || goto :error
+"%CONDA_EXE%" run -n goodq_text_embed python --version >nul 2>&1 || goto :error
 
 REM Check if torch is in requirements
-pip list | findstr torch
+"%CONDA_EXE%" run -n goodq_text_embed pip list | findstr torch
 if errorlevel 1 (
     echo PyTorch not required for this step, skipping...
 ) else (
     echo Removing CPU-only PyTorch...
-    pip uninstall -y torch torchvision
+    "%CONDA_EXE%" run -n goodq_text_embed pip uninstall -y torch torchvision
     
     echo Installing PyTorch 2.3.1 with CUDA 12.1...
-    pip install torch==2.3.1 torchvision==0.18.1 --index-url https://download.pytorch.org/whl/cu121
+    "%CONDA_EXE%" run -n goodq_text_embed pip install torch==2.3.1 torchvision==0.18.1 --index-url https://download.pytorch.org/whl/cu121
     
     echo Testing CUDA availability...
-    python -c "import torch; assert torch.cuda.is_available(), 'CUDA not available!'; print(f'✓ CUDA {torch.version.cuda} available on {torch.cuda.get_device_name(0)}')"
+    "%CONDA_EXE%" run -n goodq_text_embed python -c "import torch; assert torch.cuda.is_available(), 'CUDA not available!'; print(f'✓ CUDA {torch.version.cuda} available on {torch.cuda.get_device_name(0)}')"
     if errorlevel 1 goto :error
 )
 
@@ -132,20 +134,20 @@ echo ===========================================================================
 echo  Step 6/7: Object Detection Environment
 echo ================================================================================
 echo.
-call conda activate goodq_object_detect || goto :error
+"%CONDA_EXE%" run -n goodq_object_detect python --version >nul 2>&1 || goto :error
 
-pip list | findstr torch
+"%CONDA_EXE%" run -n goodq_object_detect pip list | findstr torch
 if errorlevel 1 (
     echo PyTorch not required for this step, skipping...
 ) else (
     echo Removing CPU-only PyTorch...
-    pip uninstall -y torch torchvision
+    "%CONDA_EXE%" run -n goodq_object_detect pip uninstall -y torch torchvision
     
     echo Installing PyTorch 2.3.1 with CUDA 12.1...
-    pip install torch==2.3.1 torchvision==0.18.1 --index-url https://download.pytorch.org/whl/cu121
+    "%CONDA_EXE%" run -n goodq_object_detect pip install torch==2.3.1 torchvision==0.18.1 --index-url https://download.pytorch.org/whl/cu121
     
     echo Testing CUDA availability...
-    python -c "import torch; assert torch.cuda.is_available(), 'CUDA not available!'; print(f'✓ CUDA {torch.version.cuda} available on {torch.cuda.get_device_name(0)}')"
+    "%CONDA_EXE%" run -n goodq_object_detect python -c "import torch; assert torch.cuda.is_available(), 'CUDA not available!'; print(f'✓ CUDA {torch.version.cuda} available on {torch.cuda.get_device_name(0)}')"
     if errorlevel 1 goto :error
 )
 
@@ -156,20 +158,20 @@ echo ===========================================================================
 echo  Step 7/7: Object Tracking Environment
 echo ================================================================================
 echo.
-call conda activate object_track_yolo || goto :error
+"%CONDA_EXE%" run -n object_track_yolo python --version >nul 2>&1 || goto :error
 
-pip list | findstr torch
+"%CONDA_EXE%" run -n object_track_yolo pip list | findstr torch
 if errorlevel 1 (
     echo PyTorch not required for this step, skipping...
 ) else (
     echo Removing CPU-only PyTorch...
-    pip uninstall -y torch torchvision
+    "%CONDA_EXE%" run -n object_track_yolo pip uninstall -y torch torchvision
     
     echo Installing PyTorch 2.3.1 with CUDA 12.1...
-    pip install torch==2.3.1 torchvision==0.18.1 --index-url https://download.pytorch.org/whl/cu121
+    "%CONDA_EXE%" run -n object_track_yolo pip install torch==2.3.1 torchvision==0.18.1 --index-url https://download.pytorch.org/whl/cu121
     
     echo Testing CUDA availability...
-    python -c "import torch; assert torch.cuda.is_available(), 'CUDA not available!'; print(f'✓ CUDA {torch.version.cuda} available on {torch.cuda.get_device_name(0)}')"
+    "%CONDA_EXE%" run -n object_track_yolo python -c "import torch; assert torch.cuda.is_available(), 'CUDA not available!'; print(f'✓ CUDA {torch.version.cuda} available on {torch.cuda.get_device_name(0)}')"
     if errorlevel 1 goto :error
 )
 

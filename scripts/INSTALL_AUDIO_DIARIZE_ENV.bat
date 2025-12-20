@@ -4,6 +4,7 @@ REM  Install Audio Diarization Environment Packages
 REM ================================================================================
 
 cd /d "%~dp0"
+call "%~dp0_lib\\interpreter_bindings.bat"
 
 echo ================================================================================
 echo   GoodQ4All - Audio Diarization Environment Setup
@@ -22,12 +23,10 @@ echo This may take 10-15 minutes...
 echo.
 pause
 
-call C:\Users\jdben\miniconda3\Scripts\activate.bat goodq_audio_diarize
-
 echo.
 echo [1/4] Installing PyTorch with CUDA support...
 echo ================================================================================
-pip install torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1 --index-url https://download.pytorch.org/whl/cu124
+"%CONDA_EXE%" run -n goodq_audio_diarize pip install torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1 --index-url https://download.pytorch.org/whl/cu124
 
 if errorlevel 1 (
     echo ERROR: PyTorch installation failed
@@ -38,7 +37,7 @@ if errorlevel 1 (
 echo.
 echo [2/4] Installing audio processing libraries...
 echo ================================================================================
-pip install soundfile==0.12.1 ffmpeg-python==0.2.0 librosa
+"%CONDA_EXE%" run -n goodq_audio_diarize pip install soundfile==0.12.1 ffmpeg-python==0.2.0 librosa
 
 if errorlevel 1 (
     echo ERROR: Audio libraries installation failed
@@ -49,7 +48,7 @@ if errorlevel 1 (
 echo.
 echo [3/4] Installing PyAnnote Audio...
 echo ================================================================================
-pip install pyannote.audio>=3.3.2
+"%CONDA_EXE%" run -n goodq_audio_diarize pip install pyannote.audio>=3.3.2
 
 if errorlevel 1 (
     echo ERROR: PyAnnote installation failed
@@ -60,7 +59,7 @@ if errorlevel 1 (
 echo.
 echo [4/4] Installing WhisperX and utilities...
 echo ================================================================================
-pip install whisperx==3.3.0 dill==0.3.8 typing-extensions==4.13.2 cryptography==42.0.8
+"%CONDA_EXE%" run -n goodq_audio_diarize pip install whisperx==3.3.0 dill==0.3.8 typing-extensions==4.13.2 cryptography==42.0.8
 
 if errorlevel 1 (
     echo ERROR: WhisperX installation failed
@@ -74,7 +73,7 @@ echo   Testing Installation
 echo ================================================================================
 echo.
 
-python -c "import torch; print(f'PyTorch: {torch.__version__}'); print(f'CUDA Available: {torch.cuda.is_available()}'); print(f'GPU: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else \"N/A\"}')"
+"%CONDA_EXE%" run -n goodq_audio_diarize python -c "import torch; print(f'PyTorch: {torch.__version__}'); print(f'CUDA Available: {torch.cuda.is_available()}'); print(f'GPU: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else \"N/A\"}')"
 
 if errorlevel 1 (
     echo ERROR: PyTorch test failed
@@ -82,7 +81,7 @@ if errorlevel 1 (
     exit /b 1
 )
 
-python -c "from pyannote.audio import Pipeline; print('PyAnnote Audio: OK')"
+"%CONDA_EXE%" run -n goodq_audio_diarize python -c "from pyannote.audio import Pipeline; print('PyAnnote Audio: OK')"
 
 if errorlevel 1 (
     echo ERROR: PyAnnote test failed
@@ -90,7 +89,7 @@ if errorlevel 1 (
     exit /b 1
 )
 
-python -c "import soundfile; import librosa; print('Audio libraries: OK')"
+"%CONDA_EXE%" run -n goodq_audio_diarize python -c "import soundfile; import librosa; print('Audio libraries: OK')"
 
 if errorlevel 1 (
     echo ERROR: Audio libraries test failed

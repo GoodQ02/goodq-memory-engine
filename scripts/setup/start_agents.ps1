@@ -6,6 +6,9 @@ Write-Host ""
 
 $ErrorActionPreference = "Stop"
 
+. (Join-Path $PSScriptRoot "..\\_lib\\interpreter_bindings.ps1")
+$condaExe = Get-GoodQCondaExe
+
 # Check if LM Studio is running
 Write-Host "Checking LM Studio..." -ForegroundColor Yellow
 try {
@@ -16,19 +19,15 @@ try {
     Write-Host "    Start LM Studio and load a model to enable LLM features" -ForegroundColor Yellow
 }
 
-# Activate conda environment
-Write-Host "`nActivating base environment..." -ForegroundColor Yellow
-conda activate base
-
 # Install required packages if missing
 Write-Host "`nChecking Python dependencies..." -ForegroundColor Yellow
 $packages = @("pyyaml", "aiohttp", "watchdog")
 
 foreach ($pkg in $packages) {
-    python -c "import $($pkg.Replace('-', '_'))" 2>$null
+    & $condaExe run -n base python -c "import $($pkg.Replace('-', '_'))" 2>$null
     if ($LASTEXITCODE -ne 0) {
         Write-Host "  Installing $pkg..." -ForegroundColor Yellow
-        pip install $pkg --quiet
+        & $condaExe run -n base pip install $pkg --quiet
     }
 }
 
@@ -74,31 +73,31 @@ $choice = Read-Host "Select option (1-5)"
 switch ($choice) {
     "1" {
         Write-Host "`nStarting Watchdog with Agent Orchestrator..." -ForegroundColor Green
-        python L:\goodq4all\agents\watchdog_agent_integration.py
+        & $condaExe run -n base python L:\goodq4all\agents\watchdog_agent_integration.py
     }
     "2" {
         Write-Host "`nStarting Self-Healing Monitor..." -ForegroundColor Green
-        python L:\goodq4all\agents\self_healing_monitor.py
+        & $condaExe run -n base python L:\goodq4all\agents\self_healing_monitor.py
     }
     "3" {
         Write-Host "`nChecking Agent Health..." -ForegroundColor Green
-        python L:\goodq4all\agents\pipeline_integration.py
+        & $condaExe run -n base python L:\goodq4all\agents\pipeline_integration.py
     }
     "4" {
         $videoPath = Read-Host "Enter video path"
         Write-Host "`nProcessing $videoPath..." -ForegroundColor Green
-        python -c "import asyncio; from agents.pipeline_integration import process_video_with_agents; asyncio.run(process_video_with_agents('$videoPath'))"
+        & $condaExe run -n base python -c "import asyncio; from agents.pipeline_integration import process_video_with_agents; asyncio.run(process_video_with_agents('$videoPath'))"
     }
     "5" {
         Write-Host "`nStarting All Services..." -ForegroundColor Green
         
         # Start self-healing monitor in background
-        Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd L:\goodq4all; conda activate base; python agents\self_healing_monitor.py"
+        Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd L:\goodq4all; & `"$condaExe`" run -n base python agents\self_healing_monitor.py"
         
         Start-Sleep -Seconds 2
         
         # Start watchdog in foreground
-        python L:\goodq4all\agents\watchdog_agent_integration.py
+        & $condaExe run -n base python L:\goodq4all\agents\watchdog_agent_integration.py
     }
     default {
         Write-Host "Invalid option" -ForegroundColor Red

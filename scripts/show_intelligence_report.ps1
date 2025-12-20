@@ -9,6 +9,9 @@
 $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
+. (Join-Path $PSScriptRoot "_lib\\interpreter_bindings.ps1")
+$condaExe = Get-GoodQCondaExe
+
 Write-Host ""
 Write-Host "================================================================" -ForegroundColor Cyan
 Write-Host "     [MISSION INTEL] GoodQ Intelligence Report                 " -ForegroundColor Cyan
@@ -89,7 +92,7 @@ conn.close()
 
 try {
     # Run query
-    $output = conda run -n goodq_zenml python -c $pyScript 2>$null
+    $output = & $condaExe run -n goodq_zenml python -c $pyScript 2>$null
 
     # Parse output
     $stats = @{}

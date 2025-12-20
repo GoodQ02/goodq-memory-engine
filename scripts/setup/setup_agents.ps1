@@ -4,12 +4,15 @@
 Write-Host "=== GoodQ Multi-Agent System Setup ===" -ForegroundColor Cyan
 Write-Host ""
 
+. (Join-Path $PSScriptRoot "..\\_lib\\interpreter_bindings.ps1")
+$condaExe = Get-GoodQCondaExe
+
 # Check prerequisites
 Write-Host "1. Checking prerequisites..." -ForegroundColor Yellow
 
 $hasUv = Get-Command uv -ErrorAction SilentlyContinue
 $hasGit = Get-Command git -ErrorAction SilentlyContinue
-$hasConda = Get-Command conda -ErrorAction SilentlyContinue
+$hasConda = if ($condaExe -ne 'conda') { Test-Path $condaExe } else { Get-Command conda -ErrorAction SilentlyContinue }
 
 if (-not $hasUv) {
     Write-Host "  ✗ uv not found - please install first" -ForegroundColor Red
@@ -29,16 +32,16 @@ Write-Host "  ✓ All prerequisites met" -ForegroundColor Green
 # Create agents environment
 Write-Host "`n2. Creating goodq_agents conda environment..." -ForegroundColor Yellow
 
-$envExists = conda env list | Select-String "goodq_agents"
+$envExists = (& $condaExe env list) | Select-String "goodq_agents"
 if ($envExists) {
     Write-Host "  ⚠ Environment already exists" -ForegroundColor Yellow
     $response = Read-Host "  Remove and recreate? (y/n)"
     if ($response -eq "y") {
-        conda env remove -n goodq_agents -y
-        conda create -n goodq_agents python=3.11 -y
+        & $condaExe env remove -n goodq_agents -y
+        & $condaExe create -n goodq_agents python=3.11 -y
     }
 } else {
-    conda create -n goodq_agents python=3.11 -y
+    & $condaExe create -n goodq_agents python=3.11 -y
 }
 
 Write-Host "  ✓ Environment created" -ForegroundColor Green
@@ -46,7 +49,7 @@ Write-Host "  ✓ Environment created" -ForegroundColor Green
 # Install Agent Framework
 Write-Host "`n3. Installing Microsoft Agent Framework..." -ForegroundColor Yellow
 
-conda run -n goodq_agents pip install agent-framework --pre
+& $condaExe run -n goodq_agents pip install agent-framework --pre
 
 Write-Host "  ✓ Agent Framework installed" -ForegroundColor Green
 

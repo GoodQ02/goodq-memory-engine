@@ -1,6 +1,8 @@
 @echo off
 REM Vision GPU Installation and Testing Script
 
+call "%~dp0_lib\\interpreter_bindings.bat"
+
 echo ================================================================================
 echo GoodQ4All - Vision Stack GPU Verification
 echo ================================================================================
@@ -9,13 +11,13 @@ echo.
 REM Test emotion_classify
 echo [1/2] Testing Emotion Classification GPU...
 echo ================================================================================
-call conda run -n goodq_emotion_classify python -c "import torch; print(f'PyTorch: {torch.__version__}'); print(f'CUDA Available: {torch.cuda.is_available()}'); print(f'Device: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else \"CPU\"}'); print(f'GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1024**3:.2f}GB' if torch.cuda.is_available() else '')"
+call "%CONDA_EXE%" run -n goodq_emotion_classify python -c "import torch; print(f'PyTorch: {torch.__version__}'); print(f'CUDA Available: {torch.cuda.is_available()}'); print(f'Device: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else \"CPU\"}'); print(f'GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1024**3:.2f}GB' if torch.cuda.is_available() else '')"
 echo.
 
 REM Test face_embed
 echo [2/2] Testing Face Embedding GPU...
 echo ================================================================================
-call conda run -n goodq_face_embed python -c "import torch; print(f'PyTorch: {torch.__version__}'); print(f'CUDA Available: {torch.cuda.is_available()}'); print(f'Device: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else \"CPU\"}'); print(f'GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1024**3:.2f}GB' if torch.cuda.is_available() else '')"
+call "%CONDA_EXE%" run -n goodq_face_embed python -c "import torch; print(f'PyTorch: {torch.__version__}'); print(f'CUDA Available: {torch.cuda.is_available()}'); print(f'Device: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else \"CPU\"}'); print(f'GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1024**3:.2f}GB' if torch.cuda.is_available() else '')"
 echo.
 
 echo ================================================================================

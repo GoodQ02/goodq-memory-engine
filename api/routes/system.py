@@ -46,8 +46,11 @@ async def get_system_status():
         # Check if goodq_core environment is available
         goodq_core_available = False
         try:
+            from steps.common.tool_paths import resolve_conda
+
+            conda_exe = resolve_conda()
             result = subprocess.run(
-                ['conda', 'run', '-n', 'goodq_core', 'python', '-c', 'print("OK")'],
+                [conda_exe, 'run', '-n', 'goodq_core', 'python', '-c', 'print("OK")'],
                 capture_output=True,
                 text=True,
                 timeout=5

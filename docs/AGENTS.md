@@ -44,6 +44,8 @@
 - Isolation: conda/venv per role; no global pollution.
 - GPU: Torch + CUDA 12.1 pinned and verified.
 - WSL: treated as a compute extension, not a peer.
+- Interpreter binding: avoid `conda activate`; prefer explicit `conda run -n <env> ...` using `steps.common.tool_paths.resolve_conda()` (Python) or `scripts/_lib/interpreter_bindings.ps1`/`.bat` (shell).
+- WSL binding: use `GOODQ_WSL_DISTRO` (default `Ubuntu`) and always invoke `wsl -d <distro> -- ...` for distro-scoped commands.
 
 ## Vector and Memory Rules
 - Embeddings generated per scene, persisted via MemoryRouter, stored in Qdrant + FAISS when enabled.
@@ -64,6 +66,7 @@
 5. Handoff: what changed, how to verify, next steps (optional).
 
 ## Documentation Reading Order (authoritative)
+- docs/HANDOFF_BASEMENT_PHASE.md
 - docs/goodq4all_agent_status.md
 - docs/SYSTEM_SNAPSHOT.md
 - docs/architecture/SYSTEM_ARCHITECTURE.md

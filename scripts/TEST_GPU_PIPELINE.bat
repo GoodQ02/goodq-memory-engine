@@ -4,6 +4,8 @@ REM  GPU-Optimized Pipeline Test
 REM  Tests the complete pipeline with GPU allocation system
 REM ================================================================================
 
+call "%~dp0_lib\\interpreter_bindings.bat"
+
 title GoodQ GPU Pipeline Test
 color 0E
 
@@ -25,7 +27,7 @@ cd /d "L:\goodq4all"
 
 REM Step 1: Diagnostic
 echo [1/5] Running diagnostics...
-python scripts\diagnose_gpu_issue.py
+"%CONDA_EXE%" run --no-capture-output -n goodq_zenml python scripts\diagnose_gpu_issue.py
 if errorlevel 1 (
     echo.
     echo [ERROR] Diagnostics failed
@@ -106,7 +108,7 @@ echo ===========================================================================
 echo.
 
 REM Start the watchdog in current window to see output
-conda run --no-capture-output -n goodq_zenml python scripts/watchdog_ingest.py
+"%CONDA_EXE%" run --no-capture-output -n goodq_zenml python scripts/watchdog_ingest.py
 
 echo.
 echo ================================================================================
@@ -115,7 +117,7 @@ echo ===========================================================================
 echo.
 
 echo [5/5] Checking results...
-python -c "import sqlite3; conn = sqlite3.connect('output/knowledge.db'); cursor = conn.cursor(); cursor.execute('SELECT COUNT(*) FROM scenes'); print(f'Scenes created: {cursor.fetchone()[0]}'); conn.close()"
+"%CONDA_EXE%" run --no-capture-output -n goodq_zenml python -c "import sqlite3; conn = sqlite3.connect('output/knowledge.db'); cursor = conn.cursor(); cursor.execute('SELECT COUNT(*) FROM scenes'); print(f'Scenes created: {cursor.fetchone()[0]}'); conn.close()"
 
 echo.
 echo ================================================================================

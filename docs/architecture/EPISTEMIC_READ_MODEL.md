@@ -14,6 +14,11 @@
 - **Provenance is a pointer:** Provenance links a hit back to commit evidence (best-effort), but is not full lineage or ground truth.
 - **Confidence is informational:** Confidence fields are metadata only; they may be null and must not be treated as policy.
 
+## Basement Phase Summary (v1)
+
+- Contract v1 defines the shared schema + semantics only (no scoring, no thresholds, no policy coupling).
+- Reference implementation exists as a deterministic, non-authoritative formatter: `steps/common/epistemic_formatter.py`.
+
 ---
 
 ## Canonical Schema (TypedDict / Pydantic-style)
@@ -268,4 +273,3 @@ Difference from `unsupported_but_related`:
   }
 }
 ```
-

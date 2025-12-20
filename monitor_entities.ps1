@@ -6,6 +6,8 @@ param(
     [switch]$Continuous
 )
 
+. (Join-Path $PSScriptRoot "scripts\\_lib\\interpreter_bindings.ps1")
+
 function Show-EntityStats {
     Write-Host "`n========================================" -ForegroundColor Cyan
     Write-Host "  ENTITY EXTRACTION MONITOR" -ForegroundColor Cyan
@@ -60,7 +62,8 @@ function Show-EntityStats {
     
     # Check WSL2 audio service
     Write-Host "`n🎙️  WSL2 Audio Service:" -ForegroundColor Yellow
-    $wslCheck = wsl ps aux 2>$null | Select-String "audio_service"
+    $distro = Get-GoodQWslDistro
+    $wslCheck = wsl -d $distro -- ps aux 2>$null | Select-String "audio_service"
     if ($wslCheck) {
         Write-Host "   ✅ Running" -ForegroundColor Green
     } else {

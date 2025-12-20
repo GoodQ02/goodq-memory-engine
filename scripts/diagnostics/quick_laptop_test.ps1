@@ -7,13 +7,16 @@ Write-Host "  GoodQ4All - Laptop Installation Test" -ForegroundColor Cyan
 Write-Host "================================================================================" -ForegroundColor Cyan
 Write-Host ""
 
+. (Join-Path $PSScriptRoot "..\\_lib\\interpreter_bindings.ps1")
+$condaExe = Get-GoodQCondaExe
+
 $testsPassed = 0
 $testsFailed = 0
 
 # Test 1: Conda Installation
 Write-Host "[TEST 1/10] Checking Conda installation..." -ForegroundColor Yellow
 try {
-    $condaVersion = conda --version 2>&1
+    $condaVersion = & $condaExe --version 2>&1
     if ($LASTEXITCODE -eq 0) {
         Write-Host "  ✓ Conda found: $condaVersion" -ForegroundColor Green
         $testsPassed++
@@ -29,7 +32,7 @@ try {
 # Test 2: Python Paths
 Write-Host "[TEST 2/10] Validating Python paths..." -ForegroundColor Yellow
 try {
-    python test_python_paths.py > $null 2>&1
+    & $condaExe run -n goodq_zenml python test_python_paths.py > $null 2>&1
     if ($LASTEXITCODE -eq 0) {
         Write-Host "  ✓ All Python paths configured correctly" -ForegroundColor Green
         $testsPassed++
@@ -61,7 +64,7 @@ try {
 # Test 4: Database Status
 Write-Host "[TEST 4/10] Checking databases..." -ForegroundColor Yellow
 try {
-    $dbCheck = python check_db_status.py 2>&1
+    $dbCheck = & $condaExe run -n goodq_zenml python check_db_status.py 2>&1
     if ($dbCheck -match "OK") {
         Write-Host "  ✓ Databases initialized" -ForegroundColor Green
         $testsPassed++
@@ -147,7 +150,7 @@ if (Test-Path "import_inbox") {
 # Test 10: GPU Management
 Write-Host "[TEST 10/10] Testing GPU management..." -ForegroundColor Yellow
 try {
-    python test_gpu_management.py > $null 2>&1
+    & $condaExe run -n goodq_zenml python test_gpu_management.py > $null 2>&1
     if ($LASTEXITCODE -eq 0) {
         Write-Host "  ✓ GPU management configured" -ForegroundColor Green
         $testsPassed++

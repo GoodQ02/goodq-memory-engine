@@ -6,6 +6,9 @@
 
 $ErrorActionPreference = "Stop"
 
+. (Join-Path $PSScriptRoot "..\\scripts\\_lib\\interpreter_bindings.ps1")
+$distro = Get-GoodQWslDistro
+
 Write-Host "================================================================================" -ForegroundColor Cyan
 Write-Host "  GoodQ4All - Windows WSL2 Audio Setup" -ForegroundColor Cyan
 Write-Host "================================================================================" -ForegroundColor Cyan
@@ -65,12 +68,12 @@ try {
 # Check CUDA passthrough
 Write-Host "[4/5] Checking CUDA passthrough..." -ForegroundColor Yellow
 try {
-    $GPUCheck = wsl nvidia-smi 2>&1
+    $GPUCheck = wsl -d $distro -- nvidia-smi 2>&1
     if ($LASTEXITCODE -eq 0) {
         Write-Host "  CUDA passthrough working!" -ForegroundColor Green
         
         # Extract GPU info
-        $GPUName = wsl nvidia-smi --query-gpu=name --format=csv,noheader | Select-Object -First 1
+        $GPUName = wsl -d $distro -- nvidia-smi --query-gpu=name --format=csv,noheader | Select-Object -First 1
         Write-Host "  GPU: $GPUName" -ForegroundColor Green
     } else {
         Write-Host "  WARNING: CUDA passthrough not working" -ForegroundColor Yellow
@@ -86,10 +89,10 @@ try {
 Write-Host "[5/5] Copying setup script to WSL2..." -ForegroundColor Yellow
 try {
     # Make setup script executable and copy
-    wsl bash -c "mkdir -p ~/goodq_audio"
-    wsl bash -c "cp /mnt/l/goodq4all/wsl2_audio/setup_wsl2_audio.sh ~/goodq_audio/"
-    wsl bash -c "cp /mnt/l/goodq4all/wsl2_audio/audio_service.py ~/goodq_audio/"
-    wsl bash -c "chmod +x ~/goodq_audio/setup_wsl2_audio.sh"
+    wsl -d $distro -- bash -c "mkdir -p ~/goodq_audio"
+    wsl -d $distro -- bash -c "cp /mnt/l/goodq4all/wsl2_audio/setup_wsl2_audio.sh ~/goodq_audio/"
+    wsl -d $distro -- bash -c "cp /mnt/l/goodq4all/wsl2_audio/audio_service.py ~/goodq_audio/"
+    wsl -d $distro -- bash -c "chmod +x ~/goodq_audio/setup_wsl2_audio.sh"
     
     Write-Host "  Scripts copied to WSL2" -ForegroundColor Green
 } catch {

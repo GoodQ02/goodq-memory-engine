@@ -21,6 +21,10 @@ $script:ConfigPath = "$script:RootDir\configs\config.yaml"
 $script:IssuesFound = 0
 $script:IssuesAutoFixed = 0
 
+. (Join-Path $PSScriptRoot "scripts\\_lib\\interpreter_bindings.ps1")
+$script:CondaExe = Get-GoodQCondaExe
+$script:CoreEnv = "goodq_core"
+
 # Colors
 $Red = "Red"
 $Green = "Green"
@@ -67,7 +71,7 @@ function Test-PythonEnvironment {
     Write-Host "  [Python Environment]" -ForegroundColor $Cyan
     
     try {
-        $pyVersion = python --version 2>&1
+        $pyVersion = & $script:CondaExe run -n $script:CoreEnv python --version 2>&1
         if ($LASTEXITCODE -eq 0) {
             Write-StatusLine "Python" $pyVersion "SUCCESS"
         } else {
@@ -80,7 +84,7 @@ function Test-PythonEnvironment {
     }
     
     try {
-        $pipVersion = pip --version 2>&1
+        $pipVersion = & $script:CondaExe run -n $script:CoreEnv python -m pip --version 2>&1
         if ($LASTEXITCODE -eq 0) {
             Write-StatusLine "Pip" "Installed" "SUCCESS"
         }
@@ -223,7 +227,7 @@ function Start-IngestionService {
     
     if (!$DryRun) {
         # Build ingestion command with optional force flag
-        $ingestCmd = "python -m cli.run_ingestion --input-dir `"$script:InboxPath`" --verbose"
+        $ingestCmd = "& `"$script:CondaExe`" run -n $script:CoreEnv --no-capture-output python -m cli.run_ingestion --input-dir `"$script:InboxPath`" --verbose"
         if ($ForceReprocess) {
             $ingestCmd += " --force"
         }
@@ -243,7 +247,7 @@ function Start-IngestionService {
 # ==================== MAIN EXECUTION ====================
 
 function Main {
-    Clear-Host
+    try { Clear-Host } catch { }
     
     Write-Host ""
     Write-Host "   ___               _ ___  _  _   _   _    _    " -ForegroundColor $Magenta

@@ -11,6 +11,9 @@ Param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+. (Join-Path $PSScriptRoot "_lib\\interpreter_bindings.ps1")
+$condaExe = Get-GoodQCondaExe
+
 function Info([string]$m) { Write-Host "[launch] $m" -ForegroundColor Cyan }
 function Ok([string]$m)   { Write-Host "[launch] $m" -ForegroundColor Green }
 function Warn([string]$m) { Write-Host "[launch] $m" -ForegroundColor Yellow }
@@ -70,7 +73,7 @@ print("[PIPELINE] Ingestion complete!")
   $tmpPy = [System.IO.Path]::GetTempFileName()
   try {
     Set-Content -LiteralPath $tmpPy -Value $pyCode -Encoding UTF8
-    & conda run -n $coreEnv python $tmpPy
+    & $condaExe run -n $coreEnv python $tmpPy
   }
   finally {
     Remove-Item -LiteralPath $tmpPy -Force -ErrorAction SilentlyContinue
@@ -81,7 +84,7 @@ if ($OpenDashboard) {
   Info 'Opening GoodQ4All UI/API dashboard'
   # Launch API server
   $coreEnv = "${EnvPrefix}_core"
-  $apiCmd = "conda run -n $coreEnv python `"$repoRoot\api\main.py`""
+  $apiCmd = "& `"$condaExe`" run -n $coreEnv python `"$repoRoot\api\main.py`""
   Start-Process pwsh -ArgumentList "-NoProfile","-ExecutionPolicy","Bypass","-Command","cd `"$repoRoot`"; $apiCmd" -WindowStyle Normal
   Info 'API server started on http://localhost:8000'
   Info 'UI available at http://localhost:8000 (if configured)'

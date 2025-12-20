@@ -12,6 +12,8 @@ from steps.discover_sources.step import discover_sources
 
 def _run_step(env: str, step: str, item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
     with tempfile.TemporaryDirectory() as td:
+        from steps.common.tool_paths import resolve_conda
+
         in_p = os.path.join(td, 'in.json')
         out_p = os.path.join(td, 'out.json')
         cfg_p = os.path.join(td, 'cfg.json')
@@ -19,8 +21,9 @@ def _run_step(env: str, step: str, item: Dict[str, Any], cfg: Dict[str, Any]) ->
             json.dump(item, f)
         with open(cfg_p, 'w', encoding='utf-8') as f:
             json.dump(cfg, f)
+        conda_exe = resolve_conda()
         cmd = [
-            'conda','run','-n',env,'python','-m','goodq4all.cli.step_runner',
+            conda_exe,'run','-n',env,'python','-m','goodq4all.cli.step_runner',
             '--step',step,'--in',in_p,'--out',out_p,'--cfg',cfg_p
         ]
         subprocess.run(cmd, check=True, capture_output=True)

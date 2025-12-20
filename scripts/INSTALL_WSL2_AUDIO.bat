@@ -2,6 +2,8 @@
 REM GoodQ4All - WSL2 Audio Setup Launcher
 REM This will install audio processing in WSL2 Ubuntu
 
+call "%~dp0_lib\\interpreter_bindings.bat"
+
 echo ================================================================================
 echo   GoodQ4All - WSL2 Audio Setup
 echo ================================================================================
@@ -40,7 +42,7 @@ echo Launching WSL2 installer...
 echo You will be prompted for your Ubuntu password
 echo.
 
-wsl -d Ubuntu -- bash /mnt/l/goodq4all/scripts/wsl2_quick_install.sh
+wsl -d %GOODQ_WSL_DISTRO% -- bash /mnt/l/goodq4all/scripts/wsl2_quick_install.sh
 
 if errorlevel 1 (
     echo.
@@ -62,7 +64,7 @@ echo   Testing Bridge
 echo ================================================================================
 echo.
 
-python L:\goodq4all\wsl2_audio_bridge.py
+"%CONDA_EXE%" run -n goodq_core python L:\goodq4all\wsl2_audio_bridge.py
 
 echo.
 echo ================================================================================

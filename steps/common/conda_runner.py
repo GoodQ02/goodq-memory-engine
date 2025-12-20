@@ -23,6 +23,8 @@ def run_conda_step(env_name: str, step_name: str, item: Dict[str, Any], cfg: Dic
     Raises:
         StepExecutionError: If the step fails, times out, or produces invalid output
     """
+    from .tool_paths import resolve_conda
+
     with tempfile.TemporaryDirectory() as td:
         in_path = os.path.join(td, "in.json")
         out_path = os.path.join(td, "out.json")
@@ -40,8 +42,9 @@ def run_conda_step(env_name: str, step_name: str, item: Dict[str, Any], cfg: Dic
         env.setdefault("HF_DATASETS_CACHE", "L:/models/hf/datasets")  # Fixed: correct path
         env.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
         
+        conda_exe = resolve_conda()
         cmd = [
-            "conda",
+            conda_exe,
             "run",
             "-n",
             env_name,

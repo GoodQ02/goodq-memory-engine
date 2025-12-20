@@ -19,8 +19,17 @@ GoodQ4All uses a **hybrid memory architecture** combining relational databases (
 - **Identity is composite; the ID namespace must never change.** Retrieval correlation relies on `embedding_id` when available, otherwise fallback identity (`scene_id` + `modality` + `model`); the deterministic UUID namespace used for Qdrant point IDs is part of storage identity and changing it risks duplicate/mismatched memories.
 - **“Committed” is per-target truth.** `targets_json` is authoritative per store; row-level `committed=true` means **all attempted targets** succeeded, not that every possible store contains the memory.
 - **Privacy:** `retrieval_events` must never record raw user queries; `retrieval_context` is an origin label (e.g., `api.search`) and `details_json` must remain sanitized.
+- **Sensitive sources are PHI-equivalent.** **Raw content is vault-only.** **Derived conduits only.** Training export requires an explicit vault build manifest + human approval.
+- **Basement sealed for chat + wearables.** Only schema + conduit wiring is present; ingestion requires an explicitly approved adapter and must stage out of the vault.
+- **Health ingestion blocked by default.** A schema-first adapter exists, but ingestion wiring remains explicitly opt-in and must not ingest per-record exports into memory/KG/conduits by default.
 
 ---
+
+## Basement Phase Summary (v1)
+
+- **Memory Integrity v1 complete:** audited writes (`memory_commit_events`), explainable reads (provenance), temporal confidence (read-time), and retrieval observability (`retrieval_events` + rollups).
+- **Conduit Pack v1 complete:** UI-safe, whitelisted, path-sanitized derived tables built via `python -m cli.conduits_build`.
+- **Sensitive Source Wiring Pack v1 installed:** CME/CHE/CWE schemas + empty public conduit stubs; raw sensitive content remains vault-only by contract.
 
 ## Active Storage Systems
 
@@ -61,10 +70,63 @@ GoodQ4All uses a **hybrid memory architecture** combining relational databases (
 
 ### Derived rollups (no history deletion)
 - `retrieval_events_daily` and `observability_rollup_state` are additive summaries computed on-demand via `python -m cli.observability_rollup`.
+- `memory_commit_events_daily` is an additive daily rollup of `memory_commit_events` computed via `python -m cli.observability_rollup --commits`.
+
+### UI-safe conduits (additive, path-redacted)
+- `scene_modality_coverage` is a per-scene boolean coverage table (no raw events) built via `python -m cli.ui_conduits_rollup`.
+- `scene_index_public` is a per-scene “spine” table (start/end + minimal Phase 6 flags) built via `python -m cli.ui_conduits_rollup`.
+- `scene_index_public.media_refs_json` stores stable media reference tokens (no absolute paths). `rel` is anchored by `video_id` (video hash), e.g. `<video_id>/video/scene_manifest.json`.
+
+## Conduit Pack v1 (UI-Safe, Whitelisted)
+
+**Builder:** `python -m cli.conduits_build`
+
+**Versioning:** `conduit_schema_version` (derived schema version; rebuildable)
+
+### What conduits may expose
+- Hash identifiers (`video_id`, `scene_id`, `embedding_id`), timestamps, durations, counts, booleans, and store names (e.g. Qdrant collection).
+- Media references as **tokens** only (never absolute paths). Tokens are resolved locally via `cli/media_refs.py::resolve_media_ref()`.
+
+### What conduits must never expose
+- Raw embeddings/vectors.
+- Absolute filesystem paths (Windows, WSL, UNC).
+- Raw transcripts (or transcript segments).
+- Full summaries by default (metadata only; optional redacted preview is behind a feature flag).
+- Basement-only raw event tables (`memory_commit_events`, `retrieval_events`) or raw logs.
+
+### Memory DB conduits (derived tables)
+- `scene_index_public`, `scene_modality_coverage`
+- `segment_index_public`, `scene_segment_alignment`
+- `embedding_catalog_public`
+- `summaries_public` (metadata only; preview gated by `GOODQ_SUMMARIES_PREVIEW=1`)
+- `link_summary_public`
+- `memory_commit_events_daily` (rollup; no target refs stored)
+
+### Knowledge graph conduits (derived tables)
+- `kg_entity_index_public`
+- `kg_edge_summary_public`
+- `entity_timeline_public`
+- `entity_scene_mentions_public` (aggregates only)
+
+### Processing artifact conduits (derived tables)
+- `scene_manifest_public` (sanitized scene manifest indexing; no paths/transcripts)
+- `temporal_index_public`, `temporal_segments_public` (sanitized; no paths/transcripts)
+
+### Store stats conduits (derived tables)
+- `vector_store_stats_public` (counts/dims only)
+- `faiss_index_stats_public` (exists/size/ntotal only; no paths)
+
+### Sensitive Source Wiring Pack v1 (schema-only stubs; empty by default)
+- `thread_index_public`, `message_activity_daily_public`, `entity_thread_mentions_public`
+- `health_activity_daily_public`, `health_trends_public`, `health_anomalies_public`
+- `wearable_capture_index_public`, `wearable_timeline_public`, `wearable_entity_mentions_public`
+- Contract: `docs/architecture/CANONICAL_SENSITIVE_EVENTS.md`
 
 ### Smoke checks
 - `python -m cli.observability_health`
 - `python -m cli.observability_rollup`
+- `python -m cli.ui_conduits_rollup`
+- `python -m cli.conduits_build`
 
 ---
 

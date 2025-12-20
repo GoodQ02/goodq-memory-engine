@@ -5,6 +5,7 @@ REM Tests CUDA availability in all GPU-capable step environments
 REM ================================================================================
 
 setlocal enabledelayedexpansion
+call "%~dp0_lib\\interpreter_bindings.bat"
 
 echo.
 echo ================================================================================
@@ -20,13 +21,13 @@ set "ENVS=audio_diarize audio_transcribe emotion_classify face_embed"
 
 for %%E in (%ENVS%) do (
     echo Testing %%E...
-    call conda activate %%E 2>nul
+    "%CONDA_EXE%" run -n %%E python --version >nul 2>&1
     if errorlevel 1 (
         echo   ❌ Environment not found: %%E
         set /a FAILED+=1
     ) else (
         REM Test PyTorch + CUDA
-        python -c "import torch; print(f'  ✓ PyTorch {torch.__version__}'); assert torch.cuda.is_available(), 'CUDA not available'; print(f'  ✓ CUDA {torch.version.cuda}'); print(f'  ✓ GPU: {torch.cuda.get_device_name(0)}'); print(f'  ✓ Memory: {torch.cuda.get_device_properties(0).total_memory/1e9:.1f}GB')" 2>nul
+        "%CONDA_EXE%" run -n %%E python -c "import torch; print(f'  ✓ PyTorch {torch.__version__}'); assert torch.cuda.is_available(), 'CUDA not available'; print(f'  ✓ CUDA {torch.version.cuda}'); print(f'  ✓ GPU: {torch.cuda.get_device_name(0)}'); print(f'  ✓ Memory: {torch.cuda.get_device_properties(0).total_memory/1e9:.1f}GB')" 2>nul
         if errorlevel 1 (
             echo   ❌ CUDA not available in %%E
             set /a FAILED+=1

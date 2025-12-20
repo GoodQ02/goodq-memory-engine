@@ -9,39 +9,41 @@ echo.
 
 cd /d L:\goodq4all
 
-SET CONDA_PATH=C:\Users\jdben\miniconda3
-SET CONDA_EXE=%CONDA_PATH%\Scripts\conda.exe
+call "%~dp0_lib\\interpreter_bindings.bat"
 
 REM Check if conda exists
-if not exist "%CONDA_EXE%" (
-    echo [ERROR] Conda not found at: %CONDA_EXE%
-    pause
-    exit /b 1
+if "%CONDA_EXE%"=="conda" (
+    where conda >nul 2>&1
+    if errorlevel 1 (
+        echo [ERROR] Conda not found on PATH
+        pause
+        exit /b 1
+    )
 )
 
-echo [1/4] Activating goodq_zenml environment...
-call "%CONDA_PATH%\Scripts\activate.bat" goodq_zenml
+echo [1/4] Checking goodq_zenml environment...
+"%CONDA_EXE%" run -n goodq_zenml python --version >nul 2>&1
 if errorlevel 1 (
-    echo [ERROR] Failed to activate goodq_zenml environment
+    echo [ERROR] Failed to run Python in goodq_zenml environment
     pause
     exit /b 1
 )
 
 echo [2/4] Installing FastAPI and dependencies...
-pip install fastapi uvicorn[standard] python-multipart websockets pydantic --quiet
+"%CONDA_EXE%" run -n goodq_zenml pip install fastapi uvicorn[standard] python-multipart websockets pydantic --quiet
 if errorlevel 1 (
     echo [WARNING] Some packages may have failed to install
 )
 
 echo [3/4] Verifying installation...
-python -c "import fastapi; print('FastAPI version:', fastapi.__version__)"
+"%CONDA_EXE%" run -n goodq_zenml python -c "import fastapi; print('FastAPI version:', fastapi.__version__)"
 if errorlevel 1 (
     echo [ERROR] FastAPI installation failed
     pause
     exit /b 1
 )
 
-python -c "import uvicorn; print('Uvicorn version:', uvicorn.__version__)"
+"%CONDA_EXE%" run -n goodq_zenml python -c "import uvicorn; print('Uvicorn version:', uvicorn.__version__)"
 if errorlevel 1 (
     echo [ERROR] Uvicorn installation failed
     pause

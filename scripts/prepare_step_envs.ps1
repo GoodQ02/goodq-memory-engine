@@ -8,6 +8,9 @@ Param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+. (Join-Path $PSScriptRoot "_lib\\interpreter_bindings.ps1")
+$condaExe = Get-GoodQCondaExe
+
 function Write-Note($msg) { Write-Host "[envs] $msg" -ForegroundColor Cyan }
 function Write-Warn($msg) { Write-Host "[envs] $msg" -ForegroundColor Yellow }
 function Write-Ok($msg)   { Write-Host "[envs] $msg" -ForegroundColor Green }
@@ -17,7 +20,7 @@ function Test-Command($name) {
   $null -ne (Get-Command $name -ErrorAction SilentlyContinue)
 }
 
-if (-not (Test-Command 'conda')) { Fail 'conda not found on PATH. Please install Miniconda/Anaconda.' }
+if ($condaExe -eq 'conda' -and -not (Test-Command 'conda')) { Fail 'conda not found on PATH. Please install Miniconda/Anaconda.' }
 
 $repoRoot = (Get-Item -LiteralPath (Join-Path $PSScriptRoot '..')).FullName
 Set-Location $repoRoot
@@ -69,7 +72,7 @@ if not written:
   try {
     $tmp = [System.IO.Path]::GetTempFileName()
     Set-Content -LiteralPath $tmp -Value $code -Encoding UTF8
-    & conda run -n $EnvName python $tmp
+    & $condaExe run -n $EnvName python $tmp
     Remove-Item -LiteralPath $tmp -Force
     Write-Note "Linked repo into $EnvName via .pth"
   } catch {
@@ -79,16 +82,16 @@ if not written:
 
 function Ensure-CondaEnv {
   Param([string]$Name, [string]$ReqFile)
-  $exists = (& conda env list) -match "^$Name\b"
+  $exists = (& $condaExe env list) -match "^$Name\b"
   if ($exists -and -not $ForceReinstall) {
     Write-Note "Env $Name exists"
   } else {
     if ($exists -and $ForceReinstall) {
       Write-Warn "Recreating env $Name (ForceReinstall)"
-      & conda env remove -n $Name -y | Out-Null
+      & $condaExe env remove -n $Name -y | Out-Null
     }
     Write-Note "Creating env $Name (python=$PythonVersion)"
-    & conda create -y -n $Name python=$PythonVersion | Out-Null
+    & $condaExe create -y -n $Name python=$PythonVersion | Out-Null
   }
   if (Test-Path $ReqFile) {
     Write-Note "Installing requirements for $Name from $ReqFile"
@@ -101,9 +104,9 @@ function Ensure-CondaEnv {
       $env:PIP_NO_CACHE_DIR = '1'            # avoid cache bleed across envs
       $env:PIP_DISABLE_PIP_VERSION_CHECK = '1'
       # Upgrade pip inside the env in isolated mode with no user writes
-      & conda run -n $Name pip install --upgrade pip --no-cache-dir --no-user --isolated
+      & $condaExe run -n $Name pip install --upgrade pip --no-cache-dir --no-user --isolated
       # Install env requirements in isolated mode with no user writes
-      & conda run -n $Name pip install -r $ReqFile --no-cache-dir --no-user --isolated --upgrade-strategy only-if-needed
+      & $condaExe run -n $Name pip install -r $ReqFile --no-cache-dir --no-user --isolated --upgrade-strategy only-if-needed
     } finally {
       if ($null -ne $prevNoUser) { $env:PYTHONNOUSERSITE = $prevNoUser } else { Remove-Item Env:PYTHONNOUSERSITE -ErrorAction SilentlyContinue }
       if ($null -ne $prevNoCache) { $env:PIP_NO_CACHE_DIR = $prevNoCache } else { Remove-Item Env:PIP_NO_CACHE_DIR -ErrorAction SilentlyContinue }
@@ -130,8 +133,8 @@ Write-Note 'Installing zenml into the ZenML env'
 try {
   $prevNoUser=$env:PYTHONNOUSERSITE; $prevNoCache=$env:PIP_NO_CACHE_DIR; $prevDisable=$env:PIP_DISABLE_PIP_VERSION_CHECK
   $env:PYTHONNOUSERSITE='1'; $env:PIP_NO_CACHE_DIR='1'; $env:PIP_DISABLE_PIP_VERSION_CHECK='1'
-  & conda run -n $zenEnv pip install --upgrade pip --no-cache-dir --no-user --isolated
-  & conda run -n $zenEnv pip install "zenml>=0.65" "openai>=1.40" "openai-agents>=0.1" "nest_asyncio>=1.6" "typer>=0.9.0" --no-cache-dir --no-user --isolated --upgrade-strategy only-if-needed
+  & $condaExe run -n $zenEnv pip install --upgrade pip --no-cache-dir --no-user --isolated
+  & $condaExe run -n $zenEnv pip install "zenml>=0.65" "openai>=1.40" "openai-agents>=0.1" "nest_asyncio>=1.6" "typer>=0.9.0" --no-cache-dir --no-user --isolated --upgrade-strategy only-if-needed
 } finally {
   if ($null -ne $prevNoUser) { $env:PYTHONNOUSERSITE=$prevNoUser } else { Remove-Item Env:PYTHONNOUSERSITE -ErrorAction SilentlyContinue }
   if ($null -ne $prevNoCache) { $env:PIP_NO_CACHE_DIR=$prevNoCache } else { Remove-Item Env:PIP_NO_CACHE_DIR -ErrorAction SilentlyContinue }
@@ -150,8 +153,8 @@ try {
     $prevNoUser=$env:PYTHONNOUSERSITE; $prevNoCache=$env:PIP_NO_CACHE_DIR; $prevDisable=$env:PIP_DISABLE_PIP_VERSION_CHECK
     try {
       $env:PYTHONNOUSERSITE='1'; $env:PIP_NO_CACHE_DIR='1'; $env:PIP_DISABLE_PIP_VERSION_CHECK='1'
-      & conda run -n $apiEnv pip install --upgrade pip --no-cache-dir --no-user --isolated
-      & conda run -n $apiEnv pip install -r $apiReq --no-cache-dir --no-user --isolated --upgrade-strategy only-if-needed
+      & $condaExe run -n $apiEnv pip install --upgrade pip --no-cache-dir --no-user --isolated
+      & $condaExe run -n $apiEnv pip install -r $apiReq --no-cache-dir --no-user --isolated --upgrade-strategy only-if-needed
     } finally {
       if ($null -ne $prevNoUser) { $env:PYTHONNOUSERSITE=$prevNoUser } else { Remove-Item Env:PYTHONNOUSERSITE -ErrorAction SilentlyContinue }
       if ($null -ne $prevNoCache) { $env:PIP_NO_CACHE_DIR=$prevNoCache } else { Remove-Item Env:PIP_NO_CACHE_DIR -ErrorAction SilentlyContinue }

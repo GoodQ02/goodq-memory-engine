@@ -19,6 +19,7 @@ echo.
 
 cd /d L:\goodq4all
 
-python scripts\audit_vision_pipeline.py
+call "%~dp0_lib\\interpreter_bindings.bat"
+"%CONDA_EXE%" run -n goodq_core python scripts\audit_vision_pipeline.py
 
 pause

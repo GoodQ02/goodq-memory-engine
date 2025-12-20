@@ -2,6 +2,8 @@
 REM GoodQ4All vLLM Server Startup Script
 REM Starts vLLM servers in WSL for AI orchestration
 
+call "%~dp0_lib\\interpreter_bindings.bat"
+
 echo ========================================
 echo GoodQ4All vLLM Server Startup
 echo ========================================
@@ -19,16 +21,16 @@ if errorlevel 1 (
 REM Preferred: systemd services (ensure sudoers allows NOPASSWD for these commands)
 echo WSL is running
 echo Starting vLLM via systemd (if available)...
-wsl sudo systemctl start vllm-llama1b
-wsl sudo systemctl start ollama
+wsl -d %GOODQ_WSL_DISTRO% -- sudo systemctl start vllm-llama1b
+wsl -d %GOODQ_WSL_DISTRO% -- sudo systemctl start ollama
 
 REM Fallback: only start per-user scripts if systemd service is NOT active
-wsl sudo systemctl is-active --quiet vllm-llama1b
+wsl -d %GOODQ_WSL_DISTRO% -- sudo systemctl is-active --quiet vllm-llama1b
 if NOT "%ERRORLEVEL%"=="0" (
     echo Systemd not active; starting vLLM via per-user scripts...
-    wsl ~/vllm_server/scripts/start_llama1b.sh
+    wsl -d %GOODQ_WSL_DISTRO% -- ~/vllm_server/scripts/start_llama1b.sh
     timeout /t 2 /nobreak >nul
-    wsl ~/vllm_server/scripts/start_llama3b.sh
+    wsl -d %GOODQ_WSL_DISTRO% -- ~/vllm_server/scripts/start_llama3b.sh
     timeout /t 2 /nobreak >nul
 )
 

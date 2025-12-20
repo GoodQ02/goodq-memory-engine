@@ -31,11 +31,13 @@ def run(item: dict, config: dict) -> dict:
             'status': 'error',
             'error': f'Audio file not found: {audio_path}'
         }
+
+    wsl_distro = os.environ.get("GOODQ_WSL_DISTRO", "Ubuntu")
     
     # Convert Windows path to WSL path
     audio_path_win = Path(audio_path).resolve()
     audio_path_wsl = subprocess.check_output(
-        ['wsl', 'wslpath', '-a', str(audio_path_win)],
+        ['wsl', '-d', wsl_distro, '--', 'wslpath', '-a', str(audio_path_win)],
         text=True
     ).strip()
     
@@ -43,13 +45,13 @@ def run(item: dict, config: dict) -> dict:
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_dir_win = Path(temp_dir).resolve()
         temp_dir_wsl = subprocess.check_output(
-            ['wsl', 'wslpath', '-a', str(temp_dir_win)],
+            ['wsl', '-d', wsl_distro, '--', 'wslpath', '-a', str(temp_dir_win)],
             text=True
         ).strip()
         
         # Call WSL2 audio processing script
         cmd = [
-            'wsl', 'bash', '-lc',
+            'wsl', '-d', wsl_distro, '--', 'bash', '-lc',
             f'source ~/goodq_audio/setup_cuda_env.sh 2>/dev/null && '
             f'cd ~/goodq_audio && '
             f'python3 ~/goodq_audio/scripts/process_audio.py "{audio_path_wsl}" "{temp_dir_wsl}"'

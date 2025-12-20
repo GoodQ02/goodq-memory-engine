@@ -7,6 +7,9 @@ $Host.UI.RawUI.WindowTitle = "GoodQ Full Diagnostic"
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $env:PYTHONIOENCODING = "utf-8"
 
+. (Join-Path $PSScriptRoot "..\\_lib\\interpreter_bindings.ps1")
+$condaExe = Get-GoodQCondaExe
+
 Clear-Host
 Write-Host ""
 Write-Host "═══════════════════════════════════════════════════════════════" -ForegroundColor Cyan
@@ -37,7 +40,7 @@ Write-Host "══════════════════════�
 Write-Host ""
 
 try {
-    conda run -n goodq_zenml python scripts\comprehensive_code_audit.py 2>&1 | Out-String | Write-Host
+    & $condaExe run -n goodq_zenml python scripts\comprehensive_code_audit.py 2>&1 | Out-String | Write-Host
     if ($LASTEXITCODE -ne 0) {
         throw "Code audit failed with exit code $LASTEXITCODE"
     }
@@ -60,7 +63,7 @@ Write-Host "══════════════════════�
 Write-Host ""
 
 try {
-    conda run -n goodq_zenml python scripts\system_readiness_check.py 2>&1 | Out-String | Write-Host
+    & $condaExe run -n goodq_zenml python scripts\system_readiness_check.py 2>&1 | Out-String | Write-Host
     if ($LASTEXITCODE -ne 0) {
         throw "System readiness check failed with exit code $LASTEXITCODE"
     }
@@ -82,7 +85,7 @@ Write-Host "PHASE 3: DATABASE HEALTH" -ForegroundColor Cyan
 Write-Host "═══════════════════════════════════════════════════════════════" -ForegroundColor Cyan
 Write-Host ""
 
-conda run -n goodq_zenml python scripts\check_db_status.py 2>&1 | Out-String | Write-Host
+& $condaExe run -n goodq_zenml python scripts\check_db_status.py 2>&1 | Out-String | Write-Host
 
 # ============================================================================
 # PHASE 4: CLEAN TEST RUN
@@ -97,7 +100,7 @@ Write-Host "Press any key to continue..." -ForegroundColor Gray
 $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
 
 try {
-    conda run -n goodq_zenml python scripts\test_clean_run.py 2>&1 | Out-String | Write-Host
+    & $condaExe run -n goodq_zenml python scripts\test_clean_run.py 2>&1 | Out-String | Write-Host
     if ($LASTEXITCODE -ne 0) {
         throw "Clean test run failed with exit code $LASTEXITCODE"
     }

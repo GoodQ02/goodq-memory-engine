@@ -40,8 +40,11 @@ def _get_faiss_ntotal(env_name: str, index_path: Optional[str]) -> Optional[int]
     import subprocess
     code = "import faiss,sys; print(faiss.read_index(sys.argv[1]).ntotal)"
     try:
+        from steps.common.tool_paths import resolve_conda
+
+        conda_exe = resolve_conda()
         out = subprocess.run([
-            "conda","run","--no-plugins","-n",env_name,
+            conda_exe,"run","--no-plugins","-n",env_name,
             "python","-c",code,index_path
         ], capture_output=True, text=True, check=True)
         s = (out.stdout or "").strip()

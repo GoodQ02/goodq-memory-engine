@@ -4,6 +4,8 @@ REM  GoodQ4All GPU Pipeline Optimization
 REM  Runs comprehensive GPU performance testing and optimization
 REM =============================================================================
 
+call "%~dp0_lib\\interpreter_bindings.bat"
+
 echo.
 echo ================================================================================
 echo   GoodQ4All GPU Pipeline Optimization Suite
@@ -26,7 +28,7 @@ echo  Step 1: Verifying GPU Configuration
 echo ================================================================================
 echo.
 
-conda run -n goodq_zenml python scripts\test_gpu_config.py
+"%CONDA_EXE%" run -n goodq_zenml python scripts\test_gpu_config.py
 if errorlevel 1 (
     echo.
     echo ERROR: GPU configuration test failed
@@ -40,7 +42,7 @@ echo  Step 2: Running Monitored Pipeline Test
 echo ================================================================================
 echo.
 
-conda run -n goodq_zenml python scripts\monitor_gpu_pipeline.py
+"%CONDA_EXE%" run -n goodq_zenml python scripts\monitor_gpu_pipeline.py
 if errorlevel 1 (
     echo.
     echo ERROR: Pipeline monitoring failed

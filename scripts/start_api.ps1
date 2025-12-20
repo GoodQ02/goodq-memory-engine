@@ -6,6 +6,9 @@ Param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+. (Join-Path $PSScriptRoot "_lib\\interpreter_bindings.ps1")
+$condaExe = Get-GoodQCondaExe
+
 Write-Host ("Starting the GoodQ Retrieval API server on {0}:{1}..." -f $BindAddress, $Port) -ForegroundColor Cyan
 
 # Ensure we run from repo root
@@ -18,7 +21,7 @@ try {
 $env:GOODQ_API_HOST = $BindAddress
 $env:GOODQ_API_PORT = [string]$Port
 
-if (-not (Get-Command conda -ErrorAction SilentlyContinue)) {
+if ($condaExe -eq "conda" -and -not (Get-Command conda -ErrorAction SilentlyContinue)) {
   Write-Error 'conda not found on PATH. Please open an Anaconda/Miniconda PowerShell prompt.'
   exit 1
 }
@@ -34,7 +37,7 @@ except Exception:
 $tmp = [System.IO.Path]::GetTempFileName()
 Set-Content -LiteralPath $tmp -Value $py -Encoding UTF8
 try {
-  $check = & conda run -n goodq_text_embed python $tmp
+  $check = & $condaExe run -n goodq_text_embed python $tmp
 } finally {
   Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue
 }
@@ -44,8 +47,8 @@ if (-not ($check | Out-String).Trim().StartsWith('OK')) {
   $prevNoUser=$env:PYTHONNOUSERSITE; $prevNoCache=$env:PIP_NO_CACHE_DIR; $prevDisable=$env:PIP_DISABLE_PIP_VERSION_CHECK
   try {
     $env:PYTHONNOUSERSITE='1'; $env:PIP_NO_CACHE_DIR='1'; $env:PIP_DISABLE_PIP_VERSION_CHECK='1'
-    & conda run -n goodq_text_embed pip install --upgrade pip --no-cache-dir --no-user --isolated
-    & conda run -n goodq_text_embed pip install -r $req --no-cache-dir --no-user --isolated --upgrade-strategy only-if-needed
+    & $condaExe run -n goodq_text_embed pip install --upgrade pip --no-cache-dir --no-user --isolated
+    & $condaExe run -n goodq_text_embed pip install -r $req --no-cache-dir --no-user --isolated --upgrade-strategy only-if-needed
   } finally {
     if ($null -ne $prevNoUser) { $env:PYTHONNOUSERSITE=$prevNoUser } else { Remove-Item Env:PYTHONNOUSERSITE -ErrorAction SilentlyContinue }
     if ($null -ne $prevNoCache) { $env:PIP_NO_CACHE_DIR=$prevNoCache } else { Remove-Item Env:PIP_NO_CACHE_DIR -ErrorAction SilentlyContinue }
@@ -55,4 +58,4 @@ if (-not ($check | Out-String).Trim().StartsWith('OK')) {
 
 # Invoke by file path so Python doesn't need to resolve the package before server.py adjusts sys.path
 $serverPath = Join-Path $repoRoot 'api\server.py'
-& conda run -n goodq_text_embed python $serverPath
+& $condaExe run -n goodq_text_embed python $serverPath

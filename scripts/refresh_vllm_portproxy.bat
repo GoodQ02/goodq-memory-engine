@@ -3,8 +3,9 @@ REM Refresh Windows->WSL portproxy for vLLM (port 38005)
 REM Run this in an elevated (Administrator) prompt whenever the WSL IP changes (e.g., after reboot)
 
 setlocal enabledelayedexpansion
+call "%~dp0_lib\\interpreter_bindings.bat"
 echo [INFO] Detecting WSL IP...
-for /f "tokens=1" %%I in ('wsl hostname -I') do (
+for /f "tokens=1" %%I in ('wsl -d %GOODQ_WSL_DISTRO% -- hostname -I') do (
     set "WSL_IP=%%I"
     goto :got_ip
 )

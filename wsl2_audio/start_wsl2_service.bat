@@ -3,17 +3,19 @@ REM ============================================================================
 REM GoodQ4All - Start WSL2 Audio Service
 REM ============================================================================
 
+call "%~dp0..\\scripts\\_lib\\interpreter_bindings.bat"
+
 echo ================================================================================
 echo   GoodQ4All - Starting WSL2 Audio Service
 echo ================================================================================
 echo.
 
 REM Check if WSL2 service is already running
-wsl pgrep -f audio_service.py >nul 2>&1
+wsl -d %GOODQ_WSL_DISTRO% -- pgrep -f audio_service.py >nul 2>&1
 if %ERRORLEVEL% EQU 0 (
     echo [INFO] WSL2 audio service is already running
     echo.
-    echo To stop it, run: wsl pkill -f audio_service.py
+    echo To stop it, run: wsl -d %GOODQ_WSL_DISTRO% -- pkill -f audio_service.py
     echo.
     pause
     exit /b 0
@@ -24,12 +26,12 @@ echo [INFO] This will run in the background
 echo.
 
 REM Start the service in WSL2
-start "GoodQ WSL2 Audio Service" wsl bash -c "cd ~/goodq_audio && source setup_cuda_env.sh && python3 /mnt/l/goodq4all/wsl2_audio/audio_service.py"
+start "GoodQ WSL2 Audio Service" wsl -d %GOODQ_WSL_DISTRO% -- bash -c "cd ~/goodq_audio && source setup_cuda_env.sh && python3 /mnt/l/goodq4all/wsl2_audio/audio_service.py"
 
 timeout /t 3 /nobreak >nul
 
 REM Check if it started
-wsl pgrep -f audio_service.py >nul 2>&1
+wsl -d %GOODQ_WSL_DISTRO% -- pgrep -f audio_service.py >nul 2>&1
 if %ERRORLEVEL% EQU 0 (
     echo ================================================================================
     echo   WSL2 Audio Service Started Successfully!
@@ -41,7 +43,7 @@ if %ERRORLEVEL% EQU 0 (
     echo   wsl tail -f ~/goodq_audio/logs/audio_service.log
     echo.
     echo To stop the service:
-    echo   wsl pkill -f audio_service.py
+    echo   wsl -d %GOODQ_WSL_DISTRO% -- pkill -f audio_service.py
     echo.
 ) else (
     echo ================================================================================

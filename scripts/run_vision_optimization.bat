@@ -18,6 +18,7 @@ echo.
 cd /d L:\goodq4all
 
 REM Run optimization script
-python scripts\optimize_vision_gpu.py
+call "%~dp0_lib\\interpreter_bindings.bat"
+"%CONDA_EXE%" run -n goodq_core python scripts\optimize_vision_gpu.py
 
 pause

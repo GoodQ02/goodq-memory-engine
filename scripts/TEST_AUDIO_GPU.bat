@@ -4,6 +4,8 @@ REM  Audio GPU Optimization Test Suite
 REM  Quick launcher for GPU-accelerated audio pipeline testing
 REM =============================================================================
 
+call "%~dp0_lib\\interpreter_bindings.bat"
+
 cd /d L:\goodq4all
 
 echo.
@@ -21,7 +23,7 @@ echo   4. Real-time GPU monitor
 echo.
 pause
 
-conda run -n goodq_zenml python scripts\test_audio_gpu_optimization.py
+"%CONDA_EXE%" run -n goodq_zenml python scripts\test_audio_gpu_optimization.py
 
 echo.
 echo ================================================================================

@@ -5,6 +5,7 @@ REM  Validates all components and runs end-to-end test
 REM ================================================================================
 
 setlocal enabledelayedexpansion
+call "%~dp0..\\_lib\\interpreter_bindings.bat"
 
 title GoodQ4All System Test
 color 0E
@@ -35,7 +36,7 @@ if "%ERRORLEVEL%"=="0" (
 
 echo.
 echo [2/8] Validating Python paths...
-conda run --no-capture-output -n goodq_zenml python test_python_paths.py
+"%CONDA_EXE%" run --no-capture-output -n goodq_zenml python test_python_paths.py
 if %ERRORLEVEL% NEQ 0 (
     echo [✗] Python path validation failed
     pause
@@ -45,7 +46,7 @@ echo [✓] Python paths OK
 
 echo.
 echo [3/8] Checking database integrity...
-conda run --no-capture-output -n goodq_zenml python check_db_stats.py
+"%CONDA_EXE%" run --no-capture-output -n goodq_zenml python check_db_stats.py
 echo [✓] Database check complete
 
 echo.
@@ -94,7 +95,7 @@ if exist "L:\goodq4all\data\processing" (
 echo.
 echo [8/8] Testing API server startup...
 echo Starting API server in background (10 second test)...
-start "GoodQ Test API" /MIN cmd /c "cd /d L:\goodq4all && conda run --no-capture-output -n goodq_zenml python scripts\api_server.py"
+start "GoodQ Test API" /MIN "%CONDA_EXE%" run --no-capture-output -n goodq_zenml python scripts\api_server.py
 timeout /t 8 /nobreak >nul
 
 echo Testing API connectivity...

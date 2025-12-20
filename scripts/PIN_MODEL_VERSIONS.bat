@@ -2,6 +2,8 @@
 REM Fetch and pin exact model versions (commit SHAs) from HuggingFace Hub
 REM This updates model_registry.yaml with actual commit hashes
 
+call "%~dp0_lib\\interpreter_bindings.bat"
+
 echo ========================================
 echo  Pin Model Versions
 echo ========================================
@@ -15,12 +17,8 @@ pause
 cd /d "%~dp0.."
 
 echo.
-echo Activating goodq_zenml environment...
-call conda activate goodq_zenml
-
-echo.
 echo Running model version pinning...
-python scripts\pin_model_versions.py
+"%CONDA_EXE%" run -n goodq_zenml python scripts\pin_model_versions.py
 
 echo.
 echo ========================================

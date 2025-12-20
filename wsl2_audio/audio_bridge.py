@@ -33,6 +33,7 @@ class WSL2AudioBridge:
             config_path = base_dir / "wsl2_audio" / "bridge_config.json"
         
         self.config = self._load_config(config_path)
+        self.wsl_distro = os.environ.get("GOODQ_WSL_DISTRO", "Ubuntu")
         
         # Windows paths
         self.windows_queue = Path(self.config['windows_queue_dir'])
@@ -78,7 +79,7 @@ class WSL2AudioBridge:
         """Check if WSL2 audio service is running"""
         try:
             result = subprocess.run(
-                ["wsl", "pgrep", "-f", "audio_service.py"],
+                ["wsl", "-d", self.wsl_distro, "--", "pgrep", "-f", "audio_service.py"],
                 capture_output=True,
                 text=True,
                 timeout=5
@@ -222,7 +223,7 @@ class WSL2AudioBridge:
         # Check if service is running
         if not self._is_wsl_service_running():
             logger.warning("WSL2 audio service does not appear to be running")
-            logger.warning("Start it with: wsl bash -c 'cd ~/goodq_audio && source venv/bin/activate && python3 /mnt/l/goodq4all/wsl2_audio/audio_service.py'")
+            logger.warning(f"Start it with: wsl -d {self.wsl_distro} -- bash -lc 'cd ~/goodq_audio && source venv/bin/activate && python3 /mnt/l/goodq4all/wsl2_audio/audio_service.py'")
         
         try:
             # Write job file to Windows queue
@@ -233,9 +234,9 @@ class WSL2AudioBridge:
             # Copy to WSL2 queue using wsl command
             wsl_pending = f"{self.wsl_queue}/pending/{job_id}.json"
             subprocess.run(
-                ["wsl", "cp", 
+                ["wsl", "-d", self.wsl_distro, "--", "cp",
                  str(job_file).replace("\\", "/").replace("L:/", "/mnt/l/"),
-                 wsl_pending],
+                  wsl_pending],
                 check=True,
                 timeout=10
             )
@@ -258,8 +259,8 @@ class WSL2AudioBridge:
                     
                     # Try result file
                     subprocess.run(
-                        ["wsl", "cp", wsl_result, 
-                         str(result_file).replace("\\", "/").replace("L:/", "/mnt/l/")],
+                        ["wsl", "-d", self.wsl_distro, "--", "cp", wsl_result,
+                          str(result_file).replace("\\", "/").replace("L:/", "/mnt/l/")],
                         capture_output=True,
                         timeout=5
                     )
@@ -272,8 +273,8 @@ class WSL2AudioBridge:
                     
                     # Try error file
                     subprocess.run(
-                        ["wsl", "cp", wsl_error,
-                         str(error_file).replace("\\", "/").replace("L:/", "/mnt/l/")],
+                        ["wsl", "-d", self.wsl_distro, "--", "cp", wsl_error,
+                          str(error_file).replace("\\", "/").replace("L:/", "/mnt/l/")],
                         capture_output=True,
                         timeout=5
                     )
@@ -338,7 +339,8 @@ def transcribe_wsl2(audio_path: str, **kwargs) -> Dict[str, Any]:
     
     try:
         # Build command
-        cmd = ["wsl", "~/goodq_audio/scripts/process.sh", wsl_path]
+        wsl_distro = os.environ.get("GOODQ_WSL_DISTRO", "Ubuntu")
+        cmd = ["wsl", "-d", wsl_distro, "--", "~/goodq_audio/scripts/process.sh", wsl_path]
         
         # Add options
         if kwargs.get('no_diarization', False):

@@ -6,6 +6,9 @@ Param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+. (Join-Path $PSScriptRoot "_lib\\interpreter_bindings.ps1")
+$condaExe = Get-GoodQCondaExe
+
 function H1($m){ Write-Host "== $m ==" -ForegroundColor Cyan }
 function Info($m){ Write-Host "[cc] $m" -ForegroundColor Cyan }
 function Warn($m){ Write-Host "[cc] $m" -ForegroundColor Yellow }
@@ -60,7 +63,7 @@ except Exception:
       $tmpFile = [System.IO.Path]::GetTempFileName()
       Set-Content -LiteralPath $tmpFile -Value $pyScript -Encoding UTF8
       try {
-        $out = & conda run -n goodq_zenml python $tmpFile $db
+        $out = & $condaExe run -n goodq_zenml python $tmpFile $db
         Write-Host ("DB: {0}" -f $out.Trim())
       } finally {
         Remove-Item -LiteralPath $tmpFile -Force -ErrorAction SilentlyContinue
@@ -83,7 +86,7 @@ except Exception:
       $tmpFile = [System.IO.Path]::GetTempFileName()
       Set-Content -LiteralPath $tmpFile -Value $pyScript -Encoding UTF8
       try {
-        $n = & conda run -n $env python $tmpFile $path
+        $n = & $condaExe run -n $env python $tmpFile $path
         if ($n) { return $n.Trim() } else { return 'err' }
       } finally {
         Remove-Item -LiteralPath $tmpFile -Force -ErrorAction SilentlyContinue
@@ -232,7 +235,7 @@ function Show-RetrievePreview {
   $query = $env:GOODQ_CC_QUERY
   if (-not $query) { $query = 'test' }
   try {
-    $out = & conda run -n goodq_text_embed python -m goodq4all.cli.retrieve --text "$query" --topk 3
+    $out = & $condaExe run -n goodq_text_embed python -m goodq4all.cli.retrieve --text "$query" --topk 3
     $j = $out | ConvertFrom-Json
     if (-not $j -or -not ($j.PSObject.Properties.Name -contains 'matches') -or -not $j.matches) { 
       Warn 'No matches'; return 
@@ -310,7 +313,7 @@ print(json.dumps(payload))
     $tmpFile = [System.IO.Path]::GetTempFileName()
     Set-Content -LiteralPath $tmpFile -Value $pyScript -Encoding UTF8
     try {
-      $json = & conda run -n goodq_zenml python $tmpFile $db
+      $json = & $condaExe run -n goodq_zenml python $tmpFile $db
     } finally {
       Remove-Item -LiteralPath $tmpFile -Force -ErrorAction SilentlyContinue
     }
@@ -415,7 +418,7 @@ print(faiss.read_index(sys.argv[1]).ntotal)
       $tmpFile = [System.IO.Path]::GetTempFileName()
       Set-Content -LiteralPath $tmpFile -Value $pyScript -Encoding UTF8
       try {
-        $o = & conda run -n $env python $tmpFile $idx
+        $o = & $condaExe run -n $env python $tmpFile $idx
       } finally {
         Remove-Item -LiteralPath $tmpFile -Force -ErrorAction SilentlyContinue
       }
@@ -431,7 +434,7 @@ con = sqlite3.connect(sys.argv[1]); cur = con.cursor(); cur.execute(sys.argv[2])
       $tmpFile = [System.IO.Path]::GetTempFileName()
       Set-Content -LiteralPath $tmpFile -Value $pyScript -Encoding UTF8
       try {
-        $o = & conda run -n goodq_zenml python $tmpFile $dbp $sql
+        $o = & $condaExe run -n goodq_zenml python $tmpFile $dbp $sql
       } finally {
         Remove-Item -LiteralPath $tmpFile -Force -ErrorAction SilentlyContinue
       }

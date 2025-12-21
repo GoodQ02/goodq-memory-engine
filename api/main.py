@@ -13,7 +13,6 @@ import glob
 
 from fastapi import FastAPI, Query, Body
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from typing import Optional, List, Any, Dict
@@ -468,13 +467,10 @@ def search(q: str = Query(..., description="Search text index"), topk: int = Que
     }
 
 
-# Root endpoint - redirect to dashboard
-from fastapi.responses import RedirectResponse
-
 @app.get("/")
-def root():
-    """Redirect root to main interface"""
-    return RedirectResponse(url="/index.html")
+def root() -> Dict[str, Any]:
+    """Root endpoint (UI is not served from this API process)."""
+    return {"status": "ok", "docs": "/docs", "openapi": "/openapi.json"}
 
 @app.get("/api")
 def api_root() -> Dict[str, Any]:
@@ -648,6 +644,8 @@ def vector_search(
     event: Optional[str] = Query(None, description="Filter by music/event label"),
     tag: Optional[str] = Query(None, description="Filter by tag/entity"),
 ) -> Dict[str, Any]:
+    return {"status": "disabled", "matches": []}
+
     # Lazy imports to keep startup fast
     from langchain_community.embeddings import HuggingFaceEmbeddings
     from langchain_community.vectorstores import Chroma
@@ -959,7 +957,7 @@ def get_command_center() -> Dict[str, Any]:
     # GPU snapshot (keep consistent with /api/gpu/stats)
     gpu_stats = get_gpu_stats()
 
-    pipeline_healthy = processing_stats.get("status") not in (None, "error")
+    pipeline_healthy = processing_stats.get("status") not in (None, "error", "disabled")
     health = {
         "api": True,
         "database": db_healthy,
@@ -1037,13 +1035,15 @@ def control_process(name: str, action: str) -> Dict[str, Any]:
         "process": name,
         "action": action,
         "success": False,
-        "message": "Process control not yet implemented"
+        "message": "disabled"
     }
 
 
 @app.post("/api/test-audio")
 def test_audio(request: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
     """Test audio processing via WSL2"""
+    return {"success": False, "message": "disabled"}
+
     try:
         import subprocess
         config_model = None
@@ -1264,6 +1264,8 @@ def _latest_run_preview(limit: int = 12) -> Dict[str, Any]:
     Inspect logs/watchdog_* folders and return a quick preview of the most recent run.
     Exposes scene thumbnails/audio clips so the dashboard can show real artifacts.
     """
+    return {"available": False, "disabled": True}
+
     runs = sorted(Path("logs").glob("watchdog_*"), key=lambda p: p.stat().st_mtime, reverse=True)
     if not runs:
         return {"available": False}
@@ -1365,6 +1367,8 @@ def get_memory_stats() -> Dict[str, Any]:
 @app.get("/api/logs/watchdog")
 def get_watchdog_logs(lines: int = 200) -> Dict[str, Any]:
     """Tail the watchdog log for the command center UI."""
+    return {"available": False, "lines": [], "disabled": True}
+
     log_path = Path("L:/goodq4all/logs/watchdog.log")
     result: Dict[str, Any] = {
         "available": log_path.exists(),
@@ -1388,6 +1392,8 @@ def get_watchdog_logs(lines: int = 200) -> Dict[str, Any]:
 @app.get("/api/progress")
 def get_progress() -> Dict[str, Any]:
     """Get current processing progress - proxies processing stats API or returns fallback"""
+    return {"status": "disabled"}
+
     try:
         import requests
         resp = requests.get("http://localhost:5001/api/processing/stats", timeout=2)
@@ -1424,6 +1430,8 @@ def get_scene(scene_id: str) -> Dict[str, Any]:
 @app.post("/api/chat/control-agent")
 def chat_with_control_agent(request: ChatRequest) -> Dict[str, Any]:
     """Chat with the Control Agent for pipeline diagnostics and help"""
+    return {"success": False, "error": "disabled", "response": "disabled"}
+
     try:
         # Import LLM client
         from lib.llm_client import LLMClient
@@ -1477,18 +1485,4 @@ Be concise, technical, and actionable. Format responses with markdown."""
             "timestamp": __import__('datetime').datetime.now().isoformat()
         }
 
-
-# Mount static files LAST (catch-all for UI)
-LOG_DIR = Path("logs").resolve()
-if LOG_DIR.exists():
-    app.mount("/logs", StaticFiles(directory=str(LOG_DIR)), name="logs")
-    logger.info(f"[SYMBOL] Serving logs from: {LOG_DIR}")
-else:
-    logger.warning(f"Logs directory not found: {LOG_DIR}")
-
-UI_DIR = Path(__file__).parent.parent / "ui"  # ui directory contains HTML files
-if UI_DIR.exists():
-    app.mount("/", StaticFiles(directory=str(UI_DIR), html=True), name="ui")
-    logger.info(f"[SYMBOL] Serving UI from: {UI_DIR}")
-else:
-    logger.warning(f"UI directory not found: {UI_DIR}")
+# Legacy UI/log static mounts intentionally disabled.

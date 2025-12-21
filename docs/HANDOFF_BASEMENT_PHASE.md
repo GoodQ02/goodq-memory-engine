@@ -43,6 +43,11 @@ The “Basement Phase” established the non-negotiable foundation for GoodQ:
 - **Pure evaluator (no wiring):** `steps/common/non_action_contract.py`
 - **Note:** declarative only; enforcement is deferred by design; future UI/agents/pipelines must consult this contract.
 
+### UI reset (clean slate prep)
+
+- **Legacy UI archived:** `archive/legacy_ui/README.md`
+- **Only supported UI direction:** `ui/justification_v1/` (scaffold only; consumes `EpistemicReadEnvelope`, `NonActionDecision`, and `_public` conduits)
+
 ### Conduit Pack v1 (UI-safe, whitelisted)
 
 - **Builder:** `python -m cli.conduits_build` (`cli/conduits_build.py`)

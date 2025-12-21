@@ -147,6 +147,8 @@ async def start_ingest(request: IngestRequest = Body(...)):
     Returns:
         Ingest job ID and status
     """
+    return IngestResponse(job_id="disabled", status="disabled", message="disabled")
+
     try:
         file_path = Path(request.file_path)
         
@@ -181,6 +183,8 @@ async def rebuild_indexes():
     Returns:
         Success message
     """
+    return {"status": "disabled"}
+
     try:
         # TODO: Implement actual index rebuild
         logger.warning("Index rebuild requested but not yet implemented")
@@ -200,6 +204,8 @@ async def reload_config():
     Returns:
         Success message
     """
+    return {"status": "disabled"}
+
     try:
         # TODO: Implement config reload
         logger.info("Config reload requested")

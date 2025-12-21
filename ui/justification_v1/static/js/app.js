@@ -12,6 +12,10 @@ Justification Channel v1:
 */
 
 const SEPARATOR = "────────────────────────────────────────────────────────────";
+const GOODQ_UI_VERSION =
+  typeof window !== "undefined" && typeof window.GOODQ_UI_VERSION === "string" && window.GOODQ_UI_VERSION.trim()
+    ? window.GOODQ_UI_VERSION.trim()
+    : "justification-ui-v1.0.3";
 
 /**
  * @param {unknown} v
@@ -754,6 +758,101 @@ const GoodQStateHistory = [];
 let _overlayRef = null;
 let _overlayPreRef = null;
 let _keyListenerBound = false;
+let _lastInspectorDiagnostics = { order_fingerprint: "", warnings: [] };
+
+/**
+ * @param {any} envelope
+ * @returns {number}
+ */
+function countEvidenceHits(envelope) {
+  if (!envelope || typeof envelope !== "object") return 0;
+  const outcome = String(envelope.outcome || "");
+  if (outcome === "answer") {
+    const candidates = Array.isArray(envelope.candidates) ? envelope.candidates : [];
+    let n = 0;
+    for (const cand of candidates) {
+      const evidence = cand && typeof cand === "object" && Array.isArray(cand.evidence) ? cand.evidence : [];
+      n += evidence.length;
+    }
+    return n;
+  }
+  if (outcome === "dont_know" && envelope.dont_know && typeof envelope.dont_know === "object") {
+    const dkEvidence = Array.isArray(envelope.dont_know.evidence) ? envelope.dont_know.evidence : [];
+    return dkEvidence.length;
+  }
+  return 0;
+}
+
+/**
+ * Extract a minimal, safe diagnostics snapshot (no raw payloads, no paths).
+ * @param {string} diagnosticsText
+ * @returns {{order_fingerprint: string, warnings: string[]}}
+ */
+function extractInspectorDiagnostics(diagnosticsText) {
+  const txt = String(diagnosticsText || "");
+  const m = txt.match(/^order_fingerprint:\s*(.+)$/m);
+  const order_fingerprint = m ? m[1].trim() : "";
+
+  /** @type {string[]} */
+  const warnings = [];
+  const seen = new Set();
+  let inWarnings = false;
+  for (const line of txt.split("\n")) {
+    const trimmed = String(line || "").trim();
+    if (!inWarnings) {
+      if (trimmed === "warnings:") inWarnings = true;
+      continue;
+    }
+    if (!trimmed || trimmed === "∅") continue;
+    const wm = trimmed.match(/^-\s*(.+)$/);
+    if (!wm) continue;
+    const raw = wm[1];
+    const code = String(raw).split(":")[0].trim();
+    if (!code || seen.has(code)) continue;
+    seen.add(code);
+    warnings.push(code);
+  }
+  return { order_fingerprint, warnings };
+}
+
+/**
+ * Observer-only hook. Never blocks rendering.
+ * @param {string} eventType
+ * @param {string} source
+ * @param {any} state
+ * @param {{order_fingerprint: string, warnings: string[]}} diagnostics
+ */
+function emitInspectorEvent(eventType, source, state, diagnostics) {
+  try {
+    const inspector = window.GoodQInspector;
+    if (!inspector || typeof inspector.observe !== "function") return;
+    if (typeof inspector.isEnabled === "function" && !inspector.isEnabled()) return;
+
+    const envelope = state && state.envelope ? state.envelope : {};
+    const candidates = Array.isArray(envelope.candidates) ? envelope.candidates : [];
+    const nonActionCount = state && Array.isArray(state.nonActionDecisions) ? state.nonActionDecisions.length : 0;
+    const diag = diagnostics && typeof diagnostics === "object" ? diagnostics : { order_fingerprint: "", warnings: [] };
+
+    inspector.observe({
+      ts_utc: new Date().toISOString(),
+      ui_version: GOODQ_UI_VERSION,
+      event_type: String(eventType || ""),
+      source: String(source || ""),
+      last_render_ts_utc: state && typeof state.updatedAt === "string" ? state.updatedAt : "",
+      counts: {
+        candidates: candidates.length,
+        evidence_hits: countEvidenceHits(envelope),
+        non_action_decisions: nonActionCount,
+      },
+      diagnostics: {
+        order_fingerprint: String(diag.order_fingerprint || ""),
+        warnings: Array.isArray(diag.warnings) ? diag.warnings : [],
+      },
+    });
+  } catch {
+    // Best-effort only.
+  }
+}
 
 /**
  * @param {any} obj
@@ -1010,9 +1109,10 @@ function renderState(state) {
   renderStructuredView(rendered);
 
   ensureOverlayRefs();
-  if (_overlayPreRef) {
-    _overlayPreRef.textContent = buildDiagnosticsText(state.envelope, state.nonActionDecisions || [], state.updatedAt);
-  }
+  const diagnosticsText = buildDiagnosticsText(state.envelope, state.nonActionDecisions || [], state.updatedAt);
+  if (_overlayPreRef) _overlayPreRef.textContent = diagnosticsText;
+  _lastInspectorDiagnostics = extractInspectorDiagnostics(diagnosticsText);
+  emitInspectorEvent("diagnostics_update", "renderState", state, _lastInspectorDiagnostics);
 }
 
 /**
@@ -1021,6 +1121,7 @@ function renderState(state) {
  * @returns {any} frozen state
  */
 function loadState(newState) {
+  const isInitial = GoodQState === null;
   assertStateShape(newState);
   deepFreeze(newState);
 
@@ -1038,6 +1139,7 @@ function loadState(newState) {
 
   window.GoodQState = state;
   renderState(state);
+  emitInspectorEvent(isInitial ? "initial_render" : "state_transition", "loadState", state, _lastInspectorDiagnostics);
   return state;
 }
 

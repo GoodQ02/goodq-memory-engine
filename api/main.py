@@ -11,7 +11,7 @@ from collections import deque
 import glob
 import glob
 
-from fastapi import FastAPI, Query, Body
+from fastapi import FastAPI, Query, Body, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -1484,5 +1484,32 @@ Be concise, technical, and actionable. Format responses with markdown."""
             "response": "Control Agent is currently unavailable. Please check that vLLM or Ollama is running.",
             "timestamp": __import__('datetime').datetime.now().isoformat()
         }
+
+# Read-only wiring: serve a precomputed EpistemicReadEnvelope bundle without accepting arbitrary queries/commands.
+@app.get("/api/read/envelope")
+def read_epistemic_envelope() -> Dict[str, Any]:
+    bundle_path = os.environ.get("GOODQ_READONLY_ENVELOPE_PATH", "").strip()
+    if not bundle_path:
+        raise HTTPException(status_code=404, detail="Envelope bundle not configured (set GOODQ_READONLY_ENVELOPE_PATH).")
+
+    p = Path(bundle_path)
+    if not p.is_file():
+        raise HTTPException(status_code=404, detail="Envelope bundle not found.")
+
+    try:
+        data = json.loads(p.read_text(encoding="utf-8"))
+    except Exception:
+        raise HTTPException(status_code=400, detail="Envelope bundle is not valid JSON.")
+
+    if not isinstance(data, dict) or "envelope" not in data:
+        raise HTTPException(status_code=400, detail="Envelope bundle must be an object with key 'envelope'.")
+
+    decisions = data.get("nonActionDecisions", data.get("non_action_decisions", []))
+    if decisions is None:
+        decisions = []
+    if not isinstance(decisions, list):
+        raise HTTPException(status_code=400, detail="Envelope bundle decisions must be a list.")
+
+    return {"envelope": data["envelope"], "nonActionDecisions": decisions}
 
 # Legacy UI/log static mounts intentionally disabled.

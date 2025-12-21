@@ -8,7 +8,7 @@ Hardening harness (integrity-only; no semantics change):
 
 Justification Channel v1:
 - Renders EpistemicReadEnvelope + NonActionDecision[] in a text-first, truth-preserving format.
-- No actions, no API calls, no fetching, no sorting, no filtering.
+- No ingestion/training/agent actions; explicit read-only envelope loading only; no sorting, no filtering.
 */
 
 const SEPARATOR = "────────────────────────────────────────────────────────────";
@@ -1197,6 +1197,352 @@ function ensureKeyListener() {
   });
 }
 
+/**
+ * Build a structural dont_know envelope for source-load failures (no stack traces; no guesses).
+ * @param {string} sourceLabel
+ * @param {string} errorCode
+ * @returns {any}
+ */
+function buildSourceFailureEnvelope(sourceLabel, errorCode) {
+  const code = String(errorCode || "source_load_failed");
+  const src = String(sourceLabel || "unknown-source");
+  return {
+    read_model_version: 1,
+    question: { text: "" },
+    retrieval_context: `system.ui.source_load:${src}`,
+    outcome: "dont_know",
+    candidates: [],
+    dont_know: {
+      state: "unknown",
+      explanation: `source_load_failed:${code}`,
+      evidence: [],
+      limits: [`source:${src}`, `error:${code}`],
+      next_steps: [
+        {
+          action: "switch to example source",
+          rationale: "Restore a known-good envelope for UI verification",
+          scope: { source: "example" },
+        },
+      ],
+    },
+  };
+}
+
+/**
+ * Build a minimal NonActionDecision requiring defer on source-load failures.
+ * @param {string} errorCode
+ * @returns {any[]}
+ */
+function buildSourceFailureDecisions(errorCode) {
+  const code = String(errorCode || "source_load_failed");
+  return [
+    {
+      contract_version: 1,
+      domain: "answer",
+      condition: "ui_source_load_failed",
+      required_response: "defer",
+      rationale: { error_code: code },
+    },
+  ];
+}
+
+/**
+ * @param {string} sourceLabel
+ * @param {string} errorCode
+ */
+function renderSourceFailure(sourceLabel, errorCode) {
+  const envelope = buildSourceFailureEnvelope(sourceLabel, errorCode);
+  const decisions = buildSourceFailureDecisions(errorCode);
+  replaceEnvelope(envelope, decisions, sourceLabel);
+}
+
+/**
+ * @param {unknown} raw
+ * @returns {string}
+ */
+function normalizeSourceKey(raw) {
+  const s = String(raw || "").trim().toLowerCase();
+  if (s === "file" || s === "local-json" || s === "local_json") return "file";
+  if (s === "api" || s === "api-readonly" || s === "api_readonly") return "api";
+  return "example";
+}
+
+/**
+ * Disallow absolute/suspicious paths; only allow relative-ish URLs for local JSON loading.
+ * @param {unknown} raw
+ * @returns {string|null}
+ */
+function sanitizeLocalJsonPath(raw) {
+  const s = String(raw || "").trim();
+  if (!s) return null;
+
+  const p = s.replace(/\\/g, "/");
+  if (p.includes("://")) return null;
+  if (p.startsWith("//")) return null;
+  if (/^[A-Za-z]:\//.test(p)) return null;
+  if (p.startsWith("\\\\")) return null;
+  if (p.split("/").some((seg) => seg === "..")) return null;
+
+  return p;
+}
+
+/**
+ * @param {any} data
+ * @returns {{envelope:any, decisions:any[]}}
+ */
+function extractEnvelopeBundle(data) {
+  if (!data || typeof data !== "object") throw new Error("bundle_invalid");
+  if (!("envelope" in data)) throw new Error("bundle_missing_envelope");
+  const envelope = data.envelope;
+  const decisions =
+    (Array.isArray(data.nonActionDecisions) && data.nonActionDecisions) ||
+    (Array.isArray(data.non_action_decisions) && data.non_action_decisions) ||
+    [];
+  if (!envelope || typeof envelope !== "object") throw new Error("bundle_envelope_invalid");
+  if (!Array.isArray(decisions)) throw new Error("bundle_decisions_invalid");
+  return { envelope, decisions };
+}
+
+async function loadExampleSource() {
+  replaceEnvelope(EXAMPLE.envelope, EXAMPLE.nonActionDecisions || [], "example");
+}
+
+/**
+ * Load EpistemicReadEnvelope + NonActionDecision[] from a local JSON file URL (explicit).
+ * @param {string} rawPath
+ */
+async function loadLocalJsonSource(rawPath) {
+  const safePath = sanitizeLocalJsonPath(rawPath);
+  if (!safePath) {
+    renderSourceFailure("local-json", "file_path_invalid");
+    return;
+  }
+
+  let url = "";
+  try {
+    url = new URL(safePath, window.location.href).toString();
+  } catch {
+    renderSourceFailure("local-json", "file_url_invalid");
+    return;
+  }
+
+  try {
+    const resp = await fetch(url, { cache: "no-store" });
+    if (!resp.ok) {
+      renderSourceFailure("local-json", `file_fetch_http_${resp.status}`);
+      return;
+    }
+    let data = null;
+    try {
+      data = await resp.json();
+    } catch {
+      renderSourceFailure("local-json", "file_json_parse_error");
+      return;
+    }
+
+    let envelope = null;
+    let decisions = [];
+    try {
+      ({ envelope, decisions } = extractEnvelopeBundle(data));
+    } catch (e) {
+      const msg = e && typeof e === "object" && "message" in e ? String(e.message || "") : "";
+      const code = msg && msg.startsWith("bundle_") ? `file_schema_${msg}` : "file_schema_invalid";
+      renderSourceFailure("local-json", code);
+      return;
+    }
+    replaceEnvelope(envelope, decisions, "local-json");
+  } catch {
+    renderSourceFailure("local-json", "file_fetch_error");
+  }
+}
+
+/**
+ * Resolve read-only API endpoint URL. Avoid assumptions when running from file:// origin.
+ * @param {string} apiBase
+ * @returns {string|null}
+ */
+function resolveReadonlyApiUrl(apiBase) {
+  const base = String(apiBase || "").trim();
+  if (base) {
+    try {
+      return new URL("/api/read/envelope", base).toString();
+    } catch {
+      return null;
+    }
+  }
+  try {
+    if (window.location && window.location.origin && window.location.origin !== "null") {
+      return new URL("/api/read/envelope", window.location.origin).toString();
+    }
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
+/**
+ * Load EpistemicReadEnvelope + NonActionDecision[] from the read-only API endpoint (explicit).
+ * @param {string} apiBase
+ */
+async function loadApiReadonlySource(apiBase) {
+  const url = resolveReadonlyApiUrl(apiBase);
+  if (!url) {
+    renderSourceFailure("api-readonly", "api_url_unavailable");
+    return;
+  }
+  try {
+    const resp = await fetch(url, { cache: "no-store" });
+    if (!resp.ok) {
+      renderSourceFailure("api-readonly", `api_fetch_http_${resp.status}`);
+      return;
+    }
+    let data = null;
+    try {
+      data = await resp.json();
+    } catch {
+      renderSourceFailure("api-readonly", "api_json_parse_error");
+      return;
+    }
+
+    let envelope = null;
+    let decisions = [];
+    try {
+      ({ envelope, decisions } = extractEnvelopeBundle(data));
+    } catch (e) {
+      const msg = e && typeof e === "object" && "message" in e ? String(e.message || "") : "";
+      const code = msg && msg.startsWith("bundle_") ? `api_schema_${msg}` : "api_schema_invalid";
+      renderSourceFailure("api-readonly", code);
+      return;
+    }
+    replaceEnvelope(envelope, decisions, "api-readonly");
+  } catch {
+    renderSourceFailure("api-readonly", "api_fetch_error");
+  }
+}
+
+/**
+ * Create a tiny source selector UI (read-only wiring; no actions beyond switching inputs).
+ * @returns {{select: HTMLSelectElement, path: HTMLInputElement, apiBase: HTMLInputElement, status: HTMLElement} | null}
+ */
+function ensureSourceControls() {
+  const root = document.getElementById("jc-controls");
+  if (!root) return null;
+  if (root.getAttribute("data-jc-bound") === "1") {
+    const select = /** @type {HTMLSelectElement|null} */ (document.getElementById("jc-source-select"));
+    const path = /** @type {HTMLInputElement|null} */ (document.getElementById("jc-source-path"));
+    const apiBase = /** @type {HTMLInputElement|null} */ (document.getElementById("jc-api-base"));
+    const status = /** @type {HTMLElement|null} */ (document.getElementById("jc-source-status"));
+    if (select && path && apiBase && status) return { select, path, apiBase, status };
+  }
+
+  root.setAttribute("data-jc-bound", "1");
+  root.style.margin = "0 0 0.75rem 0";
+
+  const wrap = document.createElement("div");
+  wrap.style.display = "flex";
+  wrap.style.flexWrap = "wrap";
+  wrap.style.gap = "0.5rem 0.75rem";
+  wrap.style.alignItems = "center";
+
+  const label = document.createElement("label");
+  label.textContent = "source:";
+  label.htmlFor = "jc-source-select";
+
+  const select = document.createElement("select");
+  select.id = "jc-source-select";
+  select.appendChild(new Option("example", "example"));
+  select.appendChild(new Option("local JSON", "file"));
+  select.appendChild(new Option("read-only API", "api"));
+
+  const path = document.createElement("input");
+  path.id = "jc-source-path";
+  path.type = "text";
+  path.placeholder = "path/to/envelope.json";
+  path.size = 36;
+
+  const apiBase = document.createElement("input");
+  apiBase.id = "jc-api-base";
+  apiBase.type = "text";
+  apiBase.placeholder = "api base (optional)";
+  apiBase.size = 26;
+
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.textContent = "load";
+
+  const status = document.createElement("span");
+  status.id = "jc-source-status";
+  status.textContent = "source: example";
+
+  function updateVisibility() {
+    const v = normalizeSourceKey(select.value);
+    path.style.display = v === "file" ? "inline-block" : "none";
+    apiBase.style.display = v === "api" ? "inline-block" : "none";
+  }
+
+  async function performLoad() {
+    const v = normalizeSourceKey(select.value);
+    if (v === "example") {
+      await loadExampleSource();
+      status.textContent = "source: example";
+      return;
+    }
+    if (v === "file") {
+      await loadLocalJsonSource(path.value);
+      status.textContent = "source: local-json";
+      return;
+    }
+    if (v === "api") {
+      await loadApiReadonlySource(apiBase.value);
+      status.textContent = "source: api-readonly";
+      return;
+    }
+    await loadExampleSource();
+    status.textContent = "source: example";
+  }
+
+  select.addEventListener("change", () => {
+    updateVisibility();
+  });
+  btn.addEventListener("click", () => {
+    performLoad();
+  });
+  path.addEventListener("keydown", (e) => {
+    if (e && e.key === "Enter") performLoad();
+  });
+  apiBase.addEventListener("keydown", (e) => {
+    if (e && e.key === "Enter") performLoad();
+  });
+
+  wrap.appendChild(label);
+  wrap.appendChild(select);
+  wrap.appendChild(path);
+  wrap.appendChild(apiBase);
+  wrap.appendChild(btn);
+  wrap.appendChild(status);
+  root.appendChild(wrap);
+
+  updateVisibility();
+  return { select, path, apiBase, status };
+}
+
+/**
+ * @returns {{sourceKey: string, path: string, apiBase: string}}
+ */
+function readSourceParams() {
+  try {
+    const params = new URLSearchParams(String(window.location && window.location.search ? window.location.search : ""));
+    const sourceKey = normalizeSourceKey(params.get("source"));
+    return {
+      sourceKey,
+      path: String(params.get("path") || ""),
+      apiBase: String(params.get("api_base") || ""),
+    };
+  } catch {
+    return { sourceKey: "example", path: "", apiBase: "" };
+  }
+}
+
 window.GoodQJustification = {
   renderJustificationText,
   EXAMPLE,
@@ -1206,9 +1552,26 @@ window.GoodQJustification = {
   getStateHistory,
 };
 
-function main() {
+async function main() {
   ensureKeyListener();
-  replaceEnvelope(EXAMPLE.envelope, EXAMPLE.nonActionDecisions || [], "hardcoded-example");
+  const controls = ensureSourceControls();
+  const params = readSourceParams();
+
+  if (controls) {
+    controls.select.value = params.sourceKey;
+    if (params.path) controls.path.value = params.path;
+    if (params.apiBase) controls.apiBase.value = params.apiBase;
+  }
+
+  if (params.sourceKey === "file") {
+    await loadLocalJsonSource(params.path);
+    return;
+  }
+  if (params.sourceKey === "api") {
+    await loadApiReadonlySource(params.apiBase);
+    return;
+  }
+  await loadExampleSource();
 }
 
 main();

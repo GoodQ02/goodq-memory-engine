@@ -1,7 +1,7 @@
-# Basement Phase Handoff (v1)
+# Basement Phase Handoff (v1) — Current System State
 
-**Status:** Basement phase sealed (integrity + observability + conduits + sensitive wiring).  
-**Scope:** Administrative + contract + tooling hardening; no UI, no policy coupling.
+**Status:** Basement phase sealed + truth plumbing sealed (read-only).  
+**Scope:** Integrity + observability + contracts + read-only UI truth layer; no execution authority, no policy coupling.
 
 ---
 
@@ -10,10 +10,24 @@
 The “Basement Phase” established the non-negotiable foundation for GoodQ:
 - **Memory Integrity v1:** auditable writes, explainable reads, and inert observability (no reinforcement/policy yet).
 - **Epistemic representation:** a stable contract for how answers/evidence/limits are represented (schema + semantics).
+- **Truth layer UI (read-only):** a deterministic Justification Channel that renders envelopes literally (no actions).
+- **Comparative understanding (read-only):** structural diffs between two envelopes without implying correctness.
 - **UI-safe conduits:** additive, whitelisted, path-sanitized derived tables/views for later UI/visualization layers.
 - **Sensitive-source wiring:** schema + vault boundary contracts for chat/health/wearables (no ingestion).
 - **Deterministic execution:** explicit interpreter binding for conda + WSL invocations (no PATH drift).
 - **Model storeroom tooling:** pin/verify ML model revisions + hashes for offline-repeatable operation.
+
+---
+
+## Version Anchors (Tags)
+
+- `basement-v1.0.0` — integrity foundation + observability + conduits + sensitive wiring + interpreter bindings + model tooling.
+- `non-action-v1.0.0` — Non-Action Contract v1 (declarative restraint; no enforcement).
+- `justification-ui-v1.0.3` — Justification Channel v1 (literal renderer + safety substrate + navigation hardening).
+- `goodq-inspector-v0.1.0` — GoodQ Inspector v0 (observer-only UI maintenance).
+- `justification-readonly-v1.0.0` — Read-Only Wiring Phase v1 (explicit data sources; honest dont_know failures).
+- `epistemic-diff-v1.0.0` — Epistemic Diff Engine v1 (structural comparison).
+- `system-map-v1.0.0` — System Map v1 (authoritative orientation): `docs/architecture/SYSTEM_MAP_v1.md`.
 
 ---
 
@@ -43,10 +57,23 @@ The “Basement Phase” established the non-negotiable foundation for GoodQ:
 - **Pure evaluator (no wiring):** `steps/common/non_action_contract.py`
 - **Note:** declarative only; enforcement is deferred by design; future UI/agents/pipelines must consult this contract.
 
-### UI reset (clean slate prep)
+### UI truth layer (read-only; invariant-safe)
 
 - **Legacy UI archived:** `archive/legacy_ui/README.md`
-- **Justification Channel v1 (literal renderer):** `ui/justification_v1/` (No API wiring yet; hardcoded example only.)
+- **Justification Channel v1:** `ui/justification_v1/` (literal renderer; no actions)
+- **Integrity harness + golden test:** `ui/justification_v1/static/js/integrity.js`, `ui/justification_v1/static/js/test_render.js`
+- **GoodQ Inspector v0 (observer-only):** `ui/justification_v1/inspector/`
+- **Read-only wiring (explicit sources):** `justification-readonly-v1.0.0` (`GET /api/read/envelope` + local JSON loader)
+
+### Comparative understanding (read-only diffs)
+
+- **Epistemic Diff Engine v1:** `steps/common/epistemic_diff.py`
+- **Tests:** `tests/unit/test_epistemic_diff_smoke.py`
+
+### System Map (authoritative orientation)
+
+- **Contract map:** `docs/architecture/SYSTEM_MAP_v1.md`
+- **Witness proof:** `docs/proof_of_concept/WITNESS_RUN_001.md`
 
 ### Conduit Pack v1 (UI-safe, whitelisted)
 
@@ -110,6 +137,13 @@ These are intentionally *not* wired into ingestion yet:
 
 ## E) How To Resume Safely
 
+### Orientation (read first)
+
+- `docs/architecture/SYSTEM_MAP_v1.md`
+- `docs/architecture/MEMORY_STORAGE.md`
+- `docs/architecture/EPISTEMIC_READ_MODEL.md`
+- `docs/architecture/NON_ACTION_CONTRACT.md`
+
 ### Build/refresh UI-safe conduits (no ingestion)
 
 1) Build all conduit schemas:
@@ -121,6 +155,25 @@ These are intentionally *not* wired into ingestion yet:
 3) Build observability rollups (optional; additive):
 - `python -m cli.observability_rollup`
 - `python -m cli.observability_rollup --commits`
+
+### Run the Justification Channel (read-only; no power)
+
+- Open: `ui/justification_v1/index.html`
+- Golden render check (browser console):
+  - Load `ui/justification_v1/static/js/test_render.js` and run `GoodQJustificationTests.run()`
+- Enable Inspector v0 (observer-only):
+  - `?inspector=1` (or set `window.GOODQ_INSPECTOR_ENABLED = true` in console)
+- Load a local bundle (explicit):
+  - `ui/justification_v1/index.html?source=file&path=<relative_bundle.json>`
+  - Bundle shape: `{ "envelope": {...}, "nonActionDecisions": [...] }`
+- Load from read-only API (explicit):
+  - Set `GOODQ_READONLY_ENVELOPE_PATH` to a precomputed bundle JSON path
+  - Run API: `python api/server.py` (default port `30000`)
+  - Open UI: `ui/justification_v1/index.html?source=api&api_base=http://localhost:30000`
+
+### Run Epistemic diff smoke tests (read-only)
+
+- `python -m pytest tests/unit/test_epistemic_diff_smoke.py -q`
 
 ### Run the Health Auto Export adapter (dry-run only)
 
@@ -144,11 +197,15 @@ This prints counts by category/name and a UTC date range. It does not write to d
 ## F) Key Directories & Files
 
 - **Architecture + doctrine:** `docs/architecture/`
+- **System map:** `docs/architecture/SYSTEM_MAP_v1.md`
 - **Basement operating protocol:** `docs/AGENTS.md`
 - **Memory/observability core:** `steps/common/`
+- **Epistemic diff engine:** `steps/common/epistemic_diff.py`
 - **Conduit builders + rollups:** `cli/conduits_build.py`, `cli/ui_conduits_rollup.py`, `cli/observability_rollup.py`
 - **Sensitive-source contracts:** `docs/architecture/CANONICAL_SENSITIVE_EVENTS.md`, `docs/architecture/VAULT_TOKEN_RESOLVER_CONTRACT.md`
 - **Sensitive schema stubs:** `steps/common/canonical_sensitive_events.py`
 - **Health adapter (dry-run):** `steps/health_auto_export/adapter.py`
+- **Justification Channel UI:** `ui/justification_v1/`
+- **Inspector v0:** `ui/justification_v1/inspector/`
 - **Interpreter binding helpers:** `scripts/_lib/interpreter_bindings.ps1`, `scripts/_lib/interpreter_bindings.bat`
 - **Model pin/verify tooling:** `configs/model_registry.yaml`, `scripts/pin_model_versions.py`, `scripts/utils/verify_model_lockdown.py`

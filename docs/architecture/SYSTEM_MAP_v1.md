@@ -102,6 +102,7 @@ It describes what exists now, how the system is layered, where connections are a
 
 ### D) Connection Points
 - **Frozen at tags:** `justification-ui-v1.0.0`, `justification-ui-v1.0.2`, `justification-ui-v1.0.3`
+- **Comparative Rendering v1 (UI) frozen at tag:** `justification-diff-ui-v1.0.0`
 - **Implementation:** `ui/justification_v1/index.html`, `ui/justification_v1/static/js/app.js`
 - **Integrity harness:** `ui/justification_v1/static/js/integrity.js`
 - **Golden test:** `ui/justification_v1/static/js/test_render.js`
@@ -195,4 +196,3 @@ It describes what exists now, how the system is layered, where connections are a
 - **Training / fine-tuning / dataset export:** deferred because sensitive sources are vault-only and exports require explicit manifests + human approval.
 - **Live sensor ingestion (wearables/health/chat):** deferred pending adapters and staging rules that guarantee no raw content leaks into memory/KG/UI conduits.
 - **Narrative / persuasive output:** deferred to avoid “sounding confident” without evidence; future presentation layers must remain evidence-first and contract-bound.
-

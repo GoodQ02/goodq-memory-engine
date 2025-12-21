@@ -30,7 +30,9 @@ class WSL2AudioBridge:
             parts = wsl_path[5:].split("/", 1)
             drive = parts[0].upper()
             rest = parts[1] if len(parts) > 1 else ""
-            return f"{drive}:\\{rest.replace('/', '\\')}"
+            # Avoid backslashes inside f-string expressions (invalid syntax).
+            rest_win = rest.replace("/", "\\")
+            return f"{drive}:\\{rest_win}"
         return wsl_path
         
     def process_audio(self, audio_file, output_file=None, timeout=None, audio_duration=None):

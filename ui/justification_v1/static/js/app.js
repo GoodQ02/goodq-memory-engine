@@ -1,6 +1,11 @@
 /*
 This renderer assembles epistemic structure only. It must not be used to gate, rank, filter, or refuse.
 
+Hardening harness (integrity-only; no semantics change):
+- Validator + order fingerprint: ./integrity.js (diagnostics only; never enforced)
+- Diagnostics overlay toggle: press "D" (read-only; does not change <pre> output)
+- Golden test: load ./test_render.js then run `GoodQJustificationTests.run()` in console
+
 Justification Channel v1:
 - Renders EpistemicReadEnvelope + NonActionDecision[] in a text-first, truth-preserving format.
 - No actions, no API calls, no fetching, no sorting, no filtering.
@@ -462,6 +467,176 @@ function renderJustificationText(input) {
   return out.join("\n");
 }
 
+/**
+ * @param {any} envelope
+ * @param {any[]} decisions
+ * @param {string} lastRenderTs
+ * @returns {string}
+ */
+function buildDiagnosticsText(envelope, decisions, lastRenderTs) {
+  const candidates = Array.isArray(envelope.candidates) ? envelope.candidates : [];
+
+  // Flatten evidence in the same order the renderer would display it.
+  /** @type {any[]} */
+  const evidenceHits = [];
+  if (String(envelope.outcome) === "answer") {
+    for (const cand of candidates) {
+      const evidence = Array.isArray(cand.evidence) ? cand.evidence : [];
+      for (const ev of evidence) evidenceHits.push(ev);
+    }
+  } else if (String(envelope.outcome) === "dont_know" && envelope.dont_know && typeof envelope.dont_know === "object") {
+    const dkEvidence = Array.isArray(envelope.dont_know.evidence) ? envelope.dont_know.evidence : [];
+    for (const ev of dkEvidence) evidenceHits.push(ev);
+  }
+
+  // Aggregate limits in the same sources/order as the renderer.
+  /** @type {string[]} */
+  const aggregatedLimits = [];
+  const seenLimit = new Set();
+  for (const cand of candidates) {
+    if (Array.isArray(cand.limits)) {
+      for (const l of cand.limits) {
+        const s = String(l);
+        if (!seenLimit.has(s)) {
+          aggregatedLimits.push(s);
+          seenLimit.add(s);
+        }
+      }
+    }
+    const evidence = Array.isArray(cand.evidence) ? cand.evidence : [];
+    for (const ev of evidence) {
+      if (ev && typeof ev === "object" && Array.isArray(ev.limits)) {
+        for (const l of ev.limits) {
+          const s = String(l);
+          if (!seenLimit.has(s)) {
+            aggregatedLimits.push(s);
+            seenLimit.add(s);
+          }
+        }
+      }
+    }
+  }
+  if (envelope.dont_know && typeof envelope.dont_know === "object" && Array.isArray(envelope.dont_know.limits)) {
+    for (const l of envelope.dont_know.limits) {
+      const s = String(l);
+      if (!seenLimit.has(s)) {
+        aggregatedLimits.push(s);
+        seenLimit.add(s);
+      }
+    }
+  }
+
+  // Aggregate next steps (deduped) using the same key shape as the renderer.
+  /** @type {{action: string, scopeText: string}[]} */
+  const aggregatedNextSteps = [];
+  const seenNext = new Set();
+  const pushNext = (action, scopeText) => {
+    const key = `${action}::${scopeText || ""}`;
+    if (seenNext.has(key)) return;
+    seenNext.add(key);
+    aggregatedNextSteps.push({ action, scopeText });
+  };
+  for (const cand of candidates) {
+    if (Array.isArray(cand.next_steps)) {
+      for (const ns of cand.next_steps) {
+        if (!ns || typeof ns !== "object") continue;
+        const action = fmtScalar(ns.action);
+        let scopeText = "";
+        if (ns.scope && typeof ns.scope === "object" && Object.keys(ns.scope).length > 0) {
+          const parts = Object.keys(ns.scope).map((k) => `${k}=${fmtScalar(ns.scope[k])}`);
+          scopeText = `scope={${parts.join(", ")}}`;
+        }
+        pushNext(action, scopeText);
+      }
+    }
+  }
+  if (envelope.dont_know && typeof envelope.dont_know === "object" && Array.isArray(envelope.dont_know.next_steps)) {
+    for (const ns of envelope.dont_know.next_steps) {
+      if (!ns || typeof ns !== "object") continue;
+      const action = fmtScalar(ns.action);
+      let scopeText = "";
+      if (ns.scope && typeof ns.scope === "object" && Object.keys(ns.scope).length > 0) {
+        const parts = Object.keys(ns.scope).map((k) => `${k}=${fmtScalar(ns.scope[k])}`);
+        scopeText = `scope={${parts.join(", ")}}`;
+      }
+      pushNext(action, scopeText);
+    }
+  }
+
+  const integrity = window.GoodQIntegrity || null;
+  const warnings = [];
+  if (integrity && typeof integrity.validateEnvelope === "function") warnings.push(...integrity.validateEnvelope(envelope));
+  if (integrity && typeof integrity.validateNonAction === "function") warnings.push(...integrity.validateNonAction(decisions));
+
+  let fingerprint = "fnv1a32:00000000";
+  if (integrity && typeof integrity.computeOrderFingerprint === "function") {
+    fingerprint = integrity.computeOrderFingerprint(evidenceHits);
+  }
+
+  const lines = [];
+  lines.push("DIAGNOSTICS (toggle: D)");
+  lines.push(SEPARATOR);
+  lines.push(`read_model_version: ${fmtScalar(envelope.read_model_version)}`);
+  lines.push(`retrieval_context: ${envelope.retrieval_context ? String(envelope.retrieval_context) : "— (not provided)"}`);
+  lines.push(`outcome: ${fmtScalar(envelope.outcome)}`);
+  lines.push(
+    `counts: candidates=${candidates.length} evidence=${evidenceHits.length} limits=${aggregatedLimits.length} next_steps=${aggregatedNextSteps.length}`
+  );
+  lines.push(`order_fingerprint: ${fingerprint}`);
+  lines.push(`last_render_ts: ${lastRenderTs}`);
+  lines.push("warnings:");
+  if (warnings.length === 0) {
+    lines.push("  ∅");
+  } else {
+    for (const w of warnings) lines.push(`  - ${String(w)}`);
+  }
+  return lines.join("\n");
+}
+
+/**
+ * @returns {{overlay: HTMLDivElement, pre: HTMLPreElement}}
+ */
+function ensureDiagnosticsOverlay() {
+  let overlay = document.getElementById("jc-diagnostics-overlay");
+  if (overlay && overlay instanceof HTMLDivElement) {
+    const pre = overlay.querySelector("pre");
+    if (pre && pre instanceof HTMLPreElement) return { overlay, pre };
+  }
+
+  overlay = document.createElement("div");
+  overlay.id = "jc-diagnostics-overlay";
+  overlay.setAttribute("role", "dialog");
+  overlay.setAttribute("aria-label", "Diagnostics overlay");
+
+  // Minimal inline styling (no framework, no theming).
+  overlay.style.position = "fixed";
+  overlay.style.right = "1rem";
+  overlay.style.bottom = "1rem";
+  overlay.style.maxWidth = "52rem";
+  overlay.style.maxHeight = "70vh";
+  overlay.style.overflow = "auto";
+  overlay.style.padding = "0.75rem 1rem";
+  overlay.style.border = "1px solid #ccc";
+  overlay.style.background = "rgba(255, 255, 255, 0.97)";
+  overlay.style.display = "none";
+  overlay.style.zIndex = "9999";
+
+  const pre = document.createElement("pre");
+  pre.id = "jc-diagnostics-text";
+  pre.style.margin = "0";
+
+  overlay.appendChild(pre);
+  document.body.appendChild(overlay);
+  return { overlay, pre };
+}
+
+/**
+ * @param {HTMLDivElement} overlay
+ */
+function toggleDiagnosticsOverlay(overlay) {
+  overlay.style.display = overlay.style.display === "none" ? "block" : "none";
+}
+
 // Hardcoded example input (mockup data); no fetching or API calls.
 const EXAMPLE = {
   envelope: {
@@ -564,10 +739,154 @@ const EXAMPLE = {
   ],
 };
 
-function main() {
+window.GoodQJustification = {
+  renderJustificationText,
+  EXAMPLE,
+};
+
+// ---- State discipline harness (no API calls; no actions; no semantics changes) ----
+
+const GOODQ_STATE_HISTORY_MAX = 10;
+let GoodQState = null;
+/** @type {any[]} */
+const GoodQStateHistory = [];
+
+let _overlayRef = null;
+let _overlayPreRef = null;
+let _keyListenerBound = false;
+
+/**
+ * @param {any} obj
+ * @param {WeakSet<object>} [seen]
+ * @returns {any}
+ */
+function deepFreeze(obj, seen) {
+  if (!obj || typeof obj !== "object") return obj;
+  const s = seen || new WeakSet();
+  if (s.has(obj)) return obj;
+  s.add(obj);
+  if (Array.isArray(obj)) {
+    for (const item of obj) deepFreeze(item, s);
+  } else {
+    for (const k of Object.keys(obj)) deepFreeze(obj[k], s);
+  }
+  try {
+    Object.freeze(obj);
+  } catch {
+    // Best-effort only.
+  }
+  return obj;
+}
+
+/**
+ * @param {any} state
+ */
+function assertStateShape(state) {
+  if (!state || typeof state !== "object") throw new Error("GoodQState invalid: not an object");
+  if (!("envelope" in state)) throw new Error("GoodQState invalid: missing envelope");
+  if (!("nonActionDecisions" in state)) throw new Error("GoodQState invalid: missing nonActionDecisions");
+  if (!("sourceLabel" in state)) throw new Error("GoodQState invalid: missing sourceLabel");
+
+  if (!state.envelope || typeof state.envelope !== "object") throw new Error("GoodQState invalid: envelope must be object");
+  if (!Array.isArray(state.nonActionDecisions)) throw new Error("GoodQState invalid: nonActionDecisions must be array");
+  if (typeof state.sourceLabel !== "string" || !state.sourceLabel.trim()) {
+    throw new Error("GoodQState invalid: sourceLabel must be non-empty string");
+  }
+}
+
+function ensureOverlayRefs() {
+  const { overlay, pre } = ensureDiagnosticsOverlay();
+  _overlayRef = overlay;
+  _overlayPreRef = pre;
+}
+
+/**
+ * Render current state into the <pre> and diagnostics overlay.
+ * @param {any} state
+ */
+function renderState(state) {
   const el = document.getElementById("jc-output");
   if (!el) return;
-  el.textContent = renderJustificationText(EXAMPLE);
+
+  const rendered = renderJustificationText({ envelope: state.envelope, nonActionDecisions: state.nonActionDecisions });
+  el.textContent = rendered;
+
+  ensureOverlayRefs();
+  if (_overlayPreRef) {
+    _overlayPreRef.textContent = buildDiagnosticsText(state.envelope, state.nonActionDecisions || [], state.updatedAt);
+  }
+}
+
+/**
+ * Replace state in one operation; no partial updates.
+ * @param {any} newState
+ * @returns {any} frozen state
+ */
+function loadState(newState) {
+  assertStateShape(newState);
+  deepFreeze(newState);
+
+  const state = {
+    envelope: newState.envelope,
+    nonActionDecisions: newState.nonActionDecisions,
+    sourceLabel: String(newState.sourceLabel),
+    updatedAt: new Date().toISOString(),
+  };
+  deepFreeze(state);
+
+  GoodQState = state;
+  GoodQStateHistory.push(state);
+  while (GoodQStateHistory.length > GOODQ_STATE_HISTORY_MAX) GoodQStateHistory.shift();
+
+  window.GoodQState = state;
+  renderState(state);
+  return state;
+}
+
+/**
+ * Convenience transition: replace envelope + decisions together.
+ * @param {any} envelope
+ * @param {any[]} decisions
+ * @param {string} sourceLabel
+ * @returns {any}
+ */
+function replaceEnvelope(envelope, decisions, sourceLabel) {
+  return loadState({ envelope, nonActionDecisions: decisions, sourceLabel });
+}
+
+function getState() {
+  return GoodQState;
+}
+
+function getStateHistory() {
+  return GoodQStateHistory.slice();
+}
+
+function ensureKeyListener() {
+  if (_keyListenerBound) return;
+  _keyListenerBound = true;
+
+  document.addEventListener("keydown", (e) => {
+    const key = e && e.key ? String(e.key) : "";
+    if (key === "d" || key === "D") {
+      ensureOverlayRefs();
+      if (_overlayRef) toggleDiagnosticsOverlay(_overlayRef);
+    }
+  });
+}
+
+window.GoodQJustification = {
+  renderJustificationText,
+  EXAMPLE,
+  loadState,
+  replaceEnvelope,
+  getState,
+  getStateHistory,
+};
+
+function main() {
+  ensureKeyListener();
+  replaceEnvelope(EXAMPLE.envelope, EXAMPLE.nonActionDecisions || [], "hardcoded-example");
 }
 
 main();

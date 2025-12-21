@@ -37,6 +37,12 @@ The “Basement Phase” established the non-negotiable foundation for GoodQ:
 - **Contract:** `docs/architecture/EPISTEMIC_READ_MODEL.md`
 - **Deterministic formatter (non-authoritative):** `steps/common/epistemic_formatter.py`
 
+### Non-Action Contract v1 (declarative restraint; no enforcement)
+
+- **Contract:** `docs/architecture/NON_ACTION_CONTRACT.md`
+- **Pure evaluator (no wiring):** `steps/common/non_action_contract.py`
+- **Note:** declarative only; enforcement is deferred by design; future UI/agents/pipelines must consult this contract.
+
 ### Conduit Pack v1 (UI-safe, whitelisted)
 
 - **Builder:** `python -m cli.conduits_build` (`cli/conduits_build.py`)
@@ -141,4 +147,3 @@ This prints counts by category/name and a UTC date range. It does not write to d
 - **Health adapter (dry-run):** `steps/health_auto_export/adapter.py`
 - **Interpreter binding helpers:** `scripts/_lib/interpreter_bindings.ps1`, `scripts/_lib/interpreter_bindings.bat`
 - **Model pin/verify tooling:** `configs/model_registry.yaml`, `scripts/pin_model_versions.py`, `scripts/utils/verify_model_lockdown.py`
-

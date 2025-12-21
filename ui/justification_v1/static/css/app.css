@@ -1,10 +1,11 @@
-/* Justification Channel v1 (scaffold) */
+/* Justification Channel v1 (text-first; no UI behavior). */
 body {
-  font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
-  margin: 2rem;
-}
-
-code {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New",
     monospace;
+  margin: 1.25rem;
+}
+
+pre {
+  margin: 0;
+  white-space: pre;
 }

@@ -46,7 +46,7 @@ The “Basement Phase” established the non-negotiable foundation for GoodQ:
 ### UI reset (clean slate prep)
 
 - **Legacy UI archived:** `archive/legacy_ui/README.md`
-- **Only supported UI direction:** `ui/justification_v1/` (scaffold only; consumes `EpistemicReadEnvelope`, `NonActionDecision`, and `_public` conduits)
+- **Justification Channel v1 (literal renderer):** `ui/justification_v1/` (No API wiring yet; hardcoded example only.)
 
 ### Conduit Pack v1 (UI-safe, whitelisted)
 

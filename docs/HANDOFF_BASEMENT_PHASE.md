@@ -163,6 +163,9 @@ These are intentionally *not* wired into ingestion yet:
   - Load `ui/justification_v1/static/js/test_render.js` and run `GoodQJustificationTests.run()`
 - Enable Inspector v0 (observer-only):
   - `?inspector=1` (or set `window.GOODQ_INSPECTOR_ENABLED = true` in console)
+- Comparison mode (EpistemicDiff v1 renderer; read-only):
+  - `ui/justification_v1/index.html?mode=compare&diff_source=file&diff_path=<relative_diff.json>`
+  - Diff JSON must conform to EpistemicDiff v1 (output of `steps/common/epistemic_diff.py`)
 - Load a local bundle (explicit):
   - `ui/justification_v1/index.html?source=file&path=<relative_bundle.json>`
   - Bundle shape: `{ "envelope": {...}, "nonActionDecisions": [...] }`

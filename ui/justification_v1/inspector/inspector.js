@@ -58,6 +58,10 @@ No actions. No suggestions. No network calls.
     const o = obs && typeof obs === "object" ? obs : {};
     const counts = o.counts && typeof o.counts === "object" ? o.counts : {};
     const diag = o.diagnostics && typeof o.diagnostics === "object" ? o.diagnostics : {};
+    const cmp = o.comparison && typeof o.comparison === "object" ? o.comparison : {};
+
+    const diffCodesRaw = Array.isArray(cmp.diff_codes) ? cmp.diff_codes : [];
+    const diff_codes = diffCodesRaw.map((c) => safeStr(c)).filter((s) => s.trim().length > 0).slice(0, 64);
 
     return {
       ts_utc: safeStr(o.ts_utc),
@@ -74,6 +78,16 @@ No actions. No suggestions. No network calls.
       diagnostics: {
         order_fingerprint: safeStr(diag.order_fingerprint),
         warnings: toWarningCodes(diag.warnings),
+      },
+      comparison: {
+        diff_version: Number.isFinite(cmp.diff_version) ? cmp.diff_version : 0,
+        diff_total: Number.isFinite(cmp.diff_total) ? cmp.diff_total : 0,
+        diff_codes,
+        identity_type: safeStr(cmp.identity_type),
+        identity_matches: typeof cmp.identity_matches === "boolean" ? cmp.identity_matches : null,
+        order_fingerprint_a: safeStr(cmp.order_fingerprint_a),
+        order_fingerprint_b: safeStr(cmp.order_fingerprint_b),
+        error_code: safeStr(cmp.error_code),
       },
     };
   }
@@ -179,4 +193,3 @@ No actions. No suggestions. No network calls.
     version: INSPECTOR_VERSION,
   };
 })();
-

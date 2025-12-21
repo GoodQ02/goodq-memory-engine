@@ -471,6 +471,177 @@ function renderJustificationText(input) {
   return out.join("\n");
 }
 
+// ---- EpistemicDiff v1 renderer (comparison mode; text-first; no interpretation) ----
+
+/**
+ * @param {any} pointers
+ * @returns {string}
+ */
+function fmtDiffPointersInline(pointers) {
+  const p = pointers && typeof pointers === "object" ? pointers : {};
+  const keys = ["store", "store_ref", "modality", "model", "component"];
+  const parts = [];
+  for (const k of keys) {
+    if (k in p) parts.push(`${k}=${fmtScalar(p[k])}`);
+  }
+  return parts.length ? parts.join("  ") : "∅";
+}
+
+/**
+ * @param {any} side
+ * @returns {string[]}
+ */
+function fmtDiffSideLines(side) {
+  const s = side && typeof side === "object" ? side : null;
+  if (!s) return ["      ∅"];
+
+  const lines = [];
+  if (s.ts_utc) lines.push(`      ts_utc=${fmtScalar(s.ts_utc)}`);
+  if (s.role) lines.push(`      role=${fmtScalar(s.role)}`);
+  if (s.state) lines.push(`      state=${fmtScalar(s.state)}`);
+  if (s.pointers && typeof s.pointers === "object") {
+    lines.push(`      pointers: ${fmtDiffPointersInline(s.pointers)}`);
+  }
+  return lines.length ? lines : ["      ∅"];
+}
+
+/**
+ * Render EpistemicDiff v1 object (as produced by steps/common/epistemic_diff.py).
+ * This is visibility-only: structural change, no judgment.
+ *
+ * @param {{diff: any, nonActionDecisions: any[], errorCode?: string}} input
+ * @returns {string}
+ */
+function renderEpistemicDiffText(input) {
+  const diff = input && input.diff && typeof input.diff === "object" ? input.diff : null;
+  const decisions = Array.isArray(input && input.nonActionDecisions) ? input.nonActionDecisions : [];
+  const errorCode = input && typeof input.errorCode === "string" ? String(input.errorCode) : "";
+
+  /** @type {string[]} */
+  const out = [];
+
+  out.push("GOODQ — JUSTIFICATION CHANNEL v1 (comparison)");
+  out.push("EPISTEMIC DIFF v1");
+  out.push(SEPARATOR);
+
+  if (!diff) {
+    out.push("comparison_outcome: dont_know");
+    out.push(`explanation: ${errorCode || "compare_diff_missing"}`);
+    out.push("");
+  } else {
+    out.push(`diff_version: ${fmtScalar(diff.diff_version)}`);
+    out.push(`comparison_id: ${fmtScalar(diff.comparison_id)}`);
+    out.push(`initiated_ts_utc: ${fmtScalar(diff.initiated_ts_utc)}`);
+    out.push("");
+
+    const identity = diff.identity_basis && typeof diff.identity_basis === "object" ? diff.identity_basis : {};
+    out.push("IDENTITY BASIS");
+    out.push(SEPARATOR);
+    out.push(`type: ${fmtScalar(identity.type)}`);
+    out.push(`matches: ${fmtScalar(identity.matches)}`);
+    if (identity.mismatch_reason) out.push(`mismatch_reason: ${fmtScalar(identity.mismatch_reason)}`);
+    out.push(`details: ${fmtInlineObject(identity.details || {})}`);
+    out.push("");
+
+    const a = diff.envelope_a && typeof diff.envelope_a === "object" ? diff.envelope_a : {};
+    const b = diff.envelope_b && typeof diff.envelope_b === "object" ? diff.envelope_b : {};
+    out.push("A / B");
+    out.push(SEPARATOR);
+    out.push(`A.sourceLabel: ${fmtScalar(a.sourceLabel)}`);
+    out.push(`A.loaded_at_utc: ${fmtScalar(a.loaded_at_utc)}`);
+    out.push(`B.sourceLabel: ${fmtScalar(b.sourceLabel)}`);
+    out.push(`B.loaded_at_utc: ${fmtScalar(b.loaded_at_utc)}`);
+    out.push("");
+
+    out.push("SUMMARY");
+    out.push(SEPARATOR);
+    const outA = fmtScalar(a.outcome);
+    const outB = fmtScalar(b.outcome);
+    if (outA !== outB) out.push(`outcome: ${outA} → ${outB}`);
+    else out.push(`outcome: ${outA}`);
+
+    const ca = a.counts && typeof a.counts === "object" ? a.counts : {};
+    const cb = b.counts && typeof b.counts === "object" ? b.counts : {};
+    out.push(
+      `counts: A(candidates=${fmtScalar(ca.candidates)} evidence=${fmtScalar(ca.evidence_hits)} decisions=${fmtScalar(
+        ca.non_action_decisions
+      )})  B(candidates=${fmtScalar(cb.candidates)} evidence=${fmtScalar(cb.evidence_hits)} decisions=${fmtScalar(
+        cb.non_action_decisions
+      )})`
+    );
+    out.push(`diff_total: ${fmtScalar(diff.diff_total)}`);
+    out.push("");
+
+    out.push("CATEGORY SUMMARIES");
+    out.push(SEPARATOR);
+    const summaries = Array.isArray(diff.category_summaries) ? diff.category_summaries : [];
+    if (summaries.length === 0) {
+      out.push("  ∅");
+    } else {
+      for (const cs of summaries) {
+        const cat = cs && typeof cs === "object" ? cs : {};
+        out.push(
+          `- category=${fmtScalar(cat.category)}  presence=${fmtScalar(cat.presence)}  diff_count=${fmtScalar(
+            cat.diff_count
+          )}`
+        );
+      }
+    }
+    out.push("");
+
+    out.push("DIFFS");
+    out.push(SEPARATOR);
+    const diffs = Array.isArray(diff.diffs) ? diff.diffs : [];
+    if (diffs.length === 0) {
+      out.push("  ∅");
+      out.push("");
+    } else {
+      for (let i = 0; i < diffs.length; i++) {
+        const d = diffs[i] && typeof diffs[i] === "object" ? diffs[i] : {};
+        const key = d.key && typeof d.key === "object" ? d.key : {};
+        out.push(`[${i + 1}] category=${fmtScalar(d.category)}  diff_code=${fmtScalar(d.diff_code)}`);
+        out.push(`    key: type=${fmtScalar(key.type)}  value=${fmtScalar(key.value)}`);
+
+        out.push("    A:");
+        out.push(...fmtDiffSideLines(d.a));
+        out.push("    B:");
+        out.push(...fmtDiffSideLines(d.b));
+        out.push("");
+      }
+      if (out[out.length - 1] === "") out.pop();
+      out.push("");
+    }
+
+    out.push("ABSENCE");
+    out.push(SEPARATOR);
+    const absent = summaries.filter((cs) => cs && typeof cs === "object" && cs.presence === "absent_both");
+    if (absent.length === 0) {
+      out.push("  ∅");
+    } else {
+      for (const cs of absent) {
+        out.push(`- category=${fmtScalar(cs.category)}: ∅`);
+      }
+    }
+    out.push("");
+  }
+
+  // NON-ACTION DECISIONS (if any)
+  if (decisions.length > 0) {
+    out.push("NON-ACTION DECISIONS");
+    out.push(SEPARATOR);
+    for (let i = 0; i < decisions.length; i++) {
+      const d = decisions[i] && typeof decisions[i] === "object" ? decisions[i] : {};
+      out.push(`${i + 1}) domain=${fmtScalar(d.domain)}  required_response=${fmtScalar(d.required_response)}`);
+      out.push(`   condition=${fmtScalar(d.condition)}`);
+      out.push(`   rationale=${fmtInlineObject(d.rationale || {})}`);
+      out.push("");
+    }
+    if (out[out.length - 1] === "") out.pop();
+  }
+
+  return out.join("\n");
+}
+
 /**
  * @param {any} envelope
  * @param {any[]} decisions
@@ -587,6 +758,57 @@ function buildDiagnosticsText(envelope, decisions, lastRenderTs) {
     `counts: candidates=${candidates.length} evidence=${evidenceHits.length} limits=${aggregatedLimits.length} next_steps=${aggregatedNextSteps.length}`
   );
   lines.push(`order_fingerprint: ${fingerprint}`);
+  lines.push(`last_render_ts: ${lastRenderTs}`);
+  lines.push("warnings:");
+  if (warnings.length === 0) {
+    lines.push("  ∅");
+  } else {
+    for (const w of warnings) lines.push(`  - ${String(w)}`);
+  }
+  return lines.join("\n");
+}
+
+/**
+ * @param {any} diff
+ * @returns {string[]}
+ */
+function validateEpistemicDiff(diff) {
+  /** @type {string[]} */
+  const warnings = [];
+  if (!diff || typeof diff !== "object") return ["diff_invalid: not an object"];
+  if (typeof diff.diff_version !== "number") warnings.push("diff_missing_version");
+  if (typeof diff.comparison_id !== "string") warnings.push("diff_missing_comparison_id");
+  if (!Array.isArray(diff.category_summaries)) warnings.push("diff_missing_category_summaries");
+  if (!Array.isArray(diff.diffs)) warnings.push("diff_missing_diffs");
+  return warnings;
+}
+
+/**
+ * @param {any} diff
+ * @param {any[]} decisions
+ * @param {string} lastRenderTs
+ * @returns {string}
+ */
+function buildCompareDiagnosticsText(diff, decisions, lastRenderTs) {
+  const integrity = window.GoodQIntegrity || null;
+  const warnings = [];
+  warnings.push(...validateEpistemicDiff(diff));
+  if (integrity && typeof integrity.validateNonAction === "function") warnings.push(...integrity.validateNonAction(decisions));
+
+  const a = diff && diff.envelope_a && typeof diff.envelope_a === "object" ? diff.envelope_a : {};
+  const b = diff && diff.envelope_b && typeof diff.envelope_b === "object" ? diff.envelope_b : {};
+  const fpA = a && a.order_fingerprint ? String(a.order_fingerprint) : "";
+  const fpB = b && b.order_fingerprint ? String(b.order_fingerprint) : "";
+  const id = diff && diff.identity_basis && typeof diff.identity_basis === "object" ? diff.identity_basis : {};
+
+  const lines = [];
+  lines.push("DIAGNOSTICS (toggle: D)");
+  lines.push(SEPARATOR);
+  lines.push("ui_mode: compare");
+  lines.push(`diff_version: ${fmtScalar(diff && diff.diff_version)}`);
+  lines.push(`identity_matches: ${fmtScalar(id && id.matches)}`);
+  lines.push(`diff_total: ${fmtScalar(diff && diff.diff_total)}`);
+  lines.push(`order_fingerprint: a=${fpA}  b=${fpB}`);
   lines.push(`last_render_ts: ${lastRenderTs}`);
   lines.push("warnings:");
   if (warnings.length === 0) {
@@ -891,6 +1113,17 @@ function assertStateShape(state) {
   if (typeof state.sourceLabel !== "string" || !state.sourceLabel.trim()) {
     throw new Error("GoodQState invalid: sourceLabel must be non-empty string");
   }
+
+  if ("mode" in state) {
+    const m = String(state.mode || "");
+    if (m && m !== "single" && m !== "compare") throw new Error("GoodQState invalid: mode must be single|compare");
+    if (m === "compare") {
+      if (!state.compare || typeof state.compare !== "object") throw new Error("GoodQState invalid: compare must be object");
+      const hasDiff = "diff" in state.compare && state.compare.diff && typeof state.compare.diff === "object";
+      const hasErr = "error_code" in state.compare && typeof state.compare.error_code === "string";
+      if (!hasDiff && !hasErr) throw new Error("GoodQState invalid: compare requires diff or error_code");
+    }
+  }
 }
 
 function ensureOverlayRefs() {
@@ -915,6 +1148,13 @@ function clearChildren(el) {
 function isSectionHeaderLine(line) {
   if (line === "QUERY") return true;
   if (line === "EPISTEMIC SUMMARY") return true;
+  if (line === "EPISTEMIC DIFF v1") return true;
+  if (line === "IDENTITY BASIS") return true;
+  if (line === "A / B") return true;
+  if (line === "SUMMARY") return true;
+  if (line === "CATEGORY SUMMARIES") return true;
+  if (line === "DIFFS") return true;
+  if (line === "ABSENCE") return true;
   if (line === "NON-ACTION DECISIONS") return true;
   if (line.startsWith("CANDIDATE ")) return true;
   if (line.startsWith("EVIDENCE (")) return true;
@@ -1103,13 +1343,31 @@ function renderState(state) {
   const el = document.getElementById("jc-output");
   if (!el) return;
 
-  const rendered = renderJustificationText({ envelope: state.envelope, nonActionDecisions: state.nonActionDecisions });
+  const mode = state && String(state.mode || "") === "compare" ? "compare" : "single";
+  const rendered =
+    mode === "compare"
+      ? renderEpistemicDiffText({
+          diff: state.compare && typeof state.compare === "object" ? state.compare.diff : null,
+          errorCode:
+            state.compare && typeof state.compare === "object" && typeof state.compare.error_code === "string"
+              ? state.compare.error_code
+              : "",
+          nonActionDecisions: state.nonActionDecisions,
+        })
+      : renderJustificationText({ envelope: state.envelope, nonActionDecisions: state.nonActionDecisions });
   el.textContent = rendered;
 
   renderStructuredView(rendered);
 
   ensureOverlayRefs();
-  const diagnosticsText = buildDiagnosticsText(state.envelope, state.nonActionDecisions || [], state.updatedAt);
+  const diagnosticsText =
+    mode === "compare"
+      ? buildCompareDiagnosticsText(
+          state.compare && typeof state.compare === "object" ? state.compare.diff : null,
+          state.nonActionDecisions || [],
+          state.updatedAt
+        )
+      : buildDiagnosticsText(state.envelope, state.nonActionDecisions || [], state.updatedAt);
   if (_overlayPreRef) _overlayPreRef.textContent = diagnosticsText;
   _lastInspectorDiagnostics = extractInspectorDiagnostics(diagnosticsText);
   emitInspectorEvent("diagnostics_update", "renderState", state, _lastInspectorDiagnostics);
@@ -1125,11 +1383,14 @@ function loadState(newState) {
   assertStateShape(newState);
   deepFreeze(newState);
 
+  const mode = String(newState.mode || "") === "compare" ? "compare" : "single";
   const state = {
     envelope: newState.envelope,
     nonActionDecisions: newState.nonActionDecisions,
     sourceLabel: String(newState.sourceLabel),
     updatedAt: new Date().toISOString(),
+    mode,
+    compare: mode === "compare" && newState.compare && typeof newState.compare === "object" ? newState.compare : null,
   };
   deepFreeze(state);
 
@@ -1152,6 +1413,72 @@ function loadState(newState) {
  */
 function replaceEnvelope(envelope, decisions, sourceLabel) {
   return loadState({ envelope, nonActionDecisions: decisions, sourceLabel });
+}
+
+/**
+ * Convenience transition: replace compare diff + decisions together (read-only).
+ * @param {any|null} diff
+ * @param {string} errorCode
+ * @param {any[]} decisions
+ * @param {string} sourceLabel
+ * @returns {any}
+ */
+function replaceComparison(diff, errorCode, decisions, sourceLabel) {
+  const compare = diff && typeof diff === "object" ? { diff } : { error_code: String(errorCode || "compare_failed") };
+  const envelopeStub = {
+    read_model_version: 1,
+    retrieval_context: "human.ui.compare",
+    outcome: "dont_know",
+    question: { text: "" },
+    candidates: [],
+  };
+  return loadState({ envelope: envelopeStub, nonActionDecisions: decisions, sourceLabel, mode: "compare", compare });
+}
+
+/**
+ * Emit comparison lifecycle observations (metadata-only; never blocks rendering).
+ * @param {string} eventType
+ * @param {string} source
+ * @param {any|null} diff
+ * @param {string} errorCode
+ */
+function emitInspectorComparisonEvent(eventType, source, diff, errorCode) {
+  try {
+    const inspector = window.GoodQInspector;
+    if (!inspector || typeof inspector.observe !== "function") return;
+    if (typeof inspector.isEnabled === "function" && !inspector.isEnabled()) return;
+
+    const d = diff && typeof diff === "object" ? diff : {};
+    const a = d.envelope_a && typeof d.envelope_a === "object" ? d.envelope_a : {};
+    const b = d.envelope_b && typeof d.envelope_b === "object" ? d.envelope_b : {};
+    const id = d.identity_basis && typeof d.identity_basis === "object" ? d.identity_basis : {};
+    const codes = Array.isArray(d.diff_codes) ? d.diff_codes.map((c) => String(c)) : [];
+
+    inspector.observe({
+      ts_utc: new Date().toISOString(),
+      ui_version: GOODQ_UI_VERSION,
+      event_type: String(eventType || ""),
+      source: String(source || ""),
+      last_render_ts_utc: GoodQState && typeof GoodQState.updatedAt === "string" ? GoodQState.updatedAt : "",
+      counts: { candidates: 0, evidence_hits: 0, non_action_decisions: 0 },
+      diagnostics: {
+        order_fingerprint: _lastInspectorDiagnostics && _lastInspectorDiagnostics.order_fingerprint ? _lastInspectorDiagnostics.order_fingerprint : "",
+        warnings: _lastInspectorDiagnostics && Array.isArray(_lastInspectorDiagnostics.warnings) ? _lastInspectorDiagnostics.warnings : [],
+      },
+      comparison: {
+        diff_version: Number.isFinite(d.diff_version) ? d.diff_version : 0,
+        diff_total: Number.isFinite(d.diff_total) ? d.diff_total : 0,
+        diff_codes: codes,
+        identity_type: typeof id.type === "string" ? id.type : "",
+        identity_matches: typeof id.matches === "boolean" ? id.matches : null,
+        order_fingerprint_a: typeof a.order_fingerprint === "string" ? a.order_fingerprint : "",
+        order_fingerprint_b: typeof b.order_fingerprint === "string" ? b.order_fingerprint : "",
+        error_code: String(errorCode || ""),
+      },
+    });
+  } catch {
+    // Best-effort only.
+  }
 }
 
 function getState() {
@@ -1257,10 +1584,57 @@ function renderSourceFailure(sourceLabel, errorCode) {
 }
 
 /**
+ * Build a minimal NonActionDecision requiring defer on compare-load failures.
+ * @param {string} errorCode
+ * @returns {any[]}
+ */
+function buildCompareFailureDecisions(errorCode) {
+  const code = String(errorCode || "compare_load_failed");
+  return [
+    {
+      contract_version: 1,
+      domain: "answer",
+      condition: "ui_compare_load_failed",
+      required_response: "defer",
+      rationale: { error_code: code },
+    },
+  ];
+}
+
+/**
+ * @param {string} sourceLabel
+ * @param {string} errorCode
+ */
+function renderCompareFailure(sourceLabel, errorCode) {
+  const decisions = buildCompareFailureDecisions(errorCode);
+  replaceComparison(null, errorCode, decisions, sourceLabel);
+}
+
+/**
  * @param {unknown} raw
  * @returns {string}
  */
 function normalizeSourceKey(raw) {
+  const s = String(raw || "").trim().toLowerCase();
+  if (s === "file" || s === "local-json" || s === "local_json") return "file";
+  if (s === "api" || s === "api-readonly" || s === "api_readonly") return "api";
+  return "example";
+}
+
+/**
+ * @param {unknown} raw
+ * @returns {"single"|"compare"}
+ */
+function normalizeMode(raw) {
+  const s = String(raw || "").trim().toLowerCase();
+  return s === "compare" ? "compare" : "single";
+}
+
+/**
+ * @param {unknown} raw
+ * @returns {"file"|"example"|"api"}
+ */
+function normalizeDiffSourceKey(raw) {
   const s = String(raw || "").trim().toLowerCase();
   if (s === "file" || s === "local-json" || s === "local_json") return "file";
   if (s === "api" || s === "api-readonly" || s === "api_readonly") return "api";
@@ -1301,6 +1675,18 @@ function extractEnvelopeBundle(data) {
   if (!envelope || typeof envelope !== "object") throw new Error("bundle_envelope_invalid");
   if (!Array.isArray(decisions)) throw new Error("bundle_decisions_invalid");
   return { envelope, decisions };
+}
+
+/**
+ * @param {any} data
+ * @returns {{diff:any}}
+ */
+function extractDiffBundle(data) {
+  if (!data || typeof data !== "object") throw new Error("diff_invalid");
+  const diff = data.diff && typeof data.diff === "object" ? data.diff : data;
+  if (!diff || typeof diff !== "object") throw new Error("diff_missing");
+  if (typeof diff.diff_version !== "number") throw new Error("diff_missing_version");
+  return { diff };
 }
 
 async function loadExampleSource() {
@@ -1421,6 +1807,107 @@ async function loadApiReadonlySource(apiBase) {
 }
 
 /**
+ * Build a minimal EpistemicDiff v1 example (no diffs).
+ * Note: real diffs should be produced by the frozen engine `steps/common/epistemic_diff.py`.
+ * @returns {any}
+ */
+function buildExampleDiff() {
+  const env = EXAMPLE && EXAMPLE.envelope && typeof EXAMPLE.envelope === "object" ? EXAMPLE.envelope : {};
+  const candidates = Array.isArray(env.candidates) ? env.candidates : [];
+  const evidenceHits = countEvidenceHits(env);
+
+  const emptyByCat = {
+    identity_basis: 0,
+    outcome: 0,
+    candidates: 0,
+    non_action_decisions: 0,
+    evidence: 0,
+    limits_aggregated: 0,
+    limits_dont_know: 0,
+    next_steps: 0,
+  };
+
+  const category_summaries = Object.keys(emptyByCat).map((cat) => ({
+    category: cat,
+    presence: "present_both",
+    changed: false,
+    diff_count: 0,
+  }));
+
+  const fingerprint = window.GoodQIntegrity && typeof window.GoodQIntegrity.computeOrderFingerprint === "function"
+    ? window.GoodQIntegrity.computeOrderFingerprint([])
+    : "fnv1a32:00000000";
+
+  return {
+    diff_version: 1,
+    comparison_id: "ediff1_example",
+    initiated_ts_utc: "",
+    identity_basis: { type: "question_text_exact", details: {}, matches: true },
+    envelope_a: {
+      sourceLabel: "example",
+      loaded_at_utc: "",
+      read_model_version: env.read_model_version,
+      retrieval_context: env.retrieval_context,
+      outcome: env.outcome,
+      counts: { candidates: candidates.length, evidence_hits: evidenceHits, non_action_decisions: 0 },
+      order_fingerprint: fingerprint,
+      warning_codes: [],
+    },
+    envelope_b: {
+      sourceLabel: "example",
+      loaded_at_utc: "",
+      read_model_version: env.read_model_version,
+      retrieval_context: env.retrieval_context,
+      outcome: env.outcome,
+      counts: { candidates: candidates.length, evidence_hits: evidenceHits, non_action_decisions: 0 },
+      order_fingerprint: fingerprint,
+      warning_codes: [],
+    },
+    category_summaries,
+    diffs: [],
+    diff_total: 0,
+    diff_by_category: emptyByCat,
+    diff_codes: [],
+  };
+}
+
+/**
+ * Load EpistemicDiff v1 from a local JSON file URL (explicit; read-only).
+ * @param {string} rawPath
+ * @returns {Promise<any>}
+ */
+async function loadLocalJsonDiffSource(rawPath) {
+  const safePath = sanitizeLocalJsonPath(rawPath);
+  if (!safePath) throw new Error("diff_file_path_invalid");
+
+  let url = "";
+  try {
+    url = new URL(safePath, window.location.href).toString();
+  } catch {
+    throw new Error("diff_file_url_invalid");
+  }
+
+  const resp = await fetch(url, { cache: "no-store" });
+  if (!resp.ok) throw new Error(`diff_file_fetch_http_${resp.status}`);
+
+  let data = null;
+  try {
+    data = await resp.json();
+  } catch {
+    throw new Error("diff_file_json_parse_error");
+  }
+
+  try {
+    const { diff } = extractDiffBundle(data);
+    return diff;
+  } catch (e) {
+    const msg = e && typeof e === "object" && "message" in e ? String(e.message || "") : "";
+    const code = msg && msg.startsWith("diff_") ? `diff_file_schema_${msg}` : "diff_file_schema_invalid";
+    throw new Error(code);
+  }
+}
+
+/**
  * Create a tiny source selector UI (read-only wiring; no actions beyond switching inputs).
  * @returns {{select: HTMLSelectElement, path: HTMLInputElement, apiBase: HTMLInputElement, status: HTMLElement} | null}
  */
@@ -1532,31 +2019,77 @@ function ensureSourceControls() {
 function readSourceParams() {
   try {
     const params = new URLSearchParams(String(window.location && window.location.search ? window.location.search : ""));
+    const mode = normalizeMode(params.get("mode"));
     const sourceKey = normalizeSourceKey(params.get("source"));
+    const diffSourceKey = normalizeDiffSourceKey(params.get("diff_source"));
     return {
+      mode,
       sourceKey,
       path: String(params.get("path") || ""),
       apiBase: String(params.get("api_base") || ""),
+      diffSourceKey,
+      diffPath: String(params.get("diff_path") || ""),
     };
   } catch {
-    return { sourceKey: "example", path: "", apiBase: "" };
+    return { mode: "single", sourceKey: "example", path: "", apiBase: "", diffSourceKey: "example", diffPath: "" };
   }
 }
 
 window.GoodQJustification = {
   renderJustificationText,
+  renderEpistemicDiffText,
   EXAMPLE,
   loadState,
   replaceEnvelope,
+  replaceComparison,
   getState,
   getStateHistory,
 };
 
 async function main() {
   ensureKeyListener();
-  const controls = ensureSourceControls();
   const params = readSourceParams();
 
+  if (params.mode === "compare") {
+    const controlsRoot = document.getElementById("jc-controls");
+    if (controlsRoot) controlsRoot.style.display = "none";
+
+    emitInspectorComparisonEvent("comparison_initiated", "main", null, "");
+
+    if (params.diffSourceKey === "api") {
+      renderCompareFailure("compare", "diff_api_not_supported");
+      emitInspectorComparisonEvent("comparison_completed", "main", null, "diff_api_not_supported");
+      return;
+    }
+
+    if (params.diffSourceKey === "file") {
+      if (!params.diffPath) {
+        renderCompareFailure("compare", "diff_path_missing");
+        emitInspectorComparisonEvent("comparison_completed", "main", null, "diff_path_missing");
+        return;
+      }
+      try {
+        const diff = await loadLocalJsonDiffSource(params.diffPath);
+        replaceComparison(diff, "", [], "compare:file");
+        emitInspectorComparisonEvent("comparison_completed", "main", diff, "");
+        return;
+      } catch (e) {
+        const msg = e && typeof e === "object" && "message" in e ? String(e.message || "") : "";
+        const code = msg || "diff_file_fetch_error";
+        renderCompareFailure("compare", code);
+        emitInspectorComparisonEvent("comparison_completed", "main", null, code);
+        return;
+      }
+    }
+
+    // Default: example diff (no diffs)
+    const diff = buildExampleDiff();
+    replaceComparison(diff, "", [], "compare:example");
+    emitInspectorComparisonEvent("comparison_completed", "main", diff, "");
+    return;
+  }
+
+  const controls = ensureSourceControls();
   if (controls) {
     controls.select.value = params.sourceKey;
     if (params.path) controls.path.value = params.path;

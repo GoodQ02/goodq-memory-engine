@@ -800,6 +800,202 @@ function ensureOverlayRefs() {
   _overlayPreRef = pre;
 }
 
+// ---- Readability view (visibility-only; canonical text remains unchanged) ----
+
+/**
+ * @param {Element} el
+ */
+function clearChildren(el) {
+  while (el.firstChild) el.removeChild(el.firstChild);
+}
+
+/**
+ * @param {string} line
+ * @returns {boolean}
+ */
+function isSectionHeaderLine(line) {
+  if (line === "QUERY") return true;
+  if (line === "EPISTEMIC SUMMARY") return true;
+  if (line === "NON-ACTION DECISIONS") return true;
+  if (line.startsWith("CANDIDATE ")) return true;
+  if (line.startsWith("EVIDENCE (")) return true;
+  if (line === "DONT-KNOW DETAIL") return true;
+  if (line === "WHAT’S MISSING (AGGREGATED LIMITS)") return true;
+  if (line === "NEXT STEPS (AGGREGATED)") return true;
+  return false;
+}
+
+/**
+ * @param {Element} container
+ * @param {string} headerText
+ * @returns {{section: HTMLElement, header: HTMLElement, body: HTMLElement}}
+ */
+function createSection(container, headerText) {
+  const section = document.createElement("section");
+  section.className = "jc-section";
+
+  const header = document.createElement("div");
+  header.className = "jc-section-header";
+  header.tabIndex = 0;
+  header.textContent = headerText;
+
+  const body = document.createElement("div");
+  body.className = "jc-section-body";
+
+  section.appendChild(header);
+  section.appendChild(body);
+  container.appendChild(section);
+  return { section, header, body };
+}
+
+/**
+ * @param {Element} body
+ * @param {string[]} lines
+ */
+function appendPreBlock(body, lines) {
+  if (!lines || lines.length === 0) return;
+  const pre = document.createElement("pre");
+  pre.className = "jc-block";
+  pre.textContent = lines.join("\n");
+  body.appendChild(pre);
+}
+
+/**
+ * @param {Element} body
+ * @param {string} summaryLine
+ * @param {string[]} bodyLines
+ */
+function appendEvidenceBlock(body, summaryLine, bodyLines) {
+  const details = document.createElement("details");
+  details.className = "jc-evidence";
+  details.open = false;
+
+  const summary = document.createElement("summary");
+  summary.className = "jc-evidence-summary";
+  summary.tabIndex = 0;
+  summary.textContent = summaryLine;
+
+  const pre = document.createElement("pre");
+  pre.className = "jc-evidence-body";
+  pre.textContent = bodyLines.join("\n");
+
+  details.appendChild(summary);
+  details.appendChild(pre);
+  body.appendChild(details);
+}
+
+/**
+ * Render a structured, navigable view derived from the canonical rendered text.
+ * This is visibility-only; it must not alter the canonical output string or order.
+ *
+ * @param {string} renderedText
+ */
+function renderStructuredView(renderedText) {
+  const container = document.getElementById("jc-view");
+  if (!container) return;
+  clearChildren(container);
+
+  const lines = String(renderedText || "").split("\n");
+
+  // Header block: first line as a section header, then metadata lines until blank line.
+  let idx = 0;
+  const titleLine = lines[idx] || "";
+  const headerSection = createSection(container, titleLine);
+  idx++;
+
+  /** @type {string[]} */
+  const headerMeta = [];
+  while (idx < lines.length && lines[idx] !== "") {
+    headerMeta.push(lines[idx]);
+    idx++;
+  }
+  appendPreBlock(headerSection.body, headerMeta);
+  // Consume the blank separator line after header meta.
+  if (idx < lines.length && lines[idx] === "") idx++;
+
+  /** @type {{body: HTMLElement} | null} */
+  let current = null;
+  /** @type {string[]} */
+  let buf = [];
+
+  const flush = () => {
+    if (!current) return;
+    appendPreBlock(current.body, buf);
+    buf = [];
+  };
+
+  while (idx < lines.length) {
+    const line = lines[idx];
+
+    if (isSectionHeaderLine(line)) {
+      if (!current) {
+        // If no section yet, create an implicit section before the first header.
+        current = createSection(container, line);
+      } else {
+        flush();
+        current = createSection(container, line);
+      }
+      idx++;
+      continue;
+    }
+
+    // Evidence blocks: convert each evidence hit into a collapsible <details>.
+    const m = line.match(/^\[(\d+)\]\s+role=/);
+    if (m) {
+      if (!current) current = createSection(container, "EVIDENCE");
+      flush();
+
+      const summaryLine = line;
+      idx++;
+      /** @type {string[]} */
+      const bodyLines = [];
+      while (idx < lines.length) {
+        const l2 = lines[idx];
+        if (l2 === "") break;
+        if (l2.match(/^\[(\d+)\]\s+role=/)) break;
+        if (isSectionHeaderLine(l2)) break;
+        bodyLines.push(l2);
+        idx++;
+      }
+
+      appendEvidenceBlock(current.body, summaryLine, bodyLines);
+
+      // Consume a single blank line after the evidence block (spacing only).
+      if (idx < lines.length && lines[idx] === "") idx++;
+      continue;
+    }
+
+    if (!current) {
+      current = createSection(container, "OUTPUT");
+    }
+
+    buf.push(line);
+    idx++;
+  }
+
+  flush();
+}
+
+/**
+ * @param {string} selector
+ * @param {number} dir
+ */
+function focusBySelector(selector, dir) {
+  const items = Array.from(document.querySelectorAll(selector));
+  if (items.length === 0) return;
+
+  const active = document.activeElement;
+  let idx = items.indexOf(active);
+  if (idx === -1) idx = dir > 0 ? -1 : items.length;
+
+  let next = idx + dir;
+  if (next < 0) next = 0;
+  if (next >= items.length) next = items.length - 1;
+
+  const el = items[next];
+  if (el && typeof el.focus === "function") el.focus();
+}
+
 /**
  * Render current state into the <pre> and diagnostics overlay.
  * @param {any} state
@@ -810,6 +1006,8 @@ function renderState(state) {
 
   const rendered = renderJustificationText({ envelope: state.envelope, nonActionDecisions: state.nonActionDecisions });
   el.textContent = rendered;
+
+  renderStructuredView(rendered);
 
   ensureOverlayRefs();
   if (_overlayPreRef) {
@@ -871,6 +1069,28 @@ function ensureKeyListener() {
     if (key === "d" || key === "D") {
       ensureOverlayRefs();
       if (_overlayRef) toggleDiagnosticsOverlay(_overlayRef);
+      return;
+    }
+
+    if (key === "]") {
+      e.preventDefault();
+      focusBySelector(".jc-section-header", +1);
+      return;
+    }
+    if (key === "[") {
+      e.preventDefault();
+      focusBySelector(".jc-section-header", -1);
+      return;
+    }
+    if (key === "j" || key === "J") {
+      e.preventDefault();
+      focusBySelector(".jc-evidence-summary", +1);
+      return;
+    }
+    if (key === "k" || key === "K") {
+      e.preventDefault();
+      focusBySelector(".jc-evidence-summary", -1);
+      return;
     }
   });
 }

@@ -1,11 +1,70 @@
-/* Justification Channel v1 (text-first; no UI behavior). */
+/* Justification Channel v1 (text-first; no semantics or behavior changes). */
 body {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New",
     monospace;
   margin: 1.25rem;
+  color: #111;
 }
 
 pre {
   margin: 0;
   white-space: pre;
+}
+
+.jc-raw-output {
+  display: none;
+}
+
+.jc-section {
+  margin: 0 0 1rem 0;
+}
+
+.jc-section-header {
+  font-size: 1.05em;
+  font-weight: 600;
+  margin: 1rem 0 0.35rem 0;
+  padding: 0;
+}
+
+.jc-section-header:focus,
+.jc-evidence-summary:focus {
+  outline: 1px solid #999;
+  outline-offset: 2px;
+}
+
+.jc-block {
+  margin: 0;
+}
+
+.jc-evidence {
+  margin: 0.25rem 0 0.75rem 0;
+}
+
+.jc-evidence-summary {
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.jc-evidence-summary::-webkit-details-marker {
+  display: none;
+}
+
+.jc-evidence-summary {
+  list-style: none;
+}
+
+.jc-evidence-summary::after {
+  content: " (collapsed)";
+  font-weight: 400;
+  color: #555;
+}
+
+.jc-evidence[open] > .jc-evidence-summary::after {
+  content: " (expanded)";
+}
+
+.jc-evidence-body {
+  color: #444;
+  margin: 0.25rem 0 0 0;
+  padding-left: 0.5rem;
 }

@@ -103,6 +103,7 @@ It describes what exists now, how the system is layered, where connections are a
 ### D) Connection Points
 - **Frozen at tags:** `justification-ui-v1.0.0`, `justification-ui-v1.0.2`, `justification-ui-v1.0.3`
 - **Comparative Rendering v1 (UI) frozen at tag:** `justification-diff-ui-v1.0.0`
+- Visual Projection Contract v1 frozen at tag visual-projection-v1.0.0.
 - **Implementation:** `ui/justification_v1/index.html`, `ui/justification_v1/static/js/app.js`
 - **Integrity harness:** `ui/justification_v1/static/js/integrity.js`
 - **Golden test:** `ui/justification_v1/static/js/test_render.js`

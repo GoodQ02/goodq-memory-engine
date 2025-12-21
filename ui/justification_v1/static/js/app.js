@@ -17,6 +17,9 @@ const GOODQ_UI_VERSION =
     ? window.GOODQ_UI_VERSION.trim()
     : "justification-ui-v1.0.3";
 
+const GOODQ_UI_VIEW_TEXT = "text";
+const GOODQ_UI_VIEW_PROJECT = "project";
+
 /**
  * @param {unknown} v
  * @returns {string}
@@ -1054,6 +1057,8 @@ function emitInspectorEvent(eventType, source, state, diagnostics) {
     const candidates = Array.isArray(envelope.candidates) ? envelope.candidates : [];
     const nonActionCount = state && Array.isArray(state.nonActionDecisions) ? state.nonActionDecisions.length : 0;
     const diag = diagnostics && typeof diagnostics === "object" ? diagnostics : { order_fingerprint: "", warnings: [] };
+    const view = state && typeof state.view === "string" ? state.view : GOODQ_UI_VIEW_TEXT;
+    const projection = state && state.projection && typeof state.projection === "object" ? state.projection : {};
 
     inspector.observe({
       ts_utc: new Date().toISOString(),
@@ -1061,6 +1066,7 @@ function emitInspectorEvent(eventType, source, state, diagnostics) {
       event_type: String(eventType || ""),
       source: String(source || ""),
       last_render_ts_utc: state && typeof state.updatedAt === "string" ? state.updatedAt : "",
+      view,
       counts: {
         candidates: candidates.length,
         evidence_hits: countEvidenceHits(envelope),
@@ -1069,6 +1075,14 @@ function emitInspectorEvent(eventType, source, state, diagnostics) {
       diagnostics: {
         order_fingerprint: String(diag.order_fingerprint || ""),
         warnings: Array.isArray(diag.warnings) ? diag.warnings : [],
+      },
+      projection: {
+        view,
+        mode: state && String(state.mode || "") === "compare" ? "compare" : "single",
+        focus_hash: hashTokenForInspector(projection.focus_key),
+        window_start_s: toFiniteNumber(projection.window_start_s),
+        window_end_s: toFiniteNumber(projection.window_end_s),
+        cursor_s: toFiniteNumber(projection.cursor_s),
       },
     });
   } catch {
@@ -1122,6 +1136,20 @@ function assertStateShape(state) {
       const hasDiff = "diff" in state.compare && state.compare.diff && typeof state.compare.diff === "object";
       const hasErr = "error_code" in state.compare && typeof state.compare.error_code === "string";
       if (!hasDiff && !hasErr) throw new Error("GoodQState invalid: compare requires diff or error_code");
+    }
+  }
+
+  if ("view" in state) {
+    const v = String(state.view || "");
+    if (v && v !== GOODQ_UI_VIEW_TEXT && v !== GOODQ_UI_VIEW_PROJECT) {
+      throw new Error("GoodQState invalid: view must be text|project");
+    }
+  }
+
+  if ("projection" in state) {
+    const p = state.projection;
+    if (p !== null && p !== undefined && typeof p !== "object") {
+      throw new Error("GoodQState invalid: projection must be object|null");
     }
   }
 }
@@ -1316,6 +1344,747 @@ function renderStructuredView(renderedText) {
 }
 
 /**
+ * Projection view renderer (read-only; must not alter canonical <pre> output).
+ * Implemented per `docs/architecture/VISUAL_PROJECTION_CONTRACT_v1.md`.
+ *
+ * @param {any} state
+ * @param {string} renderedText canonical text (unchanged)
+ */
+function renderProjectionView(state, renderedText) {
+  const container = document.getElementById("jc-view");
+  if (!container) return;
+  clearChildren(container);
+
+  const mode = state && String(state.mode || "") === "compare" ? "compare" : "single";
+  if (mode === "compare") {
+    renderProjectionCompare(container, state);
+  } else {
+    renderProjectionSingle(container, state);
+  }
+}
+
+/**
+ * @param {Element} container
+ * @param {any} state
+ */
+function renderProjectionSingle(container, state) {
+  const env = state && state.envelope && typeof state.envelope === "object" ? state.envelope : {};
+  const decisions = state && Array.isArray(state.nonActionDecisions) ? state.nonActionDecisions : [];
+  const model = buildProjectionModel(env);
+  const viewState = resolveProjectionView(model, state && state.projection);
+
+  const root = document.createElement("div");
+  root.className = "jc-proj";
+  container.appendChild(root);
+
+  const outcome = safeOneLine(env.outcome || "unknown");
+  const retrievalContext = safeOneLine(env.retrieval_context || "");
+  const q = env.question && typeof env.question === "object" ? safeOneLine(env.question.text || "") : "";
+  const sourceLabel = state && typeof state.sourceLabel === "string" ? safeOneLine(state.sourceLabel) : "";
+
+  const header = document.createElement("pre");
+  header.className = "jc-proj-header";
+  header.textContent = [
+    "SITUATIONAL AWARENESS PROJECTION v1 (read-only)",
+    SEPARATOR,
+    `source=${sourceLabel || "—"}  retrieval_context=${retrievalContext || "—"}  outcome=${outcome || "—"}`,
+    `question=${q || "∅"}`,
+    `candidates=${model.rails.length}  evidence_hits=${countEvidenceHits(env)}  non_action_decisions=${decisions.length}`,
+  ].join("\n");
+  root.appendChild(header);
+
+  const focusRow = document.createElement("div");
+  focusRow.className = "jc-proj-focus";
+  const focusLabel = document.createElement("span");
+  focusLabel.className = "jc-proj-focus-label";
+  focusLabel.textContent = "lock-on:";
+
+  const focusSelect = document.createElement("select");
+  focusSelect.className = "jc-proj-focus-select";
+  const optNone = document.createElement("option");
+  optNone.value = "";
+  optNone.textContent = "∅";
+  focusSelect.appendChild(optNone);
+  for (const k of model.focus_keys) {
+    const opt = document.createElement("option");
+    opt.value = k;
+    opt.textContent = k;
+    focusSelect.appendChild(opt);
+  }
+  focusSelect.value = viewState.focus_key || "";
+  focusSelect.addEventListener("change", () => {
+    const v = safeOneLine(focusSelect.value);
+    updateProjectionState({ focus_key: v || null }, "entity_lock_on", "projection_focus");
+  });
+  focusRow.appendChild(focusLabel);
+  focusRow.appendChild(focusSelect);
+  const focusNote = document.createElement("span");
+  focusNote.className = "jc-proj-focus-note";
+  focusNote.textContent = "focus ≠ filter (others remain visible)";
+  focusRow.appendChild(focusNote);
+  root.appendChild(focusRow);
+
+  const timeSection = document.createElement("div");
+  timeSection.className = "jc-proj-time";
+  root.appendChild(timeSection);
+
+  if (!model.has_time) {
+    const absent = document.createElement("div");
+    absent.className = "jc-proj-absent";
+    absent.textContent = "TIME AXIS: ∅ (no scene start/end fields in envelope payloads)";
+    timeSection.appendChild(absent);
+
+    const anchorWrap = document.createElement("div");
+    anchorWrap.className = "jc-proj-rails";
+    timeSection.appendChild(anchorWrap);
+
+    const rails = model.rails.length
+      ? model.rails
+      : [{ label: outcome === "dont_know" ? "dont_know" : "candidate", candidate_id: "", state: outcome, segments: [] }];
+
+    for (const r of rails) {
+      const row = document.createElement("div");
+      row.className = "jc-proj-row";
+
+      const label = document.createElement("div");
+      label.className = "jc-proj-row-label";
+      label.textContent = safeOneLine(r.label || "candidate");
+
+      const rail = document.createElement("div");
+      rail.className = "jc-proj-rail jc-proj-rail-anchors";
+
+      const segs = Array.isArray(r.segments) ? r.segments : [];
+      if (!segs.length) {
+        const none = document.createElement("div");
+        none.className = "jc-proj-gap";
+        none.textContent = "∅";
+        rail.appendChild(none);
+      } else {
+        const stateClass = projectionStateClass(r.state || outcome);
+        for (const seg of segs) {
+          if (!seg || typeof seg !== "object") continue;
+          const el = document.createElement("div");
+          el.className = `jc-proj-anchor ${stateClass}`;
+          if (seg.roles && seg.roles.support > 0 && seg.roles.contradict > 0) el.className += " has-contradiction";
+          if (viewState.focus_key) {
+            const isFocused =
+              Array.isArray(seg.focus_tokens) && seg.focus_tokens.includes(viewState.focus_key);
+            el.className += isFocused ? " focused" : " deemphasized";
+          }
+          el.title = safeOneLine(`${seg.key}  support=${seg.roles.support}  contradict=${seg.roles.contradict}`);
+          el.textContent = safeOneLine(seg.scene_id || "scene");
+          rail.appendChild(el);
+        }
+      }
+
+      row.appendChild(label);
+      row.appendChild(rail);
+      anchorWrap.appendChild(row);
+    }
+  } else {
+    const railWrap = document.createElement("div");
+    railWrap.className = "jc-proj-rails";
+    timeSection.appendChild(railWrap);
+
+    const viewStart = typeof viewState.window_start_s === "number" ? viewState.window_start_s : model.time_min_s;
+    const viewEnd = typeof viewState.window_end_s === "number" ? viewState.window_end_s : model.time_max_s;
+    const span = Math.max(0.0001, viewEnd - viewStart);
+    const rails = model.rails.length
+      ? model.rails
+      : [{ label: outcome === "dont_know" ? "dont_know" : "candidate", candidate_id: "", state: outcome, segments: [] }];
+
+    for (const r of rails) {
+      const row = document.createElement("div");
+      row.className = "jc-proj-row";
+
+      const label = document.createElement("div");
+      label.className = "jc-proj-row-label";
+      label.textContent = safeOneLine(r.label || "candidate");
+
+      const rail = document.createElement("div");
+      rail.className = "jc-proj-rail";
+
+      const segs = Array.isArray(r.segments) ? r.segments : [];
+      const stateClass = projectionStateClass(r.state || outcome);
+
+      // Render segments (time-known only). Preserve source order; no sorting.
+      const unknownSegs = [];
+      let prevVisibleEnd = null;
+      for (const seg of segs) {
+        if (!seg || typeof seg !== "object") continue;
+        if (!seg.time) {
+          unknownSegs.push(seg);
+          continue;
+        }
+        if (typeof seg.time.start_s !== "number" || typeof seg.time.end_s !== "number") continue;
+
+        const segStart = seg.time.start_s;
+        const segEnd = seg.time.end_s;
+        const visibleStart = Math.max(segStart, viewStart);
+        const visibleEnd = Math.min(segEnd, viewEnd);
+        if (visibleEnd <= visibleStart) continue;
+
+        if (prevVisibleEnd !== null && visibleStart > prevVisibleEnd) {
+          const gap = document.createElement("div");
+          gap.className = "jc-proj-gap";
+          const gLeft = ((prevVisibleEnd - viewStart) / span) * 100;
+          const gWidth = ((visibleStart - prevVisibleEnd) / span) * 100;
+          gap.style.left = `${gLeft}%`;
+          gap.style.width = `${Math.max(0, gWidth)}%`;
+          gap.textContent = "∅";
+          rail.appendChild(gap);
+        }
+
+        const el = document.createElement("div");
+        el.className = `jc-proj-seg ${stateClass}`;
+        if (seg.roles && seg.roles.support > 0 && seg.roles.contradict > 0) el.className += " has-contradiction";
+        if (viewState.focus_key) {
+          const isFocused =
+            Array.isArray(seg.focus_tokens) && seg.focus_tokens.includes(viewState.focus_key);
+          el.className += isFocused ? " focused" : " deemphasized";
+        }
+        const left = ((visibleStart - viewStart) / span) * 100;
+        const width = ((visibleEnd - visibleStart) / span) * 100;
+        el.style.left = `${left}%`;
+        el.style.width = `${Math.max(0.25, width)}%`;
+        el.title = safeOneLine(`${seg.key}  support=${seg.roles.support}  contradict=${seg.roles.contradict}`);
+        el.textContent = safeOneLine(seg.scene_id || "scene");
+        rail.appendChild(el);
+
+        prevVisibleEnd = visibleEnd;
+      }
+
+      if (typeof viewState.cursor_s === "number") {
+        const cursor = document.createElement("div");
+        cursor.className = "jc-proj-cursor";
+        const cx = ((viewState.cursor_s - viewStart) / span) * 100;
+        cursor.style.left = `${clamp(cx, 0, 100)}%`;
+        rail.appendChild(cursor);
+      }
+
+      rail.addEventListener("click", (e) => {
+        if (!e) return;
+        const rect = rail.getBoundingClientRect();
+        const x = clamp((e.clientX - rect.left) / Math.max(1, rect.width), 0, 1);
+        const t = viewStart + x * span;
+        updateProjectionState({ cursor_s: t }, "time_scrubbed", "projection_scrub");
+      });
+
+      row.appendChild(label);
+      row.appendChild(rail);
+      railWrap.appendChild(row);
+
+      if (unknownSegs.length) {
+        const uRow = document.createElement("div");
+        uRow.className = "jc-proj-row jc-proj-row-unknown";
+
+        const uLabel = document.createElement("div");
+        uLabel.className = "jc-proj-row-label";
+        uLabel.textContent = "∅ time";
+
+        const uRail = document.createElement("div");
+        uRail.className = "jc-proj-rail jc-proj-rail-anchors";
+
+        for (const seg of unknownSegs) {
+          const el = document.createElement("div");
+          el.className = `jc-proj-anchor ${stateClass}`;
+          if (seg.roles && seg.roles.support > 0 && seg.roles.contradict > 0) el.className += " has-contradiction";
+          if (viewState.focus_key) {
+            const isFocused =
+              Array.isArray(seg.focus_tokens) && seg.focus_tokens.includes(viewState.focus_key);
+            el.className += isFocused ? " focused" : " deemphasized";
+          }
+          el.title = safeOneLine(`${seg.key}  support=${seg.roles.support}  contradict=${seg.roles.contradict}`);
+          el.textContent = safeOneLine(seg.scene_id || "scene");
+          uRail.appendChild(el);
+        }
+
+        uRow.appendChild(uLabel);
+        uRow.appendChild(uRail);
+        railWrap.appendChild(uRow);
+      }
+    }
+  }
+
+  const nonAction = document.createElement("pre");
+  nonAction.className = "jc-proj-nonaction";
+  const naLines = [];
+  naLines.push("NON-ACTION (visible constraints)");
+  naLines.push(SEPARATOR);
+  if (!decisions.length) {
+    naLines.push("∅");
+  } else {
+    for (const d of decisions) {
+      const o = d && typeof d === "object" ? d : {};
+      naLines.push(
+        `- domain=${safeOneLine(o.domain || "—")}  condition=${safeOneLine(o.condition || "—")}  required_response=${safeOneLine(
+          o.required_response || "—"
+        )}`
+      );
+    }
+  }
+  nonAction.textContent = naLines.join("\n");
+  root.appendChild(nonAction);
+}
+
+/**
+ * @param {Element} container
+ * @param {any} state
+ */
+function renderProjectionCompare(container, state) {
+  const diff =
+    state && state.compare && typeof state.compare === "object" && state.compare.diff && typeof state.compare.diff === "object"
+      ? state.compare.diff
+      : null;
+  const decisions = state && Array.isArray(state.nonActionDecisions) ? state.nonActionDecisions : [];
+  const compareError =
+    state && state.compare && typeof state.compare === "object" && typeof state.compare.error_code === "string"
+      ? safeOneLine(state.compare.error_code)
+      : "";
+
+  const root = document.createElement("div");
+  root.className = "jc-proj jc-proj-compare";
+  container.appendChild(root);
+
+  const header = document.createElement("pre");
+  header.className = "jc-proj-header";
+  header.textContent = [
+    "SITUATIONAL AWARENESS PROJECTION v1 (compare; read-only)",
+    SEPARATOR,
+    diff && typeof diff.diff_version === "number" ? `diff_version=${diff.diff_version}` : "diff_version=∅",
+    diff && diff.identity_basis && typeof diff.identity_basis === "object"
+      ? `identity_basis=${safeOneLine(diff.identity_basis.type || "—")}  matches=${fmtScalar(diff.identity_basis.matches)}`
+      : "identity_basis=∅",
+    diff && diff.envelope_a && typeof diff.envelope_a === "object"
+      ? `A=${safeOneLine(diff.envelope_a.sourceLabel || "—")}  loaded_at_utc=${safeOneLine(diff.envelope_a.loaded_at_utc || "∅")}  outcome=${safeOneLine(
+          diff.envelope_a.outcome || "—"
+        )}`
+      : "A=∅",
+    diff && diff.envelope_b && typeof diff.envelope_b === "object"
+      ? `B=${safeOneLine(diff.envelope_b.sourceLabel || "—")}  loaded_at_utc=${safeOneLine(diff.envelope_b.loaded_at_utc || "∅")}  outcome=${safeOneLine(
+          diff.envelope_b.outcome || "—"
+        )}`
+      : "B=∅",
+    diff && typeof diff.diff_total === "number" ? `diff_total=${diff.diff_total}` : "diff_total=∅",
+    compareError ? `compare_error_code=${compareError}` : "",
+  ]
+    .filter((l) => l !== "")
+    .join("\n");
+  root.appendChild(header);
+
+  const cats = diff && Array.isArray(diff.category_summaries) ? diff.category_summaries : [];
+  const catWrap = document.createElement("div");
+  catWrap.className = "jc-proj-cats";
+  root.appendChild(catWrap);
+
+  if (!cats.length) {
+    const absent = document.createElement("div");
+    absent.className = "jc-proj-absent";
+    absent.textContent = "CATEGORIES: ∅";
+    catWrap.appendChild(absent);
+  } else {
+    for (const c of cats) {
+      const o = c && typeof c === "object" ? c : {};
+      const row = document.createElement("div");
+      row.className = "jc-proj-cat-row";
+
+      const name = document.createElement("div");
+      name.className = "jc-proj-cat-name";
+      name.textContent = safeOneLine(o.category || "category");
+
+      const presence = safeOneLine(o.presence || "");
+      const boxA = document.createElement("div");
+      const boxB = document.createElement("div");
+      boxA.className = "jc-proj-cat-box";
+      boxB.className = "jc-proj-cat-box";
+
+      const aPresent = presence === "present_both" || presence === "present_a_only";
+      const bPresent = presence === "present_both" || presence === "present_b_only";
+      boxA.textContent = aPresent ? " " : "∅";
+      boxB.textContent = bPresent ? " " : "∅";
+      if (aPresent) boxA.className += " present";
+      if (bPresent) boxB.className += " present";
+
+      const meta = document.createElement("div");
+      meta.className = "jc-proj-cat-meta";
+      meta.textContent = `presence=${presence || "—"}  diff_count=${fmtScalar(o.diff_count)}  changed=${fmtScalar(o.changed)}`;
+
+      row.appendChild(name);
+      row.appendChild(boxA);
+      row.appendChild(boxB);
+      row.appendChild(meta);
+      catWrap.appendChild(row);
+    }
+  }
+
+  const nonAction = document.createElement("pre");
+  nonAction.className = "jc-proj-nonaction";
+  const naLines = [];
+  naLines.push("NON-ACTION (visible constraints)");
+  naLines.push(SEPARATOR);
+  if (!decisions.length) {
+    naLines.push("∅");
+  } else {
+    for (const d of decisions) {
+      const o = d && typeof d === "object" ? d : {};
+      naLines.push(
+        `- domain=${safeOneLine(o.domain || "—")}  condition=${safeOneLine(o.condition || "—")}  required_response=${safeOneLine(
+          o.required_response || "—"
+        )}`
+      );
+    }
+  }
+  nonAction.textContent = naLines.join("\n");
+  root.appendChild(nonAction);
+}
+
+/**
+ * @param {unknown} v
+ * @returns {string}
+ */
+function safeOneLine(v) {
+  return String(v === null || v === undefined ? "" : v)
+    .replace(/\r?\n/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * @param {string} token
+ * @returns {boolean}
+ */
+function isSafeToken(token) {
+  const t = safeOneLine(token);
+  if (!t) return false;
+  if (t.length > 96) return false;
+  if (/^[a-zA-Z]+:\/\//.test(t)) return false; // URL-ish
+  if (/^[A-Za-z]:[\\/]/.test(t)) return false; // Windows absolute
+  if (/^\\\\/.test(t)) return false; // UNC
+  if (/^\//.test(t)) return false; // POSIX absolute
+  return true;
+}
+
+/**
+ * @param {unknown} v
+ * @returns {number|null}
+ */
+function toFiniteNumber(v) {
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  if (typeof v === "string") {
+    const n = Number(v);
+    if (Number.isFinite(n)) return n;
+  }
+  return null;
+}
+
+/**
+ * Best-effort: extract {start_s,end_s} from payload fields if present.
+ * @param {any} payload
+ * @returns {{start_s:number, end_s:number} | null}
+ */
+function extractSceneTimeRange(payload) {
+  const p = payload && typeof payload === "object" ? payload : {};
+  const startS = toFiniteNumber(p.scene_start_s) ?? toFiniteNumber(p.start_s) ?? toFiniteNumber(p.scene_start) ?? toFiniteNumber(p.start);
+  const endS = toFiniteNumber(p.scene_end_s) ?? toFiniteNumber(p.end_s) ?? toFiniteNumber(p.scene_end) ?? toFiniteNumber(p.end);
+
+  const startMs =
+    toFiniteNumber(p.scene_start_ms) ?? toFiniteNumber(p.start_ms) ?? toFiniteNumber(p.scene_start_msec) ?? toFiniteNumber(p.start_msec);
+  const endMs = toFiniteNumber(p.scene_end_ms) ?? toFiniteNumber(p.end_ms) ?? toFiniteNumber(p.scene_end_msec) ?? toFiniteNumber(p.end_msec);
+
+  const s = startS !== null ? startS : startMs !== null ? startMs / 1000.0 : null;
+  const e = endS !== null ? endS : endMs !== null ? endMs / 1000.0 : null;
+  if (s === null || e === null) return null;
+  if (!Number.isFinite(s) || !Number.isFinite(e)) return null;
+  if (e < s) return null;
+  return { start_s: s, end_s: e };
+}
+
+/**
+ * @param {{start_s:number,end_s:number} | null} a
+ * @param {{start_s:number,end_s:number} | null} b
+ * @returns {{start_s:number,end_s:number} | null}
+ */
+function mergeTimeRange(a, b) {
+  if (!a) return b || null;
+  if (!b) return a || null;
+  return { start_s: Math.min(a.start_s, b.start_s), end_s: Math.max(a.end_s, b.end_s) };
+}
+
+/**
+ * @param {any} hit
+ * @returns {{video_id:string, scene_id:string, key:string, anchor_token:string}}
+ */
+function extractSceneAnchor(hit) {
+  const payload = hit && hit.payload && typeof hit.payload === "object" ? hit.payload : {};
+  const prov = hit && hit.provenance && typeof hit.provenance === "object" ? hit.provenance : {};
+  const video_id = safeOneLine(payload.video_id || prov.video_id || "unknown");
+  const scene_id = safeOneLine(payload.scene_id || prov.scene_id || "unknown");
+  const key = `${video_id}/${scene_id}`;
+  return { video_id, scene_id, key, anchor_token: `scene:${key}` };
+}
+
+/**
+ * Whitelisted subject-ish keys only; never read transcript/text bodies.
+ * @param {any} payload
+ * @returns {string[]}
+ */
+function extractEntityTokens(payload) {
+  const p = payload && typeof payload === "object" ? payload : {};
+  const keys = [
+    "entity_ids",
+    "entity_id",
+    "person_ids",
+    "people",
+    "objects",
+    "subjects",
+    "tags",
+    "topic_tags",
+  ];
+
+  /** @type {string[]} */
+  const out = [];
+  for (const k of keys) {
+    if (!(k in p)) continue;
+    const v = p[k];
+    if (Array.isArray(v)) {
+      for (const item of v) {
+        const t = safeOneLine(item);
+        if (isSafeToken(t)) out.push(t);
+      }
+      continue;
+    }
+    const t = safeOneLine(v);
+    if (isSafeToken(t)) out.push(t);
+  }
+  return out;
+}
+
+/**
+ * @param {any} hit
+ * @returns {string[]}
+ */
+function extractFocusTokensForHit(hit) {
+  const payload = hit && hit.payload && typeof hit.payload === "object" ? hit.payload : {};
+  const { anchor_token } = extractSceneAnchor(hit);
+  const tokens = [anchor_token, ...extractEntityTokens(payload)];
+  const out = [];
+  const seen = new Set();
+  for (const t of tokens) {
+    const s = safeOneLine(t);
+    if (!isSafeToken(s)) continue;
+    if (seen.has(s)) continue;
+    seen.add(s);
+    out.push(s);
+  }
+  return out;
+}
+
+/**
+ * Build a deterministic projection model from the envelope (no inference; no sorting).
+ * @param {any} envelope
+ * @returns {{rails:any[], focus_keys:string[], time_min_s:number|null, time_max_s:number|null, has_time:boolean}}
+ */
+function buildProjectionModel(envelope) {
+  const env = envelope && typeof envelope === "object" ? envelope : {};
+  const candidates = Array.isArray(env.candidates) ? env.candidates : [];
+
+  /** @type {any[]} */
+  const rails = [];
+  /** @type {string[]} */
+  const focus_keys = [];
+  const focusSeen = new Set();
+
+  let timeMin = Infinity;
+  let timeMax = -Infinity;
+
+  const addFocus = (t) => {
+    const s = safeOneLine(t);
+    if (!isSafeToken(s)) return;
+    if (focusSeen.has(s)) return;
+    focusSeen.add(s);
+    focus_keys.push(s);
+  };
+
+  const sourceCandidates = candidates.length ? candidates : [];
+  for (const cand of sourceCandidates) {
+    const c = cand && typeof cand === "object" ? cand : {};
+    const evidence = Array.isArray(c.evidence) ? c.evidence : [];
+
+    const segMap = new Map();
+    for (const hit of evidence) {
+      const h = hit && typeof hit === "object" ? hit : {};
+      const { video_id, scene_id, key, anchor_token } = extractSceneAnchor(h);
+      let seg = segMap.get(key);
+      if (!seg) {
+        seg = {
+          key,
+          video_id,
+          scene_id,
+          roles: { support: 0, contradict: 0, related: 0, meta: 0 },
+          time: null,
+          focus_tokens: [],
+        };
+        segMap.set(key, seg);
+      }
+
+      const role = safeOneLine(h.role || "");
+      if (role === "support") seg.roles.support += 1;
+      else if (role === "contradict") seg.roles.contradict += 1;
+      else if (role === "related") seg.roles.related += 1;
+      else seg.roles.meta += 1;
+
+      const tr = extractSceneTimeRange(h.payload);
+      seg.time = mergeTimeRange(seg.time, tr);
+
+      // Focus tokens: scene anchor always present; entities optional.
+      for (const t of extractFocusTokensForHit(h)) {
+        if (!seg.focus_tokens.includes(t)) seg.focus_tokens.push(t);
+        addFocus(t);
+      }
+      addFocus(anchor_token);
+
+      if (seg.time) {
+        timeMin = Math.min(timeMin, seg.time.start_s);
+        timeMax = Math.max(timeMax, seg.time.end_s);
+      }
+    }
+
+    const candidate_id = safeOneLine(c.candidate_id || "");
+    const state = safeOneLine(c.state || "");
+    rails.push({
+      label: candidate_id ? `candidate:${candidate_id}` : "candidate",
+      candidate_id,
+      state,
+      segments: Array.from(segMap.values()),
+    });
+  }
+
+  // If there are no candidates, still provide a focus key from any envelope-level anchors if possible (none by default).
+  const has_time = Number.isFinite(timeMin) && Number.isFinite(timeMax) && timeMax >= timeMin;
+  return {
+    rails,
+    focus_keys,
+    time_min_s: has_time ? timeMin : null,
+    time_max_s: has_time ? timeMax : null,
+    has_time,
+  };
+}
+
+/**
+ * Map epistemic state → presence class (no scores; no ranking).
+ * @param {unknown} rawState
+ * @returns {string}
+ */
+function projectionStateClass(rawState) {
+  const s = safeOneLine(rawState || "").toLowerCase();
+  if (s === "supported") return "state-supported";
+  if (s === "partially_supported") return "state-partially_supported";
+  if (s === "conflicted") return "state-conflicted";
+  if (s === "unsupported_but_related") return "state-unsupported_but_related";
+  if (s === "unknown" || s === "dont_know") return "state-unknown";
+  return "state-unknown";
+}
+
+/**
+ * @param {string} input
+ * @returns {string}
+ */
+function fnv1a32Hex(input) {
+  let hash = 0x811c9dc5;
+  const s = String(input || "");
+  for (let i = 0; i < s.length; i++) {
+    hash ^= s.charCodeAt(i);
+    // 32-bit FNV-1a prime: 16777619
+    hash = (hash + ((hash << 1) + (hash << 4) + (hash << 7) + (hash << 8) + (hash << 24))) >>> 0;
+  }
+  return hash.toString(16).padStart(8, "0");
+}
+
+/**
+ * Inspector-safe identifier (never log raw tokens).
+ * @param {unknown} token
+ * @returns {string}
+ */
+function hashTokenForInspector(token) {
+  const t = safeOneLine(token || "");
+  if (!t) return "";
+  return `fnv1a32:${fnv1a32Hex(t)}`;
+}
+
+/**
+ * @param {number} n
+ * @param {number} lo
+ * @param {number} hi
+ * @returns {number}
+ */
+function clamp(n, lo, hi) {
+  if (!Number.isFinite(n)) return lo;
+  if (n < lo) return lo;
+  if (n > hi) return hi;
+  return n;
+}
+
+/**
+ * @param {{time_min_s:number|null, time_max_s:number|null, has_time:boolean}} model
+ * @param {any} projection
+ * @returns {{window_start_s:number|null, window_end_s:number|null, cursor_s:number|null, focus_key:string|null}}
+ */
+function resolveProjectionView(model, projection) {
+  const p = projection && typeof projection === "object" ? projection : {};
+  const focus_key = typeof p.focus_key === "string" && p.focus_key ? p.focus_key : null;
+  if (!model.has_time || model.time_min_s === null || model.time_max_s === null) {
+    return { window_start_s: null, window_end_s: null, cursor_s: null, focus_key };
+  }
+
+  const tMin = model.time_min_s;
+  const tMax = model.time_max_s;
+  const wStartRaw = toFiniteNumber(p.window_start_s);
+  const wEndRaw = toFiniteNumber(p.window_end_s);
+  let window_start_s = wStartRaw !== null ? wStartRaw : tMin;
+  let window_end_s = wEndRaw !== null ? wEndRaw : tMax;
+  if (window_end_s <= window_start_s) {
+    window_start_s = tMin;
+    window_end_s = tMax;
+  }
+  window_start_s = clamp(window_start_s, tMin, tMax);
+  window_end_s = clamp(window_end_s, tMin, tMax);
+  if (window_end_s <= window_start_s) {
+    window_start_s = tMin;
+    window_end_s = tMax;
+  }
+
+  const cursorRaw = toFiniteNumber(p.cursor_s);
+  const cursor_s =
+    cursorRaw !== null ? clamp(cursorRaw, window_start_s, window_end_s) : window_start_s;
+
+  return { window_start_s, window_end_s, cursor_s, focus_key };
+}
+
+/**
+ * Replace projection state immutably (view-only; no data mutation).
+ * @param {Record<string, unknown>} patch
+ * @param {string} eventType
+ * @param {string} source
+ */
+function updateProjectionState(patch, eventType, source) {
+  const current = getState();
+  if (!current || typeof current !== "object") return;
+  const proj = current.projection && typeof current.projection === "object" ? current.projection : {};
+  const next = { ...proj, ...patch };
+  const nextState = {
+    envelope: current.envelope,
+    nonActionDecisions: current.nonActionDecisions,
+    sourceLabel: current.sourceLabel,
+    mode: current.mode,
+    compare: current.compare,
+    view: current.view,
+    projection: next,
+  };
+  loadState(nextState);
+  emitInspectorEvent(String(eventType || ""), String(source || ""), getState(), _lastInspectorDiagnostics);
+}
+
+/**
  * @param {string} selector
  * @param {number} dir
  */
@@ -1344,6 +2113,7 @@ function renderState(state) {
   if (!el) return;
 
   const mode = state && String(state.mode || "") === "compare" ? "compare" : "single";
+  const view = state && String(state.view || "") === GOODQ_UI_VIEW_PROJECT ? GOODQ_UI_VIEW_PROJECT : GOODQ_UI_VIEW_TEXT;
   const rendered =
     mode === "compare"
       ? renderEpistemicDiffText({
@@ -1357,7 +2127,11 @@ function renderState(state) {
       : renderJustificationText({ envelope: state.envelope, nonActionDecisions: state.nonActionDecisions });
   el.textContent = rendered;
 
-  renderStructuredView(rendered);
+  if (view === GOODQ_UI_VIEW_PROJECT) {
+    renderProjectionView(state, rendered);
+  } else {
+    renderStructuredView(rendered);
+  }
 
   ensureOverlayRefs();
   const diagnosticsText =
@@ -1380,16 +2154,22 @@ function renderState(state) {
  */
 function loadState(newState) {
   const isInitial = GoodQState === null;
+  const prevView = GoodQState && typeof GoodQState.view === "string" ? GoodQState.view : GOODQ_UI_VIEW_TEXT;
   assertStateShape(newState);
   deepFreeze(newState);
 
   const mode = String(newState.mode || "") === "compare" ? "compare" : "single";
+  const view = String(newState.view || "") === GOODQ_UI_VIEW_PROJECT ? GOODQ_UI_VIEW_PROJECT : GOODQ_UI_VIEW_TEXT;
+  const projection =
+    newState.projection && typeof newState.projection === "object" ? newState.projection : null;
   const state = {
     envelope: newState.envelope,
     nonActionDecisions: newState.nonActionDecisions,
     sourceLabel: String(newState.sourceLabel),
     updatedAt: new Date().toISOString(),
     mode,
+    view,
+    projection,
     compare: mode === "compare" && newState.compare && typeof newState.compare === "object" ? newState.compare : null,
   };
   deepFreeze(state);
@@ -1401,6 +2181,14 @@ function loadState(newState) {
   window.GoodQState = state;
   renderState(state);
   emitInspectorEvent(isInitial ? "initial_render" : "state_transition", "loadState", state, _lastInspectorDiagnostics);
+  if (prevView !== view) {
+    emitInspectorEvent(
+      view === GOODQ_UI_VIEW_PROJECT ? "projection_entered" : "projection_exited",
+      "loadState",
+      state,
+      _lastInspectorDiagnostics
+    );
+  }
   return state;
 }
 
@@ -1411,8 +2199,8 @@ function loadState(newState) {
  * @param {string} sourceLabel
  * @returns {any}
  */
-function replaceEnvelope(envelope, decisions, sourceLabel) {
-  return loadState({ envelope, nonActionDecisions: decisions, sourceLabel });
+function replaceEnvelope(envelope, decisions, sourceLabel, view, projection) {
+  return loadState({ envelope, nonActionDecisions: decisions, sourceLabel, view, projection });
 }
 
 /**
@@ -1423,7 +2211,7 @@ function replaceEnvelope(envelope, decisions, sourceLabel) {
  * @param {string} sourceLabel
  * @returns {any}
  */
-function replaceComparison(diff, errorCode, decisions, sourceLabel) {
+function replaceComparison(diff, errorCode, decisions, sourceLabel, view) {
   const compare = diff && typeof diff === "object" ? { diff } : { error_code: String(errorCode || "compare_failed") };
   const envelopeStub = {
     read_model_version: 1,
@@ -1432,7 +2220,14 @@ function replaceComparison(diff, errorCode, decisions, sourceLabel) {
     question: { text: "" },
     candidates: [],
   };
-  return loadState({ envelope: envelopeStub, nonActionDecisions: decisions, sourceLabel, mode: "compare", compare });
+  return loadState({
+    envelope: envelopeStub,
+    nonActionDecisions: decisions,
+    sourceLabel,
+    mode: "compare",
+    compare,
+    view,
+  });
 }
 
 /**
@@ -1499,6 +2294,110 @@ function ensureKeyListener() {
       ensureOverlayRefs();
       if (_overlayRef) toggleDiagnosticsOverlay(_overlayRef);
       return;
+    }
+
+    const st = getState();
+    const isProjectView = st && typeof st.view === "string" && st.view === GOODQ_UI_VIEW_PROJECT;
+    if (isProjectView) {
+      if (key === "c" || key === "C") {
+        e.preventDefault();
+        emitInspectorEvent("compare_toggled", "projection_key", st, _lastInspectorDiagnostics);
+        try {
+          const params = new URLSearchParams(
+            String(window.location && window.location.search ? window.location.search : "")
+          );
+          if (st && String(st.mode || "") === "compare") {
+            params.set("mode", GOODQ_UI_VIEW_PROJECT); // alias: single + view=project
+            params.delete("view");
+          } else {
+            params.set("mode", "compare");
+            params.set("view", GOODQ_UI_VIEW_PROJECT);
+          }
+          const next = params.toString();
+          setTimeout(() => {
+            window.location.search = next ? `?${next}` : "";
+          }, 0);
+        } catch {
+          // Best-effort only.
+        }
+        return;
+      }
+
+      // Time scrub/pan/zoom (view-only; no re-ranking; no filtering).
+      const isSingle = st && String(st.mode || "") !== "compare";
+      if (isSingle) {
+        const model = buildProjectionModel(st.envelope);
+        if (model.has_time) {
+          const viewState = resolveProjectionView(model, st.projection);
+          const tMin = model.time_min_s;
+          const tMax = model.time_max_s;
+          const wStart = viewState.window_start_s;
+          const wEnd = viewState.window_end_s;
+          const cursor = viewState.cursor_s;
+
+          if (
+            typeof tMin === "number" &&
+            typeof tMax === "number" &&
+            typeof wStart === "number" &&
+            typeof wEnd === "number" &&
+            typeof cursor === "number" &&
+            wEnd > wStart
+          ) {
+            const span = wEnd - wStart;
+
+            if (key === "ArrowLeft" || key === "ArrowRight") {
+              e.preventDefault();
+              const dir = key === "ArrowLeft" ? -1 : 1;
+              if (e.shiftKey) {
+                const delta = dir * span * 0.1;
+                let ns = wStart + delta;
+                let ne = wEnd + delta;
+                const wSpan = ne - ns;
+                if (ns < tMin) {
+                  ns = tMin;
+                  ne = tMin + wSpan;
+                }
+                if (ne > tMax) {
+                  ne = tMax;
+                  ns = tMax - wSpan;
+                }
+                updateProjectionState({ window_start_s: ns, window_end_s: ne }, "time_scrubbed", "projection_pan");
+              } else {
+                const delta = dir * span * 0.01;
+                const nc = clamp(cursor + delta, wStart, wEnd);
+                updateProjectionState({ cursor_s: nc }, "time_scrubbed", "projection_scrub_key");
+              }
+              return;
+            }
+
+            if (key === "+" || key === "=" || key === "-" || key === "_") {
+              e.preventDefault();
+              const zoomIn = key === "+" || key === "=";
+              const factor = zoomIn ? 0.8 : 1.25;
+              const nextSpan = Math.max(0.5, span * factor);
+              let ns = cursor - nextSpan / 2;
+              let ne = cursor + nextSpan / 2;
+              const wSpan = ne - ns;
+              if (ns < tMin) {
+                ns = tMin;
+                ne = tMin + wSpan;
+              }
+              if (ne > tMax) {
+                ne = tMax;
+                ns = tMax - wSpan;
+              }
+              ns = clamp(ns, tMin, tMax);
+              ne = clamp(ne, tMin, tMax);
+              if (ne <= ns) {
+                ns = tMin;
+                ne = tMax;
+              }
+              updateProjectionState({ window_start_s: ns, window_end_s: ne, cursor_s: clamp(cursor, ns, ne) }, "time_scrubbed", "projection_zoom");
+              return;
+            }
+          }
+        }
+      }
     }
 
     if (key === "]") {
@@ -1577,10 +2476,16 @@ function buildSourceFailureDecisions(errorCode) {
  * @param {string} sourceLabel
  * @param {string} errorCode
  */
-function renderSourceFailure(sourceLabel, errorCode) {
+function renderSourceFailure(sourceLabel, errorCode, view) {
   const envelope = buildSourceFailureEnvelope(sourceLabel, errorCode);
   const decisions = buildSourceFailureDecisions(errorCode);
-  replaceEnvelope(envelope, decisions, sourceLabel);
+  const v =
+    typeof view === "string" && view
+      ? view
+      : GoodQState && typeof GoodQState.view === "string"
+        ? GoodQState.view
+        : GOODQ_UI_VIEW_TEXT;
+  replaceEnvelope(envelope, decisions, sourceLabel, v);
 }
 
 /**
@@ -1605,9 +2510,15 @@ function buildCompareFailureDecisions(errorCode) {
  * @param {string} sourceLabel
  * @param {string} errorCode
  */
-function renderCompareFailure(sourceLabel, errorCode) {
+function renderCompareFailure(sourceLabel, errorCode, view) {
   const decisions = buildCompareFailureDecisions(errorCode);
-  replaceComparison(null, errorCode, decisions, sourceLabel);
+  const v =
+    typeof view === "string" && view
+      ? view
+      : GoodQState && typeof GoodQState.view === "string"
+        ? GoodQState.view
+        : GOODQ_UI_VIEW_TEXT;
+  replaceComparison(null, errorCode, decisions, sourceLabel, v);
 }
 
 /**
@@ -1628,6 +2539,15 @@ function normalizeSourceKey(raw) {
 function normalizeMode(raw) {
   const s = String(raw || "").trim().toLowerCase();
   return s === "compare" ? "compare" : "single";
+}
+
+/**
+ * @param {unknown} raw
+ * @returns {"text"|"project"}
+ */
+function normalizeView(raw) {
+  const s = String(raw || "").trim().toLowerCase();
+  return s === "project" ? "project" : "text";
 }
 
 /**
@@ -1689,18 +2609,18 @@ function extractDiffBundle(data) {
   return { diff };
 }
 
-async function loadExampleSource() {
-  replaceEnvelope(EXAMPLE.envelope, EXAMPLE.nonActionDecisions || [], "example");
+async function loadExampleSource(view) {
+  replaceEnvelope(EXAMPLE.envelope, EXAMPLE.nonActionDecisions || [], "example", view);
 }
 
 /**
  * Load EpistemicReadEnvelope + NonActionDecision[] from a local JSON file URL (explicit).
  * @param {string} rawPath
  */
-async function loadLocalJsonSource(rawPath) {
+async function loadLocalJsonSource(rawPath, view) {
   const safePath = sanitizeLocalJsonPath(rawPath);
   if (!safePath) {
-    renderSourceFailure("local-json", "file_path_invalid");
+    renderSourceFailure("local-json", "file_path_invalid", view);
     return;
   }
 
@@ -1708,21 +2628,21 @@ async function loadLocalJsonSource(rawPath) {
   try {
     url = new URL(safePath, window.location.href).toString();
   } catch {
-    renderSourceFailure("local-json", "file_url_invalid");
+    renderSourceFailure("local-json", "file_url_invalid", view);
     return;
   }
 
   try {
     const resp = await fetch(url, { cache: "no-store" });
     if (!resp.ok) {
-      renderSourceFailure("local-json", `file_fetch_http_${resp.status}`);
+      renderSourceFailure("local-json", `file_fetch_http_${resp.status}`, view);
       return;
     }
     let data = null;
     try {
       data = await resp.json();
     } catch {
-      renderSourceFailure("local-json", "file_json_parse_error");
+      renderSourceFailure("local-json", "file_json_parse_error", view);
       return;
     }
 
@@ -1733,12 +2653,12 @@ async function loadLocalJsonSource(rawPath) {
     } catch (e) {
       const msg = e && typeof e === "object" && "message" in e ? String(e.message || "") : "";
       const code = msg && msg.startsWith("bundle_") ? `file_schema_${msg}` : "file_schema_invalid";
-      renderSourceFailure("local-json", code);
+      renderSourceFailure("local-json", code, view);
       return;
     }
-    replaceEnvelope(envelope, decisions, "local-json");
+    replaceEnvelope(envelope, decisions, "local-json", view);
   } catch {
-    renderSourceFailure("local-json", "file_fetch_error");
+    renderSourceFailure("local-json", "file_fetch_error", view);
   }
 }
 
@@ -1770,23 +2690,23 @@ function resolveReadonlyApiUrl(apiBase) {
  * Load EpistemicReadEnvelope + NonActionDecision[] from the read-only API endpoint (explicit).
  * @param {string} apiBase
  */
-async function loadApiReadonlySource(apiBase) {
+async function loadApiReadonlySource(apiBase, view) {
   const url = resolveReadonlyApiUrl(apiBase);
   if (!url) {
-    renderSourceFailure("api-readonly", "api_url_unavailable");
+    renderSourceFailure("api-readonly", "api_url_unavailable", view);
     return;
   }
   try {
     const resp = await fetch(url, { cache: "no-store" });
     if (!resp.ok) {
-      renderSourceFailure("api-readonly", `api_fetch_http_${resp.status}`);
+      renderSourceFailure("api-readonly", `api_fetch_http_${resp.status}`, view);
       return;
     }
     let data = null;
     try {
       data = await resp.json();
     } catch {
-      renderSourceFailure("api-readonly", "api_json_parse_error");
+      renderSourceFailure("api-readonly", "api_json_parse_error", view);
       return;
     }
 
@@ -1797,12 +2717,12 @@ async function loadApiReadonlySource(apiBase) {
     } catch (e) {
       const msg = e && typeof e === "object" && "message" in e ? String(e.message || "") : "";
       const code = msg && msg.startsWith("bundle_") ? `api_schema_${msg}` : "api_schema_invalid";
-      renderSourceFailure("api-readonly", code);
+      renderSourceFailure("api-readonly", code, view);
       return;
     }
-    replaceEnvelope(envelope, decisions, "api-readonly");
+    replaceEnvelope(envelope, decisions, "api-readonly", view);
   } catch {
-    renderSourceFailure("api-readonly", "api_fetch_error");
+    renderSourceFailure("api-readonly", "api_fetch_error", view);
   }
 }
 
@@ -1968,23 +2888,24 @@ function ensureSourceControls() {
   }
 
   async function performLoad() {
+    const view = GoodQState && typeof GoodQState.view === "string" ? GoodQState.view : GOODQ_UI_VIEW_TEXT;
     const v = normalizeSourceKey(select.value);
     if (v === "example") {
-      await loadExampleSource();
+      await loadExampleSource(view);
       status.textContent = "source: example";
       return;
     }
     if (v === "file") {
-      await loadLocalJsonSource(path.value);
+      await loadLocalJsonSource(path.value, view);
       status.textContent = "source: local-json";
       return;
     }
     if (v === "api") {
-      await loadApiReadonlySource(apiBase.value);
+      await loadApiReadonlySource(apiBase.value, view);
       status.textContent = "source: api-readonly";
       return;
     }
-    await loadExampleSource();
+    await loadExampleSource(view);
     status.textContent = "source: example";
   }
 
@@ -2019,11 +2940,18 @@ function ensureSourceControls() {
 function readSourceParams() {
   try {
     const params = new URLSearchParams(String(window.location && window.location.search ? window.location.search : ""));
-    const mode = normalizeMode(params.get("mode"));
+    const rawMode = String(params.get("mode") || "");
+    let mode = normalizeMode(rawMode);
+    let view = normalizeView(params.get("view"));
+    if (rawMode.trim().toLowerCase() === GOODQ_UI_VIEW_PROJECT) {
+      mode = "single";
+      view = GOODQ_UI_VIEW_PROJECT;
+    }
     const sourceKey = normalizeSourceKey(params.get("source"));
     const diffSourceKey = normalizeDiffSourceKey(params.get("diff_source"));
     return {
       mode,
+      view,
       sourceKey,
       path: String(params.get("path") || ""),
       apiBase: String(params.get("api_base") || ""),
@@ -2031,7 +2959,15 @@ function readSourceParams() {
       diffPath: String(params.get("diff_path") || ""),
     };
   } catch {
-    return { mode: "single", sourceKey: "example", path: "", apiBase: "", diffSourceKey: "example", diffPath: "" };
+    return {
+      mode: "single",
+      view: GOODQ_UI_VIEW_TEXT,
+      sourceKey: "example",
+      path: "",
+      apiBase: "",
+      diffSourceKey: "example",
+      diffPath: "",
+    };
   }
 }
 
@@ -2057,26 +2993,26 @@ async function main() {
     emitInspectorComparisonEvent("comparison_initiated", "main", null, "");
 
     if (params.diffSourceKey === "api") {
-      renderCompareFailure("compare", "diff_api_not_supported");
+      renderCompareFailure("compare", "diff_api_not_supported", params.view);
       emitInspectorComparisonEvent("comparison_completed", "main", null, "diff_api_not_supported");
       return;
     }
 
     if (params.diffSourceKey === "file") {
       if (!params.diffPath) {
-        renderCompareFailure("compare", "diff_path_missing");
+        renderCompareFailure("compare", "diff_path_missing", params.view);
         emitInspectorComparisonEvent("comparison_completed", "main", null, "diff_path_missing");
         return;
       }
       try {
         const diff = await loadLocalJsonDiffSource(params.diffPath);
-        replaceComparison(diff, "", [], "compare:file");
+        replaceComparison(diff, "", [], "compare:file", params.view);
         emitInspectorComparisonEvent("comparison_completed", "main", diff, "");
         return;
       } catch (e) {
         const msg = e && typeof e === "object" && "message" in e ? String(e.message || "") : "";
         const code = msg || "diff_file_fetch_error";
-        renderCompareFailure("compare", code);
+        renderCompareFailure("compare", code, params.view);
         emitInspectorComparisonEvent("comparison_completed", "main", null, code);
         return;
       }
@@ -2084,7 +3020,7 @@ async function main() {
 
     // Default: example diff (no diffs)
     const diff = buildExampleDiff();
-    replaceComparison(diff, "", [], "compare:example");
+    replaceComparison(diff, "", [], "compare:example", params.view);
     emitInspectorComparisonEvent("comparison_completed", "main", diff, "");
     return;
   }
@@ -2097,14 +3033,14 @@ async function main() {
   }
 
   if (params.sourceKey === "file") {
-    await loadLocalJsonSource(params.path);
+    await loadLocalJsonSource(params.path, params.view);
     return;
   }
   if (params.sourceKey === "api") {
-    await loadApiReadonlySource(params.apiBase);
+    await loadApiReadonlySource(params.apiBase, params.view);
     return;
   }
-  await loadExampleSource();
+  await loadExampleSource(params.view);
 }
 
 main();

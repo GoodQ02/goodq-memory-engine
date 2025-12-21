@@ -59,6 +59,7 @@ No actions. No suggestions. No network calls.
     const counts = o.counts && typeof o.counts === "object" ? o.counts : {};
     const diag = o.diagnostics && typeof o.diagnostics === "object" ? o.diagnostics : {};
     const cmp = o.comparison && typeof o.comparison === "object" ? o.comparison : {};
+    const proj = o.projection && typeof o.projection === "object" ? o.projection : {};
 
     const diffCodesRaw = Array.isArray(cmp.diff_codes) ? cmp.diff_codes : [];
     const diff_codes = diffCodesRaw.map((c) => safeStr(c)).filter((s) => s.trim().length > 0).slice(0, 64);
@@ -70,6 +71,7 @@ No actions. No suggestions. No network calls.
       event_type: safeStr(o.event_type),
       source: safeStr(o.source),
       last_render_ts_utc: safeStr(o.last_render_ts_utc),
+      view: safeStr(o.view || proj.view),
       counts: {
         candidates: Number.isFinite(counts.candidates) ? counts.candidates : 0,
         evidence_hits: Number.isFinite(counts.evidence_hits) ? counts.evidence_hits : 0,
@@ -78,6 +80,14 @@ No actions. No suggestions. No network calls.
       diagnostics: {
         order_fingerprint: safeStr(diag.order_fingerprint),
         warnings: toWarningCodes(diag.warnings),
+      },
+      projection: {
+        view: safeStr(proj.view),
+        mode: safeStr(proj.mode),
+        focus_hash: safeStr(proj.focus_hash),
+        window_start_s: Number.isFinite(proj.window_start_s) ? proj.window_start_s : null,
+        window_end_s: Number.isFinite(proj.window_end_s) ? proj.window_end_s : null,
+        cursor_s: Number.isFinite(proj.cursor_s) ? proj.cursor_s : null,
       },
       comparison: {
         diff_version: Number.isFinite(cmp.diff_version) ? cmp.diff_version : 0,

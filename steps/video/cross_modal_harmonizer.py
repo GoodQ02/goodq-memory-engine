@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Optional
 import os
 import json
 import logging
+import sqlite3
 from pathlib import Path
 import sys
 
@@ -32,6 +33,104 @@ def load_json_safe(path: str) -> Optional[Dict[str, Any]]:
     except Exception as e:
         logger.warning(f"Failed to load {path}: {e}")
     return None
+
+
+def _load_commit_presence(cfg: Dict[str, Any], video_id: str, scene_ids: List[str] | None = None) -> Dict[str, Any]:
+    """Best-effort: derive modality presence from committed memory events (authoritative)."""
+    paths_cfg = (cfg.get('paths') or {}) if isinstance(cfg, dict) else {}
+    db_path = paths_cfg.get('db_path')
+    if not db_path and paths_cfg.get('db_dir'):
+        db_path = os.path.join(paths_cfg['db_dir'], 'memory.db')
+
+    presence = {
+        'available': False,
+        'has_audio': False,
+        'has_transcripts': False,
+        'audio_scene_ids': set(),
+        'transcript_scene_ids': set(),
+    }
+
+    if not isinstance(db_path, str) or not db_path:
+        return presence
+    if not os.path.exists(db_path):
+        return presence
+
+    conn = None
+    try:
+        conn = sqlite3.connect(db_path, timeout=1.0)
+        cur = conn.cursor()
+
+        def _has_any_by_video(modality: str) -> bool:
+            cur.execute(
+                """
+                SELECT 1
+                FROM memory_commit_events
+                WHERE video_id = ?
+                  AND modality = ?
+                  AND attempted = 1
+                  AND committed = 1
+                LIMIT 1
+                """,
+                (video_id, modality),
+            )
+            return cur.fetchone() is not None
+
+        def _scene_ids_by_video(modality: str) -> set[str]:
+            cur.execute(
+                """
+                SELECT DISTINCT scene_id
+                FROM memory_commit_events
+                WHERE video_id = ?
+                  AND modality = ?
+                  AND attempted = 1
+                  AND committed = 1
+                  AND scene_id IS NOT NULL
+                  AND scene_id != ''
+                """,
+                (video_id, modality),
+            )
+            return {row[0] for row in cur.fetchall() if row and row[0]}
+
+        def _scene_ids_in(modality: str, scene_ids_list: List[str]) -> set[str]:
+            if not scene_ids_list:
+                return set()
+            placeholders = ",".join("?" for _ in scene_ids_list)
+            cur.execute(
+                f"""
+                SELECT DISTINCT scene_id
+                FROM memory_commit_events
+                WHERE modality = ?
+                  AND attempted = 1
+                  AND committed = 1
+                  AND scene_id IN ({placeholders})
+                """,
+                (modality, *scene_ids_list),
+            )
+            return {row[0] for row in cur.fetchall() if row and row[0]}
+
+        scene_ids_list = [str(sid) for sid in (scene_ids or []) if sid]
+
+        audio_scene_ids = _scene_ids_by_video('audio')
+        transcript_scene_ids = _scene_ids_by_video('audio_transcript')
+        if scene_ids_list:
+            audio_scene_ids |= _scene_ids_in('audio', scene_ids_list)
+            transcript_scene_ids |= _scene_ids_in('audio_transcript', scene_ids_list)
+
+        presence['audio_scene_ids'] = audio_scene_ids
+        presence['transcript_scene_ids'] = transcript_scene_ids
+        presence['has_audio'] = _has_any_by_video('audio') or bool(audio_scene_ids)
+        presence['has_transcripts'] = _has_any_by_video('audio_transcript') or bool(transcript_scene_ids)
+        presence['available'] = True
+        return presence
+    except Exception as e:
+        logger.warning(f"[HARMONIZER] Failed to query memory_commit_events for presence: {e}")
+        return presence
+    finally:
+        if conn is not None:
+            try:
+                conn.close()
+            except Exception:
+                pass
 
 
 def align_audio_to_scenes(
@@ -158,6 +257,16 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
         return {"harmonization_status": "skipped", "reason": "no_scene_manifest"}
     
     scenes = scene_data.get('scenes', [])
+
+    # Presence must be derived from committed truth (memory_commit_events), not filesystem heuristics.
+    scene_ids_for_video = [str(s.get('id', s.get('scene_id', ''))) for s in scenes if s.get('id') or s.get('scene_id')]
+    commit_presence = _load_commit_presence(cfg, str(video_id), scene_ids=scene_ids_for_video)
+    audio_scene_ids = commit_presence.get('audio_scene_ids') if commit_presence.get('available') else set()
+    transcript_scene_ids = commit_presence.get('transcript_scene_ids') if commit_presence.get('available') else set()
+    has_audio_committed = bool(commit_presence.get('has_audio')) if commit_presence.get('available') else None
+    has_transcripts_committed = bool(commit_presence.get('has_transcripts')) if commit_presence.get('available') else None
+    audio_scene_truth_available = has_audio_committed is False or bool(audio_scene_ids)
+    transcript_scene_truth_available = has_transcripts_committed is False or bool(transcript_scene_ids)
     
     # Load audio segmentation (Phase 3)
     segmentation_path = os.path.join(processing_dir, 'audio', 'segmentation.json')
@@ -229,6 +338,14 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
                     speaker_ids.append(spk_id)
         
         # Build unified segment
+        scene_id_str = str(scene_id)
+        has_audio_for_scene = None
+        has_transcript_for_scene = None
+        if audio_scene_truth_available and isinstance(audio_scene_ids, set):
+            has_audio_for_scene = scene_id_str in audio_scene_ids
+        if transcript_scene_truth_available and isinstance(transcript_scene_ids, set):
+            has_transcript_for_scene = scene_id_str in transcript_scene_ids
+
         unified_segment = {
             'scene_id': scene_id,
             'start': scene_start,
@@ -254,8 +371,8 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
             # Metadata
             'scene_confidence': scene.get('confidence', 0.0),
             'has_visual_embeddings': bool(scene.get('clip_id') and scene.get('dino_id')),
-            'has_audio': len(audio_chunk_ids) > 0,
-            'has_transcript': len(scene_transcripts) > 0,
+            'has_audio': has_audio_for_scene if has_audio_for_scene is not None else len(audio_chunk_ids) > 0,
+            'has_transcript': has_transcript_for_scene if has_transcript_for_scene is not None else len(scene_transcripts) > 0,
             'has_speakers': len(speaker_ids) > 0
         }
         
@@ -302,8 +419,8 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
         
         # Global metadata
         'has_visual_embeddings': any(s.get('has_visual_embeddings') for s in unified_segments),
-        'has_audio': any(s.get('has_audio') for s in unified_segments),
-        'has_transcripts': any(s.get('has_transcript') for s in unified_segments),
+        'has_audio': has_audio_committed if has_audio_committed is not None else any(s.get('has_audio') for s in unified_segments),
+        'has_transcripts': has_transcripts_committed if has_transcripts_committed is not None else any(s.get('has_transcript') for s in unified_segments),
         
         # Processing metadata
         'phase5_complete': scene_data.get('phase5_complete', False),

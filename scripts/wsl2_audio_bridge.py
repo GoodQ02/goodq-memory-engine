@@ -6,6 +6,7 @@ Simple interface to WSL2 audio processing
 import subprocess
 import json
 import time
+import os
 from pathlib import Path
 
 class WSL2AudioBridge:
@@ -14,6 +15,7 @@ class WSL2AudioBridge:
     def __init__(self):
         self.workspace = "/home/joesdomingo/goodq_audio"
         self.wsl_user = "joesdomingo"
+        self.wsl_distro = os.environ.get("GOODQ_WSL_DISTRO", "Ubuntu")
         
     def wsl_path(self, windows_path):
         """Convert Windows path to WSL path"""
@@ -72,39 +74,91 @@ class WSL2AudioBridge:
         
         print(f"Processing: {audio_path.name}")
         
+        def _stderr_warnings(stderr: str, max_lines: int = 50, max_chars: int = 300) -> list[str]:
+            warnings: list[str] = []
+            for line in (stderr or "").splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                if len(line) > max_chars:
+                    line = line[:max_chars] + "..."
+                warnings.append(line)
+                if len(warnings) >= max_lines:
+                    break
+            return warnings
+
+        def _try_parse_json(text: str) -> dict | None:
+            text = (text or "").strip()
+            if not text:
+                return None
+            try:
+                parsed = json.loads(text)
+            except json.JSONDecodeError:
+                return None
+            return parsed if isinstance(parsed, dict) else None
+
+        def _try_read_result_json() -> dict | None:
+            # Best-effort: if stdout is empty/invalid, attempt to read the output artifact.
+            # The WSL script writes <output_dir>/result.json on both success and error paths.
+            try:
+                read_cmd = ["wsl", "-d", self.wsl_distro, "--", "cat", f"{wsl_output}/result.json"]
+                read_result = subprocess.run(read_cmd, capture_output=True, text=True, timeout=10)
+            except Exception:
+                return None
+            if read_result.returncode != 0:
+                return None
+            return _try_parse_json(read_result.stdout)
+
         # Execute in WSL2
         try:
             result = subprocess.run(
-                ["wsl", "-d", "Ubuntu", "--", "bash", "-c", cmd],
+                ["wsl", "-d", self.wsl_distro, "--", "bash", "-c", cmd],
                 capture_output=True,
                 text=True,
                 timeout=timeout
             )
-            
-            if result.returncode != 0:
-                raise RuntimeError(f"Processing failed:\nSTDOUT: {result.stdout}\nSTDERR: {result.stderr}")
-                
-            # Parse JSON output from process.py
-            if not result.stdout.strip():
-                raise RuntimeError(f"No output from script.\nSTDERR: {result.stderr}")
-                
-            output = json.loads(result.stdout)
-            
-            if output.get("status") != "success":
-                raise RuntimeError(f"Processing error: {output.get('error', 'Unknown error')}")
-            
+
+            stderr_warnings = _stderr_warnings(result.stderr)
+
+            output = _try_parse_json(result.stdout)
+            if output is None:
+                output = _try_read_result_json()
+
+            if output is None:
+                # No structured output available; preserve stderr as warnings (non-fatal details).
+                return {
+                    "status": "error",
+                    "error": "No JSON output from WSL audio processor",
+                    "returncode": result.returncode,
+                    "stderr_warnings": stderr_warnings,
+                }
+
+            # Always attach stderr warnings for observability; stderr is not a failure signal on its own.
+            if stderr_warnings:
+                output.setdefault("stderr_warnings", stderr_warnings)
+            output.setdefault("returncode", result.returncode)
+
+            # Success is driven by JSON status + required fields, not stderr noise.
+            if output.get("status") == "success":
+                return output
+
+            # Preserve structured error details even when the process exits non-zero.
+            output.setdefault("status", "error")
+            output.setdefault("error", "Unknown error")
             return output
-                
+
         except subprocess.TimeoutExpired:
-            raise TimeoutError(f"Processing timeout after {timeout}s")
-        except json.JSONDecodeError as e:
-            raise RuntimeError(f"Invalid JSON output: {e}\nOutput: {result.stdout}")
+            return {
+                "status": "error",
+                "error": f"Processing timeout after {timeout}s",
+                "returncode": None,
+            }
             
     def check_status(self):
         """Check if WSL2 audio is ready"""
         test_cmd = f"source {self.workspace}/setup_cuda_env.sh && python3 -c 'import torch; print(torch.cuda.is_available())' 2>&1"
         result = subprocess.run(
-            ["wsl", "-d", "Ubuntu", "--", "bash", "-c", test_cmd],
+            ["wsl", "-d", self.wsl_distro, "--", "bash", "-c", test_cmd],
             capture_output=True,
             text=True
         )
@@ -116,7 +170,7 @@ class WSL2AudioBridge:
         info_cmd = f"source {self.workspace}/setup_cuda_env.sh && python3 -c \"import torch; print(f'Device: {{\\\"cuda\\\" if torch.cuda.is_available() else \\\"cpu\\\"}}'); import sys; sys.stdout.flush(); print(f'GPU: {{torch.cuda.get_device_name(0)}}') if torch.cuda.is_available() else None; print(f'VRAM: {{torch.cuda.get_device_properties(0).total_memory / 1e9:.1f}}GB') if torch.cuda.is_available() else None\" 2>&1"
         
         result = subprocess.run(
-            ["wsl", "-d", "Ubuntu", "--", "bash", "-c", info_cmd],
+            ["wsl", "-d", self.wsl_distro, "--", "bash", "-c", info_cmd],
             capture_output=True,
             text=True
         )

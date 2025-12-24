@@ -12,6 +12,11 @@ param(
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
 
+# Safe-by-default: if the operator did not explicitly request ingestion, default to dry-run.
+if (-not $PSBoundParameters.ContainsKey('DryRun') -and -not $StartIngestion) {
+    $DryRun = $true
+}
+
 # ==================== CONFIGURATION ====================
 $script:RootDir = $PSScriptRoot
 $script:DataRoot = "L:\_DATA\GoodQ_Data"

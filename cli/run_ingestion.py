@@ -1251,12 +1251,30 @@ def run(
                         if audio_info is None:
                             typer.echo(f'  [OK] No audio track in video (video-only)')
                         else:
-                            typer.echo(f'  [OK] Audio processed')
+                            audio_data = audio_info.get('data', {}) if isinstance(audio_info, dict) else {}
+                            if (
+                                isinstance(audio_data, dict)
+                                and audio_data.get('wsl2_unified') is True
+                                and audio_data.get('status') == 'error'
+                            ):
+                                typer.echo(
+                                    f'  [WARN] WSL2 audio processing failed for scene {scene_index}: {audio_data.get("error") or "Unknown error"}',
+                                    err=True,
+                                )
+                                typer.echo(f'  [OK] Audio extracted')
+                            else:
+                                typer.echo(f'  [OK] Audio processed')
                             if VERBOSE:
                                 typer.echo(f'[DEBUG] audio_info returned with keys: {list(audio_info.keys())}')
                     except Exception as exc:  # noqa: BLE001
                         audio_error = str(exc)
-                        typer.echo(f'[ERROR] Audio extraction failed for scene {scene_index}: {audio_error}', err=True)
+                        wav_path = audio_dir / f"scene_{scene_index:04d}.wav" if isinstance(scene_index, int) else None
+                        wav_exists = bool(wav_path and wav_path.exists())
+                        wav_size = wav_path.stat().st_size if wav_exists else 0
+                        typer.echo(
+                            f'[ERROR] Audio processing failed for scene {scene_index} (wav_exists={wav_exists}, wav_size={wav_size}): {audio_error}',
+                            err=True,
+                        )
 
             error_payload = {}
             if frame_error:

@@ -25,9 +25,12 @@ This document marks existing data stores as **legacy** (preserved) and defines h
   - `text`: `goodq_text`
   - `audio`: `goodq_audio`
 
-## Epoch: `epoch_2025_12_21` (Clean)
+## Epoch: `epoch_2025_12_21` (Preserved)
 
-**Status:** ACTIVE (empty; intended for first clean ingestion)
+**Status:** LEGACY (preserved; do not write)
+
+**Notes:**
+- This epoch predates the WSL2 audio wrapper hardening and may be missing some audio-derived signals (see tag `wsl2-audio-bridge-v1.0.1`).
 
 **Epoch root:**
 - `L:/_DATA/GoodQ_Data/epochs/epoch_2025_12_21`
@@ -43,6 +46,25 @@ This document marks existing data stores as **legacy** (preserved) and defines h
   - `dino`: `goodq_dino_epoch_2025_12_21`
   - `text`: `goodq_text_epoch_2025_12_21`
   - `audio`: `goodq_audio_epoch_2025_12_21`
+
+## Epoch: `epoch_2025_12_22` (Clean)
+
+**Status:** ACTIVE (clean; intended for the first ingestion after WSL2 audio hardening)
+
+**Epoch root:**
+- `L:/_DATA/GoodQ_Data/epochs/epoch_2025_12_22`
+
+**Stores (authoritative targets for runtime):**
+- **SQLite (memory):** `L:/_DATA/GoodQ_Data/epochs/epoch_2025_12_22/memory.db`
+- **SQLite (knowledge graph):** `L:/_DATA/GoodQ_Data/epochs/epoch_2025_12_22/knowledge_graph.db`
+- **Processing root:** `L:/_DATA/GoodQ_Data/epochs/epoch_2025_12_22/processing`
+- **FAISS directory:** `L:/_DATA/GoodQ_Data/epochs/epoch_2025_12_22/faiss`
+- **FAISS (audio):** `L:/_DATA/GoodQ_Data/epochs/epoch_2025_12_22/faiss/goodq_audio_epoch_2025_12_22.index`
+- **Qdrant collections (epoch-suffixed):**
+  - `clip`: `goodq_clip_epoch_2025_12_22`
+  - `dino`: `goodq_dino_epoch_2025_12_22`
+  - `text`: `goodq_text_epoch_2025_12_22`
+  - `audio`: `goodq_audio_epoch_2025_12_22`
 
 ## Canonical Manifest Path (Per Video)
 
@@ -85,7 +107,7 @@ The launcher propagates these values to child processes as environment variables
 ## Dry-Run Checklist (No Ingestion)
 
 1) **Confirm you are in the clean epoch**
-- `python -m cli.print_config` and verify the paths/collections match `epoch_2025_12_21` above.
+- `python -m cli.print_config` and verify the paths/collections match `epoch_2025_12_22` above.
 
 2) **Create/verify directories and DB files**
 - `python -m cli.goodq_doctor`

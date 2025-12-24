@@ -42,17 +42,17 @@ paths:
   # Core directories
   log_dir: L:/goodq4all/logs
   output_directory: L:/goodq4all/output
-  db_dir: L:/_DATA/GoodQ_Data/epochs/epoch_2025_12_21
-  db_path: L:/_DATA/GoodQ_Data/epochs/epoch_2025_12_21/memory.db
-  knowledge_graph_db: L:/_DATA/GoodQ_Data/epochs/epoch_2025_12_21/knowledge_graph.db
-  faiss_dir: L:/_DATA/GoodQ_Data/epochs/epoch_2025_12_21/faiss
-  faiss_audio_path: L:/_DATA/GoodQ_Data/epochs/epoch_2025_12_21/faiss/goodq_audio_epoch_2025_12_21.index
+  db_dir: L:/_DATA/GoodQ_Data/epochs/epoch_2025_12_22
+  db_path: L:/_DATA/GoodQ_Data/epochs/epoch_2025_12_22/memory.db
+  knowledge_graph_db: L:/_DATA/GoodQ_Data/epochs/epoch_2025_12_22/knowledge_graph.db
+  faiss_dir: L:/_DATA/GoodQ_Data/epochs/epoch_2025_12_22/faiss
+  faiss_audio_path: L:/_DATA/GoodQ_Data/epochs/epoch_2025_12_22/faiss/goodq_audio_epoch_2025_12_22.index
   config_dir: L:/goodq4all/configs
   
   # Data paths
   data_root: L:/_DATA/GoodQ_Data
   import_inbox: L:/_DATA/GoodQ_Data/import_inbox
-  processing: L:/_DATA/GoodQ_Data/epochs/epoch_2025_12_21/processing
+  processing: L:/_DATA/GoodQ_Data/epochs/epoch_2025_12_22/processing
   models_cache: L:/_DATA/models
   
   # Segmentation output paths
@@ -140,10 +140,10 @@ qdrant:
   enabled: true
   host: http://127.0.0.1:6333
   collections:
-    clip: goodq_clip_epoch_2025_12_21
-    dino: goodq_dino_epoch_2025_12_21
-    text: goodq_text_epoch_2025_12_21
-    audio: goodq_audio_epoch_2025_12_21
+    clip: goodq_clip_epoch_2025_12_22
+    dino: goodq_dino_epoch_2025_12_22
+    text: goodq_text_epoch_2025_12_22
+    audio: goodq_audio_epoch_2025_12_22
   embedding_dims:
     clip: 512
     dino: 768
@@ -256,8 +256,8 @@ phase6:
   max_gpu_batch_size: 8
   
   # Collections
-  clip_collection: goodq_clip_epoch_2025_12_21
-  dino_collection: goodq_dino_epoch_2025_12_21
+  clip_collection: goodq_clip_epoch_2025_12_22
+  dino_collection: goodq_dino_epoch_2025_12_22
   
   # Retrieval settings
   retrieval:

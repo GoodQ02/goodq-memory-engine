@@ -1570,15 +1570,14 @@ def run(
     output.write_text(json.dumps(results, ensure_ascii=False, indent=2), encoding='utf-8')
     typer.echo(f'Wrote results to {output}')
     
-    # Generate Control Agent final report
+    # Generate Control Agent final report (best-effort; non-fatal)
     if control_agent:
         try:
             # Stop monitoring if method exists
             if hasattr(control_agent, 'stop_monitoring'):
                 control_agent.stop_monitoring()
-            
+
             report_path = workspace / "control_agent_report.md"
-            # Generate report with empty diagnosis if not tracking issues
             try:
                 control_agent.generate_report(str(report_path), diagnosis={})
                 typer.echo(f"[CONTROL] Final report generated: {report_path}")
@@ -1586,9 +1585,9 @@ def run(
                 # Fallback if signature doesn't match
                 control_agent.generate_report(str(report_path))
                 typer.echo(f"[CONTROL] Final report generated: {report_path}")
-            
+
             # Display key insights
-            if VERBOSE:
+            if VERBOSE and hasattr(control_agent, 'get_insights'):
                 insights = control_agent.get_insights()
                 if insights:
                     typer.echo("\n" + "="*80)
@@ -1597,7 +1596,7 @@ def run(
                     typer.echo(insights)
                     typer.echo("="*80 + "\n")
         except Exception as e:
-            typer.echo(f"[CONTROL] Failed to generate final report: {e}")
+            typer.echo(f"[WARNING] Final report generation skipped (non-fatal): {e}", err=True)
 
 
 if __name__ == '__main__':

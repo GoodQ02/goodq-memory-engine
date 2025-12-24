@@ -423,7 +423,22 @@ Keep it concise and technical. Focus on actionable solutions.
         return results
     
     def generate_report(self, analysis: Dict, diagnosis: Dict, output_path: Path = None):
-        """Generate a markdown report"""
+        """
+        Generate a markdown report.
+
+        Cosmetic hardening (non-authoritative):
+        - Tolerate legacy calling patterns where `analysis` may be a string path (treat as `output_path`).
+        - Tolerate missing/partial `analysis`/`diagnosis` shapes without raising.
+        """
+        # Legacy call compatibility: generate_report(output_path, diagnosis) or generate_report(output_path)
+        if isinstance(analysis, (str, Path)) and output_path is None:
+            output_path = Path(analysis)
+            analysis = {}
+
+        analysis_dict = analysis if isinstance(analysis, dict) else {}
+        diagnosis_dict = diagnosis if isinstance(diagnosis, dict) else {}
+        parsed = diagnosis_dict.get("parsed") if isinstance(diagnosis_dict.get("parsed"), dict) else {}
+
         if output_path is None:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             output_path = self.reports_dir / f"pipeline_diagnosis_{timestamp}.md"
@@ -431,31 +446,31 @@ Keep it concise and technical. Focus on actionable solutions.
         report = f"""# GoodQ4All Pipeline Diagnostic Report
 **Generated**: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}  
 **Agent**: Control Agent v1.0  
-**LLM Provider**: {diagnosis.get('llm_provider', 'Unknown')}
+**LLM Provider**: {diagnosis_dict.get('llm_provider', 'Unknown')}
 
 ---
 
 ## [SYMBOL] Execution Summary
 
-- **Log File**: `{analysis.get('log_file', 'N/A')}`
-- **Errors Found**: {len(analysis.get('errors', []))}
-- **Warnings Found**: {len(analysis.get('warnings', []))}
+- **Log File**: `{analysis_dict.get('log_file', 'N/A')}`
+- **Errors Found**: {len(analysis_dict.get('errors', []))}
+- **Warnings Found**: {len(analysis_dict.get('warnings', []))}
 
 ---
 
 ## [SEARCH] LLM Diagnosis
 
-**Severity**: {diagnosis['parsed']['severity'].upper()}  
-**Confidence**: {diagnosis['parsed']['confidence']}%
+**Severity**: {str(parsed.get('severity', 'unknown')).upper()}  
+**Confidence**: {parsed.get('confidence', 0)}%
 
 ### Root Cause
-{diagnosis['parsed']['root_cause'] or 'Analysis pending...'}
+{parsed.get('root_cause') or 'Analysis pending...'}
 
 ### Recommended Fix
-{diagnosis['parsed']['fix'] or 'No specific fix recommended'}
+{parsed.get('fix') or 'No specific fix recommended'}
 
 ### Prevention Strategy
-{diagnosis['parsed']['prevention'] or 'No prevention strategy provided'}
+{parsed.get('prevention') or 'No prevention strategy provided'}
 
 ---
 
@@ -463,14 +478,14 @@ Keep it concise and technical. Focus on actionable solutions.
 
 """
         
-        if analysis.get('errors'):
+        if analysis_dict.get('errors'):
             report += "\n### Errors\n\n"
-            for i, error in enumerate(analysis['errors'], 1):
+            for i, error in enumerate(analysis_dict.get('errors', []), 1):
                 report += f"{i}. `{error}`\n"
         
-        if analysis.get('warnings'):
+        if analysis_dict.get('warnings'):
             report += "\n### Warnings\n\n"
-            for i, warning in enumerate(analysis['warnings'], 1):
+            for i, warning in enumerate(analysis_dict.get('warnings', []), 1):
                 report += f"{i}. `{warning}`\n"
         
         report += f"""
@@ -480,7 +495,7 @@ Keep it concise and technical. Focus on actionable solutions.
 ## [BOT] Full LLM Response
 
 ```
-{diagnosis['raw_response']}
+{diagnosis_dict.get('raw_response', '')}
 ```
 
 ---

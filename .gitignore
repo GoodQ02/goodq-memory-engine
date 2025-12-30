@@ -49,6 +49,7 @@ eggs/
 .eggs/
 lib/
 lib64/
+!lib/llm_client.py
 !goodq4all/lib/
 parts/
 sdist/

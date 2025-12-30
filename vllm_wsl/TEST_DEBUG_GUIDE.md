@@ -14,11 +14,11 @@
 - **Endpoint:** `http://localhost:8003/v1/chat/completions`
 - **Test Result:** ✅ Chat completions working
 
-### 2. Ollama - Phi4 (Port 11434)
+### 2. Ollama - Phi4 (Port 31434)
 - **Status:** ✅ READY (Fallback)
 - **PID:** 178
 - **Performance:** ~70 tok/s
-- **Endpoint:** `http://localhost:11434/v1/chat/completions`
+- **Endpoint:** `http://localhost:31434/v1/chat/completions`
 - **Model ID:** `phi4:latest`
 
 ---
@@ -32,7 +32,7 @@
 curl http://localhost:8003/v1/models
 
 # Test Ollama (Fallback)
-curl http://localhost:11434/v1/models
+curl http://localhost:31434/v1/models
 
 # Test chat completion (vLLM)
 curl http://localhost:8003/v1/chat/completions `
@@ -49,7 +49,7 @@ python scripts\run_control_agent.py
 
 **Expected Behavior:**
 1. Control Agent connects to vLLM at port 8003 (primary)
-2. If vLLM fails, falls back to Ollama at port 11434
+2. If vLLM fails, falls back to Ollama at port 31434
 3. Generates AI-powered diagnostics for logs
 
 ---

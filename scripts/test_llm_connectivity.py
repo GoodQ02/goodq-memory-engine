@@ -9,9 +9,12 @@ import time
 import requests
 from pathlib import Path
 
-# Add lib to path
-sys.path.insert(0, str(Path(__file__).parent.parent / "lib"))
+# Add repo + lib to path
+REPO_ROOT = Path(__file__).parent.parent
+sys.path.insert(0, str(REPO_ROOT))
+sys.path.insert(0, str(REPO_ROOT / "lib"))
 
+from steps.common.config_loader import load_configs
 from llm_client import LLMClient
 
 def test_endpoint(url, name, timeout=5):
@@ -42,14 +45,21 @@ def main():
     # Test individual endpoints
     print("Testing Individual Endpoints:")
     print("-" * 70)
-    
+
+    try:
+        cfg = load_configs({})
+        ollama_url = (cfg.get("llm", {}) or {}).get("ollama_url")
+    except Exception:
+        ollama_url = None
+
     endpoints = [
         ("http://localhost:38005/v1", "Llama-1B-Speed"),
         ("http://localhost:38004/v1", "Llama-3B-Balanced"),
         ("http://localhost:38001/v1", "Phi-3.5-LongContext"),
         ("http://localhost:38000/v1", "Qwen-Quality"),
-        ("http://localhost:11434/v1", "Ollama-Fallback"),
     ]
+    if ollama_url:
+        endpoints.append((ollama_url, "Ollama-Fallback"))
     
     results = []
     for url, name in endpoints:

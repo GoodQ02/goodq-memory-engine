@@ -34,7 +34,7 @@ The `lib/` directory contains the foundational components that power GoodQ4All's
 
 **LLM Client Architecture:**
 - **Primary Backend:** vLLM (WSL2) on port 38005
-- **Fallback Backend:** Ollama (Windows/WSL) on port 11434
+- **Fallback Backend:** Ollama (WSL) on port 31434
 - **Models Supported:** Llama 3.1 8B (primary), Qwen2.5-7B-Instruct (secondary)
 - **Features:** Connection pooling, exponential backoff, automatic failover, comprehensive logging
 - **VRAM Management:** 16GB RTX 4070 Ti SUPER shared with audio processing
@@ -307,8 +307,8 @@ response = client.generate(
            │                      │
            ▼                      ▼
   ┌─────────────────┐   ┌─────────────────┐
-  │ vLLM (WSL2)     │   │ Ollama (Windows)│
-  │ Port: 38005     │   │ Port: 11434     │
+  │ vLLM (WSL2)     │   │ Ollama (WSL)    │
+  │ Port: 38005     │   │ Port: 31434     │
   │ Llama 3.1 8B    │   │ Qwen 2.5 7B     │
   │ Primary         │   │ Fallback        │
   └─────────────────┘   └─────────────────┘
@@ -332,7 +332,7 @@ llm:
   fallback:
     backend: ollama
     host: localhost
-    port: 11434
+    port: 31434
     model: qwen2.5:7b-instruct
 ```
 
@@ -601,7 +601,7 @@ run_migrations(db_path="L:/_DATA/GoodQ_Data/memory.db")
 curl http://localhost:38005/v1/models
 
 # Check Ollama
-curl http://localhost:11434/api/tags
+curl http://localhost:31434/api/tags
 ```
 
 ### Knowledge Graph Locked

@@ -23,15 +23,15 @@ fi
 echo ""
 
 # Check Ollama
-echo "Ollama Server (Port 11434):"
+echo "Ollama Server (Port 31434):"
 echo "---------------------------"
-if curl -s http://localhost:11434/v1/models >/dev/null 2>&1; then
+if curl -s http://localhost:31434/v1/models >/dev/null 2>&1; then
     echo "✅ Status: Running"
-    PID=$(ps aux | grep "ollama serve" | grep -v grep | awk '{print $2}')
+    PID=$(ps aux | grep "ollama serve" | grep -v grep | awk '{print $2}')       
     echo "   PID: $PID"
-    MODEL=$(curl -s http://localhost:11434/v1/models | python3 -c "import sys, json; print(json.load(sys.stdin)['data'][0]['id'])" 2>/dev/null)
+    MODEL=$(curl -s http://localhost:31434/v1/models | python3 -c "import sys, json; print(json.load(sys.stdin)['data'][0]['id'])" 2>/dev/null)
     echo "   Model: $MODEL"
-    echo "   Endpoint: http://localhost:11434/v1/chat/completions"
+    echo "   Endpoint: http://localhost:31434/v1/chat/completions"
 else
     echo "❌ Status: Not running"
     echo "   Start: sudo systemctl start ollama"

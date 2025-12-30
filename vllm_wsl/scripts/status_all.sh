@@ -37,11 +37,11 @@ done
 echo ""
 echo "Ollama:"
 echo "-------"
-if curl -s http://localhost:11434/v1/models >/dev/null 2>&1; then
-    MODEL=$(curl -s http://localhost:11434/v1/models | python3 -c "import sys, json; print(json.load(sys.stdin)['data'][0]['id'])" 2>/dev/null)
-    echo "✅ Port 11434: $MODEL - READY"
+if curl -s http://localhost:31434/v1/models >/dev/null 2>&1; then
+    MODEL=$(curl -s http://localhost:31434/v1/models | python3 -c "import sys, json; print(json.load(sys.stdin)['data'][0]['id'])" 2>/dev/null)
+    echo "✅ Port 31434: $MODEL - READY"
 else
-    echo "❌ Port 11434: NOT RUNNING"
+    echo "❌ Port 31434: NOT RUNNING"
 fi
 
 echo ""

@@ -14,7 +14,7 @@ hostname -I | awk '{print "  " $1}'
 
 echo ""
 echo "Listening ports:"
-ss -tlnp 2>&1 | grep -E ":(8003|11434)" | awk '{print "  " $4 " " $7}'
+ss -tlnp 2>&1 | grep -E ":(8003|31434)" | awk '{print "  " $4 " " $7}'
 
 echo ""
 echo "2. Port 8003 Test (vLLM)"
@@ -39,12 +39,12 @@ else
 fi
 
 echo ""
-echo "3. Port 11434 Test (Ollama)"
+echo "3. Port 31434 Test (Ollama)"
 echo "─────────────────────────────────────────────────────────────"
-if curl -s --max-time 2 http://localhost:11434/v1/models >/dev/null 2>&1; then
-    echo "  ✅ WSL → localhost:11434 WORKS"
+if curl -s --max-time 2 http://localhost:31434/v1/models >/dev/null 2>&1; then  
+    echo "  ✅ WSL → localhost:31434 WORKS"
 else
-    echo "  ❌ WSL → localhost:11434 FAILS"
+    echo "  ❌ WSL → localhost:31434 FAILS"
 fi
 
 echo ""
@@ -56,7 +56,7 @@ echo "  # Test vLLM"
 echo "  curl http://localhost:8003/v1/models"
 echo ""
 echo "  # Test Ollama"  
-echo "  curl http://localhost:11434/v1/models"
+echo "  curl http://localhost:31434/v1/models"
 echo ""
 echo "  # If localhost doesn't work, try WSL IP:"
 echo "  curl http://$WSL_IP:8003/v1/models"

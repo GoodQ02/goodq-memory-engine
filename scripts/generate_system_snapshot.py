@@ -6,6 +6,7 @@ import socket
 import sys
 from datetime import datetime
 from pathlib import Path
+from urllib.parse import urlparse
 
 OUTPUT_PATH = Path("docs/SYSTEM_SNAPSHOT.md")
 
@@ -21,6 +22,23 @@ def check_port(host, port, timeout=1.0):
             return "reachable"
     except Exception:
         return "not reachable"
+
+def get_ollama_target():
+    try:
+        repo_root = Path(__file__).resolve().parents[1]
+        if str(repo_root) not in sys.path:
+            sys.path.insert(0, str(repo_root))
+        from steps.common.config_loader import load_configs
+        cfg = load_configs({})
+        ollama_url = (cfg.get("llm", {}) or {}).get("ollama_url")
+        if not ollama_url:
+            return None, None
+        parsed = urlparse(str(ollama_url))
+        host = parsed.hostname or "localhost"
+        port = parsed.port or (443 if parsed.scheme == "https" else 80)
+        return host, port
+    except Exception:
+        return None, None
 
 def main():
     lines = []
@@ -80,8 +98,12 @@ def main():
 
     lines.append("## Local Services (Presence Check)")
     lines.append(f"- Qdrant (6333): {check_port('localhost', 6333)}")
-    lines.append(f"- Ollama (11434): {check_port('localhost', 11434)}")
-    lines.append(f"- LM Studio (1234): {check_port('localhost', 1234)}")
+    ollama_host, ollama_port = get_ollama_target()
+    if ollama_port:
+        lines.append(f"- Ollama ({ollama_port}): {check_port(ollama_host, ollama_port)}")
+    else:
+        lines.append("- Ollama (unknown): unavailable")
+    lines.append(f"- LM Studio (1234): {check_port('localhost', 1234)}")        
     lines.append("")
 
     OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)

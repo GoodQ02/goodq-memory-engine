@@ -84,7 +84,7 @@ test_endpoint 8003 "Llama 1B (Speed)" 3
 test_endpoint 8004 "Llama 3B (Balanced)" 5
 test_endpoint 8001 "Phi-3.5 Mini (Long Context)" 3
 test_endpoint 8000 "Qwen 2.5 7B (Quality)" 3
-test_endpoint 11434 "Ollama Phi4 (Fallback)" 3
+test_endpoint 31434 "Ollama Phi4 (Fallback)" 3
 echo ""
 
 echo "══════════════════════════════════════════════════════════"
@@ -102,8 +102,8 @@ if ss -tlnp 2>&1 | grep -q ":8004 "; then
 fi
 
 # Test Ollama
-if ss -tlnp 2>&1 | grep -q ":11434 "; then
-    test_chat 11434 "Ollama"
+if ss -tlnp 2>&1 | grep -q ":31434 "; then
+    test_chat 31434 "Ollama"
 fi
 
 echo ""
@@ -122,7 +122,7 @@ echo "════════════════════════�
 echo "5. Network Ports"
 echo "══════════════════════════════════════════════════════════"
 echo "Active LLM ports:"
-ss -tlnp 2>&1 | grep -E ":(8000|8001|8003|8004|8005|11434)" | awk '{print "  " $4}' | sort
+ss -tlnp 2>&1 | grep -E ":(8000|8001|8003|8004|8005|31434)" | awk '{print "  " $4}' | sort
 echo ""
 
 echo "══════════════════════════════════════════════════════════"
@@ -151,7 +151,7 @@ echo "From Windows, test with:"
 echo ""
 echo "  curl http://localhost:8003/v1/models"
 echo "  curl http://localhost:8004/v1/models"
-echo "  curl http://localhost:11434/v1/models"
+echo "  curl http://localhost:31434/v1/models"
 echo ""
 echo "Or run the Control Agent:"
 echo "  cd L:\\goodq4all"

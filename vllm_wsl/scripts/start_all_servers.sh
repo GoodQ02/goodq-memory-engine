@@ -149,9 +149,9 @@ nvidia-smi --query-gpu=memory.used,memory.free,utilization.gpu --format=csv,nohe
 echo ""
 
 echo "Ollama Status:"
-if curl -s http://localhost:11434/v1/models >/dev/null 2>&1; then
-    MODEL=$(curl -s http://localhost:11434/v1/models | python3 -c "import sys, json; print(json.load(sys.stdin)['data'][0]['id'])" 2>/dev/null)
-    echo "  ✅ Port 11434: $MODEL"
+if curl -s http://localhost:31434/v1/models >/dev/null 2>&1; then
+    MODEL=$(curl -s http://localhost:31434/v1/models | python3 -c "import sys, json; print(json.load(sys.stdin)['data'][0]['id'])" 2>/dev/null)
+    echo "  ✅ Port 31434: $MODEL"
 fi
 
 echo ""

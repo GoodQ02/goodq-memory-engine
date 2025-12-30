@@ -10,6 +10,7 @@ import os
 import sys
 from pathlib import Path
 from typing import Dict, Optional
+from urllib.parse import urlparse
 
 try:
     import requests
@@ -41,9 +42,9 @@ class LLMChecker:
         },
         'ollama': {
             'name': 'Ollama',
-            'url': 'http://localhost:11434/api/tags',
-            'chat_url': 'http://localhost:11434/api/generate',
-            'port': 11434,
+            'url': 'http://localhost:31434/api/tags',
+            'chat_url': 'http://localhost:31434/api/generate',
+            'port': 31434,
             'priority': 2,
             'required': False,
         },
@@ -62,7 +63,28 @@ class LLMChecker:
             self.logger = get_goodq_logger(__name__, component='Q Branch Comms')
         else:
             self.logger = None
+        self._apply_ollama_config()
         self.results = {}
+
+    def _apply_ollama_config(self) -> None:
+        try:
+            from steps.common.config_loader import load_configs
+            cfg = load_configs({})
+            ollama_url = (cfg.get("llm", {}) or {}).get("ollama_url")
+            if not ollama_url:
+                return
+            parsed = urlparse(str(ollama_url))
+            scheme = parsed.scheme or "http"
+            host = parsed.hostname or "localhost"
+            port = parsed.port or (443 if scheme == "https" else 80)
+            base = f"{scheme}://{host}:{port}"
+            self.LLM_ENDPOINTS["ollama"].update({
+                "url": f"{base}/api/tags",
+                "chat_url": f"{base}/api/generate",
+                "port": port,
+            })
+        except Exception:
+            pass
     
     def _log(self, msg: str, level: str = 'info'):
         """Log message"""

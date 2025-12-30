@@ -2,22 +2,37 @@
 LLM Integration Module for GoodQ
 Connects to multiple LLM endpoints with intelligent fallback
 """
+import sys
+from pathlib import Path
 import requests
 from typing import Dict, Any, Optional, List
+
+def _load_ollama_url() -> Optional[str]:
+    try:
+        repo_root = Path(__file__).resolve().parents[2]
+        if str(repo_root) not in sys.path:
+            sys.path.insert(0, str(repo_root))
+        from steps.common.config_loader import load_configs
+        cfg = load_configs({})
+        return (cfg.get("llm", {}) or {}).get("ollama_url")
+    except Exception:
+        return None
 
 class LLMClient:
     def __init__(self, endpoints: List[Dict[str, str]] = None):
         """
         Initialize with multiple endpoints in priority order
-        endpoints = [{"url": "http://localhost:38005/v1", "name": "vLLM"}, {"url": "http://localhost:11434/v1", "name": "Ollama"}]
+        endpoints = [{"url": "http://localhost:38005/v1", "name": "vLLM"}, {"url": "<ollama_url>", "name": "Ollama"}]
         """
         if endpoints is None:
+            ollama_url = _load_ollama_url()
             # Default endpoints in priority order: vLLM (fast) -> Ollama -> LM Studio
             endpoints = [
                 {"url": "http://localhost:38005/v1", "name": "vLLM-Llama-1B"},
-                {"url": "http://localhost:11434/v1", "name": "Ollama-Phi4"},
+                {"url": ollama_url, "name": "Ollama-Phi4"} if ollama_url else None,
                 {"url": "http://localhost:1234/v1", "name": "LM-Studio"}
             ]
+            endpoints = [endpoint for endpoint in endpoints if endpoint]
         
         self.endpoints = endpoints
         self.model = None

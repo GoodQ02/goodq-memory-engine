@@ -5,7 +5,7 @@
 🟢 CURRENTLY RUNNING
 ────────────────────────────────────────────────────────────────
 ✅ vLLM Llama 1B     → http://localhost:8003 (178 tok/s)
-✅ Ollama Phi4       → http://localhost:11434 (fallback)
+✅ Ollama Phi4       → http://localhost:31434 (fallback)
 
 🔧 WSL COMMANDS
 ────────────────────────────────────────────────────────────────
@@ -22,7 +22,7 @@ Restart everything:    pkill -f vllm.entrypoints && sleep 3 && \
 💻 WINDOWS TESTING
 ────────────────────────────────────────────────────────────────
 Test vLLM:            curl http://localhost:8003/v1/models
-Test Ollama:          curl http://localhost:11434/v1/models
+Test Ollama:          curl http://localhost:31434/v1/models
 
 Run Control Agent:    cd L:\goodq4all
                       python scripts\run_control_agent.py

@@ -17,7 +17,7 @@ models:
   # Balanced model (Ollama)
   phi4_ollama:
     name: "Phi4-Ollama"
-    base_url: "http://localhost:11434/v1"
+    base_url: "http://localhost:31434/v1"
     model_id: "phi4"
     engine: "ollama"
     category: "balanced"

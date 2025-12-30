@@ -76,8 +76,8 @@ class ConfigHealer:
         self.backup_dir.mkdir(parents=True, exist_ok=True)
         
         # Load current configs
-        self.config_path = self.config_dir / "config_open.yaml"
-        self.gpu_config_path = self.config_dir / "gpu_config.yaml"
+        self.config_path = self.config_dir / "config.yaml"
+        self.gpu_config_path = None
         
         print("[CONFIG HEALER] Initialized")
         print(f"   Config: {self.config_path}")
@@ -116,7 +116,17 @@ class ConfigHealer:
                 max_tokens=500
             )
             
-            llm_diagnosis = response.get("content", "")
+            llm_diagnosis = ""
+            if isinstance(response, dict):
+                llm_diagnosis = response.get("content") or ""
+                if not llm_diagnosis:
+                    choices = response.get("choices") or []
+                    if choices and isinstance(choices, list):
+                        llm_diagnosis = (
+                            (choices[0].get("message") or {}).get("content", "")
+                        )
+            else:
+                llm_diagnosis = str(response)
             
             return {
                 "pattern_matched": None,

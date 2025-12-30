@@ -143,20 +143,6 @@ def _summarize_llm_health() -> Dict[str, Any]:
     }
 
 
-@app.get("/api/memory/stats")
-def memory_stats() -> Dict[str, Any]:
-    """Tiered memory stats across chroma/faiss/qdrant."""
-    stats = _MEMORY_ROUTER.stats()
-    chroma_vecs = stats["tiers"].get("chroma", {}).get("vectors", 0)
-    faiss_vecs = stats["tiers"].get("faiss", {}).get("vectors", 0)
-    qdrant_vecs = stats["tiers"].get("qdrant", {}).get("vectors", 0)
-    warnings = []
-    if chroma_vecs and faiss_vecs == 0 and qdrant_vecs == 0:
-        warnings.append("Chroma has items but FAISS/Qdrant are empty; consider promoting.")
-    stats["warnings"] = warnings
-    return stats
-
-
 def _collect_engine_details() -> Dict[str, Any]:
     """Richer engine details (kept separate from summary for UI/backward compatibility)."""
     import subprocess

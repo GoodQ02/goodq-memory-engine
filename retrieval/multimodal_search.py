@@ -28,8 +28,16 @@ class MultimodalSearchEngine:
             config: GoodQ configuration dict
         """
         self.config = config
-        self.qdrant_host = config.get('qdrant_host', 'http://127.0.0.1:6333')
-        self.data_root = config.get('data_root', 'L:/_DATA/GoodQ_Data')
+        qdrant_cfg = (config.get("qdrant") or {}) if isinstance(config, dict) else {}
+        paths_cfg = (config.get("paths") or {}) if isinstance(config, dict) else {}
+        phase6_cfg = (config.get("phase6") or {}) if isinstance(config, dict) else {}
+        collections_cfg = (qdrant_cfg.get("collections") or {}) if isinstance(qdrant_cfg, dict) else {}
+
+        self.qdrant_host = qdrant_cfg.get("host") or config.get("qdrant_host", "http://127.0.0.1:6333")
+        self.data_root = paths_cfg.get("data_root") or config.get("data_root", "L:/_DATA/GoodQ_Data")
+        self.processing_root = paths_cfg.get("processing") or os.path.join(self.data_root, "processing")
+        self.text_collection = collections_cfg.get("text") or "goodq_text"
+        self.visual_collection = phase6_cfg.get("clip_collection") or collections_cfg.get("clip") or "goodq_clip_scenes"
         
         # Fusion weights
         fusion_cfg = config.get('phase6', {}).get('retrieval', {}).get('fusion_weights', {})
@@ -174,7 +182,7 @@ class MultimodalSearchEngine:
         
         query_embedding = self.encode_text_query(query)
         
-        client = self._get_qdrant_client('goodq_text')
+        client = self._get_qdrant_client(self.text_collection)
         results = client.query(query_embedding.tolist(), top_k=top_k)
         
         return results
@@ -194,7 +202,7 @@ class MultimodalSearchEngine:
         
         query_embedding = self.encode_text_for_visual_search(query)
         
-        client = self._get_qdrant_client('goodq_clip_scenes')
+        client = self._get_qdrant_client(self.visual_collection)
         results = client.query(query_embedding.tolist(), top_k=top_k)
         
         return results
@@ -263,8 +271,7 @@ class MultimodalSearchEngine:
             Complete scene metadata including all modalities
         """
         temporal_index_path = os.path.join(
-            self.data_root,
-            'processing',
+            self.processing_root,
             video_id,
             'temporal_index.json'
         )

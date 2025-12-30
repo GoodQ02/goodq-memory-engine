@@ -8,6 +8,7 @@ from datetime import datetime
 import threading
 import requests
 from collections import deque
+from urllib.parse import urlparse
 import glob
 import glob
 
@@ -17,6 +18,7 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from typing import Optional, List, Any, Dict
 from pydantic import BaseModel
+from lib.llm_client import LLMClient, ModelConfig
 
 from steps.common.config_loader import load_configs
 from steps.common.memory_manager import build_memory_router
@@ -74,14 +76,78 @@ try:
 except Exception as e:
     logger.debug(f"DataLoader config injection failed: {e}")
 
+def _get_ollama_models_url(cfg: Dict[str, Any]) -> tuple[str | None, int | None]:
+    llm_cfg = cfg.get("llm", {}) or {}
+    ollama_url = llm_cfg.get("ollama_url")
+    if not ollama_url:
+        return None, None
+    base = str(ollama_url).rstrip("/")
+    parsed = urlparse(base)
+    port = parsed.port
+    if port is None:
+        port = 443 if parsed.scheme == "https" else 80
+    return f"{base}/models", port
+
+
+def _split_base_and_port(url: str) -> tuple[str, int]:
+    parsed = urlparse(url)
+    if not parsed.scheme or not parsed.hostname:
+        raise ValueError(f"Invalid LLM URL: {url}")
+    port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    return f"{parsed.scheme}://{parsed.hostname}", port
+
+
+def _build_llm_models(cfg: Dict[str, Any]) -> List[ModelConfig]:
+    llm_cfg = cfg.get("llm", {}) or {}
+    vllm_url = llm_cfg.get("vllm_url")
+    ollama_url = llm_cfg.get("ollama_url")
+    if not vllm_url or not ollama_url:
+        raise ValueError("Missing llm.vllm_url or llm.ollama_url in config")
+
+    vllm_base, vllm_port = _split_base_and_port(str(vllm_url))
+    ollama_base, ollama_port = _split_base_and_port(str(ollama_url))
+
+    vllm_model_id = llm_cfg.get(
+        "vllm_model",
+        "/mnt/l/_DATA/models/llm/huggingface/Llama-3.2-1B-Instruct",
+    )
+    ollama_model_id = llm_cfg.get("ollama_model", "phi4")
+
+    return [
+        ModelConfig(
+            name="Llama-1B-Speed",
+            base_url=vllm_base,
+            port=vllm_port,
+            model_id=vllm_model_id,
+            backend="vllm",
+            vram_gb=2.3,
+            tokens_per_sec=178,
+            context_length=131072,
+            capabilities=["chat", "fast"],
+            priority=100,
+        ),
+        ModelConfig(
+            name="Phi4-Ollama",
+            base_url=ollama_base,
+            port=ollama_port,
+            model_id=ollama_model_id,
+            backend="ollama",
+            vram_gb=8.4,
+            tokens_per_sec=70,
+            context_length=16384,
+            capabilities=["chat", "fallback", "quality"],
+            priority=90,
+        ),
+    ]
+
 
 def _summarize_llm_health() -> Dict[str, Any]:
-    """Lightweight LLM health summary used by /api/engines and dashboards."""
+    """Lightweight LLM health summary used by /api/engines and dashboards."""   
     vllm_healthy = 0
     vllm_total = 0
     ollama_healthy = 0
     ollama_total = 0
-    ollama_port = 11434  # default Ollama port in WSL2
+    ollama_models_url, ollama_port = _get_ollama_models_url(_CFG)
 
     try:
         resp = requests.get("http://localhost:38005/v1/models", timeout=2)
@@ -92,21 +158,22 @@ def _summarize_llm_health() -> Dict[str, Any]:
     except Exception as e:
         logger.debug(f"vLLM health check failed: {e}")
 
-    def _probe_ollama(port: int):
+    def _probe_ollama(url: str):
         try:
-            resp = requests.get(f"http://localhost:{port}/v1/models", timeout=2)
+            resp = requests.get(url, timeout=2)
             if resp.status_code == 200:
                 models = resp.json().get("data", [])
                 total = len(models)
                 return True, total, total
         except Exception as e:
-            logger.debug(f"Ollama probe on port {port} failed: {e}")
+            logger.debug(f"Ollama probe failed: {e}")
         return False, 0, 0
 
-    # Check Ollama on default WSL2 port
-    ok, t, h = _probe_ollama(ollama_port)
-    if ok:
-        ollama_total, ollama_healthy = t, h
+    # Check Ollama on configured port
+    if ollama_models_url:
+        ok, t, h = _probe_ollama(ollama_models_url)
+        if ok:
+            ollama_total, ollama_healthy = t, h
 
     def _status(healthy: int, total: int) -> str:
         if total == 0:
@@ -131,7 +198,7 @@ def _summarize_llm_health() -> Dict[str, Any]:
             "status": _status(ollama_healthy, ollama_total),
             "healthy": ollama_healthy,
             "total": max(ollama_total, 1),
-            "port": 11434,
+            "port": ollama_port,
         },
         "overall": {
             "status": "healthy" if healthy_models == total_models else "degraded" if healthy_models > 0 else "unhealthy",
@@ -179,17 +246,21 @@ def _collect_engine_details() -> Dict[str, Any]:
 
     # Check Ollama
     try:
-        resp = requests.get("http://localhost:11434/v1/models", timeout=2)
+        ollama_models_url, ollama_port = _get_ollama_models_url(_CFG)
+        if not ollama_models_url:
+            raise Exception("Ollama URL not configured")
+        resp = requests.get(ollama_models_url, timeout=2)
         if resp.status_code == 200:
             models = resp.json().get("data", [])
             model_name = models[0]["id"] if models else "Unknown"
+            port_label = str(ollama_port) if ollama_port else "unknown"
             engines["ollama"] = {
                 "name": "Ollama",
                 "category": "LLM Inference",
-                "description": f"{model_name} on port 11434",
+                "description": f"{model_name} on port {port_label}",
                 "status": "ready",
                 "gpu": True,
-                "port": 11434,
+                "port": ollama_port,
             }
         else:
             raise Exception("unhealthy")
@@ -201,7 +272,7 @@ def _collect_engine_details() -> Dict[str, Any]:
             "description": "Not running or unreachable",
             "status": "unavailable",
             "gpu": True,
-            "port": 11434,
+            "port": None,
         }
 
     # Check WSL audio processing
@@ -483,12 +554,14 @@ def get_status() -> Dict[str, Any]:
                 models_data["healthy"] += 1
         except Exception as e:
             logger.debug(f"vLLM quick health check failed: {e}")
-        
+
         try:
-            resp = requests.get("http://localhost:11434/v1/models", timeout=0.2)
-            if resp.status_code == 200:
-                models_data["ollama_healthy"] = 1
-                models_data["healthy"] += 1
+            ollama_models_url, _ = _get_ollama_models_url(_CFG)
+            if ollama_models_url:
+                resp = requests.get(ollama_models_url, timeout=0.2)
+                if resp.status_code == 200:
+                    models_data["ollama_healthy"] = 1
+                    models_data["healthy"] += 1
         except Exception as e:
             logger.debug(f"Ollama quick health check failed: {e}")
     except Exception as e:
@@ -565,16 +638,18 @@ def get_health_summary() -> Dict[str, Any]:
     total_ollama = 1
     
     try:
-        resp = requests.get("http://localhost:38005/v1/models", timeout=1)
+        resp = requests.get("http://localhost:38005/v1/models", timeout=1)      
         if resp.status_code == 200:
             vllm_healthy = 1
     except Exception as e:
         logger.debug(f"vLLM health summary check failed: {e}")
-    
+
     try:
-        resp = requests.get("http://localhost:11434/v1/models", timeout=1)
-        if resp.status_code == 200:
-            ollama_healthy = 1
+        ollama_models_url, _ = _get_ollama_models_url(_CFG)
+        if ollama_models_url:
+            resp = requests.get(ollama_models_url, timeout=1)
+            if resp.status_code == 200:
+                ollama_healthy = 1
     except Exception as e:
         logger.debug(f"Ollama health summary check failed: {e}")
     
@@ -1419,11 +1494,15 @@ def chat_with_control_agent(request: ChatRequest) -> Dict[str, Any]:
     return {"success": False, "error": "disabled", "response": "disabled"}
 
     try:
-        # Import LLM client
-        from lib.llm_client import LLMClient
-        
         # Initialize LLM client
-        llm = LLMClient()
+        llm = LLMClient(
+            models=_build_llm_models(_CFG),
+            health_check_interval=60,
+            max_retries=3,
+            timeout=30,
+            cache_ttl=300,
+            enable_health_checks=False,
+        )
         
         # Build context-aware prompt
         system_prompt = """You are the GoodQ4All Control Agent, an AI assistant that helps users:

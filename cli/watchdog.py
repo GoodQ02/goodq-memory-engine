@@ -201,7 +201,7 @@ class WatchdogProcessor:
     """Main watchdog processor"""
     def __init__(self, cfg: Dict[str, Any]):
         self._cfg_base = cfg
-        self.watch_dir = WATCH_DIR
+        self.watch_dir = Path(cfg["paths"]["import_inbox"])
         self.processing_dir = PROCESSING_DIR
         self.processed_dir = PROCESSED_DIR
         self.failed_dir = FAILED_DIR

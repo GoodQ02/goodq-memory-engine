@@ -170,3 +170,7 @@ archive/**/legacy_data/
 # Don't commit Qdrant database files - regenerate on install
 vendor/qdrant/storage/
 vendor/qdrant/*.log
+
+# ===== NARRATIVE TEST ARTIFACTS =====
+narrative*.txt
+narrative*.err

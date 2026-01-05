@@ -25,7 +25,7 @@ from steps.common.config_loader import load_configs
 from steps.common.memory_manager import build_memory_router
 
 # Import Phase 7 API routes
-from api.routes import search, scenes, timeline, media, system
+from api.routes import search, scenes, timeline, media, system, run_summary, run_index
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -57,6 +57,8 @@ app.include_router(scenes.router)
 app.include_router(timeline.router)
 app.include_router(media.router)
 app.include_router(system.router)
+app.include_router(run_summary.router)
+app.include_router(run_index.router)
 
 # UI will be mounted at the end after all API routes are defined
 

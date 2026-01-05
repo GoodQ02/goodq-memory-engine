@@ -47,7 +47,7 @@ class AgentOrchestrator:
         workflow_id = f"{workflow_name}_{int(start_time)}"
         
         logger.info(f"Starting workflow: {workflow_id}")
-        
+
         workflow_result = {
             "workflow_id": workflow_id,
             "workflow_name": workflow_name,
@@ -56,6 +56,8 @@ class AgentOrchestrator:
             "steps": [],
             "errors": []
         }
+        if isinstance(input_data, dict) and input_data.get("run_id"):
+            workflow_result["run_id"] = input_data.get("run_id")
         
         try:
             # Load workflow definition

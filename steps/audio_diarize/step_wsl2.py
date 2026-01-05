@@ -43,7 +43,10 @@ def audio_diarize(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
     if not os.path.isfile(audio_path):
         logger.warning(f"Audio file not found: {audio_path}")
         return {"diarization": [], "speakers": []}
-    
+
+    run_cfg = cfg.get("run") if isinstance(cfg, dict) else None
+    run_id = run_cfg.get("id") if isinstance(run_cfg, dict) else None
+
     logger.info(f"[DIARIZE WSL2] Processing: {os.path.basename(audio_path)}")
     
     # Get parameters from config
@@ -61,7 +64,8 @@ def audio_diarize(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
             audio_path,
             language=language,
             beam_size=beam_size,
-            timeout=timeout
+            timeout=timeout,
+            run_id=run_id,
         )
         
         if result.get('status') == 'success':

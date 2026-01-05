@@ -34,6 +34,7 @@ class ProgressTracker:
         self.current_state: Dict[str, Any] = {
             "status": "idle",
             "current_file": None,
+            "run_id": None,
             "current_step": None,
             "steps_completed": [],
             "total_steps": 0,
@@ -48,12 +49,13 @@ class ProgressTracker:
         }
         self._write_lock = threading.Lock()
         
-    def start_processing(self, filename: str, total_steps: int = 20):
+    def start_processing(self, filename: str, total_steps: int = 20, run_id: Optional[str] = None):
         """Start processing a new file"""
         with self._write_lock:
             self.current_state = {
                 "status": "processing",
                 "current_file": filename,
+                "run_id": run_id,
                 "current_step": "initializing",
                 "steps_completed": [],
                 "total_steps": total_steps,
@@ -159,9 +161,9 @@ def get_tracker() -> ProgressTracker:
     return _tracker
 
 
-def start_processing(filename: str, total_steps: int = 20):
+def start_processing(filename: str, total_steps: int = 20, run_id: Optional[str] = None):
     """Convenience function to start processing"""
-    return _tracker.start_processing(filename, total_steps)
+    return _tracker.start_processing(filename, total_steps, run_id)
 
 
 def update_step(step_name: str, step_index: int, details: Optional[Dict[str, Any]] = None):

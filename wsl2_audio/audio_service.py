@@ -50,6 +50,7 @@ class GPUConfig:
 class AudioJob:
     """Audio processing job"""
     job_id: str
+    run_id: Optional[str] = None
     audio_path: str
     output_path: str
     task: str  # "transcribe", "diarize", "both"
@@ -316,6 +317,7 @@ class AudioService:
         
         result = {
             "job_id": job.job_id,
+            "run_id": job.run_id,
             "status": "success",
             "transcription": transcription,
             "full_text": " ".join(full_text),
@@ -361,6 +363,7 @@ class AudioService:
         
         result = {
             "job_id": job.job_id,
+            "run_id": job.run_id,
             "status": "success",
             "diarization": segments,
             "speaker_count": len(set(s['speaker'] for s in segments)),
@@ -374,7 +377,10 @@ class AudioService:
     def process_job(self, job: AudioJob) -> Dict:
         """Process an audio job"""
         try:
-            logger.info(f"Processing job {job.job_id}: {job.task}")
+            if job.run_id:
+                logger.info(f"Processing job {job.job_id} (run_id={job.run_id}): {job.task}")
+            else:
+                logger.info(f"Processing job {job.job_id}: {job.task}")
             
             if job.task == "transcribe":
                 result = self.transcribe_audio(job.audio_path, job)
@@ -386,6 +392,7 @@ class AudioService:
                 diar_result = self.diarize_audio(job.audio_path, job)
                 result = {
                     "job_id": job.job_id,
+                    "run_id": job.run_id,
                     "status": "success",
                     "transcription": trans_result["transcription"],
                     "full_text": trans_result["full_text"],
@@ -411,6 +418,7 @@ class AudioService:
             
             error_result = {
                 "job_id": job.job_id,
+                "run_id": job.run_id,
                 "status": "error",
                 "error": str(e)
             }
@@ -454,6 +462,7 @@ class AudioService:
                         
                         job = AudioJob(
                             job_id=job_data['job_id'],
+                            run_id=job_data.get('run_id'),
                             audio_path=job_data['audio_path'],
                             output_path=job_data['output_path'],
                             task=job_data.get('task', 'both'),

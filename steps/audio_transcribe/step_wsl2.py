@@ -43,7 +43,10 @@ def audio_transcribe(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
     if not os.path.isfile(audio_path):
         logger.warning(f"Audio file not found: {audio_path}")
         return {"transcript": "", "transcript_segments": []}
-    
+
+    run_cfg = cfg.get("run") if isinstance(cfg, dict) else None
+    run_id = run_cfg.get("id") if isinstance(run_cfg, dict) else None
+
     logger.info(f"[TRANSCRIBE WSL2] Processing: {os.path.basename(audio_path)}")
     
     # Get transcription parameters from config
@@ -62,7 +65,8 @@ def audio_transcribe(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
             language=language,
             task=task,
             beam_size=beam_size,
-            timeout=timeout
+            timeout=timeout,
+            run_id=run_id,
         )
         
         if result.get('status') == 'success':

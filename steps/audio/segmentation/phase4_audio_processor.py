@@ -42,7 +42,7 @@ class Phase4AudioProcessor:
     def __init__(self, cfg: Dict[str, Any]):
         """
         Initialize processor with configuration
-        
+
         Args:
             cfg: Full GoodQ config dict
         """
@@ -50,6 +50,8 @@ class Phase4AudioProcessor:
         self.audio_cfg = cfg.get("audio", {})
         self.transcribe_cfg = self.audio_cfg.get("transcribe", {})
         self.diarize_cfg = self.audio_cfg.get("diarize", {})
+        run_cfg = cfg.get("run") if isinstance(cfg, dict) else None
+        self.run_id = run_cfg.get("id") if isinstance(run_cfg, dict) else None
         
         # Processing parameters
         self.language = self.transcribe_cfg.get("language")  # None = auto-detect
@@ -179,7 +181,8 @@ class Phase4AudioProcessor:
                 chunk_path,
                 language=self.language,
                 beam_size=self.beam_size,
-                timeout=self.chunk_timeout
+                timeout=self.chunk_timeout,
+                run_id=self.run_id,
             )
             
             if result.get('status') == 'success':

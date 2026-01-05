@@ -1009,6 +1009,8 @@ def run(
             run_context['git_sha'] = git_proc.stdout.strip()
     except Exception:
         pass
+    run_id = run_context["id"]
+    typer.echo(f"[RUN] run_id: {run_id}")
     existing_run = cfg.get('run') if isinstance(cfg, dict) else None
     if isinstance(existing_run, dict):
         run_copy = dict(existing_run)
@@ -1060,7 +1062,7 @@ def run(
             tracker = get_tracker()
             # Estimate total steps: scene detection + processing each scene (image+audio pipeline)
             estimated_steps = 3  # scene detection, scene processing, finalization
-            tracker.start_processing(video_path.name, total_steps=estimated_steps)
+            tracker.start_processing(video_path.name, total_steps=estimated_steps, run_id=run_id)
         
         video_hash = _compute_sha256(video_path)
         scene_overrides: Dict[str, Any] = {}

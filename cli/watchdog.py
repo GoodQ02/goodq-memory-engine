@@ -175,23 +175,37 @@ class ProcessedRegistry:
         with self.lock:
             return file_hash in self.processed
     
-    def mark_processed(self, file_hash: str, original_name: str, status: str = 'success'):
+    def mark_processed(
+        self,
+        file_hash: str,
+        original_name: str,
+        status: str = 'success',
+        run_id: Optional[str] = None,
+    ):
         """Mark file as processed"""
         with self.lock:
             self.processed[file_hash] = {
                 'original_name': original_name,
                 'status': status,
+                'run_id': run_id,
                 'timestamp': datetime.now().isoformat()
             }
             self.save()
-    
-    def mark_failed(self, file_hash: str, original_name: str, error: str):
+
+    def mark_failed(
+        self,
+        file_hash: str,
+        original_name: str,
+        error: str,
+        run_id: Optional[str] = None,
+    ):
         """Mark file as failed"""
         with self.lock:
             self.processed[file_hash] = {
                 'original_name': original_name,
                 'status': 'failed',
                 'error': error,
+                'run_id': run_id,
                 'timestamp': datetime.now().isoformat()
             }
             self.save()
@@ -226,13 +240,13 @@ class WatchdogProcessor:
         
         logger.info(f"Watching directory: {self.watch_dir}")
     
-    def _build_run_config(self, pipeline_name: str) -> Dict[str, Any]:
+    def _build_run_config(self, pipeline_name: str, run_id: Optional[str] = None) -> Dict[str, Any]:
         """Load configs and attach a run context for mission logging."""
         import subprocess
 
         cfg: Dict[str, Any] = dict(self._cfg_base) if isinstance(self._cfg_base, dict) else {}
         run_context: Dict[str, Any] = {
-            'id': str(uuid.uuid4()),
+            'id': run_id or str(uuid.uuid4()),
             'pipeline': pipeline_name,
             'started_at': datetime.now(timezone.utc).isoformat(),
             'timer_unit': 'ms',
@@ -353,17 +367,19 @@ class WatchdogProcessor:
         # Import progress tracker
         sys.path.insert(0, str(Path(__file__).parent.parent))
         from steps.common.progress_tracker import start_processing, finish_processing, add_error
-        
+
         file_type = self.get_file_type(file_path)
         logger.info(f"Processing {file_type}: {file_path.name}")
-        
+        run_id = str(uuid.uuid4())
+        logger.info(f"[RUN] run_id={run_id} file={file_path.name}")
+
         # Notify Control Agent of new file
         if self.control_agent:
             self.control_agent.on_file_detected(file_path.name, file_type, file_path.stat().st_size)
         
         # Start progress tracking
         total_steps = 20  # Estimate for video processing
-        start_processing(file_path.name, total_steps)
+        start_processing(file_path.name, total_steps, run_id=run_id)
         
         # Move to processing directory
         processing_path = self.processing_dir / file_path.name
@@ -374,7 +390,7 @@ class WatchdogProcessor:
             logger.error(f"Failed to copy file: {e}")
             add_error(f"Failed to copy file: {e}", "file_copy")
             finish_processing("failed")
-            self.registry.mark_failed(file_hash, file_path.name, str(e))
+            self.registry.mark_failed(file_hash, file_path.name, str(e), run_id=run_id)
             
             # Let Control Agent analyze the failure
             if self.control_agent:
@@ -394,15 +410,15 @@ class WatchdogProcessor:
             # Notify Control Agent that processing is starting
             if self.control_agent:
                 self.control_agent.on_processing_start(file_path.name, file_type)
-            
+
             if file_type == 'video':
-                success = self.ingest_video(processing_path)
+                success = self.ingest_video(processing_path, run_id)
             elif file_type == 'audio':
-                success = self.ingest_audio(processing_path)
+                success = self.ingest_audio(processing_path, run_id)
             elif file_type == 'image':
-                success = self.ingest_image(processing_path)
+                success = self.ingest_image(processing_path, run_id)
             elif file_type == 'document':
-                success = self.ingest_document(processing_path)
+                success = self.ingest_document(processing_path, run_id)
             else:
                 error_msg = f"Unsupported file type: {file_type}"
                 logger.error(error_msg)
@@ -426,7 +442,7 @@ class WatchdogProcessor:
         if success:
             logger.info(f"[OK] Successfully processed: {file_path.name}")
             finish_processing("completed")
-            self.registry.mark_processed(file_hash, file_path.name, 'success')
+            self.registry.mark_processed(file_hash, file_path.name, 'success', run_id=run_id)
             
             # Notify Control Agent of success
             if self.control_agent:
@@ -450,7 +466,7 @@ class WatchdogProcessor:
             logger.error(f"[FAIL] Failed to process: {file_path.name}")
             add_error(error_msg or 'Unknown error', "processing")
             finish_processing("failed")
-            self.registry.mark_failed(file_hash, file_path.name, error_msg or 'Unknown error')
+            self.registry.mark_failed(file_hash, file_path.name, error_msg or 'Unknown error', run_id=run_id)
             
             # Notify Control Agent of failure
             if self.control_agent:
@@ -472,7 +488,7 @@ class WatchdogProcessor:
         
         return success
     
-    def ingest_video(self, video_path: Path) -> bool:
+    def ingest_video(self, video_path: Path, run_id: str) -> bool:
         """Ingest video file via CLI"""
         import subprocess
         
@@ -529,7 +545,7 @@ class WatchdogProcessor:
         logger.info(f"[SYMBOL] Asset: {video_path.name}")
         
         try:
-            cfg = self._build_run_config("watchdog_video_ingest")
+            cfg = self._build_run_config("watchdog_video_ingest", run_id=run_id)
             result_dict = run_direct_ingestion(str(temp_video), cfg)
             
             # Simulate subprocess result for compatibility
@@ -578,7 +594,7 @@ class WatchdogProcessor:
             logger.warning(f"Temp files preserved for debugging: {temp_input}")
             return False
     
-    def ingest_audio(self, audio_path: Path) -> bool:
+    def ingest_audio(self, audio_path: Path, run_id: str) -> bool:
         """Ingest standalone audio file via conda step runner pipeline."""
         from steps.common.conda_runner import run_conda_step, StepExecutionError
         from steps.common.tag_utils import canonicalize_taxonomy
@@ -608,7 +624,7 @@ class WatchdogProcessor:
         # Per-step timeout for conda runner (10 minutes)
         os.environ["GOODQ_STEP_TIMEOUT_MS"] = str(600_000)
 
-        cfg = self._build_run_config("watchdog_audio_ingest")
+        cfg = self._build_run_config("watchdog_audio_ingest", run_id=run_id)
         item: Dict[str, Any] = {
             "modality": "audio",
             "source_path": str(temp_audio),
@@ -670,7 +686,7 @@ class WatchdogProcessor:
 
         return success
     
-    def ingest_image(self, image_path: Path) -> bool:
+    def ingest_image(self, image_path: Path, run_id: str) -> bool:
         """Ingest image file via conda step runner pipeline."""
         from steps.common.conda_runner import run_conda_step, StepExecutionError
         from steps.common.tag_utils import canonicalize_taxonomy
@@ -699,7 +715,7 @@ class WatchdogProcessor:
 
         os.environ["GOODQ_STEP_TIMEOUT_MS"] = str(600_000)
 
-        cfg = self._build_run_config("watchdog_image_ingest")
+        cfg = self._build_run_config("watchdog_image_ingest", run_id=run_id)
         item: Dict[str, Any] = {
             "modality": "image",
             "source_path": str(temp_image),
@@ -762,7 +778,7 @@ class WatchdogProcessor:
 
         return success
     
-    def ingest_document(self, doc_path: Path) -> bool:
+    def ingest_document(self, doc_path: Path, run_id: str) -> bool:
         """Ingest document file (PDF / text) via conda step runner pipeline."""
         from steps.common.conda_runner import run_conda_step, StepExecutionError
         from steps.common.tag_utils import canonicalize_taxonomy
@@ -797,7 +813,7 @@ class WatchdogProcessor:
         os.environ["GOODQ_STEP_TIMEOUT_MS"] = str(600_000)
 
         modality = 'pdf' if ext == '.pdf' else 'text'
-        cfg = self._build_run_config("watchdog_document_ingest")
+        cfg = self._build_run_config("watchdog_document_ingest", run_id=run_id)
         item: Dict[str, Any] = {
             "modality": modality,
             "source_path": str(temp_doc),
@@ -971,6 +987,9 @@ def main():
     try:
         from steps.common.config_loader import load_configs
         cfg = load_configs({})
+        logger.info("Runtime authority: configs/config.yaml")
+        logger.info(f"Import inbox (resolved): {cfg['paths']['import_inbox']}")
+        logger.info(f"Active epoch: {Path(cfg['paths']['db_dir']).name}")
         watchdog = WatchdogProcessor(cfg)
         watchdog.run()
     finally:

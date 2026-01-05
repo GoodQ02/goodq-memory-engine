@@ -90,12 +90,13 @@ class WSL2AudioBridge:
             return False
     
     def transcribe(
-        self, 
+        self,
         audio_path: str,
         language: Optional[str] = None,
         task: str = "transcribe",
         beam_size: int = 5,
-        timeout: Optional[int] = None
+        timeout: Optional[int] = None,
+        run_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Transcribe audio using WSL2 Whisper
@@ -130,13 +131,16 @@ class WSL2AudioBridge:
                 "beam_size": beam_size
             }
         }
-        
+        if run_id:
+            job["run_id"] = run_id
+
         return self._submit_job(job, timeout)
     
     def diarize(
         self,
         audio_path: str,
-        timeout: Optional[int] = None
+        timeout: Optional[int] = None,
+        run_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Perform speaker diarization using WSL2 PyAnnote
@@ -164,7 +168,9 @@ class WSL2AudioBridge:
             "task": "diarize",
             "params": {}
         }
-        
+        if run_id:
+            job["run_id"] = run_id
+
         return self._submit_job(job, timeout)
     
     def transcribe_and_diarize(
@@ -173,7 +179,8 @@ class WSL2AudioBridge:
         language: Optional[str] = None,
         task: str = "transcribe",
         beam_size: int = 5,
-        timeout: Optional[int] = None
+        timeout: Optional[int] = None,
+        run_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Perform both transcription and diarization
@@ -208,17 +215,23 @@ class WSL2AudioBridge:
                 "beam_size": beam_size
             }
         }
-        
+        if run_id:
+            job["run_id"] = run_id
+
         return self._submit_job(job, timeout)
     
     def _submit_job(self, job: Dict, timeout: Optional[int] = None) -> Dict[str, Any]:
         """Submit a job to WSL2 and wait for results"""
         job_id = job['job_id']
-        
+        run_id = job.get("run_id")
+
         if timeout is None:
             timeout = self.config['timeout_seconds']
-        
-        logger.info(f"Submitting job {job_id} to WSL2 audio service")
+
+        if run_id:
+            logger.info(f"Submitting job {job_id} to WSL2 audio service (run_id={run_id})")
+        else:
+            logger.info(f"Submitting job {job_id} to WSL2 audio service")
         
         # Check if service is running
         if not self._is_wsl_service_running():
@@ -241,7 +254,10 @@ class WSL2AudioBridge:
                 timeout=10
             )
             
-            logger.info(f"Job {job_id} queued in WSL2")
+            if run_id:
+                logger.info(f"Job {job_id} queued in WSL2 (run_id={run_id})")
+            else:
+                logger.info(f"Job {job_id} queued in WSL2")
             
             # Wait for result
             start_time = time.time()
@@ -268,6 +284,8 @@ class WSL2AudioBridge:
                     if result_file.exists():
                         with open(result_file, 'r') as f:
                             result = json.load(f)
+                        if run_id and "run_id" not in result:
+                            result["run_id"] = run_id
                         logger.info(f"Job {job_id} completed successfully")
                         return result
                     
@@ -282,6 +300,8 @@ class WSL2AudioBridge:
                     if error_file.exists():
                         with open(error_file, 'r') as f:
                             error = json.load(f)
+                        if run_id and "run_id" not in error:
+                            error["run_id"] = run_id
                         logger.error(f"Job {job_id} failed: {error.get('error')}")
                         return error
                 
@@ -294,19 +314,25 @@ class WSL2AudioBridge:
             
             # Timeout
             logger.error(f"Job {job_id} timed out after {timeout}s")
-            return {
+            result = {
                 "job_id": job_id,
                 "status": "timeout",
                 "error": f"Job did not complete within {timeout} seconds"
             }
-        
+            if run_id:
+                result["run_id"] = run_id
+            return result
+
         except Exception as e:
             logger.error(f"Job {job_id} submission failed: {e}")
-            return {
+            result = {
                 "job_id": job_id,
                 "status": "error",
                 "error": str(e)
             }
+            if run_id:
+                result["run_id"] = run_id
+            return result
 
 
 # Convenience functions for easy integration
@@ -333,7 +359,9 @@ def transcribe_wsl2(audio_path: str, **kwargs) -> Dict[str, Any]:
         wsl_path = audio_path.replace("C:\\", "/mnt/c/").replace("C:/", "/mnt/c/").replace("\\", "/")
     else:
         wsl_path = audio_path
-    
+
+    run_id = kwargs.get("run_id")
+
     logger.info(f"Transcribing via WSL2: {audio_path}")
     logger.info(f"  WSL path: {wsl_path}")
     
@@ -361,16 +389,21 @@ def transcribe_wsl2(audio_path: str, **kwargs) -> Dict[str, Any]:
         if result.returncode != 0:
             logger.error(f"WSL2 transcription failed with code {result.returncode}")
             logger.error(f"STDERR: {result.stderr}")
-            return {
+            error_payload = {
                 "status": "error",
                 "error": f"Transcription failed: {result.stderr}"
             }
+            if run_id:
+                error_payload["run_id"] = run_id
+            return error_payload
         
         # Parse JSON from last line of stdout
         lines = result.stdout.strip().split('\n')
         json_line = lines[-1]
         
         data = json.loads(json_line)
+        if run_id and "run_id" not in data:
+            data["run_id"] = run_id
         
         if data.get('status') != 'success':
             return data
@@ -391,7 +424,7 @@ def transcribe_wsl2(audio_path: str, **kwargs) -> Dict[str, Any]:
             })
             full_text.append(seg['text'].strip())
         
-        return {
+        result_payload = {
             "status": "success",
             "full_text": " ".join(full_text),
             "transcription": formatted_segments,
@@ -403,26 +436,38 @@ def transcribe_wsl2(audio_path: str, **kwargs) -> Dict[str, Any]:
                 "rtf": 0.0  # Not provided
             }
         }
+        if run_id:
+            result_payload["run_id"] = run_id
+        return result_payload
         
     except subprocess.TimeoutExpired:
         logger.error(f"WSL2 transcription timed out after {timeout}s")
-        return {
+        error_payload = {
             "status": "error",
             "error": f"Transcription timed out after {timeout}s"
         }
+        if run_id:
+            error_payload["run_id"] = run_id
+        return error_payload
     except json.JSONDecodeError as e:
         logger.error(f"Failed to parse WSL2 output: {e}")
         logger.error(f"Output was: {result.stdout}")
-        return {
+        error_payload = {
             "status": "error",
             "error": f"Failed to parse output: {e}"
         }
+        if run_id:
+            error_payload["run_id"] = run_id
+        return error_payload
     except Exception as e:
         logger.error(f"WSL2 transcription failed: {e}")
-        return {
+        error_payload = {
             "status": "error",
             "error": str(e)
         }
+        if run_id:
+            error_payload["run_id"] = run_id
+        return error_payload
 
 
 def diarize_wsl2(audio_path: str, **kwargs) -> Dict[str, Any]:

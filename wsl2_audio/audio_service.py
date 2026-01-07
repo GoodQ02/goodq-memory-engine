@@ -50,11 +50,11 @@ class GPUConfig:
 class AudioJob:
     """Audio processing job"""
     job_id: str
-    run_id: Optional[str] = None
     audio_path: str
     output_path: str
     task: str  # "transcribe", "diarize", "both"
     params: Dict[str, Any]
+    run_id: Optional[str] = None
 
 
 class AudioService:

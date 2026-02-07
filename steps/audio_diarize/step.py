@@ -6,6 +6,7 @@ from steps.common.audio_gpu_optimizer import get_audio_gpu_optimizer
 
 
 from typing import Any, Dict, List, Optional, Tuple
+import logging
 import os
 import tempfile
 import subprocess
@@ -16,6 +17,7 @@ import time
 _PIPELINES: Dict[Tuple[str, str], Any] = {}
 _SPEAKER_EMBEDDINGS: Dict[str, Any] = {}  # Cache for speaker embeddings
 _MODEL_WARMED_UP: bool = False  # Track if model has been warmed up
+logger = logging.getLogger(__name__)
 
 
 def _resolve_device() -> str:
@@ -61,14 +63,17 @@ def _load_pipeline(model_id: str, device: str, auth_token: Optional[str], durati
         
         if device == "cuda":
             try:
+                import torch  # type: ignore
                 pipeline.to(torch.device("cuda"))
                 load_time = time.time() - start_load
                 print(f"[DIARIZE] Model loaded on GPU in {load_time:.1f}s")
                 optimizer.print_memory_stats()
-            except Exception as e:
-                print(f'[ERROR] Failed to move model to GPU: {str(e)}')
+            except (RuntimeError, ValueError, OSError, AssertionError) as e:
+                logger.warning("Failed to move diarization model to GPU; falling back to CPU: %s", e)
                 device = "cpu"
-                pass
+            except Exception as e:
+                logger.exception("Unexpected error while moving diarization model to GPU")
+                raise
         else:
             load_time = time.time() - start_load
             print(f"[DIARIZE] Model loaded on CPU in {load_time:.1f}s")
@@ -94,23 +99,21 @@ def _load_pipeline(model_id: str, device: str, auth_token: Optional[str], durati
                     warmup_time = time.time() - warmup_start
                     print(f"[DIARIZE] Model warmup complete in {warmup_time:.1f}s")
                     _MODEL_WARMED_UP = True
-                except:
-                    pass
+                except Exception as warmup_call_exc:
+                    logger.warning("Diarization warmup inference failed: %s", warmup_call_exc)
                 
                 try:
                     os.remove(tmp.name)
-                except:
-                    pass
+                except Exception as cleanup_exc:
+                    logger.debug("Failed to remove warmup temp file %s: %s", tmp.name, cleanup_exc)
             except Exception as warmup_exc:
                 print(f"[WARN] Model warmup failed: {str(warmup_exc)}")
         
         _PIPELINES[key] = pipeline
         
-    except Exception as e:
-        print(f"[ERROR] Failed to load pipeline: {str(e)}")
-        import traceback
-        print(f"[ERROR] Traceback: {traceback.format_exc()}")
-        _PIPELINES[key] = None
+    except Exception:
+        logger.exception("Failed to load diarization pipeline for model=%s device=%s", model_id, device)
+        raise
     
     return _PIPELINES[key]
 

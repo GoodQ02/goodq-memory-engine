@@ -21,7 +21,8 @@ def test_config_values():
     print()
     
     result = load_configs()
-    cfg = result.get('config', {})
+    # Canonical loader returns top-level config; keep legacy nested fallback for old snapshots.
+    cfg = result if isinstance(result.get('video'), dict) else result.get('config', {})
     paths = result.get('paths', {})
     
     # Test Video Settings
@@ -34,7 +35,8 @@ def test_config_values():
     
     print(f"   Scene Threshold: {threshold}")
     print(f"   Min Scene Length: {min_scene}s")
-    print(f"   Max Scenes: {max_scenes if max_scenes > 0 else 'unlimited'}")
+    max_scenes_display = max_scenes if isinstance(max_scenes, (int, float)) and max_scenes > 0 else "unlimited"
+    print(f"   Max Scenes: {max_scenes_display}")
     print(f"   Entity Max Samples: {entity_samples}")
     
     # Validate

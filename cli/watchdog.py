@@ -15,7 +15,7 @@ from pathlib import Path
 from datetime import datetime, timezone
 from typing import Optional, Set, Dict, List, Any
 from queue import Queue, Empty
-from threading import Thread, Event, Lock
+from threading import Thread, Event, RLock
 import json
 import os
 import uuid
@@ -145,7 +145,7 @@ class ProcessedRegistry:
     """Track which files have been processed"""
     def __init__(self, state_file: Path):
         self.state_file = state_file
-        self.lock = Lock()
+        self.lock = RLock()
         self.processed: Dict[str, Dict] = {}
         self.load()
     

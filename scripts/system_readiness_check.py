@@ -311,7 +311,7 @@ def build_report() -> Dict[str, Any]:
     env_results = gather_env_checks()
     path_results = gather_path_checks(cfg)
     dataset_results = gather_dataset_checks(_dataset_cache_root())
-    token = os.environ.get("PYANNOTE_TOKEN") or DEFAULT_TOKEN
+    token = os.environ.get("PYANNOTE_TOKEN") or os.environ.get("HF_TOKEN")
     hf_result = check_hf_access("pyannote/speaker-diarization", token, revision="2.1")
     conda_results = gather_conda_checks(bool(token))
 

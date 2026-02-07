@@ -91,7 +91,7 @@ tts:
 # ============================================================================
 home_assistant:
   url: http://192.168.0.154:8123
-  token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiI0NTAzNDU1OWFlNGM0YmQ5ODhmNmVlYjhlMjI1YWI3ZCIsImlhdCI6MTc1MTA4NjgzMSwiZXhwIjoyMDY2NDQ2ODMxfQ.0bFd5MGzXEsQmZBzO3x2PIqSZ__Rex7t9dl_t5ui9KI
+  token: ${HA_TOKEN}
 
 # ============================================================================
 # SYSTEM HARDWARE

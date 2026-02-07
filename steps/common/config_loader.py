@@ -1,6 +1,7 @@
 from __future__ import annotations
 import os
 import json
+import re
 from typing import Any, Dict
 
 import yaml
@@ -27,13 +28,27 @@ def _normalize_win_path(value: str) -> str:
     return value
 
 
+_ENV_REF_PATTERN = re.compile(r"^\$\{([A-Za-z_][A-Za-z0-9_]*)\}$")
+
+
+def _resolve_env_ref(value: str) -> str:
+    if not isinstance(value, str):
+        return value
+    match = _ENV_REF_PATTERN.match(value.strip())
+    if not match:
+        return value
+    env_name = match.group(1)
+    env_value = os.environ.get(env_name)
+    return env_value if env_value is not None else value
+
+
 def _normalize_paths(obj: Any) -> Any:
     if isinstance(obj, dict):
         return {k: _normalize_paths(v) for k, v in obj.items()}
     if isinstance(obj, list):
         return [_normalize_paths(v) for v in obj]
     if isinstance(obj, str):
-        return _normalize_win_path(obj)
+        return _normalize_win_path(_resolve_env_ref(obj))
     return obj
 
 

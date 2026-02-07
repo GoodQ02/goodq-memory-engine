@@ -113,9 +113,9 @@ PyAnnote diarization requires a HuggingFace account and token.
 nano ~/goodq_audio/config.json
 ```
 
-Replace `"huggingface_token": null` with your token:
+Replace `"huggingface_token": null` with an env reference:
 ```json
-"huggingface_token": "hf_xxxxxxxxxxxxxxxxxxxxx"
+"huggingface_token": "${PYANNOTE_TOKEN}"
 ```
 
 ### Step 4: Start the Service

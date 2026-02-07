@@ -29,8 +29,6 @@ except Exception as exc:  # pragma: no cover
     print("Missing dependency 'pyyaml': {}".format(exc), file=sys.stderr)
     sys.exit(2)
 
-DEFAULT_TOKEN = "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"
-
 if load_dotenv:
     env_file = REPO_ROOT / ".env.local"
     if env_file.exists():
@@ -55,8 +53,10 @@ apply_default("HF_HOME", "L:/models", invalid=lambda v: "poppler" in v.lower() i
 apply_default("TORCH_HOME", "L:/models", invalid=lambda v: "poppler" in v.lower() if v else True)
 # Prefer hf_transfer enabled by default for faster local-first fetches
 apply_default("HF_HUB_ENABLE_HF_TRANSFER", "1", invalid=lambda v: v not in {None, "", "1"})
-apply_default("HF_TOKEN", DEFAULT_TOKEN)
-apply_default("PYANNOTE_TOKEN", DEFAULT_TOKEN)
+if os.environ.get("HF_TOKEN") and not os.environ.get("PYANNOTE_TOKEN"):
+    os.environ["PYANNOTE_TOKEN"] = os.environ["HF_TOKEN"]
+if os.environ.get("PYANNOTE_TOKEN") and not os.environ.get("HF_TOKEN"):
+    os.environ["HF_TOKEN"] = os.environ["PYANNOTE_TOKEN"]
 
 def _dataset_cache_root() -> Path:
     cache = os.environ.get('HF_DATASETS_CACHE')

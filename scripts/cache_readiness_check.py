@@ -82,7 +82,10 @@ def ensure_env() -> Path:
     os.environ.setdefault("HF_HUB_ENABLE_HF_TRANSFER", "0")
     token = os.environ.get("HF_TOKEN") or os.environ.get("PYANNOTE_TOKEN")
     if not token:
-        os.environ["HF_TOKEN"] = os.environ["PYANNOTE_TOKEN"] = "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"
+        print("[WARN] HF_TOKEN/PYANNOTE_TOKEN not set; gated model checks may fail.")
+    else:
+        os.environ.setdefault("HF_TOKEN", token)
+        os.environ.setdefault("PYANNOTE_TOKEN", token)
     return models_dir
 
 

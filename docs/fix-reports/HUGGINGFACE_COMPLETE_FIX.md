@@ -182,7 +182,7 @@ This will:
 export HF_HOME="L:/models"
 export TORCH_HOME="L:/models"
 export TRANSFORMERS_CACHE="L:/models/transformers"
-export HF_TOKEN="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"
+export HF_TOKEN="<from .env.local>"
 
 # Optional for offline mode
 # export TRANSFORMERS_OFFLINE=1
@@ -194,7 +194,7 @@ export HF_TOKEN="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"
 HF_HOME=L:/models
 TORCH_HOME=L:/models
 TRANSFORMERS_CACHE=L:/models/transformers
-HF_TOKEN=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
+HF_TOKEN=<from .env.local>
 ```
 
 ---

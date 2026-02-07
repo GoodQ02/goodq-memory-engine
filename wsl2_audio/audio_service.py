@@ -120,6 +120,23 @@ class AudioService:
             return json.loads(text)
         except json.JSONDecodeError as e:
             raise RuntimeError(f"Invalid JSON in {self.config_path}: {e}")
+
+    @staticmethod
+    def _resolve_secret(raw_value: Any, env_key: Optional[str] = None) -> Optional[str]:
+        """Resolve a secret value from env-first config references."""
+        if isinstance(env_key, str) and env_key.strip():
+            env_value = os.getenv(env_key.strip())
+            if env_value:
+                return env_value
+
+        if isinstance(raw_value, str):
+            value = raw_value.strip()
+            if value.startswith("${") and value.endswith("}"):
+                ref = value[2:-1].strip()
+                if ref:
+                    return os.getenv(ref)
+            return value or None
+        return None
     
     def _setup_gpu(self):
         """Configure GPU"""
@@ -188,7 +205,10 @@ class AudioService:
             from pyannote.audio import Pipeline
             
             diarization_model = models_config.get('diarization', 'pyannote/speaker-diarization-3.1')
-            hf_token = self.config.get('huggingface_token')
+            hf_token = self._resolve_secret(
+                self.config.get('huggingface_token'),
+                self.config.get('huggingface_token_env', 'PYANNOTE_TOKEN'),
+            )
             
             if hf_token:
                 logger.info(f"Loading diarization model: {diarization_model}")

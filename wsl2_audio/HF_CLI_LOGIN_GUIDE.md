@@ -8,7 +8,7 @@ You **already have a working HF token** setup! Here's the current state and how 
 
 ```
 ✓ Logged in as: JoesDomingo
-✓ HF_TOKEN in environment: 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
+✓ HF_TOKEN in environment: <from .env.local>
 ✓ HF_HOME configured: /mnt/l/models
 ✓ Token accessible via HuggingFace CLI
 ```

@@ -109,3 +109,5 @@
 ## Do / Don't
 - Do: propose before acting; keep diffs small; trust audits over intuition; preserve working behavior.
 - Don't: assume context; over-optimize; rewrite working systems; hide failures.
+
+Always use the OpenAI developer documentation MCP server if you need to work with the OpenAI API, ChatGPT Apps SDK, Codex, or related docs without me having to explicitly ask.

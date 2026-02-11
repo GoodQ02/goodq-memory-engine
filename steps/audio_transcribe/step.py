@@ -1,6 +1,11 @@
 from __future__ import annotations
 # Audio-specific GPU optimization
 from steps.common.audio_gpu_optimizer import get_audio_gpu_optimizer
+from steps.common.profile_config import (
+    is_baseline,
+    log_runtime_profile_state,
+    require_wsl_audio,
+)
 
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -394,7 +399,18 @@ def audio_transcribe(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
     # Try WSL2 acceleration first (if available and enabled)
     cfg_audio = (cfg.get("audio", {}) or {})
     tx_cfg = (cfg_audio.get("transcribe", {}) or {})
-    use_wsl = tx_cfg.get("use_wsl2", True)  # Default: enabled
+    use_wsl_default = False if is_baseline() else True
+    use_wsl = tx_cfg.get("use_wsl2", use_wsl_default)
+
+    log_runtime_profile_state(
+        logger=logger,
+        context="steps.audio_transcribe.step",
+        gpu_enabled=None,
+        wsl_enabled=bool(use_wsl),
+    )
+
+    if not use_wsl and require_wsl_audio():
+        raise RuntimeError("GOODQ_REQUIRE_WSL_AUDIO=1 but WSL audio is disabled by profile/config")
     
     if use_wsl:
         try:
@@ -429,12 +445,21 @@ def audio_transcribe(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
                         }
                     }
                 else:
-                    logger.warning(f"[TRANSCRIBE] WSL2 failed: {wsl_result.get('error')}, falling back to Windows")
+                    error_msg = wsl_result.get("error") or "unknown WSL2 processing failure"
+                    if require_wsl_audio():
+                        raise RuntimeError(f"GOODQ_REQUIRE_WSL_AUDIO=1 and WSL2 processing failed: {error_msg}")
+                    logger.warning(f"[TRANSCRIBE] WSL2 failed: {error_msg}, falling back to Windows")
             else:
+                if require_wsl_audio():
+                    raise RuntimeError("GOODQ_REQUIRE_WSL_AUDIO=1 but WSL2 bridge is not ready")
                 logger.info(f"[TRANSCRIBE] WSL2 not ready, using Windows processing")
-        except ImportError:
+        except ImportError as e:
+            if require_wsl_audio():
+                raise RuntimeError("GOODQ_REQUIRE_WSL_AUDIO=1 but wsl2_audio_bridge is unavailable") from e
             logger.info(f"[TRANSCRIBE] WSL2 bridge not installed, using Windows processing")
         except Exception as e:
+            if require_wsl_audio():
+                raise RuntimeError(f"GOODQ_REQUIRE_WSL_AUDIO=1 and WSL2 path failed: {e}") from e
             logger.warning(f"[TRANSCRIBE] WSL2 error: {e}, falling back to Windows")
     
     # Windows processing (original code)

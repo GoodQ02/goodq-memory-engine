@@ -24,3 +24,8 @@ The following Phase 0 bootstrap artifacts are authoritative:
 - Documentation normalization
 - No feature changes
 
+## Phase A Preview
+- Path abstraction has begun with `GOODQ_DATA_ROOT`-driven data root resolution.
+- Phase A Step 2: WSL identity abstraction implemented.
+- Phase A Step 3: Host profile flag introduced.
+- Phase A Step 4: Semantic profile normalization complete.

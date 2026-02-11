@@ -3,9 +3,16 @@ GPU Configuration Module
 Auto-configures GPU settings when imported by pipeline steps
 """
 
+import logging
 import os
 import sys
 from pathlib import Path
+
+from steps.common.profile_config import (
+    is_baseline,
+    log_runtime_profile_state,
+    require_gpu,
+)
 
 # Determine which step is importing this
 def get_step_name():
@@ -114,13 +121,17 @@ def configure_gpu(step_name=None, force_fraction=None):
                 "cudnn_benchmark": True
             }
         else:
+            if require_gpu():
+                raise RuntimeError(f"CUDA required but unavailable for step '{step_name}'")
             print(f"[SYMBOL] CUDA not available for {step_name} - using CPU")
             return {
                 "available": False,
                 "device": "cpu"
             }
             
-    except ImportError:
+    except ImportError as e:
+        if require_gpu():
+            raise RuntimeError(f"PyTorch required for GPU step '{step_name}' but is not installed") from e
         print(f"[SYMBOL] PyTorch not installed for {step_name} - GPU config skipped")
         return {
             "available": False,
@@ -128,6 +139,8 @@ def configure_gpu(step_name=None, force_fraction=None):
             "reason": "pytorch_not_installed"
         }
     except Exception as e:
+        if require_gpu():
+            raise RuntimeError(f"GPU configuration failed for step '{step_name}': {e}") from e
         print(f"[SYMBOL] GPU configuration failed for {step_name}: {e}")
         return {
             "available": False,
@@ -176,10 +189,25 @@ def print_memory_stats():
 
 
 # Auto-configure on import (can be disabled with GOODQ_NO_AUTO_GPU=1)
+if is_baseline():
+    # Baseline profile is CPU-safe by default; preserve explicit flag contract.
+    os.environ["GOODQ_NO_AUTO_GPU"] = "1"
+
+if require_gpu() and os.getenv("GOODQ_NO_AUTO_GPU") == "1":
+    raise RuntimeError("GOODQ_REQUIRE_GPU=1 but GPU auto-config is disabled (GOODQ_NO_AUTO_GPU=1)")
+
 if os.getenv("GOODQ_NO_AUTO_GPU") != "1":
     _gpu_config = configure_gpu()
 else:
-    _gpu_config = {"available": False, "device": "cpu", "reason": "auto_config_disabled"}
+    reason = "host_profile_baseline" if is_baseline() else "auto_config_disabled"
+    _gpu_config = {"available": False, "device": "cpu", "reason": reason}
+
+log_runtime_profile_state(
+    logger=logging.getLogger(__name__),
+    context="steps.common.gpu_config",
+    gpu_enabled=bool(_gpu_config.get("available")),
+    wsl_enabled=None,
+)
 
 # Export for use by steps
 __all__ = ['configure_gpu', 'get_device', 'clear_cache', 'print_memory_stats', '_gpu_config']

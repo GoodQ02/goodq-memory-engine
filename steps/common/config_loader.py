@@ -1,10 +1,12 @@
 from __future__ import annotations
+import logging
 import os
 import json
 import re
 from typing import Any, Dict
 
 import yaml
+from steps.common.profile_config import log_runtime_profile_state
 
 
 def _read_yaml(path: str) -> Dict[str, Any]:
@@ -28,18 +30,21 @@ def _normalize_win_path(value: str) -> str:
     return value
 
 
-_ENV_REF_PATTERN = re.compile(r"^\$\{([A-Za-z_][A-Za-z0-9_]*)\}$")
+_ENV_REF_PATTERN = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-(.*?))?\}")
 
 
 def _resolve_env_ref(value: str) -> str:
     if not isinstance(value, str):
         return value
-    match = _ENV_REF_PATTERN.match(value.strip())
-    if not match:
-        return value
-    env_name = match.group(1)
-    env_value = os.environ.get(env_name)
-    return env_value if env_value is not None else value
+    def replace_match(match: re.Match[str]) -> str:
+        env_name = match.group(1)
+        default_value = match.group(2)
+        env_value = os.environ.get(env_name)
+        if default_value is not None:
+            return env_value if env_value not in (None, "") else default_value
+        return env_value if env_value is not None else match.group(0)
+
+    return _ENV_REF_PATTERN.sub(replace_match, value)
 
 
 def _normalize_paths(obj: Any) -> Any:
@@ -69,6 +74,13 @@ def load_configs(overrides: Dict[str, Any] | None = None) -> Dict[str, Any]:
     except Exception as e:
         print(f'[WARN] Could not load .env.local: {str(e)}')
         pass
+
+    log_runtime_profile_state(
+        logger=logging.getLogger(__name__),
+        context="steps.common.config_loader",
+        gpu_enabled=None,
+        wsl_enabled=None,
+    )
 
     base_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "configs")
     

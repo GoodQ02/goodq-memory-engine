@@ -23,6 +23,23 @@ import numpy as np
 import soundfile as sf
 from faster_whisper import WhisperModel
 
+# Profile semantics (fallback to canonical behavior when steps package is unavailable in WSL context)
+try:
+    from steps.common.profile_config import (
+        log_runtime_profile_state,
+        require_gpu,
+        resolve_wsl_gpu_config,
+    )
+except Exception:
+    def require_gpu() -> bool:  # type: ignore
+        return os.getenv("GOODQ_REQUIRE_GPU", "").strip().lower() in {"1", "true", "yes", "on"}
+
+    def resolve_wsl_gpu_config(gpu_cfg: Optional[Dict[str, Any]]) -> Dict[str, Any]:  # type: ignore
+        return dict(gpu_cfg or {})
+
+    def log_runtime_profile_state(*args, **kwargs) -> None:  # type: ignore
+        return None
+
 # Setup logging
 log_dir = Path.home() / "goodq_audio" / "logs"
 log_dir.mkdir(parents=True, exist_ok=True)
@@ -70,6 +87,7 @@ class AudioService:
 
         # Validate/load JSON
         self.config = self._load_config_safely()
+        self.config["gpu"] = resolve_wsl_gpu_config(self.config.get("gpu", {}))
 
         # Auto-create expected directories (failsafe)
         self.queue_dir = self.base_dir / self.config.get("queue_dir", "queue_in")
@@ -81,6 +99,16 @@ class AudioService:
         
         self.running = True
         self.processing_lock = threading.Lock()
+
+        gpu_cfg = self.config.get("gpu", {}) or {}
+        requested_device = str(gpu_cfg.get("device", "cuda")).lower()
+        gpu_enabled = requested_device == "cuda" and torch.cuda.is_available()
+        log_runtime_profile_state(
+            logger=logger,
+            context="wsl2_audio.audio_service",
+            gpu_enabled=gpu_enabled,
+            wsl_enabled=True,
+        )
         
         # GPU setup
         self._setup_gpu()
@@ -141,8 +169,11 @@ class AudioService:
     def _setup_gpu(self):
         """Configure GPU"""
         gpu_config = self.config.get('gpu', {})
-        
-        if torch.cuda.is_available():
+        configured_device = str(gpu_config.get('device', 'cuda')).lower()
+        wants_cuda = configured_device == "cuda"
+        cuda_available = torch.cuda.is_available()
+
+        if wants_cuda and cuda_available:
             device_name = torch.cuda.get_device_name(0)
             memory_total = torch.cuda.get_device_properties(0).total_memory / 1024**3
             
@@ -161,7 +192,14 @@ class AudioService:
             
             logger.info(f"GPU memory fraction: {memory_fraction*100:.0f}%")
         else:
-            logger.warning("CUDA not available, will use CPU (slow!)")
+            if require_gpu():
+                if not wants_cuda:
+                    raise RuntimeError("GOODQ_REQUIRE_GPU=1 but profile/config resolved WSL audio device to CPU")
+                raise RuntimeError("GOODQ_REQUIRE_GPU=1 but CUDA is not available in WSL audio service")
+            if wants_cuda:
+                logger.warning("CUDA not available, will use CPU (slow!)")
+            else:
+                logger.info("WSL audio running in CPU mode by profile/config")
     
     def _load_models(self):
         """Load AI models"""
@@ -171,8 +209,11 @@ class AudioService:
         # Load Whisper
         try:
             whisper_model = models_config.get('whisper', 'large-v3')
-            device = gpu_config.get('device', 'cuda')
-            compute_type = gpu_config.get('compute_type', 'float16')
+            device = str(gpu_config.get('device', 'cuda')).lower()
+            compute_type = str(gpu_config.get('compute_type', 'float16')).lower()
+            if device == "cuda" and not torch.cuda.is_available():
+                if require_gpu():
+                    raise RuntimeError("GOODQ_REQUIRE_GPU=1 but CUDA is unavailable for Whisper load")
             
             logger.info(f"Loading Whisper model: {whisper_model}")
             self.whisper_model = WhisperModel(
@@ -216,7 +257,7 @@ class AudioService:
                     diarization_model,
                     token=hf_token
                 )
-                if torch.cuda.is_available():
+                if str(gpu_config.get("device", "cuda")).lower() == "cuda" and torch.cuda.is_available():
                     self.diarization_pipeline.to(torch.device("cuda"))
                 logger.info("[SYMBOL] Diarization pipeline loaded")
             else:

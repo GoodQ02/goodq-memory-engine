@@ -9,6 +9,7 @@ import sys
 import json
 import os
 import gc
+import logging
 import traceback
 from pathlib import Path
 
@@ -19,6 +20,23 @@ import numpy as np
 
 # Whisper for transcription
 from faster_whisper import WhisperModel
+
+# Profile semantics (fallback to canonical behavior when steps package is unavailable in WSL context)
+try:
+    from steps.common.profile_config import (
+        log_runtime_profile_state,
+        require_gpu,
+        resolve_wsl_gpu_config,
+    )
+except Exception:
+    def require_gpu() -> bool:  # type: ignore
+        return os.getenv("GOODQ_REQUIRE_GPU", "").strip().lower() in {"1", "true", "yes", "on"}
+
+    def resolve_wsl_gpu_config(gpu_cfg):  # type: ignore
+        return dict(gpu_cfg or {})
+
+    def log_runtime_profile_state(*args, **kwargs) -> None:  # type: ignore
+        return None
 
 # Pyannote for diarization (optional - requires HF token)
 try:
@@ -70,11 +88,37 @@ def process_audio(audio_file, output_dir):
         result["error"] = f"Audio file not found: {audio_file}"
         return result
     
-    # GPU setup
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    compute_type = "float16" if device == "cuda" else "int8"
+    # GPU setup (profile-aware defaults)
+    cuda_available = torch.cuda.is_available()
+    gpu_profile_cfg = resolve_wsl_gpu_config({
+        "device": "cuda" if cuda_available else "cpu",
+        "compute_type": "float16" if cuda_available else "int8",
+    })
+    device = str(gpu_profile_cfg.get("device", "cuda" if cuda_available else "cpu")).lower()
+    compute_type = str(
+        gpu_profile_cfg.get(
+            "compute_type",
+            "float16" if device == "cuda" else "int8",
+        )
+    ).lower()
+    if device == "cuda" and not cuda_available:
+        if require_gpu():
+            raise RuntimeError("GOODQ_REQUIRE_GPU=1 but CUDA is not available in WSL audio process")
+        device = "cpu"
+    if device != "cuda" and require_gpu():
+        raise RuntimeError("GOODQ_REQUIRE_GPU=1 but profile/config resolved WSL audio processing to CPU")
+    if device == "cpu" and compute_type in {"float16", "fp16", "mixed", "bfloat16"}:
+        compute_type = "int8"
+
+    log_runtime_profile_state(
+        logger=logging.getLogger(__name__),
+        context="wsl2_audio.process_audio",
+        gpu_enabled=(device == "cuda"),
+        wsl_enabled=True,
+    )
+
     result["device"] = device
-    result["cuda_available"] = torch.cuda.is_available()
+    result["cuda_available"] = cuda_available
     
     if device == "cuda":
         result["gpu_name"] = torch.cuda.get_device_name(0)

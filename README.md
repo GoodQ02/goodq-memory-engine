@@ -1,3 +1,7 @@
+<!-- DOC_BADGE: CANONICAL -->
+<!-- DOC_STATUS: AUTHORITATIVE -->
+<!-- DOC_LAST_VERIFIED: 2026-02-12 -->
+
 <div align="center">
 
 # 🎯 GoodQ4All
@@ -174,7 +178,7 @@ LAUNCH_GOODQ.bat
 - ✅ Validates all dependencies & models
 - ✅ Checks API keys (OpenAI, HuggingFace, etc.)
 - ✅ Starts Qdrant vector database service
-- ✅ Launches file watchdog on `<GOODQ_DATA_ROOT>\GoodQ_Data\import_inbox` (default `L:\_DATA\GoodQ_Data\import_inbox`)
+- ✅ Launches file watchdog on `<GOODQ_DATA_ROOT>\GoodQ_Data\import_inbox` (default: `L:/_DATA/GoodQ_Data/import_inbox` when `GOODQ_DATA_ROOT` is unset)
 - ✅ Runs comprehensive health checks with auto-healing
 - ✅ Opens live monitoring dashboard with progress bars
 - ✅ Self-diagnoses and fixes common issues
@@ -273,10 +277,10 @@ This will:
         │   └─ lib/kg_realtime_integration.py::update_kg_for_scene()
         │       ├─ Calls entity_extractor for cross-modal entity resolution
         │       ├─ Resolves entities across modalities (visual + audio + text)
-        │       └─ Inserts into KG DB: L:\_DATA\GoodQ_Data\knowledge_graph.db
+        │       └─ Inserts into KG DB: <GOODQ_DATA_ROOT>/GoodQ_Data/knowledge_graph.db (default: L:/_DATA/GoodQ_Data/knowledge_graph.db)
         │
         └─ Post-Processing:
-            ├─ register_scene_bundle() → L:\_DATA\GoodQ_Data\memory.db
+            ├─ register_scene_bundle() → <GOODQ_DATA_ROOT>/GoodQ_Data/memory.db (default: L:/_DATA/GoodQ_Data/memory.db)
             └─ Qdrant insertion → http://localhost:6333 (collections: text, image, audio)
 
 ✅ Pipeline Status: FULLY OPERATIONAL (Verified Dec 14, 2025)
@@ -288,15 +292,15 @@ This will:
 
 | Artifact | Location | Evidence |
 |----------|----------|----------|
-| **Scene audio chunks** | `L:\goodq4all\logs\scene_ingest\<video>\audio\scene_XXXX.wav` | Confirmed by live run |
-| **Scene keyframes** | `L:\goodq4all\logs\scene_ingest\<video>\video\scene_XXXX.jpg` | From run_ingestion.py |
+| **Scene audio chunks** | `<project_root>/logs/scene_ingest/<video>/audio/scene_XXXX.wav` | Confirmed by live run |
+| **Scene keyframes** | `<project_root>/logs/scene_ingest/<video>/video/scene_XXXX.jpg` | From run_ingestion.py |
 | **WSL2 transcription** | `\\wsl.localhost\Ubuntu\home\<user>\goodq_audio\output\result.json` | Confirmed live (38KB, 52 segments) |
-| **Memory DB** | `L:\_DATA\GoodQ_Data\memory.db` | config.yaml + verified |
-| **Knowledge Graph DB** | `L:\_DATA\GoodQ_Data\knowledge_graph.db` | config.yaml + logs |
+| **Memory DB** | `<GOODQ_DATA_ROOT>/GoodQ_Data/memory.db` (default: `L:/_DATA/GoodQ_Data/memory.db`) | config.yaml + verified |
+| **Knowledge Graph DB** | `<GOODQ_DATA_ROOT>/GoodQ_Data/knowledge_graph.db` (default: `L:/_DATA/GoodQ_Data/knowledge_graph.db`) | config.yaml + logs |
 | **Scene bundles** | Stored in `memory.db` via `register_scene_bundle()` | Code evidence |
 | **Qdrant vectors** | `http://localhost:6333` (collections: goodq_text, goodq_image, goodq_audio) | config.yaml |
 
-⚠️ **Note:** Config specifies `processing: L:/_DATA/GoodQ_Data/processing` but actual artifacts land in `logs/scene_ingest/`. This is a known, non-breaking inconsistency documented in [`docs/technical/ARTIFACT_LOCATION_CONTRACT.md`](docs/technical/ARTIFACT_LOCATION_CONTRACT.md).
+⚠️ **Note:** Config path contract is `<GOODQ_DATA_ROOT>/GoodQ_Data/processing` (default: `L:/_DATA/GoodQ_Data/processing`) but actual artifacts land in `logs/scene_ingest/`. This is a known, non-breaking inconsistency documented in [`docs/technical/ARTIFACT_LOCATION_CONTRACT.md`](docs/technical/ARTIFACT_LOCATION_CONTRACT.md).
 
 ### The Complete Intelligence Stack
 
@@ -346,8 +350,8 @@ This will:
 │                  INTELLIGENCE STORAGE                        │
 │  ✅ Qdrant Vector DB (http://localhost:6333)               │
 │     - goodq_text, goodq_image, goodq_audio collections       │
-│  ✅ Memory Database (L:\_DATA\GoodQ_Data\memory.db)         │
-│  ✅ Knowledge Graph (L:\_DATA\GoodQ_Data\knowledge_graph.db)│
+│  ✅ Memory Database (<GOODQ_DATA_ROOT>/GoodQ_Data/memory.db, default L:/_DATA/GoodQ_Data/memory.db)         │
+│  ✅ Knowledge Graph (<GOODQ_DATA_ROOT>/GoodQ_Data/knowledge_graph.db, default L:/_DATA/GoodQ_Data/knowledge_graph.db)│
 │  ✅ Scene Bundles (in memory.db, structured metadata)       │
 │  ✅ Entity Relationships (in KG, cross-modal links)         │
 │  ✅ Event Timelines (temporal ordering preserved)           │
@@ -371,7 +375,7 @@ This will:
 **Previous Milestones (Dec 11, 2025):**
 - 🔧 **Phase 6b Fixed** – Temporal index now correctly generated for all ingestions
 - 🚀 **Production Launcher** – One-click startup with health checks and auto-healing
-- 📁 **Unified Data Root** – All processing now under `L:\_DATA\GoodQ_Data`
+- 📁 **Unified Data Root** – All processing resolves via `<GOODQ_DATA_ROOT>/GoodQ_Data` (default: `L:/_DATA/GoodQ_Data`)
 - 🧹 **Legacy Cleanup** – FAISS deprecated, duplicate DBs archived, paths unified
 
 **Environment Consolidation (Dec 2025):**
@@ -551,7 +555,7 @@ goodq4all/
 │       └── <video_name>/
 │           ├── audio/         # scene_XXXX.wav (confirmed live)
 │           └── video/         # scene_XXXX.jpg (confirmed live)
-└── 📂 L:\_DATA\GoodQ_Data/   # ✅ ACTIVE - Unified data root
+└── 📂 <GOODQ_DATA_ROOT>/GoodQ_Data/   # ✅ ACTIVE - Unified data root (default: L:/_DATA/GoodQ_Data)
     ├── memory.db              # ✅ Scene bundles storage (verified)
     ├── knowledge_graph.db     # ✅ Entity relationships (verified)
     ├── import_inbox/          # Watchdog input directory
@@ -601,8 +605,8 @@ goodq4all/
 - **CPU:** Intel Core i7-14700KF (24 cores with hybrid architecture)
 - **RAM:** 64GB Crucial DDR5 at 5200MHz (16GB minimum, 32GB+ recommended)
 - **Storage:** 100GB+ free space (for models, cache, processed media)
-  - Primary: Samsung 990 Pro 4TB NVMe SSD (L: drive)
-  - Data root: `GOODQ_DATA_ROOT` (defaults to `L:\_DATA`)
+  - Primary: high-speed NVMe SSD (validated on Samsung 990 Pro 4TB)
+  - Data root: `GOODQ_DATA_ROOT` (default: `L:/_DATA` when unset)
 - **Network:** 2.5Gbps Ethernet (for NAS integration and fast model transfers)
 - **OS:** Windows 11 (canonical); WSL2 (Ubuntu) is optional for accelerated audio paths
 
@@ -618,6 +622,10 @@ $env:GOODQ_HOST_PROFILE = "GPU_ENHANCED"
 $env:GOODQ_REQUIRE_GPU = "1"
 $env:GOODQ_REQUIRE_WSL_AUDIO = "1"
 ```
+
+Canonical setup references:
+- Install guide: `docs/guides/install/INSTALL.md`
+- Smoke matrix: `docs/bootstrap/smoke_matrix_phase_a.md` (run `python scripts/smoke_phase_a.py`)
 
 ### Software Stack
 
@@ -668,13 +676,14 @@ cd goodq4all
 
 **2. Run Windows Installer:**
 ```powershell
-cd L:\goodq4all
+cd <project_root>
 powershell -ExecutionPolicy Bypass -File scripts\install_pipeline_windows.ps1
 ```
 
 **3. Optional: Run WSL2 Installer (accelerated audio path):**
 ```bash
-cd /mnt/l/goodq4all
+cd "<GOODQ_WSL_WORKSPACE>"
+# default when unset: /home/<user>/goodq4all
 python3 scripts/install_pipeline_wsl.py
 ```
 
@@ -689,7 +698,8 @@ python scripts\cache_readiness_check.py
 LAUNCH_GOODQ.bat
 ```
 
-📖 **Detailed Setup:** See [`docs/guides/general/INSTALL.md`](docs/guides/general/INSTALL.md)  
+📖 **Detailed Setup:** See [`docs/guides/install/INSTALL.md`](docs/guides/install/INSTALL.md)  
+🧪 **Profile Smoke Matrix:** See [`docs/bootstrap/smoke_matrix_phase_a.md`](docs/bootstrap/smoke_matrix_phase_a.md)  
 📦 **Environment Reference:** See [`docs/guides/general/CONSOLIDATION_EXPLAINED.md`](docs/guides/CONSOLIDATION_EXPLAINED.md)
 
 ---
@@ -769,8 +779,8 @@ scripts\command_center.ps1  # Interactive dashboard
 - **Archive Size:** Tested with 500+ hours of video
 - **Knowledge Graph:** 50,000+ entities, 200,000+ relationships (actively growing)
 - **Database:** Multi-GB SQLite with Qdrant vector indices
-  - Memory DB: `L:\_DATA\GoodQ_Data\memory.db`
-  - Knowledge Graph: `L:\_DATA\GoodQ_Data\knowledge_graph.db`
+  - Memory DB: `<GOODQ_DATA_ROOT>/GoodQ_Data/memory.db` (default: `L:/_DATA/GoodQ_Data/memory.db`)
+  - Knowledge Graph: `<GOODQ_DATA_ROOT>/GoodQ_Data/knowledge_graph.db` (default: `L:/_DATA/GoodQ_Data/knowledge_graph.db`)
 - **Search Speed:** Sub-second vector search via Qdrant across millions of embeddings
 - **Qdrant Collections:** goodq_text, goodq_image, goodq_audio (all active)
 - **Artifact Storage:** `logs/scene_ingest/<video>/` for scene chunks (audio + video)
@@ -790,7 +800,7 @@ scripts\command_center.ps1  # Interactive dashboard
 ### Data Protection
 
 - All processing happens on your hardware
-- Models cached locally (`L:/models`)
+- Models cached locally (for example `<GOODQ_DATA_ROOT>/models`, default `L:/_DATA/models`)
 - No external API dependencies (except optional LLM endpoints)
 - Full control over data retention and deletion
 - Audit logs for all processing operations

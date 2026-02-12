@@ -1,7 +1,7 @@
 # GoodQ4All Agent Operating Protocol
 
 ## Mission
-- Operate and evolve GoodQ4All, a local-first multimodal memory and intelligence system on Windows 11 + NVMe + GPU with WSL2 acceleration.
+- Operate and evolve GoodQ4All, a local-first multimodal memory and intelligence system on Windows 11 + NVMe with profile-gated GPU/WSL2 acceleration.
 - Prioritize correctness, observability, and system integrity above novelty; production-verified, long-running, audit-driven.
 
 ## System Identity (non-negotiable)
@@ -16,8 +16,8 @@
 ## Canonical Runtime Model
 - Primary host: Windows 11 desktop (source of truth).
 - Secondary host: laptop (follower; aligns from desktop).
-- GPU: local NVIDIA GPU (CUDA 12.1).
-- Linux layer: WSL2 (audio, Whisper, diarization, CLAP).
+- GPU: optional by profile; `GPU_ENHANCED` uses local NVIDIA GPU (CUDA 12.1).
+- Linux layer: optional by profile; WSL2 is used for accelerated audio paths.
 - Vector store: Qdrant on port 6333 (canonical).
 - Relational memory: SQLite; knowledge graph: SQLite-backed.
 - Control plane: Watchdog + Control Agent + Config Healer.
@@ -42,7 +42,7 @@
 - Primary language: Python; secondary: TypeScript (UI/dashboards), minimal JS.
 - Config: load via `config_loader`; avoid hardcoded paths.
 - Isolation: conda/venv per role; no global pollution.
-- GPU: Torch + CUDA 12.1 pinned and verified.
+- GPU: Torch + CUDA 12.1 pinned and verified for `GPU_ENHANCED`; `BASELINE` must remain CPU-safe.
 - WSL: treated as a compute extension, not a peer.
 - Interpreter binding: avoid `conda activate`; prefer explicit `conda run -n <env> ...` using `steps.common.tool_paths.resolve_conda()` (Python) or `scripts/_lib/interpreter_bindings.ps1`/`.bat` (shell).
 - WSL binding: use `GOODQ_WSL_DISTRO` (default `Ubuntu`) and always invoke `wsl -d <distro> -- ...` for distro-scoped commands.
@@ -96,7 +96,7 @@
 
 ## Pipeline Quartermaster - 00Q
 - Role: maintain pipeline health across Windows and WSL.
-- Responsibilities: verify CUDA + Torch + FAISS; keep conda envs consistent; run smoke tests.
+- Responsibilities: verify CPU-safe `BASELINE` behavior and `GPU_ENHANCED` CUDA + Torch + FAISS health; keep conda envs consistent; run smoke tests.
 - Tool: `python3 scripts/install_pipeline_wsl.py` (idempotent; safe to rerun).
 
 ## Constraints (absolute)

@@ -4,7 +4,7 @@
 
 ### Prerequisites
 - Windows 10/11 with WSL2 (optional but recommended for better performance)
-- NVIDIA GPU with latest drivers (required for video processing)
+- NVIDIA GPU with latest drivers (optional for `GPU_ENHANCED`; `BASELINE` is CPU-safe)
 - At least 32GB RAM recommended
 - 100GB+ free disk space
 

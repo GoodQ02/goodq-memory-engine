@@ -6,10 +6,19 @@
 
 ## Core Runtime Assumptions
 
-- **Platform:** Windows 11 with WSL2 enabled.
-- **GPU:** NVIDIA RTX-class GPU with 16 GB VRAM (e.g. RTX 4070 Ti SUPER).
+- **Platform:** Windows 11 desktop is canonical host; laptop follower is supported.
+- **Profiles:** `UNSET` (legacy canonical behavior), `BASELINE` (CPU-safe), `GPU_ENHANCED` (additive acceleration).
+- **GPU:** Optional by profile; NVIDIA RTX-class GPU is required only for `GPU_ENHANCED` throughput goals.
+- **WSL2 audio:** Optional by profile; required only when WSL audio acceleration is selected.
 - **Python/Conda:** Python 3.10 and the `goodq_zenml` base environment installed.
-- **Data Layout:** Project at `L:\goodq4all\` with data under `L:\_DATA\GoodQ_Data\`.
+- **Data Layout:** Project at `L:\goodq4all\` with data root from `GOODQ_DATA_ROOT` (default `L:\_DATA`).
+
+## Profile Contract
+
+- **UNSET:** Preserve legacy canonical behavior.
+- **BASELINE:** Force CPU-safe defaults; no GPU/WSL requirement for correctness.
+- **GPU_ENHANCED:** Enable existing CUDA-first and WSL acceleration paths for throughput.
+- **Strict flags:** `GOODQ_REQUIRE_GPU=1` and `GOODQ_REQUIRE_WSL_AUDIO=1` convert optional acceleration into fail-fast requirements.
 
 ---
 
@@ -33,7 +42,7 @@
 ### LLM & vLLM
 
 - `python scripts/test_llm_client.py` – LLM client/vLLM connectivity.
-- WSL2 vLLM scripts under `~/vllm_server/scripts/*.sh` (e.g. `start_llama1b.sh`) – start primary vLLM models.
+- WSL2 vLLM scripts under `~/vllm_server/scripts/*.sh` (e.g. `start_llama1b.sh`) – optional throughput stack.
 
 ---
 
@@ -60,9 +69,9 @@
 ### GPU, LLM, WSL2 & Watchdog
 
 - `docs/GPU_LLM_WSL_INDEX.md` – GPU + LLM/vLLM + WSL2 + Watchdog index.
-- `docs/GPU_SETUP.md`, `docs/GPU_MANAGEMENT_GUIDE.md`, `docs/GPU_OPTIMIZATION_GUIDE.md` – GPU configuration and optimization.
+- `docs/guides/gpu/GPU_SETUP.md`, `docs/GPU_MANAGEMENT_GUIDE.md`, `docs/guides/gpu/GPU_OPTIMIZATION_GUIDE.md` – GPU configuration and optimization (`GPU_ENHANCED` tier).
 - `docs/LLM_INFRASTRUCTURE.md`, `docs/LLM_CLIENT_GUIDE.md`, `docs/vllm-integration-complete.md` – LLM/vLLM infrastructure and client.
-- `docs/WSL2_AUDIO_SETUP.md`, `docs/WSL_AGENT_BRIEFING.md`, `docs/wsl2/START_HERE_WSL2.md` – WSL2 + audio stack.
+- `docs/WSL2_AUDIO_SETUP.md`, `docs/WSL_AGENT_BRIEFING.md`, `docs/wsl2/START_HERE_WSL2.md` – optional WSL2 audio acceleration stack.
 - `docs/WATCHDOG_INDEX.md`, `docs/WATCHDOG_GUIDE.md`, `docs/WATCHDOG_QUICKREF.md` – Watchdog usage and architecture.
 
 ### Code Cleanup & Legacy Mapping

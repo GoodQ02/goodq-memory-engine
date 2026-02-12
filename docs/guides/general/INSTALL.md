@@ -2,7 +2,7 @@
 
 **Last Updated:** December 15, 2025  
 **Status:** ✅ FULLY OPERATIONAL  
-**Verified Configuration:** RTX 4070 Ti SUPER, 16GB VRAM, CUDA 12.8
+**Verified Configuration:** RTX 4070 Ti SUPER, 16GB VRAM, CUDA 12.8 (`GPU_ENHANCED` profile)
 
 ---
 
@@ -10,23 +10,59 @@
 
 ### Hardware Requirements
 - **Windows 10/11** (Primary OS)
-- **NVIDIA GPU** with CUDA support (RTX series recommended)
-  - **Verified Configuration:** RTX 4070 Ti SUPER, 16GB VRAM
-  - Minimum: 8GB VRAM for full pipeline
+- **CPU-only mode supported** (baseline correctness path)
+- **NVIDIA GPU** with CUDA support (optional, recommended for throughput)
+  - **Verified accelerated configuration:** RTX 4070 Ti SUPER, 16GB VRAM
+  - 8GB+ VRAM recommended for `GPU_ENHANCED`
 - **Disk Space:** 100GB+ recommended (models + data)
 - **RAM:** 32GB+ recommended (64GB optimal)
 
 ### Software Requirements
-- **WSL2 (Ubuntu 22.04+)** - Required for audio processing
+- **WSL2 (Ubuntu 22.04+)** - Optional acceleration path for audio
 - **Miniconda or Anaconda** - For environment management
 - **Git** - For cloning repository
-- **CUDA 12.1+** - GPU acceleration (12.8 verified)
+- **CUDA 12.1+** - Optional acceleration dependency for `GPU_ENHANCED`
 - **HuggingFace Account** - For gated model access (Pyannote)
 
 ### Optional But Recommended
 - **Qdrant** - Vector database (Windows service mode)
 - **vLLM** - Local LLM serving (WSL2 systemd service)
 - **Ollama** - Alternative LLM backend
+
+## Performance Profiles
+
+GoodQ4All supports three runtime profile modes:
+
+- **UNSET**: Legacy canonical behavior (existing defaults preserved).
+- **BASELINE**: CPU-safe portable mode. GPU and WSL audio acceleration are not required for correctness.
+- **GPU_ENHANCED**: Throughput-optimized mode using CUDA + optional WSL audio acceleration.
+
+Profile selection examples:
+
+```powershell
+# CPU-safe profile
+$env:GOODQ_HOST_PROFILE = "BASELINE"
+
+# Throughput profile
+$env:GOODQ_HOST_PROFILE = "GPU_ENHANCED"
+```
+
+Strict fail-fast examples:
+
+```powershell
+# Fail fast if GPU acceleration cannot be used
+$env:GOODQ_REQUIRE_GPU = "1"
+
+# Fail fast if WSL audio acceleration cannot be used
+$env:GOODQ_REQUIRE_WSL_AUDIO = "1"
+```
+
+Portability and paths:
+
+- Data root is environment-driven via `GOODQ_DATA_ROOT`.
+- If unset, canonical default remains `L:/_DATA`.
+- WSL identity overrides are optional via `GOODQ_WSL_USER` and `GOODQ_WSL_WORKSPACE`.
+- CUDA is optional unless `GPU_ENHANCED` is selected or strict flags are enabled.
 
 ---
 
@@ -54,7 +90,7 @@ powershell -ExecutionPolicy Bypass -File scripts\install_pipeline_windows.ps1
 - ✅ Validate Python paths and model access
 - ✅ Download required models (CLIP, DINO, YOLO, etc.)
 
-### 3. Run WSL2 Audio Installer
+### 3. Optional: Run WSL2 Audio Installer
 
 ```bash
 # In WSL2 Ubuntu terminal
@@ -65,7 +101,7 @@ python3 scripts/install_pipeline_wsl.py
 **This will:**
 - ✅ Create WSL2 Python venv at `~/goodq_audio/venv`
 - ✅ Install Whisper large-v3, Pyannote 3.1, Wav2Vec2
-- ✅ Configure CUDA for WSL2 (shared GPU with Windows)
+- ✅ Configure optional CUDA acceleration for WSL2 (shared GPU with Windows)
 - ✅ Set up audio service as systemd daemon
 - ✅ Test HuggingFace authentication
 
@@ -74,14 +110,14 @@ python3 scripts/install_pipeline_wsl.py
 Edit `L:\goodq4all\configs\config.yaml`:
 
 ```yaml
-# Project paths (default verified locations)
+# Project paths (GOODQ_DATA_ROOT controls root; default is L:/_DATA)
 paths:
-  base_data_dir: "L:/_DATA/GoodQ_Data"
-  import_inbox: "L:/_DATA/GoodQ_Data/import_inbox"
-  memory_db: "L:/_DATA/GoodQ_Data/memory.db"
-  knowledge_graph_db: "L:/_DATA/GoodQ_Data/knowledge_graph.db"
+  data_root: "${GOODQ_DATA_ROOT:-L:/_DATA}/GoodQ_Data"
+  import_inbox: "${GOODQ_DATA_ROOT:-L:/_DATA}/GoodQ_Data/import_inbox"
+  db_path: "${GOODQ_DATA_ROOT:-L:/_DATA}/GoodQ_Data/memory.db"
+  knowledge_graph_db: "${GOODQ_DATA_ROOT:-L:/_DATA}/GoodQ_Data/knowledge_graph.db"
 
-# GPU Configuration
+# GPU Configuration (used in GPU_ENHANCED profile)
 gpu:
   device: "cuda:0"
   memory_fraction: 0.85  # 85% utilization verified stable
@@ -156,6 +192,8 @@ conda env list | findstr goodq_core
 
 ### Step 2: Create WSL2 Audio Environment
 
+This step is optional unless you need WSL audio acceleration.
+
 ```bash
 # In WSL2 terminal
 cd ~
@@ -225,7 +263,8 @@ python -c "import torch; print(f'CUDA Available: {torch.cuda.is_available()}')"
 python -c "import qdrant_client; print('Qdrant client OK')"
 
 # Expected output:
-# CUDA Available: True
+# CUDA Available: True   (GPU_ENHANCED)
+# CUDA Available: False  (BASELINE is valid)
 # Qdrant client OK
 ```
 
@@ -239,7 +278,8 @@ python -c "import torch; print(f'CUDA in WSL2: {torch.cuda.is_available()}')"
 # Expected output:
 # Whisper OK
 # Pyannote OK
-# CUDA in WSL2: True
+# CUDA in WSL2: True     (GPU_ENHANCED)
+# CUDA in WSL2: False    (BASELINE is valid)
 ```
 
 ---
@@ -295,7 +335,7 @@ goodq4all/
 │           ├── audio/       # scene_XXXX.wav chunks
 │           └── video/       # scene_XXXX.jpg keyframes
 │
-└── L:\_DATA\GoodQ_Data/     # 💾 Primary data storage
+└── <GOODQ_DATA_ROOT>\GoodQ_Data/  # 💾 Primary data storage (default L:\_DATA\GoodQ_Data)
     ├── import_inbox/        # Drop videos here
     ├── memory.db            # Scene bundles & metadata
     ├── knowledge_graph.db   # Entity relationships
@@ -411,7 +451,7 @@ Get-Process python | Where-Object {$_.CommandLine -like "*watchdog*"}
 type logs\watchdog.log
 
 # Restart watchdog
-python -m cli.watchdog --input-dir "L:\_DATA\GoodQ_Data\import_inbox"
+python -m cli.watchdog --input-dir "<GOODQ_DATA_ROOT>/GoodQ_Data/import_inbox"
 ```
 
 ### ❌ Scene Detection Stuck
@@ -436,7 +476,7 @@ Stop-Process -Name python -Force
 Remove-Item logs\scene_ingest\<video_name>\*.lock
 
 # Restart pipeline
-python -m cli.run_ingestion --input-dir "L:\_DATA\GoodQ_Data\import_inbox"
+python -m cli.run_ingestion --input-dir "<GOODQ_DATA_ROOT>/GoodQ_Data/import_inbox"
 ```
 
 ---
@@ -450,7 +490,7 @@ python -m cli.run_ingestion --input-dir "L:\_DATA\GoodQ_Data\import_inbox"
 LAUNCH_GOODQ.bat
 
 # 2. Drop test video
-copy test_input\sample.mp4 L:\_DATA\GoodQ_Data\import_inbox\
+copy test_input\sample.mp4 <GOODQ_DATA_ROOT>\GoodQ_Data\import_inbox\
 
 # 3. Monitor processing (expect 30 scenes for 1hr video)
 # Check command window for:
@@ -466,8 +506,8 @@ copy test_input\sample.mp4 L:\_DATA\GoodQ_Data\import_inbox\
 ```
 ✅ Scene audio chunks: logs\scene_ingest\sample\audio\scene_0000.wav to scene_0029.wav
 ✅ Scene keyframes: logs\scene_ingest\sample\video\scene_0000.jpg to scene_0029.jpg
-✅ Memory DB updated: L:\_DATA\GoodQ_Data\memory.db (30 scenes registered)
-✅ Knowledge graph populated: L:\_DATA\GoodQ_Data\knowledge_graph.db (entities + relationships)
+✅ Memory DB updated: <GOODQ_DATA_ROOT>\GoodQ_Data\memory.db (30 scenes registered)
+✅ Knowledge graph populated: <GOODQ_DATA_ROOT>\GoodQ_Data\knowledge_graph.db (entities + relationships)
 ✅ Qdrant collections populated: http://localhost:6333/collections
 ✅ WSL2 transcription: \\wsl.localhost\Ubuntu\home\<user>\goodq_audio\output\result.json
 ```

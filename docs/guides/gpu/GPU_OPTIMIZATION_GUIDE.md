@@ -1,10 +1,20 @@
 # GPU Pipeline Optimization Guide
 
-> Role: Canonical end-to-end GPU optimization guide. Start here when tuning GPU performance; use `docs/GPU_SETUP.md` for installation/enablement and `docs/GPU_MANAGEMENT_GUIDE.md` for management API details.
+> Role: Canonical end-to-end optimization guide for `GPU_ENHANCED`. Start here when tuning GPU performance; use `docs/guides/gpu/GPU_SETUP.md` for installation/enablement and `docs/GPU_MANAGEMENT_GUIDE.md` for management API details.
 
 ## Overview
 
-The GoodQ4All pipeline has been fully optimized for GPU acceleration. This guide explains the GPU configuration system and how to optimize performance.
+The GoodQ4All pipeline includes an additive GPU acceleration tier. This guide explains GPU configuration and optimization for `GPU_ENHANCED`; `BASELINE` remains CPU-safe and valid.
+
+## Profile Scope
+
+- `UNSET`: legacy canonical behavior.
+- `BASELINE`: CPU-safe path; skip this guide unless diagnosing optional acceleration.
+- `GPU_ENHANCED`: apply this guide for throughput tuning.
+
+```powershell
+$env:GOODQ_HOST_PROFILE = "GPU_ENHANCED"
+```
 
 ## System Configuration
 

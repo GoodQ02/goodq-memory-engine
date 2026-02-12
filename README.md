@@ -26,7 +26,7 @@
 Not "prototype complete." Not "almost there."  
 **Operationally complete.**
 
-What you have here is a local, multimodal, GPU-accelerated perception and memory system that:
+What you have here is a local, multimodal perception and memory system with optional GPU/WSL2 acceleration tiers that:
 
 ✅ **Sees** – Scene detection, object recognition, face tracking, OCR  
 ✅ **Hears** – Whisper transcription with GPU acceleration  
@@ -38,6 +38,11 @@ What you have here is a local, multimodal, GPU-accelerated perception and memory
 ✅ **Builds knowledge graphs** – Entity relationships across your entire archive  
 ✅ **Runs unattended for hours** – Watchdog mode with auto-healing  
 ✅ **Survives load, drift, and noise** – Production-hardened with retry logic
+
+Profile contract (Bootstrap Contract v1):
+- `UNSET` = legacy canonical behavior
+- `BASELINE` = CPU-safe correctness mode
+- `GPU_ENHANCED` = additive throughput mode (CUDA + optional WSL audio acceleration)
 
 **Verified Active:** December 14, 2025 – 30 scenes processed from live video with full multimodal extraction.
 
@@ -169,13 +174,13 @@ LAUNCH_GOODQ.bat
 - ✅ Validates all dependencies & models
 - ✅ Checks API keys (OpenAI, HuggingFace, etc.)
 - ✅ Starts Qdrant vector database service
-- ✅ Launches file watchdog on `L:\_DATA\GoodQ_Data\import_inbox`
+- ✅ Launches file watchdog on `<GOODQ_DATA_ROOT>\GoodQ_Data\import_inbox` (default `L:\_DATA\GoodQ_Data\import_inbox`)
 - ✅ Runs comprehensive health checks with auto-healing
 - ✅ Opens live monitoring dashboard with progress bars
 - ✅ Self-diagnoses and fixes common issues
 
 **Then just:**
-1. Drop any media files into `L:\_DATA\GoodQ_Data\import_inbox\`
+1. Drop any media files into `<GOODQ_DATA_ROOT>\GoodQ_Data\import_inbox\`
 2. Watch real-time processing in the monitoring window
 3. Query your memories via API at `http://localhost:30000/docs`
 
@@ -216,8 +221,8 @@ This will:
 | Component | Entry point | Run |
 | --- | --- | --- |
 | Full system launcher (recommended) | `LAUNCH_GOODQ.bat` / `LAUNCH_GOODQ.ps1` | `LAUNCH_GOODQ.bat` or `.\LAUNCH_GOODQ.ps1` |
-| Ingestion pipeline (scene-first) | `cli/run_ingestion.py` | `python -m cli.run_ingestion --input-dir "L:\_DATA\GoodQ_Data\import_inbox"` |
-| Watchdog (auto-ingest) | `cli/watchdog.py` | `python -m cli.watchdog --input-dir "L:\_DATA\GoodQ_Data\import_inbox"` |
+| Ingestion pipeline (scene-first) | `cli/run_ingestion.py` | `python -m cli.run_ingestion --input-dir "<GOODQ_DATA_ROOT>\GoodQ_Data\import_inbox"` |
+| Watchdog (auto-ingest) | `cli/watchdog.py` | `python -m cli.watchdog --input-dir "<GOODQ_DATA_ROOT>\GoodQ_Data\import_inbox"` |
 | Retrieval API (FastAPI) | `scripts/start_api.ps1` | `.\scripts\start_api.ps1 -Port 30000` |
 | WSL2 audio service (daemon) | `wsl2_audio/start_wsl2_service.bat` | `wsl2_audio\start_wsl2_service.bat` |
 | WSL2 LLM servers (vLLM/Ollama) | `scripts/start_vllm_servers.bat` | `scripts\start_vllm_servers.bat` (or `scripts\start_llm_servers.bat`) |
@@ -285,7 +290,7 @@ This will:
 |----------|----------|----------|
 | **Scene audio chunks** | `L:\goodq4all\logs\scene_ingest\<video>\audio\scene_XXXX.wav` | Confirmed by live run |
 | **Scene keyframes** | `L:\goodq4all\logs\scene_ingest\<video>\video\scene_XXXX.jpg` | From run_ingestion.py |
-| **WSL2 transcription** | `\\wsl.localhost\Ubuntu\home\joesdomingo\goodq_audio\output\result.json` | Confirmed live (38KB, 52 segments) |
+| **WSL2 transcription** | `\\wsl.localhost\Ubuntu\home\<user>\goodq_audio\output\result.json` | Confirmed live (38KB, 52 segments) |
 | **Memory DB** | `L:\_DATA\GoodQ_Data\memory.db` | config.yaml + verified |
 | **Knowledge Graph DB** | `L:\_DATA\GoodQ_Data\knowledge_graph.db` | config.yaml + logs |
 | **Scene bundles** | Stored in `memory.db` via `register_scene_bundle()` | Code evidence |
@@ -592,14 +597,27 @@ goodq4all/
 - **GPU:** NVIDIA GeForce RTX 4070 Ti SUPER with 16GB GDDR6X
   - CUDA: 12.8 (operational and verified)
   - Utilization: 85% during concurrent audio + vLLM processing
-  - Minimum: RTX 40-series or equivalent with CUDA 12.1+ support
+  - Optional for correctness; used for `GPU_ENHANCED` throughput targets
 - **CPU:** Intel Core i7-14700KF (24 cores with hybrid architecture)
 - **RAM:** 64GB Crucial DDR5 at 5200MHz (16GB minimum, 32GB+ recommended)
 - **Storage:** 100GB+ free space (for models, cache, processed media)
   - Primary: Samsung 990 Pro 4TB NVMe SSD (L: drive)
-  - Data: L:\_DATA\GoodQ_Data (unified data root)
+  - Data root: `GOODQ_DATA_ROOT` (defaults to `L:\_DATA`)
 - **Network:** 2.5Gbps Ethernet (for NAS integration and fast model transfers)
-- **OS:** Windows 11 + WSL2 (Ubuntu) **required** for dual-architecture audio processing
+- **OS:** Windows 11 (canonical); WSL2 (Ubuntu) is optional for accelerated audio paths
+
+### Performance Profiles
+
+- `UNSET`: legacy canonical behavior.
+- `BASELINE`: CPU-safe mode; GPU/WSL acceleration not required for correctness.
+- `GPU_ENHANCED`: additive acceleration mode for CUDA + optional WSL audio throughput.
+
+```powershell
+$env:GOODQ_HOST_PROFILE = "BASELINE"
+$env:GOODQ_HOST_PROFILE = "GPU_ENHANCED"
+$env:GOODQ_REQUIRE_GPU = "1"
+$env:GOODQ_REQUIRE_WSL_AUDIO = "1"
+```
 
 ### Software Stack
 
@@ -654,7 +672,7 @@ cd L:\goodq4all
 powershell -ExecutionPolicy Bypass -File scripts\install_pipeline_windows.ps1
 ```
 
-**3. Run WSL2 Installer (for audio):**
+**3. Optional: Run WSL2 Installer (accelerated audio path):**
 ```bash
 cd /mnt/l/goodq4all
 python3 scripts/install_pipeline_wsl.py
@@ -682,14 +700,14 @@ LAUNCH_GOODQ.bat
 
 ```bash
 conda activate goodq_core
-python -m cli.run_ingestion --input-dir "L:\_DATA\GoodQ_Data\import_inbox"
+python -m cli.run_ingestion --input-dir "<GOODQ_DATA_ROOT>\GoodQ_Data\import_inbox"
 ```
 
 ### Batch Process with Watchdog
 
 ```bash
 # Auto-monitor inbox for new videos
-python -m cli.watchdog --input-dir "L:\_DATA\GoodQ_Data\import_inbox"
+python -m cli.watchdog --input-dir "<GOODQ_DATA_ROOT>\GoodQ_Data\import_inbox"
 
 # Or use launcher
 LAUNCH_GOODQ.bat  # Select option 1

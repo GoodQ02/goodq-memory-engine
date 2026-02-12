@@ -1,10 +1,22 @@
 # GPU Setup Guide
 
-> Role: Canonical GPU setup guide for GoodQ4All. Use this document to understand how GPU support is configured across environments. For runtime management patterns, see `docs/GPU_MANAGEMENT_GUIDE.md` and `docs/GPU_OPTIMIZATION_GUIDE.md`.
+> Role: Canonical GPU setup guide for GoodQ4All `GPU_ENHANCED` profile. Use this document to configure acceleration tiers. For runtime management patterns, see `docs/GPU_MANAGEMENT_GUIDE.md` and `docs/guides/gpu/GPU_OPTIMIZATION_GUIDE.md`.
 
 ## Overview
 
-GoodQ4All pipeline uses GPU acceleration for compute-intensive tasks. This guide explains how to properly configure GPU support across all pipeline steps.
+GoodQ4All uses GPU acceleration for compute-intensive tasks when running the `GPU_ENHANCED` profile. This guide explains how to configure GPU support without changing baseline correctness semantics.
+
+## Profile Scope
+
+- `UNSET`: legacy canonical behavior.
+- `BASELINE`: CPU-safe mode; GPU setup is not required.
+- `GPU_ENHANCED`: apply this guide to enable CUDA throughput paths.
+
+Example profile selection:
+
+```powershell
+$env:GOODQ_HOST_PROFILE = "GPU_ENHANCED"
+```
 
 ## GPU Architecture
 
@@ -19,9 +31,9 @@ GPU acceleration provides **10-50x speedup** for:
 
 ### Environment Structure
 
-Each pipeline step runs in its own isolated conda environment with specific dependencies. This prevents version conflicts but requires GPU support in each environment.
+Each pipeline step runs in its own isolated conda environment with specific dependencies. This prevents version conflicts; GPU-enabled environments are only required for `GPU_ENHANCED`.
 
-## Prerequisites
+## Prerequisites (`GPU_ENHANCED`)
 
 ### Hardware Requirements
 - **NVIDIA GPU** with CUDA Compute Capability 3.5+
@@ -290,7 +302,7 @@ print(f"Memory: {stats['allocated_gb']}/{stats['total_gb']} GB")
 A: No, PyTorch bundles CUDA libraries. Just install with `--index-url`.
 
 **Q: Can I use CPU if GPU setup fails?**
-A: Yes, the pipeline automatically falls back to CPU, but it's much slower.
+A: Yes. `BASELINE` remains supported and CPU-safe.
 
 **Q: How much faster is GPU?**
 A: 10-50x depending on the task. Audio diarization sees the biggest gains.

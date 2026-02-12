@@ -13,8 +13,8 @@ class WSL2AudioBridge:
     """Bridge to WSL2 audio processing"""
     
     def __init__(self):
-        self.workspace = "/home/joesdomingo/goodq_audio"
-        self.wsl_user = "joesdomingo"
+        self.wsl_user = os.environ.get("GOODQ_WSL_USER", "joesdomingo")
+        self.workspace = os.environ.get("GOODQ_WSL_WORKSPACE", "/home/joesdomingo/goodq_audio")
         self.wsl_distro = os.environ.get("GOODQ_WSL_DISTRO", "Ubuntu")
         
     def wsl_path(self, windows_path):

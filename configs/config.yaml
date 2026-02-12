@@ -42,18 +42,18 @@ paths:
   # Core directories
   log_dir: L:/goodq4all/logs
   output_directory: L:/goodq4all/output
-  db_dir: L:/_DATA/GoodQ_Data/epochs/epoch_2025_12_22
-  db_path: L:/_DATA/GoodQ_Data/epochs/epoch_2025_12_22/memory.db
-  knowledge_graph_db: L:/_DATA/GoodQ_Data/epochs/epoch_2025_12_22/knowledge_graph.db
-  faiss_dir: L:/_DATA/GoodQ_Data/epochs/epoch_2025_12_22/faiss
-  faiss_audio_path: L:/_DATA/GoodQ_Data/epochs/epoch_2025_12_22/faiss/goodq_audio_epoch_2025_12_22.index
+  db_dir: ${GOODQ_DATA_ROOT:-L:/_DATA}/GoodQ_Data/epochs/epoch_2025_12_22
+  db_path: ${GOODQ_DATA_ROOT:-L:/_DATA}/GoodQ_Data/epochs/epoch_2025_12_22/memory.db
+  knowledge_graph_db: ${GOODQ_DATA_ROOT:-L:/_DATA}/GoodQ_Data/epochs/epoch_2025_12_22/knowledge_graph.db
+  faiss_dir: ${GOODQ_DATA_ROOT:-L:/_DATA}/GoodQ_Data/epochs/epoch_2025_12_22/faiss
+  faiss_audio_path: ${GOODQ_DATA_ROOT:-L:/_DATA}/GoodQ_Data/epochs/epoch_2025_12_22/faiss/goodq_audio_epoch_2025_12_22.index
   config_dir: L:/goodq4all/configs
   
   # Data paths
-  data_root: L:/_DATA/GoodQ_Data
-  import_inbox: L:/_DATA/GoodQ_Data/import_inbox
-  processing: L:/_DATA/GoodQ_Data/epochs/epoch_2025_12_22/processing
-  models_cache: L:/_DATA/models
+  data_root: ${GOODQ_DATA_ROOT:-L:/_DATA}/GoodQ_Data
+  import_inbox: ${GOODQ_DATA_ROOT:-L:/_DATA}/GoodQ_Data/import_inbox
+  processing: ${GOODQ_DATA_ROOT:-L:/_DATA}/GoodQ_Data/epochs/epoch_2025_12_22/processing
+  models_cache: ${GOODQ_DATA_ROOT:-L:/_DATA}/models
   
   # Segmentation output paths
   chunk_subdir: chunks

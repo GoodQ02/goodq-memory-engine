@@ -1,0 +1,53 @@
+# GPU Capability Matrix (Repository Intent)
+
+Scope: static repository analysis of GPU-related code/config references.  
+Policy target applied: system should stay functional without a GPU; GPU use should be feature-gated.
+
+## 1) Components That Benefit From GPU Acceleration
+
+| Component | GPU intent | Workload class | API assumption | Evidence |
+|---|---|---|---|---|
+| Audio transcription (Windows path + WSL2 path) | Benefits strongly; has CPU path | Inference | CUDA-assumed in accelerated path | `steps/audio_transcribe/step.py:34`, `steps/audio_transcribe/step.py:469`, `steps/audio_transcribe/step.py:481`, `wsl2_audio/process_audio.py:74`, `wsl2_audio/process_audio.py:98` |
+| Audio diarization (+ OSD/resegmentation extras) | Benefits strongly; core diarization can still run CPU | Inference | CUDA-assumed in accelerated path | `steps/audio_diarize/step.py:51`, `steps/audio_diarize/step.py:67`, `steps/audio_diarize/step.py:441`, `steps/audio_diarize/step.py:462`, `steps/audio_diarize/step.py:627` |
+| Video scene detection (GPU frame-diff / histogram) | Benefits; CPU fallback exists | Preprocessing | CUDA-assumed in accelerated path | `steps/video_scene_detect/step.py:108`, `steps/video_scene_detect/step.py:110`, `steps/video_scene_detect/gpu_scene_detect.py:31`, `steps/video_scene_detect/gpu_scene_detect.py:74` |
+| Object detection (YOLO) | Benefits; CPU retry exists | Inference | CUDA-assumed in accelerated path | `steps/object_detect/step.py:34`, `steps/object_detect/step.py:35`, `steps/object_detect/step.py:65` |
+| Face embedding (facenet-pytorch fallback branch) | Benefits when fallback branch is used | Inference | CUDA-assumed in accelerated path | `steps/face_embed/step.py:52`, `steps/face_embed/step.py:55`, `steps/face_embed/step.py:56`, `steps/face_embed/step.py:67` |
+| Text embedding (SentenceTransformer) | Benefits; CPU fallback exists | Inference | CUDA-assumed in accelerated path | `steps/text_embed/step.py:40`, `steps/text_embed/step.py:41`, `steps/text_embed/step.py:46` |
+| Text emotion classification (transformers) | Benefits; CPU path exists | Inference | CUDA-assumed in accelerated path | `steps/emotion_classify/step.py:39`, `steps/emotion_classify/step.py:40`, `steps/emotion_classify/step.py:92`, `steps/emotion_classify/step.py:93` |
+| Image captioning (BLIP / fallback pipeline) | Benefits; CPU path exists | Inference | CUDA-assumed in accelerated path | `steps/image_caption/step.py:32`, `steps/image_caption/step.py:45`, `steps/image_caption/step.py:67`, `steps/image_caption/step.py:106` |
+| Phase 6 scene visual embedding (CLIP + DINO) | Benefits strongly for batching throughput | Inference | CUDA-assumed in accelerated path | `steps/video/scene_embedder.py:33`, `steps/video/scene_embedder.py:41`, `steps/video/scene_embedder.py:67`, `steps/video/scene_embedder.py:74`, `steps/video/scene_visual_embeddings.py:103`, `configs/config.yaml:256` |
+
+## 2) Components That Currently Act As GPU-Required Profiles
+
+| Component | Why it trends toward “required” | Workload class | API assumption | Evidence |
+|---|---|---|---|---|
+| Canonical runtime contract/profile | Repo policy documents define NVIDIA/CUDA as baseline runtime identity | Optional optimization (platform profile) | CUDA-assumed | `AGENTS.md:19`, `AGENTS.md:45`, `configs/config.yaml:113`, `configs/config.yaml:114`, `configs/config.yaml:115` |
+| WSL2 audio daemon default profile (`audio_service.py`) | Config defaults to `device: cuda`; if Whisper model load fails, service path raises at transcription call | Inference | CUDA-assumed | `wsl2_audio/config.json:8`, `wsl2_audio/config.json:10`, `wsl2_audio/audio_service.py:174`, `wsl2_audio/audio_service.py:180`, `wsl2_audio/audio_service.py:290`, `wsl2_audio/audio_service.py:291` |
+| WSL2 locked environment packages | Locked env includes NVIDIA CUDA/cuDNN packages (not ROCm equivalents) | Optional optimization (runtime packaging) | CUDA-assumed | `wsl2_audio/requirements-locked.txt:62`, `wsl2_audio/requirements-locked.txt:66`, `wsl2_audio/requirements-locked.txt:67`, `wsl2_audio/requirements-locked.txt:74` |
+
+## 3) Components That Must Remain CPU-Safe
+
+| Component | CPU-safe intent | Workload class | API assumption | Evidence |
+|---|---|---|---|---|
+| Scene detection fallback path | Explicit fallback to CPU PySceneDetect when GPU unavailable/fails | Preprocessing | Vendor-agnostic CPU path | `steps/video_scene_detect/step.py:114`, `steps/video_scene_detect/step.py:119`, `steps/video_scene_detect/step.py:120` |
+| Object detection fallback path | Retries on CPU for known CUDA NMS failures | Inference | Vendor-agnostic CPU path | `steps/object_detect/step.py:90`, `steps/object_detect/step.py:93` |
+| Audio transcription fallback path | Falls back to CPU device and int8 compute type | Inference | Vendor-agnostic CPU path | `steps/audio_transcribe/step.py:469`, `steps/audio_transcribe/step.py:471`, `steps/audio_transcribe/step.py:481`, `steps/audio_transcribe/step.py:482` |
+| Audio diarization fallback path | CPU selected when CUDA unavailable; GPU move failures explicitly downgrade to CPU; GPU-only extras skipped | Inference | Vendor-agnostic CPU path | `steps/audio_diarize/step.py:26`, `steps/audio_diarize/step.py:72`, `steps/audio_diarize/step.py:73`, `steps/audio_diarize/step.py:490`, `steps/audio_diarize/step.py:491` |
+| Image captioning fallback path | BLIP failure resets to CPU and fallback pipeline supports non-CUDA device | Inference | Vendor-agnostic CPU path | `steps/image_caption/step.py:50`, `steps/image_caption/step.py:51`, `steps/image_caption/step.py:67`, `steps/image_caption/step.py:110` |
+| WSL2 audio emotion stage | Explicitly forced to CPU to preserve GPU memory budget | Inference | Vendor-agnostic CPU path | `wsl2_audio/process_audio.py:197`, `wsl2_audio/process_audio.py:206`, `wsl2_audio/process_audio.py:221` |
+| OCR pipeline | Tesseract/Pillow path is CPU toolchain | Preprocessing | Vendor-agnostic CPU path | `steps/image_ocr/step.py:19`, `steps/image_ocr/step.py:26` |
+| PDF text extraction | `pdftotext` shell path is CPU toolchain | Preprocessing | Vendor-agnostic CPU path | `steps/pdf_text/step.py:8`, `steps/pdf_text/step.py:19` |
+| Frame extraction + embedding pooling | FFmpeg frame extraction and NumPy pooling are CPU-safe foundations | Preprocessing | Vendor-agnostic CPU path | `steps/video/scene_frame_extractor.py:41`, `steps/video/scene_frame_extractor.py:175`, `steps/video/embedding_pooler.py:27`, `steps/video/embedding_pooler.py:28` |
+| Global GPU feature gating | Auto-GPU setup can be disabled and scene config exposes `use_gpu` flag | Optional optimization | CUDA-assumed acceleration with CPU toggle | `steps/common/gpu_config.py:178`, `steps/common/gpu_config.py:182`, `scripts/config_schema.py:211`, `configs/config.yaml:227` |
+
+## API Assumption Summary
+
+- CUDA/NVIDIA is the dominant assumption in active GPU paths (PyTorch `torch.cuda`, explicit `"cuda"` devices, CUDA version pinning):  
+  `steps/common/gpu_config.py:72`, `steps/common/gpu_config.py:108`, `configs/config.yaml:114`, `wsl2_audio/config.json:8`.
+- ROCm usage in project runtime code: **none found**.  
+  Docs explicitly describe current scope as CUDA/NVIDIA-only: `docs/guides/gpu/GPU_SETUP.md:299`, `docs/guides/gpu/GPU_OPTIMIZATION_GUIDE.md:284`.
+- Vendor-agnostic CPU-safe paths exist for core preprocessing/retrieval surfaces (OCR, PDF, frame extraction, pooling, CPU fallbacks above).
+
+## Training vs Inference Note
+
+- GPU references are overwhelmingly inference/preprocessing/optimization oriented; no explicit model-training loops were identified in active pipeline step code.

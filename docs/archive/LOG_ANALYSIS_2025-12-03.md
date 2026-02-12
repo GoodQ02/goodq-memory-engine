@@ -1,3 +1,7 @@
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: ARCHIVED -->
+<!-- DOC_ARCHIVED_ON: 2026-02-12 -->
+
 # Log Analysis - November 28, 2025 Pipeline Failure
 
 **Analysis Date:** 2025-12-03  

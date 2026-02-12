@@ -1,3 +1,7 @@
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: ARCHIVED -->
+<!-- DOC_ARCHIVED_ON: 2026-02-12 -->
+
 # GoodQ Project Polish - Completion Summary
 **Date:** October 6, 2025  
 **Session:** Comprehensive Polish & Validation

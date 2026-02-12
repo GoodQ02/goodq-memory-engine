@@ -1,3 +1,7 @@
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: ARCHIVED -->
+<!-- DOC_ARCHIVED_ON: 2026-02-12 -->
+
 # GoodQ Project Reorganization Summary
 **Date:** October 7, 2025  
 **Status:** ✅ COMPLETE

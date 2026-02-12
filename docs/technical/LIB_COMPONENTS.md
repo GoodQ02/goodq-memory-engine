@@ -1,3 +1,7 @@
+<!-- DOC_BADGE: CANONICAL -->
+<!-- DOC_STATUS: AUTHORITATIVE -->
+<!-- DOC_LAST_VERIFIED: 2026-02-12 -->
+
 # Core Library Components (`lib/`)
 
 **Last Updated:** December 15, 2025  

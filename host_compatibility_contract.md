@@ -1,3 +1,7 @@
+<!-- DOC_BADGE: CANONICAL -->
+<!-- DOC_STATUS: AUTHORITATIVE -->
+<!-- DOC_LAST_VERIFIED: 2026-02-12 -->
+
 # Dual-Host Compatibility Contract (Desktop + Laptop)
 
 ## Purpose

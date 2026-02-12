@@ -1,3 +1,7 @@
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: ARCHIVED -->
+<!-- DOC_ARCHIVED_ON: 2026-02-12 -->
+
 # GoodQ4All Production Test Report
 **Date:** November 9, 2025  
 **Test Duration:** ~4 hours  

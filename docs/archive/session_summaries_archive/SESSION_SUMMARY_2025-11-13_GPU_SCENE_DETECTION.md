@@ -1,3 +1,8 @@
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: ARCHIVED -->
+<!-- DOC_CANONICAL_POINTER: docs/bootstrap/bootstrap_manifest.md -->
+<!-- DOC_ARCHIVED_ON: 2026-02-12 -->
+
 # Session Summary: GPU Scene Detection Implementation
 **Date**: November 13, 2025  
 **Status**: ✅ **PRODUCTION SUCCESS**  

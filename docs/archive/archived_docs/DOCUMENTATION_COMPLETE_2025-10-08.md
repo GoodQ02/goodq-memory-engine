@@ -1,3 +1,7 @@
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: ARCHIVED -->
+<!-- DOC_ARCHIVED_ON: 2026-02-12 -->
+
 # 🎉 GoodQ Quick Start Documentation - COMPLETE!
 
 **Created:** 2025-10-08  

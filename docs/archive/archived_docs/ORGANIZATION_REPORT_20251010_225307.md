@@ -1,3 +1,7 @@
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: ARCHIVED -->
+<!-- DOC_ARCHIVED_ON: 2026-02-12 -->
+
 Archived utility script: L:\CLEANUP_DUPLICATES.ps1
 Archived utility script: L:\COMPREHENSIVE_FIX.ps1
 Archived utility script: L:\ORGANIZE_PROJECT.ps1

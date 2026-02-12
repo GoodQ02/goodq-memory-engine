@@ -1,3 +1,7 @@
+<!-- DOC_BADGE: CANONICAL -->
+<!-- DOC_STATUS: AUTHORITATIVE -->
+<!-- DOC_LAST_VERIFIED: 2026-02-12 -->
+
 # Phase 6: Multimodal Fusion & Temporal Indexing
 
 **Status**: ✅ **WIRED AND OPERATIONAL** (as of December 14, 2025)

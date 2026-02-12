@@ -1,3 +1,7 @@
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: ARCHIVED -->
+<!-- DOC_ARCHIVED_ON: 2026-02-12 -->
+
 # GoodQ4All System - LIVE & OPERATIONAL ✅
 
 **Status**: FULLY FUNCTIONAL  

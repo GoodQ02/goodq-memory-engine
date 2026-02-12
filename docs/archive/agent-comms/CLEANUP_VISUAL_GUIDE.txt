@@ -1,0 +1,42 @@
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: ARCHIVED -->
+<!-- DOC_ARCHIVED_ON: 2026-02-12 -->
+
+╔══════════════════════════════════════════════════════════════════════════╗
+║                  GoodQ4All - Directory Consolidation                     ║
+╚══════════════════════════════════════════════════════════════════════════╝
+
+CURRENT STATE (Messy):
+━━━━━━━━━━━━━━━━━━━━━━
+L:\
+├── goodq4all\              ← Git is tracking THIS (CORRECT)
+│   └── LAUNCH_GOODQ.bat    (2025-10-09 20:55) ✓ NEWEST
+│
+└── GoodQ_4_All\            ← Old duplicate (OUTDATED)
+    └── LAUNCH_GOODQ.bat    (2025-10-08 18:41) ✗ OLD
+
+
+AFTER CLEANUP (Clean):
+━━━━━━━━━━━━━━━━━━━━━━
+L:\
+├── goodq4all\              ← SINGLE source of truth
+│   ├── LAUNCH_GOODQ.bat    ← Use this!
+│   ├── import_inbox\       ← Drop videos here
+│   └── ... (full project)
+│
+├── LAUNCH_GOODQ.bat        ← Shortcut to goodq4all\LAUNCH_GOODQ.bat
+│
+├── _DATA\GoodQ_Data\       ← All data/logs here
+├── models\                 ← HuggingFace cache
+└── _ARCHIVE\               ← Old stuff archived
+    └── old_directories\
+        └── GoodQ_4_All_20251010\
+
+
+ACTION REQUIRED:
+━━━━━━━━━━━━━━━━━━━━━━
+1. Run: L:\CLEANUP_AND_FIX.bat
+2. Use: L:\LAUNCH_GOODQ.bat (from now on)
+3. Verify: L:\HEALTH_CHECK.bat
+
+

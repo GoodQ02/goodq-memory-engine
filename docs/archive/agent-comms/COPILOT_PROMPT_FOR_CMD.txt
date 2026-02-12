@@ -1,0 +1,42 @@
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: ARCHIVED -->
+<!-- DOC_ARCHIVED_ON: 2026-02-12 -->
+
+# GitHub Copilot Prompt for CMD Terminal
+# Copy and paste this into GitHub Copilot CLI if you're using CMD
+
+I'm working with GoodQ, a Python FastAPI project. I'm running in CMD terminal (not PowerShell) on Windows.
+
+Current issue:
+- Running LAUNCH_WEB_INTERFACE_FIXED.bat
+- Environment: goodq_zenml (conda)
+- Error: ModuleNotFoundError: No module named 'fastapi'
+
+Environment details:
+- Conda path: C:\Users\jdben\miniconda3
+- Project path: L:\goodq4all
+- Environment name: goodq_zenml
+- Python version: 3.13.x (in conda env)
+
+What needs to happen:
+1. Activate goodq_zenml conda environment
+2. Install FastAPI, Uvicorn, and web dependencies
+3. Verify installation
+4. Launch api_server.py
+
+Requirements:
+- Must work in CMD (not PowerShell)
+- Use full paths (conda activate may not work directly)
+- Batch file format preferred
+- Need error handling
+
+Please provide:
+1. A batch file to install dependencies in goodq_zenml
+2. A batch file to launch the API server with dependency checking
+3. Verification commands to test it worked
+
+Files available:
+- api_server.py (FastAPI application)
+- Various .bat launchers (but they're failing on missing deps)
+
+Goal: Get http://localhost:30000 running with the GoodQ web interface.

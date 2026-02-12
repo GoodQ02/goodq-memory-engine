@@ -1,3 +1,7 @@
+<!-- DOC_BADGE: CANONICAL -->
+<!-- DOC_STATUS: AUTHORITATIVE -->
+<!-- DOC_LAST_VERIFIED: 2026-02-12 -->
+
 # Control Agent & Self-Healing System
 
 **Status:** ✅ ACTIVE - Integrated into ingestion pipeline  

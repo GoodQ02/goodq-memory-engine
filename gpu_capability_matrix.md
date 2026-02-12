@@ -1,3 +1,7 @@
+<!-- DOC_BADGE: CANONICAL -->
+<!-- DOC_STATUS: AUTHORITATIVE -->
+<!-- DOC_LAST_VERIFIED: 2026-02-12 -->
+
 # GPU Capability Matrix (Repository Intent)
 
 Scope: static repository analysis of GPU-related code/config references.  

@@ -1,3 +1,7 @@
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: ARCHIVED -->
+<!-- DOC_ARCHIVED_ON: 2026-02-12 -->
+
 # GoodQ4All - Complete Project Exploration Report
 
 **Date:** 2025-12-03 13:44 UTC (While user at work)

@@ -1,3 +1,7 @@
+<!-- DOC_BADGE: CANONICAL -->
+<!-- DOC_STATUS: AUTHORITATIVE -->
+<!-- DOC_LAST_VERIFIED: 2026-02-12 -->
+
 # Watchdog Automatic Ingestion System
 
 **Status**: ✅ **OPERATIONAL** (December 14, 2025)  

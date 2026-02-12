@@ -1,3 +1,7 @@
+<!-- DOC_BADGE: CANONICAL -->
+<!-- DOC_STATUS: AUTHORITATIVE -->
+<!-- DOC_LAST_VERIFIED: 2026-02-12 -->
+
 # Basement Phase Handoff (v1) — Current System State
 
 **Status:** Basement phase sealed + truth plumbing sealed (read-only).  

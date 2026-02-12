@@ -1,3 +1,8 @@
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: ARCHIVED -->
+<!-- DOC_CANONICAL_POINTER: docs/bootstrap/bootstrap_manifest.md -->
+<!-- DOC_ARCHIVED_ON: 2026-02-12 -->
+
 # GPU Pipeline Optimization - Session Report
 
 **Date**: November 12, 2025  

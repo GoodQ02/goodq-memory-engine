@@ -168,15 +168,15 @@ Complete documentation refresh based on dual forensic audits (Windows + WSL2) co
 ### README.md Links (All Verified)
 
 ```markdown
-├── [Installation Guide](docs/guides/general/INSTALL.md) ✅
-├── [Quick Start](docs/QUICK_START.md) ✅
-├── [CLI Reference](docs/CLI-REFERENCE.md) ✅
-├── [Troubleshooting](docs/TROUBLESHOOTING.md) ✅
-├── [GPU Setup](docs/guides/gpu/GPU_SETUP.md) ✅
-├── [WSL2 Audio Setup](docs/guides/wsl2/START_HERE_WSL2.md) ✅
-├── [Consolidation Explained](docs/guides/CONSOLIDATION_EXPLAINED.md) ✅
-├── [Qdrant Setup](docs/guides/QDRANT_SETUP.md) ✅
-└── [Agents Documentation](docs/AGENTS.md) ✅
+├── [Installation Guide](/docs/guides/install/INSTALL.md) ✅
+├── [Quick Start](/docs/QUICK_START.md) ✅
+├── [CLI Reference](/docs/CLI-REFERENCE.md) ✅
+├── [Troubleshooting](/docs/TROUBLESHOOTING.md) ✅
+├── [GPU Setup](/docs/guides/gpu/GPU_SETUP.md) ✅
+├── [WSL2 Audio Setup](/docs/guides/wsl2/START_HERE_WSL2.md) ✅
+├── [Consolidation Explained](/docs/guides/CONSOLIDATION_EXPLAINED.md) ✅
+├── [Qdrant Setup](/docs/guides/QDRANT_SETUP.md) ✅
+└── [Agents Documentation](/AGENTS.md) ✅
 ```
 
 ### Component Documentation Links

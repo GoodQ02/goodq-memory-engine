@@ -417,9 +417,9 @@ pwsh scripts\run_full_dry_run.ps1
 ```
 
 **Check documentation:**
-- [Architecture](../architecture/SYSTEM_ARCHITECTURE.md)
-- [Project History](../history/PROJECT_HISTORY.md)
-- [API Reference](../reference/API.md)
+- [Architecture](../../architecture/SYSTEM_ARCHITECTURE.md)
+- [Project History](../../archive/PROJECT_HISTORY.md)
+- API Reference
 
 ---
 
@@ -603,10 +603,10 @@ Copy-Item G:\Backups\GoodQ\current\* E:\GoodQ_Backup\$(Get-Date -Format 'yyyy-MM
 
 ## 📚 Further Reading
 
-- **[Architecture](../architecture/SYSTEM_ARCHITECTURE.md)** - Technical deep dive
-- **[Diagrams](../diagrams/PIPELINE_FLOW.md)** - Visual reference
-- **[History](../history/PROJECT_HISTORY.md)** - Project evolution
-- **[API Reference](../reference/API.md)** - Developer documentation
+- **[Architecture](../../architecture/SYSTEM_ARCHITECTURE.md)** - Technical deep dive
+- **[Diagrams](../../architecture/diagrams/PIPELINE_FLOW.md)** - Visual reference
+- **[History](../../archive/PROJECT_HISTORY.md)** - Project evolution
+- **API Reference** - Developer documentation
 
 ---
 

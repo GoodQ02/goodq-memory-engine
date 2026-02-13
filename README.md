@@ -916,7 +916,7 @@ scripts\command_center.ps1  # Interactive dashboard
 | **[Core Library Components](docs/technical/LIB_COMPONENTS.md)** | Knowledge graphs, LLM client, entity resolution, utilities |
 | **[Logging & Resilience](docs/technical/LOGGING_AND_RESILIENCE.md)** | Logging system, error handling & graceful degradation |
 | **[Control Agent & Self-Healing](docs/CONTROL_AGENT.md)** | Autonomous monitoring, diagnosis & healing system |
-| **[Phased Segmentation](docs/reports/PHASED_SEGMENTATION_ENGINE_IMPLEMENTATION_REPORT.md)** | New audio/video engine |
+| **[Phased Segmentation](docs/archive/reports/PHASED_SEGMENTATION_ENGINE_IMPLEMENTATION_REPORT.md)** | New audio/video engine |
 | **[Model Lockdown](docs/technical/MODEL_LOCKDOWN.md)** | Version pinning strategy |
 | **[Qdrant Setup](docs/guides/QDRANT_SETUP.md)** | Vector database installation & configuration |
 | **[Qdrant Quick Reference](docs/QDRANT_QUICKREF.md)** | Common Qdrant commands & queries |
@@ -928,10 +928,10 @@ scripts\command_center.ps1  # Interactive dashboard
 
 | Document | Description |
 |----------|-------------|
-| **[System Status](docs/status-reports/CURRENT_SYSTEM_STATUS_2025-12-02.md)** | Current operational status |
-| **[Environment Consolidation](docs/status-reports/ENVIRONMENT_CONSOLIDATION_COMPLETE.md)** | Dec 2025 improvements |
-| **[Production Validation](docs/status-reports/PRODUCTION_VALIDATION_COMPLETE.md)** | Testing & validation results |
-| **[Documentation Timeline](docs/status-reports/MASTER_DOCUMENTATION_TIMELINE.md)** | Project history overview |
+| **[System Status](docs/archive/status-reports/CURRENT_SYSTEM_STATUS_2025-12-02.md)** | Current operational status |
+| **[Environment Consolidation](docs/archive/status-reports/ENVIRONMENT_CONSOLIDATION_COMPLETE.md)** | Dec 2025 improvements |
+| **[Production Validation](docs/archive/status-reports/PRODUCTION_VALIDATION_COMPLETE.md)** | Testing & validation results |
+| **[Documentation Timeline](docs/archive/status-reports/MASTER_DOCUMENTATION_TIMELINE.md)** | Project history overview |
 
 ---
 

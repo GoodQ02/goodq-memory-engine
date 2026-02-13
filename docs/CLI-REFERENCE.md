@@ -503,8 +503,8 @@ python -m cli.system_status
 
 ## Related Documentation
 
-- [Installation Guide](INSTALLATION.md)
-- [Architecture Overview](ARCHITECTURE.md)
-- [WSL2 Audio Setup](WSL2-AUDIO-SETUP.md)
-- [vLLM Configuration](VLLM-SETUP.md)
-- [Knowledge Graph Schema](KNOWLEDGE-GRAPH.md)
+- [Installation Guide](guides/install/INSTALL.md)
+- [Architecture Overview](architecture/SYSTEM_ARCHITECTURE.md)
+- [WSL2 Audio Setup](guides/wsl2/START_HERE_WSL2.md)
+- [vLLM Configuration](guides/llm/VLLM_SYSTEMD_SETUP.md)
+- [Knowledge Graph Schema](technical/KNOWLEDGE_GRAPH_IMPLEMENTATION.md)

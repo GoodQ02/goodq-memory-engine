@@ -75,7 +75,7 @@
 - docs/SYSTEM_SNAPSHOT.md
 - docs/architecture/SYSTEM_ARCHITECTURE.md
 - docs/architecture/MEMORY_STORAGE.md
-- docs/components/VISION_PIPELINE.md
+- docs/architecture/components/VISION_PIPELINE.md
 - docs/systems/WATCHDOG_SYSTEM.md
 - docs/CONTROL_AGENT.md
 - docs/PHASE6_MULTIMODAL_FUSION.md

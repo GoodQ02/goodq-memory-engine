@@ -275,7 +275,7 @@ agent.start()
   - Prevents duplicates
   - Logs all events
 
-**See:** [Watchdog System Documentation](systems/WATCHDOG_SYSTEM.md)
+**See:** [Watchdog System Documentation](../systems/WATCHDOG_SYSTEM.md)
 
 ---
 
@@ -340,7 +340,7 @@ diagnosis = llm.chat(
 )
 ```
 
-**See:** [LLM Integration Guide](guides/llm/LLM_CLIENT_GUIDE.md)
+**See:** [LLM Integration Guide](../guides/llm/LLM_CLIENT_GUIDE.md)
 
 ---
 
@@ -613,11 +613,11 @@ sqlite3 "L:\_DATA\GoodQ_Data\recovery.db" "SELECT * FROM recovery_history ORDER 
 
 ## Related Documentation
 
-- **[Control Agent Guide](CONTROL_AGENT.md)** - Detailed Control Agent documentation
-- **[Error Handling & Recovery](systems/ERROR_HANDLING_RECOVERY.md)** - Recovery system architecture
-- **[Watchdog System](systems/WATCHDOG_SYSTEM.md)** - Automated file monitoring
+- **[Control Agent Guide](../CONTROL_AGENT.md)** - Detailed Control Agent documentation
+- **[Error Handling & Recovery](../systems/ERROR_HANDLING_RECOVERY.md)** - Recovery system architecture
+- **[Watchdog System](../systems/WATCHDOG_SYSTEM.md)** - Automated file monitoring
 - **[Phase 3 Self-Healing](../archive/phases/PHASE3_SELF_HEALING.md)** - Implementation history
-- **[LLM Integration](guides/llm/LLM_CLIENT_GUIDE.md)** - LLM agent setup
+- **[LLM Integration](../guides/llm/LLM_CLIENT_GUIDE.md)** - LLM agent setup
 
 ---
 

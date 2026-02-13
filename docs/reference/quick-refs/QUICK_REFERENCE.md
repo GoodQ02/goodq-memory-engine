@@ -253,19 +253,19 @@ Write-Host "Backup complete: $backup"
 
 | Document | Purpose |
 |----------|---------|
-| [User Guide](docs/guides/USER_GUIDE.md) | Getting started & usage |
-| [Architecture](docs/architecture/SYSTEM_ARCHITECTURE.md) | Technical deep dive |
-| [Diagrams](docs/diagrams/PIPELINE_FLOW.md) | Visual reference |
-| [History](docs/history/PROJECT_HISTORY.md) | Project timeline |
-| [Lock Files](envs/locks/README.md) | Environment management |
+| [User Guide](../../guides/general/USER_GUIDE.md) | Getting started & usage |
+| [Architecture](../../architecture/SYSTEM_ARCHITECTURE.md) | Technical deep dive |
+| [Diagrams](../../architecture/diagrams/PIPELINE_FLOW.md) | Visual reference |
+| [History](../../archive/PROJECT_HISTORY.md) | Project timeline |
+| [Lock Files](../../../envs/locks/README.md) | Environment management |
 
 ---
 
 ## 🆘 Getting Help
 
 **Common Issues:**
-1. Check [User Guide Troubleshooting](docs/guides/USER_GUIDE.md#troubleshooting)
-2. Review [Project History](docs/history/PROJECT_HISTORY.md) for context
+1. Check [User Guide Troubleshooting](../../guides/general/USER_GUIDE.md#troubleshooting)
+2. Review [Project History](../../archive/PROJECT_HISTORY.md) for context
 3. Check logs: `L:/GoodQ_Data/logs/step_runs.jsonl`
 4. Run diagnostics: `pwsh scripts/mission_health_check.ps1`
 

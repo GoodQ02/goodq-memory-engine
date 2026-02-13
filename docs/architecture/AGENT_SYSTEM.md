@@ -616,7 +616,7 @@ sqlite3 "L:\_DATA\GoodQ_Data\recovery.db" "SELECT * FROM recovery_history ORDER 
 - **[Control Agent Guide](CONTROL_AGENT.md)** - Detailed Control Agent documentation
 - **[Error Handling & Recovery](systems/ERROR_HANDLING_RECOVERY.md)** - Recovery system architecture
 - **[Watchdog System](systems/WATCHDOG_SYSTEM.md)** - Automated file monitoring
-- **[Phase 3 Self-Healing](phases/PHASE3_SELF_HEALING.md)** - Implementation history
+- **[Phase 3 Self-Healing](../archive/phases/PHASE3_SELF_HEALING.md)** - Implementation history
 - **[LLM Integration](guides/llm/LLM_CLIENT_GUIDE.md)** - LLM agent setup
 
 ---

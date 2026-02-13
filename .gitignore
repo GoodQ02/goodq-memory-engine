@@ -140,6 +140,11 @@ temp/
 htmlcov/
 .tox/
 
+# ===== LOCAL BOOTSTRAP/INVENTORY ARTIFACTS =====
+.venv_install_audit/
+temp_dir_inventory.json
+temp_repo_inventory.json
+
 # ===== DOCUMENTATION BUILD =====
 docs/_build/
 site/

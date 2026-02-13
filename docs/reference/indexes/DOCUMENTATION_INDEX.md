@@ -84,7 +84,7 @@ When you need to understand the current state of the system and its evolution, r
 - **[project_management/SETTINGS_OPTIMIZED.md](project_management/SETTINGS_OPTIMIZED.md)** - Optimized settings
 - **[project_management/AUDIT_REPORT.md](project_management/AUDIT_REPORT.md)** - Project audit
 - **[project_management/status_reports/](project_management/status_reports/)** - Historical status reports
-- **[audits/AUDIT_INDEX.md](audits/AUDIT_INDEX.md)** - Full audits, diagnostics, and reports index
+- **[audits/AUDIT_INDEX.md](../../archive/audits/AUDIT_INDEX.md)** - Full audits, diagnostics, and reports index
 - **[SHIP_PROFILE.md](SHIP_PROFILE.md)** - Shipping profile and supported surface
 - **[RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md)** - Pre-release validation and mission launch checklist
 
@@ -97,7 +97,7 @@ When you need to understand the current state of the system and its evolution, r
 - **[history/session_summaries_archive/](history/session_summaries_archive/)** - Archived session summaries (6 files) 🆕
 
 ### 🎬 Phases & Milestones
-- **[phases/PHASE_INDEX.md](phases/PHASE_INDEX.md)** - All phase reports and milestones
+- **[phases/PHASE_INDEX.md](../../archive/phases/PHASE_INDEX.md)** - All phase reports and milestones
 
 ### ⚙️ GPU, LLM & WSL2
 - **[GPU_LLM_WSL_INDEX.md](GPU_LLM_WSL_INDEX.md)** - GPU, LLM/vLLM, WSL2 and watchdog overview

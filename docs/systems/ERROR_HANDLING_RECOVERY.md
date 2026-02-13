@@ -304,7 +304,7 @@ From production runs:
 ## Related Documentation
 
 - **[Control Agent Guide](../CONTROL_AGENT.md)** - Full Control Agent documentation
-- **[Phase 3 Self-Healing](../phases/PHASE3_SELF_HEALING.md)** - Implementation details
+- **[Phase 3 Self-Healing](../archive/phases/PHASE3_SELF_HEALING.md)** - Implementation details
 - **[Config Healing](../guides/general/CONTROL_AGENT_PHASE3.md)** - Config modification strategies
 - **[Watchdog System](WATCHDOG_SYSTEM.md)** - Automated ingestion with healing integration
 

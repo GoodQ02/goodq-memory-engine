@@ -175,7 +175,7 @@ python scripts/audio_gpu_report.py
 
 ## Documentation
 
-Full details: [`docs/AUDIO_GPU_OPTIMIZATION.md`](../docs/AUDIO_GPU_OPTIMIZATION.md)
+Full details: [`docs/AUDIO_GPU_OPTIMIZATION.md`](AUDIO_GPU_OPTIMIZATION.md)
 
 ---
 

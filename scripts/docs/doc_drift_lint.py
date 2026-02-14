@@ -14,6 +14,12 @@ from pathlib import Path
 
 L_PATH_PATTERN = re.compile(r"\bL:(?:/|\\)")
 
+ALLOWED_LEGACY_DOCS = [
+    "docs/technical/LEGACY_PATHS_DEPRECATED.md",
+    "docs/architecture/DOCUMENTATION_REORGANIZATION_PLAN.md",
+    "docs/guides/llm/LLM_IMPLEMENTATION_PLAN_PHASE1.md",
+]
+
 CUDA_MANDATORY_PATTERNS = [
     re.compile(r"\brequires?\s+cuda\b", re.IGNORECASE),
     re.compile(
@@ -53,6 +59,7 @@ def main() -> int:
     repo_root = Path(__file__).resolve().parents[2]
     archive_root = repo_root / "docs" / "archive"
     gpu_guides_root = repo_root / "docs" / "guides" / "gpu"
+    allowed_legacy_docs = set(ALLOWED_LEGACY_DOCS)
 
     targets = collect_targets(repo_root)
     l_path_violations: list[tuple[Path, int, str]] = []
@@ -67,9 +74,11 @@ def main() -> int:
 
         in_archive = is_under(file_path, archive_root)
         in_gpu_guide = is_under(file_path, gpu_guides_root)
+        relative_path = file_path.relative_to(repo_root).as_posix()
+        in_allowed_legacy_doc = relative_path in allowed_legacy_docs
 
         for line_no, line in enumerate(text.splitlines(), start=1):
-            if not in_archive and L_PATH_PATTERN.search(line):
+            if not in_archive and not in_allowed_legacy_doc and L_PATH_PATTERN.search(line):
                 l_path_violations.append((file_path, line_no, line.strip()))
 
             if in_archive or in_gpu_guide:

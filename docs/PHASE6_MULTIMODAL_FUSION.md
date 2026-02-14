@@ -386,10 +386,10 @@ phase6:
 
 ## References
 
-- **Phase 5 Documentation**: [SCENE_DETECTION.md](SCENE_DETECTION.md)
-- **Entity Extraction**: [ENTITY_EXTRACTION.md](ENTITY_EXTRACTION.md)
-- **Audio Pipeline**: [AUDIO_PROCESSING_WSL2.md](AUDIO_PROCESSING_WSL2.md)
-- **Vector Storage**: [QDRANT_SETUP.md](QDRANT_SETUP.md)
+- **Phase 5 Documentation**: [SCENE_DETECTION.md](archive/reports/PHASE5_SCENE_DETECTION_INTEGRATION_ANALYSIS.md)
+- **Entity Extraction**: [ENTITY_EXTRACTION.md](archive/implementation/ENTITY_EXTRACTION_COMPLETE.md)
+- **Audio Pipeline**: [AUDIO_PROCESSING_WSL2.md](guides/llm/WSL2_AUDIO_SETUP.md)
+- **Vector Storage**: [QDRANT_SETUP.md](guides/QDRANT_SETUP.md)
 
 ---
 

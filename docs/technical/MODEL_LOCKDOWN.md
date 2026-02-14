@@ -333,9 +333,9 @@ Combined benefits:
 
 ## Related Documentation
 
-- [Environment Setup](ENVIRONMENT_SETUP.md)
-- [System Architecture](SYSTEM_ARCHITECTURE.md)
-- [Development Guide](DEVELOPMENT.md)
+- [Environment Setup](../guides/install/INSTALL.md)
+- [System Architecture](../architecture/SYSTEM_ARCHITECTURE.md)
+- Development Guide
 
 ## Support
 

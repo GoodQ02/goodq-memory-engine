@@ -114,9 +114,9 @@ python scripts/bootstrap_models.py
 
 ## Related Documentation
 
-- [Model Lockdown Guide](docs/MODEL_LOCKDOWN.md)
-- [System Architecture](docs/SYSTEM_ARCHITECTURE.md)
-- [Environment Setup](docs/ENVIRONMENT_SETUP.md)
+- [Model Lockdown Guide](MODEL_LOCKDOWN.md)
+- [System Architecture](../architecture/SYSTEM_ARCHITECTURE.md)
+- [Environment Setup](../guides/install/INSTALL.md)
 
 ---
 

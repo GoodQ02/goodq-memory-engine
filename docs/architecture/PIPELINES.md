@@ -70,6 +70,6 @@ Vision + Audio + Entity + KG Steps
 
 ## Related Documentation
 
-- [CLI Commands](../CLI_COMMANDS.md) - User-facing command reference
+- [CLI Commands](../CLI-REFERENCE.md) - User-facing command reference
 - [Watchdog System](../systems/WATCHDOG_SYSTEM.md) - Automated ingestion trigger
-- [Run Ingestion](../RUN_INGESTION.md) - Main processing orchestrator
+- Run Ingestion - Main processing orchestrator

@@ -110,7 +110,7 @@ You can also enable/disable VAD for individual steps by passing `vad_enabled` in
 ### 1. Check Implementation Status
 
 ```bash
-cd L:\goodq4all
+cd <project_root>
 python scripts/implement_comprehensive_vad.py
 ```
 
@@ -141,7 +141,7 @@ python scripts/test_vad_gpu_usage.py
 ### 3. Run Production Test
 
 ```bash
-cd L:\goodq4all
+cd <project_root>
 python GoodQ_LAUNCHER.bat
 # Process a test video and monitor logs for VAD messages
 ```
@@ -348,3 +348,4 @@ wave, sr = librosa.load(audio_path_to_use, sr=16000)
 **Date**: 2025-11-13  
 **Author**: GitHub Copilot  
 **Status**: ✅ **COMPLETE - READY FOR PRODUCTION**
+

@@ -120,9 +120,9 @@ When you need to understand the current state of the system and its evolution, r
 
 ## 🗂️ Project Structure
 
-### Root Directory (`L:\goodq4all\`)
+### Root Directory (`<project_root>\`)
 ```
-L:\goodq4all\
+<project_root>\
 ├── README.md                   # Main project documentation
 ├── MISSION_SUCCESS_REPORT.md  # Latest status (2025-10-13)
 ├── *.bat                       # 9 active batch scripts
@@ -139,9 +139,9 @@ L:\goodq4all\
 └── logs/                       # Processing logs
 ```
 
-### Data Storage (`L:\`)
+### Data Storage (`<project_root>\` + `<GOODQ_DATA_ROOT>\`)
 ```
-L:\
+<project_root>\
 ├── goodq4all/                  # Main project (GitHub-tracked)
 ├── _DATA\GoodQ_Data\          # Persistent data storage
 │   ├── memory.db              # SQLite database
@@ -157,7 +157,7 @@ L:\
 
 ## 🎬 Active Batch Scripts
 
-Located in `L:\goodq4all\`:
+Located in `<project_root>\`:
 
 | Script | Purpose | When to Use |
 |--------|---------|-------------|
@@ -190,7 +190,7 @@ Located in `L:\goodq4all\`:
 ### Troubleshooting
 1. Check [Troubleshooting Guide](../../TROUBLESHOOTING.md)
 2. Run `CHECK_STATUS.bat`
-3. Review logs in `L:\_DATA\GoodQ_Data\logs\`
+3. Review logs in `<GOODQ_DATA_ROOT>\GoodQ_Data\logs\`
 4. Try `CLEAN_AND_RETEST.bat` if needed
 
 ---
@@ -222,7 +222,7 @@ Located in `L:\goodq4all\`:
 
 ### When Something Goes Wrong
 1. **[TROUBLESHOOTING.md](../../TROUBLESHOOTING.md)** - Start here
-2. **Logs**: `L:\_DATA\GoodQ_Data\logs\watchdog.log`
+2. **Logs**: `<GOODQ_DATA_ROOT>\GoodQ_Data\logs\watchdog.log`
 3. **Status**: Run `CHECK_STATUS.bat`
 4. **Database**: Run `QUERY_DATABASE.bat`
 
@@ -265,8 +265,8 @@ Located in `L:\goodq4all\`:
 
 - **GitHub**: https://github.com/JoesDomingo/GoodQ_4_All
 - **API Docs**: http://localhost:30000/docs (when running)
-- **Local Root**: `L:\goodq4all\`
-- **Data Storage**: `L:\_DATA\GoodQ_Data\`
+- **Local Root**: `<project_root>\`
+- **Data Storage**: `<GOODQ_DATA_ROOT>\GoodQ_Data\`
 
 ---
 

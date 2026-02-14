@@ -170,7 +170,7 @@ GPU_MEMORY_LIMITS = {
 
 **Usage:**
 ```bash
-cd L:\goodq4all
+cd <project_root>
 run_vision_optimization.bat
 ```
 
@@ -194,7 +194,7 @@ run_vision_optimization.bat
 
 **Usage:**
 ```bash
-cd L:\goodq4all
+cd <project_root>
 run_vision_audit.bat
 ```
 
@@ -217,7 +217,7 @@ run_vision_audit.bat
 - [ ] Run `run_vision_optimization.bat`
 - [ ] Verify all environments install PyTorch+CUDA
 - [ ] Confirm GPU detection in each environment
-- [ ] Check model downloads (should cache to `L:/models`)
+- [ ] Check model downloads (should cache to `<GOODQ_DATA_ROOT>/models`)
 
 ### **Phase 3: Functionality Testing** ⏳ (Your turn)
 - [ ] Extract a test frame: `test_data/sample_frame.jpg`
@@ -249,7 +249,7 @@ run_vision_audit.bat
 **Impact:** Minimal (NMS is fast even on CPU)
 
 ### **2. Model Download Times**
-**First Run:** Models download to `L:/models` (can be slow)  
+**First Run:** Models download to `<GOODQ_DATA_ROOT>/models` (can be slow)  
 **Subsequent Runs:** Fast (models cached locally)  
 **Solution:** Run optimization script once to pre-download all models
 
@@ -269,18 +269,18 @@ run_vision_audit.bat
 
 1. **Run Optimization** (15-20 min)
    ```bash
-   cd L:\goodq4all
+   cd <project_root>
    run_vision_optimization.bat
    ```
 
 2. **Extract Test Frame** (manual)
    - Use a video player or FFmpeg
-   - Save as: `L:\goodq4all\test_data\sample_frame.jpg`
+   - Save as: `<project_root>\test_data\sample_frame.jpg`
    - Any home movie frame will work
 
 3. **Run Audit** (5-10 min)
    ```bash
-   cd L:\goodq4all
+   cd <project_root>
    run_vision_audit.bat
    ```
 
@@ -347,11 +347,11 @@ conda run -n goodq_face_embed pip install torch torchvision torchaudio --index-u
 
 ### **Model Download Failures**
 - Check internet connection
-- Verify `L:/models` is writable
+- Verify `<GOODQ_DATA_ROOT>/models` is writable
 - Try downloading manually:
   ```python
   from transformers import CLIPModel
-  CLIPModel.from_pretrained("openai/clip-vit-base-patch16", cache_dir="L:/models/transformers")
+  CLIPModel.from_pretrained("openai/clip-vit-base-patch16", cache_dir="<GOODQ_DATA_ROOT>/models/transformers")
   ```
 
 ### **Audit Script Fails**
@@ -364,10 +364,10 @@ conda run -n goodq_face_embed pip install torch torchvision torchaudio --index-u
 
 ## 📚 References
 
-- **GPU Config:** `L:\goodq4all\gpu_config.py`
-- **Vision Steps:** `L:\goodq4all\steps\{face_embed,emotion_classify,object_detect,image_*}`
-- **Optimization Script:** `L:\goodq4all\scripts\optimize_vision_gpu.py`
-- **Audit Script:** `L:\goodq4all\scripts\audit_vision_pipeline.py`
+- **GPU Config:** `<project_root>\gpu_config.py`
+- **Vision Steps:** `<project_root>\steps\{face_embed,emotion_classify,object_detect,image_*}`
+- **Optimization Script:** `<project_root>\scripts\optimize_vision_gpu.py`
+- **Audit Script:** `<project_root>\scripts\audit_vision_pipeline.py`
 - **Previous GPU Work:** Audio optimization (completed 2025-11-11)
 
 ---
@@ -386,4 +386,4 @@ The vision stack is now **fully optimized for GPU acceleration** with:
 
 ---
 
-**Questions? Issues?** Check the troubleshooting section or review individual step code in `L:\goodq4all\steps\`.
+**Questions? Issues?** Check the troubleshooting section or review individual step code in `<project_root>\steps\`.

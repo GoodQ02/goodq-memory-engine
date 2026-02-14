@@ -17,7 +17,7 @@
 ### GPU-Accelerated Scene Detection
 Created custom GPU-accelerated scene detection using PyTorch CUDA:
 
-**File**: `L:\goodq4all\steps\video_scene_detect\gpu_scene_detect.py`
+**File**: `<project_root>\steps\video_scene_detect\gpu_scene_detect.py`
 
 **Features**:
 1. **GPU Frame Difference Analysis**: Batch processes frames on GPU using PyTorch
@@ -63,14 +63,14 @@ for each batch of frames:
 
 ### 2. Integration with Pipeline
 
-**Modified**: `L:\goodq4all\steps\video_scene_detect\step.py`
+**Modified**: `<project_root>\steps\video_scene_detect\step.py`
 - Detects if GPU is available (PyTorch + CUDA)
 - Uses GPU detection by default
 - Falls back to CPU PySceneDetect if needed
 
 ### 3. GPU Configuration
 
-**Updated**: `L:\goodq4all\steps\common\gpu_config.py`
+**Updated**: `<project_root>\steps\common\gpu_config.py`
 - Allocated **20% VRAM** for scene detection (was 15%)
 - Total allocation: ~3.2GB on RTX 4070 Ti SUPER
 
@@ -112,12 +112,12 @@ All scenes respect the 5-minute minimum length, preventing over-segmentation.
 
 ## 📝 Testing
 
-**Test Script**: `L:\goodq4all\scripts\test_gpu_scene_detection.py`
+**Test Script**: `<project_root>\scripts\test_gpu_scene_detection.py`
 
 To test GPU scene detection:
 ```bash
 conda activate goodq_video_scene_detect
-python L:\goodq4all\scripts\test_gpu_scene_detection.py
+python <project_root>\scripts\test_gpu_scene_detection.py
 ```
 
 ## 🎉 Impact
@@ -137,3 +137,4 @@ python L:\goodq4all\scripts\test_gpu_scene_detection.py
 ---
 
 **This is a game-changing improvement that eliminates the primary bottleneck in the entire pipeline!** 🚀
+

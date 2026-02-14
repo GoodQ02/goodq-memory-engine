@@ -1,4 +1,11 @@
+⚠ Historical planning document.
+
+Contains legacy absolute path examples reflecting the system state at time of writing.
+Active runtime documentation uses environment abstractions:
+<project_root>, <GOODQ_DATA_ROOT>, <GOODQ_WSL_WORKSPACE>.
+
 # 📋 Documentation Reorganization Plan
+> ⚠ Historical planning document — contains legacy path references.
 
 **Created:** 2025-12-02  
 **Purpose:** Structured plan for organizing 367 documentation files into a maintainable system  

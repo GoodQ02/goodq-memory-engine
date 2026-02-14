@@ -54,14 +54,14 @@ GoodQ4All is a **local, GPU-accelerated multimodal AI pipeline** that processes 
 ### 4. Observability ✅ Operational
 Comprehensive telemetry:
 - Scene artifacts: `logs/scene_ingest/<video>/audio/` & `video/`
-- Memory DB: `L:\_DATA\GoodQ_Data\memory.db`
-- Knowledge Graph: `L:\_DATA\GoodQ_Data\knowledge_graph.db`
+- Memory DB: `<GOODQ_DATA_ROOT>\GoodQ_Data\memory.db`
+- Knowledge Graph: `<GOODQ_DATA_ROOT>\GoodQ_Data\knowledge_graph.db`
 - Vector DB: Qdrant on port 6333
 
 ### 5. Privacy-First
 - All processing local (no cloud)
 - GPU: RTX 4070 Ti SUPER 16GB
-- Data root: `L:\_DATA\GoodQ_Data\`
+- Data root: `<GOODQ_DATA_ROOT>\GoodQ_Data\`
 - No external API calls except HuggingFace model downloads
 
 ---
@@ -100,7 +100,7 @@ Comprehensive telemetry:
                            │
 ┌──────────────────────────┴──────────────────────────────────┐
 │                ✅ Storage Layer                              │
-│  L:\_DATA\GoodQ_Data\ (unified root)                        │
+│  <GOODQ_DATA_ROOT>\GoodQ_Data\ (unified root)                        │
 │  logs/scene_ingest/ (artifacts)                             │
 │  \\wsl.localhost\Ubuntu\...\goodq_audio\ (WSL2)             │
 └─────────────────────────────────────────────────────────────┘
@@ -114,7 +114,7 @@ Comprehensive telemetry:
 
 ### Entry Point
 ```
-python -m cli.run_ingestion --input-dir L:\_DATA\GoodQ_Data\import_inbox
+python -m cli.run_ingestion --input-dir <GOODQ_DATA_ROOT>\GoodQ_Data\import_inbox
   │
   └─→ cli/run_ingestion.py (1541 lines, scene-first architecture)
 ```
@@ -270,7 +270,7 @@ Input Video (dropped in import_inbox)
   - Real-time insertion
   - Entity resolution
   - Relationship building
-  - Database: `L:\_DATA\GoodQ_Data\knowledge_graph.db`
+  - Database: `<GOODQ_DATA_ROOT>\GoodQ_Data\knowledge_graph.db`
   - Status: Confirmed operational (Dec 14)
 
 **⊘ Latent Capabilities:**
@@ -282,7 +282,7 @@ Input Video (dropped in import_inbox)
 
 ### Data Root Structure
 ```
-L:\_DATA\GoodQ_Data\              # ✅ Unified data root
+<GOODQ_DATA_ROOT>\GoodQ_Data\              # ✅ Unified data root
 ├── import_inbox\                 # Drop videos here
 ├── memory.db                     # Scene bundles & metadata
 ├── knowledge_graph.db            # Entity relationships
@@ -301,7 +301,7 @@ logs\scene_ingest\                # ✅ Scene artifacts (actual location)
 └── output\                       # result.json (38KB verified)
 ```
 
-> ℹ️ **Note:** There is a known config/runtime inconsistency where `config.yaml` specifies `processing: L:\_DATA\GoodQ_Data\processing\` but artifacts actually land in `logs\scene_ingest\`. This is non-breaking and fully documented. See [`docs/technical/ARTIFACT_LOCATION_CONTRACT.md`](../technical/ARTIFACT_LOCATION_CONTRACT.md) for details.
+> ℹ️ **Note:** There is a known config/runtime inconsistency where `config.yaml` specifies `processing: <GOODQ_DATA_ROOT>\GoodQ_Data\processing\` but artifacts actually land in `logs\scene_ingest\`. This is non-breaking and fully documented. See [`docs/technical/ARTIFACT_LOCATION_CONTRACT.md`](../technical/ARTIFACT_LOCATION_CONTRACT.md) for details.
 
 ### Database Details
 
@@ -340,7 +340,7 @@ logs\scene_ingest\                # ✅ Scene artifacts (actual location)
 ### ⚠️ Deprecated Storage
 - FAISS indices (replaced by Qdrant)
 - unified_goodq.db (consolidated into memory.db)
-- Old data paths (`L:/goodq4all/data/`)
+- Old data paths (`<project_root>/data/`)
 
 ---
 -- Scene tracking
@@ -456,7 +456,7 @@ pip install -r requirements.txt `
 **Project Linking:**
 ```python
 # goodq4all_local.pth in site-packages
-L:\  # Parent of goodq4all for imports
+<project_root>\  # Parent of goodq4all for imports
 ```
 
 ### Environment Matrix
@@ -556,7 +556,7 @@ L:\  # Parent of goodq4all for imports
 - **Redaction** - Sensitive data masked in logs
 
 ### Access Control
-- **Filesystem boundaries** - Operations scoped to L:/ drive
+- **Filesystem boundaries** - Operations scoped to <project_root> drive
 - **Read-only models** - Cached models never modified
 - **Backup encryption** - Optional GPG encryption for backups
 
@@ -676,7 +676,7 @@ pwsh scripts/benchmark_pipeline.ps1 -InputDir test_videos -Iterations 5
 - **GPU:** RTX 4070 Ti SUPER 16GB
 - **CUDA:** 12.1 (Windows), 12.8 (WSL2)
 - **RAM:** 32GB (16GB minimum)
-- **Storage:** NVMe SSD (L:\) for code, HDD (L:\_DATA\) for artifacts
+- **Storage:** NVMe SSD (<project_root>\) for code, HDD (<GOODQ_DATA_ROOT>\) for artifacts
 
 ### GPU Utilization
 **Normal Operating Conditions (Verified Dec 14):**
@@ -780,7 +780,7 @@ nvidia-smi                                         # GPU status
 Get-ChildItem "logs\scene_ingest\<video>\" -Recurse
 
 # Check databases
-Get-Item "L:\_DATA\GoodQ_Data\*.db" | Select-Object Name, Length, LastWriteTime
+Get-Item "<GOODQ_DATA_ROOT>\GoodQ_Data\*.db" | Select-Object Name, Length, LastWriteTime
 
 # Check Qdrant collections
 Invoke-WebRequest http://localhost:6333/collections

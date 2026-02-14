@@ -244,7 +244,7 @@ REPROCESS_ON_START = False   # Skip already-processed files
    - Future: auto-archive after N days
 
 5. **No Network Files**: Doesn't support UNC paths or network drives
-   - Local paths only (L:\ drive)
+   - Local paths only (<project_root> drive)
    - Future: support remote file systems
 
 ### Security Considerations

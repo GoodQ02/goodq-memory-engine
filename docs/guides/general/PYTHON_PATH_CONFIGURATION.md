@@ -6,8 +6,8 @@ The GoodQ4All system now uses a **centralized Python and Conda path configuratio
 
 ## Location
 
-- **Main Module**: L:\goodq4all\config\python_paths.py
-- **Test Script**: L:\goodq4all\test_python_paths.py
+- **Main Module**: <project_root>\config\python_paths.py
+- **Test Script**: <project_root>\test_python_paths.py
 
 ## Key Features
 
@@ -203,7 +203,7 @@ cmd = get_conda_run_command('goodq_zenml')
 For issues or questions, check:
 - Test script output: python test_python_paths.py
 - Configuration info: rom config.python_paths import get_config; print(get_config().get_info_dict())
-- Logs in L:\goodq4all\logs\process_manager.log
+- Logs in <project_root>\logs\process_manager.log
 
 ## Future Enhancements
 
@@ -212,3 +212,4 @@ Potential future improvements:
 - Support for virtual environments (venv)
 - Docker container path resolution
 - Network/remote Conda installations
+

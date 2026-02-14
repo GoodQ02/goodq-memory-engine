@@ -1,4 +1,5 @@
 # Phase 3: LLM Integration Completion Report
+> ⚠ Historical planning document — contains legacy path references.
 
 **Date:** 2025-11-08  
 **Status:** ✅ COMPLETE  
@@ -282,15 +283,16 @@ Phase 3 implementation is **COMPLETE and TESTED**. All LLM-powered features are 
 ## Files Created/Modified
 
 ### Created:
-- `L:\goodq4all\steps\graph_builder\llm_enrichment.py`
-- `L:\goodq4all\steps\graph_builder\emotion_arc_analyzer.py`
-- `L:\goodq4all\test_phase3_standalone.py`
-- `L:\goodq4all\test_phase3_llm_integration.py`
-- `L:\goodq4all\PHASE3_LLM_INTEGRATION_COMPLETE.md`
+- `<project_root>\steps\graph_builder\llm_enrichment.py`
+- `<project_root>\steps\graph_builder\emotion_arc_analyzer.py`
+- `<project_root>\test_phase3_standalone.py`
+- `<project_root>\test_phase3_llm_integration.py`
+- `<project_root>\PHASE3_LLM_INTEGRATION_COMPLETE.md`
 
 ### Modified:
-- `L:\goodq4all\steps\graph_builder\graph_builder.py`
-- `L:\goodq4all\config.yaml`
+- `<project_root>\steps\graph_builder\graph_builder.py`
+- `<project_root>\config.yaml`
 
 **Total Lines of Code Added:** ~800 lines  
 **Test Coverage:** 100% of new functionality
+

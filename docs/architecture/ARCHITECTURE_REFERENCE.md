@@ -22,7 +22,7 @@
 
 ### Primary Database: `memory.db`
 
-**Location:** `L:\_DATA\GoodQ_Data\memory.db` ✅ Verified  
+**Location:** `<GOODQ_DATA_ROOT>\GoodQ_Data\memory.db` ✅ Verified  
 **Purpose:** Scene bundles, metadata, processing state
 
 #### Core Tables
@@ -91,7 +91,7 @@ CREATE TABLE summaries (
 
 ### Secondary Database: `knowledge_graph.db`
 
-**Location:** `L:\_DATA\GoodQ_Data\knowledge_graph.db` ✅ Verified  
+**Location:** `<GOODQ_DATA_ROOT>\GoodQ_Data\knowledge_graph.db` ✅ Verified  
 **Purpose:** Entity relationships, cross-modal resolution
 
 #### Core Tables
@@ -154,7 +154,7 @@ CREATE TABLE relationships (
 ### Connection Details
 - **URL:** http://localhost:6333
 - **Status:** ✅ Operational (Dec 14 verified)
-- **Storage:** `L:\_DATA\GoodQ_Data\qdrant\`
+- **Storage:** `<GOODQ_DATA_ROOT>\GoodQ_Data\qdrant\`
 
 ### Collections
 
@@ -302,7 +302,7 @@ logs\scene_ingest\<video_name>\
 
 **Data Root:**
 ```
-L:\_DATA\GoodQ_Data\
+<GOODQ_DATA_ROOT>\GoodQ_Data\
 ├── import_inbox\               # Drop videos here
 ├── memory.db                   # Scene bundles
 ├── knowledge_graph.db          # Entity relationships
@@ -325,7 +325,7 @@ L:\_DATA\GoodQ_Data\
 ## File System Layout (Dec 14, 2025 Verified)
 
 ```
-L:\goodq4all\                   # Project root
+<project_root>\                   # Project root
 ├── cli\
 │   ├── run_ingestion.py        # ✅ PRIMARY ENTRY POINT (1541 lines)
 │   └── watchdog.py             # ✅ Canonical watchdog
@@ -354,7 +354,7 @@ L:\goodq4all\                   # Project root
 ├── ui\                         # ⊘ Web UI (frontend exists)
 └── retrieval\                  # ⊘ Multimodal search (built, not wired)
 
-L:\_DATA\GoodQ_Data\            # ✅ Unified data root
+<GOODQ_DATA_ROOT>\GoodQ_Data\            # ✅ Unified data root
 ├── import_inbox\               # ✅ Drop videos here
 ├── memory.db                   # ✅ Scene bundles
 ├── knowledge_graph.db          # ✅ Entity relationships
@@ -377,7 +377,7 @@ logs\scene_ingest\              # ✅ Scene artifacts
 **FAISS Indices:**
 - **Replaced by:** Qdrant vector database
 - **Migration:** Complete (Oct 2025)
-- **Old Location:** `L:\goodq4all\data\faiss_indices\`
+- **Old Location:** `<project_root>\data\faiss_indices\`
 - **Note:** May still exist on disk but not actively used
 
 **ZenML Orchestration:**
@@ -392,8 +392,8 @@ logs\scene_ingest\              # ✅ Scene artifacts
 - **Savings:** ~30GB disk space
 
 **Old Data Paths:**
-- **Deprecated:** `L:\goodq4all\data\`, `L:\GoodQ_Data\`
-- **Current:** `L:\_DATA\GoodQ_Data\` (unified root)
+- **Deprecated:** `<project_root>\data\`, `<GOODQ_DATA_ROOT>\GoodQ_Data (See LEGACY_PATHS_DEPRECATED.md)\`
+- **Current:** `<GOODQ_DATA_ROOT>\GoodQ_Data\` (unified root)
 
 ---
 
@@ -403,7 +403,7 @@ logs\scene_ingest\              # ✅ Scene artifacts
 
 **Check Databases:**
 ```powershell
-Get-Item "L:\_DATA\GoodQ_Data\*.db" | Select-Object Name, Length, LastWriteTime
+Get-Item "<GOODQ_DATA_ROOT>\GoodQ_Data\*.db" | Select-Object Name, Length, LastWriteTime
 ```
 
 **Check Qdrant:**
@@ -482,3 +482,4 @@ Invoke-WebRequest http://localhost:6333/collections/goodq_text | ConvertFrom-Jso
 ---
 
 *"The architecture is the map. The code is the territory. Both must be true."*
+

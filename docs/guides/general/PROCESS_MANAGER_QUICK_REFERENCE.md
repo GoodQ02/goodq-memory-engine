@@ -74,16 +74,16 @@ netstat -ano | findstr :30000
 
 # Reset everything
 STOP_GOODQ_SYSTEM.bat
-del L:\goodq4all\logs\process_state.json
-del L:\goodq4all\logs\pids\*.pid
+del <project_root>\logs\process_state.json
+del <project_root>\logs\pids\*.pid
 START_GOODQ_SYSTEM.bat
 ```
 
 ### Process shows "running" but isn't
 ```bash
 # Clean up stale state
-del L:\goodq4all\logs\process_state.json
-del L:\goodq4all\logs\pids\*.pid
+del <project_root>\logs\process_state.json
+del <project_root>\logs\pids\*.pid
 
 # Check actual status
 python process_manager.py status
@@ -104,7 +104,7 @@ http://localhost:30000
 ## 📁 Important Files
 
 ```
-L:\goodq4all\
+<project_root>\
 ├── process_manager.py              # Core process manager
 ├── START_GOODQ_SYSTEM.bat         # Quick start
 ├── STOP_GOODQ_SYSTEM.bat          # Quick stop

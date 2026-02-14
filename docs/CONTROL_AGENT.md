@@ -210,7 +210,7 @@ if control_agent:
 ## Databases & Storage
 
 ### Primary Database
-**Location:** `L:/_DATA/GoodQ_Data/control_memory.db`
+**Location:** `<GOODQ_DATA_ROOT>/GoodQ_Data/control_memory.db`
 
 **Tables:**
 - `error_memory` - Error history and recovery attempts
@@ -219,12 +219,12 @@ if control_agent:
 - `recommendations` - Agent recommendations and outcomes
 
 ### Recovery Database
-**Location:** `L:/_DATA/GoodQ_Data/recovery.db`
+**Location:** `<GOODQ_DATA_ROOT>/GoodQ_Data/recovery.db`
 
 **Purpose:** Stores recovery strategies and success rates
 
 ### Config Backups
-**Location:** `L:/goodq4all/data/config_backups/`
+**Location:** `<project_root>/data/config_backups/`
 
 **Format:** `config_open_backup_YYYYMMDD_HHMMSS.yaml`
 
@@ -360,10 +360,10 @@ HEALING_RULES = {
 Edit in respective agent files:
 ```python
 # Control Agent
-db_path = Path("L:/_DATA/GoodQ_Data/control_memory.db")
+db_path = Path("<GOODQ_DATA_ROOT>/GoodQ_Data/control_memory.db")
 
 # Recovery Strategies
-db_path = Path("L:/_DATA/GoodQ_Data/recovery.db")
+db_path = Path("<GOODQ_DATA_ROOT>/GoodQ_Data/recovery.db")
 ```
 
 ---
@@ -450,8 +450,8 @@ ORDER BY timestamp DESC;
 python -c "from agents.control_agent import ControlAgent; print('OK')"
 
 # Verify databases exist
-ls L:\_DATA\GoodQ_Data\control_memory.db
-ls L:\_DATA\GoodQ_Data\recovery.db
+ls <GOODQ_DATA_ROOT>\GoodQ_Data\control_memory.db
+ls <GOODQ_DATA_ROOT>\GoodQ_Data\recovery.db
 ```
 
 ### Healing Not Applied

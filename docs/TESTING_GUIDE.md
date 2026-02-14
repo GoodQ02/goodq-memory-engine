@@ -54,7 +54,7 @@ Joe, we just finished **Phase 10 - the complete system cleanup and modernization
 ### Option 1: Quick Status Check
 ```bash
 conda activate goodq_core
-set PYTHONPATH=L:\goodq4all
+set PYTHONPATH=<project_root>
 python cli\system_status.py
 ```
 
@@ -72,7 +72,7 @@ test_system.bat
 Or manually:
 ```bash
 conda activate goodq_core
-set PYTHONPATH=L:\goodq4all
+set PYTHONPATH=<project_root>
 python cli\test_ingestion.py
 ```
 
@@ -99,7 +99,7 @@ This will:
 
 3. **PYTHONPATH set** (auto-set by test scripts)
    ```bash
-   set PYTHONPATH=L:\goodq4all
+   set PYTHONPATH=<project_root>
    ```
 
 ---
@@ -218,4 +218,5 @@ Let's validate this thing and make it live! 🚀
 **Created**: 2025-12-09 01:55 AM CST  
 **Phase**: 10 Complete  
 **Next Phase**: 11 - Final Validation & Beta Launch
+
 

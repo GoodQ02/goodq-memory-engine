@@ -91,7 +91,7 @@ Overall: READY FOR PRODUCTION ✅
 ### Setup
 ```bash
 # Run automated installer
-cd L:\goodq4all
+cd <project_root>
 .\INSTALL_WSL2_AUDIO.bat
 
 # Or manual setup
@@ -172,3 +172,4 @@ if bridge.check_status():
 **Last Updated**: 2025-11-15  
 **Version**: 1.4.0  
 **Status**: Production Ready ✅
+

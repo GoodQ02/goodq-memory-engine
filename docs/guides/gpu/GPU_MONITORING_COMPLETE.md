@@ -170,7 +170,7 @@ PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512
 
 ### 1. Process Manager Test
 ```bash
-cd L:\goodq4all
+cd <project_root>
 conda activate goodq_zenml
 python lib\process_manager.py
 ```
@@ -276,3 +276,4 @@ pip install psutil          # Process monitoring (already installed)
 **The GoodQ Pipeline Engines page is now a comprehensive real-time monitoring dashboard for GPU utilization and process management.**
 
 Next test: Run a full ingestion to watch the engines activate in real-time! 🎬🔥
+

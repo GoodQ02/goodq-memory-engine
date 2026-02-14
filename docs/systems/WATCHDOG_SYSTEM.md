@@ -16,7 +16,7 @@ The Watchdog is GoodQ's **zero-touch ingestion system** that automatically monit
 
 ### What It Does
 
-- **Monitors**: `L:/goodq4all/import_inbox` every 2 seconds
+- **Monitors**: `<project_root>/import_inbox` every 2 seconds
 - **Detects**: Video, audio, image, and document files
 - **Validates**: Waits 3 seconds for file stability (copy completion)
 - **Deduplicates**: SHA-256 hash prevents reprocessing identical files
@@ -140,7 +140,7 @@ Already processed? ──YES──▶ Rename PROCESSED_*, skip
 Worker thread pulls from queue
     │
     ▼ [Copy to processing/]
-L:/_DATA/GoodQ_Data/processing/video_<hash>/video.mp4
+<GOODQ_DATA_ROOT>/GoodQ_Data/processing/video_<hash>/video.mp4
     │
     ▼ [Route by file type]
     │
@@ -159,7 +159,7 @@ L:/_DATA/GoodQ_Data/processing/video_<hash>/video.mp4
 YES    NO
 │       │
 ▼       ▼
-L:/_DATA/GoodQ_Data/processed/    L:/_DATA/GoodQ_Data/failed/
+<GOODQ_DATA_ROOT>/GoodQ_Data/processed/    <GOODQ_DATA_ROOT>/GoodQ_Data/failed/
 PROCESSED_video.mp4                FAILED_video.mp4
 ```
 
@@ -170,12 +170,12 @@ PROCESSED_video.mp4                FAILED_video.mp4
 ### File Locations (Hardcoded in `cli/watchdog.py`)
 
 ```python
-WATCH_DIR = "L:/goodq4all/import_inbox"
-PROCESSING_DIR = "L:/_DATA/GoodQ_Data/processing"
-PROCESSED_DIR = "L:/_DATA/GoodQ_Data/processed"
-FAILED_DIR = "L:/_DATA/GoodQ_Data/failed"
-STATE_FILE = "L:/goodq4all/logs/watchdog_state.json"
-LOG_FILE = "L:/goodq4all/logs/watchdog.log"
+WATCH_DIR = "<project_root>/import_inbox"
+PROCESSING_DIR = "<GOODQ_DATA_ROOT>/GoodQ_Data/processing"
+PROCESSED_DIR = "<GOODQ_DATA_ROOT>/GoodQ_Data/processed"
+FAILED_DIR = "<GOODQ_DATA_ROOT>/GoodQ_Data/failed"
+STATE_FILE = "<project_root>/logs/watchdog_state.json"
+LOG_FILE = "<project_root>/logs/watchdog.log"
 ```
 
 ### Timing Parameters
@@ -237,18 +237,18 @@ START_WATCHDOG.bat
 
 #### Option 2: PowerShell
 ```powershell
-cd L:\goodq4all
+cd <project_root>
 python -m cli.watchdog
 ```
 
 #### Option 3: Python
 ```python
-python L:\goodq4all\cli\watchdog.py
+python <project_root>\cli\watchdog.py
 ```
 
 ### Drop Files
 ```
-1. Copy files to L:\goodq4all\import_inbox\
+1. Copy files to <project_root>\import_inbox\
 2. Watchdog detects within 2 seconds
 3. Wait 3 seconds for stability check
 4. Processing begins automatically
@@ -259,12 +259,12 @@ python L:\goodq4all\cli\watchdog.py
 
 #### View Live Logs
 ```powershell
-Get-Content L:\goodq4all\logs\watchdog.log -Wait -Tail 20
+Get-Content <project_root>\logs\watchdog.log -Wait -Tail 20
 ```
 
 #### Check Processed Registry
 ```powershell
-Get-Content L:\goodq4all\logs\watchdog_state.json | ConvertFrom-Json | Format-List
+Get-Content <project_root>\logs\watchdog_state.json | ConvertFrom-Json | Format-List
 ```
 
 #### Check If Watchdog Running
@@ -297,7 +297,7 @@ Get-Process | Where-Object {$_.CommandLine -like "*watchdog*"}
 ### Single-Instance Locking
 
 ```python
-# Creates L:/_DATA/GoodQ_Data/.watchdog.lock with PID
+# Creates <GOODQ_DATA_ROOT>/GoodQ_Data/.watchdog.lock with PID
 # On startup:
 #   - If lock exists, check if PID is alive
 #   - If alive: exit (already running)
@@ -368,13 +368,13 @@ step_plan = [
 **Diagnosis**:
 ```powershell
 # Check for existing instance
-Get-Content L:\_DATA\GoodQ_Data\.watchdog.lock
+Get-Content <GOODQ_DATA_ROOT>\GoodQ_Data\.watchdog.lock
 ```
 
 **Fix**:
 ```powershell
 # If stale lock, delete manually
-Remove-Item L:\_DATA\GoodQ_Data\.watchdog.lock -Force
+Remove-Item <GOODQ_DATA_ROOT>\GoodQ_Data\.watchdog.lock -Force
 ```
 
 ---
@@ -391,10 +391,10 @@ Remove-Item L:\_DATA\GoodQ_Data\.watchdog.lock -Force
 **Fix**:
 ```powershell
 # Verify directory
-Test-Path L:\goodq4all\import_inbox
+Test-Path <project_root>\import_inbox
 
 # Check logs
-Get-Content L:\goodq4all\logs\watchdog.log -Tail 50
+Get-Content <project_root>\logs\watchdog.log -Tail 50
 ```
 
 ---
@@ -431,7 +431,7 @@ wsl -d Ubuntu bash -c "pkill -f audio_service.py && nohup python3 ~/goodq_audio/
 **Fix**:
 ```powershell
 # View registry
-Get-Content L:\goodq4all\logs\watchdog_state.json | ConvertFrom-Json
+Get-Content <project_root>\logs\watchdog_state.json | ConvertFrom-Json
 
 # Remove specific hash to force reprocess
 # Edit JSON manually or delete entire file to reset
@@ -540,7 +540,7 @@ cp test_input/sample.mp4 import_inbox/
 Get-Content logs/watchdog.log -Wait -Tail 20
 
 # Verify moved to processed
-Test-Path L:\_DATA\GoodQ_Data\processed\PROCESSED_sample.mp4
+Test-Path <GOODQ_DATA_ROOT>\GoodQ_Data\processed\PROCESSED_sample.mp4
 ```
 
 ---

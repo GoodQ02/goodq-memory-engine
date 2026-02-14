@@ -15,7 +15,7 @@ Previously, these files only existed in the WSL2 environment at:
 `\\wsl.localhost\Ubuntu\home\joesdomingo\goodq_audio\`
 
 Now they're preserved in the repository at:
-`L:\goodq4all\wsl2_audio\`
+`<project_root>\wsl2_audio\`
 
 ---
 
@@ -191,3 +191,4 @@ The repository now contains:
 
 *"Every script tells a story. Every file has a purpose."*  
 *"Complete systems ship complete repositories."*
+

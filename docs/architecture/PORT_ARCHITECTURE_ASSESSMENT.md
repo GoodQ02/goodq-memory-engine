@@ -120,7 +120,7 @@ curl http://localhost:38005/v1/chat/completions -X POST -H "Content-Type: applic
   -d '{"model": "/mnt/l/_DATA/models/llm/huggingface/Llama-3.2-1B-Instruct", "messages": [{"role": "user", "content": "test"}]}'
 
 # Test from Windows
-python L:\goodq4all\scripts\test_llm_client.py
+python <project_root>\scripts\test_llm_client.py
 ```
 
 **PRIORITY 2: Fix LLM Client Issues**
@@ -213,3 +213,4 @@ Would you like me to:
 4. **Investigate the specific error** you're experiencing?
 
 Please describe the actual localhost issue you're seeing so we can fix the root cause.
+

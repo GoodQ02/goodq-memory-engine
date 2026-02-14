@@ -3,7 +3,7 @@
 ## Installation (First Time)
 
 ```batch
-cd L:\goodq4all
+cd <project_root>
 INSTALL_WSL2_AUDIO.bat
 ```
 
@@ -42,7 +42,7 @@ bridge = WSL2AudioBridge()
 # Check status
 if bridge.check_status():
     # Process audio
-    result = bridge.process_audio("L:\\audio\\file.wav")
+    result = bridge.process_audio("<GOODQ_DATA_ROOT>\\audio\\file.wav")
     
     # Read transcription
     for seg in result['segments']:
@@ -146,9 +146,9 @@ pip install <missing-package>
 ## File Locations
 
 ### Windows
-- Bridge: `L:\goodq4all\wsl2_audio_bridge.py`
-- Installer: `L:\goodq4all\INSTALL_WSL2_AUDIO.bat`
-- Docs: `L:\goodq4all\docs\WSL2_AUDIO_SETUP.md`
+- Bridge: `<project_root>\wsl2_audio_bridge.py`
+- Installer: `<project_root>\INSTALL_WSL2_AUDIO.bat`
+- Docs: `<project_root>\docs\WSL2_AUDIO_SETUP.md`
 
 ### WSL2
 - Workspace: `~/goodq_audio/`
@@ -229,3 +229,4 @@ wsl -d Ubuntu -- nvidia-smi -l 1
 - Check: `docs\WSL2_AUDIO_SETUP.md`
 - Review: `PHASE2_COMPLETE_SUMMARY.md`
 - Test: `python wsl2_audio_bridge.py`
+

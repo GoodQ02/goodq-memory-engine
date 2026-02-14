@@ -1,4 +1,5 @@
 # Vision Stack GPU Optimization Report
+> ⚠ Historical planning document — contains legacy path references.
 
 ## 📋 Overview
 
@@ -81,7 +82,7 @@ Both vision steps already had GPU support integrated:
 ### Running Tests
 ```bash
 # Quick test
-L:\goodq4all\TEST_VISION_GPU.bat
+<project_root>\TEST_VISION_GPU.bat
 
 # Full audit
 conda run -n goodq_emotion_classify python scripts/audit_vision_gpu.py
@@ -126,7 +127,7 @@ nvidia-smi -l 1
 ### 1. Pipeline Testing
 Run a full ingestion test:
 ```bash
-cd L:\goodq4all
+cd <project_root>
 START_WATCHDOG.lnk  # or python scripts/watchdog_ingest.py
 ```
 
@@ -214,3 +215,4 @@ conda run -n goodq_face_embed python -c "import torch; print(torch.cuda.is_avail
 **Date**: 2025-11-12
 **GPU**: NVIDIA GeForce RTX 4070 Ti SUPER (16 GB)
 **Next**: Run full pipeline test with real video data
+

@@ -2,17 +2,17 @@
 
 ## 🎯 Single Source of Truth
 
-**ALL scripts are in:** `L:\goodq4all\`
+**ALL scripts are in:** `<project_root>\`
 
-- **Batch files (.bat):** In `L:\goodq4all\` root
-- **Python scripts (.py):** In `L:\goodq4all\scripts\`
-- **PowerShell scripts (.ps1):** In `L:\goodq4all\scripts\`
+- **Batch files (.bat):** In `<project_root>\` root
+- **Python scripts (.py):** In `<project_root>\scripts\`
+- **PowerShell scripts (.ps1):** In `<project_root>\scripts\`
 
 ## 🚀 Quick Start Scripts (Use These!)
 
 ### Main Launch Script
 ```batch
-L:\goodq4all\LAUNCH_GOODQ.bat
+<project_root>\LAUNCH_GOODQ.bat
 ```
 **What it does:**
 - Health checks (conda, python, ffmpeg, tesseract, nvidia-smi)
@@ -23,7 +23,7 @@ L:\goodq4all\LAUNCH_GOODQ.bat
 
 ### Simple Launch (No Dashboard)
 ```batch
-L:\goodq4all\LAUNCH_GOODQ_SIMPLE.bat
+<project_root>\LAUNCH_GOODQ_SIMPLE.bat
 ```
 **What it does:**
 - Basic health checks
@@ -31,16 +31,16 @@ L:\goodq4all\LAUNCH_GOODQ_SIMPLE.bat
 
 ### Start File Watchdog
 ```batch
-L:\goodq4all\START_WATCHDOG.bat
+<project_root>\START_WATCHDOG.bat
 ```
 **What it does:**
-- Monitors `L:\goodq4all\import_inbox` for new files
+- Monitors `<project_root>\import_inbox` for new files
 - Automatically queues files for ingestion
 - Renames processed files with `_INGESTED` suffix
 
 ### Stop All Services
 ```batch
-L:\goodq4all\STOP_GOODQ.bat
+<project_root>\STOP_GOODQ.bat
 ```
 **What it does:**
 - Stops API server
@@ -51,60 +51,60 @@ L:\goodq4all\STOP_GOODQ.bat
 
 ### Check Watchdog Status
 ```batch
-L:\goodq4all\CHECK_WATCHDOG.bat
+<project_root>\CHECK_WATCHDOG.bat
 ```
 Shows current watchdog status and queue
 
 ### Monitor Watchdog (Live)
 ```batch
-L:\goodq4all\MONITOR_WATCHDOG.bat
+<project_root>\MONITOR_WATCHDOG.bat
 ```
 Live tail of watchdog logs
 
 ### Run Health Check
 ```batch
-L:\goodq4all\RUN_HEALTH_CHECK.bat
+<project_root>\RUN_HEALTH_CHECK.bat
 ```
 Quick system health verification
 
 ## 🔧 Python Utility Scripts
 
-All in `L:\goodq4all\scripts\`:
+All in `<project_root>\scripts\`:
 
 ### Production Status
 ```batch
-conda run -n goodq_zenml python L:\goodq4all\scripts\check_production_status.py
+conda run -n goodq_zenml python <project_root>\scripts\check_production_status.py
 ```
 Shows ingestion progress, database stats, knowledge graph status
 
 ### System Readiness
 ```batch
-conda run -n goodq_zenml python L:\goodq4all\scripts\system_readiness_check.py
+conda run -n goodq_zenml python <project_root>\scripts\system_readiness_check.py
 ```
 Comprehensive system validation (models, datasets, environments)
 
 ### Check Memory Database
 ```batch
-conda run -n goodq_zenml python L:\goodq4all\scripts\check_memory_db.py
+conda run -n goodq_zenml python <project_root>\scripts\check_memory_db.py
 ```
 Query memory database contents
 
 ### Knowledge Graph Test
 ```batch
-conda run -n goodq_zenml python L:\goodq4all\scripts\test_knowledge_graph.py
+conda run -n goodq_zenml python <project_root>\scripts\test_knowledge_graph.py
 ```
 Test and verify knowledge graph functionality
 
 ### Clear Databases
 ```batch
-conda run -n goodq_zenml python L:\goodq4all\scripts\clear_databases.py
+conda run -n goodq_zenml python <project_root>\scripts\clear_databases.py
 ```
 Clean slate for fresh ingestion
 
 ## 📁 Project Structure
 
 ```
-L:\goodq4all\                      # Main project directory
+<project_root>\                      # Main project directory
 ├── *.bat                          # All batch launcher scripts (USE THESE!)
 ├── scripts\                       # All Python and PowerShell scripts
 │   ├── *.py                      # Python utilities
@@ -123,52 +123,52 @@ L:\goodq4all\                      # Main project directory
 
 1. **First Time Setup:**
    ```batch
-   L:\goodq4all\LAUNCH_GOODQ.bat
+   <project_root>\LAUNCH_GOODQ.bat
    ```
    
 2. **Start Watchdog (in separate window):**
    ```batch
-   L:\goodq4all\START_WATCHDOG.bat
+   <project_root>\START_WATCHDOG.bat
    ```
 
 3. **Drop files into:**
    ```
-   L:\goodq4all\import_inbox\
+   <project_root>\import_inbox\
    ```
 
 4. **Monitor progress:**
    - Check command center dashboard
-   - Or run: `L:\goodq4all\CHECK_WATCHDOG.bat`
-   - Or check: `L:\goodq4all\logs\watchdog\watchdog.log`
+   - Or run: `<project_root>\CHECK_WATCHDOG.bat`
+   - Or check: `<project_root>\logs\watchdog\watchdog.log`
 
 5. **Check results:**
    ```batch
-   conda run -n goodq_zenml python L:\goodq4all\scripts\check_production_status.py
+   conda run -n goodq_zenml python <project_root>\scripts\check_production_status.py
    ```
 
 ## 🛑 Common Issues
 
 ### "Port 8000 already in use"
 ```batch
-L:\goodq4all\STOP_GOODQ.bat
+<project_root>\STOP_GOODQ.bat
 ```
 
 ### "Watchdog not processing files"
 Check logs:
 ```batch
-L:\goodq4all\MONITOR_WATCHDOG.bat
+<project_root>\MONITOR_WATCHDOG.bat
 ```
 
 ### "Environment errors"
 Run health check:
 ```batch
-L:\goodq4all\RUN_HEALTH_CHECK.bat
+<project_root>\RUN_HEALTH_CHECK.bat
 ```
 
 ## 📝 Notes
 
-- **Never run scripts from L:\ root** - they don't exist there anymore
-- **All paths reference L:\goodq4all** - this is the single source of truth
-- **Logs go to:** `L:\goodq4all\logs\`
-- **Data goes to:** `L:\_DATA\` (large files, databases, models)
-- **Imports go to:** `L:\goodq4all\import_inbox\`
+- **Never run scripts from <project_root> root** - they don't exist there anymore
+- **All paths reference <project_root>** - this is the single source of truth
+- **Logs go to:** `<project_root>\logs\`
+- **Data goes to:** `<GOODQ_DATA_ROOT>\` (large files, databases, models)
+- **Imports go to:** `<project_root>\import_inbox\`

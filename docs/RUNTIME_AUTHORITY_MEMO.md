@@ -26,19 +26,19 @@ Epoch selection is performed by updating the canonical configuration:
 `phase6.dino_collection`
 
 4. Data Root Authority
-System Data Root: `L:\_DATA`.
-All data is in: `L:\_DATA\GoodQ_Data\`.
+System Data Root: `<GOODQ_DATA_ROOT>`.
+All data is in: `<GOODQ_DATA_ROOT>\GoodQ_Data\`.
 
 5. Epoch Authority
 Epoch: `epoch_2025_12_22` (Clean).
 Status: ACTIVE (clean; intended for the first ingestion after WSL2 audio hardening).
-Epoch root: `L:/_DATA/GoodQ_Data/epochs/epoch_2025_12_22`.
+Epoch root: `<GOODQ_DATA_ROOT>/GoodQ_Data/epochs/epoch_2025_12_22`.
 Stores (authoritative targets for runtime):
-SQLite (memory): `L:/_DATA/GoodQ_Data/epochs/epoch_2025_12_22/memory.db`
-SQLite (knowledge graph): `L:/_DATA/GoodQ_Data/epochs/epoch_2025_12_22/knowledge_graph.db`
-Processing root: `L:/_DATA/GoodQ_Data/epochs/epoch_2025_12_22/processing`
-FAISS directory: `L:/_DATA/GoodQ_Data/epochs/epoch_2025_12_22/faiss`
-FAISS (audio): `L:/_DATA/GoodQ_Data/epochs/epoch_2025_12_22/faiss/goodq_audio_epoch_2025_12_22.index`
+SQLite (memory): `<GOODQ_DATA_ROOT>/GoodQ_Data/epochs/epoch_2025_12_22/memory.db`
+SQLite (knowledge graph): `<GOODQ_DATA_ROOT>/GoodQ_Data/epochs/epoch_2025_12_22/knowledge_graph.db`
+Processing root: `<GOODQ_DATA_ROOT>/GoodQ_Data/epochs/epoch_2025_12_22/processing`
+FAISS directory: `<GOODQ_DATA_ROOT>/GoodQ_Data/epochs/epoch_2025_12_22/faiss`
+FAISS (audio): `<GOODQ_DATA_ROOT>/GoodQ_Data/epochs/epoch_2025_12_22/faiss/goodq_audio_epoch_2025_12_22.index`
 Qdrant collections (epoch-suffixed):
 clip: `goodq_clip_epoch_2025_12_22`
 dino: `goodq_dino_epoch_2025_12_22`
@@ -47,8 +47,8 @@ audio: `goodq_audio_epoch_2025_12_22`
 Legacy status examples in `docs/data_epochs.md` include: "Status: LEGACY (do not write; preserved for comparison)" and "Status: LEGACY (preserved; do not write)".
 
 6. Qdrant Authority
-Qdrant Vector Database location: `L:\_DATA\qdrant_storage`.
-Qdrant service config `storage_path`: `L:/_DATA/qdrant_storage`.
+Qdrant Vector Database location: `<GOODQ_DATA_ROOT>\qdrant_storage`.
+Qdrant service config `storage_path`: `<GOODQ_DATA_ROOT>/qdrant_storage`.
 `configs/config.yaml` collections:
 clip: `goodq_clip_epoch_2025_12_22`
 dino: `goodq_dino_epoch_2025_12_22`
@@ -56,8 +56,8 @@ text: `goodq_text_epoch_2025_12_22`
 audio: `goodq_audio_epoch_2025_12_22`
 
 7. Import Inbox Authority
-`configs/config.yaml` import_inbox: `L:/_DATA/GoodQ_Data/import_inbox`.
-Watchdog system monitors: `L:/goodq4all/import_inbox` every 2 seconds.
+`configs/config.yaml` import_inbox: `<GOODQ_DATA_ROOT>/GoodQ_Data/import_inbox`.
+Watchdog system monitors: `<project_root>/import_inbox` every 2 seconds.
 
 8. Watchdog Authority
 Watchdog location: `cli/watchdog.py` (Canonical; file locations are hardcoded in `cli/watchdog.py`).

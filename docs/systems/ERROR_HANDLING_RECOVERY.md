@@ -53,8 +53,8 @@ The GoodQ4All system includes a sophisticated multi-layer error handling and sel
                         ↓
 ┌───────────────────────────────────────────────────────────────┐
 │          RECOVERY DATABASE (SQLite)                           │
-│  Location: L:\_DATA\GoodQ_Data\control_memory.db            │
-│  Location: L:\_DATA\GoodQ_Data\recovery.db                  │
+│  Location: <GOODQ_DATA_ROOT>\GoodQ_Data\control_memory.db            │
+│  Location: <GOODQ_DATA_ROOT>\GoodQ_Data\recovery.db                  │
 │                                                               │
 │  Tables:                                                      │
 │  • recovery_history - All recovery attempts + outcomes       │
@@ -132,7 +132,7 @@ control_agent:
 ### Config Backup Location
 All config modifications are backed up to:
 ```
-L:\_DATA\GoodQ_Data\config_backups\config.yaml.<timestamp>
+<GOODQ_DATA_ROOT>\GoodQ_Data\config_backups\config.yaml.<timestamp>
 ```
 
 ---
@@ -140,7 +140,7 @@ L:\_DATA\GoodQ_Data\config_backups\config.yaml.<timestamp>
 ## Databases
 
 ### control_memory.db
-**Location:** `L:\_DATA\GoodQ_Data\control_memory.db`  
+**Location:** `<GOODQ_DATA_ROOT>\GoodQ_Data\control_memory.db`  
 **Purpose:** Long-term learning and pattern recognition
 
 **Tables:**
@@ -150,7 +150,7 @@ L:\_DATA\GoodQ_Data\config_backups\config.yaml.<timestamp>
 - `success_patterns` - Learned from successful runs
 
 ### recovery.db
-**Location:** `L:\_DATA\GoodQ_Data\recovery.db`  
+**Location:** `<GOODQ_DATA_ROOT>\GoodQ_Data\recovery.db`  
 **Purpose:** Detailed failure tracking
 
 **Tables:**
@@ -323,13 +323,13 @@ From production runs:
 
 2. Verify databases exist:
    ```powershell
-   ls L:\_DATA\GoodQ_Data\control_memory.db
-   ls L:\_DATA\GoodQ_Data\recovery.db
+   ls <GOODQ_DATA_ROOT>\GoodQ_Data\control_memory.db
+   ls <GOODQ_DATA_ROOT>\GoodQ_Data\recovery.db
    ```
 
 3. Check logs for healing attempts:
    ```powershell
-   rg "CONTROL AGENT" L:\goodq4all\logs\
+   rg "CONTROL AGENT" <project_root>\logs\
    ```
 
 ### Config backups filling disk?
@@ -337,7 +337,7 @@ From production runs:
 Clean old backups:
 ```powershell
 # Keep only last 10 backups
-Get-ChildItem L:\_DATA\GoodQ_Data\config_backups\ | 
+Get-ChildItem <GOODQ_DATA_ROOT>\GoodQ_Data\config_backups\ | 
   Sort-Object LastWriteTime -Descending | 
   Select-Object -Skip 10 | 
   Remove-Item
@@ -354,3 +354,4 @@ control_agent:
 ---
 
 **The GoodQ4All error handling system is designed to operate unattended for hours, adapting to failures and learning optimal recovery strategies autonomously.**
+

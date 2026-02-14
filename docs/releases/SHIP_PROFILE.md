@@ -15,7 +15,7 @@
 - **GPU:** Optional by profile; NVIDIA RTX-class GPU is required only for `GPU_ENHANCED` throughput goals.
 - **WSL2 audio:** Optional by profile; required only when WSL audio acceleration is selected.
 - **Python/Conda:** Python 3.10 and the `goodq_zenml` base environment installed.
-- **Data Layout:** Project at `L:\goodq4all\` with data root from `GOODQ_DATA_ROOT` (default `L:\_DATA`).
+- **Data Layout:** Project at `<project_root>\` with data root from `GOODQ_DATA_ROOT` (default `<GOODQ_DATA_ROOT>`).
 
 ## Profile Contract
 
@@ -112,3 +112,4 @@ When making changes for a release, prefer:
 
 - Updating the canonical docs and commands listed here.
 - Keeping historical docs intact or moving them to `_ARCHIVE` instead of editing them.
+

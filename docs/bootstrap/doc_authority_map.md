@@ -39,7 +39,7 @@ Generated: 2026-02-11T22:50:35
 ## Phase A Drift Findings
 
 - Docs contradicting Phase A profile semantics: **12**
-- Docs with hardcoded `L:/` or `L:\` paths: **373**
+- Docs with hardcoded `<drive>:/` or `<drive>:\` paths: **373**
 - Docs implying CUDA/NVIDIA mandatory: **8**
 - Duplicate install/start guides detected: **12**
 
@@ -206,7 +206,7 @@ docs/archive/
 4. **Historical relocation**: move C docs into `docs/archive/` structure without rewriting content.
 5. **Experimental triage**: merge useful D docs into canonical/operational targets; archive the rest.
 6. **Obsolete pruning**: remove E backup/duplicate files after one verification pass and git history confirmation.
-7. **Drift gate**: add CI lint to flag new docs with hardcoded `L:/` paths or mandatory CUDA wording outside GPU-specific guides.
+7. **Drift gate**: add CI lint to flag new docs with hardcoded `<drive>:/` paths or mandatory CUDA wording outside GPU-specific guides.
 
 ## Authority Map
 

@@ -1,4 +1,5 @@
 # 🎉 GoodQ UI Configuration Audit - COMPLETE
+> ⚠ Historical planning document — contains legacy path references.
 
 **Date:** November 8, 2025 23:03 UTC  
 **Status:** ✅ **ALL SYSTEMS VALIDATED**  
@@ -163,7 +164,7 @@ These files are preserved for reference but won't be executed by any launchers.
 
 ### **Option 1: Full System Launch**
 ```batch
-L:\goodq4all\LAUNCH_GOODQ.bat
+<project_root>\LAUNCH_GOODQ.bat
 ```
 **Opens:**
 - API Server on port 30000
@@ -172,7 +173,7 @@ L:\goodq4all\LAUNCH_GOODQ.bat
 
 ### **Option 2: Web Interface Only**
 ```batch
-L:\goodq4all\LAUNCH_WEB_INTERFACE.bat
+<project_root>\LAUNCH_WEB_INTERFACE.bat
 ```
 **Opens:**
 - API Server on port 30000
@@ -180,7 +181,7 @@ L:\goodq4all\LAUNCH_WEB_INTERFACE.bat
 
 ### **Option 3: Full System Test**
 ```batch
-L:\goodq4all\START_FULL_SYSTEM_TEST.bat
+<project_root>\START_FULL_SYSTEM_TEST.bat
 ```
 **Opens:**
 - Ingestion Monitor
@@ -193,7 +194,7 @@ L:\goodq4all\START_FULL_SYSTEM_TEST.bat
 
 ### **1. Start the API Server**
 ```batch
-cd L:\goodq4all
+cd <project_root>
 conda activate goodq_zenml
 python api_server.py
 ```
@@ -203,8 +204,8 @@ python api_server.py
 ================================================================================
 GoodQ API Server Starting
 ================================================================================
-Base Directory: L:\goodq4all
-Output Directory: L:\goodq4all\output
+Base Directory: <project_root>
+Output Directory: <project_root>\output
 Server will be available at: http://localhost:30000
 ================================================================================
 INFO:     Started server process
@@ -335,3 +336,4 @@ All port references are consistent (Port 30000), legacy servers are archived, an
 **Validation Script:** `validate_ui_config.py`  
 **Final Validator Exit Code:** 0 (SUCCESS)  
 **Report Generated:** 2025-11-08 23:03 UTC
+

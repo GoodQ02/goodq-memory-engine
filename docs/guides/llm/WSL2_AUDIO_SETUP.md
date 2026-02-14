@@ -145,7 +145,7 @@ chmod +x ~/goodq_audio/process_audio.py
 
 ## Windows Integration
 
-The bridge has been created at: `L:\goodq4all\wsl2_audio_bridge.py`
+The bridge has been created at: `<project_root>\wsl2_audio_bridge.py`
 
 ### Usage Example
 
@@ -160,7 +160,7 @@ if bridge.check_status():
     print("WSL2 audio ready")
     
 # Process audio file
-result = bridge.process_audio("L:\\goodq4all\\test.wav")
+result = bridge.process_audio("<project_root>\\test.wav")
 
 # Print transcription
 for seg in result['segments']:
@@ -287,3 +287,4 @@ If issues persist:
 2. Check GPU access: `wsl -d Ubuntu -- nvidia-smi`
 3. Check Python in WSL2: `wsl -d Ubuntu -- python3 --version`
 4. Review logs in `~/goodq_audio/logs/`
+

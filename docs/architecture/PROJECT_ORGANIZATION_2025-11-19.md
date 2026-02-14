@@ -1,4 +1,7 @@
 # 📁 Project Organization Report
+
+> ⚠ Historical planning document — contains legacy path references.
+
 **Date:** 2025-11-19  
 **Status:** Complete ✅  
 **Phase:** Final Structure Alignment
@@ -32,7 +35,7 @@
 ## 📂 Current Root Structure
 
 ```
-L:\goodq4all\
+<project_root>\
 ├── LAUNCH_GOODQ.bat          ✅ MAIN LAUNCHER (Production Ready)
 ├── README.md                  ✅ Primary documentation
 ├── setup.py                   ✅ Package installer
@@ -70,9 +73,9 @@ L:\goodq4all\
 7. ✅ Displays service status with endpoints
 
 **Validated Script Paths:**
-- ✅ `L:\goodq4all\api\main.py` - EXISTS
-- ✅ `L:\goodq4all\api\health_status.py` - EXISTS
-- ✅ `L:\goodq4all\api\processing_api.py` - EXISTS
+- ✅ `<project_root>\api\main.py` - EXISTS
+- ✅ `<project_root>\api\health_status.py` - EXISTS
+- ✅ `<project_root>\api\processing_api.py` - EXISTS
 
 **Browser Endpoints:**
 - 🌐 http://localhost:30000 - Main UI
@@ -194,3 +197,4 @@ Port 31434 → Ollama Phi4 (Windows service)
 ---
 
 *Generated: 2025-11-19 by GoodQ Organization System*
+

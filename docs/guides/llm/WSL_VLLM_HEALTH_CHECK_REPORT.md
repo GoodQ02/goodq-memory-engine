@@ -1,4 +1,5 @@
 # WSL/vLLM Health Check Report
+> ⚠ Historical planning document — contains legacy path references.
 
 **Date**: 2025-11-17 18:09 CST  
 **Status**: ⚠️ Services Not Running (but infrastructure is healthy)
@@ -275,7 +276,7 @@ wsl bash -c "sudo systemctl daemon-reload && sudo systemctl restart ollama"
 curl http://localhost:31434/v1/models
 
 # 6. Run full LLM client test
-python L:\goodq4all\scripts\test_llm_client.py
+python <project_root>\scripts\test_llm_client.py
 ```
 
 ---
@@ -333,3 +334,4 @@ wsl
 ---
 
 **Status**: Ready to implement fixes. All infrastructure is healthy, services just need to be started correctly.
+

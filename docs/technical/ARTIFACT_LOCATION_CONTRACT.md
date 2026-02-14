@@ -17,12 +17,12 @@ There is a **documented inconsistency** between the configured artifact location
 ### Config Contract
 **File:** `config.yaml`
 ```yaml
-processing: L:\_DATA\GoodQ_Data\processing\
+processing: <GOODQ_DATA_ROOT>\GoodQ_Data\processing\
 ```
 
 **Expectation:** Scene artifacts should be written to:
 ```
-L:\_DATA\GoodQ_Data\processing\<video_name>\
+<GOODQ_DATA_ROOT>\GoodQ_Data\processing\<video_name>\
   ├── audio\
   └── video\
 ```
@@ -36,7 +36,7 @@ workspace: Path = typer.Option(Path('logs/scene_ingest'), ...),
 
 **Actual Location:** Scene artifacts are written to:
 ```
-L:\goodq4all\logs\scene_ingest\<video_name>\
+<project_root>\logs\scene_ingest\<video_name>\
   ├── audio\          # scene_0000.wav to scene_XXXX.wav
   └── video\          # scene_0000.jpg to scene_XXXX.jpg
       └── scene_manifest.json
@@ -101,7 +101,7 @@ As of December 15, 2025, all documentation reflects **actual** locations:
 
 ```yaml
 # Current (misleading)
-processing: L:\_DATA\GoodQ_Data\processing\
+processing: <GOODQ_DATA_ROOT>\GoodQ_Data\processing\
 
 # Updated (truthful)
 scene_artifacts: logs\scene_ingest\
@@ -151,7 +151,7 @@ workspace = Path(config['processing']) / 'scene_ingest'
 # New config option
 artifact_locations:
   legacy_mode: true                # Uses logs/scene_ingest/
-  unified_storage: false           # Uses L:\_DATA\GoodQ_Data\processing/
+  unified_storage: false           # Uses <GOODQ_DATA_ROOT>\GoodQ_Data\processing/
 ```
 
 **Pros:**
@@ -200,7 +200,7 @@ Get-ChildItem "logs\scene_ingest\" -Directory | Select-Object Name, LastWriteTim
 # View config
 Get-Content config.yaml | Select-String "processing"
 
-# Will show: processing: L:\_DATA\GoodQ_Data\processing\
+# Will show: processing: <GOODQ_DATA_ROOT>\GoodQ_Data\processing\
 ```
 
 ### Confirm Scene Manifests Exist
@@ -229,3 +229,4 @@ This is a **cosmetic contract violation**, not a functional bug. The system:
 - ✅ Requires no immediate action
 
 The inconsistency is **acknowledged**, **tracked**, and **deferred** to a future release when breaking changes are acceptable.
+

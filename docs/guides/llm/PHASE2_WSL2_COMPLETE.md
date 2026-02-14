@@ -1,4 +1,5 @@
 # Phase 2: WSL2 Audio Processing - Implementation Complete
+> ⚠ Historical planning document — contains legacy path references.
 
 ## Overview
 
@@ -49,7 +50,7 @@ bridge = WSL2AudioBridge()
 # Check if ready
 if bridge.check_status():
     # Process audio
-    result = bridge.process_audio("L:\\audio.wav")
+    result = bridge.process_audio("<GOODQ_DATA_ROOT>\\audio.wav")
     
     # Access transcription
     for seg in result['segments']:
@@ -73,7 +74,7 @@ Comprehensive guide including:
 
 ```bash
 # From Windows command prompt
-cd L:\goodq4all
+cd <project_root>
 INSTALL_WSL2_AUDIO.bat
 ```
 
@@ -92,7 +93,7 @@ Follow detailed steps in `docs/WSL2_AUDIO_SETUP.md`
 ## Architecture
 
 ```
-Windows (L:\goodq4all)
+Windows (<project_root>)
 ├── wsl2_audio_bridge.py          ← Python bridge
 ├── INSTALL_WSL2_AUDIO.bat        ← Installer launcher
 ├── scripts/
@@ -186,7 +187,7 @@ print("Info:", bridge.get_info())
 ### Integration Test
 ```python
 # Process sample audio
-result = bridge.process_audio("L:\\goodq4all\\sample.wav")
+result = bridge.process_audio("<project_root>\\sample.wav")
 assert len(result['segments']) > 0
 assert 'text' in result['segments'][0]
 ```
@@ -255,7 +256,7 @@ pip install <missing-package>
 ## Files Created
 
 ```
-L:\goodq4all\
+<project_root>\
 ├── wsl2_audio_bridge.py                    ← Windows-WSL2 bridge
 ├── INSTALL_WSL2_AUDIO.bat                  ← Installation launcher
 ├── docs/
@@ -321,3 +322,4 @@ The system is ready for installation and testing. Once installed, integration wi
 ---
 
 **Ready to proceed**: Run `INSTALL_WSL2_AUDIO.bat` to begin installation
+

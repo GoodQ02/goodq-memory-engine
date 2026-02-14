@@ -14,11 +14,11 @@ GoodQ4All provides several CLI tools for different operations:
 - **Memory** - Database management
 - **Knowledge Graph** - Entity and relationship queries
 
-All commands should be run from the project root (`L:\goodq4all\`) with the `goodq_zenml` conda environment activated:
+All commands should be run from the project root (`<project_root>\`) with the `goodq_zenml` conda environment activated:
 
 ```powershell
 conda activate goodq_zenml
-cd L:\goodq4all
+cd <project_root>
 ```
 
 ---
@@ -59,7 +59,7 @@ python cli\list_inbox.py
 ```
 
 **Output:**
-- Lists all files in `L:\goodq4all\import_inbox\`
+- Lists all files in `<project_root>\import_inbox\`
 - Shows file sizes and types
 - Identifies supported formats
 
@@ -204,7 +204,7 @@ python cli\graph_query.py export 1 2 3 4 output.json
 ```
 
 **Global Options:**
-- `--graph-db PATH` - Path to knowledge graph database (default: `L:/_DATA/GoodQ_Data/knowledge_graph.db`)
+- `--graph-db PATH` - Path to knowledge graph database (default: `<GOODQ_DATA_ROOT>/GoodQ_Data/knowledge_graph.db`)
 
 ---
 
@@ -420,18 +420,18 @@ python cli\nl_query.py
 ## Configuration
 
 All CLI tools respect configuration in:
-- `L:\goodq4all\config.yaml` - Main configuration
-- `L:\goodq4all\config.json` - Legacy configuration
+- `<project_root>\config.yaml` - Main configuration
+- `<project_root>\config.json` - Legacy configuration
 - Environment variables - Runtime overrides
 
 Common configuration paths used by CLI:
 ```yaml
 paths:
-  data_dir: "L:/_DATA/GoodQ_Data"
-  db_path: "L:/_DATA/GoodQ_Data/databases/goodq.db"
-  knowledge_graph_db: "L:/_DATA/GoodQ_Data/knowledge_graph.db"
-  log_dir: "L:/_DATA/GoodQ_Data/logs"
-  inbox: "L:/goodq4all/import_inbox"
+  data_dir: "<GOODQ_DATA_ROOT>/GoodQ_Data"
+  db_path: "<GOODQ_DATA_ROOT>/GoodQ_Data/databases/goodq.db"
+  knowledge_graph_db: "<GOODQ_DATA_ROOT>/GoodQ_Data/knowledge_graph.db"
+  log_dir: "<GOODQ_DATA_ROOT>/GoodQ_Data/logs"
+  inbox: "<project_root>/import_inbox"
 ```
 
 ---
@@ -457,7 +457,7 @@ taskkill /F /IM python.exe
 **"Model not found"**
 ```powershell
 # Verify models exist
-dir L:\_DATA\models\
+dir <GOODQ_DATA_ROOT>\models\
 
 # Check model paths in config
 python cli\print_config.py | grep models

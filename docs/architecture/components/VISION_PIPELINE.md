@@ -64,7 +64,7 @@ tool_paths:
 
 **Model Details**:
 - **HuggingFace ID**: `Salesforce/blip-image-captioning-base`
-- **Cache Location**: `L:/models/transformers/`
+- **Cache Location**: `<GOODQ_DATA_ROOT>/models/transformers/`
 - **Memory Usage**: ~2GB VRAM
 
 **Output Fields**:
@@ -103,7 +103,7 @@ tool_paths:
 
 **Model Details**:
 - **Model File**: `yolov8n.pt`
-- **Cache Location**: `L:/models/yolov8n.pt`
+- **Cache Location**: `<GOODQ_DATA_ROOT>/models/yolov8n.pt`
 - **Classes**: 80 COCO classes
 - **Input Size**: 640x640
 
@@ -350,7 +350,7 @@ Total Peak:               ~9.6GB (with sequential processing)
 
 **Cache Locations**:
 ```
-L:/models/                          # Base model directory
+<GOODQ_DATA_ROOT>/models/                          # Base model directory
   ├── transformers/                 # HuggingFace models
   │   ├── blip-image-captioning-base/
   │   ├── dinov2-base/
@@ -362,9 +362,9 @@ L:/models/                          # Base model directory
 
 **Environment Variables**:
 ```bash
-HF_HOME=L:/models
-TORCH_HOME=L:/models
-TRANSFORMERS_CACHE=L:/models/transformers
+HF_HOME=<GOODQ_DATA_ROOT>/models
+TORCH_HOME=<GOODQ_DATA_ROOT>/models
+TRANSFORMERS_CACHE=<GOODQ_DATA_ROOT>/models/transformers
 ```
 
 **First-Run Behavior**:
@@ -415,7 +415,7 @@ Keyframe (JPG)
 
 ### Issue: "Model not found"
 **Solution**:
-- Verify `HF_HOME=L:/models` is set
+- Verify `HF_HOME=<GOODQ_DATA_ROOT>/models` is set
 - Check internet connection for first-run downloads
 - Manually download models if behind firewall
 

@@ -22,7 +22,7 @@ All systems have been audited and optimized. The system is clean and ready for p
 ### **Option 2: Launch from PowerShell**
 
 ```powershell
-cd L:\goodq4all
+cd <project_root>
 .\LAUNCH_GOODQ.bat
 ```
 
@@ -135,12 +135,12 @@ Should return JSON with `"status": "active"`
 
 **Check import_inbox:**
 ```powershell
-Get-ChildItem L:\goodq4all\import_inbox
+Get-ChildItem <project_root>\import_inbox
 ```
 Should show `01. 1987 - 1988.mp4`
 
 **Check watchdog is monitoring:**
-Look for `[INFO] Watching directory: L:\goodq4all\import_inbox` in watchdog window
+Look for `[INFO] Watching directory: <project_root>\import_inbox` in watchdog window
 
 ### "GPU Not Showing in UI"
 
@@ -219,3 +219,4 @@ Run `LAUNCH_GOODQ.bat` and watch your home movies transform into an intelligent,
 The UI will populate with real data as processing happens - no placeholders, no fake data.
 
 **🚀 Ready to launch when you are!**
+

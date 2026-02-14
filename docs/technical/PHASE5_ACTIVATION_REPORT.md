@@ -1,4 +1,5 @@
 # Phase 5 Video Scene Detection - Activation Report
+> ⚠ Historical planning document — contains legacy path references.
 
 **Date:** December 5, 2025  
 **Status:** READY FOR ACTIVATION  
@@ -27,7 +28,7 @@
 
 ### Phase 5 Implementation Discovered
 
-**Location:** `L:\goodq4all\steps\audio\segmentation\phase5_video_scene_integration.py`
+**Location:** `<project_root>\steps\audio\segmentation\phase5_video_scene_integration.py`
 
 **Key Functions:**
 1. `detect_scenes_for_chunk()` - GPU-accelerated per-chunk scene detection
@@ -46,21 +47,21 @@
 ## II. INTEGRATION POINTS IDENTIFIED ✅
 
 ### Pipeline Entry Point
-**File:** `L:\goodq4all\pipelines\ingest_multimodal_conda.py`  
+**File:** `<project_root>\pipelines\ingest_multimodal_conda.py`  
 **Function:** `process_items_step()`  
 **Current Video Handling:** None detected - video path exists but no active processing
 
 **Insertion Point:** After `mod == "image"` block, before universal steps
 
 ### Step Runner Registration
-**File:** `L:\goodq4all\cli\step_runner.py`  
+**File:** `<project_root>\cli\step_runner.py`  
 **Current Steps:** 30+ steps registered (audio_transcribe, image_ocr, sentiment, etc.)  
 **Required:** Add `video_scene_segmentation` step mapping
 
 ### Configuration Files
-**Main Config:** `L:\goodq4all\config.yaml` (user/model settings)  
-**Segmentation Config:** `L:\goodq4all\configs\segmentation_config.json` (Phase 0-4 settings)  
-**Phase Config:** `L:\goodq4all\configs\phased_segmentation.yaml` (All phases, including Phase 5)
+**Main Config:** `<project_root>\config.yaml` (user/model settings)  
+**Segmentation Config:** `<project_root>\configs\segmentation_config.json` (Phase 0-4 settings)  
+**Phase Config:** `<project_root>\configs\phased_segmentation.yaml` (All phases, including Phase 5)
 
 **Phase 5 Config Already Present:**
 ```yaml
@@ -78,7 +79,7 @@ phase5:
 
 ### A. Step Runner Registration ✅
 
-**File:** `L:\goodq4all\cli\step_runner.py`  
+**File:** `<project_root>\cli\step_runner.py`  
 **Action:** Add video scene segmentation step after line 161 (before `raise SystemExit`)
 
 ```python
@@ -88,7 +89,7 @@ if step_name == "video_scene_segmentation":
     # Extract required inputs from item
     video_path = item.get('path') or item.get('file_path')
     audio_segments = item.get('audio_segments', [])
-    output_dir = item.get('output_dir', cfg.get('processing_dir', 'L:/_DATA/GoodQ_Data/processing'))
+    output_dir = item.get('output_dir', cfg.get('processing_dir', '<GOODQ_DATA_ROOT>/GoodQ_Data/processing'))
     
     # Call Phase 5 processor
     return process_video_chunks_with_scenes(video_path, audio_segments, output_dir, cfg)
@@ -96,7 +97,7 @@ if step_name == "video_scene_segmentation":
 
 ### B. Pipeline Integration ✅
 
-**File:** `L:\goodq4all\pipelines\ingest_multimodal_conda.py`  
+**File:** `<project_root>\pipelines\ingest_multimodal_conda.py`  
 **Action:** Add video processing block in `process_items_step()` after line 71 (after image block)
 
 ```python
@@ -108,7 +109,7 @@ if mod == "video":
 
 ### C. Configuration Enhancement ✅
 
-**File:** `L:\goodq4all\configs\segmentation_config.json`  
+**File:** `<project_root>\configs\segmentation_config.json`  
 **Action:** Add Phase 5 section to segmentation config
 
 ```json
@@ -127,7 +128,7 @@ if mod == "video":
 ## IV. OUTPUT SPECIFICATIONS
 
 ### Scene Manifest
-**Location:** `L:/_DATA/GoodQ_Data/processing/<video_id>/video_scenes.json`
+**Location:** `<GOODQ_DATA_ROOT>/GoodQ_Data/processing/<video_id>/video_scenes.json`
 
 ```json
 {
@@ -156,7 +157,7 @@ if mod == "video":
 ```
 
 ### Temporal Index (Future Phase 6)
-**Location:** `L:/_DATA/GoodQ_Data/processing/<video_id>/temporal_index.json`  
+**Location:** `<GOODQ_DATA_ROOT>/GoodQ_Data/processing/<video_id>/temporal_index.json`  
 **Status:** Prepared in Phase 5, full integration in Phase 6
 
 ---
@@ -186,9 +187,9 @@ if mod == "video":
 
 ### Syntax Validation
 ```powershell
-python -m py_compile L:\goodq4all\cli\step_runner.py
-python -m py_compile L:\goodq4all\pipelines\ingest_multimodal_conda.py
-python -m py_compile L:\goodq4all\steps\audio\segmentation\phase5_video_scene_integration.py
+python -m py_compile <project_root>\cli\step_runner.py
+python -m py_compile <project_root>\pipelines\ingest_multimodal_conda.py
+python -m py_compile <project_root>\steps\audio\segmentation\phase5_video_scene_integration.py
 ```
 
 ### Runtime Validation
@@ -217,8 +218,8 @@ python -m py_compile L:\goodq4all\steps\audio\segmentation\phase5_video_scene_in
 
 ### Rollback Commands:
 ```powershell
-git diff HEAD~1 L:\goodq4all\cli\step_runner.py
-git diff HEAD~1 L:\goodq4all\pipelines\ingest_multimodal_conda.py
+git diff HEAD~1 <project_root>\cli\step_runner.py
+git diff HEAD~1 <project_root>\pipelines\ingest_multimodal_conda.py
 git checkout HEAD~1 -- <file>  # if needed
 ```
 

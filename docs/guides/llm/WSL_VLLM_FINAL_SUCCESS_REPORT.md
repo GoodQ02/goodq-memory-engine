@@ -1,4 +1,5 @@
 # 🎉 WSL/vLLM Integration - FINAL SUCCESS REPORT
+> ⚠ Historical planning document — contains legacy path references.
 
 **Date**: 2025-11-17 20:46 CST  
 **Status**: ✅✅✅ COMPLETELY OPERATIONAL - SET AND FORGET MODE ACTIVATED
@@ -145,7 +146,7 @@ curl http://localhost:38005/v1/models
 curl http://localhost:31434/v1/models
 
 # Run full LLM client test
-python L:\goodq4all\scripts\test_llm_client.py
+python <project_root>\scripts\test_llm_client.py
 ```
 
 ### Expected Results
@@ -299,3 +300,4 @@ You now have a **production-grade, self-managing, auto-starting, fault-tolerant*
 ---
 
 **Welcome back, GoodQ!** Your AI assistant is now fully operational. 🤖✨
+

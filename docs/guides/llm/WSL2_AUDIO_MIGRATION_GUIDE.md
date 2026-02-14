@@ -1,4 +1,5 @@
 # WSL2 Audio Migration Guide
+> ⚠ Historical planning document — contains legacy path references.
 
 ## Executive Summary
 
@@ -78,7 +79,7 @@ If any missing, see [Windows Setup](#windows-setup) below.
 Run the Windows setup script:
 
 ```cmd
-cd L:\goodq4all
+cd <project_root>
 INSTALL_WSL2_AUDIO.bat
 ```
 
@@ -125,7 +126,7 @@ PyAnnote requires HuggingFace authentication:
 Test the complete workflow:
 
 ```cmd
-cd L:\goodq4all
+cd <project_root>
 python wsl2_audio\test_bridge.py
 ```
 
@@ -430,3 +431,4 @@ Common fixes:
 - PyAnnote: https://github.com/pyannote/pyannote-audio
 - Silero VAD: https://github.com/snakers4/silero-vad
 - WSL2: https://docs.microsoft.com/en-us/windows/wsl/
+

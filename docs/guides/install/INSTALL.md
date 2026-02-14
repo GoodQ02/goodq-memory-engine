@@ -35,7 +35,7 @@ $env:GOODQ_REQUIRE_WSL_AUDIO = "1"
 ## Path and Host Identity Abstraction
 
 - `GOODQ_DATA_ROOT`: data root override.
-  - if unset, default data root is `L:/_DATA`.
+  - if unset, default data root is `<GOODQ_DATA_ROOT>`.
 - `GOODQ_WSL_USER`: optional WSL user override.
 - `GOODQ_WSL_WORKSPACE`: optional WSL workspace override.
 - `GOODQ_WSL_DISTRO`: optional distro override (default `Ubuntu`).

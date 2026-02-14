@@ -50,7 +50,7 @@ pwsh scripts/ingest_videos_lite.ps1 -InputDir smoke_inbox -VerboseSteps
 pwsh scripts/ingest_videos_lite.ps1 -InputDir import_inbox -MaxVideos 3 -MaxScenes 5
 
 # Full ingestion (no limits)
-python cli/run_ingestion.py --input-dir "L:/Videos" --workspace logs/full_run --verbose
+python cli/run_ingestion.py --input-dir "<GOODQ_DATA_ROOT>/videos" --workspace logs/full_run --verbose
 
 # Mission launch (full stack)
 pwsh scripts/mission_launch.ps1 -Mode pipeline -OpenDashboard
@@ -62,13 +62,13 @@ pwsh scripts/mission_launch.ps1 -Mode pipeline -OpenDashboard
 pwsh scripts/command_center.ps1
 
 # View recent logs
-Get-Content L:/GoodQ_Data/logs/step_runs.jsonl -Tail 50
+Get-Content <GOODQ_DATA_ROOT>/GoodQ_Data (See LEGACY_PATHS_DEPRECATED.md)/logs/step_runs.jsonl -Tail 50
 
 # Find errors
-Get-Content L:/GoodQ_Data/logs/step_runs.jsonl | Select-String '"status":"error"'
+Get-Content <GOODQ_DATA_ROOT>/GoodQ_Data (See LEGACY_PATHS_DEPRECATED.md)/logs/step_runs.jsonl | Select-String '"status":"error"'
 
 # Performance analysis
-Get-Content L:/GoodQ_Data/logs/step_runs.jsonl -Tail 1000 | 
+Get-Content <GOODQ_DATA_ROOT>/GoodQ_Data (See LEGACY_PATHS_DEPRECATED.md)/logs/step_runs.jsonl -Tail 1000 | 
     ForEach-Object { $_ | ConvertFrom-Json } | 
     Group-Object step | 
     ForEach-Object { 
@@ -104,13 +104,13 @@ pwsh scripts/enable_cuda.ps1 -Env goodq_<step>
 
 | Item | Path |
 |------|------|
-| **Config** | `L:/goodq4all/configs/config_open.yaml` |
-| **Logs** | `L:/GoodQ_Data/logs/step_runs.jsonl` |
-| **Database** | `L:/GoodQ_Data/data/memory_db/memory.db` |
-| **FAISS Indices** | `L:/GoodQ_Data/data/memory_db/*.index` |
-| **Models** | `L:/models/` |
-| **Lock Files** | `L:/goodq4all/envs/locks/*.lock.txt` |
-| **Scripts** | `L:/goodq4all/scripts/` |
+| **Config** | `<project_root>/configs/config_open.yaml` |
+| **Logs** | `<GOODQ_DATA_ROOT>/GoodQ_Data (See LEGACY_PATHS_DEPRECATED.md)/logs/step_runs.jsonl` |
+| **Database** | `<GOODQ_DATA_ROOT>/GoodQ_Data (See LEGACY_PATHS_DEPRECATED.md)/data/memory_db/memory.db` |
+| **FAISS Indices** | `<GOODQ_DATA_ROOT>/GoodQ_Data (See LEGACY_PATHS_DEPRECATED.md)/data/memory_db/*.index` |
+| **Models** | `<GOODQ_DATA_ROOT>/models/` |
+| **Lock Files** | `<project_root>/envs/locks/*.lock.txt` |
+| **Scripts** | `<project_root>/scripts/` |
 
 ---
 
@@ -118,7 +118,7 @@ pwsh scripts/enable_cuda.ps1 -Env goodq_<step>
 
 ### SQLite
 ```powershell
-sqlite3 L:/GoodQ_Data/data/memory_db/memory.db
+sqlite3 <GOODQ_DATA_ROOT>/GoodQ_Data (See LEGACY_PATHS_DEPRECATED.md)/data/memory_db/memory.db
 ```
 
 ```sql
@@ -139,7 +139,7 @@ import faiss
 import numpy as np
 from sentence_transformers import SentenceTransformer
 
-index = faiss.read_index("L:/GoodQ_Data/data/memory_db/faiss_text.index")
+index = faiss.read_index("<GOODQ_DATA_ROOT>/GoodQ_Data (See LEGACY_PATHS_DEPRECATED.md)/data/memory_db/faiss_text.index")
 model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
 
 query = "find scenes with dogs"
@@ -153,8 +153,8 @@ distances, indices = index.search(query_vec, k=10)
 
 ```powershell
 # Core paths
-$env:HF_HOME = "L:/models"
-$env:TORCH_HOME = "L:/models"
+$env:HF_HOME = "<GOODQ_DATA_ROOT>/models"
+$env:TORCH_HOME = "<GOODQ_DATA_ROOT>/models"
 $env:HF_HUB_ENABLE_HF_TRANSFER = "1"
 
 # Auth tokens
@@ -163,7 +163,7 @@ $env:HF_TOKEN = "hf_..."
 $env:OPENAI_API_KEY = "sk-..." # Optional
 
 # Set persistently
-pwsh scripts/set_env_vars.ps1 -Vars @{HF_HOME="L:/models"} -Persist
+pwsh scripts/set_env_vars.ps1 -Vars @{HF_HOME="<GOODQ_DATA_ROOT>/models"} -Persist
 ```
 
 ---
@@ -191,7 +191,7 @@ pwsh scripts/set_env_vars.ps1 -Vars @{PYANNOTE_TOKEN="hf_..."} -Persist
 ### Slow performance
 ```powershell
 # Check for deduplication
-Get-Content L:/GoodQ_Data/logs/step_runs.jsonl -Tail 100 | Select-String "skipped"
+Get-Content <GOODQ_DATA_ROOT>/GoodQ_Data (See LEGACY_PATHS_DEPRECATED.md)/logs/step_runs.jsonl -Tail 100 | Select-String "skipped"
 
 # Reconcile indices
 pwsh scripts/reconcile_indices.ps1
@@ -214,7 +214,7 @@ pwsh scripts/reconcile_indices.ps1
 ### Daily Processing
 ```powershell
 1. pwsh scripts/mission_health_check.ps1 -EnvPrefix goodq
-2. Copy videos to L:/goodq4all/import_inbox
+2. Copy videos to <project_root>/import_inbox
 3. pwsh scripts/ingest_videos_lite.ps1 -InputDir import_inbox -VerboseSteps
 4. pwsh scripts/command_center.ps1  # Monitor
 5. Move processed videos to archive
@@ -223,7 +223,7 @@ pwsh scripts/reconcile_indices.ps1
 ### Weekly Maintenance
 ```powershell
 # Clean old logs
-Get-ChildItem L:/GoodQ_Data/logs/*.jsonl | 
+Get-ChildItem <GOODQ_DATA_ROOT>/GoodQ_Data (See LEGACY_PATHS_DEPRECATED.md)/logs/*.jsonl | 
     Where-Object { $_.LastWriteTime -lt (Get-Date).AddDays(-30) } | 
     Remove-Item
 
@@ -240,9 +240,9 @@ $date = Get-Date -Format "yyyy-MM-dd"
 $backup = "G:/Backups/GoodQ/$date"
 New-Item -ItemType Directory -Path $backup -Force
 
-Copy-Item L:/GoodQ_Data/data/memory_db/*.db $backup/
-Copy-Item L:/GoodQ_Data/data/memory_db/*.index $backup/
-Copy-Item L:/GoodQ_Data/data/memory_db/*.sqlite $backup/
+Copy-Item <GOODQ_DATA_ROOT>/GoodQ_Data (See LEGACY_PATHS_DEPRECATED.md)/data/memory_db/*.db $backup/
+Copy-Item <GOODQ_DATA_ROOT>/GoodQ_Data (See LEGACY_PATHS_DEPRECATED.md)/data/memory_db/*.index $backup/
+Copy-Item <GOODQ_DATA_ROOT>/GoodQ_Data (See LEGACY_PATHS_DEPRECATED.md)/data/memory_db/*.sqlite $backup/
 
 Write-Host "Backup complete: $backup"
 ```
@@ -266,7 +266,7 @@ Write-Host "Backup complete: $backup"
 **Common Issues:**
 1. Check [User Guide Troubleshooting](../../guides/general/USER_GUIDE.md#troubleshooting)
 2. Review [Project History](../../archive/PROJECT_HISTORY.md) for context
-3. Check logs: `L:/GoodQ_Data/logs/step_runs.jsonl`
+3. Check logs: `<GOODQ_DATA_ROOT>/GoodQ_Data (See LEGACY_PATHS_DEPRECATED.md)/logs/step_runs.jsonl`
 4. Run diagnostics: `pwsh scripts/mission_health_check.ps1`
 
 **Generate Diagnostic Bundle:**

@@ -101,7 +101,7 @@ Active log files:
 - `scene_ingest/<video_name>/` - Per-video processing artifacts
 - Individual step logs (e.g., `Comms Decrypt.log`, `Visual Intel.log`)
 
-**Log Rotation**: Manual via `scripts/rotate_logs.py` (archives to `L:\_ARCHIVE\logs_YYYYMMDD/`)
+**Log Rotation**: Manual via `scripts/rotate_logs.py` (archives to `<GOODQ_DATA_ROOT>\archive\logs_YYYYMMDD/`)
 
 ---
 
@@ -234,7 +234,7 @@ Unattended monitoring with automatic restart:
 - Launches `run_ingestion.py` subprocess per video
 - Timeout protection (kills if hung >2 hours)
 - Exit code checking (logs failures, continues)
-- Moves processed files to `L:\_DATA\GoodQ_Data\processed/`
+- Moves processed files to `<GOODQ_DATA_ROOT>\GoodQ_Data\processed/`
 
 **Recovery Logic**:
 ```python

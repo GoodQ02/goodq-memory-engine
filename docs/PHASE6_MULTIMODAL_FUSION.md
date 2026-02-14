@@ -57,7 +57,7 @@ Phase 6 operates in **two sequential stages**:
 {
   "version": 1,
   "video_id": "01_1987-1988",
-  "video_path": "L:\\Videos\\01. 1987 - 1988.mp4",
+  "video_path": "<project_root>\\Videos\\01. 1987 - 1988.mp4",
   "total_scenes": 30,
   "total_duration": 1847.2,
   
@@ -139,7 +139,7 @@ Phase 6 operates in **two sequential stages**:
 | CLIP Embeddings | Qdrant collection: `goodq_clip_scenes` | Phase 6a (vector storage) |
 | DINO Embeddings | Qdrant collection: `goodq_dino_scenes` | Phase 6a (vector storage) |
 
-**Note**: Config specifies `L:/_DATA/GoodQ_Data/processing` but actual artifacts land in `logs/scene_ingest/`. Both locations are checked by harmonizer for fallback compatibility.
+**Note**: Config specifies `<GOODQ_DATA_ROOT>/GoodQ_Data/processing` but actual artifacts land in `logs/scene_ingest/`. Both locations are checked by harmonizer for fallback compatibility.
 
 ---
 
@@ -174,7 +174,7 @@ phase6:
 Phase 6 runs automatically after scene detection (Phase 5):
 
 ```powershell
-python -m cli.run_ingestion --input-dir L:\Videos\inbox
+python -m cli.run_ingestion --input-dir <GOODQ_DATA_ROOT>\videos\inbox
 ```
 
 Phase 6 is triggered when:
@@ -194,7 +194,7 @@ cfg = load_configs()
 # Phase 6a: Visual embeddings
 item = {
     'id': 'video_001',
-    'source_path': 'L:\\Videos\\sample.mp4'
+    'source_path': '<project_root>\\Videos\\sample.mp4'
 }
 embeddings_result = run_scene_visual_embeddings(item, cfg)
 
@@ -214,12 +214,12 @@ print(f"Temporal index: {temporal_index_path}")
 
 ```powershell
 # Check for scene manifest
-L:\goodq4all\logs\scene_ingest\01. 1987 - 1988\video\scene_manifest.json
+<project_root>\logs\scene_ingest\01. 1987 - 1988\video\scene_manifest.json
 Size: 4.8MB (30 scenes with embeddings)
 Last Modified: 12/14/25 02:48:26
 
 # Check for temporal index
-L:\goodq4all\logs\scene_ingest\01. 1987 - 1988\temporal_index.json
+<project_root>\logs\scene_ingest\01. 1987 - 1988\temporal_index.json
 Status: Generated after harmonization
 ```
 
@@ -318,10 +318,10 @@ Harmonizer extracts entities but doesn't yet resolve entity co-references across
 **Solution**:
 ```powershell
 # Check if scene detection ran
-Get-ChildItem L:\goodq4all\logs\scene_ingest\<video>\video\scene_manifest.json
+Get-ChildItem <project_root>\logs\scene_ingest\<video>\video\scene_manifest.json
 
 # If missing, re-run ingestion
-python -m cli.run_ingestion --input-dir L:\Videos\inbox
+python -m cli.run_ingestion --input-dir <GOODQ_DATA_ROOT>\videos\inbox
 ```
 
 ### Qdrant Connection Failed
@@ -395,3 +395,4 @@ phase6:
 
 **Last Updated**: December 15, 2025  
 **Verified Operational**: December 14, 2025 (30-scene video processed successfully)
+

@@ -12,7 +12,7 @@ Successfully integrated GPU-accelerated vLLM inference server running in WSL2 wi
 ```
 Windows (GoodQ4All Pipeline)
     ↓
-LLM Client (L:\goodq4all\lib\llm_client.py)
+LLM Client (<project_root>\lib\llm_client.py)
     ↓
 ┌─────────────────┬──────────────────┐
 │   PRIMARY       │    FALLBACK      │
@@ -41,7 +41,7 @@ LLM Client (L:\goodq4all\lib\llm_client.py)
 | Qwen-2.5-7B | vLLM | 8000 | 55 tok/s | 14.2 GB | 32K | Available |
 | Phi-4 | Ollama | 31434 | 70 tok/s | 8.4 GB | 16K | ✅ Active |
 
-### 3. Windows Integration (`L:\goodq4all\lib\llm_client.py`)
+### 3. Windows Integration (`<project_root>\lib\llm_client.py`)
 - **Automatic health checking** with 5-minute cache
 - **Intelligent model selection** by speed/quality/capability
 - **Failover chain** with exponential backoff
@@ -131,9 +131,9 @@ for line in response.iter_lines():
 ## Files Created/Modified
 
 ### New Files
-- `L:\goodq4all\lib\llm_client.py` - Production LLM client
-- `L:\goodq4all\scripts\test_llm_client.py` - Integration tests
-- `L:\goodq4all\docs\vllm-integration-complete.md` - This document
+- `<project_root>\lib\llm_client.py` - Production LLM client
+- `<project_root>\scripts\test_llm_client.py` - Integration tests
+- `<project_root>\docs\vllm-integration-complete.md` - This document
 
 ### WSL Files (~/vllm_server/)
 - `venv/` - Python 3.12 virtual environment
@@ -310,3 +310,4 @@ wsl
 **Mission Status: SUCCESS 🎯**
 
 The GoodQ4All pipeline now has production-grade GPU-accelerated LLM inference with automatic failover. Ready for full pipeline integration!
+

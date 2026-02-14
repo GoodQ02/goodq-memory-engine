@@ -641,7 +641,7 @@ logging.basicConfig(level=logging.DEBUG)
 
 ## 📞 Support
 
-- **Documentation**: `L:/goodq4all/docs/`
+- **Documentation**: `<project_root>/docs/`
 - **Issues**: Check logs in `data/logs/`
 - **Testing**: Run `python lib/llm_client.py`
 

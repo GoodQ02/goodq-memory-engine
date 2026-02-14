@@ -1,4 +1,5 @@
 # GoodQ Model Lockdown Status
+> ⚠ Historical planning document — contains legacy path references.
 
 **Date**: October 6, 2025  
 **Status**: ✅ **LOCKED AND VERIFIED**
@@ -55,9 +56,9 @@ Status: PASSED - All models properly pinned!
 
 | Tool | Path | Status |
 |------|------|--------|
-| FFmpeg | L:\_TOOLS\ffmpeg\bin\ffmpeg.exe | ✅ Found |
-| Tesseract OCR | L:\_TOOLS\tesseract\tesseract.exe | ✅ Found |
-| Poppler PDF | L:\_TOOLS\poppler\bin | ✅ Found |
+| FFmpeg | <project_root>\tools\ffmpeg\bin\ffmpeg.exe | ✅ Found |
+| Tesseract OCR | <project_root>\tools\tesseract\tesseract.exe | ✅ Found |
+| Poppler PDF | <project_root>\tools\poppler\bin | ✅ Found |
 
 ## Update Policy
 

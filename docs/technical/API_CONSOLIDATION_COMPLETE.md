@@ -81,7 +81,7 @@ This starts:
 
 ### Option 2: API Server Only
 ```batch
-cd L:\goodq4all\api
+cd <project_root>\api
 uvicorn main:app --host 0.0.0.0 --port 30000 --reload
 ```
 
@@ -108,7 +108,7 @@ The following files are **deprecated** and will raise errors if executed:
 - `api/processing_stats.py` ⚠️  
 - `api/processing_api.py` ⚠️
 
-**Backups:** `L:\goodq4all\api\_deprecated_backup_20251118_222920\`
+**Backups:** `<project_root>\api\_deprecated_backup_20251118_222920\`
 
 All functionality has been migrated to `api/main.py`.
 
@@ -192,7 +192,7 @@ async def your_endpoint():
 
 ### Updating Dependencies
 ```bash
-cd L:\goodq4all
+cd <project_root>
 pip install -r requirements.txt
 ```
 
@@ -226,3 +226,4 @@ pip install -r requirements.txt
 5. Add authentication/authorization layer
 
 🚀 **Ready for production use!**
+

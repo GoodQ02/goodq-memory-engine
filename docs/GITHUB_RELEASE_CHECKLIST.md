@@ -1,4 +1,5 @@
 # 🚀 GitHub Release Checklist
+> ⚠ Historical planning document — contains legacy path references.
 
 **Date:** December 15, 2025  
 **Version:** 2.0.0 (Scene-First, Unified Environment, Dual Audio)  
@@ -125,10 +126,10 @@
 - [x] No stale "Nov 28" failure references
 
 **Paths:**
-- [x] Unified data root: L:\_DATA\GoodQ_Data\
+- [x] Unified data root: <GOODQ_DATA_ROOT>\GoodQ_Data\
 - [x] Scene artifacts: logs/scene_ingest/
 - [x] WSL2 output: \\wsl.localhost\Ubuntu\...\goodq_audio\
-- [x] No old "L:/goodq4all/data/" references
+- [x] No old "<project_root>/data/" references
 
 **Ports:**
 - [x] Qdrant: 6333 (not 8000 or 6333)
@@ -217,7 +218,7 @@
 
 ```powershell
 # Navigate to repo
-cd L:\goodq4all
+cd <project_root>
 
 # Check git status
 git status
@@ -359,3 +360,4 @@ git push origin v2.0.0
 **Prepared by:** Copilot CLI Documentation Agent  
 **Verification Date:** December 14, 2025  
 **Release Date:** December 15, 2025
+

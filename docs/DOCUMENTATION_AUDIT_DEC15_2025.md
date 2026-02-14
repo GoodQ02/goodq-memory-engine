@@ -119,8 +119,8 @@ Complete documentation refresh based on dual forensic audits (Windows + WSL2) co
 - **Scene Audio:** `logs/scene_ingest/<video>/audio/scene_XXXX.wav`
 - **Scene Keyframes:** `logs/scene_ingest/<video>/video/scene_XXXX.jpg`
 - **WSL2 Output:** `\\wsl.localhost\Ubuntu\home\joesdomingo\goodq_audio\output\result.json`
-- **Memory DB:** `L:\_DATA\GoodQ_Data\memory.db`
-- **Knowledge Graph:** `L:\_DATA\GoodQ_Data\knowledge_graph.db`
+- **Memory DB:** `<GOODQ_DATA_ROOT>\GoodQ_Data\memory.db`
+- **Knowledge Graph:** `<GOODQ_DATA_ROOT>\GoodQ_Data\knowledge_graph.db`
 - **Qdrant Collections:** `goodq_text`, `goodq_image`, `goodq_audio`
 
 ---

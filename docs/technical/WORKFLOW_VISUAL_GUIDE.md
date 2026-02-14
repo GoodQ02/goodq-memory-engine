@@ -80,7 +80,7 @@ Option B: MANUAL
 
 ┌────────────────────────────────────┐
 │  conda activate goodq_zenml        │
-│  cd L:\goodq4all                 │
+│  cd <project_root>                 │
 │  python cli\run_ingestion.py \    │
 │    --video "path\to\video.mp4"     │
 └────────────┬───────────────────────┘
@@ -175,7 +175,7 @@ Option B: MANUAL
                         DATA STORAGE LAYOUT
 ═══════════════════════════════════════════════════════════════════════
 
-L:\_DATA\GoodQ_Data\
+<GOODQ_DATA_ROOT>\GoodQ_Data\
 │
 ├── databases/
 │   ├── memory.db              ← SQLite: Scenes, metadata, embeddings
@@ -337,26 +337,26 @@ Each environment:
 ═══════════════════════════════════════════════════════════════════════
 
 🚀 Launchers
-   L:\goodq4all\LAUNCH_GOODQ.bat       - Start everything
-   L:\goodq4all\START_WATCHDOG.bat     - Auto-processing
-   L:\goodq4all\STOP_GOODQ.bat         - Stop services
+   <project_root>\LAUNCH_GOODQ.bat       - Start everything
+   <project_root>\START_WATCHDOG.bat     - Auto-processing
+   <project_root>\STOP_GOODQ.bat         - Stop services
 
 📥 Input
-   L:\goodq4all\import_inbox\          - Drop files here
+   <project_root>\import_inbox\          - Drop files here
 
 🔧 Scripts
-   L:\goodq4all\scripts\
+   <project_root>\scripts\
       command_center.ps1                 - Dashboard
       verify_project_readiness.ps1       - Health check
       check_production_status.py         - Status report
 
 💾 Databases
-   L:\_DATA\GoodQ_Data\databases\
+   <GOODQ_DATA_ROOT>\GoodQ_Data\databases\
       memory.db                          - Main database
       knowledge_graph.db                 - Graph database
 
 📊 Logs
-   L:\_DATA\GoodQ_Data\logs\
+   <GOODQ_DATA_ROOT>\GoodQ_Data\logs\
       step_runs.jsonl                    - Processing log
       watchdog.log                       - File monitor log
 
@@ -389,3 +389,4 @@ For troubleshooting, see docs/TROUBLESHOOTING.md
 For API usage, see http://localhost:30000/docs
 
 ═══════════════════════════════════════════════════════════════════════
+

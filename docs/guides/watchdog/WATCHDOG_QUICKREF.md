@@ -21,7 +21,7 @@ Drop files in `import_inbox/`, watchdog auto-processes them.
 ## Drop Zone
 
 ```
-L:\goodq4all\import_inbox\
+<project_root>\import_inbox\
 ```
 
 ---
@@ -81,24 +81,24 @@ Get-Process python | Where-Object {$_.CommandLine -like '*watchdog*'}
 
 ### View Live Logs
 ```powershell
-Get-Content L:\goodq4all\logs\watchdog.log -Wait -Tail 20
+Get-Content <project_root>\logs\watchdog.log -Wait -Tail 20
 ```
 
 ### Check Registry
 ```powershell
-Get-Content L:\goodq4all\logs\watchdog_state.json | ConvertFrom-Json
+Get-Content <project_root>\logs\watchdog_state.json | ConvertFrom-Json
 ```
 
 ### Count Files
 ```powershell
 # Inbox
-(Get-ChildItem L:\goodq4all\import_inbox -File).Count
+(Get-ChildItem <project_root>\import_inbox -File).Count
 
 # Processed
-(Get-ChildItem L:\goodq4all\data\processed -File).Count
+(Get-ChildItem <project_root>\data\processed -File).Count
 
 # Failed
-(Get-ChildItem L:\goodq4all\data\failed -File).Count
+(Get-ChildItem <project_root>\data\failed -File).Count
 ```
 
 ---

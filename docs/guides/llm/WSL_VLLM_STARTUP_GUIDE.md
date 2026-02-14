@@ -75,7 +75,7 @@ curl http://localhost:38005/v1/models
 curl http://localhost:31434/v1/models
 
 # Run full LLM client test
-python L:\goodq4all\scripts\test_llm_client.py
+python <project_root>\scripts\test_llm_client.py
 ```
 
 ---
@@ -119,3 +119,4 @@ Once manual startup is working:
 3. Set up auto-start on WSL boot
 
 For now, the manual method works and proves the infrastructure is healthy.
+

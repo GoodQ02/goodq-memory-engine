@@ -18,7 +18,7 @@ Open your browser to: **http://localhost:30000**
 The API server serves the UI at the root URL.
 
 ### ❌ **WRONG WAY:**
-Do NOT open: `file:///L:/goodq4all/index.html`
+Do NOT open: `file:///<project_root>/index.html`
 
 Why? Relative URLs (`/api/chat`) don't work from `file://` protocol.
 
@@ -110,7 +110,7 @@ START_WATCHDOG.bat
 ```
 
 **What it does:**
-- Watches `L:\goodq4all\import_inbox\`
+- Watches `<project_root>\import_inbox\`
 - Detects new video/audio/image files
 - Automatically processes them through the pipeline
 - Uses deduplication (SHA-256 hash)
@@ -146,7 +146,7 @@ START_WATCHDOG.bat
 **Method 2: Manual Processing**
 ```batch
 conda activate goodq_zenml
-python cli\run_ingestion.py L:\goodq4all\import_inbox\sample.mp4
+python cli\run_ingestion.py <project_root>\import_inbox\sample.mp4
 ```
 
 **Method 3: Full System**
@@ -220,3 +220,4 @@ START_WATCHDOG.bat
 ---
 
 **Next:** Tell me what you see when you open http://localhost:30000 and try to chat!
+

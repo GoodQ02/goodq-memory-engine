@@ -64,9 +64,9 @@ python -m cli.run_ingestion --input-dir smoke_inbox --force-reprocess
 ```
 
 **Output Locations:**
-- **Scene artifacts:** `L:\goodq4all\logs\scene_ingest\<video_name>\`
-- **Memory database:** `L:\_DATA\GoodQ_Data\memory.db`
-- **Knowledge graph:** `L:\_DATA\GoodQ_Data\knowledge_graph.db`
+- **Scene artifacts:** `<project_root>\logs\scene_ingest\<video_name>\`
+- **Memory database:** `<GOODQ_DATA_ROOT>\GoodQ_Data\memory.db`
+- **Knowledge graph:** `<GOODQ_DATA_ROOT>\GoodQ_Data\knowledge_graph.db`
 - **Vector store:** Qdrant at `localhost:6333`
 
 ---
@@ -86,7 +86,7 @@ python -m cli.watchdog [OPTIONS]
 - `--no-agent`: Disable AI Control Agent integration
 
 **What It Does:**
-1. Watches configured inbox directory (default: `L:\goodq4all\smoke_inbox`)
+1. Watches configured inbox directory (default: `<project_root>\smoke_inbox`)
 2. Detects new video files (mp4, avi, mkv, mov, webm, flv)
 3. Calculates file hash to avoid duplicates
 4. Automatically triggers `run_ingestion` for new files
@@ -110,7 +110,7 @@ python -m cli.watchdog --poll-interval 60
 python -m cli.watchdog --no-agent
 ```
 
-**Logs:** `L:\goodq4all\logs\watchdog.log`
+**Logs:** `<project_root>\logs\watchdog.log`
 
 ---
 
@@ -152,7 +152,7 @@ python -m cli.system_status
 ENVIRONMENT STATUS
 ================================================================================
 Python: 3.11.9
-Repo Root: L:\goodq4all
+Repo Root: <project_root>
 Python Path Includes Repo: True
 
 Critical Dependencies:
@@ -166,7 +166,7 @@ Critical Dependencies:
 ================================================================================
 CONFIGURATION STATUS
 ================================================================================
-Config file: L:\goodq4all\config.yaml
+Config file: <project_root>\config.yaml
   ✅ Valid YAML
   ✅ Schema validated
 ...
@@ -325,7 +325,7 @@ python -m cli.memory backup
 **Output:**
 ```json
 {
-  "backup_dir": "L:\\goodq4all\\logs\\backups\\memory_backup_20251215_033900"
+  "backup_dir": "<project_root>\\logs\\backups\\memory_backup_20251215_033900"
 }
 ```
 
@@ -399,7 +399,7 @@ python -m cli.list_inbox
 
 **Output:**
 ```
-Files in inbox: L:\goodq4all\smoke_inbox
+Files in inbox: <project_root>\smoke_inbox
 
 ✅ interview.mp4 (processed: 2025-12-14 15:23:45)
 ⏳ lecture.mp4 (pending)
@@ -459,11 +459,11 @@ All CLI commands respect settings in `config.yaml`. Key paths:
 
 ```yaml
 paths:
-  import_inbox: "L:/goodq4all/smoke_inbox"
-  db_path: "L:/_DATA/GoodQ_Data/memory.db"
-  kg_db_path: "L:/_DATA/GoodQ_Data/knowledge_graph.db"
-  processing: "L:/_DATA/GoodQ_Data/processing"
-  log_dir: "L:/goodq4all/logs"
+  import_inbox: "<project_root>/smoke_inbox"
+  db_path: "<GOODQ_DATA_ROOT>/GoodQ_Data/memory.db"
+  kg_db_path: "<GOODQ_DATA_ROOT>/GoodQ_Data/knowledge_graph.db"
+  processing: "<GOODQ_DATA_ROOT>/GoodQ_Data/processing"
+  log_dir: "<project_root>/logs"
 
 qdrant:
   host: "localhost"

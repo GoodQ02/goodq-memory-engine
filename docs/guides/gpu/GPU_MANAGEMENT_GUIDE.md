@@ -64,9 +64,9 @@ GPUManager.clear_cache()
 CUDA_VISIBLE_DEVICES=0
 
 # Model caching
-HF_HOME=L:/models
-TORCH_HOME=L:/models
-TRANSFORMERS_CACHE=L:/models/transformers
+HF_HOME=<GOODQ_DATA_ROOT>/models
+TORCH_HOME=<GOODQ_DATA_ROOT>/models
+TRANSFORMERS_CACHE=<GOODQ_DATA_ROOT>/models/transformers
 
 # Deterministic behavior
 PYTHONHASHSEED=1337

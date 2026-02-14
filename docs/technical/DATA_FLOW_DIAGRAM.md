@@ -319,7 +319,7 @@ All ✅ require memory_writer.py to be integrated!
 ## 💾 STORAGE LOCATIONS
 
 ```
-L:\ (Project Drive)
+<project_root>\ (Project Drive)
 │
 ├─ GoodQ_Data/              # ← Main data directory
 │  ├─ memory.db             # ← Actual location!

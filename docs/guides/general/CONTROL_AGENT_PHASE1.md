@@ -1,4 +1,5 @@
 # Control Agent - Phase 1 Setup Complete! 🎉
+> ⚠ Historical planning document — contains legacy path references.
 
 ## ✅ What's Been Implemented
 
@@ -10,7 +11,7 @@
 - **Report Generation**: Creates markdown diagnostic reports
 
 ### 2. Memory Database Schema
-Located: `L:\goodq4all\data\agent_checkpoints\control_memory.db`
+Located: `<project_root>\data\agent_checkpoints\control_memory.db`
 
 **Tables**:
 - `error_memory`: Tracks all errors and recovery attempts
@@ -88,9 +89,9 @@ To test the agent with a real error:
 
 1. Create a test log with errors:
 ```bash
-mkdir -p L:\goodq4all\data\workflow_logs
-echo "[ERROR] CUDA out of memory" > L:\goodq4all\data\workflow_logs\test_error.log
-echo "[WARNING] PyAnnote model not found" >> L:\goodq4all\data\workflow_logs\test_error.log
+mkdir -p <project_root>\data\workflow_logs
+echo "[ERROR] CUDA out of memory" > <project_root>\data\workflow_logs\test_error.log
+echo "[WARNING] PyAnnote model not found" >> <project_root>\data\workflow_logs\test_error.log
 ```
 
 2. Run the agent:
@@ -98,7 +99,7 @@ echo "[WARNING] PyAnnote model not found" >> L:\goodq4all\data\workflow_logs\tes
 python scripts/run_control_agent.py
 ```
 
-3. Check the generated report in `L:\goodq4all\reports\`
+3. Check the generated report in `<project_root>\reports\`
 
 ---
 
@@ -115,3 +116,4 @@ The agent automatically:
 ---
 
 *Built with ❤️ for GoodQ4All by the Control Agent team*
+

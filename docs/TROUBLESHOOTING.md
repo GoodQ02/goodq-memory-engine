@@ -99,7 +99,7 @@ Connection refused (port 6333)
 Get-Process qdrant -ErrorAction SilentlyContinue
 
 # If not running, start it:
-cd L:\goodq4all\vendor\qdrant
+cd <project_root>\vendor\qdrant
 .\qdrant.exe
 
 # Or use the launcher:
@@ -235,10 +235,10 @@ knowledge_graph.db file size not growing
 **Check:**
 ```powershell
 # Verify KG database exists
-Test-Path "L:\_DATA\GoodQ_Data\knowledge_graph.db"
+Test-Path "<GOODQ_DATA_ROOT>\GoodQ_Data\knowledge_graph.db"
 
 # Check file size
-Get-Item "L:\_DATA\GoodQ_Data\knowledge_graph.db" | Select-Object Name, Length, LastWriteTime
+Get-Item "<GOODQ_DATA_ROOT>\GoodQ_Data\knowledge_graph.db" | Select-Object Name, Length, LastWriteTime
 
 # Verify entities are being extracted
 Get-Content "logs\*.log" | Select-String "entity"
@@ -302,17 +302,17 @@ wsl tail -f ~/goodq_audio/logs/audio_service.log
 Get-Content "logs\*.log" -Tail 100 | Select-String "entity"
 
 # Knowledge graph updates
-Get-Item "L:\_DATA\GoodQ_Data\knowledge_graph.db" | Select-Object Name, Length, LastWriteTime
+Get-Item "<GOODQ_DATA_ROOT>\GoodQ_Data\knowledge_graph.db" | Select-Object Name, Length, LastWriteTime
 ```
 
 ### Check Databases
 
 ```powershell
 # Memory DB
-Get-Item "L:\_DATA\GoodQ_Data\memory.db" | Select-Object Name, Length, LastWriteTime
+Get-Item "<GOODQ_DATA_ROOT>\GoodQ_Data\memory.db" | Select-Object Name, Length, LastWriteTime
 
 # Knowledge Graph DB
-Get-Item "L:\_DATA\GoodQ_Data\knowledge_graph.db" | Select-Object Name, Length, LastWriteTime
+Get-Item "<GOODQ_DATA_ROOT>\GoodQ_Data\knowledge_graph.db" | Select-Object Name, Length, LastWriteTime
 
 # Qdrant collections
 Invoke-WebRequest http://localhost:6333/collections | ConvertFrom-Json
@@ -372,13 +372,13 @@ pip install -r requirements.txt
 Get-Process qdrant | Stop-Process -Force
 
 # Backup data (optional)
-Copy-Item "L:\_DATA\qdrant_storage" "L:\_DATA\qdrant_storage_backup" -Recurse
+Copy-Item "<GOODQ_DATA_ROOT>\qdrant_storage" "<GOODQ_DATA_ROOT>\qdrant_storage_backup" -Recurse
 
 # Delete collections
-Remove-Item "L:\_DATA\qdrant_storage\collections\*" -Recurse -Force
+Remove-Item "<GOODQ_DATA_ROOT>\qdrant_storage\collections\*" -Recurse -Force
 
 # Start Qdrant
-cd L:\goodq4all\vendor\qdrant
+cd <project_root>\vendor\qdrant
 .\qdrant.exe
 
 # Reinitialize
@@ -433,7 +433,7 @@ pwsh scripts/prepare_step_envs.ps1 -EnvPrefix goodq -Steps <step> -LinkProject
 ```powershell
 # Full cleanup
 .\STOP_GOODQ.bat
-Remove-Item L:\goodq4all\logs\*.tmp -Force -ErrorAction SilentlyContinue
+Remove-Item <project_root>\logs\*.tmp -Force -ErrorAction SilentlyContinue
 timeout /t 3
 
 # Fresh start
@@ -484,7 +484,7 @@ Get-Process | Where-Object { $_.ProcessName -like "*python*" } | Stop-Process -F
 
 # 2. Clear temp files
 Remove-Item $env:TEMP\__conda_tmp_* -Force -ErrorAction SilentlyContinue
-Remove-Item L:\goodq4all\logs\*.tmp -Force -ErrorAction SilentlyContinue
+Remove-Item <project_root>\logs\*.tmp -Force -ErrorAction SilentlyContinue
 
 # 3. Verify conda
 conda --version
@@ -508,7 +508,7 @@ pwsh scripts/run_full_dry_run.ps1
 # Check syntax
 $errors = $null
 [System.Management.Automation.Language.Parser]::ParseFile(
-    "L:\goodq4all\scripts\command_center.ps1",
+    "<project_root>\scripts\command_center.ps1",
     [ref]$null, [ref]$errors
 )
 $errors
@@ -607,13 +607,13 @@ ERROR: Failed building wheel for dlib
 # 1. Download from https://cmake.org/download/
 # 2. Add CMake to system PATH
 # 3. Run repair script
-L:\goodq4all\scripts\emergency_conda_repair.ps1
+<project_root>\scripts\emergency_conda_repair.ps1
 ```
 
 **Option B: Use Alternative**
 Replace face-recognition with `insightface`, `deepface`, or `mediapipe` (no CMake needed)
 
-**More Info:** See `L:\goodq4all\envs\face_embed\KNOWN_ISSUES.md`
+**More Info:** See `<project_root>\envs\face_embed\KNOWN_ISSUES.md`
 
 ---
 
@@ -715,7 +715,7 @@ Get-Content "logs\*.log" -Tail 100 > diagnostic_logs.txt
 wsl tail -100 ~/goodq_audio/logs/audio_service.log >> diagnostic_logs.txt
 
 # Database status
-Get-Item "L:\_DATA\GoodQ_Data\*.db" | Select-Object Name, Length, LastWriteTime > diagnostic_db.txt
+Get-Item "<GOODQ_DATA_ROOT>\GoodQ_Data\*.db" | Select-Object Name, Length, LastWriteTime > diagnostic_db.txt
 `
 
 ---
@@ -741,8 +741,8 @@ Before reporting issues, verify:
   - [ ] Qdrant collections initialized (`Invoke-WebRequest http://localhost:6333/collections`)
 
 - [ ] **Data Paths Exist**
-  - [ ] `L:\_DATA\GoodQ_Data\` directory exists
-  - [ ] `L:\_DATA\GoodQ_Data\import_inbox\` for input files
+  - [ ] `<GOODQ_DATA_ROOT>\GoodQ_Data\` directory exists
+  - [ ] `<GOODQ_DATA_ROOT>\GoodQ_Data\import_inbox\` for input files
   - [ ] `logs\scene_ingest\` for scene artifacts
   - [ ] WSL2: `~/goodq_audio/` for audio processing
 

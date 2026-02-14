@@ -1,4 +1,5 @@
 # GoodQ4All Pipeline Diagnosis - 2025-11-11
+> ⚠ Historical planning document — contains legacy path references.
 
 ## Executive Summary
 
@@ -63,7 +64,7 @@ STATUS_INSUFFICIENT_RESOURCES
 ### Success with Small Files
 ```
 manual_debug_test.log:
-[OK] Found sample video: L:\goodq4all\data\testing\test_input\sample.mp4
+[OK] Found sample video: <project_root>\data\testing\test_input\sample.mp4
 Exit code: 0
 [SUCCESS]
 ```
@@ -195,11 +196,11 @@ services:
 ### Step 1: Test with Chunked Videos (TONIGHT)
 ```powershell
 # Split one video into 10-minute chunks
-cd L:\_DATA\FAMILY_FEAST
+cd <GOODQ_DATA_ROOT>\FAMILY_FEAST
 ffmpeg -i "01. 1987 - 1988.mp4" -c copy -map 0 -segment_time 600 -f segment -reset_timestamps 1 "chunks\01_part_%03d.mp4"
 
 # Copy chunks to import_inbox
-Copy-Item chunks\*.mp4 L:\goodq4all\import_inbox\
+Copy-Item chunks\*.mp4 <project_root>\import_inbox\
 ```
 
 ### Step 2: Monitor Resource Usage
@@ -273,3 +274,4 @@ Once a chunk processes successfully:
 - SceneDetect memory: https://github.com/Breakthrough/PySceneDetect/issues/164
 - Whisper large file: https://github.com/openai/whisper/discussions/670
 - Pyannote chunking: https://github.com/pyannote/pyannote-audio/discussions/1162
+

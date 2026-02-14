@@ -1,5 +1,5 @@
 # goodq4all Quick Reference Card
-**Version**: 1.4.0 | **Status**: Production Ready | **Location**: `L:\goodq4all\`
+**Version**: 1.4.0 | **Status**: Production Ready | **Location**: `<project_root>\`
 
 ---
 
@@ -7,13 +7,13 @@
 
 ```bash
 # Launch everything (API + Command Center + Docs)
-L:\goodq4all\LAUNCH_GOODQ.bat
+<project_root>\LAUNCH_GOODQ.bat
 
 # Start watchdog (auto-ingestion)
-L:\goodq4all\START_WATCHDOG.bat
+<project_root>\START_WATCHDOG.bat
 
 # Stop all services
-L:\goodq4all\STOP_GOODQ.bat
+<project_root>\STOP_GOODQ.bat
 ```
 
 ---
@@ -22,12 +22,12 @@ L:\goodq4all\STOP_GOODQ.bat
 
 | Location | Purpose |
 |----------|---------|
-| `L:\goodq4all\` | Main codebase (GitHub synced) |
-| `L:\_DATA\GoodQ_Data\` | Databases & exports |
-| `L:\_WORKSPACE\` | Processing workspace |
-| `L:\models\` | HuggingFace cache |
-| `L:\_TOOLS\` | External tools |
-| `L:\_ARCHIVE\` | Old versions |
+| `<project_root>\` | Main codebase (GitHub synced) |
+| `<GOODQ_DATA_ROOT>\GoodQ_Data\` | Databases & exports |
+| `<project_root>\_WORKSPACE\` | Processing workspace |
+| `<GOODQ_DATA_ROOT>\models (See LEGACY_PATHS_DEPRECATED.md)\` | HuggingFace cache |
+| `<project_root>\tools\` | External tools |
+| `<GOODQ_DATA_ROOT>\archive\` | Old versions |
 
 ---
 
@@ -39,7 +39,7 @@ L:\goodq4all\STOP_GOODQ.bat
 conda run -n goodq_zenml python -m goodq4all.cli.run_ingestion <video_path>
 
 # Auto-ingestion (drop files in)
-# → L:\goodq4all\import_inbox\
+# → <project_root>\import_inbox\
 ```
 
 ### Health Checks
@@ -69,10 +69,10 @@ conda run -n goodq_zenml python scripts\clear_databases.py
 ### Monitoring
 ```bash
 # Command center dashboard
-cd L:\goodq4all && pwsh scripts\command_center.ps1
+cd <project_root> && pwsh scripts\command_center.ps1
 
 # Watch logs
-Get-Content L:\_DATA\GoodQ_Data\logs\step_runs.jsonl -Tail 20 -Wait
+Get-Content <GOODQ_DATA_ROOT>\GoodQ_Data\logs\step_runs.jsonl -Tail 20 -Wait
 
 # Watchdog status
 pwsh scripts\watchdog_status.ps1 -Follow
@@ -102,7 +102,7 @@ pwsh scripts\watchdog_status.ps1 -Follow
 
 ### Drop & Process Video
 1. Ensure watchdog is running: `START_WATCHDOG.bat`
-2. Drop video in: `L:\goodq4all\import_inbox\`
+2. Drop video in: `<project_root>\import_inbox\`
 3. Monitor: `pwsh scripts\watchdog_status.ps1 -Follow`
 
 ### Manual Processing
@@ -175,7 +175,7 @@ conda run -n goodq_zenml python scripts\clear_databases.py
 - **Models**: Locked with commit hashes
 - **Datasets**: 60+ cached datasets
 - **GPU**: CUDA 12.1 support
-- **Storage**: Centralized in L:\_DATA\
+- **Storage**: Centralized in <GOODQ_DATA_ROOT>\
 
 ---
 
@@ -191,7 +191,7 @@ conda run -n goodq_zenml python scripts\clear_databases.py
 
 ## 🔐 Safety Reminders
 
-- ✅ All data in `L:\_DATA\` (backed up separately)
+- ✅ All data in `<GOODQ_DATA_ROOT>\` (backed up separately)
 - ✅ Old `GoodQ_4_All\` preserved as backup
 - ✅ Git history intact
 - ✅ Environments isolated (no conflicts)
@@ -203,13 +203,13 @@ conda run -n goodq_zenml python scripts\clear_databases.py
 
 ```bash
 # Stop everything
-L:\goodq4all\STOP_GOODQ.bat
+<project_root>\STOP_GOODQ.bat
 
 # Kill all Python
 Get-Process python | Stop-Process -Force
 
 # Rollback to old version (if needed)
-cd L:\GoodQ_4_All
+cd <project_root>
 
 # Clear port 8000
 netstat -ano | findstr :8000
@@ -221,8 +221,8 @@ taskkill /PID <pid> /F
 ## 📞 Quick Links
 
 - **GitHub**: https://github.com/JoesDomingo/Goodq4all
-- **Local**: `L:\goodq4all\`
-- **Data**: `L:\_DATA\GoodQ_Data\`
+- **Local**: `<project_root>\`
+- **Data**: `<GOODQ_DATA_ROOT>\GoodQ_Data\`
 
 ---
 

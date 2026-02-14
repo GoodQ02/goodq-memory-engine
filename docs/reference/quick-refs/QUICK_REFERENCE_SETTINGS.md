@@ -68,12 +68,13 @@ max_workers: 1               # Parallel workers
 
 ## Files to Monitor
 
-- `L:\goodq4all\logs\[workspace]\step_log.jsonl` - Step execution
-- `L:\goodq4all\logs\watchdog.log` - Watchdog activity
-- `L:\goodq4all\data\memory.db` - Main database
-- `L:\goodq4all\data\graph\goodq_graph.json` - Knowledge graph
+- `<project_root>\logs\[workspace]\step_log.jsonl` - Step execution
+- `<project_root>\logs\watchdog.log` - Watchdog activity
+- `<project_root>\data\memory.db` - Main database
+- `<project_root>\data\graph\goodq_graph.json` - Knowledge graph
 
 ---
 
 **Last Updated**: 2025-10-12  
 **Status**: Optimized for long-form home video processing
+

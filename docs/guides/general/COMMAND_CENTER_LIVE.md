@@ -81,12 +81,12 @@
 ### Technical Details
 
 **API Implementation:**
-- Located in: `L:\goodq4all\api_server.py` (line ~1015)
+- Located in: `<project_root>\api_server.py` (line ~1015)
 - Reads from: watchdog.log, memory.db, knowledge_graph.db
 - Returns: JSON with full system state
 
 **UI Implementation:**
-- Located in: `L:\goodq4all\index.html`
+- Located in: `<project_root>\index.html`
 - CSS classes: `.command-center`, `.cc-*`
 - Auto-refresh: setInterval(updateCommandCenter, 5000)
 - Clean navigation: hides/shows based on view selection
@@ -167,3 +167,4 @@
 The Command Center is now **LIVE and FUNCTIONAL**. This serves as your "canary in the coal mine" - a real-time view into system health and processing status. All wires are connected, data is flowing, and you can see exactly what's happening at any moment.
 
 **Refresh your browser at http://localhost:30000 and click "🔴 Command Center" to see it in action!**
+

@@ -1,4 +1,13 @@
+⚠ Historical planning document.
+
+Contains legacy absolute path examples reflecting the system state at time of writing.
+Active runtime documentation uses environment abstractions:
+<project_root>, <GOODQ_DATA_ROOT>, <GOODQ_WSL_WORKSPACE>.
+
 # 🚀 LLM INTEGRATION - PHASE 1 IMPLEMENTATION PLAN
+
+> ⚠ Historical planning document — contains legacy path references.
+
 **Created:** 2025-11-08  
 **Mission:** Enable LLM intelligence throughout GoodQ pipeline  
 **Starting Status:** LLMs available but DISABLED in pipeline
@@ -11,7 +20,7 @@
 1. **LM Studio Running** - localhost:1234 with qwen2.5-7b-instruct
 2. **Scene Summarization Code** - EXISTS but `use_llm=False` (line 56 in apply_scene_summaries.py)
 3. **Model Caches** - Scattered across THREE locations:
-   - `L:\models\` (primary HuggingFace cache)
+   - `<GOODQ_DATA_ROOT>\models (See LEGACY_PATHS_DEPRECATED.md)\` (primary HuggingFace cache)
    - `L:\_DATA\models\` (duplicate cache)
    - Various tool directories
 
@@ -31,27 +40,27 @@
 ## 🎯 PHASE 1: ENABLE CORE LLM FEATURES
 
 ### Step 1: Unify Model Cache (10 min)
-**Problem:** Models scattered across L:\models, L:\_DATA\models, and tool dirs  
+**Problem:** Models scattered across <GOODQ_DATA_ROOT>\models (See LEGACY_PATHS_DEPRECATED.md), L:\_DATA\models, and tool dirs  
 **Solution:** Consolidate to single cache, set environment variables
 
 **Actions:**
 ```powershell
 # Set HuggingFace cache to unified location
-$env:HF_HOME = "L:\models"
-$env:TRANSFORMERS_CACHE = "L:\models\transformers"
-$env:HF_DATASETS_CACHE = "L:\models\datasets"
+$env:HF_HOME = "<GOODQ_DATA_ROOT>\models (See LEGACY_PATHS_DEPRECATED.md)"
+$env:TRANSFORMERS_CACHE = "<GOODQ_DATA_ROOT>\models (See LEGACY_PATHS_DEPRECATED.md)\transformers"
+$env:HF_DATASETS_CACHE = "<GOODQ_DATA_ROOT>\models (See LEGACY_PATHS_DEPRECATED.md)\datasets"
 
 # Add to .env.local permanently
 @"
-HF_HOME=L:/models
-TRANSFORMERS_CACHE=L:/models/transformers
-HF_DATASETS_CACHE=L:/models/datasets
-TORCH_HOME=L:/models/torch
+HF_HOME=<GOODQ_DATA_ROOT>/models
+TRANSFORMERS_CACHE=<GOODQ_DATA_ROOT>/models/transformers
+HF_DATASETS_CACHE=<GOODQ_DATA_ROOT>/models/datasets
+TORCH_HOME=<GOODQ_DATA_ROOT>/models/torch
 "@ | Add-Content L:\goodq4all\.env.local
 ```
 
 **Verification:**
-- Check that models load from L:\models only
+- Check that models load from <GOODQ_DATA_ROOT>\models (See LEGACY_PATHS_DEPRECATED.md) only
 - Archive L:\_DATA\models to L:\_archive\old_model_cache
 
 ---
@@ -309,7 +318,7 @@ print("TEST 2: Scene Summarization (LLM Mode)")
 print("="*80)
 
 cfg = {
-    'paths': {'db_path': 'L:/goodq4all/data/memory.db'},
+    'paths': {'db_path': '<project_root>/data/memory.db'},
     'llm': {'api_url': 'http://localhost:1234/v1/chat/completions'}
 }
 

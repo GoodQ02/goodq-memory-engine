@@ -106,7 +106,7 @@ VAD requires PyTorch, TorchAudio, and SoundFile in the audio_diarize environment
 Run the installation script:
 
 ```bash
-L:\goodq4all\scripts\install_vad.bat
+<project_root>\scripts\install_vad.bat
 ```
 
 This will:
@@ -123,7 +123,7 @@ Test the VAD implementation:
 
 ```bash
 conda activate goodq_audio_diarize
-python L:\goodq4all\tests\test_vad_diarization.py
+python <project_root>\tests\test_vad_diarization.py
 ```
 
 The test script will:
@@ -310,3 +310,4 @@ VAD preprocessing is a **game-changer** for audio diarization:
 ✓ **Easy to configure** - enabled by default with smart defaults  
 
 The optimization is **transparent** - just enable it in config and enjoy faster, more accurate diarization!
+

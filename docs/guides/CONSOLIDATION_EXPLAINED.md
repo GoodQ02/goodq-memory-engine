@@ -324,7 +324,7 @@ git checkout HEAD~1 pipelines/ingest_multimodal_conda.py
 - GPU memory usage (should be similar or better)
 
 **Where to look:**
-- Check logs: `L:\_DATA\GoodQ_Data\logs\step_runs.jsonl`
+- Check logs: `<GOODQ_DATA_ROOT>\GoodQ_Data\logs\step_runs.jsonl`
 - Look for: `"env": "goodq_core"` in step logs
 - Verify: All steps complete successfully
 
@@ -551,7 +551,7 @@ You now have a **simpler, faster, more maintainable** pipeline:
 
 ### For Testing
 - `test_consolidation.py` → Validation test suite
-- `L:\_DATA\GoodQ_Data\logs\step_runs.jsonl` → Step execution logs
+- `<GOODQ_DATA_ROOT>\GoodQ_Data\logs\step_runs.jsonl` → Step execution logs
 
 ### For Rollback
 - `pipelines/ingest_multimodal_conda.py.backup_20251204` → Pre-consolidation backup

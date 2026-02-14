@@ -1,4 +1,7 @@
 # vLLM Integration Plan for GoodQ4All
+
+> ⚠ Historical planning document — contains legacy path references.
+
 *Comprehensive Migration Strategy from LM Studio to vLLM*
 
 ---
@@ -23,16 +26,16 @@
 
 ### LM Studio Integration Points
 ```
-L:\goodq4all\scripts\utilities\llm_client.py          # Primary client
-L:\goodq4all\agents\llm_agent.py                      # Agent wrapper
-L:\goodq4all\steps\llm_chat\step.py                   # Chat step
-L:\goodq4all\steps\common\scene_summarizer.py         # Scene analysis
-L:\goodq4all\steps\common\context_analyzer_llm.py     # Context analysis
-L:\goodq4all\steps\video_summarizer\step.py           # Video summaries
-L:\goodq4all\steps\tagger\step_llm_enhanced.py        # Enhanced tagging
-L:\goodq4all\steps\graph_builder\llm_enrichment.py    # Graph enrichment
-L:\goodq4all\steps\graph_builder\emotion_arc_analyzer.py  # Emotion analysis
-L:\goodq4all\api\main.py                              # API endpoints
+<project_root>\scripts\utilities\llm_client.py          # Primary client
+<project_root>\agents\llm_agent.py                      # Agent wrapper
+<project_root>\steps\llm_chat\step.py                   # Chat step
+<project_root>\steps\common\scene_summarizer.py         # Scene analysis
+<project_root>\steps\common\context_analyzer_llm.py     # Context analysis
+<project_root>\steps\video_summarizer\step.py           # Video summaries
+<project_root>\steps\tagger\step_llm_enhanced.py        # Enhanced tagging
+<project_root>\steps\graph_builder\llm_enrichment.py    # Graph enrichment
+<project_root>\steps\graph_builder\emotion_arc_analyzer.py  # Emotion analysis
+<project_root>\api\main.py                              # API endpoints
 ```
 
 ### Current Configuration
@@ -138,7 +141,7 @@ curl -X POST http://localhost:30000/v1/chat/completions \
 
 #### 0.4 Benchmark Performance
 ```python
-# Test script: L:/goodq4all/tests/benchmark_vllm.py
+# Test script: <project_root>/tests/benchmark_vllm.py
 import time
 import requests
 
@@ -164,7 +167,7 @@ vllm_latency = benchmark_inference("http://localhost:30000", "microsoft/phi-4", 
 
 #### 1.1 Create Unified LLM Client
 ```python
-# File: L:/goodq4all/lib/llm/unified_client.py
+# File: <project_root>/lib/llm/unified_client.py
 
 from typing import Optional, Dict, Any, List
 import requests
@@ -261,7 +264,7 @@ class UnifiedLLMClient:
 
 #### 1.2 Update Existing Clients (Backward Compatible)
 ```python
-# File: L:/goodq4all/scripts/utilities/llm_client.py
+# File: <project_root>/scripts/utilities/llm_client.py
 
 from lib.llm.unified_client import UnifiedLLMClient, LLMProvider
 
@@ -285,7 +288,7 @@ class LLMClient(UnifiedLLMClient):
 
 **Windows PowerShell Launcher:**
 ```powershell
-# File: L:/goodq4all/scripts/start_vllm.ps1
+# File: <project_root>/scripts/start_vllm.ps1
 
 # Start vLLM in WSL2
 wsl bash -c "cd ~/goodq_audio && source venv/bin/activate && ./scripts/vllm_server.sh"
@@ -315,7 +318,7 @@ vllm serve $MODEL \
 
 #### 2.2 Model Registry Integration
 ```python
-# File: L:/goodq4all/configs/vllm_models.yaml
+# File: <project_root>/configs/vllm_models.yaml
 
 vllm_models:
   # Primary chat/reasoning models
@@ -346,7 +349,7 @@ vllm_models:
 
 #### 2.3 Multi-Model Orchestrator
 ```python
-# File: L:/goodq4all/lib/llm/vllm_orchestrator.py
+# File: <project_root>/lib/llm/vllm_orchestrator.py
 
 import yaml
 import subprocess
@@ -356,7 +359,7 @@ class VLLMOrchestrator:
     """Manages multiple vLLM servers for different models"""
     
     def __init__(self):
-        self.config_path = Path("L:/goodq4all/configs/vllm_models.yaml")
+        self.config_path = Path("<project_root>/configs/vllm_models.yaml")
         self.models = self._load_config()
         self.running_servers = {}
     
@@ -393,7 +396,7 @@ class VLLMOrchestrator:
 
 **Scene Summarizer:**
 ```python
-# File: L:/goodq4all/steps/common/scene_summarizer.py
+# File: <project_root>/steps/common/scene_summarizer.py
 
 from lib.llm.unified_client import UnifiedLLMClient
 
@@ -424,7 +427,7 @@ class SceneSummarizer:
 
 #### 3.2 Environment Configuration
 ```bash
-# File: L:/goodq4all/.env.local (update)
+# File: <project_root>/.env.local (update)
 
 # LLM Configuration
 LLM_PROVIDER=vllm  # Options: vllm, lmstudio, ollama
@@ -445,7 +448,7 @@ LLM_LONG_CONTEXT_MODEL=Qwen/Qwen2.5-7B-Instruct
 
 #### 4.1 Unit Tests
 ```python
-# File: L:/goodq4all/tests/test_vllm_integration.py
+# File: <project_root>/tests/test_vllm_integration.py
 
 import pytest
 from lib.llm.unified_client import UnifiedLLMClient, LLMProvider
@@ -477,7 +480,7 @@ pytest tests/test_phase3_llm_integration.py
 
 #### 4.3 Performance Benchmarks
 ```python
-# File: L:/goodq4all/tests/benchmark_llm_providers.py
+# File: <project_root>/tests/benchmark_llm_providers.py
 
 import time
 from lib.llm.unified_client import UnifiedLLMClient, LLMProvider
@@ -519,22 +522,22 @@ print(f"LM Studio: {lmstudio_results}")
 
 #### 5.1 Update Launch Scripts
 ```batch
-REM File: L:/goodq4all/LAUNCH_GOODQ.bat
+REM File: <project_root>/LAUNCH_GOODQ.bat
 
 REM Start vLLM servers first
-powershell -File L:\goodq4all\scripts\start_vllm.ps1
+powershell -File <project_root>\scripts\start_vllm.ps1
 
 REM Wait for servers to be ready
 timeout /t 10
 
 REM Start main pipeline
 conda activate goodq_local
-python L:\goodq4all\api\main.py
+python <project_root>\api\main.py
 ```
 
 #### 5.2 Health Monitoring
 ```python
-# File: L:/goodq4all/lib/llm/health_monitor.py
+# File: <project_root>/lib/llm/health_monitor.py
 
 import requests
 import time
@@ -571,7 +574,7 @@ class LLMHealthMonitor:
 
 #### 5.3 UI Integration
 ```javascript
-// Update: L:/goodq4all/index.html
+// Update: <project_root>/index.html
 
 async function refreshLLMStatus() {
     const response = await fetch('/api/llm/status');

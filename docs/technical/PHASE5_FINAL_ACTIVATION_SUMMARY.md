@@ -24,7 +24,7 @@ if step_name == "video_scene_segmentation":
     assert item is not None
     video_path = item.get('path') or item.get('file_path')
     audio_segments = item.get('audio_segments', [])
-    output_dir = item.get('output_dir', cfg.get('processing_dir', 'L:/_DATA/GoodQ_Data/processing'))
+    output_dir = item.get('output_dir', cfg.get('processing_dir', '<GOODQ_DATA_ROOT>/GoodQ_Data/processing'))
     return process_video_chunks_with_scenes(video_path, audio_segments, output_dir, cfg)
 ```
 
@@ -118,7 +118,7 @@ if mod == "video":
    - Clear logging of fallback strategy
 
 ### Output Artifacts
-**Location:** `L:/_DATA/GoodQ_Data/processing/<video_id>/video_scenes.json`
+**Location:** `<GOODQ_DATA_ROOT>/GoodQ_Data/processing/<video_id>/video_scenes.json`
 
 ```json
 {
@@ -231,7 +231,7 @@ git checkout HEAD~1 -- pipelines/ingest_multimodal_conda.py
    - Validate alignment quality
 
 3. **Monitor Production**
-   - Watch `L:/_DATA/GoodQ_Data/logs/step_runs.jsonl`
+   - Watch `<GOODQ_DATA_ROOT>/GoodQ_Data/logs/step_runs.jsonl`
    - Check for `video_scene_segmentation` entries
    - Verify no CUDA errors in logs
 

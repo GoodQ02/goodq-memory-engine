@@ -1,7 +1,7 @@
 # Legacy Workflows (Historical)
 
 **Status:** Archived December 15, 2024  
-**Location:** `L:\_archive\workflows_legacy\`
+**Location:** `<GOODQ_DATA_ROOT>\archive\workflows_legacy\`
 
 ## Overview
 

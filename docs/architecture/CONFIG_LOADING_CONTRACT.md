@@ -17,7 +17,7 @@
 - Loads YAML from `configs/config.yaml` (raises `FileNotFoundError` if missing).
 - Returns a `dict` (empty YAML becomes `{}`).
 - Deep-merges `overrides` into the loaded config (nested dict merge).
-- Normalizes Windows drive paths like `L:/...` into `/mnt/l/...` when running on non-Windows hosts (recursive over dict/list/string values).
+- Normalizes Windows drive paths like `<project_root>/...` into `/mnt/l/...` when running on non-Windows hosts (recursive over dict/list/string values).
 - Attempts schema validation via `config_schema.GoodQConfig` when importable; otherwise falls back to the raw dict (validation is not guaranteed).
 
 ### 4) Environment Variables + `.env.local`
@@ -38,7 +38,7 @@
 Tolerated temporarily (do not expand usage; migrate when touched):
 - Direct reads of repo-root `config.yaml` in control-plane/agent code.
 - `config/gpu_config.yaml` reads in `cli/step_runner.py`.
-- Hardcoded absolute config paths in scripts (e.g., `L:/goodq4all/...`) and references to older/nonexistent config filenames.
+- Hardcoded absolute config paths in scripts (e.g., `<project_root>/...`) and references to older/nonexistent config filenames.
 
 ## Invariants Runtime Code May Rely On
 - `load_configs()` reads from `configs/config.yaml` and returns a dict.

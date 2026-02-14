@@ -15,10 +15,10 @@ This document marks existing data stores as **legacy** (preserved) and defines h
 
 **Status:** LEGACY (do not write; preserved for comparison)
 
-- **SQLite (memory):** `L:/_DATA/GoodQ_Data/memory.db`
-- **SQLite (knowledge graph):** `L:/_DATA/GoodQ_Data/knowledge_graph.db`
-- **Processing root:** `L:/_DATA/GoodQ_Data/processing`
-- **FAISS (audio):** `L:/_DATA/GoodQ_Data/faiss/goodq_audio.index`
+- **SQLite (memory):** `<GOODQ_DATA_ROOT>/GoodQ_Data/memory.db`
+- **SQLite (knowledge graph):** `<GOODQ_DATA_ROOT>/GoodQ_Data/knowledge_graph.db`
+- **Processing root:** `<GOODQ_DATA_ROOT>/GoodQ_Data/processing`
+- **FAISS (audio):** `<GOODQ_DATA_ROOT>/GoodQ_Data/faiss/goodq_audio.index`
 - **Qdrant collections:**
   - `clip`: `goodq_clip`
   - `dino`: `goodq_dino`
@@ -33,14 +33,14 @@ This document marks existing data stores as **legacy** (preserved) and defines h
 - This epoch predates the WSL2 audio wrapper hardening and may be missing some audio-derived signals (see tag `wsl2-audio-bridge-v1.0.1`).
 
 **Epoch root:**
-- `L:/_DATA/GoodQ_Data/epochs/epoch_2025_12_21`
+- `<GOODQ_DATA_ROOT>/GoodQ_Data/epochs/epoch_2025_12_21`
 
 **Stores (authoritative targets for runtime):**
-- **SQLite (memory):** `L:/_DATA/GoodQ_Data/epochs/epoch_2025_12_21/memory.db`
-- **SQLite (knowledge graph):** `L:/_DATA/GoodQ_Data/epochs/epoch_2025_12_21/knowledge_graph.db`
-- **Processing root:** `L:/_DATA/GoodQ_Data/epochs/epoch_2025_12_21/processing`
-- **FAISS directory:** `L:/_DATA/GoodQ_Data/epochs/epoch_2025_12_21/faiss`
-- **FAISS (audio):** `L:/_DATA/GoodQ_Data/epochs/epoch_2025_12_21/faiss/goodq_audio_epoch_2025_12_21.index`
+- **SQLite (memory):** `<GOODQ_DATA_ROOT>/GoodQ_Data/epochs/epoch_2025_12_21/memory.db`
+- **SQLite (knowledge graph):** `<GOODQ_DATA_ROOT>/GoodQ_Data/epochs/epoch_2025_12_21/knowledge_graph.db`
+- **Processing root:** `<GOODQ_DATA_ROOT>/GoodQ_Data/epochs/epoch_2025_12_21/processing`
+- **FAISS directory:** `<GOODQ_DATA_ROOT>/GoodQ_Data/epochs/epoch_2025_12_21/faiss`
+- **FAISS (audio):** `<GOODQ_DATA_ROOT>/GoodQ_Data/epochs/epoch_2025_12_21/faiss/goodq_audio_epoch_2025_12_21.index`
 - **Qdrant collections (epoch-suffixed):**
   - `clip`: `goodq_clip_epoch_2025_12_21`
   - `dino`: `goodq_dino_epoch_2025_12_21`
@@ -52,14 +52,14 @@ This document marks existing data stores as **legacy** (preserved) and defines h
 **Status:** ACTIVE (clean; intended for the first ingestion after WSL2 audio hardening)
 
 **Epoch root:**
-- `L:/_DATA/GoodQ_Data/epochs/epoch_2025_12_22`
+- `<GOODQ_DATA_ROOT>/GoodQ_Data/epochs/epoch_2025_12_22`
 
 **Stores (authoritative targets for runtime):**
-- **SQLite (memory):** `L:/_DATA/GoodQ_Data/epochs/epoch_2025_12_22/memory.db`
-- **SQLite (knowledge graph):** `L:/_DATA/GoodQ_Data/epochs/epoch_2025_12_22/knowledge_graph.db`
-- **Processing root:** `L:/_DATA/GoodQ_Data/epochs/epoch_2025_12_22/processing`
-- **FAISS directory:** `L:/_DATA/GoodQ_Data/epochs/epoch_2025_12_22/faiss`
-- **FAISS (audio):** `L:/_DATA/GoodQ_Data/epochs/epoch_2025_12_22/faiss/goodq_audio_epoch_2025_12_22.index`
+- **SQLite (memory):** `<GOODQ_DATA_ROOT>/GoodQ_Data/epochs/epoch_2025_12_22/memory.db`
+- **SQLite (knowledge graph):** `<GOODQ_DATA_ROOT>/GoodQ_Data/epochs/epoch_2025_12_22/knowledge_graph.db`
+- **Processing root:** `<GOODQ_DATA_ROOT>/GoodQ_Data/epochs/epoch_2025_12_22/processing`
+- **FAISS directory:** `<GOODQ_DATA_ROOT>/GoodQ_Data/epochs/epoch_2025_12_22/faiss`
+- **FAISS (audio):** `<GOODQ_DATA_ROOT>/GoodQ_Data/epochs/epoch_2025_12_22/faiss/goodq_audio_epoch_2025_12_22.index`
 - **Qdrant collections (epoch-suffixed):**
   - `clip`: `goodq_clip_epoch_2025_12_22`
   - `dino`: `goodq_dino_epoch_2025_12_22`

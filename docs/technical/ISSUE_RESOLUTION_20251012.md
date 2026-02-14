@@ -46,7 +46,7 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s [%(levelname)s] %(message)s',
     handlers=[
-        logging.FileHandler('L:/goodq4all/logs/watchdog.log', encoding='utf-8')
+        logging.FileHandler('<project_root>/logs/watchdog.log', encoding='utf-8')
     ]
 )
 # Add console handler with ASCII-safe encoding
@@ -90,7 +90,7 @@ After restarting with START_WATCHDOG.bat:
 
 ### Files Modified
 
-- `L:\goodq4all\scripts\watchdog_ingest.py` - Logging configuration
+- `<project_root>\scripts\watchdog_ingest.py` - Logging configuration
 
 ### Status: READY FOR MISSION RESTART
 
@@ -100,3 +100,4 @@ The agent is clear to proceed with ingestion. All systems nominal.
 **Report Generated**: 2025-10-12 18:15:00  
 **Agent**: GitHub Copilot CLI  
 **Mission**: GoodQ Video Ingestion Recovery
+

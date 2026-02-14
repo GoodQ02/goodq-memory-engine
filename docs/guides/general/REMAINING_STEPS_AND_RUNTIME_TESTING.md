@@ -39,7 +39,7 @@
 ```bash
 # 1. Find or create a test audio file
 # Option 1: Use existing file from your data
-cd L:\goodq4all
+cd <project_root>
 find . -name "*.mp3" -o -name "*.wav" | head -1
 
 # Option 2: Download test file
@@ -129,7 +129,7 @@ Overlap segments: 5
 
 **Test Script** (already created):
 ```bash
-python L:\goodq4all\scripts\test_osd_integration.py
+python <project_root>\scripts\test_osd_integration.py
 ```
 
 ---
@@ -375,7 +375,7 @@ result_new = audio_diarize(item, config_new)
 
 ```bash
 # 1. Navigate to project
-cd L:\goodq4all
+cd <project_root>
 
 # 2. Check if you have test audio
 dir /s /b *.wav | findstr /i test
@@ -449,3 +449,4 @@ The implementation is:
 - Optional: **1-2 hours** (full benchmarking & tuning)
 
 **You choose how deep you want to go!** 🚀
+

@@ -1,4 +1,5 @@
 # 🔍 Complete WSL2 & Services Audit Report
+> ⚠ Historical planning document — contains legacy path references.
 
 **Date:** December 15, 2025 01:42 UTC  
 **Audit Type:** Comprehensive cross-platform consistency check  
@@ -40,7 +41,7 @@ GoodQ4All achieves **zero Docker dependency** through:
 
 **Windows Repo:**
 ```
-L:\goodq4all\wsl2_audio\
+<project_root>\wsl2_audio\
 ├── scripts/
 │   ├── process_audio.py (14,645 bytes) ✅ ACTIVE VERSION
 │   ├── process.sh (439 bytes) ✅ ACTIVE VERSION
@@ -82,7 +83,7 @@ L:\goodq4all\wsl2_audio\
 
 **Windows Repo:**
 ```
-L:\goodq4all\vllm_wsl\
+<project_root>\vllm_wsl\
 ├── scripts/ (13 server management scripts)
 │   ├── start_all_servers.sh
 │   ├── start_llama1b.sh, start_llama3b.sh, start_llama11b.sh
@@ -156,7 +157,7 @@ C:\Users\jdben\AppData\Local\Programs\Ollama\
 
 **Windows Repo:**
 ```
-L:\goodq4all\vendor\qdrant\
+<project_root>\vendor\qdrant\
 ├── qdrant.exe (62.26 MB) ✅ TRACKED IN REPO
 ├── config/
 │   └── config.yaml (port 6333, data path)
@@ -168,7 +169,7 @@ L:\goodq4all\vendor\qdrant\
 - **Port:** 6333 (localhost only)
 - **Collections:** 3 collections (text_384, image_clip_512_dino_768, audio_512)
 - **Purpose:** Vector similarity search, replaces FAISS
-- **Storage:** `L:\_DATA\GoodQ_Data\qdrant_storage\`
+- **Storage:** `<GOODQ_DATA_ROOT>\GoodQ_Data\qdrant_storage\`
 
 **Integration:** Fully operational, used by ingestion pipeline
 
@@ -456,3 +457,4 @@ The **Docker-free design** is fully documented and operational:
 
 *"Every component documented. Every script synced. Every claim verified."*  
 *"Docker-free. GPU-accelerated. Production-ready."*
+

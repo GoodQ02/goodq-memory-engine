@@ -1,4 +1,5 @@
 # GoodQ Watchdog System - Implementation Summary
+> ⚠ Historical planning document — contains legacy path references.
 
 **Date**: October 7, 2025  
 **Status**: ✅ Complete and Operational  
@@ -185,7 +186,7 @@ One-time snapshot of current state
 
 **Log Tailing**:
 ```powershell
-Get-Content L:\goodq4all\logs\watchdog.log -Wait -Tail 20
+Get-Content <project_root>\logs\watchdog.log -Wait -Tail 20
 ```
 
 ---
@@ -279,10 +280,10 @@ goodq4all/
 
 ```python
 # Directories
-WATCH_DIR = Path("L:/goodq4all/import_inbox")
-PROCESSING_DIR = Path("L:/goodq4all/data/processing")
-PROCESSED_DIR = Path("L:/goodq4all/data/processed")
-FAILED_DIR = Path("L:/goodq4all/data/failed")
+WATCH_DIR = Path("<project_root>/import_inbox")
+PROCESSING_DIR = Path("<project_root>/data/processing")
+PROCESSED_DIR = Path("<project_root>/data/processed")
+FAILED_DIR = Path("<project_root>/data/failed")
 
 # Timing
 POLL_INTERVAL = 2.0          # Directory scan frequency (seconds)
@@ -333,7 +334,7 @@ REM Start the watchdog
 START_WATCHDOG.bat
 
 REM Drop files into inbox
-copy myVideo.mp4 L:\goodq4all\import_inbox\
+copy myVideo.mp4 <project_root>\import_inbox\
 
 REM Check status
 CHECK_WATCHDOG.bat
@@ -350,13 +351,13 @@ REM Drop files, watch them process in real-time
 ### Checking Logs
 ```powershell
 # View recent activity
-Get-Content L:\goodq4all\logs\watchdog.log -Tail 50
+Get-Content <project_root>\logs\watchdog.log -Tail 50
 
 # Follow live
-Get-Content L:\goodq4all\logs\watchdog.log -Wait -Tail 20
+Get-Content <project_root>\logs\watchdog.log -Wait -Tail 20
 
 # Check registry
-Get-Content L:\goodq4all\logs\watchdog_state.json | ConvertFrom-Json
+Get-Content <project_root>\logs\watchdog_state.json | ConvertFrom-Json
 ```
 
 ---
@@ -373,7 +374,7 @@ Get-Content L:\goodq4all\logs\watchdog_state.json | ConvertFrom-Json
 **Option 1: Add to LAUNCH_GOODQ.bat**
 ```batch
 REM Add before "Press any key to close"
-start "GoodQ Watchdog" /MIN cmd /k "call conda activate goodq_zenml && python L:\goodq4all\scripts\watchdog_ingest.py"
+start "GoodQ Watchdog" /MIN cmd /k "call conda activate goodq_zenml && python <project_root>\scripts\watchdog_ingest.py"
 ```
 
 **Option 2: Windows Startup**
@@ -407,7 +408,7 @@ Convert to Windows Service for true background operation (future enhancement)
 - **Future**: Auto-archive after N days (configurable)
 
 ### 5. Local Paths Only
-- **Current**: Only supports local drives (L:\)
+- **Current**: Only supports local drives (<project_root> drive)
 - **Limitation**: No UNC paths or network drives
 - **Future**: Support remote file systems
 
@@ -563,7 +564,7 @@ Convert to Windows Service for true background operation (future enhancement)
 ### Logs & Diagnostics
 - **Activity Log**: `logs/watchdog.log`
 - **State Registry**: `logs/watchdog_state.json`
-- **Step Logs**: `L:/GoodQ_Data/logs/step_runs.jsonl`
+- **Step Logs**: `<GOODQ_DATA_ROOT>/GoodQ_Data (See LEGACY_PATHS_DEPRECATED.md)/logs/step_runs.jsonl`
 
 ### Testing
 - **Test Suite**: `scripts/test_watchdog.py`

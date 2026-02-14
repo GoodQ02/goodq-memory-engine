@@ -13,8 +13,8 @@
 - ✓ Logs directory exists (191 items)
 
 ### Fixed Issues
-- ✓ Created missing `L:\_DATA\videos_to_process` directory
-- ✓ Created missing `L:\goodq4all\outputs` with subdirectories
+- ✓ Created missing `<GOODQ_DATA_ROOT>\videos_to_process` directory
+- ✓ Created missing `<project_root>\outputs` with subdirectories
   - outputs/scenes
   - outputs/audio
   - outputs/transcripts
@@ -24,7 +24,7 @@
 ## ❌ CRITICAL ISSUES FOUND
 
 ### 1. **Missing Models Configuration**
-- **Issue:** `L:/goodq4all/configs/models_config.yaml` NOT FOUND
+- **Issue:** `<project_root>/configs/models_config.yaml` NOT FOUND
 - **Impact:** LLM client cannot load model configurations
 - **Status:** NEEDS CREATION
 
@@ -40,9 +40,9 @@
 - **Status:** Servers may not be started via launch_goodq.bat
 
 ### 3. **Missing UI Directory**
-- **Issue:** `L:\goodq4all\ui` directory does NOT exist
+- **Issue:** `<project_root>\ui` directory does NOT exist
 - **Impact:** Static files (index.html, dashboard.html) cannot be served
-- **Actual Location:** Files are at `L:\goodq4all` root, not in `/ui` subfolder
+- **Actual Location:** Files are at `<project_root>` root, not in `/ui` subfolder
 - **Status:** main.py references wrong path
 
 ### 4. **Database Test Failed**
@@ -56,7 +56,7 @@
 
 ### IMMEDIATE (Blocking)
 1. **Create models_config.yaml** - LLM client depends on this
-2. **Fix UI directory path** in `main.py` - Change from `L:\goodq4all\ui` to `L:\goodq4all`
+2. **Fix UI directory path** in `main.py` - Change from `<project_root>\ui` to `<project_root>`
 3. **Start servers** via `launch_goodq.bat` to test full stack
 
 ### HIGH
@@ -104,8 +104,8 @@
 1. ✓ Created `models_config.yaml` with 2 models (llama1b_speed, phi4_ollama)
 2. ✓ Fixed UI directory path in `main.py` (now serves from root goodq4all/)
 3. ✓ Created missing directories:
-   - L:\_DATA\videos_to_process
-   - L:\goodq4all\outputs (with subdirectories)
+   - <GOODQ_DATA_ROOT>\videos_to_process
+   - <project_root>\outputs (with subdirectories)
 
 ### ❌ STILL BROKEN
 1. **vLLM Service INACTIVE** in WSL
@@ -162,7 +162,7 @@ curl http://localhost:31434/api/tags
 
 ### Step 4: Launch GoodQ Stack
 ```powershell
-cd L:\goodq4all
+cd <project_root>
 .\launch_goodq.bat
 ```
 

@@ -142,7 +142,7 @@ flowchart LR
 ```
 
 **Artifact Locations (Verified Dec 15, 2025):**
-- Keyframes: `L:\goodq4all\logs\scene_ingest\<video_name>\video\scene_XXXX.jpg`
+- Keyframes: `<project_root>\logs\scene_ingest\<video_name>\video\scene_XXXX.jpg`
 - Stored in: `memory.db` (scene_bundles table) + Qdrant collections
 
 ---
@@ -183,7 +183,7 @@ flowchart TD
 ```
 
 **Artifact Locations (Verified Dec 15, 2025):**
-- Audio chunks: `L:\goodq4all\logs\scene_ingest\<video_name>\audio\scene_XXXX.wav`
+- Audio chunks: `<project_root>\logs\scene_ingest\<video_name>\audio\scene_XXXX.wav`
 - WSL2 output: `\\wsl.localhost\Ubuntu\home\joesdomingo\goodq_audio\output\result.json`
 - GPU: RTX 4070 Ti SUPER 16GB, CUDA 12.8
 - Models loaded: Whisper medium (service) / large-v3 (direct), Pyannote 3.1, Silero VAD, Wav2Vec2 emotion
@@ -238,8 +238,8 @@ graph TB
 ```
 
 **Database Locations (Verified Dec 15, 2025):**
-- memory.db: `L:\_DATA\GoodQ_Data\memory.db`
-- knowledge_graph.db: `L:\_DATA\GoodQ_Data\knowledge_graph.db`
+- memory.db: `<GOODQ_DATA_ROOT>\GoodQ_Data\memory.db`
+- knowledge_graph.db: `<GOODQ_DATA_ROOT>\GoodQ_Data\knowledge_graph.db`
 - Qdrant: `localhost:6333` (Windows service, no Docker)
 - Vector dimensions: text=384d, CLIP=512d, DINO=768d, audio=512d
 
@@ -275,7 +275,7 @@ graph TD
     B4 --> C4[transformers CUDA]
     B5 --> C5[sentence-transformers CPU]
     
-    B1 -.pth link.- D[L:/ goodq4all]
+    B1 -.pth link.- D[<project_root>/ goodq4all]
     B2 -.pth link.- D
     B3 -.pth link.- D
     B4 -.pth link.- D
@@ -339,15 +339,15 @@ graph TD
     A[User Data] --> B{Privacy Boundary}
     
     B --> C[Local Processing Only]
-    C --> D[GPU/CPU on L:/ drive]
+    C --> D[GPU/CPU on <project_root> drive]
     
     B -.Optional.- E[External APIs]
     E -.User Choice.- F[OpenAI GPT]
     E -.User Choice.- G[ElevenLabs TTS]
     
     D --> H[Local Storage]
-    H --> I[L:/GoodQ_Data/]
-    H --> J[L:/models/]
+    H --> I[<GOODQ_DATA_ROOT>/GoodQ_Data (See LEGACY_PATHS_DEPRECATED.md)/]
+    H --> J[<GOODQ_DATA_ROOT>/models/]
     
     I --> K[SQLite Encrypted?]
     I --> L[FAISS Indices]
@@ -538,4 +538,5 @@ graph LR
 - GitHub (native Mermaid rendering)
 - [Mermaid Live Editor](https://mermaid.live)
 - Any Markdown viewer with Mermaid support
+
 

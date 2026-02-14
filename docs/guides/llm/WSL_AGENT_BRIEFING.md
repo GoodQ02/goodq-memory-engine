@@ -13,7 +13,7 @@ We are integrating a production-grade vLLM/Ollama infrastructure into the GoodQ4
 
 ### Windows Side (Accessible via /mnt/)
 ```
-L:\goodq4all\                          # Main repository
+<project_root>\                          # Main repository
 ├── lib/
 │   └── llm_client.py                 # NEW: Production LLM client (CREATED)
 ├── configs/
@@ -23,7 +23,7 @@ L:\goodq4all\                          # Main repository
 └── docs/
     └── WSL_AGENT_BRIEFING.md         # This file
 
-L:\_DATA/models/llm/
+<GOODQ_DATA_ROOT>/models/llm/
 ├── huggingface/                      # vLLM-compatible models
 │   ├── Qwen2.5-7B-Instruct/         # 15 GB - Quality leader
 │   ├── Phi-3.5-mini-instruct/        # 7.2 GB - 128K context
@@ -115,9 +115,9 @@ C:\Users\jdben\.wslconfig             # WSL network config (CREATED)
    - Model registry configured
 
 4. **Phase 2: Windows LLM Client** (JUST COMPLETED)
-   - `L:\goodq4all\lib\llm_client.py` - Production client with fallback
-   - `L:\goodq4all\configs\llm_config.yaml` - Configuration
-   - `L:\goodq4all\scripts\test_llm_client.py` - Test script
+   - `<project_root>\lib\llm_client.py` - Production client with fallback
+   - `<project_root>\configs\llm_config.yaml` - Configuration
+   - `<project_root>\scripts\test_llm_client.py` - Test script
    - Features: Automatic failover, health monitoring, metrics
 
 5. **Phase 2: WSL Network Configuration**
@@ -153,7 +153,7 @@ C:\Users\jdben\.wslconfig             # WSL network config (CREATED)
    ```
 
 3. **Test from Windows**
-   - Windows agent will run: `python L:\goodq4all\scripts\test_llm_client.py`
+   - Windows agent will run: `python <project_root>\scripts\test_llm_client.py`
    - Should connect to: vLLM (38005) → Ollama (31434) → LMStudio (1234)
 
 4. **Monitor Logs**
@@ -269,3 +269,4 @@ Example:
 ---
 
 **You are the WSL agent. The Windows agent (GoodQ) is coordinating. Let's make this integration flawless!** 🚀
+

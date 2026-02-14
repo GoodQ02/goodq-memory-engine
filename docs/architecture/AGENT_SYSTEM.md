@@ -33,7 +33,7 @@ The GoodQ4All agent system is a collection of autonomous, intelligent components
 ```
 ┌──────────────────────────────────────────────────────────────────┐
 │                      USER / FILE SYSTEM                          │
-│         (Drops video → L:\_DATA\incoming\)                      │
+│         (Drops video → <GOODQ_DATA_ROOT>\incoming\)                      │
 └────────────────────────┬─────────────────────────────────────────┘
                          │
                          ↓
@@ -87,9 +87,9 @@ The GoodQ4All agent system is a collection of autonomous, intelligent components
                          ↓
 ┌──────────────────────────────────────────────────────────────────┐
 │              SHARED KNOWLEDGE BASES (SQLite)                     │
-│  • L:\_DATA\GoodQ_Data\control_memory.db                        │
-│  • L:\_DATA\GoodQ_Data\recovery.db                              │
-│  • L:\_DATA\GoodQ_Data\agent_checkpoints\watchdog_events.db    │
+│  • <GOODQ_DATA_ROOT>\GoodQ_Data\control_memory.db                        │
+│  • <GOODQ_DATA_ROOT>\GoodQ_Data\recovery.db                              │
+│  • <GOODQ_DATA_ROOT>\GoodQ_Data\agent_checkpoints\watchdog_events.db    │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
@@ -150,8 +150,8 @@ control_agent:
 ```
 
 **Databases:**
-- `L:\_DATA\GoodQ_Data\control_memory.db` - Long-term learning
-- `L:\_DATA\GoodQ_Data\agent_checkpoints\control_memory.db` - Runtime state
+- `<GOODQ_DATA_ROOT>\GoodQ_Data\control_memory.db` - Long-term learning
+- `<GOODQ_DATA_ROOT>\GoodQ_Data\agent_checkpoints\control_memory.db` - Runtime state
 
 ---
 
@@ -193,7 +193,7 @@ healer.rollback_to_backup("config.yaml.2025-12-15_14-30-45")
 ```
 
 **Safety Features:**
-- All modifications backed up to `L:\_DATA\GoodQ_Data\config_backups/`
+- All modifications backed up to `<GOODQ_DATA_ROOT>\GoodQ_Data\config_backups/`
 - Versioned backups with timestamps
 - Rollback capability
 - Validation before applying
@@ -251,7 +251,7 @@ self_healing:
 **Role:** File system monitoring → ingestion trigger
 
 **Responsibilities:**
-- Monitor `L:\_DATA\incoming\` for new videos
+- Monitor `<GOODQ_DATA_ROOT>\incoming\` for new videos
 - Trigger ingestion pipeline automatically
 - Log all file events
 - Handle multiple simultaneous files
@@ -260,17 +260,17 @@ self_healing:
 **Usage:**
 ```python
 # Via CLI (preferred)
-python -m cli.watchdog --input-dir "L:\_DATA\incoming"
+python -m cli.watchdog --input-dir "<GOODQ_DATA_ROOT>\incoming"
 
 # Programmatic
 from agents.watchdog_agent_integration import WatchdogAgent
 
-agent = WatchdogAgent(watch_dir="L:\_DATA\incoming")
+agent = WatchdogAgent(watch_dir="<GOODQ_DATA_ROOT>\incoming")
 agent.start()
 ```
 
 **Database:**
-- `L:\_DATA\GoodQ_Data\agent_checkpoints\watchdog_events.db`
+- `<GOODQ_DATA_ROOT>\GoodQ_Data\agent_checkpoints\watchdog_events.db`
   - Tracks processed files
   - Prevents duplicates
   - Logs all events
@@ -507,7 +507,7 @@ control_agent:
 watchdog:
   enabled: true
   watch_dirs:
-    - "L:\_DATA\incoming"
+    - "<GOODQ_DATA_ROOT>\incoming"
 
 self_healing:
   enabled: true
@@ -572,7 +572,7 @@ print(f"Auto-heal success rate: {stats['overall_success_rate']}%")
 
 ### Query Recovery Database
 ```powershell
-sqlite3 "L:\_DATA\GoodQ_Data\recovery.db" "SELECT * FROM recovery_history ORDER BY timestamp DESC LIMIT 10;"
+sqlite3 "<GOODQ_DATA_ROOT>\GoodQ_Data\recovery.db" "SELECT * FROM recovery_history ORDER BY timestamp DESC LIMIT 10;"
 ```
 
 ---
@@ -633,8 +633,8 @@ sqlite3 "L:\_DATA\GoodQ_Data\recovery.db" "SELECT * FROM recovery_history ORDER 
 
 2. Verify databases exist:
    ```powershell
-   ls L:\_DATA\GoodQ_Data\control_memory.db
-   ls L:\_DATA\GoodQ_Data\recovery.db
+   ls <GOODQ_DATA_ROOT>\GoodQ_Data\control_memory.db
+   ls <GOODQ_DATA_ROOT>\GoodQ_Data\recovery.db
    ```
 
 3. Check logs:
@@ -652,10 +652,10 @@ sqlite3 "L:\_DATA\GoodQ_Data\recovery.db" "SELECT * FROM recovery_history ORDER 
 
 ```powershell
 # Backup first!
-Copy-Item "L:\_DATA\GoodQ_Data\control_memory.db" "L:\_DATA\GoodQ_Data\control_memory.db.backup"
+Copy-Item "<GOODQ_DATA_ROOT>\GoodQ_Data\control_memory.db" "<GOODQ_DATA_ROOT>\GoodQ_Data\control_memory.db.backup"
 
 # Reset
-Remove-Item "L:\_DATA\GoodQ_Data\control_memory.db"
+Remove-Item "<GOODQ_DATA_ROOT>\GoodQ_Data\control_memory.db"
 
 # Restart pipeline - database will be recreated
 ```

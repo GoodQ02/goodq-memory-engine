@@ -1,4 +1,5 @@
 # Control Agent Phase 3: Live Pipeline Integration
+> ⚠ Historical planning document — contains legacy path references.
 
 ## 🎯 Overview
 
@@ -104,21 +105,21 @@ The Control Agent is integrated at these key points:
 wsl ~/vllm_server/scripts/start_llama1b.sh
 
 # Start the ingestion watchdog
-cd L:\goodq4all
+cd <project_root>
 python scripts\watchdog_ingest.py
 ```
 
 You should see:
 ```
 2025-11-16 02:30:00 [INFO] 🤖 Control Agent initialized - AI orchestration enabled
-2025-11-16 02:30:00 [INFO] Watching directory: L:\goodq4all\import_inbox
+2025-11-16 02:30:00 [INFO] Watching directory: <project_root>\import_inbox
 ```
 
 ### Dropping a File for Processing
 
 ```bash
 # Copy a test video to the inbox
-copy "C:\test_video.mp4" "L:\goodq4all\import_inbox\"
+copy "C:\test_video.mp4" "<project_root>\import_inbox\"
 ```
 
 Watch the AI Control Agent in action:
@@ -157,7 +158,7 @@ Expected output:
 📋 Test 1: Initialize Control Agent
 ✅ Control Agent initialized successfully
    - LLM Client: LLMClient
-   - Memory Database: L:\goodq4all\data\control_agent_memory.db
+   - Memory Database: <project_root>\data\control_agent_memory.db
 
 📋 Test 2: Test File Detection Callback
 ✅ File detection callback successful
@@ -254,3 +255,4 @@ The Control Agent is designed to be extensible. To add custom recovery strategie
 **Status**: ✅ Production Ready  
 **Last Updated**: 2025-11-16  
 **Version**: 1.0.0
+

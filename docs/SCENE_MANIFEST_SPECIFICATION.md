@@ -18,7 +18,7 @@ logs/scene_ingest/<video_name>/video/scene_manifest.json
 
 **Example:**
 ```
-L:\goodq4all\logs\scene_ingest\10. 2003-2005\video\scene_manifest.json
+<project_root>\logs\scene_ingest\10. 2003-2005\video\scene_manifest.json
 ```
 
 ### Creation
@@ -37,7 +37,7 @@ L:\goodq4all\logs\scene_ingest\10. 2003-2005\video\scene_manifest.json
 ```json
 {
   "video_id": "7215a98e...",           // SHA256 hash of video file
-  "video_path": "L:\\_DATA\\...",      // Original video path
+  "video_path": "<GOODQ_DATA_ROOT>\\...",      // Original video path
   "scenes": [...]                      // Array of scene objects
 }
 ```
@@ -67,7 +67,7 @@ Visual processing results from the scene's representative frame:
 
 ```json
 "keyframe": {
-  "path": "L:\\goodq4all\\logs\\scene_ingest\\...\\frames\\scene_0000.jpg",
+  "path": "<project_root>\\logs\\scene_ingest\\...\\frames\\scene_0000.jpg",
   "timestamp": 2.0855,               // Midpoint of scene
   "scene": {
     "start": 0.0,
@@ -113,7 +113,7 @@ Audio processing results from the scene's audio chunk:
 
 ```json
 "audio": {
-  "path": "L:\\goodq4all\\logs\\scene_ingest\\...\\audio\\scene_0000.wav",
+  "path": "<project_root>\\logs\\scene_ingest\\...\\audio\\scene_0000.wav",
   "start": 0.0,
   "end": 4.171,
   "duration": 4.171,
@@ -283,8 +283,8 @@ Average manifest size correlates with:
 
 ### 1. Config vs. Reality Mismatch
 
-**Documented:** `L:\_DATA\GoodQ_Data\processing\`  
-**Actual:** `L:\goodq4all\logs\scene_ingest\`
+**Documented:** `<GOODQ_DATA_ROOT>\GoodQ_Data\processing\`  
+**Actual:** `<project_root>\logs\scene_ingest\`
 
 **Impact:** Low (code works, but config is misleading)  
 **Fix Required:** Update `config.yaml` or normalize paths
@@ -419,3 +419,4 @@ When Phase 6 modules are wired:
 **Last Generated:** December 14, 2025 19:01:52  
 **Largest Manifest:** 6.55 MB (03. 1989 - 1990)  
 **Total Scenes Tracked:** ~600+ across all videos
+

@@ -44,7 +44,7 @@ Production-grade LLM infrastructure with intelligent failover, health monitoring
 
 **Windows (Recommended):**
 ```cmd
-L:\goodq4all\scripts\start_llm_servers.bat
+<project_root>\scripts\start_llm_servers.bat
 ```
 
 **WSL Direct:**
@@ -55,7 +55,7 @@ wsl bash -c "/mnt/l/goodq4all/scripts/wsl/start_all_vllm.sh"
 ### 2. Test Connectivity
 
 ```cmd
-python L:\goodq4all\scripts\test_llm_connectivity.py
+python <project_root>\scripts\test_llm_connectivity.py
 ```
 
 ### 3. Use in Code
@@ -328,3 +328,4 @@ For issues or questions:
 **Status**: ✅ Production Ready  
 **Last Updated**: 2025-11-15  
 **Maintainer**: GoodQ4All Team
+

@@ -39,7 +39,7 @@ GoodQ4All uses a **hybrid memory architecture** combining relational databases (
 
 ### 1. **Memory Database (SQLite)**
 
-**Location:** `L:\_DATA\GoodQ_Data\memory.db`
+**Location:** `<GOODQ_DATA_ROOT>\GoodQ_Data\memory.db`
 
 **Purpose:** Structured scene and video metadata storage
 
@@ -136,7 +136,7 @@ GoodQ4All uses a **hybrid memory architecture** combining relational databases (
 
 ### 2. **Knowledge Graph Database (SQLite)**
 
-**Location:** `L:\_DATA\GoodQ_Data\knowledge_graph.db`
+**Location:** `<GOODQ_DATA_ROOT>\GoodQ_Data\knowledge_graph.db`
 
 **Purpose:** Entity relationships and cross-modal connections
 
@@ -155,7 +155,7 @@ GoodQ4All uses a **hybrid memory architecture** combining relational databases (
 
 ### 3. **Qdrant Vector Database**
 
-**Location:** `L:\_DATA\qdrant_storage`  
+**Location:** `<GOODQ_DATA_ROOT>\qdrant_storage`  
 **Endpoint:** `http://localhost:6333`  
 **Service:** Windows native (no Docker)
 
@@ -192,7 +192,7 @@ http://localhost:6333/dashboard
 
 ### 4. **FAISS Indices (Optional)**
 
-**Base Location:** `L:\_DATA\GoodQ_Data\faiss_indices/`
+**Base Location:** `<GOODQ_DATA_ROOT>\GoodQ_Data\faiss_indices/`
 
 **Indices:**
 - `text/faiss_text.index` - Text embeddings (384-dim)
@@ -268,7 +268,7 @@ def build_text_stores(cfg):
 ## Storage Locations Summary
 
 ```
-L:\_DATA\GoodQ_Data\
+<GOODQ_DATA_ROOT>\GoodQ_Data\
 ├── memory.db                      # Scene metadata (SQLite)
 ├── knowledge_graph.db             # Entity graph (SQLite)
 ├── qdrant_storage\                # Vector DB (Qdrant)
@@ -292,8 +292,8 @@ L:\_DATA\GoodQ_Data\
 
 For FAISS (which only stores integer IDs), scene ID mappings are stored:
 
-- `L:\_DATA\GoodQ_Data\databases\clip_id_map.sqlite`
-- `L:\_DATA\GoodQ_Data\databases\dino_id_map.sqlite`
+- `<GOODQ_DATA_ROOT>\GoodQ_Data\databases\clip_id_map.sqlite`
+- `<GOODQ_DATA_ROOT>\GoodQ_Data\databases\dino_id_map.sqlite`
 
 Qdrant uses string IDs natively, so no mapping needed.
 
@@ -333,8 +333,8 @@ Qdrant uses string IDs natively, so no mapping needed.
 ### Daily Operations
 ```batch
 # Backup SQLite databases
-copy L:\_DATA\GoodQ_Data\memory.db L:\_DATA\GoodQ_Data\backups\memory_%DATE%.db
-copy L:\_DATA\GoodQ_Data\knowledge_graph.db L:\_DATA\GoodQ_Data\backups\kg_%DATE%.db
+copy <GOODQ_DATA_ROOT>\GoodQ_Data\memory.db <GOODQ_DATA_ROOT>\GoodQ_Data\backups\memory_%DATE%.db
+copy <GOODQ_DATA_ROOT>\GoodQ_Data\knowledge_graph.db <GOODQ_DATA_ROOT>\GoodQ_Data\backups\kg_%DATE%.db
 
 # Backup Qdrant (snapshot)
 curl -X POST http://localhost:6333/snapshots
@@ -343,7 +343,7 @@ curl -X POST http://localhost:6333/snapshots
 ### Disaster Recovery
 1. Stop Qdrant service: `net stop GoodQ_Qdrant`
 2. Restore SQLite files from backup
-3. Restore Qdrant snapshot to `L:\_DATA\qdrant_storage\snapshots\`
+3. Restore Qdrant snapshot to `<GOODQ_DATA_ROOT>\qdrant_storage\snapshots\`
 4. Restart Qdrant: `net start GoodQ_Qdrant`
 
 ---
@@ -387,9 +387,9 @@ results = engine.search_visual("birthday celebration")
 
 ```yaml
 paths:
-  db_path: /mnt/l/L:/_DATA/GoodQ_Data/memory.db
-  knowledge_graph_db: /mnt/l/L:/_DATA/GoodQ_Data/knowledge_graph.db
-  faiss_dir: /mnt/l/L:/_DATA/GoodQ_Data/faiss
+  db_path: /mnt/l/<GOODQ_DATA_ROOT>/GoodQ_Data/memory.db
+  knowledge_graph_db: /mnt/l/<GOODQ_DATA_ROOT>/GoodQ_Data/knowledge_graph.db
+  faiss_dir: /mnt/l/<GOODQ_DATA_ROOT>/GoodQ_Data/faiss
 
 qdrant:
   enabled: true

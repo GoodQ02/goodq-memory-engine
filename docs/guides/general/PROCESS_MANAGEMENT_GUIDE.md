@@ -77,7 +77,7 @@ python process_manager.py stop-all
 ### Logging
 
 - **Dedicated Logs**: Each process gets its own timestamped log file
-- **Centralized Storage**: All logs stored in `L:\goodq4all\logs\`
+- **Centralized Storage**: All logs stored in `<project_root>\logs\`
 - **Log Viewing**: View logs via CLI or web interface
 - **Rotation**: Logs are automatically rotated on restart
 
@@ -91,7 +91,7 @@ python process_manager.py stop-all
 ## File Structure
 
 ```
-L:\goodq4all\
+<project_root>\
 ├── process_manager.py              # Core process manager
 ├── START_GOODQ_SYSTEM.bat         # Start all services
 ├── STOP_GOODQ_SYSTEM.bat          # Stop all services
@@ -121,7 +121,7 @@ Get status of all processes.
       "pid": 12345,
       "status": "running",
       "started_at": "2025-11-08T23:25:00",
-      "log_file": "L:\\goodq4all\\logs\\api_server_20251108_232500.log"
+      "log_file": "<project_root>\\logs\\api_server_20251108_232500.log"
     }
   },
   "timestamp": "2025-11-08T23:30:00"
@@ -160,8 +160,8 @@ Get recent log lines for a process.
 If processes show as "running" but aren't:
 ```bash
 # Reset state
-del L:\goodq4all\logs\process_state.json
-del L:\goodq4all\logs\pids\*.pid
+del <project_root>\logs\process_state.json
+del <project_root>\logs\pids\*.pid
 
 # Check actual status
 python process_manager.py status
@@ -286,7 +286,7 @@ The process manager integrates seamlessly with the GoodQ4All video processing pi
 ## Support
 
 For issues or questions:
-1. Check logs in `L:\goodq4all\logs\`
+1. Check logs in `<project_root>\logs\`
 2. Review this documentation
 3. Check API status: http://localhost:30000/api/status
 4. Reset system state if needed

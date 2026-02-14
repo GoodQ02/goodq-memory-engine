@@ -30,7 +30,7 @@
 
 **Primary Provider**: LM Studio (Priority 1)  
 **API Endpoint**: http://localhost:1234/v1/chat/completions  
-**Configuration**: L:\goodq4all\config.yaml (`llm.api_url`)
+**Configuration**: <project_root>\config.yaml (`llm.api_url`)
 
 ---
 
@@ -127,7 +127,7 @@ summary_text = generate_scene_summary(scene_meta, cfg, use_llm=True)  # Currentl
 
 ### Infrastructure Installed
 
-**Location**: `L:\goodq4all\agents\`  
+**Location**: `<project_root>\agents\`  
 **Framework**: Microsoft Agent Framework (Spec-to-Agents)  
 **Environment**: `goodq_agents` conda environment  
 **Status**: ⚠️ **INSTALLED BUT NOT ACTIVE**
@@ -395,7 +395,7 @@ if cfg.get('llm', {}).get('relationship_extraction'):
 
 ### Test 1: Scene Summarization
 ```powershell
-cd L:\goodq4all
+cd <project_root>
 python apply_scene_summaries.py  # With use_llm=True
 
 # Verify output
@@ -416,7 +416,7 @@ python temp_run_sample.py
 ### Test 3: Agent Framework
 ```powershell
 conda activate goodq_agents
-cd L:\goodq4all
+cd <project_root>
 python agents/ingestion/scene_detector.py
 ```
 
@@ -515,4 +515,5 @@ The infrastructure exists, LM Studio is online with capable models, but **zero L
 ---
 
 **Let's proceed with Phase 1 immediately: Enabling LLM scene summarization.**
+
 

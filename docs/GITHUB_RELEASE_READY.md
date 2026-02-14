@@ -74,7 +74,7 @@
 - ✅ architecture/ARCHITECTURE_REFERENCE.md - Dec 15
 
 **Verified Accurate:**
-- ✅ Paths: L:\_DATA\GoodQ_Data\, logs/scene_ingest/
+- ✅ Paths: <GOODQ_DATA_ROOT>\GoodQ_Data\, logs/scene_ingest/
 - ✅ Ports: Qdrant 6333
 - ✅ Environment: Unified goodq_core
 - ✅ Services: WSL2 PID 177, GPU 85% util
@@ -118,7 +118,7 @@
 
 ```powershell
 # Navigate to repo
-cd L:\goodq4all
+cd <project_root>
 
 # Check git status
 git status
@@ -232,3 +232,4 @@ git diff --cached --stat
 **Final Sweep Date:** December 15, 2025 01:07 UTC  
 **Version:** 2.0.0 - Scene-First Architecture  
 **Status:** ✅ READY FOR GITHUB RELEASE
+

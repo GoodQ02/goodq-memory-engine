@@ -243,8 +243,8 @@ The system will automatically detect and use it.
 
 ### GPU Logs Location
 ```
-L:\goodq4all\logs\gpu_reports\
-L:\goodq4all\logs\gpu_monitoring\
+<project_root>\logs\gpu_reports\
+<project_root>\logs\gpu_monitoring\
 ```
 
 ### Real-Time Monitoring
@@ -295,7 +295,7 @@ L:\goodq4all\logs\gpu_monitoring\
 ## Support
 
 For issues:
-1. Check logs in `L:\goodq4all\logs\`
+1. Check logs in `<project_root>\logs\`
 2. Run `TEST_AUDIO_GPU.bat` for diagnostics
 3. Generate performance report for analysis
 4. Review this guide for troubleshooting steps
@@ -305,3 +305,4 @@ For issues:
 **Version:** 1.0.0  
 **Last Updated:** 2025-11-12  
 **Author:** GoodQ4All Development Team
+

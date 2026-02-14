@@ -52,7 +52,7 @@ Each pipeline step runs in its own isolated conda environment with specific depe
 Run the quick setup script:
 
 ```bash
-cd L:\goodq4all
+cd <project_root>
 python scripts\quick_gpu_setup.py
 ```
 
@@ -100,7 +100,7 @@ pip install torch==2.3.1 torchvision==0.18.1 --index-url https://download.pytorc
 ### Check GPU Status
 
 ```bash
-cd L:\goodq4all
+cd <project_root>
 python scripts\check_gpu_status.py
 ```
 
@@ -146,8 +146,8 @@ These are configured in `gpu_config.py` and can be adjusted if needed.
 
 The pipeline automatically sets:
 - `CUDA_VISIBLE_DEVICES=0` - Use first GPU only
-- `HF_HOME=L:/models` - Cache models locally
-- `TORCH_HOME=L:/models` - Cache PyTorch models
+- `HF_HOME=<GOODQ_DATA_ROOT>/models` - Cache models locally
+- `TORCH_HOME=<GOODQ_DATA_ROOT>/models` - Cache PyTorch models
 - `PYTHONHASHSEED=1337` - Deterministic behavior
 - `CUBLAS_WORKSPACE_CONFIG=:4096:8` - Reproducible results
 
@@ -328,3 +328,4 @@ For issues:
 - `scripts/check_gpu_status.py` - Diagnostics
 - `scripts/setup_gpu_environments.bat` - Windows batch setup
 - `scripts/validate_gpu_setup.bat` - Validation script
+

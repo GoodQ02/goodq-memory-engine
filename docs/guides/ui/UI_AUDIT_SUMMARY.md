@@ -1,4 +1,5 @@
 # 🎯 GoodQ UI Audit - Executive Summary
+> ⚠ Historical planning document — contains legacy path references.
 
 **Audit Date:** November 8, 2025 23:03 UTC  
 **Status:** ✅ COMPLETE - ALL ISSUES RESOLVED  
@@ -119,13 +120,13 @@ VALIDATION RESULTS
 
 ### **Quick Start:**
 ```batch
-L:\goodq4all\LAUNCH_WEB_INTERFACE.bat
+<project_root>\LAUNCH_WEB_INTERFACE.bat
 ```
 Opens: `http://localhost:30000`
 
 ### **Full System:**
 ```batch
-L:\goodq4all\LAUNCH_GOODQ.bat
+<project_root>\LAUNCH_GOODQ.bat
 ```
 Opens:
 - API Server: `http://localhost:30000`
@@ -134,7 +135,7 @@ Opens:
 
 ### **Manual:**
 ```batch
-cd L:\goodq4all
+cd <project_root>
 conda activate goodq_zenml
 python api_server.py
 ```
@@ -205,3 +206,4 @@ The GoodQ UI stack now has:
 
 **Audit Complete** ✅  
 **Next Step:** Launch the server and start building! 🚀
+

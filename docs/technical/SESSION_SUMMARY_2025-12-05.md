@@ -271,7 +271,7 @@ configs/
    ```
 
 ### Output Format
-**Scene Manifest:** `L:/_DATA/GoodQ_Data/processing/<video_id>/video_scenes.json`
+**Scene Manifest:** `<GOODQ_DATA_ROOT>/GoodQ_Data/processing/<video_id>/video_scenes.json`
 ```json
 {
   "total_scenes": 42,

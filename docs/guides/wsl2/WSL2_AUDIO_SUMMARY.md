@@ -1,4 +1,5 @@
 # WSL2 Audio Offload System - Implementation Complete
+> ⚠ Historical planning document — contains legacy path references.
 
 ## Overview
 
@@ -64,7 +65,7 @@ A comprehensive GPU-accelerated audio processing system has been implemented tha
 │  └──────────┬──────────────┘   │
 │             │                   │
 │        File Queue                │
-│   (L:\goodq4all\wsl2_audio\)   │
+│   (<project_root>\wsl2_audio\)   │
 └─────────────┼───────────────────┘
               │
               │ /mnt/l/ shared FS
@@ -116,7 +117,7 @@ A comprehensive GPU-accelerated audio processing system has been implemented tha
 ### One-Command Install
 
 ```cmd
-cd L:\goodq4all
+cd <project_root>
 INSTALL_WSL2_AUDIO.bat
 ```
 
@@ -243,8 +244,8 @@ Edit `wsl2_audio\bridge_config.json` (Windows):
 
 ```json
 {
-  "windows_queue_dir": "L:\\goodq4all\\wsl2_audio\\queue",
-  "windows_output_dir": "L:\\goodq4all\\wsl2_audio\\output",
+  "windows_queue_dir": "<project_root>\\wsl2_audio\\queue",
+  "windows_output_dir": "<project_root>\\wsl2_audio\\output",
   "wsl_home_dir": "/home/$USER/goodq_audio",
   "timeout_seconds": 3600,
   "poll_interval": 1.0
@@ -253,7 +254,7 @@ Edit `wsl2_audio\bridge_config.json` (Windows):
 
 ## Files Created
 
-### Windows Side (L:\goodq4all\)
+### Windows Side (<project_root>\)
 
 ```
 wsl2_audio/
@@ -309,7 +310,7 @@ WSL2_AUDIO_SUMMARY.md               # This file
 ### Quick Test
 
 ```cmd
-cd L:\goodq4all
+cd <project_root>
 python wsl2_audio\test_bridge.py
 ```
 
@@ -475,3 +476,4 @@ All components are:
 ---
 
 *Implementation complete. Ready for deployment.*
+

@@ -3,46 +3,47 @@
 
 ## Directory Structure
 
-### Project Root: L:\goodq4all
+### Project Root: <project_root>
 - Source code, scripts, configs
 - Small working data
 - Git-tracked files
 
-### System Data Root: L:\_DATA
+### System Data Root: <GOODQ_DATA_ROOT>
 - Large databases
 - FAISS indices
 - Processing logs
 - Export bundles
 - Historical data
 
-### Models Root: L:\models
+### Models Root: <GOODQ_DATA_ROOT>\models (See LEGACY_PATHS_DEPRECATED.md)
 - HuggingFace models (HF_HOME)
 - PyTorch models (TORCH_HOME)
 - Model checkpoints
 - Datasets cache
 
-### Tools: L:\tools
+### Tools: <project_root>\tools
 - External utilities
 - Piper TTS
 - LibreOffice
 - Other tools
 
-### Archives: L:\_ARCHIVE
+### Archives: <GOODQ_DATA_ROOT>\archive
 - Old versions
 - Deprecated scripts
 - Legacy data
 
 ## Single Source of Truth
 
-All batch files are in: L:\goodq4all\*.bat
-All active scripts are in: L:\goodq4all\scripts\
-All data is in: L:\_DATA\GoodQ_Data\
-All models are in: L:\models\
+All batch files are in: <project_root>\*.bat
+All active scripts are in: <project_root>\scripts\
+All data is in: <GOODQ_DATA_ROOT>\GoodQ_Data\
+All models are in: <GOODQ_DATA_ROOT>\models (See LEGACY_PATHS_DEPRECATED.md)\
 
 ## No Duplicates Policy
 
-- No batch files in L:\ root
+- No batch files in <project_root>\ root
 - No duplicate scripts
 - No scattered data directories
 - Single configuration source
+
 

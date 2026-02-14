@@ -21,7 +21,7 @@ START_HEALTH_API.bat
 
 # Option B: Manual start
 conda activate base
-python L:\goodq4all\api\health_status.py
+python <project_root>\api\health_status.py
 ```
 
 The API will start on **port 5050**.
@@ -30,7 +30,7 @@ The API will start on **port 5050**.
 
 Open in your browser:
 ```
-file:///L:/goodq4all/web/dashboard.html
+file:///<project_root>/web/dashboard.html
 ```
 
 **You should see**:
@@ -122,14 +122,14 @@ Simple API health check
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                     Dashboard (Browser)                     │
-│                  L:\goodq4all\web\dashboard.html             │
+│                  <project_root>\web\dashboard.html             │
 └────────────────┬────────────────────────────────────────────┘
                  │ HTTP GET every 10 seconds
                  │
                  ▼
 ┌─────────────────────────────────────────────────────────────┐
 │              Health Status API (Flask)                      │
-│             L:\goodq4all\api\health_status.py                │
+│             <project_root>\api\health_status.py                │
 │                    Port 5050                                │
 └────────────────┬────────────────────────────────────────────┘
                  │ Uses
@@ -137,7 +137,7 @@ Simple API health check
                  ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                  LLM Client (Python)                        │
-│              L:\goodq4all\lib\llm_client.py                  │
+│              <project_root>\lib\llm_client.py                  │
 │          check_all_health() with force=True                 │
 └────────────────┬────────────────────────────────────────────┘
                  │ Checks
@@ -182,20 +182,20 @@ Click **"Show All Models"** to see:
 
 ### New Files
 ```
-L:\goodq4all\api\health_status.py          # Flask API for health monitoring
-L:\goodq4all\START_HEALTH_API.bat          # Launcher script
-L:\goodq4all\docs\MODEL_HEALTH_DASHBOARD.md # This file
+<project_root>\api\health_status.py          # Flask API for health monitoring
+<project_root>\START_HEALTH_API.bat          # Launcher script
+<project_root>\docs\MODEL_HEALTH_DASHBOARD.md # This file
 ```
 
 ### Modified Files
 ```
-L:\goodq4all\web\dashboard.html            # Added model health section + JS
+<project_root>\web\dashboard.html            # Added model health section + JS
 ```
 
 ### Existing Files Used
 ```
-L:\goodq4all\lib\llm_client.py             # Health check logic
-L:\goodq4all\scripts\test_llm_client.py    # Testing (already had health checks)
+<project_root>\lib\llm_client.py             # Health check logic
+<project_root>\scripts\test_llm_client.py    # Testing (already had health checks)
 ```
 
 ---
@@ -206,7 +206,7 @@ L:\goodq4all\scripts\test_llm_client.py    # Testing (already had health checks)
 
 ```bash
 # Start the API
-python L:\goodq4all\api\health_status.py
+python <project_root>\api\health_status.py
 
 # In another terminal:
 curl http://localhost:5050/api/health/summary
@@ -224,7 +224,7 @@ curl http://localhost:5050/api/health/summary
 ### 2. Test the Dashboard
 
 1. Start the health API: `START_HEALTH_API.bat`
-2. Open dashboard: `file:///L:/goodq4all/web/dashboard.html`
+2. Open dashboard: `file:///<project_root>/web/dashboard.html`
 3. Check the **LLM Model Health Status** section
 4. Should show:
    - ✅ vLLM: 1/5 models online (if Llama-1B is running)
@@ -342,9 +342,9 @@ The vLLM service auto-starts on WSL boot, Ollama runs as Windows service, and th
 
 ## 📚 Related Documentation
 
-- `L:\goodq4all\docs\VLLM_WSL_SETUP.md` - vLLM systemd service setup
-- `L:\goodq4all\scripts\test_llm_client.py` - LLM client testing
-- `L:\goodq4all\lib\llm_client.py` - Health check implementation
+- `<project_root>\docs\VLLM_WSL_SETUP.md` - vLLM systemd service setup
+- `<project_root>\scripts\test_llm_client.py` - LLM client testing
+- `<project_root>\lib\llm_client.py` - Health check implementation
 
 ---
 

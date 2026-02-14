@@ -73,7 +73,7 @@ The `lib/` directory contains the foundational components that power GoodQ4All's
 ```python
 from lib.knowledge_graph import KnowledgeGraph
 
-kg = KnowledgeGraph("L:/_DATA/GoodQ_Data/knowledge_graph.db")
+kg = KnowledgeGraph("<GOODQ_DATA_ROOT>/GoodQ_Data/knowledge_graph.db")
 
 # Add entity
 person_id = kg.add_entity("person", "John Doe", {"confidence": 0.95})
@@ -107,7 +107,7 @@ appearances = kg.get_node_media(person_id)
 ```python
 from lib.unified_knowledge_graph import UnifiedKnowledgeGraph
 
-ukg = UnifiedKnowledgeGraph("L:/_DATA/GoodQ_Data/unified_knowledge_graph.db")
+ukg = UnifiedKnowledgeGraph("<GOODQ_DATA_ROOT>/GoodQ_Data/unified_knowledge_graph.db")
 
 # Register video
 ukg.register_video(video_hash, path="/path/to/video.mp4", year=1987, duration=300.0)
@@ -260,7 +260,7 @@ timeline = builder.build_timeline(
 ```python
 from lib.graph_query import GraphQuery
 
-query = GraphQuery("L:/_DATA/GoodQ_Data/knowledge_graph.db")
+query = GraphQuery("<GOODQ_DATA_ROOT>/GoodQ_Data/knowledge_graph.db")
 
 # Find person
 appearances = query.find_person_appearances("John Doe")
@@ -431,7 +431,7 @@ extract_audio(
 ```
 
 **Features:**
-- **FFmpeg Detection**: Auto-finds in PATH or `L:/_TOOLS/ffmpeg`
+- **FFmpeg Detection**: Auto-finds in PATH or `<project_root>/tools/ffmpeg`
 - **Metadata Extraction**: Duration, FPS, resolution, codecs
 - **Audio Extraction**: Time-based clips with normalization
 - **Format Conversion**: WAV output for audio processing
@@ -483,9 +483,9 @@ from lib.memory_management.utils import create_memory_backup
 
 backup_path = create_memory_backup(
     paths_config=config['paths'],
-    backup_root_dir="L:/_DATA/backups"
+    backup_root_dir="<GOODQ_DATA_ROOT>/backups"
 )
-# Creates: L:/_DATA/backups/memory_backup_20251215_043000/
+# Creates: <GOODQ_DATA_ROOT>/backups/memory_backup_20251215_043000/
 ```
 
 **Backup Contents:**
@@ -521,7 +521,7 @@ report = validate_memory_integrity(config)
 ```python
 from lib.memory_management.migrate import run_migrations
 
-run_migrations(db_path="L:/_DATA/GoodQ_Data/memory.db")
+run_migrations(db_path="<GOODQ_DATA_ROOT>/GoodQ_Data/memory.db")
 ```
 
 **Features:**

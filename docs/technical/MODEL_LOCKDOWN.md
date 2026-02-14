@@ -283,7 +283,7 @@ python scripts/pin_model_versions.py
 
 File was corrupted or modified. Delete and re-download:
 ```bash
-rm L:/models/path/to/model.pt
+rm <GOODQ_DATA_ROOT>/models/path/to/model.pt
 python scripts/bootstrap_models.py
 ```
 

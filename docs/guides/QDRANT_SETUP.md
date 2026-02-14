@@ -57,9 +57,9 @@ results = search_scenes(
 
 ## 📦 Installation Status
 
-✅ **Qdrant binary installed:** `L:\goodq4all\vendor\qdrant\qdrant.exe`  
-✅ **Configuration created:** `L:\goodq4all\vendor\qdrant\config.yaml`  
-✅ **Data directory:** `L:\_DATA\qdrant_storage`  
+✅ **Qdrant binary installed:** `<project_root>\vendor\qdrant\qdrant.exe`  
+✅ **Configuration created:** `<project_root>\vendor\qdrant\config.yaml`  
+✅ **Data directory:** `<GOODQ_DATA_ROOT>\qdrant_storage`  
 ✅ **Config updated:** `configs/config.yaml` (qdrant.enabled = true)
 
 ---
@@ -91,7 +91,7 @@ INSTALL_QDRANT_SERVICE.bat
 This will:
 - Install Qdrant as a Windows service named `GoodQ_Qdrant`
 - Configure auto-start on system boot
-- Set up logging to `L:\goodq4all\logs\qdrant_*.log`
+- Set up logging to `<project_root>\logs\qdrant_*.log`
 
 Then initialize collections:
 ```batch
@@ -155,7 +155,7 @@ These are automatically created when you run `INIT_QDRANT.bat`.
 
 ```yaml
 storage:
-  storage_path: L:/_DATA/qdrant_storage
+  storage_path: <GOODQ_DATA_ROOT>/qdrant_storage
 
 service:
   http_port: 6333      # REST API
@@ -270,7 +270,7 @@ Features:
 ## 📁 File Locations
 
 ```
-L:\goodq4all\
+<project_root>\
 ├── vendor\
 │   ├── qdrant\
 │   │   ├── qdrant.exe          # Main executable
@@ -284,7 +284,7 @@ L:\goodq4all\
 ├── UNINSTALL_QDRANT_SERVICE.bat # Service uninstaller
 └── INIT_QDRANT.bat             # Collection initializer
 
-L:\_DATA\
+<GOODQ_DATA_ROOT>\
 └── qdrant_storage\             # Database files
     ├── collections\
     ├── wal\
@@ -307,7 +307,7 @@ taskkill /PID <PID> /F
 
 ### Service Won't Start
 
-1. Check logs: `L:\goodq4all\logs\qdrant_stderr.log`
+1. Check logs: `<project_root>\logs\qdrant_stderr.log`
 2. Try manual start: `START_QDRANT.bat`
 3. Check config syntax: `vendor\qdrant\config.yaml`
 
@@ -349,7 +349,7 @@ taskkill /PID <PID> /F
    ```batch
    LAUNCH_GOODQ_v2.bat
    ```
-   Drop videos into `L:\_DATA\GoodQ_Data\import_inbox\`
+   Drop videos into `<GOODQ_DATA_ROOT>\GoodQ_Data\import_inbox\`
 
 5. **Test Multimodal Search:**
    ```batch

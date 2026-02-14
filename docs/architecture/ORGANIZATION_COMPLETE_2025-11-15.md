@@ -193,7 +193,7 @@ Updated all references from `config.*` to `configs.*`:
 
 ### Root Directory (Clean)
 ```
-L:/goodq4all/
+<project_root>/
   ├── __init__.py               # Package init
   ├── setup.py                  # Package setup
   ├── INSTALL.bat              # Main installer

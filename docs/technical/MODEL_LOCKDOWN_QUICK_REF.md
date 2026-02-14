@@ -97,7 +97,7 @@ Run `pin_model_versions.py` to fetch real SHAs.
 ### "SHA256 hash mismatch"
 File corrupted. Delete and re-download:
 ```bash
-rm L:/models/path/to/file
+rm <GOODQ_DATA_ROOT>/models/path/to/file
 python scripts/bootstrap_models.py
 ```
 

@@ -1,4 +1,5 @@
 # Phase 6b Component Status Report
+> ⚠ Historical planning document — contains legacy path references.
 
 **Generated**: December 15, 2025  
 **Based on**: Forensic analysis of Windows + WSL2 system state
@@ -249,9 +250,9 @@ if step_name == "cross_modal_harmonization":
 
 | Artifact | Expected (Config) | Actual (Code) | Status |
 |----------|-------------------|---------------|--------|
-| Scene Manifest | `L:/_DATA/GoodQ_Data/processing/<video>/video/` | `logs/scene_ingest/<video>/video/` | ⚠️ **Drift** |
-| Temporal Index | `L:/_DATA/GoodQ_Data/processing/<video>/` | `logs/scene_ingest/<video>/` | ⚠️ **Drift** |
-| Representative Frames | `L:/_DATA/GoodQ_Data/processing/<video>/video/` | `logs/scene_ingest/<video>/video/` | ⚠️ **Drift** |
+| Scene Manifest | `<GOODQ_DATA_ROOT>/GoodQ_Data/processing/<video>/video/` | `logs/scene_ingest/<video>/video/` | ⚠️ **Drift** |
+| Temporal Index | `<GOODQ_DATA_ROOT>/GoodQ_Data/processing/<video>/` | `logs/scene_ingest/<video>/` | ⚠️ **Drift** |
+| Representative Frames | `<GOODQ_DATA_ROOT>/GoodQ_Data/processing/<video>/video/` | `logs/scene_ingest/<video>/video/` | ⚠️ **Drift** |
 | CLIP Embeddings | Qdrant: `goodq_clip_scenes` | Qdrant: `goodq_clip_scenes` | ✅ **Aligned** |
 | DINO Embeddings | Qdrant: `goodq_dino_scenes` | Qdrant: `goodq_dino_scenes` | ✅ **Aligned** |
 
@@ -266,7 +267,7 @@ if step_name == "cross_modal_harmonization":
 ```
 Video: 01. 1987 - 1988.mp4
 Scenes Detected: 30
-Scene Manifest: L:\goodq4all\logs\scene_ingest\01. 1987 - 1988\video\scene_manifest.json
+Scene Manifest: <project_root>\logs\scene_ingest\01. 1987 - 1988\video\scene_manifest.json
 Size: 4,824,358 bytes
 Last Modified: 12/14/25 02:48:26
 
@@ -286,7 +287,7 @@ No latent/unconnected Phase 6b components found. Everything described in documen
 ## Recommendations
 
 ### Priority 1: Path Alignment
-**Issue**: Config specifies `L:/_DATA/GoodQ_Data/processing` but code writes to `logs/scene_ingest/`  
+**Issue**: Config specifies `<GOODQ_DATA_ROOT>/GoodQ_Data/processing` but code writes to `logs/scene_ingest/`  
 **Impact**: Confusion, but functionally handled by fallback logic  
 **Solution**: Update config to document actual paths OR update code to respect config
 
@@ -321,3 +322,4 @@ All components are:
 **Document Author**: Forensic analysis by GitHub Copilot CLI  
 **Verification Date**: December 15, 2025  
 **System**: Windows 11 + WSL2 Ubuntu, RTX 4070 Ti SUPER, CUDA 12.8
+

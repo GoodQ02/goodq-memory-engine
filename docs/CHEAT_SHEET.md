@@ -5,11 +5,11 @@
                          🚀 GETTING STARTED
 ═══════════════════════════════════════════════════════════════════════
 
-START SYSTEM         L:\goodq4all\LAUNCH_GOODQ.bat
-START WATCHDOG       L:\goodq4all\START_WATCHDOG.bat
-STOP ALL             L:\goodq4all\STOP_GOODQ.bat (or close windows)
+START SYSTEM         <project_root>\LAUNCH_GOODQ.bat
+START WATCHDOG       <project_root>\START_WATCHDOG.bat
+STOP ALL             <project_root>\STOP_GOODQ.bat (or close windows)
 
-DROP FILES HERE      L:\goodq4all\import_inbox\
+DROP FILES HERE      <project_root>\import_inbox\
 API DOCS             http://localhost:30000/docs
 
 ═══════════════════════════════════════════════════════════════════════
@@ -26,13 +26,13 @@ pwsh scripts\verify_project_readiness.ps1
 conda run -n goodq_zenml python scripts\check_production_status.py
 
 # Watch live processing
-Get-Content L:\_DATA\GoodQ_Data\logs\step_runs.jsonl -Wait
+Get-Content <GOODQ_DATA_ROOT>\GoodQ_Data\logs\step_runs.jsonl -Wait
 
 # Watchdog status
 pwsh scripts\watchdog_status.ps1
 
 # View recent logs
-Get-Content L:\goodq4all\logs\watchdog.log -Tail 50
+Get-Content <project_root>\logs\watchdog.log -Tail 50
 
 ═══════════════════════════════════════════════════════════════════════
                        🎬 MANUAL PROCESSING
@@ -40,7 +40,7 @@ Get-Content L:\goodq4all\logs\watchdog.log -Tail 50
 
 # Activate environment first
 conda activate goodq_zenml
-cd L:\goodq4all
+cd <project_root>
 
 # Process one video
 python cli\run_ingestion.py --video "path\to\video.mp4"
@@ -95,22 +95,22 @@ nvidia-smi
 taskkill /F /IM python.exe
 
 # Rebuild environment (if corrupted)
-cd L:\goodq4all\envs
+cd <project_root>\envs
 pwsh create_all_envs.ps1
 
 # Clean database (DANGER - deletes all data!)
-Remove-Item L:\_DATA\GoodQ_Data\databases\*.db
+Remove-Item <GOODQ_DATA_ROOT>\GoodQ_Data\databases\*.db
 
 ═══════════════════════════════════════════════════════════════════════
                         📂 KEY LOCATIONS
 ═══════════════════════════════════════════════════════════════════════
 
-Project Code         L:\goodq4all\
-Drop Files           L:\goodq4all\import_inbox\
-Databases            L:\_DATA\GoodQ_Data\databases\
-Logs                 L:\_DATA\GoodQ_Data\logs\
-Models               L:\_DATA\models\
-Processing Output    L:\_DATA\GoodQ_Data\logs\workspace\
+Project Code         <project_root>\
+Drop Files           <project_root>\import_inbox\
+Databases            <GOODQ_DATA_ROOT>\GoodQ_Data\databases\
+Logs                 <GOODQ_DATA_ROOT>\GoodQ_Data\logs\
+Models               <GOODQ_DATA_ROOT>\models\
+Processing Output    <GOODQ_DATA_ROOT>\GoodQ_Data\logs\workspace\
 
 ═══════════════════════════════════════════════════════════════════════
                     🎯 SUPPORTED FILE TYPES

@@ -1,4 +1,5 @@
 # GPU Configuration Status Report
+> ⚠ Historical planning document — contains legacy path references.
 
 **Date:** 2025-11-12
 **GPU:** NVIDIA GeForce RTX 4070 Ti SUPER (16 GB VRAM)
@@ -36,17 +37,17 @@ Passed: 4/4
 
 ## Files Created
 
-1. **`L:\goodq4all\gpu_config.py`**
+1. **`<project_root>\gpu_config.py`**
    - Runtime GPU configuration
    - Memory limits per environment
    - CUDA device selection (GPU 0)
    
-2. **`L:\goodq4all\scripts\comprehensive_gpu_setup.py`**
+2. **`<project_root>\scripts\comprehensive_gpu_setup.py`**
    - Installs PyTorch with CUDA in all environments
    - Verifies GPU availability
    - Configures memory limits
 
-3. **`L:\goodq4all\scripts\test_gpu_allocation.py`**
+3. **`<project_root>\scripts\test_gpu_allocation.py`**
    - Tests GPU configuration across environments
    - Verifies memory limits
    - Validates concurrent execution
@@ -173,3 +174,4 @@ GPU configuration is complete and tested. Pipeline can now utilize GPU accelerat
 *Generated: 2025-11-12*
 *GPU: NVIDIA GeForce RTX 4070 Ti SUPER*
 *Environments Configured: 4/5 (80%)*
+

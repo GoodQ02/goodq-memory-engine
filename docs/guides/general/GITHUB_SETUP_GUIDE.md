@@ -23,7 +23,7 @@
 
 ```powershell
 # Navigate to project
-cd L:\goodq4all
+cd <project_root>
 
 # Initialize git
 git init
@@ -126,8 +126,8 @@ goodq4all/
 ### ❌ EXCLUDED (Local Data & Cache)
 ```
 # These are in .gitignore - NOT uploaded:
-- L:/GoodQ_Data/         # Your data
-- L:/models/             # Model cache (367GB!)
+- <GOODQ_DATA_ROOT>/GoodQ_Data (See LEGACY_PATHS_DEPRECATED.md)/         # Your data
+- <GOODQ_DATA_ROOT>/models/             # Model cache (367GB!)
 - logs/                  # Run logs
 - .env.local             # Your secrets
 - __pycache__/           # Python cache
@@ -309,3 +309,4 @@ Repository is ready when:
 **Ready to upload!** Follow the steps above to create your `goodq4all` repository.
 
 *Guide created: October 6, 2025*
+

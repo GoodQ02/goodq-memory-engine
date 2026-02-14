@@ -229,8 +229,8 @@ python scripts\verify_model_lockdown.py
 ## Related Documentation
 
 - [Full Guide](MODEL_LOCKDOWN.md) - Complete documentation
-- [Status Report](../LOCKDOWN_STATUS.md) - Current status
-- [System Architecture](SYSTEM_ARCHITECTURE.md) - How it fits together
+- [Status Report](LOCKDOWN_STATUS.md) - Current status
+- [System Architecture](../architecture/SYSTEM_ARCHITECTURE.md) - How it fits together
 
 ---
 

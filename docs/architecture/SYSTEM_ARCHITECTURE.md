@@ -663,9 +663,9 @@ pwsh scripts/benchmark_pipeline.ps1 -InputDir test_videos -Iterations 5
 - [Faster-Whisper](https://github.com/guillaumekln/faster-whisper)
 
 **Internal Docs:**
-- [Project History](../history/PROJECT_HISTORY.md)
-- [User Guide](../guides/USER_GUIDE.md)
-- [API Reference](../reference/API.md)
+- [Project History](../archive/PROJECT_HISTORY.md)
+- [User Guide](../guides/general/USER_GUIDE.md)
+- API Reference
 
 ---
 

@@ -251,14 +251,14 @@ Add header to each document:
 
 3. **Link to Master Timeline**
 ```markdown
-**📅 For chronological view:** See [Master Documentation Timeline](MASTER_DOCUMENTATION_TIMELINE.md)
+**📅 For chronological view:** See [Master Documentation Timeline](../archive/status-reports/MASTER_DOCUMENTATION_TIMELINE.md)
 ```
 
 4. **Update Reading Order** (for AI-relevant indexes)
 ```markdown
 ## 🤖 AI Agent Quick Start
 1. Read this index overview
-2. Check [Current System Status](CURRENT_SYSTEM_STATUS_2025-12-02.md)
+2. Check [Current System Status](../archive/status-reports/CURRENT_SYSTEM_STATUS_2025-12-02.md)
 3. Review relevant section below
 ```
 

@@ -1,0 +1,24 @@
+name: doc-drift-lint
+
+on:
+  pull_request:
+    paths:
+      - "README*.md"
+      - "docs/**"
+      - "AGENTS.md"
+      - "scripts/docs/doc_drift_lint.py"
+
+jobs:
+  docs-drift-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Run doc drift lint
+        run: python scripts/docs/doc_drift_lint.py

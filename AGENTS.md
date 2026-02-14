@@ -107,6 +107,7 @@
 - No silent failures in critical paths.
 - No global installs without approval.
 - No architectural drift.
+- Active documentation must not contain literal Windows drive roots (e.g., `L:/`, `C:/`). Use environment abstractions.
 - Agents must not modify files outside verified runtime entry points unless explicitly instructed.
 - No "cleanup passes" without audits.
 

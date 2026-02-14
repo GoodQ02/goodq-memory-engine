@@ -236,9 +236,9 @@ No configuration needed - it auto-discovers available services.
 ## 📚 Related Documentation
 
 - [Control Agent Phase 1](./CONTROL_AGENT_PHASE1.md) - Basic monitoring and reporting
-- [Control Agent Phase 2](./CONTROL_AGENT_PHASE2.md) - Memory and diagnostics
-- [LLM Client](./LLM_CLIENT.md) - Multi-service LLM integration
-- [vLLM Setup](./VLLM_SETUP.md) - GPU-accelerated inference
+- [Control Agent Phase 2](../../archive/reports/phase_reports/CONTROL_AGENT_PHASE2_COMPLETE.md) - Memory and diagnostics
+- [LLM Client](../llm/LLM_CLIENT_GUIDE.md) - Multi-service LLM integration
+- [vLLM Setup](../llm/VLLM_SYSTEMD_SETUP.md) - GPU-accelerated inference
 
 ## 🤝 Contributing
 

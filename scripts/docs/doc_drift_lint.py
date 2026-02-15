@@ -45,8 +45,16 @@ def is_under(path: Path, parent: Path) -> bool:
 
 
 def collect_targets(repo_root: Path) -> list[Path]:
-    docs = sorted((repo_root / "docs").rglob("*.md"))
-    readmes = sorted(repo_root.glob("README*.md"))
+    docs = sorted(
+        path
+        for path in (repo_root / "docs").rglob("*")
+        if path.is_file() and path.suffix.lower() in {".md", ".txt"}
+    )
+    readmes = sorted(
+        path
+        for path in repo_root.glob("README*")
+        if path.is_file() and path.suffix.lower() in {".md", ".txt"}
+    )
     return docs + readmes
 
 

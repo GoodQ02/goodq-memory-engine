@@ -41,13 +41,13 @@ python cli\run_ingestion.py --video "path\to\video.mp4"
 **Examples:**
 ```powershell
 # Basic processing
-python cli\run_ingestion.py --video "C:\Videos\birthday.mp4"
+python cli\run_ingestion.py --video "<GOODQ_DATA_ROOT>\videos\birthday.mp4"
 
 # With verbose output
-python cli\run_ingestion.py --video "C:\Videos\birthday.mp4" --verbose
+python cli\run_ingestion.py --video "<GOODQ_DATA_ROOT>\videos\birthday.mp4" --verbose
 
 # Skip specific steps
-python cli\run_ingestion.py --video "C:\Videos\birthday.mp4" --skip-steps "audio_analysis"
+python cli\run_ingestion.py --video "<GOODQ_DATA_ROOT>\videos\birthday.mp4" --skip-steps "audio_analysis"
 ```
 
 ### `list_inbox.py`

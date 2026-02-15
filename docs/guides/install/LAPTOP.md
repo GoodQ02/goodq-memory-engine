@@ -25,7 +25,7 @@ $env:GOODQ_HOST_PROFILE = "GPU_ENHANCED"
 ## Path and WSL Identity Overrides
 
 ```powershell
-$env:GOODQ_DATA_ROOT = "D:/GoodQData"  # optional
+$env:GOODQ_DATA_ROOT = "<path_to_data_root>"  # optional
 $env:GOODQ_WSL_USER = "your_user"      # optional
 $env:GOODQ_WSL_WORKSPACE = "/home/your_user/goodq4all"  # optional
 $env:GOODQ_WSL_DISTRO = "Ubuntu"       # optional

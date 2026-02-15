@@ -40,7 +40,7 @@ python scripts\cache_readiness_check.py
 
 1. **Place a video in the inbox:**
    ```powershell
-   Copy-Item "C:\Users\...\your_video.mp4" <project_root>\smoke_inbox\
+   Copy-Item "<project_root>\sample_media\your_video.mp4" <project_root>\smoke_inbox\
    ```
 
 2. **Run lite ingestion (quick test):**
@@ -484,7 +484,7 @@ pwsh scripts\export_run_profile.ps1 -RunId "abc123..." -OutputDir "exports"
 
 **Backup databases:**
 ```powershell
-$backupDir = "G:\Backups\GoodQ\$(Get-Date -Format 'yyyy-MM-dd')"
+$backupDir = "<GOODQ_DATA_ROOT>\backups\GoodQ\$(Get-Date -Format 'yyyy-MM-dd')"
 New-Item -ItemType Directory -Path $backupDir -Force
 
 Copy-Item <GOODQ_DATA_ROOT>\GoodQ_Data (See LEGACY_PATHS_DEPRECATED.md)\data\memory_db\*.db $backupDir\
@@ -556,10 +556,10 @@ pwsh scripts\prepare_step_envs.ps1 `
 
 ```powershell
 # Local backup (<GOODQ_DATA_ROOT> → NAS mount)
-Copy-Item <GOODQ_DATA_ROOT>\GoodQ_Data (See LEGACY_PATHS_DEPRECATED.md)\data\memory_db\* G:\Backups\GoodQ\current\
+Copy-Item <GOODQ_DATA_ROOT>\GoodQ_Data (See LEGACY_PATHS_DEPRECATED.md)\data\memory_db\* <GOODQ_DATA_ROOT>\backups\GoodQ\current\
 
 # External backup (monthly)
-Copy-Item G:\Backups\GoodQ\current\* E:\GoodQ_Backup\$(Get-Date -Format 'yyyy-MM')\
+Copy-Item <GOODQ_DATA_ROOT>\backups\GoodQ\current\* <GOODQ_DATA_ROOT>\offsite_backups\$(Get-Date -Format 'yyyy-MM')\
 ```
 
 ---
@@ -576,7 +576,7 @@ Copy-Item G:\Backups\GoodQ\current\* E:\GoodQ_Backup\$(Get-Date -Format 'yyyy-MM
 | View Logs | `Get-Content <GOODQ_DATA_ROOT>\GoodQ_Data (See LEGACY_PATHS_DEPRECATED.md)\logs\step_runs.jsonl -Tail 50` |
 | DB Query | `sqlite3 <GOODQ_DATA_ROOT>\GoodQ_Data (See LEGACY_PATHS_DEPRECATED.md)\data\memory_db\memory.db` |
 | Reconcile | `pwsh scripts\reconcile_indices.ps1` |
-| Backup | `Copy-Item <GOODQ_DATA_ROOT>\GoodQ_Data (See LEGACY_PATHS_DEPRECATED.md)\data\memory_db\* G:\Backups\` |
+| Backup | `Copy-Item <GOODQ_DATA_ROOT>\GoodQ_Data (See LEGACY_PATHS_DEPRECATED.md)\data\memory_db\* <GOODQ_DATA_ROOT>\backups\` |
 
 ### File Locations
 

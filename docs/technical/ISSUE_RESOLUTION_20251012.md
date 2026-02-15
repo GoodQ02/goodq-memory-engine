@@ -29,7 +29,7 @@ logger.info(f"🎬 Asset: {video_path.name}")
 **Error Stack**:
 ```
 UnicodeEncodeError: 'charmap' codec can't encode character '\U0001f4cb' in position 31: character maps to <undefined>
-File "C:\Users\jdben\miniconda3\envs\goodq_zenml\lib\encodings\cp1252.py", line 19, in encode
+File "<python_env>/lib/encodings/cp1252.py", line 19, in encode
 ```
 
 ### Solution Implemented

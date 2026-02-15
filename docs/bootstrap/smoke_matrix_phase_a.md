@@ -40,7 +40,7 @@ The companion runner is `scripts/smoke_phase_a.py`.
 
 2. Path Abstraction
 - `path_resolution_default_root`
-- `path_resolution_env_override` (`GOODQ_DATA_ROOT=X:/BOOTSTRAP_SMOKE`)
+- `path_resolution_env_override` (`GOODQ_DATA_ROOT=<project_root>/../BOOTSTRAP_SMOKE`)
 
 3. Device Resolution And Fallback
 - `wsl_gpu_profile_resolution` via `resolve_wsl_gpu_config(...)`

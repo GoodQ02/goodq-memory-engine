@@ -30,7 +30,7 @@ The GoodQ vision pipeline processes keyframes extracted from video scenes throug
 **Configuration**:
 ```yaml
 tool_paths:
-  tesseract_cmd: "C:/Program Files/Tesseract-OCR/tesseract.exe"
+  tesseract_cmd: "<project_root>/tools/tesseract/tesseract.exe"
 ```
 
 **Output Fields**:

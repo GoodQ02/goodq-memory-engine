@@ -43,7 +43,7 @@ $env:GOODQ_REQUIRE_WSL_AUDIO = "1"
 Examples:
 
 ```powershell
-$env:GOODQ_DATA_ROOT = "D:/GoodQData"
+$env:GOODQ_DATA_ROOT = "<path_to_data_root>"
 $env:GOODQ_WSL_USER = "<user>"
 $env:GOODQ_WSL_WORKSPACE = "/home/<user>/goodq4all"
 $env:GOODQ_WSL_DISTRO = "Ubuntu"

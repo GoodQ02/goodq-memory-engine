@@ -46,15 +46,15 @@ from config.python_paths import (
 
 # Get conda executable path
 conda_exe = get_conda_exe()
-# Returns: Path('C:/Users/jdben/miniconda3/Scripts/conda.exe')
+# Returns: Path('<conda_base>/Scripts/conda.exe')
 
 # Get Python for specific environment
 python_exe = get_env_python('goodq_zenml')
-# Returns: Path('C:/Users/jdben/miniconda3/envs/goodq_zenml/python.exe')
+# Returns: Path('<conda_base>/envs/goodq_zenml/python.exe')
 
 # Get conda run command for an environment
 cmd = get_conda_run_command('goodq_zenml')
-# Returns: ['C:\\Users\\jdben\\miniconda3\\Scripts\\conda.exe', 'run', '-n', 'goodq_zenml']
+# Returns: ['<conda_base>\\Scripts\\conda.exe', 'run', '-n', 'goodq_zenml']
 
 # Validate environment exists
 is_valid = validate_env('goodq_zenml')
@@ -76,8 +76,8 @@ all_envs = config.get_all_envs()
 # Get configuration info
 info = config.get_info_dict()
 # Returns: {
-#     'conda_base': 'C:\\Users\\jdben\\miniconda3',
-#     'conda_exe': 'C:\\Users\\jdben\\miniconda3\\Scripts\\conda.exe',
+#     'conda_base': '<conda_base>',
+#     'conda_exe': '<conda_base>\\Scripts\\conda.exe',
 #     'platform': 'Windows',
 #     'environments': {...},
 #     'initialized': True
@@ -93,15 +93,18 @@ The following files have been updated to use the centralized configuration:
    - Removed hardcoded paths
 
 2. **steps/common/tool_paths.py**
-   - esolve_conda() now uses centralized config
+   - 
+esolve_conda() now uses centralized config
    - Simplified implementation
 
 3. **gents/base_agent.py**
-   - un_in_conda() now uses get_conda_run_command()
+   - 
+un_in_conda() now uses get_conda_run_command()
    - Automatic path resolution
 
 4. **cli/run_ingestion.py**
-   - Already uses esolve_conda() (now improved)
+   - Already uses 
+esolve_conda() (now improved)
 
 ## Testing
 
@@ -126,7 +129,7 @@ The system searches for Conda installation in this order:
 1. **Environment Variable**: CONDA_EXE (most reliable)
 2. **PATH Search**: Uses shutil.which('conda')
 3. **Common Locations**: Checks standard installation directories
-   - Windows: C:\\Users\\<user>\\miniconda3, C:\\ProgramData\\miniconda3, etc.
+   - Windows: <conda_base>, <alt_conda_base>, etc.
    - Linux/Mac: ~/miniconda3, /opt/miniconda3, etc.
 
 ### 2. **Caching**
@@ -149,7 +152,7 @@ Configuration initializes automatically on first use:
 
 \\\python
 # DON'T DO THIS ANYMORE
-conda_path = Path("C:/Users/jdben/miniconda3")
+conda_path = Path("<conda_base>")
 python_exe = conda_path / "envs" / "goodq_zenml" / "python.exe"
 cmd = ["conda", "run", "-n", "goodq_zenml"]
 \\\

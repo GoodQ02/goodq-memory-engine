@@ -119,7 +119,7 @@ You should see:
 
 ```bash
 # Copy a test video to the inbox
-copy "C:\test_video.mp4" "<project_root>\import_inbox\"
+copy "<project_root>\sample_video.mp4" "<project_root>\import_inbox\"
 ```
 
 Watch the AI Control Agent in action:

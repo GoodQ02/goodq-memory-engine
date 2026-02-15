@@ -125,7 +125,7 @@ GoodQ4All achieves **zero Docker dependency** through:
 
 **Windows Installation:**
 ```
-C:\Users\jdben\AppData\Local\Programs\Ollama\
+<windows_user_home>\AppData\Local\Programs\Ollama\
 ```
 - **Version:** 0.13.1
 - **Type:** Native Windows application

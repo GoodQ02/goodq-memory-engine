@@ -33,7 +33,7 @@ We are integrating a production-grade vLLM/Ollama infrastructure into the GoodQ4
 └── gguf/                             # Ollama-compatible models
     └── [17 GGUF models, 142 GB]
 
-C:\Users\jdben\.wslconfig             # WSL network config (CREATED)
+<windows_user_home>\.wslconfig             # WSL network config (CREATED)
 ```
 
 ### WSL Side (Your Home Territory)
@@ -121,7 +121,7 @@ C:\Users\jdben\.wslconfig             # WSL network config (CREATED)
    - Features: Automatic failover, health monitoring, metrics
 
 5. **Phase 2: WSL Network Configuration**
-   - Created `C:\Users\jdben\.wslconfig`
+   - Created `<windows_user_home>\.wslconfig`
    - Enabled localhost forwarding
    - Mirrored networking mode
    - Auto memory/swap management

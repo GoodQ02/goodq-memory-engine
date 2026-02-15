@@ -145,7 +145,7 @@ Get recent log lines for a process.
 ### Process Won't Start
 
 1. Check logs: `python process_manager.py logs <process_name>`
-2. Verify Python environment: `C:\Users\jdben\miniconda3\envs\goodq_zenml\python.exe --version`
+2. Verify Python environment: `<path_to_python_exe> --version`
 3. Check for port conflicts (API server uses port 30000)
 4. Ensure working directory exists and is accessible
 
@@ -171,7 +171,7 @@ python process_manager.py status
 
 Ensure psutil is installed:
 ```bash
-C:\Users\jdben\miniconda3\envs\goodq_zenml\python.exe -m pip install psutil
+<path_to_python_exe> -m pip install psutil
 ```
 
 ## Best Practices

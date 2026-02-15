@@ -237,7 +237,7 @@ pwsh scripts/reconcile_indices.ps1
 ### Monthly Backup
 ```powershell
 $date = Get-Date -Format "yyyy-MM-dd"
-$backup = "G:/Backups/GoodQ/$date"
+$backup = "<GOODQ_DATA_ROOT>/backups/GoodQ/$date"
 New-Item -ItemType Directory -Path $backup -Force
 
 Copy-Item <GOODQ_DATA_ROOT>/GoodQ_Data (See LEGACY_PATHS_DEPRECATED.md)/data/memory_db/*.db $backup/

@@ -47,7 +47,7 @@
 
 ### Model Library Location
 ```
-Windows: C:\Users\jdben\.cache\lm-studio\models\
+Windows: <windows_user_home>\.cache\lm-studio\models\
          (43 models currently available)
 ```
 

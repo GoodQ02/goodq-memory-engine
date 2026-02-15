@@ -26,7 +26,7 @@
 - `.env.local` is a **local developer convenience**, not an authoritative config file; externally-provided environment variables remain authoritative (consistent with default `python-dotenv` behavior).
 
 ### 5) Windows ↔ WSL2 Interop
-- `configs/config.yaml` may contain Windows-style drive paths (`X:/...`); `load_configs()` normalizes these automatically when executed under WSL/Linux.
+- `configs/config.yaml` may contain Windows-style drive paths (`<drive>:/...`); `load_configs()` normalizes these automatically when executed under WSL/Linux.
 - WSL2 audio services currently use JSON configs (`wsl2_audio/config.json`, `wsl2_audio/bridge_config.json`). These remain **subsystem-local**; core runtime code must not treat `~/goodq_audio/config.json` (or `\\wsl$` reads) as authoritative runtime configuration—those reads are diagnostics-only.
 
 ### 6) What’s Allowed (Runtime vs Tooling)

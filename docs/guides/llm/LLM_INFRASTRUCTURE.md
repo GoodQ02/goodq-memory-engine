@@ -192,7 +192,7 @@ wsl bash -c "curl http://localhost:38005/v1/models"
 
 **Verify .wslconfig:**
 ```ini
-# C:\Users\<username>\.wslconfig
+# <windows_user_home>\.wslconfig
 [wsl2]
 networkingMode=mirrored
 ```

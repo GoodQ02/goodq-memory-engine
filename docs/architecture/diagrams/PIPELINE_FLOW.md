@@ -357,7 +357,7 @@ graph TD
     L --> N
     M --> N
     
-    N --> O[G:/ UGREEN NAS]
+    N --> O[<drive>:/ UGREEN NAS]
     O -.Optional.- P[GPG Encryption]
     
     style C fill:#90EE90

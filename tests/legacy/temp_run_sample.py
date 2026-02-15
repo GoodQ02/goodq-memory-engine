@@ -16,7 +16,7 @@ if __name__ == '__main__':
     # Run with arguments
     sys.argv = [
         'run_ingestion.py',
-        '--input-dir', 'test_input',
+        '--input-dir', 'samples/ingestion',
         '--workspace', 'logs/test_workspace',
         '--output', 'logs/test_results.json',
         '--verbose',

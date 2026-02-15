@@ -44,7 +44,7 @@ pwsh scripts/reconcile_indices.ps1
 ### Ingestion
 ```powershell
 # Quick test (1 video, 2 scenes)
-pwsh scripts/ingest_videos_lite.ps1 -InputDir smoke_inbox -VerboseSteps
+pwsh scripts/ingest_videos_lite.ps1 -InputDir samples/ingestion -VerboseSteps
 
 # Custom limits
 pwsh scripts/ingest_videos_lite.ps1 -InputDir import_inbox -MaxVideos 3 -MaxScenes 5

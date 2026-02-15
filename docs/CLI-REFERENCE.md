@@ -54,13 +54,13 @@ python -m cli.run_ingestion --input-dir <path> [OPTIONS]
 **Example:**
 ```bash
 # Process all videos in inbox
-python -m cli.run_ingestion --input-dir smoke_inbox
+python -m cli.run_ingestion --input-dir samples/ingestion
 
 # Process specific video
-python -m cli.run_ingestion --input-dir smoke_inbox --video-name "interview.mp4"
+python -m cli.run_ingestion --input-dir samples/ingestion --video-name "interview.mp4"
 
 # Reprocess with force flag
-python -m cli.run_ingestion --input-dir smoke_inbox --force-reprocess
+python -m cli.run_ingestion --input-dir samples/ingestion --force-reprocess
 ```
 
 **Output Locations:**
@@ -86,7 +86,7 @@ python -m cli.watchdog [OPTIONS]
 - `--no-agent`: Disable AI Control Agent integration
 
 **What It Does:**
-1. Watches configured inbox directory (default: `<project_root>\smoke_inbox`)
+1. Watches configured inbox directory (default: `<project_root>\samples\ingestion`)
 2. Detects new video files (mp4, avi, mkv, mov, webm, flv)
 3. Calculates file hash to avoid duplicates
 4. Automatically triggers `run_ingestion` for new files
@@ -399,7 +399,7 @@ python -m cli.list_inbox
 
 **Output:**
 ```
-Files in inbox: <project_root>\smoke_inbox
+Files in inbox: <project_root>\samples\ingestion
 
 ✅ interview.mp4 (processed: 2025-12-14 15:23:45)
 ⏳ lecture.mp4 (pending)
@@ -459,7 +459,7 @@ All CLI commands respect settings in `config.yaml`. Key paths:
 
 ```yaml
 paths:
-  import_inbox: "<project_root>/smoke_inbox"
+  import_inbox: "<project_root>/samples/ingestion"
   db_path: "<GOODQ_DATA_ROOT>/GoodQ_Data/memory.db"
   kg_db_path: "<GOODQ_DATA_ROOT>/GoodQ_Data/knowledge_graph.db"
   processing: "<GOODQ_DATA_ROOT>/GoodQ_Data/processing"

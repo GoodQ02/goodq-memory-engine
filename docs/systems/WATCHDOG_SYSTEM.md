@@ -534,7 +534,7 @@ pytest tests/test_watchdog.py
 ### Integration Tests
 ```bash
 # Drop test file
-cp test_input/sample.mp4 import_inbox/
+cp samples/smoke/sample.mp4 import_inbox/
 
 # Monitor logs
 Get-Content logs/watchdog.log -Wait -Tail 20

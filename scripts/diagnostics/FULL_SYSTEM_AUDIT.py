@@ -129,18 +129,18 @@ else:
 # STEP 6: Check for sample.mp4
 print("[6/10] Checking for sample.mp4...")
 sample_inbox = Path("L:/goodq4all/import_inbox/sample.mp4")
-sample_smoke = Path("L:/goodq4all/smoke_inbox/sample.mp4")
+sample_smoke = Path("L:/goodq4all/samples/ingestion/sample.mp4")
 
 if sample_inbox.exists():
     print(f"  [SYMBOL] sample.mp4 found in import_inbox ({sample_inbox.stat().st_size} bytes)")
 elif sample_smoke.exists():
-    print(f"  [SYMBOL] sample.mp4 found in smoke_inbox")
+    print(f"  [SYMBOL] sample.mp4 found in samples/ingestion")
     print(f"  Copying to import_inbox...")
     shutil.copy2(sample_smoke, sample_inbox)
     print(f"  [SYMBOL] Copied to import_inbox")
 else:
     print(f"  [SYMBOL] sample.mp4 not found!")
-    print(f"  Please place sample.mp4 in import_inbox or smoke_inbox")
+    print(f"  Please place sample.mp4 in import_inbox or samples/ingestion")
     exit(1)
 print()
 

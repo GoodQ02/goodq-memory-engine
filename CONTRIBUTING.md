@@ -138,7 +138,7 @@ Before submitting a PR:
 
 ```bash
 # Run ingestion on a small test video
-python -m cli.run_ingestion --input-dir test_input/ --max-scenes 5
+python -m cli.run_ingestion --input-dir samples/ingestion/ --max-scenes 5
 
 # Check logs for errors
 cat logs/ingestion.log | grep ERROR

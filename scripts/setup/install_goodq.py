@@ -102,7 +102,7 @@ def create_directories():
         "data/embeddings",
         "data/faces",
         "data/clips",
-        "smoke_inbox"
+        "samples/ingestion"
     ]
     
     for directory in directories:

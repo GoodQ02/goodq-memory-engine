@@ -230,7 +230,7 @@ config = validate_and_heal_config("config.yaml")
 Unattended monitoring with automatic restart:
 
 **Features**:
-- Polls `smoke_inbox/` every 60 seconds
+- Polls `samples/smoke/` every 60 seconds
 - Launches `run_ingestion.py` subprocess per video
 - Timeout protection (kills if hung >2 hours)
 - Exit code checking (logs failures, continues)

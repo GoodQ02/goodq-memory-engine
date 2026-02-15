@@ -20,7 +20,7 @@ def test_short_audio():
     print("="*80)
     
     # Find a test video
-    test_video = r"L:\goodq4all\smoke_inbox\sample.mp4"
+    test_video = r"L:\goodq4all\samples\ingestion\sample.mp4"
     if not os.path.exists(test_video):
         print(f"[WARN] Test video not found: {test_video}")
         return False

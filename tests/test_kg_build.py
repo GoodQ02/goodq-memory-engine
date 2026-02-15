@@ -29,7 +29,7 @@ print(f"Found {len(scenes)} scenes in memory.db\n")
 # Build sample result structure
 results = []
 video_result = {
-    'video_path': 'test_input/sample.mp4',
+    'video_path': 'samples/ingestion/sample.mp4',
     'scenes': []
 }
 

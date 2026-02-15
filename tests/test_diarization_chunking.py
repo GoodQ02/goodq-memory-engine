@@ -37,7 +37,7 @@ def test_diarization_chunking():
     test_files = [
         r"L:\goodq4all\import_inbox\01. 1987 - 1988.mp4",
         r"L:\_DATA\FAMILY_FEAST\01. 1987 - 1988.mp4",
-        r"L:\goodq4all\smoke_inbox\sample.mp4",
+        r"L:\goodq4all\samples\ingestion\sample.mp4",
     ]
     
     test_path = None

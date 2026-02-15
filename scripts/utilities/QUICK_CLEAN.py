@@ -64,9 +64,9 @@ print("\n[5/5] Checking sample.mp4...")
 if Path("L:/goodq4all/import_inbox/sample.mp4").exists():
     size = Path("L:/goodq4all/import_inbox/sample.mp4").stat().st_size
     print(f"  [SYMBOL] Found in import_inbox ({size} bytes)")
-elif Path("L:/goodq4all/smoke_inbox/sample.mp4").exists():
-    print("  [SYMBOL] Found in smoke_inbox")
-    shutil.copy2("L:/goodq4all/smoke_inbox/sample.mp4", "L:/goodq4all/import_inbox/sample.mp4")
+elif Path("L:/goodq4all/samples/ingestion/sample.mp4").exists():
+    print("  [SYMBOL] Found in samples/ingestion")
+    shutil.copy2("L:/goodq4all/samples/ingestion/sample.mp4", "L:/goodq4all/import_inbox/sample.mp4")
     print("  [SYMBOL] Copied to import_inbox")
 else:
     print("  [SYMBOL] Not found")

@@ -79,7 +79,7 @@ if workspace.exists():
 
 # 3. Check test input file
 print("\n\n### INPUT FILE CHECK ###")
-input_file = Path('test_input/sample.mp4')
+input_file = Path('samples/ingestion/sample.mp4')
 print(f"Input file: {input_file}")
 print(f"  Exists: {input_file.exists()}")
 if input_file.exists():

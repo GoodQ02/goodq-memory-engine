@@ -145,7 +145,7 @@ def seed_missing_assets() -> None:
 
     # Choose sample files if available
     repo_root = Path(__file__).resolve().parents[1]
-    smoke = repo_root / "smoke_inbox"
+    smoke = repo_root / "samples" / "ingestion"
     sample_img = str((smoke / "sample.jpg")) if (smoke / "sample.jpg").exists() else ""
     sample_wav = str((smoke / "sample.wav")) if (smoke / "sample.wav").exists() else sample_img or ""
 

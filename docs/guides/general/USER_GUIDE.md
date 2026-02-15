@@ -40,12 +40,12 @@ python scripts\cache_readiness_check.py
 
 1. **Place a video in the inbox:**
    ```powershell
-   Copy-Item "<project_root>\sample_media\your_video.mp4" <project_root>\smoke_inbox\
+   Copy-Item "<project_root>\sample_media\your_video.mp4" <project_root>\samples\smoke\
    ```
 
 2. **Run lite ingestion (quick test):**
    ```powershell
-   pwsh scripts\ingest_videos_lite.ps1 -InputDir smoke_inbox -MaxVideos 1 -MaxScenes 2 -VerboseSteps
+   pwsh scripts\ingest_videos_lite.ps1 -InputDir samples/smoke -MaxVideos 1 -MaxScenes 2 -VerboseSteps
    ```
 
 3. **Check results:**
@@ -110,7 +110,7 @@ Your Video
 
 ```powershell
 # Basic usage
-pwsh scripts\ingest_videos_lite.ps1 -InputDir smoke_inbox
+pwsh scripts\ingest_videos_lite.ps1 -InputDir samples/smoke
 
 # With limits (faster testing)
 pwsh scripts\ingest_videos_lite.ps1 `
@@ -121,13 +121,13 @@ pwsh scripts\ingest_videos_lite.ps1 `
 
 # Custom workspace
 pwsh scripts\ingest_videos_lite.ps1 `
-    -InputDir smoke_inbox `
+    -InputDir samples/smoke `
     -Workspace logs\my_test `
     -Output logs\my_test\results.json
 ```
 
 **Parameters:**
-- `-InputDir`: Source folder for videos (default: `smoke_inbox`)
+- `-InputDir`: Source folder for videos (default: `samples/smoke`)
 - `-MaxVideos`: Limit number of videos (default: 1)
 - `-MaxScenes`: Limit scenes per video (default: 12)
 - `-VerboseSteps`: Show detailed step output
@@ -571,7 +571,7 @@ Copy-Item <GOODQ_DATA_ROOT>\backups\GoodQ\current\* <GOODQ_DATA_ROOT>\offsite_ba
 | Task | Command |
 |------|---------|
 | Health Check | `pwsh scripts\mission_health_check.ps1 -EnvPrefix goodq` |
-| Lite Ingest | `pwsh scripts\ingest_videos_lite.ps1 -InputDir smoke_inbox -VerboseSteps` |
+| Lite Ingest | `pwsh scripts\ingest_videos_lite.ps1 -InputDir samples/smoke -VerboseSteps` |
 | Dashboard | `pwsh scripts\command_center.ps1` |
 | View Logs | `Get-Content <GOODQ_DATA_ROOT>\GoodQ_Data (See LEGACY_PATHS_DEPRECATED.md)\logs\step_runs.jsonl -Tail 50` |
 | DB Query | `sqlite3 <GOODQ_DATA_ROOT>\GoodQ_Data (See LEGACY_PATHS_DEPRECATED.md)\data\memory_db\memory.db` |

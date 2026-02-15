@@ -75,7 +75,7 @@ The Control Agent runs automatically during ingestion - **no configuration neede
 
 ```bash
 # Control Agent activates automatically
-python -m cli.run_ingestion --input-dir smoke_inbox
+python -m cli.run_ingestion --input-dir samples/ingestion
 ```
 
 ### Manual Diagnosis

@@ -64,7 +64,7 @@ STATUS_INSUFFICIENT_RESOURCES
 ### Success with Small Files
 ```
 manual_debug_test.log:
-[OK] Found sample video: <project_root>\data\testing\test_input\sample.mp4
+[OK] Found sample video: <project_root>\samples\smoke\sample.mp4
 Exit code: 0
 [SUCCESS]
 ```

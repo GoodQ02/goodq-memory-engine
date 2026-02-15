@@ -24,7 +24,7 @@ class PipelineOptimizationRunner:
         # Check for sample video
         sample_paths = [
             self.base_dir / "import_inbox" / "sample.mp4",
-            self.base_dir / "test_input" / "sample.mp4",
+            self.base_dir / "samples" / "ingestion" / "sample.mp4",
             Path("L:/_DATA/FAMILY_FEAST")
         ]
         

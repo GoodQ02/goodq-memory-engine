@@ -115,6 +115,7 @@ $RECYCLE.BIN/
 *.jpg
 *.jpeg
 *.png
+!samples/assets/*.png
 *.gif
 *.bmp
 *.tiff

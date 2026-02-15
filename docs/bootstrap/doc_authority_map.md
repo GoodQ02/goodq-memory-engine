@@ -11,6 +11,13 @@ Generated: 2026-02-11T22:50:35
 - Recursive scan: `docs/` plus root markdown/text docs.
 - Total documents audited: **544**.
 
+## Documentation Governance
+
+- `docs/bootstrap/PATH_ABSTRACTION_CONTRACT.md`
+- `docs/technical/LEGACY_PATHS_DEPRECATED.md`
+- `docs/bootstrap/doc_governance_summary.md`
+- `scripts/docs/doc_drift_lint.py`
+
 ## Category Definitions
 
 - **A) Canonical**: must be preserved and actively maintained as source-of-truth.

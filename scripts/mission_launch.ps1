@@ -27,10 +27,20 @@ if (Test-Path $syncScript) {
 }
 
 Info "Health check"
-& pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'mission_health_check.ps1') -EnvPrefix $EnvPrefix
+$healthCheckScript = Join-Path $PSScriptRoot 'mission_health_check.ps1'
+if (Test-Path $healthCheckScript) {
+  & pwsh -NoProfile -ExecutionPolicy Bypass -File $healthCheckScript -EnvPrefix $EnvPrefix
+} else {
+  Warn "Skipping health check: missing script '$healthCheckScript'"
+}
 
 Info "Enable/verify CUDA"
-& pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'enable_cuda.ps1') -Verify
+$enableCudaScript = Join-Path $PSScriptRoot 'enable_cuda.ps1'
+if (Test-Path $enableCudaScript) {
+  & pwsh -NoProfile -ExecutionPolicy Bypass -File $enableCudaScript -Verify
+} else {
+  Warn "Skipping CUDA verify: missing script '$enableCudaScript'"
+}
 
 if ($Airplane) {
   $hf = [Environment]::GetEnvironmentVariable('HF_HOME','User')
@@ -46,7 +56,12 @@ if ($Airplane) {
 
 if ($Mode -eq 'dryrun') {
   Info 'Running dry run export bundle'
-  & pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'run_full_dry_run.ps1') -EnvPrefix $EnvPrefix
+  $dryRunScript = Join-Path $PSScriptRoot 'run_full_dry_run.ps1'
+  if (Test-Path $dryRunScript) {
+    & pwsh -NoProfile -ExecutionPolicy Bypass -File $dryRunScript -EnvPrefix $EnvPrefix
+  } else {
+    Warn "Skipping dry run bundle: missing script '$dryRunScript'"
+  }
 }
 elseif ($Mode -eq 'pipeline') {
   Info 'Running direct ingestion pipeline'

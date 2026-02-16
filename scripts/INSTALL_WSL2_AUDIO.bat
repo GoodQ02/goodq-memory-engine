@@ -64,7 +64,7 @@ echo   Testing Bridge
 echo ================================================================================
 echo.
 
-"%CONDA_EXE%" run -n goodq_core python L:\goodq4all\wsl2_audio_bridge.py
+"%CONDA_EXE%" run -n goodq_core python "%~dp0wsl2_audio_bridge.py"
 
 echo.
 echo ================================================================================

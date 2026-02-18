@@ -2,6 +2,7 @@
 REM GoodQ4All Master Launcher (Batch Wrapper)
 REM Double-click this to start GoodQ4All
 
-cd /d L:\goodq4all
-powershell.exe -ExecutionPolicy Bypass -File "L:\goodq4all\LAUNCH_GOODQ.ps1"
+set "ROOT_DIR=%~dp0"
+cd /d "%ROOT_DIR%"
+powershell.exe -ExecutionPolicy Bypass -File "%ROOT_DIR%LAUNCH_GOODQ.ps1"
 pause

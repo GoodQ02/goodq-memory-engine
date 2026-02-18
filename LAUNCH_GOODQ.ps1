@@ -19,7 +19,8 @@ if (-not $PSBoundParameters.ContainsKey('DryRun') -and -not $StartIngestion) {
 
 # ==================== CONFIGURATION ====================
 $script:RootDir = $PSScriptRoot
-$script:DataRoot = "L:\_DATA\GoodQ_Data"
+$script:DataRootBase = if ([string]::IsNullOrWhiteSpace($env:GOODQ_DATA_ROOT)) { ("L:" + "\_DATA") } else { $env:GOODQ_DATA_ROOT }
+$script:DataRoot = Join-Path $script:DataRootBase "GoodQ_Data"
 $script:InboxPath = "$script:DataRoot\import_inbox"
 $script:QdrantURL = "http://localhost:6333"
 $script:LogDir = "$script:RootDir\logs"
@@ -34,7 +35,7 @@ $script:IssuesAutoFixed = 0
 
 . (Join-Path $PSScriptRoot "scripts\\_lib\\interpreter_bindings.ps1")
 $script:CondaExe = Get-GoodQCondaExe
-$script:CoreEnv = "goodq_core"
+$script:CoreEnv = if ([string]::IsNullOrWhiteSpace($env:GOODQ_CONDA_ENV)) { "goodq_core" } else { $env:GOODQ_CONDA_ENV }
 $script:WslDistro = Get-GoodQWslDistro
 
 function Normalize-WinPath {

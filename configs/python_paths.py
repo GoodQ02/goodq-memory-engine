@@ -91,10 +91,15 @@ class PythonPathConfig:
 
         # WSL-specific: look for Windows miniconda under /mnt/c
         if platform.system() == 'Linux' and ('WSL' in platform.release() or os.environ.get('WSL_DISTRO_NAME')):
+            users_root = Path('/mnt/c/Users')
+            if users_root.exists() and users_root.is_dir():
+                for user_dir in users_root.iterdir():
+                    if user_dir.is_dir():
+                        common_paths.append(user_dir / 'miniconda3')
+                        common_paths.append(user_dir / 'anaconda3')
             common_paths.extend([
-                Path('/mnt/c/Users/jdben/miniconda3'),
-                Path('/mnt/c/Users/Administrator/miniconda3'),
                 Path('/mnt/c/ProgramData/miniconda3'),
+                Path('/mnt/c/ProgramData/anaconda3'),
             ])
         
         for path in common_paths:

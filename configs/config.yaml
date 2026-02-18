@@ -36,6 +36,16 @@ model:
   workplace: The GoodPlace, Chicago, Illinois
 
 # ============================================================================
+# HOST IDENTITY (PORTABILITY LAYER)
+# ============================================================================
+host:
+  profile: ${GOODQ_HOST_PROFILE:-UNSET}
+  data_root: ${GOODQ_DATA_ROOT:-L:/_DATA}
+  wsl_distro: ${GOODQ_WSL_DISTRO:-Ubuntu}
+  wsl_user: ${GOODQ_WSL_USER:-auto}
+  conda_env: ${GOODQ_CONDA_ENV:-goodq_core}
+
+# ============================================================================
 # PATHS
 # ============================================================================
 paths:
@@ -113,7 +123,7 @@ gpu:
   enabled: true
   cuda_version: "12.1"
   torch_version: "2.5.1+cu121"
-  primary_env: goodq_core
+  primary_env: ${GOODQ_CONDA_ENV:-goodq_core}
   memory_fraction: 0.85
   allow_growth: true
 
@@ -122,7 +132,7 @@ gpu:
 # ============================================================================
 envs:
   # Unified Windows GPU environment (CUDA 12.1)
-  core: goodq_core
+  core: ${GOODQ_CONDA_ENV:-goodq_core}
   
   # WSL2 Audio lab (separate Linux GPU runtime)
   audio_transcribe: goodq_audio_transcribe

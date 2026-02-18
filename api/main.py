@@ -1,6 +1,7 @@
 from __future__ import annotations
 from typing import Any, Dict
 import json
+import os
 import sys
 import logging
 from pathlib import Path
@@ -64,6 +65,26 @@ app.include_router(run_index.router)
 
 _CFG = load_configs({})
 _MEMORY_ROUTER = build_memory_router(_CFG)
+_PATHS_CFG: Dict[str, Any] = _CFG.get("paths", {}) or {}
+_HOST_CFG: Dict[str, Any] = _CFG.get("host", {}) or {}
+_API_ROOT = Path(__file__).resolve().parent
+_PROJECT_ROOT = _API_ROOT.parent
+_HOST_DATA_ROOT = _HOST_CFG.get("data_root") or os.environ.get("GOODQ_DATA_ROOT")
+if _HOST_DATA_ROOT:
+    _DEFAULT_DATA_ROOT = Path(str(_HOST_DATA_ROOT)) / "GoodQ_Data"
+else:
+    _DEFAULT_DATA_ROOT = Path(str(_PATHS_CFG.get("data_root") or (_PROJECT_ROOT / "data")))
+_DATA_ROOT = Path(_PATHS_CFG.get("data_root") or _DEFAULT_DATA_ROOT)
+_LOG_DIR = Path(_PATHS_CFG.get("log_dir") or (_PROJECT_ROOT / "logs"))
+_DB_PATH = Path(_PATHS_CFG.get("db_path") or (_DATA_ROOT / "memory.db"))
+_KG_DB_PATH = Path(_PATHS_CFG.get("knowledge_graph_db") or (_DATA_ROOT / "knowledge_graph.db"))
+_PROCESSING_PATH = Path(_PATHS_CFG.get("processing") or (_DATA_ROOT / "processing"))
+_IMPORT_INBOX = Path(_PATHS_CFG.get("import_inbox") or (_DATA_ROOT / "import_inbox"))
+_WSL_DISTRO = str(os.environ.get("GOODQ_WSL_DISTRO") or _HOST_CFG.get("wsl_distro") or "Ubuntu")
+_WSL_USER = str(os.environ.get("GOODQ_WSL_USER") or "").strip()
+if not _WSL_USER or _WSL_USER.lower() == "auto":
+    _WSL_USER = str(os.environ.get("USER") or os.environ.get("USERNAME") or os.environ.get("LOGNAME") or "user")
+_WSL_WORKSPACE = str(os.environ.get("GOODQ_WSL_WORKSPACE") or f"/home/{_WSL_USER}/goodq_audio")
 
 # Enforce CONFIG_LOADING_CONTRACT: reuse the already-loaded cfg in submodules.
 # (api/routes/search.py lazily calls load_configs() otherwise; keep it lazy but non-reloading.)
@@ -303,7 +324,7 @@ def _collect_engine_details() -> Dict[str, Any]:
         }
 
     # Check vector database
-    chroma_dir = Path("L:/_DATA/GoodQ_Data/chroma")
+    chroma_dir = Path(_PATHS_CFG.get("chroma_dir") or (_DATA_ROOT / "chroma"))
     engines["vector_db"] = {
         "name": "Vector Database",
         "category": "Search & Retrieval",
@@ -375,7 +396,7 @@ def _collect_wsl_status() -> Dict[str, Any]:
 
     try:
         vllm_check = subprocess.run(
-            ["wsl", "-d", "Ubuntu", "--", "systemctl", "is-active", "vllm-llama1b.service"],
+            ["wsl", "-d", _WSL_DISTRO, "--", "systemctl", "is-active", "vllm-llama1b.service"],
             capture_output=True,
             text=True,
             timeout=3,
@@ -390,7 +411,7 @@ def _collect_wsl_status() -> Dict[str, Any]:
             [
                 "wsl",
                 "-d",
-                "Ubuntu",
+                _WSL_DISTRO,
                 "--",
                 "bash",
                 "-lc",
@@ -411,7 +432,7 @@ def _collect_wsl_status() -> Dict[str, Any]:
             [
                 "wsl",
                 "-d",
-                "Ubuntu",
+                _WSL_DISTRO,
                 "--",
                 "bash",
                 "-lc",
@@ -433,7 +454,7 @@ def _collect_wsl_status() -> Dict[str, Any]:
             [
                 "wsl",
                 "-d",
-                "Ubuntu",
+                _WSL_DISTRO,
                 "--",
                 "bash",
                 "-lc",
@@ -534,7 +555,7 @@ def get_status() -> Dict[str, Any]:
     # Quick database presence check
     database_data = {"exists": False, "scenes": 0}
     try:
-        db_path = Path("L:/_DATA/GoodQ_Data/memory.db")
+        db_path = _DB_PATH
         database_data["exists"] = db_path.exists()
         if database_data["exists"]:
             database_data["scenes"] = 1  # Minimal indicator so UI shows healthy
@@ -665,7 +686,7 @@ def vector_search(
 
     cfg = _CFG
     paths = cfg.get("paths", {}) or {}
-    persist_dir = paths.get("chroma_dir") or "L:/_DATA/GoodQ_Data/databases/chroma"
+    persist_dir = paths.get("chroma_dir") or str(_DATA_ROOT / "databases" / "chroma")
 
     emb = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
     vectordb = Chroma(collection_name="goodq", persist_directory=persist_dir, embedding_function=emb)
@@ -717,7 +738,7 @@ def get_scenes() -> Dict[str, Any]:
     from pathlib import Path
     
     # Look for scenes in data/output
-    scenes_dir = Path("L:/_DATA/GoodQ_Data/output")
+    scenes_dir = _DATA_ROOT / "output"
     all_scenes = []
     
     if scenes_dir.exists():
@@ -744,9 +765,9 @@ def get_knowledge_graph() -> Dict[str, Any]:
     
     # Look for entity data
     # Primary KG database (SQLite)
-    kg_db = Path("L:/_DATA/GoodQ_Data/knowledge_graph.db")
+    kg_db = _KG_DB_PATH
     # Legacy JSON export (fallback)
-    kg_file = Path("L:/_DATA/GoodQ_Data/output/knowledge_graph.json")
+    kg_file = _DATA_ROOT / "output" / "knowledge_graph.json"
     
     if kg_file.exists():
         try:
@@ -798,11 +819,10 @@ class ChatRequest(BaseModel):
 @app.get("/api/queue")
 def get_queue() -> Dict[str, Any]:
     """Get current processing queue"""
-    base_dir = Path("L:/goodq4all")
-    import_inbox = base_dir / "import_inbox"
-    processing_dir = base_dir / "data" / "processing"
-    processed_dir = base_dir / "data" / "processed"
-    failed_dir = base_dir / "data" / "failed"
+    import_inbox = _IMPORT_INBOX
+    processing_dir = _PROCESSING_PATH
+    processed_dir = _PROCESSING_PATH.parent / "processed"
+    failed_dir = _PROCESSING_PATH.parent / "failed"
 
     queue_data = {
         "inbox": {"count": 0, "files": [], "total_size_mb": 0},
@@ -961,7 +981,7 @@ def get_wsl2_status() -> Dict[str, Any]:
 @app.get("/api/command-center")
 def get_command_center() -> Dict[str, Any]:
     """Command center status - consolidates all system info."""
-    db_healthy = Path("L:/_DATA/GoodQ_Data/memory.db").exists()
+    db_healthy = _DB_PATH.exists()
     processing_stats = get_progress()
     model_stats = get_models()
     wsl_status = _collect_wsl_status()
@@ -1062,9 +1082,9 @@ def test_audio(request: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
         diarization_model = None
         # Try native Windows path (WSL mount), then WSL cat fallback
         try:
-            cfg_path = Path(r"\\wsl$\Ubuntu\home\joesdomingo\goodq_audio\config.json")
+            cfg_path = Path(f"\\\\wsl$\\{_WSL_DISTRO}\\home\\{_WSL_USER}\\goodq_audio\\config.json")
             if not cfg_path.exists():
-                cfg_path = Path("/home/joesdomingo/goodq_audio/config.json")
+                cfg_path = Path(f"{_WSL_WORKSPACE}/config.json")
             if cfg_path.exists():
                 cfg = json.loads(cfg_path.read_text())
             else:
@@ -1072,7 +1092,7 @@ def test_audio(request: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
             if cfg is None:
                 # Fallback: fetch via wsl cat
                 cfg_proc = subprocess.run(
-                    ["wsl", "-d", "Ubuntu", "--", "cat", "/home/joesdomingo/goodq_audio/config.json"],
+                    ["wsl", "-d", _WSL_DISTRO, "--", "cat", f"{_WSL_WORKSPACE}/config.json"],
                     capture_output=True,
                     text=True,
                     timeout=3,
@@ -1087,7 +1107,7 @@ def test_audio(request: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
         
         # Check if audio service is running
         result = subprocess.run(
-            ["wsl", "-d", "Ubuntu", "--", "systemctl", "is-active", "goodq-audio.service"],
+            ["wsl", "-d", _WSL_DISTRO, "--", "systemctl", "is-active", "goodq-audio.service"],
             capture_output=True,
             text=True,
             timeout=5
@@ -1097,7 +1117,7 @@ def test_audio(request: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
         cuda_available = False
         try:
             cuda_check = subprocess.run(
-                ["wsl", "-d", "Ubuntu", "--", "bash", "-lc", "nvidia-smi --query-gpu=name --format=csv,noheader,nounits | head -n1"],
+                ["wsl", "-d", _WSL_DISTRO, "--", "bash", "-lc", "nvidia-smi --query-gpu=name --format=csv,noheader,nounits | head -n1"],
                 capture_output=True,
                 text=True,
                 timeout=5
@@ -1108,7 +1128,7 @@ def test_audio(request: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
         
         # Check if we can access the audio processing scripts
         check_scripts = subprocess.run(
-            ["wsl", "-d", "Ubuntu", "--", "test", "-d", "/mnt/l/goodq4all/wsl2_audio"],
+            ["wsl", "-d", _WSL_DISTRO, "--", "test", "-d", f"{_WSL_WORKSPACE}/scripts"],
             capture_output=True,
             timeout=5
         )
@@ -1169,9 +1189,9 @@ def get_models() -> Dict[str, Any]:
 
 def _local_progress_stats() -> Dict[str, Any]:
     """Best-effort processing stats based on local progress.json and filesystem."""
-    progress_file = Path("L:/goodq4all/logs/progress.json")
-    processing_dir = Path("L:/_DATA/GoodQ_Data/processing")
-    processed_dir = Path("L:/_DATA/GoodQ_Data/processed")
+    progress_file = _LOG_DIR / "progress.json"
+    processing_dir = _PROCESSING_PATH
+    processed_dir = _PROCESSING_PATH.parent / "processed"
 
     progress = {}
     try:
@@ -1381,7 +1401,7 @@ def get_watchdog_logs(lines: int = 200) -> Dict[str, Any]:
     """Tail the watchdog log for the command center UI."""
     return {"available": False, "lines": [], "disabled": True}
 
-    log_path = Path("L:/goodq4all/logs/watchdog.log")
+    log_path = _LOG_DIR / "watchdog.log"
     result: Dict[str, Any] = {
         "available": log_path.exists(),
         "path": str(log_path),

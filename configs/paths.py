@@ -4,6 +4,7 @@ Central source of truth for all project paths.
 """
 from pathlib import Path
 import os
+import re
 
 
 def drive_path(win_path: str) -> Path:
@@ -20,15 +21,79 @@ def drive_path(win_path: str) -> Path:
         return Path(f"/mnt/{drive}") / rest
     return Path(win_path)
 
+
+def _normalize_win_style(path_value: str) -> str:
+    if not path_value:
+        return path_value
+    return path_value.replace("\\", "/")
+
+
+_ENV_REF_PATTERN = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-(.*?))?\}")
+
+
+def _resolve_env_ref(value: str) -> str:
+    if not isinstance(value, str):
+        return value
+
+    def _replace(match: re.Match[str]) -> str:
+        env_name = match.group(1)
+        default_value = match.group(2)
+        env_value = os.environ.get(env_name)
+        if default_value is not None:
+            return env_value if env_value not in (None, "") else default_value
+        return env_value if env_value is not None else match.group(0)
+
+    return _ENV_REF_PATTERN.sub(_replace, value)
+
+
+def _read_host_data_root_from_config() -> str | None:
+    config_path = Path(__file__).resolve().parent / "config.yaml"
+    if not config_path.exists():
+        return None
+
+    in_host_block = False
+    for raw_line in config_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.rstrip()
+        stripped = line.strip()
+
+        if not stripped or stripped.startswith("#"):
+            continue
+
+        if not line.startswith(" ") and stripped.endswith(":"):
+            in_host_block = stripped == "host:"
+            continue
+
+        if in_host_block and line.startswith("  ") and stripped.startswith("data_root:"):
+            value = stripped.split(":", 1)[1].strip().strip("'\"")
+            return value or None
+
+    return None
+
+
+def _resolve_authoritative_data_root() -> str:
+    host_data_root = _read_host_data_root_from_config()
+    if host_data_root:
+        return _normalize_win_style(_resolve_env_ref(host_data_root)).rstrip("/")
+    return _normalize_win_style(os.environ.get("GOODQ_DATA_ROOT", "L:" + "/_DATA")).rstrip("/")
+
+
+def _drive_prefix(path_value: str) -> str:
+    normalized = _normalize_win_style(path_value)
+    if len(normalized) >= 2 and normalized[1] == ":":
+        return normalized[:2]
+    return ""
+
 # ==============================================================================
 # PROJECT ROOT
 # ==============================================================================
-PROJECT_ROOT = drive_path("L:/goodq4all")
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 # ==============================================================================
 # DATA DIRECTORIES (Not in GitHub - local only)
 # ==============================================================================
-DATA_ROOT = drive_path("L:/_DATA/GoodQ_Data")
+_GOODQ_DATA_ROOT = _resolve_authoritative_data_root()
+_DRIVE_PREFIX = _drive_prefix(_GOODQ_DATA_ROOT)
+DATA_ROOT = drive_path(f"{_GOODQ_DATA_ROOT}/GoodQ_Data")
 
 # Databases
 DATABASE_DIR = DATA_ROOT / "databases"
@@ -73,9 +138,9 @@ ENVS_DIR = PROJECT_ROOT / "envs"
 # ==============================================================================
 # EXTERNAL DIRECTORIES
 # ==============================================================================
-MODELS_DIR = drive_path("L:/_DATA/models")
-TOOLS_DIR = drive_path("L:/_TOOLS")
-ARCHIVE_DIR = drive_path("L:/_ARCHIVE")
+MODELS_DIR = drive_path(f"{_GOODQ_DATA_ROOT}/models")
+TOOLS_DIR = drive_path(f"{_DRIVE_PREFIX}/_TOOLS" if _DRIVE_PREFIX else "_TOOLS")
+ARCHIVE_DIR = drive_path(f"{_DRIVE_PREFIX}/_ARCHIVE" if _DRIVE_PREFIX else "_ARCHIVE")
 
 # ==============================================================================
 # HELPER FUNCTIONS

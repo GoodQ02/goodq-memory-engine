@@ -9,6 +9,14 @@ function Get-GoodQWslDistro {
     return $distro
 }
 
+function Get-GoodQCondaEnv {
+    $envName = $env:GOODQ_CONDA_ENV
+    if ([string]::IsNullOrWhiteSpace($envName)) {
+        return "goodq_core"
+    }
+    return $envName
+}
+
 function Get-GoodQCondaExe {
     # Prefer CONDA_EXE if present (set by conda/conda init).
     $candidates = @()

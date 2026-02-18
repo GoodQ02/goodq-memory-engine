@@ -13,9 +13,74 @@ class WSL2AudioBridge:
     """Bridge to WSL2 audio processing"""
     
     def __init__(self):
-        self.wsl_user = os.environ.get("GOODQ_WSL_USER", "joesdomingo")
-        self.workspace = os.environ.get("GOODQ_WSL_WORKSPACE", "/home/joesdomingo/goodq_audio")
+        self.require_wsl_audio = self._is_truthy(os.environ.get("GOODQ_REQUIRE_WSL_AUDIO", ""))
+        self.wsl_user = self._resolve_wsl_user()
+        self.workspace = self._resolve_wsl_workspace()
         self.wsl_distro = os.environ.get("GOODQ_WSL_DISTRO", "Ubuntu")
+        self._workspace_checked = False
+        self._workspace_warned = False
+        self._workspace_ready = False
+
+    @staticmethod
+    def _is_truthy(value):
+        return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+    def _resolve_wsl_user(self):
+        explicit = os.environ.get("GOODQ_WSL_USER")
+        if explicit:
+            return explicit
+        if self.require_wsl_audio:
+            raise RuntimeError(
+                "GOODQ_REQUIRE_WSL_AUDIO=1 requires GOODQ_WSL_USER to be set explicitly."
+            )
+        for candidate in (os.environ.get("USER"), os.environ.get("USERNAME"), os.environ.get("LOGNAME")):
+            if candidate:
+                return candidate
+        return "user"
+
+    def _resolve_wsl_workspace(self):
+        explicit = os.environ.get("GOODQ_WSL_WORKSPACE")
+        if explicit:
+            return explicit
+        return f"/home/{self.wsl_user}/goodq_audio"
+
+    def _ensure_workspace_ready(self):
+        if self._workspace_checked and (self._workspace_ready or not self.require_wsl_audio):
+            return self._workspace_ready
+
+        try:
+            check = subprocess.run(
+                ["wsl", "-d", self.wsl_distro, "--", "test", "-d", self.workspace],
+                capture_output=True,
+                timeout=5,
+            )
+            self._workspace_ready = check.returncode == 0
+        except Exception as e:
+            self._workspace_ready = False
+            message = (
+                f"WSL workspace preflight failed for distro={self.wsl_distro}, "
+                f"workspace={self.workspace}: {e}"
+            )
+            self._workspace_checked = True
+            if self.require_wsl_audio:
+                raise RuntimeError(message) from e
+            if not self._workspace_warned:
+                print(f"[WSL2AudioBridge][WARN] {message}")
+                self._workspace_warned = True
+            return False
+
+        self._workspace_checked = True
+        if not self._workspace_ready:
+            message = (
+                f"WSL workspace not found for distro={self.wsl_distro}, workspace={self.workspace}. "
+                "Set GOODQ_WSL_USER and GOODQ_WSL_WORKSPACE for deterministic host setup."
+            )
+            if self.require_wsl_audio:
+                raise RuntimeError(message)
+            if not self._workspace_warned:
+                print(f"[WSL2AudioBridge][WARN] {message}")
+                self._workspace_warned = True
+        return self._workspace_ready
         
     def wsl_path(self, windows_path):
         """Convert Windows path to WSL path"""
@@ -53,6 +118,8 @@ class WSL2AudioBridge:
         audio_path = Path(audio_file)
         if not audio_path.exists():
             raise FileNotFoundError(f"Audio file not found: {audio_file}")
+
+        self._ensure_workspace_ready()
             
         # Calculate dynamic timeout based on audio duration
         # Formula: base_overhead + (duration * processing_factor)
@@ -156,6 +223,7 @@ class WSL2AudioBridge:
             
     def check_status(self):
         """Check if WSL2 audio is ready"""
+        self._ensure_workspace_ready()
         test_cmd = f"source {self.workspace}/setup_cuda_env.sh && python3 -c 'import torch; print(torch.cuda.is_available())' 2>&1"
         result = subprocess.run(
             ["wsl", "-d", self.wsl_distro, "--", "bash", "-c", test_cmd],
@@ -167,6 +235,7 @@ class WSL2AudioBridge:
         
     def get_info(self):
         """Get WSL2 audio system info"""
+        self._ensure_workspace_ready()
         info_cmd = f"source {self.workspace}/setup_cuda_env.sh && python3 -c \"import torch; print(f'Device: {{\\\"cuda\\\" if torch.cuda.is_available() else \\\"cpu\\\"}}'); import sys; sys.stdout.flush(); print(f'GPU: {{torch.cuda.get_device_name(0)}}') if torch.cuda.is_available() else None; print(f'VRAM: {{torch.cuda.get_device_properties(0).total_memory / 1e9:.1f}}GB') if torch.cuda.is_available() else None\" 2>&1"
         
         result = subprocess.run(

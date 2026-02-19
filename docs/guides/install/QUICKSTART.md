@@ -1,49 +1,55 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-02-12 -->
+<!-- DOC_LAST_VERIFIED: 2026-02-19 -->
 
-# GoodQ4All Quickstart (Canonical)
+# GoodQ4All Quickstart
 
-## 1. Select Profile
+Use this when you need the shortest clean path from clone to launch.
+
+## 1. Choose Profile
 
 ```powershell
 # Legacy canonical behavior
 Remove-Item Env:GOODQ_HOST_PROFILE -ErrorAction SilentlyContinue
 
-# or CPU-safe baseline
+# CPU-safe portability
 $env:GOODQ_HOST_PROFILE = "BASELINE"
 
-# or throughput mode
-$env:GOODQ_HOST_PROFILE = "GPU_ENHANCED"
+# Throughput acceleration
+# $env:GOODQ_HOST_PROFILE = "GPU_ENHANCED"
 ```
 
-## 2. Optional Overrides
+## 2. Optional Host Overrides
 
 ```powershell
-$env:GOODQ_DATA_ROOT = "<path_to_data_root>"   # optional
-$env:GOODQ_WSL_USER = "jdben"           # optional
-$env:GOODQ_WSL_WORKSPACE = "/home/jdben/goodq4all"  # optional
-$env:GOODQ_WSL_DISTRO = "Ubuntu"        # optional
+$env:GOODQ_DATA_ROOT = "<path_to_data_root>"
+$env:GOODQ_CONDA_ENV = "goodq_core"
+$env:GOODQ_WSL_DISTRO = "Ubuntu"
+$env:GOODQ_WSL_USER = "<wsl_user>"
+$env:GOODQ_WSL_WORKSPACE = "/home/<wsl_user>/goodq_audio"
 ```
 
-## 3. Optional Strict Requirements
+## 3. Optional Strict Flags
 
 ```powershell
 $env:GOODQ_REQUIRE_GPU = "1"
 $env:GOODQ_REQUIRE_WSL_AUDIO = "1"
 ```
 
-## 4. Verify Bootstrap Semantics
+## 4. Validate and Launch
+
+```powershell
+.\scripts\bootstrap_validate.bat
+.\LAUNCH_GOODQ.ps1
+```
+
+## 5. Deep Validation (Optional)
 
 ```powershell
 python scripts/smoke_phase_a.py
 ```
 
-Expected logs and report outputs:
+- Matrix: [`docs/bootstrap/smoke_matrix_phase_a.md`](../../bootstrap/smoke_matrix_phase_a.md)
+- Logs: `logs/bootstrap_smoke/`
 
-- `logs/bootstrap_smoke/`
-- `docs/bootstrap/smoke_matrix_phase_a.md` (expectation matrix)
-
-## 5. Run Ingestion
-
-Use your standard launcher/run entrypoint after smoke passes.
+For full setup detail, use [`docs/guides/install/INSTALL.md`](INSTALL.md).

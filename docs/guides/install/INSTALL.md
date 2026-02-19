@@ -1,76 +1,84 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-02-12 -->
+<!-- DOC_LAST_VERIFIED: 2026-02-19 -->
 
-# GoodQ4All Install (Canonical)
+# GoodQ4All Install
 
-This is the canonical installation and bootstrap guide for active environments.
+This is the canonical install and bootstrap guide.
 
-## Runtime Profiles
+## Performance Profiles
 
-- `UNSET`: legacy canonical behavior (current defaults preserved).
-- `BASELINE`: CPU-safe, GPU-optional portability mode.
-- `GPU_ENHANCED`: additive throughput mode (CUDA/WSL acceleration allowed).
+GoodQ4All supports three profile semantics:
 
-Use PowerShell:
+- `UNSET`: legacy canonical behavior (default when `GOODQ_HOST_PROFILE` is not set).
+- `BASELINE`: CPU-safe portability mode.
+- `GPU_ENHANCED`: additive acceleration mode (CUDA/WSL when available).
+
+Profile selection:
 
 ```powershell
-# CPU-safe baseline
 $env:GOODQ_HOST_PROFILE = "BASELINE"
-
-# Throughput profile
+# or
 $env:GOODQ_HOST_PROFILE = "GPU_ENHANCED"
 ```
 
 Strict fail-fast controls:
 
 ```powershell
-# Require GPU capability or fail fast
 $env:GOODQ_REQUIRE_GPU = "1"
-
-# Require WSL audio availability or fail fast
 $env:GOODQ_REQUIRE_WSL_AUDIO = "1"
 ```
 
-## Path and Host Identity Abstraction
+- Keep strict flags off for permissive/dev flows.
+- Enable strict flags for deterministic desktop enforcement.
 
-- `GOODQ_DATA_ROOT`: data root override.
-  - if unset, default data root is `<GOODQ_DATA_ROOT>`.
-- `GOODQ_WSL_USER`: optional WSL user override.
-- `GOODQ_WSL_WORKSPACE`: optional WSL workspace override.
-- `GOODQ_WSL_DISTRO`: optional distro override (default `Ubuntu`).
+## Host and Path Abstraction
 
-Examples:
+Canonical portability variables:
+
+- `GOODQ_DATA_ROOT`: data root override (default fallback remains platform contract).
+- `GOODQ_CONDA_ENV`: interpreter env override (default: `goodq_core`).
+- `GOODQ_WSL_DISTRO`: WSL distro override (default: `Ubuntu`).
+- `GOODQ_WSL_USER`: optional explicit WSL user.
+- `GOODQ_WSL_WORKSPACE`: optional explicit WSL workspace.
+
+Example:
 
 ```powershell
 $env:GOODQ_DATA_ROOT = "<path_to_data_root>"
-$env:GOODQ_WSL_USER = "<user>"
-$env:GOODQ_WSL_WORKSPACE = "/home/<user>/goodq4all"
+$env:GOODQ_CONDA_ENV = "goodq_core"
 $env:GOODQ_WSL_DISTRO = "Ubuntu"
+$env:GOODQ_WSL_USER = "<wsl_user>"
+$env:GOODQ_WSL_WORKSPACE = "/home/<wsl_user>/goodq_audio"
 ```
 
 ## Install Steps
 
-1. Clone repo and open `<project_root>` in PowerShell.
-2. Ensure the project interpreter/environment is available.
-3. Configure `.env.local` with required credentials.
-4. Validate config resolution:
-   - `python -c "from steps.common.config_loader import load_configs; print(load_configs().get('paths',{}))"`
-5. Run profile smoke matrix:
-   - `python scripts/smoke_phase_a.py`
+1. Clone and open `<project_root>`.
+2. Configure `.env.local` with required tokens/secrets.
+3. Select runtime profile (`BASELINE` or `GPU_ENHANCED`).
+4. Run bootstrap validation:
 
-## Smoke Matrix Validation
+```powershell
+.\scripts\bootstrap_validate.bat
+```
 
-Phase A smoke output:
+5. Launch:
 
-- script: `scripts/smoke_phase_a.py`
-- guide: `docs/bootstrap/smoke_matrix_phase_a.md`
-- logs: `logs/bootstrap_smoke/`
+```powershell
+.\LAUNCH_GOODQ.ps1
+```
 
-Use smoke results to verify:
+## Smoke Matrix
 
-- profile resolution (`UNSET` / `BASELINE` / `GPU_ENHANCED`)
-- GPU auto-config behavior
-- WSL audio enablement behavior
-- path resolution via `GOODQ_DATA_ROOT`
-- strict fail-fast flags (`GOODQ_REQUIRE_GPU`, `GOODQ_REQUIRE_WSL_AUDIO`)
+Use the Phase A smoke matrix when validating profile and fail-fast behavior:
+
+- Guide: [`docs/bootstrap/smoke_matrix_phase_a.md`](../../bootstrap/smoke_matrix_phase_a.md)
+- Runner: [`scripts/smoke_phase_a.py`](../../../scripts/smoke_phase_a.py)
+- Logs: `logs/bootstrap_smoke/`
+
+## Related Canonical Docs
+
+- Quickstart: [`docs/guides/install/QUICKSTART.md`](QUICKSTART.md)
+- Laptop profile guide: [`docs/guides/install/LAPTOP.md`](LAPTOP.md)
+- Path contract: [`docs/bootstrap/PATH_ABSTRACTION_CONTRACT.md`](../../bootstrap/PATH_ABSTRACTION_CONTRACT.md)

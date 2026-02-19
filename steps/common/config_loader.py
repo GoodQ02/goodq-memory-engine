@@ -47,6 +47,25 @@ def _resolve_env_ref(value: str) -> str:
     return _ENV_REF_PATTERN.sub(replace_match, value)
 
 
+def _apply_env_aliases() -> None:
+    """
+    Normalize cross-surface token aliases without requiring duplicate .env entries.
+    Canonical contract prefers HUGGINGFACE_TOKEN and mirrors it to legacy aliases when unset.
+    """
+    hf_primary = (os.environ.get("HUGGINGFACE_TOKEN") or "").strip()
+    hf_legacy = (os.environ.get("HF_TOKEN") or "").strip()
+    pyannote = (os.environ.get("PYANNOTE_TOKEN") or "").strip()
+
+    if hf_primary and not hf_legacy:
+        os.environ["HF_TOKEN"] = hf_primary
+    elif hf_legacy and not hf_primary:
+        os.environ["HUGGINGFACE_TOKEN"] = hf_legacy
+        hf_primary = hf_legacy
+
+    if hf_primary and not pyannote:
+        os.environ["PYANNOTE_TOKEN"] = hf_primary
+
+
 def _normalize_paths(obj: Any) -> Any:
     if isinstance(obj, dict):
         return {k: _normalize_paths(v) for k, v in obj.items()}
@@ -74,6 +93,8 @@ def load_configs(overrides: Dict[str, Any] | None = None) -> Dict[str, Any]:
     except Exception as e:
         print(f'[WARN] Could not load .env.local: {str(e)}')
         pass
+
+    _apply_env_aliases()
 
     log_runtime_profile_state(
         logger=logging.getLogger(__name__),

@@ -303,7 +303,12 @@ def audio_diarize(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
     token_env = str(dz_cfg.get("token_env") or "PYANNOTE_TOKEN")
     model_id = str(dz_cfg.get("model") or "pyannote/speaker-diarization@2.1")
 
-    auth_token = os.getenv(token_env) or os.getenv("PYANNOTE_AUDIO_AUTH") or os.getenv("HF_TOKEN")
+    auth_token = (
+        os.getenv(token_env)
+        or os.getenv("PYANNOTE_AUDIO_AUTH")
+        or os.getenv("HUGGINGFACE_TOKEN")
+        or os.getenv("HF_TOKEN")
+    )
     if not auth_token:
         print("[WARN] No PyAnnote auth token found, skipping diarization")
         return {"diarization": None, "diarize_meta": {"status": "unavailable", "engine": "pyannote", "reason": "no_auth"}}

@@ -7,7 +7,9 @@ call "%~dp0..\\scripts\\_lib\\interpreter_bindings.bat"
 set "SCRIPT_DIR=%~dp0"
 for %%I in ("%SCRIPT_DIR%..") do set "REPO_ROOT=%%~fI"
 for /f "delims=" %%I in ('powershell -NoProfile -Command "$p=$env:REPO_ROOT.TrimEnd('\\');$d=$p.Substring(0,1).ToLower();$rest=$p.Substring(2).Replace('\\','/');Write-Output ('/mnt/' + $d + $rest)"') do set "WSL_REPO_ROOT=%%I"
-if "%GOODQ_WSL_WORKSPACE%"=="" set "GOODQ_WSL_WORKSPACE=~/goodq_audio"
+if "%GOODQ_WSL_USER%"=="" set "GOODQ_WSL_USER=%USERNAME%"
+if "%GOODQ_WSL_USER%"=="" set "GOODQ_WSL_USER=user"
+if "%GOODQ_WSL_WORKSPACE%"=="" set "GOODQ_WSL_WORKSPACE=/home/%GOODQ_WSL_USER%/goodq_audio"
 set "WSL_AUDIO_SCRIPT=%WSL_REPO_ROOT%/wsl2_audio/audio_service.py"
 
 echo ================================================================================

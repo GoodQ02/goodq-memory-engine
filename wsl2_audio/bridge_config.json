@@ -1,7 +1,7 @@
 {
   "windows_queue_dir": "L:\\goodq4all\\wsl2_audio\\queue_in",
   "windows_output_dir": "L:\\goodq4all\\wsl2_audio\\queue_out",
-  "wsl_home_dir": "/home/joesdomingo/goodq_audio",
+  "wsl_home_dir": "/home/user/goodq_audio",
   "timeout_seconds": 3600,
   "poll_interval": 1.0
 }

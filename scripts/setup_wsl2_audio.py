@@ -13,7 +13,14 @@ class WSL2AudioSetup:
     def __init__(self):
         self.base_dir = Path(__file__).resolve().parents[1]
         self.wsl_distro = os.environ.get("GOODQ_WSL_DISTRO", "Ubuntu")
-        self.wsl_workspace = os.environ.get("GOODQ_WSL_WORKSPACE", "/home/goodq/audio_workspace")
+        self.wsl_user = (
+            os.environ.get("GOODQ_WSL_USER")
+            or os.environ.get("USER")
+            or os.environ.get("USERNAME")
+            or os.environ.get("LOGNAME")
+            or "user"
+        )
+        self.wsl_workspace = os.environ.get("GOODQ_WSL_WORKSPACE", f"/home/{self.wsl_user}/goodq_audio")
         self.errors = []
         self.warnings = []
         
@@ -401,7 +408,7 @@ class AudioQueueHandler(FileSystemEventHandler):
         
         try:
             cmd = [
-                "/home/goodq/audio_workspace/venv/bin/python",
+                "__GOODQ_WSL_WORKSPACE__/venv/bin/python",
                 str(self.processor_script),
                 str(audio_path),
                 str(output_path)
@@ -419,7 +426,7 @@ class AudioQueueHandler(FileSystemEventHandler):
             error_marker.write_text(str(e))
 
 if __name__ == "__main__":
-    workspace = Path("/home/goodq/audio_workspace")
+    workspace = Path("__GOODQ_WSL_WORKSPACE__")
     queue_in = workspace / "queue_in"
     queue_out = workspace / "queue_out"
     processor = workspace / "scripts" / "process_audio.py"
@@ -440,6 +447,7 @@ if __name__ == "__main__":
         observer.stop()
     observer.join()
 '''
+        watcher_script = watcher_script.replace("__GOODQ_WSL_WORKSPACE__", self.wsl_workspace)
         
         print("\n[2/3] Creating queue watcher script...")
         watcher_path = f"{self.wsl_workspace}/scripts/watch_queue.py"
@@ -474,8 +482,8 @@ import shutil
 
 class WSL2AudioBridge:
     def __init__(self):
-        self.wsl_queue_in = Path("/home/goodq/audio_workspace/queue_in")
-        self.wsl_queue_out = Path("/home/goodq/audio_workspace/queue_out")
+        self.wsl_queue_in = Path("__GOODQ_WSL_WORKSPACE__/queue_in")
+        self.wsl_queue_out = Path("__GOODQ_WSL_WORKSPACE__/queue_out")
         
     def wsl_path(self, windows_path):
         """Convert Windows path to WSL path"""
@@ -503,7 +511,7 @@ class WSL2AudioBridge:
             
         # Copy to WSL queue
         wsl_audio = self.wsl_path(audio_path)
-        wsl_queue = "/home/goodq/audio_workspace/queue_in"
+        wsl_queue = "__GOODQ_WSL_WORKSPACE__/queue_in"
         
         cmd = f"cp '{wsl_audio}' {wsl_queue}/"
         result = subprocess.run(
@@ -519,7 +527,7 @@ class WSL2AudioBridge:
             return None
             
         # Wait for results
-        result_file = f"/home/goodq/audio_workspace/queue_out/{audio_path.stem}_result.json"
+        result_file = f"__GOODQ_WSL_WORKSPACE__/queue_out/{audio_path.stem}_result.json"
         start_time = time.time()
         
         while time.time() - start_time < timeout:
@@ -546,7 +554,7 @@ class WSL2AudioBridge:
         
     def start_wsl_watcher(self):
         """Start the WSL2 queue watcher"""
-        cmd = "/home/goodq/audio_workspace/venv/bin/python /home/goodq/audio_workspace/scripts/watch_queue.py"
+        cmd = "__GOODQ_WSL_WORKSPACE__/venv/bin/python __GOODQ_WSL_WORKSPACE__/scripts/watch_queue.py"
         subprocess.Popen(
             ["wsl", "-d", "Ubuntu", "--", "bash", "-c", cmd],
             stdout=subprocess.PIPE,
@@ -563,6 +571,8 @@ class WSL2AudioBridge:
         )
         return result.returncode == 0
 '''
+        bridge_code = bridge_code.replace("__GOODQ_WSL_WORKSPACE__", self.wsl_workspace)
+        bridge_code = bridge_code.replace('"Ubuntu"', f'"{self.wsl_distro}"')
         
         bridge_path = self.base_dir / "wsl2_audio_bridge.py"
         print(f"[1/2] Creating bridge module at {bridge_path}...")
@@ -707,3 +717,4 @@ if __name__ == "__main__":
     setup = WSL2AudioSetup()
     success = setup.run()
     sys.exit(0 if success else 1)
+

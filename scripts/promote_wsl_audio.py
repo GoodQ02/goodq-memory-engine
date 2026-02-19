@@ -4,6 +4,7 @@ WSL Audio Output Promotion Script
 Copies validated audio results from WSL output directory to Windows canonical store.
 """
 import json
+import os
 import shutil
 from pathlib import Path
 import subprocess
@@ -11,19 +12,30 @@ import sys
 
 # Paths
 WSL_OUTPUT_DIR = Path("/mnt/l/goodq4all/logs/scene_ingest")  # WSL can access Windows via /mnt
-WINDOWS_DATA_ROOT = Path("L:/_DATA/GoodQ_Data/processing")
+REPO_ROOT = Path(__file__).resolve().parents[1]
+WINDOWS_DATA_ROOT = Path(os.environ.get("GOODQ_DATA_ROOT", "L:/_DATA")) / "GoodQ_Data" / "processing"
 
 def find_wsl_audio_results():
     """Find all result.json files in WSL output"""
-    # Access via \\wsl$\Ubuntu path from Windows
-    wsl_base = Path(r"\\wsl$\Ubuntu\home\joesdomingo\goodq_audio\output")
+    # Access via \\wsl$\<distro>\<workspace>\output from Windows
+    wsl_distro = os.environ.get("GOODQ_WSL_DISTRO", "Ubuntu")
+    wsl_user = (
+        os.environ.get("GOODQ_WSL_USER")
+        or os.environ.get("USERNAME")
+        or os.environ.get("USER")
+        or os.environ.get("LOGNAME")
+        or "user"
+    )
+    wsl_workspace = os.environ.get("GOODQ_WSL_WORKSPACE", f"/home/{wsl_user}/goodq_audio")
+    workspace_unc = wsl_workspace.strip("/").replace("/", "\\")
+    wsl_base = Path(f"\\\\wsl$\\{wsl_distro}\\{workspace_unc}\\output")
     if wsl_base.exists():
         return list(wsl_base.glob("**/result.json"))
     return []
 
 def find_scene_audio_in_logs():
     """Find audio results written by the pipeline in logs/scene_ingest"""
-    log_base = Path("L:/goodq4all/logs/scene_ingest")
+    log_base = REPO_ROOT / "logs" / "scene_ingest"
     results = []
     
     for video_dir in log_base.glob("*"):

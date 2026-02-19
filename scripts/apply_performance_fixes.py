@@ -7,11 +7,14 @@ This will update config_open.yaml with optimized settings for faster processing.
 import yaml
 from pathlib import Path
 
+REPO_ROOT = Path(__file__).resolve().parents[1]
+CONFIG_PATH = REPO_ROOT / "configs" / "config_open.yaml"
+BACKUP_PATH = REPO_ROOT / "configs" / "config_open.yaml.backup"
 
 def backup_config():
     """Create backup of current config."""
-    config_path = Path("L:/goodq4all/configs/config_open.yaml")
-    backup_path = Path("L:/goodq4all/configs/config_open.yaml.backup")
+    config_path = CONFIG_PATH
+    backup_path = BACKUP_PATH
     
     if config_path.exists():
         import shutil
@@ -23,7 +26,7 @@ def backup_config():
 
 def apply_optimizations():
     """Apply performance optimizations to config."""
-    config_path = Path("L:/goodq4all/configs/config_open.yaml")
+    config_path = CONFIG_PATH
     
     if not config_path.exists():
         print(f"[ERROR] Config not found: {config_path}")
@@ -129,7 +132,7 @@ def main():
             print()
             print("3. Test with limited scenes:")
             print("   cd L:\\goodq4all")
-            print("   conda activate goodq_zenml")
+            print("   conda activate %GOODQ_CONDA_ENV%   (default: goodq_core)")
             print("   python -m goodq4all.cli.run_ingestion --input-dir import_inbox --max-scenes 10 --force")
             print()
             print("4. Monitor progress:")

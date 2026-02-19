@@ -1,16 +1,18 @@
 """
-Configure all goodq conda environments to include L:\ in PYTHONPATH.
+Configure all goodq conda environments to include the repo parent in PYTHONPATH.
 This allows importing as 'from goodq4all.steps...' etc.
 """
+import os
 import subprocess
 import sys
 from pathlib import Path
 
-# Parent directory of goodq4all repo (L:\)
-PYTHON_PATH_TO_ADD = "L:\\"
+# Parent directory of goodq4all repo (portable, host-agnostic)
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+PYTHON_PATH_TO_ADD = str(PROJECT_ROOT.parent)
 
 ENVS = [
-    'goodq_zenml',
+    os.environ.get("GOODQ_CONDA_ENV", "goodq_core"),
     'goodq_video_scene_detect',
     'goodq_audio_transcribe',
     'goodq_audio_diarize',
@@ -73,7 +75,7 @@ def configure_env(env_name):
         
         # Create deactivation script
         deactivate_script = deactivate_d / "goodq_pythonpath.bat"
-        deactivate_content = '@echo off\nset "PYTHONPATH=%PYTHONPATH:L:\\;=%"\n'
+        deactivate_content = f'@echo off\nset "PYTHONPATH=%PYTHONPATH:{PYTHON_PATH_TO_ADD};=%"\n'
         deactivate_script.write_text(deactivate_content)
         
         print(f"[SYMBOL] Created activation script: {activate_script}")

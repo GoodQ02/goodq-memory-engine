@@ -50,14 +50,14 @@ host:
 # ============================================================================
 paths:
   # Core directories
-  log_dir: L:/goodq4all/logs
-  output_directory: L:/goodq4all/output
+  log_dir: logs
+  output_directory: output
   db_dir: ${GOODQ_DATA_ROOT:-L:/_DATA}/GoodQ_Data/epochs/epoch_2025_12_22
   db_path: ${GOODQ_DATA_ROOT:-L:/_DATA}/GoodQ_Data/epochs/epoch_2025_12_22/memory.db
   knowledge_graph_db: ${GOODQ_DATA_ROOT:-L:/_DATA}/GoodQ_Data/epochs/epoch_2025_12_22/knowledge_graph.db
   faiss_dir: ${GOODQ_DATA_ROOT:-L:/_DATA}/GoodQ_Data/epochs/epoch_2025_12_22/faiss
   faiss_audio_path: ${GOODQ_DATA_ROOT:-L:/_DATA}/GoodQ_Data/epochs/epoch_2025_12_22/faiss/goodq_audio_epoch_2025_12_22.index
-  config_dir: L:/goodq4all/configs
+  config_dir: configs
   
   # Data paths
   data_root: ${GOODQ_DATA_ROOT:-L:/_DATA}/GoodQ_Data
@@ -72,8 +72,8 @@ paths:
   metadata_subdir: metadata
   
   # External paths
-  csv_path: L:/goodq4all/logs/system_metrics.csv
-  nas_path: G:/Logs
+  csv_path: logs/system_metrics.csv
+  nas_path: logs/archive
 
 # ============================================================================
 # LLM & TTS
@@ -293,7 +293,7 @@ api:
 # ============================================================================
 ui:
   enabled: true
-  serve_from: L:/goodq4all/ui
+  serve_from: ui
   theme: dark
 
 # ============================================================================

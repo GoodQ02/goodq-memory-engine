@@ -8,6 +8,7 @@ $ErrorActionPreference = 'Stop'
 
 . (Join-Path $PSScriptRoot "_lib\\interpreter_bindings.ps1")
 $condaExe = Get-GoodQCondaExe
+$goodqCondaEnv = if ([string]::IsNullOrWhiteSpace($env:GOODQ_CONDA_ENV)) { "goodq_core" } else { $env:GOODQ_CONDA_ENV }
 
 function H1($m){ Write-Host "== $m ==" -ForegroundColor Cyan }
 function Info($m){ Write-Host "[cc] $m" -ForegroundColor Cyan }
@@ -63,7 +64,7 @@ except Exception:
       $tmpFile = [System.IO.Path]::GetTempFileName()
       Set-Content -LiteralPath $tmpFile -Value $pyScript -Encoding UTF8
       try {
-        $out = & $condaExe run -n goodq_zenml python $tmpFile $db
+        $out = & $condaExe run -n $goodqCondaEnv python $tmpFile $db
         Write-Host ("DB: {0}" -f $out.Trim())
       } finally {
         Remove-Item -LiteralPath $tmpFile -Force -ErrorAction SilentlyContinue
@@ -313,7 +314,7 @@ print(json.dumps(payload))
     $tmpFile = [System.IO.Path]::GetTempFileName()
     Set-Content -LiteralPath $tmpFile -Value $pyScript -Encoding UTF8
     try {
-      $json = & $condaExe run -n goodq_zenml python $tmpFile $db
+      $json = & $condaExe run -n $goodqCondaEnv python $tmpFile $db
     } finally {
       Remove-Item -LiteralPath $tmpFile -Force -ErrorAction SilentlyContinue
     }
@@ -434,7 +435,7 @@ con = sqlite3.connect(sys.argv[1]); cur = con.cursor(); cur.execute(sys.argv[2])
       $tmpFile = [System.IO.Path]::GetTempFileName()
       Set-Content -LiteralPath $tmpFile -Value $pyScript -Encoding UTF8
       try {
-        $o = & $condaExe run -n goodq_zenml python $tmpFile $dbp $sql
+        $o = & $condaExe run -n $goodqCondaEnv python $tmpFile $dbp $sql
       } finally {
         Remove-Item -LiteralPath $tmpFile -Force -ErrorAction SilentlyContinue
       }

@@ -19,19 +19,8 @@ import logging
 # Import centralized path configuration
 from configs.python_paths import get_conda_exe, get_env_python
 
-# Setup logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s [%(levelname)s] %(message)s',
-    handlers=[
-        logging.FileHandler('L:/goodq4all/logs/process_manager.log', encoding='utf-8'),
-        logging.StreamHandler(sys.stdout)
-    ]
-)
-logger = logging.getLogger(__name__)
-
 # Paths
-BASE_DIR = Path("L:/goodq4all")
+BASE_DIR = Path(__file__).resolve().parents[2]
 LOGS_DIR = BASE_DIR / "logs"
 PID_DIR = LOGS_DIR / "pids"
 STATE_FILE = LOGS_DIR / "process_state.json"
@@ -39,6 +28,17 @@ STATE_FILE = LOGS_DIR / "process_state.json"
 # Ensure directories exist
 PID_DIR.mkdir(parents=True, exist_ok=True)
 LOGS_DIR.mkdir(parents=True, exist_ok=True)
+
+# Setup logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(message)s',
+    handlers=[
+        logging.FileHandler(LOGS_DIR / 'process_manager.log', encoding='utf-8'),
+        logging.StreamHandler(sys.stdout)
+    ]
+)
+logger = logging.getLogger(__name__)
 
 
 class ProcessInfo:
@@ -295,7 +295,7 @@ def create_goodq_manager() -> ProcessManager:
     
     # Get paths from centralized configuration
     conda_exe = get_conda_exe()
-    python_exe = get_env_python('goodq_zenml')
+    python_exe = get_env_python(os.environ.get("GOODQ_CONDA_ENV", "goodq_core"))
     
     # API Server
     manager.register_process(

@@ -9,6 +9,8 @@ $env:PYTHONIOENCODING = "utf-8"
 
 . (Join-Path $PSScriptRoot "..\\_lib\\interpreter_bindings.ps1")
 $condaExe = Get-GoodQCondaExe
+$goodqCondaEnv = if ([string]::IsNullOrWhiteSpace($env:GOODQ_CONDA_ENV)) { "goodq_core" } else { $env:GOODQ_CONDA_ENV }
+$repoRoot = (Get-Item -LiteralPath (Join-Path $PSScriptRoot "..\\..")).FullName
 
 Clear-Host
 Write-Host ""
@@ -28,7 +30,7 @@ Write-Host ""
 Write-Host "Press any key to continue..." -ForegroundColor Gray
 $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
 
-Set-Location L:\goodq4all
+Set-Location $repoRoot
 
 # ============================================================================
 # PHASE 1: CODE AUDIT
@@ -40,7 +42,7 @@ Write-Host "══════════════════════�
 Write-Host ""
 
 try {
-    & $condaExe run -n goodq_zenml python scripts\comprehensive_code_audit.py 2>&1 | Out-String | Write-Host
+    & $condaExe run -n $goodqCondaEnv python scripts\comprehensive_code_audit.py 2>&1 | Out-String | Write-Host
     if ($LASTEXITCODE -ne 0) {
         throw "Code audit failed with exit code $LASTEXITCODE"
     }
@@ -63,7 +65,7 @@ Write-Host "══════════════════════�
 Write-Host ""
 
 try {
-    & $condaExe run -n goodq_zenml python scripts\system_readiness_check.py 2>&1 | Out-String | Write-Host
+    & $condaExe run -n $goodqCondaEnv python scripts\system_readiness_check.py 2>&1 | Out-String | Write-Host
     if ($LASTEXITCODE -ne 0) {
         throw "System readiness check failed with exit code $LASTEXITCODE"
     }
@@ -85,7 +87,7 @@ Write-Host "PHASE 3: DATABASE HEALTH" -ForegroundColor Cyan
 Write-Host "═══════════════════════════════════════════════════════════════" -ForegroundColor Cyan
 Write-Host ""
 
-& $condaExe run -n goodq_zenml python scripts\check_db_status.py 2>&1 | Out-String | Write-Host
+& $condaExe run -n $goodqCondaEnv python scripts\check_db_status.py 2>&1 | Out-String | Write-Host
 
 # ============================================================================
 # PHASE 4: CLEAN TEST RUN
@@ -100,7 +102,7 @@ Write-Host "Press any key to continue..." -ForegroundColor Gray
 $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
 
 try {
-    & $condaExe run -n goodq_zenml python scripts\test_clean_run.py 2>&1 | Out-String | Write-Host
+    & $condaExe run -n $goodqCondaEnv python scripts\test_clean_run.py 2>&1 | Out-String | Write-Host
     if ($LASTEXITCODE -ne 0) {
         throw "Clean test run failed with exit code $LASTEXITCODE"
     }
@@ -123,7 +125,7 @@ Write-Host "[OK] DIAGNOSTIC COMPLETE" -ForegroundColor Green
 Write-Host "═══════════════════════════════════════════════════════════════" -ForegroundColor Green
 Write-Host ""
 Write-Host "Review the output above for any issues." -ForegroundColor White
-Write-Host "Check L:\goodq4all\docs\project_communication\AUDIT_REPORT.md for detailed findings." -ForegroundColor White
+Write-Host "Check $(Join-Path $repoRoot 'docs\project_communication\AUDIT_REPORT.md') for detailed findings." -ForegroundColor White
 Write-Host ""
 Write-Host "Press any key to exit..." -ForegroundColor Gray
 $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")

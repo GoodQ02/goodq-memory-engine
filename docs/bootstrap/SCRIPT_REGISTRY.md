@@ -209,7 +209,7 @@ _Generated: 2026-02-15_
 | `scripts/run_vision_optimization.bat` | Unclear/Obsolete | GoodQ4All - Vision Stack GPU Optimization Launcher | No | None detected |
 | `scripts/setup/INSTALL_WEB_DEPS.ps1` | Unclear/Obsolete | GoodQ Quick Fix - Install Web Dependencies | No | None detected |
 | `scripts/setup/VALIDATE_PYTHON_PATHS.bat` | Unclear/Obsolete | Use conda run to avoid shell-state activation requirements. | No | environment mutation |
-| `scripts/setup/configure_envs_pythonpath.py` | Bootstrap-Critical | Configure all goodq conda environments to include L:\ in PYTHONPATH. | Manual Review | absolute path operations |
+| `scripts/setup/configure_envs_pythonpath.py` | Bootstrap-Critical | Configure all goodq conda environments to include the repo parent in PYTHONPATH. | Manual Review | absolute path operations |
 | `scripts/setup/install_goodq.py` | Bootstrap-Critical | GoodQ4All Automated Installer | Manual Review | absolute path operations |
 | `scripts/setup/install_package_all_envs.py` | Bootstrap-Critical | Install goodq4all package in editable mode across all conda environments. | Yes | None detected |
 | `scripts/setup/setup_agents.ps1` | Unclear/Obsolete | GoodQ Multi-Agent System Setup | No | absolute path operations |

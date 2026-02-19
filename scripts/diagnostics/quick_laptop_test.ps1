@@ -9,6 +9,7 @@ Write-Host ""
 
 . (Join-Path $PSScriptRoot "..\\_lib\\interpreter_bindings.ps1")
 $condaExe = Get-GoodQCondaExe
+$goodqCondaEnv = if ([string]::IsNullOrWhiteSpace($env:GOODQ_CONDA_ENV)) { "goodq_core" } else { $env:GOODQ_CONDA_ENV }
 
 $testsPassed = 0
 $testsFailed = 0
@@ -32,7 +33,7 @@ try {
 # Test 2: Python Paths
 Write-Host "[TEST 2/10] Validating Python paths..." -ForegroundColor Yellow
 try {
-    & $condaExe run -n goodq_zenml python test_python_paths.py > $null 2>&1
+    & $condaExe run -n $goodqCondaEnv python test_python_paths.py > $null 2>&1
     if ($LASTEXITCODE -eq 0) {
         Write-Host "  ✓ All Python paths configured correctly" -ForegroundColor Green
         $testsPassed++
@@ -64,7 +65,7 @@ try {
 # Test 4: Database Status
 Write-Host "[TEST 4/10] Checking databases..." -ForegroundColor Yellow
 try {
-    $dbCheck = & $condaExe run -n goodq_zenml python check_db_status.py 2>&1
+    $dbCheck = & $condaExe run -n $goodqCondaEnv python check_db_status.py 2>&1
     if ($dbCheck -match "OK") {
         Write-Host "  ✓ Databases initialized" -ForegroundColor Green
         $testsPassed++
@@ -150,7 +151,7 @@ if (Test-Path "import_inbox") {
 # Test 10: GPU Management
 Write-Host "[TEST 10/10] Testing GPU management..." -ForegroundColor Yellow
 try {
-    & $condaExe run -n goodq_zenml python test_gpu_management.py > $null 2>&1
+    & $condaExe run -n $goodqCondaEnv python test_gpu_management.py > $null 2>&1
     if ($LASTEXITCODE -eq 0) {
         Write-Host "  ✓ GPU management configured" -ForegroundColor Green
         $testsPassed++

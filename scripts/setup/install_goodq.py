@@ -119,10 +119,6 @@ def setup_environment():
     
     base_dir = Path(__file__).parent.parent
     env_file = base_dir / "envs" / f"{CORE_ENV}.yaml"
-    if not env_file.exists() and CORE_ENV != "goodq_zenml":
-        legacy_env = base_dir / "envs" / "goodq_zenml.yaml"
-        if legacy_env.exists():
-            env_file = legacy_env
     
     if not env_file.exists():
         print_error(f"Environment file not found: {env_file}")

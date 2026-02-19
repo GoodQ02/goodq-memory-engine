@@ -7,6 +7,7 @@ import subprocess
 import time
 import json
 import sys
+import os
 from pathlib import Path
 from datetime import datetime
 from gpu_pipeline_optimizer import GPUOptimizer
@@ -25,7 +26,7 @@ class PipelineOptimizationRunner:
         sample_paths = [
             self.base_dir / "import_inbox" / "sample.mp4",
             self.base_dir / "samples" / "ingestion" / "sample.mp4",
-            Path("L:/_DATA/FAMILY_FEAST")
+            Path(os.environ.get("GOODQ_DATA_ROOT", "L:/_DATA")) / "FAMILY_FEAST",
         ]
         
         for path in sample_paths:
@@ -119,8 +120,9 @@ class PipelineOptimizationRunner:
         
         # Start watchdog (pipeline)
         print("[LAUNCH] Starting pipeline...")
+        conda_env = os.environ.get("GOODQ_CONDA_ENV", "goodq_core")
         watchdog_cmd = [
-            "conda", "run", "-n", "goodq_zenml", "--no-capture-output",
+            "conda", "run", "-n", conda_env, "--no-capture-output",
             "python", str(self.base_dir / "scripts" / "watchdog_ingest.py")
         ]
         
@@ -328,8 +330,8 @@ class PipelineOptimizationRunner:
         if not self.test_video:
             print("\n[FAIL] No test video found!")
             print("Please place a video in one of these locations:")
-            print("  - L:/goodq4all/import_inbox/sample.mp4")
-            print("  - L:/_DATA/FAMILY_FEAST/*.mp4")
+            print(f"  - {self.base_dir / 'import_inbox' / 'sample.mp4'}")
+            print(f"  - {Path(os.environ.get('GOODQ_DATA_ROOT', 'L:/_DATA')) / 'FAMILY_FEAST'}/*.mp4")
             return False
         
         print(f"Test video: {self.test_video}")

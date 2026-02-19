@@ -39,7 +39,7 @@ def main():
         'goodq_audio_diarize',
         'goodq_audio_transcribe',
         'goodq_video_scene_detect',
-        'goodq_zenml'
+        os.environ.get("GOODQ_CONDA_ENV", "goodq_core")
     ]
     
     print("Testing critical environments...")

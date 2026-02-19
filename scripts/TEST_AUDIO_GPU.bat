@@ -5,8 +5,10 @@ REM  Quick launcher for GPU-accelerated audio pipeline testing
 REM =============================================================================
 
 call "%~dp0_lib\\interpreter_bindings.bat"
+for %%I in ("%~dp0..") do set "REPO_ROOT=%%~fI"
+if "%GOODQ_CONDA_ENV%"=="" set "GOODQ_CONDA_ENV=goodq_core"
 
-cd /d L:\goodq4all
+cd /d "%REPO_ROOT%"
 
 echo.
 echo ================================================================================
@@ -23,7 +25,7 @@ echo   4. Real-time GPU monitor
 echo.
 pause
 
-"%CONDA_EXE%" run -n goodq_zenml python scripts\test_audio_gpu_optimization.py
+"%CONDA_EXE%" run -n %GOODQ_CONDA_ENV% python scripts\test_audio_gpu_optimization.py
 
 echo.
 echo ================================================================================

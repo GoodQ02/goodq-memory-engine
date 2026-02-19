@@ -6,6 +6,8 @@ REM ============================================================================
 
 setlocal enabledelayedexpansion
 call "%~dp0..\\_lib\\interpreter_bindings.bat"
+for %%I in ("%~dp0..\\..") do set "REPO_ROOT=%%~fI"
+if "%GOODQ_CONDA_ENV%"=="" set "GOODQ_CONDA_ENV=goodq_core"
 
 title GoodQ4All System Test
 color 0E
@@ -16,7 +18,7 @@ echo  GoodQ4All Complete System Validation
 echo ================================================================================
 echo.
 
-cd /d "L:\goodq4all"
+cd /d "%REPO_ROOT%"
 
 REM Step 1: Check for running processes
 echo [1/8] Checking for conflicting processes...
@@ -36,7 +38,7 @@ if "%ERRORLEVEL%"=="0" (
 
 echo.
 echo [2/8] Validating Python paths...
-"%CONDA_EXE%" run --no-capture-output -n goodq_zenml python test_python_paths.py
+"%CONDA_EXE%" run --no-capture-output -n %GOODQ_CONDA_ENV% python test_python_paths.py
 if %ERRORLEVEL% NEQ 0 (
     echo [✗] Python path validation failed
     pause
@@ -46,13 +48,13 @@ echo [✓] Python paths OK
 
 echo.
 echo [3/8] Checking database integrity...
-"%CONDA_EXE%" run --no-capture-output -n goodq_zenml python check_db_stats.py
+"%CONDA_EXE%" run --no-capture-output -n %GOODQ_CONDA_ENV% python check_db_stats.py
 echo [✓] Database check complete
 
 echo.
 echo [4/8] Checking FAISS indices...
-if exist "L:\goodq4all\data\faiss_indices" (
-    dir /B "L:\goodq4all\data\faiss_indices\*.index" 2>NUL
+if exist "%REPO_ROOT%\data\faiss_indices" (
+    dir /B "%REPO_ROOT%\data\faiss_indices\*.index" 2>NUL
     if %ERRORLEVEL% EQU 0 (
         echo [✓] FAISS indices found
     ) else (
@@ -64,9 +66,9 @@ if exist "L:\goodq4all\data\faiss_indices" (
 
 echo.
 echo [5/8] Checking for stale lock files...
-if exist "L:\goodq4all\data\.watchdog.lock" (
+if exist "%REPO_ROOT%\data\.watchdog.lock" (
     echo [!] Found stale watchdog lock file
-    del /F "L:\goodq4all\data\.watchdog.lock"
+    del /F "%REPO_ROOT%\data\.watchdog.lock"
     echo [✓] Removed stale lock
 ) else (
     echo [✓] No stale locks
@@ -74,7 +76,7 @@ if exist "L:\goodq4all\data\.watchdog.lock" (
 
 echo.
 echo [6/8] Checking import_inbox...
-dir /B "L:\goodq4all\import_inbox\*.mp4" 2>NUL
+dir /B "%REPO_ROOT%\import_inbox\*.mp4" 2>NUL
 if %ERRORLEVEL% EQU 0 (
     echo [✓] Videos found in import_inbox
 ) else (
@@ -83,8 +85,8 @@ if %ERRORLEVEL% EQU 0 (
 
 echo.
 echo [7/8] Checking processing directory...
-if exist "L:\goodq4all\data\processing" (
-    dir /B "L:\goodq4all\data\processing" 2>NUL
+if exist "%REPO_ROOT%\data\processing" (
+    dir /B "%REPO_ROOT%\data\processing" 2>NUL
     if %ERRORLEVEL% EQU 0 (
         echo [!] Files in processing directory - may be from incomplete run
     ) else (
@@ -95,7 +97,7 @@ if exist "L:\goodq4all\data\processing" (
 echo.
 echo [8/8] Testing API server startup...
 echo Starting API server in background (10 second test)...
-start "GoodQ Test API" /MIN "%CONDA_EXE%" run --no-capture-output -n goodq_zenml python scripts\api_server.py
+start "GoodQ Test API" /MIN "%CONDA_EXE%" run --no-capture-output -n %GOODQ_CONDA_ENV% python scripts\api_server.py
 timeout /t 8 /nobreak >nul
 
 echo Testing API connectivity...
@@ -121,7 +123,7 @@ echo  All checks passed! System is ready for production use.
 echo.
 echo  Next steps:
 echo    1. Run LAUNCH_GOODQ.bat to start the full system
-echo    2. Drop a video in L:\goodq4all\import_inbox
+echo    2. Drop a video in %REPO_ROOT%\import_inbox
 echo    3. Open http://localhost:30000 to monitor progress
 echo.
 echo ================================================================================

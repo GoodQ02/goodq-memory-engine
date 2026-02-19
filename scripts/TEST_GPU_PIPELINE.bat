@@ -5,6 +5,10 @@ REM  Tests the complete pipeline with GPU allocation system
 REM ================================================================================
 
 call "%~dp0_lib\\interpreter_bindings.bat"
+for %%I in ("%~dp0..") do set "REPO_ROOT=%%~fI"
+for %%D in ("%REPO_ROOT%") do set "REPO_DRIVE=%%~dD"
+if "%GOODQ_DATA_ROOT%"=="" set "GOODQ_DATA_ROOT=%REPO_DRIVE%\_DATA"
+if "%GOODQ_CONDA_ENV%"=="" set "GOODQ_CONDA_ENV=goodq_core"
 
 title GoodQ GPU Pipeline Test
 color 0E
@@ -23,11 +27,11 @@ echo.
 echo ================================================================================
 echo.
 
-cd /d "L:\goodq4all"
+cd /d "%REPO_ROOT%"
 
 REM Step 1: Diagnostic
 echo [1/5] Running diagnostics...
-"%CONDA_EXE%" run --no-capture-output -n goodq_zenml python scripts\diagnose_gpu_issue.py
+"%CONDA_EXE%" run --no-capture-output -n %GOODQ_CONDA_ENV% python scripts\diagnose_gpu_issue.py
 if errorlevel 1 (
     echo.
     echo [ERROR] Diagnostics failed
@@ -38,29 +42,29 @@ if errorlevel 1 (
 echo.
 echo [2/5] Checking for stuck processes...
 REM Clean up any lock files
-if exist "L:\goodq4all\data\.watchdog.lock" (
+if exist "%REPO_ROOT%\data\.watchdog.lock" (
     echo   Removing watchdog lock...
-    del /f "L:\goodq4all\data\.watchdog.lock" 2>nul
+    del /f "%REPO_ROOT%\data\.watchdog.lock" 2>nul
 )
 
 REM Clear processing directory
-if exist "L:\goodq4all\data\processing\*.mp4" (
+if exist "%REPO_ROOT%\data\processing\*.mp4" (
     echo   Clearing processing directory...
-    del /f "L:\goodq4all\data\processing\*.mp4" 2>nul
+    del /f "%REPO_ROOT%\data\processing\*.mp4" 2>nul
 )
 
 echo   [OK] Ready to process
 
 echo.
 echo [3/5] Checking import inbox...
-dir /b "L:\goodq4all\import_inbox\*.mp4" 2>nul
+dir /b "%REPO_ROOT%\import_inbox\*.mp4" 2>nul
 if errorlevel 1 (
     echo.
     echo [!] No videos in import inbox
     echo.
     set /p copy_video="Copy test video? (y/N): "
     if /i "!copy_video!"=="y" (
-        copy "L:\_DATA\FAMILY_FEAST\09. 2002 - 2003.mp4" "L:\goodq4all\import_inbox\" >nul
+        copy "%GOODQ_DATA_ROOT%\FAMILY_FEAST\09. 2002 - 2003.mp4" "%REPO_ROOT%\import_inbox\" >nul
         echo   [OK] Copied test video
     ) else (
         echo.
@@ -108,7 +112,7 @@ echo ===========================================================================
 echo.
 
 REM Start the watchdog in current window to see output
-"%CONDA_EXE%" run --no-capture-output -n goodq_zenml python scripts/watchdog_ingest.py
+"%CONDA_EXE%" run --no-capture-output -n %GOODQ_CONDA_ENV% python scripts/watchdog_ingest.py
 
 echo.
 echo ================================================================================
@@ -117,7 +121,7 @@ echo ===========================================================================
 echo.
 
 echo [5/5] Checking results...
-"%CONDA_EXE%" run --no-capture-output -n goodq_zenml python -c "import sqlite3; conn = sqlite3.connect('output/knowledge.db'); cursor = conn.cursor(); cursor.execute('SELECT COUNT(*) FROM scenes'); print(f'Scenes created: {cursor.fetchone()[0]}'); conn.close()"
+"%CONDA_EXE%" run --no-capture-output -n %GOODQ_CONDA_ENV% python -c "import sqlite3; conn = sqlite3.connect('output/knowledge.db'); cursor = conn.cursor(); cursor.execute('SELECT COUNT(*) FROM scenes'); print(f'Scenes created: {cursor.fetchone()[0]}'); conn.close()"
 
 echo.
 echo ================================================================================

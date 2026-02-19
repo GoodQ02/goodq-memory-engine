@@ -11,6 +11,8 @@ $ErrorActionPreference = 'Stop'
 
 . (Join-Path $PSScriptRoot "_lib\\interpreter_bindings.ps1")
 $condaExe = Get-GoodQCondaExe
+$goodqCondaEnv = if ([string]::IsNullOrWhiteSpace($env:GOODQ_CONDA_ENV)) { "goodq_core" } else { $env:GOODQ_CONDA_ENV }
+$repoRoot = (Get-Item -LiteralPath (Join-Path $PSScriptRoot "..")).FullName
 
 Write-Host ""
 Write-Host "================================================================" -ForegroundColor Cyan
@@ -19,7 +21,7 @@ Write-Host "================================================================" -F
 Write-Host ""
 
 # Database path
-$dbPath = "L:\goodq4all\data\memory.db"
+$dbPath = Join-Path $repoRoot "data\memory.db"
 
 if (-not (Test-Path $dbPath)) {
     Write-Host "[!] No intelligence database found" -ForegroundColor Yellow
@@ -36,7 +38,7 @@ import json
 import sys
 from pathlib import Path
 
-conn = sqlite3.connect('L:/goodq4all/data/memory.db')
+conn = sqlite3.connect(sys.argv[1])
 c = conn.cursor()
 
 # Basic stats
@@ -92,7 +94,7 @@ conn.close()
 
 try {
     # Run query
-    $output = & $condaExe run -n goodq_zenml python -c $pyScript 2>$null
+    $output = & $condaExe run -n $goodqCondaEnv python -c $pyScript $dbPath 2>$null
 
     # Parse output
     $stats = @{}
@@ -156,9 +158,9 @@ try {
 
     # Show workspaces
     Write-Host "[DATA LOCATIONS]" -ForegroundColor Green
-    Write-Host "  Database: L:\goodq4all\data\memory.db" -ForegroundColor White
+    Write-Host "  Database: $dbPath" -ForegroundColor White
     
-    $workspaces = Get-ChildItem "L:\goodq4all\logs" -Directory | Where-Object { $_.Name -like "watchdog_*" } | Sort-Object CreationTime -Descending | Select-Object -First 3
+    $workspaces = Get-ChildItem (Join-Path $repoRoot "logs") -Directory | Where-Object { $_.Name -like "watchdog_*" } | Sort-Object CreationTime -Descending | Select-Object -First 3
     if ($workspaces) {
         Write-Host "  Recent Workspaces:" -ForegroundColor White
         foreach ($ws in $workspaces) {

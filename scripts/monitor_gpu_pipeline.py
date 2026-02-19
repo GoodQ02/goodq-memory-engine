@@ -7,6 +7,7 @@ import subprocess
 import time
 import json
 import threading
+import os
 from datetime import datetime
 from pathlib import Path
 import re
@@ -229,8 +230,9 @@ class RealTimeGPUMonitor:
         self.start_monitoring()
         
         # Start the watchdog/pipeline
+        conda_env = os.environ.get("GOODQ_CONDA_ENV", "goodq_core")
         watchdog_cmd = [
-            "conda", "run", "-n", "goodq_zenml", "--no-capture-output",
+            "conda", "run", "-n", conda_env, "--no-capture-output",
             "python", str(self.base_dir / "scripts" / "watchdog_ingest.py")
         ]
         

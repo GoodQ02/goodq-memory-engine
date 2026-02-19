@@ -91,7 +91,7 @@ When you need to understand the current state of the system and its evolution, r
 ### 📜 History & Archives
 - **[history/PROJECT_HISTORY.md](../../archive/PROJECT_HISTORY.md)** - Development timeline
 - **[project-history/CHANGELOG.md](../../archive/project-history/CHANGELOG.md)** - Version changelog (⚠️ needs Nov-Dec updates)
-- **[project-history/PROJECT_RENAME_COMPLETE.md](../../archive/project-history/PROJECT_RENAME_COMPLETE.md)** - Rename from zenml_project
+- **[project-history/PROJECT_RENAME_COMPLETE.md](../../archive/project-history/PROJECT_RENAME_COMPLETE.md)** - Rename from goodq4all_project
 - **[history/archived_docs/](../../archive/archived_docs/)** - Archived documentation (general)
 - **[history/status_reports_archive/](../../archive/status_reports_archive/)** - Archived status reports (11 files) 🆕
 - **[history/session_summaries_archive/](../../archive/session_summaries_archive/)** - Archived session summaries (6 files) 🆕
@@ -130,7 +130,7 @@ When you need to understand the current state of the system and its evolution, r
 ├── docs/                       # All documentation (this folder)
 ├── scripts/                    # Utility scripts
 ├── steps/                      # Pipeline step implementations
-├── pipelines/                  # ZenML pipeline definitions
+├── pipelines/                  # legacy orchestration pipeline definitions
 ├── envs/                       # Environment definitions (22 isolated envs)
 ├── api/                        # FastAPI server
 ├── vendor/                     # Third-party code

@@ -108,7 +108,7 @@ step_memory_fractions:
 **Check**: Is the conda environment active?
 ```bash
 conda info --envs
-# Should show (goodq_zenml) as active
+# Should show (goodq_core) as active
 ```
 
 **Check**: Are environment variables set?

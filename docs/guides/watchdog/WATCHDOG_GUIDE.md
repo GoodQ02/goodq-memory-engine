@@ -40,7 +40,7 @@ START_WATCHDOG.bat
 ```
 
 This will:
-- Activate the `goodq_zenml` environment
+- Activate the `goodq_core` environment
 - Start monitoring `import_inbox`
 - Display real-time status
 
@@ -148,7 +148,7 @@ This means:
 
 ### Test File Classification
 ```batch
-conda activate goodq_zenml
+conda activate goodq_core
 python scripts\test_watchdog.py
 ```
 
@@ -160,7 +160,7 @@ This tests:
 
 ### Test with Sample File
 ```batch
-conda activate goodq_zenml
+conda activate goodq_core
 python scripts\test_watchdog_simple.py
 ```
 
@@ -194,7 +194,7 @@ To add it to the launch sequence, edit `LAUNCH_GOODQ.bat`:
 
 ```batch
 REM Add before "Press any key to close"
-start "GoodQ Watchdog" /MIN cmd /k "call conda activate goodq_zenml && python <project_root>\scripts\watchdog_ingest.py"
+start "GoodQ Watchdog" /MIN cmd /k "call conda activate goodq_core && python <project_root>\scripts\watchdog_ingest.py"
 ```
 
 ## Troubleshooting
@@ -231,7 +231,7 @@ start "GoodQ Watchdog" /MIN cmd /k "call conda activate goodq_zenml && python <p
 3. Check environment is activated
 4. Verify ingestion pipeline works manually:
    ```batch
-   conda activate goodq_zenml
+   conda activate goodq_core
    python cli\run_ingestion.py ingest path\to\video.mp4
    ```
 

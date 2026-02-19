@@ -171,7 +171,7 @@ PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512
 ### 1. Process Manager Test
 ```bash
 cd <project_root>
-conda activate goodq_zenml
+conda activate goodq_core
 python lib\process_manager.py
 ```
 ✅ **Result:** Returns full JSON with GPU status and all processes
@@ -196,7 +196,7 @@ curl http://localhost:30000/api/processes
 ## 📦 Dependencies Installed
 
 ```bash
-# Core environment (goodq_zenml)
+# Core environment (goodq_core)
 pip install nvidia-ml-py3  # GPU monitoring (backup, using nvidia-smi instead)
 pip install psutil          # Process monitoring (already installed)
 
@@ -252,7 +252,7 @@ pip install psutil          # Process monitoring (already installed)
    - `index.html` - Updated `refreshProcesses()` function with new UI
 
 3. **Dependencies:**
-   - Installed `nvidia-ml-py3` in `goodq_zenml` environment
+   - Installed `nvidia-ml-py3` in `goodq_core` environment
 
 ---
 

@@ -36,7 +36,7 @@
 ### Ingestion
 ```bash
 # Manual ingestion
-conda run -n goodq_zenml python -m goodq4all.cli.run_ingestion <video_path>
+conda run -n goodq_core python -m goodq4all.cli.run_ingestion <video_path>
 
 # Auto-ingestion (drop files in)
 # → <project_root>\import_inbox\
@@ -45,25 +45,25 @@ conda run -n goodq_zenml python -m goodq4all.cli.run_ingestion <video_path>
 ### Health Checks
 ```bash
 # Full system check
-conda run -n goodq_zenml python scripts\system_readiness_check.py
+conda run -n goodq_core python scripts\system_readiness_check.py
 
 # Quick health
-conda run -n goodq_zenml python scripts\quick_health_check.py
+conda run -n goodq_core python scripts\quick_health_check.py
 
 # Production status
-conda run -n goodq_zenml python scripts\check_production_status.py
+conda run -n goodq_core python scripts\check_production_status.py
 ```
 
 ### Memory/Database
 ```bash
 # Diagnostics
-conda run -n goodq_zenml python -m goodq4all.cli.memory diagnostics
+conda run -n goodq_core python -m goodq4all.cli.memory diagnostics
 
 # List scenes
-conda run -n goodq_zenml python -m goodq4all.cli.memory list-scenes
+conda run -n goodq_core python -m goodq4all.cli.memory list-scenes
 
 # Clear (DESTRUCTIVE!)
-conda run -n goodq_zenml python scripts\clear_databases.py
+conda run -n goodq_core python scripts\clear_databases.py
 ```
 
 ### Monitoring
@@ -107,18 +107,18 @@ pwsh scripts\watchdog_status.ps1 -Follow
 
 ### Manual Processing
 1. Place video anywhere
-2. Run: `conda run -n goodq_zenml python -m goodq4all.cli.run_ingestion <path>`
+2. Run: `conda run -n goodq_core python -m goodq4all.cli.run_ingestion <path>`
 3. Watch Command Center for progress
 
 ### Check What's Processed
 ```bash
-conda run -n goodq_zenml python scripts\check_production_status.py
+conda run -n goodq_core python scripts\check_production_status.py
 ```
 
 ### Search Memories
 ```bash
 # Via CLI
-conda run -n goodq_zenml python -m goodq4all.cli.retrieve "dancing"
+conda run -n goodq_core python -m goodq4all.cli.retrieve "dancing"
 
 # Via API (when running)
 curl "http://localhost:30000/retrieve?q=dancing"
@@ -131,13 +131,13 @@ curl "http://localhost:30000/retrieve?q=dancing"
 ### Import Errors
 ```bash
 # Test imports
-conda run -n goodq_zenml python scripts\test_all_imports.py
+conda run -n goodq_core python scripts\test_all_imports.py
 ```
 
 ### Path Issues
 ```bash
 # Verify paths
-conda run -n goodq_zenml python scripts\test_paths_config.py
+conda run -n goodq_core python scripts\test_paths_config.py
 ```
 
 ### Environment Issues
@@ -149,10 +149,10 @@ pwsh scripts\prepare_step_envs.ps1
 ### Database Corruption
 ```bash
 # Backup first!
-conda run -n goodq_zenml python -m goodq4all.cli.memory backup
+conda run -n goodq_core python -m goodq4all.cli.memory backup
 
 # Then clear if needed
-conda run -n goodq_zenml python scripts\clear_databases.py
+conda run -n goodq_core python scripts\clear_databases.py
 ```
 
 ---

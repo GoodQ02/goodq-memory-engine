@@ -216,9 +216,9 @@ Updated all references from `config.*` to `configs.*`:
 /docs/         - Documentation (organized)
 /envs/         - Conda environments
 /lib/          - Core library code
-/pipelines/    - ZenML pipelines
+/pipelines/    - legacy orchestration pipelines
 /scripts/      - ALL utility scripts (consolidated)
-/steps/        - ZenML steps
+/steps/        - legacy orchestration steps
 /tests/        - Test suite
 /web/          - Web UI
 /workflows/    - CI/CD

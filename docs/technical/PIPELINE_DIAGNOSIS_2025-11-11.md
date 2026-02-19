@@ -9,7 +9,7 @@ The pipeline is **WORKING CORRECTLY** on small files but **FAILING on large file
 
 ### ✅ Correct Architecture (NOT broken!)
 - **Custom orchestration** with specialized conda environments per step
-- **NOT using ZenML** for orchestration (ZenML not needed/installed)
+- **NOT using legacy orchestration** for orchestration (legacy orchestration not needed/installed)
 - **Environment per step** pattern:
   - `goodq_video_scene_detect` - Scene detection
   - `goodq_audio_transcribe` - Whisper transcription
@@ -259,7 +259,7 @@ Once a chunk processes successfully:
 ### What's NOT Broken
 - Architecture is sound
 - No need to rewrite orchestration
-- ZenML not required (custom orchestration works)
+- legacy orchestration not required (custom orchestration works)
 - Environment isolation working correctly
 
 ### The ONLY Issue

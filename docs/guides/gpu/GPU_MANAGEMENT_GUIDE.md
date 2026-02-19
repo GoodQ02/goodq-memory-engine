@@ -158,7 +158,7 @@ GPUManager.clear_cache()
 
 ### Multiple Processes
 ```python
-# Each step runs in its own process via ZenML
+# Each step runs in its own process via legacy orchestration
 # Memory fractions prevent conflicts
 # No additional configuration needed
 ```
@@ -202,7 +202,7 @@ GPUManager.enable_mps(thread_percentage=70)
 
 ## Integration with Pipeline
 
-### ZenML Step Decorator
+### legacy orchestration Step Decorator
 
 ```python
 @step(enable_cache=False)

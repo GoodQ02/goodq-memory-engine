@@ -653,7 +653,7 @@ docs/archive/
 | `docs/reports/PHASE_9_6_BREAKTHROUGH_REPORT.md` | C) Historical | Time-bound report/release snapshot content. | ARCHIVE |
 | `docs/reports/PRODUCTION_VALIDATION_REPORT_2025-12-10.md` | C) Historical | Time-bound report/release snapshot content. | ARCHIVE |
 | `docs/reports/Phase_9.3_Live_Validation_Report.md` | C) Historical | Time-bound report/release snapshot content. | ARCHIVE |
-| `docs/reports/Phase_9.4_ZenML_Removal_Complete.md` | C) Historical | Time-bound report/release snapshot content. | ARCHIVE |
+| `docs/reports/Phase_9.4_Legacy_Orchestration_Removal_Complete.md` | C) Historical | Time-bound report/release snapshot content. | ARCHIVE |
 | `docs/reports/Phase_9.7_Debug_Report.md` | C) Historical | Time-bound report/release snapshot content. | ARCHIVE |
 | `docs/reports/QDRANT_INTEGRATION_COMPLETE_20251211.md` | C) Historical | Time-bound report/release snapshot content. | ARCHIVE |
 | `docs/reports/README.md` | C) Historical | Time-bound report/release snapshot content. | ARCHIVE |

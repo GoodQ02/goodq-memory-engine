@@ -57,8 +57,8 @@ Vision + Audio + Entity + KG Steps
 
 ## Historical Notes
 
-- **Pre-December 2025:** ZenML-based pipelines existed in `ingest_multimodal_conda.py`
-- **Current:** Pure Python sequential execution (ZenML removed)
+- **Pre-December 2025:** legacy orchestration-based pipelines existed in `ingest_multimodal_conda.py`
+- **Current:** Pure Python sequential execution (legacy orchestration removed)
 - **Backup:** `ingest_multimodal_conda.py.backup_20251204` preserved for reference
 
 ## Why This Structure?

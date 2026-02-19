@@ -45,7 +45,7 @@ Central registry containing:
 
 1. **Run the model version pinning script** (one-time or when adding models):
    ```bash
-   conda activate goodq_zenml
+   conda activate goodq_core
    python scripts/pin_model_versions.py
    ```
    
@@ -89,7 +89,7 @@ Central registry containing:
 The bootstrap script automatically respects the registry:
 
 ```bash
-conda activate goodq_zenml
+conda activate goodq_core
 python scripts/bootstrap_models.py
 ```
 

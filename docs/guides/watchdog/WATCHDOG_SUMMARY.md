@@ -374,7 +374,7 @@ Get-Content <project_root>\logs\watchdog_state.json | ConvertFrom-Json
 **Option 1: Add to LAUNCH_GOODQ.bat**
 ```batch
 REM Add before "Press any key to close"
-start "GoodQ Watchdog" /MIN cmd /k "call conda activate goodq_zenml && python <project_root>\scripts\watchdog_ingest.py"
+start "GoodQ Watchdog" /MIN cmd /k "call conda activate goodq_core && python <project_root>\scripts\watchdog_ingest.py"
 ```
 
 **Option 2: Windows Startup**
@@ -508,7 +508,7 @@ Convert to Windows Service for true background operation (future enhancement)
 - [x] Permissions set correctly
 - [x] Directories created (processing, processed, failed)
 - [x] Logs directory exists
-- [x] Environment activated (goodq_zenml)
+- [x] Environment activated (goodq_core)
 
 ### Post-Deployment
 - [x] Unit tests run successfully

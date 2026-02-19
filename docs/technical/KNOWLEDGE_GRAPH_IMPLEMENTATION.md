@@ -42,7 +42,7 @@ High-level Python API for common query patterns:
 
 ### 3. Pipeline Integration (`steps/graph_builder/`)
 
-ZenML pipeline step that:
+legacy orchestration pipeline step that:
 - Extracts entities from multimodal analysis results
 - Creates graph nodes for all detected entities
 - Builds relationships automatically:
@@ -372,7 +372,7 @@ python cli/graph_query.py --graph-db data/test_knowledge_graph.db list-entities
 3. ✅ Automatic relationship building (co-occurrence, temporal, semantic)
 4. ✅ High-level query interface with common patterns
 5. ✅ Command-line tool for interactive exploration
-6. ✅ ZenML pipeline integration
+6. ✅ legacy orchestration pipeline integration
 7. ✅ Comprehensive test suite (all passing)
 8. ✅ Complete documentation with examples
 9. ✅ Performance optimizations (indexing, batching)

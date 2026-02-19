@@ -145,7 +145,7 @@ START_WATCHDOG.bat
 
 **Method 2: Manual Processing**
 ```batch
-conda activate goodq_zenml
+conda activate goodq_core
 python cli\run_ingestion.py <project_root>\import_inbox\sample.mp4
 ```
 

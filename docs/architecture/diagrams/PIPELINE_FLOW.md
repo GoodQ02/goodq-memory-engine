@@ -425,14 +425,14 @@ graph TB
 sequenceDiagram
     participant U as User
     participant CLI as CLI Script
-    participant ZM as ZenML
+    participant ZM as legacy orchestration
     participant SR as Step Runner
     participant ENV as Conda Env
     participant MEM as Memory Layer
     
     U->>CLI: pwsh ingest_videos_lite.ps1
     CLI->>CLI: Sync .env.local
-    CLI->>ZM: conda run -n goodq_zenml
+    CLI->>ZM: conda run -n goodq_core
     ZM->>ZM: Load run_ingestion.py
     
     loop For each video

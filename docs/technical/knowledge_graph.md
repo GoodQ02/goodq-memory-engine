@@ -21,7 +21,7 @@ The GoodQ Knowledge Graph provides a powerful semantic layer on top of the multi
    - Entity summarization and statistics
 
 3. **Graph Builder Step** (`steps/graph_builder/`)
-   - ZenML pipeline step
+   - legacy orchestration pipeline step
    - Constructs graph from analysis results
    - Automatically creates nodes, edges, and relationships
 

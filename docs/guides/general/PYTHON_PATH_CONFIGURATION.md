@@ -49,15 +49,15 @@ conda_exe = get_conda_exe()
 # Returns: Path('<conda_base>/Scripts/conda.exe')
 
 # Get Python for specific environment
-python_exe = get_env_python('goodq_zenml')
-# Returns: Path('<conda_base>/envs/goodq_zenml/python.exe')
+python_exe = get_env_python('goodq_core')
+# Returns: Path('<conda_base>/envs/goodq_core/python.exe')
 
 # Get conda run command for an environment
-cmd = get_conda_run_command('goodq_zenml')
-# Returns: ['<conda_base>\\Scripts\\conda.exe', 'run', '-n', 'goodq_zenml']
+cmd = get_conda_run_command('goodq_core')
+# Returns: ['<conda_base>\\Scripts\\conda.exe', 'run', '-n', 'goodq_core']
 
 # Validate environment exists
-is_valid = validate_env('goodq_zenml')
+is_valid = validate_env('goodq_core')
 # Returns: True or False
 \\\
 
@@ -71,7 +71,7 @@ config = get_config()
 
 # Get all environments
 all_envs = config.get_all_envs()
-# Returns: {'goodq_zenml': Path(...), 'goodq_video_scene_detect': Path(...), ...}
+# Returns: {'goodq_core': Path(...), 'goodq_video_scene_detect': Path(...), ...}
 
 # Get configuration info
 info = config.get_info_dict()
@@ -111,7 +111,7 @@ esolve_conda() (now improved)
 Run the test script to verify all paths are correctly configured:
 
 \\\ash
-conda activate goodq_zenml
+conda activate goodq_core
 python test_python_paths.py
 \\\
 
@@ -153,8 +153,8 @@ Configuration initializes automatically on first use:
 \\\python
 # DON'T DO THIS ANYMORE
 conda_path = Path("<conda_base>")
-python_exe = conda_path / "envs" / "goodq_zenml" / "python.exe"
-cmd = ["conda", "run", "-n", "goodq_zenml"]
+python_exe = conda_path / "envs" / "goodq_core" / "python.exe"
+cmd = ["conda", "run", "-n", "goodq_core"]
 \\\
 
 ### New Pattern (Centralized)
@@ -163,8 +163,8 @@ cmd = ["conda", "run", "-n", "goodq_zenml"]
 # DO THIS INSTEAD
 from config.python_paths import get_env_python, get_conda_run_command
 
-python_exe = get_env_python('goodq_zenml')
-cmd = get_conda_run_command('goodq_zenml')
+python_exe = get_env_python('goodq_core')
+cmd = get_conda_run_command('goodq_core')
 \\\
 
 ## Benefits

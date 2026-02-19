@@ -14,7 +14,7 @@
 - **Profiles:** `UNSET` (legacy canonical behavior), `BASELINE` (CPU-safe), `GPU_ENHANCED` (additive acceleration).
 - **GPU:** Optional by profile; NVIDIA RTX-class GPU is required only for `GPU_ENHANCED` throughput goals.
 - **WSL2 audio:** Optional by profile; required only when WSL audio acceleration is selected.
-- **Python/Conda:** Python 3.10 and the `goodq_zenml` base environment installed.
+- **Python/Conda:** Python 3.10 and the `goodq_core` base environment installed.
 - **Data Layout:** Project at `<project_root>\` with data root from `GOODQ_DATA_ROOT` (default `<GOODQ_DATA_ROOT>`).
 
 ## Profile Contract
@@ -36,7 +36,7 @@
 
 ### Manual Ingestion
 
-- `conda run -n goodq_zenml python cli/run_ingestion.py ingest <video_path>` – CLI ingestion.
+- `conda run -n goodq_core python cli/run_ingestion.py ingest <video_path>` – CLI ingestion.
 
 ### Health & Readiness
 
@@ -90,7 +90,7 @@
 
 ## Environments Considered In-Scope
 
-- Base orchestration: `goodq_zenml`.
+- Base orchestration: `goodq_core`.
 - Vision/audio/text steps: the `goodq_*` step environments documented in:
   - `docs/ENVIRONMENT_INDEX.md`
   - `docs/PHASE_1_GPU_FINAL_SUMMARY.md`

@@ -21,7 +21,7 @@ Complete implementation of automatic file ingestion system for GoodQ project.
 
 #### Launchers
 - **`START_WATCHDOG.bat`**
-  - Activates `goodq_zenml` environment
+  - Activates `goodq_core` environment
   - Starts watchdog daemon
   - Displays monitoring information
 

@@ -34,7 +34,7 @@ The system will **automatically**:
 In a second terminal:
 
 ```batch
-conda activate goodq_zenml
+conda activate goodq_core
 python scripts/audio_gpu_monitor.py
 ```
 
@@ -45,7 +45,7 @@ Watch live GPU stats while processing.
 After processing:
 
 ```batch
-conda activate goodq_zenml
+conda activate goodq_core
 python scripts/audio_gpu_report.py
 ```
 
@@ -153,7 +153,7 @@ Choose option 1 to run full pipeline test with monitoring.
 
 ### See Report
 ```batch
-conda activate goodq_zenml
+conda activate goodq_core
 python scripts/audio_gpu_report.py
 ```
 

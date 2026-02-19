@@ -110,13 +110,13 @@ This will:
 
 #### Monitor GPU in Real-Time
 ```batch
-conda activate goodq_zenml
+conda activate goodq_core
 python scripts/audio_gpu_monitor.py
 ```
 
 #### Generate Performance Report
 ```batch
-conda activate goodq_zenml
+conda activate goodq_core
 python scripts/audio_gpu_report.py
 ```
 
@@ -281,7 +281,7 @@ The system will automatically detect and use it.
 - [ ] Dynamic precision switching
 - [ ] Automatic chunk size optimization
 - [ ] Better memory prediction
-- [ ] Integration with ZenML resource management
+- [ ] Integration with legacy orchestration resource management
 - [ ] Docker container GPU passthrough
 - [ ] Tensorboard integration for monitoring
 

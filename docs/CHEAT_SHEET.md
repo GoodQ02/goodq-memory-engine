@@ -23,7 +23,7 @@ pwsh scripts\command_center.ps1
 pwsh scripts\verify_project_readiness.ps1
 
 # Current processing status
-conda run -n goodq_zenml python scripts\check_production_status.py
+conda run -n goodq_core python scripts\check_production_status.py
 
 # Watch live processing
 Get-Content <GOODQ_DATA_ROOT>\GoodQ_Data\logs\step_runs.jsonl -Wait
@@ -39,7 +39,7 @@ Get-Content <project_root>\logs\watchdog.log -Tail 50
 ═══════════════════════════════════════════════════════════════════════
 
 # Activate environment first
-conda activate goodq_zenml
+conda activate goodq_core
 cd <project_root>
 
 # Process one video

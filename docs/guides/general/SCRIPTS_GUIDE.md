@@ -73,31 +73,31 @@ All in `<project_root>\scripts\`:
 
 ### Production Status
 ```batch
-conda run -n goodq_zenml python <project_root>\scripts\check_production_status.py
+conda run -n goodq_core python <project_root>\scripts\check_production_status.py
 ```
 Shows ingestion progress, database stats, knowledge graph status
 
 ### System Readiness
 ```batch
-conda run -n goodq_zenml python <project_root>\scripts\system_readiness_check.py
+conda run -n goodq_core python <project_root>\scripts\system_readiness_check.py
 ```
 Comprehensive system validation (models, datasets, environments)
 
 ### Check Memory Database
 ```batch
-conda run -n goodq_zenml python <project_root>\scripts\check_memory_db.py
+conda run -n goodq_core python <project_root>\scripts\check_memory_db.py
 ```
 Query memory database contents
 
 ### Knowledge Graph Test
 ```batch
-conda run -n goodq_zenml python <project_root>\scripts\test_knowledge_graph.py
+conda run -n goodq_core python <project_root>\scripts\test_knowledge_graph.py
 ```
 Test and verify knowledge graph functionality
 
 ### Clear Databases
 ```batch
-conda run -n goodq_zenml python <project_root>\scripts\clear_databases.py
+conda run -n goodq_core python <project_root>\scripts\clear_databases.py
 ```
 Clean slate for fresh ingestion
 
@@ -115,8 +115,8 @@ Clean slate for fresh ingestion
 ├── api\                           # FastAPI server
 ├── configs\                       # Configuration files
 ├── envs\                          # Environment definitions
-├── pipelines\                     # ZenML pipeline definitions
-└── steps\                         # ZenML step implementations
+├── pipelines\                     # legacy orchestration pipeline definitions
+└── steps\                         # legacy orchestration step implementations
 ```
 
 ## 🎬 Typical Workflow
@@ -143,7 +143,7 @@ Clean slate for fresh ingestion
 
 5. **Check results:**
    ```batch
-   conda run -n goodq_zenml python <project_root>\scripts\check_production_status.py
+   conda run -n goodq_core python <project_root>\scripts\check_production_status.py
    ```
 
 ## 🛑 Common Issues

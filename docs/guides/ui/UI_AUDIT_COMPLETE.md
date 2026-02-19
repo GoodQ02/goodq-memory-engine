@@ -195,7 +195,7 @@ These files are preserved for reference but won't be executed by any launchers.
 ### **1. Start the API Server**
 ```batch
 cd <project_root>
-conda activate goodq_zenml
+conda activate goodq_core
 python api_server.py
 ```
 

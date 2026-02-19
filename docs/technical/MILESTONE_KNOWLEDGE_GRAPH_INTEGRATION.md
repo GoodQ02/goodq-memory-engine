@@ -91,7 +91,7 @@ Successfully integrated a comprehensive knowledge graph system that creates rich
 │   ├── cli/                # Command-line tools
 │   ├── configs/            # Configuration (model registry, etc)
 │   ├── docs/               # Comprehensive documentation
-│   ├── pipelines/          # ZenML pipeline definitions
+│   ├── pipelines/          # legacy orchestration pipeline definitions
 │   ├── scripts/            # Automation and monitoring
 │   ├── steps/              # Modular pipeline steps
 │   │   └── graph_builder/  # NEW: Knowledge graph construction

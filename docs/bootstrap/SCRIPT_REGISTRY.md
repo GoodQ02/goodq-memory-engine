@@ -167,7 +167,7 @@ _Generated: 2026-02-15_
 | `scripts/install_vad.bat` | Unclear/Obsolete | Setup/installation utility for install vad. | No | absolute path operations |
 | `scripts/install_vision_gpu.bat` | Bootstrap-Critical | GoodQ4All - Vision GPU Setup Launcher | Manual Review | environment mutation |
 | `scripts/install_vision_gpu.py` | Unclear/Obsolete | Comprehensive Vision GPU Setup Script | No | None detected |
-| `scripts/mission_launch.ps1` | Bootstrap-Critical | Updated 2025-12-07: uses direct_ingestion instead of deprecated ZenML pipelines. | No | destructive actions; absolute path operations; environment mutation |
+| `scripts/mission_launch.ps1` | Bootstrap-Critical | Updated 2025-12-07: uses direct_ingestion instead of deprecated legacy orchestration pipelines. | No | destructive actions; absolute path operations; environment mutation |
 | `scripts/monitor_gpu_pipeline.py` | Runtime Utility | Real-time GPU Pipeline Monitor | Yes | None detected |
 | `scripts/monitor_ingestion.py` | Runtime Utility | Real-time Ingestion Monitor with Alerting | Manual Review | absolute path operations |
 | `scripts/monitor_ingestion_progress.py` | Unclear/Obsolete | GoodQ Mission Progress Monitor | No | absolute path operations |

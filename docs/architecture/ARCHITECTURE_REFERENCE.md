@@ -4,7 +4,7 @@
 **Status:** ✅ Updated with Dec 14, 2025 Forensic Verification  
 **Purpose:** Definitive reference for data structures, storage patterns, and operational architecture
 
-> **Note:** This document reflects the current operational system. FAISS has been replaced by Qdrant. ZenML orchestration removed. Unified `goodq_core` environment now standard. For full system narrative, see [SYSTEM_ARCHITECTURE.md](SYSTEM_ARCHITECTURE.md).
+> **Note:** This document reflects the current operational system. FAISS has been replaced by Qdrant. legacy orchestration orchestration removed. Unified `goodq_core` environment now standard. For full system narrative, see [SYSTEM_ARCHITECTURE.md](SYSTEM_ARCHITECTURE.md).
 
 ---
 
@@ -14,7 +14,7 @@
 3. [Storage Conventions](#storage-conventions) - Paths, artifacts, WSL2
 4. [Knowledge Graph Schema](#knowledge-graph-schema) - Entity relationships
 5. [File System Layout](#file-system-layout) - Current verified paths
-6. [Deprecated Components](#deprecated-components) - FAISS, ZenML, old envs
+6. [Deprecated Components](#deprecated-components) - FAISS, legacy orchestration, old envs
 
 ---
 
@@ -380,7 +380,7 @@ logs\scene_ingest\              # ✅ Scene artifacts
 - **Old Location:** `<project_root>\data\faiss_indices\`
 - **Note:** May still exist on disk but not actively used
 
-**ZenML Orchestration:**
+**legacy orchestration Orchestration:**
 - **Replaced by:** Direct invocation via `cli/run_ingestion.py`
 - **Removal Date:** Nov 2025
 - **Note:** References may exist in old docs

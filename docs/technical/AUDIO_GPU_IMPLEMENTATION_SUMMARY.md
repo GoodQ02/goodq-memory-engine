@@ -159,14 +159,14 @@ Choose from:
 ### Monitor in Real-Time
 
 ```batch
-conda activate goodq_zenml
+conda activate goodq_core
 python scripts/audio_gpu_monitor.py
 ```
 
 ### Check Performance
 
 ```batch
-conda activate goodq_zenml
+conda activate goodq_core
 python scripts/audio_gpu_report.py
 ```
 

@@ -18,7 +18,7 @@
 4. **No Device Scoping**: All steps try to grab the entire GPU
 
 ### Root Cause:
-**We're NOT using Docker**, so we lack the built-in process isolation that Docker containers provide. ZenML expects either:
+**We're NOT using Docker**, so we lack the built-in process isolation that Docker containers provide. legacy orchestration expects either:
 - Docker containers (each step gets isolated GPU access)
 - OR manual device management (which we haven't implemented)
 
@@ -147,13 +147,13 @@ def audio_diarize(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
         GPUManager.cleanup()
 ```
 
-### Phase 3: ZenML Step Wrapper Enhancement
+### Phase 3: legacy orchestration Step Wrapper Enhancement
 
-Add GPU resource hints to ZenML step decorators:
+Add GPU resource hints to legacy orchestration step decorators:
 
 ```python
-from zenml import step
-from zenml.config import ResourceSettings
+from pipeline_framework import step
+from pipeline_framework.config import ResourceSettings
 
 @step(
     enable_cache=True,
@@ -231,8 +231,8 @@ nvidia-smi -c EXCLUSIVE_PROCESS  # DON'T USE
 - **Our case**: We WANT controlled concurrency (2-3 steps at once)
 
 ### ❌ Separate Conda Envs Per Step
-- **Why**: We already have isolated ZenML steps
-- **Our case**: Single `goodq_zenml` env is fine with proper device management
+- **Why**: We already have isolated legacy orchestration steps
+- **Our case**: Single `goodq_core` env is fine with proper device management
 
 ---
 
@@ -250,7 +250,7 @@ nvidia-smi -c EXCLUSIVE_PROCESS  # DON'T USE
 3. Test concurrent execution
 
 ### Long-term (Phase 3):
-1. Add ZenML resource settings
+1. Add legacy orchestration resource settings
 2. Implement pipeline-level parallelism
 3. Benchmark end-to-end performance
 
@@ -303,7 +303,7 @@ python LAUNCH_GOODQ.bat
 2. ✅ We have **multiple GPU-heavy steps** that conflict
 3. ✅ We're experiencing **pipeline hangs** (resource starvation)
 4. ✅ We have **sufficient VRAM** (16GB) to run 3-4 steps concurrently with proper limits
-5. ✅ It's **ZenML-compatible** (works with bare-metal orchestration)
+5. ✅ It's **legacy orchestration-compatible** (works with bare-metal orchestration)
 
 **Next Step**: Implement Phase 1 (GPU Manager + audio_diarize update) and test immediately.
 

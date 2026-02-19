@@ -140,7 +140,7 @@ pwsh scripts\ingest_videos_lite.ps1 `
 
 ```powershell
 # Using Python CLI directly
-conda activate goodq_zenml
+conda activate goodq_core
 python cli\run_ingestion.py `
     --input-dir "<GOODQ_DATA_ROOT>\videos\to_process" `
     --workspace "logs\full_run" `

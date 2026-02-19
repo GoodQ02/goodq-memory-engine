@@ -294,7 +294,7 @@ For multiple videos, process overnight:
 
 ### Sequential Processing
 1. Watchdog detects video in `import_inbox`
-2. ZenML pipeline starts
+2. legacy orchestration pipeline starts
 3. **Step 1** loads into its conda env
    - GPU config auto-imported
    - Memory limit applied (e.g., 30%)

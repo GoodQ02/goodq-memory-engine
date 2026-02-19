@@ -136,7 +136,7 @@ Opens:
 ### **Manual:**
 ```batch
 cd <project_root>
-conda activate goodq_zenml
+conda activate goodq_core
 python api_server.py
 ```
 

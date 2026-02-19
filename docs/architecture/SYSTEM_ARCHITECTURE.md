@@ -8,7 +8,7 @@
 **Status:** ✅ Forensically Verified Operational System  
 **Verification Date:** December 14, 2025
 
-> **Note:** This document reflects the current operational architecture with scene-first processing, unified environment, and dual audio architecture. Historical references (ZenML, FAISS, multiple envs) have been removed or marked as deprecated.
+> **Note:** This document reflects the current operational architecture with scene-first processing, unified environment, and dual audio architecture. Historical references (legacy orchestration, FAISS, multiple envs) have been removed or marked as deprecated.
 
 ---
 
@@ -79,7 +79,7 @@ Comprehensive telemetry:
 ┌──────────────────────────┴──────────────────────────────────┐
 │                ✅ Orchestration Layer                        │
 │  cli/run_ingestion.py · cli/watchdog.py · Scene-First      │
-│  ⚠️ (ZenML removed - direct invocation now)                 │
+│  ⚠️ (legacy orchestration removed - direct invocation now)                 │
 └──────────────────────────┬──────────────────────────────────┘
                            │
 ┌──────────────────────────┴──────────────────────────────────┐
@@ -463,7 +463,7 @@ pip install -r requirements.txt `
 
 | Environment | Python | Purpose | GPU | Key Packages |
 |-------------|--------|---------|-----|--------------|
-| `goodq_zenml` | 3.10 | Orchestration | ❌ | zenml, typer, openai |
+| `goodq_core` | 3.10 | Orchestration | ❌ | legacy orchestration, typer, openai |
 | `goodq_video_scene_detect` | 3.10 | Scene detection | ❌ | opencv, scenedetect |
 | `goodq_ocr` | 3.10 | Text extraction | ❌ | pytesseract |
 | `goodq_image_caption` | 3.10 | Image captioning | ✅ | transformers, torch (CUDA) |
@@ -652,7 +652,7 @@ pwsh scripts/benchmark_pipeline.ps1 -InputDir test_videos -Iterations 5
 ## 📚 References & Resources
 
 **Official Documentation:**
-- [ZenML Docs](https://docs.zenml.io)
+- Historical orchestration framework docs (archived reference only)
 - [PyTorch Docs](https://pytorch.org/docs)
 - [HuggingFace Transformers](https://huggingface.co/docs/transformers)
 
@@ -721,7 +721,7 @@ pwsh scripts/benchmark_pipeline.ps1 -InputDir test_videos -Iterations 5
 - Cross-modal harmonizer (steps/video/cross_modal_harmonizer.py)
 
 ### ⚠️ Deprecated / Cleanup Planned
-- ZenML orchestration (removed, direct invocation now)
+- legacy orchestration orchestration (removed, direct invocation now)
 - FAISS indices (migrated to Qdrant)
 - 6 separate conda environments (unified to goodq_core)
 - Legacy audio steps (superseded by unified WSL2)

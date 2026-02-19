@@ -16,7 +16,7 @@ Joe, we just finished **Phase 10 - the complete system cleanup and modernization
 
 ### 2. **Clean Architecture** (100% ✅)
 - Single canonical `config.yaml`
-- No ZenML remnants anywhere
+- No legacy orchestration remnants anywhere
 - Proper directory structure
 - All legacy code archived
 

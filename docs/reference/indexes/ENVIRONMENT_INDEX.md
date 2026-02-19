@@ -8,7 +8,7 @@
 
 ### Orchestration & Core
 
-- `goodq_zenml` – Primary orchestration environment.
+- `goodq_core` – Primary orchestration environment.
   - Used by: `LAUNCH_GOODQ.bat`, `cli/run_ingestion.py`, Command Center, health checks.
   - Scope: Coordinates pipelines, DB access, FAISS, and API server.
 
@@ -70,7 +70,7 @@
 
 These environments are considered part of the **supported surface** and should not be renamed or removed without updating:
 
-- `goodq_zenml`
+- `goodq_core`
 - `goodq_video_scene_detect`
 - `goodq_audio_diarize`
 - `goodq_audio_transcribe`

@@ -14,10 +14,10 @@ GoodQ4All provides several CLI tools for different operations:
 - **Memory** - Database management
 - **Knowledge Graph** - Entity and relationship queries
 
-All commands should be run from the project root (`<project_root>\`) with the `goodq_zenml` conda environment activated:
+All commands should be run from the project root (`<project_root>\`) with the `goodq_core` conda environment activated:
 
 ```powershell
-conda activate goodq_zenml
+conda activate goodq_core
 cd <project_root>
 ```
 

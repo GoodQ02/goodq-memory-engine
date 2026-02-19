@@ -107,7 +107,7 @@ Get-Content <project_root>\logs\watchdog_state.json | ConvertFrom-Json
 
 ### Run Tests
 ```batch
-conda activate goodq_zenml
+conda activate goodq_core
 python scripts\test_watchdog.py
 ```
 
@@ -130,7 +130,7 @@ python scripts\test_watchdog_simple.py
 - Review error in `logs/watchdog.log`
 - Try manual processing:
   ```batch
-  conda activate goodq_zenml
+  conda activate goodq_core
   python cli\run_ingestion.py ingest path\to\file.mp4
   ```
 

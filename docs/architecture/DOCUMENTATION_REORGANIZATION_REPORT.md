@@ -227,7 +227,7 @@ TROUBLESHOOTING:     3 (active reference)
 - UI polish (Phases 7-12)
 
 **Oct 2025**
-- Major reorganization (zenml_project → goodq4all)
+- Major reorganization (goodq4all_project → goodq4all)
 - Knowledge graph implementation
 - Model lockdown
 - Environment isolation (22 conda envs)

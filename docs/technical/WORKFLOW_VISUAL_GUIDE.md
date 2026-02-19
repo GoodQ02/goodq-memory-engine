@@ -79,7 +79,7 @@ Option B: MANUAL
 ────────────────
 
 ┌────────────────────────────────────┐
-│  conda activate goodq_zenml        │
+│  conda activate goodq_core        │
 │  cd <project_root>                 │
 │  python cli\run_ingestion.py \    │
 │    --video "path\to\video.mp4"     │
@@ -302,8 +302,8 @@ Log Files (Detailed History)
 
 Conda Base Environment
   │
-  ├─► goodq_zenml ────► Main orchestration
-  │                      - ZenML
+  ├─► goodq_core ────► Main orchestration
+  │                      - legacy orchestration
   │                      - Typer CLI
   │                      - SQLite
   │                      - FastAPI

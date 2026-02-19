@@ -42,7 +42,7 @@ A comprehensive model version pinning and asset lockdown system to prevent versi
 
 - Updated `README.md` with lockdown section
 - Enhanced `bootstrap_models.py` to respect registry
-- Added PyYAML dependency to `goodq_zenml` environment
+- Added PyYAML dependency to `goodq_core` environment
 
 ## Features
 

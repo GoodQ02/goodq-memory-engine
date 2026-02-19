@@ -261,7 +261,7 @@ run_vision_audit.bat
 ### **4. OCR Step**
 **Status:** Environment exists but not fully integrated  
 **Next Step:** Add `image_ocr` step to pipeline if needed  
-**Note:** EasyOCR is GPU-ready, just needs ZenML step wrapper
+**Note:** EasyOCR is GPU-ready, just needs legacy orchestration step wrapper
 
 ---
 

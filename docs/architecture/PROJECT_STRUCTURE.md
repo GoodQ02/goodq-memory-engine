@@ -59,7 +59,7 @@ Core library code
 - Data models
 
 ### `/pipelines/`
-ZenML pipeline definitions
+legacy orchestration pipeline definitions
 - Audio processing pipelines
 - Vision processing pipelines
 - Knowledge graph pipelines
@@ -72,7 +72,7 @@ Utility and test scripts (consolidated)
 - Monitoring scripts
 
 ### `/steps/`
-ZenML step implementations
+legacy orchestration step implementations
 - Audio processing steps
 - Vision processing steps
 - NLP/LLM steps

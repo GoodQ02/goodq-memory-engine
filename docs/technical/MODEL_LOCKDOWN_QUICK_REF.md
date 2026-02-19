@@ -6,7 +6,7 @@
 ```bash
 scripts\VERIFY_MODEL_LOCKDOWN.bat
 # or
-conda activate goodq_zenml
+conda activate goodq_core
 python scripts/verify_model_lockdown.py
 ```
 
@@ -16,7 +16,7 @@ python scripts/verify_model_lockdown.py
 ```bash
 scripts\PIN_MODEL_VERSIONS.bat
 # or
-conda activate goodq_zenml
+conda activate goodq_core
 python scripts/pin_model_versions.py
 ```
 
@@ -28,7 +28,7 @@ python scripts/pin_model_versions.py
 
 ### Bootstrap Models (Download)
 ```bash
-conda activate goodq_zenml
+conda activate goodq_core
 python scripts/bootstrap_models.py
 ```
 

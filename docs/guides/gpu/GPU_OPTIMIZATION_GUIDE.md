@@ -96,7 +96,7 @@ model = MyModel().to(device)
 Test GPU configuration without running full pipeline:
 
 ```bash
-conda activate goodq_zenml
+conda activate goodq_core
 python scripts\test_gpu_config.py
 ```
 
@@ -104,7 +104,7 @@ python scripts\test_gpu_config.py
 Run pipeline with real-time GPU monitoring:
 
 ```bash
-conda activate goodq_zenml
+conda activate goodq_core
 python scripts\monitor_gpu_pipeline.py
 ```
 

@@ -3,6 +3,11 @@
 # Creates a production-grade auto-starting service
 
 set -e
+WSL_USER="${GOODQ_WSL_USER:-$(whoami)}"
+WSL_HOME="/home/${WSL_USER}"
+VLLM_HOME="${GOODQ_WSL_VLLM_HOME:-${WSL_HOME}/vllm_server}"
+MODEL_PATH="${GOODQ_WSL_MODEL_PATH:-/mnt/l/_DATA/models/llm/huggingface/Llama-3.2-1B-Instruct}"
+LOG_DIR="${VLLM_HOME}/logs"
 
 echo "=================================================================="
 echo "  vLLM Llama-1B systemd Service Installer"
@@ -18,22 +23,22 @@ fi
 echo "[1/6] Creating systemd service file..."
 
 # Create the service file
-sudo tee /etc/systemd/system/vllm-llama1b.service > /dev/null << 'EOF'
+sudo tee /etc/systemd/system/vllm-llama1b.service > /dev/null << EOF
 [Unit]
 Description=vLLM Llama-3.2-1B-Instruct Server
 After=network.target
 
 [Service]
 Type=simple
-User=joesdomingo
-WorkingDirectory=/home/joesdomingo/vllm_server
-Environment="PATH=/home/joesdomingo/vllm_server/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+User=${WSL_USER}
+WorkingDirectory=${VLLM_HOME}
+Environment="PATH=${VLLM_HOME}/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 Environment="CUDA_VISIBLE_DEVICES=0"
-ExecStart=/home/joesdomingo/vllm_server/venv/bin/python -m vllm.entrypoints.openai.api_server --model /mnt/l/_DATA/models/llm/huggingface/Llama-3.2-1B-Instruct --host 0.0.0.0 --port 38005 --gpu-memory-utilization 0.7 --max-model-len 8192
+ExecStart=${VLLM_HOME}/venv/bin/python -m vllm.entrypoints.openai.api_server --model ${MODEL_PATH} --host 0.0.0.0 --port 38005 --gpu-memory-utilization 0.7 --max-model-len 8192
 Restart=on-failure
 RestartSec=10
-StandardOutput=append:/home/joesdomingo/vllm_server/logs/vllm-service.log
-StandardError=append:/home/joesdomingo/vllm_server/logs/vllm-service-error.log
+StandardOutput=append:${LOG_DIR}/vllm-service.log
+StandardError=append:${LOG_DIR}/vllm-service-error.log
 
 [Install]
 WantedBy=multi-user.target
@@ -43,7 +48,7 @@ echo "✓ Service file created: /etc/systemd/system/vllm-llama1b.service"
 echo ""
 
 echo "[2/6] Creating log directory..."
-mkdir -p ~/vllm_server/logs
+mkdir -p "$LOG_DIR"
 echo "✓ Log directory ready"
 echo ""
 

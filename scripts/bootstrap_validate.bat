@@ -2,6 +2,16 @@
 setlocal EnableExtensions
 
 set "FAILED_STAGE="
+set "EXIT_CODE=1"
+set "PUSHD_OK="
+
+for %%I in ("%~dp0..") do set "REPO_ROOT=%%~fI"
+pushd "%REPO_ROOT%" >nul 2>nul
+if errorlevel 1 (
+  set "FAILED_STAGE=0 (repo root resolve)"
+  goto :fail
+)
+set "PUSHD_OK=1"
 
 echo.
 echo ============================================================
@@ -27,7 +37,7 @@ echo.
 
 echo [Stage 2] Documentation Governance
 echo ------------------------------------------------------------
-python scripts\docs\doc_drift_lint.py
+python "%REPO_ROOT%\scripts\docs\doc_drift_lint.py"
 if errorlevel 1 (
   set "FAILED_STAGE=2 (doc_drift_lint)"
   goto :fail
@@ -37,7 +47,7 @@ echo.
 
 echo [Stage 3] Bootstrap Sanity
 echo ------------------------------------------------------------
-python scripts\bootstrap_verify.py --json
+python "%REPO_ROOT%\scripts\bootstrap_verify.py" --json
 if errorlevel 1 (
   set "FAILED_STAGE=3 (bootstrap_verify error)"
   goto :fail
@@ -57,8 +67,8 @@ echo.
 
 echo [Stage 5] Optional System Signals (non-fatal)
 echo ------------------------------------------------------------
-if exist vendor\qdrant\qdrant.exe (
-  echo Qdrant binary: PRESENT ^(vendor\qdrant\qdrant.exe^)
+if exist "%REPO_ROOT%\vendor\qdrant\qdrant.exe" (
+  echo Qdrant binary: PRESENT ^(%REPO_ROOT%\vendor\qdrant\qdrant.exe^)
 ) else (
   echo Qdrant binary: MISSING
 )
@@ -80,7 +90,8 @@ echo ============================================================
 echo   BOOTSTRAP VALIDATION: PASS
 echo ============================================================
 echo.
-exit /b 0
+set "EXIT_CODE=0"
+goto :cleanup
 
 :fail
 echo.
@@ -89,4 +100,9 @@ echo   BOOTSTRAP VALIDATION: FAIL
 echo   Failed at stage: %FAILED_STAGE%
 echo ============================================================
 echo.
-exit /b 1
+set "EXIT_CODE=1"
+goto :cleanup
+
+:cleanup
+if defined PUSHD_OK popd >nul 2>nul
+exit /b %EXIT_CODE%

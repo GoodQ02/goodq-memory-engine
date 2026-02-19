@@ -8,6 +8,9 @@ REM ============================================================================
 
 setlocal EnableDelayedExpansion
 call "%~dp0_lib\\interpreter_bindings.bat"
+set "SCRIPT_DIR=%~dp0"
+for %%I in ("%SCRIPT_DIR%..") do set "REPO_ROOT=%%~fI"
+for /f "delims=" %%I in ('powershell -NoProfile -Command "$p=$env:REPO_ROOT.TrimEnd('\\');$d=$p.Substring(0,1).ToLower();$rest=$p.Substring(2).Replace('\\','/');Write-Output ('/mnt/' + $d + $rest)"') do set "WSL_REPO_ROOT=%%I"
 
 echo.
 echo ========================================================================
@@ -25,7 +28,7 @@ if errorlevel 1 (
 
 echo [1/4] Copying startup script to WSL...
 wsl -d %GOODQ_WSL_DISTRO% -- bash -c "mkdir -p ~/goodq4all/scripts/wsl"
-wsl -d %GOODQ_WSL_DISTRO% -- bash -c "cp /mnt/l/goodq4all/scripts/wsl/start_all_vllm.sh ~/goodq4all/scripts/wsl/"
+wsl -d %GOODQ_WSL_DISTRO% -- bash -c "cp %WSL_REPO_ROOT%/scripts/wsl/start_all_vllm.sh ~/goodq4all/scripts/wsl/"
 wsl -d %GOODQ_WSL_DISTRO% -- bash -c "chmod +x ~/goodq4all/scripts/wsl/start_all_vllm.sh"
 
 echo [2/4] Starting vLLM servers in WSL...
@@ -46,7 +49,7 @@ timeout /t 5 /nobreak >nul
 echo [4/4] Testing connectivity from Windows...
 echo.
 
-"%CONDA_EXE%" run -n goodq_core python L:\goodq4all\scripts\test_llm_connectivity.py
+"%CONDA_EXE%" run -n %GOODQ_CONDA_ENV% python "%REPO_ROOT%\scripts\test_llm_connectivity.py"
 
 if errorlevel 1 (
     echo.

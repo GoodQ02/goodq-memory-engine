@@ -4,10 +4,15 @@ This ensures all environments can import goodq4all.steps, goodq4all.lib, etc.
 """
 import subprocess
 import sys
+import os
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+CORE_ENV = os.environ.get("GOODQ_CONDA_ENV", "goodq_core")
 
 # List of all goodq conda environments that need the package
 ENVS = [
-    'goodq_zenml',
+    CORE_ENV,
     'goodq_video_scene_detect',
     'goodq_audio_transcribe',
     'goodq_audio_diarize',
@@ -34,7 +39,7 @@ def install_in_env(env_name):
     try:
         # Use pip install in editable mode
         result = subprocess.run(
-            ['conda', 'run', '-n', env_name, 'pip', 'install', '-e', 'L:/goodq4all', '--no-deps'],
+            ['conda', 'run', '-n', env_name, 'pip', 'install', '-e', str(REPO_ROOT), '--no-deps'],
             capture_output=True,
             text=True,
             timeout=120

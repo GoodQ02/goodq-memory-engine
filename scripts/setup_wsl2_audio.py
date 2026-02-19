@@ -11,8 +11,9 @@ import time
 
 class WSL2AudioSetup:
     def __init__(self):
-        self.base_dir = Path("L:/goodq4all")
-        self.wsl_workspace = "/home/goodq/audio_workspace"
+        self.base_dir = Path(__file__).resolve().parents[1]
+        self.wsl_distro = os.environ.get("GOODQ_WSL_DISTRO", "Ubuntu")
+        self.wsl_workspace = os.environ.get("GOODQ_WSL_WORKSPACE", "/home/goodq/audio_workspace")
         self.errors = []
         self.warnings = []
         
@@ -25,7 +26,7 @@ class WSL2AudioSetup:
         """Execute command in WSL2"""
         try:
             result = subprocess.run(
-                ["wsl", "-d", "Ubuntu", "--", "bash", "-c", command],
+                ["wsl", "-d", self.wsl_distro, "--", "bash", "-c", command],
                 capture_output=True,
                 text=True,
                 check=check
@@ -47,11 +48,11 @@ class WSL2AudioSetup:
         except:
             output = result.stdout.decode('utf-8', errors='ignore').strip()
         output_lines = output.split('\n')
-        ubuntu_running = any("Ubuntu" in line and "Running" in line for line in output_lines)
-        if not ubuntu_running:
-            self.errors.append("WSL2 Ubuntu is not running")
+        distro_running = any(self.wsl_distro in line and "Running" in line for line in output_lines)
+        if not distro_running:
+            self.errors.append(f"WSL2 distro '{self.wsl_distro}' is not running")
             return False
-        print("  [SYMBOL] WSL2 Ubuntu is running")
+        print(f"  [SYMBOL] WSL2 distro '{self.wsl_distro}' is running")
         
         # Check CUDA in WSL2
         print("\n[2/5] Checking CUDA availability in WSL2...")
@@ -602,7 +603,7 @@ def test_bridge():
             
     # Path conversion test
     print("\\n[2/3] Testing path conversion...")
-    win_path = "L:\\\\goodq4all\\\\test.wav"
+    win_path = "C:\\\\path\\\\to\\\\test.wav"
     wsl_path = bridge.wsl_path(win_path)
     print(f"  Windows: {win_path}")
     print(f"  WSL2:    {wsl_path}")

@@ -5,16 +5,23 @@ Installs everything in user space without venv or sudo
 
 import subprocess
 import sys
+import os
 from pathlib import Path
 
 class UserSpaceWSL2Setup:
     def __init__(self):
-        result = subprocess.run(
-            ["wsl", "-d", "Ubuntu", "--", "whoami"],
-            capture_output=True,
-            text=True
-        )
-        wsl_user = result.stdout.strip()
+        self.base_dir = Path(__file__).resolve().parents[1]
+        self.wsl_distro = os.environ.get("GOODQ_WSL_DISTRO", "Ubuntu")
+        wsl_user = os.environ.get("GOODQ_WSL_USER", "").strip()
+        if not wsl_user:
+            result = subprocess.run(
+                ["wsl", "-d", self.wsl_distro, "--", "whoami"],
+                capture_output=True,
+                text=True
+            )
+            wsl_user = result.stdout.strip()
+        if not wsl_user:
+            wsl_user = os.environ.get("USERNAME", "user").strip().lower() or "user"
         self.wsl_home = f"/home/{wsl_user}"
         self.workspace = f"{self.wsl_home}/goodq_audio"
         
@@ -27,7 +34,7 @@ class UserSpaceWSL2Setup:
         """Run command in WSL2"""
         try:
             result = subprocess.run(
-                ["wsl", "-d", "Ubuntu", "--", "bash", "-c", command],
+                ["wsl", "-d", self.wsl_distro, "--", "bash", "-c", command],
                 capture_output=True,
                 text=True,
                 timeout=timeout
@@ -359,7 +366,7 @@ if __name__ == "__main__":
     print("  print(result['segments'])")
 '''
         
-        bridge_path = Path("L:/goodq4all/wsl2_audio_bridge.py")
+        bridge_path = self.base_dir / "wsl2_audio_bridge.py"
         with open(bridge_path, 'w') as f:
             f.write(bridge_code)
         print(f"  [SYMBOL] Created {bridge_path}")

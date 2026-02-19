@@ -3,6 +3,9 @@ REM GoodQ4All - WSL2 Audio Setup Launcher
 REM This will install audio processing in WSL2 Ubuntu
 
 call "%~dp0_lib\\interpreter_bindings.bat"
+set "SCRIPT_DIR=%~dp0"
+for %%I in ("%SCRIPT_DIR%..") do set "REPO_ROOT=%%~fI"
+for /f "delims=" %%I in ('powershell -NoProfile -Command "$p=$env:REPO_ROOT.TrimEnd('\\');$d=$p.Substring(0,1).ToLower();$rest=$p.Substring(2).Replace('\\','/');Write-Output ('/mnt/' + $d + $rest)"') do set "WSL_REPO_ROOT=%%I"
 
 echo ================================================================================
 echo   GoodQ4All - WSL2 Audio Setup
@@ -42,7 +45,7 @@ echo Launching WSL2 installer...
 echo You will be prompted for your Ubuntu password
 echo.
 
-wsl -d %GOODQ_WSL_DISTRO% -- bash /mnt/l/goodq4all/scripts/wsl2_quick_install.sh
+wsl -d %GOODQ_WSL_DISTRO% -- bash "%WSL_REPO_ROOT%/scripts/wsl2_quick_install.sh"
 
 if errorlevel 1 (
     echo.
@@ -52,7 +55,7 @@ if errorlevel 1 (
     echo.
     echo Check the error messages above and try again
     echo Or follow the manual setup guide in:
-    echo   L:\goodq4all\docs\WSL2_AUDIO_SETUP.md
+    echo   %REPO_ROOT%\docs\WSL2_AUDIO_SETUP.md
     echo.
     pause
     exit /b 1
@@ -64,7 +67,7 @@ echo   Testing Bridge
 echo ================================================================================
 echo.
 
-"%CONDA_EXE%" run -n goodq_core python "%~dp0wsl2_audio_bridge.py"
+"%CONDA_EXE%" run -n %GOODQ_CONDA_ENV% python "%SCRIPT_DIR%wsl2_audio_bridge.py"
 
 echo.
 echo ================================================================================
@@ -78,6 +81,6 @@ echo   1. Test with a sample: python test_wsl2_audio.py
 echo   2. Integrate with pipeline steps
 echo   3. Run production test
 echo.
-echo Documentation: L:\goodq4all\docs\WSL2_AUDIO_SETUP.md
+echo Documentation: %REPO_ROOT%\docs\WSL2_AUDIO_SETUP.md
 echo.
 pause

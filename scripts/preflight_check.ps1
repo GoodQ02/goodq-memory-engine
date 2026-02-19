@@ -12,6 +12,11 @@ $ErrorActionPreference = 'Stop'
 
 . (Join-Path $PSScriptRoot "_lib\\interpreter_bindings.ps1")
 $condaExe = Get-GoodQCondaExe
+$script:RootDir = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+$script:DriveRoot = (Split-Path -Path $script:RootDir -Qualifier).TrimEnd('\')
+$script:DataRootBase = if ([string]::IsNullOrWhiteSpace($env:GOODQ_DATA_ROOT)) { "$script:DriveRoot\_DATA" } else { $env:GOODQ_DATA_ROOT }
+$script:CoreEnv = if ([string]::IsNullOrWhiteSpace($env:GOODQ_CONDA_ENV)) { "goodq_core" } else { $env:GOODQ_CONDA_ENV }
+$script:ModelsRoot = if ([string]::IsNullOrWhiteSpace($env:GOODQ_MODELS_DIR)) { "$script:DriveRoot\models" } else { $env:GOODQ_MODELS_DIR }
 
 # Mission colors for Q Branch styling
 function Write-Mission($msg, $type = "info") {
@@ -39,7 +44,7 @@ Write-Header "GoodQ Pre-Flight Check - Mission Control"
 Write-Mission "Initiating pre-flight systems check..." "mission"
 
 # Change to project directory
-Set-Location "L:\goodq4all"
+Set-Location $script:RootDir
 
 # ============================================================================
 # LLM SERVICE DETECTION & AUTO-START
@@ -282,7 +287,7 @@ Write-Header "System Health Verification"
 
 # Run unified health check
 Write-Mission "Running comprehensive health check..." "info"
-$healthCheckOutput = & $condaExe run -n goodq_zenml python scripts\unified_health_check.py --auto-heal 2>&1 | Out-String
+$healthCheckOutput = & $condaExe run -n $script:CoreEnv python scripts\unified_health_check.py --auto-heal 2>&1 | Out-String
 
 # Parse health check status
 $healthStatus = "UNKNOWN"
@@ -326,9 +331,9 @@ if ($condaCheck) {
     exit 1
 }
 
-# Check Python (zenml environment)
-Write-Mission "Verifying Python environment (goodq_zenml)..." "info"
-$pythonTest = & $condaExe run -n goodq_zenml python --version 2>&1
+# Check Python (configured core environment)
+Write-Mission "Verifying Python environment ($script:CoreEnv)..." "info"
+$pythonTest = & $condaExe run -n $script:CoreEnv python --version 2>&1
 if ($LASTEXITCODE -eq 0) {
     Write-Mission "Python environment active: $pythonTest" "success"
 } else {
@@ -348,11 +353,11 @@ if ($LASTEXITCODE -eq 0) {
 # Check critical paths
 Write-Mission "Verifying critical paths..." "info"
 $criticalPaths = @{
-    "Project Root" = "L:\goodq4all"
-    "Models Cache" = "L:\models"
-    "Dataset Cache" = "L:\models\hf\datasets"
-    "Data Directory" = "L:\goodq4all\data"
-    "Logs Directory" = "L:\goodq4all\logs"
+    "Project Root" = $script:RootDir
+    "Models Cache" = $script:ModelsRoot
+    "Dataset Cache" = (Join-Path $script:ModelsRoot "hf\datasets")
+    "Data Directory" = (Join-Path $script:DataRootBase "GoodQ_Data")
+    "Logs Directory" = (Join-Path $script:RootDir "logs")
 }
 
 $pathsOk = $true

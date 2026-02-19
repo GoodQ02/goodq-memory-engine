@@ -9,6 +9,8 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+. (Join-Path $PSScriptRoot "_lib\\interpreter_bindings.ps1")
+$condaExe = Get-GoodQCondaExe
 
 # GPU-capable environments and their required packages
 $envConfig = @{
@@ -55,14 +57,9 @@ foreach ($envName in $envConfig.Keys) {
     try {
         # Activate environment and install PyTorch with CUDA
         Write-Host "  Running: $torchInstallCmd" -ForegroundColor Gray
-        
-        $condaPath = "C:\Users\jdben\miniconda3\Scripts\conda.exe"
-        $activatePath = "C:\Users\jdben\miniconda3\Scripts\activate.bat"
-        
-        # Use cmd to properly activate conda environment
-        $cmd = "call `"$activatePath`" $envName && $torchInstallCmd"
-        $output = cmd /c $cmd 2>&1 | Out-String
-        
+
+        $output = & $condaExe run -n $envName cmd /c $torchInstallCmd 2>&1 | Out-String
+
         if ($LASTEXITCODE -eq 0) {
             Write-Host "  ✓ $envName configured successfully" -ForegroundColor Green
             $successful += $envName

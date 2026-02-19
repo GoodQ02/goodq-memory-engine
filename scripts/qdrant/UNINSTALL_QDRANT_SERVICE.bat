@@ -1,6 +1,12 @@
 @echo off
 REM GoodQ4All - Uninstall Qdrant Windows Service
 REM This requires Administrator privileges
+setlocal EnableExtensions
+for %%I in ("%~dp0..\\..") do set "REPO_ROOT=%%~fI"
+for %%D in ("%REPO_ROOT%") do set "REPO_DRIVE=%%~dD"
+if "%GOODQ_DATA_ROOT%"=="" set "GOODQ_DATA_ROOT=%REPO_DRIVE%\_DATA"
+set "NSSM_EXE=%REPO_ROOT%\vendor\nssm.exe"
+set "QDRANT_DIR=%REPO_ROOT%\vendor\qdrant"
 
 echo.
 echo ========================================
@@ -23,14 +29,14 @@ net stop GoodQ_Qdrant
 
 echo.
 echo Removing Qdrant service...
-L:\goodq4all\vendor\nssm.exe remove GoodQ_Qdrant confirm
+"%NSSM_EXE%" remove GoodQ_Qdrant confirm
 
 echo.
 echo [OK] Qdrant service uninstalled
 echo.
-echo Note: Data remains at L:\_DATA\qdrant_storage
+echo Note: Data remains at %GOODQ_DATA_ROOT%\qdrant_storage
 echo To completely remove Qdrant, delete:
-echo   - L:\goodq4all\vendor\qdrant
-echo   - L:\_DATA\qdrant_storage
+echo   - %QDRANT_DIR%
+echo   - %GOODQ_DATA_ROOT%\qdrant_storage
 echo.
 pause

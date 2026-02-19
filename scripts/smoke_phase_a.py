@@ -21,7 +21,10 @@ PROFILES: List[Tuple[str, Optional[str]]] = [
     ("GPU_ENHANCED", "GPU_ENHANCED"),
 ]
 
-SMOKE_OVERRIDE_ROOT = "X:/BOOTSTRAP_SMOKE"
+SMOKE_OVERRIDE_ROOT = os.environ.get(
+    "GOODQ_SMOKE_OVERRIDE_ROOT",
+    str((REPO_ROOT / "logs" / "bootstrap_smoke_override").as_posix()),
+)
 
 
 PROBE_CODE = r"""
@@ -506,4 +509,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

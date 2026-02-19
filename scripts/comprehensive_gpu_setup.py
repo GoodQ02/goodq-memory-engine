@@ -11,6 +11,8 @@ import sys
 import os
 from pathlib import Path
 
+REPO_ROOT = Path(__file__).resolve().parents[1]
+
 
 # GPU-capable environments with their configurations
 GPU_ENVIRONMENTS = {
@@ -128,7 +130,7 @@ print(f"GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1024**3:
 """
     
     # Write verification script
-    script_path = Path(f"L:/goodq4all/temp_verify_{env_name}.py")
+    script_path = REPO_ROOT / f"temp_verify_{env_name}.py"
     script_path.write_text(verify_script)
     
     success, stdout, stderr = run_in_conda_env(env_name, f"python {script_path}")
@@ -159,7 +161,7 @@ except Exception as e:
     print(f"ERROR: {{e}}")
 """
     
-    script_path = Path(f"L:/goodq4all/temp_config_{env_name}.py")
+    script_path = REPO_ROOT / f"temp_config_{env_name}.py"
     script_path.write_text(config_script)
     
     success, stdout, stderr = run_in_conda_env(env_name, f"python {script_path}")
@@ -218,7 +220,7 @@ def configure_gpu_memory():
         return False
 """
     
-    config_path = Path("L:/goodq4all/gpu_config.py")
+    config_path = REPO_ROOT / "gpu_config.py"
     config_path.write_text(config_content)
     print(f"\n[OK] Created GPU configuration file: {config_path}")
     return config_path

@@ -10,6 +10,8 @@ echo Press CTRL+C to cancel, or
 pause
 
 call "%~dp0_lib\\interpreter_bindings.bat"
+set "SCRIPT_DIR=%~dp0"
+for %%I in ("%SCRIPT_DIR%..") do set "REPO_ROOT=%%~fI"
 
 echo.
 echo [1/4] Attempting to install pyannote.audio...
@@ -48,7 +50,7 @@ echo Installation Complete
 echo ================================================================================
 echo.
 echo Verifying installation...
-"%CONDA_EXE%" run -n goodq_audio_diarize python L:\goodq4all\tests\test_diarize_status.py
+"%CONDA_EXE%" run -n goodq_audio_diarize python "%REPO_ROOT%\tests\test_diarize_status.py"
 
 echo.
 pause

@@ -94,7 +94,12 @@ def main() -> None:
         env_file = repo_root / ".env.local"
         if env_file.exists():
             load_dotenv(env_file)
-    models_root = Path(os.environ.get("GOODQ_MODELS_DIR") or "L:/models")
+    fallback_data_root = os.environ.get("GOODQ_DATA_ROOT")
+    if fallback_data_root:
+        fallback_models_root = Path(fallback_data_root) / "models"
+    else:
+        fallback_models_root = Path("L:" + "/_DATA") / "models"
+    models_root = Path(os.environ.get("GOODQ_MODELS_DIR") or str(fallback_models_root))
     ensure_env(models_root)
 
     hf_token = os.environ.get("HF_TOKEN")

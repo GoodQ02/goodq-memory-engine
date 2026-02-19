@@ -1,6 +1,6 @@
 #!/bin/bash
 # GoodQ4All - WSL2 Audio Quick Install
-# Run this inside WSL2: wsl -d Ubuntu -- bash /mnt/l/goodq4all/scripts/wsl2_quick_install.sh
+# Run this inside WSL2: wsl -d <distro> -- bash <wsl_project_root>/scripts/wsl2_quick_install.sh
 
 set -e
 
@@ -104,5 +104,5 @@ echo "  Setup successful! WSL2 audio processing is ready."
 echo "================================================================================"
 echo ""
 echo "Test from Windows with:"
-echo "  python L:\\goodq4all\\wsl2_audio_bridge.py"
+echo "  python <project_root>\\wsl2_audio_bridge.py"
 echo ""

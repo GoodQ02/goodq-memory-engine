@@ -20,7 +20,7 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 # Project paths
-WINDOWS_PROJECT="/mnt/l/goodq4all"
+WINDOWS_PROJECT="${GOODQ_WSL_PROJECT_ROOT:-/mnt/l/goodq4all}"
 WSL_HOME="$HOME/goodq_audio"
 VENV_PATH="$WSL_HOME/venv"
 QUEUE_DIR="$WSL_HOME/queue"
@@ -104,12 +104,12 @@ pip install -q \
     watchdog
 
 echo "[10/10] Creating service configuration..."
-cat > "$WSL_HOME/config.json" << 'EOF'
+cat > "$WSL_HOME/config.json" <<EOF
 {
   "queue_dir": "queue",
   "output_dir": "output",
   "logs_dir": "logs",
-  "windows_project": "/mnt/l/goodq4all",
+  "windows_project": "$WINDOWS_PROJECT",
   "models": {
     "whisper": "large-v3",
     "diarization": "pyannote/speaker-diarization-3.1",

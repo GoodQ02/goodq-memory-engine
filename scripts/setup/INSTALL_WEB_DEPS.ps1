@@ -5,26 +5,31 @@ Write-Host "`n========================================" -ForegroundColor Cyan
 Write-Host "GoodQ Web Dependencies Installer" -ForegroundColor Cyan
 Write-Host "========================================`n" -ForegroundColor Cyan
 
-$condaPath = "C:\Users\jdben\miniconda3"
+. (Join-Path $PSScriptRoot "..\\_lib\\interpreter_bindings.ps1")
+$condaExe = Get-GoodQCondaExe
+$coreEnv = Get-GoodQCondaEnv
 
-Write-Host "[1/4] Activating goodq_zenml environment..." -ForegroundColor Yellow
+Write-Host "[1/4] Checking $coreEnv environment..." -ForegroundColor Yellow
 
-# Activate conda environment
-& "$condaPath\Scripts\activate.bat" goodq_zenml
+$pyVersion = & $condaExe run -n $coreEnv python --version 2>&1
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "[ERROR] Failed to run Python in $coreEnv environment" -ForegroundColor Red
+    exit 1
+}
 
 Write-Host "[2/4] Installing FastAPI and dependencies..." -ForegroundColor Yellow
 Write-Host "   This may take a minute...`n" -ForegroundColor DarkGray
 
 # Install required packages
-pip install fastapi uvicorn[standard] python-multipart websockets pydantic --quiet
+& $condaExe run -n $coreEnv pip install fastapi uvicorn[standard] python-multipart websockets pydantic --quiet
 
 Write-Host "`n[3/4] Verifying installation..." -ForegroundColor Yellow
 
 try {
-    $fastapiVersion = python -c "import fastapi; print(fastapi.__version__)" 2>&1
+    $fastapiVersion = & $condaExe run -n $coreEnv python -c "import fastapi; print(fastapi.__version__)" 2>&1
     Write-Host "   ✓ FastAPI: $fastapiVersion" -ForegroundColor Green
     
-    $uvicornVersion = python -c "import uvicorn; print(uvicorn.__version__)" 2>&1
+    $uvicornVersion = & $condaExe run -n $coreEnv python -c "import uvicorn; print(uvicorn.__version__)" 2>&1
     Write-Host "   ✓ Uvicorn: $uvicornVersion" -ForegroundColor Green
     
     Write-Host "`n[4/4] Installation complete!" -ForegroundColor Green

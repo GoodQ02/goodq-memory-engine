@@ -6,6 +6,10 @@ Write-Host ""
 
 . (Join-Path $PSScriptRoot "..\\_lib\\interpreter_bindings.ps1")
 $condaExe = Get-GoodQCondaExe
+$script:RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\\..")).Path
+$script:RepoRootPosix = $script:RepoRoot.Replace('\', '/')
+$script:DataRootBase = if ([string]::IsNullOrWhiteSpace($env:GOODQ_DATA_ROOT)) { "L:/_DATA" } else { $env:GOODQ_DATA_ROOT.Replace('\', '/') }
+$script:ModelsRoot = if ([string]::IsNullOrWhiteSpace($env:GOODQ_MODELS_DIR)) { "L:/models" } else { $env:GOODQ_MODELS_DIR.Replace('\', '/') }
 
 # Check prerequisites
 Write-Host "1. Checking prerequisites..." -ForegroundColor Yellow
@@ -57,16 +61,16 @@ Write-Host "  ✓ Agent Framework installed" -ForegroundColor Green
 Write-Host "`n4. Creating directory structure..." -ForegroundColor Yellow
 
 $dirs = @(
-    "L:\goodq4all\agents\ingestion",
-    "L:\goodq4all\agents\analysis",
-    "L:\goodq4all\agents\knowledge",
-    "L:\goodq4all\agents\analysis\scripts",
-    "L:\goodq4all\workflows",
-    "L:\goodq4all\specs",
-    "L:\goodq4all\data\agent_checkpoints",
-    "L:\goodq4all\data\workflow_logs",
-    "L:\goodq4all\tests\agents",
-    "L:\goodq4all\tests\workflows"
+    (Join-Path $script:RepoRoot "agents\ingestion"),
+    (Join-Path $script:RepoRoot "agents\analysis"),
+    (Join-Path $script:RepoRoot "agents\knowledge"),
+    (Join-Path $script:RepoRoot "agents\analysis\scripts"),
+    (Join-Path $script:RepoRoot "workflows"),
+    (Join-Path $script:RepoRoot "specs"),
+    (Join-Path $script:RepoRoot "data\agent_checkpoints"),
+    (Join-Path $script:RepoRoot "data\workflow_logs"),
+    (Join-Path $script:RepoRoot "tests\agents"),
+    (Join-Path $script:RepoRoot "tests\workflows")
 )
 
 foreach ($dir in $dirs) {
@@ -88,10 +92,10 @@ AZURE_OPENAI_API_VERSION=2024-08-01-preview
 # Agent Framework Configuration
 AGENT_FRAMEWORK_LOG_LEVEL=INFO
 AGENT_FRAMEWORK_TELEMETRY_ENABLED=true
-AGENT_FRAMEWORK_CHECKPOINT_DIR=L:/goodq4all/data/agent_checkpoints
+AGENT_FRAMEWORK_CHECKPOINT_DIR=$script:RepoRootPosix/data/agent_checkpoints
 
 # Memory Store
-MEM0_DB_PATH=L:/goodq4all/data/agent_memory.db
+MEM0_DB_PATH=$script:RepoRootPosix/data/agent_memory.db
 MEM0_VECTOR_STORE=faiss
 MEM0_EMBEDDING_MODEL=text-embedding-3-small
 
@@ -101,15 +105,15 @@ DEVUI_PORT=8050
 DEVUI_DEBUG=false
 
 # GoodQ Integration
-GOODQ_DATA_DIR=L:/_DATA/GoodQ_Data
-GOODQ_MODELS_DIR=L:/models
-GOODQ_CONFIG_PATH=L:/goodq4all/configs/config.yaml
+GOODQ_DATA_DIR=$script:DataRootBase/GoodQ_Data
+GOODQ_MODELS_DIR=$script:ModelsRoot
+GOODQ_CONFIG_PATH=$script:RepoRootPosix/configs/config.yaml
 
 # Observability
 OTEL_SERVICE_NAME=goodq-agents
 "@
 
-Set-Content -Path "L:\goodq4all\.env.agents" -Value $envContent
+Set-Content -Path (Join-Path $script:RepoRoot ".env.agents") -Value $envContent
 
 Write-Host "  ✓ Configuration file created" -ForegroundColor Green
 Write-Host "  ⚠ Please update .env.agents with your Azure credentials" -ForegroundColor Yellow
@@ -181,15 +185,15 @@ class BaseAgent(ABC):
         }
 "@
 
-Set-Content -Path "L:\goodq4all\agents\base_agent.py" -Value $baseAgentContent
+Set-Content -Path (Join-Path $script:RepoRoot "agents\base_agent.py") -Value $baseAgentContent
 
 # Create __init__.py files
 $initContent = '"""GoodQ Agent System"""'
-Set-Content -Path "L:\goodq4all\agents\__init__.py" -Value $initContent
-Set-Content -Path "L:\goodq4all\agents\ingestion\__init__.py" -Value $initContent
-Set-Content -Path "L:\goodq4all\agents\analysis\__init__.py" -Value $initContent
-Set-Content -Path "L:\goodq4all\agents\knowledge\__init__.py" -Value $initContent
-Set-Content -Path "L:\goodq4all\workflows\__init__.py" -Value $initContent
+Set-Content -Path (Join-Path $script:RepoRoot "agents\__init__.py") -Value $initContent
+Set-Content -Path (Join-Path $script:RepoRoot "agents\ingestion\__init__.py") -Value $initContent
+Set-Content -Path (Join-Path $script:RepoRoot "agents\analysis\__init__.py") -Value $initContent
+Set-Content -Path (Join-Path $script:RepoRoot "agents\knowledge\__init__.py") -Value $initContent
+Set-Content -Path (Join-Path $script:RepoRoot "workflows\__init__.py") -Value $initContent
 
 Write-Host "  ✓ Base agent class created" -ForegroundColor Green
 
@@ -281,7 +285,7 @@ async def main():
     agent = SceneDetectorAgent()
     
     result = await agent.execute({
-        "video_path": "L:/_DATA/sample_video.mp4"
+        "video_path": "$script:DataRootBase/sample_video.mp4"
     })
     
     print(json.dumps(result, indent=2))
@@ -293,7 +297,7 @@ if __name__ == "__main__":
     asyncio.run(main())
 "@
 
-Set-Content -Path "L:\goodq4all\agents\ingestion\scene_detector.py" -Value $sampleAgentContent
+Set-Content -Path (Join-Path $script:RepoRoot "agents\ingestion\scene_detector.py") -Value $sampleAgentContent
 
 Write-Host "  ✓ Sample agent created" -ForegroundColor Green
 
@@ -329,7 +333,7 @@ Your agent system is now set up with:
 3. **Test Sample Agent:**
    ``````powershell
    conda activate goodq_agents
-   cd L:\goodq4all
+   cd $script:RepoRoot
    python agents/ingestion/scene_detector.py
    ``````
 
@@ -343,7 +347,7 @@ from agents.ingestion.scene_detector import SceneDetectorAgent
 
 agent = SceneDetectorAgent()
 result = await agent.execute({
-    "video_path": "L:/_DATA/video.mp4"
+    "video_path": "$script:DataRootBase/video.mp4"
 })
 ``````
 
@@ -355,7 +359,7 @@ result = await agent.execute({
 - Discord: https://discord.gg/b5zjErwbQM
 "@
 
-Set-Content -Path "L:\goodq4all\agents\README.md" -Value $readmeContent
+Set-Content -Path (Join-Path $script:RepoRoot "agents\README.md") -Value $readmeContent
 
 Write-Host "  ✓ Documentation created" -ForegroundColor Green
 
@@ -381,7 +385,7 @@ Write-Host "     conda activate goodq_agents" -ForegroundColor Gray
 Write-Host "     python agents/ingestion/scene_detector.py" -ForegroundColor Gray
 
 Write-Host "`n📚 Full documentation in:" -ForegroundColor Yellow
-Write-Host "  • L:\goodq4all\SPEC_TO_AGENTS_INTEGRATION_GUIDE.md" -ForegroundColor White
-Write-Host "  • L:\goodq4all\agents\README.md" -ForegroundColor White
+Write-Host "  • $script:RepoRoot\SPEC_TO_AGENTS_INTEGRATION_GUIDE.md" -ForegroundColor White
+Write-Host "  • $script:RepoRoot\agents\README.md" -ForegroundColor White
 
 Write-Host ""

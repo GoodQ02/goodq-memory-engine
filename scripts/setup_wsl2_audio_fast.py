@@ -5,18 +5,24 @@ Sets up user-space audio processing without system package installation
 
 import subprocess
 import sys
+import os
 from pathlib import Path
 import json
 
 class FastWSL2Setup:
     def __init__(self):
-        # Get actual WSL username
-        result = subprocess.run(
-            ["wsl", "-d", "Ubuntu", "--", "whoami"],
-            capture_output=True,
-            text=True
-        )
-        wsl_user = result.stdout.strip()
+        self.base_dir = Path(__file__).resolve().parents[1]
+        self.wsl_distro = os.environ.get("GOODQ_WSL_DISTRO", "Ubuntu")
+        wsl_user = os.environ.get("GOODQ_WSL_USER", "").strip()
+        if not wsl_user:
+            result = subprocess.run(
+                ["wsl", "-d", self.wsl_distro, "--", "whoami"],
+                capture_output=True,
+                text=True
+            )
+            wsl_user = result.stdout.strip()
+        if not wsl_user:
+            wsl_user = os.environ.get("USERNAME", "user").strip().lower() or "user"
         self.wsl_home = f"/home/{wsl_user}"
         self.workspace = f"{self.wsl_home}/audio_workspace"
         self.errors = []
@@ -30,7 +36,7 @@ class FastWSL2Setup:
     def wsl_cmd(self, command):
         """Run command in WSL2 without sudo"""
         result = subprocess.run(
-            ["wsl", "-d", "Ubuntu", "--", "bash", "-c", command],
+            ["wsl", "-d", self.wsl_distro, "--", "bash", "-c", command],
             capture_output=True,
             text=True
         )
@@ -282,7 +288,7 @@ if __name__ == "__main__":
     print(f"WSL2 Audio Bridge Ready: {bridge.check_status()}")
 '''
         
-        bridge_path = Path("L:/goodq4all/wsl2_audio_bridge.py")
+        bridge_path = self.base_dir / "wsl2_audio_bridge.py"
         with open(bridge_path, 'w') as f:
             f.write(bridge)
         print(f"  [SYMBOL] Created {bridge_path}")
@@ -295,11 +301,11 @@ bridge = WSL2Bridge()
 print("Bridge Status:", "Ready" if bridge.check_status() else "Not Ready")
 
 # Example usage:
-# result = bridge.process_audio("L:\\\\goodq4all\\\\test.wav")
+# result = bridge.process_audio("C:\\\\path\\\\to\\\\test.wav")
 # print(json.dumps(result, indent=2))
 '''
         
-        test_path = Path("L:/goodq4all/test_wsl2_bridge.py")
+        test_path = self.base_dir / "test_wsl2_bridge.py"
         with open(test_path, 'w') as f:
             f.write(test)
         print(f"  [SYMBOL] Created {test_path}")

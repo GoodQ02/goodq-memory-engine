@@ -9,13 +9,25 @@ $ErrorActionPreference = "Stop"
 . (Join-Path $PSScriptRoot "..\\scripts\\_lib\\interpreter_bindings.ps1")
 $distro = Get-GoodQWslDistro
 
+function Convert-ToWslPath {
+    param([Parameter(Mandatory = $true)][string]$WindowsPath)
+    $full = [System.IO.Path]::GetFullPath($WindowsPath)
+    $drive = $full.Substring(0, 1).ToLowerInvariant()
+    $rest = $full.Substring(2).TrimStart('\').Replace('\', '/')
+    if ([string]::IsNullOrWhiteSpace($rest)) {
+        return "/mnt/$drive"
+    }
+    return "/mnt/$drive/$rest"
+}
+
 Write-Host "================================================================================" -ForegroundColor Cyan
 Write-Host "  GoodQ4All - Windows WSL2 Audio Setup" -ForegroundColor Cyan
 Write-Host "================================================================================" -ForegroundColor Cyan
 Write-Host ""
 
-$ProjectRoot = "L:\goodq4all"
+$ProjectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $WSL2Dir = "$ProjectRoot\wsl2_audio"
+$WslProjectRoot = Convert-ToWslPath -WindowsPath $ProjectRoot
 
 # Create directories
 Write-Host "[1/5] Creating Windows directories..." -ForegroundColor Yellow
@@ -90,8 +102,8 @@ Write-Host "[5/5] Copying setup script to WSL2..." -ForegroundColor Yellow
 try {
     # Make setup script executable and copy
     wsl -d $distro -- bash -c "mkdir -p ~/goodq_audio"
-    wsl -d $distro -- bash -c "cp /mnt/l/goodq4all/wsl2_audio/setup_wsl2_audio.sh ~/goodq_audio/"
-    wsl -d $distro -- bash -c "cp /mnt/l/goodq4all/wsl2_audio/audio_service.py ~/goodq_audio/"
+    wsl -d $distro -- bash -c "cp $WslProjectRoot/wsl2_audio/setup_wsl2_audio.sh ~/goodq_audio/"
+    wsl -d $distro -- bash -c "cp $WslProjectRoot/wsl2_audio/audio_service.py ~/goodq_audio/"
     wsl -d $distro -- bash -c "chmod +x ~/goodq_audio/setup_wsl2_audio.sh"
     
     Write-Host "  Scripts copied to WSL2" -ForegroundColor Green

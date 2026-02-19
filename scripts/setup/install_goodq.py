@@ -9,6 +9,8 @@ import platform
 from pathlib import Path
 import shutil
 
+CORE_ENV = os.environ.get("GOODQ_CONDA_ENV", "goodq_core")
+
 class Colors:
     HEADER = '\033[95m'
     OKBLUE = '\033[94m'
@@ -93,12 +95,13 @@ def create_directories():
     print_header("Creating Project Directories")
     
     base_dir = Path(__file__).parent.parent
+    data_root = Path(os.environ.get("GOODQ_DATA_ROOT", "L:/_DATA"))
     
     directories = [
         "import_inbox",
         "output",
         "logs",
-        "L:/_DATA/GoodQ_Data/processing",
+        str(data_root / "GoodQ_Data" / "processing"),
         "data/embeddings",
         "data/faces",
         "data/clips",
@@ -115,7 +118,11 @@ def setup_environment():
     print_header("Setting Up Conda Environment")
     
     base_dir = Path(__file__).parent.parent
-    env_file = base_dir / "envs" / "goodq_zenml.yaml"
+    env_file = base_dir / "envs" / f"{CORE_ENV}.yaml"
+    if not env_file.exists() and CORE_ENV != "goodq_zenml":
+        legacy_env = base_dir / "envs" / "goodq_zenml.yaml"
+        if legacy_env.exists():
+            env_file = legacy_env
     
     if not env_file.exists():
         print_error(f"Environment file not found: {env_file}")
@@ -128,12 +135,12 @@ def setup_environment():
         text=True
     )
     
-    if "goodq_zenml" in result.stdout:
-        print_info("Environment 'goodq_zenml' already exists")
+    if CORE_ENV in result.stdout:
+        print_info(f"Environment '{CORE_ENV}' already exists")
         response = input("Recreate environment? (y/N): ").strip().lower()
         if response == 'y':
             print_info("Removing existing environment...")
-            subprocess.run(["conda", "env", "remove", "-n", "goodq_zenml", "-y"])
+            subprocess.run(["conda", "env", "remove", "-n", CORE_ENV, "-y"])
         else:
             print_success("Using existing environment")
             return True
@@ -190,7 +197,7 @@ def install_python_packages():
     base_dir = Path(__file__).parent.parent
     
     # Activate conda and install
-    conda_activate = f"conda activate goodq_zenml"
+    conda_activate = f"conda activate {CORE_ENV}"
     
     packages = [
         "fastapi",
@@ -286,7 +293,7 @@ def main():
     else:
         print_warning("Skipping conda setup (conda not found)")
         print_info("You can manually create the environment later with:")
-        print_info("  conda env create -f envs/goodq_zenml.yaml")
+        print_info(f"  conda env create -f envs/{CORE_ENV}.yaml")
     
     # Step 5: Verify
     if run_verification():

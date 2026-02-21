@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import json as _json
 import math
 import os
+import re
 import subprocess
 import tempfile
 import time
@@ -385,6 +386,112 @@ def _transcribe_chunk_fw(chunk_path: str, offset: float, model: Any) -> Optional
         return None
 
 
+def _windows_to_wsl_path(path: str) -> Optional[str]:
+    if not isinstance(path, str) or not path:
+        return None
+    normalized = path.replace("\\", "/")
+    match = re.match(r"^([A-Za-z]):/(.*)$", normalized)
+    if match:
+        drive = match.group(1).lower()
+        remainder = match.group(2)
+        return f"/mnt/{drive}/{remainder}"
+    if normalized.startswith("/"):
+        return normalized
+    return None
+
+
+def _run_wsl_faster_whisper_venv(input_path: str) -> Dict[str, Any]:
+    distro = (os.environ.get("GOODQ_WSL_DISTRO") or "Ubuntu-22.04").strip() or "Ubuntu-22.04"
+    wsl_workspace = (os.environ.get("GOODQ_WSL_WORKSPACE") or "").strip()
+    if not wsl_workspace:
+        wsl_user = (
+            os.environ.get("GOODQ_WSL_USER")
+            or os.environ.get("USERNAME")
+            or os.environ.get("USER")
+            or "jdben"
+        )
+        wsl_workspace = f"/home/{wsl_user}/goodq_audio"
+    wsl_workspace = wsl_workspace.rstrip("/")
+    wsl_python = f"{wsl_workspace}/env/bin/python"
+
+    repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+    helper_candidates: List[str] = []
+    repo_root_wsl = _windows_to_wsl_path(repo_root)
+    if repo_root_wsl:
+        helper_candidates.append(f"{repo_root_wsl.rstrip('/')}/wsl2_audio/fw_transcribe.py")
+    wsl_repo_root = (os.environ.get("GOODQ_WSL_REPO_ROOT") or "").strip()
+    if wsl_repo_root:
+        helper_candidates.append(f"{wsl_repo_root.rstrip('/')}/wsl2_audio/fw_transcribe.py")
+    home_match = re.match(r"^/home/([^/]+)/", wsl_workspace + "/")
+    if home_match:
+        helper_candidates.append(f"/home/{home_match.group(1)}/projects/goodq4all/wsl2_audio/fw_transcribe.py")
+
+    deduped_helpers: List[str] = []
+    seen_helpers = set()
+    for candidate in helper_candidates:
+        if candidate and candidate not in seen_helpers:
+            deduped_helpers.append(candidate)
+            seen_helpers.add(candidate)
+
+    helper_path = None
+    for candidate in deduped_helpers:
+        probe = subprocess.run(
+            ["wsl", "-d", distro, "--", "test", "-f", candidate],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+        if probe.returncode == 0:
+            helper_path = candidate
+            break
+    if not helper_path:
+        raise RuntimeError(f"WSL helper script not found. Checked: {', '.join(deduped_helpers) or 'none'}")
+
+    wsl_input_path = _windows_to_wsl_path(input_path)
+    if not wsl_input_path:
+        raise RuntimeError(f"Could not map audio path to WSL mount path: {input_path}")
+
+    tmp_out = tempfile.NamedTemporaryFile(delete=False, suffix=".json")
+    output_json_path = tmp_out.name
+    tmp_out.close()
+    try:
+        wsl_output_path = _windows_to_wsl_path(output_json_path)
+        if not wsl_output_path:
+            raise RuntimeError(f"Could not map output path to WSL mount path: {output_json_path}")
+
+        cmd = [
+            "wsl",
+            "-d",
+            distro,
+            "--",
+            wsl_python,
+            helper_path,
+            wsl_input_path,
+            wsl_output_path,
+        ]
+        proc = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+        if proc.returncode != 0:
+            stderr = (proc.stderr or proc.stdout or "").strip()
+            raise RuntimeError(f"WSL faster-whisper invocation failed ({proc.returncode}): {stderr}")
+        if not os.path.isfile(output_json_path):
+            raise RuntimeError("WSL faster-whisper did not produce an output JSON file")
+        with open(output_json_path, "r", encoding="utf-8") as fh:
+            return _json.load(fh)
+    finally:
+        try:
+            if os.path.isfile(output_json_path):
+                os.remove(output_json_path)
+        except Exception:
+            pass
+
+
 def audio_transcribe(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
     """
     Transcribe audio using Whisper with GPU optimization.
@@ -413,6 +520,56 @@ def audio_transcribe(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
         raise RuntimeError("GOODQ_REQUIRE_WSL_AUDIO=1 but WSL audio is disabled by profile/config")
     
     if use_wsl:
+        wsl_engine = str(os.environ.get("GOODQ_WSL_TRANSCRIBE_ENGINE") or "").strip().upper()
+        if wsl_engine == "FASTER_WHISPER_VENV":
+            try:
+                logger.info("[TRANSCRIBE] Using WSL faster-whisper venv engine")
+                start_time = time.time()
+                wsl_result = _run_wsl_faster_whisper_venv(path)
+                if wsl_result.get("status") == "success":
+                    elapsed = time.time() - start_time
+                    segments_raw = wsl_result.get("segments")
+                    segments = segments_raw if isinstance(segments_raw, list) else []
+                    full_text = " ".join(
+                        str(seg.get("text", "")).strip()
+                        for seg in segments
+                        if isinstance(seg, dict) and seg.get("text")
+                    ).strip()
+                    duration = 0.0
+                    for seg in segments:
+                        if isinstance(seg, dict):
+                            try:
+                                duration = max(duration, float(seg.get("end", 0.0) or 0.0))
+                            except Exception:
+                                pass
+                    return {
+                        "transcript": full_text or None,
+                        "segments": segments,
+                        "language": wsl_result.get("language"),
+                        "transcript_meta": {
+                            "status": "success",
+                            "method": "wsl_faster_whisper_venv",
+                            "engine": wsl_result.get("engine"),
+                            "model": wsl_result.get("model"),
+                            "device": wsl_result.get("device"),
+                            "duration": duration,
+                            "processing_time": elapsed,
+                            "realtime_factor": duration / elapsed if elapsed > 0 else 0.0,
+                            "telemetry": wsl_result.get("telemetry"),
+                        },
+                    }
+                error_msg = wsl_result.get("error") or "unknown WSL faster-whisper venv failure"
+                if require_wsl_audio():
+                    raise RuntimeError(
+                        f"GOODQ_REQUIRE_WSL_AUDIO=1 and WSL faster-whisper venv failed: {error_msg}"
+                    )
+                logger.warning(f"[TRANSCRIBE] WSL faster-whisper venv failed: {error_msg}, falling back")
+            except Exception as e:
+                if require_wsl_audio():
+                    raise RuntimeError(
+                        f"GOODQ_REQUIRE_WSL_AUDIO=1 and WSL faster-whisper venv path failed: {e}"
+                    ) from e
+                logger.warning(f"[TRANSCRIBE] WSL faster-whisper venv error: {e}, falling back")
         try:
             from wsl2_audio_bridge import WSL2AudioBridge
             bridge = WSL2AudioBridge()
@@ -769,6 +926,5 @@ def audio_transcribe(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
         if speakers:
             meta["speakers"] = speakers
     return {"transcript": full_text or None, "transcript_meta": meta}
-
 
 

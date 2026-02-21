@@ -10,6 +10,7 @@ from pathlib import Path
 from datetime import datetime
 from typing import Any, Dict, Optional, List
 from contextlib import contextmanager
+from configs.paths import LOGS_DIR
 
 
 class ProgressTracker:
@@ -29,7 +30,7 @@ class ProgressTracker:
         if hasattr(self, '_initialized'):
             return
         self._initialized = True
-        self.progress_file = Path("L:/goodq4all/logs/progress.json")
+        self.progress_file = LOGS_DIR / "progress.json"
         self.progress_file.parent.mkdir(parents=True, exist_ok=True)
         self.current_state: Dict[str, Any] = {
             "status": "idle",

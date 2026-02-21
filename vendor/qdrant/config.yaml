@@ -1,6 +1,8 @@
 storage:
   # Where Qdrant stores its data
   storage_path: L:/_DATA/qdrant_storage
+  # Use mmap for large datasets
+  on_disk_payload: true
 
 service:
   # HTTP API
@@ -20,11 +22,6 @@ optimizer:
   indexing_threshold: 20000
   # Flush interval (seconds)
   flush_interval_sec: 5
-
-# Resource limits
-storage:
-  # Use mmap for large datasets
-  on_disk_payload: true
 
 # Logging
 log_level: INFO

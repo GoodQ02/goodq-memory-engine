@@ -342,14 +342,14 @@ def get_goodq_logger(
     Args:
         name: Logger name (usually __name__)
         component: Component name for mission logs (e.g., 'Video Analysis', 'Audio Intel')
-        log_dir: Optional log directory (defaults to L:/goodq4all/logs)
+        log_dir: Optional log directory (defaults to <repo_root>/logs)
         level: Logging level
         
     Returns:
         GoodQLogger instance
     """
     if log_dir is None:
-        log_dir = Path("L:/goodq4all/logs")
+        log_dir = Path(__file__).resolve().parents[1] / "logs"
     
     # Create log file based on component or name
     log_file = log_dir / f"{component or name.replace('.', '_')}.log"

@@ -43,6 +43,22 @@ class ModelConfig(BaseModel):
 
 
 # ============================================================================
+# HOST IDENTITY (PORTABILITY LAYER)
+# ============================================================================
+class HostConfig(BaseModel):
+    profile: Optional[str] = None
+    data_root: Optional[str] = None
+    wsl_distro: Optional[str] = None
+    wsl_user: Optional[str] = None
+    conda_env: Optional[str] = None
+    require_gpu: Optional[bool] = None
+    require_wsl_audio: Optional[bool] = None
+
+    class Config:
+        extra = "forbid"
+
+
+# ============================================================================
 # PATHS
 # ============================================================================
 class PathsConfig(BaseModel):
@@ -326,6 +342,7 @@ class GoodQConfig(BaseModel):
     """
     user: UserConfig
     model: ModelConfig
+    host: Optional[HostConfig] = None
     paths: PathsConfig
     llm: LLMConfig
     tts: TTSConfig

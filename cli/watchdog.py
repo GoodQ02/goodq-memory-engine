@@ -23,13 +23,17 @@ import uuid
 # Add repo root to path for imports
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
+from configs.paths import LOGS_DIR
+
+log_file = LOGS_DIR / "watchdog.log"
+log_file.parent.mkdir(parents=True, exist_ok=True)
 
 # Setup logging with UTF-8 encoding for file, ASCII for console
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s [%(levelname)s] %(message)s',
     handlers=[
-        logging.FileHandler('L:/goodq4all/logs/watchdog.log', encoding='utf-8')
+        logging.FileHandler(log_file, encoding='utf-8')
     ]
 )
 # Add console handler with ASCII-safe encoding

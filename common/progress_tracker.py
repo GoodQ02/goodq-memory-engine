@@ -10,13 +10,14 @@ from pathlib import Path
 from typing import Any, Dict, Optional, List
 from threading import Lock
 from datetime import datetime
+from configs.paths import LOGS_DIR
 
 logger = logging.getLogger(__name__)
 
 class ProgressTracker:
     """Thread-safe progress tracker for pipeline operations"""
     
-    def __init__(self, progress_file: Path = Path("L:/goodq4all/logs/progress.json")):
+    def __init__(self, progress_file: Path = LOGS_DIR / "progress.json"):
         self.progress_file = progress_file
         self.lock = Lock()
         self.current_file: Optional[str] = None

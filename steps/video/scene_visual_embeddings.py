@@ -13,6 +13,18 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 
+def _stage10_18_debug(*parts: Any) -> None:
+    line = "[STAGE10_18_DEBUG] " + " ".join(str(p) for p in parts)
+    print(line)
+    try:
+        temp_dir = os.environ.get("TEMP") or os.environ.get("TMP") or "."
+        debug_log_path = Path(temp_dir) / "stage10_18_debug.log"
+        with debug_log_path.open("a", encoding="utf-8") as handle:
+            print(line, file=handle)
+    except Exception:
+        pass
+
+
 def run_scene_visual_embeddings(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
     """
     Phase 6 main orchestration: Extract frames, generate embeddings, pool to scene level.
@@ -94,6 +106,19 @@ def run_scene_visual_embeddings(item: Dict[str, Any], cfg: Dict[str, Any]) -> Di
         strategy=extraction_strategy,
         frames_per_scene=frames_per_scene
     )
+    frame_paths: List[str] = []
+    for _scene_frames in scene_frames.values():
+        if not isinstance(_scene_frames, list):
+            continue
+        for _frame in _scene_frames:
+            if isinstance(_frame, dict):
+                _path = _frame.get('path')
+                if isinstance(_path, str):
+                    frame_paths.append(_path)
+    _stage10_18_debug("frame_count:", len(frame_paths))
+    _stage10_18_debug("first_frame_paths:", frame_paths[:3])
+    for _path in frame_paths[:3]:
+        _stage10_18_debug("frame_exists:", _path, os.path.exists(_path))
     
     if not scene_frames:
         logger.error("Frame extraction failed")
@@ -101,13 +126,71 @@ def run_scene_visual_embeddings(item: Dict[str, Any], cfg: Dict[str, Any]) -> Di
     
     # === STEP 2: Generate CLIP Embeddings ===
     batch_size = phase6_cfg.get('max_gpu_batch_size', 8)
+    clip_device = "unknown"
+    try:
+        from steps.common.gpu_config import configure_gpu as setup_step_gpu
+        gpu_cfg = setup_step_gpu("scene_embedder_clip")
+        if isinstance(gpu_cfg, dict):
+            clip_device = str(gpu_cfg.get("device", "unknown"))
+    except Exception as e:
+        _stage10_18_debug("clip_device_probe_error:", f"{type(e).__name__}: {e}")
+    _stage10_18_debug("clip_device:", clip_device)
+    _stage10_18_debug("clip_batch_size:", batch_size)
+    _stage10_18_debug("clip_model_id:", "openai/clip-vit-base-patch16")
     
     logger.info("[PHASE6] Generating CLIP embeddings")
     clip_embeddings = embed_scene_frames(scene_frames, model_type='clip', batch_size=batch_size)
+    clip_model_loaded = False
+    try:
+        from steps.video import scene_embedder as _scene_embedder
+        clip_model_loaded = bool((_scene_embedder._MODELS.get("clip") or {}).get("model") is not None)
+    except Exception as e:
+        _stage10_18_debug("clip_model_probe_error:", f"{type(e).__name__}: {e}")
+    _stage10_18_debug(f"clip_model_loaded={clip_model_loaded}")
+    raw_clip_count = 0
+    sample_clip_len: Optional[int] = None
+    for _emb_list in clip_embeddings.values():
+        if isinstance(_emb_list, list):
+            raw_clip_count += len(_emb_list)
+            if sample_clip_len is None and _emb_list:
+                try:
+                    sample_clip_len = len(_emb_list[0])
+                except Exception:
+                    sample_clip_len = None
+    _stage10_18_debug("raw_clip_embedding_count:", raw_clip_count)
+    _stage10_18_debug("raw_clip_embedding_len:", sample_clip_len)
     
     # === STEP 3: Generate DINO Embeddings ===
     logger.info("[PHASE6] Generating DINO embeddings")
     dino_embeddings = embed_scene_frames(scene_frames, model_type='dino', batch_size=batch_size)
+    dino_model_loaded = False
+    try:
+        from steps.video import scene_embedder as _scene_embedder
+        dino_model_loaded = bool((_scene_embedder._MODELS.get("dino") or {}).get("model") is not None)
+    except Exception as e:
+        _stage10_18_debug("dino_model_probe_error:", f"{type(e).__name__}: {e}")
+    _stage10_18_debug(f"dino_model_loaded={dino_model_loaded}")
+    raw_dino_count = 0
+    sample_dino_len: Optional[int] = None
+    for _emb_list in dino_embeddings.values():
+        if isinstance(_emb_list, list):
+            raw_dino_count += len(_emb_list)
+            if sample_dino_len is None and _emb_list:
+                try:
+                    sample_dino_len = len(_emb_list[0])
+                except Exception:
+                    sample_dino_len = None
+    _stage10_18_debug("raw_dino_embedding_count:", raw_dino_count)
+    _stage10_18_debug("raw_dino_embedding_len:", sample_dino_len)
+
+    if frame_paths and (not clip_model_loaded or not dino_model_loaded):
+        return {
+            "phase6_status": "failed",
+            "error": "model_load_failed",
+            "clip_model_loaded": clip_model_loaded,
+            "dino_model_loaded": dino_model_loaded,
+            "total_frames": len(frame_paths),
+        }
     
     # === STEP 4: Pool to Scene-Level ===
     pooling_strategy = phase6_cfg.get('pooling_strategy', 'mean')
@@ -116,16 +199,24 @@ def run_scene_visual_embeddings(item: Dict[str, Any], cfg: Dict[str, Any]) -> Di
     
     pooled_clip = pool_multiple_scenes(clip_embeddings, strategy=pooling_strategy)
     pooled_dino = pool_multiple_scenes(dino_embeddings, strategy=pooling_strategy)
+    print("[STAGE10_16_DEBUG] pooled_clip_len:", len(pooled_clip))
+    print("[STAGE10_16_DEBUG] pooled_dino_len:", len(pooled_dino))
     
     # === STEP 5: Store in Qdrant ===
     retrieval_cfg = phase6_cfg.get('retrieval', {})
     if retrieval_cfg.get('enable', True):
         logger.info("[PHASE6] Storing embeddings in Qdrant")
+        host_value = cfg.get('qdrant_host', 'http://127.0.0.1:6333')
+        clip_collection_name = phase6_cfg.get('clip_collection', 'goodq_clip_scenes')
+        dino_collection_name = phase6_cfg.get('dino_collection', 'goodq_dino_scenes')
+        print("[STAGE10_16_DEBUG] Phase6 host:", host_value)
+        print("[STAGE10_16_DEBUG] clip_collection:", clip_collection_name)
+        print("[STAGE10_16_DEBUG] dino_collection:", dino_collection_name)
         
         # Store CLIP embeddings
-        clip_collection = phase6_cfg.get('clip_collection', 'goodq_clip_scenes')
+        clip_collection = clip_collection_name
         clip_client = QdrantClient(QdrantConfig(
-            host=cfg.get('qdrant_host', 'http://127.0.0.1:6333'),
+            host=host_value,
             collection=clip_collection,
             dim=512,
             distance='Cosine'
@@ -146,7 +237,9 @@ def run_scene_visual_embeddings(item: Dict[str, Any], cfg: Dict[str, Any]) -> Di
             })
         
         if clip_points:
-            clip_ok = clip_client.upsert(clip_points)
+            result_clip = clip_client.upsert(clip_points)
+            clip_ok = result_clip
+            print("[STAGE10_16_DEBUG] upsert_clip_return:", result_clip)
             try:
                 from steps.common.memory_commit_events import MemoryCommitEvent, emit_memory_commit_events, utc_now_iso
                 ts_utc = utc_now_iso()
@@ -176,14 +269,15 @@ def run_scene_visual_embeddings(item: Dict[str, Any], cfg: Dict[str, Any]) -> Di
                         if isinstance(p, dict)
                     ],
                 )
-            except Exception:
+            except Exception as e:
+                _stage10_18_debug("swallowed_exception:", f"{type(e).__name__}: {e}")
                 pass
             logger.info(f"  [SYMBOL] Stored {len(clip_points)} CLIP scene embeddings")
         
         # Store DINO embeddings
-        dino_collection = phase6_cfg.get('dino_collection', 'goodq_dino_scenes')
+        dino_collection = dino_collection_name
         dino_client = QdrantClient(QdrantConfig(
-            host=cfg.get('qdrant_host', 'http://127.0.0.1:6333'),
+            host=host_value,
             collection=dino_collection,
             dim=768,
             distance='Cosine'
@@ -204,7 +298,9 @@ def run_scene_visual_embeddings(item: Dict[str, Any], cfg: Dict[str, Any]) -> Di
             })
         
         if dino_points:
-            dino_ok = dino_client.upsert(dino_points)
+            result_dino = dino_client.upsert(dino_points)
+            dino_ok = result_dino
+            print("[STAGE10_16_DEBUG] upsert_dino_return:", result_dino)
             try:
                 from steps.common.memory_commit_events import MemoryCommitEvent, emit_memory_commit_events, utc_now_iso
                 ts_utc = utc_now_iso()
@@ -234,7 +330,8 @@ def run_scene_visual_embeddings(item: Dict[str, Any], cfg: Dict[str, Any]) -> Di
                         if isinstance(p, dict)
                     ],
                 )
-            except Exception:
+            except Exception as e:
+                _stage10_18_debug("swallowed_exception:", f"{type(e).__name__}: {e}")
                 pass
             logger.info(f"  [SYMBOL] Stored {len(dino_points)} DINO scene embeddings")
     

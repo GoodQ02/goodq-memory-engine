@@ -25,7 +25,7 @@ def _load_clip_model():
         return
     
     try:
-        from gpu_config import setup_step_gpu
+        from steps.common.gpu_config import configure_gpu as setup_step_gpu
     except ImportError:
         def setup_step_gpu(name):
             return {"device": "cpu", "step_name": name}
@@ -38,7 +38,7 @@ def _load_clip_model():
         from transformers import CLIPModel, CLIPProcessor
         
         processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch16")
-        model = CLIPModel.from_pretrained("openai/clip-vit-base-patch16").to(device).eval()
+        model = CLIPModel.from_pretrained("openai/clip-vit-base-patch16", use_safetensors=True).to(device).eval()
         
         _MODELS["clip"].update({
             "model": model,
@@ -58,7 +58,7 @@ def _load_dino_model():
         return
     
     try:
-        from gpu_config import setup_step_gpu
+        from steps.common.gpu_config import configure_gpu as setup_step_gpu
     except ImportError:
         def setup_step_gpu(name):
             return {"device": "cpu", "step_name": name}

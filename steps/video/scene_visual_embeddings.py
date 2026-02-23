@@ -159,6 +159,7 @@ def run_scene_visual_embeddings(item: Dict[str, Any], cfg: Dict[str, Any]) -> Di
                     sample_clip_len = None
     _stage10_18_debug("raw_clip_embedding_count:", raw_clip_count)
     _stage10_18_debug("raw_clip_embedding_len:", sample_clip_len)
+    clip_vector_dim = sample_clip_len or 0
     
     # === STEP 3: Generate DINO Embeddings ===
     logger.info("[PHASE6] Generating DINO embeddings")
@@ -182,6 +183,7 @@ def run_scene_visual_embeddings(item: Dict[str, Any], cfg: Dict[str, Any]) -> Di
                     sample_dino_len = None
     _stage10_18_debug("raw_dino_embedding_count:", raw_dino_count)
     _stage10_18_debug("raw_dino_embedding_len:", sample_dino_len)
+    dino_vector_dim = sample_dino_len or 0
 
     if frame_paths and (not clip_model_loaded or not dino_model_loaded):
         return {
@@ -190,6 +192,11 @@ def run_scene_visual_embeddings(item: Dict[str, Any], cfg: Dict[str, Any]) -> Di
             "clip_model_loaded": clip_model_loaded,
             "dino_model_loaded": dino_model_loaded,
             "total_frames": len(frame_paths),
+            "clip_vector_dim": clip_vector_dim,
+            "dino_vector_dim": dino_vector_dim,
+            "scene_clip_vectors_written": 0,
+            "scene_dino_vectors_written": 0,
+            "gpu_device": clip_device,
         }
     
     # === STEP 4: Pool to Scene-Level ===
@@ -201,6 +208,8 @@ def run_scene_visual_embeddings(item: Dict[str, Any], cfg: Dict[str, Any]) -> Di
     pooled_dino = pool_multiple_scenes(dino_embeddings, strategy=pooling_strategy)
     print("[STAGE10_16_DEBUG] pooled_clip_len:", len(pooled_clip))
     print("[STAGE10_16_DEBUG] pooled_dino_len:", len(pooled_dino))
+    scene_clip_vectors_written = 0
+    scene_dino_vectors_written = 0
     
     # === STEP 5: Store in Qdrant ===
     retrieval_cfg = phase6_cfg.get('retrieval', {})
@@ -237,6 +246,7 @@ def run_scene_visual_embeddings(item: Dict[str, Any], cfg: Dict[str, Any]) -> Di
             })
         
         if clip_points:
+            scene_clip_vectors_written = len(clip_points)
             result_clip = clip_client.upsert(clip_points)
             clip_ok = result_clip
             print("[STAGE10_16_DEBUG] upsert_clip_return:", result_clip)
@@ -298,6 +308,7 @@ def run_scene_visual_embeddings(item: Dict[str, Any], cfg: Dict[str, Any]) -> Di
             })
         
         if dino_points:
+            scene_dino_vectors_written = len(dino_points)
             result_dino = dino_client.upsert(dino_points)
             dino_ok = result_dino
             print("[STAGE10_16_DEBUG] upsert_dino_return:", result_dino)
@@ -376,5 +387,10 @@ def run_scene_visual_embeddings(item: Dict[str, Any], cfg: Dict[str, Any]) -> Di
         "clip_embeddings": len(pooled_clip),
         "dino_embeddings": len(pooled_dino),
         "total_frames": sum(len(f) for f in scene_frames.values()),
-        "scene_manifest_path": scene_manifest_path
+        "scene_manifest_path": scene_manifest_path,
+        "clip_vector_dim": clip_vector_dim,
+        "dino_vector_dim": dino_vector_dim,
+        "scene_clip_vectors_written": scene_clip_vectors_written,
+        "scene_dino_vectors_written": scene_dino_vectors_written,
+        "gpu_device": clip_device,
     }

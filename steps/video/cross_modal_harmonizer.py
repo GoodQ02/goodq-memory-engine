@@ -10,14 +10,11 @@ import json
 import logging
 import sqlite3
 from pathlib import Path
-import sys
 
-# Add lib to path for entity_extractor
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / 'lib'))
 logger = logging.getLogger(__name__)
 
 try:
-    from entity_extractor import extract_entities
+    from steps.video.entity_extractor import extract_entities_from_scene, EntityExtractor
     ENTITY_EXTRACTION_AVAILABLE = True
 except ImportError:
     ENTITY_EXTRACTION_AVAILABLE = False
@@ -240,21 +237,31 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
     # === LOAD ALL DATA SOURCES ===
     
     # Load scene manifest (Phase 5 + Phase 6)
-    # Preferred canonical location
-    scene_manifest_path = os.path.join(processing_dir, 'video', 'scene_manifest.json')
-    
-    # Fallback for older or mismatched pipelines
-    if not os.path.exists(scene_manifest_path):
-        alt_path = os.path.join(processing_dir, 'scene_manifest.json')
-        if os.path.exists(alt_path):
-            logger.warning(f"[HARMONIZER] Using fallback scene_manifest.json at: {alt_path}")
-            scene_manifest_path = alt_path
+    scene_manifest_path = item.get("scene_manifest_path")
+    if scene_manifest_path and os.path.exists(scene_manifest_path):
+        logger.debug(f"Using provided scene_manifest_path: {scene_manifest_path}")
+    else:
+        # Preferred canonical location
+        scene_manifest_path = os.path.join(processing_dir, 'video', 'scene_manifest.json')
+        
+        # Fallback for older or mismatched pipelines
+        if not os.path.exists(scene_manifest_path):
+            alt_path = os.path.join(processing_dir, 'scene_manifest.json')
+            if os.path.exists(alt_path):
+                logger.warning(f"[HARMONIZER] Using fallback scene_manifest.json at: {alt_path}")
+                scene_manifest_path = alt_path
     
     scene_data = load_json_safe(scene_manifest_path)
     
     if not scene_data:
         logger.warning(f"[HARMONIZER] No scene manifest found at {scene_manifest_path}, skipping harmonization")
-        return {"harmonization_status": "skipped", "reason": "no_scene_manifest"}
+        return {
+            "harmonization_status": "skipped",
+            "reason": "no_scene_manifest",
+            "harmonized_scene_count": 0,
+            "entity_extraction_available": ENTITY_EXTRACTION_AVAILABLE,
+            "entities_extracted": 0,
+        }
     
     scenes = scene_data.get('scenes', [])
 
@@ -296,6 +303,7 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
     
     # Build unified multimodal segments
     unified_segments = []
+    total_entities_extracted = 0
     
     for scene in scenes:
         scene_id = scene.get('id', scene.get('scene_id', 0))
@@ -321,13 +329,23 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
             caption_text = scene.get('caption', '')
             ocr_text = scene.get('ocr_text', '')
             tags = scene.get('tags', [])
-            
-            scene_entities = extract_entities(
-                transcription=full_transcript,
-                caption=caption_text,
-                ocr_text=ocr_text,
-                tags=tags
+            scene_entity_data = dict(scene)
+            scene_entity_data.update({
+                'transcription': full_transcript,
+                'caption': caption_text,
+                'ocr_text': ocr_text,
+                'tags': tags,
+                'start_time': scene_start,
+            })
+            entity_result = extract_entities_from_scene(
+                scene_data=scene_entity_data,
+                scene_id=str(scene_id),
+                video_id=str(video_id),
+                config=cfg,
             )
+            if isinstance(entity_result, dict):
+                scene_entities = entity_result.get('entities', []) or []
+                total_entities_extracted += int(entity_result.get('entity_count', len(scene_entities)))
         
         # Get speaker IDs (from diarization)
         speaker_ids = []
@@ -443,7 +461,10 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
         'harmonization_status': 'complete',
         'temporal_index_path': temporal_index_path,
         'unified_segments': len(unified_segments),
+        'harmonized_scene_count': len(unified_segments),
         'has_visual': temporal_index['has_visual_embeddings'],
         'has_audio': temporal_index['has_audio'],
-        'has_transcripts': temporal_index['has_transcripts']
+        'has_transcripts': temporal_index['has_transcripts'],
+        'entity_extraction_available': ENTITY_EXTRACTION_AVAILABLE,
+        'entities_extracted': total_entities_extracted,
     }

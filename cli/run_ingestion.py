@@ -1449,6 +1449,10 @@ def run(
                 # Phase 6a: Scene Visual Embeddings (CLIP + DINO)
                 typer.echo('[PHASE 6a] Generating scene visual embeddings...')
                 embeddings_result = _run_step('goodq_core', 'scene_visual_embeddings', phase6_item, cfg_json)
+                phase6_status = embeddings_result.get('phase6_status') if isinstance(embeddings_result, dict) else None
+                result_dict = embeddings_result if isinstance(embeddings_result, dict) else embeddings_result
+                print("[STAGE10_16_DEBUG] phase6_status:", phase6_status)
+                print("[STAGE10_16_DEBUG] phase6_result:", result_dict)
                 if isinstance(embeddings_result, dict):
                     phase6_item.update(embeddings_result)
                     typer.echo('[PHASE 6a] [PASS] Visual embeddings complete')

@@ -12,6 +12,8 @@ import subprocess
 import numpy as np
 from pathlib import Path
 
+from steps.common.tool_paths import resolve_ffmpeg
+
 logger = logging.getLogger(__name__)
 
 
@@ -19,6 +21,7 @@ def extract_frame_at_timestamp(
     video_path: str,
     timestamp: float,
     output_path: str,
+    ffmpeg_exe: str,
     width: int = 224,
     height: int = 224
 ) -> bool:
@@ -39,7 +42,7 @@ def extract_frame_at_timestamp(
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
         
         cmd = [
-            'ffmpeg',
+            ffmpeg_exe,
             '-ss', str(timestamp),
             '-i', video_path,
             '-vframes', '1',
@@ -72,7 +75,8 @@ def extract_frames_uniform(
     end: float,
     num_frames: int,
     output_dir: str,
-    scene_id: int
+    scene_id: int,
+    ffmpeg_exe: str
 ) -> List[Dict[str, Any]]:
     """
     Extract uniformly spaced frames from a scene.
@@ -103,7 +107,7 @@ def extract_frames_uniform(
         frame_filename = f"scene_{scene_id:04d}_frame_{idx:02d}.jpg"
         frame_path = os.path.join(output_dir, frame_filename)
         
-        if extract_frame_at_timestamp(video_path, ts, frame_path):
+        if extract_frame_at_timestamp(video_path, ts, frame_path, ffmpeg_exe):
             frames.append({
                 'frame_id': idx,
                 'timestamp': ts,
@@ -119,7 +123,8 @@ def extract_frames_middle(
     start: float,
     end: float,
     output_dir: str,
-    scene_id: int
+    scene_id: int,
+    ffmpeg_exe: str
 ) -> List[Dict[str, Any]]:
     """
     Extract the middle frame from a scene (fallback strategy).
@@ -138,7 +143,7 @@ def extract_frames_middle(
     frame_filename = f"scene_{scene_id:04d}_middle.jpg"
     frame_path = os.path.join(output_dir, frame_filename)
     
-    if extract_frame_at_timestamp(video_path, middle, frame_path):
+    if extract_frame_at_timestamp(video_path, middle, frame_path, ffmpeg_exe):
         return [{
             'frame_id': 0,
             'timestamp': middle,
@@ -155,6 +160,7 @@ def extract_keyframe_candidates(
     end: float,
     output_dir: str,
     scene_id: int,
+    ffmpeg_exe: str,
     max_frames: int = 5
 ) -> List[Dict[str, Any]]:
     """
@@ -174,7 +180,7 @@ def extract_keyframe_candidates(
     """
     # For now, use uniform sampling as keyframe detection requires more complex FFmpeg analysis
     # This can be enhanced with optical flow or motion vectors in future iterations
-    return extract_frames_uniform(video_path, start, end, max_frames, output_dir, scene_id)
+    return extract_frames_uniform(video_path, start, end, max_frames, output_dir, scene_id, ffmpeg_exe)
 
 
 def extract_scene_frames(
@@ -182,7 +188,8 @@ def extract_scene_frames(
     scenes: List[Dict[str, Any]],
     output_base_dir: str,
     strategy: str = 'uniform',
-    frames_per_scene: int = 3
+    frames_per_scene: int = 3,
+    cfg: Optional[Dict[str, Any]] = None
 ) -> Dict[str, Any]:
     """
     Main entry point for scene frame extraction.
@@ -204,6 +211,19 @@ def extract_scene_frames(
     # Create frames directory
     frames_dir = os.path.join(output_base_dir, 'frames')
     os.makedirs(frames_dir, exist_ok=True)
+
+    cfg_for_tools: Dict[str, Any] = cfg if isinstance(cfg, dict) else {}
+    if not cfg_for_tools:
+        try:
+            from steps.common.config_loader import load_configs
+            loaded = load_configs()
+            if isinstance(loaded, dict):
+                cfg_for_tools = loaded
+        except Exception:
+            cfg_for_tools = {}
+    ffmpeg_exe = resolve_ffmpeg(cfg_for_tools)
+    if ffmpeg_exe is None:
+        raise RuntimeError("FFmpeg not resolved")
     
     scene_frames = {}
     total_extracted = 0
@@ -224,11 +244,11 @@ def extract_scene_frames(
         
         # Select extraction strategy
         if strategy == 'middle':
-            frames = extract_frames_middle(video_path, start, end, frames_dir, scene_id_for_filename)
+            frames = extract_frames_middle(video_path, start, end, frames_dir, scene_id_for_filename, ffmpeg_exe)
         elif strategy == 'keyframe':
-            frames = extract_keyframe_candidates(video_path, start, end, frames_dir, scene_id_for_filename, frames_per_scene)
+            frames = extract_keyframe_candidates(video_path, start, end, frames_dir, scene_id_for_filename, ffmpeg_exe, frames_per_scene)
         else:  # uniform (default)
-            frames = extract_frames_uniform(video_path, start, end, frames_per_scene, frames_dir, scene_id_for_filename)
+            frames = extract_frames_uniform(video_path, start, end, frames_per_scene, frames_dir, scene_id_for_filename, ffmpeg_exe)
         
         if frames:
             scene_frames[scene_id] = frames

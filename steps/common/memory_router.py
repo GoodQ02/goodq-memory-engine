@@ -65,21 +65,36 @@ class MemoryRouter:
             store = self.stores.get(target)
             if not store:
                 results[target] = False
+                print("[STAGE10_16_DEBUG] memory_router_target:", target)
+                print("[STAGE10_16_DEBUG] memory_router_vector_len:", 0)
+                print("[STAGE10_16_DEBUG] memory_router_upsert_return:", results[target])
                 if debug:
                     print(f"[VECTOR_DEBUG] router.target missing target={target}")
                 continue
             try:
                 payload = self._filter_vectors_for_store(vectors, store)
+                vector_len = 0
+                if payload:
+                    first = payload[0] if isinstance(payload[0], dict) else {}
+                    first_vec = first.get("vector") if isinstance(first, dict) else None
+                    if isinstance(first_vec, list):
+                        vector_len = len(first_vec)
+                print("[STAGE10_16_DEBUG] memory_router_target:", target)
+                print("[STAGE10_16_DEBUG] memory_router_vector_len:", vector_len)
                 if debug:
                     print(
                         f"[VECTOR_DEBUG] router.target target={target} store={store.__class__.__name__}"
                         f" dim={getattr(store, 'dim', None)} filtered={len(payload)}"
                     )
                 results[target] = store.insert(payload) if payload else False
+                print("[STAGE10_16_DEBUG] memory_router_upsert_return:", results[target])
                 if debug:
                     print(f"[VECTOR_DEBUG] router.target result target={target} ok={results[target]}")
             except Exception:
                 results[target] = False
+                print("[STAGE10_16_DEBUG] memory_router_target:", target)
+                print("[STAGE10_16_DEBUG] memory_router_vector_len:", 0)
+                print("[STAGE10_16_DEBUG] memory_router_upsert_return:", results[target])
                 if debug:
                     print(f"[VECTOR_DEBUG] router.target exception target={target}")
         return results

@@ -30,7 +30,10 @@ def build_knowledge_graph(
     from lib.knowledge_graph import KnowledgeGraph
     
     # Initialize knowledge graph
-    graph_db_path = Path(config.get('knowledge_graph_db', 'L:/_DATA/GoodQ_Data/knowledge_graph.db'))
+    kg_db = (config.get("paths") or {}).get("knowledge_graph_db")
+    if not kg_db:
+        raise RuntimeError("knowledge_graph_db missing from config paths")
+    graph_db_path = Path(kg_db)
     graph_db_path.parent.mkdir(parents=True, exist_ok=True)
     
     logger.info(f"Building knowledge graph at {graph_db_path}")

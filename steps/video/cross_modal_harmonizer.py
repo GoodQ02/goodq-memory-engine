@@ -14,14 +14,14 @@ import sys
 
 # Add lib to path for entity_extractor
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / 'lib'))
+logger = logging.getLogger(__name__)
+
 try:
     from entity_extractor import extract_entities
     ENTITY_EXTRACTION_AVAILABLE = True
 except ImportError:
     ENTITY_EXTRACTION_AVAILABLE = False
     logger.warning("Entity extractor not available")
-
-logger = logging.getLogger(__name__)
 
 
 def load_json_safe(path: str) -> Optional[Dict[str, Any]]:

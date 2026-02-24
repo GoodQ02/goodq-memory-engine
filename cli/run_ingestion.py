@@ -27,6 +27,7 @@ from steps.common.memory import ensure_scene, register_scene_bundle, scene_has_m
 from steps.common.tag_utils import canonicalize_taxonomy
 from steps.common.tool_paths import resolve_ffmpeg, resolve_conda
 from steps.common.step_logger import log_step_run
+from steps.common.profile_config import is_baseline, require_wsl_audio, wsl_audio_auto_enabled
 
 
 def _patch_typer_help_for_click_8_2() -> None:
@@ -870,26 +871,55 @@ def _process_audio(
 
     merge('goodq_audio_metadata', 'audio_metadata')
     
-    # WSL2 GPU-accelerated UNIFIED audio processing (only if audio exists)
+    # WSL2 unified audio is profile-gated. BASELINE uses CPU-safe local fallback by default.
     if audio_path and audio_path.exists():
-        from steps.audio.audio_wsl2_bridge import audio_unified_wsl2
-        
-        # Single unified call gets transcription, diarization, emotion, embeddings
-        unified_result = audio_unified_wsl2(str(audio_path), scene_id=scene_id, duration=end-start)
-        if isinstance(unified_result, dict):
-            item.update(unified_result)
-        
+        use_wsl_unified_audio = bool(wsl_audio_auto_enabled() or require_wsl_audio())
+
+        if use_wsl_unified_audio:
+            from steps.audio.audio_wsl2_bridge import audio_unified_wsl2
+
+            # Single unified call gets transcription, diarization, emotion, embeddings
+            unified_result = audio_unified_wsl2(str(audio_path), scene_id=scene_id, duration=end-start)
+            if isinstance(unified_result, dict):
+                item.update(unified_result)
+        else:
+            logger.info(
+                "[AUDIO] WSL2 unified path disabled by profile; using local CPU-safe transcription fallback"
+            )
+            try:
+                from steps.audio_transcribe.step import audio_transcribe as local_audio_transcribe
+
+                cfg_payload = json.loads(cfg_json.read_text(encoding='utf-8'))
+                local_item = {
+                    'source_path': str(audio_path),
+                    'path': str(audio_path),
+                    'scene_id': scene_id,
+                    'video_hash': video_hash,
+                }
+                local_result = local_audio_transcribe(local_item, cfg_payload)
+                if isinstance(local_result, dict):
+                    item.update(local_result)
+                    if not isinstance(item.get('segments'), list):
+                        transcript_segments = local_result.get('transcript_segments')
+                        if isinstance(transcript_segments, list):
+                            item['segments'] = transcript_segments
+            except Exception as fallback_error:
+                logger.warning(
+                    "[AUDIO] Local CPU-safe transcription fallback failed: %s",
+                    fallback_error,
+                )
+
         # Legacy steps for speaker merge and timing (keep these for now)
         merge('goodq_audio_transcribe', 'audio_speaker_merge')
         merge('goodq_audio_transcribe', 'audio_music_events')
         merge('goodq_audio_transcribe', 'audio_time_hints')
-        
+
         # Write compatibility JSON files for harmonizer
         # The harmonizer expects separate transcript.json and diarization.json files
         video_processing_dir = audio_dir.parent  # Go up from audio/ to processing/<video>/
         audio_output_dir = video_processing_dir / 'audio'
         audio_output_dir.mkdir(parents=True, exist_ok=True)
-        
+
         # Write transcript.json
         if item.get('segments') or item.get('transcript'):
             transcript_json = {
@@ -897,11 +927,10 @@ def _process_audio(
                 'full_text': item.get('transcript', ''),
                 'language': item.get('language', 'en')
             }
-            import json
             with open(audio_output_dir / 'transcript.json', 'w', encoding='utf-8') as f:
                 json.dump(transcript_json, f, indent=2, ensure_ascii=False)
             logger.info(f"[AUDIO] Wrote transcript.json with {len(item.get('segments', []))} segments")
-        
+
         # Write diarization.json
         if item.get('speaker_segments'):
             diarization_json = {
@@ -974,7 +1003,7 @@ def run(
     verbose: bool = typer.Option(False, '--verbose', help='Emit per-step progress messages'),
     step_timeout: Optional[int] = typer.Option(None, '--step-timeout', help='Abort a step if it exceeds this many seconds'),
 ) -> None:
-    global VERBOSE, STEP_TIMEOUT
+    global VERBOSE, STEP_TIMEOUT, CONTROL_AGENT_AVAILABLE
     VERBOSE = verbose
     # Ensure step_timeout is an int or None, not an OptionInfo object
     if hasattr(step_timeout, 'default'):
@@ -992,11 +1021,22 @@ def run(
 
     base_cfg = load_configs({})
     cfg: Dict[str, Any] = dict(base_cfg) if isinstance(base_cfg, dict) else {}
+    baseline_wsl_override = bool(is_baseline() and require_wsl_audio())
+    profile_override: Optional[str] = None
+    profile_override_reason: Optional[str] = None
+    if baseline_wsl_override:
+        logger.warning("BASELINE override: WSL audio forced via GOODQ_REQUIRE_WSL_AUDIO=1")
+        profile_override = "wsl_audio_forced_in_baseline"
+        profile_override_reason = "GOODQ_REQUIRE_WSL_AUDIO=1 while GOODQ_HOST_PROFILE=BASELINE"
     run_context = {
         'id': str(uuid.uuid4()),
         'pipeline': 'scene_ingest_cli',
         'started_at': datetime.now(timezone.utc).isoformat(),
         'timer_unit': 'ms',
+        'control_agent_status': 'import_unavailable' if not CONTROL_AGENT_AVAILABLE else 'pending',
+        'control_agent_reason': None,
+        'profile_override': profile_override,
+        'profile_override_reason': profile_override_reason,
     }
     try:
         git_proc = subprocess.run(
@@ -1039,17 +1079,30 @@ def run(
         videos = videos[:max_videos]
 
     results: List[Dict[str, Any]] = []
-    
+
     # Initialize Control Agent if available
     control_agent = None
+    control_agent_status = 'import_unavailable' if not CONTROL_AGENT_AVAILABLE else 'pending'
+    control_agent_reason: Optional[str] = None
     if CONTROL_AGENT_AVAILABLE:
         try:
             control_agent = ControlAgent()
             # Control Agent auto-starts monitoring in __init__
             typer.echo("[CONTROL] Control Agent initialized and monitoring")
+            control_agent_status = 'initialized'
         except Exception as e:
             typer.echo(f"[CONTROL] Failed to initialize Control Agent: {e}", err=True)
+            control_agent_status = 'disabled_init_error'
+            control_agent_reason = f'{type(e).__name__}: {e}'
+            CONTROL_AGENT_AVAILABLE = False
             control_agent = None
+
+    run_context['control_agent_status'] = control_agent_status
+    run_context['control_agent_reason'] = control_agent_reason
+    if isinstance(cfg.get('run'), dict):
+        cfg['run']['control_agent_status'] = control_agent_status
+        cfg['run']['control_agent_reason'] = control_agent_reason
+    cfg_json = _write_cfg_snapshot(cfg, workspace)
 
     for video_path in videos:
         typer.echo(f'Processing video: {video_path.name}')
@@ -1398,7 +1451,12 @@ def run(
             'video_name': video_path.name,
             'scene_meta': detection_meta,
             'scenes': scene_outputs,
+            'control_agent_status': control_agent_status,
+            'control_agent_reason': control_agent_reason,
         }
+        if profile_override:
+            video_result['profile_override'] = profile_override
+            video_result['profile_override_reason'] = profile_override_reason
         
         # ============================================================
         # PHASE 6: VISUAL EMBEDDINGS + MULTIMODAL HARMONIZATION
@@ -1608,8 +1666,4 @@ def run(
 if __name__ == '__main__':
     _patch_typer_help_for_click_8_2()
     APP()
-
-
-
-
 

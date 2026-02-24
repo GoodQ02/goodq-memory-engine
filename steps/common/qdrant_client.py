@@ -1,14 +1,24 @@
 from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Dict, Optional, List
+import logging
 import os
 import uuid
 import requests
+
+logger = logging.getLogger(__name__)
 
 
 # NOTE: This namespace is part of GoodQ's storage identity for Qdrant point IDs.
 # Changing it will change derived UUIDs and can create duplicates for the same raw IDs.
 GOODQ_POINT_ID_NAMESPACE = uuid.UUID("2058b732-6666-5424-a820-5cf54ef071c4")
+
+
+def _truncate_http_body(body: Optional[str], max_len: int = 300) -> str:
+    text = (body or "").strip().replace("\n", " ")
+    if len(text) > max_len:
+        return text[:max_len] + "..."
+    return text
 
 
 @dataclass
@@ -95,7 +105,14 @@ class QdrantClient:
             )
             self._collection_ready = r.status_code == 200
             return self._collection_ready
-        except Exception:
+        except Exception as e:
+            logger.warning(
+                "qdrant operation failed operation=%s collection=%s exc_type=%s exc=%s",
+                "ensure_collection",
+                self.cfg.collection,
+                type(e).__name__,
+                e,
+            )
             return False
 
     def upsert(self, points: List[Dict[str, Any]]) -> bool:
@@ -159,13 +176,26 @@ class QdrantClient:
             ok = r.status_code in (200, 202)
             if ok:
                 self._upsert_metrics["points_written"] += len(normalized)
+            if not ok:
+                body = _truncate_http_body(getattr(r, "text", None))
+                logger.warning(
+                    "qdrant operation failed operation=%s collection=%s status_code=%s body=%s",
+                    "upsert",
+                    self.cfg.collection,
+                    getattr(r, "status_code", None),
+                    body,
+                )
             if not ok and self._debug_enabled():
-                body = (r.text or "").strip().replace("\n", " ")
-                if len(body) > 300:
-                    body = body[:300] + "..."
                 print(f"[VECTOR_DEBUG] qdrant.upsert failed status={r.status_code} collection={self.cfg.collection} body={body}")
             return ok
-        except Exception:
+        except Exception as e:
+            logger.warning(
+                "qdrant operation failed operation=%s collection=%s exc_type=%s exc=%s",
+                "upsert",
+                self.cfg.collection,
+                type(e).__name__,
+                e,
+            )
             return False
 
     def query(self, vector: List[float], top_k: int = 5, payload_filter: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
@@ -183,6 +213,14 @@ class QdrantClient:
                 timeout=5,
             )
             if r.status_code != 200:
+                body_text = _truncate_http_body(getattr(r, "text", None))
+                logger.warning(
+                    "qdrant operation failed operation=%s collection=%s status_code=%s body=%s",
+                    "query",
+                    self.cfg.collection,
+                    getattr(r, "status_code", None),
+                    body_text,
+                )
                 return []
             res = r.json().get("result", []) or []
             hits = [
@@ -197,8 +235,14 @@ class QdrantClient:
                 from steps.common.memory_provenance import attach_provenance_to_hits
 
                 attach_provenance_to_hits(getattr(self.cfg, "db_path", None), hits)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(
+                    "qdrant operation failed operation=%s collection=%s exc_type=%s exc=%s",
+                    "query.attach_provenance",
+                    self.cfg.collection,
+                    type(e).__name__,
+                    e,
+                )
             try:
                 from steps.common.retrieval_events import (
                     RetrievalEvent,
@@ -256,10 +300,23 @@ class QdrantClient:
                     enabled=getattr(self.cfg, "log_retrieval_events", True),
                     log_dir=getattr(self.cfg, "log_dir", None),
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(
+                    "qdrant operation failed operation=%s collection=%s exc_type=%s exc=%s",
+                    "query.emit_retrieval_events",
+                    self.cfg.collection,
+                    type(e).__name__,
+                    e,
+                )
             return hits
-        except Exception:
+        except Exception as e:
+            logger.warning(
+                "qdrant operation failed operation=%s collection=%s exc_type=%s exc=%s",
+                "query",
+                self.cfg.collection,
+                type(e).__name__,
+                e,
+            )
             return []
 
     def stats(self) -> Dict[str, Any]:
@@ -277,8 +334,14 @@ class QdrantClient:
                     self._points_cached = points
                     info.update({"available": True, "vectors": points, "dim": self.cfg.dim, "distance": self.cfg.distance})
                     return info
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(
+                "qdrant operation failed operation=%s collection=%s exc_type=%s exc=%s",
+                "stats",
+                self.cfg.collection,
+                type(e).__name__,
+                e,
+            )
         info["available"] = False
         if self._points_cached is not None:
             info["vectors"] = self._points_cached
@@ -303,7 +366,14 @@ def build_qdrant_client(cfg: Dict[str, Any], dim: int, key: str) -> Optional[Qdr
         from steps.common.retrieval_events import retrieval_events_enabled
 
         log_retrieval = retrieval_events_enabled(cfg, default=True)
-    except Exception:
+    except Exception as e:
+        logger.warning(
+            "qdrant operation failed operation=%s collection=%s exc_type=%s exc=%s",
+            "build_qdrant_client.retrieval_events_enabled",
+            collection,
+            type(e).__name__,
+            e,
+        )
         log_retrieval = True
     return QdrantClient(
         QdrantConfig(

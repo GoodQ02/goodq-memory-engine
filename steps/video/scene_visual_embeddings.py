@@ -213,7 +213,10 @@ def run_scene_visual_embeddings(item: Dict[str, Any], cfg: Dict[str, Any]) -> Di
     
     # === STEP 5: Store in Qdrant ===
     retrieval_cfg = phase6_cfg.get('retrieval', {})
-    if retrieval_cfg.get('enable', True):
+    retrieval_enabled = retrieval_cfg.get('enable', True)
+    clip_ok = True
+    dino_ok = True
+    if retrieval_enabled:
         logger.info("[PHASE6] Storing embeddings in Qdrant")
         host_value = cfg.get('qdrant_host', 'http://127.0.0.1:6333')
         clip_collection_name = phase6_cfg.get('clip_collection', 'goodq_clip_scenes')
@@ -368,7 +371,13 @@ def run_scene_visual_embeddings(item: Dict[str, Any], cfg: Dict[str, Any]) -> Di
                 scene['representative_frame'] = frames[len(frames)//2]['path']  # Middle frame
     
     # Save updated manifest
-    scene_data['phase6_complete'] = True
+    vector_commit_success = bool(clip_ok and dino_ok)
+    scene_data['phase6_complete'] = vector_commit_success
+    scene_data['phase6_vector_commit'] = {
+        'enabled': retrieval_enabled,
+        'clip_committed': bool(clip_ok),
+        'dino_committed': bool(dino_ok),
+    }
     scene_data['embedding_stats'] = {
         'clip_scenes': len(pooled_clip),
         'dino_scenes': len(pooled_dino),
@@ -379,10 +388,18 @@ def run_scene_visual_embeddings(item: Dict[str, Any], cfg: Dict[str, Any]) -> Di
     with open(scene_manifest_path, 'w', encoding='utf-8') as f:
         json.dump(scene_data, f, indent=2)
     
-    logger.info(f"[PHASE6] [OK] Complete! Processed {len(pooled_clip)} scenes with visual embeddings")
+    if vector_commit_success:
+        logger.info(f"[PHASE6] [OK] Complete! Processed {len(pooled_clip)} scenes with visual embeddings")
+    else:
+        logger.error(
+            "[PHASE6] [FAIL] Vector commit incomplete (clip_ok=%s dino_ok=%s)",
+            clip_ok,
+            dino_ok,
+        )
     
     return {
-        "phase6_status": "complete",
+        "phase6_status": "complete" if vector_commit_success else "failed",
+        "error": None if vector_commit_success else "vector_commit_failed",
         "scenes_processed": len(pooled_clip),
         "clip_embeddings": len(pooled_clip),
         "dino_embeddings": len(pooled_dino),
@@ -392,5 +409,7 @@ def run_scene_visual_embeddings(item: Dict[str, Any], cfg: Dict[str, Any]) -> Di
         "dino_vector_dim": dino_vector_dim,
         "scene_clip_vectors_written": scene_clip_vectors_written,
         "scene_dino_vectors_written": scene_dino_vectors_written,
+        "clip_committed": bool(clip_ok),
+        "dino_committed": bool(dino_ok),
         "gpu_device": clip_device,
     }

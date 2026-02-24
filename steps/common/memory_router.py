@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import logging
 import os
 from typing import Any, Dict, List, Optional
 
 from steps.common.memory_store import MemoryStore, MemoryConfig, MemoryDims
+
+logger = logging.getLogger(__name__)
 
 
 class MemoryRouter:
@@ -59,12 +62,23 @@ class MemoryRouter:
                     f"[VECTOR_DEBUG] router.insert vectors={len(vectors or [])} targets={self.config.write_targets}"
                     f" stores={list(self.stores.keys())} modalities={modalities}"
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(
+                    "memory_router operation failed operation=%s target=%s exc_type=%s exc=%s",
+                    "insert.debug_summary",
+                    "n/a",
+                    type(e).__name__,
+                    e,
+                )
         for target in self.config.write_targets:
             store = self.stores.get(target)
             if not store:
                 results[target] = False
+                logger.warning(
+                    "memory_router store unavailable operation=%s target=%s",
+                    "insert",
+                    target,
+                )
                 print("[STAGE10_16_DEBUG] memory_router_target:", target)
                 print("[STAGE10_16_DEBUG] memory_router_vector_len:", 0)
                 print("[STAGE10_16_DEBUG] memory_router_upsert_return:", results[target])
@@ -90,7 +104,14 @@ class MemoryRouter:
                 print("[STAGE10_16_DEBUG] memory_router_upsert_return:", results[target])
                 if debug:
                     print(f"[VECTOR_DEBUG] router.target result target={target} ok={results[target]}")
-            except Exception:
+            except Exception as e:
+                logger.warning(
+                    "memory_router operation failed operation=%s target=%s exc_type=%s exc=%s",
+                    "insert",
+                    target,
+                    type(e).__name__,
+                    e,
+                )
                 results[target] = False
                 print("[STAGE10_16_DEBUG] memory_router_target:", target)
                 print("[STAGE10_16_DEBUG] memory_router_vector_len:", 0)
@@ -120,8 +141,14 @@ class MemoryRouter:
                             if any(promoted.values()):
                                 self._promotions += 1
                     return hits
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(
+                    "memory_router operation failed operation=%s target=%s exc_type=%s exc=%s",
+                    "query",
+                    tier,
+                    type(e).__name__,
+                    e,
+                )
             self._misses[tier] = self._misses.get(tier, 0) + 1
         return []
 
@@ -130,7 +157,14 @@ class MemoryRouter:
         for name, store in self.stores.items():
             try:
                 out["tiers"][name] = store.stats()
-            except Exception:
+            except Exception as e:
+                logger.warning(
+                    "memory_router operation failed operation=%s target=%s exc_type=%s exc=%s",
+                    "stats",
+                    name,
+                    type(e).__name__,
+                    e,
+                )
                 out["tiers"][name] = {"available": False}
         out["routing"] = {
             "read_priority": self.config.read_priority,

@@ -3,7 +3,6 @@ Progress tracking system for GoodQ pipeline.
 Provides real-time progress updates that can be read by UI and monitoring tools.
 """
 from __future__ import annotations
-import json
 import threading
 import time
 from pathlib import Path
@@ -11,6 +10,7 @@ from datetime import datetime
 from typing import Any, Dict, Optional, List
 from contextlib import contextmanager
 from configs.paths import LOGS_DIR
+from steps.common.atomic_io import atomic_write_json
 
 
 class ProgressTracker:
@@ -135,8 +135,7 @@ class ProgressTracker:
     def _save(self):
         """Save progress state to file (must be called within lock)"""
         try:
-            with open(self.progress_file, 'w', encoding='utf-8') as f:
-                json.dump(self.current_state, f, indent=2, ensure_ascii=False)
+            atomic_write_json(self.progress_file, self.current_state)
         except Exception as e:
             print(f"Warning: Could not save progress: {e}")
     

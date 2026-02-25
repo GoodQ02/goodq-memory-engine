@@ -23,6 +23,7 @@ import re
 import typer
 
 from steps.common.config_loader import load_configs
+from steps.common.atomic_io import atomic_write_json
 from steps.common.memory import ensure_scene, register_scene_bundle, scene_has_materialized, get_scene_meta, list_scenes_for_video
 from steps.common.tag_utils import canonicalize_taxonomy
 from steps.common.tool_paths import resolve_ffmpeg, resolve_conda
@@ -1747,10 +1748,7 @@ def run(
             # Phase 5 writes scene manifest into a canonical /video/ directory
             scene_manifest_path = processing_dir / 'video' / 'scene_manifest.json'
             scene_manifest_path.parent.mkdir(parents=True, exist_ok=True)
-            scene_manifest_path.write_text(
-                json.dumps(scene_manifest, ensure_ascii=False, indent=2),
-                encoding='utf-8'
-            )
+            atomic_write_json(scene_manifest_path, scene_manifest)
             
             try:
                 # Phase 6a: Scene Visual Embeddings (CLIP + DINO)
@@ -1800,10 +1798,7 @@ def run(
                         temporal_index = harmonization_result.get('temporal_index')
                         if temporal_index:
                             temporal_index_path = video_workspace / 'temporal_index.json'
-                            temporal_index_path.write_text(
-                                json.dumps(temporal_index, ensure_ascii=False, indent=2),
-                                encoding='utf-8'
-                            )
+                            atomic_write_json(temporal_index_path, temporal_index)
                             typer.echo(f'[PHASE 6] [PASS] Temporal index written: {temporal_index_path}')
                 
             except Exception as phase6_error:

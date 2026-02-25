@@ -11,6 +11,8 @@ import logging
 import sqlite3
 from pathlib import Path
 
+from steps.common.atomic_io import atomic_write_json
+
 logger = logging.getLogger(__name__)
 _PROCESSING_FALLBACK_WARNED = False
 
@@ -477,9 +479,7 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
     
     temporal_index_path = os.path.join(processing_dir, 'temporal_index.json')
     os.makedirs(os.path.dirname(temporal_index_path), exist_ok=True)
-    
-    with open(temporal_index_path, 'w', encoding='utf-8') as f:
-        json.dump(temporal_index, f, indent=2)
+    atomic_write_json(Path(temporal_index_path), temporal_index)
     
     logger.info(f"[HARMONIZER] [OK] Created temporal index with {len(unified_segments)} multimodal segments")
     logger.info(f"  Saved: {temporal_index_path}")

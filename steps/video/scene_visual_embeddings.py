@@ -10,14 +10,15 @@ import json
 import logging
 from pathlib import Path
 
+from steps.common.atomic_io import atomic_write_json
+
 logger = logging.getLogger(__name__)
 _PROCESSING_FALLBACK_WARNED = False
 
 
 def _atomic_write_json(path: Path, data: Any) -> None:
-    tmp = Path(str(path) + ".tmp")
-    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-    os.replace(tmp, path)
+    # Backward-compatible wrapper used by existing tests and helper call sites.
+    atomic_write_json(path, data)
 
 
 def _write_scene_manifest(scene_manifest_path: str, scene_data: Dict[str, Any]) -> None:

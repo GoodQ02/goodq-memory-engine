@@ -24,6 +24,7 @@ import uuid
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 from configs.paths import LOGS_DIR
+from steps.common.atomic_io import atomic_write_json
 
 log_file = LOGS_DIR / "watchdog.log"
 log_file.parent.mkdir(parents=True, exist_ok=True)
@@ -190,9 +191,7 @@ class ProcessedRegistry:
         """Save processed file registry"""
         with self.lock:
             try:
-                self.state_file.parent.mkdir(parents=True, exist_ok=True)
-                with open(self.state_file, 'w') as f:
-                    json.dump(self.processed, f, indent=2)
+                atomic_write_json(self.state_file, self.processed)
             except Exception as e:
                 logger.error(f"Failed to save state file: {e}")
     

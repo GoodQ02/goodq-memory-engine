@@ -5,6 +5,7 @@ import shutil
 from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
+_IMAGEIO_FFMPEG_FALLBACK_WARNED = False
 
 def cfg_get(cfg: Dict[str, Any], path: str, default: Optional[str] = None) -> Optional[str]:
     cur: Any = cfg
@@ -28,6 +29,7 @@ def resolve_tesseract(cfg: Dict[str, Any]) -> Optional[str]:
 
 
 def resolve_ffmpeg(cfg: Dict[str, Any]) -> Optional[str]:
+    global _IMAGEIO_FFMPEG_FALLBACK_WARNED
     configured = cfg_get(cfg, 'config.tools.ffmpeg_exe')
     if configured:
         # Cross-host guard: reject Windows launchers on non-Windows hosts.
@@ -42,6 +44,27 @@ def resolve_ffmpeg(cfg: Dict[str, Any]) -> Optional[str]:
     ffmpeg_path = shutil.which("ffmpeg")
     if ffmpeg_path:
         return ffmpeg_path
+
+    # Python-package fallback: imageio-ffmpeg bundles a platform-appropriate binary.
+    try:
+        import imageio_ffmpeg
+
+        bundled_ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
+        if bundled_ffmpeg and os.path.isfile(bundled_ffmpeg):
+            if not _IMAGEIO_FFMPEG_FALLBACK_WARNED:
+                logger.warning(
+                    "tool_paths fallback: using_imageio_ffmpeg_binary ffmpeg_exe=%s",
+                    bundled_ffmpeg,
+                )
+                _IMAGEIO_FFMPEG_FALLBACK_WARNED = True
+            return bundled_ffmpeg
+    except Exception as e:
+        logger.debug(
+            "tool_paths debug: imageio_ffmpeg_unavailable operation=%s exc_type=%s exc=%s",
+            "resolve_ffmpeg",
+            type(e).__name__,
+            e,
+        )
     return None
 
 

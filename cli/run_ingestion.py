@@ -1113,45 +1113,64 @@ def _process_audio(
         if isinstance(result, dict):
             item.update(result)
 
+    def run_local_audio_fallback() -> None:
+        logger.info(
+            "[AUDIO] WSL2 unified path disabled or unavailable; using local CPU-safe transcription fallback"
+        )
+        try:
+            from steps.audio_transcribe.step import audio_transcribe as local_audio_transcribe
+
+            cfg_payload = json.loads(cfg_json.read_text(encoding='utf-8'))
+            local_item = {
+                'source_path': str(audio_path),
+                'path': str(audio_path),
+                'scene_id': scene_id,
+                'video_hash': video_hash,
+            }
+            local_result = local_audio_transcribe(local_item, cfg_payload)
+            if isinstance(local_result, dict):
+                item.update(local_result)
+                if not isinstance(item.get('segments'), list):
+                    transcript_segments = local_result.get('transcript_segments')
+                    if isinstance(transcript_segments, list):
+                        item['segments'] = transcript_segments
+        except Exception as fallback_error:
+            logger.warning(
+                "[AUDIO] Local CPU-safe transcription fallback failed: %s",
+                fallback_error,
+            )
+
     merge('goodq_audio_metadata', 'audio_metadata')
     
     # WSL2 unified audio is profile-gated. BASELINE uses CPU-safe local fallback by default.
     if audio_path and audio_path.exists():
         use_wsl_unified_audio = bool(wsl_audio_auto_enabled() or require_wsl_audio())
 
+        if use_wsl_unified_audio and shutil.which('wsl') is None:
+            logger.warning(
+                "[AUDIO] WSL2 unified audio requested but wsl command unavailable; using local fallback"
+            )
+            use_wsl_unified_audio = False
+
         if use_wsl_unified_audio:
             from steps.audio.audio_wsl2_bridge import audio_unified_wsl2
 
             # Single unified call gets transcription, diarization, emotion, embeddings
-            unified_result = audio_unified_wsl2(str(audio_path), scene_id=scene_id, duration=end-start)
-            if isinstance(unified_result, dict):
-                item.update(unified_result)
-        else:
-            logger.info(
-                "[AUDIO] WSL2 unified path disabled by profile; using local CPU-safe transcription fallback"
-            )
             try:
-                from steps.audio_transcribe.step import audio_transcribe as local_audio_transcribe
-
-                cfg_payload = json.loads(cfg_json.read_text(encoding='utf-8'))
-                local_item = {
-                    'source_path': str(audio_path),
-                    'path': str(audio_path),
-                    'scene_id': scene_id,
-                    'video_hash': video_hash,
-                }
-                local_result = local_audio_transcribe(local_item, cfg_payload)
-                if isinstance(local_result, dict):
-                    item.update(local_result)
-                    if not isinstance(item.get('segments'), list):
-                        transcript_segments = local_result.get('transcript_segments')
-                        if isinstance(transcript_segments, list):
-                            item['segments'] = transcript_segments
-            except Exception as fallback_error:
+                unified_result = audio_unified_wsl2(str(audio_path), scene_id=scene_id, duration=end-start)
+                if isinstance(unified_result, dict):
+                    item.update(unified_result)
+            except Exception as unified_error:
                 logger.warning(
-                    "[AUDIO] Local CPU-safe transcription fallback failed: %s",
-                    fallback_error,
+                    "[AUDIO] WSL2 unified audio failed operation=%s scene_id=%s exc_type=%s exc=%s",
+                    "audio_unified_wsl2",
+                    scene_id,
+                    type(unified_error).__name__,
+                    unified_error,
                 )
+                run_local_audio_fallback()
+        else:
+            run_local_audio_fallback()
 
         # Legacy steps for speaker merge and timing (keep these for now)
         merge('goodq_audio_transcribe', 'audio_speaker_merge')

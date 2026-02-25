@@ -22,6 +22,32 @@ logger = logging.getLogger(__name__)
 
 
 _FW_CACHE: Dict[Tuple[str, str, str], Any] = {}  # (model_id, device, compute_type) -> model
+_MODELS_FALLBACK_WARNED = False
+
+
+def _resolve_models_root() -> str:
+    global _MODELS_FALLBACK_WARNED
+    explicit = os.environ.get("HF_HOME") or os.environ.get("GOODQ_MODELS_DIR")
+    if explicit:
+        return explicit
+    data_root = os.environ.get("GOODQ_DATA_ROOT")
+    if data_root:
+        if not _MODELS_FALLBACK_WARNED:
+            logger.warning(
+                "audio_transcribe path fallback used path_key=%s derived_from=%s",
+                "HF_HOME",
+                "GOODQ_DATA_ROOT",
+            )
+            _MODELS_FALLBACK_WARNED = True
+        return os.path.join(data_root, "models")
+    if not _MODELS_FALLBACK_WARNED:
+        logger.warning(
+            "audio_transcribe path fallback used path_key=%s derived_from=%s",
+            "HF_HOME",
+            "cwd",
+        )
+        _MODELS_FALLBACK_WARNED = True
+    return os.path.join(os.getcwd(), "models")
 
 
 def _load_fw_model(model_id: str, device: str, compute_type: str, duration_minutes: float = None) -> Any:
@@ -664,8 +690,9 @@ def audio_transcribe(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
         logger.info("[TRANSCRIBE] Starting on CPU")
 
     os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
-    os.environ.setdefault("HF_HOME", os.environ.get("HF_HOME") or "L:/models")
-    os.environ.setdefault("TORCH_HOME", os.environ.get("TORCH_HOME") or "L:/models")
+    models_root = _resolve_models_root()
+    os.environ.setdefault("HF_HOME", os.environ.get("HF_HOME") or models_root)
+    os.environ.setdefault("TORCH_HOME", os.environ.get("TORCH_HOME") or models_root)
     
     # Load model with duration hint for optimal configuration
     fw_model = _load_fw_model(model_id, device, compute_type, duration_minutes)

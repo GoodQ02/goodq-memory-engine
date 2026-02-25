@@ -3,6 +3,7 @@ import argparse
 import json
 import os
 import sys
+import logging
 from typing import Any, Dict, List
 import time
 from pathlib import Path
@@ -14,6 +15,8 @@ if str(REPO_ROOT) not in sys.path:
 
 # Ensure per-env site-packages take precedence; ignore user site packages
 os.environ.setdefault('PYTHONNOUSERSITE', '0')
+logger = logging.getLogger(__name__)
+_PATH_FALLBACK_WARNED = False
 
 
 def load_cfg(overrides: Dict[str, Any] | None = None) -> Dict[str, Any]:
@@ -57,6 +60,7 @@ def _save_memory_context(step_name: str, item: Dict[str, Any] | None, results: D
 
 
 def run_step(step_name: str, item: Dict[str, Any] | None, cfg: Dict[str, Any]) -> Dict[str, Any]:
+    global _PATH_FALLBACK_WARNED
     # Map step names to callables and call signatures
     if step_name == "video_scene_detect":
         from steps.video_scene_detect.step import video_scene_detect
@@ -163,7 +167,23 @@ def run_step(step_name: str, item: Dict[str, Any] | None, cfg: Dict[str, Any]) -
         # Extract required inputs from item
         video_path = item.get('path') or item.get('file_path')
         audio_segments = item.get('audio_segments', [])
-        output_dir = item.get('output_dir', cfg.get('processing_dir', 'L:/_DATA/GoodQ_Data/processing'))
+        output_dir = item.get('output_dir')
+        if not output_dir:
+            paths_cfg = cfg.get('paths', {}) if isinstance(cfg, dict) else {}
+            output_dir = (
+                paths_cfg.get('processing')
+                or cfg.get('processing_dir')
+                or (str(Path(paths_cfg.get('data_root')) / 'processing') if paths_cfg.get('data_root') else None)
+            )
+        if not output_dir:
+            if not _PATH_FALLBACK_WARNED:
+                logger.warning(
+                    "step_runner path fallback used path_key=%s derived_from=%s",
+                    "output_dir",
+                    "cwd",
+                )
+                _PATH_FALLBACK_WARNED = True
+            output_dir = str(Path.cwd() / "processing")
         # Call Phase 5 processor
         return process_video_chunks_with_scenes(video_path, audio_segments, output_dir, cfg)
     
@@ -299,4 +319,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

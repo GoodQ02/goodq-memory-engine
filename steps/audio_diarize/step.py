@@ -12,11 +12,13 @@ import tempfile
 import subprocess
 import math
 import time
+from pathlib import Path
 
 
 _PIPELINES: Dict[Tuple[str, str], Any] = {}
 _SPEAKER_EMBEDDINGS: Dict[str, Any] = {}  # Cache for speaker embeddings
 _MODEL_WARMED_UP: bool = False  # Track if model has been warmed up
+_FFMPEG_FALLBACK_WARNED = False
 logger = logging.getLogger(__name__)
 
 
@@ -333,15 +335,32 @@ def audio_diarize(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
     if not ffmpeg_path:
         # Try config.tools.ffmpeg
         tools_cfg = ((cfg.get("config", {}) or {}).get("tools", {}) or {})
-        ffmpeg_path = tools_cfg.get("ffmpeg")
+        ffmpeg_path = tools_cfg.get("ffmpeg") or tools_cfg.get("ffmpeg_exe")
     
     if not ffmpeg_path:
-        # Fallback to known location
-        fallback_path = "L:/_TOOLS/ffmpeg/bin/ffmpeg.exe"
-        if os.path.exists(fallback_path):
-            ffmpeg_path = fallback_path
-        else:
-            ffmpeg_path = "ffmpeg"  # Hope it's in PATH
+        global _FFMPEG_FALLBACK_WARNED
+        host_cfg = (cfg.get("host") or {}) if isinstance(cfg, dict) else {}
+        data_root = host_cfg.get("data_root") or os.environ.get("GOODQ_DATA_ROOT")
+        if data_root:
+            candidate = Path(str(data_root)) / "_TOOLS" / "ffmpeg" / "bin" / "ffmpeg.exe"
+            if candidate.exists():
+                ffmpeg_path = str(candidate)
+                if not _FFMPEG_FALLBACK_WARNED:
+                    logger.warning(
+                        "audio_diarize path fallback used path_key=%s derived_from=%s",
+                        "ffmpeg",
+                        "host.data_root_or_env",
+                    )
+                    _FFMPEG_FALLBACK_WARNED = True
+        if not ffmpeg_path:
+            ffmpeg_path = "ffmpeg"
+            if not _FFMPEG_FALLBACK_WARNED:
+                logger.warning(
+                    "audio_diarize path fallback used path_key=%s derived_from=%s",
+                    "ffmpeg",
+                    "PATH",
+                )
+                _FFMPEG_FALLBACK_WARNED = True
     
     print(f"[DIARIZE] Using ffmpeg: {ffmpeg_path}")
 

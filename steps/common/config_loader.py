@@ -16,7 +16,7 @@ def _read_yaml(path: str) -> Dict[str, Any]:
 
 def _normalize_win_path(value: str) -> str:
     """
-    Convert Windows drive paths (e.g., L:/foo) to WSL mount points (/mnt/l/foo) when needed.
+    Convert Windows drive paths (e.g., <drive>:/foo) to WSL mount points (/mnt/<drive>/foo) when needed.
     Leaves non-drive strings untouched and preserves Windows paths on Windows hosts.
     """
     if not isinstance(value, str):

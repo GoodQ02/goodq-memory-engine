@@ -1,6 +1,12 @@
 @echo off
 :: Live Ingestion Monitor - Shows real-time progress
 setlocal enabledelayedexpansion
+set "REPO_ROOT=%~dp0.."
+if defined GOODQ_LOG_DIR (
+    set "LOG_DIR=%GOODQ_LOG_DIR%"
+) else (
+    set "LOG_DIR=%REPO_ROOT%\logs"
+)
 
 :loop
 cls
@@ -12,15 +18,15 @@ echo Time: %date% %time%
 echo.
 
 :: Find most recent log
-for /f "delims=" %%a in ('dir /b /od L:\goodq4all\logs\*.log 2^>nul') do set "LATEST_LOG=%%a"
+for /f "delims=" %%a in ('dir /b /od "%LOG_DIR%\*.log" 2^>nul') do set "LATEST_LOG=%%a"
 
 if defined LATEST_LOG (
-    echo Monitoring: L:\goodq4all\logs\!LATEST_LOG!
+    echo Monitoring: %LOG_DIR%\!LATEST_LOG!
     echo.
     echo === LAST 40 LINES ===
-    powershell -Command "Get-Content L:\goodq4all\logs\!LATEST_LOG! -Tail 40"
+    powershell -Command "Get-Content '%LOG_DIR%\!LATEST_LOG!' -Tail 40"
 ) else (
-    echo No log files found in L:\goodq4all\logs\
+    echo No log files found in %LOG_DIR%\
 )
 
 echo.

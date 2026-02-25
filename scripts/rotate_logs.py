@@ -8,13 +8,14 @@ Created: 2025-11-07
 
 This script rotates watchdog logs by:
 1. Keeping the newest N runs
-2. Archiving older logs to L:\_ARCHIVE\goodq4all_logs\
+2. Archiving older logs to configured archive root
 3. Compressing archived logs to save space
 """
 
 import logging
 import shutil
 import zipfile
+import os
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import List, Tuple
@@ -27,8 +28,13 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Configuration
-LOGS_DIR = Path("L:/goodq4all/logs")
-ARCHIVE_DIR = Path("L:/_ARCHIVE/goodq4all_logs")
+REPO_ROOT = Path(__file__).resolve().parents[1]
+LOGS_DIR = REPO_ROOT / "logs"
+_data_root = os.environ.get("GOODQ_DATA_ROOT")
+if _data_root:
+    ARCHIVE_DIR = Path(_data_root).parent / "_ARCHIVE" / "goodq4all_logs"
+else:
+    ARCHIVE_DIR = REPO_ROOT / "logs_archive"
 KEEP_NEWEST = 10  # Keep the 10 most recent runs
 MAX_AGE_DAYS = 30  # Also keep logs from last 30 days
 DRY_RUN = False  # Set to True to see what would happen without actually doing it
@@ -200,4 +206,3 @@ if __name__ == "__main__":
     except Exception as e:
         logger.error(f"Log rotation failed: {e}")
         raise
-

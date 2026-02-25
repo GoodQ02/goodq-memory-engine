@@ -13,7 +13,11 @@ import sys
 # Paths
 WSL_OUTPUT_DIR = Path("/mnt/l/goodq4all/logs/scene_ingest")  # WSL can access Windows via /mnt
 REPO_ROOT = Path(__file__).resolve().parents[1]
-WINDOWS_DATA_ROOT = Path(os.environ.get("GOODQ_DATA_ROOT", "L:/_DATA")) / "GoodQ_Data" / "processing"
+_data_root_env = os.environ.get("GOODQ_DATA_ROOT")
+if _data_root_env:
+    WINDOWS_DATA_ROOT = Path(_data_root_env) / "GoodQ_Data" / "processing"
+else:
+    WINDOWS_DATA_ROOT = REPO_ROOT / "processing"
 
 def find_wsl_audio_results():
     """Find all result.json files in WSL output"""
@@ -52,7 +56,7 @@ def find_scene_audio_in_logs():
 def promote_audio_result(source_json: Path, video_id: str, scene_id: str):
     """Copy audio result to canonical processing directory"""
     
-    # Target: L:/_DATA/GoodQ_Data/processing/<video_id>/audio/scene_<scene_id>.json
+    # Target: <processing_root>/<video_id>/audio/scene_<scene_id>.json
     target_dir = WINDOWS_DATA_ROOT / video_id / "audio"
     target_dir.mkdir(parents=True, exist_ok=True)
     

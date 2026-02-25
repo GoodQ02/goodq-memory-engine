@@ -87,11 +87,33 @@ except ImportError:
     logger.warning("Control Agent not available - running without AI orchestration")
 
 # Configuration
-WATCH_DIR = Path("L:/goodq4all/import_inbox")
-PROCESSING_DIR = Path("L:/_DATA/GoodQ_Data/processing")
-PROCESSED_DIR = Path("L:/_DATA/GoodQ_Data/processed")
-FAILED_DIR = Path("L:/_DATA/GoodQ_Data/failed")
-STATE_FILE = Path("L:/goodq4all/logs/watchdog_state.json")
+_PATH_FALLBACK_WARNED = False
+
+
+def _compute_data_root_base() -> Path:
+    global _PATH_FALLBACK_WARNED
+    data_root = os.environ.get("GOODQ_DATA_ROOT")
+    if data_root:
+        return Path(data_root)
+    if not _PATH_FALLBACK_WARNED:
+        logger.warning(
+            "watchdog path fallback used path_key=%s derived_from=%s",
+            "GOODQ_DATA_ROOT",
+            "repo_root_parent",
+        )
+        _PATH_FALLBACK_WARNED = True
+    return REPO_ROOT.parent / "_DATA"
+
+
+def _default_processing_root() -> Path:
+    return _compute_data_root_base() / "GoodQ_Data" / "processing"
+
+
+WATCH_DIR = REPO_ROOT / "import_inbox"
+PROCESSING_DIR = _default_processing_root()
+PROCESSED_DIR = PROCESSING_DIR.parent / "processed"
+FAILED_DIR = PROCESSING_DIR.parent / "failed"
+STATE_FILE = REPO_ROOT / "logs" / "watchdog_state.json"
 
 # File type configuration
 SUPPORTED_VIDEO = {'.mp4', '.avi', '.mov', '.mkv', '.wmv', '.flv', '.webm', '.m4v'}
@@ -219,11 +241,21 @@ class WatchdogProcessor:
     """Main watchdog processor"""
     def __init__(self, cfg: Dict[str, Any]):
         self._cfg_base = cfg
-        self.watch_dir = Path(cfg["paths"]["import_inbox"])
-        self.processing_dir = PROCESSING_DIR
-        self.processed_dir = PROCESSED_DIR
-        self.failed_dir = FAILED_DIR
-        self.registry = ProcessedRegistry(STATE_FILE)
+        paths_cfg = (cfg.get("paths") or {}) if isinstance(cfg, dict) else {}
+        self.watch_dir = Path(paths_cfg.get("import_inbox", WATCH_DIR))
+        self.processing_dir = Path(paths_cfg.get("processing", PROCESSING_DIR))
+        data_root = Path(paths_cfg.get("data_root", self.processing_dir.parent))
+        self.processed_dir = Path(paths_cfg.get("processed", data_root / "processed"))
+        self.failed_dir = Path(paths_cfg.get("failed", data_root / "failed"))
+        log_dir_raw = paths_cfg.get("log_dir")
+        if isinstance(log_dir_raw, str) and log_dir_raw:
+            log_dir = Path(log_dir_raw)
+            if not log_dir.is_absolute():
+                log_dir = REPO_ROOT / log_dir
+        else:
+            log_dir = STATE_FILE.parent
+        state_file = Path(paths_cfg.get("watchdog_state_file", log_dir / "watchdog_state.json"))
+        self.registry = ProcessedRegistry(state_file)
         self.queue = Queue()
         self.shutdown = Event()
         self.file_states: Dict[str, FileState] = {}
@@ -500,7 +532,7 @@ class WatchdogProcessor:
         # Use video hash to ensure uniqueness and avoid cleanup issues
         import hashlib
         video_hash = hashlib.sha256(video_path.name.encode()).hexdigest()[:16]
-        temp_input = Path(f"L:/_DATA/GoodQ_Data/processing/video_{video_hash}")
+        temp_input = self.processing_dir / f"video_{video_hash}"
         temp_input.mkdir(parents=True, exist_ok=True)
         
         # Copy video to temp location (must stay there for entire ingestion)
@@ -604,7 +636,7 @@ class WatchdogProcessor:
         from steps.common.tag_utils import canonicalize_taxonomy
 
         audio_hash = hashlib.sha256(audio_path.name.encode()).hexdigest()[:16]
-        temp_input = Path(f"L:/_DATA/GoodQ_Data/processing/audio_{audio_hash}")
+        temp_input = self.processing_dir / f"audio_{audio_hash}"
         temp_input.mkdir(parents=True, exist_ok=True)
 
         temp_audio = temp_input / audio_path.name
@@ -696,7 +728,7 @@ class WatchdogProcessor:
         from steps.common.tag_utils import canonicalize_taxonomy
 
         image_hash = hashlib.sha256(image_path.name.encode()).hexdigest()[:16]
-        temp_input = Path(f"L:/_DATA/GoodQ_Data/processing/image_{image_hash}")
+        temp_input = self.processing_dir / f"image_{image_hash}"
         temp_input.mkdir(parents=True, exist_ok=True)
 
         temp_image = temp_input / image_path.name
@@ -793,7 +825,7 @@ class WatchdogProcessor:
             return False
 
         doc_hash = hashlib.sha256(doc_path.name.encode()).hexdigest()[:16]
-        temp_input = Path(f"L:/_DATA/GoodQ_Data/processing/doc_{doc_hash}")
+        temp_input = self.processing_dir / f"doc_{doc_hash}"
         temp_input.mkdir(parents=True, exist_ok=True)
 
         temp_doc = temp_input / doc_path.name
@@ -957,7 +989,7 @@ class WatchdogProcessor:
 
 def main():
     """Main entry point with file lock to prevent multiple instances"""
-    lockfile = Path('L:/_DATA/GoodQ_Data/.watchdog.lock')
+    lockfile = _default_processing_root().parent / ".watchdog.lock"
     lockfile.parent.mkdir(parents=True, exist_ok=True)
     
     # Try to create lock file exclusively

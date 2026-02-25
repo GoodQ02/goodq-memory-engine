@@ -4,6 +4,8 @@ Quick diagnostic tool to check system health.
 """
 from __future__ import annotations
 import sys
+import os
+import logging
 from pathlib import Path
 from typing import Dict, Any
 import json
@@ -12,6 +14,8 @@ import json
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
+
+logger = logging.getLogger(__name__)
 
 
 def check_environment():
@@ -121,7 +125,20 @@ def check_recent_ingestions(cfg: Dict[str, Any] | None):
         print("[WARN]  Cannot check without config paths")
         return
     
-    processing_root = Path(cfg['paths'].get('processing', 'L:/_DATA/GoodQ_Data/processing'))
+    paths_cfg = cfg.get('paths', {}) if isinstance(cfg, dict) else {}
+    processing_value = paths_cfg.get('processing')
+    if not processing_value:
+        data_root = paths_cfg.get('data_root') or os.environ.get("GOODQ_DATA_ROOT")
+        if data_root:
+            processing_value = str(Path(data_root) / "processing")
+        else:
+            logger.warning(
+                "system_status path fallback used path_key=%s derived_from=%s",
+                "paths.processing",
+                "cwd",
+            )
+            processing_value = str(Path.cwd() / "processing")
+    processing_root = Path(processing_value)
     
     if not processing_root.exists():
         print(f"[FAIL] Processing directory does not exist: {processing_root}")

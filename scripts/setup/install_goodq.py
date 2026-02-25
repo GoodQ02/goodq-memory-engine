@@ -6,6 +6,7 @@ import os
 import sys
 import subprocess
 import platform
+import re
 from pathlib import Path
 import shutil
 
@@ -95,7 +96,8 @@ def create_directories():
     print_header("Creating Project Directories")
     
     base_dir = Path(__file__).parent.parent
-    data_root = Path(os.environ.get("GOODQ_DATA_ROOT", "L:/_DATA"))
+    data_root_env = os.environ.get("GOODQ_DATA_ROOT")
+    data_root = Path(data_root_env) if data_root_env else (base_dir / "data_root")
     
     directories = [
         "import_inbox",
@@ -177,7 +179,8 @@ def configure_environment_file():
         with open(env_file, 'r') as f:
             content = f.read()
         
-        content = content.replace("L:\\goodq4all", str(base_dir))
+        legacy_repo_pattern = r"[A-Za-z]" + ":" + r"[\\/]" + "goodq4all"
+        content = re.sub(legacy_repo_pattern, str(base_dir).replace("\\", "/"), content)
         
         with open(env_file, 'w') as f:
             f.write(content)

@@ -122,7 +122,78 @@ except ImportError:
     )
 
 APP = typer.Typer(help='Scene-first ingestion orchestrator for GoodQ')
-DEFAULT_MODELS_DIR = Path(os.environ.get('HF_HOME', 'L:/models'))
+_MODELS_FALLBACK_WARNED = False
+_PROCESSING_FALLBACK_WARNED = False
+
+
+def _resolve_default_models_dir() -> Path:
+    global _MODELS_FALLBACK_WARNED
+    explicit = os.environ.get("HF_HOME") or os.environ.get("GOODQ_MODELS_DIR")
+    if explicit:
+        return Path(explicit)
+
+    data_root = os.environ.get("GOODQ_DATA_ROOT")
+    if data_root:
+        if not _MODELS_FALLBACK_WARNED:
+            logger.warning(
+                "run_ingestion path fallback used path_key=%s derived_from=%s",
+                "HF_HOME",
+                "GOODQ_DATA_ROOT",
+            )
+            _MODELS_FALLBACK_WARNED = True
+        return Path(data_root) / "models"
+
+    if not _MODELS_FALLBACK_WARNED:
+        logger.warning(
+            "run_ingestion path fallback used path_key=%s derived_from=%s",
+            "HF_HOME",
+            "cwd",
+        )
+        _MODELS_FALLBACK_WARNED = True
+    return Path.cwd() / "models"
+
+
+def _resolve_processing_root(cfg: Dict[str, Any]) -> Path:
+    global _PROCESSING_FALLBACK_WARNED
+    paths_cfg = (cfg.get('paths') or {}) if isinstance(cfg, dict) else {}
+    processing = paths_cfg.get('processing')
+    if processing:
+        return Path(processing)
+
+    data_root = paths_cfg.get('data_root')
+    if data_root:
+        if not _PROCESSING_FALLBACK_WARNED:
+            logger.warning(
+                "run_ingestion path fallback used path_key=%s derived_from=%s",
+                "paths.processing",
+                "paths.data_root",
+            )
+            _PROCESSING_FALLBACK_WARNED = True
+        return Path(data_root) / "processing"
+
+    host_cfg = (cfg.get("host") or {}) if isinstance(cfg, dict) else {}
+    base_root = host_cfg.get("data_root") or os.environ.get("GOODQ_DATA_ROOT")
+    if base_root:
+        if not _PROCESSING_FALLBACK_WARNED:
+            logger.warning(
+                "run_ingestion path fallback used path_key=%s derived_from=%s",
+                "paths.processing",
+                "host.data_root_or_env",
+            )
+            _PROCESSING_FALLBACK_WARNED = True
+        return Path(base_root) / "GoodQ_Data" / "processing"
+
+    if not _PROCESSING_FALLBACK_WARNED:
+        logger.warning(
+            "run_ingestion path fallback used path_key=%s derived_from=%s",
+            "paths.processing",
+            "cwd",
+        )
+        _PROCESSING_FALLBACK_WARNED = True
+    return Path.cwd() / "processing"
+
+
+DEFAULT_MODELS_DIR = _resolve_default_models_dir()
 
 # Populated by CLI options at runtime
 VERBOSE: bool = False
@@ -550,8 +621,7 @@ def _base_env() -> Dict[str, str]:
     env.setdefault('HF_HUB_ENABLE_HF_TRANSFER', '1')
     env.setdefault('HF_HOME', str(DEFAULT_MODELS_DIR))
     env.setdefault('TORCH_HOME', str(DEFAULT_MODELS_DIR))
-    # CRITICAL FIX: Add PARENT of REPO_ROOT to PYTHONPATH so "goodq4all.steps" module can be imported
-    # (REPO_ROOT is L:\goodq4all, we need L:\ in the path)
+    # Add parent of REPO_ROOT to PYTHONPATH so "goodq4all.steps" can be imported.
     env['PYTHONPATH'] = str(REPO_ROOT.parent)
     
     # GPU Resource Management - Pin to GPU 0
@@ -675,7 +745,7 @@ def _run_step(
         
         # CRITICAL: Ensure PYTHONPATH is available in conda env
         work_env['CONDA_PREFIX_1'] = work_env.get('CONDA_PREFIX', '')
-        # Ensure PYTHONPATH points to L:\ (parent of goodq4all) so goodq4all.steps can be imported
+        # Ensure PYTHONPATH points to repo parent so goodq4all.steps can be imported.
         parent_dir = str(REPO_ROOT.parent)
         if 'PYTHONPATH' not in work_env or parent_dir not in work_env['PYTHONPATH']:
             existing_path = work_env.get('PYTHONPATH', '')
@@ -1232,8 +1302,7 @@ def run(
     cfg['force_reprocess'] = force_reprocess
     cfg_json = _write_cfg_snapshot(cfg, workspace)
 
-    paths_cfg = (cfg.get('paths') or {}) if isinstance(cfg, dict) else {}
-    processing_root = Path(paths_cfg.get('processing', 'L:/_DATA/GoodQ_Data/processing')).resolve()
+    processing_root = _resolve_processing_root(cfg).resolve()
 
     ffmpeg = resolve_ffmpeg(cfg) or 'ffmpeg'
 

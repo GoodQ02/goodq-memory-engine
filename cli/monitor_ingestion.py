@@ -7,11 +7,64 @@ import sys
 import os
 import time
 import json
+import logging
 from pathlib import Path
 from datetime import datetime, timedelta
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
+
+logger = logging.getLogger(__name__)
+_PATH_FALLBACK_WARNED = False
+
+
+def _resolve_runtime_paths() -> tuple[Path, Path]:
+    global _PATH_FALLBACK_WARNED
+    project_root = Path(__file__).resolve().parent.parent
+    paths_cfg = {}
+    try:
+        from steps.common.config_loader import load_configs
+
+        cfg = load_configs()
+        paths_cfg = (cfg.get("paths") or {}) if isinstance(cfg, dict) else {}
+    except Exception:
+        paths_cfg = {}
+
+    log_dir_raw = paths_cfg.get("log_dir")
+    if log_dir_raw:
+        log_dir = Path(log_dir_raw)
+        if not log_dir.is_absolute():
+            log_dir = (project_root / log_dir).resolve()
+    else:
+        log_dir = project_root / "logs"
+
+    processing_raw = paths_cfg.get("processing")
+    if processing_raw:
+        processing_dir = Path(processing_raw)
+    else:
+        data_root = paths_cfg.get("data_root") or os.environ.get("GOODQ_DATA_ROOT")
+        if data_root:
+            base = Path(data_root)
+            processing_dir = base / "processing" if base.name == "GoodQ_Data" else base / "GoodQ_Data" / "processing"
+            if not _PATH_FALLBACK_WARNED:
+                logger.warning(
+                    "monitor_ingestion path fallback used path_key=%s derived_from=%s",
+                    "paths.processing",
+                    "paths.data_root_or_env",
+                )
+                _PATH_FALLBACK_WARNED = True
+        else:
+            processing_dir = project_root / "processing"
+            if not _PATH_FALLBACK_WARNED:
+                logger.warning(
+                    "monitor_ingestion path fallback used path_key=%s derived_from=%s",
+                    "paths.processing",
+                    "cwd",
+                )
+                _PATH_FALLBACK_WARNED = True
+
+    return log_dir, processing_dir
+
 
 def format_time(seconds):
     """Format seconds into human readable time"""
@@ -19,7 +72,7 @@ def format_time(seconds):
 
 def get_latest_log():
     """Find the most recent watchdog log"""
-    log_dir = Path("L:/goodq4all/logs")
+    log_dir, _ = _resolve_runtime_paths()
     
     # Check for main watchdog.log first
     main_log = log_dir / "watchdog.log"
@@ -37,7 +90,7 @@ def get_latest_log():
 
 def get_processing_videos():
     """Find videos currently being processed"""
-    processing_dir = Path("L:/_DATA/GoodQ_Data/processing")
+    _, processing_dir = _resolve_runtime_paths()
     
     if not processing_dir.exists():
         return []
@@ -112,7 +165,8 @@ def monitor():
     print()
     print("[SYMBOL] Tips:")
     print("   • Run this script repeatedly to see progress")
-    print("   • Check L:/_DATA/GoodQ_Data/processing/ for output files")
+    _, processing_dir = _resolve_runtime_paths()
+    print(f"   • Check {processing_dir}/ for output files")
     print("   • Watch the log file directly for real-time updates")
     print(f"   • Log location: {log_file}")
     print()

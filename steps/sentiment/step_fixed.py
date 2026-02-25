@@ -1,11 +1,40 @@
 from __future__ import annotations
 from typing import Any, Dict
 import os
+import logging
+from pathlib import Path
 
 from steps.common.lexicon import score_nrc_sentiment
 
+logger = logging.getLogger(__name__)
+_MODELS_FALLBACK_WARNED = False
 
 _SENT = {"tok": None, "model": None, "device": "cpu", "load_attempted": False}
+
+
+def _resolve_models_root() -> str:
+    global _MODELS_FALLBACK_WARNED
+    explicit = os.environ.get("HF_HOME") or os.environ.get("GOODQ_MODELS_DIR")
+    if explicit:
+        return explicit
+    data_root = os.environ.get("GOODQ_DATA_ROOT")
+    if data_root:
+        if not _MODELS_FALLBACK_WARNED:
+            logger.warning(
+                "sentiment_fixed path fallback used path_key=%s derived_from=%s",
+                "HF_HOME",
+                "GOODQ_DATA_ROOT",
+            )
+            _MODELS_FALLBACK_WARNED = True
+        return str(Path(data_root) / "models")
+    if not _MODELS_FALLBACK_WARNED:
+        logger.warning(
+            "sentiment_fixed path fallback used path_key=%s derived_from=%s",
+            "HF_HOME",
+            "cwd",
+        )
+        _MODELS_FALLBACK_WARNED = True
+    return str(Path.cwd() / "models")
 
 
 def _load():
@@ -21,9 +50,10 @@ def _load():
         from transformers import AutoTokenizer, AutoModelForSequenceClassification  # type: ignore
 
         # Ensure HF_HOME is set for model caching
-        os.environ.setdefault("HF_HOME", "L:/models")
-        os.environ.setdefault("TORCH_HOME", "L:/models")
-        os.environ.setdefault("TRANSFORMERS_CACHE", "L:/models/transformers")
+        models_root = _resolve_models_root()
+        os.environ.setdefault("HF_HOME", models_root)
+        os.environ.setdefault("TORCH_HOME", models_root)
+        os.environ.setdefault("TRANSFORMERS_CACHE", str(Path(models_root) / "transformers"))
 
         name = "distilbert-base-uncased-finetuned-sst-2-english"
         

@@ -6,6 +6,7 @@ DRAFT - awaiting approval for integration
 import sqlite3
 import json
 import logging
+import os
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, List, Any, Optional
@@ -20,12 +21,33 @@ class MemoryWriter:
     
     def __init__(self, db_path: str = None):
         if db_path is None:
-            # Try to find memory DB in standard locations
-            possible_paths = [
-                Path("L:/GoodQ_Data/memory.db"),
-                Path("L:/_DATA/GoodQ_Data/memory.db"),
-                Path("L:/_DATA/GoodQ_Data/memory.db"),
-            ]
+            # Try to find memory DB from explicit env/config first, then computed fallbacks.
+            possible_paths = []
+            explicit_env = os.environ.get("GOODQ_MEMORY_DB_PATH") or os.environ.get("GOODQ_DB_PATH")
+            if explicit_env:
+                possible_paths.append(Path(explicit_env))
+
+            try:
+                from steps.common.config_loader import load_configs
+
+                cfg = load_configs()
+                paths_cfg = (cfg.get("paths") or {}) if isinstance(cfg, dict) else {}
+                db_from_cfg = paths_cfg.get("db_path")
+                if db_from_cfg:
+                    possible_paths.append(Path(str(db_from_cfg)))
+            except Exception:
+                pass
+
+            data_root = os.environ.get("GOODQ_DATA_ROOT")
+            if data_root:
+                base = Path(data_root)
+                possible_paths.extend([
+                    base / "GoodQ_Data" / "memory.db",
+                    base / "memory.db",
+                ])
+            else:
+                possible_paths.append(Path.cwd() / "memory.db")
+
             for p in possible_paths:
                 if p.exists():
                     db_path = str(p)

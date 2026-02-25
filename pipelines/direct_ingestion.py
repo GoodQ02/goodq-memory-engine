@@ -8,6 +8,8 @@ from __future__ import annotations
 from typing import Any, Dict
 from pathlib import Path
 import sys
+import os
+import logging
 
 # Ensure goodq4all can be imported
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -15,6 +17,49 @@ if str(REPO_ROOT.parent) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT.parent))
 
 from steps.common.config_loader import load_configs
+
+logger = logging.getLogger(__name__)
+_PROCESSING_FALLBACK_WARNED = False
+
+
+def _resolve_processing_root(cfg: Dict[str, Any]) -> Path:
+    global _PROCESSING_FALLBACK_WARNED
+    paths_cfg = (cfg.get("paths") or {}) if isinstance(cfg, dict) else {}
+    processing = paths_cfg.get("processing")
+    if processing:
+        return Path(processing)
+
+    data_root = paths_cfg.get("data_root")
+    if data_root:
+        if not _PROCESSING_FALLBACK_WARNED:
+            logger.warning(
+                "direct_ingestion path fallback used path_key=%s derived_from=%s",
+                "paths.processing",
+                "paths.data_root",
+            )
+            _PROCESSING_FALLBACK_WARNED = True
+        return Path(data_root) / "processing"
+
+    host_cfg = (cfg.get("host") or {}) if isinstance(cfg, dict) else {}
+    base_root = host_cfg.get("data_root") or os.environ.get("GOODQ_DATA_ROOT")
+    if base_root:
+        if not _PROCESSING_FALLBACK_WARNED:
+            logger.warning(
+                "direct_ingestion path fallback used path_key=%s derived_from=%s",
+                "paths.processing",
+                "host.data_root_or_env",
+            )
+            _PROCESSING_FALLBACK_WARNED = True
+        return Path(base_root) / "GoodQ_Data" / "processing"
+
+    if not _PROCESSING_FALLBACK_WARNED:
+        logger.warning(
+            "direct_ingestion path fallback used path_key=%s derived_from=%s",
+            "paths.processing",
+            "cwd",
+        )
+        _PROCESSING_FALLBACK_WARNED = True
+    return Path.cwd() / "processing"
 
 
 def run_direct_ingestion(video_path: str | Path, cfg: Dict[str, Any] | None = None) -> Dict[str, Any]:
@@ -44,7 +89,7 @@ def run_direct_ingestion(video_path: str | Path, cfg: Dict[str, Any] | None = No
     import typer
     
     # Get processing directory from config
-    processing_root = Path(cfg.get('paths', {}).get('processing', 'L:/_DATA/GoodQ_Data/processing'))
+    processing_root = _resolve_processing_root(cfg)
     processing_root.mkdir(parents=True, exist_ok=True)
     
     # Call the existing scene ingestion (which works without ZenML)

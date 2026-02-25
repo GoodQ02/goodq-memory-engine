@@ -10,12 +10,26 @@ import os
 import time
 import uuid
 import shutil
+import re
 import logging
 from pathlib import Path
 from typing import Dict, Optional, Any
 import subprocess
 
 logger = logging.getLogger(__name__)
+_WIN_DRIVE_PATTERN = re.compile(r"^(?P<drive>[A-Za-z]):[\\/](?P<rest>.*)$")
+
+
+def _windows_to_wsl_path(path_value: str) -> str:
+    """Convert Windows drive-root paths to /mnt/<drive>/... for WSL usage."""
+    if not isinstance(path_value, str):
+        return path_value
+    match = _WIN_DRIVE_PATTERN.match(path_value)
+    if not match:
+        return path_value.replace("\\", "/")
+    drive = match.group("drive").lower()
+    rest = match.group("rest").replace("\\", "/")
+    return f"/mnt/{drive}/{rest}"
 
 
 class WSL2AudioBridge:
@@ -58,8 +72,8 @@ class WSL2AudioBridge:
         if not config_path.exists():
             # Create default config
             default_config = {
-                "windows_queue_dir": "L:\\goodq4all\\wsl2_audio\\queue",
-                "windows_output_dir": "L:\\goodq4all\\wsl2_audio\\output",
+                "windows_queue_dir": str((Path(__file__).resolve().parent / "queue")),
+                "windows_output_dir": str((Path(__file__).resolve().parent / "output")),
                 "wsl_home_dir": "/home/$USER/goodq_audio",
                 "timeout_seconds": 3600,
                 "poll_interval": 1.0
@@ -114,10 +128,7 @@ class WSL2AudioBridge:
         job_id = str(uuid.uuid4())
         
         # Convert Windows path to WSL2 path if needed
-        if audio_path.startswith("L:\\"):
-            wsl_audio_path = audio_path.replace("L:\\", "/mnt/l/").replace("\\", "/")
-        else:
-            wsl_audio_path = audio_path
+        wsl_audio_path = _windows_to_wsl_path(audio_path)
         
         # Create job
         job = {
@@ -155,10 +166,7 @@ class WSL2AudioBridge:
         job_id = str(uuid.uuid4())
         
         # Convert Windows path to WSL2 path if needed
-        if audio_path.startswith("L:\\"):
-            wsl_audio_path = audio_path.replace("L:\\", "/mnt/l/").replace("\\", "/")
-        else:
-            wsl_audio_path = audio_path
+        wsl_audio_path = _windows_to_wsl_path(audio_path)
         
         # Create job
         job = {
@@ -198,10 +206,7 @@ class WSL2AudioBridge:
         job_id = str(uuid.uuid4())
         
         # Convert Windows path to WSL2 path if needed
-        if audio_path.startswith("L:\\"):
-            wsl_audio_path = audio_path.replace("L:\\", "/mnt/l/").replace("\\", "/")
-        else:
-            wsl_audio_path = audio_path
+        wsl_audio_path = _windows_to_wsl_path(audio_path)
         
         # Create job
         job = {
@@ -248,7 +253,7 @@ class WSL2AudioBridge:
             wsl_pending = f"{self.wsl_queue}/pending/{job_id}.json"
             subprocess.run(
                 ["wsl", "-d", self.wsl_distro, "--", "cp",
-                 str(job_file).replace("\\", "/").replace("L:/", "/mnt/l/"),
+                 _windows_to_wsl_path(str(job_file)),
                   wsl_pending],
                 check=True,
                 timeout=10
@@ -276,7 +281,7 @@ class WSL2AudioBridge:
                     # Try result file
                     subprocess.run(
                         ["wsl", "-d", self.wsl_distro, "--", "cp", wsl_result,
-                          str(result_file).replace("\\", "/").replace("L:/", "/mnt/l/")],
+                          _windows_to_wsl_path(str(result_file))],
                         capture_output=True,
                         timeout=5
                     )
@@ -292,7 +297,7 @@ class WSL2AudioBridge:
                     # Try error file
                     subprocess.run(
                         ["wsl", "-d", self.wsl_distro, "--", "cp", wsl_error,
-                          str(error_file).replace("\\", "/").replace("L:/", "/mnt/l/")],
+                          _windows_to_wsl_path(str(error_file))],
                         capture_output=True,
                         timeout=5
                     )
@@ -363,12 +368,7 @@ def transcribe_wsl2(audio_path: str, **kwargs) -> Dict[str, Any]:
     This bypasses the service queue and calls the script directly
     """
     # Convert Windows path to WSL path
-    if audio_path.startswith("L:\\") or audio_path.startswith("L:/"):
-        wsl_path = audio_path.replace("L:\\", "/mnt/l/").replace("L:/", "/mnt/l/").replace("\\", "/")
-    elif audio_path.startswith("C:\\") or audio_path.startswith("C:/"):
-        wsl_path = audio_path.replace("C:\\", "/mnt/c/").replace("C:/", "/mnt/c/").replace("\\", "/")
-    else:
-        wsl_path = audio_path
+    wsl_path = _windows_to_wsl_path(audio_path)
 
     run_id = kwargs.get("run_id")
 

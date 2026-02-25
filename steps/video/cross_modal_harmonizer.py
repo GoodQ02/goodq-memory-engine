@@ -12,6 +12,7 @@ import sqlite3
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
+_PROCESSING_FALLBACK_WARNED = False
 
 try:
     from steps.video.entity_extractor import extract_entities_from_scene, EntityExtractor
@@ -232,8 +233,30 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
     paths_cfg = (cfg.get('paths') or {}) if isinstance(cfg, dict) else {}
     processing_root = paths_cfg.get('processing')
     if not processing_root:
-        data_root = paths_cfg.get('data_root', 'L:/_DATA/GoodQ_Data')
-        processing_root = os.path.join(data_root, 'processing')
+        global _PROCESSING_FALLBACK_WARNED
+        data_root = paths_cfg.get('data_root')
+        if not data_root:
+            host_cfg = (cfg.get('host') or {}) if isinstance(cfg, dict) else {}
+            data_root = host_cfg.get('data_root') or os.environ.get("GOODQ_DATA_ROOT")
+        if data_root:
+            base = Path(str(data_root))
+            processing_root = str(base / "processing" if base.name == "GoodQ_Data" else base / "GoodQ_Data" / "processing")
+            if not _PROCESSING_FALLBACK_WARNED:
+                logger.warning(
+                    "cross_modal_harmonizer path fallback used path_key=%s derived_from=%s",
+                    "paths.processing",
+                    "paths_or_host_data_root",
+                )
+                _PROCESSING_FALLBACK_WARNED = True
+        else:
+            processing_root = str(Path.cwd() / "processing")
+            if not _PROCESSING_FALLBACK_WARNED:
+                logger.warning(
+                    "cross_modal_harmonizer path fallback used path_key=%s derived_from=%s",
+                    "paths.processing",
+                    "cwd",
+                )
+                _PROCESSING_FALLBACK_WARNED = True
     processing_dir = os.path.join(processing_root, str(video_id))
     
     logger.info(f"[HARMONIZER] Starting cross-modal fusion for {video_id}")

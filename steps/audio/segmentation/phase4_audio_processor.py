@@ -340,7 +340,7 @@ if __name__ == "__main__":
     parser.add_argument("video", help="Path to original video file")
     parser.add_argument("output", help="Output directory")
     parser.add_argument("--config", help="Config file path", 
-                       default="L:/goodq4all/configs/goodq_config.yaml")
+                       default=str(project_root / "configs" / "goodq_config.yaml"))
     
     args = parser.parse_args()
     

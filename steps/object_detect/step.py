@@ -3,6 +3,7 @@ from typing import Any, Dict, List
 
 import os
 import logging
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +24,32 @@ except ImportError:
 
 _YOLO = None
 _YOLO_DEVICE = "cpu"
+_MODELS_FALLBACK_WARNED = False
+
+
+def _resolve_models_root() -> str:
+    global _MODELS_FALLBACK_WARNED
+    explicit = os.environ.get("HF_HOME") or os.environ.get("GOODQ_MODELS_DIR") or os.environ.get("TORCH_HOME")
+    if explicit:
+        return explicit
+    data_root = os.environ.get("GOODQ_DATA_ROOT")
+    if data_root:
+        if not _MODELS_FALLBACK_WARNED:
+            logger.warning(
+                "object_detect path fallback used path_key=%s derived_from=%s",
+                "model_base",
+                "GOODQ_DATA_ROOT",
+            )
+            _MODELS_FALLBACK_WARNED = True
+        return str(Path(data_root) / "models")
+    if not _MODELS_FALLBACK_WARNED:
+        logger.warning(
+            "object_detect path fallback used path_key=%s derived_from=%s",
+            "model_base",
+            "cwd",
+        )
+        _MODELS_FALLBACK_WARNED = True
+    return str(Path.cwd() / "models")
 
 
 def _load_yolo(cfg: Dict[str, Any]):
@@ -44,9 +71,9 @@ def _load_yolo(cfg: Dict[str, Any]):
             or cfg.get("config", {}).get("models", {}).get("yolo_model_path")
             or "yolov8n.pt"
         )
-        # If local_path is relative, make it absolute to L:/models
+        # If local_path is relative, resolve under configured model cache root
         if model_path and not os.path.isabs(model_path):
-            model_base = os.environ.get("HF_HOME") or os.environ.get("TORCH_HOME") or "L:/models"
+            model_base = _resolve_models_root()
             model_path = os.path.join(model_base, model_path)
         
         _YOLO = YOLO(model_path)

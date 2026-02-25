@@ -17,6 +17,7 @@ import subprocess
 import tempfile
 import time
 import logging
+import wave
 
 logger = logging.getLogger(__name__)
 
@@ -98,7 +99,7 @@ def _load_fw_model(model_id: str, device: str, compute_type: str, duration_minut
 
 
 def _audio_duration(path: str) -> Optional[float]:
-    """Get audio duration using soundfile or librosa fallback."""
+    """Get audio duration using soundfile/librosa with stdlib WAV fallback."""
     try:
         import soundfile as sf  # type: ignore
 
@@ -118,8 +119,7 @@ def _audio_duration(path: str) -> Optional[float]:
         import librosa  # type: ignore
         return float(librosa.get_duration(filename=path))
     except ImportError:
-        print(f'[ERROR] Neither soundfile nor librosa available for duration detection')
-        return None
+        pass
     except Exception as e:
         print(f'[ERROR] Audio duration detection failed for {path}')
         print(f'[ERROR] Exception: {type(e).__name__}: {str(e)}')
@@ -127,7 +127,25 @@ def _audio_duration(path: str) -> Optional[float]:
             print(f'[ERROR] File exists, size: {os.path.getsize(path)} bytes')
         else:
             print(f'[ERROR] File does not exist: {path}')
-        return None
+    
+    # Final fallback: stdlib WAV parser (portable, no optional dependency required).
+    try:
+        with wave.open(path, 'rb') as wav_fh:
+            frames = int(wav_fh.getnframes() or 0)
+            rate = int(wav_fh.getframerate() or 0)
+        if frames > 0 and rate > 0:
+            return float(frames) / float(rate)
+    except Exception as e:
+        logger.warning(
+            "audio_transcribe duration fallback failed operation=%s path=%s exc_type=%s exc=%s",
+            "wave_duration_probe",
+            path,
+            type(e).__name__,
+            e,
+        )
+
+    print(f'[ERROR] Audio duration detection unavailable for {path}')
+    return None
 
 
 def _split_range(start: float, end: float, chunk_seconds: float, speaker: Optional[str]) -> List[Dict[str, Any]]:
@@ -349,7 +367,6 @@ def _transcribe_chunk_whisper_cli(chunk_path: str, offset: float, whisper_cli: s
 
 def _transcribe_chunk_fw(chunk_path: str, offset: float, model: Any) -> Optional[Dict[str, Any]]:
     if model is None:
-        print(f'[WARN] _transcribe_chunk_fw returning None')
         return None
     try:
         # Optimized Whisper settings for better transcription quality
@@ -699,6 +716,26 @@ def audio_transcribe(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
 
     if not (whisper_cli and whisper_model_path and os.path.isfile(str(whisper_cli)) and os.path.isfile(str(whisper_model_path))):
         whisper_cli = None
+
+    # No transcription backend available: preserve flow with explicit deterministic status.
+    if fw_model is None and whisper_cli is None:
+        logger.warning(
+            "[TRANSCRIBE] No transcription backend available model_id=%s device=%s",
+            model_id,
+            device,
+        )
+        return {
+            "transcript": None,
+            "transcript_meta": {
+                "status": "model_unavailable",
+                "engine": "hybrid_whisper",
+                "model": model_id,
+                "device": device,
+                "used_cli": False,
+                "chunk_seconds": chunk_seconds,
+                "duration": duration,
+            },
+        }
 
     full_text_parts: List[str] = []
     chunk_reports: List[Dict[str, Any]] = []

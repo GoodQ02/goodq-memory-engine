@@ -1,8 +1,10 @@
 from __future__ import annotations
 import os
+import logging
 import shutil
 from typing import Any, Dict, Optional
 
+logger = logging.getLogger(__name__)
 
 def cfg_get(cfg: Dict[str, Any], path: str, default: Optional[str] = None) -> Optional[str]:
     cur: Any = cfg
@@ -27,13 +29,20 @@ def resolve_tesseract(cfg: Dict[str, Any]) -> Optional[str]:
 
 def resolve_ffmpeg(cfg: Dict[str, Any]) -> Optional[str]:
     configured = cfg_get(cfg, 'config.tools.ffmpeg_exe')
-    if configured and os.path.isfile(configured):
-        return configured
+    if configured:
+        # Cross-host guard: reject Windows launchers on non-Windows hosts.
+        if os.name != 'nt' and configured.lower().endswith(('.exe', '.bat', '.cmd')):
+            logger.warning(
+                "tool_paths fallback: rejecting_windows_ffmpeg_launcher_on_non_windows ffmpeg_exe=%s",
+                configured,
+            )
+        elif os.path.isfile(configured):
+            return configured
     # Fallback: use ffmpeg on PATH if available
     ffmpeg_path = shutil.which("ffmpeg")
     if ffmpeg_path:
         return ffmpeg_path
-    return configured
+    return None
 
 
 def resolve_conda() -> str:
@@ -49,7 +58,23 @@ def resolve_conda() -> str:
     
     conda_exe = get_conda_exe()
     if conda_exe and conda_exe.exists():
-        return str(conda_exe)
+        conda_exe_str = str(conda_exe)
+        # Cross-host guard: do not return Windows launchers on non-Windows hosts.
+        if os.name != 'nt' and conda_exe_str.lower().endswith(('.exe', '.bat', '.cmd')):
+            path_conda = shutil.which('conda')
+            if path_conda:
+                logger.warning(
+                    "tool_paths fallback: rejecting_windows_conda_launcher_on_non_windows conda_exe=%s using=%s",
+                    conda_exe_str,
+                    path_conda,
+                )
+                return path_conda
+            logger.warning(
+                "tool_paths fallback: rejecting_windows_conda_launcher_on_non_windows conda_exe=%s using=conda",
+                conda_exe_str,
+            )
+            return 'conda'
+        return conda_exe_str
     
     # Fallback to 'conda' and hope it's in PATH
     return 'conda'

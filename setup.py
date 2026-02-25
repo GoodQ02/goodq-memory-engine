@@ -9,6 +9,7 @@ setup(
     packages=find_packages(),
     python_requires=">=3.10",
     install_requires=[
-        # Core dependencies are managed per environment
+        # Runtime CLI dependency (used by cli/run_ingestion and related entrypoints).
+        "typer>=0.9,<1.0",
     ],
 )

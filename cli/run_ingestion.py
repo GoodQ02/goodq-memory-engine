@@ -4,6 +4,7 @@ import hashlib
 import json
 import logging
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -125,6 +126,7 @@ except ImportError:
 APP = typer.Typer(help='Scene-first ingestion orchestrator for GoodQ')
 _MODELS_FALLBACK_WARNED = False
 _PROCESSING_FALLBACK_WARNED = False
+_CONDA_UNAVAILABLE_WARNED = False
 
 
 def _resolve_default_models_dir() -> Path:
@@ -707,6 +709,7 @@ def _run_step(
     cfg_json: Path,
     _healer_retry_attempt: int = 0,
 ) -> Dict[str, Any]:
+    global _CONDA_UNAVAILABLE_WARNED
     work_env = _base_env()
     
     # Convert payload to JSON-serializable format
@@ -731,18 +734,39 @@ def _run_step(
         serializable_payload = make_json_serializable(payload)
         in_path.write_text(json.dumps(serializable_payload, ensure_ascii=False), encoding='utf-8')
         
-        # Resolve conda path to handle subprocess PATH issues on Windows
+        # Resolve conda path to handle subprocess PATH issues across hosts.
         conda_exe = resolve_conda()
-        
-        cmd = [
-            conda_exe, 'run', '-n', env_name,
-            '--no-capture-output',  # Let output flow through
-            'python', str(REPO_ROOT / 'cli' / 'step_runner.py'),  # Use absolute path instead of -m
-            '--step', step_name,
-            '--in', str(in_path),
-            '--out', str(out_path),
-            '--cfg', str(cfg_json),
-        ]
+        conda_available = False
+        if os.path.isabs(conda_exe):
+            conda_available = os.path.exists(conda_exe)
+        else:
+            conda_available = shutil.which(conda_exe) is not None
+
+        if conda_available:
+            cmd = [
+                conda_exe, 'run', '-n', env_name,
+                '--no-capture-output',  # Let output flow through
+                'python', str(REPO_ROOT / 'cli' / 'step_runner.py'),  # Use absolute path instead of -m
+                '--step', step_name,
+                '--in', str(in_path),
+                '--out', str(out_path),
+                '--cfg', str(cfg_json),
+            ]
+        else:
+            if not _CONDA_UNAVAILABLE_WARNED:
+                logger.warning(
+                    "run_ingestion fallback: conda unavailable conda_exe=%s using_current_python=%s",
+                    conda_exe,
+                    sys.executable,
+                )
+                _CONDA_UNAVAILABLE_WARNED = True
+            cmd = [
+                sys.executable, str(REPO_ROOT / 'cli' / 'step_runner.py'),
+                '--step', step_name,
+                '--in', str(in_path),
+                '--out', str(out_path),
+                '--cfg', str(cfg_json),
+            ]
         
         # CRITICAL: Ensure PYTHONPATH is available in conda env
         work_env['CONDA_PREFIX_1'] = work_env.get('CONDA_PREFIX', '')

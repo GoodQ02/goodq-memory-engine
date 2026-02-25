@@ -4,6 +4,7 @@ from typing import Any, Dict, Optional, List
 import logging
 import os
 import uuid
+import string
 import requests
 
 logger = logging.getLogger(__name__)
@@ -62,22 +63,25 @@ class QdrantClient:
             if not s:
                 return None
             # If already a UUID (or 32-hex UUID form), normalize it.
-            try:
-                return str(uuid.UUID(s))
-            except Exception:
-                pass
+            hex_candidate = s.replace("-", "")
+            if len(hex_candidate) == 32 and all(ch in string.hexdigits for ch in hex_candidate):
+                return str(uuid.UUID(hex_candidate))
             # If numeric string, allow as int.
-            try:
-                if s.isdigit():
-                    return int(s)
-            except Exception:
-                pass
+            if s.isdigit():
+                return int(s)
             # Deterministic UUID for arbitrary strings (stable across runs).
             return str(uuid.uuid5(GOODQ_POINT_ID_NAMESPACE, s))
         # Best-effort: coerce other types to deterministic UUID.
         try:
             return str(uuid.uuid5(GOODQ_POINT_ID_NAMESPACE, str(raw_id)))
-        except Exception:
+        except Exception as e:
+            logger.warning(
+                "qdrant operation failed operation=%s collection=%s exc_type=%s exc=%s",
+                "normalize_point_id.uuid5",
+                self.cfg.collection,
+                type(e).__name__,
+                e,
+            )
             return None
 
     def ensure_collection(self) -> bool:
@@ -104,6 +108,15 @@ class QdrantClient:
                 timeout=5,
             )
             self._collection_ready = r.status_code == 200
+            if not self._collection_ready:
+                body = _truncate_http_body(getattr(r, "text", None))
+                logger.warning(
+                    "qdrant operation failed operation=%s collection=%s status_code=%s body=%s",
+                    "ensure_collection.create",
+                    self.cfg.collection,
+                    getattr(r, "status_code", None),
+                    body,
+                )
             return self._collection_ready
         except Exception as e:
             logger.warning(
@@ -258,10 +271,22 @@ class QdrantClient:
                     if not isinstance(h, dict):
                         continue
                     score = h.get("score")
-                    try:
-                        score_f = float(score) if score is not None else None
-                    except Exception:
+                    if score is None:
                         score_f = None
+                    elif isinstance(score, (int, float)):
+                        score_f = float(score)
+                    else:
+                        try:
+                            score_f = float(score)
+                        except Exception as e:
+                            logger.warning(
+                                "qdrant operation failed operation=%s collection=%s exc_type=%s exc=%s",
+                                "query.score_parse",
+                                self.cfg.collection,
+                                type(e).__name__,
+                                e,
+                            )
+                            score_f = None
                     payload = h.get("payload") if isinstance(h.get("payload"), dict) else {}
                     prov = h.get("provenance") if isinstance(h.get("provenance"), dict) else {}
                     scene_id = payload.get("scene_id") if payload else None

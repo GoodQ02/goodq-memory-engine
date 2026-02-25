@@ -126,8 +126,12 @@ def _load_commit_presence(cfg: Dict[str, Any], video_id: str, scene_ids: List[st
         if conn is not None:
             try:
                 conn.close()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(
+                    "[HARMONIZER] Failed to close commit presence DB connection: %s: %s",
+                    type(e).__name__,
+                    e,
+                )
 
 
 def align_audio_to_scenes(

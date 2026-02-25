@@ -39,7 +39,12 @@ def _patch_typer_help_for_click_8_2() -> None:
     try:
         import inspect
         import click
-    except Exception:
+    except Exception as e:
+        logger.debug(
+            "run_ingestion warning context=%s error=%s",
+            "typer_help_patch.import",
+            e,
+        )
         return
 
     make_metavar = getattr(click.core.Parameter, "make_metavar", None)
@@ -47,7 +52,12 @@ def _patch_typer_help_for_click_8_2() -> None:
         return
     try:
         sig = inspect.signature(make_metavar)
-    except Exception:
+    except Exception as e:
+        logger.debug(
+            "run_ingestion warning context=%s error=%s",
+            "typer_help_patch.signature",
+            e,
+        )
         return
     if "ctx" not in sig.parameters:
         return
@@ -92,6 +102,11 @@ try:
 except ImportError:
     CONTROL_AGENT_AVAILABLE = False
     ControlAgent = None
+    logger.warning(
+        "run_ingestion warning context=%s error=%s",
+        "control_agent.import",
+        "ImportError",
+    )
 
 # Knowledge graph integration
 try:
@@ -100,6 +115,11 @@ try:
     KNOWLEDGE_GRAPH_AVAILABLE = True
 except ImportError:
     KNOWLEDGE_GRAPH_AVAILABLE = False
+    logger.warning(
+        "run_ingestion warning context=%s error=%s",
+        "knowledge_graph.import",
+        "ImportError",
+    )
 
 APP = typer.Typer(help='Scene-first ingestion orchestrator for GoodQ')
 DEFAULT_MODELS_DIR = Path(os.environ.get('HF_HOME', 'L:/models'))
@@ -110,6 +130,8 @@ VERBOSE: bool = False
 # Audio steps (diarize, transcribe) can take 5-10 min for long scenes
 # Image steps should complete in <30s
 STEP_TIMEOUT: Optional[int] = 1800  # 30 minutes max per step
+MAX_HEALER_RETRIES: int = 3
+_CURRENT_RUN_CONTEXT: Optional[Dict[str, Any]] = None
 
 
 def run_ingestion(video_path: str, cfg: Optional[Dict] = None):
@@ -232,6 +254,11 @@ def _build_knowledge_graph_from_results(results: List[Dict[str, Any]], cfg: Dict
             }
     
     except Exception as exc:
+        logger.warning(
+            "run_ingestion warning context=%s error=%s",
+            "knowledge_graph.build",
+            exc,
+        )
         if VERBOSE:
             typer.echo(f'[kg] Knowledge graph build failed: {exc}', err=True)
         return {'status': 'failed', 'error': str(exc)}
@@ -488,6 +515,12 @@ def _ensure_dir(path: Path) -> Path:
     return path
 
 
+def _atomic_write_json(path: Path, data: Any, *, indent: Optional[int] = 2) -> None:
+    tmp = Path(str(path) + ".tmp")
+    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=indent), encoding='utf-8')
+    os.replace(tmp, path)
+
+
 def _write_cfg_snapshot(cfg: Dict[str, Any], workspace: Path) -> Path:
     cfg_path = workspace / '_resolved_config.json'
     
@@ -507,7 +540,7 @@ def _write_cfg_snapshot(cfg: Dict[str, Any], workspace: Path) -> Path:
             return str(obj)
     
     serializable_cfg = make_json_serializable(cfg)
-    cfg_path.write_text(json.dumps(serializable_cfg, ensure_ascii=False, indent=2), encoding='utf-8')
+    _atomic_write_json(cfg_path, serializable_cfg, indent=2)
     return cfg_path
 
 
@@ -532,7 +565,77 @@ def _base_env() -> Dict[str, str]:
     return env
 
 
-def _run_step(env_name: str, step_name: str, payload: Dict[str, Any], cfg_json: Path) -> Dict[str, Any]:
+def _persist_healer_retry_metadata(cfg_json: Path) -> None:
+    global _CURRENT_RUN_CONTEXT
+    if not isinstance(_CURRENT_RUN_CONTEXT, dict):
+        return
+    try:
+        cfg_data: Dict[str, Any] = {}
+        if cfg_json.exists():
+            raw = cfg_json.read_text(encoding='utf-8').strip()
+            if raw:
+                parsed = json.loads(raw)
+                if isinstance(parsed, dict):
+                    cfg_data = parsed
+        run_meta = cfg_data.get('run')
+        if not isinstance(run_meta, dict):
+            run_meta = {}
+        run_meta['healer_retry_count'] = int(_CURRENT_RUN_CONTEXT.get('healer_retry_count', 0) or 0)
+        by_step = _CURRENT_RUN_CONTEXT.get('healer_retry_by_step') or {}
+        run_meta['healer_retry_by_step'] = dict(by_step) if isinstance(by_step, dict) else {}
+        warnings = _CURRENT_RUN_CONTEXT.get('warnings') or []
+        run_meta['warnings'] = list(warnings) if isinstance(warnings, list) else []
+        cfg_data['run'] = run_meta
+        _atomic_write_json(cfg_json, cfg_data, indent=2)
+    except Exception as e:
+        logger.warning("[RUN] Failed to persist healer retry metadata: %s", e)
+
+
+def _record_run_warning(
+    cfg_json: Path,
+    *,
+    code: str,
+    message: str,
+    context: Optional[Dict[str, Any]] = None,
+) -> None:
+    global _CURRENT_RUN_CONTEXT
+    if not isinstance(_CURRENT_RUN_CONTEXT, dict):
+        return
+    warnings = _CURRENT_RUN_CONTEXT.get('warnings')
+    if not isinstance(warnings, list):
+        warnings = []
+        _CURRENT_RUN_CONTEXT['warnings'] = warnings
+    warnings.append(
+        {
+            'code': code,
+            'message': message,
+            'context': dict(context or {}),
+            'ts_utc': datetime.now(timezone.utc).isoformat(),
+        }
+    )
+    _persist_healer_retry_metadata(cfg_json)
+
+
+def _record_healer_retry(step_name: str, cfg_json: Path) -> None:
+    global _CURRENT_RUN_CONTEXT
+    if isinstance(_CURRENT_RUN_CONTEXT, dict):
+        current_count = int(_CURRENT_RUN_CONTEXT.get('healer_retry_count', 0) or 0)
+        _CURRENT_RUN_CONTEXT['healer_retry_count'] = current_count + 1
+        by_step = _CURRENT_RUN_CONTEXT.get('healer_retry_by_step')
+        if not isinstance(by_step, dict):
+            by_step = {}
+            _CURRENT_RUN_CONTEXT['healer_retry_by_step'] = by_step
+        by_step[step_name] = int(by_step.get(step_name, 0) or 0) + 1
+    _persist_healer_retry_metadata(cfg_json)
+
+
+def _run_step(
+    env_name: str,
+    step_name: str,
+    payload: Dict[str, Any],
+    cfg_json: Path,
+    _healer_retry_attempt: int = 0,
+) -> Dict[str, Any]:
     work_env = _base_env()
     
     # Convert payload to JSON-serializable format
@@ -606,12 +709,28 @@ def _run_step(env_name: str, step_name: str, payload: Dict[str, Any], cfg_json: 
                     )
 
                     if healing_result.get('success'):
-                        typer.echo("[heal] [PASS] Timeout healed, retrying step...", err=True)
-                        # Retry the step with the same payload after healing actions
-                        return _run_step(env_name, step_name, payload, cfg_json)
+                        if _healer_retry_attempt >= MAX_HEALER_RETRIES:
+                            logger.warning("Healer retry ceiling reached for step=%s", step_name)
+                            typer.echo(f"[heal] [WARN] Healer retry ceiling reached for step={step_name}", err=True)
+                        else:
+                            _record_healer_retry(step_name, cfg_json)
+                            typer.echo("[heal] [PASS] Timeout healed, retrying step...", err=True)
+                            # Retry the step with the same payload after healing actions
+                            return _run_step(
+                                env_name,
+                                step_name,
+                                payload,
+                                cfg_json,
+                                _healer_retry_attempt=_healer_retry_attempt + 1,
+                            )
                     else:
                         typer.echo(f"[heal] [FAIL] Could not heal timeout: {healing_result.get('recommendation', 'No strategy')}", err=True)
                 except Exception as heal_error:
+                    logger.warning(
+                        "run_ingestion warning context=%s error=%s",
+                        "control_agent.auto_heal_timeout",
+                        heal_error,
+                    )
                     typer.echo(f"[heal] [WARN] Healing failed: {heal_error}", err=True)
 
             raise RuntimeError(f"Step {step_name} timed out after {STEP_TIMEOUT}s") from exc
@@ -636,14 +755,30 @@ def _run_step(env_name: str, step_name: str, payload: Dict[str, Any], cfg_json: 
                     )
 
                     if healing_result.get('success'):
-                        typer.echo("[heal] [PASS] Step failure healed, retrying...", err=True)
-                        # Retry the same step after healing actions
-                        return _run_step(env_name, step_name, payload, cfg_json)
+                        if _healer_retry_attempt >= MAX_HEALER_RETRIES:
+                            logger.warning("Healer retry ceiling reached for step=%s", step_name)
+                            typer.echo(f"[heal] [WARN] Healer retry ceiling reached for step={step_name}", err=True)
+                        else:
+                            _record_healer_retry(step_name, cfg_json)
+                            typer.echo("[heal] [PASS] Step failure healed, retrying...", err=True)
+                            # Retry the same step after healing actions
+                            return _run_step(
+                                env_name,
+                                step_name,
+                                payload,
+                                cfg_json,
+                                _healer_retry_attempt=_healer_retry_attempt + 1,
+                            )
                     else:
                         typer.echo("[heal] [FAIL] Could not heal failure", err=True)
                         if healing_result.get('recommendation'):
                             typer.echo(f"[heal] [SYMBOL] Suggestion: {healing_result['recommendation'][:200]}", err=True)
                 except Exception as heal_error:
+                    logger.warning(
+                        "run_ingestion warning context=%s error=%s",
+                        "control_agent.auto_heal_failure",
+                        heal_error,
+                    )
                     typer.echo(f"[heal] [WARN] Healing attempt failed: {heal_error}", err=True)
 
             raise RuntimeError(error_msg)
@@ -661,8 +796,18 @@ def _run_step(env_name: str, step_name: str, payload: Dict[str, Any], cfg_json: 
                     config_used={'env': env_name, 'timeout': STEP_TIMEOUT},
                     context={'models_root': str(models_root)}
                 )
-            except Exception:
-                pass  # Don't fail on learning errors
+            except Exception as e:
+                logger.warning(
+                    "run_ingestion warning context=%s error=%s",
+                    "control_agent.learn_from_success",
+                    e,
+                )
+                _record_run_warning(
+                    cfg_json,
+                    code='control_agent_learn_failed',
+                    message=str(e),
+                    context={'step': step_name, 'env': env_name},
+                )
         
         if out_path.exists():
             output = out_path.read_text(encoding='utf-8').strip()
@@ -674,8 +819,12 @@ def _run_step(env_name: str, step_name: str, payload: Dict[str, Any], cfg_json: 
             for child in tmp_dir.iterdir():
                 child.unlink(missing_ok=True)
             tmp_dir.rmdir()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(
+                "run_ingestion warning context=%s error=%s",
+                "step_temp_cleanup",
+                e,
+            )
 
 
 
@@ -1003,7 +1152,7 @@ def run(
     verbose: bool = typer.Option(False, '--verbose', help='Emit per-step progress messages'),
     step_timeout: Optional[int] = typer.Option(None, '--step-timeout', help='Abort a step if it exceeds this many seconds'),
 ) -> None:
-    global VERBOSE, STEP_TIMEOUT, CONTROL_AGENT_AVAILABLE
+    global VERBOSE, STEP_TIMEOUT, CONTROL_AGENT_AVAILABLE, _CURRENT_RUN_CONTEXT
     VERBOSE = verbose
     # Ensure step_timeout is an int or None, not an OptionInfo object
     if hasattr(step_timeout, 'default'):
@@ -1033,6 +1182,8 @@ def run(
         'pipeline': 'scene_ingest_cli',
         'started_at': datetime.now(timezone.utc).isoformat(),
         'timer_unit': 'ms',
+        'healer_retry_count': 0,
+        'healer_retry_by_step': {},
         'control_agent_status': 'import_unavailable' if not CONTROL_AGENT_AVAILABLE else 'pending',
         'control_agent_reason': None,
         'profile_override': profile_override,
@@ -1047,8 +1198,23 @@ def run(
         )
         if git_proc.returncode == 0 and git_proc.stdout.strip():
             run_context['git_sha'] = git_proc.stdout.strip()
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(
+            "run_ingestion warning context=%s error=%s",
+            "git_sha_probe",
+            e,
+        )
+        warnings = run_context.get('warnings')
+        if not isinstance(warnings, list):
+            warnings = []
+            run_context['warnings'] = warnings
+        warnings.append(
+            {
+                'code': 'git_sha_probe_failed',
+                'message': str(e),
+                'ts_utc': datetime.now(timezone.utc).isoformat(),
+            }
+        )
     run_id = run_context["id"]
     typer.echo(f"[RUN] run_id: {run_id}")
     existing_run = cfg.get('run') if isinstance(cfg, dict) else None
@@ -1058,6 +1224,9 @@ def run(
         cfg['run'] = run_copy
     else:
         cfg['run'] = run_context
+    if isinstance(cfg.get('run'), dict):
+        run_context = cfg['run']
+    _CURRENT_RUN_CONTEXT = run_context
     
     # Add force_reprocess flag to config
     cfg['force_reprocess'] = force_reprocess
@@ -1398,6 +1567,17 @@ def run(
                     if VERBOSE and kg_stats:
                         typer.echo(f'[kg] Scene {scene_index}: {kg_stats.get("entities_resolved", 0)} entities resolved')
                 except Exception as kg_error:
+                    logger.warning(
+                        "run_ingestion warning context=%s error=%s",
+                        "knowledge_graph.scene_update",
+                        kg_error,
+                    )
+                    _record_run_warning(
+                        cfg_json,
+                        code='knowledge_graph_scene_update_failed',
+                        message=str(kg_error),
+                        context={'scene_id': scene_id, 'scene_index': scene_index},
+                    )
                     if VERBOSE:
                         typer.echo(f'[kg] Warning: KG update failed for scene {scene_index}: {kg_error}')
 
@@ -1508,12 +1688,19 @@ def run(
                 typer.echo('[PHASE 6a] Generating scene visual embeddings...')
                 embeddings_result = _run_step('goodq_core', 'scene_visual_embeddings', phase6_item, cfg_json)
                 phase6_status = embeddings_result.get('phase6_status') if isinstance(embeddings_result, dict) else None
+                phase6a_success = bool(phase6_status == 'complete')
                 result_dict = embeddings_result if isinstance(embeddings_result, dict) else embeddings_result
                 print("[STAGE10_16_DEBUG] phase6_status:", phase6_status)
                 print("[STAGE10_16_DEBUG] phase6_result:", result_dict)
                 if isinstance(embeddings_result, dict):
                     phase6_item.update(embeddings_result)
-                    typer.echo('[PHASE 6a] [PASS] Visual embeddings complete')
+                    if phase6a_success:
+                        typer.echo('[PHASE 6a] [PASS] Visual embeddings complete')
+                    else:
+                        typer.echo('[PHASE 6a] [WARN] Visual embeddings did not complete', err=True)
+                else:
+                    phase6a_success = False
+                    typer.echo('[PHASE 6a] [WARN] Visual embeddings returned non-dict result', err=True)
                 
                 # Phase 6b: Cross-Modal Harmonization
                 typer.echo('[PHASE 6b] Running multimodal harmonization...')
@@ -1535,7 +1722,9 @@ def run(
                             with open(temporal_index_path, 'r', encoding='utf-8') as f:
                                 video_result['temporal_index'] = json.load(f)
                         video_result['temporal_index_path'] = temporal_index_path
-                        video_result['phase6_complete'] = True
+                        video_result['phase6_complete'] = bool(phase6a_success)
+                        if not phase6a_success:
+                            typer.echo('[PHASE 6] [WARN] Harmonization complete but Phase 6a failed; keeping phase6_complete=False', err=True)
                         typer.echo('[PHASE 6b] [PASS] Harmonization complete')
                         
                         # Write temporal index if provided
@@ -1590,9 +1779,19 @@ def run(
                     if VERBOSE:
                         typer.echo(f'[llm] [FAIL] Video summary failed: {summary_result.get("error")}')
         except ImportError as e:
+            logger.warning(
+                "run_ingestion warning context=%s error=%s",
+                "video_summarizer.import",
+                e,
+            )
             if VERBOSE:
                 typer.echo(f'[llm] Video summarizer not available: {e}')
         except Exception as e:
+            logger.warning(
+                "run_ingestion warning context=%s error=%s",
+                "video_summarizer.run",
+                e,
+            )
             if VERBOSE:
                 typer.echo(f'[llm] Video summarization error: {e}')
 
@@ -1631,7 +1830,7 @@ def run(
             raise typer.Exit(code=1)
 
     output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(json.dumps(results, ensure_ascii=False, indent=2), encoding='utf-8')
+    _atomic_write_json(output, results, indent=2)
     typer.echo(f'Wrote results to {output}')
     
     # Generate Control Agent final report (best-effort; non-fatal)
@@ -1666,4 +1865,3 @@ def run(
 if __name__ == '__main__':
     _patch_typer_help_for_click_8_2()
     APP()
-

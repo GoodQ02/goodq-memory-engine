@@ -2,10 +2,14 @@ from __future__ import annotations
 
 import os
 import time
+import logging
 from typing import Any, Dict, List, Optional
 
+from steps.common.memory import to_faiss_id
 from steps.common.memory_store import MemoryStore
 from steps.common.qdrant_client import QdrantClient, build_qdrant_client
+
+logger = logging.getLogger(__name__)
 
 
 class ChromaMemory(MemoryStore):
@@ -135,8 +139,14 @@ class ChromaMemory(MemoryStore):
                     )
                 )
             emit_retrieval_events(self.db_path, events, enabled=self.log_retrieval_events, log_dir=self.log_dir)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(
+                "memory_stores operation failed store=%s operation=%s exc_type=%s exc=%s",
+                "chroma",
+                "emit_retrieval_events",
+                type(e).__name__,
+                e,
+            )
         return results
 
     def stats(self) -> Dict[str, Any]:
@@ -195,7 +205,7 @@ class FaissMemory(MemoryStore):
                     continue
                 vecs.append(vec)
                 if vid is not None:
-                    ids.append(int(vid) % (2**63 - 1))
+                    ids.append(to_faiss_id(vid))
             if not vecs:
                 return False
             np_vecs = np.array(vecs, dtype="float32")
@@ -206,7 +216,15 @@ class FaissMemory(MemoryStore):
                 index.add(np_vecs)
             faiss.write_index(index, self.index_path)
             return True
-        except Exception:
+        except Exception as e:
+            logger.warning(
+                "memory_stores operation failed store=%s operation=%s index_path=%s exc_type=%s exc=%s",
+                "faiss",
+                "insert",
+                self.index_path,
+                type(e).__name__,
+                e,
+            )
             return False
 
     def query(self, query_vector: List[float], top_k: int = 5, filter: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
@@ -228,8 +246,15 @@ class FaissMemory(MemoryStore):
                 from steps.common.memory_provenance import attach_provenance_to_hits
 
                 attach_provenance_to_hits(self.db_path, out)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(
+                    "memory_stores operation failed store=%s operation=%s index_path=%s exc_type=%s exc=%s",
+                    "faiss",
+                    "attach_provenance",
+                    self.index_path,
+                    type(e).__name__,
+                    e,
+                )
             try:
                 from steps.common.retrieval_events import (
                     RetrievalEvent,
@@ -247,7 +272,15 @@ class FaissMemory(MemoryStore):
                     score = h.get("score")
                     try:
                         score_f = float(score) if score is not None else None
-                    except Exception:
+                    except Exception as e:
+                        logger.warning(
+                            "memory_stores operation failed store=%s operation=%s index_path=%s exc_type=%s exc=%s",
+                            "faiss",
+                            "query.score_parse",
+                            self.index_path,
+                            type(e).__name__,
+                            e,
+                        )
                         score_f = None
                     payload = h.get("payload") if isinstance(h.get("payload"), dict) else {}
                     prov = h.get("provenance") if isinstance(h.get("provenance"), dict) else {}
@@ -282,10 +315,25 @@ class FaissMemory(MemoryStore):
                         )
                     )
                 emit_retrieval_events(self.db_path, events, enabled=self.log_retrieval_events, log_dir=self.log_dir)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(
+                    "memory_stores operation failed store=%s operation=%s index_path=%s exc_type=%s exc=%s",
+                    "faiss",
+                    "emit_retrieval_events",
+                    self.index_path,
+                    type(e).__name__,
+                    e,
+                )
             return out
-        except Exception:
+        except Exception as e:
+            logger.warning(
+                "memory_stores operation failed store=%s operation=%s index_path=%s exc_type=%s exc=%s",
+                "faiss",
+                "query",
+                self.index_path,
+                type(e).__name__,
+                e,
+            )
             return []
 
     def stats(self) -> Dict[str, Any]:
@@ -294,8 +342,15 @@ class FaissMemory(MemoryStore):
             if os.path.isfile(self.index_path):
                 idx = faiss.read_index(self.index_path)
                 return {"available": True, "vectors": int(getattr(idx, "ntotal", 0)), "dim": self.dim}
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(
+                "memory_stores operation failed store=%s operation=%s index_path=%s exc_type=%s exc=%s",
+                "faiss",
+                "stats",
+                self.index_path,
+                type(e).__name__,
+                e,
+            )
         return {"available": False, "vectors": 0, "dim": self.dim}
 
 
@@ -327,7 +382,14 @@ def build_text_stores(cfg: Dict[str, Any]) -> Dict[str, MemoryStore]:
         from steps.common.retrieval_events import retrieval_events_enabled
 
         log_retrieval = retrieval_events_enabled(cfg, default=True)
-    except Exception:
+    except Exception as e:
+        logger.warning(
+            "memory_stores operation failed store=%s operation=%s exc_type=%s exc=%s",
+            "build_text_stores",
+            "retrieval_events_enabled",
+            type(e).__name__,
+            e,
+        )
         log_retrieval = True
     stores["chroma"] = ChromaMemory(
         text_dim,
@@ -349,7 +411,14 @@ def build_text_stores(cfg: Dict[str, Any]) -> Dict[str, MemoryStore]:
     q_client = None
     try:
         q_client = build_qdrant_client(cfg, dim=text_dim, key="text")
-    except Exception:
+    except Exception as e:
+        logger.warning(
+            "memory_stores operation failed store=%s operation=%s exc_type=%s exc=%s",
+            "build_text_stores",
+            "build_qdrant_client",
+            type(e).__name__,
+            e,
+        )
         q_client = None
     if q_client:
         stores["qdrant"] = QdrantMemory(q_client)

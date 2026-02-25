@@ -306,9 +306,19 @@ class WSL2AudioBridge:
                         return error
                 
                 except subprocess.TimeoutExpired:
-                    pass
-                except Exception:
-                    pass
+                    logger.debug(
+                        "WSL2 bridge poll timeout operation=%s job_id=%s",
+                        "copy_result_or_error",
+                        job_id,
+                    )
+                except Exception as e:
+                    logger.warning(
+                        "WSL2 bridge poll failed operation=%s job_id=%s exc_type=%s exc=%s",
+                        "copy_result_or_error",
+                        job_id,
+                        type(e).__name__,
+                        e,
+                    )
                 
                 time.sleep(poll_interval)
             

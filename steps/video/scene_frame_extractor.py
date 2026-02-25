@@ -93,11 +93,27 @@ def extract_frames_uniform(
         List of frame metadata dicts
     """
     duration = end - start
-    if duration <= 0 or num_frames < 1:
+    if num_frames < 1:
         return []
-    
-    # Calculate uniform timestamps
-    if num_frames == 1:
+
+    # Zero/negative-duration scenes can occur from upstream detection edge cases.
+    # Keep extraction deterministic by sampling a single frame at scene start.
+    if duration <= 0:
+        try:
+            fallback_ts = max(float(start), 0.0)
+        except Exception:
+            fallback_ts = 0.0
+        logger.warning(
+            "scene_frame_extractor fallback operation=%s scene_id=%s start=%s end=%s reason=%s timestamp=%s",
+            "extract_frames_uniform",
+            scene_id,
+            start,
+            end,
+            "non_positive_duration",
+            fallback_ts,
+        )
+        timestamps = [fallback_ts]
+    elif num_frames == 1:
         timestamps = [start + duration / 2.0]
     else:
         timestamps = [start + (duration * i / (num_frames - 1)) for i in range(num_frames)]

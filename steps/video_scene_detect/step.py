@@ -9,6 +9,33 @@ except Exception:  # pragma: no cover - optional guard
     cv2 = None
 
 
+def _probe_video_duration(path: str) -> Optional[float]:
+    """Best-effort duration probe for fallback scene manifests."""
+    try:
+        import imageio_ffmpeg  # type: ignore
+
+        _, secs = imageio_ffmpeg.count_frames_and_secs(path)
+        if secs and float(secs) > 0:
+            return float(secs)
+    except Exception as e:
+        print(f"[WARN] Duration probe via imageio_ffmpeg failed: {type(e).__name__}: {str(e)}")
+
+    if cv2 is None:
+        return None
+    try:
+        cap = cv2.VideoCapture(path)
+        if not cap.isOpened():
+            return None
+        fps = float(cap.get(cv2.CAP_PROP_FPS) or 0.0)
+        frame_count = float(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0.0)
+        cap.release()
+        if fps > 0 and frame_count > 0:
+            return frame_count / fps
+    except Exception as e:
+        print(f"[WARN] Duration probe via cv2 failed: {type(e).__name__}: {str(e)}")
+    return None
+
+
 def _load_params(cfg: Dict[str, Any], item: Dict[str, Any]) -> Dict[str, Any]:
     """
     Load scene detection parameters with robust fallback handling.
@@ -83,8 +110,15 @@ def _load_params(cfg: Dict[str, Any], item: Dict[str, Any]) -> Dict[str, Any]:
     return params
 
 
-def _fallback_single_scene(duration: Optional[float]) -> List[Dict[str, Any]]:
-    end = float(duration) if duration and duration > 0 else 0.0
+def _fallback_single_scene(duration: Optional[float], path: Optional[str] = None) -> List[Dict[str, Any]]:
+    resolved_duration: Optional[float] = None
+    if duration and duration > 0:
+        resolved_duration = float(duration)
+    elif path and os.path.isfile(path):
+        resolved_duration = _probe_video_duration(path)
+        if resolved_duration and resolved_duration > 0:
+            print(f"[SCENE] Fallback duration probe succeeded: {resolved_duration:.3f}s")
+    end = float(resolved_duration) if resolved_duration and resolved_duration > 0 else 0.0
     return [
         {
             'index': 0,
@@ -427,7 +461,7 @@ def video_scene_detect(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, A
     path = item.get('source_path')
     if not isinstance(path, str) or not os.path.isfile(path):
         return {
-            'scenes': _fallback_single_scene(None),
+            'scenes': _fallback_single_scene(None, path if isinstance(path, str) else None),
             'scene_meta': {
                 'status': 'missing_file',
                 'reason': 'source_path not found',
@@ -450,7 +484,7 @@ def video_scene_detect(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, A
         detection = _detect_with_scenedetect(path, params['threshold'], params['min_scene_len_sec'])
         scenes = detection.get('scenes', [])
         if not scenes:
-            scenes = _fallback_single_scene(detection.get('duration'))
+            scenes = _fallback_single_scene(detection.get('duration'), path)
             status = 'fallback_single_scene'
             print(f"[SCENE] No scenes detected, using fallback single scene")
         else:
@@ -459,7 +493,7 @@ def video_scene_detect(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, A
         error_msg = None
     except Exception as exc:
         print(f"[ERROR] Scene detection failed: {exc}")
-        scenes = _fallback_single_scene(None)
+        scenes = _fallback_single_scene(None, path)
         status = 'error'
         error_msg = str(exc)
         if tracker:

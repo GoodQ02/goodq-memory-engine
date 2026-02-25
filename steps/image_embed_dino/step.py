@@ -93,6 +93,13 @@ def image_embed_dino(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
             index.add_with_ids(feats.astype("float32"), uid)
             faiss_id = int(uid[0])
         except Exception as e:
+            logger.warning(
+                "image_embed_dino operation fallback operation=%s source_path=%s exc_type=%s exc=%s",
+                "faiss.add_with_ids_to_add",
+                path,
+                type(e).__name__,
+                e,
+            )
             index.add(feats.astype("float32"))
             faiss_id = getattr(index, 'ntotal', 0) - 1
         faiss.write_index(index, index_path)
@@ -111,14 +118,24 @@ def image_embed_dino(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
                         (faiss_id, h, path, datetime.utcnow().isoformat()),
                     )
             except Exception as e:
-                print(f'[ERROR] Exception in step.py line 88: {str(e)}')
-                pass
+                logger.warning(
+                    "image_embed_dino operation failed operation=%s map_db=%s exc_type=%s exc=%s",
+                    "sqlite_map.upsert",
+                    map_db,
+                    type(e).__name__,
+                    e,
+                )
             finally:
                 try:
                     con.close()  # type: ignore
                 except Exception as e:
-                    print(f'[ERROR] Exception in step.py line 94: {str(e)}')
-                    pass
+                    logger.warning(
+                        "image_embed_dino operation failed operation=%s map_db=%s exc_type=%s exc=%s",
+                        "sqlite_map.close",
+                        map_db,
+                        type(e).__name__,
+                        e,
+                    )
         # Upsert generic embedding metadata for recall
         # NOTE: DINO uses modality="image" (not "dino") by design.
         # This allows DINO and CLIP embeddings to be queried together as visual content.
@@ -131,8 +148,13 @@ def image_embed_dino(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
                 scene_id = f"scene_{int(scene_id):04d}"
             upsert_embedding(cfg, h, faiss_id, path, item.get("modality", "image") or "image", scene_id=scene_id)
         except Exception as e:
-            print(f'[ERROR] Exception in step.py line 101: {str(e)}')
-            pass
+            logger.warning(
+                "image_embed_dino operation failed operation=%s source_path=%s exc_type=%s exc=%s",
+                "sqlite_embeddings.upsert",
+                path,
+                type(e).__name__,
+                e,
+            )
         return {"dino_meta": {"status": "ok", "index_path": index_path, "faiss_id": faiss_id}}
     except Exception as e:
         return {"dino_meta": {"status": "error", "error": str(e)}}

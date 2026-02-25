@@ -62,7 +62,13 @@ def _open_faiss(path: str):
     try:
         import faiss  # type: ignore
     except Exception as e:
-        print(f'[ERROR] _open_faiss: Cannot import faiss: {str(e)}')
+        logger.warning(
+            "text_embed operation failed operation=%s index_path=%s exc_type=%s exc=%s",
+            "open_faiss.import",
+            path,
+            type(e).__name__,
+            e,
+        )
         return None, None
     os.makedirs(os.path.dirname(path), exist_ok=True)
     index = None
@@ -70,7 +76,13 @@ def _open_faiss(path: str):
         try:
             index = faiss.read_index(path)
         except Exception as e:
-            print(f'[WARN] _open_faiss: Could not read existing index: {str(e)}')
+            logger.warning(
+                "text_embed operation failed operation=%s index_path=%s exc_type=%s exc=%s",
+                "open_faiss.read_index",
+                path,
+                type(e).__name__,
+                e,
+            )
             index = None
     if index is None:
         # HNSW index for cosine similarity
@@ -97,6 +109,13 @@ def _content_fingerprint(item: Dict[str, Any]) -> str:
                 for chunk in iter(lambda: f.read(1024 * 1024), b""):
                     h.update(chunk)
         except Exception as e:
+            logger.warning(
+                "text_embed operation failed operation=%s source_path=%s exc_type=%s exc=%s",
+                "content_fingerprint.read_source",
+                src,
+                type(e).__name__,
+                e,
+            )
             h.update((src or "").encode("utf-8", errors="ignore"))
     else:
         h.update(repr(item).encode("utf-8", errors="ignore"))
@@ -151,7 +170,13 @@ def text_embed(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
             embedding_ok = True
         except Exception as e:
             embedding_reason = f"exception:{type(e).__name__}"
-            print(f'[ERROR] Exception in text_embed upsert_embedding: {str(e)}')
+            logger.warning(
+                "text_embed operation failed operation=%s source_path=%s exc_type=%s exc=%s",
+                "sqlite_embeddings.upsert",
+                item.get("source_path"),
+                type(e).__name__,
+                e,
+            )
 
         try:
             from steps.common.memory_commit_events import MemoryCommitEvent, emit_memory_commit_event, utc_now_iso
@@ -167,14 +192,28 @@ def text_embed(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
                 q_store = stores.get("qdrant")
                 q_client = getattr(q_store, "client", None)
                 qdrant_ref = getattr(getattr(q_client, "cfg", None), "collection", None)
-            except Exception:
+            except Exception as e:
+                logger.warning(
+                    "text_embed operation failed operation=%s source_path=%s exc_type=%s exc=%s",
+                    "resolve_qdrant_ref",
+                    item.get("source_path"),
+                    type(e).__name__,
+                    e,
+                )
                 qdrant_ref = None
 
             faiss_ref = None
             try:
                 f_store = stores.get("faiss")
                 faiss_ref = getattr(f_store, "index_path", None)
-            except Exception:
+            except Exception as e:
+                logger.warning(
+                    "text_embed operation failed operation=%s source_path=%s exc_type=%s exc=%s",
+                    "resolve_faiss_ref",
+                    item.get("source_path"),
+                    type(e).__name__,
+                    e,
+                )
                 faiss_ref = None
 
             targets = {}
@@ -207,9 +246,22 @@ def text_embed(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
                     details={"text_len": len(text) if isinstance(text, str) else None, "source_path": item.get("source_path")},
                 ),
             )
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(
+                "text_embed operation failed operation=%s source_path=%s exc_type=%s exc=%s",
+                "emit_memory_commit_event",
+                item.get("source_path"),
+                type(e).__name__,
+                e,
+            )
 
         return {"embedding_meta": {"status": "ok", "engine": "all-MiniLM-L6-v2"}}
     except Exception as e:
+        logger.warning(
+            "text_embed operation failed operation=%s source_path=%s exc_type=%s exc=%s",
+            "embed_text",
+            item.get("source_path"),
+            type(e).__name__,
+            e,
+        )
         return {"embedding_meta": {"status": "error", "error": str(e)}}

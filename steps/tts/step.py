@@ -5,7 +5,10 @@ import os
 import tempfile
 import requests
 import subprocess
+import logging
 from steps.common.tool_paths import resolve_piper
+
+logger = logging.getLogger(__name__)
 
 
 def _resolve_elevenlabs_voice_id(api_key: str) -> Optional[str]:
@@ -20,7 +23,13 @@ def _resolve_elevenlabs_voice_id(api_key: str) -> Optional[str]:
         voices = data.get("voices") or []
         return (voices[0].get("voice_id") if voices else None)
     except Exception as e:
-        print(f'[WARN] _resolve_elevenlabs_voice_id returning None')
+        logger.warning(
+            "tts operation failed operation=%s provider=%s exc_type=%s exc=%s",
+            "resolve_voice_id",
+            "elevenlabs",
+            type(e).__name__,
+            e,
+        )
         return None
 
 
@@ -28,7 +37,12 @@ def _elevenlabs_tts(text: str, voice_id: str, api_key: str) -> Optional[str]:
     if not voice_id:
         voice_id = _resolve_elevenlabs_voice_id(api_key) or ""
         if not voice_id:
-            print(f'[WARN] _elevenlabs_tts returning None')
+            logger.warning(
+                "tts operation failed operation=%s provider=%s reason=%s",
+                "synthesize",
+                "elevenlabs",
+                "voice_id_unavailable",
+            )
             return None
     try:
         url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}/stream"
@@ -43,7 +57,14 @@ def _elevenlabs_tts(text: str, voice_id: str, api_key: str) -> Optional[str]:
                     f.write(chunk)
         return path
     except Exception as e:
-        print(f'[WARN] _elevenlabs_tts returning None')
+        logger.warning(
+            "tts operation failed operation=%s provider=%s voice_id=%s exc_type=%s exc=%s",
+            "synthesize",
+            "elevenlabs",
+            voice_id,
+            type(e).__name__,
+            e,
+        )
         return None
 
 
@@ -59,7 +80,14 @@ def _piper_tts(text: str, piper_exe: str, voice_path: str, out_dir: str) -> Opti
         proc.wait(timeout=30)
         return out_path if os.path.isfile(out_path) else None
     except Exception as e:
-        print(f'[WARN] _piper_tts returning None')
+        logger.warning(
+            "tts operation failed operation=%s provider=%s piper_exe=%s exc_type=%s exc=%s",
+            "synthesize",
+            "piper",
+            piper_exe,
+            type(e).__name__,
+            e,
+        )
         return None
 
 

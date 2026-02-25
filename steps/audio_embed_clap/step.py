@@ -10,6 +10,9 @@ import sqlite3
 from datetime import datetime
 
 import os
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 _CLAP = {"model": None, "proc": None, "device": "cpu"}
@@ -37,9 +40,14 @@ def _load() -> None:
         proc = AutoProcessor.from_pretrained("laion/clap-htsat-unfused", local_files_only=True)
         model = ClapModel.from_pretrained("laion/clap-htsat-unfused", local_files_only=True).to(device).eval()
         _CLAP.update({"model": model, "proc": proc, "device": device})
-        print(f"[INFO] CLAP model loaded on {device} with memory fraction 0.2")
+        logger.info("audio_embed_clap model loaded device=%s memory_fraction=%s", device, 0.2)
     except Exception as e:
-        print(f"[ERROR] Failed to load CLAP model: {str(e)}")
+        logger.error(
+            "audio_embed_clap operation failed operation=%s exc_type=%s exc=%s",
+            "load_model",
+            type(e).__name__,
+            e,
+        )
         _CLAP.update({"model": None, "proc": None})
 
 
@@ -62,8 +70,13 @@ def _ensure_clap_map(db_path: str) -> None:
         try:
             con.close()  # type: ignore
         except Exception as e:
-            print(f'[ERROR] Exception in step.py line 46: {str(e)}')
-            pass
+            logger.warning(
+                "audio_embed_clap operation failed operation=%s db_path=%s exc_type=%s exc=%s",
+                "ensure_clap_map.close",
+                db_path,
+                type(e).__name__,
+                e,
+            )
 
 
 def audio_embed_clap(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
@@ -87,7 +100,7 @@ def audio_embed_clap(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
         if vad_enabled:
             try:
                 from steps.common.vad_preprocessor import preprocess_audio_with_vad
-                print(f"[AUDIO_CLAP] Running VAD preprocessing on {path}")
+                logger.info("audio_embed_clap vad preprocessing source_path=%s", path)
                 
                 vad_path, vad_segments = preprocess_audio_with_vad(
                     path,
@@ -99,11 +112,26 @@ def audio_embed_clap(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
                 
                 if vad_path and vad_segments:
                     audio_path_to_use = vad_path
-                    print(f"[AUDIO_CLAP] Using VAD-filtered audio ({len(vad_segments)} segments)")
+                    logger.info(
+                        "audio_embed_clap vad preprocessing complete source_path=%s segments=%s",
+                        path,
+                        len(vad_segments),
+                    )
                 else:
-                    print(f"[AUDIO_CLAP] VAD found no speech, using original audio")
+                    logger.warning(
+                        "audio_embed_clap vad fallback operation=%s source_path=%s reason=%s",
+                        "preprocess_audio_with_vad",
+                        path,
+                        "no_speech_detected",
+                    )
             except Exception as vad_exc:
-                print(f"[AUDIO_CLAP] VAD failed: {vad_exc}, using original audio")
+                logger.warning(
+                    "audio_embed_clap operation failed operation=%s source_path=%s exc_type=%s exc=%s",
+                    "preprocess_audio_with_vad",
+                    path,
+                    type(vad_exc).__name__,
+                    vad_exc,
+                )
         
         # resample to 48kHz mono as expected
         wave, sr = librosa.load(audio_path_to_use, sr=48000, mono=True)
@@ -146,8 +174,14 @@ def audio_embed_clap(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
                         details={"source_path": path},
                     ),
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(
+                    "audio_embed_clap operation failed operation=%s source_path=%s exc_type=%s exc=%s",
+                    "emit_memory_commit_event.no_index_path",
+                    path,
+                    type(e).__name__,
+                    e,
+                )
             return {"clap_meta": {"status": "no_index_path"}}
         os.makedirs(os.path.dirname(index_path), exist_ok=True)
         if os.path.isfile(index_path):
@@ -164,6 +198,13 @@ def audio_embed_clap(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
             index.add_with_ids(feats.astype("float32"), uid)
             faiss_id = int(uid[0])
         except Exception as e:
+            logger.warning(
+                "audio_embed_clap operation fallback operation=%s source_path=%s exc_type=%s exc=%s",
+                "faiss.add_with_ids_to_add",
+                path,
+                type(e).__name__,
+                e,
+            )
             index.add(feats.astype("float32"))
             # best-effort: last ID is ntotal-1 but only valid for flat add
             faiss_id = getattr(index, 'ntotal', 0) - 1
@@ -195,7 +236,13 @@ def audio_embed_clap(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
             qdrant_attempted = True
             qdrant_ok = False
             qdrant_reason = f"exception:{type(e).__name__}"
-            pass
+            logger.warning(
+                "audio_embed_clap operation failed operation=%s source_path=%s exc_type=%s exc=%s",
+                "qdrant.upsert",
+                path,
+                type(e).__name__,
+                e,
+            )
         # Map FAISS ID -> fingerprint/source in dedicated SQLite
         map_db = (cfg.get("paths", {}) or {}).get("clap_id_map_db")
         map_ok = False
@@ -212,14 +259,24 @@ def audio_embed_clap(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
                 map_ok = True
             except Exception as e:
                 map_reason = f"exception:{type(e).__name__}"
-                print(f'[ERROR] Exception in step.py line 111: {str(e)}')
-                pass
+                logger.warning(
+                    "audio_embed_clap operation failed operation=%s map_db=%s exc_type=%s exc=%s",
+                    "sqlite_map.upsert",
+                    map_db,
+                    type(e).__name__,
+                    e,
+                )
             finally:
                 try:
                     con.close()  # type: ignore
                 except Exception as e:
-                    print(f'[ERROR] Exception in step.py line 117: {str(e)}')
-                    pass
+                    logger.warning(
+                        "audio_embed_clap operation failed operation=%s map_db=%s exc_type=%s exc=%s",
+                        "sqlite_map.close",
+                        map_db,
+                        type(e).__name__,
+                        e,
+                    )
         # Upsert generic embedding metadata for recall
         embedding_ok = False
         embedding_reason = None
@@ -232,8 +289,13 @@ def audio_embed_clap(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
             embedding_ok = True
         except Exception as e:
             embedding_reason = f"exception:{type(e).__name__}"
-            print(f'[ERROR] Exception in step.py line 124: {str(e)}')
-            pass
+            logger.warning(
+                "audio_embed_clap operation failed operation=%s source_path=%s exc_type=%s exc=%s",
+                "sqlite_embeddings.upsert",
+                path,
+                type(e).__name__,
+                e,
+            )
 
         try:
             from steps.common.memory_commit_events import MemoryCommitEvent, emit_memory_commit_event, utc_now_iso
@@ -267,8 +329,14 @@ def audio_embed_clap(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
                     details={"faiss_id": faiss_id, "source_path": path},
                 ),
             )
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(
+                "audio_embed_clap operation failed operation=%s source_path=%s exc_type=%s exc=%s",
+                "emit_memory_commit_event",
+                path,
+                type(e).__name__,
+                e,
+            )
         return {"clap_meta": {"status": "ok", "index_path": index_path, "faiss_id": faiss_id}}
     except Exception as e:
         return {"clap_meta": {"status": "error", "error": str(e)}}

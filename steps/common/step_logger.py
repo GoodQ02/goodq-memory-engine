@@ -3,6 +3,7 @@ import csv
 import json
 import os
 import hashlib
+import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -16,6 +17,8 @@ except ImportError:
     get_goodq_logger = None
     get_component_name = None
     format_duration = None
+
+logger = logging.getLogger(__name__)
 
 
 def _fingerprint_item(item: Optional[Dict[str, Any]]) -> str:
@@ -32,6 +35,12 @@ def _fingerprint_item(item: Optional[Dict[str, Any]]) -> str:
         h.update(repr(item).encode("utf-8", errors="ignore"))
         return h.hexdigest()
     except Exception as e:
+        logger.warning(
+            "step_logger operation failed operation=%s exc_type=%s exc=%s",
+            "fingerprint_item",
+            type(e).__name__,
+            e,
+        )
         return ""
 
 
@@ -66,22 +75,29 @@ def log_step_run(
     if MISSION_LOGGER_AVAILABLE:
         try:
             component = get_component_name(step_name)
-            logger = get_goodq_logger(step_name, component=component)
+            mission_logger = get_goodq_logger(step_name, component=component)
             
             duration_s = duration_ms / 1000.0
             duration_str = format_duration(duration_s)
             
             if status == "ok":
-                logger.mission_complete(step_name, duration=duration_s)
+                mission_logger.mission_complete(step_name, duration=duration_s)
             elif status == "skipped":
                 reason = (extra or {}).get('reason', 'unknown')
-                logger.info(f"Operation bypassed - {reason} [{duration_str}]")
+                mission_logger.info(f"Operation bypassed - {reason} [{duration_str}]")
             elif status == "error":
-                logger.error(f"Operation failed - {error[:100] if error else 'Unknown error'} [{duration_str}]")
+                mission_logger.error(f"Operation failed - {error[:100] if error else 'Unknown error'} [{duration_str}]")
             else:
-                logger.info(f"Status: {status} [{duration_str}]")
-        except Exception:
-            pass  # Don't let mission logging break actual logging
+                mission_logger.info(f"Status: {status} [{duration_str}]")
+        except Exception as e:
+            logger.warning(
+                "step_logger operation failed operation=%s step=%s status=%s exc_type=%s exc=%s",
+                "mission_log",
+                step_name,
+                status,
+                type(e).__name__,
+                e,
+            )
     
     # Original CSV/JSONL logging (preserved for compatibility)
     try:
@@ -112,6 +128,13 @@ def log_step_run(
         try:
             env_name = os.environ.get("CONDA_DEFAULT_ENV") or ""
         except Exception as e:
+            logger.warning(
+                "step_logger operation failed operation=%s step=%s exc_type=%s exc=%s",
+                "resolve_env_name",
+                step_name,
+                type(e).__name__,
+                e,
+            )
             env_name = ""
 
         run_cfg = cfg.get("run") if isinstance(cfg, dict) else None
@@ -159,5 +182,12 @@ def log_step_run(
         with open(jsonl, "a", encoding="utf-8") as jf:
             jf.write(json.dumps(entry, ensure_ascii=False) + "\n")
     except Exception as e:
-        print(f'[ERROR] Exception in step_logger.py line 124: {str(e)}')
+        logger.warning(
+            "step_logger operation failed operation=%s step=%s status=%s exc_type=%s exc=%s",
+            "write_step_run",
+            step_name,
+            status,
+            type(e).__name__,
+            e,
+        )
         return

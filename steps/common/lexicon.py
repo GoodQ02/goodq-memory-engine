@@ -2,8 +2,10 @@ from __future__ import annotations
 from typing import Any, Dict, Tuple, Optional, List
 
 import os
+import logging
 
 _NRC_CACHE: Dict[str, Any] = {"path": None, "lex": None, "emotions": ()}
+logger = logging.getLogger(__name__)
 
 
 def _cfg_get(cfg: Dict[str, Any], path: str, default: Optional[str] = None) -> Optional[str]:
@@ -21,7 +23,13 @@ def _find_nrc_file(dir_path: str) -> Optional[str]:
             if name.lower().endswith('.txt') and 'nrc' in name.lower():
                 return os.path.join(dir_path, name)
     except Exception as e:
-        print(f'[WARN] _find_nrc_file returning None')
+        logger.warning(
+            "lexicon operation failed operation=%s dir_path=%s exc_type=%s exc=%s",
+            "find_nrc_file",
+            dir_path,
+            type(e).__name__,
+            e,
+        )
         return None
     return None
 
@@ -39,11 +47,21 @@ def load_nrc(cfg: Dict[str, Any]) -> Tuple[Optional[Dict[str, Dict[str, int]]], 
 
     dir_path = _cfg_get(cfg, 'config.models.lexicons.nrc_emotion_dir')
     if not dir_path or not os.path.isdir(dir_path):
-        print(f'[WARN] load_nrc: NRC directory not found or invalid: {dir_path}')
+        logger.warning(
+            "lexicon operation failed operation=%s reason=%s dir_path=%s",
+            "load_nrc",
+            "nrc_directory_not_found_or_invalid",
+            dir_path,
+        )
         return None, tuple()
     file_path = _find_nrc_file(dir_path)
     if not file_path or not os.path.isfile(file_path):
-        print(f'[WARN] load_nrc: NRC file not found in {dir_path}')
+        logger.warning(
+            "lexicon operation failed operation=%s reason=%s dir_path=%s",
+            "load_nrc",
+            "nrc_file_not_found",
+            dir_path,
+        )
         return None, tuple()
 
     emotions_set = []
@@ -64,7 +82,14 @@ def load_nrc(cfg: Dict[str, Any]) -> Tuple[Optional[Dict[str, Dict[str, int]]], 
                 try:
                     val = int(assoc)
                 except Exception as e:
-                    print(f'[ERROR] Exception in lexicon.py line 64: {str(e)}')
+                    logger.warning(
+                        "lexicon operation failed operation=%s file_path=%s assoc=%s exc_type=%s exc=%s",
+                        "parse_association",
+                        file_path,
+                        assoc,
+                        type(e).__name__,
+                        e,
+                    )
                     continue
                 if emo not in emotions_set:
                     emotions_set.append(emo)
@@ -74,7 +99,13 @@ def load_nrc(cfg: Dict[str, Any]) -> Tuple[Optional[Dict[str, Dict[str, int]]], 
                     lex[w] = d
                 d[emo] = val
     except Exception as e:
-        print(f'[ERROR] load_nrc: Failed to load lexicon: {str(e)}')
+        logger.warning(
+            "lexicon operation failed operation=%s file_path=%s exc_type=%s exc=%s",
+            "load_nrc",
+            file_path,
+            type(e).__name__,
+            e,
+        )
         return None, tuple()
 
     _NRC_CACHE.update({"path": dir_path, "lex": lex, "emotions": tuple(emotions_set)})
@@ -88,7 +119,11 @@ def _tokenize(text: str) -> List[str]:
 def score_nrc_emotions(text: str, cfg: Dict[str, Any]) -> Optional[Dict[str, float]]:
     lex, emotions = load_nrc(cfg)
     if not lex:
-        print(f'[WARN] score_nrc_emotions returning None')
+        logger.warning(
+            "lexicon operation failed operation=%s reason=%s",
+            "score_nrc_emotions",
+            "lexicon_unavailable",
+        )
         return None
     counts: Dict[str, int] = {e: 0 for e in emotions}
     tokens = _tokenize(text)
@@ -109,7 +144,11 @@ def score_nrc_sentiment(text: str, cfg: Dict[str, Any]) -> Optional[Tuple[str, f
     # Derive a polarity from NRC positive/negative categories if present
     emo_scores = score_nrc_emotions(text, cfg)
     if not emo_scores:
-        print(f'[WARN] score_nrc_sentiment returning None')
+        logger.warning(
+            "lexicon operation failed operation=%s reason=%s",
+            "score_nrc_sentiment",
+            "emotion_scores_unavailable",
+        )
         return None
     pos = emo_scores.get('positive', 0.0)
     neg = emo_scores.get('negative', 0.0)
@@ -122,4 +161,3 @@ def score_nrc_sentiment(text: str, cfg: Dict[str, Any]) -> Optional[Tuple[str, f
     else:
         conf = 0.5 + min(0.45, (neg - pos))
         return ("NEGATIVE", float(f"{conf:.3f}"))
-

@@ -816,8 +816,14 @@ def audio_transcribe(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
                         logger.debug(f'Keeping chunk for inspection: {tmp_chunk}')
                     else:
                         os.remove(tmp_chunk)
-            except:
-                pass
+            except Exception as e:
+                logger.warning(
+                    "[TRANSCRIBE] Temp chunk cleanup failed operation=%s chunk=%s exc_type=%s exc=%s",
+                    "cleanup_temp_chunk",
+                    tmp_chunk,
+                    type(e).__name__,
+                    e,
+                )
     
     total_elapsed = time.time() - total_start
     
@@ -840,16 +846,36 @@ def audio_transcribe(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
     # Rest of the function remains the same...
     normalized_segments: List[Dict[str, Any]] = []
     seen_segments = set()
+    numeric_coercion_warned = False
+    chunk_report_coercion_warned = False
     for seg in flat_segments:
         if not isinstance(seg, dict):
             continue
         try:
             start_val = float(seg.get("start", 0.0) or 0.0)
         except Exception as e:
+            if not numeric_coercion_warned:
+                logger.warning(
+                    "[TRANSCRIBE] Numeric coercion fallback applied operation=%s field=%s exc_type=%s exc=%s",
+                    "normalize_segment_times",
+                    "start",
+                    type(e).__name__,
+                    e,
+                )
+                numeric_coercion_warned = True
             start_val = 0.0
         try:
             end_val = float(seg.get("end", start_val) or start_val)
         except Exception as e:
+            if not numeric_coercion_warned:
+                logger.warning(
+                    "[TRANSCRIBE] Numeric coercion fallback applied operation=%s field=%s exc_type=%s exc=%s",
+                    "normalize_segment_times",
+                    "end",
+                    type(e).__name__,
+                    e,
+                )
+                numeric_coercion_warned = True
             end_val = start_val
         text_val = seg.get("text")
         text_str = str(text_val).strip() if text_val is not None else ""
@@ -877,10 +903,28 @@ def audio_transcribe(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
             try:
                 start_val = float(report.get("start") or 0.0)
             except Exception as e:
+                if not chunk_report_coercion_warned:
+                    logger.warning(
+                        "[TRANSCRIBE] Numeric coercion fallback applied operation=%s field=%s exc_type=%s exc=%s",
+                        "normalize_chunk_report_times",
+                        "start",
+                        type(e).__name__,
+                        e,
+                    )
+                    chunk_report_coercion_warned = True
                 start_val = 0.0
             try:
                 end_val = float(report.get("end") or start_val)
             except Exception as e:
+                if not chunk_report_coercion_warned:
+                    logger.warning(
+                        "[TRANSCRIBE] Numeric coercion fallback applied operation=%s field=%s exc_type=%s exc=%s",
+                        "normalize_chunk_report_times",
+                        "end",
+                        type(e).__name__,
+                        e,
+                    )
+                    chunk_report_coercion_warned = True
                 end_val = start_val
             seg_obj = {
                 "start": start_val,
@@ -926,5 +970,3 @@ def audio_transcribe(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
         if speakers:
             meta["speakers"] = speakers
     return {"transcript": full_text or None, "transcript_meta": meta}
-
-

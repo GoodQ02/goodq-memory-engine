@@ -527,7 +527,13 @@ def register_scene_bundle(
                 max_entries=1000  # Allow many scene summaries
             )
     except Exception as e:
-        print(f'[WARN] Failed to generate scene summary: {e}')
+        logger.warning(
+            "memory operation failed operation=%s scene_id=%s exc_type=%s exc=%s",
+            "register_scene_bundle.generate_scene_summary",
+            scene_id,
+            type(e).__name__,
+            e,
+        )
 
     # Insert embeddings into vector memory (Qdrant/FAISS)
     try:
@@ -626,7 +632,13 @@ def register_scene_bundle(
             print(f'[VECTOR] Inserted {success_count}/{len(points)} embeddings for scene {scene_id}')
         
     except Exception as e:
-        print(f'[WARN] Failed to insert vectors for scene {scene_id}: {e}')
+        logger.warning(
+            "memory operation failed operation=%s scene_id=%s exc_type=%s exc=%s",
+            "register_scene_bundle.insert_vectors",
+            scene_id,
+            type(e).__name__,
+            e,
+        )
     
     return {
         'scene_id': scene_id,

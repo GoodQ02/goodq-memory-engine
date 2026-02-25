@@ -330,6 +330,9 @@ class WatchdogProcessor:
         files = []
         for item in self.watch_dir.iterdir():
             if item.is_file() and not item.name.startswith('.'):
+                # Ignore already-handled marker prefixes to prevent requeue/rename churn.
+                if item.name.startswith('PROCESSED_') or item.name.startswith('FAILED_'):
+                    continue
                 # Check if supported file type
                 if self.get_file_type(item):
                     files.append(item)
@@ -389,6 +392,10 @@ class WatchdogProcessor:
     def mark_file_processed(self, file_path: Path):
         """Mark file as processed by renaming"""
         try:
+            # Idempotency guard: avoid repeated prefix expansion on already marked files.
+            if file_path.name.startswith('PROCESSED_'):
+                logger.debug(f"Already marked processed, skipping rename: {file_path.name}")
+                return
             new_name = f"PROCESSED_{file_path.name}"
             new_path = file_path.parent / new_name
             if not new_path.exists():

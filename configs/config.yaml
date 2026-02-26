@@ -40,7 +40,7 @@ model:
 # ============================================================================
 host:
   profile: ${GOODQ_HOST_PROFILE:-UNSET}
-  data_root: ${GOODQ_DATA_ROOT:-L:/_DATA}
+  data_root: ${GOODQ_DATA_ROOT:-./_DATA}
   wsl_distro: ${GOODQ_WSL_DISTRO:-Ubuntu}
   wsl_user: ${GOODQ_WSL_USER:-auto}
   conda_env: ${GOODQ_CONDA_ENV:-goodq_core}
@@ -52,18 +52,18 @@ paths:
   # Core directories
   log_dir: logs
   output_directory: output
-  db_dir: ${GOODQ_DATA_ROOT:-L:/_DATA}/GoodQ_Data/epochs/epoch_2025_12_22
-  db_path: ${GOODQ_DATA_ROOT:-L:/_DATA}/GoodQ_Data/epochs/epoch_2025_12_22/memory.db
-  knowledge_graph_db: ${GOODQ_DATA_ROOT:-L:/_DATA}/GoodQ_Data/epochs/epoch_2025_12_22/knowledge_graph.db
-  faiss_dir: ${GOODQ_DATA_ROOT:-L:/_DATA}/GoodQ_Data/epochs/epoch_2025_12_22/faiss
-  faiss_audio_path: ${GOODQ_DATA_ROOT:-L:/_DATA}/GoodQ_Data/epochs/epoch_2025_12_22/faiss/goodq_audio_epoch_2025_12_22.index
+  db_dir: ${GOODQ_DATA_ROOT:-./_DATA}/GoodQ_Data/epochs/epoch_2025_12_22
+  db_path: ${GOODQ_DATA_ROOT:-./_DATA}/GoodQ_Data/epochs/epoch_2025_12_22/memory.db
+  knowledge_graph_db: ${GOODQ_DATA_ROOT:-./_DATA}/GoodQ_Data/epochs/epoch_2025_12_22/knowledge_graph.db
+  faiss_dir: ${GOODQ_DATA_ROOT:-./_DATA}/GoodQ_Data/epochs/epoch_2025_12_22/faiss
+  faiss_audio_path: ${GOODQ_DATA_ROOT:-./_DATA}/GoodQ_Data/epochs/epoch_2025_12_22/faiss/goodq_audio_epoch_2025_12_22.index
   config_dir: configs
   
   # Data paths
-  data_root: ${GOODQ_DATA_ROOT:-L:/_DATA}/GoodQ_Data
-  import_inbox: ${GOODQ_DATA_ROOT:-L:/_DATA}/GoodQ_Data/import_inbox
-  processing: ${GOODQ_DATA_ROOT:-L:/_DATA}/GoodQ_Data/epochs/epoch_2025_12_22/processing
-  models_cache: ${GOODQ_DATA_ROOT:-L:/_DATA}/models
+  data_root: ${GOODQ_DATA_ROOT:-./_DATA}/GoodQ_Data
+  import_inbox: ${GOODQ_DATA_ROOT:-./_DATA}/GoodQ_Data/import_inbox
+  processing: ${GOODQ_DATA_ROOT:-./_DATA}/GoodQ_Data/epochs/epoch_2025_12_22/processing
+  models_cache: ${GOODQ_DATA_ROOT:-./_DATA}/models
   
   # Segmentation output paths
   chunk_subdir: chunks
@@ -80,7 +80,7 @@ paths:
 # ============================================================================
 config:
   tools:
-    ffmpeg_exe: L:/_DATA/_TOOLS/ffmpeg/bin/ffmpeg.exe
+    ffmpeg_exe: ${GOODQ_FFMPEG_EXE:-ffmpeg}
 
 # ============================================================================
 # LLM & TTS

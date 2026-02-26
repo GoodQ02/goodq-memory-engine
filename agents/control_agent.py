@@ -11,6 +11,7 @@ Date: 2025-11-16
 """
 
 import json
+import os
 import sqlite3
 import sys
 import time
@@ -27,6 +28,43 @@ from agents.recovery_db import RecoveryDatabase
 from agents.recovery_strategies import RecoveryStrategies
 from steps.common.llm_model_factory import build_llm_models
 
+CONTROL_AGENT_STATUS_DISABLED_NO_LLM_CLIENT = "disabled_no_llm_client"
+CONTROL_AGENT_DISABLED_REASON_NO_LLM_CLIENT = "ControlAgent requires injected llm_client"
+CONTROL_AGENT_DATA_ROOT_UNRESOLVED = "ControlAgent data_root unresolved; set GOODQ_DATA_ROOT or configure paths.data_root"
+
+
+def _resolve_control_agent_data_dir(explicit_data_dir: Optional[Path]) -> Path:
+    if explicit_data_dir is not None:
+        return Path(explicit_data_dir)
+
+    env_data_root = (os.environ.get("GOODQ_DATA_ROOT") or "").strip()
+    if env_data_root:
+        env_path = Path(env_data_root)
+        return env_path if env_path.name == "GoodQ_Data" else env_path / "GoodQ_Data"
+
+    cfg: Dict[str, Any] = {}
+    try:
+        from steps.common.config_loader import load_configs
+
+        loaded = load_configs({})
+        if isinstance(loaded, dict):
+            cfg = loaded
+    except Exception:
+        cfg = {}
+
+    paths_cfg = (cfg.get("paths") or {}) if isinstance(cfg, dict) else {}
+    cfg_data_root = paths_cfg.get("data_root")
+    if isinstance(cfg_data_root, str) and cfg_data_root and "${" not in cfg_data_root:
+        return Path(cfg_data_root)
+
+    host_cfg = (cfg.get("host") or {}) if isinstance(cfg, dict) else {}
+    host_data_root = host_cfg.get("data_root")
+    if isinstance(host_data_root, str) and host_data_root and "${" not in host_data_root:
+        host_path = Path(host_data_root)
+        return host_path if host_path.name == "GoodQ_Data" else host_path / "GoodQ_Data"
+
+    raise ValueError(CONTROL_AGENT_DATA_ROOT_UNRESOLVED)
+
 class ControlAgent:
     """
     The Control Agent - Pipeline Intelligence Layer
@@ -42,12 +80,11 @@ class ControlAgent:
     def __init__(self, data_dir: Path = None, llm_client: LLMClient = None):
         """Initialize the Control Agent"""
         self.root = Path(__file__).parent.parent
-        # Use canonical data root from config
-        self.data_dir = data_dir or Path("L:/_DATA/GoodQ_Data")
 
         if llm_client is None:
-            raise ValueError("ControlAgent requires an injected llm_client")
+            raise ValueError(CONTROL_AGENT_DISABLED_REASON_NO_LLM_CLIENT)
         self.llm = llm_client
+        self.data_dir = _resolve_control_agent_data_dir(data_dir)
         
         # Initialize Config Healer (Phase 2)
         self.healer = ConfigHealer(llm_client=self.llm)

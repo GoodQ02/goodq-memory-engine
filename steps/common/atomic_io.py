@@ -3,13 +3,17 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 
-def atomic_write_json(path: Path, data: Dict[str, Any], *, indent: int = 2) -> None:
+def atomic_write_json(path: Path, data: Any, *, indent: int = 2) -> None:
     """Write JSON payload atomically using same-directory temp file + os.replace."""
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
     tmp = target.with_name(f"{target.name}.tmp")
-    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=indent), encoding="utf-8")
+    payload = json.dumps(data, ensure_ascii=False, indent=indent)
+    with tmp.open("w", encoding="utf-8") as handle:
+        handle.write(payload)
+        handle.flush()
+        os.fsync(handle.fileno())
     os.replace(tmp, target)

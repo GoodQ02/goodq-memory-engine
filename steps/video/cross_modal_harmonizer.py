@@ -35,6 +35,41 @@ def load_json_safe(path: str) -> Optional[Dict[str, Any]]:
     return None
 
 
+def _load_required_audio_artifact(path: Path, artifact_name: str) -> tuple[Optional[Dict[str, Any]], bool]:
+    """
+    Load required audio artifact and return (data, integrity_ok).
+    integrity_ok is False when artifact is missing or invalid.
+    """
+    if not path.exists():
+        logger.warning(
+            "[HARMONIZER] Missing required audio artifact artifact=%s path=%s",
+            artifact_name,
+            path,
+        )
+        return None, False
+    try:
+        with path.open("r", encoding="utf-8") as handle:
+            data = json.load(handle)
+        if not isinstance(data, dict):
+            logger.warning(
+                "[HARMONIZER] Invalid audio artifact payload artifact=%s path=%s payload_type=%s",
+                artifact_name,
+                path,
+                type(data).__name__,
+            )
+            return None, False
+        return data, True
+    except Exception as e:
+        logger.warning(
+            "[HARMONIZER] Failed to parse audio artifact artifact=%s path=%s exc_type=%s exc=%s",
+            artifact_name,
+            path,
+            type(e).__name__,
+            e,
+        )
+        return None, False
+
+
 def _load_commit_presence(cfg: Dict[str, Any], video_id: str, scene_ids: List[str] | None = None) -> Dict[str, Any]:
     """Best-effort: derive modality presence from committed memory events (authoritative)."""
     paths_cfg = (cfg.get('paths') or {}) if isinstance(cfg, dict) else {}
@@ -260,6 +295,15 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
                 )
                 _PROCESSING_FALLBACK_WARNED = True
     processing_dir = os.path.join(processing_root, str(video_id))
+    audio_artifact_dir_raw = item.get('audio_artifact_dir')
+    audio_artifact_dir: Optional[Path] = None
+    if isinstance(audio_artifact_dir_raw, str) and audio_artifact_dir_raw.strip():
+        audio_artifact_dir = Path(audio_artifact_dir_raw)
+    else:
+        logger.warning(
+            "[HARMONIZER] Missing audio_artifact_dir for video_id=%s; audio/transcript modalities disabled",
+            video_id,
+        )
     
     logger.info(f"[HARMONIZER] Starting cross-modal fusion for {video_id}")
     
@@ -305,19 +349,38 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
     transcript_scene_truth_available = has_transcripts_committed is False or bool(transcript_scene_ids)
     
     # Load audio segmentation (Phase 3)
-    segmentation_path = os.path.join(processing_dir, 'audio', 'segmentation.json')
-    segmentation_data = load_json_safe(segmentation_path)
+    segmentation_data = None
+    transcript_data = None
+    diarization_data = None
+    audio_artifact_integrity_ok = True
+    if audio_artifact_dir is not None:
+        segmentation_data = load_json_safe(str(audio_artifact_dir / 'segmentation.json'))
+        transcript_data, transcript_ok = _load_required_audio_artifact(
+            audio_artifact_dir / 'transcript.json',
+            'transcript',
+        )
+        diarization_data, diarization_ok = _load_required_audio_artifact(
+            audio_artifact_dir / 'diarization.json',
+            'diarization',
+        )
+        audio_artifact_integrity_ok = transcript_ok and diarization_ok
+    else:
+        audio_artifact_integrity_ok = False
     audio_segments = segmentation_data.get('segments', []) if segmentation_data else []
     
-    # Load transcript data
-    transcript_path = os.path.join(processing_dir, 'audio', 'transcript.json')
-    transcript_data = load_json_safe(transcript_path)
     transcript_segments = transcript_data.get('segments', []) if transcript_data else []
     
-    # Load diarization data
-    diarization_path = os.path.join(processing_dir, 'audio', 'diarization.json')
-    diarization_data = load_json_safe(diarization_path)
     speakers = diarization_data.get('speakers', []) if diarization_data else []
+    phase6_warning: Optional[str] = None
+    harmonization_status = 'complete'
+    if not audio_artifact_integrity_ok:
+        phase6_warning = 'missing_audio_artifacts'
+        harmonization_status = 'degraded'
+        logger.warning(
+            "[HARMONIZER] Harmonization degraded warning=%s video_id=%s",
+            phase6_warning,
+            video_id,
+        )
     
     # Load object detection results (if available)
     objects_path = os.path.join(processing_dir, 'video', 'detected_objects.json')
@@ -474,6 +537,9 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
         'phase6_complete': scene_data.get('phase6_complete', False),
         'phase6_harmonized': True
     }
+    if phase6_warning:
+        temporal_index['phase6_warning'] = phase6_warning
+        temporal_index['harmonization_status'] = harmonization_status
     
     # === SAVE TEMPORAL INDEX ===
     
@@ -485,7 +551,7 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
     logger.info(f"  Saved: {temporal_index_path}")
     
     return {
-        'harmonization_status': 'complete',
+        'harmonization_status': harmonization_status,
         'temporal_index_path': temporal_index_path,
         'unified_segments': len(unified_segments),
         'harmonized_scene_count': len(unified_segments),
@@ -494,4 +560,5 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
         'has_transcripts': temporal_index['has_transcripts'],
         'entity_extraction_available': ENTITY_EXTRACTION_AVAILABLE,
         'entities_extracted': total_entities_extracted,
+        **({'phase6_warning': phase6_warning} if phase6_warning else {}),
     }

@@ -536,6 +536,10 @@ def register_scene_bundle(
         )
 
     # Insert embeddings into vector memory (Qdrant/FAISS)
+    vector_store_results: Dict[str, bool] = {}
+    qdrant_ok: Optional[bool] = None
+    faiss_ok: Optional[bool] = None
+    vector_points_attempted = 0
     try:
         from steps.common.memory_manager import build_memory_router
         router = build_memory_router(cfg)
@@ -611,6 +615,7 @@ def register_scene_bundle(
                 })
         
         if points:
+            vector_points_attempted = len(points)
             if os.environ.get("GOODQ_VECTOR_DEBUG", "").strip().lower() in ("1", "true", "yes", "y", "on"):
                 try:
                     mods: Dict[str, int] = {}
@@ -627,8 +632,12 @@ def register_scene_bundle(
                         type(e).__name__,
                         e,
                     )
-            results = router.insert(points)
-            success_count = sum(1 for v in results.values() if v)
+            insert_results = router.insert(points)
+            if isinstance(insert_results, dict):
+                vector_store_results = {str(k): bool(v) for k, v in insert_results.items()}
+                qdrant_ok = vector_store_results.get('qdrant')
+                faiss_ok = vector_store_results.get('faiss')
+            success_count = sum(1 for v in vector_store_results.values() if v)
             print(f'[VECTOR] Inserted {success_count}/{len(points)} embeddings for scene {scene_id}')
         
     except Exception as e:
@@ -645,6 +654,10 @@ def register_scene_bundle(
         'frame_hash': frame_hash,
         'audio_hash': audio_hash,
         'segments': segments_created,
+        'vector_points_attempted': vector_points_attempted,
+        'vector_store_results': vector_store_results,
+        'qdrant_ok': qdrant_ok,
+        'faiss_ok': faiss_ok,
     }
 def store_short_term_summary(cfg: Dict[str, Any], summary: Dict[str, Any], *, category: str = "default") -> None:
     db_path = (cfg.get("paths", {}) or {}).get("db_path")

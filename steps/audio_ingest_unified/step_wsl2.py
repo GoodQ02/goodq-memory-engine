@@ -11,6 +11,8 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+from steps.common.atomic_io import atomic_write_json
+
 logger = logging.getLogger(__name__)
 
 
@@ -88,22 +90,26 @@ def run(item: dict, config: dict) -> dict:
             # Write compatibility artifacts for legacy code
             if 'transcription' in audio_result:
                 transcript_path = audio_path_win.parent / 'transcript.json'
-                with open(transcript_path, 'w', encoding='utf-8') as f:
-                    json.dump({
+                atomic_write_json(
+                    transcript_path,
+                    {
                         'text': audio_result.get('transcription', ''),
                         'word_timestamps': audio_result.get('word_timestamps', []),
                         'language': audio_result.get('language', 'en'),
-                        'language_probability': audio_result.get('language_probability', 0.0)
-                    }, f, indent=2)
+                        'language_probability': audio_result.get('language_probability', 0.0),
+                    },
+                )
             
             if 'diarization' in audio_result:
                 diarization_path = audio_path_win.parent / 'diarization.json'
-                with open(diarization_path, 'w', encoding='utf-8') as f:
-                    json.dump({
+                atomic_write_json(
+                    diarization_path,
+                    {
                         'speakers': audio_result.get('speakers', []),
                         'speaker_count': audio_result.get('speaker_count', 0),
-                        'segments': audio_result.get('diarization', [])
-                    }, f, indent=2)
+                        'segments': audio_result.get('diarization', []),
+                    },
+                )
             
             if 'energy' in audio_result or 'duration_seconds' in audio_result:
                 features_path = audio_path_win.parent / 'audio_features.json'

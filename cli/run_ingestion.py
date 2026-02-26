@@ -99,11 +99,17 @@ except ImportError:
 
 # Control Agent integration
 try:
-    from agents.control_agent import ControlAgent
+    from agents.control_agent import (
+        ControlAgent,
+        CONTROL_AGENT_STATUS_DISABLED_NO_LLM_CLIENT,
+        CONTROL_AGENT_DISABLED_REASON_NO_LLM_CLIENT,
+    )
     CONTROL_AGENT_AVAILABLE = True
 except ImportError:
     CONTROL_AGENT_AVAILABLE = False
     ControlAgent = None
+    CONTROL_AGENT_STATUS_DISABLED_NO_LLM_CLIENT = "disabled_no_llm_client"
+    CONTROL_AGENT_DISABLED_REASON_NO_LLM_CLIENT = "Control Agent module unavailable"
     logger.warning(
         "run_ingestion warning context=%s error=%s",
         "control_agent.import",
@@ -206,6 +212,18 @@ VERBOSE: bool = False
 STEP_TIMEOUT: Optional[int] = 1800  # 30 minutes max per step
 MAX_HEALER_RETRIES: int = 3
 _CURRENT_RUN_CONTEXT: Optional[Dict[str, Any]] = None
+
+
+def _control_agent_runtime_enabled() -> bool:
+    if not CONTROL_AGENT_AVAILABLE:
+        return False
+    if not isinstance(_CURRENT_RUN_CONTEXT, dict):
+        return False
+    status = _CURRENT_RUN_CONTEXT.get('control_agent_status')
+    if status is None:
+        # Backward-compatible default for direct _run_step() calls in tests/harnesses.
+        return True
+    return status == 'initialized'
 
 
 def run_ingestion(video_path: str, cfg: Optional[Dict] = None):
@@ -774,7 +792,9 @@ def _run_step(
         parent_dir = str(REPO_ROOT.parent)
         if 'PYTHONPATH' not in work_env or parent_dir not in work_env['PYTHONPATH']:
             existing_path = work_env.get('PYTHONPATH', '')
-            work_env['PYTHONPATH'] = f"{parent_dir};{existing_path}" if existing_path else parent_dir
+            work_env['PYTHONPATH'] = (
+                f"{parent_dir}{os.pathsep}{existing_path}" if existing_path else parent_dir
+            )
         
         start_ts = time.perf_counter()
         if VERBOSE:
@@ -794,7 +814,7 @@ def _run_step(
             if VERBOSE:
                 typer.echo(f'[step] !! {step_name} ({env_name}) timed out after {STEP_TIMEOUT}s', err=True)
 
-            if CONTROL_AGENT_AVAILABLE:
+            if _control_agent_runtime_enabled():
                 try:
                     agent = ControlAgent()
                     healing_result = agent.auto_heal_failure(
@@ -835,7 +855,7 @@ def _run_step(
             stdout = result.stdout.strip()
             error_msg = f"Step {step_name} failed ({env_name})\nSTDOUT: {stdout}\nSTDERR: {stderr}"
 
-            if CONTROL_AGENT_AVAILABLE:
+            if _control_agent_runtime_enabled():
                 try:
                     agent = ControlAgent()
                     healing_result = agent.auto_heal_failure(
@@ -882,7 +902,7 @@ def _run_step(
             typer.echo(f'[step] <- {step_name} ({env_name}) [{duration:.1f}s]')
         
         # PHASE 3: Learn from successful execution
-        if CONTROL_AGENT_AVAILABLE:
+        if _control_agent_runtime_enabled():
             try:
                 agent = ControlAgent()
                 agent.learn_from_success(
@@ -1083,6 +1103,7 @@ def _process_audio(
     video_path: Path,
     scene: Dict[str, Any],
     audio_dir: Path,
+    audio_artifact_dir: Path,
     video_hash: str,
     scene_id: str,
 ) -> Optional[Dict[str, Any]]:
@@ -1179,9 +1200,7 @@ def _process_audio(
 
         # Write compatibility JSON files for harmonizer
         # The harmonizer expects separate transcript.json and diarization.json files
-        video_processing_dir = audio_dir.parent  # Go up from audio/ to processing/<video>/
-        audio_output_dir = video_processing_dir / 'audio'
-        audio_output_dir.mkdir(parents=True, exist_ok=True)
+        audio_artifact_dir.mkdir(parents=True, exist_ok=True)
 
         # Write transcript.json
         if item.get('segments') or item.get('transcript'):
@@ -1190,8 +1209,7 @@ def _process_audio(
                 'full_text': item.get('transcript', ''),
                 'language': item.get('language', 'en')
             }
-            with open(audio_output_dir / 'transcript.json', 'w', encoding='utf-8') as f:
-                json.dump(transcript_json, f, indent=2, ensure_ascii=False)
+            atomic_write_json(audio_artifact_dir / 'transcript.json', transcript_json)
             logger.info(f"[AUDIO] Wrote transcript.json with {len(item.get('segments', []))} segments")
 
         # Write diarization.json
@@ -1200,8 +1218,7 @@ def _process_audio(
                 'speakers': item.get('speakers', []),
                 'segments': item.get('speaker_segments', [])
             }
-            with open(audio_output_dir / 'diarization.json', 'w', encoding='utf-8') as f:
-                json.dump(diarization_json, f, indent=2, ensure_ascii=False)
+            atomic_write_json(audio_artifact_dir / 'diarization.json', diarization_json)
     else:
         logger.info(f"[AUDIO] No audio stream in scene {scene_id}, skipping audio processing")
 
@@ -1287,6 +1304,7 @@ def run(
     baseline_wsl_override = bool(is_baseline() and require_wsl_audio())
     profile_override: Optional[str] = None
     profile_override_reason: Optional[str] = None
+    knowledge_graph_status = 'active' if KNOWLEDGE_GRAPH_AVAILABLE else 'disabled_import_failure'
     if baseline_wsl_override:
         logger.warning("BASELINE override: WSL audio forced via GOODQ_REQUIRE_WSL_AUDIO=1")
         profile_override = "wsl_audio_forced_in_baseline"
@@ -1298,8 +1316,15 @@ def run(
         'timer_unit': 'ms',
         'healer_retry_count': 0,
         'healer_retry_by_step': {},
-        'control_agent_status': 'import_unavailable' if not CONTROL_AGENT_AVAILABLE else 'pending',
-        'control_agent_reason': None,
+        'control_agent_status': (
+            'import_unavailable'
+            if not CONTROL_AGENT_AVAILABLE
+            else CONTROL_AGENT_STATUS_DISABLED_NO_LLM_CLIENT
+        ),
+        'control_agent_reason': (
+            None if not CONTROL_AGENT_AVAILABLE else CONTROL_AGENT_DISABLED_REASON_NO_LLM_CLIENT
+        ),
+        'knowledge_graph_status': knowledge_graph_status,
         'profile_override': profile_override,
         'profile_override_reason': profile_override_reason,
     }
@@ -1364,26 +1389,27 @@ def run(
 
     # Initialize Control Agent if available
     control_agent = None
-    control_agent_status = 'import_unavailable' if not CONTROL_AGENT_AVAILABLE else 'pending'
-    control_agent_reason: Optional[str] = None
+    control_agent_status = (
+        'import_unavailable'
+        if not CONTROL_AGENT_AVAILABLE
+        else CONTROL_AGENT_STATUS_DISABLED_NO_LLM_CLIENT
+    )
+    control_agent_reason: Optional[str] = (
+        None if not CONTROL_AGENT_AVAILABLE else CONTROL_AGENT_DISABLED_REASON_NO_LLM_CLIENT
+    )
     if CONTROL_AGENT_AVAILABLE:
-        try:
-            control_agent = ControlAgent()
-            # Control Agent auto-starts monitoring in __init__
-            typer.echo("[CONTROL] Control Agent initialized and monitoring")
-            control_agent_status = 'initialized'
-        except Exception as e:
-            typer.echo(f"[CONTROL] Failed to initialize Control Agent: {e}", err=True)
-            control_agent_status = 'disabled_init_error'
-            control_agent_reason = f'{type(e).__name__}: {e}'
-            CONTROL_AGENT_AVAILABLE = False
-            control_agent = None
+        typer.echo("[CONTROL] Control Agent disabled: no llm_client injection")
+        # Prevent downstream auto-healing calls from repeatedly attempting no-client construction.
+        CONTROL_AGENT_AVAILABLE = False
+        control_agent = None
 
     run_context['control_agent_status'] = control_agent_status
     run_context['control_agent_reason'] = control_agent_reason
+    run_context['knowledge_graph_status'] = knowledge_graph_status
     if isinstance(cfg.get('run'), dict):
         cfg['run']['control_agent_status'] = control_agent_status
         cfg['run']['control_agent_reason'] = control_agent_reason
+        cfg['run']['knowledge_graph_status'] = knowledge_graph_status
     cfg_json = _write_cfg_snapshot(cfg, workspace)
 
     for video_path in videos:
@@ -1475,6 +1501,8 @@ def run(
         processing_dir = _ensure_dir(processing_root / video_path.stem)
         frame_dir = _ensure_dir(video_workspace / 'frames')
         audio_dir = _ensure_dir(video_workspace / 'audio')
+        audio_artifact_dir = _ensure_dir(processing_dir / 'audio')
+        run_context['audio_artifact_dir'] = str(audio_artifact_dir)
 
         scene_outputs: List[Dict[str, Any]] = []
         total_scenes = len(scenes)
@@ -1584,7 +1612,16 @@ def run(
                         if VERBOSE:
                             typer.echo(f'[DEBUG] Processing audio (not skipped, force={force})')
                         typer.echo(f'  [EXTRACT] Extracting audio...')
-                        audio_info = _process_audio(cfg_json, ffmpeg, video_path, scene, audio_dir, video_hash, scene_id)
+                        audio_info = _process_audio(
+                            cfg_json,
+                            ffmpeg,
+                            video_path,
+                            scene,
+                            audio_dir,
+                            audio_artifact_dir,
+                            video_hash,
+                            scene_id,
+                        )
                         if audio_info is None:
                             typer.echo(f'  [OK] No audio track in video (video-only)')
                         else:
@@ -1680,6 +1717,10 @@ def run(
                     if VERBOSE and kg_stats:
                         typer.echo(f'[kg] Scene {scene_index}: {kg_stats.get("entities_resolved", 0)} entities resolved')
                 except Exception as kg_error:
+                    knowledge_graph_status = 'error_runtime'
+                    run_context['knowledge_graph_status'] = knowledge_graph_status
+                    if isinstance(cfg.get('run'), dict):
+                        cfg['run']['knowledge_graph_status'] = knowledge_graph_status
                     logger.warning(
                         "run_ingestion warning context=%s error=%s",
                         "knowledge_graph.scene_update",
@@ -1742,10 +1783,12 @@ def run(
             'video_hash': video_hash,
             'video_id': video_hash,  # Use video_hash as video_id for consistency
             'video_name': video_path.name,
+            'audio_artifact_dir': str(audio_artifact_dir),
             'scene_meta': detection_meta,
             'scenes': scene_outputs,
             'control_agent_status': control_agent_status,
             'control_agent_reason': control_agent_reason,
+            'knowledge_graph_status': knowledge_graph_status,
         }
         if profile_override:
             video_result['profile_override'] = profile_override
@@ -1765,6 +1808,7 @@ def run(
                 'video_id': video_hash,
                 'video_path': str(video_path),
                 'processing_dir': str(processing_dir),
+                'audio_artifact_dir': str(audio_artifact_dir),
                 'scene_manifest_path': str(processing_dir / 'video' / 'scene_manifest.json'),
                 'scenes': scene_outputs,
                 'video_hash': video_hash,
@@ -1860,6 +1904,14 @@ def run(
     if kg_result and kg_result.get('status') == 'success':
         if VERBOSE:
             typer.echo(f"[kg] Knowledge graph built successfully: {kg_result.get('statistics', {})}")
+    elif kg_result and kg_result.get('status') == 'failed':
+        knowledge_graph_status = 'error_runtime'
+
+    run_context['knowledge_graph_status'] = knowledge_graph_status
+    if isinstance(cfg.get('run'), dict):
+        cfg['run']['knowledge_graph_status'] = knowledge_graph_status
+    for result in results:
+        result['knowledge_graph_status'] = knowledge_graph_status
 
     # Generate LLM summaries for videos (if enabled)
     llm_config = cfg.get('llm', {})
@@ -1918,6 +1970,11 @@ def run(
                     frame_errors += 1
                 if 'audio' in errors:
                     audio_errors += 1
+
+    def _persist_results_artifact() -> None:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        _atomic_write_json(output, results, indent=2)
+        typer.echo(f'Wrote results to {output}')
     
     if scenes_with_errors > 0:
         error_rate = (scenes_with_errors / total_scenes * 100) if total_scenes > 0 else 0
@@ -1934,11 +1991,10 @@ def run(
             typer.echo(f'  - Video file was deleted or moved during processing', err=True)
             typer.echo(f'  - Incorrect file path', err=True)
             typer.echo(f'  - FFmpeg not available or broken', err=True)
+            _persist_results_artifact()
             raise typer.Exit(code=1)
 
-    output.parent.mkdir(parents=True, exist_ok=True)
-    _atomic_write_json(output, results, indent=2)
-    typer.echo(f'Wrote results to {output}')
+    _persist_results_artifact()
     
     # Generate Control Agent final report (best-effort; non-fatal)
     if control_agent:

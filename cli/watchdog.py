@@ -81,10 +81,16 @@ logger = logging.getLogger(__name__)
 
 # Import Control Agent
 try:
-    from agents.control_agent import ControlAgent
+    from agents.control_agent import (
+        ControlAgent,
+        CONTROL_AGENT_STATUS_DISABLED_NO_LLM_CLIENT,
+        CONTROL_AGENT_DISABLED_REASON_NO_LLM_CLIENT,
+    )
     CONTROL_AGENT_AVAILABLE = True
 except ImportError:
     CONTROL_AGENT_AVAILABLE = False
+    CONTROL_AGENT_STATUS_DISABLED_NO_LLM_CLIENT = "disabled_no_llm_client"
+    CONTROL_AGENT_DISABLED_REASON_NO_LLM_CLIENT = "Control Agent module unavailable"
     logger.warning("Control Agent not available - running without AI orchestration")
 
 # Configuration
@@ -261,12 +267,12 @@ class WatchdogProcessor:
         
         # Initialize Control Agent if available
         self.control_agent = None
+        self.control_agent_status = "import_unavailable"
+        self.control_agent_reason: Optional[str] = None
         if CONTROL_AGENT_AVAILABLE:
-            try:
-                self.control_agent = ControlAgent()
-                logger.info("[BOT] Control Agent initialized - AI orchestration enabled")
-            except Exception as e:
-                logger.warning(f"Failed to initialize Control Agent: {e}")
+            self.control_agent_status = CONTROL_AGENT_STATUS_DISABLED_NO_LLM_CLIENT
+            self.control_agent_reason = CONTROL_AGENT_DISABLED_REASON_NO_LLM_CLIENT
+            logger.info("[BOT] Control Agent disabled: no llm_client injection")
         
         # Ensure directories exist
         self.processing_dir.mkdir(parents=True, exist_ok=True)
@@ -285,6 +291,8 @@ class WatchdogProcessor:
             'pipeline': pipeline_name,
             'started_at': datetime.now(timezone.utc).isoformat(),
             'timer_unit': 'ms',
+            'control_agent_status': self.control_agent_status,
+            'control_agent_reason': self.control_agent_reason,
         }
 
         try:

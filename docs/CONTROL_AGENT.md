@@ -4,7 +4,7 @@
 
 # Control Agent & Self-Healing System
 
-**Status:** ✅ ACTIVE - Integrated into ingestion pipeline  
+**Status:** ⚠️ CONDITIONAL - Runtime disabled by default unless an `llm_client` is explicitly injected  
 **Last Updated:** December 15, 2025  
 **Version:** 1.0.0
 
@@ -12,7 +12,7 @@
 
 ## Overview
 
-The Control Agent is GoodQ4All's autonomous monitoring, diagnosis, and healing system. It watches pipeline execution in real-time, learns from failures, and automatically applies recovery strategies to keep the system operational.
+The Control Agent is GoodQ4All's monitoring, diagnosis, and healing subsystem. In the current runtime contract, it requires explicit `llm_client` injection to initialize; default CLI flows persist a deterministic disabled state instead of attempting best-effort auto-init.
 
 **Think of it as:** An intelligent DevOps engineer that never sleeps, continuously learning optimal recovery patterns and applying fixes before you even notice problems.
 
@@ -163,42 +163,22 @@ error_patterns:
 
 ### In Ingestion Pipeline (cli/run_ingestion.py)
 
-The Control Agent is **actively integrated** at three critical points:
+Control Agent integration points exist, but default runtime startup records an explicit disabled state when no `llm_client` is injected.
 
-#### 1. On Step Timeout
+#### 1. Startup State Persistence
 ```python
-if CONTROL_AGENT_AVAILABLE:
-    agent = ControlAgent()
-    healing_result = agent.auto_heal_failure(
-        error=TimeoutError(...),
-        step_name=step_name,
-        context={...}
-    )
+control_agent_status = "disabled_no_llm_client"
+control_agent_reason = "ControlAgent requires injected llm_client"
 ```
 
-#### 2. On Step Failure
+#### 2. Step-Level Healing/Learning (Conditional)
 ```python
-if CONTROL_AGENT_AVAILABLE:
-    agent = ControlAgent()
-    healing_result = agent.auto_heal_failure(
-        error=RuntimeError(error_msg),
-        step_name=step_name,
-        context={...}
-    )
+if control_agent_status == "initialized":
+    agent = ControlAgent(llm_client=llm_client)
+    # auto_heal_failure / learn_from_success
 ```
 
-#### 3. On Successful Completion
-```python
-if CONTROL_AGENT_AVAILABLE:
-    agent = ControlAgent()
-    agent.learn_from_success(
-        step_name=step_name,
-        execution_time=duration,
-        gpu_usage=gpu_stats
-    )
-```
-
-#### 4. Final Report Generation
+#### 3. Final Report Generation
 ```python
 if control_agent:
     report_path = workspace / "control_agent_report.md"
@@ -237,7 +217,7 @@ if control_agent:
 ```python
 from agents.control_agent import ControlAgent
 
-agent = ControlAgent()
+agent = ControlAgent(llm_client=llm_client)
 
 # Analyze an error
 diagnosis = agent.diagnose_error(
@@ -310,7 +290,7 @@ agent.generate_report(
 
 3. Control Agent analyzes error
    ├─> Checks HEALING_RULES (pattern match: "CUDA out of memory")
-   ├─> Checks recovery_strategies DB (success rate: 89%)
+   ├─> Checks recovery_strategies DB (current success-rate metadata)
    └─> Recommended: reduce_batch_size (auto_apply=True)
 
 4. Config Healer applies fix
@@ -395,33 +375,27 @@ ORDER BY timestamp DESC;
 
 ## Performance Impact
 
-**Overhead:** Negligible (~0.1% of total pipeline time)
+**Overhead:** Low in expected operation; verify per-run timing artifacts for current values.
 
 **Benefits:**
-- Automatic recovery from 75% of common errors
-- Reduces manual intervention by 90%
-- System uptime improved from 82% → 97%
-- Mean time to recovery: <30 seconds
+- Faster diagnosis and triage when initialized with an injected `llm_client`
+- Reduced manual intervention when healing rules match known failures
+- Explicit control-plane status persistence even when disabled
 
 ---
 
-## Status: Verified Operational ✅
+## Runtime Status (Artifact-Verified)
 
-**Evidence from forensic audit (Dec 14, 2025):**
+**Current runtime contract:**
 
-✅ Control Agent imported and initialized in `cli/run_ingestion.py`  
-✅ Auto-healing triggered on timeout and failure  
-✅ Success learning active on step completion  
-✅ Report generation confirmed  
-✅ Database schemas exist and functional  
-✅ Config backups directory active  
-✅ LLM integration working (multi-model fallback)
+✅ Control Agent module imports and storage schemas are present  
+✅ Run artifacts persist explicit control-plane state (`control_agent_status`)  
+⚠️ Default CLI/watchdog flows persist `disabled_no_llm_client` unless `llm_client` is injected  
+⚠️ Auto-healing, learning, and report generation are active only when initialization succeeds
 
-**Current Stats:**
-- 47 error patterns learned
-- 89% average healing success rate
-- 234 automatic recoveries in last 30 days
-- 0 config corruptions (backup system works)
+**Verification guidance:**
+- Trust per-run artifacts (`control_agent_status`, `control_agent_reason`) over static document claims.
+- Treat historical aggregate metrics as non-authoritative unless regenerated from current databases.
 
 ---
 
@@ -443,10 +417,10 @@ ORDER BY timestamp DESC;
 
 ## Troubleshooting
 
-### Control Agent Not Starting
+### Control Agent Disabled by Default (Expected)
 
 ```bash
-# Check if import successful
+# Check if module import succeeds
 python -c "from agents.control_agent import ControlAgent; print('OK')"
 
 # Verify databases exist
@@ -458,8 +432,8 @@ ls <GOODQ_DATA_ROOT>\GoodQ_Data\recovery.db
 
 Check logs for:
 ```
-[CONTROL] Failed to initialize Control Agent: <error>
-[CONTROL] Healing disabled (auto_apply=False)
+[CONTROL] Control Agent disabled: no llm_client injection
+control_agent_status=disabled_no_llm_client
 ```
 
 ### Database Locked
@@ -467,7 +441,7 @@ Check logs for:
 ```python
 # Reset database connection
 from agents.control_agent import ControlAgent
-agent = ControlAgent()
+agent = ControlAgent(llm_client=llm_client)
 agent.recovery_db.conn.close()
 ```
 
@@ -484,12 +458,6 @@ agent.recovery_db.conn.close()
 
 ## Conclusion
 
-The Control Agent isn't theoretical—it's **running in production right now**, learning from every video processed, healing failures automatically, and getting smarter with each execution.
+The Control Agent subsystem is production code with explicit activation semantics: default CLI/watchdog flows persist a deterministic disabled state until an injected `llm_client` integration is provided.
 
-It's the reason GoodQ4All can run unattended for hours, processing dozens of videos, surviving GPU memory spikes, network hiccups, and model crashes without human intervention.
-
-**This is autonomous infrastructure.**  
-**This is self-healing AI.**  
-**This is operational excellence.**
-
-🔥 **LIVE. LEARNING. HEALING.** 🔥
+GoodQ4All remains unattended-capable through watchdog + artifact-backed observability, with control-plane state declared in run metadata for each run.

@@ -17,7 +17,8 @@ GoodQ4All is a local-first multimodal memory system for long-running ingestion, 
 
 - Local-first operation with no required cloud runtime dependency.
 - Persistent state through SQLite + Qdrant + knowledge graph storage.
-- Watchdog and control-plane driven for long-running workloads.
+- Watchdog-driven long-running workloads with explicit control-plane state persistence.
+- ControlAgent activation is explicit; default flows persist `disabled_no_llm_client` unless an `llm_client` is injected.
 - Audit-grade behavior: failures are visible, logged, and attributable.
 
 ## Capability Surface

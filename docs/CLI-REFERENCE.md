@@ -5,7 +5,7 @@
 # GoodQ CLI Reference
 
 **Last Updated:** December 15, 2025  
-**Status:** ✅ Production Ready
+**Status:** Runtime-conditional (verify with current run artifacts and health checks)
 
 Complete command-line interface reference for GoodQ multimodal processing system.
 
@@ -34,10 +34,15 @@ python -m cli.run_ingestion --input-dir <path> [OPTIONS]
 
 **Key Options:**
 - `--input-dir`: Path to directory containing video files
-- `--video-name`: Process specific video (optional, processes all if omitted)
-- `--force-reprocess`: Reprocess even if already completed
-- `--skip-scene-detection`: Use existing scene detection results
-- `--dry-run`: Preview what would be processed without executing
+- `--output`: Path to write run-level JSON results (default: `logs/scene_ingest_results.json`)
+- `--workspace`: Workspace directory for scene artifacts and config snapshot (default: `logs/scene_ingest`)
+- `--max-videos`: Maximum number of videos to process (`0` = all)
+- `--max-scenes`: Maximum number of scenes per video (`0` = all)
+- `--scene-threshold`: Override scene detection threshold
+- `--min-scene-seconds`: Override minimum scene length
+- `--force` / `--force-reprocess`: Reprocess even if already completed
+- `--verbose`: Emit per-step progress messages
+- `--step-timeout`: Abort a step if it exceeds N seconds
 
 **What It Does:**
 1. **Scene Detection** - Splits video into semantic scenes (PySceneDetect)
@@ -55,9 +60,6 @@ python -m cli.run_ingestion --input-dir <path> [OPTIONS]
 ```bash
 # Process all videos in inbox
 python -m cli.run_ingestion --input-dir samples/ingestion
-
-# Process specific video
-python -m cli.run_ingestion --input-dir samples/ingestion --video-name "interview.mp4"
 
 # Reprocess with force flag
 python -m cli.run_ingestion --input-dir samples/ingestion --force-reprocess
@@ -77,37 +79,28 @@ python -m cli.run_ingestion --input-dir samples/ingestion --force-reprocess
 
 **Usage:**
 ```bash
-python -m cli.watchdog [OPTIONS]
+python -m cli.watchdog
 ```
 
 **Key Options:**
-- `--inbox-dir`: Directory to monitor (default: from config)
-- `--poll-interval`: Check frequency in seconds (default: 30)
-- `--no-agent`: Disable AI Control Agent integration
+- Current implementation starts with resolved config defaults and does not expose CLI flags for inbox/poll interval/agent mode.
+- Inbox and processing roots are resolved from `configs/config.yaml` and environment (`GOODQ_DATA_ROOT`).
 
 **What It Does:**
 1. Watches configured inbox directory (default: `<project_root>\samples\ingestion`)
 2. Detects new video files (mp4, avi, mkv, mov, webm, flv)
 3. Calculates file hash to avoid duplicates
 4. Automatically triggers `run_ingestion` for new files
-5. Optional: AI Control Agent for intelligent orchestration
+5. Records explicit control-plane state in run context; Control Agent remains disabled unless explicitly integrated with an injected `llm_client`.
 
-**AI Control Agent Features:**
-- Intelligent scheduling based on system load
-- Priority management (urgent/high/normal/low)
-- Resource allocation optimization
-- Error recovery and retry logic
+**Control Plane Note:**
+- The watchdog runs deterministically without auto-initializing ControlAgent by default.
+- ControlAgent state is persisted as `disabled_no_llm_client` when no injected client is provided.
 
 **Example:**
 ```bash
 # Start watchdog with defaults
 python -m cli.watchdog
-
-# Custom poll interval
-python -m cli.watchdog --poll-interval 60
-
-# Without AI agent (simpler mode)
-python -m cli.watchdog --no-agent
 ```
 
 **Logs:** `<project_root>\logs\watchdog.log`

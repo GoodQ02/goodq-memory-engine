@@ -5,10 +5,10 @@
 # GoodQ System Architecture
 
 **Last Updated:** December 15, 2025  
-**Status:** ✅ Forensically Verified Operational System  
+**Status:** Operational (verify per-run from artifacts and health checks)  
 **Verification Date:** December 14, 2025
 
-> **Note:** This document reflects the current operational architecture with scene-first processing, unified environment, and dual audio architecture. Historical references (legacy orchestration, FAISS, multiple envs) have been removed or marked as deprecated.
+> **Note:** This document reflects the runtime architecture. Treat run artifacts and health checks as source-of-truth for current state.
 
 ---
 
@@ -16,31 +16,29 @@
 
 GoodQ4All is a **local, GPU-accelerated multimodal AI pipeline** that processes video, audio, and images entirely on your machine. The system uses **scene-first processing** with a **unified environment** and **dual audio architecture** (Windows + WSL2) for maximum performance.
 
-**Key Facts (Dec 14, 2025):**
-- ✅ 30 scenes processed in live test
-- ✅ GPU: RTX 4070 Ti SUPER 16GB, 85% utilization (stable)
-- ✅ CUDA: 12.1 (Windows), 12.8 (WSL2)
-- ✅ Environment: Unified `goodq_core` (Python 3.10)
-- ✅ Vector DB: Qdrant (port 6333)
-- ✅ Audio: WSL2 GPU-accelerated (PID 177 service)
+**Key Runtime Facts:**
+- Scene-first ingestion is active.
+- Qdrant is the canonical vector store.
+- FAISS is an optional secondary parity/fallback path where configured.
+- GPU/WSL acceleration is profile-gated and optional for correctness.
 
 ---
 
 ## 🎯 Design Principles (Dec 14, 2025)
 
-### 1. Scene-First Processing ✅ Operational
+### 1. Scene-First Processing (Runtime-Validated)
 - Video split into scenes FIRST (~30 scenes for 1hr video)
 - Each scene processed independently (frame + audio + entities)
 - Parallel-friendly architecture
 - Verified: 30 scenes processed Dec 14, 2025
 
-### 2. Unified Environment ✅ Operational
+### 2. Unified Environment (Runtime-Validated)
 - Single `goodq_core` conda environment (Python 3.10)
 - All vision, text, and orchestration models
 - Replaced 6 separate environments (30GB disk savings)
 - GPU sharing: Windows (vision) + WSL2 (audio) = 85% util stable
 
-### 3. Dual Audio Architecture ✅ Operational
+### 3. Dual Audio Architecture (Runtime-Validated)
 **Queue-Based Service** (long-running daemon):
 - PID 177 (verified running Dec 14)
 - Preloaded: Whisper medium, Pyannote 3.1, Silero VAD
@@ -51,7 +49,7 @@ GoodQ4All is a **local, GPU-accelerated multimodal AI pipeline** that processes 
 - On-demand loading with cleanup
 - Output: result.json with transcript, diarization, emotion, embeddings
 
-### 4. Observability ✅ Operational
+### 4. Observability (Runtime-Validated)
 Comprehensive telemetry:
 - Scene artifacts: `logs/scene_ingest/<video>/audio/` & `video/`
 - Memory DB: `<GOODQ_DATA_ROOT>\GoodQ_Data\memory.db`
@@ -94,8 +92,8 @@ Comprehensive telemetry:
 ┌──────────────────────────┴──────────────────────────────────┐
 │                ✅ Memory Layer                               │
 │  SQLite: memory.db · knowledge_graph.db                     │
-│  Qdrant: goodq_text · goodq_image · goodq_audio (port 6333)│
-│  ⚠️ (FAISS deprecated - migrated to Qdrant)                 │
+│  Qdrant: canonical collections (port 6333)                 │
+│  FAISS: optional secondary parity/fallback path            │
 └──────────────────────────┬──────────────────────────────────┘
                            │
 ┌──────────────────────────┴──────────────────────────────────┐
@@ -313,7 +311,7 @@ logs\scene_ingest\                # ✅ Scene artifacts (actual location)
 - `processing_state` - Pipeline progress
 - `scene_metadata` - Timestamps, duration, frame counts
 
-**Status:** ✅ Operational (Dec 14 verified)
+**Status:** Runtime-conditional; verify with current artifacts and DB health checks
 
 #### 2. Knowledge Graph Database (`knowledge_graph.db`)
 **Purpose:** Entity relationships, cross-modal resolution
@@ -324,7 +322,7 @@ logs\scene_ingest\                # ✅ Scene artifacts (actual location)
 - `mentions` - Where entities appear (scene_id, timestamp)
 
 **Integration:** Real-time insertion via `lib/kg_realtime_integration.py:109`  
-**Status:** ✅ Operational (Dec 14 verified)
+**Status:** Runtime-conditional; verify with current artifacts and DB health checks
 
 #### 3. Qdrant Vector Database (Port 6333)
 **Purpose:** Semantic search across modalities
@@ -335,10 +333,10 @@ logs\scene_ingest\                # ✅ Scene artifacts (actual location)
 - `goodq_audio` - Audio embeddings (CLAP)
 
 **API:** http://localhost:6333  
-**Status:** ✅ Operational (Dec 14 verified)
+**Status:** Runtime-conditional; verify with current artifacts and DB health checks
 
 ### ⚠️ Deprecated Storage
-- FAISS indices (replaced by Qdrant)
+- FAISS-only storage as sole vector backend
 - unified_goodq.db (consolidated into memory.db)
 - Old data paths (`<project_root>/data/`)
 
@@ -704,9 +702,9 @@ pwsh scripts/benchmark_pipeline.ps1 -InputDir test_videos -Iterations 5
 
 ---
 
-## 🔄 System Status (Dec 14, 2025)
+## 🔄 System Status (Dec 14, 2025 Snapshot)
 
-### ✅ Fully Operational
+### Runtime-Verified Components
 - Scene detection (30 scenes confirmed)
 - Frame extraction & vision models (CLIP, DINO, YOLO, BLIP, OCR)
 - WSL2 audio processing (Whisper, Pyannote, emotion, CLAP)
@@ -722,7 +720,7 @@ pwsh scripts/benchmark_pipeline.ps1 -InputDir test_videos -Iterations 5
 
 ### ⚠️ Deprecated / Cleanup Planned
 - legacy orchestration orchestration (removed, direct invocation now)
-- FAISS indices (migrated to Qdrant)
+- FAISS-only vector operation (Qdrant remains canonical; FAISS may exist as secondary parity/fallback path)
 - 6 separate conda environments (unified to goodq_core)
 - Legacy audio steps (superseded by unified WSL2)
 - Old entity extractor (replaced by steps/video version)
@@ -790,7 +788,7 @@ Invoke-WebRequest http://localhost:6333/collections
 
 ## 🎯 Conclusion
 
-GoodQ4All is a **forensically verified, operationally complete multimodal AI pipeline** running entirely on local hardware.
+GoodQ4All is a local multimodal pipeline with profile-gated acceleration and artifact-driven runtime truth signals.
 
 **Key Achievements:**
 - ✅ Scene-first processing (30 scenes verified)
@@ -800,7 +798,7 @@ GoodQ4All is a **forensically verified, operationally complete multimodal AI pip
 - ✅ Knowledge graph real-time insertion confirmed
 - ✅ Qdrant vector storage operational (3 collections)
 
-**This is not a prototype. This is a production-ready system processing real video with full multimodal extraction.**
+Operational status should be interpreted from current run artifacts and health checks, not static document claims.
 
 **Performance:** 1-2 hours per 1-hour video (RTX 4070 Ti SUPER)  
 **Privacy:** 100% local processing, no cloud dependencies  
@@ -811,9 +809,8 @@ GoodQ4All is a **forensically verified, operationally complete multimodal AI pip
 **Last Updated:** December 15, 2025  
 **Architecture Version:** 2.0 (Scene-First, Unified Environment, Dual Audio)  
 **Verification Date:** December 14, 2025  
-**Status:** ✅ FULLY OPERATIONAL
+**Status:** Runtime-conditional; verify from artifacts (`control_agent_status`, `knowledge_graph_status`, `phase6_*`, vector parity fields)
 
 ---
 
-*"The best intelligence is the intelligence you control."*  
-*"Not 'almost.' Not 'prototype.' Operationally complete."*
+*"The best intelligence is the intelligence you control."*

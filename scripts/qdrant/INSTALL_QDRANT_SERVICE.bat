@@ -5,6 +5,7 @@ setlocal EnableExtensions
 for %%I in ("%~dp0..\\..") do set "REPO_ROOT=%%~fI"
 for %%D in ("%REPO_ROOT%") do set "REPO_DRIVE=%%~dD"
 if "%GOODQ_DATA_ROOT%"=="" set "GOODQ_DATA_ROOT=%REPO_DRIVE%\_DATA"
+set "QDRANT_STORAGE_PATH=%GOODQ_DATA_ROOT%\qdrant_storage"
 set "NSSM_EXE=%REPO_ROOT%\vendor\nssm.exe"
 set "NSSM_ZIP=%REPO_ROOT%\vendor\nssm.zip"
 set "NSSM_TMP=%REPO_ROOT%\vendor\nssm_temp"
@@ -52,6 +53,8 @@ echo [OK] NSSM ready
 echo.
 echo [2/3] Installing Qdrant service...
 
+if not exist "%QDRANT_STORAGE_PATH%" mkdir "%QDRANT_STORAGE_PATH%"
+
 REM Install service
 "%NSSM_EXE%" install GoodQ_Qdrant "%QDRANT_EXE%" "--config-path" "%QDRANT_CFG%"
 
@@ -62,6 +65,7 @@ REM Configure service
 "%NSSM_EXE%" set GoodQ_Qdrant AppDirectory "%QDRANT_APPDIR%"
 "%NSSM_EXE%" set GoodQ_Qdrant AppStdout "%QDRANT_STDOUT%"
 "%NSSM_EXE%" set GoodQ_Qdrant AppStderr "%QDRANT_STDERR%"
+"%NSSM_EXE%" set GoodQ_Qdrant AppEnvironmentExtra "QDRANT__STORAGE__STORAGE_PATH=%QDRANT_STORAGE_PATH%"
 
 echo [OK] Service installed
 echo.
@@ -78,7 +82,7 @@ echo Qdrant is now running as a Windows Service
 echo - Service Name: GoodQ_Qdrant
 echo - HTTP API: http://localhost:6333
 echo - gRPC API: http://localhost:6334
-echo - Data: %GOODQ_DATA_ROOT%\qdrant_storage
+echo - Data: %QDRANT_STORAGE_PATH%
 echo - Logs: %REPO_ROOT%\logs\qdrant_*.log
 echo.
 echo The service will start automatically on system boot.

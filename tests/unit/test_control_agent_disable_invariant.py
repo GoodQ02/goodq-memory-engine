@@ -32,7 +32,7 @@ def _load_run_ingestion_module():
     return importlib.import_module("cli.run_ingestion")
 
 
-def test_control_agent_init_failure_persists_state(monkeypatch, tmp_path: Path):
+def test_control_agent_disabled_without_llm_client_persists_state(monkeypatch, tmp_path: Path):
     run_ingestion = _load_run_ingestion_module()
 
     input_dir = tmp_path / "inbox"
@@ -48,11 +48,6 @@ def test_control_agent_init_failure_persists_state(monkeypatch, tmp_path: Path):
         "knowledge_graph": {"enabled": False},
     }
 
-    class _FailingControlAgent:
-        def __init__(self, *args, **kwargs):
-            raise RuntimeError("init failed")
-
-    monkeypatch.setattr(run_ingestion, "ControlAgent", _FailingControlAgent)
     monkeypatch.setattr(run_ingestion, "CONTROL_AGENT_AVAILABLE", True)
     monkeypatch.setattr(run_ingestion, "PROGRESS_TRACKING_AVAILABLE", False)
     monkeypatch.setattr(run_ingestion, "load_configs", lambda *_: cfg_template)
@@ -80,9 +75,9 @@ def test_control_agent_init_failure_persists_state(monkeypatch, tmp_path: Path):
 
     assert results
     first = results[0]
-    assert first["control_agent_status"] == "disabled_init_error"
-    assert "init failed" in (first["control_agent_reason"] or "")
+    assert first["control_agent_status"] == "disabled_no_llm_client"
+    assert "llm_client" in (first["control_agent_reason"] or "")
 
     run_meta = cfg_snapshot.get("run", {})
-    assert run_meta.get("control_agent_status") == "disabled_init_error"
-    assert "init failed" in (run_meta.get("control_agent_reason") or "")
+    assert run_meta.get("control_agent_status") == "disabled_no_llm_client"
+    assert "llm_client" in (run_meta.get("control_agent_reason") or "")

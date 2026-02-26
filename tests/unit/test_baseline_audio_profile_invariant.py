@@ -88,6 +88,7 @@ def test_baseline_profile_skips_unified_wsl(monkeypatch, tmp_path: Path):
         video_path=video_path,
         scene={"start": 0.0, "end": 2.0},
         audio_dir=audio_dir,
+        audio_artifact_dir=tmp_path / "processing" / "audio",
         video_hash="vh",
         scene_id="s1",
     )

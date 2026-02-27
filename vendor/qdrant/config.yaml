@@ -12,7 +12,7 @@ service:
   # gRPC API
   grpc_port: 6334
   # Bind to localhost only (security)
-  host: 127.0.0.1
+  host: 0.0.0.0
   # Enable CORS for local development
   enable_cors: true
 
@@ -27,3 +27,4 @@ optimizer:
 
 # Logging
 log_level: INFO
+

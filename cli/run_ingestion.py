@@ -613,6 +613,63 @@ def _atomic_write_json(path: Path, data: Any, *, indent: Optional[int] = 2) -> N
     os.replace(tmp, path)
 
 
+_SENSITIVE_SNAPSHOT_KEYS: Set[str] = {
+    'token',
+    'ha_token',
+    'hf_token',
+    'huggingface_token',
+    'pyannote_token',
+    'access_token',
+    'refresh_token',
+    'id_token',
+    'api_key',
+    'apikey',
+    'secret',
+    'client_secret',
+    'password',
+    'passwd',
+    'authorization',
+    'bearer_token',
+}
+_JWT_LIKE_RE = re.compile(r'^[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,}$')
+
+
+def _is_sensitive_snapshot_key(key: str) -> bool:
+    normalized = re.sub(r'[^a-z0-9]+', '_', key.strip().lower()).strip('_')
+    if not normalized:
+        return False
+    if normalized in _SENSITIVE_SNAPSHOT_KEYS:
+        return True
+    if normalized.endswith('_token'):
+        return True
+    if normalized.endswith('_secret'):
+        return True
+    if normalized.endswith('_password'):
+        return True
+    return False
+
+
+def _redact_sensitive_snapshot_values(obj: Any, key_hint: Optional[str] = None) -> Any:
+    if isinstance(obj, dict):
+        redacted: Dict[str, Any] = {}
+        for key, value in obj.items():
+            sensitive = isinstance(key, str) and _is_sensitive_snapshot_key(key)
+            redacted[key] = '***REDACTED***' if sensitive else _redact_sensitive_snapshot_values(value, key if isinstance(key, str) else key_hint)
+        return redacted
+    if isinstance(obj, list):
+        return [_redact_sensitive_snapshot_values(item, key_hint) for item in obj]
+    if isinstance(obj, tuple):
+        return tuple(_redact_sensitive_snapshot_values(item, key_hint) for item in obj)
+    if isinstance(obj, str):
+        if key_hint and _is_sensitive_snapshot_key(key_hint):
+            return '***REDACTED***'
+        text = obj.strip()
+        if _JWT_LIKE_RE.fullmatch(text):
+            return '***REDACTED***'
+        return obj
+    return obj
+
+
 def _write_cfg_snapshot(cfg: Dict[str, Any], workspace: Path) -> Path:
     cfg_path = workspace / '_resolved_config.json'
     
@@ -632,7 +689,8 @@ def _write_cfg_snapshot(cfg: Dict[str, Any], workspace: Path) -> Path:
             return str(obj)
     
     serializable_cfg = make_json_serializable(cfg)
-    _atomic_write_json(cfg_path, serializable_cfg, indent=2)
+    redacted_cfg = _redact_sensitive_snapshot_values(serializable_cfg)
+    _atomic_write_json(cfg_path, redacted_cfg, indent=2)
     return cfg_path
 
 

@@ -2,17 +2,28 @@
 # CUDA/cuDNN Environment Setup for GoodQ Audio Processing
 # Source this script to properly configure CUDA libraries
 
-# Add NVIDIA cuDNN libraries to LD_LIBRARY_PATH
-CUDNN_LIB_PATH="$HOME/goodq_audio/venv/lib/python3.12/site-packages/nvidia/cudnn/lib"
-CUBLAS_LIB_PATH="$HOME/goodq_audio/venv/lib/python3.12/site-packages/nvidia/cublas/lib"
-CUDA_NVRTC_LIB_PATH="$HOME/goodq_audio/venv/lib/python3.12/site-packages/nvidia/cuda_nvrtc/lib"
-CUDA_RUNTIME_LIB_PATH="$HOME/goodq_audio/venv/lib/python3.12/site-packages/nvidia/cuda_runtime/lib"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+VENV_DIR="$SCRIPT_DIR/env"
+
+if [ ! -f "$VENV_DIR/bin/activate" ]; then
+    echo "✗ Missing virtual environment activation script: $VENV_DIR/bin/activate" >&2
+    return 1 2>/dev/null || exit 1
+fi
+
+# Activate the virtual environment
+source "$VENV_DIR/bin/activate"
+
+PYTHON_TAG="$(python -c 'import sys; print(f"python{sys.version_info.major}.{sys.version_info.minor}")')"
+NVIDIA_LIB_ROOT="$VENV_DIR/lib/$PYTHON_TAG/site-packages/nvidia"
+
+# Add NVIDIA libraries to LD_LIBRARY_PATH
+CUDNN_LIB_PATH="$NVIDIA_LIB_ROOT/cudnn/lib"
+CUBLAS_LIB_PATH="$NVIDIA_LIB_ROOT/cublas/lib"
+CUDA_NVRTC_LIB_PATH="$NVIDIA_LIB_ROOT/cuda_nvrtc/lib"
+CUDA_RUNTIME_LIB_PATH="$NVIDIA_LIB_ROOT/cuda_runtime/lib"
 
 # Export LD_LIBRARY_PATH with all NVIDIA library paths
 export LD_LIBRARY_PATH="$CUDNN_LIB_PATH:$CUBLAS_LIB_PATH:$CUDA_NVRTC_LIB_PATH:$CUDA_RUNTIME_LIB_PATH:${LD_LIBRARY_PATH:-}"
-
-# Activate the virtual environment
-source "$HOME/goodq_audio/venv/bin/activate"
 
 # Export HuggingFace token
 # Priority: 1) Use existing HF_TOKEN, 2) Retrieve from HF cache

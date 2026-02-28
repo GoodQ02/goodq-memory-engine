@@ -591,6 +591,80 @@ def _merge_step_output(result: Optional[Dict[str, Any]]) -> Optional[Dict[str, A
     return merged
 
 
+def _infer_audio_backend_fields(
+    audio_info: Optional[Dict[str, Any]],
+    *,
+    skip_audio: bool,
+    audio_error: Optional[str],
+) -> Dict[str, str]:
+    if audio_error:
+        return {
+            'audio_backend_selected': 'none',
+            'audio_backend_reason': 'audio_processing_error',
+        }
+
+    if not isinstance(audio_info, dict):
+        return {
+            'audio_backend_selected': 'none',
+            'audio_backend_reason': 'dedupe_skipped' if skip_audio else 'no_audio_stream',
+        }
+
+    candidates: List[Dict[str, Any]] = [audio_info]
+    data = audio_info.get('data')
+    raw = audio_info.get('raw')
+    if isinstance(data, dict):
+        candidates.append(data)
+    if isinstance(raw, dict):
+        candidates.append(raw)
+
+    for candidate in candidates:
+        selected = candidate.get('audio_backend_selected')
+        reason = candidate.get('audio_backend_reason')
+        if isinstance(selected, str) and selected in {'wsl', 'windows', 'none'}:
+            return {
+                'audio_backend_selected': selected,
+                'audio_backend_reason': (
+                    reason if isinstance(reason, str) and reason.strip() else 'explicit_backend_marker'
+                ),
+            }
+
+    transcript_meta: Dict[str, Any] = {}
+    for candidate in candidates:
+        meta = candidate.get('transcript_meta')
+        if isinstance(meta, dict):
+            transcript_meta = meta
+            break
+
+    method = str(transcript_meta.get('method') or '').strip().lower()
+    status = str(transcript_meta.get('status') or '').strip().lower()
+
+    def _has_segments(value: Any) -> bool:
+        return isinstance(value, list) and len(value) > 0
+
+    has_transcript = False
+    has_segments = False
+    for candidate in candidates:
+        if isinstance(candidate.get('transcript'), str) and candidate.get('transcript', '').strip():
+            has_transcript = True
+        if _has_segments(candidate.get('segments')):
+            has_segments = True
+
+    if method in {'wsl2_gpu', 'wsl_faster_whisper_venv'}:
+        reason = f'wsl_transcript_{status}' if status else 'wsl_transcript_selected'
+        return {'audio_backend_selected': 'wsl', 'audio_backend_reason': reason}
+
+    if has_transcript or has_segments:
+        return {
+            'audio_backend_selected': 'windows',
+            'audio_backend_reason': f'windows_transcript_{status}' if status else 'windows_transcript_available',
+        }
+
+    if status:
+        return {'audio_backend_selected': 'none', 'audio_backend_reason': f'unavailable_backend_{status}'}
+
+    return {'audio_backend_selected': 'none', 'audio_backend_reason': 'unavailable_backend'}
+
+
 def _compute_sha256(path: Path) -> str:
     hasher = hashlib.sha256()
     with path.open('rb') as handle:
@@ -1699,6 +1773,25 @@ def run(
                             err=True,
                         )
 
+            audio_backend_fields = _infer_audio_backend_fields(
+                audio_info,
+                skip_audio=skip_audio,
+                audio_error=audio_error,
+            )
+            if isinstance(audio_info, dict):
+                audio_info.setdefault('audio_backend_selected', audio_backend_fields['audio_backend_selected'])
+                audio_info.setdefault('audio_backend_reason', audio_backend_fields['audio_backend_reason'])
+                audio_data_for_backend = audio_info.get('data')
+                if isinstance(audio_data_for_backend, dict):
+                    audio_data_for_backend.setdefault(
+                        'audio_backend_selected',
+                        audio_backend_fields['audio_backend_selected'],
+                    )
+                    audio_data_for_backend.setdefault(
+                        'audio_backend_reason',
+                        audio_backend_fields['audio_backend_reason'],
+                    )
+
             error_payload = {}
             if frame_error:
                 error_payload['frame'] = frame_error
@@ -1792,6 +1885,8 @@ def run(
                 'duration': scene.get('duration'),
                 'confidence': scene.get('confidence'),
                 'persistence': persist_result,
+                'audio_backend_selected': audio_backend_fields['audio_backend_selected'],
+                'audio_backend_reason': audio_backend_fields['audio_backend_reason'],
             }
             if frame_info:
                 formatted_frame = _merge_step_output(frame_info)
@@ -1817,6 +1912,14 @@ def run(
                             audio_end_val = float(audio_info.get('end'))
                     formatted_audio.setdefault('start', audio_start_val)
                     formatted_audio.setdefault('end', audio_end_val)
+                    formatted_audio.setdefault(
+                        'audio_backend_selected',
+                        audio_backend_fields['audio_backend_selected'],
+                    )
+                    formatted_audio.setdefault(
+                        'audio_backend_reason',
+                        audio_backend_fields['audio_backend_reason'],
+                    )
                     scene_record['audio'] = formatted_audio
                 else:
                     scene_record['audio'] = audio_info

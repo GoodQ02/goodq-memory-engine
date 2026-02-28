@@ -132,7 +132,6 @@ except ImportError:
 APP = typer.Typer(help='Scene-first ingestion orchestrator for GoodQ')
 _MODELS_FALLBACK_WARNED = False
 _PROCESSING_FALLBACK_WARNED = False
-_CONDA_UNAVAILABLE_WARNED = False
 
 
 def _resolve_default_models_dir() -> Path:
@@ -785,7 +784,6 @@ def _run_step(
     cfg_json: Path,
     _healer_retry_attempt: int = 0,
 ) -> Dict[str, Any]:
-    global _CONDA_UNAVAILABLE_WARNED
     work_env = _base_env()
     
     # Convert payload to JSON-serializable format
@@ -829,20 +827,13 @@ def _run_step(
                 '--cfg', str(cfg_json),
             ]
         else:
-            if not _CONDA_UNAVAILABLE_WARNED:
-                logger.warning(
-                    "run_ingestion fallback: conda unavailable conda_exe=%s using_current_python=%s",
-                    conda_exe,
-                    sys.executable,
-                )
-                _CONDA_UNAVAILABLE_WARNED = True
-            cmd = [
-                sys.executable, str(REPO_ROOT / 'cli' / 'step_runner.py'),
-                '--step', step_name,
-                '--in', str(in_path),
-                '--out', str(out_path),
-                '--cfg', str(cfg_json),
-            ]
+            error_msg = (
+                "Conda unavailable for step execution "
+                f"(step={step_name}, env={env_name}, conda_exe={conda_exe}). "
+                "Bare interpreter fallback is disabled."
+            )
+            logger.error("run_ingestion abort: %s", error_msg)
+            raise RuntimeError(error_msg)
         
         # CRITICAL: Ensure PYTHONPATH is available in conda env
         work_env['CONDA_PREFIX_1'] = work_env.get('CONDA_PREFIX', '')

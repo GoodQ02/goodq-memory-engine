@@ -456,12 +456,22 @@ def run_scene_visual_embeddings(item: Dict[str, Any], cfg: Dict[str, Any]) -> Di
                     scene['representative_frame'] = frames[len(frames)//2]['path']  # Middle frame
         
         # Save updated manifest
-        vector_commit_success = bool(clip_ok and dino_ok)
+        phase6_vector_points_attempted = int(scene_clip_vectors_written + scene_dino_vectors_written)
+        phase6_qdrant_ok: Any = (
+            bool(clip_ok and dino_ok)
+            if retrieval_enabled and phase6_vector_points_attempted > 0
+            else 'not_attempted'
+        )
+        phase6_faiss_ok: Any = 'not_attempted'
+        vector_commit_success = bool(phase6_qdrant_ok is True or phase6_qdrant_ok == 'not_attempted')
         scene_data['phase6_complete'] = vector_commit_success
         scene_data['phase6_vector_commit'] = {
             'enabled': retrieval_enabled,
             'clip_committed': bool(clip_ok),
             'dino_committed': bool(dino_ok),
+            'vector_points_attempted': phase6_vector_points_attempted,
+            'qdrant_ok': phase6_qdrant_ok,
+            'faiss_ok': phase6_faiss_ok,
         }
         scene_data['embedding_stats'] = {
             'clip_scenes': len(pooled_clip),
@@ -493,8 +503,11 @@ def run_scene_visual_embeddings(item: Dict[str, Any], cfg: Dict[str, Any]) -> Di
             "dino_vector_dim": dino_vector_dim,
             "scene_clip_vectors_written": scene_clip_vectors_written,
             "scene_dino_vectors_written": scene_dino_vectors_written,
+            "vector_points_attempted": phase6_vector_points_attempted,
             "clip_committed": bool(clip_ok),
             "dino_committed": bool(dino_ok),
+            "qdrant_ok": phase6_qdrant_ok,
+            "faiss_ok": phase6_faiss_ok,
             "gpu_device": clip_device,
         }
     except Exception as e:

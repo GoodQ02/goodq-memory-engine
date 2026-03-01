@@ -674,6 +674,50 @@ def _infer_audio_backend_fields(
     return {'audio_backend_selected': 'none', 'audio_backend_reason': 'unavailable_backend'}
 
 
+def _normalize_vector_store_status(value: Any) -> Any:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str) and value.strip().lower() == 'not_attempted':
+        return 'not_attempted'
+    if value is None:
+        return None
+    return bool(value)
+
+
+def _aggregate_scene_store_status(scene_outputs: List[Dict[str, Any]], store_key: str) -> Any:
+    attempted = 0
+    statuses: List[bool] = []
+
+    for scene in scene_outputs:
+        if not isinstance(scene, dict):
+            continue
+        persistence = scene.get('persistence')
+        if not isinstance(persistence, dict):
+            continue
+        points = int(persistence.get('vector_points_attempted') or 0)
+        attempted += points
+        if points <= 0:
+            continue
+        status = _normalize_vector_store_status(persistence.get(store_key))
+        if isinstance(status, bool):
+            statuses.append(status)
+        else:
+            statuses.append(False)
+
+    if attempted <= 0:
+        return 'not_attempted'
+    return False if any(not s for s in statuses) else True
+
+
+def _merge_store_statuses(*statuses: Any) -> Any:
+    normalized = [_normalize_vector_store_status(s) for s in statuses]
+    if any(s is False for s in normalized):
+        return False
+    if any(s is True for s in normalized):
+        return True
+    return 'not_attempted'
+
+
 def _compute_sha256(path: Path) -> str:
     hasher = hashlib.sha256()
     with path.open('rb') as handle:
@@ -2029,6 +2073,21 @@ def run(
                 'persistence': persist_result,
                 'audio_backend_selected': audio_backend_fields['audio_backend_selected'],
                 'audio_backend_reason': audio_backend_fields['audio_backend_reason'],
+                'vector_points_attempted': (
+                    int(persist_result.get('vector_points_attempted') or 0)
+                    if isinstance(persist_result, dict)
+                    else 0
+                ),
+                'qdrant_ok': (
+                    _normalize_vector_store_status(persist_result.get('qdrant_ok'))
+                    if isinstance(persist_result, dict)
+                    else 'not_attempted'
+                ),
+                'faiss_ok': (
+                    _normalize_vector_store_status(persist_result.get('faiss_ok'))
+                    if isinstance(persist_result, dict)
+                    else 'not_attempted'
+                ),
             }
             if frame_info:
                 formatted_frame = _merge_step_output(frame_info)
@@ -2072,6 +2131,20 @@ def run(
 
             scene_outputs.append(scene_record)
 
+        if observer:
+            observer.step_end(
+                scene_loop_step,
+                metadata={
+                    "video_path": str(video_path),
+                    "processed_scenes": len(scene_outputs),
+                },
+            )
+
+        scene_qdrant_status = _aggregate_scene_store_status(scene_outputs, 'qdrant_ok')
+        scene_faiss_status = _aggregate_scene_store_status(scene_outputs, 'faiss_ok')
+        phase6_qdrant_status: Any = 'not_attempted'
+        phase6_faiss_status: Any = 'not_attempted'
+
         video_result = {
             'video_path': str(video_path),
             'video_hash': video_hash,
@@ -2080,6 +2153,8 @@ def run(
             'audio_artifact_dir': str(audio_artifact_dir),
             'scene_meta': detection_meta,
             'scenes': scene_outputs,
+            'qdrant_ok': scene_qdrant_status,
+            'faiss_ok': scene_faiss_status,
             'control_agent_status': control_agent_status,
             'control_agent_reason': control_agent_reason,
             'knowledge_graph_status': knowledge_graph_status,
@@ -2155,6 +2230,14 @@ def run(
                 print("[STAGE10_16_DEBUG] phase6_result:", result_dict)
                 if isinstance(embeddings_result, dict):
                     phase6_item.update(embeddings_result)
+                    phase6_qdrant_status = _normalize_vector_store_status(embeddings_result.get('qdrant_ok'))
+                    phase6_faiss_status = _normalize_vector_store_status(embeddings_result.get('faiss_ok'))
+                    if phase6_qdrant_status is None:
+                        phase6_qdrant_status = 'not_attempted'
+                    if phase6_faiss_status is None:
+                        phase6_faiss_status = 'not_attempted'
+                    video_result['phase6_qdrant_ok'] = phase6_qdrant_status
+                    video_result['phase6_faiss_ok'] = phase6_faiss_status
                     if phase6a_success:
                         typer.echo('[PHASE 6a] [PASS] Visual embeddings complete')
                     else:
@@ -2221,6 +2304,9 @@ def run(
             if not phase6_enabled:
                 typer.echo('[PHASE 6] Skipped (disabled in config)')
             video_result['phase6_complete'] = False
+
+        video_result['qdrant_ok'] = _merge_store_statuses(scene_qdrant_status, phase6_qdrant_status)
+        video_result['faiss_ok'] = _merge_store_statuses(scene_faiss_status, phase6_faiss_status)
         
         results.append(video_result)
 

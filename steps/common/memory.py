@@ -537,8 +537,8 @@ def register_scene_bundle(
 
     # Insert embeddings into vector memory (Qdrant/FAISS)
     vector_store_results: Dict[str, bool] = {}
-    qdrant_ok: Optional[bool] = None
-    faiss_ok: Optional[bool] = None
+    qdrant_ok: Any = 'not_attempted'
+    faiss_ok: Any = 'not_attempted'
     vector_points_attempted = 0
     try:
         from steps.common.memory_manager import build_memory_router
@@ -616,6 +616,9 @@ def register_scene_bundle(
         
         if points:
             vector_points_attempted = len(points)
+            # Once vectors exist, parity must resolve to concrete booleans.
+            qdrant_ok = False
+            faiss_ok = False
             if os.environ.get("GOODQ_VECTOR_DEBUG", "").strip().lower() in ("1", "true", "yes", "y", "on"):
                 try:
                     mods: Dict[str, int] = {}
@@ -635,8 +638,8 @@ def register_scene_bundle(
             insert_results = router.insert(points)
             if isinstance(insert_results, dict):
                 vector_store_results = {str(k): bool(v) for k, v in insert_results.items()}
-                qdrant_ok = vector_store_results.get('qdrant')
-                faiss_ok = vector_store_results.get('faiss')
+                qdrant_ok = bool(vector_store_results.get('qdrant', False))
+                faiss_ok = bool(vector_store_results.get('faiss', False))
             success_count = sum(1 for v in vector_store_results.values() if v)
             print(f'[VECTOR] Inserted {success_count}/{len(points)} embeddings for scene {scene_id}')
         

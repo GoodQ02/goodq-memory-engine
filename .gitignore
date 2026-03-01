@@ -134,6 +134,7 @@ run_exports/
 workspace/
 tmp/
 temp/
+snapshots/
 
 # ===== TESTING =====
 .pytest_cache/

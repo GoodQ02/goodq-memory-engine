@@ -30,6 +30,7 @@ from steps.common.tag_utils import canonicalize_taxonomy
 from steps.common.tool_paths import resolve_ffmpeg, resolve_conda
 from steps.common.step_logger import log_step_run
 from steps.common.profile_config import is_baseline, require_wsl_audio, wsl_audio_auto_enabled
+from lib.observability.observer import PipelineObserver
 
 
 def _patch_typer_help_for_click_8_2() -> None:
@@ -211,6 +212,7 @@ VERBOSE: bool = False
 STEP_TIMEOUT: Optional[int] = 1800  # 30 minutes max per step
 MAX_HEALER_RETRIES: int = 3
 _CURRENT_RUN_CONTEXT: Optional[Dict[str, Any]] = None
+_PIPELINE_OBSERVER: Optional[PipelineObserver] = None
 
 
 def _control_agent_runtime_enabled() -> bool:
@@ -223,6 +225,13 @@ def _control_agent_runtime_enabled() -> bool:
         # Backward-compatible default for direct _run_step() calls in tests/harnesses.
         return True
     return status == 'initialized'
+
+
+def _observer() -> Optional[PipelineObserver]:
+    global _PIPELINE_OBSERVER
+    if _PIPELINE_OBSERVER is None or not _PIPELINE_OBSERVER.enabled:
+        return None
+    return _PIPELINE_OBSERVER
 
 
 def run_ingestion(video_path: str, cfg: Optional[Dict] = None):
@@ -920,20 +929,37 @@ def _run_step(
             )
         
         start_ts = time.perf_counter()
+        observer = _observer()
+        observer_step = f"step.{step_name}"
+        observer_meta = {"env": env_name}
+        if observer:
+            observer.step_start(observer_step, metadata=observer_meta)
         if VERBOSE:
             typer.echo(f'[step] -> {step_name} ({env_name})')
+        stop_heartbeat = (lambda: None)
         try:
-            result = subprocess.run(
-                cmd,
-                cwd=str(REPO_ROOT),
-                capture_output=True,
-                text=True,
-                encoding='utf-8',
-                errors='replace',
-                env=work_env,
-                timeout=STEP_TIMEOUT,
-            )
+            if observer:
+                stop_heartbeat = observer.begin_heartbeat(observer_step, metadata=observer_meta)
+            try:
+                result = subprocess.run(
+                    cmd,
+                    cwd=str(REPO_ROOT),
+                    capture_output=True,
+                    text=True,
+                    encoding='utf-8',
+                    errors='replace',
+                    env=work_env,
+                    timeout=STEP_TIMEOUT,
+                )
+            finally:
+                stop_heartbeat()
         except subprocess.TimeoutExpired as exc:
+            if observer:
+                observer.step_error(
+                    observer_step,
+                    error=f"timeout_after_{STEP_TIMEOUT}s",
+                    metadata=observer_meta,
+                )
             if VERBOSE:
                 typer.echo(f'[step] !! {step_name} ({env_name}) timed out after {STEP_TIMEOUT}s', err=True)
 
@@ -977,6 +1003,12 @@ def _run_step(
             stderr = result.stderr.strip()
             stdout = result.stdout.strip()
             error_msg = f"Step {step_name} failed ({env_name})\nSTDOUT: {stdout}\nSTDERR: {stderr}"
+            if observer:
+                observer.step_error(
+                    observer_step,
+                    error=f"returncode_{result.returncode}",
+                    metadata=observer_meta,
+                )
 
             if _control_agent_runtime_enabled():
                 try:
@@ -1021,6 +1053,14 @@ def _run_step(
 
             raise RuntimeError(error_msg)
         duration = time.perf_counter() - start_ts
+        if observer:
+            observer.step_end(
+                observer_step,
+                metadata={
+                    "env": env_name,
+                    "duration_sec": round(duration, 3),
+                },
+            )
         if VERBOSE:
             typer.echo(f'[step] <- {step_name} ({env_name}) [{duration:.1f}s]')
         
@@ -1100,6 +1140,14 @@ def _extract_keyframe(ffmpeg: str, video_path: Path, scene: Dict[str, Any], dest
     start = float(scene.get('start', 0.0) or 0.0)
     timestamp = start + (duration / 2.0) if duration > 0 else start
     outfile = dest_dir / f"scene_{scene.get('index', 0):04d}.jpg"
+    observer = _observer()
+    observer_step = "ffmpeg.extract_keyframe"
+    observer_meta = {
+        "video": str(video_path),
+        "scene_index": scene.get('index', 0),
+    }
+    if observer:
+        observer.step_start(observer_step, metadata=observer_meta)
     cmd = [
         ffmpeg,
         '-hide_banner',
@@ -1110,11 +1158,31 @@ def _extract_keyframe(ffmpeg: str, video_path: Path, scene: Dict[str, Any], dest
         '-y',
         str(outfile),
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', errors='replace')
+    stop_heartbeat = (lambda: None)
+    if observer:
+        stop_heartbeat = observer.begin_heartbeat(observer_step, metadata=observer_meta)
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', errors='replace')
+    finally:
+        stop_heartbeat()
     if result.returncode != 0:
+        if observer:
+            observer.step_error(
+                observer_step,
+                error=f"returncode_{result.returncode}",
+                metadata=observer_meta,
+            )
         raise RuntimeError(f"ffmpeg failed to extract keyframe: {result.stderr}")
     if not outfile.exists():
+        if observer:
+            observer.step_error(
+                observer_step,
+                error="output_missing",
+                metadata=observer_meta,
+            )
         raise RuntimeError('Keyframe extraction did not produce a file')
+    if observer:
+        observer.step_end(observer_step, metadata=observer_meta)
     return outfile
 
 
@@ -1125,6 +1193,15 @@ def _extract_audio_chunk(ffmpeg: str, video_path: Path, scene: Dict[str, Any], d
     end = float(scene.get('end', start) or start)
     duration = max(0.1, end - start)
     outfile = dest_dir / f"scene_{scene.get('index', 0):04d}.wav"
+    observer = _observer()
+    observer_step = "ffmpeg.extract_audio_chunk"
+    observer_meta = {
+        "video": str(video_path),
+        "scene_index": scene.get('index', 0),
+        "duration_sec": round(duration, 3),
+    }
+    if observer:
+        observer.step_start(observer_step, metadata=observer_meta)
     cmd = [
         ffmpeg,
         '-hide_banner',
@@ -1139,16 +1216,34 @@ def _extract_audio_chunk(ffmpeg: str, video_path: Path, scene: Dict[str, Any], d
         '-y',
         str(outfile),
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', errors='replace')
+    stop_heartbeat = (lambda: None)
+    if observer:
+        stop_heartbeat = observer.begin_heartbeat(observer_step, metadata=observer_meta)
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', errors='replace')
+    finally:
+        stop_heartbeat()
     if result.returncode != 0:
         # Check if error is due to no audio stream
         if 'does not contain any stream' in result.stderr or 'Stream specifier' in result.stderr:
             # Video has no audio - this is OK, return None
+            if observer:
+                observer.step_end(observer_step, metadata={**observer_meta, "status": "no_audio_stream"})
             return None
+        if observer:
+            observer.step_error(
+                observer_step,
+                error=f"returncode_{result.returncode}",
+                metadata=observer_meta,
+            )
         raise RuntimeError(f"ffmpeg failed to extract audio chunk: {result.stderr}")
     if not outfile.exists():
         # If no file was created but no error, video likely has no audio
+        if observer:
+            observer.step_end(observer_step, metadata={**observer_meta, "status": "no_audio_output"})
         return None
+    if observer:
+        observer.step_end(observer_step, metadata=observer_meta)
     return outfile
 
 
@@ -1406,7 +1501,7 @@ def run(
     verbose: bool = typer.Option(False, '--verbose', help='Emit per-step progress messages'),
     step_timeout: Optional[int] = typer.Option(None, '--step-timeout', help='Abort a step if it exceeds this many seconds'),
 ) -> None:
-    global VERBOSE, STEP_TIMEOUT, CONTROL_AGENT_AVAILABLE, _CURRENT_RUN_CONTEXT
+    global VERBOSE, STEP_TIMEOUT, CONTROL_AGENT_AVAILABLE, _CURRENT_RUN_CONTEXT, _PIPELINE_OBSERVER
     VERBOSE = verbose
     # Ensure step_timeout is an int or None, not an OptionInfo object
     if hasattr(step_timeout, 'default'):
@@ -1489,6 +1584,17 @@ def run(
     if isinstance(cfg.get('run'), dict):
         run_context = cfg['run']
     _CURRENT_RUN_CONTEXT = run_context
+    _PIPELINE_OBSERVER = PipelineObserver.from_runtime(run_id=run_id, verbose=verbose)
+    observer = _observer()
+    if observer:
+        observer.step_start(
+            "pipeline.ingestion",
+            metadata={
+                "input_dir": str(input_dir),
+                "workspace": str(workspace),
+                "output": str(output),
+            },
+        )
     
     # Add force_reprocess flag to config
     cfg['force_reprocess'] = force_reprocess
@@ -1504,6 +1610,11 @@ def run(
         videos.extend(sorted(input_dir.glob(pattern)))
     if not videos:
         typer.echo('No videos found to process.')
+        if observer:
+            observer.step_end("pipeline.ingestion", metadata={"status": "no_videos"})
+        if _PIPELINE_OBSERVER is not None:
+            _PIPELINE_OBSERVER.close()
+        _PIPELINE_OBSERVER = None
         return
     if max_videos and len(videos) > max_videos:
         videos = videos[:max_videos]
@@ -1535,7 +1646,21 @@ def run(
         cfg['run']['knowledge_graph_status'] = knowledge_graph_status
     cfg_json = _write_cfg_snapshot(cfg, workspace)
 
-    for video_path in videos:
+    if observer:
+        observer.step_start(
+            "loop.videos",
+            total=len(videos),
+            metadata={"input_dir": str(input_dir)},
+        )
+
+    for video_num, video_path in enumerate(videos, 1):
+        if observer:
+            observer.step_progress(
+                "loop.videos",
+                current=video_num,
+                total=len(videos),
+                metadata={"video_path": str(video_path)},
+            )
         typer.echo(f'Processing video: {video_path.name}')
         typer.echo(f'  Full path: {video_path}')
         typer.echo(f'  Exists: {video_path.exists()}')
@@ -1630,12 +1755,29 @@ def run(
         scene_outputs: List[Dict[str, Any]] = []
         total_scenes = len(scenes)
         typer.echo(f'\n=== Processing {total_scenes} scenes for {video_path.name} ===\n')
+        scene_loop_step = f"loop.scenes.{video_hash[:12]}"
+        if observer:
+            observer.step_start(
+                scene_loop_step,
+                total=total_scenes,
+                metadata={"video_path": str(video_path)},
+            )
         
         for scene_num, scene in enumerate(scenes, 1):
             scene_start = float(scene.get('start', 0.0) or 0.0)
             scene_end = float(scene.get('end', scene_start) or scene_start)
             scene_index = scene.get('index')
             scene_duration = scene.get('duration', scene_end - scene_start)
+            if observer:
+                observer.step_progress(
+                    scene_loop_step,
+                    current=scene_num,
+                    total=total_scenes,
+                    metadata={
+                        "video_path": str(video_path),
+                        "scene_index": scene_index,
+                    },
+                )
             
             # Progress logging
             typer.echo(f'[Scene {scene_num}/{total_scenes}] Processing scene {scene_index}: {scene_start:.1f}s - {scene_end:.1f}s (duration: {scene_duration:.1f}s)')
@@ -1951,6 +2093,12 @@ def run(
         # ============================================================
         phase6_enabled = cfg.get('phase6', {}).get('enabled', True)
         if phase6_enabled and scene_outputs:
+            if observer:
+                observer.step_start(
+                    "phase6.pipeline",
+                    total=2,
+                    metadata={"video_path": str(video_path)},
+                )
             typer.echo(f'\n=== Starting Phase 6: Visual Embeddings & Harmonization ===\n')
             
             # Create phase6_item with required structure
@@ -1993,6 +2141,13 @@ def run(
                 # Phase 6a: Scene Visual Embeddings (CLIP + DINO)
                 typer.echo('[PHASE 6a] Generating scene visual embeddings...')
                 embeddings_result = _run_step('goodq_core', 'scene_visual_embeddings', phase6_item, cfg_json)
+                if observer:
+                    observer.step_progress(
+                        "phase6.pipeline",
+                        current=1,
+                        total=2,
+                        metadata={"stage": "scene_visual_embeddings", "video_path": str(video_path)},
+                    )
                 phase6_status = embeddings_result.get('phase6_status') if isinstance(embeddings_result, dict) else None
                 phase6a_success = bool(phase6_status == 'complete')
                 result_dict = embeddings_result if isinstance(embeddings_result, dict) else embeddings_result
@@ -2011,6 +2166,13 @@ def run(
                 # Phase 6b: Cross-Modal Harmonization
                 typer.echo('[PHASE 6b] Running multimodal harmonization...')
                 harmonization_result = _run_step('goodq_core', 'cross_modal_harmonization', phase6_item, cfg_json)
+                if observer:
+                    observer.step_progress(
+                        "phase6.pipeline",
+                        current=2,
+                        total=2,
+                        metadata={"stage": "cross_modal_harmonization", "video_path": str(video_path)},
+                    )
                 if isinstance(harmonization_result, dict):
                     phase6_item.update(harmonization_result)
                     
@@ -2039,8 +2201,19 @@ def run(
                             temporal_index_path = video_workspace / 'temporal_index.json'
                             atomic_write_json(temporal_index_path, temporal_index)
                             typer.echo(f'[PHASE 6] [PASS] Temporal index written: {temporal_index_path}')
+                if observer:
+                    observer.step_end(
+                        "phase6.pipeline",
+                        metadata={"video_path": str(video_path), "status": "complete"},
+                    )
                 
             except Exception as phase6_error:
+                if observer:
+                    observer.step_error(
+                        "phase6.pipeline",
+                        error=str(phase6_error),
+                        metadata={"video_path": str(video_path)},
+                    )
                 typer.echo(f'[PHASE 6] [FAIL] Phase 6 failed: {phase6_error}', err=True)
                 video_result['phase6_error'] = str(phase6_error)
                 video_result['phase6_complete'] = False
@@ -2050,6 +2223,9 @@ def run(
             video_result['phase6_complete'] = False
         
         results.append(video_result)
+
+    if observer:
+        observer.step_end("loop.videos", metadata={"processed_videos": len(results)})
 
     # Build knowledge graph from results
     kg_result = _build_knowledge_graph_from_results(results, cfg)
@@ -2175,6 +2351,15 @@ def run(
                     typer.echo("="*80 + "\n")
         except Exception as e:
             typer.echo(f"[WARNING] Final report generation skipped (non-fatal): {e}", err=True)
+
+    if observer:
+        observer.step_end(
+            "pipeline.ingestion",
+            metadata={"status": "completed", "processed_videos": len(results)},
+        )
+    if _PIPELINE_OBSERVER is not None:
+        _PIPELINE_OBSERVER.close()
+    _PIPELINE_OBSERVER = None
 
 
 if __name__ == '__main__':

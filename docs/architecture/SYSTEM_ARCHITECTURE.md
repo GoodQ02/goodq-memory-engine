@@ -1,14 +1,49 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-02-12 -->
+<!-- DOC_LAST_VERIFIED: 2026-03-02 -->
 
 # GoodQ System Architecture
 
-**Last Updated:** December 15, 2025  
+**Last Updated:** March 2, 2026  
 **Status:** Operational (verify per-run from artifacts and health checks)  
-**Verification Date:** December 14, 2025
+**Verification Date:** March 1, 2026 (witness run)
 
 > **Note:** This document reflects the runtime architecture. Treat run artifacts and health checks as source-of-truth for current state.
+
+---
+
+## Current Status (v1.0.0-canonical-windows-wsl-integrated)
+
+This milestone snapshot is constrained to witness-run evidence (`run_id=51e42006-f64d-4b13-a42a-f180bf8ba7f3`) and does not expand profile guarantees beyond existing contracts.
+
+- Windows runtime remains canonical and deterministic for orchestrated ingestion.
+- Hybrid Windows + WSL architecture remains in force; WSL is an optional, profile-gated audio compute extension.
+- Knowledge graph is active for scene-linked media persistence.
+- Vector parity is deterministic at run scope (`qdrant_ok=true`, `faiss_ok=not_attempted` for Phase 6 witness write).
+- Read-only observability is active (structured JSON step events + heartbeat).
+- Tagger native-crash mitigation is active; rare native faults remain possible and are surfaced in telemetry.
+
+### Witness-Run Summary
+
+| Field | Value |
+| --- | --- |
+| `video` | `09. 2002 - 2003.mp4` |
+| `scenes_total` | `19` |
+| `transcript_scenes` | `18` |
+| `audio_backend_selected` | `windows (18/19 scenes; 1 missing)` |
+| `wsl2_unified` | `true (18/19 scenes; 1 missing)` |
+| `phase6_complete` | `true` |
+| `qdrant_points_clip` | `19` |
+| `qdrant_points_dino` | `19` |
+| `kg_media_nodes` | `19` |
+| `retry_counts` | `step_error_events=1; retry_events_observed=0` |
+| `total_duration_sec` | `1418.856` |
+
+### Known Gaps
+
+- Text/audio vector coverage is not assumed dense for every run; validate modality coverage from artifacts before making claims.
+- `tagger` native faults are mitigated, not eliminated.
+- Distributed/multi-node operation is out of scope for this milestone.
 
 ---
 

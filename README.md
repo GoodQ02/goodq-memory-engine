@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-02-19 -->
+<!-- DOC_LAST_VERIFIED: 2026-03-02 -->
 
 # GoodQ4All
 
@@ -43,6 +43,39 @@ Strict fail-fast flags:
 
 - `GOODQ_REQUIRE_GPU=1`: fail when GPU capability is required but unavailable.
 - `GOODQ_REQUIRE_WSL_AUDIO=1`: fail when WSL audio path is required but unavailable.
+
+## Current Status (v1.0.0-canonical-windows-wsl-integrated)
+
+This status section is anchored to a documented witness ingest run (`run_id=51e42006-f64d-4b13-a42a-f180bf8ba7f3`, March 1, 2026 UTC) and only states claims backed by artifacts.
+
+- Deterministic Windows canonical runtime: witness run completed end-to-end under the canonical Windows execution path.
+- Hybrid Windows + WSL doctrine preserved: WSL remains a profile-gated compute extension, not a peer runtime.
+- Knowledge graph active: scene-linked media nodes were written for the witness video.
+- Vector parity deterministic at witness scope: phase-level parity fields resolved explicitly (`qdrant_ok=true`, `faiss_ok=not_attempted`).
+- Observability layer active: structured telemetry emitted `step_start`, `step_end`, `step_error`, progress, and heartbeat events.
+- Tagger native-crash mitigation active: witness telemetry captured one tagger native crash event while the pipeline still completed.
+
+### Witness-Run Summary
+
+| Field | Value |
+| --- | --- |
+| `video` | `09. 2002 - 2003.mp4` |
+| `scenes_total` | `19` |
+| `transcript_scenes` | `18` |
+| `audio_backend_selected` | `windows (18/19 scenes; 1 missing)` |
+| `wsl2_unified` | `true (18/19 scenes; 1 missing)` |
+| `phase6_complete` | `true` |
+| `qdrant_points_clip` | `19` |
+| `qdrant_points_dino` | `19` |
+| `kg_media_nodes` | `19` |
+| `retry_counts` | `step_error_events=1; retry_events_observed=0` |
+| `total_duration_sec` | `1418.856` |
+
+### Known Gaps
+
+- Text/audio vector coverage can be sparse by run; do not claim full modality coverage unless run artifacts prove it.
+- `tagger` has rare native-process instability; mitigation is bounded retry plus persisted metadata, not a claim of zero native faults.
+- Distributed/multi-node support is not claimed as complete in this milestone.
 
 ## Environment Contract (v2.2.0)
 

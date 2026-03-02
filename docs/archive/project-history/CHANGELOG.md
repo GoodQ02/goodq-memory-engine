@@ -11,6 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.0-canonical-windows-wsl-integrated] - 2026-03-02
+
+### Changed
+- Forward-facing docs now include a witness-run anchored milestone status section (`run_id=51e42006-f64d-4b13-a42a-f180bf8ba7f3`).
+- README and architecture status claims were tightened to artifact-verified facts only.
+- Added explicit known-gap notes for sparse text/audio vector coverage and rare tagger native instability (mitigated, not eliminated).
+
+### Preserved
+- Profile-gated runtime doctrine (`BASELINE` CPU-safe, `GPU_ENHANCED` additive acceleration).
+- Hybrid Windows + WSL architecture contract (WSL as compute extension, not canonical authority).
+- Failure transparency doctrine (errors surfaced via telemetry/artifacts; no silent success claims).
+
+---
+
 ## [1.4.0] - 2025-11-07
 
 ### Changed

@@ -596,7 +596,7 @@ def _build_kg_relationships(kg: Any) -> None:
 
 
 
-OUTPUT_DROP_KEYS: Set[str] = {'modality', 'scene_id', 'scene_index', 'video_hash'}
+OUTPUT_DROP_KEYS: Set[str] = {'modality', 'scene_id', 'scene_index', 'video_hash', 'video_id'}
 
 
 def _merge_step_output(result: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
@@ -700,6 +700,25 @@ def _normalize_vector_store_status(value: Any) -> Any:
     return bool(value)
 
 
+def _coerce_nonnegative_int(value: Any) -> int:
+    try:
+        parsed = int(value or 0)
+    except (TypeError, ValueError):
+        return 0
+    return parsed if parsed > 0 else 0
+
+
+def _resolve_store_status_for_points(points_attempted: Any, raw_status: Any) -> Any:
+    points = _coerce_nonnegative_int(points_attempted)
+    if points <= 0:
+        return 'not_attempted'
+    normalized = _normalize_vector_store_status(raw_status)
+    if isinstance(normalized, bool):
+        return normalized
+    # Deterministic truth: attempted writes must resolve to a concrete boolean.
+    return False
+
+
 def _aggregate_scene_store_status(scene_outputs: List[Dict[str, Any]], store_key: str) -> Any:
     attempted = 0
     statuses: List[bool] = []
@@ -710,11 +729,11 @@ def _aggregate_scene_store_status(scene_outputs: List[Dict[str, Any]], store_key
         persistence = scene.get('persistence')
         if not isinstance(persistence, dict):
             continue
-        points = int(persistence.get('vector_points_attempted') or 0)
+        points = _coerce_nonnegative_int(persistence.get('vector_points_attempted'))
         attempted += points
         if points <= 0:
             continue
-        status = _normalize_vector_store_status(persistence.get(store_key))
+        status = _resolve_store_status_for_points(points, persistence.get(store_key))
         if isinstance(status, bool):
             statuses.append(status)
         else:
@@ -1044,7 +1063,13 @@ def _run_step(
         start_ts = time.perf_counter()
         observer = _observer()
         observer_step = f"step.{step_name}"
-        observer_meta = {"env": env_name}
+        observer_meta: Dict[str, Any] = {"env": env_name}
+        payload_video_id = payload.get('video_id') or payload.get('video_hash')
+        if payload_video_id is not None:
+            observer_meta["video_id"] = str(payload_video_id)
+        payload_scene_id = payload.get('scene_id')
+        if payload_scene_id is not None:
+            observer_meta["scene_id"] = str(payload_scene_id)
         if observer:
             observer.step_start(observer_step, metadata=observer_meta)
         if VERBOSE:
@@ -1289,6 +1314,7 @@ def _log_skipped_steps(
     item: Dict[str, Any] = {
         'modality': modality,
         'video_hash': video_hash,
+        'video_id': video_hash,
     }
     if scene_id is not None:
         item['scene_id'] = scene_id
@@ -1433,6 +1459,7 @@ def _process_frame(
         'source_path': str(frame_path),
         'scene_id': scene_id,
         'video_hash': video_hash,
+        'video_id': video_hash,
         'scene_index': scene_index,
         'timestamp': frame_timestamp,
         'scene': {
@@ -1468,6 +1495,7 @@ def _process_frame(
             'frame_text': frame_text,
             'scene_id': scene_id,
             'video_hash': video_hash,
+            'video_id': video_hash,
         }
         _run_step('goodq_core', 'text_embed', text_payload, cfg_json)
         item['frame_text'] = frame_text
@@ -1506,6 +1534,7 @@ def _process_audio(
         'source_path': str(audio_path),
         'scene_id': scene_id,
         'video_hash': video_hash,
+        'video_id': video_hash,
         'scene': {
             'start': start,
             'end': end,
@@ -1531,6 +1560,7 @@ def _process_audio(
                 'path': str(audio_path),
                 'scene_id': scene_id,
                 'video_hash': video_hash,
+                'video_id': video_hash,
             }
             local_result = local_audio_transcribe(local_item, cfg_payload)
             if isinstance(local_result, dict):
@@ -1614,6 +1644,7 @@ def _process_audio(
             'text': transcript,
             'scene_id': scene_id,
             'video_hash': video_hash,
+            'video_id': video_hash,
         }
         _run_step('goodq_core', 'text_embed', text_payload, cfg_json)
 
@@ -1632,11 +1663,20 @@ def _process_audio(
     }
 
 
-def _detect_scenes(cfg_json: Path, video_path: Path, overrides: Dict[str, Any]) -> Dict[str, Any]:
+def _detect_scenes(
+    cfg_json: Path,
+    video_path: Path,
+    overrides: Dict[str, Any],
+    *,
+    video_id: Optional[str] = None,
+) -> Dict[str, Any]:
     payload: Dict[str, Any] = {
         'modality': 'video',
         'source_path': str(video_path),
     }
+    if video_id:
+        payload['video_id'] = str(video_id)
+        payload['video_hash'] = str(video_id)
     if overrides:
         payload['scene_detect'] = overrides
     result = _run_step('goodq_video_scene_detect', 'video_scene_detect', payload, cfg_json)
@@ -1822,12 +1862,13 @@ def run(
         )
 
     for video_num, video_path in enumerate(videos, 1):
+        video_hash = _compute_sha256(video_path)
         if observer:
             observer.step_progress(
                 "loop.videos",
                 current=video_num,
                 total=len(videos),
-                metadata={"video_path": str(video_path)},
+                metadata={"video_path": str(video_path), "video_id": video_hash},
             )
         typer.echo(f'Processing video: {video_path.name}')
         typer.echo(f'  Full path: {video_path}')
@@ -1841,7 +1882,6 @@ def run(
             estimated_steps = 3  # scene detection, scene processing, finalization
             tracker.start_processing(video_path.name, total_steps=estimated_steps, run_id=run_id)
         
-        video_hash = _compute_sha256(video_path)
         scene_overrides: Dict[str, Any] = {}
         if max_scenes:
             scene_overrides['max_scenes'] = max_scenes
@@ -1897,7 +1937,7 @@ def run(
                 tracker = get_tracker()
                 tracker.update_step("Scene Detection", 1, {"scenes_to_detect": "analyzing video"})
             
-            detection = _detect_scenes(cfg_json, video_path, scene_overrides)
+            detection = _detect_scenes(cfg_json, video_path, scene_overrides, video_id=video_hash)
             scenes = detection.get('scenes', [])
             
             if PROGRESS_TRACKING_AVAILABLE:
@@ -1928,7 +1968,7 @@ def run(
             observer.step_start(
                 scene_loop_step,
                 total=total_scenes,
-                metadata={"video_path": str(video_path)},
+                metadata={"video_path": str(video_path), "video_id": video_hash},
             )
         
         for scene_num, scene in enumerate(scenes, 1):
@@ -1943,6 +1983,7 @@ def run(
                     total=total_scenes,
                     metadata={
                         "video_path": str(video_path),
+                        "video_id": video_hash,
                         "scene_index": scene_index,
                     },
                 )
@@ -2161,10 +2202,10 @@ def run(
                 try:
                     kg_stats = update_kg_for_scene(
                         kg_scene_data,
-                        scene_id,
-                        video_hash,
-                        str(video_path),
-                        cfg
+                        scene_id=scene_id,
+                        video_id=video_hash,
+                        video_path=str(video_path),
+                        cfg=cfg,
                     )
                     if VERBOSE and kg_stats:
                         typer.echo(f'[kg] Scene {scene_index}: {kg_stats.get("entities_resolved", 0)} entities resolved')
@@ -2189,6 +2230,7 @@ def run(
 
             scene_record: Dict[str, Any] = {
                 'scene_id': scene_id,
+                'video_id': video_hash,
                 'index': scene.get('index'),
                 'start': scene.get('start'),
                 'end': scene.get('end'),
@@ -2198,17 +2240,23 @@ def run(
                 'audio_backend_selected': audio_backend_fields['audio_backend_selected'],
                 'audio_backend_reason': audio_backend_fields['audio_backend_reason'],
                 'vector_points_attempted': (
-                    int(persist_result.get('vector_points_attempted') or 0)
+                    _coerce_nonnegative_int(persist_result.get('vector_points_attempted'))
                     if isinstance(persist_result, dict)
                     else 0
                 ),
                 'qdrant_ok': (
-                    _normalize_vector_store_status(persist_result.get('qdrant_ok'))
+                    _resolve_store_status_for_points(
+                        persist_result.get('vector_points_attempted'),
+                        persist_result.get('qdrant_ok'),
+                    )
                     if isinstance(persist_result, dict)
                     else 'not_attempted'
                 ),
                 'faiss_ok': (
-                    _normalize_vector_store_status(persist_result.get('faiss_ok'))
+                    _resolve_store_status_for_points(
+                        persist_result.get('vector_points_attempted'),
+                        persist_result.get('faiss_ok'),
+                    )
                     if isinstance(persist_result, dict)
                     else 'not_attempted'
                 ),
@@ -2260,6 +2308,7 @@ def run(
                 scene_loop_step,
                 metadata={
                     "video_path": str(video_path),
+                    "video_id": video_hash,
                     "processed_scenes": len(scene_outputs),
                 },
             )
@@ -2296,15 +2345,16 @@ def run(
                 observer.step_start(
                     "phase6.pipeline",
                     total=2,
-                    metadata={"video_path": str(video_path)},
+                    metadata={"video_path": str(video_path), "video_id": video_hash},
                 )
             typer.echo(f'\n=== Starting Phase 6: Visual Embeddings & Harmonization ===\n')
             
             # Create phase6_item with required structure
             phase6_item = {
-                'id': video_path.stem,
+                'id': video_hash,
                 'source_path': str(video_path),
                 'video_id': video_hash,
+                'video_storage_key': video_path.stem,
                 'video_path': str(video_path),
                 'processing_dir': str(processing_dir),
                 'audio_artifact_dir': str(audio_artifact_dir),
@@ -2319,12 +2369,22 @@ def run(
                 'video_path': str(video_path),
                 'scenes': [
                     {
+                        'video_id': video_hash,
                         'scene_id': s.get('scene_id'),
                         'index': s.get('index'),
                         'start': s.get('start'),
                         'end': s.get('end'),
                         'duration': s.get('duration'),
                         'confidence': s.get('confidence'),
+                        'vector_points_attempted': _coerce_nonnegative_int(s.get('vector_points_attempted')),
+                        'qdrant_ok': _resolve_store_status_for_points(
+                            s.get('vector_points_attempted'),
+                            s.get('qdrant_ok'),
+                        ),
+                        'faiss_ok': _resolve_store_status_for_points(
+                            s.get('vector_points_attempted'),
+                            s.get('faiss_ok'),
+                        ),
                         'keyframe': s.get('keyframe', {}),
                         'audio': s.get('audio', {}),
                     }
@@ -2345,7 +2405,11 @@ def run(
                         "phase6.pipeline",
                         current=1,
                         total=2,
-                        metadata={"stage": "scene_visual_embeddings", "video_path": str(video_path)},
+                        metadata={
+                            "stage": "scene_visual_embeddings",
+                            "video_path": str(video_path),
+                            "video_id": video_hash,
+                        },
                     )
                 phase6_status = embeddings_result.get('phase6_status') if isinstance(embeddings_result, dict) else None
                 phase6a_success = bool(phase6_status == 'complete')
@@ -2378,7 +2442,11 @@ def run(
                         "phase6.pipeline",
                         current=2,
                         total=2,
-                        metadata={"stage": "cross_modal_harmonization", "video_path": str(video_path)},
+                        metadata={
+                            "stage": "cross_modal_harmonization",
+                            "video_path": str(video_path),
+                            "video_id": video_hash,
+                        },
                     )
                 if isinstance(harmonization_result, dict):
                     phase6_item.update(harmonization_result)
@@ -2411,7 +2479,11 @@ def run(
                 if observer:
                     observer.step_end(
                         "phase6.pipeline",
-                        metadata={"video_path": str(video_path), "status": "complete"},
+                        metadata={
+                            "video_path": str(video_path),
+                            "video_id": video_hash,
+                            "status": "complete",
+                        },
                     )
                 
             except Exception as phase6_error:
@@ -2419,7 +2491,7 @@ def run(
                     observer.step_error(
                         "phase6.pipeline",
                         error=str(phase6_error),
-                        metadata={"video_path": str(video_path)},
+                        metadata={"video_path": str(video_path), "video_id": video_hash},
                     )
                 typer.echo(f'[PHASE 6] [FAIL] Phase 6 failed: {phase6_error}', err=True)
                 video_result['phase6_error'] = str(phase6_error)

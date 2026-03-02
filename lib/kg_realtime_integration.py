@@ -223,7 +223,7 @@ def build_scene_relationships(kg: KnowledgeGraph, min_cooccurrence: int = 2) -> 
 def update_kg_for_scene(
     scene_data: Dict[str, Any],
     scene_id: str,
-    video_hash: str,
+    video_id: str,
     video_path: str,
     cfg: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
@@ -235,6 +235,7 @@ def update_kg_for_scene(
     duration = max(0.0, end_time - start_time)
 
     with KnowledgeGraph(str(graph_db_path)) as kg:
+        canonical_video_id = str(video_id)
         media_id = kg.add_media_node(
             media_type="video_scene",
             media_path=str(video_path),
@@ -242,7 +243,8 @@ def update_kg_for_scene(
             timestamp_start=start_time,
             timestamp_end=end_time,
             properties={
-                "video_hash": video_hash,
+                "video_id": canonical_video_id,
+                "video_hash": canonical_video_id,
                 "confidence": scene_data.get("confidence", 0.0),
                 "scene_index": scene_data.get("index"),
             },
@@ -255,7 +257,8 @@ def update_kg_for_scene(
             duration=duration,
             properties={
                 "scene_id": scene_id,
-                "video_hash": video_hash,
+                "video_id": canonical_video_id,
+                "video_hash": canonical_video_id,
                 "media_id": media_id,
             },
         )
@@ -277,6 +280,7 @@ def update_kg_for_scene(
         "status": "success",
         "graph_db_path": str(graph_db_path),
         "scene_id": scene_id,
+        "video_id": canonical_video_id,
         "media_id": media_id,
         "ingest_counts": ingest_counts,
         "relationship_counts": rel_counts,

@@ -543,6 +543,7 @@ def register_scene_bundle(
     try:
         from steps.common.memory_manager import build_memory_router
         router = build_memory_router(cfg)
+        canonical_video_id = str(video_hash)
         
         points = []
         
@@ -556,6 +557,7 @@ def register_scene_bundle(
                     'vector': frame_data['clip_embedding'],
                     'payload': {
                         'scene_id': scene_id,
+                        'video_id': canonical_video_id,
                         'video_hash': video_hash,
                         'modality': 'clip',
                         'start': scene_start,
@@ -570,6 +572,7 @@ def register_scene_bundle(
                     'vector': frame_data['dino_embedding'],
                     'payload': {
                         'scene_id': scene_id,
+                        'video_id': canonical_video_id,
                         'video_hash': video_hash,
                         'modality': 'dino',
                         'start': scene_start,
@@ -588,6 +591,7 @@ def register_scene_bundle(
                     'vector': audio_data['clap_embedding'],
                     'payload': {
                         'scene_id': scene_id,
+                        'video_id': canonical_video_id,
                         'video_hash': video_hash,
                         'modality': 'clap',
                         'start': audio_start,
@@ -606,6 +610,7 @@ def register_scene_bundle(
                     'vector': frame_data['text_embedding'],
                     'payload': {
                         'scene_id': scene_id,
+                        'video_id': canonical_video_id,
                         'video_hash': video_hash,
                         'modality': 'text',
                         'start': scene_start,
@@ -654,6 +659,7 @@ def register_scene_bundle(
     
     return {
         'scene_id': scene_id,
+        'video_id': str(video_hash),
         'frame_hash': frame_hash,
         'audio_hash': audio_hash,
         'segments': segments_created,

@@ -118,14 +118,31 @@ def run_scene_visual_embeddings(item: Dict[str, Any], cfg: Dict[str, Any]) -> Di
         logger.error(f"Video file not found: {video_path}")
         return {"phase6_status": "error", "error": "video_not_found"}
     
-    # Determine processing directory
-    video_id = item.get('id', Path(video_path).stem)
-    processing_root = _resolve_processing_root(cfg)
-    processing_dir = os.path.join(processing_root, str(video_id))
+    # Canonical semantic identifier used across KG/vector payload/telemetry.
+    video_id_raw = item.get('video_id') or item.get('video_hash') or item.get('id')
+    video_id = str(video_id_raw).strip() if video_id_raw is not None else ""
+    if not video_id:
+        video_id = Path(video_path).stem
+
+    # Storage key may differ from semantic video_id to preserve existing directory layout.
+    storage_key_raw = item.get('video_storage_key') or item.get('id') or video_id
+    video_storage_key = str(storage_key_raw).strip() if storage_key_raw is not None else video_id
+    if not video_storage_key:
+        video_storage_key = video_id
+
+    # Determine processing directory (prefer explicit path passed from ingestion orchestrator).
+    processing_dir_raw = item.get('processing_dir')
+    if isinstance(processing_dir_raw, str) and processing_dir_raw.strip():
+        processing_dir = processing_dir_raw
+    else:
+        processing_root = _resolve_processing_root(cfg)
+        processing_dir = os.path.join(processing_root, str(video_storage_key))
     os.makedirs(processing_dir, exist_ok=True)
     
     # Load scene manifest from Phase 5
-    scene_manifest_path = os.path.join(processing_dir, 'video', 'scene_manifest.json')
+    scene_manifest_path = item.get('scene_manifest_path')
+    if not (isinstance(scene_manifest_path, str) and os.path.exists(scene_manifest_path)):
+        scene_manifest_path = os.path.join(processing_dir, 'video', 'scene_manifest.json')
     if not os.path.exists(scene_manifest_path):
         alt_path = os.path.join(processing_dir, 'scene_manifest.json')
         if os.path.exists(alt_path):
@@ -134,15 +151,22 @@ def run_scene_visual_embeddings(item: Dict[str, Any], cfg: Dict[str, Any]) -> Di
         else:
             logger.warning(f"Scene manifest not found: {scene_manifest_path}")
             logger.info("Phase 6 requires Phase 5 scene detection to run first")
-            return {"phase6_status": "skipped", "reason": "no_scene_manifest"}
+            return {"video_id": video_id, "phase6_status": "skipped", "reason": "no_scene_manifest"}
     
     with open(scene_manifest_path, 'r', encoding='utf-8') as f:
         scene_data = json.load(f)
+
+    manifest_video_id = scene_data.get('video_id') if isinstance(scene_data, dict) else None
+    if isinstance(manifest_video_id, str) and manifest_video_id.strip():
+        video_id = manifest_video_id.strip()
+    else:
+        scene_data['video_id'] = video_id
+    scene_data.setdefault('video_hash', video_id)
     
     scenes = scene_data.get('scenes', [])
     if not scenes:
         logger.warning("No scenes found in manifest")
-        return {"phase6_status": "skipped", "reason": "no_scenes"}
+        return {"video_id": video_id, "phase6_status": "skipped", "reason": "no_scenes"}
     
     logger.info(f"[PHASE6] Processing {len(scenes)} scenes for video: {video_id}")
     try:
@@ -179,7 +203,7 @@ def run_scene_visual_embeddings(item: Dict[str, Any], cfg: Dict[str, Any]) -> Di
                 _persist_phase6_failure(scene_manifest_path, scene_data, "frame_extraction_failed")
             except Exception as e:
                 logger.warning("[PHASE6] Failed to persist failure manifest state: %s", e)
-            return {"phase6_status": "error", "error": "frame_extraction_failed"}
+            return {"video_id": video_id, "phase6_status": "error", "error": "frame_extraction_failed"}
         
         # === STEP 2: Generate CLIP Embeddings ===
         batch_size = phase6_cfg.get('max_gpu_batch_size', 8)
@@ -260,6 +284,7 @@ def run_scene_visual_embeddings(item: Dict[str, Any], cfg: Dict[str, Any]) -> Di
             except Exception as e:
                 logger.warning("[PHASE6] Failed to persist failure manifest state: %s", e)
             return {
+                "video_id": video_id,
                 "phase6_status": "failed",
                 "error": "model_load_failed",
                 "clip_model_loaded": clip_model_loaded,
@@ -437,6 +462,7 @@ def run_scene_visual_embeddings(item: Dict[str, Any], cfg: Dict[str, Any]) -> Di
         # === STEP 6: Update Scene Manifest ===
         # Add embedding IDs to scene metadata
         for scene in scenes:
+            scene.setdefault('video_id', video_id)
             scene_id = scene.get('id', scene.get('scene_id', 0))
             
             if scene_id in pooled_clip:
@@ -492,6 +518,7 @@ def run_scene_visual_embeddings(item: Dict[str, Any], cfg: Dict[str, Any]) -> Di
             )
         
         return {
+            "video_id": video_id,
             "phase6_status": "complete" if vector_commit_success else "failed",
             "error": None if vector_commit_success else "vector_commit_failed",
             "scenes_processed": len(pooled_clip),
@@ -518,6 +545,7 @@ def run_scene_visual_embeddings(item: Dict[str, Any], cfg: Dict[str, Any]) -> Di
         except Exception as persist_error:
             logger.warning("[PHASE6] Failed to persist failure manifest state after exception: %s", persist_error)
         return {
+            "video_id": video_id,
             "phase6_status": "failed",
             "error": "exception",
             "exc_type": type(e).__name__,

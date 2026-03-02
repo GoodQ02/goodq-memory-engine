@@ -265,7 +265,14 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
     """
     # Get video info
     video_path = item.get('source_path')
-    video_id = item.get('id', Path(video_path).stem if video_path else 'unknown')
+    video_id_raw = item.get('video_id') or item.get('video_hash') or item.get('id')
+    video_id = str(video_id_raw).strip() if video_id_raw is not None else ""
+    if not video_id:
+        video_id = Path(video_path).stem if video_path else 'unknown'
+    storage_key_raw = item.get('video_storage_key') or item.get('id') or video_id
+    video_storage_key = str(storage_key_raw).strip() if storage_key_raw is not None else video_id
+    if not video_storage_key:
+        video_storage_key = video_id
     
     paths_cfg = (cfg.get('paths') or {}) if isinstance(cfg, dict) else {}
     processing_root = paths_cfg.get('processing')
@@ -294,7 +301,11 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
                     "cwd",
                 )
                 _PROCESSING_FALLBACK_WARNED = True
-    processing_dir = os.path.join(processing_root, str(video_id))
+    processing_dir_raw = item.get('processing_dir')
+    if isinstance(processing_dir_raw, str) and processing_dir_raw.strip():
+        processing_dir = processing_dir_raw
+    else:
+        processing_dir = os.path.join(processing_root, str(video_storage_key))
     audio_artifact_dir_raw = item.get('audio_artifact_dir')
     audio_artifact_dir: Optional[Path] = None
     if isinstance(audio_artifact_dir_raw, str) and audio_artifact_dir_raw.strip():
@@ -337,6 +348,11 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
         }
     
     scenes = scene_data.get('scenes', [])
+    manifest_video_id = scene_data.get('video_id') if isinstance(scene_data, dict) else None
+    if isinstance(manifest_video_id, str) and manifest_video_id.strip():
+        video_id = manifest_video_id.strip()
+    else:
+        scene_data['video_id'] = video_id
 
     # Presence must be derived from committed truth (memory_commit_events), not filesystem heuristics.
     scene_ids_for_video = [str(s.get('id', s.get('scene_id', ''))) for s in scenes if s.get('id') or s.get('scene_id')]
@@ -371,6 +387,28 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
     transcript_segments = transcript_data.get('segments', []) if transcript_data else []
     
     speakers = diarization_data.get('speakers', []) if diarization_data else []
+    if (
+        commit_presence.get('available')
+        and isinstance(transcript_segments, list)
+        and transcript_segments
+        and has_transcripts_committed is False
+    ):
+        logger.warning(
+            "[HARMONIZER] transcript artifacts present but commit truth is false; suppressing transcript payloads "
+            "for deterministic truth alignment video_id=%s",
+            video_id,
+        )
+    if (
+        commit_presence.get('available')
+        and isinstance(audio_segments, list)
+        and audio_segments
+        and has_audio_committed is False
+    ):
+        logger.warning(
+            "[HARMONIZER] audio artifacts present but commit truth is false; suppressing audio payloads "
+            "for deterministic truth alignment video_id=%s",
+            video_id,
+        )
     phase6_warning: Optional[str] = None
     harmonization_status = 'complete'
     if not audio_artifact_integrity_ok:
@@ -402,19 +440,39 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
         scene_start = scene.get('start', 0.0)
         scene_end = scene.get('end', 0.0)
         
-        # Get overlapping audio chunks
-        audio_chunk_ids = scene_audio_map.get(scene_id, [])
-        
-        # Get overlapping transcripts
-        scene_transcripts = [
+        # Get overlapping audio/transcript payloads from artifacts first.
+        raw_audio_chunk_ids = scene_audio_map.get(scene_id, [])
+        raw_scene_transcripts = [
             seg for seg in transcript_segments
             if seg.get('start', 0) < scene_end and seg.get('end', 0) > scene_start
         ]
-        
-        # Extract keywords from transcripts
+
+        # Resolve per-scene truth from authoritative commit events when available.
+        scene_id_str = str(scene_id)
+        has_audio_for_scene = None
+        has_transcript_for_scene = None
+        if audio_scene_truth_available and isinstance(audio_scene_ids, set):
+            has_audio_for_scene = scene_id_str in audio_scene_ids
+        if transcript_scene_truth_available and isinstance(transcript_scene_ids, set):
+            has_transcript_for_scene = scene_id_str in transcript_scene_ids
+
+        # Consolidated truth contract:
+        # If commit-truth says modality is absent for the scene, suppress payload materialization.
+        audio_chunk_ids = (
+            list(raw_audio_chunk_ids)
+            if has_audio_for_scene is not False
+            else []
+        )
+        scene_transcripts = (
+            list(raw_scene_transcripts)
+            if has_transcript_for_scene is not False
+            else []
+        )
+
+        # Extract keywords from truth-aligned transcripts
         keywords = extract_keywords_from_transcript(scene_transcripts, top_k=5)
-        
-        # Extract entities from all text sources
+
+        # Extract entities from truth-aligned text sources
         scene_entities = []
         if ENTITY_EXTRACTION_AVAILABLE:
             full_transcript = ' '.join(seg.get('text', '') for seg in scene_transcripts)
@@ -446,16 +504,10 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
                 spk_id = speaker.get('speaker', 'UNKNOWN')
                 if spk_id not in speaker_ids:
                     speaker_ids.append(spk_id)
+        if has_audio_for_scene is False:
+            speaker_ids = []
         
         # Build unified segment
-        scene_id_str = str(scene_id)
-        has_audio_for_scene = None
-        has_transcript_for_scene = None
-        if audio_scene_truth_available and isinstance(audio_scene_ids, set):
-            has_audio_for_scene = scene_id_str in audio_scene_ids
-        if transcript_scene_truth_available and isinstance(transcript_scene_ids, set):
-            has_transcript_for_scene = scene_id_str in transcript_scene_ids
-
         unified_segment = {
             'scene_id': scene_id,
             'start': scene_start,
@@ -481,9 +533,9 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
             # Metadata
             'scene_confidence': scene.get('confidence', 0.0),
             'has_visual_embeddings': bool(scene.get('clip_id') and scene.get('dino_id')),
-            'has_audio': has_audio_for_scene if has_audio_for_scene is not None else len(audio_chunk_ids) > 0,
-            'has_transcript': has_transcript_for_scene if has_transcript_for_scene is not None else len(scene_transcripts) > 0,
-            'has_speakers': len(speaker_ids) > 0
+            'has_audio': bool(has_audio_for_scene) if has_audio_for_scene is not None else len(audio_chunk_ids) > 0,
+            'has_transcript': bool(has_transcript_for_scene) if has_transcript_for_scene is not None else len(scene_transcripts) > 0,
+            'has_speakers': bool(has_audio_for_scene) and len(speaker_ids) > 0 if has_audio_for_scene is not None else len(speaker_ids) > 0
         }
         
         # Add detected objects if available
@@ -512,6 +564,7 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
     temporal_index = {
         'version': 1,
         'video_id': video_id,
+        'video_hash': video_id,
         'video_path': video_path,
         'total_scenes': len(scenes),
         'total_duration': max(s.get('end', 0) for s in scenes) if scenes else 0,
@@ -551,6 +604,7 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
     logger.info(f"  Saved: {temporal_index_path}")
     
     return {
+        'video_id': video_id,
         'harmonization_status': harmonization_status,
         'temporal_index_path': temporal_index_path,
         'unified_segments': len(unified_segments),

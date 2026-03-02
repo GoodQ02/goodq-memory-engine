@@ -277,6 +277,22 @@ AUDIO_PIPELINE_STEPS = [
     'audio_embed_clap',
 ]
 
+# Native-heavy NLP subprocesses can sporadically crash under unrestricted thread fan-out.
+# Apply conservative thread caps only for these subprocess steps.
+SUBPROCESS_THREAD_CAP_STEPS: Set[str] = {
+    'tagger',
+    'sentiment',
+    'emotion_classify',
+}
+SUBPROCESS_THREAD_CAP_ENV: Dict[str, str] = {
+    'OMP_NUM_THREADS': '1',
+    'MKL_NUM_THREADS': '1',
+    'NUMEXPR_MAX_THREADS': '1',
+    'TOKENIZERS_PARALLELISM': 'false',
+}
+NATIVE_CRASH_RETRY_STEPS: Set[str] = {'tagger'}
+MAX_NATIVE_STEP_RETRIES: int = 1
+
 
 
 def _build_knowledge_graph_from_results(results: List[Dict[str, Any]], cfg: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -858,6 +874,9 @@ def _persist_healer_retry_metadata(cfg_json: Path) -> None:
         run_meta['healer_retry_count'] = int(_CURRENT_RUN_CONTEXT.get('healer_retry_count', 0) or 0)
         by_step = _CURRENT_RUN_CONTEXT.get('healer_retry_by_step') or {}
         run_meta['healer_retry_by_step'] = dict(by_step) if isinstance(by_step, dict) else {}
+        run_meta['native_retry_count'] = int(_CURRENT_RUN_CONTEXT.get('native_retry_count', 0) or 0)
+        native_by_step = _CURRENT_RUN_CONTEXT.get('native_retry_by_step') or {}
+        run_meta['native_retry_by_step'] = dict(native_by_step) if isinstance(native_by_step, dict) else {}
         warnings = _CURRENT_RUN_CONTEXT.get('warnings') or []
         run_meta['warnings'] = list(warnings) if isinstance(warnings, list) else []
         cfg_data['run'] = run_meta
@@ -904,12 +923,56 @@ def _record_healer_retry(step_name: str, cfg_json: Path) -> None:
     _persist_healer_retry_metadata(cfg_json)
 
 
+def _normalize_windows_status_code(return_code: int) -> int:
+    return (int(return_code) + (1 << 32)) & 0xFFFFFFFF
+
+
+def _is_windows_native_crash(return_code: int) -> bool:
+    # Native Windows exception family: 0xC0000000 - 0xCFFFFFFF.
+    status_code = _normalize_windows_status_code(return_code)
+    return (status_code & 0xF0000000) == 0xC0000000
+
+
+def _record_native_retry(
+    step_name: str,
+    cfg_json: Path,
+    return_code: int,
+    attempt: int,
+    env_fingerprint: Optional[str] = None,
+) -> None:
+    global _CURRENT_RUN_CONTEXT
+    status_code = _normalize_windows_status_code(return_code)
+    if isinstance(_CURRENT_RUN_CONTEXT, dict):
+        current_count = int(_CURRENT_RUN_CONTEXT.get('native_retry_count', 0) or 0)
+        _CURRENT_RUN_CONTEXT['native_retry_count'] = current_count + 1
+        by_step = _CURRENT_RUN_CONTEXT.get('native_retry_by_step')
+        if not isinstance(by_step, dict):
+            by_step = {}
+            _CURRENT_RUN_CONTEXT['native_retry_by_step'] = by_step
+        by_step[step_name] = int(by_step.get(step_name, 0) or 0) + 1
+    context = {
+        'step': step_name,
+        'return_code': int(return_code),
+        'status_code_hex': f"0x{status_code:08X}",
+        'attempt': int(attempt),
+    }
+    if env_fingerprint:
+        context['env_fingerprint'] = env_fingerprint
+    _record_run_warning(
+        cfg_json,
+        code='native_crash_retry',
+        message='Retrying step after native subprocess crash',
+        context=context,
+    )
+
+
 def _run_step(
     env_name: str,
     step_name: str,
     payload: Dict[str, Any],
     cfg_json: Path,
     _healer_retry_attempt: int = 0,
+    _native_retry_attempt: int = 0,
 ) -> Dict[str, Any]:
     work_env = _base_env()
     
@@ -971,7 +1034,13 @@ def _run_step(
             work_env['PYTHONPATH'] = (
                 f"{parent_dir}{os.pathsep}{existing_path}" if existing_path else parent_dir
             )
-        
+
+        step_env = work_env
+        if step_name in SUBPROCESS_THREAD_CAP_STEPS:
+            step_env = dict(work_env)
+            for env_key, env_value in SUBPROCESS_THREAD_CAP_ENV.items():
+                step_env.setdefault(env_key, env_value)
+
         start_ts = time.perf_counter()
         observer = _observer()
         observer_step = f"step.{step_name}"
@@ -992,7 +1061,7 @@ def _run_step(
                     text=True,
                     encoding='utf-8',
                     errors='replace',
-                    env=work_env,
+                    env=step_env,
                     timeout=STEP_TIMEOUT,
                 )
             finally:
@@ -1030,6 +1099,7 @@ def _run_step(
                                 payload,
                                 cfg_json,
                                 _healer_retry_attempt=_healer_retry_attempt + 1,
+                                _native_retry_attempt=_native_retry_attempt,
                             )
                     else:
                         typer.echo(f"[heal] [FAIL] Could not heal timeout: {healing_result.get('recommendation', 'No strategy')}", err=True)
@@ -1052,6 +1122,57 @@ def _run_step(
                     observer_step,
                     error=f"returncode_{result.returncode}",
                     metadata=observer_meta,
+                )
+
+            is_native_crash = _is_windows_native_crash(result.returncode)
+            if (
+                step_name in NATIVE_CRASH_RETRY_STEPS
+                and is_native_crash
+                and _native_retry_attempt < MAX_NATIVE_STEP_RETRIES
+            ):
+                retry_attempt = _native_retry_attempt + 1
+                env_fingerprint_line: Optional[str] = None
+                for stderr_line in stderr.splitlines():
+                    if 'subprocess_env_fingerprint' in stderr_line:
+                        env_fingerprint_line = stderr_line.strip()
+                        break
+                _record_native_retry(
+                    step_name,
+                    cfg_json,
+                    result.returncode,
+                    retry_attempt,
+                    env_fingerprint=env_fingerprint_line,
+                )
+                status_code = _normalize_windows_status_code(result.returncode)
+                logger.warning(
+                    "[RUN] Native crash detected for step=%s return_code=%s status_code=0x%08X retry=%s/%s",
+                    step_name,
+                    result.returncode,
+                    status_code,
+                    retry_attempt,
+                    MAX_NATIVE_STEP_RETRIES,
+                )
+                if env_fingerprint_line:
+                    logger.warning(
+                        "[RUN] Native crash env fingerprint step=%s %s",
+                        step_name,
+                        env_fingerprint_line,
+                    )
+                if VERBOSE:
+                    typer.echo(
+                        (
+                            f"[retry] [WARN] Native crash for {step_name} "
+                            f"(0x{status_code:08X}); retrying once"
+                        ),
+                        err=True,
+                    )
+                return _run_step(
+                    env_name,
+                    step_name,
+                    payload,
+                    cfg_json,
+                    _healer_retry_attempt=_healer_retry_attempt,
+                    _native_retry_attempt=retry_attempt,
                 )
 
             if _control_agent_runtime_enabled():
@@ -1082,6 +1203,7 @@ def _run_step(
                                 payload,
                                 cfg_json,
                                 _healer_retry_attempt=_healer_retry_attempt + 1,
+                                _native_retry_attempt=_native_retry_attempt,
                             )
                     else:
                         typer.echo("[heal] [FAIL] Could not heal failure", err=True)
@@ -1578,6 +1700,8 @@ def run(
         'timer_unit': 'ms',
         'healer_retry_count': 0,
         'healer_retry_by_step': {},
+        'native_retry_count': 0,
+        'native_retry_by_step': {},
         'control_agent_status': (
             'import_unavailable'
             if not CONTROL_AGENT_AVAILABLE

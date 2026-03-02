@@ -1,5 +1,6 @@
 from __future__ import annotations
 import argparse
+import hashlib
 import json
 import os
 import sys
@@ -17,6 +18,26 @@ if str(REPO_ROOT) not in sys.path:
 os.environ.setdefault('PYTHONNOUSERSITE', '0')
 logger = logging.getLogger(__name__)
 _PATH_FALLBACK_WARNED = False
+
+
+def _emit_subprocess_env_fingerprint(step_name: str) -> None:
+    if step_name != "tagger":
+        return
+    env_subset = {
+        "OMP_NUM_THREADS": os.getenv("OMP_NUM_THREADS"),
+        "MKL_NUM_THREADS": os.getenv("MKL_NUM_THREADS"),
+        "NUMEXPR_MAX_THREADS": os.getenv("NUMEXPR_MAX_THREADS"),
+        "TOKENIZERS_PARALLELISM": os.getenv("TOKENIZERS_PARALLELISM"),
+    }
+    payload = {
+        "event": "subprocess_env_fingerprint",
+        "step": step_name,
+        "pid": os.getpid(),
+        "env": env_subset,
+    }
+    payload_raw = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    payload["fingerprint"] = hashlib.sha256(payload_raw.encode("utf-8")).hexdigest()[:16]
+    print(json.dumps(payload, ensure_ascii=False), file=sys.stderr, flush=True)
 
 
 def load_cfg(overrides: Dict[str, Any] | None = None) -> Dict[str, Any]:
@@ -271,6 +292,7 @@ def main() -> None:
     # Measure and log duration
     from steps.common.step_logger import log_step_run
     start_ns = time.perf_counter_ns()
+    _emit_subprocess_env_fingerprint(args.step)
     try:
         res = run_step(args.step, item, cfg)
     except Exception as exc:

@@ -1104,6 +1104,14 @@ def _run_step(
         payload_scene_id = payload.get('scene_id')
         if payload_scene_id is not None:
             observer_meta["scene_id"] = str(payload_scene_id)
+        payload_scene_index = payload.get('scene_index')
+        if payload_scene_index is not None:
+            observer_meta["scene_index"] = payload_scene_index
+        elif isinstance(payload.get('scene'), dict) and payload['scene'].get('index') is not None:
+            observer_meta["scene_index"] = payload['scene'].get('index')
+        observer_meta["attempt"] = max(int(_healer_retry_attempt), int(_native_retry_attempt)) + 1
+        observer_meta["healer_retry_attempt"] = int(_healer_retry_attempt)
+        observer_meta["native_retry_attempt"] = int(_native_retry_attempt)
         if observer:
             observer.step_start(observer_step, metadata=observer_meta)
         if VERBOSE:
@@ -1282,7 +1290,7 @@ def _run_step(
             observer.step_end(
                 observer_step,
                 metadata={
-                    "env": env_name,
+                    **observer_meta,
                     "duration_sec": round(duration, 3),
                 },
             )
@@ -1360,7 +1368,15 @@ def _log_skipped_steps(
         log_step_run(cfg, step_name, item, 0.0, 'skipped', extra=extra_payload)
 
 
-def _extract_keyframe(ffmpeg: str, video_path: Path, scene: Dict[str, Any], dest_dir: Path) -> Path:
+def _extract_keyframe(
+    ffmpeg: str,
+    video_path: Path,
+    scene: Dict[str, Any],
+    dest_dir: Path,
+    *,
+    scene_id: Optional[str] = None,
+    video_id: Optional[str] = None,
+) -> Path:
     _ensure_dir(dest_dir)
     duration = float(scene.get('duration', 0.0) or 0.0)
     start = float(scene.get('start', 0.0) or 0.0)
@@ -1372,6 +1388,10 @@ def _extract_keyframe(ffmpeg: str, video_path: Path, scene: Dict[str, Any], dest
         "video": str(video_path),
         "scene_index": scene.get('index', 0),
     }
+    if scene_id is not None:
+        observer_meta["scene_id"] = str(scene_id)
+    if video_id is not None:
+        observer_meta["video_id"] = str(video_id)
     if observer:
         observer.step_start(observer_step, metadata=observer_meta)
     cmd = [
@@ -1412,7 +1432,15 @@ def _extract_keyframe(ffmpeg: str, video_path: Path, scene: Dict[str, Any], dest
     return outfile
 
 
-def _extract_audio_chunk(ffmpeg: str, video_path: Path, scene: Dict[str, Any], dest_dir: Path) -> Optional[Path]:
+def _extract_audio_chunk(
+    ffmpeg: str,
+    video_path: Path,
+    scene: Dict[str, Any],
+    dest_dir: Path,
+    *,
+    scene_id: Optional[str] = None,
+    video_id: Optional[str] = None,
+) -> Optional[Path]:
     """Extract audio chunk - returns None if video has no audio"""
     _ensure_dir(dest_dir)
     start = float(scene.get('start', 0.0) or 0.0)
@@ -1426,6 +1454,10 @@ def _extract_audio_chunk(ffmpeg: str, video_path: Path, scene: Dict[str, Any], d
         "scene_index": scene.get('index', 0),
         "duration_sec": round(duration, 3),
     }
+    if scene_id is not None:
+        observer_meta["scene_id"] = str(scene_id)
+    if video_id is not None:
+        observer_meta["video_id"] = str(video_id)
     if observer:
         observer.step_start(observer_step, metadata=observer_meta)
     cmd = [
@@ -1482,7 +1514,14 @@ def _process_frame(
     video_hash: str,
     scene_id: str,
 ) -> Dict[str, Any]:
-    frame_path = _extract_keyframe(ffmpeg, video_path, scene, frame_dir)
+    frame_path = _extract_keyframe(
+        ffmpeg,
+        video_path,
+        scene,
+        frame_dir,
+        scene_id=scene_id,
+        video_id=video_hash,
+    )
     scene_index = scene.get('index')
     duration = float(scene.get('duration', 0.0) or 0.0)
     start = float(scene.get('start', 0.0) or 0.0)
@@ -1528,6 +1567,7 @@ def _process_frame(
             'source_path': str(frame_path),
             'frame_text': frame_text,
             'scene_id': scene_id,
+            'scene_index': scene_index,
             'video_hash': video_hash,
             'video_id': video_hash,
         }
@@ -1554,7 +1594,14 @@ def _process_audio(
     scene_id: str,
 ) -> Optional[Dict[str, Any]]:
     """Process audio for scene - returns None if video has no audio"""
-    audio_path = _extract_audio_chunk(ffmpeg, video_path, scene, audio_dir)
+    audio_path = _extract_audio_chunk(
+        ffmpeg,
+        video_path,
+        scene,
+        audio_dir,
+        scene_id=scene_id,
+        video_id=video_hash,
+    )
     
     # If no audio was extracted, return None
     if audio_path is None:
@@ -1567,6 +1614,7 @@ def _process_audio(
         'modality': 'audio',
         'source_path': str(audio_path),
         'scene_id': scene_id,
+        'scene_index': scene.get('index'),
         'video_hash': video_hash,
         'video_id': video_hash,
         'scene': {
@@ -1593,6 +1641,7 @@ def _process_audio(
                 'source_path': str(audio_path),
                 'path': str(audio_path),
                 'scene_id': scene_id,
+                'scene_index': scene.get('index'),
                 'video_hash': video_hash,
                 'video_id': video_hash,
             }
@@ -1677,6 +1726,7 @@ def _process_audio(
             'source_path': str(audio_path),
             'text': transcript,
             'scene_id': scene_id,
+            'scene_index': scene.get('index'),
             'video_hash': video_hash,
             'video_id': video_hash,
         }

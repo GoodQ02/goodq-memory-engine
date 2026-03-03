@@ -53,9 +53,17 @@ def test_healer_retry_ceiling_caps_at_three(monkeypatch, tmp_path: Path, caplog)
 
     calls = {"subprocess": 0, "heal": 0}
 
-    def _fake_subprocess_run(*args, **kwargs):
-        calls["subprocess"] += 1
-        return types.SimpleNamespace(returncode=1, stdout="stdout", stderr="stderr")
+    class _FakePopenFailure:
+        def __init__(self, *args, **kwargs):
+            calls["subprocess"] += 1
+            self.pid = 2026
+            self.returncode = 1
+
+        def communicate(self, timeout=None):
+            return "stdout", "stderr"
+
+        def kill(self):
+            self.returncode = -9
 
     class _FakeControlAgent:
         def __init__(self, *args, **kwargs):
@@ -66,9 +74,12 @@ def test_healer_retry_ceiling_caps_at_three(monkeypatch, tmp_path: Path, caplog)
             return {"success": True}
 
     monkeypatch.setattr(run_ingestion, "resolve_conda", lambda: "conda")
-    monkeypatch.setattr(run_ingestion.subprocess, "run", _fake_subprocess_run)
+    monkeypatch.setattr(run_ingestion.shutil, "which", lambda _: "conda")
+    monkeypatch.setattr(run_ingestion.subprocess, "Popen", _FakePopenFailure)
     monkeypatch.setattr(run_ingestion, "ControlAgent", _FakeControlAgent)
     monkeypatch.setattr(run_ingestion, "CONTROL_AGENT_AVAILABLE", True)
+    monkeypatch.setattr(run_ingestion, "_control_agent_runtime_enabled", lambda: True)
+    monkeypatch.setattr(run_ingestion, "_PIPELINE_OBSERVER", None)
     monkeypatch.setattr(
         run_ingestion,
         "_CURRENT_RUN_CONTEXT",

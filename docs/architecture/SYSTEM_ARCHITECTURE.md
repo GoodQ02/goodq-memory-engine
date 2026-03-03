@@ -16,6 +16,8 @@
 
 This milestone snapshot is constrained to witness-run evidence (`run_id=51e42006-f64d-4b13-a42a-f180bf8ba7f3`) and does not expand profile guarantees beyond existing contracts.
 
+Latest rerun comparison evidence is archived at `docs/archive/proof_of_concept/WITNESS_RUN_002.md` (`run_id=90e366c9-41be-4c37-84b6-52abbf4addb9`).
+
 - Windows runtime remains canonical and deterministic for orchestrated ingestion.
 - Hybrid Windows + WSL architecture remains in force; WSL is an optional, profile-gated audio compute extension.
 - Knowledge graph is active for scene-linked media persistence.

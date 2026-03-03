@@ -21,6 +21,21 @@ _TRUTHY = {"1", "true", "yes", "on"}
 _FALSY = {"0", "false", "no", "off"}
 
 
+def _env_with_alias(primary: str, *aliases: str) -> Optional[str]:
+    """
+    Resolve an env var with optional aliases.
+    Canonical primary key always takes precedence when present.
+    """
+    value = os.getenv(primary)
+    if value is not None:
+        return value
+    for alias in aliases:
+        aliased = os.getenv(alias)
+        if aliased is not None:
+            return aliased
+    return None
+
+
 def _parse_bool_env(raw: Optional[str], default: bool) -> bool:
     if raw is None:
         return default
@@ -30,6 +45,15 @@ def _parse_bool_env(raw: Optional[str], default: bool) -> bool:
     if norm in _FALSY:
         return False
     return default
+
+
+def _parse_float_env(raw: Optional[str], default: float) -> float:
+    if raw is None:
+        return default
+    try:
+        return float(raw)
+    except (TypeError, ValueError):
+        return default
 
 
 @dataclass
@@ -74,10 +98,22 @@ class PipelineObserver:
 
     @classmethod
     def from_runtime(cls, *, run_id: Optional[str], verbose: bool) -> "PipelineObserver":
-        enabled = _parse_bool_env(os.getenv("GOODQ_OBSERVER_ENABLED"), bool(verbose))
-        emit_json = _parse_bool_env(os.getenv("GOODQ_OBSERVER_JSON"), True)
-        enable_tqdm = _parse_bool_env(os.getenv("GOODQ_OBSERVER_TQDM"), True)
-        heartbeat_interval = float(os.getenv("GOODQ_OBSERVER_HEARTBEAT_SEC", "5") or "5")
+        enabled = _parse_bool_env(
+            _env_with_alias("GOODQ_OBSERVER_ENABLED", "GOODQ_OBSERVE"),
+            bool(verbose),
+        )
+        emit_json = _parse_bool_env(
+            _env_with_alias("GOODQ_OBSERVER_JSON", "GOODQ_OBSERVE_JSON"),
+            True,
+        )
+        enable_tqdm = _parse_bool_env(
+            _env_with_alias("GOODQ_OBSERVER_TQDM", "GOODQ_OBSERVE_TQDM"),
+            True,
+        )
+        heartbeat_interval = _parse_float_env(
+            _env_with_alias("GOODQ_OBSERVER_HEARTBEAT_SEC", "GOODQ_OBSERVE_HEARTBEAT_SEC"),
+            5.0,
+        )
         return cls(
             run_id=run_id,
             enabled=enabled,
@@ -241,4 +277,3 @@ class PipelineObserver:
                     state.bar.close()
                 except Exception:
                     pass
-

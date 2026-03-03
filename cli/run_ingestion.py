@@ -734,6 +734,109 @@ def _aggregate_audio_backend(scene_outputs: List[Dict[str, Any]]) -> str:
     return 'none'
 
 
+def _merge_modality_state(current: str, candidate: str) -> str:
+    rank = {
+        'not_attempted': 0,
+        'unavailable': 1,
+        'available': 2,
+    }
+    current_norm = str(current or '').strip().lower()
+    candidate_norm = str(candidate or '').strip().lower()
+    if current_norm not in rank:
+        current_norm = 'not_attempted'
+    if candidate_norm not in rank:
+        candidate_norm = 'not_attempted'
+    return candidate_norm if rank[candidate_norm] > rank[current_norm] else current_norm
+
+
+def _status_dict_to_modality_state(status_dict: Any) -> str:
+    if not isinstance(status_dict, dict):
+        return 'not_attempted'
+    raw_status = status_dict.get('status')
+    if not isinstance(raw_status, str):
+        return 'not_attempted'
+    status = raw_status.strip().lower()
+    if status in {'ok', 'success', 'complete'}:
+        return 'available'
+    if status in {'unavailable', 'error', 'failed'}:
+        return 'unavailable'
+    if status in {
+        'no_text',
+        'no_file',
+        'no_index_path',
+        'no_audio_stream',
+        'no_audio_output',
+        'skipped',
+        'dedupe_skipped',
+    }:
+        return 'not_attempted'
+    return 'not_attempted'
+
+
+def _aggregate_modality_status(
+    scene_outputs: List[Dict[str, Any]],
+    phase6_embeddings_result: Optional[Dict[str, Any]] = None,
+) -> Dict[str, str]:
+    status = {
+        'vision_clip': 'not_attempted',
+        'vision_dino': 'not_attempted',
+        'text_embed': 'not_attempted',
+        'audio_embed': 'not_attempted',
+    }
+
+    for scene in scene_outputs:
+        if not isinstance(scene, dict):
+            continue
+
+        keyframe = scene.get('keyframe')
+        if isinstance(keyframe, dict):
+            if keyframe.get('clip_embedding') is not None:
+                status['vision_clip'] = _merge_modality_state(status['vision_clip'], 'available')
+            status['vision_clip'] = _merge_modality_state(
+                status['vision_clip'],
+                _status_dict_to_modality_state(keyframe.get('clip_meta')),
+            )
+            if keyframe.get('dino_embedding') is not None:
+                status['vision_dino'] = _merge_modality_state(status['vision_dino'], 'available')
+            status['vision_dino'] = _merge_modality_state(
+                status['vision_dino'],
+                _status_dict_to_modality_state(keyframe.get('dino_meta')),
+            )
+            status['text_embed'] = _merge_modality_state(
+                status['text_embed'],
+                _status_dict_to_modality_state(keyframe.get('frame_text_embed_meta')),
+            )
+
+        audio = scene.get('audio')
+        if isinstance(audio, dict):
+            if audio.get('clap_embedding') is not None:
+                status['audio_embed'] = _merge_modality_state(status['audio_embed'], 'available')
+            status['audio_embed'] = _merge_modality_state(
+                status['audio_embed'],
+                _status_dict_to_modality_state(audio.get('clap_meta')),
+            )
+            status['text_embed'] = _merge_modality_state(
+                status['text_embed'],
+                _status_dict_to_modality_state(audio.get('audio_text_embed_meta')),
+            )
+
+    if isinstance(phase6_embeddings_result, dict):
+        clip_written = _coerce_nonnegative_int(phase6_embeddings_result.get('scene_clip_vectors_written'))
+        dino_written = _coerce_nonnegative_int(phase6_embeddings_result.get('scene_dino_vectors_written'))
+        clip_attempted = _coerce_nonnegative_int(phase6_embeddings_result.get('clip_embeddings'))
+        dino_attempted = _coerce_nonnegative_int(phase6_embeddings_result.get('dino_embeddings'))
+        if bool(phase6_embeddings_result.get('clip_committed')) or clip_written > 0:
+            status['vision_clip'] = 'available'
+        elif clip_attempted > 0:
+            status['vision_clip'] = _merge_modality_state(status['vision_clip'], 'unavailable')
+        if bool(phase6_embeddings_result.get('dino_committed')) or dino_written > 0:
+            status['vision_dino'] = 'available'
+        elif dino_attempted > 0:
+            status['vision_dino'] = _merge_modality_state(status['vision_dino'], 'unavailable')
+
+    return status
+
+
 def _coerce_nonnegative_int(value: Any) -> int:
     try:
         parsed = int(value or 0)
@@ -1616,7 +1719,11 @@ def _process_frame(
             'video_hash': video_hash,
             'video_id': video_hash,
         }
-        _run_step('goodq_core', 'text_embed', text_payload, cfg_json)
+        text_embed_result = _run_step('goodq_core', 'text_embed', text_payload, cfg_json)
+        if isinstance(text_embed_result, dict):
+            frame_text_embed_meta = text_embed_result.get('embedding_meta')
+            if isinstance(frame_text_embed_meta, dict):
+                item['frame_text_embed_meta'] = frame_text_embed_meta
         item['frame_text'] = frame_text
 
     canonicalize_taxonomy(item)
@@ -1775,7 +1882,11 @@ def _process_audio(
             'video_hash': video_hash,
             'video_id': video_hash,
         }
-        _run_step('goodq_core', 'text_embed', text_payload, cfg_json)
+        text_embed_result = _run_step('goodq_core', 'text_embed', text_payload, cfg_json)
+        if isinstance(text_embed_result, dict):
+            audio_text_embed_meta = text_embed_result.get('embedding_meta')
+            if isinstance(audio_text_embed_meta, dict):
+                item['audio_text_embed_meta'] = audio_text_embed_meta
 
     merge('goodq_core', 'sentiment')
     merge('goodq_core', 'emotion_classify')
@@ -2445,6 +2556,7 @@ def run(
         scene_qdrant_status = _aggregate_scene_store_status(scene_outputs, 'qdrant_ok')
         scene_faiss_status = _aggregate_scene_store_status(scene_outputs, 'faiss_ok')
         run_audio_backend_selected = _aggregate_audio_backend(scene_outputs)
+        phase6_embeddings_result: Optional[Dict[str, Any]] = None
         phase6_qdrant_status: Any = 'not_attempted'
         phase6_faiss_status: Any = 'not_attempted'
 
@@ -2548,6 +2660,7 @@ def run(
                 print("[STAGE10_16_DEBUG] phase6_status:", phase6_status)
                 print("[STAGE10_16_DEBUG] phase6_result:", result_dict)
                 if isinstance(embeddings_result, dict):
+                    phase6_embeddings_result = embeddings_result
                     phase6_item.update(embeddings_result)
                     phase6_qdrant_status = _normalize_vector_store_status(embeddings_result.get('qdrant_ok'))
                     phase6_faiss_status = _normalize_vector_store_status(embeddings_result.get('faiss_ok'))
@@ -2634,6 +2747,7 @@ def run(
 
         video_result['qdrant_ok'] = _merge_store_statuses(scene_qdrant_status, phase6_qdrant_status)
         video_result['faiss_ok'] = _merge_store_statuses(scene_faiss_status, phase6_faiss_status)
+        video_result['modality_status'] = _aggregate_modality_status(scene_outputs, phase6_embeddings_result)
         
         results.append(video_result)
 

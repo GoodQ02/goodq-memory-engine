@@ -1112,28 +1112,45 @@ def _run_step(
         observer_meta["attempt"] = max(int(_healer_retry_attempt), int(_native_retry_attempt)) + 1
         observer_meta["healer_retry_attempt"] = int(_healer_retry_attempt)
         observer_meta["native_retry_attempt"] = int(_native_retry_attempt)
-        if observer:
-            observer.step_start(observer_step, metadata=observer_meta)
         if VERBOSE:
             typer.echo(f'[step] -> {step_name} ({env_name})')
         stop_heartbeat = (lambda: None)
+        process: Optional[subprocess.Popen[str]] = None
         try:
+            process = subprocess.Popen(
+                cmd,
+                cwd=str(REPO_ROOT),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                encoding='utf-8',
+                errors='replace',
+                env=step_env,
+            )
+            observer_meta["subprocess_pid"] = int(process.pid)
             if observer:
+                observer.step_start(observer_step, metadata=observer_meta)
                 stop_heartbeat = observer.begin_heartbeat(observer_step, metadata=observer_meta)
             try:
-                result = subprocess.run(
-                    cmd,
-                    cwd=str(REPO_ROOT),
-                    capture_output=True,
-                    text=True,
-                    encoding='utf-8',
-                    errors='replace',
-                    env=step_env,
-                    timeout=STEP_TIMEOUT,
-                )
+                stdout_text, stderr_text = process.communicate(timeout=STEP_TIMEOUT)
             finally:
                 stop_heartbeat()
+            result = subprocess.CompletedProcess(
+                cmd,
+                process.returncode if process.returncode is not None else 1,
+                stdout_text or '',
+                stderr_text or '',
+            )
         except subprocess.TimeoutExpired as exc:
+            if process is not None:
+                try:
+                    process.kill()
+                except Exception:
+                    pass
+                try:
+                    process.communicate(timeout=5)
+                except Exception:
+                    pass
             if observer:
                 observer.step_error(
                     observer_step,
@@ -1392,8 +1409,6 @@ def _extract_keyframe(
         observer_meta["scene_id"] = str(scene_id)
     if video_id is not None:
         observer_meta["video_id"] = str(video_id)
-    if observer:
-        observer.step_start(observer_step, metadata=observer_meta)
     cmd = [
         ffmpeg,
         '-hide_banner',
@@ -1405,12 +1420,28 @@ def _extract_keyframe(
         str(outfile),
     ]
     stop_heartbeat = (lambda: None)
+    process = subprocess.Popen(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        encoding='utf-8',
+        errors='replace',
+    )
+    observer_meta["subprocess_pid"] = int(process.pid)
     if observer:
+        observer.step_start(observer_step, metadata=observer_meta)
         stop_heartbeat = observer.begin_heartbeat(observer_step, metadata=observer_meta)
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', errors='replace')
+        stdout_text, stderr_text = process.communicate()
     finally:
         stop_heartbeat()
+    result = subprocess.CompletedProcess(
+        cmd,
+        process.returncode if process.returncode is not None else 1,
+        stdout_text or '',
+        stderr_text or '',
+    )
     if result.returncode != 0:
         if observer:
             observer.step_error(
@@ -1458,8 +1489,6 @@ def _extract_audio_chunk(
         observer_meta["scene_id"] = str(scene_id)
     if video_id is not None:
         observer_meta["video_id"] = str(video_id)
-    if observer:
-        observer.step_start(observer_step, metadata=observer_meta)
     cmd = [
         ffmpeg,
         '-hide_banner',
@@ -1475,12 +1504,28 @@ def _extract_audio_chunk(
         str(outfile),
     ]
     stop_heartbeat = (lambda: None)
+    process = subprocess.Popen(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        encoding='utf-8',
+        errors='replace',
+    )
+    observer_meta["subprocess_pid"] = int(process.pid)
     if observer:
+        observer.step_start(observer_step, metadata=observer_meta)
         stop_heartbeat = observer.begin_heartbeat(observer_step, metadata=observer_meta)
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', errors='replace')
+        stdout_text, stderr_text = process.communicate()
     finally:
         stop_heartbeat()
+    result = subprocess.CompletedProcess(
+        cmd,
+        process.returncode if process.returncode is not None else 1,
+        stdout_text or '',
+        stderr_text or '',
+    )
     if result.returncode != 0:
         # Check if error is due to no audio stream
         if 'does not contain any stream' in result.stderr or 'Stream specifier' in result.stderr:

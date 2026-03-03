@@ -700,6 +700,40 @@ def _normalize_vector_store_status(value: Any) -> Any:
     return bool(value)
 
 
+def _aggregate_audio_backend(scene_outputs: List[Dict[str, Any]]) -> str:
+    """
+    Deterministic run-level backend reducer.
+
+    Rules:
+    - wsl: at least one scene uses wsl, and none use windows
+    - windows: at least one scene uses windows, and none use wsl
+    - mixed: scenes include both wsl and windows
+    - none: no scenes report wsl/windows
+    """
+    used_wsl = False
+    used_windows = False
+
+    for scene in scene_outputs:
+        if not isinstance(scene, dict):
+            continue
+        backend = scene.get('audio_backend_selected')
+        if not isinstance(backend, str):
+            continue
+        normalized = backend.strip().lower()
+        if normalized == 'wsl':
+            used_wsl = True
+        elif normalized == 'windows':
+            used_windows = True
+
+    if used_wsl and used_windows:
+        return 'mixed'
+    if used_wsl:
+        return 'wsl'
+    if used_windows:
+        return 'windows'
+    return 'none'
+
+
 def _coerce_nonnegative_int(value: Any) -> int:
     try:
         parsed = int(value or 0)
@@ -2315,6 +2349,7 @@ def run(
 
         scene_qdrant_status = _aggregate_scene_store_status(scene_outputs, 'qdrant_ok')
         scene_faiss_status = _aggregate_scene_store_status(scene_outputs, 'faiss_ok')
+        run_audio_backend_selected = _aggregate_audio_backend(scene_outputs)
         phase6_qdrant_status: Any = 'not_attempted'
         phase6_faiss_status: Any = 'not_attempted'
 
@@ -2326,6 +2361,7 @@ def run(
             'audio_artifact_dir': str(audio_artifact_dir),
             'scene_meta': detection_meta,
             'scenes': scene_outputs,
+            'audio_backend_selected': run_audio_backend_selected,
             'qdrant_ok': scene_qdrant_status,
             'faiss_ok': scene_faiss_status,
             'control_agent_status': control_agent_status,

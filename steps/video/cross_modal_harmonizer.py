@@ -354,15 +354,24 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
     else:
         scene_data['video_id'] = video_id
 
-    # Presence must be derived from committed truth (memory_commit_events), not filesystem heuristics.
+    # Preserve committed-modality truth (memory_commit_events) as metadata/checks,
+    # but do not let it suppress scene payload transcript/audio truth.
     scene_ids_for_video = [str(s.get('id', s.get('scene_id', ''))) for s in scenes if s.get('id') or s.get('scene_id')]
     commit_presence = _load_commit_presence(cfg, str(video_id), scene_ids=scene_ids_for_video)
-    audio_scene_ids = commit_presence.get('audio_scene_ids') if commit_presence.get('available') else set()
-    transcript_scene_ids = commit_presence.get('transcript_scene_ids') if commit_presence.get('available') else set()
+    audio_scene_ids = set(commit_presence.get('audio_scene_ids') or []) if commit_presence.get('available') else set()
+    transcript_scene_ids = set(commit_presence.get('transcript_scene_ids') or []) if commit_presence.get('available') else set()
     has_audio_committed = bool(commit_presence.get('has_audio')) if commit_presence.get('available') else None
     has_transcripts_committed = bool(commit_presence.get('has_transcripts')) if commit_presence.get('available') else None
-    audio_scene_truth_available = has_audio_committed is False or bool(audio_scene_ids)
-    transcript_scene_truth_available = has_transcripts_committed is False or bool(transcript_scene_ids)
+
+    scene_content_states: List[str] = []
+    for scene in scenes:
+        state = scene.get('content_state')
+        if isinstance(state, str):
+            normalized = state.strip().lower()
+            if normalized in {'signal', 'empty', 'processing_error'}:
+                scene_content_states.append(normalized)
+    all_scenes_classified = len(scene_content_states) == len(scenes) and len(scenes) > 0
+    processing_error_scene_count = sum(1 for state in scene_content_states if state == 'processing_error')
     
     # Load audio segmentation (Phase 3)
     segmentation_data = None
@@ -387,38 +396,27 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
     transcript_segments = transcript_data.get('segments', []) if transcript_data else []
     
     speakers = diarization_data.get('speakers', []) if diarization_data else []
-    if (
-        commit_presence.get('available')
-        and isinstance(transcript_segments, list)
-        and transcript_segments
-        and has_transcripts_committed is False
-    ):
-        logger.warning(
-            "[HARMONIZER] transcript artifacts present but commit truth is false; suppressing transcript payloads "
-            "for deterministic truth alignment video_id=%s",
-            video_id,
-        )
-    if (
-        commit_presence.get('available')
-        and isinstance(audio_segments, list)
-        and audio_segments
-        and has_audio_committed is False
-    ):
-        logger.warning(
-            "[HARMONIZER] audio artifacts present but commit truth is false; suppressing audio payloads "
-            "for deterministic truth alignment video_id=%s",
-            video_id,
-        )
     phase6_warning: Optional[str] = None
     harmonization_status = 'complete'
     if not audio_artifact_integrity_ok:
-        phase6_warning = 'missing_audio_artifacts'
-        harmonization_status = 'degraded'
-        logger.warning(
-            "[HARMONIZER] Harmonization degraded warning=%s video_id=%s",
-            phase6_warning,
-            video_id,
-        )
+        # Classified runs: only processing_error scenes should degrade harmonization.
+        # Legacy/unclassified runs retain prior conservative behavior.
+        if (all_scenes_classified and processing_error_scene_count > 0) or (not all_scenes_classified):
+            phase6_warning = 'missing_audio_artifacts'
+            harmonization_status = 'degraded'
+            logger.warning(
+                "[HARMONIZER] Harmonization degraded warning=%s video_id=%s processing_error_scenes=%s classified=%s",
+                phase6_warning,
+                video_id,
+                processing_error_scene_count,
+                all_scenes_classified,
+            )
+        else:
+            logger.info(
+                "[HARMONIZER] Audio artifacts missing but scenes classified without processing errors; "
+                "keeping harmonization_status=complete video_id=%s",
+                video_id,
+            )
     
     # Load object detection results (if available)
     objects_path = os.path.join(processing_dir, 'video', 'detected_objects.json')
@@ -447,27 +445,39 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
             if seg.get('start', 0) < scene_end and seg.get('end', 0) > scene_start
         ]
 
-        # Resolve per-scene truth from authoritative commit events when available.
-        scene_id_str = str(scene_id)
-        has_audio_for_scene = None
-        has_transcript_for_scene = None
-        if audio_scene_truth_available and isinstance(audio_scene_ids, set):
-            has_audio_for_scene = scene_id_str in audio_scene_ids
-        if transcript_scene_truth_available and isinstance(transcript_scene_ids, set):
-            has_transcript_for_scene = scene_id_str in transcript_scene_ids
+        # Scene payload truth (authoritative for has_audio/has_transcript flags).
+        scene_audio_payload = scene.get('audio') if isinstance(scene.get('audio'), dict) else {}
+        payload_audio_path = scene_audio_payload.get('path')
+        payload_audio_path = payload_audio_path.strip() if isinstance(payload_audio_path, str) else ''
+        payload_audio_meta = scene_audio_payload.get('audio_meta')
+        payload_audio_segments = scene_audio_payload.get('segments') if isinstance(scene_audio_payload.get('segments'), list) else []
+        payload_transcript_text = scene_audio_payload.get('transcript')
+        payload_transcript_text = payload_transcript_text.strip() if isinstance(payload_transcript_text, str) else ''
 
-        # Consolidated truth contract:
-        # If commit-truth says modality is absent for the scene, suppress payload materialization.
-        audio_chunk_ids = (
-            list(raw_audio_chunk_ids)
-            if has_audio_for_scene is not False
-            else []
+        # Prefer artifact overlap segments; fallback to scene payload segments; then fallback to full transcript text.
+        scene_transcripts = list(raw_scene_transcripts)
+        if not scene_transcripts and payload_audio_segments:
+            scene_transcripts = [seg for seg in payload_audio_segments if isinstance(seg, dict)]
+        if not scene_transcripts and payload_transcript_text:
+            scene_transcripts = [{'start': scene_start, 'end': scene_end, 'text': payload_transcript_text}]
+        audio_chunk_ids = list(raw_audio_chunk_ids)
+
+        scene_transcript_texts = [
+            str(seg.get('text', '')).strip()
+            for seg in scene_transcripts
+            if isinstance(seg, dict)
+        ]
+        scene_transcript_texts = [text for text in scene_transcript_texts if text]
+        full_transcript_text = payload_transcript_text or ' '.join(scene_transcript_texts).strip()
+
+        has_audio_for_scene = bool(
+            audio_chunk_ids
+            or payload_audio_path
+            or isinstance(payload_audio_meta, dict)
+            or payload_audio_segments
+            or payload_transcript_text
         )
-        scene_transcripts = (
-            list(raw_scene_transcripts)
-            if has_transcript_for_scene is not False
-            else []
-        )
+        has_transcript_for_scene = bool(full_transcript_text or scene_transcript_texts)
 
         # Extract keywords from truth-aligned transcripts
         keywords = extract_keywords_from_transcript(scene_transcripts, top_k=5)
@@ -475,7 +485,7 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
         # Extract entities from truth-aligned text sources
         scene_entities = []
         if ENTITY_EXTRACTION_AVAILABLE:
-            full_transcript = ' '.join(seg.get('text', '') for seg in scene_transcripts)
+            full_transcript = full_transcript_text
             caption_text = scene.get('caption', '')
             ocr_text = scene.get('ocr_text', '')
             tags = scene.get('tags', [])
@@ -504,7 +514,7 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
                 spk_id = speaker.get('speaker', 'UNKNOWN')
                 if spk_id not in speaker_ids:
                     speaker_ids.append(spk_id)
-        if has_audio_for_scene is False:
+        if not has_audio_for_scene:
             speaker_ids = []
         
         # Build unified segment
@@ -513,6 +523,7 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
             'start': scene_start,
             'end': scene_end,
             'duration': scene_end - scene_start,
+            'content_state': scene.get('content_state', 'signal'),
             
             # Visual embeddings
             'clip_id': scene.get('clip_id'),
@@ -527,15 +538,15 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
             # Semantic content
             'keywords': keywords,
             'entities': scene_entities,  # NEW: Extracted entities
-            'transcript_segments': [seg.get('text', '') for seg in scene_transcripts],
-            'full_transcript': ' '.join(seg.get('text', '') for seg in scene_transcripts),
+            'transcript_segments': scene_transcript_texts,
+            'full_transcript': full_transcript_text,
             
             # Metadata
             'scene_confidence': scene.get('confidence', 0.0),
             'has_visual_embeddings': bool(scene.get('clip_id') and scene.get('dino_id')),
-            'has_audio': bool(has_audio_for_scene) if has_audio_for_scene is not None else len(audio_chunk_ids) > 0,
-            'has_transcript': bool(has_transcript_for_scene) if has_transcript_for_scene is not None else len(scene_transcripts) > 0,
-            'has_speakers': bool(has_audio_for_scene) and len(speaker_ids) > 0 if has_audio_for_scene is not None else len(speaker_ids) > 0
+            'has_audio': has_audio_for_scene,
+            'has_transcript': has_transcript_for_scene,
+            'has_speakers': has_audio_for_scene and len(speaker_ids) > 0
         }
         
         # Add detected objects if available
@@ -561,6 +572,19 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
     # Get top entities
     top_entities = sorted(entity_counts.items(), key=lambda x: x[1], reverse=True)[:20]
     
+    has_audio_payload_truth = any(s.get('has_audio') for s in unified_segments)
+    has_transcript_payload_truth = any(s.get('has_transcript') for s in unified_segments)
+    if commit_presence.get('available') and has_transcript_payload_truth and has_transcripts_committed is False:
+        logger.warning(
+            "[HARMONIZER] Transcript payload present without committed audio_transcript vectors video_id=%s",
+            video_id,
+        )
+    if commit_presence.get('available') and has_audio_payload_truth and has_audio_committed is False:
+        logger.warning(
+            "[HARMONIZER] Audio payload present without committed audio vectors video_id=%s",
+            video_id,
+        )
+
     temporal_index = {
         'version': 1,
         'video_id': video_id,
@@ -582,8 +606,20 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
         
         # Global metadata
         'has_visual_embeddings': any(s.get('has_visual_embeddings') for s in unified_segments),
-        'has_audio': has_audio_committed if has_audio_committed is not None else any(s.get('has_audio') for s in unified_segments),
-        'has_transcripts': has_transcripts_committed if has_transcripts_committed is not None else any(s.get('has_transcript') for s in unified_segments),
+        'has_audio': has_audio_payload_truth,
+        'has_transcripts': has_transcript_payload_truth,
+        'committed_modalities': {
+            'available': bool(commit_presence.get('available')),
+            'audio': has_audio_committed,
+            'audio_transcript': has_transcripts_committed,
+            'audio_scene_count': len(audio_scene_ids),
+            'transcript_scene_count': len(transcript_scene_ids),
+        },
+        'content_summary': {
+            'signal': sum(1 for state in scene_content_states if state == 'signal'),
+            'empty': sum(1 for state in scene_content_states if state == 'empty'),
+            'processing_error': processing_error_scene_count,
+        } if all_scenes_classified else None,
         
         # Processing metadata
         'phase5_complete': scene_data.get('phase5_complete', False),

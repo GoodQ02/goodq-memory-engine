@@ -11,6 +11,7 @@ from pathlib import Path
 
 class WSL2AudioBridge:
     """Bridge to WSL2 audio processing"""
+    _workspace_warning_keys: set[str] = set()
     
     def __init__(self):
         self.require_wsl_audio = self._is_truthy(os.environ.get("GOODQ_REQUIRE_WSL_AUDIO", ""))
@@ -25,6 +26,27 @@ class WSL2AudioBridge:
     @staticmethod
     def _is_truthy(value):
         return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+    @classmethod
+    def _workspace_warning_key(cls, *, distro: str, workspace: str, warning_kind: str) -> str:
+        run_id = os.environ.get("GOODQ_RUN_ID")
+        scope = f"run:{run_id}" if run_id else f"pid:{os.getpid()}"
+        return f"{scope}|{distro}|{workspace}|{warning_kind}"
+
+    def _warn_workspace_once(self, message: str, *, warning_kind: str) -> None:
+        if self._workspace_warned:
+            return
+        key = self._workspace_warning_key(
+            distro=self.wsl_distro,
+            workspace=self.audio_workspace,
+            warning_kind=warning_kind,
+        )
+        if key in self._workspace_warning_keys:
+            self._workspace_warned = True
+            return
+        print(f"[WSL2AudioBridge][WARN] {message}")
+        self._workspace_warning_keys.add(key)
+        self._workspace_warned = True
 
     def _resolve_wsl_user(self):
         explicit = os.environ.get("GOODQ_WSL_USER")
@@ -65,9 +87,7 @@ class WSL2AudioBridge:
             self._workspace_checked = True
             if self.require_wsl_audio:
                 raise RuntimeError(message) from e
-            if not self._workspace_warned:
-                print(f"[WSL2AudioBridge][WARN] {message}")
-                self._workspace_warned = True
+            self._warn_workspace_once(message, warning_kind="preflight_failed")
             return False
 
         self._workspace_checked = True
@@ -78,9 +98,7 @@ class WSL2AudioBridge:
             )
             if self.require_wsl_audio:
                 raise RuntimeError(message)
-            if not self._workspace_warned:
-                print(f"[WSL2AudioBridge][WARN] {message}")
-                self._workspace_warned = True
+            self._warn_workspace_once(message, warning_kind="workspace_not_found")
         return self._workspace_ready
         
     def wsl_path(self, windows_path):

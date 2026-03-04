@@ -690,6 +690,126 @@ def _infer_audio_backend_fields(
     return {'audio_backend_selected': 'none', 'audio_backend_reason': 'unavailable_backend'}
 
 
+def _read_audio_backend_marker(audio_info: Optional[Dict[str, Any]], key: str) -> Any:
+    if not isinstance(audio_info, dict):
+        return None
+    candidates: List[Dict[str, Any]] = [audio_info]
+    data = audio_info.get('data')
+    raw = audio_info.get('raw')
+    if isinstance(data, dict):
+        candidates.append(data)
+    if isinstance(raw, dict):
+        candidates.append(raw)
+    for candidate in candidates:
+        if key in candidate:
+            return candidate.get(key)
+    return None
+
+
+def _record_audio_backend_event(run_context: Optional[Dict[str, Any]], event: Dict[str, Any]) -> None:
+    if not isinstance(run_context, dict):
+        return
+    events = run_context.get('audio_backend_events')
+    if not isinstance(events, list):
+        events = []
+        run_context['audio_backend_events'] = events
+    events.append(dict(event))
+
+
+def _resolve_audio_backend_attribution(
+    audio_info: Optional[Dict[str, Any]],
+    *,
+    skip_audio: bool,
+    audio_error: Optional[str],
+    audio_runtime_contract: Optional[Dict[str, Any]],
+    run_context: Optional[Dict[str, Any]],
+    scene_id: str,
+    scene_index: Any,
+) -> Dict[str, Any]:
+    inferred_effective = _infer_audio_backend_fields(
+        audio_info,
+        skip_audio=skip_audio,
+        audio_error=audio_error,
+    )
+    selected = 'none'
+    selected_reason = 'runtime_contract_unset'
+    if isinstance(audio_runtime_contract, dict):
+        contract_selected = audio_runtime_contract.get('selected')
+        contract_reason = audio_runtime_contract.get('reason')
+        if isinstance(contract_selected, str) and contract_selected.strip().lower() in {'wsl', 'windows', 'none'}:
+            selected = contract_selected.strip().lower()
+            if isinstance(contract_reason, str) and contract_reason.strip():
+                selected_reason = contract_reason.strip()
+            else:
+                selected_reason = 'runtime_contract_selected'
+    if selected_reason == 'runtime_contract_unset':
+        selected = inferred_effective['audio_backend_selected']
+        selected_reason = 'scene_inferred_selected'
+
+    explicit_effective = _read_audio_backend_marker(audio_info, 'audio_backend_effective')
+    explicit_effective_reason = _read_audio_backend_marker(audio_info, 'audio_backend_effective_reason')
+    if isinstance(explicit_effective, str) and explicit_effective.strip().lower() in {'wsl', 'windows', 'none', 'failed'}:
+        effective = explicit_effective.strip().lower()
+        if isinstance(explicit_effective_reason, str) and explicit_effective_reason.strip():
+            effective_reason = explicit_effective_reason.strip()
+        else:
+            effective_reason = 'explicit_effective_marker'
+    else:
+        effective = inferred_effective['audio_backend_selected']
+        effective_reason = inferred_effective['audio_backend_reason']
+
+    if isinstance(audio_error, str) and audio_error.strip():
+        effective = 'failed'
+        effective_reason = 'audio_processing_error'
+
+    downgraded = selected in {'wsl', 'windows'} and effective in {'wsl', 'windows', 'none', 'failed'} and selected != effective
+    downgrade_reason: Optional[str] = None
+    downgrade_details: Dict[str, Any] = {}
+    downgrade_ts_utc: Optional[str] = None
+    if downgraded:
+        if audio_error:
+            downgrade_reason = 'audio_processing_error'
+            downgrade_details['audio_error'] = audio_error
+        elif selected == 'wsl' and effective == 'windows':
+            downgrade_reason = 'wsl_to_windows_fallback'
+        elif selected == 'wsl' and effective == 'failed':
+            downgrade_reason = 'wsl_processing_failed'
+        elif selected == 'wsl' and effective == 'none':
+            downgrade_reason = 'wsl_unavailable_in_scene'
+        elif selected == 'windows' and effective == 'failed':
+            downgrade_reason = 'windows_processing_failed'
+        elif selected == 'windows' and effective == 'none':
+            downgrade_reason = 'windows_unavailable_in_scene'
+        else:
+            downgrade_reason = f'{selected}_to_{effective}'
+        downgrade_ts_utc = datetime.now(timezone.utc).isoformat()
+        downgrade_details['selected_reason'] = selected_reason
+        downgrade_details['effective_reason'] = effective_reason
+        _record_audio_backend_event(
+            run_context,
+            {
+                'scene_id': scene_id,
+                'scene_index': scene_index,
+                'selected': selected,
+                'effective': effective,
+                'downgrade_reason': downgrade_reason,
+                'details': dict(downgrade_details),
+                'ts_utc': downgrade_ts_utc,
+            },
+        )
+
+    return {
+        'audio_backend_selected': selected,
+        'audio_backend_reason': selected_reason,
+        'audio_backend_effective': effective,
+        'audio_backend_effective_reason': effective_reason,
+        'audio_backend_downgraded': downgraded,
+        'audio_backend_downgrade_reason': downgrade_reason,
+        'audio_backend_downgrade_ts': downgrade_ts_utc,
+        'audio_backend_downgrade_details': downgrade_details,
+    }
+
+
 def _normalize_vector_store_status(value: Any) -> Any:
     if isinstance(value, bool):
         return value
@@ -700,23 +820,29 @@ def _normalize_vector_store_status(value: Any) -> Any:
     return bool(value)
 
 
-def _aggregate_audio_backend(scene_outputs: List[Dict[str, Any]]) -> str:
+def _aggregate_audio_backend(
+    scene_outputs: List[Dict[str, Any]],
+    *,
+    field: str = 'audio_backend_selected',
+) -> str:
     """
     Deterministic run-level backend reducer.
 
     Rules:
+    - mixed: scenes include both wsl and windows
     - wsl: at least one scene uses wsl, and none use windows
     - windows: at least one scene uses windows, and none use wsl
-    - mixed: scenes include both wsl and windows
-    - none: no scenes report wsl/windows
+    - failed: at least one scene reports failed and no wsl/windows present
+    - none: no scenes report wsl/windows/failed
     """
     used_wsl = False
     used_windows = False
+    used_failed = False
 
     for scene in scene_outputs:
         if not isinstance(scene, dict):
             continue
-        backend = scene.get('audio_backend_selected')
+        backend = scene.get(field)
         if not isinstance(backend, str):
             continue
         normalized = backend.strip().lower()
@@ -724,6 +850,8 @@ def _aggregate_audio_backend(scene_outputs: List[Dict[str, Any]]) -> str:
             used_wsl = True
         elif normalized == 'windows':
             used_windows = True
+        elif normalized == 'failed':
+            used_failed = True
 
     if used_wsl and used_windows:
         return 'mixed'
@@ -731,7 +859,122 @@ def _aggregate_audio_backend(scene_outputs: List[Dict[str, Any]]) -> str:
         return 'wsl'
     if used_windows:
         return 'windows'
+    if used_failed:
+        return 'failed'
     return 'none'
+
+
+def _resolve_audio_runtime_contract(cfg: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Resolve audio backend contract once per run.
+    This prevents per-scene backend discovery drift.
+    """
+    require_wsl = require_wsl_audio()
+    requested_wsl = bool(wsl_audio_auto_enabled() or require_wsl)
+    wsl_distro = str(os.environ.get("GOODQ_WSL_DISTRO") or "Ubuntu").strip() or "Ubuntu"
+    contract: Dict[str, Any] = {
+        'mode': 'auto',
+        'requested_wsl': requested_wsl,
+        'require_wsl_audio': require_wsl,
+        'wsl_command_available': bool(shutil.which('wsl')),
+        'wsl_distro': wsl_distro,
+        'wsl_user': None,
+        'wsl_workspace': None,
+        'wsl_audio_workspace': None,
+        'workspace_ready': False,
+        'selected': 'none',
+        'reason': 'unresolved',
+    }
+
+    if not requested_wsl:
+        contract['selected'] = 'windows'
+        contract['reason'] = 'profile_wsl_disabled'
+        return contract
+
+    if not contract['wsl_command_available']:
+        if require_wsl:
+            raise RuntimeError("GOODQ_REQUIRE_WSL_AUDIO=1 but wsl command is unavailable.")
+        contract['selected'] = 'none'
+        contract['reason'] = 'wsl_command_unavailable'
+        return contract
+
+    host_cfg = cfg.get('host') if isinstance(cfg, dict) else {}
+    cfg_wsl_user = (
+        str(host_cfg.get('wsl_user')).strip()
+        if isinstance(host_cfg, dict) and host_cfg.get('wsl_user') is not None
+        else ''
+    )
+    explicit_wsl_user = str(os.environ.get("GOODQ_WSL_USER") or "").strip()
+    if not explicit_wsl_user and cfg_wsl_user and cfg_wsl_user.lower() not in {'auto', 'unset'}:
+        explicit_wsl_user = cfg_wsl_user
+
+    if explicit_wsl_user:
+        wsl_user = explicit_wsl_user
+    else:
+        if require_wsl:
+            raise RuntimeError(
+                "GOODQ_REQUIRE_WSL_AUDIO=1 requires GOODQ_WSL_USER to be set explicitly."
+            )
+        wsl_user = ''
+        for candidate in (os.environ.get("USER"), os.environ.get("USERNAME"), os.environ.get("LOGNAME")):
+            if candidate:
+                wsl_user = str(candidate).strip()
+                break
+        if not wsl_user:
+            wsl_user = 'user'
+
+    cfg_wsl_workspace = (
+        str(host_cfg.get('wsl_workspace')).strip()
+        if isinstance(host_cfg, dict) and host_cfg.get('wsl_workspace') is not None
+        else ''
+    )
+    explicit_workspace = str(os.environ.get("GOODQ_WSL_WORKSPACE") or "").strip()
+    workspace = explicit_workspace or cfg_wsl_workspace or f"/home/{wsl_user}/projects/goodq4all"
+    audio_workspace = f"{workspace.rstrip('/')}/wsl2_audio"
+    contract['wsl_user'] = wsl_user
+    contract['wsl_workspace'] = workspace
+    contract['wsl_audio_workspace'] = audio_workspace
+
+    # Export resolved identity for downstream subprocesses so all steps share one contract.
+    if wsl_user:
+        os.environ.setdefault("GOODQ_WSL_USER", wsl_user)
+    if workspace:
+        os.environ.setdefault("GOODQ_WSL_WORKSPACE", workspace)
+
+    try:
+        check = subprocess.run(
+            ["wsl", "-d", wsl_distro, "--", "test", "-d", audio_workspace],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+        ready = check.returncode == 0
+        contract['workspace_ready'] = ready
+        if ready:
+            contract['selected'] = 'wsl'
+            contract['reason'] = 'wsl_workspace_ready'
+            return contract
+        message = (
+            f"WSL workspace not found for distro={wsl_distro}, workspace={audio_workspace}. "
+            "Set GOODQ_WSL_USER and GOODQ_WSL_WORKSPACE for deterministic host setup."
+        )
+        if require_wsl:
+            raise RuntimeError(message)
+        contract['selected'] = 'none'
+        contract['reason'] = 'wsl_workspace_missing'
+        contract['workspace_check_message'] = message
+        return contract
+    except Exception as e:
+        message = (
+            f"WSL workspace preflight failed for distro={wsl_distro}, workspace={audio_workspace}: {e}"
+        )
+        if require_wsl:
+            raise RuntimeError(message) from e
+        contract['selected'] = 'none'
+        contract['reason'] = 'wsl_workspace_preflight_failed'
+        contract['workspace_check_message'] = message
+        return contract
 
 
 def _merge_modality_state(current: str, candidate: str) -> str:
@@ -835,6 +1078,145 @@ def _aggregate_modality_status(
             status['vision_dino'] = _merge_modality_state(status['vision_dino'], 'unavailable')
 
     return status
+
+
+def _coerce_float(value: Any, default: float = 0.0) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _resolve_content_empty_duration_threshold(cfg: Dict[str, Any]) -> float:
+    run_cfg = cfg.get('run') if isinstance(cfg, dict) else None
+    if isinstance(run_cfg, dict):
+        configured = run_cfg.get('content_empty_duration_threshold_sec')
+        threshold = _coerce_float(configured, default=1.0)
+        return threshold if threshold >= 0.0 else 1.0
+    return 1.0
+
+
+def _extract_audio_payload(scene: Dict[str, Any]) -> Dict[str, Any]:
+    audio = scene.get('audio')
+    return audio if isinstance(audio, dict) else {}
+
+
+def _extract_transcript_text(audio_payload: Dict[str, Any]) -> str:
+    for key in ('transcript', 'full_text'):
+        value = audio_payload.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    raw = audio_payload.get('raw')
+    if isinstance(raw, dict):
+        for key in ('transcript', 'full_text'):
+            value = raw.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+    return ''
+
+
+def _extract_segments(audio_payload: Dict[str, Any]) -> List[Dict[str, Any]]:
+    segments = audio_payload.get('segments')
+    if isinstance(segments, list):
+        return [seg for seg in segments if isinstance(seg, dict)]
+    raw = audio_payload.get('raw')
+    if isinstance(raw, dict) and isinstance(raw.get('segments'), list):
+        return [seg for seg in raw.get('segments') if isinstance(seg, dict)]
+    return []
+
+
+def _has_meaningful_audio_segments(segments: List[Dict[str, Any]]) -> bool:
+    for segment in segments:
+        text = segment.get('text')
+        if isinstance(text, str) and text.strip():
+            return True
+    return False
+
+
+def _scene_has_processing_error(scene: Dict[str, Any]) -> bool:
+    for key in ('audio_error', 'frame_error', 'keyframe_error', 'step_error'):
+        value = scene.get(key)
+        if isinstance(value, str) and value.strip():
+            return True
+
+    errors = scene.get('errors')
+    if isinstance(errors, dict):
+        for value in errors.values():
+            if isinstance(value, str) and value.strip():
+                return True
+
+    reason = scene.get('audio_backend_reason')
+    if isinstance(reason, str) and reason == 'audio_processing_error':
+        return True
+
+    return False
+
+
+def _classify_scene_content(
+    scene: Dict[str, Any],
+    *,
+    empty_duration_threshold_sec: float,
+) -> str:
+    """
+    Deterministic scene-level content classification.
+    Allowed values: signal | empty | processing_error
+    """
+    if _scene_has_processing_error(scene):
+        return 'processing_error'
+
+    duration = _coerce_float(scene.get('duration'))
+    audio_payload = _extract_audio_payload(scene)
+    transcript_meta = audio_payload.get('transcript_meta')
+    transcript_status = (
+        str(transcript_meta.get('status', '')).strip().lower()
+        if isinstance(transcript_meta, dict)
+        else ''
+    )
+    transcript_duration = (
+        _coerce_float(transcript_meta.get('duration'))
+        if isinstance(transcript_meta, dict)
+        else None
+    )
+    transcript_text = _extract_transcript_text(audio_payload)
+    segments = _extract_segments(audio_payload)
+    has_meaningful_segments = _has_meaningful_audio_segments(segments)
+
+    audio_meta = audio_payload.get('audio_meta')
+    audio_path = audio_payload.get('path')
+    audio_present = bool(
+        (isinstance(audio_path, str) and audio_path.strip())
+        or isinstance(audio_meta, dict)
+        or segments
+        or transcript_text
+    )
+
+    if duration < empty_duration_threshold_sec:
+        return 'empty'
+
+    if transcript_status == 'success' and (not transcript_text or transcript_duration == 0.0):
+        return 'empty'
+
+    if audio_present and not transcript_text and not has_meaningful_segments:
+        return 'empty'
+
+    return 'signal'
+
+
+def _aggregate_content_summary(scene_outputs: List[Dict[str, Any]]) -> Dict[str, int]:
+    summary = {
+        'signal': 0,
+        'empty': 0,
+        'processing_error': 0,
+    }
+    for scene in scene_outputs:
+        if not isinstance(scene, dict):
+            continue
+        state = scene.get('content_state')
+        if isinstance(state, str) and state in summary:
+            summary[state] += 1
+        else:
+            summary['signal'] += 1
+    return summary
 
 
 def _coerce_nonnegative_int(value: Any) -> int:
@@ -1744,6 +2126,7 @@ def _process_audio(
     audio_artifact_dir: Path,
     video_hash: str,
     scene_id: str,
+    audio_runtime_contract: Optional[Dict[str, Any]] = None,
 ) -> Optional[Dict[str, Any]]:
     """Process audio for scene - returns None if video has no audio"""
     audio_path = _extract_audio_chunk(
@@ -1775,13 +2158,35 @@ def _process_audio(
             'duration': end - start,
         },
     }
+    contract_selected = 'none'
+    contract_reason = 'runtime_contract_unset'
+    if isinstance(audio_runtime_contract, dict):
+        selected_value = audio_runtime_contract.get('selected')
+        if isinstance(selected_value, str) and selected_value.strip().lower() in {'wsl', 'windows', 'none'}:
+            contract_selected = selected_value.strip().lower()
+        reason_value = audio_runtime_contract.get('reason')
+        if isinstance(reason_value, str) and reason_value.strip():
+            contract_reason = reason_value.strip()
+        else:
+            contract_reason = 'runtime_contract_selected'
+    item['audio_backend_selected'] = contract_selected
+    item['audio_backend_reason'] = contract_reason
+    item['audio_backend_effective'] = 'none'
+    item['audio_backend_effective_reason'] = 'not_processed'
+
+    def _set_effective_backend(backend: str, reason: str) -> None:
+        item['audio_backend_effective'] = backend
+        item['audio_backend_effective_reason'] = reason
 
     def merge(env_name: str, step_name: str) -> None:
         result = _run_step(env_name, step_name, item, cfg_json)
         if isinstance(result, dict):
             item.update(result)
+            # Selected backend is run-contract truth; downstream steps must not mutate it.
+            item['audio_backend_selected'] = contract_selected
+            item['audio_backend_reason'] = contract_reason
 
-    def run_local_audio_fallback() -> None:
+    def run_local_audio_fallback(reason: str) -> None:
         logger.info(
             "[AUDIO] WSL2 unified path disabled or unavailable; using local CPU-safe transcription fallback"
         )
@@ -1800,27 +2205,38 @@ def _process_audio(
             local_result = local_audio_transcribe(local_item, cfg_payload)
             if isinstance(local_result, dict):
                 item.update(local_result)
+                item['audio_backend_selected'] = contract_selected
+                item['audio_backend_reason'] = contract_reason
                 if not isinstance(item.get('segments'), list):
                     transcript_segments = local_result.get('transcript_segments')
                     if isinstance(transcript_segments, list):
                         item['segments'] = transcript_segments
+            has_transcript = isinstance(item.get('transcript'), str) and bool(item.get('transcript', '').strip())
+            has_segments = isinstance(item.get('segments'), list) and len(item.get('segments')) > 0
+            if has_transcript or has_segments:
+                _set_effective_backend('windows', reason)
+            else:
+                _set_effective_backend('none', f'{reason}_no_transcript')
         except Exception as fallback_error:
             logger.warning(
                 "[AUDIO] Local CPU-safe transcription fallback failed: %s",
                 fallback_error,
             )
+            _set_effective_backend('failed', f'{reason}_failed')
 
     merge('goodq_audio_metadata', 'audio_metadata')
     
     # WSL2 unified audio is profile-gated. BASELINE uses CPU-safe local fallback by default.
     if audio_path and audio_path.exists():
-        use_wsl_unified_audio = bool(wsl_audio_auto_enabled() or require_wsl_audio())
-
-        if use_wsl_unified_audio and shutil.which('wsl') is None:
-            logger.warning(
-                "[AUDIO] WSL2 unified audio requested but wsl command unavailable; using local fallback"
-            )
-            use_wsl_unified_audio = False
+        if contract_selected in {'wsl', 'windows', 'none'}:
+            use_wsl_unified_audio = contract_selected == 'wsl'
+        else:
+            use_wsl_unified_audio = bool(wsl_audio_auto_enabled() or require_wsl_audio())
+            if use_wsl_unified_audio and shutil.which('wsl') is None:
+                logger.warning(
+                    "[AUDIO] WSL2 unified audio requested but wsl command unavailable; using local fallback"
+                )
+                use_wsl_unified_audio = False
 
         if use_wsl_unified_audio:
             from steps.audio.audio_wsl2_bridge import audio_unified_wsl2
@@ -1830,6 +2246,12 @@ def _process_audio(
                 unified_result = audio_unified_wsl2(str(audio_path), scene_id=scene_id, duration=end-start)
                 if isinstance(unified_result, dict):
                     item.update(unified_result)
+                    item['audio_backend_selected'] = contract_selected
+                    item['audio_backend_reason'] = contract_reason
+                    if str(unified_result.get('status', '')).strip().lower() == 'error':
+                        _set_effective_backend('failed', 'wsl_unified_error')
+                    else:
+                        _set_effective_backend('wsl', 'wsl_unified_success')
             except Exception as unified_error:
                 logger.warning(
                     "[AUDIO] WSL2 unified audio failed operation=%s scene_id=%s exc_type=%s exc=%s",
@@ -1838,9 +2260,14 @@ def _process_audio(
                     type(unified_error).__name__,
                     unified_error,
                 )
-                run_local_audio_fallback()
+                run_local_audio_fallback('wsl_unified_exception_fallback')
         else:
-            run_local_audio_fallback()
+            if contract_selected == 'windows':
+                run_local_audio_fallback('windows_contract_selected')
+            elif contract_selected == 'none':
+                run_local_audio_fallback('contract_selected_none')
+            else:
+                run_local_audio_fallback('wsl_disabled_fallback')
 
         # Legacy steps for speaker merge and timing (keep these for now)
         merge('goodq_audio_transcribe', 'audio_speaker_merge')
@@ -1982,6 +2409,7 @@ def run(
         'healer_retry_by_step': {},
         'native_retry_count': 0,
         'native_retry_by_step': {},
+        'audio_backend_events': [],
         'control_agent_status': (
             'import_unavailable'
             if not CONTROL_AGENT_AVAILABLE
@@ -2021,6 +2449,8 @@ def run(
             }
         )
     run_id = run_context["id"]
+    # Expose run id to in-process helpers so warn-once behavior can be scoped per ingestion run.
+    os.environ["GOODQ_RUN_ID"] = run_id
     typer.echo(f"[RUN] run_id: {run_id}")
     existing_run = cfg.get('run') if isinstance(cfg, dict) else None
     if isinstance(existing_run, dict):
@@ -2031,6 +2461,15 @@ def run(
         cfg['run'] = run_context
     if isinstance(cfg.get('run'), dict):
         run_context = cfg['run']
+    audio_runtime_contract = _resolve_audio_runtime_contract(cfg)
+    run_context['audio_runtime_contract'] = dict(audio_runtime_contract)
+    logger.info(
+        "[AUDIO] Runtime contract selected=%s reason=%s requested_wsl=%s workspace=%s",
+        audio_runtime_contract.get('selected'),
+        audio_runtime_contract.get('reason'),
+        audio_runtime_contract.get('requested_wsl'),
+        audio_runtime_contract.get('wsl_audio_workspace'),
+    )
     _CURRENT_RUN_CONTEXT = run_context
     _PIPELINE_OBSERVER = PipelineObserver.from_runtime(run_id=run_id, verbose=verbose)
     observer = _observer()
@@ -2201,6 +2640,7 @@ def run(
         run_context['audio_artifact_dir'] = str(audio_artifact_dir)
 
         scene_outputs: List[Dict[str, Any]] = []
+        empty_duration_threshold_sec = _resolve_content_empty_duration_threshold(cfg)
         total_scenes = len(scenes)
         typer.echo(f'\n=== Processing {total_scenes} scenes for {video_path.name} ===\n')
         scene_loop_step = f"loop.scenes.{video_hash[:12]}"
@@ -2335,6 +2775,7 @@ def run(
                             audio_artifact_dir,
                             video_hash,
                             scene_id,
+                            audio_runtime_contract=audio_runtime_contract,
                         )
                         if audio_info is None:
                             typer.echo(f'  [OK] No audio track in video (video-only)')
@@ -2364,23 +2805,43 @@ def run(
                             err=True,
                         )
 
-            audio_backend_fields = _infer_audio_backend_fields(
+            audio_backend_fields = _resolve_audio_backend_attribution(
                 audio_info,
                 skip_audio=skip_audio,
                 audio_error=audio_error,
+                audio_runtime_contract=audio_runtime_contract,
+                run_context=run_context,
+                scene_id=scene_id,
+                scene_index=scene_index,
             )
             if isinstance(audio_info, dict):
-                audio_info.setdefault('audio_backend_selected', audio_backend_fields['audio_backend_selected'])
-                audio_info.setdefault('audio_backend_reason', audio_backend_fields['audio_backend_reason'])
+                audio_info['audio_backend_selected'] = audio_backend_fields['audio_backend_selected']
+                audio_info['audio_backend_reason'] = audio_backend_fields['audio_backend_reason']
+                audio_info['audio_backend_effective'] = audio_backend_fields['audio_backend_effective']
+                audio_info['audio_backend_effective_reason'] = audio_backend_fields['audio_backend_effective_reason']
+                audio_info['audio_backend_downgraded'] = bool(audio_backend_fields['audio_backend_downgraded'])
+                audio_info['audio_backend_downgrade_reason'] = audio_backend_fields['audio_backend_downgrade_reason']
+                audio_info['audio_backend_downgrade_ts'] = audio_backend_fields['audio_backend_downgrade_ts']
+                audio_info['audio_backend_downgrade_details'] = dict(
+                    audio_backend_fields.get('audio_backend_downgrade_details') or {}
+                )
                 audio_data_for_backend = audio_info.get('data')
                 if isinstance(audio_data_for_backend, dict):
-                    audio_data_for_backend.setdefault(
-                        'audio_backend_selected',
-                        audio_backend_fields['audio_backend_selected'],
+                    audio_data_for_backend['audio_backend_selected'] = audio_backend_fields['audio_backend_selected']
+                    audio_data_for_backend['audio_backend_reason'] = audio_backend_fields['audio_backend_reason']
+                    audio_data_for_backend['audio_backend_effective'] = audio_backend_fields['audio_backend_effective']
+                    audio_data_for_backend['audio_backend_effective_reason'] = audio_backend_fields['audio_backend_effective_reason']
+                    audio_data_for_backend['audio_backend_downgraded'] = bool(
+                        audio_backend_fields['audio_backend_downgraded']
                     )
-                    audio_data_for_backend.setdefault(
-                        'audio_backend_reason',
-                        audio_backend_fields['audio_backend_reason'],
+                    audio_data_for_backend['audio_backend_downgrade_reason'] = audio_backend_fields[
+                        'audio_backend_downgrade_reason'
+                    ]
+                    audio_data_for_backend['audio_backend_downgrade_ts'] = audio_backend_fields[
+                        'audio_backend_downgrade_ts'
+                    ]
+                    audio_data_for_backend['audio_backend_downgrade_details'] = dict(
+                        audio_backend_fields.get('audio_backend_downgrade_details') or {}
                     )
 
             error_payload = {}
@@ -2479,6 +2940,14 @@ def run(
                 'persistence': persist_result,
                 'audio_backend_selected': audio_backend_fields['audio_backend_selected'],
                 'audio_backend_reason': audio_backend_fields['audio_backend_reason'],
+                'audio_backend_effective': audio_backend_fields['audio_backend_effective'],
+                'audio_backend_effective_reason': audio_backend_fields['audio_backend_effective_reason'],
+                'audio_backend_downgraded': bool(audio_backend_fields['audio_backend_downgraded']),
+                'audio_backend_downgrade_reason': audio_backend_fields['audio_backend_downgrade_reason'],
+                'audio_backend_downgrade_ts': audio_backend_fields['audio_backend_downgrade_ts'],
+                'audio_backend_downgrade_details': dict(
+                    audio_backend_fields.get('audio_backend_downgrade_details') or {}
+                ),
                 'vector_points_attempted': (
                     _coerce_nonnegative_int(persist_result.get('vector_points_attempted'))
                     if isinstance(persist_result, dict)
@@ -2533,6 +3002,30 @@ def run(
                         'audio_backend_reason',
                         audio_backend_fields['audio_backend_reason'],
                     )
+                    formatted_audio.setdefault(
+                        'audio_backend_effective',
+                        audio_backend_fields['audio_backend_effective'],
+                    )
+                    formatted_audio.setdefault(
+                        'audio_backend_effective_reason',
+                        audio_backend_fields['audio_backend_effective_reason'],
+                    )
+                    formatted_audio.setdefault(
+                        'audio_backend_downgraded',
+                        bool(audio_backend_fields['audio_backend_downgraded']),
+                    )
+                    formatted_audio.setdefault(
+                        'audio_backend_downgrade_reason',
+                        audio_backend_fields['audio_backend_downgrade_reason'],
+                    )
+                    formatted_audio.setdefault(
+                        'audio_backend_downgrade_ts',
+                        audio_backend_fields['audio_backend_downgrade_ts'],
+                    )
+                    formatted_audio.setdefault(
+                        'audio_backend_downgrade_details',
+                        dict(audio_backend_fields.get('audio_backend_downgrade_details') or {}),
+                    )
                     scene_record['audio'] = formatted_audio
                 else:
                     scene_record['audio'] = audio_info
@@ -2540,6 +3033,10 @@ def run(
                 scene_record['audio_error'] = audio_error
             if error_payload:
                 scene_record['errors'] = error_payload
+            scene_record['content_state'] = _classify_scene_content(
+                scene_record,
+                empty_duration_threshold_sec=empty_duration_threshold_sec,
+            )
 
             scene_outputs.append(scene_record)
 
@@ -2555,7 +3052,17 @@ def run(
 
         scene_qdrant_status = _aggregate_scene_store_status(scene_outputs, 'qdrant_ok')
         scene_faiss_status = _aggregate_scene_store_status(scene_outputs, 'faiss_ok')
+        content_summary = _aggregate_content_summary(scene_outputs)
         run_audio_backend_selected = _aggregate_audio_backend(scene_outputs)
+        run_audio_backend_effective = _aggregate_audio_backend(
+            scene_outputs,
+            field='audio_backend_effective',
+        )
+        run_audio_backend_downgraded = any(
+            bool(scene.get('audio_backend_downgraded'))
+            for scene in scene_outputs
+            if isinstance(scene, dict)
+        )
         phase6_embeddings_result: Optional[Dict[str, Any]] = None
         phase6_qdrant_status: Any = 'not_attempted'
         phase6_faiss_status: Any = 'not_attempted'
@@ -2569,6 +3076,11 @@ def run(
             'scene_meta': detection_meta,
             'scenes': scene_outputs,
             'audio_backend_selected': run_audio_backend_selected,
+            'audio_backend_effective': run_audio_backend_effective,
+            'audio_backend_downgraded': run_audio_backend_downgraded,
+            'audio_backend_events': list(run_context.get('audio_backend_events') or []),
+            'audio_runtime_contract': audio_runtime_contract,
+            'content_summary': content_summary,
             'qdrant_ok': scene_qdrant_status,
             'faiss_ok': scene_faiss_status,
             'control_agent_status': control_agent_status,
@@ -2628,6 +3140,7 @@ def run(
                             s.get('vector_points_attempted'),
                             s.get('faiss_ok'),
                         ),
+                        'content_state': s.get('content_state', 'signal'),
                         'keyframe': s.get('keyframe', {}),
                         'audio': s.get('audio', {}),
                     }

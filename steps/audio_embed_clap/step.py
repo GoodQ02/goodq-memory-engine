@@ -8,6 +8,7 @@ from typing import Any, Dict, Optional
 from contextlib import nullcontext
 import sqlite3
 from datetime import datetime
+import importlib.util
 
 import os
 import logging
@@ -16,6 +17,21 @@ logger = logging.getLogger(__name__)
 
 
 _CLAP = {"model": None, "proc": None, "device": "cpu"}
+_TORCHAUDIO_INSTALL_HINT = (
+    "conda run -n goodq_audio_embed pip install "
+    "torchaudio==2.3.1 --extra-index-url https://download.pytorch.org/whl/cu121"
+)
+
+
+def _torchaudio_preflight() -> bool:
+    if importlib.util.find_spec("torchaudio") is not None:
+        return True
+    logger.error(
+        "audio_embed_clap preflight failed missing_dependency=%s install_hint=\"%s\"",
+        "torchaudio",
+        _TORCHAUDIO_INSTALL_HINT,
+    )
+    return False
 
 
 def _load() -> None:
@@ -83,6 +99,14 @@ def audio_embed_clap(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
     path = item.get("source_path")
     if not isinstance(path, str) or not os.path.isfile(path):
         return {"clap_meta": {"status": "no_file"}}
+    if not _torchaudio_preflight():
+        return {
+            "clap_meta": {
+                "status": "unavailable",
+                "reason": "missing_torchaudio",
+                "install_hint": _TORCHAUDIO_INSTALL_HINT,
+            }
+        }
     _load()
     if _CLAP["model"] is None:
         return {"clap_meta": {"status": "unavailable"}}

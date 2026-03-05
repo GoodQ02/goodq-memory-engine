@@ -290,6 +290,12 @@ SUBPROCESS_THREAD_CAP_ENV: Dict[str, str] = {
     'NUMEXPR_MAX_THREADS': '1',
     'TOKENIZERS_PARALLELISM': 'false',
 }
+SUBPROCESS_AUDIO_OPENMP_GUARD_STEPS: Set[str] = {'audio_embed_clap'}
+SUBPROCESS_AUDIO_OPENMP_GUARD_ENV: Dict[str, str] = {
+    'KMP_DUPLICATE_LIB_OK': 'TRUE',
+    'OMP_NUM_THREADS': '1',
+    'MKL_NUM_THREADS': '1',
+}
 NATIVE_CRASH_RETRY_STEPS: Set[str] = {'tagger'}
 MAX_NATIVE_STEP_RETRIES: int = 1
 
@@ -785,6 +791,16 @@ def _resolve_audio_backend_attribution(
         downgrade_ts_utc = datetime.now(timezone.utc).isoformat()
         downgrade_details['selected_reason'] = selected_reason
         downgrade_details['effective_reason'] = effective_reason
+        unavailable_details = _read_audio_backend_marker(audio_info, 'audio_backend_unavailable_details')
+        if isinstance(unavailable_details, dict) and unavailable_details:
+            downgrade_details['backend_unavailable'] = dict(unavailable_details)
+        elif downgrade_reason in {'windows_unavailable_in_scene', 'wsl_unavailable_in_scene'}:
+            transcript_meta = _read_audio_backend_marker(audio_info, 'transcript_meta')
+            if isinstance(transcript_meta, dict):
+                downgrade_details['transcript_status'] = transcript_meta.get('status')
+                downgrade_details['transcript_engine'] = transcript_meta.get('engine')
+                downgrade_details['transcript_model'] = transcript_meta.get('model')
+                downgrade_details['transcript_device'] = transcript_meta.get('device')
         _record_audio_backend_event(
             run_context,
             {
@@ -1578,6 +1594,11 @@ def _run_step(
             step_env = dict(work_env)
             for env_key, env_value in SUBPROCESS_THREAD_CAP_ENV.items():
                 step_env.setdefault(env_key, env_value)
+        if step_name in SUBPROCESS_AUDIO_OPENMP_GUARD_STEPS:
+            if step_env is work_env:
+                step_env = dict(work_env)
+            for env_key, env_value in SUBPROCESS_AUDIO_OPENMP_GUARD_ENV.items():
+                step_env.setdefault(env_key, env_value)
 
         start_ts = time.perf_counter()
         observer = _observer()
@@ -2216,6 +2237,24 @@ def _process_audio(
             if has_transcript or has_segments:
                 _set_effective_backend('windows', reason)
             else:
+                transcript_meta = item.get('transcript_meta') if isinstance(item.get('transcript_meta'), dict) else {}
+                unavailable_details: Dict[str, Any] = {'reason': 'no_transcript_output'}
+                if transcript_meta:
+                    unavailable_details.update(
+                        {
+                            'status': transcript_meta.get('status'),
+                            'engine': transcript_meta.get('engine'),
+                            'model': transcript_meta.get('model'),
+                            'device': transcript_meta.get('device'),
+                        }
+                    )
+                item['audio_backend_unavailable_details'] = unavailable_details
+                logger.warning(
+                    "[AUDIO] Windows fallback produced no transcript scene_id=%s status=%s engine=%s",
+                    scene_id,
+                    unavailable_details.get('status'),
+                    unavailable_details.get('engine'),
+                )
                 _set_effective_backend('none', f'{reason}_no_transcript')
         except Exception as fallback_error:
             logger.warning(

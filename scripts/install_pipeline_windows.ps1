@@ -59,10 +59,24 @@ function Smoke($name, $needsTorch, $needsFaiss) {
     LogQ "Smoke tests for $name"
     if ($needsTorch) {
         RunEnv $name "python - <<'PY'`nimport torch`nprint('torch', torch.__version__, 'cuda?', torch.cuda.is_available())`nPY"
+        if ($name -eq "goodq_audio_embed") {
+            RunEnv $name "python - <<'PY'`nimport torchaudio`nprint('torchaudio', torchaudio.__version__)`nPY"
+        }
     }
     if ($needsFaiss) {
         RunEnv $name "python - <<'PY'`nimport faiss, numpy as np`nprint('faiss', faiss.__version__, 'numpy', np.__version__)`nPY"
     }
+}
+
+function EnsureCoreFallbackDependency() {
+    $coreEnv = if ([string]::IsNullOrWhiteSpace($env:GOODQ_CONDA_ENV)) { "goodq_core" } else { $env:GOODQ_CONDA_ENV }
+    if (-not (EnvExists $coreEnv)) {
+        LogQ "Core env missing ($coreEnv); skipping faster-whisper fallback provisioning"
+        return
+    }
+    LogQ "Ensuring faster-whisper for local BASELINE transcription fallback in $coreEnv"
+    RunEnv $coreEnv "pip install --no-cache-dir faster-whisper==1.0.3"
+    RunEnv $coreEnv "python - <<'PY'`nimport importlib.util as u`nprint('faster_whisper', u.find_spec('faster_whisper') is not None)`nPY"
 }
 
 # Env matrix
@@ -108,5 +122,7 @@ foreach ($env in $envs) {
         continue
     }
 }
+
+EnsureCoreFallbackDependency
 
 LogQ "All done. Rerun anytime for self-heal."

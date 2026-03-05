@@ -14,4 +14,11 @@ setup(
         # Portable FFmpeg binary fallback for environments without system ffmpeg.
         "imageio-ffmpeg>=0.6.0,<1.0",
     ],
+    extras_require={
+        # Optional local Windows fallback transcription dependency used by
+        # run_ingestion when BASELINE selects the windows backend.
+        "audio-transcribe-local": [
+            "faster-whisper==1.0.3",
+        ],
+    },
 )

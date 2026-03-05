@@ -75,12 +75,15 @@ def get_gpu_memory_info():
 
 def process_audio(audio_file, output_dir):
     """Process audio file with full classification pipeline - Memory optimized"""
-    
+    request_uuid = (os.getenv("GOODQ_BRIDGE_REQUEST_UUID") or "").strip()
+
     result = {
         "status": "processing",
         "audio_file": str(audio_file),
         "output_dir": str(output_dir)
     }
+    if request_uuid:
+        result["request_uuid"] = request_uuid
     
     # Check file exists
     if not Path(audio_file).exists():

@@ -7,7 +7,9 @@ import subprocess
 import json
 import time
 import os
+import uuid
 from pathlib import Path
+from typing import Any, Dict, Optional
 
 class WSL2AudioBridge:
     """Bridge to WSL2 audio processing"""
@@ -155,11 +157,19 @@ class WSL2AudioBridge:
         # Output directory for results
         wsl_output = f"{self.audio_workspace}/output"
         
+        request_uuid = str(uuid.uuid4())
+
         # Build command - use CUDA environment setup (includes venv + cuDNN paths)
-        cmd = f"source {self.audio_workspace}/setup_cuda_env.sh && python3 {self.audio_workspace}/process_audio.py '{wsl_input}' '{wsl_output}'"
+        cmd = (
+            f"source {self.audio_workspace}/setup_cuda_env.sh && "
+            f"GOODQ_BRIDGE_REQUEST_UUID='{request_uuid}' "
+            f"python3 {self.audio_workspace}/process_audio.py '{wsl_input}' '{wsl_output}'"
+        )
         
         print(f"Processing: {audio_path.name}")
-        
+        process_started_epoch = time.time()
+        requested_scene_file = Path(str(wsl_input).replace("\\", "/")).name
+
         def _stderr_warnings(stderr: str, max_lines: int = 50, max_chars: int = 300) -> list[str]:
             warnings: list[str] = []
             for line in (stderr or "").splitlines():
@@ -183,9 +193,29 @@ class WSL2AudioBridge:
                 return None
             return parsed if isinstance(parsed, dict) else None
 
-        def _try_read_result_json() -> dict | None:
-            # Best-effort: if stdout is empty/invalid, attempt to read the output artifact.
-            # The WSL script writes <output_dir>/result.json on both success and error paths.
+        def _probe_abi_warning() -> Optional[str]:
+            probe_cmd = (
+                f"source {self.audio_workspace}/setup_cuda_env.sh && "
+                "python3 -c \"import torch, torchvision; print(torch.__version__, torchvision.__version__)\""
+            )
+            try:
+                probe_result = subprocess.run(
+                    ["wsl", "-d", self.wsl_distro, "--", "bash", "-c", probe_cmd],
+                    capture_output=True,
+                    text=True,
+                    timeout=15,
+                )
+            except Exception:
+                return "abi_probe_subprocess_failed"
+            if probe_result.returncode == 0:
+                return None
+            diagnostic = (probe_result.stderr or probe_result.stdout or "").strip()
+            if diagnostic:
+                diagnostic = diagnostic.splitlines()[-1]
+            return f"abi_probe_warning: {diagnostic[:240] if diagnostic else 'import torch, torchvision failed'}"
+
+        def _read_result_json_debug() -> dict | None:
+            # Debug-only fallback: never authoritative for success.
             try:
                 read_cmd = ["wsl", "-d", self.wsl_distro, "--", "cat", f"{wsl_output}/result.json"]
                 read_result = subprocess.run(read_cmd, capture_output=True, text=True, timeout=10)
@@ -195,8 +225,67 @@ class WSL2AudioBridge:
                 return None
             return _try_parse_json(read_result.stdout)
 
+        def _result_json_mtime_epoch() -> Optional[float]:
+            try:
+                stat_cmd = [
+                    "wsl",
+                    "-d",
+                    self.wsl_distro,
+                    "--",
+                    "bash",
+                    "-c",
+                    f"stat -c %Y '{wsl_output}/result.json'",
+                ]
+                stat_result = subprocess.run(stat_cmd, capture_output=True, text=True, timeout=10)
+            except Exception:
+                return None
+            if stat_result.returncode != 0:
+                return None
+            try:
+                return float((stat_result.stdout or "").strip())
+            except (TypeError, ValueError):
+                return None
+
+        def _scene_file_name(path_value: Any) -> str:
+            if not isinstance(path_value, str):
+                return ""
+            return Path(path_value.replace("\\", "/")).name
+
+        def _build_error(
+            reason: str,
+            *,
+            error_message: str,
+            wsl_returncode: Optional[int],
+            stderr_warnings: list[str],
+            details: Optional[Dict[str, Any]] = None,
+            returned_scene_file: Optional[str] = None,
+            returned_request_uuid: Optional[str] = None,
+            used_fallback_result_json: bool = False,
+            env_warnings: Optional[list[str]] = None,
+        ) -> Dict[str, Any]:
+            payload: Dict[str, Any] = {
+                "status": "error",
+                "error": error_message,
+                "bridge_error_reason": reason,
+                "bridge_error_details": details or {},
+                "wsl_returncode": wsl_returncode,
+                "returncode": wsl_returncode,
+                "requested_scene_file": requested_scene_file,
+                "returned_scene_file": returned_scene_file,
+                "requested_request_uuid": request_uuid,
+                "returned_request_uuid": returned_request_uuid,
+                "used_fallback_result_json": bool(used_fallback_result_json),
+            }
+            if stderr_warnings:
+                payload["stderr_warnings"] = stderr_warnings
+            if env_warnings:
+                payload["bridge_env_warnings"] = env_warnings
+            return payload
+
         # Execute in WSL2
         try:
+            abi_warning = _probe_abi_warning()
+            env_warnings = [abi_warning] if abi_warning else []
             result = subprocess.run(
                 ["wsl", "-d", self.wsl_distro, "--", "bash", "-c", cmd],
                 capture_output=True,
@@ -205,39 +294,187 @@ class WSL2AudioBridge:
             )
 
             stderr_warnings = _stderr_warnings(result.stderr)
+            fallback_debug = None
+            fallback_used = False
 
             output = _try_parse_json(result.stdout)
             if output is None:
-                output = _try_read_result_json()
+                fallback_debug = _read_result_json_debug()
+                fallback_used = isinstance(fallback_debug, dict)
+                if fallback_debug is not None and result.returncode == 0:
+                    stderr_warnings.append("stdout_json_parse_failed; result.json read for debug only")
+
+            if result.returncode != 0:
+                details = {
+                    "stdout_json_parse_ok": isinstance(output, dict),
+                    "stderr_tail": (result.stderr or "")[-600:],
+                }
+                if isinstance(fallback_debug, dict):
+                    details["fallback_result_status"] = fallback_debug.get("status")
+                    details["fallback_result_audio_file"] = fallback_debug.get("audio_file")
+                    details["fallback_result_request_uuid"] = fallback_debug.get("request_uuid")
+                return _build_error(
+                    "wsl_subprocess_nonzero",
+                    error_message=f"WSL audio processor exited with return code {result.returncode}",
+                    wsl_returncode=result.returncode,
+                    stderr_warnings=stderr_warnings,
+                    details=details,
+                    returned_scene_file=_scene_file_name(
+                        fallback_debug.get("audio_file") if isinstance(fallback_debug, dict) else None
+                    )
+                    or None,
+                    returned_request_uuid=(
+                        fallback_debug.get("request_uuid") if isinstance(fallback_debug, dict) else None
+                    ),
+                    used_fallback_result_json=fallback_used,
+                    env_warnings=env_warnings,
+                )
 
             if output is None:
-                # No structured output available; preserve stderr as warnings (non-fatal details).
-                return {
-                    "status": "error",
-                    "error": "No JSON output from WSL audio processor",
-                    "returncode": result.returncode,
-                    "stderr_warnings": stderr_warnings,
+                details = {
+                    "stdout_json_parse_ok": False,
+                    "stdout_prefix": (result.stdout or "").strip()[:400],
                 }
+                if isinstance(fallback_debug, dict):
+                    details["fallback_result_status"] = fallback_debug.get("status")
+                    details["fallback_result_audio_file"] = fallback_debug.get("audio_file")
+                    details["fallback_result_request_uuid"] = fallback_debug.get("request_uuid")
+                return _build_error(
+                    "stdout_json_parse_failed",
+                    error_message="No valid JSON output from WSL audio processor stdout",
+                    wsl_returncode=result.returncode,
+                    stderr_warnings=stderr_warnings,
+                    details=details,
+                    returned_scene_file=_scene_file_name(
+                        fallback_debug.get("audio_file") if isinstance(fallback_debug, dict) else None
+                    )
+                    or None,
+                    returned_request_uuid=(
+                        fallback_debug.get("request_uuid") if isinstance(fallback_debug, dict) else None
+                    ),
+                    used_fallback_result_json=fallback_used,
+                    env_warnings=env_warnings,
+                )
 
-            # Always attach stderr warnings for observability; stderr is not a failure signal on its own.
+            returned_request_uuid = output.get("request_uuid") if isinstance(output.get("request_uuid"), str) else None
+            if not returned_request_uuid:
+                return _build_error(
+                    "request_uuid_missing",
+                    error_message="WSL audio output missing request_uuid",
+                    wsl_returncode=result.returncode,
+                    stderr_warnings=stderr_warnings,
+                    details={},
+                    returned_scene_file=_scene_file_name(output.get("audio_file")) or None,
+                    returned_request_uuid=None,
+                    used_fallback_result_json=False,
+                    env_warnings=env_warnings,
+                )
+            if returned_request_uuid != request_uuid:
+                return _build_error(
+                    "request_uuid_mismatch",
+                    error_message="WSL audio output request_uuid mismatch",
+                    wsl_returncode=result.returncode,
+                    stderr_warnings=stderr_warnings,
+                    details={
+                        "requested_request_uuid": request_uuid,
+                        "returned_request_uuid": returned_request_uuid,
+                    },
+                    returned_scene_file=_scene_file_name(output.get("audio_file")) or None,
+                    returned_request_uuid=returned_request_uuid,
+                    used_fallback_result_json=False,
+                    env_warnings=env_warnings,
+                )
+
+            returned_scene_file = _scene_file_name(output.get("audio_file"))
+            if not returned_scene_file or returned_scene_file.lower() != requested_scene_file.lower():
+                details = {
+                    "requested_audio_file": wsl_input,
+                    "returned_audio_file": output.get("audio_file"),
+                }
+                return _build_error(
+                    "stale_or_mismatched_result",
+                    error_message="WSL audio output identity mismatch",
+                    wsl_returncode=result.returncode,
+                    stderr_warnings=stderr_warnings,
+                    details=details,
+                    returned_scene_file=returned_scene_file or None,
+                    returned_request_uuid=returned_request_uuid,
+                    used_fallback_result_json=False,
+                    env_warnings=env_warnings,
+                )
+
+            result_json_mtime = _result_json_mtime_epoch()
+            if result_json_mtime is None:
+                return _build_error(
+                    "result_json_freshness_unavailable",
+                    error_message="Unable to verify WSL result.json freshness",
+                    wsl_returncode=result.returncode,
+                    stderr_warnings=stderr_warnings,
+                    details={},
+                    returned_scene_file=returned_scene_file or None,
+                    returned_request_uuid=returned_request_uuid,
+                    used_fallback_result_json=False,
+                    env_warnings=env_warnings,
+                )
+            if result_json_mtime < (process_started_epoch - 1.0):
+                details = {
+                    "result_json_mtime_epoch": result_json_mtime,
+                    "process_started_epoch": process_started_epoch,
+                }
+                return _build_error(
+                    "stale_or_mismatched_result",
+                    error_message="WSL result.json is stale relative to process start",
+                    wsl_returncode=result.returncode,
+                    stderr_warnings=stderr_warnings,
+                    details=details,
+                    returned_scene_file=returned_scene_file or None,
+                    returned_request_uuid=returned_request_uuid,
+                    used_fallback_result_json=False,
+                    env_warnings=env_warnings,
+                )
+
+            # Always attach warnings and explicit bridge metadata for observability.
             if stderr_warnings:
                 output.setdefault("stderr_warnings", stderr_warnings)
+            if env_warnings:
+                output.setdefault("bridge_env_warnings", env_warnings)
             output.setdefault("returncode", result.returncode)
+            output.setdefault("wsl_returncode", result.returncode)
+            output.setdefault("requested_scene_file", requested_scene_file)
+            output.setdefault("returned_scene_file", returned_scene_file)
+            output.setdefault("requested_request_uuid", request_uuid)
+            output.setdefault("returned_request_uuid", returned_request_uuid)
+            output.setdefault("used_fallback_result_json", False)
 
-            # Success is driven by JSON status + required fields, not stderr noise.
             if output.get("status") == "success":
                 return output
 
-            # Preserve structured error details even when the process exits non-zero.
-            output.setdefault("status", "error")
-            output.setdefault("error", "Unknown error")
-            return output
+            details = {"output_status": output.get("status")}
+            return _build_error(
+                "wsl_processor_reported_error",
+                error_message=str(output.get("error") or "Unknown error"),
+                wsl_returncode=result.returncode,
+                stderr_warnings=stderr_warnings,
+                details=details,
+                returned_scene_file=returned_scene_file or None,
+                returned_request_uuid=returned_request_uuid,
+                used_fallback_result_json=False,
+                env_warnings=env_warnings,
+            )
 
         except subprocess.TimeoutExpired:
             return {
                 "status": "error",
                 "error": f"Processing timeout after {timeout}s",
+                "bridge_error_reason": "wsl_timeout",
+                "bridge_error_details": {"timeout_seconds": timeout},
+                "wsl_returncode": None,
                 "returncode": None,
+                "requested_scene_file": requested_scene_file,
+                "returned_scene_file": None,
+                "requested_request_uuid": request_uuid,
+                "returned_request_uuid": None,
+                "used_fallback_result_json": False,
             }
             
     def check_status(self):

@@ -132,21 +132,32 @@ def embed_frames_clip(frame_paths: List[str], batch_size: int = 8) -> List[np.nd
         try:
             inputs = processor(images=images, return_tensors="pt", padding=True)
             inputs = {k: v.to(device) for k, v in inputs.items()}
-            
+
             with torch.no_grad():
                 outputs = model.get_image_features(**inputs)
-                batch_embeddings = outputs.cpu().numpy()
-            
+
+            # transformers may return either a tensor or an output object with pooler_output.
+            if hasattr(outputs, "pooler_output"):
+                features = outputs.pooler_output
+            elif isinstance(outputs, tuple):
+                features = outputs[0]
+            else:
+                features = outputs
+
+            if not torch.is_tensor(features):
+                raise TypeError(f"Unexpected CLIP output type: {type(features).__name__}")
+
+            batch_embeddings = features.detach().cpu().numpy()
+
             # Normalize embeddings
             norms = np.linalg.norm(batch_embeddings, axis=1, keepdims=True)
             batch_embeddings = batch_embeddings / (norms + 1e-8)
-            
+
             embeddings.extend(batch_embeddings)
-            
+
         except Exception as e:
             logger.error(f"CLIP embedding batch failed: {e}")
-            # Add zero embeddings for failed batch
-            embeddings.extend([np.zeros(512) for _ in range(len(images))])
+            continue
     
     logger.info(f"Generated {len(embeddings)} CLIP embeddings")
     return embeddings

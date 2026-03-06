@@ -507,13 +507,44 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
                 scene_entities = entity_result.get('entities', []) or []
                 total_entities_extracted += int(entity_result.get('entity_count', len(scene_entities)))
         
-        # Get speaker IDs (from diarization)
+        # Get speaker IDs (prefer scene-level payload truth, fallback to diarization artifact overlap)
         speaker_ids = []
-        for speaker in speakers:
-            if speaker.get('start', 0) < scene_end and speaker.get('end', 0) > scene_start:
-                spk_id = speaker.get('speaker', 'UNKNOWN')
-                if spk_id not in speaker_ids:
-                    speaker_ids.append(spk_id)
+
+        def _append_speaker_id(raw_id: Any) -> None:
+            if not isinstance(raw_id, str):
+                return
+            speaker_id = raw_id.strip()
+            if speaker_id and speaker_id not in speaker_ids:
+                speaker_ids.append(speaker_id)
+
+        scene_speaker_ids = scene.get('speaker_ids')
+        if isinstance(scene_speaker_ids, list):
+            for speaker_id in scene_speaker_ids:
+                _append_speaker_id(speaker_id)
+
+        payload_speakers = scene_audio_payload.get('speakers')
+        if isinstance(payload_speakers, list):
+            for speaker in payload_speakers:
+                if isinstance(speaker, str):
+                    _append_speaker_id(speaker)
+                elif isinstance(speaker, dict):
+                    _append_speaker_id(speaker.get('speaker', speaker.get('label')))
+
+        for segment_key in ('speaker_transcript', 'speaker_segments', 'diarization'):
+            speaker_segments = scene_audio_payload.get(segment_key)
+            if not isinstance(speaker_segments, list):
+                continue
+            for segment in speaker_segments:
+                if isinstance(segment, dict):
+                    _append_speaker_id(segment.get('speaker'))
+
+        if not speaker_ids:
+            for speaker in speakers:
+                if not isinstance(speaker, dict):
+                    continue
+                if speaker.get('start', 0) < scene_end and speaker.get('end', 0) > scene_start:
+                    _append_speaker_id(speaker.get('speaker', 'UNKNOWN'))
+
         if not has_audio_for_scene:
             speaker_ids = []
         

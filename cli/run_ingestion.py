@@ -622,6 +622,38 @@ def _merge_step_output(result: Optional[Dict[str, Any]]) -> Optional[Dict[str, A
     return merged
 
 
+def _extract_speaker_ids(audio_payload: Any) -> List[str]:
+    if not isinstance(audio_payload, dict):
+        return []
+
+    speaker_ids: List[str] = []
+
+    def _append_speaker(raw: Any) -> None:
+        if not isinstance(raw, str):
+            return
+        speaker = raw.strip()
+        if speaker and speaker not in speaker_ids:
+            speaker_ids.append(speaker)
+
+    speakers = audio_payload.get('speakers')
+    if isinstance(speakers, list):
+        for speaker in speakers:
+            if isinstance(speaker, str):
+                _append_speaker(speaker)
+            elif isinstance(speaker, dict):
+                _append_speaker(speaker.get('speaker', speaker.get('label')))
+
+    for key in ('speaker_transcript', 'speaker_segments', 'diarization'):
+        segments = audio_payload.get(key)
+        if not isinstance(segments, list):
+            continue
+        for segment in segments:
+            if isinstance(segment, dict):
+                _append_speaker(segment.get('speaker'))
+
+    return speaker_ids
+
+
 def _infer_audio_backend_fields(
     audio_info: Optional[Dict[str, Any]],
     *,
@@ -2921,6 +2953,13 @@ def run(
                     typer.echo(f'[DEBUG] has full_text: {bool(audio_data.get("full_text"))}')
                     if audio_data.get('transcript'):
                         typer.echo(f'[DEBUG] transcript preview: {str(audio_data.get("transcript"))[:50]}...')
+                audio_speaker_ids = _extract_speaker_ids(audio_data)
+                merged_entities = []
+                for entity_source in (frame_data.get('entities'), audio_data.get('entities')):
+                    if isinstance(entity_source, list):
+                        merged_entities.extend(entity_source)
+                    elif isinstance(entity_source, str) and entity_source.strip():
+                        merged_entities.append(entity_source.strip())
                 
                 kg_scene_data = {
                     'index': scene.get('index'),
@@ -2931,10 +2970,19 @@ def run(
                     'caption': frame_data.get('caption'),
                     'ocr_text': frame_data.get('ocr_text'),
                     'objects': frame_data.get('objects'),
+                    'faces': frame_data.get('faces'),
                     'tags': frame_data.get('tags'),
+                    'entities': merged_entities,
+                    'location': frame_data.get('location') or audio_data.get('location'),
+                    'locations': frame_data.get('locations') or audio_data.get('locations'),
                     'emotion': audio_data.get('emotion'),
                     'speakers': audio_data.get('speakers'),
+                    'speaker_ids': audio_speaker_ids,
+                    'speaker_count': audio_data.get('speaker_count', len(audio_speaker_ids)),
+                    'speaker_transcript': audio_data.get('speaker_transcript'),
                     'diarization': audio_data.get('diarization'),
+                    'music_events': audio_data.get('music_events'),
+                    'time_hints': audio_data.get('time_hints') or frame_data.get('time_hints'),
                     # Keep full data for other uses
                     'keyframe': frame_data,
                     'audio': audio_data,
@@ -3065,11 +3113,15 @@ def run(
                         'audio_backend_downgrade_details',
                         dict(audio_backend_fields.get('audio_backend_downgrade_details') or {}),
                     )
+                    speaker_ids = _extract_speaker_ids(formatted_audio)
+                    formatted_audio.setdefault('speaker_ids', speaker_ids)
+                    formatted_audio.setdefault('speaker_count', len(speaker_ids))
                     scene_record['audio'] = formatted_audio
                 else:
                     scene_record['audio'] = audio_info
             elif audio_error:
                 scene_record['audio_error'] = audio_error
+            scene_record['speaker_ids'] = _extract_speaker_ids(scene_record.get('audio'))
             if error_payload:
                 scene_record['errors'] = error_payload
             scene_record['content_state'] = _classify_scene_content(
@@ -3180,6 +3232,16 @@ def run(
                             s.get('faiss_ok'),
                         ),
                         'content_state': s.get('content_state', 'signal'),
+                        'speaker_ids': (
+                            s.get('speaker_ids')
+                            if isinstance(s.get('speaker_ids'), list)
+                            else _extract_speaker_ids(s.get('audio'))
+                        ),
+                        'speaker_count': len(
+                            s.get('speaker_ids')
+                            if isinstance(s.get('speaker_ids'), list)
+                            else _extract_speaker_ids(s.get('audio'))
+                        ),
                         'keyframe': s.get('keyframe', {}),
                         'audio': s.get('audio', {}),
                     }

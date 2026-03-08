@@ -32,14 +32,14 @@ huggingface_models:
     required: true
   pyannote_diarization:
     repo_id: pyannote/speaker-diarization
-    revision: '2.1'
+    revision: 25bcc7e3631933a02af5ee39379797d704aee3f8
     model_type: audio-diarization
     required: true
     requires_auth: true
     auth_token_env: PYANNOTE_TOKEN
   pyannote_segmentation:
     repo_id: pyannote/segmentation
-    revision: 2.1.1
+    revision: 660b9e20307a2b0cdb400d0f80aadc04a701fc54
     model_type: audio-segmentation
     required: true
     requires_auth: true
@@ -92,9 +92,9 @@ external_models:
     name: Whisper GGML Large v3
     source_url: https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3.bin
     version: large-v3
-    sha256: placeholder_not_yet_downloaded
+    sha256: 64d182b440b98d5203c4f9bd541544d84c605196c4f7b845dfa11fb23594d1e2
     local_path: whisper/ggml-large-v3.bin
-    file_size_bytes: 3089474048
+    file_size_bytes: 3095033483
     required: false
     model_type: speech-to-text
     notes: Optional - only needed for whisper.cpp CLI alternative (not currently used)
@@ -120,19 +120,19 @@ system_tools:
   ffmpeg:
     name: FFmpeg
     version: '6.1'
-    binary_path: L:/_TOOLS/ffmpeg/bin/ffmpeg.exe
+    binary_path: '@config.tools.ffmpeg_exe'
     required: true
     verify_command: ffmpeg -version
   tesseract:
     name: Tesseract OCR
     version: 5.3.0
-    binary_path: L:/_TOOLS/tesseract/tesseract.exe
+    binary_path: '@config.tools.tesseract_exe'
     required: true
     verify_command: tesseract --version
   poppler:
     name: Poppler PDF Tools
     version: 23.08.0
-    binary_path: L:/_TOOLS/poppler/bin
+    binary_path: '@config.tools.poppler_bin'
     required: true
     verify_command: pdftotext -v
 verification:
@@ -148,5 +148,5 @@ update_policy:
 backup:
   enabled: true
   snapshot_on_install: true
-  snapshot_dir: L:/models/snapshots
+  snapshot_dir: '@paths.models_cache/snapshots'
   retention_days: 90

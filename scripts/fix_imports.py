@@ -2,19 +2,22 @@ import re
 import os
 from pathlib import Path
 
+repo_root = Path(__file__).resolve().parents[1]
+
 files_to_fix = [
-    r"L:\goodq4all\pipelines\direct_ingestion.py",
-    r"L:\goodq4all\test_ingestion.py",
-    r"L:\goodq4all\api\main.py",
-    r"L:\goodq4all\cli\run_ingestion.py",
-    r"L:\goodq4all\api\routes\search.py",
-    r"L:\goodq4all\api\routes\scenes.py",
-    r"L:\goodq4all\api\routes\timeline.py",
-    r"L:\goodq4all\api\routes\media.py",
-    r"L:\goodq4all\api\routes\system.py",
-    r"L:\goodq4all\retrieval\multimodal_search.py",
-    r"L:\goodq4all\steps\video\scene_visual_embeddings.py",
-    r"L:\goodq4all\steps\video\cross_modal_harmonizer.py"
+    repo_root / "pipelines" / "direct_ingestion.py",
+    repo_root / "cli" / "test_ingestion.py",
+    repo_root / "tests" / "test_ingestion.py",
+    repo_root / "api" / "main.py",
+    repo_root / "cli" / "run_ingestion.py",
+    repo_root / "api" / "routes" / "search.py",
+    repo_root / "api" / "routes" / "scenes.py",
+    repo_root / "api" / "routes" / "timeline.py",
+    repo_root / "api" / "routes" / "media.py",
+    repo_root / "api" / "routes" / "system.py",
+    repo_root / "retrieval" / "multimodal_search.py",
+    repo_root / "steps" / "video" / "scene_visual_embeddings.py",
+    repo_root / "steps" / "video" / "cross_modal_harmonizer.py",
 ]
 
 # Pattern to replace
@@ -23,17 +26,18 @@ replacement = 'from '
 
 fixed_count = 0
 for filepath in files_to_fix:
-    if not os.path.exists(filepath):
+    filepath = Path(filepath)
+    if not filepath.exists():
         print(f"SKIP (not found): {filepath}")
         continue
     
-    with open(filepath, 'r', encoding='utf-8') as f:
+    with filepath.open('r', encoding='utf-8') as f:
         content = f.read()
     
     new_content = pattern.sub(replacement, content)
     
     if new_content != content:
-        with open(filepath, 'w', encoding='utf-8') as f:
+        with filepath.open('w', encoding='utf-8') as f:
             f.write(new_content)
         print(f"FIXED: {filepath}")
         fixed_count += 1

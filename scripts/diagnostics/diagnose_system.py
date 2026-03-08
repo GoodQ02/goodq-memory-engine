@@ -9,7 +9,38 @@ import subprocess
 import sys
 from pathlib import Path
 from datetime import datetime
-import psutil
+
+try:
+    import psutil
+except Exception:
+    psutil = None
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+REPO_ROOT = SCRIPT_DIR.parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+_RUNTIME_PATHS = None
+
+
+def get_runtime_paths():
+    """Resolve canonical runtime paths once for this diagnostic session."""
+    global _RUNTIME_PATHS
+    if _RUNTIME_PATHS is None:
+        from steps.common.config_loader import get_runtime_paths as _get_runtime_paths
+        from steps.common.config_loader import load_configs
+
+        cfg = load_configs({})
+        resolved = _get_runtime_paths(cfg, "db_dir", "faiss_dir")
+        db_dir = Path(resolved["db_dir"])
+        log_dir = Path(resolved["log_dir"])
+        resolved["unified_db_path"] = str(db_dir / "unified_goodq.db")
+        resolved["progress_file"] = str(log_dir / "progress.json")
+        resolved["watchdog_log"] = str(log_dir / "watchdog.log")
+        resolved["command_center_log"] = str(log_dir / "command_center.log")
+        resolved["step_runs_log"] = str(log_dir / "step_runs.jsonl")
+        _RUNTIME_PATHS = resolved
+    return _RUNTIME_PATHS
 
 
 def check_section(title):
@@ -30,7 +61,11 @@ def check_status(msg, condition):
 def check_python_processes():
     """Check running Python processes related to GoodQ"""
     check_section("Running Processes")
-    
+
+    if psutil is None:
+        print("  [SYMBOL] psutil not available; skipping process scan")
+        return []
+
     found_processes = []
     for proc in psutil.process_iter(['pid', 'name', 'cmdline', 'create_time']):
         try:
@@ -57,11 +92,12 @@ def check_python_processes():
 def check_databases():
     """Check database status"""
     check_section("Database Status")
-    
+
+    runtime_paths = get_runtime_paths()
     db_paths = {
-        "Memory DB": Path("L:/_DATA/GoodQ_Data/memory.db"),
-        "Knowledge Graph": Path("L:/_DATA/GoodQ_Data/knowledge_graph.db"),
-        "Unified DB": Path("L:/_DATA/GoodQ_Data/unified_goodq.db"),
+        "Memory DB": Path(runtime_paths["db_path"]),
+        "Knowledge Graph": Path(runtime_paths["knowledge_graph_db"]),
+        "Unified DB": Path(runtime_paths["unified_db_path"]),
     }
     
     results = {}
@@ -110,17 +146,20 @@ def check_databases():
 def check_faiss_indices():
     """Check FAISS index status"""
     check_section("FAISS Indices")
-    
-    faiss_dir = Path("L:/_DATA/GoodQ_Data/faiss_indices")
-    indices = {
-        "Text": faiss_dir / "text" / "faiss_text.index",
-        "CLIP": faiss_dir / "clip" / "faiss_clip.index",
-        "DINO": faiss_dir / "dino" / "faiss_dino.index",
-        "Audio (CLAP)": faiss_dir / "audio" / "faiss_audio.index",
-    }
-    
+
+    faiss_dir = Path(get_runtime_paths()["faiss_dir"])
     results = {}
-    for name, path in indices.items():
+    if not faiss_dir.exists():
+        print(f"  [SYMBOL] FAISS directory not found: {faiss_dir}")
+        return results
+
+    index_files = sorted(faiss_dir.rglob("*.index"))
+    if not index_files:
+        print("  [SYMBOL] No FAISS index files found")
+        return results
+
+    for path in index_files:
+        name = path.stem
         exists = path.exists()
         check_status(name, exists)
         if exists:
@@ -134,8 +173,8 @@ def check_faiss_indices():
 def check_video_files():
     """Check for videos in import inbox"""
     check_section("Import Inbox")
-    
-    inbox = Path("L:/goodq4all/import_inbox")
+
+    inbox = Path(get_runtime_paths()["import_inbox"])
     
     if not inbox.exists():
         print("  [SYMBOL] Import inbox not found")
@@ -162,8 +201,8 @@ def check_video_files():
 def check_progress():
     """Check current processing progress"""
     check_section("Current Progress")
-    
-    progress_file = Path("L:/goodq4all/logs/progress.json")
+
+    progress_file = Path(get_runtime_paths()["progress_file"])
     
     if not progress_file.exists():
         print("  [SYMBOL] No active processing (progress.json not found)")
@@ -198,10 +237,12 @@ def check_progress():
 def check_logs():
     """Check recent log entries"""
     check_section("Recent Logs")
-    
+
+    runtime_paths = get_runtime_paths()
     log_files = {
-        "Watchdog": Path("L:/goodq4all/logs/watchdog.log"),
-        "Command Center": Path("L:/goodq4all/logs/command_center.log"),
+        "Watchdog": Path(runtime_paths["watchdog_log"]),
+        "Command Center": Path(runtime_paths["command_center_log"]),
+        "Step Runs": Path(runtime_paths["step_runs_log"]),
     }
     
     for name, log_path in log_files.items():
@@ -257,7 +298,16 @@ def main():
     print("  GoodQ System Diagnostics")
     print("  " + datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
     print("="*80)
-    
+
+    try:
+        runtime_paths = get_runtime_paths()
+        print(f"  Runtime Inbox: {runtime_paths['import_inbox']}")
+        print(f"  Runtime Log Dir: {runtime_paths['log_dir']}")
+        print(f"  Runtime DB Dir: {runtime_paths['db_dir']}")
+    except Exception as e:
+        print(f"  [SYMBOL] Failed to resolve canonical runtime paths: {e}")
+        raise
+
     # Run all checks
     processes = check_python_processes()
     databases = check_databases()
@@ -295,7 +345,7 @@ def main():
         if not api_status:
             print("    - Start API server: python api_server.py")
         if len(videos) == 0:
-            print("    - Add videos to L:\\goodq4all\\import_inbox")
+            print(f"    - Add videos to {runtime_paths['import_inbox']}")
         if not any(databases.values()):
             print("    - Run ingestion to populate databases")
     

@@ -35,8 +35,8 @@ Status: PASSED - All models properly pinned!
 | dinov2 | facebook/dinov2-base | 4b1f91f4ab0cf72b... | vision-embedding |
 | sentence_transformer | sentence-transformers/all-MiniLM-L6-v2 | 8b3219a92973c328... | text-embedding |
 | clap_audio | laion/clap-htsat-unfused | 973b6e5389df55f8... | audio-embedding |
-| pyannote_diarization | pyannote/speaker-diarization | 2.1 (tag) | audio-diarization |
-| pyannote_segmentation | pyannote/segmentation | 2.1.1 (tag) | audio-segmentation |
+| pyannote_diarization | pyannote/speaker-diarization | 25bcc7e3631933a0... | audio-diarization |
+| pyannote_segmentation | pyannote/segmentation | 660b9e20307a2b0c... | audio-segmentation |
 | whisper_large_v3 | openai/whisper-large-v3 | e445c1e9f2327e0c... | speech-to-text |
 | faster_whisper_large_v3 | Systran/faster-whisper-large-v3 | 8687a7b7e6e8e7e7... | speech-to-text |
 | faster_whisper_medium | Systran/faster-whisper-medium | c5f8b45e7e7e7e7e... | speech-to-text |
@@ -50,7 +50,7 @@ Status: PASSED - All models properly pinned!
 | Asset | Version | SHA256 | Size | Status |
 |-------|---------|--------|------|--------|
 | yolov8n.pt | 8.2.0 | f59b3d833e2ff32e... | 6,549,796 bytes | ✅ Verified |
-| ggml-large-v3.bin | large-v3 | (placeholder) | 3,089,474,048 bytes | ⚠ Optional (not downloaded) |
+| ggml-large-v3.bin | large-v3 | 64d182b440b98d52... | 3,095,033,483 bytes | ✅ Verified |
 
 ### System Tools (Path Locked)
 
@@ -101,7 +101,7 @@ python scripts/bootstrap_models.py
 ## Notes
 
 - **Placeholder SHAs**: Some models (whisper variants, emotion models) have placeholder commit SHAs that repeat the same character. These should be updated to real SHAs before production use by running `pin_model_versions.py`.
-- **PyAnnote Models**: Using tagged releases (2.1, 2.1.1) instead of commit SHAs, which is acceptable for stable releases.
+- **PyAnnote Models**: both diarization and segmentation are now pinned to exact commit SHAs for reproducible bootstrap installs.
 - **Whisper GGML**: Optional asset, only needed if using whisper.cpp CLI (not currently in use).
 
 ## Maintenance

@@ -3,15 +3,16 @@ FULL SYSTEM TEST - Complete Pipeline Validation
 Tests entire GoodQ4All pipeline with WSL2 acceleration
 """
 import sys
-import os
 import json
 from pathlib import Path
 from datetime import datetime
 
 # Setup paths
-REPO_ROOT = Path(__file__).resolve().parent
+SCRIPT_DIR = Path(__file__).resolve().parent
+REPO_ROOT = SCRIPT_DIR.parent
 sys.path.insert(0, str(REPO_ROOT.parent))
 sys.path.insert(0, str(REPO_ROOT))
+sys.path.insert(0, str(SCRIPT_DIR))
 
 def test_full_system():
     print("="*80)
@@ -26,6 +27,16 @@ def test_full_system():
         "tests": {},
         "overall_status": "unknown"
     }
+
+    try:
+        from steps.common.config_loader import load_configs
+        cfg = load_configs({})
+        path_cfg = cfg.get("paths", {})
+    except Exception as e:
+        print(f"[FAIL] Config load error: {e}")
+        results["tests"]["config"] = "ERROR"
+        cfg = {}
+        path_cfg = {}
     
     # Test 1: WSL2 Bridge
     print("TEST 1: WSL2 Audio Bridge")
@@ -51,13 +62,11 @@ def test_full_system():
     print("-" * 40)
     try:
         from steps.audio_transcribe.step import audio_transcribe
-        from steps.common.config_loader import load_configs
+        data_root = Path(path_cfg.get("data_root", ""))
+        test_audio = data_root / "temp" / "test_chunk.wav"
         
-        cfg = load_configs({})
-        test_audio = r"L:\_DATA\GoodQ_Data\temp\test_chunk.wav"
-        
-        if Path(test_audio).exists():
-            item = {"source_path": test_audio, "modality": "audio"}
+        if test_audio.exists():
+            item = {"source_path": str(test_audio), "modality": "audio"}
             result = audio_transcribe(item, cfg)
             
             method = result.get("transcript_meta", {}).get("method")
@@ -87,16 +96,16 @@ def test_full_system():
     print("-" * 40)
     try:
         import sqlite3
-        
+        db_dir = Path(path_cfg.get("db_dir", path_cfg.get("data_root", "")))
         dbs = {
-            "memory.db": r"L:\_DATA\GoodQ_Data\memory.db",
-            "knowledge_graph.db": r"L:\_DATA\GoodQ_Data\knowledge_graph.db",
-            "unified_goodq.db": r"L:\_DATA\GoodQ_Data\unified_goodq.db"
+            "memory.db": path_cfg.get("db_path"),
+            "knowledge_graph.db": path_cfg.get("knowledge_graph_db"),
+            "unified_goodq.db": str(db_dir / "unified_goodq.db") if str(db_dir) else None,
         }
         
         db_status = {}
         for name, path in dbs.items():
-            if Path(path).exists():
+            if path and Path(path).exists():
                 conn = sqlite3.connect(path)
                 cursor = conn.cursor()
                 cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
@@ -145,7 +154,7 @@ def test_full_system():
     # Test 5: Model Cache
     print("TEST 5: Model Cache")
     print("-" * 40)
-    model_dir = Path(r"L:\models\hub")
+    model_dir = Path(path_cfg.get("models_cache", ""))
     if model_dir.exists():
         models = list(model_dir.glob("models--*"))
         print(f"[OK] Model cache: {len(models)} models")
@@ -190,7 +199,7 @@ def test_full_system():
     print("="*80)
     
     # Save results
-    results_file = Path(r"L:\goodq4all\test_results.json")
+    results_file = REPO_ROOT / "test_results.json"
     with open(results_file, 'w') as f:
         json.dump(results, f, indent=2)
     print(f"\nResults saved to: {results_file}")

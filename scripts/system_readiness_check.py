@@ -5,18 +5,22 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from dataset_specs import DATASET_SPECS, find_local_copy
-
+SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = Path(__file__).resolve().parents[1]
 VENDOR_DIR = REPO_ROOT / 'vendor'
+sys.path.insert(0, str(SCRIPT_DIR))
+sys.path.insert(0, str(REPO_ROOT))
 if VENDOR_DIR.exists():
-    sys.path.insert(0, str(VENDOR_DIR))
+    sys.path.append(str(VENDOR_DIR))
+
+from dataset_specs import DATASET_SPECS, find_local_copy
 
 try:
     from dotenv import load_dotenv  # type: ignore
@@ -37,6 +41,73 @@ if load_dotenv:
 FALLBACKS: Dict[str, Optional[str]] = {}
 
 
+def _load_runtime_cfg() -> Dict[str, Any]:
+    try:
+        from steps.common.config_loader import load_configs
+        return load_configs({})
+    except Exception:
+        return {}
+
+
+def _cfg_get(cfg: Dict[str, Any], dotted_path: str) -> str:
+    cur: Any = cfg
+    for key in dotted_path.split('.'):
+        if not isinstance(cur, dict) or key not in cur:
+            return ""
+        cur = cur[key]
+    return cur if isinstance(cur, str) else ""
+
+
+def _models_root(cfg: Dict[str, Any]) -> Path:
+    explicit = os.environ.get("GOODQ_MODELS_DIR")
+    if explicit:
+        return Path(explicit)
+    cfg_models = _cfg_get(cfg, "paths.models_cache")
+    if cfg_models:
+        return Path(cfg_models)
+    return Path("models")
+
+
+def _load_model_registry() -> Dict[str, Any]:
+    registry_path = REPO_ROOT / "configs" / "model_registry.yaml"
+    if not registry_path.exists():
+        return {}
+    try:
+        with registry_path.open("r", encoding="utf-8") as handle:
+            return yaml.safe_load(handle) or {}
+    except Exception:
+        return {}
+
+
+def _synthesize_readiness_cfg(cfg: Dict[str, Any]) -> Dict[str, Any]:
+    tools_cfg = (((cfg.get("config", {}) or {}).get("tools", {})) or {}).copy()
+    models_root = _models_root(cfg)
+    registry = _load_model_registry()
+    external = registry.get("external_models", {}) or {}
+    lexicons = registry.get("lexicons", {}) or {}
+
+    yolo_info = external.get("yolo_v8n", {}) or {}
+    whisper_info = external.get("whisper_ggml_large_v3", {}) or {}
+    nrc_info = lexicons.get("nrc_emotion", {}) or {}
+
+    models_cfg = {
+        "yolo_model_path": str(models_root / yolo_info.get("local_path", "")) if yolo_info.get("local_path") else "",
+        "whisper_ggml_model": str(models_root / whisper_info.get("local_path", "")) if whisper_info.get("local_path") else "",
+        "lexicons": {
+            "nrc_emotion_dir": str(models_root / nrc_info.get("local_path", "")) if nrc_info.get("local_path") else "",
+        },
+    }
+
+    return {
+        "tools": tools_cfg,
+        "models": models_cfg,
+        "paths": (cfg.get("paths", {}) or {}),
+    }
+
+
+RUNTIME_CFG = _load_runtime_cfg()
+
+
 def apply_default(name: str, default: str, *, invalid: Optional[callable] = None) -> None:
     current = os.environ.get(name)
     needs_default = False
@@ -49,8 +120,8 @@ def apply_default(name: str, default: str, *, invalid: Optional[callable] = None
         os.environ[name] = default
 
 
-apply_default("HF_HOME", "L:/models", invalid=lambda v: "poppler" in v.lower() if v else True)
-apply_default("TORCH_HOME", "L:/models", invalid=lambda v: "poppler" in v.lower() if v else True)
+apply_default("HF_HOME", str(_models_root(RUNTIME_CFG)), invalid=lambda v: "poppler" in v.lower() if v else True)
+apply_default("TORCH_HOME", str(_models_root(RUNTIME_CFG)), invalid=lambda v: "poppler" in v.lower() if v else True)
 # Prefer hf_transfer enabled by default for faster local-first fetches
 apply_default("HF_HUB_ENABLE_HF_TRANSFER", "1", invalid=lambda v: v not in {None, "", "1"})
 if os.environ.get("HF_TOKEN") and not os.environ.get("PYANNOTE_TOKEN"):
@@ -62,7 +133,7 @@ def _dataset_cache_root() -> Path:
     cache = os.environ.get('HF_DATASETS_CACHE')
     if cache:
         return Path(cache)
-    hf_home = os.environ.get('HF_HOME') or 'L:/models'
+    hf_home = os.environ.get('HF_HOME') or str(_models_root(RUNTIME_CFG))
     return Path(hf_home) / 'hf' / 'datasets'
 
 
@@ -89,16 +160,11 @@ def mask(value: Optional[str], keep: int = 4) -> str:
 def run_conda(env: str, code: str, timeout: int = 180, label: Optional[str] = None) -> CheckResult:
     conda_exe = os.environ.get("CONDA_EXE")
     if not conda_exe:
-        candidates = [
-            Path(os.environ.get("CONDA_PREFIX", "")) / "Scripts" / "conda.exe",
-            Path(os.environ.get("CONDA_ROOT", "")) / "Scripts" / "conda.exe",
-            Path("C:/Users/jdben/miniconda3/Scripts/conda.exe"),
-            Path("C:/ProgramData/miniconda3/Scripts/conda.exe"),
-        ]
-        for candidate in candidates:
-            if candidate and candidate.is_file():
-                conda_exe = str(candidate)
-                break
+        try:
+            from steps.common.tool_paths import resolve_conda
+            conda_exe = resolve_conda()
+        except Exception:
+            conda_exe = None
     conda_bat: Optional[str] = None
     if conda_exe and str(conda_exe).lower().endswith('.exe'):
         candidate_bat = Path(conda_exe).with_suffix('.bat')
@@ -157,6 +223,28 @@ def check_hf_access(model_id: str, token: Optional[str], revision: Optional[str]
         return CheckResult("huggingface", "yellow", "error: {}".format(exc))
 
 
+def check_wsl_workspace(distro: str, workspace: str) -> CheckResult:
+    if not distro or not workspace:
+        return CheckResult("audio_diarize:wsl", "yellow", "WSL audio workspace not configured")
+    try:
+        proc = subprocess.run(
+            ["wsl", "-d", distro, "--", "test", "-d", workspace],
+            capture_output=True,
+            text=True,
+            timeout=15,
+            cwd=str(REPO_ROOT),
+        )
+    except FileNotFoundError:
+        return CheckResult("audio_diarize:wsl", "red", "wsl executable not found")
+    except subprocess.TimeoutExpired:
+        return CheckResult("audio_diarize:wsl", "yellow", "workspace check timed out")
+
+    if proc.returncode == 0:
+        return CheckResult("audio_diarize:wsl", "green", f"{distro}:{workspace}")
+    detail = proc.stderr.strip() or proc.stdout.strip() or f"missing {workspace}"
+    return CheckResult("audio_diarize:wsl", "red", detail)
+
+
 def gather_env_checks() -> List[CheckResult]:
     def normalize(name: str, raw: Optional[str]) -> Optional[str]:
         if not raw:
@@ -196,6 +284,14 @@ def gather_path_checks(cfg: Dict[str, Any]) -> List[CheckResult]:
         if not path_value:
             checks.append(CheckResult(name, "red", "not configured"))
             return
+        if not any(sep in path_value for sep in ("\\", "/", ":")):
+            resolved_cmd = shutil.which(path_value)
+            if resolved_cmd:
+                checks.append(CheckResult(name, "green", resolved_cmd))
+            else:
+                status = "red" if must_exist else "yellow"
+                checks.append(CheckResult(name, status, path_value))
+            return
         path_obj = Path(path_value)
         if path_obj.exists():
             status = "green"
@@ -204,19 +300,17 @@ def gather_path_checks(cfg: Dict[str, Any]) -> List[CheckResult]:
         checks.append(CheckResult(name, status, str(path_obj)))
 
     tools_cfg = cfg.get("tools", {})
-    check_path("tools_root", tools_cfg.get("root"))
     check_path("ffmpeg", tools_cfg.get("ffmpeg_exe"))
-    check_path("whisper_cli", tools_cfg.get("whisper_cli"))
-    check_path("whisper_model", tools_cfg.get("whisper_ggml_model"))
     check_path("tesseract", tools_cfg.get("tesseract_exe"), must_exist=False)
     check_path("poppler_bin", tools_cfg.get("poppler_bin"), must_exist=False)
 
     models_cfg = cfg.get("models", {})
     check_path("yolo_model", models_cfg.get("yolo_model_path"))
+    check_path("whisper_model", models_cfg.get("whisper_ggml_model"), must_exist=False)
     lex_cfg = models_cfg.get("lexicons", {})
     check_path("nrc_emotion_dir", lex_cfg.get("nrc_emotion_dir"), must_exist=False)
 
-    models_root = Path(os.environ.get("HF_HOME", "L:/models"))
+    models_root = _models_root(RUNTIME_CFG)
     if models_root.exists():
         checks.append(CheckResult("models_root", "green", str(models_root)))
     else:
@@ -255,24 +349,34 @@ def gather_dataset_checks(cache_root: Path) -> List[CheckResult]:
 
 
 
-def gather_conda_checks(token_present: bool) -> List[CheckResult]:
+def gather_conda_checks(token_present: bool, runtime_cfg: Dict[str, Any]) -> List[CheckResult]:
     checks: List[CheckResult] = []
-    torch_probe = (
-        "import os; os.environ.setdefault('HF_HUB_ENABLE_HF_TRANSFER', '0'); "
-        "import torch, torchaudio; print(str({'cuda': torch.cuda.is_available(), 'token': bool(os.getenv('PYANNOTE_TOKEN'))}))"
-    )
-    checks.append(run_conda("goodq_audio_diarize", torch_probe, label="goodq_audio_diarize:torch"))
+    envs_cfg = runtime_cfg.get("envs", {}) or {}
+    host_cfg = runtime_cfg.get("host", {}) or {}
 
-    if token_present:
-        pipeline_probe = (
-            "import os; os.environ.setdefault('HF_HUB_ENABLE_HF_TRANSFER', '0'); "
-            "from pyannote.audio import Pipeline; token = os.getenv('PYANNOTE_TOKEN'); "
-            "Pipeline.from_pretrained('pyannote/speaker-diarization@2.1', use_auth_token=token, cache_dir=os.getenv('HF_HOME')); "
-            "print('pipeline ok')"
+    audio_transcribe_env = envs_cfg.get("audio_transcribe")
+    if audio_transcribe_env:
+        backend_probe = (
+            "import os, importlib.util; "
+            "os.environ.setdefault('HF_HUB_ENABLE_HF_TRANSFER', '0'); "
+            "result = {'token': bool(os.getenv('PYANNOTE_TOKEN')), 'torch_cuda': False, 'ctranslate2_cuda': False}; "
+            "torch_mod = __import__('torch') if importlib.util.find_spec('torch') else None; "
+            "ctranslate2_mod = __import__('ctranslate2') if importlib.util.find_spec('ctranslate2') else None; "
+            "result['torch_cuda'] = bool(torch_mod and getattr(torch_mod, 'cuda', None) and torch_mod.cuda.is_available()); "
+            "result['torch_version'] = getattr(torch_mod, '__version__', None) if torch_mod else None; "
+            "result['ctranslate2_cuda'] = bool(ctranslate2_mod and ctranslate2_mod.get_cuda_device_count()); "
+            "result['ctranslate2_version'] = getattr(ctranslate2_mod, '__version__', None) if ctranslate2_mod else None; "
+            "result['backend_cuda'] = bool(result['torch_cuda'] or result['ctranslate2_cuda']); "
+            "print(str(result))"
         )
-        checks.append(run_conda("goodq_audio_diarize", pipeline_probe, label="goodq_audio_diarize:pyannote"))
-    else:
-        checks.append(CheckResult("goodq_audio_diarize:pyannote", "red", "token missing; skipped"))
+        checks.append(run_conda(audio_transcribe_env, backend_probe, label=f"{audio_transcribe_env}:backend"))
+
+    checks.append(
+        check_wsl_workspace(
+            str(host_cfg.get("wsl_distro") or ""),
+            str(host_cfg.get("wsl_workspace") or ""),
+        )
+    )
 
     text_probe = (
         "import os; os.environ.setdefault('HF_HUB_ENABLE_HF_TRANSFER', '0'); "
@@ -301,9 +405,7 @@ def check_ffmpeg(ffmpeg_path: Path) -> CheckResult:
 
 
 def load_project_config() -> Dict[str, Any]:
-    cfg_path = REPO_ROOT / "configs" / "config_open.yaml"
-    with cfg_path.open("r", encoding="utf-8") as handle:
-        return yaml.safe_load(handle) or {}
+    return _synthesize_readiness_cfg(RUNTIME_CFG)
 
 
 def build_report() -> Dict[str, Any]:
@@ -313,7 +415,7 @@ def build_report() -> Dict[str, Any]:
     dataset_results = gather_dataset_checks(_dataset_cache_root())
     token = os.environ.get("PYANNOTE_TOKEN") or os.environ.get("HF_TOKEN")
     hf_result = check_hf_access("pyannote/speaker-diarization", token, revision="2.1")
-    conda_results = gather_conda_checks(bool(token))
+    conda_results = gather_conda_checks(bool(token), RUNTIME_CFG)
 
     report_sections: Dict[str, Any] = {
         "env": [r.as_dict() for r in env_results],

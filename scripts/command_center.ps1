@@ -13,20 +13,110 @@ $goodqCondaEnv = if ([string]::IsNullOrWhiteSpace($env:GOODQ_CONDA_ENV)) { "good
 function H1($m){ Write-Host "== $m ==" -ForegroundColor Cyan }
 function Info($m){ Write-Host "[cc] $m" -ForegroundColor Cyan }
 function Warn($m){ Write-Host "[cc] $m" -ForegroundColor Yellow }
+function Safe-ClearHost {
+  try {
+    Clear-Host
+  } catch {
+    # Non-interactive shells can throw on RawUI cursor updates; continue without clearing.
+  }
+}
 
 $repoRoot = (Get-Item -LiteralPath (Join-Path $PSScriptRoot '..')).FullName
 Set-Location $repoRoot
+$script:CommandCenterPaths = $null
 
 function Read-PathsYaml {
-  $f = 'configs/paths.yaml'
-  $raw = Get-Content -LiteralPath $f -Raw
-  $o = @{}
-  foreach ($line in $raw -split "`n") {
-    if ($line -match '^\s*([A-Za-z0-9_]+):\s*"(.*)"\s*$') {
-      $o[$matches[1]] = $matches[2]
+  if ($script:CommandCenterPaths) { return $script:CommandCenterPaths }
+
+  try {
+    $pyScript = @'
+import json
+import sys
+from pathlib import Path
+
+repo_root = Path.cwd()
+sys.path.insert(0, str(repo_root))
+
+from steps.common.config_loader import load_configs
+
+cfg = load_configs({})
+paths = cfg.get("paths", {})
+data_root = paths.get("data_root", "")
+faiss_dir = Path(paths.get("faiss_dir", "")) if paths.get("faiss_dir") else None
+output_dir = Path(paths.get("output_directory", "")) if paths.get("output_directory") else None
+repo_root = Path.cwd()
+repo_logs = repo_root / "logs"
+
+def find_index(token: str) -> str:
+    if not faiss_dir or not faiss_dir.exists():
+        return ""
+    direct = paths.get(f"faiss_{token}_path", "")
+    if direct:
+        return direct
+    for candidate in sorted(faiss_dir.rglob("*.index")):
+        if token in candidate.name.lower():
+            return str(candidate)
+    return ""
+
+scene_candidates = []
+if output_dir:
+    scene_candidates.append(output_dir / "scene_ingest_results.json")
+scene_candidates.append(repo_logs / "scene_ingest_results.json")
+scene_candidates.append(repo_logs / "video_ingest_results.json")
+scene_results = ""
+for candidate in scene_candidates:
+    if candidate.exists():
+        scene_results = str(candidate)
+        break
+if not scene_results and scene_candidates:
+    scene_results = str(scene_candidates[0])
+
+payload = {
+    "data_root": data_root,
+    "db_path": paths.get("db_path", ""),
+    "log_dir": paths.get("log_dir", ""),
+    "import_inbox": paths.get("import_inbox", ""),
+    "output_directory": paths.get("output_directory", ""),
+    "exports_dir": str(Path(data_root) / "exports") if data_root else "",
+    "scene_results_path": scene_results,
+    "faiss_dir": paths.get("faiss_dir", ""),
+    "faiss_audio_path": paths.get("faiss_audio_path", ""),
+    "faiss_index_path": find_index("text"),
+    "faiss_clip_path": find_index("clip"),
+    "faiss_dino_path": find_index("dino"),
+    "clip_id_map_db": "",
+    "dino_id_map_db": "",
+    "clap_id_map_db": "",
+}
+print(json.dumps(payload))
+'@
+    $tmpFile = [System.IO.Path]::GetTempFileName()
+    Set-Content -LiteralPath $tmpFile -Value $pyScript -Encoding UTF8
+    try {
+      $json = & $condaExe run -n $goodqCondaEnv python $tmpFile
+    } finally {
+      Remove-Item -LiteralPath $tmpFile -Force -ErrorAction SilentlyContinue
     }
+    $jsonText = ($json | Out-String).Trim()
+    if (-not [string]::IsNullOrWhiteSpace($jsonText)) {
+      $script:CommandCenterPaths = $jsonText | ConvertFrom-Json -AsHashtable
+    } else {
+      $script:CommandCenterPaths = @{}
+    }
+  } catch {
+    Warn 'Failed to resolve canonical runtime paths'
+    $script:CommandCenterPaths = @{}
   }
-  return $o
+
+  return $script:CommandCenterPaths
+}
+
+function Get-SceneResultsPath {
+  $p = Read-PathsYaml
+  if ($p['scene_results_path'] -and (Test-Path $p['scene_results_path'])) {
+    return $p['scene_results_path']
+  }
+  return $null
 }
 
 function Show-GPU {
@@ -88,7 +178,8 @@ except Exception:
       Set-Content -LiteralPath $tmpFile -Value $pyScript -Encoding UTF8
       try {
         $n = & $condaExe run -n $env python $tmpFile $path
-        if ($n) { return $n.Trim() } else { return 'err' }
+        $nText = ($n | Out-String).Trim()
+        if ($nText) { return $nText } else { return 'err' }
       } finally {
         Remove-Item -LiteralPath $tmpFile -Force -ErrorAction SilentlyContinue
       }
@@ -112,7 +203,7 @@ function Show-HotCache {
 
 function Show-LastScenePeek {
   H1 'Last Scene Peek'
-  $path = Join-Path $repoRoot 'logs/video_ingest_results.json'
+  $path = Get-SceneResultsPath
   if (-not (Test-Path $path)) { Warn 'No video summaries yet'; return }
   try { $json = Get-Content -Raw -LiteralPath $path | ConvertFrom-Json } catch { Warn 'Failed to read video summaries'; return }
   $entry = if ($json -is [System.Array]) { $json[-1] } else { $json }
@@ -133,7 +224,8 @@ function Show-LastScenePeek {
 }
 function Show-LatestExport {
   H1 'Latest Export'
-  $base = 'L:\\_DATA\\GoodQ_Data\\exports'
+  $p = Read-PathsYaml
+  $base = $p['exports_dir']
   if (-not (Test-Path $base)) { Warn 'No export directory found'; return }
   $dir = Get-ChildItem -LiteralPath $base -Directory | Sort-Object LastWriteTime -Descending | Select-Object -First 1
   if (-not $dir) { Warn 'No exports yet'; return }
@@ -145,7 +237,7 @@ function Show-LatestExport {
 
 function Show-VideoSummary {
   H1 'Video Summary'
-  $path = Join-Path $repoRoot 'logs/video_ingest_results.json'
+  $path = Get-SceneResultsPath
   if (-not (Test-Path $path)) { Warn 'No video summaries yet'; return }
   try {
     $json = Get-Content -Raw -LiteralPath $path | ConvertFrom-Json
@@ -154,18 +246,49 @@ function Show-VideoSummary {
   }
   if (-not $json) { Warn 'Video summary empty'; return }
   $entry = if ($json -is [System.Array]) { $json[-1] } else { $json }
-  $video = if ($entry.video) { $entry.video } else { '(unknown)' }
+  $video = if ($entry.PSObject.Properties.Name -contains 'video_name' -and $entry.video_name) {
+    $entry.video_name
+  } elseif ($entry.PSObject.Properties.Name -contains 'video' -and $entry.video) {
+    $entry.video
+  } elseif ($entry.PSObject.Properties.Name -contains 'video_path' -and $entry.video_path) {
+    [System.IO.Path]::GetFileName($entry.video_path)
+  } elseif ($entry.PSObject.Properties.Name -contains 'source_path' -and $entry.source_path) {
+    [System.IO.Path]::GetFileName($entry.source_path)
+  } else {
+    '(unknown)'
+  }
   Write-Host ("Video: {0}" -f $video)
-  if ($entry.duration_sec) {
+  $duration = $null
+  if ($entry.PSObject.Properties.Name -contains 'duration_sec' -and $entry.duration_sec) {
+    $duration = $entry.duration_sec
+  } elseif (
+    $entry.PSObject.Properties.Name -contains 'temporal_index' -and
+    $entry.temporal_index -and
+    $entry.temporal_index.PSObject.Properties.Name -contains 'total_duration' -and
+    $entry.temporal_index.total_duration
+  ) {
+    $duration = $entry.temporal_index.total_duration
+  }
+  if ($duration) {
     try {
-      $dur = [double]$entry.duration_sec
+      $dur = [double]$duration
       Write-Host ("Duration: {0:N1}s" -f $dur)
     } catch {}
   }
-  $frameCount = @($entry.frames).Count
-  $sceneCount = @($entry.scenes).Count
+  $frameCount = if ($entry.PSObject.Properties.Name -contains 'frames' -and $entry.frames) { @($entry.frames).Count } else { 0 }
+  $sceneCount = if ($entry.PSObject.Properties.Name -contains 'scenes' -and $entry.scenes) {
+    @($entry.scenes).Count
+  } elseif (
+    $entry.PSObject.Properties.Name -contains 'scene_meta' -and
+    $entry.scene_meta -and
+    $entry.scene_meta.PSObject.Properties.Name -contains 'scene_count'
+  ) {
+    [int]$entry.scene_meta.scene_count
+  } else {
+    0
+  }
   Write-Host ("Frames: {0}  Scenes: {1}" -f $frameCount, $sceneCount)
-  $audio = $entry.audio
+  $audio = if ($entry.PSObject.Properties.Name -contains 'audio') { $entry.audio } else { $null }
   if ($audio) {
     $clapMeta = $audio.clap_meta
     if ($clapMeta) {
@@ -236,8 +359,12 @@ function Show-RetrievePreview {
   $query = $env:GOODQ_CC_QUERY
   if (-not $query) { $query = 'test' }
   try {
-    $out = & $condaExe run -n goodq_text_embed python -m goodq4all.cli.retrieve --text "$query" --topk 3
-    $j = $out | ConvertFrom-Json
+    $out = & $condaExe run -n goodq_text_embed python -m cli.retrieve --text "$query" --topk 3
+    $jsonText = ($out | Out-String).Trim()
+    if ([string]::IsNullOrWhiteSpace($jsonText)) {
+      Warn 'No matches'; return
+    }
+    $j = $jsonText | ConvertFrom-Json
     if (-not $j -or -not ($j.PSObject.Properties.Name -contains 'matches') -or -not $j.matches) { 
       Warn 'No matches'; return 
     }
@@ -462,7 +589,7 @@ con = sqlite3.connect(sys.argv[1]); cur = con.cursor(); cur.execute(sys.argv[2])
 
 function Show-Thumbnails {
   H1 'Scene Thumbnails'
-  $path = Join-Path $repoRoot 'logs/video_ingest_results.json'
+  $path = Get-SceneResultsPath
   if (-not (Test-Path $path)) { Warn 'No video summaries yet'; return }
   try { $json = Get-Content -Raw -LiteralPath $path | ConvertFrom-Json } catch { Warn 'Failed to read video summaries'; return }
   $entry = if ($json -is [System.Array]) { $json[-1] } else { $json }
@@ -499,7 +626,7 @@ function Show-ZenMLArtifacts {
 }
 
 function Render {
-  Clear-Host
+  Safe-ClearHost
   H1 'GoodQ Command Center'
   Show-GPU
   Show-DBAndFAISS

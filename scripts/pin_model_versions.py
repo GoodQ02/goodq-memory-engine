@@ -16,6 +16,7 @@ import yaml
 # Add vendor to path
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _VENDOR_DIR = _REPO_ROOT / "vendor"
+sys.path.insert(0, str(_REPO_ROOT))
 if _VENDOR_DIR.exists():
     sys.path.insert(0, str(_VENDOR_DIR))
 
@@ -24,6 +25,21 @@ try:
 except ImportError:
     print("ERROR: huggingface_hub not available. Install via: pip install huggingface_hub")
     sys.exit(1)
+
+
+def resolve_models_dir() -> Path:
+    explicit = os.environ.get("GOODQ_MODELS_DIR")
+    if explicit:
+        return Path(explicit)
+    try:
+        from steps.common.config_loader import load_configs
+        cfg = load_configs({})
+        cfg_models = (((cfg.get("paths", {}) or {}).get("models_cache")) or "").strip()
+        if cfg_models:
+            return Path(cfg_models)
+    except Exception:
+        pass
+    return Path("models")
 
 
 def get_latest_commit_sha(repo_id: str, token: str | None = None) -> str | None:
@@ -81,7 +97,7 @@ def main() -> None:
     hf_token = os.environ.get("HF_TOKEN")
     pyannote_token = os.environ.get("PYANNOTE_TOKEN") or hf_token
     
-    models_dir = Path(os.environ.get("GOODQ_MODELS_DIR", "L:/models"))
+    models_dir = resolve_models_dir()
     
     print(f"{'='*80}")
     print(f"Model Version Pinning Tool")

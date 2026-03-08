@@ -17,6 +17,7 @@ import contextlib
 import io
 import os
 import re
+import shlex
 import shutil
 import socket
 import subprocess
@@ -88,6 +89,12 @@ def _read_text(path: Path) -> Tuple[Optional[str], Optional[str]]:
         return path.read_text(encoding="utf-8", errors="replace"), None
     except Exception as exc:
         return None, str(exc)
+
+
+def _bootstrap_repo_imports(repo_root: Path) -> None:
+    repo_root_str = str(repo_root)
+    if repo_root_str not in sys.path:
+        sys.path.insert(0, repo_root_str)
 
 
 def _parse_mode(agent_status_text: str) -> Optional[str]:
@@ -216,6 +223,7 @@ def _config_checks(repo_root: Path) -> Tuple[List[Item], Optional[Dict[str, Any]
         items.append(Item(FAIL, f"Missing canonical config: {canonical_cfg_path}"))
 
     try:
+        _bootstrap_repo_imports(repo_root)
         from steps.common.config_loader import load_configs
 
         buf = io.StringIO()
@@ -308,43 +316,43 @@ def _manifest_checks(repo_root: Path, cfg: Optional[Dict[str, Any]]) -> List[Ite
     return items
 
 
-def _phase6_checks(cfg: Optional[Dict[str, Any]], gov: Dict[str, Any]) -> List[Item]:
+def _phase6_checks(repo_root: Path, cfg: Optional[Dict[str, Any]], gov: Dict[str, Any]) -> List[Item]:
     items: List[Item] = []
 
-    # Imports (static availability)
-    sfe = None
-    try:
-        import steps.video.scene_frame_extractor as sfe_mod
+    # Source-level availability checks avoid false negatives from optional env/import drift.
+    sfe_path = repo_root / "steps" / "video" / "scene_frame_extractor.py"
+    sfe_text = None
+    if sfe_path.is_file():
+        sfe_text, err = _read_text(sfe_path)
+        if sfe_text is None:
+            items.append(Item(FAIL, f"Could not read scene_frame_extractor source: {sfe_path} ({err})"))
+        else:
+            items.append(Item(PASS, f"Found scene_frame_extractor source: {sfe_path}"))
+    else:
+        items.append(Item(FAIL, f"Missing phase6 source file: {sfe_path}"))
 
-        sfe = sfe_mod
-        items.append(Item(PASS, "Imported steps.video.scene_frame_extractor"))
-    except Exception as exc:
-        items.append(Item(FAIL, f"Import failed: steps.video.scene_frame_extractor ({exc})"))
-
-    try:
-        import steps.video.cross_modal_harmonizer  # noqa: F401
-
-        items.append(Item(PASS, "Imported steps.video.cross_modal_harmonizer"))
-    except Exception as exc:
-        items.append(Item(FAIL, f"Import failed: steps.video.cross_modal_harmonizer ({exc})"))
+    harmonizer_path = repo_root / "steps" / "video" / "cross_modal_harmonizer.py"
+    if harmonizer_path.is_file():
+        harmonizer_text, err = _read_text(harmonizer_path)
+        if harmonizer_text is None:
+            items.append(Item(FAIL, f"Could not read cross_modal_harmonizer source: {harmonizer_path} ({err})"))
+        else:
+            items.append(Item(PASS, f"Found cross_modal_harmonizer source: {harmonizer_path}"))
+    else:
+        items.append(Item(FAIL, f"Missing phase6 source file: {harmonizer_path}"))
 
     # Validate non-numeric scene_id safety (static source check; avoids IO/writes).
-    if sfe is not None:
+    if sfe_text is not None:
         try:
-            path = Path(str(getattr(sfe, "__file__", "")))
-            text, err = _read_text(path) if path else (None, "module __file__ missing")
-            if text is None:
-                items.append(Item(FAIL, f"Could not read scene_frame_extractor source: {err}"))
+            ok = (
+                "scene_id_for_filename" in sfe_text
+                and "int(scene_id_for_filename)" in sfe_text
+                and "except (TypeError, ValueError)" in sfe_text
+            )
+            if ok:
+                items.append(Item(PASS, "scene_frame_extractor normalizes non-numeric scene_id for filenames"))
             else:
-                ok = (
-                    "scene_id_for_filename" in text
-                    and "int(scene_id_for_filename)" in text
-                    and "except (TypeError, ValueError)" in text
-                )
-                if ok:
-                    items.append(Item(PASS, "scene_frame_extractor normalizes non-numeric scene_id for filenames"))
-                else:
-                    items.append(Item(FAIL, "scene_frame_extractor does not appear to normalize non-numeric scene_id (risk: :04d crash)"))
+                items.append(Item(FAIL, "scene_frame_extractor does not appear to normalize non-numeric scene_id (risk: :04d crash)"))
         except Exception as exc:
             items.append(Item(FAIL, f"Could not validate scene_id normalization: {exc}"))
 
@@ -393,8 +401,22 @@ def _service_checks(cfg: Optional[Dict[str, Any]]) -> List[Item]:
     else:
         items.append(Item(WARN, "Qdrant disabled in config; skipping reachability check"))
 
-    # ffmpeg
-    ffmpeg = shutil.which("ffmpeg")
+    # ffmpeg (canonical config first, PATH second)
+    ffmpeg = None
+    tools_cfg = None
+    if isinstance(cfg, dict):
+        config_cfg = cfg.get("config")
+        if isinstance(config_cfg, dict):
+            tools_cfg = config_cfg.get("tools")
+    if isinstance(tools_cfg, dict):
+        configured_ffmpeg = tools_cfg.get("ffmpeg_exe")
+        if isinstance(configured_ffmpeg, str) and configured_ffmpeg.strip():
+            if configured_ffmpeg.strip().lower() == "ffmpeg":
+                ffmpeg = shutil.which("ffmpeg")
+            else:
+                ffmpeg = configured_ffmpeg.strip()
+    if not ffmpeg:
+        ffmpeg = shutil.which("ffmpeg")
     if ffmpeg:
         ok, msg = _check_cmd([ffmpeg, "-version"], timeout_s=10.0)
         if ok:
@@ -402,7 +424,7 @@ def _service_checks(cfg: Optional[Dict[str, Any]]) -> List[Item]:
         else:
             items.append(Item(FAIL, f"ffmpeg found but not usable: {ffmpeg} ({msg})"))
     else:
-        items.append(Item(FAIL, "ffmpeg not found on PATH"))
+        items.append(Item(FAIL, "ffmpeg not resolved from canonical config or PATH"))
 
     # GPU (nvidia-smi) if enabled
     gpu_enabled = False
@@ -430,11 +452,39 @@ def _service_checks(cfg: Optional[Dict[str, Any]]) -> List[Item]:
         if not wsl:
             items.append(Item(FAIL, "Audio enabled but wsl.exe not found on PATH"))
         else:
-            ok, msg = _check_cmd([wsl, "-l", "-q"], timeout_s=15.0)
+            host_cfg = cfg.get("host") if isinstance(cfg, dict) else None
+            wsl_distro = None
+            wsl_workspace = None
+            if isinstance(host_cfg, dict):
+                distro_value = host_cfg.get("wsl_distro")
+                workspace_value = host_cfg.get("wsl_workspace")
+                if isinstance(distro_value, str) and distro_value.strip():
+                    wsl_distro = distro_value.strip()
+                if isinstance(workspace_value, str) and workspace_value.strip():
+                    wsl_workspace = workspace_value.strip()
+
+            distro_cmd = [wsl, "-l", "-q"]
+            ok, msg = _check_cmd(distro_cmd, timeout_s=15.0)
             if ok:
                 items.append(Item(PASS, "WSL reachable (wsl -l -q succeeded)"))
             else:
                 items.append(Item(FAIL, f"WSL not reachable: {msg}"))
+
+            if ok and wsl_distro and wsl_workspace:
+                workspace_check = [
+                    wsl,
+                    "-d",
+                    wsl_distro,
+                    "--",
+                    "bash",
+                    "-lc",
+                    f"test -d {shlex.quote(wsl_workspace)}",
+                ]
+                workspace_ok, workspace_msg = _check_cmd(workspace_check, timeout_s=15.0)
+                if workspace_ok:
+                    items.append(Item(PASS, f"Configured WSL audio workspace exists: {wsl_distro}:{wsl_workspace}"))
+                else:
+                    items.append(Item(FAIL, f"Configured WSL audio workspace missing/unreachable: {wsl_distro}:{wsl_workspace} ({workspace_msg})"))
     else:
         items.append(Item(PASS, "Audio not enabled in config; skipping WSL reachability check"))
 
@@ -455,6 +505,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     _ = parser.parse_args(argv)
 
     repo_root = Path(__file__).resolve().parents[1]
+    _bootstrap_repo_imports(repo_root)
 
     print("GoodQ Doctor (read-only preflight)")
     print(f"Time: {datetime.now(timezone.utc).isoformat()}")
@@ -463,7 +514,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     gov_items, gov_info = _governance_checks(repo_root)
     cfg_items, cfg = _config_checks(repo_root)
     manifest_items = _manifest_checks(repo_root, cfg)
-    phase6_items = _phase6_checks(cfg, gov_info)
+    phase6_items = _phase6_checks(repo_root, cfg, gov_info)
     service_items = _service_checks(cfg)
 
     statuses = [

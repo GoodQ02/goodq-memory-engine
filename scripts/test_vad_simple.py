@@ -1,15 +1,59 @@
 """
 Simple standalone test for Silero VAD on audio file.
-No project dependencies required.
+Uses canonical config when available.
 """
 import os
 import sys
 import time
+from pathlib import Path
 import torch
 import torchaudio
 import soundfile as sf
 
-def test_vad_on_audio(audio_path):
+MEDIA_EXTENSIONS = ('.mp4', '.avi', '.mov', '.mkv', '.wav', '.mp3', '.m4a', '.flac')
+
+
+def load_runtime_cfg():
+    repo_root = Path(__file__).resolve().parents[1]
+    if str(repo_root) not in sys.path:
+        sys.path.insert(0, str(repo_root))
+
+    try:
+        from steps.common.config_loader import load_configs
+        return load_configs({})
+    except Exception:
+        return {}
+
+
+def resolve_ffmpeg_exe(cfg):
+    ffmpeg_exe = (
+        cfg.get("config", {})
+        .get("tools", {})
+        .get("ffmpeg_exe")
+    )
+    if ffmpeg_exe:
+        return ffmpeg_exe
+    return os.getenv("GOODQ_FFMPEG_EXE", "ffmpeg")
+
+
+def find_first_media_file(root_path):
+    if not root_path:
+        return None
+
+    root = Path(root_path)
+    if root.is_file() and root.suffix.lower() in MEDIA_EXTENSIONS:
+        return str(root)
+    if not root.exists():
+        return None
+
+    for ext in MEDIA_EXTENSIONS:
+        for candidate in root.rglob(f"*{ext}"):
+            if candidate.is_file():
+                return str(candidate)
+    return None
+
+
+def test_vad_on_audio(audio_path, ffmpeg_exe="ffmpeg"):
     """Test VAD on an audio file"""
     print("="*80)
     print("Silero VAD Simple Test")
@@ -50,9 +94,7 @@ def test_vad_on_audio(audio_path):
         temp_audio = temp_file.name
         temp_file.close()
         
-        ffmpeg_path = r"L:\_TOOLS\ffmpeg\bin\ffmpeg.exe"
-        if not os.path.exists(ffmpeg_path):
-            ffmpeg_path = "ffmpeg"
+        ffmpeg_path = ffmpeg_exe
         
         try:
             cmd = [
@@ -171,25 +213,31 @@ def test_vad_on_audio(audio_path):
 
 if __name__ == "__main__":
     print("GoodQ4All - Silero VAD Simple Test\n")
-    
+
+    cfg = load_runtime_cfg()
+    ffmpeg_exe = resolve_ffmpeg_exe(cfg)
+    path_cfg = cfg.get("paths", {})
+
     # Find test audio file
-    test_files = [
-        r"L:\goodq4all\import_inbox\01. 1987 - 1988.mp4",
-        r"L:\_DATA\GoodQ_Data\processing\sample.mp4",
-        r"L:\_DATA\FAMILY_FEAST\01. 1987 - 1988.mp4",
+    test_roots = [
+        path_cfg.get("import_inbox"),
+        path_cfg.get("processing"),
+        path_cfg.get("data_root"),
     ]
-    
+
     audio_path = None
-    for path in test_files:
-        if os.path.exists(path):
-            audio_path = path
+    for root in test_roots:
+        candidate = find_first_media_file(root)
+        if candidate:
+            audio_path = candidate
             break
     
     if not audio_path:
         print("ERROR: No test audio file found!")
         print(f"Tried:")
-        for path in test_files:
-            print(f"  - {path}")
+        for root in test_roots:
+            if root:
+                print(f"  - {root}")
         print("\nPlease specify audio file as argument:")
         print(f"  python {sys.argv[0]} <path_to_audio_file>")
         sys.exit(1)
@@ -198,6 +246,6 @@ if __name__ == "__main__":
     if len(sys.argv) > 1:
         audio_path = sys.argv[1]
     
-    success = test_vad_on_audio(audio_path)
+    success = test_vad_on_audio(audio_path, ffmpeg_exe=ffmpeg_exe)
     
     sys.exit(0 if success else 1)

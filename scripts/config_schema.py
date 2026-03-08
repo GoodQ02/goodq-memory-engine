@@ -50,6 +50,7 @@ class HostConfig(BaseModel):
     data_root: Optional[str] = None
     wsl_distro: Optional[str] = None
     wsl_user: Optional[str] = None
+    wsl_workspace: Optional[str] = None
     conda_env: Optional[str] = None
     require_gpu: Optional[bool] = None
     require_wsl_audio: Optional[bool] = None
@@ -68,10 +69,16 @@ class PathsConfig(BaseModel):
     db_path: str
     knowledge_graph_db: str
     faiss_dir: str
+    faiss_audio_path: Optional[str] = None
+    qdrant_storage: Optional[str] = None
+    watchdog_state_file: Optional[str] = None
+    watchdog_lock_file: Optional[str] = None
     config_dir: str
     data_root: str
     import_inbox: str
     processing: str
+    processed: Optional[str] = None
+    failed: Optional[str] = None
     models_cache: str
     chunk_subdir: str
     audio_subdir: str
@@ -84,6 +91,16 @@ class PathsConfig(BaseModel):
 # ============================================================================
 # LLM & TTS
 # ============================================================================
+class ToolsConfig(BaseModel):
+    ffmpeg_exe: str = "ffmpeg"
+    tesseract_exe: str = "tesseract"
+    poppler_bin: str = ""
+
+
+class RuntimeConfigSection(BaseModel):
+    tools: ToolsConfig
+
+
 class LLMConfig(BaseModel):
     api_url: str
     model_id: str
@@ -159,6 +176,7 @@ class QdrantEmbeddingDims(BaseModel):
 
 
 class QdrantConfig(BaseModel):
+    enabled: bool = True
     host: str = "http://localhost:6333"
     collections: QdrantCollectionsConfig
     embedding_dims: QdrantEmbeddingDims
@@ -344,6 +362,7 @@ class GoodQConfig(BaseModel):
     model: ModelConfig
     host: Optional[HostConfig] = None
     paths: PathsConfig
+    config: Optional[RuntimeConfigSection] = None
     llm: LLMConfig
     tts: TTSConfig
     home_assistant: HomeAssistantConfig

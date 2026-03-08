@@ -7,16 +7,96 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import shutil
 import sys
 from pathlib import Path
+import re
 from typing import Any, Dict, List
 
 import yaml
 
-_REPO_ROOT = Path(__file__).resolve().parents[1]
+_REPO_ROOT = Path(__file__).resolve().parents[2]
 _VENDOR_DIR = _REPO_ROOT / "vendor"
+sys.path.insert(0, str(_REPO_ROOT))
 if _VENDOR_DIR.exists():
     sys.path.insert(0, str(_VENDOR_DIR))
+
+_CONFIG_REF_RE = re.compile(r"^\@(?P<section>config|paths)\.(?P<path>.+)$")
+
+
+def _load_cfg() -> Dict[str, Any]:
+    try:
+        from steps.common.config_loader import load_configs
+        return load_configs({})
+    except Exception:
+        return {}
+
+
+def _cfg_get(cfg: Dict[str, Any], dotted_path: str) -> str:
+    cur: Any = cfg
+    for key in dotted_path.split('.'):
+        if not isinstance(cur, dict) or key not in cur:
+            return ""
+        cur = cur[key]
+    return cur if isinstance(cur, str) else ""
+
+
+def _resolve_models_dir(cfg: Dict[str, Any]) -> Path:
+    explicit = os.environ.get("GOODQ_MODELS_DIR")
+    if explicit:
+        return Path(explicit)
+    cfg_models = _cfg_get(cfg, "paths.models_cache")
+    if cfg_models:
+        return Path(cfg_models)
+    return Path("models")
+
+
+def _resolve_registry_binding(raw_value: str, cfg: Dict[str, Any], models_dir: Path) -> str:
+    if not raw_value:
+        return ""
+
+    match = _CONFIG_REF_RE.match(raw_value.strip())
+    if match:
+        section = match.group("section")
+        dotted = match.group("path")
+        if section == "config":
+            return _cfg_get(cfg, f"config.{dotted}")
+        if section == "paths":
+            base_key, _, suffix = dotted.partition("/")
+            base_value = _cfg_get(cfg, f"paths.{base_key}")
+            if base_value and suffix:
+                return str(Path(base_value) / Path(suffix))
+            return base_value
+
+    if raw_value.strip().lower() == "auto/snapshots":
+        return str(models_dir / "snapshots")
+
+    return raw_value
+
+
+def _resolve_tool_path(tool_key: str, raw_value: str, cfg: Dict[str, Any], models_dir: Path) -> str:
+    resolved = _resolve_registry_binding(raw_value, cfg, models_dir).strip()
+    if not resolved:
+        if tool_key == "ffmpeg":
+            resolved = _cfg_get(cfg, "config.tools.ffmpeg_exe") or "ffmpeg"
+        elif tool_key == "tesseract":
+            resolved = _cfg_get(cfg, "config.tools.tesseract_exe") or "tesseract"
+        elif tool_key == "poppler":
+            resolved = _cfg_get(cfg, "config.tools.poppler_bin")
+
+    if tool_key == "poppler":
+        if resolved and Path(resolved).is_dir():
+            candidate = Path(resolved) / "pdftotext.exe"
+            if candidate.exists():
+                return str(candidate)
+        if resolved and resolved.lower() not in {"pdftotext", "."} and Path(resolved).is_file():
+            return resolved
+        return shutil.which("pdftotext") or resolved or "pdftotext"
+
+    if resolved and any(sep in resolved for sep in ("\\", "/", ":")):
+        return resolved
+
+    return shutil.which(resolved) or resolved
 
 
 class Colors:
@@ -148,23 +228,32 @@ def check_external_assets(registry: Dict[str, Any], models_dir: Path) -> List[Di
     return results
 
 
-def check_system_tools(registry: Dict[str, Any]) -> List[Dict[str, Any]]:
+def check_system_tools(registry: Dict[str, Any], cfg: Dict[str, Any], models_dir: Path) -> List[Dict[str, Any]]:
     """Check system tools are available."""
     results = []
     
     for tool_key, tool_info in registry.get('system_tools', {}).items():
-        binary_path = Path(tool_info.get('binary_path', ''))
+        raw_binary_path = tool_info.get('binary_path', '')
+        resolved_binary = _resolve_tool_path(tool_key, raw_binary_path, cfg, models_dir)
+        binary_path = Path(resolved_binary) if resolved_binary else Path()
         
         check = {
             'key': tool_key,
-            'path': str(binary_path),
+            'path': resolved_binary,
             'status': 'ok',
             'issues': [],
         }
         
-        if not binary_path.exists():
+        if not resolved_binary:
             check['status'] = 'error'
             check['issues'].append("Binary not found")
+        elif any(sep in resolved_binary for sep in ("\\", "/", ":")):
+            if not binary_path.exists():
+                check['status'] = 'error'
+                check['issues'].append("Binary not found")
+        elif not shutil.which(resolved_binary):
+            check['status'] = 'error'
+            check['issues'].append("Binary not found on PATH")
         
         results.append(check)
     
@@ -232,7 +321,8 @@ def main() -> None:
     with open(registry_path, 'r', encoding='utf-8') as f:
         registry = yaml.safe_load(f)
     
-    models_dir = Path(os.environ.get("GOODQ_MODELS_DIR", "L:/models"))
+    cfg = _load_cfg()
+    models_dir = _resolve_models_dir(cfg)
     
     # Run checks
     all_counts = {'ok': 0, 'warning': 0, 'error': 0}
@@ -252,7 +342,7 @@ def main() -> None:
     
     # Check system tools
     if 'system_tools' in registry:
-        tool_results = check_system_tools(registry)
+        tool_results = check_system_tools(registry, cfg, models_dir)
         counts = print_results(tool_results, "System Tools")
         for k, v in counts.items():
             all_counts[k] += v

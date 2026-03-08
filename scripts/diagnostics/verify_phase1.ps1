@@ -4,10 +4,12 @@ Write-Host "=" * 80 -ForegroundColor Cyan
 Write-Host "PHASE 1 VERIFICATION: Audio Diarization Chunking" -ForegroundColor Cyan
 Write-Host "=" * 80 -ForegroundColor Cyan
 
+$repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+
 # 1. Check step.py exists and has chunking code
 Write-Host "
 [1/5] Checking audio_diarize implementation..." -ForegroundColor Yellow
-$stepFile = "L:\goodq4all\steps\audio_diarize\step.py"
+$stepFile = Join-Path $repoRoot "steps\audio_diarize\step.py"
 if (Test-Path $stepFile) {
     $content = Get-Content $stepFile -Raw
     if ($content -match "_extract_audio_chunk" -and $content -match "_merge_speaker_segments") {
@@ -27,7 +29,7 @@ if (Test-Path $stepFile) {
 # 2. Check config.yaml has chunk_size_minutes
 Write-Host "
 [2/5] Checking configuration..." -ForegroundColor Yellow
-$configFile = "L:\goodq4all\config.yaml"
+$configFile = Join-Path $repoRoot "configs\config.yaml"
 if (Test-Path $configFile) {
     $configContent = Get-Content $configFile -Raw
     if ($configContent -match "chunk_size_minutes") {
@@ -46,7 +48,7 @@ if (Test-Path $configFile) {
 # 3. Check backup exists
 Write-Host "
 [3/5] Checking backups..." -ForegroundColor Yellow
-$backupFile = "L:\goodq4all\steps\audio_diarize\step.py.backup_before_chunking"
+$backupFile = Join-Path $repoRoot "steps\audio_diarize\step.py.backup_before_chunking"
 if (Test-Path $backupFile) {
     Write-Host "  [OK] Backup created" -ForegroundColor Green
 } else {
@@ -56,7 +58,7 @@ if (Test-Path $backupFile) {
 # 4. Check test suite exists
 Write-Host "
 [4/5] Checking test suite..." -ForegroundColor Yellow
-$testFile = "L:\goodq4all\tests\test_diarization_chunking.py"
+$testFile = Join-Path $repoRoot "tests\test_diarization_chunking.py"
 if (Test-Path $testFile) {
     Write-Host "  [OK] Test suite created" -ForegroundColor Green
 } else {
@@ -67,8 +69,8 @@ if (Test-Path $testFile) {
 Write-Host "
 [5/5] Checking documentation..." -ForegroundColor Yellow
 $docs = @(
-    "L:\goodq4all\docs\AUDIO_DIARIZATION_OPTIMIZATION_PLAN.md",
-    "L:\goodq4all\docs\PHASE_1_AUDIO_DIARIZATION_COMPLETE.md"
+    (Join-Path $repoRoot "docs\technical\AUDIO_DIARIZATION_OPTIMIZATION_PLAN.md"),
+    (Join-Path $repoRoot "docs\archive\phases\PHASE_1_AUDIO_DIARIZATION_COMPLETE.md")
 )
 foreach ($doc in $docs) {
     if (Test-Path $doc) {

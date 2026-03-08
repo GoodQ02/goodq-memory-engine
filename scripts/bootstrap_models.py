@@ -14,21 +14,34 @@ except Exception:
 # Ensure vendored dependencies (e.g., huggingface_hub) are importable
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _VENDOR_DIR = _REPO_ROOT / "vendor"
+sys.path.insert(0, str(_REPO_ROOT))
 if _VENDOR_DIR.exists():
-    sys.path.insert(0, str(_VENDOR_DIR))
+    sys.path.append(str(_VENDOR_DIR))
 
 
 def ensure_env(target_models_dir: Path) -> None:
     target_models_dir.mkdir(parents=True, exist_ok=True)
     # Prefer project models dir for all downloads
     os.environ['HF_HOME'] = str(target_models_dir)
+    os.environ['HF_HUB_CACHE'] = str(target_models_dir / 'hub')
     os.environ['TORCH_HOME'] = str(target_models_dir)
     os.environ.setdefault('TRANSFORMERS_CACHE', str(target_models_dir / 'cache'))
     # Default to enabling hf_transfer for faster, resilient downloads
     os.environ['HF_HUB_ENABLE_HF_TRANSFER'] = '1'
 
 
-def snapshot(model_id: str, auth_token: str | None = None, revision: str | None = None) -> Dict[str, str]:
+def _repo_local_dir(models_root: Path, repo_id: str) -> Path:
+    repo_cache_name = repo_id.replace("/", "--")
+    return models_root / "hub" / f"models--{repo_cache_name}"
+
+
+def snapshot(
+    model_id: str,
+    auth_token: str | None = None,
+    revision: str | None = None,
+    *,
+    models_root: Path | None = None,
+) -> Dict[str, str]:
     """
     Download a model snapshot from HuggingFace Hub.
     
@@ -36,6 +49,7 @@ def snapshot(model_id: str, auth_token: str | None = None, revision: str | None 
         model_id: Model ID (may include @revision)
         auth_token: HuggingFace auth token
         revision: Explicit revision (commit SHA, tag, or branch). Overrides @revision in model_id.
+        models_root: Canonical GoodQ models root for local placement.
     """
     repo_id = model_id
     if '@' in model_id and revision is None:
@@ -45,9 +59,12 @@ def snapshot(model_id: str, auth_token: str | None = None, revision: str | None 
     except Exception as exc:  # pragma: no cover
         return {"model": model_id, "status": "error", "error": f"huggingface_hub not available: {exc}"}
     try:
+        target_models_root = models_root or Path(os.environ.get("HF_HOME") or ".")
+        local_dir = _repo_local_dir(target_models_root, repo_id)
+        local_dir.parent.mkdir(parents=True, exist_ok=True)
         local_dir = snapshot_download(
             repo_id=repo_id,
-            local_dir=None,
+            local_dir=str(local_dir),
             revision=revision,
             local_dir_use_symlinks=False,
             token=auth_token,
@@ -86,6 +103,25 @@ def load_registry(repo_root: Path) -> Dict | None:
     return None
 
 
+def resolve_models_root() -> Path:
+    explicit = os.environ.get("GOODQ_MODELS_DIR")
+    if explicit:
+        return Path(explicit)
+    try:
+        from steps.common.config_loader import load_configs
+
+        cfg = load_configs({})
+        models_cache = (((cfg.get("paths", {}) or {}).get("models_cache")) or "").strip()
+        if models_cache:
+            return Path(models_cache)
+    except Exception:
+        pass
+    fallback_data_root = os.environ.get("GOODQ_DATA_ROOT")
+    if fallback_data_root:
+        return Path(fallback_data_root) / "models"
+    return Path("models")
+
+
 def main() -> None:
     # Resolve project root (scripts/..)
     script_dir = Path(__file__).resolve().parent
@@ -94,12 +130,7 @@ def main() -> None:
         env_file = repo_root / ".env.local"
         if env_file.exists():
             load_dotenv(env_file)
-    fallback_data_root = os.environ.get("GOODQ_DATA_ROOT")
-    if fallback_data_root:
-        fallback_models_root = Path(fallback_data_root) / "models"
-    else:
-        fallback_models_root = Path("L:" + "/_DATA") / "models"
-    models_root = Path(os.environ.get("GOODQ_MODELS_DIR") or str(fallback_models_root))
+    models_root = resolve_models_root()
     ensure_env(models_root)
 
     hf_token = os.environ.get("HF_TOKEN")
@@ -154,7 +185,7 @@ def main() -> None:
         token = pyannote_token if repo_id.startswith('pyannote/') else hf_token
         
         # Download with pinned revision
-        result = snapshot(mid, token, revision)
+        result = snapshot(mid, token, revision, models_root=models_root)
         if revision:
             result['pinned_revision'] = revision
         results.append(result)
@@ -180,4 +211,3 @@ def main() -> None:
 
 if __name__ == "__main__":  # pragma: no cover
     main()
-

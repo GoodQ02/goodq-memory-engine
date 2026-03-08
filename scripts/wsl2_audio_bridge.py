@@ -19,7 +19,7 @@ class WSL2AudioBridge:
         self.require_wsl_audio = self._is_truthy(os.environ.get("GOODQ_REQUIRE_WSL_AUDIO", ""))
         self.wsl_user = self._resolve_wsl_user()
         self.workspace = self._resolve_wsl_workspace()
-        self.audio_workspace = f"{self.workspace.rstrip('/')}/wsl2_audio"
+        self.audio_workspace = self.workspace.rstrip("/")
         self.wsl_distro = os.environ.get("GOODQ_WSL_DISTRO", "Ubuntu")
         self._workspace_checked = False
         self._workspace_warned = False
@@ -67,7 +67,7 @@ class WSL2AudioBridge:
         explicit = os.environ.get("GOODQ_WSL_WORKSPACE")
         if explicit:
             return explicit
-        return f"/home/{self.wsl_user}/projects/goodq4all"
+        return f"/home/{self.wsl_user}/goodq_audio"
 
     def _ensure_workspace_ready(self):
         if self._workspace_checked and (self._workspace_ready or not self.require_wsl_audio):
@@ -75,7 +75,19 @@ class WSL2AudioBridge:
 
         try:
             check = subprocess.run(
-                ["wsl", "-d", self.wsl_distro, "--", "test", "-d", self.audio_workspace],
+                [
+                    "wsl",
+                    "-d",
+                    self.wsl_distro,
+                    "--",
+                    "bash",
+                    "-lc",
+                    (
+                        f"test -d '{self.audio_workspace}' && "
+                        f"test -f '{self.audio_workspace}/setup_cuda_env.sh' && "
+                        f"test -f '{self.audio_workspace}/process_audio.py'"
+                    ),
+                ],
                 capture_output=True,
                 timeout=5,
             )

@@ -34,6 +34,7 @@ import uvicorn
 # Add project root to path
 PROJECT_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
+from steps.common.config_loader import get_runtime_paths, load_configs
 
 # Import LLM client
 try:
@@ -64,14 +65,16 @@ app.add_middleware(
 
 # Configuration
 BASE_DIR = PROJECT_ROOT
-OUTPUT_DIR = BASE_DIR / "output"
-DATA_DIR = BASE_DIR / "data"
-LOGS_DIR = BASE_DIR / "logs"
-PROCESSING_DIR = DATA_DIR / "processing"
-MEMORY_DB = DATA_DIR / "memory.db"
-KG_DB = DATA_DIR / "knowledge_graph.db"
+CONFIG = load_configs({})
+RUNTIME_PATHS = get_runtime_paths(CONFIG, "output_directory", "faiss_dir")
+OUTPUT_DIR = Path(RUNTIME_PATHS["output_directory"]).resolve()
+DATA_DIR = Path(RUNTIME_PATHS["db_path"]).resolve().parent
+LOGS_DIR = Path(RUNTIME_PATHS["log_dir"]).resolve()
+PROCESSING_DIR = Path(RUNTIME_PATHS["processing"]).resolve()
+MEMORY_DB = Path(RUNTIME_PATHS["db_path"]).resolve()
+KG_DB = Path(RUNTIME_PATHS["knowledge_graph_db"]).resolve()
 UNIFIED_DB = DATA_DIR / "unified_goodq.db"
-FAISS_DIR = DATA_DIR / "faiss_indices"
+FAISS_DIR = Path(RUNTIME_PATHS["faiss_dir"]).resolve()
 COMMAND_LOG = LOGS_DIR / "command_center.log"
 
 # Ensure directories exist
@@ -1913,7 +1916,7 @@ async def get_pipeline_engines():
                                         source = step_data.get('source_path', '')
                                         if source:
                                             # Extract video name from watchdog log path structure
-                                            # Path format: L:\goodq4all\logs\watchdog_YYYYMMDD_HHMMSS\VIDEO_NAME\...
+                                            # Path format: <canonical_log_dir>\watchdog_YYYYMMDD_HHMMSS\VIDEO_NAME\...
                                             import re
                                             match = re.search(r'watchdog_\d+_\d+[/\\]([^/\\]+)[/\\]', source)
                                             if match:

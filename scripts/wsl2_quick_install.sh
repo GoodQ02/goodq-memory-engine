@@ -39,7 +39,7 @@ pip install librosa soundfile scipy numpy
 
 echo ""
 echo "[6/6] Creating processing script..."
-cat > "$WORKSPACE/scripts/process_audio.py" << 'SCRIPT_EOF'
+cat > "$WORKSPACE/process_audio.py" << 'SCRIPT_EOF'
 #!/usr/bin/env python3
 """GPU-Accelerated Audio Processor for GoodQ"""
 import sys
@@ -84,7 +84,7 @@ if __name__ == "__main__":
     process_audio(sys.argv[1], sys.argv[2])
 SCRIPT_EOF
 
-chmod +x "$WORKSPACE/scripts/process_audio.py"
+chmod +x "$WORKSPACE/process_audio.py"
 
 echo ""
 echo "================================================================================"

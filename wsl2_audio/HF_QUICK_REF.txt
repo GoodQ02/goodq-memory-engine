@@ -31,7 +31,7 @@ This automatically:
   ✓ Exports HuggingFace token
 
 Then run your scripts:
-  ./scripts/process.sh audio.wav output/
+  ./process.sh audio.wav output/
 
 🔍 VERIFICATION COMMANDS
 ────────────────────────────────────────────────────────────────────────

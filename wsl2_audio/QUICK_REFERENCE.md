@@ -5,12 +5,12 @@
 ### Start Service
 ```bash
 # From Windows
-L:\goodq4all\wsl2_audio\start_wsl2_service.bat
+.\wsl2_audio\start_wsl2_service.bat
 
 # From WSL2
 cd ~/goodq_audio
 source setup_cuda_env.sh
-python3 /mnt/l/goodq4all/wsl2_audio/audio_service.py &
+python3 ~/goodq_audio/audio_service.py &
 ```
 
 ### Stop Service
@@ -51,7 +51,7 @@ python3 -c "import torch; print('CUDA:', torch.cuda.is_available())"
 ### Verify HF Token
 ```bash
 cd ~/goodq_audio
-bash verify_hf_token.sh
+grep huggingface_token config.json
 ```
 
 ## Testing
@@ -84,12 +84,12 @@ print('Access:', 'OK' if model_info else 'FAILED')
 
 ### Configs
 - `~/goodq_audio/config.json` - Main config (includes HF token)
-- `/mnt/l/goodq4all/wsl2_audio/config.json` - Service config (includes HF token)
+- `wsl2_audio/config.json` - Repo-side service template
 
 ### Scripts
 - `~/goodq_audio/setup_cuda_env.sh` - Environment setup (use instead of venv activation)
-- `~/goodq_audio/verify_hf_token.sh` - Token verification
-- `/mnt/l/goodq4all/wsl2_audio/start_wsl2_service.bat` - Windows startup script
+- `~/goodq_audio/fw_transcribe.py` - Direct transcription helper
+- `wsl2_audio/start_wsl2_service.bat` - Windows startup script
 
 ### Logs
 - `~/goodq_audio/logs/audio_service.log` - Service logs
@@ -131,7 +131,7 @@ echo $LD_LIBRARY_PATH | grep cudnn
 ### No Diarization
 ```bash
 # Check token in config
-grep huggingface_token /mnt/l/goodq4all/wsl2_audio/config.json
+grep huggingface_token ~/goodq_audio/config.json
 
 # Should show: "huggingface_token": "hf_pnnV..."
 ```
@@ -144,17 +144,16 @@ cat /tmp/audio_restart.log
 # Or run manually to see errors
 cd ~/goodq_audio
 source setup_cuda_env.sh
-python3 /mnt/l/goodq4all/wsl2_audio/audio_service.py
+python3 ~/goodq_audio/audio_service.py
 ```
 
-## Current Status
+## Healthy State
 
-✅ **All Systems Operational**
-- Service: Running (PID 94196)
-- CUDA: Enabled
-- Whisper: Loaded (medium model)
-- Diarization: Loaded (with HF token)
-- cuDNN: Libraries accessible
+- Service: running
+- CUDA: enabled
+- Whisper: loaded
+- Diarization: loaded when `PYANNOTE_TOKEN` is available
+- cuDNN: libraries accessible through `setup_cuda_env.sh`
 
 ---
 

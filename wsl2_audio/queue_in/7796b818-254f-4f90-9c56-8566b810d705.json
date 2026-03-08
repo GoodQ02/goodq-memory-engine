@@ -1,7 +1,0 @@
-{
-  "job_id": "7796b818-254f-4f90-9c56-8566b810d705",
-  "audio_path": "/mnt/l/goodq4all/logs/scene_ingest/01. 1987 - 1988/audio/scene_0000.wav",
-  "output_path": "/home/user/goodq_audio/output/7796b818-254f-4f90-9c56-8566b810d705_result.json",
-  "task": "diarize",
-  "params": {}
-}

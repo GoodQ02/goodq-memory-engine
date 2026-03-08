@@ -5,10 +5,15 @@ Comprehensive visualization and reporting for video analytics
 import sqlite3
 import json
 import logging
+import sys
 from pathlib import Path
 from typing import Dict, Any, List
 from datetime import datetime
 from collections import Counter, defaultdict
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -511,13 +516,10 @@ def generate_video_report(config: Dict[str, Any], video_path: str, output_dir: P
 
 
 if __name__ == "__main__":
-    import yaml
     import sys
+    from steps.common.config_loader import load_configs
     
-    # Load config
-    config_path = Path(__file__).parent / "config.yaml"
-    with open(config_path) as f:
-        config = yaml.safe_load(f)
+    config = load_configs({})
     
     output_dir = Path(config['paths']['output_directory'])
     output_dir.mkdir(exist_ok=True, parents=True)

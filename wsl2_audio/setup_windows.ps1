@@ -28,12 +28,14 @@ Write-Host ""
 $ProjectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $WSL2Dir = "$ProjectRoot\wsl2_audio"
 $WslProjectRoot = Convert-ToWslPath -WindowsPath $ProjectRoot
+$WslUser = if ($env:GOODQ_WSL_USER) { $env:GOODQ_WSL_USER } elseif ($env:USERNAME) { $env:USERNAME } else { "user" }
+$WslWorkspace = if ($env:GOODQ_WSL_WORKSPACE) { $env:GOODQ_WSL_WORKSPACE } else { "/home/$WslUser/goodq_audio" }
 
 # Create directories
 Write-Host "[1/5] Creating Windows directories..." -ForegroundColor Yellow
 $Dirs = @(
-    "$WSL2Dir\queue",
-    "$WSL2Dir\output",
+    "$WSL2Dir\queue_in",
+    "$WSL2Dir\queue_out",
     "$WSL2Dir\logs"
 )
 
@@ -47,9 +49,9 @@ foreach ($Dir in $Dirs) {
 # Create bridge config
 Write-Host "[2/5] Creating bridge configuration..." -ForegroundColor Yellow
 $BridgeConfig = @{
-    windows_queue_dir = "$WSL2Dir\queue"
-    windows_output_dir = "$WSL2Dir\output"
-    wsl_home_dir = "/home/`$USER/goodq_audio"
+    windows_queue_dir = "queue_in"
+    windows_output_dir = "queue_out"
+    wsl_home_dir = $WslWorkspace
     timeout_seconds = 3600
     poll_interval = 1.0
 } | ConvertTo-Json
@@ -101,10 +103,14 @@ try {
 Write-Host "[5/5] Copying setup script to WSL2..." -ForegroundColor Yellow
 try {
     # Make setup script executable and copy
-    wsl -d $distro -- bash -c "mkdir -p ~/goodq_audio"
-    wsl -d $distro -- bash -c "cp $WslProjectRoot/wsl2_audio/setup_wsl2_audio.sh ~/goodq_audio/"
-    wsl -d $distro -- bash -c "cp $WslProjectRoot/wsl2_audio/audio_service.py ~/goodq_audio/"
-    wsl -d $distro -- bash -c "chmod +x ~/goodq_audio/setup_wsl2_audio.sh"
+    wsl -d $distro -- bash -lc "mkdir -p '$WslWorkspace'"
+    wsl -d $distro -- bash -lc "cp '$WslProjectRoot/wsl2_audio/setup_wsl2_audio.sh' '$WslWorkspace/'"
+    wsl -d $distro -- bash -lc "cp '$WslProjectRoot/wsl2_audio/audio_service.py' '$WslWorkspace/'"
+    wsl -d $distro -- bash -lc "cp '$WslProjectRoot/wsl2_audio/process_audio.py' '$WslWorkspace/'"
+    wsl -d $distro -- bash -lc "cp '$WslProjectRoot/wsl2_audio/fw_transcribe.py' '$WslWorkspace/'"
+    wsl -d $distro -- bash -lc "cp '$WslProjectRoot/wsl2_audio/setup_cuda_env.sh' '$WslWorkspace/'"
+    wsl -d $distro -- bash -lc "cp '$WslProjectRoot/wsl2_audio/process.sh' '$WslWorkspace/'"
+    wsl -d $distro -- bash -lc "chmod +x '$WslWorkspace/setup_wsl2_audio.sh'"
     
     Write-Host "  Scripts copied to WSL2" -ForegroundColor Green
 } catch {
@@ -119,10 +125,10 @@ Write-Host "====================================================================
 Write-Host ""
 Write-Host "Next steps:" -ForegroundColor Yellow
 Write-Host "  1. Open WSL2 Ubuntu terminal" -ForegroundColor White
-Write-Host "  2. Run: cd ~/goodq_audio && ./setup_wsl2_audio.sh" -ForegroundColor White
-Write-Host "  3. Edit ~/goodq_audio/config.json with your HuggingFace token" -ForegroundColor White
-Write-Host "  4. Start service: source venv/bin/activate && python3 audio_service.py" -ForegroundColor White
+Write-Host "  2. Run: cd $WslWorkspace && ./setup_wsl2_audio.sh" -ForegroundColor White
+Write-Host "  3. Edit $WslWorkspace/config.json with your HuggingFace token" -ForegroundColor White
+Write-Host "  4. Start service: cd $WslWorkspace && source setup_cuda_env.sh && python3 audio_service.py" -ForegroundColor White
 Write-Host ""
 Write-Host "To test the bridge:" -ForegroundColor Yellow
-Write-Host "  python $WSL2Dir\test_bridge.py" -ForegroundColor White
+Write-Host "  python .\wsl2_audio\test_bridge.py" -ForegroundColor White
 Write-Host ""

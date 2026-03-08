@@ -11,8 +11,8 @@
     "vad_threshold": 0.6
   },
   "paths": {
-    "logs_dir": "/home/user/goodq_audio/logs",
-    "models_dir": "/home/user/goodq_audio/models"
+    "logs_dir": "logs",
+    "models_dir": "models"
   },
   "queue_dir": "queue_in",
   "queue_out_dir": "queue_out",

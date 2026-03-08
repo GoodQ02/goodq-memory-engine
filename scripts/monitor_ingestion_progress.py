@@ -12,6 +12,18 @@ from datetime import datetime, timedelta
 from typing import Optional, Dict, List
 import sqlite3
 
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from steps.common.config_loader import get_runtime_paths, load_configs
+
+_RUNTIME_PATHS = get_runtime_paths(load_configs({}), "output_directory")
+PROCESSING_ROOT = Path(_RUNTIME_PATHS["processing"]).resolve()
+WORKSPACE_ROOT = PROCESSING_ROOT / "_workspace"
+DB_PATH = Path(_RUNTIME_PATHS["db_path"]).resolve()
+LOG_PATH = Path(_RUNTIME_PATHS["log_dir"]).resolve() / "watchdog.log"
+
 def clear_screen():
     """Clear terminal screen"""
     print("\033[2J\033[H", end="")
@@ -26,21 +38,27 @@ def format_duration(seconds: float) -> str:
         return f"{seconds/3600:.1f}h"
 
 def get_latest_workspace() -> Optional[Path]:
-    """Find the most recent watchdog workspace"""
-    logs_dir = Path("L:/goodq4all/logs")
-    watchdog_dirs = sorted(logs_dir.glob("watchdog_*"), key=lambda p: p.stat().st_mtime, reverse=True)
-    return watchdog_dirs[0] if watchdog_dirs else None
+    """Return the canonical run workspace if present."""
+    workspace = WORKSPACE_ROOT / "scene_ingest"
+    return workspace if workspace.exists() else None
 
 def count_scenes(workspace: Path) -> Dict:
     """Count extracted scenes"""
     if not workspace.exists():
         return {"videos": 0, "scenes": 0, "frames": 0, "audio": 0}
     
-    videos = list(workspace.glob("*/"))
-    videos = [v for v in videos if v.is_dir() and v.name not in ['_resolved_config.json']]
+    videos = [v for v in PROCESSING_ROOT.iterdir() if v.is_dir() and not v.name.startswith("_")]
     
-    total_frames = sum(len(list((v / "frames").glob("*.jpg"))) for v in videos if (v / "frames").exists())
-    total_audio = sum(len(list((v / "audio").glob("*.wav"))) for v in videos if (v / "audio").exists())
+    total_frames = sum(
+        len(list((v / "video" / "frames").glob("*.jpg")))
+        for v in videos
+        if (v / "video" / "frames").exists()
+    )
+    total_audio = sum(
+        len(list((v / "audio" / "chunks").glob("*.wav")))
+        for v in videos
+        if (v / "audio" / "chunks").exists()
+    )
     
     return {
         "videos": len(videos),
@@ -51,7 +69,7 @@ def count_scenes(workspace: Path) -> Dict:
 
 def check_database() -> Dict:
     """Check memory database status"""
-    db_path = Path("L:/_DATA/GoodQ_Data/memory.db")
+    db_path = DB_PATH
     if not db_path.exists():
         return {"embeddings": 0, "scenes": 0, "links": 0}
     
@@ -84,7 +102,7 @@ def check_database() -> Dict:
 
 def check_watchdog_log() -> Dict:
     """Parse watchdog log for current status"""
-    log_file = Path("L:/goodq4all/logs/watchdog.log")
+    log_file = LOG_PATH
     if not log_file.exists():
         return {"status": "not_running", "current_file": None}
     

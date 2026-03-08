@@ -20,12 +20,13 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 # Project paths
-WINDOWS_PROJECT="${GOODQ_WSL_PROJECT_ROOT:-/mnt/l/goodq4all}"
-WSL_HOME="$HOME/goodq_audio"
+WSL_HOME="${GOODQ_WSL_WORKSPACE:-$HOME/goodq_audio}"
 VENV_PATH="$WSL_HOME/venv"
-QUEUE_DIR="$WSL_HOME/queue"
+QUEUE_DIR="$WSL_HOME/queue_in"
+QUEUE_OUT_DIR="$WSL_HOME/queue_out"
 OUTPUT_DIR="$WSL_HOME/output"
 LOGS_DIR="$WSL_HOME/logs"
+MODELS_DIR="$WSL_HOME/models"
 
 echo "[1/10] Creating directory structure..."
 mkdir -p "$WSL_HOME"
@@ -33,8 +34,10 @@ mkdir -p "$QUEUE_DIR/pending"
 mkdir -p "$QUEUE_DIR/processing"
 mkdir -p "$QUEUE_DIR/completed"
 mkdir -p "$QUEUE_DIR/failed"
+mkdir -p "$QUEUE_OUT_DIR"
 mkdir -p "$OUTPUT_DIR"
 mkdir -p "$LOGS_DIR"
+mkdir -p "$MODELS_DIR"
 
 echo "[2/10] Checking CUDA availability..."
 if ! nvidia-smi &> /dev/null; then
@@ -106,14 +109,14 @@ pip install -q \
 echo "[10/10] Creating service configuration..."
 cat > "$WSL_HOME/config.json" <<EOF
 {
-  "queue_dir": "queue",
-  "output_dir": "output",
+  "queue_dir": "queue_in",
+  "output_dir": "queue_out",
   "logs_dir": "logs",
-  "windows_project": "$WINDOWS_PROJECT",
+  "huggingface_token": "\${PYANNOTE_TOKEN}",
+  "huggingface_token_env": "PYANNOTE_TOKEN",
   "models": {
     "whisper": "large-v3",
-    "diarization": "pyannote/speaker-diarization-3.1",
-    "vad": "silero_vad"
+    "diarization": "pyannote/speaker-diarization-3.1"
   },
   "gpu": {
     "device": "cuda",
@@ -125,8 +128,7 @@ cat > "$WSL_HOME/config.json" <<EOF
     "vad_threshold": 0.5,
     "min_speech_duration_ms": 250,
     "min_silence_duration_ms": 100
-  },
-  "huggingface_token": null
+  }
 }
 EOF
 
@@ -139,12 +141,13 @@ echo "Environment details:"
 echo "  - WSL Home: $WSL_HOME"
 echo "  - Virtual Env: $VENV_PATH"
 echo "  - Queue Dir: $QUEUE_DIR"
+echo "  - Queue Out: $QUEUE_OUT_DIR"
 echo "  - Output Dir: $OUTPUT_DIR"
 echo ""
 echo "To activate the environment:"
 echo "  source $VENV_PATH/bin/activate"
 echo ""
 echo "Next steps:"
-echo "  1. Set your HuggingFace token in config.json (for pyannote models)"
+echo "  1. Export PYANNOTE_TOKEN in WSL before using diarization"
 echo "  2. Run the audio service: python3 audio_service.py"
 echo ""

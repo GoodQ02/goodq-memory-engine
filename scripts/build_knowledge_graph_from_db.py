@@ -7,32 +7,30 @@ import sqlite3
 import logging
 from pathlib import Path
 from typing import Dict, Any, List
-import yaml
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-# Import knowledge graph
 import sys
-sys.path.insert(0, str(Path(__file__).parent / 'lib'))
-from knowledge_graph import KnowledgeGraph
+REPO_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO_ROOT))
+
+from steps.common.config_loader import get_runtime_paths, load_configs
+from lib.knowledge_graph import KnowledgeGraph
 
 # Import graph builder functions
-sys.path.insert(0, str(Path(__file__).parent / 'steps'))
-from graph_builder.graph_builder import (
+from steps.graph_builder.graph_builder import (
     _process_objects, _process_faces, _process_text,
     _process_audio, _process_emotions, _process_locations,
     _build_cooccurrence_edges, _build_temporal_edges, _build_semantic_edges
 )
-from graph_builder.emotion_arc_analyzer import analyze_emotional_arc, add_emotional_arc_to_kg
+from steps.graph_builder.emotion_arc_analyzer import analyze_emotional_arc, add_emotional_arc_to_kg
 
 
 def load_config():
     """Load configuration"""
-    config_path = Path("L:/goodq4all/config.yaml")
-    with open(config_path, 'r', encoding='utf-8') as f:
-        return yaml.safe_load(f)
+    return load_configs({})
 
 
 def fetch_scenes_from_db(db_path: str) -> List[Dict[str, Any]]:
@@ -76,8 +74,8 @@ def build_kg_from_scenes(scenes: List[Dict[str, Any]], config: Dict[str, Any]):
     """Build knowledge graph from scene data"""
     
     # Get knowledge graph path
-    kg_path = Path(config.get('paths', {}).get('knowledge_graph_db', 
-                                                'L:/_DATA/GoodQ_Data/knowledge_graph.db'))
+    runtime_paths = get_runtime_paths(config, 'log_dir')
+    kg_path = Path(runtime_paths['knowledge_graph_db']).resolve()
     kg_path.parent.mkdir(parents=True, exist_ok=True)
     
     logger.info(f"Building knowledge graph at: {kg_path}")
@@ -203,9 +201,10 @@ def main():
     
     # Load configuration
     config = load_config()
+    runtime_paths = get_runtime_paths(config, 'log_dir')
     
     # Get database path
-    db_path = config.get('paths', {}).get('db_path', 'L:/_DATA/GoodQ_Data/memory.db')
+    db_path = runtime_paths['db_path']
     
     # Fetch scenes
     scenes = fetch_scenes_from_db(db_path)
@@ -220,7 +219,7 @@ def main():
     logger.info("Knowledge graph build complete!")
     
     # Save stats to file
-    stats_path = Path("L:/goodq4all/logs/kg_build_stats.json")
+    stats_path = Path(runtime_paths['log_dir']).resolve() / "kg_build_stats.json"
     stats_path.parent.mkdir(parents=True, exist_ok=True)
     with open(stats_path, 'w', encoding='utf-8') as f:
         json.dump(stats, f, indent=2)

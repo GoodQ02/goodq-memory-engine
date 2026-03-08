@@ -32,6 +32,33 @@ def _windows_to_wsl_path(path_value: str) -> str:
     return f"/mnt/{drive}/{rest}"
 
 
+def _resolve_windows_dir(path_value: str, *, config_dir: Path) -> Path:
+    """Resolve queue/output directories relative to the config file."""
+    expanded = Path(os.path.expandvars(str(path_value)))
+    if expanded.is_absolute():
+        return expanded
+    return (config_dir / expanded).resolve()
+
+
+def _resolve_wsl_home_dir(raw_value: Optional[str]) -> str:
+    """Resolve the canonical WSL workspace root for helper templates."""
+    explicit = (os.environ.get("GOODQ_WSL_WORKSPACE") or "").strip()
+    if explicit:
+        return explicit.rstrip("/")
+
+    wsl_user = (
+        os.environ.get("GOODQ_WSL_USER")
+        or os.environ.get("USER")
+        or os.environ.get("USERNAME")
+        or os.environ.get("LOGNAME")
+        or "user"
+    )
+    value = (raw_value or "/home/$USER/goodq_audio").strip()
+    for token in ("${USER}", "$USER", "%USER%", "%USERNAME%"):
+        value = value.replace(token, wsl_user)
+    return value.rstrip("/")
+
+
 class WSL2AudioBridge:
     """Bridge for offloading audio processing to WSL2"""
     
@@ -45,18 +72,19 @@ class WSL2AudioBridge:
         if config_path is None:
             base_dir = Path(__file__).parent.parent
             config_path = base_dir / "wsl2_audio" / "bridge_config.json"
+        config_path = Path(config_path)
         
         self.config = self._load_config(config_path)
         self.wsl_distro = os.environ.get("GOODQ_WSL_DISTRO", "Ubuntu")
         
         # Windows paths
-        self.windows_queue = Path(self.config['windows_queue_dir'])
-        self.windows_output = Path(self.config['windows_output_dir'])
+        self.windows_queue = _resolve_windows_dir(self.config["windows_queue_dir"], config_dir=config_path.parent)
+        self.windows_output = _resolve_windows_dir(self.config["windows_output_dir"], config_dir=config_path.parent)
         
         # WSL2 paths (from Windows perspective)
-        wsl_home = self.config['wsl_home_dir']
-        self.wsl_queue = f"{wsl_home}/queue"
-        self.wsl_output = f"{wsl_home}/output"
+        wsl_home = _resolve_wsl_home_dir(self.config.get("wsl_home_dir"))
+        self.wsl_queue = f"{wsl_home}/queue_in"
+        self.wsl_output = f"{wsl_home}/queue_out"
         
         # Ensure Windows directories exist
         self.windows_queue.mkdir(parents=True, exist_ok=True)
@@ -72,8 +100,8 @@ class WSL2AudioBridge:
         if not config_path.exists():
             # Create default config
             default_config = {
-                "windows_queue_dir": str((Path(__file__).resolve().parent / "queue")),
-                "windows_output_dir": str((Path(__file__).resolve().parent / "output")),
+                "windows_queue_dir": "queue_in",
+                "windows_output_dir": "queue_out",
                 "wsl_home_dir": "/home/$USER/goodq_audio",
                 "timeout_seconds": 3600,
                 "poll_interval": 1.0
@@ -241,7 +269,7 @@ class WSL2AudioBridge:
         # Check if service is running
         if not self._is_wsl_service_running():
             logger.warning("WSL2 audio service does not appear to be running")
-            logger.warning(f"Start it with: wsl -d {self.wsl_distro} -- bash -lc 'cd ~/goodq_audio && source venv/bin/activate && python3 /mnt/l/goodq4all/wsl2_audio/audio_service.py'")
+            logger.warning(f"Start it with: wsl -d {self.wsl_distro} -- bash -lc 'cd ~/goodq_audio && source setup_cuda_env.sh && python3 ~/goodq_audio/audio_service.py'")
         
         try:
             # Write job file to Windows queue
@@ -378,7 +406,7 @@ def transcribe_wsl2(audio_path: str, **kwargs) -> Dict[str, Any]:
     try:
         # Build command
         wsl_distro = os.environ.get("GOODQ_WSL_DISTRO", "Ubuntu")
-        cmd = ["wsl", "-d", wsl_distro, "--", "~/goodq_audio/scripts/process.sh", wsl_path]
+        cmd = ["wsl", "-d", wsl_distro, "--", "~/goodq_audio/process.sh", wsl_path]
         
         # Add options
         if kwargs.get('no_diarization', False):

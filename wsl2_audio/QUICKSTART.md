@@ -9,7 +9,7 @@ The WSL2 audio environment is installed and the pipeline has been updated to use
 Before running ingestion, start the WSL2 audio service:
 
 ```batch
-L:\goodq4all\wsl2_audio\start_wsl2_service.bat
+.\wsl2_audio\start_wsl2_service.bat
 ```
 
 This will launch the GPU-accelerated audio processing service in the background.
@@ -52,7 +52,7 @@ wsl pkill -f audio_service.py
 
 ## ⚙️ Configuration
 
-Edit `L:\goodq4all\wsl2_audio\config.json` to customize:
+Edit `wsl2_audio\config.json` to customize:
 - Whisper model size
 - Diarization parameters
 - GPU memory allocation
@@ -69,12 +69,11 @@ Edit `L:\goodq4all\wsl2_audio\config.json` to customize:
 
 **Files not processing:**
 - Verify queue directories exist:
-  - `L:\goodq4all\wsl2_audio\queue_in`
-  - `L:\goodq4all\wsl2_audio\queue_out`
+  - `wsl2_audio\queue_in`
+  - `wsl2_audio\queue_out`
 
 ## ✨ Integration
 
 The pipeline automatically detects and uses WSL2 audio when available.
 
 No code changes needed - just start the service and run ingestion normally!
-

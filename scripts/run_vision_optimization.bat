@@ -15,10 +15,12 @@ echo Estimated time: 15-20 minutes
 echo ================================================================================
 echo.
 
-cd /d L:\goodq4all
-
 REM Run optimization script
 call "%~dp0_lib\\interpreter_bindings.bat"
-"%CONDA_EXE%" run -n goodq_core python scripts\optimize_vision_gpu.py
+for %%I in ("%~dp0..") do set "REPO_ROOT=%%~fI"
+pushd "%REPO_ROOT%" >nul
+set "PYTHONPATH=%CD%"
+"%CONDA_EXE%" run -n %GOODQ_CONDA_ENV% python scripts\optimize_vision_gpu.py
+popd >nul
 
 pause

@@ -8,6 +8,15 @@ $ErrorActionPreference = "Stop"
 
 . (Join-Path $PSScriptRoot "..\\_lib\\interpreter_bindings.ps1")
 $condaExe = Get-GoodQCondaExe
+$runtimeEnv = Get-GoodQCondaEnv
+$RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\\..")).Path
+$env:PYTHONPATH = $RepoRoot
+
+$runtimeJson = & $condaExe run -n $runtimeEnv python -c "from steps.common.config_loader import get_runtime_paths, load_configs; import json; rp = get_runtime_paths(load_configs({})); print(json.dumps({'import_inbox': rp['import_inbox'], 'log_dir': rp['log_dir']}))"
+if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($runtimeJson)) {
+    throw "Failed to resolve canonical runtime paths via config_loader."
+}
+$runtimePaths = $runtimeJson | ConvertFrom-Json
 
 # Check if LM Studio is running
 Write-Host "Checking LM Studio..." -ForegroundColor Yellow
@@ -36,11 +45,11 @@ Write-Host "  ✓ Dependencies ready" -ForegroundColor Green
 # Create necessary directories
 Write-Host "`nSetting up directories..." -ForegroundColor Yellow
 $dirs = @(
-    "L:\goodq4all\import_inbox",
-    "L:\goodq4all\import_inbox\_completed",
-    "L:\goodq4all\import_inbox\_failed",
-    "L:\goodq4all\logs",
-    "L:\goodq4all\workflows"
+    $runtimePaths.import_inbox,
+    (Join-Path $runtimePaths.import_inbox "_completed"),
+    (Join-Path $runtimePaths.import_inbox "_failed"),
+    $runtimePaths.log_dir,
+    (Join-Path $RepoRoot "workflows")
 )
 
 foreach ($dir in $dirs) {
@@ -73,15 +82,15 @@ $choice = Read-Host "Select option (1-5)"
 switch ($choice) {
     "1" {
         Write-Host "`nStarting Watchdog with Agent Orchestrator..." -ForegroundColor Green
-        & $condaExe run -n base python L:\goodq4all\agents\watchdog_agent_integration.py
+        & $condaExe run -n base python (Join-Path $RepoRoot "agents\\watchdog_agent_integration.py")
     }
     "2" {
         Write-Host "`nStarting Self-Healing Monitor..." -ForegroundColor Green
-        & $condaExe run -n base python L:\goodq4all\agents\self_healing_monitor.py
+        & $condaExe run -n base python (Join-Path $RepoRoot "agents\\self_healing_monitor.py")
     }
     "3" {
         Write-Host "`nChecking Agent Health..." -ForegroundColor Green
-        & $condaExe run -n base python L:\goodq4all\agents\pipeline_integration.py
+        & $condaExe run -n base python (Join-Path $RepoRoot "agents\\pipeline_integration.py")
     }
     "4" {
         $videoPath = Read-Host "Enter video path"
@@ -92,12 +101,12 @@ switch ($choice) {
         Write-Host "`nStarting All Services..." -ForegroundColor Green
         
         # Start self-healing monitor in background
-        Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd L:\goodq4all; & `"$condaExe`" run -n base python agents\self_healing_monitor.py"
+        Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd `"$RepoRoot`"; `$env:PYTHONPATH=`"$RepoRoot`"; & `"$condaExe`" run -n base python agents\self_healing_monitor.py"
         
         Start-Sleep -Seconds 2
         
         # Start watchdog in foreground
-        & $condaExe run -n base python L:\goodq4all\agents\watchdog_agent_integration.py
+        & $condaExe run -n base python (Join-Path $RepoRoot "agents\\watchdog_agent_integration.py")
     }
     default {
         Write-Host "Invalid option" -ForegroundColor Red

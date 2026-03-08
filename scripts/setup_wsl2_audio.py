@@ -362,7 +362,7 @@ if __name__ == "__main__":
 '''
         
         print("[1/3] Creating audio processor script...")
-        script_path = f"{self.wsl_workspace}/scripts/process_audio.py"
+        script_path = f"{self.wsl_workspace}/process_audio.py"
         # Write script via WSL
         cmd = f"cat > {script_path} << 'SCRIPT_EOF'\n{processor_script}\nSCRIPT_EOF"
         self.run_wsl_command(cmd)
@@ -429,7 +429,7 @@ if __name__ == "__main__":
     workspace = Path("__GOODQ_WSL_WORKSPACE__")
     queue_in = workspace / "queue_in"
     queue_out = workspace / "queue_out"
-    processor = workspace / "scripts" / "process_audio.py"
+    processor = workspace / "process_audio.py"
     
     handler = AudioQueueHandler(queue_in, queue_out, processor)
     observer = Observer()
@@ -644,7 +644,8 @@ if __name__ == "__main__":
         print("Summary:")
         print(f"  Workspace: {self.wsl_workspace}")
         print(f"  Virtual environment: {self.wsl_workspace}/venv")
-        print(f"  Processing scripts: {self.wsl_workspace}/scripts/")
+        print(f"  Processing entrypoint: {self.wsl_workspace}/process_audio.py")
+        print(f"  Queue watcher: {self.wsl_workspace}/scripts/watch_queue.py")
         print(f"  Queue directories:")
         print(f"    - Input:  {self.wsl_workspace}/queue_in")
         print(f"    - Output: {self.wsl_workspace}/queue_out")
@@ -717,4 +718,3 @@ if __name__ == "__main__":
     setup = WSL2AudioSetup()
     success = setup.run()
     sys.exit(0 if success else 1)
-

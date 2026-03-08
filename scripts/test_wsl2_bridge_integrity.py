@@ -31,7 +31,7 @@ class WSL2BridgeIntegrityTests(unittest.TestCase):
         bridge = WSL2AudioBridge()
         bridge._ensure_workspace_ready = lambda: True  # type: ignore[assignment]
         bridge.wsl_distro = "Ubuntu-22.04"
-        bridge.audio_workspace = "/home/jdben/projects/goodq4all/wsl2_audio"
+        bridge.audio_workspace = "/home/jdben/goodq_audio"
         return bridge
 
     def _make_scene_file(self, name: str) -> Path:

@@ -17,9 +17,11 @@ echo Estimated time: 5-10 minutes
 echo ================================================================================
 echo.
 
-cd /d L:\goodq4all
-
 call "%~dp0_lib\\interpreter_bindings.bat"
-"%CONDA_EXE%" run -n goodq_core python scripts\audit_vision_pipeline.py
+for %%I in ("%~dp0..") do set "REPO_ROOT=%%~fI"
+pushd "%REPO_ROOT%" >nul
+set "PYTHONPATH=%CD%"
+"%CONDA_EXE%" run -n %GOODQ_CONDA_ENV% python scripts\audit_vision_pipeline.py
+popd >nul
 
 pause

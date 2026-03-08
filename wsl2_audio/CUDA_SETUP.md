@@ -45,7 +45,7 @@ This will verify:
 
 ```bash
 cd ~/goodq_audio
-./scripts/process.sh /path/to/audio.wav /path/to/output_dir
+./process.sh /path/to/audio.wav /path/to/output_dir
 ```
 
 ## What Was Fixed
@@ -71,7 +71,7 @@ Created `setup_cuda_env.sh` which sets LD_LIBRARY_PATH to include:
 
 1. **~/goodq_audio/setup_cuda_env.sh** - CUDA environment activation script
 2. **~/goodq_audio/check_cuda.py** - Comprehensive diagnostic tool
-3. **~/goodq_audio/scripts/process.sh** - Updated to use CUDA environment
+3. **~/goodq_audio/process.sh** - Updated to use CUDA environment
 
 ## Library Locations
 

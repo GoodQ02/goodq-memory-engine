@@ -23,7 +23,7 @@ def test_audio_processing(audio_file, output_dir, description=""):
     
     # Run the processing
     cmd = [
-        "./scripts/process.sh",
+        "./process.sh",
         str(audio_file),
         str(output_dir)
     ]

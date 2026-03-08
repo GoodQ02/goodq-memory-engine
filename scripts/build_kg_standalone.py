@@ -7,24 +7,23 @@ import sqlite3
 import logging
 from pathlib import Path
 from typing import Dict, Any, List, Optional
-import yaml
 import requests
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-# Import knowledge graph
 import sys
-sys.path.insert(0, str(Path(__file__).parent / 'lib'))
-from knowledge_graph import KnowledgeGraph
+REPO_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO_ROOT))
+
+from steps.common.config_loader import get_runtime_paths, load_configs
+from lib.knowledge_graph import KnowledgeGraph
 
 
 def load_config():
     """Load configuration"""
-    config_path = Path("L:/goodq4all/config.yaml")
-    with open(config_path, 'r', encoding='utf-8') as f:
-        return yaml.safe_load(f)
+    return load_configs({})
 
 
 def fetch_scenes_from_db(db_path: str) -> List[Dict[str, Any]]:
@@ -350,8 +349,8 @@ Return valid JSON only."""
 def build_kg_from_scenes(scenes: List[Dict[str, Any]], config: Dict[str, Any]):
     """Build knowledge graph from scene data"""
     
-    kg_path = Path(config.get('paths', {}).get('knowledge_graph_db', 
-                                                'L:/_DATA/GoodQ_Data/knowledge_graph.db'))
+    runtime_paths = get_runtime_paths(config, 'log_dir')
+    kg_path = Path(runtime_paths['knowledge_graph_db']).resolve()
     kg_path.parent.mkdir(parents=True, exist_ok=True)
     
     logger.info(f"Building knowledge graph at: {kg_path}")
@@ -483,7 +482,8 @@ def main():
     logger.info("Starting knowledge graph build from database")
     
     config = load_config()
-    db_path = config.get('paths', {}).get('db_path', 'L:/_DATA/GoodQ_Data/memory.db')
+    runtime_paths = get_runtime_paths(config, 'log_dir')
+    db_path = runtime_paths['db_path']
     
     scenes = fetch_scenes_from_db(db_path)
     
@@ -495,7 +495,7 @@ def main():
     
     logger.info("Knowledge graph build complete!")
     
-    stats_path = Path("L:/goodq4all/logs/kg_build_stats.json")
+    stats_path = Path(runtime_paths['log_dir']).resolve() / "kg_build_stats.json"
     stats_path.parent.mkdir(parents=True, exist_ok=True)
     with open(stats_path, 'w', encoding='utf-8') as f:
         json.dump(stats, f, indent=2)

@@ -15,4 +15,4 @@ OUTPUT_DIR="$2"
 source ~/goodq_audio/setup_cuda_env.sh
 
 # Run the audio processing script
-python3 ~/goodq_audio/scripts/process_audio.py "$AUDIO_FILE" "$OUTPUT_DIR"
+python3 ~/goodq_audio/process_audio.py "$AUDIO_FILE" "$OUTPUT_DIR"

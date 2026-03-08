@@ -3,9 +3,13 @@ GoodQ Analytics CLI
 Command-line interface for analytics system
 """
 import sys
-import yaml
 from pathlib import Path
 import argparse
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO_ROOT))
+
+from steps.common.config_loader import get_runtime_paths, load_configs
 
 def main():
     parser = argparse.ArgumentParser(
@@ -34,13 +38,13 @@ Examples:
     
     # Dashboard command
     dashboard_parser = subparsers.add_parser('dashboard', help='Generate global dashboard')
-    dashboard_parser.add_argument('-o', '--output', default='output/analytics_dashboard.md',
+    dashboard_parser.add_argument('-o', '--output', default=None,
                                   help='Output file path')
     
     # Analyze command
     analyze_parser = subparsers.add_parser('analyze', help='Analyze specific video')
     analyze_parser.add_argument('video', help='Video path or hash')
-    analyze_parser.add_argument('-o', '--output-dir', default='output',
+    analyze_parser.add_argument('-o', '--output-dir', default=None,
                                help='Output directory')
     analyze_parser.add_argument('--json-only', action='store_true',
                                help='Export JSON only')
@@ -66,15 +70,15 @@ Examples:
         parser.print_help()
         return
     
-    # Load config
-    with open('config.yaml') as f:
-        config = yaml.safe_load(f)
+    config = load_configs({})
+    runtime_paths = get_runtime_paths(config, 'output_directory')
+    output_root = Path(runtime_paths['output_directory']).resolve()
     
     # Execute command
     if args.command == 'dashboard':
         from analytics_dashboard import AnalyticsDashboard
         dashboard = AnalyticsDashboard(config)
-        output_path = Path(args.output)
+        output_path = Path(args.output).resolve() if args.output else (output_root / 'analytics_dashboard.md')
         dashboard.generate_dashboard(output_path)
         print(f"\n[SYMBOL] Dashboard generated: {output_path}")
         
@@ -85,7 +89,7 @@ Examples:
         print(f"\nAnalyzing: {args.video}")
         report = engine.generate_comprehensive_report(args.video)
         
-        output_dir = Path(args.output_dir)
+        output_dir = Path(args.output_dir).resolve() if args.output_dir else output_root
         output_dir.mkdir(exist_ok=True, parents=True)
         
         video_name = Path(args.video).stem

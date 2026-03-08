@@ -24,16 +24,16 @@ The `audio_service.py` was being started **without proper CUDA/cuDNN environment
 
 ### 1. Updated Windows Batch File
 
-**File:** `L:\goodq4all\wsl2_audio\start_wsl2_service.bat`
+**File:** `wsl2_audio\start_wsl2_service.bat`
 
 **Changed line 27 from:**
 ```batch
-start "GoodQ WSL2 Audio Service" wsl bash -c "cd ~/goodq_audio && source venv/bin/activate && python3 /mnt/l/goodq4all/wsl2_audio/audio_service.py"
+start "GoodQ WSL2 Audio Service" wsl bash -c "cd ~/goodq_audio && source venv/bin/activate && python3 ~/goodq_audio/audio_service.py"
 ```
 
 **To:**
 ```batch
-start "GoodQ WSL2 Audio Service" wsl bash -c "cd ~/goodq_audio && source setup_cuda_env.sh && python3 /mnt/l/goodq4all/wsl2_audio/audio_service.py"
+start "GoodQ WSL2 Audio Service" wsl bash -c "cd ~/goodq_audio && source setup_cuda_env.sh && python3 ~/goodq_audio/audio_service.py"
 ```
 
 ### 2. Verified CUDA Environment
@@ -48,7 +48,7 @@ The `setup_cuda_env.sh` script properly sets:
 ### 1. Service Status
 ```bash
 $ ps aux | grep audio_service | grep -v grep
-joesdom+ 36894 43.6  7.0 82564104 1160412 pts/35 SLl 13:44   0:05 python3 /mnt/l/goodq4all/wsl2_audio/audio_service.py
+joesdom+ 36894 43.6  7.0 82564104 1160412 pts/35 SLl 13:44   0:05 python3 ~/goodq_audio/audio_service.py
 ```
 ✅ Service is running
 
@@ -95,7 +95,7 @@ When you run your video processing pipeline, you should now see:
 
 2. Start with the updated batch file:
    ```cmd
-   L:\goodq4all\wsl2_audio\start_wsl2_service.bat
+   .\wsl2_audio\start_wsl2_service.bat
    ```
 
 ### From WSL2 (Manual):
@@ -106,16 +106,16 @@ pkill -f audio_service.py
 # Start with CUDA environment
 cd ~/goodq_audio
 source setup_cuda_env.sh
-python3 /mnt/l/goodq4all/wsl2_audio/audio_service.py &
+python3 ~/goodq_audio/audio_service.py &
 ```
 
 ## Files Modified
 
-1. **`/mnt/l/goodq4all/wsl2_audio/start_wsl2_service.bat`**
+1. **`wsl2_audio/start_wsl2_service.bat`**
    - Changed to use `setup_cuda_env.sh` instead of direct venv activation
    - Backup saved as `start_wsl2_service.bat.backup`
 
-2. **`/home/joesdomingo/goodq_audio/setup_cuda_env.sh`**
+2. **`~/goodq_audio/setup_cuda_env.sh`**
    - Already existed and working correctly
    - Sets LD_LIBRARY_PATH for cuDNN
    - Exports HuggingFace token
@@ -187,7 +187,7 @@ All installed via: `pip install nvidia-cudnn-cu12`
    ```bash
    cd ~/goodq_audio
    source setup_cuda_env.sh
-   python3 /mnt/l/goodq4all/wsl2_audio/audio_service.py
+   python3 ~/goodq_audio/audio_service.py
    ```
 
 3. Check for errors in the output

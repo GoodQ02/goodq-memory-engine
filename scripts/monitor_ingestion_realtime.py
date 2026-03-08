@@ -5,14 +5,20 @@ Monitors the ingestion process and detects stalls or errors
 """
 import sqlite3
 import time
-import os
 from pathlib import Path
 from datetime import datetime
 import sys
 
-DB_PATH = Path("L:/_DATA/GoodQ_Data/memory.db")
-LOG_PATH = Path("L:/goodq4all/logs/watchdog.log")
-PROCESSING_PATH = Path("L:/_DATA/GoodQ_Data/processing")
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from steps.common.config_loader import get_runtime_paths, load_configs
+
+_RUNTIME_PATHS = get_runtime_paths(load_configs({}), "watchdog_state_file")
+DB_PATH = Path(_RUNTIME_PATHS["db_path"]).resolve()
+LOG_PATH = Path(_RUNTIME_PATHS["log_dir"]).resolve() / "watchdog.log"
+PROCESSING_PATH = Path(_RUNTIME_PATHS["processing"]).resolve()
 
 class IngestionMonitor:
     def __init__(self):

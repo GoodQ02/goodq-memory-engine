@@ -5,7 +5,7 @@
 
 ## Overview
 
-Successfully upgraded `~/goodq_audio/scripts/process_audio.py` to include ALL audio classification features with GPU acceleration and clean JSON output.
+Successfully upgraded `~/goodq_audio/process_audio.py` to include ALL audio classification features with GPU acceleration and clean JSON output.
 
 ## Implemented Features
 
@@ -185,17 +185,17 @@ for segment, track, speaker in diarization.itertracks(yield_label=True):
 ### Basic Usage
 ```bash
 cd ~/goodq_audio
-./scripts/process.sh /path/to/audio.wav /path/to/output
+./process.sh /path/to/audio.wav /path/to/output
 ```
 
 ### Clean JSON Output (for pipelines)
 ```bash
-./scripts/process.sh audio.wav output/ 2>/dev/null | python3 -m json.tool
+./process.sh audio.wav output/ 2>/dev/null | python3 -m json.tool
 ```
 
 ### With Diagnostics
 ```bash
-./scripts/process.sh audio.wav output/
+./process.sh audio.wav output/
 # Diagnostics go to stderr, JSON to stdout
 ```
 
@@ -257,7 +257,7 @@ except Exception as e:
 ## Files Created/Modified
 
 ### Modified Files
-1. **`~/goodq_audio/scripts/process_audio.py`**
+1. **`~/goodq_audio/process_audio.py`**
    - Fixed pyannote diarization API
    - All 6 features operational
    - Clean JSON output
@@ -310,7 +310,7 @@ python3 ~/goodq_audio/check_cuda.py
 ### If JSON is polluted:
 ```bash
 # Redirect stderr
-./scripts/process.sh audio.wav output/ 2>/dev/null
+./process.sh audio.wav output/ 2>/dev/null
 ```
 
 ## Next Steps

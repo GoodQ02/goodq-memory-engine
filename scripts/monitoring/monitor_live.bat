@@ -1,5 +1,26 @@
 @echo off
 setlocal enabledelayedexpansion
+call "%~dp0..\\_lib\\interpreter_bindings.bat"
+for %%I in ("%~dp0..\\..") do set "REPO_ROOT=%%~fI"
+pushd "%REPO_ROOT%" >nul
+set "PYTHONPATH=%CD%"
+
+for /f "delims=" %%I in ('"%CONDA_EXE%" run -n %GOODQ_CONDA_ENV% python -c "from steps.common.config_loader import get_runtime_paths, load_configs; print(get_runtime_paths(load_configs({}))['processing'])"') do set "PROCESSING_DIR=%%I"
+for /f "delims=" %%I in ('"%CONDA_EXE%" run -n %GOODQ_CONDA_ENV% python -c "from steps.common.config_loader import get_runtime_paths, load_configs; print(get_runtime_paths(load_configs({}))['log_dir'])"') do set "LOG_DIR=%%I"
+
+if not defined PROCESSING_DIR (
+    echo Failed to resolve canonical processing directory.
+    popd >nul
+    exit /b 1
+)
+if not defined LOG_DIR (
+    echo Failed to resolve canonical log directory.
+    popd >nul
+    exit /b 1
+)
+
+set "GOODQ_PROCESSING_DIR=%PROCESSING_DIR%"
+set "GOODQ_LOG_DIR=%LOG_DIR%"
 
 :LOOP
 cls
@@ -17,8 +38,8 @@ echo.
 
 REM Check processing directories
 echo === PROCESSING VIDEOS ===
-if exist "L:\_DATA\GoodQ_Data\processing" (
-    for /d %%D in ("L:\_DATA\GoodQ_Data\processing\*") do (
+if exist "%GOODQ_PROCESSING_DIR%" (
+    for /d %%D in ("%GOODQ_PROCESSING_DIR%\*") do (
         echo [%%~nD]
         if exist "%%D\status.json" (
             powershell -Command "Get-Content '%%D\status.json' | ConvertFrom-Json | Select-Object video_id, current_phase, progress_pct | Format-List"
@@ -34,7 +55,7 @@ if exist "L:\_DATA\GoodQ_Data\processing" (
 
 REM Show recent log activity
 echo === RECENT LOG ACTIVITY (last 10 lines) ===
-powershell -Command "$log = Get-ChildItem 'L:\goodq4all\logs' -Filter '*.log' | Sort-Object LastWriteTime -Descending | Select-Object -First 1; Write-Host \"Log: $($log.Name) (Updated: $($log.LastWriteTime))\" -ForegroundColor Cyan; Get-Content $log.FullName -Tail 10"
+powershell -Command "$logDir = $env:GOODQ_LOG_DIR; $log = Get-ChildItem $logDir -Filter '*.log' -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1; if ($null -eq $log) { Write-Host 'No logs found' -ForegroundColor Yellow } else { Write-Host \"Log: $($log.Name) (Updated: $($log.LastWriteTime))\" -ForegroundColor Cyan; Get-Content $log.FullName -Tail 10 }"
 echo.
 
 echo ===============================================================================

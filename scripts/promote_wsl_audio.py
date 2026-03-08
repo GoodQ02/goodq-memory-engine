@@ -10,27 +10,46 @@ from pathlib import Path
 import subprocess
 import sys
 
-# Paths
-WSL_OUTPUT_DIR = Path("/mnt/l/goodq4all/logs/scene_ingest")  # WSL can access Windows via /mnt
 REPO_ROOT = Path(__file__).resolve().parents[1]
-_data_root_env = os.environ.get("GOODQ_DATA_ROOT")
-if _data_root_env:
-    WINDOWS_DATA_ROOT = Path(_data_root_env) / "GoodQ_Data" / "processing"
-else:
-    WINDOWS_DATA_ROOT = REPO_ROOT / "processing"
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
-def find_wsl_audio_results():
-    """Find all result.json files in WSL output"""
-    # Access via \\wsl$\<distro>\<workspace>\output from Windows
-    wsl_distro = os.environ.get("GOODQ_WSL_DISTRO", "Ubuntu")
+from steps.common.config_loader import get_runtime_paths, load_configs
+
+
+def _resolve_runtime_context():
+    cfg = load_configs({})
+    runtime_paths = get_runtime_paths(cfg)
+    host_cfg = cfg.get("host", {}) if isinstance(cfg.get("host"), dict) else {}
     wsl_user = (
         os.environ.get("GOODQ_WSL_USER")
+        or host_cfg.get("wsl_user")
         or os.environ.get("USERNAME")
         or os.environ.get("USER")
         or os.environ.get("LOGNAME")
         or "user"
     )
-    wsl_workspace = os.environ.get("GOODQ_WSL_WORKSPACE", f"/home/{wsl_user}/goodq_audio")
+    wsl_workspace = (
+        os.environ.get("GOODQ_WSL_WORKSPACE")
+        or host_cfg.get("wsl_workspace")
+        or f"/home/{wsl_user}/goodq_audio"
+    )
+    return {
+        "processing_root": Path(runtime_paths["processing"]).resolve(),
+        "log_dir": Path(runtime_paths["log_dir"]).resolve(),
+        "wsl_distro": os.environ.get("GOODQ_WSL_DISTRO", host_cfg.get("wsl_distro", "Ubuntu")),
+        "wsl_workspace": str(wsl_workspace).strip(),
+    }
+
+
+_RUNTIME = _resolve_runtime_context()
+WINDOWS_DATA_ROOT = _RUNTIME["processing_root"]
+
+def find_wsl_audio_results():
+    """Find all result.json files in WSL output"""
+    # Access via \\wsl$\<distro>\<workspace>\output from Windows
+    wsl_distro = str(_RUNTIME["wsl_distro"])
+    wsl_workspace = str(_RUNTIME["wsl_workspace"])
     workspace_unc = wsl_workspace.strip("/").replace("/", "\\")
     wsl_base = Path(f"\\\\wsl$\\{wsl_distro}\\{workspace_unc}\\output")
     if wsl_base.exists():
@@ -38,8 +57,8 @@ def find_wsl_audio_results():
     return []
 
 def find_scene_audio_in_logs():
-    """Find audio results written by the pipeline in logs/scene_ingest"""
-    log_base = REPO_ROOT / "logs" / "scene_ingest"
+    """Find audio results written by the pipeline in canonical log_dir/scene_ingest."""
+    log_base = _RUNTIME["log_dir"] / "scene_ingest"
     results = []
     
     for video_dir in log_base.glob("*"):

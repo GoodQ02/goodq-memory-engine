@@ -32,8 +32,8 @@ def main():
         print()
         print("To start the service, open WSL2 and run:")
         print("  cd ~/goodq_audio")
-        print("  source venv/bin/activate")
-        print("  python3 /mnt/l/goodq4all/wsl2_audio/audio_service.py")
+        print("  source setup_cuda_env.sh")
+        print("  python3 ~/goodq_audio/audio_service.py")
         print()
         return
     print()

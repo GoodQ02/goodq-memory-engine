@@ -147,7 +147,7 @@ model.to(torch.device("cuda"))
 
 **Validation:**
 ```bash
-./scripts/process.sh audio.wav output/ 2>/dev/null | python3 -m json.tool
+./process.sh audio.wav output/ 2>/dev/null | python3 -m json.tool
 # Result: Valid JSON, no errors
 ```
 
@@ -288,7 +288,7 @@ You can confidently use this environment for audio processing!
 ### Run Audio Processing
 ```bash
 cd ~/goodq_audio
-./scripts/process.sh /path/to/audio.wav /path/to/output
+./process.sh /path/to/audio.wav /path/to/output
 ```
 
 ### Verify Setup
@@ -305,7 +305,7 @@ ls -lh /mnt/l/models/hub/
 
 ### Test JSON Output
 ```bash
-./scripts/process.sh audio.wav output/ 2>/dev/null | python3 -m json.tool
+./process.sh audio.wav output/ 2>/dev/null | python3 -m json.tool
 ```
 
 ---

@@ -7,7 +7,6 @@ import logging
 import sqlite3
 from pathlib import Path
 from typing import Dict, Any, List
-import yaml
 from datetime import datetime
 
 # Configure logging
@@ -19,8 +18,10 @@ logger = logging.getLogger(__name__)
 
 # Import Phase 8 components
 import sys
-sys.path.insert(0, str(Path(__file__).parent / 'lib'))
+REPO_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO_ROOT))
 
+from steps.common.config_loader import get_runtime_paths, load_configs
 from unified_knowledge_graph import UnifiedKnowledgeGraph
 from cross_video_entity_resolver import CrossVideoEntityResolver
 from timeline_builder import TimelineBuilder
@@ -28,15 +29,15 @@ from timeline_builder import TimelineBuilder
 
 def load_config():
     """Load configuration"""
-    config_path = Path("L:/goodq4all/config.yaml")
-    with open(config_path, 'r', encoding='utf-8') as f:
-        config = yaml.safe_load(f)
+    config = load_configs({})
     
     # Add default unified KG config if not present
     if 'unified_knowledge_graph' not in config:
+        runtime_paths = get_runtime_paths(config)
+        db_dir = Path(runtime_paths['db_path']).resolve().parent
         config['unified_knowledge_graph'] = {
             'enabled': True,
-            'db_path': 'L:/_DATA/GoodQ_Data/unified_goodq.db',
+            'db_path': str(db_dir / 'unified_goodq.db'),
             'entity_resolution': {
                 'face_similarity_threshold': 0.85,
                 'voice_similarity_threshold': 0.80,
@@ -60,9 +61,10 @@ def discover_processed_videos(config: Dict[str, Any]) -> List[Dict[str, Any]]:
     logger.info("Discovering processed videos...")
     
     videos = []
-    memory_db_path = Path(config['paths']['db_path'])
-    kg_data_dir = Path(config['paths'].get('knowledge_graph_db', '')).parent
-    output_dir = Path(config['paths'].get('output', 'L:/goodq4all/output'))
+    runtime_paths = get_runtime_paths(config, 'output_directory')
+    memory_db_path = Path(runtime_paths['db_path']).resolve()
+    kg_data_dir = Path(runtime_paths['knowledge_graph_db']).resolve().parent
+    output_dir = Path(runtime_paths['output_directory']).resolve()
     
     if not memory_db_path.exists():
         logger.warning(f"Memory database not found at {memory_db_path}")

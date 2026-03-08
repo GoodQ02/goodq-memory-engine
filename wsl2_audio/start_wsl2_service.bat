@@ -10,7 +10,7 @@ for /f "delims=" %%I in ('powershell -NoProfile -Command "$p=$env:REPO_ROOT.Trim
 if "%GOODQ_WSL_USER%"=="" set "GOODQ_WSL_USER=%USERNAME%"
 if "%GOODQ_WSL_USER%"=="" set "GOODQ_WSL_USER=user"
 if "%GOODQ_WSL_WORKSPACE%"=="" set "GOODQ_WSL_WORKSPACE=/home/%GOODQ_WSL_USER%/goodq_audio"
-set "WSL_AUDIO_SCRIPT=%WSL_REPO_ROOT%/wsl2_audio/audio_service.py"
+set "WSL_AUDIO_SCRIPT=%GOODQ_WSL_WORKSPACE%/audio_service.py"
 
 echo ================================================================================
 echo   GoodQ4All - Starting WSL2 Audio Service

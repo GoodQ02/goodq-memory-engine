@@ -6,16 +6,28 @@ Provides detailed status of file processing
 
 import json
 import psutil
+import sys
 from pathlib import Path
 from datetime import datetime
 
-# Paths
-WATCH_DIR = Path("L:/goodq4all/import_inbox")
-PROCESSING_DIR = Path("L:/_DATA/GoodQ_Data/processing")
-PROCESSED_DIR = Path("L:/_DATA/GoodQ_Data/processed")
-FAILED_DIR = Path("L:/_DATA/GoodQ_Data/failed")
-STATE_FILE = Path("L:/goodq4all/logs/watchdog_state.json")
-LOG_FILE = Path("L:/goodq4all/logs/watchdog.log")
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from steps.common.config_loader import get_runtime_paths, load_configs
+
+_RUNTIME_PATHS = get_runtime_paths(
+    load_configs({}),
+    "processed",
+    "failed",
+    "watchdog_state_file",
+)
+WATCH_DIR = Path(_RUNTIME_PATHS["import_inbox"]).resolve()
+PROCESSING_DIR = Path(_RUNTIME_PATHS["processing"]).resolve()
+PROCESSED_DIR = Path(_RUNTIME_PATHS["processed"]).resolve()
+FAILED_DIR = Path(_RUNTIME_PATHS["failed"]).resolve()
+STATE_FILE = Path(_RUNTIME_PATHS["watchdog_state_file"]).resolve()
+LOG_FILE = Path(_RUNTIME_PATHS["log_dir"]).resolve() / "watchdog.log"
 
 # File types
 VIDEO_EXTS = {'.mp4', '.avi', '.mov', '.mkv', '.wmv', '.flv', '.webm', '.m4v'}
@@ -50,7 +62,8 @@ def is_watchdog_running():
     for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
         try:
             cmdline = proc.info.get('cmdline', [])
-            if cmdline and 'watchdog_ingest.py' in ' '.join(cmdline):
+            joined = ' '.join(cmdline) if cmdline else ''
+            if joined and ('cli\\watchdog.py' in joined or 'goodq4all.cli.watchdog' in joined):
                 return True, proc.info['pid']
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             pass
@@ -58,8 +71,7 @@ def is_watchdog_running():
 
 def load_state():
     """Load watchdog state from result files"""
-    logs_dir = Path("L:/goodq4all/logs")
-    result_files = sorted(logs_dir.glob("watchdog_*_results.json"), 
+    result_files = sorted(LOG_FILE.parent.glob("watchdog_*_results.json"), 
                          key=lambda x: x.stat().st_mtime, reverse=True)
     
     processed_count = 0

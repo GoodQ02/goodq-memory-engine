@@ -74,8 +74,8 @@ Example: 1 hour of audio
 Open PowerShell 7 in the project directory:
 
 ```powershell
-cd L:\goodq4all\wsl2_audio
-.\setup_windows.ps1
+cd <repo_root>
+.\wsl2_audio\setup_windows.ps1
 ```
 
 This will:
@@ -124,14 +124,14 @@ In WSL2 terminal:
 
 ```bash
 cd ~/goodq_audio
-source venv/bin/activate
-python3 /mnt/l/goodq4all/wsl2_audio/audio_service.py
+source setup_cuda_env.sh
+python3 ~/goodq_audio/audio_service.py
 ```
 
 Or from Windows:
 
 ```cmd
-L:\goodq4all\wsl2_audio\start_wsl2_service.bat
+.\wsl2_audio\start_wsl2_service.bat
 ```
 
 The service will run in the background and watch for jobs.
@@ -141,8 +141,8 @@ The service will run in the background and watch for jobs.
 From Windows:
 
 ```cmd
-cd L:\goodq4all
-python wsl2_audio\test_bridge.py
+cd <repo_root>
+python .\wsl2_audio\test_bridge.py
 ```
 
 This will submit a test audio file and verify the complete workflow.
@@ -275,7 +275,7 @@ Or in config (`bridge_config.json`):
 
 Ensure WSL2 can read Windows files:
 ```bash
-ls -la /mnt/l/goodq4all/
+ls -la /mnt/<drive>/<repo_root>/
 ```
 
 If permission denied, check Windows folder permissions.
@@ -303,7 +303,7 @@ wsl watch -n 1 nvidia-smi
 
 ```bash
 # In WSL2
-cd ~/goodq_audio/queue
+cd ~/goodq_audio/queue_in
 ls -la pending/    # Waiting jobs
 ls -la processing/ # Currently processing
 ls -la completed/  # Successful
@@ -396,7 +396,7 @@ For parallel processing of multiple files:
 For issues, check:
 1. Windows event logs
 2. WSL2 service logs: `~/goodq_audio/logs/audio_service.log`
-3. Pipeline logs: `L:\goodq4all\logs\`
+3. Pipeline logs: canonical Windows host log directory (`cfg.paths.log_dir`)
 
 Common fixes:
 - Restart WSL2: `wsl --shutdown`

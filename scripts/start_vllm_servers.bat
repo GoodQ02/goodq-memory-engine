@@ -3,6 +3,7 @@ REM GoodQ4All vLLM Server Startup Script
 REM Starts vLLM servers in WSL for AI orchestration
 
 call "%~dp0_lib\\interpreter_bindings.bat"
+for %%I in ("%~dp0..") do set "REPO_ROOT=%%~fI"
 
 echo ========================================
 echo GoodQ4All vLLM Server Startup
@@ -46,6 +47,6 @@ echo.
 echo Servers are starting in the background.
 echo It may take 30-60 seconds for models to fully load.
 echo.
-echo Check status: python L:\goodq4all\scripts\test_llm_client.py
+echo Check status: python "%REPO_ROOT%\\scripts\\test_llm_client.py"
 echo.
 pause

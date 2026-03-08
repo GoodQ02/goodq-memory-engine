@@ -7,7 +7,7 @@ A GPU-accelerated audio processing system that runs in WSL2 Linux for **3-5x fas
 ## One-Command Install
 
 ```cmd
-cd L:\goodq4all
+cd <repo_root>
 INSTALL_WSL2_AUDIO.bat
 ```
 
@@ -121,7 +121,7 @@ Edit `wsl2_audio\bridge_config.json`:
 
 - Full docs: `wsl2_audio\README.md`
 - Migration guide: `docs\WSL2_AUDIO_MIGRATION_GUIDE.md`
-- Troubleshooting: Check logs in `wsl2_audio\logs\` and `~/goodq_audio/logs/`
+- Troubleshooting: Check canonical Windows logs plus `~/goodq_audio/logs/`
 
 ## Support
 

@@ -3,17 +3,28 @@ REM GoodQ4All - Install Qdrant as Windows Service
 REM This requires Administrator privileges
 setlocal EnableExtensions
 for %%I in ("%~dp0..\\..") do set "REPO_ROOT=%%~fI"
-for %%D in ("%REPO_ROOT%") do set "REPO_DRIVE=%%~dD"
-if "%GOODQ_DATA_ROOT%"=="" set "GOODQ_DATA_ROOT=%REPO_DRIVE%\_DATA"
-set "QDRANT_STORAGE_PATH=%GOODQ_DATA_ROOT%\qdrant_storage"
+call "%REPO_ROOT%\scripts\_lib\interpreter_bindings.bat"
+pushd "%REPO_ROOT%"
+for /f "usebackq tokens=1,* delims==" %%A in (`"%CONDA_EXE%" run -n "%GOODQ_CONDA_ENV%" --no-capture-output python -c "from steps.common.config_loader import load_configs, get_runtime_paths; cfg=load_configs({}); paths=get_runtime_paths(cfg, 'qdrant_storage'); print('QDRANT_STORAGE_PATH=' + paths['qdrant_storage']); print('GOODQ_LOG_DIR=' + paths['log_dir'])"`) do (
+  if not "%%A"=="" set "%%A=%%B"
+)
+popd
+if "%QDRANT_STORAGE_PATH%"=="" (
+  echo [ERROR] Failed to resolve Qdrant storage path from canonical config.
+  exit /b 1
+)
+if "%GOODQ_LOG_DIR%"=="" (
+  echo [ERROR] Failed to resolve Qdrant log directory from canonical config.
+  exit /b 1
+)
 set "NSSM_EXE=%REPO_ROOT%\vendor\nssm.exe"
 set "NSSM_ZIP=%REPO_ROOT%\vendor\nssm.zip"
 set "NSSM_TMP=%REPO_ROOT%\vendor\nssm_temp"
 set "QDRANT_EXE=%REPO_ROOT%\vendor\qdrant\qdrant.exe"
 set "QDRANT_CFG=%REPO_ROOT%\vendor\qdrant\config.yaml"
 set "QDRANT_APPDIR=%REPO_ROOT%\vendor\qdrant"
-set "QDRANT_STDOUT=%REPO_ROOT%\logs\qdrant_stdout.log"
-set "QDRANT_STDERR=%REPO_ROOT%\logs\qdrant_stderr.log"
+set "QDRANT_STDOUT=%GOODQ_LOG_DIR%\qdrant_stdout.log"
+set "QDRANT_STDERR=%GOODQ_LOG_DIR%\qdrant_stderr.log"
 
 echo.
 echo ========================================
@@ -54,6 +65,7 @@ echo.
 echo [2/3] Installing Qdrant service...
 
 if not exist "%QDRANT_STORAGE_PATH%" mkdir "%QDRANT_STORAGE_PATH%"
+if not exist "%GOODQ_LOG_DIR%" mkdir "%GOODQ_LOG_DIR%"
 
 REM Install service
 "%NSSM_EXE%" install GoodQ_Qdrant "%QDRANT_EXE%" "--config-path" "%QDRANT_CFG%"

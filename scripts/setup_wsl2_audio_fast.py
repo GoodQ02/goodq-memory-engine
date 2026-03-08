@@ -24,7 +24,7 @@ class FastWSL2Setup:
         if not wsl_user:
             wsl_user = os.environ.get("USERNAME", "user").strip().lower() or "user"
         self.wsl_home = f"/home/{wsl_user}"
-        self.workspace = f"{self.wsl_home}/audio_workspace"
+        self.workspace = f"{self.wsl_home}/goodq_audio"
         self.errors = []
         self.warnings = []
         
@@ -197,7 +197,7 @@ if __name__ == "__main__":
     process_audio(sys.argv[1], sys.argv[2])
 '''
         
-        script_path = f"{self.workspace}/scripts/process_audio.py"
+        script_path = f"{self.workspace}/process_audio.py"
         # Escape single quotes for bash
         safe_script = script.replace("'", "'\"'\"'")
         cmd = f"cat > {script_path} << 'EOF'\n{script}\nEOF"
@@ -226,7 +226,7 @@ class WSL2Bridge:
             text=True
         )
         wsl_user = result.stdout.strip()
-        self.workspace = f"/home/{wsl_user}/audio_workspace"
+        self.workspace = f"/home/{wsl_user}/goodq_audio"
         
     def wsl_path(self, windows_path):
         """Convert Windows to WSL path"""
@@ -248,7 +248,7 @@ class WSL2Bridge:
         
         cmd = (
             f"{self.workspace}/venv/bin/python "
-            f"{self.workspace}/scripts/process_audio.py "
+            f"{self.workspace}/process_audio.py "
             f"'{wsl_input}' '{wsl_output}'"
         )
         

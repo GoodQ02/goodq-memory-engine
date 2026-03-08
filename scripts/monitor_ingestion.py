@@ -7,19 +7,20 @@ Watches for stalls and unexpected errors during ingestion
 import time
 import sqlite3
 import sys
-import os
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, Optional
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-_data_root_env = os.environ.get("GOODQ_DATA_ROOT")
-if _data_root_env:
-    DATA_DIR = Path(_data_root_env) / "GoodQ_Data"
-else:
-    DATA_DIR = PROJECT_ROOT / "data"
-MEMORY_DB = DATA_DIR / "memory.db"
-LOGS_DIR = PROJECT_ROOT / "logs"
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from steps.common.config_loader import get_runtime_paths, load_configs
+
+_RUNTIME_PATHS = get_runtime_paths(load_configs({}), "output_directory")
+DATA_DIR = Path(_RUNTIME_PATHS["db_path"]).resolve().parent
+MEMORY_DB = Path(_RUNTIME_PATHS["db_path"]).resolve()
+LOGS_DIR = Path(_RUNTIME_PATHS["log_dir"]).resolve()
 
 class IngestionMonitor:
     def __init__(self, check_interval: int = 30, stall_threshold: int = 300):

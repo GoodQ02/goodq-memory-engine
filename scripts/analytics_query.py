@@ -6,9 +6,14 @@ import sqlite3
 import json
 import logging
 import requests
+import sys
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 from datetime import datetime
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 logger = logging.getLogger(__name__)
 
@@ -592,11 +597,7 @@ def interactive_query_session(config: Dict[str, Any]):
 
 
 if __name__ == "__main__":
-    import yaml
+    from steps.common.config_loader import load_configs
     
-    # Load config
-    config_path = Path(__file__).parent / "config.yaml"
-    with open(config_path) as f:
-        config = yaml.safe_load(f)
-    
+    config = load_configs({})
     interactive_query_session(config)

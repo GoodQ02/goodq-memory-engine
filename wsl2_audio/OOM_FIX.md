@@ -234,7 +234,7 @@ No changes to external API:
 
 ```bash
 cd ~/goodq_audio
-./scripts/process.sh /path/to/audio.wav /path/to/output
+./process.sh /path/to/audio.wav /path/to/output
 ```
 
 ## Recommendations
@@ -256,7 +256,7 @@ cd ~/goodq_audio
 
 ## Files Modified
 
-### `~/goodq_audio/scripts/process_audio.py`
+### `~/goodq_audio/process_audio.py`
 - Added: `clear_gpu_memory()` function
 - Added: `get_gpu_memory_info()` function
 - Modified: All model sections with cleanup
@@ -273,7 +273,7 @@ watch -n 1 nvidia-smi
 
 ### Check memory in JSON output:
 ```bash
-./scripts/process.sh audio.wav output/ 2>/dev/null | \
+./process.sh audio.wav output/ 2>/dev/null | \
   python3 -c "import json, sys; data=json.load(sys.stdin); \
   print('Peak GPU:', data.get('after_embeddings_gpu_memory'))"
 ```

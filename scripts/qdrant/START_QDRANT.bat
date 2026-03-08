@@ -4,9 +4,16 @@ REM This script starts Qdrant as a foreground process for testing
 REM For production, use the Windows Service (install via INSTALL_QDRANT_SERVICE.bat)
 setlocal EnableExtensions
 for %%I in ("%~dp0..\\..") do set "REPO_ROOT=%%~fI"
-for %%D in ("%REPO_ROOT%") do set "REPO_DRIVE=%%~dD"
-if "%GOODQ_DATA_ROOT%"=="" set "GOODQ_DATA_ROOT=%REPO_DRIVE%\_DATA"
-set "QDRANT_STORAGE_PATH=%GOODQ_DATA_ROOT%\qdrant_storage"
+call "%REPO_ROOT%\scripts\_lib\interpreter_bindings.bat"
+pushd "%REPO_ROOT%"
+for /f "usebackq tokens=1,* delims==" %%A in (`"%CONDA_EXE%" run -n "%GOODQ_CONDA_ENV%" --no-capture-output python -c "from steps.common.config_loader import load_configs, get_runtime_paths; cfg=load_configs({}); paths=get_runtime_paths(cfg, 'qdrant_storage'); print('QDRANT_STORAGE_PATH=' + paths['qdrant_storage']); print('GOODQ_LOG_DIR=' + paths['log_dir'])"`) do (
+  if not "%%A"=="" set "%%A=%%B"
+)
+popd
+if "%QDRANT_STORAGE_PATH%"=="" (
+  echo [ERROR] Failed to resolve Qdrant storage path from canonical config.
+  exit /b 1
+)
 if not exist "%QDRANT_STORAGE_PATH%" mkdir "%QDRANT_STORAGE_PATH%"
 set "QDRANT__STORAGE__STORAGE_PATH=%QDRANT_STORAGE_PATH%"
 

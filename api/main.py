@@ -84,7 +84,7 @@ _WSL_DISTRO = str(os.environ.get("GOODQ_WSL_DISTRO") or _HOST_CFG.get("wsl_distr
 _WSL_USER = str(os.environ.get("GOODQ_WSL_USER") or "").strip()
 if not _WSL_USER or _WSL_USER.lower() == "auto":
     _WSL_USER = str(os.environ.get("USER") or os.environ.get("USERNAME") or os.environ.get("LOGNAME") or "user")
-_WSL_WORKSPACE = str(os.environ.get("GOODQ_WSL_WORKSPACE") or f"/home/{_WSL_USER}/goodq_audio")
+_WSL_WORKSPACE = str(os.environ.get("GOODQ_WSL_WORKSPACE") or _HOST_CFG.get("wsl_workspace") or f"/home/{_WSL_USER}/goodq_audio")
 
 # Enforce CONFIG_LOADING_CONTRACT: reuse the already-loaded cfg in submodules.
 # (api/routes/search.py lazily calls load_configs() otherwise; keep it lazy but non-reloading.)
@@ -1082,7 +1082,8 @@ def test_audio(request: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
         diarization_model = None
         # Try native Windows path (WSL mount), then WSL cat fallback
         try:
-            cfg_path = Path(f"\\\\wsl$\\{_WSL_DISTRO}\\home\\{_WSL_USER}\\goodq_audio\\config.json")
+            workspace_parts = [part for part in _WSL_WORKSPACE.strip("/").split("/") if part]
+            cfg_path = Path(f"\\\\wsl$\\{_WSL_DISTRO}\\" + "\\".join(workspace_parts) + "\\config.json")
             if not cfg_path.exists():
                 cfg_path = Path(f"{_WSL_WORKSPACE}/config.json")
             if cfg_path.exists():

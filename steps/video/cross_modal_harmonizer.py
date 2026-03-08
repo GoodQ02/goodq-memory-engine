@@ -12,9 +12,9 @@ import sqlite3
 from pathlib import Path
 
 from steps.common.atomic_io import atomic_write_json
+from steps.common.config_loader import get_runtime_paths
 
 logger = logging.getLogger(__name__)
-_PROCESSING_FALLBACK_WARNED = False
 
 try:
     from steps.video.entity_extractor import extract_entities_from_scene, EntityExtractor
@@ -72,11 +72,6 @@ def _load_required_audio_artifact(path: Path, artifact_name: str) -> tuple[Optio
 
 def _load_commit_presence(cfg: Dict[str, Any], video_id: str, scene_ids: List[str] | None = None) -> Dict[str, Any]:
     """Best-effort: derive modality presence from committed memory events (authoritative)."""
-    paths_cfg = (cfg.get('paths') or {}) if isinstance(cfg, dict) else {}
-    db_path = paths_cfg.get('db_path')
-    if not db_path and paths_cfg.get('db_dir'):
-        db_path = os.path.join(paths_cfg['db_dir'], 'memory.db')
-
     presence = {
         'available': False,
         'has_audio': False,
@@ -84,6 +79,12 @@ def _load_commit_presence(cfg: Dict[str, Any], video_id: str, scene_ids: List[st
         'audio_scene_ids': set(),
         'transcript_scene_ids': set(),
     }
+
+    try:
+        runtime_paths = get_runtime_paths(cfg)
+        db_path = runtime_paths['db_path']
+    except KeyError:
+        return presence
 
     if not isinstance(db_path, str) or not db_path:
         return presence
@@ -274,33 +275,8 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
     if not video_storage_key:
         video_storage_key = video_id
     
-    paths_cfg = (cfg.get('paths') or {}) if isinstance(cfg, dict) else {}
-    processing_root = paths_cfg.get('processing')
-    if not processing_root:
-        global _PROCESSING_FALLBACK_WARNED
-        data_root = paths_cfg.get('data_root')
-        if not data_root:
-            host_cfg = (cfg.get('host') or {}) if isinstance(cfg, dict) else {}
-            data_root = host_cfg.get('data_root') or os.environ.get("GOODQ_DATA_ROOT")
-        if data_root:
-            base = Path(str(data_root))
-            processing_root = str(base / "processing" if base.name == "GoodQ_Data" else base / "GoodQ_Data" / "processing")
-            if not _PROCESSING_FALLBACK_WARNED:
-                logger.warning(
-                    "cross_modal_harmonizer path fallback used path_key=%s derived_from=%s",
-                    "paths.processing",
-                    "paths_or_host_data_root",
-                )
-                _PROCESSING_FALLBACK_WARNED = True
-        else:
-            processing_root = str(Path.cwd() / "processing")
-            if not _PROCESSING_FALLBACK_WARNED:
-                logger.warning(
-                    "cross_modal_harmonizer path fallback used path_key=%s derived_from=%s",
-                    "paths.processing",
-                    "cwd",
-                )
-                _PROCESSING_FALLBACK_WARNED = True
+    runtime_paths = get_runtime_paths(cfg)
+    processing_root = runtime_paths['processing']
     processing_dir_raw = item.get('processing_dir')
     if isinstance(processing_dir_raw, str) and processing_dir_raw.strip():
         processing_dir = processing_dir_raw

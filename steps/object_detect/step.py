@@ -5,6 +5,8 @@ import os
 import logging
 from pathlib import Path
 
+from steps.common.config_loader import get_runtime_paths, load_configs
+
 logger = logging.getLogger(__name__)
 
 # Import GPU manager for centralized GPU configuration
@@ -24,32 +26,11 @@ except ImportError:
 
 _YOLO = None
 _YOLO_DEVICE = "cpu"
-_MODELS_FALLBACK_WARNED = False
 
 
 def _resolve_models_root() -> str:
-    global _MODELS_FALLBACK_WARNED
-    explicit = os.environ.get("HF_HOME") or os.environ.get("GOODQ_MODELS_DIR") or os.environ.get("TORCH_HOME")
-    if explicit:
-        return explicit
-    data_root = os.environ.get("GOODQ_DATA_ROOT")
-    if data_root:
-        if not _MODELS_FALLBACK_WARNED:
-            logger.warning(
-                "object_detect path fallback used path_key=%s derived_from=%s",
-                "model_base",
-                "GOODQ_DATA_ROOT",
-            )
-            _MODELS_FALLBACK_WARNED = True
-        return str(Path(data_root) / "models")
-    if not _MODELS_FALLBACK_WARNED:
-        logger.warning(
-            "object_detect path fallback used path_key=%s derived_from=%s",
-            "model_base",
-            "cwd",
-        )
-        _MODELS_FALLBACK_WARNED = True
-    return str(Path.cwd() / "models")
+    runtime_paths = get_runtime_paths(load_configs({}), "models_cache")
+    return str(Path(runtime_paths["models_cache"]).resolve())
 
 
 def _load_yolo(cfg: Dict[str, Any]):

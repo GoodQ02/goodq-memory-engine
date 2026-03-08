@@ -23,7 +23,7 @@ sys.path.insert(0, str(REPO_ROOT))
 import re
 import typer
 
-from steps.common.config_loader import load_configs
+from steps.common.config_loader import get_runtime_paths, load_configs
 from steps.common.atomic_io import atomic_write_json
 from steps.common.memory import ensure_scene, register_scene_bundle, scene_has_materialized, get_scene_meta, list_scenes_for_video
 from steps.common.tag_utils import canonicalize_taxonomy
@@ -131,78 +131,37 @@ except ImportError:
     )
 
 APP = typer.Typer(help='Scene-first ingestion orchestrator for GoodQ')
-_MODELS_FALLBACK_WARNED = False
-_PROCESSING_FALLBACK_WARNED = False
 
-
-def _resolve_default_models_dir() -> Path:
-    global _MODELS_FALLBACK_WARNED
-    explicit = os.environ.get("HF_HOME") or os.environ.get("GOODQ_MODELS_DIR")
-    if explicit:
-        return Path(explicit)
-
-    data_root = os.environ.get("GOODQ_DATA_ROOT")
-    if data_root:
-        if not _MODELS_FALLBACK_WARNED:
+def _load_runtime_cfg_snapshot(cfg_json: Optional[Path] = None) -> Dict[str, Any]:
+    if cfg_json and cfg_json.exists():
+        try:
+            raw = cfg_json.read_text(encoding='utf-8').strip()
+            if raw:
+                parsed = json.loads(raw)
+                if isinstance(parsed, dict):
+                    return parsed
+        except Exception as e:
             logger.warning(
-                "run_ingestion path fallback used path_key=%s derived_from=%s",
-                "HF_HOME",
-                "GOODQ_DATA_ROOT",
+                "run_ingestion warning context=%s error=%s",
+                "runtime_cfg_snapshot",
+                e,
             )
-            _MODELS_FALLBACK_WARNED = True
-        return Path(data_root) / "models"
+    return load_configs({})
 
-    if not _MODELS_FALLBACK_WARNED:
-        logger.warning(
-            "run_ingestion path fallback used path_key=%s derived_from=%s",
-            "HF_HOME",
-            "cwd",
-        )
-        _MODELS_FALLBACK_WARNED = True
-    return Path.cwd() / "models"
+
+def _resolve_models_dir(
+    cfg: Optional[Dict[str, Any]] = None,
+    *,
+    cfg_json: Optional[Path] = None,
+) -> Path:
+    cfg_payload = cfg if isinstance(cfg, dict) else _load_runtime_cfg_snapshot(cfg_json)
+    runtime_paths = get_runtime_paths(cfg_payload, "models_cache")
+    return Path(runtime_paths["models_cache"]).resolve()
 
 
 def _resolve_processing_root(cfg: Dict[str, Any]) -> Path:
-    global _PROCESSING_FALLBACK_WARNED
-    paths_cfg = (cfg.get('paths') or {}) if isinstance(cfg, dict) else {}
-    processing = paths_cfg.get('processing')
-    if processing:
-        return Path(processing)
-
-    data_root = paths_cfg.get('data_root')
-    if data_root:
-        if not _PROCESSING_FALLBACK_WARNED:
-            logger.warning(
-                "run_ingestion path fallback used path_key=%s derived_from=%s",
-                "paths.processing",
-                "paths.data_root",
-            )
-            _PROCESSING_FALLBACK_WARNED = True
-        return Path(data_root) / "processing"
-
-    host_cfg = (cfg.get("host") or {}) if isinstance(cfg, dict) else {}
-    base_root = host_cfg.get("data_root") or os.environ.get("GOODQ_DATA_ROOT")
-    if base_root:
-        if not _PROCESSING_FALLBACK_WARNED:
-            logger.warning(
-                "run_ingestion path fallback used path_key=%s derived_from=%s",
-                "paths.processing",
-                "host.data_root_or_env",
-            )
-            _PROCESSING_FALLBACK_WARNED = True
-        return Path(base_root) / "GoodQ_Data" / "processing"
-
-    if not _PROCESSING_FALLBACK_WARNED:
-        logger.warning(
-            "run_ingestion path fallback used path_key=%s derived_from=%s",
-            "paths.processing",
-            "cwd",
-        )
-        _PROCESSING_FALLBACK_WARNED = True
-    return Path.cwd() / "processing"
-
-
-DEFAULT_MODELS_DIR = _resolve_default_models_dir()
+    runtime_paths = get_runtime_paths(cfg)
+    return Path(runtime_paths["processing"]).resolve()
 
 # Populated by CLI options at runtime
 VERBOSE: bool = False
@@ -309,8 +268,8 @@ def _build_knowledge_graph_from_results(results: List[Dict[str, Any]], cfg: Dict
         return None
     
     try:
-        data_dir = Path(cfg.get('data_dir', 'data'))
-        graph_db_path = data_dir / 'knowledge_graph.db'
+        runtime_paths = get_runtime_paths(cfg)
+        graph_db_path = Path(runtime_paths['knowledge_graph_db']).resolve()
         graph_db_path.parent.mkdir(parents=True, exist_ok=True)
         
         if VERBOSE:
@@ -977,8 +936,8 @@ def _resolve_audio_runtime_contract(cfg: Dict[str, Any]) -> Dict[str, Any]:
         else ''
     )
     explicit_workspace = str(os.environ.get("GOODQ_WSL_WORKSPACE") or "").strip()
-    workspace = explicit_workspace or cfg_wsl_workspace or f"/home/{wsl_user}/projects/goodq4all"
-    audio_workspace = f"{workspace.rstrip('/')}/wsl2_audio"
+    workspace = explicit_workspace or cfg_wsl_workspace or f"/home/{wsl_user}/goodq_audio"
+    audio_workspace = workspace.rstrip("/")
     contract['wsl_user'] = wsl_user
     contract['wsl_workspace'] = workspace
     contract['wsl_audio_workspace'] = audio_workspace
@@ -991,7 +950,19 @@ def _resolve_audio_runtime_contract(cfg: Dict[str, Any]) -> Dict[str, Any]:
 
     try:
         check = subprocess.run(
-            ["wsl", "-d", wsl_distro, "--", "test", "-d", audio_workspace],
+            [
+                "wsl",
+                "-d",
+                wsl_distro,
+                "--",
+                "bash",
+                "-lc",
+                (
+                    f"test -d '{audio_workspace}' && "
+                    f"test -f '{audio_workspace}/setup_cuda_env.sh' && "
+                    f"test -f '{audio_workspace}/process_audio.py'"
+                ),
+            ],
             capture_output=True,
             text=True,
             timeout=5,
@@ -1422,12 +1393,13 @@ def _write_cfg_snapshot(cfg: Dict[str, Any], workspace: Path) -> Path:
     return cfg_path
 
 
-def _base_env() -> Dict[str, str]:
+def _base_env(cfg_json: Optional[Path] = None) -> Dict[str, str]:
     env = os.environ.copy()
     env.setdefault('PYTHONNOUSERSITE', '0')
     env.setdefault('HF_HUB_ENABLE_HF_TRANSFER', '1')
-    env.setdefault('HF_HOME', str(DEFAULT_MODELS_DIR))
-    env.setdefault('TORCH_HOME', str(DEFAULT_MODELS_DIR))
+    models_root = _resolve_models_dir(cfg_json=cfg_json)
+    env['HF_HOME'] = str(models_root)
+    env['TORCH_HOME'] = str(models_root)
     # Add parent of REPO_ROOT to PYTHONPATH so "goodq4all.steps" can be imported.
     env['PYTHONPATH'] = str(REPO_ROOT.parent)
     
@@ -1560,7 +1532,7 @@ def _run_step(
     _healer_retry_attempt: int = 0,
     _native_retry_attempt: int = 0,
 ) -> Dict[str, Any]:
-    work_env = _base_env()
+    work_env = _base_env(cfg_json)
     
     # Convert payload to JSON-serializable format
     def make_json_serializable(obj):
@@ -2137,6 +2109,7 @@ def _process_frame(
     merge('goodq_core', 'image_embed_dino')
     merge('goodq_core', 'image_embed_clip')
     merge('goodq_core', 'tagger')
+    canonicalize_taxonomy(item)
 
     frame_text_parts: List[str] = []
     if isinstance(item.get('ocr_text'), str):
@@ -2153,6 +2126,12 @@ def _process_frame(
             'scene_index': scene_index,
             'video_hash': video_hash,
             'video_id': video_hash,
+            'ner_entities': item.get('ner_entities'),
+            'tags': item.get('tags'),
+            'entities': item.get('entities'),
+            'location': item.get('location'),
+            'locations': item.get('locations'),
+            'scene': item.get('scene'),
         }
         text_embed_result = _run_step('goodq_core', 'text_embed', text_payload, cfg_json)
         if isinstance(text_embed_result, dict):
@@ -2160,8 +2139,6 @@ def _process_frame(
             if isinstance(frame_text_embed_meta, dict):
                 item['frame_text_embed_meta'] = frame_text_embed_meta
         item['frame_text'] = frame_text
-
-    canonicalize_taxonomy(item)
 
     return {
         'path': str(frame_path),
@@ -2238,6 +2215,65 @@ def _process_audio(
             # Selected backend is run-contract truth; downstream steps must not mutate it.
             item['audio_backend_selected'] = contract_selected
             item['audio_backend_reason'] = contract_reason
+
+    def record_optional_audio_step_failure(env_name: str, step_name: str, exc: Exception) -> None:
+        error_text = str(exc).strip() or type(exc).__name__
+        warning_payload = {
+            'step': step_name,
+            'env': env_name,
+            'error': error_text,
+        }
+        warnings = item.get('audio_step_warnings')
+        if not isinstance(warnings, list):
+            warnings = []
+            item['audio_step_warnings'] = warnings
+        warnings.append(warning_payload)
+        status_meta_field = {
+            'sentiment': 'sentiment_meta',
+            'emotion_classify': 'emotion_meta',
+            'audio_embed_clap': 'clap_meta',
+        }.get(step_name)
+        if status_meta_field:
+            status_meta = item.get(status_meta_field)
+            if not isinstance(status_meta, dict):
+                status_meta = {}
+            status_meta.update(
+                {
+                    'status': 'error',
+                    'error': error_text,
+                }
+            )
+            item[status_meta_field] = status_meta
+        if step_name == 'sentiment':
+            item.setdefault('sentiment', None)
+        elif step_name == 'emotion_classify':
+            item.setdefault('emotions', None)
+        logger.warning(
+            "[AUDIO] Optional step failed env=%s step=%s scene_id=%s scene_index=%s error=%s",
+            env_name,
+            step_name,
+            scene_id,
+            scene.get('index'),
+            error_text,
+        )
+        _record_run_warning(
+            cfg_json,
+            code='optional_audio_step_failed',
+            message=error_text,
+            context={
+                'step': step_name,
+                'env': env_name,
+                'scene_id': scene_id,
+                'scene_index': scene.get('index'),
+            },
+        )
+
+    def merge_optional_audio_step(env_name: str, step_name: str) -> None:
+        try:
+            merge(env_name, step_name)
+        except Exception as exc:  # noqa: BLE001
+            # Transcript-bearing scenes should survive late enrichment failures.
+            record_optional_audio_step_failure(env_name, step_name, exc)
 
     def run_local_audio_fallback(reason: str) -> None:
         logger.info(
@@ -2369,6 +2405,12 @@ def _process_audio(
     else:
         logger.info(f"[AUDIO] No audio stream in scene {scene_id}, skipping audio processing")
 
+    merge_optional_audio_step('goodq_core', 'sentiment')
+    merge_optional_audio_step('goodq_core', 'emotion_classify')
+    merge_optional_audio_step('goodq_core', 'tagger')
+    merge_optional_audio_step('goodq_audio_embed', 'audio_embed_clap')
+
+    canonicalize_taxonomy(item)
     transcript = item.get('transcript') if isinstance(item.get('transcript'), str) else ''
     if transcript:
         text_payload = {
@@ -2379,19 +2421,22 @@ def _process_audio(
             'scene_index': scene.get('index'),
             'video_hash': video_hash,
             'video_id': video_hash,
+            'ner_entities': item.get('ner_entities'),
+            'tags': item.get('tags'),
+            'entities': item.get('entities'),
+            'location': item.get('location'),
+            'locations': item.get('locations'),
+            'emotion': item.get('emotion'),
+            'emotion_scores': item.get('emotion_scores') or item.get('emotions'),
+            'sentiment': item.get('sentiment'),
+            'speaker_count': item.get('speaker_count'),
+            'scene': item.get('scene'),
         }
         text_embed_result = _run_step('goodq_core', 'text_embed', text_payload, cfg_json)
         if isinstance(text_embed_result, dict):
             audio_text_embed_meta = text_embed_result.get('embedding_meta')
             if isinstance(audio_text_embed_meta, dict):
                 item['audio_text_embed_meta'] = audio_text_embed_meta
-
-    merge('goodq_core', 'sentiment')
-    merge('goodq_core', 'emotion_classify')
-    merge('goodq_core', 'tagger')
-    merge('goodq_audio_embed', 'audio_embed_clap')
-
-    canonicalize_taxonomy(item)
 
     return {
         'path': str(audio_path),
@@ -2434,9 +2479,9 @@ def _detect_scenes(
 
 @APP.command()
 def run(
-    input_dir: Path = typer.Option(Path('import_inbox'), help='Directory containing videos to ingest'),
-    output: Path = typer.Option(Path('logs/scene_ingest_results.json'), help='Path to write JSON results'),
-    workspace: Path = typer.Option(Path('logs/scene_ingest'), help='Workspace directory for artifacts'),
+    input_dir: Optional[Path] = typer.Option(None, help='Directory containing videos to ingest'),
+    output: Optional[Path] = typer.Option(None, help='Path to write JSON results'),
+    workspace: Optional[Path] = typer.Option(None, help='Workspace directory for artifacts'),
     max_videos: int = typer.Option(0, help='Maximum number of videos to process (0 = all)'),
     max_scenes: int = typer.Option(0, help='Maximum scenes per video (0 = all)'),
     scene_threshold: Optional[float] = typer.Option(None, help='Override PySceneDetect content threshold'),
@@ -2452,17 +2497,24 @@ def run(
         STEP_TIMEOUT = step_timeout.default
     else:
         STEP_TIMEOUT = step_timeout if isinstance(step_timeout, (int, type(None))) else None
-    input_dir = input_dir.resolve()
-    workspace = workspace.resolve()
-    output = output.resolve()
+
+    base_cfg = load_configs({})
+    cfg: Dict[str, Any] = dict(base_cfg) if isinstance(base_cfg, dict) else {}
+    runtime_paths = get_runtime_paths(cfg, "output_directory")
+    input_dir = (input_dir or Path(runtime_paths["import_inbox"])).resolve()
+    output = (
+        output
+        or (Path(runtime_paths["output_directory"]) / "scene_ingest_results.json")
+    ).resolve()
+    workspace = (
+        workspace
+        or (Path(runtime_paths["processing"]) / "_workspace" / "scene_ingest")
+    ).resolve()
 
     if not input_dir.exists():
         raise typer.BadParameter(f'Input directory not found: {input_dir}')
 
     _ensure_dir(workspace)
-
-    base_cfg = load_configs({})
-    cfg: Dict[str, Any] = dict(base_cfg) if isinstance(base_cfg, dict) else {}
     baseline_wsl_override = bool(is_baseline() and require_wsl_audio())
     profile_override: Optional[str] = None
     profile_override_reason: Optional[str] = None
@@ -2703,11 +2755,10 @@ def run(
             detection_meta['scene_manifest_hash'] = manifest_hasher.hexdigest()
             detection['meta'] = detection_meta
 
-        video_workspace = _ensure_dir(workspace / video_path.stem)
         processing_dir = _ensure_dir(processing_root / video_path.stem)
-        frame_dir = _ensure_dir(video_workspace / 'frames')
-        audio_dir = _ensure_dir(video_workspace / 'audio')
+        frame_dir = _ensure_dir(processing_dir / 'video' / 'frames')
         audio_artifact_dir = _ensure_dir(processing_dir / 'audio')
+        audio_dir = _ensure_dir(audio_artifact_dir / 'chunks')
         run_context['audio_artifact_dir'] = str(audio_artifact_dir)
 
         scene_outputs: List[Dict[str, Any]] = []
@@ -2955,11 +3006,16 @@ def run(
                         typer.echo(f'[DEBUG] transcript preview: {str(audio_data.get("transcript"))[:50]}...')
                 audio_speaker_ids = _extract_speaker_ids(audio_data)
                 merged_entities = []
-                for entity_source in (frame_data.get('entities'), audio_data.get('entities')):
-                    if isinstance(entity_source, list):
-                        merged_entities.extend(entity_source)
-                    elif isinstance(entity_source, str) and entity_source.strip():
-                        merged_entities.append(entity_source.strip())
+                for modality_data in (frame_data, audio_data):
+                    typed_entities = modality_data.get('ner_entities')
+                    fallback_entities = modality_data.get('entities')
+                    if isinstance(typed_entities, list) and typed_entities:
+                        merged_entities.extend(typed_entities)
+                        continue
+                    if isinstance(fallback_entities, list):
+                        merged_entities.extend(fallback_entities)
+                    elif isinstance(fallback_entities, str) and fallback_entities.strip():
+                        merged_entities.append(fallback_entities.strip())
                 
                 kg_scene_data = {
                     'index': scene.get('index'),
@@ -3328,12 +3384,6 @@ def run(
                             typer.echo('[PHASE 6] [WARN] Harmonization complete but Phase 6a failed; keeping phase6_complete=False', err=True)
                         typer.echo('[PHASE 6b] [PASS] Harmonization complete')
                         
-                        # Write temporal index if provided
-                        temporal_index = harmonization_result.get('temporal_index')
-                        if temporal_index:
-                            temporal_index_path = video_workspace / 'temporal_index.json'
-                            atomic_write_json(temporal_index_path, temporal_index)
-                            typer.echo(f'[PHASE 6] [PASS] Temporal index written: {temporal_index_path}')
                 if observer:
                     observer.step_end(
                         "phase6.pipeline",
@@ -3368,13 +3418,10 @@ def run(
     if observer:
         observer.step_end("loop.videos", metadata={"processed_videos": len(results)})
 
-    # Build knowledge graph from results
-    kg_result = _build_knowledge_graph_from_results(results, cfg)
-    if kg_result and kg_result.get('status') == 'success':
-        if VERBOSE:
-            typer.echo(f"[kg] Knowledge graph built successfully: {kg_result.get('statistics', {})}")
-    elif kg_result and kg_result.get('status') == 'failed':
-        knowledge_graph_status = 'error_runtime'
+    # Canonical ingestion path writes KG incrementally per scene via update_kg_for_scene().
+    # Preserve the legacy end-of-run builder for diagnostics/tests, but do not invoke it here.
+    if VERBOSE and KNOWLEDGE_GRAPH_AVAILABLE and cfg.get('knowledge_graph', {}).get('enabled', True):
+        typer.echo("[kg] Realtime scene updates are canonical; skipping legacy end-of-run rebuild")
 
     run_context['knowledge_graph_status'] = knowledge_graph_status
     if isinstance(cfg.get('run'), dict):

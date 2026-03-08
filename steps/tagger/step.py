@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 
 _NER_PIPELINES: Dict[str, Any] = {}
 
@@ -54,7 +54,7 @@ def _usefulness_score(text: str) -> float:
     return min(1.0, (len(tokens) / 200.0) + (keywords / 100.0))
 
 
-def _extract_entities_transformers(text: str, cfg: Dict[str, Any]) -> List[str]:
+def _extract_entities_transformers(text: str, cfg: Dict[str, Any]) -> Tuple[List[str], List[Dict[str, str]]]:
     try:
         model_id = (
             ((cfg.get("config", {}) or {}).get("tagger", {}) or {}).get("ner_model")
@@ -63,13 +63,28 @@ def _extract_entities_transformers(text: str, cfg: Dict[str, Any]) -> List[str]:
         nlp = _get_ner_pipeline(model_id)
         ents = nlp(text)
         labels = []
+        structured = []
+        seen_structured = set()
         for e in ents:
-            word = (e.get("word") or e.get("entity_group") or "").strip()
+            word = (e.get("word") or "").strip()
+            entity_group = (e.get("entity_group") or e.get("entity") or "").strip().upper()
             if word:
                 labels.append(word)
-        return list(dict.fromkeys(labels))[:20]
+                key = (word.casefold(), entity_group)
+                if key in seen_structured:
+                    continue
+                seen_structured.add(key)
+                structured.append(
+                    {
+                        "name": word,
+                        "type": entity_group,
+                        "source_step": "tagger",
+                        "source_modality": "text",
+                    }
+                )
+        return list(dict.fromkeys(labels))[:20], structured[:20]
     except Exception as e:
-        return []
+        return [], []
 
 
 def _fallback_entities(text: str) -> List[str]:
@@ -82,9 +97,15 @@ def _fallback_entities(text: str) -> List[str]:
 def tagger(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
     text = _gather_text(item)
     if not text:
-        return {"tags": [], "usefulness": 0.0, "entities": []}
-    ents = _extract_entities_transformers(text, cfg) or _fallback_entities(text)
+        return {"tags": [], "usefulness": 0.0, "entities": [], "ner_entities": []}
+    ents, ner_entities = _extract_entities_transformers(text, cfg)
+    ents = ents or _fallback_entities(text)
     ents = dedupe_tokens(ents)
     score = _usefulness_score(text)
     tags = ents[:5]
-    return {"tags": tags, "usefulness": score, "entities": ents}
+    return {
+        "tags": tags,
+        "usefulness": score,
+        "entities": ents,
+        "ner_entities": ner_entities,
+    }

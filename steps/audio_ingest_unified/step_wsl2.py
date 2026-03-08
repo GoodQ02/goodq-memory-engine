@@ -52,11 +52,18 @@ def run(item: dict, config: dict) -> dict:
         ).strip()
         
         # Call WSL2 audio processing script
+        wsl_user = (
+            os.environ.get("GOODQ_WSL_USER")
+            or os.environ.get("USERNAME")
+            or os.environ.get("USER")
+            or "user"
+        )
+        wsl_workspace = (os.environ.get("GOODQ_WSL_WORKSPACE") or f"/home/{wsl_user}/goodq_audio").rstrip("/")
         cmd = [
             'wsl', '-d', wsl_distro, '--', 'bash', '-lc',
-            f'source ~/goodq_audio/setup_cuda_env.sh 2>/dev/null && '
-            f'cd ~/goodq_audio && '
-            f'python3 ~/goodq_audio/scripts/process_audio.py "{audio_path_wsl}" "{temp_dir_wsl}"'
+            f'source {wsl_workspace}/setup_cuda_env.sh 2>/dev/null && '
+            f'cd {wsl_workspace} && '
+            f'python3 {wsl_workspace}/process_audio.py "{audio_path_wsl}" "{temp_dir_wsl}"'
         ]
         
         try:

@@ -45,8 +45,10 @@ class EntityExtractor:
         self.family_names = self._load_family_names()
         self.entity_cache = {}
         
-        # Stopwords to filter out (common words that aren't names)
+        # Stopwords to filter out (common words that aren't names/entities)
         self.stopwords = {
+            "i", "i'm", "you", "you're", "we", "we're", "they", "it's", "that's",
+            "what", "well", "yeah", "okay", "why", "how", "look", "but", "and", "the",
             'okay', 'ok', 'yes', 'no', 'yeah', 'yep', 'nope',
             'thank', 'thanks', 'please', 'hey', 'hi', 'hello',
             'can', 'could', 'would', 'should', 'will', 'shall',
@@ -57,6 +59,7 @@ class EntityExtractor:
             'emotion', 'sentiment', 'man', 'woman', 'person',
             'hose', 'mathias',  # Add specific false positives as found
         }
+        self._contraction_parts = {"'m", "'re", "'s", "'ll", "'ve", "'d", "n't"}
         
     def _load_family_names(self) -> Set[str]:
         """Load known family member names from config"""
@@ -218,6 +221,8 @@ class EntityExtractor:
             for obj in objects:
                 if isinstance(obj, dict):
                     obj_name = obj.get("class", obj.get("label", "unknown"))
+                    if not self._is_valid_entity_candidate(obj_name):
+                        continue
                     confidence = obj.get("confidence", 0.5)
                     
                     entities.append(ExtractedEntity(
@@ -241,7 +246,7 @@ class EntityExtractor:
             tags = scene_data["tags"]
             if isinstance(tags, list):
                 for tag in tags:
-                    if isinstance(tag, str):
+                    if isinstance(tag, str) and self._is_valid_entity_candidate(tag):
                         entities.append(ExtractedEntity(
                             entity_id=f"{scene_id}_concept_{tag}",
                             entity_type="concept",
@@ -298,8 +303,7 @@ class EntityExtractor:
         # Check for family names
         for name in self.family_names:
             if name in text_lower:
-                # Skip if it's a stopword
-                if name.lower() in self.stopwords:
+                if not self._is_valid_entity_candidate(name):
                     continue
                     
                 entities.append(ExtractedEntity(
@@ -366,6 +370,33 @@ class EntityExtractor:
     def _normalize_name(self, name: str) -> str:
         """Normalize entity name for matching"""
         return re.sub(r'\s+', ' ', name.lower().strip())
+
+    def _is_valid_entity_candidate(self, token: Any) -> bool:
+        """Filter filler tokens and low-signal fragments from becoming entities."""
+        if not isinstance(token, str):
+            return False
+        raw = token.strip()
+        if not raw:
+            return False
+        lower_raw = raw.lower()
+
+        # Explicit stopword filter (case-insensitive).
+        if lower_raw in self.stopwords:
+            return False
+
+        # Skip punctuation-only fragments and isolated contraction suffixes.
+        if re.fullmatch(r"[^\w]+", raw):
+            return False
+        if lower_raw in self._contraction_parts:
+            return False
+
+        # Skip very short lowercase fragments unless they appear capitalized.
+        compact = re.sub(r"[^A-Za-z0-9]+", "", raw)
+        is_capitalized = bool(raw[:1].isupper())
+        if compact and len(compact) < 3 and not is_capitalized:
+            return False
+
+        return True
 
 
 def extract_entities_from_scene(

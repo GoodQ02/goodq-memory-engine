@@ -14,56 +14,18 @@ from datetime import datetime, timedelta
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from steps.common.config_loader import get_runtime_paths, load_configs
+
 logger = logging.getLogger(__name__)
-_PATH_FALLBACK_WARNED = False
 
 
 def _resolve_runtime_paths() -> tuple[Path, Path]:
-    global _PATH_FALLBACK_WARNED
-    project_root = Path(__file__).resolve().parent.parent
-    paths_cfg = {}
-    try:
-        from steps.common.config_loader import load_configs
-
-        cfg = load_configs()
-        paths_cfg = (cfg.get("paths") or {}) if isinstance(cfg, dict) else {}
-    except Exception:
-        paths_cfg = {}
-
-    log_dir_raw = paths_cfg.get("log_dir")
-    if log_dir_raw:
-        log_dir = Path(log_dir_raw)
-        if not log_dir.is_absolute():
-            log_dir = (project_root / log_dir).resolve()
-    else:
-        log_dir = project_root / "logs"
-
-    processing_raw = paths_cfg.get("processing")
-    if processing_raw:
-        processing_dir = Path(processing_raw)
-    else:
-        data_root = paths_cfg.get("data_root") or os.environ.get("GOODQ_DATA_ROOT")
-        if data_root:
-            base = Path(data_root)
-            processing_dir = base / "processing" if base.name == "GoodQ_Data" else base / "GoodQ_Data" / "processing"
-            if not _PATH_FALLBACK_WARNED:
-                logger.warning(
-                    "monitor_ingestion path fallback used path_key=%s derived_from=%s",
-                    "paths.processing",
-                    "paths.data_root_or_env",
-                )
-                _PATH_FALLBACK_WARNED = True
-        else:
-            processing_dir = project_root / "processing"
-            if not _PATH_FALLBACK_WARNED:
-                logger.warning(
-                    "monitor_ingestion path fallback used path_key=%s derived_from=%s",
-                    "paths.processing",
-                    "cwd",
-                )
-                _PATH_FALLBACK_WARNED = True
-
-    return log_dir, processing_dir
+    cfg = load_configs({})
+    runtime_paths = get_runtime_paths(cfg)
+    return (
+        Path(runtime_paths["log_dir"]).resolve(),
+        Path(runtime_paths["processing"]).resolve(),
+    )
 
 
 def format_time(seconds):

@@ -15,6 +15,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+from steps.common.config_loader import get_runtime_paths, load_configs
+
 logger = logging.getLogger(__name__)
 
 
@@ -62,7 +64,6 @@ def check_config():
     print(f"[PASS] Config file: {config_path}")
     
     try:
-        from steps.common.config_loader import load_configs
         cfg = load_configs({})
         
         print("[PASS] Config loads successfully")
@@ -125,20 +126,7 @@ def check_recent_ingestions(cfg: Dict[str, Any] | None):
         print("[WARN]  Cannot check without config paths")
         return
     
-    paths_cfg = cfg.get('paths', {}) if isinstance(cfg, dict) else {}
-    processing_value = paths_cfg.get('processing')
-    if not processing_value:
-        data_root = paths_cfg.get('data_root') or os.environ.get("GOODQ_DATA_ROOT")
-        if data_root:
-            processing_value = str(Path(data_root) / "processing")
-        else:
-            logger.warning(
-                "system_status path fallback used path_key=%s derived_from=%s",
-                "paths.processing",
-                "cwd",
-            )
-            processing_value = str(Path.cwd() / "processing")
-    processing_root = Path(processing_value)
+    processing_root = Path(get_runtime_paths(cfg)['processing']).resolve()
     
     if not processing_root.exists():
         print(f"[FAIL] Processing directory does not exist: {processing_root}")

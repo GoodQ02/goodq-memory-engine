@@ -10,39 +10,20 @@ from pathlib import Path
 import os
 import logging
 
+from steps.common.config_loader import get_runtime_paths, load_configs
+
 logger = logging.getLogger(__name__)
-_MODELS_FALLBACK_WARNED = False
 
 
 def _resolve_models_root() -> Path:
-    global _MODELS_FALLBACK_WARNED
-    explicit = os.environ.get("HF_HOME") or os.environ.get("GOODQ_MODELS_DIR")
-    if explicit:
-        return Path(explicit)
-    data_root = os.environ.get("GOODQ_DATA_ROOT")
-    if data_root:
-        if not _MODELS_FALLBACK_WARNED:
-            logger.warning(
-                "audio_emotion path fallback used path_key=%s derived_from=%s",
-                "HF_HOME",
-                "GOODQ_DATA_ROOT",
-            )
-            _MODELS_FALLBACK_WARNED = True
-        return Path(data_root) / "models"
-    if not _MODELS_FALLBACK_WARNED:
-        logger.warning(
-            "audio_emotion path fallback used path_key=%s derived_from=%s",
-            "HF_HOME",
-            "cwd",
-        )
-        _MODELS_FALLBACK_WARNED = True
-    return Path.cwd() / "models"
+    runtime_paths = get_runtime_paths(load_configs({}), "models_cache")
+    return Path(runtime_paths["models_cache"]).resolve()
 
 
 _AEMO: Dict[str, Any] = {"pipe": None, "device": "cpu", "model_id": None}
 HF_HOME = _resolve_models_root()
-os.environ.setdefault("HF_HOME", str(HF_HOME))
-os.environ.setdefault("TORCH_HOME", os.environ.get("TORCH_HOME") or str(HF_HOME))
+os.environ["HF_HOME"] = str(HF_HOME)
+os.environ["TORCH_HOME"] = str(HF_HOME)
 # Disable hf_transfer to avoid dependency issues
 os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "0"
 

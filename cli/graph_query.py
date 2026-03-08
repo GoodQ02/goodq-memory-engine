@@ -3,7 +3,6 @@ Knowledge Graph Query CLI
 Command-line interface for querying the knowledge graph
 """
 import sys
-import os
 import click
 import json
 import logging
@@ -14,47 +13,15 @@ from tabulate import tabulate
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from lib.graph_query import GraphQuery
+from steps.common.config_loader import get_runtime_paths, load_configs
 
 logger = logging.getLogger(__name__)
-_GRAPH_DB_FALLBACK_WARNED = False
 
 
 def _default_graph_db() -> str:
-    global _GRAPH_DB_FALLBACK_WARNED
-    explicit = os.environ.get("GOODQ_KNOWLEDGE_GRAPH_DB") or os.environ.get("GOODQ_GRAPH_DB")
-    if explicit:
-        return explicit
-
-    try:
-        from steps.common.config_loader import load_configs
-
-        cfg = load_configs()
-        paths_cfg = (cfg.get("paths") or {}) if isinstance(cfg, dict) else {}
-        graph_db = paths_cfg.get("knowledge_graph_db")
-        if graph_db:
-            return str(graph_db)
-    except Exception:
-        pass
-
-    data_root = os.environ.get("GOODQ_DATA_ROOT")
-    if data_root:
-        if not _GRAPH_DB_FALLBACK_WARNED:
-            logger.warning(
-                "graph_query path fallback used path_key=%s derived_from=%s",
-                "knowledge_graph_db",
-                "GOODQ_DATA_ROOT",
-            )
-            _GRAPH_DB_FALLBACK_WARNED = True
-        return str(Path(data_root) / "GoodQ_Data" / "knowledge_graph.db")
-
-    if not _GRAPH_DB_FALLBACK_WARNED:
-        logger.warning(
-            "graph_query path fallback used path_key=%s derived_from=%s",
-            "knowledge_graph_db",
-            "cwd",
-        )
-        _GRAPH_DB_FALLBACK_WARNED = True
-    return str(Path.cwd() / "knowledge_graph.db")
+    cfg = load_configs({})
+    runtime_paths = get_runtime_paths(cfg)
+    return str(Path(runtime_paths["knowledge_graph_db"]).resolve())
 
 
 @click.group()

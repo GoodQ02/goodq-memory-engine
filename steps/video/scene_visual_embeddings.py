@@ -11,9 +11,9 @@ import logging
 from pathlib import Path
 
 from steps.common.atomic_io import atomic_write_json
+from steps.common.config_loader import get_runtime_paths
 
 logger = logging.getLogger(__name__)
-_PROCESSING_FALLBACK_WARNED = False
 
 
 def _atomic_write_json(path: Path, data: Any) -> None:
@@ -33,36 +33,8 @@ def _persist_phase6_failure(scene_manifest_path: str, scene_data: Dict[str, Any]
 
 
 def _resolve_processing_root(cfg: Dict[str, Any]) -> str:
-    global _PROCESSING_FALLBACK_WARNED
-    paths_cfg = (cfg.get('paths') or {}) if isinstance(cfg, dict) else {}
-    processing_root = paths_cfg.get('processing')
-    if processing_root:
-        return str(processing_root)
-
-    data_root = paths_cfg.get('data_root')
-    if not data_root:
-        host_cfg = (cfg.get('host') or {}) if isinstance(cfg, dict) else {}
-        data_root = host_cfg.get('data_root') or os.environ.get("GOODQ_DATA_ROOT")
-    if data_root:
-        base = Path(str(data_root))
-        if not _PROCESSING_FALLBACK_WARNED:
-            logger.warning(
-                "scene_visual_embeddings path fallback used path_key=%s derived_from=%s",
-                "paths.processing",
-                "paths_or_host_data_root",
-            )
-            _PROCESSING_FALLBACK_WARNED = True
-        resolved = base / "processing" if base.name == "GoodQ_Data" else base / "GoodQ_Data" / "processing"
-        return str(resolved)
-
-    if not _PROCESSING_FALLBACK_WARNED:
-        logger.warning(
-            "scene_visual_embeddings path fallback used path_key=%s derived_from=%s",
-            "paths.processing",
-            "cwd",
-        )
-        _PROCESSING_FALLBACK_WARNED = True
-    return str(Path.cwd() / "processing")
+    runtime_paths = get_runtime_paths(cfg)
+    return str(Path(runtime_paths['processing']).resolve())
 
 
 def _stage10_18_debug(*parts: Any) -> None:

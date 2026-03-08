@@ -19,27 +19,27 @@ from threading import Thread, Event, RLock
 import json
 import os
 import uuid
+import tempfile
 
 # Add repo root to path for imports
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
-from configs.paths import LOGS_DIR
 from steps.common.atomic_io import atomic_write_json
+from steps.common.config_loader import get_runtime_paths, load_configs
 
-log_file = LOGS_DIR / "watchdog.log"
-log_file.parent.mkdir(parents=True, exist_ok=True)
+_LOG_FORMAT = '%(asctime)s [%(levelname)s] %(message)s'
+_BOOTSTRAP_LOG_PATH = Path(tempfile.gettempdir()) / "goodq_watchdog_bootstrap.log"
+_CONSOLE_HANDLER = logging.StreamHandler(sys.stderr)
+_CONSOLE_HANDLER.setFormatter(logging.Formatter(_LOG_FORMAT))
+_BOOTSTRAP_FILE_HANDLER = logging.FileHandler(_BOOTSTRAP_LOG_PATH, encoding='utf-8')
+_BOOTSTRAP_FILE_HANDLER.setFormatter(logging.Formatter(_LOG_FORMAT))
 
-# Setup logging with UTF-8 encoding for file, ASCII for console
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s [%(levelname)s] %(message)s',
-    handlers=[
-        logging.FileHandler(log_file, encoding='utf-8')
-    ]
+    format=_LOG_FORMAT,
+    handlers=[_CONSOLE_HANDLER, _BOOTSTRAP_FILE_HANDLER],
+    force=True,
 )
-# Add console handler with ASCII-safe encoding
-console_handler = logging.StreamHandler(sys.stdout)
-console_handler.setFormatter(logging.Formatter('%(asctime)s [%(levelname)s] %(message)s'))
 
 
 # ASCII filter to replace emojis with text equivalents
@@ -75,9 +75,59 @@ class ASCIIFilter(logging.Filter):
         return True
 
 
-console_handler.addFilter(ASCIIFilter())
-logging.root.addHandler(console_handler)
+_CONSOLE_HANDLER.addFilter(ASCIIFilter())
+_BOOTSTRAP_FILE_HANDLER.addFilter(ASCIIFilter())
 logger = logging.getLogger(__name__)
+
+
+def _resolve_watchdog_paths(cfg: Dict[str, Any]) -> Dict[str, Path]:
+    runtime_paths = get_runtime_paths(
+        cfg,
+        "processed",
+        "failed",
+        "watchdog_state_file",
+        "watchdog_lock_file",
+    )
+    return {
+        "watch_dir": Path(runtime_paths["import_inbox"]).resolve(),
+        "processing_dir": Path(runtime_paths["processing"]).resolve(),
+        "processed_dir": Path(runtime_paths["processed"]).resolve(),
+        "failed_dir": Path(runtime_paths["failed"]).resolve(),
+        "log_dir": Path(runtime_paths["log_dir"]).resolve(),
+        "state_file": Path(runtime_paths["watchdog_state_file"]).resolve(),
+        "lock_file": Path(runtime_paths["watchdog_lock_file"]).resolve(),
+    }
+
+
+def _configure_watchdog_logging(log_dir: Path) -> Path:
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_file = log_dir / "watchdog.log"
+    root_logger = logging.getLogger()
+    formatter = logging.Formatter(_LOG_FORMAT)
+
+    for handler in root_logger.handlers:
+        handler.setFormatter(formatter)
+
+    has_file_handler = False
+    for handler in root_logger.handlers:
+        if isinstance(handler, logging.FileHandler):
+            try:
+                if Path(handler.baseFilename).resolve() == log_file.resolve():
+                    has_file_handler = True
+                    break
+            except Exception:
+                continue
+
+    if not has_file_handler:
+        file_handler = logging.FileHandler(log_file, encoding='utf-8')
+        file_handler.setFormatter(formatter)
+        root_logger.addHandler(file_handler)
+
+    if _BOOTSTRAP_FILE_HANDLER in root_logger.handlers:
+        root_logger.removeHandler(_BOOTSTRAP_FILE_HANDLER)
+        _BOOTSTRAP_FILE_HANDLER.close()
+
+    return log_file
 
 # Import Control Agent
 try:
@@ -92,35 +142,6 @@ except ImportError:
     CONTROL_AGENT_STATUS_DISABLED_NO_LLM_CLIENT = "disabled_no_llm_client"
     CONTROL_AGENT_DISABLED_REASON_NO_LLM_CLIENT = "Control Agent module unavailable"
     logger.warning("Control Agent not available - running without AI orchestration")
-
-# Configuration
-_PATH_FALLBACK_WARNED = False
-
-
-def _compute_data_root_base() -> Path:
-    global _PATH_FALLBACK_WARNED
-    data_root = os.environ.get("GOODQ_DATA_ROOT")
-    if data_root:
-        return Path(data_root)
-    if not _PATH_FALLBACK_WARNED:
-        logger.warning(
-            "watchdog path fallback used path_key=%s derived_from=%s",
-            "GOODQ_DATA_ROOT",
-            "repo_root_parent",
-        )
-        _PATH_FALLBACK_WARNED = True
-    return REPO_ROOT.parent / "_DATA"
-
-
-def _default_processing_root() -> Path:
-    return _compute_data_root_base() / "GoodQ_Data" / "processing"
-
-
-WATCH_DIR = REPO_ROOT / "import_inbox"
-PROCESSING_DIR = _default_processing_root()
-PROCESSED_DIR = PROCESSING_DIR.parent / "processed"
-FAILED_DIR = PROCESSING_DIR.parent / "failed"
-STATE_FILE = REPO_ROOT / "logs" / "watchdog_state.json"
 
 # File type configuration
 SUPPORTED_VIDEO = {'.mp4', '.avi', '.mov', '.mkv', '.wmv', '.flv', '.webm', '.m4v'}
@@ -178,6 +199,7 @@ class ProcessedRegistry:
     """Track which files have been processed"""
     def __init__(self, state_file: Path):
         self.state_file = state_file
+        self.state_file.parent.mkdir(parents=True, exist_ok=True)
         self.lock = RLock()
         self.processed: Dict[str, Dict] = {}
         self.load()
@@ -244,23 +266,17 @@ class ProcessedRegistry:
 
 class WatchdogProcessor:
     """Main watchdog processor"""
-    def __init__(self, cfg: Dict[str, Any]):
+    def __init__(self, cfg: Dict[str, Any], resolved_paths: Optional[Dict[str, Path]] = None):
         self._cfg_base = cfg
-        paths_cfg = (cfg.get("paths") or {}) if isinstance(cfg, dict) else {}
-        self.watch_dir = Path(paths_cfg.get("import_inbox", WATCH_DIR))
-        self.processing_dir = Path(paths_cfg.get("processing", PROCESSING_DIR))
-        data_root = Path(paths_cfg.get("data_root", self.processing_dir.parent))
-        self.processed_dir = Path(paths_cfg.get("processed", data_root / "processed"))
-        self.failed_dir = Path(paths_cfg.get("failed", data_root / "failed"))
-        log_dir_raw = paths_cfg.get("log_dir")
-        if isinstance(log_dir_raw, str) and log_dir_raw:
-            log_dir = Path(log_dir_raw)
-            if not log_dir.is_absolute():
-                log_dir = REPO_ROOT / log_dir
-        else:
-            log_dir = STATE_FILE.parent
-        state_file = Path(paths_cfg.get("watchdog_state_file", log_dir / "watchdog_state.json"))
-        self.registry = ProcessedRegistry(state_file)
+        runtime_paths = resolved_paths or _resolve_watchdog_paths(cfg)
+        self.watch_dir = runtime_paths["watch_dir"]
+        self.processing_dir = runtime_paths["processing_dir"]
+        self.processed_dir = runtime_paths["processed_dir"]
+        self.failed_dir = runtime_paths["failed_dir"]
+        self.log_dir = runtime_paths["log_dir"]
+        self.state_file = runtime_paths["state_file"]
+        self.lock_file = runtime_paths["lock_file"]
+        self.registry = ProcessedRegistry(self.state_file)
         self.queue = Queue()
         self.shutdown = Event()
         self.file_states: Dict[str, FileState] = {}
@@ -278,6 +294,7 @@ class WatchdogProcessor:
         self.processing_dir.mkdir(parents=True, exist_ok=True)
         self.processed_dir.mkdir(parents=True, exist_ok=True)
         self.failed_dir.mkdir(parents=True, exist_ok=True)
+        self.log_dir.mkdir(parents=True, exist_ok=True)
         
         logger.info(f"Watching directory: {self.watch_dir}")
     
@@ -1003,7 +1020,17 @@ class WatchdogProcessor:
 
 def main():
     """Main entry point with file lock to prevent multiple instances"""
-    lockfile = _default_processing_root().parent / ".watchdog.lock"
+    try:
+        cfg = load_configs({})
+        runtime_paths = _resolve_watchdog_paths(cfg)
+        log_file = _configure_watchdog_logging(runtime_paths["log_dir"])
+    except Exception:
+        logger.exception(
+            "Watchdog bootstrap failed before canonical log binding. bootstrap_log=%s",
+            _BOOTSTRAP_LOG_PATH,
+        )
+        raise
+    lockfile = runtime_paths["lock_file"]
     lockfile.parent.mkdir(parents=True, exist_ok=True)
     
     # Try to create lock file exclusively
@@ -1035,12 +1062,11 @@ def main():
             sys.exit(1)
     
     try:
-        from steps.common.config_loader import load_configs
-        cfg = load_configs({})
         logger.info("Runtime authority: configs/config.yaml")
         logger.info(f"Import inbox (resolved): {cfg['paths']['import_inbox']}")
         logger.info(f"Active epoch: {Path(cfg['paths']['db_dir']).name}")
-        watchdog = WatchdogProcessor(cfg)
+        logger.info(f"Watchdog log file: {log_file}")
+        watchdog = WatchdogProcessor(cfg, resolved_paths=runtime_paths)
         watchdog.run()
     finally:
         # Remove lock on exit

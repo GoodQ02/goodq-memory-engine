@@ -18,37 +18,55 @@ import tempfile
 import time
 import logging
 import wave
+from pathlib import Path
+
+from steps.common.config_loader import get_runtime_paths, load_configs
 
 logger = logging.getLogger(__name__)
 
 
 _FW_CACHE: Dict[Tuple[str, str, str], Any] = {}  # (model_id, device, compute_type) -> model
-_MODELS_FALLBACK_WARNED = False
 
 
 def _resolve_models_root() -> str:
-    global _MODELS_FALLBACK_WARNED
-    explicit = os.environ.get("HF_HOME") or os.environ.get("GOODQ_MODELS_DIR")
-    if explicit:
-        return explicit
-    data_root = os.environ.get("GOODQ_DATA_ROOT")
-    if data_root:
-        if not _MODELS_FALLBACK_WARNED:
-            logger.warning(
-                "audio_transcribe path fallback used path_key=%s derived_from=%s",
-                "HF_HOME",
-                "GOODQ_DATA_ROOT",
-            )
-            _MODELS_FALLBACK_WARNED = True
-        return os.path.join(data_root, "models")
-    if not _MODELS_FALLBACK_WARNED:
-        logger.warning(
-            "audio_transcribe path fallback used path_key=%s derived_from=%s",
-            "HF_HOME",
-            "cwd",
+    runtime_paths = get_runtime_paths(load_configs({}), "models_cache")
+    return str(Path(runtime_paths["models_cache"]).resolve())
+
+
+def _detect_transcription_device() -> Tuple[str, str]:
+    """
+    Detect the best local device for faster-whisper.
+
+    The Windows fallback path uses faster-whisper/CTranslate2 for inference, so
+    torch-only CUDA probing is too narrow. Prefer torch when it is available
+    because the optimizer stack uses it, but allow CTranslate2 to unlock local
+    GPU transcription when torch itself is CPU-only.
+    """
+    try:
+        import torch  # type: ignore
+
+        if bool(getattr(torch, "cuda", None) and torch.cuda.is_available()):
+            return "cuda", f"torch:{getattr(torch, '__version__', 'unknown')}"
+    except Exception as e:
+        logger.debug(
+            "[TRANSCRIBE] Torch CUDA probe failed exc_type=%s exc=%s",
+            type(e).__name__,
+            e,
         )
-        _MODELS_FALLBACK_WARNED = True
-    return os.path.join(os.getcwd(), "models")
+
+    try:
+        import ctranslate2  # type: ignore
+
+        if int(ctranslate2.get_cuda_device_count()) > 0:
+            return "cuda", f"ctranslate2:{getattr(ctranslate2, '__version__', 'unknown')}"
+    except Exception as e:
+        logger.debug(
+            "[TRANSCRIBE] CTranslate2 CUDA probe failed exc_type=%s exc=%s",
+            type(e).__name__,
+            e,
+        )
+
+    return "cpu", "no_cuda_backend"
 
 
 def _load_fw_model(model_id: str, device: str, compute_type: str, duration_minutes: float = None) -> Any:
@@ -457,17 +475,7 @@ def _run_wsl_faster_whisper_venv(input_path: str) -> Dict[str, Any]:
     wsl_workspace = wsl_workspace.rstrip("/")
     wsl_python = f"{wsl_workspace}/env/bin/python"
 
-    repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-    helper_candidates: List[str] = []
-    repo_root_wsl = _windows_to_wsl_path(repo_root)
-    if repo_root_wsl:
-        helper_candidates.append(f"{repo_root_wsl.rstrip('/')}/wsl2_audio/fw_transcribe.py")
-    wsl_repo_root = (os.environ.get("GOODQ_WSL_REPO_ROOT") or "").strip()
-    if wsl_repo_root:
-        helper_candidates.append(f"{wsl_repo_root.rstrip('/')}/wsl2_audio/fw_transcribe.py")
-    home_match = re.match(r"^/home/([^/]+)/", wsl_workspace + "/")
-    if home_match:
-        helper_candidates.append(f"/home/{home_match.group(1)}/projects/goodq4all/wsl2_audio/fw_transcribe.py")
+    helper_candidates: List[str] = [f"{wsl_workspace}/fw_transcribe.py"]
 
     deduped_helpers: List[str] = []
     seen_helpers = set()
@@ -688,12 +696,8 @@ def audio_transcribe(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
     whisper_cli = tools_cfg.get("whisper_cli")
     whisper_model_path = tools_cfg.get("whisper_ggml_model")
 
-    # Detect device
-    try:
-        import torch
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-    except:
-        device = "cpu"
+    device, device_probe = _detect_transcription_device()
+    logger.info("[TRANSCRIBE] Device selected=%s via=%s", device, device_probe)
     
     model_id = str(tx_cfg.get("model") or "medium")
     
@@ -731,6 +735,7 @@ def audio_transcribe(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
                 "engine": "hybrid_whisper",
                 "model": model_id,
                 "device": device,
+                "device_probe": device_probe,
                 "used_cli": False,
                 "chunk_seconds": chunk_seconds,
                 "duration": duration,
@@ -1022,6 +1027,7 @@ def audio_transcribe(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
         "duration": duration,
         "used_cli": bool(whisper_cli),
         "device": device,
+        "device_probe": device_probe,
         "processing_time": total_elapsed,
         "realtime_factor": (total_audio_duration / total_elapsed) if total_elapsed > 0 else 0,
         "gpu_memory_peak_gb": gpu_stats.get("allocated_gb"),

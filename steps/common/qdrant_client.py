@@ -217,7 +217,12 @@ class QdrantClient:
         if not self.ensure_collection():
             return []
         try:
-            body: Dict[str, Any] = {"vector": vector, "limit": top_k}
+            body: Dict[str, Any] = {
+                "vector": vector,
+                "limit": top_k,
+                "with_payload": True,
+                "with_vector": False,
+            }
             if payload_filter:
                 body["filter"] = payload_filter
             r = self.session.post(

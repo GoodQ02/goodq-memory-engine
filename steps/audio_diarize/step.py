@@ -340,7 +340,7 @@ def audio_diarize(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
     if not ffmpeg_path:
         global _FFMPEG_FALLBACK_WARNED
         host_cfg = (cfg.get("host") or {}) if isinstance(cfg, dict) else {}
-        data_root = host_cfg.get("data_root") or os.environ.get("GOODQ_DATA_ROOT")
+        data_root = host_cfg.get("data_root")
         if data_root:
             candidate = Path(str(data_root)) / "_TOOLS" / "ffmpeg" / "bin" / "ffmpeg.exe"
             if candidate.exists():
@@ -349,7 +349,7 @@ def audio_diarize(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
                     logger.warning(
                         "audio_diarize path fallback used path_key=%s derived_from=%s",
                         "ffmpeg",
-                        "host.data_root_or_env",
+                        "host.data_root",
                     )
                     _FFMPEG_FALLBACK_WARNED = True
         if not ffmpeg_path:

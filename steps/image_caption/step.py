@@ -4,6 +4,8 @@ import os
 import logging
 from pathlib import Path
 
+from steps.common.config_loader import get_runtime_paths, load_configs
+
 logger = logging.getLogger(__name__)
 
 # Import GPU manager for centralized GPU configuration
@@ -23,32 +25,11 @@ except ImportError:
 
 _BLIP = {"model": None, "proc": None, "device": "cpu"}
 _FALLBACK = {"pipe": None, "device": "cpu"}
-_MODELS_FALLBACK_WARNED = False
 
 
 def _resolve_models_root() -> str:
-    global _MODELS_FALLBACK_WARNED
-    explicit = os.environ.get("HF_HOME") or os.environ.get("GOODQ_MODELS_DIR")
-    if explicit:
-        return explicit
-    data_root = os.environ.get("GOODQ_DATA_ROOT")
-    if data_root:
-        if not _MODELS_FALLBACK_WARNED:
-            logger.warning(
-                "image_caption path fallback used path_key=%s derived_from=%s",
-                "HF_HOME",
-                "GOODQ_DATA_ROOT",
-            )
-            _MODELS_FALLBACK_WARNED = True
-        return str(Path(data_root) / "models")
-    if not _MODELS_FALLBACK_WARNED:
-        logger.warning(
-            "image_caption path fallback used path_key=%s derived_from=%s",
-            "HF_HOME",
-            "cwd",
-        )
-        _MODELS_FALLBACK_WARNED = True
-    return str(Path.cwd() / "models")
+    runtime_paths = get_runtime_paths(load_configs({}), "models_cache")
+    return str(Path(runtime_paths["models_cache"]).resolve())
 
 
 def _load_blip() -> None:
@@ -65,8 +46,8 @@ def _load_blip() -> None:
 
         # Ensure HF_HOME is set for model caching
         models_root = _resolve_models_root()
-        os.environ.setdefault("HF_HOME", models_root)
-        os.environ.setdefault("TORCH_HOME", models_root)
+        os.environ["HF_HOME"] = models_root
+        os.environ["TORCH_HOME"] = models_root
         os.environ.setdefault("TRANSFORMERS_CACHE", str(Path(models_root) / "transformers"))
         
         proc = BlipProcessor.from_pretrained("Salesforce/blip-image-captioning-base")

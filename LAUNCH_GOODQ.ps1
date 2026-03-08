@@ -19,17 +19,19 @@ if (-not $PSBoundParameters.ContainsKey('DryRun') -and -not $StartIngestion) {
 
 # ==================== CONFIGURATION ====================
 $script:RootDir = $PSScriptRoot
-$script:DataRootBase = if ([string]::IsNullOrWhiteSpace($env:GOODQ_DATA_ROOT)) { ("L:" + "\_DATA") } else { $env:GOODQ_DATA_ROOT }
-$script:DataRoot = Join-Path $script:DataRootBase "GoodQ_Data"
-$script:InboxPath = "$script:DataRoot\import_inbox"
-$script:QdrantURL = "http://localhost:6333"
-$script:LogDir = "$script:RootDir\logs"
+$script:DataRoot = $null
+$script:InboxPath = $null
+$script:ProcessedDir = $null
+$script:FailedDir = $null
+$script:QdrantURL = $null
+$script:QdrantStoragePath = $null
+$script:LogDir = $null
 $script:ConfigPath = "$script:RootDir\configs\config.yaml"
-$script:ProcessingRoot = "$script:DataRoot\processing"
-$script:MemoryDbPath = "$script:DataRoot\memory.db"
-$script:KnowledgeGraphDbPath = "$script:DataRoot\knowledge_graph.db"
-$script:FaissDir = "$script:DataRoot\faiss"
-$script:FaissAudioPath = "$script:FaissDir\goodq_audio.index"
+$script:ProcessingRoot = $null
+$script:MemoryDbPath = $null
+$script:KnowledgeGraphDbPath = $null
+$script:FaissDir = $null
+$script:FaissAudioPath = $null
 $script:IssuesFound = 0
 $script:IssuesAutoFixed = 0
 
@@ -85,22 +87,32 @@ function Load-ConfigSnapshot {
 
 function Apply-ConfigSnapshot {
     $snap = Load-ConfigSnapshot
-    if (-not $snap) { return }
-
-    $p = $snap.paths
-    if ($p) {
-        if ($p.data_root) { $script:DataRoot = Normalize-WinPath $p.data_root }
-        if ($p.import_inbox) { $script:InboxPath = Normalize-WinPath $p.import_inbox }
-        if ($p.log_dir) { $script:LogDir = Normalize-WinPath $p.log_dir }
-        if ($p.processing) { $script:ProcessingRoot = Normalize-WinPath $p.processing }
-        if ($p.db_path) { $script:MemoryDbPath = Normalize-WinPath $p.db_path }
-        if ($p.knowledge_graph_db) { $script:KnowledgeGraphDbPath = Normalize-WinPath $p.knowledge_graph_db }
-        if ($p.faiss_dir) { $script:FaissDir = Normalize-WinPath $p.faiss_dir }
-        if ($p.faiss_audio_path) { $script:FaissAudioPath = Normalize-WinPath $p.faiss_audio_path }
+    if (-not $snap) {
+        throw "Failed to load canonical runtime config via steps.common.config_loader.load_configs()."
     }
 
+    $p = $snap.paths
+    if (-not $p) {
+        throw "Canonical config snapshot does not contain a paths section."
+    }
+    if (-not $p.data_root -or -not $p.import_inbox -or -not $p.log_dir -or -not $p.processing -or -not $p.db_path -or -not $p.knowledge_graph_db) {
+        throw "Canonical config snapshot is missing one or more required runtime paths."
+    }
+
+    $script:DataRoot = Normalize-WinPath $p.data_root
+    $script:InboxPath = Normalize-WinPath $p.import_inbox
+    $script:ProcessedDir = if ($p.processed) { Normalize-WinPath $p.processed } else { $null }
+    $script:FailedDir = if ($p.failed) { Normalize-WinPath $p.failed } else { $null }
+    $script:LogDir = Normalize-WinPath $p.log_dir
+    $script:ProcessingRoot = Normalize-WinPath $p.processing
+    $script:MemoryDbPath = Normalize-WinPath $p.db_path
+    $script:KnowledgeGraphDbPath = Normalize-WinPath $p.knowledge_graph_db
+    $script:FaissDir = if ($p.faiss_dir) { Normalize-WinPath $p.faiss_dir } else { $null }
+    $script:FaissAudioPath = if ($p.faiss_audio_path) { Normalize-WinPath $p.faiss_audio_path } else { $null }
+    $script:QdrantStoragePath = if ($p.qdrant_storage) { Normalize-WinPath $p.qdrant_storage } else { $null }
+
     $q = $snap.qdrant
-    if ($q -and $q.host) { $script:QdrantURL = [string]$q.host }
+    if ($q -and $q.host) { $script:QdrantURL = [string]$q.host } else { throw "Canonical config snapshot is missing qdrant.host." }
     if ($q -and $q.collections) { $script:QdrantCollections = $q.collections }
 
     # Propagate bindings as env vars (read-only hints; best-effort).
@@ -111,6 +123,7 @@ function Apply-ConfigSnapshot {
     if ($script:FaissDir) { $env:GOODQ_FAISS_DIR = $script:FaissDir }
     if ($script:FaissAudioPath) { $env:GOODQ_FAISS_AUDIO_PATH = $script:FaissAudioPath }
     if ($script:QdrantURL) { $env:GOODQ_QDRANT_URL = $script:QdrantURL }
+    if ($script:QdrantStoragePath) { $env:GOODQ_QDRANT_STORAGE = $script:QdrantStoragePath }
     if ($script:QdrantCollections) {
         if ($script:QdrantCollections.clip) { $env:GOODQ_QDRANT_COLLECTION_CLIP = [string]$script:QdrantCollections.clip }
         if ($script:QdrantCollections.dino) { $env:GOODQ_QDRANT_COLLECTION_DINO = [string]$script:QdrantCollections.dino }
@@ -225,19 +238,20 @@ function Test-QdrantService {
 function Test-Directories {
     Write-Host "  [Directory Structure]" -ForegroundColor $Cyan
     
-    $processingDir = if ($script:ProcessingRoot) { $script:ProcessingRoot } else { "$script:DataRoot\\processing" }
-    $faissDir = if ($script:FaissDir) { $script:FaissDir } else { "$script:DataRoot\\faiss" }
-    $dbDir = if ($script:MemoryDbPath) { Split-Path $script:MemoryDbPath -Parent } else { $script:DataRoot }
+    $processingDir = $script:ProcessingRoot
+    $faissDir = $script:FaissDir
+    $dbDir = Split-Path $script:MemoryDbPath -Parent
 
     $criticalDirs = @(
         $script:DataRoot,
         $script:InboxPath,
         $processingDir,
-        "$script:DataRoot\processed",
+        $script:ProcessedDir,
+        $script:FailedDir,
         $faissDir,
         $dbDir,
         $script:LogDir
-    )
+    ) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
     
     foreach ($dir in $criticalDirs) {
         if (Test-Path $dir) {
@@ -373,14 +387,8 @@ function Main {
     # Bind runtime paths/collections from canonical config (best-effort) and propagate as env vars.
     Apply-ConfigSnapshot
 
-    # Optional explicit env overrides (if set, prefer env over config for this launcher run).
+    # Non-path runtime env remains allowed; path bindings come from canonical config only.
     if ($env:GOODQ_WSL_DISTRO) { $script:WslDistro = $env:GOODQ_WSL_DISTRO }
-    if ($env:GOODQ_DB_PATH) { $script:MemoryDbPath = Normalize-WinPath $env:GOODQ_DB_PATH }
-    if ($env:GOODQ_KG_DB_PATH) { $script:KnowledgeGraphDbPath = Normalize-WinPath $env:GOODQ_KG_DB_PATH }
-    if ($env:GOODQ_PROCESSING_ROOT) { $script:ProcessingRoot = Normalize-WinPath $env:GOODQ_PROCESSING_ROOT }
-    if ($env:GOODQ_FAISS_DIR) { $script:FaissDir = Normalize-WinPath $env:GOODQ_FAISS_DIR }
-    if ($env:GOODQ_FAISS_AUDIO_PATH) { $script:FaissAudioPath = Normalize-WinPath $env:GOODQ_FAISS_AUDIO_PATH }
-    if ($env:GOODQ_QDRANT_URL) { $script:QdrantURL = $env:GOODQ_QDRANT_URL }
 
     # HEALTH CHECKS
     if (!$SkipHealthCheck) {

@@ -3,6 +3,12 @@
 <!-- DOC_CANONICAL_POINTER: docs/releases/SHIP_PROFILE.md -->
 <!-- DOC_ARCHIVED_ON: 2026-02-12 -->
 
+> [!WARNING]
+> ARCHIVE / NON-CANONICAL / DO NOT COPY PATHS
+> This document is preserved as historical evidence and may contain obsolete fixed-drive paths, host-specific assumptions, stale commands, or superseded runtime guidance.
+> Do not use it for current runtime, setup, migration, or copy-paste path decisions.
+> Use active documentation, `config_loader`, and canonical path abstractions such as `<project_root>`, `<GOODQ_DATA_ROOT>`, and `<GOODQ_WSL_WORKSPACE>` instead.
+
 # GoodQ4All Release / Mission Launch Checklist
 
 **Purpose:** One-page checklist to validate a build before you call it “production ready”. Think of this as your Q‑style pre‑flight: verify core services, GPU paths, WSL integrations, and a full ingestion loop.
@@ -85,7 +91,7 @@ In WSL2:
 cd ~/goodq_audio
 source venv/bin/activate
 
-./scripts/process.sh /mnt/l/goodq4all/data/test_audio.mp3
+./process.sh /mnt/l/goodq4all/data/test_audio.mp3
 tail -f ~/goodq_audio/logs/audio_service.log
 ```
 

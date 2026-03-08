@@ -23,7 +23,7 @@ A consistency audit revealed that the repository contained **outdated versions**
 **Call Chain:**
 ```python
 # Line 69-76 in scripts/wsl2_audio_bridge.py
-cmd = f"source {workspace}/setup_cuda_env.sh && python3 {workspace}/scripts/process_audio.py '{wsl_input}' '{wsl_output}'"
+cmd = f"source {workspace}/setup_cuda_env.sh && python3 {workspace}/process_audio.py '{wsl_input}' '{wsl_output}'"
 
 result = subprocess.run(
     ["wsl", "-d", "Ubuntu", "--", "bash", "-c", cmd],
@@ -33,18 +33,17 @@ result = subprocess.run(
 )
 ```
 
-**Key Finding:** Bridge calls `~/goodq_audio/scripts/process_audio.py`  
-**Not:** `~/goodq_audio/process_audio.py` (root directory)
+**Key Finding:** Bridge calls `~/goodq_audio/process_audio.py`  
+**Not:** `~/goodq_audio/scripts/process_audio.py` (legacy subdirectory)
 
 ### WSL2 Directory Structure
 
 ```
 \\wsl.localhost\Ubuntu\home\joesdomingo\goodq_audio\
-├── scripts/              # ✅ ACTIVE SCRIPTS (called by bridge)
-│   ├── process_audio.py  # ← Bridge calls this one
-│   ├── process.sh
-│   ├── process_minimal.sh
-│   └── test_simple.sh
+├── process_audio.py      # ✅ ACTIVE SCRIPT (called by bridge)
+├── process.sh
+├── process_minimal.sh
+├── test_simple.sh
 ├── logs/
 ├── output/
 ├── queue/
@@ -63,14 +62,14 @@ result = subprocess.run(
 
 | Location | Size | Date | Hash | Status |
 |----------|------|------|------|--------|
-| **WSL2 scripts/** | 14,645 bytes | Dec 12, 18:16 | 8474E37B | ✅ ACTIVE |
+| **WSL2 root** | 14,645 bytes | Dec 12, 18:16 | 8474E37B | ✅ ACTIVE |
 | **Windows repo** | 10,703 bytes | Dec 11, 23:39 | AFE0D80F | ❌ OUTDATED |
 
 **Impact:** CRITICAL - This is the main processing script called by the bridge.  
 **Difference:** 3,942 bytes (27% size difference)  
 **Age Gap:** 1 day (Dec 11 → Dec 12)
 
-**Fix:** Copied active WSL2 scripts/process_audio.py to repository
+**Fix:** Copied active WSL2 process_audio.py to repository
 
 ---
 
@@ -78,7 +77,7 @@ result = subprocess.run(
 
 | Location | Size | Date | Status |
 |----------|------|------|--------|
-| **WSL2 scripts/** | 439 bytes | - | ✅ ACTIVE (simplified) |
+| **WSL2 root** | 439 bytes | - | ✅ ACTIVE (simplified) |
 | **Windows repo** | 6,234 bytes | Dec 12 | ❌ OUTDATED (complex) |
 
 **Impact:** MAJOR - Processing wrapper script  
@@ -93,7 +92,7 @@ result = subprocess.run(
 
 | Location | Size | Difference |
 |----------|------|------------|
-| **WSL2 scripts/** | 1,589 bytes | ✅ ACTIVE |
+| **WSL2 root** | 1,589 bytes | ✅ ACTIVE |
 | **Windows repo** | 1,641 bytes | ❌ OUTDATED |
 
 **Impact:** MINOR - Minimal processing wrapper  
@@ -107,7 +106,7 @@ result = subprocess.run(
 
 | Location | Size | Status |
 |----------|------|--------|
-| **WSL2 scripts/** | 44 bytes | ✅ EXISTS |
+| **WSL2 root** | 44 bytes | ✅ EXISTS |
 | **Windows repo** | - | ❌ MISSING |
 
 **Impact:** MINOR - Testing utility  
@@ -119,9 +118,9 @@ result = subprocess.run(
 
 ### Why This Happened
 
-1. **WSL2 scripts were actively developed in `~/goodq_audio/scripts/`**
+1. **WSL2 helpers now live directly in `~/goodq_audio/`**
 2. **Repository was initialized with scripts from `~/goodq_audio/` root**
-3. **Bridge always called `scripts/process_audio.py`** (subdirectory)
+3. **Bridge now calls `process_audio.py`** from the workspace root
 4. **Repository had older version from different location**
 5. **No sync mechanism between WSL2 active and Windows repo**
 
@@ -195,7 +194,7 @@ Deletions: -178 lines
 - Contains **reference scripts** for deployment
 - Should **mirror active WSL2 scripts**
 
-**WSL2 Active (`~/goodq_audio/scripts/`):**
+**WSL2 Active (`~/goodq_audio/`):**
 - Contains **runtime scripts** actually executed
 - **This is the source of truth** for active code
 - Called by Windows bridge via subprocess
@@ -211,7 +210,7 @@ scripts/wsl2_audio_bridge.py (WSL2AudioBridge class)
     ↓
 subprocess.run(["wsl", "-d", "Ubuntu", "--", "bash", "-c", cmd])
     ↓
-WSL2: ~/goodq_audio/scripts/process_audio.py ← ACTIVE SCRIPT
+WSL2: ~/goodq_audio/process_audio.py ← ACTIVE SCRIPT
 ```
 
 ---

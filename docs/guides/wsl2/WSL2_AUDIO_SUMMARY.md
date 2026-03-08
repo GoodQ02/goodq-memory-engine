@@ -7,7 +7,7 @@ A comprehensive GPU-accelerated audio processing system has been implemented tha
 
 ## What Was Built
 
-### 1. WSL2 Audio Service (`wsl2_audio/audio_service.py`)
+### 1. WSL2 Audio Service (`~/goodq_audio/audio_service.py`)
 - Standalone Python service that runs in WSL2
 - Loads models once, processes jobs from queue
 - Uses faster-whisper, PyAnnote diarization, Silero VAD
@@ -151,7 +151,7 @@ Or from WSL2:
 ```bash
 cd ~/goodq_audio
 source venv/bin/activate
-python3 /mnt/l/goodq4all/wsl2_audio/audio_service.py
+python3 ~/goodq_audio/audio_service.py
 ```
 
 ### Use in Pipeline

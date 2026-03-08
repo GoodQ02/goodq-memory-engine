@@ -3,6 +3,12 @@
 <!-- DOC_CANONICAL_POINTER: docs/releases/SHIP_PROFILE.md -->
 <!-- DOC_ARCHIVED_ON: 2026-02-12 -->
 
+> [!WARNING]
+> ARCHIVE / NON-CANONICAL / DO NOT COPY PATHS
+> This document is preserved as historical evidence and may contain obsolete fixed-drive paths, host-specific assumptions, stale commands, or superseded runtime guidance.
+> Do not use it for current runtime, setup, migration, or copy-paste path decisions.
+> Use active documentation, `config_loader`, and canonical path abstractions such as `<project_root>`, `<GOODQ_DATA_ROOT>`, and `<GOODQ_WSL_WORKSPACE>` instead.
+
 # GoodQ4All v1.4.0 - Production Release
 
 ## 🎉 Major Release: WSL2 GPU Acceleration + Full UI Polish
@@ -70,7 +76,7 @@
 
 ### WSL2 Components (~/goodq_audio/)
 - `scripts/process.py` - Core audio processor (220 lines)
-- `scripts/process.sh` - Wrapper with cuDNN paths
+- `process.sh` - Wrapper with cuDNN paths
 - `DIARIZATION_SETUP.md` - HuggingFace token guide
 - `CHANGELOG.md` - Version history
 

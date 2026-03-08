@@ -3,6 +3,12 @@
 <!-- DOC_CANONICAL_POINTER: docs/releases/SHIP_PROFILE.md -->
 <!-- DOC_ARCHIVED_ON: 2026-02-12 -->
 
+> [!WARNING]
+> ARCHIVE / NON-CANONICAL / DO NOT COPY PATHS
+> This document is preserved as historical evidence and may contain obsolete fixed-drive paths, host-specific assumptions, stale commands, or superseded runtime guidance.
+> Do not use it for current runtime, setup, migration, or copy-paste path decisions.
+> Use active documentation, `config_loader`, and canonical path abstractions such as `<project_root>`, `<GOODQ_DATA_ROOT>`, and `<GOODQ_WSL_WORKSPACE>` instead.
+
 # 🎊 GoodQ4All v1.4.0 - PRODUCTION DEPLOYMENT SUMMARY
 
 **Date**: November 15, 2025  
@@ -106,7 +112,7 @@ GoodQ4All v1.4.0 has successfully completed all 12 development phases with a per
 ✅ **cuDNN**: 9.10.02  
 
 ### **Scripts**
-✅ `~/goodq_audio/scripts/process.sh` - Main wrapper  
+✅ `~/goodq_audio/process.sh` - Main wrapper  
 ✅ `~/goodq_audio/scripts/process.py` - Python implementation  
 ✅ Executable permissions set  
 ✅ Library paths configured  

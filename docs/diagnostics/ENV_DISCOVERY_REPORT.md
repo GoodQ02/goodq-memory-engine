@@ -92,10 +92,10 @@ Scan exclusions: `**/archive/**`, `**/__pycache__/**`, `*.pyc`, `*.backup*`, `*.
 ## GOODQ_DATA_ROOT
 
 - Surfaces: LAUNCH_GOODQ.ps1:22, api/main.py:72, configs/config.yaml:43, configs/config.yaml:55, configs/config.yaml:56, configs/config.yaml:57, configs/config.yaml:58, configs/config.yaml:59, configs/config.yaml:63, configs/config.yaml:64 ...
-- Default in code: "L:" + "/_DATA", "L:/_DATA", L:/_DATA
+- Default in code: canonical host data-root fallback (`<GOODQ_DATA_ROOT>` default)
 - Required in strict mode: No
 - Affects: runtime/bootstrap/install
-- Safe if unset: Yes (defaults to L:/_DATA via config fallback)
+- Safe if unset: Yes (falls back through canonical host data-root config)
 - Notes: Canonical host data root abstraction.
 
 ## GOODQ_DB_PATH
@@ -191,7 +191,7 @@ Scan exclusions: `**/archive/**`, `**/__pycache__/**`, `*.pyc`, `*.backup*`, `*.
 ## GOODQ_MODELS_DIR
 
 - Surfaces: scripts/bootstrap_models.py:102, scripts/pin_model_versions.py:84, scripts/preflight_check.ps1:19, scripts/setup/setup_agents.ps1:109, scripts/setup/setup_agents.ps1:12, scripts/sync_env_local.ps1:5, scripts/utils/verify_model_lockdown.py:235
-- Default in code: "L:/models"
+- Default in code: canonical model-cache root (`<GOODQ_DATA_ROOT>/models`)
 - Required in strict mode: No
 - Affects: runtime/bootstrap/install
 - Safe if unset: Yes
@@ -425,10 +425,10 @@ Scan exclusions: `**/archive/**`, `**/__pycache__/**`, `*.pyc`, `*.backup*`, `*.
 ## GOODQ_WSL_PROJECT_ROOT
 
 - Surfaces: scripts/wsl/install_audio_service.sh:13, scripts/wsl/install_audio_service.sh:6, wsl2_audio/setup_wsl2_audio.sh:23
-- Default in code: /mnt/l/goodq4all
+- Default in code: canonical WSL-mounted repo root (`/mnt/<drive>/<repo_root>`)
 - Required in strict mode: No
 - Affects: install/service
-- Safe if unset: Yes (defaults to /mnt/l/goodq4all in install scripts)
+- Safe if unset: Yes (defaults to canonical WSL-mounted repo root in install scripts)
 - Notes: WSL-side repo path for service installers.
 
 ## GOODQ_WSL_USER
@@ -452,7 +452,7 @@ Scan exclusions: `**/archive/**`, `**/__pycache__/**`, `*.pyc`, `*.backup*`, `*.
 ## GOODQ_WSL_WORKSPACE
 
 - Surfaces: api/main.py:87, scripts/bootstrap_verify.py:92, scripts/setup_wsl2_audio.py:16, scripts/wsl/install_audio_service.sh:12, scripts/wsl/install_audio_service.sh:6, scripts/wsl2_audio_bridge.py:42, scripts/wsl2_audio_bridge.py:76, wsl2_audio/start_wsl2_service.bat:10, wsl2_audio/start_wsl2_service.bat:34, wsl2_audio/start_wsl2_service.bat:48 ...
-- Default in code: "/home/goodq/audio_workspace", ${WSL_HOME
+- Default in code: "/home/<resolved_user>/goodq_audio"
 - Required in strict mode: No
 - Affects: runtime/bootstrap/service
 - Safe if unset: Yes (defaults to /home/<resolved_user>/goodq_audio)
@@ -506,7 +506,7 @@ Scan exclusions: `**/archive/**`, `**/__pycache__/**`, `*.pyc`, `*.backup*`, `*.
 ## HF_HOME
 
 - Surfaces: cli/run_ingestion.py:104, cli/run_ingestion.py:517, configs/paths.py:177, scripts/audit_vision_pipeline.py:320, scripts/bootstrap_models.py:172, scripts/bootstrap_models.py:24, scripts/bootstrap_models.py:63, scripts/cache_readiness_check.py:115, scripts/cache_readiness_check.py:72, scripts/cache_readiness_check.py:77 ...
-- Default in code: "L:/models", "Not set", 'L:/models', os.environ.get("HF_HOME", str(HF_HOME, str(MODELS_DEFAULT, unset
+- Default in code: canonical model-cache root, unset env fallback, and env-backed resolution (`HF_HOME`)
 - Required in strict mode: No
 - Affects: runtime/bootstrap
 - Safe if unset: Yes (multiple script defaults)
@@ -578,7 +578,7 @@ Scan exclusions: `**/archive/**`, `**/__pycache__/**`, `*.pyc`, `*.backup*`, `*.
 ## TORCH_HOME
 
 - Surfaces: cli/run_ingestion.py:518, configs/paths.py:178, scripts/audit_vision_pipeline.py:321, scripts/bootstrap_models.py:173, scripts/bootstrap_models.py:25, scripts/bootstrap_models.py:63, scripts/cache_readiness_check.py:78, scripts/cache_readiness_check.py:81, scripts/command_center.ps1:106, scripts/command_center.ps1:109 ...
-- Default in code: "L:/models", "Not set", os.environ.get("TORCH_HOME", unset
+- Default in code: canonical model-cache root, unset env fallback, and env-backed resolution (`TORCH_HOME`)
 - Required in strict mode: No
 - Affects: runtime/bootstrap
 - Safe if unset: Yes
@@ -587,7 +587,7 @@ Scan exclusions: `**/archive/**`, `**/__pycache__/**`, `*.pyc`, `*.backup*`, `*.
 ## TRANSFORMERS_CACHE
 
 - Surfaces: configs/paths.py:179, scripts/audit_vision_pipeline.py:322, scripts/bootstrap_models.py:26, scripts/sync_env_local.ps1:6, scripts/utilities/gpu_config.py:50, scripts/utils/check_gpu_status.py:162, steps/common/conda_runner.py:41, steps/image_caption/step.py:42, steps/sentiment/step.py:21, steps/sentiment/step_fixed.py:26 ...
-- Default in code: "L:/models/transformers", "Not set", str(target_models_dir / 'cache'
+- Default in code: canonical transformers cache root (`<GOODQ_DATA_ROOT>/models/transformers`) and unset env fallback
 - Required in strict mode: No
 - Affects: runtime/bootstrap
 - Safe if unset: Yes
@@ -643,4 +643,3 @@ These literals are intentionally excluded from `.env.template` because they are 
 - `WSL_DISTRO_NAME`: configs/python_paths.py:93
 
 These variables come from shell/OS/conda runtime and are not part of the GoodQ operator contract.
-

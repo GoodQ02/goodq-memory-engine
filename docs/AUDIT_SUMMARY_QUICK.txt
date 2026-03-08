@@ -7,7 +7,7 @@ Your question was excellent! You uncovered a critical inconsistency.
 📊 FINDINGS:
 
 ✅ Architecture Understanding:
-  - Windows calls: ~/goodq_audio/scripts/process_audio.py
+  - Windows calls: ~/goodq_audio/process_audio.py
   - Repository had: wsl2_audio/process_audio.py (outdated version)
   - Files were DIFFERENT (10,703 vs 14,645 bytes)
 

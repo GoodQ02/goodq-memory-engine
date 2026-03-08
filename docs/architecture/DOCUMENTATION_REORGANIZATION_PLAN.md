@@ -195,26 +195,26 @@ docs/
 
 ### Action 1: Create Archive Directories
 ```powershell
-New-Item -Path "L:\goodq4all\docs\history\status_reports_archive" -ItemType Directory -Force
-New-Item -Path "L:\goodq4all\docs\history\session_summaries_archive" -ItemType Directory -Force
+New-Item -Path "<project_root>\docs\history\status_reports_archive" -ItemType Directory -Force
+New-Item -Path "<project_root>\docs\history\session_summaries_archive" -ItemType Directory -Force
 ```
 
 ### Action 2: Move Outdated Status Reports
 ```powershell
 # Move old status reports
-Move-Item "L:\goodq4all\docs\CURRENT_SYSTEM_STATUS.md" "L:\goodq4all\docs\history\status_reports_archive\"
-Move-Item "L:\goodq4all\docs\PRODUCTION_STATUS_2025-11-09.md" "L:\goodq4all\docs\history\status_reports_archive\"
-Move-Item "L:\goodq4all\docs\PRODUCTION_SYSTEM_STATUS.md" "L:\goodq4all\docs\history\status_reports_archive\"
-Move-Item "L:\goodq4all\docs\STATUS.md" "L:\goodq4all\docs\history\status_reports_archive\"
-Move-Item "L:\goodq4all\docs\FINAL_SYSTEM_STATUS.md" "L:\goodq4all\docs\history\status_reports_archive\" -ErrorAction SilentlyContinue
+Move-Item "<project_root>\docs\CURRENT_SYSTEM_STATUS.md" "<project_root>\docs\history\status_reports_archive\"
+Move-Item "<project_root>\docs\PRODUCTION_STATUS_2025-11-09.md" "<project_root>\docs\history\status_reports_archive\"
+Move-Item "<project_root>\docs\PRODUCTION_SYSTEM_STATUS.md" "<project_root>\docs\history\status_reports_archive\"
+Move-Item "<project_root>\docs\STATUS.md" "<project_root>\docs\history\status_reports_archive\"
+Move-Item "<project_root>\docs\FINAL_SYSTEM_STATUS.md" "<project_root>\docs\history\status_reports_archive\" -ErrorAction SilentlyContinue
 ```
 
 ### Action 3: Move Session Summaries
 ```powershell
 # Move session summaries
-Move-Item "L:\goodq4all\docs\SESSION_REPORT_Nov8_2025.md" "L:\goodq4all\docs\history\session_summaries_archive\"
-Move-Item "L:\goodq4all\docs\SESSION_SUMMARY_2025-*.md" "L:\goodq4all\docs\history\session_summaries_archive\"
-Move-Item "L:\goodq4all\docs\SESSION_SUMMARY_*.md" "L:\goodq4all\docs\history\session_summaries_archive\"
+Move-Item "<project_root>\docs\SESSION_REPORT_Nov8_2025.md" "<project_root>\docs\history\session_summaries_archive\"
+Move-Item "<project_root>\docs\SESSION_SUMMARY_2025-*.md" "<project_root>\docs\history\session_summaries_archive\"
+Move-Item "<project_root>\docs\SESSION_SUMMARY_*.md" "<project_root>\docs\history\session_summaries_archive\"
 ```
 
 ### Action 4: Create Archive Index

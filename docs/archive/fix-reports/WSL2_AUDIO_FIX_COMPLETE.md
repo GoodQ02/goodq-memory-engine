@@ -3,6 +3,12 @@
 <!-- DOC_CANONICAL_POINTER: docs/bootstrap/bootstrap_manifest.md -->
 <!-- DOC_ARCHIVED_ON: 2026-02-12 -->
 
+> [!WARNING]
+> ARCHIVE / NON-CANONICAL / DO NOT COPY PATHS
+> This document is preserved as historical evidence and may contain obsolete fixed-drive paths, host-specific assumptions, stale commands, or superseded runtime guidance.
+> Do not use it for current runtime, setup, migration, or copy-paste path decisions.
+> Use active documentation, `config_loader`, and canonical path abstractions such as `<project_root>`, `<GOODQ_DATA_ROOT>`, and `<GOODQ_WSL_WORKSPACE>` instead.
+
 # WSL2 Audio Processing - Empty Transcript Fix COMPLETED ✅
 
 **Date:** December 13, 2024  
@@ -33,12 +39,12 @@ The `audio_service.py` was being started **without proper CUDA/cuDNN environment
 
 **Changed line 27 from:**
 ```batch
-start "GoodQ WSL2 Audio Service" wsl bash -c "cd ~/goodq_audio && source venv/bin/activate && python3 /mnt/l/goodq4all/wsl2_audio/audio_service.py"
+start "GoodQ WSL2 Audio Service" wsl bash -c "cd ~/goodq_audio && source venv/bin/activate && python3 ~/goodq_audio/audio_service.py"
 ```
 
 **To:**
 ```batch
-start "GoodQ WSL2 Audio Service" wsl bash -c "cd ~/goodq_audio && source setup_cuda_env.sh && python3 /mnt/l/goodq4all/wsl2_audio/audio_service.py"
+start "GoodQ WSL2 Audio Service" wsl bash -c "cd ~/goodq_audio && source setup_cuda_env.sh && python3 ~/goodq_audio/audio_service.py"
 ```
 
 ### 2. Verified CUDA Environment
@@ -53,7 +59,7 @@ The `setup_cuda_env.sh` script properly sets:
 ### 1. Service Status
 ```bash
 $ ps aux | grep audio_service | grep -v grep
-joesdom+ 36894 43.6  7.0 82564104 1160412 pts/35 SLl 13:44   0:05 python3 /mnt/l/goodq4all/wsl2_audio/audio_service.py
+joesdom+ 36894 43.6  7.0 82564104 1160412 pts/35 SLl 13:44   0:05 python3 ~/goodq_audio/audio_service.py
 ```
 ✅ Service is running
 
@@ -111,7 +117,7 @@ pkill -f audio_service.py
 # Start with CUDA environment
 cd ~/goodq_audio
 source setup_cuda_env.sh
-python3 /mnt/l/goodq4all/wsl2_audio/audio_service.py &
+python3 ~/goodq_audio/audio_service.py &
 ```
 
 ## Files Modified
@@ -192,7 +198,7 @@ All installed via: `pip install nvidia-cudnn-cu12`
    ```bash
    cd ~/goodq_audio
    source setup_cuda_env.sh
-   python3 /mnt/l/goodq4all/wsl2_audio/audio_service.py
+   python3 ~/goodq_audio/audio_service.py
    ```
 
 3. Check for errors in the output

@@ -154,7 +154,7 @@ Or manually in WSL2:
 ```bash
 cd ~/goodq_audio
 source venv/bin/activate
-python3 /mnt/l/goodq4all/wsl2_audio/audio_service.py
+python3 ~/goodq_audio/audio_service.py
 ```
 
 ### Phase 8: Run Pipeline

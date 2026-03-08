@@ -2,6 +2,12 @@
 <!-- DOC_STATUS: ARCHIVED -->
 <!-- DOC_ARCHIVED_ON: 2026-02-12 -->
 
+> [!WARNING]
+> ARCHIVE / NON-CANONICAL / DO NOT COPY PATHS
+> This document is preserved as historical evidence and may contain obsolete fixed-drive paths, host-specific assumptions, stale commands, or superseded runtime guidance.
+> Do not use it for current runtime, setup, migration, or copy-paste path decisions.
+> Use active documentation, `config_loader`, and canonical path abstractions such as `<project_root>`, `<GOODQ_DATA_ROOT>`, and `<GOODQ_WSL_WORKSPACE>` instead.
+
 # 🎯 GoodQ4All Launch Scripts Audit - Complete Report
 
 **Audit Date:** November 15, 2025  
@@ -66,7 +72,7 @@ Three batch scripts were referencing `api_server.py` in the wrong location (root
 | Component | Location | Status |
 |-----------|----------|--------|
 | Audio Environment | `~/goodq_audio/` | ✅ Configured |
-| Process Script | `~/goodq_audio/scripts/process.sh` | ✅ Executable |
+| Process Script | `~/goodq_audio/process.sh` | ✅ Executable |
 | Python Script | `~/goodq_audio/scripts/process.py` | ✅ GPU-ready |
 | Models | `~/goodq_audio/models/` | ✅ Cached |
 
@@ -267,7 +273,7 @@ python scripts/watchdog_ingest.py
 ```bash
 cd ~/goodq_audio
 source venv/bin/activate
-./scripts/process.sh /path/to/audio.mp3
+./process.sh /path/to/audio.mp3
 ```
 
 ---

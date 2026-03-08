@@ -53,7 +53,7 @@
 
 - Location: `~/goodq_audio/` (WSL2 Ubuntu).
   - `venv/` – Python 3.12 virtual environment.
-  - `scripts/process.sh` / `scripts/process.py` – GPU-accelerated audio processing (Whisper + PyAnnote).
+  - `process.sh` / `process_audio.py` – GPU-accelerated audio processing (Whisper + PyAnnote).
   - Docs: `docs/WSL2_AUDIO_SETUP.md`, `docs/WSL2_AUDIO_MIGRATION_GUIDE.md`, `docs/wsl2/START_HERE_WSL2.md`, `docs/wsl2/WSL2_AUDIO_SUMMARY.md`.
 
 ### vLLM / LLM Servers (`~/vllm_server/`)
@@ -98,4 +98,3 @@ Other `goodq_*` or utility envs that appear only in historical docs or lockfiles
   - If you introduce a new env that is part of the shipping surface, add it both here and in `docs/SHIP_PROFILE.md`.
 - When troubleshooting:
   - Use this index alongside `docs/GPU_LLM_WSL_INDEX.md` and `docs/TROUBLESHOOTING_INDEX.md` to quickly map failures to the right environment and docs.
-

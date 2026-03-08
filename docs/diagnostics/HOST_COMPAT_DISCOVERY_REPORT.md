@@ -26,33 +26,33 @@ Decision:
 
 #### Must-fix for portability
 - `LAUNCH_GOODQ.bat:5-6`
-  - Hardcoded repo root: `L:\goodq4all`
+  - Hardcoded repo root: legacy fixed-drive repo-root literal
   - Classification: must-fix (runtime launcher portability blocker)
   - Resolution: use `%~dp0` / script-relative path indirection (out-of-scope in this mission's edit list).
 
 - `LAUNCH_GOODQ.ps1:22`
-  - Hardcoded data root: `L:\_DATA\GoodQ_Data`
+  - Hardcoded data root: legacy fixed-drive `GoodQ_Data` root
   - Classification: must-fix (runtime bootstrap default host coupling)
   - Resolution: derive from `GOODQ_DATA_ROOT` / config paths.
 
 - `api/main.py:306,537,668,720,747,749,801,964,1172,1173,1174,1384`
-  - Hardcoded `L:/_DATA/...` and `L:/goodq4all/...`
+  - Hardcoded fixed-drive data-root and repo-root path families
   - Classification: must-fix (runtime API behavior tied to one host layout)
   - Resolution: derive from `_CFG['paths']`, repo-relative root, and `GOODQ_DATA_ROOT` fallback.
 
 - `configs/paths.py:26,31,76`
-  - Hardcoded `L:/goodq4all`, `L:/_DATA/GoodQ_Data`, `L:/_DATA/models`
+  - Hardcoded fixed-drive repo root, `GoodQ_Data` root, and model-cache root
   - Classification: must-fix (shared path module host-bound)
   - Resolution: env-backed path construction (`GOODQ_DATA_ROOT`) + repo-relative root.
 
 #### Must-fix but out-of-scope for this patch set (reported only)
 - `configs/model_registry.yaml:123,129,135,151`
-  - Hardcoded tool/snapshot paths under `L:/...`
+  - Hardcoded fixed-drive tool/snapshot paths
   - Classification: must-fix (portability), out-of-scope per allowed file list.
   - Resolution: host/config indirection in registry paths.
 
 - `scripts/qdrant/*.bat`
-  - Hardcoded `L:\goodq4all`, `L:\_DATA`, and env name `goodq_core`:
+  - Hardcoded fixed-drive repo/data roots and env name `goodq_core`:
     - `scripts/qdrant/INIT_QDRANT.bat:14`
     - `scripts/qdrant/START_QDRANT.bat:12,17`
     - `scripts/qdrant/INSTALL_QDRANT_SERVICE.bat:30,32,33,34,35,36,44,47,48,49,50,51,52,69,70,77`

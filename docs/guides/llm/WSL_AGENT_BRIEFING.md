@@ -88,7 +88,7 @@ We are integrating a production-grade vLLM/Ollama infrastructure into the GoodQ4
 
 ### 3. Audio Processing (Port: N/A - CLI tool)
 - **Status:** Operational
-- **Script:** `~/goodq_audio/scripts/process.sh`
+- **Script:** `~/goodq_audio/process.sh`
 - **Features:** GPU-accelerated Whisper + PyAnnote diarization
 
 ---
@@ -188,7 +188,7 @@ curl http://localhost:31434/v1/models
 curl http://localhost:38005/v1/models
 
 # Audio processing test
-~/goodq_audio/scripts/process.sh /mnt/l/goodq4all/data/test_audio.mp3
+~/goodq_audio/process.sh /mnt/<drive>/<repo_root>/samples/audio/test_audio.mp3
 ```
 
 ### Start vLLM Server

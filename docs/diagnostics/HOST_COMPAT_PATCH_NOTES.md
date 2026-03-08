@@ -28,7 +28,7 @@ File: `configs/config.yaml`
 
 Added:
 - `host.profile: ${GOODQ_HOST_PROFILE:-UNSET}`
-- `host.data_root: ${GOODQ_DATA_ROOT:-L:/_DATA}`
+- `host.data_root`: env-backed canonical host data root
 - `host.wsl_distro: ${GOODQ_WSL_DISTRO:-Ubuntu}`
 - `host.wsl_user: ${GOODQ_WSL_USER:-auto}`
 - `host.conda_env: ${GOODQ_CONDA_ENV:-goodq_core}`
@@ -69,20 +69,20 @@ File: `scripts/wsl2_audio_bridge.py`
 File: `api/main.py`
 
 - Added centralized host/path resolution from `_CFG.host`, `_CFG.paths`, and env overrides
-- Replaced hardcoded `L:/_DATA...` and `L:/goodq4all...` paths with derived paths
+- Replaced hardcoded fixed-drive data and repo-root paths with derived paths
 - Replaced hardcoded WSL distro/user/workspace literals in subprocess path construction with resolved `_WSL_DISTRO`, `_WSL_USER`, `_WSL_WORKSPACE`
 
 ## Static Validation (No Runtime Execution)
 
 Checks run:
 - `joesdomingo` in patched runtime/config files
-- literal `L:/_DATA` in patched runtime code files
+- literal fixed-drive data-root token in patched runtime code files
 - hardcoded `"Ubuntu"` in WSL subprocess calls
 - conda env naming references in launch/config bindings
 
 Results:
 - `joesdomingo`: **0 matches** in patched runtime/config files.
-- `L:/_DATA` in runtime code (`api/main.py`, `configs/paths.py`, bridge/bindings): **0 matches**.
+- fixed-drive data-root literals in runtime code (`api/main.py`, `configs/paths.py`, bridge/bindings): **0 matches**.
 - `"Ubuntu"` remains only as allowed default-value declarations:
   - `api/main.py` host fallback default
   - `scripts/wsl2_audio_bridge.py` env default
@@ -90,10 +90,10 @@ Results:
 - `GOODQ_CONDA_ENV` wired in config + bindings.
 
 Remaining hardcoded assumptions (known, out-of-scope in this mission):
-- `LAUNCH_GOODQ.ps1:22` (`L:\_DATA\GoodQ_Data`)
+- `LAUNCH_GOODQ.ps1:22` (legacy fixed-drive `GoodQ_Data` default)
 - `LAUNCH_GOODQ.ps1:37` (`goodq_core`)
-- `scripts/qdrant/*.bat` still contain fixed `L:\...` paths and one `goodq_core` invocation
-- `configs/model_registry.yaml` contains fixed `L:/...` tool paths
+- `scripts/qdrant/*.bat` still contain fixed-drive path literals and one `goodq_core` invocation
+- `configs/model_registry.yaml` contains fixed-drive tool/snapshot paths
 
 ## Why these out-of-scope remain
 Per mission scope lock, launcher and qdrant service scripts were discovery targets but not in the allowed implementation file list.
@@ -101,7 +101,7 @@ Per mission scope lock, launcher and qdrant service scripts were discovery targe
 ## Desktop Checklist (minimal)
 Set these before first desktop run (example values):
 - `GOODQ_HOST_PROFILE=GPU_ENHANCED`
-- `GOODQ_DATA_ROOT=L:/_DATA`
+- `GOODQ_DATA_ROOT=<host_data_root>`
 - `GOODQ_WSL_DISTRO=Ubuntu`
 - `GOODQ_WSL_USER=<desktop_wsl_user>`
 - `GOODQ_CONDA_ENV=goodq_core`

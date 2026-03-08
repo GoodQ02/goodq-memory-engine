@@ -20,7 +20,7 @@ Phase 2 successfully implements GPU-accelerated audio processing in WSL2, provid
 - Installs Python venv, PyTorch with CUDA, audio libraries
 - Creates processing workspace
 - Verifies GPU availability
-- **Usage**: `wsl -d Ubuntu -- bash /mnt/l/goodq4all/scripts/wsl2_quick_install.sh`
+- **Usage**: `wsl -d <distro> -- bash /mnt/<drive>/<repo_root>/scripts/wsl2_quick_install.sh`
 
 #### `INSTALL_WSL2_AUDIO.bat`
 - Windows launcher for WSL2 setup
@@ -101,7 +101,7 @@ Windows (<project_root>)
 └── steps/
     └── audio_transcribe.py        ← Updated to use bridge
     
-WSL2 Ubuntu (/home/joesdomingo/goodq_audio)
+WSL2 Ubuntu (~/goodq_audio)
 ├── venv/                          ← Virtual environment
 │   ├── bin/python                 ← Python with CUDA
 │   └── lib/python3.12/site-packages/
@@ -322,4 +322,3 @@ The system is ready for installation and testing. Once installed, integration wi
 ---
 
 **Ready to proceed**: Run `INSTALL_WSL2_AUDIO.bat` to begin installation
-

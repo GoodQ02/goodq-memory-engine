@@ -49,7 +49,7 @@ Production-grade LLM infrastructure with intelligent failover, health monitoring
 
 **WSL Direct:**
 ```bash
-wsl bash -c "/mnt/l/goodq4all/scripts/wsl/start_all_vllm.sh"
+wsl -d <distro> -- bash /mnt/<drive>/<repo_root>/scripts/wsl/start_all_vllm.sh
 ```
 
 ### 2. Test Connectivity
@@ -328,4 +328,3 @@ For issues or questions:
 **Status**: ✅ Production Ready  
 **Last Updated**: 2025-11-15  
 **Maintainer**: GoodQ4All Team
-

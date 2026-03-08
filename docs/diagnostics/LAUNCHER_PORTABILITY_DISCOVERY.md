@@ -8,12 +8,12 @@ Mode: Static/read-only discovery
 
 ### 1) Repository root assumptions
 - `LAUNCH_GOODQ.bat:5`
-  - `cd /d L:\goodq4all`
+  - `cd /d <project_root>`
   - Classification: **MUST replace**
   - Reason: hardcoded drive+path prevents portability.
 
 - `LAUNCH_GOODQ.bat:6`
-  - `-File "L:\goodq4all\LAUNCH_GOODQ.ps1"`
+  - `-File "<project_root>\LAUNCH_GOODQ.ps1"`
   - Classification: **MUST replace**
   - Reason: hardcoded absolute script path.
 
@@ -24,7 +24,7 @@ Mode: Static/read-only discovery
 
 ### 2) Data root assumptions
 - `LAUNCH_GOODQ.ps1:22`
-  - `$script:DataRoot = "L:\_DATA\GoodQ_Data"`
+  - `$script:DataRoot = "<GOODQ_DATA_ROOT>\GoodQ_Data"`
   - Classification: **MUST replace**
   - Reason: hardcoded drive-root path.
 

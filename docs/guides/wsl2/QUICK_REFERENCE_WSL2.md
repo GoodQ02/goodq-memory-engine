@@ -153,7 +153,7 @@ pip install <missing-package>
 ### WSL2
 - Workspace: `~/goodq_audio/`
 - Venv: `~/goodq_audio/venv/`
-- Processor: `~/goodq_audio/scripts/process_audio.py`
+- Processor: `~/goodq_audio/process_audio.py`
 - Models: `~/.cache/huggingface/`
 
 ---
@@ -168,7 +168,7 @@ python wsl2_audio_bridge.py
 ### Manual Process
 ```bash
 wsl -d Ubuntu -- ~/goodq_audio/venv/bin/python \
-    ~/goodq_audio/scripts/process_audio.py \
+    ~/goodq_audio/process_audio.py \
     /mnt/l/audio/file.wav \
     /mnt/l/output/result.json
 ```

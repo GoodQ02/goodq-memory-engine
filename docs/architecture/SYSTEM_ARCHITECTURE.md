@@ -260,17 +260,17 @@ Input Video (dropped in import_inbox)
 **✅ Operational Components (Dual Architecture):**
 
 **A. Queue-Based Service** (long-running daemon)
-- **Service:** `wsl2_audio/audio_service.py`
+- **Service:** `~/goodq_audio/audio_service.py`
 - **Status:** PID 177 (verified Dec 14)
 - **Preloaded Models:**
   - Whisper medium
   - Pyannote 3.1 (speaker diarization)
   - Silero VAD (40-60% speedup)
-- **Watches:** `wsl2_audio/queue_in/`
+- **Watches:** `~/goodq_audio/queue_in/`
 - **Output:** `queue_out/{job_id}_result.json`
 
 **B. Direct Invocation** (per-scene)
-- **Script:** `wsl2_audio/process_audio.py`
+- **Script:** `~/goodq_audio/process_audio.py`
 - **Model Loading:** On-demand with cleanup
 - **Output:** `~/goodq_audio/output/result.json` (38KB verified)
 - **Includes:**

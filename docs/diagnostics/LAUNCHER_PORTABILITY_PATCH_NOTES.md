@@ -8,7 +8,7 @@ Scope: `LAUNCH_GOODQ.ps1`, `LAUNCH_GOODQ.bat`
 ### `LAUNCH_GOODQ.ps1`
 - Replaced hardcoded data root with env-driven resolution:
   - `GOODQ_DATA_ROOT` if set
-  - fallback to previous canonical behavior equivalent (`L:\_DATA`) and then append `GoodQ_Data`
+  - fallback to previous canonical behavior equivalent (`<GOODQ_DATA_ROOT>`) and then append `GoodQ_Data`
 - Replaced hardcoded conda env with env-driven resolution:
   - `GOODQ_CONDA_ENV` if set
   - fallback to `goodq_core`
@@ -23,8 +23,8 @@ Scope: `LAUNCH_GOODQ.ps1`, `LAUNCH_GOODQ.bat`
 ## Static Validation
 
 ### Literals check (launcher-only)
-- `L:\goodq4all`: **not present** in launchers.
-- `L:\_DATA`: **not present as literal token** in launchers.
+- legacy repo-root literal: **not present** in launchers.
+- fixed-drive data-root literal: **not present as literal token** in launchers.
 - `goodq_core`: present only as **default fallback value** in `.ps1` (expected).
 
 ### Required dynamic primitives

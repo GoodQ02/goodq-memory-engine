@@ -5,6 +5,7 @@ Checks:
 1. Hardcoded L:/ paths are not allowed outside docs/archive/.
 2. Hardcoded drive-root paths (e.g., C:/, D:\\) are not allowed outside docs/archive/.
 3. CUDA/NVIDIA mandatory wording is not allowed outside docs/guides/gpu/ and docs/archive/.
+4. Archive docs with historical fixed-drive literals must carry the standard non-canonical warning banner.
 """
 
 from __future__ import annotations
@@ -16,6 +17,7 @@ from pathlib import Path
 L_PATH_PATTERN = re.compile(r"\bL:(?:/|\\)")
 DRIVE_ROOT_PATTERN = re.compile(r"\b[A-Za-z]:[\\/]")
 LEGACY_HINT_PATTERN = re.compile(r"\blegacy\b", re.IGNORECASE)
+ARCHIVE_WARNING_PATTERN = re.compile(r"ARCHIVE / NON-CANONICAL / DO NOT COPY PATHS")
 
 ALLOWED_LEGACY_DOCS = [
     "docs/technical/LEGACY_PATHS_DEPRECATED.md",
@@ -81,6 +83,9 @@ def main() -> int:
     l_path_violations: list[tuple[Path, int, str]] = []
     drive_root_violations: list[tuple[Path, int, str]] = []
     cuda_violations: list[tuple[Path, int, str]] = []
+    archive_banner_violations: list[tuple[Path, str]] = []
+    archive_literal_doc_count = 0
+    archive_literal_line_count = 0
 
     for file_path in targets:
         try:
@@ -93,10 +98,12 @@ def main() -> int:
         in_gpu_guide = is_under(file_path, gpu_guides_root)
         relative_path = file_path.relative_to(repo_root).as_posix()
         in_allowed_legacy_doc = relative_path in allowed_legacy_docs
+        has_archive_warning = bool(ARCHIVE_WARNING_PATTERN.search(text))
 
         in_fenced_block = False
         in_legacy_fenced_block = False
         recent_context: list[str] = []
+        archive_literal_found = False
 
         for line_no, line in enumerate(text.splitlines(), start=1):
             stripped = line.strip()
@@ -115,11 +122,17 @@ def main() -> int:
                 continue
 
             skip_path_checks = in_archive or in_allowed_legacy_doc or (in_fenced_block and in_legacy_fenced_block)
+            has_l_path = bool(L_PATH_PATTERN.search(line))
+            has_drive_root = bool(DRIVE_ROOT_PATTERN.search(line))
 
-            if not skip_path_checks and L_PATH_PATTERN.search(line):
+            if in_archive and (has_l_path or has_drive_root):
+                archive_literal_found = True
+                archive_literal_line_count += 1
+
+            if not skip_path_checks and has_l_path:
                 l_path_violations.append((file_path, line_no, stripped))
 
-            if not skip_path_checks and DRIVE_ROOT_PATTERN.search(line):
+            if not skip_path_checks and has_drive_root:
                 drive_root_violations.append((file_path, line_no, stripped))
 
             if in_archive or in_gpu_guide:
@@ -135,6 +148,13 @@ def main() -> int:
             if stripped:
                 recent_context.append(stripped)
 
+        if in_archive and archive_literal_found:
+            archive_literal_doc_count += 1
+            if not has_archive_warning:
+                archive_banner_violations.append(
+                    (file_path, "archive doc contains historical fixed-drive literals without the standard warning banner")
+                )
+
     for path, line_no, line in l_path_violations:
         print(f"[L_PATH] {path}:{line_no}: {sanitize_console(line)}")
 
@@ -144,14 +164,20 @@ def main() -> int:
     for path, line_no, line in cuda_violations:
         print(f"[CUDA_MANDATORY] {path}:{line_no}: {sanitize_console(line)}")
 
+    for path, detail in archive_banner_violations:
+        print(f"[ARCHIVE_BANNER] {path}: {sanitize_console(detail)}")
+
     print(
         f"doc_drift_lint summary: files_scanned={len(targets)} "
-        f"l_path_violations={len(l_path_violations)} "
-        f"drive_root_violations={len(drive_root_violations)} "
-        f"cuda_mandatory_violations={len(cuda_violations)}"
+        f"active_l_path_violations={len(l_path_violations)} "
+        f"active_drive_root_violations={len(drive_root_violations)} "
+        f"cuda_mandatory_violations={len(cuda_violations)} "
+        f"archive_literal_docs={archive_literal_doc_count} "
+        f"archive_literal_lines={archive_literal_line_count} "
+        f"archive_banner_violations={len(archive_banner_violations)}"
     )
 
-    return 1 if (l_path_violations or drive_root_violations or cuda_violations) else 0
+    return 1 if (l_path_violations or drive_root_violations or cuda_violations or archive_banner_violations) else 0
 
 
 if __name__ == "__main__":

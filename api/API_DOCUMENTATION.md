@@ -429,8 +429,8 @@ All endpoints return consistent error responses:
 ### Start the API Server
 
 ```bash
-cd L:\goodq4all\api
-uvicorn main:app --host 0.0.0.0 --port 30000 --reload
+cd <repo_root>
+uvicorn api.main:app --host 0.0.0.0 --port 30000 --reload
 ```
 
 ### Test Endpoints
@@ -547,7 +547,7 @@ wsl -- nvidia-smi
 ## 📞 Support
 
 For issues or questions:
-- Check logs: `L:\goodq4all\logs\`
+- Check logs: canonical runtime log directory (`cfg.paths.log_dir`)
 - API logs: Console output from uvicorn
 - System logs: Windows Event Viewer
 

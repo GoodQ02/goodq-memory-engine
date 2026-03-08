@@ -308,7 +308,7 @@ scripts/wsl2_audio_bridge.py (WSL2AudioBridge class)
     ↓
 subprocess.run(["wsl", "-d", "Ubuntu", "--", "bash", "-c", cmd])
     ↓
-WSL2: ~/goodq_audio/scripts/process_audio.py
+WSL2: ~/goodq_audio/process_audio.py
     ↓
 Output: result.json (Windows accessible via \\wsl.localhost\...)
 ```

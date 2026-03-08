@@ -95,7 +95,7 @@ cd <project_root>
 .\INSTALL_WSL2_AUDIO.bat
 
 # Or manual setup
-wsl bash /mnt/l/goodq4all/install_wsl2_audio_manual.sh
+wsl -d <distro> -- bash /mnt/<drive>/<repo_root>/scripts/wsl2_quick_install.sh
 ```
 
 ### Verification
@@ -172,4 +172,3 @@ if bridge.check_status():
 **Last Updated**: 2025-11-15  
 **Version**: 1.4.0  
 **Status**: Production Ready ✅
-

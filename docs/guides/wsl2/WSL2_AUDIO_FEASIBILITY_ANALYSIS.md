@@ -110,9 +110,9 @@ pip install soundfile librosa
 
 ### Phase 4: Bridge Layer (60 min)
 Create a lightweight Python service in WSL2 that:
-1. Watches `/mnt/l/goodq4all/wsl_audio_queue/` for jobs
+1. Watches `~/goodq_audio/queue_in/pending/` for jobs
 2. Processes audio using GPU
-3. Writes results to `/mnt/l/goodq4all/wsl_audio_output/`
+3. Writes results to `~/goodq_audio/queue_out/`
 4. Updates status file for Windows monitor
 
 ### Phase 5: Windows Integration (60 min)
@@ -140,7 +140,8 @@ Modify GoodQ pipeline to:
 │                               ▼                               │
 │                    ┌──────────────────────┐                  │
 │                    │  Audio Queue Dir     │                  │
-│                    │  /wsl_audio_queue/   │                  │
+│                    │  canonical log/step  │                  │
+│                    │  outputs on Windows  │                  │
 │                    └──────────┬───────────┘                  │
 └────────────────────────────────┼──────────────────────────────┘
                                  │
@@ -150,8 +151,8 @@ Modify GoodQ pipeline to:
 │                                ▼            WSL2 (Ubuntu)     │
 │                    ┌──────────────────────┐                  │
 │                    │   Audio Queue        │                  │
-│                    │  /mnt/l/goodq4all/   │                  │
-│                    │  wsl_audio_queue/    │                  │
+│                    │  ~/goodq_audio/      │                  │
+│                    │  queue_in/pending/   │                  │
 │                    └──────────┬───────────┘                  │
 │                               │                               │
 │                               ▼                               │
@@ -174,8 +175,8 @@ Modify GoodQ pipeline to:
 │              │                                                │
 │              │     ┌──────────────────────┐                  │
 │              └────▶│  Output Directory    │                  │
-│                    │  /mnt/l/goodq4all/   │                  │
-│                    │  wsl_audio_output/   │                  │
+│                    │  ~/goodq_audio/      │                  │
+│                    │  queue_out/          │                  │
 │                    └──────────┬───────────┘                  │
 └────────────────────────────────┼──────────────────────────────┘
                                  │

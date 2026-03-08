@@ -20,8 +20,8 @@ Active runtime documentation uses environment abstractions:
 1. **LM Studio Running** - localhost:1234 with qwen2.5-7b-instruct
 2. **Scene Summarization Code** - EXISTS but `use_llm=False` (line 56 in apply_scene_summaries.py)
 3. **Model Caches** - Scattered across THREE locations:
-   - `<GOODQ_DATA_ROOT>\models (See LEGACY_PATHS_DEPRECATED.md)\` (primary HuggingFace cache)
-   - `L:\_DATA\models\` (duplicate cache)
+   - `<GOODQ_DATA_ROOT>\models\` (primary HuggingFace cache)
+   - duplicate caches under older local data roots
    - Various tool directories
 
 4. **Agent Framework** - Installed but dormant (goodq_agents conda env)
@@ -40,15 +40,15 @@ Active runtime documentation uses environment abstractions:
 ## 🎯 PHASE 1: ENABLE CORE LLM FEATURES
 
 ### Step 1: Unify Model Cache (10 min)
-**Problem:** Models scattered across <GOODQ_DATA_ROOT>\models (See LEGACY_PATHS_DEPRECATED.md), L:\_DATA\models, and tool dirs  
+**Problem:** Models scattered across `<GOODQ_DATA_ROOT>\models`, duplicate caches, and tool dirs  
 **Solution:** Consolidate to single cache, set environment variables
 
 **Actions:**
 ```powershell
 # Set HuggingFace cache to unified location
-$env:HF_HOME = "<GOODQ_DATA_ROOT>\models (See LEGACY_PATHS_DEPRECATED.md)"
-$env:TRANSFORMERS_CACHE = "<GOODQ_DATA_ROOT>\models (See LEGACY_PATHS_DEPRECATED.md)\transformers"
-$env:HF_DATASETS_CACHE = "<GOODQ_DATA_ROOT>\models (See LEGACY_PATHS_DEPRECATED.md)\datasets"
+$env:HF_HOME = "<GOODQ_DATA_ROOT>\models"
+$env:TRANSFORMERS_CACHE = "<GOODQ_DATA_ROOT>\models\transformers"
+$env:HF_DATASETS_CACHE = "<GOODQ_DATA_ROOT>\models\datasets"
 
 # Add to .env.local permanently
 @"
@@ -56,17 +56,17 @@ HF_HOME=<GOODQ_DATA_ROOT>/models
 TRANSFORMERS_CACHE=<GOODQ_DATA_ROOT>/models/transformers
 HF_DATASETS_CACHE=<GOODQ_DATA_ROOT>/models/datasets
 TORCH_HOME=<GOODQ_DATA_ROOT>/models/torch
-"@ | Add-Content L:\goodq4all\.env.local
+"@ | Add-Content <project_root>\.env.local
 ```
 
 **Verification:**
-- Check that models load from <GOODQ_DATA_ROOT>\models (See LEGACY_PATHS_DEPRECATED.md) only
-- Archive L:\_DATA\models to L:\_archive\old_model_cache
+- Check that models load from `<GOODQ_DATA_ROOT>\models` only
+- Archive duplicate caches into an environment-appropriate archive location
 
 ---
 
 ### Step 2: Enable Scene Summarization LLM (5 min)
-**File:** `L:\goodq4all\apply_scene_summaries.py` (Line 56)
+**File:** `<project_root>\apply_scene_summaries.py` (Line 56)
 
 **Change:**
 ```python
@@ -79,7 +79,7 @@ summary_text = generate_scene_summary(scene_meta, cfg, use_llm=True)
 
 **Test:**
 ```powershell
-cd L:\goodq4all
+cd <project_root>
 python apply_scene_summaries.py
 
 # Verify LLM summaries in database
@@ -97,7 +97,7 @@ python -c "import sqlite3; c=sqlite3.connect('data/memory.db').cursor(); c.execu
 
 **Find current pipeline entry point:**
 ```powershell
-cd L:\goodq4all
+cd <project_root>
 # Search for main ingestion entry point
 Get-ChildItem -Recurse -Include "*.py" | Select-String "video_scene_detect" -List | Select-Object Path
 Get-ChildItem -Recurse -Include "*.py" | Select-String "def run_ingestion" -List | Select-Object Path
@@ -134,7 +134,7 @@ for scene in scenes:
 ---
 
 ### Step 4: Update Config for LLM Control (5 min)
-**File:** `L:\goodq4all\config.yaml`
+**File:** `<project_root>\configs\config.yaml`
 
 **Add LLM feature flags:**
 ```yaml
@@ -161,7 +161,7 @@ llm:
 ---
 
 ### Step 5: Create Video-Level Summarization Step (30 min)
-**New file:** `L:\goodq4all\steps\video_summarizer\step.py`
+**New file:** `<project_root>\steps\video_summarizer\step.py`
 
 **Implementation:**
 ```python
@@ -273,7 +273,7 @@ def run_step(cfg: Dict, video_id: str) -> Dict[str, Any]:
     }
 ```
 
-**Also create:** `L:\goodq4all\steps\video_summarizer\__init__.py`
+**Also create:** `<project_root>\steps\video_summarizer\__init__.py`
 ```python
 from .step import run_step
 __all__ = ['run_step']
@@ -283,7 +283,7 @@ __all__ = ['run_step']
 
 ### Step 6: Test Full LLM Pipeline (30 min)
 
-**Test Script:** Create `L:\goodq4all\test_llm_pipeline.py`
+**Test Script:** Create `<project_root>\test_llm_pipeline.py`
 ```python
 #!/usr/bin/env python3
 """
@@ -375,7 +375,7 @@ print("="*80)
 
 **Run test:**
 ```powershell
-cd L:\goodq4all
+cd <project_root>
 python test_llm_pipeline.py
 ```
 

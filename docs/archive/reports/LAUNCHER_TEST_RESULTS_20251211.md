@@ -2,6 +2,12 @@
 <!-- DOC_STATUS: ARCHIVED -->
 <!-- DOC_ARCHIVED_ON: 2026-02-12 -->
 
+> [!WARNING]
+> ARCHIVE / NON-CANONICAL / DO NOT COPY PATHS
+> This document is preserved as historical evidence and may contain obsolete fixed-drive paths, host-specific assumptions, stale commands, or superseded runtime guidance.
+> Do not use it for current runtime, setup, migration, or copy-paste path decisions.
+> Use active documentation, `config_loader`, and canonical path abstractions such as `<project_root>`, `<GOODQ_DATA_ROOT>`, and `<GOODQ_WSL_WORKSPACE>` instead.
+
 # GOODQ4ALL LAUNCHER - TEST SUITE RESULTS
 **Date:** 2025-12-11 04:33 UTC  
 **Status:** ✅ **IRON-CLAD - PRODUCTION READY**

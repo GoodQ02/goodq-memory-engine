@@ -22,3 +22,5 @@ This directory is the canonical home for the Season 1 benchmark first-pass analy
 
 - Runtime logs remain under `logs/` (canonical operational location).
 - This folder contains post-ingestion analysis artifacts only.
+- Latest control milestone: `diagnostics/experiment_summary.md` now records the 2026-03-09 formal Season 1 witness run.
+- Formal witness record: `diagnostics/SEASON1_WITNESS_RUN_2026-03-09.md`

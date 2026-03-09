@@ -2203,10 +2203,26 @@ def _process_audio(
     item['audio_backend_reason'] = contract_reason
     item['audio_backend_effective'] = 'none'
     item['audio_backend_effective_reason'] = 'not_processed'
+    step_log_cfg: Optional[Dict[str, Any]] = None
 
     def _set_effective_backend(backend: str, reason: str) -> None:
         item['audio_backend_effective'] = backend
         item['audio_backend_effective_reason'] = reason
+
+    def _get_step_log_cfg() -> Dict[str, Any]:
+        nonlocal step_log_cfg
+        if isinstance(step_log_cfg, dict):
+            return step_log_cfg
+        try:
+            step_log_cfg = json.loads(cfg_json.read_text(encoding='utf-8'))
+        except Exception as cfg_error:  # noqa: BLE001
+            logger.warning(
+                "run_ingestion warning context=%s error=%s",
+                "optional_audio_step.load_step_log_cfg",
+                cfg_error,
+            )
+            step_log_cfg = {}
+        return step_log_cfg
 
     def merge(env_name: str, step_name: str) -> None:
         result = _run_step(env_name, step_name, item, cfg_json)
@@ -2255,6 +2271,25 @@ def _process_audio(
             scene_id,
             scene.get('index'),
             error_text,
+        )
+        step_extra: Dict[str, Any] = {
+            'reason': 'optional_step_failed',
+            'optional': True,
+            'env': env_name,
+        }
+        if step_name == 'audio_embed_clap':
+            step_extra['embedding_emitted'] = False
+            clap_meta = item.get('clap_meta')
+            if isinstance(clap_meta, dict):
+                step_extra['result_meta'] = {'clap_meta': clap_meta}
+        log_step_run(
+            _get_step_log_cfg(),
+            step_name,
+            item,
+            0.0,
+            'error',
+            error_text,
+            extra=step_extra,
         )
         _record_run_warning(
             cfg_json,

@@ -19,6 +19,13 @@ os.environ.setdefault('PYTHONNOUSERSITE', '0')
 logger = logging.getLogger(__name__)
 _PATH_FALLBACK_WARNED = False
 
+_EXPLICIT_META_STATUS_FIELD_BY_STEP = {
+    "audio_embed_clap": "clap_meta",
+}
+
+_META_ERROR_STATUSES = {"error"}
+_META_SKIPPED_STATUSES = {"no_file", "unavailable", "no_index_path"}
+
 
 def _emit_subprocess_env_fingerprint(step_name: str) -> None:
     if step_name != "tagger":
@@ -76,6 +83,41 @@ def _save_memory_context(step_name: str, item: Dict[str, Any] | None, results: D
         import logging
         logger = logging.getLogger(__name__)
         logger.warning(f"Failed to save memory context for {step_name}: {e}", exc_info=True)
+
+
+def _derive_step_log_outcome(
+    step_name: str,
+    result: Dict[str, Any] | None,
+    *,
+    verbose: bool,
+) -> tuple[str, str | None, Dict[str, Any] | None]:
+    extra: Dict[str, Any] | None = None
+    meta_field = _EXPLICIT_META_STATUS_FIELD_BY_STEP.get(step_name)
+    if meta_field and isinstance(result, dict):
+        result_meta = result.get(meta_field)
+        if isinstance(result_meta, dict):
+            meta_status = str(result_meta.get("status") or "").strip().lower()
+            extra = {
+                "result_meta": {meta_field: result_meta},
+                "embedding_emitted": meta_status == "ok",
+            }
+            if meta_status in _META_ERROR_STATUSES:
+                error_text = str(result_meta.get("error") or "").strip() or f"{step_name} failed"
+                extra["reason"] = f"{step_name}_{meta_status}"
+                return "error", error_text, extra
+            if meta_status in _META_SKIPPED_STATUSES:
+                extra["reason"] = f"{step_name}_{meta_status}"
+                return "skipped", None, extra
+
+    if verbose and isinstance(result, dict):
+        meta_keys: List[str] = [
+            k
+            for k in result.keys()
+            if k.endswith("_meta") or k.endswith("_meta".upper()) or k in ("embedding_meta", "clap_meta")
+        ]
+        if meta_keys:
+            extra = {"result_meta": {k: result.get(k) for k in meta_keys}}
+    return "ok", None, extra
 
 
 
@@ -300,14 +342,10 @@ def main() -> None:
         log_step_run(cfg, args.step, item, duration_ms, "error", str(exc))
         raise
     else:
-        extra: Dict[str, Any] | None = None
-        if args.verbose and isinstance(res, dict):
-            meta_keys: List[str] = [k for k in res.keys() if k.endswith("_meta") or k.endswith("_meta".upper()) or k in ("embedding_meta", "clap_meta")]
-            if meta_keys:
-                extra = {"result_meta": {k: res.get(k) for k in meta_keys}}
         duration_ms = (time.perf_counter_ns() - start_ns) / 1_000_000.0
-        log_step_run(cfg, args.step, item, duration_ms, "ok", extra=extra)
-        
+        log_status, log_error, extra = _derive_step_log_outcome(args.step, res, verbose=args.verbose)
+        log_step_run(cfg, args.step, item, duration_ms, log_status, log_error, extra=extra)
+
         # CRITICAL: Save step results to memory database for context enrichment
         try:
             _save_memory_context(args.step, item, res, cfg)

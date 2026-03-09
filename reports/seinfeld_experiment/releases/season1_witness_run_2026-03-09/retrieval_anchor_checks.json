@@ -1,0 +1,195 @@
+[
+  {
+    "query": "coffee shop conversation",
+    "top_result": {
+      "score": 0.22617585,
+      "scene_id": "337a21d8c289d0e92ec2cfbb1348d2e673befd55235fa545794ee8e7e36c835f",
+      "scene_index": 3,
+      "source_path": "L:\\_DATA\\GoodQ_Data\\epochs\\epoch_2025_12_22\\processing\\01x01 - Good News, Bad News\\audio\\chunks\\scene_0003.wav",
+      "entities": [
+        "Claire",
+        "George",
+        "Laura",
+        "Michigan",
+        "Lansing"
+      ],
+      "locations": [],
+      "text_preview": "Can you relax? It's a cup of coffee. Claire's a professional waitress. Trust me, George. No one has any interest in seeing you on caffeine. I can be not doing the second show to one. Well, there's this woman might be coming in. Wait a second. Wait a second. Why coming in? What woman is coming in? I told you about Laura, the girl I met in Michigan. But you didn't? I thought I told you about it. Yes, she teaches political science ..."
+    },
+    "top_3": [
+      {
+        "score": 0.22617585,
+        "scene_id": "337a21d8c289d0e92ec2cfbb1348d2e673befd55235fa545794ee8e7e36c835f",
+        "scene_index": 3,
+        "source_path": "L:\\_DATA\\GoodQ_Data\\epochs\\epoch_2025_12_22\\processing\\01x01 - Good News, Bad News\\audio\\chunks\\scene_0003.wav",
+        "entities": [
+          "Claire",
+          "George",
+          "Laura",
+          "Michigan",
+          "Lansing"
+        ],
+        "locations": []
+      },
+      {
+        "score": 0.191024825,
+        "scene_id": "09c74a9e4de0124995646e13d00565376796ce000388fe4bcbd41268392932c1",
+        "scene_index": 12,
+        "source_path": "L:\\_DATA\\GoodQ_Data\\epochs\\epoch_2025_12_22\\processing\\01x03 - The Robbery\\audio\\chunks\\scene_0012.wav",
+        "entities": [],
+        "locations": []
+      },
+      {
+        "score": 0.162612825,
+        "scene_id": "fc7b9736364c18ce8c461848a0f99d9260bd72b877e22f46c7a47a885f104c22",
+        "scene_index": 36,
+        "source_path": "L:\\_DATA\\GoodQ_Data\\epochs\\epoch_2025_12_22\\processing\\01x04 - Male Unbonding\\audio\\chunks\\scene_0036.wav",
+        "entities": [],
+        "locations": []
+      }
+    ]
+  },
+  {
+    "query": "laundry day clothes joke",
+    "top_result": {
+      "score": 0.35870665,
+      "scene_id": "a277ca6374ac4dfd05b19aae4e2326cb5d0ad157bdd023dc796b7f1f1dd431b7",
+      "scene_index": 10,
+      "source_path": "L:\\_DATA\\GoodQ_Data\\epochs\\epoch_2025_12_22\\processing\\01x01 - Good News, Bad News\\audio\\chunks\\scene_0010.wav",
+      "entities": [
+        "Neil"
+      ],
+      "locations": [],
+      "text_preview": "... You know which dark, there's bubbles happening, they're all kind of dancing around in there. Shirt grabs you underwear. Come on babe, let's go. You come by, you open up the lid, Neil. Socks are the most amazing article of clothing. They hate their lives, they're in the shoes with stinky feet, the boring drawers. The dryer is their only chance to escape and they all know it."
+    },
+    "top_3": [
+      {
+        "score": 0.35870665,
+        "scene_id": "a277ca6374ac4dfd05b19aae4e2326cb5d0ad157bdd023dc796b7f1f1dd431b7",
+        "scene_index": 10,
+        "source_path": "L:\\_DATA\\GoodQ_Data\\epochs\\epoch_2025_12_22\\processing\\01x01 - Good News, Bad News\\audio\\chunks\\scene_0010.wav",
+        "entities": [
+          "Neil"
+        ],
+        "locations": []
+      },
+      {
+        "score": 0.24703072499999998,
+        "scene_id": "3e3f598b52732eeba676c777455f95d7cbcbb0090291cf3a24288a1f2871e50b",
+        "scene_index": 20,
+        "source_path": "L:\\_DATA\\GoodQ_Data\\epochs\\epoch_2025_12_22\\processing\\01x05 - The Stock Tip\\audio\\chunks\\scene_0020.wav",
+        "entities": [],
+        "locations": []
+      },
+      {
+        "score": 0.2305025,
+        "scene_id": "134efeefc651d27adb59af996ae93a0837faa892dce45e65236e9eac91b97c27",
+        "scene_index": 11,
+        "source_path": "L:\\_DATA\\GoodQ_Data\\epochs\\epoch_2025_12_22\\processing\\01x01 - Good News, Bad News\\audio\\chunks\\scene_0011.wav",
+        "entities": [
+          "Met Game"
+        ],
+        "locations": []
+      }
+    ]
+  },
+  {
+    "query": "George complaining",
+    "top_result": {
+      "score": 0.5138099,
+      "scene_id": "d3f2052335d8dea6a03b185dec30cdfe4971069ca9df503e1933c2d0ca468dfa",
+      "scene_index": 23,
+      "source_path": "L:\\_DATA\\GoodQ_Data\\epochs\\epoch_2025_12_22\\processing\\01x03 - The Robbery\\audio\\chunks\\scene_0023.wav",
+      "entities": [
+        "George"
+      ],
+      "locations": [],
+      "text_preview": "Excuse me, uh, I don't mean to cause any trouble here, but George, if you take it, can I take your place? Yes, but I am not taking it. I am not taking it. Well, why don't you better damn well take it? Well, what do you want to do? You want to flip a coin? Who flips? You flip, I'll call. Okay, fine. This is the official flip. No crying, no guilt, winner takes all and that's it. Agreed?"
+    },
+    "top_3": [
+      {
+        "score": 0.5138099,
+        "scene_id": "d3f2052335d8dea6a03b185dec30cdfe4971069ca9df503e1933c2d0ca468dfa",
+        "scene_index": 23,
+        "source_path": "L:\\_DATA\\GoodQ_Data\\epochs\\epoch_2025_12_22\\processing\\01x03 - The Robbery\\audio\\chunks\\scene_0023.wav",
+        "entities": [
+          "George"
+        ],
+        "locations": []
+      },
+      {
+        "score": 0.46183664999999996,
+        "scene_id": "155d01facab33d75af2d6a4767a8322aed02e30f71e7e32f1d2773d9de553987",
+        "scene_index": 23,
+        "source_path": "L:\\_DATA\\GoodQ_Data\\epochs\\epoch_2025_12_22\\processing\\01x04 - Male Unbonding\\audio\\chunks\\scene_0023.wav",
+        "entities": [
+          "George"
+        ],
+        "locations": []
+      },
+      {
+        "score": 0.43624338500000004,
+        "scene_id": "bcfe84962a8c4139d4ef018208b6ccc91117e7556e3505d2d96094a78783956d",
+        "scene_index": 25,
+        "source_path": "L:\\_DATA\\GoodQ_Data\\epochs\\epoch_2025_12_22\\processing\\01x04 - Male Unbonding\\audio\\chunks\\scene_0025.wav",
+        "entities": [
+          "George"
+        ],
+        "locations": []
+      }
+    ]
+  },
+  {
+    "query": "awkward Laura greeting",
+    "top_result": {
+      "score": 0.4838399685714286,
+      "scene_id": "ebbcc8ed3e81b6f7158be35fcb27706aa9665a9d01e310eac19036d7afa98149",
+      "scene_index": 24,
+      "source_path": "L:\\_DATA\\GoodQ_Data\\epochs\\epoch_2025_12_22\\processing\\01x01 - Good News, Bad News\\audio\\chunks\\scene_0024.wav",
+      "entities": [
+        "George",
+        "Laura"
+      ],
+      "locations": [],
+      "text_preview": "... Oh! Oh! Oh! You're back! You're back! Oh, I'm sorry. Thank you. But that was an interesting greeting. Did you notice that, George? Yes, the surprise blindfold greeting. That wasn't in the manual, right? So, uh, what do you think? Wow! Oh! This place isn't so bad. Yeah, it kind of motivates me to work on the road. So, uh, make yourself at home. Ah!"
+    },
+    "top_3": [
+      {
+        "score": 0.4838399685714286,
+        "scene_id": "ebbcc8ed3e81b6f7158be35fcb27706aa9665a9d01e310eac19036d7afa98149",
+        "scene_index": 24,
+        "source_path": "L:\\_DATA\\GoodQ_Data\\epochs\\epoch_2025_12_22\\processing\\01x01 - Good News, Bad News\\audio\\chunks\\scene_0024.wav",
+        "entities": [
+          "George",
+          "Laura"
+        ],
+        "locations": []
+      },
+      {
+        "score": 0.4498916819047619,
+        "scene_id": "337a21d8c289d0e92ec2cfbb1348d2e673befd55235fa545794ee8e7e36c835f",
+        "scene_index": 3,
+        "source_path": "L:\\_DATA\\GoodQ_Data\\epochs\\epoch_2025_12_22\\processing\\01x01 - Good News, Bad News\\audio\\chunks\\scene_0003.wav",
+        "entities": [
+          "Claire",
+          "George",
+          "Laura",
+          "Michigan",
+          "Lansing"
+        ],
+        "locations": []
+      },
+      {
+        "score": 0.42492434999999995,
+        "scene_id": "4dc72878b7800f5aef4fc5ec87ccbcdce9b70b754641f2153a0a7e3f7faedaa1",
+        "scene_index": 15,
+        "source_path": "L:\\_DATA\\GoodQ_Data\\epochs\\epoch_2025_12_22\\processing\\01x01 - Good News, Bad News\\audio\\chunks\\scene_0015.wav",
+        "entities": [
+          "Laura",
+          "George"
+        ],
+        "locations": []
+      }
+    ]
+  }
+]

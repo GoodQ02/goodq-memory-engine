@@ -54,6 +54,7 @@ This status section is anchored to a documented witness ingest run (`run_id=51e4
 - Vector parity deterministic at witness scope: phase-level parity fields resolved explicitly (`qdrant_ok=true`, `faiss_ok=not_attempted`).
 - Observability layer active: structured telemetry emitted `step_start`, `step_end`, `step_error`, progress, and heartbeat events.
 - Tagger native-crash mitigation active: witness telemetry captured one tagger native crash event while the pipeline still completed.
+- Season 1 release witness baseline published on 2026-03-09: five-episode clean-state control run with `185` scenes, `182/185` transcript coverage, `0` processing-error scenes, and a typed KG witness profile. See [`reports/seinfeld_experiment/diagnostics/SEASON1_WITNESS_RUN_2026-03-09.md`](reports/seinfeld_experiment/diagnostics/SEASON1_WITNESS_RUN_2026-03-09.md) and [`reports/seinfeld_experiment/diagnostics/POST_WITNESS_ANALYTICS_COMPARISON_2026-03-09.md`](reports/seinfeld_experiment/diagnostics/POST_WITNESS_ANALYTICS_COMPARISON_2026-03-09.md).
 
 ### Witness-Run Summary
 

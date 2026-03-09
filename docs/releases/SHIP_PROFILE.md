@@ -85,6 +85,10 @@
 ### Validation & Release
 
 - `docs/RELEASE_CHECKLIST.md` – Standard operating procedure for pre-release validation and mission launch.
+- Current witness-backed release baseline:
+  - `reports/seinfeld_experiment/diagnostics/SEASON1_WITNESS_RUN_2026-03-09.md`
+  - `reports/seinfeld_experiment/diagnostics/POST_WITNESS_ANALYTICS_COMPARISON_2026-03-09.md`
+  - `reports/seinfeld_experiment/releases/season1_witness_run_2026-03-09/`
 
 ---
 
@@ -112,4 +116,3 @@ When making changes for a release, prefer:
 
 - Updating the canonical docs and commands listed here.
 - Keeping historical docs intact or moving them to `_ARCHIVE` instead of editing them.
-

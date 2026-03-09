@@ -1,0 +1,19 @@
+{
+  "bundle_created_on": "2026-03-09",
+  "source_rerun_dir": "reports/seinfeld_experiment/reruns/20260308_season1_witness_run",
+  "source_artifacts": [
+    "ingestion_results.json",
+    "ingestion_stderr.log",
+    "ingestion_stdout.log",
+    "workspace/_resolved_config.json"
+  ],
+  "bundle_artifacts": [
+    "README.md",
+    "witness_metrics.json",
+    "per_episode_coverage.csv",
+    "optional_step_failures.json",
+    "retrieval_anchor_checks.json",
+    "resolved_config_snapshot.json",
+    "ingestion_stderr.log"
+  ]
+}

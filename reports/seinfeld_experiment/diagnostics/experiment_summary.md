@@ -32,6 +32,11 @@ Witness baseline highlights:
 
 This run supersedes the earlier episode-only control reruns as the formal witness record for release tagging.
 
+Supporting release artifacts:
+
+- post-witness comparison pack: `POST_WITNESS_ANALYTICS_COMPARISON_2026-03-09.md`
+- permanent release bundle: `../releases/season1_witness_run_2026-03-09/`
+
 ## Milestone: Clean Reset Control Rerun (2026-03-08)
 
 The Episode 1 control rerun from `reruns/20260308_episode1_clean_reset_rerun_v2/` was executed after wiping the active epoch runtime state:

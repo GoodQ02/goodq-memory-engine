@@ -129,12 +129,17 @@ def test_run_step_success_emits_scene_metadata_and_pid(monkeypatch, tmp_path: Pa
     run_ingestion = _load_run_ingestion_module()
     observer = _RecorderObserver()
     cfg_json = _write_cfg(tmp_path)
+    direct_env_python = tmp_path / "goodq_core_python.exe"
+    direct_env_python.write_text("", encoding="utf-8")
+
+    import configs.python_paths as python_paths
 
     monkeypatch.setattr(run_ingestion, "_PIPELINE_OBSERVER", observer)
     monkeypatch.setattr(run_ingestion, "resolve_conda", lambda: "conda")
     monkeypatch.setattr(run_ingestion.shutil, "which", lambda _: "conda")
     monkeypatch.setattr(run_ingestion.subprocess, "Popen", _FakePopenSuccess)
     monkeypatch.setattr(run_ingestion, "_control_agent_runtime_enabled", lambda: False)
+    monkeypatch.setattr(python_paths, "get_env_python", lambda name: direct_env_python)
 
     payload = {
         "source_path": str(tmp_path / "dummy_input.json"),
@@ -165,6 +170,7 @@ def test_run_step_success_emits_scene_metadata_and_pid(monkeypatch, tmp_path: Pa
         assert meta["video_id"] == "video_test_001"
         assert isinstance(meta["subprocess_pid"], int)
         assert meta["subprocess_pid"] > 0
+        assert meta["launcher"] == "direct_env_python"
 
 
 def test_run_step_failure_emits_step_error_with_scene_metadata_and_pid(monkeypatch, tmp_path: Path):
@@ -172,11 +178,15 @@ def test_run_step_failure_emits_step_error_with_scene_metadata_and_pid(monkeypat
     observer = _RecorderObserver()
     cfg_json = _write_cfg(tmp_path)
 
+    import configs.python_paths as python_paths
+
     monkeypatch.setattr(run_ingestion, "_PIPELINE_OBSERVER", observer)
     monkeypatch.setattr(run_ingestion, "resolve_conda", lambda: "conda")
     monkeypatch.setattr(run_ingestion.shutil, "which", lambda _: "conda")
     monkeypatch.setattr(run_ingestion.subprocess, "Popen", _FakePopenFailure)
     monkeypatch.setattr(run_ingestion, "_control_agent_runtime_enabled", lambda: False)
+    monkeypatch.setattr(run_ingestion, "_PREFER_DIRECT_ENV_PYTHON_ON_WINDOWS", False)
+    monkeypatch.setattr(python_paths, "get_env_python", lambda name: None)
 
     payload = {
         "source_path": str(tmp_path / "dummy_input.json"),
@@ -242,6 +252,7 @@ def test_run_step_retries_optional_steps_via_direct_env_python_on_conda_tmp_fail
     monkeypatch.setattr(run_ingestion.shutil, "which", lambda _: "conda")
     monkeypatch.setattr(run_ingestion.subprocess, "Popen", _FakeSequencedPopen)
     monkeypatch.setattr(run_ingestion, "_control_agent_runtime_enabled", lambda: False)
+    monkeypatch.setattr(run_ingestion, "_PREFER_DIRECT_ENV_PYTHON_ON_WINDOWS", False)
     monkeypatch.setattr(python_paths, "get_env_python", lambda name: direct_env_python)
 
     payload = {

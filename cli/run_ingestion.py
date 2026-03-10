@@ -33,6 +33,7 @@ from steps.common.profile_config import is_baseline, require_wsl_audio, wsl_audi
 from lib.observability.observer import PipelineObserver
 
 _OPTIONAL_DIRECT_ENV_FALLBACK_STEPS = {"sentiment", "audio_embed_clap"}
+_PREFER_DIRECT_ENV_PYTHON_ON_WINDOWS = os.name == 'nt'
 
 
 def _patch_typer_help_for_click_8_2() -> None:
@@ -1585,6 +1586,13 @@ def _run_step(
             return None
 
         direct_env_python = _resolve_env_python_for_step_fallback(env_name)
+        prefer_direct_env_python = bool(
+            _prefer_direct_env_python
+            or (
+                _PREFER_DIRECT_ENV_PYTHON_ON_WINDOWS
+                and direct_env_python is not None
+            )
+        )
 
         def _build_step_runner_cmd(*, prefer_direct_env_python: bool) -> tuple[List[str], str]:
             if prefer_direct_env_python:
@@ -1624,7 +1632,7 @@ def _run_step(
 
         try:
             cmd, launcher_kind = _build_step_runner_cmd(
-                prefer_direct_env_python=_prefer_direct_env_python
+                prefer_direct_env_python=prefer_direct_env_python
             )
         except RuntimeError:
             raise
@@ -1661,6 +1669,25 @@ def _run_step(
                 step_env = dict(work_env)
             for env_key, env_value in SUBPROCESS_AUDIO_OPENMP_GUARD_ENV.items():
                 step_env.setdefault(env_key, env_value)
+        if launcher_kind == "direct_env_python" and direct_env_python:
+            env_python_path = Path(direct_env_python)
+            if env_python_path.parent.name.lower() == 'bin':
+                env_root = env_python_path.parent.parent
+                env_bin = env_python_path.parent
+            else:
+                env_root = env_python_path.parent
+                env_bin = env_root / 'Scripts'
+            if step_env is work_env:
+                step_env = dict(work_env)
+            step_env['CONDA_DEFAULT_ENV'] = env_name
+            step_env['CONDA_PREFIX'] = str(env_root)
+            path_entries = [str(env_root)]
+            if env_bin.exists():
+                path_entries.append(str(env_bin))
+            existing_path = step_env.get('PATH', '')
+            if existing_path:
+                path_entries.append(existing_path)
+            step_env['PATH'] = os.pathsep.join(path_entries)
 
         start_ts = time.perf_counter()
         observer = _observer()

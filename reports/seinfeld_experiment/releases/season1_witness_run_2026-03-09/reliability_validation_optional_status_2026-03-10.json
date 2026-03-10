@@ -1,0 +1,70 @@
+[
+  {
+    "step": "sentiment",
+    "status": "skipped",
+    "scene_id": "baa5775dcf9360a44eafd6961ac625c883227f86e03ba16678b41a8eaf75b5dd",
+    "scene_index": 32,
+    "source_path": "L:\\_DATA\\GoodQ_Data\\epochs\\epoch_2025_12_22\\processing\\01x01 - Good News, Bad News\\audio\\chunks\\scene_0032.wav",
+    "extra": {
+      "result_meta": {
+        "sentiment_meta": {
+          "status": "no_text",
+          "reason": "no_text"
+        }
+      },
+      "embedding_emitted": false,
+      "reason": "sentiment_no_text"
+    }
+  },
+  {
+    "step": "sentiment",
+    "status": "skipped",
+    "scene_id": "aaa8265b2387c3bacc2a2e53196f91668677fe118b03a6f432057398d1f65a6f",
+    "scene_index": 38,
+    "source_path": "L:\\_DATA\\GoodQ_Data\\epochs\\epoch_2025_12_22\\processing\\01x02 - The Stakeout\\audio\\chunks\\scene_0038.wav",
+    "extra": {
+      "result_meta": {
+        "sentiment_meta": {
+          "status": "no_text",
+          "reason": "no_text"
+        }
+      },
+      "embedding_emitted": false,
+      "reason": "sentiment_no_text"
+    }
+  },
+  {
+    "step": "sentiment",
+    "status": "skipped",
+    "scene_id": "aa9e9bd2f24e9c3be145cb3364801f8f706f83090814a42ba78394f5d8be713d",
+    "scene_index": 37,
+    "source_path": "L:\\_DATA\\GoodQ_Data\\epochs\\epoch_2025_12_22\\processing\\01x05 - The Stock Tip\\audio\\chunks\\scene_0037.wav",
+    "extra": {
+      "result_meta": {
+        "sentiment_meta": {
+          "status": "no_text",
+          "reason": "no_text"
+        }
+      },
+      "embedding_emitted": false,
+      "reason": "sentiment_no_text"
+    }
+  },
+  {
+    "step": "sentiment",
+    "status": "skipped",
+    "scene_id": "a3fbab205d5452799004b9fb9027f130682191c1172327352f1812da7df89a4c",
+    "scene_index": 38,
+    "source_path": "L:\\_DATA\\GoodQ_Data\\epochs\\epoch_2025_12_22\\processing\\01x05 - The Stock Tip\\audio\\chunks\\scene_0038.wav",
+    "extra": {
+      "result_meta": {
+        "sentiment_meta": {
+          "status": "skipped",
+          "reason": "too_short"
+        }
+      },
+      "embedding_emitted": false,
+      "reason": "sentiment_too_short"
+    }
+  }
+]

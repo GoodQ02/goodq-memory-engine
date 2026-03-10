@@ -1,7 +1,9 @@
 from __future__ import annotations
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 import os
 import logging
+import re
+import unicodedata
 from pathlib import Path
 
 from steps.common.lexicon import score_nrc_sentiment
@@ -9,7 +11,8 @@ from steps.common.config_loader import get_runtime_paths, load_configs
 
 logger = logging.getLogger(__name__)
 
-_SENT = {"tok": None, "model": None, "device": "cpu"}
+_SENTIMENT_MODEL = "distilbert-base-uncased-finetuned-sst-2-english"
+_SENT = {"tok": None, "model": None, "device": "cpu", "load_attempted": False, "load_error": None}
 
 
 def _resolve_models_root() -> str:
@@ -17,31 +20,96 @@ def _resolve_models_root() -> str:
     return str(Path(runtime_paths["models_cache"]).resolve())
 
 
-def _load():
+def _configure_model_env() -> None:
+    models_root = _resolve_models_root()
+    os.environ["HF_HOME"] = models_root
+    os.environ["TORCH_HOME"] = models_root
+    os.environ.setdefault("TRANSFORMERS_CACHE", str(Path(models_root) / "transformers"))
+    os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "0"
+    os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+
+
+def _normalize_text(text: str) -> str:
+    text = unicodedata.normalize("NFKC", text)
+    text = "".join(ch if (ch.isprintable() or ch.isspace()) else " " for ch in text)
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
+
+
+def _looks_too_short(text: str) -> bool:
+    tokens = re.findall(r"[A-Za-z0-9']+", text)
+    if not tokens:
+        return True
+    return len(tokens) < 2 and len(text) < 8
+
+
+def _preferred_device() -> str:
+    try:
+        import torch  # type: ignore
+
+        if getattr(torch, "cuda", None) and torch.cuda.is_available():
+            return "cuda"
+    except Exception:
+        pass
+    return "cpu"
+
+
+def _should_retry_on_cpu(exc: Exception) -> bool:
+    message = f"{type(exc).__name__}: {exc}".lower()
+    return any(
+        token in message
+        for token in (
+            "cuda",
+            "cublas",
+            "cudnn",
+            "out of memory",
+            "device-side",
+            "device type",
+            "driver shutting down",
+        )
+    )
+
+
+def _load(preferred_device: Optional[str] = None) -> bool:
+    target_device = preferred_device or _preferred_device()
     if _SENT["model"] is not None:
-        return
+        if _SENT["device"] == target_device:
+            return True
+        try:
+            _SENT["model"] = _SENT["model"].to(target_device).eval()
+            _SENT["device"] = target_device
+            return True
+        except Exception as exc:
+            logger.warning(
+                "sentiment model move failed target_device=%s exc_type=%s exc=%s",
+                target_device,
+                type(exc).__name__,
+                exc,
+            )
+            _SENT.update({"tok": None, "model": None, "device": "cpu"})
     try:
         import torch  # type: ignore
         from transformers import AutoTokenizer, AutoModelForSequenceClassification  # type: ignore
 
-        # Ensure HF_HOME is set for model caching
-        models_root = _resolve_models_root()
-        os.environ["HF_HOME"] = models_root
-        os.environ["TORCH_HOME"] = models_root
-        os.environ.setdefault("TRANSFORMERS_CACHE", str(Path(models_root) / "transformers"))
-        # Disable hf_transfer to avoid dependency issues
-        os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "0"
-
-        name = "distilbert-base-uncased-finetuned-sst-2-english"
-        
-        # Direct loading without timeout - models are cached now
-        tok = AutoTokenizer.from_pretrained(name)
-        model = AutoModelForSequenceClassification.from_pretrained(name)
-        device = "cuda" if getattr(torch, "cuda", None) and torch.cuda.is_available() else "cpu"
+        _configure_model_env()
+        device = target_device if target_device == "cpu" or torch.cuda.is_available() else "cpu"
+        tok = AutoTokenizer.from_pretrained(_SENTIMENT_MODEL, local_files_only=True)
+        model = AutoModelForSequenceClassification.from_pretrained(_SENTIMENT_MODEL, local_files_only=True)
         _SENT.update({"tok": tok, "model": model.to(device).eval(), "device": device})
+        _SENT["load_attempted"] = True
+        _SENT["load_error"] = None
+        return True
     except Exception as e:
-        print(f'[ERROR] Sentiment model initialization failed: {type(e).__name__}: {str(e)}')
-        _SENT.update({"tok": None, "model": None})
+        _SENT["load_attempted"] = True
+        _SENT["load_error"] = f"{type(e).__name__}: {str(e)}"
+        logger.warning(
+            "sentiment model initialization failed preferred_device=%s exc_type=%s exc=%s",
+            target_device,
+            type(e).__name__,
+            e,
+        )
+        _SENT.update({"tok": None, "model": None, "device": "cpu"})
+        return False
 
 
 def _gather_text(item: Dict[str, Any]) -> str:
@@ -53,18 +121,18 @@ def _gather_text(item: Dict[str, Any]) -> str:
 
 
 def sentiment(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
-    text = _gather_text(item)
+    text = _normalize_text(_gather_text(item))
     if not text:
-        return {"sentiment": None, "sentiment_meta": {"status": "no_text"}}
-    
-    # Re-enabled sentiment model now that it's cached and HF_TRANSFER is disabled
+        return {"sentiment": None, "sentiment_meta": {"status": "no_text", "reason": "no_text"}}
+    if _looks_too_short(text):
+        return {"sentiment": None, "sentiment_meta": {"status": "skipped", "reason": "too_short"}}
+
     offline = (os.environ.get("TRANSFORMERS_OFFLINE") == "1" or os.environ.get("HF_DATASETS_OFFLINE") == "1")
     use_nrc_cfg = bool(((cfg.get("config", {}) or {}).get("analysis", {}) or {}).get("use_nrc_lexicon", False))
 
-    # Try model first when available and not offline
     if not offline:
-        _load()
-        if _SENT["model"] is not None:
+        preferred_device = _preferred_device()
+        if _load(preferred_device):
             try:
                 import torch  # type: ignore
                 from steps.text_embed.step import _content_fingerprint  # reuse fingerprint
@@ -73,7 +141,7 @@ def sentiment(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
                 inputs = _SENT["tok"](text, return_tensors="pt", truncation=True, max_length=512).to(_SENT["device"])
                 with torch.no_grad():
                     if _SENT.get("device") == "cuda":
-                        with torch.cuda.amp.autocast():
+                        with torch.amp.autocast("cuda"):
                             logits = _SENT["model"](**inputs).logits
                     else:
                         logits = _SENT["model"](**inputs).logits
@@ -85,19 +153,50 @@ def sentiment(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
                 try:
                     update_fields(cfg, _content_fingerprint(item), sentiment_label=label, sentiment_score=score)
                 except Exception as e:
-                    print(f'[ERROR] Exception in step.py line 69: {str(e)}')
-                    pass
+                    logger.warning(
+                        "sentiment sqlite update failed exc_type=%s exc=%s",
+                        type(e).__name__,
+                        e,
+                    )
                 return {"sentiment": {"label": label, "score": score}, "sentiment_meta": {"engine": "hf"}}
             except Exception as e:
-                # Fall through to lexicon/rule-based options
-                print(f'[ERROR] Sentiment HF model failed: {type(e).__name__}: {str(e)}')
-                pass
+                logger.warning(
+                    "sentiment inference failed device=%s exc_type=%s exc=%s",
+                    _SENT.get("device"),
+                    type(e).__name__,
+                    e,
+                )
+                if _SENT.get("device") == "cuda" and _should_retry_on_cpu(e) and _load("cpu"):
+                    try:
+                        inputs = _SENT["tok"](text, return_tensors="pt", truncation=True, max_length=512).to(_SENT["device"])
+                        with torch.no_grad():
+                            logits = _SENT["model"](**inputs).logits
+                            probs = torch.softmax(logits, dim=-1).cpu().numpy().tolist()[0]
+                        labels = ["NEGATIVE", "POSITIVE"]
+                        idx = int(probs[1] >= probs[0])
+                        label = labels[idx]
+                        score = float(probs[idx])
+                        try:
+                            update_fields(cfg, _content_fingerprint(item), sentiment_label=label, sentiment_score=score)
+                        except Exception as update_exc:
+                            logger.warning(
+                                "sentiment sqlite update failed after cpu retry exc_type=%s exc=%s",
+                                type(update_exc).__name__,
+                                update_exc,
+                            )
+                        return {"sentiment": {"label": label, "score": score}, "sentiment_meta": {"engine": "hf"}}
+                    except Exception as retry_exc:
+                        logger.warning(
+                            "sentiment cpu retry failed exc_type=%s exc=%s",
+                            type(retry_exc).__name__,
+                            retry_exc,
+                        )
 
     # Lexicon fallback when configured or HF failed
     if False and use_nrc_cfg:  # Disabled for now
         try:
             res = score_nrc_sentiment(text, cfg)
-        except Exception as e:
+        except Exception:
             res = None
         if res:
             label, score = res

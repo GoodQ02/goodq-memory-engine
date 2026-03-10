@@ -21,10 +21,15 @@ _PATH_FALLBACK_WARNED = False
 
 _EXPLICIT_META_STATUS_FIELD_BY_STEP = {
     "audio_embed_clap": "clap_meta",
+    "sentiment": "sentiment_meta",
 }
 
 _META_ERROR_STATUSES = {"error"}
-_META_SKIPPED_STATUSES = {"no_file", "unavailable", "no_index_path"}
+_META_SKIPPED_STATUSES = {"skipped", "no_text", "no_file", "unavailable", "no_index_path"}
+_EMBEDDING_EMISSION_BY_STEP = {
+    "audio_embed_clap": True,
+    "sentiment": False,
+}
 
 
 def _emit_subprocess_env_fingerprint(step_name: str) -> None:
@@ -99,15 +104,18 @@ def _derive_step_log_outcome(
             meta_status = str(result_meta.get("status") or "").strip().lower()
             extra = {
                 "result_meta": {meta_field: result_meta},
-                "embedding_emitted": meta_status == "ok",
+                "embedding_emitted": bool(_EMBEDDING_EMISSION_BY_STEP.get(step_name, False) and meta_status == "ok"),
             }
             if meta_status in _META_ERROR_STATUSES:
                 error_text = str(result_meta.get("error") or "").strip() or f"{step_name} failed"
-                extra["reason"] = f"{step_name}_{meta_status}"
+                error_reason = str(result_meta.get("reason") or meta_status).strip().lower() or meta_status
+                extra["reason"] = f"{step_name}_{error_reason}"
                 return "error", error_text, extra
             if meta_status in _META_SKIPPED_STATUSES:
-                extra["reason"] = f"{step_name}_{meta_status}"
+                skip_reason = str(result_meta.get("reason") or meta_status).strip().lower() or meta_status
+                extra["reason"] = f"{step_name}_{skip_reason}"
                 return "skipped", None, extra
+            return "ok", None, extra
 
     if verbose and isinstance(result, dict):
         meta_keys: List[str] = [

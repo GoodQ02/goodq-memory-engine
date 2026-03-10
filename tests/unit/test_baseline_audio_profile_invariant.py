@@ -4,6 +4,7 @@ import json
 import importlib
 import sys
 import types
+import wave
 from pathlib import Path
 
 import pytest
@@ -32,6 +33,14 @@ def _load_run_ingestion_module():
         sys.modules["typer"] = typer
 
     return importlib.import_module("cli.run_ingestion")
+
+
+def _write_silent_wav(path: Path, *, sample_rate: int = 16000, frames: int = 0) -> None:
+    with wave.open(str(path), "wb") as wav:
+        wav.setnchannels(1)
+        wav.setsampwidth(2)
+        wav.setframerate(sample_rate)
+        wav.writeframes(b"\x00\x00" * frames)
 
 
 def test_baseline_profile_skips_unified_wsl(monkeypatch, tmp_path: Path):
@@ -196,6 +205,18 @@ def test_audio_embed_clap_failure_preserves_transcript_payload(monkeypatch, tmp_
     ]
 
 
+def test_audio_embed_clap_skips_invalid_audio_before_model_load(tmp_path: Path):
+    from steps.audio_embed_clap.step import audio_embed_clap
+
+    audio_path = tmp_path / "silent.wav"
+    _write_silent_wav(audio_path, frames=0)
+
+    result = audio_embed_clap({"source_path": str(audio_path)}, {"paths": {}})
+
+    assert result["clap_meta"]["status"] == "skipped"
+    assert result["clap_meta"]["reason"] in {"audio_too_small", "audio_too_short", "audio_empty", "invalid_audio"}
+
+
 @pytest.mark.parametrize(
     ("failing_step", "expected_meta_field"),
     [
@@ -299,3 +320,61 @@ def test_optional_audio_text_enrichment_failure_preserves_transcript_payload(
             },
         }
     ]
+
+
+@pytest.mark.parametrize(
+    ("payload", "expected_status", "expected_reason"),
+    [
+        ({}, "no_text", "no_text"),
+        ({"transcript": "hi"}, "skipped", "too_short"),
+    ],
+)
+def test_sentiment_guards_skip_invalid_text_inputs(
+    payload,
+    expected_status: str,
+    expected_reason: str,
+):
+    from steps.sentiment.step import sentiment
+
+    result = sentiment(payload, {"config": {}})
+
+    assert result["sentiment"] is None
+    assert result["sentiment_meta"]["status"] == expected_status
+    assert result["sentiment_meta"]["reason"] == expected_reason
+
+
+@pytest.mark.parametrize(
+    ("step_name", "result", "expected_status", "expected_reason", "expected_embedding"),
+    [
+        (
+            "audio_embed_clap",
+            {"clap_meta": {"status": "skipped", "reason": "audio_silent"}},
+            "skipped",
+            "audio_embed_clap_audio_silent",
+            False,
+        ),
+        (
+            "sentiment",
+            {"sentiment_meta": {"status": "skipped", "reason": "too_short"}},
+            "skipped",
+            "sentiment_too_short",
+            False,
+        ),
+    ],
+)
+def test_step_runner_meta_outcome_preserves_optional_skip_observability(
+    step_name: str,
+    result: dict,
+    expected_status: str,
+    expected_reason: str,
+    expected_embedding: bool,
+):
+    from cli.step_runner import _derive_step_log_outcome
+
+    status, error, extra = _derive_step_log_outcome(step_name, result, verbose=False)
+
+    assert status == expected_status
+    assert error is None
+    assert extra is not None
+    assert extra["reason"] == expected_reason
+    assert extra["embedding_emitted"] is expected_embedding

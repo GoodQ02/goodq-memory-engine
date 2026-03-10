@@ -32,6 +32,8 @@ from steps.common.step_logger import log_step_run
 from steps.common.profile_config import is_baseline, require_wsl_audio, wsl_audio_auto_enabled
 from lib.observability.observer import PipelineObserver
 
+_OPTIONAL_DIRECT_ENV_FALLBACK_STEPS = {"sentiment", "audio_embed_clap"}
+
 
 def _patch_typer_help_for_click_8_2() -> None:
     """
@@ -1531,6 +1533,8 @@ def _run_step(
     cfg_json: Path,
     _healer_retry_attempt: int = 0,
     _native_retry_attempt: int = 0,
+    _direct_env_fallback_attempt: int = 0,
+    _prefer_direct_env_python: bool = False,
 ) -> Dict[str, Any]:
     work_env = _base_env(cfg_json)
     
@@ -1564,17 +1568,71 @@ def _run_step(
         else:
             conda_available = shutil.which(conda_exe) is not None
 
-        if conda_available:
-            cmd = [
-                conda_exe, 'run', '-n', env_name,
-                '--no-capture-output',  # Let output flow through
-                'python', str(REPO_ROOT / 'cli' / 'step_runner.py'),  # Use absolute path instead of -m
-                '--step', step_name,
-                '--in', str(in_path),
-                '--out', str(out_path),
-                '--cfg', str(cfg_json),
-            ]
-        else:
+        def _resolve_env_python_for_step_fallback(name: str) -> Optional[str]:
+            try:
+                from configs.python_paths import get_env_python
+
+                env_python = get_env_python(name)
+            except Exception as e:
+                logger.warning(
+                    "run_ingestion warning context=%s error=%s",
+                    "direct_env_python.resolve",
+                    e,
+                )
+                return None
+            if env_python and Path(env_python).exists():
+                return str(env_python)
+            return None
+
+        direct_env_python = _resolve_env_python_for_step_fallback(env_name)
+
+        def _build_step_runner_cmd(*, prefer_direct_env_python: bool) -> tuple[List[str], str]:
+            if prefer_direct_env_python:
+                if not direct_env_python:
+                    raise RuntimeError(
+                        f"Direct interpreter fallback unavailable for env={env_name} step={step_name}"
+                    )
+                return (
+                    [
+                        direct_env_python,
+                        str(REPO_ROOT / 'cli' / 'step_runner.py'),
+                        '--step', step_name,
+                        '--in', str(in_path),
+                        '--out', str(out_path),
+                        '--cfg', str(cfg_json),
+                    ],
+                    "direct_env_python",
+                )
+            if conda_available:
+                return (
+                    [
+                        conda_exe, 'run', '-n', env_name,
+                        '--no-capture-output',  # Let output flow through
+                        'python', str(REPO_ROOT / 'cli' / 'step_runner.py'),  # Use absolute path instead of -m
+                        '--step', step_name,
+                        '--in', str(in_path),
+                        '--out', str(out_path),
+                        '--cfg', str(cfg_json),
+                    ],
+                    "conda_run",
+                )
+            raise RuntimeError(
+                "Conda unavailable for step execution "
+                f"(step={step_name}, env={env_name}, conda_exe={conda_exe}). "
+                "Bare interpreter fallback is disabled."
+            )
+
+        try:
+            cmd, launcher_kind = _build_step_runner_cmd(
+                prefer_direct_env_python=_prefer_direct_env_python
+            )
+        except RuntimeError:
+            raise
+        except Exception as e:
+            logger.error("run_ingestion abort: step_command_build_failed step=%s env=%s error=%s", step_name, env_name, e)
+            raise
+
+        if not conda_available and launcher_kind != "direct_env_python":
             error_msg = (
                 "Conda unavailable for step execution "
                 f"(step={step_name}, env={env_name}, conda_exe={conda_exe}). "
@@ -1622,8 +1680,10 @@ def _run_step(
         observer_meta["attempt"] = max(int(_healer_retry_attempt), int(_native_retry_attempt)) + 1
         observer_meta["healer_retry_attempt"] = int(_healer_retry_attempt)
         observer_meta["native_retry_attempt"] = int(_native_retry_attempt)
+        observer_meta["launcher"] = launcher_kind
+        observer_meta["direct_env_fallback_attempt"] = int(_direct_env_fallback_attempt)
         if VERBOSE:
-            typer.echo(f'[step] -> {step_name} ({env_name})')
+            typer.echo(f'[step] -> {step_name} ({env_name}) [{launcher_kind}]')
         stop_heartbeat = (lambda: None)
         process: Optional[subprocess.Popen[str]] = None
         try:
@@ -1710,6 +1770,47 @@ def _run_step(
         if result.returncode != 0:
             stderr = result.stderr.strip()
             stdout = result.stdout.strip()
+            combined_output = f"{stdout}\n{stderr}".lower()
+
+            should_try_direct_env_fallback = (
+                launcher_kind == "conda_run"
+                and step_name in _OPTIONAL_DIRECT_ENV_FALLBACK_STEPS
+                and _direct_env_fallback_attempt == 0
+                and direct_env_python is not None
+                and (
+                    "conda.cli.main_run:execute(127)" in combined_output
+                    or "failed to run 'conda activate" in combined_output
+                    or (
+                        "__conda_tmp_" in combined_output
+                        and (
+                            "being used by another process" in combined_output
+                            or "cannot access the file because it is being used by another process" in combined_output
+                        )
+                    )
+                )
+            )
+            if should_try_direct_env_fallback:
+                logger.warning(
+                    "[RUN] Conda launcher failed for optional step=%s env=%s; retrying via direct env python",
+                    step_name,
+                    env_name,
+                )
+                if VERBOSE:
+                    typer.echo(
+                        f"[retry] [WARN] Conda launcher failed for {step_name}; retrying via direct env python",
+                        err=True,
+                    )
+                return _run_step(
+                    env_name,
+                    step_name,
+                    payload,
+                    cfg_json,
+                    _healer_retry_attempt=_healer_retry_attempt,
+                    _native_retry_attempt=_native_retry_attempt,
+                    _direct_env_fallback_attempt=1,
+                    _prefer_direct_env_python=True,
+                )
+
             error_msg = f"Step {step_name} failed ({env_name})\nSTDOUT: {stdout}\nSTDERR: {stderr}"
             if observer:
                 observer.step_error(

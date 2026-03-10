@@ -9,6 +9,9 @@ from contextlib import nullcontext
 import sqlite3
 from datetime import datetime
 import importlib.util
+from pathlib import Path
+import audioop
+import wave
 
 import os
 import logging
@@ -16,11 +19,16 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-_CLAP = {"model": None, "proc": None, "device": "cpu"}
+_CLAP_MODEL_ID = "laion/clap-htsat-unfused"
+_CLAP = {"model": None, "proc": None, "device": "cpu", "model_dir": None}
 _TORCHAUDIO_INSTALL_HINT = (
     "conda run -n goodq_audio_embed pip install "
     "torchaudio==2.3.1 --extra-index-url https://download.pytorch.org/whl/cu121"
 )
+_MIN_AUDIO_DURATION_SEC = 0.35
+_MIN_AUDIO_BYTES = 512
+_SILENCE_RMS_THRESHOLD = 8
+_SILENCE_PEAK_THRESHOLD = 24
 
 
 def _torchaudio_preflight() -> bool:
@@ -34,17 +42,149 @@ def _torchaudio_preflight() -> bool:
     return False
 
 
-def _load() -> None:
-    if _CLAP["model"] is not None:
-        return
+def _resolve_models_root() -> str:
+    from steps.common.config_loader import get_runtime_paths, load_configs
+
+    runtime_paths = get_runtime_paths(load_configs({}), "models_cache")
+    return str(Path(runtime_paths["models_cache"]).resolve())
+
+
+def _configure_model_env() -> Path:
+    models_root = Path(_resolve_models_root())
+    os.environ["HF_HOME"] = str(models_root)
+    os.environ["TORCH_HOME"] = str(models_root)
+    os.environ.setdefault("HF_HUB_CACHE", str(models_root / "hub"))
+    os.environ.setdefault("TRANSFORMERS_CACHE", str(models_root / "transformers"))
+    os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "0"
+    os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+    return models_root
+
+
+def _resolve_local_model_dir(models_root: Path) -> Optional[str]:
+    repo_cache = models_root / "hub" / f"models--{_CLAP_MODEL_ID.replace('/', '--')}"
+    snapshots_dir = repo_cache / "snapshots"
+    refs_main = repo_cache / "refs" / "main"
+    required = ("config.json", "preprocessor_config.json", "pytorch_model.bin")
+    candidates = []
+
+    if refs_main.is_file():
+        revision = refs_main.read_text(encoding="utf-8").strip()
+        if revision:
+            candidates.append(snapshots_dir / revision)
+
+    if snapshots_dir.is_dir():
+        candidates.extend(sorted(snapshots_dir.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True))
+
+    seen: set[Path] = set()
+    for candidate in candidates:
+        if candidate in seen or not candidate.is_dir():
+            continue
+        seen.add(candidate)
+        if all((candidate / name).is_file() for name in required):
+            return str(candidate)
+    return None
+
+
+def _preferred_device() -> str:
     try:
         import torch  # type: ignore
-        from transformers import ClapModel, AutoProcessor  # type: ignore
+
+        if getattr(torch, "cuda", None) and torch.cuda.is_available():
+            return "cuda"
+    except Exception:
+        pass
+    return "cpu"
+
+
+def _should_retry_on_cpu(exc: Exception) -> bool:
+    message = f"{type(exc).__name__}: {exc}".lower()
+    return any(
+        token in message
+        for token in (
+            "cuda",
+            "cublas",
+            "cudnn",
+            "out of memory",
+            "device-side",
+            "device type",
+            "driver shutting down",
+        )
+    )
+
+
+def _inspect_audio_input(path: str) -> Optional[Dict[str, Any]]:
+    try:
+        file_size = os.path.getsize(path)
+    except OSError as exc:
+        return {"status": "skipped", "reason": "audio_stat_failed", "error": str(exc)}
+    if file_size < _MIN_AUDIO_BYTES:
+        return {"status": "skipped", "reason": "audio_too_small", "bytes": file_size}
+
+    if Path(path).suffix.lower() != ".wav":
+        return None
+
+    try:
+        with wave.open(path, "rb") as wav:
+            frame_count = wav.getnframes()
+            sample_rate = wav.getframerate()
+            sample_width = wav.getsampwidth()
+            if frame_count <= 0 or sample_rate <= 0 or sample_width <= 0:
+                return {"status": "skipped", "reason": "invalid_audio"}
+
+            duration_sec = frame_count / float(sample_rate)
+            if duration_sec < _MIN_AUDIO_DURATION_SEC:
+                return {
+                    "status": "skipped",
+                    "reason": "audio_too_short",
+                    "duration_sec": round(duration_sec, 4),
+                }
+
+            raw = wav.readframes(frame_count)
+            if not raw:
+                return {"status": "skipped", "reason": "audio_empty"}
+
+            rms = int(audioop.rms(raw, sample_width))
+            peak = int(audioop.max(raw, sample_width))
+            if rms <= _SILENCE_RMS_THRESHOLD and peak <= _SILENCE_PEAK_THRESHOLD:
+                return {
+                    "status": "skipped",
+                    "reason": "audio_silent",
+                    "duration_sec": round(duration_sec, 4),
+                }
+    except (wave.Error, EOFError, OSError) as exc:
+        return {"status": "skipped", "reason": "invalid_audio", "error": str(exc)}
+
+    return None
+
+
+def _load(preferred_device: Optional[str] = None) -> tuple[bool, Optional[str]]:
+    target_device = preferred_device or _preferred_device()
+    if _CLAP["model"] is not None:
+        if _CLAP["device"] == target_device:
+            return True, None
+        try:
+            _CLAP["model"] = _CLAP["model"].to(target_device).eval()
+            _CLAP["device"] = target_device
+            return True, None
+        except Exception as exc:
+            logger.warning(
+                "audio_embed_clap model move failed target_device=%s exc_type=%s exc=%s",
+                target_device,
+                type(exc).__name__,
+                exc,
+            )
+            _CLAP.update({"model": None, "proc": None, "device": "cpu", "model_dir": None})
+    try:
+        import torch  # type: ignore
+        from transformers import AutoFeatureExtractor, ClapModel  # type: ignore
+
+        models_root = _configure_model_env()
+        model_source = _resolve_local_model_dir(models_root) or _CLAP_MODEL_ID
         
         # GPU Isolation - Phase 2
         os.environ.setdefault("CUDA_VISIBLE_DEVICES", "0")
         
-        device = "cuda" if getattr(torch, "cuda", None) and torch.cuda.is_available() else "cpu"
+        device = target_device if target_device == "cpu" or (getattr(torch, "cuda", None) and torch.cuda.is_available()) else "cpu"
         
         # Set memory fraction for this process (20% of GPU)
         if device == "cuda":
@@ -52,11 +192,11 @@ def _load() -> None:
             torch.backends.cudnn.benchmark = False
             torch.backends.cudnn.deterministic = True
         
-        # Prefer local caches; processor prepares input_features for audio
-        proc = AutoProcessor.from_pretrained("laion/clap-htsat-unfused", local_files_only=True)
-        model = ClapModel.from_pretrained("laion/clap-htsat-unfused", local_files_only=True).to(device).eval()
-        _CLAP.update({"model": model, "proc": proc, "device": device})
+        proc = AutoFeatureExtractor.from_pretrained(model_source, local_files_only=True)
+        model = ClapModel.from_pretrained(model_source, local_files_only=True).to(device).eval()
+        _CLAP.update({"model": model, "proc": proc, "device": device, "model_dir": model_source})
         logger.info("audio_embed_clap model loaded device=%s memory_fraction=%s", device, 0.2)
+        return True, None
     except Exception as e:
         logger.error(
             "audio_embed_clap operation failed operation=%s exc_type=%s exc=%s",
@@ -64,7 +204,8 @@ def _load() -> None:
             type(e).__name__,
             e,
         )
-        _CLAP.update({"model": None, "proc": None})
+        _CLAP.update({"model": None, "proc": None, "device": "cpu", "model_dir": None})
+        return False, f"{type(e).__name__}: {e}"
 
 
 def _ensure_clap_map(db_path: str) -> None:
@@ -99,6 +240,9 @@ def audio_embed_clap(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
     path = item.get("source_path")
     if not isinstance(path, str) or not os.path.isfile(path):
         return {"clap_meta": {"status": "no_file"}}
+    audio_guard = _inspect_audio_input(path)
+    if audio_guard is not None:
+        return {"clap_meta": audio_guard}
     if not _torchaudio_preflight():
         return {
             "clap_meta": {
@@ -107,9 +251,12 @@ def audio_embed_clap(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
                 "install_hint": _TORCHAUDIO_INSTALL_HINT,
             }
         }
-    _load()
-    if _CLAP["model"] is None:
-        return {"clap_meta": {"status": "unavailable"}}
+    load_ok, load_error = _load(_preferred_device())
+    if not load_ok and _preferred_device() == "cuda":
+        clear_cache()
+        load_ok, load_error = _load("cpu")
+    if not load_ok or _CLAP["model"] is None:
+        return {"clap_meta": {"status": "error", "reason": "model_load_failed", "error": load_error or "model unavailable"}}
     try:
         import torch  # type: ignore
         import librosa  # type: ignore
@@ -157,19 +304,68 @@ def audio_embed_clap(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
                     vad_exc,
                 )
         
-        # resample to 48kHz mono as expected
-        wave, sr = librosa.load(audio_path_to_use, sr=48000, mono=True)
-        # Prepare CLAP audio input features; ClapModel expects input_features for audio
-        batch = _CLAP["proc"](audios=wave, sampling_rate=48000, return_tensors="pt")
-        input_features = batch.get("input_features")
-        if input_features is None:
-            raise RuntimeError("CLAP processor did not return input_features for audio")
-        input_features = input_features.to(_CLAP["device"])  # type: ignore[attr-defined]
-        if _CLAP["device"] == "cuda":
-            with torch.cuda.amp.autocast():
-                out = _CLAP["model"].get_audio_features(input_features=input_features)
-        else:
-            out = _CLAP["model"].get_audio_features(input_features=input_features)
+        try:
+            wave_data, sr = librosa.load(audio_path_to_use, sr=48000, mono=True)
+        except Exception as decode_exc:
+            logger.warning(
+                "audio_embed_clap decode failed source_path=%s exc_type=%s exc=%s",
+                audio_path_to_use,
+                type(decode_exc).__name__,
+                decode_exc,
+            )
+            return {"clap_meta": {"status": "skipped", "reason": "audio_decode_failed", "error": str(decode_exc)}}
+        if wave_data is None or len(wave_data) == 0:
+            return {"clap_meta": {"status": "skipped", "reason": "audio_empty"}}
+        if not np.isfinite(wave_data).all():
+            return {"clap_meta": {"status": "skipped", "reason": "invalid_audio"}}
+        if float(np.max(np.abs(wave_data))) <= 1e-5:
+            return {"clap_meta": {"status": "skipped", "reason": "audio_silent"}}
+
+        def _run_inference() -> Any:
+            batch = _CLAP["proc"](raw_speech=wave_data, sampling_rate=48000, return_tensors="pt")
+            input_features = batch.get("input_features")
+            if input_features is None:
+                raise RuntimeError("CLAP processor did not return input_features for audio")
+            input_features = input_features.to(_CLAP["device"])  # type: ignore[attr-defined]
+            if _CLAP["device"] == "cuda":
+                with torch.amp.autocast("cuda"):
+                    return _CLAP["model"].get_audio_features(input_features=input_features)
+            return _CLAP["model"].get_audio_features(input_features=input_features)
+
+        try:
+            out = _run_inference()
+        except Exception as infer_exc:
+            logger.warning(
+                "audio_embed_clap inference failed device=%s source_path=%s exc_type=%s exc=%s",
+                _CLAP.get("device"),
+                path,
+                type(infer_exc).__name__,
+                infer_exc,
+            )
+            if _CLAP.get("device") == "cuda" and _should_retry_on_cpu(infer_exc):
+                clear_cache()
+                retry_ok, retry_error = _load("cpu")
+                if retry_ok:
+                    try:
+                        out = _run_inference()
+                    except Exception as retry_exc:
+                        return {
+                            "clap_meta": {
+                                "status": "error",
+                                "reason": "cpu_retry_failed",
+                                "error": str(retry_exc),
+                            }
+                        }
+                else:
+                    return {
+                        "clap_meta": {
+                            "status": "error",
+                            "reason": "retry_model_load_failed",
+                            "error": retry_error or str(infer_exc),
+                        }
+                    }
+            else:
+                return {"clap_meta": {"status": "error", "reason": "inference_failed", "error": str(infer_exc)}}
         feats = out.detach().cpu().numpy().astype("float32")
         index_path = (cfg.get("paths", {}) or {}).get("faiss_audio_path")
         if not index_path:

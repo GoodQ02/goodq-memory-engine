@@ -44,7 +44,7 @@ Strict fail-fast flags:
 - `GOODQ_REQUIRE_GPU=1`: fail when GPU capability is required but unavailable.
 - `GOODQ_REQUIRE_WSL_AUDIO=1`: fail when WSL audio path is required but unavailable.
 
-## Current Status (v1.0.0-canonical-windows-wsl-integrated)
+## Current Status
 
 This status section is anchored to a documented witness ingest run (`run_id=51e42006-f64d-4b13-a42a-f180bf8ba7f3`, March 1, 2026 UTC) and only states claims backed by artifacts.
 

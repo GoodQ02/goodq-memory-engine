@@ -1,7 +1,7 @@
 # GoodQ4All Development Roadmap
 
 **Project:** GoodQ4All - Multimodal Memory Intelligence System  
-**Version:** 1.4.0  
+**Roadmap Snapshot:** October 2025 planning draft  
 **Last Updated:** October 13, 2025
 
 ---
@@ -12,7 +12,7 @@ GoodQ4All is an open-source, privacy-first multimodal AI system designed to proc
 
 ---
 
-## Current Status (v1.4.0)
+## Status At Draft Time
 
 ### Core Capabilities
 - ✅ Multimodal ingestion pipeline (video, audio, image, text)

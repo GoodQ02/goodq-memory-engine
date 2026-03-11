@@ -12,7 +12,7 @@
 
 ---
 
-## Current Status (v1.0.0-canonical-windows-wsl-integrated)
+## Current Status
 
 This milestone snapshot is constrained to witness-run evidence (`run_id=51e42006-f64d-4b13-a42a-f180bf8ba7f3`) and does not expand profile guarantees beyond existing contracts.
 

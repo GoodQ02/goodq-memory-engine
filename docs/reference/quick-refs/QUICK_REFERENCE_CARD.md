@@ -1,5 +1,5 @@
 # goodq4all Quick Reference Card
-**Version**: 1.4.0 | **Status**: Production Ready | **Location**: `<project_root>\`
+**Version Surface**: public branch baseline | **Status**: Operational quick reference | **Location**: `<project_root>\`
 
 ---
 
@@ -228,4 +228,4 @@ taskkill /PID <pid> /F
 
 **Print this card** | **Bookmark this file** | **Keep handy!**
 
-*Last updated: October 9, 2025 - v1.4.0*
+*Last updated: October 9, 2025 - pre-public quick reference snapshot*

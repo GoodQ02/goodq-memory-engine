@@ -21,6 +21,7 @@ from typing import Optional, List, Any, Dict
 from pydantic import BaseModel
 from lib.llm_client import LLMClient
 from steps.common.llm_model_factory import build_llm_models
+from goodq_version import GOODQ_VERSION
 
 from steps.common.config_loader import load_configs
 from steps.common.memory_manager import build_memory_router
@@ -32,7 +33,7 @@ from api.routes import search, scenes, timeline, media, system, run_summary, run
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="GoodQ Retrieval API", version="0.1.0")
+app = FastAPI(title="GoodQ Retrieval API", version=GOODQ_VERSION)
 
 # Add UTF-8 charset to JSON responses
 class UTF8JSONMiddleware(BaseHTTPMiddleware):
@@ -586,7 +587,7 @@ def get_status() -> Dict[str, Any]:
     
     return {
         "status": "active",
-        "version": "1.4.0",
+        "version": GOODQ_VERSION,
         "components": {
             "api": "running",
             "pipeline": processing_data["status"],

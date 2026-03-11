@@ -11,7 +11,7 @@ from pathlib import Path
 # Add parent to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from scripts.watchdog_ingest import WatchdogProcessor, FileState
+from cli.watchdog import WatchdogProcessor, FileState
 
 def test_file_classification():
     """Test file type detection"""

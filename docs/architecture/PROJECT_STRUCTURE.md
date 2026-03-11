@@ -27,12 +27,14 @@ Shared utilities and helpers
 - Common data models
 
 ### `/configs/`
-All configuration files (merged from config/)
-- `config.yaml` - Main configuration
-- `gpu_config.yaml` - GPU settings
-- `paths.yaml` - Path configurations
+ All configuration files and runtime path bindings
+- `config.yaml` - Sanitized public baseline configuration
+- `config.example.yaml` - Public example configuration
+- `config.local.example.yaml` - Local-only override template
 - `entities.yaml` - Entity definitions
 - `model_registry.yaml` - Model versions
+- `models_config.yaml` - Optional model path settings
+- `python_paths.py` - Interpreter binding helpers
 
 ### `/data/`
 Runtime data storage
@@ -59,7 +61,7 @@ Core library code
 - Data models
 
 ### `/pipelines/`
-legacy orchestration pipeline definitions
+ historical orchestration pipeline definitions retained for reference
 - Audio processing pipelines
 - Vision processing pipelines
 - Knowledge graph pipelines
@@ -72,7 +74,7 @@ Utility and test scripts (consolidated)
 - Monitoring scripts
 
 ### `/steps/`
-legacy orchestration step implementations
+ active multimodal step implementations
 - Audio processing steps
 - Vision processing steps
 - NLP/LLM steps

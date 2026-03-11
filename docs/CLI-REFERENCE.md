@@ -159,7 +159,7 @@ Critical Dependencies:
 ================================================================================
 CONFIGURATION STATUS
 ================================================================================
-Config file: <project_root>\config.yaml
+Config file: <project_root>\configs\config.yaml
   ✅ Valid YAML
   ✅ Schema validated
 ...
@@ -218,7 +218,7 @@ python -m cli.nl_query "When did the speaker mention 'innovation' while showing 
 ```
 
 **Configuration:**
-- LLM endpoint: `llm.api_url` in config.yaml
+- LLM endpoint: `llm.api_url` in `configs/config.yaml`
 - Default: `http://localhost:1234/v1/chat/completions` (vLLM on WSL2)
 
 ---
@@ -374,7 +374,7 @@ python -m cli.print_config [--format json|yaml]
 ```
 
 **Output:** Complete configuration tree showing:
-- Loaded values from config.yaml
+- Loaded values from `configs/config.yaml`
 - Applied defaults
 - Resolved paths
 - Service endpoints
@@ -448,15 +448,15 @@ python -m cli.step_runner entity_extractor --input scene_data.json
 
 ## Configuration
 
-All CLI commands respect settings in `config.yaml`. Key paths:
+All CLI commands respect settings in `configs/config.yaml`. Key paths:
 
 ```yaml
 paths:
   import_inbox: "<project_root>/samples/ingestion"
-  db_path: "<GOODQ_DATA_ROOT>/GoodQ_Data/memory.db"
-  kg_db_path: "<GOODQ_DATA_ROOT>/GoodQ_Data/knowledge_graph.db"
-  processing: "<GOODQ_DATA_ROOT>/GoodQ_Data/processing"
-  log_dir: "<project_root>/logs"
+  db_path: "<GOODQ_DATA_ROOT>/GoodQ_Data/epochs/<epoch>/memory.db"
+  knowledge_graph_db: "<GOODQ_DATA_ROOT>/GoodQ_Data/epochs/<epoch>/knowledge_graph.db"
+  processing: "<GOODQ_DATA_ROOT>/GoodQ_Data/epochs/<epoch>/processing"
+  log_dir: "<GOODQ_DATA_ROOT>/GoodQ_Data/epochs/<epoch>/logs"
 
 qdrant:
   host: "localhost"

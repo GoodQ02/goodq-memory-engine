@@ -187,7 +187,7 @@ Recommended pre-push checks:
 
 ```powershell
 python scripts/docs/doc_drift_lint.py
-python -m pytest -q
+python -m pytest -q  # unit suite via pytest.ini; broader integration/manual suites are separate
 .\scripts\bootstrap_validate.bat
 ```
 

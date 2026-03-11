@@ -17,7 +17,7 @@ Successfully implemented a comprehensive automatic file ingestion system (Watchd
 
 ## What Was Built
 
-### 1. Core Watchdog Daemon (`scripts/watchdog_ingest.py`)
+### 1. Core Watchdog Daemon (`cli/watchdog.py`)
 A robust Python daemon featuring:
 - **File Detection**: Polls directory every 2 seconds for new files
 - **Type Recognition**: Automatically identifies video, audio, image, and document files
@@ -47,29 +47,26 @@ Real-time status display showing:
 
 **Lines of Code**: 172  
 **Modes**: 
-- Single snapshot (`CHECK_WATCHDOG.bat`)
-- Live monitoring with auto-refresh (`MONITOR_WATCHDOG.bat`)
+- Single snapshot (`python scripts/utils/check_watchdog_status.py`)
+- Live monitoring with auto-refresh (`scripts/monitoring/monitor_live.bat`)
 
 ### 3. Launcher Scripts
 
 | Script | Purpose |
 |--------|---------|
-| `START_WATCHDOG.bat` | Start the watchdog daemon |
-| `CHECK_WATCHDOG.bat` | One-time status check |
-| `MONITOR_WATCHDOG.bat` | Live status updates (5-second refresh) |
+| `python -m cli.watchdog` | Start the watchdog daemon |
+| `python scripts/utils/check_watchdog_status.py` | One-time status check |
+| `scripts/monitoring/monitor_live.bat` | Live status updates (5-second refresh) |
 
 ### 4. Testing Suite
 
-#### Comprehensive Tests (`scripts/test_watchdog.py`)
+#### Comprehensive Tests (`tests/integration/test_watchdog.py`)
 - File type classification tests
 - Directory scanning validation
 - Registry persistence checks
 - File stability detection verification
 
-#### Simple Test (`scripts/test_watchdog_simple.py`)
-- Creates test file copy for manual watchdog validation
-
-**Test Results**: ✅ All tests passing
+**Test Results**: ✅ Current integration check remains available
 
 ### 5. Documentation Suite
 
@@ -174,13 +171,13 @@ Failed files are:
 
 **Live Monitoring**:
 ```batch
-MONITOR_WATCHDOG.bat
+scripts\monitoring\monitor_live.bat
 ```
 Shows real-time updates every 5 seconds
 
 **Status Check**:
 ```batch
-CHECK_WATCHDOG.bat
+python scripts\utils\check_watchdog_status.py
 ```
 One-time snapshot of current state
 
@@ -235,7 +232,7 @@ goodq4all/
 │   ├── watchdog.log           # Activity log with timestamps
 │   └── watchdog_state.json    # SHA-256 hash registry
 ├── scripts/
-│   ├── watchdog_ingest.py     # Main daemon (544 lines)
+│   ├── watchdog.py            # Canonical daemon
 │   ├── watchdog_status.ps1    # Status dashboard (172 lines)
 │   └── test_watchdog.py       # Test suite (140 lines)
 └── docs/
@@ -276,7 +273,7 @@ goodq4all/
 
 ## Configuration
 
-### Editable Settings (`scripts/watchdog_ingest.py`)
+### Editable Settings (`cli/watchdog.py`)
 
 ```python
 # Directories
@@ -331,19 +328,19 @@ SUPPORTED_DOCUMENT = {'.pdf', '.txt', '.md', '.doc', '.docx'}
 ### Basic Usage
 ```batch
 REM Start the watchdog
-START_WATCHDOG.bat
+python -m cli.watchdog
 
 REM Drop files into inbox
 copy myVideo.mp4 <project_root>\import_inbox\
 
 REM Check status
-CHECK_WATCHDOG.bat
+python scripts\utils\check_watchdog_status.py
 ```
 
 ### Live Monitoring
 ```batch
 REM Open in separate window
-start MONITOR_WATCHDOG.bat
+start scripts\monitoring\monitor_live.bat
 
 REM Drop files, watch them process in real-time
 ```
@@ -374,11 +371,11 @@ Get-Content <project_root>\logs\watchdog_state.json | ConvertFrom-Json
 **Option 1: Add to LAUNCH_GOODQ.bat**
 ```batch
 REM Add before "Press any key to close"
-start "GoodQ Watchdog" /MIN cmd /k "call conda activate goodq_core && python <project_root>\scripts\watchdog_ingest.py"
+start "GoodQ Watchdog" /MIN cmd /k "conda run -n goodq_core python -m cli.watchdog"
 ```
 
 **Option 2: Windows Startup**
-Add `START_WATCHDOG.bat` to Windows Startup folder for automatic start on boot
+Add a shortcut to `python -m cli.watchdog` to the Windows Startup folder for automatic start on boot
 
 **Option 3: Service Mode**
 Convert to Windows Service for true background operation (future enhancement)
@@ -518,7 +515,7 @@ Convert to Windows Service for true background operation (future enhancement)
 - [x] Architecture diagrams viewable
 
 ### User Acceptance
-- [ ] User tests START_WATCHDOG.bat
+- [ ] User tests `python -m cli.watchdog`
 - [ ] User drops test file
 - [ ] User verifies processing
 - [ ] User checks status dashboard
@@ -556,9 +553,9 @@ Convert to Windows Service for true background operation (future enhancement)
 ## Support & Resources
 
 ### Documentation
-- **User Guide**: `docs/WATCHDOG_GUIDE.md`
+- **User Guide**: `docs/guides/watchdog/WATCHDOG_GUIDE.md`
 - **Architecture**: `docs/diagrams/watchdog_flow.md`
-- **Changelog**: `docs/WATCHDOG_CHANGELOG.md`
+- **Changelog**: `docs/guides/watchdog/WATCHDOG_CHANGELOG.md`
 - **Main README**: `README.md` (Watchdog section)
 
 ### Logs & Diagnostics
@@ -567,8 +564,7 @@ Convert to Windows Service for true background operation (future enhancement)
 - **Step Logs**: `<GOODQ_DATA_ROOT>/GoodQ_Data (See LEGACY_PATHS_DEPRECATED.md)/logs/step_runs.jsonl`
 
 ### Testing
-- **Test Suite**: `scripts/test_watchdog.py`
-- **Simple Test**: `scripts/test_watchdog_simple.py`
+- **Test Suite**: `tests/integration/test_watchdog.py`
 
 ### Troubleshooting
 See `docs/WATCHDOG_GUIDE.md` section "Troubleshooting" for common issues and solutions.

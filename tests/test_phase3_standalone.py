@@ -16,13 +16,14 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Add project root to path
-sys.path.insert(0, str(Path(__file__).parent))
+REPO_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO_ROOT))
 
 
 def load_config():
     """Load configuration"""
     import yaml
-    with open('L:/goodq4all/config.yaml', 'r') as f:
+    with open(REPO_ROOT / 'configs' / 'config.yaml', 'r') as f:
         return yaml.safe_load(f)
 
 
@@ -34,10 +35,10 @@ def test_llm_entity_extraction_standalone():
     cfg = load_config()
     
     # Import the function directly from the module file
-    sys.path.insert(0, 'L:/goodq4all/steps/graph_builder')
+    sys.path.insert(0, str(REPO_ROOT / 'steps' / 'graph_builder'))
     
     # Load the function without importing the whole module
-    with open('L:/goodq4all/steps/graph_builder/llm_enrichment.py', 'r') as f:
+    with open(REPO_ROOT / 'steps' / 'graph_builder' / 'llm_enrichment.py', 'r') as f:
         code = f.read()
         # Remove any zenml imports
         code = code.replace('from zenml import step', '')
@@ -88,8 +89,8 @@ def test_scene_narrative_standalone():
     cfg = load_config()
     
     # Load the function
-    sys.path.insert(0, 'L:/goodq4all/steps/graph_builder')
-    with open('L:/goodq4all/steps/graph_builder/llm_enrichment.py', 'r') as f:
+    sys.path.insert(0, str(REPO_ROOT / 'steps' / 'graph_builder'))
+    with open(REPO_ROOT / 'steps' / 'graph_builder' / 'llm_enrichment.py', 'r') as f:
         code = f.read()
         namespace = {}
         exec(code, namespace)
@@ -139,8 +140,8 @@ def test_emotional_arc_standalone():
     cfg = load_config()
     
     # Load the function
-    sys.path.insert(0, 'L:/goodq4all/steps/graph_builder')
-    with open('L:/goodq4all/steps/graph_builder/emotion_arc_analyzer.py', 'r') as f:
+    sys.path.insert(0, str(REPO_ROOT / 'steps' / 'graph_builder'))
+    with open(REPO_ROOT / 'steps' / 'graph_builder' / 'emotion_arc_analyzer.py', 'r') as f:
         code = f.read()
         namespace = {}
         exec(code, namespace)

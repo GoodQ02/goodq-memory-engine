@@ -36,11 +36,10 @@ The GoodQ Watchdog is an automatic file monitoring and ingestion system that wat
 ### 1. Start the Watchdog
 
 ```batch
-START_WATCHDOG.bat
+conda run -n goodq_core python -m cli.watchdog
 ```
 
 This will:
-- Activate the `goodq_core` environment
 - Start monitoring `import_inbox`
 - Display real-time status
 
@@ -103,13 +102,13 @@ goodq4all/
 ├── logs/
 │   ├── watchdog.log       # Watchdog activity log
 │   └── watchdog_state.json # Processed file registry
-└── scripts/
-    └── watchdog_ingest.py # Main watchdog script
+└── cli/
+    └── watchdog.py        # Canonical watchdog implementation
 ```
 
 ## Configuration
 
-Edit `scripts/watchdog_ingest.py` to adjust:
+Adjust the polling constants in `cli/watchdog.py` to change:
 
 ```python
 POLL_INTERVAL = 2.0      # How often to scan (seconds)
@@ -148,8 +147,7 @@ This means:
 
 ### Test File Classification
 ```batch
-conda activate goodq_core
-python scripts\test_watchdog.py
+conda run -n goodq_core python tests\integration\test_watchdog.py
 ```
 
 This tests:
@@ -157,14 +155,6 @@ This tests:
 - Directory scanning
 - Processed file registry
 - File stability checks
-
-### Test with Sample File
-```batch
-conda activate goodq_core
-python scripts\test_watchdog_simple.py
-```
-
-This creates a test copy of `sample.mp4` that you can use to test the watchdog.
 
 ## Monitoring
 
@@ -194,7 +184,7 @@ To add it to the launch sequence, edit `LAUNCH_GOODQ.bat`:
 
 ```batch
 REM Add before "Press any key to close"
-start "GoodQ Watchdog" /MIN cmd /k "call conda activate goodq_core && python <project_root>\scripts\watchdog_ingest.py"
+start "GoodQ Watchdog" /MIN cmd /k "conda run -n goodq_core python -m cli.watchdog"
 ```
 
 ## Troubleshooting
@@ -268,7 +258,7 @@ start "GoodQ Watchdog" /MIN cmd /k "call conda activate goodq_core && python <pr
 
 Start Python REPL in the environment:
 ```python
-from scripts.watchdog_ingest import WatchdogProcessor
+from cli.watchdog import WatchdogProcessor
 
 watchdog = WatchdogProcessor()
 
@@ -282,7 +272,7 @@ for hash_val, info in watchdog.registry.processed.items():
 
 ### Custom Processing Pipelines
 
-Edit `watchdog_ingest.py` to customize ingestion methods:
+Extend `cli/watchdog.py` to customize ingestion methods:
 
 ```python
 def ingest_video(self, video_path: Path) -> bool:

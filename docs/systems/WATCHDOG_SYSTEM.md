@@ -6,7 +6,7 @@
 
 **Status**: ✅ **OPERATIONAL** (December 14, 2025)  
 **Location**: `cli/watchdog.py` (Canonical)  
-**Duplicate**: `scripts/watchdog_ingest.py` (Legacy, functionally identical)
+**Legacy Note**: `scripts/watchdog_ingest.py` has been retired from the supported surface.
 
 ---
 
@@ -230,15 +230,15 @@ control_agent.on_processing_complete(filename, success, error)
 
 ### Start Watchdog
 
-#### Option 1: Batch Script
-```batch
-START_WATCHDOG.bat
-```
-
-#### Option 2: PowerShell
+#### Option 1: PowerShell
 ```powershell
 cd <project_root>
 python -m cli.watchdog
+```
+
+#### Option 2: Status Snapshot
+```powershell
+python scripts/utils/check_watchdog_status.py
 ```
 
 #### Option 3: Python
@@ -449,19 +449,12 @@ Get-Content <project_root>\logs\watchdog_state.json | ConvertFrom-Json
 
 ---
 
-## Comparison: `cli/watchdog.py` vs `scripts/watchdog_ingest.py`
+## Legacy Watchdog Note
 
-| Feature | `cli/watchdog.py` | `scripts/watchdog_ingest.py` |
-|---------|-------------------|------------------------------|
-| **Status** | ✅ Canonical | ⚠️ Legacy duplicate |
-| **Location** | `cli/watchdog.py` | `scripts/watchdog_ingest.py` |
-| **Video Pipeline** | `run_direct_ingestion()` (no subprocess) | Subprocess call to `cli.run_ingestion` |
-| **Logging** | ASCII filter for Windows console | ASCII filter for Windows console |
-| **Control Agent** | Integrated | Integrated |
-| **Lines of Code** | 983 lines | 972 lines |
-| **Recommendation** | **Use this** | Archive or delete |
+The supported watchdog surface is now **only** `cli/watchdog.py`.
 
-**Verdict**: Both are functionally identical. `cli/watchdog.py` is the canonical version (discovered via forensic audit). `scripts/watchdog_ingest.py` should be retired.
+- Historical references to `scripts/watchdog_ingest.py` are retained only in archived material.
+- Operational guidance, tests, and launch commands should target `python -m cli.watchdog`.
 
 ---
 
@@ -528,7 +521,7 @@ Get-Content <project_root>\logs\watchdog_state.json | ConvertFrom-Json
 
 ### Unit Tests
 ```bash
-pytest tests/test_watchdog.py
+python tests/integration/test_watchdog.py
 ```
 
 ### Integration Tests
@@ -556,7 +549,7 @@ The Watchdog system is **production-ready** and **operational** as of December 1
 - **Comprehensive logging** for auditing and debugging
 
 **Canonical Implementation**: `cli/watchdog.py`  
-**Duplicate (Legacy)**: `scripts/watchdog_ingest.py` (recommend archiving)
+**Legacy duplicate**: retired from the supported surface and kept only in historical references if present
 
 ---
 

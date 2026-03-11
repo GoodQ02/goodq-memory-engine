@@ -22,11 +22,12 @@ cd goodq4all
 
 ### 2. Set Up Development Environment
 
-Follow the [Installation Guide](README.md#installation) to set up:
-- Python environment (goodq_core)
-- WSL2 audio stack
-- GPU dependencies (CUDA 12.8+)
-- Required models
+Follow the [Installation Guide](docs/guides/install/INSTALL.md) and the
+[bootstrap installer guide](docs/bootstrap/INSTALL_BOOTSTRAP.md) to set up:
+- the baseline Conda environment from `environment.yml`
+- optional WSL2 audio acceleration
+- optional GPU acceleration for `GPU_ENHANCED`
+- model caches downloaded on demand
 
 ### 3. Create a Feature Branch
 
@@ -61,7 +62,7 @@ def process_scene(scene_data: Dict[str, Any], config: Config) -> SceneBundle:
 ```
 
 ### Logging
-- Use the project's logging framework (`common/logging_setup.py`)
+- Use the project's existing module-level logging conventions
 - Log levels: DEBUG for detailed traces, INFO for milestones, WARNING for recoverable issues, ERROR for failures
 - Include context: scene IDs, file paths, timestamps
 
@@ -118,10 +119,10 @@ Open a PR on GitHub with:
 1. **System specs** – OS, GPU, CUDA version, Python version
 2. **Reproduction steps** – Exact commands that trigger the issue
 3. **Expected vs Actual** – What should happen vs what does happen
-4. **Logs** – Relevant excerpts from `logs/ingestion.log` or `logs/watchdog.log`
-5. **Configuration** – Any custom settings in `config.yaml`
+4. **Logs** – Relevant excerpts from runtime logs or step telemetry
+5. **Configuration** – Any custom settings in `configs/config.local.yaml`
 
-Use the [Issue Template](https://github.com/jbmiller10/goodq4all/issues/new) on GitHub.
+Use the repository issue tracker on GitHub.
 
 ## 💡 Feature Requests
 
@@ -137,22 +138,22 @@ We love new ideas! When suggesting features:
 Before submitting a PR:
 
 ```bash
-# Run ingestion on a small test video
-python -m cli.run_ingestion --input-dir samples/ingestion/ --max-scenes 5
+# Unit suite configured by pytest.ini
+python -m pytest -q
 
-# Check logs for errors
-cat logs/ingestion.log | grep ERROR
+# Docs/public-surface drift checks
+python scripts/docs/doc_drift_lint.py
 
-# Verify database writes
-python -m cli.query_memory --list-videos
+# Bootstrap/install readiness checks
+scripts/bootstrap_validate.bat
 ```
 
 ### Integration Testing
 For changes affecting the pipeline:
-1. Test with sample video (5-10 scenes)
-2. Verify all output artifacts exist
-3. Check database entries in memory.db and knowledge_graph.db
-4. Validate Qdrant vector insertion
+1. Use the smallest scoped runtime validation that matches the change
+2. Prefer targeted smoke checks over full ingestion reruns
+3. Validate persisted artifacts only when the change touches runtime behavior
+4. Document any non-default environment assumptions in the PR notes
 
 ## 📚 Documentation Standards
 
@@ -168,7 +169,7 @@ When updating documentation:
 - **Never commit credentials** – Use `.env` files (gitignored)
 - **Validate inputs** – Sanitize file paths and user data
 - **Log safely** – Avoid logging sensitive information
-- **Dependencies** – Use pinned versions in `requirements.txt`
+- **Dependencies** – Use the public baseline in `environment.yml` and the role-specific lockfiles under `envs/locks/`
 
 ## 🤝 Community Guidelines
 
@@ -181,7 +182,7 @@ When updating documentation:
 
 - **GitHub Issues** – For bugs and feature requests
 - **Discussions** – For questions and community support
-- **Email** – contact@goodq4all.org (for security issues)
+- **Security** – Do not post secrets or private data in public issues
 
 ## 🎖️ Recognition
 

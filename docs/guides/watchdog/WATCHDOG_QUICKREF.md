@@ -1,6 +1,6 @@
 # GoodQ Watchdog - Quick Reference Card
 
-> Role: Quick command and operations reference for the Watchdog system. For full explanations, edge cases, and troubleshooting, use `docs/WATCHDOG_GUIDE.md` and `docs/WATCHDOG_INDEX.md`.
+> Role: Quick command and operations reference for the Watchdog system. For full explanations, edge cases, and troubleshooting, use `docs/guides/watchdog/WATCHDOG_GUIDE.md` and `docs/guides/watchdog/WATCHDOG_INDEX.md`.
 
 ## One-Line Summary
 Drop files in `import_inbox/`, watchdog auto-processes them.
@@ -11,9 +11,9 @@ Drop files in `import_inbox/`, watchdog auto-processes them.
 
 | Task | Command |
 |------|---------|
-| **Start Watchdog** | `START_WATCHDOG.bat` |
-| **Check Status** | `CHECK_WATCHDOG.bat` |
-| **Live Monitor** | `MONITOR_WATCHDOG.bat` |
+| **Start Watchdog** | `python -m cli.watchdog` |
+| **Check Status** | `python scripts/utils/check_watchdog_status.py` |
+| **Live Monitor** | `scripts/monitoring/monitor_live.bat` |
 | **Stop Watchdog** | `Ctrl+C` in watchdog window |
 
 ---
@@ -107,13 +107,7 @@ Get-Content <project_root>\logs\watchdog_state.json | ConvertFrom-Json
 
 ### Run Tests
 ```batch
-conda activate goodq_core
-python scripts\test_watchdog.py
-```
-
-### Create Test File
-```batch
-python scripts\test_watchdog_simple.py
+conda run -n goodq_core python tests\integration\test_watchdog.py
 ```
 
 ---
@@ -143,7 +137,7 @@ python scripts\test_watchdog_simple.py
 
 ## Configuration
 
-Edit `scripts/watchdog_ingest.py`:
+Adjust the watchdog constants in `cli/watchdog.py`:
 
 ```python
 POLL_INTERVAL = 2.0      # Scan every 2 seconds
@@ -155,7 +149,7 @@ MAX_WORKERS = 1          # Process 1 file at a time
 
 ## Status Dashboard
 
-When you run `CHECK_WATCHDOG.bat`, you see:
+When you run `python scripts/utils/check_watchdog_status.py`, you see:
 - ✅ Watchdog running status
 - 📊 File counts (inbox, processing, processed, failed)
 - 📁 Recent inbox files
@@ -167,7 +161,7 @@ When you run `CHECK_WATCHDOG.bat`, you see:
 ## Tips
 
 - **Start watchdog before dropping files** for immediate processing
-- **Use MONITOR_WATCHDOG.bat** for real-time status during batch processing
+- **Use `scripts/monitoring/monitor_live.bat`** for real-time status during batch processing
 - **Check failed directory** if processing seems stuck
 - **Don't delete watchdog_state.json** unless resetting registry
 - **Archive processed files** periodically to save space
@@ -176,18 +170,18 @@ When you run `CHECK_WATCHDOG.bat`, you see:
 
 ## Full Documentation
 
-- **User Guide**: `docs/WATCHDOG_GUIDE.md`
+- **User Guide**: `docs/guides/watchdog/WATCHDOG_GUIDE.md`
 - **Architecture**: `docs/diagrams/watchdog_flow.md`
-- **Summary**: `docs/WATCHDOG_SUMMARY.md`
-- **Changelog**: `docs/WATCHDOG_CHANGELOG.md`
+- **Summary**: `docs/guides/watchdog/WATCHDOG_SUMMARY.md`
+- **Changelog**: `docs/guides/watchdog/WATCHDOG_CHANGELOG.md`
 
 ---
 
 ## Need Help?
 
 1. Check `logs/watchdog.log`
-2. Read `docs/WATCHDOG_GUIDE.md`
-3. Run `python scripts\test_watchdog.py`
+2. Read `docs/guides/watchdog/WATCHDOG_GUIDE.md`
+3. Run `python tests\integration\test_watchdog.py`
 4. Report issues on GitHub
 
 ---

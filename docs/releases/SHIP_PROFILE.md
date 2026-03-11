@@ -31,8 +31,9 @@
 ### Launch & Control
 
 - `LAUNCH_GOODQ.bat` – Primary launcher (API + Command Center + docs).
-- `START_WATCHDOG.bat` – Start automatic ingestion (Watchdog).
-- `MONITOR_WATCHDOG.bat` / `CHECK_WATCHDOG_STATUS.bat` – Watchdog monitoring.
+- `LAUNCH_GOODQ.ps1` – PowerShell launcher for the canonical Windows host.
+- `python -m cli.watchdog` – Start automatic ingestion (Watchdog).
+- `python scripts/utils/check_watchdog_status.py` – Watchdog status utility.
 
 ### Manual Ingestion
 
@@ -54,37 +55,37 @@
 
 ### Getting Started & Usage
 
-- `docs/user-guides/QUICK_START_CLEAN.md` – Canonical Quick Start.
-- `docs/guides/USER_GUIDE.md` – Detailed user guide.
-- `docs/reference/QUICK_INDEX.md` – Index for quickstart/quickref docs.
+- `docs/guides/install/QUICKSTART.md` – Public quick start.
+- `docs/guides/general/USER_GUIDE.md` – Detailed user guide.
+- `docs/reference/indexes/QUICK_INDEX.md` – Index for quickstart/quickref docs.
 
 ### Architecture & Status
 
-- `docs/ARCHITECTURE_REFERENCE.md` – Canonical architecture reference.
-- `docs/COMPREHENSIVE_ARCHITECTURE_RESEARCH_2025-11-15.md` – Deep-dive architecture snapshot.
-- `docs/project-history/CHANGELOG.md` – Project timeline (newest entries first).
-- `docs/CURRENT_SYSTEM_STATUS.md` – Canonical current system status.
+- `docs/architecture/ARCHITECTURE_REFERENCE.md` – Canonical architecture reference.
+- `docs/SYSTEM_SNAPSHOT.md` – Current system snapshot.
+- `docs/goodq4all_agent_status.md` – Current agent/runtime status.
+- `docs/archive/project-history/CHANGELOG.md` – Historical project timeline.
 
 ### Pipeline Phases & Audits
 
-- `docs/phases/PHASE_INDEX.md` – All phase reports/milestones.
-- `docs/audits/AUDIT_INDEX.md` – Audits, diagnostics, and test reports.
+- `docs/archive/phases/PHASE_INDEX.md` – Historical phase reports and milestones.
+- `docs/archive/audits/AUDIT_INDEX.md` – Historical audits and diagnostics.
 
 ### GPU, LLM, WSL2 & Watchdog
 
-- `docs/GPU_LLM_WSL_INDEX.md` – GPU + LLM/vLLM + WSL2 + Watchdog index.
-- `docs/guides/gpu/GPU_SETUP.md`, `docs/GPU_MANAGEMENT_GUIDE.md`, `docs/guides/gpu/GPU_OPTIMIZATION_GUIDE.md` – GPU configuration and optimization (`GPU_ENHANCED` tier).
-- `docs/LLM_INFRASTRUCTURE.md`, `docs/LLM_CLIENT_GUIDE.md`, `docs/vllm-integration-complete.md` – LLM/vLLM infrastructure and client.
-- `docs/WSL2_AUDIO_SETUP.md`, `docs/WSL_AGENT_BRIEFING.md`, `docs/wsl2/START_HERE_WSL2.md` – optional WSL2 audio acceleration stack.
-- `docs/WATCHDOG_INDEX.md`, `docs/WATCHDOG_GUIDE.md`, `docs/WATCHDOG_QUICKREF.md` – Watchdog usage and architecture.
+- `docs/guides/gpu/GPU_LLM_WSL_INDEX.md` – GPU + LLM/vLLM + WSL2 + Watchdog index.
+- `docs/guides/gpu/GPU_SETUP.md`, `docs/guides/gpu/GPU_MANAGEMENT_GUIDE.md`, `docs/guides/gpu/GPU_OPTIMIZATION_GUIDE.md` – GPU configuration and optimization (`GPU_ENHANCED` tier).
+- `docs/guides/llm/LLM_INFRASTRUCTURE.md`, `docs/guides/llm/LLM_CLIENT_GUIDE.md`, `docs/guides/llm/vllm-integration-complete.md` – LLM/vLLM infrastructure and client.
+- `docs/guides/llm/WSL2_AUDIO_SETUP.md`, `docs/guides/llm/WSL_AGENT_BRIEFING.md`, `docs/guides/wsl2/START_HERE_WSL2.md` – optional WSL2 audio acceleration stack.
+- `docs/guides/watchdog/WATCHDOG_INDEX.md`, `docs/guides/watchdog/WATCHDOG_GUIDE.md`, `docs/guides/watchdog/WATCHDOG_QUICKREF.md` – Watchdog usage and architecture.
 
 ### Code Cleanup & Legacy Mapping
 
-- `docs/CODE_CLEANUP_INDEX.md` – Index of lower-usage/legacy scripts for manual review.
+- `docs/reference/indexes/CODE_CLEANUP_INDEX.md` – Index of lower-usage/legacy scripts for manual review.
 
 ### Validation & Release
 
-- `docs/RELEASE_CHECKLIST.md` – Standard operating procedure for pre-release validation and mission launch.
+- `docs/archive/audits/RELEASE_CHECKLIST.md` – Historical pre-release validation checklist.
 - Current witness-backed release baseline:
   - `reports/seinfeld_experiment/diagnostics/SEASON1_WITNESS_RUN_2026-03-09.md`
   - `reports/seinfeld_experiment/diagnostics/POST_WITNESS_ANALYTICS_COMPARISON_2026-03-09.md`

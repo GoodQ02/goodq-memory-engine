@@ -10,7 +10,7 @@ Phase 3 integrates the AI Control Agent directly into the GoodQ4All ingestion pi
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │                     File Monitoring Layer                     │
-│                  (watchdog_ingest.py)                        │
+│                     (cli/watchdog.py)                        │
 └───────────────────────┬──────────────────────────────────────┘
                         │
                         ▼
@@ -65,7 +65,7 @@ Phase 3 integrates the AI Control Agent directly into the GoodQ4All ingestion pi
 
 ## 📋 Integration Points
 
-### Watchdog Monitor (`watchdog_ingest.py`)
+### Watchdog Monitor (`cli/watchdog.py`)
 
 The Control Agent is integrated at these key points:
 
@@ -106,7 +106,7 @@ wsl ~/vllm_server/scripts/start_llama1b.sh
 
 # Start the ingestion watchdog
 cd <project_root>
-python scripts\watchdog_ingest.py
+python -m cli.watchdog
 ```
 
 You should see:
@@ -203,13 +203,13 @@ Expected output:
 The Control Agent is automatically enabled if available. To disable:
 
 ```python
-# In watchdog_ingest.py, set:
+# In cli/watchdog.py, adjust:
 CONTROL_AGENT_AVAILABLE = False
 ```
 
 Or at runtime:
 ```bash
-python scripts\watchdog_ingest.py --no-ai-control
+python -m cli.watchdog --no-ai-control
 ```
 
 ### LLM Service Configuration
@@ -255,4 +255,3 @@ The Control Agent is designed to be extensible. To add custom recovery strategie
 **Status**: ✅ Production Ready  
 **Last Updated**: 2025-11-16  
 **Version**: 1.0.0
-

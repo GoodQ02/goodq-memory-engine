@@ -10,7 +10,7 @@ Complete implementation of automatic file ingestion system for GoodQ project.
 ### Components Created
 
 #### Core System
-- **`scripts/watchdog_ingest.py`** (544 lines)
+- **`cli/watchdog.py`** (canonical watchdog implementation)
   - Main watchdog daemon with monitor and worker threads
   - File type detection (video, audio, image, document)
   - Stability checking (3-second wait before processing)
@@ -20,10 +20,9 @@ Complete implementation of automatic file ingestion system for GoodQ project.
   - State persistence via JSON registry
 
 #### Launchers
-- **`START_WATCHDOG.bat`**
-  - Activates `goodq_core` environment
-  - Starts watchdog daemon
-  - Displays monitoring information
+- **`python -m cli.watchdog`**
+  - Starts the canonical Watchdog daemon
+  - Uses the active `goodq_core` environment
 
 #### Status & Monitoring
 - **`scripts/watchdog_status.ps1`** (172 lines)
@@ -34,21 +33,18 @@ Complete implementation of automatic file ingestion system for GoodQ project.
   - All-time registry statistics
   - Recent log activity
 
-- **`CHECK_WATCHDOG.bat`**
+- **`python scripts/utils/check_watchdog_status.py`**
   - One-time status snapshot
 
-- **`MONITOR_WATCHDOG.bat`**
+- **`scripts/monitoring/monitor_live.bat`**
   - Live status updates (5-second refresh)
 
 #### Testing
-- **`scripts/test_watchdog.py`** (140 lines)
+- **`tests/integration/test_watchdog.py`**
   - File classification tests
   - Directory scanning tests
   - Registry persistence tests
   - File stability detection tests
-
-- **`scripts/test_watchdog_simple.py`** (50 lines)
-  - Simple copy test for manual verification
 
 #### Documentation
 - **`docs/WATCHDOG_GUIDE.md`** (400+ lines)
@@ -150,19 +146,19 @@ goodq4all/
 ├── logs/
 │   ├── watchdog.log           # Activity log
 │   └── watchdog_state.json    # Processed files registry
+├── cli/
+│   └── watchdog.py            # Canonical daemon
 ├── scripts/
-│   ├── watchdog_ingest.py     # Main daemon
-│   ├── watchdog_status.ps1    # Status dashboard
-│   ├── test_watchdog.py       # Test suite
-│   └── test_watchdog_simple.py # Simple test
+│   ├── utils/check_watchdog_status.py
+│   └── monitoring/monitor_live.bat
 ├── docs/
 │   ├── WATCHDOG_GUIDE.md      # User guide
 │   ├── WATCHDOG_CHANGELOG.md  # This file
 │   └── diagrams/
 │       └── watchdog_flow.md   # Architecture diagrams
-├── START_WATCHDOG.bat         # Start daemon
-├── CHECK_WATCHDOG.bat         # One-time status
-└── MONITOR_WATCHDOG.bat       # Live monitoring
+├── cli/watchdog.py            # Canonical daemon
+├── scripts/utils/check_watchdog_status.py
+└── scripts/monitoring/monitor_live.bat
 ```
 
 ### Testing Results
@@ -193,7 +189,7 @@ goodq4all/
 ### Configuration Options
 
 ```python
-# scripts/watchdog_ingest.py
+# cli/watchdog.py
 
 POLL_INTERVAL = 2.0          # Directory scan frequency
 STABILITY_WAIT = 3.0         # File stability threshold
@@ -278,7 +274,7 @@ Not applicable (initial release)
 To disable watchdog:
 1. Stop the watchdog process (Ctrl+C or close window)
 2. Delete `logs/watchdog_state.json` to reset registry
-3. Remove `START_WATCHDOG.bat` from startup (if added)
+3. Remove any Startup shortcut that targets `python -m cli.watchdog`
 4. Continue using manual ingestion via `cli/run_ingestion.py`
 
 ### Support & Troubleshooting

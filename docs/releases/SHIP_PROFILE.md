@@ -85,6 +85,7 @@
 
 ### Validation & Release
 
+- `CHANGELOG.md` – Public-facing release milestones and readiness checkpoints.
 - `docs/archive/audits/RELEASE_CHECKLIST.md` – Historical pre-release validation checklist.
 - Current witness-backed release baseline:
   - `reports/seinfeld_experiment/diagnostics/SEASON1_WITNESS_RUN_2026-03-09.md`

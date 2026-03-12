@@ -34,6 +34,27 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="GoodQ Retrieval API", version=GOODQ_VERSION)
+_CFG = load_configs({})
+_MEMORY_ROUTER = build_memory_router(_CFG)
+_PATHS_CFG: Dict[str, Any] = _CFG.get("paths", {}) or {}
+_HOST_CFG: Dict[str, Any] = _CFG.get("host", {}) or {}
+_API_CFG: Dict[str, Any] = _CFG.get("api", {}) or {}
+
+
+def _resolve_allowed_origins() -> List[str]:
+    override = str(os.environ.get("GOODQ_API_ALLOWED_ORIGINS") or "").strip()
+    if override:
+        origins = [item.strip() for item in override.split(",") if item.strip()]
+        if origins:
+            return origins
+    return [
+        "http://localhost",
+        "http://127.0.0.1",
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+        "http://localhost:30000",
+        "http://127.0.0.1:30000",
+    ]
 
 # Add UTF-8 charset to JSON responses
 class UTF8JSONMiddleware(BaseHTTPMiddleware):
@@ -45,13 +66,14 @@ class UTF8JSONMiddleware(BaseHTTPMiddleware):
 
 app.add_middleware(UTF8JSONMiddleware)
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+if bool(_API_CFG.get("cors_enabled", False)):
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=_resolve_allowed_origins(),
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 # Mount Phase 7 API routers
 app.include_router(search.router)
@@ -64,10 +86,6 @@ app.include_router(run_index.router)
 
 # UI will be mounted at the end after all API routes are defined
 
-_CFG = load_configs({})
-_MEMORY_ROUTER = build_memory_router(_CFG)
-_PATHS_CFG: Dict[str, Any] = _CFG.get("paths", {}) or {}
-_HOST_CFG: Dict[str, Any] = _CFG.get("host", {}) or {}
 _API_ROOT = Path(__file__).resolve().parent
 _PROJECT_ROOT = _API_ROOT.parent
 _HOST_DATA_ROOT = _HOST_CFG.get("data_root") or os.environ.get("GOODQ_DATA_ROOT")

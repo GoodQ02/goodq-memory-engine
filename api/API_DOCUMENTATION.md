@@ -18,7 +18,7 @@ The GoodQ4All API is a unified FastAPI server that consolidates all system endpo
 - ✅ **LLM Chat Integration** - Multi-model chat with fallback
 - ✅ **Command Center** - System control and diagnostics
 - ✅ **Static File Serving** - UI/dashboard hosting
-- ✅ **CORS Enabled** - Cross-origin requests supported
+- ✅ **Optional CORS** - Disabled by default; localhost-only when explicitly enabled
 
 ---
 

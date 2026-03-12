@@ -10,6 +10,9 @@ and related canonical docs.
 ## [Unreleased]
 
 - Ongoing public-surface cleanup and release hardening on the `public` branch.
+- Runtime hardening: stale `GOODQ_WSL_WORKSPACE` overrides now fall back to the
+  canonical `~/goodq_audio` workspace when the explicit path is missing, rather
+  than disabling WSL audio for the run.
 
 ## [2026-03-10] Public Readiness Checkpoint
 

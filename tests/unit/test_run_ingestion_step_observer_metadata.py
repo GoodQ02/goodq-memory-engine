@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib
 import json
+import os
 import sys
 import types
 from pathlib import Path
@@ -102,6 +103,13 @@ class _FakeSequencedPopen:
 
     def kill(self):
         self.returncode = -9
+
+
+class _FakeCompletedProcess:
+    def __init__(self, returncode=0, stdout="", stderr=""):
+        self.returncode = returncode
+        self.stdout = stdout
+        self.stderr = stderr
 
 
 def _write_cfg(tmp_path: Path) -> Path:
@@ -293,3 +301,47 @@ def test_run_step_retries_optional_steps_via_direct_env_python_on_conda_tmp_fail
     assert end_meta["launcher"] == "direct_env_python"
     assert end_meta["direct_env_fallback_attempt"] == 1
     assert end_meta["scene_id"] == "scene_0003"
+
+
+def test_resolve_audio_runtime_contract_falls_back_from_stale_env_workspace(
+    monkeypatch,
+):
+    run_ingestion = _load_run_ingestion_module()
+
+    monkeypatch.setenv("GOODQ_WSL_DISTRO", "Ubuntu-22.04")
+    monkeypatch.setenv("GOODQ_WSL_USER", "jdben")
+    monkeypatch.setenv("GOODQ_WSL_WORKSPACE", "/home/jdben/projects/goodq4all")
+
+    probed_workspaces = []
+
+    def _fake_subprocess_run(cmd, *args, **kwargs):
+        workspace = cmd[-1].split("'")[1]
+        probed_workspaces.append(workspace)
+        if workspace == "/home/jdben/projects/goodq4all":
+            return _FakeCompletedProcess(returncode=1)
+        if workspace == "/home/jdben/goodq_audio":
+            return _FakeCompletedProcess(returncode=0)
+        raise AssertionError(f"unexpected workspace probe: {workspace}")
+
+    monkeypatch.setattr(run_ingestion.subprocess, "run", _fake_subprocess_run)
+
+    cfg = {
+        "host": {
+            "wsl_distro": "Ubuntu-22.04",
+            "wsl_user": "jdben",
+            "wsl_workspace": "/home/jdben/goodq_audio",
+        }
+    }
+
+    contract = run_ingestion._resolve_audio_runtime_contract(cfg)
+
+    assert probed_workspaces == [
+        "/home/jdben/projects/goodq4all",
+        "/home/jdben/goodq_audio",
+    ]
+    assert contract["selected"] == "wsl"
+    assert contract["reason"] == "wsl_workspace_ready"
+    assert contract["wsl_audio_workspace"] == "/home/jdben/goodq_audio"
+    assert contract["wsl_workspace_source"] == "config"
+    assert contract["workspace_ready"] is True
+    assert os.environ["GOODQ_WSL_WORKSPACE"] == "/home/jdben/goodq_audio"

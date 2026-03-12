@@ -114,12 +114,12 @@ if ($missingDirs.Count -eq 0) {
 
 # Test 7: Configuration Files
 Write-Host "[TEST 7/10] Checking configuration..." -ForegroundColor Yellow
-if ((Test-Path ".env.local") -and (Test-Path "config.yaml")) {
+if ((Test-Path ".env.local") -and (Test-Path "configs\\config.local.yaml")) {
     Write-Host "  ✓ Configuration files present" -ForegroundColor Green
     $testsPassed++
 } else {
-    Write-Host "  ✗ Missing .env.local or config.yaml" -ForegroundColor Red
-    Write-Host "    Copy .env.local.template to .env.local and configure" -ForegroundColor Yellow
+    Write-Host "  ✗ Missing .env.local or configs\\config.local.yaml" -ForegroundColor Red
+    Write-Host "    Run the bootstrap installer or create local overrides from the templates" -ForegroundColor Yellow
     $testsFailed++
 }
 

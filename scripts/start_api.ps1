@@ -1,5 +1,5 @@
 Param(
-  [Alias('Host')][string]$BindAddress = '0.0.0.0',
+  [Alias('Host')][string]$BindAddress = '127.0.0.1',
   [int]$Port = 30000
 )
 

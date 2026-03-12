@@ -2508,5 +2508,7 @@ if __name__ == "__main__":
     print(f"Output Directory: {OUTPUT_DIR}")
     print(f"Server will be available at: http://localhost:30000")
     print("="*80 + "\n")
-    
-    uvicorn.run(app, host="0.0.0.0", port=30000, log_level="info")
+
+    host = os.environ.get("GOODQ_API_HOST", "127.0.0.1")
+    port = int(os.environ.get("GOODQ_API_PORT", "30000"))
+    uvicorn.run(app, host=host, port=port, log_level="info")

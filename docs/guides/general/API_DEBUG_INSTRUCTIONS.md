@@ -44,7 +44,10 @@ Solution: API might be returning different structure than expected
 
 Current settings in `api_server.py`:
 ```python
-# Legacy localhost-only CORS middleware
+# Safe-by-default local bind and localhost-only CORS middleware
+host = os.environ.get("GOODQ_API_HOST", "127.0.0.1")
+port = int(os.environ.get("GOODQ_API_PORT", "30000"))
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -57,7 +60,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+uvicorn.run(app, host=host, port=port, log_level="info")
 ```
+
+If you intentionally need LAN access for a local network test, set
+`GOODQ_API_HOST=0.0.0.0` explicitly before starting the legacy helper.
 
 ## Manual Test (Bypass UI Completely):
 

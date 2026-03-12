@@ -48,6 +48,11 @@ Strict fail-fast flags:
 
 This status section is anchored to a documented witness ingest run (`run_id=51e42006-f64d-4b13-a42a-f180bf8ba7f3`, March 1, 2026 UTC) and only states claims backed by artifacts.
 
+**Stability note:** GoodQ4All currently reports version `0.1.0`. Treat the
+public surface as pre-1.0 software: the supported bootstrap and canonical
+runtime path are the priority, but APIs, helper scripts, and surrounding
+tooling may still change between releases.
+
 - Deterministic Windows canonical runtime: witness run completed end-to-end under the canonical Windows execution path.
 - Hybrid Windows + WSL doctrine preserved: WSL remains a profile-gated compute extension, not a peer runtime.
 - Knowledge graph active: scene-linked media nodes were written for the witness video.

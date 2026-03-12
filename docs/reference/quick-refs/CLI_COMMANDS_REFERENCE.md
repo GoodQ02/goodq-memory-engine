@@ -420,7 +420,7 @@ python cli\nl_query.py
 ## Configuration
 
 All CLI tools respect configuration in:
-- `<project_root>\config.yaml` - Main configuration
+- `<project_root>\configs\config.yaml` - Canonical baseline configuration
 - `<project_root>\config.json` - Legacy configuration
 - Environment variables - Runtime overrides
 
@@ -451,7 +451,7 @@ taskkill /F /IM python.exe
 **"LLM not available"**
 ```powershell
 # Ensure LM Studio or Ollama is running
-# Check llm.api_url in config.yaml
+# Check llm.api_url in configs/config.yaml
 ```
 
 **"Model not found"**

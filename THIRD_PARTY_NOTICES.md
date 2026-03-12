@@ -14,8 +14,10 @@ This notice is a public-facing summary, not legal advice.
 - Path: [`vendor/qdrant/qdrant.exe`](vendor/qdrant/qdrant.exe)
 - Purpose: local vector database runtime for the canonical Windows host
 - Note: this repository ships the Qdrant executable as a convenience for local
-  operation. Public consumers should review Qdrant's upstream project licensing
-  and notices when redistributing or repackaging builds.
+  operation. The Apache 2.0 license text is bundled at
+  [`vendor/qdrant/LICENSE`](vendor/qdrant/LICENSE). Public consumers should
+  still review Qdrant's upstream project licensing and notices when
+  redistributing or repackaging builds.
 
 ### Vendored Python Packages
 

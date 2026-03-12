@@ -10,6 +10,7 @@ and related canonical docs.
 ## [Unreleased]
 
 - Ongoing public-surface cleanup and release hardening on the `public` branch.
+- Reliability: `sentiment` now uses the existing one-shot native-crash retry path, recovering from intermittent Windows first-load subprocess crashes without breaking scene validity.
 - Runtime hardening: stale `GOODQ_WSL_WORKSPACE` overrides now fall back to the
   canonical `~/goodq_audio` workspace when the explicit path is missing, rather
   than disabling WSL audio for the run.

@@ -258,7 +258,7 @@ SUBPROCESS_AUDIO_OPENMP_GUARD_ENV: Dict[str, str] = {
     'OMP_NUM_THREADS': '1',
     'MKL_NUM_THREADS': '1',
 }
-NATIVE_CRASH_RETRY_STEPS: Set[str] = {'tagger'}
+NATIVE_CRASH_RETRY_STEPS: Set[str] = {'tagger', 'sentiment'}
 MAX_NATIVE_STEP_RETRIES: int = 1
 
 

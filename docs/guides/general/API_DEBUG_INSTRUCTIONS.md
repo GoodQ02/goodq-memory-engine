@@ -31,7 +31,8 @@ Navigate to: **http://localhost:30000/test_chat_debug.html**
 Solution: Hard refresh (Ctrl+Shift+R)
 
 **2. CORS Blocking**
-Solution: API should already have CORS enabled, but check console
+Solution: the API should allow localhost origins only; check the browser console
+to confirm you are running from `http://localhost:30000` or `http://127.0.0.1:30000`
 
 **3. JavaScript Error**
 Solution: Check console for red text, tell me what it says
@@ -43,10 +44,15 @@ Solution: API might be returning different structure than expected
 
 Current settings in `api_server.py`:
 ```python
-# Line 28-34 - CORS Middleware
+# Legacy localhost-only CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Should allow all origins
+    allow_origins=[
+        "http://localhost",
+        "http://127.0.0.1",
+        "http://localhost:30000",
+        "http://127.0.0.1:30000",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

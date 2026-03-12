@@ -54,10 +54,19 @@ except ImportError as e:
 
 app = FastAPI(title="GoodQ API", version="2.0.0-production")
 
-# Enable CORS
+# Keep the legacy API server localhost-only by default.
+_LOCAL_CORS_ORIGINS = [
+    "http://localhost",
+    "http://127.0.0.1",
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+    "http://localhost:30000",
+    "http://127.0.0.1:30000",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_LOCAL_CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

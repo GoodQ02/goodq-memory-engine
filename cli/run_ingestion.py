@@ -1398,7 +1398,7 @@ def _write_cfg_snapshot(cfg: Dict[str, Any], workspace: Path) -> Path:
 
 def _base_env(cfg_json: Optional[Path] = None) -> Dict[str, str]:
     env = os.environ.copy()
-    env.setdefault('PYTHONNOUSERSITE', '0')
+    env.setdefault('PYTHONNOUSERSITE', '1')
     env.setdefault('HF_HUB_ENABLE_HF_TRANSFER', '1')
     models_root = _resolve_models_dir(cfg_json=cfg_json)
     env['HF_HOME'] = str(models_root)

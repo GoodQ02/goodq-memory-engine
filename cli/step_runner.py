@@ -15,7 +15,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 # Ensure per-env site-packages take precedence; ignore user site packages
-os.environ.setdefault('PYTHONNOUSERSITE', '0')
+os.environ.setdefault('PYTHONNOUSERSITE', '1')
 logger = logging.getLogger(__name__)
 _PATH_FALLBACK_WARNED = False
 

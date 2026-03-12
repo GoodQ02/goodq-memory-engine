@@ -125,6 +125,17 @@ def _write_cfg(tmp_path: Path) -> Path:
     return cfg_json
 
 
+def test_base_env_enforces_python_no_user_site(monkeypatch, tmp_path: Path):
+    run_ingestion = _load_run_ingestion_module()
+    cfg_json = _write_cfg(tmp_path)
+
+    monkeypatch.delenv("PYTHONNOUSERSITE", raising=False)
+
+    env = run_ingestion._base_env(cfg_json)
+
+    assert env["PYTHONNOUSERSITE"] == "1"
+
+
 def test_run_step_success_emits_scene_metadata_and_pid(monkeypatch, tmp_path: Path):
     run_ingestion = _load_run_ingestion_module()
     observer = _RecorderObserver()

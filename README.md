@@ -144,6 +144,12 @@ This staged check validates docs governance, bootstrap semantics, and test statu
 - Local storage is the source of truth; logs support investigation, not authority.
 - Operational posture is conservative by design: explicit config, clear failure signals, minimal trust assumptions.
 
+## Model and Data Licensing
+
+- Some optional models require acceptance of upstream licenses or gated-access terms.
+- Model weights are downloaded directly from upstream providers; this repository does not redistribute them.
+- Public summaries may describe proprietary-media benchmarks at the metric level, but this repository does not publish transcripts or copyrighted dialogue excerpts.
+- Third-party notices and redistribution guidance live in [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
 ## Documentation Map
 
 ### Start Here

@@ -86,6 +86,7 @@
 ### Validation & Release
 
 - `CHANGELOG.md` – Public-facing release milestones and readiness checkpoints.
+- `THIRD_PARTY_NOTICES.md` – Public-facing summary of vendored components, model downloads, and upstream licensing caveats.
 - `docs/archive/audits/RELEASE_CHECKLIST.md` – Historical pre-release validation checklist.
 - Current witness-backed release baseline:
   - `reports/seinfeld_experiment/diagnostics/SEASON1_WITNESS_RUN_2026-03-09.md`

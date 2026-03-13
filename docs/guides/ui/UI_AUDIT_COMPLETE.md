@@ -1,5 +1,5 @@
 # 🎉 GoodQ UI Configuration Audit - COMPLETE
-> ⚠ Historical planning document — contains legacy path references.
+> ⚠ Historical audit report — not current production guidance. References to `api_server.py` and legacy launchers are preserved for historical context only.
 
 **Date:** November 8, 2025 23:03 UTC  
 **Status:** ✅ **ALL SYSTEMS VALIDATED**  
@@ -336,4 +336,3 @@ All port references are consistent (Port 30000), legacy servers are archived, an
 **Validation Script:** `validate_ui_config.py`  
 **Final Validator Exit Code:** 0 (SUCCESS)  
 **Report Generated:** 2025-11-08 23:03 UTC
-

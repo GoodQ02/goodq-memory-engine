@@ -1,4 +1,5 @@
 # GoodQ UI Configuration Audit Report
+> ⚠ Historical audit report — not current production guidance. References to `api_server.py` and legacy launchers are preserved for historical context only.
 **Date:** November 8, 2025 23:03 UTC  
 **Status:** ⚠️ PORT INCONSISTENCIES DETECTED
 

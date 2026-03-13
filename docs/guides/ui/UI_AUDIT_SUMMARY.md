@@ -1,5 +1,5 @@
 # 🎯 GoodQ UI Audit - Executive Summary
-> ⚠ Historical planning document — contains legacy path references.
+> ⚠ Historical audit report — not current production guidance. References to `api_server.py` and legacy launchers are preserved for historical context only.
 
 **Audit Date:** November 8, 2025 23:03 UTC  
 **Status:** ✅ COMPLETE - ALL ISSUES RESOLVED  
@@ -206,4 +206,3 @@ The GoodQ UI stack now has:
 
 **Audit Complete** ✅  
 **Next Step:** Launch the server and start building! 🚀
-

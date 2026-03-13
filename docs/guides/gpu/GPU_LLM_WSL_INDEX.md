@@ -58,7 +58,7 @@
 - `docs/wsl2/WSL2_AUDIO_FEASIBILITY_ANALYSIS.md` – Feasibility analysis
 - `docs/wsl2/WSL2_AUDIO_SUMMARY.md` – Summary of WSL2 audio work
 - `docs/wsl2/WSL2_BENCHMARKS.md` – Benchmarks for WSL2 audio/GPU
-- `docs/WSL_AGENT_BRIEFING.md` – WSL agent responsibilities and services
+- `docs/VLLM_SYSTEMD_SETUP.md` – WSL vLLM service setup and advanced operator reference
 - `docs/PHASE2_WSL2_COMPLETE.md` – Phase 2 WSL2 completion report
 
 ---

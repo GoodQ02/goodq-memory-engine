@@ -485,7 +485,6 @@ docs/archive/
 | `docs/guides/llm/VLLM_SYSTEMD_SETUP.md` | B) Operational | Operator setup/usage guide. | KEEP |
 | `docs/guides/llm/WSL2_AUDIO_MIGRATION_GUIDE.md` | B) Operational | Operator setup/usage guide. | KEEP |
 | `docs/guides/llm/WSL2_AUDIO_SETUP.md` | B) Operational | Operational guide with overlap/drift risk; keep but normalize. | REFRACTOR |
-| `docs/guides/llm/WSL_AGENT_BRIEFING.md` | B) Operational | Operator setup/usage guide. | KEEP |
 | `docs/guides/ui/UI_ALIGNMENT_AUDIT.md` | B) Operational | Operator setup/usage guide. | KEEP |
 | `docs/guides/ui/UI_AUDIT_COMPLETE.md` | B) Operational | Operator setup/usage guide. | KEEP |
 | `docs/guides/ui/UI_AUDIT_REPORT.md` | B) Operational | Operator setup/usage guide. | KEEP |

@@ -14,6 +14,9 @@ and related canonical docs.
 - Runtime hardening: stale `GOODQ_WSL_WORKSPACE` overrides now fall back to the
   canonical `~/goodq_audio` workspace when the explicit path is missing, rather
   than disabling WSL audio for the run.
+- Reliability: the WSL audio bridge now retries `result.json` freshness checks
+  once before failing and records richer probe details when verification still
+  cannot be completed.
 
 ## [2026-03-10] Public Readiness Checkpoint
 

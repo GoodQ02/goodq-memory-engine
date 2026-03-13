@@ -102,6 +102,43 @@ class WSL2BridgeIntegrityTests(unittest.TestCase):
         self.assertEqual(result.get("requested_request_uuid"), self.TEST_UUID)
         self.assertEqual(result.get("returned_request_uuid"), self.TEST_UUID)
 
+    def test_result_json_freshness_probe_retries_once(self) -> None:
+        scene_file = self._make_scene_file("scene_0004.wav")
+        bridge = self._make_bridge()
+        stat_calls = {"count": 0}
+
+        def fake_run(cmd, capture_output=True, text=True, timeout=None):  # noqa: ANN001
+            cmd_str = " ".join(str(part) for part in cmd)
+            if "from torchvision.ops import nms" in cmd_str:
+                return _Result(returncode=0, stdout="OK")
+            if "process_audio.py" in cmd_str:
+                return _Result(
+                    returncode=0,
+                    stdout=(
+                        f'{{"status":"success","audio_file":"/mnt/l/path/scene_0004.wav",'
+                        f'"transcription":"hello","request_uuid":"{self.TEST_UUID}"}}'
+                    ),
+                )
+            if "stat -c %Y" in cmd_str:
+                stat_calls["count"] += 1
+                if stat_calls["count"] == 1:
+                    return _Result(returncode=1, stderr="stat: cannot stat result.json")
+                return _Result(returncode=0, stdout=str(int(time.time())))
+            return _Result(returncode=0, stdout="")
+
+        with patch("wsl2_audio_bridge.uuid.uuid4", return_value=uuid.UUID(self.TEST_UUID)), patch(
+            "wsl2_audio_bridge.subprocess.run", side_effect=fake_run
+        ):
+            result = bridge.process_audio(str(scene_file), timeout=5)
+
+        self.assertEqual(result.get("status"), "success")
+        self.assertEqual(result.get("requested_scene_file"), "scene_0004.wav")
+        self.assertEqual(result.get("returned_scene_file"), "scene_0004.wav")
+        self.assertEqual(result.get("requested_request_uuid"), self.TEST_UUID)
+        self.assertEqual(result.get("returned_request_uuid"), self.TEST_UUID)
+        self.assertEqual(stat_calls["count"], 2)
+        self.assertIn("result_json_freshness_probe_retried", result.get("stderr_warnings", []))
+
     def test_abi_gate_fails_early_and_returns_fix_command(self) -> None:
         scene_file = self._make_scene_file("scene_0004.wav")
         bridge = self._make_bridge()

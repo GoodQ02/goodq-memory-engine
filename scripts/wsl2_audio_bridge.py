@@ -289,7 +289,7 @@ class WSL2AudioBridge:
                 return None
             return _try_parse_json(read_result.stdout)
 
-        def _result_json_mtime_epoch() -> Optional[float]:
+        def _result_json_mtime_epoch() -> tuple[Optional[float], Dict[str, Any]]:
             try:
                 stat_cmd = [
                     "wsl",
@@ -301,14 +301,31 @@ class WSL2AudioBridge:
                     f"stat -c %Y '{wsl_output}/result.json'",
                 ]
                 stat_result = subprocess.run(stat_cmd, capture_output=True, text=True, timeout=10)
-            except Exception:
-                return None
+            except Exception as exc:
+                return None, {
+                    "probe": "result_json_mtime",
+                    "exception_type": type(exc).__name__,
+                    "exception_message": str(exc),
+                }
             if stat_result.returncode != 0:
-                return None
+                return None, {
+                    "probe": "result_json_mtime",
+                    "stat_returncode": stat_result.returncode,
+                    "stat_stdout_tail": (stat_result.stdout or "")[-300:],
+                    "stat_stderr_tail": (stat_result.stderr or "")[-300:],
+                }
+            raw_mtime = (stat_result.stdout or "").strip()
             try:
-                return float((stat_result.stdout or "").strip())
+                return float(raw_mtime), {
+                    "probe": "result_json_mtime",
+                    "stat_returncode": stat_result.returncode,
+                }
             except (TypeError, ValueError):
-                return None
+                return None, {
+                    "probe": "result_json_mtime",
+                    "stat_returncode": stat_result.returncode,
+                    "stat_stdout_raw": raw_mtime[:300],
+                }
 
         def _scene_file_name(path_value: Any) -> str:
             if not isinstance(path_value, str):
@@ -469,23 +486,36 @@ class WSL2AudioBridge:
                     env_warnings=env_warnings,
                 )
 
-            result_json_mtime = _result_json_mtime_epoch()
+            result_json_mtime, freshness_probe = _result_json_mtime_epoch()
             if result_json_mtime is None:
-                return _build_error(
-                    "result_json_freshness_unavailable",
-                    error_message="Unable to verify WSL result.json freshness",
-                    wsl_returncode=result.returncode,
-                    stderr_warnings=stderr_warnings,
-                    details={},
-                    returned_scene_file=returned_scene_file or None,
-                    returned_request_uuid=returned_request_uuid,
-                    used_fallback_result_json=False,
-                    env_warnings=env_warnings,
-                )
+                time.sleep(0.5)
+                retried_result_json_mtime, freshness_retry_probe = _result_json_mtime_epoch()
+                if retried_result_json_mtime is not None:
+                    result_json_mtime = retried_result_json_mtime
+                    stderr_warnings.append("result_json_freshness_probe_retried")
+                else:
+                    details = {
+                        "freshness_probe_attempts": [
+                            freshness_probe,
+                            freshness_retry_probe,
+                        ]
+                    }
+                    return _build_error(
+                        "result_json_freshness_unavailable",
+                        error_message="Unable to verify WSL result.json freshness",
+                        wsl_returncode=result.returncode,
+                        stderr_warnings=stderr_warnings,
+                        details=details,
+                        returned_scene_file=returned_scene_file or None,
+                        returned_request_uuid=returned_request_uuid,
+                        used_fallback_result_json=False,
+                        env_warnings=env_warnings,
+                    )
             if result_json_mtime < (process_started_epoch - 1.0):
                 details = {
                     "result_json_mtime_epoch": result_json_mtime,
                     "process_started_epoch": process_started_epoch,
+                    "freshness_probe": freshness_probe,
                 }
                 return _build_error(
                     "stale_or_mismatched_result",

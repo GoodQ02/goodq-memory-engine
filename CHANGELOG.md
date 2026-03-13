@@ -12,6 +12,7 @@ and related canonical docs.
 - Ongoing public-surface cleanup and release hardening on the `public` branch.
 - Retired the legacy `scripts/api_server.py` monolith from the tracked surface and repointed direct support-facing references to the canonical `api.server` wrapper.
 - Retired the legacy `scripts/refresh_vllm_portproxy.bat` helper from the tracked surface; Windows↔WSL vLLM access is no longer documented through manual portproxy mutation.
+- Retired stale WSL/vLLM report-style docs from the tracked support surface and repointed live indexes to the current operator docs.
 - Reliability: `sentiment` now uses the existing one-shot native-crash retry path, recovering from intermittent Windows first-load subprocess crashes without breaking scene validity.
 - Runtime hardening: stale `GOODQ_WSL_WORKSPACE` overrides now fall back to the
   canonical `~/goodq_audio` workspace when the explicit path is missing, rather

@@ -80,7 +80,7 @@ adjacent helper tooling may still evolve between releases.
 
 - `docs/guides/gpu/GPU_LLM_WSL_INDEX.md` – GPU + LLM/vLLM + WSL2 + Watchdog index.
 - `docs/guides/gpu/GPU_SETUP.md`, `docs/guides/gpu/GPU_MANAGEMENT_GUIDE.md`, `docs/guides/gpu/GPU_OPTIMIZATION_GUIDE.md` – GPU configuration and optimization (`GPU_ENHANCED` tier).
-- `docs/guides/llm/LLM_INFRASTRUCTURE.md`, `docs/guides/llm/LLM_CLIENT_GUIDE.md`, `docs/guides/llm/vllm-integration-complete.md` – LLM/vLLM infrastructure and client.
+- `docs/guides/llm/LLM_INFRASTRUCTURE.md`, `docs/guides/llm/LLM_CLIENT_GUIDE.md`, `docs/guides/llm/VLLM_SYSTEMD_SETUP.md` – LLM/vLLM infrastructure, client behavior, and advanced operator setup.
 - `docs/guides/llm/WSL2_AUDIO_SETUP.md`, `docs/guides/llm/WSL_AGENT_BRIEFING.md`, `docs/guides/wsl2/START_HERE_WSL2.md` – optional WSL2 audio acceleration stack.
 - `docs/guides/watchdog/WATCHDOG_INDEX.md`, `docs/guides/watchdog/WATCHDOG_GUIDE.md`, `docs/guides/watchdog/WATCHDOG_QUICKREF.md` – Watchdog usage and architecture.
 

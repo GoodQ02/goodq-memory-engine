@@ -38,7 +38,7 @@
 - `docs/LLM_CLIENT_GUIDE.md` – Production LLM client usage and behavior.
 - `docs/LLM_PHASE1_COMPLETION_REPORT.md` – Phase 1 LLM integration completion.
 - `docs/LLM_STATUS.md` – Current LLM integration status snapshot.
-- `docs/vllm-integration-complete.md` – vLLM integration completion summary (WSL2 + Windows).
+- `docs/VLLM_SYSTEMD_SETUP.md` – Advanced vLLM operator setup for WSL/systemd hosts.
 - `docs/PHASE3_LLM_INTEGRATION_COMPLETE.md` – Phase 3 LLM integration in the wider pipeline.
 
 ### Historical Plans & Analyses (Reference)
@@ -46,7 +46,7 @@
 - `docs/LLM_IMPLEMENTATION_PLAN_PHASE1.md` – Initial implementation plan (superseded by completion reports).
 - `docs/LLM_INTEGRATION_ANALYSIS.md` – Early integration analysis and gap assessment.
 - `docs/LLM_INTEGRATION_COMPLETE.md` – LM Studio-focused integration completion (pre-vLLM).
-- `docs/VLLM_INTEGRATION_PLAN.md` – vLLM integration design plan (superseded by `vllm-integration-complete.md`).
+- `docs/VLLM_INTEGRATION_PLAN.md` – vLLM integration design plan (historical design reference; superseded by the current LLM infrastructure and operator setup docs).
 
 ---
 

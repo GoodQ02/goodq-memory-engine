@@ -62,7 +62,7 @@
   - `venv/` – Python 3.12 virtual environment for vLLM.
   - `models/` – Symlink to `/mnt/l/_DATA/models/llm/huggingface/`.
   - `scripts/start_llama1b.sh`, `start_llama3b.sh`, `start_phi.sh`, `start_qwen.sh`, `start_llama11b.sh` – Per-model startup scripts.
-  - Docs: `docs/WSL_AGENT_BRIEFING.md`, `docs/LLM_INFRASTRUCTURE.md`, `docs/vllm-integration-complete.md`.
+  - Docs: `docs/WSL_AGENT_BRIEFING.md`, `docs/LLM_INFRASTRUCTURE.md`, `docs/VLLM_SYSTEMD_SETUP.md`.
 
 ---
 

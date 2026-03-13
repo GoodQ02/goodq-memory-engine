@@ -17,6 +17,13 @@ and related canonical docs.
 - Reliability: the WSL audio bridge now retries `result.json` freshness checks
   once before failing and records richer probe details when verification still
   cannot be completed.
+- Security hardening: the legacy API server launcher now defaults to
+  `127.0.0.1`, with LAN exposure remaining explicit via `GOODQ_API_HOST`.
+- Security hardening: environment preparation now seeds `GOODQ_API_HOST` with a
+  loopback default rather than a broad network bind.
+- Portability hardening: `setup_agents.ps1` now defaults agent setup data and
+  model roots to the portable `C:/GoodQ_Data` / `<GOODQ_DATA_ROOT>/models`
+  pattern instead of desktop-specific `L:/` paths.
 
 ## [2026-03-10] Public Readiness Checkpoint
 

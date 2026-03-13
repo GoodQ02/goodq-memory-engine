@@ -8,8 +8,8 @@ Write-Host ""
 $condaExe = Get-GoodQCondaExe
 $script:RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\\..")).Path
 $script:RepoRootPosix = $script:RepoRoot.Replace('\', '/')
-$script:DataRootBase = if ([string]::IsNullOrWhiteSpace($env:GOODQ_DATA_ROOT)) { "L:/_DATA" } else { $env:GOODQ_DATA_ROOT.Replace('\', '/') }
-$script:ModelsRoot = if ([string]::IsNullOrWhiteSpace($env:GOODQ_MODELS_DIR)) { "L:/models" } else { $env:GOODQ_MODELS_DIR.Replace('\', '/') }
+$script:DataRootBase = if ([string]::IsNullOrWhiteSpace($env:GOODQ_DATA_ROOT)) { "C:/GoodQ_Data" } else { $env:GOODQ_DATA_ROOT.Replace('\', '/') }
+$script:ModelsRoot = if ([string]::IsNullOrWhiteSpace($env:GOODQ_MODELS_DIR)) { "$script:DataRootBase/models" } else { $env:GOODQ_MODELS_DIR.Replace('\', '/') }
 
 # Check prerequisites
 Write-Host "1. Checking prerequisites..." -ForegroundColor Yellow
@@ -91,7 +91,7 @@ AZURE_OPENAI_API_VERSION=2024-08-01-preview
 
 # Agent Framework Configuration
 AGENT_FRAMEWORK_LOG_LEVEL=INFO
-AGENT_FRAMEWORK_TELEMETRY_ENABLED=true
+AGENT_FRAMEWORK_TELEMETRY_ENABLED=false
 AGENT_FRAMEWORK_CHECKPOINT_DIR=$script:RepoRootPosix/data/agent_checkpoints
 
 # Memory Store
@@ -100,7 +100,7 @@ MEM0_VECTOR_STORE=faiss
 MEM0_EMBEDDING_MODEL=text-embedding-3-small
 
 # DevUI Configuration
-DEVUI_HOST=0.0.0.0
+DEVUI_HOST=127.0.0.1
 DEVUI_PORT=8050
 DEVUI_DEBUG=false
 

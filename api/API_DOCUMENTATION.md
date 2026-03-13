@@ -430,7 +430,7 @@ All endpoints return consistent error responses:
 
 ```bash
 cd <repo_root>
-uvicorn api.main:app --host 0.0.0.0 --port 30000 --reload
+uvicorn api.main:app --host 127.0.0.1 --port 30000 --reload
 ```
 
 ### Test Endpoints
@@ -471,7 +471,7 @@ Environment variables (optional):
 
 ```bash
 # API Configuration
-GOODQ_API_HOST=0.0.0.0
+GOODQ_API_HOST=127.0.0.1
 GOODQ_API_PORT=30000
 
 # LLM Endpoints
@@ -481,6 +481,9 @@ OLLAMA_ENDPOINT=http://localhost:31434/v1
 # WSL2
 WSL_DISTRIBUTION=Ubuntu-22.04
 ```
+
+Loopback is the safe default. Only set `GOODQ_API_HOST=0.0.0.0` when you
+intentionally want LAN exposure on a trusted network.
 
 ---
 

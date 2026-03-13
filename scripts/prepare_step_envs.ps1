@@ -31,7 +31,7 @@ try {
     'HF_HOME'    = 'L:\\models'
     'TORCH_HOME' = 'L:\\models'
     'HF_HUB_ENABLE_HF_TRANSFER' = '1'
-    'GOODQ_API_HOST' = '0.0.0.0'
+    'GOODQ_API_HOST' = '127.0.0.1'
     'GOODQ_API_PORT' = '30000'
   }
   Write-Note 'Setting core environment variables (HF_HOME, TORCH_HOME, API host/port)'
@@ -167,4 +167,3 @@ try {
 }
 
 Write-Ok 'All environments prepared.'
-

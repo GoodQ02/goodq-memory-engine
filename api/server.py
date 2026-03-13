@@ -10,7 +10,7 @@ def main() -> None:
     repo_root = here.parents[1]  # .../goodq4all/api/server.py -> goodq4all root
     sys.path.insert(0, str(repo_root))
 
-    host = os.environ.get("GOODQ_API_HOST", "0.0.0.0")
+    host = os.environ.get("GOODQ_API_HOST", "127.0.0.1")
     try:
         port = int(os.environ.get("GOODQ_API_PORT", "30000"))
     except Exception:
@@ -24,4 +24,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

@@ -76,7 +76,7 @@ except requests.exceptions.RequestException as e:
     print(f"   {e}")
     print()
     print("Make sure the API server is running:")
-    print("   python api_server.py")
+    print("   python -m api.server")
 except Exception as e:
     print(f"[FAIL] ERROR: {e}")
     import traceback

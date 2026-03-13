@@ -40,7 +40,7 @@ try {
     
     Write-Host "You can now run:" -ForegroundColor White
     Write-Host "   • LAUNCH_WEB_INTERFACE_FIXED_V2.bat" -ForegroundColor Yellow
-    Write-Host "   • Or: python api_server.py`n" -ForegroundColor Yellow
+    Write-Host "   • Or: python -m api.server`n" -ForegroundColor Yellow
     
 } catch {
     Write-Host "`n✗ Installation verification failed: $_" -ForegroundColor Red

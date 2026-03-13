@@ -42,7 +42,7 @@ Solution: API might be returning different structure than expected
 
 ## API Server Configuration:
 
-Current settings in `api_server.py`:
+Current settings in the canonical API server (`api/server.py` + `api/main.py`):
 ```python
 # Safe-by-default local bind and localhost-only CORS middleware
 host = os.environ.get("GOODQ_API_HOST", "127.0.0.1")
@@ -65,7 +65,7 @@ uvicorn.run(app, host=host, port=port, log_level="info")
 ```
 
 If you intentionally need LAN access for a local network test, set
-`GOODQ_API_HOST=0.0.0.0` explicitly before starting the legacy helper.
+`GOODQ_API_HOST=0.0.0.0` explicitly before starting the canonical API helper.
 
 ## Manual Test (Bypass UI Completely):
 

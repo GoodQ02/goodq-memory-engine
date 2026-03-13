@@ -1,4 +1,5 @@
 # GoodQ4All Process Management - Quick Reference Card
+> Historical quick reference — covers an older process-management stack that is not part of the canonical supported runtime. References to `api_server.py` and legacy batch launchers are preserved for context only.
 
 ## 🚀 Quick Start
 

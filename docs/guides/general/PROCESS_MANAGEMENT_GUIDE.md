@@ -1,4 +1,5 @@
 # GoodQ4All Process Management System - Complete Guide
+> Historical guide — documents an older process-management stack that is not part of the canonical supported runtime. References to `api_server.py` and legacy batch launchers are preserved for context only.
 
 ## Overview
 

@@ -96,7 +96,7 @@ _Generated: 2026-02-15_
 | `scripts/analyze_kg_gaps.py` | Unclear/Obsolete | Analyze what data is available vs what's being extracted to knowledge graph | No | None detected |
 | `scripts/analyze_sample_output.py` | Runtime Utility | Analyze sample.mp4 processing output from memory.db. | Yes | None detected |
 | `scripts/analyze_unified_kg.py` | Unclear/Obsolete | Analyze Unified Knowledge Graph - Phase 8 | No | absolute path operations |
-| `scripts/api_server.py` | Unclear/Obsolete | GoodQ API Server - Production Grade | No | absolute path operations |
+| `scripts/api_server.py (retired)` | Unclear/Obsolete | Legacy API monolith removed from tracked surface; restore from local quarantine only if needed | No | absolute path operations |
 | `scripts/apply_performance_fixes.py` | Unclear/Obsolete | Apply performance optimizations to GoodQ configuration. | No | absolute path operations |
 | `scripts/apply_scene_summaries.py` | Unclear/Obsolete | Apply Scene Summarization to All Existing Scenes | No | destructive actions |
 | `scripts/audio_gpu_monitor.py` | Runtime Utility | Real-Time Audio GPU Monitor | Manual Review | absolute path operations |
@@ -258,7 +258,7 @@ _Generated: 2026-02-15_
 | `scripts/utilities/backup_gpu_steps.py` | Unclear/Obsolete | Steps that need refactoring | No | None detected |
 | `scripts/utilities/gpu_config.py` | Unclear/Obsolete | GPU Isolation and Memory Management Configuration | No | absolute path operations |
 | `scripts/utilities/llm_client.py` | Runtime Utility | LLM Integration Module for GoodQ | Manual Review | absolute path operations; binary/network download |
-| `scripts/utilities/process_manager.py` | Runtime Utility | GoodQ4All Process Manager | Manual Review | absolute path operations |
+| `scripts/utilities/process_manager.py` | Unclear/Obsolete | Legacy process-manager cluster tied to retired API/watchdog helpers | Manual Review | absolute path operations |
 | `scripts/utils/check_api_data.py` | Unclear/Obsolete | Quick check of what data is available for the API | No | absolute path operations |
 | `scripts/utils/check_databases.py` | Unclear/Obsolete | Check memory.db | No | absolute path operations |
 | `scripts/utils/check_db.py` | Unclear/Obsolete | Validation/test utility for check db. | No | None detected |
@@ -350,7 +350,7 @@ _Generated: 2026-02-15_
 | `scripts/analytics_engine.py` | Runtime Utility | absolute path operations |
 | `scripts/analytics_query.py` | Runtime Utility | absolute path operations |
 | `scripts/analyze_unified_kg.py` | Unclear/Obsolete | absolute path operations |
-| `scripts/api_server.py` | Unclear/Obsolete | absolute path operations |
+| `scripts/api_server.py (retired)` | Unclear/Obsolete | absolute path operations |
 | `scripts/apply_performance_fixes.py` | Unclear/Obsolete | absolute path operations |
 | `scripts/apply_scene_summaries.py` | Unclear/Obsolete | destructive actions |
 | `scripts/audio_gpu_monitor.py` | Runtime Utility | absolute path operations |
@@ -444,7 +444,7 @@ _Generated: 2026-02-15_
 | `scripts/test_vllm_from_windows.ps1` | Dev Utility | absolute path operations; binary/network download |
 | `scripts/utilities/gpu_config.py` | Unclear/Obsolete | absolute path operations |
 | `scripts/utilities/llm_client.py` | Runtime Utility | absolute path operations; binary/network download |
-| `scripts/utilities/process_manager.py` | Runtime Utility | absolute path operations |
+| `scripts/utilities/process_manager.py` | Unclear/Obsolete | absolute path operations |
 | `scripts/utils/check_api_data.py` | Unclear/Obsolete | absolute path operations |
 | `scripts/utils/check_databases.py` | Unclear/Obsolete | absolute path operations |
 | `scripts/utils/check_ingestion_status.py` | Unclear/Obsolete | absolute path operations |

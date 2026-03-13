@@ -45,7 +45,6 @@ ACTIVE_RUNTIME_FILES = [
     Path("scripts/build_knowledge_graph_from_db.py"),
     Path("scripts/build_kg_standalone.py"),
     Path("scripts/build_unified_kg.py"),
-    Path("scripts/api_server.py"),
     Path("scripts/monitor_ingestion.py"),
     Path("scripts/monitor_ingestion_realtime.py"),
     Path("scripts/monitor_ingestion_progress.py"),

@@ -343,7 +343,7 @@ def main():
     if passed_checks < total_checks:
         print("\n  Recommendations:")
         if not api_status:
-            print("    - Start API server: python api_server.py")
+            print("    - Start API server: python -m api.server")
         if len(videos) == 0:
             print(f"    - Add videos to {runtime_paths['import_inbox']}")
         if not any(databases.values()):

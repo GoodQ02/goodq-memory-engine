@@ -81,13 +81,13 @@ if not exist "logs\pids" (
 echo [PASS] Log directories OK
 echo.
 
-echo [TEST 6] Verifying API server file...
-if not exist "scripts\api_server.py" (
-    echo [FAIL] scripts\api_server.py not found
+echo [TEST 6] Verifying canonical API wrapper file...
+if not exist "api\server.py" (
+    echo [FAIL] api\server.py not found
     pause
     exit /b 1
 )
-echo [PASS] API server file found
+echo [PASS] Canonical API wrapper found
 echo.
 
 echo [TEST 7] Checking process manager integration...

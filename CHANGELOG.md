@@ -14,6 +14,7 @@ and related canonical docs.
 - Retired the legacy `scripts/refresh_vllm_portproxy.bat` helper from the tracked surface; Windows↔WSL vLLM access is no longer documented through manual portproxy mutation.
 - Retired stale WSL/vLLM report-style docs from the tracked support surface and repointed live indexes to the current operator docs.
 - Retired the stale `docs/guides/llm/WSL_AGENT_BRIEFING.md` coordination brief and repointed live docs to current WSL/vLLM operator references.
+- Sanitized `docs/guides/llm/VLLM_SYSTEMD_SETUP.md` into a portable advanced-operator reference and removed workstation-specific path and user assumptions.
 - Reliability: `sentiment` now uses the existing one-shot native-crash retry path, recovering from intermittent Windows first-load subprocess crashes without breaking scene validity.
 - Runtime hardening: stale `GOODQ_WSL_WORKSPACE` overrides now fall back to the
   canonical `~/goodq_audio` workspace when the explicit path is missing, rather

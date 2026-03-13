@@ -10,11 +10,11 @@ _Generated: 2026-02-15_
 
 ## Category Summary
 
-- Bootstrap-Critical: **31**
+- Bootstrap-Critical: **30**
 - Runtime Utility: **97**
 - Dev Utility: **36**
 - One-Time Migration: **0**
-- Unclear/Obsolete: **121**
+- Unclear/Obsolete: **122**
 - Archived/Migrations (`scripts/archive/**`): **3**
 
 ## Danger Capability Flags (Human Review)
@@ -222,7 +222,7 @@ _Generated: 2026-02-15_
 | `scripts/show_kg_insights.py` | Unclear/Obsolete | -*- coding: utf-8 -*- | No | None detected |
 | `scripts/show_phase2_enhancement.py` | Unclear/Obsolete | Utility script for show phase2 enhancement. | No | None detected |
 | `scripts/smoke_phase_a.py` | Runtime Utility | Utility script for smoke phase a. | Manual Review | absolute path operations |
-| `scripts/start_api.ps1` | Bootstrap-Critical | Ensure we run from repo root | No | destructive actions; environment mutation |
+| `scripts/start_api.ps1` | Unclear/Obsolete | Experimental FastAPI launcher; scaffolded API helper, not part of the canonical bootstrap/runtime path. | No | environment mutation |
 | `scripts/start_llm_servers.bat` | Bootstrap-Critical | ============================================================================ | Manual Review | absolute path operations |
 | `scripts/start_vllm_servers.bat` | Bootstrap-Critical | GoodQ4All vLLM Server Startup Script | Yes | None detected |
 | `scripts/status_vllm_servers.bat` | Runtime Utility | GoodQ4All vLLM Server Status Check | Yes | None detected |
@@ -423,7 +423,7 @@ _Generated: 2026-02-15_
 | `scripts/setup_wsl2_audio_fast.py` | Unclear/Obsolete | absolute path operations |
 | `scripts/setup_wsl2_audio_userspace.py` | Unclear/Obsolete | absolute path operations |
 | `scripts/smoke_phase_a.py` | Runtime Utility | absolute path operations |
-| `scripts/start_api.ps1` | Bootstrap-Critical | destructive actions; environment mutation |
+| `scripts/start_api.ps1` | Unclear/Obsolete | environment mutation |
 | `scripts/start_llm_servers.bat` | Bootstrap-Critical | absolute path operations |
 | `scripts/system_readiness_check.py` | Dev Utility | absolute path operations |
 | `scripts/system_status_check.py` | Unclear/Obsolete | absolute path operations |

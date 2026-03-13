@@ -310,9 +310,9 @@ for i, (dist, idx) in enumerate(zip(distances[0], indices[0])):
     print(f"{i+1}. Index {idx}, Distance: {dist:.4f}")
 ```
 
-### API Queries (if API enabled)
+### API Queries (experimental, if API enabled)
 
-**Start API server:**
+**Experimental FastAPI helper (not part of the canonical bootstrap/runtime path):**
 ```powershell
 pwsh scripts\start_api.ps1
 ```

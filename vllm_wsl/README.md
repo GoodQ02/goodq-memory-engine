@@ -163,13 +163,16 @@ Installed via: `scripts/wsl/install_vllm_service.sh` (in repo root)
 
 ## Port Proxy (Windows ↔ WSL2)
 
-Windows accesses WSL2 vLLM servers via netsh port proxy:
+> Historical note: older hosts used a manual Windows `netsh interface portproxy`
+> helper to expose WSL vLLM services. That helper has been retired from the
+> tracked surface. The supported path is to verify the WSL service directly from
+> Windows using localhost.
 
 ```powershell
-# Refresh port proxy (if WSL2 IP changes)
-.\scripts\refresh_vllm_portproxy.bat
+# Test connectivity from Windows
+.\scripts\test_vllm_from_windows.ps1
 
-# View current proxies
+# View current proxies on a legacy host (cleanup/inspection only)
 netsh interface portproxy show all
 ```
 
@@ -261,8 +264,8 @@ python3 -c "import torch; print(torch.cuda.is_available())"
 ### Port Proxy Issues
 
 ```powershell
-# Refresh port proxy
-.\scripts\refresh_vllm_portproxy.bat
+# Check existing legacy portproxy rules
+netsh interface portproxy show all
 
 # Test connectivity
 .\scripts\test_vllm_from_windows.ps1

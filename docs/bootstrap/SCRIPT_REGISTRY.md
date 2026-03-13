@@ -200,7 +200,7 @@ _Generated: 2026-02-15_
 | `scripts/quick_analysis.py` | Unclear/Obsolete | Get counts | No | None detected |
 | `scripts/quick_gpu_setup.py` | Bootstrap-Critical | Quick GPU Setup - Install PyTorch with CUDA in all GPU-capable environments | Yes | None detected |
 | `scripts/quick_gpu_test.py` | Unclear/Obsolete | Validation/test utility for quick gpu test. | No | None detected |
-| `scripts/refresh_vllm_portproxy.bat` | Unclear/Obsolete | Refresh Windows->WSL portproxy for vLLM (port 38005) | No | absolute path operations; binary/network download |
+| `scripts/refresh_vllm_portproxy.bat` (retired) | Unclear/Obsolete | Legacy Windows->WSL portproxy helper removed from the tracked surface; retained only as historical context in archive/docs. | No | destructive actions; binary/network download |
 | `scripts/rotate_logs.py` | Runtime Utility | Log Rotation Script | No | destructive actions; absolute path operations |
 | `scripts/run_audio_diarize_test.bat` | Unclear/Obsolete | Direct environment test for audio diarization | No | environment mutation |
 | `scripts/run_control_agent.py` | Bootstrap-Critical | Control Agent Runner - Convenience script | Yes | None detected |
@@ -410,7 +410,7 @@ _Generated: 2026-02-15_
 | `scripts/qdrant/CHECK_QDRANT.bat` | Unclear/Obsolete | binary/network download |
 | `scripts/qdrant/INSTALL_QDRANT_SERVICE.bat` | Bootstrap-Critical | destructive actions; absolute path operations; binary/network download |
 | `scripts/qdrant/UNINSTALL_QDRANT_SERVICE.bat` | Bootstrap-Critical | absolute path operations |
-| `scripts/refresh_vllm_portproxy.bat` | Unclear/Obsolete | absolute path operations; binary/network download |
+| `scripts/refresh_vllm_portproxy.bat` (retired) | Unclear/Obsolete | destructive actions; binary/network download |
 | `scripts/rotate_logs.py` | Runtime Utility | destructive actions; absolute path operations |
 | `scripts/run_audio_diarize_test.bat` | Unclear/Obsolete | environment mutation |
 | `scripts/run_gpu_optimization_tests.py` | Dev Utility | destructive actions; absolute path operations |

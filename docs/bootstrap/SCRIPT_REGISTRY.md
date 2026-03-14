@@ -294,7 +294,7 @@ _Generated: 2026-02-15_
 | `scripts/wsl/install_vllm_service.sh` | Runtime Utility | Install/enable the vLLM Llama-1B systemd service inside WSL. | Manual Review | privileged systemd mutation; environment mutation |
 | `scripts/wsl/monitor.sh` | Unclear/Obsolete | ============================================================================ | No | binary/network download |
 | `scripts/wsl/smoke_wsl_memory.sh` | Runtime Utility | One-stop smoke test + light self-heal for GoodQ memory stack on WSL. | Manual Review | absolute path operations; environment mutation; binary/network download |
-| `scripts/wsl/start_all_vllm.sh` | Bootstrap-Critical | GoodQ4All - Start All vLLM Servers | Manual Review | absolute path operations; binary/network download |
+| `scripts/wsl/start_all_vllm.sh` (retired) | Unclear/Obsolete | Historical raw-process WSL vLLM launcher removed after the systemd-backed service path became the supported operator surface. | No | absolute path operations; binary/network download |
 | `scripts/wsl/update_vllm_service_port.sh` | Runtime Utility | Helper to retarget the vllm-llama1b systemd unit to the normalized port (38005). | Yes | None detected |
 | `scripts/wsl2_audio_bridge.py` | Runtime Utility | GoodQ4All WSL2 Audio Bridge | Yes | None detected |
 | `scripts/wsl2_process_audio.py` | Unclear/Obsolete | GoodQ4All WSL2 Audio Processor | No | None detected |
@@ -461,7 +461,7 @@ _Generated: 2026-02-15_
 | `scripts/wsl/install_vllm_service.sh` | Runtime Utility | privileged systemd mutation; environment mutation |
 | `scripts/wsl/monitor.sh` | Unclear/Obsolete | binary/network download |
 | `scripts/wsl/smoke_wsl_memory.sh` | Runtime Utility | absolute path operations; environment mutation; binary/network download |
-| `scripts/wsl/start_all_vllm.sh` | Bootstrap-Critical | absolute path operations; binary/network download |
+| `scripts/wsl/start_all_vllm.sh` (retired) | Unclear/Obsolete | absolute path operations; binary/network download |
 | `scripts/wsl2_quick_install.sh` | Bootstrap-Critical | absolute path operations |
 | `wsl2_audio/audio_bridge.py` | Runtime Utility | absolute path operations |
 | `wsl2_audio/setup_cuda_env.sh` | Bootstrap-Critical | environment mutation |

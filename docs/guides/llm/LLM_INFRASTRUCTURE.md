@@ -28,7 +28,6 @@ Ports and scripts such as:
 - `38001`
 - `~/vllm_server/scripts/start_llama1b.sh`
 - `~/vllm_server/scripts/start_llama3b.sh`
-- `scripts/wsl/start_all_vllm.sh`
 
 belong to an older experimental/operator surface. They may still exist, but they are not part of the current supported `llm_client.py` contract.
 
@@ -76,6 +75,8 @@ Use:
 Use `scripts/start_vllm_servers.bat` if you want a Windows wrapper for the current systemd-backed primary endpoint.
 
 The older `scripts/start_llm_servers.bat` launcher has been retired with the direct-start multi-model chain it depended on.
+
+The older raw-process helper `scripts/wsl/start_all_vllm.sh` has also been retired. The supported operator path is the systemd-backed installer and service flow.
 
 ## Quick Verification
 

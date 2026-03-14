@@ -30,6 +30,7 @@ and related canonical docs.
 - Sanitized `docs/reference/indexes/ENVIRONMENT_INDEX.md` and `docs/guides/wsl2/HF_CLI_LOGIN_GUIDE.md` so they no longer embed workstation-specific HuggingFace or WSL path assumptions and now point to the current operator surfaces.
 - Realigned `docs/guides/llm/LLM_INFRASTRUCTURE.md` and `docs/guides/llm/LLM_CLIENT_GUIDE.md` to the current injected two-endpoint LLM contract and removed the stale zero-config multi-model guidance.
 - Retired the stale `scripts/start_llm_servers.bat` and `scripts/test_llm_connectivity.py` helper pair, updated `scripts/test_llm_client.py` to the current injected client contract, and realigned the live vLLM helper docs around the systemd-backed start/status path.
+- Retired `scripts/wsl/start_all_vllm.sh`, the old raw-process WSL vLLM launcher, and realigned the LLM infrastructure docs and script registry around the supported systemd-backed operator path.
 - Reliability: `sentiment` now uses the existing one-shot native-crash retry path, recovering from intermittent Windows first-load subprocess crashes without breaking scene validity.
 - Runtime hardening: stale `GOODQ_WSL_WORKSPACE` overrides now fall back to the
   canonical `~/goodq_audio` workspace when the explicit path is missing, rather

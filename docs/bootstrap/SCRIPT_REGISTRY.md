@@ -258,7 +258,7 @@ _Generated: 2026-02-15_
 | `scripts/utilities/backup_gpu_steps.py` | Unclear/Obsolete | Steps that need refactoring | No | None detected |
 | `scripts/utilities/gpu_config.py` | Unclear/Obsolete | GPU Isolation and Memory Management Configuration | No | absolute path operations |
 | `scripts/utilities/llm_client.py` | Runtime Utility | LLM Integration Module for GoodQ | Manual Review | absolute path operations; binary/network download |
-| `scripts/utilities/process_manager.py` | Unclear/Obsolete | Legacy process-manager cluster tied to retired API/watchdog helpers | Manual Review | absolute path operations |
+| `scripts/utilities/process_manager.py` (retired) | Unclear/Obsolete | Legacy process-manager cluster removed from the tracked surface after its API/watchdog helpers were retired. | No | absolute path operations |
 | `scripts/utils/check_api_data.py` | Unclear/Obsolete | Quick check of what data is available for the API | No | absolute path operations |
 | `scripts/utils/check_databases.py` | Unclear/Obsolete | Check memory.db | No | absolute path operations |
 | `scripts/utils/check_db.py` | Unclear/Obsolete | Validation/test utility for check db. | No | None detected |
@@ -444,7 +444,7 @@ _Generated: 2026-02-15_
 | `scripts/test_vllm_from_windows.ps1` | Dev Utility | absolute path operations; binary/network download |
 | `scripts/utilities/gpu_config.py` | Unclear/Obsolete | absolute path operations |
 | `scripts/utilities/llm_client.py` | Runtime Utility | absolute path operations; binary/network download |
-| `scripts/utilities/process_manager.py` | Unclear/Obsolete | absolute path operations |
+| `scripts/utilities/process_manager.py` (retired) | Unclear/Obsolete | absolute path operations |
 | `scripts/utils/check_api_data.py` | Unclear/Obsolete | absolute path operations |
 | `scripts/utils/check_databases.py` | Unclear/Obsolete | absolute path operations |
 | `scripts/utils/check_ingestion_status.py` | Unclear/Obsolete | absolute path operations |

@@ -88,9 +88,9 @@ info = config.get_info_dict()
 
 The following files have been updated to use the centralized configuration:
 
-1. **process_manager.py**
-   - Now uses get_conda_exe() and get_env_python()
-   - Removed hardcoded paths
+1. **Retired `process_manager.py` (historical note)**
+   - Previously updated to use get_conda_exe() and get_env_python()
+   - Retired from the tracked surface on 2026-03-14 with the rest of the legacy process-manager stack
 
 2. **steps/common/tool_paths.py**
    - 
@@ -215,4 +215,3 @@ Potential future improvements:
 - Support for virtual environments (venv)
 - Docker container path resolution
 - Network/remote Conda installations
-

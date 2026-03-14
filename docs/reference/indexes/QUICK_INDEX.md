@@ -27,7 +27,6 @@
 
 - `docs/AUDIO_GPU_QUICK_START.md` – Audio GPU quickstart.
 - `docs/ANALYTICS_QUICK_REFERENCE.md` – Analytics/queries quick reference.
-- `docs/PROCESS_MANAGER_QUICK_REFERENCE.md` – Process manager quick reference.
 - `docs/WATCHDOG_QUICKREF.md` – Watchdog quick reference.
 - `docs/user-guides/WATCHDOG_QUICKSTART.txt` – Watchdog quickstart (text-oriented).
 - `docs/wsl2/QUICK_REFERENCE_WSL2.md` – WSL2-specific quick reference.
@@ -39,4 +38,3 @@
 
 - `docs/reference/FIXES_QUICK_REFERENCE.txt` – Historical quick reference for early critical fixes.
 - `_ARCHIVE/goodq4all_docs/GPU_QUICKSTART.md` – Older GPU quickstart superseded by `docs/GPU_QUICK_START.md`.
-

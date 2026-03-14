@@ -1,7 +1,8 @@
 # GPU Monitoring & Process Control - COMPLETE ✅
+> Historical implementation report — documents a 2025 process-manager and `api_server.py` integration that is no longer part of the canonical supported runtime. References to `process_manager.py` and `api_server.py` are preserved for context only.
 
 ## Date: 2025-11-12
-**Status:** ✅ FULLY OPERATIONAL
+**Status:** Historical implementation snapshot
 
 ---
 
@@ -276,4 +277,3 @@ pip install psutil          # Process monitoring (already installed)
 **The GoodQ Pipeline Engines page is now a comprehensive real-time monitoring dashboard for GPU utilization and process management.**
 
 Next test: Run a full ingestion to watch the engines activate in real-time! 🎬🔥
-

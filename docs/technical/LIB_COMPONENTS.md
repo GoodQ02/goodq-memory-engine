@@ -48,7 +48,7 @@ The `lib/` directory contains the foundational components that power GoodQ4All's
 | Component | Purpose | Status | Key Features |
 |-----------|---------|--------|--------------|
 | `goodq_logger.py` | Mission-themed logging system | ✅ Active | Q Branch branding, progress bars, mission symbols |
-| `process_manager.py` | GPU & process monitoring | ✅ Active | nvidia-smi integration, real-time VRAM tracking |
+| `process_manager.py` | Legacy process-manager cluster | Retired | Historical wrapper removed from tracked surface on 2026-03-14 |
 | `ffmpeg_utils.py` | Audio/video extraction | ✅ Active | Media info, audio extraction, normalization |
 | `mission_components.py` | Component name branding | ✅ Active | Maps pipeline steps to Q Branch terminology |
 
@@ -377,37 +377,19 @@ logger.success("Mission accomplished!")
 ---
 
 #### `process_manager.py`
-**GPU & Process Monitoring**
+**Historical Process-Manager Cluster**
 
-```python
-from lib.process_manager import GPUMonitor
+This legacy helper was retired from the tracked surface on 2026-03-14.
 
-monitor = GPUMonitor()
-info = monitor.get_gpu_info()
+**Why it was retired:**
+- It still registered deleted legacy launchers such as `api_server.py` and `scripts/watchdog_ingest.py`.
+- It was no longer part of the canonical launcher or watchdog path.
+- Keeping it around made the supported runtime surface look larger than it really is.
 
-# Returns:
-{
-  "gpu_id": 0,
-  "name": "NVIDIA GeForce RTX 4070 Ti SUPER",
-  "memory_used": 12288,  # MB
-  "memory_total": 16384,  # MB
-  "utilization_gpu": 85,  # %
-  "utilization_memory": 75,  # %
-  "temperature": 68,  # °C
-  "power_draw": 220  # W
-}
-```
-
-**Features:**
-- **Real-Time Monitoring**: nvidia-smi integration
-- **Process Tracking**: GPU process enumeration
-- **VRAM Allocation**: Per-process memory usage
-- **Health Checks**: Temperature/power alerts
-
-**Use Cases:**
-- Pre-flight checks before ingestion
-- Load balancing between vLLM and audio
-- Debugging OOM errors
+**Current replacement surfaces:**
+- `LAUNCH_GOODQ.bat` / `LAUNCH_GOODQ.ps1`
+- `python -m cli.watchdog`
+- `python -m api.server` when the scaffolded API wrapper is needed explicitly
 
 ---
 
@@ -541,7 +523,7 @@ run_migrations(db_path="<GOODQ_DATA_ROOT>/GoodQ_Data/memory.db")
 | `kg_realtime_integration.py` | Ingestion pipeline | `cli/run_ingestion.py:1400` |
 | `llm_client.py` | Entity extraction, summarization | `steps/video/entity_extractor.py:200` |
 | `goodq_logger.py` | All modules | Universal import |
-| `process_manager.py` | Pre-flight checks | `cli/run_ingestion.py:120` |
+| `process_manager.py` | Retired legacy helper | No current canonical caller |
 | `ffmpeg_utils.py` | Audio extraction | `cli/run_ingestion.py:850` |
 | `entity_resolver.py` | KG integration | `lib/kg_realtime_integration.py:50` |
 
@@ -569,7 +551,7 @@ run_migrations(db_path="<GOODQ_DATA_ROOT>/GoodQ_Data/memory.db")
 
 ### Deprecated Components
 
-**None currently** - All components are actively used.
+- `process_manager.py` – Retired from the tracked surface on 2026-03-14 after the legacy API/watchdog helpers it managed were removed.
 
 ### Legacy Locations
 

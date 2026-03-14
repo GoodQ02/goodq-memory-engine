@@ -21,6 +21,7 @@ and related canonical docs.
 - Retired the legacy `agents/watchdog_agent_integration.py` watcher and made the obsolete startup menu fail visibly toward the canonical `cli.watchdog` path.
 - Retired the legacy `agents/pipeline_integration.py` and `agents/orchestrator.py` core, removed the obsolete quick agent test, and made the remaining startup menu options fail visibly toward canonical CLI surfaces.
 - Sanitized `docs/architecture/AGENT_SYSTEM.md` so its retired watcher/pipeline sections no longer document deleted imports and entrypoints as live behavior.
+- Retired the legacy `scripts/utilities/process_manager.py` cluster and `tests/TEST_PROCESS_MANAGER.bat`, then collapsed the old process-management guides into short historical notes that redirect to canonical launcher/watchdog surfaces.
 - Reliability: `sentiment` now uses the existing one-shot native-crash retry path, recovering from intermittent Windows first-load subprocess crashes without breaking scene validity.
 - Runtime hardening: stale `GOODQ_WSL_WORKSPACE` overrides now fall back to the
   canonical `~/goodq_audio` workspace when the explicit path is missing, rather

@@ -30,8 +30,8 @@ Generated: 2026-02-11T22:50:35
 
 - **Doc entropy level:** **HIGH**
 - Canonical (A): **20**
-- Operational (B): **135**
-- Historical (C): **235**
+- Operational (B): **132**
+- Historical (C): **238**
 - Experimental (D): **153**
 - Redundant/Obsolete (E): **1**
 
@@ -450,8 +450,8 @@ docs/archive/
 | `docs/guides/general/INSTALL.md` | B) Operational | Operational guide with overlap/drift risk; keep but normalize. | REFRACTOR |
 | `docs/guides/general/LAPTOP_INSTALL_GUIDE.md` | B) Operational | Operational guide with overlap/drift risk; keep but normalize. | REFRACTOR |
 | `docs/guides/general/LAUNCH_INSTRUCTIONS.md` | B) Operational | Operator setup/usage guide. | KEEP |
-| `docs/guides/general/PROCESS_MANAGEMENT_GUIDE.md` | B) Operational | Operator setup/usage guide. | KEEP |
-| `docs/guides/general/PROCESS_MANAGER_QUICK_REFERENCE.md` | B) Operational | Operator setup/usage guide. | KEEP |
+| `docs/guides/general/PROCESS_MANAGEMENT_GUIDE.md` | C) Historical | Historical retirement marker for the removed process-manager surface. | KEEP |
+| `docs/guides/general/PROCESS_MANAGER_QUICK_REFERENCE.md` | C) Historical | Historical retirement marker for the removed process-manager surface. | KEEP |
 | `docs/guides/general/PYTHON_PATH_CONFIGURATION.md` | B) Operational | Operator setup/usage guide. | KEEP |
 | `docs/guides/general/QUICK_START_CLEAN.md` | B) Operational | Operational guide with overlap/drift risk; keep but normalize. | REFRACTOR |
 | `docs/guides/general/QUICK_START_GUIDE.md` | B) Operational | Operational guide with overlap/drift risk; keep but normalize. | REFRACTOR |
@@ -466,7 +466,7 @@ docs/archive/
 | `docs/guides/gpu/GPU_ISOLATION_STRATEGY.md` | B) Operational | Operator setup/usage guide. | KEEP |
 | `docs/guides/gpu/GPU_LLM_WSL_INDEX.md` | B) Operational | Operator setup/usage guide. | KEEP |
 | `docs/guides/gpu/GPU_MANAGEMENT_GUIDE.md` | B) Operational | Operator setup/usage guide. | KEEP |
-| `docs/guides/gpu/GPU_MONITORING_COMPLETE.md` | B) Operational | Operator setup/usage guide. | KEEP |
+| `docs/guides/gpu/GPU_MONITORING_COMPLETE.md` | C) Historical | Historical implementation report for the retired process-manager/API-monolith stack. | KEEP |
 | `docs/guides/gpu/GPU_OPTIMIZATION_GUIDE.md` | B) Operational | Operator setup/usage guide. | KEEP |
 | `docs/guides/gpu/GPU_PHASE_1_COMPLETE.md` | B) Operational | Operator setup/usage guide. | KEEP |
 | `docs/guides/gpu/GPU_PHASE_1_TEST_RESULTS.md` | B) Operational | Operator setup/usage guide. | KEEP |

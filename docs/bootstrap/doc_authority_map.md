@@ -30,9 +30,9 @@ Generated: 2026-02-11T22:50:35
 
 - **Doc entropy level:** **HIGH**
 - Canonical (A): **20**
-- Operational (B): **132**
-- Historical (C): **238**
-- Experimental (D): **153**
+- Operational (B): **130**
+- Historical (C): **241**
+- Experimental (D): **152**
 - Redundant/Obsolete (E): **1**
 
 ### Recommended Actions (count)
@@ -443,7 +443,7 @@ docs/archive/
 | `docs/guides/QDRANT_SETUP.md` | B) Operational | Operator setup/usage guide. | KEEP |
 | `docs/guides/SCENE_OPTIMIZATION_GUIDE.md` | B) Operational | Operator setup/usage guide. | KEEP |
 | `docs/guides/general/API_DEBUG_INSTRUCTIONS.md` | B) Operational | Operator setup/usage guide. | KEEP |
-| `docs/guides/general/COMMAND_CENTER_LIVE.md` | B) Operational | Operator setup/usage guide. | KEEP |
+| `docs/guides/general/COMMAND_CENTER_LIVE.md` | C) Historical | Historical implementation note for a still-supported feature whose backend details moved into the canonical API surface. | KEEP |
 | `docs/guides/general/CONTROL_AGENT_PHASE1.md` | B) Operational | Operator setup/usage guide. | KEEP |
 | `docs/guides/general/CONTROL_AGENT_PHASE3.md` | B) Operational | Operator setup/usage guide. | KEEP |
 | `docs/guides/general/GITHUB_SETUP_GUIDE.md` | B) Operational | Operator setup/usage guide. | KEEP |
@@ -742,9 +742,9 @@ docs/archive/
 | `docs/technical/PHASE5_FINAL_ACTIVATION_SUMMARY.md` | D) Experimental | Design or implementation note; useful but not primary authority. | MERGE |
 | `docs/technical/PIPELINE_DEEP_DIVE_REPORT.md` | D) Experimental | Design or implementation note; useful but not primary authority. | MERGE |
 | `docs/technical/PIPELINE_DIAGNOSIS_2025-11-11.md` | B) Operational | Architecture/technical reference; align to canonical runtime contracts. | REFRACTOR |
-| `docs/technical/PIPELINE_ENGINES_COMPLETE.md` | D) Experimental | Design or implementation note; useful but not primary authority. | MERGE |
+| `docs/technical/PIPELINE_ENGINES_COMPLETE.md` | C) Historical | Historical implementation note for the pipeline-engines UI rollout; retain only as context. | KEEP |
 | `docs/technical/PIPELINE_ENGINES_UI_UPDATE.md` | B) Operational | Architecture/technical reference document. | KEEP |
-| `docs/technical/SCENE_EXPLORER_DEPLOYMENT_GUIDE.md` | B) Operational | Architecture/technical reference document. | KEEP |
+| `docs/technical/SCENE_EXPLORER_DEPLOYMENT_GUIDE.md` | C) Historical | Historical deployment note for the Scene Explorer rollout; retain only as context. | KEEP |
 | `docs/technical/SECRETS_ENV_MIGRATION.md` | B) Operational | Architecture/technical reference document. | KEEP |
 | `docs/technical/SESSION_SUMMARY_2025-12-05.md` | D) Experimental | Design or implementation note; useful but not primary authority. | MERGE |
 | `docs/technical/VAD_AND_GPU_OPTIMIZATION_COMPLETE.md` | D) Experimental | Design or implementation note; useful but not primary authority. | MERGE |

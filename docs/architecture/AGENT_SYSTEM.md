@@ -47,18 +47,18 @@ The GoodQ4All agent system is a collection of autonomous, intelligent components
                          │
                          ↓
 ┌──────────────────────────────────────────────────────────────────┐
-│         WATCHDOG AGENT (watchdog_agent_integration.py)           │
-│  • Monitors directories for new files                            │
-│  • Triggers ingestion pipeline automatically                     │
-│  • Logs events to agent_checkpoints/watchdog_events.db          │
+│   HISTORICAL WATCHDOG WRAPPER (watchdog_agent_integration.py)    │
+│  • Retired legacy parallel watcher                               │
+│  • Replaced by canonical cli/watchdog.py runtime                 │
+│  • Preserved here only as architecture history                   │
 └────────────────────────┬─────────────────────────────────────────┘
                          │
                          ↓
 ┌──────────────────────────────────────────────────────────────────┐
-│         PIPELINE INTEGRATION (pipeline_integration.py)           │
-│  • Injects agent hooks into cli/run_ingestion.py                │
-│  • Wraps step execution with monitoring                          │
-│  • Forwards errors to Control Agent                              │
+│   HISTORICAL PIPELINE WRAPPER (pipeline_integration.py)          │
+│  • Retired legacy orchestration bridge                           │
+│  • No longer part of tracked runtime surface                     │
+│  • Canonical ingestion stays in cli/run_ingestion.py             │
 └────────────────────────┬─────────────────────────────────────────┘
                          │
                          ↓
@@ -255,65 +255,31 @@ self_healing:
 
 ---
 
-### 4. Watchdog Agent Integration (`agents/watchdog_agent_integration.py`)
+### 4. Historical Watchdog Wrapper (`agents/watchdog_agent_integration.py`)
 
-**Role:** File system monitoring → ingestion trigger
+**Status:** Retired from tracked runtime surface
 
-**Responsibilities:**
-- Monitor `<GOODQ_DATA_ROOT>\incoming\` for new videos
-- Trigger ingestion pipeline automatically
-- Log all file events
-- Handle multiple simultaneous files
-- Prevent duplicate processing
+This file used to provide a parallel watcher path into the old agent-orchestrator stack.
 
-**Usage:**
-```python
-# Via CLI (preferred)
-python -m cli.watchdog --input-dir "<GOODQ_DATA_ROOT>\incoming"
+Current truth:
+- The canonical watcher is `python -m cli.watchdog`
+- Run-state is persisted through the current watchdog/control-plane contract
+- The retired wrapper should be treated as architecture history only
 
-# Programmatic
-from agents.watchdog_agent_integration import WatchdogAgent
-
-agent = WatchdogAgent(watch_dir="<GOODQ_DATA_ROOT>\incoming")
-agent.start()
-```
-
-**Database:**
-- `<GOODQ_DATA_ROOT>\GoodQ_Data\agent_checkpoints\watchdog_events.db`
-  - Tracks processed files
-  - Prevents duplicates
-  - Logs all events
-
-**See:** [Watchdog System Documentation](../systems/WATCHDOG_SYSTEM.md)
+**See instead:** [Watchdog System Documentation](../systems/WATCHDOG_SYSTEM.md)
 
 ---
 
-### 5. Pipeline Integration (`agents/pipeline_integration.py`)
+### 5. Historical Pipeline Wrapper (`agents/pipeline_integration.py`)
 
-**Role:** Hook agents into ingestion flow
+**Status:** Retired from tracked runtime surface
 
-**Responsibilities:**
-- Inject agent monitoring into `cli/run_ingestion.py`
-- Wrap step execution with error capture
-- Forward errors to Control Agent
-- Track step timing and GPU usage
-- Enable/disable agent features
+This file used to wrap a parallel agent-orchestrator workflow around ingestion steps.
 
-**Implementation:**
-```python
-# In cli/run_ingestion.py
-from agents.pipeline_integration import with_agent_monitoring
-
-@with_agent_monitoring
-def process_scene(scene_data, cfg):
-    # Normal processing
-    return result
-```
-
-**Features:**
-- Non-invasive: Works with existing code
-- Optional: Can be disabled via config
-- Performant: Minimal overhead (<5ms per step)
+Current truth:
+- There is no current `with_agent_monitoring` decorator in the tracked runtime
+- Canonical ingestion lives in `cli/run_ingestion.py`
+- Control-plane state is declared through current run metadata and watchdog/runtime docs, not through the retired wrapper layer
 
 ---
 

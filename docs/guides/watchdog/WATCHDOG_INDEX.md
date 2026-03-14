@@ -10,14 +10,14 @@
 - `docs/guides/watchdog/WATCHDOG_QUICKREF.md` – Quick reference card for commands and common tasks.
 - `docs/guides/watchdog/WATCHDOG_SUMMARY.md` – High-level implementation and performance summary.
 - `docs/guides/watchdog/WATCHDOG_CHANGELOG.md` – Canonical development and version history.
-- `docs/diagrams/watchdog_flow.md` – Architecture and flow diagrams for the Watchdog system.
+- `docs/architecture/diagrams/watchdog_flow.md` – Architecture and flow diagrams for the Watchdog system.
 
 ---
 
 ## Quickstart & User-Facing Shortcuts
 
-- `docs/user-guides/WATCHDOG_QUICKSTART.txt` – Text-mode quickstart; legacy helper that defers to the canonical Watchdog docs for current details.
-- `python -m cli.watchdog` – Start Watchdog service.
+- `docs/guides/general/WATCHDOG_QUICKSTART.txt` – Text-mode quickstart; legacy helper that defers to the canonical Watchdog docs for current details.
+- `conda run -n goodq_core python -m cli.watchdog` – Start Watchdog service.
 - `python scripts/utils/check_watchdog_status.py` – One-time status snapshot.
 - `scripts/monitoring/monitor_live.bat` – Live monitoring dashboard.
 
@@ -29,7 +29,7 @@
 - `scripts/utils/check_watchdog_status.py` – Status dashboard script.
 - `tests/integration/test_watchdog.py` – File classification and status behavior check.
 
-See `docs/guides/watchdog/WATCHDOG_GUIDE.md` and `docs/diagrams/watchdog_flow.md` for details on these components.
+See `docs/guides/watchdog/WATCHDOG_GUIDE.md` and `docs/architecture/diagrams/watchdog_flow.md` for details on these components.
 
 ---
 

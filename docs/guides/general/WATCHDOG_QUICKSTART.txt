@@ -2,36 +2,35 @@
 ║                  GOODQ WATCHDOG QUICK START                  ║
 ╚══════════════════════════════════════════════════════════════╝
 
-NOTE: This is a text-mode quickstart helper and may reflect an earlier directory layout. For the canonical, up-to-date Watchdog behavior and paths, always prefer `docs/WATCHDOG_GUIDE.md`, `docs/WATCHDOG_QUICKREF.md`, and `docs/WATCHDOG_INDEX.md`.
+NOTE: This is a text-mode quickstart helper and may reflect an earlier directory layout. For the canonical, up-to-date Watchdog behavior and paths, always prefer `docs/guides/watchdog/WATCHDOG_GUIDE.md`, `docs/guides/watchdog/WATCHDOG_QUICKREF.md`, and `docs/guides/watchdog/WATCHDOG_INDEX.md`.
 
-📂 DROP FILES HERE: <project_root>\import_inbox\
+📂 DROP FILES HERE: <GOODQ_DATA_ROOT>\GoodQ_Data\import_inbox\
 
 🚀 START WATCHDOG:
-   Double-click: START_WATCHDOG.bat
-   - Monitors import_inbox folder
+   conda run -n goodq_core python -m cli.watchdog
+   - Monitors the configured import inbox
    - Automatically processes new files
-   - Runs in background
+   - Uses the canonical config-resolved runtime
 
 📊 CHECK STATUS (One-Time):
-   Double-click: CHECK_WATCHDOG_STATUS.bat
+   python scripts/utils/check_watchdog_status.py
    - Shows current file counts
    - Displays recent activity
-   - Press any key to close
 
 📈 LIVE MONITOR (Auto-Refresh):
-   Double-click: MONITOR_WATCHDOG.bat
+   scripts/monitoring/monitor_live.bat
    - Updates every 5 seconds
    - Shows live processing progress
    - Ctrl+C to stop
 
 📋 FILE LOCATIONS AFTER PROCESSING:
-   ✓ Success → import_inbox/.processed/
-   ✗ Failed  → import_inbox/.failed/
-   ⏳ Active → import_inbox/.processing/
+   ✓ Success → <GOODQ_DATA_ROOT>\GoodQ_Data\processed\
+   ✗ Failed  → <GOODQ_DATA_ROOT>\GoodQ_Data\failed\
+   ⏳ Active → <GOODQ_DATA_ROOT>\GoodQ_Data\epochs\<epoch>\processing\
 
 📝 LOGS:
-   Main log: logs\watchdog.log
-   Results:  logs\watchdog_YYYYMMDD_HHMMSS_results.json
+   Main log: <GOODQ_DATA_ROOT>\GoodQ_Data\epochs\<epoch>\logs\watchdog.log
+   State:    <GOODQ_DATA_ROOT>\GoodQ_Data\epochs\<epoch>\logs\watchdog_state.json
 
 🎯 SUPPORTED FILE TYPES:
    Video:    .mp4, .avi, .mov, .mkv, .wmv, .flv, .webm
@@ -40,10 +39,10 @@ NOTE: This is a text-mode quickstart helper and may reflect an earlier directory
    Document: .pdf, .txt, .doc, .docx
 
 ⚡ QUICK WORKFLOW:
-   1. START_WATCHDOG.bat (leave running)
-   2. Drop files into import_inbox\
-   3. MONITOR_WATCHDOG.bat (watch progress)
-   4. Find processed files in .processed\ folder
+   1. Start `conda run -n goodq_core python -m cli.watchdog`
+   2. Drop files into <GOODQ_DATA_ROOT>\GoodQ_Data\import_inbox\
+   3. Run `scripts/monitoring/monitor_live.bat` if you want live status
+   4. Find completed files in <GOODQ_DATA_ROOT>\GoodQ_Data\processed\
 
 🛑 STOP WATCHDOG:
    Press Ctrl+C in the watchdog window

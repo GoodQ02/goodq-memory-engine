@@ -65,8 +65,8 @@
 
 ## Watchdog & Automation (Related Operational Context)
 
-- `docs/WATCHDOG_INDEX.md` – Watchdog docs index and entrypoint.
-- `docs/WATCHDOG_GUIDE.md` – Canonical Watchdog user guide.
-- `docs/WATCHDOG_QUICKREF.md` – Quick reference for Watchdog commands.
-- `docs/WATCHDOG_SUMMARY.md` – High-level Watchdog implementation summary.
-- `docs/WATCHDOG_CHANGELOG.md` – Watchdog-specific changelog and history.
+- `docs/guides/watchdog/WATCHDOG_INDEX.md` – Watchdog docs index and entrypoint.
+- `docs/guides/watchdog/WATCHDOG_GUIDE.md` – Canonical Watchdog user guide.
+- `docs/guides/watchdog/WATCHDOG_QUICKREF.md` – Quick reference for Watchdog commands.
+- `docs/guides/watchdog/WATCHDOG_SUMMARY.md` – High-level Watchdog implementation summary.
+- `docs/guides/watchdog/WATCHDOG_CHANGELOG.md` – Watchdog-specific changelog and history.

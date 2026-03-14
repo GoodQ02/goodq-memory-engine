@@ -4,7 +4,7 @@
 
 # Watchdog Automatic Ingestion System
 
-**Status**: ✅ **OPERATIONAL** (December 14, 2025)  
+**Status**: ✅ **OPERATIONAL** (config-resolved runtime)  
 **Location**: `cli/watchdog.py` (Canonical)  
 **Legacy Note**: `scripts/watchdog_ingest.py` has been retired from the supported surface.
 
@@ -12,17 +12,17 @@
 
 ## Overview
 
-The Watchdog is GoodQ's **zero-touch ingestion system** that automatically monitors the `import_inbox` folder and processes any media dropped into it. No manual commands required—just drop files and walk away.
+The Watchdog is GoodQ's **zero-touch ingestion system**. It monitors the configured import inbox and processes supported files through the canonical ingestion runtime. Runtime paths are resolved from `configs/config.yaml`, local overrides, and environment variables via `config_loader`.
 
 ### What It Does
 
-- **Monitors**: `<project_root>/import_inbox` every 2 seconds
+- **Monitors**: `<GOODQ_DATA_ROOT>\GoodQ_Data\import_inbox` every 2 seconds
 - **Detects**: Video, audio, image, and document files
 - **Validates**: Waits 3 seconds for file stability (copy completion)
 - **Deduplicates**: SHA-256 hash prevents reprocessing identical files
 - **Processes**: Routes to appropriate pipeline (video/audio/image/document)
-- **Tracks**: AI Control Agent monitors and diagnoses failures
-- **Archives**: Moves to `processed/` (success) or `failed/` (error)
+- **Tracks**: Control-plane state on every run; AI diagnosis is available only when an `llm_client` is explicitly injected
+- **Archives**: Moves to configured `processed/` (success) or `failed/` (error) directories
 
 ---
 
@@ -35,7 +35,7 @@ The Watchdog is GoodQ's **zero-touch ingestion system** that automatically monit
 | **File Detection** | 2s polling loop, FileState tracking | ✅ Active |
 | **Stability Check** | 3s wait + size/mtime comparison | ✅ Active |
 | **Hash Deduplication** | SHA-256 streaming, registry in JSON | ✅ Active |
-| **Control Agent Integration** | AI diagnosis on failure, retry recommendations | ✅ Active |
+| **Control Agent Integration** | Optional `llm_client` injection; state always recorded, AI diagnosis conditional | ⚠ Conditional |
 | **Single-Instance Lock** | PID-based lockfile, stale lock detection | ✅ Active |
 | **Multi-Format Support** | Video, audio, image, PDF/text documents | ✅ Active |
 | **Progress Tracking** | `progress_tracker` integration | ✅ Active |
@@ -65,7 +65,7 @@ The Watchdog is GoodQ's **zero-touch ingestion system** that automatically monit
 
 ### Documents (via Conda Step Runner)
 ```
-.pdf, .txt, .md
+.pdf, .txt, .md, .doc, .docx
 ```
 **Steps**: PDF text extraction → Text embed → Sentiment → Emotion → Tagging
 
@@ -167,15 +167,18 @@ PROCESSED_video.mp4                FAILED_video.mp4
 
 ## Key Configuration
 
-### File Locations (Hardcoded in `cli/watchdog.py`)
+### File Locations (Resolved at Runtime)
+
+The watchdog does **not** use repo-root hardcoded directories. `cli/watchdog.py` resolves runtime paths through `load_configs()` + `get_runtime_paths()` using the active config and local overrides.
 
 ```python
-WATCH_DIR = "<project_root>/import_inbox"
-PROCESSING_DIR = "<GOODQ_DATA_ROOT>/GoodQ_Data/processing"
+WATCH_DIR = "<GOODQ_DATA_ROOT>/GoodQ_Data/import_inbox"
+PROCESSING_DIR = "<GOODQ_DATA_ROOT>/GoodQ_Data/epochs/<epoch>/processing"
 PROCESSED_DIR = "<GOODQ_DATA_ROOT>/GoodQ_Data/processed"
 FAILED_DIR = "<GOODQ_DATA_ROOT>/GoodQ_Data/failed"
-STATE_FILE = "<project_root>/logs/watchdog_state.json"
-LOG_FILE = "<project_root>/logs/watchdog.log"
+STATE_FILE = "<GOODQ_DATA_ROOT>/GoodQ_Data/epochs/<epoch>/logs/watchdog_state.json"
+LOCK_FILE = "<GOODQ_DATA_ROOT>/GoodQ_Data/epochs/<epoch>/logs/watchdog.lock"
+LOG_FILE = "<GOODQ_DATA_ROOT>/GoodQ_Data/epochs/<epoch>/logs/watchdog.log"
 ```
 
 ### Timing Parameters
@@ -200,22 +203,16 @@ GOODQ_STEP_TIMEOUT_MS = 600_000  # 10 minutes per step
 
 ## Control Agent Integration
 
-The Watchdog integrates with `agents/control_agent.py` for AI-powered monitoring:
+The Watchdog records control-plane state on every run. AI-powered diagnosis is available only when `agents/control_agent.py` is available **and** an `llm_client` is explicitly injected:
 
 ### Hooks
 ```python
-# On file detection
-control_agent.on_file_detected(filename, file_type, size)
+# Default runtime
+control_agent_status = "disabled_no_llm_client"
 
-# On processing start
-control_agent.on_processing_start(filename, file_type)
-
-# On error
+# Optional injected runtime
+control_agent = ControlAgent(llm_client=...)
 diagnosis = control_agent.analyze_error(error, context)
-# Returns: {'diagnosis': str, 'recommended_action': str, 'changes': str}
-
-# On completion
-control_agent.on_processing_complete(filename, success, error)
 ```
 
 ### AI Diagnosis Example
@@ -232,8 +229,7 @@ control_agent.on_processing_complete(filename, success, error)
 
 #### Option 1: PowerShell
 ```powershell
-cd <project_root>
-python -m cli.watchdog
+conda run -n goodq_core python -m cli.watchdog
 ```
 
 #### Option 2: Status Snapshot
@@ -241,14 +237,9 @@ python -m cli.watchdog
 python scripts/utils/check_watchdog_status.py
 ```
 
-#### Option 3: Python
-```python
-python <project_root>\cli\watchdog.py
-```
-
 ### Drop Files
 ```
-1. Copy files to <project_root>\import_inbox\
+1. Copy files to <GOODQ_DATA_ROOT>\GoodQ_Data\import_inbox\
 2. Watchdog detects within 2 seconds
 3. Wait 3 seconds for stability check
 4. Processing begins automatically
@@ -259,12 +250,12 @@ python <project_root>\cli\watchdog.py
 
 #### View Live Logs
 ```powershell
-Get-Content <project_root>\logs\watchdog.log -Wait -Tail 20
+Get-Content <GOODQ_DATA_ROOT>\GoodQ_Data\epochs\<epoch>\logs\watchdog.log -Wait -Tail 20
 ```
 
 #### Check Processed Registry
 ```powershell
-Get-Content <project_root>\logs\watchdog_state.json | ConvertFrom-Json | Format-List
+Get-Content <GOODQ_DATA_ROOT>\GoodQ_Data\epochs\<epoch>\logs\watchdog_state.json | ConvertFrom-Json | Format-List
 ```
 
 #### Check If Watchdog Running
@@ -297,7 +288,7 @@ Get-Process | Where-Object {$_.CommandLine -like "*watchdog*"}
 ### Single-Instance Locking
 
 ```python
-# Creates <GOODQ_DATA_ROOT>/GoodQ_Data/.watchdog.lock with PID
+# Creates <GOODQ_DATA_ROOT>/GoodQ_Data/epochs/<epoch>/logs/watchdog.lock with PID
 # On startup:
 #   - If lock exists, check if PID is alive
 #   - If alive: exit (already running)
@@ -368,13 +359,13 @@ step_plan = [
 **Diagnosis**:
 ```powershell
 # Check for existing instance
-Get-Content <GOODQ_DATA_ROOT>\GoodQ_Data\.watchdog.lock
+Get-Content <GOODQ_DATA_ROOT>\GoodQ_Data\epochs\<epoch>\logs\watchdog.lock
 ```
 
 **Fix**:
 ```powershell
 # If stale lock, delete manually
-Remove-Item <GOODQ_DATA_ROOT>\GoodQ_Data\.watchdog.lock -Force
+Remove-Item <GOODQ_DATA_ROOT>\GoodQ_Data\epochs\<epoch>\logs\watchdog.lock -Force
 ```
 
 ---
@@ -391,10 +382,10 @@ Remove-Item <GOODQ_DATA_ROOT>\GoodQ_Data\.watchdog.lock -Force
 **Fix**:
 ```powershell
 # Verify directory
-Test-Path <project_root>\import_inbox
+Test-Path <GOODQ_DATA_ROOT>\GoodQ_Data\import_inbox
 
 # Check logs
-Get-Content <project_root>\logs\watchdog.log -Tail 50
+Get-Content <GOODQ_DATA_ROOT>\GoodQ_Data\epochs\<epoch>\logs\watchdog.log -Tail 50
 ```
 
 ---
@@ -431,7 +422,7 @@ wsl -d Ubuntu bash -c "pkill -f audio_service.py && nohup python3 ~/goodq_audio/
 **Fix**:
 ```powershell
 # View registry
-Get-Content <project_root>\logs\watchdog_state.json | ConvertFrom-Json
+Get-Content <GOODQ_DATA_ROOT>\GoodQ_Data\epochs\<epoch>\logs\watchdog_state.json | ConvertFrom-Json
 
 # Remove specific hash to force reprocess
 # Edit JSON manually or delete entire file to reset
@@ -491,7 +482,8 @@ The supported watchdog surface is now **only** `cli/watchdog.py`.
 - [ ] Cloud storage sync (S3, Drive)
 
 ### Already Implemented (But Latent)
-- ✅ Control Agent diagnosis (active)
+- ✅ Control Agent state recording (active)
+- ⚠ AI diagnosis when `llm_client` is explicitly injected
 - ✅ Hash-based deduplication (active)
 - ✅ Multi-format support (active)
 - ✅ Graceful shutdown (active)
@@ -510,7 +502,7 @@ The supported watchdog surface is now **only** `cli/watchdog.py`.
 ### Reliability
 - ✅ Hash-based deduplication (collision-resistant)
 - ✅ File stability check (prevents partial reads)
-- ✅ Queue persistence (survives crashes)
+- ✅ Processed registry persistence across restarts
 - ✅ Temp files preserved on failure (debugging)
 - ✅ Stale lock detection (auto-recovery)
 - ✅ Graceful shutdown (queue drain)
@@ -521,16 +513,16 @@ The supported watchdog surface is now **only** `cli/watchdog.py`.
 
 ### Unit Tests
 ```bash
-python tests/integration/test_watchdog.py
+conda run -n goodq_core python tests\integration\test_watchdog.py
 ```
 
 ### Integration Tests
-```bash
+```powershell
 # Drop test file
-cp samples/smoke/sample.mp4 import_inbox/
+Copy-Item samples\smoke\sample.mp4 <GOODQ_DATA_ROOT>\GoodQ_Data\import_inbox\
 
 # Monitor logs
-Get-Content logs/watchdog.log -Wait -Tail 20
+Get-Content <GOODQ_DATA_ROOT>\GoodQ_Data\epochs\<epoch>\logs\watchdog.log -Wait -Tail 20
 
 # Verify moved to processed
 Test-Path <GOODQ_DATA_ROOT>\GoodQ_Data\processed\PROCESSED_sample.mp4
@@ -540,10 +532,10 @@ Test-Path <GOODQ_DATA_ROOT>\GoodQ_Data\processed\PROCESSED_sample.mp4
 
 ## Summary
 
-The Watchdog system is **production-ready** and **operational** as of December 14, 2025. It provides:
+The Watchdog system is **production-ready** and **operational** in the current config-resolved runtime. It provides:
 
 - **Zero-touch ingestion** for all supported media types
-- **AI-powered diagnostics** via Control Agent
+- **Visible control-plane state** with optional AI diagnostics
 - **Robust deduplication** via SHA-256 hashing
 - **Graceful error handling** with preservation of failed files
 - **Comprehensive logging** for auditing and debugging

@@ -87,7 +87,7 @@ python -m cli.watchdog
 - Inbox and processing roots are resolved from `configs/config.yaml` and environment (`GOODQ_DATA_ROOT`).
 
 **What It Does:**
-1. Watches configured inbox directory (default: `<project_root>\samples\ingestion`)
+1. Watches configured inbox directory (default: `<GOODQ_DATA_ROOT>\GoodQ_Data\import_inbox`)
 2. Detects new video files (mp4, avi, mkv, mov, webm, flv)
 3. Calculates file hash to avoid duplicates
 4. Automatically triggers `run_ingestion` for new files
@@ -103,7 +103,7 @@ python -m cli.watchdog
 python -m cli.watchdog
 ```
 
-**Logs:** `<project_root>\logs\watchdog.log`
+**Logs:** `<GOODQ_DATA_ROOT>\GoodQ_Data\epochs\<epoch>\logs\watchdog.log`
 
 ---
 
@@ -392,7 +392,7 @@ python -m cli.list_inbox
 
 **Output:**
 ```
-Files in inbox: <project_root>\samples\ingestion
+Files in inbox: <GOODQ_DATA_ROOT>\GoodQ_Data\import_inbox
 
 ✅ interview.mp4 (processed: 2025-12-14 15:23:45)
 ⏳ lecture.mp4 (pending)
@@ -452,11 +452,14 @@ All CLI commands respect settings in `configs/config.yaml`. Key paths:
 
 ```yaml
 paths:
-  import_inbox: "<project_root>/samples/ingestion"
+  import_inbox: "<GOODQ_DATA_ROOT>/GoodQ_Data/import_inbox"
+  processed: "<GOODQ_DATA_ROOT>/GoodQ_Data/processed"
+  failed: "<GOODQ_DATA_ROOT>/GoodQ_Data/failed"
   db_path: "<GOODQ_DATA_ROOT>/GoodQ_Data/epochs/<epoch>/memory.db"
   knowledge_graph_db: "<GOODQ_DATA_ROOT>/GoodQ_Data/epochs/<epoch>/knowledge_graph.db"
   processing: "<GOODQ_DATA_ROOT>/GoodQ_Data/epochs/<epoch>/processing"
   log_dir: "<GOODQ_DATA_ROOT>/GoodQ_Data/epochs/<epoch>/logs"
+  watchdog_state_file: "<GOODQ_DATA_ROOT>/GoodQ_Data/epochs/<epoch>/logs/watchdog_state.json"
 
 qdrant:
   host: "localhost"

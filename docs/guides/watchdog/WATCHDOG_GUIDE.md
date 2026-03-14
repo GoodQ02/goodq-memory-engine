@@ -1,21 +1,22 @@
 # GoodQ Watchdog - Automatic File Ingestion
 
-> Role: This is the primary, canonical user guide for the Watchdog automatic ingestion system. For quick commands, see `docs/WATCHDOG_QUICKREF.md`; for architecture diagrams, see `docs/diagrams/watchdog_flow.md`; for a high-level overview, see `docs/WATCHDOG_SUMMARY.md`. All other Watchdog docs should be read as supporting or historical context.
+> Role: This is the primary, canonical user guide for the Watchdog automatic ingestion system. For quick commands, see `docs/guides/watchdog/WATCHDOG_QUICKREF.md`; for architecture diagrams, see `docs/architecture/diagrams/watchdog_flow.md`; for a high-level overview, see `docs/guides/watchdog/WATCHDOG_SUMMARY.md`. All other Watchdog docs should be read as supporting or historical context.
 
 ## Overview
 
-The GoodQ Watchdog is an automatic file monitoring and ingestion system that watches the `import_inbox` folder for new files and automatically processes them through the appropriate pipeline.
+The GoodQ Watchdog is an automatic file monitoring and ingestion system that watches the configured import inbox and automatically processes new files through the appropriate pipeline. Runtime paths are resolved from the active config and local overrides, not fixed to repo-root directories.
 
 ## Features
 
-- **Automatic Detection**: Monitors `import_inbox` folder for new files
+- **Automatic Detection**: Monitors `<GOODQ_DATA_ROOT>\GoodQ_Data\import_inbox` for new files
 - **File Type Recognition**: Automatically identifies video, audio, image, and document files
 - **Queue Management**: Processes files one at a time to ensure system stability
 - **Duplicate Detection**: Uses SHA-256 hashing to prevent reprocessing identical files
 - **File Stability Check**: Waits for files to finish copying before processing
-- **Error Handling**: Failed files are moved to `data/failed` folder
+- **Error Handling**: Failed files are moved to the configured failed directory
 - **State Persistence**: Maintains registry of processed files across restarts
-- **Comprehensive Logging**: All activity logged to `logs/watchdog.log`
+- **Comprehensive Logging**: Activity logged under `<GOODQ_DATA_ROOT>\GoodQ_Data\epochs\<epoch>\logs\`
+- **Control-Plane Visibility**: Records Control Agent state every run; AI diagnosis remains optional
 
 ## Supported File Types
 
@@ -40,14 +41,14 @@ conda run -n goodq_core python -m cli.watchdog
 ```
 
 This will:
-- Start monitoring `import_inbox`
+- Start monitoring the resolved import inbox
 - Display real-time status
 
 ### 2. Add Files for Processing
 
 Simply drag and drop files into:
 ```
-<project_root>\import_inbox\
+<GOODQ_DATA_ROOT>\GoodQ_Data\import_inbox\
 ```
 
 ### 3. Monitor Progress
@@ -58,12 +59,12 @@ The watchdog will:
 - Compute file hash and check if already processed
 - Add to processing queue
 - Process through the appropriate pipeline
-- Move to `data/processed` with `PROCESSED_` prefix
+- Move to the resolved processed directory with `PROCESSED_` prefix
 
 ## File Flow
 
 ```
-import_inbox/
+<GOODQ_DATA_ROOT>\GoodQ_Data\import_inbox\
     video.mp4              ← Drop file here
          ↓
     [Watchdog detects]
@@ -74,7 +75,7 @@ import_inbox/
          ↓
     [Check if already processed]
          ↓
-data/processing/
+<GOODQ_DATA_ROOT>\GoodQ_Data\epochs\<epoch>\processing\
     video.mp4              ← Temporary copy during processing
          ↓
     [Run ingestion pipeline]
@@ -86,29 +87,27 @@ data/processing/
  YES         NO
   │           │
   ↓           ↓
-data/processed/  data/failed/
+<GOODQ_DATA_ROOT>\GoodQ_Data\processed\  <GOODQ_DATA_ROOT>\GoodQ_Data\failed\
 PROCESSED_video.mp4  FAILED_video.mp4
 ```
 
 ## Directory Structure
 
 ```
-goodq4all/
-├── import_inbox/          # Drop files here
-├── data/
-│   ├── processing/        # Temp files during processing
-│   ├── processed/         # Successfully processed files
-│   └── failed/            # Failed processing attempts
-├── logs/
-│   ├── watchdog.log       # Watchdog activity log
-│   └── watchdog_state.json # Processed file registry
-└── cli/
-    └── watchdog.py        # Canonical watchdog implementation
+<GOODQ_DATA_ROOT>\GoodQ_Data\
+├── import_inbox\                          # Drop files here
+├── processed\                             # Successfully processed files
+├── failed\                                # Failed processing attempts
+└── epochs\<epoch>\
+    ├── processing\                        # Temp files during processing
+    └── logs\
+        ├── watchdog.log                   # Watchdog activity log
+        └── watchdog_state.json            # Processed file registry
 ```
 
 ## Configuration
 
-Adjust the polling constants in `cli/watchdog.py` to change:
+`cli/watchdog.py` resolves directories through `load_configs()` + `get_runtime_paths()`. The inbox, processing, processed, failed, lock, and log locations come from the active config. Adjust the polling constants below only if you need to change runtime behavior:
 
 ```python
 POLL_INTERVAL = 2.0      # How often to scan (seconds)
@@ -119,22 +118,22 @@ MAX_WORKERS = 1          # Number of concurrent processors
 ## Processing Status
 
 ### During Processing
-Files remain in `import_inbox` with their original name while being processed.
+Files remain in `<GOODQ_DATA_ROOT>\GoodQ_Data\import_inbox` with their original name while being processed.
 
 ### After Success
-- Original file: `import_inbox/video.mp4` → `data/processed/PROCESSED_video.mp4`
-- Log entry: Added to `logs/watchdog_state.json`
+- Original file: `<GOODQ_DATA_ROOT>\GoodQ_Data\import_inbox\video.mp4` → `<GOODQ_DATA_ROOT>\GoodQ_Data\processed\PROCESSED_video.mp4`
+- Log entry: Added to `<GOODQ_DATA_ROOT>\GoodQ_Data\epochs\<epoch>\logs\watchdog_state.json`
 
 ### After Failure
-- Original file: `import_inbox/video.mp4` → `data/failed/FAILED_video.mp4`
-- Error logged in `logs/watchdog.log`
+- Original file: `<GOODQ_DATA_ROOT>\GoodQ_Data\import_inbox\video.mp4` → `<GOODQ_DATA_ROOT>\GoodQ_Data\failed\FAILED_video.mp4`
+- Error logged in `<GOODQ_DATA_ROOT>\GoodQ_Data\epochs\<epoch>\logs\watchdog.log`
 
 ## Duplicate Detection
 
 The watchdog uses SHA-256 hashing to detect duplicate files:
 
 1. When a stable file is detected, compute its hash
-2. Check `logs/watchdog_state.json` for this hash
+2. Check `watchdog_state.json` in the resolved `log_dir` for this hash
 3. If found, mark as `PROCESSED_` without re-ingestion
 4. If not found, process and add hash to registry
 
@@ -160,12 +159,12 @@ This tests:
 
 ### View Live Logs
 ```powershell
-Get-Content <project_root>\logs\watchdog.log -Wait -Tail 20
+Get-Content <GOODQ_DATA_ROOT>\GoodQ_Data\epochs\<epoch>\logs\watchdog.log -Wait -Tail 20
 ```
 
 ### Check Processed Files
 ```powershell
-Get-Content <project_root>\logs\watchdog_state.json | ConvertFrom-Json
+Get-Content <GOODQ_DATA_ROOT>\GoodQ_Data\epochs\<epoch>\logs\watchdog_state.json | ConvertFrom-Json
 ```
 
 ### View Queue Status
@@ -193,21 +192,21 @@ start "GoodQ Watchdog" /MIN cmd /k "conda run -n goodq_core python -m cli.watchd
 
 1. Check watch directory exists:
    ```powershell
-   Test-Path <project_root>\import_inbox
+   Test-Path <GOODQ_DATA_ROOT>\GoodQ_Data\import_inbox
    ```
 
 2. Verify file type is supported (check extensions)
 
 3. Check logs:
    ```powershell
-   Get-Content <project_root>\logs\watchdog.log -Tail 50
+   Get-Content <GOODQ_DATA_ROOT>\GoodQ_Data\epochs\<epoch>\logs\watchdog.log -Tail 50
    ```
 
 ### Files Not Processing
 
 1. Check if already processed:
    ```powershell
-   Get-Content <project_root>\logs\watchdog_state.json | ConvertFrom-Json
+   Get-Content <GOODQ_DATA_ROOT>\GoodQ_Data\epochs\<epoch>\logs\watchdog_state.json | ConvertFrom-Json
    ```
 
 2. Check for errors in log
@@ -216,13 +215,12 @@ start "GoodQ Watchdog" /MIN cmd /k "conda run -n goodq_core python -m cli.watchd
 
 ### Processing Fails
 
-1. Check `data/failed/` for the failed file
-2. Review `logs/watchdog.log` for error details
-3. Check environment is activated
+1. Check `<GOODQ_DATA_ROOT>\GoodQ_Data\failed\` for the failed file
+2. Review `<GOODQ_DATA_ROOT>\GoodQ_Data\epochs\<epoch>\logs\watchdog.log` for error details
+3. Check the `goodq_core` environment is available
 4. Verify ingestion pipeline works manually:
    ```batch
-   conda activate goodq_core
-   python cli\run_ingestion.py ingest path\to\video.mp4
+   conda run -n goodq_core python -m cli.run_ingestion ingest path\to\video.mp4
    ```
 
 ## Best Practices
@@ -232,7 +230,7 @@ start "GoodQ Watchdog" /MIN cmd /k "conda run -n goodq_core python -m cli.watchd
 3. **Monitor logs** during initial testing
 4. **Check processed registry** to avoid duplicates
 5. **Clean up processed/failed directories** periodically
-6. **Don't delete watchdog_state.json** unless intentionally resetting
+6. **Don't delete the resolved `watchdog_state.json`** unless intentionally resetting
 
 ## Performance Notes
 
@@ -259,8 +257,10 @@ start "GoodQ Watchdog" /MIN cmd /k "conda run -n goodq_core python -m cli.watchd
 Start Python REPL in the environment:
 ```python
 from cli.watchdog import WatchdogProcessor
+from steps.common.config_loader import load_configs
 
-watchdog = WatchdogProcessor()
+cfg = load_configs({})
+watchdog = WatchdogProcessor(cfg)
 
 # Check queue
 print(f"Queue size: {watchdog.queue.qsize()}")
@@ -302,6 +302,6 @@ The watchdog can be extended to:
 
 ---
 
-**Need Help?** Check `logs/watchdog.log` for detailed activity logs.
+**Need Help?** Check `<GOODQ_DATA_ROOT>\GoodQ_Data\epochs\<epoch>\logs\watchdog.log` for detailed activity logs.
 
 **Want to Contribute?** See `CONTRIBUTING.md` for development guidelines.

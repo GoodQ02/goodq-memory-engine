@@ -52,17 +52,17 @@
 ### Audio Processing Stack (`~/goodq_audio/`)
 
 - Location: `~/goodq_audio/` (WSL2 Ubuntu).
-  - `venv/` – Python 3.12 virtual environment.
-  - `process.sh` / `process_audio.py` – GPU-accelerated audio processing (Whisper + PyAnnote).
-  - Docs: `docs/WSL2_AUDIO_SETUP.md`, `docs/WSL2_AUDIO_MIGRATION_GUIDE.md`, `docs/wsl2/START_HERE_WSL2.md`, `docs/wsl2/WSL2_AUDIO_SUMMARY.md`.
+  - `venv/` – Python virtual environment for the WSL audio worker.
+  - `setup_cuda_env.sh`, `process.sh`, `process_audio.py` – GPU-accelerated audio processing and environment bootstrap.
+  - Docs: `docs/guides/llm/WSL2_AUDIO_SETUP.md`, `docs/guides/llm/WSL2_AUDIO_MIGRATION_GUIDE.md`, `docs/guides/wsl2/START_HERE_WSL2.md`, `docs/guides/wsl2/WSL2_AUDIO_SUMMARY.md`.
 
-### vLLM / LLM Servers (`~/vllm_server/`)
+### vLLM / LLM Service Stack (WSL2 Ubuntu)
 
-- Location: `~/vllm_server/` (WSL2 Ubuntu).
-  - `venv/` – Python 3.12 virtual environment for vLLM.
-  - `models/` – Symlink to `/mnt/l/_DATA/models/llm/huggingface/`.
-  - `scripts/start_llama1b.sh`, `start_llama3b.sh`, `start_phi.sh`, `start_qwen.sh`, `start_llama11b.sh` – Per-model startup scripts.
-  - Docs: `docs/LLM_INFRASTRUCTURE.md`, `docs/LLM_CLIENT_GUIDE.md`, `docs/VLLM_SYSTEMD_SETUP.md`.
+- Runtime home: `GOODQ_WSL_VLLM_HOME` (default: `~/vllm_server`).
+  - `venv/` – Python virtual environment for the vLLM service.
+  - `GOODQ_WSL_MODEL_PATH` – Preferred model-path variable for the active vLLM service.
+  - `scripts/wsl/install_vllm_service.sh` – Supported installer for the `vllm-llama1b` systemd service.
+  - Docs: `docs/guides/llm/VLLM_SYSTEMD_SETUP.md`, `docs/guides/llm/LLM_INFRASTRUCTURE.md`, `docs/guides/llm/LLM_CLIENT_GUIDE.md`.
 
 ---
 
@@ -85,9 +85,9 @@ These environments are considered part of the **supported surface** and should n
 - `goodq_emotion_classify`
 - `goodq_audio_embed`
 - `goodq_knowledge_graph`
-- WSL2: `~/goodq_audio/venv/`, `~/vllm_server/venv/`
+- WSL2: `~/goodq_audio/venv/`, `GOODQ_WSL_VLLM_HOME/venv`
 
-Other `goodq_*` or utility envs that appear only in historical docs or lockfiles may be treated as auxiliary/experimental unless explicitly referenced in `docs/SHIP_PROFILE.md` or other canonical docs.
+Other `goodq_*` or utility envs that appear only in historical docs or lockfiles may be treated as auxiliary/experimental unless explicitly referenced in `docs/releases/SHIP_PROFILE.md` or other canonical docs.
 
 ---
 
@@ -95,6 +95,6 @@ Other `goodq_*` or utility envs that appear only in historical docs or lockfiles
 
 - When adding or modifying steps:
   - Ensure the associated environment name matches the `goodq_<step>` pattern documented here.
-  - If you introduce a new env that is part of the shipping surface, add it both here and in `docs/SHIP_PROFILE.md`.
+  - If you introduce a new env that is part of the shipping surface, add it both here and in `docs/releases/SHIP_PROFILE.md`.
 - When troubleshooting:
-  - Use this index alongside `docs/GPU_LLM_WSL_INDEX.md` and `docs/TROUBLESHOOTING_INDEX.md` to quickly map failures to the right environment and docs.
+  - Use this index alongside `docs/guides/gpu/GPU_LLM_WSL_INDEX.md` and `docs/reference/indexes/TROUBLESHOOTING_INDEX.md` to quickly map failures to the right environment and docs.

@@ -291,7 +291,7 @@ _Generated: 2026-02-15_
 | `scripts/validate_gpu_setup.bat` | Bootstrap-Critical | ================================================================================ | Manual Review | environment mutation |
 | `scripts/vllm_control.bat` | Runtime Utility | Utility script for vllm control. | Yes | None detected |
 | `scripts/wsl/install_audio_service.sh` | Bootstrap-Critical | Install/enable systemd service for GoodQ WSL2 audio_service.py | Yes | None detected |
-| `scripts/wsl/install_vllm_service.sh` | Unclear/Obsolete | vLLM systemd service installer for Llama-1B | No | absolute path operations; binary/network download |
+| `scripts/wsl/install_vllm_service.sh` | Runtime Utility | Install/enable the vLLM Llama-1B systemd service inside WSL. | Manual Review | privileged systemd mutation; environment mutation |
 | `scripts/wsl/monitor.sh` | Unclear/Obsolete | ============================================================================ | No | binary/network download |
 | `scripts/wsl/smoke_wsl_memory.sh` | Runtime Utility | One-stop smoke test + light self-heal for GoodQ memory stack on WSL. | Manual Review | absolute path operations; environment mutation; binary/network download |
 | `scripts/wsl/start_all_vllm.sh` | Bootstrap-Critical | GoodQ4All - Start All vLLM Servers | Manual Review | absolute path operations; binary/network download |
@@ -458,7 +458,7 @@ _Generated: 2026-02-15_
 | `scripts/utils/verify_command_center.py` | Unclear/Obsolete | binary/network download |
 | `scripts/utils/verify_model_lockdown.py` | Dev Utility | absolute path operations |
 | `scripts/validate_gpu_setup.bat` | Bootstrap-Critical | environment mutation |
-| `scripts/wsl/install_vllm_service.sh` | Unclear/Obsolete | absolute path operations; binary/network download |
+| `scripts/wsl/install_vllm_service.sh` | Runtime Utility | privileged systemd mutation; environment mutation |
 | `scripts/wsl/monitor.sh` | Unclear/Obsolete | binary/network download |
 | `scripts/wsl/smoke_wsl_memory.sh` | Runtime Utility | absolute path operations; environment mutation; binary/network download |
 | `scripts/wsl/start_all_vllm.sh` | Bootstrap-Critical | absolute path operations; binary/network download |

@@ -6,7 +6,7 @@ set -e
 WSL_USER="${GOODQ_WSL_USER:-$(whoami)}"
 WSL_HOME="/home/${WSL_USER}"
 VLLM_HOME="${GOODQ_WSL_VLLM_HOME:-${WSL_HOME}/vllm_server}"
-MODEL_PATH="${GOODQ_WSL_MODEL_PATH:-/mnt/l/_DATA/models/llm/huggingface/Llama-3.2-1B-Instruct}"
+MODEL_PATH="${GOODQ_WSL_MODEL_PATH:-${WSL_HOME}/models/Llama-3.2-1B-Instruct}"
 LOG_DIR="${VLLM_HOME}/logs"
 
 echo "=================================================================="
@@ -44,27 +44,27 @@ StandardError=append:${LOG_DIR}/vllm-service-error.log
 WantedBy=multi-user.target
 EOF
 
-echo "✓ Service file created: /etc/systemd/system/vllm-llama1b.service"
+echo "Service file created: /etc/systemd/system/vllm-llama1b.service"
 echo ""
 
 echo "[2/6] Creating log directory..."
 mkdir -p "$LOG_DIR"
-echo "✓ Log directory ready"
+echo "Log directory ready"
 echo ""
 
 echo "[3/6] Reloading systemd daemon..."
 sudo systemctl daemon-reload
-echo "✓ Daemon reloaded"
+echo "Daemon reloaded"
 echo ""
 
 echo "[4/6] Enabling vLLM service (auto-start on boot)..."
 sudo systemctl enable vllm-llama1b.service
-echo "✓ Service enabled"
+echo "Service enabled"
 echo ""
 
 echo "[5/6] Starting vLLM service..."
 sudo systemctl start vllm-llama1b.service
-echo "✓ Service started"
+echo "Service started"
 echo ""
 
 echo "[6/6] Checking service status..."
@@ -94,9 +94,9 @@ sleep 30
 
 echo "Testing endpoint..."
 if curl -s http://localhost:38005/v1/models > /dev/null 2>&1; then
-    echo "✅ vLLM service is responding!"
+    echo "vLLM service is responding."
 else
-    echo "⚠️  Service may still be loading. Check with:"
+    echo "Service may still be loading. Check with:"
     echo "   journalctl -u vllm-llama1b -f"
 fi
 echo ""

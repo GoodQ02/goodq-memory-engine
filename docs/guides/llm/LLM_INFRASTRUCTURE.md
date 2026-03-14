@@ -1,330 +1,191 @@
 # GoodQ4All LLM Infrastructure
 
-## Overview
+## Current Supported Contract
 
-Production-grade LLM infrastructure with intelligent failover, health monitoring, and automatic model selection.
+The supported local LLM surface is a **config-driven two-endpoint contract**:
+
+- **Primary**: `llm.vllm_url`
+  - Default: `http://localhost:38005/v1`
+  - Model id from `llm.vllm_model`
+- **Fallback**: `llm.ollama_url`
+  - Default: `http://localhost:31434/v1`
+  - Model id from `llm.ollama_model`
+
+These endpoints are turned into the live `LLMClient` model list by:
+- `steps/common/llm_model_factory.py`
+
+This is the contract used by current injected client flows such as:
+- `api/main.py`
+- `agents/control_agent.py`
+- `agents/config_healer.py`
+
+## What This Guide Does Not Assume
+
+This guide does **not** assume the older multi-model WSL stack is active.
+
+Ports and scripts such as:
+- `38004`
+- `38001`
+- `~/vllm_server/scripts/start_llama1b.sh`
+- `~/vllm_server/scripts/start_llama3b.sh`
+- `scripts/wsl/start_all_vllm.sh`
+
+belong to an older experimental/operator surface. They may still exist, but they are not part of the current supported `llm_client.py` contract.
 
 ## Architecture
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                      Windows (GoodQ4All)                        │
-│  ┌────────────────────────────────────────────────────────────┐ │
-│  │              LLMClient (lib/llm_client.py)                 │ │
-│  │  - Health monitoring                                       │ │
-│  │  - Automatic failover                                      │ │
-│  │  - Model selection by capability                          │ │
-│  └───────────────┬──────────────────┬─────────────────────────┘ │
-│                  │                  │                           │
-└──────────────────┼──────────────────┼───────────────────────────┘
-                   │                  │
-        ┌──────────▼────────┐  ┌──────▼──────────┐
-        │   WSL (vLLM)      │  │  Ollama         │
-        │  ┌──────────────┐ │  │  (Fallback)     │
-        │  │ Llama 1B     │ │  │  Port: 31434    │
-        │  │ Port: 38005   │ │  │  Model: Phi-4   │
-        │  │ 178 tok/s ⚡ │ │  │  70 tok/s       │
-        │  └──────────────┘ │  └─────────────────┘
-        │  ┌──────────────┐ │
-        │  │ Llama 3B     │ │
-        │  │ Port: 38004   │ │
-        │  │ (Optional)   │ │
-        │  └──────────────┘ │
-        │  ┌──────────────┐ │
-        │  │ Phi-3.5      │ │
-        │  │ Port: 38001   │ │
-        │  │ (Optional)   │ │
-        │  └──────────────┘ │
-        └───────────────────┘
+```text
+┌───────────────────────────────────────────────────────┐
+│                GoodQ4All Application                  │
+│  api/main.py · ControlAgent · ConfigHealer · others  │
+└──────────────────────────┬────────────────────────────┘
+                           │
+                           ▼
+                 lib/llm_client.LLMClient
+                           │
+           ┌───────────────┴───────────────┐
+           ▼                               ▼
+   Primary vLLM endpoint            Fallback Ollama endpoint
+   llm.vllm_url                     llm.ollama_url
+   default :38005                  default :31434
 ```
 
-## Quick Start
+## Supported Start Paths
 
-### 1. Start All LLM Servers
+### Preferred vLLM Path
 
-**Windows (Recommended):**
-```cmd
-<project_root>\scripts\start_llm_servers.bat
-```
+Use the WSL systemd installer:
 
-**WSL Direct:**
 ```bash
-wsl -d <distro> -- bash /mnt/<drive>/<repo_root>/scripts/wsl/start_all_vllm.sh
+wsl -d <GOODQ_WSL_DISTRO> -- bash /mnt/<drive>/<repo_root>/scripts/wsl/install_vllm_service.sh
 ```
 
-### 2. Test Connectivity
+After installation, the supported service is:
 
-```cmd
-python <project_root>\scripts\test_llm_connectivity.py
+```bash
+sudo systemctl status vllm-llama1b
 ```
 
-### 3. Use in Code
+### Manual Recovery / Operator Reference
 
-```python
-from lib.llm_client import LLMClient
+Use:
+- `docs/guides/llm/VLLM_SYSTEMD_SETUP.md`
 
-# Initialize client
-client = LLMClient()
+### Legacy Hybrid Launcher
 
-# Chat completion
-response = client.chat(
-    messages=[
-        {"role": "user", "content": "Hello!"}
-    ],
-    prefer_speed=True  # Use fastest model
-)
+`scripts/start_llm_servers.bat` still exists as a broader convenience launcher for older multi-model experiments, but it is **not required** for the supported client contract described here.
 
-print(response['choices'][0]['message']['content'])
+## Quick Verification
+
+From Windows:
+
+```powershell
+curl http://localhost:38005/v1/models
+curl http://localhost:31434/v1/models
 ```
 
-## Available Models
+If the primary vLLM service is installed and the fallback Ollama service is available, both commands should return model metadata.
 
-| Model | Port | Speed | VRAM | Context | Best For |
-|-------|------|-------|------|---------|----------|
-| **Llama-1B-Speed** | 38005 | 178 tok/s ⚡ | 2.3 GB | 131K | Primary, fastest |
-| **Llama-3B-Balanced** | 38004 | 82 tok/s | 6.1 GB | 131K | (optional) |
-| **Phi-3.5-LongContext** | 38001 | 73 tok/s | 8.7 GB | 131K | Long conversations |
-| **Phi4-Ollama** (fallback) | 31434 | 70 tok/s | 2.8 GB | 8K | Reliability |
+## Supported Endpoints Today
 
-## LLMClient Features
-
-### Automatic Failover
-- Primary: vLLM servers (fastest)
-- Fallback: Ollama (reliability)
-- Automatic recovery on failure
-
-### Health Monitoring
-- Continuous endpoint health checks
-- Automatic model selection based on availability
-- Failure tracking and circuit breaker pattern
-
-### Intelligent Routing
-```python
-# Prefer speed
-response = client.chat(messages, prefer_speed=True)
-
-# Prefer long context
-response = client.chat(messages, prefer_long_context=True)
-
-# Auto-select best available
-response = client.chat(messages)
-```
-
-### Retry Logic
-- Exponential backoff
-- Multiple retry attempts
-- Graceful degradation
+| Role | Source config | Default endpoint | Default model id |
+|------|---------------|------------------|------------------|
+| Primary | `llm.vllm_url` / `llm.vllm_model` | `http://localhost:38005/v1` | `meta-llama/Llama-3.2-1B-Instruct` |
+| Fallback | `llm.ollama_url` / `llm.ollama_model` | `http://localhost:31434/v1` | `phi4:latest` |
 
 ## Management
 
-### Monitor Services
-
-**GPU Status:**
-```bash
-wsl bash -c "nvidia-smi"
-```
-
-**Service Status:**
-```bash
-wsl bash -c "ps aux | grep -E '(vllm|ollama)'"
-```
-
-**Logs:**
-```bash
-wsl bash -c "tail -f ~/vllm_server/logs/*.log"
-```
-
-### Stop All vLLM Servers
+### GPU Status
 
 ```bash
-wsl bash -c "pkill -f 'vllm.entrypoints'"
+wsl -d <GOODQ_WSL_DISTRO> -- nvidia-smi
 ```
 
-### Restart Individual Server
+### vLLM Service Status
 
 ```bash
-# Llama 1B (primary)
-wsl bash -c "~/vllm_server/scripts/start_llama1b.sh"
-
-# Llama 3B
-wsl bash -c "~/vllm_server/scripts/start_llama3b.sh"
-
-# Phi-3.5
-wsl bash -c "~/vllm_server/scripts/start_phi.sh"
+wsl -d <GOODQ_WSL_DISTRO> -- sudo systemctl status vllm-llama1b
 ```
 
-## Performance
+### vLLM Logs
 
-### Llama 1B (Primary - Port 38005)
-- **Speed**: 178 tokens/second (fastest!)
-- **VRAM**: 2.3 GB (very efficient)
-- **Latency**: ~140ms first token
-- **Concurrent**: Can run with audio processing
-- **Use Case**: Real-time chat, fast responses
+```bash
+wsl -d <GOODQ_WSL_DISTRO> -- journalctl -u vllm-llama1b -f
+```
 
-### Phi4 Ollama (Fallback - Port 31434)
-- **Speed**: 70 tokens/second
-- **VRAM**: 2.8 GB
-- **Latency**: ~300ms
-- **Reliability**: Extremely stable
-- **Use Case**: Backup, development
+### Restart vLLM
+
+```bash
+wsl -d <GOODQ_WSL_DISTRO> -- sudo systemctl restart vllm-llama1b
+```
+
+### Restart WSL Networking
+
+```powershell
+wsl --shutdown
+```
 
 ## Troubleshooting
 
-### vLLM Server Won't Start
+### Primary Endpoint Not Reachable
 
-**Check if port is in use:**
+Check the service first:
+
 ```bash
-wsl bash -c "lsof -i:38005"
+wsl -d <GOODQ_WSL_DISTRO> -- sudo systemctl status vllm-llama1b
 ```
 
-**Kill and restart:**
+If needed:
+
 ```bash
-wsl bash -c "pkill -f 'vllm.entrypoints' && ~/vllm_server/scripts/start_llama1b.sh"
+wsl -d <GOODQ_WSL_DISTRO> -- sudo systemctl restart vllm-llama1b
 ```
 
 ### Connection Refused from Windows
 
-**Check WSL networking:**
+Verify the primary endpoint from inside WSL:
+
 ```bash
-wsl bash -c "curl http://localhost:38005/v1/models"
+wsl -d <GOODQ_WSL_DISTRO> -- curl http://localhost:38005/v1/models
 ```
 
-**Verify .wslconfig:**
-```ini
-# <windows_user_home>\.wslconfig
-[wsl2]
-networkingMode=mirrored
-```
+If Windows still cannot reach it, review WSL networking configuration and then restart WSL:
 
-**Restart WSL:**
-```cmd
+```powershell
 wsl --shutdown
-wsl
 ```
 
-### Out of VRAM
+### Fallback Not Reachable
 
-**Check current usage:**
-```bash
-wsl bash -c "nvidia-smi"
+Check the configured Ollama endpoint:
+
+```powershell
+curl http://localhost:31434/v1/models
 ```
 
-**Stop optional models:**
-```bash
-# Keep only Llama 1B (primary)
-wsl bash -c "pkill -f 'port 38004'"  # Stop Llama 3B
-wsl bash -c "pkill -f 'port 38001'"  # Stop Phi-3.5
-```
+If unavailable, bring Ollama up separately before relying on failover.
 
-## Configuration
+## Configuration Authority
 
-### Model Priority
+The active LLM endpoints come from:
+- `configs/config.yaml`
+- local config overrides
+- environment variables
 
-Edit `lib/llm_client.py`:
-```python
-MODELS = [
-    ModelConfig(
-        name="Llama-1B-Speed",
-        priority=100,  # Higher = preferred
-        ...
-    ),
-]
-```
+The model list used by the client is built by:
+- `steps/common/llm_model_factory.py`
 
-### Startup Models
+That factory currently defines **two** models:
+- `Llama-1B-Speed`
+- `Phi4-Ollama`
 
-Edit `scripts/wsl/start_all_vllm.sh` to comment/uncomment models.
+If you want to expand the supported client surface, update the factory and the config contract together.
 
-### Health Check Interval
+## Notes on Historical Drift
 
-```python
-client = LLMClient()
-client.cache_ttl = 60  # Health check cache in seconds
-```
+Older LLM docs and helpers described a larger stack with:
+- multiple direct-start WSL scripts
+- extra ports such as `38004`, `38001`, and `8000`
+- model tiers like Qwen and Llama-11B
 
-## Integration Examples
-
-### Control Agent (Phase 1)
-```python
-from agents.control_agent import ControlAgent
-
-agent = ControlAgent()
-agent.analyze_logs()  # Uses LLMClient automatically
-```
-
-### Pipeline Diagnostics
-```python
-from lib.llm_client import LLMClient
-
-client = LLMClient()
-diagnosis = client.chat(
-    messages=[{
-        "role": "user", 
-        "content": f"Analyze this error: {error_log}"
-    }]
-)
-```
-
-### Chat Interface
-```python
-# Streaming chat
-for chunk in client.stream_chat(messages):
-    print(chunk, end='', flush=True)
-```
-
-## Files
-
-```
-goodq4all/
-├── lib/
-│   └── llm_client.py          # Main LLM client (19KB)
-├── agents/
-│   └── control_agent.py       # Control agent using LLM (16KB)
-├── scripts/
-│   ├── start_llm_servers.bat  # Windows launcher
-│   ├── test_llm_connectivity.py # Test script
-│   ├── run_control_agent.py   # Control agent runner
-│   └── wsl/
-│       └── start_all_vllm.sh  # WSL vLLM startup
-└── docs/
-    └── LLM_INFRASTRUCTURE.md  # This file
-```
-
-## Version History
-
-### v1.0.0 (2025-11-15)
-- ✅ Production LLMClient with failover
-- ✅ vLLM integration (Llama 1B, 3B, Phi-3.5)
-- ✅ Ollama fallback (Phi-4)
-- ✅ Automatic health monitoring
-- ✅ Control Agent Phase 1
-- ✅ Comprehensive testing suite
-- ✅ WSL/Windows hybrid architecture
-
-## Next Steps
-
-### Phase 2: Advanced Orchestration
-- [ ] Auto-healing pipeline integration
-- [ ] Real-time log analysis
-- [ ] Dynamic config modification
-- [ ] Performance optimization suggestions
-
-### Phase 3: Learning Loop
-- [ ] SQLite knowledge base
-- [ ] Fine-tuning corpus generation
-- [ ] Success/failure tracking
-- [ ] Self-optimization
-
-## Support
-
-For issues or questions:
-1. Check logs: `wsl bash -c "tail -100 ~/vllm_server/logs/*.log"`
-2. Test connectivity: `python scripts\test_llm_connectivity.py`
-3. Restart services: `scripts\start_llm_servers.bat`
-
----
-
-**Status**: ✅ Production Ready  
-**Last Updated**: 2025-11-15  
-**Maintainer**: GoodQ4All Team
+Those descriptions are not the current supported client contract. Treat them as advanced or historical unless and until the config-driven model factory is expanded to match them.

@@ -28,6 +28,7 @@ and related canonical docs.
 - Retired stale watchdog-adjacent Phase 3 and diarization harnesses whose hardcoded roots and deleted `scripts/watchdog_ingest.py` dependency no longer matched the supported runtime surface.
 - Realigned the active Watchdog docs and entrypoint references so they describe config-resolved inbox/log/state paths, canonical `python -m cli.watchdog` startup, and Control Agent diagnosis as optional rather than always-on.
 - Sanitized `docs/reference/indexes/ENVIRONMENT_INDEX.md` and `docs/guides/wsl2/HF_CLI_LOGIN_GUIDE.md` so they no longer embed workstation-specific HuggingFace or WSL path assumptions and now point to the current operator surfaces.
+- Realigned `docs/guides/llm/LLM_INFRASTRUCTURE.md` and `docs/guides/llm/LLM_CLIENT_GUIDE.md` to the current injected two-endpoint LLM contract and removed the stale zero-config multi-model guidance.
 - Reliability: `sentiment` now uses the existing one-shot native-crash retry path, recovering from intermittent Windows first-load subprocess crashes without breaking scene validity.
 - Runtime hardening: stale `GOODQ_WSL_WORKSPACE` overrides now fall back to the
   canonical `~/goodq_audio` workspace when the explicit path is missing, rather

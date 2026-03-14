@@ -1,12 +1,12 @@
 @echo off
-REM GoodQ4All vLLM Server Status Check
-REM Shows status of all LLM servers
+REM GoodQ4All vLLM Service Status Check
+REM Shows status of the current injected vLLM + Ollama contract
 
 call "%~dp0_lib\\interpreter_bindings.bat"
 for %%I in ("%~dp0..") do set "REPO_ROOT=%%~fI"
 
 echo ========================================
-echo vLLM Server Status
+echo vLLM Service Status
 echo ========================================
 echo.
 

@@ -71,9 +71,11 @@ sudo systemctl status vllm-llama1b
 Use:
 - `docs/guides/llm/VLLM_SYSTEMD_SETUP.md`
 
-### Legacy Hybrid Launcher
+### Windows Convenience Launcher
 
-`scripts/start_llm_servers.bat` still exists as a broader convenience launcher for older multi-model experiments, but it is **not required** for the supported client contract described here.
+Use `scripts/start_vllm_servers.bat` if you want a Windows wrapper for the current systemd-backed primary endpoint.
+
+The older `scripts/start_llm_servers.bat` launcher has been retired with the direct-start multi-model chain it depended on.
 
 ## Quick Verification
 

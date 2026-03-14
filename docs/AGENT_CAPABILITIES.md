@@ -14,7 +14,7 @@ This list is derived from static analysis of the repository (launch scripts + Py
 - Optional experimental API scaffolding: `scripts/start_api.ps1`, `api/server.py` (FastAPI wrapper; scaffolded and not part of the canonical bootstrap/runtime path)
 - WSL2 audio services: `wsl2_audio/start_wsl2_service.bat`, `wsl2_audio/audio_service.py`, `wsl2_audio/process_audio.py`
 - Control agents: `agents/control_agent.py`, `agents/config_healer.py`, `agents/self_healing_monitor.py`
-- LLM server launchers: `scripts/start_vllm_servers.bat`, `scripts/start_llm_servers.bat`, `scripts/wsl/start_all_vllm.sh`
+- LLM server launchers: `scripts/start_vllm_servers.bat`, `scripts/status_vllm_servers.bat`, `scripts/wsl/install_vllm_service.sh`
 
 ### Human-authored: How agents must rediscover runtime entry points (static analysis)
 

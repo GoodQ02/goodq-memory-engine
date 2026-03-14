@@ -1,6 +1,6 @@
 @echo off
-REM GoodQ4All vLLM Server Startup Script
-REM Starts vLLM servers in WSL for AI orchestration
+REM GoodQ4All vLLM Service Startup Script
+REM Starts the current systemd-backed vLLM primary + Ollama fallback services
 
 call "%~dp0_lib\\interpreter_bindings.bat"
 for %%I in ("%~dp0..") do set "REPO_ROOT=%%~fI"
@@ -46,6 +46,6 @@ echo.
 echo Services are starting in the background.
 echo It may take 30-60 seconds for the primary model to fully load.
 echo.
-echo Check status: python "%REPO_ROOT%\\scripts\\test_llm_client.py"
+echo Check status: "%REPO_ROOT%\\scripts\\status_vllm_servers.bat"
 echo.
 pause

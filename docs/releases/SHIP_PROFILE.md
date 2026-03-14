@@ -52,7 +52,7 @@ adjacent helper tooling may still evolve between releases.
 ### LLM & vLLM
 
 - `python scripts/test_llm_client.py` – LLM client/vLLM connectivity.
-- WSL2 vLLM scripts under `~/vllm_server/scripts/*.sh` (e.g. `start_llama1b.sh`) – optional throughput stack.
+- `scripts/start_vllm_servers.bat` and `scripts/status_vllm_servers.bat` – optional Windows wrappers for the current WSL/systemd-backed vLLM operator path.
 
 ---
 

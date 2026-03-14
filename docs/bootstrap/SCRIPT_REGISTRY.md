@@ -223,8 +223,8 @@ _Generated: 2026-02-15_
 | `scripts/show_phase2_enhancement.py` | Unclear/Obsolete | Utility script for show phase2 enhancement. | No | None detected |
 | `scripts/smoke_phase_a.py` | Runtime Utility | Utility script for smoke phase a. | Manual Review | absolute path operations |
 | `scripts/start_api.ps1` | Unclear/Obsolete | Experimental FastAPI launcher; scaffolded API helper, not part of the canonical bootstrap/runtime path. | No | environment mutation |
-| `scripts/start_llm_servers.bat` | Bootstrap-Critical | ============================================================================ | Manual Review | absolute path operations |
-| `scripts/start_vllm_servers.bat` | Bootstrap-Critical | GoodQ4All vLLM Server Startup Script | Yes | None detected |
+| `scripts/start_llm_servers.bat` (retired) | Unclear/Obsolete | Historical Windows launcher removed after the older direct-start WSL multi-model chain drifted from the current systemd-backed vLLM contract. | No | absolute path operations |
+| `scripts/start_vllm_servers.bat` | Runtime Utility | GoodQ4All vLLM service startup wrapper for the current systemd-backed primary endpoint. | Yes | None detected |
 | `scripts/status_vllm_servers.bat` | Runtime Utility | GoodQ4All vLLM Server Status Check | Yes | None detected |
 | `scripts/stop_vllm_servers.bat` | Runtime Utility | GoodQ4All vLLM Server Stop Script | Yes | None detected |
 | `scripts/sync_env_local.ps1` | Unclear/Obsolete | Utility script for sync env local. | No | None detected |
@@ -242,9 +242,9 @@ _Generated: 2026-02-15_
 | `scripts/test_gpu_config.py` | Dev Utility | Quick GPU Test - Verify GPU configuration is working | Manual Review | absolute path operations |
 | `scripts/test_gpu_pipeline.py` | Unclear/Obsolete | Test GPU allocation with a small video | No | None detected |
 | `scripts/test_gpu_scene_detection.py` | Dev Utility | Test GPU-Accelerated Scene Detection | Manual Review | absolute path operations |
-| `scripts/test_llm_client.py` | Dev Utility | GoodQ4All LLM Client Integration Test | Manual Review | None detected |
+| `scripts/test_llm_client.py` | Dev Utility | GoodQ4All LLM client integration test for the current injected vLLM primary + Ollama fallback contract. | Manual Review | None detected |
 | `scripts/test_llm_client_simple.py` | Unclear/Obsolete | Test LLM Client from Windows | No | absolute path operations |
-| `scripts/test_llm_connectivity.py` | Dev Utility | GoodQ4All - LLM Connectivity Test | Manual Review | absolute path operations; binary/network download |
+| `scripts/test_llm_connectivity.py` (retired) | Unclear/Obsolete | Historical hardcoded endpoint probe removed after the injected LLM client contract replaced the older multi-model connectivity surface. | No | absolute path operations; binary/network download |
 | `scripts/test_osd_integration.py` | Unclear/Obsolete | OSD Integration Test Script | No | None detected |
 | `scripts/test_phase2_integration.py` | Dev Utility | Phase 2 Control Agent Integration Test | Manual Review | None detected |
 | `scripts/test_phase3_healing.py` | Dev Utility | Test script for Phase 3: Self-Healing & Learning | Manual Review | None detected |
@@ -424,7 +424,7 @@ _Generated: 2026-02-15_
 | `scripts/setup_wsl2_audio_userspace.py` | Unclear/Obsolete | absolute path operations |
 | `scripts/smoke_phase_a.py` | Runtime Utility | absolute path operations |
 | `scripts/start_api.ps1` | Unclear/Obsolete | environment mutation |
-| `scripts/start_llm_servers.bat` | Bootstrap-Critical | absolute path operations |
+| `scripts/start_llm_servers.bat` (retired) | Unclear/Obsolete | absolute path operations |
 | `scripts/system_readiness_check.py` | Dev Utility | absolute path operations |
 | `scripts/system_status_check.py` | Unclear/Obsolete | absolute path operations |
 | `scripts/test_all_endpoints.py` | Dev Utility | absolute path operations; binary/network download |
@@ -437,7 +437,7 @@ _Generated: 2026-02-15_
 | `scripts/test_gpu_config.py` | Dev Utility | absolute path operations |
 | `scripts/test_gpu_scene_detection.py` | Dev Utility | absolute path operations |
 | `scripts/test_llm_client_simple.py` | Unclear/Obsolete | absolute path operations |
-| `scripts/test_llm_connectivity.py` | Dev Utility | absolute path operations; binary/network download |
+| `scripts/test_llm_connectivity.py` (retired) | Unclear/Obsolete | absolute path operations; binary/network download |
 | `scripts/test_recovery_system.py` | Dev Utility | absolute path operations |
 | `scripts/test_transcribe_integration.py` | Unclear/Obsolete | absolute path operations |
 | `scripts/test_vad_simple.py` | Dev Utility | destructive actions; absolute path operations |

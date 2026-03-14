@@ -33,7 +33,7 @@ These scripts are referenced multiple times and/or are explicitly part of the sh
   - `scripts/gpu_config.py`
   - `scripts/quick_gpu_setup.py`
   - `scripts/test_gpu_scene_detection.py`
-  - `scripts/test_llm_client.py`, `scripts/test_llm_connectivity.py`
+  - `scripts/test_llm_client.py`
   - `scripts/test_wsl2_bridge.py`
 - Watchdog:
   - `scripts/watchdog_ingest.py`
@@ -90,8 +90,6 @@ The following scripts had **zero references** in `docs/`, `scripts/`, and `cli/`
 
 ### VLLM & Environment Utilities
 
-- `scripts/start_vllm_servers.bat`
-- `scripts/status_vllm_servers.bat`
 - `scripts/stop_vllm_servers.bat`
 - `scripts/setup/install_package_all_envs.py`
 

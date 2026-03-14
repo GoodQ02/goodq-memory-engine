@@ -31,6 +31,8 @@ Ports and scripts such as:
 
 belong to an older experimental/operator surface. They may still exist, but they are not part of the current supported `llm_client.py` contract.
 
+Those older direct-start scripts have now been retired from the tracked surface.
+
 ## Architecture
 
 ```text

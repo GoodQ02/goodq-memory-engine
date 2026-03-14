@@ -108,8 +108,8 @@ The Control Agent is integrated at these key points:
 ### Starting the Pipeline with Control Agent
 
 ```bash
-# Ensure vLLM is running in WSL
-wsl ~/vllm_server/scripts/start_llama1b.sh
+# Ensure the current systemd-backed vLLM service path is available
+scripts/start_vllm_servers.bat
 
 # Start the ingestion watchdog
 cd <project_root>

@@ -134,8 +134,8 @@ python <project_root>\scripts\test_llm_client.py
 # Restart WSL networking
 wsl --shutdown
 wsl
-# Restart vLLM server
-wsl bash -c "~/vllm_server/scripts/start_llama1b.sh"
+# Restart vLLM service
+wsl -d <GOODQ_WSL_DISTRO> -- sudo systemctl restart vllm-llama1b
 ```
 
 **PRIORITY 4: Configuration Audit**

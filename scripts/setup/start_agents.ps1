@@ -1,5 +1,5 @@
 # GoodQ Agent System - Startup Script
-# Starts agent orchestrator with self-healing and LLM integration
+# Legacy helper for historical agent surfaces and diagnostics
 
 Write-Host "=== GoodQ Agent System Startup ===" -ForegroundColor Cyan
 Write-Host ""
@@ -61,8 +61,8 @@ Write-Host "  ✓ Directories ready" -ForegroundColor Green
 # Display startup options
 Write-Host "`n=== Startup Options ===" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "1. Start Watchdog with Agent Orchestrator" -ForegroundColor White
-Write-Host "   Watches import_inbox and processes videos with full agent pipeline"
+Write-Host "1. Legacy Watchdog Entry (retired)" -ForegroundColor White
+Write-Host "   The old agent-orchestrator watcher was removed; use python -m cli.watchdog"
 Write-Host ""
 Write-Host "2. Start Self-Healing Monitor" -ForegroundColor White
 Write-Host "   Monitors pipeline health and auto-fixes issues"
@@ -73,16 +73,17 @@ Write-Host ""
 Write-Host "4. Process Single Video" -ForegroundColor White
 Write-Host "   Process one video through agent pipeline"
 Write-Host ""
-Write-Host "5. Start All Services" -ForegroundColor White
-Write-Host "   Start watchdog + self-healing monitor"
+Write-Host "5. Legacy All-Services Bundle (retired)" -ForegroundColor White
+Write-Host "   The old watcher bundle was removed; start canonical services explicitly"
 Write-Host ""
 
 $choice = Read-Host "Select option (1-5)"
 
 switch ($choice) {
     "1" {
-        Write-Host "`nStarting Watchdog with Agent Orchestrator..." -ForegroundColor Green
-        & $condaExe run -n base python (Join-Path $RepoRoot "agents\\watchdog_agent_integration.py")
+        Write-Host "`nLegacy watcher retired." -ForegroundColor Yellow
+        Write-Host "Use: $condaExe run -n $runtimeEnv python -m cli.watchdog" -ForegroundColor Yellow
+        exit 1
     }
     "2" {
         Write-Host "`nStarting Self-Healing Monitor..." -ForegroundColor Green
@@ -98,15 +99,9 @@ switch ($choice) {
         & $condaExe run -n base python -c "import asyncio; from agents.pipeline_integration import process_video_with_agents; asyncio.run(process_video_with_agents('$videoPath'))"
     }
     "5" {
-        Write-Host "`nStarting All Services..." -ForegroundColor Green
-        
-        # Start self-healing monitor in background
-        Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd `"$RepoRoot`"; `$env:PYTHONPATH=`"$RepoRoot`"; & `"$condaExe`" run -n base python agents\self_healing_monitor.py"
-        
-        Start-Sleep -Seconds 2
-        
-        # Start watchdog in foreground
-        & $condaExe run -n base python (Join-Path $RepoRoot "agents\\watchdog_agent_integration.py")
+        Write-Host "`nLegacy all-services bundle retired." -ForegroundColor Yellow
+        Write-Host "Start the canonical watchdog explicitly with python -m cli.watchdog." -ForegroundColor Yellow
+        exit 1
     }
     default {
         Write-Host "Invalid option" -ForegroundColor Red

@@ -18,6 +18,7 @@ and related canonical docs.
 - Reclassified `scripts/wsl/install_vllm_service.sh` as a current WSL/vLLM runtime utility and aligned its default model path with the safer WSL-home fallback.
 - Hardened `scripts/start_vllm_servers.bat` to fail visibly when the `vllm-llama1b` systemd service is inactive instead of falling back to stale direct-launch scripts with drifted port assumptions.
 - Demoted legacy agent-system docs so they no longer present the old real-time orchestration stack as the current runtime contract.
+- Retired the legacy `agents/watchdog_agent_integration.py` watcher and made the obsolete startup menu fail visibly toward the canonical `cli.watchdog` path.
 - Reliability: `sentiment` now uses the existing one-shot native-crash retry path, recovering from intermittent Windows first-load subprocess crashes without breaking scene validity.
 - Runtime hardening: stale `GOODQ_WSL_WORKSPACE` overrides now fall back to the
   canonical `~/goodq_audio` workspace when the explicit path is missing, rather

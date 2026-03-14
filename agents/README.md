@@ -28,7 +28,7 @@ Current runtime truth:
 | Recovery Strategies | `recovery_strategies.py` | Strategy library for healing actions | Runtime utility |
 | LLM Agent | `llm_agent.py` | Optional reasoning helper for advanced/legacy flows | Partial |
 | Orchestrator | `orchestrator.py` | Legacy multi-agent workflow coordinator | Historical |
-| Watchdog Agent Integration | `watchdog_agent_integration.py` | Legacy parallel file-watcher/orchestrator path | Historical |
+| Watchdog Agent Integration | `watchdog_agent_integration.py` | Legacy parallel file-watcher/orchestrator path | Retired |
 | Pipeline Integration | `pipeline_integration.py` | Legacy wrapper layer for agent-driven ingestion | Historical |
 
 ---

@@ -44,7 +44,7 @@ _Generated: 2026-02-15_
 | `agents/recovery_db.py` | Runtime Utility | GoodQ4All Recovery Database - Phase 2 | Yes | None detected |
 | `agents/recovery_strategies.py` | Runtime Utility | Recovery Strategies Database for Control Agent Self-Healing | Manual Review | absolute path operations |
 | `agents/self_healing_monitor.py` | Runtime Utility | Self-Healing Monitor | Manual Review | absolute path operations |
-| `agents/watchdog_agent_integration.py` | Runtime Utility | Watchdog Integration with Agent Orchestrator | Manual Review | absolute path operations |
+| `agents/watchdog_agent_integration.py` | Unclear/Obsolete | Watchdog Integration with Agent Orchestrator (retired) | No | absolute path operations |
 | `cli/__init__.py` | Runtime Utility | CLI commands | Yes | None detected |
 | `cli/chroma_store.py` | Runtime Utility | OCR + caption | Yes | None detected |
 | `cli/conduits_build.py` | Runtime Utility | Conduit Pack v1 builder (offline/on-demand). | Yes | None detected |
@@ -334,7 +334,7 @@ _Generated: 2026-02-15_
 | `agents/pipeline_integration.py` | Runtime Utility | absolute path operations |
 | `agents/recovery_strategies.py` | Runtime Utility | absolute path operations |
 | `agents/self_healing_monitor.py` | Runtime Utility | absolute path operations |
-| `agents/watchdog_agent_integration.py` | Runtime Utility | absolute path operations |
+| `agents/watchdog_agent_integration.py` | Unclear/Obsolete | absolute path operations |
 | `cli/conduits_processing.py` | Runtime Utility | destructive actions |
 | `cli/goodq_doctor.py` | Runtime Utility | absolute path operations |
 | `cli/graph_query.py` | Runtime Utility | absolute path operations |

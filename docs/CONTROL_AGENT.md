@@ -452,7 +452,7 @@ agent.recovery_db.conn.close()
 - **Agents System:** `docs/agents.md` (coming soon)
 - **Pipeline Integration:** `docs/PIPELINE_ARCHITECTURE.md`
 - **Configuration:** `docs/CONFIGURATION.md`
-- **Watchdog Integration:** `agents/watchdog_agent_integration.py`
+- **Canonical Watchdog Runtime:** `cli/watchdog.py`
 
 ---
 

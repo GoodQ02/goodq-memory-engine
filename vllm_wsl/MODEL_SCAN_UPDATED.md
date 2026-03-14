@@ -1,5 +1,7 @@
 # Model Scan Report (Updated) - vLLM Integration
 
+> Historical reference — captures a 2025 scan/update snapshot for the earlier direct-start WSL vLLM toolkit. Paths, ports, and commands here are not the current supported operator contract.
+
 **Date:** 2025-11-15  
 **Scan Location:** `/mnt/l/_DATA/models/`  
 **Status:** ⚠️ **GGUF Models Found - Conversion Needed**

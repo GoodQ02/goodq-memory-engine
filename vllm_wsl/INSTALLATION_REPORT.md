@@ -1,5 +1,7 @@
 # vLLM Server Installation Report
 
+> Historical reference — captures a 2025 bring-up state for the earlier direct-start WSL vLLM toolkit. Paths, ports, and commands here are not the current supported operator contract.
+
 **Date:** 2025-11-15  
 **Environment:** WSL2 Ubuntu + RTX 4070 Ti SUPER  
 **Status:** ✅ **INSTALLATION SUCCESSFUL**

@@ -32,6 +32,7 @@ and related canonical docs.
 - Retired the stale `scripts/start_llm_servers.bat` and `scripts/test_llm_connectivity.py` helper pair, updated `scripts/test_llm_client.py` to the current injected client contract, and realigned the live vLLM helper docs around the systemd-backed start/status path.
 - Retired `scripts/wsl/start_all_vllm.sh`, the old raw-process WSL vLLM launcher, and realigned the LLM infrastructure docs and script registry around the supported systemd-backed operator path.
 - Retired the legacy `vllm_wsl/scripts/` direct-start toolkit plus its high-risk quick-reference/debug docs, and recast `vllm_wsl/README.md` as a historical note that points to the supported systemd-backed operator path.
+- Added historical banners to the remaining `vllm_wsl` report docs, removed the stale `vllm_wsl/WINDOWS_TEST_READY.txt` memo, and updated the surviving WSL audit summaries so they no longer overstate the retired direct-start toolkit as current.
 - Reliability: `sentiment` now uses the existing one-shot native-crash retry path, recovering from intermittent Windows first-load subprocess crashes without breaking scene validity.
 - Runtime hardening: stale `GOODQ_WSL_WORKSPACE` overrides now fall back to the
   canonical `~/goodq_audio` workspace when the explicit path is missing, rather

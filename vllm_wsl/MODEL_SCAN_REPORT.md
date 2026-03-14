@@ -1,5 +1,7 @@
 # Model Scan Report - vLLM Integration
 
+> Historical reference — captures a 2025 scan snapshot for the earlier direct-start WSL vLLM toolkit. Paths, ports, and commands here are not the current supported operator contract.
+
 **Date:** 2025-11-15  
 **Scan Location:** `/mnt/l/models/`
 

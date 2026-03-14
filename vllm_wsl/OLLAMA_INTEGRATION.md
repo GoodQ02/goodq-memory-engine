@@ -1,5 +1,7 @@
 # Ollama Integration - Phase 1 Complete
 
+> Historical reference — captures a 2025 integration snapshot for the earlier direct-start WSL vLLM toolkit. Paths, ports, and commands here are not the current supported operator contract.
+
 **Date:** 2025-11-15  
 **Status:** ✅ **OPERATIONAL**  
 **Model:** Phi-4 (microsoft/Phi-4-reasoning-plus)

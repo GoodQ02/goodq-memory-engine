@@ -2,6 +2,8 @@
 🎉 COMPLETE WSL2 AUDIT - ALL COMPONENTS SYNCED!
 ════════════════════════════════════════════════════════════════
 
+Historical note: the later systemd-backed cleanup retired the tracked `vllm_wsl/scripts/` direct-start toolkit. Treat the `vllm_wsl/` inventory below as historical context only.
+
 Your excellent question led to a comprehensive audit that found:
 
 📊 FINDINGS:

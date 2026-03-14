@@ -1,5 +1,7 @@
 # Llama 3.2 Model Testing Results
 
+> Historical reference — captures a 2025 validation snapshot for the earlier direct-start WSL vLLM toolkit. Paths, ports, and commands here are not the current supported operator contract.
+
 **Date:** 2025-11-15  
 **GPU:** NVIDIA GeForce RTX 4070 Ti SUPER (16 GB)  
 **Environment:** WSL2 + vLLM 0.11.0 + CUDA 12.8
@@ -291,4 +293,3 @@ This gives you:
 **Models tested:** 2 of 3 Llama models (1B + 3B)  
 **Status:** ✅ Production ready!  
 **Winner:** Llama-3.2-1B for speed, 3B for balance 🚀
-

@@ -1,5 +1,7 @@
 # vLLM Model Download Report
 
+> Historical reference — captures a 2025 model-download state for the earlier direct-start WSL vLLM toolkit. Paths, ports, and commands here are not the current supported operator contract.
+
 **Date:** 2025-11-15  
 **Status:** ✅ **2 of 3 Models Downloaded Successfully**  
 **Total Size:** 22.2 GB
@@ -368,4 +370,3 @@ tail -f ~/vllm_server/logs/vllm-qwen-*.log
 
 **Download completed:** 2025-11-15 14:50 CST  
 **Ready for production deployment!** 🚀
-

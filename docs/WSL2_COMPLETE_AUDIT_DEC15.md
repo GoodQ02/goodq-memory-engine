@@ -1,5 +1,6 @@
 # 🔍 Complete WSL2 & Services Audit Report
 > ⚠ Historical planning document — contains legacy path references.
+> ⚠ The later systemd-backed cleanup retired the tracked `vllm_wsl/scripts/` direct-start toolkit; treat the `vllm_wsl/` inventory below as historical context only.
 
 **Date:** December 15, 2025 01:42 UTC  
 **Audit Type:** Comprehensive cross-platform consistency check  

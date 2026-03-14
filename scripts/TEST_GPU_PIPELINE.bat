@@ -1,4 +1,5 @@
 @echo off
+setlocal EnableExtensions EnableDelayedExpansion
 REM ================================================================================
 REM  GPU-Optimized Pipeline Test
 REM  Tests the complete pipeline with GPU allocation system
@@ -29,6 +30,26 @@ echo.
 
 cd /d "%REPO_ROOT%"
 
+for /f "usebackq tokens=1,* delims==" %%A in (`"%CONDA_EXE%" run -n %GOODQ_CONDA_ENV% --no-capture-output python -c "from steps.common.config_loader import get_runtime_paths, load_configs; paths=get_runtime_paths(load_configs({}),'watchdog_lock_file'); print('IMPORT_INBOX=' + paths['import_inbox']); print('PROCESSING_DIR=' + paths['processing']); print('DB_PATH=' + paths['db_path']); print('WATCHDOG_LOCK_FILE=' + paths['watchdog_lock_file'])"`) do (
+    set "%%A=%%B"
+)
+
+if not defined IMPORT_INBOX (
+    echo [ERROR] Failed to resolve canonical import inbox
+    pause
+    exit /b 1
+)
+if not defined PROCESSING_DIR (
+    echo [ERROR] Failed to resolve canonical processing directory
+    pause
+    exit /b 1
+)
+if not defined DB_PATH (
+    echo [ERROR] Failed to resolve canonical database path
+    pause
+    exit /b 1
+)
+
 REM Step 1: Diagnostic
 echo [1/5] Running diagnostics...
 "%CONDA_EXE%" run --no-capture-output -n %GOODQ_CONDA_ENV% python scripts\diagnose_gpu_issue.py
@@ -42,29 +63,30 @@ if errorlevel 1 (
 echo.
 echo [2/5] Checking for stuck processes...
 REM Clean up any lock files
-if exist "%REPO_ROOT%\data\.watchdog.lock" (
+if exist "%WATCHDOG_LOCK_FILE%" (
     echo   Removing watchdog lock...
-    del /f "%REPO_ROOT%\data\.watchdog.lock" 2>nul
+    del /f "%WATCHDOG_LOCK_FILE%" 2>nul
 )
 
 REM Clear processing directory
-if exist "%REPO_ROOT%\data\processing\*.mp4" (
+if exist "%PROCESSING_DIR%\*" (
     echo   Clearing processing directory...
-    del /f "%REPO_ROOT%\data\processing\*.mp4" 2>nul
+    del /f "%PROCESSING_DIR%\*" 2>nul
+    for /d %%I in ("%PROCESSING_DIR%\*") do rd /s /q "%%~fI" 2>nul
 )
 
 echo   [OK] Ready to process
 
 echo.
 echo [3/5] Checking import inbox...
-dir /b "%REPO_ROOT%\import_inbox\*.mp4" 2>nul
+dir /b "%IMPORT_INBOX%\*.mp4" 2>nul
 if errorlevel 1 (
     echo.
     echo [!] No videos in import inbox
     echo.
     set /p copy_video="Copy test video? (y/N): "
     if /i "!copy_video!"=="y" (
-        copy "%GOODQ_DATA_ROOT%\FAMILY_FEAST\09. 2002 - 2003.mp4" "%REPO_ROOT%\import_inbox\" >nul
+        copy "%GOODQ_DATA_ROOT%\FAMILY_FEAST\09. 2002 - 2003.mp4" "%IMPORT_INBOX%\" >nul
         echo   [OK] Copied test video
     ) else (
         echo.
@@ -112,16 +134,16 @@ echo ===========================================================================
 echo.
 
 REM Start the watchdog in current window to see output
-"%CONDA_EXE%" run --no-capture-output -n %GOODQ_CONDA_ENV% python scripts/watchdog_ingest.py
+"%CONDA_EXE%" run --no-capture-output -n %GOODQ_CONDA_ENV% python -m cli.watchdog
 
 echo.
-echo ================================================================================
+echo ================================================================================ 
 echo  Processing Complete
-echo ================================================================================
+echo ================================================================================ 
 echo.
 
 echo [5/5] Checking results...
-"%CONDA_EXE%" run --no-capture-output -n %GOODQ_CONDA_ENV% python -c "import sqlite3; conn = sqlite3.connect('output/knowledge.db'); cursor = conn.cursor(); cursor.execute('SELECT COUNT(*) FROM scenes'); print(f'Scenes created: {cursor.fetchone()[0]}'); conn.close()"
+"%CONDA_EXE%" run --no-capture-output -n %GOODQ_CONDA_ENV% python -c "import sqlite3; conn = sqlite3.connect(r'%DB_PATH%'); cursor = conn.cursor(); cursor.execute('SELECT COUNT(*) FROM scenes'); print(f'Scenes created: {cursor.fetchone()[0]}'); conn.close()"
 
 echo.
 echo ================================================================================

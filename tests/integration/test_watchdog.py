@@ -9,9 +9,16 @@ import time
 from pathlib import Path
 
 # Add parent to path
-sys.path.insert(0, str(Path(__file__).parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from cli.watchdog import WatchdogProcessor, FileState
+from cli.watchdog import FileState, WatchdogProcessor, _resolve_watchdog_paths
+from steps.common.config_loader import load_configs
+
+
+def build_watchdog() -> WatchdogProcessor:
+    """Create a watchdog bound to canonical runtime paths."""
+    cfg = load_configs({})
+    return WatchdogProcessor(cfg, resolved_paths=_resolve_watchdog_paths(cfg))
 
 def test_file_classification():
     """Test file type detection"""
@@ -19,7 +26,7 @@ def test_file_classification():
     print("Testing File Classification")
     print("=" * 60)
     
-    watchdog = WatchdogProcessor()
+    watchdog = build_watchdog()
     
     test_files = [
         "video.mp4",
@@ -46,7 +53,7 @@ def test_file_scanning():
     print("Testing Directory Scanning")
     print("=" * 60)
     
-    watchdog = WatchdogProcessor()
+    watchdog = build_watchdog()
     
     print(f"Watch directory: {watchdog.watch_dir}")
     print(f"Exists: {watchdog.watch_dir.exists()}")
@@ -70,7 +77,7 @@ def test_registry():
     print("Testing Processed File Registry")
     print("=" * 60)
     
-    watchdog = WatchdogProcessor()
+    watchdog = build_watchdog()
     
     print(f"State file: {watchdog.registry.state_file}")
     print(f"Exists: {watchdog.registry.state_file.exists()}")
@@ -89,7 +96,7 @@ def test_file_stability():
     print("Testing File Stability Detection")
     print("=" * 60)
     
-    watchdog = WatchdogProcessor()
+    watchdog = build_watchdog()
     files = watchdog.scan_directory()
     
     if files:

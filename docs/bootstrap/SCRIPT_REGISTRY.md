@@ -82,7 +82,7 @@ _Generated: 2026-02-15_
 | `scripts/SETUP_WEB_DEPENDENCIES.bat` | Unclear/Obsolete | GoodQ Environment Setup & Dependency Installer | No | None detected |
 | `scripts/TEST_AUDIO_DIARIZE_BREAKDOWN.bat` | Unclear/Obsolete | Test Audio Diarization - Component Breakdown | No | None detected |
 | `scripts/TEST_AUDIO_GPU.bat` | Unclear/Obsolete | ============================================================================= | No | None detected |
-| `scripts/TEST_GPU_PIPELINE.bat` | Unclear/Obsolete | ================================================================================ | No | destructive actions; absolute path operations |
+| `scripts/TEST_GPU_PIPELINE.bat` | Dev Utility | ================================================================================ | No | destructive actions; environment mutation |
 | `scripts/TEST_VISION_GPU.bat` | Unclear/Obsolete | Vision GPU Installation and Testing Script | No | None detected |
 | `scripts/Test-AudioDiarization.ps1` | Dev Utility | > | Manual Review | None detected |
 | `scripts/VERIFY_MODEL_LOCKDOWN.bat` | Dev Utility | Verify that all models are properly locked down with exact versions | Manual Review | None detected |
@@ -113,7 +113,7 @@ _Generated: 2026-02-15_
 | `scripts/cache_readiness_check.py` | Dev Utility | Cache readiness checker for goodq4all assets and models. | Manual Review | absolute path operations |
 | `scripts/clean_old_processing.py` | Unclear/Obsolete | Clean Old Processing Files | No | destructive actions; absolute path operations |
 | `scripts/command_center.ps1` | Runtime Utility | Utility script for command center. | No | destructive actions; absolute path operations |
-| `scripts/comprehensive_clean_run.py` | Runtime Utility | Comprehensive Clean Run Test with Full Monitoring | No | destructive actions; absolute path operations |
+| `scripts/comprehensive_clean_run.py` (retired) | Unclear/Obsolete | Legacy clean-run watchdog harness removed after its root paths and watchdog entrypoint drifted from canonical runtime surfaces. | No | destructive actions; absolute path operations |
 | `scripts/comprehensive_gpu_setup.py` | Unclear/Obsolete | Comprehensive GPU Setup & Verification for GoodQ4All | No | absolute path operations |
 | `scripts/config_schema.py` | Runtime Utility | GoodQ4All Canonical Configuration Schema | Manual Review | absolute path operations |
 | `scripts/dataset_specs.py` | Unclear/Obsolete | Utility script for dataset specs. | No | absolute path operations |
@@ -168,7 +168,7 @@ _Generated: 2026-02-15_
 | `scripts/install_vision_gpu.bat` | Bootstrap-Critical | GoodQ4All - Vision GPU Setup Launcher | Manual Review | environment mutation |
 | `scripts/install_vision_gpu.py` | Unclear/Obsolete | Comprehensive Vision GPU Setup Script | No | None detected |
 | `scripts/mission_launch.ps1` | Bootstrap-Critical | Updated 2025-12-07: uses direct_ingestion instead of deprecated legacy orchestration pipelines. | No | destructive actions; absolute path operations; environment mutation |
-| `scripts/monitor_gpu_pipeline.py` | Runtime Utility | Real-time GPU Pipeline Monitor | Yes | None detected |
+| `scripts/monitor_gpu_pipeline.py` | Dev Utility | Real-time GPU Pipeline Monitor | Yes | environment mutation |
 | `scripts/monitor_ingestion.py` | Runtime Utility | Real-time Ingestion Monitor with Alerting | Manual Review | absolute path operations |
 | `scripts/monitor_ingestion_progress.py` | Unclear/Obsolete | GoodQ Mission Progress Monitor | No | absolute path operations |
 | `scripts/monitor_ingestion_realtime.py` | Unclear/Obsolete | Real-time Ingestion Monitor | No | absolute path operations |
@@ -204,7 +204,7 @@ _Generated: 2026-02-15_
 | `scripts/rotate_logs.py` | Runtime Utility | Log Rotation Script | No | destructive actions; absolute path operations |
 | `scripts/run_audio_diarize_test.bat` | Unclear/Obsolete | Direct environment test for audio diarization | No | environment mutation |
 | `scripts/run_control_agent.py` | Bootstrap-Critical | Control Agent Runner - Convenience script | Yes | None detected |
-| `scripts/run_gpu_optimization_tests.py` | Dev Utility | Full GPU Pipeline Optimization Test Suite | No | destructive actions; absolute path operations |
+| `scripts/run_gpu_optimization_tests.py` | Dev Utility | Full GPU Pipeline Optimization Test Suite | No | destructive actions; environment mutation |
 | `scripts/run_vision_audit.bat` | Unclear/Obsolete | GoodQ4All - Vision Pipeline Audit | No | None detected |
 | `scripts/run_vision_optimization.bat` | Unclear/Obsolete | GoodQ4All - Vision Stack GPU Optimization Launcher | No | None detected |
 | `scripts/setup/INSTALL_WEB_DEPS.ps1` | Unclear/Obsolete | GoodQ Quick Fix - Install Web Dependencies | No | None detected |
@@ -234,7 +234,7 @@ _Generated: 2026-02-15_
 | `scripts/test_all_endpoints.py` | Dev Utility | Phase 2: Comprehensive Endpoint Validation | Manual Review | absolute path operations; binary/network download |
 | `scripts/test_clap_clustering.py` | Unclear/Obsolete | Phase 1 Validation: Test CLAP-based Speaker Clustering | No | absolute path operations |
 | `scripts/test_control_agent_phase2.py` | Dev Utility | Test Control Agent Phase 2: Auto-Healing Capabilities | Manual Review | absolute path operations |
-| `scripts/test_control_agent_phase3.py` | Unclear/Obsolete | Phase 3 Test: Control Agent Pipeline Integration | No | absolute path operations |
+| `scripts/test_control_agent_phase3.py` (retired) | Unclear/Obsolete | Historical Phase 3 Control Agent harness removed after the direct-orchestration path was demoted from the tracked surface. | No | absolute path operations |
 | `scripts/test_control_integration.py` | Dev Utility | Test Control Agent integration with ingestion pipeline | Manual Review | None detected |
 | `scripts/test_from_windows_simple.py` | Dev Utility | Simple test to check if Windows can reach vLLM | Manual Review | absolute path operations; binary/network download |
 | `scripts/test_full_system.py` | Unclear/Obsolete | FULL SYSTEM TEST - Complete Pipeline Validation | No | absolute path operations |
@@ -282,7 +282,7 @@ _Generated: 2026-02-15_
 | `scripts/utils/validate_critical_fixes.py` | Unclear/Obsolete | Validate that all critical fixes are working | No | None detected |
 | `scripts/utils/validate_environment_fix.py` | Unclear/Obsolete | Validate that all environment fixes are working | No | None detected |
 | `scripts/utils/validate_models.py` | Unclear/Obsolete | Comprehensive model validation script to ensure all steps produce actual output. | No | absolute path operations |
-| `scripts/utils/validate_phase3_integration.py` | Unclear/Obsolete | Phase 3 Pipeline Integration Validator | No | absolute path operations |
+| `scripts/utils/validate_phase3_integration.py` (retired) | Unclear/Obsolete | Historical Phase 3 validator removed after its file map and path assumptions drifted from the current runtime. | No | absolute path operations |
 | `scripts/utils/validate_pipeline_flow.py` | Unclear/Obsolete | Pipeline Flow Validator for GoodQ Multimodal Ingestion | No | absolute path operations |
 | `scripts/utils/validate_ui_config.py` | Unclear/Obsolete | GoodQ UI Configuration Validator | No | absolute path operations |
 | `scripts/utils/verify_command_center.py` | Unclear/Obsolete | Quick verification that Command Center is fully operational | No | binary/network download |
@@ -345,7 +345,7 @@ _Generated: 2026-02-15_
 | `cli/step_runner.py` | Runtime Utility | absolute path operations |
 | `cli/system_status.py` | Runtime Utility | absolute path operations |
 | `cli/watchdog.py` | Runtime Utility | absolute path operations |
-| `scripts/TEST_GPU_PIPELINE.bat` | Unclear/Obsolete | destructive actions; absolute path operations |
+| `scripts/TEST_GPU_PIPELINE.bat` | Dev Utility | destructive actions; environment mutation |
 | `scripts/_lib/interpreter_bindings.ps1` | Runtime Utility | absolute path operations |
 | `scripts/analytics_engine.py` | Runtime Utility | absolute path operations |
 | `scripts/analytics_query.py` | Runtime Utility | absolute path operations |
@@ -365,7 +365,7 @@ _Generated: 2026-02-15_
 | `scripts/cache_readiness_check.py` | Dev Utility | absolute path operations |
 | `scripts/clean_old_processing.py` | Unclear/Obsolete | destructive actions; absolute path operations |
 | `scripts/command_center.ps1` | Runtime Utility | destructive actions; absolute path operations |
-| `scripts/comprehensive_clean_run.py` | Runtime Utility | destructive actions; absolute path operations |
+| `scripts/comprehensive_clean_run.py` (retired) | Unclear/Obsolete | destructive actions; absolute path operations |
 | `scripts/comprehensive_gpu_setup.py` | Unclear/Obsolete | absolute path operations |
 | `scripts/config_schema.py` | Runtime Utility | absolute path operations |
 | `scripts/dataset_specs.py` | Unclear/Obsolete | absolute path operations |
@@ -413,7 +413,7 @@ _Generated: 2026-02-15_
 | `scripts/refresh_vllm_portproxy.bat` (retired) | Unclear/Obsolete | destructive actions; binary/network download |
 | `scripts/rotate_logs.py` | Runtime Utility | destructive actions; absolute path operations |
 | `scripts/run_audio_diarize_test.bat` | Unclear/Obsolete | environment mutation |
-| `scripts/run_gpu_optimization_tests.py` | Dev Utility | destructive actions; absolute path operations |
+| `scripts/run_gpu_optimization_tests.py` | Dev Utility | destructive actions; environment mutation |
 | `scripts/setup/VALIDATE_PYTHON_PATHS.bat` | Unclear/Obsolete | environment mutation |
 | `scripts/setup/configure_envs_pythonpath.py` | Bootstrap-Critical | absolute path operations |
 | `scripts/setup/install_goodq.py` | Bootstrap-Critical | absolute path operations |
@@ -430,7 +430,7 @@ _Generated: 2026-02-15_
 | `scripts/test_all_endpoints.py` | Dev Utility | absolute path operations; binary/network download |
 | `scripts/test_clap_clustering.py` | Unclear/Obsolete | absolute path operations |
 | `scripts/test_control_agent_phase2.py` | Dev Utility | absolute path operations |
-| `scripts/test_control_agent_phase3.py` | Unclear/Obsolete | absolute path operations |
+| `scripts/test_control_agent_phase3.py` (retired) | Unclear/Obsolete | absolute path operations |
 | `scripts/test_from_windows_simple.py` | Dev Utility | absolute path operations; binary/network download |
 | `scripts/test_full_system.py` | Unclear/Obsolete | absolute path operations |
 | `scripts/test_gpu_allocation.py` | Unclear/Obsolete | absolute path operations |
@@ -452,7 +452,7 @@ _Generated: 2026-02-15_
 | `scripts/utils/check_memory_db.py` | Unclear/Obsolete | absolute path operations |
 | `scripts/utils/check_watchdog_status.py` | Unclear/Obsolete | absolute path operations |
 | `scripts/utils/validate_models.py` | Unclear/Obsolete | absolute path operations |
-| `scripts/utils/validate_phase3_integration.py` | Unclear/Obsolete | absolute path operations |
+| `scripts/utils/validate_phase3_integration.py` (retired) | Unclear/Obsolete | absolute path operations |
 | `scripts/utils/validate_pipeline_flow.py` | Unclear/Obsolete | absolute path operations |
 | `scripts/utils/validate_ui_config.py` | Unclear/Obsolete | absolute path operations |
 | `scripts/utils/verify_command_center.py` | Unclear/Obsolete | binary/network download |

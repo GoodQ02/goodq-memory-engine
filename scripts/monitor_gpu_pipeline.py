@@ -233,7 +233,7 @@ class RealTimeGPUMonitor:
         conda_env = os.environ.get("GOODQ_CONDA_ENV", "goodq_core")
         watchdog_cmd = [
             "conda", "run", "-n", conda_env, "--no-capture-output",
-            "python", str(self.base_dir / "scripts" / "watchdog_ingest.py")
+            "python", "-m", "cli.watchdog"
         ]
         
         print("[LAUNCH] Starting pipeline...")

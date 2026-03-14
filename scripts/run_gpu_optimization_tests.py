@@ -10,12 +10,20 @@ import sys
 import os
 from pathlib import Path
 from datetime import datetime
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
 from gpu_pipeline_optimizer import GPUOptimizer
+from steps.common.config_loader import get_runtime_paths, load_configs
 
 class PipelineOptimizationRunner:
     def __init__(self, base_dir=None):
         self.base_dir = Path(base_dir) if base_dir else Path(__file__).parent.parent
         self.optimizer = GPUOptimizer(base_dir)
+        self.config = load_configs({})
+        self.runtime_paths = get_runtime_paths(self.config)
+        self.import_inbox = Path(self.runtime_paths["import_inbox"])
+        self.processing_dir = Path(self.runtime_paths["processing"])
         self.test_video = None
         self.test_iterations = 5
         self.all_test_results = []
@@ -24,7 +32,7 @@ class PipelineOptimizationRunner:
         """Find a suitable test video"""
         # Check for sample video
         sample_paths = [
-            self.base_dir / "import_inbox" / "sample.mp4",
+            self.import_inbox / "sample.mp4",
             self.base_dir / "samples" / "ingestion" / "sample.mp4",
             Path(os.environ.get("GOODQ_DATA_ROOT", "L:/_DATA")) / "FAMILY_FEAST",
         ]
@@ -46,10 +54,9 @@ class PipelineOptimizationRunner:
         print("\n[SYMBOL] Cleaning up previous processing state...")
         
         # Clear processing directory
-        processing_dir = self.base_dir / "data" / "processing"
-        if processing_dir.exists():
+        if self.processing_dir.exists():
             import shutil
-            for item in processing_dir.iterdir():
+            for item in self.processing_dir.iterdir():
                 if item.is_dir():
                     shutil.rmtree(item)
                     print(f"  [SYMBOL] Removed: {item.name}")
@@ -101,8 +108,8 @@ class PipelineOptimizationRunner:
         
         # Copy video to import inbox
         import shutil
-        inbox = self.base_dir / "import_inbox"
-        inbox.mkdir(exist_ok=True)
+        inbox = self.import_inbox
+        inbox.mkdir(parents=True, exist_ok=True)
         
         # Clear inbox first
         for item in inbox.glob("*"):
@@ -123,7 +130,7 @@ class PipelineOptimizationRunner:
         conda_env = os.environ.get("GOODQ_CONDA_ENV", "goodq_core")
         watchdog_cmd = [
             "conda", "run", "-n", conda_env, "--no-capture-output",
-            "python", str(self.base_dir / "scripts" / "watchdog_ingest.py")
+            "python", "-m", "cli.watchdog"
         ]
         
         # Start process in background
@@ -330,7 +337,7 @@ class PipelineOptimizationRunner:
         if not self.test_video:
             print("\n[FAIL] No test video found!")
             print("Please place a video in one of these locations:")
-            print(f"  - {self.base_dir / 'import_inbox' / 'sample.mp4'}")
+            print(f"  - {self.import_inbox / 'sample.mp4'}")
             print(f"  - {Path(os.environ.get('GOODQ_DATA_ROOT', 'L:/_DATA')) / 'FAMILY_FEAST'}/*.mp4")
             return False
         

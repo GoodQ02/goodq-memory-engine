@@ -311,6 +311,6 @@ Main Thread
 
 ---
 
-For implementation details, see `scripts/watchdog_ingest.py`
+For implementation details, see `cli/watchdog.py`
 
-For usage guide, see `docs/WATCHDOG_GUIDE.md`
+For usage guide, see `docs/guides/watchdog/WATCHDOG_GUIDE.md`

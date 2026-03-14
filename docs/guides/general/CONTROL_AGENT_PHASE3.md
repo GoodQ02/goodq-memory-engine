@@ -152,47 +152,13 @@ python scripts\run_control_agent.py --errors-only
 
 ## 🧪 Testing
 
-```bash
-# Run Phase 3 integration tests
-python scripts\test_control_agent_phase3.py
-```
+The standalone `scripts/test_control_agent_phase3.py` harness has been retired.
+It depended on the old direct-orchestration assumptions from this historical
+phase plan and no longer reflects the canonical runtime contract.
 
-Expected output:
-```
-🧪 PHASE 3 TEST: CONTROL AGENT PIPELINE INTEGRATION
-================================================================================
-
-📋 Test 1: Initialize Control Agent
-✅ Control Agent initialized successfully
-   - LLM Client: LLMClient
-   - Memory Database: <project_root>\data\control_agent_memory.db
-
-📋 Test 2: Test File Detection Callback
-✅ File detection callback successful
-
-📋 Test 3: Test Processing Start Callback
-✅ Processing start callback successful
-
-📋 Test 4: AI Error Diagnosis
-✅ AI Diagnosis received:
-   📊 Diagnosis: The error indicates that CUDA ran out of memory...
-   💡 Root Cause: Insufficient GPU memory for the requested operation...
-   🔧 Recommended Action: retry_with_changes
-   ⚡ Confidence: high
-
-📋 Test 5: Test Processing Completion Callback
-✅ Success callback successful
-✅ Failure callback successful
-
-📋 Test 6: Generate Comprehensive Report
-✅ Report generated successfully
-
-📋 Test 7: Verify Watchdog Integration
-✅ Watchdog has Control Agent integrated
-   - Agent Type: ControlAgent
-
-🎉 PHASE 3 INTEGRATION TEST COMPLETE!
-```
+For current behavior:
+- use `python -m cli.watchdog` for the canonical watcher
+- use [CONTROL_AGENT.md](../../CONTROL_AGENT.md) for the live Control Agent contract
 
 ## 📊 Performance Impact
 
@@ -212,11 +178,6 @@ The Control Agent is automatically enabled if available. To disable:
 ```python
 # In cli/watchdog.py, adjust:
 CONTROL_AGENT_AVAILABLE = False
-```
-
-Or at runtime:
-```bash
-python -m cli.watchdog --no-ai-control
 ```
 
 ### LLM Service Configuration
@@ -254,7 +215,7 @@ The Control Agent is designed to be extensible. To add custom recovery strategie
 
 1. Create a new method in `agents/control_agent.py`
 2. Register it in the `recovery_strategies` dict
-3. Test with `test_control_agent_phase3.py`
+3. Validate against the canonical watchdog and Control Agent docs
 4. Submit a PR with examples
 
 ---

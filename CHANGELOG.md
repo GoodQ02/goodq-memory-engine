@@ -24,6 +24,8 @@ and related canonical docs.
 - Retired the legacy `scripts/utilities/process_manager.py` cluster and `tests/TEST_PROCESS_MANAGER.bat`, then collapsed the old process-management guides into short historical notes that redirect to canonical launcher/watchdog surfaces.
 - Retired the stale one-off `scripts/organize_project.py` cleanup utility from the tracked surface after its hardcoded root assumptions and file map drifted from the current repo layout.
 - Recast `COMMAND_CENTER_LIVE.md`, `SCENE_EXPLORER_DEPLOYMENT_GUIDE.md`, and `PIPELINE_ENGINES_COMPLETE.md` as historical implementation notes so they no longer present retired `api_server.py` details as current runtime truth.
+- Retargeted the remaining GPU watchdog harnesses to the canonical `python -m cli.watchdog` entrypoint and canonical runtime inbox/processing paths.
+- Retired stale watchdog-adjacent Phase 3 and diarization harnesses whose hardcoded roots and deleted `scripts/watchdog_ingest.py` dependency no longer matched the supported runtime surface.
 - Reliability: `sentiment` now uses the existing one-shot native-crash retry path, recovering from intermittent Windows first-load subprocess crashes without breaking scene validity.
 - Runtime hardening: stale `GOODQ_WSL_WORKSPACE` overrides now fall back to the
   canonical `~/goodq_audio` workspace when the explicit path is missing, rather

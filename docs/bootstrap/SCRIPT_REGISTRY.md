@@ -178,7 +178,7 @@ _Generated: 2026-02-15_
 | `scripts/monitoring/monitor_live.bat` | Unclear/Obsolete | Check running processes | No | None detected |
 | `scripts/optimize_config.py` | Unclear/Obsolete | GoodQ Configuration Optimizer | No | absolute path operations |
 | `scripts/optimize_vision_gpu.py` | Runtime Utility | GoodQ4All - Vision Stack GPU Optimization | Manual Review | absolute path operations |
-| `scripts/organize_project.py` | Unclear/Obsolete | GoodQ4All Project Organizer | No | absolute path operations |
+| `scripts/organize_project.py` (retired) | Unclear/Obsolete | One-off 2025 root-cleanup organizer removed from the tracked surface after its file map drifted from the current repo layout. | No | absolute path operations |
 | `scripts/phase2_completion_report.py` | Runtime Utility | PHASE 2 COMPLETION REPORT | Manual Review | absolute path operations |
 | `scripts/phase2_embedding_analysis.py` | Runtime Utility | Phase 2: Comprehensive Embedding and Knowledge Graph Analysis | Manual Review | absolute path operations |
 | `scripts/phase2_fixes.py` | Runtime Utility | Phase 2 Comprehensive Fixes: Embedding & Knowledge Graph Integration | Manual Review | absolute path operations |
@@ -395,7 +395,7 @@ _Generated: 2026-02-15_
 | `scripts/monitoring/monitor_ingestion.bat` | Unclear/Obsolete | environment mutation |
 | `scripts/optimize_config.py` | Unclear/Obsolete | absolute path operations |
 | `scripts/optimize_vision_gpu.py` | Runtime Utility | absolute path operations |
-| `scripts/organize_project.py` | Unclear/Obsolete | absolute path operations |
+| `scripts/organize_project.py` (retired) | Unclear/Obsolete | absolute path operations |
 | `scripts/phase2_completion_report.py` | Runtime Utility | absolute path operations |
 | `scripts/phase2_embedding_analysis.py` | Runtime Utility | absolute path operations |
 | `scripts/phase2_fixes.py` | Runtime Utility | absolute path operations |

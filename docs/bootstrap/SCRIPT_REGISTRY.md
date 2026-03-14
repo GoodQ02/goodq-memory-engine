@@ -39,8 +39,8 @@ _Generated: 2026-02-15_
 | `agents/ingestion/scene_detector.py` | Runtime Utility | Scene Detector Agent - Detects scene boundaries in videos. | Manual Review | absolute path operations |
 | `agents/knowledge/__init__.py` | Runtime Utility | GoodQ Agent System | Yes | None detected |
 | `agents/llm_agent.py` | Runtime Utility | LLM Agent - Provides LLM capabilities for analysis, summarization, and self-healing | Manual Review | absolute path operations |
-| `agents/orchestrator.py` | Runtime Utility | GoodQ Agent Orchestrator | Manual Review | absolute path operations |
-| `agents/pipeline_integration.py` | Runtime Utility | Pipeline Agent Integration | Manual Review | absolute path operations |
+| `agents/orchestrator.py` | Unclear/Obsolete | GoodQ Agent Orchestrator (retired) | No | absolute path operations |
+| `agents/pipeline_integration.py` | Unclear/Obsolete | Pipeline Agent Integration (retired) | No | absolute path operations |
 | `agents/recovery_db.py` | Runtime Utility | GoodQ4All Recovery Database - Phase 2 | Yes | None detected |
 | `agents/recovery_strategies.py` | Runtime Utility | Recovery Strategies Database for Control Agent Self-Healing | Manual Review | absolute path operations |
 | `agents/self_healing_monitor.py` | Runtime Utility | Self-Healing Monitor | Manual Review | absolute path operations |
@@ -330,8 +330,8 @@ _Generated: 2026-02-15_
 | `agents/control_agent.py` | Runtime Utility | absolute path operations |
 | `agents/ingestion/scene_detector.py` | Runtime Utility | absolute path operations |
 | `agents/llm_agent.py` | Runtime Utility | absolute path operations |
-| `agents/orchestrator.py` | Runtime Utility | absolute path operations |
-| `agents/pipeline_integration.py` | Runtime Utility | absolute path operations |
+| `agents/orchestrator.py` | Unclear/Obsolete | absolute path operations |
+| `agents/pipeline_integration.py` | Unclear/Obsolete | absolute path operations |
 | `agents/recovery_strategies.py` | Runtime Utility | absolute path operations |
 | `agents/self_healing_monitor.py` | Runtime Utility | absolute path operations |
 | `agents/watchdog_agent_integration.py` | Unclear/Obsolete | absolute path operations |

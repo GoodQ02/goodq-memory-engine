@@ -19,6 +19,7 @@ and related canonical docs.
 - Hardened `scripts/start_vllm_servers.bat` to fail visibly when the `vllm-llama1b` systemd service is inactive instead of falling back to stale direct-launch scripts with drifted port assumptions.
 - Demoted legacy agent-system docs so they no longer present the old real-time orchestration stack as the current runtime contract.
 - Retired the legacy `agents/watchdog_agent_integration.py` watcher and made the obsolete startup menu fail visibly toward the canonical `cli.watchdog` path.
+- Retired the legacy `agents/pipeline_integration.py` and `agents/orchestrator.py` core, removed the obsolete quick agent test, and made the remaining startup menu options fail visibly toward canonical CLI surfaces.
 - Reliability: `sentiment` now uses the existing one-shot native-crash retry path, recovering from intermittent Windows first-load subprocess crashes without breaking scene validity.
 - Runtime hardening: stale `GOODQ_WSL_WORKSPACE` overrides now fall back to the
   canonical `~/goodq_audio` workspace when the explicit path is missing, rather

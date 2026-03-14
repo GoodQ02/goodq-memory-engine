@@ -13,7 +13,7 @@ Current runtime truth:
 
 - The authoritative ingestion entry points are `cli/run_ingestion.py` and `cli/watchdog.py`.
 - `ControlAgent` still exists, but default CLI/runtime flows record `disabled_no_llm_client` unless an `llm_client` is explicitly injected.
-- `watchdog_agent_integration.py`, `pipeline_integration.py`, and `orchestrator.py` represent an older parallel orchestration path and should not be treated as canonical bootstrap/runtime surfaces.
+- `watchdog_agent_integration.py`, `pipeline_integration.py`, and `orchestrator.py` belonged to an older parallel orchestration path and are now retired from the tracked surface.
 
 ---
 
@@ -27,9 +27,9 @@ Current runtime truth:
 | Recovery Database | `recovery_db.py` | Stores recovery history and outcomes | Runtime utility |
 | Recovery Strategies | `recovery_strategies.py` | Strategy library for healing actions | Runtime utility |
 | LLM Agent | `llm_agent.py` | Optional reasoning helper for advanced/legacy flows | Partial |
-| Orchestrator | `orchestrator.py` | Legacy multi-agent workflow coordinator | Historical |
+| Orchestrator | `orchestrator.py` | Legacy multi-agent workflow coordinator | Retired |
 | Watchdog Agent Integration | `watchdog_agent_integration.py` | Legacy parallel file-watcher/orchestrator path | Retired |
-| Pipeline Integration | `pipeline_integration.py` | Legacy wrapper layer for agent-driven ingestion | Historical |
+| Pipeline Integration | `pipeline_integration.py` | Legacy wrapper layer for agent-driven ingestion | Retired |
 
 ---
 

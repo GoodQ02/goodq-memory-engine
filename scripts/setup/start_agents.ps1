@@ -67,11 +67,11 @@ Write-Host ""
 Write-Host "2. Start Self-Healing Monitor" -ForegroundColor White
 Write-Host "   Monitors pipeline health and auto-fixes issues"
 Write-Host ""
-Write-Host "3. Test Agent Health" -ForegroundColor White
-Write-Host "   Check status of all agents"
+Write-Host "3. Legacy Agent Health (retired)" -ForegroundColor White
+Write-Host "   The old pipeline integration health check was removed"
 Write-Host ""
-Write-Host "4. Process Single Video" -ForegroundColor White
-Write-Host "   Process one video through agent pipeline"
+Write-Host "4. Legacy Single-Video Agent Pipeline (retired)" -ForegroundColor White
+Write-Host "   Use canonical ingestion entrypoints instead"
 Write-Host ""
 Write-Host "5. Legacy All-Services Bundle (retired)" -ForegroundColor White
 Write-Host "   The old watcher bundle was removed; start canonical services explicitly"
@@ -90,13 +90,14 @@ switch ($choice) {
         & $condaExe run -n base python (Join-Path $RepoRoot "agents\\self_healing_monitor.py")
     }
     "3" {
-        Write-Host "`nChecking Agent Health..." -ForegroundColor Green
-        & $condaExe run -n base python (Join-Path $RepoRoot "agents\\pipeline_integration.py")
+        Write-Host "`nLegacy agent health path retired." -ForegroundColor Yellow
+        Write-Host "Use current runtime utilities and docs instead of the removed pipeline integration harness." -ForegroundColor Yellow
+        exit 1
     }
     "4" {
-        $videoPath = Read-Host "Enter video path"
-        Write-Host "`nProcessing $videoPath..." -ForegroundColor Green
-        & $condaExe run -n base python -c "import asyncio; from agents.pipeline_integration import process_video_with_agents; asyncio.run(process_video_with_agents('$videoPath'))"
+        Write-Host "`nLegacy single-video agent pipeline retired." -ForegroundColor Yellow
+        Write-Host "Use: $condaExe run -n $runtimeEnv python -m cli.run_ingestion --input-dir <path>" -ForegroundColor Yellow
+        exit 1
     }
     "5" {
         Write-Host "`nLegacy all-services bundle retired." -ForegroundColor Yellow

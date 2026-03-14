@@ -12,7 +12,7 @@
 
 - `cli/watchdog.py` is the canonical file monitor / automatic ingestion entry point.
 - `cli/run_ingestion.py` and `cli/watchdog.py` persist `control_agent_status=disabled_no_llm_client` by default unless an `llm_client` is explicitly injected.
-- `agents/watchdog_agent_integration.py`, `agents/pipeline_integration.py`, and `agents/orchestrator.py` are legacy parallel surfaces, not the canonical watchdog/runtime path.
+- `agents/watchdog_agent_integration.py`, `agents/pipeline_integration.py`, and `agents/orchestrator.py` are retired legacy parallel surfaces, not the canonical watchdog/runtime path.
 - For current behavior, trust `docs/CONTROL_AGENT.md`, `docs/systems/WATCHDOG_SYSTEM.md`, and `docs/CLI-REFERENCE.md`.
 
 ## Historical Overview

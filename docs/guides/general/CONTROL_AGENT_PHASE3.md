@@ -1,9 +1,16 @@
-# Control Agent Phase 3: Live Pipeline Integration
-> ⚠ Historical planning document — contains legacy path references.
+# Control Agent Phase 3: Historical Live Integration Plan
+> ⚠ Historical planning document — describes a 2025 experimental integration path and contains legacy path references.
+
+## Current Runtime Truth
+
+- The canonical file monitor is `cli/watchdog.py`, not `agents/watchdog_agent_integration.py`.
+- Default `cli/watchdog.py` and `cli/run_ingestion.py` flows persist `disabled_no_llm_client` unless an `llm_client` is explicitly injected.
+- Direct WSL startup commands using `~/vllm_server/scripts/start_llama1b.sh` are obsolete.
+- For current behavior, trust `docs/CONTROL_AGENT.md`, `docs/systems/WATCHDOG_SYSTEM.md`, and `docs/CLI-REFERENCE.md`.
 
 ## 🎯 Overview
 
-Phase 3 integrates the AI Control Agent directly into the GoodQ4All ingestion pipeline, enabling **real-time intelligent orchestration** with self-healing capabilities.
+This document captures a Phase 3 integration plan for direct AI Control Agent orchestration. It is preserved as historical reference, not as the current default runtime contract.
 
 ## 🏗️ Architecture
 

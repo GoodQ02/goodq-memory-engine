@@ -1,12 +1,21 @@
 # GoodQ4All Agent System
 
-**Status:** ✅ PRODUCTION ACTIVE  
-**Last Updated:** December 15, 2025  
-**Version:** 1.0.0
+> Historical architecture reference - describes a legacy parallel agent-orchestration stack and should not be read as the current runtime contract.
+
+**Status:** Historical / mixed-state reference  
+**Last Verified:** 2026-03-13  
+**Version:** Legacy 2025 architecture snapshot
 
 ---
 
-## Overview
+## Current Runtime Truth
+
+- `cli/watchdog.py` is the canonical file monitor / automatic ingestion entry point.
+- `cli/run_ingestion.py` and `cli/watchdog.py` persist `control_agent_status=disabled_no_llm_client` by default unless an `llm_client` is explicitly injected.
+- `agents/watchdog_agent_integration.py`, `agents/pipeline_integration.py`, and `agents/orchestrator.py` are legacy parallel surfaces, not the canonical watchdog/runtime path.
+- For current behavior, trust `docs/CONTROL_AGENT.md`, `docs/systems/WATCHDOG_SYSTEM.md`, and `docs/CLI-REFERENCE.md`.
+
+## Historical Overview
 
 The GoodQ4All agent system is a collection of autonomous, intelligent components that work together to monitor, heal, and optimize the multimodal ingestion pipeline. These agents operate independently but share knowledge through common databases and configuration.
 

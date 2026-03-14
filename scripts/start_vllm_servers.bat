@@ -25,27 +25,26 @@ echo Starting vLLM via systemd (if available)...
 wsl -d %GOODQ_WSL_DISTRO% -- sudo systemctl start vllm-llama1b
 wsl -d %GOODQ_WSL_DISTRO% -- sudo systemctl start ollama
 
-REM Fallback: only start per-user scripts if systemd service is NOT active
+REM Fail visibly if the expected systemd service is not active.
 wsl -d %GOODQ_WSL_DISTRO% -- sudo systemctl is-active --quiet vllm-llama1b
-if NOT "%ERRORLEVEL%"=="0" (
-    echo Systemd not active; starting vLLM via per-user scripts...
-    wsl -d %GOODQ_WSL_DISTRO% -- ~/vllm_server/scripts/start_llama1b.sh
-    timeout /t 2 /nobreak >nul
-    wsl -d %GOODQ_WSL_DISTRO% -- ~/vllm_server/scripts/start_llama3b.sh
-    timeout /t 2 /nobreak >nul
+if errorlevel 1 (
+    echo ERROR: vllm-llama1b systemd service is not active.
+    echo Expected path: scripts/wsl/install_vllm_service.sh inside the repo checkout.
+    echo Check status: wsl -d %GOODQ_WSL_DISTRO% -- sudo systemctl status vllm-llama1b --no-pager
+    pause
+    exit /b 1
 )
 
 echo.
 echo ========================================
-echo vLLM Servers Starting...
+echo vLLM Services Starting...
 echo ========================================
 echo.
 echo Llama 1B (Speed):     http://localhost:38005/v1
-echo Llama 3B (Balanced):  http://localhost:38004/v1
 echo Ollama (Fallback):    http://localhost:31434/v1
 echo.
-echo Servers are starting in the background.
-echo It may take 30-60 seconds for models to fully load.
+echo Services are starting in the background.
+echo It may take 30-60 seconds for the primary model to fully load.
 echo.
 echo Check status: python "%REPO_ROOT%\\scripts\\test_llm_client.py"
 echo.

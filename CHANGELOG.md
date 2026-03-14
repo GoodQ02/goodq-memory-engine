@@ -16,6 +16,7 @@ and related canonical docs.
 - Retired the stale `docs/guides/llm/WSL_AGENT_BRIEFING.md` coordination brief and repointed live docs to current WSL/vLLM operator references.
 - Sanitized `docs/guides/llm/VLLM_SYSTEMD_SETUP.md` into a portable advanced-operator reference and removed workstation-specific path and user assumptions.
 - Reclassified `scripts/wsl/install_vllm_service.sh` as a current WSL/vLLM runtime utility and aligned its default model path with the safer WSL-home fallback.
+- Hardened `scripts/start_vllm_servers.bat` to fail visibly when the `vllm-llama1b` systemd service is inactive instead of falling back to stale direct-launch scripts with drifted port assumptions.
 - Reliability: `sentiment` now uses the existing one-shot native-crash retry path, recovering from intermittent Windows first-load subprocess crashes without breaking scene validity.
 - Runtime hardening: stale `GOODQ_WSL_WORKSPACE` overrides now fall back to the
   canonical `~/goodq_audio` workspace when the explicit path is missing, rather

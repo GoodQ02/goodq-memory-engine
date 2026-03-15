@@ -408,7 +408,7 @@ def _transcribe_chunk_fw(chunk_path: str, offset: float, model: Any) -> Optional
             condition_on_previous_text=True,
             temperature=[0.0, 0.2, 0.4, 0.6, 0.8, 1.0],  # Fallback temperatures
             compression_ratio_threshold=2.4,
-            logprob_threshold=-1.0,
+            log_prob_threshold=-1.0,
             no_speech_threshold=0.6
         )
         seg_list: List[Dict[str, Any]] = []

@@ -9,6 +9,8 @@ and related canonical docs.
 
 ## [Unreleased]
 
+- Fixed the Windows `faster-whisper` fallback contract in `steps/audio_transcribe/step.py` by aligning the `WhisperModel.transcribe(...)` keyword args with the installed API and adding a regression test for the chunk helper.
+
 - Ongoing public-surface cleanup and release hardening on the `public` branch.
 - Bootstrap hardening: the default `environment.yml` is now CPU-safe for `BASELINE`, while `GPU_ENHANCED` selects a separate `environment.gpu.yml` spec so fresh-machine bootstrap no longer pulls CUDA packages by default.
 - CI hardening: the shipped bootstrap environment now includes `pytest`, matching the existing GitHub Actions `python -m pytest -q` contract.

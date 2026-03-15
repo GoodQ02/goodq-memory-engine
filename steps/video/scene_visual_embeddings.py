@@ -33,7 +33,7 @@ def _persist_phase6_failure(scene_manifest_path: str, scene_data: Dict[str, Any]
 
 
 def _resolve_processing_root(cfg: Dict[str, Any]) -> str:
-    runtime_paths = get_runtime_paths(cfg)
+    runtime_paths = get_runtime_paths(cfg, 'processing', require_canonical=False)
     return str(Path(runtime_paths['processing']).resolve())
 
 

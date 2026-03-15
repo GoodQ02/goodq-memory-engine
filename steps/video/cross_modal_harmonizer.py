@@ -81,7 +81,7 @@ def _load_commit_presence(cfg: Dict[str, Any], video_id: str, scene_ids: List[st
     }
 
     try:
-        runtime_paths = get_runtime_paths(cfg)
+        runtime_paths = get_runtime_paths(cfg, 'db_path', require_canonical=False)
         db_path = runtime_paths['db_path']
     except KeyError:
         return presence
@@ -275,7 +275,7 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
     if not video_storage_key:
         video_storage_key = video_id
     
-    runtime_paths = get_runtime_paths(cfg)
+    runtime_paths = get_runtime_paths(cfg, 'processing', require_canonical=False)
     processing_root = runtime_paths['processing']
     processing_dir_raw = item.get('processing_dir')
     if isinstance(processing_dir_raw, str) and processing_dir_raw.strip():

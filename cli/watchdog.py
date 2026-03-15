@@ -83,10 +83,14 @@ logger = logging.getLogger(__name__)
 def _resolve_watchdog_paths(cfg: Dict[str, Any]) -> Dict[str, Path]:
     runtime_paths = get_runtime_paths(
         cfg,
+        "import_inbox",
+        "processing",
         "processed",
         "failed",
+        "log_dir",
         "watchdog_state_file",
         "watchdog_lock_file",
+        require_canonical=False,
     )
     return {
         "watch_dir": Path(runtime_paths["import_inbox"]).resolve(),

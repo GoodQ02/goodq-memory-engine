@@ -135,21 +135,32 @@ except ImportError:
 
 APP = typer.Typer(help='Scene-first ingestion orchestrator for GoodQ')
 
+def _deep_merge_dicts(base: Dict[str, Any], override: Dict[str, Any]) -> None:
+    for key, value in override.items():
+        if key in base and isinstance(base[key], dict) and isinstance(value, dict):
+            _deep_merge_dicts(base[key], value)
+        else:
+            base[key] = value
+
+
 def _load_runtime_cfg_snapshot(cfg_json: Optional[Path] = None) -> Dict[str, Any]:
+    base_cfg = load_configs({})
     if cfg_json and cfg_json.exists():
         try:
             raw = cfg_json.read_text(encoding='utf-8').strip()
             if raw:
                 parsed = json.loads(raw)
                 if isinstance(parsed, dict):
-                    return parsed
+                    merged = dict(base_cfg) if isinstance(base_cfg, dict) else {}
+                    _deep_merge_dicts(merged, parsed)
+                    return merged
         except Exception as e:
             logger.warning(
                 "run_ingestion warning context=%s error=%s",
                 "runtime_cfg_snapshot",
                 e,
             )
-    return load_configs({})
+    return base_cfg if isinstance(base_cfg, dict) else {}
 
 
 def _resolve_models_dir(
@@ -158,12 +169,12 @@ def _resolve_models_dir(
     cfg_json: Optional[Path] = None,
 ) -> Path:
     cfg_payload = cfg if isinstance(cfg, dict) else _load_runtime_cfg_snapshot(cfg_json)
-    runtime_paths = get_runtime_paths(cfg_payload, "models_cache")
+    runtime_paths = get_runtime_paths(cfg_payload, "models_cache", require_canonical=False)
     return Path(runtime_paths["models_cache"]).resolve()
 
 
 def _resolve_processing_root(cfg: Dict[str, Any]) -> Path:
-    runtime_paths = get_runtime_paths(cfg)
+    runtime_paths = get_runtime_paths(cfg, "processing", require_canonical=False)
     return Path(runtime_paths["processing"]).resolve()
 
 # Populated by CLI options at runtime
@@ -2690,7 +2701,19 @@ def run(
 
     base_cfg = load_configs({})
     cfg: Dict[str, Any] = dict(base_cfg) if isinstance(base_cfg, dict) else {}
-    runtime_paths = get_runtime_paths(cfg, "output_directory")
+    required_runtime_keys: List[str] = []
+    if input_dir is None:
+        required_runtime_keys.append("import_inbox")
+    if output is None:
+        required_runtime_keys.append("output_directory")
+    if workspace is None:
+        required_runtime_keys.append("processing")
+
+    runtime_paths = (
+        get_runtime_paths(cfg, *required_runtime_keys, require_canonical=False)
+        if required_runtime_keys
+        else {}
+    )
     input_dir = (input_dir or Path(runtime_paths["import_inbox"])).resolve()
     output = (
         output

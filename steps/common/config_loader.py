@@ -219,7 +219,11 @@ CANONICAL_RUNTIME_PATH_KEYS = (
 )
 
 
-def get_runtime_paths(cfg: Dict[str, Any], *extra_keys: str) -> Dict[str, str]:
+def get_runtime_paths(
+    cfg: Dict[str, Any],
+    *extra_keys: str,
+    require_canonical: bool = True,
+) -> Dict[str, str]:
     if not isinstance(cfg, dict):
         raise KeyError("Config payload is not a dictionary")
 
@@ -230,7 +234,8 @@ def get_runtime_paths(cfg: Dict[str, Any], *extra_keys: str) -> Dict[str, str]:
 
     resolved: Dict[str, str] = {}
     missing = []
-    for key in (*CANONICAL_RUNTIME_PATH_KEYS, *extra_keys):
+    required_keys = (*CANONICAL_RUNTIME_PATH_KEYS, *extra_keys) if require_canonical else extra_keys
+    for key in required_keys:
         value = paths_cfg.get(key)
         if isinstance(value, str) and value.strip():
             resolved[key] = value

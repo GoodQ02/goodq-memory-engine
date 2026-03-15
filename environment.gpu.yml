@@ -15,6 +15,7 @@ dependencies:
   - fastapi
   - uvicorn
   - typer
+  - pytest
   - pytorch
   - torchvision
   - torchaudio

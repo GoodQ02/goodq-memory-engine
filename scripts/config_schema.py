@@ -303,7 +303,7 @@ class Phase6Config(BaseModel):
 class APIConfig(BaseModel):
     enabled: bool = True
     host: str = "127.0.0.1"
-    port: int = 8000
+    port: int = 30000
     reload: bool = True
     cors_enabled: bool = False
     max_upload_size: int = 5368709120

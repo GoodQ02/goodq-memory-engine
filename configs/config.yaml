@@ -298,7 +298,7 @@ phase6:
 api:
   enabled: true
   host: 127.0.0.1
-  port: 8000
+  port: 30000
   reload: true
   cors_enabled: false
   max_upload_size: 5368709120  # 5GB

@@ -1,10 +1,14 @@
-<!-- DOC_BADGE: CANONICAL -->
-<!-- DOC_STATUS: AUTHORITATIVE -->
+<!-- DOC_BADGE: OPERATIONAL -->
+<!-- DOC_STATUS: GENERATED_SNAPSHOT -->
 <!-- DOC_LAST_VERIFIED: 2026-02-12 -->
 
 # Documentation Authority Map
 
 Generated: 2026-02-11T22:50:35
+
+This file is a generated inventory snapshot for documentation triage.
+It does not supersede the canonical reading order in `AGENTS.md`, the
+authority docs listed below, or direct file-level audits when entries drift.
 
 ## Scope
 
@@ -30,8 +34,8 @@ Generated: 2026-02-11T22:50:35
 
 - **Doc entropy level:** **HIGH**
 - Canonical (A): **20**
-- Operational (B): **130**
-- Historical (C): **241**
+- Operational (B): **123**
+- Historical (C): **248**
 - Experimental (D): **152**
 - Redundant/Obsolete (E): **1**
 
@@ -485,13 +489,13 @@ docs/archive/
 | `docs/guides/llm/VLLM_SYSTEMD_SETUP.md` | B) Operational | Operator setup/usage guide. | KEEP |
 | `docs/guides/llm/WSL2_AUDIO_MIGRATION_GUIDE.md` | B) Operational | Operator setup/usage guide. | KEEP |
 | `docs/guides/llm/WSL2_AUDIO_SETUP.md` | B) Operational | Operational guide with overlap/drift risk; keep but normalize. | REFRACTOR |
-| `docs/guides/ui/UI_ALIGNMENT_AUDIT.md` | B) Operational | Operator setup/usage guide. | KEEP |
-| `docs/guides/ui/UI_AUDIT_COMPLETE.md` | B) Operational | Operator setup/usage guide. | KEEP |
-| `docs/guides/ui/UI_AUDIT_REPORT.md` | B) Operational | Operator setup/usage guide. | KEEP |
-| `docs/guides/ui/UI_AUDIT_SUMMARY.md` | B) Operational | Operator setup/usage guide. | KEEP |
-| `docs/guides/ui/UI_CONNECTION_GUIDE.md` | B) Operational | Operator setup/usage guide. | KEEP |
-| `docs/guides/ui/UI_FIXES_COMPLETED.txt` | B) Operational | Operator setup/usage guide. | KEEP |
-| `docs/guides/ui/UI_PHASE2_FIXES.md` | B) Operational | Operator setup/usage guide. | KEEP |
+| `docs/guides/ui/UI_ALIGNMENT_AUDIT.md` | C) Historical | Historical UI audit artifact; retain only as context. | KEEP |
+| `docs/guides/ui/UI_AUDIT_COMPLETE.md` | C) Historical | Historical UI audit artifact; retain only as context. | KEEP |
+| `docs/guides/ui/UI_AUDIT_REPORT.md` | C) Historical | Historical UI audit artifact; retain only as context. | KEEP |
+| `docs/guides/ui/UI_AUDIT_SUMMARY.md` | C) Historical | Historical UI audit artifact; retain only as context. | KEEP |
+| `docs/guides/ui/UI_CONNECTION_GUIDE.md` | C) Historical | Historical UI rollout note; retain only as context. | KEEP |
+| `docs/guides/ui/UI_FIXES_COMPLETED.txt` | C) Historical | Historical UI rollout note; retain only as context. | KEEP |
+| `docs/guides/ui/UI_PHASE2_FIXES.md` | C) Historical | Historical UI rollout note; retain only as context. | KEEP |
 | `docs/guides/watchdog/WATCHDOG_CHANGELOG.md` | B) Operational | Operator setup/usage guide. | KEEP |
 | `docs/guides/watchdog/WATCHDOG_GUIDE.md` | B) Operational | Operator setup/usage guide. | KEEP |
 | `docs/guides/watchdog/WATCHDOG_INDEX.md` | B) Operational | Operator setup/usage guide. | KEEP |

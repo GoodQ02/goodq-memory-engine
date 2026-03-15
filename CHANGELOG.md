@@ -10,6 +10,7 @@ and related canonical docs.
 ## [Unreleased]
 
 - Ongoing public-surface cleanup and release hardening on the `public` branch.
+- Bootstrap hardening: the default `environment.yml` is now CPU-safe for `BASELINE`, while `GPU_ENHANCED` selects a separate `environment.gpu.yml` spec so fresh-machine bootstrap no longer pulls CUDA packages by default.
 - Retired the legacy `scripts/api_server.py` monolith from the tracked surface and repointed direct support-facing references to the canonical `api.server` wrapper.
 - Retired the legacy `scripts/refresh_vllm_portproxy.bat` helper from the tracked surface; Windows↔WSL vLLM access is no longer documented through manual portproxy mutation.
 - Retired stale WSL/vLLM report-style docs from the tracked support surface and repointed live indexes to the current operator docs.

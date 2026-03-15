@@ -1,6 +1,7 @@
 name: goodq_core
 channels:
   - pytorch
+  - nvidia
   - conda-forge
   - defaults
 dependencies:
@@ -17,7 +18,6 @@ dependencies:
   - pytorch
   - torchvision
   - torchaudio
-  - cpuonly
   - imageio-ffmpeg
   - pip:
       - -e .
@@ -26,7 +26,6 @@ dependencies:
       - qdrant-client
       - faster-whisper
 #
-# Public BASELINE environment only.
-# GPU_ENHANCED uses environment.gpu.yml to add CUDA-backed throughput packages.
-# Specialized step environments remain under envs/*/requirements.txt
-# and envs/locks/*.lock.txt for GPU/WSL and model-specific workloads.
+# Public GPU_ENHANCED environment overlay.
+# This keeps the shared goodq_core name but allows bootstrap_install.py
+# to select CUDA-backed packages only when the operator enables GPU mode.

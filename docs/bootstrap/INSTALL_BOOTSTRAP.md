@@ -10,7 +10,7 @@
 It does not change GoodQ runtime architecture. It only:
 
 - inspects host capabilities
-- prepares the public baseline Conda environment from [`environment.yml`](../../environment.yml)
+- prepares the Conda environment for the selected runtime profile
 - creates local-only config files when missing
 - runs lightweight verification
 - launches [`LAUNCH_GOODQ.bat`](../../LAUNCH_GOODQ.bat)
@@ -20,6 +20,7 @@ It does not change GoodQ runtime architecture. It only:
 The bootstrap intentionally reuses existing project surfaces:
 
 - [`environment.yml`](../../environment.yml)
+- [`environment.gpu.yml`](../../environment.gpu.yml)
 - [`LAUNCH_GOODQ.bat`](../../LAUNCH_GOODQ.bat)
 - [`scripts/bootstrap_verify.py`](../../scripts/bootstrap_verify.py)
 - [`scripts/qdrant/START_QDRANT.bat`](../../scripts/qdrant/START_QDRANT.bat)
@@ -89,6 +90,13 @@ It also reports:
 - `WSL_AVAILABLE`
 
 `BASELINE` always remains CPU-safe.
+
+Environment selection:
+
+- `BASELINE` uses [`environment.yml`](../../environment.yml)
+- `GPU_ENHANCED` uses [`environment.gpu.yml`](../../environment.gpu.yml)
+- both profiles target the same `goodq_core` environment name
+- the bootstrap defaults to `BASELINE`; GPU throughput remains explicit opt-in
 
 ## Lightweight Verification
 

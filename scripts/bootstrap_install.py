@@ -18,6 +18,8 @@ from typing import Iterable, Optional
 
 
 ENV_NAME = "goodq_core"
+BASELINE_ENV_FILE = "environment.yml"
+GPU_ENV_FILE = "environment.gpu.yml"
 DEFAULT_DATA_ROOT = Path(r"C:\GoodQ_Data")
 DEFAULT_WSL_DISTRO = "Ubuntu"
 MIN_FREE_SPACE_GB = 25
@@ -163,6 +165,14 @@ def detect_wsl() -> tuple[bool, str, str]:
     distro = distros[0] if distros else DEFAULT_WSL_DISTRO
     detail = f"installed distros: {', '.join(distros)}" if distros else "wsl present"
     return True, detail, distro
+
+
+def resolve_environment_spec(repo_root: Path, enable_gpu: bool, gpu_available: bool) -> Path:
+    if enable_gpu and gpu_available:
+        gpu_spec = repo_root / GPU_ENV_FILE
+        if gpu_spec.exists():
+            return gpu_spec
+    return repo_root / BASELINE_ENV_FILE
 
 
 def prompt_text(prompt: str, default: str, assume_yes: bool) -> str:
@@ -374,7 +384,7 @@ def collect_context(args: argparse.Namespace) -> BootstrapContext:
     default_data_root = str(args.data_root or DEFAULT_DATA_ROOT)
     chosen_data_root = Path(prompt_text("Base data root directory", default_data_root, args.yes))
     enable_gpu = args.enable_gpu if args.enable_gpu is not None else prompt_bool(
-        "Enable GPU acceleration", gpu_available, args.yes
+        "Enable GPU acceleration", False, args.yes
     )
     enable_wsl_audio = args.enable_wsl_audio if args.enable_wsl_audio is not None else prompt_bool(
         "Enable WSL audio acceleration", wsl_available, args.yes
@@ -399,7 +409,7 @@ def collect_context(args: argparse.Namespace) -> BootstrapContext:
         repo_root=repo_root,
         conda_exe=conda_exe,
         launcher_bat=repo_root / "LAUNCH_GOODQ.bat",
-        environment_yml=repo_root / "environment.yml",
+        environment_yml=resolve_environment_spec(repo_root, enable_gpu, gpu_available),
         env_local_template=repo_root / ".env.local.template",
         config_local_example=repo_root / "configs" / "config.local.example.yaml",
         bootstrap_verify=repo_root / "scripts" / "bootstrap_verify.py",
@@ -427,6 +437,7 @@ def print_inspection(ctx: BootstrapContext) -> None:
     _print(f"profile          : {ctx.profile.profile}")
     _print(f"enable_gpu       : {ctx.enable_gpu}")
     _print(f"enable_wsl_audio : {ctx.enable_wsl_audio}")
+    _print(f"environment_spec : {ctx.environment_yml.name}")
     _print(f"data_root        : {ctx.data_root}")
     if not disk_ok:
         _print(f"[WARN] Recommended free space is at least {MIN_FREE_SPACE_GB} GB.")

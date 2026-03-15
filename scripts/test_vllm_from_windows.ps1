@@ -17,8 +17,9 @@ try {
 
 # Test 2: Try a chat completion
 Write-Host "`n2. Testing chat completion..." -ForegroundColor Yellow
+$modelId = if ($env:GOODQ_WSL_MODEL_PATH) { $env:GOODQ_WSL_MODEL_PATH } else { "Llama-3.2-1B-Instruct" }
 $body = @{
-    model = "/mnt/l/_DATA/models/llm/huggingface/Llama-3.2-1B-Instruct"
+    model = $modelId
     messages = @(
         @{
             role = "user"

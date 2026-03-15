@@ -11,6 +11,12 @@ import os
 from datetime import datetime
 from pathlib import Path
 
+try:
+    from steps.common.config_loader import get_runtime_paths, load_configs
+except Exception:  # pragma: no cover
+    get_runtime_paths = None  # type: ignore[assignment]
+    load_configs = None  # type: ignore[assignment]
+
 class AudioGPUMonitor:
     """Real-time GPU monitoring for audio pipeline"""
     
@@ -19,6 +25,14 @@ class AudioGPUMonitor:
         self.monitoring = False
         self.samples = []
         self.monitor_thread = None
+
+    def _default_report_dir(self) -> Path:
+        if load_configs and get_runtime_paths:
+            try:
+                return Path(get_runtime_paths(load_configs({}), "log_dir")) / "gpu_monitoring"
+            except Exception:
+                pass
+        return Path.cwd() / "logs" / "gpu_monitoring"
         
     def get_gpu_stats(self):
         """Get current GPU stats via nvidia-smi"""
@@ -151,7 +165,7 @@ class AudioGPUMonitor:
             return
         
         if filepath is None:
-            report_dir = Path("L:/goodq4all/logs/gpu_monitoring")
+            report_dir = self._default_report_dir()
             report_dir.mkdir(parents=True, exist_ok=True)
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             filepath = report_dir / f"gpu_monitor_{timestamp}.csv"

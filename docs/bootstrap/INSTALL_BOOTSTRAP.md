@@ -31,14 +31,19 @@ The bootstrap intentionally reuses existing project surfaces:
 
 On a normal interactive run, the bootstrap prompts for:
 
-- data root directory
+- base data root directory
 - whether to enable GPU acceleration
 - whether to enable WSL audio acceleration
 
 Default portable data root:
 
 - a local Windows data root chosen by the bootstrap installer
-- current default implementation: `GOODQ_DATA_ROOT` -> `GoodQ_Data` on the system drive
+- current default implementation: `GOODQ_DATA_ROOT` points at the base root on the
+  system drive
+- the runtime then derives:
+  - `GoodQ_Data/`
+  - `models/`
+  - `qdrant_storage/`
 
 Private machine configuration is written only to:
 
@@ -119,6 +124,6 @@ Created only if missing:
 
 - `.env.local`
 - `configs/config.local.yaml`
-- selected data root directory under the bootstrap-managed local data root
+- the selected base data root directory and its derived GoodQ subpaths
 
 No core pipeline files are modified by the installer.

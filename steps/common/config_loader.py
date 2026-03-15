@@ -200,6 +200,14 @@ def _ensure_runtime_path_defaults(cfg: Dict[str, Any]) -> Dict[str, Any]:
     return cfg
 
 
+def _deep_merge(base: Dict[str, Any], override: Dict[str, Any]) -> None:
+    for key, value in override.items():
+        if key in base and isinstance(base[key], dict) and isinstance(value, dict):
+            _deep_merge(base[key], value)
+        else:
+            base[key] = value
+
+
 CANONICAL_RUNTIME_PATH_KEYS = (
     "data_root",
     "import_inbox",
@@ -270,17 +278,17 @@ def load_configs(overrides: Dict[str, Any] | None = None) -> Dict[str, Any]:
         raise FileNotFoundError(f"Canonical config not found: {unified_config_path}")
     
     raw_cfg = _ensure_runtime_path_defaults(_normalize_paths(_read_yaml(unified_config_path)))
+
+    local_config_path = os.path.join(base_dir, "config.local.yaml")
+    if os.path.isfile(local_config_path):
+        local_cfg = _normalize_paths(_read_yaml(local_config_path))
+        if isinstance(local_cfg, dict):
+            _deep_merge(raw_cfg, local_cfg)
+            raw_cfg = _ensure_runtime_path_defaults(raw_cfg)
     
     # Apply overrides before validation
     if overrides:
-        # Deep merge for nested overrides
-        def deep_merge(base, override):
-            for k, v in override.items():
-                if k in base and isinstance(base[k], dict) and isinstance(v, dict):
-                    deep_merge(base[k], v)
-                else:
-                    base[k] = v
-        deep_merge(raw_cfg, overrides)
+        _deep_merge(raw_cfg, overrides)
         raw_cfg = _ensure_runtime_path_defaults(raw_cfg)
     
     # Validate against Pydantic schema (optional - graceful degradation)

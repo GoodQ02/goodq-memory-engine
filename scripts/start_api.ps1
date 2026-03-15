@@ -10,6 +10,9 @@ $ErrorActionPreference = 'Stop'
 $condaExe = Get-GoodQCondaExe
 
 Write-Host ("Starting the GoodQ Retrieval API server on {0}:{1}..." -f $BindAddress, $Port) -ForegroundColor Cyan
+if ($BindAddress -notin @('127.0.0.1', 'localhost', '::1')) {
+  Write-Warning 'Non-loopback API binding requested. LAN exposure is opt-in and should only be used on a trusted network.'
+}
 
 # Ensure we run from repo root
 try {

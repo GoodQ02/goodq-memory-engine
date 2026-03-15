@@ -2,9 +2,12 @@
 # Prevents sensitive data and large files from being committed
 
 # ===== SECRETS & CREDENTIALS =====
-.env
-.env.local
-.env.*.local
+.env*
+!.env.template
+!.env.local.template
+!.env.example
+!.env.*.example
+!.env.*.template
 *.key
 *.pem
 secrets.yaml
@@ -134,6 +137,13 @@ workspace/
 tmp/
 temp/
 snapshots/
+reports/seinfeld_experiment/
+configs/config.local.yaml
+/config.yaml
+/bootstrap_report.json
+/GOODCUBE_STAGE6_WSL_PYTORCH_REPORT.md
+scripts/internal/*
+!scripts/internal/README.md
 
 # ===== TESTING =====
 .pytest_cache/
@@ -165,6 +175,7 @@ yarn.lock
 !scripts/**/*.ps1
 !configs/**/*.yaml
 !LICENSE
+configs/config.local.yaml
 
 # ===== ARCHIVE DIRECTORIES =====
 # Archive deprecated code but not the large binary artifacts

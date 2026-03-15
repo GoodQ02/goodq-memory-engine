@@ -372,7 +372,7 @@ def collect_context(args: argparse.Namespace) -> BootstrapContext:
     wsl_available, wsl_detail, detected_distro = detect_wsl()
 
     default_data_root = str(args.data_root or DEFAULT_DATA_ROOT)
-    chosen_data_root = Path(prompt_text("Data root directory", default_data_root, args.yes))
+    chosen_data_root = Path(prompt_text("Base data root directory", default_data_root, args.yes))
     enable_gpu = args.enable_gpu if args.enable_gpu is not None else prompt_bool(
         "Enable GPU acceleration", gpu_available, args.yes
     )

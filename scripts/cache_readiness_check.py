@@ -17,7 +17,23 @@ except Exception:  # pragma: no cover
     load_dotenv = None  # type: ignore
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-MODELS_DEFAULT = Path("L:/models")
+try:
+    from steps.common.config_loader import get_runtime_paths, load_configs
+except Exception:  # pragma: no cover
+    get_runtime_paths = None  # type: ignore[assignment]
+    load_configs = None  # type: ignore[assignment]
+
+
+def _default_models_dir() -> Path:
+    if load_configs and get_runtime_paths:
+        try:
+            return Path(get_runtime_paths(load_configs({}), "models_cache"))
+        except Exception:
+            pass
+    return REPO_ROOT / "_DATA" / "models"
+
+
+MODELS_DEFAULT = _default_models_dir()
 BOOTSTRAP_MODELS = REPO_ROOT / "scripts" / "bootstrap_models.py"
 BOOTSTRAP_ASSETS = REPO_ROOT / "scripts" / "bootstrap_assets.ps1"
 

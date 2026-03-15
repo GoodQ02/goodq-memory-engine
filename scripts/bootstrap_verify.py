@@ -5,7 +5,11 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
+import subprocess
 import sys
+import urllib.error
+import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List
@@ -13,6 +17,9 @@ from typing import Any, Dict, List
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
+
+
+QDRANT_SERVICE_NAME = "GoodQ_Qdrant"
 
 
 @dataclass
@@ -60,11 +67,105 @@ def _check_qdrant_binary() -> CheckResult:
     return CheckResult("qdrant_binary", "warn", f"not found at {binary}")
 
 
+def _run_powershell(command: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["powershell", "-NoProfile", "-Command", command],
+        capture_output=True,
+        text=True,
+    )
+
+
+def _inspect_windows_service(name: str) -> Dict[str, str]:
+    command = (
+        f"$svc = Get-Service -Name '{name}' -ErrorAction SilentlyContinue; "
+        "if ($null -eq $svc) { 'exists=false' } "
+        "else { 'exists=true'; 'status=' + $svc.Status.ToString(); "
+        "try { $cim = Get-CimInstance Win32_Service -Filter \"Name='"
+        + name
+        + "'\"; if ($cim) { 'start_mode=' + $cim.StartMode } } catch { } }"
+    )
+    completed = _run_powershell(command)
+    info: Dict[str, str] = {}
+    for line in (completed.stdout or "").splitlines():
+        if "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        info[key.strip()] = value.strip()
+    return info
+
+
+def _resolve_qdrant_url(cfg: Dict[str, Any]) -> str:
+    qdrant_cfg = cfg.get("qdrant") if isinstance(cfg, dict) else {}
+    if isinstance(qdrant_cfg, dict):
+        host = qdrant_cfg.get("host")
+        if isinstance(host, str) and host.strip():
+            return host.strip()
+    return "http://127.0.0.1:6333"
+
+
+def _check_qdrant_runtime(cfg: Dict[str, Any]) -> CheckResult:
+    url = _resolve_qdrant_url(cfg)
+    try:
+        with urllib.request.urlopen(f"{url.rstrip('/')}/collections", timeout=5) as response:
+            if response.status == 200:
+                return CheckResult("qdrant_runtime", "pass", f"reachable at {url}")
+    except urllib.error.URLError as exc:
+        detail = str(exc.reason)
+    except Exception as exc:  # noqa: BLE001
+        detail = str(exc)
+    else:
+        detail = "unexpected response"
+
+    service = _inspect_windows_service(QDRANT_SERVICE_NAME)
+    installer = REPO_ROOT / "scripts" / "qdrant" / "INSTALL_QDRANT_SERVICE.bat"
+    if service.get("exists") == "true":
+        service_detail = (
+            f"service status={service.get('status', 'unknown')} "
+            f"start_mode={service.get('start_mode', 'unknown')}"
+        )
+    else:
+        service_detail = "service not installed"
+    return CheckResult(
+        "qdrant_runtime",
+        "warn",
+        f"unreachable at {url} ({detail}); {service_detail}; preferred remediation: {installer}",
+    )
+
+
+def _check_ffmpeg() -> CheckResult:
+    override = os.environ.get("GOODQ_FFMPEG_EXE", "").strip()
+    if override:
+        override_path = Path(override)
+        if override_path.exists():
+            return CheckResult("ffmpeg", "pass", f"GOODQ_FFMPEG_EXE={override_path}")
+    ffmpeg_path = shutil.which("ffmpeg")
+    if ffmpeg_path:
+        return CheckResult("ffmpeg", "pass", ffmpeg_path)
+
+    remediation: List[str] = []
+    if shutil.which("winget"):
+        remediation.append("winget install --id Gyan.FFmpeg.Essentials -e --accept-package-agreements --accept-source-agreements")
+    if shutil.which("choco"):
+        remediation.append("choco install ffmpeg -y")
+    remediation.append("or set GOODQ_FFMPEG_EXE in .env.local")
+    return CheckResult("ffmpeg", "warn", "; ".join(remediation))
+
+
 def _check_wsl_flag() -> CheckResult:
     value = os.environ.get("GOODQ_WSL_DISTRO")
     if value:
         return CheckResult("wsl_flag", "pass", f"GOODQ_WSL_DISTRO={value}")
-    return CheckResult("wsl_flag", "warn", "GOODQ_WSL_DISTRO not set (runtime default is Ubuntu)")
+    try:
+        completed = subprocess.run(["wsl", "-l", "-q"], capture_output=True, text=True)
+    except FileNotFoundError:
+        return CheckResult("wsl_flag", "warn", "GOODQ_WSL_DISTRO not set and WSL is unavailable")
+    raw_stdout = (completed.stdout or "").replace("\x00", "")
+    distros = [line.strip() for line in raw_stdout.splitlines() if line.strip()]
+    ubuntu_like = [candidate for candidate in distros if candidate.lower().startswith("ubuntu")]
+    if ubuntu_like:
+        chosen = next((candidate for candidate in ubuntu_like if candidate.lower() == "ubuntu"), None) or ubuntu_like[0]
+        return CheckResult("wsl_flag", "warn", f"GOODQ_WSL_DISTRO unset (runtime auto-selects {chosen})")
+    return CheckResult("wsl_flag", "warn", "GOODQ_WSL_DISTRO unset (runtime default is Ubuntu)")
 
 
 def _check_env_resolution(cfg: Dict[str, Any]) -> List[CheckResult]:
@@ -106,6 +207,8 @@ def build_report() -> Dict[str, Any]:
     checks.append(config_check)
     checks.extend(_check_required_folders())
     checks.append(_check_qdrant_binary())
+    checks.append(_check_qdrant_runtime(cfg))
+    checks.append(_check_ffmpeg())
     checks.append(_check_wsl_flag())
     checks.extend(_check_env_resolution(cfg))
 

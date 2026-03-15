@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import ctypes
 import json
 import os
 import platform
@@ -23,6 +24,16 @@ GPU_ENV_FILE = "environment.gpu.yml"
 DEFAULT_DATA_ROOT = Path(r"C:\GoodQ_Data")
 DEFAULT_WSL_DISTRO = "Ubuntu"
 MIN_FREE_SPACE_GB = 25
+QDRANT_SERVICE_NAME = "GoodQ_Qdrant"
+CONDA_TOS_CHANNELS = (
+    "https://repo.anaconda.com/pkgs/main",
+    "https://repo.anaconda.com/pkgs/r",
+    "https://repo.anaconda.com/pkgs/msys2",
+)
+WINGET_FFMPEG_ID = "Gyan.FFmpeg.Essentials"
+WINGET_NSSM_ID = "NSSM.NSSM"
+CHOCO_FFMPEG_PACKAGE = "ffmpeg"
+CHOCO_NSSM_PACKAGE = "nssm"
 
 
 @dataclass
@@ -43,6 +54,7 @@ class BootstrapContext:
     env_local_template: Path
     config_local_example: Path
     bootstrap_verify: Path
+    qdrant_service_installer: Path
     qdrant_start_bat: Path
     data_root: Path
     enable_gpu: bool
@@ -58,6 +70,10 @@ def _print(msg: str) -> None:
 def _fail(msg: str, exit_code: int = 1) -> int:
     _print(f"[FAIL] {msg}")
     return exit_code
+
+
+def _completed_output(completed: subprocess.CompletedProcess[str]) -> str:
+    return "\n".join(part for part in ((completed.stdout or "").strip(), (completed.stderr or "").strip()) if part).strip()
 
 
 def _run(
@@ -106,6 +122,10 @@ def detect_python() -> tuple[bool, str]:
     version = sys.version_info
     detail = f"{version.major}.{version.minor}.{version.micro} ({sys.executable})"
     return (version.major, version.minor) >= (3, 10), detail
+
+
+def _command_exists(name: str) -> bool:
+    return shutil.which(name) is not None
 
 
 def detect_conda() -> Optional[Path]:
@@ -162,7 +182,14 @@ def detect_wsl() -> tuple[bool, str, str]:
         return False, detail, DEFAULT_WSL_DISTRO
     raw_stdout = (completed.stdout or "").replace("\x00", "")
     distros = [line.strip() for line in raw_stdout.splitlines() if line.strip()]
-    distro = distros[0] if distros else DEFAULT_WSL_DISTRO
+    distro = DEFAULT_WSL_DISTRO
+    if distros:
+        ubuntu_like = [candidate for candidate in distros if candidate.lower().startswith("ubuntu")]
+        if ubuntu_like:
+            exact = next((candidate for candidate in ubuntu_like if candidate.lower() == "ubuntu"), None)
+            distro = exact or ubuntu_like[0]
+        else:
+            distro = distros[0]
     detail = f"installed distros: {', '.join(distros)}" if distros else "wsl present"
     return True, detail, distro
 
@@ -192,6 +219,21 @@ def prompt_bool(prompt: str, default: bool, assume_yes: bool) -> bool:
     return raw in {"y", "yes", "1", "true"}
 
 
+def _is_admin() -> bool:
+    try:
+        return bool(ctypes.windll.shell32.IsUserAnAdmin())
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _run_powershell(command: str, *, capture: bool = True) -> subprocess.CompletedProcess[str]:
+    return _run(["powershell", "-NoProfile", "-Command", command], capture=capture)
+
+
+def _quote_ps(value: str) -> str:
+    return value.replace("'", "''")
+
+
 def classify_profile(gpu_available: bool, wsl_available: bool, enable_gpu: bool) -> CapabilityProfile:
     profile = "GPU_ENHANCED" if gpu_available and enable_gpu else "BASELINE"
     gpu_ok, gpu_detail = detect_gpu()
@@ -219,7 +261,44 @@ def conda_env_exists(conda_exe: Path, env_name: str) -> bool:
     return False
 
 
-def ensure_conda_env(conda_exe: Path, repo_root: Path, env_file: Path) -> None:
+def _conda_tos_commands(conda_exe: Path) -> list[list[str]]:
+    return [
+        [str(conda_exe), "tos", "accept", "--override-channels", "--channel", channel]
+        for channel in CONDA_TOS_CHANNELS
+    ]
+
+
+def _conda_tos_instruction_block() -> str:
+    commands = "\n".join(
+        f"  conda tos accept --override-channels --channel {channel}" for channel in CONDA_TOS_CHANNELS
+    )
+    return f"Conda channel Terms of Service must be accepted before environment creation can continue:\n{commands}"
+
+
+def _is_conda_tos_block(detail: str) -> bool:
+    lowered = detail.lower()
+    return (
+        "terms of service" in lowered
+        or "conda tos" in lowered
+        or ("repo.anaconda.com" in lowered and "accept" in lowered and "channel" in lowered)
+    )
+
+
+def _accept_conda_tos(conda_exe: Path, *, assume_yes: bool) -> None:
+    _print("")
+    _print("[WARN] Conda channel Terms of Service are not yet accepted for this machine.")
+    if not prompt_bool("Accept the required Conda channel Terms of Service now", True, assume_yes):
+        raise RuntimeError(_conda_tos_instruction_block())
+
+    for cmd in _conda_tos_commands(conda_exe):
+        completed = _run(cmd)
+        if completed.returncode != 0:
+            detail = _completed_output(completed) or "conda tos accept failed"
+            raise RuntimeError(f"{detail}\n\n{_conda_tos_instruction_block()}")
+    _print("[OK] Accepted required Conda channel Terms of Service")
+
+
+def ensure_conda_env(conda_exe: Path, repo_root: Path, env_file: Path, *, assume_yes: bool) -> None:
     if conda_env_exists(conda_exe, ENV_NAME):
         _print(f"[INFO] Updating existing Conda environment: {ENV_NAME}")
         completed = _run([str(conda_exe), "env", "update", "-n", ENV_NAME, "-f", str(env_file)], cwd=repo_root)
@@ -228,6 +307,10 @@ def ensure_conda_env(conda_exe: Path, repo_root: Path, env_file: Path) -> None:
         completed = _run([str(conda_exe), "env", "create", "-f", str(env_file)], cwd=repo_root)
     if completed.returncode != 0:
         detail = (completed.stderr or completed.stdout).strip() or "conda environment command failed"
+        if _is_conda_tos_block(detail):
+            _accept_conda_tos(conda_exe, assume_yes=assume_yes)
+            ensure_conda_env(conda_exe, repo_root, env_file, assume_yes=assume_yes)
+            return
         raise RuntimeError(detail)
 
 
@@ -305,6 +388,68 @@ def write_config_local(path: Path, ctx: BootstrapContext) -> None:
     _print(f"[OK] Created {path.name}")
 
 
+def resolve_ffmpeg() -> tuple[bool, str]:
+    override = os.environ.get("GOODQ_FFMPEG_EXE", "").strip()
+    if override:
+        override_path = Path(override)
+        if override_path.exists():
+            return True, f"GOODQ_FFMPEG_EXE={override_path}"
+    ffmpeg_path = shutil.which("ffmpeg")
+    if ffmpeg_path:
+        return True, ffmpeg_path
+    return False, "ffmpeg not found on PATH and GOODQ_FFMPEG_EXE is unset"
+
+
+def _ffmpeg_instruction_block() -> str:
+    lines = [
+        "FFmpeg is optional but recommended for media extraction.",
+        "Installer guidance:",
+    ]
+    if _command_exists("winget"):
+        lines.append(f"  winget install --id {WINGET_FFMPEG_ID} -e --accept-package-agreements --accept-source-agreements")
+    if _command_exists("choco"):
+        lines.append(f"  choco install {CHOCO_FFMPEG_PACKAGE} -y")
+    lines.append("  Or install FFmpeg manually and add it to PATH, or set GOODQ_FFMPEG_EXE in .env.local")
+    return "\n".join(lines)
+
+
+def ensure_ffmpeg_ready(*, assume_yes: bool) -> bool:
+    ffmpeg_ok, ffmpeg_detail = resolve_ffmpeg()
+    if ffmpeg_ok:
+        _print(f"[OK] ffmpeg: {ffmpeg_detail}")
+        return True
+
+    _print(f"[WARN] ffmpeg: {ffmpeg_detail}")
+    install_cmd: Optional[list[str]] = None
+    install_label = ""
+    if _command_exists("winget"):
+        install_cmd = [
+            "winget",
+            "install",
+            "--id",
+            WINGET_FFMPEG_ID,
+            "-e",
+            "--accept-package-agreements",
+            "--accept-source-agreements",
+        ]
+        install_label = "winget"
+    elif _command_exists("choco"):
+        install_cmd = ["choco", "install", CHOCO_FFMPEG_PACKAGE, "-y"]
+        install_label = "Chocolatey"
+
+    if install_cmd and prompt_bool(f"Attempt FFmpeg installation via {install_label} now", True, assume_yes):
+        completed = _run(install_cmd, capture=False)
+        if completed.returncode == 0:
+            ffmpeg_ok, ffmpeg_detail = resolve_ffmpeg()
+            if ffmpeg_ok:
+                _print(f"[OK] ffmpeg installed: {ffmpeg_detail}")
+                return True
+        _print("[WARN] FFmpeg installation attempt did not complete successfully.")
+
+    _print(_ffmpeg_instruction_block())
+    return False
+
+
 def resolve_qdrant_url(conda_exe: Path, repo_root: Path) -> str:
     code = (
         "from steps.common.config_loader import load_configs; "
@@ -328,6 +473,105 @@ def check_qdrant(url: str) -> tuple[bool, str]:
         return False, f"not reachable at {url} ({exc})"
 
 
+def inspect_windows_service(name: str) -> dict[str, str]:
+    command = (
+        f"$svc = Get-Service -Name '{_quote_ps(name)}' -ErrorAction SilentlyContinue; "
+        "if ($null -eq $svc) { 'exists=false' } "
+        "else { "
+        "'exists=true'; "
+        "'status=' + $svc.Status.ToString(); "
+        "try { "
+        f"  $cim = Get-CimInstance Win32_Service -Filter \"Name='{name}'\"; "
+        "  if ($cim) { 'start_mode=' + $cim.StartMode } "
+        "} catch { } "
+        "}"
+    )
+    completed = _run_powershell(command)
+    info: dict[str, str] = {}
+    for line in (completed.stdout or "").splitlines():
+        if "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        info[key.strip()] = value.strip()
+    return info
+
+
+def _qdrant_repair_instruction(ctx: BootstrapContext) -> str:
+    lines = [
+        "Preferred Qdrant repair/install path:",
+        f"  {ctx.qdrant_service_installer}",
+    ]
+    if ctx.qdrant_start_bat.exists():
+        lines.append(f"Foreground testing fallback only: {ctx.qdrant_start_bat}")
+    return "\n".join(lines)
+
+
+def _run_qdrant_service_installer(installer: Path) -> subprocess.CompletedProcess[str]:
+    return _run(["cmd.exe", "/c", str(installer), "--non-interactive"], capture=False)
+
+
+def _run_qdrant_service_installer_elevated(installer: Path) -> subprocess.CompletedProcess[str]:
+    installer_path = _quote_ps(str(installer))
+    ps_script = (
+        f"$p = Start-Process -FilePath 'cmd.exe' "
+        f"-ArgumentList '/c','\"{installer_path}\" --non-interactive' "
+        "-Verb RunAs -Wait -PassThru; "
+        "exit $p.ExitCode"
+    )
+    return _run(["powershell", "-NoProfile", "-Command", ps_script])
+
+
+def ensure_qdrant_ready(ctx: BootstrapContext, *, assume_yes: bool) -> bool:
+    qdrant_url = resolve_qdrant_url(ctx.conda_exe, ctx.repo_root)
+    qdrant_ok, qdrant_detail = check_qdrant(qdrant_url)
+    if qdrant_ok:
+        _print(f"[OK] qdrant: {qdrant_detail}")
+        return True
+
+    service_info = inspect_windows_service(QDRANT_SERVICE_NAME)
+    qdrant_exe = ctx.repo_root / "vendor" / "qdrant" / "qdrant.exe"
+    qdrant_cfg = ctx.repo_root / "vendor" / "qdrant" / "config.yaml"
+
+    _print(f"[WARN] qdrant: {qdrant_detail}")
+    if service_info.get("exists") == "true":
+        status = service_info.get("status", "unknown")
+        start_mode = service_info.get("start_mode", "unknown")
+        _print(f"[INFO] Qdrant service status: {status} (start mode: {start_mode})")
+    else:
+        _print("[INFO] Qdrant service status: not installed")
+    _print(f"[INFO] Repo Qdrant binary: {'present' if qdrant_exe.exists() else 'missing'} at {qdrant_exe}")
+    _print(f"[INFO] Repo Qdrant config: {'present' if qdrant_cfg.exists() else 'missing'} at {qdrant_cfg}")
+
+    if not (ctx.qdrant_service_installer.exists() and qdrant_exe.exists() and qdrant_cfg.exists()):
+        _print(_qdrant_repair_instruction(ctx))
+        return False
+
+    if not prompt_bool("Attempt to install or repair the Windows Qdrant service now", True, assume_yes):
+        _print(_qdrant_repair_instruction(ctx))
+        return False
+
+    if _is_admin():
+        completed = _run_qdrant_service_installer(ctx.qdrant_service_installer)
+    else:
+        _print("[INFO] Elevation required to install or repair the Windows Qdrant service.")
+        completed = _run_qdrant_service_installer_elevated(ctx.qdrant_service_installer)
+
+    if completed.returncode != 0:
+        detail = _completed_output(completed) or "Qdrant service installer exited non-zero"
+        _print(f"[WARN] Qdrant service installer did not complete successfully: {detail}")
+        _print(_qdrant_repair_instruction(ctx))
+        return False
+
+    qdrant_ok, qdrant_detail = check_qdrant(qdrant_url)
+    if qdrant_ok:
+        _print(f"[OK] qdrant: {qdrant_detail}")
+        return True
+
+    _print(f"[WARN] qdrant still unavailable after installer run: {qdrant_detail}")
+    _print(_qdrant_repair_instruction(ctx))
+    return False
+
+
 def run_bootstrap_verify(conda_exe: Path, repo_root: Path) -> tuple[bool, str]:
     completed = _run(
         [str(conda_exe), "run", "-n", ENV_NAME, "python", str(repo_root / "scripts" / "bootstrap_verify.py"), "--json"],
@@ -336,7 +580,18 @@ def run_bootstrap_verify(conda_exe: Path, repo_root: Path) -> tuple[bool, str]:
     if completed.returncode != 0:
         detail = (completed.stderr or completed.stdout).strip() or "bootstrap_verify failed"
         return False, detail
-    return True, "bootstrap_verify passed"
+    payload_text = (completed.stdout or "").strip()
+    if payload_text:
+        try:
+            report = json.loads(payload_text)
+            overall = str(report.get("overall") or "pass").lower()
+            if overall == "warn":
+                return True, "bootstrap_verify overall=warn"
+            if overall == "fail":
+                return False, "bootstrap_verify overall=fail"
+        except json.JSONDecodeError:
+            pass
+    return True, "bootstrap_verify overall=pass"
 
 
 def verify_env_python(conda_exe: Path, repo_root: Path) -> tuple[bool, str]:
@@ -381,13 +636,14 @@ def collect_context(args: argparse.Namespace) -> BootstrapContext:
     gpu_available, gpu_detail = detect_gpu()
     wsl_available, wsl_detail, detected_distro = detect_wsl()
 
+    assume_defaults = args.yes or args.inspect_only or args.verify_only
     default_data_root = str(args.data_root or DEFAULT_DATA_ROOT)
-    chosen_data_root = Path(prompt_text("Base data root directory", default_data_root, args.yes))
+    chosen_data_root = Path(prompt_text("Base data root directory", default_data_root, assume_defaults))
     enable_gpu = args.enable_gpu if args.enable_gpu is not None else prompt_bool(
-        "Enable GPU acceleration", False, args.yes
+        "Enable GPU acceleration", False, assume_defaults
     )
     enable_wsl_audio = args.enable_wsl_audio if args.enable_wsl_audio is not None else prompt_bool(
-        "Enable WSL audio acceleration", wsl_available, args.yes
+        "Enable WSL audio acceleration", wsl_available, assume_defaults
     )
 
     if enable_gpu and not gpu_available:
@@ -413,6 +669,7 @@ def collect_context(args: argparse.Namespace) -> BootstrapContext:
         env_local_template=repo_root / ".env.local.template",
         config_local_example=repo_root / "configs" / "config.local.example.yaml",
         bootstrap_verify=repo_root / "scripts" / "bootstrap_verify.py",
+        qdrant_service_installer=repo_root / "scripts" / "qdrant" / "INSTALL_QDRANT_SERVICE.bat",
         qdrant_start_bat=repo_root / "scripts" / "qdrant" / "START_QDRANT.bat",
         data_root=chosen_data_root,
         enable_gpu=enable_gpu,
@@ -449,7 +706,7 @@ def prepare_local_files(ctx: BootstrapContext) -> None:
     write_config_local(ctx.repo_root / "configs" / "config.local.yaml", ctx)
 
 
-def verify_runtime(ctx: BootstrapContext) -> int:
+def verify_runtime(ctx: BootstrapContext, *, qdrant_ready: Optional[bool] = None) -> int:
     _print("")
     _print("Bootstrap Verification")
     _print("======================")
@@ -466,22 +723,33 @@ def verify_runtime(ctx: BootstrapContext) -> int:
     launcher_ok, launcher_detail = verify_launcher(ctx.launcher_bat)
     _print(f"[{'OK' if launcher_ok else 'FAIL'}] launcher: {launcher_detail}")
 
-    ffmpeg_path = shutil.which("ffmpeg")
-    if ffmpeg_path:
-        _print(f"[OK] ffmpeg: {ffmpeg_path}")
+    ffmpeg_ok, ffmpeg_detail = resolve_ffmpeg()
+    if ffmpeg_ok:
+        _print(f"[OK] ffmpeg: {ffmpeg_detail}")
     else:
-        _print("[WARN] ffmpeg not on PATH. Install it or set GOODQ_FFMPEG_EXE in .env.local.")
+        _print(f"[WARN] ffmpeg: {ffmpeg_detail}")
+        _print(_ffmpeg_instruction_block())
 
     qdrant_url = resolve_qdrant_url(ctx.conda_exe, ctx.repo_root)
     qdrant_ok, qdrant_detail = check_qdrant(qdrant_url)
+    if qdrant_ready is not None and qdrant_ready:
+        qdrant_ok = True
+        qdrant_detail = f"reachable at {qdrant_url}"
     level = "OK" if qdrant_ok else "WARN"
     _print(f"[{level}] qdrant: {qdrant_detail}")
     if not qdrant_ok:
-        qdrant_service_installer = ctx.repo_root / "scripts" / "qdrant" / "INSTALL_QDRANT_SERVICE.bat"
-        if qdrant_service_installer.exists():
+        service_info = inspect_windows_service(QDRANT_SERVICE_NAME)
+        if service_info.get("exists") == "true":
+            _print(
+                f"[INFO] Qdrant service status: {service_info.get('status', 'unknown')} "
+                f"(start mode: {service_info.get('start_mode', 'unknown')})"
+            )
+        else:
+            _print("[INFO] Qdrant service status: not installed")
+        if ctx.qdrant_service_installer.exists():
             _print(
                 "[INFO] Preferred Qdrant path: install or repair the Windows service via: "
-                f"{qdrant_service_installer}"
+                f"{ctx.qdrant_service_installer}"
             )
         if ctx.qdrant_start_bat.exists():
             _print(f"[INFO] Foreground testing fallback only: {ctx.qdrant_start_bat}")
@@ -536,14 +804,25 @@ def main() -> int:
 
     if not args.verify_only:
         try:
-            ensure_conda_env(ctx.conda_exe, ctx.repo_root, ctx.environment_yml)
+            ensure_conda_env(ctx.conda_exe, ctx.repo_root, ctx.environment_yml, assume_yes=args.yes)
             prepare_local_files(ctx)
         except Exception as exc:  # noqa: BLE001
             return _fail(f"Bootstrap preparation failed: {exc}")
 
-    verify_exit = verify_runtime(ctx)
+    qdrant_ready = True
+    if not args.verify_only:
+        ensure_ffmpeg_ready(assume_yes=args.yes)
+        qdrant_ready = ensure_qdrant_ready(ctx, assume_yes=args.yes)
+
+    verify_exit = verify_runtime(ctx, qdrant_ready=qdrant_ready)
     if verify_exit != 0:
         return verify_exit
+
+    if not args.verify_only and not qdrant_ready:
+        return _fail(
+            "Bootstrap completed, but Qdrant is still unavailable. "
+            "Repair the Windows service and rerun the bootstrap or launch step."
+        )
 
     if args.no_launch or args.verify_only:
         _print("[OK] Bootstrap complete. Launch skipped by flag.")

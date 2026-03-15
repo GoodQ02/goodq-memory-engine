@@ -16,6 +16,11 @@ if "%QDRANT_STORAGE_PATH%"=="" (
 )
 if not exist "%QDRANT_STORAGE_PATH%" mkdir "%QDRANT_STORAGE_PATH%"
 set "QDRANT__STORAGE__STORAGE_PATH=%QDRANT_STORAGE_PATH%"
+if not exist "%REPO_ROOT%\vendor\qdrant\qdrant.exe" (
+  echo [ERROR] Missing Qdrant binary at "%REPO_ROOT%\vendor\qdrant\qdrant.exe"
+  echo [INFO] Preferred fix: run scripts\qdrant\INSTALL_QDRANT_SERVICE.bat
+  exit /b 1
+)
 
 echo.
 echo ========================================

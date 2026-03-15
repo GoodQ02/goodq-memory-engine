@@ -2,6 +2,8 @@
 REM GoodQ4All - Install Qdrant as Windows Service
 REM This requires Administrator privileges
 setlocal EnableExtensions
+set "NON_INTERACTIVE=0"
+if /I "%~1"=="--non-interactive" set "NON_INTERACTIVE=1"
 for %%I in ("%~dp0..\\..") do set "REPO_ROOT=%%~fI"
 call "%REPO_ROOT%\scripts\_lib\interpreter_bindings.bat"
 pushd "%REPO_ROOT%"
@@ -34,7 +36,7 @@ echo.
 echo This will install Qdrant to run automatically on system startup.
 echo You need Administrator privileges to continue.
 echo.
-pause
+if "%NON_INTERACTIVE%"=="0" pause
 
 REM Check for admin rights
 net session >nul 2>&1
@@ -43,21 +45,28 @@ if %errorLevel% neq 0 (
     echo [ERROR] This script requires Administrator privileges!
     echo Please right-click and select "Run as Administrator"
     echo.
-    pause
+    if "%NON_INTERACTIVE%"=="0" pause
     exit /b 1
 )
 
 echo.
 echo [1/3] Creating NSSM service manager...
 
-REM Download NSSM (Non-Sucking Service Manager) if not present
+REM Prefer NSSM already on PATH, then vendored copy, then repo-scoped download
+where nssm >nul 2>&1
+if %errorLevel%==0 (
+    for /f "delims=" %%I in ('where nssm') do if not defined NSSM_EXE set "NSSM_EXE=%%~fI"
+)
 if not exist "%NSSM_EXE%" (
-    echo Downloading NSSM...
-    powershell -Command "Invoke-WebRequest -Uri 'https://nssm.cc/ci/nssm-2.24-101-g897c7ad.zip' -OutFile '%NSSM_ZIP%'"
-    powershell -Command "Expand-Archive -Path '%NSSM_ZIP%' -DestinationPath '%NSSM_TMP%' -Force"
-    copy "%NSSM_TMP%\nssm-2.24-101-g897c7ad\win64\nssm.exe" "%NSSM_EXE%"
-    rmdir /s /q "%NSSM_TMP%"
-    del "%NSSM_ZIP%"
+    echo Downloading NSSM into vendor\ ...
+    powershell -NoProfile -Command "Invoke-WebRequest -Uri 'https://nssm.cc/ci/nssm-2.24-101-g897c7ad.zip' -OutFile '%NSSM_ZIP%'"
+    if errorlevel 1 goto :nssm_missing
+    powershell -NoProfile -Command "Expand-Archive -Path '%NSSM_ZIP%' -DestinationPath '%NSSM_TMP%' -Force"
+    if errorlevel 1 goto :nssm_missing
+    copy "%NSSM_TMP%\nssm-2.24-101-g897c7ad\win64\nssm.exe" "%NSSM_EXE%" >nul
+    if errorlevel 1 goto :nssm_missing
+    rmdir /s /q "%NSSM_TMP%" >nul 2>&1
+    del "%NSSM_ZIP%" >nul 2>&1
 )
 
 echo [OK] NSSM ready
@@ -66,9 +75,25 @@ echo [2/3] Installing Qdrant service...
 
 if not exist "%QDRANT_STORAGE_PATH%" mkdir "%QDRANT_STORAGE_PATH%"
 if not exist "%GOODQ_LOG_DIR%" mkdir "%GOODQ_LOG_DIR%"
+if not exist "%QDRANT_EXE%" (
+    echo [ERROR] Missing Qdrant binary: %QDRANT_EXE%
+    exit /b 1
+)
+if not exist "%QDRANT_CFG%" (
+    echo [ERROR] Missing Qdrant config: %QDRANT_CFG%
+    exit /b 1
+)
 
-REM Install service
-"%NSSM_EXE%" install GoodQ_Qdrant "%QDRANT_EXE%" "--config-path" "%QDRANT_CFG%"
+sc query GoodQ_Qdrant >nul 2>&1
+if %errorLevel% neq 0 (
+    "%NSSM_EXE%" install GoodQ_Qdrant "%QDRANT_EXE%" "--config-path" "%QDRANT_CFG%"
+    if errorlevel 1 (
+        echo [ERROR] Failed to install GoodQ_Qdrant service.
+        exit /b 1
+    )
+) else (
+    echo [INFO] GoodQ_Qdrant already exists. Refreshing service configuration...
+)
 
 REM Configure service
 "%NSSM_EXE%" set GoodQ_Qdrant DisplayName "GoodQ4All - Qdrant Vector Database"
@@ -83,7 +108,12 @@ echo [OK] Service installed
 echo.
 echo [3/3] Starting Qdrant service...
 
+net stop GoodQ_Qdrant >nul 2>&1
 net start GoodQ_Qdrant
+if errorlevel 1 (
+    echo [ERROR] Failed to start GoodQ_Qdrant.
+    exit /b 1
+)
 
 echo.
 echo ========================================
@@ -104,4 +134,13 @@ echo   - Start:   net start GoodQ_Qdrant
 echo   - Stop:    net stop GoodQ_Qdrant
 echo   - Remove:  %NSSM_EXE% remove GoodQ_Qdrant confirm
 echo.
-pause
+if "%NON_INTERACTIVE%"=="0" pause
+exit /b 0
+
+:nssm_missing
+echo [ERROR] NSSM is required to host Qdrant as a Windows service.
+echo [INFO] Install NSSM using one of the following commands, then rerun this installer:
+echo   winget install --id NSSM.NSSM -e --accept-package-agreements --accept-source-agreements
+echo   choco install nssm -y
+if "%NON_INTERACTIVE%"=="0" pause
+exit /b 1

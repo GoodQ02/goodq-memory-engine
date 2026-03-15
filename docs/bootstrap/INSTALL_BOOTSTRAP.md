@@ -12,6 +12,7 @@ It does not change GoodQ runtime architecture. It only:
 - inspects host capabilities
 - prepares the Conda environment for the selected runtime profile
 - creates local-only config files when missing
+- assists with external runtime prerequisites when they are missing
 - runs lightweight verification
 - launches [`LAUNCH_GOODQ.bat`](../../LAUNCH_GOODQ.bat)
 
@@ -36,6 +37,9 @@ On a normal interactive run, the bootstrap prompts for:
 - base data root directory
 - whether to enable GPU acceleration
 - whether to enable WSL audio acceleration
+- whether to accept Conda channel Terms of Service when the local Conda installation requires it
+- whether to install missing external tools such as FFmpeg when a supported package manager is available
+- whether to install or repair the Windows `GoodQ_Qdrant` service when Qdrant is unavailable
 
 Default portable data root:
 
@@ -92,6 +96,12 @@ It also reports:
 
 `BASELINE` always remains CPU-safe.
 
+WSL distro selection:
+
+- if `GOODQ_WSL_DISTRO` is already set, the bootstrap preserves it
+- otherwise it prefers the first Ubuntu-like distro detected on the host
+- if no Ubuntu-like distro is present, it falls back to the existing default behavior
+
 Environment selection:
 
 - `BASELINE` uses [`environment.yml`](../../environment.yml)
@@ -106,12 +116,27 @@ The bootstrap performs only lightweight checks:
 - Conda environment exists
 - environment Python is available
 - config loader works
+- FFmpeg status is clear
 - Qdrant reachability is checked
+- Qdrant Windows service status is surfaced when Qdrant is unavailable
 - launcher exists
 
 If Qdrant is unavailable, the bootstrap recommends repairing or installing the
-Windows `GoodQ_Qdrant` service first and mentions the foreground start helper only
-as a manual testing fallback.
+Windows `GoodQ_Qdrant` service first, attempts the existing service installer
+when the operator consents, and mentions the foreground start helper only as a
+manual testing fallback.
+
+If FFmpeg is unavailable, the bootstrap keeps going but prints explicit
+installation guidance:
+
+- preferred: `winget`
+- fallback: `choco`
+- otherwise: manual install or `GOODQ_FFMPEG_EXE`
+
+If Conda environment creation is blocked by unaccepted channel Terms of
+Service, the bootstrap now detects that condition explicitly and prints or
+executes the required `conda tos accept ...` commands only with operator
+consent.
 
 It does not run ingestion or a full pipeline test.
 

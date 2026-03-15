@@ -10,13 +10,16 @@ echo.
 
 REM Test if Qdrant is running
 echo [1/4] Checking if Qdrant is running...
-curl -s http://localhost:6333/health > nul 2>&1
+powershell -NoProfile -Command "try { $r = Invoke-WebRequest -UseBasicParsing http://127.0.0.1:6333/collections -TimeoutSec 5; if ($r.StatusCode -eq 200) { exit 0 } else { exit 1 } } catch { exit 1 }" > nul 2>&1
 if errorlevel 1 (
     echo [FAIL] Qdrant is not responding on port 6333
     echo.
-    echo Please start Qdrant:
-    echo   Manual: START_QDRANT.bat
-    echo   Service: net start GoodQ_Qdrant
+    echo Preferred fix:
+    echo   Service install/repair: INSTALL_QDRANT_SERVICE.bat
+    echo   Start existing service: net start GoodQ_Qdrant
+    echo.
+    echo Foreground testing fallback only:
+    echo   START_QDRANT.bat
     echo.
     pause
     exit /b 1

@@ -66,6 +66,13 @@ results = search_scenes(
 
 ## 🚀 Quick Start
 
+If you are using the fresh-machine bootstrap path, start with
+`python scripts/bootstrap_install.py`.
+
+When run with operator consent, the bootstrap will try to repair or install the
+Windows `GoodQ_Qdrant` service automatically before falling back to manual
+instructions.
+
 ### Option 1: Install as Windows Service (Recommended)
 
 ```batch
@@ -76,6 +83,7 @@ INSTALL_QDRANT_SERVICE.bat
 This will:
 - Install Qdrant as a Windows service named `GoodQ_Qdrant`
 - Configure auto-start on system boot
+- Reuse an existing service if one is already present and refresh its settings
 - Set up logging to `<project_root>\logs\qdrant_*.log`
 
 ### Option 2: Run Manually (Foreground Testing Fallback)
@@ -123,7 +131,7 @@ services.msc
 # Look for "GoodQ4All - Qdrant Vector Database"
 ```
 
-Or visit: **http://127.0.0.1:6333/health**
+Or query: **http://127.0.0.1:6333/collections**
 
 ### Uninstall Service
 
@@ -199,13 +207,10 @@ qdrant:
 ### 1. Verify Service is Running
 
 ```powershell
-# Test health endpoint
-Invoke-RestMethod -Uri http://127.0.0.1:6333/health
+# Test the collections endpoint used by the bootstrap/runtime checks
+Invoke-RestMethod -Uri http://127.0.0.1:6333/collections
 
-# Expected output:
-# status
-# ------
-# ok
+# Expected output includes a result.collections payload
 ```
 
 ### 2. List Collections
@@ -316,7 +321,7 @@ taskkill /PID <PID> /F
 
 1. Make sure Qdrant is running
 2. Run `INIT_QDRANT.bat` again
-3. Check connection: `http://localhost:6333/health`
+3. Check connection: `http://localhost:6333/collections`
 
 ### Ingestion Not Using Qdrant
 
@@ -325,7 +330,7 @@ taskkill /PID <PID> /F
 3. Test connection from Python:
    ```python
    import requests
-   requests.get('http://localhost:6333/health')
+   requests.get('http://localhost:6333/collections')
    ```
 
 ---

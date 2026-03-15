@@ -284,7 +284,7 @@ _Generated: 2026-02-15_
 | `scripts/utils/validate_models.py` | Unclear/Obsolete | Comprehensive model validation script to ensure all steps produce actual output. | No | absolute path operations |
 | `scripts/utils/validate_phase3_integration.py` (retired) | Unclear/Obsolete | Historical Phase 3 validator removed after its file map and path assumptions drifted from the current runtime. | No | absolute path operations |
 | `scripts/utils/validate_pipeline_flow.py` | Unclear/Obsolete | Pipeline Flow Validator for GoodQ Multimodal Ingestion | No | absolute path operations |
-| `scripts/utils/validate_ui_config.py` | Unclear/Obsolete | GoodQ UI Configuration Validator | No | absolute path operations |
+| `scripts/utils/validate_ui_config.py` (retired) | Unclear/Obsolete | Historical UI port validator removed after its hardcoded repo root and `api_server.py` assumptions drifted from the supported runtime. | No | absolute path operations |
 | `scripts/utils/verify_command_center.py` | Unclear/Obsolete | Quick verification that Command Center is fully operational | No | binary/network download |
 | `scripts/utils/verify_model_lockdown.py` | Dev Utility | Verify that all models are properly locked down with exact versions. | Manual Review | absolute path operations |
 | `scripts/utils/verify_phase1_fix.py` | Unclear/Obsolete | Comprehensive verification of Phase 1 fix - Segment text storage | No | None detected |
@@ -454,7 +454,7 @@ _Generated: 2026-02-15_
 | `scripts/utils/validate_models.py` | Unclear/Obsolete | absolute path operations |
 | `scripts/utils/validate_phase3_integration.py` (retired) | Unclear/Obsolete | absolute path operations |
 | `scripts/utils/validate_pipeline_flow.py` | Unclear/Obsolete | absolute path operations |
-| `scripts/utils/validate_ui_config.py` | Unclear/Obsolete | absolute path operations |
+| `scripts/utils/validate_ui_config.py` (retired) | Unclear/Obsolete | absolute path operations |
 | `scripts/utils/verify_command_center.py` | Unclear/Obsolete | binary/network download |
 | `scripts/utils/verify_model_lockdown.py` | Dev Utility | absolute path operations |
 | `scripts/validate_gpu_setup.bat` | Bootstrap-Critical | environment mutation |

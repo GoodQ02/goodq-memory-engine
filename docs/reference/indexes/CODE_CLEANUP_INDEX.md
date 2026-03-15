@@ -36,9 +36,9 @@ These scripts are referenced multiple times and/or are explicitly part of the sh
   - `scripts/test_llm_client.py`
   - `scripts/test_wsl2_bridge.py`
 - Watchdog:
-  - `scripts/watchdog_ingest.py`
-  - `scripts/check_watchdog_status.py`
-  - `scripts/test_watchdog.py`, `scripts/test_watchdog_simple.py`
+  - `cli/watchdog.py`
+  - `scripts/utils/check_watchdog_status.py`
+  - `tests/integration/test_watchdog.py`
 - Diagnostics / dashboards:
   - `scripts/command_center.ps1`
   - `scripts/diagnostics/diagnose_system.py`

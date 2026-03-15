@@ -1,6 +1,6 @@
 # Analytics Pages - Phase Complete ✓
 
-> Role: Implementation summary for the analytics pages and `/api/analytics/*` endpoints as of Phase 7. For how to drive analytics via CLI and queries, see `docs/ANALYTICS_QUICK_REFERENCE.md` and `docs/ANALYTICS_INDEX.md`.
+> Historical implementation summary for the analytics pages and `/api/analytics/*` endpoints as of Phase 7. The feature remains live, but the original rollout references here should not be treated as the canonical runtime surface. For current usage, see `docs/ANALYTICS_QUICK_REFERENCE.md`, `docs/ANALYTICS_INDEX.md`, and `api/main.py`.
 
 ## Summary
 Successfully wired in comprehensive analytics pages with **100% real data streams** - NO placeholders or mock data.
@@ -239,7 +239,7 @@ Added comprehensive styles for:
 ## Files Modified
 
 ### Backend
-- `<project_root>\api_server.py` - Added 4 new analytics endpoints
+- `<project_root>\api/main.py` - Current canonical home of the analytics endpoints preserved from the original rollout
 
 ### Frontend
 - `<project_root>\index.html` - Added tabbed analytics interface, CSS styling, and JavaScript handlers
@@ -260,4 +260,3 @@ All analytics pages are fully wired with real data streams. The system is produc
 
 *Generated: 2025-11-11*
 *GoodQ4All - Production Analytics System*
-

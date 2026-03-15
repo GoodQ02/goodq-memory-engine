@@ -476,8 +476,15 @@ def verify_runtime(ctx: BootstrapContext) -> int:
     qdrant_ok, qdrant_detail = check_qdrant(qdrant_url)
     level = "OK" if qdrant_ok else "WARN"
     _print(f"[{level}] qdrant: {qdrant_detail}")
-    if not qdrant_ok and ctx.qdrant_start_bat.exists():
-        _print(f"[INFO] To start Qdrant manually, run: {ctx.qdrant_start_bat}")
+    if not qdrant_ok:
+        qdrant_service_installer = ctx.repo_root / "scripts" / "qdrant" / "INSTALL_QDRANT_SERVICE.bat"
+        if qdrant_service_installer.exists():
+            _print(
+                "[INFO] Preferred Qdrant path: install or repair the Windows service via: "
+                f"{qdrant_service_installer}"
+            )
+        if ctx.qdrant_start_bat.exists():
+            _print(f"[INFO] Foreground testing fallback only: {ctx.qdrant_start_bat}")
 
     if not (env_ok and cfg_ok and launcher_ok):
         return 1

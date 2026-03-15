@@ -66,7 +66,19 @@ results = search_scenes(
 
 ## 🚀 Quick Start
 
-### Option 1: Run Manually (Testing)
+### Option 1: Install as Windows Service (Recommended)
+
+```batch
+# Right-click and "Run as Administrator"
+INSTALL_QDRANT_SERVICE.bat
+```
+
+This will:
+- Install Qdrant as a Windows service named `GoodQ_Qdrant`
+- Configure auto-start on system boot
+- Set up logging to `<project_root>\logs\qdrant_*.log`
+
+### Option 2: Run Manually (Foreground Testing Fallback)
 
 ```batch
 # Start Qdrant in foreground
@@ -80,18 +92,6 @@ INIT_QDRANT.bat
 ```
 
 Access dashboard: **http://127.0.0.1:6333/dashboard**
-
-### Option 2: Install as Windows Service (Recommended)
-
-```batch
-# Right-click and "Run as Administrator"
-INSTALL_QDRANT_SERVICE.bat
-```
-
-This will:
-- Install Qdrant as a Windows service named `GoodQ_Qdrant`
-- Configure auto-start on system boot
-- Set up logging to `<project_root>\logs\qdrant_*.log`
 
 Then initialize collections:
 ```batch
@@ -308,8 +308,9 @@ taskkill /PID <PID> /F
 ### Service Won't Start
 
 1. Check logs: `<project_root>\logs\qdrant_stderr.log`
-2. Try manual start: `START_QDRANT.bat`
+2. Re-run `INSTALL_QDRANT_SERVICE.bat` as Administrator to repair the Windows service
 3. Check config syntax: `vendor\qdrant\config.yaml`
+4. Use `START_QDRANT.bat` only as a foreground diagnostic fallback
 
 ### Collections Not Created
 
@@ -332,8 +333,8 @@ taskkill /PID <PID> /F
 ## 🎓 Next Steps
 
 1. **Start Qdrant:**
-   - Manual: `START_QDRANT.bat`
-   - Service: `INSTALL_QDRANT_SERVICE.bat` (as Admin)
+   - Preferred: `INSTALL_QDRANT_SERVICE.bat` (as Admin)
+   - Testing fallback: `START_QDRANT.bat`
 
 2. **Initialize Collections:**
    ```batch

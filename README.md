@@ -105,6 +105,11 @@ Reference: [`docs/bootstrap/PATH_ABSTRACTION_CONTRACT.md`](docs/bootstrap/PATH_A
 
 ## Quick Start
 
+For a fresh Windows machine, the preferred entrypoint is the bootstrap installer:
+
+- Bootstrap guide: [`docs/bootstrap/INSTALL_BOOTSTRAP.md`](docs/bootstrap/INSTALL_BOOTSTRAP.md)
+- Bootstrap command: `python scripts/bootstrap_install.py`
+
 ### 1. Open Repo Root
 
 ```powershell
@@ -112,16 +117,14 @@ git clone <repo_url>
 cd goodq4all
 ```
 
-### 2. Choose Profile
+### 2. Run Bootstrap
 
 ```powershell
-# CPU-safe portability mode
-$env:GOODQ_HOST_PROFILE = "BASELINE"
-
-# Optional strict checks
-$env:GOODQ_REQUIRE_GPU = "0"
-$env:GOODQ_REQUIRE_WSL_AUDIO = "0"
+python scripts/bootstrap_install.py
 ```
+
+The bootstrap creates or updates the `goodq_core` environment, writes local-only
+overrides when missing, and checks canonical launcher prerequisites.
 
 ### 3. Run Bootstrap Validation
 
@@ -141,6 +144,12 @@ This staged check validates docs governance, bootstrap semantics, and test statu
 .\LAUNCH_GOODQ.bat
 ```
 
+### 5. Advanced Manual Path (Optional)
+
+For manual environment control, host overrides, and profile flags, use:
+- [`docs/guides/install/INSTALL.md`](docs/guides/install/INSTALL.md)
+- [`docs/guides/install/QUICKSTART.md`](docs/guides/install/QUICKSTART.md)
+
 ## Security Posture
 
 - Secrets live in `.env.local` only.
@@ -148,6 +157,7 @@ This staged check validates docs governance, bootstrap semantics, and test statu
 - Raw sensitive query text should not be persisted in retrieval event logs.
 - Local storage is the source of truth; logs support investigation, not authority.
 - Operational posture is conservative by design: explicit config, clear failure signals, minimal trust assumptions.
+- See [`SECURITY.md`](SECURITY.md) for vulnerability reporting guidance.
 
 ## Model and Data Licensing
 
@@ -185,6 +195,8 @@ This staged check validates docs governance, bootstrap semantics, and test statu
 
 ### Governance and Drift Controls
 
+- Code of conduct: [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md)
+- Security policy: [`SECURITY.md`](SECURITY.md)
 - Governance summary: [`docs/bootstrap/doc_governance_summary.md`](docs/bootstrap/doc_governance_summary.md)
 - Authority policy: [`docs/bootstrap/doc_authority_policy.md`](docs/bootstrap/doc_authority_policy.md)
 - Authority map: [`docs/bootstrap/doc_authority_map.md`](docs/bootstrap/doc_authority_map.md)

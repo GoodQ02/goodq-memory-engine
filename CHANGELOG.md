@@ -17,6 +17,7 @@ and related canonical docs.
 - Qdrant contract hardening: bootstrap and setup docs now treat the Windows `GoodQ_Qdrant` service as the canonical startup path, with `START_QDRANT.bat` retained only as a foreground testing fallback.
 - Documentation governance hardening: `doc_authority_map.md` now identifies itself as a generated snapshot rather than canonical authority and no longer misclassifies the historical UI audit cluster as live operational guidance.
 - Retired the stale `scripts/utils/validate_ui_config.py` one-off validator and aligned the remaining cleanup/index docs to the canonical watchdog and analytics surfaces.
+- Forward-facing docs now reflect the bootstrap-first install story, Qdrant service-first recovery path, and repository governance surface with real `CODE_OF_CONDUCT.md` and `SECURITY.md` policies.
 - Retired the legacy `scripts/api_server.py` monolith from the tracked surface and repointed direct support-facing references to the canonical `api.server` wrapper.
 - Retired the legacy `scripts/refresh_vllm_portproxy.bat` helper from the tracked surface; Windows↔WSL vLLM access is no longer documented through manual portproxy mutation.
 - Retired stale WSL/vLLM report-style docs from the tracked support surface and repointed live indexes to the current operator docs.

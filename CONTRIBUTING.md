@@ -22,7 +22,13 @@ cd goodq4all
 
 ### 2. Set Up Development Environment
 
-Follow the [Installation Guide](docs/guides/install/INSTALL.md) and the
+Preferred Windows path:
+
+```powershell
+python scripts/bootstrap_install.py
+```
+
+For manual environment control, follow the [Installation Guide](docs/guides/install/INSTALL.md) and the
 [bootstrap installer guide](docs/bootstrap/INSTALL_BOOTSTRAP.md) to set up:
 - the baseline Conda environment from `environment.yml`
 - optional WSL2 audio acceleration
@@ -166,10 +172,11 @@ When updating documentation:
 
 ## 🔐 Security Considerations
 
-- **Never commit credentials** – Use `.env` files (gitignored)
+- **Never commit credentials** – Use `.env.local` and local config overrides only
 - **Validate inputs** – Sanitize file paths and user data
 - **Log safely** – Avoid logging sensitive information
 - **Dependencies** – Use the public baseline in `environment.yml` and the role-specific lockfiles under `envs/locks/`
+- **Reporting** – See [`SECURITY.md`](SECURITY.md) for vulnerability reporting guidance
 
 ## 🤝 Community Guidelines
 
@@ -177,6 +184,7 @@ When updating documentation:
 - **Be patient** – Maintainers are volunteers
 - **Be collaborative** – Help others learn and grow
 - **Be inclusive** – Welcome contributors of all skill levels
+- **Follow the project conduct policy** – See [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md)
 
 ## 📞 Getting Help
 

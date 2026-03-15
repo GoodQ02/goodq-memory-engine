@@ -6,6 +6,18 @@
 
 This is the canonical install and bootstrap guide.
 
+## Preferred Fresh-Machine Path
+
+For a fresh Windows machine, use the bootstrap installer first:
+
+```powershell
+python scripts/bootstrap_install.py
+```
+
+That path creates or updates the `goodq_core` environment, writes local-only
+overrides when missing, performs lightweight verification, and launches the
+canonical launcher surface.
+
 ## Performance Profiles
 
 GoodQ4All supports three profile semantics:
@@ -52,7 +64,10 @@ $env:GOODQ_WSL_USER = "<wsl_user>"
 $env:GOODQ_WSL_WORKSPACE = "/home/<wsl_user>/goodq_audio"
 ```
 
-## Install Steps
+## Manual Setup (Advanced / Existing Environment)
+
+Use this path when you need deterministic manual control instead of the bootstrap
+installer.
 
 1. Clone and open `<project_root>`.
 2. Configure `.env.local` with required tokens/secrets.

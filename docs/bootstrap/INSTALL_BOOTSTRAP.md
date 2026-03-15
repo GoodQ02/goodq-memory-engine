@@ -23,7 +23,8 @@ The bootstrap intentionally reuses existing project surfaces:
 - [`environment.gpu.yml`](../../environment.gpu.yml)
 - [`LAUNCH_GOODQ.bat`](../../LAUNCH_GOODQ.bat)
 - [`scripts/bootstrap_verify.py`](../../scripts/bootstrap_verify.py)
-- [`scripts/qdrant/START_QDRANT.bat`](../../scripts/qdrant/START_QDRANT.bat)
+- [`scripts/qdrant/INSTALL_QDRANT_SERVICE.bat`](../../scripts/qdrant/INSTALL_QDRANT_SERVICE.bat)
+- [`scripts/qdrant/START_QDRANT.bat`](../../scripts/qdrant/START_QDRANT.bat) for foreground testing fallback only
 - [`configs/config.yaml`](../../configs/config.yaml)
 - [`configs/config.local.example.yaml`](../../configs/config.local.example.yaml)
 - [`.env.local.template`](../../.env.local.template)
@@ -107,6 +108,10 @@ The bootstrap performs only lightweight checks:
 - config loader works
 - Qdrant reachability is checked
 - launcher exists
+
+If Qdrant is unavailable, the bootstrap recommends repairing or installing the
+Windows `GoodQ_Qdrant` service first and mentions the foreground start helper only
+as a manual testing fallback.
 
 It does not run ingestion or a full pipeline test.
 

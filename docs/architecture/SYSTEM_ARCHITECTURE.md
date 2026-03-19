@@ -49,7 +49,7 @@ Latest rerun comparison evidence is archived at `docs/archive/proof_of_concept/W
 
 ---
 
-## 🏗️ Architectural Overview
+## Architectural Overview
 
 GoodQ4All is a **local, GPU-accelerated multimodal AI pipeline** that processes video, audio, and images entirely on your machine. The system uses **scene-first processing** with a **unified environment** and **dual audio architecture** (Windows + WSL2) for maximum performance.
 
@@ -61,7 +61,7 @@ GoodQ4All is a **local, GPU-accelerated multimodal AI pipeline** that processes 
 
 ---
 
-## 🎯 Design Principles (Dec 14, 2025)
+## Design Principles (Dec 14, 2025)
 
 ### 1. Scene-First Processing (Runtime-Validated)
 - Video split into scenes FIRST (~30 scenes for 1hr video)
@@ -101,7 +101,7 @@ Comprehensive telemetry:
 
 ---
 
-## 📐 System Layers (Dec 14, 2025 Verified)
+## System Layers (Dec 14, 2025 Verified)
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -141,11 +141,11 @@ Comprehensive telemetry:
 └─────────────────────────────────────────────────────────────┘
 ```
 
-**Legend:** ✅ Operational | ⊘ Latent (built, not wired) | ⚠️ Deprecated
+**Legend:** Operational | Latent (built, not wired) | Deprecated
 
 ---
 
-## 🔄 Pipeline Architecture (Dec 14, 2025 - Golden Path)
+## Pipeline Architecture (Dec 14, 2025 - Golden Path)
 
 ### Entry Point
 ```
@@ -209,13 +209,13 @@ Input Video (dropped in import_inbox)
 
 ---
 
-## 🧩 Component Details (Dec 14, 2025)
+## Component Details (Dec 14, 2025)
 
 ### 1. Video Pipeline (Windows - goodq_core environment)
 
 **Responsibility:** Extract and analyze visual content per scene
 
-**✅ Operational Components:**
+**Operational Components:**
 
 - **Scene Detection** (goodq_video_scene_detect)
   - Adaptive thresholding
@@ -257,7 +257,7 @@ Input Video (dropped in import_inbox)
 
 **Responsibility:** Extract and analyze audio content per scene
 
-**✅ Operational Components (Dual Architecture):**
+**Operational Components (Dual Architecture):**
 
 **A. Queue-Based Service** (long-running daemon)
 - **Service:** `~/goodq_audio/audio_service.py`
@@ -280,11 +280,11 @@ Input Video (dropped in import_inbox)
   - Audio embeddings (768-dimensional)
   - Features & metadata
 
-**⊘ Latent Capabilities:**
+**Latent Capabilities:**
 - Music Detection (stub exists, not connected)
 - Time Hints (stub exists, not connected)
 
-**⚠️ Legacy Components (Still Running - Cleanup Planned):**
+**Legacy Components (Still Running - Cleanup Planned):**
 - audio_speaker_merge
 - audio_music_events  
 - audio_time_hints
@@ -293,7 +293,7 @@ Input Video (dropped in import_inbox)
 
 **Responsibility:** Extract entities and build knowledge graph
 
-**✅ Operational Components:**
+**Operational Components:**
 
 - **Entity Extractor** (`steps/video/entity_extractor.py:370`)
   - Cross-modal resolution
@@ -308,12 +308,12 @@ Input Video (dropped in import_inbox)
   - Database: `<GOODQ_DATA_ROOT>\GoodQ_Data\knowledge_graph.db`
   - Status: Confirmed operational (Dec 14)
 
-**⊘ Latent Capabilities:**
+**Latent Capabilities:**
 - Cross-Modal Harmonizer (`steps/video/cross_modal_harmonizer.py`)
   - Complete but not wired
   - Phase 7 deployment planned
 
-## 💾 Storage & Database Architecture (Dec 14, 2025)
+## Storage & Database Architecture (Dec 14, 2025)
 
 ### Data Root Structure
 ```
@@ -336,7 +336,7 @@ logs\scene_ingest\                # ✅ Scene artifacts (actual location)
 └── output\                       # result.json (38KB verified)
 ```
 
-> ℹ️ **Note:** There is a known config/runtime inconsistency where `config.yaml` specifies `processing: <GOODQ_DATA_ROOT>\GoodQ_Data\processing\` but artifacts actually land in `logs\scene_ingest\`. This is non-breaking and fully documented. See [`docs/technical/ARTIFACT_LOCATION_CONTRACT.md`](../technical/ARTIFACT_LOCATION_CONTRACT.md) for details.
+> **Note:** There is a known config/runtime inconsistency where `config.yaml` specifies `processing: <GOODQ_DATA_ROOT>\GoodQ_Data\processing\` but artifacts actually land in `logs\scene_ingest\`. This is non-breaking and fully documented. See [`docs/technical/ARTIFACT_LOCATION_CONTRACT.md`](../technical/ARTIFACT_LOCATION_CONTRACT.md) for details.
 
 ### Database Details
 
@@ -372,7 +372,7 @@ logs\scene_ingest\                # ✅ Scene artifacts (actual location)
 **API:** http://localhost:6333  
 **Status:** Runtime-conditional; verify with current artifacts and DB health checks
 
-### ⚠️ Deprecated Storage
+### Deprecated Storage
 - FAISS-only storage as sole vector backend
 - unified_goodq.db (consolidated into memory.db)
 - Old data paths (`<project_root>/data/`)
@@ -465,7 +465,7 @@ CREATE INDEX idx_content_hash ON id_map(content_hash);
 
 ---
 
-## 🔧 Environment Architecture
+## Environment Architecture
 
 ### Isolation Strategy
 
@@ -522,7 +522,7 @@ pip install -r requirements.txt `
 
 ---
 
-## 📊 Data Flow Diagram
+## Data Flow Diagram
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
@@ -576,7 +576,7 @@ pip install -r requirements.txt `
 
 ---
 
-## 🔐 Security & Privacy
+## Security & Privacy
 
 ### Privacy-First Design
 - **No cloud processing** - All ML models run locally
@@ -597,7 +597,7 @@ pip install -r requirements.txt `
 
 ---
 
-## 🚀 Performance Optimizations
+## Performance Optimizations
 
 ### GPU Utilization
 - **CUDA streams** - Asynchronous model execution
@@ -624,7 +624,7 @@ pip install -r requirements.txt `
 
 ---
 
-## 📈 Scalability Considerations
+## Scalability Considerations
 
 ### Current Capacity (Single Machine)
 - **Videos:** 10,000+ with 100K+ scenes
@@ -653,7 +653,7 @@ pip install -r requirements.txt `
 
 ---
 
-## 🧪 Testing & Validation
+## Testing & Validation
 
 ### Automated Tests
 ```powershell
@@ -684,7 +684,7 @@ pwsh scripts/benchmark_pipeline.ps1 -InputDir test_videos -Iterations 5
 
 ---
 
-## 📚 References & Resources
+## References & Resources
 
 **Official Documentation:**
 - Historical orchestration framework docs (archived reference only)
@@ -705,7 +705,7 @@ pwsh scripts/benchmark_pipeline.ps1 -InputDir test_videos -Iterations 5
 ---
 
 *Architecture document - Version 1.2.0 - October 6, 2025*
-## 🎯 GPU & Performance (Dec 14, 2025 Verified)
+## GPU & Performance (Dec 14, 2025 Verified)
 
 ### Hardware Configuration
 - **GPU:** RTX 4070 Ti SUPER 16GB
@@ -739,7 +739,7 @@ pwsh scripts/benchmark_pipeline.ps1 -InputDir test_videos -Iterations 5
 
 ---
 
-## 🔄 System Status (Dec 14, 2025 Snapshot)
+## System Status (Dec 14, 2025 Snapshot)
 
 ### Runtime-Verified Components
 - Scene detection (30 scenes confirmed)
@@ -749,13 +749,13 @@ pwsh scripts/benchmark_pipeline.ps1 -InputDir test_videos -Iterations 5
 - Knowledge graph (real-time insertion)
 - Qdrant vector storage (3 collections active)
 
-### ⊘ Built But Not Wired (Phase 7 - Q1 2026)
+### Built But Not Wired (Phase 7 - Q1 2026)
 - FastAPI server (api/server.py - scaffolded)
 - Web UI (ui/ - frontend exists)
 - Multimodal search (retrieval/multimodal_search.py)
 - Cross-modal harmonizer (steps/video/cross_modal_harmonizer.py)
 
-### ⚠️ Deprecated / Cleanup Planned
+### Deprecated / Cleanup Planned
 - legacy orchestration orchestration (removed, direct invocation now)
 - FAISS-only vector operation (Qdrant remains canonical; FAISS may exist as secondary parity/fallback path)
 - 6 separate conda environments (unified to goodq_core)
@@ -764,9 +764,9 @@ pwsh scripts/benchmark_pipeline.ps1 -InputDir test_videos -Iterations 5
 
 ---
 
-## 📚 Related Documentation
+## Related Documentation
 
-**Core Documentation (✅ Updated Dec 14-15, 2025):**
+**Core Documentation (Updated Dec 14-15, 2025):**
 - [README.md](../../README.md) - System overview with forensic verification
 - [QUICK_START.md](../QUICK_START.md) - Fast launch guide
 - [TROUBLESHOOTING.md](../TROUBLESHOOTING.md) - 7 issues, 25+ commands
@@ -776,14 +776,14 @@ pwsh scripts/benchmark_pipeline.ps1 -InputDir test_videos -Iterations 5
 - [ARCHITECTURE_REFERENCE.md](ARCHITECTURE_REFERENCE.md) - Database schemas (needs Qdrant update)
 - [PROJECT_STRUCTURE.md](PROJECT_STRUCTURE.md) - Directory layout (if exists)
 
-**Subsystem Guides (✅ Current):**
+**Subsystem Guides (Current):**
 - [WSL2 Audio](../guides/wsl2/START_HERE_WSL2.md) - Dual architecture details
 - [Qdrant Setup](../guides/QDRANT_SETUP.md) - Vector database guide
 - [GPU Configuration](../guides/gpu/GPU_SETUP.md) - GPU optimization
 
 ---
 
-## 🔬 Testing & Validation (Dec 14, 2025)
+## Testing & Validation (Dec 14, 2025)
 
 ### Automated Health Checks
 \\\powershell
@@ -800,14 +800,14 @@ nvidia-smi                                         # GPU status
 \\\
 
 ### Live Test Results (Dec 14, 2025)
-✅ **Input:** 1-hour video  
-✅ **Output:** 30 scenes processed  
-✅ **Audio:** 52 segments, 2 speakers identified  
-✅ **Entity extraction:** Operational  
-✅ **Knowledge graph:** Real-time insertion confirmed  
-✅ **GPU:** 85% utilization stable  
-✅ **Databases:** memory.db + knowledge_graph.db growing  
-✅ **Qdrant:** 3 collections receiving vectors
+[OK] **Input:** 1-hour video  
+[OK] **Output:** 30 scenes processed  
+[OK] **Audio:** 52 segments, 2 speakers identified  
+[OK] **Entity extraction:** Operational  
+[OK] **Knowledge graph:** Real-time insertion confirmed  
+[OK] **GPU:** 85% utilization stable  
+[OK] **Databases:** memory.db + knowledge_graph.db growing  
+[OK] **Qdrant:** 3 collections receiving vectors
 
 ### Manual Verification
 \\\powershell
@@ -823,17 +823,17 @@ Invoke-WebRequest http://localhost:6333/collections
 
 ---
 
-## 🎯 Conclusion
+## Conclusion
 
 GoodQ4All is a local multimodal pipeline with profile-gated acceleration and artifact-driven runtime truth signals.
 
 **Key Achievements:**
-- ✅ Scene-first processing (30 scenes verified)
-- ✅ Unified environment (goodq_core, 30GB savings)
-- ✅ Dual audio architecture (Windows + WSL2 GPU-accelerated)
-- ✅ Cross-modal entity extraction operational
-- ✅ Knowledge graph real-time insertion confirmed
-- ✅ Qdrant vector storage operational (3 collections)
+- [OK] Scene-first processing (30 scenes verified)
+- [OK] Unified environment (goodq_core, 30GB savings)
+- [OK] Dual audio architecture (Windows + WSL2 GPU-accelerated)
+- [OK] Cross-modal entity extraction operational
+- [OK] Knowledge graph real-time insertion confirmed
+- [OK] Qdrant vector storage operational (3 collections)
 
 Operational status should be interpreted from current run artifacts and health checks, not static document claims.
 

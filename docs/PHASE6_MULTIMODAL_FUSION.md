@@ -4,9 +4,9 @@
 
 # Phase 6: Multimodal Fusion & Temporal Indexing
 
-**Status**: ✅ **WIRED AND OPERATIONAL** (as of December 14, 2025)
+**Status**: **WIRED AND OPERATIONAL** (as of December 14, 2025)
 
-Phase 6 represents the culmination of the ingestion pipeline—fusing visual, audio, and textual modalities into a unified temporal index suitable for multimodal retrieval.
+Phase 6 represents the culmination of the ingestion pipeline, fusing visual, audio, and textual modalities into a unified temporal index suitable for multimodal retrieval.
 
 ---
 
@@ -21,11 +21,11 @@ Phase 6 operates in **two sequential stages**:
 **Purpose**: Generate scene-level visual embeddings from video frames.
 
 **Process**:
-1. **Frame Extraction** → Extract representative frames per scene (uniform, keyframe, or middle strategies)
-2. **CLIP Embeddings** → Generate 512-dim semantic visual embeddings
-3. **DINO Embeddings** → Generate 768-dim structural visual embeddings
-4. **Embedding Pooling** → Aggregate frame embeddings to scene-level (mean/max/attention)
-5. **Vector Storage** → Store in Qdrant collections (`goodq_clip_scenes`, `goodq_dino_scenes`)
+1. **Frame Extraction** -> Extract representative frames per scene (uniform, keyframe, or middle strategies)
+2. **CLIP Embeddings** -> Generate 512-dim semantic visual embeddings
+3. **DINO Embeddings** -> Generate 768-dim structural visual embeddings
+4. **Embedding Pooling** -> Aggregate frame embeddings to scene-level (mean/max/attention)
+5. **Vector Storage** -> Store in Qdrant collections (`goodq_clip_scenes`, `goodq_dino_scenes`)
 
 **Dependencies**:
 - `scene_frame_extractor.py` - FFmpeg-based frame extraction
@@ -249,26 +249,26 @@ harmonization_result = _run_step('goodq_core', 'cross_modal_harmonization', phas
 
 ### What Phase 6 Delivers
 
-✅ **Scene-Level Visual Understanding**  
+[OK] **Scene-Level Visual Understanding**  
 - CLIP embeddings for semantic visual search ("find scenes with beaches")
 - DINO embeddings for structural similarity ("find scenes with similar layouts")
 
-✅ **Multimodal Alignment**  
+[OK] **Multimodal Alignment**  
 - Audio chunks aligned to video scenes
 - Transcripts synchronized with visual content
 - Speaker IDs mapped to temporal regions
 
-✅ **Entity Extraction**  
+[OK] **Entity Extraction**  
 - Cross-modal entity resolution (visual + audio + text)
 - Entity frequency counts across video
 - Top entities surfaced for summarization
 
-✅ **Unified Retrieval Index**  
+[OK] **Unified Retrieval Index**  
 - Single JSON structure for all modalities
 - Temporal ordering preserved
 - Metadata flags for capability checking
 
-✅ **Vector Database Integration**  
+[OK] **Vector Database Integration**  
 - Embeddings stored in Qdrant for similarity search
 - Scene IDs and video IDs in payload for filtering
 - Cosine distance for semantic retrieval
@@ -277,13 +277,13 @@ harmonization_result = _run_step('goodq_core', 'cross_modal_harmonization', phas
 
 ## Latent Capabilities (Built but Not Yet Activated)
 
-⚠️ **Attention-Based Pooling**  
+[Planned] **Attention-Based Pooling**  
 Implemented in `embedding_pooler.py` but not yet default. Would allow model to weight important frames more heavily.
 
-⚠️ **Concatenation Pooling**  
+[Planned] **Concatenation Pooling**  
 Available for preserving temporal order within scenes (useful for action recognition).
 
-⚠️ **Entity Cross-Resolution**  
+[Planned] **Entity Cross-Resolution**  
 Harmonizer extracts entities but doesn't yet resolve entity co-references across scenes (e.g., "John" in scene 1 = "he" in scene 2).
 
 ---
@@ -395,4 +395,3 @@ phase6:
 
 **Last Updated**: December 15, 2025  
 **Verified Operational**: December 14, 2025 (30-scene video processed successfully)
-

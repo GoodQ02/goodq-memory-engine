@@ -76,96 +76,73 @@ The Watchdog is GoodQ's **zero-touch ingestion system**. It monitors the configu
 ## Architecture
 
 ### Component Diagram
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    Watchdog System                          │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  ┌──────────────┐         ┌──────────────┐                │
-│  │  Monitor     │ 2s poll │  FileState   │                │
-│  │  Thread      │────────▶│  Tracker     │                │
-│  └──────────────┘         └──────────────┘                │
-│         │                                                   │
-│         ▼                                                   │
-│  ┌──────────────┐         ┌──────────────┐                │
-│  │  Stability   │  3s     │  SHA-256     │                │
-│  │  Check       │────────▶│  Hash        │                │
-│  └──────────────┘         └──────────────┘                │
-│         │                        │                          │
-│         ▼                        ▼                          │
-│  ┌──────────────┐         ┌──────────────┐                │
-│  │  Processed   │  lookup │  Queue       │                │
-│  │  Registry    │────────▶│  (FIFO)      │                │
-│  └──────────────┘         └──────────────┘                │
-│                                  │                          │
-│                                  ▼                          │
-│                           ┌──────────────┐                 │
-│                           │  Worker      │                 │
-│                           │  Thread      │                 │
-│                           └──────────────┘                 │
-│                                  │                          │
-│                                  ▼                          │
-│         ┌────────────────────────┼────────────────────┐   │
-│         │                        │                    │   │
-│    ┌────▼────┐          ┌───────▼──────┐      ┌─────▼───┐│
-│    │ Video   │          │ Audio/Image  │      │Document ││
-│    │Pipeline │          │ Conda Steps  │      │Pipeline ││
-│    └────┬────┘          └───────┬──────┘      └─────┬───┘│
-│         │                       │                    │   │
-│         └───────────────────────┼────────────────────┘   │
-│                                 ▼                          │
-│                         ┌──────────────┐                  │
-│                         │ Control      │                  │
-│                         │ Agent        │                  │
-│                         └──────────────┘                  │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
+```text
++--------------------------- Watchdog System ---------------------------+
+|                                                                       |
+|  Monitor Thread --2s poll--> FileState Tracker                        |
+|        |                                                              |
+|        +--3s stability check--> SHA-256 Hash                          |
+|                                   |                                   |
+|                                   +--> Processed Registry lookup      |
+|                                               |                       |
+|                                               +--> Queue (FIFO)       |
+|                                                         |             |
+|                                                         v             |
+|                                                   Worker Thread       |
+|                                                         |             |
+|            +----------------------+---------------------+----------+  |
+|            |                      |                                |  |
+|       Video Pipeline       Audio/Image Conda Steps     Document Pipeline |
+|            |                      |                                |  |
+|            +----------------------+--------------------------------+  |
+|                                   |                                   |
+|                              Control Agent                            |
++-----------------------------------------------------------------------+
 ```
 
 ### Dataflow
 
-```
+```text
 import_inbox/video.mp4
-    │
-    ▼ [Monitor detects]
+    |
+    +-> [Monitor detects]
 FileState(path, size, mtime)
-    │
-    ▼ [Wait 3s, check stable]
+    |
+    +-> [Wait 3s, check stable]
 Compute SHA-256 hash
-    │
-    ▼ [Check registry]
-Already processed? ──YES──▶ Rename PROCESSED_*, skip
-    │
+    |
+    +-> [Check registry]
+Already processed? --YES--> Rename PROCESSED_*, skip
+    |
    NO
-    │
-    ▼ [Add to queue]
+    |
+    +-> [Add to queue]
 Worker thread pulls from queue
-    │
-    ▼ [Copy to processing/]
+    |
+    +-> [Copy to processing/]
 <GOODQ_DATA_ROOT>/GoodQ_Data/processing/video_<hash>/video.mp4
-    │
-    ▼ [Route by file type]
-    │
-    ├─▶ VIDEO: run_direct_ingestion() → Scene detect → Audio WSL2 → Vision → KG
-    │
-    ├─▶ AUDIO: Conda steps → Transcribe → Embed → Emotion → Metadata
-    │
-    ├─▶ IMAGE: Conda steps → OCR → Caption → Detect → Embed
-    │
-    └─▶ DOCUMENT: Conda steps → Extract text → Embed → Sentiment
-    │
-    ▼ [Success?]
-    │
-┌───┴───┐
-│       │
-YES    NO
-│       │
-▼       ▼
+    |
+    +-> [Route by file type]
+    |
+    +-> VIDEO: run_direct_ingestion() -> Scene detect -> Runtime-selected audio -> Vision -> KG
+    |
+    +-> AUDIO: Conda steps -> Transcribe -> Embed -> Emotion -> Metadata
+    |
+    +-> IMAGE: Conda steps -> OCR -> Caption -> Detect -> Embed
+    |
+    +-> DOCUMENT: Conda steps -> Extract text -> Embed -> Sentiment
+    |
+    +-> [Success?]
+       |
+      YES                              NO
+       |                               |
+       v                               v
 <GOODQ_DATA_ROOT>/GoodQ_Data/processed/    <GOODQ_DATA_ROOT>/GoodQ_Data/failed/
-PROCESSED_video.mp4                FAILED_video.mp4
+PROCESSED_video.mp4                        FAILED_video.mp4
 ```
 
 ---
+
 
 ## Key Configuration
 
@@ -464,11 +441,11 @@ The supported watchdog surface is now **only** `cli/watchdog.py`.
 - **Errors**: `add_error(error_msg, step_name)`
 
 ### With Knowledge Graph
-- Indirect via `run_direct_ingestion()` → `update_kg_for_scene()`
+- Indirect via `run_direct_ingestion()` -> `update_kg_for_scene()`
 - Entities written to `knowledge_graph.db`
 
 ### With Memory DB
-- Indirect via `run_direct_ingestion()` → `register_scene_bundle()`
+- Indirect via `run_direct_ingestion()` -> `register_scene_bundle()`
 - Scene bundles written to `memory.db`
 
 ---
@@ -484,30 +461,30 @@ The supported watchdog surface is now **only** `cli/watchdog.py`.
 - [ ] Cloud storage sync (S3, Drive)
 
 ### Already Implemented (But Latent)
-- ✅ Control Agent state recording (active)
-- ⚠ AI diagnosis when `llm_client` is explicitly injected
-- ✅ Hash-based deduplication (active)
-- ✅ Multi-format support (active)
-- ✅ Graceful shutdown (active)
+- [OK] Control Agent state recording (active)
+- [Conditional] AI diagnosis when `llm_client` is explicitly injected
+- [OK] Hash-based deduplication (active)
+- [OK] Multi-format support (active)
+- [OK] Graceful shutdown (active)
 
 ---
 
 ## Security & Reliability
 
 ### Security
-- ✅ Single-instance lock prevents concurrent runs
-- ✅ No network access required
-- ✅ Files never leave local system
-- ✅ State file is plaintext JSON (auditable)
-- ⚠️ Runs with user permissions (no privilege escalation)
+- [OK] Single-instance lock prevents concurrent runs
+- [OK] No network access required
+- [OK] Files never leave local system
+- [OK] State file is plaintext JSON (auditable)
+- [Note] Runs with user permissions (no privilege escalation)
 
 ### Reliability
-- ✅ Hash-based deduplication (collision-resistant)
-- ✅ File stability check (prevents partial reads)
-- ✅ Processed registry persistence across restarts
-- ✅ Temp files preserved on failure (debugging)
-- ✅ Stale lock detection (auto-recovery)
-- ✅ Graceful shutdown (queue drain)
+- [OK] Hash-based deduplication (collision-resistant)
+- [OK] File stability check (prevents partial reads)
+- [OK] Processed registry persistence across restarts
+- [OK] Temp files preserved on failure (debugging)
+- [OK] Stale lock detection (auto-recovery)
+- [OK] Graceful shutdown (queue drain)
 
 ---
 

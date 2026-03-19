@@ -1,10 +1,10 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-02-12 -->
+<!-- DOC_LAST_VERIFIED: 2026-03-19 -->
 
 # Watchdog Automatic Ingestion System
 
-**Status**: ✅ **OPERATIONAL** (config-resolved runtime)  
+**Status**: **OPERATIONAL** (config-resolved runtime)  
 **Location**: `cli/watchdog.py` (Canonical)  
 **Legacy Note**: `scripts/watchdog_ingest.py` has been retired from the supported surface.
 
@@ -13,6 +13,8 @@
 ## Overview
 
 The Watchdog is GoodQ's **zero-touch ingestion system**. It monitors the configured import inbox and processes supported files through the canonical ingestion runtime. Runtime paths are resolved from `configs/config.yaml`, local overrides, and environment variables via `config_loader`.
+
+`BASELINE` remains fully supported on Windows without WSL. If the active runtime contract enables WSL audio, video ingestion may delegate scene-audio work to the WSL bridge; otherwise the Windows-local audio path remains the default.
 
 ### What It Does
 
@@ -28,18 +30,18 @@ The Watchdog is GoodQ's **zero-touch ingestion system**. It monitors the configu
 
 ## Features
 
-### ✅ Confirmed Operational (Dec 14, 2025)
+### Confirmed Operational (Dec 14, 2025)
 
 | Feature | Implementation | Status |
 |---------|---------------|--------|
-| **File Detection** | 2s polling loop, FileState tracking | ✅ Active |
-| **Stability Check** | 3s wait + size/mtime comparison | ✅ Active |
-| **Hash Deduplication** | SHA-256 streaming, registry in JSON | ✅ Active |
-| **Control Agent Integration** | Optional `llm_client` injection; state always recorded, AI diagnosis conditional | ⚠ Conditional |
-| **Single-Instance Lock** | PID-based lockfile, stale lock detection | ✅ Active |
-| **Multi-Format Support** | Video, audio, image, PDF/text documents | ✅ Active |
-| **Progress Tracking** | `progress_tracker` integration | ✅ Active |
-| **Graceful Shutdown** | Queue drain, thread join on Ctrl+C | ✅ Active |
+| **File Detection** | 2s polling loop, FileState tracking | Active |
+| **Stability Check** | 3s wait + size/mtime comparison | Active |
+| **Hash Deduplication** | SHA-256 streaming, registry in JSON | Active |
+| **Control Agent Integration** | Optional `llm_client` injection; state always recorded, AI diagnosis conditional | Conditional |
+| **Single-Instance Lock** | PID-based lockfile, stale lock detection | Active |
+| **Multi-Format Support** | Video, audio, image, PDF/text documents | Active |
+| **Progress Tracking** | `progress_tracker` integration | Active |
+| **Graceful Shutdown** | Queue drain, thread join on Ctrl+C | Active |
 
 ---
 
@@ -49,25 +51,25 @@ The Watchdog is GoodQ's **zero-touch ingestion system**. It monitors the configu
 ```
 .mp4, .avi, .mov, .mkv, .wmv, .flv, .webm, .m4v
 ```
-**Pipeline**: `pipelines/direct_ingestion.py` → Full scene detection, audio/video analysis
+**Pipeline**: `pipelines/direct_ingestion.py` -> Full scene detection, audio/video analysis
 
 ### Audio (via Conda Step Runner)
 ```
 .mp3, .wav, .flac, .m4a, .aac, .ogg, .wma
 ```
-**Steps**: Transcription → CLAP embedding → Emotion → Metadata → Text embed → Sentiment
+**Steps**: Transcription -> CLAP embedding -> Emotion -> Metadata -> Text embed -> Sentiment
 
 ### Image (via Conda Step Runner)
 ```
 .jpg, .jpeg, .png, .bmp, .gif, .tiff, .webp
 ```
-**Steps**: OCR → Caption → Object Detection → Face Embed → DINO/CLIP → Text Embed
+**Steps**: OCR -> Caption -> Object Detection -> Face Embed -> DINO/CLIP -> Text Embed
 
 ### Documents (via Conda Step Runner)
 ```
 .pdf, .txt, .md, .doc, .docx
 ```
-**Steps**: PDF text extraction → Text embed → Sentiment → Emotion → Tagging
+**Steps**: PDF text extraction -> Text embed -> Sentiment -> Emotion -> Tagging
 
 ---
 
@@ -307,8 +309,8 @@ Get-Process | Where-Object {$_.CommandLine -like "*watchdog*"}
 3. **Stages**:
    - Scene detection (scenedetect)
    - Per-scene loop:
-     - Extract keyframe → Vision pipeline
-     - Extract audio chunk → WSL2 unified audio
+     - Extract keyframe -> Vision pipeline
+     - Extract audio chunk -> runtime-selected audio backend (Windows default; WSL bridge when enabled)
      - Entity extraction
      - Knowledge graph update
 4. **Cleanup**: Remove temp dir on success, preserve on failure
@@ -396,7 +398,7 @@ Get-Content <GOODQ_DATA_ROOT>\GoodQ_Data\epochs\<epoch>\logs\watchdog.log -Tail 
 
 **Diagnosis**:
 - Check GPU memory (may be full from vLLM)
-- Check WSL2 audio service (may be crashed)
+- Check the active audio backend for the run. WSL audio service health matters only when the run selected WSL; `BASELINE` normally uses the Windows-local path.
 - Check per-step timeout (10 min default)
 
 **Fix**:
@@ -404,7 +406,7 @@ Get-Content <GOODQ_DATA_ROOT>\GoodQ_Data\epochs\<epoch>\logs\watchdog.log -Tail 
 # Check GPU
 nvidia-smi
 
-# Restart WSL2 audio service
+# Restart WSL2 audio service only if the run selected WSL audio
 wsl -d Ubuntu bash -c "pkill -f audio_service.py && nohup python3 ~/goodq_audio/audio_service.py &"
 
 # Kill watchdog, increase timeout in code

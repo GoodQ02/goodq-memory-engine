@@ -12,6 +12,7 @@ and related canonical docs.
 - Bootstrap hardening: the Windows bootstrap now detects Conda Terms of Service blocks explicitly, offers FFmpeg install guidance via available package managers, prefers Ubuntu-like WSL distro names automatically, and attempts service-first Qdrant repair or installation before failing visibly.
 - `docs/goodq4all_agent_status.md` is now labeled as a generated December 2025 snapshot instead of a canonical authoritative runtime status source.
 - Active docs now normalize corrupted or tool-hostile Unicode in `docs/SYSTEM_SNAPSHOT.md`, `docs/architecture/SYSTEM_ARCHITECTURE.md`, and `docs/PHASE6_MULTIMODAL_FUSION.md` without changing their runtime claims.
+- Active runtime docs now state the current audio contract more clearly: `BASELINE` remains Windows-safe by default, while WSL audio is documented as optional accelerated compute rather than a default requirement.
 - Fixed the Windows `faster-whisper` fallback contract in `steps/audio_transcribe/step.py` by aligning the `WhisperModel.transcribe(...)` keyword args with the installed API and adding a regression test for the chunk helper.
 
 - Ongoing public-surface cleanup and release hardening on the `public` branch.

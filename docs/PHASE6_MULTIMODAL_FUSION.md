@@ -1,12 +1,14 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-02-12 -->
+<!-- DOC_LAST_VERIFIED: 2026-03-19 -->
 
 # Phase 6: Multimodal Fusion & Temporal Indexing
 
-**Status**: **WIRED AND OPERATIONAL** (as of December 14, 2025)
+**Status**: **WIRED AND OPERATIONAL** (backend-agnostic once scene artifacts exist)
 
 Phase 6 represents the culmination of the ingestion pipeline, fusing visual, audio, and textual modalities into a unified temporal index suitable for multimodal retrieval.
+
+Phase 6 is backend-agnostic once scene and audio artifacts exist. In `BASELINE`, those artifacts come from the Windows-safe runtime path; when accelerated profiles or explicit overrides enable WSL audio, the same harmonization consumes WSL-produced transcript and diarization artifacts.
 
 ---
 
@@ -42,7 +44,7 @@ Phase 6 operates in **two sequential stages**:
 **Input Sources**:
 - **Visual**: Scene embeddings from Phase 6a (CLIP IDs, DINO IDs, representative frames)
 - **Audio**: Segmentation from Phase 3 (`audio/segmentation.json`)
-- **Speech**: Transcripts from WSL2 audio pipeline (`audio/transcript.json`)
+- **Speech**: Transcripts from the active audio backend (`audio/transcript.json`); WSL2 when enabled, Windows-local fallback otherwise
 - **Speakers**: Diarization data (`audio/diarization.json`)
 - **Objects**: Detected objects from YOLO (`video/detected_objects.json`)
 - **Entities**: Extracted entities from `entity_extractor.py`
@@ -139,7 +141,7 @@ Phase 6 operates in **two sequential stages**:
 | CLIP Embeddings | Qdrant collection: `goodq_clip_scenes` | Phase 6a (vector storage) |
 | DINO Embeddings | Qdrant collection: `goodq_dino_scenes` | Phase 6a (vector storage) |
 
-**Note**: Config specifies `<GOODQ_DATA_ROOT>/GoodQ_Data/processing` but actual artifacts land in `logs/scene_ingest/`. Both locations are checked by harmonizer for fallback compatibility.
+**Note**: Config specifies `<GOODQ_DATA_ROOT>/GoodQ_Data/processing` but actual artifacts land in `logs/scene_ingest/`. Both locations are checked by harmonizer for fallback compatibility, and neither path requires WSL to exist.
 
 ---
 
@@ -388,10 +390,10 @@ phase6:
 
 - **Phase 5 Documentation**: [SCENE_DETECTION.md](archive/reports/PHASE5_SCENE_DETECTION_INTEGRATION_ANALYSIS.md)
 - **Entity Extraction**: [ENTITY_EXTRACTION.md](archive/implementation/ENTITY_EXTRACTION_COMPLETE.md)
-- **Audio Pipeline**: [AUDIO_PROCESSING_WSL2.md](guides/llm/WSL2_AUDIO_SETUP.md)
+- **Audio Pipeline**: [AUDIO_PROCESSING_WSL2.md](guides/llm/WSL2_AUDIO_SETUP.md) (advanced WSL operator reference; not required for `BASELINE`)
 - **Vector Storage**: [QDRANT_SETUP.md](guides/QDRANT_SETUP.md)
 
 ---
 
-**Last Updated**: December 15, 2025  
+**Last Updated**: March 19, 2026  
 **Verified Operational**: December 14, 2025 (30-scene video processed successfully)

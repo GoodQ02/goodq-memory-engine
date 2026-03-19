@@ -1,10 +1,10 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-03-02 -->
+<!-- DOC_LAST_VERIFIED: 2026-03-19 -->
 
 # GoodQ System Architecture
 
-**Last Updated:** March 2, 2026  
+**Last Updated:** March 19, 2026  
 **Status:** Operational (verify per-run from artifacts and health checks)  
 **Verification Date:** March 1, 2026 (witness run)
 
@@ -19,7 +19,8 @@ This milestone snapshot is constrained to witness-run evidence (`run_id=51e42006
 Latest rerun comparison evidence is archived at `docs/archive/proof_of_concept/WITNESS_RUN_002.md` (`run_id=90e366c9-41be-4c37-84b6-52abbf4addb9`).
 
 - Windows runtime remains canonical and deterministic for orchestrated ingestion.
-- Hybrid Windows + WSL architecture remains in force; WSL is an optional, profile-gated audio compute extension.
+- `BASELINE` remains Windows-safe and CPU-safe; WSL audio is selected only when the active profile or explicit overrides request it.
+- Hybrid Windows + WSL architecture remains in force; WSL is an optional, profile-gated audio compute extension rather than a default runtime requirement.
 - Knowledge graph is active for scene-linked media persistence.
 - Vector parity is deterministic at run scope (`qdrant_ok=true`, `faiss_ok=not_attempted` for Phase 6 witness write).
 - Read-only observability is active (structured JSON step events + heartbeat).
@@ -33,7 +34,7 @@ Latest rerun comparison evidence is archived at `docs/archive/proof_of_concept/W
 | `scenes_total` | `19` |
 | `transcript_scenes` | `18` |
 | `audio_backend_selected` | `windows (18/19 scenes; 1 missing)` |
-| `wsl2_unified` | `true (18/19 scenes; 1 missing)` |
+| `wsl2_unified` | `true in this witness run (18/19 scenes; 1 missing), not a default BASELINE guarantee` |
 | `phase6_complete` | `true` |
 | `qdrant_points_clip` | `19` |
 | `qdrant_points_dino` | `19` |
@@ -51,12 +52,13 @@ Latest rerun comparison evidence is archived at `docs/archive/proof_of_concept/W
 
 ## Architectural Overview
 
-GoodQ4All is a **local, GPU-accelerated multimodal AI pipeline** that processes video, audio, and images entirely on your machine. The system uses **scene-first processing** with a **unified environment** and **dual audio architecture** (Windows + WSL2) for maximum performance.
+GoodQ4All is a **local, GPU-accelerated multimodal AI pipeline** that processes video, audio, and images entirely on your machine. The supported default is Windows-first `BASELINE`; WSL2 is an optional audio compute extension used only when accelerated profiles or explicit overrides enable it.
 
 **Key Runtime Facts:**
 - Scene-first ingestion is active.
 - Qdrant is the canonical vector store.
 - FAISS is an optional secondary parity/fallback path where configured.
+- Windows-local audio fallback remains the safe default contract.
 - GPU/WSL acceleration is profile-gated and optional for correctness.
 
 ---
@@ -76,12 +78,16 @@ GoodQ4All is a **local, GPU-accelerated multimodal AI pipeline** that processes 
 - GPU sharing: Windows (vision) + WSL2 (audio) = 85% util stable
 
 ### 3. Dual Audio Architecture (Runtime-Validated)
-**Queue-Based Service** (long-running daemon):
+Current contract:
+- `BASELINE` defaults to Windows-local audio processing.
+- WSL audio is used only when the active profile or explicit overrides enable it and the workspace preflight succeeds.
+
+**Queue-Based Service** (long-running daemon, when WSL audio is enabled):
 - PID 177 (verified running Dec 14)
 - Preloaded: Whisper medium, Pyannote 3.1, Silero VAD
 - Watches: `wsl2_audio/queue_in/`
 
-**Direct Invocation** (per-scene):
+**Direct Invocation** (per-scene, when WSL audio is enabled):
 - Runtime: `process_audio.py`
 - On-demand loading with cleanup
 - Output: result.json with transcript, diarization, emotion, embeddings
@@ -121,7 +127,7 @@ Comprehensive telemetry:
 |                [OK] Processing Layer                           |
 |  +------------+  +------------+  +------------+            |
 |  |   Video    |  |   Audio    |  |  Entity    |            |
-|  | (Windows)  |  |  (WSL2)    |  | Extraction |            |
+|  | (Windows)  |  | (Windows default / WSL2 optional) |  | Extraction |            |
 |  |  steps/    |  | wsl2_audio/|  |  steps/    |            |
 |  +------------+  +------------+  +------------+            |
 +--------------------------+----------------------------------+
@@ -174,10 +180,10 @@ Input Video (dropped in import_inbox)
         |   +--> DINO Embed (facebook/dinov2-base) -> 768-dim
         |   +--> Tagger (image classification)
         |
-        +--> [OK] Audio Processing (WSL2, GPU-accelerated)
+        +--> [OK] Audio Processing (Windows fallback by default; WSL2 when enabled)
         |   +--> Extract audio chunk -> logs/scene_ingest/<video>/audio/scene_XXXX.wav
         |   +--> audio_metadata (mutagen/librosa)
-        |   +--> audio_unified_wsl2() -> WSL2 process_audio.py
+        |   +--> audio_unified_wsl2() -> WSL2 process_audio.py (when the WSL contract is selected)
         |   |   +--> Transcribe (Whisper large-v3) -> 'transcript'
         |   |   +--> Diarize (Pyannote 3.1) -> 52 segments, 2 speakers (verified)
         |   |   +--> Emotion (Wav2Vec2) -> 8-class
@@ -253,9 +259,11 @@ Input Video (dropped in import_inbox)
     - 768-d vectors
     - Strong semantic similarity
 
-### 2. Audio Pipeline (WSL2 - GPU-accelerated)
+### 2. Audio Pipeline (Windows default, WSL2 accelerated when enabled)
 
 **Responsibility:** Extract and analyze audio content per scene
+
+Windows-local fallback remains the default path in `BASELINE`. The WSL2 stack below describes the accelerated bridge used only when that runtime contract is explicitly active.
 
 **Operational Components (Dual Architecture):**
 
@@ -725,7 +733,7 @@ pwsh scripts/benchmark_pipeline.ps1 -InputDir test_videos -Iterations 5
 |------|------|----------|
 | Scene detection (30 scenes) | 2-20 min | Moderate |
 | Per-scene vision processing | ~30-60s | High (85%) |
-| Per-scene audio (WSL2) | ~20-40s | High (85%) |
+| Per-scene audio (WSL2 accelerated path) | ~20-40s | High (85%) |
 | Entity extraction | ~5-10s | Low (CPU) |
 | Knowledge graph update | <1s | N/A (SQLite) |
 
@@ -802,7 +810,7 @@ nvidia-smi                                         # GPU status
 ### Live Test Results (Dec 14, 2025)
 [OK] **Input:** 1-hour video  
 [OK] **Output:** 30 scenes processed  
-[OK] **Audio:** 52 segments, 2 speakers identified  
+[OK] **Audio:** 52 segments, 2 speakers identified (witness run used the WSL-accelerated path; `BASELINE` still defaults to Windows-local audio)  
 [OK] **Entity extraction:** Operational  
 [OK] **Knowledge graph:** Real-time insertion confirmed  
 [OK] **GPU:** 85% utilization stable  
@@ -830,7 +838,7 @@ GoodQ4All is a local multimodal pipeline with profile-gated acceleration and art
 **Key Achievements:**
 - [OK] Scene-first processing (30 scenes verified)
 - [OK] Unified environment (goodq_core, 30GB savings)
-- [OK] Dual audio architecture (Windows + WSL2 GPU-accelerated)
+- [OK] Dual audio architecture (Windows-local default with optional WSL2 acceleration)
 - [OK] Cross-modal entity extraction operational
 - [OK] Knowledge graph real-time insertion confirmed
 - [OK] Qdrant vector storage operational (3 collections)
@@ -843,7 +851,7 @@ Operational status should be interpreted from current run artifacts and health c
 
 ---
 
-**Last Updated:** December 15, 2025  
+**Last Updated:** March 19, 2026  
 **Architecture Version:** 2.0 (Scene-First, Unified Environment, Dual Audio)  
 **Verification Date:** December 14, 2025  
 **Status:** Runtime-conditional; verify from artifacts (`control_agent_status`, `knowledge_graph_status`, `phase6_*`, vector parity fields)

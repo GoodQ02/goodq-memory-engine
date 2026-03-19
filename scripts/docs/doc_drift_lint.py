@@ -6,6 +6,8 @@ Checks:
 2. Hardcoded drive-root paths (e.g., C:/, D:\\) are not allowed outside docs/archive/.
 3. CUDA/NVIDIA mandatory wording is not allowed outside docs/guides/gpu/ and docs/archive/.
 4. Archive docs with historical fixed-drive literals must carry the standard non-canonical warning banner.
+5. Active docs must not contain suspicious control/replacement characters.
+6. Generated snapshot docs must not claim canonical/authoritative status.
 """
 
 from __future__ import annotations
@@ -18,6 +20,14 @@ L_PATH_PATTERN = re.compile(r"\bL:(?:/|\\)")
 DRIVE_ROOT_PATTERN = re.compile(r"\b[A-Za-z]:[\\/]")
 LEGACY_HINT_PATTERN = re.compile(r"\blegacy\b", re.IGNORECASE)
 ARCHIVE_WARNING_PATTERN = re.compile(r"ARCHIVE / NON-CANONICAL / DO NOT COPY PATHS")
+CONTROL_CHAR_PATTERN = re.compile(r"[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]")
+REPLACEMENT_CHAR_PATTERN = re.compile("\uFFFD")
+DOC_BADGE_PATTERN = re.compile(r"<!--\s*DOC_BADGE:\s*([A-Z_]+)\s*-->")
+DOC_STATUS_PATTERN = re.compile(r"<!--\s*DOC_STATUS:\s*([A-Z_]+)\s*-->")
+SNAPSHOT_HEADER_PATTERN = re.compile(
+    r"(generated\s*:|generated.+snapshot|snapshot.+generated|generated_snapshot)",
+    re.IGNORECASE,
+)
 
 ALLOWED_LEGACY_DOCS = [
     "docs/technical/LEGACY_PATHS_DEPRECATED.md",
@@ -60,12 +70,12 @@ def collect_targets(repo_root: Path) -> list[Path]:
         for path in (repo_root / "docs").rglob("*")
         if path.is_file() and path.suffix.lower() in {".md", ".txt"}
     )
-    readmes = sorted(
+    root_docs = sorted(
         path
-        for path in repo_root.glob("README*")
+        for path in repo_root.iterdir()
         if path.is_file() and path.suffix.lower() in {".md", ".txt"}
     )
-    return docs + readmes
+    return docs + root_docs
 
 
 def sanitize_console(text: str) -> str:
@@ -84,6 +94,8 @@ def main() -> int:
     drive_root_violations: list[tuple[Path, int, str]] = []
     cuda_violations: list[tuple[Path, int, str]] = []
     archive_banner_violations: list[tuple[Path, str]] = []
+    corrupt_char_violations: list[tuple[Path, int, str]] = []
+    snapshot_authority_violations: list[tuple[Path, str]] = []
     archive_literal_doc_count = 0
     archive_literal_line_count = 0
 
@@ -94,11 +106,31 @@ def main() -> int:
             print(f"[ERROR] unable to read {file_path}: {exc}", file=sys.stderr)
             return 2
 
+        in_docs_tree = is_under(file_path, repo_root / "docs")
         in_archive = is_under(file_path, archive_root)
         in_gpu_guide = is_under(file_path, gpu_guides_root)
+        enforce_contract_checks = in_docs_tree or file_path.name.upper().startswith("README")
         relative_path = file_path.relative_to(repo_root).as_posix()
         in_allowed_legacy_doc = relative_path in allowed_legacy_docs
         has_archive_warning = bool(ARCHIVE_WARNING_PATTERN.search(text))
+        header_preview = "\n".join(text.splitlines()[:25])
+        badge_match = DOC_BADGE_PATTERN.search(header_preview)
+        status_match = DOC_STATUS_PATTERN.search(header_preview)
+        doc_badge = badge_match.group(1) if badge_match else ""
+        doc_status = status_match.group(1) if status_match else ""
+        is_generated_snapshot_doc = doc_status == "GENERATED_SNAPSHOT" or bool(
+            SNAPSHOT_HEADER_PATTERN.search(header_preview)
+        )
+        claims_canonical_authority = doc_badge == "CANONICAL" or doc_status == "AUTHORITATIVE"
+
+        if not in_archive and is_generated_snapshot_doc and claims_canonical_authority:
+            snapshot_authority_violations.append(
+                (
+                    file_path,
+                    f"generated snapshot metadata/body conflicts with DOC_BADGE={doc_badge or 'unset'} "
+                    f"DOC_STATUS={doc_status or 'unset'}",
+                )
+            )
 
         in_fenced_block = False
         in_legacy_fenced_block = False
@@ -121,13 +153,23 @@ def main() -> int:
                     recent_context.append(stripped)
                 continue
 
-            skip_path_checks = in_archive or in_allowed_legacy_doc or (in_fenced_block and in_legacy_fenced_block)
+            skip_path_checks = (
+                (not enforce_contract_checks)
+                or in_archive
+                or in_allowed_legacy_doc
+                or (in_fenced_block and in_legacy_fenced_block)
+            )
             has_l_path = bool(L_PATH_PATTERN.search(line))
             has_drive_root = bool(DRIVE_ROOT_PATTERN.search(line))
+            has_control_char = bool(CONTROL_CHAR_PATTERN.search(line))
+            has_replacement_char = bool(REPLACEMENT_CHAR_PATTERN.search(line))
 
             if in_archive and (has_l_path or has_drive_root):
                 archive_literal_found = True
                 archive_literal_line_count += 1
+
+            if not in_archive and (has_control_char or has_replacement_char):
+                corrupt_char_violations.append((file_path, line_no, stripped or repr(line)))
 
             if not skip_path_checks and has_l_path:
                 l_path_violations.append((file_path, line_no, stripped))
@@ -135,7 +177,7 @@ def main() -> int:
             if not skip_path_checks and has_drive_root:
                 drive_root_violations.append((file_path, line_no, stripped))
 
-            if in_archive or in_gpu_guide:
+            if (not enforce_contract_checks) or in_archive or in_gpu_guide:
                 if stripped:
                     recent_context.append(stripped)
                 continue
@@ -167,6 +209,12 @@ def main() -> int:
     for path, detail in archive_banner_violations:
         print(f"[ARCHIVE_BANNER] {path}: {sanitize_console(detail)}")
 
+    for path, line_no, line in corrupt_char_violations:
+        print(f"[CORRUPT_CHARS] {path}:{line_no}: {sanitize_console(line)}")
+
+    for path, detail in snapshot_authority_violations:
+        print(f"[SNAPSHOT_AUTHORITY] {path}: {sanitize_console(detail)}")
+
     print(
         f"doc_drift_lint summary: files_scanned={len(targets)} "
         f"active_l_path_violations={len(l_path_violations)} "
@@ -174,10 +222,19 @@ def main() -> int:
         f"cuda_mandatory_violations={len(cuda_violations)} "
         f"archive_literal_docs={archive_literal_doc_count} "
         f"archive_literal_lines={archive_literal_line_count} "
-        f"archive_banner_violations={len(archive_banner_violations)}"
+        f"archive_banner_violations={len(archive_banner_violations)} "
+        f"corrupt_char_violations={len(corrupt_char_violations)} "
+        f"snapshot_authority_violations={len(snapshot_authority_violations)}"
     )
 
-    return 1 if (l_path_violations or drive_root_violations or cuda_violations or archive_banner_violations) else 0
+    return 1 if (
+        l_path_violations
+        or drive_root_violations
+        or cuda_violations
+        or archive_banner_violations
+        or corrupt_char_violations
+        or snapshot_authority_violations
+    ) else 0
 
 
 if __name__ == "__main__":

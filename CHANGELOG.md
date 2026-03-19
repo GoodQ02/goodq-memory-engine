@@ -9,11 +9,13 @@ and related canonical docs.
 
 ## [Unreleased]
 
+- Documentation governance hardening: `scripts/docs/doc_drift_lint.py` now fails on suspicious control or replacement characters in active docs and on generated snapshot docs that still claim canonical or authoritative status.
 - Bootstrap hardening: the Windows bootstrap now detects Conda Terms of Service blocks explicitly, offers FFmpeg install guidance via available package managers, prefers Ubuntu-like WSL distro names automatically, and attempts service-first Qdrant repair or installation before failing visibly.
 - `docs/goodq4all_agent_status.md` is now labeled as a generated December 2025 snapshot instead of a canonical authoritative runtime status source.
 - Active docs now normalize corrupted or tool-hostile Unicode in `docs/SYSTEM_SNAPSHOT.md`, `docs/architecture/SYSTEM_ARCHITECTURE.md`, and `docs/PHASE6_MULTIMODAL_FUSION.md` without changing their runtime claims.
 - Active runtime docs now state the current audio contract more clearly: `BASELINE` remains Windows-safe by default, while WSL audio is documented as optional accelerated compute rather than a default requirement.
 - `docs/systems/WATCHDOG_SYSTEM.md` now uses ASCII-safe diagrams and markers throughout, removing the remaining corrupted diagram and symbol residue from the active watchdog guide.
+- Normalized active documentation residue in `docs/guides/general/PYTHON_PATH_CONFIGURATION.md` and `docs/technical/PIPELINE_DIAGNOSIS_2025-11-11.md`, restoring clean encoding and current interpreter-binding references.
 - Fixed the Windows `faster-whisper` fallback contract in `steps/audio_transcribe/step.py` by aligning the `WhisperModel.transcribe(...)` keyword args with the installed API and adding a regression test for the chunk helper.
 
 - Ongoing public-surface cleanup and release hardening on the `public` branch.

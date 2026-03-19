@@ -1,10 +1,10 @@
-<!-- DOC_BADGE: CANONICAL -->
-<!-- DOC_STATUS: AUTHORITATIVE -->
+<!-- DOC_BADGE: OPERATIONAL -->
+<!-- DOC_STATUS: GENERATED_SNAPSHOT -->
 <!-- DOC_LAST_VERIFIED: 2026-03-18 -->
 
 # System Snapshot
 
-_Generated: 2025-12-16T18:38:53_
+_Generated snapshot: 2025-12-16T18:38:53. Use canonical runtime docs, config, and current run artifacts for live state._
 
 ## Host & OS
 - Hostname: GOOD-REACTOR

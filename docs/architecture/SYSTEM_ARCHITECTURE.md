@@ -104,41 +104,41 @@ Comprehensive telemetry:
 ## System Layers (Dec 14, 2025 Verified)
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                     User Interface Layer                     │
-│  CLI · LAUNCH_GOODQ.bat · Command Window Monitoring         │
-│  ⊘ FastAPI (api/server.py - scaffolded, not deployed)      │
-│  ⊘ Web UI (ui/ - frontend exists, not deployed)            │
-└──────────────────────────┬──────────────────────────────────┘
-                           │
-┌──────────────────────────┴──────────────────────────────────┐
-│                ✅ Orchestration Layer                        │
-│  cli/run_ingestion.py · cli/watchdog.py · Scene-First      │
-│  ⚠️ (legacy orchestration removed - direct invocation now)                 │
-└──────────────────────────┬──────────────────────────────────┘
-                           │
-┌──────────────────────────┴──────────────────────────────────┐
-│                ✅ Processing Layer                           │
-│  ┌────────────┐  ┌────────────┐  ┌────────────┐            │
-│  │   Video    │  │   Audio    │  │  Entity    │            │
-│  │ (Windows)  │  │  (WSL2)    │  │ Extraction │            │
-│  │  steps/    │  │ wsl2_audio/│  │  steps/    │            │
-│  └────────────┘  └────────────┘  └────────────┘            │
-└──────────────────────────┬──────────────────────────────────┘
-                           │
-┌──────────────────────────┴──────────────────────────────────┐
-│                ✅ Memory Layer                               │
-│  SQLite: memory.db · knowledge_graph.db                     │
-│  Qdrant: canonical collections (port 6333)                 │
-│  FAISS: optional secondary parity/fallback path            │
-└──────────────────────────┬──────────────────────────────────┘
-                           │
-┌──────────────────────────┴──────────────────────────────────┐
-│                ✅ Storage Layer                              │
-│  <GOODQ_DATA_ROOT>\GoodQ_Data\ (unified root)                        │
-│  logs/scene_ingest/ (artifacts)                             │
-│  \\wsl.localhost\Ubuntu\...\goodq_audio\ (WSL2)             │
-└─────────────────────────────────────────────────────────────┘
++-------------------------------------------------------------+
+|                     User Interface Layer                     |
+|  CLI - LAUNCH_GOODQ.bat - Command Window Monitoring         |
+|  [Latent] FastAPI (api/server.py - scaffolded, not deployed)      |
+|  [Latent] Web UI (ui/ - frontend exists, not deployed)            |
++--------------------------+----------------------------------+
+                           |
++--------------------------+----------------------------------+
+|                [OK] Orchestration Layer                        |
+|  cli/run_ingestion.py - cli/watchdog.py - Scene-First      |
+|  [Deprecated] (legacy orchestration removed - direct invocation now)                 |
++--------------------------+----------------------------------+
+                           |
++--------------------------+----------------------------------+
+|                [OK] Processing Layer                           |
+|  +------------+  +------------+  +------------+            |
+|  |   Video    |  |   Audio    |  |  Entity    |            |
+|  | (Windows)  |  |  (WSL2)    |  | Extraction |            |
+|  |  steps/    |  | wsl2_audio/|  |  steps/    |            |
+|  +------------+  +------------+  +------------+            |
++--------------------------+----------------------------------+
+                           |
++--------------------------+----------------------------------+
+|                [OK] Memory Layer                               |
+|  SQLite: memory.db - knowledge_graph.db                     |
+|  Qdrant: canonical collections (port 6333)                 |
+|  FAISS: optional secondary parity/fallback path            |
++--------------------------+----------------------------------+
+                           |
++--------------------------+----------------------------------+
+|                [OK] Storage Layer                              |
+|  <GOODQ_DATA_ROOT>\GoodQ_Data\ (unified root)                        |
+|  logs/scene_ingest/ (artifacts)                             |
+|  \\wsl.localhost\Ubuntu\...\goodq_audio\ (WSL2)             |
++-------------------------------------------------------------+
 ```
 
 **Legend:** Operational | Latent (built, not wired) | Deprecated
@@ -150,59 +150,59 @@ Comprehensive telemetry:
 ### Entry Point
 ```
 python -m cli.run_ingestion --input-dir <GOODQ_DATA_ROOT>\GoodQ_Data\import_inbox
-  │
-  └─→ cli/run_ingestion.py (1541 lines, scene-first architecture)
+  |
+  +--> cli/run_ingestion.py (1541 lines, scene-first architecture)
 ```
 
 ### High-Level Flow (Verified Dec 14, 2025)
 
 ```
 Input Video (dropped in import_inbox)
-    │
-    ├─→ Scene Detection (goodq_video_scene_detect) 
-    │   └─→ 30 scenes detected (verified)
-    │
-    └─→ Per-Scene Loop (for each of 30 scenes):
-        │
-        ├─→ ✅ Frame Processing (Windows, goodq_core env)
-        │   ├─→ Extract keyframe → logs/scene_ingest/<video>/video/scene_XXXX.jpg
-        │   ├─→ OCR (Tesseract) → 'ocr_text' field
-        │   ├─→ Caption (BLIP2) → 'caption' field
-        │   ├─→ Object Detect (YOLOv8) → 'objects' field
-        │   ├─→ Face Embed (face_recognition)
-        │   ├─→ CLIP Embed (openai/clip-vit-base) → 512-dim
-        │   ├─→ DINO Embed (facebook/dinov2-base) → 768-dim
-        │   └─→ Tagger (image classification)
-        │
-        ├─→ ✅ Audio Processing (WSL2, GPU-accelerated)
-        │   ├─→ Extract audio chunk → logs/scene_ingest/<video>/audio/scene_XXXX.wav
-        │   ├─→ audio_metadata (mutagen/librosa)
-        │   ├─→ audio_unified_wsl2() → WSL2 process_audio.py
-        │   │   ├─→ Transcribe (Whisper large-v3) → 'transcript'
-        │   │   ├─→ Diarize (Pyannote 3.1) → 52 segments, 2 speakers (verified)
-        │   │   ├─→ Emotion (Wav2Vec2) → 8-class
-        │   │   └─→ Embed (768-dim vectors)
-        │   ├─→ ⚠️ audio_speaker_merge (legacy, still runs)
-        │   ├─→ ⚠️ audio_music_events (legacy, still runs)
-        │   ├─→ ⚠️ audio_time_hints (legacy, still runs)
-        │   └─→ audio_embed_clap (goodq_audio_embed)
-        │
-        ├─→ ✅ Entity Extraction (steps/video/entity_extractor.py:370)
-        │   ├─→ Input: scene_data with 'transcript', 'caption', 'ocr_text', 'objects'
-        │   ├─→ Process: Cross-modal resolution
-        │   └─→ Output: ExtractedEntity list (people, places, organizations)
-        │
-        ├─→ ✅ Knowledge Graph Update (lib/kg_realtime_integration.py:109)
-        │   ├─→ Calls entity_extractor
-        │   ├─→ Resolves entities cross-modally
-        │   └─→ Inserts into knowledge_graph.db
-        │
-        └─→ ✅ Post-Processing
-            ├─→ register_scene_bundle() → memory.db
-            └─→ Qdrant insertion → http://localhost:6333
-                ├─→ goodq_text (transcript embeddings)
-                ├─→ goodq_image (CLIP + DINO embeddings)
-                └─→ goodq_audio (CLAP embeddings)
+    |
+    +--> Scene Detection (goodq_video_scene_detect) 
+    |   +--> 30 scenes detected (verified)
+    |
+    +--> Per-Scene Loop (for each of 30 scenes):
+        |
+        +--> [OK] Frame Processing (Windows, goodq_core env)
+        |   +--> Extract keyframe -> logs/scene_ingest/<video>/video/scene_XXXX.jpg
+        |   +--> OCR (Tesseract) -> 'ocr_text' field
+        |   +--> Caption (BLIP2) -> 'caption' field
+        |   +--> Object Detect (YOLOv8) -> 'objects' field
+        |   +--> Face Embed (face_recognition)
+        |   +--> CLIP Embed (openai/clip-vit-base) -> 512-dim
+        |   +--> DINO Embed (facebook/dinov2-base) -> 768-dim
+        |   +--> Tagger (image classification)
+        |
+        +--> [OK] Audio Processing (WSL2, GPU-accelerated)
+        |   +--> Extract audio chunk -> logs/scene_ingest/<video>/audio/scene_XXXX.wav
+        |   +--> audio_metadata (mutagen/librosa)
+        |   +--> audio_unified_wsl2() -> WSL2 process_audio.py
+        |   |   +--> Transcribe (Whisper large-v3) -> 'transcript'
+        |   |   +--> Diarize (Pyannote 3.1) -> 52 segments, 2 speakers (verified)
+        |   |   +--> Emotion (Wav2Vec2) -> 8-class
+        |   |   +--> Embed (768-dim vectors)
+        |   +--> [Deprecated] audio_speaker_merge (legacy, still runs)
+        |   +--> [Deprecated] audio_music_events (legacy, still runs)
+        |   +--> [Deprecated] audio_time_hints (legacy, still runs)
+        |   +--> audio_embed_clap (goodq_audio_embed)
+        |
+        +--> [OK] Entity Extraction (steps/video/entity_extractor.py:370)
+        |   +--> Input: scene_data with 'transcript', 'caption', 'ocr_text', 'objects'
+        |   +--> Process: Cross-modal resolution
+        |   +--> Output: ExtractedEntity list (people, places, organizations)
+        |
+        +--> [OK] Knowledge Graph Update (lib/kg_realtime_integration.py:109)
+        |   +--> Calls entity_extractor
+        |   +--> Resolves entities cross-modally
+        |   +--> Inserts into knowledge_graph.db
+        |
+        +--> [OK] Post-Processing
+            +--> register_scene_bundle() -> memory.db
+            +--> Qdrant insertion -> http://localhost:6333
+                +--> goodq_text (transcript embeddings)
+                +--> goodq_image (CLIP + DINO embeddings)
+                +--> goodq_audio (CLAP embeddings)
 ```
 
 **Performance:** ~1-2 hours for 1-hour video (RTX 4070 Ti SUPER)
@@ -317,23 +317,23 @@ Input Video (dropped in import_inbox)
 
 ### Data Root Structure
 ```
-<GOODQ_DATA_ROOT>\GoodQ_Data\              # ✅ Unified data root
-├── import_inbox\                 # Drop videos here
-├── memory.db                     # Scene bundles & metadata
-├── knowledge_graph.db            # Entity relationships
-└── qdrant\                       # Vector storage (port 6333)
+<GOODQ_DATA_ROOT>\GoodQ_Data\              # [OK] Unified data root
++-- import_inbox\                 # Drop videos here
++-- memory.db                     # Scene bundles & metadata
++-- knowledge_graph.db            # Entity relationships
++-- qdrant\                       # Vector storage (port 6333)
 
-logs\scene_ingest\                # ✅ Scene artifacts (actual location)
-└── <video_name>\
-    ├── audio\                    # scene_0000.wav to scene_0029.wav
-    └── video\                    # scene_0000.jpg to scene_0029.jpg
+logs\scene_ingest\                # [OK] Scene artifacts (actual location)
++-- <video_name>\
+    +-- audio\                    # scene_0000.wav to scene_0029.wav
+    +-- video\                    # scene_0000.jpg to scene_0029.jpg
 
-\\wsl.localhost\Ubuntu\...\goodq_audio\  # ✅ WSL2 audio stack
-├── audio_service.py              # Daemon (PID 177)
-├── process_audio.py              # Direct invocation
-├── queue_in\                     # Service input
-├── queue_out\                    # Service output
-└── output\                       # result.json (38KB verified)
+\\wsl.localhost\Ubuntu\...\goodq_audio\  # [OK] WSL2 audio stack
++-- audio_service.py              # Daemon (PID 177)
++-- process_audio.py              # Direct invocation
++-- queue_in\                     # Service input
++-- queue_out\                    # Service output
++-- output\                       # result.json (38KB verified)
 ```
 
 > **Note:** There is a known config/runtime inconsistency where `config.yaml` specifies `processing: <GOODQ_DATA_ROOT>\GoodQ_Data\processing\` but artifacts actually land in `logs\scene_ingest\`. This is non-breaking and fully documented. See [`docs/technical/ARTIFACT_LOCATION_CONTRACT.md`](../technical/ARTIFACT_LOCATION_CONTRACT.md) for details.
@@ -448,9 +448,9 @@ CREATE TABLE summaries (
 **Purpose:** Link FAISS vector IDs to content hashes for auditability
 
 **Databases:**
-- `clip_id_map.sqlite`: FAISS ID → content hash (CLIP)
-- `dino_id_map.sqlite`: FAISS ID → content hash (DINO)
-- `clap_id_map.sqlite`: FAISS ID → content hash (CLAP)
+- `clip_id_map.sqlite`: FAISS ID -> content hash (CLIP)
+- `dino_id_map.sqlite`: FAISS ID -> content hash (DINO)
+- `clap_id_map.sqlite`: FAISS ID -> content hash (CLAP)
 
 **Schema:**
 ```sql
@@ -498,25 +498,25 @@ pip install -r requirements.txt `
 
 | Environment | Python | Purpose | GPU | Key Packages |
 |-------------|--------|---------|-----|--------------|
-| `goodq_core` | 3.10 | Orchestration | ❌ | legacy orchestration, typer, openai |
-| `goodq_video_scene_detect` | 3.10 | Scene detection | ❌ | opencv, scenedetect |
-| `goodq_ocr` | 3.10 | Text extraction | ❌ | pytesseract |
-| `goodq_image_caption` | 3.10 | Image captioning | ✅ | transformers, torch (CUDA) |
-| `goodq_object_detect` | 3.10 | Object detection | ✅ | ultralytics, torch (CUDA) |
-| `goodq_face_embed` | 3.10 | Face recognition | ✅ | face_recognition, torch (CUDA) |
-| `goodq_audio_metadata` | 3.10 | Audio metadata | ❌ | mutagen, librosa |
-| `goodq_audio_diarize` | 3.10 | Speaker diarization | ✅ | pyannote.audio, torch (CUDA) |
-| `goodq_audio_transcribe` | 3.10 | Speech-to-text | ✅ | faster-whisper, torch (CUDA) |
-| `goodq_audio_emotion` | 3.10 | Speech emotion | ✅ | transformers, torch (CUDA) |
-| `goodq_audio_embed` | 3.10 | Audio embeddings | ✅ | transformers (CLAP), torch (CUDA) |
-| `goodq_text_embed` | 3.10 | Text embeddings | ❌ | sentence-transformers |
-| `goodq_sentiment` | 3.10 | Sentiment analysis | ❌ | transformers |
-| `goodq_emotion_classify` | 3.10 | Text emotion | ❌ | transformers |
-| `goodq_tagger` | 3.10 | NER tagging | ❌ | transformers (DSLIM) |
-| `goodq_llm_chat` | 3.10 | LLM interaction | ❌ | openai |
-| `goodq_tts` | 3.10 | Text-to-speech | ❌ | elevenlabs, piper |
-| `goodq_system_metrics` | 3.10 | System monitoring | ❌ | psutil, pynvml |
-| `goodq_home_assistant_status` | 3.10 | HA integration | ❌ | requests |
+| `goodq_core` | 3.10 | Orchestration |  | legacy orchestration, typer, openai |
+| `goodq_video_scene_detect` | 3.10 | Scene detection |  | opencv, scenedetect |
+| `goodq_ocr` | 3.10 | Text extraction |  | pytesseract |
+| `goodq_image_caption` | 3.10 | Image captioning | [OK] | transformers, torch (CUDA) |
+| `goodq_object_detect` | 3.10 | Object detection | [OK] | ultralytics, torch (CUDA) |
+| `goodq_face_embed` | 3.10 | Face recognition | [OK] | face_recognition, torch (CUDA) |
+| `goodq_audio_metadata` | 3.10 | Audio metadata |  | mutagen, librosa |
+| `goodq_audio_diarize` | 3.10 | Speaker diarization | [OK] | pyannote.audio, torch (CUDA) |
+| `goodq_audio_transcribe` | 3.10 | Speech-to-text | [OK] | faster-whisper, torch (CUDA) |
+| `goodq_audio_emotion` | 3.10 | Speech emotion | [OK] | transformers, torch (CUDA) |
+| `goodq_audio_embed` | 3.10 | Audio embeddings | [OK] | transformers (CLAP), torch (CUDA) |
+| `goodq_text_embed` | 3.10 | Text embeddings |  | sentence-transformers |
+| `goodq_sentiment` | 3.10 | Sentiment analysis |  | transformers |
+| `goodq_emotion_classify` | 3.10 | Text emotion |  | transformers |
+| `goodq_tagger` | 3.10 | NER tagging |  | transformers (DSLIM) |
+| `goodq_llm_chat` | 3.10 | LLM interaction |  | openai |
+| `goodq_tts` | 3.10 | Text-to-speech |  | elevenlabs, piper |
+| `goodq_system_metrics` | 3.10 | System monitoring |  | psutil, pynvml |
+| `goodq_home_assistant_status` | 3.10 | HA integration |  | requests |
 
 **Total:** 22 environments (18 active + 4 support)
 
@@ -525,53 +525,53 @@ pip install -r requirements.txt `
 ## Data Flow Diagram
 
 ```
-┌──────────────────────────────────────────────────────────────┐
-│                         Input Sources                         │
-│  Videos · Audio Files · Documents · Screen Recordings         │
-└────────────┬─────────────────────────────────────────────────┘
-             │
-┌────────────▼────────────────────────────────────────────────┐
-│                    Content Hash Layer                         │
-│  Video Hash · Scene Hash · Item Hash                         │
-│  (Deduplication Check)                                        │
-└────────────┬─────────────────────────────────────────────────┘
-             │
-      ┌──────┴───────┐
-      │              │
-┌─────▼─────┐  ┌────▼────┐
-│   Image   │  │  Audio  │
-│  Pipeline │  │ Pipeline│
-└─────┬─────┘  └────┬────┘
-      │             │
-      │  ┌──────────┘
-      │  │
-┌─────▼──▼─────────────────────────────────────────────────────┐
-│                    Feature Extraction                         │
-│  · Text (OCR, transcripts)                                    │
-│  · Objects (bounding boxes, labels)                           │
-│  · Faces (identities, embeddings)                             │
-│  · Embeddings (CLIP, DINO, CLAP, SBERT)                      │
-│  · Emotions (speech, text)                                    │
-│  · Entities (NER tags)                                        │
-│  · Events (music, temporal)                                   │
-└────────────┬──────────────────────────────────────────────────┘
-             │
-┌────────────▼──────────────────────────────────────────────────┐
-│                    Memory Integration                         │
-│                                                               │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐       │
-│  │   SQLite     │  │   FAISS      │  │   ID Maps    │       │
-│  │  (Metadata)  │  │  (Vectors)   │  │ (Addressing) │       │
-│  └──────────────┘  └──────────────┘  └──────────────┘       │
-└────────────┬──────────────────────────────────────────────────┘
-             │
-┌────────────▼──────────────────────────────────────────────────┐
-│                      Query & Retrieval                        │
-│  · Semantic search (text, images, audio)                      │
-│  · Temporal queries (time ranges, dates)                      │
-│  · Entity-based queries (people, places)                      │
-│  · Cross-modal retrieval (text → video, audio → image)       │
-└───────────────────────────────────────────────────────────────┘
++--------------------------------------------------------------+
+|                         Input Sources                         |
+|  Videos - Audio Files - Documents - Screen Recordings         |
++------------+-------------------------------------------------+
+             |
++------------v------------------------------------------------+
+|                    Content Hash Layer                         |
+|  Video Hash - Scene Hash - Item Hash                         |
+|  (Deduplication Check)                                        |
++------------+-------------------------------------------------+
+             |
+      +------+-------+
+      |              |
++-----v-----+  +----v----+
+|   Image   |  |  Audio  |
+|  Pipeline |  | Pipeline|
++-----+-----+  +----+----+
+      |             |
+      |  +----------+
+      |  |
++-----v--v-----------------------------------------------------+
+|                    Feature Extraction                         |
+|  - Text (OCR, transcripts)                                    |
+|  - Objects (bounding boxes, labels)                           |
+|  - Faces (identities, embeddings)                             |
+|  - Embeddings (CLIP, DINO, CLAP, SBERT)                      |
+|  - Emotions (speech, text)                                    |
+|  - Entities (NER tags)                                        |
+|  - Events (music, temporal)                                   |
++------------+--------------------------------------------------+
+             |
++------------v--------------------------------------------------+
+|                    Memory Integration                         |
+|                                                               |
+|  +--------------+  +--------------+  +--------------+       |
+|  |   SQLite     |  |   FAISS      |  |   ID Maps    |       |
+|  |  (Metadata)  |  |  (Vectors)   |  | (Addressing) |       |
+|  +--------------+  +--------------+  +--------------+       |
++------------+--------------------------------------------------+
+             |
++------------v--------------------------------------------------+
+|                      Query & Retrieval                        |
+|  - Semantic search (text, images, audio)                      |
+|  - Temporal queries (time ranges, dates)                      |
+|  - Entity-based queries (people, places)                      |
+|  - Cross-modal retrieval (text -> video, audio -> image)       |
++---------------------------------------------------------------+
 ```
 
 ---

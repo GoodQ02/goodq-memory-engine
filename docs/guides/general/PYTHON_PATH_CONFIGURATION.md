@@ -11,7 +11,7 @@ across desktop, laptop, and shell-driven automation.
 - Main module: `<project_root>\configs\python_paths.py`
 - Python runtime helper: `<project_root>\steps\common\tool_paths.py`
 - Shell helpers: `<project_root>\scripts\_lib\interpreter_bindings.ps1` and `.bat`
-- Validation test: `<project_root>\tests\test_python_paths.py`
+- Historical validation harness: `<project_root>\tests\legacy\root_harnesses\test_python_paths.py`
 
 ## What This Controls
 
@@ -71,9 +71,8 @@ The shell helpers follow the same contract for PowerShell and batch launchers.
 
 Run the validation test inside `goodq_core`:
 
-```bash
-conda activate goodq_core
-python tests/test_python_paths.py
+```powershell
+conda run -n goodq_core python tests/legacy/root_harnesses/test_python_paths.py
 ```
 
 Expected result:
@@ -106,7 +105,7 @@ cmd = get_conda_run_command("goodq_core")
 If interpreter binding fails:
 
 1. Verify Conda is installed: `conda --version`
-2. Run `python tests/test_python_paths.py`
+2. Run `python tests/legacy/root_harnesses/test_python_paths.py`
 3. Check `from configs.python_paths import get_config; print(get_config().get_info_dict())`
 4. For shell launchers, use `scripts/diagnostics/quick_laptop_test.ps1`
 

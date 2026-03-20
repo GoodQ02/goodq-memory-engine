@@ -48,7 +48,6 @@ ACTIVE_RUNTIME_FILES = [
     Path("scripts/monitor_ingestion.py"),
     Path("scripts/monitor_ingestion_realtime.py"),
     Path("scripts/monitor_ingestion_progress.py"),
-    Path("scripts/utils/check_ingestion_status.py"),
     Path("scripts/utils/check_watchdog_status.py"),
 ]
 

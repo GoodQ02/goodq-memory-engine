@@ -11,6 +11,9 @@ and related canonical docs.
 
 - Ongoing doc cleanup and archive alignment around the remaining historical
   surfaces.
+- Archived historical test harnesses and obsolete validation helpers out of the
+  active `tests/` and `scripts/` surfaces, while keeping the canonical unit
+  suite and current manual watchdog/LLM/WSL/GPU utilities in place.
 
 ## [0.1.0] - 2026-03-20
 

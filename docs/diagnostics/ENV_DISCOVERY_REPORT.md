@@ -469,7 +469,7 @@ Scan exclusions: `**/archive/**`, `**/__pycache__/**`, `*.pyc`, `*.backup*`, `*.
 
 ## HF_AUTH_TOKEN
 
-- Surfaces: scripts/utils/validate_critical_fixes.py:33
+- Surfaces: scripts/archive/legacy_validation/utils/validate_critical_fixes.py:33
 - Default in code: none (or inherited via config resolution)
 - Required in strict mode: No
 - Affects: dev utility
@@ -550,7 +550,7 @@ Scan exclusions: `**/archive/**`, `**/__pycache__/**`, `*.pyc`, `*.backup*`, `*.
 
 ## OPENAI_API_KEY
 
-- Surfaces: LAUNCH_GOODQ.ps1:278, scripts/preflight_check.ps1:252, scripts/preflight_check.ps1:272, scripts/preflight_check.ps1:78, scripts/sync_env_local.ps1:8, scripts/utils/check_llm_availability.py:55, steps/llm_chat/step.py:102
+- Surfaces: LAUNCH_GOODQ.ps1:278, scripts/preflight_check.ps1:252, scripts/preflight_check.ps1:272, scripts/preflight_check.ps1:78, scripts/sync_env_local.ps1:8, scripts/archive/legacy_validation/utils/check_llm_availability.py:55, steps/llm_chat/step.py:102
 - Default in code: none (or inherited via config resolution)
 - Required in strict mode: Conditional
 - Affects: runtime/optional integration
@@ -586,7 +586,7 @@ Scan exclusions: `**/archive/**`, `**/__pycache__/**`, `*.pyc`, `*.backup*`, `*.
 
 ## TRANSFORMERS_CACHE
 
-- Surfaces: configs/paths.py:179, scripts/audit_vision_pipeline.py:322, scripts/bootstrap_models.py:26, scripts/sync_env_local.ps1:6, scripts/utilities/gpu_config.py:50, scripts/utils/check_gpu_status.py:162, steps/common/conda_runner.py:41, steps/image_caption/step.py:42, steps/sentiment/step.py:21, steps/sentiment/step_fixed.py:26 ...
+- Surfaces: configs/paths.py:179, scripts/audit_vision_pipeline.py:322, scripts/bootstrap_models.py:26, scripts/sync_env_local.ps1:6, scripts/utilities/gpu_config.py:50, scripts/archive/legacy_validation/utils/check_gpu_status.py:162, steps/common/conda_runner.py:41, steps/image_caption/step.py:42, steps/sentiment/step.py:21, steps/sentiment/step_fixed.py:26 ...
 - Default in code: canonical transformers cache root (`<GOODQ_DATA_ROOT>/models/transformers`) and unset env fallback
 - Required in strict mode: No
 - Affects: runtime/bootstrap

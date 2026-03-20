@@ -5,7 +5,7 @@ _Generated: 2026-02-15_
 ## Scope
 
 - Included: `scripts/**`, `cli/**`, `agents/**`, `wsl2_audio/**`, root launchers (`LAUNCH_GOODQ.bat`, `LAUNCH_GOODQ.ps1`).
-- Excluded from main table: `scripts/archive/**` (listed separately under Archived/Migrations).
+- `scripts/archive/**` is treated as historical surface; archived script rows may still appear below when path continuity matters.
 - Classification is heuristic (references + naming + inline comments/docstrings + capability scan).
 
 ## Category Summary
@@ -14,8 +14,8 @@ _Generated: 2026-02-15_
 - Runtime Utility: **97**
 - Dev Utility: **36**
 - One-Time Migration: **0**
-- Unclear/Obsolete: **122**
-- Archived/Migrations (`scripts/archive/**`): **3**
+- Unclear/Obsolete: **84**
+- Archived/Migrations (`scripts/archive/**`): **41**
 
 ## Danger Capability Flags (Human Review)
 
@@ -80,10 +80,10 @@ _Generated: 2026-02-15_
 | `scripts/PIN_MODEL_VERSIONS.bat` | Runtime Utility | Fetch and pin exact model versions (commit SHAs) from HuggingFace Hub | Yes | None detected |
 | `scripts/RUN_GPU_OPTIMIZATION.bat` | Unclear/Obsolete | ============================================================================= | No | None detected |
 | `scripts/SETUP_WEB_DEPENDENCIES.bat` | Unclear/Obsolete | GoodQ Environment Setup & Dependency Installer | No | None detected |
-| `scripts/TEST_AUDIO_DIARIZE_BREAKDOWN.bat` | Unclear/Obsolete | Test Audio Diarization - Component Breakdown | No | None detected |
-| `scripts/TEST_AUDIO_GPU.bat` | Unclear/Obsolete | ============================================================================= | No | None detected |
+| `scripts/archive/legacy_validation/bat/TEST_AUDIO_DIARIZE_BREAKDOWN.bat` | Archived/Migrations | Test Audio Diarization - Component Breakdown | No | None detected |
+| `scripts/archive/legacy_validation/bat/TEST_AUDIO_GPU.bat` | Archived/Migrations | ============================================================================= | No | None detected |
 | `scripts/TEST_GPU_PIPELINE.bat` | Dev Utility | ================================================================================ | No | destructive actions; environment mutation |
-| `scripts/TEST_VISION_GPU.bat` | Unclear/Obsolete | Vision GPU Installation and Testing Script | No | None detected |
+| `scripts/archive/legacy_validation/bat/TEST_VISION_GPU.bat` | Archived/Migrations | Vision GPU Installation and Testing Script | No | None detected |
 | `scripts/Test-AudioDiarization.ps1` | Dev Utility | > | Manual Review | None detected |
 | `scripts/VERIFY_MODEL_LOCKDOWN.bat` | Dev Utility | Verify that all models are properly locked down with exact versions | Manual Review | None detected |
 | `scripts/_lib/interpreter_bindings.bat` | Runtime Utility | Shared interpreter binding helpers for GoodQ4All batch scripts. | Yes | None detected |
@@ -127,13 +127,13 @@ _Generated: 2026-02-15_
 | `scripts/diagnostics/FULL_SYSTEM_TEST.bat` | Unclear/Obsolete | ================================================================================ | No | destructive actions; absolute path operations; binary/network download |
 | `scripts/diagnostics/RUN_FULL_DIAGNOSTIC.ps1` | Unclear/Obsolete | ============================================================================ | No | environment mutation |
 | `scripts/diagnostics/audit_gpu_steps.py` | Dev Utility | Scan all step directories | Manual Review | None detected |
-| `scripts/diagnostics/check_db.py` | Unclear/Obsolete | Validation/test utility for check db. | No | None detected |
-| `scripts/diagnostics/check_db_stats.py` | Unclear/Obsolete | Get all tables | No | None detected |
-| `scripts/diagnostics/check_db_status.py` | Unclear/Obsolete | Check main database | No | None detected |
+| `scripts/archive/legacy_validation/diagnostics/check_db.py` | Archived/Migrations | Validation/test utility for check db. | No | None detected |
+| `scripts/archive/legacy_validation/diagnostics/check_db_stats.py` | Archived/Migrations | Get all tables | No | None detected |
+| `scripts/archive/legacy_validation/diagnostics/check_db_status.py` | Archived/Migrations | Check main database | No | None detected |
 | `scripts/diagnostics/check_dbs.py` | Dev Utility | Validation/test utility for check dbs. | Manual Review | None detected |
 | `scripts/diagnostics/check_latest_results.py` | Dev Utility | Check latest processing results | Manual Review | None detected |
-| `scripts/diagnostics/check_processing_results.py` | Unclear/Obsolete | Check latest processing results | No | None detected |
-| `scripts/diagnostics/check_schema.py` | Unclear/Obsolete | Validation/test utility for check schema. | No | None detected |
+| `scripts/archive/legacy_validation/diagnostics/check_processing_results.py` | Archived/Migrations | Check latest processing results | No | None detected |
+| `scripts/archive/legacy_validation/diagnostics/check_schema.py` | Archived/Migrations | Validation/test utility for check schema. | No | None detected |
 | `scripts/diagnostics/diagnose_system.py` | Dev Utility | GoodQ System Diagnostic Tool | Manual Review | absolute path operations |
 | `scripts/diagnostics/monitor_progress.py` | Dev Utility | Real-time progress monitor for GoodQ pipeline | Manual Review | absolute path operations |
 | `scripts/diagnostics/quick_laptop_test.ps1` | Unclear/Obsolete | Quick Laptop Installation Test Script | No | binary/network download |
@@ -232,24 +232,24 @@ _Generated: 2026-02-15_
 | `scripts/system_readiness_check.py` | Dev Utility | System readiness checker for the goodq4all stack. | Manual Review | absolute path operations |
 | `scripts/system_status_check.py` | Unclear/Obsolete | Comprehensive System Status Check | No | absolute path operations |
 | `scripts/test_all_endpoints.py` | Dev Utility | Phase 2: Comprehensive Endpoint Validation | Manual Review | absolute path operations; binary/network download |
-| `scripts/test_clap_clustering.py` | Unclear/Obsolete | Phase 1 Validation: Test CLAP-based Speaker Clustering | No | absolute path operations |
+| `scripts/archive/legacy_validation/root/test_clap_clustering.py` | Archived/Migrations | Phase 1 Validation: Test CLAP-based Speaker Clustering | No | absolute path operations |
 | `scripts/test_control_agent_phase2.py` | Dev Utility | Test Control Agent Phase 2: Auto-Healing Capabilities | Manual Review | absolute path operations |
 | `scripts/test_control_agent_phase3.py` (retired) | Unclear/Obsolete | Historical Phase 3 Control Agent harness removed after the direct-orchestration path was demoted from the tracked surface. | No | absolute path operations |
 | `scripts/test_control_integration.py` | Dev Utility | Test Control Agent integration with ingestion pipeline | Manual Review | None detected |
 | `scripts/test_from_windows_simple.py` | Dev Utility | Simple test to check if Windows can reach vLLM | Manual Review | absolute path operations; binary/network download |
-| `scripts/test_full_system.py` | Unclear/Obsolete | FULL SYSTEM TEST - Complete Pipeline Validation | No | absolute path operations |
-| `scripts/test_gpu_allocation.py` | Unclear/Obsolete | Test GPU allocation and memory limits across all environments | No | absolute path operations |
+| `scripts/archive/legacy_validation/root/test_full_system.py` | Archived/Migrations | FULL SYSTEM TEST - Complete Pipeline Validation | No | absolute path operations |
+| `scripts/archive/legacy_validation/root/test_gpu_allocation.py` | Archived/Migrations | Test GPU allocation and memory limits across all environments | No | absolute path operations |
 | `scripts/test_gpu_config.py` | Dev Utility | Quick GPU Test - Verify GPU configuration is working | Manual Review | absolute path operations |
-| `scripts/test_gpu_pipeline.py` | Unclear/Obsolete | Test GPU allocation with a small video | No | None detected |
+| `scripts/archive/legacy_validation/root/test_gpu_pipeline.py` | Archived/Migrations | Test GPU allocation with a small video | No | None detected |
 | `scripts/test_gpu_scene_detection.py` | Dev Utility | Test GPU-Accelerated Scene Detection | Manual Review | absolute path operations |
 | `scripts/test_llm_client.py` | Dev Utility | GoodQ4All LLM client integration test for the current injected vLLM primary + Ollama fallback contract. | Manual Review | None detected |
-| `scripts/test_llm_client_simple.py` | Unclear/Obsolete | Test LLM Client from Windows | No | absolute path operations |
+| `scripts/archive/legacy_validation/root/test_llm_client_simple.py` | Archived/Migrations | Test LLM Client from Windows | No | absolute path operations |
 | `scripts/test_llm_connectivity.py` (retired) | Unclear/Obsolete | Historical hardcoded endpoint probe removed after the injected LLM client contract replaced the older multi-model connectivity surface. | No | absolute path operations; binary/network download |
-| `scripts/test_osd_integration.py` | Unclear/Obsolete | OSD Integration Test Script | No | None detected |
+| `scripts/archive/legacy_validation/root/test_osd_integration.py` | Archived/Migrations | OSD Integration Test Script | No | None detected |
 | `scripts/test_phase2_integration.py` | Dev Utility | Phase 2 Control Agent Integration Test | Manual Review | None detected |
 | `scripts/test_phase3_healing.py` | Dev Utility | Test script for Phase 3: Self-Healing & Learning | Manual Review | None detected |
 | `scripts/test_recovery_system.py` | Dev Utility | Test Recovery System (Phase 2) | Manual Review | absolute path operations |
-| `scripts/test_transcribe_integration.py` | Unclear/Obsolete | Integration Test: Audio Transcribe with WSL2 Fallback | No | absolute path operations |
+| `scripts/archive/legacy_validation/root/test_transcribe_integration.py` | Archived/Migrations | Integration Test: Audio Transcribe with WSL2 Fallback | No | absolute path operations |
 | `scripts/test_vad_gpu_usage.py` | Dev Utility | Test VAD Implementation and GPU Usage | Manual Review | None detected |
 | `scripts/test_vad_simple.py` | Dev Utility | Simple standalone test for Silero VAD on audio file. | No | destructive actions; absolute path operations |
 | `scripts/test_vision_gpu.py` | Dev Utility | Test Vision GPU Setup | Manual Review | None detected |
@@ -259,31 +259,31 @@ _Generated: 2026-02-15_
 | `scripts/utilities/gpu_config.py` | Unclear/Obsolete | GPU Isolation and Memory Management Configuration | No | absolute path operations |
 | `scripts/utilities/llm_client.py` | Runtime Utility | LLM Integration Module for GoodQ | Manual Review | absolute path operations; binary/network download |
 | `scripts/utilities/process_manager.py` (retired) | Unclear/Obsolete | Legacy process-manager cluster removed from the tracked surface after its API/watchdog helpers were retired. | No | absolute path operations |
-| `scripts/utils/check_api_data.py` | Unclear/Obsolete | Quick check of what data is available for the API | No | absolute path operations |
-| `scripts/utils/check_databases.py` | Unclear/Obsolete | Check memory.db | No | absolute path operations |
-| `scripts/utils/check_db.py` | Unclear/Obsolete | Validation/test utility for check db. | No | None detected |
-| `scripts/utils/check_db2.py` | Unclear/Obsolete | List all tables | No | None detected |
-| `scripts/utils/check_db_schema.py` | Unclear/Obsolete | Check database schema and tables. | No | None detected |
-| `scripts/utils/check_gpu_status.py` | Unclear/Obsolete | GPU Status and Diagnostics Tool | No | None detected |
-| `scripts/utils/check_ingestion_status.py` | Unclear/Obsolete | Check current ingestion status and progress | No | absolute path operations |
-| `scripts/utils/check_kg_schema.py` | Unclear/Obsolete | Check knowledge graph database schema and content. | No | None detected |
-| `scripts/utils/check_llm_availability.py` | Unclear/Obsolete | GoodQ LLM Availability Checker | No | absolute path operations; binary/network download |
-| `scripts/utils/check_memory_db.py` | Unclear/Obsolete | Check memory database contents | No | absolute path operations |
-| `scripts/utils/check_missing_data.py` | Unclear/Obsolete | Check what face, speaker, and emotion data exists | No | None detected |
-| `scripts/utils/check_nested.py` | Unclear/Obsolete | Get a scene with faces | No | None detected |
-| `scripts/utils/check_sample_data.py` | Unclear/Obsolete | Check sample.mp4 processing data in the knowledge graph. | No | None detected |
-| `scripts/utils/check_scene_ids.py` | Unclear/Obsolete | Validation/test utility for check scene ids. | No | None detected |
-| `scripts/utils/check_scene_keys.py` | Unclear/Obsolete | Get a fully enriched scene | No | None detected |
-| `scripts/utils/check_scene_meta.py` | Unclear/Obsolete | Check scene metadata in memory.db | No | None detected |
-| `scripts/utils/check_scene_results.py` | Unclear/Obsolete | Check database for scene data | No | None detected |
-| `scripts/utils/check_schema.py` | Unclear/Obsolete | Get schema for each table | No | None detected |
-| `scripts/utils/check_tables.py` | Unclear/Obsolete | Get all tables | No | None detected |
+| `scripts/archive/legacy_validation/utils/check_api_data.py` | Archived/Migrations | Quick check of what data is available for the API | No | absolute path operations |
+| `scripts/archive/legacy_validation/utils/check_databases.py` | Archived/Migrations | Check memory.db | No | absolute path operations |
+| `scripts/archive/legacy_validation/utils/check_db.py` | Archived/Migrations | Validation/test utility for check db. | No | None detected |
+| `scripts/archive/legacy_validation/utils/check_db2.py` | Archived/Migrations | List all tables | No | None detected |
+| `scripts/archive/legacy_validation/utils/check_db_schema.py` | Archived/Migrations | Check database schema and tables. | No | None detected |
+| `scripts/archive/legacy_validation/utils/check_gpu_status.py` | Archived/Migrations | GPU Status and Diagnostics Tool | No | None detected |
+| `scripts/archive/legacy_validation/utils/check_ingestion_status.py` | Archived/Migrations | Check current ingestion status and progress | No | absolute path operations |
+| `scripts/archive/legacy_validation/utils/check_kg_schema.py` | Archived/Migrations | Check knowledge graph database schema and content. | No | None detected |
+| `scripts/archive/legacy_validation/utils/check_llm_availability.py` | Archived/Migrations | GoodQ LLM Availability Checker | No | absolute path operations; binary/network download |
+| `scripts/archive/legacy_validation/utils/check_memory_db.py` | Archived/Migrations | Check memory database contents | No | absolute path operations |
+| `scripts/archive/legacy_validation/utils/check_missing_data.py` | Archived/Migrations | Check what face, speaker, and emotion data exists | No | None detected |
+| `scripts/archive/legacy_validation/utils/check_nested.py` | Archived/Migrations | Get a scene with faces | No | None detected |
+| `scripts/archive/legacy_validation/utils/check_sample_data.py` | Archived/Migrations | Check sample.mp4 processing data in the knowledge graph. | No | None detected |
+| `scripts/archive/legacy_validation/utils/check_scene_ids.py` | Archived/Migrations | Validation/test utility for check scene ids. | No | None detected |
+| `scripts/archive/legacy_validation/utils/check_scene_keys.py` | Archived/Migrations | Get a fully enriched scene | No | None detected |
+| `scripts/archive/legacy_validation/utils/check_scene_meta.py` | Archived/Migrations | Check scene metadata in memory.db | No | None detected |
+| `scripts/archive/legacy_validation/utils/check_scene_results.py` | Archived/Migrations | Check database for scene data | No | None detected |
+| `scripts/archive/legacy_validation/utils/check_schema.py` | Archived/Migrations | Get schema for each table | No | None detected |
+| `scripts/archive/legacy_validation/utils/check_tables.py` | Archived/Migrations | Get all tables | No | None detected |
 | `scripts/utils/check_watchdog_status.py` | Runtime Utility | One-time status snapshot for the canonical watchdog runtime. | Yes | absolute path operations |
-| `scripts/utils/validate_critical_fixes.py` | Unclear/Obsolete | Validate that all critical fixes are working | No | None detected |
-| `scripts/utils/validate_environment_fix.py` | Unclear/Obsolete | Validate that all environment fixes are working | No | None detected |
-| `scripts/utils/validate_models.py` | Unclear/Obsolete | Comprehensive model validation script to ensure all steps produce actual output. | No | absolute path operations |
+| `scripts/archive/legacy_validation/utils/validate_critical_fixes.py` | Archived/Migrations | Validate that all critical fixes are working | No | None detected |
+| `scripts/archive/legacy_validation/utils/validate_environment_fix.py` | Archived/Migrations | Validate that all environment fixes are working | No | None detected |
+| `scripts/archive/legacy_validation/utils/validate_models.py` | Archived/Migrations | Comprehensive model validation script to ensure all steps produce actual output. | No | absolute path operations |
 | `scripts/utils/validate_phase3_integration.py` (retired) | Unclear/Obsolete | Historical Phase 3 validator removed after its file map and path assumptions drifted from the current runtime. | No | absolute path operations |
-| `scripts/utils/validate_pipeline_flow.py` | Unclear/Obsolete | Pipeline Flow Validator for GoodQ Multimodal Ingestion | No | absolute path operations |
+| `scripts/archive/legacy_validation/utils/validate_pipeline_flow.py` | Archived/Migrations | Pipeline Flow Validator for GoodQ Multimodal Ingestion | No | absolute path operations |
 | `scripts/utils/validate_ui_config.py` (retired) | Unclear/Obsolete | Historical UI port validator removed after its hardcoded repo root and `api_server.py` assumptions drifted from the supported runtime. | No | absolute path operations |
 | `scripts/utils/verify_command_center.py` | Unclear/Obsolete | Quick verification that Command Center is fully operational | No | binary/network download |
 | `scripts/utils/verify_model_lockdown.py` | Dev Utility | Verify that all models are properly locked down with exact versions. | Manual Review | absolute path operations |
@@ -428,32 +428,32 @@ _Generated: 2026-02-15_
 | `scripts/system_readiness_check.py` | Dev Utility | absolute path operations |
 | `scripts/system_status_check.py` | Unclear/Obsolete | absolute path operations |
 | `scripts/test_all_endpoints.py` | Dev Utility | absolute path operations; binary/network download |
-| `scripts/test_clap_clustering.py` | Unclear/Obsolete | absolute path operations |
+| `scripts/archive/legacy_validation/root/test_clap_clustering.py` | Archived/Migrations | absolute path operations |
 | `scripts/test_control_agent_phase2.py` | Dev Utility | absolute path operations |
 | `scripts/test_control_agent_phase3.py` (retired) | Unclear/Obsolete | absolute path operations |
 | `scripts/test_from_windows_simple.py` | Dev Utility | absolute path operations; binary/network download |
-| `scripts/test_full_system.py` | Unclear/Obsolete | absolute path operations |
-| `scripts/test_gpu_allocation.py` | Unclear/Obsolete | absolute path operations |
+| `scripts/archive/legacy_validation/root/test_full_system.py` | Archived/Migrations | absolute path operations |
+| `scripts/archive/legacy_validation/root/test_gpu_allocation.py` | Archived/Migrations | absolute path operations |
 | `scripts/test_gpu_config.py` | Dev Utility | absolute path operations |
 | `scripts/test_gpu_scene_detection.py` | Dev Utility | absolute path operations |
-| `scripts/test_llm_client_simple.py` | Unclear/Obsolete | absolute path operations |
+| `scripts/archive/legacy_validation/root/test_llm_client_simple.py` | Archived/Migrations | absolute path operations |
 | `scripts/test_llm_connectivity.py` (retired) | Unclear/Obsolete | absolute path operations; binary/network download |
 | `scripts/test_recovery_system.py` | Dev Utility | absolute path operations |
-| `scripts/test_transcribe_integration.py` | Unclear/Obsolete | absolute path operations |
+| `scripts/archive/legacy_validation/root/test_transcribe_integration.py` | Archived/Migrations | absolute path operations |
 | `scripts/test_vad_simple.py` | Dev Utility | destructive actions; absolute path operations |
 | `scripts/test_vllm_from_windows.ps1` | Dev Utility | absolute path operations; binary/network download |
 | `scripts/utilities/gpu_config.py` | Unclear/Obsolete | absolute path operations |
 | `scripts/utilities/llm_client.py` | Runtime Utility | absolute path operations; binary/network download |
 | `scripts/utilities/process_manager.py` (retired) | Unclear/Obsolete | absolute path operations |
-| `scripts/utils/check_api_data.py` | Unclear/Obsolete | absolute path operations |
-| `scripts/utils/check_databases.py` | Unclear/Obsolete | absolute path operations |
-| `scripts/utils/check_ingestion_status.py` | Unclear/Obsolete | absolute path operations |
-| `scripts/utils/check_llm_availability.py` | Unclear/Obsolete | absolute path operations; binary/network download |
-| `scripts/utils/check_memory_db.py` | Unclear/Obsolete | absolute path operations |
+| `scripts/archive/legacy_validation/utils/check_api_data.py` | Archived/Migrations | absolute path operations |
+| `scripts/archive/legacy_validation/utils/check_databases.py` | Archived/Migrations | absolute path operations |
+| `scripts/archive/legacy_validation/utils/check_ingestion_status.py` | Archived/Migrations | absolute path operations |
+| `scripts/archive/legacy_validation/utils/check_llm_availability.py` | Archived/Migrations | absolute path operations; binary/network download |
+| `scripts/archive/legacy_validation/utils/check_memory_db.py` | Archived/Migrations | absolute path operations |
 | `scripts/utils/check_watchdog_status.py` | Runtime Utility | absolute path operations |
-| `scripts/utils/validate_models.py` | Unclear/Obsolete | absolute path operations |
+| `scripts/archive/legacy_validation/utils/validate_models.py` | Archived/Migrations | absolute path operations |
 | `scripts/utils/validate_phase3_integration.py` (retired) | Unclear/Obsolete | absolute path operations |
-| `scripts/utils/validate_pipeline_flow.py` | Unclear/Obsolete | absolute path operations |
+| `scripts/archive/legacy_validation/utils/validate_pipeline_flow.py` | Archived/Migrations | absolute path operations |
 | `scripts/utils/validate_ui_config.py` (retired) | Unclear/Obsolete | absolute path operations |
 | `scripts/utils/verify_command_center.py` | Unclear/Obsolete | binary/network download |
 | `scripts/utils/verify_model_lockdown.py` | Dev Utility | absolute path operations |

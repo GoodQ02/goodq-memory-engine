@@ -173,7 +173,7 @@ Updated all references from `config.*` to `configs.*`:
    # After:  from configs.python_paths import get_conda_run_command
    ```
 
-2. `tests/test_python_paths.py`
+2. `tests/legacy/root_harnesses/test_python_paths.py`
    ```python
    # Before: from config.python_paths import ...
    # After:  from configs.python_paths import ...

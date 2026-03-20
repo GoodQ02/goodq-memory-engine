@@ -1,54 +1,30 @@
-# Legacy Test Scripts
+# Legacy Test Archive
 
-**Purpose:** Historical diagnostic and one-off testing scripts  
-**Status:** Archived - not part of active test suite  
-**Moved:** December 15, 2025
+**Purpose:** Historical test and validation harnesses  
+**Status:** Archived, non-canonical  
+**Last Verified:** 2026-03-20
 
----
+This directory preserves one-off build verifiers, manual probes, and path-specific harnesses that are no longer part of the maintained test contract.
 
-## Contents
+## Current Layout
 
-This directory contains temporary diagnostic scripts created during development and debugging sessions. These scripts were used for:
+- `tests/legacy/root_harnesses/` - old root-level `test_*.py` and ad hoc pipeline checks
+- `tests/legacy/integration_harnesses/` - historical ingestion, scene, and embedding probes
+- `tests/legacy/utilities/` - one-off validation helpers and environment checks
+- existing top-level legacy files - earlier archived diagnostics
 
-- **Database diagnostics** (`temp_check_db*.py`, `temp_db_*.py`)
-- **Scene analysis** (`temp_check_scenes.py`, `temp_scene_analysis.py`)
-- **Configuration validation** (`temp_check_config.py`)
-- **Sample data analysis** (`temp_analyze_*.py`, `temp_run_sample.py`)
-- **System diagnostics** (`temp_full_diagnostic.py`)
+## Canonical Test Contract
 
----
+Do not use this directory as the default validation surface.
 
-## Why Archived?
+Use:
 
-These scripts served specific debugging purposes during development but:
-- Are superseded by organized test suite (`tests/unit/`, `tests/integration/`, `tests/utils/`)
-- May reference outdated code paths or configurations
-- Were one-off diagnostic tools, not repeatable tests
-- Could confuse users about which tests are current
+- `pytest.ini`
+- `tests/unit`
+- `tests/integration/test_watchdog.py` for the maintained manual watchdog check
 
----
+## Why These Were Archived
 
-## If You Need Them
-
-These scripts are preserved for historical reference and may contain useful debugging patterns. However:
-
-⚠️ **They may not work with current codebase**  
-⚠️ **Use organized test suite for current testing**  
-⚠️ **Check git history for context on when/why they were created**
-
----
-
-## Current Testing
-
-For current, maintained tests, use:
-- **Unit tests:** `tests/unit/`
-- **Integration tests:** `tests/integration/`
-- **Utilities:** `tests/utils/`
-- **Quick tests:** `tests/run_test_ingestion.py`, `tests/test_wsl_audio.py`
-
-See `tests/README.md` for complete testing documentation.
-
----
-
-**Archived:** December 15, 2025  
-**Reason:** GitHub release preparation - cleanup of forward-facing documentation
+- They are not collected by the default `pytest` configuration.
+- Many rely on historical path assumptions or workstation-specific fixtures.
+- Several were created to validate intermediate implementation phases rather than the current release surface.

@@ -11,6 +11,10 @@ Bootstrap contract:
 - `scripts/bootstrap_install.py` provisions `goodq_core` plus the supported
   specialized step-env pack listed below, so a fresh machine can install the
   active pipeline in one shot.
+- Those specialized step envs are provisioned from the pinned stable lock
+  recipes in `envs/locks/`, not from a fresh pip resolver pass.
+- `goodq_face_embed` additionally uses Conda `dlib` as part of its Windows
+  bootstrap recipe so the face stack remains reproducible on clean hosts.
 
 ### Orchestration & Core
 

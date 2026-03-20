@@ -1,5 +1,6 @@
 @echo off
 setlocal EnableExtensions
+set "PYTHONNOUSERSITE=1"
 
 set "FAILED_STAGE="
 set "EXIT_CODE=1"

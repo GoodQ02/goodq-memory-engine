@@ -11,6 +11,10 @@ from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
 
+# Windows Conda hosts can surface duplicate libiomp runtimes during torch import.
+# Set the documented workaround before torch is imported anywhere in this module.
+os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
+
 
 @dataclass
 class AudioGPUConfig:

@@ -16,8 +16,9 @@ python scripts/bootstrap_install.py
 
 That path creates or updates the `goodq_core` orchestration environment,
 provisions the supported specialized step-env pack required by the active
-pipeline, writes local-only overrides when missing, performs lightweight
-verification, and launches the canonical launcher surface.
+pipeline from the pinned stable recipes under `envs/locks/`, writes local-only
+overrides when missing, performs lightweight verification, and launches the
+canonical launcher surface.
 
 ## Performance Profiles
 

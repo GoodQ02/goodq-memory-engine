@@ -10,6 +10,7 @@ and related canonical docs.
 ## [Unreleased]
 
 ### Changed
+- Switched supported step-env provisioning back to the pinned lock recipes under `envs/locks/`, added per-env smoke validation during bootstrap, hardened step subprocesses against user-site package leakage, and rebuilt the `goodq_face_embed` recipe around Conda `dlib` plus a portable pip-native lock set.
 - Bound `scripts/bootstrap_validate.bat` to the canonical `goodq_core` interpreter for verification and pytest instead of the ambient shell Python, added explicit `pdftotext` / Poppler readiness checks to bootstrap verification, and corrected the isolated step runner to launch `python -m cli.step_runner` from the repo root instead of the non-importable `goodq4all.cli.step_runner` path.
 - Restored the live image/audio/text step routing to the supported specialized env boundaries where `goodq_core` did not actually carry the full dependency stack, and taught bootstrap to provision that step-env pack in one shot for full pipeline capability.
 - Archived the last small pack of phase-era validation and operator helper scripts, including the retired command-center dashboard, phase control-agent harnesses, quick GPU setup helper, and one-off audio/VAD probes.

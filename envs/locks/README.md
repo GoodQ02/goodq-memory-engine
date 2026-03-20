@@ -42,6 +42,10 @@ conda create -n goodq_<step> python=3.10 -y
 conda run -n goodq_<step> pip install -r locks/<step>.lock.txt --no-cache-dir
 ```
 
+`scripts/bootstrap_install.py` uses these lock files as the canonical recipe
+for the supported step-env pack. When a step env needs extra host preparation
+for reproducibility, bootstrap performs that first and then applies the lock.
+
 ### Update Lock After Changes
 
 ```powershell

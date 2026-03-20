@@ -51,6 +51,7 @@ def run_conda_step(env_name: str, step_name: str, item: Dict[str, Any], cfg: Dic
         env.setdefault("TRANSFORMERS_CACHE", os.path.join(models_root, "transformers"))
         env.setdefault("HF_DATASETS_CACHE", os.path.join(models_root, "hf", "datasets"))
         env.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
+        env.setdefault("PYTHONNOUSERSITE", "1")
         
         conda_exe = resolve_conda()
         cmd = [

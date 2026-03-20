@@ -110,7 +110,8 @@ Environment selection:
 - `GPU_ENHANCED` uses [`environment.gpu.yml`](../../environment.gpu.yml)
 - both profiles target the same `goodq_core` orchestration environment name
 - bootstrap also provisions the supported specialized step-env pack for image, audio, and video steps that still require isolated dependency boundaries
-- when GPU mode is enabled, the step-env pack is upgraded to the CUDA-backed Torch stack where those step envs use Torch
+- the step-env pack is installed from the pinned lock recipes in `envs/locks/` instead of a fresh dependency solve
+- `goodq_face_embed` additionally installs Conda `dlib` first so Windows hosts do not need to compile it from source during bootstrap
 - the bootstrap defaults to `BASELINE`; GPU throughput remains explicit opt-in
 
 ## Lightweight Verification

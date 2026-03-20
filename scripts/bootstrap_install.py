@@ -11,6 +11,7 @@ import shutil
 import subprocess
 import sys
 import textwrap
+import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
@@ -35,6 +36,7 @@ WINGET_NSSM_ID = "NSSM.NSSM"
 CHOCO_FFMPEG_PACKAGE = "ffmpeg"
 CHOCO_NSSM_PACKAGE = "nssm"
 STEP_ENV_PYTHON = "3.10"
+TORCH_CUDA_INDEX_URL = "https://download.pytorch.org/whl/cu121"
 
 
 @dataclass
@@ -69,20 +71,84 @@ class BootstrapContext:
 class StepEnvSpec:
     name: str
     req_rel_path: str
+    lock_rel_path: str
     description: str
-    gpu_torch: bool = False
+    smoke_imports: tuple[str, ...]
+    conda_packages: tuple[str, ...] = ()
+    conda_channels: tuple[str, ...] = ()
+    allowed_pip_check_warnings: tuple[str, ...] = ()
 
 
 SUPPORTED_STEP_ENVS: tuple[StepEnvSpec, ...] = (
-    StepEnvSpec("goodq_video_scene_detect", "envs/video_scene_detect/requirements.txt", "scene detection", gpu_torch=True),
-    StepEnvSpec("goodq_image_caption", "envs/image_caption/requirements.txt", "ocr, captioning, exif, clip, dino", gpu_torch=True),
-    StepEnvSpec("goodq_object_detect", "envs/object_detect/requirements.txt", "object detection", gpu_torch=True),
-    StepEnvSpec("goodq_face_embed", "envs/face_embed/requirements.txt", "face detection and embeddings", gpu_torch=True),
-    StepEnvSpec("goodq_text_embed", "envs/text_embed/requirements.txt", "text embeddings", gpu_torch=True),
-    StepEnvSpec("goodq_audio_metadata", "envs/audio_metadata/requirements.txt", "audio metadata and time hints"),
-    StepEnvSpec("goodq_audio_transcribe", "envs/audio_transcribe/requirements.txt", "audio transcription helpers", gpu_torch=True),
-    StepEnvSpec("goodq_audio_emotion", "envs/audio_emotion/requirements.txt", "audio emotion analysis", gpu_torch=True),
-    StepEnvSpec("goodq_audio_embed", "envs/audio_embed/requirements.txt", "audio embeddings", gpu_torch=True),
+    StepEnvSpec(
+        "goodq_video_scene_detect",
+        "envs/video_scene_detect/requirements.txt",
+        "envs/locks/video_scene_detect.lock.txt",
+        "scene detection",
+        ("scenedetect", "cv2", "numpy"),
+    ),
+    StepEnvSpec(
+        "goodq_image_caption",
+        "envs/image_caption/requirements.txt",
+        "envs/locks/image_caption.lock.txt",
+        "ocr, captioning, exif, clip, dino",
+        ("torch", "transformers", "faiss", "accelerate", "timezonefinder"),
+    ),
+    StepEnvSpec(
+        "goodq_object_detect",
+        "envs/object_detect/requirements.txt",
+        "envs/locks/object_detect.lock.txt",
+        "object detection",
+        ("torch", "torchvision", "ultralytics", "cv2", "numpy"),
+    ),
+    StepEnvSpec(
+        "goodq_face_embed",
+        "envs/face_embed/requirements.txt",
+        "envs/locks/face_embed.lock.txt",
+        "face detection and embeddings",
+        ("PIL", "torch", "torchvision", "face_recognition", "facenet_pytorch", "cv2", "dlib"),
+        conda_packages=("dlib=20.0.0",),
+        conda_channels=("conda-forge",),
+        allowed_pip_check_warnings=(
+            "facenet-pytorch 2.6.0 has requirement torch<2.3.0,>=2.2.0",
+            "facenet-pytorch 2.6.0 has requirement torchvision<0.18.0,>=0.17.0",
+        ),
+    ),
+    StepEnvSpec(
+        "goodq_text_embed",
+        "envs/text_embed/requirements.txt",
+        "envs/locks/text_embed.lock.txt",
+        "text embeddings",
+        ("torch", "sentence_transformers", "faiss", "numpy", "datasets"),
+    ),
+    StepEnvSpec(
+        "goodq_audio_metadata",
+        "envs/audio_metadata/requirements.txt",
+        "envs/locks/audio_metadata.lock.txt",
+        "audio metadata and time hints",
+        ("mutagen", "librosa", "soundfile", "numpy"),
+    ),
+    StepEnvSpec(
+        "goodq_audio_transcribe",
+        "envs/audio_transcribe/requirements.txt",
+        "envs/locks/audio_transcribe.lock.txt",
+        "audio transcription helpers",
+        ("torch", "faster_whisper", "soundfile"),
+    ),
+    StepEnvSpec(
+        "goodq_audio_emotion",
+        "envs/audio_emotion/requirements.txt",
+        "envs/locks/audio_emotion.lock.txt",
+        "audio emotion analysis",
+        ("torch", "transformers", "librosa", "soundfile"),
+    ),
+    StepEnvSpec(
+        "goodq_audio_embed",
+        "envs/audio_embed/requirements.txt",
+        "envs/locks/audio_embed.lock.txt",
+        "audio embeddings",
+        ("torch", "torchaudio", "transformers", "librosa", "faiss"),
+    ),
 )
 
 
@@ -284,6 +350,27 @@ def conda_env_exists(conda_exe: Path, env_name: str) -> bool:
     return False
 
 
+def _has_core_torch_stack_conflict(conda_exe: Path) -> tuple[bool, str]:
+    completed = _run([str(conda_exe), "list", "-n", ENV_NAME, "--json"])
+    if completed.returncode != 0:
+        detail = (completed.stderr or completed.stdout).strip() or "conda list failed"
+        return False, detail
+    try:
+        payload = json.loads(completed.stdout or "[]")
+    except json.JSONDecodeError:
+        return False, "conda list returned invalid JSON"
+
+    has_conda_pytorch = any(str(rec.get("name")).lower() == "pytorch" for rec in payload if isinstance(rec, dict))
+    has_pip_torch = any(
+        str(rec.get("name")).lower() == "torch" and str(rec.get("channel", "")).lower() == "pypi"
+        for rec in payload
+        if isinstance(rec, dict)
+    )
+    if has_conda_pytorch and has_pip_torch:
+        return True, "detected both Conda pytorch and pip torch in goodq_core"
+    return False, "no duplicate torch stack detected"
+
+
 def _conda_tos_commands(conda_exe: Path) -> list[list[str]]:
     return [
         [str(conda_exe), "tos", "accept", "--override-channels", "--channel", channel]
@@ -304,6 +391,21 @@ def _is_conda_tos_block(detail: str) -> bool:
         "terms of service" in lowered
         or "conda tos" in lowered
         or ("repo.anaconda.com" in lowered and "accept" in lowered and "channel" in lowered)
+    )
+
+
+def _is_transient_conda_network_error(detail: str) -> bool:
+    lowered = detail.lower()
+    return any(
+        token in lowered
+        for token in (
+            "condahttperror",
+            "http 000 connection failed",
+            "connection reset",
+            "read timeout",
+            "temporarily unavailable",
+            "failed after connection broken",
+        )
     )
 
 
@@ -329,15 +431,27 @@ def _run_conda_with_tos_retry(
     assume_yes: bool,
     capture: bool = True,
 ) -> subprocess.CompletedProcess[str]:
-    completed = _run(cmd, cwd=repo_root, capture=capture)
-    if completed.returncode != 0:
+    completed: subprocess.CompletedProcess[str] | None = None
+    for attempt in range(1, 4):
+        completed = _run(cmd, cwd=repo_root, capture=capture)
+        if completed.returncode == 0:
+            return completed
+
         detail = (completed.stderr or completed.stdout).strip() or "conda environment command failed"
         if _is_conda_tos_block(detail):
             _accept_conda_tos(conda_exe, assume_yes=assume_yes)
             completed = _run(cmd, cwd=repo_root, capture=capture)
-        if completed.returncode != 0:
+            if completed.returncode == 0:
+                return completed
             detail = (completed.stderr or completed.stdout).strip() or "conda environment command failed"
-            raise RuntimeError(detail)
+
+        if attempt < 3 and _is_transient_conda_network_error(detail):
+            _print(f"[WARN] Transient Conda network failure (attempt {attempt}/3). Retrying...")
+            time.sleep(attempt * 2)
+            continue
+        raise RuntimeError(detail)
+
+    assert completed is not None
     return completed
 
 
@@ -350,6 +464,21 @@ def ensure_conda_env(conda_exe: Path, repo_root: Path, env_file: Path, *, assume
             repo_root=repo_root,
             assume_yes=assume_yes,
         )
+        has_conflict, detail = _has_core_torch_stack_conflict(conda_exe)
+        if has_conflict:
+            _print(f"[WARN] {detail}; recreating {ENV_NAME} from {env_file.name}")
+            _run_conda_with_tos_retry(
+                conda_exe,
+                [str(conda_exe), "env", "remove", "-n", ENV_NAME, "-y"],
+                repo_root=repo_root,
+                assume_yes=assume_yes,
+            )
+            _run_conda_with_tos_retry(
+                conda_exe,
+                [str(conda_exe), "env", "create", "-f", str(env_file)],
+                repo_root=repo_root,
+                assume_yes=assume_yes,
+            )
     else:
         _print(f"[INFO] Creating Conda environment from {env_file.name}")
         _run_conda_with_tos_retry(
@@ -360,7 +489,7 @@ def ensure_conda_env(conda_exe: Path, repo_root: Path, env_file: Path, *, assume
         )
 
 
-def _step_env_install_env() -> dict[str, str]:
+def _isolated_process_env() -> dict[str, str]:
     env = os.environ.copy()
     env["PYTHONNOUSERSITE"] = "1"
     env["PIP_NO_CACHE_DIR"] = "1"
@@ -368,25 +497,70 @@ def _step_env_install_env() -> dict[str, str]:
     return env
 
 
-def ensure_step_env(conda_exe: Path, repo_root: Path, spec: StepEnvSpec, *, assume_yes: bool) -> None:
-    req_path = repo_root / spec.req_rel_path
-    if not req_path.exists():
-        raise RuntimeError(f"Missing requirements file for {spec.name}: {req_path}")
+def _read_lock_lines(lock_path: Path) -> list[str]:
+    return [
+        line.strip()
+        for line in lock_path.read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    ]
 
-    if conda_env_exists(conda_exe, spec.name):
-        _print(f"[INFO] Refreshing supported step env: {spec.name} ({spec.description})")
-    else:
-        _print(f"[INFO] Creating supported step env: {spec.name} ({spec.description})")
-        _run_conda_with_tos_retry(
-            conda_exe,
-            [str(conda_exe), "create", "-y", "-n", spec.name, f"python={STEP_ENV_PYTHON}", "pip"],
-            repo_root=repo_root,
-            assume_yes=assume_yes,
-        )
 
-    pip_env = _step_env_install_env()
+def _lock_uses_cuda_wheels(lock_path: Path) -> bool:
+    return any("+cu121" in line for line in _read_lock_lines(lock_path))
+
+
+def _create_step_env(conda_exe: Path, repo_root: Path, spec: StepEnvSpec, *, assume_yes: bool) -> None:
+    _run_conda_with_tos_retry(
+        conda_exe,
+        [str(conda_exe), "create", "-y", "-n", spec.name, f"python={STEP_ENV_PYTHON}", "pip"],
+        repo_root=repo_root,
+        assume_yes=assume_yes,
+    )
+
+
+def _remove_step_env(conda_exe: Path, repo_root: Path, spec: StepEnvSpec, *, assume_yes: bool) -> None:
+    _run_conda_with_tos_retry(
+        conda_exe,
+        [str(conda_exe), "env", "remove", "-n", spec.name, "-y"],
+        repo_root=repo_root,
+        assume_yes=assume_yes,
+    )
+
+
+def _ensure_step_env_conda_packages(conda_exe: Path, repo_root: Path, spec: StepEnvSpec, *, assume_yes: bool) -> None:
+    if not spec.conda_packages:
+        return
+    cmd = [str(conda_exe), "install", "-y", "-n", spec.name]
+    for channel in spec.conda_channels:
+        cmd.extend(["-c", channel])
+    cmd.extend(spec.conda_packages)
+    _run_conda_with_tos_retry(
+        conda_exe,
+        cmd,
+        repo_root=repo_root,
+        assume_yes=assume_yes,
+    )
+
+
+def _install_step_env_from_lock(conda_exe: Path, repo_root: Path, spec: StepEnvSpec) -> None:
+    lock_path = repo_root / spec.lock_rel_path
+    pip_env = _isolated_process_env()
     upgrade = _run(
-        [str(conda_exe), "run", "-n", spec.name, "python", "-m", "pip", "install", "--upgrade", "pip", "--no-cache-dir", "--no-user", "--isolated"],
+        [
+            str(conda_exe),
+            "run",
+            "-n",
+            spec.name,
+            "python",
+            "-m",
+            "pip",
+            "install",
+            "--upgrade",
+            "pip",
+            "--no-cache-dir",
+            "--no-user",
+            "--isolated",
+        ],
         cwd=repo_root,
         env=pip_env,
     )
@@ -394,69 +568,97 @@ def ensure_step_env(conda_exe: Path, repo_root: Path, spec: StepEnvSpec, *, assu
         detail = (upgrade.stderr or upgrade.stdout).strip() or f"pip upgrade failed for {spec.name}"
         raise RuntimeError(detail)
 
+    install_cmd = [
+        str(conda_exe),
+        "run",
+        "-n",
+        spec.name,
+        "python",
+        "-m",
+        "pip",
+        "install",
+        "-r",
+        str(lock_path),
+        "--no-cache-dir",
+        "--no-user",
+        "--isolated",
+        "--no-deps",
+    ]
+    if _lock_uses_cuda_wheels(lock_path):
+        install_cmd.extend(["--extra-index-url", TORCH_CUDA_INDEX_URL])
+
     install = _run(
-        [
-            str(conda_exe),
-            "run",
-            "-n",
-            spec.name,
-            "python",
-            "-m",
-            "pip",
-            "install",
-            "-r",
-            str(req_path),
-            "--no-cache-dir",
-            "--no-user",
-            "--isolated",
-            "--upgrade-strategy",
-            "only-if-needed",
-        ],
+        install_cmd,
         cwd=repo_root,
         env=pip_env,
     )
     if install.returncode != 0:
-        detail = (install.stderr or install.stdout).strip() or f"requirements install failed for {spec.name}"
+        detail = (install.stderr or install.stdout).strip() or f"lock install failed for {spec.name}"
         raise RuntimeError(detail)
 
 
-def _upgrade_step_env_gpu_stack(conda_exe: Path, repo_root: Path, spec: StepEnvSpec) -> None:
-    pip_env = _step_env_install_env()
-    uninstall = _run(
-        [str(conda_exe), "run", "-n", spec.name, "python", "-m", "pip", "uninstall", "-y", "torch", "torchvision", "torchaudio"],
-        cwd=repo_root,
-        env=pip_env,
-    )
-    if uninstall.returncode != 0:
-        detail = (uninstall.stderr or uninstall.stdout).strip()
-        if detail and "skipping torch as it is not installed" not in detail.lower():
-            raise RuntimeError(detail)
+def _validate_step_env(conda_exe: Path, repo_root: Path, spec: StepEnvSpec) -> list[str]:
+    issues: list[str] = []
+    runtime_env = _isolated_process_env()
 
-    install = _run(
-        [
-            str(conda_exe),
-            "run",
-            "-n",
-            spec.name,
-            "python",
-            "-m",
-            "pip",
-            "install",
-            "--no-cache-dir",
-            "--no-user",
-            "--isolated",
-            "torch==2.3.1+cu121",
-            "torchvision==0.18.1+cu121",
-            "torchaudio==2.3.1",
-            "--extra-index-url",
-            "https://download.pytorch.org/whl/cu121",
-        ],
+    pip_check = _run(
+        [str(conda_exe), "run", "-n", spec.name, "python", "-m", "pip", "check"],
         cwd=repo_root,
-        env=pip_env,
+        env=runtime_env,
     )
-    if install.returncode != 0:
-        detail = (install.stderr or install.stdout).strip() or f"GPU torch install failed for {spec.name}"
-        raise RuntimeError(detail)
+    if pip_check.returncode != 0:
+        detail = (pip_check.stdout or pip_check.stderr).strip() or "pip check failed"
+        lines = [line.strip() for line in detail.splitlines() if line.strip()]
+        unexpected = [
+            line for line in lines
+            if not any(allowed in line for allowed in spec.allowed_pip_check_warnings)
+        ]
+        if unexpected:
+            issues.append(f"pip check failed for {spec.name}: {' | '.join(unexpected)}")
+        else:
+            _print(f"[WARN] {spec.name}: {' | '.join(lines)}")
+
+    smoke_code = "import " + ", ".join(spec.smoke_imports) + "; print('ok')"
+    smoke = _run(
+        [str(conda_exe), "run", "-n", spec.name, "python", "-c", smoke_code],
+        cwd=repo_root,
+        env=runtime_env,
+    )
+    if smoke.returncode != 0:
+        detail = (smoke.stderr or smoke.stdout).strip() or f"smoke import failed for {spec.name}"
+        issues.append(f"smoke imports failed for {spec.name}: {detail}")
+
+    return issues
+
+
+def ensure_step_env(conda_exe: Path, repo_root: Path, spec: StepEnvSpec, *, assume_yes: bool) -> None:
+    req_path = repo_root / spec.req_rel_path
+    lock_path = repo_root / spec.lock_rel_path
+    if not req_path.exists():
+        raise RuntimeError(f"Missing requirements file for {spec.name}: {req_path}")
+    if not lock_path.exists():
+        raise RuntimeError(f"Missing lock file for {spec.name}: {lock_path}")
+
+    existed = conda_env_exists(conda_exe, spec.name)
+    if existed:
+        _print(f"[INFO] Refreshing supported step env: {spec.name} ({spec.description}) from {lock_path.relative_to(repo_root)}")
+    else:
+        _print(f"[INFO] Creating supported step env: {spec.name} ({spec.description}) from {lock_path.relative_to(repo_root)}")
+        _create_step_env(conda_exe, repo_root, spec, assume_yes=assume_yes)
+
+    def _sync_and_validate() -> list[str]:
+        _ensure_step_env_conda_packages(conda_exe, repo_root, spec, assume_yes=assume_yes)
+        _install_step_env_from_lock(conda_exe, repo_root, spec)
+        return _validate_step_env(conda_exe, repo_root, spec)
+
+    issues = _sync_and_validate()
+    if issues and existed:
+        _print(f"[WARN] {spec.name} diverged from the locked recipe; recreating the env for a clean sync")
+        _remove_step_env(conda_exe, repo_root, spec, assume_yes=assume_yes)
+        _create_step_env(conda_exe, repo_root, spec, assume_yes=assume_yes)
+        issues = _sync_and_validate()
+    if issues:
+        raise RuntimeError(" ; ".join(issues))
 
 
 def ensure_supported_step_envs(ctx: BootstrapContext, *, assume_yes: bool) -> None:
@@ -467,15 +669,13 @@ def ensure_supported_step_envs(ctx: BootstrapContext, *, assume_yes: bool) -> No
     _print("[INFO] Provisioning supported step environment pack for full pipeline capability")
     for spec in SUPPORTED_STEP_ENVS:
         ensure_step_env(ctx.conda_exe, ctx.repo_root, spec, assume_yes=assume_yes)
-        if ctx.enable_gpu and spec.gpu_torch:
-            _print(f"[INFO] Upgrading {spec.name} to the CUDA-backed torch stack")
-            _upgrade_step_env_gpu_stack(ctx.conda_exe, ctx.repo_root, spec)
 
 
 def env_python(conda_exe: Path, repo_root: Path, code: str) -> subprocess.CompletedProcess[str]:
     return _run(
         [str(conda_exe), "run", "-n", ENV_NAME, "python", "-c", code],
         cwd=repo_root,
+        env=_isolated_process_env(),
     )
 
 
@@ -734,6 +934,7 @@ def run_bootstrap_verify(conda_exe: Path, repo_root: Path) -> tuple[bool, str]:
     completed = _run(
         [str(conda_exe), "run", "-n", ENV_NAME, "python", str(repo_root / "scripts" / "bootstrap_verify.py"), "--json"],
         cwd=repo_root,
+        env=_isolated_process_env(),
     )
     if completed.returncode != 0:
         detail = (completed.stderr or completed.stdout).strip() or "bootstrap_verify failed"

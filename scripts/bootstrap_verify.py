@@ -20,16 +20,16 @@ if str(REPO_ROOT) not in sys.path:
 
 
 QDRANT_SERVICE_NAME = "GoodQ_Qdrant"
-SUPPORTED_STEP_ENVS: tuple[tuple[str, str], ...] = (
-    ("goodq_video_scene_detect", "scene detection"),
-    ("goodq_image_caption", "ocr, captioning, exif, clip, dino"),
-    ("goodq_object_detect", "object detection"),
-    ("goodq_face_embed", "face detection and embeddings"),
-    ("goodq_text_embed", "text embeddings"),
-    ("goodq_audio_metadata", "audio metadata and time hints"),
-    ("goodq_audio_transcribe", "audio transcription helpers"),
-    ("goodq_audio_emotion", "audio emotion analysis"),
-    ("goodq_audio_embed", "audio embeddings"),
+SUPPORTED_STEP_ENVS: tuple[tuple[str, str, str], ...] = (
+    ("goodq_video_scene_detect", "scene detection", "envs/locks/video_scene_detect.lock.txt"),
+    ("goodq_image_caption", "ocr, captioning, exif, clip, dino", "envs/locks/image_caption.lock.txt"),
+    ("goodq_object_detect", "object detection", "envs/locks/object_detect.lock.txt"),
+    ("goodq_face_embed", "face detection and embeddings (Conda dlib + locked pip recipe)", "envs/locks/face_embed.lock.txt"),
+    ("goodq_text_embed", "text embeddings", "envs/locks/text_embed.lock.txt"),
+    ("goodq_audio_metadata", "audio metadata and time hints", "envs/locks/audio_metadata.lock.txt"),
+    ("goodq_audio_transcribe", "audio transcription helpers", "envs/locks/audio_transcribe.lock.txt"),
+    ("goodq_audio_emotion", "audio emotion analysis", "envs/locks/audio_emotion.lock.txt"),
+    ("goodq_audio_embed", "audio embeddings", "envs/locks/audio_embed.lock.txt"),
 )
 
 
@@ -110,11 +110,15 @@ def _check_step_env_pack() -> List[CheckResult]:
 
     present = {Path(env_path).name.lower() for env_path in payload.get("envs", [])}
     results: List[CheckResult] = []
-    for env_name, desc in SUPPORTED_STEP_ENVS:
+    for env_name, desc, lock_rel_path in SUPPORTED_STEP_ENVS:
+        lock_path = REPO_ROOT / lock_rel_path
+        if not lock_path.exists():
+            results.append(CheckResult(f"step_env_lock:{env_name}", "fail", f"missing lock recipe at {lock_path}"))
+            continue
         if env_name.lower() in present:
-            results.append(CheckResult(f"step_env:{env_name}", "pass", f"present ({desc})"))
+            results.append(CheckResult(f"step_env:{env_name}", "pass", f"present ({desc}); lock={lock_rel_path}"))
         else:
-            results.append(CheckResult(f"step_env:{env_name}", "fail", f"missing ({desc})"))
+            results.append(CheckResult(f"step_env:{env_name}", "fail", f"missing ({desc}); lock={lock_rel_path}"))
     return results
 
 

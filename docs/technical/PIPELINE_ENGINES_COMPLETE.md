@@ -9,7 +9,7 @@
 
 ## Use Instead
 
-- [`api/API_DOCUMENTATION.md`](../../api/API_DOCUMENTATION.md)
+- [`docs/reference/API.md`](../reference/API.md)
 - [`docs/guides/general/LAUNCH_INSTRUCTIONS.md`](../guides/general/LAUNCH_INSTRUCTIONS.md)
 - [`docs/releases/SHIP_PROFILE.md`](../releases/SHIP_PROFILE.md)
 

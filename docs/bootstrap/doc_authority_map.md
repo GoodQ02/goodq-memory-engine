@@ -489,13 +489,14 @@ docs/archive/
 | `docs/guides/llm/VLLM_SYSTEMD_SETUP.md` | B) Operational | Operator setup/usage guide. | KEEP |
 | `docs/guides/llm/WSL2_AUDIO_MIGRATION_GUIDE.md` | B) Operational | Operator setup/usage guide. | KEEP |
 | `docs/guides/llm/WSL2_AUDIO_SETUP.md` | B) Operational | Operational guide with overlap/drift risk; keep but normalize. | REFRACTOR |
-| `docs/guides/ui/UI_ALIGNMENT_AUDIT.md` | C) Historical | Historical UI audit artifact; retain only as context. | KEEP |
-| `docs/guides/ui/UI_AUDIT_COMPLETE.md` | C) Historical | Historical UI audit artifact; retain only as context. | KEEP |
-| `docs/guides/ui/UI_AUDIT_REPORT.md` | C) Historical | Historical UI audit artifact; retain only as context. | KEEP |
-| `docs/guides/ui/UI_AUDIT_SUMMARY.md` | C) Historical | Historical UI audit artifact; retain only as context. | KEEP |
-| `docs/guides/ui/UI_CONNECTION_GUIDE.md` | C) Historical | Historical UI rollout note; retain only as context. | KEEP |
-| `docs/guides/ui/UI_FIXES_COMPLETED.txt` | C) Historical | Historical UI rollout note; retain only as context. | KEEP |
-| `docs/guides/ui/UI_PHASE2_FIXES.md` | C) Historical | Historical UI rollout note; retain only as context. | KEEP |
+| `docs/archive/proof_of_concept/ui/UI_ALIGNMENT_AUDIT.md` | C) Historical | Archived UI audit artifact from the retired scaffolded interface. | KEEP |
+| `docs/archive/proof_of_concept/ui/UI_AUDIT_COMPLETE.md` | C) Historical | Archived UI audit artifact from the retired scaffolded interface. | KEEP |
+| `docs/archive/proof_of_concept/ui/UI_AUDIT_REPORT.md` | C) Historical | Archived UI audit artifact from the retired scaffolded interface. | KEEP |
+| `docs/archive/proof_of_concept/ui/UI_AUDIT_SUMMARY.md` | C) Historical | Archived UI audit artifact from the retired scaffolded interface. | KEEP |
+| `docs/archive/proof_of_concept/ui/UI_CONNECTION_GUIDE.md` | C) Historical | Archived UI rollout note for the retired scaffolded interface. | KEEP |
+| `docs/archive/proof_of_concept/ui/UI_FIXES_COMPLETED.txt` | C) Historical | Archived UI rollout note for the retired scaffolded interface. | KEEP |
+| `docs/archive/proof_of_concept/ui/UI_PHASE2_FIXES.md` | C) Historical | Archived UI rollout note for the retired scaffolded interface. | KEEP |
+| `docs/guides/ui/JUSTIFICATION_UI.md` | B) Operational | Current note describing the dormant UI scaffold and the supported API-only runtime surface. | KEEP |
 | `docs/guides/watchdog/WATCHDOG_CHANGELOG.md` | B) Operational | Operator setup/usage guide. | KEEP |
 | `docs/guides/watchdog/WATCHDOG_GUIDE.md` | B) Operational | Operator setup/usage guide. | KEEP |
 | `docs/guides/watchdog/WATCHDOG_INDEX.md` | B) Operational | Operator setup/usage guide. | KEEP |

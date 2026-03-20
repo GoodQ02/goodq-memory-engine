@@ -10,7 +10,7 @@
 
 ## Use Instead
 
-- [`api/API_DOCUMENTATION.md`](../../../api/API_DOCUMENTATION.md)
+- [`docs/reference/API.md`](../../reference/API.md)
 - [`docs/CLI-REFERENCE.md`](../../CLI-REFERENCE.md)
 - [`docs/releases/SHIP_PROFILE.md`](../../releases/SHIP_PROFILE.md)
 

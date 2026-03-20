@@ -53,7 +53,7 @@ Agent-facing fix summaries:
 - `docs/SCENE_SUMMARIZATION_FIX_PLAN.md`
 - `docs/GPU_FIX_SUMMARY.md`
 - `docs/PHASE4_EMOTION_DETECTION_FIXES.md`
-- `docs/UI_PHASE2_FIXES.md`
+- `docs/archive/proof_of_concept/ui/UI_PHASE2_FIXES.md` - Historical UI-fix note for the retired scaffolded web interface.
 - `docs/VISION_GPU_OPTIMIZATION.md` / `docs/VISION_GPU_OPTIMIZATION_REPORT.md` (see also GPU index).
 
 ### Configuration / Dependencies
@@ -79,4 +79,3 @@ Agent-facing fix summaries:
 - For GPU, LLM, WSL2, and Watchdog-specific troubleshooting, prefer:
   - `docs/GPU_LLM_WSL_INDEX.md`
   - `docs/WATCHDOG_INDEX.md`
-

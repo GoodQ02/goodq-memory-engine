@@ -49,6 +49,15 @@ This is the current landing page for the active GoodQ4All docs surface.
 - GPU, LLM, WSL:
   [`docs/guides/gpu/GPU_LLM_WSL_INDEX.md`](guides/gpu/GPU_LLM_WSL_INDEX.md)
 
+## Release Checkpoint
+
+- Release `0.1.0`:
+  [`docs/releases/RELEASE_0.1.0.md`](releases/RELEASE_0.1.0.md)
+- Shipping profile:
+  [`docs/releases/SHIP_PROFILE.md`](releases/SHIP_PROFILE.md)
+- Public changelog:
+  [`CHANGELOG.md`](../CHANGELOG.md)
+
 ## Important Note
 
 GoodQ4All does not currently ship a supported production UI. The supported

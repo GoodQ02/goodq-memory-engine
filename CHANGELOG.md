@@ -9,64 +9,41 @@ and related canonical docs.
 
 ## [Unreleased]
 
-- Launch/runtime truthfulness hardening: rewrote the active launch and quick-reference docs around the real safe-mode launcher, explicit API/watchdog entrypoints, current docs landing page, and the no-supported-UI contract; also fixed the watchdog status utility and registry entries to match the canonical `python -m cli.watchdog` surface.
-- Root declutter hardening: moved live dependency/platform/GPU contract docs under `docs/reference` and moved generated or historical root artifacts into `docs/archive`, including the runtime path authority report and older stage audit artifacts.
-- UI/API truthfulness hardening: archived the retired scaffolded UI rollout notes under `docs/archive/proof_of_concept/ui/`, replaced `api/API_DOCUMENTATION.md` with a current pointer, and added canonical active docs for the supported API surface and current no-supported-UI status.
-- Documentation governance hardening: `scripts/docs/doc_drift_lint.py` now fails on suspicious control or replacement characters in active docs and on generated snapshot docs that still claim canonical or authoritative status.
-- Bootstrap hardening: the Windows bootstrap now detects Conda Terms of Service blocks explicitly, offers FFmpeg install guidance via available package managers, prefers Ubuntu-like WSL distro names automatically, and attempts service-first Qdrant repair or installation before failing visibly.
-- `docs/goodq4all_agent_status.md` is now labeled as a generated December 2025 snapshot instead of a canonical authoritative runtime status source.
-- Active docs now normalize corrupted or tool-hostile Unicode in `docs/SYSTEM_SNAPSHOT.md`, `docs/architecture/SYSTEM_ARCHITECTURE.md`, and `docs/PHASE6_MULTIMODAL_FUSION.md` without changing their runtime claims.
-- Active runtime docs now state the current audio contract more clearly: `BASELINE` remains Windows-safe by default, while WSL audio is documented as optional accelerated compute rather than a default requirement.
-- `docs/systems/WATCHDOG_SYSTEM.md` now uses ASCII-safe diagrams and markers throughout, removing the remaining corrupted diagram and symbol residue from the active watchdog guide.
-- Normalized active documentation residue in `docs/guides/general/PYTHON_PATH_CONFIGURATION.md` and `docs/technical/PIPELINE_DIAGNOSIS_2025-11-11.md`, restoring clean encoding and current interpreter-binding references.
-- Fixed the Windows `faster-whisper` fallback contract in `steps/audio_transcribe/step.py` by aligning the `WhisperModel.transcribe(...)` keyword args with the installed API and adding a regression test for the chunk helper.
+- Ongoing doc cleanup and archive alignment around the remaining historical
+  surfaces.
 
-- Ongoing public-surface cleanup and release hardening on the `public` branch.
-- Bootstrap hardening: the default `environment.yml` is now CPU-safe for `BASELINE`, while `GPU_ENHANCED` selects a separate `environment.gpu.yml` spec so fresh-machine bootstrap no longer pulls CUDA packages by default.
-- CI hardening: the shipped bootstrap environment now includes `pytest`, matching the existing GitHub Actions `python -m pytest -q` contract.
-- CI hardening: runtime-path callers that only consume narrow path subsets now request only those paths, restoring compatibility with partial config fixtures and runtime snapshots while preserving the full canonical contract for strict callers.
-- API contract hardening: canonical config, schema defaults, and the API server wrapper now agree on loopback host `127.0.0.1` and port `30000`, with env vars remaining the explicit override path.
-- Qdrant contract hardening: bootstrap and setup docs now treat the Windows `GoodQ_Qdrant` service as the canonical startup path, with `START_QDRANT.bat` retained only as a foreground testing fallback.
-- Documentation governance hardening: `doc_authority_map.md` now identifies itself as a generated snapshot rather than canonical authority and no longer misclassifies the historical UI audit cluster as live operational guidance.
-- Retired the stale `scripts/utils/validate_ui_config.py` one-off validator and aligned the remaining cleanup/index docs to the canonical watchdog and analytics surfaces.
-- Forward-facing docs now reflect the bootstrap-first install story, Qdrant service-first recovery path, and repository governance surface with real `CODE_OF_CONDUCT.md` and `SECURITY.md` policies.
-- Retired the legacy `scripts/api_server.py` monolith from the tracked surface and repointed direct support-facing references to the canonical `api.server` wrapper.
-- Retired the legacy `scripts/refresh_vllm_portproxy.bat` helper from the tracked surface; Windows↔WSL vLLM access is no longer documented through manual portproxy mutation.
-- Retired stale WSL/vLLM report-style docs from the tracked support surface and repointed live indexes to the current operator docs.
-- Retired the stale `docs/guides/llm/WSL_AGENT_BRIEFING.md` coordination brief and repointed live docs to current WSL/vLLM operator references.
-- Sanitized `docs/guides/llm/VLLM_SYSTEMD_SETUP.md` into a portable advanced-operator reference and removed workstation-specific path and user assumptions.
-- Reclassified `scripts/wsl/install_vllm_service.sh` as a current WSL/vLLM runtime utility and aligned its default model path with the safer WSL-home fallback.
-- Hardened `scripts/start_vllm_servers.bat` to fail visibly when the `vllm-llama1b` systemd service is inactive instead of falling back to stale direct-launch scripts with drifted port assumptions.
-- Demoted legacy agent-system docs so they no longer present the old real-time orchestration stack as the current runtime contract.
-- Retired the legacy `agents/watchdog_agent_integration.py` watcher and made the obsolete startup menu fail visibly toward the canonical `cli.watchdog` path.
-- Retired the legacy `agents/pipeline_integration.py` and `agents/orchestrator.py` core, removed the obsolete quick agent test, and made the remaining startup menu options fail visibly toward canonical CLI surfaces.
-- Sanitized `docs/architecture/AGENT_SYSTEM.md` so its retired watcher/pipeline sections no longer document deleted imports and entrypoints as live behavior.
-- Retired the legacy `scripts/utilities/process_manager.py` cluster and `tests/TEST_PROCESS_MANAGER.bat`, then collapsed the old process-management guides into short historical notes that redirect to canonical launcher/watchdog surfaces.
-- Retired the stale one-off `scripts/organize_project.py` cleanup utility from the tracked surface after its hardcoded root assumptions and file map drifted from the current repo layout.
-- Recast `COMMAND_CENTER_LIVE.md`, `SCENE_EXPLORER_DEPLOYMENT_GUIDE.md`, and `PIPELINE_ENGINES_COMPLETE.md` as historical implementation notes so they no longer present retired `api_server.py` details as current runtime truth.
-- Retargeted the remaining GPU watchdog harnesses to the canonical `python -m cli.watchdog` entrypoint and canonical runtime inbox/processing paths.
-- Retired stale watchdog-adjacent Phase 3 and diarization harnesses whose hardcoded roots and deleted `scripts/watchdog_ingest.py` dependency no longer matched the supported runtime surface.
-- Realigned the active Watchdog docs and entrypoint references so they describe config-resolved inbox/log/state paths, canonical `python -m cli.watchdog` startup, and Control Agent diagnosis as optional rather than always-on.
-- Sanitized `docs/reference/indexes/ENVIRONMENT_INDEX.md` and `docs/guides/wsl2/HF_CLI_LOGIN_GUIDE.md` so they no longer embed workstation-specific HuggingFace or WSL path assumptions and now point to the current operator surfaces.
-- Realigned `docs/guides/llm/LLM_INFRASTRUCTURE.md` and `docs/guides/llm/LLM_CLIENT_GUIDE.md` to the current injected two-endpoint LLM contract and removed the stale zero-config multi-model guidance.
-- Retired the stale `scripts/start_llm_servers.bat` and `scripts/test_llm_connectivity.py` helper pair, updated `scripts/test_llm_client.py` to the current injected client contract, and realigned the live vLLM helper docs around the systemd-backed start/status path.
-- Retired `scripts/wsl/start_all_vllm.sh`, the old raw-process WSL vLLM launcher, and realigned the LLM infrastructure docs and script registry around the supported systemd-backed operator path.
-- Retired the legacy `vllm_wsl/scripts/` direct-start toolkit plus its high-risk quick-reference/debug docs, and recast `vllm_wsl/README.md` as a historical note that points to the supported systemd-backed operator path.
-- Added historical banners to the remaining `vllm_wsl` report docs, removed the stale `vllm_wsl/WINDOWS_TEST_READY.txt` memo, and updated the surviving WSL audit summaries so they no longer overstate the retired direct-start toolkit as current.
-- Reliability: `sentiment` now uses the existing one-shot native-crash retry path, recovering from intermittent Windows first-load subprocess crashes without breaking scene validity.
-- Runtime hardening: stale `GOODQ_WSL_WORKSPACE` overrides now fall back to the
-  canonical `~/goodq_audio` workspace when the explicit path is missing, rather
-  than disabling WSL audio for the run.
-- Reliability: the WSL audio bridge now retries `result.json` freshness checks
-  once before failing and records richer probe details when verification still
-  cannot be completed.
-- Security hardening: the legacy API server launcher now defaults to
-  `127.0.0.1`, with LAN exposure remaining explicit via `GOODQ_API_HOST`.
-- Security hardening: environment preparation now seeds `GOODQ_API_HOST` with a
-  loopback default rather than a broad network bind.
-- Portability hardening: `setup_agents.ps1` now defaults agent setup data and
-  model roots to the portable `C:/GoodQ_Data` / `<GOODQ_DATA_ROOT>/models`
-  pattern instead of desktop-specific `L:/` paths.
+## [0.1.0] - 2026-03-20
+
+Reference checkpoint:
+[`docs/releases/RELEASE_0.1.0.md`](docs/releases/RELEASE_0.1.0.md)
+
+### Release Highlights
+
+- Fresh-machine Windows bootstrap is now a supported path through
+  `python scripts/bootstrap_install.py`.
+- The active release surface is aligned around the canonical local API, CLI,
+  watchdog, bootstrap, and persisted runtime artifacts.
+- `BASELINE` remains CPU-safe by default while GPU/WSL acceleration stays
+  additive and optional.
+- The API contract is aligned around loopback host `127.0.0.1` and port
+  `30000`.
+- Qdrant is handled consistently as a Windows service-first dependency.
+- Forward-facing docs, quick references, and support indexes were rewritten to
+  reflect the real launcher/API/watchdog contract.
+- Large legacy clusters were retired or archived from the active support
+  surface, including obsolete UI scaffolding, legacy orchestration surfaces,
+  process-manager residue, and raw vLLM direct-start helpers.
+- Documentation governance now guards against active drive-root drift,
+  corrupted characters, and generated snapshots that overclaim authority.
+
+### Validation
+
+- Local CI-equivalent baseline passed with `python -m pytest -q`.
+- Active documentation governance lint passed with
+  `python scripts/docs/doc_drift_lint.py`.
+- Fresh laptop bootstrap succeeded after bootstrap hardening.
+- Forced-ingest runtime sanity validation succeeded after the Windows audio
+  fallback repair.
 
 ## [2026-03-10] Public Readiness Checkpoint
 

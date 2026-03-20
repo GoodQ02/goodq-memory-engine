@@ -94,6 +94,7 @@ adjacent helper tooling may still evolve between releases.
 ### Validation & Release
 
 - `CHANGELOG.md` – Public-facing release milestones and readiness checkpoints.
+- `docs/releases/RELEASE_0.1.0.md` – Current public release checkpoint narrative.
 - `THIRD_PARTY_NOTICES.md` – Public-facing summary of vendored components, model downloads, and upstream licensing caveats.
 - `docs/archive/audits/RELEASE_CHECKLIST.md` – Historical pre-release validation checklist.
 - Current witness-backed release baseline:

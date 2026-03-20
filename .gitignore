@@ -147,6 +147,7 @@ scripts/internal/*
 
 # ===== TESTING =====
 .pytest_cache/
+.pytest_tmp/
 .coverage
 htmlcov/
 .tox/

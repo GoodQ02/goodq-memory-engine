@@ -9,6 +9,7 @@ build/
 out/
 __pycache__/
 .pytest_cache/
+.pytest_tmp/
 
 # Local runtime/output surfaces
 data/

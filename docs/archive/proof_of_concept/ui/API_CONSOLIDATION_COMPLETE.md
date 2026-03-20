@@ -1,5 +1,9 @@
 # ✅ API Consolidation Complete
 
+> Historical proof-of-concept note — preserved for archive only. The browser UI
+> and dashboard routes described here are not part of the current supported
+> release surface.
+
 **Date:** 2025-11-19  
 **Status:** Production Ready
 
@@ -226,4 +230,3 @@ pip install -r requirements.txt
 5. Add authentication/authorization layer
 
 🚀 **Ready for production use!**
-

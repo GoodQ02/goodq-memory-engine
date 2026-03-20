@@ -1,5 +1,7 @@
 # Issue Resolution Report - October 12, 2025
 
+> Historical fix report — preserved for project history only.
+
 ## Mission Status: RESOLVED
 
 ### Issue Identified
@@ -100,4 +102,3 @@ The agent is clear to proceed with ingestion. All systems nominal.
 **Report Generated**: 2025-10-12 18:15:00  
 **Agent**: GitHub Copilot CLI  
 **Mission**: GoodQ Video Ingestion Recovery
-

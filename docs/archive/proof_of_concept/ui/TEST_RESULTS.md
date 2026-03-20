@@ -1,4 +1,7 @@
 # GoodQ4All System Test Results
+
+> Historical proof-of-concept note — preserved for archive only. This report
+> validates a 2025 UI/API trial surface, not the current release contract.
 **Date:** 2025-11-19  
 **Test Type:** Comprehensive Real-World Validation
 

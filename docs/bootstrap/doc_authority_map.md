@@ -185,7 +185,7 @@ authority docs listed below, or direct file-level audits when entries drift.
 | --- | --- | --- | --- |
 | `docs/reference/DEPENDENCIES.md` | 11 | High-authority dependency contract surface; must stay aligned with portability and profile semantics. | KEEP |
 | `docs/architecture/CONFIG_LOADING_CONTRACT.md` | 12 | Phase A semantic contradiction; hardcoded L: paths; high-authority surface | REFRACTOR |
-| `docs/guides/CONSOLIDATION_EXPLAINED.md` | 12 | Phase A semantic contradiction; hardcoded L: paths; high-authority surface | REFRACTOR |
+| `docs/guides/CONSOLIDATION_EXPLAINED.md` | 4 | Historical consolidation note retained as context only; should stay subordinate to live env/runtime docs. | KEEP |
 | `docs/guides/llm/WSL2_AUDIO_SETUP.md` | 12 | Phase A semantic contradiction; hardcoded L: paths; high-authority surface | REFRACTOR |
 | `docs/archive/README.md.backup_20251204` | 10 | Phase A semantic contradiction; hardcoded L: paths | DELETE (safe) |
 | `docs/agent-comms/PHASED_SEGMENTATION_ENGINE_ANALYSIS_2025-12-04.md` | 9 | Phase A semantic contradiction; hardcoded L: paths | ARCHIVE |
@@ -307,7 +307,7 @@ docs/archive/
 | `docs/agent-comms/WATCHDOG_CLEANUP.md` | D) Experimental | Agent session notes and transient planning artifacts. | ARCHIVE |
 | `docs/agent-comms/WELCOME_BACK.md` | D) Experimental | Agent session notes and transient planning artifacts. | ARCHIVE |
 | `docs/architecture/AGENT_SYSTEM.md` | B) Operational | Architecture/technical reference; align to canonical runtime contracts. | REFRACTOR |
-| `docs/architecture/ARCHITECTURE_REFERENCE.md` | B) Operational | Architecture/technical reference; align to canonical runtime contracts. | REFRACTOR |
+| `docs/architecture/ARCHITECTURE_REFERENCE.md` | B) Operational | Architecture/technical reference aligned to the current hybrid env and explicit-API runtime contract. | KEEP |
 | `docs/architecture/CANONICAL_SENSITIVE_EVENTS.md` | B) Operational | Architecture/technical reference document. | KEEP |
 | `docs/architecture/CONFIG_LOADING_CONTRACT.md` | B) Operational | Architecture/technical reference; align to canonical runtime contracts. | REFRACTOR |
 | `docs/architecture/DATA_STRUCTURE.md` | B) Operational | Architecture/technical reference; align to canonical runtime contracts. | REFRACTOR |
@@ -413,7 +413,7 @@ docs/archive/
 | `docs/bootstrap/smoke_matrix_phase_a.md` | A) Canonical | Declared runtime/contract authority document. | KEEP |
 | `docs/components/VISION_PIPELINE.md` | A) Canonical | Declared runtime/contract authority document. | KEEP |
 | `docs/data_epochs.md` | D) Experimental | Unclassified supporting document; merge/archive after review. | MERGE |
-| `docs/diagnostics/TEST_RESULTS.md` | D) Experimental | Unclassified supporting document; merge/archive after review. | MERGE |
+| `docs/archive/proof_of_concept/ui/TEST_RESULTS.md` | C) Historical | Archived UI/API stack validation snapshot retained for proof-of-concept history only. | KEEP |
 | `docs/diagnostics/VLLM_AND_INGESTION_STATUS.md` | D) Experimental | Unclassified supporting document; merge/archive after review. | MERGE |
 | `docs/fix-reports/AUDIO_DIARIZATION_COMPLETE_FIX.md` | C) Historical | Time-bound report/release snapshot content. | ARCHIVE |
 | `docs/fix-reports/AUDIO_DIARIZATION_FIX.md` | C) Historical | Time-bound report/release snapshot content. | ARCHIVE |
@@ -444,7 +444,7 @@ docs/archive/
 | `docs/fix-reports/WEB_INTERFACE_FIX_REPORT.md` | C) Historical | Time-bound report/release snapshot content. | ARCHIVE |
 | `docs/fix-reports/WSL2_AUDIO_FIX_COMPLETE.md` | C) Historical | Time-bound report/release snapshot content. | ARCHIVE |
 | `docs/goodq4all_agent_status.md` | A) Canonical | Declared runtime/contract authority document. | KEEP |
-| `docs/guides/CONSOLIDATION_EXPLAINED.md` | B) Operational | Operational guide with overlap/drift risk; keep but normalize. | REFRACTOR |
+| `docs/guides/CONSOLIDATION_EXPLAINED.md` | B) Operational | Historical explanatory note kept in place to explain the Dec 2025 consolidation phase without overriding the live env contract. | KEEP |
 | `docs/guides/QDRANT_SETUP.md` | B) Operational | Operator setup/usage guide. | KEEP |
 | `docs/guides/SCENE_OPTIMIZATION_GUIDE.md` | B) Operational | Operator setup/usage guide. | KEEP |
 | `docs/guides/general/API_DEBUG_INSTRUCTIONS.md` | B) Operational | Operator setup/usage guide. | KEEP |
@@ -461,7 +461,7 @@ docs/archive/
 | `docs/guides/general/QUICK_START_CLEAN.md` | B) Operational | Operational guide with overlap/drift risk; keep but normalize. | REFRACTOR |
 | `docs/guides/general/QUICK_START_GUIDE.md` | B) Operational | Operational guide with overlap/drift risk; keep but normalize. | REFRACTOR |
 | `docs/guides/general/REMAINING_STEPS_AND_RUNTIME_TESTING.md` | B) Operational | Operator setup/usage guide. | KEEP |
-| `docs/guides/general/RESTART_API_INSTRUCTIONS.md` | B) Operational | Operator setup/usage guide. | KEEP |
+| `docs/archive/proof_of_concept/ui/RESTART_API_INSTRUCTIONS.md` | C) Historical | Archived browser-UI/API restart note from the retired UI scaffold. | KEEP |
 | `docs/guides/general/SCRIPTS_GUIDE.md` | B) Operational | Operator setup/usage guide. | KEEP |
 | `docs/guides/general/USER_GUIDE.md` | B) Operational | Operator setup/usage guide. | KEEP |
 | `docs/guides/general/WATCHDOG_QUICKSTART.txt` | B) Operational | Operational guide with overlap/drift risk; keep but normalize. | REFRACTOR |
@@ -727,7 +727,7 @@ docs/archive/
 | `docs/systems/WATCHDOG_SYSTEM.md` | A) Canonical | Declared runtime/contract authority document. | KEEP |
 | `docs/technical/ANALYTICS_PAGES_COMPLETE.md` | D) Experimental | Design or implementation note; useful but not primary authority. | MERGE |
 | `docs/technical/ANALYTICS_QUICK_REFERENCE.md` | B) Operational | Architecture/technical reference document. | KEEP |
-| `docs/technical/API_CONSOLIDATION_COMPLETE.md` | D) Experimental | Design or implementation note; useful but not primary authority. | MERGE |
+| `docs/archive/proof_of_concept/ui/API_CONSOLIDATION_COMPLETE.md` | C) Historical | Archived API/UI consolidation note from the retired browser scaffold. | KEEP |
 | `docs/technical/ARTIFACT_LOCATION_CONTRACT.md` | B) Operational | Architecture/technical reference; align to canonical runtime contracts. | REFRACTOR |
 | `docs/technical/AUDIO_DIARIZATION_OPTIMIZATION_PLAN.md` | D) Experimental | Design or implementation note; useful but not primary authority. | MERGE |
 | `docs/technical/AUDIO_GPU_IMPLEMENTATION_SUMMARY.md` | D) Experimental | Design or implementation note; useful but not primary authority. | MERGE |
@@ -735,13 +735,13 @@ docs/archive/
 | `docs/technical/AUDIO_GPU_QUICK_START.md` | B) Operational | Architecture/technical reference document. | KEEP |
 | `docs/technical/AUDIO_VAD_OPTIMIZATION.md` | B) Operational | Architecture/technical reference; align to canonical runtime contracts. | REFRACTOR |
 | `docs/technical/DATA_FLOW_DIAGRAM.md` | B) Operational | Architecture/technical reference; align to canonical runtime contracts. | REFRACTOR |
-| `docs/technical/ISSUE_RESOLUTION_20251012.md` | B) Operational | Architecture/technical reference; align to canonical runtime contracts. | REFRACTOR |
+| `docs/archive/fix-reports/ISSUE_RESOLUTION_20251012.md` | C) Historical | Archived watchdog fix report from an early Windows console-encoding incident. | KEEP |
 | `docs/technical/KNOWLEDGE_GRAPH_IMPLEMENTATION.md` | B) Operational | Architecture/technical reference document. | KEEP |
 | `docs/technical/LIB_COMPONENTS.md` | A) Canonical | Declared runtime/contract authority document. | KEEP |
 | `docs/archive/status-reports/LOCKDOWN_STATUS.md` | C) Historical | Archived lockdown status snapshot retained for historical context only. | KEEP |
 | `docs/technical/LOGGING_AND_RESILIENCE.md` | B) Operational | Architecture/technical reference; align to canonical runtime contracts. | REFRACTOR |
-| `docs/technical/MILESTONE_KNOWLEDGE_GRAPH_INTEGRATION.md` | B) Operational | Architecture/technical reference; align to canonical runtime contracts. | REFRACTOR |
-| `docs/technical/MODEL_HEALTH_DASHBOARD.md` | B) Operational | Architecture/technical reference; align to canonical runtime contracts. | REFRACTOR |
+| `docs/archive/implementation-reports/MILESTONE_KNOWLEDGE_GRAPH_INTEGRATION.md` | C) Historical | Archived milestone report from the early knowledge-graph rollout phase. | KEEP |
+| `docs/archive/proof_of_concept/ui/MODEL_HEALTH_DASHBOARD.md` | C) Historical | Archived model-health dashboard note from the retired browser UI experiment. | KEEP |
 | `docs/technical/MODEL_LOCKDOWN.md` | B) Operational | Architecture/technical reference; align to canonical runtime contracts. | REFRACTOR |
 | `docs/technical/MODEL_LOCKDOWN_IMPLEMENTATION.md` | B) Operational | Architecture/technical reference document. | KEEP |
 | `docs/technical/MODEL_LOCKDOWN_QUICK_REF.md` | B) Operational | Architecture/technical reference; align to canonical runtime contracts. | REFRACTOR |
@@ -758,9 +758,8 @@ docs/archive/
 | `docs/technical/VAD_IMPLEMENTATION_SUMMARY.md` | D) Experimental | Design or implementation note; useful but not primary authority. | MERGE |
 | `docs/technical/VISION_GPU_OPTIMIZATION.md` | B) Operational | Architecture/technical reference; align to canonical runtime contracts. | REFRACTOR |
 | `docs/archive/reports/VISION_GPU_OPTIMIZATION_REPORT.md` | C) Historical | Archived vision GPU optimization report retained for historical context only. | KEEP |
-| `docs/technical/WORKFLOW_VISUAL_GUIDE.md` | B) Operational | Architecture/technical reference; align to canonical runtime contracts. | REFRACTOR |
+| `docs/archive/proof_of_concept/ui/WORKFLOW_VISUAL_GUIDE.md` | C) Historical | Archived visual guide for the retired dashboard-era launcher and ingest flow. | KEEP |
 | `docs/technical/knowledge_graph.md` | B) Operational | Architecture/technical reference document. | KEEP |
-| `docs/testing/TEST_RESULTS.md` | B) Operational | Testing and validation runbook. | KEEP |
 | `docs/validation/run_narrative_validation.md` | B) Operational | Testing and validation runbook. | KEEP |
 | `docs/reference/GPU_CAPABILITY_MATRIX.md` | A) Canonical | Declared runtime/contract authority document moved under the reference surface. | KEEP |
 | `docs/reference/PLATFORM_SUPPORT.md` | A) Canonical | Declared runtime/contract authority document moved under the reference surface. | KEEP |

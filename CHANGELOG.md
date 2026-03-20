@@ -25,6 +25,16 @@ and related canonical docs.
 - Rewrote the remaining agent/recovery and cleanup-map docs to match the
   current conditional Control Agent contract instead of the older phase-era
   self-healing narrative.
+- Archived the remaining browser-UI/dashboard proof-of-concept docs under
+  `docs/archive/proof_of_concept/ui/` and removed them from the active support
+  surface.
+- Rewrote `docs/guides/general/SCRIPTS_GUIDE.md` and
+  `docs/guides/CONSOLIDATION_EXPLAINED.md` so they match the current launcher,
+  bootstrap, and hybrid env contract instead of the older dashboard and
+  single-env narratives.
+- Corrected `docs/architecture/ARCHITECTURE_REFERENCE.md` so it reflects the
+  explicit local API surface, experimental-only UI scaffold, and the supported
+  specialized step-env pack.
 
 ## [0.1.0] - 2026-03-20
 

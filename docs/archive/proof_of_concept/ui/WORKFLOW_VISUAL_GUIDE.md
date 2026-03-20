@@ -1,4 +1,7 @@
 # GoodQ Processing Flow - Visual Guide
+
+> Historical proof-of-concept note — preserved for archive only. This visual
+> guide describes a retired dashboard-era launcher and environment model.
 Last Updated: 2025-10-08
 
 ═══════════════════════════════════════════════════════════════════════

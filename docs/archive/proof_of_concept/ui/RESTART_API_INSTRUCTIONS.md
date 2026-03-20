@@ -1,5 +1,9 @@
 # 🎯 QUICK FIX - Restart API Server
 
+> Historical proof-of-concept note — preserved for archive only. Browser UI,
+> dashboard, and static-file claims in this document are not current release
+> guidance.
+
 The API server code was just updated to serve all HTML files.
 
 ## Restart the API Server:

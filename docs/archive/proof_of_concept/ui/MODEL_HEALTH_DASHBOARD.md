@@ -1,5 +1,9 @@
 # Model Health Dashboard Integration
 
+> Historical proof-of-concept note — preserved for archive only. The dashboard
+> and separate Flask health API described here are not part of the current
+> supported runtime.
+
 **Status**: ✅ Complete  
 **Date**: 2025-11-18
 

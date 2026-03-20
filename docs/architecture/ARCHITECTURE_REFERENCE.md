@@ -4,7 +4,7 @@
 **Status:** ✅ Updated with Dec 14, 2025 Forensic Verification  
 **Purpose:** Definitive reference for data structures, storage patterns, and operational architecture
 
-> **Note:** This document reflects the current operational system. Qdrant is canonical, FAISS remains optional parity/fallback, and `goodq_core` is the orchestration/base environment while specialized step envs still back several image/audio/video workloads. For full system narrative, see [SYSTEM_ARCHITECTURE.md](SYSTEM_ARCHITECTURE.md).
+> **Note:** This document reflects the current operational system. Qdrant is canonical, FAISS remains optional parity/fallback, and `goodq_core` is the orchestration/base environment while specialized step envs still back several image/audio/video workloads. The local API is an explicit helper surface, while the old browser UI/dashboard scaffold is experimental only. For full system narrative, see [SYSTEM_ARCHITECTURE.md](SYSTEM_ARCHITECTURE.md).
 
 ---
 
@@ -350,8 +350,9 @@ logs\scene_ingest\<video_name>\
 │   ├── requests\               # HTTP client
 │   ├── pyyaml\                 # Config parsing
 │   └── ...                     # Supporting libs (tqdm, certifi, etc.)
-├── api\                        # ⊘ FastAPI (scaffolded, not deployed)
-├── ui\                         # ⊘ Web UI (frontend exists)
+├── api\                        # ✅ Explicit local API surface
+├── ui\
+│   └── justification_v1\      # ⊘ Experimental UI scaffold only
 └── retrieval\                  # ⊘ Multimodal search (built, not wired)
 
 <GOODQ_DATA_ROOT>\GoodQ_Data\            # ✅ Unified data root
@@ -385,11 +386,13 @@ logs\scene_ingest\              # ✅ Scene artifacts
 - **Removal Date:** Nov 2025
 - **Note:** References may exist in old docs
 
-**Multiple Conda Environments:**
-- **Replaced by:** Unified `goodq_core` environment
-- **Old Envs:** goodq_image_caption, goodq_object_detect, goodq_ocr, goodq_audio_*
-- **Consolidation Date:** Dec 2025
-- **Savings:** ~30GB disk space
+**Single-Env Consolidation Narrative:**
+- **Historical phase:** Dec 2025 image/text consolidation work
+- **Current truth:** `goodq_core` is the orchestration/base env, and the
+  supported runtime still provisions a specialized step-env pack for active
+  image, audio, text, and scene-detection workloads that retain dependency
+  boundaries
+- **See:** `docs/reference/indexes/ENVIRONMENT_INDEX.md`
 
 **Old Data Paths:**
 - **Deprecated:** `<project_root>\data\`, `<GOODQ_DATA_ROOT>\GoodQ_Data (See LEGACY_PATHS_DEPRECATED.md)\`

@@ -1,174 +1,80 @@
+<!-- DOC_BADGE: OPERATIONAL -->
+<!-- DOC_STATUS: ACTIVE -->
+<!-- DOC_LAST_VERIFIED: 2026-03-20 -->
+
 # GoodQ4All Scripts Guide
 
-## 🎯 Single Source of Truth
+This guide lists the maintained script and launcher surfaces for the current
+GoodQ4All runtime.
 
-**ALL scripts are in:** `<project_root>\`
+## Canonical Start Surfaces
 
-- **Batch files (.bat):** In `<project_root>\` root
-- **Python scripts (.py):** In `<project_root>\scripts\`
-- **PowerShell scripts (.ps1):** In `<project_root>\scripts\`
+- `python scripts/bootstrap_install.py`
+  - Create or update `goodq_core` and the supported specialized step-env pack.
+- `scripts\bootstrap_validate.bat`
+  - Run documentation governance, bootstrap verification, and the unit test
+    slice used by the supported bootstrap contract.
+- `LAUNCH_GOODQ.ps1`
+  - Canonical Windows launcher for readiness checks, Qdrant validation, live
+    log monitoring, and optional direct ingestion.
+- `LAUNCH_GOODQ.bat`
+  - Batch wrapper around `LAUNCH_GOODQ.ps1`.
 
-## 🚀 Quick Start Scripts (Use These!)
+## Explicit Runtime Controls
 
-### Main Launch Script
-```batch
-<project_root>\LAUNCH_GOODQ.bat
-```
-**What it does:**
-- Health checks (conda, python, ffmpeg, tesseract, nvidia-smi)
-- CUDA verification for all GPU environments
-- Dry run ingestion
-- Starts command center dashboard
-- Opens API documentation
+- `conda run -n goodq_core python -m cli.watchdog`
+  - Start watchdog ingestion explicitly.
+- `python scripts\utils\check_watchdog_status.py`
+  - One-shot watchdog status snapshot.
+- `python -m api.server`
+  - Start the local API directly.
+- `pwsh .\scripts\start_api.ps1`
+  - Windows helper for the local API surface.
+- `conda run -n goodq_core python cli\run_ingestion.py ingest <media_path>`
+  - Direct CLI ingestion entry point.
 
-### Simple Launch (No Dashboard)
-```batch
-<project_root>\LAUNCH_GOODQ_SIMPLE.bat
-```
-**What it does:**
-- Basic health checks
-- Runs ingestion without command center
+## Readiness And Diagnostics
 
-### Start File Watchdog
-```batch
-<project_root>\START_WATCHDOG.bat
-```
-**What it does:**
-- Monitors `<project_root>\import_inbox` for new files
-- Automatically queues files for ingestion
-- Renames processed files with `_INGESTED` suffix
+- `python scripts\system_readiness_check.py`
+  - Manual environment and runtime readiness probe.
+- `python scripts\cache_readiness_check.py`
+  - Model and dataset cache probe.
+- `python scripts\test_llm_client.py`
+  - Local LLM connectivity and health check.
 
-### Stop All Services
-```batch
-<project_root>\STOP_GOODQ.bat
-```
-**What it does:**
-- Stops API server
-- Stops watchdog
-- Cleans up processes
+## Advanced Repair Surfaces
 
-## 📊 Monitoring & Status Scripts
+These remain useful, but they are not the primary onboarding path:
 
-### Check Watchdog Status
-```batch
-<project_root>\CHECK_WATCHDOG.bat
-```
-Shows current watchdog status and queue
+- `scripts\prepare_step_envs.ps1`
+  - Manual repair/reinstall surface for specialized step environments.
+- `scripts\setup_gpu_environments.bat`
+  - Windows GPU stack repair/upgrade helper for the specialized env pack.
+- `scripts\install_pipeline_windows.ps1`
+  - Broader Windows pipeline repair/provisioning helper.
+- `python scripts\install_pipeline_wsl.py`
+  - WSL-side pipeline repair/provisioning helper.
 
-### Monitor Watchdog (Live)
-```batch
-<project_root>\MONITOR_WATCHDOG.bat
-```
-Live tail of watchdog logs
+Use these only when bootstrap validation or a targeted runtime audit shows a
+real env breakage.
 
-### Run Health Check
-```batch
-<project_root>\RUN_HEALTH_CHECK.bat
-```
-Quick system health verification
+## Truth Boundary
 
-## 🔧 Python Utility Scripts
+- No supported browser UI is currently launched by these scripts.
+- Historical dashboard, command-center, and `START_WATCHDOG.bat` rollout notes
+  have been archived as proof-of-concept material.
+- The maintained operator surface is bootstrap, launcher, CLI ingestion,
+  watchdog, API, and persisted runtime artifacts.
 
-All in `<project_root>\scripts\`:
+## Related Docs
 
-### Production Status
-```batch
-conda run -n goodq_core python <project_root>\scripts\check_production_status.py
-```
-Shows ingestion progress, database stats, knowledge graph status
-
-### System Readiness
-```batch
-conda run -n goodq_core python <project_root>\scripts\system_readiness_check.py
-```
-Comprehensive system validation (models, datasets, environments)
-
-### Check Memory Database
-```batch
-conda run -n goodq_core python <project_root>\scripts\check_memory_db.py
-```
-Query memory database contents
-
-### Knowledge Graph Test
-```batch
-conda run -n goodq_core python <project_root>\scripts\test_knowledge_graph.py
-```
-Test and verify knowledge graph functionality
-
-### Clear Databases
-```batch
-conda run -n goodq_core python <project_root>\scripts\clear_databases.py
-```
-Clean slate for fresh ingestion
-
-## 📁 Project Structure
-
-```
-<project_root>\                      # Main project directory
-├── *.bat                          # All batch launcher scripts (USE THESE!)
-├── scripts\                       # All Python and PowerShell scripts
-│   ├── *.py                      # Python utilities
-│   └── *.ps1                     # PowerShell utilities
-├── import_inbox\                  # Drop files here for ingestion
-├── logs\                          # All log outputs
-│   └── ingest_full\              # Current ingestion workspace
-├── api\                           # FastAPI server
-├── configs\                       # Configuration files
-├── envs\                          # Environment definitions
-├── pipelines\                     # legacy orchestration pipeline definitions
-└── steps\                         # legacy orchestration step implementations
-```
-
-## 🎬 Typical Workflow
-
-1. **First Time Setup:**
-   ```batch
-   <project_root>\LAUNCH_GOODQ.bat
-   ```
-   
-2. **Start Watchdog (in separate window):**
-   ```batch
-   <project_root>\START_WATCHDOG.bat
-   ```
-
-3. **Drop files into:**
-   ```
-   <project_root>\import_inbox\
-   ```
-
-4. **Monitor progress:**
-   - Check command center dashboard
-   - Or run: `<project_root>\CHECK_WATCHDOG.bat`
-   - Or check: `<project_root>\logs\watchdog\watchdog.log`
-
-5. **Check results:**
-   ```batch
-   conda run -n goodq_core python <project_root>\scripts\check_production_status.py
-   ```
-
-## 🛑 Common Issues
-
-### "Port 8000 already in use"
-```batch
-<project_root>\STOP_GOODQ.bat
-```
-
-### "Watchdog not processing files"
-Check logs:
-```batch
-<project_root>\MONITOR_WATCHDOG.bat
-```
-
-### "Environment errors"
-Run health check:
-```batch
-<project_root>\RUN_HEALTH_CHECK.bat
-```
-
-## 📝 Notes
-
-- **Never run scripts from <project_root> root** - they don't exist there anymore
-- **All paths reference <project_root>** - this is the single source of truth
-- **Logs go to:** `<project_root>\logs\`
-- **Data goes to:** `<GOODQ_DATA_ROOT>\` (large files, databases, models)
-- **Imports go to:** `<project_root>\import_inbox\`
+- Launch:
+  [`docs/guides/general/LAUNCH_INSTRUCTIONS.md`](LAUNCH_INSTRUCTIONS.md)
+- Install:
+  [`docs/guides/install/INSTALL.md`](../install/INSTALL.md)
+- Quickstart:
+  [`docs/guides/install/QUICKSTART.md`](../install/QUICKSTART.md)
+- API:
+  [`docs/reference/API.md`](../../reference/API.md)
+- UI status:
+  [`docs/guides/ui/JUSTIFICATION_UI.md`](../ui/JUSTIFICATION_UI.md)

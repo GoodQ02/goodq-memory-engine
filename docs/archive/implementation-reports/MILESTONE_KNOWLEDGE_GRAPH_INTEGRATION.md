@@ -1,5 +1,7 @@
 # Milestone: Knowledge Graph Integration Complete
 
+> Historical milestone report — preserved for rollout history only.
+
 **Date:** October 8, 2025  
 **Status:** ✅ PRODUCTION READY
 

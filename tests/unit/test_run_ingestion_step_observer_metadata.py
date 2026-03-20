@@ -369,6 +369,9 @@ def test_resolve_audio_runtime_contract_falls_back_from_stale_env_workspace(
 ):
     run_ingestion = _load_run_ingestion_module()
 
+    monkeypatch.setattr(run_ingestion, "wsl_audio_auto_enabled", lambda: True)
+    monkeypatch.setattr(run_ingestion, "require_wsl_audio", lambda: False)
+    monkeypatch.setattr(run_ingestion.shutil, "which", lambda name: "wsl" if name == "wsl" else None)
     monkeypatch.setenv("GOODQ_WSL_DISTRO", "Ubuntu-22.04")
     monkeypatch.setenv("GOODQ_WSL_USER", "jdben")
     monkeypatch.setenv("GOODQ_WSL_WORKSPACE", "/home/jdben/projects/goodq4all")

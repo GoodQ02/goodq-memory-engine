@@ -104,7 +104,10 @@ The companion runner is `scripts/smoke_phase_a.py`.
 
 ### GOODQ_REQUIRE_WSL_AUDIO=1
 
-- `BASELINE`: must fail fast because WSL audio auto path is disabled by profile.
+- `BASELINE`:
+  - strict override may force the WSL audio path even though the profile default is Windows-safe.
+  - If the resolved WSL user/workspace and bridge path are available: pass with explicit override metadata.
+  - Otherwise: must fail fast with explicit `GOODQ_REQUIRE_WSL_AUDIO=1` error.
 - `UNSET` and `GPU_ENHANCED`:
   - If WSL path is available and succeeds: pass.
   - Otherwise: must fail fast with explicit `GOODQ_REQUIRE_WSL_AUDIO=1` error.
@@ -166,4 +169,3 @@ Populate from `smoke_matrix_results.md`:
 | Test Case | Profile | Expected Result | Actual Result | Pass/Fail |
 | --- | --- | --- | --- | --- |
 | ... | ... | ... | ... | ... |
-

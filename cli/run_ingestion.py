@@ -932,10 +932,6 @@ def _resolve_audio_runtime_contract(cfg: Dict[str, Any]) -> Dict[str, Any]:
     if explicit_wsl_user:
         wsl_user = explicit_wsl_user
     else:
-        if require_wsl:
-            raise RuntimeError(
-                "GOODQ_REQUIRE_WSL_AUDIO=1 requires GOODQ_WSL_USER to be set explicitly."
-            )
         wsl_user = ''
         for candidate in (os.environ.get("USER"), os.environ.get("USERNAME"), os.environ.get("LOGNAME")):
             if candidate:

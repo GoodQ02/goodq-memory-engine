@@ -48,6 +48,12 @@ def test_baseline_forced_wsl_persists_profile_override_metadata(monkeypatch, tmp
         "knowledge_graph": {"enabled": False},
     }
 
+    class _FakeCompletedProcess:
+        def __init__(self, returncode=0, stdout="", stderr=""):
+            self.returncode = returncode
+            self.stdout = stdout
+            self.stderr = stderr
+
     monkeypatch.setattr(run_ingestion, "is_baseline", lambda: True)
     monkeypatch.setattr(run_ingestion, "require_wsl_audio", lambda: True)
     monkeypatch.setattr(run_ingestion, "CONTROL_AGENT_AVAILABLE", False)
@@ -58,6 +64,19 @@ def test_baseline_forced_wsl_persists_profile_override_metadata(monkeypatch, tmp
     monkeypatch.setattr(run_ingestion, "list_scenes_for_video", lambda *a, **k: {"scenes": []})
     monkeypatch.setattr(run_ingestion, "_compute_sha256", lambda *a, **k: "videohash")
     monkeypatch.setattr(run_ingestion, "_build_knowledge_graph_from_results", lambda *a, **k: None)
+    monkeypatch.setattr(run_ingestion.shutil, "which", lambda name: "wsl" if name == "wsl" else None)
+    monkeypatch.setenv("USERNAME", "jdben")
+    monkeypatch.delenv("GOODQ_WSL_USER", raising=False)
+    monkeypatch.setenv("GOODQ_WSL_WORKSPACE", "/home/jdben/goodq_audio")
+
+    def _fake_subprocess_run(cmd, *args, **kwargs):
+        if cmd and cmd[0] == "git":
+            return _FakeCompletedProcess(returncode=0, stdout="deadbeef\n")
+        if cmd and cmd[0] == "wsl":
+            return _FakeCompletedProcess(returncode=0)
+        raise AssertionError(f"unexpected subprocess.run call: {cmd}")
+
+    monkeypatch.setattr(run_ingestion.subprocess, "run", _fake_subprocess_run)
 
     run_ingestion.run(
         input_dir=input_dir,

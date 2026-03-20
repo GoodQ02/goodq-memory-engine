@@ -12,6 +12,7 @@ and related canonical docs.
 ### Changed
 - Archived the last small pack of phase-era validation and operator helper scripts, including the retired command-center dashboard, phase control-agent harnesses, quick GPU setup helper, and one-off audio/VAD probes.
 - Realigned active runbooks and quick-reference docs to the maintained status/readiness surfaces: `cli.system_status`, `scripts/system_readiness_check.py`, `scripts/utils/check_watchdog_status.py`, and the current GPU setup flow.
+- Relaxed the WSL-audio strict override guard to use the documented `GOODQ_WSL_USER` fallback chain instead of requiring an explicit env var, and made the WSL audio metadata tests deterministic against host profile/env leakage.
 
 - Ongoing doc cleanup and archive alignment around the remaining historical
   surfaces.

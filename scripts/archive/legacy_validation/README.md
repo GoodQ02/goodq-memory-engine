@@ -13,11 +13,20 @@ This directory preserves helper scripts that were useful during individual build
 - `scripts/archive/legacy_validation/diagnostics/` - archived diagnostics probes
 - `scripts/archive/legacy_validation/bat/` - retired batch harnesses
 
+Recent additions to this archive include:
+
+- retired control-agent validation harnesses
+- retired one-off VAD / diarization probes
+- retired quick GPU setup helper
+- retired command-center / system-diagnostic console utilities
+
 ## Canonical Active Replacements
 
 Prefer the maintained surfaces instead:
 
 - `python -m pytest -q`
+- `python -m cli.system_status`
+- `python scripts/system_readiness_check.py`
 - `tests/integration/test_watchdog.py`
 - `scripts/test_llm_client.py`
 - `scripts/test_wsl2_bridge.py`

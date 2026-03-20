@@ -505,13 +505,9 @@ pwsh scripts/mission_health_check.ps1 -EnvPrefix goodq
 # Generate diagnostic bundle
 pwsh scripts/run_full_dry_run.ps1
 
-# Check syntax
-$errors = $null
-[System.Management.Automation.Language.Parser]::ParseFile(
-    "<project_root>\scripts\command_center.ps1",
-    [ref]$null, [ref]$errors
-)
-$errors
+# Current status surfaces
+python -m cli.system_status
+python scripts/system_readiness_check.py
 ```
 
 ### What to Report

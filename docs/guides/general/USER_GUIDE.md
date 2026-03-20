@@ -158,15 +158,14 @@ pwsh scripts\ingest_videos.ps1 -InputDir "<GOODQ_DATA_ROOT>\videos\to_process"
 # Dry run (validate setup)
 pwsh scripts\mission_launch.ps1 -Mode dryrun -EnvPrefix goodq
 
-# Full pipeline with dashboard
-pwsh scripts\mission_launch.ps1 -Mode pipeline -OpenDashboard
+# Full pipeline
+pwsh scripts\mission_launch.ps1 -Mode pipeline
 
 # Custom configuration
 pwsh scripts\mission_launch.ps1 `
     -Mode pipeline `
     -InputDir "<GOODQ_DATA_ROOT>\videos\archive" `
-    -EnvPrefix goodq `
-    -OpenDashboard
+    -EnvPrefix goodq
 ```
 
 **Modes:**
@@ -177,27 +176,26 @@ pwsh scripts\mission_launch.ps1 `
 
 ---
 
-## 📊 Monitoring & Dashboards
+## 📊 Monitoring & Status
 
-### Command Center Dashboard
+### Canonical Status Surfaces
 
-**Launch:**
+**System snapshot:**
 ```powershell
-pwsh scripts\command_center.ps1
+python -m cli.system_status
 ```
 
-**Features:**
-- Real-time GPU stats (temp, usage, memory)
-- System metrics (CPU, RAM, disk)
-- Pipeline status (current video/scene)
-- Memory statistics (scene count, vector counts)
-- Live log tail
+**Readiness and dependency check:**
+```powershell
+python scripts\system_readiness_check.py
+```
 
-**Keyboard Shortcuts:**
-- `R`: Refresh display
-- `Q`: Quit
-- `L`: Show last 50 log entries
-- `D`: Detailed database stats
+**Watchdog / inbox status:**
+```powershell
+python scripts\utils\check_watchdog_status.py
+```
+
+These are the current supported text-mode status surfaces. The older `command_center.ps1` console dashboard has been archived.
 
 ### Log Analysis
 
@@ -572,7 +570,7 @@ Copy-Item <GOODQ_DATA_ROOT>\backups\GoodQ\current\* <GOODQ_DATA_ROOT>\offsite_ba
 |------|---------|
 | Health Check | `pwsh scripts\mission_health_check.ps1 -EnvPrefix goodq` |
 | Lite Ingest | `pwsh scripts\ingest_videos_lite.ps1 -InputDir samples/smoke -VerboseSteps` |
-| Dashboard | `pwsh scripts\command_center.ps1` |
+| System Status | `python -m cli.system_status` |
 | View Logs | `Get-Content <GOODQ_DATA_ROOT>\GoodQ_Data (See LEGACY_PATHS_DEPRECATED.md)\logs\step_runs.jsonl -Tail 50` |
 | DB Query | `sqlite3 <GOODQ_DATA_ROOT>\GoodQ_Data (See LEGACY_PATHS_DEPRECATED.md)\data\memory_db\memory.db` |
 | Reconcile | `pwsh scripts\reconcile_indices.ps1` |

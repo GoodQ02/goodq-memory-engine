@@ -55,7 +55,7 @@ Scan exclusions: `**/archive/**`, `**/__pycache__/**`, `*.pyc`, `*.backup*`, `*.
 
 ## GOODQ_CC_QUERY
 
-- Surfaces: scripts/command_center.ps1:235, scripts/sync_env_local.ps1:5
+- Surfaces: scripts/archive/legacy_validation/root/command_center.ps1:235, scripts/sync_env_local.ps1:5
 - Default in code: none (or inherited via config resolution)
 - Required in strict mode: No
 - Affects: dev utility
@@ -64,7 +64,7 @@ Scan exclusions: `**/archive/**`, `**/__pycache__/**`, `*.pyc`, `*.backup*`, `*.
 
 ## GOODQ_CC_THUMBS
 
-- Surfaces: scripts/command_center.ps1:470, scripts/sync_env_local.ps1:5
+- Surfaces: scripts/archive/legacy_validation/root/command_center.ps1:470, scripts/sync_env_local.ps1:5
 - Default in code: none (or inherited via config resolution)
 - Required in strict mode: No
 - Affects: dev utility
@@ -568,7 +568,7 @@ Scan exclusions: `**/archive/**`, `**/__pycache__/**`, `*.pyc`, `*.backup*`, `*.
 
 ## PYANNOTE_TOKEN
 
-- Surfaces: configs/model_registry.yaml:39, scripts/bootstrap_models.py:106, scripts/cache_readiness_check.py:83, scripts/cache_readiness_check.py:85, scripts/cache_readiness_check.py:88, scripts/diagnostics/verify_phase1.ps1:88, scripts/pin_model_versions.py:82, scripts/sync_env_local.ps1:7, scripts/system_readiness_check.py:176, scripts/system_readiness_check.py:262 ...
+- Surfaces: configs/model_registry.yaml:39, scripts/bootstrap_models.py:106, scripts/cache_readiness_check.py:83, scripts/cache_readiness_check.py:85, scripts/cache_readiness_check.py:88, scripts/archive/legacy_validation/diagnostics/verify_phase1.ps1:88, scripts/pin_model_versions.py:82, scripts/sync_env_local.ps1:7, scripts/system_readiness_check.py:176, scripts/system_readiness_check.py:262 ...
 - Default in code: token
 - Required in strict mode: Conditional
 - Affects: runtime/optional integration
@@ -577,7 +577,7 @@ Scan exclusions: `**/archive/**`, `**/__pycache__/**`, `*.pyc`, `*.backup*`, `*.
 
 ## TORCH_HOME
 
-- Surfaces: cli/run_ingestion.py:518, configs/paths.py:178, scripts/audit_vision_pipeline.py:321, scripts/bootstrap_models.py:173, scripts/bootstrap_models.py:25, scripts/bootstrap_models.py:63, scripts/cache_readiness_check.py:78, scripts/cache_readiness_check.py:81, scripts/command_center.ps1:106, scripts/command_center.ps1:109 ...
+- Surfaces: cli/run_ingestion.py:518, configs/paths.py:178, scripts/audit_vision_pipeline.py:321, scripts/bootstrap_models.py:173, scripts/bootstrap_models.py:25, scripts/bootstrap_models.py:63, scripts/cache_readiness_check.py:78, scripts/cache_readiness_check.py:81, scripts/archive/legacy_validation/root/command_center.ps1:106, scripts/archive/legacy_validation/root/command_center.ps1:109 ...
 - Default in code: canonical model-cache root, unset env fallback, and env-backed resolution (`TORCH_HOME`)
 - Required in strict mode: No
 - Affects: runtime/bootstrap

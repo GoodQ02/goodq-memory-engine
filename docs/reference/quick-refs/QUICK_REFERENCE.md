@@ -53,13 +53,16 @@ pwsh scripts/ingest_videos_lite.ps1 -InputDir import_inbox -MaxVideos 3 -MaxScen
 python cli/run_ingestion.py --input-dir "<GOODQ_DATA_ROOT>/videos" --workspace logs/full_run --verbose
 
 # Mission launch (full stack)
-pwsh scripts/mission_launch.ps1 -Mode pipeline -OpenDashboard
+pwsh scripts/mission_launch.ps1 -Mode pipeline
 ```
 
 ### Monitoring
 ```powershell
-# Command Center dashboard
-pwsh scripts/command_center.ps1
+# System snapshot
+python -m cli.system_status
+
+# Watchdog / inbox status
+python scripts/utils/check_watchdog_status.py
 
 # View recent logs
 Get-Content <GOODQ_DATA_ROOT>/GoodQ_Data (See LEGACY_PATHS_DEPRECATED.md)/logs/step_runs.jsonl -Tail 50
@@ -216,7 +219,7 @@ pwsh scripts/reconcile_indices.ps1
 1. pwsh scripts/mission_health_check.ps1 -EnvPrefix goodq
 2. Copy videos to <project_root>/import_inbox
 3. pwsh scripts/ingest_videos_lite.ps1 -InputDir import_inbox -VerboseSteps
-4. pwsh scripts/command_center.ps1  # Monitor
+4. python -m cli.system_status
 5. Move processed videos to archive
 ```
 

@@ -9,6 +9,10 @@ and related canonical docs.
 
 ## [Unreleased]
 
+### Changed
+- Archived the last small pack of phase-era validation and operator helper scripts, including the retired command-center dashboard, phase control-agent harnesses, quick GPU setup helper, and one-off audio/VAD probes.
+- Realigned active runbooks and quick-reference docs to the maintained status/readiness surfaces: `cli.system_status`, `scripts/system_readiness_check.py`, `scripts/utils/check_watchdog_status.py`, and the current GPU setup flow.
+
 - Ongoing doc cleanup and archive alignment around the remaining historical
   surfaces.
 - Archived historical test harnesses and obsolete validation helpers out of the

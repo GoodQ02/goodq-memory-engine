@@ -31,22 +31,23 @@ These still have clear present-day value and should not be treated as cleanup ta
 
 ## Remaining Manual-Review Surfaces
 
-These are still tracked and may be useful, but they are not part of the smallest canonical release surface:
+The last small pack of phase-era manual-review utilities has now been archived.
 
-### Control / Recovery Utilities
+What moved out of the active surface:
 
 - `scripts/test_control_agent_phase2.py`
 - `scripts/test_control_integration.py`
 - `scripts/test_from_windows_simple.py`
 - `scripts/test_vad_simple.py`
-
-### GPU / Operator Utilities
-
 - `scripts/quick_gpu_setup.py`
 - `scripts/command_center.ps1`
 - `scripts/diagnostics/diagnose_system.py`
 - `scripts/Test-AudioDiarization.ps1`
 - `scripts/diagnostics/verify_phase1.ps1`
+
+Current rule:
+
+- treat new cleanup candidates as audit-driven exceptions, not as part of an open backlog carried in this index
 
 ## Recently Archived
 

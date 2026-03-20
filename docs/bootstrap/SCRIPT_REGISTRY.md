@@ -84,7 +84,7 @@ _Generated: 2026-02-15_
 | `scripts/archive/legacy_validation/bat/TEST_AUDIO_GPU.bat` | Archived/Migrations | ============================================================================= | No | None detected |
 | `scripts/TEST_GPU_PIPELINE.bat` | Dev Utility | ================================================================================ | No | destructive actions; environment mutation |
 | `scripts/archive/legacy_validation/bat/TEST_VISION_GPU.bat` | Archived/Migrations | Vision GPU Installation and Testing Script | No | None detected |
-| `scripts/Test-AudioDiarization.ps1` | Dev Utility | > | Manual Review | None detected |
+| `scripts/Test-AudioDiarization.ps1` (retired) | Unclear/Obsolete | Historical one-off audio diarization component harness archived after canonical audio validation moved to maintained GPU / watchdog surfaces. | No | None detected |
 | `scripts/VERIFY_MODEL_LOCKDOWN.bat` | Dev Utility | Verify that all models are properly locked down with exact versions | Manual Review | None detected |
 | `scripts/_lib/interpreter_bindings.bat` | Runtime Utility | Shared interpreter binding helpers for GoodQ4All batch scripts. | Yes | None detected |
 | `scripts/_lib/interpreter_bindings.ps1` | Runtime Utility | Shared interpreter binding helpers for GoodQ4All scripts. | Manual Review | absolute path operations |
@@ -112,7 +112,7 @@ _Generated: 2026-02-15_
 | `scripts/build_unified_kg.py` | Unclear/Obsolete | Build Unified Knowledge Graph - Phase 8 | No | absolute path operations |
 | `scripts/cache_readiness_check.py` | Dev Utility | Cache readiness checker for goodq4all assets and models. | Manual Review | absolute path operations |
 | `scripts/clean_old_processing.py` | Unclear/Obsolete | Clean Old Processing Files | No | destructive actions; absolute path operations |
-| `scripts/command_center.ps1` | Runtime Utility | Utility script for command center. | No | destructive actions; absolute path operations |
+| `scripts/command_center.ps1` (retired) | Unclear/Obsolete | Historical console dashboard archived after the maintained status surfaces converged on `cli/system_status.py`, `scripts/system_readiness_check.py`, and `scripts/utils/check_watchdog_status.py`. | No | destructive actions; absolute path operations |
 | `scripts/comprehensive_clean_run.py` (retired) | Unclear/Obsolete | Legacy clean-run watchdog harness removed after its root paths and watchdog entrypoint drifted from canonical runtime surfaces. | No | destructive actions; absolute path operations |
 | `scripts/comprehensive_gpu_setup.py` | Unclear/Obsolete | Comprehensive GPU Setup & Verification for GoodQ4All | No | absolute path operations |
 | `scripts/config_schema.py` | Runtime Utility | GoodQ4All Canonical Configuration Schema | Manual Review | absolute path operations |
@@ -134,10 +134,10 @@ _Generated: 2026-02-15_
 | `scripts/diagnostics/check_latest_results.py` | Dev Utility | Check latest processing results | Manual Review | None detected |
 | `scripts/archive/legacy_validation/diagnostics/check_processing_results.py` | Archived/Migrations | Check latest processing results | No | None detected |
 | `scripts/archive/legacy_validation/diagnostics/check_schema.py` | Archived/Migrations | Validation/test utility for check schema. | No | None detected |
-| `scripts/diagnostics/diagnose_system.py` | Dev Utility | GoodQ System Diagnostic Tool | Manual Review | absolute path operations |
+| `scripts/diagnostics/diagnose_system.py` (retired) | Unclear/Obsolete | Historical all-in-one system diagnostic archived after its overlap with the maintained readiness and status tooling. | No | absolute path operations |
 | `scripts/diagnostics/monitor_progress.py` | Dev Utility | Real-time progress monitor for GoodQ pipeline | Manual Review | absolute path operations |
 | `scripts/diagnostics/quick_laptop_test.ps1` | Unclear/Obsolete | Quick Laptop Installation Test Script | No | binary/network download |
-| `scripts/diagnostics/verify_phase1.ps1` | Dev Utility | Phase 1 Audio Diarization Optimization - Verification | Manual Review | None detected |
+| `scripts/diagnostics/verify_phase1.ps1` (retired) | Unclear/Obsolete | Historical Phase 1 audio diarization verification harness preserved in archive only. | No | None detected |
 | `scripts/docs/doc_drift_lint.py` | Bootstrap-Critical | Lint documentation drift against Bootstrap Contract semantics. | Manual Review | absolute path operations |
 | `scripts/download_datasets.py` | Unclear/Obsolete | Load project .env so HF_TOKEN and related flags are picked up when invoked standalone | No | absolute path operations; environment mutation |
 | `scripts/extract_test_frame.bat` | Unclear/Obsolete | Extract test frame for vision testing | No | None detected |
@@ -198,7 +198,7 @@ _Generated: 2026-02-15_
 | `scripts/qdrant/UNINSTALL_QDRANT_SERVICE.bat` | Bootstrap-Critical | GoodQ4All - Uninstall Qdrant Windows Service | Manual Review | absolute path operations |
 | `scripts/query_db_simple.py` | Unclear/Obsolete | Check tables | No | None detected |
 | `scripts/quick_analysis.py` | Unclear/Obsolete | Get counts | No | None detected |
-| `scripts/quick_gpu_setup.py` | Bootstrap-Critical | Quick GPU Setup - Install PyTorch with CUDA in all GPU-capable environments | Yes | None detected |
+| `scripts/quick_gpu_setup.py` (retired) | Unclear/Obsolete | Historical GPU setup helper archived after the supported GPU install path converged on `install_gpu_support.ps1` and `setup_gpu_environments.bat`. | No | None detected |
 | `scripts/quick_gpu_test.py` | Unclear/Obsolete | Validation/test utility for quick gpu test. | No | None detected |
 | `scripts/refresh_vllm_portproxy.bat` (retired) | Unclear/Obsolete | Legacy Windows->WSL portproxy helper removed from the tracked surface; retained only as historical context in archive/docs. | No | destructive actions; binary/network download |
 | `scripts/rotate_logs.py` | Runtime Utility | Log Rotation Script | No | destructive actions; absolute path operations |
@@ -233,10 +233,10 @@ _Generated: 2026-02-15_
 | `scripts/system_status_check.py` | Unclear/Obsolete | Comprehensive System Status Check | No | absolute path operations |
 | `scripts/test_all_endpoints.py` | Dev Utility | Phase 2: Comprehensive Endpoint Validation | Manual Review | absolute path operations; binary/network download |
 | `scripts/archive/legacy_validation/root/test_clap_clustering.py` | Archived/Migrations | Phase 1 Validation: Test CLAP-based Speaker Clustering | No | absolute path operations |
-| `scripts/test_control_agent_phase2.py` | Dev Utility | Test Control Agent Phase 2: Auto-Healing Capabilities | Manual Review | absolute path operations |
+| `scripts/test_control_agent_phase2.py` (retired) | Unclear/Obsolete | Historical Control Agent Phase 2 harness archived after the canonical injected-client runtime replaced direct phase-era validation. | No | absolute path operations |
 | `scripts/test_control_agent_phase3.py` (retired) | Unclear/Obsolete | Historical Phase 3 Control Agent harness removed after the direct-orchestration path was demoted from the tracked surface. | No | absolute path operations |
-| `scripts/test_control_integration.py` | Dev Utility | Test Control Agent integration with ingestion pipeline | Manual Review | None detected |
-| `scripts/test_from_windows_simple.py` | Dev Utility | Simple test to check if Windows can reach vLLM | Manual Review | absolute path operations; binary/network download |
+| `scripts/test_control_integration.py` (retired) | Unclear/Obsolete | Historical direct control-agent integration harness archived after the current runtime no longer uses that phase-era path. | No | None detected |
+| `scripts/test_from_windows_simple.py` (retired) | Unclear/Obsolete | Historical Windows-to-vLLM probe archived after `test_vllm_from_windows.ps1` became the maintained validation surface. | No | absolute path operations; binary/network download |
 | `scripts/archive/legacy_validation/root/test_full_system.py` | Archived/Migrations | FULL SYSTEM TEST - Complete Pipeline Validation | No | absolute path operations |
 | `scripts/archive/legacy_validation/root/test_gpu_allocation.py` | Archived/Migrations | Test GPU allocation and memory limits across all environments | No | absolute path operations |
 | `scripts/test_gpu_config.py` | Dev Utility | Quick GPU Test - Verify GPU configuration is working | Manual Review | absolute path operations |
@@ -251,7 +251,7 @@ _Generated: 2026-02-15_
 | `scripts/archive/legacy_validation/root/test_recovery_system.py` | Archived/Migrations | Historical Phase 2 recovery-system harness preserved for reference only. | No | absolute path operations |
 | `scripts/archive/legacy_validation/root/test_transcribe_integration.py` | Archived/Migrations | Integration Test: Audio Transcribe with WSL2 Fallback | No | absolute path operations |
 | `scripts/test_vad_gpu_usage.py` | Dev Utility | Test VAD Implementation and GPU Usage | Manual Review | None detected |
-| `scripts/test_vad_simple.py` | Dev Utility | Simple standalone test for Silero VAD on audio file. | No | destructive actions; absolute path operations |
+| `scripts/test_vad_simple.py` (retired) | Unclear/Obsolete | Historical standalone VAD probe archived after phase-era component validation was quarantined. | No | destructive actions; absolute path operations |
 | `scripts/test_vision_gpu.py` | Dev Utility | Test Vision GPU Setup | Manual Review | None detected |
 | `scripts/test_vllm_from_windows.ps1` | Dev Utility | Quick Windows Test Script | Manual Review | absolute path operations; binary/network download |
 | `scripts/test_wsl2_bridge.py` | Dev Utility | Test WSL2 Audio Bridge End-to-End | Manual Review | None detected |
@@ -364,7 +364,7 @@ _Generated: 2026-02-15_
 | `scripts/build_unified_kg.py` | Unclear/Obsolete | absolute path operations |
 | `scripts/cache_readiness_check.py` | Dev Utility | absolute path operations |
 | `scripts/clean_old_processing.py` | Unclear/Obsolete | destructive actions; absolute path operations |
-| `scripts/command_center.ps1` | Runtime Utility | destructive actions; absolute path operations |
+| `scripts/command_center.ps1` (retired) | Unclear/Obsolete | destructive actions; absolute path operations |
 | `scripts/comprehensive_clean_run.py` (retired) | Unclear/Obsolete | destructive actions; absolute path operations |
 | `scripts/comprehensive_gpu_setup.py` | Unclear/Obsolete | absolute path operations |
 | `scripts/config_schema.py` | Runtime Utility | absolute path operations |
@@ -374,7 +374,7 @@ _Generated: 2026-02-15_
 | `scripts/diagnostics/FULL_SYSTEM_AUDIT.py` | Unclear/Obsolete | destructive actions; absolute path operations |
 | `scripts/diagnostics/FULL_SYSTEM_TEST.bat` | Unclear/Obsolete | destructive actions; absolute path operations; binary/network download |
 | `scripts/diagnostics/RUN_FULL_DIAGNOSTIC.ps1` | Unclear/Obsolete | environment mutation |
-| `scripts/diagnostics/diagnose_system.py` | Dev Utility | absolute path operations |
+| `scripts/diagnostics/diagnose_system.py` (retired) | Unclear/Obsolete | absolute path operations |
 | `scripts/diagnostics/monitor_progress.py` | Dev Utility | absolute path operations |
 | `scripts/diagnostics/quick_laptop_test.ps1` | Unclear/Obsolete | binary/network download |
 | `scripts/docs/doc_drift_lint.py` | Bootstrap-Critical | absolute path operations |
@@ -429,9 +429,9 @@ _Generated: 2026-02-15_
 | `scripts/system_status_check.py` | Unclear/Obsolete | absolute path operations |
 | `scripts/test_all_endpoints.py` | Dev Utility | absolute path operations; binary/network download |
 | `scripts/archive/legacy_validation/root/test_clap_clustering.py` | Archived/Migrations | absolute path operations |
-| `scripts/test_control_agent_phase2.py` | Dev Utility | absolute path operations |
+| `scripts/test_control_agent_phase2.py` (retired) | Unclear/Obsolete | absolute path operations |
 | `scripts/test_control_agent_phase3.py` (retired) | Unclear/Obsolete | absolute path operations |
-| `scripts/test_from_windows_simple.py` | Dev Utility | absolute path operations; binary/network download |
+| `scripts/test_from_windows_simple.py` (retired) | Unclear/Obsolete | absolute path operations; binary/network download |
 | `scripts/archive/legacy_validation/root/test_full_system.py` | Archived/Migrations | absolute path operations |
 | `scripts/archive/legacy_validation/root/test_gpu_allocation.py` | Archived/Migrations | absolute path operations |
 | `scripts/test_gpu_config.py` | Dev Utility | absolute path operations |
@@ -440,7 +440,7 @@ _Generated: 2026-02-15_
 | `scripts/test_llm_connectivity.py` (retired) | Unclear/Obsolete | absolute path operations; binary/network download |
 | `scripts/archive/legacy_validation/root/test_recovery_system.py` | Archived/Migrations | absolute path operations |
 | `scripts/archive/legacy_validation/root/test_transcribe_integration.py` | Archived/Migrations | absolute path operations |
-| `scripts/test_vad_simple.py` | Dev Utility | destructive actions; absolute path operations |
+| `scripts/test_vad_simple.py` (retired) | Unclear/Obsolete | destructive actions; absolute path operations |
 | `scripts/test_vllm_from_windows.ps1` | Dev Utility | absolute path operations; binary/network download |
 | `scripts/utilities/gpu_config.py` | Unclear/Obsolete | absolute path operations |
 | `scripts/utilities/llm_client.py` | Runtime Utility | absolute path operations; binary/network download |

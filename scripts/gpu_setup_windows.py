@@ -190,7 +190,7 @@ def main():
         for env in GPU_ENVIRONMENTS.keys():
             print(f"  [SYMBOL] {env}")
         print("\nNext steps:")
-        print("  1. Run: python scripts\\check_gpu_status.py")
+        print("  1. Run: conda run -n goodq_core python scripts\\test_gpu_config.py")
         print("  2. Test the pipeline with a video file")
         print("  3. Monitor GPU usage with: nvidia-smi")
         return 0

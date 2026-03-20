@@ -47,83 +47,35 @@ Each pipeline step runs in its own isolated conda environment with specific depe
 
 ## Quick Setup
 
-### Option 1: Automated Setup (Recommended)
+### Option 1: Canonical PowerShell Installer (Recommended)
 
-Run the quick setup script:
-
-```bash
-cd <project_root>
-python scripts\quick_gpu_setup.py
+```powershell
+pwsh scripts\install_gpu_support.ps1 -Force
 ```
 
-This will:
-1. Uninstall CPU-only PyTorch from each environment
-2. Install CUDA-enabled PyTorch with correct versions
-3. Verify CUDA works in each environment
-4. Report any failures
+This is the current supported setup surface for installing CUDA-enabled PyTorch into the maintained `goodq_*` GPU-capable environments.
 
-**Time**: ~10-15 minutes (one-time setup)
+### Option 2: Windows Batch Launcher
 
-### Option 2: Manual Setup
-
-For each environment, run:
-
-```bash
-# Audio Diarization (PyTorch 2.5.1 + CUDA 12.4)
-conda activate audio_diarize
-pip uninstall -y torch torchaudio torchvision
-pip install torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1 --index-url https://download.pytorch.org/whl/cu124
-
-# Audio Transcription (PyTorch 2.3.1 + CUDA 12.1)
-conda activate audio_transcribe
-pip uninstall -y torch
-pip install torch==2.3.1 --index-url https://download.pytorch.org/whl/cu121
-
-# Emotion Classification (PyTorch 2.3.1 + CUDA 12.1)
-conda activate emotion_classify
-pip uninstall -y torch torchvision
-pip install torch==2.3.1 torchvision==0.18.1 --index-url https://download.pytorch.org/whl/cu121
-
-# Face Embedding (PyTorch 2.3.1 + CUDA 12.1)
-conda activate face_embed
-pip uninstall -y torch torchvision
-pip install torch==2.3.1 torchvision==0.18.1 --index-url https://download.pytorch.org/whl/cu121
-
-# Text Embedding (PyTorch 2.3.1 + CUDA 12.1)
-conda activate text_embed
-pip uninstall -y torch torchvision
-pip install torch==2.3.1 torchvision==0.18.1 --index-url https://download.pytorch.org/whl/cu121
+```powershell
+.\scripts\setup_gpu_environments.bat
 ```
+
+Use this if you prefer the packaged batch wrapper around the same GPU setup flow.
 
 ## Verification
 
 ### Check GPU Status
 
-```bash
-cd <project_root>
-python scripts\check_gpu_status.py
+```powershell
+conda run -n goodq_core python scripts\test_gpu_config.py
 ```
 
 Expected output:
 ```
-✓ PASS: NVIDIA Drivers
-✓ PASS: CUDA Availability
-✓ PASS: GPU Utilization
-✓ PASS: GPU Processes
-✓ PASS: Environment Vars
-```
-
-### Test Specific Environment
-
-```bash
-conda activate audio_diarize
-python -c "import torch; print(f'CUDA: {torch.cuda.is_available()}'); print(f'Device: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CPU'}')"
-```
-
-Expected output:
-```
-CUDA: True
-Device: NVIDIA GeForce RTX 4070 Ti SUPER
+[PASS] CUDA available
+[PASS] expected GPU visible
+[PASS] torch/runtime imports healthy
 ```
 
 ## GPU Configuration
@@ -316,7 +268,7 @@ A: Yes, but monitor GPU memory. You may need to reduce memory fractions.
 ## Support
 
 For issues:
-1. Run diagnostics: `python scripts\check_gpu_status.py`
+1. Run diagnostics: `conda run -n goodq_core python scripts\test_gpu_config.py`
 2. Check logs in `logs/` directory
 3. Review error messages carefully
 4. Check GPU memory: `nvidia-smi`
@@ -324,8 +276,6 @@ For issues:
 ## Related Files
 
 - `gpu_config.py` - Central GPU configuration
-- `scripts/quick_gpu_setup.py` - Automated setup
-- `scripts/check_gpu_status.py` - Diagnostics
+- `scripts/install_gpu_support.ps1` - Canonical GPU setup
 - `scripts/setup_gpu_environments.bat` - Windows batch setup
-- `scripts/validate_gpu_setup.bat` - Validation script
-
+- `scripts/test_gpu_config.py` - Diagnostics

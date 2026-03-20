@@ -346,7 +346,7 @@ Each environment:
 
 🔧 Scripts
    <project_root>\scripts\
-      command_center.ps1                 - Dashboard
+      system_readiness_check.py          - Status / dependency check
       verify_project_readiness.ps1       - Health check
       check_production_status.py         - Status report
 
@@ -389,4 +389,3 @@ For troubleshooting, see docs/TROUBLESHOOTING.md
 For API usage, see http://localhost:30000/docs
 
 ═══════════════════════════════════════════════════════════════════════
-

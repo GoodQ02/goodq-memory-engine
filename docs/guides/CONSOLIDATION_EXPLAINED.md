@@ -417,7 +417,7 @@ Behind the scenes, `run_conda_step()` does this:
 1. **Saves data to a temporary file** (JSON format)
 2. **Runs this command:**
    ```
-   conda run -n <environment_name> python -m goodq4all.cli.step_runner <step_name> <data_file>
+   conda run -n <environment_name> python -m cli.step_runner <step_name> <data_file>
    ```
 3. **Reads the results** from another temporary file
 4. **Returns the enriched data**

@@ -151,6 +151,53 @@ def _check_ffmpeg() -> CheckResult:
     return CheckResult("ffmpeg", "warn", "; ".join(remediation))
 
 
+def _resolve_pdftotext_from_hint(raw: str) -> Optional[Path]:
+    hint = raw.strip()
+    if not hint or hint.lower() == "pdftotext":
+        return None
+    candidate = Path(hint)
+    if candidate.is_dir():
+        for name in ("pdftotext.exe", "pdftotext"):
+            exe = candidate / name
+            if exe.exists():
+                return exe
+        return None
+    if candidate.is_file():
+        return candidate
+    return None
+
+
+def _check_pdftotext(cfg: Dict[str, Any]) -> CheckResult:
+    tools_cfg = {}
+    if isinstance(cfg, dict):
+        config_cfg = cfg.get("config")
+        if isinstance(config_cfg, dict):
+            tools_cfg = config_cfg.get("tools") or {}
+            if not isinstance(tools_cfg, dict):
+                tools_cfg = {}
+
+    env_hint = os.environ.get("GOODQ_POPPLER_BIN", "").strip()
+    if env_hint:
+        resolved = _resolve_pdftotext_from_hint(env_hint)
+        if resolved:
+            return CheckResult("pdftotext", "pass", f"GOODQ_POPPLER_BIN={resolved}")
+
+    cfg_hint = str(tools_cfg.get("poppler_bin") or "").strip()
+    if cfg_hint:
+        resolved = _resolve_pdftotext_from_hint(cfg_hint)
+        if resolved:
+            return CheckResult("pdftotext", "pass", f"config.tools.poppler_bin={resolved}")
+
+    path_hit = shutil.which("pdftotext")
+    if path_hit:
+        return CheckResult("pdftotext", "pass", path_hit)
+
+    remediation = ["install Poppler/pdftotext and set GOODQ_POPPLER_BIN or add pdftotext to PATH"]
+    if shutil.which("winget") or shutil.which("choco"):
+        remediation.insert(0, "use an existing package manager to install Poppler/pdftotext")
+    return CheckResult("pdftotext", "warn", "; ".join(remediation))
+
+
 def _check_wsl_flag() -> CheckResult:
     value = os.environ.get("GOODQ_WSL_DISTRO")
     if value:
@@ -209,6 +256,7 @@ def build_report() -> Dict[str, Any]:
     checks.append(_check_qdrant_binary())
     checks.append(_check_qdrant_runtime(cfg))
     checks.append(_check_ffmpeg())
+    checks.append(_check_pdftotext(cfg))
     checks.append(_check_wsl_flag())
     checks.extend(_check_env_resolution(cfg))
 

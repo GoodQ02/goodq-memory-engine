@@ -10,6 +10,7 @@ from typing import Any, Dict
 from steps.common.config_loader import get_runtime_paths, load_configs
 
 logger = logging.getLogger(__name__)
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def _resolve_models_root() -> str:
@@ -59,7 +60,7 @@ def run_conda_step(env_name: str, step_name: str, item: Dict[str, Any], cfg: Dic
             env_name,
             "python",
             "-m",
-            "goodq4all.cli.step_runner",
+            "cli.step_runner",
             "--step",
             step_name,
             "--in",
@@ -81,7 +82,17 @@ def run_conda_step(env_name: str, step_name: str, item: Dict[str, Any], cfg: Dic
             timeout_s = None
         
         try:
-            result = subprocess.run(cmd, check=True, capture_output=True, timeout=timeout_s, env=env, text=True, encoding='utf-8', errors='replace')
+            result = subprocess.run(
+                cmd,
+                check=True,
+                capture_output=True,
+                timeout=timeout_s,
+                cwd=str(REPO_ROOT),
+                env=env,
+                text=True,
+                encoding='utf-8',
+                errors='replace',
+            )
         except subprocess.TimeoutExpired as e:
             error_msg = f"[TIMER]  Mission timeout: {step_name} in {env_name} (exceeded {timeout_s}s)"
             logger.error(error_msg)

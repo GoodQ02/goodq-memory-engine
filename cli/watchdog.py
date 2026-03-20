@@ -802,17 +802,17 @@ class WatchdogProcessor:
         success = True
         try:
             step_plan = [
-                ("goodq_image_caption", "image_ocr"),
-                ("goodq_image_caption", "image_caption"),
-                ("goodq_object_detect", "object_detect"),
-                ("goodq_face_embed", "face_embed"),
-                ("goodq_image_caption", "image_exif"),
-                ("goodq_image_caption", "image_embed_dino"),
-                ("goodq_image_caption", "image_embed_clip"),
-                ("goodq_text_embed", "text_embed"),
-                ("goodq_sentiment", "sentiment"),
-                ("goodq_emotion_classify", "emotion_classify"),
-                ("goodq_emotion_classify", "tagger"),
+                ("goodq_core", "image_ocr"),
+                ("goodq_core", "image_caption"),
+                ("goodq_core", "object_detect"),
+                ("goodq_core", "face_embed"),
+                ("goodq_core", "image_exif"),
+                ("goodq_core", "image_embed_dino"),
+                ("goodq_core", "image_embed_clip"),
+                ("goodq_core", "text_embed"),
+                ("goodq_core", "sentiment"),
+                ("goodq_core", "emotion_classify"),
+                ("goodq_core", "tagger"),
             ]
 
             for env_name, step_name in step_plan:
@@ -901,8 +901,8 @@ class WatchdogProcessor:
         try:
             # For PDFs, first extract text via pdf_text
             if ext == '.pdf':
-                logger.info("[DOC] Running step pdf_text in goodq_text_embed")
-                pdf_result = run_conda_step("goodq_text_embed", "pdf_text", item, cfg)
+                logger.info("[DOC] Running step pdf_text in goodq_core")
+                pdf_result = run_conda_step("goodq_core", "pdf_text", item, cfg)
                 if isinstance(pdf_result, dict):
                     item.update(pdf_result)
                     pdf_text = pdf_result.get("pdf_text")
@@ -918,10 +918,10 @@ class WatchdogProcessor:
                 item["frame_text"] = text_content
 
             step_plan = [
-                ("goodq_text_embed", "text_embed"),
-                ("goodq_sentiment", "sentiment"),
-                ("goodq_emotion_classify", "emotion_classify"),
-                ("goodq_emotion_classify", "tagger"),
+                ("goodq_core", "text_embed"),
+                ("goodq_core", "sentiment"),
+                ("goodq_core", "emotion_classify"),
+                ("goodq_core", "tagger"),
             ]
 
             for env_name, step_name in step_plan:

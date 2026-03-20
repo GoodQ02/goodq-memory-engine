@@ -9,6 +9,8 @@ from typing import Any, Dict, List, Optional
 from steps.common.config_loader import load_configs
 from steps.discover_sources.step import discover_sources
 
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 
 def _run_step(env: str, step: str, item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
     with tempfile.TemporaryDirectory() as td:
@@ -23,10 +25,10 @@ def _run_step(env: str, step: str, item: Dict[str, Any], cfg: Dict[str, Any]) ->
             json.dump(cfg, f)
         conda_exe = resolve_conda()
         cmd = [
-            conda_exe,'run','-n',env,'python','-m','goodq4all.cli.step_runner',
+            conda_exe,'run','-n',env,'python','-m','cli.step_runner',
             '--step',step,'--in',in_p,'--out',out_p,'--cfg',cfg_p
         ]
-        subprocess.run(cmd, check=True, capture_output=True)
+        subprocess.run(cmd, check=True, capture_output=True, cwd=REPO_ROOT)
         if os.path.isfile(out_p):
             with open(out_p, 'r', encoding='utf-8') as f:
                 try:

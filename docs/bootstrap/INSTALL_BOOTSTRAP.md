@@ -117,6 +117,7 @@ The bootstrap performs only lightweight checks:
 - environment Python is available
 - config loader works
 - FFmpeg status is clear
+- `pdftotext` / Poppler status is clear for PDF ingestion
 - Qdrant reachability is checked
 - Qdrant Windows service status is surfaced when Qdrant is unavailable
 - launcher exists
@@ -132,6 +133,12 @@ installation guidance:
 - preferred: `winget`
 - fallback: `choco`
 - otherwise: manual install or `GOODQ_FFMPEG_EXE`
+
+If `pdftotext` is unavailable, the bootstrap keeps going but reports that PDF
+ingestion still needs Poppler and points at:
+
+- `GOODQ_POPPLER_BIN`
+- `pdftotext` on `PATH`
 
 If Conda environment creation is blocked by unaccepted channel Terms of
 Service, the bootstrap now detects that condition explicitly and prints or

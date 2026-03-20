@@ -1,356 +1,77 @@
 # Error Handling & Recovery System
 
-**Status:** ✅ PRODUCTION ACTIVE  
-**Last Updated:** December 15, 2025  
-**Version:** 1.0.0
-
----
-
-## Quick Reference
-
-The GoodQ4All system includes a sophisticated multi-layer error handling and self-healing infrastructure that operates autonomously during ingestion.
-
-**Key Components:**
-- **Control Agent** - Orchestrates monitoring and healing
-- **Config Healer** - Auto-modifies configuration for recovery  
-- **Recovery Strategies DB** - Learns optimal patterns from history
-- **Self-Healing Monitor** - Real-time pipeline health tracking
-
----
-
-## System Architecture
-
-```
-┌──────────────────────────────────────────────────────────────┐
-│                   INGESTION PIPELINE                         │
-│          (cli/run_ingestion.py + steps/*)                   │
-└───────────────────────┬──────────────────────────────────────┘
-                        │
-                        ↓ Error Detected
-┌───────────────────────────────────────────────────────────────┐
-│                    CONTROL AGENT LAYER                        │
-│  ┌────────────────────────────────────────────────────────┐  │
-│  │  Self-Healing Monitor (agents/self_healing_monitor.py) │  │
-│  │  • Watches logs continuously                           │  │
-│  │  • Matches error patterns                              │  │
-│  │  • Triggers recovery actions                           │  │
-│  └────────────────────────────────────────────────────────┘  │
-│                         ↓                                     │
-│  ┌────────────────────────────────────────────────────────┐  │
-│  │  Config Healer (agents/config_healer.py)               │  │
-│  │  • Modifies config.yaml safely                         │  │
-│  │  • Backs up all changes                                │  │
-│  │  • Applies LLM-suggested fixes                         │  │
-│  └────────────────────────────────────────────────────────┘  │
-│                         ↓                                     │
-│  ┌────────────────────────────────────────────────────────┐  │
-│  │  Recovery Strategies (agents/recovery_strategies.py)   │  │
-│  │  • Query pattern database                              │  │
-│  │  • Execute recovery actions                            │  │
-│  │  • Update success metrics                              │  │
-│  └────────────────────────────────────────────────────────┘  │
-└───────────────────────────────────────────────────────────────┘
-                        ↓
-┌───────────────────────────────────────────────────────────────┐
-│          RECOVERY DATABASE (SQLite)                           │
-│  Location: <GOODQ_DATA_ROOT>\GoodQ_Data\control_memory.db            │
-│  Location: <GOODQ_DATA_ROOT>\GoodQ_Data\recovery.db                  │
-│                                                               │
-│  Tables:                                                      │
-│  • recovery_history - All recovery attempts + outcomes       │
-│  • error_patterns - Known patterns + success rates           │
-│  • success_patterns - Learned from successful runs           │
-└───────────────────────────────────────────────────────────────┘
-```
-
----
-
-## Known Error Patterns
-
-The system recognizes and auto-heals these error classes:
-
-| Error Pattern | Detection Keywords | Recovery Strategy | Auto-Apply |
-|---------------|-------------------|-------------------|------------|
-| **CUDA OOM** | `out of memory`, `CUDA error`, `OOM` | Reduce batch size → Switch to CPU → Use smaller model | ✅ Yes |
-| **Timeout** | `timeout`, `timed out`, `connection timeout` | Retry with exponential backoff (3x, 2s delay) | ✅ Yes |
-| **Audio Missing** | `no audio stream`, `audio not found` | Skip audio steps, mark scene as silent | ✅ Yes |
-| **Model Not Found** | `model not found`, `cannot find model` | Download model automatically | ⚠️ Ask LLM |
-| **PyAnnote Failure** | `pyannote`, `diarization failed` | Increase warmup → CPU fallback → Skip diarization | ⚠️ Ask LLM |
-| **Whisper Error** | `RuntimeError`, `whisper`, `transcription failed` | Use smaller model → Reduce chunk size → Skip | ✅ Yes |
-| **Empty Result** | `no scenes detected`, `no faces found` | Adjust thresholds, log warning, continue | ✅ Yes |
-| **File Missing** | `file not found`, `does not exist` | Skip file, log error, continue with next | ✅ Yes |
-
----
-
-## Recovery Actions
-
-### 1. reduce_batch_size
-**When:** GPU memory exhaustion  
-**Action:** Halves batch size in config, retries step  
-**Backup:** Saves original config before modification
-
-### 2. skip_audio_steps
-**When:** Missing/corrupted audio stream  
-**Action:** Sets `skip_audio: true`, continues with vision-only processing  
-
-### 3. partition_audio
-**When:** Audio chunk too large for transcription  
-**Action:** Splits into smaller chunks, processes sequentially, merges results
-
-### 4. downgrade_model
-**When:** Model too large for available VRAM  
-**Action:** Switches to smaller model variant (e.g., `large-v3` → `medium`)
-
-### 5. retry_with_backoff
-**When:** Transient network/service failures  
-**Action:** Retries with delays: 2s, 4s, 8s (max 3 attempts)
+**Status:** Operational with conditional Control Agent support  
+**Last Verified:** 2026-03-20
 
-### 6. switch_to_cpu
-**When:** GPU unavailable or persistent GPU errors  
-**Action:** Forces `device: cpu` in config, clears GPU cache
+## Current Runtime Truth
 
----
+GoodQ handles failures through visible runtime state, persisted artifacts, and bounded recovery helpers.
 
-## Configuration
+- critical path failures are logged and surfaced
+- non-critical enrichments may fail without halting ingestion
+- watchdog and ingestion runs persist status metadata and output artifacts
+- Control Agent diagnosis is available only when an `llm_client` is explicitly injected
+- there is no canonical always-on autonomous healing daemon in the default runtime
 
-### Enable/Disable Self-Healing
+For current behavior, trust:
 
-In `config.yaml`:
-```yaml
-control_agent:
-  enabled: true                    # Master switch
-  auto_heal: true                  # Automatic recovery
-  ask_llm_for_complex: true       # Use LLM for ambiguous errors
-  backup_configs: true             # Save config before modifications
-  
-  # Recovery behavior
-  max_retry_attempts: 3
-  backoff_factor: 2.0              # Exponential backoff multiplier
-  gpu_fallback_enabled: true
-```
-
-### Config Backup Location
-All config modifications are backed up to:
-```
-<GOODQ_DATA_ROOT>\GoodQ_Data\config_backups\config.yaml.<timestamp>
-```
+- `docs/CONTROL_AGENT.md`
+- `docs/systems/WATCHDOG_SYSTEM.md`
+- `cli/run_ingestion.py`
+- `cli/watchdog.py`
 
----
+## Active Recovery Surfaces
 
-## Databases
+- `agents/config_healer.py` - targeted config-healing helper
+- `agents/recovery_db.py` - persistent recovery-memory store
+- `agents/recovery_strategies.py` - historical strategy store
+- `agents/control_agent.py` - conditional diagnosis/healing coordinator
 
-### control_memory.db
-**Location:** `<GOODQ_DATA_ROOT>\GoodQ_Data\control_memory.db`  
-**Purpose:** Long-term learning and pattern recognition
+These are supporting surfaces, not a separate guaranteed service layer.
 
-**Tables:**
-- `error_memory` - All errors encountered
-- `recovery_history` - All recovery attempts + outcomes
-- `error_patterns` - Regex patterns + recommended strategies
-- `success_patterns` - Learned from successful runs
+## Runtime Pattern
 
-### recovery.db
-**Location:** `<GOODQ_DATA_ROOT>\GoodQ_Data\recovery.db`  
-**Purpose:** Detailed failure tracking
-
-**Tables:**
-- `failures` - Complete failure records with context
-- `recovery_attempts` - Individual recovery tries
-- `success_patterns` - Known working solutions
-
----
-
-## Learning & Adaptation
-
-The system **learns over time**:
+### Default CLI Behavior
 
-1. **Track Success Rates**
-   - Each error pattern has `success_rate` and `total_attempts`
-   - Strategies are ranked by historical success
+- `cli/run_ingestion.py` records deterministic control-agent status
+- `cli/watchdog.py` records watchdog state and recovery context
+- failures remain visible in logs, manifests, and run artifacts
 
-2. **Update Patterns**
-   - New error types create new patterns automatically
-   - Patterns are refined based on outcomes
+### Optional Diagnosis Path
 
-3. **Optimize Strategies**
-   - Failed strategies are de-prioritized
-   - Successful strategies are recommended more frequently
-
-4. **LLM Integration**
-   - For ambiguous errors, LLM analyzes context
-   - LLM suggests novel recovery approaches
-   - Suggestions are added to pattern database if successful
+If an `llm_client` is explicitly injected:
 
----
+- Control Agent may analyze errors
+- recovery recommendations may be generated
+- healing reports may be written
 
-## Usage Examples
+If no `llm_client` is injected:
 
-### Programmatic Healing
+- the runtime persists the disabled state explicitly
+- ingestion continues under the normal local contract
 
-```python
-from agents.control_agent import ControlAgent
-
-agent = ControlAgent()
+## Historical Surfaces
 
-# Attempt automatic healing
-result = agent.auto_heal_failure(
-    error_message="CUDA out of memory",
-    step_name="image_embed_clip",
-    context={
-        "gpu_usage_mb": 15800,
-        "batch_size": 32,
-        "model": "openai/clip-vit-large-patch14"
-    }
-)
+The original Phase 2 / Phase 3 self-healing campaign produced standalone validation harnesses that are no longer part of the active support surface:
 
-if result["success"]:
-    print(f"Healed with strategy: {result['strategy_applied']}")
-else:
-    print(f"Could not heal: {result['reason']}")
-```
+- `scripts/archive/legacy_validation/root/test_recovery_system.py`
+- `scripts/archive/legacy_validation/root/test_phase3_healing.py`
+- `scripts/archive/legacy_validation/root/test_phase2_integration.py`
 
-### Learn from Success
+These are preserved as historical reference only.
 
-```python
-# After successful step execution
-agent.learn_from_success(
-    step_name="audio_transcription",
-    execution_time=45.2,
-    gpu_usage=8500,
-    metadata={"model": "whisper-large-v3", "duration": 180}
-)
-```
+## Operator Guidance
 
-### Query Learning Statistics
+- Use canonical runtime commands first.
+- Treat archived recovery harnesses as historical evidence, not current acceptance tests.
+- When debugging current runtime behavior, prefer:
+  - `python scripts/utils/check_watchdog_status.py`
+  - `python scripts/test_llm_client.py`
+  - `python scripts/test_wsl2_bridge.py`
 
-```python
-stats = agent.get_learning_statistics()
-print(f"Total errors: {stats['total_errors']}")
-print(f"Success rate: {stats['overall_success_rate']}%")
-print(f"Most common error: {stats['most_common_error']}")
-```
+## Related Docs
 
----
-
-## Monitoring
-
-### Live Monitoring
-The Self-Healing Monitor runs as an async background task during ingestion:
-
-```python
-from agents.self_healing_monitor import SelfHealingMonitor
-
-monitor = SelfHealingMonitor()
-await monitor.monitor_and_heal(check_interval=60)  # Check every 60s
-```
-
-### Log Output
-All healing attempts are logged:
-```
-[CONTROL AGENT] Error detected: CUDA out of memory
-[CONTROL AGENT] Matched pattern: cuda_oom
-[CONTROL AGENT] Applying strategy: reduce_batch_size
-[CONFIG HEALER] Backing up config → config.yaml.2025-12-15_14-30-45
-[CONFIG HEALER] Setting vision.batch_size: 32 → 16
-[CONTROL AGENT] ✅ Recovery successful (37.2s)
-[CONTROL AGENT] Recording outcome to recovery DB
-```
-
----
-
-## Testing
-
-Run the recovery system test suite:
-
-```powershell
-python scripts/test_recovery_system.py
-```
-
-Verify specific healing scenarios:
-```powershell
-python scripts/test_phase3_healing.py
-```
-
-Check Phase 2 integration:
-```powershell
-python scripts/test_phase2_integration.py
-```
-
----
-
-## Performance Metrics
-
-From production runs:
-
-| Metric | Value |
-|--------|-------|
-| **Auto-Heal Success Rate** | 87.3% |
-| **Avg Recovery Time** | 42.5s |
-| **Most Common Error** | CUDA OOM (43%) |
-| **Most Effective Strategy** | `reduce_batch_size` (94% success) |
-| **LLM Consultation Rate** | 12% of errors |
-
----
-
-## Known Limitations
-
-1. **Cannot heal hardware failures** - Physical GPU/disk failures require manual intervention
-2. **Limited WSL2 audio recovery** - WSL2 process failures may need service restart
-3. **No rollback for partial runs** - Scene-level recovery only, not video-level
-4. **Config changes persist** - Modifications are not auto-reverted after success
-
----
-
-## Related Documentation
-
-- **[Control Agent Guide](../CONTROL_AGENT.md)** - Full Control Agent documentation
-- **[Phase 3 Self-Healing](../archive/phases/PHASE3_SELF_HEALING.md)** - Implementation details
-- **[Control Agent Guide](../CONTROL_AGENT.md)** - Current control-agent behavior and diagnosis boundaries
-- **[Watchdog System](WATCHDOG_SYSTEM.md)** - Automated ingestion with healing integration
-
----
-
-## Troubleshooting
-
-### Healing not working?
-
-1. Check `config.yaml`:
-   ```yaml
-   control_agent:
-     enabled: true
-     auto_heal: true
-   ```
-
-2. Verify databases exist:
-   ```powershell
-   ls <GOODQ_DATA_ROOT>\GoodQ_Data\control_memory.db
-   ls <GOODQ_DATA_ROOT>\GoodQ_Data\recovery.db
-   ```
-
-3. Check logs for healing attempts:
-   ```powershell
-   rg "CONTROL AGENT" <project_root>\logs\
-   ```
-
-### Config backups filling disk?
-
-Clean old backups:
-```powershell
-# Keep only last 10 backups
-Get-ChildItem <GOODQ_DATA_ROOT>\GoodQ_Data\config_backups\ | 
-  Sort-Object LastWriteTime -Descending | 
-  Select-Object -Skip 10 | 
-  Remove-Item
-```
-
-### Want to disable auto-healing?
-
-Set in `config.yaml`:
-```yaml
-control_agent:
-  auto_heal: false  # Manual intervention required
-```
-
----
-
-**The GoodQ4All error handling system is designed to operate unattended for hours, adapting to failures and learning optimal recovery strategies autonomously.**
+- `docs/CONTROL_AGENT.md`
+- `docs/systems/WATCHDOG_SYSTEM.md`
+- `docs/CLI-REFERENCE.md`
+- `docs/archive/phases/PHASE3_SELF_HEALING.md`

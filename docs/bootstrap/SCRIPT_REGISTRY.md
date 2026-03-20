@@ -12,10 +12,10 @@ _Generated: 2026-02-15_
 
 - Bootstrap-Critical: **30**
 - Runtime Utility: **97**
-- Dev Utility: **36**
+- Dev Utility: **33**
 - One-Time Migration: **0**
 - Unclear/Obsolete: **84**
-- Archived/Migrations (`scripts/archive/**`): **41**
+- Archived/Migrations (`scripts/archive/**`): **44**
 
 ## Danger Capability Flags (Human Review)
 
@@ -246,9 +246,9 @@ _Generated: 2026-02-15_
 | `scripts/archive/legacy_validation/root/test_llm_client_simple.py` | Archived/Migrations | Test LLM Client from Windows | No | absolute path operations |
 | `scripts/test_llm_connectivity.py` (retired) | Unclear/Obsolete | Historical hardcoded endpoint probe removed after the injected LLM client contract replaced the older multi-model connectivity surface. | No | absolute path operations; binary/network download |
 | `scripts/archive/legacy_validation/root/test_osd_integration.py` | Archived/Migrations | OSD Integration Test Script | No | None detected |
-| `scripts/test_phase2_integration.py` | Dev Utility | Phase 2 Control Agent Integration Test | Manual Review | None detected |
-| `scripts/test_phase3_healing.py` | Dev Utility | Test script for Phase 3: Self-Healing & Learning | Manual Review | None detected |
-| `scripts/test_recovery_system.py` | Dev Utility | Test Recovery System (Phase 2) | Manual Review | absolute path operations |
+| `scripts/archive/legacy_validation/root/test_phase2_integration.py` | Archived/Migrations | Historical Phase 2 Control Agent integration harness preserved for reference only. | No | None detected |
+| `scripts/archive/legacy_validation/root/test_phase3_healing.py` | Archived/Migrations | Historical Phase 3 self-healing harness preserved for reference only. | No | None detected |
+| `scripts/archive/legacy_validation/root/test_recovery_system.py` | Archived/Migrations | Historical Phase 2 recovery-system harness preserved for reference only. | No | absolute path operations |
 | `scripts/archive/legacy_validation/root/test_transcribe_integration.py` | Archived/Migrations | Integration Test: Audio Transcribe with WSL2 Fallback | No | absolute path operations |
 | `scripts/test_vad_gpu_usage.py` | Dev Utility | Test VAD Implementation and GPU Usage | Manual Review | None detected |
 | `scripts/test_vad_simple.py` | Dev Utility | Simple standalone test for Silero VAD on audio file. | No | destructive actions; absolute path operations |
@@ -438,7 +438,7 @@ _Generated: 2026-02-15_
 | `scripts/test_gpu_scene_detection.py` | Dev Utility | absolute path operations |
 | `scripts/archive/legacy_validation/root/test_llm_client_simple.py` | Archived/Migrations | absolute path operations |
 | `scripts/test_llm_connectivity.py` (retired) | Unclear/Obsolete | absolute path operations; binary/network download |
-| `scripts/test_recovery_system.py` | Dev Utility | absolute path operations |
+| `scripts/archive/legacy_validation/root/test_recovery_system.py` | Archived/Migrations | absolute path operations |
 | `scripts/archive/legacy_validation/root/test_transcribe_integration.py` | Archived/Migrations | absolute path operations |
 | `scripts/test_vad_simple.py` | Dev Utility | destructive actions; absolute path operations |
 | `scripts/test_vllm_from_windows.ps1` | Dev Utility | absolute path operations; binary/network download |

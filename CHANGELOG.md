@@ -14,6 +14,9 @@ and related canonical docs.
 - Archived historical test harnesses and obsolete validation helpers out of the
   active `tests/` and `scripts/` surfaces, while keeping the canonical unit
   suite and current manual watchdog/LLM/WSL/GPU utilities in place.
+- Rewrote the remaining agent/recovery and cleanup-map docs to match the
+  current conditional Control Agent contract instead of the older phase-era
+  self-healing narrative.
 
 ## [0.1.0] - 2026-03-20
 

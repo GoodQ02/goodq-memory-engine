@@ -95,17 +95,15 @@ model = MyModel().to(device)
 ### Quick Test
 Test GPU configuration without running full pipeline:
 
-```bash
-conda activate goodq_core
-python scripts\test_gpu_config.py
+```powershell
+conda run -n goodq_core python scripts\test_gpu_config.py
 ```
 
 ### Full Monitoring
 Run pipeline with real-time GPU monitoring:
 
-```bash
-conda activate goodq_core
-python scripts\monitor_gpu_pipeline.py
+```powershell
+conda run -n goodq_core python scripts\monitor_gpu_pipeline.py
 ```
 
 This will:
@@ -262,7 +260,7 @@ The system logs GPU stats to:
 
 ### Core Files
 - `steps/common/gpu_config.py` - Main GPU configuration module
-- `config/gpu_optimized.json` - Optimized allocation settings
+- `steps/common/gpu_config.py` - Canonical GPU allocation and tuning rules
 
 ### Optimization Scripts
 - `scripts/test_gpu_config.py` - Quick GPU test
@@ -308,7 +306,7 @@ For issues or questions:
 1. Check logs in `logs/gpu_optimization/`
 2. Review GPU stats with `nvidia-smi`
 3. Verify step configurations in `steps/common/gpu_config.py`
-4. Run `python scripts/test_gpu_config.py` to verify setup
+4. Run `conda run -n goodq_core python scripts/test_gpu_config.py` to verify setup
 
 ## Version History
 

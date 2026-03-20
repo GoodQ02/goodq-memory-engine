@@ -35,6 +35,9 @@ and related canonical docs.
 - Corrected `docs/architecture/ARCHITECTURE_REFERENCE.md` so it reflects the
   explicit local API surface, experimental-only UI scaffold, and the supported
   specialized step-env pack.
+- Corrected the specialized step-env pins for `goodq_image_caption` and
+  `goodq_audio_embed` so bootstrap no longer tries to resolve incompatible
+  `numpy==2.2.6` combinations on fresh machines.
 
 ## [0.1.0] - 2026-03-20
 

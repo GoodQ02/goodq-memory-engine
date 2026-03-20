@@ -21,6 +21,9 @@ reference docs.
 - `docs/CHEAT_SHEET.md` – Command-first cheat sheet for the supported runtime.
 - `docs/CLI-REFERENCE.md` – Full CLI reference.
 - `docs/reference/quick-refs/CLI_COMMANDS_REFERENCE.md` – Extended command reference.
+- `docs/reference/DEPENDENCIES.md` – Current dependency contract matrix.
+- `docs/reference/PLATFORM_SUPPORT.md` – Desktop/laptop compatibility contract.
+- `docs/reference/GPU_CAPABILITY_MATRIX.md` – GPU acceleration and CPU-safe reference.
 
 ---
 

@@ -16,17 +16,17 @@ Analysis method: file inspection only (no project code executed).
 | YAML config loading (`PyYAML`) | Runtime library | Canonical config loader parses YAML for runtime settings. | `steps/common/config_loader.py:7`; `steps/common/config_loader.py:10`; `steps/common/config_loader.py:12` |
 | SQLite persistence (memory + KG) | Data store | SQLite is listed as authoritative relational store and wired in config paths. | `AGENTS.md:11`; `AGENTS.md:22`; `configs/config.yaml:46`; `configs/config.yaml:47` |
 | Qdrant service (`localhost:6333`) | Data store/service | Qdrant is canonical vector store and enabled in config. | `AGENTS.md:21`; `configs/config.yaml:139`; `configs/config.yaml:141`; `scripts/qdrant/START_QDRANT.bat:20` |
-| Local storage topology on `L:/_DATA` | Hardware/storage assumption | Runtime paths are hard-wired to local Windows volumes in canonical config. | `configs/config.yaml:45`; `configs/config.yaml:53`; `configs/config.yaml:55`; `scripts/qdrant/START_QDRANT.bat:12` |
+| Local storage topology resolved from `GOODQ_DATA_ROOT` | Hardware/storage assumption | Runtime expects a local Windows-accessible data root resolved through layered config and environment, not cloud storage. | `steps/common/config_loader.py:61`; `steps/common/config_loader.py:80`; `configs/config.yaml:45`; `scripts/qdrant/START_QDRANT.bat:12` |
 | PyTorch baseline for multimodal steps | Runtime library | Technical standard and environment matrix repeatedly require torch in active steps. | `AGENTS.md:45`; `docs/CLI-REFERENCE.md:127`; `docs/CLI-REFERENCE.md:155`; `envs/audio_diarize/requirements.txt:7` |
 
 ## OPTIONAL (feature-gated)
 
 | Dependency | Type | Why this is OPTIONAL | Evidence (exact citations) |
 |---|---|---|---|
-| NVIDIA GPU + CUDA 12.1 profile | Hardware/runtime | Required only when `GPU_ENHANCED` profile is active; CPU-safe fallbacks exist for all referenced steps. | `AGENTS.md:19`; `AGENTS.md:45`; `configs/config.yaml:114`; `configs/config.yaml:115` |
+| NVIDIA GPU + CUDA 12.1 profile | Hardware/runtime | Applies only when the `GPU_ENHANCED` profile is intentionally enabled; CPU-safe fallbacks exist for all referenced steps. | `AGENTS.md:19`; `AGENTS.md:45`; `configs/config.yaml:114`; `configs/config.yaml:115` |
 | WSL2 Ubuntu audio compute extension | Runtime/OS | Audio pipeline offloads to WSL2, but architecture states optional enrichments may fail without halting ingestion. | `AGENTS.md:13`; `AGENTS.md:20`; `AGENTS.md:48`; `configs/config.yaml:194`; `scripts/wsl2_audio_bridge.py:115` |
 | WSL audio services (queue daemon + direct invocation) | Runtime/service | Audio subsystem defines two WSL execution modes rather than a single mandatory service. | `docs/architecture/SYSTEM_ARCHITECTURE.md:223`; `docs/architecture/SYSTEM_ARCHITECTURE.md:224`; `docs/architecture/SYSTEM_ARCHITECTURE.md:234`; `docs/architecture/SYSTEM_ARCHITECTURE.md:238` |
-| WSL audio venv + CUDA library shims | Runtime/tooling | Required only for WSL audio path. | `wsl2_audio/setup_cuda_env.sh:6`; `wsl2_audio/setup_cuda_env.sh:12`; `wsl2_audio/setup_cuda_env.sh:15` |
+| WSL audio venv + CUDA library shims | Runtime/tooling | Used only for the optional WSL audio acceleration path. | `wsl2_audio/setup_cuda_env.sh:6`; `wsl2_audio/setup_cuda_env.sh:12`; `wsl2_audio/setup_cuda_env.sh:15` |
 | FFmpeg binary | External tool | Used for media extraction if present; system probes for availability and handles missing tool states. | `steps/common/tool_paths.py:33`; `steps/audio_diarize/step.py:150`; `api/main.py:265`; `api/main.py:271` |
 | Tesseract OCR (`pytesseract` + binary) | External tool/library | OCR step is best-effort and gracefully degrades when dependency/tool missing. | `envs/ocr/requirements.txt:1`; `steps/image_ocr/step.py:14`; `steps/image_ocr/step.py:19`; `steps/image_ocr/step.py:23` |
 | Poppler `pdftotext` | External tool | PDF text extraction is tool-backed and returns `None` on failure. | `envs/pdf_text/requirements.txt:1`; `steps/pdf_text/step.py:8`; `steps/pdf_text/step.py:19`; `steps/pdf_text/step.py:29` |

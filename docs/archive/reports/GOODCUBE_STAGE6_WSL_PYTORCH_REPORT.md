@@ -1,3 +1,7 @@
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: ARCHIVED -->
+<!-- DOC_ARCHIVED_ON: 2026-03-19 -->
+
 # GOODCUBE Stage 6 WSL PyTorch Report
 
 ## WSL Environment

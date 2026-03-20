@@ -33,6 +33,12 @@ This is the current landing page for the active GoodQ4All docs surface.
   [`docs/CLI-REFERENCE.md`](CLI-REFERENCE.md)
 - Shipping profile:
   [`docs/releases/SHIP_PROFILE.md`](releases/SHIP_PROFILE.md)
+- Dependencies:
+  [`docs/reference/DEPENDENCIES.md`](reference/DEPENDENCIES.md)
+- Platform support:
+  [`docs/reference/PLATFORM_SUPPORT.md`](reference/PLATFORM_SUPPORT.md)
+- GPU capability matrix:
+  [`docs/reference/GPU_CAPABILITY_MATRIX.md`](reference/GPU_CAPABILITY_MATRIX.md)
 
 ## Operations
 

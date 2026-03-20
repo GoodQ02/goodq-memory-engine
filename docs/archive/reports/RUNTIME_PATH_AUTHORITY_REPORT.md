@@ -1,3 +1,8 @@
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: ARCHIVED -->
+<!-- DOC_ARCHIVED_ON: 2026-03-19 -->
+<!-- ARCHIVE / NON-CANONICAL / DO NOT COPY PATHS -->
+
 # Runtime Path Authority Report
 
 - Generated: 2026-03-08T17:58:42.871570+00:00

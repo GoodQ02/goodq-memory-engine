@@ -14,6 +14,10 @@ This older documentation index path is kept to preserve incoming links.
   [`docs/reference/indexes/QUICK_INDEX.md`](QUICK_INDEX.md)
 - API reference:
   [`docs/reference/API.md`](../API.md)
+- Reference contracts:
+  [`docs/reference/DEPENDENCIES.md`](../DEPENDENCIES.md),
+  [`docs/reference/PLATFORM_SUPPORT.md`](../PLATFORM_SUPPORT.md),
+  [`docs/reference/GPU_CAPABILITY_MATRIX.md`](../GPU_CAPABILITY_MATRIX.md)
 - Install:
   [`docs/guides/install/INSTALL.md`](../../guides/install/INSTALL.md)
 - Quickstart:

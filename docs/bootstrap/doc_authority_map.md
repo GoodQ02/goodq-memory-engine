@@ -56,7 +56,7 @@ authority docs listed below, or direct file-level audits when entries drift.
 
 ### Contradictions (sample)
 
-- `dependency_matrix.md`
+- `docs/reference/DEPENDENCIES.md`
 - `docs/agent-comms/PHASED_SEGMENTATION_ENGINE_ANALYSIS_2025-12-04.md`
 - `docs/architecture/CONFIG_LOADING_CONTRACT.md`
 - `docs/archive/README.md.backup_20251204`
@@ -72,7 +72,7 @@ authority docs listed below, or direct file-level audits when entries drift.
 ### Hardcoded L: paths (sample)
 
 - `README.md`
-- `dependency_matrix.md`
+- `docs/reference/DEPENDENCIES.md`
 - `docs/CHEAT_SHEET.md`
 - `docs/CLI-REFERENCE.md`
 - `docs/CONTROL_AGENT.md`
@@ -155,7 +155,7 @@ authority docs listed below, or direct file-level audits when entries drift.
 
 ### CUDA mandatory implications (sample)
 
-- `dependency_matrix.md`
+- `docs/reference/DEPENDENCIES.md`
 - `docs/agent-comms/PHASED_SEGMENTATION_ENGINE_ANALYSIS_2025-12-04.md`
 - `docs/archive/README.md.backup_20251204`
 - `docs/audits/ADVANCED_TACTICS_ANALYSIS.md`
@@ -183,7 +183,7 @@ authority docs listed below, or direct file-level audits when entries drift.
 
 | File | Risk Score | Why High Risk | Recommended Action |
 | --- | --- | --- | --- |
-| `dependency_matrix.md` | 14 | Phase A semantic contradiction; hardcoded L: paths; high-authority surface | KEEP |
+| `docs/reference/DEPENDENCIES.md` | 11 | High-authority dependency contract surface; must stay aligned with portability and profile semantics. | KEEP |
 | `docs/architecture/CONFIG_LOADING_CONTRACT.md` | 12 | Phase A semantic contradiction; hardcoded L: paths; high-authority surface | REFRACTOR |
 | `docs/guides/CONSOLIDATION_EXPLAINED.md` | 12 | Phase A semantic contradiction; hardcoded L: paths; high-authority surface | REFRACTOR |
 | `docs/guides/llm/WSL2_AUDIO_SETUP.md` | 12 | Phase A semantic contradiction; hardcoded L: paths; high-authority surface | REFRACTOR |
@@ -227,7 +227,7 @@ docs/archive/
 | `CODE_OF_CONDUCT.md` | B) Operational | Repository governance/operational contribution policy. | KEEP |
 | `CONTRIBUTING.md` | B) Operational | Repository governance/operational contribution policy. | KEEP |
 | `README.md` | A) Canonical | Declared runtime/contract authority document. | KEEP |
-| `dependency_matrix.md` | A) Canonical | Declared runtime/contract authority document. | KEEP |
+| `docs/reference/DEPENDENCIES.md` | A) Canonical | Declared runtime/contract authority document moved under the reference surface. | KEEP |
 | `docs/AGENT_CAPABILITIES.md` | D) Experimental | Unclassified supporting document; merge/archive after review. | MERGE |
 | `docs/AUDIT_SUMMARY_QUICK.txt` | D) Experimental | Unclassified supporting document; merge/archive after review. | MERGE |
 | `docs/CHEAT_SHEET.md` | B) Operational | Current command-first cheat sheet for the supported runtime surface. | KEEP |
@@ -761,5 +761,5 @@ docs/archive/
 | `docs/technical/knowledge_graph.md` | B) Operational | Architecture/technical reference document. | KEEP |
 | `docs/testing/TEST_RESULTS.md` | B) Operational | Testing and validation runbook. | KEEP |
 | `docs/validation/run_narrative_validation.md` | B) Operational | Testing and validation runbook. | KEEP |
-| `gpu_capability_matrix.md` | A) Canonical | Declared runtime/contract authority document. | KEEP |
-| `host_compatibility_contract.md` | A) Canonical | Declared runtime/contract authority document. | KEEP |
+| `docs/reference/GPU_CAPABILITY_MATRIX.md` | A) Canonical | Declared runtime/contract authority document moved under the reference surface. | KEEP |
+| `docs/reference/PLATFORM_SUPPORT.md` | A) Canonical | Declared runtime/contract authority document moved under the reference surface. | KEEP |

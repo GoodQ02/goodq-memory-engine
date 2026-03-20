@@ -7,7 +7,7 @@ from typing import Iterable
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-REPORT_PATH = REPO_ROOT / "runtime_path_authority_report.md"
+REPORT_PATH = REPO_ROOT / "docs" / "archive" / "reports" / "RUNTIME_PATH_AUTHORITY_REPORT.md"
 
 
 CANONICAL_FILES = [

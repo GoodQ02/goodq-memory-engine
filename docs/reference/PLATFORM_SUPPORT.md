@@ -103,7 +103,7 @@ Evidence:
 | Hardcoded WSL user/workspace in bridge | Breaks on hosts where WSL user/path is not `joesdomingo` or layout differs. | `scripts/wsl2_audio_bridge.py:16`, `scripts/wsl2_audio_bridge.py:17` |
 | WSL audio config defaults are CUDA-first | CPU-only WSL hosts may fail model init due to `device=cuda`/`float16` defaults. | `wsl2_audio/config.json:8`, `wsl2_audio/config.json:10`, `wsl2_audio/audio_service.py:174`, `wsl2_audio/audio_service.py:180` |
 | Runtime contract drift: `goodq_zenml` vs `goodq_core` | Ambiguous baseline env breaks reproducibility between docs and launcher paths. | `docs/releases/SHIP_PROFILE.md:11`, `docs/releases/SHIP_PROFILE.md:80`, `LAUNCH_GOODQ.ps1:37`, `README.md:374` |
-| Policy/docs still frame NVIDIA/CUDA as required | Conflicts with desired GPU-optional portability target unless profile semantics are formalized. | `AGENTS.md:19`, `AGENTS.md:45`, `docs/releases/SHIP_PROFILE.md:10`, `docs/guides/general/INSTALL.md:13` |
+| Policy/docs still over-emphasize NVIDIA/CUDA | Can conflict with the desired GPU-optional portability target unless profile semantics stay explicit. | `AGENTS.md:19`, `AGENTS.md:45`, `docs/releases/SHIP_PROFILE.md:10`, `docs/guides/general/INSTALL.md:13` |
 
 ---
 
@@ -132,4 +132,3 @@ Evidence anchors:
 - If a host satisfies **Mandatory Baseline**, it is contract-compliant as `BASELINE` even without GPU.
 - `GPU_ENHANCED` is an additive tier and must not be required for correctness.
 - Desktop remains canonical for synchronization and epoch authority; laptop remains follower-only.
-

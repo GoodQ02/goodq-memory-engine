@@ -10,7 +10,8 @@
 It does not change GoodQ runtime architecture. It only:
 
 - inspects host capabilities
-- prepares the Conda environment for the selected runtime profile
+- prepares the core Conda environment for the selected runtime profile
+- provisions the supported specialized step-env pack required by the active pipeline
 - creates local-only config files when missing
 - assists with external runtime prerequisites when they are missing
 - runs lightweight verification
@@ -37,6 +38,7 @@ On a normal interactive run, the bootstrap prompts for:
 - base data root directory
 - whether to enable GPU acceleration
 - whether to enable WSL audio acceleration
+- whether to provision the supported specialized step-env pack for full pipeline capability
 - whether to accept Conda channel Terms of Service when the local Conda installation requires it
 - whether to install missing external tools such as FFmpeg when a supported package manager is available
 - whether to install or repair the Windows `GoodQ_Qdrant` service when Qdrant is unavailable
@@ -106,7 +108,9 @@ Environment selection:
 
 - `BASELINE` uses [`environment.yml`](../../environment.yml)
 - `GPU_ENHANCED` uses [`environment.gpu.yml`](../../environment.gpu.yml)
-- both profiles target the same `goodq_core` environment name
+- both profiles target the same `goodq_core` orchestration environment name
+- bootstrap also provisions the supported specialized step-env pack for image, audio, and video steps that still require isolated dependency boundaries
+- when GPU mode is enabled, the step-env pack is upgraded to the CUDA-backed Torch stack where those step envs use Torch
 - the bootstrap defaults to `BASELINE`; GPU throughput remains explicit opt-in
 
 ## Lightweight Verification
@@ -114,6 +118,7 @@ Environment selection:
 The bootstrap performs only lightweight checks:
 
 - Conda environment exists
+- supported specialized step environments exist
 - environment Python is available
 - config loader works
 - FFmpeg status is clear

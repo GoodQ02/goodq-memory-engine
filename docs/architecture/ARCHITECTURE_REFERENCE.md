@@ -4,7 +4,7 @@
 **Status:** ✅ Updated with Dec 14, 2025 Forensic Verification  
 **Purpose:** Definitive reference for data structures, storage patterns, and operational architecture
 
-> **Note:** This document reflects the current operational system. FAISS has been replaced by Qdrant. legacy orchestration orchestration removed. Unified `goodq_core` environment now standard. For full system narrative, see [SYSTEM_ARCHITECTURE.md](SYSTEM_ARCHITECTURE.md).
+> **Note:** This document reflects the current operational system. Qdrant is canonical, FAISS remains optional parity/fallback, and `goodq_core` is the orchestration/base environment while specialized step envs still back several image/audio/video workloads. For full system narrative, see [SYSTEM_ARCHITECTURE.md](SYSTEM_ARCHITECTURE.md).
 
 ---
 
@@ -482,4 +482,3 @@ Invoke-WebRequest http://localhost:6333/collections/goodq_text | ConvertFrom-Jso
 ---
 
 *"The architecture is the map. The code is the territory. Both must be true."*
-

@@ -2,7 +2,12 @@
 
 **Date:** December 4, 2025  
 **For:** Human readers who want to understand what just happened  
-**Status:** ✅ Consolidation Complete
+**Status:** Historical consolidation note
+
+> Historical note: this document describes the image/text consolidation phase.
+> Current bootstrap truth is narrower: `goodq_core` remains the orchestration/base
+> environment, while the supported full pipeline also provisions a specialized
+> step-env pack for workloads that still require isolated dependency boundaries.
 
 ---
 

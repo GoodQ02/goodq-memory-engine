@@ -652,15 +652,15 @@ For comprehensive troubleshooting of specific components:
 - Driver issues → Update to latest NVIDIA drivers
 
 ### Environment & Installation
-- **[CONSOLIDATION_EXPLAINED.md](guides/CONSOLIDATION_EXPLAINED.md)** - Unified goodq_core environment
+- **[CONSOLIDATION_EXPLAINED.md](guides/CONSOLIDATION_EXPLAINED.md)** - Historical consolidation context
 - **[INSTALL.md](guides/general/INSTALL.md)** - Complete installation guide
 - **[LAPTOP_INSTALL_GUIDE.md](guides/general/LAPTOP_INSTALL_GUIDE.md)** - Installation for laptops
 
 **Common Environment Issues:**
-- Missing goodq_core → Unified environment replaces 6 separate envs
-- Import errors → Ensure `conda activate goodq_core` before running
-- Package conflicts → Unified env eliminates most conflicts
-- Old envs still present → Safe to remove (goodq_image_caption, goodq_object_detect, etc.)
+- Missing `goodq_core` → Core orchestration env is unavailable
+- Missing supported step envs → Rerun `python scripts/bootstrap_install.py` to provision the full active env pack
+- Import errors → Ensure the repo bootstrap completed and the targeted env exists before running ad hoc scripts
+- Package conflicts → Keep image/audio/video steps in their supported specialized envs unless a compatibility audit proves a safe merge
 
 ---
 

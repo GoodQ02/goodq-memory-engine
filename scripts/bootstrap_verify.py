@@ -20,6 +20,17 @@ if str(REPO_ROOT) not in sys.path:
 
 
 QDRANT_SERVICE_NAME = "GoodQ_Qdrant"
+SUPPORTED_STEP_ENVS: tuple[tuple[str, str], ...] = (
+    ("goodq_video_scene_detect", "scene detection"),
+    ("goodq_image_caption", "ocr, captioning, exif, clip, dino"),
+    ("goodq_object_detect", "object detection"),
+    ("goodq_face_embed", "face detection and embeddings"),
+    ("goodq_text_embed", "text embeddings"),
+    ("goodq_audio_metadata", "audio metadata and time hints"),
+    ("goodq_audio_transcribe", "audio transcription helpers"),
+    ("goodq_audio_emotion", "audio emotion analysis"),
+    ("goodq_audio_embed", "audio embeddings"),
+)
 
 
 @dataclass
@@ -57,6 +68,53 @@ def _check_required_folders() -> List[CheckResult]:
         status = "pass" if path_obj.exists() else "fail"
         detail = str(path_obj)
         results.append(CheckResult(f"folder:{folder}", status, detail))
+    return results
+
+
+def _detect_conda() -> Path | None:
+    candidates: list[Path] = []
+    env_conda = os.environ.get("CONDA_EXE")
+    if env_conda:
+        candidates.append(Path(env_conda))
+    which_conda = shutil.which("conda")
+    if which_conda:
+        candidates.append(Path(which_conda))
+    user_profile = Path(os.environ.get("USERPROFILE", ""))
+    if user_profile:
+        candidates.extend(
+            [
+                user_profile / "miniconda3" / "Scripts" / "conda.exe",
+                user_profile / "anaconda3" / "Scripts" / "conda.exe",
+            ]
+        )
+    for candidate in candidates:
+        if candidate and candidate.exists():
+            return candidate
+    return None
+
+
+def _check_step_env_pack() -> List[CheckResult]:
+    conda_exe = _detect_conda()
+    if not conda_exe:
+        return [CheckResult("step_env_pack", "warn", "conda not found; unable to verify supported step environments")]
+
+    completed = subprocess.run([str(conda_exe), "env", "list", "--json"], capture_output=True, text=True)
+    if completed.returncode != 0:
+        detail = (completed.stderr or completed.stdout).strip() or "conda env list failed"
+        return [CheckResult("step_env_pack", "warn", detail)]
+
+    try:
+        payload = json.loads(completed.stdout or "{}")
+    except json.JSONDecodeError:
+        return [CheckResult("step_env_pack", "warn", "conda env list returned invalid JSON")]
+
+    present = {Path(env_path).name.lower() for env_path in payload.get("envs", [])}
+    results: List[CheckResult] = []
+    for env_name, desc in SUPPORTED_STEP_ENVS:
+        if env_name.lower() in present:
+            results.append(CheckResult(f"step_env:{env_name}", "pass", f"present ({desc})"))
+        else:
+            results.append(CheckResult(f"step_env:{env_name}", "fail", f"missing ({desc})"))
     return results
 
 
@@ -258,6 +316,7 @@ def build_report() -> Dict[str, Any]:
     checks.append(_check_ffmpeg())
     checks.append(_check_pdftotext(cfg))
     checks.append(_check_wsl_flag())
+    checks.extend(_check_step_env_pack())
     checks.extend(_check_env_resolution(cfg))
 
     statuses = [entry.status for entry in checks]

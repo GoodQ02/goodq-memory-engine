@@ -303,9 +303,9 @@ step_plan = [
     ("goodq_audio_metadata", "audio_time_hints"),        # Temporal markers
     ("goodq_audio_metadata", "audio_music_events"),      # Music detection
     ("goodq_text_embed", "text_embed"),                  # Sentence embeddings
-    ("goodq_sentiment", "sentiment"),                    # Sentiment analysis
-    ("goodq_emotion_classify", "emotion_classify"),      # Text emotion
-    ("goodq_emotion_classify", "tagger")                 # Taxonomy tags
+    ("goodq_core", "sentiment"),                         # Sentiment analysis
+    ("goodq_core", "emotion_classify"),                 # Text emotion
+    ("goodq_core", "tagger")                            # Taxonomy tags
 ]
 ```
 
@@ -321,9 +321,9 @@ step_plan = [
     ("goodq_image_caption", "image_embed_dino"),         # DINOv2 embeddings
     ("goodq_image_caption", "image_embed_clip"),         # CLIP embeddings
     ("goodq_text_embed", "text_embed"),                  # Text embeddings
-    ("goodq_sentiment", "sentiment"),                    # Sentiment
-    ("goodq_emotion_classify", "emotion_classify"),      # Emotion
-    ("goodq_emotion_classify", "tagger")                 # Tags
+    ("goodq_core", "sentiment"),                         # Sentiment
+    ("goodq_core", "emotion_classify"),                 # Emotion
+    ("goodq_core", "tagger")                            # Tags
 ]
 ```
 

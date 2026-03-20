@@ -34,6 +34,7 @@ WINGET_FFMPEG_ID = "Gyan.FFmpeg.Essentials"
 WINGET_NSSM_ID = "NSSM.NSSM"
 CHOCO_FFMPEG_PACKAGE = "ffmpeg"
 CHOCO_NSSM_PACKAGE = "nssm"
+STEP_ENV_PYTHON = "3.10"
 
 
 @dataclass
@@ -61,6 +62,28 @@ class BootstrapContext:
     enable_wsl_audio: bool
     wsl_distro: str
     profile: CapabilityProfile
+    install_step_envs: bool
+
+
+@dataclass(frozen=True)
+class StepEnvSpec:
+    name: str
+    req_rel_path: str
+    description: str
+    gpu_torch: bool = False
+
+
+SUPPORTED_STEP_ENVS: tuple[StepEnvSpec, ...] = (
+    StepEnvSpec("goodq_video_scene_detect", "envs/video_scene_detect/requirements.txt", "scene detection", gpu_torch=True),
+    StepEnvSpec("goodq_image_caption", "envs/image_caption/requirements.txt", "ocr, captioning, exif, clip, dino", gpu_torch=True),
+    StepEnvSpec("goodq_object_detect", "envs/object_detect/requirements.txt", "object detection", gpu_torch=True),
+    StepEnvSpec("goodq_face_embed", "envs/face_embed/requirements.txt", "face detection and embeddings", gpu_torch=True),
+    StepEnvSpec("goodq_text_embed", "envs/text_embed/requirements.txt", "text embeddings", gpu_torch=True),
+    StepEnvSpec("goodq_audio_metadata", "envs/audio_metadata/requirements.txt", "audio metadata and time hints"),
+    StepEnvSpec("goodq_audio_transcribe", "envs/audio_transcribe/requirements.txt", "audio transcription helpers", gpu_torch=True),
+    StepEnvSpec("goodq_audio_emotion", "envs/audio_emotion/requirements.txt", "audio emotion analysis", gpu_torch=True),
+    StepEnvSpec("goodq_audio_embed", "envs/audio_embed/requirements.txt", "audio embeddings", gpu_torch=True),
+)
 
 
 def _print(msg: str) -> None:
@@ -298,20 +321,155 @@ def _accept_conda_tos(conda_exe: Path, *, assume_yes: bool) -> None:
     _print("[OK] Accepted required Conda channel Terms of Service")
 
 
-def ensure_conda_env(conda_exe: Path, repo_root: Path, env_file: Path, *, assume_yes: bool) -> None:
-    if conda_env_exists(conda_exe, ENV_NAME):
-        _print(f"[INFO] Updating existing Conda environment: {ENV_NAME}")
-        completed = _run([str(conda_exe), "env", "update", "-n", ENV_NAME, "-f", str(env_file)], cwd=repo_root)
-    else:
-        _print(f"[INFO] Creating Conda environment from {env_file.name}")
-        completed = _run([str(conda_exe), "env", "create", "-f", str(env_file)], cwd=repo_root)
+def _run_conda_with_tos_retry(
+    conda_exe: Path,
+    cmd: list[str],
+    *,
+    repo_root: Path,
+    assume_yes: bool,
+    capture: bool = True,
+) -> subprocess.CompletedProcess[str]:
+    completed = _run(cmd, cwd=repo_root, capture=capture)
     if completed.returncode != 0:
         detail = (completed.stderr or completed.stdout).strip() or "conda environment command failed"
         if _is_conda_tos_block(detail):
             _accept_conda_tos(conda_exe, assume_yes=assume_yes)
-            ensure_conda_env(conda_exe, repo_root, env_file, assume_yes=assume_yes)
-            return
+            completed = _run(cmd, cwd=repo_root, capture=capture)
+        if completed.returncode != 0:
+            detail = (completed.stderr or completed.stdout).strip() or "conda environment command failed"
+            raise RuntimeError(detail)
+    return completed
+
+
+def ensure_conda_env(conda_exe: Path, repo_root: Path, env_file: Path, *, assume_yes: bool) -> None:
+    if conda_env_exists(conda_exe, ENV_NAME):
+        _print(f"[INFO] Updating existing Conda environment: {ENV_NAME}")
+        _run_conda_with_tos_retry(
+            conda_exe,
+            [str(conda_exe), "env", "update", "-n", ENV_NAME, "-f", str(env_file)],
+            repo_root=repo_root,
+            assume_yes=assume_yes,
+        )
+    else:
+        _print(f"[INFO] Creating Conda environment from {env_file.name}")
+        _run_conda_with_tos_retry(
+            conda_exe,
+            [str(conda_exe), "env", "create", "-f", str(env_file)],
+            repo_root=repo_root,
+            assume_yes=assume_yes,
+        )
+
+
+def _step_env_install_env() -> dict[str, str]:
+    env = os.environ.copy()
+    env["PYTHONNOUSERSITE"] = "1"
+    env["PIP_NO_CACHE_DIR"] = "1"
+    env["PIP_DISABLE_PIP_VERSION_CHECK"] = "1"
+    return env
+
+
+def ensure_step_env(conda_exe: Path, repo_root: Path, spec: StepEnvSpec, *, assume_yes: bool) -> None:
+    req_path = repo_root / spec.req_rel_path
+    if not req_path.exists():
+        raise RuntimeError(f"Missing requirements file for {spec.name}: {req_path}")
+
+    if conda_env_exists(conda_exe, spec.name):
+        _print(f"[INFO] Refreshing supported step env: {spec.name} ({spec.description})")
+    else:
+        _print(f"[INFO] Creating supported step env: {spec.name} ({spec.description})")
+        _run_conda_with_tos_retry(
+            conda_exe,
+            [str(conda_exe), "create", "-y", "-n", spec.name, f"python={STEP_ENV_PYTHON}", "pip"],
+            repo_root=repo_root,
+            assume_yes=assume_yes,
+        )
+
+    pip_env = _step_env_install_env()
+    upgrade = _run(
+        [str(conda_exe), "run", "-n", spec.name, "python", "-m", "pip", "install", "--upgrade", "pip", "--no-cache-dir", "--no-user", "--isolated"],
+        cwd=repo_root,
+        env=pip_env,
+    )
+    if upgrade.returncode != 0:
+        detail = (upgrade.stderr or upgrade.stdout).strip() or f"pip upgrade failed for {spec.name}"
         raise RuntimeError(detail)
+
+    install = _run(
+        [
+            str(conda_exe),
+            "run",
+            "-n",
+            spec.name,
+            "python",
+            "-m",
+            "pip",
+            "install",
+            "-r",
+            str(req_path),
+            "--no-cache-dir",
+            "--no-user",
+            "--isolated",
+            "--upgrade-strategy",
+            "only-if-needed",
+        ],
+        cwd=repo_root,
+        env=pip_env,
+    )
+    if install.returncode != 0:
+        detail = (install.stderr or install.stdout).strip() or f"requirements install failed for {spec.name}"
+        raise RuntimeError(detail)
+
+
+def _upgrade_step_env_gpu_stack(conda_exe: Path, repo_root: Path, spec: StepEnvSpec) -> None:
+    pip_env = _step_env_install_env()
+    uninstall = _run(
+        [str(conda_exe), "run", "-n", spec.name, "python", "-m", "pip", "uninstall", "-y", "torch", "torchvision", "torchaudio"],
+        cwd=repo_root,
+        env=pip_env,
+    )
+    if uninstall.returncode != 0:
+        detail = (uninstall.stderr or uninstall.stdout).strip()
+        if detail and "skipping torch as it is not installed" not in detail.lower():
+            raise RuntimeError(detail)
+
+    install = _run(
+        [
+            str(conda_exe),
+            "run",
+            "-n",
+            spec.name,
+            "python",
+            "-m",
+            "pip",
+            "install",
+            "--no-cache-dir",
+            "--no-user",
+            "--isolated",
+            "torch==2.3.1+cu121",
+            "torchvision==0.18.1+cu121",
+            "torchaudio==2.3.1",
+            "--extra-index-url",
+            "https://download.pytorch.org/whl/cu121",
+        ],
+        cwd=repo_root,
+        env=pip_env,
+    )
+    if install.returncode != 0:
+        detail = (install.stderr or install.stdout).strip() or f"GPU torch install failed for {spec.name}"
+        raise RuntimeError(detail)
+
+
+def ensure_supported_step_envs(ctx: BootstrapContext, *, assume_yes: bool) -> None:
+    if not ctx.install_step_envs:
+        _print("[WARN] Step environment pack skipped. Full pipeline capability is not guaranteed.")
+        return
+
+    _print("[INFO] Provisioning supported step environment pack for full pipeline capability")
+    for spec in SUPPORTED_STEP_ENVS:
+        ensure_step_env(ctx.conda_exe, ctx.repo_root, spec, assume_yes=assume_yes)
+        if ctx.enable_gpu and spec.gpu_torch:
+            _print(f"[INFO] Upgrading {spec.name} to the CUDA-backed torch stack")
+            _upgrade_step_env_gpu_stack(ctx.conda_exe, ctx.repo_root, spec)
 
 
 def env_python(conda_exe: Path, repo_root: Path, code: str) -> subprocess.CompletedProcess[str]:
@@ -645,6 +803,11 @@ def collect_context(args: argparse.Namespace) -> BootstrapContext:
     enable_wsl_audio = args.enable_wsl_audio if args.enable_wsl_audio is not None else prompt_bool(
         "Enable WSL audio acceleration", wsl_available, assume_defaults
     )
+    install_step_envs = prompt_bool(
+        "Install the supported step environment pack for full pipeline capability",
+        True,
+        assume_defaults,
+    )
 
     if enable_gpu and not gpu_available:
         _print("[WARN] GPU acceleration requested, but no NVIDIA GPU was detected. Falling back to BASELINE.")
@@ -676,6 +839,7 @@ def collect_context(args: argparse.Namespace) -> BootstrapContext:
         enable_wsl_audio=enable_wsl_audio,
         wsl_distro=args.wsl_distro or detected_distro or DEFAULT_WSL_DISTRO,
         profile=profile,
+        install_step_envs=install_step_envs,
     )
 
 
@@ -694,8 +858,10 @@ def print_inspection(ctx: BootstrapContext) -> None:
     _print(f"profile          : {ctx.profile.profile}")
     _print(f"enable_gpu       : {ctx.enable_gpu}")
     _print(f"enable_wsl_audio : {ctx.enable_wsl_audio}")
+    _print(f"install_step_envs: {ctx.install_step_envs}")
     _print(f"environment_spec : {ctx.environment_yml.name}")
     _print(f"data_root        : {ctx.data_root}")
+    _print("step_env_pack    : " + ", ".join(spec.name for spec in SUPPORTED_STEP_ENVS))
     if not disk_ok:
         _print(f"[WARN] Recommended free space is at least {MIN_FREE_SPACE_GB} GB.")
 
@@ -805,6 +971,7 @@ def main() -> int:
     if not args.verify_only:
         try:
             ensure_conda_env(ctx.conda_exe, ctx.repo_root, ctx.environment_yml, assume_yes=args.yes)
+            ensure_supported_step_envs(ctx, assume_yes=args.yes)
             prepare_local_files(ctx)
         except Exception as exc:  # noqa: BLE001
             return _fail(f"Bootstrap preparation failed: {exc}")

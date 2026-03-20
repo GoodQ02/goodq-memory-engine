@@ -123,8 +123,10 @@ cd goodq4all
 python scripts/bootstrap_install.py
 ```
 
-The bootstrap creates or updates the `goodq_core` environment, writes local-only
-overrides when missing, and checks canonical launcher prerequisites.
+The bootstrap creates or updates the `goodq_core` orchestration environment,
+provisions the supported specialized step-env pack needed for full image/audio/video
+capability, writes local-only overrides when missing, and checks canonical launcher
+prerequisites.
 
 ### 3. Run Bootstrap Validation
 

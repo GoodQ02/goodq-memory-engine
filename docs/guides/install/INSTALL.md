@@ -14,9 +14,10 @@ For a fresh Windows machine, use the bootstrap installer first:
 python scripts/bootstrap_install.py
 ```
 
-That path creates or updates the `goodq_core` environment, writes local-only
-overrides when missing, performs lightweight verification, and launches the
-canonical launcher surface.
+That path creates or updates the `goodq_core` orchestration environment,
+provisions the supported specialized step-env pack required by the active
+pipeline, writes local-only overrides when missing, performs lightweight
+verification, and launches the canonical launcher surface.
 
 ## Performance Profiles
 

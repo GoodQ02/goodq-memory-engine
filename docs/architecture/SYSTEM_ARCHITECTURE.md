@@ -71,11 +71,11 @@ GoodQ4All is a **local, GPU-accelerated multimodal AI pipeline** that processes 
 - Parallel-friendly architecture
 - Verified: 30 scenes processed Dec 14, 2025
 
-### 2. Unified Environment (Runtime-Validated)
-- Single `goodq_core` conda environment (Python 3.10)
-- All vision, text, and orchestration models
-- Replaced 6 separate environments (30GB disk savings)
-- GPU sharing: Windows (vision) + WSL2 (audio) = 85% util stable
+### 2. Hybrid Environment Model (Runtime-Validated)
+- `goodq_core` remains the orchestration/base environment (Python 3.10)
+- Specialized Windows step envs still back image, audio, and scene-detect workloads with unresolved dependency boundaries
+- Bootstrap now provisions the supported step-env pack in one shot
+- GPU sharing: Windows (specialized vision/audio envs) + WSL2 (audio acceleration when enabled)
 
 ### 3. Dual Audio Architecture (Runtime-Validated)
 Current contract:
@@ -170,7 +170,7 @@ Input Video (dropped in import_inbox)
     |
     +--> Per-Scene Loop (for each of 30 scenes):
         |
-        +--> [OK] Frame Processing (Windows, goodq_core env)
+        +--> [OK] Frame Processing (Windows, specialized step envs)
         |   +--> Extract keyframe -> logs/scene_ingest/<video>/video/scene_XXXX.jpg
         |   +--> OCR (Tesseract) -> 'ocr_text' field
         |   +--> Caption (BLIP2) -> 'caption' field
@@ -217,7 +217,7 @@ Input Video (dropped in import_inbox)
 
 ## Component Details (Dec 14, 2025)
 
-### 1. Video Pipeline (Windows - goodq_core environment)
+### 1. Video Pipeline (Windows - orchestration + specialized step envs)
 
 **Responsibility:** Extract and analyze visual content per scene
 
@@ -228,22 +228,22 @@ Input Video (dropped in import_inbox)
   - Output: 30 scenes for 1hr video (verified)
   - Artifacts: Scene manifests with timestamps
 
-- **OCR** (Tesseract via goodq_core)
+- **OCR** (Tesseract via `goodq_image_caption`)
   - Text extraction from keyframes
   - Multi-language support
   - Output: 'ocr_text' field
 
-- **Image Captioning** (BLIP2 via goodq_core)
+- **Image Captioning** (BLIP2 via `goodq_image_caption`)
   - Natural language descriptions
   - Scene understanding
   - Output: 'caption' field
 
-- **Object Detection** (YOLOv8 via goodq_core)
+- **Object Detection** (YOLOv8 via `goodq_object_detect`)
   - 80 COCO classes
   - Bounding boxes and confidence
   - Output: 'objects' field (verified Dec 13-14)
 
-- **Face Recognition** (face_recognition via goodq_core)
+- **Face Recognition** (face_recognition / facenet-pytorch via `goodq_face_embed`)
   - Face detection and alignment
   - 128-d embedding vectors
   - Known face matching
@@ -742,7 +742,7 @@ pwsh scripts/benchmark_pipeline.ps1 -InputDir test_videos -Iterations 5
 ### Optimization Strategies
 1. **Scene-first architecture** - 30 scenes = parallel-friendly
 2. **WSL2 audio preload** - Models cached in daemon (PID 177)
-3. **Unified environment** - No env switching overhead
+3. **Hybrid env pack** - Orchestration stays in `goodq_core`; specialized steps keep their verified dependency boundaries
 4. **GPU sharing** - Windows + WSL2 concurrent = 85% stable
 
 ---
@@ -837,7 +837,7 @@ GoodQ4All is a local multimodal pipeline with profile-gated acceleration and art
 
 **Key Achievements:**
 - [OK] Scene-first processing (30 scenes verified)
-- [OK] Unified environment (goodq_core, 30GB savings)
+- [OK] Hybrid Windows env model (`goodq_core` + supported step-env pack)
 - [OK] Dual audio architecture (Windows-local default with optional WSL2 acceleration)
 - [OK] Cross-modal entity extraction operational
 - [OK] Knowledge graph real-time insertion confirmed

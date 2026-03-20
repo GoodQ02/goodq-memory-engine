@@ -2264,12 +2264,12 @@ def _process_frame(
         if isinstance(result, dict):
             item.update(result)
 
-    merge('goodq_core', 'image_ocr')
-    merge('goodq_core', 'image_caption')
-    merge('goodq_core', 'object_detect')
-    merge('goodq_core', 'face_embed')
-    merge('goodq_core', 'image_embed_dino')
-    merge('goodq_core', 'image_embed_clip')
+    merge('goodq_image_caption', 'image_ocr')
+    merge('goodq_image_caption', 'image_caption')
+    merge('goodq_object_detect', 'object_detect')
+    merge('goodq_face_embed', 'face_embed')
+    merge('goodq_image_caption', 'image_embed_dino')
+    merge('goodq_image_caption', 'image_embed_clip')
     merge('goodq_core', 'tagger')
     canonicalize_taxonomy(item)
 
@@ -2295,7 +2295,7 @@ def _process_frame(
             'locations': item.get('locations'),
             'scene': item.get('scene'),
         }
-        text_embed_result = _run_step('goodq_core', 'text_embed', text_payload, cfg_json)
+        text_embed_result = _run_step('goodq_text_embed', 'text_embed', text_payload, cfg_json)
         if isinstance(text_embed_result, dict):
             frame_text_embed_meta = text_embed_result.get('embedding_meta')
             if isinstance(frame_text_embed_meta, dict):
@@ -2629,7 +2629,7 @@ def _process_audio(
             'speaker_count': item.get('speaker_count'),
             'scene': item.get('scene'),
         }
-        text_embed_result = _run_step('goodq_core', 'text_embed', text_payload, cfg_json)
+        text_embed_result = _run_step('goodq_text_embed', 'text_embed', text_payload, cfg_json)
         if isinstance(text_embed_result, dict):
             audio_text_embed_meta = text_embed_result.get('embedding_meta')
             if isinstance(audio_text_embed_meta, dict):

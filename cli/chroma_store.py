@@ -154,14 +154,14 @@ def main() -> None:
         # Optional: enrich with tags/entities and audio insights for filters
         # Tagger (NER)
         try:
-            res_tag = _run_step('goodq_emotion_classify','tagger', it, cfg)
+            res_tag = _run_step('goodq_core','tagger', it, cfg)
         except Exception:
             res_tag = {}
         tags = res_tag.get('tags') or []
         entities = res_tag.get('entities') or []
         # Sentiment (label only)
         try:
-            res_sent = _run_step('goodq_sentiment','sentiment', it, cfg)
+            res_sent = _run_step('goodq_core','sentiment', it, cfg)
         except Exception:
             res_sent = {}
         sent = None

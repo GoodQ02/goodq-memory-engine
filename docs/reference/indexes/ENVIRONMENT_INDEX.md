@@ -6,6 +6,12 @@
 
 ## Windows Conda Environments (GoodQ4All)
 
+Bootstrap contract:
+
+- `scripts/bootstrap_install.py` provisions `goodq_core` plus the supported
+  specialized step-env pack listed below, so a fresh machine can install the
+  active pipeline in one shot.
+
 ### Orchestration & Core
 
 - `goodq_core` – Primary orchestration environment.

@@ -19,6 +19,9 @@ cd goodq4all
 python scripts/bootstrap_install.py
 ```
 
+This provisions `goodq_core` plus the supported specialized step-env pack for
+full pipeline capability.
+
 ## 3. Validate and Launch
 
 ```powershell

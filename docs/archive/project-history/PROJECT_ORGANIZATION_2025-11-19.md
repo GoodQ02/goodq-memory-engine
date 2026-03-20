@@ -197,4 +197,8 @@ Port 31434 → Ollama Phi4 (Windows service)
 ---
 
 *Generated: 2025-11-19 by GoodQ Organization System*
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: ARCHIVED -->
+<!-- DOC_ARCHIVED_ON: 2026-03-20 -->
+<!-- ARCHIVE / NON-CANONICAL / DO NOT COPY PATHS -->
 

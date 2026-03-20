@@ -43,7 +43,7 @@ python scripts/bootstrap_models.py
 | File | Purpose |
 |------|---------|
 | `configs/model_registry.yaml` | Central registry with all version pins |
-| `LOCKDOWN_STATUS.md` | Current verification status |
+| `docs/archive/status-reports/LOCKDOWN_STATUS.md` | Historical verification snapshot |
 | `configs/model_registry.yaml.bak` | Automatic backup |
 | `logs/model_pin_report.json` | Pin operation report |
 
@@ -229,7 +229,7 @@ python scripts\verify_model_lockdown.py
 ## Related Documentation
 
 - [Full Guide](MODEL_LOCKDOWN.md) - Complete documentation
-- [Status Report](LOCKDOWN_STATUS.md) - Current status
+- [Historical Status Report](../archive/status-reports/LOCKDOWN_STATUS.md) - Archived verification snapshot
 - [System Architecture](../architecture/SYSTEM_ARCHITECTURE.md) - How it fits together
 
 ---

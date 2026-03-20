@@ -174,4 +174,8 @@ GPU configuration is complete and tested. Pipeline can now utilize GPU accelerat
 *Generated: 2025-11-12*
 *GPU: NVIDIA GeForce RTX 4070 Ti SUPER*
 *Environments Configured: 4/5 (80%)*
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: ARCHIVED -->
+<!-- DOC_ARCHIVED_ON: 2026-03-20 -->
+<!-- ARCHIVE / NON-CANONICAL / DO NOT COPY PATHS -->
 

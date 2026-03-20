@@ -322,3 +322,7 @@ The system is ready for installation and testing. Once installed, integration wi
 ---
 
 **Ready to proceed**: Run `INSTALL_WSL2_AUDIO.bat` to begin installation
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: ARCHIVED -->
+<!-- DOC_ARCHIVED_ON: 2026-03-20 -->
+<!-- ARCHIVE / NON-CANONICAL / DO NOT COPY PATHS -->

@@ -64,7 +64,7 @@ if mod == "video":
 - Updated function names to match actual exports
 
 ### 5. Documentation ✅
-**File:** `docs/technical/PHASE5_ACTIVATION_REPORT.md`  
+**Historical File:** `docs/archive/reports/PHASE5_ACTIVATION_REPORT.md`  
 **Change:** Added comprehensive 9,500-word activation analysis report
 
 ---

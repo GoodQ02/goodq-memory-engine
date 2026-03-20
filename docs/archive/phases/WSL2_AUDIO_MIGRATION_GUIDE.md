@@ -432,3 +432,7 @@ Common fixes:
 - Silero VAD: https://github.com/snakers4/silero-vad
 - WSL2: https://docs.microsoft.com/en-us/windows/wsl/
 
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: ARCHIVED -->
+<!-- DOC_ARCHIVED_ON: 2026-03-20 -->
+<!-- ARCHIVE / NON-CANONICAL / DO NOT COPY PATHS -->

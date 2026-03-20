@@ -215,4 +215,8 @@ conda run -n goodq_face_embed python -c "import torch; print(torch.cuda.is_avail
 **Date**: 2025-11-12
 **GPU**: NVIDIA GeForce RTX 4070 Ti SUPER (16 GB)
 **Next**: Run full pipeline test with real video data
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: ARCHIVED -->
+<!-- DOC_ARCHIVED_ON: 2026-03-20 -->
+<!-- ARCHIVE / NON-CANONICAL / DO NOT COPY PATHS -->
 

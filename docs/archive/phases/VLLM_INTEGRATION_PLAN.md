@@ -675,3 +675,7 @@ setInterval(refreshLLMStatus, 5000);
 **Status**: Ready for Phase 0 Testing  
 **Last Updated**: 2025-11-15  
 **Owner**: GoodQ Team  
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: ARCHIVED -->
+<!-- DOC_ARCHIVED_ON: 2026-03-20 -->
+<!-- ARCHIVE / NON-CANONICAL / DO NOT COPY PATHS -->

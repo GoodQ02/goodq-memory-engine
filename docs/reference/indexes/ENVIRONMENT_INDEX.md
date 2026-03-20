@@ -54,7 +54,7 @@
 - Location: `~/goodq_audio/` (WSL2 Ubuntu).
   - `venv/` – Python virtual environment for the WSL audio worker.
   - `setup_cuda_env.sh`, `process.sh`, `process_audio.py` – GPU-accelerated audio processing and environment bootstrap.
-  - Docs: `docs/guides/llm/WSL2_AUDIO_SETUP.md`, `docs/guides/llm/WSL2_AUDIO_MIGRATION_GUIDE.md`, `docs/guides/wsl2/START_HERE_WSL2.md`, `docs/guides/wsl2/WSL2_AUDIO_SUMMARY.md`.
+  - Docs: `docs/guides/llm/WSL2_AUDIO_SETUP.md`, `docs/guides/wsl2/START_HERE_WSL2.md`, `docs/guides/gpu/GPU_LLM_WSL_INDEX.md`.
 
 ### vLLM / LLM Service Stack (WSL2 Ubuntu)
 

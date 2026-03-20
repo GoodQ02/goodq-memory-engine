@@ -76,7 +76,7 @@ Zero Docker dependency achieved!
 1. WSL2_CONSISTENCY_AUDIT_DEC15.md
    - wsl2_audio script inconsistencies found & fixed
 
-2. WSL2_COMPLETE_AUDIT_DEC15.md
+2. docs/archive/audits/WSL2_COMPLETE_AUDIT_DEC15.md
    - Comprehensive WSL2 + services audit
    - All components documented
    - Architecture validated

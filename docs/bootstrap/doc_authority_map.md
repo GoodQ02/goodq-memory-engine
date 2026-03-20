@@ -79,8 +79,8 @@ authority docs listed below, or direct file-level audits when entries drift.
 - `docs/DOCUMENTATION_AUDIT_DEC15_2025.md`
 - `docs/GITHUB_RELEASE_CHECKLIST.md`
 - `docs/GITHUB_RELEASE_READY.md`
-- `docs/OPERATIONAL_STATE_CHECKLIST.md`
-- `docs/PHASE6B_COMPONENT_STATUS.md`
+- `docs/archive/status-reports/OPERATIONAL_STATE_CHECKLIST.md`
+- `docs/archive/status-reports/PHASE6B_COMPONENT_STATUS.md`
 - `docs/PHASE6_MULTIMODAL_FUSION.md`
 - `docs/QDRANT_QUICKREF.md`
 - `docs/QUICK_START.md`
@@ -89,7 +89,7 @@ authority docs listed below, or direct file-level audits when entries drift.
 - `docs/START_HERE.md`
 - `docs/TESTING_GUIDE.md`
 - `docs/TROUBLESHOOTING.md`
-- `docs/WSL2_COMPLETE_AUDIT_DEC15.md`
+- `docs/archive/audits/WSL2_COMPLETE_AUDIT_DEC15.md`
 - `docs/WSL2_SCRIPTS_ADDED.md`
 - `docs/agent-comms/ALL_ISSUES_RESOLVED.md`
 - `docs/agent-comms/CLEANUP_SUMMARY.md`
@@ -133,8 +133,8 @@ authority docs listed below, or direct file-level audits when entries drift.
 - `docs/architecture/MEMORY_STORAGE.md`
 - `docs/architecture/ORGANIZATION_COMPLETE_2025-11-15.md`
 - `docs/architecture/PORT_ARCHITECTURE_ASSESSMENT.md`
-- `docs/architecture/PROJECT_ORGANIZATION_2025-11-19.md`
-- `docs/architecture/PROJECT_ORGANIZATION_PHASE3_DATABASE_CONSOLIDATION.md`
+- `docs/archive/project-history/PROJECT_ORGANIZATION_2025-11-19.md`
+- `docs/archive/project-history/PROJECT_ORGANIZATION_PHASE3_DATABASE_CONSOLIDATION.md`
 - `docs/architecture/SYSTEM_ARCHITECTURE.md`
 - `docs/architecture/diagrams/PIPELINE_FLOW.md`
 - `docs/archive/DEEP_PROJECT_EXPLORATION_2025-12-03.md`
@@ -239,8 +239,8 @@ docs/archive/
 | `docs/GITHUB_RELEASE_READY.md` | D) Experimental | Unclassified supporting document; merge/archive after review. | MERGE |
 | `docs/HANDOFF_BASEMENT_PHASE.md` | A) Canonical | Declared runtime/contract authority document. | KEEP |
 | `docs/README.md` | B) Operational | Current documentation landing page for active surfaces and archive boundaries. | KEEP |
-| `docs/OPERATIONAL_STATE_CHECKLIST.md` | D) Experimental | Unclassified supporting document; merge/archive after review. | MERGE |
-| `docs/PHASE6B_COMPONENT_STATUS.md` | D) Experimental | Unclassified supporting document; merge/archive after review. | MERGE |
+| `docs/archive/status-reports/OPERATIONAL_STATE_CHECKLIST.md` | C) Historical | Archived operational checklist retained for project history only. | KEEP |
+| `docs/archive/status-reports/PHASE6B_COMPONENT_STATUS.md` | C) Historical | Archived Phase 6b component status snapshot retained for history only. | KEEP |
 | `docs/PHASE6_MULTIMODAL_FUSION.md` | A) Canonical | Declared runtime/contract authority document. | KEEP |
 | `docs/QDRANT_QUICKREF.md` | D) Experimental | Unclassified supporting document; merge/archive after review. | MERGE |
 | `docs/QUICK_START.md` | B) Operational | Reference guide with path/profile drift; normalize to canonical contract. | REFRACTOR |
@@ -252,7 +252,7 @@ docs/archive/
 | `docs/SYSTEM_SNAPSHOT.md` | A) Canonical | Declared runtime/contract authority document. | KEEP |
 | `docs/TESTING_GUIDE.md` | B) Operational | Reference guide with path/profile drift; normalize to canonical contract. | REFRACTOR |
 | `docs/TROUBLESHOOTING.md` | B) Operational | Reference guide with path/profile drift; normalize to canonical contract. | REFRACTOR |
-| `docs/WSL2_COMPLETE_AUDIT_DEC15.md` | D) Experimental | Unclassified supporting document; merge/archive after review. | MERGE |
+| `docs/archive/audits/WSL2_COMPLETE_AUDIT_DEC15.md` | C) Historical | Archived WSL2 audit snapshot retained for historical context only. | KEEP |
 | `docs/WSL2_CONSISTENCY_AUDIT_DEC15.md` | D) Experimental | Unclassified supporting document; merge/archive after review. | MERGE |
 | `docs/WSL2_SCRIPTS_ADDED.md` | D) Experimental | Unclassified supporting document; merge/archive after review. | MERGE |
 | `docs/agent-comms/ALL_ISSUES_RESOLVED.md` | D) Experimental | Agent session notes and transient planning artifacts. | ARCHIVE |
@@ -321,8 +321,8 @@ docs/archive/
 | `docs/architecture/ORGANIZATION_COMPLETE_2025-11-15.md` | D) Experimental | Design or implementation note; useful but not primary authority. | MERGE |
 | `docs/architecture/PIPELINES.md` | B) Operational | Architecture/technical reference document. | KEEP |
 | `docs/architecture/PORT_ARCHITECTURE_ASSESSMENT.md` | B) Operational | Architecture/technical reference; align to canonical runtime contracts. | REFRACTOR |
-| `docs/architecture/PROJECT_ORGANIZATION_2025-11-19.md` | B) Operational | Architecture/technical reference; align to canonical runtime contracts. | REFRACTOR |
-| `docs/architecture/PROJECT_ORGANIZATION_PHASE3_DATABASE_CONSOLIDATION.md` | B) Operational | Architecture/technical reference; align to canonical runtime contracts. | REFRACTOR |
+| `docs/archive/project-history/PROJECT_ORGANIZATION_2025-11-19.md` | C) Historical | Archived project-organization snapshot retained for repo history only. | KEEP |
+| `docs/archive/project-history/PROJECT_ORGANIZATION_PHASE3_DATABASE_CONSOLIDATION.md` | C) Historical | Archived database-consolidation organization snapshot retained for repo history only. | KEEP |
 | `docs/architecture/PROJECT_STRUCTURE.md` | B) Operational | Architecture/technical reference document. | KEEP |
 | `docs/architecture/SYSTEM_ARCHITECTURE.md` | A) Canonical | Declared runtime/contract authority document. | KEEP |
 | `docs/architecture/SYSTEM_MAP_v1.md` | B) Operational | Architecture/technical reference document. | KEEP |
@@ -448,9 +448,9 @@ docs/archive/
 | `docs/guides/QDRANT_SETUP.md` | B) Operational | Operator setup/usage guide. | KEEP |
 | `docs/guides/SCENE_OPTIMIZATION_GUIDE.md` | B) Operational | Operator setup/usage guide. | KEEP |
 | `docs/guides/general/API_DEBUG_INSTRUCTIONS.md` | B) Operational | Operator setup/usage guide. | KEEP |
-| `docs/guides/general/COMMAND_CENTER_LIVE.md` | C) Historical | Historical implementation note for a still-supported feature whose backend details moved into the canonical API surface. | KEEP |
-| `docs/guides/general/CONTROL_AGENT_PHASE1.md` | B) Operational | Operator setup/usage guide. | KEEP |
-| `docs/guides/general/CONTROL_AGENT_PHASE3.md` | B) Operational | Operator setup/usage guide. | KEEP |
+| `docs/archive/proof_of_concept/COMMAND_CENTER_LIVE.md` | C) Historical | Archived command-center rollout note from the retired UI/API scaffold. | KEEP |
+| `docs/archive/phases/CONTROL_AGENT_PHASE1.md` | C) Historical | Archived early control-agent phase plan retained for historical context only. | KEEP |
+| `docs/archive/phases/CONTROL_AGENT_PHASE3.md` | C) Historical | Archived control-agent integration plan retained for historical context only. | KEEP |
 | `docs/guides/general/GITHUB_SETUP_GUIDE.md` | B) Operational | Operator setup/usage guide. | KEEP |
 | `docs/guides/general/INSTALL.md` | B) Operational | Operational guide with overlap/drift risk; keep but normalize. | REFRACTOR |
 | `docs/guides/general/LAPTOP_INSTALL_GUIDE.md` | B) Operational | Operational guide with overlap/drift risk; keep but normalize. | REFRACTOR |
@@ -465,7 +465,7 @@ docs/archive/
 | `docs/guides/general/SCRIPTS_GUIDE.md` | B) Operational | Operator setup/usage guide. | KEEP |
 | `docs/guides/general/USER_GUIDE.md` | B) Operational | Operator setup/usage guide. | KEEP |
 | `docs/guides/general/WATCHDOG_QUICKSTART.txt` | B) Operational | Operational guide with overlap/drift risk; keep but normalize. | REFRACTOR |
-| `docs/guides/gpu/GPU_CONFIGURATION_REPORT.md` | B) Operational | Operator setup/usage guide. | KEEP |
+| `docs/archive/reports/GPU_CONFIGURATION_REPORT.md` | C) Historical | Archived GPU configuration report retained for historical context only. | KEEP |
 | `docs/guides/gpu/GPU_DIAGNOSTIC_REPORT.md` | B) Operational | Operator setup/usage guide. | KEEP |
 | `docs/guides/gpu/GPU_FIX_SUMMARY.md` | B) Operational | Operator setup/usage guide. | KEEP |
 | `docs/guides/gpu/GPU_ISOLATION_STRATEGY.md` | B) Operational | Operator setup/usage guide. | KEEP |
@@ -484,11 +484,11 @@ docs/archive/
 | `docs/guides/llm/LLM_INFRASTRUCTURE.md` | B) Operational | Operator setup/usage guide. | KEEP |
 | `docs/guides/llm/LLM_INTEGRATION_ANALYSIS.md` | B) Operational | Operator setup/usage guide. | KEEP |
 | `docs/guides/llm/LLM_INTEGRATION_COMPLETE.md` | B) Operational | Operator setup/usage guide. | KEEP |
-| `docs/guides/llm/PHASE2_WSL2_COMPLETE.md` | B) Operational | Operator setup/usage guide. | KEEP |
-| `docs/guides/llm/PHASE3_LLM_INTEGRATION_COMPLETE.md` | B) Operational | Operator setup/usage guide. | KEEP |
-| `docs/guides/llm/VLLM_INTEGRATION_PLAN.md` | B) Operational | Operator setup/usage guide. | KEEP |
+| `docs/archive/phases/PHASE2_WSL2_COMPLETE.md` | C) Historical | Archived WSL2 completion report retained for historical context only. | KEEP |
+| `docs/archive/phases/PHASE3_LLM_INTEGRATION_COMPLETE.md` | C) Historical | Archived LLM phase completion report retained for historical context only. | KEEP |
+| `docs/archive/phases/VLLM_INTEGRATION_PLAN.md` | C) Historical | Archived vLLM integration plan retained for historical context only. | KEEP |
 | `docs/guides/llm/VLLM_SYSTEMD_SETUP.md` | B) Operational | Operator setup/usage guide. | KEEP |
-| `docs/guides/llm/WSL2_AUDIO_MIGRATION_GUIDE.md` | B) Operational | Operator setup/usage guide. | KEEP |
+| `docs/archive/phases/WSL2_AUDIO_MIGRATION_GUIDE.md` | C) Historical | Archived WSL2 audio migration guide retained for historical context only. | KEEP |
 | `docs/guides/llm/WSL2_AUDIO_SETUP.md` | B) Operational | Operational guide with overlap/drift risk; keep but normalize. | REFRACTOR |
 | `docs/archive/proof_of_concept/ui/UI_ALIGNMENT_AUDIT.md` | C) Historical | Archived UI audit artifact from the retired scaffolded interface. | KEEP |
 | `docs/archive/proof_of_concept/ui/UI_AUDIT_COMPLETE.md` | C) Historical | Archived UI audit artifact from the retired scaffolded interface. | KEEP |
@@ -502,13 +502,13 @@ docs/archive/
 | `docs/guides/watchdog/WATCHDOG_GUIDE.md` | B) Operational | Operator setup/usage guide. | KEEP |
 | `docs/guides/watchdog/WATCHDOG_INDEX.md` | B) Operational | Operator setup/usage guide. | KEEP |
 | `docs/guides/watchdog/WATCHDOG_QUICKREF.md` | B) Operational | Operator setup/usage guide. | KEEP |
-| `docs/guides/watchdog/WATCHDOG_SUMMARY.md` | B) Operational | Operator setup/usage guide. | KEEP |
+| `docs/archive/reports/WATCHDOG_SUMMARY.md` | C) Historical | Archived Watchdog implementation summary retained for historical context only. | KEEP |
 | `docs/guides/wsl2/HF_CLI_LOGIN_GUIDE.md` | B) Operational | Operator setup/usage guide. | KEEP |
 | `docs/guides/wsl2/PIPELINE_UPGRADE.md` | B) Operational | Operator setup/usage guide. | KEEP |
 | `docs/guides/wsl2/QUICK_REFERENCE_WSL2.md` | B) Operational | Operator setup/usage guide. | KEEP |
 | `docs/guides/wsl2/START_HERE_WSL2.md` | B) Operational | Operational guide with overlap/drift risk; keep but normalize. | REFRACTOR |
 | `docs/guides/wsl2/WSL2_AUDIO_FEASIBILITY_ANALYSIS.md` | B) Operational | Operator setup/usage guide. | KEEP |
-| `docs/guides/wsl2/WSL2_AUDIO_SUMMARY.md` | B) Operational | Operator setup/usage guide. | KEEP |
+| `docs/archive/reports/WSL2_AUDIO_SUMMARY.md` | C) Historical | Archived WSL2 audio summary retained for historical context only. | KEEP |
 | `docs/guides/wsl2/WSL2_BENCHMARKS.md` | B) Operational | Operator setup/usage guide. | KEEP |
 | `docs/implementation-reports/PHASE_9.7_COMPLETE_REPORT.md` | C) Historical | Time-bound report/release snapshot content. | ARCHIVE |
 | `docs/implementation-reports/PHASE_9.8_FINAL_ACTIVATION_REPORT.md` | C) Historical | Time-bound report/release snapshot content. | ARCHIVE |
@@ -604,6 +604,7 @@ docs/archive/
 | `docs/releases/GPU_AND_PROCESS_CONTROL_SUMMARY.md` | C) Historical | Release artifact or shipping snapshot (except canonical ship profile). | ARCHIVE |
 | `docs/releases/GPU_QUICK_REF.md` | C) Historical | Release artifact or shipping snapshot (except canonical ship profile). | ARCHIVE |
 | `docs/releases/READY_FOR_LAPTOP.md` | C) Historical | Release artifact or shipping snapshot (except canonical ship profile). | ARCHIVE |
+| `docs/releases/RELEASE_0.1.0.md` | B) Operational | Current public release checkpoint narrative aligned to the active shipping surface. | KEEP |
 | `docs/releases/RELEASE_CHECKPOINT_2026-02-10.md` | C) Historical | Release artifact or shipping snapshot (except canonical ship profile). | ARCHIVE |
 | `docs/releases/RELEASE_NOTES_v1.4.0.md` | C) Historical | Release artifact or shipping snapshot (except canonical ship profile). | ARCHIVE |
 | `docs/releases/SESSION_SUMMARY.md` | C) Historical | Release artifact or shipping snapshot (except canonical ship profile). | ARCHIVE |
@@ -737,14 +738,14 @@ docs/archive/
 | `docs/technical/ISSUE_RESOLUTION_20251012.md` | B) Operational | Architecture/technical reference; align to canonical runtime contracts. | REFRACTOR |
 | `docs/technical/KNOWLEDGE_GRAPH_IMPLEMENTATION.md` | B) Operational | Architecture/technical reference document. | KEEP |
 | `docs/technical/LIB_COMPONENTS.md` | A) Canonical | Declared runtime/contract authority document. | KEEP |
-| `docs/technical/LOCKDOWN_STATUS.md` | B) Operational | Architecture/technical reference; align to canonical runtime contracts. | REFRACTOR |
+| `docs/archive/status-reports/LOCKDOWN_STATUS.md` | C) Historical | Archived lockdown status snapshot retained for historical context only. | KEEP |
 | `docs/technical/LOGGING_AND_RESILIENCE.md` | B) Operational | Architecture/technical reference; align to canonical runtime contracts. | REFRACTOR |
 | `docs/technical/MILESTONE_KNOWLEDGE_GRAPH_INTEGRATION.md` | B) Operational | Architecture/technical reference; align to canonical runtime contracts. | REFRACTOR |
 | `docs/technical/MODEL_HEALTH_DASHBOARD.md` | B) Operational | Architecture/technical reference; align to canonical runtime contracts. | REFRACTOR |
 | `docs/technical/MODEL_LOCKDOWN.md` | B) Operational | Architecture/technical reference; align to canonical runtime contracts. | REFRACTOR |
 | `docs/technical/MODEL_LOCKDOWN_IMPLEMENTATION.md` | B) Operational | Architecture/technical reference document. | KEEP |
 | `docs/technical/MODEL_LOCKDOWN_QUICK_REF.md` | B) Operational | Architecture/technical reference; align to canonical runtime contracts. | REFRACTOR |
-| `docs/technical/PHASE5_ACTIVATION_REPORT.md` | D) Experimental | Design or implementation note; useful but not primary authority. | MERGE |
+| `docs/archive/reports/PHASE5_ACTIVATION_REPORT.md` | C) Historical | Archived Phase 5 activation report retained for historical context only. | KEEP |
 | `docs/technical/PHASE5_FINAL_ACTIVATION_SUMMARY.md` | D) Experimental | Design or implementation note; useful but not primary authority. | MERGE |
 | `docs/technical/PIPELINE_DEEP_DIVE_REPORT.md` | D) Experimental | Design or implementation note; useful but not primary authority. | MERGE |
 | `docs/technical/PIPELINE_DIAGNOSIS_2025-11-11.md` | B) Operational | Architecture/technical reference; align to canonical runtime contracts. | REFRACTOR |
@@ -756,7 +757,7 @@ docs/archive/
 | `docs/technical/VAD_AND_GPU_OPTIMIZATION_COMPLETE.md` | D) Experimental | Design or implementation note; useful but not primary authority. | MERGE |
 | `docs/technical/VAD_IMPLEMENTATION_SUMMARY.md` | D) Experimental | Design or implementation note; useful but not primary authority. | MERGE |
 | `docs/technical/VISION_GPU_OPTIMIZATION.md` | B) Operational | Architecture/technical reference; align to canonical runtime contracts. | REFRACTOR |
-| `docs/technical/VISION_GPU_OPTIMIZATION_REPORT.md` | D) Experimental | Design or implementation note; useful but not primary authority. | MERGE |
+| `docs/archive/reports/VISION_GPU_OPTIMIZATION_REPORT.md` | C) Historical | Archived vision GPU optimization report retained for historical context only. | KEEP |
 | `docs/technical/WORKFLOW_VISUAL_GUIDE.md` | B) Operational | Architecture/technical reference; align to canonical runtime contracts. | REFRACTOR |
 | `docs/technical/knowledge_graph.md` | B) Operational | Architecture/technical reference document. | KEEP |
 | `docs/testing/TEST_RESULTS.md` | B) Operational | Testing and validation runbook. | KEEP |

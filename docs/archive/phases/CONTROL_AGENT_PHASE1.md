@@ -116,4 +116,8 @@ The agent automatically:
 ---
 
 *Built with ❤️ for GoodQ4All by the Control Agent team*
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: ARCHIVED -->
+<!-- DOC_ARCHIVED_ON: 2026-03-20 -->
+<!-- ARCHIVE / NON-CANONICAL / DO NOT COPY PATHS -->
 

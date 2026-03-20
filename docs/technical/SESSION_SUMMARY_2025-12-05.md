@@ -306,7 +306,7 @@ configs/
    - Integration guide
 
 3. **Phase 5 Activation Report**
-   - `docs/technical/PHASE5_ACTIVATION_REPORT.md`
+   - `docs/archive/reports/PHASE5_ACTIVATION_REPORT.md`
    - Deep analysis of video scene detection
    - CUDA migration strategy
    - Risk assessment

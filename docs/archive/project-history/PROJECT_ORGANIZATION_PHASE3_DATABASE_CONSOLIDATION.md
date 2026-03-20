@@ -125,3 +125,7 @@ Remove `<project_root>/data/test_recovery.db` after confirming recovery.db works
 
 ---
 **Documentation**: Added to <project_root>/docs/PROJECT_ORGANIZATION_PHASE3_DATABASE_CONSOLIDATION.md
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: ARCHIVED -->
+<!-- DOC_ARCHIVED_ON: 2026-03-20 -->
+<!-- ARCHIVE / NON-CANONICAL / DO NOT COPY PATHS -->

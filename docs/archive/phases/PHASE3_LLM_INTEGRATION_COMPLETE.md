@@ -295,4 +295,8 @@ Phase 3 implementation is **COMPLETE and TESTED**. All LLM-powered features are 
 
 **Total Lines of Code Added:** ~800 lines  
 **Test Coverage:** 100% of new functionality
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: ARCHIVED -->
+<!-- DOC_ARCHIVED_ON: 2026-03-20 -->
+<!-- ARCHIVE / NON-CANONICAL / DO NOT COPY PATHS -->
 

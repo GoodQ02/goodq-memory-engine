@@ -171,7 +171,7 @@ When you run `python scripts/utils/check_watchdog_status.py`, you see:
 
 - **User Guide**: `docs/guides/watchdog/WATCHDOG_GUIDE.md`
 - **Architecture**: `docs/architecture/diagrams/watchdog_flow.md`
-- **Summary**: `docs/guides/watchdog/WATCHDOG_SUMMARY.md`
+- **Historical Summary**: `docs/archive/reports/WATCHDOG_SUMMARY.md`
 - **Changelog**: `docs/guides/watchdog/WATCHDOG_CHANGELOG.md`
 
 ---

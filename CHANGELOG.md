@@ -33,6 +33,9 @@ Reference checkpoint:
 - Large legacy clusters were retired or archived from the active support
   surface, including obsolete UI scaffolding, legacy orchestration surfaces,
   process-manager residue, and raw vLLM direct-start helpers.
+- Second-wave historical docs were quarantined out of the active support
+  surface, with current GPU/LLM/WSL/Watchdog indexes and technical refs
+  retargeted to canonical docs or explicit archive paths.
 - Documentation governance now guards against active drive-root drift,
   corrupted characters, and generated snapshots that overclaim authority.
 

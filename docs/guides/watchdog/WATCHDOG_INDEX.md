@@ -8,7 +8,6 @@
 
 - `docs/guides/watchdog/WATCHDOG_GUIDE.md` – Primary, comprehensive user guide for Watchdog behavior and configuration.
 - `docs/guides/watchdog/WATCHDOG_QUICKREF.md` – Quick reference card for commands and common tasks.
-- `docs/guides/watchdog/WATCHDOG_SUMMARY.md` – High-level implementation and performance summary.
 - `docs/guides/watchdog/WATCHDOG_CHANGELOG.md` – Canonical development and version history.
 - `docs/architecture/diagrams/watchdog_flow.md` – Architecture and flow diagrams for the Watchdog system.
 
@@ -38,3 +37,7 @@ See `docs/guides/watchdog/WATCHDOG_GUIDE.md` and `docs/architecture/diagrams/wat
 - `docs/agent-communications/WATCHDOG_CLEANUP.md` – Agent-focused cleanup summary and active script list as of 2025-10-11.
 
 This document is useful for understanding past cleanup decisions, but `WATCHDOG_GUIDE.md`, `WATCHDOG_QUICKREF.md`, and `WATCHDOG_INDEX.md` should be treated as the current sources of truth for usage.
+
+Historical summary:
+
+- `docs/archive/reports/WATCHDOG_SUMMARY.md` – Archived high-level implementation summary.

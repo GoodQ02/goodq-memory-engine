@@ -35,7 +35,7 @@ A comprehensive model version pinning and asset lockdown system to prevent versi
 |----------|---------|----------|
 | `MODEL_LOCKDOWN.md` | Complete guide | `docs/` |
 | `MODEL_LOCKDOWN_QUICK_REF.md` | Quick reference | `docs/` |
-| `LOCKDOWN_STATUS.md` | Current status report | Root |
+| `docs/archive/status-reports/LOCKDOWN_STATUS.md` | Historical status report | Archive |
 | `MODEL_LOCKDOWN_IMPLEMENTATION.md` | This file | Root |
 
 ### 4. Integration

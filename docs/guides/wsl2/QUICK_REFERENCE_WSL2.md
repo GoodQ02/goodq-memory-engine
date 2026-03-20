@@ -192,7 +192,7 @@ wsl -d Ubuntu -- nvidia-smi -l 1
    - Manual setup steps
    - Troubleshooting
 
-2. **Implementation:** `docs\PHASE2_WSL2_COMPLETE.md`
+2. **Current setup:** `docs\guides\llm\WSL2_AUDIO_SETUP.md`
    - Architecture details
    - Integration guide
    - Testing procedures

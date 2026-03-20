@@ -54,7 +54,7 @@ Agent-facing fix summaries:
 - `docs/GPU_FIX_SUMMARY.md`
 - `docs/PHASE4_EMOTION_DETECTION_FIXES.md`
 - `docs/archive/proof_of_concept/ui/UI_PHASE2_FIXES.md` - Historical UI-fix note for the retired scaffolded web interface.
-- `docs/VISION_GPU_OPTIMIZATION.md` / `docs/VISION_GPU_OPTIMIZATION_REPORT.md` (see also GPU index).
+- `docs/technical/VISION_GPU_OPTIMIZATION.md` (see also `docs/guides/gpu/GPU_LLM_WSL_INDEX.md` for the current GPU/WSL surface).
 
 ### Configuration / Dependencies
 

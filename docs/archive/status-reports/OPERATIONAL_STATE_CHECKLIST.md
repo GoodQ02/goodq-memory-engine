@@ -16,3 +16,7 @@ Checked at:
 - [ ] Safe to ingest? [ ] Yes [ ] No
 
 Notes:
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: ARCHIVED -->
+<!-- DOC_ARCHIVED_ON: 2026-03-20 -->
+<!-- ARCHIVE / NON-CANONICAL / DO NOT COPY PATHS -->

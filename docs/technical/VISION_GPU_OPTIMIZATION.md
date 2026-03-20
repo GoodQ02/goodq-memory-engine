@@ -1,6 +1,6 @@
 # Vision Stack GPU Optimization - Implementation Report
 
-> Role: Canonical implementation report for vision-specific GPU optimization. For overall GPU strategy, see `docs/GPU_OPTIMIZATION_GUIDE.md`; for additional measurements and context, see `docs/VISION_GPU_OPTIMIZATION_REPORT.md`.
+> Role: Canonical implementation report for vision-specific GPU optimization. For overall GPU strategy, see `docs/GPU_OPTIMIZATION_GUIDE.md`; for archived measurements and historical context, see `docs/archive/reports/VISION_GPU_OPTIMIZATION_REPORT.md`.
 
 **Date:** 2025-11-12  
 **Status:** ✅ Ready for Testing

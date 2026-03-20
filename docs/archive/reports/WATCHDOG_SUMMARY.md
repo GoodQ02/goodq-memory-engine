@@ -598,3 +598,7 @@ The GoodQ Watchdog system is **complete, tested, and ready for production use**.
 **Last Updated**: October 7, 2025  
 **Author**: GoodQ Development Team  
 **License**: MIT
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: ARCHIVED -->
+<!-- DOC_ARCHIVED_ON: 2026-03-20 -->
+<!-- ARCHIVE / NON-CANONICAL / DO NOT COPY PATHS -->

@@ -290,3 +290,7 @@ All components are in place:
 *Report Generated: 2025-12-05*  
 *Agent: GitHub Copilot CLI (Codex)*  
 *Project: GoodQ4All Multimodal Ingestion Pipeline*
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: ARCHIVED -->
+<!-- DOC_ARCHIVED_ON: 2026-03-20 -->
+<!-- ARCHIVE / NON-CANONICAL / DO NOT COPY PATHS -->

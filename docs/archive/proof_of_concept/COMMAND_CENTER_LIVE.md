@@ -19,3 +19,7 @@
 - The original 2025 implementation report referred to `api_server.py` as the active backend.
 - The endpoint family survived and moved into the canonical API surface.
 - Keeping the old rollout prose as live guidance made the supported runtime look different from what actually ships.
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: ARCHIVED -->
+<!-- DOC_ARCHIVED_ON: 2026-03-20 -->
+<!-- ARCHIVE / NON-CANONICAL / DO NOT COPY PATHS -->

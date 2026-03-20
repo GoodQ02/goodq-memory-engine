@@ -625,7 +625,7 @@ For comprehensive troubleshooting of specific components:
 
 ### WSL2 Audio System
 - **[START_HERE_WSL2.md](guides/wsl2/START_HERE_WSL2.md)** - Complete WSL2 audio setup and troubleshooting
-- **[WSL2_AUDIO_SUMMARY.md](guides/wsl2/WSL2_AUDIO_SUMMARY.md)** - Architecture and performance details
+- **[WSL2_AUDIO_SETUP.md](guides/llm/WSL2_AUDIO_SETUP.md)** - Current optional WSL2 audio setup
 - **[WSL2_BENCHMARKS.md](guides/wsl2/WSL2_BENCHMARKS.md)** - Performance comparisons
 
 **Common WSL2 Issues:**

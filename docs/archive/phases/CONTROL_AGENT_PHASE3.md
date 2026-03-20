@@ -223,3 +223,7 @@ The Control Agent is designed to be extensible. To add custom recovery strategie
 **Status**: ✅ Production Ready  
 **Last Updated**: 2025-11-16  
 **Version**: 1.0.0
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: ARCHIVED -->
+<!-- DOC_ARCHIVED_ON: 2026-03-20 -->
+<!-- ARCHIVE / NON-CANONICAL / DO NOT COPY PATHS -->

@@ -459,3 +459,7 @@ The **Docker-free design** is fully documented and operational:
 *"Every component documented. Every script synced. Every claim verified."*  
 *"Docker-free. GPU-accelerated. Production-ready."*
 
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: ARCHIVED -->
+<!-- DOC_ARCHIVED_ON: 2026-03-20 -->
+<!-- ARCHIVE / NON-CANONICAL / DO NOT COPY PATHS -->

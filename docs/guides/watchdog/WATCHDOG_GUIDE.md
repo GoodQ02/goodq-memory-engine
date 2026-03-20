@@ -1,6 +1,6 @@
 # GoodQ Watchdog - Automatic File Ingestion
 
-> Role: This is the primary, canonical user guide for the Watchdog automatic ingestion system. For quick commands, see `docs/guides/watchdog/WATCHDOG_QUICKREF.md`; for architecture diagrams, see `docs/architecture/diagrams/watchdog_flow.md`; for a high-level overview, see `docs/guides/watchdog/WATCHDOG_SUMMARY.md`. All other Watchdog docs should be read as supporting or historical context.
+> Role: This is the primary, canonical user guide for the Watchdog automatic ingestion system. For quick commands, see `docs/guides/watchdog/WATCHDOG_QUICKREF.md`; for architecture diagrams, see `docs/architecture/diagrams/watchdog_flow.md`; for historical implementation context, see `docs/archive/reports/WATCHDOG_SUMMARY.md`. All other Watchdog docs should be read as supporting or historical context.
 
 ## Overview
 

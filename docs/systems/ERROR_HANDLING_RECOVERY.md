@@ -305,7 +305,7 @@ From production runs:
 
 - **[Control Agent Guide](../CONTROL_AGENT.md)** - Full Control Agent documentation
 - **[Phase 3 Self-Healing](../archive/phases/PHASE3_SELF_HEALING.md)** - Implementation details
-- **[Config Healing](../guides/general/CONTROL_AGENT_PHASE3.md)** - Config modification strategies
+- **[Control Agent Guide](../CONTROL_AGENT.md)** - Current control-agent behavior and diagnosis boundaries
 - **[Watchdog System](WATCHDOG_SYSTEM.md)** - Automated ingestion with healing integration
 
 ---
@@ -354,4 +354,3 @@ control_agent:
 ---
 
 **The GoodQ4All error handling system is designed to operate unattended for hours, adapting to failures and learning optimal recovery strategies autonomously.**
-

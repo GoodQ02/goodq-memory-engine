@@ -124,3 +124,7 @@ python scripts/bootstrap_models.py
 **Last Updated**: October 6, 2025  
 **Verified By**: Automated verification script  
 **Next Review**: November 6, 2025
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: ARCHIVED -->
+<!-- DOC_ARCHIVED_ON: 2026-03-20 -->
+<!-- ARCHIVE / NON-CANONICAL / DO NOT COPY PATHS -->

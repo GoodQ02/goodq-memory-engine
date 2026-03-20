@@ -322,4 +322,8 @@ All components are:
 **Document Author**: Forensic analysis by GitHub Copilot CLI  
 **Verification Date**: December 15, 2025  
 **System**: Windows 11 + WSL2 Ubuntu, RTX 4070 Ti SUPER, CUDA 12.8
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: ARCHIVED -->
+<!-- DOC_ARCHIVED_ON: 2026-03-20 -->
+<!-- ARCHIVE / NON-CANONICAL / DO NOT COPY PATHS -->
 

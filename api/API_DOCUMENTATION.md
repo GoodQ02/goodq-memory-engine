@@ -9,13 +9,15 @@ deployment notes.
 
 ## Current Runtime Truth
 
-- The canonical API process is launched via `python -m api.server` or the
-  supported launcher surfaces.
+- The canonical API process is launched explicitly via `python -m api.server`
+  or `pwsh .\scripts\start_api.ps1`.
 - The API bind defaults are configuration-driven and currently resolve to
   `127.0.0.1:30000` unless explicit environment overrides are set.
 - `GET /` returns JSON status metadata and links to `/docs` and
   `/openapi.json`.
 - The API process does **not** serve a supported product UI at the root path.
+- `LAUNCH_GOODQ.ps1` is a related runtime helper, but it does not start the API
+  process by default.
 
 ## Use Instead
 

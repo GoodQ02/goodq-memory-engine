@@ -35,8 +35,9 @@ adjacent helper tooling may still evolve between releases.
 
 ### Launch & Control
 
-- `LAUNCH_GOODQ.bat` – Primary launcher (API + Command Center + docs).
-- `LAUNCH_GOODQ.ps1` – PowerShell launcher for the canonical Windows host.
+- `LAUNCH_GOODQ.ps1` – Canonical Windows launcher for health checks, canonical path binding, Qdrant readiness, live log monitoring, and optional direct ingestion via `-StartIngestion`.
+- `LAUNCH_GOODQ.bat` – Batch wrapper around the canonical PowerShell launcher.
+- `python -m api.server` / `scripts/start_api.ps1` – Explicit API start surfaces when the local API is needed.
 - `python -m cli.watchdog` – Start automatic ingestion (Watchdog).
 - `python scripts/utils/check_watchdog_status.py` – Watchdog status utility.
 
@@ -60,9 +61,11 @@ adjacent helper tooling may still evolve between releases.
 
 ### Getting Started & Usage
 
+- `docs/README.md` – Current docs landing page.
 - `docs/guides/install/QUICKSTART.md` – Public quick start.
 - `docs/guides/general/USER_GUIDE.md` – Detailed user guide.
 - `docs/reference/indexes/QUICK_INDEX.md` – Index for quickstart/quickref docs.
+- `docs/reference/API.md` – Current local API reference.
 
 ### Architecture & Status
 

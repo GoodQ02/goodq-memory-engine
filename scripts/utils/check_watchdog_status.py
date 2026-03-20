@@ -63,7 +63,12 @@ def is_watchdog_running():
         try:
             cmdline = proc.info.get('cmdline', [])
             joined = ' '.join(cmdline) if cmdline else ''
-            if joined and ('cli\\watchdog.py' in joined or 'goodq4all.cli.watchdog' in joined):
+            if joined and (
+                'cli\\watchdog.py' in joined
+                or 'goodq4all.cli.watchdog' in joined
+                or '-m cli.watchdog' in joined
+                or ' cli.watchdog' in joined
+            ):
                 return True, proc.info['pid']
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             pass
@@ -120,7 +125,7 @@ def main():
         print(f"  Status: RUNNING (PID: {pid})")
     else:
         print(f"  Status: STOPPED")
-        print(f"  Run START_WATCHDOG.bat to start")
+        print(f"  Run: conda run -n goodq_core python -m cli.watchdog")
     print()
     
     # Load state
@@ -190,7 +195,7 @@ def main():
     
     # Recommendations
     if not is_running and inbox_files:
-        print("\n  [TIP] Tip: You have files waiting. Run START_WATCHDOG.bat to process them.")
+        print("\n  [TIP] Tip: You have files waiting. Run: conda run -n goodq_core python -m cli.watchdog")
     elif is_running and not inbox_files:
         print("\n  [SYMBOL] Watchdog is running and inbox is empty.")
     elif is_running and inbox_files:

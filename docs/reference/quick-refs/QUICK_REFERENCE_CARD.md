@@ -1,231 +1,49 @@
-# goodq4all Quick Reference Card
-**Version Surface**: public branch baseline | **Status**: Operational quick reference | **Location**: `<project_root>\`
-
----
-
-## 🚀 One-Line Launchers
-
-```bash
-# Launch everything (API + Command Center + Docs)
-<project_root>\LAUNCH_GOODQ.bat
-
-# Start watchdog (auto-ingestion)
-<project_root>\START_WATCHDOG.bat
-
-# Stop all services
-<project_root>\STOP_GOODQ.bat
-```
-
----
-
-## 📂 Key Directories
-
-| Location | Purpose |
-|----------|---------|
-| `<project_root>\` | Main codebase (GitHub synced) |
-| `<GOODQ_DATA_ROOT>\GoodQ_Data\` | Databases & exports |
-| `<project_root>\_WORKSPACE\` | Processing workspace |
-| `<GOODQ_DATA_ROOT>\models (See LEGACY_PATHS_DEPRECATED.md)\` | HuggingFace cache |
-| `<project_root>\tools\` | External tools |
-| `<GOODQ_DATA_ROOT>\archive\` | Old versions |
-
----
-
-## 🎬 Quick Commands
-
-### Ingestion
-```bash
-# Manual ingestion
-conda run -n goodq_core python -m goodq4all.cli.run_ingestion <video_path>
-
-# Auto-ingestion (drop files in)
-# → <project_root>\import_inbox\
-```
-
-### Health Checks
-```bash
-# Full system check
-conda run -n goodq_core python scripts\system_readiness_check.py
-
-# Quick health
-conda run -n goodq_core python scripts\quick_health_check.py
-
-# Production status
-conda run -n goodq_core python scripts\check_production_status.py
-```
-
-### Memory/Database
-```bash
-# Diagnostics
-conda run -n goodq_core python -m goodq4all.cli.memory diagnostics
-
-# List scenes
-conda run -n goodq_core python -m goodq4all.cli.memory list-scenes
-
-# Clear (DESTRUCTIVE!)
-conda run -n goodq_core python scripts\clear_databases.py
-```
-
-### Monitoring
-```bash
-# Command center dashboard
-cd <project_root> && pwsh scripts\command_center.ps1
-
-# Watch logs
-Get-Content <GOODQ_DATA_ROOT>\GoodQ_Data\logs\step_runs.jsonl -Tail 20 -Wait
-
-# Watchdog status
-pwsh scripts\watchdog_status.ps1 -Follow
-```
-
----
-
-## 🌐 Web Interfaces
-
-- **API Docs**: http://localhost:30000/docs
-- **API Server**: http://localhost:30000
-- **Retrieve**: http://localhost:30000/retrieve?q=your+query
-
----
-
-## 📊 Status Indicators
-
-| Color | Meaning |
-|-------|---------|
-| 🟢 GREEN | Fully operational |
-| 🟡 YELLOW | Working, minor warnings |
-| 🔴 RED | Needs attention |
-
----
-
-## 🛠️ Common Tasks
-
-### Drop & Process Video
-1. Ensure watchdog is running: `START_WATCHDOG.bat`
-2. Drop video in: `<project_root>\import_inbox\`
-3. Monitor: `pwsh scripts\watchdog_status.ps1 -Follow`
-
-### Manual Processing
-1. Place video anywhere
-2. Run: `conda run -n goodq_core python -m goodq4all.cli.run_ingestion <path>`
-3. Watch Command Center for progress
-
-### Check What's Processed
-```bash
-conda run -n goodq_core python scripts\check_production_status.py
-```
-
-### Search Memories
-```bash
-# Via CLI
-conda run -n goodq_core python -m goodq4all.cli.retrieve "dancing"
-
-# Via API (when running)
-curl "http://localhost:30000/retrieve?q=dancing"
-```
-
----
-
-## 🔧 Troubleshooting
-
-### Import Errors
-```bash
-# Test imports
-conda run -n goodq_core python scripts\test_all_imports.py
-```
-
-### Path Issues
-```bash
-# Verify paths
-conda run -n goodq_core python scripts\test_paths_config.py
-```
-
-### Environment Issues
-```bash
-# Rebuild if needed (takes ~30 min)
-pwsh scripts\prepare_step_envs.ps1
-```
-
-### Database Corruption
-```bash
-# Backup first!
-conda run -n goodq_core python -m goodq4all.cli.memory backup
-
-# Then clear if needed
-conda run -n goodq_core python scripts\clear_databases.py
-```
-
----
-
-## 📚 Documentation
-
-| Document | Purpose |
-|----------|---------|
-| `README.md` | Project overview |
-| `docs/QUICK_START.md` | 5-min setup |
-| `docs/DOCUMENTATION_INDEX.md` | Full doc listing |
-| `PROJECT_STATUS.md` | Current status |
-| `RENAME_SUCCESS_SUMMARY.md` | Recent changes |
-
----
-
-## 🎯 Project Stats
-
-- **Environments**: 22 isolated conda envs
-- **Models**: Locked with commit hashes
-- **Datasets**: 60+ cached datasets
-- **GPU**: CUDA 12.1 support
-- **Storage**: Centralized in <GOODQ_DATA_ROOT>\
-
----
-
-## ⚡ Performance Tips
-
-1. **Use watchdog** for hands-off processing
-2. **Monitor GPU** with Command Center
-3. **Check logs** regularly for issues
-4. **Keep models cached** (already done!)
-5. **Regular backups** of memory.db
-
----
-
-## 🔐 Safety Reminders
-
-- ✅ All data in `<GOODQ_DATA_ROOT>\` (backed up separately)
-- ✅ Old `GoodQ_4_All\` preserved as backup
-- ✅ Git history intact
-- ✅ Environments isolated (no conflicts)
-- ✅ Models pinned (no surprise upgrades)
-
----
-
-## 🆘 Emergency Commands
-
-```bash
-# Stop everything
-<project_root>\STOP_GOODQ.bat
-
-# Kill all Python
-Get-Process python | Stop-Process -Force
-
-# Rollback to old version (if needed)
-cd <project_root>
-
-# Clear port 8000
-netstat -ano | findstr :8000
-taskkill /PID <pid> /F
-```
-
----
-
-## 📞 Quick Links
-
-- **GitHub**: https://github.com/JoesDomingo/Goodq4all
-- **Local**: `<project_root>\`
-- **Data**: `<GOODQ_DATA_ROOT>\GoodQ_Data\`
-
----
-
-**Print this card** | **Bookmark this file** | **Keep handy!**
-
-*Last updated: October 9, 2025 - pre-public quick reference snapshot*
+<!-- DOC_BADGE: OPERATIONAL -->
+<!-- DOC_STATUS: ACTIVE -->
+<!-- DOC_LAST_VERIFIED: 2026-03-19 -->
+
+# GoodQ4All Quick Reference Card
+
+Compact operational quick reference for the current release surface.
+
+## Entry Points
+
+| Surface | Command | Purpose |
+| --- | --- | --- |
+| Safe launcher | `.\LAUNCH_GOODQ.ps1` | Health checks, runtime path binding, live log monitor |
+| Intentional ingestion | `.\LAUNCH_GOODQ.ps1 -StartIngestion` | Start direct ingestion from the configured inbox |
+| API | `python -m api.server` | Start the local API explicitly |
+| API helper | `pwsh .\scripts\start_api.ps1` | Windows wrapper for the local API |
+| Watchdog | `conda run -n goodq_core python -m cli.watchdog` | Start inbox monitoring explicitly |
+| Watchdog status | `python .\scripts\utils\check_watchdog_status.py` | One-time watchdog snapshot |
+
+## Most Useful Checks
+
+| Check | Command |
+| --- | --- |
+| Bootstrap validation | `.\scripts\bootstrap_validate.bat` |
+| System readiness | `python scripts/system_readiness_check.py` |
+| Cache readiness | `python scripts/cache_readiness_check.py` |
+| Docs governance | `python scripts/docs/doc_drift_lint.py` |
+| Test suite | `python -m pytest -q` |
+
+## API Notes
+
+- API root: `http://127.0.0.1:30000/`
+- API docs: `http://127.0.0.1:30000/docs`
+- Status: `http://127.0.0.1:30000/api/status`
+- No supported product UI is currently served by the API process.
+
+## Core Paths
+
+- Inbox: `<GOODQ_DATA_ROOT>\GoodQ_Data\import_inbox\`
+- Processing: `<GOODQ_DATA_ROOT>\GoodQ_Data\processing\`
+- Logs: `<GOODQ_DATA_ROOT>\GoodQ_Data\logs\`
+- Memory DB: `<GOODQ_DATA_ROOT>\GoodQ_Data\memory.db`
+
+## Follow-Up Docs
+
+- Docs landing page: [`docs/README.md`](../../README.md)
+- Launch runbook: [`docs/guides/general/LAUNCH_INSTRUCTIONS.md`](../../guides/general/LAUNCH_INSTRUCTIONS.md)
+- API reference: [`docs/reference/API.md`](../API.md)
+- UI status: [`docs/guides/ui/JUSTIFICATION_UI.md`](../../guides/ui/JUSTIFICATION_UI.md)

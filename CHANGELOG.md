@@ -9,6 +9,7 @@ and related canonical docs.
 
 ## [Unreleased]
 
+- Launch/runtime truthfulness hardening: rewrote the active launch and quick-reference docs around the real safe-mode launcher, explicit API/watchdog entrypoints, current docs landing page, and the no-supported-UI contract; also fixed the watchdog status utility and registry entries to match the canonical `python -m cli.watchdog` surface.
 - UI/API truthfulness hardening: archived the retired scaffolded UI rollout notes under `docs/archive/proof_of_concept/ui/`, replaced `api/API_DOCUMENTATION.md` with a current pointer, and added canonical active docs for the supported API surface and current no-supported-UI status.
 - Documentation governance hardening: `scripts/docs/doc_drift_lint.py` now fails on suspicious control or replacement characters in active docs and on generated snapshot docs that still claim canonical or authoritative status.
 - Bootstrap hardening: the Windows bootstrap now detects Conda Terms of Service blocks explicitly, offers FFmpeg install guidance via available package managers, prefers Ubuntu-like WSL distro names automatically, and attempts service-first Qdrant repair or installation before failing visibly.

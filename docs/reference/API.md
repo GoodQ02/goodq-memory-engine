@@ -8,14 +8,15 @@ This is the current API reference for the supported local GoodQ4All runtime.
 
 ## Runtime Contract
 
-- Launch surface: `python -m api.server`, `LAUNCH_GOODQ.ps1`, or
-  `LAUNCH_GOODQ.bat`
+- Explicit API start: `python -m api.server` or `pwsh .\scripts\start_api.ps1`
+- Related runtime launcher: `LAUNCH_GOODQ.ps1` / `LAUNCH_GOODQ.bat`
 - Default bind: `127.0.0.1:30000` unless explicit environment overrides are set
 - Root endpoint: `GET /` returns JSON status metadata
 - OpenAPI docs: `GET /docs`
 - OpenAPI schema: `GET /openapi.json`
 - Supported surface: API + CLI + watchdog/runtime artifacts
 - No supported product UI is currently served by the API process
+- `LAUNCH_GOODQ` does not start the API process by default
 
 ## Canonical Endpoint Families
 

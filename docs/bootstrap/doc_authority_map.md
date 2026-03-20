@@ -230,7 +230,7 @@ docs/archive/
 | `dependency_matrix.md` | A) Canonical | Declared runtime/contract authority document. | KEEP |
 | `docs/AGENT_CAPABILITIES.md` | D) Experimental | Unclassified supporting document; merge/archive after review. | MERGE |
 | `docs/AUDIT_SUMMARY_QUICK.txt` | D) Experimental | Unclassified supporting document; merge/archive after review. | MERGE |
-| `docs/CHEAT_SHEET.md` | B) Operational | Reference guide with path/profile drift; normalize to canonical contract. | REFRACTOR |
+| `docs/CHEAT_SHEET.md` | B) Operational | Current command-first cheat sheet for the supported runtime surface. | KEEP |
 | `docs/CLI-REFERENCE.md` | A) Canonical | Declared runtime/contract authority document. | KEEP |
 | `docs/CONTROL_AGENT.md` | A) Canonical | Declared runtime/contract authority document. | KEEP |
 | `docs/DEPLOYMENT_SUCCESS_v2.0.0.md` | D) Experimental | Unclassified supporting document; merge/archive after review. | MERGE |
@@ -238,6 +238,7 @@ docs/archive/
 | `docs/GITHUB_RELEASE_CHECKLIST.md` | D) Experimental | Unclassified supporting document; merge/archive after review. | MERGE |
 | `docs/GITHUB_RELEASE_READY.md` | D) Experimental | Unclassified supporting document; merge/archive after review. | MERGE |
 | `docs/HANDOFF_BASEMENT_PHASE.md` | A) Canonical | Declared runtime/contract authority document. | KEEP |
+| `docs/README.md` | B) Operational | Current documentation landing page for active surfaces and archive boundaries. | KEEP |
 | `docs/OPERATIONAL_STATE_CHECKLIST.md` | D) Experimental | Unclassified supporting document; merge/archive after review. | MERGE |
 | `docs/PHASE6B_COMPONENT_STATUS.md` | D) Experimental | Unclassified supporting document; merge/archive after review. | MERGE |
 | `docs/PHASE6_MULTIMODAL_FUSION.md` | A) Canonical | Declared runtime/contract authority document. | KEEP |
@@ -590,13 +591,13 @@ docs/archive/
 | `docs/reference/indexes/AGENT_COMMS_INDEX.md` | B) Operational | Reference/operator quick-access documentation. | KEEP |
 | `docs/reference/indexes/ANALYTICS_INDEX.md` | B) Operational | Reference/operator quick-access documentation. | KEEP |
 | `docs/reference/indexes/CODE_CLEANUP_INDEX.md` | B) Operational | Reference/operator quick-access documentation. | KEEP |
-| `docs/reference/indexes/DOCUMENTATION_INDEX.md` | B) Operational | Reference guide with path/profile drift; normalize to canonical contract. | REFRACTOR |
+| `docs/reference/indexes/DOCUMENTATION_INDEX.md` | B) Operational | Current pointer preserving incoming links to the docs landing and quick-reference surfaces. | KEEP |
 | `docs/reference/indexes/ENVIRONMENT_INDEX.md` | B) Operational | Reference/operator quick-access documentation. | KEEP |
 | `docs/reference/indexes/QUICK_INDEX.md` | B) Operational | Reference/operator quick-access documentation. | KEEP |
 | `docs/reference/indexes/TROUBLESHOOTING_INDEX.md` | B) Operational | Reference/operator quick-access documentation. | KEEP |
 | `docs/reference/quick-refs/CLI_COMMANDS_REFERENCE.md` | B) Operational | Reference guide with path/profile drift; normalize to canonical contract. | REFRACTOR |
 | `docs/reference/quick-refs/QUICK_REFERENCE.md` | B) Operational | Reference guide with path/profile drift; normalize to canonical contract. | REFRACTOR |
-| `docs/reference/quick-refs/QUICK_REFERENCE_CARD.md` | B) Operational | Reference guide with path/profile drift; normalize to canonical contract. | REFRACTOR |
+| `docs/reference/quick-refs/QUICK_REFERENCE_CARD.md` | B) Operational | Compact operational quick reference for the supported runtime surface. | KEEP |
 | `docs/reference/quick-refs/QUICK_REFERENCE_SETTINGS.md` | B) Operational | Reference guide with path/profile drift; normalize to canonical contract. | REFRACTOR |
 | `docs/releases/AUDIO_DIARIZATION_STATUS.md` | C) Historical | Release artifact or shipping snapshot (except canonical ship profile). | ARCHIVE |
 | `docs/releases/DEPLOYMENT_SUMMARY.md` | C) Historical | Release artifact or shipping snapshot (except canonical ship profile). | ARCHIVE |

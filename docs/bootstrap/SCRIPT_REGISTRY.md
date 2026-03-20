@@ -222,7 +222,7 @@ _Generated: 2026-02-15_
 | `scripts/show_kg_insights.py` | Unclear/Obsolete | -*- coding: utf-8 -*- | No | None detected |
 | `scripts/show_phase2_enhancement.py` | Unclear/Obsolete | Utility script for show phase2 enhancement. | No | None detected |
 | `scripts/smoke_phase_a.py` | Runtime Utility | Utility script for smoke phase a. | Manual Review | absolute path operations |
-| `scripts/start_api.ps1` | Unclear/Obsolete | Experimental FastAPI launcher; scaffolded API helper, not part of the canonical bootstrap/runtime path. | No | environment mutation |
+| `scripts/start_api.ps1` | Runtime Utility | Manual PowerShell wrapper for the canonical local `api.server` bind surface. | Yes | environment mutation |
 | `scripts/start_llm_servers.bat` (retired) | Unclear/Obsolete | Historical Windows launcher removed after the older direct-start WSL multi-model chain drifted from the current systemd-backed vLLM contract. | No | absolute path operations |
 | `scripts/start_vllm_servers.bat` | Runtime Utility | GoodQ4All vLLM service startup wrapper for the current systemd-backed primary endpoint. | Yes | None detected |
 | `scripts/status_vllm_servers.bat` | Runtime Utility | GoodQ4All vLLM Server Status Check | Yes | None detected |
@@ -278,7 +278,7 @@ _Generated: 2026-02-15_
 | `scripts/utils/check_scene_results.py` | Unclear/Obsolete | Check database for scene data | No | None detected |
 | `scripts/utils/check_schema.py` | Unclear/Obsolete | Get schema for each table | No | None detected |
 | `scripts/utils/check_tables.py` | Unclear/Obsolete | Get all tables | No | None detected |
-| `scripts/utils/check_watchdog_status.py` | Unclear/Obsolete | GoodQ Watchdog Status Checker | No | absolute path operations |
+| `scripts/utils/check_watchdog_status.py` | Runtime Utility | One-time status snapshot for the canonical watchdog runtime. | Yes | absolute path operations |
 | `scripts/utils/validate_critical_fixes.py` | Unclear/Obsolete | Validate that all critical fixes are working | No | None detected |
 | `scripts/utils/validate_environment_fix.py` | Unclear/Obsolete | Validate that all environment fixes are working | No | None detected |
 | `scripts/utils/validate_models.py` | Unclear/Obsolete | Comprehensive model validation script to ensure all steps produce actual output. | No | absolute path operations |
@@ -423,7 +423,7 @@ _Generated: 2026-02-15_
 | `scripts/setup_wsl2_audio_fast.py` | Unclear/Obsolete | absolute path operations |
 | `scripts/setup_wsl2_audio_userspace.py` | Unclear/Obsolete | absolute path operations |
 | `scripts/smoke_phase_a.py` | Runtime Utility | absolute path operations |
-| `scripts/start_api.ps1` | Unclear/Obsolete | environment mutation |
+| `scripts/start_api.ps1` | Runtime Utility | environment mutation |
 | `scripts/start_llm_servers.bat` (retired) | Unclear/Obsolete | absolute path operations |
 | `scripts/system_readiness_check.py` | Dev Utility | absolute path operations |
 | `scripts/system_status_check.py` | Unclear/Obsolete | absolute path operations |
@@ -450,7 +450,7 @@ _Generated: 2026-02-15_
 | `scripts/utils/check_ingestion_status.py` | Unclear/Obsolete | absolute path operations |
 | `scripts/utils/check_llm_availability.py` | Unclear/Obsolete | absolute path operations; binary/network download |
 | `scripts/utils/check_memory_db.py` | Unclear/Obsolete | absolute path operations |
-| `scripts/utils/check_watchdog_status.py` | Unclear/Obsolete | absolute path operations |
+| `scripts/utils/check_watchdog_status.py` | Runtime Utility | absolute path operations |
 | `scripts/utils/validate_models.py` | Unclear/Obsolete | absolute path operations |
 | `scripts/utils/validate_phase3_integration.py` (retired) | Unclear/Obsolete | absolute path operations |
 | `scripts/utils/validate_pipeline_flow.py` | Unclear/Obsolete | absolute path operations |

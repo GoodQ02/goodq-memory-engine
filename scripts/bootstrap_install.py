@@ -294,8 +294,18 @@ def resolve_environment_spec(repo_root: Path, enable_gpu: bool, gpu_available: b
 def prompt_text(prompt: str, default: str, assume_yes: bool) -> str:
     if assume_yes or not sys.stdin.isatty():
         return default
-    raw = input(f"{prompt} [{default}]: ").strip()
-    return raw or default
+    while True:
+        raw = input(f"{prompt} [{default}]: ").strip()
+        if not raw:
+            return default
+        lowered = raw.lower()
+        if lowered in {"y", "yes"}:
+            _print(f"[INFO] Using default path: {default}")
+            return default
+        if lowered in {"n", "no"}:
+            _print(f"[WARN] Enter a path or press Enter to accept the default: {default}")
+            continue
+        return raw
 
 
 def prompt_bool(prompt: str, default: bool, assume_yes: bool) -> bool:

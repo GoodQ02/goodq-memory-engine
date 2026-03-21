@@ -1,9 +1,13 @@
 from __future__ import annotations
 from typing import Any, Dict, List
 
+import contextlib
+import importlib
 import importlib.util
+import io
 import os
 import logging
+import warnings
 
 logger = logging.getLogger(__name__)
 
@@ -23,10 +27,19 @@ except ImportError:
 
 
 def _face_recognition_stack_available() -> bool:
-    return bool(
-        importlib.util.find_spec("face_recognition")
-        and importlib.util.find_spec("face_recognition_models")
-    )
+    if not importlib.util.find_spec("face_recognition"):
+        return False
+    if not importlib.util.find_spec("face_recognition_models"):
+        return False
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                importlib.import_module("face_recognition_models")
+        return True
+    except Exception as exc:
+        logger.warning("[WARN] face_recognition_models import failed; using facenet-pytorch fallback: %s", exc)
+        return False
 
 
 def face_embed(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:

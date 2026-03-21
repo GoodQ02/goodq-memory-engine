@@ -22,6 +22,19 @@ def test_face_recognition_stack_available_requires_models(monkeypatch):
     assert face_step._face_recognition_stack_available() is False
 
 
+def test_face_recognition_stack_available_false_when_models_import_breaks(monkeypatch):
+    monkeypatch.setattr(face_step.importlib.util, "find_spec", lambda _name: object())
+
+    def _fake_import_module(name: str):
+        if name == "face_recognition_models":
+            raise ModuleNotFoundError("No module named 'pkg_resources'")
+        return object()
+
+    monkeypatch.setattr(face_step.importlib, "import_module", _fake_import_module)
+
+    assert face_step._face_recognition_stack_available() is False
+
+
 def test_face_embed_falls_back_to_facenet_when_dlib_stack_missing(monkeypatch, tmp_path: Path):
     image_path = tmp_path / "frame.jpg"
     image_path.write_bytes(b"fake")

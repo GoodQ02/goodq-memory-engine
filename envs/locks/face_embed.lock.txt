@@ -16,6 +16,7 @@ numpy==1.26.4
 opencv-python-headless==4.10.0.84
 pillow==10.2.0
 requests==2.32.5
+setuptools==80.10.2
 sympy==1.13.1
 torch==2.5.1+cu121
 torchaudio==2.5.1+cu121

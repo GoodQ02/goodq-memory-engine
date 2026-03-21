@@ -16,6 +16,16 @@ _FAISS_ID_NAMESPACE = uuid.UUID("2f7b3122-0d88-592e-8d42-4f7a271fd942")
 _FAISS_ID_MAX = (1 << 63) - 1
 
 
+def _coerce_time(value: Any, default: float) -> float:
+    """Coerce timestamp-like values without treating 0.0 as missing."""
+    if value is None:
+        return float(default)
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return float(default)
+
+
 def to_faiss_id(raw_id: Any) -> int:
     """Map arbitrary IDs to deterministic signed-64-bit-safe FAISS IDs."""
     try:
@@ -310,8 +320,8 @@ def register_scene_bundle(
     audio: Optional[Dict[str, Any]] = None,
     errors: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    scene_start = float(scene.get('start', 0.0) or 0.0)
-    scene_end = float(scene.get('end', scene_start) or scene_start)
+    scene_start = _coerce_time(scene.get('start'), 0.0)
+    scene_end = _coerce_time(scene.get('end'), scene_start)
     scene_duration = max(0.0, scene_end - scene_start)
     scene_index = scene.get('index')
     scene_confidence = scene.get('confidence')
@@ -357,8 +367,8 @@ def register_scene_bundle(
     if isinstance(audio, dict):
         audio_path = audio.get('path')
         audio_hash = compute_file_hash(audio_path)
-        audio_start = float(audio.get('start', scene_start) or scene_start)
-        audio_end = float(audio.get('end', scene_end) or scene_end)
+        audio_start = _coerce_time(audio.get('start'), scene_start)
+        audio_end = _coerce_time(audio.get('end'), scene_end)
         audio_data = audio.get('data') if isinstance(audio.get('data'), dict) else {}
         if isinstance(audio_data, dict):
             audio_meta = {
@@ -453,8 +463,8 @@ def register_scene_bundle(
                     for seg in diarization:
                         if not isinstance(seg, dict):
                             continue
-                        seg_start = float(seg.get('start', audio_start) or audio_start)
-                        seg_end = float(seg.get('end', audio_end) or audio_end)
+                        seg_start = _coerce_time(seg.get('start'), audio_start)
+                        seg_end = _coerce_time(seg.get('end'), audio_end)
                         if not (0 <= seg_start < seg_end):
                             print(f'[WARN] Invalid segment times: start={seg_start}, end={seg_end}. Skipping.')
                             continue

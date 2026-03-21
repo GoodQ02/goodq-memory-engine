@@ -652,6 +652,73 @@ def _extract_speaker_ids(audio_payload: Any) -> List[str]:
     return speaker_ids
 
 
+def _coerce_optional_float(value: Any) -> Optional[float]:
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _offset_timestamped_segments(segments: Any, offset: float) -> Any:
+    if not isinstance(segments, list) or abs(offset) < 1e-9:
+        return segments
+
+    normalized: List[Any] = []
+    for segment in segments:
+        if not isinstance(segment, dict):
+            normalized.append(segment)
+            continue
+        segment_copy = dict(segment)
+        start_val = _coerce_optional_float(segment_copy.get("start"))
+        if start_val is not None:
+            segment_copy["start"] = start_val + offset
+        end_val = _coerce_optional_float(segment_copy.get("end"))
+        if end_val is not None:
+            segment_copy["end"] = end_val + offset
+        if isinstance(segment_copy.get("words"), list):
+            segment_copy["words"] = _offset_timestamped_segments(segment_copy["words"], offset)
+        if isinstance(segment_copy.get("segments"), list):
+            segment_copy["segments"] = _offset_timestamped_segments(segment_copy["segments"], offset)
+        normalized.append(segment_copy)
+    return normalized
+
+
+def _offset_local_audio_result_to_scene(result: Any, scene_start: float) -> Any:
+    """
+    Normalize local transcription output onto the absolute scene timeline.
+
+    The local audio transcription step works on extracted scene chunks, so its
+    segment timestamps are scene-relative by construction. Downstream memory and
+    harmonization logic align transcript and speaker segments against absolute
+    video scene ranges, so translate those local timestamps before they fan out.
+    """
+    if not isinstance(result, dict) or abs(scene_start) < 1e-9:
+        return result
+
+    normalized = dict(result)
+    if isinstance(normalized.get("segments"), list):
+        normalized["segments"] = _offset_timestamped_segments(normalized["segments"], scene_start)
+
+    transcript_meta = normalized.get("transcript_meta")
+    if isinstance(transcript_meta, dict):
+        transcript_meta_copy = dict(transcript_meta)
+        if isinstance(transcript_meta_copy.get("segments"), list):
+            transcript_meta_copy["segments"] = _offset_timestamped_segments(
+                transcript_meta_copy["segments"],
+                scene_start,
+            )
+        if isinstance(transcript_meta_copy.get("chunks"), list):
+            transcript_meta_copy["chunks"] = _offset_timestamped_segments(
+                transcript_meta_copy["chunks"],
+                scene_start,
+            )
+        normalized["transcript_meta"] = transcript_meta_copy
+
+    return normalized
+
+
 def _infer_audio_backend_fields(
     audio_info: Optional[Dict[str, Any]],
     *,
@@ -2525,6 +2592,7 @@ def _process_audio(
             }
             local_result = local_audio_transcribe(local_item, cfg_payload)
             if isinstance(local_result, dict):
+                local_result = _offset_local_audio_result_to_scene(local_result, start)
                 item.update(local_result)
                 item['audio_backend_selected'] = contract_selected
                 item['audio_backend_reason'] = contract_reason

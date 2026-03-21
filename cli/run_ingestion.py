@@ -177,6 +177,31 @@ def _resolve_processing_root(cfg: Dict[str, Any]) -> Path:
     runtime_paths = get_runtime_paths(cfg, "processing", require_canonical=False)
     return Path(runtime_paths["processing"]).resolve()
 
+
+def _parse_step_result_json(
+    raw: str,
+    *,
+    step_name: str,
+    env_name: str,
+    source: str,
+) -> Dict[str, Any]:
+    payload = raw.strip()
+    if not payload:
+        return {}
+    try:
+        parsed = json.loads(payload)
+    except json.JSONDecodeError as exc:
+        preview = payload.splitlines()[0][:200]
+        raise RuntimeError(
+            f"Step {step_name} returned invalid JSON from {source} ({env_name}): "
+            f"{exc.msg} at line {exc.lineno} column {exc.colno}; preview={preview!r}"
+        ) from exc
+    if not isinstance(parsed, dict):
+        raise RuntimeError(
+            f"Step {step_name} returned non-object JSON from {source} ({env_name})"
+        )
+    return parsed
+
 # Populated by CLI options at runtime
 VERBOSE: bool = False
 # Timeout per step in seconds - prevents infinite hangs
@@ -2010,10 +2035,20 @@ def _run_step(
                 )
         
         if out_path.exists():
-            output = out_path.read_text(encoding='utf-8').strip()
-            return json.loads(output) if output else {}
-        stdout = result.stdout.strip()
-        return json.loads(stdout) if stdout else {}
+            output = out_path.read_text(encoding='utf-8')
+            return _parse_step_result_json(
+                output,
+                step_name=step_name,
+                env_name=env_name,
+                source="output.json",
+            )
+        stdout = result.stdout
+        return _parse_step_result_json(
+            stdout,
+            step_name=step_name,
+            env_name=env_name,
+            source="stdout",
+        )
     finally:
         try:
             for child in tmp_dir.iterdir():
@@ -3059,7 +3094,10 @@ def run(
                         typer.echo(f'  [OK] Keyframe processed')
                     except Exception as exc:  # noqa: BLE001
                         frame_error = str(exc)
-                        typer.echo(f'[ERROR] Frame extraction failed for scene {scene_index}: {frame_error}', err=True)
+                        typer.echo(
+                            f'[ERROR] Frame/image processing failed for scene {scene_index}: {frame_error}',
+                            err=True,
+                        )
 
             if skip_audio:
                 if VERBOSE:

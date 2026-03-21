@@ -4,6 +4,7 @@ from steps.common.audio_gpu_optimizer import get_audio_gpu_optimizer
 from steps.common.profile_config import (
     is_baseline,
     log_runtime_profile_state,
+    require_gpu,
     require_wsl_audio,
 )
 
@@ -42,6 +43,9 @@ def _detect_transcription_device() -> Tuple[str, str]:
     because the optimizer stack uses it, but allow CTranslate2 to unlock local
     GPU transcription when torch itself is CPU-only.
     """
+    if is_baseline() and not require_gpu():
+        return "cpu", "profile:baseline_cpu_safe"
+
     try:
         import torch  # type: ignore
 

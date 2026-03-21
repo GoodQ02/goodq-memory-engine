@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import sys
+import types
 import wave
 from pathlib import Path
 
-from steps.audio_transcribe.step import audio_transcribe
+from steps.audio_transcribe.step import _detect_transcription_device, audio_transcribe
 
 
 def test_audio_transcribe_returns_model_unavailable_without_chunk_loop(
@@ -38,3 +40,42 @@ def test_audio_transcribe_returns_model_unavailable_without_chunk_loop(
 
     assert result["transcript"] is None
     assert result["transcript_meta"]["status"] == "model_unavailable"
+    assert result["transcript_meta"]["device"] == "cpu"
+    assert result["transcript_meta"]["device_probe"] == "profile:baseline_cpu_safe"
+
+
+def test_detect_transcription_device_baseline_prefers_cpu(monkeypatch):
+    monkeypatch.setattr("steps.audio_transcribe.step.is_baseline", lambda: True)
+    monkeypatch.setattr("steps.audio_transcribe.step.require_gpu", lambda: False)
+
+    device, probe = _detect_transcription_device()
+
+    assert device == "cpu"
+    assert probe == "profile:baseline_cpu_safe"
+
+
+def test_detect_transcription_device_non_baseline_allows_ctranslate2_probe(monkeypatch):
+    monkeypatch.setattr("steps.audio_transcribe.step.is_baseline", lambda: False)
+    monkeypatch.setattr("steps.audio_transcribe.step.require_gpu", lambda: False)
+
+    fake_torch = types.ModuleType("torch")
+
+    class _FakeCuda:
+        @staticmethod
+        def is_available():
+            return False
+
+    fake_torch.cuda = _FakeCuda()
+    fake_torch.__version__ = "fake"
+
+    fake_ctranslate2 = types.ModuleType("ctranslate2")
+    fake_ctranslate2.__version__ = "fake"
+    fake_ctranslate2.get_cuda_device_count = lambda: 1
+
+    monkeypatch.setitem(sys.modules, "torch", fake_torch)
+    monkeypatch.setitem(sys.modules, "ctranslate2", fake_ctranslate2)
+
+    device, probe = _detect_transcription_device()
+
+    assert device == "cuda"
+    assert probe == "ctranslate2:fake"

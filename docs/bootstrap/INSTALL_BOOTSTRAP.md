@@ -46,6 +46,7 @@ On a normal interactive run, the bootstrap prompts for:
 - whether to install or repair the Windows `GoodQ_Qdrant` service when Qdrant is unavailable
 
 When model prefetch is enabled, bootstrap now streams live progress to the console and retries transient download failures automatically instead of leaving a silent cursor wait.
+It also reports whether Hugging Face / PyAnnote auth was detected from `.env.local` or the current environment without printing any secret values. Accepted Hugging Face aliases are `HF_TOKEN`, `HF_HUB_TOKEN`, `HUGGINGFACE_HUB_TOKEN`, and `HUGGINGFACE_TOKEN`.
 
 Default portable data root:
 

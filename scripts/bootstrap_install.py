@@ -722,6 +722,20 @@ def ensure_model_cache(ctx: BootstrapContext) -> None:
     except json.JSONDecodeError as exc:
         raise RuntimeError(f"bootstrap_models.py wrote invalid JSON report: {exc}") from exc
 
+    env_payload = payload.get("env", {}) if isinstance(payload, dict) else {}
+    hf_auth_present = bool(env_payload.get("hf_auth_present"))
+    pyannote_auth_present = bool(env_payload.get("pyannote_auth_present"))
+    hf_auth_source = str(env_payload.get("hf_auth_source") or "none")
+    pyannote_auth_source = str(env_payload.get("pyannote_auth_source") or "none")
+    if hf_auth_present:
+        _print(f"[INFO] Hugging Face auth detected via {hf_auth_source}")
+    else:
+        _print("[WARN] Hugging Face auth not detected from .env.local or the current environment")
+    if pyannote_auth_present:
+        _print(f"[INFO] PyAnnote auth detected via {pyannote_auth_source}")
+    else:
+        _print("[WARN] PyAnnote auth not detected; gated diarization downloads may be skipped")
+
     for entry in payload.get("results", []):
         if not isinstance(entry, dict) or str(entry.get("status")).lower() != "error":
             continue

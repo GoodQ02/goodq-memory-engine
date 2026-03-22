@@ -13,6 +13,37 @@ def test_transient_download_error_classifier():
     assert not bootstrap_models._is_transient_download_error("401 Client Error: Unauthorized")
 
 
+def test_resolve_auth_tokens_uses_hf_hub_alias(monkeypatch):
+    from scripts import bootstrap_models
+
+    monkeypatch.delenv("HF_TOKEN", raising=False)
+    monkeypatch.setenv("HF_HUB_TOKEN", "hf_test_alias_token")
+    monkeypatch.delenv("PYANNOTE_TOKEN", raising=False)
+
+    auth = bootstrap_models.resolve_auth_tokens()
+
+    assert auth["hf_present"] is True
+    assert auth["hf_source"] == "HF_HUB_TOKEN"
+    assert auth["pyannote_present"] is True
+    assert auth["pyannote_source"] == "HF_HUB_TOKEN"
+    assert auth["hf_token"] == "hf_test_alias_token"
+    assert auth["pyannote_token"] == "hf_test_alias_token"
+
+
+def test_resolve_auth_tokens_ignores_placeholder_values(monkeypatch):
+    from scripts import bootstrap_models
+
+    monkeypatch.setenv("HF_TOKEN", "your_huggingface_token_here")
+    monkeypatch.setenv("PYANNOTE_TOKEN", "your_pyannote_token_here")
+
+    auth = bootstrap_models.resolve_auth_tokens()
+
+    assert auth["hf_present"] is False
+    assert auth["pyannote_present"] is False
+    assert auth["hf_token"] is None
+    assert auth["pyannote_token"] is None
+
+
 def test_snapshot_retries_transient_failure(monkeypatch, tmp_path: Path):
     from scripts import bootstrap_models
 

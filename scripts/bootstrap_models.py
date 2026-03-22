@@ -24,10 +24,59 @@ if _VENDOR_DIR.exists():
 
 DEFAULT_DOWNLOAD_RETRIES = 4
 YOLO_URL = "https://github.com/ultralytics/assets/releases/download/v8.2.0/yolov8n.pt"
+_HF_TOKEN_CANDIDATES = ("HF_TOKEN", "HF_HUB_TOKEN", "HUGGINGFACE_HUB_TOKEN", "HUGGINGFACE_TOKEN")
+_PLACEHOLDER_TOKENS = {
+    "your_huggingface_token_here",
+    "your_pyannote_token_here",
+    "your_token_here",
+    "changeme",
+}
 
 
 def _log(msg: str) -> None:
     print(msg, file=sys.stderr, flush=True)
+
+
+def _clean_token(raw: str | None) -> str | None:
+    if raw is None:
+        return None
+    value = raw.strip().strip('"').strip("'")
+    if not value:
+        return None
+    if value.lower() in _PLACEHOLDER_TOKENS:
+        return None
+    return value
+
+
+def _resolve_env_token(*names: str) -> tuple[str | None, str | None]:
+    for name in names:
+        token = _clean_token(os.environ.get(name))
+        if token:
+            return token, name
+    return None, None
+
+
+def resolve_auth_tokens() -> Dict[str, str | bool | None]:
+    hf_token, hf_source = _resolve_env_token(*_HF_TOKEN_CANDIDATES)
+    pyannote_token, pyannote_source = _resolve_env_token("PYANNOTE_TOKEN")
+    if not pyannote_token:
+        pyannote_token = hf_token
+        pyannote_source = hf_source
+
+    if hf_token:
+        os.environ["HF_TOKEN"] = hf_token
+        os.environ.setdefault("HF_HUB_TOKEN", hf_token)
+    if pyannote_token:
+        os.environ.setdefault("PYANNOTE_TOKEN", pyannote_token)
+
+    return {
+        "hf_token": hf_token,
+        "hf_source": hf_source,
+        "pyannote_token": pyannote_token,
+        "pyannote_source": pyannote_source,
+        "hf_present": bool(hf_token),
+        "pyannote_present": bool(pyannote_token),
+    }
 
 
 def _default_retry_count() -> int:
@@ -237,8 +286,17 @@ def main() -> None:
     models_root = resolve_models_root()
     ensure_env(models_root)
 
-    hf_token = os.environ.get("HF_TOKEN")
-    pyannote_token = os.environ.get("PYANNOTE_TOKEN") or hf_token
+    auth = resolve_auth_tokens()
+    hf_token = auth["hf_token"] if isinstance(auth["hf_token"], str) else None
+    pyannote_token = auth["pyannote_token"] if isinstance(auth["pyannote_token"], str) else None
+    if auth["hf_present"]:
+        _log(f"[bootstrap] Hugging Face auth detected via {auth['hf_source']}")
+    else:
+        _log("[bootstrap] Hugging Face auth not detected in .env.local or environment")
+    if auth["pyannote_present"]:
+        _log(f"[bootstrap] PyAnnote auth detected via {auth['pyannote_source']}")
+    else:
+        _log("[bootstrap] PyAnnote auth not detected; gated diarization downloads may be skipped")
 
     # Load registry for pinned versions
     registry = load_registry(repo_root)
@@ -315,6 +373,10 @@ def main() -> None:
         "env": {
             "HF_HOME": os.environ.get("HF_HOME"),
             "TORCH_HOME": os.environ.get("TORCH_HOME"),
+            "hf_auth_present": bool(auth["hf_present"]),
+            "hf_auth_source": auth["hf_source"],
+            "pyannote_auth_present": bool(auth["pyannote_present"]),
+            "pyannote_auth_source": auth["pyannote_source"],
         },
         "results": results,
     }

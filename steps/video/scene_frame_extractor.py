@@ -9,12 +9,20 @@ import os
 import json
 import logging
 import subprocess
+import tempfile
 import numpy as np
 from pathlib import Path
 
 from steps.common.tool_paths import resolve_ffmpeg
 
 logger = logging.getLogger(__name__)
+
+
+def _is_reusable_frame(path: str) -> bool:
+    try:
+        return os.path.isfile(path) and os.path.getsize(path) > 0
+    except OSError:
+        return False
 
 
 def extract_frame_at_timestamp(
@@ -40,6 +48,19 @@ def extract_frame_at_timestamp(
     """
     try:
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        if _is_reusable_frame(output_path):
+            logger.info("scene_frame_extractor reuse existing frame output=%s timestamp=%s", output_path, timestamp)
+            return True
+
+        suffix = Path(output_path).suffix or ".jpg"
+        temp_handle = tempfile.NamedTemporaryFile(
+            prefix="frame_extract_",
+            suffix=suffix,
+            dir=os.path.dirname(output_path) or None,
+            delete=False,
+        )
+        temp_path = temp_handle.name
+        temp_handle.close()
         
         cmd = [
             ffmpeg_exe,
@@ -48,7 +69,7 @@ def extract_frame_at_timestamp(
             '-vframes', '1',
             '-vf', f'scale={width}:{height}',
             '-y',
-            output_path
+            temp_path
         ]
         
         result = subprocess.run(
@@ -58,7 +79,8 @@ def extract_frame_at_timestamp(
             timeout=30
         )
         
-        if result.returncode == 0 and os.path.exists(output_path):
+        if result.returncode == 0 and _is_reusable_frame(temp_path):
+            os.replace(temp_path, output_path)
             return True
         else:
             logger.warning(f"FFmpeg frame extraction failed at {timestamp}s: {result.stderr}")
@@ -67,6 +89,13 @@ def extract_frame_at_timestamp(
     except Exception as e:
         logger.error(f"Frame extraction error at {timestamp}s: {e}")
         return False
+    finally:
+        temp_path_value = locals().get("temp_path")
+        if isinstance(temp_path_value, str) and os.path.exists(temp_path_value):
+            try:
+                os.remove(temp_path_value)
+            except OSError:
+                pass
 
 
 def extract_frames_uniform(

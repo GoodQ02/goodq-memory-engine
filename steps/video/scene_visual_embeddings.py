@@ -153,7 +153,8 @@ def run_scene_visual_embeddings(item: Dict[str, Any], cfg: Dict[str, Any]) -> Di
             scenes=scenes,
             output_base_dir=os.path.join(processing_dir, 'video'),
             strategy=extraction_strategy,
-            frames_per_scene=frames_per_scene
+            frames_per_scene=frames_per_scene,
+            cfg=cfg,
         )
         frame_paths: List[str] = []
         for _scene_frames in scene_frames.values():

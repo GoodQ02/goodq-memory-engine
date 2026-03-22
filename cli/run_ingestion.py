@@ -207,7 +207,8 @@ VERBOSE: bool = False
 # Timeout per step in seconds - prevents infinite hangs
 # Audio steps (diarize, transcribe) can take 5-10 min for long scenes
 # Image steps should complete in <30s
-STEP_TIMEOUT: Optional[int] = 1800  # 30 minutes max per step
+DEFAULT_STEP_TIMEOUT: int = 1800
+STEP_TIMEOUT: Optional[int] = DEFAULT_STEP_TIMEOUT  # 30 minutes max per step
 MAX_HEALER_RETRIES: int = 3
 _CURRENT_RUN_CONTEXT: Optional[Dict[str, Any]] = None
 _PIPELINE_OBSERVER: Optional[PipelineObserver] = None
@@ -223,6 +224,78 @@ def _control_agent_runtime_enabled() -> bool:
         # Backward-compatible default for direct _run_step() calls in tests/harnesses.
         return True
     return status == 'initialized'
+
+
+def _resolve_step_timeout_value(step_timeout: Optional[int]) -> Optional[int]:
+    if step_timeout is None:
+        return DEFAULT_STEP_TIMEOUT
+    try:
+        parsed = int(step_timeout)
+    except (TypeError, ValueError):
+        return DEFAULT_STEP_TIMEOUT
+    return parsed if parsed > 0 else None
+
+
+_PHASE6_MANIFEST_TOP_LEVEL_KEYS = (
+    'phase6_complete',
+    'phase6_status',
+    'phase6_error',
+    'phase6_vector_commit',
+    'embedding_stats',
+)
+_PHASE6_MANIFEST_SCENE_KEYS = (
+    'clip_id',
+    'clip_dim',
+    'dino_id',
+    'dino_dim',
+    'frame_count',
+    'frame_paths',
+    'representative_frame',
+)
+
+
+def _merge_prior_phase6_manifest_state(
+    new_manifest: Dict[str, Any],
+    existing_manifest: Optional[Dict[str, Any]],
+) -> Dict[str, Any]:
+    if not isinstance(existing_manifest, dict):
+        return new_manifest
+
+    merged = dict(new_manifest)
+    for key in _PHASE6_MANIFEST_TOP_LEVEL_KEYS:
+        if key in existing_manifest and key not in merged:
+            merged[key] = existing_manifest[key]
+
+    new_scenes = merged.get('scenes')
+    old_scenes = existing_manifest.get('scenes')
+    if not isinstance(new_scenes, list) or not isinstance(old_scenes, list):
+        return merged
+
+    prior_by_identity: Dict[tuple[Any, Any], Dict[str, Any]] = {}
+    for scene in old_scenes:
+        if not isinstance(scene, dict):
+            continue
+        identity = (scene.get('scene_id'), scene.get('index'))
+        prior_by_identity[identity] = scene
+
+    preserved_scenes: List[Dict[str, Any]] = []
+    for scene in new_scenes:
+        if not isinstance(scene, dict):
+            preserved_scenes.append(scene)
+            continue
+        identity = (scene.get('scene_id'), scene.get('index'))
+        prior = prior_by_identity.get(identity)
+        if not isinstance(prior, dict):
+            preserved_scenes.append(scene)
+            continue
+        merged_scene = dict(scene)
+        for key in _PHASE6_MANIFEST_SCENE_KEYS:
+            if key in prior and key not in merged_scene:
+                merged_scene[key] = prior[key]
+        preserved_scenes.append(merged_scene)
+
+    merged['scenes'] = preserved_scenes
+    return merged
 
 
 def _observer() -> Optional[PipelineObserver]:
@@ -2792,11 +2865,7 @@ def run(
 ) -> None:
     global VERBOSE, STEP_TIMEOUT, CONTROL_AGENT_AVAILABLE, _CURRENT_RUN_CONTEXT, _PIPELINE_OBSERVER
     VERBOSE = verbose
-    # Ensure step_timeout is an int or None, not an OptionInfo object
-    if hasattr(step_timeout, 'default'):
-        STEP_TIMEOUT = step_timeout.default
-    else:
-        STEP_TIMEOUT = step_timeout if isinstance(step_timeout, (int, type(None))) else None
+    STEP_TIMEOUT = _resolve_step_timeout_value(step_timeout)
 
     base_cfg = load_configs({})
     cfg: Dict[str, Any] = dict(base_cfg) if isinstance(base_cfg, dict) else {}
@@ -3619,10 +3688,22 @@ def run(
                     for s in scene_outputs
                 ]
             }
-            # Phase 5 writes scene manifest into a canonical /video/ directory
             scene_manifest_path = processing_dir / 'video' / 'scene_manifest.json'
             scene_manifest_path.parent.mkdir(parents=True, exist_ok=True)
-            atomic_write_json(scene_manifest_path, scene_manifest)
+            existing_scene_manifest: Optional[Dict[str, Any]] = None
+            if scene_manifest_path.exists():
+                try:
+                    existing_scene_manifest = json.loads(scene_manifest_path.read_text(encoding='utf-8'))
+                except Exception as e:
+                    logger.warning(
+                        "run_ingestion warning context=%s error=%s",
+                        "phase6_manifest_prior_state",
+                        e,
+                    )
+            atomic_write_json(
+                scene_manifest_path,
+                _merge_prior_phase6_manifest_state(scene_manifest, existing_scene_manifest),
+            )
             
             try:
                 # Phase 6a: Scene Visual Embeddings (CLIP + DINO)

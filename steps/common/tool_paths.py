@@ -28,9 +28,29 @@ def resolve_tesseract(cfg: Dict[str, Any]) -> Optional[str]:
     return cfg_get(cfg, 'config.tools.tesseract_exe')
 
 
+def _normalize_executable_hint(raw: Optional[str], *, exe_names: tuple[str, ...]) -> Optional[str]:
+    if not isinstance(raw, str):
+        return None
+    hint = raw.strip().strip('"').strip("'")
+    if not hint:
+        return None
+    candidate = os.path.expandvars(os.path.expanduser(hint))
+    if os.path.isdir(candidate):
+        for name in exe_names:
+            exe_path = os.path.join(candidate, name)
+            if os.path.isfile(exe_path):
+                return exe_path
+        return None
+    return candidate
+
+
 def resolve_ffmpeg(cfg: Dict[str, Any]) -> Optional[str]:
     global _IMAGEIO_FFMPEG_FALLBACK_WARNED
-    configured = cfg_get(cfg, 'config.tools.ffmpeg_exe')
+    exe_names = ('ffmpeg.exe', 'ffmpeg') if os.name == 'nt' else ('ffmpeg', 'ffmpeg.exe')
+    configured = _normalize_executable_hint(
+        cfg_get(cfg, 'config.tools.ffmpeg_exe'),
+        exe_names=exe_names,
+    )
     if configured:
         # Cross-host guard: reject Windows launchers on non-Windows hosts.
         if os.name != 'nt' and configured.lower().endswith(('.exe', '.bat', '.cmd')):

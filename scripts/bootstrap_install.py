@@ -778,9 +778,15 @@ def write_config_local(path: Path, ctx: BootstrapContext) -> None:
 
 
 def resolve_ffmpeg() -> tuple[bool, str]:
-    override = os.environ.get("GOODQ_FFMPEG_EXE", "").strip()
+    override = os.environ.get("GOODQ_FFMPEG_EXE", "").strip().strip('"').strip("'")
     if override:
         override_path = Path(override)
+        if override_path.is_dir():
+            for name in ("ffmpeg.exe", "ffmpeg"):
+                candidate = override_path / name
+                if candidate.exists():
+                    override_path = candidate
+                    break
         if override_path.exists():
             return True, f"GOODQ_FFMPEG_EXE={override_path}"
     ffmpeg_path = shutil.which("ffmpeg")

@@ -938,6 +938,32 @@ def resolve_qdrant_url(conda_exe: Path, repo_root: Path) -> str:
     return lines[-1] if lines else "http://localhost:6333"
 
 
+def resolve_qdrant_runtime_paths(conda_exe: Path, repo_root: Path) -> tuple[str, str]:
+    code = (
+        "import json; "
+        "from steps.common.config_loader import get_runtime_paths, load_configs; "
+        "cfg = load_configs({}); "
+        "paths = get_runtime_paths(cfg, 'qdrant_storage', 'log_dir'); "
+        "print(json.dumps({'qdrant_storage': paths['qdrant_storage'], 'log_dir': paths['log_dir']}))"
+    )
+    completed = env_python(conda_exe, repo_root, code)
+    if completed.returncode != 0:
+        detail = (completed.stderr or completed.stdout).strip() or "unable to resolve Qdrant runtime paths"
+        raise RuntimeError(detail)
+    lines = [line.strip() for line in (completed.stdout or "").splitlines() if line.strip()]
+    if not lines:
+        raise RuntimeError("unable to resolve Qdrant runtime paths")
+    try:
+        payload = json.loads(lines[-1])
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"unable to parse Qdrant runtime paths: {exc}") from exc
+    qdrant_storage = str(payload.get("qdrant_storage") or "").strip()
+    log_dir = str(payload.get("log_dir") or "").strip()
+    if not qdrant_storage or not log_dir:
+        raise RuntimeError("Qdrant runtime paths were incomplete")
+    return qdrant_storage, log_dir
+
+
 def check_qdrant(url: str) -> tuple[bool, str]:
     try:
         with urllib.request.urlopen(f"{url.rstrip('/')}/collections", timeout=5) as response:
@@ -981,19 +1007,56 @@ def _qdrant_repair_instruction(ctx: BootstrapContext) -> str:
     return "\n".join(lines)
 
 
-def _run_qdrant_service_installer(installer: Path) -> subprocess.CompletedProcess[str]:
-    return _run(["cmd.exe", "/c", str(installer), "--non-interactive"], capture=False)
+def _qdrant_installer_env(ctx: BootstrapContext) -> dict[str, str]:
+    env = os.environ.copy()
+    env["GOODQ_CONDA_ENV"] = ENV_NAME
+    env["CONDA_EXE"] = str(ctx.conda_exe)
+    try:
+        qdrant_storage, log_dir = resolve_qdrant_runtime_paths(ctx.conda_exe, ctx.repo_root)
+        env["QDRANT_STORAGE_PATH"] = qdrant_storage
+        env["GOODQ_LOG_DIR"] = log_dir
+    except Exception as exc:  # noqa: BLE001
+        _print(f"[WARN] Unable to pre-resolve Qdrant runtime paths for installer handoff: {exc}")
+    return env
 
 
-def _run_qdrant_service_installer_elevated(installer: Path) -> subprocess.CompletedProcess[str]:
+def _run_qdrant_service_installer(installer: Path, env: dict[str, str]) -> subprocess.CompletedProcess[str]:
+    return _run(["cmd.exe", "/c", str(installer), "--non-interactive"], capture=False, env=env)
+
+
+def _run_qdrant_service_installer_elevated(installer: Path, env: dict[str, str]) -> subprocess.CompletedProcess[str]:
     installer_path = _quote_ps(str(installer))
+    qdrant_storage = _quote_ps(env.get("QDRANT_STORAGE_PATH", ""))
+    log_dir = _quote_ps(env.get("GOODQ_LOG_DIR", ""))
+    conda_exe = _quote_ps(env.get("CONDA_EXE", ""))
+    conda_env = _quote_ps(env.get("GOODQ_CONDA_ENV", ENV_NAME))
+    cmd_script = (
+        f"set \"CONDA_EXE={conda_exe}\" && "
+        f"set \"GOODQ_CONDA_ENV={conda_env}\" && "
+        f"set \"QDRANT_STORAGE_PATH={qdrant_storage}\" && "
+        f"set \"GOODQ_LOG_DIR={log_dir}\" && "
+        f"call \"{installer_path}\" --non-interactive"
+    )
     ps_script = (
         f"$p = Start-Process -FilePath 'cmd.exe' "
-        f"-ArgumentList '/c','\"{installer_path}\" --non-interactive' "
+        f"-ArgumentList '/c','{cmd_script}' "
+        f"-WorkingDirectory '{_quote_ps(str(installer.parent))}' "
         "-Verb RunAs -Wait -PassThru; "
         "exit $p.ExitCode"
     )
-    return _run(["powershell", "-NoProfile", "-Command", ps_script])
+    return _run(["powershell", "-NoProfile", "-Command", ps_script], env=env)
+
+
+def _wait_for_qdrant(url: str, timeout_sec: int = 20) -> tuple[bool, str]:
+    deadline = time.time() + max(timeout_sec, 1)
+    last_detail = "not checked"
+    while time.time() < deadline:
+        ok, detail = check_qdrant(url)
+        if ok:
+            return True, detail
+        last_detail = detail
+        time.sleep(1)
+    return False, last_detail
 
 
 def ensure_qdrant_ready(ctx: BootstrapContext, *, assume_yes: bool) -> bool:
@@ -1025,19 +1088,22 @@ def ensure_qdrant_ready(ctx: BootstrapContext, *, assume_yes: bool) -> bool:
         _print(_qdrant_repair_instruction(ctx))
         return False
 
+    installer_env = _qdrant_installer_env(ctx)
     if _is_admin():
-        completed = _run_qdrant_service_installer(ctx.qdrant_service_installer)
+        completed = _run_qdrant_service_installer(ctx.qdrant_service_installer, installer_env)
     else:
         _print("[INFO] Elevation required to install or repair the Windows Qdrant service.")
-        completed = _run_qdrant_service_installer_elevated(ctx.qdrant_service_installer)
+        completed = _run_qdrant_service_installer_elevated(ctx.qdrant_service_installer, installer_env)
 
     if completed.returncode != 0:
         detail = _completed_output(completed) or "Qdrant service installer exited non-zero"
+        if not _is_admin():
+            detail = f"{detail}. Accept the UAC prompt or run the installer manually as Administrator."
         _print(f"[WARN] Qdrant service installer did not complete successfully: {detail}")
         _print(_qdrant_repair_instruction(ctx))
         return False
 
-    qdrant_ok, qdrant_detail = check_qdrant(qdrant_url)
+    qdrant_ok, qdrant_detail = _wait_for_qdrant(qdrant_url)
     if qdrant_ok:
         _print(f"[OK] qdrant: {qdrant_detail}")
         return True
@@ -1315,8 +1381,9 @@ def main() -> int:
 
     if not args.verify_only and not qdrant_ready:
         return _fail(
-            "Bootstrap completed, but Qdrant is still unavailable. "
-            "Repair the Windows service and rerun the bootstrap or launch step."
+            "Bootstrap core setup completed, but Qdrant service provisioning is still incomplete. "
+            "Accept the elevation prompt or run INSTALL_QDRANT_SERVICE.bat as Administrator, "
+            "then rerun the bootstrap or launch step."
         )
 
     if args.no_launch or args.verify_only:

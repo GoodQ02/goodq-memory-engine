@@ -44,6 +44,8 @@ and related canonical docs.
 - Made `progress.json` truthful for real ingest runs by updating it through scene processing and Phase 6 milestones and marking successful or failed completion explicitly.
 - Changed CLAP audio embedding readiness to report a structured `model_not_cached` unavailable state with a repair hint instead of surfacing a misleading generic Hugging Face-style load failure, and taught bootstrap to optionally prefetch the required local model cache for offline-ready ingest.
 - Model-cache prefetch now streams live console progress and retries transient download failures automatically so bootstrap no longer appears idle during large first-run model downloads.
+- Bootstrap model prefetch now uses `configs/model_registry.yaml` as the actual Hugging Face download manifest, which fixes stale hardcoded model ids such as `pyannote/speaker-diarization@2.1` and ensures required registry entries like PyAnnote segmentation are staged consistently.
+- Bootstrap now hands the canonical Qdrant storage/log paths directly into the service installer and waits briefly for the service to come online after installation, reducing fresh-machine failures across the UAC elevation boundary.
 
 ## [0.1.0] - 2026-03-20
 

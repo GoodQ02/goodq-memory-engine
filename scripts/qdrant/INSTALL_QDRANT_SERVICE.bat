@@ -6,11 +6,18 @@ set "NON_INTERACTIVE=0"
 if /I "%~1"=="--non-interactive" set "NON_INTERACTIVE=1"
 for %%I in ("%~dp0..\\..") do set "REPO_ROOT=%%~fI"
 call "%REPO_ROOT%\scripts\_lib\interpreter_bindings.bat"
+if "%QDRANT_STORAGE_PATH%"=="" goto :resolve_paths
+if "%GOODQ_LOG_DIR%"=="" goto :resolve_paths
+goto :paths_ready
+
+:resolve_paths
 pushd "%REPO_ROOT%"
 for /f "usebackq tokens=1,* delims==" %%A in (`"%CONDA_EXE%" run -n "%GOODQ_CONDA_ENV%" --no-capture-output python -c "from steps.common.config_loader import load_configs, get_runtime_paths; cfg=load_configs({}); paths=get_runtime_paths(cfg, 'qdrant_storage'); print('QDRANT_STORAGE_PATH=' + paths['qdrant_storage']); print('GOODQ_LOG_DIR=' + paths['log_dir'])"`) do (
   if not "%%A"=="" set "%%A=%%B"
 )
 popd
+
+:paths_ready
 if "%QDRANT_STORAGE_PATH%"=="" (
   echo [ERROR] Failed to resolve Qdrant storage path from canonical config.
   exit /b 1

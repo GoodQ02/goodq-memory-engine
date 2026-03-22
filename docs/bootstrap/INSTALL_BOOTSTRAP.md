@@ -119,6 +119,7 @@ Environment selection:
 - both profiles target the same `goodq_core` orchestration environment name
 - bootstrap also provisions the supported specialized step-env pack for image, audio, and video steps that still require isolated dependency boundaries
 - bootstrap can prefetch the required non-gated model cache into the local models root so first ingest stays offline-ready
+- model prefetch now follows `configs/model_registry.yaml` directly, so pinned repo ids and revisions stay aligned without separate hardcoded bootstrap lists
 - the step-env pack is installed from the pinned lock recipes in `envs/locks/` instead of a fresh dependency solve
 - `goodq_face_embed` additionally installs Conda `dlib` first so Windows hosts do not need to compile it from source during bootstrap
 - the bootstrap defaults to `BASELINE`; GPU throughput remains explicit opt-in
@@ -142,6 +143,10 @@ If Qdrant is unavailable, the bootstrap recommends repairing or installing the
 Windows `GoodQ_Qdrant` service first, attempts the existing service installer
 when the operator consents, and mentions the foreground start helper only as a
 manual testing fallback.
+When the installer must cross a UAC elevation boundary, bootstrap now passes the
+already-resolved canonical storage/log paths into the service installer so the
+admin hop does not have to rediscover the Python/Conda runtime before creating
+the service.
 
 If FFmpeg is unavailable, the bootstrap keeps going but prints explicit
 installation guidance:

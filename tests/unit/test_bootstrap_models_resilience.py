@@ -44,6 +44,28 @@ def test_resolve_auth_tokens_ignores_placeholder_values(monkeypatch):
     assert auth["pyannote_token"] is None
 
 
+def test_build_wanted_models_uses_registry_repo_ids():
+    from scripts import bootstrap_models
+
+    registry = {
+        "huggingface_models": {
+            "pyannote_diarization": {
+                "repo_id": "pyannote/speaker-diarization",
+                "revision": "25bcc7e3631933a02af5ee39379797d704aee3f8",
+            },
+            "pyannote_segmentation": {
+                "repo_id": "pyannote/segmentation",
+                "revision": "660b9e20307a2b0cdb400d0f80aadc04a701fc54",
+            },
+        }
+    }
+
+    wanted = bootstrap_models.build_wanted_models(registry)
+
+    assert wanted == ["pyannote/speaker-diarization", "pyannote/segmentation"]
+    assert all("@" not in model_id for model_id in wanted)
+
+
 def test_snapshot_retries_transient_failure(monkeypatch, tmp_path: Path):
     from scripts import bootstrap_models
 

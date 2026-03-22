@@ -248,6 +248,38 @@ def load_registry(repo_root: Path) -> Dict | None:
     return None
 
 
+def build_wanted_models(registry: Dict | None) -> List[str]:
+    if isinstance(registry, dict):
+        huggingface_models = registry.get("huggingface_models")
+        if isinstance(huggingface_models, dict):
+            wanted = []
+            for model_info in huggingface_models.values():
+                if not isinstance(model_info, dict):
+                    continue
+                repo_id = str(model_info.get("repo_id") or "").strip()
+                if repo_id:
+                    wanted.append(repo_id)
+            if wanted:
+                return wanted
+
+    # Fallback list if registry is unavailable
+    return [
+        "Salesforce/blip-image-captioning-base",
+        "nlpconnect/vit-gpt2-image-captioning",
+        "openai/clip-vit-base-patch16",
+        "facebook/dinov2-base",
+        "sentence-transformers/all-MiniLM-L6-v2",
+        "laion/clap-htsat-unfused",
+        "pyannote/speaker-diarization",
+        "openai/whisper-large-v3",
+        "Systran/faster-whisper-large-v3",
+        "Systran/faster-whisper-medium",
+        "Systran/faster-whisper-tiny",
+        "superb/hubert-large-superb-er",
+        "ehcalabres/wav2vec2-lg-xlsr-en-speech-emotion-recognition",
+    ]
+
+
 def resolve_models_root() -> Path:
     explicit = os.environ.get("GOODQ_MODELS_DIR")
     if explicit:
@@ -312,28 +344,7 @@ def main() -> None:
     else:
         print("[bootstrap] WARNING: model_registry.yaml not found, using latest versions")
 
-    # Fallback list (if registry doesn't exist)
-    wanted: List[str] = [
-        # Image caption (primary + fallback)
-        "Salesforce/blip-image-captioning-base",
-        "nlpconnect/vit-gpt2-image-captioning",
-        # Image embeddings
-        "openai/clip-vit-base-patch16",
-        "facebook/dinov2-base",
-        # Text embeddings
-        "sentence-transformers/all-MiniLM-L6-v2",
-        # Audio CLAP
-        "laion/clap-htsat-unfused",
-        # PyAnnote diarization pipeline + dependencies
-        "pyannote/speaker-diarization@2.1",
-        # Whisper variants used by diarize/transcribe stacks
-        "openai/whisper-large-v3",
-        "Systran/faster-whisper-large-v3",
-        "Systran/faster-whisper-medium",
-        "Systran/faster-whisper-tiny",
-        "superb/hubert-large-superb-er",
-        "ehcalabres/wav2vec2-lg-xlsr-en-speech-emotion-recognition",
-    ]
+    wanted = build_wanted_models(registry)
 
     results: List[Dict[str, str]] = []
     total_assets = len(wanted) + 1

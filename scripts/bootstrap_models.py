@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import sys
+import time
+import urllib.request
 from pathlib import Path
 from typing import Dict, List
 
@@ -19,6 +22,51 @@ if _VENDOR_DIR.exists():
     sys.path.append(str(_VENDOR_DIR))
 
 
+DEFAULT_DOWNLOAD_RETRIES = 4
+YOLO_URL = "https://github.com/ultralytics/assets/releases/download/v8.2.0/yolov8n.pt"
+
+
+def _log(msg: str) -> None:
+    print(msg, file=sys.stderr, flush=True)
+
+
+def _default_retry_count() -> int:
+    raw = os.environ.get("GOODQ_MODEL_DOWNLOAD_RETRIES", str(DEFAULT_DOWNLOAD_RETRIES)).strip()
+    try:
+        return max(int(raw), 1)
+    except ValueError:
+        return DEFAULT_DOWNLOAD_RETRIES
+
+
+def _is_transient_download_error(detail: str) -> bool:
+    lowered = detail.lower()
+    return any(
+        token in lowered
+        for token in (
+            "connection reset",
+            "connection broken",
+            "connection aborted",
+            "read timed out",
+            "read timeout",
+            "timed out",
+            "server disconnected",
+            "temporary failure",
+            "temporarily unavailable",
+            "name resolution",
+            "http 502",
+            "http 503",
+            "http 504",
+            "chunkedencodingerror",
+            "incomplete read",
+            "connectionerror",
+        )
+    )
+
+
+def _retry_pause(attempt: int) -> None:
+    time.sleep(min(3 * attempt, 15))
+
+
 def ensure_env(target_models_dir: Path) -> None:
     target_models_dir.mkdir(parents=True, exist_ok=True)
     # Prefer project models dir for all downloads
@@ -28,6 +76,8 @@ def ensure_env(target_models_dir: Path) -> None:
     os.environ.setdefault('TRANSFORMERS_CACHE', str(target_models_dir / 'cache'))
     # Default to enabling hf_transfer for faster, resilient downloads
     os.environ['HF_HUB_ENABLE_HF_TRANSFER'] = '1'
+    os.environ.setdefault('HF_HUB_DISABLE_PROGRESS_BARS', '0')
+    os.environ.setdefault('PYTHONUNBUFFERED', '1')
 
 
 def _repo_local_dir(models_root: Path, repo_id: str) -> Path:
@@ -41,6 +91,8 @@ def snapshot(
     revision: str | None = None,
     *,
     models_root: Path | None = None,
+    retries: int = DEFAULT_DOWNLOAD_RETRIES,
+    progress_label: str = "",
 ) -> Dict[str, str]:
     """
     Download a model snapshot from HuggingFace Hub.
@@ -58,36 +110,80 @@ def snapshot(
         from huggingface_hub import snapshot_download  # type: ignore
     except Exception as exc:  # pragma: no cover
         return {"model": model_id, "status": "error", "error": f"huggingface_hub not available: {exc}"}
-    try:
-        target_models_root = models_root or Path(os.environ.get("HF_HOME") or ".")
-        local_dir = _repo_local_dir(target_models_root, repo_id)
-        local_dir.parent.mkdir(parents=True, exist_ok=True)
-        local_dir = snapshot_download(
-            repo_id=repo_id,
-            local_dir=str(local_dir),
-            revision=revision,
-            local_dir_use_symlinks=False,
-            token=auth_token,
-        )
-        return {"model": model_id, "status": "ok", "path": local_dir, "revision": revision or "default"}
-    except Exception as exc:  # pragma: no cover
-        return {"model": model_id, "status": "error", "error": str(exc)}
+    target_models_root = models_root or Path(os.environ.get("HF_HOME") or ".")
+    local_dir = _repo_local_dir(target_models_root, repo_id)
+    local_dir.parent.mkdir(parents=True, exist_ok=True)
+    attempts = max(int(retries), 1)
+    label = f"[bootstrap] [{progress_label}] " if progress_label else "[bootstrap] "
+
+    for attempt in range(1, attempts + 1):
+        _log(f"{label}syncing {repo_id} (attempt {attempt}/{attempts})")
+        try:
+            resolved_dir = snapshot_download(
+                repo_id=repo_id,
+                local_dir=str(local_dir),
+                revision=revision,
+                local_dir_use_symlinks=False,
+                token=auth_token,
+            )
+            _log(f"{label}ready {repo_id}")
+            return {
+                "model": model_id,
+                "status": "ok",
+                "path": resolved_dir,
+                "revision": revision or "default",
+                "attempts": str(attempt),
+            }
+        except Exception as exc:  # pragma: no cover
+            detail = str(exc)
+            if attempt < attempts and _is_transient_download_error(detail):
+                _log(f"{label}transient failure for {repo_id}: {detail}. Retrying...")
+                _retry_pause(attempt)
+                continue
+            return {"model": model_id, "status": "error", "error": detail, "attempts": str(attempt)}
 
 
-def download_yolo_n() -> Dict[str, str]:
+def download_yolo_n(*, retries: int = DEFAULT_DOWNLOAD_RETRIES, progress_label: str = "") -> Dict[str, str]:
     # Ultralytics yolov8n.pt hosted in GH assets; cache into models/yolo
-    url = "https://github.com/ultralytics/assets/releases/download/v8.2.0/yolov8n.pt"
     target = Path(os.environ.get("TORCH_HOME") or os.environ.get("HF_HOME") or ".") / "yolo" / "yolov8n.pt"
     target.parent.mkdir(parents=True, exist_ok=True)
     if target.exists() and target.stat().st_size > 1024 * 1024:
         return {"asset": "yolov8n.pt", "status": "ok", "path": str(target), "cached": "true"}
-    try:
-        import urllib.request
-        with urllib.request.urlopen(url, timeout=120) as r, open(target, "wb") as f:
-            f.write(r.read())
-        return {"asset": "yolov8n.pt", "status": "ok", "path": str(target), "cached": "false"}
-    except Exception as exc:  # pragma: no cover
-        return {"asset": "yolov8n.pt", "status": "error", "error": str(exc)}
+    attempts = max(int(retries), 1)
+    label = f"[bootstrap] [{progress_label}] " if progress_label else "[bootstrap] "
+    temp_target = target.with_suffix(".tmp")
+    for attempt in range(1, attempts + 1):
+        try:
+            _log(f"{label}downloading yolov8n.pt (attempt {attempt}/{attempts})")
+            with urllib.request.urlopen(YOLO_URL, timeout=120) as response, open(temp_target, "wb") as handle:
+                total = int(response.headers.get("Content-Length", "0") or "0")
+                downloaded = 0
+                next_marker = 25
+                while True:
+                    chunk = response.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    handle.write(chunk)
+                    downloaded += len(chunk)
+                    if total > 0:
+                        percent = int((downloaded / total) * 100)
+                        while percent >= next_marker and next_marker <= 100:
+                            _log(f"{label}yolov8n.pt {next_marker}%")
+                            next_marker += 25
+            os.replace(temp_target, target)
+            _log(f"{label}ready yolov8n.pt")
+            return {"asset": "yolov8n.pt", "status": "ok", "path": str(target), "cached": "false", "attempts": str(attempt)}
+        except Exception as exc:  # pragma: no cover
+            detail = str(exc)
+            try:
+                temp_target.unlink(missing_ok=True)
+            except Exception:
+                pass
+            if attempt < attempts and _is_transient_download_error(detail):
+                _log(f"{label}transient failure for yolov8n.pt: {detail}. Retrying...")
+                _retry_pause(attempt)
+                continue
+            return {"asset": "yolov8n.pt", "status": "error", "error": detail, "attempts": str(attempt)}
 
 
 def load_registry(repo_root: Path) -> Dict | None:
@@ -122,7 +218,15 @@ def resolve_models_root() -> Path:
     return Path("models")
 
 
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Prefetch local model cache for GoodQ bootstrap")
+    parser.add_argument("--report-path", help="Write machine-readable JSON report to this path")
+    parser.add_argument("--retries", type=int, default=_default_retry_count(), help="Retries for transient download failures")
+    return parser.parse_args()
+
+
 def main() -> None:
+    args = parse_args()
     # Resolve project root (scripts/..)
     script_dir = Path(__file__).resolve().parent
     repo_root = script_dir.parent
@@ -174,7 +278,9 @@ def main() -> None:
     ]
 
     results: List[Dict[str, str]] = []
-    for mid in wanted:
+    total_assets = len(wanted) + 1
+    _log(f"[bootstrap] Prefetching {total_assets} model assets into {models_root}")
+    for index, mid in enumerate(wanted, start=1):
         # Strip any existing @revision
         repo_id = mid.split('@')[0] if '@' in mid else mid
         
@@ -185,20 +291,27 @@ def main() -> None:
         token = pyannote_token if repo_id.startswith('pyannote/') else hf_token
         
         # Download with pinned revision
-        result = snapshot(mid, token, revision, models_root=models_root)
+        result = snapshot(
+            mid,
+            token,
+            revision,
+            models_root=models_root,
+            retries=args.retries,
+            progress_label=f"{index}/{total_assets}",
+        )
         if revision:
             result['pinned_revision'] = revision
         results.append(result)
 
-    results.append(download_yolo_n())
+    results.append(download_yolo_n(retries=args.retries, progress_label=f"{total_assets}/{total_assets}"))
 
-    out_dir = repo_root / "logs"
-    out_dir.mkdir(parents=True, exist_ok=True)
-    report_path = out_dir / "bootstrap_models_report.json"
+    report_path = Path(args.report_path) if args.report_path else repo_root / "logs" / "bootstrap_models_report.json"
+    report_path.parent.mkdir(parents=True, exist_ok=True)
     report = {
         "models_dir": str(models_root),
         "registry_loaded": registry is not None,
         "pinned_models_count": len(pinned_models),
+        "download_retries": args.retries,
         "env": {
             "HF_HOME": os.environ.get("HF_HOME"),
             "TORCH_HOME": os.environ.get("TORCH_HOME"),
@@ -206,6 +319,7 @@ def main() -> None:
         "results": results,
     }
     report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+    _log(f"[bootstrap] Wrote model prefetch report to {report_path}")
     print(json.dumps(report, ensure_ascii=False, indent=2))
 
 

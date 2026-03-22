@@ -43,6 +43,7 @@ and related canonical docs.
 - Normalized scene-local transcript segments onto scene-absolute timelines before memory/Phase 6 processing and preserved explicit `0.0` segment starts so rerun warnings like `start=928.68, end=1.84` no longer appear.
 - Made `progress.json` truthful for real ingest runs by updating it through scene processing and Phase 6 milestones and marking successful or failed completion explicitly.
 - Changed CLAP audio embedding readiness to report a structured `model_not_cached` unavailable state with a repair hint instead of surfacing a misleading generic Hugging Face-style load failure, and taught bootstrap to optionally prefetch the required local model cache for offline-ready ingest.
+- Model-cache prefetch now streams live console progress and retries transient download failures automatically so bootstrap no longer appears idle during large first-run model downloads.
 
 ## [0.1.0] - 2026-03-20
 

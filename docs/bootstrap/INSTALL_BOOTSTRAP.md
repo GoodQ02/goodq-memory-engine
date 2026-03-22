@@ -45,6 +45,8 @@ On a normal interactive run, the bootstrap prompts for:
 - whether to install missing external tools such as FFmpeg when a supported package manager is available
 - whether to install or repair the Windows `GoodQ_Qdrant` service when Qdrant is unavailable
 
+When model prefetch is enabled, bootstrap now streams live progress to the console and retries transient download failures automatically instead of leaving a silent cursor wait.
+
 Default portable data root:
 
 - a local Windows data root chosen by the bootstrap installer

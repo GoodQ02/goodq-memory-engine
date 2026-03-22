@@ -682,11 +682,21 @@ def ensure_supported_step_envs(ctx: BootstrapContext, *, assume_yes: bool) -> No
         ensure_step_env(ctx.conda_exe, ctx.repo_root, spec, assume_yes=assume_yes)
 
 
-def _run_bootstrap_models(conda_exe: Path, repo_root: Path) -> subprocess.CompletedProcess[str]:
+def _run_bootstrap_models(conda_exe: Path, repo_root: Path, report_path: Path) -> subprocess.CompletedProcess[str]:
     return _run(
-        [str(conda_exe), "run", "-n", ENV_NAME, "python", str(repo_root / "scripts" / "bootstrap_models.py")],
+        [
+            str(conda_exe),
+            "run",
+            "-n",
+            ENV_NAME,
+            "python",
+            str(repo_root / "scripts" / "bootstrap_models.py"),
+            "--report-path",
+            str(report_path),
+        ],
         cwd=repo_root,
         env=_isolated_process_env(),
+        capture=False,
     )
 
 
@@ -696,21 +706,21 @@ def ensure_model_cache(ctx: BootstrapContext) -> None:
         return
 
     _print("[INFO] Prefetching required model cache for offline-ready ingest")
-    completed = _run_bootstrap_models(ctx.conda_exe, ctx.repo_root)
-    detail = _completed_output(completed)
+    _print("[INFO] Live model download progress will be shown below. Transient network failures are retried automatically.")
+    report_path = ctx.repo_root / "logs" / "bootstrap_models_report.json"
+    report_path.unlink(missing_ok=True)
+    completed = _run_bootstrap_models(ctx.conda_exe, ctx.repo_root, report_path)
     if completed.returncode != 0:
-        raise RuntimeError(detail or "bootstrap_models.py failed")
+        raise RuntimeError("bootstrap_models.py failed; see console output above")
 
     required_failures: list[str] = []
     gated_failures: list[str] = []
     try:
-        payload = json.loads(completed.stdout or "{}")
-    except json.JSONDecodeError:
-        if detail:
-            _print(f"[WARN] bootstrap_models.py returned non-JSON output: {detail}")
-        else:
-            _print("[WARN] bootstrap_models.py returned no machine-readable output")
-        return
+        payload = json.loads(report_path.read_text(encoding="utf-8"))
+    except FileNotFoundError as exc:
+        raise RuntimeError(f"bootstrap_models.py completed but did not write a report: {exc}") from exc
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"bootstrap_models.py wrote invalid JSON report: {exc}") from exc
 
     for entry in payload.get("results", []):
         if not isinstance(entry, dict) or str(entry.get("status")).lower() != "error":
@@ -731,6 +741,9 @@ def ensure_model_cache(ctx: BootstrapContext) -> None:
             + ", ".join(gated_failures)
             + ". Set HF_TOKEN/PYANNOTE_TOKEN in .env.local and rerun bootstrap_models.py for full gated coverage."
         )
+    ok_count = sum(1 for entry in payload.get("results", []) if isinstance(entry, dict) and str(entry.get("status")).lower() == "ok")
+    error_count = len(required_failures) + len(gated_failures)
+    _print(f"[INFO] Model prefetch summary: ok={ok_count} error={error_count}")
     _print("[OK] Required model cache prefetched")
 
 

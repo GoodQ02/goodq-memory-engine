@@ -75,7 +75,7 @@ huggingface_models:
     required: true
   bert_ner:
     repo_id: dslim/bert-base-NER
-    revision: 6e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e
+    revision: d1a3e8f13f8c3566299d95fcfc9a8d2382a9affc
     model_type: token-classification
     required: true
 external_models:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import sys
 import types
 from pathlib import Path
@@ -64,6 +65,22 @@ def test_build_wanted_models_uses_registry_repo_ids():
 
     assert wanted == ["pyannote/speaker-diarization", "pyannote/segmentation"]
     assert all("@" not in model_id for model_id in wanted)
+
+
+def test_model_registry_revisions_do_not_use_placeholder_hashes():
+    import yaml
+
+    registry_path = Path(__file__).resolve().parents[2] / "configs" / "model_registry.yaml"
+    registry = yaml.safe_load(registry_path.read_text(encoding="utf-8")) or {}
+    huggingface_models = registry.get("huggingface_models", {})
+
+    for model_key, model_info in huggingface_models.items():
+        if not isinstance(model_info, dict):
+            continue
+        revision = str(model_info.get("revision") or "").strip()
+        if not revision:
+            continue
+        assert not re.fullmatch(r"(.)\1{39}", revision), f"{model_key} uses a placeholder revision: {revision}"
 
 
 def test_snapshot_retries_transient_failure(monkeypatch, tmp_path: Path):

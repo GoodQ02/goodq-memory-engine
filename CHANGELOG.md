@@ -46,6 +46,7 @@ and related canonical docs.
 - Model-cache prefetch now streams live console progress and retries transient download failures automatically so bootstrap no longer appears idle during large first-run model downloads.
 - Bootstrap model prefetch now uses `configs/model_registry.yaml` as the actual Hugging Face download manifest, which fixes stale hardcoded model ids such as `pyannote/speaker-diarization@2.1` and ensures required registry entries like PyAnnote segmentation are staged consistently.
 - Bootstrap now hands the canonical Qdrant storage/log paths directly into the service installer and waits briefly for the service to come online after installation, reducing fresh-machine failures across the UAC elevation boundary.
+- Corrected the `dslim/bert-base-NER` pinned revision in `configs/model_registry.yaml` and added a registry sanity check so placeholder 40-character hashes are caught before they can break clean-machine model prefetch again.
 
 ## [0.1.0] - 2026-03-20
 

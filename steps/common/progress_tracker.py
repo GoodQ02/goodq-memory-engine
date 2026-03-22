@@ -83,6 +83,13 @@ class ProgressTracker:
             if details:
                 self.current_state["details"].update(details)
             self._save()
+
+    def set_total_steps(self, total_steps: int):
+        """Update total steps once the workload size is known."""
+        with self._write_lock:
+            self.current_state["total_steps"] = max(int(total_steps), 1)
+            self.current_state["updated_at"] = datetime.now().isoformat()
+            self._save()
     
     def complete_step(self, step_name: str, result: Optional[Dict[str, Any]] = None):
         """Mark a step as completed"""
@@ -169,6 +176,11 @@ def start_processing(filename: str, total_steps: int = 20, run_id: Optional[str]
 def update_step(step_name: str, step_index: int, details: Optional[Dict[str, Any]] = None):
     """Convenience function to update step"""
     return _tracker.update_step(step_name, step_index, details)
+
+
+def set_total_steps(total_steps: int):
+    """Convenience function to update total steps."""
+    return _tracker.set_total_steps(total_steps)
 
 
 def complete_step(step_name: str, result: Optional[Dict[str, Any]] = None):

@@ -83,7 +83,7 @@ def _patch_typer_help_for_click_8_2() -> None:
 
 # Progress tracking
 try:
-    from steps.common.progress_tracker import get_tracker, step_context, update_step
+    from steps.common.progress_tracker import get_tracker, step_context, update_step, set_total_steps, finish_processing
     PROGRESS_TRACKING_AVAILABLE = True
 except ImportError:
     PROGRESS_TRACKING_AVAILABLE = False
@@ -98,6 +98,10 @@ except ImportError:
     def get_tracker():
         return DummyTracker()
     def update_step(*args, **kwargs):
+        pass
+    def set_total_steps(*args, **kwargs):
+        pass
+    def finish_processing(*args, **kwargs):
         pass
     step_context = lambda *args, **kwargs: DummyTracker().step_context(*args, **kwargs)
 
@@ -3058,12 +3062,11 @@ def run(
         typer.echo(f'  Exists: {video_path.exists()}')
         typer.echo(f'  Size: {video_path.stat().st_size / 1024**2:.2f} MB' if video_path.exists() else '  Size: N/A')
         
+        tracker = get_tracker() if PROGRESS_TRACKING_AVAILABLE else None
+
         # Initialize progress tracking
         if PROGRESS_TRACKING_AVAILABLE:
-            tracker = get_tracker()
-            # Estimate total steps: scene detection + processing each scene (image+audio pipeline)
-            estimated_steps = 3  # scene detection, scene processing, finalization
-            tracker.start_processing(video_path.name, total_steps=estimated_steps, run_id=run_id)
+            tracker.start_processing(video_path.name, total_steps=4, run_id=run_id)
         
         scene_overrides: Dict[str, Any] = {}
         if max_scenes:
@@ -3072,6 +3075,7 @@ def run(
             scene_overrides['threshold'] = scene_threshold
         if min_scene_seconds is not None:
             scene_overrides['min_scene_len_sec'] = min_scene_seconds
+        phase6_enabled = cfg.get('phase6', {}).get('enabled', True)
 
         stored_manifest = list_scenes_for_video(cfg, video_hash)
         force_redetect = cfg.get('force_reprocess', False)
@@ -3105,6 +3109,10 @@ def run(
                     manifest_hasher.update(f"{start:.6f}|{end:.6f}|".encode('utf-8'))
                 detection_meta['scene_manifest_hash'] = manifest_hasher.hexdigest()
             detection = {'scenes': scenes, 'meta': detection_meta}
+            if tracker is not None:
+                total_progress_steps = 1 + len(scenes) + (2 if phase6_enabled and len(scenes) > 0 else 0)
+                tracker.set_total_steps(total_progress_steps)
+                tracker.update_step("Scene Reuse", 1, {"scenes_found": len(scenes), "video_id": video_hash})
             _log_skipped_steps(
                 cfg,
                 ['video_scene_detect'],
@@ -3116,16 +3124,16 @@ def run(
                 extra={'component': 'scene_detect'},
             )
         else:
-            if PROGRESS_TRACKING_AVAILABLE:
-                tracker = get_tracker()
+            if tracker is not None:
                 tracker.update_step("Scene Detection", 1, {"scenes_to_detect": "analyzing video"})
             
             detection = _detect_scenes(cfg_json, video_path, scene_overrides, video_id=video_hash)
             scenes = detection.get('scenes', [])
             
-            if PROGRESS_TRACKING_AVAILABLE:
-                tracker = get_tracker()
-                tracker.update_step("Scene Detection Complete", 2, {"scenes_found": len(scenes)})
+            if tracker is not None:
+                total_progress_steps = 1 + len(scenes) + (2 if phase6_enabled and len(scenes) > 0 else 0)
+                tracker.set_total_steps(total_progress_steps)
+                tracker.update_step("Scene Detection Complete", 1, {"scenes_found": len(scenes), "video_id": video_hash})
             
             detection_meta = detection.get('meta') or {}
             manifest_hasher = hashlib.sha256()
@@ -3173,6 +3181,16 @@ def run(
             
             # Progress logging
             typer.echo(f'[Scene {scene_num}/{total_scenes}] Processing scene {scene_index}: {scene_start:.1f}s - {scene_end:.1f}s (duration: {scene_duration:.1f}s)')
+            if tracker is not None:
+                tracker.update_step(
+                    f"Scene {scene_num}/{total_scenes}",
+                    1 + scene_num,
+                    {
+                        "scene_index": scene_index,
+                        "scenes_total": total_scenes,
+                        "video_id": video_hash,
+                    },
+                )
             
             meta_payload: Dict[str, Any] = {
                 'index': scene_index,
@@ -3625,7 +3643,6 @@ def run(
         # ============================================================
         # PHASE 6: VISUAL EMBEDDINGS + MULTIMODAL HARMONIZATION
         # ============================================================
-        phase6_enabled = cfg.get('phase6', {}).get('enabled', True)
         if phase6_enabled and scene_outputs:
             if observer:
                 observer.step_start(
@@ -3709,6 +3726,12 @@ def run(
                 # Phase 6a: Scene Visual Embeddings (CLIP + DINO)
                 typer.echo('[PHASE 6a] Generating scene visual embeddings...')
                 embeddings_result = _run_step('goodq_core', 'scene_visual_embeddings', phase6_item, cfg_json)
+                if tracker is not None:
+                    tracker.update_step(
+                        "Phase 6a",
+                        total_scenes + 2,
+                        {"stage": "scene_visual_embeddings", "video_id": video_hash},
+                    )
                 if observer:
                     observer.step_progress(
                         "phase6.pipeline",
@@ -3747,6 +3770,12 @@ def run(
                 # Phase 6b: Cross-Modal Harmonization
                 typer.echo('[PHASE 6b] Running multimodal harmonization...')
                 harmonization_result = _run_step('goodq_core', 'cross_modal_harmonization', phase6_item, cfg_json)
+                if tracker is not None:
+                    tracker.update_step(
+                        "Phase 6b",
+                        total_scenes + 3,
+                        {"stage": "cross_modal_harmonization", "video_id": video_hash},
+                    )
                 if observer:
                     observer.step_progress(
                         "phase6.pipeline",
@@ -3810,6 +3839,8 @@ def run(
         video_result['modality_status'] = _aggregate_modality_status(scene_outputs, phase6_embeddings_result)
         
         results.append(video_result)
+        if tracker is not None:
+            finish_processing("completed")
 
     if observer:
         observer.step_end("loop.videos", metadata={"processed_videos": len(results)})
@@ -3904,6 +3935,8 @@ def run(
             typer.echo(f'  - Incorrect file path', err=True)
             typer.echo(f'  - FFmpeg not available or broken', err=True)
             _persist_results_artifact()
+            if PROGRESS_TRACKING_AVAILABLE:
+                finish_processing("failed")
             raise typer.Exit(code=1)
 
     _persist_results_artifact()

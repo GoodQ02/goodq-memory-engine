@@ -217,6 +217,27 @@ def test_audio_embed_clap_skips_invalid_audio_before_model_load(tmp_path: Path):
     assert result["clap_meta"]["reason"] in {"audio_too_small", "audio_too_short", "audio_empty", "invalid_audio"}
 
 
+def test_audio_embed_clap_reports_missing_model_cache(monkeypatch, tmp_path: Path):
+    from steps.audio_embed_clap import step as clap_step
+
+    audio_path = tmp_path / "valid.wav"
+    _write_silent_wav(audio_path, frames=16000)
+
+    clap_step._CLAP.update({"model": None, "proc": None, "device": "cpu", "model_dir": None})
+    monkeypatch.setattr(clap_step, "_torchaudio_preflight", lambda: True)
+    monkeypatch.setattr(clap_step, "_inspect_audio_input", lambda _path: None)
+    monkeypatch.setattr(clap_step, "_configure_model_env", lambda: tmp_path / "models")
+    monkeypatch.setattr(clap_step, "_resolve_local_model_dir", lambda _root: None)
+    monkeypatch.setattr(clap_step, "_preferred_device", lambda: "cpu")
+
+    result = clap_step.audio_embed_clap({"source_path": str(audio_path)}, {"paths": {}})
+
+    assert result["clap_meta"]["status"] == "unavailable"
+    assert result["clap_meta"]["reason"] == "model_not_cached"
+    assert result["clap_meta"]["model"] == "laion/clap-htsat-unfused"
+    assert "bootstrap_models.py" in result["clap_meta"]["install_hint"]
+
+
 @pytest.mark.parametrize(
     ("failing_step", "expected_meta_field"),
     [

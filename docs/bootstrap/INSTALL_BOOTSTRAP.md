@@ -25,6 +25,7 @@ The bootstrap intentionally reuses existing project surfaces:
 - [`environment.gpu.yml`](../../environment.gpu.yml)
 - [`LAUNCH_GOODQ.bat`](../../LAUNCH_GOODQ.bat)
 - [`scripts/bootstrap_verify.py`](../../scripts/bootstrap_verify.py)
+- [`scripts/bootstrap_models.py`](../../scripts/bootstrap_models.py)
 - [`scripts/qdrant/INSTALL_QDRANT_SERVICE.bat`](../../scripts/qdrant/INSTALL_QDRANT_SERVICE.bat)
 - [`scripts/qdrant/START_QDRANT.bat`](../../scripts/qdrant/START_QDRANT.bat) for foreground testing fallback only
 - [`configs/config.yaml`](../../configs/config.yaml)
@@ -39,6 +40,7 @@ On a normal interactive run, the bootstrap prompts for:
 - whether to enable GPU acceleration
 - whether to enable WSL audio acceleration
 - whether to provision the supported specialized step-env pack for full pipeline capability
+- whether to prefetch the required local model cache for offline-ready ingest
 - whether to accept Conda channel Terms of Service when the local Conda installation requires it
 - whether to install missing external tools such as FFmpeg when a supported package manager is available
 - whether to install or repair the Windows `GoodQ_Qdrant` service when Qdrant is unavailable
@@ -82,6 +84,9 @@ python scripts/bootstrap_install.py --verify-only --no-launch
 
 # Force CPU-safe profile
 python scripts/bootstrap_install.py --disable-gpu --disable-wsl-audio
+
+# Skip model-cache downloads during bootstrap
+python scripts/bootstrap_install.py --skip-model-prefetch
 ```
 
 ## Capability Model
@@ -110,6 +115,7 @@ Environment selection:
 - `GPU_ENHANCED` uses [`environment.gpu.yml`](../../environment.gpu.yml)
 - both profiles target the same `goodq_core` orchestration environment name
 - bootstrap also provisions the supported specialized step-env pack for image, audio, and video steps that still require isolated dependency boundaries
+- bootstrap can prefetch the required non-gated model cache into the local models root so first ingest stays offline-ready
 - the step-env pack is installed from the pinned lock recipes in `envs/locks/` instead of a fresh dependency solve
 - `goodq_face_embed` additionally installs Conda `dlib` first so Windows hosts do not need to compile it from source during bootstrap
 - the bootstrap defaults to `BASELINE`; GPU throughput remains explicit opt-in
@@ -120,6 +126,7 @@ The bootstrap performs only lightweight checks:
 
 - Conda environment exists
 - supported specialized step environments exist
+- required non-gated model caches are visible when they have already been prefetched
 - environment Python is available
 - config loader works
 - FFmpeg status is clear

@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 
 _CLAP_MODEL_ID = "laion/clap-htsat-unfused"
 _CLAP = {"model": None, "proc": None, "device": "cpu", "model_dir": None}
+_CLAP_INSTALL_HINT = "conda run -n goodq_core python scripts/bootstrap_models.py"
 _TORCHAUDIO_INSTALL_HINT = (
     "conda run -n goodq_audio_embed pip install "
     "torchaudio==2.3.1 --extra-index-url https://download.pytorch.org/whl/cu121"
@@ -175,12 +176,20 @@ def _load(preferred_device: Optional[str] = None) -> tuple[bool, Optional[str]]:
             )
             _CLAP.update({"model": None, "proc": None, "device": "cpu", "model_dir": None})
     try:
+        models_root = _configure_model_env()
+        model_source = _resolve_local_model_dir(models_root)
+        if not model_source:
+            logger.warning(
+                "audio_embed_clap model cache missing model_id=%s models_root=%s install_hint=\"%s\"",
+                _CLAP_MODEL_ID,
+                models_root,
+                _CLAP_INSTALL_HINT,
+            )
+            return False, f"model_not_cached:{models_root}"
+
         import torch  # type: ignore
         from transformers import AutoFeatureExtractor, ClapModel  # type: ignore
 
-        models_root = _configure_model_env()
-        model_source = _resolve_local_model_dir(models_root) or _CLAP_MODEL_ID
-        
         # GPU Isolation - Phase 2
         os.environ.setdefault("CUDA_VISIBLE_DEVICES", "0")
         
@@ -256,7 +265,24 @@ def audio_embed_clap(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
         clear_cache()
         load_ok, load_error = _load("cpu")
     if not load_ok or _CLAP["model"] is None:
-        return {"clap_meta": {"status": "error", "reason": "model_load_failed", "error": load_error or "model unavailable"}}
+        if isinstance(load_error, str) and load_error.startswith("model_not_cached:"):
+            models_root = load_error.split(":", 1)[1] or _resolve_models_root()
+            return {
+                "clap_meta": {
+                    "status": "unavailable",
+                    "reason": "model_not_cached",
+                    "model": _CLAP_MODEL_ID,
+                    "models_root": models_root,
+                    "install_hint": _CLAP_INSTALL_HINT,
+                }
+            }
+        return {
+            "clap_meta": {
+                "status": "error",
+                "reason": "model_load_failed",
+                "error": load_error or "model unavailable",
+            }
+        }
     try:
         import torch  # type: ignore
         import librosa  # type: ignore

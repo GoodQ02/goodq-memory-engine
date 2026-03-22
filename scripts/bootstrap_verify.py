@@ -266,6 +266,71 @@ def _check_pdftotext(cfg: Dict[str, Any]) -> CheckResult:
     return CheckResult("pdftotext", "warn", "; ".join(remediation))
 
 
+def _resolve_models_cache_root(cfg: Dict[str, Any]) -> Path:
+    paths_cfg = cfg.get("paths", {}) if isinstance(cfg, dict) else {}
+    models_cache = paths_cfg.get("models_cache") if isinstance(paths_cfg, dict) else None
+    if isinstance(models_cache, str) and models_cache.strip():
+        return Path(models_cache.strip())
+    data_root = os.environ.get("GOODQ_DATA_ROOT", "").strip()
+    if data_root:
+        return Path(data_root) / "models"
+    return REPO_ROOT / "models"
+
+
+def _model_snapshot_present(models_root: Path, repo_id: str) -> bool:
+    repo_cache = models_root / "hub" / f"models--{repo_id.replace('/', '--')}" / "snapshots"
+    if not repo_cache.exists():
+        return False
+    for candidate in repo_cache.iterdir():
+        if candidate.is_dir() and any(candidate.iterdir()):
+            return True
+    return False
+
+
+def _check_required_model_cache(cfg: Dict[str, Any]) -> List[CheckResult]:
+    registry_path = REPO_ROOT / "configs" / "model_registry.yaml"
+    if not registry_path.exists():
+        return [CheckResult("model_cache", "warn", f"missing registry at {registry_path}")]
+
+    try:
+        import yaml  # type: ignore
+    except Exception as exc:  # noqa: BLE001
+        return [CheckResult("model_cache", "warn", f"yaml unavailable: {exc}")]
+
+    try:
+        registry = yaml.safe_load(registry_path.read_text(encoding="utf-8")) or {}
+    except Exception as exc:  # noqa: BLE001
+        return [CheckResult("model_cache", "warn", f"unable to parse model registry: {exc}")]
+
+    models_root = _resolve_models_cache_root(cfg)
+    results: List[CheckResult] = []
+    huggingface_models = registry.get("huggingface_models") if isinstance(registry, dict) else {}
+    if not isinstance(huggingface_models, dict):
+        return [CheckResult("model_cache", "warn", "model registry has no huggingface_models block")]
+
+    for model_key, model_info in huggingface_models.items():
+        if not isinstance(model_info, dict):
+            continue
+        if not bool(model_info.get("required")):
+            continue
+        if bool(model_info.get("requires_auth")):
+            continue
+        repo_id = str(model_info.get("repo_id") or "").strip()
+        if not repo_id:
+            continue
+        if _model_snapshot_present(models_root, repo_id):
+            results.append(CheckResult(f"model_cache:{model_key}", "pass", f"cached ({repo_id})"))
+        else:
+            results.append(
+                CheckResult(
+                    f"model_cache:{model_key}",
+                    "warn",
+                    f"missing cache for {repo_id} under {models_root}; remediation: conda run -n goodq_core python scripts/bootstrap_models.py",
+                )
+            )
+    return results
+
+
 def _check_wsl_flag() -> CheckResult:
     value = os.environ.get("GOODQ_WSL_DISTRO")
     if value:
@@ -325,6 +390,7 @@ def build_report() -> Dict[str, Any]:
     checks.append(_check_qdrant_runtime(cfg))
     checks.append(_check_ffmpeg())
     checks.append(_check_pdftotext(cfg))
+    checks.extend(_check_required_model_cache(cfg))
     checks.append(_check_wsl_flag())
     checks.extend(_check_step_env_pack())
     checks.extend(_check_env_resolution(cfg))

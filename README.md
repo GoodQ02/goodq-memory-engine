@@ -125,8 +125,9 @@ python scripts/bootstrap_install.py
 
 The bootstrap creates or updates the `goodq_core` orchestration environment,
 provisions the supported specialized step-env pack from the pinned stable lock
-recipes under `envs/locks/`, writes local-only overrides when missing, and
-checks canonical launcher prerequisites.
+recipes under `envs/locks/`, can prefetch the required local model cache for
+offline-ready ingest, writes local-only overrides when missing, and checks
+canonical launcher prerequisites.
 
 ### 3. Run Bootstrap Validation
 

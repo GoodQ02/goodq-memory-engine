@@ -65,6 +65,7 @@ class BootstrapContext:
     wsl_distro: str
     profile: CapabilityProfile
     install_step_envs: bool
+    prefetch_models: bool
 
 
 @dataclass(frozen=True)
@@ -681,6 +682,58 @@ def ensure_supported_step_envs(ctx: BootstrapContext, *, assume_yes: bool) -> No
         ensure_step_env(ctx.conda_exe, ctx.repo_root, spec, assume_yes=assume_yes)
 
 
+def _run_bootstrap_models(conda_exe: Path, repo_root: Path) -> subprocess.CompletedProcess[str]:
+    return _run(
+        [str(conda_exe), "run", "-n", ENV_NAME, "python", str(repo_root / "scripts" / "bootstrap_models.py")],
+        cwd=repo_root,
+        env=_isolated_process_env(),
+    )
+
+
+def ensure_model_cache(ctx: BootstrapContext) -> None:
+    if not ctx.prefetch_models:
+        _print("[WARN] Model cache prefetch skipped. First-run embedding steps may be degraded until required models are staged.")
+        return
+
+    _print("[INFO] Prefetching required model cache for offline-ready ingest")
+    completed = _run_bootstrap_models(ctx.conda_exe, ctx.repo_root)
+    detail = _completed_output(completed)
+    if completed.returncode != 0:
+        raise RuntimeError(detail or "bootstrap_models.py failed")
+
+    required_failures: list[str] = []
+    gated_failures: list[str] = []
+    try:
+        payload = json.loads(completed.stdout or "{}")
+    except json.JSONDecodeError:
+        if detail:
+            _print(f"[WARN] bootstrap_models.py returned non-JSON output: {detail}")
+        else:
+            _print("[WARN] bootstrap_models.py returned no machine-readable output")
+        return
+
+    for entry in payload.get("results", []):
+        if not isinstance(entry, dict) or str(entry.get("status")).lower() != "error":
+            continue
+        model_name = str(entry.get("model") or entry.get("asset") or "unknown")
+        if model_name.startswith("pyannote/"):
+            gated_failures.append(model_name)
+        else:
+            required_failures.append(model_name)
+
+    if required_failures:
+        raise RuntimeError(
+            "required model prefetch failed for: " + ", ".join(required_failures)
+        )
+    if gated_failures:
+        _print(
+            "[WARN] Gated model downloads were skipped or failed: "
+            + ", ".join(gated_failures)
+            + ". Set HF_TOKEN/PYANNOTE_TOKEN in .env.local and rerun bootstrap_models.py for full gated coverage."
+        )
+    _print("[OK] Required model cache prefetched")
+
+
 def env_python(conda_exe: Path, repo_root: Path, code: str) -> subprocess.CompletedProcess[str]:
     return _run(
         [str(conda_exe), "run", "-n", ENV_NAME, "python", "-c", code],
@@ -1046,6 +1099,11 @@ def collect_context(args: argparse.Namespace) -> BootstrapContext:
         True,
         assume_defaults,
     )
+    prefetch_models = args.prefetch_models if args.prefetch_models is not None else prompt_bool(
+        "Prefetch required model cache for offline-ready ingest",
+        True,
+        assume_defaults,
+    )
 
     if enable_gpu and not gpu_available:
         _print("[WARN] GPU acceleration requested, but no NVIDIA GPU was detected. Falling back to BASELINE.")
@@ -1078,6 +1136,7 @@ def collect_context(args: argparse.Namespace) -> BootstrapContext:
         wsl_distro=args.wsl_distro or detected_distro or DEFAULT_WSL_DISTRO,
         profile=profile,
         install_step_envs=install_step_envs,
+        prefetch_models=prefetch_models,
     )
 
 
@@ -1097,6 +1156,7 @@ def print_inspection(ctx: BootstrapContext) -> None:
     _print(f"enable_gpu       : {ctx.enable_gpu}")
     _print(f"enable_wsl_audio : {ctx.enable_wsl_audio}")
     _print(f"install_step_envs: {ctx.install_step_envs}")
+    _print(f"prefetch_models  : {ctx.prefetch_models}")
     _print(f"environment_spec : {ctx.environment_yml.name}")
     _print(f"data_root        : {ctx.data_root}")
     _print("step_env_pack    : " + ", ".join(spec.name for spec in SUPPORTED_STEP_ENVS))
@@ -1179,11 +1239,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--disable-gpu", dest="enable_gpu", action="store_false", help="force BASELINE profile")
     parser.add_argument("--enable-wsl-audio", dest="enable_wsl_audio", action="store_true", help="enable WSL audio extension if available")
     parser.add_argument("--disable-wsl-audio", dest="enable_wsl_audio", action="store_false", help="disable WSL audio extension")
+    parser.add_argument("--prefetch-models", dest="prefetch_models", action="store_true", help="download required model cache during bootstrap")
+    parser.add_argument("--skip-model-prefetch", dest="prefetch_models", action="store_false", help="skip model cache downloads during bootstrap")
     parser.add_argument("--yes", action="store_true", help="accept defaults without prompting")
     parser.add_argument("--inspect-only", action="store_true", help="inspect capabilities and exit without changes")
     parser.add_argument("--verify-only", action="store_true", help="run lightweight verification only")
     parser.add_argument("--no-launch", action="store_true", help="skip launching LAUNCH_GOODQ.bat")
-    parser.set_defaults(enable_gpu=None, enable_wsl_audio=None)
+    parser.set_defaults(enable_gpu=None, enable_wsl_audio=None, prefetch_models=None)
     return parser.parse_args()
 
 
@@ -1211,6 +1273,7 @@ def main() -> int:
             ensure_conda_env(ctx.conda_exe, ctx.repo_root, ctx.environment_yml, assume_yes=args.yes)
             ensure_supported_step_envs(ctx, assume_yes=args.yes)
             prepare_local_files(ctx)
+            ensure_model_cache(ctx)
         except Exception as exc:  # noqa: BLE001
             return _fail(f"Bootstrap preparation failed: {exc}")
 

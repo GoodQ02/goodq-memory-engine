@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 
@@ -43,3 +44,27 @@ def test_qdrant_installer_env_uses_canonical_runtime_paths(monkeypatch, tmp_path
     assert env["GOODQ_CONDA_ENV"] == "goodq_core"
     assert env["QDRANT_STORAGE_PATH"] == r"C:\GoodQ_Data\qdrant_storage"
     assert env["GOODQ_LOG_DIR"] == r"C:\GoodQ_Data\logs"
+
+
+def test_qdrant_lifecycle_state_distinguishes_pending_installed_and_running():
+    from scripts import bootstrap_install
+
+    assert bootstrap_install._qdrant_lifecycle_state(True, {"exists": "false"}) == "QDRANT_RUNNING"
+    assert bootstrap_install._qdrant_lifecycle_state(False, {"exists": "true"}) == "QDRANT_INSTALLED"
+    assert bootstrap_install._qdrant_lifecycle_state(False, {"exists": "false"}) == "QDRANT_PENDING_ADMIN"
+
+
+def test_run_emits_heartbeat_for_silent_subprocess(monkeypatch):
+    from scripts import bootstrap_install
+
+    messages: list[str] = []
+    monkeypatch.setattr(bootstrap_install, "_print", lambda msg: messages.append(msg))
+
+    completed = bootstrap_install._run(
+        [sys.executable, "-c", "import time; time.sleep(2.2)"],
+        heartbeat_label="Silent installer phase",
+        heartbeat_interval=1,
+    )
+
+    assert completed.returncode == 0
+    assert any("[HEARTBEAT] Silent installer phase" in message for message in messages)

@@ -10,6 +10,7 @@ import platform
 import shutil
 import subprocess
 import sys
+import threading
 import textwrap
 import time
 import urllib.error
@@ -166,6 +167,95 @@ def _completed_output(completed: subprocess.CompletedProcess[str]) -> str:
     return "\n".join(part for part in ((completed.stdout or "").strip(), (completed.stderr or "").strip()) if part).strip()
 
 
+def _format_elapsed(seconds: float) -> str:
+    total = max(int(seconds), 0)
+    minutes, secs = divmod(total, 60)
+    hours, minutes = divmod(minutes, 60)
+    if hours:
+        return f"{hours}h{minutes:02d}m{secs:02d}s"
+    if minutes:
+        return f"{minutes}m{secs:02d}s"
+    return f"{secs}s"
+
+
+def _artifact_hint(paths: Iterable[Path]) -> str:
+    for candidate in paths:
+        try:
+            resolved = candidate.resolve()
+        except Exception:
+            resolved = candidate
+        if resolved.exists():
+            return str(resolved)
+    for candidate in paths:
+        return str(candidate)
+    return ""
+
+
+def _run_with_heartbeat(
+    cmd: list[str],
+    *,
+    cwd: Optional[Path] = None,
+    env: Optional[dict[str, str]] = None,
+    heartbeat_label: str,
+    heartbeat_interval: int,
+    heartbeat_artifacts: Iterable[Path],
+) -> subprocess.CompletedProcess[str]:
+    proc = subprocess.Popen(
+        cmd,
+        cwd=str(cwd) if cwd else None,
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        bufsize=1,
+    )
+
+    output_lines: list[str] = []
+    state = {
+        "last_output_at": time.time(),
+        "last_output_line": "",
+    }
+
+    def _reader() -> None:
+        assert proc.stdout is not None
+        for raw_line in proc.stdout:
+            output_lines.append(raw_line)
+            line = raw_line.rstrip("\r\n")
+            if line:
+                state["last_output_at"] = time.time()
+                state["last_output_line"] = line
+                _print(line)
+
+    reader = threading.Thread(target=_reader, name="bootstrap-install-reader", daemon=True)
+    reader.start()
+
+    started = time.time()
+    last_heartbeat = started
+    artifact_hint = _artifact_hint(heartbeat_artifacts)
+    while proc.poll() is None:
+        time.sleep(1)
+        now = time.time()
+        if now - state["last_output_at"] < heartbeat_interval:
+            continue
+        if now - last_heartbeat < heartbeat_interval:
+            continue
+        message = f"[HEARTBEAT] {heartbeat_label}: elapsed={_format_elapsed(now - started)}"
+        if artifact_hint:
+            message += f" artifact_hint={artifact_hint}"
+        if state["last_output_line"]:
+            message += f" last_output={state['last_output_line'][:140]}"
+        else:
+            message += " status=waiting_for_subprocess_output"
+        _print(message)
+        last_heartbeat = now
+
+    reader.join(timeout=5)
+    stdout = "".join(output_lines)
+    return subprocess.CompletedProcess(cmd, proc.returncode or 0, stdout=stdout, stderr="")
+
+
 def _run(
     cmd: list[str],
     *,
@@ -173,7 +263,23 @@ def _run(
     env: Optional[dict[str, str]] = None,
     capture: bool = True,
     check: bool = False,
+    heartbeat_label: str | None = None,
+    heartbeat_interval: int = 20,
+    heartbeat_artifacts: Iterable[Path] = (),
 ) -> subprocess.CompletedProcess[str]:
+    if heartbeat_label:
+        completed = _run_with_heartbeat(
+            cmd,
+            cwd=cwd,
+            env=env,
+            heartbeat_label=heartbeat_label,
+            heartbeat_interval=max(int(heartbeat_interval), 1),
+            heartbeat_artifacts=heartbeat_artifacts,
+        )
+        if check and completed.returncode != 0:
+            raise subprocess.CalledProcessError(completed.returncode, cmd, output=completed.stdout, stderr=completed.stderr)
+        return completed
+
     return subprocess.run(
         cmd,
         cwd=str(cwd) if cwd else None,
@@ -441,17 +547,31 @@ def _run_conda_with_tos_retry(
     repo_root: Path,
     assume_yes: bool,
     capture: bool = True,
+    heartbeat_label: str | None = None,
+    heartbeat_artifacts: Iterable[Path] = (),
 ) -> subprocess.CompletedProcess[str]:
     completed: subprocess.CompletedProcess[str] | None = None
     for attempt in range(1, 4):
-        completed = _run(cmd, cwd=repo_root, capture=capture)
+        completed = _run(
+            cmd,
+            cwd=repo_root,
+            capture=capture,
+            heartbeat_label=heartbeat_label,
+            heartbeat_artifacts=heartbeat_artifacts,
+        )
         if completed.returncode == 0:
             return completed
 
         detail = (completed.stderr or completed.stdout).strip() or "conda environment command failed"
         if _is_conda_tos_block(detail):
             _accept_conda_tos(conda_exe, assume_yes=assume_yes)
-            completed = _run(cmd, cwd=repo_root, capture=capture)
+            completed = _run(
+                cmd,
+                cwd=repo_root,
+                capture=capture,
+                heartbeat_label=heartbeat_label,
+                heartbeat_artifacts=heartbeat_artifacts,
+            )
             if completed.returncode == 0:
                 return completed
             detail = (completed.stderr or completed.stdout).strip() or "conda environment command failed"
@@ -474,6 +594,8 @@ def ensure_conda_env(conda_exe: Path, repo_root: Path, env_file: Path, *, assume
             [str(conda_exe), "env", "update", "-n", ENV_NAME, "-f", str(env_file)],
             repo_root=repo_root,
             assume_yes=assume_yes,
+            heartbeat_label=f"Conda env update ({ENV_NAME})",
+            heartbeat_artifacts=(env_file,),
         )
         has_conflict, detail = _has_core_torch_stack_conflict(conda_exe)
         if has_conflict:
@@ -483,12 +605,16 @@ def ensure_conda_env(conda_exe: Path, repo_root: Path, env_file: Path, *, assume
                 [str(conda_exe), "env", "remove", "-n", ENV_NAME, "-y"],
                 repo_root=repo_root,
                 assume_yes=assume_yes,
+                heartbeat_label=f"Conda env remove ({ENV_NAME})",
+                heartbeat_artifacts=(env_file,),
             )
             _run_conda_with_tos_retry(
                 conda_exe,
                 [str(conda_exe), "env", "create", "-f", str(env_file)],
                 repo_root=repo_root,
                 assume_yes=assume_yes,
+                heartbeat_label=f"Conda env create ({ENV_NAME})",
+                heartbeat_artifacts=(env_file,),
             )
     else:
         _print(f"[INFO] Creating Conda environment from {env_file.name}")
@@ -497,6 +623,8 @@ def ensure_conda_env(conda_exe: Path, repo_root: Path, env_file: Path, *, assume
             [str(conda_exe), "env", "create", "-f", str(env_file)],
             repo_root=repo_root,
             assume_yes=assume_yes,
+            heartbeat_label=f"Conda env create ({ENV_NAME})",
+            heartbeat_artifacts=(env_file,),
         )
 
 
@@ -526,6 +654,8 @@ def _create_step_env(conda_exe: Path, repo_root: Path, spec: StepEnvSpec, *, ass
         [str(conda_exe), "create", "-y", "-n", spec.name, f"python={STEP_ENV_PYTHON}", "pip"],
         repo_root=repo_root,
         assume_yes=assume_yes,
+        heartbeat_label=f"Step env create ({spec.name})",
+        heartbeat_artifacts=(repo_root / spec.lock_rel_path,),
     )
 
 
@@ -535,6 +665,8 @@ def _remove_step_env(conda_exe: Path, repo_root: Path, spec: StepEnvSpec, *, ass
         [str(conda_exe), "env", "remove", "-n", spec.name, "-y"],
         repo_root=repo_root,
         assume_yes=assume_yes,
+        heartbeat_label=f"Step env remove ({spec.name})",
+        heartbeat_artifacts=(repo_root / spec.lock_rel_path,),
     )
 
 
@@ -550,6 +682,8 @@ def _ensure_step_env_conda_packages(conda_exe: Path, repo_root: Path, spec: Step
         cmd,
         repo_root=repo_root,
         assume_yes=assume_yes,
+        heartbeat_label=f"Step env conda sync ({spec.name})",
+        heartbeat_artifacts=(repo_root / spec.lock_rel_path,),
     )
 
 
@@ -574,6 +708,8 @@ def _install_step_env_from_lock(conda_exe: Path, repo_root: Path, spec: StepEnvS
         ],
         cwd=repo_root,
         env=pip_env,
+        heartbeat_label=f"Step env pip upgrade ({spec.name})",
+        heartbeat_artifacts=(lock_path,),
     )
     if upgrade.returncode != 0:
         detail = (upgrade.stderr or upgrade.stdout).strip() or f"pip upgrade failed for {spec.name}"
@@ -602,6 +738,8 @@ def _install_step_env_from_lock(conda_exe: Path, repo_root: Path, spec: StepEnvS
         install_cmd,
         cwd=repo_root,
         env=pip_env,
+        heartbeat_label=f"Step env lock install ({spec.name})",
+        heartbeat_artifacts=(lock_path,),
     )
     if install.returncode != 0:
         detail = (install.stderr or install.stdout).strip() or f"lock install failed for {spec.name}"
@@ -696,7 +834,8 @@ def _run_bootstrap_models(conda_exe: Path, repo_root: Path, report_path: Path) -
         ],
         cwd=repo_root,
         env=_isolated_process_env(),
-        capture=False,
+        heartbeat_label="Model prefetch",
+        heartbeat_artifacts=(report_path,),
     )
 
 
@@ -1007,6 +1146,32 @@ def _qdrant_repair_instruction(ctx: BootstrapContext) -> str:
     return "\n".join(lines)
 
 
+def _qdrant_admin_command(ctx: BootstrapContext) -> str:
+    installer = str(ctx.qdrant_service_installer)
+    return (
+        "powershell -NoProfile -Command "
+        f"\"Start-Process -FilePath 'cmd.exe' -Verb RunAs -ArgumentList '/c','\\\"{installer}\\\" --non-interactive'\""
+    )
+
+
+def _qdrant_lifecycle_state(qdrant_ok: bool, service_info: dict[str, str]) -> str:
+    if qdrant_ok:
+        return "QDRANT_RUNNING"
+    if service_info.get("exists") == "true":
+        return "QDRANT_INSTALLED"
+    return "QDRANT_PENDING_ADMIN"
+
+
+def _print_qdrant_handoff(ctx: BootstrapContext, *, state: str, elevated: bool, qdrant_url: str) -> None:
+    _print("[INFO] Qdrant lifecycle state: " + state)
+    _print(f"[INFO] Current shell elevation: {'admin' if elevated else 'standard user'}")
+    _print(f"[INFO] Qdrant health endpoint: {qdrant_url.rstrip('/')}")
+    if not elevated and state != "QDRANT_RUNNING":
+        _print("[WARN] Administrator privileges are required to install or repair the canonical Windows Qdrant service.")
+        _print("[INFO] Run this command from an elevated shell if the automatic handoff does not complete:")
+        _print(f"  {_qdrant_admin_command(ctx)}")
+
+
 def _qdrant_installer_env(ctx: BootstrapContext) -> dict[str, str]:
     env = os.environ.copy()
     env["GOODQ_CONDA_ENV"] = ENV_NAME
@@ -1021,7 +1186,12 @@ def _qdrant_installer_env(ctx: BootstrapContext) -> dict[str, str]:
 
 
 def _run_qdrant_service_installer(installer: Path, env: dict[str, str]) -> subprocess.CompletedProcess[str]:
-    return _run(["cmd.exe", "/c", str(installer), "--non-interactive"], capture=False, env=env)
+    return _run(
+        ["cmd.exe", "/c", str(installer), "--non-interactive"],
+        env=env,
+        heartbeat_label="Qdrant service install",
+        heartbeat_artifacts=(installer,),
+    )
 
 
 def _run_qdrant_service_installer_elevated(installer: Path, env: dict[str, str]) -> subprocess.CompletedProcess[str]:
@@ -1044,7 +1214,12 @@ def _run_qdrant_service_installer_elevated(installer: Path, env: dict[str, str])
         "-Verb RunAs -Wait -PassThru; "
         "exit $p.ExitCode"
     )
-    return _run(["powershell", "-NoProfile", "-Command", ps_script], env=env)
+    return _run(
+        ["powershell", "-NoProfile", "-Command", ps_script],
+        env=env,
+        heartbeat_label="Qdrant admin handoff",
+        heartbeat_artifacts=(installer,),
+    )
 
 
 def _wait_for_qdrant(url: str, timeout_sec: int = 20) -> tuple[bool, str]:
@@ -1062,15 +1237,19 @@ def _wait_for_qdrant(url: str, timeout_sec: int = 20) -> tuple[bool, str]:
 def ensure_qdrant_ready(ctx: BootstrapContext, *, assume_yes: bool) -> bool:
     qdrant_url = resolve_qdrant_url(ctx.conda_exe, ctx.repo_root)
     qdrant_ok, qdrant_detail = check_qdrant(qdrant_url)
+    service_info = inspect_windows_service(QDRANT_SERVICE_NAME)
+    elevated = _is_admin()
+    lifecycle_state = _qdrant_lifecycle_state(qdrant_ok, service_info)
     if qdrant_ok:
         _print(f"[OK] qdrant: {qdrant_detail}")
+        _print_qdrant_handoff(ctx, state=lifecycle_state, elevated=elevated, qdrant_url=qdrant_url)
         return True
 
-    service_info = inspect_windows_service(QDRANT_SERVICE_NAME)
     qdrant_exe = ctx.repo_root / "vendor" / "qdrant" / "qdrant.exe"
     qdrant_cfg = ctx.repo_root / "vendor" / "qdrant" / "config.yaml"
 
     _print(f"[WARN] qdrant: {qdrant_detail}")
+    _print_qdrant_handoff(ctx, state=lifecycle_state, elevated=elevated, qdrant_url=qdrant_url)
     if service_info.get("exists") == "true":
         status = service_info.get("status", "unknown")
         start_mode = service_info.get("start_mode", "unknown")
@@ -1089,15 +1268,15 @@ def ensure_qdrant_ready(ctx: BootstrapContext, *, assume_yes: bool) -> bool:
         return False
 
     installer_env = _qdrant_installer_env(ctx)
-    if _is_admin():
+    if elevated:
         completed = _run_qdrant_service_installer(ctx.qdrant_service_installer, installer_env)
     else:
-        _print("[INFO] Elevation required to install or repair the Windows Qdrant service.")
+        _print("[INFO] Elevation handoff starting now for the Windows Qdrant service installer.")
         completed = _run_qdrant_service_installer_elevated(ctx.qdrant_service_installer, installer_env)
 
     if completed.returncode != 0:
         detail = _completed_output(completed) or "Qdrant service installer exited non-zero"
-        if not _is_admin():
+        if not elevated:
             detail = f"{detail}. Accept the UAC prompt or run the installer manually as Administrator."
         _print(f"[WARN] Qdrant service installer did not complete successfully: {detail}")
         _print(_qdrant_repair_instruction(ctx))
@@ -1106,9 +1285,13 @@ def ensure_qdrant_ready(ctx: BootstrapContext, *, assume_yes: bool) -> bool:
     qdrant_ok, qdrant_detail = _wait_for_qdrant(qdrant_url)
     if qdrant_ok:
         _print(f"[OK] qdrant: {qdrant_detail}")
+        _print_qdrant_handoff(ctx, state="QDRANT_RUNNING", elevated=elevated, qdrant_url=qdrant_url)
         return True
 
+    service_info = inspect_windows_service(QDRANT_SERVICE_NAME)
+    lifecycle_state = _qdrant_lifecycle_state(qdrant_ok, service_info)
     _print(f"[WARN] qdrant still unavailable after installer run: {qdrant_detail}")
+    _print_qdrant_handoff(ctx, state=lifecycle_state, elevated=elevated, qdrant_url=qdrant_url)
     _print(_qdrant_repair_instruction(ctx))
     return False
 

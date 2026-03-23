@@ -172,10 +172,14 @@ def snapshot(
     target_models_root = models_root or Path(os.environ.get("HF_HOME") or ".")
     cache_dir = target_models_root / "hub"
     cache_dir.mkdir(parents=True, exist_ok=True)
+    repo_cache_dir = _repo_cache_dir(target_models_root, repo_id)
     attempts = max(int(retries), 1)
     label = f"[bootstrap] [{progress_label}] " if progress_label else "[bootstrap] "
 
     for attempt in range(1, attempts + 1):
+        started = time.time()
+        if repo_cache_dir.exists() and any(repo_cache_dir.iterdir()) and not _cache_snapshot_present(target_models_root, repo_id):
+            _log(f"{label}existing cache detected for {repo_id}; normalizing to canonical snapshots layout")
         _log(f"{label}syncing {repo_id} (attempt {attempt}/{attempts})")
         try:
             resolved_dir = snapshot_download(
@@ -191,7 +195,8 @@ def snapshot(
                     "error": f"cache layout incomplete for {repo_id} under {cache_dir}",
                     "attempts": str(attempt),
                 }
-            _log(f"{label}ready {repo_id}")
+            elapsed_sec = round(time.time() - started, 1)
+            _log(f"{label}ready {repo_id} ({elapsed_sec:.1f}s)")
             return {
                 "model": model_id,
                 "status": "ok",
@@ -199,6 +204,7 @@ def snapshot(
                 "revision": revision or "default",
                 "attempts": str(attempt),
                 "cache_verified": "true",
+                "elapsed_sec": elapsed_sec,
             }
         except Exception as exc:  # pragma: no cover
             detail = str(exc)
@@ -219,6 +225,7 @@ def download_yolo_n(*, retries: int = DEFAULT_DOWNLOAD_RETRIES, progress_label: 
     label = f"[bootstrap] [{progress_label}] " if progress_label else "[bootstrap] "
     temp_target = target.with_suffix(".tmp")
     for attempt in range(1, attempts + 1):
+        started = time.time()
         try:
             _log(f"{label}downloading yolov8n.pt (attempt {attempt}/{attempts})")
             with urllib.request.urlopen(YOLO_URL, timeout=120) as response, open(temp_target, "wb") as handle:
@@ -237,8 +244,9 @@ def download_yolo_n(*, retries: int = DEFAULT_DOWNLOAD_RETRIES, progress_label: 
                             _log(f"{label}yolov8n.pt {next_marker}%")
                             next_marker += 25
             os.replace(temp_target, target)
-            _log(f"{label}ready yolov8n.pt")
-            return {"asset": "yolov8n.pt", "status": "ok", "path": str(target), "cached": "false", "attempts": str(attempt)}
+            elapsed_sec = round(time.time() - started, 1)
+            _log(f"{label}ready yolov8n.pt ({elapsed_sec:.1f}s)")
+            return {"asset": "yolov8n.pt", "status": "ok", "path": str(target), "cached": "false", "attempts": str(attempt), "elapsed_sec": elapsed_sec}
         except Exception as exc:  # pragma: no cover
             detail = str(exc)
             try:

@@ -37,6 +37,20 @@ def _resolve_processing_root(cfg: Dict[str, Any]) -> str:
     return str(Path(runtime_paths['processing']).resolve())
 
 
+def _resolve_qdrant_host(cfg: Dict[str, Any]) -> str:
+    qdrant_cfg = cfg.get('qdrant')
+    if isinstance(qdrant_cfg, dict):
+        host = qdrant_cfg.get('host')
+        if isinstance(host, str) and host.strip():
+            return host.strip()
+
+    host_value = cfg.get('qdrant_host')
+    if isinstance(host_value, str) and host_value.strip():
+        return host_value.strip()
+
+    return 'http://127.0.0.1:6333'
+
+
 def _stage10_18_debug(*parts: Any) -> None:
     line = "[STAGE10_18_DEBUG] " + " ".join(str(p) for p in parts)
     print(line)
@@ -281,6 +295,40 @@ def run_scene_visual_embeddings(item: Dict[str, Any], cfg: Dict[str, Any]) -> Di
         print("[STAGE10_16_DEBUG] pooled_dino_len:", len(pooled_dino))
         scene_clip_vectors_written = 0
         scene_dino_vectors_written = 0
+
+        expected_scene_ids = {
+            scene_id for scene_id, frames in scene_frames.items()
+            if isinstance(frames, list) and frames
+        }
+        missing_clip_scene_ids = sorted(str(scene_id) for scene_id in expected_scene_ids if scene_id not in pooled_clip)
+        missing_dino_scene_ids = sorted(str(scene_id) for scene_id in expected_scene_ids if scene_id not in pooled_dino)
+        if missing_clip_scene_ids or missing_dino_scene_ids:
+            failure_reason = "missing_scene_embeddings"
+            scene_data['phase6_embedding_integrity'] = {
+                'expected_scenes': len(expected_scene_ids),
+                'clip_scenes': len(pooled_clip),
+                'dino_scenes': len(pooled_dino),
+                'missing_clip_scene_ids': missing_clip_scene_ids,
+                'missing_dino_scene_ids': missing_dino_scene_ids,
+            }
+            try:
+                _persist_phase6_failure(scene_manifest_path, scene_data, failure_reason)
+            except Exception as e:
+                logger.warning("[PHASE6] Failed to persist failure manifest state: %s", e)
+            return {
+                "video_id": video_id,
+                "phase6_status": "failed",
+                "error": failure_reason,
+                "expected_scenes": len(expected_scene_ids),
+                "clip_embeddings": len(pooled_clip),
+                "dino_embeddings": len(pooled_dino),
+                "missing_clip_scene_ids": missing_clip_scene_ids,
+                "missing_dino_scene_ids": missing_dino_scene_ids,
+                "scene_manifest_path": scene_manifest_path,
+                "clip_vector_dim": clip_vector_dim,
+                "dino_vector_dim": dino_vector_dim,
+                "gpu_device": clip_device,
+            }
         
         # === STEP 5: Store in Qdrant ===
         retrieval_cfg = phase6_cfg.get('retrieval', {})
@@ -289,7 +337,7 @@ def run_scene_visual_embeddings(item: Dict[str, Any], cfg: Dict[str, Any]) -> Di
         dino_ok = True
         if retrieval_enabled:
             logger.info("[PHASE6] Storing embeddings in Qdrant")
-            host_value = cfg.get('qdrant_host', 'http://127.0.0.1:6333')
+            host_value = _resolve_qdrant_host(cfg)
             clip_collection_name = phase6_cfg.get('clip_collection', 'goodq_clip_scenes')
             dino_collection_name = phase6_cfg.get('dino_collection', 'goodq_dino_scenes')
             print("[STAGE10_16_DEBUG] Phase6 host:", host_value)

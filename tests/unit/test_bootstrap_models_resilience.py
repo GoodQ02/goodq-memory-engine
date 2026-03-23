@@ -87,12 +87,17 @@ def test_snapshot_retries_transient_failure(monkeypatch, tmp_path: Path):
     from scripts import bootstrap_models
 
     attempts = {"count": 0}
+    recorded_kwargs = {}
 
     def fake_snapshot_download(**kwargs):
         attempts["count"] += 1
+        recorded_kwargs.update(kwargs)
         if attempts["count"] == 1:
             raise RuntimeError("Read timed out")
-        return str(tmp_path / "hub" / "models--laion--clap-htsat-unfused" / "snapshots" / "abc123")
+        snapshot_dir = tmp_path / "hub" / "models--laion--clap-htsat-unfused" / "snapshots" / "abc123"
+        snapshot_dir.mkdir(parents=True)
+        (snapshot_dir / "config.json").write_text("{}", encoding="utf-8")
+        return str(snapshot_dir)
 
     monkeypatch.setitem(sys.modules, "huggingface_hub", types.SimpleNamespace(snapshot_download=fake_snapshot_download))
     monkeypatch.setattr(bootstrap_models, "_retry_pause", lambda attempt: None)
@@ -107,6 +112,8 @@ def test_snapshot_retries_transient_failure(monkeypatch, tmp_path: Path):
     assert result["status"] == "ok"
     assert result["attempts"] == "2"
     assert attempts["count"] == 2
+    assert recorded_kwargs["cache_dir"] == str(tmp_path / "hub")
+    assert "local_dir" not in recorded_kwargs
 
 
 def test_snapshot_stops_on_non_transient_failure(monkeypatch, tmp_path: Path):
@@ -131,3 +138,25 @@ def test_snapshot_stops_on_non_transient_failure(monkeypatch, tmp_path: Path):
     assert result["status"] == "error"
     assert result["attempts"] == "1"
     assert attempts["count"] == 1
+
+
+def test_snapshot_reports_error_when_cache_layout_is_not_runtime_compatible(monkeypatch, tmp_path: Path):
+    from scripts import bootstrap_models
+
+    def fake_snapshot_download(**kwargs):
+        flat_dir = tmp_path / "hub" / "models--laion--clap-htsat-unfused"
+        flat_dir.mkdir(parents=True)
+        (flat_dir / "config.json").write_text("{}", encoding="utf-8")
+        return str(flat_dir)
+
+    monkeypatch.setitem(sys.modules, "huggingface_hub", types.SimpleNamespace(snapshot_download=fake_snapshot_download))
+
+    result = bootstrap_models.snapshot(
+        "laion/clap-htsat-unfused",
+        models_root=tmp_path,
+        retries=1,
+        progress_label="1/1",
+    )
+
+    assert result["status"] == "error"
+    assert "cache layout incomplete" in result["error"]

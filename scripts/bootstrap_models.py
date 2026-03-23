@@ -129,9 +129,19 @@ def ensure_env(target_models_dir: Path) -> None:
     os.environ.setdefault('PYTHONUNBUFFERED', '1')
 
 
-def _repo_local_dir(models_root: Path, repo_id: str) -> Path:
+def _repo_cache_dir(models_root: Path, repo_id: str) -> Path:
     repo_cache_name = repo_id.replace("/", "--")
     return models_root / "hub" / f"models--{repo_cache_name}"
+
+
+def _cache_snapshot_present(models_root: Path, repo_id: str) -> bool:
+    repo_cache = _repo_cache_dir(models_root, repo_id) / "snapshots"
+    if not repo_cache.exists():
+        return False
+    for candidate in repo_cache.iterdir():
+        if candidate.is_dir() and any(candidate.iterdir()):
+            return True
+    return False
 
 
 def snapshot(
@@ -160,8 +170,8 @@ def snapshot(
     except Exception as exc:  # pragma: no cover
         return {"model": model_id, "status": "error", "error": f"huggingface_hub not available: {exc}"}
     target_models_root = models_root or Path(os.environ.get("HF_HOME") or ".")
-    local_dir = _repo_local_dir(target_models_root, repo_id)
-    local_dir.parent.mkdir(parents=True, exist_ok=True)
+    cache_dir = target_models_root / "hub"
+    cache_dir.mkdir(parents=True, exist_ok=True)
     attempts = max(int(retries), 1)
     label = f"[bootstrap] [{progress_label}] " if progress_label else "[bootstrap] "
 
@@ -170,11 +180,17 @@ def snapshot(
         try:
             resolved_dir = snapshot_download(
                 repo_id=repo_id,
-                local_dir=str(local_dir),
+                cache_dir=str(cache_dir),
                 revision=revision,
-                local_dir_use_symlinks=False,
                 token=auth_token,
             )
+            if not _cache_snapshot_present(target_models_root, repo_id):
+                return {
+                    "model": model_id,
+                    "status": "error",
+                    "error": f"cache layout incomplete for {repo_id} under {cache_dir}",
+                    "attempts": str(attempt),
+                }
             _log(f"{label}ready {repo_id}")
             return {
                 "model": model_id,
@@ -182,6 +198,7 @@ def snapshot(
                 "path": resolved_dir,
                 "revision": revision or "default",
                 "attempts": str(attempt),
+                "cache_verified": "true",
             }
         except Exception as exc:  # pragma: no cover
             detail = str(exc)

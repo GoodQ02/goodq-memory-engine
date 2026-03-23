@@ -465,6 +465,24 @@ def _windows_to_wsl_path(path: str) -> Optional[str]:
     return None
 
 
+def _resolve_wsl_python(distro: str, wsl_workspace: str) -> str:
+    candidates = [
+        f"{wsl_workspace}/venv/bin/python",
+        f"{wsl_workspace}/env/bin/python",
+    ]
+    for candidate in candidates:
+        probe = subprocess.run(
+            ["wsl", "-d", distro, "--", "test", "-x", candidate],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+        if probe.returncode == 0:
+            return candidate
+    return candidates[0]
+
+
 def _run_wsl_faster_whisper_venv(input_path: str) -> Dict[str, Any]:
     distro = (os.environ.get("GOODQ_WSL_DISTRO") or "Ubuntu-22.04").strip() or "Ubuntu-22.04"
     wsl_workspace = (os.environ.get("GOODQ_WSL_WORKSPACE") or "").strip()
@@ -477,7 +495,7 @@ def _run_wsl_faster_whisper_venv(input_path: str) -> Dict[str, Any]:
         )
         wsl_workspace = f"/home/{wsl_user}/goodq_audio"
     wsl_workspace = wsl_workspace.rstrip("/")
-    wsl_python = f"{wsl_workspace}/env/bin/python"
+    wsl_python = _resolve_wsl_python(distro, wsl_workspace)
 
     helper_candidates: List[str] = [f"{wsl_workspace}/fw_transcribe.py"]
 

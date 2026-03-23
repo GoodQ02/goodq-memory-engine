@@ -24,7 +24,7 @@ ENV_NAME = "goodq_core"
 BASELINE_ENV_FILE = "environment.yml"
 GPU_ENV_FILE = "environment.gpu.yml"
 DEFAULT_DATA_ROOT = Path(r"C:\GoodQ_Data")
-DEFAULT_WSL_DISTRO = "Ubuntu"
+DEFAULT_WSL_DISTRO = "Ubuntu-22.04"
 MIN_FREE_SPACE_GB = 25
 QDRANT_SERVICE_NAME = "GoodQ_Qdrant"
 CONDA_TOS_CHANNELS = (
@@ -67,6 +67,17 @@ class BootstrapContext:
     profile: CapabilityProfile
     install_step_envs: bool
     prefetch_models: bool
+    wsl_user: Optional[str] = None
+    wsl_workspace: Optional[str] = None
+
+
+@dataclass(frozen=True)
+class WslAudioContext:
+    distro: str
+    user: str
+    home: str
+    workspace: str
+    windows_workspace: Path
 
 
 @dataclass(frozen=True)
@@ -151,6 +162,15 @@ SUPPORTED_STEP_ENVS: tuple[StepEnvSpec, ...] = (
         "audio embeddings",
         ("torch", "torchaudio", "transformers", "librosa", "faiss"),
     ),
+)
+
+WSL_AUDIO_ASSET_RELATIVE_PATHS: tuple[str, ...] = (
+    "wsl2_audio/setup_wsl2_audio.sh",
+    "wsl2_audio/setup_cuda_env.sh",
+    "wsl2_audio/process_audio.py",
+    "wsl2_audio/audio_service.py",
+    "wsl2_audio/fw_transcribe.py",
+    "scripts/wsl/install_audio_service.sh",
 )
 
 
@@ -438,6 +458,55 @@ def _run_powershell(command: str, *, capture: bool = True) -> subprocess.Complet
 
 def _quote_ps(value: str) -> str:
     return value.replace("'", "''")
+
+
+def _strip_wrapping_quotes(value: str) -> str:
+    trimmed = (value or "").strip()
+    if len(trimmed) >= 2 and trimmed[0] == trimmed[-1] and trimmed[0] in {"'", '"'}:
+        return trimmed[1:-1]
+    return trimmed
+
+
+def _bash_quote(value: str) -> str:
+    return "'" + str(value).replace("'", "'\"'\"'") + "'"
+
+
+def _windows_to_wsl_path(path: str | Path) -> Optional[str]:
+    normalized = str(path).replace("\\", "/")
+    if len(normalized) >= 3 and normalized[1] == ":" and normalized[2] == "/":
+        return f"/mnt/{normalized[0].lower()}/{normalized[3:]}"
+    if normalized.startswith("/"):
+        return normalized
+    return None
+
+
+def _wsl_unc_path(distro: str, wsl_path: str) -> Path:
+    segments = [segment for segment in str(wsl_path).replace("\\", "/").split("/") if segment]
+    unc = Path(rf"\\wsl$\{distro}")
+    for segment in segments:
+        unc = unc / segment
+    return unc
+
+
+def _load_env_file(path: Path) -> dict[str, str]:
+    values: dict[str, str] = {}
+    if not path.exists():
+        return values
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        if not key:
+            continue
+        values[key] = _strip_wrapping_quotes(value)
+    return values
+
+
+def _is_placeholder_secret(value: str) -> bool:
+    lowered = (value or "").strip().lower()
+    return not lowered or lowered.startswith("your_") or lowered.endswith("_here")
 
 
 def classify_profile(gpu_available: bool, wsl_available: bool, enable_gpu: bool) -> CapabilityProfile:
@@ -908,6 +977,25 @@ def env_python(conda_exe: Path, repo_root: Path, code: str) -> subprocess.Comple
     )
 
 
+def resolve_models_cache_root(conda_exe: Path, repo_root: Path) -> Optional[Path]:
+    completed = env_python(
+        conda_exe,
+        repo_root,
+        (
+            "from steps.common.config_loader import get_runtime_paths, load_configs; "
+            "cfg = load_configs({}); "
+            "paths = get_runtime_paths(cfg, 'models_cache'); "
+            "print(paths.get('models_cache', ''))"
+        ),
+    )
+    if completed.returncode != 0:
+        return None
+    lines = [line.strip() for line in (completed.stdout or "").splitlines() if line.strip()]
+    if not lines:
+        return None
+    return Path(lines[-1])
+
+
 def check_disk_space(path: Path) -> tuple[bool, str]:
     probe = path
     if not probe.exists():
@@ -931,6 +1019,241 @@ def _base_data_root(path: Path) -> Path:
     return effective.parent if effective.parent != effective else effective
 
 
+def _resolve_wsl_audio_context(ctx: BootstrapContext) -> WslAudioContext:
+    distro = (ctx.wsl_distro or DEFAULT_WSL_DISTRO).strip() or DEFAULT_WSL_DISTRO
+    explicit_user = (ctx.wsl_user or os.environ.get("GOODQ_WSL_USER") or "").strip()
+    explicit_workspace = _strip_wrapping_quotes(
+        ctx.wsl_workspace or os.environ.get("GOODQ_WSL_WORKSPACE") or ""
+    ).strip()
+    if explicit_workspace.lower() == "auto":
+        explicit_workspace = ""
+
+    if not ctx.profile.wsl_available:
+        raise RuntimeError("WSL audio bootstrap requested, but WSL is not available on this host.")
+
+    probe = _run(
+        [
+            "wsl",
+            "-d",
+            distro,
+            "--",
+            "bash",
+            "-lc",
+            "printf '%s\\n%s\\n' \"$(whoami)\" \"$HOME\"",
+        ]
+    )
+    if probe.returncode != 0:
+        detail = (probe.stderr or probe.stdout).strip() or f"unable to query distro {distro}"
+        raise RuntimeError(
+            f"WSL distro '{distro}' is not ready yet. Launch it once to finish first-time setup, then rerun bootstrap. Detail: {detail}"
+        )
+
+    lines = [line.strip() for line in (probe.stdout or "").splitlines() if line.strip()]
+    detected_user = lines[0] if lines else ""
+    detected_home = lines[1] if len(lines) > 1 else ""
+    user = explicit_user or detected_user or "user"
+    home = detected_home or f"/home/{user}"
+    workspace = explicit_workspace or f"{home.rstrip('/')}/goodq_audio"
+    return WslAudioContext(
+        distro=distro,
+        user=user,
+        home=home.rstrip("/") or f"/home/{user}",
+        workspace=workspace.rstrip("/") or f"/home/{user}/goodq_audio",
+        windows_workspace=_wsl_unc_path(distro, workspace),
+    )
+
+
+def _wsl_audio_env_values(ctx: BootstrapContext, wsl_ctx: WslAudioContext) -> dict[str, str]:
+    env_file_values = _load_env_file(ctx.repo_root / ".env.local")
+
+    def pick(*keys: str) -> Optional[str]:
+        for key in keys:
+            candidate = _strip_wrapping_quotes(os.environ.get(key) or env_file_values.get(key) or "")
+            if candidate and not _is_placeholder_secret(candidate):
+                return candidate
+        return None
+
+    values = {
+        "GOODQ_WSL_DISTRO": wsl_ctx.distro,
+        "GOODQ_WSL_USER": wsl_ctx.user,
+        "GOODQ_WSL_WORKSPACE": wsl_ctx.workspace,
+        "GOODQ_REQUIRE_WSL_AUDIO": "1",
+        "GOODQ_REQUIRE_GPU": "1" if ctx.enable_gpu else "0",
+    }
+
+    hf_token = pick("HF_TOKEN", "HF_HUB_TOKEN", "HUGGINGFACE_TOKEN", "HUGGINGFACE_HUB_TOKEN")
+    pyannote_token = pick("PYANNOTE_TOKEN") or hf_token
+    if hf_token:
+        values.update(
+            {
+                "HF_TOKEN": hf_token,
+                "HF_HUB_TOKEN": hf_token,
+                "HUGGINGFACE_TOKEN": hf_token,
+                "HUGGINGFACE_HUB_TOKEN": hf_token,
+            }
+        )
+    if pyannote_token:
+        values["PYANNOTE_TOKEN"] = pyannote_token
+
+    models_root = resolve_models_cache_root(ctx.conda_exe, ctx.repo_root)
+    wsl_models_root = _windows_to_wsl_path(models_root) if models_root else None
+    if wsl_models_root:
+        values["HF_HOME"] = wsl_models_root
+        values["TORCH_HOME"] = wsl_models_root
+        values["HUGGINGFACE_HUB_CACHE"] = f"{wsl_models_root.rstrip('/')}/hub"
+
+    return values
+
+
+def _render_env_assignment(value: str) -> str:
+    escaped = str(value).replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{escaped}"'
+
+
+def _write_wsl_audio_env_file(wsl_ctx: WslAudioContext, values: dict[str, str]) -> Path:
+    env_path = wsl_ctx.windows_workspace / ".goodq_env"
+    env_path.parent.mkdir(parents=True, exist_ok=True)
+    lines = ["# Generated by scripts/bootstrap_install.py"]
+    for key in sorted(values):
+        lines.append(f"{key}={_render_env_assignment(values[key])}")
+    env_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return env_path
+
+
+def _run_wsl_bash(
+    wsl_ctx: WslAudioContext,
+    script: str,
+    *,
+    heartbeat_label: str | None = None,
+    heartbeat_artifacts: Iterable[Path] = (),
+) -> subprocess.CompletedProcess[str]:
+    return _run(
+        ["wsl", "-d", wsl_ctx.distro, "--", "bash", "-lc", script],
+        heartbeat_label=heartbeat_label,
+        heartbeat_artifacts=heartbeat_artifacts,
+    )
+
+
+def _sync_wsl_audio_assets(ctx: BootstrapContext, wsl_ctx: WslAudioContext) -> None:
+    wsl_ctx.windows_workspace.mkdir(parents=True, exist_ok=True)
+    for rel_path in WSL_AUDIO_ASSET_RELATIVE_PATHS:
+        src = ctx.repo_root / rel_path
+        if not src.exists():
+            raise FileNotFoundError(f"Missing WSL audio asset: {src}")
+        dst = wsl_ctx.windows_workspace / Path(rel_path).name
+        shutil.copy2(src, dst)
+    chmod_targets = " ".join(
+        _bash_quote(f"{wsl_ctx.workspace}/{Path(rel_path).name}") for rel_path in WSL_AUDIO_ASSET_RELATIVE_PATHS
+    )
+    _run_wsl_bash(wsl_ctx, f"chmod +x {chmod_targets}")
+
+
+def _probe_wsl_audio_workspace_ready(wsl_ctx: WslAudioContext) -> tuple[bool, str]:
+    script = (
+        f"test -f {_bash_quote(f'{wsl_ctx.workspace}/setup_cuda_env.sh')} && "
+        f"test -f {_bash_quote(f'{wsl_ctx.workspace}/process_audio.py')} && "
+        f"(test -x {_bash_quote(f'{wsl_ctx.workspace}/venv/bin/python')} || "
+        f"test -x {_bash_quote(f'{wsl_ctx.workspace}/env/bin/python')}) && "
+        f"source {_bash_quote(f'{wsl_ctx.workspace}/setup_cuda_env.sh')} >/dev/null 2>&1 && "
+        "python3 -c \"import faster_whisper, torch; print('ready')\""
+    )
+    completed = _run_wsl_bash(wsl_ctx, script)
+    if completed.returncode == 0:
+        return True, "workspace and Python runtime are ready"
+    return False, _completed_output(completed) or "WSL audio workspace probe failed"
+
+
+def _wsl_has_systemd(wsl_ctx: WslAudioContext) -> bool:
+    completed = _run_wsl_bash(wsl_ctx, "test -d /run/systemd/system")
+    return completed.returncode == 0
+
+
+def ensure_wsl_audio_ready(ctx: BootstrapContext, *, assume_yes: bool) -> bool:
+    if not ctx.enable_wsl_audio:
+        return True
+    if not ctx.profile.wsl_available:
+        elevated = _is_admin()
+        _print("")
+        _print("WSL Audio Bootstrap Handoff")
+        _print("===========================")
+        _print(f"[WARN] WSL audio acceleration was requested, but WSL is not installed yet.")
+        _print(f"[INFO] Elevation state: {'elevated' if elevated else 'non-elevated'}")
+        _print(f"[INFO] Run this next in an elevated PowerShell:")
+        _print(f"  wsl --install -d {ctx.wsl_distro}")
+        _print("[INFO] Reboot if Windows asks, launch the distro once to finish first-time setup, then rerun bootstrap.")
+        return False
+
+    wsl_ctx = _resolve_wsl_audio_context(ctx)
+    ctx.wsl_user = wsl_ctx.user
+    ctx.wsl_workspace = wsl_ctx.workspace
+    _print(f"[INFO] WSL audio target: distro={wsl_ctx.distro} user={wsl_ctx.user} workspace={wsl_ctx.workspace}")
+
+    _run_wsl_bash(
+        wsl_ctx,
+        f"mkdir -p {_bash_quote(wsl_ctx.workspace)}",
+        heartbeat_label="WSL audio workspace prepare",
+        heartbeat_artifacts=(wsl_ctx.windows_workspace,),
+    )
+    _sync_wsl_audio_assets(ctx, wsl_ctx)
+    env_file = _write_wsl_audio_env_file(wsl_ctx, _wsl_audio_env_values(ctx, wsl_ctx))
+
+    ready, detail = _probe_wsl_audio_workspace_ready(wsl_ctx)
+    if not ready:
+        _print("[INFO] Provisioning WSL audio runtime. Your Linux password may be requested by sudo.")
+        setup_script = (
+            f"cd {_bash_quote(wsl_ctx.workspace)} && "
+            "set -a && [ -f ./.goodq_env ] && source ./.goodq_env; set +a && "
+            f"GOODQ_WSL_WORKSPACE={_bash_quote(wsl_ctx.workspace)} "
+            f"./setup_wsl2_audio.sh"
+        )
+        completed = _run_wsl_bash(
+            wsl_ctx,
+            setup_script,
+            heartbeat_label="WSL audio bootstrap",
+            heartbeat_artifacts=(wsl_ctx.windows_workspace / "venv", env_file),
+        )
+        if completed.returncode != 0:
+            raise RuntimeError(_completed_output(completed) or "WSL audio setup failed")
+        ready, detail = _probe_wsl_audio_workspace_ready(wsl_ctx)
+        if not ready:
+            raise RuntimeError(f"WSL audio workspace is still not ready after setup: {detail}")
+    else:
+        _print(f"[OK] WSL audio workspace already ready: {detail}")
+
+    if _wsl_has_systemd(wsl_ctx):
+        service_script = (
+            f"cd {_bash_quote(wsl_ctx.workspace)} && "
+            "set -a && [ -f ./.goodq_env ] && source ./.goodq_env; set +a && "
+            f"GOODQ_WSL_USER={_bash_quote(wsl_ctx.user)} "
+            f"GOODQ_WSL_WORKSPACE={_bash_quote(wsl_ctx.workspace)} "
+            "./install_audio_service.sh"
+        )
+        completed = _run_wsl_bash(
+            wsl_ctx,
+            service_script,
+            heartbeat_label="WSL audio service install",
+            heartbeat_artifacts=(wsl_ctx.windows_workspace / "logs",),
+        )
+        if completed.returncode == 0:
+            _print("[OK] WSL audio service is installed and running.")
+        else:
+            _print("[WARN] WSL audio workspace is ready, but service install did not complete cleanly.")
+            detail = _completed_output(completed)
+            if detail:
+                _print(f"[INFO] WSL service detail: {detail}")
+            _print(
+                "[INFO] Direct WSL audio execution remains available; rerun install_audio_service.sh inside WSL when convenient."
+            )
+    else:
+        _print("[WARN] WSL systemd is unavailable; skipping persistent audio service install.")
+        _print(
+            f"[INFO] Direct WSL audio execution is ready. Manual service command: "
+            f"wsl -d {wsl_ctx.distro} -- bash -lc \"cd {wsl_ctx.workspace} && source setup_cuda_env.sh && python3 audio_service.py\""
+        )
+
+    return True
+
+
 def write_env_local(path: Path, template_path: Path, ctx: BootstrapContext) -> None:
     managed_marker = "# Bootstrap-managed defaults"
     created = not path.exists()
@@ -944,6 +1267,9 @@ def write_env_local(path: Path, template_path: Path, ctx: BootstrapContext) -> N
         base = existing.split(managed_marker, 1)[0].rstrip()
 
     base_data_root = _base_data_root(ctx.data_root)
+    wsl_audio_ready = bool(ctx.enable_wsl_audio and ctx.wsl_user and ctx.wsl_workspace)
+    wsl_workspace = ctx.wsl_workspace or "auto"
+    wsl_user = ctx.wsl_user or "auto"
     managed_block = textwrap.dedent(
         f"""
 
@@ -954,9 +1280,10 @@ def write_env_local(path: Path, template_path: Path, ctx: BootstrapContext) -> N
         GOODQ_CONDA_ENV={ENV_NAME}
         GOODQ_HOST_PROFILE={ctx.profile.profile}
         GOODQ_REQUIRE_GPU=0
-        GOODQ_REQUIRE_WSL_AUDIO=0
+        GOODQ_REQUIRE_WSL_AUDIO={1 if wsl_audio_ready else 0}
         GOODQ_WSL_DISTRO={ctx.wsl_distro}
-        GOODQ_WSL_WORKSPACE=auto
+        GOODQ_WSL_USER={wsl_user}
+        GOODQ_WSL_WORKSPACE={wsl_workspace}
         """
     ).lstrip()
     path.write_text(base.rstrip() + "\n\n" + managed_block, encoding="utf-8")
@@ -1385,8 +1712,7 @@ def collect_context(args: argparse.Namespace) -> BootstrapContext:
         _print("[WARN] GPU acceleration requested, but no NVIDIA GPU was detected. Falling back to BASELINE.")
         enable_gpu = False
     if enable_wsl_audio and not wsl_available:
-        _print("[WARN] WSL audio acceleration requested, but WSL2 was not detected. Keeping WSL disabled.")
-        enable_wsl_audio = False
+        _print("[WARN] WSL audio acceleration requested, but WSL2 is not installed yet. Bootstrap will stage the required handoff.")
 
     profile = CapabilityProfile(
         profile="GPU_ENHANCED" if enable_gpu and gpu_available else "BASELINE",
@@ -1544,12 +1870,15 @@ def main() -> int:
     if not ctx.launcher_bat.exists():
         return _fail(f"Missing launcher: {ctx.launcher_bat}")
 
+    wsl_ready = True
     if not args.verify_only:
         try:
             ensure_conda_env(ctx.conda_exe, ctx.repo_root, ctx.environment_yml, assume_yes=args.yes)
             ensure_supported_step_envs(ctx, assume_yes=args.yes)
             prepare_local_files(ctx)
             ensure_model_cache(ctx)
+            wsl_ready = ensure_wsl_audio_ready(ctx, assume_yes=args.yes)
+            prepare_local_files(ctx)
         except Exception as exc:  # noqa: BLE001
             return _fail(f"Bootstrap preparation failed: {exc}")
 
@@ -1561,6 +1890,12 @@ def main() -> int:
     verify_exit = verify_runtime(ctx, qdrant_ready=qdrant_ready)
     if verify_exit != 0:
         return verify_exit
+
+    if not args.verify_only and ctx.enable_wsl_audio and not wsl_ready:
+        return _fail(
+            "Bootstrap core setup completed, but the WSL audio extension is still pending. "
+            "Complete the staged WSL install step shown above, launch the distro once, and rerun bootstrap."
+        )
 
     if not args.verify_only and not qdrant_ready:
         return _fail(

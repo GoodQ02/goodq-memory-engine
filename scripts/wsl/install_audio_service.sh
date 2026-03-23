@@ -22,7 +22,8 @@ Type=simple
 User=${WSL_USER}
 WorkingDirectory=${WSL_WORKSPACE}
 Environment=HOME=${WSL_HOME}
-ExecStart=${WSL_WORKSPACE}/venv/bin/python ${WSL_WORKSPACE}/audio_service.py
+EnvironmentFile=-${WSL_WORKSPACE}/.goodq_env
+ExecStart=/bin/bash -lc 'cd "${WSL_WORKSPACE}" && source "${WSL_WORKSPACE}/setup_cuda_env.sh" && exec python3 "${WSL_WORKSPACE}/audio_service.py"'
 Restart=on-failure
 RestartSec=5
 

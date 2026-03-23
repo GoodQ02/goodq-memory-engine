@@ -3,7 +3,19 @@
 # Source this script to properly configure CUDA libraries
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-VENV_DIR="$SCRIPT_DIR/env"
+ENV_FILE="$SCRIPT_DIR/.goodq_env"
+VENV_DIR="$SCRIPT_DIR/venv"
+
+if [ ! -f "$VENV_DIR/bin/activate" ] && [ -f "$SCRIPT_DIR/env/bin/activate" ]; then
+    VENV_DIR="$SCRIPT_DIR/env"
+fi
+
+if [ -f "$ENV_FILE" ]; then
+    set -a
+    # shellcheck disable=SC1090
+    source "$ENV_FILE"
+    set +a
+fi
 
 if [ ! -f "$VENV_DIR/bin/activate" ]; then
     echo "✗ Missing virtual environment activation script: $VENV_DIR/bin/activate" >&2

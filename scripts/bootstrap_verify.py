@@ -43,6 +43,29 @@ class CheckResult:
         return {"name": self.name, "status": self.status, "detail": self.detail}
 
 
+def _load_env_file(path: Path) -> Dict[str, str]:
+    values: Dict[str, str] = {}
+    if not path.exists():
+        return values
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        if not key:
+            continue
+        values[key] = value.strip().strip("'").strip('"')
+    return values
+
+
+_ENV_FILE_VALUES = _load_env_file(REPO_ROOT / ".env.local")
+
+
+def _env_or_file(name: str) -> str:
+    return (os.environ.get(name) or _ENV_FILE_VALUES.get(name) or "").strip()
+
+
 def _check_config_load() -> tuple[CheckResult, Dict[str, Any]]:
     try:
         from steps.common.config_loader import load_configs
@@ -332,7 +355,7 @@ def _check_required_model_cache(cfg: Dict[str, Any]) -> List[CheckResult]:
 
 
 def _check_wsl_flag() -> CheckResult:
-    value = os.environ.get("GOODQ_WSL_DISTRO")
+    value = _env_or_file("GOODQ_WSL_DISTRO")
     if value:
         return CheckResult("wsl_flag", "pass", f"GOODQ_WSL_DISTRO={value}")
     try:
@@ -348,11 +371,62 @@ def _check_wsl_flag() -> CheckResult:
     return CheckResult("wsl_flag", "warn", "GOODQ_WSL_DISTRO unset (runtime default is Ubuntu)")
 
 
+def _is_truthy(value: str) -> bool:
+    return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _check_wsl_audio_workspace() -> List[CheckResult]:
+    if not _is_truthy(_env_or_file("GOODQ_REQUIRE_WSL_AUDIO")):
+        return []
+
+    distro = (_env_or_file("GOODQ_WSL_DISTRO") or "Ubuntu-22.04").strip() or "Ubuntu-22.04"
+    wsl_user = (_env_or_file("GOODQ_WSL_USER") or os.environ.get("USERNAME") or os.environ.get("USER") or "user").strip()
+    workspace = (_env_or_file("GOODQ_WSL_WORKSPACE") or f"/home/{wsl_user}/goodq_audio").strip()
+    if workspace.lower() == "auto":
+        workspace = f"/home/{wsl_user}/goodq_audio"
+
+    try:
+        completed = subprocess.run(
+            [
+                "wsl",
+                "-d",
+                distro,
+                "--",
+                "bash",
+                "-lc",
+                (
+                    f"test -f '{workspace}/setup_cuda_env.sh' && "
+                    f"test -f '{workspace}/process_audio.py' && "
+                    f"(test -x '{workspace}/venv/bin/python' || test -x '{workspace}/env/bin/python')"
+                ),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except FileNotFoundError:
+        return [CheckResult("wsl_audio_workspace", "fail", "WSL is unavailable but GOODQ_REQUIRE_WSL_AUDIO=1")]
+    except Exception as exc:  # noqa: BLE001
+        return [CheckResult("wsl_audio_workspace", "fail", f"WSL workspace probe failed: {exc}")]
+
+    if completed.returncode == 0:
+        return [CheckResult("wsl_audio_workspace", "pass", f"ready in distro={distro} workspace={workspace}")]
+
+    detail = (completed.stderr or completed.stdout).strip() or "workspace missing required files"
+    return [
+        CheckResult(
+            "wsl_audio_workspace",
+            "fail",
+            f"GOODQ_REQUIRE_WSL_AUDIO=1 but workspace is not ready in distro={distro} workspace={workspace} ({detail})",
+        )
+    ]
+
+
 def _check_env_resolution(cfg: Dict[str, Any]) -> List[CheckResult]:
     paths = cfg.get("paths", {}) if isinstance(cfg, dict) else {}
     resolved_data_root = paths.get("data_root")
     resolved_db_path = paths.get("db_path")
-    profile = os.environ.get("GOODQ_HOST_PROFILE")
+    profile = _env_or_file("GOODQ_HOST_PROFILE")
 
     results: List[CheckResult] = []
     if resolved_data_root:
@@ -371,7 +445,7 @@ def _check_env_resolution(cfg: Dict[str, Any]) -> List[CheckResult]:
         results.append(CheckResult("env:host_profile", "warn", "GOODQ_HOST_PROFILE unset (legacy behavior)"))
 
     for name in ("GOODQ_DATA_ROOT", "GOODQ_WSL_USER", "GOODQ_WSL_WORKSPACE"):
-        value = os.environ.get(name)
+        value = _env_or_file(name)
         if value:
             results.append(CheckResult(f"env:{name}", "pass", f"{name}={value}"))
         else:
@@ -392,6 +466,7 @@ def build_report() -> Dict[str, Any]:
     checks.append(_check_pdftotext(cfg))
     checks.extend(_check_required_model_cache(cfg))
     checks.append(_check_wsl_flag())
+    checks.extend(_check_wsl_audio_workspace())
     checks.extend(_check_step_env_pack())
     checks.extend(_check_env_resolution(cfg))
 

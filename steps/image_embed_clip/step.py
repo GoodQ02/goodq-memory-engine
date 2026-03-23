@@ -11,17 +11,17 @@ logger = logging.getLogger(__name__)
 
 # Import GPU manager for centralized GPU configuration
 try:
-    from gpu_config import setup_step_gpu, GPUManager
-except ImportError:
-    try:
-        from gpu_config import setup_step_gpu, GPUManager
-    except ImportError:
-        def setup_step_gpu(step_name):
-            return {"device": "cpu", "step_name": step_name}
-        class GPUManager:
-            @staticmethod
-            def clear_cache():
-                pass
+    from scripts.gpu_config import setup_step_gpu, GPUManager
+except ImportError as exc:
+    logger.warning("[WARN] scripts.gpu_config unavailable; using CPU fallback: %s", exc)
+
+    def setup_step_gpu(step_name):
+        return {"device": "cpu", "step_name": step_name}
+
+    class GPUManager:
+        @staticmethod
+        def clear_cache():
+            pass
 
 from steps.text_embed.step import _content_fingerprint
 from steps.common.qdrant_client import build_qdrant_client
@@ -183,4 +183,3 @@ def image_embed_clip(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
     except Exception as e:
         print(f"[ERROR] CLIP embedding failed: {str(e)}")
         return {"clip_meta": {"status": "error", "error": str(e)}}
-

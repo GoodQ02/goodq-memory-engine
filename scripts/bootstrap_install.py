@@ -1134,6 +1134,17 @@ def _run_wsl_bash(
     )
 
 
+def _normalize_wsl_shell_asset(path: Path) -> bool:
+    if path.suffix.lower() != ".sh" or not path.exists():
+        return False
+    raw = path.read_bytes()
+    normalized = raw.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+    if normalized == raw:
+        return False
+    path.write_bytes(normalized)
+    return True
+
+
 def _sync_wsl_audio_assets(ctx: BootstrapContext, wsl_ctx: WslAudioContext) -> None:
     wsl_ctx.windows_workspace.mkdir(parents=True, exist_ok=True)
     for rel_path in WSL_AUDIO_ASSET_RELATIVE_PATHS:
@@ -1142,6 +1153,8 @@ def _sync_wsl_audio_assets(ctx: BootstrapContext, wsl_ctx: WslAudioContext) -> N
             raise FileNotFoundError(f"Missing WSL audio asset: {src}")
         dst = wsl_ctx.windows_workspace / Path(rel_path).name
         shutil.copy2(src, dst)
+        if _normalize_wsl_shell_asset(dst):
+            _print(f"[INFO] Normalized CRLF line endings for staged WSL shell asset: {dst.name}")
     chmod_targets = " ".join(
         _bash_quote(f"{wsl_ctx.workspace}/{Path(rel_path).name}") for rel_path in WSL_AUDIO_ASSET_RELATIVE_PATHS
     )

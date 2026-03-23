@@ -115,6 +115,54 @@ def test_wsl_audio_env_values_share_model_cache_and_tokens(monkeypatch, tmp_path
     assert values["HUGGINGFACE_HUB_CACHE"] == "/mnt/c/models/hub"
 
 
+def test_sync_wsl_audio_assets_normalizes_shell_line_endings(monkeypatch, tmp_path: Path):
+    from scripts import bootstrap_install
+
+    ctx = _ctx(tmp_path)
+    source_setup = tmp_path / "wsl2_audio" / "setup_wsl2_audio.sh"
+    source_service = tmp_path / "scripts" / "wsl" / "install_audio_service.sh"
+    source_setup.parent.mkdir(parents=True, exist_ok=True)
+    source_service.parent.mkdir(parents=True, exist_ok=True)
+    source_setup.write_bytes(b"#!/bin/bash\r\necho setup\r\n")
+    source_service.write_bytes(b"#!/bin/bash\r\necho service\r\n")
+
+    staged_workspace = tmp_path / "wsl_stage"
+    wsl_ctx = bootstrap_install.WslAudioContext(
+        distro="Ubuntu-22.04",
+        user="goodq",
+        home="/home/goodq",
+        workspace="/home/goodq/goodq_audio",
+        windows_workspace=staged_workspace,
+    )
+
+    seen_scripts: list[str] = []
+
+    def fake_run_wsl_bash(_wsl_ctx, script, **kwargs):
+        seen_scripts.append(script)
+        return subprocess.CompletedProcess(["wsl"], 0, "", "")
+
+    monkeypatch.setattr(bootstrap_install, "_run_wsl_bash", fake_run_wsl_bash)
+    monkeypatch.setattr(
+        bootstrap_install,
+        "WSL_AUDIO_ASSET_RELATIVE_PATHS",
+        [
+            "wsl2_audio/setup_wsl2_audio.sh",
+            "scripts/wsl/install_audio_service.sh",
+        ],
+    )
+
+    bootstrap_install._sync_wsl_audio_assets(ctx, wsl_ctx)
+
+    staged_setup = staged_workspace / "setup_wsl2_audio.sh"
+    staged_service = staged_workspace / "install_audio_service.sh"
+    assert b"\r" not in staged_setup.read_bytes()
+    assert b"\r" not in staged_service.read_bytes()
+    assert staged_setup.read_bytes().startswith(b"#!/bin/bash\n")
+    assert staged_service.read_bytes().startswith(b"#!/bin/bash\n")
+    assert seen_scripts
+    assert "chmod +x" in seen_scripts[0]
+
+
 def test_resolve_wsl_python_prefers_venv(monkeypatch):
     from steps.audio_transcribe import step
 

@@ -242,6 +242,27 @@ def extract_keywords_from_transcript(transcript_segments: List[Dict[str, Any]], 
     return [word for word, count in sorted_words[:top_k]]
 
 
+def _resolve_scene_objects(
+    scene: Dict[str, Any],
+    scene_id: Any,
+    objects_data: Optional[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    for key in ("objects", "detected_objects"):
+        payload_objects = scene.get(key)
+        if isinstance(payload_objects, list):
+            return payload_objects
+
+    if isinstance(objects_data, dict):
+        for lookup_key in (scene_id, str(scene_id)):
+            scene_entry = objects_data.get(lookup_key)
+            if isinstance(scene_entry, dict):
+                scene_objects = scene_entry.get("objects")
+                if isinstance(scene_objects, list):
+                    return scene_objects
+
+    return []
+
+
 def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
     """
     Phase 6 harmonization: Fuse all modalities into unified temporal index.
@@ -556,9 +577,9 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
             'has_speakers': has_audio_for_scene and len(speaker_ids) > 0
         }
         
-        # Add detected objects if available
-        if objects_data:
-            scene_objects = objects_data.get(str(scene_id), {}).get('objects', [])
+        # Prefer live scene payload truth; fallback to the legacy Phase 6 object artifact.
+        scene_objects = _resolve_scene_objects(scene, scene_id, objects_data)
+        if scene_objects:
             unified_segment['detected_objects'] = scene_objects
         
         unified_segments.append(unified_segment)

@@ -901,7 +901,10 @@ def _validate_step_env(conda_exe: Path, repo_root: Path, spec: StepEnvSpec) -> l
         if unexpected:
             issues.append(f"pip check failed for {spec.name}: {' | '.join(unexpected)}")
         else:
-            _print(f"[WARN] {spec.name}: {' | '.join(lines)}")
+            _print(
+                f"[INFO] {spec.name}: accepted non-blocking dependency notice "
+                f"(runtime fallback remains supported): {' | '.join(lines)}"
+            )
 
     smoke_code = "import " + ", ".join(spec.smoke_imports) + "; print('ok')"
     smoke = _run(

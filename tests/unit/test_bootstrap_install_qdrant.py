@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import subprocess
 import sys
 from pathlib import Path
 
@@ -114,3 +115,45 @@ def test_run_emits_heartbeat_status_hint(monkeypatch):
 
     assert completed.returncode == 0
     assert any("current_model=openai/whisper-large-v3" in message for message in messages)
+
+
+def test_validate_step_env_reports_allowed_pip_check_warning_as_non_blocking(monkeypatch, tmp_path):
+    from scripts import bootstrap_install
+
+    messages: list[str] = []
+    monkeypatch.setattr(bootstrap_install, "_print", lambda msg: messages.append(msg))
+
+    spec = bootstrap_install.StepEnvSpec(
+        "goodq_face_embed",
+        "envs/face_embed/requirements.txt",
+        "envs/locks/face_embed.lock.txt",
+        "face detection and embeddings",
+        ("face_recognition",),
+        allowed_pip_check_warnings=(
+            "facenet-pytorch 2.6.0 has requirement torch<2.3.0,>=2.2.0",
+        ),
+    )
+
+    def fake_run(cmd, **kwargs):
+        rendered = " ".join(str(part) for part in cmd)
+        if "python -m pip check" in rendered:
+            return subprocess.CompletedProcess(
+                cmd,
+                1,
+                "facenet-pytorch 2.6.0 has requirement torch<2.3.0,>=2.2.0, but you have torch 2.5.1+cu121.",
+                "",
+            )
+        if "python -c" in rendered:
+            return subprocess.CompletedProcess(cmd, 0, "ok\n", "")
+        raise AssertionError(f"unexpected command: {rendered}")
+
+    monkeypatch.setattr(bootstrap_install, "_run", fake_run)
+
+    issues = bootstrap_install._validate_step_env(
+        Path(r"C:\Miniconda3\Scripts\conda.exe"),
+        tmp_path,
+        spec,
+    )
+
+    assert issues == []
+    assert any("accepted non-blocking dependency notice" in message for message in messages)

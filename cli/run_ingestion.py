@@ -1061,13 +1061,34 @@ def _resolve_audio_runtime_contract(cfg: Dict[str, Any]) -> Dict[str, Any]:
     """
     require_wsl = require_wsl_audio()
     requested_wsl = bool(wsl_audio_auto_enabled() or require_wsl)
-    wsl_distro = str(os.environ.get("GOODQ_WSL_DISTRO") or "Ubuntu").strip() or "Ubuntu"
+    host_cfg = cfg.get('host') if isinstance(cfg, dict) else {}
+    cfg_wsl_distro = (
+        str(host_cfg.get('wsl_distro')).strip()
+        if isinstance(host_cfg, dict) and host_cfg.get('wsl_distro') is not None
+        else ''
+    )
+    explicit_wsl_distro = str(os.environ.get("GOODQ_WSL_DISTRO") or "").strip()
+    distro_candidates: List[tuple[str, str]] = []
+    seen_distros: Set[str] = set()
+
+    def _add_distro_candidate(source: str, value: str) -> None:
+        normalized = str(value or "").strip()
+        if not normalized or normalized.lower() in {'auto', 'unset'} or normalized in seen_distros:
+            return
+        seen_distros.add(normalized)
+        distro_candidates.append((source, normalized))
+
+    _add_distro_candidate('env', explicit_wsl_distro)
+    _add_distro_candidate('config', cfg_wsl_distro)
+    _add_distro_candidate('default', 'Ubuntu')
+    primary_distro_source, wsl_distro = distro_candidates[0] if distro_candidates else ('default', 'Ubuntu')
     contract: Dict[str, Any] = {
         'mode': 'auto',
         'requested_wsl': requested_wsl,
         'require_wsl_audio': require_wsl,
         'wsl_command_available': bool(shutil.which('wsl')),
         'wsl_distro': wsl_distro,
+        'wsl_distro_source': primary_distro_source,
         'wsl_user': None,
         'wsl_workspace': None,
         'wsl_audio_workspace': None,
@@ -1088,7 +1109,6 @@ def _resolve_audio_runtime_contract(cfg: Dict[str, Any]) -> Dict[str, Any]:
         contract['reason'] = 'wsl_command_unavailable'
         return contract
 
-    host_cfg = cfg.get('host') if isinstance(cfg, dict) else {}
     cfg_wsl_user = (
         str(host_cfg.get('wsl_user')).strip()
         if isinstance(host_cfg, dict) and host_cfg.get('wsl_user') is not None
@@ -1133,54 +1153,66 @@ def _resolve_audio_runtime_contract(cfg: Dict[str, Any]) -> Dict[str, Any]:
 
     failed_workspaces: List[str] = []
     probe_failures: List[str] = []
+    attempted_targets: List[str] = []
 
-    for workspace_source, audio_workspace in workspace_candidates:
-        workspace = audio_workspace
-        contract['wsl_workspace'] = workspace
-        contract['wsl_audio_workspace'] = audio_workspace
-        contract['wsl_workspace_source'] = workspace_source
-        try:
-            check = subprocess.run(
-                [
-                    "wsl",
-                    "-d",
-                    wsl_distro,
-                    "--",
-                    "bash",
-                    "-lc",
-                    (
-                        f"test -d '{audio_workspace}' && "
-                        f"test -f '{audio_workspace}/setup_cuda_env.sh' && "
-                        f"test -f '{audio_workspace}/process_audio.py'"
-                    ),
-                ],
-                capture_output=True,
-                text=True,
-                timeout=5,
-                check=False,
-            )
-            ready = check.returncode == 0
-            contract['workspace_ready'] = ready
-            if ready:
-                contract['selected'] = 'wsl'
-                contract['reason'] = 'wsl_workspace_ready'
-                if explicit_workspace and workspace_source != 'env':
-                    contract['workspace_check_message'] = (
-                        f"GOODQ_WSL_WORKSPACE={explicit_workspace} was unavailable; "
-                        f"using {audio_workspace} from {workspace_source}."
-                    )
-                if wsl_user:
-                    os.environ["GOODQ_WSL_USER"] = wsl_user
-                os.environ["GOODQ_WSL_WORKSPACE"] = workspace
-                return contract
-            failed_workspaces.append(audio_workspace)
-        except Exception as e:
-            probe_failures.append(f"{audio_workspace}: {e}")
+    for distro_source, candidate_distro in distro_candidates:
+        for workspace_source, audio_workspace in workspace_candidates:
+            workspace = audio_workspace
+            contract['wsl_distro'] = candidate_distro
+            contract['wsl_distro_source'] = distro_source
+            contract['wsl_workspace'] = workspace
+            contract['wsl_audio_workspace'] = audio_workspace
+            contract['wsl_workspace_source'] = workspace_source
+            attempted_targets.append(f"{candidate_distro}:{audio_workspace}")
+            try:
+                check = subprocess.run(
+                    [
+                        "wsl",
+                        "-d",
+                        candidate_distro,
+                        "--",
+                        "bash",
+                        "-lc",
+                        (
+                            f"test -d '{audio_workspace}' && "
+                            f"test -f '{audio_workspace}/setup_cuda_env.sh' && "
+                            f"test -f '{audio_workspace}/process_audio.py'"
+                        ),
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
+                    check=False,
+                )
+                ready = check.returncode == 0
+                contract['workspace_ready'] = ready
+                if ready:
+                    contract['selected'] = 'wsl'
+                    contract['reason'] = 'wsl_workspace_ready'
+                    fallback_notes: List[str] = []
+                    if explicit_wsl_distro and distro_source != 'env':
+                        fallback_notes.append(
+                            f"GOODQ_WSL_DISTRO={explicit_wsl_distro} was unavailable; using {candidate_distro} from {distro_source}."
+                        )
+                    if explicit_workspace and workspace_source != 'env':
+                        fallback_notes.append(
+                            f"GOODQ_WSL_WORKSPACE={explicit_workspace} was unavailable; using {audio_workspace} from {workspace_source}."
+                        )
+                    if fallback_notes:
+                        contract['workspace_check_message'] = " ".join(fallback_notes)
+                    if wsl_user:
+                        os.environ["GOODQ_WSL_USER"] = wsl_user
+                    os.environ["GOODQ_WSL_DISTRO"] = candidate_distro
+                    os.environ["GOODQ_WSL_WORKSPACE"] = workspace
+                    return contract
+                failed_workspaces.append(f"{candidate_distro}:{audio_workspace}")
+            except Exception as e:
+                probe_failures.append(f"{candidate_distro}:{audio_workspace}: {e}")
 
-    tried_workspaces = ", ".join(failed_workspaces or [candidate for _, candidate in workspace_candidates])
+    tried_workspaces = ", ".join(failed_workspaces or attempted_targets)
     if probe_failures:
         message = (
-            f"WSL workspace preflight failed for distro={wsl_distro}; "
+            "WSL workspace preflight failed; "
             f"tried={tried_workspaces}; errors={' | '.join(probe_failures)}"
         )
         if require_wsl:
@@ -1191,8 +1223,8 @@ def _resolve_audio_runtime_contract(cfg: Dict[str, Any]) -> Dict[str, Any]:
         return contract
 
     message = (
-        f"WSL workspace not found for distro={wsl_distro}, tried={tried_workspaces}. "
-        "Set GOODQ_WSL_USER and GOODQ_WSL_WORKSPACE for deterministic host setup."
+        f"WSL workspace not found, tried={tried_workspaces}. "
+        "Set GOODQ_WSL_DISTRO, GOODQ_WSL_USER and GOODQ_WSL_WORKSPACE for deterministic host setup."
     )
     if require_wsl:
         raise RuntimeError(message)

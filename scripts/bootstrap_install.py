@@ -17,7 +17,7 @@ import urllib.error
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, Optional
+from typing import Callable, Iterable, Optional
 
 
 ENV_NAME = "goodq_core"
@@ -198,6 +198,14 @@ def _format_elapsed(seconds: float) -> str:
     return f"{secs}s"
 
 
+def _model_progress_stale_timeout_sec() -> int:
+    raw = os.environ.get("GOODQ_MODEL_STALL_TIMEOUT_SEC", "300").strip()
+    try:
+        return max(int(raw), 30)
+    except ValueError:
+        return 300
+
+
 def _artifact_hint(paths: Iterable[Path]) -> str:
     for candidate in paths:
         try:
@@ -211,6 +219,58 @@ def _artifact_hint(paths: Iterable[Path]) -> str:
     return ""
 
 
+def _read_json_file(path: Path) -> Optional[dict]:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return None
+    except json.JSONDecodeError:
+        return None
+    except Exception:
+        return None
+
+
+def _bootstrap_models_heartbeat_status(progress_path: Path, report_path: Path) -> str:
+    payload = _read_json_file(progress_path)
+    if not isinstance(payload, dict):
+        fallback = _read_json_file(report_path)
+        if isinstance(fallback, dict):
+            completed_count = fallback.get("completed_count")
+            status = str(fallback.get("status") or "unknown")
+            if completed_count is not None:
+                return f"report_status={status} completed={completed_count}"
+            return f"report_status={status}"
+        return ""
+
+    current_model = str(payload.get("current_model") or "pending")
+    current_index = payload.get("current_index")
+    total_assets = payload.get("total_assets")
+    attempt = payload.get("current_attempt")
+    completed_count = payload.get("completed_count")
+    last_event = str(payload.get("last_event") or "unknown")
+    status = str(payload.get("status") or "unknown")
+    last_progress_at = payload.get("last_progress_at")
+    age_text = "unknown"
+    stale_marker = ""
+    if isinstance(last_progress_at, (int, float)):
+        age_sec = max(int(time.time() - float(last_progress_at)), 0)
+        age_text = _format_elapsed(age_sec)
+        if age_sec >= _model_progress_stale_timeout_sec():
+            stale_marker = " stale=yes"
+
+    parts = [f"progress_status={status}"]
+    if current_index and total_assets:
+        parts.append(f"asset={current_index}/{total_assets}")
+    if completed_count is not None:
+        parts.append(f"completed={completed_count}")
+    parts.append(f"current_model={current_model}")
+    if attempt not in (None, ""):
+        parts.append(f"attempt={attempt}")
+    parts.append(f"last_event={last_event}")
+    parts.append(f"last_progress_age={age_text}{stale_marker}")
+    return " ".join(parts)
+
+
 def _run_with_heartbeat(
     cmd: list[str],
     *,
@@ -219,6 +279,7 @@ def _run_with_heartbeat(
     heartbeat_label: str,
     heartbeat_interval: int,
     heartbeat_artifacts: Iterable[Path],
+    heartbeat_status_fn: Optional[Callable[[], str]] = None,
 ) -> subprocess.CompletedProcess[str]:
     proc = subprocess.Popen(
         cmd,
@@ -264,6 +325,10 @@ def _run_with_heartbeat(
         message = f"[HEARTBEAT] {heartbeat_label}: elapsed={_format_elapsed(now - started)}"
         if artifact_hint:
             message += f" artifact_hint={artifact_hint}"
+        if heartbeat_status_fn:
+            status_hint = heartbeat_status_fn().strip()
+            if status_hint:
+                message += f" {status_hint}"
         if state["last_output_line"]:
             message += f" last_output={state['last_output_line'][:140]}"
         else:
@@ -286,6 +351,7 @@ def _run(
     heartbeat_label: str | None = None,
     heartbeat_interval: int = 20,
     heartbeat_artifacts: Iterable[Path] = (),
+    heartbeat_status_fn: Optional[Callable[[], str]] = None,
 ) -> subprocess.CompletedProcess[str]:
     if heartbeat_label:
         completed = _run_with_heartbeat(
@@ -295,6 +361,7 @@ def _run(
             heartbeat_label=heartbeat_label,
             heartbeat_interval=max(int(heartbeat_interval), 1),
             heartbeat_artifacts=heartbeat_artifacts,
+            heartbeat_status_fn=heartbeat_status_fn,
         )
         if check and completed.returncode != 0:
             raise subprocess.CalledProcessError(completed.returncode, cmd, output=completed.stdout, stderr=completed.stderr)
@@ -889,7 +956,7 @@ def ensure_supported_step_envs(ctx: BootstrapContext, *, assume_yes: bool) -> No
         ensure_step_env(ctx.conda_exe, ctx.repo_root, spec, assume_yes=assume_yes)
 
 
-def _run_bootstrap_models(conda_exe: Path, repo_root: Path, report_path: Path) -> subprocess.CompletedProcess[str]:
+def _run_bootstrap_models(conda_exe: Path, repo_root: Path, report_path: Path, progress_path: Path) -> subprocess.CompletedProcess[str]:
     return _run(
         [
             str(conda_exe),
@@ -900,11 +967,14 @@ def _run_bootstrap_models(conda_exe: Path, repo_root: Path, report_path: Path) -
             str(repo_root / "scripts" / "bootstrap_models.py"),
             "--report-path",
             str(report_path),
+            "--progress-path",
+            str(progress_path),
         ],
         cwd=repo_root,
         env=_isolated_process_env(),
         heartbeat_label="Model prefetch",
-        heartbeat_artifacts=(report_path,),
+        heartbeat_artifacts=(progress_path, report_path),
+        heartbeat_status_fn=lambda: _bootstrap_models_heartbeat_status(progress_path, report_path),
     )
 
 
@@ -916,8 +986,10 @@ def ensure_model_cache(ctx: BootstrapContext) -> None:
     _print("[INFO] Prefetching required model cache for offline-ready ingest")
     _print("[INFO] Live model download progress will be shown below. Transient network failures are retried automatically.")
     report_path = ctx.repo_root / "logs" / "bootstrap_models_report.json"
+    progress_path = ctx.repo_root / "logs" / "bootstrap_models_progress.json"
     report_path.unlink(missing_ok=True)
-    completed = _run_bootstrap_models(ctx.conda_exe, ctx.repo_root, report_path)
+    progress_path.unlink(missing_ok=True)
+    completed = _run_bootstrap_models(ctx.conda_exe, ctx.repo_root, report_path, progress_path)
     if completed.returncode != 0:
         raise RuntimeError("bootstrap_models.py failed; see console output above")
 

@@ -68,3 +68,49 @@ def test_run_emits_heartbeat_for_silent_subprocess(monkeypatch):
 
     assert completed.returncode == 0
     assert any("[HEARTBEAT] Silent installer phase" in message for message in messages)
+
+
+def test_bootstrap_models_heartbeat_status_reads_progress_and_flags_stale(monkeypatch, tmp_path: Path):
+    from scripts import bootstrap_install
+
+    progress_path = tmp_path / "bootstrap_models_progress.json"
+    report_path = tmp_path / "bootstrap_models_report.json"
+    progress_path.write_text(
+        """{
+  "status": "in_progress",
+  "current_model": "openai/whisper-large-v3",
+  "current_index": 8,
+  "total_assets": 16,
+  "current_attempt": 1,
+  "completed_count": 7,
+  "last_event": "model_started",
+  "last_progress_at": 100.0
+}""",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("GOODQ_MODEL_STALL_TIMEOUT_SEC", "60")
+    monkeypatch.setattr(bootstrap_install.time, "time", lambda: 250.0)
+
+    status = bootstrap_install._bootstrap_models_heartbeat_status(progress_path, report_path)
+
+    assert "current_model=openai/whisper-large-v3" in status
+    assert "asset=8/16" in status
+    assert "completed=7" in status
+    assert "last_progress_age=2m30s stale=yes" in status
+
+
+def test_run_emits_heartbeat_status_hint(monkeypatch):
+    from scripts import bootstrap_install
+
+    messages: list[str] = []
+    monkeypatch.setattr(bootstrap_install, "_print", lambda msg: messages.append(msg))
+
+    completed = bootstrap_install._run(
+        [sys.executable, "-c", "import time; time.sleep(2.2)"],
+        heartbeat_label="Model prefetch",
+        heartbeat_interval=1,
+        heartbeat_status_fn=lambda: "current_model=openai/whisper-large-v3 last_progress_age=45s",
+    )
+
+    assert completed.returncode == 0
+    assert any("current_model=openai/whisper-large-v3" in message for message in messages)

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import json
 import re
 import sys
 import types
+from argparse import Namespace
 from pathlib import Path
 
 
@@ -160,3 +162,138 @@ def test_snapshot_reports_error_when_cache_layout_is_not_runtime_compatible(monk
 
     assert result["status"] == "error"
     assert "cache layout incomplete" in result["error"]
+
+
+def test_main_writes_incremental_progress_and_partial_report(monkeypatch, tmp_path: Path):
+    from scripts import bootstrap_models
+
+    report_path = tmp_path / "logs" / "bootstrap_models_report.json"
+    progress_path = tmp_path / "logs" / "bootstrap_models_progress.json"
+    models_root = tmp_path / "models"
+    registry = {
+        "huggingface_models": {
+            "first": {"repo_id": "org/model-one", "revision": "rev-one"},
+            "second": {"repo_id": "org/model-two", "revision": "rev-two"},
+        }
+    }
+
+    snapshot_calls = {"count": 0}
+
+    def fake_snapshot(model_id, auth_token=None, revision=None, **kwargs):
+        snapshot_calls["count"] += 1
+        live_progress = json.loads(progress_path.read_text(encoding="utf-8"))
+        if snapshot_calls["count"] == 1:
+            assert live_progress["current_model"] == "org/model-one"
+            assert live_progress["current_index"] == 1
+        else:
+            partial_report = json.loads(report_path.read_text(encoding="utf-8"))
+            assert partial_report["completed_count"] == 1
+            assert partial_report["results"][0]["model"] == "org/model-one"
+        if kwargs.get("progress_cb"):
+            kwargs["progress_cb"](current_attempt=1, last_event="fake_snapshot_ready")
+        return {
+            "model": model_id,
+            "status": "ok",
+            "path": str(models_root / model_id.replace("/", "--")),
+            "attempts": "1",
+        }
+
+    def fake_yolo(**kwargs):
+        live_progress = json.loads(progress_path.read_text(encoding="utf-8"))
+        assert live_progress["current_model"] == "yolov8n.pt"
+        return {"asset": "yolov8n.pt", "status": "ok", "path": str(models_root / "yolo" / "yolov8n.pt"), "attempts": "1"}
+
+    monkeypatch.setattr(bootstrap_models, "parse_args", lambda: Namespace(report_path=str(report_path), progress_path=str(progress_path), retries=1))
+    monkeypatch.setattr(bootstrap_models, "load_registry", lambda repo_root: registry)
+    monkeypatch.setattr(bootstrap_models, "resolve_models_root", lambda: models_root)
+    monkeypatch.setattr(bootstrap_models, "ensure_env", lambda path: None)
+    monkeypatch.setattr(
+        bootstrap_models,
+        "resolve_auth_tokens",
+        lambda: {
+            "hf_token": None,
+            "hf_source": None,
+            "pyannote_token": None,
+            "pyannote_source": None,
+            "hf_present": False,
+            "pyannote_present": False,
+        },
+    )
+    monkeypatch.setattr(bootstrap_models, "load_dotenv", None)
+    monkeypatch.setattr(bootstrap_models, "snapshot", fake_snapshot)
+    monkeypatch.setattr(bootstrap_models, "download_yolo_n", fake_yolo)
+
+    bootstrap_models.main()
+
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    progress = json.loads(progress_path.read_text(encoding="utf-8"))
+    assert report["status"] == "complete"
+    assert report["completed_count"] == 3
+    assert len(report["results"]) == 3
+    assert progress["status"] == "complete"
+    assert progress["completed_count"] == 3
+    assert progress["current_model"] is None
+    assert progress["last_event"] == "bootstrap_complete"
+
+
+def test_main_persists_partial_report_on_keyboard_interrupt(monkeypatch, tmp_path: Path):
+    from scripts import bootstrap_models
+
+    report_path = tmp_path / "logs" / "bootstrap_models_report.json"
+    progress_path = tmp_path / "logs" / "bootstrap_models_progress.json"
+    models_root = tmp_path / "models"
+    registry = {
+        "huggingface_models": {
+            "first": {"repo_id": "org/model-one", "revision": "rev-one"},
+            "second": {"repo_id": "org/model-two", "revision": "rev-two"},
+        }
+    }
+
+    snapshot_calls = {"count": 0}
+
+    def fake_snapshot(model_id, auth_token=None, revision=None, **kwargs):
+        snapshot_calls["count"] += 1
+        if snapshot_calls["count"] == 1:
+            return {
+                "model": model_id,
+                "status": "ok",
+                "path": str(models_root / model_id.replace("/", "--")),
+                "attempts": "1",
+            }
+        raise KeyboardInterrupt()
+
+    monkeypatch.setattr(bootstrap_models, "parse_args", lambda: Namespace(report_path=str(report_path), progress_path=str(progress_path), retries=1))
+    monkeypatch.setattr(bootstrap_models, "load_registry", lambda repo_root: registry)
+    monkeypatch.setattr(bootstrap_models, "resolve_models_root", lambda: models_root)
+    monkeypatch.setattr(bootstrap_models, "ensure_env", lambda path: None)
+    monkeypatch.setattr(
+        bootstrap_models,
+        "resolve_auth_tokens",
+        lambda: {
+            "hf_token": None,
+            "hf_source": None,
+            "pyannote_token": None,
+            "pyannote_source": None,
+            "hf_present": False,
+            "pyannote_present": False,
+        },
+    )
+    monkeypatch.setattr(bootstrap_models, "load_dotenv", None)
+    monkeypatch.setattr(bootstrap_models, "snapshot", fake_snapshot)
+
+    try:
+        bootstrap_models.main()
+    except KeyboardInterrupt:
+        pass
+    else:
+        raise AssertionError("expected KeyboardInterrupt")
+
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    progress = json.loads(progress_path.read_text(encoding="utf-8"))
+    assert report["status"] == "interrupted"
+    assert report["completed_count"] == 1
+    assert report["current_model"] == "org/model-two"
+    assert progress["status"] == "interrupted"
+    assert progress["completed_count"] == 1
+    assert progress["current_model"] == "org/model-two"
+    assert progress["last_event"] == "keyboard_interrupt"

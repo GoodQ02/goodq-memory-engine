@@ -310,6 +310,21 @@ def _model_snapshot_present(models_root: Path, repo_id: str) -> bool:
     return False
 
 
+def _model_recoverable_cache_present(models_root: Path, repo_id: str) -> bool:
+    repo_cache = models_root / "hub" / f"models--{repo_id.replace('/', '--')}"
+    if not repo_cache.exists():
+        return False
+    snapshots_dir = repo_cache / "snapshots"
+    if snapshots_dir.exists() and _model_snapshot_present(models_root, repo_id):
+        return False
+    for candidate in repo_cache.rglob("*"):
+        if candidate == snapshots_dir:
+            continue
+        if candidate.is_file():
+            return True
+    return False
+
+
 def _check_required_model_cache(cfg: Dict[str, Any]) -> List[CheckResult]:
     registry_path = REPO_ROOT / "configs" / "model_registry.yaml"
     if not registry_path.exists():
@@ -343,6 +358,14 @@ def _check_required_model_cache(cfg: Dict[str, Any]) -> List[CheckResult]:
             continue
         if _model_snapshot_present(models_root, repo_id):
             results.append(CheckResult(f"model_cache:{model_key}", "pass", f"cached ({repo_id})"))
+        elif _model_recoverable_cache_present(models_root, repo_id):
+            results.append(
+                CheckResult(
+                    f"model_cache:{model_key}",
+                    "warn",
+                    f"recoverable noncanonical cache present for {repo_id} under {models_root}; remediation: conda run -n goodq_core python scripts/bootstrap_models.py",
+                )
+            )
         else:
             results.append(
                 CheckResult(

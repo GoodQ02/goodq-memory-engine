@@ -7,7 +7,7 @@ import sys
 import time
 import urllib.request
 from pathlib import Path
-from typing import Dict, List
+from typing import Any, Callable, Dict, List
 
 try:
     from dotenv import load_dotenv  # type: ignore
@@ -35,6 +35,13 @@ _PLACEHOLDER_TOKENS = {
 
 def _log(msg: str) -> None:
     print(msg, file=sys.stderr, flush=True)
+
+
+def _write_json_atomic(path: Path, payload: Dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp_path = path.with_name(f"{path.name}.tmp")
+    temp_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    os.replace(temp_path, path)
 
 
 def _clean_token(raw: str | None) -> str | None:
@@ -144,6 +151,44 @@ def _cache_snapshot_present(models_root: Path, repo_id: str) -> bool:
     return False
 
 
+def _build_report(
+    *,
+    models_root: Path,
+    registry_loaded: bool,
+    pinned_models_count: int,
+    retries: int,
+    auth: Dict[str, str | bool | None],
+    results: List[Dict[str, Any]],
+    status: str,
+    progress_path: Path,
+    current_model: str | None = None,
+    fatal_error: str | None = None,
+) -> Dict[str, Any]:
+    payload: Dict[str, Any] = {
+        "models_dir": str(models_root),
+        "registry_loaded": registry_loaded,
+        "pinned_models_count": pinned_models_count,
+        "download_retries": retries,
+        "status": status,
+        "completed_count": len(results),
+        "current_model": current_model,
+        "progress_path": str(progress_path),
+        "updated_at": time.time(),
+        "env": {
+            "HF_HOME": os.environ.get("HF_HOME"),
+            "TORCH_HOME": os.environ.get("TORCH_HOME"),
+            "hf_auth_present": bool(auth["hf_present"]),
+            "hf_auth_source": auth["hf_source"],
+            "pyannote_auth_present": bool(auth["pyannote_present"]),
+            "pyannote_auth_source": auth["pyannote_source"],
+        },
+        "results": results,
+    }
+    if fatal_error:
+        payload["fatal_error"] = fatal_error
+    return payload
+
+
 def snapshot(
     model_id: str,
     auth_token: str | None = None,
@@ -152,6 +197,7 @@ def snapshot(
     models_root: Path | None = None,
     retries: int = DEFAULT_DOWNLOAD_RETRIES,
     progress_label: str = "",
+    progress_cb: Callable[..., None] | None = None,
 ) -> Dict[str, str]:
     """
     Download a model snapshot from HuggingFace Hub.
@@ -179,7 +225,11 @@ def snapshot(
     for attempt in range(1, attempts + 1):
         started = time.time()
         if repo_cache_dir.exists() and any(repo_cache_dir.iterdir()) and not _cache_snapshot_present(target_models_root, repo_id):
+            if progress_cb:
+                progress_cb(current_attempt=attempt, last_event="normalizing_existing_cache")
             _log(f"{label}existing cache detected for {repo_id}; normalizing to canonical snapshots layout")
+        if progress_cb:
+            progress_cb(current_attempt=attempt, last_event="snapshot_download_started")
         _log(f"{label}syncing {repo_id} (attempt {attempt}/{attempts})")
         try:
             resolved_dir = snapshot_download(
@@ -189,6 +239,8 @@ def snapshot(
                 token=auth_token,
             )
             if not _cache_snapshot_present(target_models_root, repo_id):
+                if progress_cb:
+                    progress_cb(current_attempt=attempt, last_event="cache_layout_incomplete")
                 return {
                     "model": model_id,
                     "status": "error",
@@ -196,6 +248,8 @@ def snapshot(
                     "attempts": str(attempt),
                 }
             elapsed_sec = round(time.time() - started, 1)
+            if progress_cb:
+                progress_cb(current_attempt=attempt, last_event="snapshot_ready")
             _log(f"{label}ready {repo_id} ({elapsed_sec:.1f}s)")
             return {
                 "model": model_id,
@@ -209,13 +263,22 @@ def snapshot(
         except Exception as exc:  # pragma: no cover
             detail = str(exc)
             if attempt < attempts and _is_transient_download_error(detail):
+                if progress_cb:
+                    progress_cb(current_attempt=attempt, last_event="transient_retry", last_error=detail)
                 _log(f"{label}transient failure for {repo_id}: {detail}. Retrying...")
                 _retry_pause(attempt)
                 continue
+            if progress_cb:
+                progress_cb(current_attempt=attempt, last_event="snapshot_error", last_error=detail)
             return {"model": model_id, "status": "error", "error": detail, "attempts": str(attempt)}
 
 
-def download_yolo_n(*, retries: int = DEFAULT_DOWNLOAD_RETRIES, progress_label: str = "") -> Dict[str, str]:
+def download_yolo_n(
+    *,
+    retries: int = DEFAULT_DOWNLOAD_RETRIES,
+    progress_label: str = "",
+    progress_cb: Callable[..., None] | None = None,
+) -> Dict[str, str]:
     # Ultralytics yolov8n.pt hosted in GH assets; cache into models/yolo
     target = Path(os.environ.get("TORCH_HOME") or os.environ.get("HF_HOME") or ".") / "yolo" / "yolov8n.pt"
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -227,6 +290,8 @@ def download_yolo_n(*, retries: int = DEFAULT_DOWNLOAD_RETRIES, progress_label: 
     for attempt in range(1, attempts + 1):
         started = time.time()
         try:
+            if progress_cb:
+                progress_cb(current_attempt=attempt, last_event="asset_download_started")
             _log(f"{label}downloading yolov8n.pt (attempt {attempt}/{attempts})")
             with urllib.request.urlopen(YOLO_URL, timeout=120) as response, open(temp_target, "wb") as handle:
                 total = int(response.headers.get("Content-Length", "0") or "0")
@@ -241,10 +306,14 @@ def download_yolo_n(*, retries: int = DEFAULT_DOWNLOAD_RETRIES, progress_label: 
                     if total > 0:
                         percent = int((downloaded / total) * 100)
                         while percent >= next_marker and next_marker <= 100:
+                            if progress_cb:
+                                progress_cb(current_attempt=attempt, last_event=f"asset_download_{next_marker}pct")
                             _log(f"{label}yolov8n.pt {next_marker}%")
                             next_marker += 25
             os.replace(temp_target, target)
             elapsed_sec = round(time.time() - started, 1)
+            if progress_cb:
+                progress_cb(current_attempt=attempt, last_event="asset_ready")
             _log(f"{label}ready yolov8n.pt ({elapsed_sec:.1f}s)")
             return {"asset": "yolov8n.pt", "status": "ok", "path": str(target), "cached": "false", "attempts": str(attempt), "elapsed_sec": elapsed_sec}
         except Exception as exc:  # pragma: no cover
@@ -254,9 +323,13 @@ def download_yolo_n(*, retries: int = DEFAULT_DOWNLOAD_RETRIES, progress_label: 
             except Exception:
                 pass
             if attempt < attempts and _is_transient_download_error(detail):
+                if progress_cb:
+                    progress_cb(current_attempt=attempt, last_event="transient_retry", last_error=detail)
                 _log(f"{label}transient failure for yolov8n.pt: {detail}. Retrying...")
                 _retry_pause(attempt)
                 continue
+            if progress_cb:
+                progress_cb(current_attempt=attempt, last_event="asset_error", last_error=detail)
             return {"asset": "yolov8n.pt", "status": "error", "error": detail, "attempts": str(attempt)}
 
 
@@ -327,6 +400,7 @@ def resolve_models_root() -> Path:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Prefetch local model cache for GoodQ bootstrap")
     parser.add_argument("--report-path", help="Write machine-readable JSON report to this path")
+    parser.add_argument("--progress-path", help="Write machine-readable progress JSON to this path")
     parser.add_argument("--retries", type=int, default=_default_retry_count(), help="Retries for transient download failures")
     return parser.parse_args()
 
@@ -371,54 +445,134 @@ def main() -> None:
 
     wanted = build_wanted_models(registry)
 
-    results: List[Dict[str, str]] = []
-    total_assets = len(wanted) + 1
-    _log(f"[bootstrap] Prefetching {total_assets} model assets into {models_root}")
-    for index, mid in enumerate(wanted, start=1):
-        # Strip any existing @revision
-        repo_id = mid.split('@')[0] if '@' in mid else mid
-        
-        # Use pinned revision if available
-        revision = pinned_models.get(repo_id)
-        
-        # Determine auth token
-        token = pyannote_token if repo_id.startswith('pyannote/') else hf_token
-        
-        # Download with pinned revision
-        result = snapshot(
-            mid,
-            token,
-            revision,
-            models_root=models_root,
-            retries=args.retries,
-            progress_label=f"{index}/{total_assets}",
-        )
-        if revision:
-            result['pinned_revision'] = revision
-        results.append(result)
-
-    results.append(download_yolo_n(retries=args.retries, progress_label=f"{total_assets}/{total_assets}"))
-
     report_path = Path(args.report_path) if args.report_path else repo_root / "logs" / "bootstrap_models_report.json"
-    report_path.parent.mkdir(parents=True, exist_ok=True)
-    report = {
+    progress_path = Path(args.progress_path) if args.progress_path else repo_root / "logs" / "bootstrap_models_progress.json"
+    results: List[Dict[str, Any]] = []
+    total_assets = len(wanted) + 1
+    progress_state: Dict[str, Any] = {
+        "status": "in_progress",
         "models_dir": str(models_root),
-        "registry_loaded": registry is not None,
-        "pinned_models_count": len(pinned_models),
-        "download_retries": args.retries,
-        "env": {
-            "HF_HOME": os.environ.get("HF_HOME"),
-            "TORCH_HOME": os.environ.get("TORCH_HOME"),
-            "hf_auth_present": bool(auth["hf_present"]),
-            "hf_auth_source": auth["hf_source"],
-            "pyannote_auth_present": bool(auth["pyannote_present"]),
-            "pyannote_auth_source": auth["pyannote_source"],
-        },
-        "results": results,
+        "current_model": None,
+        "current_index": 0,
+        "total_assets": total_assets,
+        "current_attempt": None,
+        "started_at": time.time(),
+        "last_progress_at": time.time(),
+        "last_event": "bootstrap_started",
+        "completed_count": 0,
+        "report_path": str(report_path),
     }
-    report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    def emit_progress(**updates: Any) -> None:
+        progress_state.update(updates)
+        progress_state["last_progress_at"] = time.time()
+        _write_json_atomic(progress_path, progress_state)
+
+    def write_report(status: str, *, current_model: str | None = None, fatal_error: str | None = None) -> None:
+        _write_json_atomic(
+            report_path,
+            _build_report(
+                models_root=models_root,
+                registry_loaded=registry is not None,
+                pinned_models_count=len(pinned_models),
+                retries=args.retries,
+                auth=auth,
+                results=results,
+                status=status,
+                progress_path=progress_path,
+                current_model=current_model,
+                fatal_error=fatal_error,
+            ),
+        )
+
+    emit_progress()
+    write_report("in_progress")
+    _log(f"[bootstrap] Prefetching {total_assets} model assets into {models_root}")
+    try:
+        for index, mid in enumerate(wanted, start=1):
+            repo_id = mid.split('@')[0] if '@' in mid else mid
+            revision = pinned_models.get(repo_id)
+            token = pyannote_token if repo_id.startswith('pyannote/') else hf_token
+
+            emit_progress(
+                current_model=repo_id,
+                current_index=index,
+                current_attempt=1,
+                last_event="model_started",
+                completed_count=len(results),
+            )
+            result = snapshot(
+                mid,
+                token,
+                revision,
+                models_root=models_root,
+                retries=args.retries,
+                progress_label=f"{index}/{total_assets}",
+                progress_cb=emit_progress,
+            )
+            if revision:
+                result["pinned_revision"] = revision
+            results.append(result)
+            emit_progress(
+                current_model=repo_id,
+                current_index=index,
+                current_attempt=result.get("attempts"),
+                last_event="model_completed",
+                completed_count=len(results),
+            )
+            write_report("in_progress", current_model=repo_id)
+
+        emit_progress(
+            current_model="yolov8n.pt",
+            current_index=total_assets,
+            current_attempt=1,
+            last_event="asset_started",
+            completed_count=len(results),
+        )
+        results.append(
+            download_yolo_n(
+                retries=args.retries,
+                progress_label=f"{total_assets}/{total_assets}",
+                progress_cb=emit_progress,
+            )
+        )
+        emit_progress(
+            current_model="yolov8n.pt",
+            current_index=total_assets,
+            current_attempt=results[-1].get("attempts"),
+            last_event="asset_completed",
+            completed_count=len(results),
+        )
+        write_report("complete", current_model=None)
+        emit_progress(
+            status="complete",
+            current_model=None,
+            current_attempt=None,
+            current_index=total_assets,
+            last_event="bootstrap_complete",
+            completed_count=len(results),
+        )
+    except KeyboardInterrupt:
+        emit_progress(
+            status="interrupted",
+            last_event="keyboard_interrupt",
+            completed_count=len(results),
+        )
+        write_report("interrupted", current_model=str(progress_state.get("current_model") or ""), fatal_error="KeyboardInterrupt")
+        raise
+    except Exception as exc:
+        emit_progress(
+            status="failed",
+            last_event="fatal_error",
+            last_error=str(exc),
+            completed_count=len(results),
+        )
+        write_report("failed", current_model=str(progress_state.get("current_model") or ""), fatal_error=str(exc))
+        raise
+
+    final_report = json.loads(report_path.read_text(encoding="utf-8"))
     _log(f"[bootstrap] Wrote model prefetch report to {report_path}")
-    print(json.dumps(report, ensure_ascii=False, indent=2))
+    print(json.dumps(final_report, ensure_ascii=False, indent=2))
 
 
 if __name__ == "__main__":  # pragma: no cover

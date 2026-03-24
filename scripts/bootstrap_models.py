@@ -55,6 +55,22 @@ def _clean_token(raw: str | None) -> str | None:
     return value
 
 
+def _load_env_file_values(path: Path) -> Dict[str, str]:
+    values: Dict[str, str] = {}
+    if not path.exists():
+        return values
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        if not key:
+            continue
+        values[key] = value.strip().strip('"').strip("'")
+    return values
+
+
 def _resolve_env_token(*names: str) -> tuple[str | None, str | None]:
     for name in names:
         token = _clean_token(os.environ.get(name))
@@ -63,18 +79,35 @@ def _resolve_env_token(*names: str) -> tuple[str | None, str | None]:
     return None, None
 
 
-def resolve_auth_tokens() -> Dict[str, str | bool | None]:
-    hf_token, hf_source = _resolve_env_token(*_HF_TOKEN_CANDIDATES)
-    pyannote_token, pyannote_source = _resolve_env_token("PYANNOTE_TOKEN")
+def _resolve_preferred_token(
+    env_file_values: Dict[str, str],
+    *names: str,
+) -> tuple[str | None, str | None]:
+    if any(name in env_file_values for name in names):
+        for name in names:
+            token = _clean_token(env_file_values.get(name))
+            if token:
+                return token, name
+        return None, None
+    return _resolve_env_token(*names)
+
+
+def resolve_auth_tokens(env_file_values: Dict[str, str] | None = None) -> Dict[str, str | bool | None]:
+    env_values = env_file_values if env_file_values is not None else _load_env_file_values(_REPO_ROOT / ".env.local")
+
+    hf_token, hf_source = _resolve_preferred_token(env_values, *_HF_TOKEN_CANDIDATES)
+    pyannote_token, pyannote_source = _resolve_preferred_token(env_values, "PYANNOTE_TOKEN")
     if not pyannote_token:
         pyannote_token = hf_token
         pyannote_source = hf_source
 
     if hf_token:
         os.environ["HF_TOKEN"] = hf_token
-        os.environ.setdefault("HF_HUB_TOKEN", hf_token)
+        os.environ["HF_HUB_TOKEN"] = hf_token
+        os.environ["HUGGINGFACE_HUB_TOKEN"] = hf_token
+        os.environ["HUGGINGFACE_TOKEN"] = hf_token
     if pyannote_token:
-        os.environ.setdefault("PYANNOTE_TOKEN", pyannote_token)
+        os.environ["PYANNOTE_TOKEN"] = pyannote_token
 
     return {
         "hf_token": hf_token,

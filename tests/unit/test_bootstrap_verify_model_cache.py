@@ -47,3 +47,12 @@ huggingface_models:
 
     assert "recoverable noncanonical cache present for laion/clap-htsat-unfused" in details["model_cache:clap"]
     assert "missing cache for openai/clip-vit-base-patch16" in details["model_cache:clip"]
+
+
+def test_env_or_file_prefers_project_env_over_ambient_env(monkeypatch):
+    from scripts import bootstrap_verify
+
+    monkeypatch.setattr(bootstrap_verify, "_ENV_FILE_VALUES", {"GOODQ_WSL_DISTRO": "Ubuntu-22.04"})
+    monkeypatch.setenv("GOODQ_WSL_DISTRO", "Ubuntu")
+
+    assert bootstrap_verify._env_or_file("GOODQ_WSL_DISTRO") == "Ubuntu-22.04"

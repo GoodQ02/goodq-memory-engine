@@ -63,7 +63,7 @@ _ENV_FILE_VALUES = _load_env_file(REPO_ROOT / ".env.local")
 
 
 def _env_or_file(name: str) -> str:
-    return (os.environ.get(name) or _ENV_FILE_VALUES.get(name) or "").strip()
+    return (_ENV_FILE_VALUES.get(name) or os.environ.get(name) or "").strip()
 
 
 def _check_config_load() -> tuple[CheckResult, Dict[str, Any]]:

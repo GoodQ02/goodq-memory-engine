@@ -95,6 +95,8 @@ def test_wsl_audio_env_values_share_model_cache_and_tokens(monkeypatch, tmp_path
         "HF_TOKEN=hf_secret\nPYANNOTE_TOKEN=py_secret\n",
         encoding="utf-8",
     )
+    monkeypatch.setenv("HF_TOKEN", "hf_ambient_shell_token")
+    monkeypatch.setenv("PYANNOTE_TOKEN", "py_ambient_shell_token")
     monkeypatch.setattr(bootstrap_install, "resolve_models_cache_root", lambda conda_exe, repo_root: Path(r"C:\models"))
 
     values = bootstrap_install._wsl_audio_env_values(

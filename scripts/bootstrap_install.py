@@ -1142,8 +1142,14 @@ def _wsl_audio_env_values(ctx: BootstrapContext, wsl_ctx: WslAudioContext) -> di
     env_file_values = _load_env_file(ctx.repo_root / ".env.local")
 
     def pick(*keys: str) -> Optional[str]:
+        if any(key in env_file_values for key in keys):
+            for key in keys:
+                candidate = _strip_wrapping_quotes(env_file_values.get(key, ""))
+                if candidate and not _is_placeholder_secret(candidate):
+                    return candidate
+            return None
         for key in keys:
-            candidate = _strip_wrapping_quotes(os.environ.get(key) or env_file_values.get(key) or "")
+            candidate = _strip_wrapping_quotes(os.environ.get(key) or "")
             if candidate and not _is_placeholder_secret(candidate):
                 return candidate
         return None

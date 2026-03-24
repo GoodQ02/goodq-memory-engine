@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import sys
 import types
@@ -20,10 +21,12 @@ def test_resolve_auth_tokens_uses_hf_hub_alias(monkeypatch):
     from scripts import bootstrap_models
 
     monkeypatch.delenv("HF_TOKEN", raising=False)
+    monkeypatch.delenv("HUGGINGFACE_HUB_TOKEN", raising=False)
+    monkeypatch.delenv("HUGGINGFACE_TOKEN", raising=False)
     monkeypatch.setenv("HF_HUB_TOKEN", "hf_test_alias_token")
     monkeypatch.delenv("PYANNOTE_TOKEN", raising=False)
 
-    auth = bootstrap_models.resolve_auth_tokens()
+    auth = bootstrap_models.resolve_auth_tokens({})
 
     assert auth["hf_present"] is True
     assert auth["hf_source"] == "HF_HUB_TOKEN"
@@ -37,14 +40,57 @@ def test_resolve_auth_tokens_ignores_placeholder_values(monkeypatch):
     from scripts import bootstrap_models
 
     monkeypatch.setenv("HF_TOKEN", "your_huggingface_token_here")
+    monkeypatch.delenv("HF_HUB_TOKEN", raising=False)
+    monkeypatch.delenv("HUGGINGFACE_HUB_TOKEN", raising=False)
+    monkeypatch.delenv("HUGGINGFACE_TOKEN", raising=False)
     monkeypatch.setenv("PYANNOTE_TOKEN", "your_pyannote_token_here")
 
-    auth = bootstrap_models.resolve_auth_tokens()
+    auth = bootstrap_models.resolve_auth_tokens({})
 
     assert auth["hf_present"] is False
     assert auth["pyannote_present"] is False
     assert auth["hf_token"] is None
     assert auth["pyannote_token"] is None
+
+
+def test_resolve_auth_tokens_prefers_env_file_over_ambient_env(monkeypatch):
+    from scripts import bootstrap_models
+
+    monkeypatch.setenv("HF_TOKEN", "hf_ambient_shell_token")
+    monkeypatch.setenv("HF_HUB_TOKEN", "hf_ambient_alias_token")
+    monkeypatch.setenv("PYANNOTE_TOKEN", "py_ambient_shell_token")
+
+    auth = bootstrap_models.resolve_auth_tokens(
+        {
+            "HF_TOKEN": "hf_file_token",
+            "PYANNOTE_TOKEN": "py_file_token",
+        }
+    )
+
+    assert auth["hf_present"] is True
+    assert auth["pyannote_present"] is True
+    assert auth["hf_source"] == "HF_TOKEN"
+    assert auth["pyannote_source"] == "PYANNOTE_TOKEN"
+    assert auth["hf_token"] == "hf_file_token"
+    assert auth["pyannote_token"] == "py_file_token"
+    assert os.environ["HF_TOKEN"] == "hf_file_token"
+    assert os.environ["HF_HUB_TOKEN"] == "hf_file_token"
+    assert os.environ["PYANNOTE_TOKEN"] == "py_file_token"
+
+
+def test_resolve_auth_tokens_env_file_placeholder_blocks_ambient_alias(monkeypatch):
+    from scripts import bootstrap_models
+
+    monkeypatch.setenv("HF_HUB_TOKEN", "hf_real_ambient_alias")
+
+    auth = bootstrap_models.resolve_auth_tokens(
+        {
+            "HF_TOKEN": "your_huggingface_token_here",
+        }
+    )
+
+    assert auth["hf_present"] is False
+    assert auth["hf_token"] is None
 
 
 def test_build_wanted_models_uses_registry_repo_ids():

@@ -1181,6 +1181,13 @@ def _wsl_has_systemd(wsl_ctx: WslAudioContext) -> bool:
     return completed.returncode == 0
 
 
+def _wsl_passwordless_sudo_ready(wsl_ctx: WslAudioContext) -> tuple[bool, str]:
+    completed = _run_wsl_bash(wsl_ctx, "sudo -n true")
+    if completed.returncode == 0:
+        return True, "passwordless sudo available"
+    return False, _completed_output(completed) or "sudo password required"
+
+
 def ensure_wsl_audio_ready(ctx: BootstrapContext, *, assume_yes: bool) -> bool:
     if not ctx.enable_wsl_audio:
         return True
@@ -1234,6 +1241,20 @@ def ensure_wsl_audio_ready(ctx: BootstrapContext, *, assume_yes: bool) -> bool:
         _print(f"[OK] WSL audio workspace already ready: {detail}")
 
     if _wsl_has_systemd(wsl_ctx):
+        sudo_ready, sudo_detail = _wsl_passwordless_sudo_ready(wsl_ctx)
+        if not sudo_ready:
+            _print("[WARN] WSL audio workspace is ready, but persistent service install requires a Linux sudo password.")
+            _print("[INFO] WSL audio service status: PENDING_SUDO")
+            if sudo_detail:
+                _print(f"[INFO] WSL sudo preflight detail: {sudo_detail}")
+            _print("[INFO] Complete this once inside WSL to enable the persistent audio service:")
+            _print(f"  wsl -d {wsl_ctx.distro}")
+            _print(f"  cd {wsl_ctx.workspace}")
+            _print("  bash ./install_audio_service.sh")
+            _print(
+                "[INFO] Direct WSL audio execution remains available meanwhile; bootstrap will continue without the persistent service."
+            )
+            return True
         service_script = (
             f"cd {_bash_quote(wsl_ctx.workspace)} && "
             "set -a && [ -f ./.goodq_env ] && source ./.goodq_env; set +a && "
@@ -1249,6 +1270,7 @@ def ensure_wsl_audio_ready(ctx: BootstrapContext, *, assume_yes: bool) -> bool:
         )
         if completed.returncode == 0:
             _print("[OK] WSL audio service is installed and running.")
+            _print("[INFO] WSL audio service status: RUNNING")
         else:
             _print("[WARN] WSL audio workspace is ready, but service install did not complete cleanly.")
             detail = _completed_output(completed)
@@ -1259,6 +1281,7 @@ def ensure_wsl_audio_ready(ctx: BootstrapContext, *, assume_yes: bool) -> bool:
             )
     else:
         _print("[WARN] WSL systemd is unavailable; skipping persistent audio service install.")
+        _print("[INFO] WSL audio service status: SKIPPED_NO_SYSTEMD")
         _print(
             f"[INFO] Direct WSL audio execution is ready. Manual service command: "
             f"wsl -d {wsl_ctx.distro} -- bash -lc \"cd {wsl_ctx.workspace} && source setup_cuda_env.sh && python3 audio_service.py\""

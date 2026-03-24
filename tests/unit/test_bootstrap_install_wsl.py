@@ -189,3 +189,79 @@ def test_resolve_wsl_python_falls_back_to_legacy_env(monkeypatch):
     resolved = step._resolve_wsl_python("Ubuntu-22.04", "/home/goodq/goodq_audio")
 
     assert resolved == "/home/goodq/goodq_audio/env/bin/python"
+
+
+def test_ensure_wsl_audio_ready_skips_service_install_when_sudo_password_required(monkeypatch, tmp_path: Path):
+    from scripts import bootstrap_install
+
+    ctx = _ctx(tmp_path)
+    wsl_ctx = bootstrap_install.WslAudioContext(
+        distro="Ubuntu-22.04",
+        user="goodq",
+        home="/home/goodq",
+        workspace="/home/goodq/goodq_audio",
+        windows_workspace=tmp_path / "wsl_stage",
+    )
+
+    seen_scripts: list[str] = []
+    messages: list[str] = []
+
+    def fake_run_wsl_bash(_wsl_ctx, script, **kwargs):
+        seen_scripts.append(script)
+        if script == "test -d /run/systemd/system":
+            return subprocess.CompletedProcess(["wsl"], 0, "", "")
+        if script == "sudo -n true":
+            return subprocess.CompletedProcess(["wsl"], 1, "", "sudo: a password is required")
+        return subprocess.CompletedProcess(["wsl"], 0, "", "")
+
+    monkeypatch.setattr(bootstrap_install, "_resolve_wsl_audio_context", lambda _ctx: wsl_ctx)
+    monkeypatch.setattr(bootstrap_install, "_run_wsl_bash", fake_run_wsl_bash)
+    monkeypatch.setattr(bootstrap_install, "_sync_wsl_audio_assets", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(bootstrap_install, "_write_wsl_audio_env_file", lambda *_args, **_kwargs: tmp_path / ".goodq_env")
+    monkeypatch.setattr(bootstrap_install, "_probe_wsl_audio_workspace_ready", lambda *_args, **_kwargs: (True, "ready"))
+    monkeypatch.setattr(bootstrap_install, "resolve_models_cache_root", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(bootstrap_install, "_print", messages.append)
+
+    ready = bootstrap_install.ensure_wsl_audio_ready(ctx, assume_yes=True)
+
+    assert ready is True
+    assert not any("install_audio_service.sh" in script for script in seen_scripts)
+    joined = "\n".join(messages)
+    assert "PENDING_SUDO" in joined
+    assert "sudo: a password is required" in joined
+    assert "bash ./install_audio_service.sh" in joined
+
+
+def test_ensure_wsl_audio_ready_installs_service_when_passwordless_sudo_available(monkeypatch, tmp_path: Path):
+    from scripts import bootstrap_install
+
+    ctx = _ctx(tmp_path)
+    wsl_ctx = bootstrap_install.WslAudioContext(
+        distro="Ubuntu-22.04",
+        user="goodq",
+        home="/home/goodq",
+        workspace="/home/goodq/goodq_audio",
+        windows_workspace=tmp_path / "wsl_stage",
+    )
+
+    seen_scripts: list[str] = []
+    messages: list[str] = []
+
+    def fake_run_wsl_bash(_wsl_ctx, script, **kwargs):
+        seen_scripts.append(script)
+        return subprocess.CompletedProcess(["wsl"], 0, "", "")
+
+    monkeypatch.setattr(bootstrap_install, "_resolve_wsl_audio_context", lambda _ctx: wsl_ctx)
+    monkeypatch.setattr(bootstrap_install, "_run_wsl_bash", fake_run_wsl_bash)
+    monkeypatch.setattr(bootstrap_install, "_sync_wsl_audio_assets", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(bootstrap_install, "_write_wsl_audio_env_file", lambda *_args, **_kwargs: tmp_path / ".goodq_env")
+    monkeypatch.setattr(bootstrap_install, "_probe_wsl_audio_workspace_ready", lambda *_args, **_kwargs: (True, "ready"))
+    monkeypatch.setattr(bootstrap_install, "resolve_models_cache_root", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(bootstrap_install, "_print", messages.append)
+
+    ready = bootstrap_install.ensure_wsl_audio_ready(ctx, assume_yes=True)
+
+    assert ready is True
+    assert any("sudo -n true" == script for script in seen_scripts)
+    assert any("install_audio_service.sh" in script for script in seen_scripts)
+    assert "RUNNING" in "\n".join(messages)

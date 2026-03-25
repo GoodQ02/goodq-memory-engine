@@ -1,10 +1,15 @@
 from __future__ import annotations
+import re
 from typing import Any, Dict, List, Tuple
 
 _NER_PIPELINES: Dict[str, Any] = {}
 
 try:
-    from steps.common.tag_utils import dedupe_tokens
+    from steps.common.tag_utils import (
+        dedupe_tokens,
+        is_valid_entity_token,
+        normalize_entity_token,
+    )
 except Exception as e:
     def dedupe_tokens(tokens):
         seen = set()
@@ -21,6 +26,12 @@ except Exception as e:
             seen.add(key)
             deduped.append(text)
         return deduped
+    def is_valid_entity_token(token):
+        text = str(token or "").strip()
+        return len(text) >= 3
+    def normalize_entity_token(token):
+        text = str(token or "").strip()
+        return text or None
 
 
 def _get_ner_pipeline(model_id: str) -> Any:
@@ -37,12 +48,34 @@ def _get_ner_pipeline(model_id: str) -> Any:
     _NER_PIPELINES[model_id] = pipe
     return pipe
 
+def _speaker_transcript_text(item: Dict[str, Any]) -> str:
+    speaker_transcript = item.get("speaker_transcript")
+    if not isinstance(speaker_transcript, list):
+        return ""
+    parts: List[str] = []
+    for segment in speaker_transcript:
+        if not isinstance(segment, dict):
+            continue
+        text = segment.get("text")
+        if isinstance(text, str) and text.strip():
+            parts.append(text.strip())
+    return " ".join(parts)
+
+
 def _gather_text(item: Dict[str, Any]) -> str:
+    texts: List[str] = []
+    seen: set[str] = set()
     for k in ("transcript", "ocr_text", "caption"):
         v = item.get(k)
         if isinstance(v, str) and v.strip():
-            return v
-    return ""
+            text = v.strip()
+            if text not in seen:
+                seen.add(text)
+                texts.append(text)
+    speaker_text = _speaker_transcript_text(item)
+    if speaker_text and speaker_text not in seen:
+        texts.append(speaker_text)
+    return "\n".join(texts)
 
 
 def _usefulness_score(text: str) -> float:
@@ -68,15 +101,16 @@ def _extract_entities_transformers(text: str, cfg: Dict[str, Any]) -> Tuple[List
         for e in ents:
             word = (e.get("word") or "").strip()
             entity_group = (e.get("entity_group") or e.get("entity") or "").strip().upper()
-            if word:
-                labels.append(word)
-                key = (word.casefold(), entity_group)
+            normalized = normalize_entity_token(word)
+            if normalized and is_valid_entity_token(normalized):
+                labels.append(normalized)
+                key = (normalized.casefold(), entity_group)
                 if key in seen_structured:
                     continue
                 seen_structured.add(key)
                 structured.append(
                     {
-                        "name": word,
+                        "name": normalized,
                         "type": entity_group,
                         "source_step": "tagger",
                         "source_modality": "text",
@@ -88,10 +122,13 @@ def _extract_entities_transformers(text: str, cfg: Dict[str, Any]) -> Tuple[List
 
 
 def _fallback_entities(text: str) -> List[str]:
-    # crude fallback: capitalized words as entities
-    words = [w.strip(".,;:!?") for w in text.split()]
-    caps = [w for w in words if len(w) > 2 and w[0].isupper()]
-    return list(dict.fromkeys(caps))[:20]
+    pattern = re.compile(r"\b(?:[A-Z][A-Za-z']{1,}(?:\s+[A-Z][A-Za-z']{1,})*|[A-Z]{2,})\b")
+    matches: List[str] = []
+    for match in pattern.finditer(text):
+        normalized = normalize_entity_token(match.group(0))
+        if normalized and is_valid_entity_token(normalized):
+            matches.append(normalized)
+    return dedupe_tokens(matches)[:20]
 
 
 def tagger(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
@@ -100,7 +137,11 @@ def tagger(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
         return {"tags": [], "usefulness": 0.0, "entities": [], "ner_entities": []}
     ents, ner_entities = _extract_entities_transformers(text, cfg)
     ents = ents or _fallback_entities(text)
-    ents = dedupe_tokens(ents)
+    ents = dedupe_tokens(
+        ents,
+        validator=is_valid_entity_token,
+        normalizer=normalize_entity_token,
+    )
     score = _usefulness_score(text)
     tags = ents[:5]
     return {

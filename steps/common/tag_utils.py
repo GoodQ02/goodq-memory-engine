@@ -1,24 +1,110 @@
 from __future__ import annotations
-from typing import Any, Iterable, List, Optional, Sequence
+import re
+from typing import Any, Callable, Iterable, List, Optional, Sequence
+
+try:
+    from lib.kg_realtime_integration import (
+        _ENTITY_CONTRACTION_PARTS as _KG_CONTRACTION_PARTS,
+        _ENTITY_STOPWORDS as _KG_STOPWORDS,
+        _is_valid_entity_token as _kg_is_valid_entity_token,
+        normalize_entity_name as _kg_normalize_entity_name,
+    )
+except Exception:
+    _KG_STOPWORDS = {
+        "i", "i'm", "you", "you're", "we", "we're", "they", "it's", "that's",
+        "what", "well", "yeah", "okay", "why", "how", "look", "but", "and", "the",
+    }
+    _KG_CONTRACTION_PARTS = {"'m", "'re", "'s", "'ll", "'ve", "'d", "n't"}
+    _kg_is_valid_entity_token = None
+    _kg_normalize_entity_name = None
+
+
+TokenValidator = Callable[[str], bool]
+TokenNormalizer = Callable[[Any], Optional[str]]
+
+_SEMANTIC_STOPWORDS = set(_KG_STOPWORDS) | {"unknown", "none"}
+_SEMANTIC_CONTRACTION_PARTS = set(_KG_CONTRACTION_PARTS)
 
 
 def _normalize_token(token: Any) -> Optional[str]:
     if token is None:
-        print(f'[WARN] _normalize_token returning None')
         return None
-    text = str(token).strip()
+    text = re.sub(r"\s+", " ", str(token)).strip()
     if not text:
-        print(f'[WARN] _normalize_token returning None')
         return None
     return text
 
 
-def dedupe_tokens(tokens: Iterable[Any], *, casefold: bool = True) -> List[str]:
+def _token_key(text: str) -> str:
+    return re.sub(r"[^A-Za-z0-9']+", "", text).casefold()
+
+
+def normalize_tag_token(token: Any) -> Optional[str]:
+    text = _normalize_token(token)
+    if text is None:
+        return None
+    text = re.sub(r"^[^\w]+|[^\w]+$", "", text).strip()
+    return text or None
+
+
+def normalize_entity_token(token: Any) -> Optional[str]:
+    text = _normalize_token(token)
+    if text is None:
+        return None
+    if _kg_normalize_entity_name is not None:
+        normalized = _kg_normalize_entity_name(text)
+        return normalized or None
+    text = re.sub(r"^[^\w]+|[^\w]+$", "", text).strip()
+    return text or None
+
+
+def is_semantic_stopword(token: Any) -> bool:
+    text = normalize_tag_token(token)
+    if text is None:
+        return True
+    compact = _token_key(text)
+    if not compact:
+        return True
+    return compact in _SEMANTIC_STOPWORDS or compact in _SEMANTIC_CONTRACTION_PARTS
+
+
+def is_valid_tag_token(token: Any) -> bool:
+    text = normalize_tag_token(token)
+    if text is None:
+        return False
+    compact = _token_key(text)
+    if not compact:
+        return False
+    if compact in _SEMANTIC_STOPWORDS or compact in _SEMANTIC_CONTRACTION_PARTS:
+        return False
+    if compact.isdigit():
+        return False
+    return len(compact) >= 3 or text.isupper()
+
+
+def is_valid_entity_token(token: Any) -> bool:
+    text = _normalize_token(token)
+    if text is None:
+        return False
+    if _kg_is_valid_entity_token is not None:
+        return bool(_kg_is_valid_entity_token(text))
+    return is_valid_tag_token(text)
+
+
+def dedupe_tokens(
+    tokens: Iterable[Any],
+    *,
+    casefold: bool = True,
+    validator: Optional[TokenValidator] = None,
+    normalizer: Optional[TokenNormalizer] = None,
+) -> List[str]:
     seen: set[str] = set()
     result: List[str] = []
     for raw in tokens:
-        text = _normalize_token(raw)
+        text = normalizer(raw) if normalizer is not None else _normalize_token(raw)
         if text is None:
+            continue
+        if validator is not None and not validator(text):
             continue
         key = text.casefold() if casefold else text
         if key in seen:
@@ -28,13 +114,23 @@ def dedupe_tokens(tokens: Iterable[Any], *, casefold: bool = True) -> List[str]:
     return result
 
 
-def merge_tag_sources(*sources: Iterable[Any], casefold: bool = True) -> List[str]:
+def merge_tag_sources(
+    *sources: Iterable[Any],
+    casefold: bool = True,
+    validator: Optional[TokenValidator] = None,
+    normalizer: Optional[TokenNormalizer] = None,
+) -> List[str]:
     merged: List[Any] = []
     for source in sources:
         if not source:
             continue
         merged.extend(source)
-    return dedupe_tokens(merged, casefold=casefold)
+    return dedupe_tokens(
+        merged,
+        casefold=casefold,
+        validator=validator,
+        normalizer=normalizer,
+    )
 
 
 def canonicalize_taxonomy(item: dict[str, Any]) -> None:
@@ -49,6 +145,15 @@ def canonicalize_taxonomy(item: dict[str, Any]) -> None:
     entities_value = item.get('entities')
     if isinstance(entities_value, Sequence) and not isinstance(entities_value, (str, bytes)):
         entities_sources.append(entities_value)
+
+    ner_entities = item.get('ner_entities')
+    if isinstance(ner_entities, Sequence) and not isinstance(ner_entities, (str, bytes)):
+        entity_labels = []
+        for entity in ner_entities:
+            if isinstance(entity, dict):
+                entity_labels.append(entity.get('name') or entity.get('text'))
+        if entity_labels:
+            entities_sources.append(entity_labels)
 
     objs = item.get('objects')
     if isinstance(objs, Sequence):
@@ -100,8 +205,16 @@ def canonicalize_taxonomy(item: dict[str, Any]) -> None:
                     else:
                         entities_sources.append(tokens)
 
-    canonical_tags = merge_tag_sources(*tags_sources)
-    canonical_entities = merge_tag_sources(*entities_sources)
+    canonical_tags = merge_tag_sources(
+        *tags_sources,
+        validator=is_valid_tag_token,
+        normalizer=normalize_tag_token,
+    )
+    canonical_entities = merge_tag_sources(
+        *entities_sources,
+        validator=is_valid_entity_token,
+        normalizer=normalize_entity_token,
+    )
 
     item['tags'] = canonical_tags
     item['entities'] = canonical_entities

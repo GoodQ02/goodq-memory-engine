@@ -6,6 +6,28 @@ from __future__ import annotations
 from typing import Any, Dict, Optional
 import json
 
+try:
+    from steps.common.tag_utils import (
+        dedupe_tokens,
+        is_valid_entity_token,
+        is_valid_tag_token,
+        normalize_entity_token,
+        normalize_tag_token,
+    )
+except Exception:
+    def dedupe_tokens(tokens, **_kwargs):
+        return [str(token).strip() for token in tokens if isinstance(token, str) and token.strip()]
+    def is_valid_entity_token(token):
+        return bool(str(token or "").strip())
+    def is_valid_tag_token(token):
+        return bool(str(token or "").strip())
+    def normalize_entity_token(token):
+        text = str(token or "").strip()
+        return text or None
+    def normalize_tag_token(token):
+        text = str(token or "").strip()
+        return text or None
+
 def _format_list(items: list, max_items: int = 5) -> str:
     """Format a list for display"""
     if not items:
@@ -40,6 +62,32 @@ def _format_objects(objects: list, max_items: int = 5) -> str:
         else:
             formatted.append(str(obj))
     return ", ".join(formatted)
+
+
+def _semantic_tags(scene_meta: Dict[str, Any]) -> list[str]:
+    labels = []
+    for detail in scene_meta.get("tag_details") or []:
+        if isinstance(detail, dict):
+            labels.append(detail.get("label"))
+    labels.extend(scene_meta.get("tags") or [])
+    return dedupe_tokens(
+        labels,
+        validator=is_valid_tag_token,
+        normalizer=normalize_tag_token,
+    )
+
+
+def _semantic_entities(scene_meta: Dict[str, Any]) -> list[str]:
+    labels = []
+    for entity in scene_meta.get("ner_entities") or []:
+        if isinstance(entity, dict):
+            labels.append(entity.get("name") or entity.get("text"))
+    labels.extend(scene_meta.get("entities") or [])
+    return dedupe_tokens(
+        labels,
+        validator=is_valid_entity_token,
+        normalizer=normalize_entity_token,
+    )
 
 
 def generate_scene_summary_template(scene_meta: Dict[str, Any]) -> str:
@@ -87,8 +135,8 @@ def generate_scene_summary_template(scene_meta: Dict[str, Any]) -> str:
             dominant_emotion = audio_emotion[0].get('label', dominant_emotion) if isinstance(audio_emotion[0], dict) else dominant_emotion
     
     # Tags and entities
-    tags = scene_meta.get('tags', [])
-    entities = scene_meta.get('entities', [])
+    tags = _semantic_tags(scene_meta)
+    entities = _semantic_entities(scene_meta)
     
     # Build summary parts
     parts = []

@@ -8,15 +8,43 @@ import json
 
 from lib.memory_management.diagnostics import run_all_diagnostics
 
+try:
+    from steps.common.tag_utils import (
+        is_valid_entity_token,
+        is_valid_tag_token,
+        normalize_entity_token,
+        normalize_tag_token,
+    )
+except Exception:
+    def is_valid_entity_token(token):
+        return bool(str(token or "").strip())
+    def is_valid_tag_token(token):
+        return bool(str(token or "").strip())
+    def normalize_entity_token(token):
+        text = str(token or "").strip()
+        return text or None
+    def normalize_tag_token(token):
+        text = str(token or "").strip()
+        return text or None
 
-def _tally(tokens: List[Any]) -> Dict[str, int]:
+
+def _tally(
+    tokens: List[Any],
+    *,
+    validator=None,
+    normalizer=None,
+) -> Dict[str, int]:
     counts: Dict[str, int] = {}
     display: Dict[str, str] = {}
     for token in tokens:
+        if isinstance(token, dict):
+            token = token.get("label") or token.get("name") or token.get("tag") or token.get("text")
         if token is None:
             continue
-        text = str(token).strip()
+        text = normalizer(token) if normalizer is not None else str(token).strip()
         if not text:
+            continue
+        if validator is not None and not validator(text):
             continue
         key = text.casefold()
         if key not in display:
@@ -116,11 +144,19 @@ def overview(results: List[Dict[str, Any]] | None, video_summary: Dict[str, Any]
             if m: mod_counts[m] = mod_counts.get(m, 0) + 1
             if isinstance(it.get("frames"), list):
                 frames_total += len(it["frames"])  # type: ignore[index]
-            tag_counts = _tally(list(it.get("tags") or []))
+            tag_counts = _tally(
+                list(it.get("tag_details") or it.get("tags") or []),
+                validator=is_valid_tag_token,
+                normalizer=normalize_tag_token,
+            )
             for lbl, cnt in tag_counts.items():
                 tags[lbl] = tags.get(lbl, 0) + cnt
 
-            entity_counts = _tally(list(it.get("entities") or []))
+            entity_counts = _tally(
+                list(it.get("ner_entities") or it.get("entities") or []),
+                validator=is_valid_entity_token,
+                normalizer=normalize_entity_token,
+            )
             for lbl, cnt in entity_counts.items():
                 entities[lbl] = entities.get(lbl, 0) + cnt
 

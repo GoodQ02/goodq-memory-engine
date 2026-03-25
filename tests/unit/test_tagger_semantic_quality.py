@@ -32,6 +32,9 @@ def test_tagger_filters_noisy_entities_before_persisting(monkeypatch):
     item = {
         "transcript": "I'm meeting Jerry in Vermont tonight.",
         "caption": "A man standing in an apartment kitchen.",
+        "objects": [{"label": "kitchen"}, {"label": "coffee"}],
+        "place_tags": ["Apartment"],
+        "time_hints": {"relative_phrases": ["tonight"]},
     }
 
     def fake_extract(_text, _cfg):
@@ -47,5 +50,9 @@ def test_tagger_filters_noisy_entities_before_persisting(monkeypatch):
     result = tagger_step.tagger(item, {})
 
     assert result["entities"] == ["Jerry", "Vermont"]
-    assert result["tags"] == ["Jerry", "Vermont"]
+    assert result["tags"][:4] == ["Vermont", "coffee", "kitchen", "Apartment"]
+    assert "Jerry" not in result["tags"]
     assert [entry["name"] for entry in result["ner_entities"]] == ["Jerry", "Vermont"]
+    assert result["tag_details"][0]["sources"] == ["typed_entity"]
+    assert result["entity_details"][0]["label"] == "Jerry"
+    assert result["entity_details"][0]["type"] == "PERSON"

@@ -6,6 +6,7 @@ from __future__ import annotations
 from typing import Dict, List, Any, Optional
 import os
 import json
+from pathlib import Path
 
 try:
     import cv2
@@ -239,24 +240,50 @@ def process_video_chunks_with_scenes(
         alignment_tolerance=0.5
     )
     
+    video_id = Path(video_path).stem if video_path else "unknown_video"
+
     # Save scene detection results
     scenes_output = os.path.join(output_dir, 'video_scenes.json')
+    scene_manifest_path = os.path.join(output_dir, 'scene_manifest.json')
     os.makedirs(output_dir, exist_ok=True)
-    
+
+    indexed_scenes = []
+    for idx, scene in enumerate(all_video_scenes):
+        indexed_scene = dict(scene)
+        indexed_scene.setdefault('scene_id', f"scene_{idx:04d}")
+        indexed_scene.setdefault('index', idx)
+        indexed_scenes.append(indexed_scene)
+
     with open(scenes_output, 'w', encoding='utf-8') as f:
         json.dump({
             'total_scenes': len(all_video_scenes),
             'scenes': all_video_scenes,
             'aligned_segments': unified_segments
         }, f, indent=2)
+
+    with open(scene_manifest_path, 'w', encoding='utf-8') as f:
+        json.dump(
+            {
+                'video_id': video_id,
+                'video_path': video_path,
+                'phase5_complete': True,
+                'total_scenes': len(indexed_scenes),
+                'scenes': indexed_scenes,
+                'aligned_segments': unified_segments,
+            },
+            f,
+            indent=2,
+        )
     
     print(f"[PHASE5] Detected {len(all_video_scenes)} video scenes across {len(audio_segments)} audio chunks")
     print(f"[PHASE5] Scene data saved to: {scenes_output}")
     
     return {
-        'video_scenes': all_video_scenes,
+        'video_scenes': indexed_scenes,
+        'scene_manifest_path': scene_manifest_path,
+        'video_scenes_path': scenes_output,
         'unified_segments': unified_segments,
-        'total_scenes': len(all_video_scenes),
+        'total_scenes': len(indexed_scenes),
         'total_chunks': len(audio_segments)
     }
 

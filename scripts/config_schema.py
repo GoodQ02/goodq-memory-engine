@@ -249,6 +249,8 @@ class Phase5Config(BaseModel):
 
 class SegmentationConfig(BaseModel):
     enabled: bool = True
+    activation: str = "off"
+    metrics_output: bool = True
     mode: str = "phased"
     phase0: Phase0Config
     phase1: Phase1Config

@@ -84,7 +84,7 @@ class Phase4AudioProcessor:
         Returns:
             Enhanced manifest with transcription, diarization, embeddings
         """
-        segments = segmentation_manifest.get("segments", [])
+        segments = segmentation_manifest.get("segments") or segmentation_manifest.get("chunks", [])
         
         if not segments:
             logger.warning("[PHASE 4] No segments to process")
@@ -135,6 +135,7 @@ class Phase4AudioProcessor:
         # Update manifest
         enhanced_manifest = segmentation_manifest.copy()
         enhanced_manifest['segments'] = processed_segments
+        enhanced_manifest['chunks'] = processed_segments
         enhanced_manifest['phase4_complete'] = True
         enhanced_manifest['processed_segment_count'] = len(processed_segments)
         

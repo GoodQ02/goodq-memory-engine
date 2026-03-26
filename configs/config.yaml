@@ -180,16 +180,18 @@ qdrant:
 # ============================================================================
 segmentation:
   enabled: true
+  activation: off
+  metrics_output: true
   mode: phased
   
-  # Phase 0: Pre-Normalization
+  # SEG_P0: Pre-Normalization
   phase0:
     target_sample_rate: 16000
     channels: 1
     bit_depth: 16
     codec: pcm_s16le
   
-  # Phase 1: WebRTC-VAD Segmentation
+  # SEG_P1: WebRTC-VAD Segmentation
   phase1:
     aggressiveness: 3
     frame_duration_ms: 30
@@ -197,7 +199,7 @@ segmentation:
     min_silence_duration: 0.5
     padding_duration: 0.1
   
-  # Phase 2: Pyannote Segmentation
+  # SEG_P2: Pyannote Segmentation
   phase2:
     enabled: false
     min_duration_off: 0.0
@@ -206,7 +208,7 @@ segmentation:
     device: cuda
     use_auth_token: null
   
-  # Phase 3: Smart Chunk Building
+  # SEG_P3: Smart Chunk Building
   phase3:
     min_chunk_duration: 1.0
     max_chunk_duration: 40.0
@@ -215,7 +217,7 @@ segmentation:
     chunk_overlap_ms: 500
     merge_threshold: 2.0
   
-  # Phase 4: Heavy Audio Processing (WSL2)
+  # SEG_P4: Heavy Audio Processing (WSL2)
   phase4:
     enable_transcription: true
     enable_diarization: true
@@ -243,7 +245,7 @@ segmentation:
     # Emotion detection
     emotion_model: ehcalabres/wav2vec2-lg-xlsr-en-speech-emotion-recognition
   
-  # Phase 5: Video Scene Detection
+  # SEG_P5: Video Scene Detection
   phase5:
     enabled: true
     scene_threshold: 27.0  # Lower = more sensitive to changes = shorter scenes

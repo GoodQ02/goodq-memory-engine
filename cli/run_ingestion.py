@@ -1226,6 +1226,409 @@ def _resolve_audio_runtime_contract(cfg: Dict[str, Any]) -> Dict[str, Any]:
     return contract
 
 
+def _resolve_segmentation_activation(cfg: Dict[str, Any]) -> str:
+    segmentation_cfg = cfg.get('segmentation') if isinstance(cfg, dict) else {}
+    if not isinstance(segmentation_cfg, dict):
+        return 'off'
+    raw_value = str(segmentation_cfg.get('activation') or 'off').strip().lower()
+    if raw_value in {'off', 'shadow', 'authoritative'}:
+        return raw_value
+    return 'off'
+
+
+def _safe_read_json_dict(path_value: Any) -> Optional[Dict[str, Any]]:
+    if not isinstance(path_value, (str, Path)):
+        return None
+    try:
+        path = Path(path_value)
+        if not path.exists():
+            return None
+        payload = json.loads(path.read_text(encoding='utf-8'))
+        return payload if isinstance(payload, dict) else None
+    except Exception as e:
+        logger.debug(
+            "run_ingestion warning context=%s error=%s",
+            "segmentation_shadow.read_json",
+            e,
+        )
+        return None
+
+
+def _ratio(numerator: int, denominator: int) -> float:
+    if denominator <= 0:
+        return 0.0
+    return numerator / denominator
+
+
+def _segment_has_transcript(segment: Any) -> bool:
+    if not isinstance(segment, dict):
+        return False
+    transcript = segment.get('transcript')
+    if isinstance(transcript, str) and transcript.strip():
+        return True
+    transcript_segments = segment.get('transcript_segments')
+    if isinstance(transcript_segments, list):
+        return _has_meaningful_audio_segments(
+            [item for item in transcript_segments if isinstance(item, dict)]
+        )
+    words = segment.get('words')
+    if isinstance(words, list):
+        return any(
+            isinstance(word, dict) and isinstance(word.get('word'), str) and word.get('word', '').strip()
+            for word in words
+        )
+    return False
+
+
+def _extract_segment_speaker_ids(segment: Any) -> List[str]:
+    if not isinstance(segment, dict):
+        return []
+    speaker_ids: List[str] = []
+
+    def _append(raw: Any) -> None:
+        if not isinstance(raw, str):
+            return
+        speaker = raw.strip()
+        if speaker and speaker not in speaker_ids:
+            speaker_ids.append(speaker)
+
+    for key in ('primary_speaker', 'speaker'):
+        _append(segment.get(key))
+
+    speakers = segment.get('speakers')
+    if isinstance(speakers, list):
+        for speaker in speakers:
+            if isinstance(speaker, str):
+                _append(speaker)
+            elif isinstance(speaker, dict):
+                _append(speaker.get('speaker_id') or speaker.get('speaker') or speaker.get('label'))
+
+    diarization = segment.get('diarization')
+    if isinstance(diarization, list):
+        for item in diarization:
+            if isinstance(item, dict):
+                _append(item.get('speaker'))
+
+    return speaker_ids
+
+
+def _compute_scene_coverages(scene_outputs: List[Dict[str, Any]]) -> Dict[str, Any]:
+    scenes = [scene for scene in scene_outputs if isinstance(scene, dict)]
+    total = len(scenes)
+    transcript_scene_count = 0
+    speaker_scene_count = 0
+
+    for scene in scenes:
+        audio_payload = _extract_audio_payload(scene)
+        transcript_text = _extract_transcript_text(audio_payload)
+        segments = _extract_segments(audio_payload)
+        if transcript_text or _has_meaningful_audio_segments(segments):
+            transcript_scene_count += 1
+        if _extract_speaker_ids(audio_payload):
+            speaker_scene_count += 1
+
+    return {
+        'scene_count': total,
+        'transcript_scene_count': transcript_scene_count,
+        'speaker_scene_count': speaker_scene_count,
+        'transcript_coverage': _ratio(transcript_scene_count, total),
+        'speaker_coverage': _ratio(speaker_scene_count, total),
+    }
+
+
+def _compute_segment_coverages(segments: Any) -> Dict[str, Any]:
+    normalized = [segment for segment in segments if isinstance(segment, dict)] if isinstance(segments, list) else []
+    total = len(normalized)
+    transcript_segment_count = 0
+    speaker_segment_count = 0
+
+    for segment in normalized:
+        if _segment_has_transcript(segment):
+            transcript_segment_count += 1
+        if _extract_segment_speaker_ids(segment):
+            speaker_segment_count += 1
+
+    return {
+        'segment_count': total,
+        'transcript_segment_count': transcript_segment_count,
+        'speaker_segment_count': speaker_segment_count,
+        'transcript_coverage': _ratio(transcript_segment_count, total),
+        'speaker_coverage': _ratio(speaker_segment_count, total),
+    }
+
+
+def _compute_temporal_index_completeness(temporal_index: Optional[Dict[str, Any]]) -> float:
+    if not isinstance(temporal_index, dict):
+        return 0.0
+    checks = [
+        isinstance(temporal_index.get('segments'), list),
+        temporal_index.get('total_scenes') is not None,
+        'has_audio' in temporal_index,
+        'has_transcripts' in temporal_index,
+        'phase5_complete' in temporal_index,
+        'phase6_complete' in temporal_index,
+        'phase6_harmonized' in temporal_index,
+    ]
+    return _ratio(sum(1 for check in checks if check), len(checks))
+
+
+def _compute_shadow_alignment_score(scene_manifest: Optional[Dict[str, Any]]) -> float:
+    if not isinstance(scene_manifest, dict):
+        return 0.0
+    aligned_segments = scene_manifest.get('aligned_segments')
+    if not isinstance(aligned_segments, list) or not aligned_segments:
+        return 0.0
+    aligned_count = 0
+    for segment in aligned_segments:
+        if not isinstance(segment, dict):
+            continue
+        if bool(segment.get('scene_aligned')) or int(segment.get('scene_count') or 0) > 0:
+            aligned_count += 1
+    return _ratio(aligned_count, len(aligned_segments))
+
+
+def _compute_shadow_temporal_readiness(
+    shadow_result: Dict[str, Any],
+    segmentation_manifest: Optional[Dict[str, Any]],
+    scene_manifest: Optional[Dict[str, Any]],
+) -> Dict[str, Any]:
+    if isinstance(segmentation_manifest, dict):
+        checks = {
+            'segments': isinstance(segmentation_manifest.get('segments'), list),
+            'frame_index': isinstance(segmentation_manifest.get('frame_index'), list),
+            'summary': isinstance(segmentation_manifest.get('summary'), dict),
+            'processing': isinstance(segmentation_manifest.get('processing'), dict),
+            'source': isinstance(segmentation_manifest.get('source'), dict),
+        }
+        score = _ratio(sum(1 for passed in checks.values() if passed), len(checks))
+        return {
+            'score': score,
+            'basis': 'shadow_segmentation_manifest',
+            'checks': checks,
+        }
+
+    skip_phases = shadow_result.get('skip_phases')
+    checks = {
+        'audio_manifest': bool(shadow_result.get('audio_manifest_path')),
+        'scene_manifest': isinstance(scene_manifest, dict),
+        'phase4_manifest': bool(shadow_result.get('phase4_manifest_path')),
+        'phase6_manifest': bool(shadow_result.get('segmentation_manifest_path')),
+        'validation': isinstance(shadow_result.get('validation'), dict),
+        'phase6_requested': 'phase6' not in skip_phases if isinstance(skip_phases, list) else True,
+    }
+    score = _ratio(sum(1 for passed in checks.values() if passed), len(checks))
+    return {
+        'score': score,
+        'basis': 'shadow_temporal_readiness',
+        'checks': checks,
+    }
+
+
+def _build_segmentation_shadow_metrics(
+    scene_outputs: List[Dict[str, Any]],
+    temporal_index: Optional[Dict[str, Any]],
+    shadow_result: Dict[str, Any],
+) -> Dict[str, Any]:
+    current = _compute_scene_coverages(scene_outputs)
+    current_temporal_completeness = _compute_temporal_index_completeness(temporal_index)
+
+    shadow_scene_manifest = _safe_read_json_dict(shadow_result.get('scene_manifest_path'))
+    shadow_segmentation_manifest = _safe_read_json_dict(shadow_result.get('segmentation_manifest_path'))
+    shadow_phase4_manifest = _safe_read_json_dict(shadow_result.get('phase4_manifest_path'))
+
+    shadow_scene_count = 0
+    if isinstance(shadow_scene_manifest, dict):
+        if shadow_scene_manifest.get('total_scenes') is not None:
+            try:
+                shadow_scene_count = int(shadow_scene_manifest.get('total_scenes') or 0)
+            except (TypeError, ValueError):
+                shadow_scene_count = 0
+        elif isinstance(shadow_scene_manifest.get('scenes'), list):
+            shadow_scene_count = len(shadow_scene_manifest.get('scenes') or [])
+
+    shadow_validation = shadow_result.get('validation') if isinstance(shadow_result.get('validation'), dict) else {}
+    shadow_validation_stats = shadow_validation.get('stats') if isinstance(shadow_validation, dict) else {}
+
+    if isinstance(shadow_validation_stats, dict):
+        shadow_transcript_coverage = float(shadow_validation_stats.get('transcript_coverage') or 0.0)
+        shadow_speaker_coverage = float(shadow_validation_stats.get('speaker_coverage') or 0.0)
+        shadow_segment_count = int(shadow_validation_stats.get('total_segments') or 0)
+    else:
+        shadow_segments = None
+        if isinstance(shadow_segmentation_manifest, dict):
+            shadow_segments = shadow_segmentation_manifest.get('segments')
+        if shadow_segments is None and isinstance(shadow_phase4_manifest, dict):
+            shadow_segments = shadow_phase4_manifest.get('segments') or shadow_phase4_manifest.get('chunks')
+        shadow_coverages = _compute_segment_coverages(shadow_segments)
+        shadow_transcript_coverage = float(shadow_coverages['transcript_coverage'])
+        shadow_speaker_coverage = float(shadow_coverages['speaker_coverage'])
+        shadow_segment_count = int(shadow_coverages['segment_count'])
+
+    shadow_alignment_score = _compute_shadow_alignment_score(shadow_scene_manifest)
+    shadow_temporal = _compute_shadow_temporal_readiness(
+        shadow_result,
+        shadow_segmentation_manifest,
+        shadow_scene_manifest,
+    )
+    shadow_temporal_completeness = float(shadow_temporal['score'])
+
+    return {
+        'version': 1,
+        'activation': shadow_result.get('activation'),
+        'status': shadow_result.get('status'),
+        'scene_count_current': current['scene_count'],
+        'scene_count_shadow': shadow_scene_count,
+        'scene_count_delta': shadow_scene_count - current['scene_count'],
+        'transcript_coverage_current': current['transcript_coverage'],
+        'transcript_coverage_shadow': shadow_transcript_coverage,
+        'transcript_coverage_delta': shadow_transcript_coverage - current['transcript_coverage'],
+        'speaker_coverage_current': current['speaker_coverage'],
+        'speaker_coverage_shadow': shadow_speaker_coverage,
+        'speaker_coverage_delta': shadow_speaker_coverage - current['speaker_coverage'],
+        'alignment_score': shadow_alignment_score,
+        'temporal_index_completeness_current': current_temporal_completeness,
+        'temporal_index_completeness_shadow': shadow_temporal_completeness,
+        'temporal_index_completeness_delta': shadow_temporal_completeness - current_temporal_completeness,
+        'temporal_index_completeness_basis': shadow_temporal.get('basis'),
+        'current': {
+            **current,
+            'temporal_index_completeness': current_temporal_completeness,
+        },
+        'shadow': {
+            'scene_count': shadow_scene_count,
+            'segment_count': shadow_segment_count,
+            'transcript_coverage': shadow_transcript_coverage,
+            'speaker_coverage': shadow_speaker_coverage,
+            'alignment_score': shadow_alignment_score,
+            'temporal_index_completeness': shadow_temporal_completeness,
+            'temporal_index_completeness_checks': shadow_temporal.get('checks'),
+        },
+        'files': {
+            'summary_path': shadow_result.get('summary_path'),
+            'audio_manifest_path': shadow_result.get('audio_manifest_path'),
+            'phase4_manifest_path': shadow_result.get('phase4_manifest_path'),
+            'scene_manifest_path': shadow_result.get('scene_manifest_path'),
+            'segmentation_manifest_path': shadow_result.get('segmentation_manifest_path'),
+        },
+    }
+
+
+def _attach_segmentation_shadow_metrics(
+    cfg: Dict[str, Any],
+    scene_outputs: List[Dict[str, Any]],
+    temporal_index: Optional[Dict[str, Any]],
+    shadow_result: Dict[str, Any],
+) -> Dict[str, Any]:
+    if not isinstance(shadow_result, dict):
+        return shadow_result
+    if shadow_result.get('status') not in {'complete', 'partial'}:
+        return shadow_result
+
+    segmentation_cfg = cfg.get('segmentation') if isinstance(cfg, dict) else {}
+    if not isinstance(segmentation_cfg, dict) or not segmentation_cfg.get('metrics_output', True):
+        return shadow_result
+
+    summary_path = shadow_result.get('summary_path')
+    if not isinstance(summary_path, str) or not summary_path.strip():
+        return shadow_result
+
+    metrics = _build_segmentation_shadow_metrics(scene_outputs, temporal_index, shadow_result)
+    metrics_path = Path(summary_path).parent / 'shadow_metrics.json'
+    atomic_write_json(metrics_path, metrics)
+
+    updated = dict(shadow_result)
+    updated['metrics'] = metrics
+    updated['metrics_path'] = str(metrics_path)
+    return updated
+
+
+def _run_segmentation_shadow_pipeline(
+    video_path: Path,
+    processing_dir: Path,
+    cfg: Dict[str, Any],
+    audio_runtime_contract: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    activation = _resolve_segmentation_activation(cfg)
+    result: Dict[str, Any] = {
+        'activation': activation,
+        'status': 'off',
+        'reason': 'segmentation_shadow_disabled',
+        'skip_phases': [],
+    }
+    if activation == 'off':
+        return result
+    if activation == 'authoritative':
+        return {
+            **result,
+            'status': 'unsupported',
+            'reason': 'segmentation_authoritative_not_enabled',
+        }
+
+    segmentation_cfg = cfg.get('segmentation') if isinstance(cfg, dict) else {}
+    if not isinstance(segmentation_cfg, dict) or not segmentation_cfg.get('enabled', True):
+        return {
+            **result,
+            'status': 'disabled',
+            'reason': 'segmentation_config_disabled',
+        }
+
+    skip_phases: List[str] = []
+    if isinstance(audio_runtime_contract, dict):
+        selected_backend = str(audio_runtime_contract.get('selected') or '').strip().lower()
+        if selected_backend != 'wsl':
+            skip_phases.extend(['phase4', 'phase6'])
+
+    try:
+        from steps.audio.segmentation import PhasedSegmentationEngine
+
+        shadow_root = processing_dir / "_segmentation_shadow"
+        engine = PhasedSegmentationEngine(cfg)
+        shadow_run = engine.run_full_pipeline(
+            str(video_path),
+            str(shadow_root),
+            skip_phases=skip_phases,
+        )
+        phase_results = shadow_run.get('phase_results') if isinstance(shadow_run, dict) else {}
+        phase3_result = phase_results.get('phase3') if isinstance(phase_results, dict) else {}
+        phase5_result = phase_results.get('phase5') if isinstance(phase_results, dict) else {}
+        phase6_result = phase_results.get('phase6') if isinstance(phase_results, dict) else {}
+        summary: Dict[str, Any] = {
+            'activation': activation,
+            'status': 'complete' if not skip_phases else 'partial',
+            'reason': 'segmentation_shadow_complete' if not skip_phases else 'segmentation_shadow_partial',
+            'skip_phases': list(skip_phases),
+            'output_dir': shadow_run.get('output_dir') if isinstance(shadow_run, dict) else None,
+            'audio_manifest_path': phase3_result.get('audio_manifest_path') if isinstance(phase3_result, dict) else None,
+            'phase4_manifest_path': (
+                str(Path(shadow_run['output_dir']) / 'metadata' / 'segmentation_enhanced.json')
+                if isinstance(shadow_run, dict) and shadow_run.get('output_dir')
+                else None
+            ),
+            'scene_manifest_path': phase5_result.get('scene_manifest_path') if isinstance(phase5_result, dict) else None,
+            'video_scenes_path': phase5_result.get('video_scenes_path') if isinstance(phase5_result, dict) else None,
+            'segmentation_manifest_path': phase6_result.get('manifest_path') if isinstance(phase6_result, dict) else None,
+            'validation': phase6_result.get('validation') if isinstance(phase6_result, dict) else None,
+            'timings': shadow_run.get('timings') if isinstance(shadow_run, dict) else None,
+        }
+        summary_path = shadow_root / "shadow_summary.json"
+        atomic_write_json(summary_path, summary)
+        summary['summary_path'] = str(summary_path)
+        return summary
+    except Exception as e:
+        logger.warning(
+            "run_ingestion warning context=%s error=%s",
+            "segmentation_shadow",
+            e,
+        )
+        return {
+            **result,
+            'status': 'error',
+            'reason': 'segmentation_shadow_failed',
+            'error': str(e),
+            'skip_phases': list(skip_phases),
+        }
+
+
 def _merge_modality_state(current: str, candidate: str) -> str:
     rank = {
         'not_attempted': 0,
@@ -3927,6 +4330,20 @@ def run(
             if not phase6_enabled:
                 typer.echo('[PHASE 6] Skipped (disabled in config)')
             video_result['phase6_complete'] = False
+
+        segmentation_shadow_result = _run_segmentation_shadow_pipeline(
+            video_path,
+            processing_dir,
+            cfg,
+            audio_runtime_contract=audio_runtime_contract,
+        )
+        segmentation_shadow_result = _attach_segmentation_shadow_metrics(
+            cfg,
+            scene_outputs,
+            video_result.get('temporal_index'),
+            segmentation_shadow_result,
+        )
+        video_result['segmentation_shadow'] = segmentation_shadow_result
 
         video_result['qdrant_ok'] = _merge_store_statuses(scene_qdrant_status, phase6_qdrant_status)
         video_result['faiss_ok'] = _merge_store_statuses(scene_faiss_status, phase6_faiss_status)

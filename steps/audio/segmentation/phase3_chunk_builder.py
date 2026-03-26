@@ -5,10 +5,15 @@ Merges short segments, splits long ones, adds padding/overlap, creates chunk WAV
 
 import os
 import json
+import wave
 from pathlib import Path
 from typing import List, Dict, Any, Tuple
 import numpy as np
-import soundfile as sf
+
+try:
+    import soundfile as sf
+except ImportError:
+    sf = None
 
 class ChunkBuilder:
     """
@@ -66,8 +71,21 @@ class ChunkBuilder:
         padded_chunks = self._add_padding_and_overlap(split_chunks)
         
         # Step 4: Load audio for chunking
-        audio_data, sample_rate = sf.read(audio_path)
-        audio_duration = len(audio_data) / sample_rate
+        audio_data = None
+        audio_frames = None
+        channels = 1
+        sample_width = 2
+        if sf is not None:
+            audio_data, sample_rate = sf.read(audio_path)
+            audio_duration = len(audio_data) / sample_rate
+        else:
+            with wave.open(audio_path, 'rb') as wf:
+                sample_rate = wf.getframerate()
+                channels = wf.getnchannels()
+                sample_width = wf.getsampwidth()
+                frame_count = wf.getnframes()
+                audio_frames = wf.readframes(frame_count)
+            audio_duration = frame_count / sample_rate if sample_rate else 0.0
         
         # Step 5: Create chunk WAVs
         chunks_dir = Path(output_dir) / "chunks"
@@ -80,14 +98,23 @@ class ChunkBuilder:
             end_sec = min(audio_duration, chunk['end'])
             
             # Extract audio segment
-            start_sample = int(start_sec * sample_rate)
-            end_sample = int(end_sec * sample_rate)
-            chunk_audio = audio_data[start_sample:end_sample]
-            
-            # Write chunk WAV
             chunk_filename = f"chunk_{chunk_id:04d}.wav"
             chunk_path = chunks_dir / chunk_filename
-            sf.write(str(chunk_path), chunk_audio, sample_rate)
+            if sf is not None and audio_data is not None:
+                start_sample = int(start_sec * sample_rate)
+                end_sample = int(end_sec * sample_rate)
+                chunk_audio = audio_data[start_sample:end_sample]
+                sf.write(str(chunk_path), chunk_audio, sample_rate)
+            else:
+                start_frame = int(start_sec * sample_rate)
+                end_frame = int(end_sec * sample_rate)
+                bytes_per_frame = channels * sample_width
+                chunk_bytes = (audio_frames or b"")[start_frame * bytes_per_frame:end_frame * bytes_per_frame]
+                with wave.open(str(chunk_path), 'wb') as chunk_wav:
+                    chunk_wav.setnchannels(channels)
+                    chunk_wav.setsampwidth(sample_width)
+                    chunk_wav.setframerate(sample_rate)
+                    chunk_wav.writeframes(chunk_bytes)
             
             # Build chunk metadata
             chunk_meta = {
@@ -110,13 +137,16 @@ class ChunkBuilder:
             'total_duration': audio_duration,
             'sample_rate': sample_rate,
             'num_chunks': len(final_chunks),
+            # Keep both keys while the live pipeline and the phased engine
+            # converge on a single canonical artifact shape.
+            'segments': final_chunks,
+            'chunks': final_chunks,
             'config': {
                 'min_chunk_duration': self.min_chunk_duration,
                 'max_chunk_duration': self.max_chunk_duration,
                 'padding_ms': self.padding_ms,
                 'overlap_ms': self.overlap_ms
             },
-            'chunks': final_chunks
         }
         
         with open(manifest_path, 'w', encoding='utf-8') as f:

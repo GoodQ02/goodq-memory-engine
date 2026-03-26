@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -157,3 +158,66 @@ def test_validate_step_env_reports_allowed_pip_check_warning_as_non_blocking(mon
 
     assert issues == []
     assert any("accepted non-blocking dependency notice" in message for message in messages)
+
+
+def test_write_env_local_sets_require_gpu_from_context(tmp_path: Path):
+    from scripts import bootstrap_install
+
+    env_path = tmp_path / ".env.local"
+    template_path = tmp_path / ".env.local.template"
+    template_path.write_text("# GoodQ local overrides\n", encoding="utf-8")
+
+    ctx = bootstrap_install.BootstrapContext(
+        repo_root=tmp_path,
+        conda_exe=Path(r"C:\Miniconda3\Scripts\conda.exe"),
+        launcher_bat=tmp_path / "LAUNCH_GOODQ.bat",
+        environment_yml=tmp_path / "environment.gpu.yml",
+        env_local_template=template_path,
+        config_local_example=tmp_path / "configs" / "config.local.example.yaml",
+        bootstrap_verify=tmp_path / "scripts" / "bootstrap_verify.py",
+        qdrant_service_installer=tmp_path / "scripts" / "qdrant" / "INSTALL_QDRANT_SERVICE.bat",
+        qdrant_start_bat=tmp_path / "scripts" / "qdrant" / "START_QDRANT.bat",
+        data_root=Path(r"C:\GoodQ_Data"),
+        enable_gpu=True,
+        enable_wsl_audio=False,
+        wsl_distro="Ubuntu-22.04",
+        profile=bootstrap_install.CapabilityProfile(
+            profile="GPU_ENHANCED",
+            gpu_available=True,
+            wsl_available=False,
+            nvidia_detail="gpu present",
+            wsl_detail="none",
+        ),
+        install_step_envs=True,
+        prefetch_models=True,
+    )
+
+    bootstrap_install.write_env_local(env_path, template_path, ctx)
+    written = env_path.read_text(encoding="utf-8")
+
+    assert "GOODQ_REQUIRE_GPU=1" in written
+
+
+def test_has_core_torch_stack_conflict_detects_gpu_cpuonly(monkeypatch):
+    from scripts import bootstrap_install
+
+    payload = json.dumps(
+        [
+            {"name": "cpuonly", "version": "2.0", "channel": "pytorch"},
+            {"name": "pytorch", "version": "2.5.1", "channel": "pytorch"},
+        ]
+    )
+
+    monkeypatch.setattr(
+        bootstrap_install,
+        "_run",
+        lambda *args, **kwargs: subprocess.CompletedProcess(args[0], 0, payload, ""),
+    )
+
+    has_conflict, detail = bootstrap_install._has_core_torch_stack_conflict(
+        Path(r"C:\Miniconda3\Scripts\conda.exe"),
+        require_gpu=True,
+    )
+
+    assert has_conflict is True
+    assert "cpuonly" in detail

@@ -87,3 +87,31 @@ def test_check_wsl_audio_workspace_warns_when_abi_is_degraded(monkeypatch):
     assert len(results) == 1
     assert results[0].status == "warn"
     assert "transcription-ready" in results[0].detail
+
+
+def test_check_torch_cuda_runtime_fails_when_gpu_profile_uses_cpu_only_torch(monkeypatch):
+    from scripts import bootstrap_verify
+
+    monkeypatch.setattr(
+        bootstrap_verify,
+        "_ENV_FILE_VALUES",
+        {
+            "GOODQ_HOST_PROFILE": "GPU_ENHANCED",
+            "GOODQ_REQUIRE_GPU": "1",
+        },
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "torch",
+        types.SimpleNamespace(
+            __version__="2.5.1",
+            version=types.SimpleNamespace(cuda=None),
+            cuda=types.SimpleNamespace(is_available=lambda: False, device_count=lambda: 0),
+        ),
+    )
+
+    results = bootstrap_verify._check_torch_cuda_runtime()
+
+    assert len(results) == 1
+    assert results[0].status == "fail"
+    assert "CPU-only" in results[0].detail

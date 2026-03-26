@@ -437,6 +437,50 @@ def _check_wsl_audio_workspace() -> List[CheckResult]:
     ]
 
 
+def _check_torch_cuda_runtime() -> List[CheckResult]:
+    profile = (_env_or_file("GOODQ_HOST_PROFILE") or "").strip().upper()
+    require_gpu = _is_truthy(_env_or_file("GOODQ_REQUIRE_GPU"))
+    if not require_gpu and profile != "GPU_ENHANCED":
+        return [CheckResult("torch_cuda_runtime", "pass", "GPU runtime not required by current bootstrap profile")]
+
+    try:
+        import torch
+    except Exception as exc:  # noqa: BLE001
+        severity = "fail" if require_gpu or profile == "GPU_ENHANCED" else "warn"
+        return [CheckResult("torch_cuda_runtime", severity, f"torch import failed: {type(exc).__name__}: {exc}")]
+
+    cuda_compiled = torch.version.cuda
+    cuda_available = bool(torch.cuda.is_available())
+    device_count = int(torch.cuda.device_count())
+    torch_version = torch.__version__
+    if not cuda_compiled:
+        return [
+            CheckResult(
+                "torch_cuda_runtime",
+                "fail",
+                f"torch {torch_version} is CPU-only (torch.version.cuda is unset)",
+            )
+        ]
+    if not cuda_available or device_count < 1:
+        return [
+            CheckResult(
+                "torch_cuda_runtime",
+                "fail",
+                (
+                    f"torch {torch_version} is CUDA-compiled ({cuda_compiled}) but no GPU is visible "
+                    f"(cuda_available={cuda_available} device_count={device_count})"
+                ),
+            )
+        ]
+    return [
+        CheckResult(
+            "torch_cuda_runtime",
+            "pass",
+            f"torch {torch_version} CUDA {cuda_compiled} device_count={device_count}",
+        )
+    ]
+
+
 def _check_env_resolution(cfg: Dict[str, Any]) -> List[CheckResult]:
     paths = cfg.get("paths", {}) if isinstance(cfg, dict) else {}
     resolved_data_root = paths.get("data_root")
@@ -482,6 +526,7 @@ def build_report() -> Dict[str, Any]:
     checks.extend(_check_required_model_cache(cfg))
     checks.append(_check_wsl_flag())
     checks.extend(_check_wsl_audio_workspace())
+    checks.extend(_check_torch_cuda_runtime())
     checks.extend(_check_step_env_pack())
     checks.extend(_check_env_resolution(cfg))
 

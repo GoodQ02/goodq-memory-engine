@@ -608,7 +608,49 @@ def conda_env_exists(conda_exe: Path, env_name: str) -> bool:
     return False
 
 
-def _has_core_torch_stack_conflict(conda_exe: Path) -> tuple[bool, str]:
+def _probe_core_torch_runtime(conda_exe: Path) -> tuple[bool, str]:
+    completed = _run(
+        [
+            str(conda_exe),
+            "run",
+            "-n",
+            ENV_NAME,
+            "python",
+            "-c",
+            (
+                "import json, torch; "
+                "print(json.dumps({"
+                "'torch': torch.__version__, "
+                "'cuda_compiled': torch.version.cuda, "
+                "'cuda_available': torch.cuda.is_available(), "
+                "'device_count': torch.cuda.device_count()"
+                "}))"
+            ),
+        ]
+    )
+    if completed.returncode != 0:
+        detail = (completed.stderr or completed.stdout).strip() or "torch runtime probe failed"
+        return False, detail
+    try:
+        payload = json.loads((completed.stdout or "").strip())
+    except json.JSONDecodeError:
+        return False, "torch runtime probe returned invalid JSON"
+
+    cuda_compiled = payload.get("cuda_compiled")
+    cuda_available = bool(payload.get("cuda_available"))
+    device_count = int(payload.get("device_count") or 0)
+    torch_version = str(payload.get("torch") or "unknown")
+    if not cuda_compiled:
+        return False, f"torch {torch_version} is CPU-only (torch.version.cuda is unset)"
+    if not cuda_available or device_count < 1:
+        return False, (
+            f"torch {torch_version} is CUDA-compiled ({cuda_compiled}) but no GPU is visible "
+            f"(cuda_available={cuda_available} device_count={device_count})"
+        )
+    return True, f"torch {torch_version} CUDA {cuda_compiled} device_count={device_count}"
+
+
+def _has_core_torch_stack_conflict(conda_exe: Path, *, require_gpu: bool = False) -> tuple[bool, str]:
     completed = _run([str(conda_exe), "list", "-n", ENV_NAME, "--json"])
     if completed.returncode != 0:
         detail = (completed.stderr or completed.stdout).strip() or "conda list failed"
@@ -619,6 +661,8 @@ def _has_core_torch_stack_conflict(conda_exe: Path) -> tuple[bool, str]:
         return False, "conda list returned invalid JSON"
 
     has_conda_pytorch = any(str(rec.get("name")).lower() == "pytorch" for rec in payload if isinstance(rec, dict))
+    has_cpuonly = any(str(rec.get("name")).lower() == "cpuonly" for rec in payload if isinstance(rec, dict))
+    has_pytorch_cuda = any(str(rec.get("name")).lower() == "pytorch-cuda" for rec in payload if isinstance(rec, dict))
     has_pip_torch = any(
         str(rec.get("name")).lower() == "torch" and str(rec.get("channel", "")).lower() == "pypi"
         for rec in payload
@@ -626,6 +670,14 @@ def _has_core_torch_stack_conflict(conda_exe: Path) -> tuple[bool, str]:
     )
     if has_conda_pytorch and has_pip_torch:
         return True, "detected both Conda pytorch and pip torch in goodq_core"
+    if require_gpu:
+        if has_cpuonly:
+            return True, "detected cpuonly package in GPU_ENHANCED goodq_core"
+        if not has_pytorch_cuda:
+            return True, "pytorch-cuda is missing in GPU_ENHANCED goodq_core"
+        torch_ok, detail = _probe_core_torch_runtime(conda_exe)
+        if not torch_ok:
+            return True, detail
     return False, "no duplicate torch stack detected"
 
 
@@ -728,6 +780,7 @@ def _run_conda_with_tos_retry(
 
 
 def ensure_conda_env(conda_exe: Path, repo_root: Path, env_file: Path, *, assume_yes: bool) -> None:
+    require_gpu = env_file.name == GPU_ENV_FILE
     if conda_env_exists(conda_exe, ENV_NAME):
         _print(f"[INFO] Updating existing Conda environment: {ENV_NAME}")
         _run_conda_with_tos_retry(
@@ -738,7 +791,7 @@ def ensure_conda_env(conda_exe: Path, repo_root: Path, env_file: Path, *, assume
             heartbeat_label=f"Conda env update ({ENV_NAME})",
             heartbeat_artifacts=(env_file,),
         )
-        has_conflict, detail = _has_core_torch_stack_conflict(conda_exe)
+        has_conflict, detail = _has_core_torch_stack_conflict(conda_exe, require_gpu=require_gpu)
         if has_conflict:
             _print(f"[WARN] {detail}; recreating {ENV_NAME} from {env_file.name}")
             _run_conda_with_tos_retry(
@@ -767,6 +820,10 @@ def ensure_conda_env(conda_exe: Path, repo_root: Path, env_file: Path, *, assume
             heartbeat_label=f"Conda env create ({ENV_NAME})",
             heartbeat_artifacts=(env_file,),
         )
+
+    has_conflict, detail = _has_core_torch_stack_conflict(conda_exe, require_gpu=require_gpu)
+    if has_conflict:
+        raise RuntimeError(f"{detail}; bootstrap could not provision a healthy {ENV_NAME} from {env_file.name}")
 
 
 def _isolated_process_env() -> dict[str, str]:
@@ -1394,7 +1451,7 @@ def write_env_local(path: Path, template_path: Path, ctx: BootstrapContext) -> N
         GOODQ_DATA_ROOT={base_data_root}
         GOODQ_CONDA_ENV={ENV_NAME}
         GOODQ_HOST_PROFILE={ctx.profile.profile}
-        GOODQ_REQUIRE_GPU=0
+        GOODQ_REQUIRE_GPU={1 if ctx.enable_gpu else 0}
         GOODQ_REQUIRE_WSL_AUDIO={1 if wsl_audio_ready else 0}
         GOODQ_WSL_DISTRO={ctx.wsl_distro}
         GOODQ_WSL_USER={wsl_user}

@@ -116,7 +116,7 @@ if errorlevel 1 (
   echo WSL: AVAILABLE
 )
 
-"%CONDA_EXE%" run --no-capture-output -n %GOODQ_CONDA_ENV% python -c "import importlib.util; s=importlib.util.find_spec('torch'); print('CUDA visible:', __import__('torch').cuda.is_available() if s else 'torch not installed')"
+"%CONDA_EXE%" run --no-capture-output -n %GOODQ_CONDA_ENV% python -c "import importlib.util; s=importlib.util.find_spec('torch'); exec(\"print('CUDA runtime: torch not installed')\" if not s else \"import torch; compiled = torch.version.cuda or 'cpu-only'; print('CUDA runtime: compiled=' + str(compiled) + ' available=' + str(torch.cuda.is_available()) + ' devices=' + str(torch.cuda.device_count()))\")"
 if errorlevel 1 (
   echo CUDA probe: unable to evaluate (non-fatal)
 )

@@ -17,6 +17,7 @@ dependencies:
   - typer
   - pytest
   - pytorch
+  - pytorch-cuda=12.1
   - torchvision
   - torchaudio
   - imageio-ffmpeg

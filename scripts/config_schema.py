@@ -251,6 +251,7 @@ class SegmentationConfig(BaseModel):
     enabled: bool = True
     activation: str = "off"
     metrics_output: bool = True
+    shadow_audio_overlay: bool = False
     mode: str = "phased"
     phase0: Phase0Config
     phase1: Phase1Config

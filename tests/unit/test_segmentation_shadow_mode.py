@@ -3,7 +3,11 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from cli.run_ingestion import _attach_segmentation_shadow_metrics, _run_segmentation_shadow_pipeline
+from cli.run_ingestion import (
+    _attach_segmentation_shadow_metrics,
+    _prepare_segmentation_shadow_audio_overlay,
+    _run_segmentation_shadow_pipeline,
+)
 from steps.audio.segmentation.orchestrator import PhasedSegmentationEngine
 from steps.audio.segmentation.phase4_audio_processor import Phase4AudioProcessor
 from steps.audio.segmentation.phase5_video_scene_integration import process_video_chunks_with_scenes
@@ -271,3 +275,78 @@ def test_segmentation_shadow_metrics_respect_metrics_output_flag(tmp_path: Path)
 
     assert "metrics_path" not in updated
     assert not (shadow_root / "shadow_metrics.json").exists()
+
+
+def test_segmentation_shadow_audio_overlay_disabled_by_default(tmp_path: Path) -> None:
+    shadow_root = tmp_path / "processing" / "_segmentation_shadow"
+    shadow_root.mkdir(parents=True, exist_ok=True)
+    summary_path = shadow_root / "shadow_summary.json"
+    summary_path.write_text("{}", encoding="utf-8")
+
+    shadow_result = {
+        "activation": "shadow",
+        "status": "complete",
+        "summary_path": str(summary_path),
+        "phase4_manifest_path": str(shadow_root / "segmentation_enhanced.json"),
+    }
+
+    overlay = _prepare_segmentation_shadow_audio_overlay(
+        {"segmentation": {"activation": "shadow", "shadow_audio_overlay": False}},
+        shadow_result,
+    )
+
+    assert overlay["enabled"] is False
+    assert overlay["reason"] == "segmentation_shadow_audio_overlay_disabled"
+
+
+def test_segmentation_shadow_audio_overlay_builds_phase6_artifacts(tmp_path: Path) -> None:
+    shadow_root = tmp_path / "processing" / "_segmentation_shadow"
+    metadata_dir = shadow_root / "metadata"
+    metadata_dir.mkdir(parents=True, exist_ok=True)
+    summary_path = shadow_root / "shadow_summary.json"
+    summary_path.write_text("{}", encoding="utf-8")
+
+    phase4_manifest_path = metadata_dir / "segmentation_enhanced.json"
+    phase4_manifest_path.write_text(
+        json.dumps(
+            {
+                "segments": [
+                    {
+                        "id": 0,
+                        "start": 0.0,
+                        "end": 1.0,
+                        "transcript": "hello",
+                        "transcript_segments": [{"start": 0.0, "end": 1.0, "text": "hello", "words": []}],
+                        "language": "en",
+                        "diarization": [{"start": 0.0, "end": 1.0, "speaker": "SPEAKER_00", "duration": 1.0}],
+                        "speakers": [{"speaker_id": "SPEAKER_00", "total_duration": 1.0, "segment_count": 1}],
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    shadow_result = {
+        "activation": "shadow",
+        "status": "complete",
+        "summary_path": str(summary_path),
+        "phase4_manifest_path": str(phase4_manifest_path),
+    }
+
+    overlay = _prepare_segmentation_shadow_audio_overlay(
+        {"segmentation": {"activation": "shadow", "shadow_audio_overlay": True}},
+        shadow_result,
+    )
+
+    assert overlay["enabled"] is True
+    overlay_dir = Path(overlay["audio_artifact_dir"])
+    transcript_json = json.loads((overlay_dir / "transcript.json").read_text(encoding="utf-8"))
+    diarization_json = json.loads((overlay_dir / "diarization.json").read_text(encoding="utf-8"))
+    segmentation_json = json.loads((overlay_dir / "segmentation.json").read_text(encoding="utf-8"))
+
+    assert transcript_json["full_text"] == "hello"
+    assert transcript_json["segments"][0]["text"] == "hello"
+    assert diarization_json["segments"][0]["speaker"] == "SPEAKER_00"
+    assert diarization_json["speakers"][0]["speaker_id"] == "SPEAKER_00"
+    assert segmentation_json["segments"][0]["id"] == 0

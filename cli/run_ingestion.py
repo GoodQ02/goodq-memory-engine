@@ -1542,6 +1542,189 @@ def _attach_segmentation_shadow_metrics(
     return updated
 
 
+def _segmentation_shadow_audio_overlay_enabled(cfg: Dict[str, Any]) -> bool:
+    segmentation_cfg = cfg.get('segmentation') if isinstance(cfg, dict) else {}
+    if not isinstance(segmentation_cfg, dict):
+        return False
+    return _resolve_segmentation_activation(cfg) == 'shadow' and bool(
+        segmentation_cfg.get('shadow_audio_overlay', False)
+    )
+
+
+def _prepare_segmentation_shadow_audio_overlay(
+    cfg: Dict[str, Any],
+    shadow_result: Dict[str, Any],
+) -> Dict[str, Any]:
+    result: Dict[str, Any] = {
+        'enabled': False,
+        'reason': 'segmentation_shadow_audio_overlay_disabled',
+    }
+    if not _segmentation_shadow_audio_overlay_enabled(cfg):
+        return result
+    if not isinstance(shadow_result, dict):
+        return result
+    if shadow_result.get('status') != 'complete':
+        return {
+            **result,
+            'reason': 'segmentation_shadow_audio_overlay_requires_complete_shadow_run',
+        }
+
+    summary_path = shadow_result.get('summary_path')
+    phase4_manifest_path = shadow_result.get('phase4_manifest_path')
+    if not isinstance(summary_path, str) or not summary_path.strip():
+        return {
+            **result,
+            'reason': 'segmentation_shadow_audio_overlay_missing_summary',
+        }
+    if not isinstance(phase4_manifest_path, str) or not phase4_manifest_path.strip():
+        return {
+            **result,
+            'reason': 'segmentation_shadow_audio_overlay_missing_phase4_manifest',
+        }
+
+    phase4_manifest = _safe_read_json_dict(phase4_manifest_path)
+    if not isinstance(phase4_manifest, dict):
+        return {
+            **result,
+            'reason': 'segmentation_shadow_audio_overlay_invalid_phase4_manifest',
+        }
+
+    phase4_segments = phase4_manifest.get('segments') or phase4_manifest.get('chunks') or []
+    segments = [segment for segment in phase4_segments if isinstance(segment, dict)]
+    if not segments:
+        return {
+            **result,
+            'reason': 'segmentation_shadow_audio_overlay_no_segments',
+        }
+
+    overlay_dir = Path(summary_path).parent / 'phase6_audio_overlay'
+    overlay_dir.mkdir(parents=True, exist_ok=True)
+
+    transcript_segments: List[Dict[str, Any]] = []
+    diarization_segments: List[Dict[str, Any]] = []
+    speaker_stats: Dict[str, Dict[str, Any]] = {}
+    full_text_parts: List[str] = []
+    language: Optional[str] = None
+
+    for segment in segments:
+        start = segment.get('start')
+        end = segment.get('end')
+        transcript = segment.get('transcript')
+        transcript = transcript.strip() if isinstance(transcript, str) else ''
+        if transcript:
+            full_text_parts.append(transcript)
+
+        raw_transcript_segments = segment.get('transcript_segments')
+        if isinstance(raw_transcript_segments, list):
+            for item in raw_transcript_segments:
+                if not isinstance(item, dict):
+                    continue
+                transcript_entry = dict(item)
+                transcript_entry.setdefault('start', start)
+                transcript_entry.setdefault('end', end)
+                transcript_segments.append(transcript_entry)
+        elif transcript:
+            transcript_segments.append(
+                {
+                    'start': start,
+                    'end': end,
+                    'text': transcript,
+                    'words': [],
+                }
+            )
+
+        if language is None:
+            raw_language = segment.get('language')
+            if isinstance(raw_language, str) and raw_language.strip():
+                language = raw_language.strip()
+
+        raw_diarization = segment.get('diarization')
+        if isinstance(raw_diarization, list):
+            for item in raw_diarization:
+                if not isinstance(item, dict):
+                    continue
+                diarization_entry = dict(item)
+                diarization_entry.setdefault('start', start)
+                diarization_entry.setdefault('end', end)
+                diarization_segments.append(diarization_entry)
+                speaker_id = diarization_entry.get('speaker')
+                if isinstance(speaker_id, str) and speaker_id.strip():
+                    normalized_id = speaker_id.strip()
+                    speaker_stats.setdefault(
+                        normalized_id,
+                        {
+                            'speaker_id': normalized_id,
+                            'total_duration': 0.0,
+                            'segment_count': 0,
+                        },
+                    )
+                    duration_value = _coerce_optional_float(diarization_entry.get('duration'))
+                    if duration_value is None:
+                        start_value = _coerce_optional_float(diarization_entry.get('start'))
+                        end_value = _coerce_optional_float(diarization_entry.get('end'))
+                        if start_value is not None and end_value is not None:
+                            duration_value = max(0.0, end_value - start_value)
+                    speaker_stats[normalized_id]['total_duration'] += float(duration_value or 0.0)
+                    speaker_stats[normalized_id]['segment_count'] += 1
+
+        raw_speakers = segment.get('speakers')
+        if isinstance(raw_speakers, list):
+            for item in raw_speakers:
+                if isinstance(item, dict):
+                    speaker_id = item.get('speaker_id') or item.get('speaker') or item.get('label')
+                    if isinstance(speaker_id, str) and speaker_id.strip():
+                        normalized_id = speaker_id.strip()
+                        speaker_stats.setdefault(
+                            normalized_id,
+                            {
+                                'speaker_id': normalized_id,
+                                'total_duration': float(item.get('total_duration') or 0.0),
+                                'segment_count': int(item.get('segment_count') or 0),
+                            },
+                        )
+
+    speakers = sorted(
+        speaker_stats.values(),
+        key=lambda speaker: (
+            -float(speaker.get('total_duration') or 0.0),
+            str(speaker.get('speaker_id') or ''),
+        ),
+    )
+    full_text = " ".join(part for part in full_text_parts if part).strip()
+
+    atomic_write_json(
+        overlay_dir / 'segmentation.json',
+        {
+            'segments': segments,
+        },
+    )
+    atomic_write_json(
+        overlay_dir / 'transcript.json',
+        {
+            'segments': transcript_segments,
+            'full_text': full_text,
+            'language': language or 'en',
+        },
+    )
+    atomic_write_json(
+        overlay_dir / 'diarization.json',
+        {
+            'speakers': speakers,
+            'segments': diarization_segments,
+        },
+    )
+
+    return {
+        'enabled': True,
+        'reason': 'segmentation_shadow_audio_overlay_ready',
+        'audio_artifact_dir': str(overlay_dir),
+        'segment_count': len(segments),
+        'transcript_segment_count': len(transcript_segments),
+        'diarization_segment_count': len(diarization_segments),
+        'speaker_count': len(speakers),
+    }
+
+
 def _run_segmentation_shadow_pipeline(
     video_path: Path,
     processing_dir: Path,
@@ -4136,6 +4319,23 @@ def run(
         if profile_override:
             video_result['profile_override'] = profile_override
             video_result['profile_override_reason'] = profile_override_reason
+
+        segmentation_shadow_result = _run_segmentation_shadow_pipeline(
+            video_path,
+            processing_dir,
+            cfg,
+            audio_runtime_contract=audio_runtime_contract,
+        )
+        segmentation_shadow_overlay = _prepare_segmentation_shadow_audio_overlay(
+            cfg,
+            segmentation_shadow_result,
+        )
+        phase6_audio_artifact_dir = Path(
+            segmentation_shadow_overlay.get('audio_artifact_dir')
+        ) if segmentation_shadow_overlay.get('enabled') else audio_artifact_dir
+        video_result['phase6_audio_artifact_dir'] = str(phase6_audio_artifact_dir)
+        if segmentation_shadow_overlay.get('enabled'):
+            video_result['phase6_audio_overlay'] = segmentation_shadow_overlay
         
         # ============================================================
         # PHASE 6: VISUAL EMBEDDINGS + MULTIMODAL HARMONIZATION
@@ -4157,7 +4357,7 @@ def run(
                 'video_storage_key': video_path.stem,
                 'video_path': str(video_path),
                 'processing_dir': str(processing_dir),
-                'audio_artifact_dir': str(audio_artifact_dir),
+                'audio_artifact_dir': str(phase6_audio_artifact_dir),
                 'scene_manifest_path': str(processing_dir / 'video' / 'scene_manifest.json'),
                 'scenes': scene_outputs,
                 'video_hash': video_hash,
@@ -4331,18 +4531,15 @@ def run(
                 typer.echo('[PHASE 6] Skipped (disabled in config)')
             video_result['phase6_complete'] = False
 
-        segmentation_shadow_result = _run_segmentation_shadow_pipeline(
-            video_path,
-            processing_dir,
-            cfg,
-            audio_runtime_contract=audio_runtime_contract,
-        )
         segmentation_shadow_result = _attach_segmentation_shadow_metrics(
             cfg,
             scene_outputs,
             video_result.get('temporal_index'),
             segmentation_shadow_result,
         )
+        if segmentation_shadow_overlay.get('enabled'):
+            segmentation_shadow_result = dict(segmentation_shadow_result)
+            segmentation_shadow_result['phase6_audio_overlay'] = segmentation_shadow_overlay
         video_result['segmentation_shadow'] = segmentation_shadow_result
 
         video_result['qdrant_ok'] = _merge_store_statuses(scene_qdrant_status, phase6_qdrant_status)

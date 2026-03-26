@@ -182,6 +182,7 @@ segmentation:
   enabled: true
   activation: off
   metrics_output: true
+  shadow_audio_overlay: false
   mode: phased
   
   # SEG_P0: Pre-Normalization

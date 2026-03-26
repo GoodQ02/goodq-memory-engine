@@ -55,6 +55,12 @@ Derived shadow artifacts:
 
 Shadow artifacts are comparison-only until a later explicit cutover.
 
+Current Wave 2 exception:
+
+- when `segmentation.activation=shadow` and `segmentation.shadow_audio_overlay=true`, the live Phase 6 harmonizer may consume a derived shadow audio overlay directory for chunk-aware transcript and diarization inputs
+- scene selection remains authoritative from the live ingest path
+- this is an audio-source overlay, not a scene-backend cutover
+
 ## Paths
 
 Required shadow artifact paths:

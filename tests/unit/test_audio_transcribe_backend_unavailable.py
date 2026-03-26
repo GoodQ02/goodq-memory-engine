@@ -22,6 +22,7 @@ def test_audio_transcribe_returns_model_unavailable_without_chunk_loop(
 
     monkeypatch.setattr("steps.audio_transcribe.step.require_wsl_audio", lambda: False)
     monkeypatch.setattr("steps.audio_transcribe.step.is_baseline", lambda: True)
+    monkeypatch.setattr("steps.audio_transcribe.step.require_gpu", lambda: False)
     monkeypatch.setattr("steps.audio_transcribe.step._audio_duration", lambda _path: 1.0)
     monkeypatch.setattr(
         "steps.audio_transcribe.step._build_chunks",

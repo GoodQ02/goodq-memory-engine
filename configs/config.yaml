@@ -180,7 +180,7 @@ qdrant:
 # ============================================================================
 segmentation:
   enabled: true
-  activation: off
+  activation: "off"
   metrics_output: true
   shadow_audio_overlay: false
   mode: phased

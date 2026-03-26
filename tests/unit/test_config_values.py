@@ -13,6 +13,13 @@ sys.path.insert(0, str(project_root))
 from steps.common.config_loader import load_configs
 
 
+def test_config_loads_segmentation_activation_as_string():
+    result = load_configs()
+    segmentation = result.get('segmentation', {})
+    assert isinstance(segmentation.get('activation'), str)
+    assert segmentation.get('activation') == 'off'
+
+
 def test_config_values():
     """Test that all critical settings have correct values"""
     print("=" * 70)

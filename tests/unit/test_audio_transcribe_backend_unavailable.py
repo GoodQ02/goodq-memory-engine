@@ -41,7 +41,8 @@ def test_audio_transcribe_returns_model_unavailable_without_chunk_loop(
 
     assert result["transcript"] is None
     assert result["transcript_meta"]["status"] == "model_unavailable"
-    assert result["transcript_meta"]["device"] == "cpu"
+    assert result["transcript_meta"]["device"] == "none"
+    assert result["transcript_meta"]["attempted_device"] == "cpu"
     assert result["transcript_meta"]["device_probe"] == "profile:baseline_cpu_safe"
 
 

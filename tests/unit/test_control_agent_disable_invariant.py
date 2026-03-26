@@ -33,6 +33,15 @@ def _load_run_ingestion_module():
 
 
 def test_control_agent_disabled_without_llm_client_persists_state(monkeypatch, tmp_path: Path):
+    for name in (
+        "GOODQ_REQUIRE_WSL_AUDIO",
+        "GOODQ_REQUIRE_GPU",
+        "GOODQ_WSL_DISTRO",
+        "GOODQ_WSL_USER",
+        "GOODQ_WSL_WORKSPACE",
+    ):
+        monkeypatch.delenv(name, raising=False)
+
     run_ingestion = _load_run_ingestion_module()
 
     input_dir = tmp_path / "inbox"

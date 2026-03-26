@@ -53,6 +53,15 @@ class _FakeTracker:
 
 
 def test_run_updates_and_finishes_progress_tracker(monkeypatch, tmp_path: Path):
+    for name in (
+        "GOODQ_REQUIRE_WSL_AUDIO",
+        "GOODQ_REQUIRE_GPU",
+        "GOODQ_WSL_DISTRO",
+        "GOODQ_WSL_USER",
+        "GOODQ_WSL_WORKSPACE",
+    ):
+        monkeypatch.delenv(name, raising=False)
+
     run_ingestion = _load_run_ingestion_module()
 
     input_dir = tmp_path / "inbox"

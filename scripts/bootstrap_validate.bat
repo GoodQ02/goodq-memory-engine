@@ -85,8 +85,16 @@ echo.
 
 echo [Stage 4] Test Suite
 echo ------------------------------------------------------------
+setlocal
+set "GOODQ_REQUIRE_WSL_AUDIO="
+set "GOODQ_REQUIRE_GPU="
+set "GOODQ_WSL_DISTRO="
+set "GOODQ_WSL_USER="
+set "GOODQ_WSL_WORKSPACE="
 "%CONDA_EXE%" run --no-capture-output -n %GOODQ_CONDA_ENV% python -m pytest -q
-if errorlevel 1 (
+set "PYTEST_EXIT=%ERRORLEVEL%"
+endlocal & set "PYTEST_EXIT=%PYTEST_EXIT%"
+if not "%PYTEST_EXIT%"=="0" (
   set "FAILED_STAGE=4 (pytest)"
   goto :fail
 )

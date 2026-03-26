@@ -243,7 +243,19 @@ def _config_checks(repo_root: Path) -> Tuple[List[Item], Optional[Dict[str, Any]
             cfg = loaded
             items.append(Item(PASS, "load_configs() succeeded"))
     except Exception as exc:
-        items.append(Item(FAIL, f"load_configs() failed: {exc}"))
+        if isinstance(exc, ModuleNotFoundError) and getattr(exc, "name", None) == "yaml":
+            items.append(
+                Item(
+                    FAIL,
+                    (
+                        "load_configs() failed: No module named 'yaml'. "
+                        "Run doctor from the bound GoodQ environment, for example: "
+                        "conda run -n goodq_core python -m cli.goodq_doctor"
+                    ),
+                )
+            )
+        else:
+            items.append(Item(FAIL, f"load_configs() failed: {exc}"))
         return items, None
 
     paths_cfg = cfg.get("paths") if isinstance(cfg, dict) else None

@@ -14,6 +14,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List
 
+try:
+    from scripts.wsl_audio_preflight import probe_wsl_audio_runtime
+except Exception:  # noqa: BLE001
+    from wsl_audio_preflight import probe_wsl_audio_runtime
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
@@ -408,34 +413,21 @@ def _check_wsl_audio_workspace() -> List[CheckResult]:
     if workspace.lower() == "auto":
         workspace = f"/home/{wsl_user}/goodq_audio"
 
-    try:
-        completed = subprocess.run(
-            [
-                "wsl",
-                "-d",
-                distro,
-                "--",
-                "bash",
-                "-lc",
+    probe = probe_wsl_audio_runtime(distro, workspace)
+    detail = str(probe.get("detail") or "workspace missing required files")
+    if bool(probe.get("runtime_ready")):
+        if bool(probe.get("abi_ready")):
+            return [CheckResult("wsl_audio_workspace", "pass", f"ready in distro={distro} workspace={workspace}")]
+        return [
+            CheckResult(
+                "wsl_audio_workspace",
+                "warn",
                 (
-                    f"test -f '{workspace}/setup_cuda_env.sh' && "
-                    f"test -f '{workspace}/process_audio.py' && "
-                    f"(test -x '{workspace}/venv/bin/python' || test -x '{workspace}/env/bin/python')"
+                    f"transcription-ready in distro={distro} workspace={workspace}, "
+                    f"but torchvision ABI is degraded ({detail})"
                 ),
-            ],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-    except FileNotFoundError:
-        return [CheckResult("wsl_audio_workspace", "fail", "WSL is unavailable but GOODQ_REQUIRE_WSL_AUDIO=1")]
-    except Exception as exc:  # noqa: BLE001
-        return [CheckResult("wsl_audio_workspace", "fail", f"WSL workspace probe failed: {exc}")]
-
-    if completed.returncode == 0:
-        return [CheckResult("wsl_audio_workspace", "pass", f"ready in distro={distro} workspace={workspace}")]
-
-    detail = (completed.stderr or completed.stdout).strip() or "workspace missing required files"
+            )
+        ]
     return [
         CheckResult(
             "wsl_audio_workspace",

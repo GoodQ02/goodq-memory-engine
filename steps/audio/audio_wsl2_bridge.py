@@ -157,17 +157,26 @@ def audio_unified_wsl2(audio_path: str, scene_id: str = None, duration: float = 
         word_count = len(transcript.split()) if transcript else 0
         speaker_count = result.get('speaker_count', 0)
         emotion = result.get('emotion', 'unknown')
+        word_timestamps = result.get('word_timestamps', []) or result.get('segments', [])
         
         logger.info(f"[WSL2] Unified processing complete - {word_count} words, {speaker_count} speakers, emotion: {emotion}")
         
         # Return unified structure that matches entity extractor expectations
         return {
+            'status': 'success',
             # Transcription
             'transcript': transcript,
             'full_text': transcript,
-            'word_timestamps': result.get('word_timestamps', []),
+            'segments': word_timestamps,
+            'word_timestamps': word_timestamps,
             'language': result.get('language'),
             'language_probability': result.get('language_probability'),
+            'transcript_meta': {
+                'status': result.get('transcription_status', 'success'),
+                'engine': 'wsl_unified',
+                'device': result.get('device'),
+                'language': result.get('language'),
+            },
             
             # Diarization
             'speakers': result.get('speakers', []),
@@ -192,6 +201,8 @@ def audio_unified_wsl2(audio_path: str, scene_id: str = None, duration: float = 
             'wsl2_unified': True,
             'gpu_used': result.get('device') == 'cuda',
             'gpu_name': result.get('gpu_name'),
+            'bridge_env_warnings': result.get('bridge_env_warnings', []),
+            'stderr_warnings': result.get('stderr_warnings', []),
         }
     else:
         error_msg = result.get('error', 'Unknown error')
@@ -201,5 +212,15 @@ def audio_unified_wsl2(audio_path: str, scene_id: str = None, duration: float = 
             'transcript': '',
             'full_text': '',
             'wsl2_unified': True,
-            'status': 'error'
+            'status': 'error',
+            'bridge_error_reason': result.get('bridge_error_reason'),
+            'bridge_error_details': result.get('bridge_error_details'),
+            'bridge_env_warnings': result.get('bridge_env_warnings', []),
+            'stderr_warnings': result.get('stderr_warnings', []),
+            'wsl_returncode': result.get('wsl_returncode'),
+            'transcript_meta': {
+                'status': 'error',
+                'engine': 'wsl_unified',
+                'error': error_msg,
+            },
         }

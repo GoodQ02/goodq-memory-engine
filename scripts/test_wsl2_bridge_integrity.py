@@ -59,6 +59,14 @@ class WSL2BridgeIntegrityTests(unittest.TestCase):
 
         with patch("wsl2_audio_bridge.uuid.uuid4", return_value=uuid.UUID(self.TEST_UUID)), patch(
             "wsl2_audio_bridge.subprocess.run", side_effect=fake_run
+        ), patch(
+            "wsl2_audio_bridge.probe_wsl_audio_runtime",
+            return_value={
+                "workspace_ready": True,
+                "runtime_ready": True,
+                "abi_ready": True,
+                "detail": "workspace and Python runtime are ready",
+            },
         ):
             result = bridge.process_audio(str(scene_file), timeout=5)
 
@@ -90,6 +98,14 @@ class WSL2BridgeIntegrityTests(unittest.TestCase):
 
         with patch("wsl2_audio_bridge.uuid.uuid4", return_value=uuid.UUID(self.TEST_UUID)), patch(
             "wsl2_audio_bridge.subprocess.run", side_effect=fake_run
+        ), patch(
+            "wsl2_audio_bridge.probe_wsl_audio_runtime",
+            return_value={
+                "workspace_ready": True,
+                "runtime_ready": True,
+                "abi_ready": True,
+                "detail": "workspace and Python runtime are ready",
+            },
         ):
             result = bridge.process_audio(str(scene_file), timeout=5)
 
@@ -128,6 +144,14 @@ class WSL2BridgeIntegrityTests(unittest.TestCase):
 
         with patch("wsl2_audio_bridge.uuid.uuid4", return_value=uuid.UUID(self.TEST_UUID)), patch(
             "wsl2_audio_bridge.subprocess.run", side_effect=fake_run
+        ), patch(
+            "wsl2_audio_bridge.probe_wsl_audio_runtime",
+            return_value={
+                "workspace_ready": True,
+                "runtime_ready": True,
+                "abi_ready": True,
+                "detail": "workspace and Python runtime are ready",
+            },
         ):
             result = bridge.process_audio(str(scene_file), timeout=5)
 
@@ -139,43 +163,44 @@ class WSL2BridgeIntegrityTests(unittest.TestCase):
         self.assertEqual(stat_calls["count"], 2)
         self.assertIn("result_json_freshness_probe_retried", result.get("stderr_warnings", []))
 
-    def test_abi_gate_fails_early_and_returns_fix_command(self) -> None:
+    def test_abi_degraded_runtime_warns_but_allows_processing(self) -> None:
         scene_file = self._make_scene_file("scene_0004.wav")
         bridge = self._make_bridge()
 
         def fake_run(cmd, capture_output=True, text=True, timeout=None):  # noqa: ANN001
             cmd_str = " ".join(str(part) for part in cmd)
-            if "from torchvision.ops import nms" in cmd_str:
-                return _Result(returncode=1, stderr="RuntimeError: operator torchvision::nms does not exist")
-            if "md.version('torch')" in cmd_str:
-                return _Result(returncode=0, stdout="2.8.0")
-            if "md.version('torchvision')" in cmd_str:
-                return _Result(returncode=0, stdout="0.20.1+cu121")
-            if "md.version('torchaudio')" in cmd_str:
-                return _Result(returncode=0, stdout="2.8.0")
             if "process_audio.py" in cmd_str:
-                self.fail("process_audio.py should not be called when ABI preflight fails")
+                return _Result(
+                    returncode=0,
+                    stdout=(
+                        f'{{"status":"success","audio_file":"/mnt/l/path/scene_0004.wav",'
+                        f'"transcription":"hello","request_uuid":"{self.TEST_UUID}"}}'
+                    ),
+                )
+            if "stat -c %Y" in cmd_str:
+                return _Result(returncode=0, stdout=str(int(time.time())))
             return _Result(returncode=0, stdout="")
 
         with patch("wsl2_audio_bridge.uuid.uuid4", return_value=uuid.UUID(self.TEST_UUID)), patch(
             "wsl2_audio_bridge.subprocess.run", side_effect=fake_run
+        ), patch(
+            "wsl2_audio_bridge.probe_wsl_audio_runtime",
+            return_value={
+                "workspace_ready": True,
+                "runtime_ready": True,
+                "abi_ready": False,
+                "detail": "transcription runtime ready; torchvision ABI unavailable (diarization may be degraded)",
+            },
         ):
             result = bridge.process_audio(str(scene_file), timeout=5)
 
-        self.assertEqual(result.get("status"), "error")
-        self.assertEqual(result.get("bridge_error_reason"), "wsl_env_abi_mismatch")
-        self.assertEqual(result.get("wsl_returncode"), 1)
+        self.assertEqual(result.get("status"), "success")
+        self.assertEqual(result.get("transcription"), "hello")
         self.assertEqual(result.get("requested_scene_file"), "scene_0004.wav")
         self.assertEqual(result.get("requested_request_uuid"), self.TEST_UUID)
-        self.assertFalse(result.get("used_fallback_result_json"))
-        details = result.get("bridge_error_details") or {}
-        versions = details.get("detected_versions") or {}
-        self.assertEqual(versions.get("torch"), "2.8.0")
-        self.assertEqual(versions.get("torchvision"), "0.20.1+cu121")
-        self.assertEqual(versions.get("torchaudio"), "2.8.0")
         self.assertEqual(
-            details.get("recommended_install_command"),
-            "pip install torch==2.8.0 torchvision==0.23.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cu128",
+            result.get("bridge_env_warnings"),
+            ["transcription runtime ready; torchvision ABI unavailable (diarization may be degraded)"],
         )
 
 

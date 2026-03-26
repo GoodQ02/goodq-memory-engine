@@ -112,6 +112,100 @@ def test_baseline_profile_skips_unified_wsl(monkeypatch, tmp_path: Path):
     assert ("goodq_audio_transcribe", "audio_speaker_merge") in merge_calls
 
 
+def test_structured_wsl_audio_error_downgrades_to_local_transcription(monkeypatch, tmp_path: Path):
+    run_ingestion = _load_run_ingestion_module()
+    _process_audio = run_ingestion._process_audio
+
+    cfg_json = tmp_path / "cfg.json"
+    cfg_json.write_text(
+        json.dumps(
+            {"audio": {}, "run": {"id": "run_test"}, "paths": {"log_dir": str(tmp_path / "logs")}}
+        ),
+        encoding="utf-8",
+    )
+
+    video_path = tmp_path / "video.mp4"
+    audio_path = tmp_path / "scene.wav"
+    video_path.write_bytes(b"v")
+    audio_path.write_bytes(b"a")
+
+    audio_dir = tmp_path / "artifacts" / "audio"
+    audio_dir.mkdir(parents=True, exist_ok=True)
+
+    monkeypatch.setattr(run_ingestion, "wsl_audio_auto_enabled", lambda: True)
+    monkeypatch.setattr(run_ingestion, "require_wsl_audio", lambda: False)
+    monkeypatch.setattr(run_ingestion, "_extract_audio_chunk", lambda *a, **k: audio_path)
+
+    mod_unified = types.ModuleType("steps.audio.audio_wsl2_bridge")
+
+    def _audio_unified_wsl2(*args, **kwargs):
+        return {
+            "status": "error",
+            "error": "WSL ABI preflight failed before audio processing",
+            "bridge_error_reason": "wsl_env_runtime_unavailable",
+            "bridge_error_details": {"detail": "transcription runtime unavailable"},
+            "bridge_env_warnings": ["transcription runtime unavailable"],
+        }
+
+    mod_unified.audio_unified_wsl2 = _audio_unified_wsl2
+    monkeypatch.setitem(sys.modules, "steps.audio.audio_wsl2_bridge", mod_unified)
+
+    mod_local = types.ModuleType("steps.audio_transcribe.step")
+
+    def _audio_transcribe(*args, **kwargs):
+        return {
+            "transcript": "fallback transcript",
+            "transcript_segments": [{"start": 0.0, "end": 1.0, "text": "fallback transcript"}],
+            "transcript_meta": {"status": "success", "duration": 1.0},
+        }
+
+    mod_local.audio_transcribe = _audio_transcribe
+    monkeypatch.setitem(sys.modules, "steps.audio_transcribe.step", mod_local)
+
+    merge_calls = []
+    logged_steps = []
+
+    def _run_step(env_name, step_name, payload, cfg_path):
+        merge_calls.append((env_name, step_name))
+        return {}
+
+    def _log_step_run(cfg, step_name, item, duration_ms, status, error=None, *, extra=None):
+        logged_steps.append(
+            {
+                "step": step_name,
+                "status": status,
+                "error": error,
+                "extra": dict(extra or {}),
+            }
+        )
+
+    monkeypatch.setattr(run_ingestion, "_run_step", _run_step)
+    monkeypatch.setattr(run_ingestion, "log_step_run", _log_step_run)
+
+    result = _process_audio(
+        cfg_json=cfg_json,
+        ffmpeg="ffmpeg",
+        video_path=video_path,
+        scene={"start": 0.0, "end": 2.0, "index": 3},
+        audio_dir=audio_dir,
+        audio_artifact_dir=tmp_path / "processing" / "audio",
+        video_hash="vh",
+        scene_id="scene_0003",
+        audio_runtime_contract={
+            "selected": "wsl",
+            "reason": "wsl_runtime_ready",
+        },
+    )
+
+    assert result is not None
+    assert result["data"]["transcript"] == "fallback transcript"
+    assert result["data"]["audio_backend_selected"] == "wsl"
+    assert result["data"]["audio_backend_effective"] == "windows"
+    assert result["data"]["audio_backend_unavailable_details"]["reason"] == "wsl_env_runtime_unavailable"
+    assert ("goodq_audio_transcribe", "audio_speaker_merge") in merge_calls
+    assert any(entry["step"] == "audio_unified_wsl2" and entry["status"] == "error" for entry in logged_steps)
+
+
 def test_audio_embed_clap_failure_preserves_transcript_payload(monkeypatch, tmp_path: Path):
     run_ingestion = _load_run_ingestion_module()
     _process_audio = run_ingestion._process_audio

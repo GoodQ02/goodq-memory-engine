@@ -11,6 +11,11 @@ import uuid
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+try:
+    from scripts.wsl_audio_preflight import probe_wsl_audio_runtime
+except Exception:  # noqa: BLE001
+    from wsl_audio_preflight import probe_wsl_audio_runtime
+
 class WSL2AudioBridge:
     """Bridge to WSL2 audio processing"""
     _workspace_warning_keys: set[str] = set()
@@ -205,79 +210,6 @@ class WSL2AudioBridge:
                 return None
             return parsed if isinstance(parsed, dict) else None
 
-        def _probe_package_version(package_name: str) -> Optional[str]:
-            probe_cmd = (
-                f"source {self.audio_workspace}/setup_cuda_env.sh && "
-                f"python3 -c \"import importlib.metadata as md; print(md.version('{package_name}'))\""
-            )
-            try:
-                probe_result = subprocess.run(
-                    ["wsl", "-d", self.wsl_distro, "--", "bash", "-c", probe_cmd],
-                    capture_output=True,
-                    text=True,
-                    timeout=10,
-                )
-            except Exception:
-                return None
-            if probe_result.returncode != 0:
-                return None
-            version_text = (probe_result.stdout or "").strip()
-            return version_text or None
-
-        def _probe_abi_gate() -> Optional[Dict[str, Any]]:
-            probe_cmd = (
-                f"source {self.audio_workspace}/setup_cuda_env.sh && "
-                "python3 -c \"import torch, torchvision; from torchvision.ops import nms; print('OK')\""
-            )
-            try:
-                probe_result = subprocess.run(
-                    ["wsl", "-d", self.wsl_distro, "--", "bash", "-c", probe_cmd],
-                    capture_output=True,
-                    text=True,
-                    timeout=15,
-                )
-            except Exception as exc:
-                return _build_error(
-                    "wsl_env_abi_mismatch",
-                    error_message="WSL ABI preflight subprocess failed",
-                    wsl_returncode=None,
-                    stderr_warnings=[],
-                    details={
-                        "abi_probe_exception": type(exc).__name__,
-                        "abi_probe_message": str(exc),
-                        "detected_versions": {},
-                        "recommended_install_command": (
-                            "pip install torch==2.8.0 torchvision==0.23.0 torchaudio==2.8.0 "
-                            "--index-url https://download.pytorch.org/whl/cu128"
-                        ),
-                    },
-                    used_fallback_result_json=False,
-                )
-            if probe_result.returncode == 0:
-                return None
-            detected_versions = {
-                "torch": _probe_package_version("torch"),
-                "torchvision": _probe_package_version("torchvision"),
-                "torchaudio": _probe_package_version("torchaudio"),
-            }
-            diagnostic = (probe_result.stderr or probe_result.stdout or "").strip()
-            diagnostic_tail = diagnostic[-600:] if diagnostic else ""
-            return _build_error(
-                "wsl_env_abi_mismatch",
-                error_message="WSL ABI preflight failed before audio processing",
-                wsl_returncode=probe_result.returncode,
-                stderr_warnings=_stderr_warnings(probe_result.stderr),
-                details={
-                    "abi_probe_stderr_tail": diagnostic_tail,
-                    "detected_versions": detected_versions,
-                    "recommended_install_command": (
-                        "pip install torch==2.8.0 torchvision==0.23.0 torchaudio==2.8.0 "
-                        "--index-url https://download.pytorch.org/whl/cu128"
-                    ),
-                },
-                used_fallback_result_json=False,
-            )
-
         def _read_result_json_debug() -> dict | None:
             # Debug-only fallback: never authoritative for success.
             try:
@@ -365,10 +297,24 @@ class WSL2AudioBridge:
 
         # Execute in WSL2
         try:
-            abi_gate_error = _probe_abi_gate()
-            if isinstance(abi_gate_error, dict):
-                return abi_gate_error
+            runtime_probe = probe_wsl_audio_runtime(self.wsl_distro, self.audio_workspace)
+            if not bool(runtime_probe.get("runtime_ready")):
+                return _build_error(
+                    "wsl_env_runtime_unavailable",
+                    error_message=str(runtime_probe.get("detail") or "WSL audio runtime preflight failed"),
+                    wsl_returncode=None,
+                    stderr_warnings=[],
+                    details=runtime_probe,
+                    used_fallback_result_json=False,
+                )
             env_warnings: list[str] = []
+            if not bool(runtime_probe.get("abi_ready")):
+                env_warnings.append(
+                    str(
+                        runtime_probe.get("detail")
+                        or "transcription runtime ready; torchvision ABI unavailable"
+                    )
+                )
             result = subprocess.run(
                 ["wsl", "-d", self.wsl_distro, "--", "bash", "-c", cmd],
                 capture_output=True,

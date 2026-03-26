@@ -31,6 +31,7 @@ from steps.common.tool_paths import resolve_ffmpeg, resolve_conda
 from steps.common.step_logger import log_step_run
 from steps.common.profile_config import is_baseline, require_wsl_audio, wsl_audio_auto_enabled
 from lib.observability.observer import PipelineObserver
+from scripts.wsl_audio_preflight import probe_wsl_audio_runtime
 
 _OPTIONAL_DIRECT_ENV_FALLBACK_STEPS = {"sentiment", "audio_embed_clap"}
 _PREFER_DIRECT_ENV_PYTHON_ON_WINDOWS = os.name == 'nt'
@@ -1093,6 +1094,8 @@ def _resolve_audio_runtime_contract(cfg: Dict[str, Any]) -> Dict[str, Any]:
         'wsl_workspace': None,
         'wsl_audio_workspace': None,
         'workspace_ready': False,
+        'wsl_runtime_ready': False,
+        'wsl_abi_ready': False,
         'selected': 'none',
         'reason': 'unresolved',
     }
@@ -1165,30 +1168,17 @@ def _resolve_audio_runtime_contract(cfg: Dict[str, Any]) -> Dict[str, Any]:
             contract['wsl_workspace_source'] = workspace_source
             attempted_targets.append(f"{candidate_distro}:{audio_workspace}")
             try:
-                check = subprocess.run(
-                    [
-                        "wsl",
-                        "-d",
-                        candidate_distro,
-                        "--",
-                        "bash",
-                        "-lc",
-                        (
-                            f"test -d '{audio_workspace}' && "
-                            f"test -f '{audio_workspace}/setup_cuda_env.sh' && "
-                            f"test -f '{audio_workspace}/process_audio.py'"
-                        ),
-                    ],
-                    capture_output=True,
-                    text=True,
-                    timeout=5,
-                    check=False,
-                )
-                ready = check.returncode == 0
-                contract['workspace_ready'] = ready
-                if ready:
+                probe = probe_wsl_audio_runtime(candidate_distro, audio_workspace)
+                workspace_ready = bool(probe.get('workspace_ready'))
+                runtime_ready = bool(probe.get('runtime_ready'))
+                abi_ready = bool(probe.get('abi_ready'))
+                contract['workspace_ready'] = workspace_ready
+                contract['wsl_runtime_ready'] = runtime_ready
+                contract['wsl_abi_ready'] = abi_ready
+                contract['wsl_runtime_detail'] = str(probe.get('detail') or '')
+                if runtime_ready:
                     contract['selected'] = 'wsl'
-                    contract['reason'] = 'wsl_workspace_ready'
+                    contract['reason'] = 'wsl_runtime_ready'
                     fallback_notes: List[str] = []
                     if explicit_wsl_distro and distro_source != 'env':
                         fallback_notes.append(
@@ -1205,7 +1195,9 @@ def _resolve_audio_runtime_contract(cfg: Dict[str, Any]) -> Dict[str, Any]:
                     os.environ["GOODQ_WSL_DISTRO"] = candidate_distro
                     os.environ["GOODQ_WSL_WORKSPACE"] = workspace
                     return contract
-                failed_workspaces.append(f"{candidate_distro}:{audio_workspace}")
+                failed_workspaces.append(
+                    f"{candidate_distro}:{audio_workspace} ({probe.get('detail') or 'not ready'})"
+                )
             except Exception as e:
                 probe_failures.append(f"{candidate_distro}:{audio_workspace}: {e}")
 
@@ -2740,6 +2732,38 @@ def _process_audio(
             )
             _set_effective_backend('failed', f'{reason}_failed')
 
+    def log_unified_audio_attempt(
+        result_payload: Optional[Dict[str, Any]],
+        duration_ms: float,
+        *,
+        error_text: Optional[str] = None,
+        status_override: Optional[str] = None,
+    ) -> None:
+        step_item = dict(item)
+        extra: Dict[str, Any] = {
+            'backend': 'wsl',
+            'requested_backend': contract_selected,
+        }
+        if isinstance(result_payload, dict):
+            reason = result_payload.get('bridge_error_reason')
+            if isinstance(reason, str) and reason.strip():
+                extra['reason'] = reason.strip()
+            details = result_payload.get('bridge_error_details')
+            if isinstance(details, dict) and details:
+                extra['bridge_error_details'] = details
+            env_warnings = result_payload.get('bridge_env_warnings')
+            if isinstance(env_warnings, list) and env_warnings:
+                extra['bridge_env_warnings'] = env_warnings
+        log_step_run(
+            _get_step_log_cfg(),
+            'audio_unified_wsl2',
+            step_item,
+            duration_ms,
+            status_override or ('error' if error_text else 'ok'),
+            error_text,
+            extra=extra,
+        )
+
     merge('goodq_audio_metadata', 'audio_metadata')
     
     # WSL2 unified audio is profile-gated. BASELINE uses CPU-safe local fallback by default.
@@ -2759,16 +2783,54 @@ def _process_audio(
 
             # Single unified call gets transcription, diarization, emotion, embeddings
             try:
+                unified_started = time.perf_counter()
                 unified_result = audio_unified_wsl2(str(audio_path), scene_id=scene_id, duration=end-start)
+                unified_duration_ms = (time.perf_counter() - unified_started) * 1000.0
                 if isinstance(unified_result, dict):
                     item.update(unified_result)
                     item['audio_backend_selected'] = contract_selected
                     item['audio_backend_reason'] = contract_reason
                     if str(unified_result.get('status', '')).strip().lower() == 'error':
-                        _set_effective_backend('failed', 'wsl_unified_error')
+                        error_text = str(
+                            unified_result.get('error')
+                            or unified_result.get('bridge_error_reason')
+                            or 'WSL unified audio error'
+                        ).strip()
+                        log_unified_audio_attempt(
+                            unified_result,
+                            unified_duration_ms,
+                            error_text=error_text,
+                            status_override='error',
+                        )
+                        unavailable_details: Dict[str, Any] = {
+                            'reason': str(unified_result.get('bridge_error_reason') or 'wsl_unified_error'),
+                            'error': error_text,
+                        }
+                        bridge_details = unified_result.get('bridge_error_details')
+                        if isinstance(bridge_details, dict) and bridge_details:
+                            unavailable_details['bridge_error_details'] = bridge_details
+                        env_warnings = unified_result.get('bridge_env_warnings')
+                        if isinstance(env_warnings, list) and env_warnings:
+                            unavailable_details['bridge_env_warnings'] = env_warnings
+                        item['audio_backend_unavailable_details'] = unavailable_details
+                        logger.warning(
+                            "[AUDIO] WSL2 unified audio returned structured error scene_id=%s reason=%s error=%s; downgrading to local fallback",
+                            scene_id,
+                            unavailable_details['reason'],
+                            error_text,
+                        )
+                        run_local_audio_fallback('wsl_unified_error_fallback')
                     else:
+                        log_unified_audio_attempt(unified_result, unified_duration_ms)
                         _set_effective_backend('wsl', 'wsl_unified_success')
             except Exception as unified_error:
+                unified_duration_ms = (time.perf_counter() - unified_started) * 1000.0 if 'unified_started' in locals() else 0.0
+                log_unified_audio_attempt(
+                    None,
+                    unified_duration_ms,
+                    error_text=str(unified_error),
+                    status_override='error',
+                )
                 logger.warning(
                     "[AUDIO] WSL2 unified audio failed operation=%s scene_id=%s exc_type=%s exc=%s",
                     "audio_unified_wsl2",

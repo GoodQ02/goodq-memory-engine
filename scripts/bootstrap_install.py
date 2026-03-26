@@ -19,6 +19,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Iterable, Optional
 
+try:
+    from scripts.wsl_audio_preflight import probe_wsl_audio_runtime
+except Exception:  # noqa: BLE001
+    from wsl_audio_preflight import probe_wsl_audio_runtime
+
 
 ENV_NAME = "goodq_core"
 BASELINE_ENV_FILE = "environment.yml"
@@ -1243,18 +1248,11 @@ def _sync_wsl_audio_assets(ctx: BootstrapContext, wsl_ctx: WslAudioContext) -> N
 
 
 def _probe_wsl_audio_workspace_ready(wsl_ctx: WslAudioContext) -> tuple[bool, str]:
-    script = (
-        f"test -f {_bash_quote(f'{wsl_ctx.workspace}/setup_cuda_env.sh')} && "
-        f"test -f {_bash_quote(f'{wsl_ctx.workspace}/process_audio.py')} && "
-        f"(test -x {_bash_quote(f'{wsl_ctx.workspace}/venv/bin/python')} || "
-        f"test -x {_bash_quote(f'{wsl_ctx.workspace}/env/bin/python')}) && "
-        f"source {_bash_quote(f'{wsl_ctx.workspace}/setup_cuda_env.sh')} >/dev/null 2>&1 && "
-        "python3 -c \"import faster_whisper, torch; print('ready')\""
-    )
-    completed = _run_wsl_bash(wsl_ctx, script)
-    if completed.returncode == 0:
-        return True, "workspace and Python runtime are ready"
-    return False, _completed_output(completed) or "WSL audio workspace probe failed"
+    probe = probe_wsl_audio_runtime(wsl_ctx.distro, wsl_ctx.workspace)
+    detail = str(probe.get("detail") or "WSL audio workspace probe failed")
+    if bool(probe.get("runtime_ready")):
+        return True, detail
+    return False, detail
 
 
 def _wsl_has_systemd(wsl_ctx: WslAudioContext) -> bool:

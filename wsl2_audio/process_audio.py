@@ -39,11 +39,13 @@ except Exception:
         return None
 
 # Pyannote for diarization (optional - requires HF token)
+DIARIZATION_IMPORT_ERROR = None
 try:
     from pyannote.audio import Pipeline as DiarizationPipeline
     DIARIZATION_AVAILABLE = True
-except ImportError:
+except Exception as exc:
     DIARIZATION_AVAILABLE = False
+    DIARIZATION_IMPORT_ERROR = f"{type(exc).__name__}: {exc}"
 
 # Transformers for emotion/embeddings
 try:
@@ -236,7 +238,10 @@ def process_audio(audio_file, output_dir):
                 clear_gpu_memory()
         else:
             result["diarization_status"] = "unavailable"
-            result["diarization_note"] = "pyannote.audio not installed"
+            if DIARIZATION_IMPORT_ERROR:
+                result["diarization_note"] = f"pyannote.audio unavailable: {DIARIZATION_IMPORT_ERROR}"
+            else:
+                result["diarization_note"] = "pyannote.audio not installed"
         
         # === STEP 3: EMOTION CLASSIFICATION (Wav2Vec2 - optional) ===
         # Use CPU for emotion model to save GPU memory

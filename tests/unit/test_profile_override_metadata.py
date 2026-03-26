@@ -56,6 +56,16 @@ def test_baseline_forced_wsl_persists_profile_override_metadata(monkeypatch, tmp
 
     monkeypatch.setattr(run_ingestion, "is_baseline", lambda: True)
     monkeypatch.setattr(run_ingestion, "require_wsl_audio", lambda: True)
+    monkeypatch.setattr(
+        run_ingestion,
+        "probe_wsl_audio_runtime",
+        lambda *args, **kwargs: {
+            "workspace_ready": True,
+            "runtime_ready": True,
+            "abi_ready": True,
+            "detail": "workspace and Python runtime are ready",
+        },
+    )
     monkeypatch.setattr(run_ingestion, "CONTROL_AGENT_AVAILABLE", False)
     monkeypatch.setattr(run_ingestion, "PROGRESS_TRACKING_AVAILABLE", False)
     monkeypatch.setattr(run_ingestion, "load_configs", lambda *_: cfg_template)

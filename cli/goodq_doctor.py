@@ -17,7 +17,6 @@ import contextlib
 import io
 import os
 import re
-import shlex
 import shutil
 import socket
 import subprocess
@@ -27,6 +26,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 from urllib.parse import urlparse
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from scripts.wsl_audio_preflight import probe_wsl_audio_runtime
 
 
 # Best-effort to keep this tool read-only (avoid writing __pycache__ for subsequent imports).
@@ -471,20 +476,28 @@ def _service_checks(cfg: Optional[Dict[str, Any]]) -> List[Item]:
                 items.append(Item(FAIL, f"WSL not reachable: {msg}"))
 
             if ok and wsl_distro and wsl_workspace:
-                workspace_check = [
-                    wsl,
-                    "-d",
-                    wsl_distro,
-                    "--",
-                    "bash",
-                    "-lc",
-                    f"test -d {shlex.quote(wsl_workspace)}",
-                ]
-                workspace_ok, workspace_msg = _check_cmd(workspace_check, timeout_s=15.0)
-                if workspace_ok:
-                    items.append(Item(PASS, f"Configured WSL audio workspace exists: {wsl_distro}:{wsl_workspace}"))
+                probe = probe_wsl_audio_runtime(wsl_distro, wsl_workspace)
+                detail = str(probe.get("detail") or "workspace probe failed")
+                if bool(probe.get("runtime_ready")):
+                    if bool(probe.get("abi_ready")):
+                        items.append(Item(PASS, f"Configured WSL audio runtime ready: {wsl_distro}:{wsl_workspace}"))
+                    else:
+                        items.append(
+                            Item(
+                                WARN,
+                                (
+                                    f"Configured WSL audio runtime is transcription-ready but ABI-degraded: "
+                                    f"{wsl_distro}:{wsl_workspace} ({detail})"
+                                ),
+                            )
+                        )
                 else:
-                    items.append(Item(FAIL, f"Configured WSL audio workspace missing/unreachable: {wsl_distro}:{wsl_workspace} ({workspace_msg})"))
+                    items.append(
+                        Item(
+                            FAIL,
+                            f"Configured WSL audio runtime missing/unreachable: {wsl_distro}:{wsl_workspace} ({detail})",
+                        )
+                    )
     else:
         items.append(Item(PASS, "Audio not enabled in config; skipping WSL reachability check"))
 

@@ -56,3 +56,34 @@ def test_env_or_file_prefers_project_env_over_ambient_env(monkeypatch):
     monkeypatch.setenv("GOODQ_WSL_DISTRO", "Ubuntu")
 
     assert bootstrap_verify._env_or_file("GOODQ_WSL_DISTRO") == "Ubuntu-22.04"
+
+
+def test_check_wsl_audio_workspace_warns_when_abi_is_degraded(monkeypatch):
+    from scripts import bootstrap_verify
+
+    monkeypatch.setattr(
+        bootstrap_verify,
+        "_ENV_FILE_VALUES",
+        {
+            "GOODQ_REQUIRE_WSL_AUDIO": "1",
+            "GOODQ_WSL_DISTRO": "Ubuntu-22.04",
+            "GOODQ_WSL_USER": "goodq",
+            "GOODQ_WSL_WORKSPACE": "/home/goodq/goodq_audio",
+        },
+    )
+    monkeypatch.setattr(
+        bootstrap_verify,
+        "probe_wsl_audio_runtime",
+        lambda distro, workspace: {
+            "workspace_ready": True,
+            "runtime_ready": True,
+            "abi_ready": False,
+            "detail": "transcription runtime ready; torchvision ABI unavailable (diarization may be degraded)",
+        },
+    )
+
+    results = bootstrap_verify._check_wsl_audio_workspace()
+
+    assert len(results) == 1
+    assert results[0].status == "warn"
+    assert "transcription-ready" in results[0].detail

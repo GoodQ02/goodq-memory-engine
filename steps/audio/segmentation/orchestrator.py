@@ -414,8 +414,10 @@ class PhasedSegmentationEngine:
         total_time = sum(self.timings.values())
         print(f"Total time: {total_time:.2f}s")
         print(f"\nPhase timings:")
+        percent_basis = total_time if total_time > 0 else None
         for phase, duration in self.timings.items():
-            print(f"  {phase}: {duration:.2f}s ({duration/total_time*100:.1f}%)")
+            share = (duration / percent_basis * 100.0) if percent_basis else 0.0
+            print(f"  {phase}: {duration:.2f}s ({share:.1f}%)")
         
         if 'phase6' in self.phase_results:
             print(f"\n[SYMBOL] Segmentation manifest: {self.phase_results['phase6']['manifest_path']}")

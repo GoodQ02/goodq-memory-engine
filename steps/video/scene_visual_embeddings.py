@@ -51,6 +51,29 @@ def _resolve_qdrant_host(cfg: Dict[str, Any]) -> str:
     return 'http://127.0.0.1:6333'
 
 
+def _mirror_scene_vector_status(
+    scenes: List[Dict[str, Any]],
+    *,
+    pooled_clip: Dict[Any, Any],
+    pooled_dino: Dict[Any, Any],
+    qdrant_ok: Any,
+    faiss_ok: Any,
+) -> None:
+    for scene in scenes:
+        scene_id = scene.get('id', scene.get('scene_id', 0))
+        scene_points_attempted = int(
+            (1 if scene_id in pooled_clip else 0) +
+            (1 if scene_id in pooled_dino else 0)
+        )
+        scene['vector_points_attempted'] = scene_points_attempted
+        if scene_points_attempted <= 0:
+            scene['qdrant_ok'] = 'not_attempted'
+            scene['faiss_ok'] = 'not_attempted'
+        else:
+            scene['qdrant_ok'] = bool(qdrant_ok is True)
+            scene['faiss_ok'] = faiss_ok
+
+
 def _stage10_18_debug(*parts: Any) -> None:
     line = "[STAGE10_18_DEBUG] " + " ".join(str(p) for p in parts)
     print(line)
@@ -311,6 +334,13 @@ def run_scene_visual_embeddings(item: Dict[str, Any], cfg: Dict[str, Any]) -> Di
                 'missing_clip_scene_ids': missing_clip_scene_ids,
                 'missing_dino_scene_ids': missing_dino_scene_ids,
             }
+            _mirror_scene_vector_status(
+                scenes,
+                pooled_clip=pooled_clip,
+                pooled_dino=pooled_dino,
+                qdrant_ok=False,
+                faiss_ok='not_attempted',
+            )
             try:
                 _persist_phase6_failure(scene_manifest_path, scene_data, failure_reason)
             except Exception as e:
@@ -520,6 +550,13 @@ def run_scene_visual_embeddings(item: Dict[str, Any], cfg: Dict[str, Any]) -> Di
             'qdrant_ok': phase6_qdrant_ok,
             'faiss_ok': phase6_faiss_ok,
         }
+        _mirror_scene_vector_status(
+            scenes,
+            pooled_clip=pooled_clip,
+            pooled_dino=pooled_dino,
+            qdrant_ok=phase6_qdrant_ok,
+            faiss_ok=phase6_faiss_ok,
+        )
         scene_data['embedding_stats'] = {
             'clip_scenes': len(pooled_clip),
             'dino_scenes': len(pooled_dino),

@@ -113,6 +113,10 @@ def test_phase6_commit_failure_sets_manifest_false(monkeypatch, tmp_path: Path):
     assert manifest["phase6_complete"] is False
     assert manifest["phase6_vector_commit"]["clip_committed"] is True
     assert manifest["phase6_vector_commit"]["dino_committed"] is False
+    scene_entry = manifest["scenes"][0]
+    assert scene_entry["vector_points_attempted"] == 2
+    assert scene_entry["qdrant_ok"] is False
+    assert scene_entry["faiss_ok"] == "not_attempted"
 
 
 def test_phase6_missing_visual_modality_sets_manifest_false(monkeypatch, tmp_path: Path):
@@ -215,6 +219,10 @@ def test_phase6_missing_visual_modality_sets_manifest_false(monkeypatch, tmp_pat
     assert manifest["phase6_complete"] is False
     assert manifest["phase6_status"] == "failed"
     assert manifest["phase6_error"] == "missing_scene_embeddings"
+    scene_entry = manifest["scenes"][0]
+    assert scene_entry["vector_points_attempted"] == 1
+    assert scene_entry["qdrant_ok"] is False
+    assert scene_entry["faiss_ok"] == "not_attempted"
 
 
 def test_phase6_uses_nested_qdrant_host(monkeypatch, tmp_path: Path):

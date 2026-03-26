@@ -112,7 +112,22 @@ class _FakeCompletedProcess:
         self.stderr = stderr
 
 
-def _write_cfg(tmp_path: Path) -> Path:
+class _FakePopenCaptureEnv:
+    captured_env = None
+
+    def __init__(self, *args, **kwargs):
+        type(self).captured_env = dict(kwargs.get("env") or {})
+        self.pid = 7171
+        self.returncode = 0
+
+    def communicate(self, timeout=None):
+        return "{}", ""
+
+    def kill(self):
+        self.returncode = -9
+
+
+def _write_cfg(tmp_path: Path, *, host: dict | None = None) -> Path:
     cfg_json = tmp_path / "cfg.json"
     runtime_root = tmp_path / "runtime"
     runtime_root.mkdir(parents=True, exist_ok=True)
@@ -129,6 +144,8 @@ def _write_cfg(tmp_path: Path) -> Path:
             "models_cache": str(runtime_root / "models"),
         },
     }
+    if host:
+        cfg_payload["host"] = host
     cfg_json.write_text(json.dumps(cfg_payload), encoding="utf-8")
     return cfg_json
 
@@ -142,6 +159,39 @@ def test_base_env_enforces_python_no_user_site(monkeypatch, tmp_path: Path):
     env = run_ingestion._base_env(cfg_json)
 
     assert env["PYTHONNOUSERSITE"] == "1"
+
+
+def test_base_env_prefers_cfg_gpu_profile_over_stale_no_auto_gpu(monkeypatch, tmp_path: Path):
+    run_ingestion = _load_run_ingestion_module()
+    cfg_json = _write_cfg(
+        tmp_path,
+        host={"profile": "GPU_ENHANCED", "require_gpu": True},
+    )
+
+    monkeypatch.setenv("GOODQ_HOST_PROFILE", "BASELINE")
+    monkeypatch.setenv("GOODQ_REQUIRE_GPU", "1")
+    monkeypatch.setenv("GOODQ_NO_AUTO_GPU", "1")
+
+    env = run_ingestion._base_env(cfg_json)
+
+    assert env["GOODQ_HOST_PROFILE"] == "GPU_ENHANCED"
+    assert env["GOODQ_REQUIRE_GPU"] == "1"
+    assert env.get("GOODQ_NO_AUTO_GPU") != "1"
+
+
+def test_base_env_forces_no_auto_gpu_for_baseline_profile(monkeypatch, tmp_path: Path):
+    run_ingestion = _load_run_ingestion_module()
+    cfg_json = _write_cfg(
+        tmp_path,
+        host={"profile": "BASELINE", "require_gpu": False},
+    )
+
+    monkeypatch.delenv("GOODQ_NO_AUTO_GPU", raising=False)
+
+    env = run_ingestion._base_env(cfg_json)
+
+    assert env["GOODQ_HOST_PROFILE"] == "BASELINE"
+    assert env["GOODQ_NO_AUTO_GPU"] == "1"
 
 
 def test_run_step_success_emits_scene_metadata_and_pid(monkeypatch, tmp_path: Path):
@@ -190,6 +240,40 @@ def test_run_step_success_emits_scene_metadata_and_pid(monkeypatch, tmp_path: Pa
         assert isinstance(meta["subprocess_pid"], int)
         assert meta["subprocess_pid"] > 0
         assert meta["launcher"] == "direct_env_python"
+
+
+def test_run_step_sanitizes_stale_gpu_disable_flag_for_gpu_profile(monkeypatch, tmp_path: Path):
+    run_ingestion = _load_run_ingestion_module()
+    cfg_json = _write_cfg(
+        tmp_path,
+        host={"profile": "GPU_ENHANCED", "require_gpu": True},
+    )
+    direct_env_python = tmp_path / "goodq_audio_embed_python.exe"
+    direct_env_python.write_text("", encoding="utf-8")
+
+    import configs.python_paths as python_paths
+
+    _FakePopenCaptureEnv.captured_env = None
+    monkeypatch.setenv("GOODQ_NO_AUTO_GPU", "1")
+    monkeypatch.setenv("GOODQ_REQUIRE_GPU", "1")
+    monkeypatch.setenv("GOODQ_HOST_PROFILE", "BASELINE")
+    monkeypatch.setattr(run_ingestion, "resolve_conda", lambda: "conda")
+    monkeypatch.setattr(run_ingestion.shutil, "which", lambda _: "conda")
+    monkeypatch.setattr(run_ingestion.subprocess, "Popen", _FakePopenCaptureEnv)
+    monkeypatch.setattr(run_ingestion, "_control_agent_runtime_enabled", lambda: False)
+    monkeypatch.setattr(python_paths, "get_env_python", lambda name: direct_env_python)
+
+    run_ingestion._run_step(
+        env_name="goodq_audio_embed",
+        step_name="audio_embed_clap",
+        payload={"source_path": str(tmp_path / "dummy.wav")},
+        cfg_json=cfg_json,
+    )
+
+    captured_env = _FakePopenCaptureEnv.captured_env or {}
+    assert captured_env["GOODQ_HOST_PROFILE"] == "GPU_ENHANCED"
+    assert captured_env["GOODQ_REQUIRE_GPU"] == "1"
+    assert captured_env.get("GOODQ_NO_AUTO_GPU") != "1"
 
 
 def test_run_step_failure_emits_step_error_with_scene_metadata_and_pid(monkeypatch, tmp_path: Path):

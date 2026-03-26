@@ -2209,6 +2209,31 @@ def _write_cfg_snapshot(cfg: Dict[str, Any], workspace: Path) -> Path:
     return cfg_path
 
 
+def _normalize_host_profile_name(raw: Any) -> str:
+    value = str(raw or "").strip().upper()
+    if value in {"BASELINE", "GPU_ENHANCED"}:
+        return value
+    return ""
+
+
+def _load_host_runtime_overrides(cfg_json: Optional[Path]) -> Dict[str, Any]:
+    if cfg_json is None or not cfg_json.exists():
+        return {}
+    try:
+        raw = cfg_json.read_text(encoding="utf-8").strip()
+        if not raw:
+            return {}
+        parsed = json.loads(raw)
+    except Exception:
+        return {}
+    if not isinstance(parsed, dict):
+        return {}
+    host_cfg = parsed.get("host")
+    if not isinstance(host_cfg, dict):
+        return {}
+    return host_cfg
+
+
 def _base_env(cfg_json: Optional[Path] = None) -> Dict[str, str]:
     env = os.environ.copy()
     env.setdefault('PYTHONNOUSERSITE', '1')
@@ -2221,6 +2246,24 @@ def _base_env(cfg_json: Optional[Path] = None) -> Dict[str, str]:
     
     # GPU Resource Management - Pin to GPU 0
     env['CUDA_VISIBLE_DEVICES'] = '0'
+
+    host_cfg = _load_host_runtime_overrides(cfg_json)
+    host_profile = _normalize_host_profile_name(host_cfg.get("profile") or env.get("GOODQ_HOST_PROFILE"))
+    if host_profile:
+        env["GOODQ_HOST_PROFILE"] = host_profile
+
+    require_gpu_override = host_cfg.get("require_gpu")
+    if isinstance(require_gpu_override, bool):
+        env["GOODQ_REQUIRE_GPU"] = "1" if require_gpu_override else "0"
+
+    require_wsl_audio_override = host_cfg.get("require_wsl_audio")
+    if isinstance(require_wsl_audio_override, bool):
+        env["GOODQ_REQUIRE_WSL_AUDIO"] = "1" if require_wsl_audio_override else "0"
+
+    if host_profile == "BASELINE":
+        env["GOODQ_NO_AUTO_GPU"] = "1"
+    elif host_profile:
+        env.pop("GOODQ_NO_AUTO_GPU", None)
     
     # Enable deterministic CUDA operations for reproducibility (optional)
     # Uncomment if reproducibility is needed (slight performance cost)

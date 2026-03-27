@@ -1236,6 +1236,119 @@ def _resolve_segmentation_activation(cfg: Dict[str, Any]) -> str:
     return 'off'
 
 
+def _resolve_scene_backend_contract(cfg: Dict[str, Any]) -> Dict[str, Any]:
+    segmentation_cfg = cfg.get('segmentation') if isinstance(cfg, dict) else {}
+    segmentation_enabled = bool(segmentation_cfg.get('enabled', True)) if isinstance(segmentation_cfg, dict) else False
+    activation = _resolve_segmentation_activation(cfg)
+
+    contract: Dict[str, Any] = {
+        'segmentation_enabled': segmentation_enabled,
+        'segmentation_activation': activation,
+        'scene_backend_selected': 'legacy_scene_detect',
+        'scene_backend_effective': 'legacy_scene_detect',
+        'scene_backend_effective_reason': 'legacy_scene_detect_default',
+        'authoritative_cutover_supported': False,
+    }
+
+    if not segmentation_enabled:
+        contract['scene_backend_effective_reason'] = 'segmentation_config_disabled'
+        return contract
+
+    if activation == 'shadow':
+        contract['scene_backend_selected'] = 'segmentation_phase5_shadow_compare'
+        contract['scene_backend_effective_reason'] = 'segmentation_shadow_compare_legacy_authority'
+        return contract
+
+    if activation == 'authoritative':
+        contract['scene_backend_selected'] = 'segmentation_phase5'
+        contract['scene_backend_effective_reason'] = 'segmentation_authoritative_not_enabled'
+        return contract
+
+    return contract
+
+
+def _resolve_scene_backend_dispatch(scene_backend_contract: Dict[str, Any]) -> Dict[str, str]:
+    effective_backend = str(scene_backend_contract.get('scene_backend_effective') or 'legacy_scene_detect').strip().lower()
+    if effective_backend == 'segmentation_phase5':
+        return {
+            'env_name': 'goodq_core',
+            'step_name': 'video_scene_segmentation',
+        }
+    return {
+        'env_name': 'goodq_video_scene_detect',
+        'step_name': 'video_scene_detect',
+    }
+
+
+def _resolve_phase6_audio_source_contract(
+    cfg: Dict[str, Any],
+    segmentation_shadow_overlay: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    overlay_requested = _segmentation_shadow_audio_overlay_enabled(cfg)
+    contract: Dict[str, Any] = {
+        'phase6_audio_source_selected': 'segmentation_shadow_audio_overlay' if overlay_requested else 'live_audio_artifacts',
+        'phase6_audio_source_effective': 'live_audio_artifacts',
+        'phase6_audio_source_effective_reason': 'live_audio_artifacts_default',
+    }
+
+    if not overlay_requested:
+        return contract
+
+    if isinstance(segmentation_shadow_overlay, dict) and segmentation_shadow_overlay.get('enabled'):
+        contract['phase6_audio_source_effective'] = 'segmentation_shadow_audio_overlay'
+        contract['phase6_audio_source_effective_reason'] = str(
+            segmentation_shadow_overlay.get('reason') or 'segmentation_shadow_audio_overlay_ready'
+        )
+        return contract
+
+    if isinstance(segmentation_shadow_overlay, dict):
+        contract['phase6_audio_source_effective_reason'] = str(
+            segmentation_shadow_overlay.get('reason') or 'segmentation_shadow_audio_overlay_not_ready'
+        )
+    else:
+        contract['phase6_audio_source_effective_reason'] = 'segmentation_shadow_audio_overlay_not_resolved'
+    return contract
+
+
+def _resolve_ingest_orchestration_contract(
+    cfg: Dict[str, Any],
+    *,
+    audio_runtime_contract: Optional[Dict[str, Any]] = None,
+    segmentation_shadow: Optional[Dict[str, Any]] = None,
+    segmentation_shadow_overlay: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    scene_backend = _resolve_scene_backend_contract(cfg)
+    phase6_audio_source = _resolve_phase6_audio_source_contract(cfg, segmentation_shadow_overlay)
+    audio_backend = str((audio_runtime_contract or {}).get('selected') or 'none').strip().lower() or 'none'
+    shadow_status = str((segmentation_shadow or {}).get('status') or '').strip().lower()
+    shadow_reason = str((segmentation_shadow or {}).get('reason') or '').strip().lower()
+
+    return {
+        'version': 1,
+        'execution_owner': 'cli.run_ingestion',
+        'step_execution_owner': 'cli.step_runner',
+        'persistence_owner': 'steps.common.memory',
+        'persistence_functions': [
+            'ensure_scene',
+            'scene_has_materialized',
+            'register_scene_bundle',
+        ],
+        'phase6_owner': 'live_phase6',
+        'segmentation_activation': scene_backend['segmentation_activation'],
+        'segmentation_enabled': scene_backend['segmentation_enabled'],
+        'scene_backend_selected': scene_backend['scene_backend_selected'],
+        'scene_backend_effective': scene_backend['scene_backend_effective'],
+        'scene_backend_effective_reason': scene_backend['scene_backend_effective_reason'],
+        'phase6_audio_source_selected': phase6_audio_source['phase6_audio_source_selected'],
+        'phase6_audio_source_effective': phase6_audio_source['phase6_audio_source_effective'],
+        'phase6_audio_source_effective_reason': phase6_audio_source['phase6_audio_source_effective_reason'],
+        'audio_runtime_backend': audio_backend,
+        'segmentation_shadow_status': shadow_status or 'not_run',
+        'segmentation_shadow_reason': shadow_reason or 'not_run',
+        'authoritative_cutover_supported': bool(scene_backend['authoritative_cutover_supported']),
+    }
+
+
 def _safe_read_json_dict(path_value: Any) -> Optional[Dict[str, Any]]:
     if not isinstance(path_value, (str, Path)):
         return None
@@ -3552,7 +3665,14 @@ def _detect_scenes(
     overrides: Dict[str, Any],
     *,
     video_id: Optional[str] = None,
+    scene_backend_contract: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
+    backend_contract = scene_backend_contract if isinstance(scene_backend_contract, dict) else {
+        'scene_backend_selected': 'legacy_scene_detect',
+        'scene_backend_effective': 'legacy_scene_detect',
+        'scene_backend_effective_reason': 'legacy_scene_detect_default',
+    }
+    dispatch = _resolve_scene_backend_dispatch(backend_contract)
     payload: Dict[str, Any] = {
         'modality': 'video',
         'source_path': str(video_path),
@@ -3562,7 +3682,7 @@ def _detect_scenes(
         payload['video_hash'] = str(video_id)
     if overrides:
         payload['scene_detect'] = overrides
-    result = _run_step('goodq_video_scene_detect', 'video_scene_detect', payload, cfg_json)
+    result = _run_step(dispatch['env_name'], dispatch['step_name'], payload, cfg_json)
     scenes = result.get('scenes') if isinstance(result, dict) else None
     if not scenes:
         scenes = [{'index': 0, 'start': 0.0, 'end': 0.0, 'duration': 0.0, 'confidence': 1.0}]
@@ -3571,9 +3691,19 @@ def _detect_scenes(
         end = float(scene.get('end', start) or start)
         scene['duration'] = round(max(0.0, end - start), 3)
         scene.setdefault('confidence', 0.5)
+    meta = result.get('scene_meta') if isinstance(result, dict) else {}
+    if not isinstance(meta, dict):
+        meta = {}
+    meta['orchestration'] = {
+        'scene_backend_selected': backend_contract.get('scene_backend_selected'),
+        'scene_backend_effective': backend_contract.get('scene_backend_effective'),
+        'scene_backend_effective_reason': backend_contract.get('scene_backend_effective_reason'),
+        'step_env': dispatch['env_name'],
+        'step_name': dispatch['step_name'],
+    }
     return {
         'scenes': scenes,
-        'meta': result.get('scene_meta') if isinstance(result, dict) else {},
+        'meta': meta,
     }
 
 
@@ -3809,6 +3939,7 @@ def run(
                 typer.echo(f'[INFO] Force reprocess enabled - ignoring {len(stored_manifest.get("scenes", []))} stored scenes, will re-detect')
         
         if reuse_scenes:
+            scene_backend_contract = _resolve_scene_backend_contract(cfg)
             stored_scenes = []
             for stored in stored_manifest['scenes']:
                 meta = stored.get('meta') or {}
@@ -3824,6 +3955,18 @@ def run(
                 stored_scenes.append(scene_entry)
             scenes = stored_scenes
             detection_meta = stored_manifest.get('detection_meta') or {}
+            if not isinstance(detection_meta, dict):
+                detection_meta = {}
+            detection_meta.setdefault(
+                'orchestration',
+                {
+                    'scene_backend_selected': scene_backend_contract.get('scene_backend_selected'),
+                    'scene_backend_effective': scene_backend_contract.get('scene_backend_effective'),
+                    'scene_backend_effective_reason': 'scene_manifest_reuse',
+                    'step_env': 'scene_manifest_reuse',
+                    'step_name': 'scene_manifest_reuse',
+                },
+            )
             if 'scene_manifest_hash' not in detection_meta or not detection_meta['scene_manifest_hash']:
                 manifest_hasher = hashlib.sha256()
                 for seg in scenes:
@@ -3849,8 +3992,15 @@ def run(
         else:
             if tracker is not None:
                 tracker.update_step("Scene Detection", 1, {"scenes_to_detect": "analyzing video"})
-            
-            detection = _detect_scenes(cfg_json, video_path, scene_overrides, video_id=video_hash)
+
+            scene_backend_contract = _resolve_scene_backend_contract(cfg)
+            detection = _detect_scenes(
+                cfg_json,
+                video_path,
+                scene_overrides,
+                video_id=video_hash,
+                scene_backend_contract=scene_backend_contract,
+            )
             scenes = detection.get('scenes', [])
             
             if tracker is not None:
@@ -4373,6 +4523,13 @@ def run(
             cfg,
             segmentation_shadow_result,
         )
+        orchestration_contract = _resolve_ingest_orchestration_contract(
+            cfg,
+            audio_runtime_contract=audio_runtime_contract,
+            segmentation_shadow=segmentation_shadow_result,
+            segmentation_shadow_overlay=segmentation_shadow_overlay,
+        )
+        video_result['orchestration'] = orchestration_contract
         phase6_audio_artifact_dir = Path(
             segmentation_shadow_overlay.get('audio_artifact_dir')
         ) if segmentation_shadow_overlay.get('enabled') else audio_artifact_dir
@@ -4580,8 +4737,9 @@ def run(
             video_result.get('temporal_index'),
             segmentation_shadow_result,
         )
+        segmentation_shadow_result = dict(segmentation_shadow_result)
+        segmentation_shadow_result['orchestration'] = orchestration_contract
         if segmentation_shadow_overlay.get('enabled'):
-            segmentation_shadow_result = dict(segmentation_shadow_result)
             segmentation_shadow_result['phase6_audio_overlay'] = segmentation_shadow_overlay
         video_result['segmentation_shadow'] = segmentation_shadow_result
 

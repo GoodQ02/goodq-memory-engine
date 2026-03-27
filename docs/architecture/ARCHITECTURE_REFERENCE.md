@@ -4,7 +4,7 @@
 **Status:** ✅ Updated with Dec 14, 2025 Forensic Verification  
 **Purpose:** Definitive reference for data structures, storage patterns, and operational architecture
 
-> **Note:** This document reflects the current operational system. Qdrant is canonical, FAISS remains optional parity/fallback, and `goodq_core` is the orchestration/base environment while specialized step envs still back several image/audio/video workloads. The local API is an explicit helper surface, while the old browser UI/dashboard scaffold is experimental only. For full system narrative, see [SYSTEM_ARCHITECTURE.md](SYSTEM_ARCHITECTURE.md).
+> **Note:** This document reflects the current operational system. Qdrant is canonical, FAISS remains optional parity/fallback, and `goodq_core` is the orchestration/base environment while specialized step envs still back several image/audio/video workloads. The local API is an explicit helper surface, while the old browser UI/dashboard scaffold is experimental only. For full system narrative, see [SYSTEM_ARCHITECTURE.md](SYSTEM_ARCHITECTURE.md). For canonical ingest authority and engine cutover rules, see [INGEST_ORCHESTRATION_CONTRACT.md](INGEST_ORCHESTRATION_CONTRACT.md).
 
 ---
 

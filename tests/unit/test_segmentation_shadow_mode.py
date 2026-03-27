@@ -4,8 +4,11 @@ import json
 from pathlib import Path
 
 from cli.run_ingestion import (
+    _detect_scenes,
     _attach_segmentation_shadow_metrics,
     _prepare_segmentation_shadow_audio_overlay,
+    _resolve_ingest_orchestration_contract,
+    _resolve_scene_backend_contract,
     _run_segmentation_shadow_pipeline,
 )
 from steps.audio.segmentation.orchestrator import PhasedSegmentationEngine
@@ -165,6 +168,87 @@ def test_segmentation_shadow_pipeline_is_default_off_and_partial_when_wsl_unavai
     assert shadow_result["status"] == "partial"
     assert shadow_result["skip_phases"] == ["phase4", "phase6"]
     assert Path(shadow_result["summary_path"]).exists()
+
+
+def test_scene_backend_contract_is_explicit_across_activation_modes() -> None:
+    off_contract = _resolve_scene_backend_contract({"segmentation": {"enabled": True, "activation": "off"}})
+    assert off_contract["scene_backend_selected"] == "legacy_scene_detect"
+    assert off_contract["scene_backend_effective"] == "legacy_scene_detect"
+    assert off_contract["scene_backend_effective_reason"] == "legacy_scene_detect_default"
+
+    shadow_contract = _resolve_scene_backend_contract({"segmentation": {"enabled": True, "activation": "shadow"}})
+    assert shadow_contract["scene_backend_selected"] == "segmentation_phase5_shadow_compare"
+    assert shadow_contract["scene_backend_effective"] == "legacy_scene_detect"
+    assert shadow_contract["scene_backend_effective_reason"] == "segmentation_shadow_compare_legacy_authority"
+
+    authoritative_contract = _resolve_scene_backend_contract(
+        {"segmentation": {"enabled": True, "activation": "authoritative"}}
+    )
+    assert authoritative_contract["scene_backend_selected"] == "segmentation_phase5"
+    assert authoritative_contract["scene_backend_effective"] == "legacy_scene_detect"
+    assert authoritative_contract["scene_backend_effective_reason"] == "segmentation_authoritative_not_enabled"
+
+
+def test_ingest_orchestration_contract_tracks_overlay_selection_and_effective_source() -> None:
+    overlay_pending = _resolve_ingest_orchestration_contract(
+        {"segmentation": {"enabled": True, "activation": "shadow", "shadow_audio_overlay": True}},
+        audio_runtime_contract={"selected": "wsl"},
+        segmentation_shadow={"status": "complete", "reason": "segmentation_shadow_complete"},
+        segmentation_shadow_overlay={"enabled": False, "reason": "segmentation_shadow_audio_overlay_requires_complete_shadow_run"},
+    )
+    assert overlay_pending["scene_backend_selected"] == "segmentation_phase5_shadow_compare"
+    assert overlay_pending["scene_backend_effective"] == "legacy_scene_detect"
+    assert overlay_pending["phase6_audio_source_selected"] == "segmentation_shadow_audio_overlay"
+    assert overlay_pending["phase6_audio_source_effective"] == "live_audio_artifacts"
+    assert (
+        overlay_pending["phase6_audio_source_effective_reason"]
+        == "segmentation_shadow_audio_overlay_requires_complete_shadow_run"
+    )
+    assert overlay_pending["audio_runtime_backend"] == "wsl"
+
+    overlay_ready = _resolve_ingest_orchestration_contract(
+        {"segmentation": {"enabled": True, "activation": "shadow", "shadow_audio_overlay": True}},
+        segmentation_shadow_overlay={"enabled": True, "reason": "segmentation_shadow_audio_overlay_ready"},
+    )
+    assert overlay_ready["phase6_audio_source_effective"] == "segmentation_shadow_audio_overlay"
+    assert overlay_ready["phase6_audio_source_effective_reason"] == "segmentation_shadow_audio_overlay_ready"
+
+
+def test_detect_scenes_routes_through_resolved_scene_backend_and_records_contract(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    calls: dict[str, str] = {}
+
+    def fake_run_step(env_name, step_name, payload, cfg_json):
+        calls["env_name"] = env_name
+        calls["step_name"] = step_name
+        calls["video_id"] = payload.get("video_id")
+        return {
+            "scenes": [{"index": 0, "start": 0.0, "end": 1.25}],
+            "scene_meta": {"detected": True},
+        }
+
+    monkeypatch.setattr("cli.run_ingestion._run_step", fake_run_step)
+
+    contract = _resolve_scene_backend_contract(
+        {"segmentation": {"enabled": True, "activation": "authoritative"}}
+    )
+    result = _detect_scenes(
+        tmp_path / "cfg.json",
+        tmp_path / "video.mp4",
+        {},
+        video_id="video-123",
+        scene_backend_contract=contract,
+    )
+
+    assert calls["env_name"] == "goodq_video_scene_detect"
+    assert calls["step_name"] == "video_scene_detect"
+    assert calls["video_id"] == "video-123"
+    assert result["scenes"][0]["duration"] == 1.25
+    assert result["meta"]["orchestration"]["scene_backend_selected"] == "segmentation_phase5"
+    assert result["meta"]["orchestration"]["scene_backend_effective"] == "legacy_scene_detect"
+    assert result["meta"]["orchestration"]["step_env"] == "goodq_video_scene_detect"
 
 
 def test_segmentation_shadow_metrics_written_when_enabled(tmp_path: Path) -> None:

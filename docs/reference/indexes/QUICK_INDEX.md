@@ -1,7 +1,6 @@
 # GoodQ4All Quickstart & Reference Index
 
-**Purpose:** Unified entrypoint for current quickstart, launch, API, and quick
-reference docs.
+**Purpose:** Unified entrypoint for current quickstart, launch, API, and quick reference docs.
 
 ---
 
@@ -15,19 +14,27 @@ reference docs.
 
 ---
 
-## General Quick Reference
+## Core Reference Contracts
 
-- `docs/reference/quick-refs/QUICK_REFERENCE_CARD.md` – Compact operational quick reference.
-- `docs/CHEAT_SHEET.md` – Command-first cheat sheet for the supported runtime.
-- `docs/CLI-REFERENCE.md` – Full CLI reference.
-- `docs/reference/quick-refs/CLI_COMMANDS_REFERENCE.md` – Extended command reference.
 - `docs/reference/DEPENDENCIES.md` – Current dependency contract matrix.
-- `docs/reference/PLATFORM_SUPPORT.md` – Desktop/laptop compatibility contract.
+- `docs/reference/PLATFORM_SUPPORT.md` – Desktop/laptop runtime contract.
 - `docs/reference/GPU_CAPABILITY_MATRIX.md` – GPU acceleration and CPU-safe reference.
+- `docs/reference/WSL_AUDIO_RUNTIME.md` – Current WSL audio runtime truth surface.
+- `docs/technical/SEGMENTATION_ARTIFACT_CONTRACT.md` – Shadow segmentation artifact contract.
+- `docs/technical/PIPELINE_RESTORATION_BACKLOG.md` – Confirmed restoration backlog and remaining cutovers.
 
 ---
 
-## Component-Specific Quick Guides
+## Operator Quick References
+
+- `docs/reference/quick-refs/QUICK_REFERENCE_CARD.md` – Compact current operator quick reference.
+- `docs/CHEAT_SHEET.md` – Command-first cheat sheet for the supported runtime.
+- `docs/CLI-REFERENCE.md` – Full canonical CLI reference.
+- `docs/reference/quick-refs/CLI_COMMANDS_REFERENCE.md` – Compatibility pointer to the current CLI surfaces.
+
+---
+
+## Component-Specific Guides
 
 - `docs/guides/watchdog/WATCHDOG_QUICKREF.md` – Watchdog quick reference.
 - `docs/guides/watchdog/WATCHDOG_INDEX.md` – Watchdog docs index.
@@ -39,3 +46,4 @@ reference docs.
 ## Historical Quick References
 
 - Historical quick refs and rollout notes live under `docs/archive/`.
+- `docs/reference/quick-refs/QUICK_REFERENCE.md` and `docs/reference/quick-refs/QUICK_REFERENCE_SETTINGS.md` are preserved only as historical compatibility pointers.

@@ -10,6 +10,7 @@ from cli.run_ingestion import (
     _prepare_segmentation_shadow_audio_overlay,
     _resolve_ingest_orchestration_contract,
     _resolve_scene_backend_contract,
+    _run_segmentation_authoritative_scene_backend,
     _run_segmentation_shadow_pipeline,
 )
 from steps.audio.segmentation.orchestrator import PhasedSegmentationEngine
@@ -190,6 +191,18 @@ def test_scene_backend_contract_is_explicit_across_activation_modes() -> None:
     assert authoritative_contract["scene_backend_effective_reason"] == "segmentation_authoritative_not_enabled"
 
 
+def test_scene_backend_contract_honors_authoritative_env_override(monkeypatch) -> None:
+    monkeypatch.setenv("GOODQ_SEGMENTATION_MODE", "authoritative")
+    monkeypatch.setenv("GOODQ_SEGMENTATION_BACKEND", "seg_p5")
+
+    contract = _resolve_scene_backend_contract({"segmentation": {"enabled": True, "activation": "off"}})
+
+    assert contract["scene_backend_selected"] == "segmentation_phase5"
+    assert contract["scene_backend_effective"] == "segmentation_phase5"
+    assert contract["scene_backend_effective_reason"] == "segmentation_authoritative_env_override"
+    assert contract["authoritative_cutover_supported"] is True
+
+
 def test_ingest_orchestration_contract_tracks_overlay_selection_and_effective_source() -> None:
     overlay_pending = _resolve_ingest_orchestration_contract(
         {"segmentation": {"enabled": True, "activation": "shadow", "shadow_audio_overlay": True}},
@@ -250,6 +263,58 @@ def test_detect_scenes_routes_through_resolved_scene_backend_and_records_contrac
     assert result["meta"]["orchestration"]["scene_backend_selected"] == "segmentation_phase5"
     assert result["meta"]["orchestration"]["scene_backend_effective"] == "legacy_scene_detect"
     assert result["meta"]["orchestration"]["step_env"] == "goodq_video_scene_detect"
+
+
+def test_authoritative_scene_backend_runs_seg_p5_manifest(monkeypatch, tmp_path: Path) -> None:
+    import steps.audio.segmentation as segmentation_module
+
+    class DummyEngine:
+        def __init__(self, cfg):
+            self.cfg = cfg
+
+        def run_full_pipeline(self, video_path, output_base_dir, skip_phases=None):
+            output_dir = Path(output_base_dir) / Path(video_path).stem
+            scene_dir = output_dir / "video"
+            scene_dir.mkdir(parents=True, exist_ok=True)
+            scene_manifest_path = scene_dir / "scene_manifest.json"
+            scene_manifest_path.write_text(
+                json.dumps(
+                    {
+                        "total_scenes": 2,
+                        "scenes": [
+                            {"index": 0, "start": 0.0, "end": 1.25, "confidence": 0.9},
+                            {"index": 1, "start": 1.25, "end": 3.0, "confidence": 0.8},
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            return {
+                "output_dir": str(output_dir),
+                "phase_results": {
+                    "phase5": {
+                        "scene_manifest_path": str(scene_manifest_path),
+                    }
+                },
+            }
+
+    monkeypatch.setattr(segmentation_module, "PhasedSegmentationEngine", DummyEngine)
+
+    result = _run_segmentation_authoritative_scene_backend(
+        tmp_path / "video.mp4",
+        tmp_path / "processing",
+        {"segmentation": {"enabled": True}},
+        scene_backend_contract={
+            "scene_backend_selected": "segmentation_phase5",
+            "scene_backend_effective": "segmentation_phase5",
+            "scene_backend_effective_reason": "segmentation_authoritative_env_override",
+        },
+    )
+
+    assert len(result["scenes"]) == 2
+    assert result["scenes"][0]["duration"] == 1.25
+    assert result["meta"]["engine"] == "segmentation_phase5"
+    assert result["meta"]["orchestration"]["step_name"] == "segmentation_phase5_authoritative"
 
 
 def test_scene_backend_comparison_reports_match_ratio_and_boundary_drift() -> None:

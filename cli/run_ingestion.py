@@ -1227,6 +1227,10 @@ def _resolve_audio_runtime_contract(cfg: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _resolve_segmentation_activation(cfg: Dict[str, Any]) -> str:
+    env_mode = str(os.getenv("GOODQ_SEGMENTATION_MODE") or "").strip().lower()
+    env_backend = str(os.getenv("GOODQ_SEGMENTATION_BACKEND") or "").strip().lower()
+    if env_mode == "authoritative" and env_backend in {"seg_p5", "segmentation_phase5"}:
+        return "authoritative"
     segmentation_cfg = cfg.get('segmentation') if isinstance(cfg, dict) else {}
     if not isinstance(segmentation_cfg, dict):
         return 'off'
@@ -1240,6 +1244,8 @@ def _resolve_scene_backend_contract(cfg: Dict[str, Any]) -> Dict[str, Any]:
     segmentation_cfg = cfg.get('segmentation') if isinstance(cfg, dict) else {}
     segmentation_enabled = bool(segmentation_cfg.get('enabled', True)) if isinstance(segmentation_cfg, dict) else False
     activation = _resolve_segmentation_activation(cfg)
+    env_mode = str(os.getenv("GOODQ_SEGMENTATION_MODE") or "").strip().lower()
+    env_backend = str(os.getenv("GOODQ_SEGMENTATION_BACKEND") or "").strip().lower()
 
     contract: Dict[str, Any] = {
         'segmentation_enabled': segmentation_enabled,
@@ -1252,6 +1258,13 @@ def _resolve_scene_backend_contract(cfg: Dict[str, Any]) -> Dict[str, Any]:
 
     if not segmentation_enabled:
         contract['scene_backend_effective_reason'] = 'segmentation_config_disabled'
+        return contract
+
+    if env_mode == 'authoritative' and env_backend in {'seg_p5', 'segmentation_phase5'}:
+        contract['scene_backend_selected'] = 'segmentation_phase5'
+        contract['scene_backend_effective'] = 'segmentation_phase5'
+        contract['scene_backend_effective_reason'] = 'segmentation_authoritative_env_override'
+        contract['authoritative_cutover_supported'] = True
         return contract
 
     if activation == 'shadow':
@@ -1277,6 +1290,78 @@ def _resolve_scene_backend_dispatch(scene_backend_contract: Dict[str, Any]) -> D
     return {
         'env_name': 'goodq_video_scene_detect',
         'step_name': 'video_scene_detect',
+    }
+
+
+def _run_segmentation_authoritative_scene_backend(
+    video_path: Path,
+    processing_dir: Path,
+    cfg: Dict[str, Any],
+    *,
+    scene_backend_contract: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    contract = scene_backend_contract if isinstance(scene_backend_contract, dict) else {
+        'scene_backend_selected': 'segmentation_phase5',
+        'scene_backend_effective': 'segmentation_phase5',
+        'scene_backend_effective_reason': 'segmentation_authoritative_env_override',
+    }
+
+    from steps.audio.segmentation import PhasedSegmentationEngine
+
+    authoritative_root = processing_dir / "_segmentation_authoritative"
+    engine = PhasedSegmentationEngine(cfg)
+    run_result = engine.run_full_pipeline(
+        str(video_path),
+        str(authoritative_root),
+        skip_phases=['phase4', 'phase6'],
+    )
+
+    phase_results = run_result.get('phase_results') if isinstance(run_result, dict) else {}
+    phase5_result = phase_results.get('phase5') if isinstance(phase_results, dict) else {}
+    scene_manifest_path = phase5_result.get('scene_manifest_path') if isinstance(phase5_result, dict) else None
+    scene_manifest = _safe_read_json_dict(scene_manifest_path)
+    raw_scenes = scene_manifest.get('scenes') if isinstance(scene_manifest, dict) else None
+    if not isinstance(raw_scenes, list) or not raw_scenes:
+        raise RuntimeError("SEG_P5 authoritative cutover produced no scene manifest scenes")
+
+    scenes: List[Dict[str, Any]] = []
+    manifest_hasher = hashlib.sha256()
+    for idx, raw_scene in enumerate(raw_scenes):
+        if not isinstance(raw_scene, dict):
+            continue
+        start = float(raw_scene.get('start', 0.0) or 0.0)
+        end = float(raw_scene.get('end', start) or start)
+        duration = round(max(0.0, end - start), 3)
+        manifest_hasher.update(f"{start:.6f}|{end:.6f}|".encode('utf-8'))
+        scenes.append(
+            {
+                'index': int(raw_scene.get('index', idx) or idx),
+                'start': start,
+                'end': end,
+                'duration': duration,
+                'confidence': float(raw_scene.get('confidence', 0.5) or 0.5),
+            }
+        )
+
+    if not scenes:
+        raise RuntimeError("SEG_P5 authoritative cutover produced no usable scenes")
+
+    return {
+        'scenes': scenes,
+        'meta': {
+            'status': 'ok',
+            'engine': 'segmentation_phase5',
+            'scene_count': len(scenes),
+            'scene_manifest_path': scene_manifest_path,
+            'scene_manifest_hash': manifest_hasher.hexdigest(),
+            'orchestration': {
+                'scene_backend_selected': contract.get('scene_backend_selected'),
+                'scene_backend_effective': contract.get('scene_backend_effective'),
+                'scene_backend_effective_reason': contract.get('scene_backend_effective_reason'),
+                'step_env': 'goodq_core',
+                'step_name': 'segmentation_phase5_authoritative',
+            },
+        },
     }
 
 
@@ -4024,6 +4109,12 @@ def run(
         if force_redetect and stored_manifest.get('scenes'):
             if VERBOSE:
                 typer.echo(f'[INFO] Force reprocess enabled - ignoring {len(stored_manifest.get("scenes", []))} stored scenes, will re-detect')
+
+        processing_dir = _ensure_dir(processing_root / video_path.stem)
+        frame_dir = _ensure_dir(processing_dir / 'video' / 'frames')
+        audio_artifact_dir = _ensure_dir(processing_dir / 'audio')
+        audio_dir = _ensure_dir(audio_artifact_dir / 'chunks')
+        run_context['audio_artifact_dir'] = str(audio_artifact_dir)
         
         if reuse_scenes:
             scene_backend_contract = _resolve_scene_backend_contract(cfg)
@@ -4081,13 +4172,21 @@ def run(
                 tracker.update_step("Scene Detection", 1, {"scenes_to_detect": "analyzing video"})
 
             scene_backend_contract = _resolve_scene_backend_contract(cfg)
-            detection = _detect_scenes(
-                cfg_json,
-                video_path,
-                scene_overrides,
-                video_id=video_hash,
-                scene_backend_contract=scene_backend_contract,
-            )
+            if scene_backend_contract.get('scene_backend_effective') == 'segmentation_phase5':
+                detection = _run_segmentation_authoritative_scene_backend(
+                    video_path,
+                    processing_dir,
+                    cfg,
+                    scene_backend_contract=scene_backend_contract,
+                )
+            else:
+                detection = _detect_scenes(
+                    cfg_json,
+                    video_path,
+                    scene_overrides,
+                    video_id=video_hash,
+                    scene_backend_contract=scene_backend_contract,
+                )
             scenes = detection.get('scenes', [])
             
             if tracker is not None:
@@ -4103,12 +4202,6 @@ def run(
                 manifest_hasher.update(f"{start:.6f}|{end:.6f}|".encode('utf-8'))
             detection_meta['scene_manifest_hash'] = manifest_hasher.hexdigest()
             detection['meta'] = detection_meta
-
-        processing_dir = _ensure_dir(processing_root / video_path.stem)
-        frame_dir = _ensure_dir(processing_dir / 'video' / 'frames')
-        audio_artifact_dir = _ensure_dir(processing_dir / 'audio')
-        audio_dir = _ensure_dir(audio_artifact_dir / 'chunks')
-        run_context['audio_artifact_dir'] = str(audio_artifact_dir)
 
         scene_outputs: List[Dict[str, Any]] = []
         empty_duration_threshold_sec = _resolve_content_empty_duration_threshold(cfg)

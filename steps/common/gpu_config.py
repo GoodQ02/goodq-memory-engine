@@ -14,6 +14,17 @@ from steps.common.profile_config import (
     require_gpu,
 )
 
+
+def _console_print(text: str) -> None:
+    """Print diagnostics without crashing on cp1252-only consoles."""
+    try:
+        print(text)
+    except UnicodeEncodeError:
+        encoding = getattr(sys.stdout, "encoding", None) or "utf-8"
+        safe_text = text.encode(encoding, errors="replace").decode(encoding, errors="replace")
+        print(safe_text)
+
+
 # Determine which step is importing this
 def get_step_name():
     """Detect which step is importing this module"""
@@ -99,16 +110,16 @@ def configure_gpu(step_name=None, force_fraction=None):
             total_memory_gb = device_props.total_memory / 1024**3
             allocated_gb = total_memory_gb * memory_fraction
             
-            print(f"╔{'═'*78}╗")
-            print(f"║ GPU Configuration: {step_name or 'unknown':>57} ║")
-            print(f"╠{'═'*78}╣")
-            print(f"║ Device: {device_props.name:<67} ║")
-            print(f"║ Total VRAM: {total_memory_gb:>6.2f} GB{' '*55} ║")
-            print(f"║ Allocated: {allocated_gb:>6.2f} GB ({memory_fraction*100:>5.1f}%){' '*43} ║")
-            print(f"║ CUDA Capability: {device_props.major}.{device_props.minor}{' '*57} ║")
-            print(f"║ TF32 Enabled: {'Yes' if torch.backends.cuda.matmul.allow_tf32 else 'No':<66} ║")
-            print(f"║ cuDNN Benchmark: {'Yes' if torch.backends.cudnn.benchmark else 'No':<63} ║")
-            print(f"╚{'═'*78}╝")
+            _console_print(f"╔{'═'*78}╗")
+            _console_print(f"║ GPU Configuration: {step_name or 'unknown':>57} ║")
+            _console_print(f"╠{'═'*78}╣")
+            _console_print(f"║ Device: {device_props.name:<67} ║")
+            _console_print(f"║ Total VRAM: {total_memory_gb:>6.2f} GB{' '*55} ║")
+            _console_print(f"║ Allocated: {allocated_gb:>6.2f} GB ({memory_fraction*100:>5.1f}%){' '*43} ║")
+            _console_print(f"║ CUDA Capability: {device_props.major}.{device_props.minor}{' '*57} ║")
+            _console_print(f"║ TF32 Enabled: {'Yes' if torch.backends.cuda.matmul.allow_tf32 else 'No':<66} ║")
+            _console_print(f"║ cuDNN Benchmark: {'Yes' if torch.backends.cudnn.benchmark else 'No':<63} ║")
+            _console_print(f"╚{'═'*78}╝")
             
             return {
                 "available": True,
@@ -123,7 +134,7 @@ def configure_gpu(step_name=None, force_fraction=None):
         else:
             if require_gpu():
                 raise RuntimeError(f"CUDA required but unavailable for step '{step_name}'")
-            print(f"[SYMBOL] CUDA not available for {step_name} - using CPU")
+            _console_print(f"[SYMBOL] CUDA not available for {step_name} - using CPU")
             return {
                 "available": False,
                 "device": "cpu"
@@ -132,7 +143,7 @@ def configure_gpu(step_name=None, force_fraction=None):
     except ImportError as e:
         if require_gpu():
             raise RuntimeError(f"PyTorch required for GPU step '{step_name}' but is not installed") from e
-        print(f"[SYMBOL] PyTorch not installed for {step_name} - GPU config skipped")
+        _console_print(f"[SYMBOL] PyTorch not installed for {step_name} - GPU config skipped")
         return {
             "available": False,
             "device": "cpu",
@@ -141,7 +152,7 @@ def configure_gpu(step_name=None, force_fraction=None):
     except Exception as e:
         if require_gpu():
             raise RuntimeError(f"GPU configuration failed for step '{step_name}': {e}") from e
-        print(f"[SYMBOL] GPU configuration failed for {step_name}: {e}")
+        _console_print(f"[SYMBOL] GPU configuration failed for {step_name}: {e}")
         return {
             "available": False,
             "device": "cpu",
@@ -175,9 +186,11 @@ def print_memory_stats():
             reserved = torch.cuda.memory_reserved(0) / 1024**3
             max_allocated = torch.cuda.max_memory_allocated(0) / 1024**3
             
-            print(f"GPU Memory - Allocated: {allocated:.2f} GB, "
-                  f"Reserved: {reserved:.2f} GB, "
-                  f"Peak: {max_allocated:.2f} GB")
+            _console_print(
+                f"GPU Memory - Allocated: {allocated:.2f} GB, "
+                f"Reserved: {reserved:.2f} GB, "
+                f"Peak: {max_allocated:.2f} GB"
+            )
             return {
                 "allocated_gb": allocated,
                 "reserved_gb": reserved,

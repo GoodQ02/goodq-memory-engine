@@ -1500,6 +1500,87 @@ def _compute_shadow_alignment_score(scene_manifest: Optional[Dict[str, Any]]) ->
     return _ratio(aligned_count, len(aligned_segments))
 
 
+def _normalize_scene_boundaries(raw_scenes: Any) -> List[Dict[str, float]]:
+    normalized: List[Dict[str, float]] = []
+    scenes = raw_scenes
+    if isinstance(raw_scenes, dict):
+        scenes = raw_scenes.get('scenes')
+    if not isinstance(scenes, list):
+        return normalized
+    for scene in scenes:
+        if not isinstance(scene, dict):
+            continue
+        start = _coerce_optional_float(scene.get('start'))
+        end = _coerce_optional_float(scene.get('end'))
+        if start is None or end is None:
+            continue
+        if end < start:
+            start, end = end, start
+        normalized.append(
+            {
+                'start': float(start),
+                'end': float(end),
+                'duration': max(0.0, float(end) - float(start)),
+            }
+        )
+    return normalized
+
+
+def _scene_overlap_duration(left: Dict[str, float], right: Dict[str, float]) -> float:
+    return max(0.0, min(float(left['end']), float(right['end'])) - max(float(left['start']), float(right['start'])))
+
+
+def _compute_scene_backend_comparison(
+    scene_outputs: List[Dict[str, Any]],
+    shadow_scene_manifest: Optional[Dict[str, Any]],
+) -> Dict[str, Any]:
+    live_scenes = _normalize_scene_boundaries(scene_outputs)
+    shadow_scenes = _normalize_scene_boundaries(shadow_scene_manifest)
+
+    claimed_shadow: Set[int] = set()
+    matched_count = 0
+    overlap_duration_total = 0.0
+    boundary_deltas: List[float] = []
+
+    for live_scene in live_scenes:
+        best_idx: Optional[int] = None
+        best_overlap = 0.0
+        for idx, shadow_scene in enumerate(shadow_scenes):
+            if idx in claimed_shadow:
+                continue
+            overlap = _scene_overlap_duration(live_scene, shadow_scene)
+            if overlap > best_overlap:
+                best_overlap = overlap
+                best_idx = idx
+        if best_idx is None or best_overlap <= 0.0:
+            continue
+        claimed_shadow.add(best_idx)
+        matched_count += 1
+        overlap_duration_total += best_overlap
+        shadow_scene = shadow_scenes[best_idx]
+        boundary_deltas.append(
+            (
+                abs(float(live_scene['start']) - float(shadow_scene['start']))
+                + abs(float(live_scene['end']) - float(shadow_scene['end']))
+            ) / 2.0
+        )
+
+    total_live_duration = sum(float(scene['duration']) for scene in live_scenes)
+    boundary_delta_mean = sum(boundary_deltas) / len(boundary_deltas) if boundary_deltas else 0.0
+    boundary_delta_max = max(boundary_deltas) if boundary_deltas else 0.0
+
+    return {
+        'live_scene_count': len(live_scenes),
+        'shadow_scene_count': len(shadow_scenes),
+        'matched_scene_count': matched_count,
+        'matched_scene_ratio_live': _ratio(matched_count, len(live_scenes)),
+        'matched_scene_ratio_shadow': _ratio(len(claimed_shadow), len(shadow_scenes)),
+        'duration_coverage': _ratio(int(overlap_duration_total * 1000), int(total_live_duration * 1000)) if total_live_duration > 0 else 0.0,
+        'boundary_delta_mean_sec': boundary_delta_mean,
+        'boundary_delta_max_sec': boundary_delta_max,
+    }
+
+
 def _compute_shadow_temporal_readiness(
     shadow_result: Dict[str, Any],
     segmentation_manifest: Optional[Dict[str, Any]],
@@ -1578,6 +1659,7 @@ def _build_segmentation_shadow_metrics(
         shadow_segment_count = int(shadow_coverages['segment_count'])
 
     shadow_alignment_score = _compute_shadow_alignment_score(shadow_scene_manifest)
+    scene_backend_comparison = _compute_scene_backend_comparison(scene_outputs, shadow_scene_manifest)
     shadow_temporal = _compute_shadow_temporal_readiness(
         shadow_result,
         shadow_segmentation_manifest,
@@ -1599,6 +1681,10 @@ def _build_segmentation_shadow_metrics(
         'speaker_coverage_shadow': shadow_speaker_coverage,
         'speaker_coverage_delta': shadow_speaker_coverage - current['speaker_coverage'],
         'alignment_score': shadow_alignment_score,
+        'scene_backend_match_ratio_live': scene_backend_comparison['matched_scene_ratio_live'],
+        'scene_backend_match_ratio_shadow': scene_backend_comparison['matched_scene_ratio_shadow'],
+        'scene_backend_duration_coverage': scene_backend_comparison['duration_coverage'],
+        'scene_backend_boundary_delta_mean_sec': scene_backend_comparison['boundary_delta_mean_sec'],
         'temporal_index_completeness_current': current_temporal_completeness,
         'temporal_index_completeness_shadow': shadow_temporal_completeness,
         'temporal_index_completeness_delta': shadow_temporal_completeness - current_temporal_completeness,
@@ -1613,6 +1699,7 @@ def _build_segmentation_shadow_metrics(
             'transcript_coverage': shadow_transcript_coverage,
             'speaker_coverage': shadow_speaker_coverage,
             'alignment_score': shadow_alignment_score,
+            'scene_backend_comparison': scene_backend_comparison,
             'temporal_index_completeness': shadow_temporal_completeness,
             'temporal_index_completeness_checks': shadow_temporal.get('checks'),
         },
@@ -4738,6 +4825,13 @@ def run(
             segmentation_shadow_result,
         )
         segmentation_shadow_result = dict(segmentation_shadow_result)
+        shadow_metrics = segmentation_shadow_result.get('metrics') if isinstance(segmentation_shadow_result.get('metrics'), dict) else {}
+        if isinstance(video_result.get('orchestration'), dict) and isinstance(shadow_metrics, dict):
+            orchestration_contract = dict(video_result['orchestration'])
+            scene_backend_comparison = shadow_metrics.get('shadow', {}).get('scene_backend_comparison')
+            if isinstance(scene_backend_comparison, dict):
+                orchestration_contract['scene_backend_comparison'] = scene_backend_comparison
+                video_result['orchestration'] = orchestration_contract
         segmentation_shadow_result['orchestration'] = orchestration_contract
         if segmentation_shadow_overlay.get('enabled'):
             segmentation_shadow_result['phase6_audio_overlay'] = segmentation_shadow_overlay

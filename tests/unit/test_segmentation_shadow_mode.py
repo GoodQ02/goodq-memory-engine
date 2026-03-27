@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 from cli.run_ingestion import (
+    _compute_scene_backend_comparison,
     _detect_scenes,
     _attach_segmentation_shadow_metrics,
     _prepare_segmentation_shadow_audio_overlay,
@@ -251,6 +252,30 @@ def test_detect_scenes_routes_through_resolved_scene_backend_and_records_contrac
     assert result["meta"]["orchestration"]["step_env"] == "goodq_video_scene_detect"
 
 
+def test_scene_backend_comparison_reports_match_ratio_and_boundary_drift() -> None:
+    comparison = _compute_scene_backend_comparison(
+        [
+            {"start": 0.0, "end": 1.0},
+            {"start": 1.0, "end": 2.0},
+        ],
+        {
+            "scenes": [
+                {"start": 0.0, "end": 1.0},
+                {"start": 1.0, "end": 2.0},
+            ]
+        },
+    )
+
+    assert comparison["live_scene_count"] == 2
+    assert comparison["shadow_scene_count"] == 2
+    assert comparison["matched_scene_count"] == 2
+    assert comparison["matched_scene_ratio_live"] == 1.0
+    assert comparison["matched_scene_ratio_shadow"] == 1.0
+    assert comparison["duration_coverage"] == 1.0
+    assert comparison["boundary_delta_mean_sec"] == 0.0
+    assert comparison["boundary_delta_max_sec"] == 0.0
+
+
 def test_segmentation_shadow_metrics_written_when_enabled(tmp_path: Path) -> None:
     shadow_root = tmp_path / "processing" / "_segmentation_shadow"
     shadow_root.mkdir(parents=True, exist_ok=True)
@@ -307,8 +332,8 @@ def test_segmentation_shadow_metrics_written_when_enabled(tmp_path: Path) -> Non
         },
     }
     scene_outputs = [
-        {"audio": {"transcript": "hello", "speakers": ["SPEAKER_00"]}},
-        {"audio": {}},
+        {"start": 0.0, "end": 1.0, "audio": {"transcript": "hello", "speakers": ["SPEAKER_00"]}},
+        {"start": 1.0, "end": 2.0, "audio": {}},
     ]
     temporal_index = {
         "segments": [],
@@ -334,8 +359,13 @@ def test_segmentation_shadow_metrics_written_when_enabled(tmp_path: Path) -> Non
     assert metrics["transcript_coverage_delta"] == 0.0
     assert metrics["speaker_coverage_delta"] == 0.0
     assert metrics["alignment_score"] == 0.5
+    assert metrics["scene_backend_match_ratio_live"] == 1.0
+    assert metrics["scene_backend_match_ratio_shadow"] == 1.0
+    assert metrics["scene_backend_duration_coverage"] == 1.0
+    assert metrics["scene_backend_boundary_delta_mean_sec"] == 0.0
     assert metrics["temporal_index_completeness_current"] == 1.0
     assert metrics["temporal_index_completeness_shadow"] == 1.0
+    assert metrics["shadow"]["scene_backend_comparison"]["matched_scene_count"] == 2
 
 
 def test_segmentation_shadow_metrics_respect_metrics_output_flag(tmp_path: Path) -> None:

@@ -309,12 +309,19 @@ class WSL2AudioBridge:
                 )
             env_warnings: list[str] = []
             if not bool(runtime_probe.get("abi_ready")):
-                env_warnings.append(
-                    str(
-                        runtime_probe.get("detail")
-                        or "transcription runtime ready; torchvision ABI unavailable"
-                    )
+                abi_warning = str(
+                    runtime_probe.get("detail")
+                    or "transcription runtime ready; torchvision ABI unavailable"
                 )
+                if abi_warning not in env_warnings:
+                    env_warnings.append(abi_warning)
+            if "diarization_ready" in runtime_probe and not bool(runtime_probe.get("diarization_ready")):
+                diarization_warning = str(
+                    runtime_probe.get("diarization_detail")
+                    or "diarization runtime unavailable"
+                ).strip()
+                if diarization_warning and diarization_warning not in env_warnings:
+                    env_warnings.append(diarization_warning)
             result = subprocess.run(
                 ["wsl", "-d", self.wsl_distro, "--", "bash", "-c", cmd],
                 capture_output=True,
@@ -338,13 +345,27 @@ class WSL2AudioBridge:
                     "stdout_json_parse_ok": isinstance(output, dict),
                     "stderr_tail": (result.stderr or "")[-600:],
                 }
+                processor_error = None
                 if isinstance(fallback_debug, dict):
                     details["fallback_result_status"] = fallback_debug.get("status")
                     details["fallback_result_audio_file"] = fallback_debug.get("audio_file")
                     details["fallback_result_request_uuid"] = fallback_debug.get("request_uuid")
+                    details["processor_transcription_status"] = fallback_debug.get("transcription_status")
+                    details["processor_diarization_status"] = fallback_debug.get("diarization_status")
+                    details["processor_emotion_status"] = fallback_debug.get("emotion_status")
+                    details["processor_embeddings_status"] = fallback_debug.get("embeddings_status")
+                    processor_error = str(fallback_debug.get("error") or "").strip() or None
+                    if processor_error:
+                        details["processor_error"] = processor_error
+                    processor_traceback = str(fallback_debug.get("traceback") or "").strip()
+                    if processor_traceback:
+                        details["processor_traceback_tail"] = processor_traceback[-1200:]
+                error_message = f"WSL audio processor exited with return code {result.returncode}"
+                if processor_error:
+                    error_message = f"{error_message}: {processor_error}"
                 return _build_error(
                     "wsl_subprocess_nonzero",
-                    error_message=f"WSL audio processor exited with return code {result.returncode}",
+                    error_message=error_message,
                     wsl_returncode=result.returncode,
                     stderr_warnings=stderr_warnings,
                     details=details,

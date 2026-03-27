@@ -491,8 +491,21 @@ def _service_checks(cfg: Optional[Dict[str, Any]]) -> List[Item]:
                 probe = probe_wsl_audio_runtime(wsl_distro, wsl_workspace)
                 detail = str(probe.get("detail") or "workspace probe failed")
                 if bool(probe.get("runtime_ready")):
-                    if bool(probe.get("abi_ready")):
+                    diarization_known = "diarization_ready" in probe
+                    diarization_ready = bool(probe.get("diarization_ready")) if diarization_known else True
+                    diarization_detail = str(probe.get("diarization_detail") or detail)
+                    if bool(probe.get("abi_ready")) and diarization_ready:
                         items.append(Item(PASS, f"Configured WSL audio runtime ready: {wsl_distro}:{wsl_workspace}"))
+                    elif bool(probe.get("abi_ready")) and not diarization_ready:
+                        items.append(
+                            Item(
+                                WARN,
+                                (
+                                    f"Configured WSL audio runtime is transcription-ready but diarization-degraded: "
+                                    f"{wsl_distro}:{wsl_workspace} ({diarization_detail})"
+                                ),
+                            )
+                        )
                     else:
                         items.append(
                             Item(

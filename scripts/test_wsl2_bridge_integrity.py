@@ -203,6 +203,51 @@ class WSL2BridgeIntegrityTests(unittest.TestCase):
             ["transcription runtime ready; torchvision ABI unavailable (diarization may be degraded)"],
         )
 
+    def test_nonzero_returncode_surfaces_processor_error_details(self) -> None:
+        scene_file = self._make_scene_file("scene_0004.wav")
+        bridge = self._make_bridge()
+
+        def fake_run(cmd, capture_output=True, text=True, timeout=None):  # noqa: ANN001
+            cmd_str = " ".join(str(part) for part in cmd)
+            if "process_audio.py" in cmd_str:
+                return _Result(returncode=1, stderr="traceback: wsl process failed")
+            if " cat " in f" {cmd_str} " and "result.json" in cmd_str:
+                return _Result(
+                    returncode=0,
+                    stdout=(
+                        f'{{"status":"error","audio_file":"/mnt/l/path/scene_0004.wav",'
+                        f'"request_uuid":"{self.TEST_UUID}","error":"pyannote exploded",'
+                        f'"traceback":"Traceback: pyannote exploded","transcription_status":"success",'
+                        f'"diarization_status":"error"}}'
+                    ),
+                )
+            return _Result(returncode=0, stdout="")
+
+        with patch("wsl2_audio_bridge.uuid.uuid4", return_value=uuid.UUID(self.TEST_UUID)), patch(
+            "wsl2_audio_bridge.subprocess.run", side_effect=fake_run
+        ), patch(
+            "wsl2_audio_bridge.probe_wsl_audio_runtime",
+            return_value={
+                "workspace_ready": True,
+                "runtime_ready": True,
+                "process_import_ready": True,
+                "transcription_ready": True,
+                "abi_ready": True,
+                "diarization_ready": True,
+                "detail": "workspace, transcription runtime, process import, ABI, and diarization checks are ready",
+            },
+        ):
+            result = bridge.process_audio(str(scene_file), timeout=5)
+
+        self.assertEqual(result.get("status"), "error")
+        self.assertEqual(result.get("bridge_error_reason"), "wsl_subprocess_nonzero")
+        self.assertIn("pyannote exploded", result.get("error", ""))
+        details = result.get("bridge_error_details") or {}
+        self.assertEqual(details.get("processor_error"), "pyannote exploded")
+        self.assertEqual(details.get("processor_transcription_status"), "success")
+        self.assertEqual(details.get("processor_diarization_status"), "error")
+        self.assertIn("Traceback", details.get("processor_traceback_tail", ""))
+
 
 if __name__ == "__main__":
     unittest.main()

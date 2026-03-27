@@ -5,8 +5,8 @@ from typing import Any, Dict, Optional
 
 
 _RECOMMENDED_INSTALL_COMMAND = (
-    "pip install torch==2.8.0 torchvision==0.23.0 torchaudio==2.8.0 "
-    "--index-url https://download.pytorch.org/whl/cu128"
+    "pip install torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1 "
+    "--index-url https://download.pytorch.org/whl/cu121"
 )
 
 
@@ -35,11 +35,19 @@ def _probe_package_version(distro: str, workspace: str, package_name: str) -> Op
     return version_text or None
 
 
+def _python_path_literal(path_value: str) -> str:
+    return path_value.replace("\\", "\\\\").replace("'", "\\'")
+
+
 def probe_wsl_audio_runtime(distro: str, workspace: str) -> Dict[str, Any]:
     result: Dict[str, Any] = {
         "distro": str(distro or "").strip() or "Ubuntu",
         "workspace": str(workspace or "").strip().rstrip("/"),
         "workspace_ready": False,
+        "gpu_ready": False,
+        "transcription_ready": False,
+        "process_import_ready": False,
+        "diarization_ready": False,
         "runtime_ready": False,
         "abi_ready": False,
         "ready": False,
@@ -70,20 +78,59 @@ def probe_wsl_audio_runtime(distro: str, workspace: str) -> Dict[str, Any]:
 
     result["workspace_ready"] = True
 
-    runtime_script = (
+    transcription_script = (
         f"source '{workspace}/setup_cuda_env.sh' >/dev/null 2>&1 && "
-        "python3 -c \"import faster_whisper, torch; print('runtime_ready')\""
+        "python3 -c \"import faster_whisper, torch; "
+        "print('transcription_ready'); "
+        "print('gpu_ready' if torch.cuda.is_available() else 'gpu_unavailable')\""
     )
     try:
-        runtime_probe = _run_wsl_probe(distro, runtime_script, timeout=15)
+        transcription_probe = _run_wsl_probe(distro, transcription_script, timeout=15)
     except Exception as exc:
         result["detail"] = f"runtime probe failed: {exc}"
         return result
 
-    if runtime_probe.returncode != 0:
-        result["detail"] = (runtime_probe.stderr or runtime_probe.stdout).strip() or "python runtime probe failed"
+    if transcription_probe.returncode != 0:
+        result["detail"] = (
+            (transcription_probe.stderr or transcription_probe.stdout).strip()
+            or "python transcription probe failed"
+        )
         return result
 
+    transcription_stdout = (transcription_probe.stdout or "").strip()
+    result["transcription_ready"] = "transcription_ready" in transcription_stdout
+    result["gpu_ready"] = "gpu_ready" in transcription_stdout
+    if not result["transcription_ready"]:
+        result["detail"] = "python transcription probe did not report ready"
+        return result
+
+    process_audio_path = _python_path_literal(f"{workspace}/process_audio.py")
+    process_import_script = (
+        f"source '{workspace}/setup_cuda_env.sh' >/dev/null 2>&1 && "
+        "python3 -c \"import importlib.util as iu; "
+        f"spec = iu.spec_from_file_location('goodq_process_audio', '{process_audio_path}'); "
+        "module = iu.module_from_spec(spec); "
+        "spec.loader.exec_module(module); "
+        "print('process_import_ready')\""
+    )
+    try:
+        process_import_probe = _run_wsl_probe(distro, process_import_script, timeout=20)
+    except Exception as exc:
+        result["detail"] = f"process_audio import probe failed: {exc}"
+        return result
+
+    if process_import_probe.returncode != 0:
+        result["detail"] = (
+            (process_import_probe.stderr or process_import_probe.stdout).strip()
+            or "process_audio import probe failed"
+        )
+        return result
+
+    if "process_import_ready" not in (process_import_probe.stdout or ""):
+        result["detail"] = "process_audio import probe did not report ready"
+        return result
+
+    result["process_import_ready"] = True
     result["runtime_ready"] = True
 
     abi_script = (
@@ -99,16 +146,46 @@ def probe_wsl_audio_runtime(distro: str, workspace: str) -> Dict[str, Any]:
 
     if abi_probe.returncode == 0:
         result["abi_ready"] = True
-        result["ready"] = True
-        result["detail"] = "workspace, transcription runtime, and ABI checks are ready"
-        return result
+    else:
+        result["abi_probe_stderr_tail"] = ((abi_probe.stderr or abi_probe.stdout or "").strip())[-600:]
 
-    result["ready"] = True
-    result["abi_probe_stderr_tail"] = ((abi_probe.stderr or abi_probe.stdout or "").strip())[-600:]
+    diarization_script = (
+        f"source '{workspace}/setup_cuda_env.sh' >/dev/null 2>&1 && "
+        "python3 -c \"import os; from pyannote.audio import Pipeline; "
+        "token = os.getenv('PYANNOTE_TOKEN') or os.getenv('HUGGINGFACE_TOKEN') or os.getenv('HF_TOKEN'); "
+        "print('diarization_ready' if token else 'diarization_token_missing')\""
+    )
+    try:
+        diarization_probe = _run_wsl_probe(distro, diarization_script, timeout=20)
+    except Exception as exc:
+        diarization_probe = None
+        result["diarization_probe_stderr_tail"] = f"{type(exc).__name__}: {exc}"
+
+    if diarization_probe is not None and diarization_probe.returncode == 0:
+        diarization_stdout = (diarization_probe.stdout or "").strip()
+        result["diarization_ready"] = "diarization_ready" in diarization_stdout
+        if not result["diarization_ready"]:
+            result["diarization_detail"] = "pyannote importable but no HuggingFace token available"
+    else:
+        if diarization_probe is not None:
+            result["diarization_probe_stderr_tail"] = (
+                (diarization_probe.stderr or diarization_probe.stdout or "").strip()
+            )[-600:]
+        result["diarization_detail"] = "pyannote runtime unavailable"
+
     result["detected_versions"] = {
         "torch": _probe_package_version(distro, workspace, "torch"),
         "torchvision": _probe_package_version(distro, workspace, "torchvision"),
         "torchaudio": _probe_package_version(distro, workspace, "torchaudio"),
+        "pyannote.audio": _probe_package_version(distro, workspace, "pyannote.audio"),
+        "faster-whisper": _probe_package_version(distro, workspace, "faster-whisper"),
     }
-    result["detail"] = "transcription runtime ready; torchvision ABI unavailable (diarization may be degraded)"
+
+    result["ready"] = True
+    if result["abi_ready"] and result["diarization_ready"]:
+        result["detail"] = "workspace, transcription runtime, process import, ABI, and diarization checks are ready"
+    elif result["abi_ready"]:
+        result["detail"] = "transcription runtime ready; process_audio import ready; diarization unavailable"
+    else:
+        result["detail"] = "transcription runtime ready; process_audio import ready; torchvision ABI unavailable (diarization may be degraded)"
     return result

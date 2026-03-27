@@ -59,6 +59,121 @@ except ImportError:
     TRANSFORMERS_AVAILABLE = False
 
 
+_DEFAULT_RUNTIME_CONFIG = {
+    "gpu": {
+        "device": "cuda",
+        "compute_type": "float16",
+        "memory_fraction": 0.8,
+    },
+    "models": {
+        "whisper": "medium",
+        "diarization": "pyannote/speaker-diarization-3.1",
+    },
+    "diarization": {
+        "enabled": True,
+    },
+    "processing": {
+        "language": "en",
+        "beam_size": 5,
+    },
+}
+
+
+def _deep_merge(base, override):
+    for key, value in (override or {}).items():
+        if key in base and isinstance(base[key], dict) and isinstance(value, dict):
+            _deep_merge(base[key], value)
+        else:
+            base[key] = value
+
+
+def _load_json_dict(path: Path):
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    return raw if isinstance(raw, dict) else {}
+
+
+def _normalize_runtime_overlay(raw_cfg):
+    normalized = {}
+    if not isinstance(raw_cfg, dict):
+        return normalized
+
+    gpu_cfg = raw_cfg.get("gpu")
+    if isinstance(gpu_cfg, dict):
+        normalized["gpu"] = dict(gpu_cfg)
+    else:
+        inline_gpu = {}
+        for key in ("device", "compute_type", "memory_fraction"):
+            if key in raw_cfg:
+                inline_gpu[key] = raw_cfg.get(key)
+        if inline_gpu:
+            normalized["gpu"] = inline_gpu
+
+    if isinstance(raw_cfg.get("models"), dict):
+        normalized["models"] = dict(raw_cfg.get("models") or {})
+
+    whisper_cfg = raw_cfg.get("whisper")
+    if isinstance(whisper_cfg, dict):
+        whisper_model = whisper_cfg.get("model") or whisper_cfg.get("name")
+        if whisper_model:
+            normalized.setdefault("models", {})["whisper"] = whisper_model
+    elif isinstance(whisper_cfg, str) and whisper_cfg.strip():
+        normalized.setdefault("models", {})["whisper"] = whisper_cfg.strip()
+
+    diarization_cfg = raw_cfg.get("diarization")
+    if isinstance(diarization_cfg, dict):
+        model_name = diarization_cfg.get("model") or diarization_cfg.get("name")
+        if model_name:
+            normalized.setdefault("models", {})["diarization"] = model_name
+        normalized.setdefault("diarization", {}).update(
+            {k: v for k, v in diarization_cfg.items() if k not in {"model", "name"}}
+        )
+    elif isinstance(diarization_cfg, str) and diarization_cfg.strip():
+        normalized.setdefault("models", {})["diarization"] = diarization_cfg.strip()
+
+    if isinstance(raw_cfg.get("processing"), dict):
+        normalized.setdefault("processing", {}).update(raw_cfg.get("processing") or {})
+
+    for key in ("huggingface_token", "huggingface_token_env"):
+        if key in raw_cfg:
+            normalized[key] = raw_cfg.get(key)
+
+    return normalized
+
+
+def _load_runtime_config():
+    config = json.loads(json.dumps(_DEFAULT_RUNTIME_CONFIG))
+    config_sources = []
+    base_dir = Path(__file__).resolve().parent
+    for candidate in (base_dir / "config.json", base_dir / "config_wsl2_audio.json"):
+        if not candidate.exists():
+            continue
+        overlay = _normalize_runtime_overlay(_load_json_dict(candidate))
+        if overlay:
+            _deep_merge(config, overlay)
+            config_sources.append(candidate.name)
+    config["_sources"] = config_sources
+    return config
+
+
+def _resolve_secret(raw_value, env_key=None):
+    if isinstance(env_key, str) and env_key.strip():
+        env_value = os.getenv(env_key.strip())
+        if env_value:
+            return env_value
+
+    if isinstance(raw_value, str):
+        value = raw_value.strip()
+        if value.startswith("${") and value.endswith("}"):
+            ref = value[2:-1].strip()
+            if ref:
+                return os.getenv(ref)
+        return value or None
+    return None
+
+
 def clear_gpu_memory():
     """Clear GPU memory cache and run garbage collection"""
     if torch.cuda.is_available():
@@ -78,11 +193,13 @@ def get_gpu_memory_info():
 def process_audio(audio_file, output_dir):
     """Process audio file with full classification pipeline - Memory optimized"""
     request_uuid = (os.getenv("GOODQ_BRIDGE_REQUEST_UUID") or "").strip()
+    runtime_cfg = _load_runtime_config()
 
     result = {
         "status": "processing",
         "audio_file": str(audio_file),
-        "output_dir": str(output_dir)
+        "output_dir": str(output_dir),
+        "config_sources": runtime_cfg.get("_sources", []),
     }
     if request_uuid:
         result["request_uuid"] = request_uuid
@@ -98,6 +215,8 @@ def process_audio(audio_file, output_dir):
     gpu_profile_cfg = resolve_wsl_gpu_config({
         "device": "cuda" if cuda_available else "cpu",
         "compute_type": "float16" if cuda_available else "int8",
+        "memory_fraction": 0.8,
+        **dict(runtime_cfg.get("gpu") or {}),
     })
     device = str(gpu_profile_cfg.get("device", "cuda" if cuda_available else "cpu")).lower()
     compute_type = str(
@@ -124,11 +243,21 @@ def process_audio(audio_file, output_dir):
 
     result["device"] = device
     result["cuda_available"] = cuda_available
+    result["gpu_memory_fraction"] = gpu_profile_cfg.get("memory_fraction", 0.8)
+    result["whisper_model"] = str((runtime_cfg.get("models", {}) or {}).get("whisper", "medium"))
+    result["diarization_model"] = str(
+        (runtime_cfg.get("models", {}) or {}).get("diarization", "pyannote/speaker-diarization-3.1")
+    )
+    result["diarization_enabled"] = bool((runtime_cfg.get("diarization", {}) or {}).get("enabled", True))
     
     if device == "cuda":
         result["gpu_name"] = torch.cuda.get_device_name(0)
         result["gpu_memory_mb"] = torch.cuda.get_device_properties(0).total_memory // (1024**2)
         result["initial_gpu_memory"] = get_gpu_memory_info()
+        try:
+            torch.cuda.set_per_process_memory_fraction(float(result["gpu_memory_fraction"]), 0)
+        except Exception as exc:
+            result["gpu_memory_fraction_warning"] = f"{type(exc).__name__}: {exc}"
     
     try:
         # Load audio ONCE and keep in memory (small footprint)
@@ -144,8 +273,16 @@ def process_audio(audio_file, output_dir):
         # === STEP 1: TRANSCRIPTION (Faster-Whisper) ===
         print("Processing: Transcription...", file=sys.stderr)
         try:
-            whisper_model = WhisperModel("base", device=device, compute_type=compute_type)
-            segments, info = whisper_model.transcribe(audio_file, language="en", beam_size=5)
+            processing_cfg = dict(runtime_cfg.get("processing") or {})
+            transcription_language_raw = str(processing_cfg.get("language", "en") or "").strip()
+            transcription_language = None if transcription_language_raw.lower() in {"", "auto", "detect", "none"} else transcription_language_raw
+            beam_size = int(processing_cfg.get("beam_size", 5) or 5)
+            whisper_model = WhisperModel(result["whisper_model"], device=device, compute_type=compute_type)
+            segments, info = whisper_model.transcribe(
+                audio_file,
+                language=transcription_language,
+                beam_size=beam_size,
+            )
             
             transcription_text = ""
             word_timestamps = []
@@ -183,12 +320,22 @@ def process_audio(audio_file, output_dir):
         
         # === STEP 2: SPEAKER DIARIZATION (Pyannote - optional) ===
         print("Processing: Diarization...", file=sys.stderr)
-        if DIARIZATION_AVAILABLE:
+        if bool(result["diarization_enabled"]) and DIARIZATION_AVAILABLE:
             try:
-                hf_token = os.getenv("HUGGINGFACE_TOKEN", "")
+                hf_token = (
+                    _resolve_secret(
+                        runtime_cfg.get("huggingface_token"),
+                        runtime_cfg.get("huggingface_token_env"),
+                    )
+                    or os.getenv("HUGGINGFACE_TOKEN", "")
+                    or os.getenv("HF_TOKEN", "")
+                    or os.getenv("PYANNOTE_TOKEN", "")
+                )
                 if hf_token:
+                    os.environ.setdefault("HUGGINGFACE_TOKEN", hf_token)
+                    os.environ.setdefault("HF_TOKEN", hf_token)
                     diarization_pipeline = DiarizationPipeline.from_pretrained(
-                        "pyannote/speaker-diarization-3.1",
+                        result["diarization_model"],
                         token=hf_token
                     )
                     diarization_pipeline.to(torch.device(device))
@@ -236,6 +383,9 @@ def process_audio(audio_file, output_dir):
                 except:
                     pass
                 clear_gpu_memory()
+        elif not bool(result["diarization_enabled"]):
+            result["diarization_status"] = "skipped"
+            result["diarization_note"] = "disabled by runtime config"
         else:
             result["diarization_status"] = "unavailable"
             if DIARIZATION_IMPORT_ERROR:

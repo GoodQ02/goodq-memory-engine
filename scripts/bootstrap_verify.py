@@ -416,8 +416,22 @@ def _check_wsl_audio_workspace() -> List[CheckResult]:
     probe = probe_wsl_audio_runtime(distro, workspace)
     detail = str(probe.get("detail") or "workspace missing required files")
     if bool(probe.get("runtime_ready")):
-        if bool(probe.get("abi_ready")):
+        diarization_known = "diarization_ready" in probe
+        diarization_ready = bool(probe.get("diarization_ready")) if diarization_known else True
+        diarization_detail = str(probe.get("diarization_detail") or detail)
+        if bool(probe.get("abi_ready")) and diarization_ready:
             return [CheckResult("wsl_audio_workspace", "pass", f"ready in distro={distro} workspace={workspace}")]
+        if bool(probe.get("abi_ready")) and not diarization_ready:
+            return [
+                CheckResult(
+                    "wsl_audio_workspace",
+                    "warn",
+                    (
+                        f"transcription-ready in distro={distro} workspace={workspace}, "
+                        f"but diarization is degraded ({diarization_detail})"
+                    ),
+                )
+            ]
         return [
             CheckResult(
                 "wsl_audio_workspace",

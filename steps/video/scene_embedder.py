@@ -18,19 +18,60 @@ _MODELS = {
 }
 
 
+def _resolve_model_device(step_name: str) -> str:
+    """
+    Resolve the execution device for Phase 6 model loading.
+
+    Prefer the shared GPU manager so we preserve per-step budgeting, but do not
+    let its import-time auto-configuration abort Phase 6a. If the GPU manager is
+    unavailable, fall back to a direct torch CUDA probe and then CPU.
+    """
+    try:
+        from steps.common.gpu_config import configure_gpu as setup_step_gpu
+    except Exception as e:
+        logger.warning(
+            "[PHASE6] GPU manager unavailable for %s; falling back to direct torch probe "
+            "exc_type=%s exc=%s",
+            step_name,
+            type(e).__name__,
+            e,
+        )
+    else:
+        try:
+            gpu_config = setup_step_gpu(step_name)
+            return str(gpu_config.get("device", "cpu"))
+        except Exception as e:
+            logger.warning(
+                "[PHASE6] GPU manager failed for %s; falling back to direct torch probe "
+                "exc_type=%s exc=%s",
+                step_name,
+                type(e).__name__,
+                e,
+            )
+
+    try:
+        import torch
+
+        if torch.cuda.is_available():
+            return "cuda:0"
+    except Exception as e:
+        logger.warning(
+            "[PHASE6] Torch device probe failed for %s; using CPU "
+            "exc_type=%s exc=%s",
+            step_name,
+            type(e).__name__,
+            e,
+        )
+
+    return "cpu"
+
+
 def _load_clip_model():
     """Load CLIP model using GPU manager."""
     if _MODELS["clip"]["model"] is not None:
         return
-    
-    try:
-        from steps.common.gpu_config import configure_gpu as setup_step_gpu
-    except ImportError:
-        def setup_step_gpu(name):
-            return {"device": "cpu", "step_name": name}
-    
-    gpu_config = setup_step_gpu("scene_embedder_clip")
-    device = gpu_config["device"]
+
+    device = _resolve_model_device("scene_embedder_clip")
     
     try:
         import torch
@@ -55,15 +96,8 @@ def _load_dino_model():
     """Load DINO model using GPU manager."""
     if _MODELS["dino"]["model"] is not None:
         return
-    
-    try:
-        from steps.common.gpu_config import configure_gpu as setup_step_gpu
-    except ImportError:
-        def setup_step_gpu(name):
-            return {"device": "cpu", "step_name": name}
-    
-    gpu_config = setup_step_gpu("scene_embedder_dino")
-    device = gpu_config["device"]
+
+    device = _resolve_model_device("scene_embedder_dino")
     
     try:
         import torch

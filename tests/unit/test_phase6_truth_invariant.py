@@ -319,4 +319,6 @@ def test_phase6_uses_nested_qdrant_host(monkeypatch, tmp_path: Path):
 
     assert result["phase6_status"] == "complete"
     assert manifest["phase6_complete"] is True
+    assert manifest["phase6_status"] == "complete"
+    assert "phase6_error" not in manifest
     assert seen_hosts == ["http://10.0.0.9:6333", "http://10.0.0.9:6333"]

@@ -234,7 +234,9 @@ def run_scene_visual_embeddings(item: Dict[str, Any], cfg: Dict[str, Any]) -> Di
         clip_model_loaded = False
         try:
             from steps.video import scene_embedder as _scene_embedder
-            clip_model_loaded = bool((_scene_embedder._MODELS.get("clip") or {}).get("model") is not None)
+            clip_state = _scene_embedder._MODELS.get("clip") or {}
+            clip_model_loaded = bool(clip_state.get("model") is not None)
+            clip_device = str(clip_state.get("device") or clip_device)
         except Exception as e:
             _stage10_18_debug("clip_model_probe_error:", f"{type(e).__name__}: {e}")
         _stage10_18_debug(f"clip_model_loaded={clip_model_loaded}")
@@ -542,6 +544,12 @@ def run_scene_visual_embeddings(item: Dict[str, Any], cfg: Dict[str, Any]) -> Di
         phase6_faiss_ok: Any = 'not_attempted'
         vector_commit_success = bool(phase6_qdrant_ok is True or phase6_qdrant_ok == 'not_attempted')
         scene_data['phase6_complete'] = vector_commit_success
+        scene_data['phase6_status'] = 'complete' if vector_commit_success else 'failed'
+        if vector_commit_success:
+            scene_data.pop('phase6_error', None)
+            scene_data.pop('phase6_embedding_integrity', None)
+        else:
+            scene_data['phase6_error'] = 'vector_commit_failed'
         scene_data['phase6_vector_commit'] = {
             'enabled': retrieval_enabled,
             'clip_committed': bool(clip_ok),

@@ -6,6 +6,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENV_FILE="$SCRIPT_DIR/.goodq_env"
 VENV_DIR="$SCRIPT_DIR/venv"
 
+strip_cr() {
+    printf '%s' "${1//$'\r'/}"
+}
+
+has_hf_snapshot_file() {
+    compgen -G "$1" > /dev/null
+}
+
 if [ ! -f "$VENV_DIR/bin/activate" ] && [ -f "$SCRIPT_DIR/env/bin/activate" ]; then
     VENV_DIR="$SCRIPT_DIR/env"
 fi
@@ -15,6 +23,26 @@ if [ -f "$ENV_FILE" ]; then
     # shellcheck disable=SC1090
     source "$ENV_FILE"
     set +a
+    for key in \
+        GOODQ_REQUIRE_GPU \
+        GOODQ_REQUIRE_WSL_AUDIO \
+        GOODQ_WSL_DISTRO \
+        GOODQ_WSL_USER \
+        GOODQ_WSL_WORKSPACE \
+        HF_HOME \
+        HF_HUB_TOKEN \
+        HF_TOKEN \
+        HUGGINGFACE_HUB_CACHE \
+        HUGGINGFACE_HUB_TOKEN \
+        HUGGINGFACE_TOKEN \
+        PYANNOTE_TOKEN \
+        TORCH_HOME
+    do
+        current_value="${!key:-}"
+        if [ -n "$current_value" ]; then
+            export "$key=$(strip_cr "$current_value")"
+        fi
+    done
 fi
 
 if [ ! -f "$VENV_DIR/bin/activate" ]; then
@@ -57,9 +85,34 @@ else
     fi
 fi
 
+# Prefer the staged shared HF cache when it is complete, but fall back to the
+# local WSL cache if required audio models are missing there. This keeps the
+# runtime offline-first without depending on an incomplete mounted cache.
+if [ -n "${HUGGINGFACE_HUB_CACHE:-}" ]; then
+    EMOTION_CACHE_GLOB="${HUGGINGFACE_HUB_CACHE%/}/models--ehcalabres--wav2vec2-lg-xlsr-en-speech-emotion-recognition/snapshots/*/preprocessor_config.json"
+    EMBEDDING_CACHE_GLOB="${HUGGINGFACE_HUB_CACHE%/}/models--facebook--wav2vec2-base-960h/snapshots/*/preprocessor_config.json"
+    if ! has_hf_snapshot_file "$EMOTION_CACHE_GLOB" || ! has_hf_snapshot_file "$EMBEDDING_CACHE_GLOB"; then
+        unset HF_HOME
+        unset HUGGINGFACE_HUB_CACHE
+        unset TORCH_HOME
+        export GOODQ_WSL_AUDIO_CACHE_FALLBACK="local"
+    fi
+fi
+
+# Prefer the staged local model cache during normal ingest runs.
+# Set GOODQ_WSL_ALLOW_HF_NETWORK=1 only for explicit repair/bootstrap sessions
+# that need to fetch or refresh models from Hugging Face.
+if [ "${GOODQ_WSL_ALLOW_HF_NETWORK:-0}" != "1" ]; then
+    export HF_HUB_OFFLINE=1
+    export TRANSFORMERS_OFFLINE=1
+fi
+
 echo "✓ CUDA/cuDNN environment configured" >&2
 echo "  - LD_LIBRARY_PATH set with NVIDIA libraries" >&2
 echo "  - Virtual environment activated" >&2
+if [ "${GOODQ_WSL_AUDIO_CACHE_FALLBACK:-}" = "local" ]; then
+    echo "  - HF cache fallback: using local WSL cache" >&2
+fi
 echo "" >&2
 echo "Test CUDA availability with:" >&2
 echo "  python3 -c \"import torch; print(f'CUDA: {torch.cuda.is_available()}')\"" >&2

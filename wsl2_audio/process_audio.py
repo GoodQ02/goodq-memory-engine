@@ -11,6 +11,7 @@ import os
 import gc
 import logging
 import traceback
+from contextlib import redirect_stdout
 from pathlib import Path
 
 # Core imports
@@ -562,8 +563,13 @@ def main():
     
     audio_file = sys.argv[1]
     output_dir = sys.argv[2]
-    
-    result = process_audio(audio_file, output_dir)
+
+    # Keep stdout reserved for the final machine-readable JSON payload.
+    # Third-party libraries occasionally print progress or auth messages to
+    # stdout during processing, which would otherwise corrupt the bridge
+    # contract.
+    with redirect_stdout(sys.stderr):
+        result = process_audio(audio_file, output_dir)
     print(json.dumps(result))
     
     if result["status"] != "success":

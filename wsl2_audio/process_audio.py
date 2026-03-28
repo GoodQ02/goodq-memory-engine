@@ -341,7 +341,11 @@ def process_audio(audio_file, output_dir):
                     )
                     diarization_pipeline.to(torch.device(device))
                     
-                    diarization_result = diarization_pipeline(audio_file)
+                    diarization_audio = {
+                        "waveform": waveform.detach().cpu(),
+                        "sample_rate": sr,
+                    }
+                    diarization_result = diarization_pipeline(diarization_audio)
                     
                     # Handle new pyannote API - DiarizeOutput object
                     # The actual annotation is in the speaker_diarization attribute

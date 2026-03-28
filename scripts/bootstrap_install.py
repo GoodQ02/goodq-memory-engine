@@ -180,7 +180,12 @@ WSL_AUDIO_ASSET_RELATIVE_PATHS: tuple[str, ...] = (
 
 
 def _print(msg: str) -> None:
-    print(msg, flush=True)
+    try:
+        print(msg, flush=True)
+    except UnicodeEncodeError:
+        encoding = getattr(sys.stdout, "encoding", None) or "utf-8"
+        safe = str(msg).encode(encoding, errors="replace").decode(encoding, errors="replace")
+        print(safe, flush=True)
 
 
 def _fail(msg: str, exit_code: int = 1) -> int:

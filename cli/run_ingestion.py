@@ -3597,6 +3597,16 @@ def _process_audio(
             from steps.audio_transcribe.step import audio_transcribe as local_audio_transcribe
 
             cfg_payload = json.loads(cfg_json.read_text(encoding='utf-8'))
+            audio_cfg = cfg_payload.get('audio')
+            if not isinstance(audio_cfg, dict):
+                audio_cfg = {}
+                cfg_payload['audio'] = audio_cfg
+            tx_cfg = audio_cfg.get('transcribe')
+            if not isinstance(tx_cfg, dict):
+                tx_cfg = {}
+                audio_cfg['transcribe'] = tx_cfg
+            # Local fallback must not recurse back into the WSL path we are explicitly downgrading from.
+            tx_cfg['use_wsl2'] = False
             local_item = {
                 'source_path': str(audio_path),
                 'path': str(audio_path),
@@ -3605,7 +3615,15 @@ def _process_audio(
                 'video_hash': video_hash,
                 'video_id': video_hash,
             }
-            local_result = local_audio_transcribe(local_item, cfg_payload)
+            prior_require_wsl_audio = os.environ.get('GOODQ_REQUIRE_WSL_AUDIO')
+            os.environ['GOODQ_REQUIRE_WSL_AUDIO'] = '0'
+            try:
+                local_result = local_audio_transcribe(local_item, cfg_payload)
+            finally:
+                if prior_require_wsl_audio is None:
+                    os.environ.pop('GOODQ_REQUIRE_WSL_AUDIO', None)
+                else:
+                    os.environ['GOODQ_REQUIRE_WSL_AUDIO'] = prior_require_wsl_audio
             if isinstance(local_result, dict):
                 local_result = _offset_local_audio_result_to_scene(local_result, start)
                 item.update(local_result)

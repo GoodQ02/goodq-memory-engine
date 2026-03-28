@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import json
 import importlib
 import sys
@@ -151,8 +152,11 @@ def test_structured_wsl_audio_error_downgrades_to_local_transcription(monkeypatc
     monkeypatch.setitem(sys.modules, "steps.audio.audio_wsl2_bridge", mod_unified)
 
     mod_local = types.ModuleType("steps.audio_transcribe.step")
+    observed = {}
 
-    def _audio_transcribe(*args, **kwargs):
+    def _audio_transcribe(item, cfg):
+        observed["use_wsl2"] = ((cfg.get("audio", {}) or {}).get("transcribe", {}) or {}).get("use_wsl2")
+        observed["require_wsl_audio"] = os.environ.get("GOODQ_REQUIRE_WSL_AUDIO")
         return {
             "transcript": "fallback transcript",
             "transcript_segments": [{"start": 0.0, "end": 1.0, "text": "fallback transcript"}],
@@ -202,8 +206,95 @@ def test_structured_wsl_audio_error_downgrades_to_local_transcription(monkeypatc
     assert result["data"]["audio_backend_selected"] == "wsl"
     assert result["data"]["audio_backend_effective"] == "windows"
     assert result["data"]["audio_backend_unavailable_details"]["reason"] == "wsl_env_runtime_unavailable"
+    assert observed == {
+        "use_wsl2": False,
+        "require_wsl_audio": "0",
+    }
     assert ("goodq_audio_transcribe", "audio_speaker_merge") in merge_calls
     assert any(entry["step"] == "audio_unified_wsl2" and entry["status"] == "error" for entry in logged_steps)
+
+
+def test_structured_wsl_audio_error_forces_local_fallback_even_when_wsl_required(monkeypatch, tmp_path: Path):
+    run_ingestion = _load_run_ingestion_module()
+    _process_audio = run_ingestion._process_audio
+
+    cfg_json = tmp_path / "cfg.json"
+    cfg_json.write_text(
+        json.dumps(
+            {"audio": {}, "run": {"id": "run_test"}, "paths": {"log_dir": str(tmp_path / "logs")}}
+        ),
+        encoding="utf-8",
+    )
+
+    video_path = tmp_path / "video.mp4"
+    audio_path = tmp_path / "scene.wav"
+    video_path.write_bytes(b"v")
+    audio_path.write_bytes(b"a")
+
+    audio_dir = tmp_path / "artifacts" / "audio"
+    audio_dir.mkdir(parents=True, exist_ok=True)
+
+    monkeypatch.setattr(run_ingestion, "wsl_audio_auto_enabled", lambda: True)
+    monkeypatch.setattr(run_ingestion, "require_wsl_audio", lambda: True)
+    monkeypatch.setattr(run_ingestion, "_extract_audio_chunk", lambda *a, **k: audio_path)
+    monkeypatch.setenv("GOODQ_REQUIRE_WSL_AUDIO", "1")
+
+    mod_unified = types.ModuleType("steps.audio.audio_wsl2_bridge")
+
+    def _audio_unified_wsl2(*args, **kwargs):
+        return {
+            "status": "error",
+            "error": "Processing timeout after 600s",
+            "bridge_error_reason": "wsl_timeout",
+            "bridge_error_details": {"timeout_seconds": 600},
+        }
+
+    mod_unified.audio_unified_wsl2 = _audio_unified_wsl2
+    monkeypatch.setitem(sys.modules, "steps.audio.audio_wsl2_bridge", mod_unified)
+
+    mod_local = types.ModuleType("steps.audio_transcribe.step")
+    observed = {}
+
+    def _audio_transcribe(item, cfg):
+        observed["use_wsl2"] = ((cfg.get("audio", {}) or {}).get("transcribe", {}) or {}).get("use_wsl2")
+        observed["require_wsl_audio"] = os.environ.get("GOODQ_REQUIRE_WSL_AUDIO")
+        return {
+            "transcript": "forced local fallback transcript",
+            "transcript_segments": [{"start": 0.0, "end": 1.0, "text": "forced local fallback transcript"}],
+            "transcript_meta": {"status": "success", "duration": 1.0},
+        }
+
+    mod_local.audio_transcribe = _audio_transcribe
+    monkeypatch.setitem(sys.modules, "steps.audio_transcribe.step", mod_local)
+
+    monkeypatch.setattr(run_ingestion, "_run_step", lambda *args, **kwargs: {})
+    monkeypatch.setattr(run_ingestion, "log_step_run", lambda *args, **kwargs: None)
+
+    result = _process_audio(
+        cfg_json=cfg_json,
+        ffmpeg="ffmpeg",
+        video_path=video_path,
+        scene={"start": 0.0, "end": 2.0, "index": 4},
+        audio_dir=audio_dir,
+        audio_artifact_dir=tmp_path / "processing" / "audio",
+        video_hash="vh",
+        scene_id="scene_0004",
+        audio_runtime_contract={
+            "selected": "wsl",
+            "reason": "wsl_runtime_required",
+        },
+    )
+
+    assert result is not None
+    assert result["data"]["transcript"] == "forced local fallback transcript"
+    assert result["data"]["audio_backend_selected"] == "wsl"
+    assert result["data"]["audio_backend_effective"] == "windows"
+    assert result["data"]["audio_backend_effective_reason"] == "wsl_unified_error_fallback"
+    assert observed == {
+        "use_wsl2": False,
+        "require_wsl_audio": "0",
+    }
+    assert os.environ.get("GOODQ_REQUIRE_WSL_AUDIO") == "1"
 
 
 def test_audio_embed_clap_failure_preserves_transcript_payload(monkeypatch, tmp_path: Path):

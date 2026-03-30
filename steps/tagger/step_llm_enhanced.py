@@ -5,14 +5,22 @@ Uses LLM for intelligent tagging when available, falls back to NER
 from __future__ import annotations
 from typing import Any, Dict, List
 import logging
+import re
 import requests
 
 logger = logging.getLogger(__name__)
 
 _NER_PIPELINES: Dict[str, Any] = {}
+_PLACEHOLDER_ENTITY_PATTERN = re.compile(r"^(?:SPEAKER|FACE)_\d+$", re.IGNORECASE)
 
 try:
-    from steps.common.tag_utils import dedupe_tokens
+    from steps.common.tag_utils import (
+        dedupe_tokens,
+        is_valid_entity_token,
+        is_valid_tag_token,
+        normalize_entity_token,
+        normalize_tag_token,
+    )
 except Exception as e:
     def dedupe_tokens(tokens):
         seen = set()
@@ -29,6 +37,16 @@ except Exception as e:
             seen.add(key)
             deduped.append(text)
         return deduped
+    def is_valid_entity_token(token):
+        return bool(str(token or "").strip())
+    def is_valid_tag_token(token):
+        return bool(str(token or "").strip())
+    def normalize_entity_token(token):
+        text = str(token or "").strip()
+        return text or None
+    def normalize_tag_token(token):
+        text = str(token or "").strip()
+        return text or None
 
 
 def _get_ner_pipeline(model_id: str) -> Any:
@@ -86,10 +104,34 @@ def _extract_entities_transformers(text: str, cfg: Dict[str, Any]) -> List[str]:
 
 
 def _fallback_entities(text: str) -> List[str]:
-    """Crude fallback: capitalized words as entities"""
-    words = [w.strip(".,;:!?") for w in text.split()]
-    caps = [w for w in words if len(w) > 2 and w[0].isupper()]
-    return list(dict.fromkeys(caps))[:20]
+    """Phrase-based fallback with basic scaffold suppression."""
+    pattern = re.compile(r"\b(?:[A-Z][A-Za-z']{1,}(?:\s+[A-Z][A-Za-z']{1,})*|[A-Z]{2,})\b")
+    matches: List[str] = []
+    for match in pattern.finditer(text):
+        normalized = normalize_entity_token(match.group(0))
+        if not normalized or not is_valid_entity_token(normalized):
+            continue
+        if " " not in normalized:
+            prefix = text[:match.start()]
+            if not prefix.rstrip() or prefix.rstrip().endswith((".", "!", "?")):
+                continue
+        matches.append(normalized)
+    return dedupe_tokens(matches)[:20]
+
+
+def _sanitize_llm_values(values: Any, *, kind: str, limit: int) -> List[str]:
+    if not isinstance(values, list):
+        return []
+    validator = is_valid_entity_token if kind == "entity" else is_valid_tag_token
+    normalizer = normalize_entity_token if kind == "entity" else normalize_tag_token
+    out: List[str] = []
+    for value in dedupe_tokens(values, validator=validator, normalizer=normalizer):
+        if _PLACEHOLDER_ENTITY_PATTERN.fullmatch(value):
+            continue
+        out.append(value)
+        if len(out) >= limit:
+            break
+    return out
 
 
 def _extract_tags_llm(text: str, cfg: Dict[str, Any], context: Dict[str, Any] = None) -> Dict[str, Any]:
@@ -173,10 +215,10 @@ JSON:"""
             try:
                 parsed = json.loads(content)
                 return {
-                    'tags': parsed.get('tags', [])[:5],
-                    'entities': parsed.get('entities', [])[:20],
-                    'themes': parsed.get('themes', [])[:10],
-                    'keywords': parsed.get('keywords', [])[:15],
+                    'tags': _sanitize_llm_values(parsed.get('tags', []), kind='tag', limit=5),
+                    'entities': _sanitize_llm_values(parsed.get('entities', []), kind='entity', limit=20),
+                    'themes': _sanitize_llm_values(parsed.get('themes', []), kind='tag', limit=10),
+                    'keywords': _sanitize_llm_values(parsed.get('keywords', []), kind='tag', limit=15),
                     'method': 'llm'
                 }
             except json.JSONDecodeError:

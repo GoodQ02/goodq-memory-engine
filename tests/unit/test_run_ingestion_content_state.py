@@ -52,6 +52,23 @@ def test_classify_scene_content_signal_with_transcript_text():
     assert state == "signal"
 
 
+def test_classify_scene_content_signal_when_duration_missing_but_transcript_present():
+    run_ingestion = _load_run_ingestion_module()
+
+    scene = {
+        "duration": 12.0,
+        "audio": {
+            "transcript": "still meaningful",
+            "segments": [{"start": 0.0, "end": 1.0, "text": "still meaningful"}],
+            "transcript_meta": {"status": "success"},
+        },
+    }
+
+    state = run_ingestion._classify_scene_content(scene, empty_duration_threshold_sec=1.0)
+
+    assert state == "signal"
+
+
 def test_classify_scene_content_empty_when_success_but_empty_short():
     run_ingestion = _load_run_ingestion_module()
 
@@ -86,6 +103,29 @@ def test_classify_scene_content_processing_error_with_audio_error():
     state = run_ingestion._classify_scene_content(scene, empty_duration_threshold_sec=1.0)
 
     assert state == "processing_error"
+
+
+def test_extract_step_failure_details_preserves_step_and_raw_message():
+    run_ingestion = _load_run_ingestion_module()
+
+    raw_message = (
+        "Step image_embed_dino failed (goodq_image_caption) [returncode=7]\n"
+        "STDOUT: \n"
+        "STDERR: FutureWarning: autocast() is deprecated\n"
+        "RuntimeError: CUDA kernel launch failed"
+    )
+
+    details = run_ingestion._extract_step_failure_details(
+        RuntimeError(raw_message),
+        stage_label="Keyframe",
+    )
+
+    assert details["step"] == "image_embed_dino"
+    assert details["env"] == "goodq_image_caption"
+    assert details["returncode"] == "7"
+    assert details["raw_message"] == raw_message
+    assert "Keyframe step image_embed_dino failed" in details["message"]
+    assert "CUDA kernel launch failed" in details["message"]
 
 
 def test_aggregate_content_summary_counts_and_sums():

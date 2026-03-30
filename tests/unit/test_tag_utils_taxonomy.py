@@ -17,3 +17,14 @@ def test_canonicalize_taxonomy_filters_stopwords_and_merges_typed_entities():
     assert item["tags"] == ["Apartment", "coffee", "tonight"]
     assert item["entities"] == ["Jerry", "George"]
     assert item["vocabulary"] == ["apartment", "coffee", "tonight", "jerry", "george"]
+
+
+def test_canonicalize_taxonomy_rejects_placeholder_entity_labels():
+    item = {
+        "entities": ["SPEAKER_00", "FACE_1", "Jerry"],
+        "ner_entities": [{"name": "SPEAKER_02", "type": "PERSON"}, {"name": "George", "type": "PERSON"}],
+    }
+
+    canonicalize_taxonomy(item)
+
+    assert item["entities"] == ["Jerry", "George"]

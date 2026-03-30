@@ -62,6 +62,17 @@ _ENTITY_TYPE_WEIGHTS = {
     "ORG": 2.0,
     "EVENT": 2.0,
 }
+_TRUSTED_SHORT_ENTITY_TYPES = {"PERSON", "PER", "CHARACTER", "LOCATION", "LOC", "GPE", "PLACE", "FAC"}
+_SEMANTIC_CONTRACTION_PATTERN = re.compile(r".+(?:'m|'re|'s|'ll|'ve|'d|n't)$", re.IGNORECASE)
+_LOW_VALUE_ENTITY_TERMS = {
+    "also", "can", "go", "he", "hold", "it", "listen", "meat", "oh",
+    "really", "shake", "so", "sure", "to", "uh", "want",
+}
+_ENTITY_CONTEXT_REJECTIONS = {
+    "god": {"oh my god", "my god", "god bless"},
+    "justin case": {"a justin case"},
+    "signal": {"mr. signal", "the signal", "this is the signal"},
+}
 
 
 def _get_ner_pipeline(model_id: str) -> Any:
@@ -135,7 +146,14 @@ def _extract_entities_transformers(text: str, cfg: Dict[str, Any]) -> Tuple[List
             word = (e.get("word") or "").strip()
             entity_group = (e.get("entity_group") or e.get("entity") or "").strip().upper()
             normalized = normalize_entity_token(word)
-            if normalized and is_valid_entity_token(normalized):
+            trusted = entity_group in _TRUSTED_SHORT_ENTITY_TYPES
+            if (
+                normalized
+                and is_valid_entity_token(normalized)
+                and _is_meaningful_entity_label(normalized, trusted=trusted)
+                and not _contextually_reject_entity(normalized, text)
+                and _appears_as_entity_span(normalized, text, trusted=trusted)
+            ):
                 labels.append(normalized)
                 key = (normalized.casefold(), entity_group)
                 if key in seen_structured:
@@ -159,9 +177,123 @@ def _fallback_entities(text: str) -> List[str]:
     matches: List[str] = []
     for match in pattern.finditer(text):
         normalized = normalize_entity_token(match.group(0))
-        if normalized and is_valid_entity_token(normalized):
+        token_count = len(_entity_tokens(match.group(0)))
+        if token_count == 1 and _is_sentence_start_match(text, match.start()):
+            continue
+        if (
+            normalized
+            and is_valid_entity_token(normalized)
+            and _is_meaningful_entity_label(normalized, trusted=False)
+            and not _contextually_reject_entity(normalized, text)
+        ):
             matches.append(normalized)
     return dedupe_tokens(matches)[:20]
+
+
+def _entity_tokens(value: str) -> List[str]:
+    return [token.strip("'") for token in re.findall(r"[A-Za-z0-9']+", value) if token.strip("'")]
+
+
+def _is_meaningful_entity_label(value: str, *, trusted: bool) -> bool:
+    if not isinstance(value, str):
+        return False
+    text = value.strip(" ,;:.!?")
+    if not text or not is_valid_entity_token(text):
+        return False
+    if text.casefold() in _LOW_VALUE_ENTITY_TERMS:
+        return False
+    if re.fullmatch(r"(?:SPEAKER|FACE)_\d+", text, re.IGNORECASE):
+        return False
+
+    tokens = _entity_tokens(text)
+    if not tokens:
+        return False
+
+    substantive = [
+        token for token in tokens
+        if len(re.sub(r"[^A-Za-z0-9]+", "", token)) >= 3
+        and is_valid_entity_token(token)
+    ]
+    if not substantive:
+        return False
+
+    if len(tokens) == 1:
+        token = tokens[0]
+        compact = re.sub(r"[^A-Za-z0-9]+", "", token)
+        if len(compact) < 3:
+            return False
+        if "'" in token and _SEMANTIC_CONTRACTION_PATTERN.fullmatch(token):
+            return False
+        if token.isupper() and len(compact) >= 3:
+            return True
+        min_len = 3 if trusted else 4
+        return bool(token[:1].isupper() and len(compact) >= min_len)
+
+    return len(substantive) >= 2
+
+
+def _contextually_reject_entity(label: str, text: str) -> bool:
+    phrases = _ENTITY_CONTEXT_REJECTIONS.get(label.casefold())
+    if not phrases:
+        return False
+    lowered = re.sub(r"[^a-z0-9]+", " ", text.lower())
+    return any(phrase in lowered for phrase in phrases)
+
+
+def _appears_as_entity_span(label: str, text: str, *, trusted: bool) -> bool:
+    if not isinstance(label, str) or not label.strip():
+        return False
+    if not isinstance(text, str) or not text.strip():
+        return False
+
+    tokens = _entity_tokens(label)
+    if not tokens:
+        return False
+
+    escaped = r"\s+".join(re.escape(token) for token in tokens)
+    flags = 0 if (trusted and len(tokens) == 1 and len(tokens[0]) <= 4) else re.IGNORECASE
+    return re.search(rf"\b{escaped}\b", text, flags) is not None
+
+
+def _is_sentence_start_match(text: str, start_index: int) -> bool:
+    prefix = text[:start_index].rstrip()
+    if not prefix:
+        return True
+    return prefix[-1] in ".!?\n"
+
+
+def _filter_ner_entities(text: str, ner_entities: List[Dict[str, str]]) -> List[Dict[str, str]]:
+    filtered: List[Dict[str, str]] = []
+    for entity in ner_entities:
+        if not isinstance(entity, dict):
+            continue
+        name = entity.get("name")
+        ent_type = _coerce_entity_type(entity.get("type"))
+        trusted = ent_type in _TRUSTED_SHORT_ENTITY_TYPES
+        if not (
+            isinstance(name, str)
+            and _is_meaningful_entity_label(name, trusted=trusted)
+            and not _contextually_reject_entity(name, text)
+            and _appears_as_entity_span(name, text, trusted=trusted)
+        ):
+            continue
+        filtered.append(entity)
+    return filtered
+
+
+def _filter_entity_labels(text: str, labels: List[str], *, trusted: bool) -> List[str]:
+    filtered: List[str] = []
+    for label in labels:
+        if not (
+            isinstance(label, str)
+            and _is_meaningful_entity_label(label, trusted=trusted)
+            and not _contextually_reject_entity(label, text)
+        ):
+            continue
+        if trusted and not _appears_as_entity_span(label, text, trusted=trusted):
+            continue
+        filtered.append(label)
+    return filtered
 
 
 def _coerce_entity_type(raw: Any) -> str:
@@ -358,10 +490,12 @@ def tagger(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
             "entity_details": [],
         }
     extracted_entities, ner_entities = _extract_entities_transformers(text, cfg)
+    ner_entities = _filter_ner_entities(text, ner_entities)
+    extracted_entities = _filter_entity_labels(text, extracted_entities, trusted=True)
     fallback_entities = _fallback_entities(text)
     if not extracted_entities:
         extracted_entities = fallback_entities
-    entity_details = _rank_entities(ner_entities, extracted_entities)
+    entity_details = _rank_entities(ner_entities, fallback_entities)
     tag_details = _rank_tags(item, ner_entities, fallback_entities)
     entities = [entry["label"] for entry in entity_details[:10]]
     tags = [entry["label"] for entry in tag_details[:8]]

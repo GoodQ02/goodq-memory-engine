@@ -7,21 +7,34 @@ import os
 import subprocess
 
 from steps.common.memory import append_long_term_summary, store_short_term_summary
-from steps.common.tag_utils import canonicalize_taxonomy
+from steps.common.tag_utils import (
+    canonicalize_taxonomy,
+    is_valid_entity_token,
+    is_valid_tag_token,
+    normalize_entity_token,
+    normalize_tag_token,
+)
 
 
 def _default(val, d):
     return val if val is not None else d
 
 
-def _histogram(items: List[str]) -> Dict[str, int]:
+def _histogram(
+    items: List[str],
+    *,
+    validator=None,
+    normalizer=None,
+) -> Dict[str, int]:
     h: Dict[str, int] = {}
     display_by_key: Dict[str, str] = {}
     for it in items:
         if not it:
             continue
-        text = str(it).strip()
+        text = normalizer(it) if normalizer is not None else str(it).strip()
         if not text:
+            continue
+        if validator is not None and not validator(text):
             continue
         key = text.casefold()
         display = display_by_key.get(key)
@@ -120,8 +133,16 @@ def _summarize_video(entry: Dict[str, Any]) -> Dict[str, Any]:
         "objects_top": sorted(_histogram(objects).items(), key=lambda kv: kv[1], reverse=True)[:10],
         "tags_frames": tags_frames,
         "tags_coverage": (tags_frames / frame_count) if frame_count else 0.0,
-        "tags_top": sorted(_histogram(tags).items(), key=lambda kv: kv[1], reverse=True)[:10],
-        "entities_top": sorted(_histogram(ents).items(), key=lambda kv: kv[1], reverse=True)[:10],
+        "tags_top": sorted(
+            _histogram(tags, validator=is_valid_tag_token, normalizer=normalize_tag_token).items(),
+            key=lambda kv: kv[1],
+            reverse=True,
+        )[:10],
+        "entities_top": sorted(
+            _histogram(ents, validator=is_valid_entity_token, normalizer=normalize_entity_token).items(),
+            key=lambda kv: kv[1],
+            reverse=True,
+        )[:10],
         "unique_entities_count": len(set(ents)),
         "transcript_chars": transcript_len,
         "transcript_words": transcript_words,
@@ -531,8 +552,22 @@ def video_ingest_and_summarize(cfg: Dict[str, Any]) -> Dict[str, Any]:
             "clap_coverage": clap_cov,
             "speaker_count": summ.get("speaker_count"),
             "transcript_words": summ.get("transcript_words"),
-            "top_tags": [{"label": k, "count": v} for k, v in sorted(_histogram(audio_tags).items(), key=lambda kv: kv[1], reverse=True)[:5]],
-            "top_entities": [{"label": k, "count": v} for k, v in sorted(_histogram(audio_entities).items(), key=lambda kv: kv[1], reverse=True)[:5]],
+            "top_tags": [
+                {"label": k, "count": v}
+                for k, v in sorted(
+                    _histogram(audio_tags, validator=is_valid_tag_token, normalizer=normalize_tag_token).items(),
+                    key=lambda kv: kv[1],
+                    reverse=True,
+                )[:5]
+            ],
+            "top_entities": [
+                {"label": k, "count": v}
+                for k, v in sorted(
+                    _histogram(audio_entities, validator=is_valid_entity_token, normalizer=normalize_entity_token).items(),
+                    key=lambda kv: kv[1],
+                    reverse=True,
+                )[:5]
+            ],
         }
 
         summ.update({

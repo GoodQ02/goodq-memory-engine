@@ -26,7 +26,7 @@ import typer
 from steps.common.config_loader import get_runtime_paths, load_configs
 from steps.common.atomic_io import atomic_write_json
 from steps.common.memory import ensure_scene, register_scene_bundle, scene_has_materialized, get_scene_meta, list_scenes_for_video
-from steps.common.tag_utils import canonicalize_taxonomy
+from steps.common.tag_utils import canonicalize_taxonomy, normalize_entity_token
 from steps.common.tool_paths import resolve_ffmpeg, resolve_conda
 from steps.common.step_logger import log_step_run
 from steps.common.profile_config import is_baseline, require_wsl_audio, wsl_audio_auto_enabled
@@ -35,6 +35,72 @@ from scripts.wsl_audio_preflight import probe_wsl_audio_runtime
 
 _OPTIONAL_DIRECT_ENV_FALLBACK_STEPS = {"sentiment", "audio_embed_clap"}
 _PREFER_DIRECT_ENV_PYTHON_ON_WINDOWS = os.name == 'nt'
+_PLACEHOLDER_SPEAKER_PATTERN = re.compile(r"^(?:speaker|face)_\d+$", re.IGNORECASE)
+_PLACEHOLDER_IDENTITY_PATTERN = re.compile(r"^(?:unknown(?:_\d+)?|speaker_\d+|face_\d+|person_\d+)$", re.IGNORECASE)
+
+
+def _is_placeholder_speaker_label(value: Any) -> bool:
+    if not isinstance(value, str):
+        return False
+    return bool(_PLACEHOLDER_SPEAKER_PATTERN.fullmatch(value.strip()))
+
+
+def _scoped_placeholder_speaker_name(scope_value: Any, speaker_label: Any) -> Optional[str]:
+    if not _is_placeholder_speaker_label(speaker_label):
+        return None
+    scope_text = str(scope_value or "").strip()
+    speaker_text = str(speaker_label or "").strip()
+    if not scope_text or not speaker_text:
+        return None
+    scope_token = re.sub(r"[^A-Za-z0-9_]+", "_", scope_text).strip("_") or "scene"
+    speaker_token = re.sub(r"[^A-Za-z0-9_]+", "_", speaker_text).strip("_") or "speaker"
+    return f"{scope_token}__{speaker_token.lower()}"
+
+
+def _resolve_named_person_identity(raw_identity: Any) -> Optional[str]:
+    candidate = raw_identity
+    if isinstance(raw_identity, dict):
+        candidate = (
+            raw_identity.get("name")
+            or raw_identity.get("identity")
+            or raw_identity.get("person")
+            or raw_identity.get("speaker_id")
+            or raw_identity.get("speaker")
+            or raw_identity.get("label")
+        )
+    if candidate is None:
+        return None
+    raw_text = str(candidate).strip()
+    if not raw_text or _PLACEHOLDER_IDENTITY_PATTERN.fullmatch(raw_text):
+        return None
+    normalized = normalize_entity_token(raw_text)
+    if not normalized or _PLACEHOLDER_IDENTITY_PATTERN.fullmatch(normalized):
+        return None
+    return normalized
+
+
+def _resolve_audio_speaker_identity(raw_speaker: Any) -> Optional[tuple[str, str]]:
+    candidate = None
+    if isinstance(raw_speaker, dict):
+        candidate = (
+            raw_speaker.get("name")
+            or raw_speaker.get("identity")
+            or raw_speaker.get("person")
+            or raw_speaker.get("speaker_id")
+            or raw_speaker.get("speaker")
+            or raw_speaker.get("label")
+        )
+    else:
+        candidate = raw_speaker
+
+    raw_text = str(candidate).strip() if candidate is not None else ""
+    if raw_text and _is_placeholder_speaker_label(raw_text):
+        return ("speaker", raw_text)
+
+    normalized = _resolve_named_person_identity(candidate)
+    if not normalized:
+        return None
+    return ("person", normalized)
 
 
 def _patch_typer_help_for_click_8_2() -> None:
@@ -376,6 +442,50 @@ NATIVE_CRASH_RETRY_STEPS: Set[str] = {'tagger', 'sentiment'}
 MAX_NATIVE_STEP_RETRIES: int = 1
 
 
+def _apply_env_overrides(
+    env: Dict[str, str],
+    overrides: Optional[Dict[str, Optional[str]]],
+) -> Dict[str, str]:
+    if not overrides:
+        return env
+    updated = dict(env)
+    for key, value in overrides.items():
+        if value is None:
+            updated.pop(key, None)
+        else:
+            updated[key] = value
+    return updated
+
+
+def _resolve_native_retry_strategy(
+    step_name: str,
+    retry_attempt: int,
+) -> tuple[int, Optional[Dict[str, Optional[str]]], Optional[str]]:
+    if step_name == 'image_embed_dino':
+        if retry_attempt == 1:
+            return (
+                2,
+                {
+                    'GOODQ_DINO_DISABLE_AMP': '1',
+                    'GOODQ_DINO_FORCE_CPU': None,
+                },
+                'gpu_amp_disabled',
+            )
+        if retry_attempt == 2:
+            return (
+                2,
+                {
+                    'GOODQ_DINO_DISABLE_AMP': '1',
+                    'GOODQ_DINO_FORCE_CPU': '1',
+                },
+                'cpu_fallback',
+            )
+        return (2, None, None)
+    if step_name in NATIVE_CRASH_RETRY_STEPS:
+        return (MAX_NATIVE_STEP_RETRIES, None, None)
+    return (0, None, None)
+
+
 
 def _build_knowledge_graph_from_results(results: List[Dict[str, Any]], cfg: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """Build knowledge graph from ingestion results"""
@@ -483,9 +593,20 @@ def _process_keyframe_entities(kg: Any, keyframe: Dict[str, Any], media_id: int,
             if isinstance(face, dict):
                 confidence = face.get('confidence', face.get('score', 1.0))
                 bbox = face.get('bbox', [])
-                face_id = face.get('identity', f'unknown_{idx}')
-                entity_id = kg.add_node('person', f'face_{face_id}', {'face_detected': True}, timestamp)
-                kg.link_node_to_media(entity_id, media_id, confidence, {'bbox': bbox, 'face_index': idx})
+                face_node_id = kg.add_node('face', f'media_{media_id}_face_{idx}', {'face_detected': True}, timestamp)
+                kg.link_node_to_media(face_node_id, media_id, confidence, {'bbox': bbox, 'face_index': idx})
+
+                identity_name = _resolve_named_person_identity(face)
+                if identity_name:
+                    person_node_id = kg.add_node('person', identity_name, {'face_detected': True}, timestamp)
+                    kg.link_node_to_media(person_node_id, media_id, confidence, {'bbox': bbox, 'face_index': idx})
+                    kg.add_edge(
+                        face_node_id,
+                        person_node_id,
+                        'identity_evidence',
+                        float(confidence),
+                        {'source': 'scene_face_detection'},
+                    )
     
     # Caption/Description
     caption = keyframe.get('caption')
@@ -526,6 +647,8 @@ def _process_keyframe_entities(kg: Any, keyframe: Dict[str, Any], media_id: int,
 
 def _process_audio_entities(kg: Any, audio: Dict[str, Any], media_id: int, timestamp: float) -> None:
     """Extract and add entities from audio data"""
+    scene_scope = audio.get('scene_id') or f'media_{media_id}'
+
     # Transcript
     transcript = audio.get('transcript')
     if transcript:
@@ -572,29 +695,67 @@ def _process_audio_entities(kg: Any, audio: Dict[str, Any], media_id: int, times
     if isinstance(speaker_transcript, list):
         for segment in speaker_transcript:
             if isinstance(segment, dict):
-                speaker_id = segment.get('speaker')
+                speaker_identity = _resolve_audio_speaker_identity(segment)
                 text = segment.get('text', '')
-                if speaker_id:
-                    entity_id = kg.add_node('person', f'speaker_{speaker_id}', {'transcript_sample': text[:100]}, timestamp)
+                if speaker_identity:
+                    node_type, speaker_name = speaker_identity
+                    node_name = speaker_name
+                    node_props = {'transcript_sample': text[:100]}
+                    if node_type == 'speaker':
+                        scoped_name = _scoped_placeholder_speaker_name(scene_scope, speaker_name)
+                        if scoped_name:
+                            node_name = scoped_name
+                            node_props['speaker_label'] = speaker_name
+                            node_props['scene_id'] = scene_scope
+                    entity_id = kg.add_node(node_type, node_name, node_props, timestamp)
                     kg.link_node_to_media(entity_id, media_id, 0.8, {
                         'start': segment.get('start'),
                         'end': segment.get('end'),
                         'text': text
                     })
+                    if node_type == 'person':
+                        speaker_node_id = kg.add_node('speaker', speaker_name, {'transcript_sample': text[:100]}, timestamp)
+                        kg.link_node_to_media(speaker_node_id, media_id, 0.8, {
+                            'start': segment.get('start'),
+                            'end': segment.get('end'),
+                            'text': text
+                        })
+                        kg.add_edge(
+                            speaker_node_id,
+                            entity_id,
+                            'identity_evidence',
+                            0.8,
+                            {'source': 'speaker_transcript'},
+                        )
     
     # Fallback: Speaker diarization (if speaker_transcript not available)
     if not speaker_transcript:
         speakers = audio.get('speakers', [])
         if isinstance(speakers, list):
             for speaker in speakers:
-                if isinstance(speaker, str):
-                    entity_id = kg.add_node('person', f'speaker_{speaker}', {}, timestamp)
+                speaker_identity = _resolve_audio_speaker_identity(speaker)
+                if speaker_identity:
+                    node_type, speaker_name = speaker_identity
+                    node_name = speaker_name
+                    node_props = {}
+                    if node_type == 'speaker':
+                        scoped_name = _scoped_placeholder_speaker_name(scene_scope, speaker_name)
+                        if scoped_name:
+                            node_name = scoped_name
+                            node_props['speaker_label'] = speaker_name
+                            node_props['scene_id'] = scene_scope
+                    entity_id = kg.add_node(node_type, node_name, node_props, timestamp)
                     kg.link_node_to_media(entity_id, media_id, 0.7)
-                elif isinstance(speaker, dict):
-                    speaker_id = speaker.get('speaker', speaker.get('label'))
-                    if speaker_id:
-                        entity_id = kg.add_node('person', f'speaker_{speaker_id}', {}, timestamp)
-                        kg.link_node_to_media(entity_id, media_id, 0.7)
+                    if node_type == 'person':
+                        speaker_node_id = kg.add_node('speaker', speaker_name, {}, timestamp)
+                        kg.link_node_to_media(speaker_node_id, media_id, 0.7)
+                        kg.add_edge(
+                            speaker_node_id,
+                            entity_id,
+                            'identity_evidence',
+                            0.7,
+                            {'source': 'speaker_ids'},
+                        )
     
     # Entities (named entities from transcript)
     entities = audio.get('entities', [])
@@ -2272,6 +2433,73 @@ def _scene_has_processing_error(scene: Dict[str, Any]) -> bool:
     return False
 
 
+_STEP_FAILURE_RE = re.compile(
+    r"^Step (?P<step>[A-Za-z0-9_]+) failed \((?P<env>[^)]+)\)"
+    r"(?: \[returncode=(?P<returncode>-?\d+)\])?",
+    re.MULTILINE,
+)
+
+
+def _tail_text(value: Any, *, max_chars: int = 1200) -> str:
+    text = str(value or "").strip()
+    if len(text) <= max_chars:
+        return text
+    return text[-max_chars:]
+
+
+def _extract_labeled_output(raw_text: str, label: str) -> str:
+    if label == "STDOUT":
+        pattern = r"(?:^|\n)STDOUT:(.*?)(?=\nSTDERR:|\Z)"
+    else:
+        pattern = r"(?:^|\n)STDERR:(.*)\Z"
+    match = re.search(pattern, raw_text, flags=re.DOTALL)
+    if not match:
+        return ""
+    return str(match.group(1) or "").strip()
+
+
+def _extract_step_failure_details(error: Any, *, stage_label: str = "Step") -> Dict[str, Optional[str]]:
+    raw_message = str(error or "").strip()
+    details: Dict[str, Optional[str]] = {
+        "step": None,
+        "env": None,
+        "returncode": None,
+        "raw_message": raw_message or None,
+        "message": None,
+    }
+    if not raw_message:
+        details["message"] = f"{stage_label} failed with no error details"
+        return details
+
+    match = _STEP_FAILURE_RE.search(raw_message)
+    if match:
+        details["step"] = match.group("step")
+        details["env"] = match.group("env")
+        details["returncode"] = match.group("returncode")
+
+    stdout_tail = _tail_text(_extract_labeled_output(raw_message, "STDOUT"))
+    stderr_tail = _tail_text(_extract_labeled_output(raw_message, "STDERR"))
+
+    message_parts: List[str] = []
+    if details["step"] and details["env"]:
+        headline = f"{stage_label} step {details['step']} failed ({details['env']})"
+        if details["returncode"]:
+            headline += f" [returncode={details['returncode']}]"
+        message_parts.append(headline)
+    else:
+        message_parts.append(_tail_text(raw_message, max_chars=800))
+
+    if stdout_tail:
+        message_parts.append(f"STDOUT tail: {stdout_tail}")
+    if stderr_tail:
+        message_parts.append(f"STDERR tail: {stderr_tail}")
+    if match and not stdout_tail and not stderr_tail:
+        message_parts.append("No stdout/stderr captured from failing step")
+
+    details["message"] = "\n".join(message_parts)
+    return details
+
+
 def _classify_scene_content(
     scene: Dict[str, Any],
     *,
@@ -2292,11 +2520,9 @@ def _classify_scene_content(
         if isinstance(transcript_meta, dict)
         else ''
     )
-    transcript_duration = (
-        _coerce_float(transcript_meta.get('duration'))
-        if isinstance(transcript_meta, dict)
-        else None
-    )
+    transcript_duration = None
+    if isinstance(transcript_meta, dict) and transcript_meta.get('duration') is not None:
+        transcript_duration = _coerce_float(transcript_meta.get('duration'))
     transcript_text = _extract_transcript_text(audio_payload)
     segments = _extract_segments(audio_payload)
     has_meaningful_segments = _has_meaningful_audio_segments(segments)
@@ -2313,7 +2539,7 @@ def _classify_scene_content(
     if duration < empty_duration_threshold_sec:
         return 'empty'
 
-    if transcript_status == 'success' and (not transcript_text or transcript_duration == 0.0):
+    if transcript_status == 'success' and not transcript_text and transcript_duration == 0.0:
         return 'empty'
 
     if audio_present and not transcript_text and not has_meaningful_segments:
@@ -2677,6 +2903,8 @@ def _run_step(
     _native_retry_attempt: int = 0,
     _direct_env_fallback_attempt: int = 0,
     _prefer_direct_env_python: bool = False,
+    _step_env_overrides: Optional[Dict[str, Optional[str]]] = None,
+    _native_retry_mode: Optional[str] = None,
 ) -> Dict[str, Any]:
     work_env = _base_env(cfg_json)
     
@@ -2829,6 +3057,7 @@ def _run_step(
             if existing_path:
                 path_entries.append(existing_path)
             step_env['PATH'] = os.pathsep.join(path_entries)
+        step_env = _apply_env_overrides(step_env, _step_env_overrides)
 
         start_ts = time.perf_counter()
         observer = _observer()
@@ -2850,6 +3079,8 @@ def _run_step(
         observer_meta["native_retry_attempt"] = int(_native_retry_attempt)
         observer_meta["launcher"] = launcher_kind
         observer_meta["direct_env_fallback_attempt"] = int(_direct_env_fallback_attempt)
+        if _native_retry_mode:
+            observer_meta["native_retry_mode"] = _native_retry_mode
         if VERBOSE:
             typer.echo(f'[step] -> {step_name} ({env_name}) [{launcher_kind}]')
         stop_heartbeat = (lambda: None)
@@ -2922,6 +3153,10 @@ def _run_step(
                                 cfg_json,
                                 _healer_retry_attempt=_healer_retry_attempt + 1,
                                 _native_retry_attempt=_native_retry_attempt,
+                                _direct_env_fallback_attempt=_direct_env_fallback_attempt,
+                                _prefer_direct_env_python=_prefer_direct_env_python,
+                                _step_env_overrides=_step_env_overrides,
+                                _native_retry_mode=_native_retry_mode,
                             )
                     else:
                         typer.echo(f"[heal] [FAIL] Could not heal timeout: {healing_result.get('recommendation', 'No strategy')}", err=True)
@@ -2977,9 +3212,15 @@ def _run_step(
                     _native_retry_attempt=_native_retry_attempt,
                     _direct_env_fallback_attempt=1,
                     _prefer_direct_env_python=True,
+                    _step_env_overrides=_step_env_overrides,
+                    _native_retry_mode=_native_retry_mode,
                 )
 
-            error_msg = f"Step {step_name} failed ({env_name})\nSTDOUT: {stdout}\nSTDERR: {stderr}"
+            error_msg = (
+                f"Step {step_name} failed ({env_name}) [returncode={result.returncode}]\n"
+                f"STDOUT: {stdout}\n"
+                f"STDERR: {stderr}"
+            )
             if observer:
                 observer.step_error(
                     observer_step,
@@ -2988,11 +3229,11 @@ def _run_step(
                 )
 
             is_native_crash = _is_windows_native_crash(result.returncode)
-            if (
-                step_name in NATIVE_CRASH_RETRY_STEPS
-                and is_native_crash
-                and _native_retry_attempt < MAX_NATIVE_STEP_RETRIES
-            ):
+            retry_limit, retry_env_overrides, retry_mode = _resolve_native_retry_strategy(
+                step_name,
+                _native_retry_attempt + 1,
+            )
+            if is_native_crash and _native_retry_attempt < retry_limit:
                 retry_attempt = _native_retry_attempt + 1
                 env_fingerprint_line: Optional[str] = None
                 for stderr_line in stderr.splitlines():
@@ -3008,12 +3249,13 @@ def _run_step(
                 )
                 status_code = _normalize_windows_status_code(result.returncode)
                 logger.warning(
-                    "[RUN] Native crash detected for step=%s return_code=%s status_code=0x%08X retry=%s/%s",
+                    "[RUN] Native crash detected for step=%s return_code=%s status_code=0x%08X retry=%s/%s mode=%s",
                     step_name,
                     result.returncode,
                     status_code,
                     retry_attempt,
-                    MAX_NATIVE_STEP_RETRIES,
+                    retry_limit,
+                    retry_mode or "default",
                 )
                 if env_fingerprint_line:
                     logger.warning(
@@ -3025,7 +3267,7 @@ def _run_step(
                     typer.echo(
                         (
                             f"[retry] [WARN] Native crash for {step_name} "
-                            f"(0x{status_code:08X}); retrying once"
+                            f"(0x{status_code:08X}); retrying via {retry_mode or 'default'}"
                         ),
                         err=True,
                     )
@@ -3036,6 +3278,10 @@ def _run_step(
                     cfg_json,
                     _healer_retry_attempt=_healer_retry_attempt,
                     _native_retry_attempt=retry_attempt,
+                    _direct_env_fallback_attempt=_direct_env_fallback_attempt,
+                    _prefer_direct_env_python=_prefer_direct_env_python,
+                    _step_env_overrides=retry_env_overrides,
+                    _native_retry_mode=retry_mode,
                 )
 
             if _control_agent_runtime_enabled():
@@ -3067,6 +3313,10 @@ def _run_step(
                                 cfg_json,
                                 _healer_retry_attempt=_healer_retry_attempt + 1,
                                 _native_retry_attempt=_native_retry_attempt,
+                                _direct_env_fallback_attempt=_direct_env_fallback_attempt,
+                                _prefer_direct_env_python=_prefer_direct_env_python,
+                                _step_env_overrides=_step_env_overrides,
+                                _native_retry_mode=_native_retry_mode,
                             )
                     else:
                         typer.echo("[heal] [FAIL] Could not heal failure", err=True)
@@ -4277,6 +4527,9 @@ def run(
             frame_info: Optional[Dict[str, Any]] = None
             audio_info: Optional[Dict[str, Any]] = None
             frame_error: Optional[str] = None
+            frame_error_raw: Optional[str] = None
+            frame_error_step: Optional[str] = None
+            frame_error_env: Optional[str] = None
             audio_error: Optional[str] = None
 
             # Check if we should skip based on dedupe (unless force_reprocess is enabled)
@@ -4319,9 +4572,14 @@ def run(
                         frame_info = _process_frame(cfg_json, ffmpeg, video_path, scene, frame_dir, video_hash, scene_id)
                         typer.echo(f'  [OK] Keyframe processed')
                     except Exception as exc:  # noqa: BLE001
-                        frame_error = str(exc)
+                        frame_failure = _extract_step_failure_details(exc, stage_label='Keyframe')
+                        frame_error = frame_failure.get('message') or str(exc)
+                        frame_error_raw = frame_failure.get('raw_message')
+                        frame_error_step = frame_failure.get('step')
+                        frame_error_env = frame_failure.get('env')
+                        step_suffix = f" step={frame_error_step}" if frame_error_step else ""
                         typer.echo(
-                            f'[ERROR] Frame/image processing failed for scene {scene_index}: {frame_error}',
+                            f'[ERROR] Keyframe processing failed for scene {scene_index}{step_suffix}: {frame_error}',
                             err=True,
                         )
 
@@ -4442,6 +4700,12 @@ def run(
             error_payload = {}
             if frame_error:
                 error_payload['frame'] = frame_error
+                if frame_error_raw and frame_error_raw != frame_error:
+                    error_payload['frame_raw'] = frame_error_raw
+                if frame_error_step:
+                    error_payload['frame_step'] = frame_error_step
+                if frame_error_env:
+                    error_payload['frame_env'] = frame_error_env
             if audio_error:
                 error_payload['audio'] = audio_error
 
@@ -4598,6 +4862,12 @@ def run(
                     scene_record['keyframe'] = frame_info
             elif frame_error:
                 scene_record['keyframe_error'] = frame_error
+                if frame_error_raw and frame_error_raw != frame_error:
+                    scene_record['keyframe_error_raw'] = frame_error_raw
+                if frame_error_step:
+                    scene_record['keyframe_error_step'] = frame_error_step
+                if frame_error_env:
+                    scene_record['keyframe_error_env'] = frame_error_env
             if audio_info:
                 formatted_audio = _merge_step_output(audio_info)
                 if formatted_audio:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 import re
@@ -32,6 +33,10 @@ _TRANSCRIPT_ENTITY_SOURCES = {
 _PERSON_ENTITY_TYPES = {"PERSON", "PER", "CHARACTER"}
 _LOCATION_ENTITY_TYPES = {"LOCATION", "LOC", "GPE", "PLACE", "FAC"}
 _CO_OCCURRENCE_NODE_TYPES = {"person", "location", "speaker", "object", "audio_event"}
+_PLACEHOLDER_SPEAKER_PATTERN = re.compile(r"^(?:speaker|face)_\d+$", re.IGNORECASE)
+_PLACEHOLDER_IDENTITY_PATTERN = re.compile(r"^(?:unknown(?:_\d+)?|speaker_\d+|face_\d+|person_\d+)$", re.IGNORECASE)
+_IDENTITY_SUPPORT_MIN_SCENES = 2
+_WEAK_IDENTITY_NAME_REJECTIONS = {"God"}
 
 
 def _cfg_get(cfg: Optional[Dict[str, Any]], path: str, default: Any = None) -> Any:
@@ -117,6 +122,42 @@ def _is_likely_character_name(name: str) -> bool:
     return _is_valid_entity_token(token)
 
 
+def _is_weak_identity_promotion_name(name: str) -> bool:
+    normalized = normalize_entity_name(name)
+    if not normalized:
+        return False
+    if normalized in _WEAK_IDENTITY_NAME_REJECTIONS:
+        return False
+    parts = [part for part in normalized.split() if part]
+    if len(parts) == 1:
+        compact = re.sub(r"[^A-Za-z0-9]+", "", parts[0])
+        if len(compact) < 3:
+            return False
+    return _is_valid_entity_token(normalized)
+
+
+def _resolve_identity_name(raw: Any) -> str:
+    candidate = raw
+    if isinstance(raw, dict):
+        candidate = (
+            raw.get("name")
+            or raw.get("identity")
+            or raw.get("person")
+            or raw.get("speaker_id")
+            or raw.get("speaker")
+            or raw.get("label")
+        )
+    if not isinstance(candidate, str) or not candidate.strip():
+        return ""
+    raw_text = candidate.strip()
+    if _PLACEHOLDER_IDENTITY_PATTERN.fullmatch(raw_text):
+        return ""
+    normalized = normalize_entity_name(raw_text)
+    if not normalized or _PLACEHOLDER_IDENTITY_PATTERN.fullmatch(normalized):
+        return ""
+    return normalized if _is_valid_entity_token(normalized) else ""
+
+
 def _is_meaningful_generic_entity(name: str) -> bool:
     raw = name.strip()
     if not raw or "##" in raw:
@@ -141,6 +182,147 @@ def _is_meaningful_generic_entity(name: str) -> bool:
         and token.casefold() not in _ENTITY_STOPWORDS
     ]
     return len(substantive) >= 2
+
+
+def _is_placeholder_speaker_label(value: Any) -> bool:
+    if not isinstance(value, str):
+        return False
+    text = value.strip()
+    if not text:
+        return False
+    if text.casefold() in {"unknown", "none"}:
+        return True
+    return bool(_PLACEHOLDER_SPEAKER_PATTERN.fullmatch(text))
+
+
+def _scene_scoped_placeholder_speaker_name(scene_identifier: Any, speaker_label: Any) -> Optional[str]:
+    if not _is_placeholder_speaker_label(speaker_label):
+        return None
+    scene_text = str(scene_identifier or "").strip()
+    speaker_text = str(speaker_label or "").strip()
+    if not scene_text or not speaker_text:
+        return None
+    scene_token = re.sub(r"[^A-Za-z0-9_]+", "_", scene_text).strip("_") or "scene"
+    speaker_token = re.sub(r"[^A-Za-z0-9_]+", "_", speaker_text).strip("_") or "speaker"
+    return f"{scene_token}__{speaker_token.lower()}"
+
+
+def _parse_edge_properties(raw: Any) -> Dict[str, Any]:
+    if not isinstance(raw, str) or not raw.strip():
+        return {}
+    try:
+        parsed = json.loads(raw)
+    except Exception:
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
+
+
+def _has_conflicting_identity_support(
+    kg: KnowledgeGraph,
+    *,
+    source_id: int,
+    target_id: int,
+) -> bool:
+    cur = kg.conn.cursor()
+    row = cur.execute(
+        """
+        SELECT COUNT(*)
+        FROM edges
+        WHERE source_id = ?
+          AND target_id != ?
+          AND edge_type IN ('identity_evidence', 'identity_supported')
+        """,
+        (int(source_id), int(target_id)),
+    ).fetchone()
+    return bool(row and int(row[0] or 0) > 0)
+
+
+def _accumulate_identity_candidate_support(kg: KnowledgeGraph) -> int:
+    cur = kg.conn.cursor()
+    rows = cur.execute(
+        """
+        SELECT e.source_id, e.target_id, e.properties, n.node_type AS source_node_type
+        FROM edges e
+        JOIN nodes n ON n.id = e.source_id
+        WHERE e.edge_type = 'identity_candidate'
+          AND n.node_type IN ('speaker', 'face')
+        """
+    ).fetchall()
+
+    grouped: Dict[tuple[int, str, str], Dict[str, Any]] = {}
+    for row in rows:
+        source_id = int(row["source_id"])
+        target_id = int(row["target_id"])
+        if _has_conflicting_identity_support(kg, source_id=source_id, target_id=target_id):
+            continue
+
+        props = _parse_edge_properties(row["properties"])
+        scene_id = props.get("scene_id")
+        source_rule = props.get("source")
+        source_node_type = str(row["source_node_type"])
+        if not isinstance(scene_id, str) or not scene_id.strip():
+            continue
+        if not isinstance(source_rule, str) or not source_rule.strip():
+            continue
+
+        group_key = (target_id, source_node_type, source_rule.strip())
+        bundle = grouped.setdefault(
+            group_key,
+            {
+                "scene_ids": set(),
+                "rows": [],
+            },
+        )
+        bundle["scene_ids"].add(scene_id.strip())
+        bundle["rows"].append(
+            {
+                "source_id": source_id,
+                "target_id": target_id,
+                "scene_id": scene_id.strip(),
+                "source_node_type": source_node_type,
+                "source_rule": source_rule.strip(),
+                "properties": props,
+            }
+        )
+
+    promoted = 0
+    for (_target_id, source_node_type, source_rule), bundle in grouped.items():
+        scene_ids = sorted(bundle["scene_ids"])
+        if len(scene_ids) < _IDENTITY_SUPPORT_MIN_SCENES:
+            continue
+
+        evidence_strength = "strong" if len(scene_ids) >= 3 else "moderate"
+        support_weight = min(0.8, 0.55 + (0.1 * max(0, len(scene_ids) - 2)))
+
+        for row in bundle["rows"]:
+            props = row["properties"]
+            support_props: Dict[str, Any] = {
+                "source": "identity_candidate_accumulator",
+                "candidate_source": source_rule,
+                "source_node_type": source_node_type,
+                "scene_id": row["scene_id"],
+                "media_id": props.get("media_id"),
+                "supporting_scene_count": len(scene_ids),
+                "supporting_scene_ids": scene_ids,
+                "evidence_strength": evidence_strength,
+            }
+            if props.get("speaker_label"):
+                support_props["speaker_label"] = props.get("speaker_label")
+            if props.get("face_index") is not None:
+                support_props["face_index"] = props.get("face_index")
+            if props.get("bbox") is not None:
+                support_props["bbox"] = props.get("bbox")
+
+            kg.add_edge(
+                source_id=row["source_id"],
+                target_id=row["target_id"],
+                edge_type="identity_supported",
+                weight=support_weight,
+                properties=support_props,
+            )
+            promoted += 1
+
+    return promoted
 
 
 def _entity_type_priority(ent_type: Optional[str]) -> int:
@@ -383,8 +565,44 @@ def _add_scene_entities(kg: KnowledgeGraph, media_id: int, scene_data: Dict[str,
         context={"start": scene_data.get("start"), "end": scene_data.get("end")},
     )
     person_node_ids: set[int] = set()
+    person_node_names: Dict[int, str] = {}
     location_node_ids: set[int] = set()
     speaker_node_ids: set[int] = set()
+    face_node_ids: set[int] = set()
+    anonymous_face_node_ids: set[int] = set()
+    anonymous_speaker_node_ids: set[int] = set()
+    named_speaker_node_ids: set[int] = set()
+    anonymous_face_context: Dict[int, Dict[str, Any]] = {}
+    anonymous_speaker_context: Dict[int, Dict[str, Any]] = {}
+
+    def add_structural_speaker(
+        speaker_label: str,
+        *,
+        confidence: float,
+        props: Optional[Dict[str, Any]] = None,
+        context: Optional[Dict[str, Any]] = None,
+    ) -> Optional[int]:
+        scoped_name = _scene_scoped_placeholder_speaker_name(scene_identifier, speaker_label)
+        if not scoped_name:
+            return None
+        speaker_props = dict(props or {})
+        speaker_props.setdefault("speaker_label", normalize_entity_name(str(speaker_label)))
+        speaker_props.setdefault("scene_id", scene_identifier)
+        node_id = kg.add_node(
+            node_type="speaker",
+            name=scoped_name,
+            properties=speaker_props,
+            timestamp=ts,
+        )
+        kg.link_node_to_media(
+            node_id=node_id,
+            media_id=media_id,
+            confidence=float(confidence),
+            context=context or {},
+        )
+        counts["nodes_added"] += 1
+        counts["links_added"] += 1
+        return int(node_id)
 
     for det in scene_data.get("objects", []) or []:
         if not isinstance(det, dict):
@@ -401,21 +619,46 @@ def _add_scene_entities(kg: KnowledgeGraph, media_id: int, scene_data: Dict[str,
         )
 
     for idx, face in enumerate(scene_data.get("faces", []) or []):
-        if isinstance(face, dict):
-            identity = face.get("identity")
-            if isinstance(identity, str) and identity.strip():
-                face_name = f"face_{identity.strip()}"
-            else:
-                face_name = f"face_{idx}"
-            node_id = add_and_link(
-                "person",
-                face_name,
-                confidence=float(face.get("confidence", face.get("score", 0.8)) or 0.8),
-                props={"source": "scene_face_detection"},
-                context={"bbox": face.get("bbox")},
+        if not isinstance(face, dict):
+            continue
+        face_node_name = f"{scene_identifier.strip()}:face_{idx}"
+        face_confidence = float(face.get("confidence", face.get("score", 0.8)) or 0.8)
+        face_node_id = add_and_link(
+            "face",
+            face_node_name,
+            confidence=face_confidence,
+            props={"source": "scene_face_detection"},
+            context={"bbox": face.get("bbox"), "face_index": idx},
+        )
+        if face_node_id is not None:
+            face_node_ids.add(face_node_id)
+        identity_name = _resolve_identity_name(face)
+        if face_node_id is None or not identity_name:
+            if face_node_id is not None:
+                anonymous_face_node_ids.add(face_node_id)
+                anonymous_face_context[face_node_id] = {
+                    "face_index": idx,
+                    "bbox": face.get("bbox"),
+                }
+            continue
+        person_node_id = add_and_link(
+            "person",
+            identity_name,
+            confidence=face_confidence,
+            props={"source": "scene_face_identity"},
+            context={"bbox": face.get("bbox"), "face_index": idx},
+        )
+        if person_node_id is not None:
+            person_node_ids.add(person_node_id)
+            person_node_names[person_node_id] = identity_name
+            kg.add_edge(
+                face_node_id,
+                person_node_id,
+                "identity_evidence",
+                weight=face_confidence,
+                properties={"source": "scene_face_detection"},
             )
-            if node_id is not None:
-                person_node_ids.add(node_id)
+            counts["edges_added"] += 1
 
     caption = scene_data.get("caption")
     if isinstance(caption, str) and caption.strip():
@@ -440,6 +683,7 @@ def _add_scene_entities(kg: KnowledgeGraph, media_id: int, scene_data: Dict[str,
             node_id = add_and_link("person", ent_name, confidence=0.7, props=props)
             if node_id is not None:
                 person_node_ids.add(node_id)
+                person_node_names[node_id] = ent_name
                 bump_node_occurrences("person", ent_name, mentions, props=props)
             continue
         if node_type == "location":
@@ -502,35 +746,91 @@ def _add_scene_entities(kg: KnowledgeGraph, media_id: int, scene_data: Dict[str,
             continue
         speaker_clean = normalize_entity_name(speaker)
         emitted_speaker_ids.add(speaker_clean)
-        speaker_node_id = add_and_link(
-            "speaker",
-            speaker_clean,
-            confidence=0.8,
-            props={"source": "speaker_transcript"},
-            context={"start": seg.get("start"), "end": seg.get("end"), "text": seg.get("text")},
-        )
+        if _is_placeholder_speaker_label(speaker_clean):
+            speaker_node_id = add_structural_speaker(
+                speaker_clean,
+                confidence=0.8,
+                props={"source": "speaker_transcript"},
+                context={"start": seg.get("start"), "end": seg.get("end"), "text": seg.get("text")},
+            )
+        else:
+            speaker_node_id = add_and_link(
+                "speaker",
+                speaker_clean,
+                confidence=0.8,
+                props={"source": "speaker_transcript"},
+                context={"start": seg.get("start"), "end": seg.get("end"), "text": seg.get("text")},
+            )
         if speaker_node_id is not None:
             speaker_node_ids.add(speaker_node_id)
+            if _is_placeholder_speaker_label(speaker_clean):
+                anonymous_speaker_node_ids.add(speaker_node_id)
+                anonymous_speaker_context[speaker_node_id] = {
+                    "speaker_label": speaker_clean,
+                    "source": "speaker_transcript",
+                }
+            else:
+                named_speaker_node_ids.add(speaker_node_id)
 
-        person_node_id = add_and_link(
-            "person",
-            f"speaker_{speaker_clean}",
-            confidence=0.8,
-            props={"source": "speaker_transcript"},
-            context={"start": seg.get("start"), "end": seg.get("end"), "text": seg.get("text")},
-        )
-        if person_node_id is not None:
-            person_node_ids.add(person_node_id)
+        if not _is_placeholder_speaker_label(speaker_clean):
+            person_node_id = add_and_link(
+                "person",
+                speaker_clean,
+                confidence=0.8,
+                props={"source": "speaker_transcript"},
+                context={"start": seg.get("start"), "end": seg.get("end"), "text": seg.get("text")},
+            )
+            if person_node_id is not None:
+                person_node_ids.add(person_node_id)
+                person_node_names[person_node_id] = speaker_clean
+                if speaker_node_id is not None:
+                    kg.add_edge(
+                        speaker_node_id,
+                        person_node_id,
+                        "identity_evidence",
+                        weight=0.8,
+                        properties={"source": "speaker_transcript"},
+                    )
+                    counts["edges_added"] += 1
 
     for speaker_id in _extract_speaker_ids(scene_data):
         if speaker_id in emitted_speaker_ids:
             continue
-        speaker_node_id = add_and_link("speaker", speaker_id, confidence=0.7, props={"source": "speaker_ids"})
+        if _is_placeholder_speaker_label(speaker_id):
+            speaker_node_id = add_structural_speaker(
+                speaker_id,
+                confidence=0.7,
+                props={"source": "speaker_ids"},
+            )
+        else:
+            speaker_node_id = add_and_link("speaker", speaker_id, confidence=0.7, props={"source": "speaker_ids"})
         if speaker_node_id is not None:
             speaker_node_ids.add(speaker_node_id)
-        person_node_id = add_and_link("person", f"speaker_{speaker_id}", confidence=0.7, props={"source": "speaker_ids"})
-        if person_node_id is not None:
-            person_node_ids.add(person_node_id)
+            if _is_placeholder_speaker_label(speaker_id):
+                anonymous_speaker_node_ids.add(speaker_node_id)
+                anonymous_speaker_context.setdefault(
+                    speaker_node_id,
+                    {
+                        "speaker_label": speaker_id,
+                        "source": "speaker_ids",
+                    },
+                )
+            else:
+                named_speaker_node_ids.add(speaker_node_id)
+        if not _is_placeholder_speaker_label(speaker_id):
+            person_node_id = add_and_link("person", speaker_id, confidence=0.7, props={"source": "speaker_ids"})
+            if person_node_id is not None:
+                person_node_ids.add(person_node_id)
+                person_node_names[person_node_id] = speaker_id
+                if speaker_node_id is not None:
+                    kg.add_edge(
+                        speaker_node_id,
+                        person_node_id,
+                        "identity_evidence",
+                        weight=0.7,
+                        properties={"source": "speaker_ids"},
+                    )
+                    counts["edges_added"] += 1
 
     for event in scene_data.get("music_events", []) or []:
         if not isinstance(event, dict):
@@ -587,6 +887,49 @@ def _add_scene_entities(kg: KnowledgeGraph, media_id: int, scene_data: Dict[str,
             properties={"scene_id": scene_identifier, "media_id": media_id},
         )
         counts["edges_added"] += 1
+
+    if len(person_node_ids) == 1:
+        sole_person_node_id = next(iter(person_node_ids))
+        allow_weak_identity_promotion = _is_weak_identity_promotion_name(
+            person_node_names.get(sole_person_node_id, "")
+        )
+        if allow_weak_identity_promotion and len(anonymous_speaker_node_ids) == 1 and not named_speaker_node_ids:
+            speaker_node_id = next(iter(anonymous_speaker_node_ids))
+            speaker_meta = anonymous_speaker_context.get(speaker_node_id, {})
+            kg.add_edge(
+                source_id=speaker_node_id,
+                target_id=sole_person_node_id,
+                edge_type="identity_candidate",
+                weight=0.35,
+                properties={
+                    "source": "scene_single_person_single_speaker",
+                    "scene_id": scene_identifier,
+                    "media_id": media_id,
+                    "evidence_strength": "weak",
+                    "speaker_label": speaker_meta.get("speaker_label"),
+                },
+            )
+            counts["edges_added"] += 1
+        if allow_weak_identity_promotion and len(face_node_ids) == 1 and len(anonymous_face_node_ids) == 1:
+            face_node_id = next(iter(anonymous_face_node_ids))
+            face_meta = anonymous_face_context.get(face_node_id, {})
+            kg.add_edge(
+                source_id=face_node_id,
+                target_id=sole_person_node_id,
+                edge_type="identity_candidate",
+                weight=0.3,
+                properties={
+                    "source": "scene_single_person_single_face",
+                    "scene_id": scene_identifier,
+                    "media_id": media_id,
+                    "evidence_strength": "weak",
+                    "face_index": face_meta.get("face_index"),
+                    "bbox": face_meta.get("bbox"),
+                },
+            )
+            counts["edges_added"] += 1
+
+    counts["edges_added"] += _accumulate_identity_candidate_support(kg)
 
     person_ids_sorted = sorted(person_node_ids)
     for left_idx, left_node_id in enumerate(person_ids_sorted):

@@ -6,8 +6,42 @@ from typing import Dict, Any, List, Optional
 import logging
 import requests
 import json
+import re
 
 logger = logging.getLogger(__name__)
+_PLACEHOLDER_SPEAKER_PATTERN = re.compile(r"^(?:speaker|face)_\d+$", re.IGNORECASE)
+
+
+def _speaker_prompt_summary(speakers: List[Any]) -> str:
+    names: List[str] = []
+    anonymous_ids: set[str] = set()
+    for speaker in speakers or []:
+        candidate = speaker
+        if isinstance(speaker, dict):
+            candidate = (
+                speaker.get("name")
+                or speaker.get("identity")
+                or speaker.get("person")
+                or speaker.get("speaker_id")
+                or speaker.get("speaker")
+                or speaker.get("label")
+            )
+        if not isinstance(candidate, str) or not candidate.strip():
+            continue
+        label = candidate.strip()
+        if _PLACEHOLDER_SPEAKER_PATTERN.fullmatch(label):
+            anonymous_ids.add(label.casefold())
+            continue
+        if label not in names:
+            names.append(label)
+    if names and anonymous_ids:
+        suffix = "anonymous speaker" if len(anonymous_ids) == 1 else f"{len(anonymous_ids)} anonymous speakers"
+        return f"{', '.join(names)} + {suffix}"
+    if names:
+        return ", ".join(names)
+    if anonymous_ids:
+        return "1 anonymous speaker" if len(anonymous_ids) == 1 else f"{len(anonymous_ids)} anonymous speakers"
+    return "unknown"
 
 
 def analyze_scene_context_llm(scene_meta: Dict[str, Any], cfg: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -47,7 +81,7 @@ def analyze_scene_context_llm(scene_meta: Dict[str, Any], cfg: Dict[str, Any]) -
         # Format data
         objects_str = ', '.join([str(obj.get('label', obj)) if isinstance(obj, dict) else str(obj) for obj in objects[:10]]) if objects else 'none'
         emotions_str = ', '.join([f"{e.get('label', 'unknown')} ({e.get('score', 0):.0%})" if isinstance(e, dict) else str(e) for e in emotions[:3]]) if emotions else 'neutral'
-        speakers_str = ', '.join([str(s) for s in speakers]) if speakers else 'unknown'
+        speakers_str = _speaker_prompt_summary(speakers)
         
         prompt = f"""Analyze this video scene and extract semantic context:
 
@@ -74,7 +108,7 @@ Example:
   "key_moments": ["children playing with toys", "adults laughing together"],
   "emotional_arc": "joyful and relaxed throughout",
   "context_tags": ["family time", "indoor gathering", "childhood play"],
-  "relationships": [{{"entities": ["speaker_00", "speaker_01"], "type": "conversation"}}],
+  "relationships": [{{"entities": ["person_a", "person_b"], "type": "conversation"}}],
   "activity_description": "Informal family interaction with playful atmosphere"
 }}
 

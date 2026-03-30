@@ -299,3 +299,207 @@ def test_harmonizer_uses_scene_payload_objects_when_legacy_file_missing(tmp_path
 
     temporal_index = json.loads((processing_dir / "temporal_index.json").read_text(encoding="utf-8"))
     assert temporal_index["segments"][0]["detected_objects"] == expected_objects
+
+
+def test_harmonizer_rollup_uses_payload_truth_and_normalized_entities(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    processing_root = tmp_path / "processing"
+    video_id = "video_rollup_truth"
+    processing_dir = processing_root / video_id
+    scene_manifest_path = processing_dir / "video" / "scene_manifest.json"
+
+    _write_json(
+        scene_manifest_path,
+        {
+            "video_id": video_id,
+            "phase5_complete": True,
+            "phase6_complete": True,
+            "scenes": [
+                {
+                    "scene_id": "scene_0000",
+                    "start": 0.0,
+                    "end": 5.0,
+                    "duration": 5.0,
+                    "confidence": 0.9,
+                    "content_state": "empty",
+                    "keyframe": {
+                        "caption": "Jerry stands in the apartment",
+                        "ocr_text": "",
+                        "tags": ["apartment"],
+                    },
+                    "audio": {
+                        "path": "audio/scene_0000.wav",
+                        "audio_meta": {"duration_sec": 5.0},
+                        "transcript": "Jerry is talking in the apartment",
+                        "segments": [{"start": 0.0, "end": 2.0, "text": "Jerry is talking"}],
+                    },
+                }
+            ],
+        },
+    )
+
+    audio_artifact_dir = tmp_path / "canonical_audio_artifacts"
+    _write_json(audio_artifact_dir / "segmentation.json", {"segments": []})
+    _write_json(
+        audio_artifact_dir / "transcript.json",
+        {"segments": [{"start": 0.0, "end": 2.0, "text": "Jerry is talking"}]},
+    )
+    _write_json(audio_artifact_dir / "diarization.json", {"speakers": []})
+
+    monkeypatch.setattr(harmonizer_module, "ENTITY_EXTRACTION_AVAILABLE", True)
+    monkeypatch.setattr(
+        harmonizer_module,
+        "extract_entities_from_scene",
+        lambda **_kwargs: {
+            "entity_count": 2,
+            "entities": [
+                {"name": "Jerry", "entity_type": "PERSON"},
+                {"name": "Apartment", "entity_type": "LOCATION"},
+            ],
+        },
+    )
+
+    item = {
+        "id": video_id,
+        "source_path": str(tmp_path / "video.mp4"),
+        "processing_dir": str(processing_dir),
+        "scene_manifest_path": str(scene_manifest_path),
+        "audio_artifact_dir": str(audio_artifact_dir),
+    }
+    cfg = {"paths": {"processing": str(processing_root)}}
+
+    run_cross_modal_harmonization(item, cfg)
+    temporal_index = json.loads((processing_dir / "temporal_index.json").read_text(encoding="utf-8"))
+
+    assert temporal_index["content_summary"] == {"signal": 1, "empty": 0, "processing_error": 0}
+    assert temporal_index["total_entities"] == 2
+    assert temporal_index["unique_entities"] == 2
+    assert temporal_index["top_entities"] == [
+        {"entity": "jerry", "type": "PERSON", "count": 1},
+        {"entity": "apartment", "type": "LOCATION", "count": 1},
+    ]
+    assert temporal_index["top_objects"] == []
+
+
+def test_harmonizer_rollup_separates_object_inventory_from_top_entities(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    processing_root = tmp_path / "processing"
+    video_id = "video_rollup_object_separation"
+    processing_dir = processing_root / video_id
+    scene_manifest_path = processing_dir / "video" / "scene_manifest.json"
+
+    _write_json(
+        scene_manifest_path,
+        {
+            "video_id": video_id,
+            "phase5_complete": True,
+            "phase6_complete": True,
+            "scenes": [
+                {
+                    "scene_id": "scene_0000",
+                    "start": 0.0,
+                    "end": 5.0,
+                    "duration": 5.0,
+                    "confidence": 0.9,
+                    "audio": {"transcript": "George walks into the apartment."},
+                }
+            ],
+        },
+    )
+
+    audio_artifact_dir = tmp_path / "canonical_audio_artifacts"
+    _write_json(audio_artifact_dir / "segmentation.json", {"segments": []})
+    _write_json(audio_artifact_dir / "transcript.json", {"segments": []})
+    _write_json(audio_artifact_dir / "diarization.json", {"speakers": []})
+
+    monkeypatch.setattr(harmonizer_module, "ENTITY_EXTRACTION_AVAILABLE", True)
+    monkeypatch.setattr(
+        harmonizer_module,
+        "extract_entities_from_scene",
+        lambda **_kwargs: {
+            "entity_count": 2,
+            "entities": [
+                {"name": "George", "entity_type": "PERSON"},
+                {"name": "bottle", "entity_type": "object"},
+            ],
+        },
+    )
+
+    item = {
+        "id": video_id,
+        "source_path": str(tmp_path / "video.mp4"),
+        "processing_dir": str(processing_dir),
+        "scene_manifest_path": str(scene_manifest_path),
+        "audio_artifact_dir": str(audio_artifact_dir),
+    }
+    cfg = {"paths": {"processing": str(processing_root)}}
+
+    run_cross_modal_harmonization(item, cfg)
+    temporal_index = json.loads((processing_dir / "temporal_index.json").read_text(encoding="utf-8"))
+
+    assert temporal_index["top_entities"] == [
+        {"entity": "george", "type": "PERSON", "count": 1},
+    ]
+    assert temporal_index["top_objects"] == [
+        {"entity": "bottle", "type": "object", "count": 1},
+    ]
+
+
+def test_harmonizer_does_not_promote_unknown_speaker_fallback_ids(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    processing_root = tmp_path / "processing"
+    video_id = "video_unknown_speaker_filter"
+    processing_dir = processing_root / video_id
+    scene_manifest_path = processing_dir / "video" / "scene_manifest.json"
+
+    _write_json(
+        scene_manifest_path,
+        {
+            "video_id": video_id,
+            "phase5_complete": True,
+            "phase6_complete": True,
+            "scenes": [
+                {
+                    "scene_id": "scene_0000",
+                    "start": 0.0,
+                    "end": 5.0,
+                    "duration": 5.0,
+                    "confidence": 0.9,
+                    "content_state": "signal",
+                    "audio": {
+                        "path": "audio/scene_0000.wav",
+                        "audio_meta": {"duration_sec": 5.0},
+                        "transcript": "Hello there",
+                        "speakers": [{"start": 0.0, "end": 5.0}],
+                    },
+                }
+            ],
+        },
+    )
+
+    audio_artifact_dir = tmp_path / "canonical_audio_artifacts"
+    _write_json(audio_artifact_dir / "segmentation.json", {"segments": []})
+    _write_json(audio_artifact_dir / "transcript.json", {"segments": []})
+    _write_json(audio_artifact_dir / "diarization.json", {"speakers": []})
+
+    monkeypatch.setattr(harmonizer_module, "ENTITY_EXTRACTION_AVAILABLE", False)
+
+    item = {
+        "id": video_id,
+        "source_path": str(tmp_path / "video.mp4"),
+        "processing_dir": str(processing_dir),
+        "scene_manifest_path": str(scene_manifest_path),
+        "audio_artifact_dir": str(audio_artifact_dir),
+    }
+    cfg = {"paths": {"processing": str(processing_root)}}
+
+    run_cross_modal_harmonization(item, cfg)
+    temporal_index = json.loads((processing_dir / "temporal_index.json").read_text(encoding="utf-8"))
+
+    assert temporal_index["segments"][0]["speaker_ids"] == []

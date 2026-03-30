@@ -10,7 +10,12 @@ def audio_speaker_merge(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, 
     """Merge diarization speakers with transcript segments by temporal overlap."""
     tmeta = item.get("transcript_meta")
     meta: Dict[str, Any] = dict(tmeta) if isinstance(tmeta, dict) else {}
-    segs = meta.get("segments") or []
+    segs = (
+        meta.get("segments")
+        or item.get("segments")
+        or item.get("word_timestamps")
+        or []
+    )
     if not isinstance(segs, list):
         segs = []
     diar = item.get("diarization") or []
@@ -82,4 +87,3 @@ def audio_speaker_merge(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, 
     if speakers:
         meta["speakers"] = speakers
     return {"speaker_transcript": merged, "transcript_meta": meta}
-

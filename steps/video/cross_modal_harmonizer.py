@@ -35,6 +35,70 @@ def load_json_safe(path: str) -> Optional[Dict[str, Any]]:
     return None
 
 
+def _normalize_content_state(value: Any) -> Optional[str]:
+    if not isinstance(value, str):
+        return None
+    normalized = value.strip().lower()
+    if normalized in {"signal", "empty", "processing_error"}:
+        return normalized
+    return None
+
+
+def _normalize_entity_rollup_record(entity: Any) -> Optional[Dict[str, str]]:
+    if not isinstance(entity, dict):
+        return None
+
+    raw_text = (
+        entity.get("text")
+        or entity.get("name")
+        or entity.get("label")
+        or entity.get("entity")
+    )
+    text = str(raw_text or "").strip()
+    if not text:
+        return None
+
+    raw_type = entity.get("type") or entity.get("entity_type") or "UNKNOWN"
+    entity_type = str(raw_type or "UNKNOWN").strip() or "UNKNOWN"
+    return {"text": text, "type": entity_type}
+
+
+def _resolve_segment_content_state(
+    scene: Dict[str, Any],
+    *,
+    full_transcript_text: str,
+    scene_entities: List[Dict[str, Any]],
+    scene_objects: List[Dict[str, Any]],
+    speaker_ids: List[str],
+    keywords: List[str],
+) -> str:
+    raw_state = _normalize_content_state(scene.get("content_state"))
+    if raw_state == "processing_error":
+        return raw_state
+
+    keyframe_payload = scene.get("keyframe") if isinstance(scene.get("keyframe"), dict) else {}
+    caption_text = scene.get("caption") or keyframe_payload.get("caption") or ""
+    ocr_text = scene.get("ocr_text") or keyframe_payload.get("ocr_text") or ""
+    raw_tags = scene.get("tags") or keyframe_payload.get("tags") or []
+    has_tags = isinstance(raw_tags, list) and any(str(tag or "").strip() for tag in raw_tags)
+
+    has_semantic_signal = bool(
+        full_transcript_text
+        or scene_entities
+        or scene_objects
+        or speaker_ids
+        or keywords
+        or str(caption_text).strip()
+        or str(ocr_text).strip()
+        or has_tags
+        or scene.get("clip_id")
+        or scene.get("dino_id")
+    )
+    if has_semantic_signal:
+        return "signal"
+    return raw_state or "empty"
+
+
 def _load_required_audio_artifact(path: Path, artifact_name: str) -> tuple[Optional[Dict[str, Any]], bool]:
     """
     Load required audio artifact and return (data, integrity_ok).
@@ -362,11 +426,9 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
 
     scene_content_states: List[str] = []
     for scene in scenes:
-        state = scene.get('content_state')
-        if isinstance(state, str):
-            normalized = state.strip().lower()
-            if normalized in {'signal', 'empty', 'processing_error'}:
-                scene_content_states.append(normalized)
+        normalized = _normalize_content_state(scene.get('content_state'))
+        if normalized:
+            scene_content_states.append(normalized)
     all_scenes_classified = len(scene_content_states) == len(scenes) and len(scenes) > 0
     processing_error_scene_count = sum(1 for state in scene_content_states if state == 'processing_error')
     
@@ -483,9 +545,10 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
         scene_entities = []
         if ENTITY_EXTRACTION_AVAILABLE:
             full_transcript = full_transcript_text
-            caption_text = scene.get('caption', '')
-            ocr_text = scene.get('ocr_text', '')
-            tags = scene.get('tags', [])
+            keyframe_payload = scene.get('keyframe') if isinstance(scene.get('keyframe'), dict) else {}
+            caption_text = scene.get('caption') or keyframe_payload.get('caption', '')
+            ocr_text = scene.get('ocr_text') or keyframe_payload.get('ocr_text', '')
+            tags = scene.get('tags') or keyframe_payload.get('tags', [])
             scene_entity_data = dict(scene)
             scene_entity_data.update({
                 'transcription': full_transcript,
@@ -540,7 +603,11 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
                 if not isinstance(speaker, dict):
                     continue
                 if speaker.get('start', 0) < scene_end and speaker.get('end', 0) > scene_start:
-                    _append_speaker_id(speaker.get('speaker', 'UNKNOWN'))
+                    _append_speaker_id(
+                        speaker.get('speaker')
+                        or speaker.get('speaker_id')
+                        or speaker.get('label')
+                    )
 
         if not has_audio_for_scene:
             speaker_ids = []
@@ -579,8 +646,17 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
         
         # Prefer live scene payload truth; fallback to the legacy Phase 6 object artifact.
         scene_objects = _resolve_scene_objects(scene, scene_id, objects_data)
+        content_state = _resolve_segment_content_state(
+            scene,
+            full_transcript_text=full_transcript_text,
+            scene_entities=scene_entities,
+            scene_objects=scene_objects,
+            speaker_ids=speaker_ids,
+            keywords=keywords,
+        )
         if scene_objects:
             unified_segment['detected_objects'] = scene_objects
+        unified_segment['content_state'] = content_state
         
         unified_segments.append(unified_segment)
     
@@ -589,16 +665,36 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
     # Aggregate all entities across segments
     all_entities = []
     entity_counts = {}
+    segment_content_states: List[str] = []
     for seg in unified_segments:
+        segment_state = _normalize_content_state(seg.get('content_state')) or 'signal'
+        segment_content_states.append(segment_state)
         for entity in seg.get('entities', []):
-            all_entities.append(entity)
-            entity_text = entity.get('text', '').lower()
-            entity_type = entity.get('type', 'UNKNOWN')
+            normalized_entity = _normalize_entity_rollup_record(entity)
+            if not normalized_entity:
+                continue
+            all_entities.append(normalized_entity)
+            entity_text = normalized_entity['text'].lower()
+            entity_type = normalized_entity['type']
             key = f"{entity_text}:{entity_type}"
             entity_counts[key] = entity_counts.get(key, 0) + 1
     
-    # Get top entities
-    top_entities = sorted(entity_counts.items(), key=lambda x: x[1], reverse=True)[:20]
+    semantic_entity_counts = {
+        key: value
+        for key, value in entity_counts.items()
+        if not key.endswith(":object")
+    }
+    object_entity_counts = {
+        key: value
+        for key, value in entity_counts.items()
+        if key.endswith(":object")
+    }
+
+    # Keep top_entities focused on semantic entities; object inventories are
+    # already available per-segment via detected_objects and are exposed
+    # separately below.
+    top_entities = sorted(semantic_entity_counts.items(), key=lambda x: x[1], reverse=True)[:20]
+    top_objects = sorted(object_entity_counts.items(), key=lambda x: x[1], reverse=True)[:20]
     
     has_audio_payload_truth = any(s.get('has_audio') for s in unified_segments)
     has_transcript_payload_truth = any(s.get('has_transcript') for s in unified_segments)
@@ -631,6 +727,10 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
             {'entity': k.split(':')[0], 'type': k.split(':')[1], 'count': v}
             for k, v in top_entities
         ],
+        'top_objects': [
+            {'entity': k.split(':')[0], 'type': k.split(':')[1], 'count': v}
+            for k, v in top_objects
+        ],
         
         # Global metadata
         'has_visual_embeddings': any(s.get('has_visual_embeddings') for s in unified_segments),
@@ -644,10 +744,10 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
             'transcript_scene_count': len(transcript_scene_ids),
         },
         'content_summary': {
-            'signal': sum(1 for state in scene_content_states if state == 'signal'),
-            'empty': sum(1 for state in scene_content_states if state == 'empty'),
-            'processing_error': processing_error_scene_count,
-        } if all_scenes_classified else None,
+            'signal': sum(1 for state in segment_content_states if state == 'signal'),
+            'empty': sum(1 for state in segment_content_states if state == 'empty'),
+            'processing_error': sum(1 for state in segment_content_states if state == 'processing_error'),
+        } if segment_content_states else None,
         
         # Processing metadata
         'phase5_complete': scene_data.get('phase5_complete', False),

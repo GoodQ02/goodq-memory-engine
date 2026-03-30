@@ -16,6 +16,10 @@ try:
 except Exception:  # noqa: BLE001
     from wsl_audio_preflight import probe_wsl_audio_runtime
 
+_WORKSPACE_PREFLIGHT_TIMEOUTS = (5, 10)
+_WORKSPACE_PREFLIGHT_RETRY_DELAY_SEC = 0.25
+
+
 class WSL2AudioBridge:
     """Bridge to WSL2 audio processing"""
     _workspace_warning_keys: set[str] = set()
@@ -78,34 +82,46 @@ class WSL2AudioBridge:
         if self._workspace_checked and (self._workspace_ready or not self.require_wsl_audio):
             return self._workspace_ready
 
-        try:
-            check = subprocess.run(
-                [
-                    "wsl",
-                    "-d",
-                    self.wsl_distro,
-                    "--",
-                    "bash",
-                    "-lc",
-                    (
-                        f"test -d '{self.audio_workspace}' && "
-                        f"test -f '{self.audio_workspace}/setup_cuda_env.sh' && "
-                        f"test -f '{self.audio_workspace}/process_audio.py'"
-                    ),
-                ],
-                capture_output=True,
-                timeout=5,
-            )
-            self._workspace_ready = check.returncode == 0
-        except Exception as e:
+        check = None
+        last_exception: Optional[Exception] = None
+        for attempt_index, timeout_sec in enumerate(_WORKSPACE_PREFLIGHT_TIMEOUTS, start=1):
+            try:
+                check = subprocess.run(
+                    [
+                        "wsl",
+                        "-d",
+                        self.wsl_distro,
+                        "--",
+                        "bash",
+                        "-lc",
+                        (
+                            f"test -d '{self.audio_workspace}' && "
+                            f"test -f '{self.audio_workspace}/setup_cuda_env.sh' && "
+                            f"test -f '{self.audio_workspace}/process_audio.py'"
+                        ),
+                    ],
+                    capture_output=True,
+                    timeout=timeout_sec,
+                )
+                self._workspace_ready = check.returncode == 0
+                last_exception = None
+                break
+            except Exception as e:
+                last_exception = e
+                self._workspace_ready = False
+                if attempt_index < len(_WORKSPACE_PREFLIGHT_TIMEOUTS):
+                    time.sleep(_WORKSPACE_PREFLIGHT_RETRY_DELAY_SEC)
+                    continue
+
+        if last_exception is not None:
             self._workspace_ready = False
             message = (
                 f"WSL workspace preflight failed for distro={self.wsl_distro}, "
-                f"workspace={self.audio_workspace}: {e}"
+                f"workspace={self.audio_workspace}: {last_exception}"
             )
             self._workspace_checked = True
             if self.require_wsl_audio:
-                raise RuntimeError(message) from e
+                raise RuntimeError(message) from last_exception
             self._warn_workspace_once(message, warning_kind="preflight_failed")
             return False
 

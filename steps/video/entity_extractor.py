@@ -13,6 +13,31 @@ import re
 logger = logging.getLogger(__name__)
 
 
+_SCENE_PLACE_LABELS = {
+    "apartment": "Apartment",
+    "kitchen": "Kitchen",
+    "living room": "Living Room",
+    "bedroom": "Bedroom",
+    "office": "Office",
+    "cafe": "Cafe",
+    "coffee shop": "Cafe",
+    "restaurant": "Restaurant",
+    "diner": "Diner",
+    "street": "Street",
+    "sidewalk": "Street",
+    "intersection": "Street",
+}
+
+_OBJECT_PLACE_SIGNATURES = (
+    ({"refrigerator"}, "Kitchen", 0.78),
+    ({"oven"}, "Kitchen", 0.78),
+    ({"sink"}, "Kitchen", 0.78),
+    ({"traffic light"}, "Street", 0.76),
+    ({"couch", "chair"}, "Living Room", 0.68),
+    ({"dining table", "chair"}, "Dining Room", 0.66),
+)
+
+
 @dataclass
 class ExtractedEntity:
     """Single extracted entity with source provenance"""
@@ -60,6 +85,23 @@ class EntityExtractor:
             'hose', 'mathias',  # Add specific false positives as found
         }
         self._contraction_parts = {"'m", "'re", "'s", "'ll", "'ve", "'d", "n't"}
+        self._typed_entity_type_map = {
+            "PER": "person",
+            "PERSON": "person",
+            "LOC": "location",
+            "LOCATION": "location",
+            "GPE": "location",
+            "FAC": "location",
+            "ORG": "organization",
+            "ORGANIZATION": "organization",
+            "EVENT": "event",
+            "PRODUCT": "object",
+            "OBJECT": "object",
+            "WORK_OF_ART": "concept",
+            "LANGUAGE": "concept",
+            "LAW": "concept",
+            "MISC": "concept",
+        }
         
     def _load_family_names(self) -> Set[str]:
         """Load known family member names from config"""
@@ -109,6 +151,13 @@ class EntityExtractor:
                     scene_data[key] = value
         
         entities = []
+
+        # 0. Prefer structured semantic entities already produced by upstream steps.
+        entities.extend(self._extract_from_structured_entities(scene_data, scene_id, "metadata", "scene_payload"))
+        if isinstance(scene_data.get("audio"), dict):
+            entities.extend(self._extract_from_structured_entities(scene_data["audio"], scene_id, "audio", "tagger"))
+        if isinstance(scene_data.get("keyframe"), dict):
+            entities.extend(self._extract_from_structured_entities(scene_data["keyframe"], scene_id, "vision", "tagger"))
         
         # 1. Extract from visual data
         entities.extend(self._extract_from_vision(scene_data, scene_id))
@@ -154,6 +203,9 @@ class EntityExtractor:
             entities.extend(self._extract_names_from_text(
                 caption, scene_id, "vision", "image_caption"
             ))
+            entities.extend(self._extract_place_entities_from_text(
+                caption, scene_id, "vision", "image_caption", confidence=0.8
+            ))
         
         return entities
     
@@ -171,21 +223,27 @@ class EntityExtractor:
                 transcript_text, scene_id, "audio", "transcription"
             ))
         
-        # From speaker diarization
+        # Preserve real speaker identities when available, but avoid placeholder
+        # diarization labels because speaker_ids already carry that structure.
         if "speakers" in scene_data:
             speakers = scene_data["speakers"]
             if isinstance(speakers, list):
                 for idx, speaker_data in enumerate(speakers):
+                    speaker_name = None
                     if isinstance(speaker_data, dict):
-                        speaker_label = speaker_data.get("label", f"SPEAKER_{idx}")
-                    else:
-                        speaker_label = f"SPEAKER_{idx}"
-                    
+                        speaker_name = (
+                            speaker_data.get("name")
+                            or speaker_data.get("identity")
+                            or speaker_data.get("person")
+                        )
+                    if not self._is_meaningful_person_name(speaker_name):
+                        continue
+
                     entities.append(ExtractedEntity(
                         entity_id=f"{scene_id}_speaker_{idx}",
                         entity_type="person",
-                        name=speaker_label,
-                        confidence=0.8,
+                        name=str(speaker_name).strip(),
+                        confidence=0.85,
                         source_modality="audio",
                         source_step="diarization",
                         properties={"speaker_index": idx, "diarization_data": speaker_data},
@@ -235,28 +293,69 @@ class EntityExtractor:
                         properties={"bbox": obj.get("bbox"), "detection": obj},
                         timestamps=[scene_data.get("start_time", 0)]
                     ))
+            entities.extend(self._infer_locations_from_objects(objects, scene_id, scene_data))
         
         return entities
     
     def _extract_from_tags(self, scene_data: Dict, scene_id: str) -> List[ExtractedEntity]:
         """Extract concept entities from tags"""
         entities = []
-        
-        if "tags" in scene_data:
-            tags = scene_data["tags"]
-            if isinstance(tags, list):
-                for tag in tags:
-                    if isinstance(tag, str) and self._is_valid_entity_candidate(tag):
-                        entities.append(ExtractedEntity(
-                            entity_id=f"{scene_id}_concept_{tag}",
-                            entity_type="concept",
-                            name=tag,
-                            confidence=0.7,
-                            source_modality="metadata",
-                            source_step="tagger",
-                            properties={},
-                            timestamps=[scene_data.get("start_time", 0)]
-                        ))
+        object_labels = self._object_label_set(scene_data)
+        timestamps = [scene_data.get("start_time", 0)]
+
+        tag_details = scene_data.get("tag_details")
+        if isinstance(tag_details, list):
+            for idx, detail in enumerate(tag_details):
+                if not isinstance(detail, dict):
+                    continue
+                tag_name = detail.get("label") or detail.get("name")
+                if not self._is_valid_entity_candidate(tag_name):
+                    continue
+                normalized_name = self._normalize_name(str(tag_name))
+                detail_sources = {
+                    str(source).strip().lower()
+                    for source in detail.get("sources", [])
+                    if isinstance(source, str) and source.strip()
+                }
+                if normalized_name in object_labels:
+                    continue
+                if detail_sources and detail_sources.issubset({"object"}):
+                    continue
+
+                entity_type = self._normalize_typed_entity_type(detail.get("type")) or "concept"
+                if entity_type == "concept" and self._is_scene_place_tag(tag_name, detail_sources):
+                    entity_type = "location"
+                entities.append(ExtractedEntity(
+                    entity_id=f"{scene_id}_concept_{idx}",
+                    entity_type=entity_type,
+                    name=str(tag_name).strip(),
+                    confidence=self._score_to_confidence(detail.get("score"), default=0.72),
+                    source_modality="metadata",
+                    source_step="tagger",
+                    properties={"detail_sources": sorted(detail_sources), "detail": detail},
+                    timestamps=timestamps,
+                ))
+            return entities
+
+        tags = scene_data.get("tags")
+        if isinstance(tags, list):
+            for idx, tag in enumerate(tags):
+                if not isinstance(tag, str) or not self._is_valid_entity_candidate(tag):
+                    continue
+                normalized_tag = self._normalize_name(tag)
+                if normalized_tag in object_labels:
+                    continue
+                entity_type = "location" if self._is_scene_place_tag(tag, set()) else "concept"
+                entities.append(ExtractedEntity(
+                    entity_id=f"{scene_id}_concept_{idx}",
+                    entity_type=entity_type,
+                    name=tag.strip(),
+                    confidence=0.7,
+                    source_modality="metadata",
+                    source_step="tagger",
+                    properties={},
+                    timestamps=timestamps,
+                ))
         
         return entities
     
@@ -267,19 +366,92 @@ class EntityExtractor:
         if "faces" in scene_data:
             faces = scene_data.get("faces", [])
             for idx, face in enumerate(faces):
-                # Face embeddings exist but no identity yet
-                # This is where face recognition would plug in
+                face_name = None
+                if isinstance(face, dict):
+                    face_name = face.get("name") or face.get("identity") or face.get("label")
+                if not self._is_meaningful_person_name(face_name):
+                    continue
+
                 entities.append(ExtractedEntity(
                     entity_id=f"{scene_id}_face_{idx}",
                     entity_type="person",
-                    name=f"FACE_{idx}",  # Placeholder until face recognition
-                    confidence=0.6,
+                    name=str(face_name).strip(),
+                    confidence=0.8,
                     source_modality="vision",
                     source_step="face_embed",
-                    properties={"face_index": idx, "embedding": face.get("embedding")},
+                    properties={"face_index": idx, "face": face},
                     timestamps=[scene_data.get("start_time", 0)]
                 ))
         
+        return entities
+
+    def _extract_from_structured_entities(
+        self,
+        payload: Dict[str, Any],
+        scene_id: str,
+        modality: str,
+        default_step: str,
+    ) -> List[ExtractedEntity]:
+        entities: List[ExtractedEntity] = []
+        if not isinstance(payload, dict):
+            return entities
+
+        timestamps = [payload.get("start_time", 0)]
+
+        ner_entities = payload.get("ner_entities")
+        if isinstance(ner_entities, list):
+            for idx, entity in enumerate(ner_entities):
+                if not isinstance(entity, dict):
+                    continue
+                name = entity.get("name") or entity.get("label")
+                entity_type = self._normalize_typed_entity_type(entity.get("type"))
+                if entity_type is None or not self._is_valid_entity_candidate(name):
+                    continue
+                if entity_type == "person" and not self._is_meaningful_person_name(name):
+                    continue
+                entities.append(ExtractedEntity(
+                    entity_id=f"{scene_id}_{modality}_ner_{idx}",
+                    entity_type=entity_type,
+                    name=str(name).strip(),
+                    confidence=0.92,
+                    source_modality=modality,
+                    source_step=str(entity.get("source_step") or default_step),
+                    properties={"ner_entity": entity},
+                    timestamps=timestamps,
+                ))
+
+        entity_details = payload.get("entity_details")
+        if isinstance(entity_details, list):
+            for idx, detail in enumerate(entity_details):
+                if not isinstance(detail, dict):
+                    continue
+                name = detail.get("label") or detail.get("name")
+                if not self._is_valid_entity_candidate(name):
+                    continue
+
+                detail_sources = {
+                    str(source).strip().lower()
+                    for source in detail.get("sources", [])
+                    if isinstance(source, str) and source.strip()
+                }
+                entity_type = self._normalize_typed_entity_type(detail.get("type"))
+                if entity_type is None and "ner" not in detail_sources:
+                    continue
+                entity_type = entity_type or "concept"
+                if entity_type == "person" and not self._is_meaningful_person_name(name):
+                    continue
+
+                entities.append(ExtractedEntity(
+                    entity_id=f"{scene_id}_{modality}_detail_{idx}",
+                    entity_type=entity_type,
+                    name=str(name).strip(),
+                    confidence=self._score_to_confidence(detail.get("score"), default=0.82),
+                    source_modality=modality,
+                    source_step=default_step,
+                    properties={"detail_sources": sorted(detail_sources), "detail": detail},
+                    timestamps=timestamps,
+                ))
+
         return entities
     
     def _extract_names_from_text(
@@ -317,6 +489,69 @@ class EntityExtractor:
                     timestamps=[]
                 ))
         
+        return entities
+
+    def _extract_place_entities_from_text(
+        self,
+        text: str,
+        scene_id: str,
+        modality: str,
+        step: str,
+        *,
+        confidence: float,
+    ) -> List[ExtractedEntity]:
+        entities: List[ExtractedEntity] = []
+        if not isinstance(text, str) or not text.strip():
+            return entities
+
+        lowered = text.lower()
+        for phrase, canonical in _SCENE_PLACE_LABELS.items():
+            if not re.search(rf"\b{re.escape(phrase)}\b", lowered):
+                continue
+            entities.append(ExtractedEntity(
+                entity_id=f"{scene_id}_{modality}_place_{self._normalize_name(canonical)}",
+                entity_type="location",
+                name=canonical,
+                confidence=confidence,
+                source_modality=modality,
+                source_step=step,
+                properties={"matched_phrase": phrase, "matched_text": text[:120]},
+                timestamps=[0.0],
+            ))
+
+        return entities
+
+    def _infer_locations_from_objects(
+        self,
+        objects: List[Dict[str, Any]],
+        scene_id: str,
+        scene_data: Dict[str, Any],
+    ) -> List[ExtractedEntity]:
+        entities: List[ExtractedEntity] = []
+        object_labels = {
+            self._normalize_name(str(obj.get("class") or obj.get("label") or ""))
+            for obj in objects
+            if isinstance(obj, dict)
+        }
+        object_labels.discard("")
+        if not object_labels:
+            return entities
+
+        for required_labels, location_name, confidence in _OBJECT_PLACE_SIGNATURES:
+            normalized_required = {self._normalize_name(label) for label in required_labels}
+            if not normalized_required.issubset(object_labels):
+                continue
+            entities.append(ExtractedEntity(
+                entity_id=f"{scene_id}_vision_place_{self._normalize_name(location_name)}",
+                entity_type="location",
+                name=location_name,
+                confidence=confidence,
+                source_modality="vision",
+                source_step="object_place_inference",
+                properties={"matched_objects": sorted(normalized_required)},
+                timestamps=[scene_data.get("start_time", 0)],
+            ))
+
         return entities
     
     def merge_entities(self, entities: List[ExtractedEntity]) -> List[Dict[str, Any]]:
@@ -371,6 +606,53 @@ class EntityExtractor:
         """Normalize entity name for matching"""
         return re.sub(r'\s+', ' ', name.lower().strip())
 
+    def _normalize_typed_entity_type(self, raw_type: Any) -> Optional[str]:
+        if not isinstance(raw_type, str):
+            return None
+        normalized = raw_type.strip().upper()
+        if not normalized:
+            return None
+        return self._typed_entity_type_map.get(normalized, "concept")
+
+    def _score_to_confidence(self, score: Any, *, default: float) -> float:
+        if isinstance(score, (int, float)):
+            return max(0.5, min(0.99, float(score) / 15.0))
+        return default
+
+    def _is_placeholder_entity_name(self, value: Any) -> bool:
+        if not isinstance(value, str):
+            return False
+        candidate = value.strip().upper()
+        return bool(re.fullmatch(r"(SPEAKER|FACE)_\d+", candidate))
+
+    def _is_meaningful_person_name(self, value: Any) -> bool:
+        if not self._is_valid_entity_candidate(value):
+            return False
+        return not self._is_placeholder_entity_name(value)
+
+    def _is_scene_place_tag(self, value: Any, detail_sources: Set[str]) -> bool:
+        if not isinstance(value, str):
+            return False
+        normalized = self._normalize_name(value)
+        if not normalized:
+            return False
+        if "place" in detail_sources:
+            return True
+        return normalized in {self._normalize_name(label) for label in _SCENE_PLACE_LABELS}
+
+    def _object_label_set(self, scene_data: Dict[str, Any]) -> Set[str]:
+        labels: Set[str] = set()
+        objects = scene_data.get("objects") or scene_data.get("detected_objects") or []
+        if not isinstance(objects, list):
+            return labels
+        for obj in objects:
+            if not isinstance(obj, dict):
+                continue
+            label = obj.get("class") or obj.get("label")
+            if isinstance(label, str) and label.strip():
+                labels.add(self._normalize_name(label))
+        return labels
+
     def _is_valid_entity_candidate(self, token: Any) -> bool:
         """Filter filler tokens and low-signal fragments from becoming entities."""
         if not isinstance(token, str):
@@ -392,6 +674,8 @@ class EntityExtractor:
 
         # Skip very short lowercase fragments unless they appear capitalized.
         compact = re.sub(r"[^A-Za-z0-9]+", "", raw)
+        if compact and len(compact) < 2:
+            return False
         is_capitalized = bool(raw[:1].isupper())
         if compact and len(compact) < 3 and not is_capitalized:
             return False

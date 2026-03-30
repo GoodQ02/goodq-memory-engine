@@ -24,6 +24,7 @@ TokenNormalizer = Callable[[Any], Optional[str]]
 
 _SEMANTIC_STOPWORDS = set(_KG_STOPWORDS) | {"unknown", "none"}
 _SEMANTIC_CONTRACTION_PARTS = set(_KG_CONTRACTION_PARTS)
+_SEMANTIC_PLACEHOLDER_PATTERN = re.compile(r"^(?:SPEAKER|FACE)_\d+$", re.IGNORECASE)
 
 
 def _normalize_token(token: Any) -> Optional[str]:
@@ -85,6 +86,8 @@ def is_valid_tag_token(token: Any) -> bool:
 def is_valid_entity_token(token: Any) -> bool:
     text = _normalize_token(token)
     if text is None:
+        return False
+    if _SEMANTIC_PLACEHOLDER_PATTERN.fullmatch(text.strip()):
         return False
     if _kg_is_valid_entity_token is not None:
         return bool(_kg_is_valid_entity_token(text))

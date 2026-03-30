@@ -5,6 +5,7 @@ Generates natural language summaries of video scenes from rich metadata.
 from __future__ import annotations
 from typing import Any, Dict, Optional
 import json
+import re
 
 try:
     from steps.common.tag_utils import (
@@ -90,6 +91,62 @@ def _semantic_entities(scene_meta: Dict[str, Any]) -> list[str]:
     )
 
 
+_PLACEHOLDER_SPEAKER_PATTERN = re.compile(r"^(?:SPEAKER|FACE)_\d+$", re.IGNORECASE)
+
+
+def _normalize_speaker_label(raw: Any) -> Optional[str]:
+    candidate = raw
+    if isinstance(raw, dict):
+        candidate = (
+            raw.get("name")
+            or raw.get("identity")
+            or raw.get("person")
+            or raw.get("speaker_id")
+            or raw.get("speaker")
+            or raw.get("label")
+        )
+    normalized = normalize_entity_token(candidate)
+    return normalized or None
+
+
+def _speaker_summary(scene_meta: Dict[str, Any]) -> Optional[str]:
+    speaker_labels: list[str] = []
+    anonymous_ids: set[str] = set()
+
+    raw_speakers = scene_meta.get("speakers")
+    if isinstance(raw_speakers, list):
+        for raw in raw_speakers:
+            label = _normalize_speaker_label(raw)
+            if not label:
+                continue
+            if _PLACEHOLDER_SPEAKER_PATTERN.fullmatch(label):
+                anonymous_ids.add(label.casefold())
+                continue
+            speaker_labels.append(label)
+
+    raw_segments = scene_meta.get("speaker_transcript")
+    if isinstance(raw_segments, list):
+        for raw in raw_segments:
+            label = _normalize_speaker_label(raw)
+            if not label:
+                continue
+            if _PLACEHOLDER_SPEAKER_PATTERN.fullmatch(label):
+                anonymous_ids.add(label.casefold())
+                continue
+            speaker_labels.append(label)
+
+    speaker_labels = dedupe_tokens(speaker_labels, normalizer=normalize_entity_token)
+    anonymous_count = len(anonymous_ids)
+    if speaker_labels and anonymous_count:
+        suffix = "anonymous speaker" if anonymous_count == 1 else f"{anonymous_count} anonymous speakers"
+        return f"{', '.join(speaker_labels)} + {suffix}"
+    if speaker_labels:
+        return ", ".join(speaker_labels)
+    if anonymous_count:
+        return "1 anonymous speaker" if anonymous_count == 1 else f"{anonymous_count} anonymous speakers"
+    return None
+
+
 def generate_scene_summary_template(scene_meta: Dict[str, Any]) -> str:
     """
     Generate a template-based natural language summary of a scene.
@@ -159,17 +216,9 @@ def generate_scene_summary_template(scene_meta: Dict[str, Any]) -> str:
         parts.append(f'Transcript: "{transcript_summary}"')
     
     # Speaker information
-    if speakers:
-        speaker_list = ", ".join([str(s) for s in speakers])
-        parts.append(f"Speakers: {speaker_list}")
-    elif speaker_transcript:
-        # Extract unique speakers from speaker_transcript
-        unique_speakers = set()
-        for seg in speaker_transcript:
-            if isinstance(seg, dict) and seg.get('speaker'):
-                unique_speakers.add(seg['speaker'])
-        if unique_speakers:
-            parts.append(f"Speakers: {', '.join(sorted(unique_speakers))}")
+    speaker_summary = _speaker_summary(scene_meta)
+    if speaker_summary:
+        parts.append(f"Speakers: {speaker_summary}")
     
     # Emotional context
     if emotions:
@@ -225,7 +274,7 @@ def generate_scene_summary_llm(scene_meta: Dict[str, Any], cfg: Dict[str, Any]) 
         
         # Format emotions
         emotions_str = _format_emotions(emotions) if emotions else "neutral"
-        speakers_str = ", ".join([str(s) for s in speakers]) if speakers else "unknown"
+        speakers_str = _speaker_summary(scene_meta) or "unknown"
         objects_str = _format_objects(objects) if objects else "none visible"
         
         # Build prompt

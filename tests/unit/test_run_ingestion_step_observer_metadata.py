@@ -89,9 +89,11 @@ class _FakePopenFailure:
 class _FakeSequencedPopen:
     calls = []
     responses = []
+    captured_envs = []
 
     def __init__(self, cmd, *args, **kwargs):
         type(self).calls.append(list(cmd))
+        type(self).captured_envs.append(dict(kwargs.get("env") or {}))
         response = type(self).responses.pop(0)
         self.pid = response.get("pid", 6464)
         self.returncode = response["returncode"]
@@ -330,6 +332,7 @@ def test_run_step_retries_optional_steps_via_direct_env_python_on_conda_tmp_fail
     import configs.python_paths as python_paths
 
     _FakeSequencedPopen.calls = []
+    _FakeSequencedPopen.captured_envs = []
     _FakeSequencedPopen.responses = [
         {
             "pid": 7171,
@@ -400,6 +403,7 @@ def test_run_step_retries_sentiment_once_after_native_crash(
     import configs.python_paths as python_paths
 
     _FakeSequencedPopen.calls = []
+    _FakeSequencedPopen.captured_envs = []
     _FakeSequencedPopen.responses = [
         {
             "pid": 9191,
@@ -446,6 +450,82 @@ def test_run_step_retries_sentiment_once_after_native_crash(
     end_meta = end_events[-1][2]
     assert end_meta["native_retry_attempt"] == 1
     assert end_meta["scene_id"] == "scene_0004"
+
+
+def test_run_step_retries_dino_with_amp_disable_then_cpu_fallback_after_native_crashes(
+    monkeypatch,
+    tmp_path: Path,
+):
+    run_ingestion = _load_run_ingestion_module()
+    observer = _RecorderObserver()
+    cfg_json = _write_cfg(tmp_path)
+    direct_env_python = tmp_path / "goodq_image_caption_python.exe"
+    direct_env_python.write_text("", encoding="utf-8")
+
+    import configs.python_paths as python_paths
+
+    _FakeSequencedPopen.calls = []
+    _FakeSequencedPopen.captured_envs = []
+    _FakeSequencedPopen.responses = [
+        {
+            "pid": 10101,
+            "returncode": 3221226505,
+            "stdout": "",
+            "stderr": "native dino crash on first gpu attempt",
+        },
+        {
+            "pid": 10102,
+            "returncode": 3221226505,
+            "stdout": "",
+            "stderr": "native dino crash on second gpu attempt",
+        },
+        {
+            "pid": 10103,
+            "returncode": 0,
+            "stdout": "{}",
+            "stderr": "",
+        },
+    ]
+
+    monkeypatch.setattr(run_ingestion, "_PIPELINE_OBSERVER", observer)
+    monkeypatch.setattr(run_ingestion, "resolve_conda", lambda: "conda")
+    monkeypatch.setattr(run_ingestion.shutil, "which", lambda _: "conda")
+    monkeypatch.setattr(run_ingestion.subprocess, "Popen", _FakeSequencedPopen)
+    monkeypatch.setattr(run_ingestion, "_control_agent_runtime_enabled", lambda: False)
+    monkeypatch.setattr(python_paths, "get_env_python", lambda name: direct_env_python)
+
+    payload = {
+        "source_path": str(tmp_path / "scene_0002.jpg"),
+        "video_id": "video_test_dino",
+        "scene_id": "scene_0002",
+        "scene_index": 2,
+    }
+
+    result = run_ingestion._run_step(
+        env_name="goodq_image_caption",
+        step_name="image_embed_dino",
+        payload=payload,
+        cfg_json=cfg_json,
+    )
+
+    assert result == {}
+    assert len(_FakeSequencedPopen.calls) == 3
+    assert all(call[0] == str(direct_env_python) for call in _FakeSequencedPopen.calls)
+
+    first_env, second_env, third_env = _FakeSequencedPopen.captured_envs
+    assert first_env.get("GOODQ_DINO_DISABLE_AMP") != "1"
+    assert first_env.get("GOODQ_DINO_FORCE_CPU") != "1"
+    assert second_env["GOODQ_DINO_DISABLE_AMP"] == "1"
+    assert second_env.get("GOODQ_DINO_FORCE_CPU") != "1"
+    assert third_env["GOODQ_DINO_DISABLE_AMP"] == "1"
+    assert third_env["GOODQ_DINO_FORCE_CPU"] == "1"
+
+    end_events = [event for event in observer.events if event[0] == "step_end" and event[1] == "step.image_embed_dino"]
+    assert end_events
+    end_meta = end_events[-1][2]
+    assert end_meta["native_retry_attempt"] == 2
+    assert end_meta["native_retry_mode"] == "cpu_fallback"
+    assert end_meta["scene_id"] == "scene_0002"
 
 
 def test_resolve_audio_runtime_contract_falls_back_from_stale_env_workspace(

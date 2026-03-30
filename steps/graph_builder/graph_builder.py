@@ -138,12 +138,9 @@ def _process_faces(kg, scene: Dict, media_id: int, timestamp: float):
     faces = scene.get('faces', [])
     
     for face_idx, face in enumerate(faces):
-        # Create person node (could be enhanced with face recognition)
-        person_name = f"person_{face_idx}"
-        
-        node_id = kg.add_node(
-            node_type='person',
-            name=person_name,
+        face_node_id = kg.add_node(
+            node_type='face',
+            name=f"scene_face_{media_id}_{face_idx}",
             properties={
                 'face_embedding_available': True
             },
@@ -151,11 +148,33 @@ def _process_faces(kg, scene: Dict, media_id: int, timestamp: float):
         )
         
         kg.link_node_to_media(
-            node_id=node_id,
+            node_id=face_node_id,
             media_id=media_id,
             confidence=face.get('confidence', 1.0),
             context={'bbox': face.get('bbox', []), 'timestamp': timestamp}
         )
+
+        identity = face.get('name') or face.get('identity') or face.get('person') or face.get('label')
+        if isinstance(identity, str) and identity.strip():
+            person_node_id = kg.add_node(
+                node_type='person',
+                name=identity.strip(),
+                properties={'face_embedding_available': True},
+                timestamp=timestamp,
+            )
+            kg.link_node_to_media(
+                node_id=person_node_id,
+                media_id=media_id,
+                confidence=face.get('confidence', 1.0),
+                context={'bbox': face.get('bbox', []), 'timestamp': timestamp}
+            )
+            kg.add_edge(
+                face_node_id,
+                person_node_id,
+                'identity_evidence',
+                weight=float(face.get('confidence', 1.0) or 1.0),
+                properties={'source': 'scene_face_detection'},
+            )
 
 
 def _process_text(kg, scene: Dict, media_id: int, timestamp: float, cfg: Dict[str, Any] = None):
@@ -210,7 +229,17 @@ def _process_audio(kg, scene: Dict, media_id: int, timestamp: float):
         # Extract speakers
         speakers = audio_data.get('speakers', [])
         for speaker in speakers:
-            speaker_id = speaker.get('speaker_id', 'unknown')
+            if not isinstance(speaker, dict):
+                continue
+            speaker_id = (
+                speaker.get('speaker_id')
+                or speaker.get('speaker')
+                or speaker.get('label')
+            )
+            if not isinstance(speaker_id, str) or not speaker_id.strip():
+                continue
+            if speaker_id.strip().casefold() == 'unknown':
+                continue
             node_id = kg.add_node(
                 node_type='speaker',
                 name=speaker_id,

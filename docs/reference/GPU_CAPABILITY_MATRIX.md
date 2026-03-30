@@ -25,8 +25,8 @@ Policy target applied: system should stay functional without a GPU; GPU use shou
 
 | Component | Why it trends toward “required” | Workload class | API assumption | Evidence |
 |---|---|---|---|---|
-| Canonical runtime contract/profile | Repo policy documents define NVIDIA/CUDA as baseline runtime identity | Optional optimization (platform profile) | CUDA-assumed | `AGENTS.md:19`, `AGENTS.md:45`, `configs/config.yaml:113`, `configs/config.yaml:114`, `configs/config.yaml:115` |
-| WSL2 audio daemon default profile (`audio_service.py`) | Config defaults to `device: cuda`; if Whisper model load fails, service path raises at transcription call | Inference | CUDA-assumed | `wsl2_audio/config.json:8`, `wsl2_audio/config.json:10`, `wsl2_audio/audio_service.py:174`, `wsl2_audio/audio_service.py:180`, `wsl2_audio/audio_service.py:290`, `wsl2_audio/audio_service.py:291` |
+| `GPU_ENHANCED` runtime profile | CUDA is intentionally expected only when the accelerated host profile or strict flags are selected; `BASELINE` must remain CPU-safe | Optional optimization (platform profile) | CUDA-assumed when explicitly selected | `AGENTS.md:19`, `AGENTS.md:45`, `configs/config.yaml:139`, `configs/config.yaml:140`, `docs/reference/PLATFORM_SUPPORT.md:1` |
+| WSL2 unified audio worker (`process_audio.py`) | Accelerated audio path prefers CUDA when available and is configured from live runtime settings | Inference | CUDA-assumed in accelerated path | `configs/config.yaml:221`, `configs/config.yaml:229`, `wsl2_audio/process_audio.py:527`, `wsl2_audio/process_audio.py:621`, `wsl2_audio/process_audio.py:727` |
 | WSL2 locked environment packages | Locked env includes NVIDIA CUDA/cuDNN packages (not ROCm equivalents) | Optional optimization (runtime packaging) | CUDA-assumed | `wsl2_audio/requirements-locked.txt:62`, `wsl2_audio/requirements-locked.txt:66`, `wsl2_audio/requirements-locked.txt:67`, `wsl2_audio/requirements-locked.txt:74` |
 
 ## 3) Components That Must Remain CPU-Safe

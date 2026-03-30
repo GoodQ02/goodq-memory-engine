@@ -1,110 +1,119 @@
+<!-- DOC_BADGE: OPERATIONAL -->
+<!-- DOC_STATUS: ACTIVE -->
+<!-- DOC_LAST_VERIFIED: 2026-03-26 -->
+
 # GoodQ4All Environment Index
 
-**Purpose:** Map the core Conda environments and WSL2 environments to their roles in the GoodQ4All pipeline, and distinguish shipping-critical envs from auxiliary/experimental ones.
+**Purpose:** Map the current supported Windows and WSL environments to their roles in the live pipeline.
 
 ---
 
-## Windows Conda Environments (GoodQ4All)
+## Bootstrap-Provisioned Windows Environments
 
-Bootstrap contract:
-
-- `scripts/bootstrap_install.py` provisions `goodq_core` plus the supported
-  specialized step-env pack listed below, so a fresh machine can install the
-  active pipeline in one shot.
-- Those specialized step envs are provisioned from the pinned stable lock
-  recipes in `envs/locks/`, not from a fresh pip resolver pass.
-- `goodq_face_embed` additionally uses Conda `dlib` as part of its Windows
-  bootstrap recipe so the face stack remains reproducible on clean hosts.
+The supported bootstrap surface provisions `goodq_core` plus the current step-env pack from pinned lock recipes.
 
 ### Orchestration & Core
 
-- `goodq_core` – Primary orchestration environment.
-  - Used by: `LAUNCH_GOODQ.bat`, `cli/run_ingestion.py`, Command Center, health checks.
-  - Scope: Coordinates pipelines, DB access, FAISS, and API server.
+- `goodq_core`
+  - canonical orchestration environment
+  - used by launcher, CLI, bootstrap validation, API, and watchdog
 
 ### Vision / Video
 
-- `goodq_video_scene_detect` – GPU-accelerated scene detection.
-  - Steps: `video_scene_detect` (scene boundary detection).
-- `goodq_image_caption` – Image captioning.
-  - Steps: BLIP-based captioning.
-- `goodq_image_embed` (mapped from `envs/image_caption` / `envs/text_embed`) – CLIP and DINO embeddings.
-  - Steps: `image_embed_clip`, `image_embed_dino`.
-- `goodq_object_detect` – Object detection (YOLO).
-- `goodq_face_embed` – Face detection and embeddings.
-- `goodq_ocr` – OCR for frame text.
+- `goodq_video_scene_detect`
+  - legacy-but-supported scene detection environment
+- `goodq_image_caption`
+  - image captioning plus OCR / EXIF / CLIP / DINO support for the current image lane
+- `goodq_object_detect`
+  - YOLO object detection
+- `goodq_face_embed`
+  - face detection and embedding
+- `goodq_text_embed`
+  - text embedding support
 
 ### Audio
 
-- `goodq_audio_diarize` – Speaker diarization (PyAnnote).
-- `goodq_audio_transcribe` – Whisper/Faster-Whisper transcription.
-- `goodq_audio_emotion` – Audio emotion classification.
-- `goodq_audio_embed` – CLAP audio embeddings.
-
-### Text, Sentiment & Emotion
-
-- `goodq_text_embed` – SBERT text embeddings.
-- `goodq_text_tagger` (mapped from `envs/tagger`) – NER/tagging.
-- `goodq_sentiment` – Sentiment analysis.
-- `goodq_emotion_classify` – Text emotion classification.
-
-### Knowledge Graph & LLM
-
-- `goodq_knowledge_graph` – Knowledge graph construction and queries.
-- `goodq_llm_chat` / `llm_chat` – LLM-based chat and analysis (see LLM docs).
-
-> Note: Environment lockfiles and names are further described in `envs/locks/README.md`. Where there is a `goodq_<step>` pattern and a matching `envs/<step>/` directory, they form a pair.
+- `goodq_audio_metadata`
+  - audio metadata and time-hint helpers
+- `goodq_audio_transcribe`
+  - Windows-side audio helper lane used for speaker merge, music events, and time hints
+- `goodq_audio_emotion`
+  - audio emotion analysis
+- `goodq_audio_embed`
+  - CLAP audio embeddings
 
 ---
 
-## WSL2 Environments
+## Current WSL Environments
 
-### Audio Processing Stack (`~/goodq_audio/`)
+### WSL Unified Audio Worker
 
-- Location: `~/goodq_audio/` (WSL2 Ubuntu).
-  - `venv/` – Python virtual environment for the WSL audio worker.
-  - `setup_cuda_env.sh`, `process.sh`, `process_audio.py` – GPU-accelerated audio processing and environment bootstrap.
-  - Docs: `docs/guides/llm/WSL2_AUDIO_SETUP.md`, `docs/guides/wsl2/START_HERE_WSL2.md`, `docs/guides/gpu/GPU_LLM_WSL_INDEX.md`.
+- home: `GOODQ_WSL_WORKSPACE` (typically `~/goodq_audio`)
+- runtime: `venv/`
+- key files:
+  - `setup_cuda_env.sh`
+  - `process_audio.py`
+  - `process.sh`
 
-### vLLM / LLM Service Stack (WSL2 Ubuntu)
+This is the current accelerated audio worker for:
 
-- Runtime home: `GOODQ_WSL_VLLM_HOME` (default: `~/vllm_server`).
-  - `venv/` – Python virtual environment for the vLLM service.
-  - `GOODQ_WSL_MODEL_PATH` – Preferred model-path variable for the active vLLM service.
-  - `scripts/wsl/install_vllm_service.sh` – Supported installer for the `vllm-llama1b` systemd service.
-  - Docs: `docs/guides/llm/VLLM_SYSTEMD_SETUP.md`, `docs/guides/llm/LLM_INFRASTRUCTURE.md`, `docs/guides/llm/LLM_CLIENT_GUIDE.md`.
+- transcription
+- optional diarization
+- optional embeddings
+- optional emotion
+
+### WSL vLLM Service Stack
+
+- home: `GOODQ_WSL_VLLM_HOME` (default `~/vllm_server`)
+- runtime: `venv/`
+- used for the optional WSL/systemd-backed local LLM service path
 
 ---
 
-## Shipping-Critical Envs (Per SHIP_PROFILE)
+## Supported Shipping Surface
 
-These environments are considered part of the **supported surface** and should not be renamed or removed without updating:
+These are the environments/operators that should be treated as part of the active supported surface:
 
 - `goodq_core`
 - `goodq_video_scene_detect`
-- `goodq_audio_diarize`
-- `goodq_audio_transcribe`
-- `goodq_audio_emotion`
 - `goodq_image_caption`
-- `goodq_image_embed`
 - `goodq_object_detect`
 - `goodq_face_embed`
-- `goodq_ocr`
 - `goodq_text_embed`
-- `goodq_sentiment`
-- `goodq_emotion_classify`
+- `goodq_audio_metadata`
+- `goodq_audio_transcribe`
+- `goodq_audio_emotion`
 - `goodq_audio_embed`
-- `goodq_knowledge_graph`
-- WSL2: `~/goodq_audio/venv/`, `GOODQ_WSL_VLLM_HOME/venv`
-
-Other `goodq_*` or utility envs that appear only in historical docs or lockfiles may be treated as auxiliary/experimental unless explicitly referenced in `docs/releases/SHIP_PROFILE.md` or other canonical docs.
+- WSL unified audio worker: `GOODQ_WSL_WORKSPACE/venv`
+- WSL vLLM worker: `GOODQ_WSL_VLLM_HOME/venv`
 
 ---
 
-## How to Use This Index
+## Legacy / Non-Canonical Surfaces
 
-- When adding or modifying steps:
-  - Ensure the associated environment name matches the `goodq_<step>` pattern documented here.
-  - If you introduce a new env that is part of the shipping surface, add it both here and in `docs/releases/SHIP_PROFILE.md`.
-- When troubleshooting:
-  - Use this index alongside `docs/guides/gpu/GPU_LLM_WSL_INDEX.md` and `docs/reference/indexes/TROUBLESHOOTING_INDEX.md` to quickly map failures to the right environment and docs.
+The following names may still exist in code, lockfiles, or historical docs, but they are not the current primary bootstrap/runtime surface:
+
+- `goodq_audio_diarize`
+- `goodq_image_embed`
+- `goodq_ocr`
+- `goodq_text_tagger`
+- `goodq_sentiment`
+- `goodq_emotion_classify`
+- `goodq_knowledge_graph`
+- `goodq_llm_chat`
+
+They should not be treated as the first stop for current runtime troubleshooting unless a canonical doc explicitly points there.
+
+---
+
+## How To Use This Index
+
+- Use this index to map a failing step to its current runtime environment.
+- Use the WSL runtime doc when audio acceleration is involved.
+- Use the segmentation artifact contract when shadow-mode segmentation is involved.
+
+Related docs:
+
+- [`docs/reference/WSL_AUDIO_RUNTIME.md`](../WSL_AUDIO_RUNTIME.md)
+- [`docs/technical/SEGMENTATION_ARTIFACT_CONTRACT.md`](../../technical/SEGMENTATION_ARTIFACT_CONTRACT.md)
+- [`docs/guides/gpu/GPU_LLM_WSL_INDEX.md`](../../guides/gpu/GPU_LLM_WSL_INDEX.md)

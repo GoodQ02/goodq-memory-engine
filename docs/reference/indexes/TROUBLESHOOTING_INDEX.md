@@ -1,26 +1,24 @@
 # GoodQ4All Troubleshooting & Fixes Index
 
-**Purpose:** Central entrypoint for troubleshooting guides and fix-specific reports. Use this to find the right level of detail when diagnosing or resolving issues.
+**Purpose:** Central entrypoint for troubleshooting guides and fix-specific reports.
 
 ---
 
 ## Canonical Troubleshooting Guides
 
 - `docs/TROUBLESHOOTING.md` – Primary, canonical troubleshooting guide for common issues and workflows.
-- `docs/TROUBLESHOOTING_EMPTY_ANALYSIS.md` – Specialized guide for “empty analysis” / no-output scenarios.
-- `docs/reference/FIXES_QUICK_REFERENCE.txt` – Historical quick reference for early critical fixes (still useful as a checklist).
+- `docs/TROUBLESHOOTING_EMPTY_ANALYSIS.md` – Specialized guide for no-output / empty-analysis scenarios.
+- `docs/reference/WSL_AUDIO_RUNTIME.md` – Current WSL audio runtime truth surfaces, readiness states, and bridge error fields.
 
 ---
 
 ## High-Impact Fix Summaries
 
-Use these when you need to understand major fix sets that changed system behavior:
-
-- `docs/CRITICAL_FIXES_APPLIED.md` – Log of critical fixes applied across the system.
-- `docs/IMMEDIATE_FIXES.md` – High-priority fixes from early diagnostics.
-- `docs/SYSTEM_FIX_SUMMARY.md` – System-wide fix summary.
-- `docs/PERFORMANCE_FIXES.md` – Performance-focused fixes and optimizations.
-- `docs/FIXES_APPLIED_2025-10-17.md` – Session-specific fix summary.
+- `docs/CRITICAL_FIXES_APPLIED.md`
+- `docs/IMMEDIATE_FIXES.md`
+- `docs/SYSTEM_FIX_SUMMARY.md`
+- `docs/PERFORMANCE_FIXES.md`
+- `docs/FIXES_APPLIED_2025-10-17.md`
 
 Agent-facing fix summaries:
 
@@ -37,7 +35,7 @@ Agent-facing fix summaries:
 
 - `docs/AUDIO_DIARIZATION_FIX.md`
 - `docs/AUDIO_DIARIZATION_COMPLETE_FIX.md`
-- `docs/TRANSCRIPTION_FIX_APPLIED.md` (agent-communications)
+- `docs/agent-communications/TRANSCRIPTION_FIX_APPLIED.md`
 - `docs/HUGGINGFACE_COMPLETE_FIX.md`
 - `docs/SENTIMENT_TIMEOUT_FIX.md`
 - `docs/SILENT_FAILURE_FIX_REPORT.md`
@@ -53,8 +51,7 @@ Agent-facing fix summaries:
 - `docs/SCENE_SUMMARIZATION_FIX_PLAN.md`
 - `docs/GPU_FIX_SUMMARY.md`
 - `docs/PHASE4_EMOTION_DETECTION_FIXES.md`
-- `docs/archive/proof_of_concept/ui/UI_PHASE2_FIXES.md` - Historical UI-fix note for the retired scaffolded web interface.
-- `docs/technical/VISION_GPU_OPTIMIZATION.md` (see also `docs/guides/gpu/GPU_LLM_WSL_INDEX.md` for the current GPU/WSL surface).
+- `docs/technical/VISION_GPU_OPTIMIZATION.md`
 
 ### Configuration / Dependencies
 
@@ -68,14 +65,15 @@ Agent-facing fix summaries:
 
 ---
 
-## When to Use What
+## When To Use What
 
 - Start with:
-  - `docs/TROUBLESHOOTING.md` for general issues.
-  - `docs/TROUBLESHOOTING_EMPTY_ANALYSIS.md` for “no output / empty analysis” cases.
+  - `docs/TROUBLESHOOTING.md` for general issues
+  - `docs/TROUBLESHOOTING_EMPTY_ANALYSIS.md` for no-output cases
+  - `docs/reference/WSL_AUDIO_RUNTIME.md` for WSL audio readiness and bridge failures
 - Then consult:
-  - `docs/CRITICAL_FIXES_APPLIED.md` and `docs/SYSTEM_FIX_SUMMARY.md` for an overview of past critical fixes.
-  - Specific subsystem fix reports (audio, scene detection, config) when symptoms match those areas.
-- For GPU, LLM, WSL2, and Watchdog-specific troubleshooting, prefer:
-  - `docs/GPU_LLM_WSL_INDEX.md`
-  - `docs/WATCHDOG_INDEX.md`
+  - `docs/CRITICAL_FIXES_APPLIED.md` and `docs/SYSTEM_FIX_SUMMARY.md` for system-wide overview
+  - the subsystem-specific fix reports when symptoms match
+- For GPU, LLM, WSL2, and Watchdog-specific docs, prefer:
+  - `docs/guides/gpu/GPU_LLM_WSL_INDEX.md`
+  - `docs/guides/watchdog/WATCHDOG_INDEX.md`

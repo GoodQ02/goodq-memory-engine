@@ -10,26 +10,24 @@
 - `docs/copilot_user_communications/` – Copilot/user-facing session summaries and overnight work reports.
 - `docs/releases/SESSION_SUMMARY.md` – Release-focused session summary.
 
-Most files in these directories are **historical snapshots** of specific sessions. Canonical technical behavior is defined in the primary docs (architecture, phases, GPU/LLM/WSL, troubleshooting, etc.).
+Most files in these directories are historical snapshots of specific sessions. Canonical technical behavior is defined in the primary architecture, status, platform, WSL, and troubleshooting docs.
 
 ---
 
 ## Guidance-Oriented Agent Docs
 
-These are more “how to work” than “what happened,” and are useful to revisit:
-
-- `docs/agent-communications/README.md` – Directory overview and high-level structure.
-- `docs/agent-communications/MORNING_CHECKLIST.md` – Example morning checklist for system review and next steps (older paths but useful pattern).
-- `docs/agent-communications/START_HERE_AFTER_WORK.md` – Guidance for resuming work after a session.
-- `docs/agent-communications/NEXT_STEPS.md` – High-level next-steps guidance at a point in time.
-- `docs/agent-communications/WELCOME_BACK.md` – Orientation note for returning to the project.
-- `docs/agent-communications/MODEL_LOADING_FIXES.md` – Detailed explanation of model-loading fixes; complements canonical fix docs.
+- `docs/agent-communications/README.md`
+- `docs/agent-communications/MORNING_CHECKLIST.md`
+- `docs/agent-communications/START_HERE_AFTER_WORK.md`
+- `docs/agent-communications/NEXT_STEPS.md`
+- `docs/agent-communications/WELCOME_BACK.md`
+- `docs/agent-communications/MODEL_LOADING_FIXES.md`
 
 ---
 
 ## Historical Session & Fix Logs (Agent)
 
-These are primarily historical records of specific efforts and should be read as snapshots:
+These are snapshots, not canonical runtime docs:
 
 - `docs/agent-communications/ALL_ISSUES_RESOLVED.md`
 - `docs/agent-communications/CLEANUP_SUMMARY.md`
@@ -50,38 +48,39 @@ These are primarily historical records of specific efforts and should be read as
 - `docs/agent-communications/VALIDATION_AND_NEXT_STEPS.md`
 - `docs/agent-communications/WATCHDOG_CLEANUP.md`
 
-For canonical status and timelines, prefer `docs/CURRENT_SYSTEM_STATUS.md` and `docs/project-history/CHANGELOG.md`.
+For canonical status and timelines, prefer:
+
+- `docs/goodq4all_agent_status.md`
+- `docs/SYSTEM_SNAPSHOT.md`
+- `docs/archive/project-history/CHANGELOG.md`
 
 ---
 
 ## Copilot/User Communications
 
-These are user-facing narratives of sessions and overnight work:
-
-- `docs/copilot_user_communications/MORNING_BRIEFING.md` – Morning overview after overnight work.
-- `docs/copilot_user_communications/OVERNIGHT_INDEX.md` – Navigation index for overnight deliverables.
-- `docs/copilot_user_communications/OVERNIGHT_AUDIT_FINDINGS.md` – Technical audit findings.
-- `docs/copilot_user_communications/COMPREHENSIVE_ENHANCEMENT_PLAN.md` – Enhancement roadmap (vision-level).
-- `docs/copilot_user_communications/OVERNIGHT_WORK_COMPLETE.md` – Overnight completion summary.
-- `docs/copilot_user_communications/OVERNIGHT_MONITORING_REPORT.md` – Monitoring/reporting snapshot.
-- `docs/copilot_user_communications/SESSION_SUMMARY.md` – Session summary; historical snapshot.
+- `docs/copilot_user_communications/MORNING_BRIEFING.md`
+- `docs/copilot_user_communications/OVERNIGHT_INDEX.md`
+- `docs/copilot_user_communications/OVERNIGHT_AUDIT_FINDINGS.md`
+- `docs/copilot_user_communications/COMPREHENSIVE_ENHANCEMENT_PLAN.md`
+- `docs/copilot_user_communications/OVERNIGHT_WORK_COMPLETE.md`
+- `docs/copilot_user_communications/OVERNIGHT_MONITORING_REPORT.md`
+- `docs/copilot_user_communications/SESSION_SUMMARY.md`
 
 Release-level session summary:
 
-- `docs/releases/SESSION_SUMMARY.md` – Release-focused summary for a specific recovery session (historical).
+- `docs/releases/SESSION_SUMMARY.md`
 
 ---
 
 ## How Agents Should Treat These Docs
 
-- **Primary truth:** Always prefer canonical technical docs first:
-  - `docs/SHIP_PROFILE.md`
-  - `docs/ARCHITECTURE_REFERENCE.md`
-  - `docs/project-history/CHANGELOG.md`
-  - `docs/CURRENT_SYSTEM_STATUS.md`
-  - Phase, GPU/LLM/WSL, Watchdog, and Troubleshooting indexes.
-- **Historical context:** Use agent & Copilot communications to understand:
-  - Why certain decisions were made.
-  - How past sessions approached fixes and planning.
-  - Additional narrative context around major changes.
-
+- Primary truth first:
+  - `docs/releases/SHIP_PROFILE.md`
+  - `docs/architecture/ARCHITECTURE_REFERENCE.md`
+  - `docs/architecture/SYSTEM_ARCHITECTURE.md`
+  - `docs/goodq4all_agent_status.md`
+  - `docs/SYSTEM_SNAPSHOT.md`
+  - `docs/archive/project-history/CHANGELOG.md`
+  - the platform / WSL / troubleshooting indexes
+- Historical context second:
+  - use agent and Copilot communications to understand why earlier decisions were made and how past sessions approached specific fixes

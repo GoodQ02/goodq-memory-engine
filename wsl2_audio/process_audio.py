@@ -539,14 +539,16 @@ def process_audio(audio_file, output_dir):
         print("Processing: Diarization...", file=sys.stderr)
         if bool(result["diarization_enabled"]) and DIARIZATION_AVAILABLE:
             try:
+                # Runtime env overrides must win so tests, local overrides, and
+                # temporary credential swaps can take effect without mutating config.
                 hf_token = (
-                    _resolve_secret(
+                    os.getenv("HF_TOKEN", "")
+                    or os.getenv("PYANNOTE_TOKEN", "")
+                    or os.getenv("HUGGINGFACE_TOKEN", "")
+                    or _resolve_secret(
                         runtime_cfg.get("huggingface_token"),
                         runtime_cfg.get("huggingface_token_env"),
                     )
-                    or os.getenv("HUGGINGFACE_TOKEN", "")
-                    or os.getenv("HF_TOKEN", "")
-                    or os.getenv("PYANNOTE_TOKEN", "")
                 )
                 if hf_token:
                     os.environ.setdefault("HUGGINGFACE_TOKEN", hf_token)

@@ -35,6 +35,7 @@ def _flatten_scene_payload(scene: Dict[str, Any]) -> Dict[str, Any]:
         "tags",
         "faces",
         "objects",
+        "speaker_voice_signatures",
         "speaker_transcript",
         "speakers",
         "speaker_ids",
@@ -157,6 +158,20 @@ def _parse_properties(raw: Any) -> Dict[str, Any]:
     return data if isinstance(data, dict) else {}
 
 
+def _dedupe_supporting_evidence(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    seen = set()
+    deduped: List[Dict[str, Any]] = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        key = json.dumps(item, ensure_ascii=False, sort_keys=True)
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(item)
+    return deduped
+
+
 def build_identity_ledger(
     *,
     graph_db_path: Path,
@@ -213,6 +228,7 @@ def build_identity_ledger(
                 "source_type_counts": Counter(),
                 "source_rule_counts": Counter(),
                 "supporting_scene_ids": set(),
+                "supporting_evidence": [],
             },
         )
         person_entry["edge_counts"][edge_type] += 1
@@ -232,6 +248,13 @@ def build_identity_ledger(
                     support_episode = scene_episode_map.get(support_scene_id.strip())
                     if support_episode:
                         person_entry["episodes"].add(support_episode)
+        supporting_evidence = properties.get("supporting_evidence")
+        if isinstance(supporting_evidence, list):
+            person_entry["supporting_evidence"].extend(
+                evidence
+                for evidence in supporting_evidence
+                if isinstance(evidence, dict)
+            )
 
         pair_key = (source_name, target_name, edge_type)
         pair_entry = pair_bundles.setdefault(
@@ -246,6 +269,7 @@ def build_identity_ledger(
                 "episodes": set(),
                 "sources": set(),
                 "supporting_scene_ids": set(),
+                "supporting_evidence": [],
             },
         )
         pair_entry["edge_count"] += 1
@@ -262,6 +286,12 @@ def build_identity_ledger(
                     support_episode = scene_episode_map.get(support_scene_id.strip())
                     if support_episode:
                         pair_entry["episodes"].add(support_episode)
+        if isinstance(supporting_evidence, list):
+            pair_entry["supporting_evidence"].extend(
+                evidence
+                for evidence in supporting_evidence
+                if isinstance(evidence, dict)
+            )
 
     conn.close()
 
@@ -277,6 +307,7 @@ def build_identity_ledger(
                 "edge_counts": dict(entry["edge_counts"]),
                 "source_type_counts": dict(entry["source_type_counts"]),
                 "source_rule_counts": dict(entry["source_rule_counts"]),
+                "supporting_evidence": _dedupe_supporting_evidence(entry["supporting_evidence"])[:8],
             }
         )
 
@@ -293,6 +324,7 @@ def build_identity_ledger(
                 "scene_count": len(entry["scene_ids"]),
                 "supporting_scene_count": len(entry["supporting_scene_ids"]),
                 "sources": sorted(entry["sources"]),
+                "supporting_evidence": _dedupe_supporting_evidence(entry["supporting_evidence"])[:8],
             }
         )
 

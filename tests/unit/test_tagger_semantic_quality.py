@@ -117,3 +117,126 @@ def test_tagger_rejects_god_bless_and_justin_case_artifacts(monkeypatch):
     assert result["entity_details"] == [
         {"label": "George", "score": 12.5, "sources": ["fallback", "ner"], "type": "PERSON"}
     ]
+
+
+def test_tagger_rejects_batman_and_case_common_noun_artifacts(monkeypatch):
+    item = {
+        "transcript": "It's not like Batman. We are going to crack this case. Case closed. Sony is here.",
+    }
+
+    def fake_extract(_text, _cfg):
+        return (
+            ["Batman", "Case", "Sony"],
+            [
+                {"name": "Batman", "type": "PER", "source_step": "tagger", "source_modality": "text"},
+                {"name": "Case", "type": "PER", "source_step": "tagger", "source_modality": "text"},
+                {"name": "Sony", "type": "ORG", "source_step": "tagger", "source_modality": "text"},
+            ],
+        )
+
+    monkeypatch.setattr(tagger_step, "_extract_entities_transformers", fake_extract)
+    monkeypatch.setattr(tagger_step, "_fallback_entities", lambda _text: ["Sony"])
+
+    result = tagger_step.tagger(item, {})
+
+    assert result["entities"] == ["Sony"]
+    assert result["entity_details"] == [
+        {"label": "Sony", "score": 10.5, "sources": ["fallback", "ner"], "type": "ORG"}
+    ]
+
+
+def test_tagger_boosts_repeated_names_over_one_off_entities(monkeypatch):
+    item = {
+        "transcript": "George arrives. George sits down. Bill waves once.",
+    }
+
+    def fake_extract(_text, _cfg):
+        return (
+            ["George", "Bill"],
+            [
+                {"name": "George", "type": "PERSON", "source_step": "tagger", "source_modality": "text"},
+                {"name": "Bill", "type": "PERSON", "source_step": "tagger", "source_modality": "text"},
+            ],
+        )
+
+    monkeypatch.setattr(tagger_step, "_extract_entities_transformers", fake_extract)
+    monkeypatch.setattr(tagger_step, "_fallback_entities", lambda _text: ["George", "Bill"])
+
+    result = tagger_step.tagger(item, {})
+
+    assert result["entities"][:2] == ["George", "Bill"]
+    assert result["entity_details"][0]["label"] == "George"
+    assert result["entity_details"][0]["score"] > result["entity_details"][1]["score"]
+
+
+def test_tagger_collapses_unstable_compound_person_alias_to_head_name(monkeypatch):
+    item = {
+        "transcript": "And I'm Jerry Cougar, Mellon Camp. Anyway, we have a problem here.",
+    }
+
+    def fake_extract(_text, _cfg):
+        return (
+            ["Jerry Cougar", "Mellon Camp"],
+            [
+                {"name": "Jerry Cougar", "type": "PER", "source_step": "tagger", "source_modality": "text"},
+                {"name": "Mellon Camp", "type": "ORG", "source_step": "tagger", "source_modality": "text"},
+            ],
+        )
+
+    monkeypatch.setattr(tagger_step, "_extract_entities_transformers", fake_extract)
+    monkeypatch.setattr(tagger_step, "_fallback_entities", lambda _text: ["Jerry Cougar"])
+
+    result = tagger_step.tagger(item, {})
+
+    assert "Jerry Cougar" not in result["entities"]
+    assert "Jerry" in result["entities"]
+    assert "Mellon" not in result["entities"]
+    assert [entry["name"] for entry in result["ner_entities"]] == ["Jerry", "Mellon Camp"]
+
+
+def test_tagger_collapses_three_word_alias_to_stable_head_name(monkeypatch):
+    item = {
+        "transcript": "Oh, really? Elaine Marie Venice. What? No, it's not a big deal.",
+    }
+
+    def fake_extract(_text, _cfg):
+        return (
+            ["Elaine Marie Venice"],
+            [
+                {"name": "Elaine Marie Venice", "type": "PER", "source_step": "tagger", "source_modality": "text"},
+            ],
+        )
+
+    monkeypatch.setattr(tagger_step, "_extract_entities_transformers", fake_extract)
+    monkeypatch.setattr(tagger_step, "_fallback_entities", lambda _text: ["Elaine Marie Venice"])
+
+    result = tagger_step.tagger(item, {})
+
+    assert result["entities"] == ["Elaine"]
+    assert result["ner_entities"] == [
+        {"name": "Elaine", "type": "PER", "source_step": "tagger", "source_modality": "text"}
+    ]
+
+
+def test_tagger_preserves_repeated_compound_person_name_with_recurrence(monkeypatch):
+    item = {
+        "transcript": "George Costanza walks in. George Costanza sits down. Jerry listens.",
+    }
+
+    def fake_extract(_text, _cfg):
+        return (
+            ["George Costanza", "Jerry"],
+            [
+                {"name": "George Costanza", "type": "PER", "source_step": "tagger", "source_modality": "text"},
+                {"name": "Jerry", "type": "PER", "source_step": "tagger", "source_modality": "text"},
+            ],
+        )
+
+    monkeypatch.setattr(tagger_step, "_extract_entities_transformers", fake_extract)
+    monkeypatch.setattr(tagger_step, "_fallback_entities", lambda _text: ["George Costanza", "Jerry"])
+
+    result = tagger_step.tagger(item, {})
+
+    assert "George Costanza" in result["entities"]
+    assert "George" not in [entry["name"] for entry in result["ner_entities"]]
+    assert result["ner_entities"][0]["name"] == "George Costanza"

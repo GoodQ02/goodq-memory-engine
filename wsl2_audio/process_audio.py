@@ -13,6 +13,7 @@ import logging
 import traceback
 from contextlib import redirect_stdout
 from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 # Core imports
 import torch
@@ -78,6 +79,12 @@ _DEFAULT_RUNTIME_CONFIG = {
         "beam_size": 5,
     },
 }
+
+_SPEAKER_SIGNATURE_TARGET_SR = 16000
+_SPEAKER_SIGNATURE_MIN_TOTAL_SECONDS = 4.0
+_SPEAKER_SIGNATURE_MIN_SEGMENTS = 2
+_SPEAKER_SIGNATURE_MIN_SEGMENT_SECONDS = 0.75
+_SPEAKER_SIGNATURE_MAX_SEGMENTS = 4
 
 
 def _deep_merge(base, override):
@@ -191,6 +198,213 @@ def get_gpu_memory_info():
     return {"allocated_mb": 0, "reserved_mb": 0}
 
 
+def _segment_duration(segment: Dict[str, Any]) -> float:
+    try:
+        start_val = float(segment.get("start") or 0.0)
+    except Exception:
+        start_val = 0.0
+    try:
+        end_val = float(segment.get("end") or start_val)
+    except Exception:
+        end_val = start_val
+    return max(0.0, end_val - start_val)
+
+
+def _select_speaker_signature_segments(
+    diarization_segments: Any,
+    *,
+    min_total_seconds: float = _SPEAKER_SIGNATURE_MIN_TOTAL_SECONDS,
+    min_segments: int = _SPEAKER_SIGNATURE_MIN_SEGMENTS,
+    min_segment_seconds: float = _SPEAKER_SIGNATURE_MIN_SEGMENT_SECONDS,
+    max_segments: int = _SPEAKER_SIGNATURE_MAX_SEGMENTS,
+) -> List[Dict[str, Any]]:
+    grouped: Dict[str, List[Dict[str, Any]]] = {}
+    if not isinstance(diarization_segments, list):
+        return []
+
+    for segment in diarization_segments:
+        if not isinstance(segment, dict):
+            continue
+        speaker = segment.get("speaker")
+        if not isinstance(speaker, str) or not speaker.strip():
+            continue
+        duration = _segment_duration(segment)
+        if duration < min_segment_seconds:
+            continue
+        grouped.setdefault(speaker.strip(), []).append(
+            {
+                "speaker": speaker.strip(),
+                "start": float(segment.get("start") or 0.0),
+                "end": float(segment.get("end") or 0.0),
+                "duration": duration,
+            }
+        )
+
+    selected_groups: List[Dict[str, Any]] = []
+    for speaker, segments in grouped.items():
+        ranked = sorted(
+            segments,
+            key=lambda item: (-float(item.get("duration") or 0.0), float(item.get("start") or 0.0)),
+        )
+        chosen = ranked[: max(1, int(max_segments))]
+        total_seconds = sum(float(item.get("duration") or 0.0) for item in chosen)
+        if len(chosen) < int(min_segments) or total_seconds < float(min_total_seconds):
+            continue
+        selected_groups.append(
+            {
+                "speaker": speaker,
+                "selected_segments": sorted(chosen, key=lambda item: float(item.get("start") or 0.0)),
+                "selected_segment_count": len(chosen),
+                "available_segment_count": len(segments),
+                "voiced_seconds": round(total_seconds, 3),
+            }
+        )
+    return selected_groups
+
+
+def _slice_waveform_segment(
+    waveform: torch.Tensor,
+    *,
+    start_seconds: float,
+    end_seconds: float,
+    sample_rate: int,
+) -> Optional[torch.Tensor]:
+    if not isinstance(waveform, torch.Tensor):
+        return None
+    safe_start = max(0.0, float(start_seconds or 0.0))
+    safe_end = max(safe_start, float(end_seconds or safe_start))
+    if safe_end <= safe_start:
+        return None
+    start_idx = int(round(safe_start * sample_rate))
+    end_idx = int(round(safe_end * sample_rate))
+    if end_idx <= start_idx:
+        return None
+    clipped = waveform[..., start_idx:end_idx]
+    if clipped.numel() == 0:
+        return None
+    return clipped.detach().cpu()
+
+
+def _normalize_embedding_vector(vector: np.ndarray) -> Optional[np.ndarray]:
+    if not isinstance(vector, np.ndarray):
+        return None
+    norm = float(np.linalg.norm(vector))
+    if not np.isfinite(norm) or norm <= 1e-8:
+        return None
+    return vector / norm
+
+
+def _build_speaker_voice_signatures(
+    waveform_16k: torch.Tensor,
+    diarization_segments: Any,
+    *,
+    embed_model: Any,
+    embed_extractor: Any,
+    device: str,
+    sample_rate: int = _SPEAKER_SIGNATURE_TARGET_SR,
+) -> Dict[str, Any]:
+    selected_groups = _select_speaker_signature_segments(diarization_segments)
+    signatures: List[Dict[str, Any]] = []
+    skipped: List[Dict[str, Any]] = []
+
+    if not selected_groups:
+        return {
+            "signatures": [],
+            "meta": {
+                "status": "skipped",
+                "reason": "insufficient_diverse_speech",
+                "emitted": 0,
+                "attempted_speakers": 0,
+                "min_voiced_seconds": _SPEAKER_SIGNATURE_MIN_TOTAL_SECONDS,
+                "min_segment_count": _SPEAKER_SIGNATURE_MIN_SEGMENTS,
+            },
+        }
+
+    for group in selected_groups:
+        speaker = str(group.get("speaker") or "").strip()
+        segment_vectors: List[np.ndarray] = []
+        emitted_segments: List[Dict[str, Any]] = []
+        for segment in group.get("selected_segments") or []:
+            clipped = _slice_waveform_segment(
+                waveform_16k,
+                start_seconds=float(segment.get("start") or 0.0),
+                end_seconds=float(segment.get("end") or 0.0),
+                sample_rate=int(sample_rate),
+            )
+            if clipped is None:
+                continue
+            inputs = embed_extractor(
+                clipped.numpy().flatten(),
+                sampling_rate=int(sample_rate),
+                return_tensors="pt",
+                padding=True,
+            )
+            inputs = {key: value.to(device) for key, value in inputs.items()}
+            with torch.no_grad():
+                hidden_state = embed_model(**inputs).last_hidden_state
+            pooled = torch.mean(hidden_state, dim=1).detach().cpu().numpy()[0]
+            normalized = _normalize_embedding_vector(pooled)
+            if normalized is None:
+                continue
+            segment_vectors.append(normalized)
+            emitted_segments.append(
+                {
+                    "start": float(segment.get("start") or 0.0),
+                    "end": float(segment.get("end") or 0.0),
+                    "duration": round(float(segment.get("duration") or 0.0), 3),
+                }
+            )
+
+        if len(segment_vectors) < _SPEAKER_SIGNATURE_MIN_SEGMENTS:
+            skipped.append(
+                {
+                    "speaker": speaker,
+                    "reason": "insufficient_embedded_segments",
+                    "selected_segment_count": len(emitted_segments),
+                    "required_segment_count": _SPEAKER_SIGNATURE_MIN_SEGMENTS,
+                }
+            )
+            continue
+
+        centroid = np.mean(np.stack(segment_vectors, axis=0), axis=0)
+        normalized_centroid = _normalize_embedding_vector(centroid)
+        if normalized_centroid is None:
+            skipped.append(
+                {
+                    "speaker": speaker,
+                    "reason": "invalid_centroid",
+                    "selected_segment_count": len(emitted_segments),
+                }
+            )
+            continue
+
+        signatures.append(
+            {
+                "speaker": speaker,
+                "embedding": normalized_centroid.astype(np.float32).tolist(),
+                "embedding_dim": int(normalized_centroid.shape[0]),
+                "voiced_seconds": float(group.get("voiced_seconds") or 0.0),
+                "segment_count": len(emitted_segments),
+                "available_segment_count": int(group.get("available_segment_count") or len(emitted_segments)),
+                "selected_segments": emitted_segments,
+            }
+        )
+
+    status = "ok" if signatures else "skipped"
+    meta: Dict[str, Any] = {
+        "status": status,
+        "emitted": len(signatures),
+        "attempted_speakers": len(selected_groups),
+        "min_voiced_seconds": _SPEAKER_SIGNATURE_MIN_TOTAL_SECONDS,
+        "min_segment_count": _SPEAKER_SIGNATURE_MIN_SEGMENTS,
+    }
+    if skipped:
+        meta["skipped"] = skipped
+    if status != "ok":
+        meta.setdefault("reason", "no_signatures_emitted")
+    return {"signatures": signatures, "meta": meta}
+
+
 def process_audio(audio_file, output_dir):
     """Process audio file with full classification pipeline - Memory optimized"""
     request_uuid = (os.getenv("GOODQ_BRIDGE_REQUEST_UUID") or "").strip()
@@ -201,6 +415,8 @@ def process_audio(audio_file, output_dir):
         "audio_file": str(audio_file),
         "output_dir": str(output_dir),
         "config_sources": runtime_cfg.get("_sources", []),
+        "speaker_voice_signatures": [],
+        "speaker_voice_signature_meta": {"status": "pending"},
     }
     if request_uuid:
         result["request_uuid"] = request_uuid
@@ -509,6 +725,32 @@ def process_audio(audio_file, output_dir):
                 result["embeddings"] = embedding_vector.tolist()
                 result["embedding_dim"] = len(embedding_vector)
                 result["embeddings_status"] = "success"
+
+                diarization_segments = result.get("diarization")
+                if isinstance(diarization_segments, list) and diarization_segments:
+                    try:
+                        signature_result = _build_speaker_voice_signatures(
+                            waveform_16k.detach().cpu(),
+                            diarization_segments,
+                            embed_model=embed_model,
+                            embed_extractor=embed_extractor,
+                            device=device,
+                            sample_rate=_SPEAKER_SIGNATURE_TARGET_SR,
+                        )
+                        result["speaker_voice_signatures"] = signature_result.get("signatures", [])
+                        result["speaker_voice_signature_meta"] = signature_result.get("meta", {})
+                    except Exception as signature_exc:
+                        result["speaker_voice_signatures"] = []
+                        result["speaker_voice_signature_meta"] = {
+                            "status": "error",
+                            "error": str(signature_exc),
+                        }
+                else:
+                    result["speaker_voice_signatures"] = []
+                    result["speaker_voice_signature_meta"] = {
+                        "status": "skipped",
+                        "reason": "diarization_unavailable",
+                    }
                 
                 # Clean up embedding model
                 del embed_model
@@ -520,6 +762,12 @@ def process_audio(audio_file, output_dir):
             except Exception as e:
                 result["embeddings_status"] = "error"
                 result["embeddings_error"] = str(e)
+                result["speaker_voice_signatures"] = []
+                result["speaker_voice_signature_meta"] = {
+                    "status": "error",
+                    "reason": "embedding_step_failed",
+                    "error": str(e),
+                }
                 # Ensure cleanup even on error
                 try:
                     del embed_model
@@ -530,6 +778,11 @@ def process_audio(audio_file, output_dir):
         else:
             result["embeddings_status"] = "unavailable"
             result["embeddings_note"] = "transformers not installed"
+            result["speaker_voice_signatures"] = []
+            result["speaker_voice_signature_meta"] = {
+                "status": "unavailable",
+                "reason": "transformers_not_installed",
+            }
         
         # Final cleanup
         print("Processing complete. Final cleanup...", file=sys.stderr)

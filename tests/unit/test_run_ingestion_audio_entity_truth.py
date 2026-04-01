@@ -98,3 +98,35 @@ def test_process_keyframe_entities_keeps_faces_structural_and_links_named_identi
     assert ("person", "Jerry") in node_pairs
     assert not any(node_type == "person" and name.startswith("face_") for node_type, name in node_pairs)
     assert any(edge["edge_type"] == "identity_evidence" for edge in kg.edges)
+
+
+def test_build_kg_scene_data_exposes_speaker_voice_signatures_for_realtime_stitching():
+    scene = {"index": 3, "start": 10.0, "end": 20.0}
+    audio = {
+        "transcript": "George is talking here",
+        "speakers": ["SPEAKER_00"],
+        "speaker_transcript": [{"speaker": "SPEAKER_00", "text": "George is talking here"}],
+        "speaker_voice_signatures": [
+            {
+                "speaker": "SPEAKER_00",
+                "embedding": [0.1, 0.2, 0.3],
+                "voiced_seconds": 6.2,
+                "segment_count": 2,
+            }
+        ],
+        "speaker_voice_signature_meta": {"status": "ok", "emitted": 1},
+    }
+
+    payload = run_ingestion._build_kg_scene_data(
+        scene,
+        scene_id="scene_gamma",
+        video_id="video_alpha",
+        frame_data={},
+        audio_data=audio,
+    )
+
+    assert payload["scene_id"] == "scene_gamma"
+    assert payload["video_id"] == "video_alpha"
+    assert payload["speaker_ids"] == ["SPEAKER_00"]
+    assert payload["speaker_voice_signatures"] == audio["speaker_voice_signatures"]
+    assert payload["speaker_voice_signature_meta"] == {"status": "ok", "emitted": 1}

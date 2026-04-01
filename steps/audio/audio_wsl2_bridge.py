@@ -196,6 +196,8 @@ def audio_unified_wsl2(audio_path: str, scene_id: str = None, duration: float = 
             # Embeddings
             'embeddings': result.get('embeddings', []),
             'embedding_dim': result.get('embedding_dim', 768),
+            'speaker_voice_signatures': result.get('speaker_voice_signatures', []),
+            'speaker_voice_signature_meta': result.get('speaker_voice_signature_meta', {}),
             
             # Status
             'wsl2_unified': True,

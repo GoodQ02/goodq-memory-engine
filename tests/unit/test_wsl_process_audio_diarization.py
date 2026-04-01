@@ -72,3 +72,62 @@ def test_process_audio_uses_waveform_dict_for_diarization(monkeypatch, tmp_path:
     assert isinstance(captured["audio_input"], dict)
     assert captured["audio_input"]["sample_rate"] == 16000
     assert torch.equal(captured["audio_input"]["waveform"], waveform)
+
+
+def test_select_speaker_signature_segments_requires_diversity():
+    from wsl2_audio import process_audio as mod
+
+    single_segment = mod._select_speaker_signature_segments(
+        [{"speaker": "SPEAKER_00", "start": 0.0, "end": 4.2}]
+    )
+    assert single_segment == []
+
+    diverse_segments = mod._select_speaker_signature_segments(
+        [
+            {"speaker": "SPEAKER_00", "start": 0.0, "end": 2.1},
+            {"speaker": "SPEAKER_00", "start": 3.0, "end": 5.2},
+        ]
+    )
+    assert len(diverse_segments) == 1
+    assert diverse_segments[0]["speaker"] == "SPEAKER_00"
+    assert diverse_segments[0]["selected_segment_count"] == 2
+    assert diverse_segments[0]["voiced_seconds"] >= 4.0
+
+
+def test_build_speaker_voice_signatures_emits_signature_for_diverse_segments():
+    from wsl2_audio import process_audio as mod
+
+    waveform = torch.ones((1, 16000 * 6), dtype=torch.float32)
+
+    class _FakeExtractor:
+        def __call__(self, audio, sampling_rate, return_tensors, padding):
+            assert sampling_rate == 16000
+            return {"input_values": torch.tensor([[1.0, 1.0, 1.0]], dtype=torch.float32)}
+
+    class _FakeModel:
+        def __call__(self, **kwargs):
+            return types.SimpleNamespace(
+                last_hidden_state=torch.tensor(
+                    [[[1.0, 0.0], [1.0, 0.0], [1.0, 0.0]]],
+                    dtype=torch.float32,
+                )
+            )
+
+    result = mod._build_speaker_voice_signatures(
+        waveform,
+        [
+            {"speaker": "SPEAKER_00", "start": 0.0, "end": 2.2},
+            {"speaker": "SPEAKER_00", "start": 3.0, "end": 5.2},
+        ],
+        embed_model=_FakeModel(),
+        embed_extractor=_FakeExtractor(),
+        device="cpu",
+    )
+
+    assert result["meta"]["status"] == "ok"
+    assert result["meta"]["emitted"] == 1
+    signature = result["signatures"][0]
+    assert signature["speaker"] == "SPEAKER_00"
+    assert signature["embedding_dim"] == 2
+    assert signature["segment_count"] == 2
+    assert abs(sum(value * value for value in signature["embedding"]) - 1.0) < 1e-6

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 import re
@@ -36,7 +37,17 @@ _CO_OCCURRENCE_NODE_TYPES = {"person", "location", "speaker", "object", "audio_e
 _PLACEHOLDER_SPEAKER_PATTERN = re.compile(r"^(?:speaker|face)_\d+$", re.IGNORECASE)
 _PLACEHOLDER_IDENTITY_PATTERN = re.compile(r"^(?:unknown(?:_\d+)?|speaker_\d+|face_\d+|person_\d+)$", re.IGNORECASE)
 _IDENTITY_SUPPORT_MIN_SCENES = 2
+_SPEAKER_PATTERN_SUPPORT_MIN_SCENES = 3
+_SPEAKER_PATTERN_EVIDENCE_MIN_SCENES = 5
+_SPEAKER_PATTERN_EVIDENCE_MIN_EPISODES = 2
+_SPEAKER_PATTERN_SIMILARITY_MIN = 0.92
+_SPEAKER_PATTERN_DOMINANT_SHARE_MIN = 0.6
 _WEAK_IDENTITY_NAME_REJECTIONS = {"God"}
+_WEAK_IDENTITY_CONTEXT_REJECTIONS = {
+    "batman": {"like batman"},
+    "case": {"case closed", "crack this case"},
+    "god": {"oh my god", "my god", "god bless"},
+}
 
 
 def _cfg_get(cfg: Optional[Dict[str, Any]], path: str, default: Any = None) -> Any:
@@ -134,6 +145,398 @@ def _is_weak_identity_promotion_name(name: str) -> bool:
         if len(compact) < 3:
             return False
     return _is_valid_entity_token(normalized)
+
+
+def _scene_text_for_identity(scene_data: Dict[str, Any]) -> str:
+    texts: List[str] = []
+    primary_text = None
+    for key in ("transcript", "full_text"):
+        value = scene_data.get(key)
+        if isinstance(value, str) and value.strip():
+            primary_text = value.strip()
+            break
+    if primary_text:
+        texts.append(primary_text)
+    else:
+        for seg in scene_data.get("speaker_transcript", []) or []:
+            if not isinstance(seg, dict):
+                continue
+            text = seg.get("text")
+            if isinstance(text, str) and text.strip():
+                texts.append(text.strip())
+    for key in ("caption", "ocr_text"):
+        value = scene_data.get(key)
+        if isinstance(value, str) and value.strip():
+            texts.append(value.strip())
+    return "\n".join(texts)
+
+
+def _count_identity_name_mentions(name: str, text: str) -> int:
+    if not isinstance(name, str) or not name.strip():
+        return 0
+    if not isinstance(text, str) or not text.strip():
+        return 0
+    tokens = [
+        token
+        for token in re.findall(r"[A-Za-z0-9']+", name)
+        if token
+    ]
+    if not tokens:
+        return 0
+    escaped = r"\s+".join(re.escape(token) for token in tokens)
+    return len(re.findall(rf"\b{escaped}\b", text, flags=re.IGNORECASE))
+
+
+def _contextually_reject_weak_identity_name(name: str, text: str) -> bool:
+    phrases = _WEAK_IDENTITY_CONTEXT_REJECTIONS.get(name.casefold())
+    if not phrases:
+        return False
+    lowered = re.sub(r"[^a-z0-9]+", " ", text.lower())
+    return any(phrase in lowered for phrase in phrases)
+
+
+def _weak_identity_candidate_allowed(name: str, scene_data: Dict[str, Any]) -> bool:
+    normalized = normalize_entity_name(name)
+    if not _is_weak_identity_promotion_name(normalized):
+        return False
+    scene_text = _scene_text_for_identity(scene_data)
+    if scene_text and _contextually_reject_weak_identity_name(normalized, scene_text):
+        return False
+    parts = [part for part in normalized.split() if part]
+    if len(parts) >= 2:
+        return _count_identity_name_mentions(normalized, scene_text) >= 2
+    return True
+
+
+def _identity_scene_excerpt(scene_data: Dict[str, Any], limit: int = 240) -> Optional[str]:
+    scene_text = _scene_text_for_identity(scene_data)
+    if not scene_text:
+        return None
+    compact = re.sub(r"\s+", " ", scene_text).strip()
+    if not compact:
+        return None
+    return compact[:limit]
+
+
+def _speaker_transcript_excerpt(
+    scene_data: Dict[str, Any],
+    speaker_label: str,
+    *,
+    limit: int = 240,
+) -> Optional[str]:
+    if not isinstance(speaker_label, str) or not speaker_label.strip():
+        return None
+    segments = scene_data.get("speaker_transcript")
+    if not isinstance(segments, list):
+        return None
+    target = normalize_entity_name(speaker_label)
+    parts: List[str] = []
+    for segment in segments:
+        if not isinstance(segment, dict):
+            continue
+        seg_speaker = normalize_entity_name(str(segment.get("speaker") or ""))
+        if seg_speaker != target:
+            continue
+        text = segment.get("text")
+        if isinstance(text, str) and text.strip():
+            parts.append(text.strip())
+    if not parts:
+        return None
+    compact = re.sub(r"\s+", " ", " ".join(parts)).strip()
+    return compact[:limit] if compact else None
+
+
+def _speaker_duration_share(scene_data: Dict[str, Any], speaker_label: str) -> float:
+    if not isinstance(speaker_label, str) or not speaker_label.strip():
+        return 0.0
+    segments = scene_data.get("speaker_transcript")
+    if not isinstance(segments, list):
+        return 0.0
+    target = normalize_entity_name(speaker_label)
+    speaker_seconds = 0.0
+    total_seconds = 0.0
+    for segment in segments:
+        if not isinstance(segment, dict):
+            continue
+        try:
+            start_val = float(segment.get("start") or 0.0)
+        except Exception:
+            start_val = 0.0
+        try:
+            end_val = float(segment.get("end") or start_val)
+        except Exception:
+            end_val = start_val
+        duration_val = max(0.0, end_val - start_val)
+        if duration_val <= 0.0:
+            continue
+        total_seconds += duration_val
+        seg_speaker = normalize_entity_name(str(segment.get("speaker") or ""))
+        if seg_speaker == target:
+            speaker_seconds += duration_val
+    if total_seconds <= 1e-8:
+        return 0.0
+    return speaker_seconds / total_seconds
+
+
+def _speaker_name_alignment_excerpt(
+    scene_data: Dict[str, Any],
+    speaker_label: str,
+    person_name: str,
+) -> Optional[str]:
+    excerpt = _speaker_transcript_excerpt(scene_data, speaker_label)
+    if not excerpt:
+        return None
+    if _count_identity_name_mentions(person_name, excerpt) < 1:
+        return None
+    return excerpt
+
+
+def _coerce_embedding(raw: Any) -> List[float]:
+    if not isinstance(raw, list):
+        return []
+    values: List[float] = []
+    for item in raw:
+        try:
+            value = float(item)
+        except Exception:
+            return []
+        if not math.isfinite(value):
+            return []
+        values.append(value)
+    return values
+
+
+def _normalize_embedding(embedding: Any) -> List[float]:
+    values = _coerce_embedding(embedding)
+    if not values:
+        return []
+    norm = math.sqrt(sum(value * value for value in values))
+    if not math.isfinite(norm) or norm <= 1e-8:
+        return []
+    return [float(value / norm) for value in values]
+
+
+def _cosine_similarity(left: Any, right: Any) -> Optional[float]:
+    left_values = _normalize_embedding(left)
+    right_values = _normalize_embedding(right)
+    if not left_values or not right_values or len(left_values) != len(right_values):
+        return None
+    return sum(a * b for a, b in zip(left_values, right_values))
+
+
+def _speaker_voice_signature_map(scene_data: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+    signatures = scene_data.get("speaker_voice_signatures")
+    if not isinstance(signatures, list):
+        return {}
+    by_label: Dict[str, Dict[str, Any]] = {}
+    for signature in signatures:
+        if not isinstance(signature, dict):
+            continue
+        speaker = normalize_entity_name(str(signature.get("speaker") or ""))
+        embedding = _normalize_embedding(signature.get("embedding"))
+        if not speaker or not embedding:
+            continue
+        voiced_seconds = signature.get("voiced_seconds")
+        try:
+            voiced_seconds_val = float(voiced_seconds) if voiced_seconds is not None else 0.0
+        except Exception:
+            voiced_seconds_val = 0.0
+        segment_count = signature.get("segment_count")
+        try:
+            segment_count_val = int(segment_count) if segment_count is not None else 0
+        except Exception:
+            segment_count_val = 0
+        by_label[speaker] = {
+            "speaker": speaker,
+            "embedding": embedding,
+            "embedding_dim": len(embedding),
+            "voiced_seconds": voiced_seconds_val,
+            "segment_count": segment_count_val,
+            "available_segment_count": int(signature.get("available_segment_count") or segment_count_val or 0),
+            "selected_segments": list(signature.get("selected_segments") or []),
+        }
+    return by_label
+
+
+def _speaker_pattern_name(scene_identifier: str, speaker_label: str) -> str:
+    scene_token = re.sub(r"[^A-Za-z0-9_]+", "_", str(scene_identifier or "")).strip("_") or "scene"
+    speaker_token = re.sub(r"[^A-Za-z0-9_]+", "_", str(speaker_label or "")).strip("_") or "speaker"
+    return f"voice_pattern_{scene_token[:24]}_{speaker_token.lower()}"
+
+
+def _upsert_speaker_pattern_node(
+    kg: KnowledgeGraph,
+    *,
+    scene_identifier: str,
+    speaker_label: str,
+    signature: Dict[str, Any],
+    timestamp: float,
+) -> Dict[str, Any]:
+    embedding = _normalize_embedding(signature.get("embedding"))
+    if not embedding:
+        return {"node_id": None, "similarity": None, "created": False, "pattern_name": None}
+
+    cur = kg.conn.cursor()
+    rows = cur.execute(
+        "SELECT id, name, properties FROM nodes WHERE node_type = ?",
+        ("speaker_pattern",),
+    ).fetchall()
+
+    best_match = None
+    best_similarity = -1.0
+    for row in rows:
+        props = _parse_edge_properties(row["properties"])
+        similarity = _cosine_similarity(embedding, props.get("embedding"))
+        if similarity is None or similarity < _SPEAKER_PATTERN_SIMILARITY_MIN:
+            continue
+        if similarity > best_similarity:
+            best_similarity = similarity
+            best_match = {
+                "id": int(row["id"]),
+                "name": str(row["name"]),
+                "properties": props,
+            }
+
+    if best_match is None:
+        pattern_name = _speaker_pattern_name(scene_identifier, speaker_label)
+        node_id = kg.add_node(
+            "speaker_pattern",
+            pattern_name,
+            {
+                "embedding": embedding,
+                "embedding_dim": len(embedding),
+                "signature_count": 1,
+                "scene_count": 1,
+                "total_voiced_seconds": float(signature.get("voiced_seconds") or 0.0),
+                "speaker_labels": [speaker_label],
+                "source": "speaker_voice_signature",
+            },
+            timestamp,
+        )
+        return {
+            "node_id": int(node_id),
+            "similarity": 1.0,
+            "created": True,
+            "pattern_name": pattern_name,
+        }
+
+    props = dict(best_match["properties"])
+    previous_embedding = _normalize_embedding(props.get("embedding"))
+    signature_count = int(props.get("signature_count") or 1)
+    if previous_embedding and len(previous_embedding) == len(embedding):
+        updated_embedding = [
+            ((previous_embedding[idx] * signature_count) + embedding[idx]) / float(signature_count + 1)
+            for idx in range(len(embedding))
+        ]
+        props["embedding"] = _normalize_embedding(updated_embedding) or embedding
+    else:
+        props["embedding"] = embedding
+    props["embedding_dim"] = len(embedding)
+    props["signature_count"] = signature_count + 1
+    props["scene_count"] = int(props.get("scene_count") or 1) + 1
+    props["total_voiced_seconds"] = float(props.get("total_voiced_seconds") or 0.0) + float(signature.get("voiced_seconds") or 0.0)
+    speaker_labels = {
+        normalize_entity_name(str(label or ""))
+        for label in (props.get("speaker_labels") or [])
+        if normalize_entity_name(str(label or ""))
+    }
+    speaker_labels.add(normalize_entity_name(speaker_label))
+    props["speaker_labels"] = sorted(speaker_labels)
+    cur.execute(
+        "UPDATE nodes SET properties = ?, occurrence_count = occurrence_count + 1, last_seen = ? WHERE id = ?",
+        (json.dumps(props, ensure_ascii=False, sort_keys=True), float(timestamp), int(best_match["id"])),
+    )
+    kg.conn.commit()
+    return {
+        "node_id": int(best_match["id"]),
+        "similarity": round(float(best_similarity), 6),
+        "created": False,
+        "pattern_name": best_match["name"],
+    }
+
+
+def _identity_support_scene_threshold(source_node_type: str, source_rule: str) -> int:
+    if source_node_type == "speaker_pattern":
+        return _SPEAKER_PATTERN_SUPPORT_MIN_SCENES
+    return _IDENTITY_SUPPORT_MIN_SCENES
+
+
+def _dedupe_identity_evidence_items(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    seen = set()
+    deduped: List[Dict[str, Any]] = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        key = json.dumps(item, ensure_ascii=False, sort_keys=True)
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(item)
+    return deduped
+
+
+def _append_identity_candidate_edge(
+    kg: KnowledgeGraph,
+    *,
+    source_id: int,
+    target_id: int,
+    weight: float,
+    properties: Dict[str, Any],
+) -> int:
+    cur = kg.conn.cursor()
+    existing = cur.execute(
+        "SELECT properties FROM edges WHERE source_id = ? AND target_id = ? AND edge_type = ?",
+        (int(source_id), int(target_id), "identity_candidate"),
+    ).fetchone()
+    merged = dict(properties)
+    if existing is not None:
+        existing_props = _parse_edge_properties(existing["properties"])
+        candidate_scene_ids = {
+            str(scene_id).strip()
+            for scene_id in existing_props.get("candidate_scene_ids") or []
+            if isinstance(scene_id, str) and str(scene_id).strip()
+        }
+        scene_id = properties.get("scene_id")
+        if isinstance(scene_id, str) and scene_id.strip():
+            candidate_scene_ids.add(scene_id.strip())
+        merged["candidate_scene_ids"] = sorted(candidate_scene_ids)
+
+        candidate_video_ids = {
+            str(video_id).strip()
+            for video_id in existing_props.get("candidate_video_ids") or []
+            if isinstance(video_id, str) and str(video_id).strip()
+        }
+        video_id = properties.get("video_id")
+        if isinstance(video_id, str) and video_id.strip():
+            candidate_video_ids.add(video_id.strip())
+        merged["candidate_video_ids"] = sorted(candidate_video_ids)
+
+        evidence_items = []
+        if isinstance(existing_props.get("candidate_evidence"), list):
+            evidence_items.extend(item for item in existing_props["candidate_evidence"] if isinstance(item, dict))
+        if isinstance(properties.get("candidate_evidence"), list):
+            evidence_items.extend(item for item in properties["candidate_evidence"] if isinstance(item, dict))
+        merged["candidate_evidence"] = _dedupe_identity_evidence_items(evidence_items)
+    else:
+        scene_id = properties.get("scene_id")
+        merged["candidate_scene_ids"] = [scene_id] if isinstance(scene_id, str) and scene_id.strip() else []
+        video_id = properties.get("video_id")
+        merged["candidate_video_ids"] = [video_id] if isinstance(video_id, str) and video_id.strip() else []
+        candidate_evidence = properties.get("candidate_evidence")
+        if isinstance(candidate_evidence, list):
+            merged["candidate_evidence"] = _dedupe_identity_evidence_items(
+                [item for item in candidate_evidence if isinstance(item, dict)]
+            )
+        else:
+            merged["candidate_evidence"] = []
+
+    return kg.add_edge(
+        source_id=source_id,
+        target_id=target_id,
+        edge_type="identity_candidate",
+        weight=weight,
+        properties=merged,
+    )
 
 
 def _resolve_identity_name(raw: Any) -> str:
@@ -245,11 +648,11 @@ def _accumulate_identity_candidate_support(kg: KnowledgeGraph) -> int:
         FROM edges e
         JOIN nodes n ON n.id = e.source_id
         WHERE e.edge_type = 'identity_candidate'
-          AND n.node_type IN ('speaker', 'face')
+          AND n.node_type IN ('speaker', 'face', 'speaker_pattern')
         """
     ).fetchall()
 
-    grouped: Dict[tuple[int, str, str], Dict[str, Any]] = {}
+    grouped: Dict[tuple[int, str, str, int], Dict[str, Any]] = {}
     for row in rows:
         source_id = int(row["source_id"])
         target_id = int(row["target_id"])
@@ -265,34 +668,91 @@ def _accumulate_identity_candidate_support(kg: KnowledgeGraph) -> int:
         if not isinstance(source_rule, str) or not source_rule.strip():
             continue
 
-        group_key = (target_id, source_node_type, source_rule.strip())
+        source_rule_clean = source_rule.strip()
+        video_id = props.get("video_id")
+        group_key = (
+            target_id,
+            source_node_type,
+            source_rule_clean,
+            source_id if source_node_type == "speaker_pattern" else 0,
+        )
         bundle = grouped.setdefault(
             group_key,
             {
                 "scene_ids": set(),
+                "video_ids": set(),
                 "rows": [],
+                "supporting_evidence": [],
             },
         )
-        bundle["scene_ids"].add(scene_id.strip())
+        candidate_scene_ids = props.get("candidate_scene_ids") if source_node_type == "speaker_pattern" else None
+        if isinstance(candidate_scene_ids, list):
+            for candidate_scene_id in candidate_scene_ids:
+                if isinstance(candidate_scene_id, str) and candidate_scene_id.strip():
+                    bundle["scene_ids"].add(candidate_scene_id.strip())
+        else:
+            bundle["scene_ids"].add(scene_id.strip())
+        if isinstance(video_id, str) and video_id.strip():
+            bundle["video_ids"].add(video_id.strip())
+        candidate_video_ids = props.get("candidate_video_ids") if source_node_type == "speaker_pattern" else None
+        if isinstance(candidate_video_ids, list):
+            for candidate_video_id in candidate_video_ids:
+                if isinstance(candidate_video_id, str) and candidate_video_id.strip():
+                    bundle["video_ids"].add(candidate_video_id.strip())
+        evidence: Dict[str, Any] = {
+            "scene_id": scene_id.strip(),
+            "media_id": props.get("media_id"),
+            "candidate_source": source_rule_clean,
+            "source_node_type": source_node_type,
+        }
+        if isinstance(video_id, str) and video_id.strip():
+            evidence["video_id"] = video_id.strip()
+        if props.get("speaker_label"):
+            evidence["speaker_label"] = props.get("speaker_label")
+        if props.get("face_index") is not None:
+            evidence["face_index"] = props.get("face_index")
+        if props.get("voice_similarity") is not None:
+            evidence["voice_similarity"] = props.get("voice_similarity")
+        if props.get("voiced_seconds") is not None:
+            evidence["voiced_seconds"] = props.get("voiced_seconds")
+        if props.get("dominant_share") is not None:
+            evidence["dominant_share"] = props.get("dominant_share")
+        if props.get("transcript_excerpt"):
+            evidence["transcript_excerpt"] = props.get("transcript_excerpt")
+        if props.get("scene_excerpt"):
+            evidence["scene_excerpt"] = props.get("scene_excerpt")
+        candidate_evidence = props.get("candidate_evidence") if source_node_type == "speaker_pattern" else None
+        if isinstance(candidate_evidence, list) and candidate_evidence:
+            bundle["supporting_evidence"].extend(
+                item for item in candidate_evidence if isinstance(item, dict)
+            )
+        else:
+            bundle["supporting_evidence"].append(evidence)
         bundle["rows"].append(
             {
                 "source_id": source_id,
                 "target_id": target_id,
                 "scene_id": scene_id.strip(),
                 "source_node_type": source_node_type,
-                "source_rule": source_rule.strip(),
+                "source_rule": source_rule_clean,
                 "properties": props,
             }
         )
 
     promoted = 0
-    for (_target_id, source_node_type, source_rule), bundle in grouped.items():
+    for (_target_id, source_node_type, source_rule, _source_group_id), bundle in grouped.items():
         scene_ids = sorted(bundle["scene_ids"])
-        if len(scene_ids) < _IDENTITY_SUPPORT_MIN_SCENES:
+        min_scenes = _identity_support_scene_threshold(source_node_type, source_rule)
+        if len(scene_ids) < min_scenes:
             continue
 
         evidence_strength = "strong" if len(scene_ids) >= 3 else "moderate"
         support_weight = min(0.8, 0.55 + (0.1 * max(0, len(scene_ids) - 2)))
+        supporting_evidence = sorted(
+            bundle["supporting_evidence"],
+            key=lambda item: (str(item.get("scene_id", "")), str(item.get("source_node_type", ""))),
+        )
+        supporting_video_ids = sorted(bundle["video_ids"])
 
         for row in bundle["rows"]:
             props = row["properties"]
@@ -304,6 +764,9 @@ def _accumulate_identity_candidate_support(kg: KnowledgeGraph) -> int:
                 "media_id": props.get("media_id"),
                 "supporting_scene_count": len(scene_ids),
                 "supporting_scene_ids": scene_ids,
+                "supporting_video_count": len(supporting_video_ids),
+                "supporting_video_ids": supporting_video_ids,
+                "supporting_evidence": supporting_evidence,
                 "evidence_strength": evidence_strength,
             }
             if props.get("speaker_label"):
@@ -312,6 +775,12 @@ def _accumulate_identity_candidate_support(kg: KnowledgeGraph) -> int:
                 support_props["face_index"] = props.get("face_index")
             if props.get("bbox") is not None:
                 support_props["bbox"] = props.get("bbox")
+            if props.get("voice_similarity") is not None:
+                support_props["voice_similarity"] = props.get("voice_similarity")
+            if props.get("voiced_seconds") is not None:
+                support_props["voiced_seconds"] = props.get("voiced_seconds")
+            if props.get("dominant_share") is not None:
+                support_props["dominant_share"] = props.get("dominant_share")
 
             kg.add_edge(
                 source_id=row["source_id"],
@@ -321,6 +790,89 @@ def _accumulate_identity_candidate_support(kg: KnowledgeGraph) -> int:
                 properties=support_props,
             )
             promoted += 1
+
+    return promoted
+
+
+def _accumulate_identity_supported_evidence(kg: KnowledgeGraph) -> int:
+    cur = kg.conn.cursor()
+    rows = cur.execute(
+        """
+        SELECT e.source_id, e.target_id, e.properties
+        FROM edges e
+        JOIN nodes n ON n.id = e.source_id
+        WHERE e.edge_type = 'identity_supported'
+          AND n.node_type = 'speaker_pattern'
+        """
+    ).fetchall()
+
+    grouped: Dict[tuple[int, int, str], Dict[str, Any]] = {}
+    for row in rows:
+        source_id = int(row["source_id"])
+        target_id = int(row["target_id"])
+        if _has_conflicting_identity_support(kg, source_id=source_id, target_id=target_id):
+            continue
+
+        props = _parse_edge_properties(row["properties"])
+        candidate_source = str(props.get("candidate_source") or props.get("source") or "").strip()
+        if not candidate_source:
+            continue
+
+        group_key = (source_id, target_id, candidate_source)
+        bundle = grouped.setdefault(
+            group_key,
+            {
+                "scene_ids": set(),
+                "video_ids": set(),
+                "supporting_evidence": [],
+            },
+        )
+        for scene_id in props.get("supporting_scene_ids") or []:
+            if isinstance(scene_id, str) and scene_id.strip():
+                bundle["scene_ids"].add(scene_id.strip())
+        scene_id = props.get("scene_id")
+        if isinstance(scene_id, str) and scene_id.strip():
+            bundle["scene_ids"].add(scene_id.strip())
+        for video_id in props.get("supporting_video_ids") or []:
+            if isinstance(video_id, str) and video_id.strip():
+                bundle["video_ids"].add(video_id.strip())
+        video_id = props.get("video_id")
+        if isinstance(video_id, str) and video_id.strip():
+            bundle["video_ids"].add(video_id.strip())
+        supporting_evidence = props.get("supporting_evidence")
+        if isinstance(supporting_evidence, list):
+            bundle["supporting_evidence"].extend(
+                item for item in supporting_evidence if isinstance(item, dict)
+            )
+
+    promoted = 0
+    for (source_id, target_id, candidate_source), bundle in grouped.items():
+        scene_ids = sorted(bundle["scene_ids"])
+        video_ids = sorted(bundle["video_ids"])
+        if len(scene_ids) < _SPEAKER_PATTERN_EVIDENCE_MIN_SCENES:
+            continue
+        if len(video_ids) < _SPEAKER_PATTERN_EVIDENCE_MIN_EPISODES:
+            continue
+        kg.add_edge(
+            source_id=source_id,
+            target_id=target_id,
+            edge_type="identity_evidence",
+            weight=0.9,
+            properties={
+                "source": "identity_supported_accumulator",
+                "candidate_source": candidate_source,
+                "supporting_scene_count": len(scene_ids),
+                "supporting_scene_ids": scene_ids,
+                "supporting_video_count": len(video_ids),
+                "supporting_video_ids": video_ids,
+                "supporting_evidence": sorted(
+                    bundle["supporting_evidence"],
+                    key=lambda item: (str(item.get("scene_id", "")), str(item.get("source_node_type", ""))),
+                ),
+                "evidence_strength": "strong",
+            },
+        )
+        promoted += 1
 
     return promoted
 
@@ -569,11 +1121,14 @@ def _add_scene_entities(kg: KnowledgeGraph, media_id: int, scene_data: Dict[str,
     location_node_ids: set[int] = set()
     speaker_node_ids: set[int] = set()
     face_node_ids: set[int] = set()
+    speaker_pattern_node_ids: set[int] = set()
     anonymous_face_node_ids: set[int] = set()
     anonymous_speaker_node_ids: set[int] = set()
     named_speaker_node_ids: set[int] = set()
     anonymous_face_context: Dict[int, Dict[str, Any]] = {}
     anonymous_speaker_context: Dict[int, Dict[str, Any]] = {}
+    speaker_node_by_label: Dict[str, int] = {}
+    speaker_pattern_context: Dict[int, Dict[str, Any]] = {}
 
     def add_structural_speaker(
         speaker_label: str,
@@ -763,6 +1318,7 @@ def _add_scene_entities(kg: KnowledgeGraph, media_id: int, scene_data: Dict[str,
             )
         if speaker_node_id is not None:
             speaker_node_ids.add(speaker_node_id)
+            speaker_node_by_label[speaker_clean] = speaker_node_id
             if _is_placeholder_speaker_label(speaker_clean):
                 anonymous_speaker_node_ids.add(speaker_node_id)
                 anonymous_speaker_context[speaker_node_id] = {
@@ -806,6 +1362,7 @@ def _add_scene_entities(kg: KnowledgeGraph, media_id: int, scene_data: Dict[str,
             speaker_node_id = add_and_link("speaker", speaker_id, confidence=0.7, props={"source": "speaker_ids"})
         if speaker_node_id is not None:
             speaker_node_ids.add(speaker_node_id)
+            speaker_node_by_label[speaker_id] = speaker_node_id
             if _is_placeholder_speaker_label(speaker_id):
                 anonymous_speaker_node_ids.add(speaker_node_id)
                 anonymous_speaker_context.setdefault(
@@ -831,6 +1388,64 @@ def _add_scene_entities(kg: KnowledgeGraph, media_id: int, scene_data: Dict[str,
                         properties={"source": "speaker_ids"},
                     )
                     counts["edges_added"] += 1
+
+    for speaker_label, signature in _speaker_voice_signature_map(scene_data).items():
+        speaker_node_id = speaker_node_by_label.get(speaker_label)
+        if speaker_node_id is None:
+            continue
+        pattern_result = _upsert_speaker_pattern_node(
+            kg,
+            scene_identifier=scene_identifier,
+            speaker_label=speaker_label,
+            signature=signature,
+            timestamp=ts,
+        )
+        pattern_node_id = pattern_result.get("node_id")
+        if pattern_node_id is None:
+            continue
+        pattern_node_id = int(pattern_node_id)
+        speaker_pattern_node_ids.add(pattern_node_id)
+        dominant_share = _speaker_duration_share(scene_data, speaker_label)
+        pattern_context = {
+            "speaker_label": speaker_label,
+            "voice_similarity": pattern_result.get("similarity"),
+            "voiced_seconds": float(signature.get("voiced_seconds") or 0.0),
+            "segment_count": int(signature.get("segment_count") or 0),
+            "dominant_share": dominant_share,
+            "pattern_name": pattern_result.get("pattern_name"),
+        }
+        speaker_pattern_context[pattern_node_id] = pattern_context
+        kg.link_node_to_media(
+            node_id=pattern_node_id,
+            media_id=media_id,
+            confidence=float(pattern_result.get("similarity") or 1.0),
+            context={
+                "scene_id": scene_identifier,
+                "speaker_label": speaker_label,
+                "voiced_seconds": pattern_context["voiced_seconds"],
+                "segment_count": pattern_context["segment_count"],
+            },
+        )
+        counts["links_added"] += 1
+        kg.add_edge(
+            source_id=speaker_node_id,
+            target_id=pattern_node_id,
+            edge_type="voice_pattern_match",
+            weight=float(pattern_result.get("similarity") or 1.0),
+            properties={
+                "source": "speaker_voice_signature",
+                "scene_id": scene_identifier,
+                "video_id": str(scene_data.get("video_id") or ""),
+                "media_id": media_id,
+                "speaker_label": speaker_label,
+                "voiced_seconds": pattern_context["voiced_seconds"],
+                "segment_count": pattern_context["segment_count"],
+                "dominant_share": dominant_share,
+                "pattern_name": pattern_result.get("pattern_name"),
+                "created": bool(pattern_result.get("created")),
+            },
+        )
+        counts["edges_added"] += 1
 
     for event in scene_data.get("music_events", []) or []:
         if not isinstance(event, dict):
@@ -890,26 +1505,81 @@ def _add_scene_entities(kg: KnowledgeGraph, media_id: int, scene_data: Dict[str,
 
     if len(person_node_ids) == 1:
         sole_person_node_id = next(iter(person_node_ids))
-        allow_weak_identity_promotion = _is_weak_identity_promotion_name(
-            person_node_names.get(sole_person_node_id, "")
+        sole_person_name = person_node_names.get(sole_person_node_id, "")
+        allow_weak_identity_promotion = _weak_identity_candidate_allowed(
+            sole_person_name,
+            scene_data,
         )
         if allow_weak_identity_promotion and len(anonymous_speaker_node_ids) == 1 and not named_speaker_node_ids:
             speaker_node_id = next(iter(anonymous_speaker_node_ids))
             speaker_meta = anonymous_speaker_context.get(speaker_node_id, {})
-            kg.add_edge(
-                source_id=speaker_node_id,
-                target_id=sole_person_node_id,
-                edge_type="identity_candidate",
-                weight=0.35,
-                properties={
-                    "source": "scene_single_person_single_speaker",
-                    "scene_id": scene_identifier,
-                    "media_id": media_id,
-                    "evidence_strength": "weak",
-                    "speaker_label": speaker_meta.get("speaker_label"),
-                },
+            speaker_label = str(speaker_meta.get("speaker_label") or "")
+            transcript_excerpt = _speaker_name_alignment_excerpt(
+                scene_data,
+                speaker_label,
+                sole_person_name,
             )
-            counts["edges_added"] += 1
+            dominant_share = _speaker_duration_share(scene_data, speaker_label)
+            if transcript_excerpt and dominant_share >= _SPEAKER_PATTERN_DOMINANT_SHARE_MIN:
+                kg.add_edge(
+                    source_id=speaker_node_id,
+                    target_id=sole_person_node_id,
+                    edge_type="identity_candidate",
+                    weight=0.35,
+                    properties={
+                        "source": "scene_single_person_single_speaker",
+                        "scene_id": scene_identifier,
+                        "video_id": str(scene_data.get("video_id") or ""),
+                        "media_id": media_id,
+                        "evidence_strength": "weak",
+                        "speaker_label": speaker_label,
+                        "dominant_share": dominant_share,
+                        "transcript_excerpt": transcript_excerpt,
+                    },
+                )
+                counts["edges_added"] += 1
+            for pattern_node_id in sorted(speaker_pattern_node_ids):
+                pattern_meta = speaker_pattern_context.get(pattern_node_id, {})
+                if pattern_meta.get("speaker_label") != speaker_label:
+                    continue
+                if not transcript_excerpt:
+                    continue
+                if float(pattern_meta.get("dominant_share") or 0.0) < _SPEAKER_PATTERN_DOMINANT_SHARE_MIN:
+                    continue
+                _append_identity_candidate_edge(
+                    kg,
+                    source_id=pattern_node_id,
+                    target_id=sole_person_node_id,
+                    weight=0.4,
+                    properties={
+                        "source": "scene_single_person_single_speaker_pattern",
+                        "scene_id": scene_identifier,
+                        "video_id": str(scene_data.get("video_id") or ""),
+                        "media_id": media_id,
+                        "evidence_strength": "weak",
+                        "speaker_label": speaker_label,
+                        "voice_similarity": pattern_meta.get("voice_similarity"),
+                        "voiced_seconds": pattern_meta.get("voiced_seconds"),
+                        "segment_count": pattern_meta.get("segment_count"),
+                        "dominant_share": pattern_meta.get("dominant_share"),
+                        "transcript_excerpt": transcript_excerpt,
+                        "candidate_evidence": [
+                            {
+                                "scene_id": scene_identifier,
+                                "video_id": str(scene_data.get("video_id") or ""),
+                                "candidate_source": "scene_single_person_single_speaker_pattern",
+                                "source_node_type": "speaker_pattern",
+                                "speaker_label": speaker_label,
+                                "voice_similarity": pattern_meta.get("voice_similarity"),
+                                "voiced_seconds": pattern_meta.get("voiced_seconds"),
+                                "segment_count": pattern_meta.get("segment_count"),
+                                "dominant_share": pattern_meta.get("dominant_share"),
+                                "transcript_excerpt": transcript_excerpt,
+                            }
+                        ],
+                    },
+                )
+                counts["edges_added"] += 1
         if allow_weak_identity_promotion and len(face_node_ids) == 1 and len(anonymous_face_node_ids) == 1:
             face_node_id = next(iter(anonymous_face_node_ids))
             face_meta = anonymous_face_context.get(face_node_id, {})
@@ -925,11 +1595,13 @@ def _add_scene_entities(kg: KnowledgeGraph, media_id: int, scene_data: Dict[str,
                     "evidence_strength": "weak",
                     "face_index": face_meta.get("face_index"),
                     "bbox": face_meta.get("bbox"),
+                    "scene_excerpt": _identity_scene_excerpt(scene_data),
                 },
             )
             counts["edges_added"] += 1
 
     counts["edges_added"] += _accumulate_identity_candidate_support(kg)
+    counts["edges_added"] += _accumulate_identity_supported_evidence(kg)
 
     person_ids_sorted = sorted(person_node_ids)
     for left_idx, left_node_id in enumerate(person_ids_sorted):

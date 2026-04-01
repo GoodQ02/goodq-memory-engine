@@ -891,6 +891,60 @@ def _extract_speaker_ids(audio_payload: Any) -> List[str]:
     return speaker_ids
 
 
+def _build_kg_scene_data(
+    scene: Dict[str, Any],
+    *,
+    scene_id: str,
+    video_id: str,
+    frame_data: Optional[Dict[str, Any]],
+    audio_data: Optional[Dict[str, Any]],
+) -> Dict[str, Any]:
+    frame_payload = frame_data if isinstance(frame_data, dict) else {}
+    audio_payload = audio_data if isinstance(audio_data, dict) else {}
+    audio_speaker_ids = _extract_speaker_ids(audio_payload)
+    merged_entities: List[Any] = []
+    for modality_data in (frame_payload, audio_payload):
+        typed_entities = modality_data.get('ner_entities')
+        fallback_entities = modality_data.get('entities')
+        if isinstance(typed_entities, list) and typed_entities:
+            merged_entities.extend(typed_entities)
+            continue
+        if isinstance(fallback_entities, list):
+            merged_entities.extend(fallback_entities)
+        elif isinstance(fallback_entities, str) and fallback_entities.strip():
+            merged_entities.append(fallback_entities.strip())
+
+    return {
+        'scene_id': scene_id,
+        'video_id': video_id,
+        'index': scene.get('index'),
+        'start': scene.get('start'),
+        'end': scene.get('end'),
+        'transcript': audio_payload.get('transcript') or audio_payload.get('full_text'),
+        'caption': frame_payload.get('caption'),
+        'ocr_text': frame_payload.get('ocr_text'),
+        'objects': frame_payload.get('objects'),
+        'faces': frame_payload.get('faces'),
+        'tags': frame_payload.get('tags'),
+        'entities': merged_entities,
+        'location': frame_payload.get('location') or audio_payload.get('location'),
+        'locations': frame_payload.get('locations') or audio_payload.get('locations'),
+        'emotion': audio_payload.get('emotion'),
+        'speakers': audio_payload.get('speakers'),
+        'speaker_ids': audio_speaker_ids,
+        'speaker_count': audio_payload.get('speaker_count', len(audio_speaker_ids)),
+        'speaker_transcript': audio_payload.get('speaker_transcript'),
+        'diarization': audio_payload.get('diarization'),
+        'speaker_segments': audio_payload.get('speaker_segments'),
+        'speaker_voice_signatures': audio_payload.get('speaker_voice_signatures'),
+        'speaker_voice_signature_meta': audio_payload.get('speaker_voice_signature_meta'),
+        'music_events': audio_payload.get('music_events'),
+        'time_hints': audio_payload.get('time_hints') or frame_payload.get('time_hints'),
+        'keyframe': frame_payload,
+        'audio': audio_payload,
+    }
+
+
 def _coerce_optional_float(value: Any) -> Optional[float]:
     if value is None:
         return None
@@ -4741,45 +4795,13 @@ def run(
                     typer.echo(f'[DEBUG] has full_text: {bool(audio_data.get("full_text"))}')
                     if audio_data.get('transcript'):
                         typer.echo(f'[DEBUG] transcript preview: {str(audio_data.get("transcript"))[:50]}...')
-                audio_speaker_ids = _extract_speaker_ids(audio_data)
-                merged_entities = []
-                for modality_data in (frame_data, audio_data):
-                    typed_entities = modality_data.get('ner_entities')
-                    fallback_entities = modality_data.get('entities')
-                    if isinstance(typed_entities, list) and typed_entities:
-                        merged_entities.extend(typed_entities)
-                        continue
-                    if isinstance(fallback_entities, list):
-                        merged_entities.extend(fallback_entities)
-                    elif isinstance(fallback_entities, str) and fallback_entities.strip():
-                        merged_entities.append(fallback_entities.strip())
-                
-                kg_scene_data = {
-                    'index': scene.get('index'),
-                    'start': scene.get('start'),
-                    'end': scene.get('end'),
-                    # Flatten for entity extractor access
-                    'transcript': audio_data.get('transcript') or audio_data.get('full_text'),
-                    'caption': frame_data.get('caption'),
-                    'ocr_text': frame_data.get('ocr_text'),
-                    'objects': frame_data.get('objects'),
-                    'faces': frame_data.get('faces'),
-                    'tags': frame_data.get('tags'),
-                    'entities': merged_entities,
-                    'location': frame_data.get('location') or audio_data.get('location'),
-                    'locations': frame_data.get('locations') or audio_data.get('locations'),
-                    'emotion': audio_data.get('emotion'),
-                    'speakers': audio_data.get('speakers'),
-                    'speaker_ids': audio_speaker_ids,
-                    'speaker_count': audio_data.get('speaker_count', len(audio_speaker_ids)),
-                    'speaker_transcript': audio_data.get('speaker_transcript'),
-                    'diarization': audio_data.get('diarization'),
-                    'music_events': audio_data.get('music_events'),
-                    'time_hints': audio_data.get('time_hints') or frame_data.get('time_hints'),
-                    # Keep full data for other uses
-                    'keyframe': frame_data,
-                    'audio': audio_data,
-                }
+                kg_scene_data = _build_kg_scene_data(
+                    scene,
+                    scene_id=scene_id,
+                    video_id=video_hash,
+                    frame_data=frame_data,
+                    audio_data=audio_data,
+                )
                 try:
                     kg_stats = update_kg_for_scene(
                         kg_scene_data,

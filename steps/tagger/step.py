@@ -65,13 +65,15 @@ _ENTITY_TYPE_WEIGHTS = {
 _TRUSTED_SHORT_ENTITY_TYPES = {"PERSON", "PER", "CHARACTER", "LOCATION", "LOC", "GPE", "PLACE", "FAC"}
 _SEMANTIC_CONTRACTION_PATTERN = re.compile(r".+(?:'m|'re|'s|'ll|'ve|'d|n't)$", re.IGNORECASE)
 _LOW_VALUE_ENTITY_TERMS = {
-    "also", "can", "go", "he", "hold", "it", "listen", "meat", "oh",
+    "also", "can", "go", "he", "hold", "i'm", "im", "it", "listen", "meat", "oh",
     "really", "shake", "so", "sure", "to", "uh", "want",
 }
 _ENTITY_CONTEXT_REJECTIONS = {
     "god": {"oh my god", "my god", "god bless"},
     "justin case": {"a justin case"},
     "signal": {"mr. signal", "the signal", "this is the signal"},
+    "batman": {"like batman"},
+    "case": {"case closed", "crack this case"},
 }
 
 
@@ -114,8 +116,18 @@ def _gather_text(item: Dict[str, Any]) -> str:
                 seen.add(text)
                 texts.append(text)
     speaker_text = _speaker_transcript_text(item)
-    if speaker_text and speaker_text not in seen:
-        texts.append(speaker_text)
+    if speaker_text:
+        normalized_speaker = re.sub(r"\s+", " ", speaker_text).strip().casefold()
+        covered = False
+        for existing in texts:
+            normalized_existing = re.sub(r"\s+", " ", existing).strip().casefold()
+            if normalized_speaker and (
+                normalized_speaker in normalized_existing or normalized_existing in normalized_speaker
+            ):
+                covered = True
+                break
+        if not covered and speaker_text not in seen:
+            texts.append(speaker_text)
     return "\n".join(texts)
 
 
@@ -194,6 +206,64 @@ def _entity_tokens(value: str) -> List[str]:
     return [token.strip("'") for token in re.findall(r"[A-Za-z0-9']+", value) if token.strip("'")]
 
 
+def _count_entity_mentions(label: str, text: str) -> int:
+    if not isinstance(label, str) or not label.strip():
+        return 0
+    if not isinstance(text, str) or not text.strip():
+        return 0
+    tokens = _entity_tokens(label)
+    if not tokens:
+        return 0
+    escaped = r"\s+".join(re.escape(token) for token in tokens)
+    matches = re.findall(rf"\b{escaped}\b", text, flags=re.IGNORECASE)
+    return len(matches)
+
+
+def _count_independent_token_mentions(token: str, full_label: str, text: str) -> int:
+    token_mentions = _count_entity_mentions(token, text)
+    label_mentions = _count_entity_mentions(full_label, text)
+    return max(0, token_mentions - label_mentions)
+
+
+def _canonicalize_unstable_compound_person_label(
+    label: str,
+    text: str,
+    *,
+    trusted: bool,
+    entity_type: str | None = None,
+) -> str | None:
+    normalized = normalize_entity_token(label)
+    if not normalized:
+        return None
+    if _contextually_reject_entity(normalized, text):
+        return None
+
+    tokens = _entity_tokens(normalized)
+    if len(tokens) < 2:
+        return normalized
+
+    ent_type = _coerce_entity_type(entity_type)
+    if ent_type and ent_type not in _PERSON_ENTITY_TYPES:
+        return normalized
+
+    phrase_mentions = _count_entity_mentions(normalized, text)
+    tail_support = 0
+    for token in tokens[1:]:
+        tail_support += _count_independent_token_mentions(token, normalized, text)
+    if phrase_mentions > 1 or tail_support > 0:
+        return normalized
+
+    head = normalize_entity_token(tokens[0])
+    if (
+        head
+        and _is_meaningful_entity_label(head, trusted=trusted)
+        and not _contextually_reject_entity(head, text)
+        and _appears_as_entity_span(head, text, trusted=trusted)
+    ):
+        return head
+    return None
+
+
 def _is_meaningful_entity_label(value: str, *, trusted: bool) -> bool:
     if not isinstance(value, str):
         return False
@@ -228,6 +298,10 @@ def _is_meaningful_entity_label(value: str, *, trusted: bool) -> bool:
             return True
         min_len = 3 if trusted else 4
         return bool(token[:1].isupper() and len(compact) >= min_len)
+
+    first_token = tokens[0].casefold()
+    if first_token in _LOW_VALUE_ENTITY_TERMS:
+        return False
 
     return len(substantive) >= 2
 
@@ -270,29 +344,42 @@ def _filter_ner_entities(text: str, ner_entities: List[Dict[str, str]]) -> List[
         name = entity.get("name")
         ent_type = _coerce_entity_type(entity.get("type"))
         trusted = ent_type in _TRUSTED_SHORT_ENTITY_TYPES
+        sanitized_name = _canonicalize_unstable_compound_person_label(
+            str(name or ""),
+            text,
+            trusted=trusted,
+            entity_type=ent_type,
+        )
         if not (
-            isinstance(name, str)
-            and _is_meaningful_entity_label(name, trusted=trusted)
-            and not _contextually_reject_entity(name, text)
-            and _appears_as_entity_span(name, text, trusted=trusted)
+            isinstance(sanitized_name, str)
+            and _is_meaningful_entity_label(sanitized_name, trusted=trusted)
+            and not _contextually_reject_entity(sanitized_name, text)
+            and _appears_as_entity_span(sanitized_name, text, trusted=trusted)
         ):
             continue
-        filtered.append(entity)
+        cleaned = dict(entity)
+        cleaned["name"] = sanitized_name
+        filtered.append(cleaned)
     return filtered
 
 
 def _filter_entity_labels(text: str, labels: List[str], *, trusted: bool) -> List[str]:
     filtered: List[str] = []
     for label in labels:
+        sanitized_label = _canonicalize_unstable_compound_person_label(
+            str(label or ""),
+            text,
+            trusted=trusted,
+        )
         if not (
-            isinstance(label, str)
-            and _is_meaningful_entity_label(label, trusted=trusted)
-            and not _contextually_reject_entity(label, text)
+            isinstance(sanitized_label, str)
+            and _is_meaningful_entity_label(sanitized_label, trusted=trusted)
+            and not _contextually_reject_entity(sanitized_label, text)
         ):
             continue
-        if trusted and not _appears_as_entity_span(label, text, trusted=trusted):
+        if trusted and not _appears_as_entity_span(sanitized_label, text, trusted=trusted):
             continue
-        filtered.append(label)
+        filtered.append(sanitized_label)
     return filtered
 
 
@@ -336,6 +423,16 @@ def _sorted_candidates(bucket: Dict[str, Dict[str, Any]]) -> List[Dict[str, Any]
         bucket.values(),
         key=lambda item: (-float(item.get("score", 0.0)), str(item.get("label", "")).casefold()),
     )
+    multiword_heads: set[str] = set()
+    for row in rows:
+        label = str(row.get("label", "")).strip()
+        if len(_entity_tokens(label)) < 2:
+            continue
+        if row.get("type"):
+            head = _entity_tokens(label)[0].casefold()
+            if head:
+                multiword_heads.add(head)
+
     return [
         {
             "label": str(row["label"]),
@@ -344,6 +441,11 @@ def _sorted_candidates(bucket: Dict[str, Dict[str, Any]]) -> List[Dict[str, Any]
             "type": row.get("type"),
         }
         for row in rows
+        if not (
+            len(_entity_tokens(str(row.get("label", "")).strip())) == 1
+            and row.get("sources") == {"fallback"}
+            and str(row.get("label", "")).strip().casefold() in multiword_heads
+        )
     ]
 
 
@@ -382,12 +484,13 @@ def _iter_time_tokens(item: Dict[str, Any]) -> List[str]:
     return tokens
 
 
-def _rank_entities(ner_entities: List[Dict[str, str]], fallback_entities: List[str]) -> List[Dict[str, Any]]:
+def _rank_entities(text: str, ner_entities: List[Dict[str, str]], fallback_entities: List[str]) -> List[Dict[str, Any]]:
     bucket: Dict[str, Dict[str, Any]] = {}
     for entity in ner_entities:
         name = entity.get("name")
         ent_type = _coerce_entity_type(entity.get("type"))
-        score = 6.0 + _ENTITY_TYPE_WEIGHTS.get(ent_type, 1.0)
+        mention_bonus = max(0.0, (_count_entity_mentions(str(name or ""), text) - 1) * 1.5)
+        score = 6.0 + _ENTITY_TYPE_WEIGHTS.get(ent_type, 1.0) + mention_bonus
         _add_candidate(
             bucket,
             name,
@@ -398,10 +501,11 @@ def _rank_entities(ner_entities: List[Dict[str, str]], fallback_entities: List[s
             candidate_type=ent_type or None,
         )
     for name in fallback_entities:
+        mention_bonus = max(0.0, (_count_entity_mentions(str(name or ""), text) - 1) * 1.5)
         _add_candidate(
             bucket,
             name,
-            2.5,
+            2.5 + mention_bonus,
             "fallback",
             validator=is_valid_entity_token,
             normalizer=normalize_entity_token,
@@ -493,9 +597,10 @@ def tagger(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
     ner_entities = _filter_ner_entities(text, ner_entities)
     extracted_entities = _filter_entity_labels(text, extracted_entities, trusted=True)
     fallback_entities = _fallback_entities(text)
+    fallback_entities = _filter_entity_labels(text, fallback_entities, trusted=False)
     if not extracted_entities:
         extracted_entities = fallback_entities
-    entity_details = _rank_entities(ner_entities, fallback_entities)
+    entity_details = _rank_entities(text, ner_entities, fallback_entities)
     tag_details = _rank_tags(item, ner_entities, fallback_entities)
     entities = [entry["label"] for entry in entity_details[:10]]
     tags = [entry["label"] for entry in tag_details[:8]]

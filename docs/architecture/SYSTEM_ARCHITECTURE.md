@@ -1,12 +1,12 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-03-19 -->
+<!-- DOC_LAST_VERIFIED: 2026-04-01 -->
 
 # GoodQ System Architecture
 
-**Last Updated:** March 19, 2026  
+**Last Updated:** April 1, 2026  
 **Status:** Operational (verify per-run from artifacts and health checks)  
-**Verification Date:** March 1, 2026 (witness run)
+**Verification Date:** March 31, 2026 (stitching-era witness)
 
 > **Note:** This document reflects the runtime architecture. Treat run artifacts and health checks as source-of-truth for current state.
 
@@ -14,19 +14,20 @@
 
 ## Current Status
 
-This milestone snapshot is constrained to witness-run evidence (`run_id=51e42006-f64d-4b13-a42a-f180bf8ba7f3`) and does not expand profile guarantees beyond existing contracts.
+This architecture snapshot is constrained to witness-run evidence and does not expand profile guarantees beyond existing contracts.
 
 Latest rerun comparison evidence is archived at `docs/archive/proof_of_concept/WITNESS_RUN_002.md` (`run_id=90e366c9-41be-4c37-84b6-52abbf4addb9`).
 
 - Windows runtime remains canonical and deterministic for orchestrated ingestion.
 - `BASELINE` remains Windows-safe and CPU-safe; WSL audio is selected only when the active profile or explicit overrides request it.
 - Hybrid Windows + WSL architecture remains in force; WSL is an optional, profile-gated audio compute extension rather than a default runtime requirement.
-- Knowledge graph is active for scene-linked media persistence.
+- Knowledge graph is active for scene-linked media persistence and the identity formation layer.
 - Vector parity is deterministic at run scope (`qdrant_ok=true`, `faiss_ok=not_attempted` for Phase 6 witness write).
 - Read-only observability is active (structured JSON step events + heartbeat).
 - Tagger native-crash mitigation is active; rare native faults remain possible and are surfaced in telemetry.
+- The current accelerated audio contract is the direct unified WSL worker; legacy queue-style audio service paths are not the active runtime contract.
 
-### Witness-Run Summary
+### Historical Witness Snapshot
 
 | Field | Value |
 | --- | --- |
@@ -82,21 +83,22 @@ Current contract:
 - `BASELINE` defaults to Windows-local audio processing.
 - WSL audio is used only when the active profile or explicit overrides enable it and the workspace preflight succeeds.
 
-**Queue-Based Service** (long-running daemon, when WSL audio is enabled):
-- PID 177 (verified running Dec 14)
-- Preloaded: Whisper medium, Pyannote 3.1, Silero VAD
-- Watches: `wsl2_audio/queue_in/`
-
-**Direct Invocation** (per-scene, when WSL audio is enabled):
+**Direct Unified Worker** (current accelerated path, when WSL audio is enabled):
 - Runtime: `process_audio.py`
 - On-demand loading with cleanup
-- Output: result.json with transcript, diarization, emotion, embeddings
+- Local-first/offline model resolution inside the WSL workspace
+- Output: result.json with transcript, diarization, emotion, embeddings, and `speaker_voice_signatures`
+
+**Structured Fallback** (when WSL is degraded and strict mode is not enabled):
+- A single scene may downgrade to the Windows-safe audio path
+- Fallback is explicit and non-recursive
+- Backend truth is persisted via `audio_backend_selected`, `audio_backend_effective`, and `audio_backend_downgraded`
 
 ### 4. Observability (Runtime-Validated)
 Comprehensive telemetry:
-- Scene artifacts: `logs/scene_ingest/<video>/audio/` & `video/`
-- Memory DB: `<GOODQ_DATA_ROOT>\GoodQ_Data\memory.db`
-- Knowledge Graph: `<GOODQ_DATA_ROOT>\GoodQ_Data\knowledge_graph.db`
+- Scene artifacts: `${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/<epoch>/processing/<video>/audio/` and `video/`
+- Memory DB: `${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/<epoch>/memory.db`
+- Knowledge Graph: `${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/<epoch>/knowledge_graph.db`
 - Vector DB: Qdrant on port 6333
 
 ### 5. Privacy-First
@@ -134,16 +136,16 @@ Comprehensive telemetry:
                            |
 +--------------------------+----------------------------------+
 |                [OK] Memory Layer                               |
-|  SQLite: memory.db - knowledge_graph.db                     |
+|  SQLite: epoch-scoped memory + knowledge graph DBs         |
 |  Qdrant: canonical collections (port 6333)                 |
 |  FAISS: optional secondary parity/fallback path            |
 +--------------------------+----------------------------------+
                            |
 +--------------------------+----------------------------------+
 |                [OK] Storage Layer                              |
-|  <GOODQ_DATA_ROOT>\GoodQ_Data\ (unified root)                        |
-|  logs/scene_ingest/ (artifacts)                             |
-|  \\wsl.localhost\Ubuntu\...\goodq_audio\ (WSL2)             |
+|  ${GOODQ_DATA_ROOT}/GoodQ_Data/ (unified root)             |
+|  epochs/<epoch>/processing/ (canonical artifacts)          |
+|  GOODQ_WSL_WORKSPACE (WSL2 audio worker root)              |
 +-------------------------------------------------------------+
 ```
 
@@ -171,7 +173,7 @@ Input Video (dropped in import_inbox)
     +--> Per-Scene Loop (for each of 30 scenes):
         |
         +--> [OK] Frame Processing (Windows, specialized step envs)
-        |   +--> Extract keyframe -> logs/scene_ingest/<video>/video/scene_XXXX.jpg
+        |   +--> Extract keyframe -> ${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/<epoch>/processing/<video>/video/scene_XXXX.jpg
         |   +--> OCR (Tesseract) -> 'ocr_text' field
         |   +--> Caption (BLIP2) -> 'caption' field
         |   +--> Object Detect (YOLOv8) -> 'objects' field
@@ -181,13 +183,14 @@ Input Video (dropped in import_inbox)
         |   +--> Tagger (image classification)
         |
         +--> [OK] Audio Processing (Windows fallback by default; WSL2 when enabled)
-        |   +--> Extract audio chunk -> logs/scene_ingest/<video>/audio/scene_XXXX.wav
+        |   +--> Extract audio chunk -> ${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/<epoch>/processing/<video>/audio/scene_XXXX.wav
         |   +--> audio_metadata (mutagen/librosa)
         |   +--> audio_unified_wsl2() -> WSL2 process_audio.py (when the WSL contract is selected)
         |   |   +--> Transcribe (Whisper large-v3) -> 'transcript'
         |   |   +--> Diarize (Pyannote 3.1) -> 52 segments, 2 speakers (verified)
         |   |   +--> Emotion (Wav2Vec2) -> 8-class
         |   |   +--> Embed (768-dim vectors)
+        |   |   +--> Speaker voice signatures -> 768-dim per-speaker patterns
         |   +--> [Deprecated] audio_speaker_merge (legacy, still runs)
         |   +--> [Deprecated] audio_music_events (legacy, still runs)
         |   +--> [Deprecated] audio_time_hints (legacy, still runs)
@@ -201,13 +204,13 @@ Input Video (dropped in import_inbox)
         +--> [OK] Knowledge Graph Update (lib/kg_realtime_integration.py:109)
         |   +--> Calls entity_extractor
         |   +--> Resolves entities cross-modally
-        |   +--> Inserts into knowledge_graph.db
+        |   +--> Inserts into the epoch-scoped knowledge graph DB
         |
         +--> [OK] Post-Processing
-            +--> register_scene_bundle() -> memory.db
+            +--> register_scene_bundle() -> epoch-scoped memory.db
             +--> Qdrant insertion -> http://localhost:6333
                 +--> goodq_text (transcript embeddings)
-                +--> goodq_image (CLIP + DINO embeddings)
+                +--> goodq_clip_epoch_<epoch> + goodq_dino_epoch_<epoch>
                 +--> goodq_audio (CLAP embeddings)
 ```
 
@@ -265,28 +268,24 @@ Input Video (dropped in import_inbox)
 
 Windows-local fallback remains the default path in `BASELINE`. The WSL2 stack below describes the accelerated bridge used only when that runtime contract is explicitly active.
 
-**Operational Components (Dual Architecture):**
+**Operational Components:**
 
-**A. Queue-Based Service** (long-running daemon)
-- **Service:** `~/goodq_audio/audio_service.py`
-- **Status:** PID 177 (verified Dec 14)
-- **Preloaded Models:**
-  - Whisper medium
-  - Pyannote 3.1 (speaker diarization)
-  - Silero VAD (40-60% speedup)
-- **Watches:** `~/goodq_audio/queue_in/`
-- **Output:** `queue_out/{job_id}_result.json`
-
-**B. Direct Invocation** (per-scene)
+**A. Direct Unified Worker** (current accelerated path)
 - **Script:** `~/goodq_audio/process_audio.py`
 - **Model Loading:** On-demand with cleanup
-- **Output:** `~/goodq_audio/output/result.json` (38KB verified)
+- **Model Resolution:** local-first / offline-capable inside the WSL workspace
+- **Output:** `~/goodq_audio/output/result.json`
 - **Includes:**
-  - Transcription (Whisper large-v3)
-  - Diarization (52 segments, 2 speakers - verified)
+  - Transcription (unified WSL worker)
+  - Diarization (Pyannote 3.1)
   - Emotion classification (Wav2Vec2, 8-class)
   - Audio embeddings (768-dimensional)
+  - Per-speaker voice signatures for identity stitching
   - Features & metadata
+
+**B. Windows-Safe Fallback**
+- Used only when WSL audio is unavailable or degraded and strict WSL mode is not required
+- Runtime truth is persisted on each scene via audio backend markers
 
 **Latent Capabilities:**
 - Music Detection (stub exists, not connected)
@@ -313,38 +312,36 @@ Windows-local fallback remains the default path in `BASELINE`. The WSL2 stack be
   - Real-time insertion
   - Entity resolution
   - Relationship building
-  - Database: `<GOODQ_DATA_ROOT>\GoodQ_Data\knowledge_graph.db`
-  - Status: Confirmed operational (Dec 14)
+  - Identity formation ladder (`speaker_pattern`, `voice_pattern_match`, `identity_candidate`, `identity_supported`, `identity_evidence`)
+  - Database: `${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/<epoch>/knowledge_graph.db`
+  - Status: Operational
 
-**Latent Capabilities:**
-- Cross-Modal Harmonizer (`steps/video/cross_modal_harmonizer.py`)
-  - Complete but not wired
-  - Phase 7 deployment planned
+**Related Contract:**
+- `docs/architecture/IDENTITY_STITCHING_CONTRACT.md`
 
 ## Storage & Database Architecture (Dec 14, 2025)
 
 ### Data Root Structure
 ```
-<GOODQ_DATA_ROOT>\GoodQ_Data\              # [OK] Unified data root
-+-- import_inbox\                 # Drop videos here
-+-- memory.db                     # Scene bundles & metadata
-+-- knowledge_graph.db            # Entity relationships
-+-- qdrant\                       # Vector storage (port 6333)
+${GOODQ_DATA_ROOT}/GoodQ_Data/
++-- import_inbox/                             # Drop videos here
++-- epochs/<epoch>/
+|   +-- memory.db                             # Scene bundles & metadata
+|   +-- knowledge_graph.db                    # Entity relationships + identity ladder
+|   +-- output/scene_ingest_results.json      # Run summary
+|   +-- processing/<video>/
+|       +-- audio/scene_XXXX.wav
+|       +-- video/scene_manifest.json
+|       +-- temporal_index.json
++-- qdrant_storage/                           # Vector storage (port 6333)
 
-logs\scene_ingest\                # [OK] Scene artifacts (actual location)
-+-- <video_name>\
-    +-- audio\                    # scene_0000.wav to scene_0029.wav
-    +-- video\                    # scene_0000.jpg to scene_0029.jpg
-
-\\wsl.localhost\Ubuntu\...\goodq_audio\  # [OK] WSL2 audio stack
-+-- audio_service.py              # Daemon (PID 177)
-+-- process_audio.py              # Direct invocation
-+-- queue_in\                     # Service input
-+-- queue_out\                    # Service output
-+-- output\                       # result.json (38KB verified)
+GOODQ_WSL_WORKSPACE/
++-- process_audio.py                          # Direct unified worker
++-- setup_cuda_env.sh                         # Worker env bootstrap
++-- output/result.json                        # Per-scene bridge output
 ```
 
-> **Note:** There is a known config/runtime inconsistency where `config.yaml` specifies `processing: <GOODQ_DATA_ROOT>\GoodQ_Data\processing\` but artifacts actually land in `logs\scene_ingest\`. This is non-breaking and fully documented. See [`docs/technical/ARTIFACT_LOCATION_CONTRACT.md`](../technical/ARTIFACT_LOCATION_CONTRACT.md) for details.
+> **Note:** The epoch tree is the canonical artifact root. Older artifact layouts may still exist for compatibility, but they are not the current operator truth.
 
 ### Database Details
 
@@ -352,9 +349,12 @@ logs\scene_ingest\                # [OK] Scene artifacts (actual location)
 **Purpose:** Scene bundles, metadata, processing state
 
 **Key Tables:**
-- `scene_bundles` - Scene metadata (30 scenes verified)
-- `processing_state` - Pipeline progress
-- `scene_metadata` - Timestamps, duration, frame counts
+- `scenes`
+- `segments`
+- `embeddings`
+- `links`
+- `summaries`
+- `memory_commit_events`
 
 **Status:** Runtime-conditional; verify with current artifacts and DB health checks
 
@@ -362,9 +362,12 @@ logs\scene_ingest\                # [OK] Scene artifacts (actual location)
 **Purpose:** Entity relationships, cross-modal resolution
 
 **Key Tables:**
-- `entities` - People, places, organizations
-- `relationships` - Entity connections
-- `mentions` - Where entities appear (scene_id, timestamp)
+- `nodes`
+- `edges`
+- `media_nodes`
+- `node_media`
+- `events`
+- `event_nodes`
 
 **Integration:** Real-time insertion via `lib/kg_realtime_integration.py:109`  
 **Status:** Runtime-conditional; verify with current artifacts and DB health checks
@@ -374,7 +377,8 @@ logs\scene_ingest\                # [OK] Scene artifacts (actual location)
 
 **Collections:**
 - `goodq_text` - Transcript embeddings (SBERT)
-- `goodq_image` - Visual embeddings (CLIP + DINO)
+- `goodq_clip_epoch_<epoch>` - Phase 6 CLIP scene embeddings
+- `goodq_dino_epoch_<epoch>` - Phase 6 DINO scene embeddings
 - `goodq_audio` - Audio embeddings (CLAP)
 
 **API:** http://localhost:6333  
@@ -803,8 +807,8 @@ python scripts\cache_readiness_check.py
 
 # Service verification
 Invoke-WebRequest http://localhost:6333/health  # Qdrant
-wsl ps aux | grep audio_service                   # WSL2 (PID 177)
-nvidia-smi                                         # GPU status
+wsl -d <distro> -- bash -lc 'test -f "$GOODQ_WSL_WORKSPACE/process_audio.py" && echo worker_ready'  # WSL2
+nvidia-smi                                                                                           # GPU status
 \\\
 
 ### Live Test Results (Dec 14, 2025)

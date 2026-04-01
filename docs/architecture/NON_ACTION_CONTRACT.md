@@ -19,6 +19,7 @@ This contract is a **guardrail layer**, not a policy engine:
 ## Cross-References (Authoritative)
 
 - Epistemic envelope + states: `docs/architecture/EPISTEMIC_READ_MODEL.md`
+- Identity formation ladder + non-promotion rules: `docs/architecture/IDENTITY_STITCHING_CONTRACT.md`
 - Memory integrity doctrine (confidence is not policy; audit absence is not evidence): `docs/architecture/MEMORY_STORAGE.md`
 - Sensitive source wiring + vault rules: `docs/architecture/CANONICAL_SENSITIVE_EVENTS.md`
 - Vault token resolution (local-only): `docs/architecture/VAULT_TOKEN_RESOLVER_CONTRACT.md`
@@ -143,4 +144,3 @@ Structural (no thresholds):
 
 - This contract is intentionally conservative and incomplete-by-design: it enumerates **known** non-action conditions without claiming global completeness.
 - Enforcement/wiring belongs to future policy/UI layers; this contract is the shared language those layers must follow.
-

@@ -48,13 +48,13 @@ The “Basement Phase” established the non-negotiable foundation for GoodQ:
   - `  [OK] No audio track in video (video-only)` → no audio stream (`_extract_audio_chunk()` returned `None`).
   - `Processing: scene_XXXX.wav` followed by an error → audio exists; WSL2 processing failed (do not treat as “no audio”).
 - **WSL2 audio components:** `steps/audio/audio_wsl2_bridge.py`, `scripts/wsl2_audio_bridge.py`, `wsl2_audio/process_audio.py`.
-- **Primary logs for audits:** `logs/step_runs.jsonl`, `logs/scene_ingest/`, `wsl2_audio/logs/`.
+- **Primary logs for audits:** epoch `logs/step_runs.jsonl`, epoch `processing/<video>/`, and the WSL worker output/workspace.
 
 ---
 
 ## Current Watch List (Known Ongoing Issues)
 
-- **Intermittent WSL2 audio unified failures:** some scenes have extracted audio chunks (`Processing: scene_XXXX.wav`) but WSL2 processing returns an error (often alongside benign stderr warnings); treat this as *audio-present processing failure*, not “no audio”. Start investigation at `scripts/wsl2_audio_bridge.py` + `wsl2_audio/process_audio.py` and confirm the extracted `.wav` exists/has non-trivial size in `logs/scene_ingest/.../audio/`.
+- **Intermittent WSL2 audio unified failures:** some scenes have extracted audio chunks (`Processing: scene_XXXX.wav`) but WSL2 processing returns an error (often alongside benign stderr warnings); treat this as *audio-present processing failure*, not “no audio”. Start investigation at `scripts/wsl2_audio_bridge.py` + `wsl2_audio/process_audio.py` and confirm the extracted `.wav` exists/has non-trivial size in the epoch `processing/<video>/audio/` tree.
 - **Status pages can be stale:** `docs/goodq4all_agent_status.md` is a snapshot and may lag current tags; use `git tag --list` + `docs/HANDOFF_BASEMENT_PHASE.md` + `docs/architecture/SYSTEM_MAP_v1.md` for authoritative anchors.
 
 ---

@@ -1,11 +1,11 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-02-12 -->
+<!-- DOC_LAST_VERIFIED: 2026-04-01 -->
 
 # Memory & Storage Architecture
 
-**Last Updated:** December 15, 2025  
-**Status:** ✅ Operational
+**Last Updated:** April 1, 2026  
+**Status:** ✅ Operational (epoch-scoped memory + KG storage)
 
 ---
 
@@ -39,17 +39,17 @@ GoodQ4All uses a **hybrid memory architecture** combining relational databases (
 
 ### 1. **Memory Database (SQLite)**
 
-**Location:** `<GOODQ_DATA_ROOT>\GoodQ_Data\memory.db`
+**Location:** `${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/<epoch>/memory.db`
 
 **Purpose:** Structured scene and video metadata storage
 
 **Tables:**
-- `videos` - Video file metadata (hash, path, duration, fps, resolution)
-- `scenes` - Scene boundaries and temporal data (start/end times, scene_id)
-- `scene_results` - Processing results for each scene (JSON payloads)
-- `processing_log` - Audit trail of all processing operations
+- `scenes` - Scene bundles and scene-level metadata
+- `segments` - Temporal text/audio segments
+- `embeddings` - Embedding identity + storage routing metadata
+- `links` - Cross-item memory links
+- `summaries` - Derived summaries
 - `memory_commit_events` - Append-only record of memory write attempts (attempted/committed + per-target details)
-- `retrieval_events` - Append-only record of retrieval hits returned (store + score + best-effort identity)
 
 **Access Pattern:** Read/write during ingestion, read-heavy during retrieval
 
@@ -65,7 +65,7 @@ GoodQ4All uses a **hybrid memory architecture** combining relational databases (
 - **Non-blocking:** emission is best-effort; failures must not stop ingestion.
 - **Fallback mirror:** optional JSONL append at `cfg['paths']['log_dir']/memory_commit_events.jsonl`.
 
-### `retrieval_events` (reads)
+### `retrieval_events` (reads; optional SQLite or JSONL mirror)
 - **Intent:** auditable record of hits returned by retrieval (observability only; not reinforcement).
 - **Privacy:** never record raw user queries in events; `retrieval_context` is a sanitized origin label.
 - **Context taxonomy (conventional):** `human.ui.search`, `human.cli.retrieve`, `system.healthcheck`, `system.dashboard`, `agent.reasoning`, `unknown`.
@@ -136,16 +136,17 @@ GoodQ4All uses a **hybrid memory architecture** combining relational databases (
 
 ### 2. **Knowledge Graph Database (SQLite)**
 
-**Location:** `<GOODQ_DATA_ROOT>\GoodQ_Data\knowledge_graph.db`
+**Location:** `${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/<epoch>/knowledge_graph.db`
 
 **Purpose:** Entity relationships and cross-modal connections
 
 **Tables:**
-- `entities` - Detected entities (people, objects, locations, concepts)
-- `entity_occurrences` - Scene-level entity appearances with confidence
-- `relationships` - Entity-to-entity connections
-- `mentions` - Textual mentions and co-references
-- `cross_modal_links` - Connections between visual, audio, and textual entities
+- `nodes` - Entities, structural nodes, and identity-layer nodes
+- `edges` - Relationships, candidate/support/evidence edges, and modality links
+- `media_nodes` - Scene/media linkage
+- `node_media` - Node-to-scene/media joins
+- `events` - Temporal KG events
+- `event_nodes` - Event-to-node joins
 
 **Populated By:** `lib/kg_realtime_integration.py::update_kg_for_scene()`
 
@@ -163,8 +164,8 @@ GoodQ4All uses a **hybrid memory architecture** combining relational databases (
 
 | Collection | Dimension | Model | Purpose |
 |-----------|-----------|-------|---------|
-| `goodq_clip` | 512 | CLIP ViT-L/14 | Visual scene embeddings |
-| `goodq_dino` | 768 | DINOv2 ViT-L/14 | Visual scene embeddings (fine-grained) |
+| `goodq_clip_epoch_<epoch>` | 512 | CLIP | Phase 6 visual scene embeddings |
+| `goodq_dino_epoch_<epoch>` | 768 | DINOv2 | Phase 6 visual scene embeddings (fine-grained) |
 | `goodq_text` | 384 | all-MiniLM-L6-v2 | Transcript and caption embeddings |
 | `goodq_audio` | 512 | CLAP | Audio embeddings |
 
@@ -268,22 +269,27 @@ def build_text_stores(cfg):
 ## Storage Locations Summary
 
 ```
-<GOODQ_DATA_ROOT>\GoodQ_Data\
-├── memory.db                      # Scene metadata (SQLite)
-├── knowledge_graph.db             # Entity graph (SQLite)
-├── qdrant_storage\                # Vector DB (Qdrant)
-│   ├── collections\
-│   │   ├── goodq_clip\
-│   │   ├── goodq_dino\
-│   │   ├── goodq_text\
-│   │   └── goodq_audio\
-│   ├── wal\
-│   └── snapshots\
-└── faiss_indices\                 # Fallback indices (FAISS)
-    ├── text\
-    ├── clip\
-    ├── dino\
-    └── audio\
+${GOODQ_DATA_ROOT}/GoodQ_Data/
+├── epochs/<epoch>/
+│   ├── memory.db
+│   ├── knowledge_graph.db
+│   ├── output/scene_ingest_results.json
+│   └── processing/<video>/
+│       ├── video/scene_manifest.json
+│       └── temporal_index.json
+├── qdrant_storage/
+│   ├── collections/
+│   │   ├── goodq_clip_epoch_<epoch>/
+│   │   ├── goodq_dino_epoch_<epoch>/
+│   │   ├── goodq_text/
+│   │   └── goodq_audio/
+│   ├── wal/
+│   └── snapshots/
+└── faiss_indices/
+    ├── text/
+    ├── clip/
+    ├── dino/
+    └── audio/
 ```
 
 ---
@@ -333,8 +339,8 @@ Qdrant uses string IDs natively, so no mapping needed.
 ### Daily Operations
 ```batch
 # Backup SQLite databases
-copy <GOODQ_DATA_ROOT>\GoodQ_Data\memory.db <GOODQ_DATA_ROOT>\GoodQ_Data\backups\memory_%DATE%.db
-copy <GOODQ_DATA_ROOT>\GoodQ_Data\knowledge_graph.db <GOODQ_DATA_ROOT>\GoodQ_Data\backups\kg_%DATE%.db
+copy <GOODQ_DATA_ROOT>\GoodQ_Data\epochs\<epoch>\memory.db <GOODQ_DATA_ROOT>\GoodQ_Data\backups\memory_<epoch>_%DATE%.db
+copy <GOODQ_DATA_ROOT>\GoodQ_Data\epochs\<epoch>\knowledge_graph.db <GOODQ_DATA_ROOT>\GoodQ_Data\backups\kg_<epoch>_%DATE%.db
 
 # Backup Qdrant (snapshot)
 curl -X POST http://localhost:6333/snapshots
@@ -387,8 +393,8 @@ results = engine.search_visual("birthday celebration")
 
 ```yaml
 paths:
-  db_path: /mnt/l/<GOODQ_DATA_ROOT>/GoodQ_Data/memory.db
-  knowledge_graph_db: /mnt/l/<GOODQ_DATA_ROOT>/GoodQ_Data/knowledge_graph.db
+  db_path: ${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/<epoch>/memory.db
+  knowledge_graph_db: ${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/<epoch>/knowledge_graph.db
   faiss_dir: /mnt/l/<GOODQ_DATA_ROOT>/GoodQ_Data/faiss
 
 qdrant:

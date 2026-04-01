@@ -1,10 +1,10 @@
 # 🏗️ GoodQ4All Architecture Reference
 
-**Last Updated:** December 15, 2025  
-**Status:** ✅ Updated with Dec 14, 2025 Forensic Verification  
+**Last Updated:** April 1, 2026  
+**Status:** ✅ Updated with epoch-scoped storage and stitching-era verification  
 **Purpose:** Definitive reference for data structures, storage patterns, and operational architecture
 
-> **Note:** This document reflects the current operational system. Qdrant is canonical, FAISS remains optional parity/fallback, and `goodq_core` is the orchestration/base environment while specialized step envs still back several image/audio/video workloads. The local API is an explicit helper surface, while the old browser UI/dashboard scaffold is experimental only. For full system narrative, see [SYSTEM_ARCHITECTURE.md](SYSTEM_ARCHITECTURE.md). For canonical ingest authority and engine cutover rules, see [INGEST_ORCHESTRATION_CONTRACT.md](INGEST_ORCHESTRATION_CONTRACT.md).
+> **Note:** This document reflects the current operational system. Qdrant is canonical, FAISS remains optional parity/fallback, and `goodq_core` is the orchestration/base environment while specialized step envs still back several image/audio/video workloads. The local API is an explicit helper surface, while the old browser UI/dashboard scaffold is experimental only. For full system narrative, see [SYSTEM_ARCHITECTURE.md](SYSTEM_ARCHITECTURE.md). For canonical ingest authority and engine cutover rules, see [INGEST_ORCHESTRATION_CONTRACT.md](INGEST_ORCHESTRATION_CONTRACT.md). For the identity formation ladder, see [IDENTITY_STITCHING_CONTRACT.md](IDENTITY_STITCHING_CONTRACT.md).
 
 ---
 
@@ -18,143 +18,63 @@
 
 ---
 
-## Database Schema (Dec 14, 2025)
+## Database Schema (Live Runtime Summary)
 
 ### Primary Database: `memory.db`
 
-**Location:** `<GOODQ_DATA_ROOT>\GoodQ_Data\memory.db` ✅ Verified  
-**Purpose:** Scene bundles, metadata, processing state
+**Location:** `${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/<epoch>/memory.db` ✅ Verified  
+**Purpose:** Scene bundles, temporal segments, embedding routing metadata, summaries, and memory commit observability
 
 #### Core Tables
 
-**1. scene_bundles**
-```sql
-CREATE TABLE scene_bundles (
-    scene_id TEXT PRIMARY KEY,          -- Unique scene identifier
-    video_name TEXT,                    -- Source video filename
-    scene_index INTEGER,                -- Scene number (0-29 typical)
-    start_time REAL,                    -- Start timestamp in seconds
-    end_time REAL,                      -- End timestamp in seconds
-    duration REAL,                      -- Scene duration
-    keyframe_path TEXT,                 -- logs/scene_ingest/<video>/video/scene_XXXX.jpg
-    audio_path TEXT,                    -- logs/scene_ingest/<video>/audio/scene_XXXX.wav
-    transcript TEXT,                    -- Whisper transcription
-    caption TEXT,                       -- BLIP2 image caption
-    ocr_text TEXT,                      -- Tesseract OCR output
-    objects TEXT,                       -- JSON list of detected objects (YOLO)
-    metadata_json TEXT,                 -- Extended metadata
-    created_at TEXT,                    -- ISO timestamp
-    processed BOOLEAN DEFAULT 0         -- Processing completion flag
-);
-```
+- `scenes`
+- `segments`
+- `embeddings`
+- `links`
+- `summaries`
+- `memory_commit_events`
 
 **Key Points:**
-- Registered via `register_scene_bundle()` in `cli/run_ingestion.py`
-- Each scene (0-29) gets one bundle entry
-- Artifact paths point to `logs/scene_ingest/`
-- Status: ✅ Operational (Dec 14 verified)
-
-**2. embeddings** (if still used)
-```sql
-CREATE TABLE embeddings (
-    hash TEXT PRIMARY KEY,              -- Content fingerprint (SHA256)
-    scene_id TEXT,                      -- Reference to scene_bundles
-    modality TEXT,                      -- 'clip', 'dino', 'clap', 'text'
-    embedding_type TEXT,                -- Model used (e.g., 'clip-vit-base')
-    dimensions INTEGER,                 -- Vector dimensionality
-    created_at TEXT                     -- ISO timestamp
-);
-```
-
-**Note:** Embeddings primarily stored in Qdrant now, this may be legacy/backup.
-
----
-);
-```
-
-**Purpose:** Knowledge graph edges, relationships between embeddings
-
-**5. summaries**
-```sql
-CREATE TABLE summaries (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    summary_type TEXT,               -- Type of summary
-    category TEXT,                   -- Category
-    content TEXT,                    -- Summary text
-    created_at TEXT                  -- ISO timestamp
-);
-```
-
-**Purpose:** Generated summaries (currently unused)
-
----
+- Scene bundle registration remains owned by `cli/run_ingestion.py`
+- Scene and segment rows are tied to epoch-scoped ingest artifacts
+- Artifact references are anchored in the epoch processing tree
+- Qdrant remains canonical for vector search; SQLite tracks routing identity and commit observability
 
 ### Secondary Database: `knowledge_graph.db`
 
-**Location:** `<GOODQ_DATA_ROOT>\GoodQ_Data\knowledge_graph.db` ✅ Verified  
-**Purpose:** Entity relationships, cross-modal resolution
+**Location:** `${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/<epoch>/knowledge_graph.db` ✅ Verified  
+**Purpose:** Entity relationships, media linkage, temporal events, and identity formation edges
 
 #### Core Tables
 
-**1. entities**
-```sql
-CREATE TABLE entities (
-    entity_id TEXT PRIMARY KEY,         -- Unique entity identifier
-    entity_type TEXT,                   -- 'person', 'place', 'organization'
-    name TEXT,                          -- Canonical entity name
-    confidence REAL,                    -- Extraction confidence (0-1)
-    first_seen TEXT,                    -- ISO timestamp
-    last_seen TEXT,                     -- ISO timestamp
-    mention_count INTEGER DEFAULT 1,    -- Number of mentions
-    metadata_json TEXT                  -- Extended attributes
-);
-```
-
-**2. mentions**
-```sql
-CREATE TABLE mentions (
-    mention_id TEXT PRIMARY KEY,        -- Unique mention identifier
-    entity_id TEXT,                     -- Foreign key to entities
-    scene_id TEXT,                      -- Scene where mentioned
-    source TEXT,                        -- 'transcript', 'caption', 'ocr', 'objects'
-    timestamp REAL,                     -- Scene timestamp
-    context TEXT,                       -- Surrounding text/context
-    created_at TEXT,                    -- ISO timestamp
-    FOREIGN KEY (entity_id) REFERENCES entities(entity_id)
-);
-```
-
-**3. relationships**
-```sql
-CREATE TABLE relationships (
-    relationship_id TEXT PRIMARY KEY,   -- Unique relationship identifier
-    entity_a_id TEXT,                   -- First entity
-    entity_b_id TEXT,                   -- Second entity
-    relationship_type TEXT,             -- 'co-occurs', 'mentions', 'related'
-    strength REAL,                      -- Relationship strength (0-1)
-    first_seen TEXT,                    -- ISO timestamp
-    scenes_json TEXT,                   -- JSON list of scene_ids
-    FOREIGN KEY (entity_a_id) REFERENCES entities(entity_id),
-    FOREIGN KEY (entity_b_id) REFERENCES entities(entity_id)
-);
-```
+- `nodes`
+- `edges`
+- `media_nodes`
+- `node_media`
+- `events`
+- `event_nodes`
 
 **Integration:**
-- Real-time insertion via `lib/kg_realtime_integration.py:109`
-- Entity extraction from `steps/video/entity_extractor.py:370`
-- Cross-modal resolution: transcript + caption + OCR + objects
-- Status: ✅ Operational (Dec 14 verified)
+- Real-time insertion via `lib/kg_realtime_integration.py`
+- Cross-modal resolution from transcript + caption + OCR + objects
+- Identity formation ladder documented in [IDENTITY_STITCHING_CONTRACT.md](IDENTITY_STITCHING_CONTRACT.md)
+
+**Live Edge Types Include:**
+- `voice_pattern_match`
+- `identity_candidate`
+- `identity_supported`
+- `identity_evidence`
 
 ---
 
-## Qdrant Vector Storage (Dec 14, 2025)
+## Qdrant Vector Storage
 
 **Replaces:** FAISS indices (deprecated Oct 2025)
 
 ### Connection Details
 - **URL:** http://localhost:6333
 - **Status:** ✅ Operational (Dec 14 verified)
-- **Storage:** `<GOODQ_DATA_ROOT>\GoodQ_Data\qdrant\`
+- **Storage:** `${GOODQ_DATA_ROOT}/qdrant_storage/`
 
 ### Collections
 
@@ -180,20 +100,10 @@ CREATE TABLE relationships (
 **Model:** sentence-transformers/all-MiniLM-L6-v2  
 **Dimensions:** 384
 
-**2. goodq_image**
+**2. Phase 6 image collections**
 ```python
 {
-    "name": "goodq_image",
-    "vectors": {
-        "clip": {
-            "size": 512,                # CLIP ViT-B/16
-            "distance": "Cosine"
-        },
-        "dino": {
-            "size": 768,                # DINOv2-base
-            "distance": "Cosine"
-        }
-    },
+    "name": "goodq_clip_epoch_<epoch> / goodq_dino_epoch_<epoch>",
     "payload_schema": {
         "scene_id": "keyword",
         "keyframe_path": "keyword",
@@ -206,8 +116,8 @@ CREATE TABLE relationships (
 ```
 
 **Sources:** Keyframe images  
-**Models:** CLIP (512-d) + DINO (768-d) as named vectors  
-**Status:** Multi-vector support for dual embeddings
+**Models:** CLIP (512-d) and DINO (768-d) in separate epoch-scoped collections  
+**Status:** Operational in Phase 6a
 
 **3. goodq_audio**
 ```python
@@ -258,55 +168,55 @@ results = client.search(
     limit=10
 )
 
-# Search images with CLIP
+# Search CLIP scene embeddings
 results = client.search(
-    collection_name="goodq_image",
+    collection_name="goodq_clip_epoch_2025_12_22",
     query_vector=embed_image("image.jpg"),
-    using="clip",
     limit=10
 )
 ```
 
 ---
 
-## Storage Conventions (Dec 14, 2025)
+## Storage Conventions
 
 ### Artifact Locations
 
-**Scene Artifacts (Verified Dec 14):**
+**Scene Artifacts (Verified in stitching-era witnesses):**
 ```
-logs\scene_ingest\<video_name>\
+<GOODQ_DATA_ROOT>\GoodQ_Data\epochs\<epoch>\processing\<video_name>\
 ├── audio\
 │   ├── scene_0000.wav
 │   ├── scene_0001.wav
-│   └── scene_0029.wav          # 30 scenes typical
-└── video\
-    ├── scene_0000.jpg
-    ├── scene_0001.jpg
-    └── scene_0029.jpg
+│   └── scene_00NN.wav
+├── video\
+│   ├── scene_0000.jpg
+│   ├── scene_0001.jpg
+│   └── scene_manifest.json
+└── temporal_index.json
 ```
 
-**⚠️ Config Drift:** Config specifies `processing/` but actual location is `logs/scene_ingest/`  
-**Status:** Documented, not a bug - artifacts reliably land in `logs/scene_ingest/`
+**Status:** The epoch processing tree is canonical. Older layouts may still exist for compatibility, but are not the current operator truth.
 
 **WSL2 Audio Output:**
 ```
 \\wsl.localhost\Ubuntu\home\<user>\goodq_audio\
 ├── output\
-│   └── result.json             # 38KB verified Dec 14
-├── queue_in\                   # Service input
-├── queue_out\                  # Service output
-└── logs\
-    └── audio_service.log       # Service daemon logs
+│   └── result.json
+├── process_audio.py            # Direct unified worker
+└── setup_cuda_env.sh
 ```
 
 **Data Root:**
 ```
 <GOODQ_DATA_ROOT>\GoodQ_Data\
 ├── import_inbox\               # Drop videos here
-├── memory.db                   # Scene bundles
-├── knowledge_graph.db          # Entity relationships
-└── qdrant\                     # Vector storage
+├── epochs\<epoch>\
+│   ├── memory.db
+│   ├── knowledge_graph.db
+│   ├── output\
+│   └── processing\
+└── qdrant_storage\             # Vector storage
 ```
 
 ### File Naming Conventions
@@ -322,7 +232,7 @@ logs\scene_ingest\<video_name>\
 
 ---
 
-## File System Layout (Dec 14, 2025 Verified)
+## File System Layout
 
 ```
 <project_root>\                   # Project root
@@ -339,10 +249,8 @@ logs\scene_ingest\<video_name>\
 │   ├── kg_realtime_integration.py  # ✅ KG updates (line 109)
 │   └── knowledge_graph.py      # Graph manager
 ├── wsl2_audio\                 # ✅ WSL2 audio stack
-│   ├── audio_service.py        # Daemon (PID 177)
-│   ├── process_audio.py        # Direct invocation
-│   ├── queue_in\
-│   ├── queue_out\
+│   ├── process_audio.py        # Direct unified worker
+│   ├── setup_cuda_env.sh
 │   └── output\
 ├── vendor\                     # ✅ Vendored dependencies for bootstrap
 │   ├── qdrant\                 # Qdrant Windows service binary
@@ -357,14 +265,11 @@ logs\scene_ingest\<video_name>\
 
 <GOODQ_DATA_ROOT>\GoodQ_Data\            # ✅ Unified data root
 ├── import_inbox\               # ✅ Drop videos here
-├── memory.db                   # ✅ Scene bundles
-├── knowledge_graph.db          # ✅ Entity relationships
-└── qdrant\                     # ✅ Vector storage
-
-logs\scene_ingest\              # ✅ Scene artifacts
-└── <video_name>\
-    ├── audio\                  # scene_XXXX.wav
-    └── video\                  # scene_XXXX.jpg
+├── epochs\<epoch>\
+│   ├── memory.db               # ✅ Scene bundles
+│   ├── knowledge_graph.db      # ✅ Entity relationships
+│   └── processing\<video>\     # ✅ Scene artifacts
+└── qdrant_storage\             # ✅ Vector storage
 ```
 
 **Legend:** ✅ Operational | ⊘ Latent (built, not wired) | ⚠️ Cleanup planned
@@ -417,14 +322,14 @@ Invoke-WebRequest http://localhost:6333/collections
 
 **Check Scene Artifacts:**
 ```powershell
-Get-ChildItem "logs\scene_ingest\" -Directory
-Get-ChildItem "logs\scene_ingest\<video>\audio\" | Measure-Object
+Get-ChildItem "<GOODQ_DATA_ROOT>\GoodQ_Data\epochs\*\processing" -Directory
+Get-ChildItem "<GOODQ_DATA_ROOT>\GoodQ_Data\epochs\*\processing\<video>\audio\" | Measure-Object
 ```
 
 **Check WSL2 Audio:**
 ```powershell
-wsl ps aux | grep audio_service                   # Should show PID 177
-wsl tail -f ~/goodq_audio/logs/audio_service.log
+wsl -d <distro> -- bash -lc 'test -f "$GOODQ_WSL_WORKSPACE/process_audio.py" && echo worker_ready'
+wsl -d <distro> -- bash -lc 'ls -lah "$GOODQ_WSL_WORKSPACE/output"'
 ```
 
 ### Common Queries
@@ -432,26 +337,26 @@ wsl tail -f ~/goodq_audio/logs/audio_service.log
 **SQLite (memory.db):**
 ```sql
 -- Count scenes
-SELECT COUNT(*) FROM scene_bundles;
+SELECT COUNT(*) FROM scenes;
 
 -- Recent scenes
-SELECT scene_id, video_name, created_at 
-FROM scene_bundles 
-ORDER BY created_at DESC 
+SELECT scene_id, modality, created_at
+FROM embeddings
+ORDER BY created_at DESC
 LIMIT 10;
 ```
 
 **SQLite (knowledge_graph.db):**
 ```sql
--- Entity counts by type
-SELECT entity_type, COUNT(*) 
-FROM entities 
-GROUP BY entity_type;
+-- Node counts by type
+SELECT node_type, COUNT(*)
+FROM nodes
+GROUP BY node_type;
 
--- Top mentioned entities
-SELECT name, mention_count 
-FROM entities 
-ORDER BY mention_count DESC 
+-- Top recurring labels
+SELECT label, occurrence_count
+FROM nodes
+ORDER BY occurrence_count DESC
 LIMIT 10;
 ```
 

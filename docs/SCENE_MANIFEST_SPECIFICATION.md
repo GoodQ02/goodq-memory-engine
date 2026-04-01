@@ -1,8 +1,8 @@
 # Scene Manifest Specification
 
 **Status:** ✅ **STABLE AND OPERATIONAL**  
-**Last Verified:** December 15, 2025  
-**Evidence:** 13 manifests generated, 0.01 MB to 6.55 MB in size
+**Last Verified:** April 1, 2026  
+**Evidence:** stitching-era witness runs produced epoch-scoped manifests with active WSL audio, Phase 6 completion, and persisted speaker voice signatures
 
 ---
 
@@ -13,20 +13,20 @@ The **scene_manifest.json** is the canonical index file created during video ing
 ### Location
 
 ```
-logs/scene_ingest/<video_name>/video/scene_manifest.json
+${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/<epoch>/processing/<video_name>/video/scene_manifest.json
 ```
 
 **Example:**
 ```
-<project_root>\logs\scene_ingest\10. 2003-2005\video\scene_manifest.json
+${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/epoch_2025_12_22/processing/01x01 - Good News, Bad News/video/scene_manifest.json
 ```
 
 ### Creation
 
 - **Module:** `cli/run_ingestion.py`
 - **Lines:** 1377-1382
-- **Timing:** Created after all scene processing completes (Phase 1-5)
-- **Purpose:** Provides Phase 6 (harmonization) with unified scene data
+- **Timing:** Created during scene ingestion and finalized before Phase 6b completes
+- **Purpose:** Provides Phase 6 and downstream retrieval/memory systems with the canonical scene bundle
 
 ---
 
@@ -37,7 +37,9 @@ logs/scene_ingest/<video_name>/video/scene_manifest.json
 ```json
 {
   "video_id": "7215a98e...",           // SHA256 hash of video file
-  "video_path": "<GOODQ_DATA_ROOT>\\...",      // Original video path
+  "video_path": "<GOODQ_DATA_ROOT>/import_inbox/...",  // Original video path
+  "phase6_status": "complete",         // Phase 6 truth surface
+  "phase6_complete": true,
   "scenes": [...]                      // Array of scene objects
 }
 ```
@@ -54,6 +56,11 @@ Each scene contains:
   "end": 4.171,                        // End timestamp (seconds)
   "duration": 4.171,                   // Duration (seconds)
   "confidence": 1.0,                   // Scene detection confidence
+  "clip_id": "clip_scene_...",         // Phase 6a CLIP vector id
+  "dino_id": "dino_scene_...",         // Phase 6a DINO vector id
+  "qdrant_ok": true,                   // Scene vectors committed to Qdrant
+  "speaker_ids": ["SPEAKER_00"],
+  "speaker_count": 1,
   "keyframe": {...},                   // Visual analysis results
   "audio": {...}                       // Audio analysis results
 }
@@ -113,17 +120,23 @@ Audio processing results from the scene's audio chunk:
 
 ```json
 "audio": {
-  "path": "<project_root>\\logs\\scene_ingest\\...\\audio\\scene_0000.wav",
+  "path": "${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/<epoch>/processing/<video>/audio/scene_0000.wav",
   "start": 0.0,
   "end": 4.171,
   "duration": 4.171,
+
+  // Backend contract
+  "audio_backend_selected": "wsl",
+  "audio_backend_effective": "wsl",
+  "audio_backend_downgraded": false,
   
   // Transcription (WSL2 Unified)
-  "transcript": "You",
+  "transcript": "look at it it's too high it's in no man's land",
   "transcript_meta": {
-    "status": "ok",
-    "engine": "whisper-large-v3",
-    "wsl2_unified": true
+    "status": "success",
+    "engine": "wsl_unified",
+    "device": "cuda",
+    "segment_count": 7
   },
   
   // Speaker Diarization
@@ -139,6 +152,34 @@ Audio processing results from the scene's audio chunk:
     "status": "ok",
     "engine": "pyannote-3.1",
     "num_speakers": 1
+  },
+
+  // Speaker-owned transcript alignment
+  "speaker_transcript": [
+    {
+      "speaker": "SPEAKER_00",
+      "text": "look at it it's too high it's in no man's land",
+      "start": 0.0,
+      "end": 3.9
+    }
+  ],
+
+  // Per-speaker voice signatures
+  "speaker_voice_signatures": [
+    {
+      "speaker": "SPEAKER_00",
+      "embedding": [0.119, -0.306, ...],
+      "embedding_dim": 768,
+      "voiced_seconds": 5.72,
+      "segment_count": 3
+    }
+  ],
+  "speaker_voice_signature_meta": {
+    "status": "ok",
+    "emitted": 1,
+    "attempted_speakers": 1,
+    "min_voiced_seconds": 4.0,
+    "min_segment_count": 2
   },
   
   // Emotion Analysis
@@ -156,14 +197,12 @@ Audio processing results from the scene's audio chunk:
   },
   
   // Audio Embeddings
-  "embedding": [0.119, -0.306, ...],  // 768-dim vector
+  "embeddings": [0.119, -0.306, ...],  // 768-dim scene-level vector
   "embedding_dim": 768,
   "wsl2_unified": true,
   "gpu_used": true,
   "gpu_name": "NVIDIA GeForce RTX 4070 Ti SUPER",
-  
-  // Legacy Fields (still populated)
-  "speaker_transcript": null,
+
   "music_events": "",
   "music_events_meta": {"status": "none"},
   "time_hints": {
@@ -195,33 +234,33 @@ Audio processing results from the scene's audio chunk:
 
 ## Consumers
 
-### Phase 6 Modules (Latent, Ready to Activate)
+### Phase 6 Modules (Operational)
 
 1. **Scene Visual Embeddings** (`steps/video/scene_visual_embeddings.py`)
    - Reads: `scene_manifest.json`
    - Purpose: Pool CLIP/DINO embeddings across scenes
-   - Status: Built, not wired
+   - Status: Wired and operational
 
 2. **Cross-Modal Harmonizer** (`steps/video/cross_modal_harmonizer.py`)
-   - Reads: `scene_manifest.json` (with fallback paths)
+   - Reads: `scene_manifest.json`
    - Purpose: Align audio/visual timelines, resolve entities
-   - Status: Built, not wired
+   - Status: Wired and operational
 
 3. **Embedding Pooler** (`steps/video/embedding_pooler.py`)
    - Reads: Scene embeddings
    - Purpose: Aggregate scene-level vectors
-   - Status: Built, not wired
+   - Status: Used by Phase 6a
 
 ### API/Query Systems
 
 4. **API Loaders** (`api/utils/loaders.py`)
-   - Reads: `scene_manifest.json` from processing or completed dirs
+   - Reads: `scene_manifest.json` from the epoch processing tree
    - Purpose: Serve scene data to UI/API
-   - Status: Built, not deployed
+   - Status: Deployment-dependent consumer
 
 5. **Multimodal Search** (`retrieval/multimodal_search.py`)
    - Potential consumer of aggregated scene data
-   - Status: Built, not wired
+   - Status: Runtime consumer when retrieval is enabled
 
 ---
 
@@ -281,32 +320,26 @@ Average manifest size correlates with:
 
 ## Known Issues
 
-### 1. Config vs. Reality Mismatch
+### 1. Partial Scene Errors Remain Possible
 
-**Documented:** `<GOODQ_DATA_ROOT>\GoodQ_Data\processing\`  
-**Actual:** `<project_root>\logs\scene_ingest\`
+Some scenes may still carry partial keyframe or optional-audio failures while the manifest remains canonical.
 
-**Impact:** Low (code works, but config is misleading)  
-**Fix Required:** Update `config.yaml` or normalize paths
+**Current behavior:** the scene stays persisted, `content_state` and step-level error fields remain truthful, and Phase 6 continues when allowed.
 
-### 2. Embedding Availability
+### 2. Backend Markers Must Be Read From Audio Fields
 
-Some scenes show:
+Use:
 ```json
-"dino_meta": {"status": "unavailable"},
-"clip_meta": {"status": "unavailable"}
+"audio_backend_selected"
+"audio_backend_effective"
+"audio_backend_downgraded"
 ```
 
-**Reason:** Phase 6 modules not yet wired  
-**Workaround:** Embeddings are processed but not inserted into manifest  
-**Resolution:** Activate Phase 6a (scene_visual_embeddings)
+These fields are authoritative for whether WSL audio succeeded, downgraded, or was never selected.
 
-### 3. Legacy Audio Fields
+### 3. Identity Formation Starts Here, Not In The KG Alone
 
-Fields like `music_events`, `time_hints`, `speaker_transcript` still present with `"status": "none"` despite being superseded by WSL2 unified processing.
-
-**Impact:** None (fields ignored, no processing overhead)  
-**Fix:** Optional cleanup after confirming no dependencies
+`speaker_voice_signatures`, `speaker_voice_signature_meta`, and `speaker_transcript` are now part of the manifest contract. They are the input surface for the identity ladder defined in `docs/architecture/IDENTITY_STITCHING_CONTRACT.md`.
 
 ---
 
@@ -315,10 +348,12 @@ Fields like `music_events`, `time_hints`, `speaker_transcript` still present wit
 ### Python: Load Manifest
 
 ```python
+import os
 import json
 from pathlib import Path
 
-manifest_path = Path("logs/scene_ingest/video_name/video/scene_manifest.json")
+processing_root = Path(os.environ["GOODQ_DATA_ROOT"]) / "GoodQ_Data" / "epochs" / epoch / "processing"
+manifest_path = Path(processing_root) / video_name / "video" / "scene_manifest.json"
 with open(manifest_path) as f:
     data = json.load(f)
 
@@ -334,7 +369,7 @@ for scene in data['scenes']:
 ### PowerShell: Validate All Manifests
 
 ```powershell
-Get-ChildItem -Path "logs\scene_ingest" -Recurse -Filter "scene_manifest.json" | ForEach-Object {
+Get-ChildItem -Path "$env:GOODQ_DATA_ROOT\\GoodQ_Data\\epochs" -Recurse -Filter "scene_manifest.json" | ForEach-Object {
     $json = Get-Content $_.FullName | ConvertFrom-Json
     Write-Output "$($_.Directory.Parent.Name): $($json.scenes.Count) scenes"
 }
@@ -419,4 +454,3 @@ When Phase 6 modules are wired:
 **Last Generated:** December 14, 2025 19:01:52  
 **Largest Manifest:** 6.55 MB (03. 1989 - 1990)  
 **Total Scenes Tracked:** ~600+ across all videos
-

@@ -237,9 +237,9 @@ graph TB
     B3 -.scene_id.- A1
 ```
 
-**Database Locations (Verified Dec 15, 2025):**
-- memory.db: `<GOODQ_DATA_ROOT>\GoodQ_Data\memory.db`
-- knowledge_graph.db: `<GOODQ_DATA_ROOT>\GoodQ_Data\knowledge_graph.db`
+**Database Locations (Stitching-Era Baseline):**
+- memory.db: `<GOODQ_DATA_ROOT>\GoodQ_Data\epochs\<epoch>\memory.db`
+- knowledge_graph.db: `<GOODQ_DATA_ROOT>\GoodQ_Data\epochs\<epoch>\knowledge_graph.db`
 - Qdrant: `localhost:6333` (Windows service, no Docker)
 - Vector dimensions: text=384d, CLIP=512d, DINO=768d, audio=512d
 
@@ -538,5 +538,4 @@ graph LR
 - GitHub (native Mermaid rendering)
 - [Mermaid Live Editor](https://mermaid.live)
 - Any Markdown viewer with Mermaid support
-
 

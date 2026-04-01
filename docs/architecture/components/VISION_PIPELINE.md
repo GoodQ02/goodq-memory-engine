@@ -379,7 +379,7 @@ TRANSFORMERS_CACHE=<GOODQ_DATA_ROOT>/models/transformers
 **Called From**: `cli/run_ingestion.py` (main loop)
 
 **Processing Order** (per scene):
-1. Extract keyframe → `logs/scene_ingest/<video>/video/scene_XXXX.jpg`
+1. Extract keyframe → `${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/<epoch>/processing/<video>/video/scene_XXXX.jpg`
 2. Run 7 vision steps in sequence
 3. Aggregate results into scene data
 4. Pass to entity extraction → knowledge graph

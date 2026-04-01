@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-03-19 -->
+<!-- DOC_LAST_VERIFIED: 2026-04-01 -->
 
 # Phase 6: Multimodal Fusion & Temporal Indexing
 
@@ -27,7 +27,7 @@ Phase 6 operates in **two sequential stages**:
 2. **CLIP Embeddings** -> Generate 512-dim semantic visual embeddings
 3. **DINO Embeddings** -> Generate 768-dim structural visual embeddings
 4. **Embedding Pooling** -> Aggregate frame embeddings to scene-level (mean/max/attention)
-5. **Vector Storage** -> Store in Qdrant collections (`goodq_clip_scenes`, `goodq_dino_scenes`)
+5. **Vector Storage** -> Store in Qdrant collections (`goodq_clip_epoch_2025_12_22`, `goodq_dino_epoch_2025_12_22`)
 
 **Dependencies**:
 - `scene_frame_extractor.py` - FFmpeg-based frame extraction
@@ -46,6 +46,7 @@ Phase 6 operates in **two sequential stages**:
 - **Audio**: Segmentation from Phase 3 (`audio/segmentation.json`)
 - **Speech**: Transcripts from the active audio backend (`audio/transcript.json`); WSL2 when enabled, Windows-local fallback otherwise
 - **Speakers**: Diarization data (`audio/diarization.json`)
+- **Voice Signatures**: Per-speaker voice patterns carried in scene manifests (`speaker_voice_signatures`)
 - **Objects**: Detected objects from YOLO (`video/detected_objects.json`)
 - **Entities**: Extracted entities from `entity_extractor.py`
 
@@ -131,17 +132,17 @@ Phase 6 operates in **two sequential stages**:
 
 ## Artifact Locations
 
-**Verified as of December 14, 2025**:
+**Verified against stitching-era witness runs (April 1, 2026)**:
 
 | Artifact | Location | Source |
 |----------|----------|--------|
-| Scene Manifest | `logs/scene_ingest/<video>/video/scene_manifest.json` | Phase 5 (scene detection) |
-| Temporal Index | `logs/scene_ingest/<video>/temporal_index.json` | Phase 6b (harmonization) |
-| Representative Frames | `logs/scene_ingest/<video>/video/scene_XXXX.jpg` | Phase 6a (frame extraction) |
-| CLIP Embeddings | Qdrant collection: `goodq_clip_scenes` | Phase 6a (vector storage) |
-| DINO Embeddings | Qdrant collection: `goodq_dino_scenes` | Phase 6a (vector storage) |
+| Scene Manifest | `${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/<epoch>/processing/<video>/video/scene_manifest.json` | Phase 5 / scene processing |
+| Temporal Index | `${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/<epoch>/processing/<video>/temporal_index.json` | Phase 6b (harmonization) |
+| Representative Frames | `${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/<epoch>/processing/<video>/video/scene_XXXX.jpg` | Phase 6a (frame extraction) |
+| CLIP Embeddings | Qdrant collection: `goodq_clip_epoch_2025_12_22` | Phase 6a (vector storage) |
+| DINO Embeddings | Qdrant collection: `goodq_dino_epoch_2025_12_22` | Phase 6a (vector storage) |
 
-**Note**: Config specifies `<GOODQ_DATA_ROOT>/GoodQ_Data/processing` but actual artifacts land in `logs/scene_ingest/`. Both locations are checked by harmonizer for fallback compatibility, and neither path requires WSL to exist.
+**Note**: The epoch processing tree is the canonical artifact root. Harmonization keeps limited compatibility with older artifact layouts, but current operators should verify against the epoch-scoped processing directory.
 
 ---
 
@@ -164,8 +165,8 @@ phase6:
   # Vector storage
   retrieval:
     enable: true  # Store embeddings in Qdrant
-  clip_collection: "goodq_clip_scenes"
-  dino_collection: "goodq_dino_scenes"
+  clip_collection: "goodq_clip_epoch_2025_12_22"
+  dino_collection: "goodq_dino_epoch_2025_12_22"
 ```
 
 ---
@@ -212,17 +213,14 @@ print(f"Temporal index: {temporal_index_path}")
 
 ## Evidence of Operation
 
-### Live Artifacts (Verified December 14, 2025)
+### Live Artifacts (Verified April 1, 2026)
 
 ```powershell
-# Check for scene manifest
-<project_root>\logs\scene_ingest\01. 1987 - 1988\video\scene_manifest.json
-Size: 4.8MB (30 scenes with embeddings)
-Last Modified: 12/14/25 02:48:26
+# Check for scene manifests
+Get-ChildItem "$env:GOODQ_DATA_ROOT\GoodQ_Data\epochs\*\processing\*\video\scene_manifest.json"
 
-# Check for temporal index
-<project_root>\logs\scene_ingest\01. 1987 - 1988\temporal_index.json
-Status: Generated after harmonization
+# Check for temporal indexes
+Get-ChildItem "$env:GOODQ_DATA_ROOT\GoodQ_Data\epochs\*\processing\*\temporal_index.json"
 ```
 
 ### Code Integration Points
@@ -237,7 +235,7 @@ if step_name == "cross_modal_harmonization":
     from goodq4all.steps.video.cross_modal_harmonizer import run_cross_modal_harmonization
     return run_cross_modal_harmonization(item, cfg)
 
-# Main ingestion loop (cli/run_ingestion.py lines 1385-1428)
+# Main ingestion loop (cli/run_ingestion.py)
 # Phase 6a: Scene Visual Embeddings (CLIP + DINO)
 embeddings_result = _run_step('goodq_core', 'scene_visual_embeddings', phase6_item, cfg_json)
 
@@ -320,7 +318,7 @@ Harmonizer extracts entities but doesn't yet resolve entity co-references across
 **Solution**:
 ```powershell
 # Check if scene detection ran
-Get-ChildItem <project_root>\logs\scene_ingest\<video>\video\scene_manifest.json
+Get-ChildItem "$env:GOODQ_DATA_ROOT\GoodQ_Data\epochs\*\processing\<video>\video\scene_manifest.json"
 
 # If missing, re-run ingestion
 python -m cli.run_ingestion --input-dir <GOODQ_DATA_ROOT>\videos\inbox
@@ -356,6 +354,17 @@ curl http://localhost:6333/collections
 phase6:
   max_gpu_batch_size: 4  # Reduce from 8
 ```
+
+### DINO Native Crash With Successful Recovery
+
+**Symptom**: `image_embed_dino` exits natively, but the run continues
+
+**Cause**: transient native CUDA / AMP instability in the DINO step
+
+**Current containment**:
+- first retry disables AMP on GPU
+- second retry can fall back to CPU
+- Phase 6 continues when the recovered step persists valid scene artifacts
 
 ---
 
@@ -395,5 +404,5 @@ phase6:
 
 ---
 
-**Last Updated**: March 19, 2026  
-**Verified Operational**: December 14, 2025 (30-scene video processed successfully)
+**Last Updated**: April 1, 2026  
+**Verified Operational**: stitching-era witness runs with epoch-scoped artifacts, Qdrant commits, and active WSL audio when selected

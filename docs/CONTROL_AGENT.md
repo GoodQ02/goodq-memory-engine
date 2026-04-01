@@ -5,7 +5,7 @@
 # Control Agent & Self-Healing System
 
 **Status:** ⚠️ CONDITIONAL - Runtime disabled by default unless an `llm_client` is explicitly injected  
-**Last Updated:** December 15, 2025  
+**Last Updated:** April 1, 2026  
 **Version:** 1.0.0
 
 ---
@@ -352,7 +352,7 @@ db_path = Path("<GOODQ_DATA_ROOT>/GoodQ_Data/recovery.db")
 
 ### Control Agent Report
 
-**Location:** `logs/scene_ingest/<video>/control_agent_report.md`
+**Location:** `<workspace>/control_agent_report.md`
 
 **Contents:**
 - Pipeline execution summary

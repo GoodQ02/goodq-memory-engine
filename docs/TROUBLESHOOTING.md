@@ -2,8 +2,8 @@
 
 > **Role:** Canonical troubleshooting guide for GoodQ4All. Start here for common issues when launching or running services. See `docs/guides/` for specific subsystem guides (WSL2, Qdrant, GPU).
 
-**Last Updated:** December 14, 2025  
-**Status:** ✅ Reflects forensically verified operational system
+**Last Updated:** April 1, 2026  
+**Status:** ✅ Active operator guide (verify against current epoch artifacts)
 
 Quick fixes for common issues when launching and running GoodQ services.
 
@@ -39,27 +39,24 @@ Invoke-WebRequest http://localhost:6333/health
 
 ---
 
-### Issue 2: WSL2 Audio Service Not Running
+### Issue 2: WSL2 Unified Audio Not Ready
 
 **Error:**
 ```
-[ERROR] WSL2 audio service not responding
-[ERROR] Connection refused on WSL2 bridge
+[ERROR] WSL2 audio worker not ready
+[ERROR] WSL workspace preflight failed
 Audio processing failed
 ```
 
 **Fix:**
 ```bash
-# In WSL2, check if service is running
-ps aux | grep audio_service
+# In WSL2, verify the worker exists
+test -f "$GOODQ_WSL_WORKSPACE/process_audio.py"
 
-# Should show PID (e.g., 177) - if not, start it:
-cd ~/goodq_audio
-python audio_service.py &
+# Verify the workspace can see the GPU
+nvidia-smi
 
-# Verify it's working
-ps aux | grep audio_service
-# Expected: python audio_service.py (with PID)
+# If the workspace is missing or stale, resync/re-bootstrap the WSL worker files
 ```
 
 **Verify GPU Access:**
@@ -188,7 +185,7 @@ Get-Content "logs\scene_ingest\<video>\*.log" -Tail 50
 **Restart if needed:**
 1. Stop: Ctrl+C in command window
 2. Check GPU: `nvidia-smi` (verify nothing hung)
-3. Restart WSL2 service if needed: `wsl pkill python; wsl cd ~/goodq_audio && python audio_service.py &`
+3. Re-check WSL worker readiness if needed: `wsl -d <distro> -- bash -lc 'test -f \"$GOODQ_WSL_WORKSPACE/process_audio.py\" && nvidia-smi'`
 4. Resume processing
 
 ---
@@ -235,10 +232,10 @@ knowledge_graph.db file size not growing
 **Check:**
 ```powershell
 # Verify KG database exists
-Test-Path "<GOODQ_DATA_ROOT>\GoodQ_Data\knowledge_graph.db"
+Get-ChildItem "<GOODQ_DATA_ROOT>\GoodQ_Data\epochs\*\knowledge_graph.db"
 
 # Check file size
-Get-Item "<GOODQ_DATA_ROOT>\GoodQ_Data\knowledge_graph.db" | Select-Object Name, Length, LastWriteTime
+Get-ChildItem "<GOODQ_DATA_ROOT>\GoodQ_Data\epochs\*\knowledge_graph.db" | Select-Object Name, Length, LastWriteTime
 
 # Verify entities are being extracted
 Get-Content "logs\*.log" | Select-String "entity"
@@ -265,9 +262,8 @@ python scripts/cache_readiness_check.py
 # 1. Qdrant
 Invoke-WebRequest http://localhost:6333/health
 
-# 2. WSL2 Audio Service
-wsl ps aux | grep audio_service
-# Should show: PID 177 (or similar) running
+# 2. WSL2 unified audio worker readiness
+wsl -d <distro> -- bash -lc 'test -f "$GOODQ_WSL_WORKSPACE/process_audio.py" && echo worker_ready'
 
 # 3. GPU Status
 nvidia-smi
@@ -281,9 +277,8 @@ nvidia-smi
 Get-Process qdrant -ErrorAction SilentlyContinue
 Invoke-WebRequest http://localhost:6333/collections
 
-# Check WSL2 Audio
-wsl pgrep -f audio_service
-# Returns PID if running
+# Check WSL2 audio workspace
+wsl -d <distro> -- bash -lc 'test -f "$GOODQ_WSL_WORKSPACE/process_audio.py" && ls "$GOODQ_WSL_WORKSPACE"'
 
 # Check Python processes
 Get-Process python | Select-Object Id, ProcessName, WorkingSet, CPU
@@ -293,26 +288,26 @@ Get-Process python | Select-Object Id, ProcessName, WorkingSet, CPU
 
 ```powershell
 # Scene processing logs
-Get-ChildItem "logs\scene_ingest\" -Recurse -Filter "*.log" | Select-Object FullName, Length, LastWriteTime
+Get-ChildItem "<GOODQ_DATA_ROOT>\GoodQ_Data\epochs\*\logs\*.log" -Recurse | Select-Object FullName, Length, LastWriteTime
 
-# WSL2 audio logs
-wsl tail -f ~/goodq_audio/logs/audio_service.log
+# WSL2 audio worker output
+wsl -d <distro> -- bash -lc 'ls -lah "$GOODQ_WSL_WORKSPACE/output"'
 
 # Recent entity extraction
 Get-Content "logs\*.log" -Tail 100 | Select-String "entity"
 
 # Knowledge graph updates
-Get-Item "<GOODQ_DATA_ROOT>\GoodQ_Data\knowledge_graph.db" | Select-Object Name, Length, LastWriteTime
+Get-ChildItem "<GOODQ_DATA_ROOT>\GoodQ_Data\epochs\*\knowledge_graph.db" | Select-Object Name, Length, LastWriteTime
 ```
 
 ### Check Databases
 
 ```powershell
 # Memory DB
-Get-Item "<GOODQ_DATA_ROOT>\GoodQ_Data\memory.db" | Select-Object Name, Length, LastWriteTime
+Get-ChildItem "<GOODQ_DATA_ROOT>\GoodQ_Data\epochs\*\memory.db" | Select-Object Name, Length, LastWriteTime
 
 # Knowledge Graph DB
-Get-Item "<GOODQ_DATA_ROOT>\GoodQ_Data\knowledge_graph.db" | Select-Object Name, Length, LastWriteTime
+Get-ChildItem "<GOODQ_DATA_ROOT>\GoodQ_Data\epochs\*\knowledge_graph.db" | Select-Object Name, Length, LastWriteTime
 
 # Qdrant collections
 Invoke-WebRequest http://localhost:6333/collections | ConvertFrom-Json
@@ -322,15 +317,15 @@ Invoke-WebRequest http://localhost:6333/collections | ConvertFrom-Json
 
 ```powershell
 # List recent videos processed
-Get-ChildItem "logs\scene_ingest\" -Directory | Select-Object Name, LastWriteTime | Sort-Object LastWriteTime -Descending
+Get-ChildItem "<GOODQ_DATA_ROOT>\GoodQ_Data\epochs\*\processing" -Directory | Select-Object Name, LastWriteTime | Sort-Object LastWriteTime -Descending
 
 # Check specific video artifacts
 $video = "your_video_name"
-Get-ChildItem "logs\scene_ingest\$video" -Recurse | Select-Object FullName, Length, LastWriteTime
+Get-ChildItem "<GOODQ_DATA_ROOT>\GoodQ_Data\epochs\*\processing\$video" -Recurse | Select-Object FullName, Length, LastWriteTime
 
 # Count scenes processed
-(Get-ChildItem "logs\scene_ingest\$video\audio\*.wav").Count
-(Get-ChildItem "logs\scene_ingest\$video\video\*.jpg").Count
+(Get-ChildItem "<GOODQ_DATA_ROOT>\GoodQ_Data\epochs\*\processing\$video\audio\*.wav").Count
+(Get-ChildItem "<GOODQ_DATA_ROOT>\GoodQ_Data\epochs\*\processing\$video\video\*.jpg").Count
 ```
 
 ---
@@ -346,8 +341,8 @@ Get-Process python -ErrorAction SilentlyContinue | Stop-Process -Force
 # Stop Qdrant
 Get-Process qdrant -ErrorAction SilentlyContinue | Stop-Process -Force
 
-# Stop WSL2 audio service
-wsl pkill -f audio_service
+# Reset WSL2 worker state by restarting the WSL session if needed
+wsl --shutdown
 
 # Restart everything
 .\LAUNCH_GOODQ.bat
@@ -391,17 +386,11 @@ cd <project_root>\vendor\qdrant
 # In WSL2
 cd ~/goodq_audio
 
-# Stop service
-pkill -f audio_service
-
 # Clear output
 rm -rf output/*
 
-# Restart service
-python audio_service.py &
-
-# Verify
-ps aux | grep audio_service
+# Verify worker files are present
+test -f process_audio.py
 ```
 
 ### Clear GPU Memory
@@ -680,8 +669,8 @@ python scripts/cache_readiness_check.py
 
 # Check services
 Invoke-WebRequest http://localhost:6333/health  # Qdrant
-wsl ps aux | grep audio_service                   # WSL2 Audio
-nvidia-smi                                         # GPU Status
+wsl -d <distro> -- bash -lc 'test -f "$GOODQ_WSL_WORKSPACE/process_audio.py" && echo worker_ready'   # WSL2 Audio
+nvidia-smi                                                                                             # GPU Status
 `
 
 ### Review Recent Changes
@@ -708,7 +697,7 @@ wsl ps aux | grep python >> diagnostic_services.txt
 
 # Recent logs
 Get-Content "logs\*.log" -Tail 100 > diagnostic_logs.txt
-wsl tail -100 ~/goodq_audio/logs/audio_service.log >> diagnostic_logs.txt
+wsl -d <distro> -- bash -lc 'ls -lah "$GOODQ_WSL_WORKSPACE/output"' >> diagnostic_logs.txt
 
 # Database status
 Get-Item "<GOODQ_DATA_ROOT>\GoodQ_Data\*.db" | Select-Object Name, Length, LastWriteTime > diagnostic_db.txt
@@ -728,7 +717,7 @@ Before reporting issues, verify:
 
 - [ ] **Services Running**
   - [ ] Qdrant on port 6333 (`Invoke-WebRequest http://localhost:6333/health`)
-  - [ ] WSL2 audio service (`wsl ps aux | grep audio_service`)
+  - [ ] WSL2 audio workspace ready (`wsl -d <distro> -- bash -lc 'test -f "$GOODQ_WSL_WORKSPACE/process_audio.py"'`)
   - [ ] GPU accessible (`nvidia-smi` shows CUDA 12.1/12.8)
 
 - [ ] **Environment Configured**
@@ -739,8 +728,8 @@ Before reporting issues, verify:
 - [ ] **Data Paths Exist**
   - [ ] `<GOODQ_DATA_ROOT>\GoodQ_Data\` directory exists
   - [ ] `<GOODQ_DATA_ROOT>\GoodQ_Data\import_inbox\` for input files
-  - [ ] `logs\scene_ingest\` for scene artifacts
-  - [ ] WSL2: `~/goodq_audio/` for audio processing
+  - [ ] `<GOODQ_DATA_ROOT>\GoodQ_Data\epochs\<epoch>\processing\` for scene artifacts
+  - [ ] WSL2: `GOODQ_WSL_WORKSPACE` for audio processing
 
 - [ ] **Recent Updates Applied**
   - [ ] Latest code from main branch (`git pull origin main`)
@@ -749,11 +738,11 @@ Before reporting issues, verify:
 
 ---
 
-## 🔄 System Status (December 14, 2025)
+## 🔄 System Status (Stitching-Era Baseline)
 
 ### ✅ Verified Operational
 - Scene detection (30 scenes processed)
-- WSL2 audio service (PID 177, CUDA 12.8)
+- WSL2 unified audio worker (CUDA-capable when selected)
 - Speaker diarization (52 segments, 2 speakers)
 - Entity extraction (cross-modal resolution)
 - Knowledge graph updates (real-time insertion)
@@ -764,18 +753,17 @@ Before reporting issues, verify:
 - FastAPI server (scaffolded in `api/`)
 - Web UI (frontend in `ui/`)
 - Multimodal search (`retrieval/multimodal_search.py`)
-- Cross-modal harmonizer (`steps/video/cross_modal_harmonizer.py`)
 
 ### ⚠️ Known Issues
-- Config drift: Artifacts in `logs/scene_ingest/` not `processing/` (documented, not a bug)
+- Native vision-step crashes can still surface occasionally (`image_caption`, `object_detect`, `image_embed_dino`)
 - Legacy audio steps still run alongside unified WSL2 call (cleanup planned)
 - API/UI mentioned in old docs but not yet deployed
 
 ---
 
-**Last Updated:** December 14, 2025  
-**Status:** Forensically verified operational system  
-**Next Update:** After Phase 7 (API/UI deployment)
+**Last Updated:** April 1, 2026  
+**Status:** Active operator guide aligned to epoch-scoped artifacts and direct WSL audio runtime  
+**Next Update:** After the next operator-surface sweep
 
 ---
 

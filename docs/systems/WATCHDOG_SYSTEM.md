@@ -383,8 +383,8 @@ Get-Content <GOODQ_DATA_ROOT>\GoodQ_Data\epochs\<epoch>\logs\watchdog.log -Tail 
 # Check GPU
 nvidia-smi
 
-# Restart WSL2 audio service only if the run selected WSL audio
-wsl -d Ubuntu bash -c "pkill -f audio_service.py && nohup python3 ~/goodq_audio/audio_service.py &"
+# Recheck the WSL worker only if the run selected WSL audio
+wsl -d <distro> -- bash -lc 'test -f "$GOODQ_WSL_WORKSPACE/process_audio.py" && nvidia-smi'
 
 # Kill watchdog, increase timeout in code
 # GOODQ_STEP_TIMEOUT_MS = 1200_000  # 20 minutes

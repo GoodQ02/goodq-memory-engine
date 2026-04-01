@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-03-19 -->
+<!-- DOC_LAST_VERIFIED: 2026-04-01 -->
 
 # GoodQ4All Quick Reference Card
 
@@ -37,9 +37,9 @@ Compact operational quick reference for the current release surface.
 ## Core Paths
 
 - Inbox: `<GOODQ_DATA_ROOT>\GoodQ_Data\import_inbox\`
-- Processing: `<GOODQ_DATA_ROOT>\GoodQ_Data\processing\`
-- Logs: `<GOODQ_DATA_ROOT>\GoodQ_Data\logs\`
-- Memory DB: `<GOODQ_DATA_ROOT>\GoodQ_Data\memory.db`
+- Processing: `<GOODQ_DATA_ROOT>\GoodQ_Data\epochs\<epoch>\processing\`
+- Logs: `<GOODQ_DATA_ROOT>\GoodQ_Data\epochs\<epoch>\logs\`
+- Memory DB: `<GOODQ_DATA_ROOT>\GoodQ_Data\epochs\<epoch>\memory.db`
 
 ## Follow-Up Docs
 

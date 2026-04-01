@@ -1,10 +1,10 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-02-12 -->
+<!-- DOC_LAST_VERIFIED: 2026-04-01 -->
 
 # GoodQ CLI Reference
 
-**Last Updated:** December 15, 2025  
+**Last Updated:** April 1, 2026  
 **Status:** Runtime-conditional (verify with current run artifacts and health checks)
 
 Complete command-line interface reference for GoodQ multimodal processing system.
@@ -34,8 +34,8 @@ python -m cli.run_ingestion --input-dir <path> [OPTIONS]
 
 **Key Options:**
 - `--input-dir`: Path to directory containing video files
-- `--output`: Path to write run-level JSON results (default: `logs/scene_ingest_results.json`)
-- `--workspace`: Workspace directory for scene artifacts and config snapshot (default: `logs/scene_ingest`)
+- `--output`: Path to write run-level JSON results (default: resolved epoch output directory + `scene_ingest_results.json`)
+- `--workspace`: Workspace directory for config snapshots and auxiliary run artifacts (default: resolved processing root + `_workspace/scene_ingest`)
 - `--max-videos`: Maximum number of videos to process (`0` = all)
 - `--max-scenes`: Maximum number of scenes per video (`0` = all)
 - `--scene-threshold`: Override scene detection threshold
@@ -52,9 +52,9 @@ python -m cli.run_ingestion --input-dir <path> [OPTIONS]
    - **Entities:** Cross-modal entity extraction and resolution
    - **Memory:** Knowledge graph updates, scene bundle registration, vector storage
 3. **Artifact Generation:**
-   - Keyframes: `logs/scene_ingest/<video>/video/scene_XXXX.jpg`
-   - Audio chunks: `logs/scene_ingest/<video>/audio/scene_XXXX.wav`
-   - Metadata: SQLite (memory.db) + Qdrant vectors
+   - Keyframes: `${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/<epoch>/processing/<video>/video/scene_XXXX.jpg`
+   - Audio chunks: `${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/<epoch>/processing/<video>/audio/scene_XXXX.wav`
+   - Metadata: epoch-scoped SQLite + Qdrant vectors
 
 **Example:**
 ```bash
@@ -66,9 +66,9 @@ python -m cli.run_ingestion --input-dir samples/ingestion --force-reprocess
 ```
 
 **Output Locations:**
-- **Scene artifacts:** `<project_root>\logs\scene_ingest\<video_name>\`
-- **Memory database:** `<GOODQ_DATA_ROOT>\GoodQ_Data\memory.db`
-- **Knowledge graph:** `<GOODQ_DATA_ROOT>\GoodQ_Data\knowledge_graph.db`
+- **Scene artifacts:** `${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/<epoch>/processing/<video_name>/`
+- **Memory database:** `${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/<epoch>/memory.db`
+- **Knowledge graph:** `${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/<epoch>/knowledge_graph.db`
 - **Vector store:** Qdrant at `localhost:6333`
 
 ---
@@ -202,7 +202,7 @@ python -m cli.nl_query "<your question>"
 **What It Does:**
 1. Accepts natural language question
 2. Uses LLM to generate optimized graph query
-3. Executes against knowledge_graph.db
+3. Executes against the epoch-scoped knowledge graph database
 4. Returns structured results with context
 
 **Examples:**
@@ -274,7 +274,7 @@ python -m cli.graph_query "<SQL query>"
 
 **Example:**
 ```bash
-python -m cli.graph_query "SELECT entity_name, entity_type, COUNT(*) as mentions FROM entities GROUP BY entity_name ORDER BY mentions DESC LIMIT 10"
+python -m cli.graph_query "SELECT label, node_type, occurrence_count FROM nodes ORDER BY occurrence_count DESC LIMIT 10"
 ```
 
 ⚠️ **Advanced Users Only** - Requires knowledge of database schema.
@@ -285,7 +285,7 @@ python -m cli.graph_query "SELECT entity_name, entity_type, COUNT(*) as mentions
 
 ### `memory health-check` - Memory Database Diagnostics
 
-**Purpose:** Comprehensive health check of memory.db.
+**Purpose:** Comprehensive health check of the active epoch `memory.db`.
 
 **Usage:**
 ```bash
@@ -308,7 +308,7 @@ python -m cli.memory health-check [--output-file report.json]
 
 ### `memory backup` - Create Memory Backup
 
-**Purpose:** Create timestamped backup of memory.db and knowledge_graph.db.
+**Purpose:** Create timestamped backup of the active epoch `memory.db` and `knowledge_graph.db`.
 
 **Usage:**
 ```bash
@@ -348,7 +348,7 @@ python -m cli.memory verify-schema
 
 ### `memory migrate` - Database Migration
 
-**Purpose:** Migrate memory.db to latest schema version.
+**Purpose:** Migrate the active epoch `memory.db` to the latest schema version.
 
 **Usage:**
 ```bash

@@ -12,7 +12,7 @@ This list is derived from static analysis of the repository (launch scripts + Py
 - Ingestion pipeline CLI: `cli/run_ingestion.py` (typically invoked via `python -m cli.run_ingestion ...`)
 - Watchdog CLI: `cli/watchdog.py` (typically invoked via `python -m cli.watchdog ...`)
 - Optional experimental API scaffolding: `scripts/start_api.ps1`, `api/server.py` (FastAPI wrapper; scaffolded and not part of the canonical bootstrap/runtime path)
-- WSL2 audio services: `wsl2_audio/start_wsl2_service.bat`, `wsl2_audio/audio_service.py`, `wsl2_audio/process_audio.py`
+- WSL2 audio runtime surfaces: `scripts/wsl2_audio_bridge.py`, `steps/audio/audio_wsl2_bridge.py`, `wsl2_audio/process_audio.py`
 - Control agents: `agents/control_agent.py`, `agents/config_healer.py`, `agents/self_healing_monitor.py`
 - LLM server launchers: `scripts/start_vllm_servers.bat`, `scripts/status_vllm_servers.bat`, `scripts/wsl/install_vllm_service.sh`
 

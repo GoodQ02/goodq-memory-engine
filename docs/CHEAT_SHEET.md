@@ -61,7 +61,7 @@ Only valid when the API process is running:
 ## Key Paths
 
 - Inbox: `<GOODQ_DATA_ROOT>\GoodQ_Data\import_inbox\`
-- Processing: `<GOODQ_DATA_ROOT>\GoodQ_Data\processing\`
+- Processing: `<GOODQ_DATA_ROOT>\GoodQ_Data\epochs\<epoch>\processing\`
 - Logs: `<GOODQ_DATA_ROOT>\GoodQ_Data\logs\`
 
 ## Important Note

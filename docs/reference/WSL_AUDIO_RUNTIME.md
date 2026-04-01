@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-03-26 -->
+<!-- DOC_LAST_VERIFIED: 2026-04-01 -->
 
 # WSL Audio Runtime Reference
 
@@ -11,7 +11,9 @@ This is the current operator-facing truth surface for the WSL unified audio path
 - Windows remains the primary runtime host.
 - WSL is an optional compute extension for accelerated audio.
 - The active accelerated path is the unified WSL audio worker rooted at `GOODQ_WSL_WORKSPACE`.
+- The worker is local-first and offline-capable once models are staged in the WSL workspace/cache.
 - When WSL is unavailable or degraded and strict mode is not enabled, the system may fall back to the Windows-safe audio path.
+- Fallback is structured and non-recursive: once a scene downgrades, that call path does not bounce back into WSL.
 
 ## Deterministic Environment Contract
 
@@ -66,6 +68,32 @@ When the WSL processor exits nonzero, bridge diagnostics may include:
 - `bridge_error_details.processor_embeddings_status`
 
 These fields are the first place to look when a WSL run reports a generic nonzero return code.
+
+## Successful Payload Surface
+
+Successful unified WSL payloads now carry, in addition to transcript / diarization / emotion / embeddings:
+
+- `audio_backend_selected`
+- `audio_backend_effective`
+- `audio_backend_downgraded`
+- `speaker_transcript`
+- `speaker_voice_signatures`
+- `speaker_voice_signature_meta`
+
+Operator meaning:
+
+- `speaker_transcript` is the aligned speaker-owned text surface used by higher layers.
+- `speaker_voice_signatures` is the per-speaker pattern surface used by the identity stitching layer.
+- `speaker_voice_signature_meta` records whether signatures were emitted and which minimum thresholds applied.
+
+Current runtime thresholds for signature emission are:
+
+- minimum voiced audio: `4.0s`
+- minimum usable segments: `2`
+- minimum per-segment duration: `0.75s`
+
+See:
+- [`docs/architecture/IDENTITY_STITCHING_CONTRACT.md`](../architecture/IDENTITY_STITCHING_CONTRACT.md)
 
 ## Related Contracts
 

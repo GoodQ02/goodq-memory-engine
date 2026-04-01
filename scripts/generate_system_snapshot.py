@@ -1,3 +1,4 @@
+import os
 import platform
 import subprocess
 import shutil
@@ -10,11 +11,44 @@ from urllib.parse import urlparse
 
 OUTPUT_PATH = Path("docs/SYSTEM_SNAPSHOT.md")
 
+def get_windows_product_name():
+    if platform.system() != "Windows":
+        return None
+    try:
+        output = subprocess.check_output(
+            ["powershell", "-NoProfile", "-Command", "(Get-ComputerInfo).WindowsProductName"],
+            stderr=subprocess.STDOUT,
+            timeout=5,
+        )
+        text = output.decode("utf-8", errors="replace").strip()
+        return text or None
+    except Exception:
+        return None
+
 def run(cmd):
     try:
-        return subprocess.check_output(cmd, stderr=subprocess.STDOUT, text=True).strip()
+        output = subprocess.check_output(cmd, stderr=subprocess.STDOUT)
+        if b"\x00" in output:
+            text = output.decode("utf-16le", errors="replace")
+        else:
+            text = output.decode("utf-8", errors="replace")
+        lines = [line.strip() for line in text.replace("\r\n", "\n").split("\n") if line.strip()]
+        return " | ".join(lines) if lines else "unavailable"
     except Exception:
         return "unavailable"
+
+def iter_storage_targets(repo_root):
+    seen = set()
+    targets = [
+        ("System volume", Path(os.environ.get("SystemDrive", ""))),
+        ("Workspace volume", Path(repo_root.anchor)),
+    ]
+    for label, path in targets:
+        anchor = path.anchor.upper() if path.anchor else ""
+        if not anchor or anchor in seen or not path.exists():
+            continue
+        seen.add(anchor)
+        yield label, path
 
 def check_port(host, port, timeout=1.0):
     try:
@@ -43,6 +77,8 @@ def get_ollama_target():
 def main():
     lines = []
     now = datetime.now().isoformat(timespec="seconds")
+    today = datetime.now().date().isoformat()
+    repo_root = Path(__file__).resolve().parents[1]
 
     try:
         from configs.python_paths import get_conda_exe
@@ -51,13 +87,21 @@ def main():
     except Exception:
         conda_cmd = "conda"
 
+    lines.append("<!-- DOC_BADGE: OPERATIONAL -->")
+    lines.append("<!-- DOC_STATUS: GENERATED_SNAPSHOT -->")
+    lines.append(f"<!-- DOC_LAST_VERIFIED: {today} -->")
+    lines.append("")
     lines.append("# System Snapshot")
     lines.append("")
     lines.append(f"_Generated: {now}_")
     lines.append("")
     lines.append("## Host & OS")
     lines.append(f"- Hostname: {platform.node()}")
-    lines.append(f"- OS: {platform.system()} {platform.release()} ({platform.version()})")
+    windows_product = get_windows_product_name()
+    if windows_product:
+        lines.append(f"- OS: {windows_product} ({platform.version()})")
+    else:
+        lines.append(f"- OS: {platform.system()} {platform.release()} ({platform.version()})")
     lines.append(f"- Architecture: {platform.machine()}")
     lines.append(f"- Timezone: {run(['tzutil', '/g']) if platform.system() == 'Windows' else run(['date', '+%Z'])}")
     lines.append("")
@@ -77,10 +121,9 @@ def main():
     lines.append("")
 
     lines.append("## Storage (Top-Level)")
-    for drive in ["C:", "L:"]:
-        if Path(drive).exists():
-            total, used, free = shutil.disk_usage(drive)
-            lines.append(f"- {drive} total={total//(1024**3)}GB free={free//(1024**3)}GB")
+    for label, path in iter_storage_targets(repo_root):
+        total, used, free = shutil.disk_usage(path)
+        lines.append(f"- {label}: total={total//(1024**3)}GB free={free//(1024**3)}GB")
     lines.append("")
 
     lines.append("## Toolchain")

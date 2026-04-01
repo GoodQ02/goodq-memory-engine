@@ -10,6 +10,11 @@ and related canonical docs.
 ## [Unreleased]
 
 ### Changed
+- Restored the desktop `GPU_ENHANCED` runtime through bootstrap-managed environment repair, bringing `goodq_core` back onto a CUDA-backed stack and revalidating the canonical bootstrap path.
+- Restored the unified WSL audio path with local-first/offline model resolution, diarization recovery, per-scene non-recursive Windows fallback, and explicit backend truth persisted in scene artifacts.
+- Hardened Phase 6 and scene-level runtime resilience: Qdrant scene-vector persistence is explicit, DINO native crashes are contained through staged retry/fallback behavior, and per-run results remain truthful under partial-scene failures.
+- Raised semantic quality and identity readiness by removing placeholder scaffolding, tightening alias/noise filtering, adding per-speaker voice signatures, and introducing the conservative identity stitching ladder (`speaker_pattern`, `voice_pattern_match`, `identity_candidate`, `identity_supported`, `identity_evidence`).
+- Realigned the active documentation surface around epoch-scoped artifacts, the direct WSL worker contract, the stitching-era architecture, and the current agent/operator read order.
 - Switched supported step-env provisioning back to the pinned lock recipes under `envs/locks/`, added per-env smoke validation during bootstrap, hardened step subprocesses against user-site package leakage, and rebuilt the `goodq_face_embed` recipe around Conda `dlib` plus a portable pip-native lock set.
 - Bound `scripts/bootstrap_validate.bat` to the canonical `goodq_core` interpreter for verification and pytest instead of the ambient shell Python, added explicit `pdftotext` / Poppler readiness checks to bootstrap verification, and corrected the isolated step runner to launch `python -m cli.step_runner` from the repo root instead of the non-importable `goodq4all.cli.step_runner` path.
 - Restored the live image/audio/text step routing to the supported specialized env boundaries where `goodq_core` did not actually carry the full dependency stack, and taught bootstrap to provision that step-env pack in one shot for full pipeline capability.

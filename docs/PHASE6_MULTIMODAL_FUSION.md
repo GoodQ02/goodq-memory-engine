@@ -4,405 +4,245 @@
 
 # Phase 6: Multimodal Fusion & Temporal Indexing
 
-**Status**: **WIRED AND OPERATIONAL** (backend-agnostic once scene artifacts exist)
+**Status:** ✅ Wired and operational  
+**Scope:** Phase 6a visual embeddings + Phase 6b cross-modal harmonization
 
-Phase 6 represents the culmination of the ingestion pipeline, fusing visual, audio, and textual modalities into a unified temporal index suitable for multimodal retrieval.
+Phase 6 consumes persisted scene artifacts and converts them into:
+- scene-level CLIP/DINO vector truth
+- Qdrant commits
+- `temporal_index.json`
+- top-level `phase6_status` / `phase6_complete` truth
 
-Phase 6 is backend-agnostic once scene and audio artifacts exist. In `BASELINE`, those artifacts come from the Windows-safe runtime path; when accelerated profiles or explicit overrides enable WSL audio, the same harmonization consumes WSL-produced transcript and diarization artifacts.
+It is backend-agnostic once the required scene and audio artifacts exist.
 
 ---
 
-## Architecture Overview
-
-Phase 6 operates in **two sequential stages**:
+## Phase 6 Structure
 
 ### Phase 6a: Scene Visual Embeddings
-**File**: `steps/video/scene_visual_embeddings.py`  
-**Entry Point**: `run_scene_visual_embeddings()`
 
-**Purpose**: Generate scene-level visual embeddings from video frames.
+**Module**
+- `steps/video/scene_visual_embeddings.py`
 
-**Process**:
-1. **Frame Extraction** -> Extract representative frames per scene (uniform, keyframe, or middle strategies)
-2. **CLIP Embeddings** -> Generate 512-dim semantic visual embeddings
-3. **DINO Embeddings** -> Generate 768-dim structural visual embeddings
-4. **Embedding Pooling** -> Aggregate frame embeddings to scene-level (mean/max/attention)
-5. **Vector Storage** -> Store in Qdrant collections (`goodq_clip_epoch_2025_12_22`, `goodq_dino_epoch_2025_12_22`)
+**Responsibilities**
+- load `scene_manifest.json`
+- gather representative frame evidence
+- finalize CLIP and DINO scene-vector state
+- write `clip_id`, `dino_id`, `qdrant_ok`
+- set `phase6_status` / `phase6_complete`
 
-**Dependencies**:
-- `scene_frame_extractor.py` - FFmpeg-based frame extraction
-- `scene_embedder.py` - CLIP/DINO model inference (GPU-accelerated)
-- `embedding_pooler.py` - Pooling strategies (mean, max, concat, attention)
-- `steps/common/qdrant_client.py` - Vector database insertion
+**Primary Outputs**
+- scene-level vector ids
+- top-level Phase 6 truth fields
+- Qdrant writes into:
+  - `goodq_clip_epoch_<epoch>`
+  - `goodq_dino_epoch_<epoch>`
 
 ### Phase 6b: Cross-Modal Harmonization
-**File**: `steps/video/cross_modal_harmonizer.py`  
-**Entry Point**: `run_cross_modal_harmonization()`
 
-**Purpose**: Fuse all modalities into a unified temporal index.
+**Module**
+- `steps/video/cross_modal_harmonizer.py`
 
-**Input Sources**:
-- **Visual**: Scene embeddings from Phase 6a (CLIP IDs, DINO IDs, representative frames)
-- **Audio**: Segmentation from Phase 3 (`audio/segmentation.json`)
-- **Speech**: Transcripts from the active audio backend (`audio/transcript.json`); WSL2 when enabled, Windows-local fallback otherwise
-- **Speakers**: Diarization data (`audio/diarization.json`)
-- **Voice Signatures**: Per-speaker voice patterns carried in scene manifests (`speaker_voice_signatures`)
-- **Objects**: Detected objects from YOLO (`video/detected_objects.json`)
-- **Entities**: Extracted entities from `entity_extractor.py`
+**Responsibilities**
+- consume the persisted scene bundle
+- align visual, transcript, diarization, entity, and timing surfaces
+- build the canonical temporal rollup
 
-**Output**: `temporal_index.json` - A unified multimodal timeline
+**Primary Output**
+
+```text
+${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/<epoch>/processing/<video_name>/temporal_index.json
+```
 
 ---
 
-## Temporal Index Structure
+## Canonical Inputs
 
-```json
-{
-  "version": 1,
-  "video_id": "01_1987-1988",
-  "video_path": "<project_root>\\Videos\\01. 1987 - 1988.mp4",
-  "total_scenes": 30,
-  "total_duration": 1847.2,
-  
-  "segments": [
-    {
-      "scene_id": 0,
-      "start": 0.0,
-      "end": 45.3,
-      "duration": 45.3,
-      
-      // Visual embeddings
-      "clip_id": "clip_scene_01_1987-1988_0",
-      "dino_id": "dino_scene_01_1987-1988_0",
-      "representative_frame": "scene_0000.jpg",
-      "frame_count": 3,
-      
-      // Audio alignment
-      "audio_chunks": [0, 1],
-      "speaker_ids": ["SPEAKER_00", "SPEAKER_01"],
-      
-      // Semantic content
-      "keywords": ["introduction", "family", "video", "documentation"],
-      "entities": [
-        {"text": "John", "type": "PERSON", "confidence": 0.95},
-        {"text": "1987", "type": "DATE", "confidence": 0.99}
-      ],
-      "transcript_segments": [
-        "This is a family video from 1987.",
-        "We're documenting our summer vacation."
-      ],
-      "full_transcript": "This is a family video from 1987. We're documenting our summer vacation.",
-      
-      // Detected objects
-      "detected_objects": [
-        {"label": "person", "confidence": 0.92, "bbox": [100, 150, 300, 450]},
-        {"label": "chair", "confidence": 0.78, "bbox": [450, 200, 600, 400]}
-      ],
-      
-      // Metadata
-      "scene_confidence": 0.87,
-      "has_visual_embeddings": true,
-      "has_audio": true,
-      "has_transcript": true,
-      "has_speakers": true
-    }
-  ],
-  
-  // Aggregated entity statistics
-  "total_entities": 127,
-  "unique_entities": 43,
-  "top_entities": [
-    {"entity": "john", "type": "PERSON", "count": 8},
-    {"entity": "summer", "type": "EVENT", "count": 5}
-  ],
-  
-  // Global flags
-  "has_visual_embeddings": true,
-  "has_audio": true,
-  "has_transcripts": true,
-  
-  // Processing metadata
-  "phase5_complete": true,
-  "phase6_complete": true,
-  "phase6_harmonized": true
-}
+Phase 6 consumes persisted scene artifacts, not ad hoc in-memory guesses.
+
+### Required Inputs
+
+- `video/scene_manifest.json`
+
+### Common Input Surfaces Used
+
+- `caption`
+- `ocr_text`
+- `objects`
+- `faces`
+- `tags`
+- `entities`
+- `audio.transcript`
+- `audio.diarization`
+- `audio.speaker_transcript`
+- `audio.speaker_voice_signatures`
+- backend truth fields (`audio_backend_*`)
+
+When WSL audio is enabled, Phase 6 consumes WSL-produced transcript/diarization/signature outputs through the same manifest contract. When Windows-local audio is used, the same downstream contract still applies.
+
+---
+
+## Canonical Outputs
+
+### Scene Manifest Updates
+
+Phase 6a writes or finalizes:
+- `clip_id`
+- `dino_id`
+- `qdrant_ok`
+- `phase6_status`
+- `phase6_complete`
+
+### Temporal Index
+
+Phase 6b writes:
+
+```text
+${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/<epoch>/processing/<video_name>/temporal_index.json
 ```
+
+The temporal index is the canonical multimodal rollup for:
+- content summary
+- per-scene timeline segments
+- entity aggregation
+- object and location summaries
 
 ---
 
 ## Artifact Locations
 
-**Verified against stitching-era witness runs (April 1, 2026)**:
+### Scene Manifest
 
-| Artifact | Location | Source |
-|----------|----------|--------|
-| Scene Manifest | `${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/<epoch>/processing/<video>/video/scene_manifest.json` | Phase 5 / scene processing |
-| Temporal Index | `${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/<epoch>/processing/<video>/temporal_index.json` | Phase 6b (harmonization) |
-| Representative Frames | `${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/<epoch>/processing/<video>/video/scene_XXXX.jpg` | Phase 6a (frame extraction) |
-| CLIP Embeddings | Qdrant collection: `goodq_clip_epoch_2025_12_22` | Phase 6a (vector storage) |
-| DINO Embeddings | Qdrant collection: `goodq_dino_epoch_2025_12_22` | Phase 6a (vector storage) |
-
-**Note**: The epoch processing tree is the canonical artifact root. Harmonization keeps limited compatibility with older artifact layouts, but current operators should verify against the epoch-scoped processing directory.
-
----
-
-## Configuration
-
-Phase 6 is enabled by default in `configs/config.yaml`:
-
-```yaml
-phase6:
-  enabled: true  # Toggle Phase 6 execution
-  
-  # Frame extraction settings
-  frame_sampling_strategy: "uniform"  # Options: uniform, keyframe, middle
-  frames_per_scene: 3  # Number of frames to extract per scene
-  
-  # Embedding generation
-  max_gpu_batch_size: 8  # Batch size for CLIP/DINO inference
-  pooling_strategy: "mean"  # Options: mean, max, concat, attention
-  
-  # Vector storage
-  retrieval:
-    enable: true  # Store embeddings in Qdrant
-  clip_collection: "goodq_clip_epoch_2025_12_22"
-  dino_collection: "goodq_dino_epoch_2025_12_22"
+```text
+${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/<epoch>/processing/<video_name>/video/scene_manifest.json
 ```
 
----
+### Temporal Index
 
-## Invocation Points
-
-### Command Line
-Phase 6 runs automatically after scene detection (Phase 5):
-
-```powershell
-python -m cli.run_ingestion --input-dir <GOODQ_DATA_ROOT>\videos\inbox
+```text
+${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/<epoch>/processing/<video_name>/temporal_index.json
 ```
 
-Phase 6 is triggered when:
-- `phase6.enabled = true` in config
-- Scene manifest exists (`scene_manifest.json`)
-- Scenes have been detected (Phase 5 complete)
+### Qdrant Collections
 
-### Programmatic
+- `goodq_clip_epoch_<epoch>`
+- `goodq_dino_epoch_<epoch>`
 
-```python
-from goodq4all.steps.video.scene_visual_embeddings import run_scene_visual_embeddings
-from goodq4all.steps.video.cross_modal_harmonizer import run_cross_modal_harmonization
-from goodq4all.steps.common.config_loader import load_configs
-
-cfg = load_configs()
-
-# Phase 6a: Visual embeddings
-item = {
-    'id': 'video_001',
-    'source_path': '<project_root>\\Videos\\sample.mp4'
-}
-embeddings_result = run_scene_visual_embeddings(item, cfg)
-
-# Phase 6b: Harmonization
-harmonization_result = run_cross_modal_harmonization(item, cfg)
-
-# Access temporal index
-temporal_index_path = harmonization_result['temporal_index_path']
-print(f"Temporal index: {temporal_index_path}")
-```
+The epoch processing tree is the canonical artifact root. Compatibility fallbacks may exist in code, but they are not the active operator truth.
 
 ---
 
-## Evidence of Operation
+## Runtime Truth
 
-### Live Artifacts (Verified April 1, 2026)
+### What Healthy Phase 6 Looks Like
 
-```powershell
-# Check for scene manifests
-Get-ChildItem "$env:GOODQ_DATA_ROOT\GoodQ_Data\epochs\*\processing\*\video\scene_manifest.json"
+On a successful witness:
+- `phase6_status = complete`
+- `phase6_complete = true`
+- `qdrant_ok = true`
+- CLIP and DINO scene vectors are committed
+- `temporal_index.json` exists and reflects actual scene payload truth
 
-# Check for temporal indexes
-Get-ChildItem "$env:GOODQ_DATA_ROOT\GoodQ_Data\epochs\*\processing\*\temporal_index.json"
-```
+### What Partial Failure Looks Like
 
-### Code Integration Points
+Phase 6 may still proceed under partial upstream scene failures when the scene bundle remains canonical and truthful.
 
-```powershell
-# Entry in step_runner.py (lines 172-180)
-if step_name == "scene_visual_embeddings":
-    from goodq4all.steps.video.scene_visual_embeddings import run_scene_visual_embeddings
-    return run_scene_visual_embeddings(item, cfg)
+For example:
+- isolated keyframe-step failure on one scene
+- recovered DINO retry
+- optional audio enrichment failure
 
-if step_name == "cross_modal_harmonization":
-    from goodq4all.steps.video.cross_modal_harmonizer import run_cross_modal_harmonization
-    return run_cross_modal_harmonization(item, cfg)
-
-# Main ingestion loop (cli/run_ingestion.py)
-# Phase 6a: Scene Visual Embeddings (CLIP + DINO)
-embeddings_result = _run_step('goodq_core', 'scene_visual_embeddings', phase6_item, cfg_json)
-
-# Phase 6b: Cross-Modal Harmonization
-harmonization_result = _run_step('goodq_core', 'cross_modal_harmonization', phase6_item, cfg_json)
-```
+These should not be described as “Phase 6 not wired” or “future” behavior.
 
 ---
 
-## Capabilities
+## DINO And Vision-Step Containment
 
-### What Phase 6 Delivers
+Current runtime quality truth:
+- DINO is operational
+- native DINO crashes may still occur
+- staged containment is in place
 
-[OK] **Scene-Level Visual Understanding**  
-- CLIP embeddings for semantic visual search ("find scenes with beaches")
-- DINO embeddings for structural similarity ("find scenes with similar layouts")
+Current retry ladder for DINO:
+1. normal GPU attempt
+2. GPU retry with AMP disabled
+3. CPU fallback if policy requires it
 
-[OK] **Multimodal Alignment**  
-- Audio chunks aligned to video scenes
-- Transcripts synchronized with visual content
-- Speaker IDs mapped to temporal regions
-
-[OK] **Entity Extraction**  
-- Cross-modal entity resolution (visual + audio + text)
-- Entity frequency counts across video
-- Top entities surfaced for summarization
-
-[OK] **Unified Retrieval Index**  
-- Single JSON structure for all modalities
-- Temporal ordering preserved
-- Metadata flags for capability checking
-
-[OK] **Vector Database Integration**  
-- Embeddings stored in Qdrant for similarity search
-- Scene IDs and video IDs in payload for filtering
-- Cosine distance for semantic retrieval
+The purpose of this containment is to preserve run integrity and truthful scene state, not to hide the failure.
 
 ---
 
-## Latent Capabilities (Built but Not Yet Activated)
+## Harmonization Truth
 
-[Planned] **Attention-Based Pooling**  
-Implemented in `embedding_pooler.py` but not yet default. Would allow model to weight important frames more heavily.
+`cross_modal_harmonizer.py` now derives rollup truth from actual scene payload content rather than stale scene labels.
 
-[Planned] **Concatenation Pooling**  
-Available for preserving temporal order within scenes (useful for action recognition).
+That includes:
+- `content_summary`
+- `signal` vs `empty` vs `processing_error`
+- `top_entities`
+- `top_objects`
+- place/location lift from visual semantics
 
-[Planned] **Entity Cross-Resolution**  
-Harmonizer extracts entities but doesn't yet resolve entity co-references across scenes (e.g., "John" in scene 1 = "he" in scene 2).
-
----
-
-## Dependencies
-
-**Python Packages**:
-- `transformers` - CLIP model
-- `torch` - GPU inference
-- `Pillow` - Image loading
-- `numpy` - Embedding manipulation
-- `qdrant-client` - Vector storage
-
-**External Services**:
-- **Qdrant** (http://localhost:6333) - Vector database for embeddings
-- **FFmpeg** - Frame extraction from video
-
-**Internal Modules**:
-- `gpu_config.py` - GPU allocation for CLIP/DINO
-- `entity_extractor.py` - Entity extraction (optional, degrades gracefully)
+This means Phase 6 is now part of memory truth, not just a convenience layer.
 
 ---
 
-## Troubleshooting
+## Verification Checklist
 
-### Phase 6 Skipped
+Verify Phase 6 with current artifacts, not with historical prose.
 
-**Symptom**: `[PHASE 6b] [WARN] Harmonization skipped: no_scene_manifest`
+Healthy verification should show:
 
-**Cause**: Scene manifest not found (Phase 5 didn't run or failed)
-
-**Solution**:
-```powershell
-# Check if scene detection ran
-Get-ChildItem "$env:GOODQ_DATA_ROOT\GoodQ_Data\epochs\*\processing\<video>\video\scene_manifest.json"
-
-# If missing, re-run ingestion
-python -m cli.run_ingestion --input-dir <GOODQ_DATA_ROOT>\videos\inbox
-```
-
-### Qdrant Connection Failed
-
-**Symptom**: `Failed to store embeddings in Qdrant`
-
-**Cause**: Qdrant service not running
-
-**Solution**:
-```powershell
-# Check Qdrant status
-Get-Service GoodQ-Qdrant
-
-# Start if stopped
-Start-Service GoodQ-Qdrant
-
-# Verify connectivity
-curl http://localhost:6333/collections
-```
-
-### GPU Out of Memory
-
-**Symptom**: `CUDA out of memory` during CLIP/DINO inference
-
-**Cause**: Batch size too large or GPU shared with other processes
-
-**Solution**:
-```yaml
-# Reduce batch size in config.yaml
-phase6:
-  max_gpu_batch_size: 4  # Reduce from 8
-```
-
-### DINO Native Crash With Successful Recovery
-
-**Symptom**: `image_embed_dino` exits natively, but the run continues
-
-**Cause**: transient native CUDA / AMP instability in the DINO step
-
-**Current containment**:
-- first retry disables AMP on GPU
-- second retry can fall back to CPU
-- Phase 6 continues when the recovered step persists valid scene artifacts
+1. `scene_manifest.json` exists under the epoch processing tree.
+2. `temporal_index.json` exists under the epoch processing tree.
+3. `phase6_complete = true` on successful episodes.
+4. `qdrant_ok = true` for successful scene-vector commits.
+5. `temporal_index.json` matches the fresh semantic outputs rather than collapsing to placeholders.
 
 ---
 
-## Performance Metrics
+## Common Failure Modes
 
-**Measured on RTX 4070 Ti SUPER (16GB VRAM), CUDA 12.8**:
+### `no_scene_manifest`
 
-| Operation | Time per Scene | GPU Usage |
-|-----------|----------------|-----------|
-| Frame Extraction (3 frames) | ~0.2s | N/A (FFmpeg CPU) |
-| CLIP Embedding (batch=8) | ~0.5s | 45% VRAM |
-| DINO Embedding (batch=8) | ~0.7s | 55% VRAM |
-| Embedding Pooling | ~0.01s | CPU |
-| Qdrant Insertion | ~0.05s | N/A |
-| **Total per Scene** | **~1.5s** | |
+Cause:
+- scene manifest missing or scene processing failed too early
 
-**Throughput**: ~40 scenes/minute (single video processing)
+Meaning:
+- Phase 6 was skipped correctly because required scene truth was unavailable
 
----
+### Qdrant Unavailable
 
-## Future Enhancements
+Cause:
+- Qdrant not running or unreachable
 
-1. **Scene Similarity Clustering** - Group visually similar scenes
-2. **Action Recognition** - Detect activities within scenes (walking, talking, etc.)
-3. **Entity Co-Reference Resolution** - Link entities across scenes
-4. **Audio-Visual Alignment Scoring** - Detect synchronization issues
-5. **Temporal Graph Construction** - Build scene-to-scene transition graph
+Meaning:
+- Phase 6 scene-vector persistence cannot complete canonically
 
----
+### Partial Upstream Scene Failures
 
-## References
+Cause:
+- one or more visual or optional audio steps failed for a scene
 
-- **Phase 5 Documentation**: [SCENE_DETECTION.md](archive/reports/PHASE5_SCENE_DETECTION_INTEGRATION_ANALYSIS.md)
-- **Entity Extraction**: [ENTITY_EXTRACTION.md](archive/implementation/ENTITY_EXTRACTION_COMPLETE.md)
-- **Audio Pipeline**: [AUDIO_PROCESSING_WSL2.md](guides/llm/WSL2_AUDIO_SETUP.md) (advanced WSL operator reference; not required for `BASELINE`)
-- **Vector Storage**: [QDRANT_SETUP.md](guides/QDRANT_SETUP.md)
+Meaning:
+- Phase 6 should still consume the truthful bundle if the non-action contract allows it
 
 ---
 
-**Last Updated**: April 1, 2026  
-**Verified Operational**: stitching-era witness runs with epoch-scoped artifacts, Qdrant commits, and active WSL audio when selected
+## Related Documentation
+
+- [SCENE_MANIFEST_SPECIFICATION.md](SCENE_MANIFEST_SPECIFICATION.md)
+- [SYSTEM_ARCHITECTURE.md](architecture/SYSTEM_ARCHITECTURE.md)
+- [ARCHITECTURE_REFERENCE.md](architecture/ARCHITECTURE_REFERENCE.md)
+- [WSL_AUDIO_RUNTIME.md](reference/WSL_AUDIO_RUNTIME.md)
+- [IDENTITY_STITCHING_CONTRACT.md](architecture/IDENTITY_STITCHING_CONTRACT.md)
+
+---
+
+## Summary
+
+Phase 6 is no longer a “planned” or “available but not wired” component. It is an operational fusion layer that:
+- finalizes scene-level visual vector truth
+- commits canonical CLIP/DINO scene vectors to Qdrant
+- writes a durable multimodal temporal index
+- carries stitching-era semantic and audio surfaces into retrieval and memory

@@ -48,11 +48,25 @@ These are snapshots, not canonical runtime docs:
 - `docs/agent-communications/VALIDATION_AND_NEXT_STEPS.md`
 - `docs/agent-communications/WATCHDOG_CLEANUP.md`
 
-For canonical status and timelines, prefer:
+For canonical status and current runtime truth, prefer:
 
+- `docs/HANDOFF_BASEMENT_PHASE.md`
+- `docs/architecture/INGEST_ORCHESTRATION_CONTRACT.md`
+- `docs/architecture/IDENTITY_STITCHING_CONTRACT.md`
+- `docs/reference/WSL_AUDIO_RUNTIME.md`
+- `docs/SCENE_MANIFEST_SPECIFICATION.md`
 - `docs/goodq4all_agent_status.md`
 - `docs/SYSTEM_SNAPSHOT.md`
-- `docs/archive/project-history/CHANGELOG.md`
+- `docs/architecture/SYSTEM_ARCHITECTURE.md`
+- `docs/architecture/ARCHITECTURE_REFERENCE.md`
+- `docs/architecture/MEMORY_STORAGE.md`
+- `docs/architecture/components/VISION_PIPELINE.md`
+- `docs/systems/WATCHDOG_SYSTEM.md`
+- `docs/CONTROL_AGENT.md`
+- `docs/PHASE6_MULTIMODAL_FUSION.md`
+- `docs/CLI-REFERENCE.md`
+- `docs/technical/LIB_COMPONENTS.md`
+- `CHANGELOG.md`
 
 ---
 
@@ -75,12 +89,23 @@ Release-level session summary:
 ## How Agents Should Treat These Docs
 
 - Primary truth first:
-  - `docs/releases/SHIP_PROFILE.md`
-  - `docs/architecture/ARCHITECTURE_REFERENCE.md`
-  - `docs/architecture/SYSTEM_ARCHITECTURE.md`
+  - `docs/HANDOFF_BASEMENT_PHASE.md`
+  - `docs/architecture/INGEST_ORCHESTRATION_CONTRACT.md`
+  - `docs/architecture/IDENTITY_STITCHING_CONTRACT.md`
+  - `docs/reference/WSL_AUDIO_RUNTIME.md`
+  - `docs/SCENE_MANIFEST_SPECIFICATION.md`
   - `docs/goodq4all_agent_status.md`
   - `docs/SYSTEM_SNAPSHOT.md`
-  - `docs/archive/project-history/CHANGELOG.md`
+  - `docs/architecture/SYSTEM_ARCHITECTURE.md`
+  - `docs/architecture/ARCHITECTURE_REFERENCE.md`
+  - `docs/architecture/MEMORY_STORAGE.md`
+  - `docs/architecture/components/VISION_PIPELINE.md`
+  - `docs/systems/WATCHDOG_SYSTEM.md`
+  - `docs/CONTROL_AGENT.md`
+  - `docs/PHASE6_MULTIMODAL_FUSION.md`
+  - `docs/CLI-REFERENCE.md`
+  - `docs/technical/LIB_COMPONENTS.md`
+  - `CHANGELOG.md`
   - the platform / WSL / troubleshooting indexes
 - Historical context second:
   - use agent and Copilot communications to understand why earlier decisions were made and how past sessions approached specific fixes

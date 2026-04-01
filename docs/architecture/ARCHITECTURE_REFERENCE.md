@@ -1,51 +1,88 @@
-# 🏗️ GoodQ4All Architecture Reference
+# GoodQ4All Architecture Reference
 
 **Last Updated:** April 1, 2026  
 **Status:** ✅ Updated with epoch-scoped storage and stitching-era verification  
-**Purpose:** Definitive reference for data structures, storage patterns, and operational architecture
+**Purpose:** Definitive reference for current storage surfaces, core runtime entry points, and canonical architecture components
 
-> **Note:** This document reflects the current operational system. Qdrant is canonical, FAISS remains optional parity/fallback, and `goodq_core` is the orchestration/base environment while specialized step envs still back several image/audio/video workloads. The local API is an explicit helper surface, while the old browser UI/dashboard scaffold is experimental only. For full system narrative, see [SYSTEM_ARCHITECTURE.md](SYSTEM_ARCHITECTURE.md). For canonical ingest authority and engine cutover rules, see [INGEST_ORCHESTRATION_CONTRACT.md](INGEST_ORCHESTRATION_CONTRACT.md). For the identity formation ladder, see [IDENTITY_STITCHING_CONTRACT.md](IDENTITY_STITCHING_CONTRACT.md).
-
----
-
-## Table of Contents
-1. [Database Schema](#database-schema) - memory.db, knowledge_graph.db
-2. [Qdrant Vector Storage](#qdrant-vector-storage) - Replaces FAISS
-3. [Storage Conventions](#storage-conventions) - Paths, artifacts, WSL2
-4. [Knowledge Graph Schema](#knowledge-graph-schema) - Entity relationships
-5. [File System Layout](#file-system-layout) - Current verified paths
-6. [Deprecated Components](#deprecated-components) - FAISS, legacy orchestration, old envs
+> This document is intentionally narrower than `SYSTEM_ARCHITECTURE.md`. It exists to freeze the active operator truth, not to preserve every historical implementation detail.
 
 ---
 
-## Database Schema (Live Runtime Summary)
+## Core Runtime Truth
 
-### Primary Database: `memory.db`
+- **Canonical ingest owner:** `cli/run_ingestion.py`
+- **Canonical data root:** `${GOODQ_DATA_ROOT}/GoodQ_Data`
+- **Canonical vector store:** Qdrant
+- **Canonical relational memory:** epoch-scoped SQLite
+- **Canonical scene bundle:** epoch-scoped `scene_manifest.json`
+- **Canonical audio acceleration path:** direct unified WSL worker
+- **Canonical identity ladder:** `speaker_pattern -> voice_pattern_match -> identity_candidate -> identity_supported -> identity_evidence`
 
-**Location:** `${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/<epoch>/memory.db` ✅ Verified  
-**Purpose:** Scene bundles, temporal segments, embedding routing metadata, summaries, and memory commit observability
+Desktop remains the source of truth. WSL is a compute extension, not a peer control plane.
 
-#### Core Tables
+---
 
-- `scenes`
-- `segments`
-- `embeddings`
-- `links`
-- `summaries`
-- `memory_commit_events`
+## Storage Surfaces
 
-**Key Points:**
-- Scene bundle registration remains owned by `cli/run_ingestion.py`
-- Scene and segment rows are tied to epoch-scoped ingest artifacts
-- Artifact references are anchored in the epoch processing tree
-- Qdrant remains canonical for vector search; SQLite tracks routing identity and commit observability
+### `memory.db`
 
-### Secondary Database: `knowledge_graph.db`
+**Location**
 
-**Location:** `${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/<epoch>/knowledge_graph.db` ✅ Verified  
-**Purpose:** Entity relationships, media linkage, temporal events, and identity formation edges
+```text
+${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/<epoch>/memory.db
+```
 
-#### Core Tables
+**Purpose**
+
+- scene bundles
+- segment rows
+- summary rows
+- embedding routing metadata
+- memory commit observability
+
+### `knowledge_graph.db`
+
+**Location**
+
+```text
+${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/<epoch>/knowledge_graph.db
+```
+
+**Purpose**
+
+- nodes and edges for entities, concepts, locations, speakers, faces, and voice patterns
+- media linkage
+- temporal events
+- identity formation edges
+
+### Qdrant
+
+**Endpoint**
+
+```text
+http://localhost:6333
+```
+
+**Storage Root**
+
+```text
+${GOODQ_DATA_ROOT}/GoodQ_Data/qdrant_storage
+```
+
+**Canonical Collections**
+
+- `goodq_text`
+- `goodq_audio`
+- `goodq_clip_epoch_<epoch>`
+- `goodq_dino_epoch_<epoch>`
+
+FAISS remains optional parity or fallback only. It is not the current operator truth for retrieval.
+
+---
+
+## Knowledge Graph Schema
+
+### Core Tables
 
 - `nodes`
 - `edges`
@@ -54,339 +91,152 @@
 - `events`
 - `event_nodes`
 
-**Integration:**
-- Real-time insertion via `lib/kg_realtime_integration.py`
-- Cross-modal resolution from transcript + caption + OCR + objects
-- Identity formation ladder documented in [IDENTITY_STITCHING_CONTRACT.md](IDENTITY_STITCHING_CONTRACT.md)
+### Live Identity / Pattern Edge Types
 
-**Live Edge Types Include:**
 - `voice_pattern_match`
 - `identity_candidate`
 - `identity_supported`
 - `identity_evidence`
 
----
+### Important Node Types
 
-## Qdrant Vector Storage
+- `person`
+- `location`
+- `object`
+- `concept`
+- `speaker`
+- `face`
+- `speaker_pattern`
 
-**Replaces:** FAISS indices (deprecated Oct 2025)
-
-### Connection Details
-- **URL:** http://localhost:6333
-- **Status:** ✅ Operational (Dec 14 verified)
-- **Storage:** `${GOODQ_DATA_ROOT}/qdrant_storage/`
-
-### Collections
-
-**1. goodq_text**
-```python
-{
-    "name": "goodq_text",
-    "vectors": {
-        "size": 384,                    # SBERT all-MiniLM-L6-v2
-        "distance": "Cosine"
-    },
-    "payload_schema": {
-        "scene_id": "keyword",
-        "source": "keyword",            # 'transcript', 'ocr', 'caption'
-        "text": "text",
-        "timestamp": "float",
-        "video_name": "keyword"
-    }
-}
-```
-
-**Sources:** Transcripts, OCR text, captions  
-**Model:** sentence-transformers/all-MiniLM-L6-v2  
-**Dimensions:** 384
-
-**2. Phase 6 image collections**
-```python
-{
-    "name": "goodq_clip_epoch_<epoch> / goodq_dino_epoch_<epoch>",
-    "payload_schema": {
-        "scene_id": "keyword",
-        "keyframe_path": "keyword",
-        "caption": "text",
-        "objects": "keyword[]",
-        "timestamp": "float",
-        "video_name": "keyword"
-    }
-}
-```
-
-**Sources:** Keyframe images  
-**Models:** CLIP (512-d) and DINO (768-d) in separate epoch-scoped collections  
-**Status:** Operational in Phase 6a
-
-**3. goodq_audio**
-```python
-{
-    "name": "goodq_audio",
-    "vectors": {
-        "size": 512,                    # CLAP
-        "distance": "Cosine"
-    },
-    "payload_schema": {
-        "scene_id": "keyword",
-        "audio_path": "keyword",
-        "transcript": "text",
-        "speaker": "keyword",
-        "emotion": "keyword",
-        "timestamp": "float",
-        "video_name": "keyword"
-    }
-}
-```
-
-**Sources:** Scene audio clips  
-**Model:** laion/clap-htsat-unfused  
-**Dimensions:** 512
-
-### Querying Qdrant
-
-**Health Check:**
-```powershell
-Invoke-WebRequest http://localhost:6333/health
-```
-
-**List Collections:**
-```powershell
-Invoke-WebRequest http://localhost:6333/collections
-```
-
-**Query Example (Python):**
-```python
-from qdrant_client import QdrantClient
-
-client = QdrantClient(url="http://localhost:6333")
-
-# Search text embeddings
-results = client.search(
-    collection_name="goodq_text",
-    query_vector=embed_text("person with dog"),
-    limit=10
-)
-
-# Search CLIP scene embeddings
-results = client.search(
-    collection_name="goodq_clip_epoch_2025_12_22",
-    query_vector=embed_image("image.jpg"),
-    limit=10
-)
-```
-
----
-
-## Storage Conventions
-
-### Artifact Locations
-
-**Scene Artifacts (Verified in stitching-era witnesses):**
-```
-<GOODQ_DATA_ROOT>\GoodQ_Data\epochs\<epoch>\processing\<video_name>\
-├── audio\
-│   ├── scene_0000.wav
-│   ├── scene_0001.wav
-│   └── scene_00NN.wav
-├── video\
-│   ├── scene_0000.jpg
-│   ├── scene_0001.jpg
-│   └── scene_manifest.json
-└── temporal_index.json
-```
-
-**Status:** The epoch processing tree is canonical. Older layouts may still exist for compatibility, but are not the current operator truth.
-
-**WSL2 Audio Output:**
-```
-\\wsl.localhost\Ubuntu\home\<user>\goodq_audio\
-├── output\
-│   └── result.json
-├── process_audio.py            # Direct unified worker
-└── setup_cuda_env.sh
-```
-
-**Data Root:**
-```
-<GOODQ_DATA_ROOT>\GoodQ_Data\
-├── import_inbox\               # Drop videos here
-├── epochs\<epoch>\
-│   ├── memory.db
-│   ├── knowledge_graph.db
-│   ├── output\
-│   └── processing\
-└── qdrant_storage\             # Vector storage
-```
-
-### File Naming Conventions
-
-**Scene Files:**
-- Pattern: `scene_XXXX.{wav,jpg}` where XXXX is zero-padded scene index
-- Example: `scene_0000.wav`, `scene_0029.jpg`
-
-**Video Names:**
-- Source filename becomes video identifier
-- Spaces preserved in artifact paths
-- Hash used for DB lookups
+Anonymous speaker and face nodes remain structural until the identity ladder has enough evidence to support promotion.
 
 ---
 
 ## File System Layout
 
-```
-<project_root>\                   # Project root
-├── cli\
-│   ├── run_ingestion.py        # ✅ PRIMARY ENTRY POINT (1541 lines)
-│   └── watchdog.py             # ✅ Canonical watchdog
-├── steps\
-│   ├── audio\                  # Legacy audio steps (⚠️ cleanup planned)
-│   ├── video\
-│   │   └── entity_extractor.py # ✅ Entity extraction (line 370)
-│   ├── image\                  # Vision models
-│   └── common\                 # Shared utilities
-├── lib\
-│   ├── kg_realtime_integration.py  # ✅ KG updates (line 109)
-│   └── knowledge_graph.py      # Graph manager
-├── wsl2_audio\                 # ✅ WSL2 audio stack
-│   ├── process_audio.py        # Direct unified worker
-│   ├── setup_cuda_env.sh
-│   └── output\
-├── vendor\                     # ✅ Vendored dependencies for bootstrap
-│   ├── qdrant\                 # Qdrant Windows service binary
-│   ├── huggingface_hub\        # Offline model downloads
-│   ├── requests\               # HTTP client
-│   ├── pyyaml\                 # Config parsing
-│   └── ...                     # Supporting libs (tqdm, certifi, etc.)
-├── api\                        # ✅ Explicit local API surface
-├── ui\
-│   └── justification_v1\      # ⊘ Experimental UI scaffold only
-└── retrieval\                  # ⊘ Multimodal search (built, not wired)
-
-<GOODQ_DATA_ROOT>\GoodQ_Data\            # ✅ Unified data root
-├── import_inbox\               # ✅ Drop videos here
-├── epochs\<epoch>\
-│   ├── memory.db               # ✅ Scene bundles
-│   ├── knowledge_graph.db      # ✅ Entity relationships
-│   └── processing\<video>\     # ✅ Scene artifacts
-└── qdrant_storage\             # ✅ Vector storage
+```text
+${GOODQ_DATA_ROOT}/GoodQ_Data/
+├── import_inbox/
+├── epochs/<epoch>/
+│   ├── memory.db
+│   ├── knowledge_graph.db
+│   ├── output/
+│   │   └── scene_ingest_results.json
+│   └── processing/<video_name>/
+│       ├── audio/
+│       ├── video/
+│       │   └── scene_manifest.json
+│       └── temporal_index.json
+└── qdrant_storage/
 ```
 
-**Legend:** ✅ Operational | ⊘ Latent (built, not wired) | ⚠️ Cleanup planned
+WSL worker assets are anchored at:
+
+```text
+${GOODQ_WSL_WORKSPACE}
+```
+
+That workspace contains the direct unified worker and its helper scripts.
 
 ---
 
-## Deprecated Components
+## Runtime Entry Points
 
-### ⚠️ No Longer Used (Dec 2025)
+### CLI
 
-**FAISS Indices:**
-- **Replaced by:** Qdrant vector database
-- **Migration:** Complete (Oct 2025)
-- **Old Location:** `<project_root>\data\faiss_indices\`
-- **Note:** May still exist on disk but not actively used
+- `python -m cli.run_ingestion`
+- `python -m cli.watchdog`
+- `python -m cli.monitor_ingestion`
+- `python -m cli.system_status`
+- `python -m cli.print_config`
+- `python -m cli.list_runs`
+- `python -m cli.list_inbox`
+- `python -m cli.retrieve`
+- `python -m cli.nl_query`
 
-**legacy orchestration Orchestration:**
-- **Replaced by:** Direct invocation via `cli/run_ingestion.py`
-- **Removal Date:** Nov 2025
-- **Note:** References may exist in old docs
+### WSL Audio
 
-**Single-Env Consolidation Narrative:**
-- **Historical phase:** Dec 2025 image/text consolidation work
-- **Current truth:** `goodq_core` is the orchestration/base env, and the
-  supported runtime still provisions a specialized step-env pack for active
-  image, audio, text, and scene-detection workloads that retain dependency
-  boundaries
-- **See:** `docs/reference/indexes/ENVIRONMENT_INDEX.md`
+The canonical accelerated path is the direct unified worker under `${GOODQ_WSL_WORKSPACE}`. The old service-style queue model is not the current runtime truth.
 
-**Old Data Paths:**
-- **Deprecated:** `<project_root>\data\`, `<GOODQ_DATA_ROOT>\GoodQ_Data (See LEGACY_PATHS_DEPRECATED.md)\`
-- **Current:** `<GOODQ_DATA_ROOT>\GoodQ_Data\` (unified root)
+See [WSL_AUDIO_RUNTIME.md](../reference/WSL_AUDIO_RUNTIME.md).
 
 ---
 
-## Quick Reference
+## Active Components
 
-### Diagnostic Commands
+### CLI Surface
 
-**Check Databases:**
-```powershell
-Get-Item "<GOODQ_DATA_ROOT>\GoodQ_Data\*.db" | Select-Object Name, Length, LastWriteTime
-```
+- `cli/run_ingestion.py` - orchestration owner
+- `cli/watchdog.py` - canonical watchdog
+- `cli/system_status.py` - runtime/operator checks
+- `cli/monitor_ingestion.py` - live run monitoring
+- `cli/retrieve.py` - vector search surface
+- `cli/nl_query.py` - natural-language KG/query helper
 
-**Check Qdrant:**
-```powershell
-Invoke-WebRequest http://localhost:6333/health
-Invoke-WebRequest http://localhost:6333/collections
-```
+### `lib/`
 
-**Check Scene Artifacts:**
-```powershell
-Get-ChildItem "<GOODQ_DATA_ROOT>\GoodQ_Data\epochs\*\processing" -Directory
-Get-ChildItem "<GOODQ_DATA_ROOT>\GoodQ_Data\epochs\*\processing\<video>\audio\" | Measure-Object
-```
+- `knowledge_graph.py`
+- `kg_realtime_integration.py`
+- `identity_ledger.py`
+- `llm_client.py`
+- `goodq_logger.py`
+- `mission_components.py`
 
-**Check WSL2 Audio:**
-```powershell
-wsl -d <distro> -- bash -lc 'test -f "$GOODQ_WSL_WORKSPACE/process_audio.py" && echo worker_ready'
-wsl -d <distro> -- bash -lc 'ls -lah "$GOODQ_WSL_WORKSPACE/output"'
-```
+### Phase 6
 
-### Common Queries
+- `steps/video/scene_visual_embeddings.py`
+- `steps/video/cross_modal_harmonizer.py`
 
-**SQLite (memory.db):**
-```sql
--- Count scenes
-SELECT COUNT(*) FROM scenes;
+### WSL Audio
 
--- Recent scenes
-SELECT scene_id, modality, created_at
-FROM embeddings
-ORDER BY created_at DESC
-LIMIT 10;
-```
+- `wsl2_audio/process_audio.py`
+- `steps/audio/audio_wsl2_bridge.py`
+- `scripts/wsl2_audio_bridge.py`
 
-**SQLite (knowledge_graph.db):**
-```sql
--- Node counts by type
-SELECT node_type, COUNT(*)
-FROM nodes
-GROUP BY node_type;
+---
 
--- Top recurring labels
-SELECT label, occurrence_count
-FROM nodes
-ORDER BY occurrence_count DESC
-LIMIT 10;
-```
+## Deprecated Or Historical Surfaces
 
-**Qdrant (HTTP API):**
-```powershell
-# Collection stats
-Invoke-WebRequest http://localhost:6333/collections/goodq_text | ConvertFrom-Json
-```
+These may still appear in archived docs or compatibility notes, but they are not the active operator truth:
+
+- `logs/scene_ingest` as the primary artifact root
+- service-style WSL queue orchestration as the canonical audio path
+- root-level DB assumptions outside the epoch tree
+- “Phase 6 is latent” language
+- old FAISS-first retrieval descriptions
+- old cross-video graph modules described as active runtime owners
+
+Historical docs may still mention them; canonical active docs should not.
+
+---
+
+## Verification Checklist
+
+When validating runtime truth, confirm:
+
+1. Scene bundles exist under the epoch processing tree.
+2. `scene_ingest_results.json` exists under the epoch output tree.
+3. `phase6_complete = true` and `qdrant_ok = true` on successful witnesses.
+4. `audio_backend_effective` truth matches the actual backend used.
+5. `speaker_voice_signatures` and stitching-era fields appear in fresh manifests when the runtime has enough voiced speech.
 
 ---
 
 ## Related Documentation
 
-**Core Documentation (✅ Updated Dec 14-15, 2025):**
-- [SYSTEM_ARCHITECTURE.md](SYSTEM_ARCHITECTURE.md) - System design, pipeline flow
-- [README.md](../../README.md) - System overview with forensic verification
-- [QUICK_START.md](../QUICK_START.md) - Fast launch guide
-- [TROUBLESHOOTING.md](../TROUBLESHOOTING.md) - 7 issues, 25+ commands
-
-**Subsystem Guides:**
-- [Qdrant Setup](../guides/QDRANT_SETUP.md) - Vector database initialization
-- [WSL2 Audio](../guides/wsl2/START_HERE_WSL2.md) - Dual architecture details
-- [GPU Configuration](../guides/gpu/GPU_SETUP.md) - GPU optimization
+- [SYSTEM_ARCHITECTURE.md](SYSTEM_ARCHITECTURE.md)
+- [MEMORY_STORAGE.md](MEMORY_STORAGE.md)
+- [INGEST_ORCHESTRATION_CONTRACT.md](INGEST_ORCHESTRATION_CONTRACT.md)
+- [IDENTITY_STITCHING_CONTRACT.md](IDENTITY_STITCHING_CONTRACT.md)
+- [WSL_AUDIO_RUNTIME.md](../reference/WSL_AUDIO_RUNTIME.md)
 
 ---
 
-**Last Updated:** December 15, 2025  
-**Status:** ✅ Forensically Verified (Dec 14, 2025)  
-**Architecture Version:** 2.0 (Qdrant, Unified Env, Dual Audio)
+## Summary
 
----
-
-*"The architecture is the map. The code is the territory. Both must be true."*
+GoodQ4All is now an epoch-scoped, scene-centric memory system with:
+- Qdrant as the canonical vector store
+- SQLite as canonical memory and graph persistence
+- direct unified WSL audio acceleration
+- operational Phase 6 multimodal fusion
+- a conservative identity formation ladder built on persisted speaker and voice-pattern evidence

@@ -71,9 +71,14 @@
 
 ## Documentation Reading Order (authoritative)
 - docs/HANDOFF_BASEMENT_PHASE.md
+- docs/architecture/INGEST_ORCHESTRATION_CONTRACT.md
+- docs/architecture/IDENTITY_STITCHING_CONTRACT.md
+- docs/reference/WSL_AUDIO_RUNTIME.md
+- docs/SCENE_MANIFEST_SPECIFICATION.md
 - docs/goodq4all_agent_status.md
 - docs/SYSTEM_SNAPSHOT.md
 - docs/architecture/SYSTEM_ARCHITECTURE.md
+- docs/architecture/ARCHITECTURE_REFERENCE.md
 - docs/architecture/MEMORY_STORAGE.md
 - docs/architecture/components/VISION_PIPELINE.md
 - docs/systems/WATCHDOG_SYSTEM.md

@@ -196,6 +196,23 @@ def test_base_env_forces_no_auto_gpu_for_baseline_profile(monkeypatch, tmp_path:
     assert env["GOODQ_NO_AUTO_GPU"] == "1"
 
 
+def test_base_env_baseline_clears_stale_require_gpu(monkeypatch, tmp_path: Path):
+    run_ingestion = _load_run_ingestion_module()
+    cfg_json = _write_cfg(
+        tmp_path,
+        host={"profile": "BASELINE"},
+    )
+
+    monkeypatch.setenv("GOODQ_REQUIRE_GPU", "1")
+    monkeypatch.delenv("GOODQ_NO_AUTO_GPU", raising=False)
+
+    env = run_ingestion._base_env(cfg_json)
+
+    assert env["GOODQ_HOST_PROFILE"] == "BASELINE"
+    assert env["GOODQ_REQUIRE_GPU"] == "0"
+    assert env["GOODQ_NO_AUTO_GPU"] == "1"
+
+
 def test_run_step_success_emits_scene_metadata_and_pid(monkeypatch, tmp_path: Path):
     run_ingestion = _load_run_ingestion_module()
     observer = _RecorderObserver()
@@ -526,6 +543,144 @@ def test_run_step_retries_dino_with_amp_disable_then_cpu_fallback_after_native_c
     assert end_meta["native_retry_attempt"] == 2
     assert end_meta["native_retry_mode"] == "cpu_fallback"
     assert end_meta["scene_id"] == "scene_0002"
+
+
+def test_run_step_retries_image_caption_with_amp_disable_then_cpu_fallback_after_native_crashes(
+    monkeypatch,
+    tmp_path: Path,
+):
+    run_ingestion = _load_run_ingestion_module()
+    observer = _RecorderObserver()
+    cfg_json = _write_cfg(tmp_path)
+    direct_env_python = tmp_path / "goodq_image_caption_python.exe"
+    direct_env_python.write_text("", encoding="utf-8")
+
+    import configs.python_paths as python_paths
+
+    _FakeSequencedPopen.calls = []
+    _FakeSequencedPopen.captured_envs = []
+    _FakeSequencedPopen.responses = [
+        {
+            "pid": 11101,
+            "returncode": 3221226505,
+            "stdout": "",
+            "stderr": "native image caption crash on first gpu attempt",
+        },
+        {
+            "pid": 11102,
+            "returncode": 3221226505,
+            "stdout": "",
+            "stderr": "native image caption crash on second gpu attempt",
+        },
+        {
+            "pid": 11103,
+            "returncode": 0,
+            "stdout": "{}",
+            "stderr": "",
+        },
+    ]
+
+    monkeypatch.setattr(run_ingestion, "_PIPELINE_OBSERVER", observer)
+    monkeypatch.setattr(run_ingestion, "resolve_conda", lambda: "conda")
+    monkeypatch.setattr(run_ingestion.shutil, "which", lambda _: "conda")
+    monkeypatch.setattr(run_ingestion.subprocess, "Popen", _FakeSequencedPopen)
+    monkeypatch.setattr(run_ingestion, "_control_agent_runtime_enabled", lambda: False)
+    monkeypatch.setattr(python_paths, "get_env_python", lambda name: direct_env_python)
+
+    payload = {
+        "source_path": str(tmp_path / "scene_0003.jpg"),
+        "video_id": "video_test_caption",
+        "scene_id": "scene_0003",
+        "scene_index": 3,
+    }
+
+    result = run_ingestion._run_step(
+        env_name="goodq_image_caption",
+        step_name="image_caption",
+        payload=payload,
+        cfg_json=cfg_json,
+    )
+
+    assert result == {}
+    assert len(_FakeSequencedPopen.calls) == 3
+    first_env, second_env, third_env = _FakeSequencedPopen.captured_envs
+    assert first_env.get("GOODQ_IMAGE_CAPTION_DISABLE_AMP") != "1"
+    assert first_env.get("GOODQ_IMAGE_CAPTION_FORCE_CPU") != "1"
+    assert second_env["GOODQ_IMAGE_CAPTION_DISABLE_AMP"] == "1"
+    assert second_env.get("GOODQ_IMAGE_CAPTION_FORCE_CPU") != "1"
+    assert third_env["GOODQ_IMAGE_CAPTION_DISABLE_AMP"] == "1"
+    assert third_env["GOODQ_IMAGE_CAPTION_FORCE_CPU"] == "1"
+
+    end_events = [event for event in observer.events if event[0] == "step_end" and event[1] == "step.image_caption"]
+    assert end_events
+    end_meta = end_events[-1][2]
+    assert end_meta["native_retry_attempt"] == 2
+    assert end_meta["native_retry_mode"] == "cpu_fallback"
+    assert end_meta["scene_id"] == "scene_0003"
+
+
+def test_run_step_retries_object_detect_with_cpu_fallback_after_native_crash(
+    monkeypatch,
+    tmp_path: Path,
+):
+    run_ingestion = _load_run_ingestion_module()
+    observer = _RecorderObserver()
+    cfg_json = _write_cfg(tmp_path)
+    direct_env_python = tmp_path / "goodq_object_detect_python.exe"
+    direct_env_python.write_text("", encoding="utf-8")
+
+    import configs.python_paths as python_paths
+
+    _FakeSequencedPopen.calls = []
+    _FakeSequencedPopen.captured_envs = []
+    _FakeSequencedPopen.responses = [
+        {
+            "pid": 12101,
+            "returncode": 3221226505,
+            "stdout": "",
+            "stderr": "native object detect crash on gpu attempt",
+        },
+        {
+            "pid": 12102,
+            "returncode": 0,
+            "stdout": "{}",
+            "stderr": "",
+        },
+    ]
+
+    monkeypatch.setattr(run_ingestion, "_PIPELINE_OBSERVER", observer)
+    monkeypatch.setattr(run_ingestion, "resolve_conda", lambda: "conda")
+    monkeypatch.setattr(run_ingestion.shutil, "which", lambda _: "conda")
+    monkeypatch.setattr(run_ingestion.subprocess, "Popen", _FakeSequencedPopen)
+    monkeypatch.setattr(run_ingestion, "_control_agent_runtime_enabled", lambda: False)
+    monkeypatch.setattr(python_paths, "get_env_python", lambda name: direct_env_python)
+
+    payload = {
+        "source_path": str(tmp_path / "scene_0013.jpg"),
+        "video_id": "video_test_detect",
+        "scene_id": "scene_0013",
+        "scene_index": 13,
+    }
+
+    result = run_ingestion._run_step(
+        env_name="goodq_object_detect",
+        step_name="object_detect",
+        payload=payload,
+        cfg_json=cfg_json,
+    )
+
+    assert result == {}
+    assert len(_FakeSequencedPopen.calls) == 2
+    first_env, second_env = _FakeSequencedPopen.captured_envs
+    assert first_env.get("GOODQ_OBJECT_DETECT_FORCE_CPU") != "1"
+    assert second_env["GOODQ_OBJECT_DETECT_FORCE_CPU"] == "1"
+
+    end_events = [event for event in observer.events if event[0] == "step_end" and event[1] == "step.object_detect"]
+    assert end_events
+    end_meta = end_events[-1][2]
+    assert end_meta["native_retry_attempt"] == 1
+    assert end_meta["native_retry_mode"] == "cpu_fallback"
+    assert end_meta["scene_id"] == "scene_0013"
 
 
 def test_resolve_audio_runtime_contract_falls_back_from_stale_env_workspace(

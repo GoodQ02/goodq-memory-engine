@@ -26,7 +26,12 @@ import typer
 from steps.common.config_loader import get_runtime_paths, load_configs
 from steps.common.atomic_io import atomic_write_json
 from steps.common.memory import ensure_scene, register_scene_bundle, scene_has_materialized, get_scene_meta, list_scenes_for_video
-from steps.common.tag_utils import canonicalize_taxonomy, normalize_entity_token
+from steps.common.tag_utils import (
+    canonicalize_taxonomy,
+    is_valid_entity_token,
+    merge_tag_sources,
+    normalize_entity_token,
+)
 from steps.common.tool_paths import resolve_ffmpeg, resolve_conda
 from steps.common.step_logger import log_step_run
 from steps.common.profile_config import is_baseline, require_wsl_audio, wsl_audio_auto_enabled
@@ -201,6 +206,17 @@ except ImportError:
     logger.warning(
         "run_ingestion warning context=%s error=%s",
         "knowledge_graph.import",
+        "ImportError",
+    )
+
+try:
+    from steps.video.entity_extractor import extract_entities_from_scene
+    VISION_ENTITY_EXTRACTION_AVAILABLE = True
+except ImportError:
+    VISION_ENTITY_EXTRACTION_AVAILABLE = False
+    logger.warning(
+        "run_ingestion warning context=%s error=%s",
+        "vision_entity_extractor.import",
         "ImportError",
     )
 
@@ -461,6 +477,36 @@ def _resolve_native_retry_strategy(
     step_name: str,
     retry_attempt: int,
 ) -> tuple[int, Optional[Dict[str, Optional[str]]], Optional[str]]:
+    if step_name == 'image_caption':
+        if retry_attempt == 1:
+            return (
+                2,
+                {
+                    'GOODQ_IMAGE_CAPTION_DISABLE_AMP': '1',
+                    'GOODQ_IMAGE_CAPTION_FORCE_CPU': None,
+                },
+                'gpu_amp_disabled',
+            )
+        if retry_attempt == 2:
+            return (
+                2,
+                {
+                    'GOODQ_IMAGE_CAPTION_DISABLE_AMP': '1',
+                    'GOODQ_IMAGE_CAPTION_FORCE_CPU': '1',
+                },
+                'cpu_fallback',
+            )
+        return (2, None, None)
+    if step_name == 'object_detect':
+        if retry_attempt == 1:
+            return (
+                1,
+                {
+                    'GOODQ_OBJECT_DETECT_FORCE_CPU': '1',
+                },
+                'cpu_fallback',
+            )
+        return (1, None, None)
     if step_name == 'image_embed_dino':
         if retry_attempt == 1:
             return (
@@ -942,6 +988,136 @@ def _build_kg_scene_data(
         'time_hints': audio_payload.get('time_hints') or frame_payload.get('time_hints'),
         'keyframe': frame_payload,
         'audio': audio_payload,
+    }
+
+
+def _persist_frame_semantic_entities(
+    item: Dict[str, Any],
+    *,
+    scene_id: str,
+    video_id: str,
+) -> None:
+    """
+    Derive safe, non-object vision semantics from the already-materialized frame payload.
+
+    This persists useful location/person/concept signals into the keyframe payload so
+    downstream consumers do not have to wait for Phase 6 harmonization to see them.
+    Objects remain in the dedicated object path and are not duplicated here.
+    """
+    if not VISION_ENTITY_EXTRACTION_AVAILABLE or not isinstance(item, dict):
+        return
+
+    scene_data = {
+        "keyframe": dict(item),
+        "start_time": item.get("timestamp") or 0.0,
+    }
+    try:
+        entity_result = extract_entities_from_scene(
+            scene_data=scene_data,
+            scene_id=scene_id,
+            video_id=video_id,
+            config={},
+        )
+    except Exception as e:
+        logger.warning(
+            "run_ingestion warning context=%s scene_id=%s video_id=%s error=%s",
+            "frame_semantic_entities",
+            scene_id,
+            video_id,
+            e,
+        )
+        return
+
+    if not isinstance(entity_result, dict):
+        return
+
+    raw_entities = entity_result.get("entities")
+    if not isinstance(raw_entities, list):
+        return
+
+    semantic_labels: List[str] = []
+    semantic_details: List[Dict[str, Any]] = []
+    location_names: List[str] = []
+    location_details: List[Dict[str, Any]] = []
+
+    for entity in raw_entities:
+        if not isinstance(entity, dict):
+            continue
+        name = normalize_entity_token(entity.get("name"))
+        entity_type = str(entity.get("entity_type") or "").strip().lower()
+        if not name or not entity_type or entity_type == "object":
+            continue
+        if not is_valid_entity_token(name):
+            continue
+
+        confidence_raw = entity.get("confidence")
+        try:
+            confidence = float(confidence_raw) if confidence_raw is not None else 0.7
+        except Exception:
+            confidence = 0.7
+        confidence = max(0.0, min(confidence, 1.0))
+
+        semantic_labels.append(name)
+        detail = {
+            "label": name,
+            "type": entity_type.upper(),
+            "score": round(confidence * 10.0, 3),
+            "sources": ["vision_semantic"],
+        }
+        semantic_details.append(detail)
+        if entity_type == "location":
+            location_names.append(name)
+            location_details.append(detail)
+
+    if not semantic_details:
+        item.setdefault("vision_semantic_meta", {"status": "ok", "entity_count": 0, "location_count": 0})
+        return
+
+    existing_entities = item.get("entities") if isinstance(item.get("entities"), list) else []
+    item["entities"] = merge_tag_sources(
+        existing_entities,
+        semantic_labels,
+        validator=is_valid_entity_token,
+        normalizer=normalize_entity_token,
+    )
+
+    existing_entity_details = item.get("entity_details") if isinstance(item.get("entity_details"), list) else []
+    existing_detail_keys = {
+        (
+            str(detail.get("label") or "").strip().casefold(),
+            str(detail.get("type") or "").strip().upper(),
+        )
+        for detail in existing_entity_details
+        if isinstance(detail, dict)
+    }
+    merged_entity_details: List[Dict[str, Any]] = list(existing_entity_details)
+    for detail in semantic_details:
+        detail_key = (
+            str(detail.get("label") or "").strip().casefold(),
+            str(detail.get("type") or "").strip().upper(),
+        )
+        if detail_key in existing_detail_keys:
+            continue
+        merged_entity_details.append(detail)
+        existing_detail_keys.add(detail_key)
+    item["entity_details"] = merged_entity_details
+
+    if location_names:
+        existing_locations = item.get("locations") if isinstance(item.get("locations"), list) else []
+        item["locations"] = merge_tag_sources(
+            existing_locations,
+            location_names,
+            validator=is_valid_entity_token,
+            normalizer=normalize_entity_token,
+        )
+        if not item.get("location"):
+            item["location"] = item["locations"][0]
+
+    item["vision_semantic_entities"] = semantic_details
+    item["vision_semantic_meta"] = {
+        "status": "ok",
+        "entity_count": len(semantic_details),
+        "location_count": len(location_details),
     }
 
 
@@ -2820,6 +2996,10 @@ def _base_env(cfg_json: Optional[Path] = None) -> Dict[str, str]:
     require_gpu_override = host_cfg.get("require_gpu")
     if isinstance(require_gpu_override, bool):
         env["GOODQ_REQUIRE_GPU"] = "1" if require_gpu_override else "0"
+    elif host_profile == "BASELINE":
+        # Baseline profile is CPU-safe by contract. Clear stale shell exports so
+        # sidecar steps like OCR/CLAP do not inherit an accidental GPU requirement.
+        env["GOODQ_REQUIRE_GPU"] = "0"
 
     require_wsl_audio_override = host_cfg.get("require_wsl_audio")
     if isinstance(require_wsl_audio_override, bool):
@@ -3693,6 +3873,11 @@ def _process_frame(
     merge('goodq_image_caption', 'image_embed_clip')
     merge('goodq_core', 'tagger')
     canonicalize_taxonomy(item)
+    _persist_frame_semantic_entities(
+        item,
+        scene_id=scene_id,
+        video_id=video_hash,
+    )
 
     frame_text_parts: List[str] = []
     if isinstance(item.get('ocr_text'), str):

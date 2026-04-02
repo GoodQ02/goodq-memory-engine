@@ -1,8 +1,10 @@
 from __future__ import annotations
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import os
 import logging
+import json
+import sys
 from pathlib import Path
 
 from steps.common.config_loader import get_runtime_paths, load_configs
@@ -28,19 +30,63 @@ _YOLO = None
 _YOLO_DEVICE = "cpu"
 
 
+def _resolve_device(requested_device: str) -> str:
+    if os.getenv("GOODQ_OBJECT_DETECT_FORCE_CPU", "").strip() == "1":
+        return "cpu"
+    return requested_device
+
+
+def _gpu_memory_snapshot(torch_module) -> Dict[str, Any]:
+    if not getattr(torch_module, "cuda", None):
+        return {"available": False}
+    try:
+        if not torch_module.cuda.is_available():
+            return {"available": False}
+        return {
+            "available": True,
+            "allocated_mb": round(float(torch_module.cuda.memory_allocated()) / (1024 * 1024), 2),
+            "reserved_mb": round(float(torch_module.cuda.memory_reserved()) / (1024 * 1024), 2),
+            "max_allocated_mb": round(float(torch_module.cuda.max_memory_allocated()) / (1024 * 1024), 2),
+        }
+    except Exception as exc:
+        return {"available": "unknown", "error": str(exc)}
+
+
+def _log_object_detect_diagnostics(
+    stage: str,
+    *,
+    source_path: str,
+    device: str,
+    image_size: Optional[tuple[int, int]] = None,
+    model_loaded_now: Optional[bool] = None,
+    gpu_memory: Optional[Dict[str, Any]] = None,
+) -> None:
+    payload = {
+        "event": "object_detect_diagnostics",
+        "stage": stage,
+        "source_path": source_path,
+        "device": device,
+        "image_size": list(image_size) if image_size else None,
+        "model_loaded_now": model_loaded_now,
+        "gpu_memory": gpu_memory,
+    }
+    print(json.dumps(payload, ensure_ascii=False), file=sys.stderr, flush=True)
+    logger.info("object_detect diagnostics %s", payload)
+
+
 def _resolve_models_root() -> str:
     runtime_paths = get_runtime_paths(load_configs({}), "models_cache")
     return str(Path(runtime_paths["models_cache"]).resolve())
 
 
-def _load_yolo(cfg: Dict[str, Any]):
+def _load_yolo(cfg: Dict[str, Any]) -> bool:
     global _YOLO, _YOLO_DEVICE
     if _YOLO is not None:
-        return _YOLO
+        return False
     
     # Configure GPU using centralized manager (Phase 3)
     gpu_config = setup_step_gpu("object_detect")
-    _YOLO_DEVICE = gpu_config["device"]
+    _YOLO_DEVICE = _resolve_device(gpu_config["device"])
     
     try:
         from ultralytics import YOLO  # type: ignore
@@ -59,12 +105,13 @@ def _load_yolo(cfg: Dict[str, Any]):
         
         _YOLO = YOLO(model_path)
         logger.info(f"[OK] YOLO model loaded on {_YOLO_DEVICE} (GPU config: {gpu_config['memory_fraction']:.1%} memory)")
+        return True
             
     except Exception as e:
         logger.error(f"[FAIL] Failed to load YOLO model: {str(e)}")
         _YOLO = None
         GPUManager.clear_cache()
-    return _YOLO
+        return False
 
 
 def _run_yolo(model, path: str, device: str | None = None):
@@ -87,12 +134,37 @@ def object_detect(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
     if not isinstance(path, str) or not os.path.isfile(path):
         return {"objects": [], "detect_meta": {"status": "no_file"}}
 
-    model = _load_yolo(cfg)
+    model_loaded_now = _load_yolo(cfg)
+    model = _YOLO
     if model is None:
         return {"objects": [], "detect_meta": {"status": "unavailable", "engine": "yolo"}}
+    image_size = None
+    gpu_memory_before = None
     try:
+        import torch  # type: ignore
+        from PIL import Image  # type: ignore
+
+        with Image.open(path) as img:
+            image_size = getattr(img, "size", None)
+        gpu_memory_before = _gpu_memory_snapshot(torch)
+        _log_object_detect_diagnostics(
+            "before_inference",
+            source_path=path,
+            device=_YOLO_DEVICE,
+            image_size=image_size,
+            model_loaded_now=model_loaded_now,
+            gpu_memory=gpu_memory_before,
+        )
         # First attempt: default device selection (GPU if available)
         results = _run_yolo(model, path)
+        _log_object_detect_diagnostics(
+            "after_inference",
+            source_path=path,
+            device=_YOLO_DEVICE,
+            image_size=image_size,
+            model_loaded_now=model_loaded_now,
+            gpu_memory=_gpu_memory_snapshot(torch),
+        )
     except Exception as e:
         msg = str(e)
         # Known failure: torchvision::nms CUDA op unavailable -> retry on CPU
@@ -100,9 +172,9 @@ def object_detect(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
             try:
                 results = _run_yolo(model, path, device="cpu")
             except Exception as e2:
-                return {"objects": [], "detect_meta": {"status": "error", "error": str(e2), "engine": "yolo", "device": "cpu"}}
+                return {"objects": [], "detect_meta": {"status": "error", "error": str(e2), "engine": "yolo", "device": "cpu", "exc_type": type(e2).__name__}}
         else:
-            return {"objects": [], "detect_meta": {"status": "error", "error": msg, "engine": "yolo"}}
+            return {"objects": [], "detect_meta": {"status": "error", "error": msg, "engine": "yolo", "exc_type": type(e).__name__}}
 
     try:
         detections: List[Dict[str, Any]] = []
@@ -134,4 +206,4 @@ def object_detect(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
                 })
         return {"objects": detections}
     except Exception as e:
-        return {"objects": [], "detect_meta": {"status": "error", "error": str(e), "engine": "yolo"}}
+        return {"objects": [], "detect_meta": {"status": "error", "error": str(e), "engine": "yolo", "exc_type": type(e).__name__}}

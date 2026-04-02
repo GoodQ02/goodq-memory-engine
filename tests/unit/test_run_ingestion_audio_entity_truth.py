@@ -130,3 +130,57 @@ def test_build_kg_scene_data_exposes_speaker_voice_signatures_for_realtime_stitc
     assert payload["speaker_ids"] == ["SPEAKER_00"]
     assert payload["speaker_voice_signatures"] == audio["speaker_voice_signatures"]
     assert payload["speaker_voice_signature_meta"] == {"status": "ok", "emitted": 1}
+
+
+def test_persist_frame_semantic_entities_promotes_non_object_vision_signal():
+    item = {
+        "caption": "Jerry stands in the apartment kitchen.",
+        "objects": [
+            {"label": "refrigerator", "score": 0.97},
+            {"label": "dining table", "score": 0.91},
+            {"label": "chair", "score": 0.88},
+        ],
+        "tags": ["dining table", "chair"],
+        "entities": [],
+        "entity_details": [],
+        "timestamp": 5.0,
+    }
+
+    run_ingestion._persist_frame_semantic_entities(
+        item,
+        scene_id="scene_0011",
+        video_id="video_123",
+    )
+
+    assert "Kitchen" in item["entities"]
+    assert "Apartment" in item["entities"]
+    assert "Dining Room" in item["entities"]
+    assert "refrigerator" not in item["entities"]
+    assert item["location"] in {"Apartment", "Kitchen"}
+    assert item["locations"] == ["Apartment", "Kitchen", "Dining Room"]
+    assert item["vision_semantic_meta"] == {"status": "ok", "entity_count": 3, "location_count": 3}
+    assert {detail["label"] for detail in item["vision_semantic_entities"]} == {
+        "Apartment",
+        "Kitchen",
+        "Dining Room",
+    }
+
+
+def test_persist_frame_semantic_entities_preserves_existing_named_entities():
+    item = {
+        "caption": "Jerry stands in the apartment kitchen.",
+        "objects": [{"label": "refrigerator", "score": 0.97}],
+        "entities": ["Jerry"],
+        "entity_details": [{"label": "Jerry", "type": "PERSON", "score": 12.0, "sources": ["tagger"]}],
+        "timestamp": 5.0,
+    }
+
+    run_ingestion._persist_frame_semantic_entities(
+        item,
+        scene_id="scene_0012",
+        video_id="video_123",
+    )
+
+    assert item["entities"][0] == "Jerry"
+    assert "Kitchen" in item["entities"]
+    assert len([detail for detail in item["entity_details"] if detail["label"] == "Jerry"]) == 1

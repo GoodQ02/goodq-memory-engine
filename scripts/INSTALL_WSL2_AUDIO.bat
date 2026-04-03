@@ -54,8 +54,10 @@ if errorlevel 1 (
     echo ================================================================================
     echo.
     echo Check the error messages above and try again
-    echo Or follow the manual setup guide in:
-    echo   %REPO_ROOT%\docs\WSL2_AUDIO_SETUP.md
+    echo Or follow the setup guide in:
+    echo   %REPO_ROOT%\docs\guides\llm\WSL2_AUDIO_SETUP.md
+    echo Runtime details:
+    echo   %REPO_ROOT%\docs\reference\WSL_AUDIO_RUNTIME.md
     echo.
     pause
     exit /b 1
@@ -77,10 +79,11 @@ echo.
 echo WSL2 audio processing is now available
 echo.
 echo Next steps:
-echo   1. Test with a sample: python test_wsl2_audio.py
-echo   2. Integrate with pipeline steps
-echo   3. Run production test
+echo   1. Verify bridge readiness
+echo   2. Launch the canonical runtime via LAUNCH_GOODQ.bat
+echo   3. Run a scoped ingestion witness
 echo.
-echo Documentation: %REPO_ROOT%\docs\WSL2_AUDIO_SETUP.md
+echo Setup guide: %REPO_ROOT%\docs\guides\llm\WSL2_AUDIO_SETUP.md
+echo Runtime reference: %REPO_ROOT%\docs\reference\WSL_AUDIO_RUNTIME.md
 echo.
 pause

@@ -21,7 +21,7 @@
 - `docs/reference/GPU_CAPABILITY_MATRIX.md` – GPU acceleration and CPU-safe reference.
 - `docs/reference/WSL_AUDIO_RUNTIME.md` – Current WSL audio runtime truth surface.
 - `docs/technical/SEGMENTATION_ARTIFACT_CONTRACT.md` – Shadow segmentation artifact contract.
-- `docs/technical/PIPELINE_RESTORATION_BACKLOG.md` – Confirmed restoration backlog and remaining cutovers.
+- `docs/technical/PIPELINE_RESTORATION_BACKLOG.md` – Historical restoration backlog and remaining cutovers.
 
 ---
 

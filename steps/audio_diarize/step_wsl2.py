@@ -1,8 +1,7 @@
 """
-Audio Diarization Step - WSL2 Accelerated Version
+Audio diarization compatibility step.
 
-This version offloads diarization to WSL2 for better GPU utilization
-and VAD preprocessing.
+This legacy step surface now delegates to the canonical unified WSL bridge.
 """
 
 from __future__ import annotations
@@ -25,8 +24,7 @@ def audio_diarize(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
     """
     Perform speaker diarization using WSL2-accelerated PyAnnote
     
-    This offloads both transcription and diarization to the WSL2 audio service
-    which uses VAD preprocessing and full GPU acceleration.
+    This delegates transcription and diarization to the canonical unified WSL bridge.
     
     Args:
         item: Item dict containing 'path' or 'audio_path'

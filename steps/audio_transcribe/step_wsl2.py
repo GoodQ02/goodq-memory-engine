@@ -1,8 +1,7 @@
 """
-Audio Transcription Step - WSL2 Accelerated Version
+Audio transcription compatibility step.
 
-This version offloads transcription to WSL2 for better GPU utilization
-and faster processing with faster-whisper.
+This legacy step surface now delegates to the canonical unified WSL bridge.
 """
 
 from __future__ import annotations
@@ -25,8 +24,7 @@ def audio_transcribe(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
     """
     Transcribe audio using WSL2-accelerated Whisper
     
-    This offloads transcription to the WSL2 audio service which uses
-    faster-whisper with full GPU acceleration and VAD preprocessing.
+    This delegates transcription to the canonical unified WSL bridge.
     
     Args:
         item: Item dict containing 'path' or 'audio_path'

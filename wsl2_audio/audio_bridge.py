@@ -1,136 +1,101 @@
 """
-GoodQ4All - Windows to WSL2 Audio Bridge
+Legacy compatibility facade for WSL audio helpers.
 
-This module provides a bridge between the Windows-based pipeline
-and the WSL2 audio processing service.
+This module preserves the older import surface used by a few compatibility
+steps, but delegates all runtime work to the canonical unified WSL bridge in
+``scripts.wsl2_audio_bridge``.
 """
 
-import json
-import os
-import time
-import uuid
-import shutil
-import re
-import logging
-from pathlib import Path
-from typing import Dict, Optional, Any
-import subprocess
+from __future__ import annotations
 
-logger = logging.getLogger(__name__)
-_WIN_DRIVE_PATTERN = re.compile(r"^(?P<drive>[A-Za-z]):[\\/](?P<rest>.*)$")
+from typing import Any, Dict, Optional
+
+from scripts.wsl2_audio_bridge import WSL2AudioBridge as _CanonicalWSL2AudioBridge
 
 
-def _windows_to_wsl_path(path_value: str) -> str:
-    """Convert Windows drive-root paths to /mnt/<drive>/... for WSL usage."""
-    if not isinstance(path_value, str):
-        return path_value
-    match = _WIN_DRIVE_PATTERN.match(path_value)
-    if not match:
-        return path_value.replace("\\", "/")
-    drive = match.group("drive").lower()
-    rest = match.group("rest").replace("\\", "/")
-    return f"/mnt/{drive}/{rest}"
+def _attach_run_id(payload: Dict[str, Any], run_id: Optional[str]) -> Dict[str, Any]:
+    if run_id and "run_id" not in payload:
+        payload["run_id"] = run_id
+    return payload
 
 
-def _resolve_windows_dir(path_value: str, *, config_dir: Path) -> Path:
-    """Resolve queue/output directories relative to the config file."""
-    expanded = Path(os.path.expandvars(str(path_value)))
-    if expanded.is_absolute():
-        return expanded
-    return (config_dir / expanded).resolve()
+def _as_error_payload(error: str, *, run_id: Optional[str]) -> Dict[str, Any]:
+    return _attach_run_id({"status": "error", "error": error}, run_id)
 
 
-def _resolve_wsl_home_dir(raw_value: Optional[str]) -> str:
-    """Resolve the canonical WSL workspace root for helper templates."""
-    explicit = (os.environ.get("GOODQ_WSL_WORKSPACE") or "").strip()
-    if explicit:
-        return explicit.rstrip("/")
+def _to_transcribe_payload(result: Dict[str, Any], *, run_id: Optional[str]) -> Dict[str, Any]:
+    if result.get("status") != "success":
+        return _as_error_payload(str(result.get("error") or "Unknown error"), run_id=run_id)
 
-    wsl_user = (
-        os.environ.get("GOODQ_WSL_USER")
-        or os.environ.get("USER")
-        or os.environ.get("USERNAME")
-        or os.environ.get("LOGNAME")
-        or "user"
-    )
-    value = (raw_value or "/home/$USER/goodq_audio").strip()
-    for token in ("${USER}", "$USER", "%USER%", "%USERNAME%"):
-        value = value.replace(token, wsl_user)
-    return value.rstrip("/")
+    transcript = result.get("transcription", "") or result.get("full_text", "")
+    segments = result.get("segments", []) or result.get("word_timestamps", [])
+    payload = {
+        "status": "success",
+        "full_text": transcript,
+        "transcription": segments,
+        "info": {
+            "language": result.get("language", "unknown"),
+            "language_probability": result.get("language_probability", 0.0),
+            "duration": result.get("duration_seconds", 0.0),
+            "speakers_detected": result.get("speaker_count", 0),
+            "rtf": result.get("rtf", 0.0),
+        },
+        "segments": segments,
+        "word_timestamps": result.get("word_timestamps", []),
+    }
+    return _attach_run_id(payload, run_id)
 
 
-class WSL2AudioBridge:
-    """Bridge for offloading audio processing to WSL2"""
-    
-    def __init__(self, config_path: Optional[str] = None):
-        """
-        Initialize the bridge
-        
-        Args:
-            config_path: Optional path to config file (default: wsl2_audio/bridge_config.json)
-        """
-        if config_path is None:
-            base_dir = Path(__file__).parent.parent
-            config_path = base_dir / "wsl2_audio" / "bridge_config.json"
-        config_path = Path(config_path)
-        
-        self.config = self._load_config(config_path)
-        self.wsl_distro = os.environ.get("GOODQ_WSL_DISTRO", "Ubuntu")
-        
-        # Windows paths
-        self.windows_queue = _resolve_windows_dir(self.config["windows_queue_dir"], config_dir=config_path.parent)
-        self.windows_output = _resolve_windows_dir(self.config["windows_output_dir"], config_dir=config_path.parent)
-        
-        # WSL2 paths (from Windows perspective)
-        wsl_home = _resolve_wsl_home_dir(self.config.get("wsl_home_dir"))
-        self.wsl_queue = f"{wsl_home}/queue_in"
-        self.wsl_output = f"{wsl_home}/queue_out"
-        
-        # Ensure Windows directories exist
-        self.windows_queue.mkdir(parents=True, exist_ok=True)
-        self.windows_output.mkdir(parents=True, exist_ok=True)
-        
-        logger.info(f"WSL2 Audio Bridge initialized")
-        logger.info(f"  Windows Queue: {self.windows_queue}")
-        logger.info(f"  Windows Output: {self.windows_output}")
-        logger.info(f"  WSL2 Queue: {self.wsl_queue}")
-    
-    def _load_config(self, config_path: Path) -> Dict:
-        """Load configuration"""
-        if not config_path.exists():
-            # Create default config
-            default_config = {
-                "windows_queue_dir": "queue_in",
-                "windows_output_dir": "queue_out",
-                "wsl_home_dir": "/home/$USER/goodq_audio",
-                "timeout_seconds": 3600,
-                "poll_interval": 1.0
-            }
-            
-            config_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(config_path, 'w') as f:
-                json.dump(default_config, f, indent=2)
-            
-            logger.info(f"Created default config: {config_path}")
-            return default_config
-        
-        with open(config_path, 'r') as f:
-            return json.load(f)
-    
+def _to_diarize_payload(result: Dict[str, Any], *, run_id: Optional[str]) -> Dict[str, Any]:
+    if result.get("status") != "success":
+        return _as_error_payload(str(result.get("error") or "Unknown error"), run_id=run_id)
+
+    payload = {
+        "status": "success",
+        "diarization": result.get("diarization", []),
+        "speaker_count": result.get("speaker_count", 0),
+        "speakers": result.get("speakers", []),
+    }
+    return _attach_run_id(payload, run_id)
+
+
+def _to_combined_payload(result: Dict[str, Any], *, run_id: Optional[str]) -> Dict[str, Any]:
+    if result.get("status") != "success":
+        return _as_error_payload(str(result.get("error") or "Unknown error"), run_id=run_id)
+
+    transcript = result.get("transcription", "") or result.get("full_text", "")
+    segments = result.get("segments", []) or result.get("word_timestamps", [])
+    payload = {
+        "status": "success",
+        "full_text": transcript,
+        "transcription": segments,
+        "diarization": result.get("diarization", []),
+        "speaker_count": result.get("speaker_count", 0),
+        "speakers": result.get("speakers", []),
+        "info": {
+            "language": result.get("language", "unknown"),
+            "language_probability": result.get("language_probability", 0.0),
+            "duration": result.get("duration_seconds", 0.0),
+            "speakers_detected": result.get("speaker_count", 0),
+            "rtf": result.get("rtf", 0.0),
+        },
+    }
+    return _attach_run_id(payload, run_id)
+
+
+class WSL2AudioBridge(_CanonicalWSL2AudioBridge):
+    """
+    Backward-compatible bridge surface.
+
+    The legacy API exposed ``transcribe`` / ``diarize`` / ``transcribe_and_diarize``
+    and a private ``_is_wsl_service_running`` helper. Those methods now translate
+    onto the canonical unified ``process_audio`` bridge.
+    """
+
     def _is_wsl_service_running(self) -> bool:
-        """Check if WSL2 audio service is running"""
-        try:
-            result = subprocess.run(
-                ["wsl", "-d", self.wsl_distro, "--", "pgrep", "-f", "audio_service.py"],
-                capture_output=True,
-                text=True,
-                timeout=5
-            )
-            return result.returncode == 0
-        except Exception as e:
-            logger.warning(f"Failed to check WSL2 service status: {e}")
-            return False
-    
+        # Compatibility alias for older callers and tests.
+        return self.check_status()
+
     def transcribe(
         self,
         audio_path: str,
@@ -140,75 +105,23 @@ class WSL2AudioBridge:
         timeout: Optional[int] = None,
         run_id: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """
-        Transcribe audio using WSL2 Whisper
-        
-        Args:
-            audio_path: Path to audio file
-            language: Optional language code (e.g., 'en')
-            task: 'transcribe' or 'translate'
-            beam_size: Beam size for decoding
-            timeout: Timeout in seconds
-            
-        Returns:
-            Dictionary with transcription results
-        """
-        job_id = str(uuid.uuid4())
-        
-        # Convert Windows path to WSL2 path if needed
-        wsl_audio_path = _windows_to_wsl_path(audio_path)
-        
-        # Create job
-        job = {
-            "job_id": job_id,
-            "audio_path": wsl_audio_path,
-            "output_path": f"{self.wsl_output}/{job_id}_result.json",
-            "task": "transcribe",
-            "params": {
-                "language": language,
-                "task": task,
-                "beam_size": beam_size
-            }
-        }
-        if run_id:
-            job["run_id"] = run_id
+        _ = (language, task, beam_size)
+        return _to_transcribe_payload(
+            self.process_audio(audio_path, timeout=timeout),
+            run_id=run_id,
+        )
 
-        return self._submit_job(job, timeout)
-    
     def diarize(
         self,
         audio_path: str,
         timeout: Optional[int] = None,
         run_id: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """
-        Perform speaker diarization using WSL2 PyAnnote
-        
-        Args:
-            audio_path: Path to audio file
-            timeout: Timeout in seconds
-            
-        Returns:
-            Dictionary with diarization results
-        """
-        job_id = str(uuid.uuid4())
-        
-        # Convert Windows path to WSL2 path if needed
-        wsl_audio_path = _windows_to_wsl_path(audio_path)
-        
-        # Create job
-        job = {
-            "job_id": job_id,
-            "audio_path": wsl_audio_path,
-            "output_path": f"{self.wsl_output}/{job_id}_result.json",
-            "task": "diarize",
-            "params": {}
-        }
-        if run_id:
-            job["run_id"] = run_id
+        return _to_diarize_payload(
+            self.process_audio(audio_path, timeout=timeout),
+            run_id=run_id,
+        )
 
-        return self._submit_job(job, timeout)
-    
     def transcribe_and_diarize(
         self,
         audio_path: str,
@@ -218,303 +131,30 @@ class WSL2AudioBridge:
         timeout: Optional[int] = None,
         run_id: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """
-        Perform both transcription and diarization
-        
-        Args:
-            audio_path: Path to audio file
-            language: Optional language code
-            task: 'transcribe' or 'translate'
-            beam_size: Beam size for decoding
-            timeout: Timeout in seconds
-            
-        Returns:
-            Dictionary with both transcription and diarization results
-        """
-        job_id = str(uuid.uuid4())
-        
-        # Convert Windows path to WSL2 path if needed
-        wsl_audio_path = _windows_to_wsl_path(audio_path)
-        
-        # Create job
-        job = {
-            "job_id": job_id,
-            "audio_path": wsl_audio_path,
-            "output_path": f"{self.wsl_output}/{job_id}_result.json",
-            "task": "both",
-            "params": {
-                "language": language,
-                "task": task,
-                "beam_size": beam_size
-            }
-        }
-        if run_id:
-            job["run_id"] = run_id
-
-        return self._submit_job(job, timeout)
-    
-    def _submit_job(self, job: Dict, timeout: Optional[int] = None) -> Dict[str, Any]:
-        """Submit a job to WSL2 and wait for results"""
-        job_id = job['job_id']
-        run_id = job.get("run_id")
-
-        if timeout is None:
-            timeout = self.config['timeout_seconds']
-
-        if run_id:
-            logger.info(f"Submitting job {job_id} to WSL2 audio service (run_id={run_id})")
-        else:
-            logger.info(f"Submitting job {job_id} to WSL2 audio service")
-        
-        # Check if service is running
-        if not self._is_wsl_service_running():
-            logger.warning("WSL2 audio service does not appear to be running")
-            logger.warning(f"Start it with: wsl -d {self.wsl_distro} -- bash -lc 'cd ~/goodq_audio && source setup_cuda_env.sh && python3 ~/goodq_audio/audio_service.py'")
-        
-        try:
-            # Write job file to Windows queue
-            job_file = self.windows_queue / f"{job_id}.json"
-            with open(job_file, 'w') as f:
-                json.dump(job, f, indent=2)
-            
-            # Copy to WSL2 queue using wsl command
-            wsl_pending = f"{self.wsl_queue}/pending/{job_id}.json"
-            subprocess.run(
-                ["wsl", "-d", self.wsl_distro, "--", "cp",
-                 _windows_to_wsl_path(str(job_file)),
-                  wsl_pending],
-                check=True,
-                timeout=10
-            )
-            
-            if run_id:
-                logger.info(f"Job {job_id} queued in WSL2 (run_id={run_id})")
-            else:
-                logger.info(f"Job {job_id} queued in WSL2")
-            
-            # Wait for result
-            start_time = time.time()
-            poll_interval = self.config['poll_interval']
-            
-            while time.time() - start_time < timeout:
-                # Check for result file in Windows output
-                result_file = self.windows_output / f"{job_id}_result.json"
-                error_file = self.windows_output / f"{job_id}_error.json"
-                
-                # Try to copy result from WSL2
-                try:
-                    wsl_result = f"{self.wsl_output}/{job_id}_result.json"
-                    wsl_error = f"{self.wsl_output}/{job_id}_error.json"
-                    
-                    # Try result file
-                    subprocess.run(
-                        ["wsl", "-d", self.wsl_distro, "--", "cp", wsl_result,
-                          _windows_to_wsl_path(str(result_file))],
-                        capture_output=True,
-                        timeout=5
-                    )
-                    
-                    if result_file.exists():
-                        with open(result_file, 'r') as f:
-                            result = json.load(f)
-                        if run_id and "run_id" not in result:
-                            result["run_id"] = run_id
-                        logger.info(f"Job {job_id} completed successfully")
-                        return result
-                    
-                    # Try error file
-                    subprocess.run(
-                        ["wsl", "-d", self.wsl_distro, "--", "cp", wsl_error,
-                          _windows_to_wsl_path(str(error_file))],
-                        capture_output=True,
-                        timeout=5
-                    )
-                    
-                    if error_file.exists():
-                        with open(error_file, 'r') as f:
-                            error = json.load(f)
-                        if run_id and "run_id" not in error:
-                            error["run_id"] = run_id
-                        logger.error(f"Job {job_id} failed: {error.get('error')}")
-                        return error
-                
-                except subprocess.TimeoutExpired:
-                    logger.debug(
-                        "WSL2 bridge poll timeout operation=%s job_id=%s",
-                        "copy_result_or_error",
-                        job_id,
-                    )
-                except Exception as e:
-                    logger.warning(
-                        "WSL2 bridge poll failed operation=%s job_id=%s exc_type=%s exc=%s",
-                        "copy_result_or_error",
-                        job_id,
-                        type(e).__name__,
-                        e,
-                    )
-                
-                time.sleep(poll_interval)
-            
-            # Timeout
-            logger.error(f"Job {job_id} timed out after {timeout}s")
-            result = {
-                "job_id": job_id,
-                "status": "timeout",
-                "error": f"Job did not complete within {timeout} seconds"
-            }
-            if run_id:
-                result["run_id"] = run_id
-            return result
-
-        except Exception as e:
-            logger.error(f"Job {job_id} submission failed: {e}")
-            result = {
-                "job_id": job_id,
-                "status": "error",
-                "error": str(e)
-            }
-            if run_id:
-                result["run_id"] = run_id
-            return result
+        _ = (language, task, beam_size)
+        return _to_combined_payload(
+            self.process_audio(audio_path, timeout=timeout),
+            run_id=run_id,
+        )
 
 
-# Convenience functions for easy integration
-_bridge = None
+_bridge: Optional[WSL2AudioBridge] = None
+
 
 def get_bridge() -> WSL2AudioBridge:
-    """Get or create the global bridge instance"""
     global _bridge
     if _bridge is None:
         _bridge = WSL2AudioBridge()
     return _bridge
 
 
-def transcribe_wsl2(audio_path: str, **kwargs) -> Dict[str, Any]:
-    """
-    Transcribe audio using WSL2 direct script approach
-    
-    This bypasses the service queue and calls the script directly
-    """
-    # Convert Windows path to WSL path
-    wsl_path = _windows_to_wsl_path(audio_path)
-
-    run_id = kwargs.get("run_id")
-
-    logger.info(f"Transcribing via WSL2: {audio_path}")
-    logger.info(f"  WSL path: {wsl_path}")
-    
-    try:
-        # Build command
-        wsl_distro = os.environ.get("GOODQ_WSL_DISTRO", "Ubuntu")
-        cmd = ["wsl", "-d", wsl_distro, "--", "~/goodq_audio/process.sh", wsl_path]
-        
-        # Add options
-        if kwargs.get('no_diarization', False):
-            cmd.append("--no-diarization")
-        if 'model' in kwargs:
-            cmd.extend(["--model", kwargs['model']])
-        
-        timeout = kwargs.get('timeout', 3600)
-        
-        # Run command
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=timeout
-        )
-        
-        if result.returncode != 0:
-            logger.error(f"WSL2 transcription failed with code {result.returncode}")
-            logger.error(f"STDERR: {result.stderr}")
-            error_payload = {
-                "status": "error",
-                "error": f"Transcription failed: {result.stderr}"
-            }
-            if run_id:
-                error_payload["run_id"] = run_id
-            return error_payload
-        
-        # Parse JSON from last line of stdout
-        lines = result.stdout.strip().split('\n')
-        json_line = lines[-1]
-        
-        data = json.loads(json_line)
-        if run_id and "run_id" not in data:
-            data["run_id"] = run_id
-        
-        if data.get('status') != 'success':
-            return data
-        
-        # Convert to expected format
-        segments = data.get('segments', [])
-        formatted_segments = []
-        full_text = []
-        
-        for seg in segments:
-            formatted_segments.append({
-                "start": seg['start'],
-                "end": seg['end'],
-                "text": seg['text'].strip(),
-                "speaker": seg.get('speaker', 'SPEAKER_00'),
-                "confidence": seg.get('confidence', 1.0),
-                "words": []  # Not provided by current implementation
-            })
-            full_text.append(seg['text'].strip())
-        
-        result_payload = {
-            "status": "success",
-            "full_text": " ".join(full_text),
-            "transcription": formatted_segments,
-            "info": {
-                "language": data.get('language', 'unknown'),
-                "language_probability": 1.0,  # Not provided
-                "duration": data.get('duration', 0),
-                "speakers_detected": data.get('speakers_detected', 1),
-                "rtf": 0.0  # Not provided
-            }
-        }
-        if run_id:
-            result_payload["run_id"] = run_id
-        return result_payload
-        
-    except subprocess.TimeoutExpired:
-        logger.error(f"WSL2 transcription timed out after {timeout}s")
-        error_payload = {
-            "status": "error",
-            "error": f"Transcription timed out after {timeout}s"
-        }
-        if run_id:
-            error_payload["run_id"] = run_id
-        return error_payload
-    except json.JSONDecodeError as e:
-        logger.error(f"Failed to parse WSL2 output: {e}")
-        logger.error(f"Output was: {result.stdout}")
-        error_payload = {
-            "status": "error",
-            "error": f"Failed to parse output: {e}"
-        }
-        if run_id:
-            error_payload["run_id"] = run_id
-        return error_payload
-    except Exception as e:
-        logger.error(f"WSL2 transcription failed: {e}")
-        error_payload = {
-            "status": "error",
-            "error": str(e)
-        }
-        if run_id:
-            error_payload["run_id"] = run_id
-        return error_payload
+def transcribe_wsl2(audio_path: str, **kwargs: Any) -> Dict[str, Any]:
+    return get_bridge().transcribe(audio_path, **kwargs)
 
 
-def diarize_wsl2(audio_path: str, **kwargs) -> Dict[str, Any]:
-    """Diarize audio using WSL2"""
-    bridge = get_bridge()
-    return bridge.diarize(audio_path, **kwargs)
+def diarize_wsl2(audio_path: str, **kwargs: Any) -> Dict[str, Any]:
+    return get_bridge().diarize(audio_path, **kwargs)
 
 
-def transcribe_and_diarize_wsl2(audio_path: str, **kwargs) -> Dict[str, Any]:
-    """Transcribe and diarize audio using WSL2"""
-    bridge = get_bridge()
-    return bridge.transcribe_and_diarize(audio_path, **kwargs)
+def transcribe_and_diarize_wsl2(audio_path: str, **kwargs: Any) -> Dict[str, Any]:
+    return get_bridge().transcribe_and_diarize(audio_path, **kwargs)

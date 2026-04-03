@@ -45,4 +45,4 @@ See canonical policy details in:
 - Prefer moves to `docs/archive/...` over deletion.
 - Preserve relative structure where practical.
 - Add `HISTORICAL` badge and canonical pointer when topics overlap.
-- Delete only when explicitly marked `DELETE (safe)` and unreferenced.
+- Delete only when explicitly marked `DELETE (safe)` in the curated authority map or explicitly approved in the cleanup checklist, and only after reference checks.

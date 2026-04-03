@@ -27,7 +27,7 @@ def run_conda_step(env_name: str, step_name: str, item: Dict[str, Any], cfg: Dic
     """Invoke a step in an isolated conda env via the CLI runner.
 
     This mirrors scripts/ingest_*.ps1 behavior to keep per-step isolation while
-    allowing orchestration from a ZenML pipeline.
+    allowing orchestration from higher-level runtime surfaces.
     
     Raises:
         StepExecutionError: If the step fails, times out, or produces invalid output

@@ -6,39 +6,14 @@ This system offloads audio processing (transcription and diarization) from Windo
 
 ### Architecture
 
-```
-┌─────────────────────────────────────┐
-│         Windows Pipeline            │
-│                                     │
-│  ┌───────────────────────────────┐ │
-│  │  Audio Bridge (Python)        │ │
-│  │  - Submits jobs via queue     │ │
-│  │  - Retrieves results          │ │
-│  └───────────┬───────────────────┘ │
-│              │                      │
-│              │ File System Bridge   │
-└──────────────┼──────────────────────┘
-               │
-               │ /mnt/l/ (shared)
-               │
-┌──────────────┼──────────────────────┐
-│              │                      │
-│              ▼                      │
-│  ┌───────────────────────────────┐ │
-│  │  WSL2 Audio Service           │ │
-│  │  - Watches queue directory    │ │
-│  │  - Processes with GPU         │ │
-│  │  - Returns results            │ │
-│  └───────────────────────────────┘ │
-│                                     │
-│  Models:                            │
-│  - Faster Whisper (large-v3)        │
-│  - PyAnnote Diarization 3.1         │
-│  - Silero VAD                       │
-│                                     │
-│         WSL2 Ubuntu + CUDA          │
-└─────────────────────────────────────┘
-```
+The active runtime uses a unified local WSL worker selected by the canonical
+Windows ingestion/runtime surface.
+
+- Windows remains the primary host.
+- WSL is a compute extension for accelerated audio.
+- The canonical bridge is `scripts/wsl2_audio_bridge.py`.
+- Legacy helper imports under `wsl2_audio/` are compatibility wrappers only.
+- No queue-directory watcher or pipeline-file editing is required for normal operation.
 
 ### Benefits
 
@@ -118,14 +93,13 @@ Replace `"huggingface_token": null` with an env reference:
 "huggingface_token": "${PYANNOTE_TOKEN}"
 ```
 
-### Step 4: Start the Service
+### Step 4: Verify the Runtime
 
 In WSL2 terminal:
 
 ```bash
-cd ~/goodq_audio
-source setup_cuda_env.sh
-python3 ~/goodq_audio/audio_service.py
+cd <repo_root>
+python scripts/wsl2_audio_bridge.py
 ```
 
 Or from Windows:
@@ -134,7 +108,7 @@ Or from Windows:
 .\wsl2_audio\start_wsl2_service.bat
 ```
 
-The service will run in the background and watch for jobs.
+This verifies that the canonical WSL audio runtime is ready.
 
 ### Step 5: Test the Bridge
 
@@ -149,22 +123,20 @@ This will submit a test audio file and verify the complete workflow.
 
 ## Usage
 
-### In Pipeline Steps
+### Canonical Runtime Selection
 
-To use WSL2 acceleration in your pipeline, simply use the `_wsl2` step variants:
+The active runtime does not require pipeline-file edits.
 
-```python
-# In pipelines/ingest_multimodal_conda.py
+- Launch the system through the canonical repo-root launcher:
+  - `LAUNCH_GOODQ.bat`
+  - `LAUNCH_GOODQ.ps1`
+- Ingestion is owned by `cli.run_ingestion`.
+- The active WSL path is the unified bridge selected by runtime profile and flags, not by swapping `_wsl2` step modules into pipeline files.
 
-# Replace:
-run_conda_step("goodq_audio_transcribe", "audio_transcribe", enriched, cfg)
+For the current operator-facing contract, see:
 
-# With:
-run_conda_step("goodq_audio_transcribe", "audio_transcribe.step_wsl2", enriched, cfg)
-
-# For diarization:
-run_conda_step("goodq_audio_diarize", "audio_diarize.step_wsl2", enriched, cfg)
-```
+- `docs/reference/WSL_AUDIO_RUNTIME.md`
+- `docs/guides/llm/WSL2_AUDIO_SETUP.md`
 
 ### Direct Python API
 
@@ -222,16 +194,11 @@ Edit `~/goodq_audio/config.json` in WSL2:
 
 ## Troubleshooting
 
-### Service Won't Start
+### Runtime Not Ready
 
-Check WSL2 service status:
+Check bridge readiness:
 ```bash
-wsl pgrep -f audio_service.py
-```
-
-View logs:
-```bash
-wsl tail -f ~/goodq_audio/logs/audio_service.log
+python scripts/wsl2_audio_bridge.py
 ```
 
 ### CUDA Not Available
@@ -282,10 +249,10 @@ If permission denied, check Windows folder permissions.
 
 ## Monitoring
 
-### Service Status
+### Runtime Status
 
 ```cmd
-wsl ps aux | findstr audio_service
+python scripts\wsl2_audio_bridge.py
 ```
 
 ### GPU Usage
@@ -297,17 +264,6 @@ wsl nvidia-smi
 Watch in real-time:
 ```cmd
 wsl watch -n 1 nvidia-smi
-```
-
-### Queue Status
-
-```bash
-# In WSL2
-cd ~/goodq_audio/queue_in
-ls -la pending/    # Waiting jobs
-ls -la processing/ # Currently processing
-ls -la completed/  # Successful
-ls -la failed/     # Failed
 ```
 
 ## Performance Tuning
@@ -383,23 +339,15 @@ rm -rf goodq_audio
 
 Then re-run setup scripts.
 
-## Advanced: Multiple Workers
-
-For parallel processing of multiple files:
-
-1. Edit `audio_service.py`, change to use threading
-2. Or run multiple service instances on different machines
-3. Point them all to a shared network queue directory
-
 ## Support
 
 For issues, check:
 1. Windows event logs
-2. WSL2 service logs: `~/goodq_audio/logs/audio_service.log`
-3. Pipeline logs: canonical Windows host log directory (`cfg.paths.log_dir`)
+2. Pipeline logs: canonical Windows host log directory (`cfg.paths.log_dir`)
+3. Runtime reference: `docs/reference/WSL_AUDIO_RUNTIME.md`
 
 Common fixes:
 - Restart WSL2: `wsl --shutdown`
-- Restart service: `wsl pkill -f audio_service` then start again
+- Re-run bridge readiness: `python scripts/wsl2_audio_bridge.py`
 - Check GPU: `wsl nvidia-smi`
 - Check disk: `wsl df -h`

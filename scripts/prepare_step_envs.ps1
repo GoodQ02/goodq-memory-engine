@@ -2,7 +2,8 @@ Param(
   [string]$EnvPrefix = 'goodq',
   [string]$PythonVersion = '3.10',
   [switch]$ForceReinstall,
-  [switch]$LinkProject
+  [switch]$LinkProject,
+  [string[]]$Steps
 )
 
 Set-StrictMode -Version Latest
@@ -24,6 +25,18 @@ if ($condaExe -eq 'conda' -and -not (Test-Command 'conda')) { Fail 'conda not fo
 
 $repoRoot = (Get-Item -LiteralPath (Join-Path $PSScriptRoot '..')).FullName
 Set-Location $repoRoot
+
+$defaultSteps = @(
+  'video_scene_detect',
+  'image_caption',
+  'object_detect',
+  'face_embed',
+  'text_embed',
+  'audio_metadata',
+  'audio_transcribe',
+  'audio_emotion',
+  'audio_embed'
+)
 
 # Ensure critical environment variables are set and persisted consistently
 try {
@@ -118,30 +131,42 @@ function Ensure-CondaEnv {
   }
 }
 
-# Step envs from envs/*/requirements.txt
-Get-ChildItem -LiteralPath (Join-Path $repoRoot 'envs') -Directory | ForEach-Object {
+function Resolve-StepEnvDirectories {
+  $envRoot = Join-Path $repoRoot 'envs'
+  $available = @{}
+  Get-ChildItem -LiteralPath $envRoot -Directory | ForEach-Object {
+    if ($_.Name -ne 'locks') {
+      $available[$_.Name] = $_
+    }
+  }
+
+  $requestedSteps = @()
+  if ($Steps -and $Steps.Count -gt 0) {
+    $requestedSteps = @($Steps | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | ForEach-Object { $_.Trim() })
+  } else {
+    $requestedSteps = $defaultSteps
+  }
+
+  $resolved = @()
+  foreach ($stepName in $requestedSteps) {
+    if (-not $available.ContainsKey($stepName)) {
+      Fail ("Requested step env '{0}' was not found under envs/" -f $stepName)
+    }
+    $resolved += $available[$stepName]
+  }
+
+  return $resolved
+}
+
+$selectedStepDirs = Resolve-StepEnvDirectories
+Write-Note ("Preparing step env pack: {0}" -f (($selectedStepDirs | ForEach-Object { $_.Name }) -join ', '))
+
+# Step envs from the supported pack or explicit -Steps selection
+$selectedStepDirs | ForEach-Object {
   $short = $_.Name
   $envName = "${EnvPrefix}_$short"
   $req = Join-Path $_.FullName 'requirements.txt'
   Ensure-CondaEnv -Name $envName -ReqFile $req
-}
-
-# ZenML env for orchestration and dashboard
-$zenEnv = "${EnvPrefix}_zenml"
-Ensure-CondaEnv -Name $zenEnv -ReqFile $null
-Write-Note 'Installing zenml into the ZenML env'
-try {
-  $prevNoUser=$env:PYTHONNOUSERSITE; $prevNoCache=$env:PIP_NO_CACHE_DIR; $prevDisable=$env:PIP_DISABLE_PIP_VERSION_CHECK
-  $env:PYTHONNOUSERSITE='1'; $env:PIP_NO_CACHE_DIR='1'; $env:PIP_DISABLE_PIP_VERSION_CHECK='1'
-  & $condaExe run -n $zenEnv pip install --upgrade pip --no-cache-dir --no-user --isolated
-  & $condaExe run -n $zenEnv pip install "zenml>=0.65" "openai>=1.40" "openai-agents>=0.1" "nest_asyncio>=1.6" "typer>=0.9.0" --no-cache-dir --no-user --isolated --upgrade-strategy only-if-needed
-} finally {
-  if ($null -ne $prevNoUser) { $env:PYTHONNOUSERSITE=$prevNoUser } else { Remove-Item Env:PYTHONNOUSERSITE -ErrorAction SilentlyContinue }
-  if ($null -ne $prevNoCache) { $env:PIP_NO_CACHE_DIR=$prevNoCache } else { Remove-Item Env:PIP_NO_CACHE_DIR -ErrorAction SilentlyContinue }
-  if ($null -ne $prevDisable) { $env:PIP_DISABLE_PIP_VERSION_CHECK=$prevDisable } else { Remove-Item Env:PIP_DISABLE_PIP_VERSION_CHECK -ErrorAction SilentlyContinue }
-}
-if ($LinkProject) {
-  Link-ProjectPath -EnvName $zenEnv
 }
 
 # Ensure API deps installed in text_embed env if present

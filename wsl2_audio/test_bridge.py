@@ -23,17 +23,16 @@ def main():
     print("[SYMBOL] Bridge initialized")
     print()
     
-    # Check if service is running
-    print("[2/3] Checking WSL2 service...")
+    # Check if the canonical WSL audio runtime is ready
+    print("[2/3] Checking WSL2 audio runtime...")
     if bridge._is_wsl_service_running():
-        print("[SYMBOL] WSL2 audio service is running")
+        print("[SYMBOL] WSL2 audio runtime is ready")
     else:
-        print("[SYMBOL] WSL2 audio service is NOT running")
+        print("[SYMBOL] WSL2 audio runtime is NOT ready")
         print()
-        print("To start the service, open WSL2 and run:")
-        print("  cd ~/goodq_audio")
-        print("  source setup_cuda_env.sh")
-        print("  python3 ~/goodq_audio/audio_service.py")
+        print("Check the canonical runtime reference and WSL workspace setup:")
+        print("  docs\\reference\\WSL_AUDIO_RUNTIME.md")
+        print("  docs\\guides\\llm\\WSL2_AUDIO_SETUP.md")
         print()
         return
     print()

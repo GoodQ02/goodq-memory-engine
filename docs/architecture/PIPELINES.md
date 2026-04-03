@@ -1,11 +1,13 @@
 # Pipelines Architecture
 
-**Status:** Active (Compatibility Layer)  
-**Last Updated:** December 15, 2025
+**Status:** Active (Compatibility Reference)  
+**Last Updated:** April 2, 2026
 
 ## Overview
 
-The `pipelines/` directory serves as a compatibility and abstraction layer for different ingestion entry points. The actual processing logic lives in `cli/run_ingestion.py`.
+The `pipelines/` directory is a small compatibility/reference layer for
+programmatic ingestion entry points. The actual ingestion authority lives in
+`cli/run_ingestion.py`.
 
 ## Active Components
 
@@ -57,9 +59,10 @@ Vision + Audio + Entity + KG Steps
 
 ## Historical Notes
 
-- **Pre-December 2025:** legacy orchestration-based pipelines existed in `ingest_multimodal_conda.py`
-- **Current:** Pure Python sequential execution (legacy orchestration removed)
-- **Backup:** `ingest_multimodal_conda.py.backup_20251204` preserved for reference
+- **Pre-December 2025:** a legacy orchestration path existed in `ingest_multimodal_conda.py`
+- **Current:** pure Python sequential execution through `cli/run_ingestion.py`
+- **Historical only:** any mention of `ingest_multimodal_conda.py` or its backup
+  should be treated as archive/reference material, not an alternate runtime
 
 ## Why This Structure?
 
@@ -68,8 +71,16 @@ Vision + Audio + Entity + KG Steps
 3. **Future Flexibility:** Can add new pipeline types (streaming, batch, chat) without changing core logic
 4. **Legacy Compatibility:** Existing code calling `pipelines.*` continues to work
 
+## Non-Action Rules
+
+- Do not treat `pipelines/` as an alternate orchestration authority.
+- Do not revive `ingest_multimodal_conda.py` from historical notes.
+- Do not add new pipeline doctrines here without updating
+  `INGEST_ORCHESTRATION_CONTRACT.md` first.
+
 ## Related Documentation
 
 - [CLI Commands](../CLI-REFERENCE.md) - User-facing command reference
 - [Watchdog System](../systems/WATCHDOG_SYSTEM.md) - Automated ingestion trigger
-- Run Ingestion - Main processing orchestrator
+- [INGEST_ORCHESTRATION_CONTRACT.md](INGEST_ORCHESTRATION_CONTRACT.md) - Canonical ingestion authority
+- [SYSTEM_ARCHITECTURE.md](SYSTEM_ARCHITECTURE.md) - Runtime authority and component layout

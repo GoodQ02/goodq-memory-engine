@@ -1,6 +1,6 @@
 """
 Direct Python ingestion pipeline for GoodQ4All.
-NO ZenML. Pure Python sequential execution.
+Pure Python sequential execution.
 
 This is the production ingestion system.
 """
@@ -81,9 +81,9 @@ def run_direct_ingestion(video_path: str | Path, cfg: Dict[str, Any] | None = No
         raise FileNotFoundError(f"Video not found: {video_path}")
     
     print(f"[INGEST] Starting direct ingestion for: {video_path.name}")
-    print(f"[INGEST] Using pure Python pipeline (NO ZenML)")
+    print("[INGEST] Using direct Python pipeline")
     
-    # The actual ingestion uses the scene-based runner which is already ZenML-free
+    # The actual ingestion uses the canonical scene-based runner
     # Import and use the working scene ingestion system
     from goodq4all.cli.run_ingestion import run as scene_ingest_run
     import typer
@@ -92,7 +92,7 @@ def run_direct_ingestion(video_path: str | Path, cfg: Dict[str, Any] | None = No
     processing_root = _resolve_processing_root(cfg)
     processing_root.mkdir(parents=True, exist_ok=True)
     
-    # Call the existing scene ingestion (which works without ZenML)
+    # Call the existing scene ingestion runtime
     try:
         # Create a temporary directory with just this video to ensure only it gets processed
         import shutil

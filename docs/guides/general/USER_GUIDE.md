@@ -150,29 +150,25 @@ python cli\run_ingestion.py `
 pwsh scripts\ingest_videos.ps1 -InputDir "<GOODQ_DATA_ROOT>\videos\to_process"
 ```
 
-### Mission Launch (Full Stack)
+### Canonical Launcher (Full Stack)
 
 **Purpose:** Complete automation with health checks and monitoring
 
 ```powershell
-# Dry run (validate setup)
-pwsh scripts\mission_launch.ps1 -Mode dryrun -EnvPrefix goodq
+# Safe launch / dry-run behavior
+.\LAUNCH_GOODQ.ps1
 
-# Full pipeline
-pwsh scripts\mission_launch.ps1 -Mode pipeline
+# Start ingestion explicitly
+.\LAUNCH_GOODQ.ps1 -StartIngestion
 
-# Custom configuration
-pwsh scripts\mission_launch.ps1 `
-    -Mode pipeline `
-    -InputDir "<GOODQ_DATA_ROOT>\videos\archive" `
-    -EnvPrefix goodq
+# Force reprocess
+.\LAUNCH_GOODQ.ps1 -StartIngestion -ForceReprocess
 ```
 
-**Modes:**
-- `dryrun`: Validate environments and cache
-- `pipeline`: Run full ingestion
-- `health`: Health check only
-- `dashboard`: Open Command Center only
+**Recommended launcher surfaces:**
+- `LAUNCH_GOODQ.ps1` - canonical operator launcher
+- `LAUNCH_GOODQ.bat` - wrapper for double-click or batch usage
+- `python -m cli.run_ingestion ...` - direct developer/operator CLI
 
 ---
 
@@ -544,6 +540,9 @@ pwsh scripts\prepare_step_envs.ps1 `
     -ForceReinstall `
     -LinkProject
 ```
+
+By default, `prepare_step_envs.ps1` repairs the supported specialized step-env
+pack. Use `-Steps <step>` for narrower repairs when only one env is broken.
 
 ### 5. Backup Strategy
 

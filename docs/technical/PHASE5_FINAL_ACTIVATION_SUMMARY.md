@@ -1,4 +1,16 @@
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: IMPLEMENTATION_NOTE -->
+<!-- DOC_LAST_VERIFIED: 2026-04-02 -->
+
 # Phase 5 Video Scene Segmentation - Final Activation Summary
+
+> Historical implementation note. This document captures a December 2025
+> activation-era integration snapshot and references the retired
+> `pipelines/ingest_multimodal_conda.py` path. It is not an active operator or
+> runtime authority surface. For current ingest authority, use
+> [INGEST_ORCHESTRATION_CONTRACT.md](../architecture/INGEST_ORCHESTRATION_CONTRACT.md),
+> [SYSTEM_ARCHITECTURE.md](../architecture/SYSTEM_ARCHITECTURE.md), and
+> [PHASE6_MULTIMODAL_FUSION.md](../PHASE6_MULTIMODAL_FUSION.md).
 
 **Date:** December 5, 2025  
 **Status:** ✅ SUCCESSFULLY ACTIVATED (LOCAL)  

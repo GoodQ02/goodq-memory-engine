@@ -215,8 +215,7 @@ def install_python_packages():
         "opencv-python",
         "pillow",
         "chromadb",
-        "faiss-cpu",
-        "zenml"
+        "faiss-cpu"
     ]
     
     print_info(f"Installing {len(packages)} packages...")

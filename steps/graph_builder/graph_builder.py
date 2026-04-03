@@ -7,12 +7,9 @@ from pathlib import Path
 from typing import Dict, Any, List, Optional
 import logging
 
-from zenml import step
-
 logger = logging.getLogger(__name__)
 
 
-@step
 def build_knowledge_graph(
     analysis_results: Dict[str, Any],
     config: Dict[str, Any]

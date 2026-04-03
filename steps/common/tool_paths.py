@@ -17,10 +17,25 @@ def cfg_get(cfg: Dict[str, Any], path: str, default: Optional[str] = None) -> Op
 
 
 def resolve_piper(cfg: Dict[str, Any]) -> (Optional[str], Optional[str], Optional[str]):
-    # Prefer explicit tts config, fallback to tools section
-    exe = cfg_get(cfg, 'config.tts.piper_exe') or cfg_get(cfg, 'config.tools.piper_exe')
-    voice = cfg_get(cfg, 'config.tts.voice_path') or cfg_get(cfg, 'config.tools.piper_voice')
-    out_dir = cfg_get(cfg, 'config.tts.out_dir') or (os.path.dirname(exe) if exe else None)
+    # Prefer explicit runtime overrides, then top-level tts config, then legacy nested/tool fallbacks.
+    exe = (
+        os.environ.get("GOODQ_PIPER_EXE")
+        or cfg_get(cfg, 'tts.piper_exe')
+        or cfg_get(cfg, 'config.tts.piper_exe')
+        or cfg_get(cfg, 'config.tools.piper_exe')
+    )
+    voice = (
+        os.environ.get("GOODQ_PIPER_VOICE_PATH")
+        or cfg_get(cfg, 'tts.voice_path')
+        or cfg_get(cfg, 'config.tts.voice_path')
+        or cfg_get(cfg, 'config.tools.piper_voice')
+    )
+    out_dir = (
+        os.environ.get("GOODQ_PIPER_OUT_DIR")
+        or cfg_get(cfg, 'tts.out_dir')
+        or cfg_get(cfg, 'config.tts.out_dir')
+        or (os.path.dirname(exe) if exe else None)
+    )
     return exe, voice, out_dir
 
 

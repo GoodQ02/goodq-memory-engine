@@ -1,8 +1,18 @@
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: REFERENCE_ONLY -->
+<!-- DOC_LAST_VERIFIED: 2026-04-02 -->
+
 # Artifact Location Contract
 
-**Status:** ⚠️ **KNOWN INCONSISTENCY** (Acceptable for v2.0)  
-**Last Updated:** December 15, 2025  
-**Priority:** Low (deferred to v2.1+)
+> Historical note only. This document describes a legacy inconsistency that is no
+> longer the active runtime truth. For current artifact/storage authority, use
+> [SCENE_MANIFEST_SPECIFICATION.md](../SCENE_MANIFEST_SPECIFICATION.md),
+> [SYSTEM_ARCHITECTURE.md](../architecture/SYSTEM_ARCHITECTURE.md), and
+> [MEMORY_STORAGE.md](../architecture/MEMORY_STORAGE.md).
+
+**Status:** Historical contract note  
+**Scope:** Legacy artifact-path mismatch analysis  
+**Use:** Reference only, not operator guidance
 
 ---
 
@@ -222,11 +232,11 @@ Get-ChildItem "logs\scene_ingest\*\video\scene_manifest.json" -Recurse
 
 ## Conclusion
 
-This is a **cosmetic contract violation**, not a functional bug. The system:
+At the time this note was written, this was a **cosmetic contract violation**,
+not a functional bug. The system:
 - ✅ Works correctly
 - ✅ Is fully documented
 - ✅ Has no data integrity issues
 - ✅ Requires no immediate action
 
 The inconsistency is **acknowledged**, **tracked**, and **deferred** to a future release when breaking changes are acceptable.
-

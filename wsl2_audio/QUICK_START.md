@@ -20,7 +20,7 @@ Follow the prompts. Total time: ~30 minutes.
 - WSL2 with Ubuntu
 - HuggingFace account (free)
 
-## 5-Step Setup
+## 4-Step Setup
 
 ### 1. Run Installer
 
@@ -46,15 +46,10 @@ wsl2_audio\start_wsl2_service.bat
 python wsl2_audio\test_bridge.py
 ```
 
-### 5. Enable in Pipeline
-
-```cmd
-python wsl2_audio\enable_in_pipeline.py
-```
-
 ## Done!
 
-Your pipeline now uses WSL2 for audio processing.
+WSL2 audio is now available to the canonical runtime.
+No pipeline files need to be edited.
 
 ## Daily Use
 
@@ -65,7 +60,7 @@ wsl2_audio\start_wsl2_service.bat
 
 **Run the pipeline:**
 ```cmd
-launch_goodq.bat
+LAUNCH_GOODQ.bat
 ```
 
 **Check service status:**
@@ -120,7 +115,8 @@ Edit `wsl2_audio\bridge_config.json`:
 ## More Info
 
 - Full docs: `wsl2_audio\README.md`
-- Migration guide: `docs\WSL2_AUDIO_MIGRATION_GUIDE.md`
+- Runtime truth: `docs\reference\WSL_AUDIO_RUNTIME.md`
+- Setup guide: `docs\guides\llm\WSL2_AUDIO_SETUP.md`
 - Troubleshooting: Check canonical Windows logs plus `~/goodq_audio/logs/`
 
 ## Support
@@ -137,10 +133,10 @@ To disable WSL2 audio:
 
 ```cmd
 wsl pkill -f audio_service
-copy pipelines\ingest_multimodal_conda.py.backup_before_wsl2 pipelines\ingest_multimodal_conda.py
 ```
 
-Then restart the pipeline.
+Then relaunch the canonical runtime without strict WSL-audio requirements.
+No pipeline files need to be restored.
 
 ---
 

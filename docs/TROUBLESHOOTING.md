@@ -418,6 +418,9 @@ conda env remove -n goodq_<step> -y
 pwsh scripts/prepare_step_envs.ps1 -EnvPrefix goodq -Steps <step> -LinkProject
 ```
 
+`prepare_step_envs.ps1` now repairs the supported specialized step-env pack by
+default. Use `-Steps` when you want a narrow repair instead of the full pack.
+
 ### Clear and Restart
 ```powershell
 # Full cleanup

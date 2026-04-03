@@ -1,8 +1,15 @@
-<!-- DOC_BADGE: CANONICAL -->
-<!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-03-26 -->
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: BACKLOG_REFERENCE -->
+<!-- DOC_LAST_VERIFIED: 2026-04-02 -->
 
 # Pipeline Restoration Backlog
+
+> Historical backlog reference. This document captures restoration-era design
+> intent and deferred cutovers, but it is not the current operator truth surface.
+> For active runtime authority, use
+> [INGEST_ORCHESTRATION_CONTRACT.md](../architecture/INGEST_ORCHESTRATION_CONTRACT.md),
+> [WSL_AUDIO_RUNTIME.md](../reference/WSL_AUDIO_RUNTIME.md), and
+> [IDENTITY_STITCHING_CONTRACT.md](../architecture/IDENTITY_STITCHING_CONTRACT.md).
 
 This document tracks recovered design intent and currently missing cutovers for the GoodQ4All multimodal pipeline.
 

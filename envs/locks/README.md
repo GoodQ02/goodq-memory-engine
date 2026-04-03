@@ -89,9 +89,11 @@ Compare-Object `
 | text_embed | 162 | text_embed.lock.txt |
 | tts | 145 | tts.lock.txt |
 | video_scene_detect | 147 | video_scene_detect.lock.txt |
-| zenml | 171 | zenml.lock.txt |
+**Total:** 21 environments, 3,169 packages locked
 
-**Total:** 22 environments, 3,340 packages locked
+`prepare_step_envs.ps1` no longer provisions every environment by default. The
+supported manual repair surface now targets the same specialized step-env pack
+used by bootstrap, and you can narrow further with `-Steps`.
 
 ---
 

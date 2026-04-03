@@ -68,13 +68,14 @@ Use these comment badges at the top of each document.
 
 1. Canonical bootstrap contract docs live under `docs/bootstrap/` plus approved root-level contract artifacts.
 2. Runtime architecture contracts live in approved `docs/architecture/`, `docs/systems/`, and component authority files.
-3. New canonical docs require explicit reference in `docs/bootstrap/doc_authority_map.md`.
+3. New canonical docs require explicit reference in `docs/bootstrap/doc_authority_map.md` under the curated canonical authority set.
 
 ## Update and Verification Rules
 
 1. Update canonical docs first, then operational docs, then historical references.
 2. If an operational guide conflicts with canonical doctrine, treat the guide as stale until corrected.
 3. Every phase checkpoint must record verified date and commit hash in canonical docs.
+4. `docs/bootstrap/doc_authority_map.md` is a curated authority index, not a whole-repo generated snapshot.
 
 ## Precedence Rules
 

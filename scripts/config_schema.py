@@ -110,6 +110,9 @@ class TTSConfig(BaseModel):
     elevenlabs_voice_id: str
     piper_voice: str
     last_used_voice: str
+    piper_exe: str | None = None
+    voice_path: str | None = None
+    out_dir: str | None = None
 
 
 # ============================================================================

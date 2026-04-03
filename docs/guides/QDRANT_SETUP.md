@@ -353,7 +353,7 @@ taskkill /PID <PID> /F
 
 4. **Process Real Videos:**
    ```batch
-   LAUNCH_GOODQ_v2.bat
+   LAUNCH_GOODQ.bat
    ```
    Drop videos into `<GOODQ_DATA_ROOT>\GoodQ_Data\import_inbox\`
 

@@ -63,32 +63,11 @@ print(bridge.get_info())
 
 ## Integration Pattern
 
-### In Pipeline Steps
+The active runtime does not require pipeline-file edits.
 
-```python
-from wsl2_audio_bridge import WSL2AudioBridge
-
-class YourAudioStep:
-    def __init__(self):
-        # Try to use WSL2, fallback to Windows
-        self.use_wsl2 = False
-        try:
-            self.bridge = WSL2AudioBridge()
-            self.use_wsl2 = self.bridge.check_status()
-        except:
-            pass
-            
-        if self.use_wsl2:
-            print("Using WSL2 GPU acceleration")
-        else:
-            print("Using Windows processing")
-    
-    def process(self, audio_path):
-        if self.use_wsl2:
-            return self.bridge.process_audio(audio_path)
-        else:
-            return self.process_windows(audio_path)
-```
+- Launch GoodQ4All via `LAUNCH_GOODQ.bat` or `LAUNCH_GOODQ.ps1`
+- Ingestion is owned by `cli.run_ingestion`
+- WSL audio is selected by profile and runtime flags, with structured fallback when strict mode is not enabled
 
 ---
 
@@ -148,7 +127,8 @@ pip install <missing-package>
 ### Windows
 - Bridge: `<project_root>\wsl2_audio_bridge.py`
 - Installer: `<project_root>\INSTALL_WSL2_AUDIO.bat`
-- Docs: `<project_root>\docs\WSL2_AUDIO_SETUP.md`
+- Runtime docs: `<project_root>\docs\reference\WSL_AUDIO_RUNTIME.md`
+- Setup docs: `<project_root>\docs\guides\llm\WSL2_AUDIO_SETUP.md`
 
 ### WSL2
 - Workspace: `~/goodq_audio/`
@@ -187,20 +167,15 @@ wsl -d Ubuntu -- nvidia-smi -l 1
 
 ## Documentation Links
 
-1. **Setup Guide:** `docs\WSL2_AUDIO_SETUP.md`
-   - Full installation instructions
-   - Manual setup steps
-   - Troubleshooting
-
-2. **Current setup:** `docs\guides\llm\WSL2_AUDIO_SETUP.md`
+1. **Current setup:** `docs\guides\llm\WSL2_AUDIO_SETUP.md`
    - Architecture details
    - Integration guide
    - Testing procedures
 
-3. **Summary:** `PHASE2_COMPLETE_SUMMARY.md`
-   - What was built
-   - Performance expectations
-   - Next steps
+2. **Runtime truth:** `docs\reference\WSL_AUDIO_RUNTIME.md`
+   - Active execution model
+   - Fallback behavior
+   - Successful payload surface
 
 ---
 
@@ -218,7 +193,7 @@ wsl -d Ubuntu -- nvidia-smi -l 1
 
 1. ✅ Install: `INSTALL_WSL2_AUDIO.bat`
 2. ✅ Verify: `python wsl2_audio_bridge.py`
-3. ⬜ Update pipeline steps
+3. ⬜ Launch the canonical runtime
 4. ⬜ Test with sample audio
 5. ⬜ Process home movies
 6. ⬜ Measure performance gains
@@ -226,7 +201,7 @@ wsl -d Ubuntu -- nvidia-smi -l 1
 ---
 
 **Need Help?**
-- Check: `docs\WSL2_AUDIO_SETUP.md`
-- Review: `PHASE2_COMPLETE_SUMMARY.md`
+- Check: `docs\guides\llm\WSL2_AUDIO_SETUP.md`
+- Review: `docs\reference\WSL_AUDIO_RUNTIME.md`
 - Test: `python wsl2_audio_bridge.py`
 

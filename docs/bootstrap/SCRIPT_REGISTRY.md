@@ -167,7 +167,6 @@ _Generated: 2026-02-15_
 | `scripts/install_vad.bat` | Unclear/Obsolete | Setup/installation utility for install vad. | No | absolute path operations |
 | `scripts/install_vision_gpu.bat` | Bootstrap-Critical | GoodQ4All - Vision GPU Setup Launcher | Manual Review | environment mutation |
 | `scripts/install_vision_gpu.py` | Unclear/Obsolete | Comprehensive Vision GPU Setup Script | No | None detected |
-| `scripts/mission_launch.ps1` | Bootstrap-Critical | Updated 2025-12-07: uses direct_ingestion instead of deprecated legacy orchestration pipelines. | No | destructive actions; absolute path operations; environment mutation |
 | `scripts/monitor_gpu_pipeline.py` | Dev Utility | Real-time GPU Pipeline Monitor | Yes | environment mutation |
 | `scripts/monitor_ingestion.py` | Runtime Utility | Real-time Ingestion Monitor with Alerting | Manual Review | absolute path operations |
 | `scripts/monitor_ingestion_progress.py` | Unclear/Obsolete | GoodQ Mission Progress Monitor | No | absolute path operations |
@@ -189,7 +188,7 @@ _Generated: 2026-02-15_
 | `scripts/phase5_full_validation.py` | Runtime Utility | Phase 5: Full System Validation | Manual Review | absolute path operations |
 | `scripts/pin_model_versions.py` | Runtime Utility | Fetch and pin exact model versions (commit SHAs) for all HuggingFace models. | Manual Review | absolute path operations |
 | `scripts/preflight_check.ps1` | Unclear/Obsolete | GoodQ Pre-Flight Check & Auto-Launcher | No | absolute path operations; binary/network download |
-| `scripts/prepare_step_envs.ps1` | Runtime Utility | Ensure critical environment variables are set and persisted consistently | No | destructive actions; absolute path operations; environment mutation |
+| `scripts/prepare_step_envs.ps1` | Runtime Utility | Repair the supported specialized step-env pack or targeted `-Steps` selection while keeping core env variables aligned. | No | destructive actions; absolute path operations; environment mutation |
 | `scripts/promote_wsl_audio.py` | Runtime Utility | WSL Audio Output Promotion Script | Manual Review | absolute path operations |
 | `scripts/qdrant/CHECK_QDRANT.bat` | Unclear/Obsolete | GoodQ4All - Qdrant Health Check | No | binary/network download |
 | `scripts/qdrant/INIT_QDRANT.bat` | Unclear/Obsolete | GoodQ4All - Initialize Qdrant Collections | No | None detected |
@@ -299,10 +298,9 @@ _Generated: 2026-02-15_
 | `scripts/wsl2_audio_bridge.py` | Runtime Utility | GoodQ4All WSL2 Audio Bridge | Yes | None detected |
 | `scripts/wsl2_process_audio.py` | Unclear/Obsolete | GoodQ4All WSL2 Audio Processor | No | None detected |
 | `scripts/wsl2_quick_install.sh` | Bootstrap-Critical | GoodQ4All - WSL2 Audio Quick Install | Manual Review | absolute path operations |
-| `wsl2_audio/audio_bridge.py` | Runtime Utility | GoodQ4All - Windows to WSL2 Audio Bridge | Manual Review | absolute path operations |
+| `wsl2_audio/audio_bridge.py` | Runtime Utility | Legacy compatibility facade over the canonical WSL audio bridge. | Manual Review | absolute path operations |
 | `wsl2_audio/audio_service.py` | Bootstrap-Critical | GoodQ4All - WSL2 Audio Processing Service | Yes | None detected |
 | `wsl2_audio/check_cuda.py` | Dev Utility | CUDA/cuDNN Diagnostic Script for GoodQ Audio Processing | Manual Review | None detected |
-| `wsl2_audio/enable_in_pipeline.py` | Runtime Utility | Script to enable WSL2 audio processing in the pipeline | Yes | None detected |
 | `wsl2_audio/process.sh` | Runtime Utility | Check if arguments are provided | Yes | None detected |
 | `wsl2_audio/process_audio.py` | Runtime Utility | GoodQ Audio Processing Script - Full Classification | Yes | None detected |
 | `wsl2_audio/process_minimal.sh` | Runtime Utility | Minimal GoodQ Audio Processing - Transcription Only | Yes | None detected |
@@ -388,7 +386,6 @@ _Generated: 2026-02-15_
 | `scripts/install_pipeline_wsl.py` | Bootstrap-Critical | destructive actions; absolute path operations |
 | `scripts/install_vad.bat` | Unclear/Obsolete | absolute path operations |
 | `scripts/install_vision_gpu.bat` | Bootstrap-Critical | environment mutation |
-| `scripts/mission_launch.ps1` | Bootstrap-Critical | destructive actions; absolute path operations; environment mutation |
 | `scripts/monitor_ingestion.py` | Runtime Utility | absolute path operations |
 | `scripts/monitor_ingestion_progress.py` | Unclear/Obsolete | absolute path operations |
 | `scripts/monitor_ingestion_realtime.py` | Unclear/Obsolete | absolute path operations |

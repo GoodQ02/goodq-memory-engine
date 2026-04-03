@@ -52,7 +52,7 @@ docs/archive/
 
 Deletion is allowed only when all conditions are true:
 
-1. File is marked `DELETE (safe)` in `docs/bootstrap/doc_authority_map.md`.
+1. File is marked `DELETE (safe)` in `docs/bootstrap/doc_authority_map.md` or explicitly approved in `docs/bootstrap/REPO_GROUNDED_CLEANUP_CHECKLIST.md`.
 2. File has no inbound references from active docs (`docs/` and `README*.md`).
 3. File is a duplicate/backup artifact with no unique technical content.
 4. Deletion is performed in a docs-only commit with explicit rationale.

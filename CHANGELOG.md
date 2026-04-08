@@ -10,6 +10,12 @@ and related canonical docs.
 ## [Unreleased]
 
 ### Changed
+- Restored the fully monitored 2-episode ingestion baseline after the witness-shell false-stop investigation, proving the core multi-episode pipeline remains healthy and benchmarkable from `main`.
+- Wired stranded perception surfaces into Phase 6 outputs so fresh scene/temporal artifacts now expose visible person-object counts, audio emotion, music events, time hints, and speaker voice-signature coverage.
+- Removed the last active legacy launcher and queue-era WSL toggle surfaces, collapsed compatibility adapters onto the canonical unified WSL bridge, and removed active ZenML references from the maintained runtime/bootstrap surface.
+- Installed and wired Poppler / `pdftotext` plus Piper + `en_US-joe-medium` for host-complete offline parity, including explicit GoodQ tool-path resolution for Piper.
+- Closed the desktop offline package audit into a canonical machine-audit set and staged a workspace-adjacent offline bundle containing Conda payloads, Windows/Linux wheelhouses, model caches, binaries, installers, and the exported WSL distro.
+- Launched a fresh five-episode offline-package witness run from commit `e880c9e` to confirm the packaged host/tool/model state still reproduces the current ingestion pipeline.
 - Restored the desktop `GPU_ENHANCED` runtime through bootstrap-managed environment repair, bringing `goodq_core` back onto a CUDA-backed stack and revalidating the canonical bootstrap path.
 - Restored the unified WSL audio path with local-first/offline model resolution, diarization recovery, per-scene non-recursive Windows fallback, and explicit backend truth persisted in scene artifacts.
 - Hardened Phase 6 and scene-level runtime resilience: Qdrant scene-vector persistence is explicit, DINO native crashes are contained through staged retry/fallback behavior, and per-run results remain truthful under partial-scene failures.

@@ -1,10 +1,10 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: GENERATED_SNAPSHOT -->
-<!-- DOC_LAST_VERIFIED: 2026-04-01 -->
+<!-- DOC_LAST_VERIFIED: 2026-04-08 -->
 
 # System Snapshot
 
-_Generated: 2026-04-01T17:28:09_
+_Generated: 2026-04-08T10:25:00_
 
 ## Host & OS
 - Hostname: GOOD-CUBE
@@ -31,6 +31,13 @@ _Generated: 2026-04-01T17:28:09_
 - Node: v24.14.0
 - Codex CLI: unavailable
 
+## Installed Host Tools
+- FFmpeg: present
+- Tesseract: present
+- Poppler / `pdftotext`: present
+- Piper: present
+- Qdrant / NSSM payloads: present
+
 ## WSL
 - WSL enabled: Default Distribution: Ubuntu-22.04 | Default Version: 2 | WSL1 is not supported with your current machine configuration. | Please enable the "Windows Subsystem for Linux" optional component to use WSL1.
 - Distros: NAME            STATE           VERSION | * Ubuntu-22.04    Stopped         2
@@ -39,3 +46,28 @@ _Generated: 2026-04-01T17:28:09_
 - Qdrant (6333): reachable
 - Ollama (unknown): unavailable
 - LM Studio (1234): not reachable
+
+## Offline Packaging State
+- Workspace-adjacent machine-audit pack: present
+- Workspace-adjacent offline bundle root: present
+- Repo payload staged into offline bundle: present
+- Transport reconciliation final gap report: `HIGH` confidence
+- Phase 1 self-extracting installer: present
+- Closure state:
+  - Linux wheels: complete
+  - Windows wheels: complete
+  - Host payloads: complete
+- Current large local asset work:
+  - required model cache: present locally
+  - NRC lexicon: present locally
+  - dataset prefetch: active / large cache already materialized
+
+## Benchmark State
+- Monitored 2-episode baseline rerun: successful
+- Current monitored benchmark root: `../scratch/debug_runs/two_episode_baseline_verify_monitored_20260408/`
+- Fresh canonical outputs confirmed perception wiring for:
+  - visible person-object counts
+  - audio emotion
+  - music event rollups
+  - time-hint rollups
+  - speaker voice-signature coverage

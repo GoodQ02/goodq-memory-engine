@@ -6,6 +6,7 @@ that the Control Agent learns over time.
 """
 
 import json
+import os
 import sqlite3
 from datetime import datetime
 from pathlib import Path
@@ -15,12 +16,24 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+def _default_control_memory_path() -> Path:
+    explicit_db = os.environ.get("GOODQ_CONTROL_MEMORY_DB")
+    if explicit_db:
+        return Path(explicit_db)
+
+    data_root = os.environ.get("GOODQ_DATA_ROOT")
+    if data_root:
+        return Path(data_root) / "control_memory.db"
+
+    return Path("GoodQ_Data") / "control_memory.db"
+
+
 class RecoveryStrategies:
     """Maintains a database of error patterns and successful recovery strategies"""
     
     def __init__(self, db_path: Optional[Path] = None):
         if db_path is None:
-            db_path = Path("L:/_DATA/GoodQ_Data") / "control_memory.db"
+            db_path = _default_control_memory_path()
         
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)

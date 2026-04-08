@@ -82,7 +82,7 @@ async def main():
     agent = SceneDetectorAgent()
     
     result = await agent.execute({
-        "video_path": "L:/_DATA/sample_video.mp4"
+        "video_path": str(Path("GoodQ_Data") / "sample_video.mp4")
     })
     
     print(json.dumps(result, indent=2))

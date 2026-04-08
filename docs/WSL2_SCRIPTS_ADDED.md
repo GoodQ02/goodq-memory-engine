@@ -12,7 +12,7 @@
 ### 📦 WSL2-Side Files (17 files, +3,106 lines)
 
 Previously, these files only existed in the WSL2 environment at:
-`\\wsl.localhost\Ubuntu\home\joesdomingo\goodq_audio\`
+`\\wsl.localhost\<distro>\home\<user>\goodq_audio\`
 
 Now they're preserved in the repository at:
 `<project_root>\wsl2_audio\`

@@ -22,7 +22,7 @@ The environment has been excluded from the CUDA enablement check until dependenc
 1. Download CMake from https://cmake.org/download/
 2. Add CMake to system PATH
 3. Rebuild environment with: ```powershell
-L:\goodq4all\scripts\emergency_conda_repair.ps1
+scripts\emergency_conda_repair.ps1
 ```
 
 ### Option 2: Use Prebuilt dlib Wheel

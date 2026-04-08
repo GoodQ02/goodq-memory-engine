@@ -39,7 +39,7 @@ result = subprocess.run(
 ### WSL2 Directory Structure
 
 ```
-\\wsl.localhost\Ubuntu\home\joesdomingo\goodq_audio\
+\\wsl.localhost\<distro>\home\<user>\goodq_audio\
 ├── process_audio.py      # ✅ ACTIVE SCRIPT (called by bridge)
 ├── process.sh
 ├── process_minimal.sh

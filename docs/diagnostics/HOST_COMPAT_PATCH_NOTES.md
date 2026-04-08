@@ -75,13 +75,13 @@ File: `api/main.py`
 ## Static Validation (No Runtime Execution)
 
 Checks run:
-- `joesdomingo` in patched runtime/config files
+- `<wsl_user>` placeholders in patched runtime/config files
 - literal fixed-drive data-root token in patched runtime code files
 - hardcoded `"Ubuntu"` in WSL subprocess calls
 - conda env naming references in launch/config bindings
 
 Results:
-- `joesdomingo`: **0 matches** in patched runtime/config files.
+- user-specific WSL usernames: **0 matches** in patched runtime/config files.
 - fixed-drive data-root literals in runtime code (`api/main.py`, `configs/paths.py`, bridge/bindings): **0 matches**.
 - `"Ubuntu"` remains only as allowed default-value declarations:
   - `api/main.py` host fallback default

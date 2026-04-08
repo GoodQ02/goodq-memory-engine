@@ -14,9 +14,9 @@ Non-goals (by design):
 - No health semantics, no trends, no alerts, no UI
 
 Example:
-  $env:GOODQ_HEALTH_EXPORT_URL = "http://192.168.0.106:9000/export"
-  $env:GOODQ_HEALTH_SOURCE_ID = "ipad-air-health"
-  $env:GOODQ_VAULT_ROOT = "L:\\_DATA\\GoodQ_Vault"
+  $env:GOODQ_HEALTH_EXPORT_URL = "http://127.0.0.1:9000/export"
+  $env:GOODQ_HEALTH_SOURCE_ID = "example-health-source"
+  $env:GOODQ_VAULT_ROOT = "<GOODQ_VAULT_ROOT>"
   python scripts/health/pull_health_export.py
 
 Dry run (fetch + fingerprint only; no vault write; no CHE emission):

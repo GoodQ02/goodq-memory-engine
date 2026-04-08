@@ -184,7 +184,7 @@ flowchart TD
 
 **Artifact Locations (Verified Dec 15, 2025):**
 - Audio chunks: `<project_root>\logs\scene_ingest\<video_name>\audio\scene_XXXX.wav`
-- WSL2 output: `\\wsl.localhost\Ubuntu\home\joesdomingo\goodq_audio\output\result.json`
+- WSL2 output: `\\wsl.localhost\<distro>\home\<user>\goodq_audio\output\result.json`
 - GPU: RTX 4070 Ti SUPER 16GB, CUDA 12.8
 - Models loaded: Whisper medium (service) / large-v3 (direct), Pyannote 3.1, Silero VAD, Wav2Vec2 emotion
 

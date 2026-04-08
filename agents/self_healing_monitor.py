@@ -5,6 +5,7 @@ Monitors pipeline execution and applies automatic fixes
 
 import asyncio
 import logging
+import os
 import sqlite3
 import json
 from pathlib import Path
@@ -17,14 +18,35 @@ logger = logging.getLogger(__name__)
 from steps.common.config_loader import load_configs
 
 
+def _default_memory_db_path() -> Path:
+    explicit_db = os.environ.get("GOODQ_DB_PATH")
+    if explicit_db:
+        return Path(explicit_db)
+
+    data_root = os.environ.get("GOODQ_DATA_ROOT")
+    if data_root:
+        return Path(data_root) / "memory.db"
+
+    return Path("GoodQ_Data") / "memory.db"
+
+
+def _default_log_dir(config: Dict[str, Any]) -> Path:
+    paths = (config.get("paths") or {}) if isinstance(config, dict) else {}
+    explicit_log_dir = paths.get("logs") or os.environ.get("GOODQ_LOG_DIR")
+    if explicit_log_dir:
+        return Path(explicit_log_dir)
+    return Path("logs")
+
+
 class SelfHealingMonitor:
     """Monitors pipeline health and applies automatic fixes."""
     
     def __init__(self, cfg: Dict[str, Any], db_path: str | None = None):
         self.config = cfg
         paths = (self.config.get("paths") or {}) if isinstance(self.config, dict) else {}
-        resolved_db_path = db_path or (paths.get("db_path") if isinstance(paths, dict) else None) or "L:/_DATA/GoodQ_Data/memory.db"
+        resolved_db_path = db_path or (paths.get("db_path") if isinstance(paths, dict) else None) or _default_memory_db_path()
         self.db_path = Path(resolved_db_path)
+        self.log_dir = _default_log_dir(self.config)
         self.llm_config = self.config.get('llm', {})
         self.healing_history = []
         self.patterns = self._load_error_patterns()
@@ -312,7 +334,8 @@ class SelfHealingMonitor:
             logger.info(f"LLM analysis: {result}")
             
             # Log for human review
-            log_file = Path(f"L:/goodq4all/logs/llm_error_analysis_{int(time.time())}.json")
+            self.log_dir.mkdir(parents=True, exist_ok=True)
+            log_file = self.log_dir / f"llm_error_analysis_{int(time.time())}.json"
             with open(log_file, 'w') as f:
                 json.dump({
                     "issue": issue,

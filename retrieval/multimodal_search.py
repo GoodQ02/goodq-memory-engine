@@ -15,6 +15,13 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
+
+def _default_data_root() -> str:
+    explicit_data_root = os.environ.get("GOODQ_DATA_ROOT")
+    if explicit_data_root:
+        return explicit_data_root
+    return str(Path("GoodQ_Data"))
+
 _QUERY_STOPWORDS = {
     "a", "an", "and", "at", "for", "from", "in", "into", "of", "on", "or", "the", "to", "with",
 }
@@ -142,7 +149,7 @@ class MultimodalSearchEngine:
         collections_cfg = (qdrant_cfg.get("collections") or {}) if isinstance(qdrant_cfg, dict) else {}
 
         self.qdrant_host = qdrant_cfg.get("host") or config.get("qdrant_host", "http://127.0.0.1:6333")
-        self.data_root = paths_cfg.get("data_root") or config.get("data_root", "L:/_DATA/GoodQ_Data")
+        self.data_root = paths_cfg.get("data_root") or config.get("data_root") or _default_data_root()
         self.processing_root = paths_cfg.get("processing") or os.path.join(self.data_root, "processing")
         self.kg_db_path = paths_cfg.get("knowledge_graph_db") or config.get("knowledge_graph_db")
         self.text_collection = collections_cfg.get("text") or "goodq_text"

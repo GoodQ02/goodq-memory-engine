@@ -10,6 +10,7 @@ and related canonical docs.
 ## [Unreleased]
 
 ### Changed
+- Published a compact Season 1 benchmark memo from the completed 5-episode `main` witness, including season totals, representative interaction/visual samples, and comparison guidance for cross-host validation.
 - Started a clean season-scale benchmark witness from `main` commit `31fd533` after restoring the monitored 2-episode ingestion baseline, creating a benchmarkable proof surface for laptop-side comparison.
 - Restored the fully monitored 2-episode ingestion baseline after the witness-shell false-stop investigation, proving the core multi-episode pipeline remains healthy and benchmarkable from `main`.
 - Wired stranded perception surfaces into Phase 6 outputs so fresh scene/temporal artifacts now expose visible person-object counts, audio emotion, music events, time hints, and speaker voice-signature coverage.

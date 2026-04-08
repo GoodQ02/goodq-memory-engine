@@ -71,5 +71,6 @@ _Generated: 2026-04-08T07:35:00_
   - music event rollups
   - time-hint rollups
   - speaker voice-signature coverage
-- Active full-season benchmark witness: `reports/fresh_ingest_runs/20260408_070502_season1_main_benchmark_witness/`
-- Active benchmark commit: `31fd533`
+- Completed full-season benchmark witness: `reports/fresh_ingest_runs/20260408_070502_season1_main_benchmark_witness/`
+- Benchmark commit: `31fd533`
+- Benchmark memo: `docs/testing/SEASON1_MAIN_BENCHMARK_MEMO_2026-04-08.md`

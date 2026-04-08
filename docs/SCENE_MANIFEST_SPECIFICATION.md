@@ -1,8 +1,8 @@
 # Scene Manifest Specification
 
 **Status:** ✅ **STABLE AND OPERATIONAL**  
-**Last Verified:** April 1, 2026  
-**Evidence:** stitching-era witness runs produced epoch-scoped manifests with active WSL audio, Phase 6 completion, and persisted speaker voice signatures
+**Last Verified:** April 8, 2026  
+**Evidence:** monitored 2-episode baseline rerun and fresh benchmark artifacts produced epoch-scoped manifests with active WSL audio, Phase 6 completion, persisted speaker voice signatures, and additive harmonized perception fields
 
 ---
 
@@ -17,6 +17,7 @@ It is authoritative for:
 - backend truth (`audio_backend_*`, `phase6_*`)
 - speaker-owned transcript alignment
 - per-speaker voice signatures used by stitching
+- additive harmonized scene truth written by Phase 6b
 
 ### Location
 
@@ -64,7 +65,7 @@ ${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/epoch_2025_12_22/processing/01x01 - Good Ne
 
 ## Scene Object
 
-Each scene entry contains the scene boundary, keyframe outputs, audio outputs, and vector-store truth.
+Each scene entry contains the scene boundary, keyframe outputs, audio outputs, vector-store truth, and additive harmonized scene context.
 
 ```json
 {
@@ -90,6 +91,17 @@ Each scene entry contains the scene boundary, keyframe outputs, audio outputs, a
 - `qdrant_ok`
 - `speaker_ids`
 - `speaker_count`
+- `continuity_key`
+- `dominant_speaker_id`
+- `dominant_speaker_share`
+- `dominance_confidence`
+- `visible_person_object_count`
+- `speaker_voice_signature_count`
+- `audio_emotion`
+- `music_events`
+- `time_hints`
+- `candidate_visible_people`
+- `conversation_owner`
 
 `speaker_ids` may still contain structural diarization labels such as `SPEAKER_00`. Those labels are not semantic identity by themselves.
 
@@ -211,6 +223,9 @@ These fields are now part of the manifest contract:
 - `speaker_transcript`
 - `speaker_voice_signatures`
 - `speaker_voice_signature_meta`
+- `emotion` / `emotion_scores`
+- `music_events`
+- `time_hints`
 
 They are the input surface for the ladder defined in `docs/architecture/IDENTITY_STITCHING_CONTRACT.md`.
 
@@ -231,6 +246,7 @@ They are the input surface for the ladder defined in `docs/architecture/IDENTITY
 2. **Cross-Modal Harmonizer** (`steps/video/cross_modal_harmonizer.py`)
    - Reads `scene_manifest.json`
    - Produces `temporal_index.json`
+   - Writes additive harmonized scene truth back into `scene_manifest.json`
    - Uses scene payload truth, not stale labels, for `content_summary`
 
 3. **Realtime KG Integration** (`lib/kg_realtime_integration.py`)
@@ -263,6 +279,7 @@ Required:
 - `audio_backend_*` fields reflect real backend behavior
 - `phase6_status` / `phase6_complete` reflect actual Phase 6 outcome
 - scene vector status resolves through `qdrant_ok`
+- additive harmonized fields must remain truthful and non-destructive; they may enrich the scene bundle, but they must not overwrite raw upstream scene evidence
 
 ### Partial Failure Semantics
 
@@ -313,3 +330,4 @@ The presence of `speaker_voice_signatures` does not imply that identity promotio
 - Phase 6 completion
 - speaker-owned transcript alignment
 - voice-signature capture used by identity stitching
+- additive perception and interaction context written by harmonization

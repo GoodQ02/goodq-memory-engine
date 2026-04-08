@@ -1,12 +1,14 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-04-01 -->
+<!-- DOC_LAST_VERIFIED: 2026-04-08 -->
 
 # Identity Stitching Contract
 
 **Purpose:** define how GoodQ forms identity from audio, semantics, and scene evidence without hallucinating merges.  
 **Scope:** speaker-pattern capture, candidate/support/evidence promotion, and explicit non-action rules.  
 **Non-goals:** node merges, retrieval policy, UI behavior, or cross-run ranking logic.
+
+This contract also does not define interaction-ownership fields such as `conversation_owner`. Those signals may summarize who an exchange revolves around, but they must not be treated as visual presence or identity promotion.
 
 ---
 
@@ -28,6 +30,7 @@ GoodQ may record that:
 - a person name is recurring
 - a face is recurring
 - a speaker/person pairing is a candidate
+- a conversation appears to revolve around a person
 
 GoodQ must not claim identity merely because entities co-occurred in one scene.
 

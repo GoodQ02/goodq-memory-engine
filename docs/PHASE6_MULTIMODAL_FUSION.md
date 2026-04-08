@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-04-01 -->
+<!-- DOC_LAST_VERIFIED: 2026-04-08 -->
 
 # Phase 6: Multimodal Fusion & Temporal Indexing
 
@@ -46,6 +46,7 @@ It is backend-agnostic once the required scene and audio artifacts exist.
 **Responsibilities**
 - consume the persisted scene bundle
 - align visual, transcript, diarization, entity, and timing surfaces
+- persist additive harmonized scene truth back into `scene_manifest.json`
 - build the canonical temporal rollup
 
 **Primary Output**
@@ -106,6 +107,15 @@ The temporal index is the canonical multimodal rollup for:
 - per-scene timeline segments
 - entity aggregation
 - object and location summaries
+- perception context including:
+  - visible person-object counts
+  - audio emotion
+  - music event labels
+  - time-hint rollups
+  - speaker voice-signature coverage
+- interaction context including:
+  - `candidate_visible_people` (conservative physical-presence candidates)
+  - `conversation_owner` (dominant interaction participant, not visual presence)
 
 ---
 
@@ -122,6 +132,25 @@ ${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/<epoch>/processing/<video_name>/video/scene
 ```text
 ${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/<epoch>/processing/<video_name>/temporal_index.json
 ```
+
+### Harmonized Scene Truth
+
+Phase 6b also writes additive scene-level harmonized fields back into the persisted scene bundle. Common fields now include:
+- `scene_present_entities`
+- `dialogue_mentioned_entities`
+- `visible_people`
+- `mentioned_people`
+- `candidate_visible_people`
+- `conversation_owner`
+- `continuity_key`
+- `dominant_speaker_id`
+- `dominant_speaker_share`
+- `dominance_confidence`
+- `visible_person_object_count`
+- `speaker_voice_signature_count`
+- `audio_emotion`
+- `music_events`
+- `time_hints`
 
 ### Qdrant Collections
 
@@ -182,6 +211,9 @@ That includes:
 - `top_entities`
 - `top_objects`
 - place/location lift from visual semantics
+- speaker continuity and dominance truth
+- additive interaction ownership (`conversation_owner`) without promoting visual presence
+- richer perception context from already-produced audio metadata
 
 This means Phase 6 is now part of memory truth, not just a convenience layer.
 
@@ -198,6 +230,22 @@ Healthy verification should show:
 3. `phase6_complete = true` on successful episodes.
 4. `qdrant_ok = true` for successful scene-vector commits.
 5. `temporal_index.json` matches the fresh semantic outputs rather than collapsing to placeholders.
+6. harmonized scene fields in `scene_manifest.json` match the per-segment truth in `temporal_index.json`.
+
+### Practical Inspection
+
+For fresh benchmark verification, inspect:
+- `scene_manifest.json`
+- `temporal_index.json`
+- `scene_ingest_results.json`
+
+Useful truth fields to grep:
+- `visible_person`
+- `audio_emotion`
+- `music`
+- `time_hints`
+- `speaker_voice`
+- `conversation_owner`
 
 ---
 
@@ -246,3 +294,4 @@ Phase 6 is no longer a “planned” or “available but not wired” component.
 - commits canonical CLIP/DINO scene vectors to Qdrant
 - writes a durable multimodal temporal index
 - carries stitching-era semantic and audio surfaces into retrieval and memory
+- exposes richer situational-awareness context without relaxing visible-person truth

@@ -4,7 +4,7 @@
 
 # System Snapshot
 
-_Generated: 2026-04-08T10:25:00_
+_Generated: 2026-04-08T07:35:00_
 
 ## Host & OS
 - Hostname: GOOD-CUBE
@@ -71,3 +71,5 @@ _Generated: 2026-04-08T10:25:00_
   - music event rollups
   - time-hint rollups
   - speaker voice-signature coverage
+- Active full-season benchmark witness: `reports/fresh_ingest_runs/20260408_070502_season1_main_benchmark_witness/`
+- Active benchmark commit: `31fd533`

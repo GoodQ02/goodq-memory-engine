@@ -4,7 +4,7 @@
 
 # GoodQ4All Agent Status
 
-_Generated: 2026-04-08T10:25:00_
+_Generated: 2026-04-08T07:35:00_
 
 This document is a generated operator snapshot of the current stitching-era and offline-package baseline.
 Treat per-run artifacts and canonical runtime contracts as source of truth for live claims.
@@ -49,6 +49,16 @@ Audit Status: ACTIVE (2026-04-08)
   - `candidate_visible_people` remains conservative / empty
   - `conversation_owner` remains intentionally unpromoted pending further interaction-ownership work
 
+## Active Season Benchmark
+- Active 5-episode witness: `reports/fresh_ingest_runs/20260408_070502_season1_main_benchmark_witness/`
+- Run id: `420ba9d8-31f7-4614-934f-0ad8eddfd631`
+- Launch commit: `31fd533`
+- Current observed state: in progress on `main`; benchmark is intended as the first season-scale comparison point after the monitored 2-episode baseline restoration and perception wiring fixes
+- Current checkpoint:
+  - `01x01` is actively processing
+  - stderr remains limited to the familiar non-fatal `[ENTITY] No entities found...` lines on weak caption/object-only scenes
+  - no new ingestion regression has surfaced
+
 ## Offline Package State
 - Desktop machine audit: complete and authoritative in the workspace-adjacent pack
 - Offline bundle root: `../scratch/offline_bundle/goodq4all-offline/`
@@ -92,6 +102,7 @@ Audit Status: ACTIVE (2026-04-08)
 - Built the first self-extracting offline installer wrapper and staged the repo mirror into the offline bundle.
 - Restored the monitored multi-episode ingestion baseline on the current branch and verified the new perception wiring in fresh epoch artifacts.
 - Confirmed that interaction ownership remains an additive next-step concern rather than a reason to loosen visible-person promotion.
+- Launched the first full 5-episode benchmark witness from pushed `main` so desktop and laptop summaries can be compared against the same benchmarked branch state.
 
 ## Agent Instructions (Binding)
 - Treat the epoch processing tree and per-run artifacts as canonical, not historical `logs/scene_ingest` paths.

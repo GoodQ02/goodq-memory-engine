@@ -10,6 +10,7 @@ and related canonical docs.
 ## [Unreleased]
 
 ### Changed
+- Started a clean season-scale benchmark witness from `main` commit `31fd533` after restoring the monitored 2-episode ingestion baseline, creating a benchmarkable proof surface for laptop-side comparison.
 - Restored the fully monitored 2-episode ingestion baseline after the witness-shell false-stop investigation, proving the core multi-episode pipeline remains healthy and benchmarkable from `main`.
 - Wired stranded perception surfaces into Phase 6 outputs so fresh scene/temporal artifacts now expose visible person-object counts, audio emotion, music events, time hints, and speaker voice-signature coverage.
 - Removed the last active legacy launcher and queue-era WSL toggle surfaces, collapsed compatibility adapters onto the canonical unified WSL bridge, and removed active ZenML references from the maintained runtime/bootstrap surface.

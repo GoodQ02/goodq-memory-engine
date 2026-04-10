@@ -12,6 +12,17 @@ logger = logging.getLogger(__name__)
 _PLACEHOLDER_SPEAKER_PATTERN = re.compile(r"^(?:speaker|face)_\d+$", re.IGNORECASE)
 
 
+def _resolve_llm_config(cfg: Dict[str, Any]) -> Dict[str, Any]:
+    root_llm = cfg.get("llm")
+    if isinstance(root_llm, dict):
+        return root_llm
+
+    nested_llm = cfg.get("config", {}).get("llm", {})
+    if isinstance(nested_llm, dict):
+        return nested_llm
+    return {}
+
+
 def _speaker_prompt_summary(speakers: List[Any]) -> str:
     names: List[str] = []
     anonymous_ids: set[str] = set()
@@ -63,7 +74,7 @@ def analyze_scene_context_llm(scene_meta: Dict[str, Any], cfg: Dict[str, Any]) -
         }
     """
     try:
-        llm_config = cfg.get('config', {}).get('llm', {})
+        llm_config = _resolve_llm_config(cfg)
         api_url = llm_config.get('api_url', 'http://localhost:1234/v1/chat/completions')
         timeout = llm_config.get('timeout', 20)
         
@@ -176,7 +187,7 @@ def analyze_emotional_progression(scenes: List[Dict[str, Any]], cfg: Dict[str, A
         }
     """
     try:
-        llm_config = cfg.get('config', {}).get('llm', {})
+        llm_config = _resolve_llm_config(cfg)
         api_url = llm_config.get('api_url', 'http://localhost:1234/v1/chat/completions')
         timeout = llm_config.get('timeout', 25)
         

@@ -1,3 +1,10 @@
+"""Experimental alternate video-ingest summary surface.
+
+This module is off the canonical scene-centric ingestion path and is retained
+for reference, tests, and possible future adoption. It must not be treated as
+the authoritative ingestion entrypoint.
+"""
+
 from __future__ import annotations
 from typing import Any, Dict, List, Optional, Tuple
 

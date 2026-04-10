@@ -937,6 +937,19 @@ def _extract_speaker_ids(audio_payload: Any) -> List[str]:
     return speaker_ids
 
 
+def _promote_metadata_time_hints(audio_payload: Any) -> None:
+    if not isinstance(audio_payload, dict):
+        return
+    if isinstance(audio_payload.get('metadata_time_hints'), dict):
+        return
+    audio_meta = audio_payload.get('audio_meta')
+    if not isinstance(audio_meta, dict):
+        return
+    tag_time_hints = audio_meta.get('tag_time_hints')
+    if isinstance(tag_time_hints, dict):
+        audio_payload['metadata_time_hints'] = tag_time_hints
+
+
 def _build_kg_scene_data(
     scene: Dict[str, Any],
     *,
@@ -947,6 +960,7 @@ def _build_kg_scene_data(
 ) -> Dict[str, Any]:
     frame_payload = frame_data if isinstance(frame_data, dict) else {}
     audio_payload = audio_data if isinstance(audio_data, dict) else {}
+    _promote_metadata_time_hints(audio_payload)
     audio_speaker_ids = _extract_speaker_ids(audio_payload)
     merged_entities: List[Any] = []
     for modality_data in (frame_payload, audio_payload):
@@ -986,6 +1000,7 @@ def _build_kg_scene_data(
         'speaker_voice_signature_meta': audio_payload.get('speaker_voice_signature_meta'),
         'music_events': audio_payload.get('music_events'),
         'time_hints': audio_payload.get('time_hints') or frame_payload.get('time_hints'),
+        'metadata_time_hints': audio_payload.get('metadata_time_hints'),
         'keyframe': frame_payload,
         'audio': audio_payload,
     }
@@ -5078,6 +5093,7 @@ def run(
             if audio_info:
                 formatted_audio = _merge_step_output(audio_info)
                 if formatted_audio:
+                    _promote_metadata_time_hints(formatted_audio)
                     audio_start_val = scene_start
                     audio_end_val = scene_end
                     if isinstance(audio_info, dict):

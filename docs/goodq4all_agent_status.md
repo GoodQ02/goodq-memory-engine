@@ -1,17 +1,17 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: GENERATED_SNAPSHOT -->
-<!-- DOC_LAST_VERIFIED: 2026-04-08 -->
+<!-- DOC_LAST_VERIFIED: 2026-04-10 -->
 
 # GoodQ4All Agent Status
 
-_Generated: 2026-04-08T07:35:00_
+_Generated: 2026-04-10T10:30:00_
 
 This document is a generated operator snapshot of the current stitching-era and offline-package baseline.
 Treat per-run artifacts and canonical runtime contracts as source of truth for live claims.
 
 ## System Mode
 - MODE: Operational / Packaging / Hardening
-Audit Status: ACTIVE (2026-04-08)
+Audit Status: ACTIVE (2026-04-10)
 
 ## Phase Status
 | Phase | Status | Notes |
@@ -29,35 +29,40 @@ Audit Status: ACTIVE (2026-04-08)
 | Final Report | ✅ Available | scene_ingest_results.json is canonical run summary |
 
 ## Current Witness
-- Active 5-episode witness: `reports/fresh_ingest_runs/20260403_133244_season1_offline_package_witness/`
-- Run id: `59ba9343-881f-4ceb-b625-3fbed5a59fd4`
-- Launch commit: `e880c9e`
-- Current observed state: completed successfully across all 5 episodes; Phase 6a and Phase 6b passed, `scene_ingest_results.json` was written, and Qdrant stayed healthy with CLIP + DINO vectors committed
-- Current run seams: repeated non-fatal `[ENTITY] No entities found...` lines for weak vision-only scenes, 2 contained `image_embed_dino` native crashes recovered via `gpu_amp_disabled`, and 2 optional `audio_embed_clap` failures
+- Locked two-season baseline witness: `reports/fresh_ingest_runs/20260409_072106_two_season_benchmark_witness/`
+- Run id: `4e35b14d-f19a-4ea4-8b4a-2213f165c6d0`
+- Current observed state: completed successfully across `17` episodes with final `pipeline.ingestion` status `completed`, `processed_videos = 17`, and Phase 6 completed across the benchmark
+- Canonical comparison memo: `docs/testing/SEASON1_2_BASELINE_MEMO_2026-04-10.md`
+- Contained seams remained within the expected envelope:
+  - repeated non-fatal `[ENTITY] No entities found...` lines for weak vision-only scenes
+  - contained `object_detect` CPU fallbacks
+  - contained `image_embed_dino` AMP-disabled retries
+  - a small number of optional `audio_embed_clap` failures
 
 ## Current Benchmark
-- Fully monitored 2-episode rerun: `../scratch/debug_runs/two_episode_baseline_verify_monitored_20260408/`
-- Run id: `c0ee39ca-7ad0-467a-af5e-d9c4a0837c70`
-- Current observed state: completed successfully across `01x01` + `01x02`; the earlier witness-shell false-stop was ruled out as a monitoring artifact, not a pipeline regression
-- Fresh perception wiring now visible in canonical outputs:
-  - `visible_person_object_count`
-  - `audio_emotion`
-  - `music_events`
-  - `time_hints`
-  - `speaker_voice_signature_count`
-- Semantic state:
-  - `candidate_visible_people` remains conservative / empty
-  - `conversation_owner` remains intentionally unpromoted pending further interaction-ownership work
+- Two-season totals from the locked baseline:
+  - `381` dialogue-entity scenes
+  - `316` mentioned-people scenes
+  - `131` candidate-visible scenes
+  - `70` interaction-dominance scenes
+  - `10` conversation-owner scenes
+  - `651` audio-emotion scenes
+  - `167` time-hint scenes
+  - `14` music-event scenes
+- The current authoritative baseline remains `epoch_2025_12_22`
+- `audio.metadata_time_hints`, the modernized `scene_summarizer`, and `scene_context_llm` are post-baseline additions and should be treated as treatment features rather than part of the overnight control
 
-## Active Season Benchmark
-- Completed 5-episode witness: `reports/fresh_ingest_runs/20260408_070502_season1_main_benchmark_witness/`
-- Run id: `420ba9d8-31f7-4614-934f-0ad8eddfd631`
-- Launch commit: `31fd533`
-- Current observed state: completed successfully on `main`; `processed_videos = 5`, Phase 6 completed across the benchmark, and the witness now serves as the canonical season-scale comparison point after the monitored 2-episode baseline restoration and perception wiring fixes
-- Benchmark outcome:
-  - fresh canonical outputs now surface visible person-object counts, audio emotion, music events, time hints, speaker voice-signature coverage, sparse candidate-visible people, and early conversation-owner evidence
-  - contained native retries remained within the expected envelope (`object_detect` CPU fallback, `image_embed_dino` AMP-disabled retry)
-  - benchmark memo published at `docs/testing/SEASON1_MAIN_BENCHMARK_MEMO_2026-04-08.md`
+## Active Treatment Ladder
+- Season 3 feature ladder run root: `reports/fresh_ingest_runs/20260410_071121_season3_feature_ladder/`
+- Treatment epoch: `epoch_2025_12_23`
+- Execution model:
+  - `03x01` -> `audio.metadata_time_hints`
+  - `03x02` -> modernized `scene_summarizer`
+  - `03x03` -> `scene_context_llm` (feature-gated; local LLM required)
+- Guardrails:
+  - one feature change per run
+  - local override only via `configs/config.local.yaml`
+  - stop on regression before proceeding to the next feature
 
 ## Offline Package State
 - Desktop machine audit: complete and authoritative in the workspace-adjacent pack
@@ -104,6 +109,11 @@ Audit Status: ACTIVE (2026-04-08)
 - Confirmed that interaction ownership remains an additive next-step concern rather than a reason to loosen visible-person promotion.
 - Completed the first full 5-episode benchmark witness from pushed `main` so desktop and laptop summaries can be compared against the same benchmarked branch state.
 - Published a compact benchmark memo with season totals and representative scene samples for cross-host comparison.
+- Completed the locked 17-episode Season 1-2 baseline witness and published a compact two-season memo for control-vs-treatment comparisons.
+- Added provenance-safe `audio.metadata_time_hints` surfacing into canonical scene truth and Phase 6 rollups.
+- Modernized the canonical `scene_summarizer` template path to read the current nested `keyframe` and `audio` scene shape.
+- Added the feature-gated additive `scene_context_llm` surface and a one-feature-per-episode Season 3 experiment ladder for isolated treatment validation.
+- Audited and explicitly marked secondary, deprecated, and experimental perception surfaces to reduce ambiguity before further integration work.
 
 ## Agent Instructions (Binding)
 - Treat the epoch processing tree and per-run artifacts as canonical, not historical `logs/scene_ingest` paths.

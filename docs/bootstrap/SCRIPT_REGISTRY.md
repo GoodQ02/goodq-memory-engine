@@ -181,7 +181,7 @@ _Generated: 2026-02-15_
 | `scripts/phase2_completion_report.py` | Runtime Utility | PHASE 2 COMPLETION REPORT | Manual Review | absolute path operations |
 | `scripts/phase2_embedding_analysis.py` | Runtime Utility | Phase 2: Comprehensive Embedding and Knowledge Graph Analysis | Manual Review | absolute path operations |
 | `scripts/phase2_fixes.py` | Runtime Utility | Phase 2 Comprehensive Fixes: Embedding & Knowledge Graph Integration | Manual Review | absolute path operations |
-| `scripts/phase2_llm_integration.py` | Unclear/Obsolete | Phase 2: LLM-Enhanced Semantic Analysis Integration | No | absolute path operations; environment mutation; binary/network download |
+| `scripts/phase2_llm_integration.py` | Unclear/Obsolete | Phase 2: LLM-Enhanced Semantic Analysis Integration (legacy / quarantined; requires explicit `--allow-legacy-run`) | No | absolute path operations; environment mutation; binary/network download |
 | `scripts/phase2_progress_report.py` | Runtime Utility | Phase 2 Progress Report | Manual Review | absolute path operations |
 | `scripts/phase2_verify.py` | Dev Utility | Phase 2 Verification Script | Manual Review | absolute path operations |
 | `scripts/phase3_diagnostic.py` | Dev Utility | Phase 3 Diagnostic - Identify exact issues with scene processing | Manual Review | None detected |

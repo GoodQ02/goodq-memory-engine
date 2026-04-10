@@ -97,6 +97,8 @@ llm:
   # LM Studio (primary for chat/dialogue)
   api_url: http://localhost:1234/v1/chat/completions
   model_id: LM_STUDIO_GOODQ
+  features:
+    scene_context_analysis: false
   
   # vLLM Server (WSL2, high-performance inference)
   vllm_url: http://localhost:38005/v1

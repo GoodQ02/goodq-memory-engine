@@ -1,7 +1,12 @@
 #!/usr/bin/env python3
 """
 Centralized Memory Database Writer
-DRAFT - awaiting approval for integration
+
+DRAFT / OFF-PATH NOTICE
+This module is not the canonical persistence path for GoodQ scene memory.
+It remains in-tree as an experimental alternate writer and reference draft.
+Do not wire it into active runtime ingestion without an explicit adoption
+decision and audit against the current scene-centric storage contract.
 """
 import sqlite3
 import json
@@ -323,6 +328,9 @@ def save_step_results(scene_id: str, step_name: str, results: Any):
 
 
 if __name__ == "__main__":
+    logger.warning(
+        "MemoryWriter is a draft / off-path persistence helper and is not part of the canonical runtime."
+    )
     # Test the writer
     writer = MemoryWriter()
     

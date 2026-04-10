@@ -1,10 +1,10 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: GENERATED_SNAPSHOT -->
-<!-- DOC_LAST_VERIFIED: 2026-04-08 -->
+<!-- DOC_LAST_VERIFIED: 2026-04-10 -->
 
 # System Snapshot
 
-_Generated: 2026-04-08T07:35:00_
+_Generated: 2026-04-10T10:30:00_
 
 ## Host & OS
 - Hostname: GOOD-CUBE
@@ -63,14 +63,26 @@ _Generated: 2026-04-08T07:35:00_
   - dataset prefetch: active / large cache already materialized
 
 ## Benchmark State
-- Monitored 2-episode baseline rerun: successful
-- Current monitored benchmark root: `../scratch/debug_runs/two_episode_baseline_verify_monitored_20260408/`
-- Fresh canonical outputs confirmed perception wiring for:
-  - visible person-object counts
-  - audio emotion
-  - music event rollups
-  - time-hint rollups
-  - speaker voice-signature coverage
-- Completed full-season benchmark witness: `reports/fresh_ingest_runs/20260408_070502_season1_main_benchmark_witness/`
-- Benchmark commit: `31fd533`
-- Benchmark memo: `docs/testing/SEASON1_MAIN_BENCHMARK_MEMO_2026-04-08.md`
+- Locked two-season benchmark witness: `reports/fresh_ingest_runs/20260409_072106_two_season_benchmark_witness/`
+- Episodes processed: `17`
+- Total scenes: `651`
+- Baseline totals:
+  - `381` dialogue-entity scenes
+  - `316` mentioned-people scenes
+  - `131` candidate-visible scenes
+  - `70` interaction-dominance scenes
+  - `10` conversation-owner scenes
+  - `651` audio-emotion scenes
+  - `167` time-hint scenes
+  - `14` music-event scenes
+- Canonical baseline memo: `docs/testing/SEASON1_2_BASELINE_MEMO_2026-04-10.md`
+- Note: `audio.metadata_time_hints`, the modernized `scene_summarizer`, and `scene_context_llm` landed after this benchmark started and are treatment features, not part of the locked control
+
+## Active Treatment State
+- Feature ladder root: `reports/fresh_ingest_runs/20260410_071121_season3_feature_ladder/`
+- Treatment epoch: `epoch_2025_12_23`
+- Execution order:
+  - `03x01`: `audio.metadata_time_hints`
+  - `03x02`: modernized `scene_summarizer`
+  - `03x03`: `scene_context_llm`
+- Feature enablement rule: local override only through `configs/config.local.yaml`

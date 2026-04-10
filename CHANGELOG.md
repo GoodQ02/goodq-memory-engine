@@ -10,6 +10,11 @@ and related canonical docs.
 ## [Unreleased]
 
 ### Changed
+- Locked and documented a full 17-episode Season 1-2 baseline witness, publishing a compact two-season benchmark memo with the strongest control metrics and representative scene samples for laptop-side review.
+- Added provenance-safe `audio.metadata_time_hints` surfacing so metadata-derived temporal cues now persist separately from semantic `time_hints` and can be validated independently.
+- Modernized the canonical template `scene_summarizer` to read the current nested `keyframe` and `audio` scene shape instead of relying on stale top-level fields.
+- Added the feature-gated additive `scene_context_llm` surface and a one-feature-per-episode Season 3 feature ladder script for isolated treatment validation in a new epoch.
+- Audited perception surfaces and explicitly marked legacy, secondary, experimental, and canonical interpretation paths to reduce repo ambiguity before further integration work.
 - Published a compact Season 1 benchmark memo from the completed 5-episode `main` witness, including season totals, representative interaction/visual samples, and comparison guidance for cross-host validation.
 - Started a clean season-scale benchmark witness from `main` commit `31fd533` after restoring the monitored 2-episode ingestion baseline, creating a benchmarkable proof surface for laptop-side comparison.
 - Restored the fully monitored 2-episode ingestion baseline after the witness-shell false-stop investigation, proving the core multi-episode pipeline remains healthy and benchmarkable from `main`.

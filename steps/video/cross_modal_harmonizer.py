@@ -25,6 +25,13 @@ except ImportError:
     ENTITY_EXTRACTION_AVAILABLE = False
     logger.warning("Entity extractor not available")
 
+try:
+    from steps.common.context_analyzer_llm import analyze_scene_context_llm
+    SCENE_CONTEXT_LLM_AVAILABLE = True
+except ImportError:
+    SCENE_CONTEXT_LLM_AVAILABLE = False
+    logger.warning("Scene context analyzer not available")
+
 
 def load_json_safe(path: str) -> Optional[Dict[str, Any]]:
     """Safely load JSON file with error handling."""
@@ -260,6 +267,77 @@ def _resolve_scene_time_hints(scene_audio_payload: Dict[str, Any]) -> Dict[str, 
     return time_hints if isinstance(time_hints, dict) else {}
 
 
+def _resolve_scene_metadata_time_hints(scene_audio_payload: Dict[str, Any]) -> Dict[str, Any]:
+    metadata_time_hints = scene_audio_payload.get("metadata_time_hints")
+    if isinstance(metadata_time_hints, dict):
+        return metadata_time_hints
+    audio_meta = scene_audio_payload.get("audio_meta")
+    if isinstance(audio_meta, dict):
+        tag_time_hints = audio_meta.get("tag_time_hints")
+        if isinstance(tag_time_hints, dict):
+            return tag_time_hints
+    return {}
+
+
+def _scene_context_llm_enabled(cfg: Dict[str, Any]) -> bool:
+    llm_cfg = cfg.get("llm", {})
+    if not isinstance(llm_cfg, dict):
+        llm_cfg = {}
+    features = llm_cfg.get("features", {})
+    if not isinstance(features, dict):
+        features = {}
+    return bool(features.get("scene_context_analysis", False))
+
+
+def _sanitize_scene_context_llm(raw_context: Any) -> Optional[Dict[str, Any]]:
+    if not isinstance(raw_context, dict):
+        return None
+
+    def _clean_text(value: Any) -> Optional[str]:
+        if not isinstance(value, str):
+            return None
+        normalized = value.strip()
+        return normalized or None
+
+    def _clean_list(values: Any, *, limit: int) -> List[str]:
+        cleaned: List[str] = []
+        seen: set[str] = set()
+        if not isinstance(values, list):
+            return cleaned
+        for value in values:
+            normalized = _clean_text(value)
+            if not normalized:
+                continue
+            key = normalized.casefold()
+            if key in seen:
+                continue
+            seen.add(key)
+            cleaned.append(normalized)
+            if len(cleaned) >= limit:
+                break
+        return cleaned
+
+    sanitized = {
+        "narrative_summary": _clean_text(raw_context.get("narrative_summary")),
+        "key_moments": _clean_list(raw_context.get("key_moments"), limit=3),
+        "emotional_arc": _clean_text(raw_context.get("emotional_arc")),
+        "context_tags": _clean_list(raw_context.get("context_tags"), limit=5),
+        "activity_description": _clean_text(raw_context.get("activity_description")),
+        "source": "scene_context_llm",
+    }
+    has_signal = any(
+        sanitized[key]
+        for key in (
+            "narrative_summary",
+            "key_moments",
+            "emotional_arc",
+            "context_tags",
+            "activity_description",
+        )
+    )
+    return sanitized if has_signal else None
+
+
 def _extract_time_hint_tokens(time_hints: Any) -> List[str]:
     tokens: List[str] = []
 
@@ -280,7 +358,14 @@ def _extract_time_hint_tokens(time_hints: Any) -> List[str]:
                 tokens.append(normalized)
 
     _walk(time_hints)
-    return tokens
+    seen: set[str] = set()
+    unique_tokens: List[str] = []
+    for token in tokens:
+        if token in seen:
+            continue
+        seen.add(token)
+        unique_tokens.append(token)
+    return unique_tokens
 
 
 def _normalize_speaker_id(raw_speaker: Any) -> Optional[str]:
@@ -417,6 +502,15 @@ def _has_direct_address(text: str, name: str) -> bool:
     return re.search(pattern, normalized_text, flags=re.IGNORECASE) is not None
 
 
+def _text_mentions_name(text: str, name: str) -> bool:
+    normalized_text = str(text or "").strip()
+    normalized_name = str(name or "").strip()
+    if not normalized_text or not normalized_name:
+        return False
+    pattern = rf"\b{re.escape(normalized_name)}\b"
+    return re.search(pattern, normalized_text, flags=re.IGNORECASE) is not None
+
+
 def _has_adjacent_reply_confirmation(
     speaker_records: List[Dict[str, Any]],
     *,
@@ -473,6 +567,12 @@ def _derive_candidate_visible_people(
     visible_face_count = len(visible_faces)
     visible_person_object_count = _count_visible_person_objects(scene_objects)
     visible_anonymous_people_count = visible_face_count if visible_face_count > 0 else visible_person_object_count
+    crowd_risk = max(visible_face_count, visible_person_object_count) > 1
+    source_modalities: List[str] = []
+    if visible_person_object_count > 0:
+        source_modalities.append("object_detect")
+    if visible_face_count > 0:
+        source_modalities.append("face_embed")
 
     speaker_records = _collect_scene_speaker_records(
         scene_audio_payload,
@@ -503,17 +603,75 @@ def _derive_candidate_visible_people(
         if len(set(normalized_speaker_ids)) == 1:
             continuity_key = normalized_speaker_ids[0]
 
+    visible_person_confidence: Optional[Dict[str, Any]] = None
+    if source_modalities:
+        visible_person_confidence = {
+            "source_modalities": source_modalities,
+            "frame_consistency": "keyframe_only",
+            "face_support": visible_face_count > 0,
+            "object_support": visible_person_object_count > 0,
+            "crowd_risk": "high" if crowd_risk else "low",
+        }
+
+    candidate_visible_people: List[Dict[str, Any]] = []
+    if visible_person_object_count >= 1 and visible_face_count >= 1 and not crowd_risk:
+        candidate_visible_people = [
+            {
+                "text": "anonymous_person_1",
+                "name": "anonymous_person_1",
+                "type": "PERSON",
+                "source": "visual_scene_presence",
+                "confidence": "supported",
+                "evidence": {
+                    "source_modalities": source_modalities,
+                    "frame_consistency": "keyframe_only",
+                    "visible_person_object_count": visible_person_object_count,
+                    "visible_face_count": visible_face_count,
+                    "crowd_risk": "low",
+                },
+            }
+        ]
+
+    speaker_aligned_mentions: List[Dict[str, Any]] = []
+    dominant_speaker_id = speaker_summary["dominant_speaker_id"]
+    if dominant_speaker_id:
+        aligned_records = [
+            record
+            for record in speaker_records
+            if _normalize_speaker_id(record.get("speaker")) == dominant_speaker_id
+        ]
+        for person in entity_channels.get("mentioned_people", []):
+            if not isinstance(person, dict):
+                continue
+            person_name = str(person.get("text") or "").strip()
+            if not person_name:
+                continue
+            mention_count = sum(
+                1 for record in aligned_records if _text_mentions_name(record.get("text", ""), person_name)
+            )
+            if mention_count <= 0:
+                continue
+            speaker_aligned_mentions.append(
+                {
+                    "text": person_name,
+                    "type": "PERSON",
+                    "count": mention_count,
+                }
+            )
+
     return {
         "visible_face_count": visible_face_count,
         "visible_person_object_count": visible_person_object_count,
         "visible_anonymous_people_count": visible_anonymous_people_count,
+        "visible_person_confidence": visible_person_confidence,
         "speaker_count": speaker_summary["speaker_count"],
         "dominant_speaker_id": speaker_summary["dominant_speaker_id"],
         "dominant_speaker_share": speaker_summary["dominant_speaker_share"],
         "dominance_confidence": speaker_summary["dominance_confidence"],
         "conversation_speaker_ids": continuity_members,
         "continuity_key": continuity_key,
-        "candidate_visible_people": [],
+        "speaker_aligned_mentions": speaker_aligned_mentions,
+        "candidate_visible_people": candidate_visible_people,
     }
 
 
@@ -615,111 +773,46 @@ def _iter_continuity_chains(unified_segments: List[Dict[str, Any]]) -> List[tupl
     return chains
 
 
-def _apply_candidate_visible_people_window(unified_segments: List[Dict[str, Any]]) -> None:
+def _apply_interaction_dominance_window(unified_segments: List[Dict[str, Any]]) -> None:
     for segment in unified_segments:
-        segment["candidate_visible_people"] = []
+        segment["interaction_dominance"] = None
 
     for chain_start, chain_end, continuity_key in _iter_continuity_chains(unified_segments):
         chain = unified_segments[chain_start:chain_end + 1]
-
-        if any(segment.get("visible_people") for segment in chain):
-            continue
-        if any(int(segment.get("visible_anonymous_people_count") or 0) > 1 for segment in chain):
-            continue
-
-        visible_segments = [
-            segment
-            for segment in chain
-            if int(segment.get("visible_anonymous_people_count") or 0) == 1
-        ]
-        if not visible_segments:
-            continue
-
-        person_display_names: Dict[str, str] = {}
-        person_segment_counts: Counter[str] = Counter()
-        person_mention_segment_ids: Dict[str, List[str]] = {}
-        mention_segments: List[Dict[str, Any]] = []
-        chain_speaker_ids: set[str] = set()
-        chain_continuity_members = set().union(
-            *(_resolve_segment_continuity_members(segment) for segment in chain)
-        )
-        speaker_continuity_segments = 0
+        speaker_share_totals: Dict[str, float] = {}
+        speaker_segment_counts: Counter[str] = Counter()
         for chain_segment in chain:
-            normalized_speaker_ids = {
-                speaker_id
-                for speaker_id in (
-                    _normalize_speaker_id(raw_speaker)
-                    for raw_speaker in (chain_segment.get("speaker_ids") or [])
-                )
-                if speaker_id
-            }
-            chain_speaker_ids.update(normalized_speaker_ids)
-            segment_continuity_members = _resolve_segment_continuity_members(chain_segment)
-            if chain_continuity_members and segment_continuity_members.intersection(chain_continuity_members):
-                speaker_continuity_segments += 1
+            speaker_id = _normalize_speaker_id(chain_segment.get("dominant_speaker_id"))
+            dominant_share = float(chain_segment.get("dominant_speaker_share") or 0.0)
+            if not speaker_id or dominant_share <= 0.0:
+                continue
+            speaker_share_totals[speaker_id] = speaker_share_totals.get(speaker_id, 0.0) + dominant_share
+            speaker_segment_counts[speaker_id] += 1
 
-            segment_people: set[str] = set()
-            for person in chain_segment.get("mentioned_people", []):
-                if not isinstance(person, dict):
-                    continue
-                text = str(person.get("text") or "").strip()
-                if text:
-                    normalized_text = text.casefold()
-                    person_display_names.setdefault(normalized_text, text)
-                    segment_people.add(normalized_text)
+        if not speaker_share_totals:
+            continue
 
-            if segment_people:
-                mention_segments.append(chain_segment)
-                scene_id = str(chain_segment.get("scene_id") or "")
-                for normalized_person in segment_people:
-                    person_segment_counts[normalized_person] += 1
-                    person_mention_segment_ids.setdefault(normalized_person, []).append(scene_id)
-
-        if not person_segment_counts:
-            continue
-        if speaker_continuity_segments < 2:
-            continue
-        if len(chain_speaker_ids) < 2:
-            continue
-        dominance_ok_segments = sum(
-            1 for segment in chain if float(segment.get("dominant_speaker_share") or 0.0) >= 0.45
+        ranked_speakers = sorted(
+            speaker_share_totals.items(),
+            key=lambda item: (-item[1], -speaker_segment_counts[item[0]], item[0]),
         )
-        if (dominance_ok_segments / len(chain)) < 0.7:
+        speaker_id, total_share = ranked_speakers[0]
+        segments_for_speaker = speaker_segment_counts[speaker_id]
+        average_share = total_share / segments_for_speaker if segments_for_speaker else 0.0
+        stability = segments_for_speaker / len(chain)
+        if average_share < 0.6 or segments_for_speaker < 2 or stability < 0.6:
             continue
 
-        ranked_people = sorted(
-            person_segment_counts.items(),
-            key=lambda item: (-item[1], person_display_names.get(item[0], item[0])),
-        )
-        candidate_key, candidate_count = ranked_people[0]
-        total_mentions_in_chain = sum(person_segment_counts.values())
-        mention_dominance_ratio = (
-            candidate_count / total_mentions_in_chain if total_mentions_in_chain > 0 else 0.0
-        )
-        if mention_dominance_ratio < 0.5:
-            continue
-
-        candidate_name = person_display_names.get(candidate_key, candidate_key)
-        anchor_segment = visible_segments[0]
-        anchor_segment["candidate_visible_people"] = [
-            {
-                "text": candidate_name,
-                "name": candidate_name,
-                "type": "PERSON",
-                "source": "continuity_chain",
-                "continuity_key": continuity_key,
-                "chain_length": len(chain),
-                "evidence": [
-                    {
-                        "segment_ids": [segment.get("scene_id") for segment in chain],
-                        "visible_segment_ids": [segment.get("scene_id") for segment in visible_segments],
-                        "mention_segment_ids": person_mention_segment_ids.get(candidate_key, []),
-                        "mention_dominance_ratio": round(mention_dominance_ratio, 4),
-                        "dominance_ok_segment_ratio": round(dominance_ok_segments / len(chain), 4),
-                    }
-                ],
-            }
-        ]
+        payload = {
+            "speaker_id": speaker_id,
+            "dominant_share": round(average_share, 4),
+            "segments": segments_for_speaker,
+            "stability": round(stability, 4),
+            "confidence": "strong" if average_share >= 0.7 and stability >= 0.75 else "stable",
+            "continuity_key": continuity_key,
+        }
+        for chain_segment in chain:
+            chain_segment["interaction_dominance"] = payload
 
 
 def _apply_conversation_owner_window(unified_segments: List[Dict[str, Any]]) -> None:
@@ -728,33 +821,22 @@ def _apply_conversation_owner_window(unified_segments: List[Dict[str, Any]]) -> 
 
     for chain_start, chain_end, continuity_key in _iter_continuity_chains(unified_segments):
         chain = unified_segments[chain_start:chain_end + 1]
+        interaction_dominance = chain[0].get("interaction_dominance")
+        if not isinstance(interaction_dominance, dict):
+            continue
+        dominant_speaker_id = _normalize_speaker_id(interaction_dominance.get("speaker_id"))
+        if not dominant_speaker_id:
+            continue
 
-        chain_speaker_ids: set[str] = set()
         person_display_names: Dict[str, str] = {}
-        person_segment_counts: Counter[str] = Counter()
         person_aligned_counts: Counter[str] = Counter()
-        person_adjacent_reply_hits: Counter[str] = Counter()
+        person_dominant_segment_counts: Counter[str] = Counter()
         person_mention_segment_ids: Dict[str, List[str]] = {}
 
-        mention_sets: List[set[str]] = []
-        dominant_speakers: List[Optional[str]] = []
-        dominance_shares: List[float] = []
-
         for chain_segment in chain:
-            normalized_speaker_ids = {
-                speaker_id
-                for speaker_id in (
-                    _normalize_speaker_id(raw_speaker)
-                    for raw_speaker in (chain_segment.get("speaker_ids") or [])
-                )
-                if speaker_id
-            }
-            chain_speaker_ids.update(normalized_speaker_ids)
-            dominant_speakers.append(_normalize_speaker_id(chain_segment.get("dominant_speaker_id")))
-            dominance_shares.append(float(chain_segment.get("dominant_speaker_share") or 0.0))
-
-            segment_people: set[str] = set()
-            for person in chain_segment.get("mentioned_people", []):
+            scene_id = str(chain_segment.get("scene_id") or "")
+            segment_dominant_speaker_id = _normalize_speaker_id(chain_segment.get("dominant_speaker_id"))
+            for person in chain_segment.get("speaker_aligned_mentions", []):
                 if not isinstance(person, dict):
                     continue
                 text = str(person.get("text") or "").strip()
@@ -762,40 +844,17 @@ def _apply_conversation_owner_window(unified_segments: List[Dict[str, Any]]) -> 
                     continue
                 normalized_text = text.casefold()
                 person_display_names.setdefault(normalized_text, text)
-                segment_people.add(normalized_text)
+                person_aligned_counts[normalized_text] += int(person.get("count") or 1)
+                person_mention_segment_ids.setdefault(normalized_text, []).append(scene_id)
+                if segment_dominant_speaker_id == dominant_speaker_id:
+                    person_dominant_segment_counts[normalized_text] += int(person.get("count") or 1)
 
-            mention_sets.append(segment_people)
-            if not segment_people:
-                continue
-
-            scene_id = str(chain_segment.get("scene_id") or "")
-            for normalized_person in segment_people:
-                person_segment_counts[normalized_person] += 1
-                person_mention_segment_ids.setdefault(normalized_person, []).append(scene_id)
-                if dominant_speakers[-1] and dominance_shares[-1] >= 0.4:
-                    person_aligned_counts[normalized_person] += 1
-
-        if len(chain_speaker_ids) < 2 or not person_segment_counts:
+        if not person_aligned_counts:
             continue
-
-        dominance_ok_segments = sum(1 for share in dominance_shares if share >= 0.45)
-        if (dominance_ok_segments / len(chain)) < 0.7:
-            continue
-
-        for index in range(len(chain) - 1):
-            left_speaker = dominant_speakers[index]
-            right_speaker = dominant_speakers[index + 1]
-            if not left_speaker or not right_speaker or left_speaker == right_speaker:
-                continue
-            shared_people = mention_sets[index].intersection(mention_sets[index + 1])
-            for person_key in shared_people:
-                person_adjacent_reply_hits[person_key] += 1
 
         ranked_people = sorted(
-            person_segment_counts.items(),
+            person_aligned_counts.items(),
             key=lambda item: (
-                -person_aligned_counts[item[0]],
-                -person_adjacent_reply_hits[item[0]],
                 -item[1],
                 person_display_names.get(item[0], item[0]),
             ),
@@ -803,16 +862,18 @@ def _apply_conversation_owner_window(unified_segments: List[Dict[str, Any]]) -> 
         candidate_key, candidate_count = ranked_people[0]
         if candidate_count < 2:
             continue
+        if person_dominant_segment_counts.get(candidate_key, 0) < 1:
+            continue
 
-        total_mentions_in_chain = sum(person_segment_counts.values())
+        total_mentions_in_chain = sum(person_aligned_counts.values())
         mention_dominance_ratio = (
             candidate_count / total_mentions_in_chain if total_mentions_in_chain > 0 else 0.0
         )
-        if mention_dominance_ratio < 0.5:
+        if mention_dominance_ratio < 0.6:
             continue
 
         competitor_count = ranked_people[1][1] if len(ranked_people) > 1 else 0
-        if competitor_count >= candidate_count:
+        if competitor_count and (competitor_count / candidate_count) > 0.8:
             continue
 
         candidate_name = person_display_names.get(candidate_key, candidate_key)
@@ -825,7 +886,7 @@ def _apply_conversation_owner_window(unified_segments: List[Dict[str, Any]]) -> 
             "continuity_key": continuity_key,
             "chain_length": len(chain),
             "mention_dominance_ratio": round(mention_dominance_ratio, 4),
-            "speaker_dominance_ratio": round(dominance_ok_segments / len(chain), 4),
+            "speaker_dominance_ratio": round(float(interaction_dominance.get("dominant_share") or 0.0), 4),
             "competitor_gap": candidate_count - competitor_count,
             "evidence": {
                 "speaker_aligned_mentions": person_aligned_counts[candidate_key],
@@ -836,6 +897,81 @@ def _apply_conversation_owner_window(unified_segments: List[Dict[str, Any]]) -> 
 
         for chain_segment in chain:
             chain_segment["conversation_owner"] = owner_payload
+
+
+def _apply_scene_context_llm(
+    unified_segments: List[Dict[str, Any]],
+    scene_lookup: Dict[str, Dict[str, Any]],
+    cfg: Dict[str, Any],
+) -> None:
+    for segment in unified_segments:
+        segment["scene_context_llm"] = None
+
+    if not SCENE_CONTEXT_LLM_AVAILABLE or not _scene_context_llm_enabled(cfg):
+        return
+
+    for segment in unified_segments:
+        if _normalize_content_state(segment.get("content_state")) != "signal":
+            continue
+
+        scene = scene_lookup.get(str(segment.get("scene_id") or ""))
+        if not isinstance(scene, dict):
+            continue
+
+        keyframe_payload = scene.get("keyframe") if isinstance(scene.get("keyframe"), dict) else {}
+        transcript_text = str(segment.get("full_transcript") or "").strip()
+        scene_objects = segment.get("detected_objects")
+        if not isinstance(scene_objects, list):
+            scene_objects = []
+        face_count = int(segment.get("visible_face_count") or 0)
+
+        if not transcript_text and not scene_objects and face_count <= 0:
+            continue
+
+        emotions_payload: List[Dict[str, Any]] = []
+        emotion_scores = segment.get("audio_emotion_scores")
+        if isinstance(emotion_scores, dict):
+            sorted_emotions = sorted(
+                (
+                    (str(label).strip().lower(), score)
+                    for label, score in emotion_scores.items()
+                    if str(label).strip()
+                ),
+                key=lambda item: float(item[1]),
+                reverse=True,
+            )
+            for label, score in sorted_emotions[:3]:
+                try:
+                    emotions_payload.append({"label": label, "score": float(score)})
+                except (TypeError, ValueError):
+                    continue
+        elif isinstance(segment.get("audio_emotion"), str) and segment.get("audio_emotion"):
+            emotions_payload.append({"label": str(segment.get("audio_emotion")).strip().lower(), "score": 1.0})
+
+        scene_meta = {
+            "index": scene.get("index"),
+            "start": segment.get("start"),
+            "end": segment.get("end"),
+            "caption": scene.get("caption") or keyframe_payload.get("caption") or "",
+            "transcript": transcript_text,
+            "objects": scene_objects,
+            "face_count": face_count,
+            "emotions": emotions_payload,
+            "speakers": segment.get("speaker_ids") or [],
+        }
+
+        try:
+            raw_context = analyze_scene_context_llm(scene_meta, cfg)
+        except Exception as exc:
+            logger.warning(
+                "[HARMONIZER] Scene context analysis failed scene_id=%s exc_type=%s exc=%s",
+                segment.get("scene_id"),
+                type(exc).__name__,
+                exc,
+            )
+            continue
+
+        segment["scene_context_llm"] = _sanitize_scene_context_llm(raw_context)
 
 
 def _persist_harmonized_scene_fields(
@@ -859,17 +995,27 @@ def _persist_harmonized_scene_fields(
         "mentioned_people",
         "candidate_visible_people",
         "conversation_owner",
+        "speaker_aligned_mentions",
         "scene_locations",
         "dialogue_topics",
         "visible_face_count",
         "visible_person_object_count",
         "visible_anonymous_people_count",
+        "visible_person_confidence",
+        "music_events",
+        "time_hints",
+        "metadata_time_hints",
+        "audio_emotion",
+        "audio_emotion_scores",
+        "scene_context_llm",
+        "speaker_voice_signature_count",
         "speaker_count",
         "dominant_speaker_id",
         "dominant_speaker_share",
         "dominance_confidence",
         "conversation_speaker_ids",
         "continuity_key",
+        "interaction_dominance",
         "content_state",
     )
 
@@ -1237,6 +1383,11 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
         }
     
     scenes = scene_data.get('scenes', [])
+    scene_lookup = {
+        str(scene.get("scene_id")): scene
+        for scene in scenes
+        if isinstance(scene, dict) and scene.get("scene_id") is not None
+    }
     manifest_video_id = scene_data.get('video_id') if isinstance(scene_data, dict) else None
     if isinstance(manifest_video_id, str) and manifest_video_id.strip():
         video_id = manifest_video_id.strip()
@@ -1446,6 +1597,7 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
         scene_objects = _resolve_scene_objects(scene, scene_id, objects_data)
         music_events = _resolve_scene_music_events(scene_audio_payload)
         time_hints = _resolve_scene_time_hints(scene_audio_payload)
+        metadata_time_hints = _resolve_scene_metadata_time_hints(scene_audio_payload)
         audio_emotion, audio_emotion_scores = _resolve_audio_emotion(scene_audio_payload)
         speaker_voice_signatures = scene_audio_payload.get('speaker_voice_signatures') if isinstance(scene_audio_payload.get('speaker_voice_signatures'), list) else []
         candidate_visibility = _derive_candidate_visible_people(
@@ -1486,6 +1638,7 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
             'visible_people': entity_channels['visible_people'],
             'mentioned_people': entity_channels['mentioned_people'],
             'candidate_visible_people': entity_channels['candidate_visible_people'],
+            'speaker_aligned_mentions': candidate_visibility['speaker_aligned_mentions'],
             'scene_locations': entity_channels['scene_locations'],
             'dialogue_topics': entity_channels['dialogue_topics'],
             'transcript_segments': scene_transcript_texts,
@@ -1500,11 +1653,14 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
             'visible_face_count': candidate_visibility['visible_face_count'],
             'visible_person_object_count': candidate_visibility['visible_person_object_count'],
             'visible_anonymous_people_count': candidate_visibility['visible_anonymous_people_count'],
+            'visible_person_confidence': candidate_visibility['visible_person_confidence'],
             'speaker_voice_signature_count': len(speaker_voice_signatures),
             'music_events': music_events,
             'time_hints': time_hints,
+            'metadata_time_hints': metadata_time_hints,
             'audio_emotion': audio_emotion,
             'audio_emotion_scores': audio_emotion_scores,
+            'scene_context_llm': None,
             'speaker_count': candidate_visibility['speaker_count'],
             'dominant_speaker_id': candidate_visibility['dominant_speaker_id'],
             'dominant_speaker_share': candidate_visibility['dominant_speaker_share'],
@@ -1527,8 +1683,9 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
         
         unified_segments.append(unified_segment)
 
-    _apply_candidate_visible_people_window(unified_segments)
+    _apply_interaction_dominance_window(unified_segments)
     _apply_conversation_owner_window(unified_segments)
+    _apply_scene_context_llm(unified_segments, scene_lookup, cfg)
     
     # === CREATE TEMPORAL INDEX ===
     
@@ -1541,9 +1698,12 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
     mentioned_people_counts = {}
     candidate_visible_people_counts = {}
     conversation_owner_counts = {}
+    interaction_dominance_counts: Dict[str, int] = {}
     music_event_counts: Dict[str, int] = {}
     time_hint_counts: Dict[str, int] = {}
+    metadata_time_hint_counts: Dict[str, int] = {}
     audio_emotion_counts: Dict[str, int] = {}
+    scene_context_tag_counts: Dict[str, int] = {}
     segment_content_states: List[str] = []
     for seg in unified_segments:
         segment_state = _normalize_content_state(seg.get('content_state')) or 'signal'
@@ -1578,13 +1738,26 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
             if normalized_owner:
                 owner_key = f"{normalized_owner['text'].lower()}:{normalized_owner['type']}"
                 conversation_owner_counts[owner_key] = conversation_owner_counts.get(owner_key, 0) + 1
+        interaction_dominance = seg.get('interaction_dominance')
+        if isinstance(interaction_dominance, dict):
+            dominant_speaker_id = _normalize_speaker_id(interaction_dominance.get('speaker_id'))
+            if dominant_speaker_id:
+                interaction_dominance_counts[dominant_speaker_id] = interaction_dominance_counts.get(dominant_speaker_id, 0) + 1
         for event_label in _extract_music_event_labels(seg.get('music_events', [])):
             music_event_counts[event_label] = music_event_counts.get(event_label, 0) + 1
         for time_hint in _extract_time_hint_tokens(seg.get('time_hints', {})):
             time_hint_counts[time_hint] = time_hint_counts.get(time_hint, 0) + 1
+        for time_hint in _extract_time_hint_tokens(seg.get('metadata_time_hints', {})):
+            metadata_time_hint_counts[time_hint] = metadata_time_hint_counts.get(time_hint, 0) + 1
         normalized_audio_emotion = str(seg.get('audio_emotion') or '').strip().lower()
         if normalized_audio_emotion:
             audio_emotion_counts[normalized_audio_emotion] = audio_emotion_counts.get(normalized_audio_emotion, 0) + 1
+        scene_context_llm = seg.get("scene_context_llm")
+        if isinstance(scene_context_llm, dict):
+            for tag in scene_context_llm.get("context_tags", []):
+                normalized_tag = str(tag or "").strip().lower()
+                if normalized_tag:
+                    scene_context_tag_counts[normalized_tag] = scene_context_tag_counts.get(normalized_tag, 0) + 1
 
     semantic_entity_counts = {
         key: value
@@ -1608,9 +1781,12 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
     top_mentioned_people = sorted(mentioned_people_counts.items(), key=lambda x: x[1], reverse=True)[:20]
     top_candidate_visible_people = sorted(candidate_visible_people_counts.items(), key=lambda x: x[1], reverse=True)[:20]
     top_conversation_owners = sorted(conversation_owner_counts.items(), key=lambda x: x[1], reverse=True)[:20]
+    top_interaction_dominance = sorted(interaction_dominance_counts.items(), key=lambda x: x[1], reverse=True)[:20]
     top_music_events = sorted(music_event_counts.items(), key=lambda x: x[1], reverse=True)[:20]
     top_time_hints = sorted(time_hint_counts.items(), key=lambda x: x[1], reverse=True)[:20]
+    top_metadata_time_hints = sorted(metadata_time_hint_counts.items(), key=lambda x: x[1], reverse=True)[:20]
     top_audio_emotions = sorted(audio_emotion_counts.items(), key=lambda x: x[1], reverse=True)[:20]
+    top_scene_context_tags = sorted(scene_context_tag_counts.items(), key=lambda x: x[1], reverse=True)[:20]
     
     has_audio_payload_truth = any(s.get('has_audio') for s in unified_segments)
     has_transcript_payload_truth = any(s.get('has_transcript') for s in unified_segments)
@@ -1644,11 +1820,14 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
         'segments_with_visible_people': sum(1 for seg in unified_segments if seg.get('visible_people')),
         'segments_with_mentioned_people': sum(1 for seg in unified_segments if seg.get('mentioned_people')),
         'segments_with_candidate_visible_people': sum(1 for seg in unified_segments if seg.get('candidate_visible_people')),
+        'segments_with_interaction_dominance': sum(1 for seg in unified_segments if seg.get('interaction_dominance')),
         'segments_with_conversation_owner': sum(1 for seg in unified_segments if seg.get('conversation_owner')),
         'segments_with_music_events': sum(1 for seg in unified_segments if seg.get('music_events')),
         'segments_with_time_hints': sum(1 for seg in unified_segments if _extract_time_hint_tokens(seg.get('time_hints', {}))),
+        'segments_with_metadata_time_hints': sum(1 for seg in unified_segments if _extract_time_hint_tokens(seg.get('metadata_time_hints', {}))),
         'segments_with_audio_emotion': sum(1 for seg in unified_segments if seg.get('audio_emotion')),
         'segments_with_speaker_voice_signatures': sum(1 for seg in unified_segments if seg.get('speaker_voice_signature_count', 0) > 0),
+        'segments_with_scene_context_llm': sum(1 for seg in unified_segments if seg.get('scene_context_llm')),
         'top_entities': [
             {'entity': k.split(':')[0], 'type': k.split(':')[1], 'count': v}
             for k, v in top_entities
@@ -1673,6 +1852,10 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
             {'entity': k.split(':')[0], 'type': k.split(':')[1], 'count': v}
             for k, v in top_candidate_visible_people
         ],
+        'top_interaction_dominance': [
+            {'speaker_id': key, 'count': value}
+            for key, value in top_interaction_dominance
+        ],
         'top_conversation_owners': [
             {'entity': k.split(':')[0], 'type': k.split(':')[1], 'count': v}
             for k, v in top_conversation_owners
@@ -1685,9 +1868,17 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
             {'hint': key, 'count': value}
             for key, value in top_time_hints
         ],
+        'top_metadata_time_hints': [
+            {'hint': key, 'count': value}
+            for key, value in top_metadata_time_hints
+        ],
         'top_audio_emotions': [
             {'emotion': key, 'count': value}
             for key, value in top_audio_emotions
+        ],
+        'top_scene_context_tags': [
+            {'tag': key, 'count': value}
+            for key, value in top_scene_context_tags
         ],
         'top_objects': [
             {'entity': k.split(':')[0], 'type': k.split(':')[1], 'count': v}

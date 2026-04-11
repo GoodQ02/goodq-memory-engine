@@ -79,10 +79,17 @@ _Generated: 2026-04-10T10:30:00_
 - Note: `audio.metadata_time_hints`, the modernized `scene_summarizer`, and `scene_context_llm` landed after this benchmark started and are treatment features, not part of the locked control
 
 ## Active Treatment State
-- Feature ladder root: `reports/fresh_ingest_runs/20260410_071121_season3_feature_ladder/`
+- Feature ladder authoritative pass roots:
+  - `reports/fresh_ingest_runs/20260410_071121_season3_feature_ladder/`
+  - `reports/fresh_ingest_runs/20260410_164051_season3_feature_ladder/`
+  - `reports/fresh_ingest_runs/20260411_061212_season3_feature_ladder/`
 - Treatment epoch: `epoch_2025_12_23`
 - Execution order:
   - `03x01`: `audio.metadata_time_hints`
   - `03x02`: modernized `scene_summarizer`
   - `03x03`: `scene_context_llm`
 - Feature enablement rule: local override only through `configs/config.local.yaml`
+- Confirmed state:
+  - `03x01` is an auditable no-signal pass: wiring proved, but chunked scene WAVs did not contain file-tag metadata.
+  - `03x02` passed with full summary coverage against the modern nested scene shape.
+  - `03x03` passed with `scene_context_llm` coverage in `38/39` scenes and `generic_context_detected = false` on the clean `20260411_061212` run.

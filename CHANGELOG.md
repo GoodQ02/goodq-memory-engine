@@ -14,6 +14,8 @@ and related canonical docs.
 - Added provenance-safe `audio.metadata_time_hints` surfacing so metadata-derived temporal cues now persist separately from semantic `time_hints` and can be validated independently.
 - Modernized the canonical template `scene_summarizer` to read the current nested `keyframe` and `audio` scene shape instead of relying on stale top-level fields.
 - Added the feature-gated additive `scene_context_llm` surface and a one-feature-per-episode Season 3 feature ladder script for isolated treatment validation in a new epoch.
+- Validated the first clean Season 3 treatment ladder passes: `03x01` proved `audio.metadata_time_hints` wiring as an auditable no-signal corpus case, `03x02` passed the modernized `scene_summarizer`, and `03x03` passed `scene_context_llm` against local WSL `vLLM` serving `Qwen/Qwen2.5-0.5B-Instruct`.
+- Hardened `scene_context_llm` grounding with explicit evidence priority, dry operator-note output rules, monologue/low-signal fallbacks, generic-tag suppression, and transcript-topic normalization so treatment runs stop inventing social events and unsupported roles.
 - Audited perception surfaces and explicitly marked legacy, secondary, experimental, and canonical interpretation paths to reduce repo ambiguity before further integration work.
 - Published a compact Season 1 benchmark memo from the completed 5-episode `main` witness, including season totals, representative interaction/visual samples, and comparison guidance for cross-host validation.
 - Started a clean season-scale benchmark witness from `main` commit `31fd533` after restoring the monitored 2-episode ingestion baseline, creating a benchmarkable proof surface for laptop-side comparison.

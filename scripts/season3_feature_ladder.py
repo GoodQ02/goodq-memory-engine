@@ -191,28 +191,51 @@ def _build_epoch_override(cfg: Dict[str, Any], epoch: str, enable_scene_context:
     return override
 
 
-def _llm_endpoint_ready(cfg: Dict[str, Any], timeout_seconds: int = 5) -> tuple[bool, str]:
+def _llm_endpoint_ready(cfg: Dict[str, Any], timeout_seconds: int = 5) -> tuple[bool, str, Dict[str, Any]]:
     import urllib.error
     import urllib.request
 
     llm_cfg = cfg.get("llm") if isinstance(cfg.get("llm"), dict) else {}
     api_url = str(llm_cfg.get("api_url") or "").strip()
     if not api_url:
-        return False, "llm.api_url missing"
+        return False, "llm.api_url missing", {
+            "llm_models_probe": {
+                "timestamp_utc": _iso_now(),
+                "endpoint": None,
+                "llm_model_id_used": [],
+            }
+        }
     models_url = api_url
     for suffix in ("/chat/completions", "/completions"):
         if models_url.endswith(suffix):
             models_url = models_url[: -len(suffix)]
             break
     models_url = models_url.rstrip("/") + "/models"
+    probe: Dict[str, Any] = {
+        "llm_models_probe": {
+            "timestamp_utc": _iso_now(),
+            "endpoint": models_url,
+            "llm_model_id_used": [],
+        }
+    }
     try:
         with urllib.request.urlopen(models_url, timeout=timeout_seconds) as response:
             status_code = getattr(response, "status", 200)
-            return bool(status_code == 200), f"{models_url} -> {status_code}"
+            if status_code == 200:
+                payload = json.loads(response.read().decode("utf-8"))
+                data = payload.get("data") if isinstance(payload, dict) else None
+                if isinstance(data, list):
+                    model_ids = [
+                        entry.get("id")
+                        for entry in data
+                        if isinstance(entry, dict) and isinstance(entry.get("id"), str) and entry.get("id").strip()
+                    ]
+                    probe["llm_models_probe"]["llm_model_id_used"] = model_ids
+            return bool(status_code == 200), f"{models_url} -> {status_code}", probe
     except urllib.error.URLError as exc:
-        return False, f"{models_url} unavailable: {exc.reason}"
+        return False, f"{models_url} unavailable: {exc.reason}", probe
     except Exception as exc:  # pragma: no cover - defensive
-        return False, f"{models_url} unavailable: {exc}"
+        return False, f"{models_url} unavailable: {exc}", probe
 
 
 def _load_json(path: Path) -> Dict[str, Any] | List[Any]:
@@ -545,8 +568,9 @@ def _run_plan(args: argparse.Namespace) -> int:
 
             if feature_run.enable_scene_context_analysis and not args.plan_only:
                 effective_cfg = load_configs({})
-                llm_ready, llm_reason = _llm_endpoint_ready(effective_cfg)
+                llm_ready, llm_reason, llm_probe = _llm_endpoint_ready(effective_cfg)
                 record["metrics"]["llm_endpoint_ready"] = llm_ready
+                record["metrics"].update(llm_probe)
                 record["notes"].append(llm_reason)
                 if not llm_ready:
                     record["status"] = "blocked"

@@ -80,13 +80,17 @@ Important integration note:
 
 For this machine, prefer a WSL-local model path over a mounted Windows path.
 
-Recommended model path:
-- `/home/jdben/models/Llama-3.2-1B-Instruct`
+Recommended initial bootstrap model path:
+- `/home/jdben/models/Qwen2.5-0.5B-Instruct`
 
 Why:
 - avoids mount latency and path translation issues
 - fits the service installer defaults
 - keeps the pipeline runtime fully WSL-local
+
+Current machine-specific note:
+- `meta-llama/Llama-3.2-1B-Instruct` is gated and returned `401 Unauthorized` during verification without Hugging Face auth
+- `Qwen/Qwen2.5-0.5B-Instruct` is openly reachable and is the safest bootstrap model for initial service bring-up on this machine
 
 Do not assume the model ID in config ahead of time.
 
@@ -140,7 +144,7 @@ mkdir -p ~/models
 Then place or download the model into:
 
 ```bash
-/home/jdben/models/Llama-3.2-1B-Instruct
+/home/jdben/models/Qwen2.5-0.5B-Instruct
 ```
 
 The exact download method can vary, but the success criterion is simple:
@@ -157,7 +161,7 @@ From Windows PowerShell, run this from the repo root:
 
 ```powershell
 $repoWsl = wsl -d Ubuntu-22.04 -- wslpath .
-wsl -d Ubuntu-22.04 -- bash -lc "cd '$repoWsl/scripts/wsl' && GOODQ_WSL_USER=jdben GOODQ_WSL_MODEL_PATH=/home/jdben/models/Llama-3.2-1B-Instruct ./install_vllm_service.sh"
+wsl -d Ubuntu-22.04 -- bash -lc "cd '$repoWsl/scripts/wsl' && GOODQ_WSL_USER=jdben GOODQ_WSL_MODEL_PATH=/home/jdben/models/Qwen2.5-0.5B-Instruct ./install_vllm_service.sh"
 ```
 
 On this machine, `sudo` is interactive, so expect a password prompt during:
@@ -222,6 +226,7 @@ Notes:
 - keep `scene_context_analysis` off until endpoint sanity is proven
 - do not assume the model ID string; copy the exact value returned by the running server
 - this step is what aligns direct-step callers and the general LLM client to the same runtime
+- once Hugging Face auth is configured, you can later swap the service to `Llama-3.2-1B-Instruct` if desired, but bootstrap should favor the reachable open model
 
 ## Phase 7: Windows-Side Sanity Tests
 

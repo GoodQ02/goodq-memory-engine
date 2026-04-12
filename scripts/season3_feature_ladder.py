@@ -233,7 +233,7 @@ def _build_epoch_override(cfg: Dict[str, Any], epoch: str, enable_scene_context:
     return override
 
 
-def _llm_endpoint_ready(cfg: Dict[str, Any], timeout_seconds: int = 5) -> tuple[bool, str, Dict[str, Any]]:
+def _llm_endpoint_ready(cfg: Dict[str, Any], timeout_seconds: int = 15) -> tuple[bool, str, Dict[str, Any]]:
     import urllib.error
     import urllib.request
 

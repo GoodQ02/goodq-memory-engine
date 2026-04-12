@@ -82,7 +82,7 @@ _Generated: 2026-04-10T10:30:00_
 - Feature ladder authoritative pass roots:
   - `reports/fresh_ingest_runs/20260410_071121_season3_feature_ladder/`
   - `reports/fresh_ingest_runs/20260410_164051_season3_feature_ladder/`
-  - `reports/fresh_ingest_runs/20260411_061212_season3_feature_ladder/`
+  - `reports/fresh_ingest_runs/20260411_171418_season3_feature_ladder/`
 - Treatment epoch: `epoch_2025_12_23`
 - Execution order:
   - `03x01`: `audio.metadata_time_hints`
@@ -92,4 +92,6 @@ _Generated: 2026-04-10T10:30:00_
 - Confirmed state:
   - `03x01` is an auditable no-signal pass: wiring proved, but chunked scene WAVs did not contain file-tag metadata.
   - `03x02` passed with full summary coverage against the modern nested scene shape.
-  - `03x03` passed with `scene_context_llm` coverage in `38/39` scenes and `generic_context_detected = false` on the clean `20260411_061212` run.
+  - `03x03` passed with `scene_context_llm` coverage in `36/39` scenes and `generic_context_detected = false` on the authoritative `20260411_171418` run.
+- Canonical treatment memo: `docs/testing/SEASON3_TREATMENT_LADDER_MEMO_2026-04-11.md`
+- Next campaign runbook: `docs/testing/SEASON3_FIVE_EPISODE_RUNBOOK_2026-04-11.md`

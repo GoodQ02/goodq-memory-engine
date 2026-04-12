@@ -159,6 +159,108 @@ This suggests the current prompt is better grounded than before, but still not w
 - output: `A man floats in water while others wait for a boat to arrive.`
 - issue: the model turned comic material into literal scene action
 
+## Final Verification Rerun (`20260411_103108`)
+
+After the narrower transcript-fragment cleanup and the final post-normalization guardrails, the rerun passed the treatment gate cleanly.
+
+### Final run result
+
+- `scene_count = 39`
+- `phase6_complete = true`
+- `qdrant_ok = true`
+- `segments_with_scene_context_llm = 38`
+- `generic_context_detected = false`
+- local endpoint probe:
+  - `http://localhost:38005/v1/models -> 200`
+  - model id: `Qwen/Qwen2.5-0.5B-Instruct`
+
+### Final top tags
+
+- `pen` `13`
+- `living room` `7`
+- `kitchen` `7`
+- `rental car` `6`
+- `condo` `4`
+- `air conditioning` `3`
+- `president` `3`
+- `scuba diving` `3`
+- `group conversation` `3`
+- `florida` `2`
+
+### Final consistency read
+
+The final rerun shows a materially better semantic engine:
+
+- transcript-salient episode themes now dominate retrieval tags instead of generic social framing
+- the worst social hallucinations (`social gathering`, `outdoor activity`, `outdoor setting`) are gone
+- generic human filler tags (`man`, `woman`, `conversation`, `room`, `waiting`) are fully suppressed at the tag layer
+- the output remains short and operator-like rather than cinematic
+
+### Representative final samples
+
+#### Scene 1 - stand-up no longer literalized into physical action
+
+- transcript: stand-up material about bathing suits and Florida
+- final summary: `Conversation about florida.`
+- final tags: `bathing suit`, `Florida`
+- assessment: still terse, but no longer invents water, boats, or waiting
+
+#### Scene 3 - rental-car arrival scene stays grounded
+
+- caption: two women in a room with a blue backpack
+- transcript: welcome to Florida, delayed at rental-car counter, discussion about using the car
+- final summary: `Room conversation about rental car.`
+- final tags: `blue backpack`, `room with a blue backpack`, `rental car`, `florida`
+- assessment: grounded topic anchoring is good; the remaining weakness is a little too much caption phrasing in the tag set
+
+#### Scene 22 - black-screen / weak-visual scene now stays topic-centered
+
+- caption: person against black background
+- transcript: air conditioner, pen, muscle relaxers
+- final summary: `Conversation about air conditioning.`
+- final tags: `air conditioning`, `background`, `muscle relaxers`, `pen`
+- assessment: acceptable; no narrative invention, though `background` is low-value and could be pruned later
+
+#### Scene 26 - conflict scene is correctly anchored to kitchen / pen argument
+
+- caption: two men in a kitchen
+- transcript: sponge cake, scotch tape, pen conflict, angry exchange
+- final summary: `Two men in a kitchen scream at each other while holding a tie.`
+- final tags: `kitchen`, `tied tie`, `men screaming`, `pen`
+- assessment: conflict is correctly captured; the tie-focused phrasing is still too literal relative to transcript importance
+
+#### Scene 34 - late episode topic weighting is better but still imperfect
+
+- caption: man in suit at a table
+- transcript: peanuts, scotch, pen, doctor warning about travel
+- final summary: `Table conversation about pen.`
+- final tags: `people sitting at a table`, `conversation about peanuts and scotch`, `pen`
+- assessment: much better than prior broad social-event drift, but still underweights the medical/travel consequence in favor of table-level framing
+
+#### Scene 35 - lawyer topic is now surfaced
+
+- caption: man and woman sitting on a couch
+- transcript: staying longer, lawyer, case
+- final summary: `Couch conversation about lawyer.`
+- final tags: `couch`, `microwave`, `lawyer`, `case`
+- assessment: core topic is right; `microwave` remains a weak vision-led tag that may be worth suppressing if it stays low-value across episodes
+
+### Remaining watch-list residue
+
+The feature now passes, but a few narrow seams remain:
+
+- residual unsupported social wording in a small subset of scenes:
+  - `friends`
+  - `family`
+  - `couple`
+- occasional low-value vision tags that are technically visible but semantically weak:
+  - `background`
+  - `microwave`
+  - `blue backpack`
+- a few scene summaries still favor room-level staging over stronger transcript consequence
+
+These are polish issues, not feature blockers. The run is now consistent enough to treat `scene_context_llm` as a validated additive layer in the Season 3 treatment ladder.
+
 ### Scene 22 - unsupported family-role invention
 
 - caption: woman lying on the floor in a room
@@ -303,3 +405,55 @@ Those residual issues are appropriate for a narrower transcript-fragment cleanup
 - Phase 6 persists the additive scene context cleanly
 - the major semantic drift problem is resolved
 - remaining cleanup is lexical hardening, not architecture repair
+
+## Final Authoritative Pass (`20260411_171418`)
+
+The final verification run closed the last remaining seam and is the authoritative `03x03` result for this treatment ladder step.
+
+### Authoritative result
+
+- run root: `reports/fresh_ingest_runs/20260411_171418_season3_feature_ladder/`
+- model endpoint: `http://localhost:38005/v1/models`
+- model id used: `Qwen/Qwen2.5-0.5B-Instruct`
+- `scene_count = 39`
+- `phase6_complete = true`
+- `qdrant_ok = true`
+- `segments_with_scene_context_llm = 36`
+- `generic_context_detected = false`
+
+### Final top tags
+
+- `pen` `10`
+- `living room` `7`
+- `rental car` `6`
+- `kitchen` `6`
+- `condo` `4`
+- `group conversation` `4`
+- `couch` `4`
+- `florida` `3`
+- `air conditioning` `3`
+- `scuba diving` `3`
+
+### Final residue sweep
+
+A direct sweep of the persisted `scene_manifest.json` for the final authoritative pass found no remaining matches for the previously pinned residue terms:
+
+- `friends`
+- `family`
+- `couple`
+- `background`
+- `microwave`
+- `blue backpack`
+- `room with a blue backpack`
+
+That confirms the last cleanup pass removed the unsupported social-role wording and the low-value visible-tag residue instead of merely relaxing the gate.
+
+### Closeout read
+
+This is now strong enough to lock in as the validated `scene_context_llm` treatment behavior:
+
+- the layer stays additive and non-authoritative
+- transcript-backed episode topics are retrieval-visible
+- generic social-event storytelling is gone
+- role-like claims now require transcript support
+- the gate and the analyzer are aligned with the system's evidence-first contract

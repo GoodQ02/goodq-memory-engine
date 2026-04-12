@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
 import sqlite3
 import subprocess
@@ -35,6 +36,7 @@ GENERIC_CONTEXT_PHRASES = {
     "people are talking",
     "characters interact",
 }
+SOCIAL_ROLE_TERMS = ("friend", "friends", "family", "couple")
 
 
 @dataclass(frozen=True)
@@ -65,12 +67,52 @@ DEFAULT_PLAN: tuple[FeatureRun, ...] = (
 )
 
 
-def _select_plan(start_at_prefix: Optional[str]) -> tuple[FeatureRun, ...]:
+FEATURE_TEMPLATES: Dict[str, FeatureRun] = {
+    feature_run.feature_name: feature_run for feature_run in DEFAULT_PLAN
+}
+
+
+def _parse_episode_prefixes(raw: Optional[str]) -> tuple[str, ...]:
+    if not raw:
+        return ()
+    prefixes = tuple(prefix.strip() for prefix in str(raw).split(",") if prefix.strip())
+    if not prefixes:
+        raise ValueError("episode-prefixes was provided but no usable prefixes were found")
+    return prefixes
+
+
+def _feature_template(feature_name: str) -> FeatureRun:
+    template = FEATURE_TEMPLATES.get(feature_name)
+    if template is None:
+        raise ValueError(f"Unknown single-feature name: {feature_name}")
+    return template
+
+
+def _select_plan(
+    start_at_prefix: Optional[str],
+    episode_prefixes: tuple[str, ...] = (),
+    single_feature_name: Optional[str] = None,
+) -> tuple[FeatureRun, ...]:
+    if episode_prefixes:
+        if not single_feature_name:
+            raise ValueError("single-feature must be provided when episode-prefixes is used")
+        template = _feature_template(single_feature_name)
+        plan = tuple(
+            FeatureRun(
+                episode_prefix=episode_prefix,
+                feature_name=template.feature_name,
+                enable_scene_context_analysis=template.enable_scene_context_analysis,
+                description=f"{template.description} ({episode_prefix})",
+            )
+            for episode_prefix in episode_prefixes
+        )
+    else:
+        plan = DEFAULT_PLAN
     if not start_at_prefix:
-        return DEFAULT_PLAN
-    for index, feature_run in enumerate(DEFAULT_PLAN):
+        return plan
+    for index, feature_run in enumerate(plan):
         if feature_run.episode_prefix == start_at_prefix:
-            return DEFAULT_PLAN[index:]
+            return plan[index:]
     raise ValueError(f"Unknown start-at episode prefix: {start_at_prefix}")
 
 
@@ -335,11 +377,35 @@ def _extract_summary_by_scene_id(db_path: Path, target_scene_ids: set[str]) -> D
     return found
 
 
+def _segment_transcript_text(segment: Dict[str, Any]) -> str:
+    transcript = _first_non_empty(
+        segment.get("full_transcript"),
+        segment.get("transcript"),
+        segment.get("speaker_transcript"),
+        segment.get("dialogue_text"),
+    )
+    return str(transcript or "").strip()
+
+
+def _social_role_supported(term: str, transcript: str) -> bool:
+    normalized = str(transcript or "").strip().lower()
+    if not normalized:
+        return False
+    variants = {
+        "friend": ("friend", "friends"),
+        "friends": ("friend", "friends"),
+        "family": ("family", "families"),
+        "couple": ("couple", "couples"),
+    }.get(term, (term,))
+    return any(re.search(rf"\b{re.escape(variant)}\b", normalized) for variant in variants)
+
+
 def _generic_context_detected(scene_context_segments: List[Dict[str, Any]]) -> bool:
     for segment in scene_context_segments:
         payload = segment.get("scene_context_llm")
         if not isinstance(payload, dict):
             continue
+        transcript = _segment_transcript_text(segment)
         samples: List[str] = []
         for key in ("narrative_summary", "activity_description", "emotional_arc"):
             value = payload.get(key)
@@ -350,6 +416,14 @@ def _generic_context_detected(scene_context_segments: List[Dict[str, Any]]) -> b
                 samples.append(value.strip().lower())
         if any(phrase in sample for sample in samples for phrase in GENERIC_CONTEXT_PHRASES):
             return True
+        role_samples = list(samples)
+        for value in payload.get("context_tags") or []:
+            if isinstance(value, str) and value.strip():
+                role_samples.append(value.strip().lower())
+        for term in SOCIAL_ROLE_TERMS:
+            if any(f" {term} " in f" {sample} " for sample in role_samples):
+                if not _social_role_supported(term, transcript):
+                    return True
     return False
 
 
@@ -550,7 +624,11 @@ def _run_plan(args: argparse.Namespace) -> int:
         }
         _safe_write_json(summary_path, experiment_log)
 
-        for feature_run in _select_plan(args.start_at_prefix):
+        for feature_run in _select_plan(
+            args.start_at_prefix,
+            _parse_episode_prefixes(args.episode_prefixes),
+            args.single_feature,
+        ):
             episode_file = _find_episode_file(args.source_dir, feature_run.episode_prefix)
             run_slug = f"{feature_run.episode_prefix}_{feature_run.feature_name}"
             run_dir = root_run_dir / run_slug
@@ -684,6 +762,15 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--start-at-prefix",
         help="Resume the ladder starting at a specific episode prefix, e.g. 03x02.",
+    )
+    parser.add_argument(
+        "--episode-prefixes",
+        help="Comma-separated episode prefixes for a custom campaign, e.g. 03x03,03x04,03x05.",
+    )
+    parser.add_argument(
+        "--single-feature",
+        choices=tuple(FEATURE_TEMPLATES.keys()),
+        help="When running a custom campaign, apply this single validated feature template to every listed episode.",
     )
     return parser.parse_args()
 

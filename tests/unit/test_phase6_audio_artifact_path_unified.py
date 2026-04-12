@@ -477,12 +477,13 @@ def test_harmonizer_applies_scene_context_llm_when_feature_enabled(tmp_path: Pat
         "narrative_summary": "Jerry outlines a tense plan to George in the kitchen.",
         "key_moments": ["Jerry explains the plan", "George listens carefully"],
         "emotional_arc": "tense but controlled",
-        "context_tags": ["planning", "kitchen", "conversation"],
+        "context_tags": ["planning", "kitchen"],
         "activity_description": "Two friends discuss their next move.",
         "source": "scene_context_llm",
     }
     assert temporal_index["segments_with_scene_context_llm"] == 1
     assert {"tag": "planning", "count": 1} in temporal_index["top_scene_context_tags"]
+    assert not any(item["tag"] == "conversation" for item in temporal_index["top_scene_context_tags"])
 
     persisted_manifest = json.loads(scene_manifest_path.read_text(encoding="utf-8"))
     persisted_scene = persisted_manifest["scenes"][0]

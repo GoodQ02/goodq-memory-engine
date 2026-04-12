@@ -56,7 +56,7 @@ Audit Status: ACTIVE (2026-04-10)
 - Season 3 feature ladder authoritative pass roots:
   - `reports/fresh_ingest_runs/20260410_071121_season3_feature_ladder/`
   - `reports/fresh_ingest_runs/20260410_164051_season3_feature_ladder/`
-  - `reports/fresh_ingest_runs/20260411_061212_season3_feature_ladder/`
+  - `reports/fresh_ingest_runs/20260411_171418_season3_feature_ladder/`
 - Treatment epoch: `epoch_2025_12_23`
 - Execution model:
   - `03x01` -> `audio.metadata_time_hints`
@@ -65,11 +65,14 @@ Audit Status: ACTIVE (2026-04-10)
 - Confirmed treatment outcomes:
   - `03x01` validated `audio.metadata_time_hints` wiring with `scene_count = 40`, `phase6_complete = true`, and `qdrant_ok = true`; no file-tag metadata was present in the chunked-audio corpus, so the run is treated as an auditable no-signal pass.
   - `03x02` passed the modernized `scene_summarizer` verification with `scene_count = 39`, `summary_count = 39`, `scene_coverage = 39`, `visual_nested_proven = true`, `audio_nested_proven = true`, and `unique_ratio = 1.0`.
-  - `03x03` passed the first clean `scene_context_llm` gate on run `20260411_061212_season3_feature_ladder` using local `vLLM` + `Qwen/Qwen2.5-0.5B-Instruct`, with `scene_count = 39`, `phase6_complete = true`, `qdrant_ok = true`, `segments_with_scene_context_llm = 38`, and `generic_context_detected = false`.
+  - `03x03` passed the final authoritative `scene_context_llm` gate on run `20260411_171418_season3_feature_ladder` using local `vLLM` + `Qwen/Qwen2.5-0.5B-Instruct`, with `scene_count = 39`, `phase6_complete = true`, `qdrant_ok = true`, `segments_with_scene_context_llm = 36`, and `generic_context_detected = false`.
 - Guardrails:
   - one feature change per run
   - local override only via `configs/config.local.yaml`
   - stop on regression before proceeding to the next feature
+- Canonical treatment docs:
+  - `docs/testing/SEASON3_TREATMENT_LADDER_MEMO_2026-04-11.md`
+  - `docs/testing/SEASON3_FIVE_EPISODE_RUNBOOK_2026-04-11.md`
 
 ## Offline Package State
 - Desktop machine audit: complete and authoritative in the workspace-adjacent pack
@@ -121,6 +124,7 @@ Audit Status: ACTIVE (2026-04-10)
 - Modernized the canonical `scene_summarizer` template path to read the current nested `keyframe` and `audio` scene shape.
 - Added the feature-gated additive `scene_context_llm` surface and a one-feature-per-episode Season 3 experiment ladder for isolated treatment validation.
 - Proved the first clean Season 3 treatment ladder passes for `audio.metadata_time_hints`, the modernized `scene_summarizer`, and `scene_context_llm`, with local `vLLM` serving `Qwen/Qwen2.5-0.5B-Instruct` for the `03x03` interpretation run.
+- Prepared the first reusable five-episode Season 3 treatment campaign path so the validated `scene_context_llm` logic can be replayed over `03x03` through `03x07` without changing the locked control epoch.
 - Audited and explicitly marked secondary, deprecated, and experimental perception surfaces to reduce ambiguity before further integration work.
 
 ## Agent Instructions (Binding)

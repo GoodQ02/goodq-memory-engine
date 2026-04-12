@@ -292,6 +292,19 @@ def _scene_context_llm_enabled(cfg: Dict[str, Any]) -> bool:
 def _sanitize_scene_context_llm(raw_context: Any) -> Optional[Dict[str, Any]]:
     if not isinstance(raw_context, dict):
         return None
+    generic_tags = {
+        "man",
+        "woman",
+        "people",
+        "conversation",
+        "indoor conversation",
+        "room",
+        "waiting",
+        "friend",
+        "friends",
+        "family",
+        "two women",
+    }
 
     def _clean_text(value: Any) -> Optional[str]:
         if not isinstance(value, str):
@@ -317,11 +330,19 @@ def _sanitize_scene_context_llm(raw_context: Any) -> Optional[Dict[str, Any]]:
                 break
         return cleaned
 
+    raw_tags = _clean_list(raw_context.get("context_tags"), limit=8)
+    has_specific_tags = any(tag.casefold() not in generic_tags for tag in raw_tags)
+    cleaned_tags = [
+        tag
+        for tag in raw_tags
+        if not (has_specific_tags and tag.casefold() in generic_tags)
+    ][:5]
+
     sanitized = {
         "narrative_summary": _clean_text(raw_context.get("narrative_summary")),
         "key_moments": _clean_list(raw_context.get("key_moments"), limit=3),
         "emotional_arc": _clean_text(raw_context.get("emotional_arc")),
-        "context_tags": _clean_list(raw_context.get("context_tags"), limit=5),
+        "context_tags": cleaned_tags,
         "activity_description": _clean_text(raw_context.get("activity_description")),
         "source": "scene_context_llm",
     }

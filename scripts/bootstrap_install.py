@@ -1312,7 +1312,7 @@ def _sync_wsl_audio_assets(ctx: BootstrapContext, wsl_ctx: WslAudioContext) -> N
 def _probe_wsl_audio_workspace_ready(wsl_ctx: WslAudioContext) -> tuple[bool, str]:
     probe = probe_wsl_audio_runtime(wsl_ctx.distro, wsl_ctx.workspace)
     detail = str(probe.get("detail") or "WSL audio workspace probe failed")
-    if bool(probe.get("runtime_ready")):
+    if bool(probe.get("runtime_ready")) and bool(probe.get("abi_ready")):
         return True, detail
     return False, detail
 

@@ -52,8 +52,15 @@ Interpretation:
 
 - bootstrap and doctor treat WSL audio as:
   - `pass` when the accelerated worker is fully ready
-  - `warn` when transcription is usable but ABI or diarization is degraded
+  - `warn` in doctor/verify mode when transcription is usable but ABI or diarization is degraded
   - `fail` only when strict WSL audio is required and the worker is not usable
+
+Additional operator truth:
+
+- bootstrap install does **not** treat `runtime_ready=true` as sufficient on its own
+- WSL audio must be both `runtime_ready=true` and `abi_ready=true` before bootstrap considers the workspace ready
+- canonical ingestion does **not** select the WSL backend when `abi_ready=false`
+- when WSL is ABI-degraded and strict mode is not enabled, the system should fall back to the Windows-safe audio path instead of attempting the canonical WSL worker
 
 ## Runtime Error Surfacing
 

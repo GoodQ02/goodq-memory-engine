@@ -837,7 +837,7 @@ def test_resolve_audio_runtime_contract_requires_distro_in_failure_message(
     assert "GOODQ_WSL_DISTRO, GOODQ_WSL_USER and GOODQ_WSL_WORKSPACE" in message
 
 
-def test_resolve_audio_runtime_contract_accepts_abi_degraded_transcription_runtime(
+def test_resolve_audio_runtime_contract_rejects_abi_degraded_transcription_runtime(
     monkeypatch,
 ):
     run_ingestion = _load_run_ingestion_module()
@@ -869,8 +869,8 @@ def test_resolve_audio_runtime_contract_accepts_abi_degraded_transcription_runti
         }
     )
 
-    assert contract["selected"] == "wsl"
-    assert contract["reason"] == "wsl_runtime_ready"
+    assert contract["selected"] == "none"
+    assert contract["reason"] == "wsl_workspace_abi_degraded"
     assert contract["wsl_runtime_ready"] is True
     assert contract["wsl_abi_ready"] is False
     assert "transcription runtime ready" in contract["wsl_runtime_detail"]

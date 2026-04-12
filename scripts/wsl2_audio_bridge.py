@@ -323,14 +323,19 @@ class WSL2AudioBridge:
                     details=runtime_probe,
                     used_fallback_result_json=False,
                 )
-            env_warnings: list[str] = []
             if not bool(runtime_probe.get("abi_ready")):
-                abi_warning = str(
-                    runtime_probe.get("detail")
-                    or "transcription runtime ready; torchvision ABI unavailable"
+                return _build_error(
+                    "wsl_env_abi_unavailable",
+                    error_message=str(
+                        runtime_probe.get("detail")
+                        or "WSL audio runtime ABI preflight failed"
+                    ),
+                    wsl_returncode=None,
+                    stderr_warnings=[],
+                    details=runtime_probe,
+                    used_fallback_result_json=False,
                 )
-                if abi_warning not in env_warnings:
-                    env_warnings.append(abi_warning)
+            env_warnings: list[str] = []
             if "diarization_ready" in runtime_probe and not bool(runtime_probe.get("diarization_ready")):
                 diarization_warning = str(
                     runtime_probe.get("diarization_detail")

@@ -163,7 +163,7 @@ class WSL2BridgeIntegrityTests(unittest.TestCase):
         self.assertEqual(stat_calls["count"], 2)
         self.assertIn("result_json_freshness_probe_retried", result.get("stderr_warnings", []))
 
-    def test_abi_degraded_runtime_warns_but_allows_processing(self) -> None:
+    def test_abi_degraded_runtime_is_rejected_before_processing(self) -> None:
         scene_file = self._make_scene_file("scene_0004.wav")
         bridge = self._make_bridge()
 
@@ -194,14 +194,9 @@ class WSL2BridgeIntegrityTests(unittest.TestCase):
         ):
             result = bridge.process_audio(str(scene_file), timeout=5)
 
-        self.assertEqual(result.get("status"), "success")
-        self.assertEqual(result.get("transcription"), "hello")
-        self.assertEqual(result.get("requested_scene_file"), "scene_0004.wav")
-        self.assertEqual(result.get("requested_request_uuid"), self.TEST_UUID)
-        self.assertEqual(
-            result.get("bridge_env_warnings"),
-            ["transcription runtime ready; torchvision ABI unavailable (diarization may be degraded)"],
-        )
+        self.assertEqual(result.get("status"), "error")
+        self.assertEqual(result.get("bridge_error_reason"), "wsl_env_abi_unavailable")
+        self.assertIn("torchvision ABI unavailable", result.get("error", ""))
 
     def test_nonzero_returncode_surfaces_processor_error_details(self) -> None:
         scene_file = self._make_scene_file("scene_0004.wav")

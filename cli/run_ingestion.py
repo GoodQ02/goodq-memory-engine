@@ -1563,6 +1563,7 @@ def _resolve_audio_runtime_contract(cfg: Dict[str, Any]) -> Dict[str, Any]:
     failed_workspaces: List[str] = []
     probe_failures: List[str] = []
     attempted_targets: List[str] = []
+    degraded_workspaces: List[str] = []
 
     for distro_source, candidate_distro in distro_candidates:
         for workspace_source, audio_workspace in workspace_candidates:
@@ -1582,7 +1583,7 @@ def _resolve_audio_runtime_contract(cfg: Dict[str, Any]) -> Dict[str, Any]:
                 contract['wsl_runtime_ready'] = runtime_ready
                 contract['wsl_abi_ready'] = abi_ready
                 contract['wsl_runtime_detail'] = str(probe.get('detail') or '')
-                if runtime_ready:
+                if runtime_ready and abi_ready:
                     contract['selected'] = 'wsl'
                     contract['reason'] = 'wsl_runtime_ready'
                     fallback_notes: List[str] = []
@@ -1601,6 +1602,11 @@ def _resolve_audio_runtime_contract(cfg: Dict[str, Any]) -> Dict[str, Any]:
                     os.environ["GOODQ_WSL_DISTRO"] = candidate_distro
                     os.environ["GOODQ_WSL_WORKSPACE"] = workspace
                     return contract
+                if runtime_ready and not abi_ready:
+                    degraded_workspaces.append(
+                        f"{candidate_distro}:{audio_workspace} ({probe.get('detail') or 'abi degraded'})"
+                    )
+                    continue
                 failed_workspaces.append(
                     f"{candidate_distro}:{audio_workspace} ({probe.get('detail') or 'not ready'})"
                 )
@@ -1617,6 +1623,19 @@ def _resolve_audio_runtime_contract(cfg: Dict[str, Any]) -> Dict[str, Any]:
             raise RuntimeError(message)
         contract['selected'] = 'none'
         contract['reason'] = 'wsl_workspace_preflight_failed'
+        contract['workspace_check_message'] = message
+        return contract
+
+    if degraded_workspaces:
+        message = (
+            "WSL workspace is transcription-ready but ABI-degraded; "
+            f"tried={', '.join(degraded_workspaces)}. "
+            "Canonical ingestion will not select WSL until abi_ready=true."
+        )
+        if require_wsl:
+            raise RuntimeError(message)
+        contract['selected'] = 'none'
+        contract['reason'] = 'wsl_workspace_abi_degraded'
         contract['workspace_check_message'] = message
         return contract
 

@@ -267,3 +267,30 @@ def test_ensure_wsl_audio_ready_installs_service_when_passwordless_sudo_availabl
     assert any("sudo -n true" == script for script in seen_scripts)
     assert any("install_audio_service.sh" in script for script in seen_scripts)
     assert "RUNNING" in "\n".join(messages)
+
+
+def test_probe_wsl_audio_workspace_ready_requires_abi(monkeypatch):
+    from scripts import bootstrap_install
+
+    monkeypatch.setattr(
+        bootstrap_install,
+        "probe_wsl_audio_runtime",
+        lambda *_args, **_kwargs: {
+            "runtime_ready": True,
+            "abi_ready": False,
+            "detail": "transcription runtime ready; torchvision ABI unavailable (diarization may be degraded)",
+        },
+    )
+
+    ready, detail = bootstrap_install._probe_wsl_audio_workspace_ready(
+        bootstrap_install.WslAudioContext(
+            distro="Ubuntu-22.04",
+            user="goodq",
+            home="/home/goodq",
+            workspace="/home/goodq/goodq_audio",
+            windows_workspace=Path(r"\\wsl$\Ubuntu-22.04\home\goodq\goodq_audio"),
+        )
+    )
+
+    assert ready is False
+    assert "torchvision ABI unavailable" in detail

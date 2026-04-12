@@ -159,3 +159,10 @@ Tag: `season1-witness-run-2026-03-09`
   [`docs/archive/`](docs/archive/).
 - Legacy runtime tags remain in Git history for internal traceability, but this
   changelog focuses on current public-facing release checkpoints.
+## 2026-04-12
+
+- Hardened WSL audio readiness and selection policy:
+  - `bootstrap_install` now requires `abi_ready=true` before considering the WSL audio workspace ready
+  - canonical ingestion no longer selects the WSL audio backend when preflight reports an ABI-degraded runtime
+  - `wsl2_audio_bridge` now surfaces ABI-degraded WSL as an explicit preflight error instead of proceeding with warnings
+  - fixed `cache_readiness_check.py` so it resolves the canonical `models_cache` path correctly instead of falling back to repo-local `_DATA\models`

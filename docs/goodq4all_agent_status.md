@@ -74,6 +74,7 @@ Audit Status: ACTIVE (2026-04-10)
   - `docs/testing/SEASON3_TREATMENT_LADDER_MEMO_2026-04-11.md`
   - `docs/testing/SEASON3_FIVE_EPISODE_RUNBOOK_2026-04-11.md`
   - `docs/testing/SEASON3_FIVE_EPISODE_CAMPAIGN_MEMO_2026-04-12.md`
+  - `docs/diagnostics/SEASON3_FIVE_SAMPLE_AUDIT_2026-04-12.md`
 - Multi-episode treatment campaign:
   - run root: `reports/fresh_ingest_runs/20260411_194713_season3_feature_ladder/`
   - scope: `03x04` through `03x08`
@@ -138,7 +139,9 @@ Audit Status: ACTIVE (2026-04-10)
 - Added the feature-gated additive `scene_context_llm` surface and a one-feature-per-episode Season 3 experiment ladder for isolated treatment validation.
 - Proved the first clean Season 3 treatment ladder passes for `audio.metadata_time_hints`, the modernized `scene_summarizer`, and `scene_context_llm`, with local `vLLM` serving `Qwen/Qwen2.5-0.5B-Instruct` for the `03x03` interpretation run.
 - Prepared the first reusable five-episode Season 3 treatment campaign path so the validated `scene_context_llm` logic can be replayed over `03x03` through `03x07` without changing the locked control epoch.
+- Confirmed the first five-episode Season 3 `scene_context_llm` campaign across `03x04` through `03x08` and added a five-scene qualitative audit covering dialogue-heavy, environment-heavy, identity-adjacent, ambiguous, and low-signal scenes.
 - Audited and explicitly marked secondary, deprecated, and experimental perception surfaces to reduce ambiguity before further integration work.
+- Hardened WSL audio readiness and selection so ABI-degraded runtimes no longer present as healthy during bootstrap or canonical ingest selection.
 
 ## Agent Instructions (Binding)
 - Treat the epoch processing tree and per-run artifacts as canonical, not historical `logs/scene_ingest` paths.

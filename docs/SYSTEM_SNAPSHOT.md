@@ -96,6 +96,7 @@ _Generated: 2026-04-10T10:30:00_
 - Canonical treatment memo: `docs/testing/SEASON3_TREATMENT_LADDER_MEMO_2026-04-11.md`
 - Next campaign runbook: `docs/testing/SEASON3_FIVE_EPISODE_RUNBOOK_2026-04-11.md`
 - Five-episode campaign close-out: `docs/testing/SEASON3_FIVE_EPISODE_CAMPAIGN_MEMO_2026-04-12.md`
+- Supplemental five-scene audit: `docs/diagnostics/SEASON3_FIVE_SAMPLE_AUDIT_2026-04-12.md`
 - Campaign completion state:
   - run root: `reports/fresh_ingest_runs/20260411_194713_season3_feature_ladder/`
   - episodes: `03x04` through `03x08`
@@ -108,3 +109,8 @@ _Generated: 2026-04-10T10:30:00_
     - `phase6_complete = true`
     - `qdrant_ok = true`
     - `generic_context_detected = false`
+
+## Recent Hardening
+- WSL audio readiness now requires `abi_ready=true` before bootstrap or canonical ingest will treat the workspace as healthy.
+- Canonical WSL selection now rejects ABI-degraded runtimes instead of running in warning-only mode.
+- Cache readiness now resolves the canonical `models_cache` path correctly, avoiding false repo-local `_DATA/models` fallbacks.

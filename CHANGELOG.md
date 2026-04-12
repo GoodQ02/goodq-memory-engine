@@ -10,6 +10,7 @@ and related canonical docs.
 ## [Unreleased]
 
 ### Changed
+- Added a supplemental five-scene Season 3 audit covering dialogue-heavy, environment-heavy, low-signal, identity-adjacent, and ambiguous scenes so the campaign now has both batch-level and sample-level proof.
 - Closed the Season 3 treatment ladder into an authoritative three-step pass set, documenting the validated `03x03` `scene_context_llm` result against local WSL `vLLM` with `Qwen/Qwen2.5-0.5B-Instruct` and publishing a five-episode campaign runbook for the next treatment expansion.
 - Locked and documented a full 17-episode Season 1-2 baseline witness, publishing a compact two-season benchmark memo with the strongest control metrics and representative scene samples for laptop-side review.
 - Added provenance-safe `audio.metadata_time_hints` surfacing so metadata-derived temporal cues now persist separately from semantic `time_hints` and can be validated independently.

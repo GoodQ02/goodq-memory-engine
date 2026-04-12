@@ -26,6 +26,7 @@ additional Season 3 episodes without reopening the old generic-context failure.
 Supplemental qualitative audit:
 
 - `docs/diagnostics/SEASON3_FIVE_SAMPLE_AUDIT_2026-04-12.md`
+- `docs/diagnostics/SEASON3_EPISODE_FORENSIC_AUDIT_03x05_2026-04-12.md`
 
 ## Campaign Result
 

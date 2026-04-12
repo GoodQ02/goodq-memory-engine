@@ -9,7 +9,6 @@ import logging
 import requests
 import json
 import re
-from collections import Counter
 
 logger = logging.getLogger(__name__)
 _PLACEHOLDER_SPEAKER_PATTERN = re.compile(r"^(?:speaker|face)_\d+$", re.IGNORECASE)
@@ -102,6 +101,17 @@ _LOW_VALUE_TOPIC_TOKENS = {
     "time",
 }
 _TRANSCRIPT_TOPIC_PATTERNS = (
+    (re.compile(r"\bnose job\b", re.IGNORECASE), "nose job"),
+    (re.compile(r"\bcrop circles?\b", re.IGNORECASE), "crop circles"),
+    (re.compile(r"\bpharmacist\b", re.IGNORECASE), "pharmacist"),
+    (re.compile(r"\bpills?\b", re.IGNORECASE), "pills"),
+    (re.compile(r"\btypewriter\b", re.IGNORECASE), "typewriter"),
+    (re.compile(r"\belevator\b", re.IGNORECASE), "elevator"),
+    (re.compile(r"\bhawaii\b", re.IGNORECASE), "hawaii"),
+    (re.compile(r"\bcaribbean\b", re.IGNORECASE), "caribbean"),
+    (re.compile(r"\bmiss pepper\b", re.IGNORECASE), "miss pepper"),
+    (re.compile(r"\bprofessor von nostrand\b", re.IGNORECASE), "professor von nostrand"),
+    (re.compile(r"\bshakespeare\b", re.IGNORECASE), "shakespeare"),
     (re.compile(r"\brental car\b", re.IGNORECASE), "rental car"),
     (re.compile(r"\bair conditioning\b", re.IGNORECASE), "air conditioning"),
     (re.compile(r"\bscuba diving\b", re.IGNORECASE), "scuba diving"),
@@ -140,6 +150,40 @@ _TOPIC_STOPWORDS = {
     "want", "we", "well", "welcome", "what", "whats", "where", "why", "with", "would",
     "you", "your", "zero", "one", "two", "three", "four", "five", "six", "seven", "eight",
     "nine", "ten", "hello", "meet", "never", "days",
+}
+_CAPITALIZED_TOPIC_EXCLUSIONS = {
+    "ah",
+    "all",
+    "anyway",
+    "but",
+    "can",
+    "could",
+    "god",
+    "has",
+    "hello",
+    "how",
+    "i",
+    "it",
+    "no",
+    "oh",
+    "okay",
+    "put",
+    "so",
+    "take",
+    "the",
+    "well",
+    "welcome",
+    "what",
+    "why",
+    "yes",
+    "you",
+}
+_STAGE_MONOLOGUE_VISUAL_HINTS = {
+    "microphone",
+    "stage",
+    "curtain",
+    "podium",
+    "spotlight",
 }
 _ROLE_SUPPORT_VARIANTS = {
     "friend": ("friend", "friends"),
@@ -217,7 +261,8 @@ def _caption_is_low_signal(caption: str) -> bool:
 
 
 def _extract_transcript_topic_hints(transcript: str) -> List[str]:
-    normalized = str(transcript or "").strip().lower()
+    transcript_text = str(transcript or "").strip()
+    normalized = transcript_text.lower()
     if not normalized:
         return []
 
@@ -230,48 +275,48 @@ def _extract_transcript_topic_hints(transcript: str) -> List[str]:
             hints.append(label)
             if len(hints) >= 5:
                 return hints
-    if hints:
-        return hints[:5]
 
-    words = re.findall(r"[a-zA-Z][a-zA-Z'-]{2,}", normalized)
-    if not words:
-        return hints
-
-    filtered_tokens: List[tuple[int, str]] = []
-    for index, word in enumerate(words):
-        token = word.strip("'").lower()
-        normalized_token = token.replace("'", "")
-        if normalized_token in _TOPIC_STOPWORDS or len(normalized_token) < 3:
-            continue
-        filtered_tokens.append((index, normalized_token))
-
-    bigrams: List[str] = []
-    for (left_index, left_token), (right_index, right_token) in zip(filtered_tokens, filtered_tokens[1:]):
-        if right_index != left_index + 1:
-            continue
-        if left_token == right_token:
-            continue
-        bigrams.append(f"{left_token} {right_token}")
-
-    for phrase, _ in Counter(bigrams).most_common(3):
-        if _is_low_value_topic_fragment(phrase):
-            continue
-        if phrase not in seen:
-            seen.add(phrase)
-            hints.append(phrase)
-        if len(hints) >= 5:
-            return hints
-
-    for token, _ in Counter(token for _, token in filtered_tokens).most_common(5):
-        if _is_low_value_topic_fragment(token):
-            continue
-        if token not in seen:
-            seen.add(token)
-            hints.append(token)
-        if len(hints) >= 5:
-            break
+    if not hints:
+        proper_name_matches = re.findall(
+            r"\b(?:[A-Z][a-z]+(?:\s+(?:von|van|de|da))?)(?:\s+[A-Z][a-z]+){0,2}\b",
+            transcript_text,
+        )
+        for match in proper_name_matches:
+            raw_candidate = str(match or "").strip()
+            if not raw_candidate:
+                continue
+            tokens = [token for token in raw_candidate.split() if token]
+            while tokens and tokens[0].casefold() in _CAPITALIZED_TOPIC_EXCLUSIONS.union(_TOPIC_STOPWORDS):
+                tokens.pop(0)
+            while tokens and tokens[-1].casefold() in _CAPITALIZED_TOPIC_EXCLUSIONS.union(_TOPIC_STOPWORDS):
+                tokens.pop()
+            if not tokens:
+                continue
+            if len(tokens) == 1:
+                single = tokens[0].casefold()
+                if single in _CAPITALIZED_TOPIC_EXCLUSIONS or single in _TOPIC_STOPWORDS or len(tokens[0]) < 5:
+                    continue
+            candidate = " ".join(tokens)
+            lowered = candidate.casefold()
+            if lowered in seen or _is_low_value_topic_fragment(lowered):
+                continue
+            seen.add(lowered)
+            hints.append(candidate)
+            if len(hints) >= 5:
+                return hints
 
     return hints[:5]
+
+
+def _has_stage_monologue_visual_cue(caption: str, objects: List[Any]) -> bool:
+    caption_lower = str(caption or "").casefold()
+    if any(hint in caption_lower for hint in _STAGE_MONOLOGUE_VISUAL_HINTS):
+        return True
+    for obj in objects or []:
+        label = obj.get("label") if isinstance(obj, dict) else obj
+        if str(label or "").strip().casefold() in _STAGE_MONOLOGUE_VISUAL_HINTS:
+            return True
+    return False
 
 
 def _minimal_scene_context_payload() -> Dict[str, Any]:
@@ -704,12 +749,14 @@ def analyze_scene_context_llm(scene_meta: Dict[str, Any], cfg: Dict[str, Any]) -
             scene_objects = []
         face_count = int(scene_meta.get("face_count", 0) or 0)
         transcript_word_count = len(re.findall(r"\b\w+\b", transcript))
+        speaker_count = len(scene_meta.get("speakers") or [])
+        stage_monologue_visual = _has_stage_monologue_visual_cue(caption, scene_objects)
+        topic_hints = _extract_transcript_topic_hints(transcript)
         weak_visual_signal = face_count <= 0 and not scene_objects and _caption_is_low_signal(caption)
-        if transcript_word_count < 6 and weak_visual_signal:
+        if transcript_word_count < 3 and (weak_visual_signal or stage_monologue_visual):
             logger.info("Scene %s context resolved via low-signal fallback", scene_meta.get("index", 0))
             return _minimal_scene_context_payload()
-        if transcript_word_count >= 8 and weak_visual_signal:
-            topic_hints = _extract_transcript_topic_hints(transcript)
+        if transcript_word_count >= 8 and (weak_visual_signal or (stage_monologue_visual and speaker_count <= 1)):
             logger.info("Scene %s context resolved via monologue fallback", scene_meta.get("index", 0))
             return _spoken_monologue_payload(topic_hints)
         system_prompt, user_prompt = _build_scene_context_prompts(scene_meta)

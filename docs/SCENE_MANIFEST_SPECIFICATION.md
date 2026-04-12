@@ -91,6 +91,8 @@ Each scene entry contains the scene boundary, keyframe outputs, audio outputs, v
 - `qdrant_ok`
 - `speaker_ids`
 - `speaker_count`
+- `scene_context_llm` (feature-gated additive interpretation)
+- `scene_context_epistemic` (additive self-audit payload describing evidence dominance, fallback mode, and limits)
 - `continuity_key`
 - `dominant_speaker_id`
 - `dominant_speaker_share`

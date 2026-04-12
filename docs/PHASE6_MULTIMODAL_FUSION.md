@@ -142,6 +142,8 @@ Phase 6b also writes additive scene-level harmonized fields back into the persis
 - `mentioned_people`
 - `candidate_visible_people`
 - `conversation_owner`
+- `scene_context_llm`
+- `scene_context_epistemic`
 - `continuity_key`
 - `dominant_speaker_id`
 - `dominant_speaker_share`

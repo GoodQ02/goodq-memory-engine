@@ -26,11 +26,26 @@ except ImportError:
     logger.warning("Entity extractor not available")
 
 try:
-    from steps.common.context_analyzer_llm import analyze_scene_context_llm
+    from steps.common.context_analyzer_llm import (
+        analyze_scene_context_llm,
+        _caption_is_low_signal as _scene_context_caption_is_low_signal,
+        _extract_transcript_topic_hints as _scene_context_extract_transcript_topic_hints,
+    )
     SCENE_CONTEXT_LLM_AVAILABLE = True
 except ImportError:
     SCENE_CONTEXT_LLM_AVAILABLE = False
     logger.warning("Scene context analyzer not available")
+
+    def _scene_context_caption_is_low_signal(caption: str) -> bool:
+        return not bool(str(caption or "").strip())
+
+    def _scene_context_extract_transcript_topic_hints(transcript: str) -> List[str]:
+        return []
+
+try:
+    from steps.common.epistemic_formatter import EPISTEMIC_READ_MODEL_VERSION
+except ImportError:
+    EPISTEMIC_READ_MODEL_VERSION = 1
 
 
 def load_json_safe(path: str) -> Optional[Dict[str, Any]]:
@@ -357,6 +372,168 @@ def _sanitize_scene_context_llm(raw_context: Any) -> Optional[Dict[str, Any]]:
         )
     )
     return sanitized if has_signal else None
+
+
+def _scene_context_text_blob(scene_context: Dict[str, Any]) -> str:
+    parts: List[str] = []
+    for key in ("narrative_summary", "activity_description", "emotional_arc"):
+        value = scene_context.get(key)
+        if isinstance(value, str) and value.strip():
+            parts.append(value.strip())
+    for key in ("key_moments", "context_tags"):
+        values = scene_context.get(key)
+        if isinstance(values, list):
+            parts.extend(str(value).strip() for value in values if isinstance(value, str) and str(value).strip())
+    return " ".join(parts).strip().lower()
+
+
+def _extract_scene_object_labels(scene_objects: Any) -> List[str]:
+    labels: List[str] = []
+    if not isinstance(scene_objects, list):
+        return labels
+    for obj in scene_objects[:10]:
+        if isinstance(obj, dict):
+            raw_label = obj.get("label") or obj.get("name") or obj.get("class")
+        else:
+            raw_label = obj
+        normalized = str(raw_label or "").strip().lower()
+        if normalized:
+            labels.append(normalized)
+    return labels
+
+
+def _derive_scene_context_epistemic(
+    scene_meta: Dict[str, Any],
+    scene_context: Dict[str, Any],
+) -> Optional[Dict[str, Any]]:
+    if not isinstance(scene_context, dict):
+        return None
+
+    transcript = str(scene_meta.get("transcript") or "").strip()
+    caption = str(scene_meta.get("caption") or "").strip()
+    face_count = int(scene_meta.get("face_count") or 0)
+    emotions = scene_meta.get("emotions") if isinstance(scene_meta.get("emotions"), list) else []
+    topic_hints = _scene_context_extract_transcript_topic_hints(transcript)
+    context_blob = _scene_context_text_blob(scene_context)
+    context_tags = [
+        str(tag).strip().lower()
+        for tag in scene_context.get("context_tags", [])
+        if isinstance(tag, str) and str(tag).strip()
+    ]
+    object_labels = _extract_scene_object_labels(scene_meta.get("objects"))
+    caption_lower = caption.lower()
+
+    fallback_mode: Optional[str] = None
+    if "low-signal scene" in context_tags:
+        fallback_mode = "low_signal"
+    elif "spoken monologue" in context_tags:
+        fallback_mode = "spoken_monologue"
+
+    evidence: List[Dict[str, Any]] = []
+    limits: List[str] = []
+    next_steps: List[Dict[str, str]] = []
+    families: List[str] = []
+
+    supported_topics = [hint for hint in topic_hints if hint and hint.casefold() in context_blob]
+    for hint in supported_topics[:3]:
+        evidence.append({"role": "support", "kind": "transcript_topic", "value": hint})
+    if supported_topics:
+        families.append("transcript")
+
+    supported_visual: List[str] = []
+    if caption and not _scene_context_caption_is_low_signal(caption):
+        for tag in context_tags:
+            if tag and tag in caption_lower and tag not in supported_visual:
+                supported_visual.append(tag)
+    for label in object_labels:
+        if label in context_blob and label not in supported_visual:
+            supported_visual.append(label)
+    if face_count > 0 and any(token in context_blob for token in ("person", "people", "group conversation", "indoor conversation")):
+        supported_visual.append("visible_faces")
+    for value in supported_visual[:3]:
+        evidence.append({"role": "support", "kind": "visual_signal", "value": value})
+    if supported_visual:
+        families.append("visual")
+
+    top_emotion = None
+    if emotions:
+        top_emotion = str(emotions[0].get("label") or "").strip().lower()
+    if top_emotion:
+        emotional_arc = str(scene_context.get("emotional_arc") or "").strip().lower()
+        role = "support" if top_emotion in emotional_arc else "related"
+        evidence.append({"role": role, "kind": "audio_emotion", "value": top_emotion})
+        families.append("audio")
+
+    if fallback_mode:
+        evidence.append({"role": "meta", "kind": "fallback_mode", "value": fallback_mode})
+        if fallback_mode == "low_signal":
+            limits.append("low_signal_scene")
+            next_steps.append(
+                {
+                    "action": "inspect scene manually",
+                    "rationale": "Low-signal fallback was used because transcript and visual evidence were weak.",
+                }
+            )
+        else:
+            next_steps.append(
+                {
+                    "action": "review monologue transcript",
+                    "rationale": "Scene context relied on monologue fallback with transcript-led topic hints.",
+                }
+            )
+
+    conflict_detected = False
+    if topic_hints and not supported_topics and transcript:
+        limits.append("transcript_topic_not_reflected")
+        next_steps.append(
+            {
+                "action": "review transcript-led scene context",
+                "rationale": "Extracted transcript topics were not explicitly preserved in the scene context output.",
+            }
+        )
+
+    if not supported_topics and not supported_visual and not top_emotion and not fallback_mode:
+        limits.append("evidence_coverage_limited")
+
+    family_order = [family for family in ("transcript", "visual", "audio") if family in families]
+    if fallback_mode:
+        dominant_evidence = "fallback"
+    elif "transcript" in families and "visual" in families:
+        dominant_evidence = "mixed"
+    elif "transcript" in families:
+        dominant_evidence = "transcript"
+    elif "visual" in families:
+        dominant_evidence = "visual"
+    elif "audio" in families:
+        dominant_evidence = "audio"
+    else:
+        dominant_evidence = "unknown"
+
+    if fallback_mode == "low_signal":
+        state = "unknown"
+    elif conflict_detected:
+        state = "conflicted"
+    elif len([item for item in evidence if item.get("role") == "support"]) >= 2:
+        state = "supported"
+    elif any(item.get("role") == "support" for item in evidence) or any(item.get("role") == "related" for item in evidence):
+        state = "partially_supported"
+    else:
+        state = "unknown"
+
+    evidence_family = "+".join(family_order) if family_order else ("fallback" if fallback_mode else "unknown")
+    if not (evidence or limits or next_steps):
+        return None
+    return {
+        "read_model_version": EPISTEMIC_READ_MODEL_VERSION,
+        "state": state,
+        "dominant_evidence": dominant_evidence,
+        "evidence_family": evidence_family,
+        "fallback_mode": fallback_mode,
+        "conflict_detected": conflict_detected,
+        "evidence": evidence,
+        "limits": limits,
+        "next_steps": next_steps[:3],
+    }
 
 
 def _extract_time_hint_tokens(time_hints: Any) -> List[str]:
@@ -927,6 +1104,7 @@ def _apply_scene_context_llm(
 ) -> None:
     for segment in unified_segments:
         segment["scene_context_llm"] = None
+        segment["scene_context_epistemic"] = None
 
     if not SCENE_CONTEXT_LLM_AVAILABLE or not _scene_context_llm_enabled(cfg):
         return
@@ -992,7 +1170,10 @@ def _apply_scene_context_llm(
             )
             continue
 
-        segment["scene_context_llm"] = _sanitize_scene_context_llm(raw_context)
+        sanitized_context = _sanitize_scene_context_llm(raw_context)
+        segment["scene_context_llm"] = sanitized_context
+        if sanitized_context:
+            segment["scene_context_epistemic"] = _derive_scene_context_epistemic(scene_meta, sanitized_context)
 
 
 def _persist_harmonized_scene_fields(
@@ -1029,6 +1210,7 @@ def _persist_harmonized_scene_fields(
         "audio_emotion",
         "audio_emotion_scores",
         "scene_context_llm",
+        "scene_context_epistemic",
         "speaker_voice_signature_count",
         "speaker_count",
         "dominant_speaker_id",
@@ -1682,6 +1864,7 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
             'audio_emotion': audio_emotion,
             'audio_emotion_scores': audio_emotion_scores,
             'scene_context_llm': None,
+            'scene_context_epistemic': None,
             'speaker_count': candidate_visibility['speaker_count'],
             'dominant_speaker_id': candidate_visibility['dominant_speaker_id'],
             'dominant_speaker_share': candidate_visibility['dominant_speaker_share'],
@@ -1725,6 +1908,8 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
     metadata_time_hint_counts: Dict[str, int] = {}
     audio_emotion_counts: Dict[str, int] = {}
     scene_context_tag_counts: Dict[str, int] = {}
+    scene_context_epistemic_state_counts: Dict[str, int] = {}
+    scene_context_epistemic_dominant_counts: Dict[str, int] = {}
     segment_content_states: List[str] = []
     for seg in unified_segments:
         segment_state = _normalize_content_state(seg.get('content_state')) or 'signal'
@@ -1779,6 +1964,18 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
                 normalized_tag = str(tag or "").strip().lower()
                 if normalized_tag:
                     scene_context_tag_counts[normalized_tag] = scene_context_tag_counts.get(normalized_tag, 0) + 1
+        scene_context_epistemic = seg.get("scene_context_epistemic")
+        if isinstance(scene_context_epistemic, dict):
+            normalized_state = str(scene_context_epistemic.get("state") or "").strip().lower()
+            if normalized_state:
+                scene_context_epistemic_state_counts[normalized_state] = (
+                    scene_context_epistemic_state_counts.get(normalized_state, 0) + 1
+                )
+            dominant_evidence = str(scene_context_epistemic.get("dominant_evidence") or "").strip().lower()
+            if dominant_evidence:
+                scene_context_epistemic_dominant_counts[dominant_evidence] = (
+                    scene_context_epistemic_dominant_counts.get(dominant_evidence, 0) + 1
+                )
 
     semantic_entity_counts = {
         key: value
@@ -1808,6 +2005,16 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
     top_metadata_time_hints = sorted(metadata_time_hint_counts.items(), key=lambda x: x[1], reverse=True)[:20]
     top_audio_emotions = sorted(audio_emotion_counts.items(), key=lambda x: x[1], reverse=True)[:20]
     top_scene_context_tags = sorted(scene_context_tag_counts.items(), key=lambda x: x[1], reverse=True)[:20]
+    top_scene_context_epistemic_states = sorted(
+        scene_context_epistemic_state_counts.items(),
+        key=lambda x: x[1],
+        reverse=True,
+    )[:20]
+    top_scene_context_epistemic_dominant = sorted(
+        scene_context_epistemic_dominant_counts.items(),
+        key=lambda x: x[1],
+        reverse=True,
+    )[:20]
     
     has_audio_payload_truth = any(s.get('has_audio') for s in unified_segments)
     has_transcript_payload_truth = any(s.get('has_transcript') for s in unified_segments)
@@ -1849,6 +2056,7 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
         'segments_with_audio_emotion': sum(1 for seg in unified_segments if seg.get('audio_emotion')),
         'segments_with_speaker_voice_signatures': sum(1 for seg in unified_segments if seg.get('speaker_voice_signature_count', 0) > 0),
         'segments_with_scene_context_llm': sum(1 for seg in unified_segments if seg.get('scene_context_llm')),
+        'segments_with_scene_context_epistemic': sum(1 for seg in unified_segments if seg.get('scene_context_epistemic')),
         'top_entities': [
             {'entity': k.split(':')[0], 'type': k.split(':')[1], 'count': v}
             for k, v in top_entities
@@ -1900,6 +2108,14 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
         'top_scene_context_tags': [
             {'tag': key, 'count': value}
             for key, value in top_scene_context_tags
+        ],
+        'top_scene_context_epistemic_states': [
+            {'state': key, 'count': value}
+            for key, value in top_scene_context_epistemic_states
+        ],
+        'top_scene_context_epistemic_dominant_evidence': [
+            {'evidence': key, 'count': value}
+            for key, value in top_scene_context_epistemic_dominant
         ],
         'top_objects': [
             {'entity': k.split(':')[0], 'type': k.split(':')[1], 'count': v}

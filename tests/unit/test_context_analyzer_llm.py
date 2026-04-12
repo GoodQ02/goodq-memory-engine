@@ -179,6 +179,77 @@ def test_analyze_scene_context_llm_uses_monologue_fallback_for_low_signal_transc
     }
 
 
+def test_analyze_scene_context_llm_uses_stage_monologue_fallback(monkeypatch) -> None:
+    called = {"value": False}
+
+    def _fake_post(*args, **kwargs):  # type: ignore[no-untyped-def]
+        called["value"] = True
+        raise AssertionError("requests.post should not be called for stage monologue scenes")
+
+    monkeypatch.setattr(analyzer.requests, "post", _fake_post)
+
+    result = analyzer.analyze_scene_context_llm(
+        {
+            "index": 0,
+            "start": 0.0,
+            "end": 30.0,
+            "caption": "a man in a brown jacket is holding a microphone",
+            "transcript": (
+                "Can you give me an explanation as to why the pharmacist has to be two and a half feet up "
+                "above everybody else? Look out everybody, I'm working with pills."
+            ),
+            "objects": [{"label": "person"}, {"label": "cell phone"}],
+            "face_count": 1,
+            "emotions": [{"label": "surprise", "score": 0.6}],
+            "speakers": ["SPEAKER_00"],
+        },
+        {"llm": {"api_url": "http://localhost:38005/v1/chat/completions", "timeout": 12}},
+    )
+
+    assert called["value"] is False
+    assert result == {
+        "narrative_summary": "Spoken monologue about pharmacist.",
+        "key_moments": ["Speaker delivers a monologue about pharmacist"],
+        "emotional_arc": "spoken performance",
+        "context_tags": ["spoken monologue", "pharmacist"],
+        "activity_description": "Spoken monologue about pharmacist.",
+    }
+
+
+def test_analyze_scene_context_llm_uses_minimal_fallback_for_stage_oh_scene(monkeypatch) -> None:
+    called = {"value": False}
+
+    def _fake_post(*args, **kwargs):  # type: ignore[no-untyped-def]
+        called["value"] = True
+        raise AssertionError("requests.post should not be called for minimal stage scenes")
+
+    monkeypatch.setattr(analyzer.requests, "post", _fake_post)
+
+    result = analyzer.analyze_scene_context_llm(
+        {
+            "index": 37,
+            "start": 800.0,
+            "end": 804.0,
+            "caption": "a man in a suit and tie standing on a stage",
+            "transcript": "Oh",
+            "objects": [],
+            "face_count": 0,
+            "emotions": [{"label": "neutral", "score": 0.5}],
+            "speakers": [],
+        },
+        {"llm": {"api_url": "http://localhost:38005/v1/chat/completions", "timeout": 12}},
+    )
+
+    assert called["value"] is False
+    assert result == {
+        "narrative_summary": "Minimal visual or dialogue content.",
+        "key_moments": ["Minimal visual or dialogue content"],
+        "emotional_arc": "low-signal scene",
+        "context_tags": ["low-signal scene"],
+        "activity_description": "Minimal visual or dialogue content.",
+    }
+
+
 def test_normalize_scene_context_payload_filters_generic_tags_and_promotes_topics() -> None:
     result = analyzer._normalize_scene_context_payload(  # type: ignore[attr-defined]
         {
@@ -212,6 +283,14 @@ def test_extract_transcript_topic_hints_suppresses_low_value_fragments() -> None
     assert analyzer._extract_transcript_topic_hints(
         "Is it the white shoes? Isn't he supposed to be the emcee? What about those muscle relaxers?"
     ) == ["emcee", "white shoes", "muscle relaxers"]
+    assert analyzer._extract_transcript_topic_hints(
+        "Can you give me an explanation as to why the pharmacist has to be two and a half feet up? "
+        "Look out everybody, I'm working with pills."
+    ) == ["pharmacist", "pills"]
+    assert analyzer._extract_transcript_topic_hints(
+        "Hello, Miss Pepper. It's a pleasure to meet you and you must be Professor von Nostrand. "
+        "I've read your book about Shakespeare."
+    ) == ["miss pepper", "professor von nostrand", "shakespeare"]
 
 
 def test_normalize_scene_context_payload_drops_unsupported_setting_tags() -> None:

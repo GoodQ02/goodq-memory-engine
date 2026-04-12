@@ -481,13 +481,99 @@ def test_harmonizer_applies_scene_context_llm_when_feature_enabled(tmp_path: Pat
         "activity_description": "Two friends discuss their next move.",
         "source": "scene_context_llm",
     }
+    assert segment["scene_context_epistemic"]["read_model_version"] == 1
+    assert segment["scene_context_epistemic"]["state"] in {"supported", "partially_supported"}
+    assert segment["scene_context_epistemic"]["dominant_evidence"] in {"transcript", "visual", "mixed"}
+    assert any(
+        item["role"] == "support" and item["kind"] in {"transcript_topic", "visual_signal"}
+        for item in segment["scene_context_epistemic"]["evidence"]
+    )
     assert temporal_index["segments_with_scene_context_llm"] == 1
+    assert temporal_index["segments_with_scene_context_epistemic"] == 1
     assert {"tag": "planning", "count": 1} in temporal_index["top_scene_context_tags"]
     assert not any(item["tag"] == "conversation" for item in temporal_index["top_scene_context_tags"])
+    assert temporal_index["top_scene_context_epistemic_states"]
+    assert temporal_index["top_scene_context_epistemic_dominant_evidence"]
 
     persisted_manifest = json.loads(scene_manifest_path.read_text(encoding="utf-8"))
     persisted_scene = persisted_manifest["scenes"][0]
     assert persisted_scene["scene_context_llm"] == segment["scene_context_llm"]
+    assert persisted_scene["scene_context_epistemic"] == segment["scene_context_epistemic"]
+
+
+def test_scene_context_epistemic_marks_low_signal_fallback() -> None:
+    result = harmonizer_module._derive_scene_context_epistemic(  # type: ignore[attr-defined]
+        {
+            "caption": "a black background with a white and red light",
+            "transcript": "",
+            "objects": [],
+            "face_count": 0,
+            "emotions": [],
+        },
+        {
+            "narrative_summary": "Minimal visual or dialogue content.",
+            "key_moments": ["Minimal visual or dialogue content"],
+            "emotional_arc": "low-signal scene",
+            "context_tags": ["low-signal scene"],
+            "activity_description": "Minimal visual or dialogue content.",
+            "source": "scene_context_llm",
+        },
+    )
+
+    assert result == {
+        "read_model_version": 1,
+        "state": "unknown",
+        "dominant_evidence": "fallback",
+        "evidence_family": "fallback",
+        "fallback_mode": "low_signal",
+        "conflict_detected": False,
+        "evidence": [{"role": "meta", "kind": "fallback_mode", "value": "low_signal"}],
+        "limits": ["low_signal_scene"],
+        "next_steps": [
+            {
+                "action": "inspect scene manually",
+                "rationale": "Low-signal fallback was used because transcript and visual evidence were weak.",
+            }
+        ],
+    }
+
+
+def test_scene_context_epistemic_uses_transcript_and_visual_support() -> None:
+    result = harmonizer_module._derive_scene_context_epistemic(  # type: ignore[attr-defined]
+        {
+            "caption": "a man and a woman sit in the living room",
+            "transcript": "How much is the rental car in Florida?",
+            "objects": [{"label": "person"}],
+            "face_count": 2,
+            "emotions": [{"label": "tense", "score": 0.8}],
+        },
+        {
+            "narrative_summary": "Living room conversation about rental car.",
+            "key_moments": ["They mention the rental car"],
+            "emotional_arc": "tense discussion",
+            "context_tags": ["living room", "rental car"],
+            "activity_description": "Living room conversation about rental car.",
+            "source": "scene_context_llm",
+        },
+    )
+
+    assert result["state"] == "supported"
+    assert result["dominant_evidence"] == "mixed"
+    assert result["evidence_family"] == "transcript+visual+audio"
+    assert result["fallback_mode"] is None
+    assert result["conflict_detected"] is False
+    assert any(
+        item["role"] == "support" and item["kind"] == "transcript_topic" and item["value"] == "rental car"
+        for item in result["evidence"]
+    )
+    assert any(
+        item["role"] == "support" and item["kind"] == "visual_signal" and item["value"] == "living room"
+        for item in result["evidence"]
+    )
+    assert any(
+        item["kind"] == "audio_emotion" and item["value"] == "tense"
+        for item in result["evidence"]
+    )
 
 
 def test_harmonizer_rollup_uses_payload_truth_and_normalized_entities(

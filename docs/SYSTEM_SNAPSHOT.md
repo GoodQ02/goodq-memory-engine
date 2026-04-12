@@ -96,6 +96,7 @@ _Generated: 2026-04-10T10:30:00_
 - Canonical treatment memo: `docs/testing/SEASON3_TREATMENT_LADDER_MEMO_2026-04-11.md`
 - Next campaign runbook: `docs/testing/SEASON3_FIVE_EPISODE_RUNBOOK_2026-04-11.md`
 - Five-episode campaign close-out: `docs/testing/SEASON3_FIVE_EPISODE_CAMPAIGN_MEMO_2026-04-12.md`
+- Next-layer implementation prework: `docs/architecture/NEXT_LAYER_IMPLEMENTATION_PLAN_2026-04-12.md`
 - Supplemental five-scene audit: `docs/diagnostics/SEASON3_FIVE_SAMPLE_AUDIT_2026-04-12.md`
 - Campaign completion state:
   - run root: `reports/fresh_ingest_runs/20260411_194713_season3_feature_ladder/`

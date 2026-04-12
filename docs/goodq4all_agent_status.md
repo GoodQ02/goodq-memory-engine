@@ -75,6 +75,7 @@ Audit Status: ACTIVE (2026-04-10)
   - `docs/testing/SEASON3_FIVE_EPISODE_RUNBOOK_2026-04-11.md`
   - `docs/testing/SEASON3_FIVE_EPISODE_CAMPAIGN_MEMO_2026-04-12.md`
   - `docs/diagnostics/SEASON3_FIVE_SAMPLE_AUDIT_2026-04-12.md`
+  - `docs/architecture/NEXT_LAYER_IMPLEMENTATION_PLAN_2026-04-12.md`
 - Multi-episode treatment campaign:
   - run root: `reports/fresh_ingest_runs/20260411_194713_season3_feature_ladder/`
   - scope: `03x04` through `03x08`

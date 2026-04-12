@@ -73,6 +73,19 @@ Audit Status: ACTIVE (2026-04-10)
 - Canonical treatment docs:
   - `docs/testing/SEASON3_TREATMENT_LADDER_MEMO_2026-04-11.md`
   - `docs/testing/SEASON3_FIVE_EPISODE_RUNBOOK_2026-04-11.md`
+  - `docs/testing/SEASON3_FIVE_EPISODE_CAMPAIGN_MEMO_2026-04-12.md`
+- Multi-episode treatment campaign:
+  - run root: `reports/fresh_ingest_runs/20260411_194713_season3_feature_ladder/`
+  - scope: `03x04` through `03x08`
+  - result: `5 / 5` passed
+  - totals:
+    - `193` scenes processed
+    - `189` scenes with `scene_context_llm`
+    - `97.9%` scene-context coverage
+  - all five runs held:
+    - `phase6_complete = true`
+    - `qdrant_ok = true`
+    - `generic_context_detected = false`
 
 ## Offline Package State
 - Desktop machine audit: complete and authoritative in the workspace-adjacent pack

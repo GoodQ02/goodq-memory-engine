@@ -95,3 +95,16 @@ _Generated: 2026-04-10T10:30:00_
   - `03x03` passed with `scene_context_llm` coverage in `36/39` scenes and `generic_context_detected = false` on the authoritative `20260411_171418` run.
 - Canonical treatment memo: `docs/testing/SEASON3_TREATMENT_LADDER_MEMO_2026-04-11.md`
 - Next campaign runbook: `docs/testing/SEASON3_FIVE_EPISODE_RUNBOOK_2026-04-11.md`
+- Five-episode campaign close-out: `docs/testing/SEASON3_FIVE_EPISODE_CAMPAIGN_MEMO_2026-04-12.md`
+- Campaign completion state:
+  - run root: `reports/fresh_ingest_runs/20260411_194713_season3_feature_ladder/`
+  - episodes: `03x04` through `03x08`
+  - result: `5 / 5` passed
+  - totals:
+    - `193` scenes processed
+    - `189` scenes with `scene_context_llm`
+    - `97.9%` scene-context coverage
+  - all five runs preserved:
+    - `phase6_complete = true`
+    - `qdrant_ok = true`
+    - `generic_context_detected = false`

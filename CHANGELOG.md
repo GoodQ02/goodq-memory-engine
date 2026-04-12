@@ -166,3 +166,8 @@ Tag: `season1-witness-run-2026-03-09`
   - canonical ingestion no longer selects the WSL audio backend when preflight reports an ABI-degraded runtime
   - `wsl2_audio_bridge` now surfaces ABI-degraded WSL as an explicit preflight error instead of proceeding with warnings
   - fixed `cache_readiness_check.py` so it resolves the canonical `models_cache` path correctly instead of falling back to repo-local `_DATA\models`
+- Completed the first five-episode Season 3 `scene_context_llm` campaign:
+  - `03x04` through `03x08` all passed
+  - `193` scenes processed
+  - `189` scenes with `scene_context_llm`
+  - all five runs preserved `phase6_complete = true`, `qdrant_ok = true`, and `generic_context_detected = false`

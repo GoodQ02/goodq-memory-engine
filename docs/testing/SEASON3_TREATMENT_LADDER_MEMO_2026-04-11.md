@@ -92,6 +92,14 @@ Across all three treatment runs:
 - Phase 6 completed
 - Qdrant writes remained healthy
 
+## Follow-On Campaign
+
+The next five-episode treatment campaign (`03x04` through `03x08`) completed
+successfully under the same additive `scene_context_llm` contract. The
+authoritative campaign close-out is:
+
+- `docs/testing/SEASON3_FIVE_EPISODE_CAMPAIGN_MEMO_2026-04-12.md`
+
 ## Next Safe Step
 
 The next expansion should not stack new features. It should reuse the validated `scene_context_llm` treatment over multiple additional Season 3 episodes with the same local-override discipline and the same regression rails:

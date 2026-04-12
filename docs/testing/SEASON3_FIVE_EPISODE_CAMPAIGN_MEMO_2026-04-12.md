@@ -23,6 +23,10 @@ This campaign reuses the validated `scene_context_llm` treatment logic from the
 authoritative `03x03` pass and checks whether it remains grounded across five
 additional Season 3 episodes without reopening the old generic-context failure.
 
+Supplemental qualitative audit:
+
+- `docs/diagnostics/SEASON3_FIVE_SAMPLE_AUDIT_2026-04-12.md`
+
 ## Campaign Result
 
 The full five-episode campaign passed.

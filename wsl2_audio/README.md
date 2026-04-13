@@ -71,7 +71,10 @@ cd ~/goodq_audio
 This will:
 - Install system dependencies (ffmpeg, libsndfile, etc.)
 - Create Python virtual environment
-- Install PyTorch with CUDA 12.1
+- Install the validated WSL audio CUDA 12.1 trio:
+  - `torch==2.5.1+cu121`
+  - `torchvision==0.20.1+cu121`
+  - `torchaudio==2.5.1+cu121`
 - Install faster-whisper, pyannote.audio, Silero VAD
 - Generate default configuration
 

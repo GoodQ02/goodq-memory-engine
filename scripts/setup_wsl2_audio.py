@@ -9,6 +9,11 @@ import os
 from pathlib import Path
 import time
 
+WSL_AUDIO_TORCH_VERSION = "2.5.1+cu121"
+WSL_AUDIO_TORCHVISION_VERSION = "0.20.1+cu121"
+WSL_AUDIO_TORCHAUDIO_VERSION = "2.5.1+cu121"
+WSL_AUDIO_TORCH_INDEX_URL = "https://download.pytorch.org/whl/cu121"
+
 class WSL2AudioSetup:
     def __init__(self):
         self.base_dir = Path(__file__).resolve().parents[1]
@@ -209,7 +214,13 @@ class WSL2AudioSetup:
             
         print("\n[3/4] Installing PyTorch with CUDA support...")
         print("  This will download ~2.5GB, please wait...")
-        cmd = f"{venv_path}/bin/pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121"
+        cmd = (
+            f"{venv_path}/bin/pip install "
+            f"torch=={WSL_AUDIO_TORCH_VERSION} "
+            f"torchvision=={WSL_AUDIO_TORCHVISION_VERSION} "
+            f"torchaudio=={WSL_AUDIO_TORCHAUDIO_VERSION} "
+            f"--index-url {WSL_AUDIO_TORCH_INDEX_URL}"
+        )
         stdout, stderr, code = self.run_wsl_command(cmd)
         if code != 0:
             self.errors.append(f"PyTorch installation failed: {stderr}")

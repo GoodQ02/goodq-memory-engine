@@ -165,6 +165,28 @@ def test_sync_wsl_audio_assets_normalizes_shell_line_endings(monkeypatch, tmp_pa
     assert "chmod +x" in seen_scripts[0]
 
 
+def test_wsl_audio_setup_scripts_pin_validated_torch_trio() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    shell_content = (repo_root / "wsl2_audio/setup_wsl2_audio.sh").read_text(encoding="utf-8")
+    quick_content = (repo_root / "scripts/wsl2_quick_install.sh").read_text(encoding="utf-8")
+
+    for marker in (
+        "TORCH_VERSION='2.5.1+cu121'",
+        "TORCHVISION_VERSION='0.20.1+cu121'",
+        "TORCHAUDIO_VERSION='2.5.1+cu121'",
+    ):
+        assert marker in shell_content
+        assert marker in quick_content
+
+    for command_marker in (
+        '"torch==${TORCH_VERSION}"',
+        '"torchvision==${TORCHVISION_VERSION}"',
+        '"torchaudio==${TORCHAUDIO_VERSION}"',
+    ):
+        assert command_marker in shell_content
+        assert command_marker in quick_content
+
+
 def test_resolve_wsl_python_prefers_venv(monkeypatch):
     from steps.audio_transcribe import step
 

@@ -3,6 +3,10 @@
 # Run this inside WSL2: wsl -d <distro> -- bash <wsl_project_root>/scripts/wsl2_quick_install.sh
 
 set -e
+TORCH_VERSION='2.5.1+cu121'
+TORCHVISION_VERSION='0.20.1+cu121'
+TORCHAUDIO_VERSION='2.5.1+cu121'
+TORCH_INDEX_URL='https://download.pytorch.org/whl/cu121'
 
 echo "================================================================================"
 echo "  GoodQ4All WSL2 Audio Setup"
@@ -30,7 +34,11 @@ source venv/bin/activate
 echo ""
 echo "[4/6] Installing PyTorch with CUDA..."
 pip install --upgrade pip -q
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+pip install \
+  "torch==${TORCH_VERSION}" \
+  "torchvision==${TORCHVISION_VERSION}" \
+  "torchaudio==${TORCHAUDIO_VERSION}" \
+  --index-url "${TORCH_INDEX_URL}"
 
 echo ""
 echo "[5/6] Installing audio libraries..."

@@ -9,6 +9,11 @@ import os
 from pathlib import Path
 import json
 
+WSL_AUDIO_TORCH_VERSION = "2.5.1+cu121"
+WSL_AUDIO_TORCHVISION_VERSION = "0.20.1+cu121"
+WSL_AUDIO_TORCHAUDIO_VERSION = "2.5.1+cu121"
+WSL_AUDIO_TORCH_INDEX_URL = "https://download.pytorch.org/whl/cu121"
+
 class FastWSL2Setup:
     def __init__(self):
         self.base_dir = Path(__file__).resolve().parents[1]
@@ -120,7 +125,11 @@ class FastWSL2Setup:
         print("\n[3/5] Installing PyTorch with CUDA...")
         print("  (This downloads ~2.5GB, may take 5-10 minutes)")
         out, err, code = self.wsl_cmd(
-            f"{pip} install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121 -q"
+            f"{pip} install "
+            f"torch=={WSL_AUDIO_TORCH_VERSION} "
+            f"torchvision=={WSL_AUDIO_TORCHVISION_VERSION} "
+            f"torchaudio=={WSL_AUDIO_TORCHAUDIO_VERSION} "
+            f"--index-url {WSL_AUDIO_TORCH_INDEX_URL} -q"
         )
         if code != 0:
             print(f"  [SYMBOL] Warning: {err[:200]}")

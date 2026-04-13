@@ -18,6 +18,10 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
+TORCH_VERSION='2.5.1+cu121'
+TORCHVISION_VERSION='0.20.1+cu121'
+TORCHAUDIO_VERSION='2.5.1+cu121'
+TORCH_INDEX_URL='https://download.pytorch.org/whl/cu121'
 
 # Project paths
 WSL_HOME="${GOODQ_WSL_WORKSPACE:-$HOME/goodq_audio}"
@@ -72,7 +76,11 @@ source "$VENV_PATH/bin/activate"
 
 echo "[5/10] Installing PyTorch with CUDA 12.1..."
 pip install -q --upgrade pip wheel setuptools
-pip install -q torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+pip install -q \
+    "torch==${TORCH_VERSION}" \
+    "torchvision==${TORCHVISION_VERSION}" \
+    "torchaudio==${TORCHAUDIO_VERSION}" \
+    --index-url "${TORCH_INDEX_URL}"
 
 echo "[6/10] Verifying PyTorch CUDA..."
 python3 << 'PYEOF'

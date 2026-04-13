@@ -8,6 +8,11 @@ import sys
 import os
 from pathlib import Path
 
+WSL_AUDIO_TORCH_VERSION = "2.5.1+cu121"
+WSL_AUDIO_TORCHVISION_VERSION = "0.20.1+cu121"
+WSL_AUDIO_TORCHAUDIO_VERSION = "2.5.1+cu121"
+WSL_AUDIO_TORCH_INDEX_URL = "https://download.pytorch.org/whl/cu121"
+
 class UserSpaceWSL2Setup:
     def __init__(self):
         self.base_dir = Path(__file__).resolve().parents[1]
@@ -113,7 +118,13 @@ class UserSpaceWSL2Setup:
             print(f"[{i}/{len(packages)}] {desc}...")
             
             if pkg == "torch":
-                cmd = "pip3 install --user torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121"
+                cmd = (
+                    "pip3 install --user "
+                    f"torch=={WSL_AUDIO_TORCH_VERSION} "
+                    f"torchvision=={WSL_AUDIO_TORCHVISION_VERSION} "
+                    f"torchaudio=={WSL_AUDIO_TORCHAUDIO_VERSION} "
+                    f"--index-url {WSL_AUDIO_TORCH_INDEX_URL}"
+                )
             else:
                 cmd = f"pip3 install --user {pkg}"
                 

@@ -29,6 +29,10 @@ Notes:
 
 - `GOODQ_REQUIRE_WSL_AUDIO=1` converts WSL audio into a fail-fast requirement.
 - `GOODQ_WSL_USER` and `GOODQ_WSL_WORKSPACE` are part of deterministic host setup on accelerated systems.
+- The current conservative WSL audio torch lane is:
+  - `torch==2.5.1+cu121`
+  - `torchvision==0.20.1+cu121`
+  - `torchaudio==2.5.1+cu121`
 
 ## Readiness States
 

@@ -187,6 +187,37 @@ def test_wsl_audio_setup_scripts_pin_validated_torch_trio() -> None:
         assert command_marker in quick_content
 
 
+def test_wsl_audio_installers_use_bootstrap_constraints_and_post_install_validation() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    bootstrap_content = (repo_root / "scripts/bootstrap_install.py").read_text(encoding="utf-8")
+    shell_content = (repo_root / "wsl2_audio/setup_wsl2_audio.sh").read_text(encoding="utf-8")
+    quick_content = (repo_root / "scripts/wsl2_quick_install.sh").read_text(encoding="utf-8")
+    setup_py_content = (repo_root / "scripts/setup_wsl2_audio.py").read_text(encoding="utf-8")
+    fast_py_content = (repo_root / "scripts/setup_wsl2_audio_fast.py").read_text(encoding="utf-8")
+    userspace_py_content = (repo_root / "scripts/setup_wsl2_audio_userspace.py").read_text(encoding="utf-8")
+
+    assert "wsl2_audio/requirements-bootstrap-constraints.txt" in bootstrap_content
+
+    for content in (
+        shell_content,
+        quick_content,
+        setup_py_content,
+        fast_py_content,
+        userspace_py_content,
+    ):
+        assert "requirements-bootstrap-constraints.txt" in content
+        assert "pip check" in content
+
+    for content in (
+        shell_content,
+        quick_content,
+        setup_py_content,
+        fast_py_content,
+        userspace_py_content,
+    ):
+        assert "torchvision.ops import nms" in content
+
+
 def test_resolve_wsl_python_prefers_venv(monkeypatch):
     from steps.audio_transcribe import step
 

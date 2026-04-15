@@ -22,6 +22,8 @@ TORCH_VERSION='2.5.1+cu121'
 TORCHVISION_VERSION='0.20.1+cu121'
 TORCHAUDIO_VERSION='2.5.1+cu121'
 TORCH_INDEX_URL='https://download.pytorch.org/whl/cu121'
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BOOTSTRAP_CONSTRAINTS_FILE="$SCRIPT_DIR/requirements-bootstrap-constraints.txt"
 
 # Project paths
 WSL_HOME="${GOODQ_WSL_WORKSPACE:-$HOME/goodq_audio}"
@@ -95,7 +97,13 @@ else:
 PYEOF
 
 echo "[7/10] Installing audio processing libraries..."
+if [ ! -f "$BOOTSTRAP_CONSTRAINTS_FILE" ]; then
+    echo -e "${RED}ERROR: Missing WSL bootstrap constraints file: $BOOTSTRAP_CONSTRAINTS_FILE${NC}"
+    exit 1
+fi
+
 pip install -q \
+    --constraint "$BOOTSTRAP_CONSTRAINTS_FILE" \
     faster-whisper \
     pyannote.audio \
     soundfile \
@@ -104,15 +112,37 @@ pip install -q \
     pydub
 
 echo "[8/10] Installing Silero VAD..."
-pip install -q silero-vad
+pip install -q --constraint "$BOOTSTRAP_CONSTRAINTS_FILE" silero-vad
 
 echo "[9/10] Installing utilities..."
 pip install -q \
+    --constraint "$BOOTSTRAP_CONSTRAINTS_FILE" \
     numpy \
     scipy \
     tqdm \
     psutil \
     watchdog
+
+echo "[9.5/10] Verifying WSL audio runtime..."
+python3 -m pip check
+python3 << 'PYEOF'
+import importlib.metadata as md
+import torch
+import torchaudio
+import torchvision
+from torchvision.ops import nms
+
+expected = {
+    "torch": "2.5.1+cu121",
+    "torchvision": "0.20.1+cu121",
+    "torchaudio": "2.5.1+cu121",
+}
+actual = {name: md.version(name) for name in expected}
+bad = [f"{name}={actual[name]} (expected {version})" for name, version in expected.items() if actual[name] != version]
+if bad:
+    raise SystemExit("WSL audio runtime drift detected: " + "; ".join(bad))
+print("✓ WSL audio runtime validated")
+PYEOF
 
 echo "[10/10] Creating service configuration..."
 cat > "$WSL_HOME/config.json" <<EOF

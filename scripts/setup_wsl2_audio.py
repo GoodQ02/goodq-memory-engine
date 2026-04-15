@@ -13,6 +13,7 @@ WSL_AUDIO_TORCH_VERSION = "2.5.1+cu121"
 WSL_AUDIO_TORCHVISION_VERSION = "0.20.1+cu121"
 WSL_AUDIO_TORCHAUDIO_VERSION = "2.5.1+cu121"
 WSL_AUDIO_TORCH_INDEX_URL = "https://download.pytorch.org/whl/cu121"
+WSL_AUDIO_BOOTSTRAP_CONSTRAINTS = "requirements-bootstrap-constraints.txt"
 
 class WSL2AudioSetup:
     def __init__(self):
@@ -46,6 +47,66 @@ class WSL2AudioSetup:
             return result.stdout, result.stderr, result.returncode
         except subprocess.CalledProcessError as e:
             return e.stdout, e.stderr, e.returncode
+
+    def stage_constraints_file(self):
+        """Stage the locked WSL bootstrap constraints into the workspace."""
+        src = self.base_dir / "wsl2_audio" / WSL_AUDIO_BOOTSTRAP_CONSTRAINTS
+        if not src.exists():
+            self.errors.append(f"Missing bootstrap constraints file: {src}")
+            return False
+        content = src.read_text(encoding="utf-8")
+        dst = f"{self.wsl_workspace}/{WSL_AUDIO_BOOTSTRAP_CONSTRAINTS}"
+        cmd = f"cat > {dst} << 'EOF'\n{content}\nEOF"
+        stdout, stderr, code = self.run_wsl_command(cmd)
+        if code != 0:
+            self.errors.append(f"Failed to stage bootstrap constraints: {stderr or stdout}")
+            return False
+        return True
+
+    def validate_audio_runtime(self):
+        """Fail fast when the rebuilt venv drifts off the validated ABI lane."""
+        self.print_header("Phase 6.5: Validating WSL Audio Runtime")
+
+        venv_python = f"{self.wsl_workspace}/venv/bin/python"
+        expected = {
+            "torch": WSL_AUDIO_TORCH_VERSION,
+            "torchvision": WSL_AUDIO_TORCHVISION_VERSION,
+            "torchaudio": WSL_AUDIO_TORCHAUDIO_VERSION,
+        }
+
+        print("[1/2] Running pip check...")
+        stdout, stderr, code = self.run_wsl_command(f"{venv_python} -m pip check")
+        if code != 0:
+            self.errors.append((stdout or stderr).strip() or "pip check failed")
+            return False
+        print("  [SYMBOL] pip check passed")
+
+        print("\n[2/2] Verifying torch trio + ABI...")
+        verify_script = f"""
+import importlib.metadata as md
+import torch
+import torchaudio
+import torchvision
+from torchvision.ops import nms
+
+expected = {{
+    "torch": "{expected['torch']}",
+    "torchvision": "{expected['torchvision']}",
+    "torchaudio": "{expected['torchaudio']}",
+}}
+actual = {{name: md.version(name) for name in expected}}
+bad = [f"{{name}}={{actual[name]}} (expected {{version}})" for name, version in expected.items() if actual[name] != version]
+if bad:
+    raise SystemExit("WSL audio runtime drift detected: " + "; ".join(bad))
+print("abi_ready")
+""".strip()
+        verify_cmd = f"{venv_python} <<'PYEOF'\n{verify_script}\nPYEOF"
+        stdout, stderr, code = self.run_wsl_command(verify_cmd)
+        if code != 0:
+            self.errors.append((stderr or stdout).strip() or "torch trio / ABI verification failed")
+            return False
+        print("  [SYMBOL] ABI-ready torch lane verified")
+        return True
             
     def check_prerequisites(self):
         """Phase 1: Verify WSL2 and CUDA"""
@@ -164,7 +225,12 @@ class WSL2AudioSetup:
         print("\n[MOUNT] Creating mount point for L: drive...")
         self.run_wsl_command("mkdir -p /mnt/l")
         print("  [SYMBOL] Mount point ready")
-        
+
+        print("\n[STAGE] Staging WSL bootstrap constraints...")
+        if not self.stage_constraints_file():
+            return False
+        print("  [SYMBOL] Bootstrap constraints staged")
+
         return True
         
     def install_cuda_toolkit(self):
@@ -243,38 +309,39 @@ class WSL2AudioSetup:
         self.print_header("Phase 6: Audio Processing Packages")
         
         venv_pip = f"{self.wsl_workspace}/venv/bin/pip"
-        
-        packages = [
-            ("faster-whisper", "Faster Whisper (optimized transcription)"),
-            ("openai-whisper", "OpenAI Whisper (fallback)"),
-            ("pyannote.audio", "Speaker diarization"),
-            ("speechbrain", "Advanced audio processing"),
-            ("librosa", "Audio analysis"),
-            ("soundfile", "Audio I/O"),
-            ("pydub", "Audio manipulation"),
-            ("webrtcvad", "Voice activity detection"),
-            ("noisereduce", "Noise reduction"),
-            ("scipy", "Scientific computing"),
-            ("numpy", "Numerical operations")
-        ]
-        
-        for i, (package, description) in enumerate(packages, 1):
-            print(f"\n[{i}/{len(packages)}] Installing {description}...")
-            stdout, stderr, code = self.run_wsl_command(f"{venv_pip} install {package}")
-            if code != 0:
-                self.warnings.append(f"Failed to install {package}: {stderr[:100]}")
-                print(f"  [SYMBOL] Installation issue (may still work)")
-            else:
-                print(f"  [SYMBOL] {package} installed")
-                
-        # Install Silero VAD from torch hub
-        print(f"\n[{len(packages)+1}/{len(packages)+1}] Setting up Silero VAD...")
-        test_cmd = f"{self.wsl_workspace}/venv/bin/python -c \"import torch; model, utils = torch.hub.load('snakers4/silero-vad', 'silero_vad', onnx=False); print('Silero VAD loaded successfully')\""
+        constraints_path = f"{self.wsl_workspace}/{WSL_AUDIO_BOOTSTRAP_CONSTRAINTS}"
+
+        print("\n[1/3] Installing audio processing packages...")
+        package_cmd = (
+            f"{venv_pip} install --constraint {constraints_path} "
+            "faster-whisper openai-whisper pyannote.audio speechbrain "
+            "librosa soundfile pydub webrtcvad noisereduce scipy numpy"
+        )
+        stdout, stderr, code = self.run_wsl_command(package_cmd)
+        if code != 0:
+            self.errors.append(f"Audio package installation failed: {(stderr or stdout)[:200]}")
+            return False
+        print("  [SYMBOL] Audio packages installed")
+
+        print("\n[2/3] Installing Silero VAD...")
+        stdout, stderr, code = self.run_wsl_command(
+            f"{venv_pip} install --constraint {constraints_path} silero-vad"
+        )
+        if code != 0:
+            self.errors.append(f"Silero VAD installation failed: {(stderr or stdout)[:200]}")
+            return False
+        print("  [SYMBOL] Silero VAD installed")
+
+        print("\n[3/3] Verifying Silero VAD import...")
+        test_cmd = (
+            f"{self.wsl_workspace}/venv/bin/python -c "
+            "\"import importlib.metadata as md; print(md.version('silero-vad'))\""
+        )
         stdout, stderr, code = self.run_wsl_command(test_cmd)
         if code == 0:
-            print("  [SYMBOL] Silero VAD ready")
+            print(f"  [SYMBOL] silero-vad {stdout.strip()}")
         else:
-            self.warnings.append("Silero VAD setup had issues")
+            self.warnings.append("Silero VAD import check had issues")
             
         return True
         
@@ -705,6 +772,7 @@ if __name__ == "__main__":
             ("CUDA Toolkit", self.install_cuda_toolkit),
             ("Python Environment", self.create_python_venv),
             ("Audio Packages", self.install_audio_packages),
+            ("Runtime Validation", self.validate_audio_runtime),
             ("Processing Scripts", self.create_processing_scripts),
             ("Windows Bridge", self.create_windows_bridge)
         ]

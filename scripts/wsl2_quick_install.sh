@@ -7,6 +7,8 @@ TORCH_VERSION='2.5.1+cu121'
 TORCHVISION_VERSION='0.20.1+cu121'
 TORCHAUDIO_VERSION='2.5.1+cu121'
 TORCH_INDEX_URL='https://download.pytorch.org/whl/cu121'
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BOOTSTRAP_CONSTRAINTS_FILE="$SCRIPT_DIR/../wsl2_audio/requirements-bootstrap-constraints.txt"
 
 echo "================================================================================"
 echo "  GoodQ4All WSL2 Audio Setup"
@@ -42,8 +44,31 @@ pip install \
 
 echo ""
 echo "[5/6] Installing audio libraries..."
-pip install faster-whisper openai-whisper pyannote.audio
-pip install librosa soundfile scipy numpy
+if [ ! -f "$BOOTSTRAP_CONSTRAINTS_FILE" ]; then
+  echo "ERROR: Missing WSL bootstrap constraints file: $BOOTSTRAP_CONSTRAINTS_FILE"
+  exit 1
+fi
+pip install --constraint "$BOOTSTRAP_CONSTRAINTS_FILE" faster-whisper openai-whisper pyannote.audio
+pip install --constraint "$BOOTSTRAP_CONSTRAINTS_FILE" librosa soundfile scipy numpy
+python -m pip check
+python - <<'PYEOF'
+import importlib.metadata as md
+import torch
+import torchaudio
+import torchvision
+from torchvision.ops import nms
+
+expected = {
+    "torch": "2.5.1+cu121",
+    "torchvision": "0.20.1+cu121",
+    "torchaudio": "2.5.1+cu121",
+}
+actual = {name: md.version(name) for name in expected}
+bad = [f"{name}={actual[name]} (expected {version})" for name, version in expected.items() if actual[name] != version]
+if bad:
+    raise SystemExit("WSL audio runtime drift detected: " + "; ".join(bad))
+print("WSL audio runtime validated")
+PYEOF
 
 echo ""
 echo "[6/6] Creating processing script..."

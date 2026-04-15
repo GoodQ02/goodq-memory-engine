@@ -13,6 +13,7 @@ WSL_AUDIO_TORCH_VERSION = "2.5.1+cu121"
 WSL_AUDIO_TORCHVISION_VERSION = "0.20.1+cu121"
 WSL_AUDIO_TORCHAUDIO_VERSION = "2.5.1+cu121"
 WSL_AUDIO_TORCH_INDEX_URL = "https://download.pytorch.org/whl/cu121"
+WSL_AUDIO_BOOTSTRAP_CONSTRAINTS = "requirements-bootstrap-constraints.txt"
 
 class FastWSL2Setup:
     def __init__(self):
@@ -46,6 +47,62 @@ class FastWSL2Setup:
             text=True
         )
         return result.stdout, result.stderr, result.returncode
+
+    def stage_constraints_file(self):
+        src = self.base_dir / "wsl2_audio" / WSL_AUDIO_BOOTSTRAP_CONSTRAINTS
+        if not src.exists():
+            self.errors.append(f"Missing bootstrap constraints file: {src}")
+            return False
+        content = src.read_text(encoding="utf-8")
+        dst = f"{self.workspace}/{WSL_AUDIO_BOOTSTRAP_CONSTRAINTS}"
+        out, err, code = self.wsl_cmd(f"cat > {dst} << 'EOF'\n{content}\nEOF")
+        if code != 0:
+            self.errors.append((err or out).strip() or "Failed to stage bootstrap constraints")
+            return False
+        return True
+
+    def validate_runtime(self):
+        self.print_header("Validating WSL Audio Runtime")
+        venv_python = f"{self.workspace}/venv/bin/python"
+        expected = {
+            "torch": WSL_AUDIO_TORCH_VERSION,
+            "torchvision": WSL_AUDIO_TORCHVISION_VERSION,
+            "torchaudio": WSL_AUDIO_TORCHAUDIO_VERSION,
+        }
+
+        print("[1/2] Running pip check...")
+        out, err, code = self.wsl_cmd(f"{venv_python} -m pip check")
+        if code != 0:
+            self.errors.append((out or err).strip() or "pip check failed")
+            return False
+        print("  [SYMBOL] pip check passed")
+
+        print("\n[2/2] Verifying torch trio + ABI...")
+        verify_script = f"""
+import importlib.metadata as md
+import torch
+import torchaudio
+import torchvision
+from torchvision.ops import nms
+
+expected = {{
+    "torch": "{expected['torch']}",
+    "torchvision": "{expected['torchvision']}",
+    "torchaudio": "{expected['torchaudio']}",
+}}
+actual = {{name: md.version(name) for name in expected}}
+bad = [f"{{name}}={{actual[name]}} (expected {{version}})" for name, version in expected.items() if actual[name] != version]
+if bad:
+    raise SystemExit("WSL audio runtime drift detected: " + "; ".join(bad))
+print("abi_ready")
+""".strip()
+        verify_cmd = f"{venv_python} <<'PYEOF'\n{verify_script}\nPYEOF"
+        out, err, code = self.wsl_cmd(verify_cmd)
+        if code != 0:
+            self.errors.append((err or out).strip() or "torch trio / ABI verification failed")
+            return False
+        print("  [SYMBOL] ABI-ready torch lane verified")
+        return True
         
     def check_prerequisites(self):
         """Quick prerequisite check"""
@@ -98,6 +155,9 @@ class FastWSL2Setup:
         for d in dirs:
             self.wsl_cmd(f"mkdir -p {d}")
         print("  [SYMBOL] Workspace created")
+        if not self.stage_constraints_file():
+            return False
+        print("  [SYMBOL] Bootstrap constraints staged")
         return True
         
     def setup_venv(self):
@@ -117,6 +177,7 @@ class FastWSL2Setup:
         print("  [SYMBOL] Virtual environment created")
         
         pip = f"{venv}/bin/pip"
+        constraints_path = f"{self.workspace}/{WSL_AUDIO_BOOTSTRAP_CONSTRAINTS}"
         
         print("\n[2/5] Upgrading pip...")
         self.wsl_cmd(f"{pip} install --upgrade pip -q")
@@ -137,17 +198,14 @@ class FastWSL2Setup:
             print("  [SYMBOL] PyTorch installed")
             
         print("\n[4/5] Installing audio libraries...")
-        packages = [
-            "faster-whisper",
-            "openai-whisper", 
-            "librosa",
-            "soundfile",
-            "scipy",
-            "numpy"
-        ]
-        for pkg in packages:
-            print(f"  Installing {pkg}...")
-            self.wsl_cmd(f"{pip} install {pkg} -q")
+        packages = (
+            "faster-whisper openai-whisper librosa soundfile scipy numpy"
+        )
+        print("  Installing constrained audio stack...")
+        out, err, code = self.wsl_cmd(f"{pip} install --constraint {constraints_path} {packages} -q")
+        if code != 0:
+            self.errors.append((err or out).strip() or "Audio package installation failed")
+            return False
         print("  [SYMBOL] Audio libraries installed")
         
         print("\n[5/5] Verifying CUDA...")
@@ -340,6 +398,7 @@ print("Bridge Status:", "Ready" if bridge.check_status() else "Not Ready")
             ("Prerequisites", self.check_prerequisites),
             ("Workspace", self.create_workspace),
             ("Python Environment", self.setup_venv),
+            ("Runtime Validation", self.validate_runtime),
             ("Processing Scripts", self.create_processor_script),
             ("Windows Bridge", self.create_bridge)
         ]

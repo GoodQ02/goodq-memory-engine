@@ -12,6 +12,7 @@ WSL_AUDIO_TORCH_VERSION = "2.5.1+cu121"
 WSL_AUDIO_TORCHVISION_VERSION = "0.20.1+cu121"
 WSL_AUDIO_TORCHAUDIO_VERSION = "2.5.1+cu121"
 WSL_AUDIO_TORCH_INDEX_URL = "https://download.pytorch.org/whl/cu121"
+WSL_AUDIO_BOOTSTRAP_CONSTRAINTS = "requirements-bootstrap-constraints.txt"
 
 class UserSpaceWSL2Setup:
     def __init__(self):
@@ -47,6 +48,61 @@ class UserSpaceWSL2Setup:
             return result.stdout, result.stderr, result.returncode
         except subprocess.TimeoutExpired:
             return "", "Timeout", -1
+
+    def stage_constraints_file(self):
+        src = self.base_dir / "wsl2_audio" / WSL_AUDIO_BOOTSTRAP_CONSTRAINTS
+        if not src.exists():
+            print(f"  [SYMBOL] Missing bootstrap constraints file: {src}")
+            return False
+        content = src.read_text(encoding="utf-8")
+        dst = f"{self.workspace}/{WSL_AUDIO_BOOTSTRAP_CONSTRAINTS}"
+        out, err, code = self.wsl_cmd(f"cat > {dst} << 'EOF'\n{content}\nEOF")
+        if code != 0:
+            print(f"  [SYMBOL] Failed to stage bootstrap constraints: {(err or out)[:160]}")
+            return False
+        return True
+
+    def validate_runtime(self):
+        self.print_header("Validating WSL Audio Runtime")
+        expected = {
+            "torch": WSL_AUDIO_TORCH_VERSION,
+            "torchvision": WSL_AUDIO_TORCHVISION_VERSION,
+            "torchaudio": WSL_AUDIO_TORCHAUDIO_VERSION,
+        }
+
+        print("[1/2] Running pip check...")
+        out, err, code = self.wsl_cmd("python3 -m pip check")
+        if code != 0:
+            print(f"  [SYMBOL] pip check failed: {(out or err)[:200]}")
+            return False
+        print("  [SYMBOL] pip check passed")
+
+        print("\n[2/2] Verifying torch trio + ABI...")
+        verify_script = f"""
+import importlib.metadata as md
+import torch
+import torchaudio
+import torchvision
+from torchvision.ops import nms
+
+expected = {{
+    "torch": "{expected['torch']}",
+    "torchvision": "{expected['torchvision']}",
+    "torchaudio": "{expected['torchaudio']}",
+}}
+actual = {{name: md.version(name) for name in expected}}
+bad = [f"{{name}}={{actual[name]}} (expected {{version}})" for name, version in expected.items() if actual[name] != version]
+if bad:
+    raise SystemExit("WSL audio runtime drift detected: " + "; ".join(bad))
+print("abi_ready")
+""".strip()
+        verify_cmd = f"python3 <<'PYEOF'\n{verify_script}\nPYEOF"
+        out, err, code = self.wsl_cmd(verify_cmd)
+        if code != 0:
+            print(f"  [SYMBOL] Runtime validation failed: {(err or out)[:200]}")
+            return False
+        print("  [SYMBOL] ABI-ready torch lane verified")
+        return True
             
     def check_system(self):
         """Check WSL2 system"""
@@ -95,6 +151,9 @@ class UserSpaceWSL2Setup:
         for d in dirs:
             self.wsl_cmd(f"mkdir -p {d}")
         print("  [SYMBOL] Workspace created")
+        if not self.stage_constraints_file():
+            return False
+        print("  [SYMBOL] Bootstrap constraints staged")
         return True
         
     def install_packages(self):
@@ -113,6 +172,7 @@ class UserSpaceWSL2Setup:
         
         print("Installing packages (this may take 10-15 minutes)...")
         print("Using --user flag to install in user space\n")
+        constraints_path = f"{self.workspace}/{WSL_AUDIO_BOOTSTRAP_CONSTRAINTS}"
         
         for i, (pkg, desc) in enumerate(packages, 1):
             print(f"[{i}/{len(packages)}] {desc}...")
@@ -126,7 +186,7 @@ class UserSpaceWSL2Setup:
                     f"--index-url {WSL_AUDIO_TORCH_INDEX_URL}"
                 )
             else:
-                cmd = f"pip3 install --user {pkg}"
+                cmd = f"pip3 install --user --constraint {constraints_path} {pkg}"
                 
             out, err, code = self.wsl_cmd(cmd, timeout=600)
             
@@ -404,6 +464,7 @@ if __name__ == "__main__":
             ("System Check", self.check_system),
             ("Workspace", self.create_workspace),
             ("Python Packages", self.install_packages),
+            ("Runtime Validation", self.validate_runtime),
             ("Processing Scripts", self.create_scripts),
             ("Windows Bridge", self.create_bridge)
         ]

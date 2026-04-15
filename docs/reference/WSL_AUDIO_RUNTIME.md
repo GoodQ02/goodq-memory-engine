@@ -33,6 +33,7 @@ Notes:
   - `torch==2.5.1+cu121`
   - `torchvision==0.20.1+cu121`
   - `torchaudio==2.5.1+cu121`
+- The bootstrap installers now stage and honor `wsl2_audio/requirements-bootstrap-constraints.txt` to keep later dependency installs from drifting off that lane.
 
 ## Readiness States
 
@@ -65,6 +66,10 @@ Additional operator truth:
 - WSL audio must be both `runtime_ready=true` and `abi_ready=true` before bootstrap considers the workspace ready
 - canonical ingestion does **not** select the WSL backend when `abi_ready=false`
 - when WSL is ABI-degraded and strict mode is not enabled, the system should fall back to the Windows-safe audio path instead of attempting the canonical WSL worker
+- WSL bootstrap installers must end with:
+  - `python -m pip check == 0`
+  - the validated torch / torchvision / torchaudio trio still installed
+  - successful `torchvision.ops.nms` import before the environment is considered ready
 
 ## Runtime Error Surfacing
 

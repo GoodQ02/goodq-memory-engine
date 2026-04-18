@@ -6,7 +6,7 @@ models:
   llama1b_speed:
     name: "Llama-1B-Speed"
     base_url: "http://localhost:38005/v1"
-    model_id: "/mnt/l/_DATA/models/llm/huggingface/Llama-3.2-1B-Instruct"
+    model_id: "${GOODQ_WSL_MODEL_PATH:-meta-llama/Llama-3.2-1B-Instruct}"
     engine: "vllm"
     category: "speed"
     gpu_accelerated: true

@@ -1,3 +1,4 @@
+import os
 from typing import Any, Dict, List
 from urllib.parse import urlparse
 
@@ -22,9 +23,10 @@ def _build_llm_models(cfg: Dict[str, Any]) -> List[ModelConfig]:
     vllm_base, vllm_port = _split_base_and_port(str(vllm_url))
     ollama_base, ollama_port = _split_base_and_port(str(ollama_url))
 
-    vllm_model_id = llm_cfg.get(
-        "vllm_model",
-        "/mnt/l/_DATA/models/llm/huggingface/Llama-3.2-1B-Instruct",
+    vllm_model_id = (
+        llm_cfg.get("vllm_model")
+        or os.environ.get("GOODQ_WSL_MODEL_PATH")
+        or "meta-llama/Llama-3.2-1B-Instruct"
     )
     ollama_model_id = llm_cfg.get("ollama_model", "phi4")
 

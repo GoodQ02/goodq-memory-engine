@@ -6,6 +6,19 @@
 
 This is the current landing page for the active GoodQ4All docs surface.
 
+## Current Outcome and Evidence
+
+- Current release checkpoint:
+  [`docs/releases/RELEASE_0.1.1.md`](releases/RELEASE_0.1.1.md)
+- Current operator checkpoint:
+  [`docs/goodq4all_agent_status.md`](goodq4all_agent_status.md)
+- Current system snapshot:
+  [`docs/SYSTEM_SNAPSHOT.md`](SYSTEM_SNAPSHOT.md)
+- Reports and evidence map:
+  [`reports/README.md`](../reports/README.md)
+- Diagnostics index:
+  [`docs/diagnostics/README.md`](diagnostics/README.md)
+
 ## Start Here
 
 - Install:

@@ -170,6 +170,19 @@ For manual environment control, host overrides, and profile flags, use:
 - Third-party notices and redistribution guidance live in [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
 ## Documentation Map
 
+### Current Outcome and Evidence
+
+- Current release checkpoint:
+  [`docs/releases/RELEASE_0.1.1.md`](docs/releases/RELEASE_0.1.1.md)
+- Shipping profile:
+  [`docs/releases/SHIP_PROFILE.md`](docs/releases/SHIP_PROFILE.md)
+- Current operator state:
+  [`docs/goodq4all_agent_status.md`](docs/goodq4all_agent_status.md)
+- Current system snapshot:
+  [`docs/SYSTEM_SNAPSHOT.md`](docs/SYSTEM_SNAPSHOT.md)
+- Evidence and report map:
+  [`reports/README.md`](reports/README.md)
+
 ### Start Here
 
 - Install (canonical): [`docs/guides/install/INSTALL.md`](docs/guides/install/INSTALL.md)

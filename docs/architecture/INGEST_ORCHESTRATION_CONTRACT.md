@@ -119,6 +119,28 @@ That means:
 
 No alternate engine may silently bypass scene persistence or Phase 6 consumption.
 
+## Agent Repair Behavior
+
+Agent-driven runtime changes must preserve the scene-first invariant.
+
+Required behavior:
+
+1. isolate one concrete seam
+2. trace it to one code path or one contract mismatch
+3. implement the smallest viable repair
+4. validate at scene level or focused contract level first
+5. widen to a full witness only after the smaller validation passes
+
+Agent actions must not:
+
+- bundle unrelated fixes into one runtime pass
+- bypass scene-first validation
+- alter persistence or Phase 6 contracts casually
+- treat eval anchors or public references as runtime truth overrides
+
+This repair behavior is elaborated in
+`docs/architecture/AGENT_DECISION_PROTOCOL.md`.
+
 ## Phase Activation Contract
 
 ### Current canonical sequence

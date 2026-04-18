@@ -1,10 +1,10 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: GENERATED_SNAPSHOT -->
-<!-- DOC_LAST_VERIFIED: 2026-04-10 -->
+<!-- DOC_LAST_VERIFIED: 2026-04-17 -->
 
 # System Snapshot
 
-_Generated: 2026-04-10T10:30:00_
+_Generated: 2026-04-17T19:15:00_
 
 ## Host & OS
 - Hostname: GOOD-CUBE
@@ -98,6 +98,9 @@ _Generated: 2026-04-10T10:30:00_
 - Five-episode campaign close-out: `docs/testing/SEASON3_FIVE_EPISODE_CAMPAIGN_MEMO_2026-04-12.md`
 - Next-layer implementation prework: `docs/architecture/NEXT_LAYER_IMPLEMENTATION_PLAN_2026-04-12.md`
 - Supplemental five-scene audit: `docs/diagnostics/SEASON3_FIVE_SAMPLE_AUDIT_2026-04-12.md`
+- Post-campaign validation:
+  - `03x09` passed as the authoritative self-audit witness on `reports/fresh_ingest_runs/20260412_140550_season3_feature_ladder/`
+  - canonical audit: `docs/diagnostics/SCENE_CONTEXT_LLM_AUDIT_03x09_2026-04-12.md`
 - Campaign completion state:
   - run root: `reports/fresh_ingest_runs/20260411_194713_season3_feature_ladder/`
   - episodes: `03x04` through `03x08`
@@ -110,6 +113,15 @@ _Generated: 2026-04-10T10:30:00_
     - `phase6_complete = true`
     - `qdrant_ok = true`
     - `generic_context_detected = false`
+- Current release checkpoint:
+  - proving witness: `reports/fresh_ingest_runs/20260417_163530_season3_feature_ladder/`
+  - additive `scene_context_arbitration` is now canonical in Phase 6 outputs and projected run summaries
+  - the three-tier `scene_context_llm` contract is active, with explicit array persistence for low-signal scenes
+  - transcript-beat seam closure is witness-proven on `03x10` / `03x11`, including `Steve Pocatillo`, `alternate side`, and `rental car`
+  - local episode-reference eval now uses curated IMDb-backed anchor artifacts under `reports/reference_anchors/seinfeld/episodes/` for audit only; they score witness output without overriding runtime scene truth
+  - proving-witness local eval improved to `6/6` core beats and `9.0/9.0` salience
+  - local forensic reference: `docs/diagnostics/MEMORY_ARBITRATION_FORENSIC_AUDIT_03x10_2026-04-12.md`
+  - the `GOOD-SPEED-32` WSL audio bootstrap drift fix is now shipped on `main`; remaining follow-up is laptop-side confirmation of the repaired installer path.
 
 ## Recent Hardening
 - WSL audio readiness now requires `abi_ready=true` before bootstrap or canonical ingest will treat the workspace as healthy.

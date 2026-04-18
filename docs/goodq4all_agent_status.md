@@ -1,10 +1,10 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: GENERATED_SNAPSHOT -->
-<!-- DOC_LAST_VERIFIED: 2026-04-10 -->
+<!-- DOC_LAST_VERIFIED: 2026-04-17 -->
 
 # GoodQ4All Agent Status
 
-_Generated: 2026-04-10T10:30:00_
+_Generated: 2026-04-17T19:15:00_
 
 This document is a generated operator snapshot of the current stitching-era and offline-package baseline.
 Treat per-run artifacts and canonical runtime contracts as source of truth for live claims.
@@ -88,6 +88,43 @@ Audit Status: ACTIVE (2026-04-10)
     - `phase6_complete = true`
     - `qdrant_ok = true`
     - `generic_context_detected = false`
+- Post-campaign treatment validation:
+  - `03x09` authoritative self-audit witness:
+    - run root: `reports/fresh_ingest_runs/20260412_140550_season3_feature_ladder/`
+    - result: passed
+    - metrics:
+      - `scene_count = 39`
+      - `phase6_complete = true`
+      - `qdrant_ok = true`
+      - `segments_with_scene_context_llm = 36`
+      - `generic_context_detected = false`
+  - canonical references:
+    - `docs/diagnostics/SCENE_CONTEXT_LLM_AUDIT_03x09_2026-04-12.md`
+    - `docs/diagnostics/SEASON3_EPISODE_FORENSIC_AUDIT_03x05_2026-04-12.md`
+
+## Current Release Checkpoint
+- Release checkpoint witness root: `reports/fresh_ingest_runs/20260417_163530_season3_feature_ladder/`
+- Release checkpoint witness state:
+  - `03x10` passed:
+    - `scene_count = 40`
+    - `phase6_complete = true`
+    - `qdrant_ok = true`
+    - `segments_with_scene_context_llm = 38`
+    - `generic_context_detected = false`
+  - `03x11` passed:
+    - `scene_count = 40`
+    - `phase6_complete = true`
+    - `qdrant_ok = true`
+    - `segments_with_scene_context_llm = 39`
+    - `generic_context_detected = false`
+- Current engineering truth:
+  - `scene_context_arbitration` is now a canonical additive Phase 6 output and projected witness surface
+  - the three-tier `scene_context_llm` contract (`primary_tags`, `contextual_tags`, `structural_tags`) is active and persists explicit arrays instead of `null`
+  - the transcript-beat seam family on `03x10` / `03x11` is closed in the proving lane, including `Steve Pocatillo`, `alternate side`, and `rental car`
+  - local episode-reference eval now uses curated IMDb-backed anchor artifacts under `reports/reference_anchors/seinfeld/episodes/` for audit only; these anchors inform witness scoring but do not override runtime scene truth
+  - the proving witness improved local episode-reference eval to `6/6` core beats and `9.0/9.0` salience
+  - remaining interpretation differences are policy-level texture choices inside the three-tier model rather than blocking seams
+  - canonical forensic reference: `docs/diagnostics/MEMORY_ARBITRATION_FORENSIC_AUDIT_03x10_2026-04-12.md`
 
 ## Offline Package State
 - Desktop machine audit: complete and authoritative in the workspace-adjacent pack
@@ -119,6 +156,7 @@ Audit Status: ACTIVE (2026-04-10)
 - Identity promotion is intentionally conservative; multi-episode evidence is required before stronger links appear.
 - Some caption/object-rich scenes still yield no persisted person entities; continue auditing the vision-semantic seam before widening inference rules.
 - Entity-noise cleanup still has a few season-level tails to inspect (`God`, `Wednesday`, `Tuesday`, `Superman`, `West`).
+- The `GOOD-SPEED-32` WSL audio bootstrap drift issue is now fixed on `main` via staged constraints plus final post-install ABI verification; pending follow-up is laptop-side confirmation of the repaired installer path rather than further desktop-side hardening.
 
 ## Recent Notable Changes
 - Restored `GPU_ENHANCED` desktop runtime through bootstrap-managed environment repair and verified CUDA-backed `goodq_core`.

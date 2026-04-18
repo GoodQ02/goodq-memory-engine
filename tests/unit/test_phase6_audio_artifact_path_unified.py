@@ -478,6 +478,9 @@ def test_harmonizer_applies_scene_context_llm_when_feature_enabled(tmp_path: Pat
         "key_moments": ["Jerry explains the plan", "George listens carefully"],
         "emotional_arc": "tense but controlled",
         "context_tags": ["planning", "kitchen"],
+        "primary_tags": [],
+        "contextual_tags": [],
+        "structural_tags": [],
         "activity_description": "Two friends discuss their next move.",
         "source": "scene_context_llm",
     }
@@ -488,17 +491,26 @@ def test_harmonizer_applies_scene_context_llm_when_feature_enabled(tmp_path: Pat
         item["role"] == "support" and item["kind"] in {"transcript_topic", "visual_signal"}
         for item in segment["scene_context_epistemic"]["evidence"]
     )
+    assert segment["scene_context_arbitration"]["read_model_version"] == 1
+    assert segment["scene_context_arbitration"]["resolved_by"] in {"transcript", "visual", "mixed"}
+    assert any(
+        hypothesis["axis"] == "setting" and hypothesis["claim"] == "kitchen"
+        for hypothesis in segment["scene_context_arbitration"]["hypotheses"]
+    )
     assert temporal_index["segments_with_scene_context_llm"] == 1
     assert temporal_index["segments_with_scene_context_epistemic"] == 1
+    assert temporal_index["segments_with_scene_context_arbitration"] == 1
     assert {"tag": "planning", "count": 1} in temporal_index["top_scene_context_tags"]
     assert not any(item["tag"] == "conversation" for item in temporal_index["top_scene_context_tags"])
     assert temporal_index["top_scene_context_epistemic_states"]
     assert temporal_index["top_scene_context_epistemic_dominant_evidence"]
+    assert temporal_index["top_scene_context_arbitration_resolved_by"]
 
     persisted_manifest = json.loads(scene_manifest_path.read_text(encoding="utf-8"))
     persisted_scene = persisted_manifest["scenes"][0]
     assert persisted_scene["scene_context_llm"] == segment["scene_context_llm"]
     assert persisted_scene["scene_context_epistemic"] == segment["scene_context_epistemic"]
+    assert persisted_scene["scene_context_arbitration"] == segment["scene_context_arbitration"]
 
 
 def test_scene_context_epistemic_marks_low_signal_fallback() -> None:
@@ -574,6 +586,456 @@ def test_scene_context_epistemic_uses_transcript_and_visual_support() -> None:
         item["kind"] == "audio_emotion" and item["value"] == "tense"
         for item in result["evidence"]
     )
+
+
+def test_scene_context_arbitration_records_supported_hypotheses_and_conflicts() -> None:
+    epistemic = {
+        "read_model_version": 1,
+        "state": "partially_supported",
+        "dominant_evidence": "transcript",
+        "evidence_family": "transcript+audio",
+        "fallback_mode": None,
+        "conflict_detected": False,
+        "evidence": [],
+        "limits": [],
+        "next_steps": [],
+    }
+
+    result = harmonizer_module._derive_scene_context_arbitration(  # type: ignore[attr-defined]
+        {
+            "caption": "two people stand by a couch in a living room",
+            "transcript": "The rental car in Florida is still too expensive.",
+            "objects": [{"label": "couch"}],
+            "emotions": [{"label": "tense", "score": 0.8}],
+            "conversation_owner": {"text": "Jerry", "type": "PERSON"},
+        },
+        {
+            "narrative_summary": "Indoor conversation about rental car.",
+            "key_moments": ["They mention the rental car"],
+            "emotional_arc": "tense discussion",
+            "context_tags": ["rental car", "living room"],
+            "activity_description": "Indoor conversation about rental car.",
+            "source": "scene_context_llm",
+        },
+        epistemic,
+    )
+
+    assert result["resolved_by"] == "transcript"
+    assert any(
+        item["axis"] == "topic" and item["claim"] == "rental car"
+        for item in result["hypotheses"]
+    )
+    assert any(
+        item["axis"] == "setting" and item["claim"] == "living room"
+        for item in result["hypotheses"]
+    )
+    assert any(
+        item["axis"] == "tone" and item["claim"] == "tense"
+        for item in result["hypotheses"]
+    )
+    assert any(
+        item["axis"] == "conversation_focus" and item["claim"] == "Jerry"
+        for item in result["hypotheses"]
+    )
+    assert result["evidence_conflicts"] == []
+    assert result["unresolved_axes"] == []
+
+
+def test_scene_context_arbitration_marks_unreflected_topics() -> None:
+    epistemic = {
+        "read_model_version": 1,
+        "state": "partially_supported",
+        "dominant_evidence": "visual",
+        "evidence_family": "visual",
+        "fallback_mode": None,
+        "conflict_detected": False,
+        "evidence": [],
+        "limits": [],
+        "next_steps": [],
+    }
+
+    result = harmonizer_module._derive_scene_context_arbitration(  # type: ignore[attr-defined]
+        {
+            "caption": "a stage with a spotlight",
+            "transcript": "The pharmacist keeps asking about pills.",
+            "objects": [{"label": "stage"}],
+            "emotions": [],
+        },
+        {
+            "narrative_summary": "Spoken monologue about stage.",
+            "key_moments": ["Minimal visual or dialogue content."],
+            "emotional_arc": "spoken monologue",
+            "context_tags": ["spoken monologue"],
+            "activity_description": "Spoken monologue.",
+            "source": "scene_context_llm",
+        },
+        epistemic,
+    )
+
+    assert result["resolved_by"] == "visual"
+    assert result["evidence_conflicts"] == [
+        {
+            "axis": "topic",
+            "reason": "transcript_topics_not_reflected",
+            "transcript_topics": ["pharmacist", "pills"],
+        }
+    ]
+    assert result["unresolved_axes"] == ["topic"]
+
+
+def test_scene_context_arbitration_filters_discourse_fragments_and_identity_names() -> None:
+    epistemic = {
+        "read_model_version": 1,
+        "state": "supported",
+        "dominant_evidence": "mixed",
+        "evidence_family": "transcript+visual",
+        "fallback_mode": None,
+        "conflict_detected": False,
+        "evidence": [],
+        "limits": [],
+        "next_steps": [],
+    }
+
+    result = harmonizer_module._derive_scene_context_arbitration(  # type: ignore[attr-defined]
+        {
+            "caption": "two men sit by a table",
+            "transcript": "Maybe George should go to Long Island. Thanks for the ride.",
+            "objects": [{"label": "table"}],
+            "emotions": [],
+            "mentioned_people": [{"text": "George", "type": "PERSON"}],
+        },
+        {
+            "narrative_summary": "Table conversation about Long Island.",
+            "key_moments": ["They mention Long Island"],
+            "emotional_arc": "calm discussion",
+            "context_tags": ["table", "Long Island"],
+            "activity_description": "Table conversation about Long Island.",
+            "source": "scene_context_llm",
+        },
+        epistemic,
+    )
+
+    topic_claims = [item["claim"] for item in result["hypotheses"] if item["axis"] == "topic"]
+    assert "Long Island" in topic_claims
+    assert "Maybe" not in topic_claims
+    assert "Thanks" not in topic_claims
+    assert "George" not in topic_claims
+
+
+def test_scene_context_arbitration_avoids_person_false_positive_from_personal_phrase() -> None:
+    epistemic = {
+        "read_model_version": 1,
+        "state": "supported",
+        "dominant_evidence": "visual",
+        "evidence_family": "visual",
+        "fallback_mode": None,
+        "conflict_detected": False,
+        "evidence": [],
+        "limits": [],
+        "next_steps": [],
+    }
+
+    result = harmonizer_module._derive_scene_context_arbitration(  # type: ignore[attr-defined]
+        {
+            "caption": "people talking indoors",
+            "transcript": "Let's discuss the personal project later.",
+            "objects": [{"label": "person"}],
+            "emotions": [],
+        },
+        {
+            "narrative_summary": "A group of coworkers discuss their plans for the day.",
+            "key_moments": ["They talk about a personal project"],
+            "emotional_arc": "neutral discussion",
+            "context_tags": ["personal project", "group conversation"],
+            "activity_description": "Coworkers talk indoors.",
+            "source": "scene_context_llm",
+        },
+        epistemic,
+    )
+
+    assert result is None
+
+
+def test_scene_context_arbitration_ignores_generic_visual_gender_claims() -> None:
+    epistemic = {
+        "read_model_version": 1,
+        "state": "supported",
+        "dominant_evidence": "mixed",
+        "evidence_family": "transcript+visual",
+        "fallback_mode": None,
+        "conflict_detected": False,
+        "evidence": [],
+        "limits": [],
+        "next_steps": [],
+    }
+
+    result = harmonizer_module._derive_scene_context_arbitration(  # type: ignore[attr-defined]
+        {
+            "caption": "a man in a white robe is standing in front of a woman",
+            "transcript": "I knew the exit on the Long Island Expressway.",
+            "objects": [{"label": "person"}],
+            "emotions": [],
+        },
+        {
+            "narrative_summary": "Conversation about Long Island Expressway.",
+            "key_moments": ["They mention Long Island Expressway."],
+            "emotional_arc": "neutral tone",
+            "context_tags": ["man", "woman", "conversation", "Long Island Expressway", "Long Island"],
+            "activity_description": "Conversation about Long Island Expressway.",
+            "source": "scene_context_llm",
+        },
+        epistemic,
+    )
+
+    assert result is not None
+    assert result["resolved_by"] == "mixed"
+    assert result["hypotheses"] == [
+        {
+            "axis": "topic",
+            "claim": "Long Island Expressway",
+            "evidence_family": "transcript",
+            "weight": "primary",
+        },
+        {
+            "axis": "topic",
+            "claim": "Long Island",
+            "evidence_family": "transcript",
+            "weight": "primary",
+        },
+    ]
+
+
+def test_scene_context_arbitration_respects_tiered_transcript_tags() -> None:
+    epistemic = {
+        "read_model_version": 1,
+        "state": "supported",
+        "dominant_evidence": "transcript",
+        "evidence_family": "transcript",
+        "fallback_mode": None,
+        "conflict_detected": False,
+        "evidence": [],
+        "limits": [],
+        "next_steps": [],
+    }
+
+    result = harmonizer_module._derive_scene_context_arbitration(  # type: ignore[attr-defined]
+        {
+            "caption": "a man sitting on a couch",
+            "transcript": (
+                "They're making that Woody Allen movie in the block. "
+                "Right out of the Clear Blue Sky? Clear Blue Sky!"
+            ),
+            "objects": [{"label": "couch"}],
+            "emotions": [],
+            "conversation_owner": {"text": "Jerry", "type": "PERSON"},
+        },
+        {
+            "narrative_summary": "Couch conversation about Woody Allen.",
+            "key_moments": ["They mention Woody Allen."],
+            "emotional_arc": "neutral tone",
+            "context_tags": ["Woody Allen", "Clear Blue Sky"],
+            "primary_tags": ["Woody Allen"],
+            "contextual_tags": ["Clear Blue Sky"],
+            "structural_tags": [],
+            "activity_description": "Couch conversation about Woody Allen.",
+            "source": "scene_context_llm",
+        },
+        epistemic,
+    )
+
+    assert result is not None
+    assert result["resolved_by"] == "transcript"
+    assert any(
+        item["axis"] == "topic"
+        and item["claim"] == "Woody Allen"
+        and item["evidence_family"] == "transcript"
+        and item["weight"] == "primary"
+        for item in result["hypotheses"]
+    )
+    assert any(
+        item["axis"] == "context"
+        and item["claim"] == "Clear Blue Sky"
+        and item["evidence_family"] == "transcript"
+        and item["weight"] == "supporting"
+        for item in result["hypotheses"]
+    )
+    assert not any(
+        item["axis"] == "topic" and item["claim"] == "Clear Blue Sky"
+        for item in result["hypotheses"]
+    )
+    assert result["evidence_conflicts"] == []
+    assert result["unresolved_axes"] == []
+
+
+def test_scene_context_arbitration_excludes_structural_tags_from_setting_claims() -> None:
+    epistemic = {
+        "read_model_version": 1,
+        "state": "partially_supported",
+        "dominant_evidence": "visual",
+        "evidence_family": "visual",
+        "fallback_mode": None,
+        "conflict_detected": False,
+        "evidence": [],
+        "limits": [],
+        "next_steps": [],
+    }
+
+    result = harmonizer_module._derive_scene_context_arbitration(  # type: ignore[attr-defined]
+        {
+            "caption": "a man and woman sitting at a table in a restaurant",
+            "transcript": "",
+            "objects": [{"label": "table"}],
+            "emotions": [],
+        },
+        {
+            "narrative_summary": "Restaurant conversation.",
+            "key_moments": ["Restaurant conversation."],
+            "emotional_arc": "neutral tone",
+            "context_tags": ["restaurant"],
+            "primary_tags": [],
+            "contextual_tags": ["restaurant"],
+            "structural_tags": ["table"],
+            "activity_description": "Restaurant conversation.",
+            "source": "scene_context_llm",
+        },
+        epistemic,
+    )
+
+    assert result is not None
+    assert result["resolved_by"] == "visual"
+    assert result["hypotheses"] == [
+        {
+            "axis": "setting",
+            "claim": "restaurant",
+            "evidence_family": "visual",
+            "weight": "supporting",
+        }
+    ]
+    assert result["evidence_conflicts"] == []
+    assert result["unresolved_axes"] == []
+
+
+def test_scene_context_arbitration_tolerates_none_tier_fields() -> None:
+    epistemic = {
+        "read_model_version": 1,
+        "state": "partially_supported",
+        "dominant_evidence": "transcript",
+        "evidence_family": "transcript",
+        "fallback_mode": None,
+        "conflict_detected": False,
+        "evidence": [],
+        "limits": [],
+        "next_steps": [],
+    }
+
+    result = harmonizer_module._derive_scene_context_arbitration(  # type: ignore[attr-defined]
+        {
+            "caption": "two people at a table",
+            "transcript": "We're talking about the reservation.",
+            "objects": [{"label": "table"}],
+            "emotions": [],
+        },
+        {
+            "narrative_summary": "Restaurant conversation about reservation.",
+            "key_moments": ["They mention the reservation."],
+            "emotional_arc": "neutral tone",
+            "context_tags": ["reservation", "restaurant"],
+            "primary_tags": None,
+            "contextual_tags": None,
+            "structural_tags": None,
+            "activity_description": "Restaurant conversation about reservation.",
+            "source": "scene_context_llm",
+        },
+        epistemic,
+    )
+
+    assert result is not None
+    assert result["resolved_by"] == "transcript"
+    assert any(
+        item["axis"] == "topic" and item["claim"] == "reservation"
+        for item in result["hypotheses"]
+    )
+    assert result["evidence_conflicts"] == []
+    assert result["unresolved_axes"] == []
+
+
+def test_harmonizer_preserves_empty_tier_arrays_for_low_signal_scene(tmp_path: Path, monkeypatch) -> None:
+    processing_root = tmp_path / "processing"
+    video_id = "video_scene_context_minimal_contract"
+    processing_dir = processing_root / video_id
+    scene_manifest_path = processing_dir / "video" / "scene_manifest.json"
+
+    _write_json(
+        scene_manifest_path,
+        {
+            "video_id": video_id,
+            "phase5_complete": True,
+            "phase6_complete": True,
+            "scenes": [
+                {
+                    "scene_id": "scene_0000",
+                    "index": 0,
+                    "start": 0.0,
+                    "end": 3.0,
+                    "duration": 3.0,
+                    "confidence": 0.9,
+                    "caption": "a dark room",
+                    "audio": {
+                        "transcript": "",
+                        "segments": [],
+                        "emotion": "neutral",
+                        "emotion_scores": {"neutral": 1.0},
+                    },
+                    "keyframe": {
+                        "objects": [{"label": "room", "score": 0.9}],
+                        "faces": [],
+                    },
+                }
+            ],
+        },
+    )
+
+    audio_artifact_dir = tmp_path / "canonical_audio_artifacts"
+    _write_json(audio_artifact_dir / "transcript.json", {"segments": []})
+    _write_json(audio_artifact_dir / "diarization.json", {"speakers": []})
+    _write_json(audio_artifact_dir / "segmentation.json", {"segments": []})
+
+    monkeypatch.setattr(harmonizer_module, "SCENE_CONTEXT_LLM_AVAILABLE", True)
+    monkeypatch.setattr(
+        harmonizer_module,
+        "analyze_scene_context_llm",
+        lambda scene_meta, cfg: {
+            "narrative_summary": "Minimal visual or dialogue content.",
+            "key_moments": ["Minimal visual or dialogue content."],
+            "emotional_arc": "low-signal scene",
+            "context_tags": ["low-signal scene"],
+            "primary_tags": [],
+            "contextual_tags": [],
+            "structural_tags": ["low-signal scene"],
+            "activity_description": "Minimal visual or dialogue content.",
+        },
+    )
+
+    item = {
+        "id": video_id,
+        "source_path": str(tmp_path / "video.mp4"),
+        "processing_dir": str(processing_dir),
+        "scene_manifest_path": str(scene_manifest_path),
+        "audio_artifact_dir": str(audio_artifact_dir),
+    }
+    cfg = {
+        "paths": {"processing": str(processing_root)},
+        "llm": {"features": {"scene_context_analysis": True}},
+    }
+
+    result = run_cross_modal_harmonization(item, cfg)
+    assert result["harmonization_status"] == "complete"
+
+    manifest = json.loads(scene_manifest_path.read_text(encoding="utf-8"))
+    scene_context = manifest["scenes"][0]["scene_context_llm"]
+    assert scene_context["primary_tags"] == []
+    assert scene_context["contextual_tags"] == []
+    assert scene_context["structural_tags"] == ["low-signal scene"]
 
 
 def test_harmonizer_rollup_uses_payload_truth_and_normalized_entities(

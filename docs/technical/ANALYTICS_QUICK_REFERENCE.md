@@ -148,10 +148,14 @@ dashboard.generate_dashboard(Path('output/dashboard.md'))
 
 ```python
 import sqlite3
+import os
 from pathlib import Path
 
+epoch = "<epoch>"
+epoch_root = Path(os.environ["GOODQ_DATA_ROOT"]) / "GoodQ_Data" / "epochs" / epoch
+
 # Memory database
-conn = sqlite3.connect('data/memory.db')
+conn = sqlite3.connect(epoch_root / 'memory.db')
 cursor = conn.cursor()
 
 # Get all videos
@@ -178,7 +182,7 @@ embeddings = cursor.fetchall()
 conn.close()
 
 # Knowledge graph database
-conn = sqlite3.connect('data/knowledge_graph.db')
+conn = sqlite3.connect(epoch_root / 'knowledge_graph.db')
 cursor = conn.cursor()
 
 # Get all entities
@@ -316,10 +320,14 @@ def custom_insight_analyzer(report):
 
 ```python
 import sqlite3
+import os
 from pathlib import Path
 
+epoch = "<epoch>"
+epoch_root = Path(os.environ["GOODQ_DATA_ROOT"]) / "GoodQ_Data" / "epochs" / epoch
+
 # Get all videos
-conn = sqlite3.connect('data/memory.db')
+conn = sqlite3.connect(epoch_root / 'memory.db')
 cursor = conn.cursor()
 cursor.execute("SELECT DISTINCT video_hash FROM scenes")
 video_hashes = [row[0] for row in cursor.fetchall()]

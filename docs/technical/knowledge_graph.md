@@ -21,7 +21,8 @@ The GoodQ Knowledge Graph provides a powerful semantic layer on top of the multi
    - Entity summarization and statistics
 
 3. **Graph Builder Step** (`steps/graph_builder/`)
-   - legacy orchestration pipeline step
+   - historical compatibility/backfill surface
+   - current ingest primarily enriches the graph incrementally during runtime
    - Constructs graph from analysis results
    - Automatically creates nodes, edges, and relationships
 
@@ -123,8 +124,11 @@ The graph is automatically built during pipeline execution:
 ### Find Person Appearances
 ```python
 from lib.graph_query import GraphQuery
+from pathlib import Path
 
-with GraphQuery('data/knowledge_graph.db') as gq:
+kg_path = Path("<GOODQ_DATA_ROOT>") / "GoodQ_Data" / "epochs" / "<epoch>" / "knowledge_graph.db"
+
+with GraphQuery(kg_path) as gq:
     appearances = gq.find_person_appearances('John')
     for app in appearances:
         print(f"Scene: {app['scene_id']}, Time: {app['timestamp_start']}s")
@@ -228,7 +232,7 @@ def goodq_pipeline(...):
 ### Graph Traversal
 ```python
 # Find all nodes within 2 hops of a person
-with GraphQuery('data/knowledge_graph.db') as gq:
+with GraphQuery(kg_path) as gq:
     cursor = gq.kg.conn.cursor()
     person_id = cursor.execute(
         "SELECT id FROM nodes WHERE name='John'"

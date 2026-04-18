@@ -30,6 +30,7 @@ try:
         analyze_scene_context_llm,
         _caption_is_low_signal as _scene_context_caption_is_low_signal,
         _extract_transcript_topic_hints as _scene_context_extract_transcript_topic_hints,
+        _is_low_value_topic_fragment as _scene_context_is_low_value_topic_fragment,
     )
     SCENE_CONTEXT_LLM_AVAILABLE = True
 except ImportError:
@@ -41,6 +42,9 @@ except ImportError:
 
     def _scene_context_extract_transcript_topic_hints(transcript: str) -> List[str]:
         return []
+
+    def _scene_context_is_low_value_topic_fragment(value: str) -> bool:
+        return not bool(str(value or "").strip())
 
 try:
     from steps.common.epistemic_formatter import EPISTEMIC_READ_MODEL_VERSION
@@ -345,6 +349,9 @@ def _sanitize_scene_context_llm(raw_context: Any) -> Optional[Dict[str, Any]]:
                 break
         return cleaned
 
+    raw_primary_tags = _clean_list(raw_context.get("primary_tags"), limit=8)
+    raw_contextual_tags = _clean_list(raw_context.get("contextual_tags"), limit=8)
+    raw_structural_tags = _clean_list(raw_context.get("structural_tags"), limit=8)
     raw_tags = _clean_list(raw_context.get("context_tags"), limit=8)
     has_specific_tags = any(tag.casefold() not in generic_tags for tag in raw_tags)
     cleaned_tags = [
@@ -361,6 +368,9 @@ def _sanitize_scene_context_llm(raw_context: Any) -> Optional[Dict[str, Any]]:
         "activity_description": _clean_text(raw_context.get("activity_description")),
         "source": "scene_context_llm",
     }
+    sanitized["primary_tags"] = raw_primary_tags[:5]
+    sanitized["contextual_tags"] = raw_contextual_tags[:5]
+    sanitized["structural_tags"] = raw_structural_tags[:5]
     has_signal = any(
         sanitized[key]
         for key in (
@@ -385,6 +395,90 @@ def _scene_context_text_blob(scene_context: Dict[str, Any]) -> str:
         if isinstance(values, list):
             parts.extend(str(value).strip() for value in values if isinstance(value, str) and str(value).strip())
     return " ".join(parts).strip().lower()
+
+
+def _collect_entity_texts(values: Any) -> List[str]:
+    texts: List[str] = []
+    if not isinstance(values, list):
+        return texts
+    for value in values:
+        normalized = _normalize_entity_rollup_record(value)
+        if normalized:
+            texts.append(normalized["text"].strip().lower())
+    return texts
+
+
+_ARBITRATION_DISCOURSE_TOPIC_TOKENS = {
+    "because",
+    "every",
+    "first",
+    "goodbye",
+    "great",
+    "hello",
+    "maybe",
+    "thanks",
+}
+_LOW_VALUE_ARBITRATION_VISUAL_CLAIMS = {
+    "conversation",
+    "man",
+    "person",
+    "men",
+    "men sitting",
+    "men in a store",
+    "woman",
+    "man and woman",
+    "woman in a suit",
+    "spoken topic",
+}
+
+
+def _text_contains_phrase(text: str, phrase: str) -> bool:
+    haystack = str(text or "").strip().casefold()
+    needle = str(phrase or "").strip().casefold()
+    if not haystack or not needle:
+        return False
+    pattern = re.compile(rf"(?<![a-z0-9]){re.escape(needle)}(?![a-z0-9])", re.IGNORECASE)
+    return bool(pattern.search(haystack))
+
+
+def _collect_scene_identity_names(scene_meta: Dict[str, Any]) -> set[str]:
+    identity_names: set[str] = set()
+    owner = _normalize_entity_rollup_record(scene_meta.get("conversation_owner"))
+    if owner:
+        identity_names.add(owner["text"].casefold())
+    for person in _collect_entity_texts(scene_meta.get("mentioned_people")):
+        identity_names.add(person.casefold())
+    for person in _collect_entity_texts(scene_meta.get("visible_people")):
+        identity_names.add(person.casefold())
+    for person in _collect_entity_texts(scene_meta.get("candidate_visible_people")):
+        identity_names.add(person.casefold())
+    return identity_names
+
+
+def _is_supported_arbitration_topic(
+    topic: str,
+    *,
+    identity_names: set[str],
+) -> bool:
+    normalized = str(topic or "").strip()
+    lowered = normalized.casefold()
+    if not normalized:
+        return False
+    if _scene_context_is_low_value_topic_fragment(normalized):
+        return False
+    if lowered in _ARBITRATION_DISCOURSE_TOPIC_TOKENS:
+        return False
+    if lowered.startswith("personal "):
+        return False
+    if lowered in identity_names:
+        return False
+
+    tokens = [token for token in re.findall(r"[A-Za-z0-9]+", normalized) if token]
+    if not tokens:
+        return False
+    if len(tokens) == 1 and normalized[0].isupper():
+        return False
+    return True
 
 
 def _extract_scene_object_labels(scene_objects: Any) -> List[str]:
@@ -434,7 +528,7 @@ def _derive_scene_context_epistemic(
     next_steps: List[Dict[str, str]] = []
     families: List[str] = []
 
-    supported_topics = [hint for hint in topic_hints if hint and hint.casefold() in context_blob]
+    supported_topics = [hint for hint in topic_hints if hint and _text_contains_phrase(context_blob, hint)]
     for hint in supported_topics[:3]:
         evidence.append({"role": "support", "kind": "transcript_topic", "value": hint})
     if supported_topics:
@@ -443,10 +537,14 @@ def _derive_scene_context_epistemic(
     supported_visual: List[str] = []
     if caption and not _scene_context_caption_is_low_signal(caption):
         for tag in context_tags:
-            if tag and tag in caption_lower and tag not in supported_visual:
+            if tag in _LOW_VALUE_ARBITRATION_VISUAL_CLAIMS:
+                continue
+            if tag and _text_contains_phrase(caption_lower, tag) and tag not in supported_visual:
                 supported_visual.append(tag)
     for label in object_labels:
-        if label in context_blob and label not in supported_visual:
+        if label in _LOW_VALUE_ARBITRATION_VISUAL_CLAIMS:
+            continue
+        if _text_contains_phrase(context_blob, label) and label not in supported_visual:
             supported_visual.append(label)
     if face_count > 0 and any(token in context_blob for token in ("person", "people", "group conversation", "indoor conversation")):
         supported_visual.append("visible_faces")
@@ -533,6 +631,155 @@ def _derive_scene_context_epistemic(
         "evidence": evidence,
         "limits": limits,
         "next_steps": next_steps[:3],
+    }
+
+
+def _derive_scene_context_arbitration(
+    scene_meta: Dict[str, Any],
+    scene_context: Dict[str, Any],
+    scene_context_epistemic: Optional[Dict[str, Any]],
+) -> Optional[Dict[str, Any]]:
+    if not isinstance(scene_context, dict):
+        return None
+
+    transcript = str(scene_meta.get("transcript") or "").strip()
+    caption = str(scene_meta.get("caption") or "").strip()
+    context_blob = _scene_context_text_blob(scene_context)
+    identity_names = _collect_scene_identity_names(scene_meta)
+    topic_hints = [
+        hint
+        for hint in _scene_context_extract_transcript_topic_hints(transcript)
+        if _is_supported_arbitration_topic(hint, identity_names=identity_names)
+    ]
+    raw_primary_tags = scene_context.get("primary_tags")
+    primary_tag_values = raw_primary_tags if isinstance(raw_primary_tags, list) else []
+    primary_tags = {
+        str(tag).strip().casefold()
+        for tag in primary_tag_values
+        if isinstance(tag, str) and tag.strip()
+    }
+    raw_contextual_tags = scene_context.get("contextual_tags")
+    contextual_tag_values = raw_contextual_tags if isinstance(raw_contextual_tags, list) else []
+    contextual_tags = {
+        str(tag).strip().casefold()
+        for tag in contextual_tag_values
+        if isinstance(tag, str) and tag.strip()
+    }
+    has_tiered_tags = bool(primary_tags or contextual_tags or isinstance(scene_context.get("structural_tags"), list))
+
+    if has_tiered_tags:
+        supported_topics = [hint for hint in topic_hints if hint and hint.casefold() in primary_tags]
+        contextual_topic_hints = [
+            hint
+            for hint in topic_hints
+            if hint
+            and hint.casefold() in contextual_tags
+            and hint not in supported_topics
+        ]
+    else:
+        supported_topics = [hint for hint in topic_hints if hint and _text_contains_phrase(context_blob, hint)]
+        contextual_topic_hints = []
+    object_labels = _extract_scene_object_labels(scene_meta.get("objects"))
+    caption_lower = caption.lower()
+    top_emotion = None
+    emotions = scene_meta.get("emotions") if isinstance(scene_meta.get("emotions"), list) else []
+    if emotions:
+        top_emotion = str(emotions[0].get("label") or "").strip().lower() or None
+    emotional_arc = str(scene_context.get("emotional_arc") or "").strip().lower()
+
+    hypotheses: List[Dict[str, str]] = []
+    evidence_conflicts: List[Dict[str, Any]] = []
+    unresolved_axes: List[str] = []
+
+    def _add_hypothesis(axis: str, claim: str, evidence_family: str, weight: str) -> None:
+        normalized_claim = str(claim or "").strip()
+        if not normalized_claim:
+            return
+        candidate = {
+            "axis": axis,
+            "claim": normalized_claim,
+            "evidence_family": evidence_family,
+            "weight": weight,
+        }
+        if candidate not in hypotheses:
+            hypotheses.append(candidate)
+
+    for topic in supported_topics[:2]:
+        _add_hypothesis("topic", topic, "transcript", "primary")
+    for topic in contextual_topic_hints[:2]:
+        _add_hypothesis("context", topic, "transcript", "supporting")
+
+    supported_visual: List[str] = []
+    raw_tags = scene_context.get("context_tags")
+    context_tags = [
+        str(tag).strip().lower()
+        for tag in raw_tags
+        if isinstance(raw_tags, list) and isinstance(tag, str) and tag.strip()
+    ]
+    if caption and not _scene_context_caption_is_low_signal(caption):
+        for tag in context_tags:
+            if tag in _LOW_VALUE_ARBITRATION_VISUAL_CLAIMS:
+                continue
+            if _text_contains_phrase(caption_lower, tag) and tag not in supported_visual:
+                supported_visual.append(tag)
+    for label in object_labels:
+        if label in _LOW_VALUE_ARBITRATION_VISUAL_CLAIMS:
+            continue
+        if _text_contains_phrase(context_blob, label) and label not in supported_visual:
+            supported_visual.append(label)
+    for tag in supported_visual[:2]:
+        _add_hypothesis("setting", tag, "visual", "supporting")
+
+    if top_emotion and top_emotion in emotional_arc:
+        _add_hypothesis("tone", top_emotion, "audio", "supporting")
+
+    owner = _normalize_entity_rollup_record(scene_meta.get("conversation_owner"))
+    if owner:
+        _add_hypothesis("conversation_focus", owner["text"], "identity", "supporting")
+    else:
+        mentioned_people = _collect_entity_texts(scene_meta.get("mentioned_people"))
+        visible_people = _collect_entity_texts(scene_meta.get("visible_people"))
+        candidate_people = _collect_entity_texts(scene_meta.get("candidate_visible_people"))
+        for person in (mentioned_people + visible_people + candidate_people)[:1]:
+            _add_hypothesis("conversation_focus", person, "identity", "supporting")
+
+    reflected_transcript_topics = supported_topics + contextual_topic_hints
+    if topic_hints and not reflected_transcript_topics and transcript:
+        evidence_conflicts.append(
+            {
+                "axis": "topic",
+                "reason": "transcript_topics_not_reflected",
+                "transcript_topics": topic_hints[:3],
+            }
+        )
+        unresolved_axes.append("topic")
+
+    if top_emotion and top_emotion not in emotional_arc:
+        evidence_conflicts.append(
+            {
+                "axis": "tone",
+                "reason": "audio_emotion_not_reflected",
+                "audio_emotion": top_emotion,
+            }
+        )
+        unresolved_axes.append("tone")
+
+    if not hypotheses and scene_context_epistemic and scene_context_epistemic.get("fallback_mode"):
+        unresolved_axes.append("low_signal")
+
+    resolved_by = "unknown"
+    if isinstance(scene_context_epistemic, dict):
+        resolved_by = str(scene_context_epistemic.get("dominant_evidence") or "").strip().lower() or "unknown"
+
+    if not hypotheses and not evidence_conflicts and not unresolved_axes:
+        return None
+
+    return {
+        "read_model_version": EPISTEMIC_READ_MODEL_VERSION,
+        "resolved_by": resolved_by,
+        "hypotheses": hypotheses[:4],
+        "evidence_conflicts": evidence_conflicts[:3],
+        "unresolved_axes": unresolved_axes[:3],
     }
 
 
@@ -1105,6 +1352,7 @@ def _apply_scene_context_llm(
     for segment in unified_segments:
         segment["scene_context_llm"] = None
         segment["scene_context_epistemic"] = None
+        segment["scene_context_arbitration"] = None
 
     if not SCENE_CONTEXT_LLM_AVAILABLE or not _scene_context_llm_enabled(cfg):
         return
@@ -1157,6 +1405,10 @@ def _apply_scene_context_llm(
             "face_count": face_count,
             "emotions": emotions_payload,
             "speakers": segment.get("speaker_ids") or [],
+            "conversation_owner": segment.get("conversation_owner"),
+            "visible_people": segment.get("visible_people") or [],
+            "mentioned_people": segment.get("mentioned_people") or [],
+            "candidate_visible_people": segment.get("candidate_visible_people") or [],
         }
 
         try:
@@ -1174,6 +1426,11 @@ def _apply_scene_context_llm(
         segment["scene_context_llm"] = sanitized_context
         if sanitized_context:
             segment["scene_context_epistemic"] = _derive_scene_context_epistemic(scene_meta, sanitized_context)
+            segment["scene_context_arbitration"] = _derive_scene_context_arbitration(
+                scene_meta,
+                sanitized_context,
+                segment.get("scene_context_epistemic"),
+            )
 
 
 def _persist_harmonized_scene_fields(
@@ -1211,6 +1468,7 @@ def _persist_harmonized_scene_fields(
         "audio_emotion_scores",
         "scene_context_llm",
         "scene_context_epistemic",
+        "scene_context_arbitration",
         "speaker_voice_signature_count",
         "speaker_count",
         "dominant_speaker_id",
@@ -1865,6 +2123,7 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
             'audio_emotion_scores': audio_emotion_scores,
             'scene_context_llm': None,
             'scene_context_epistemic': None,
+            'scene_context_arbitration': None,
             'speaker_count': candidate_visibility['speaker_count'],
             'dominant_speaker_id': candidate_visibility['dominant_speaker_id'],
             'dominant_speaker_share': candidate_visibility['dominant_speaker_share'],
@@ -1910,6 +2169,8 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
     scene_context_tag_counts: Dict[str, int] = {}
     scene_context_epistemic_state_counts: Dict[str, int] = {}
     scene_context_epistemic_dominant_counts: Dict[str, int] = {}
+    scene_context_arbitration_resolved_counts: Dict[str, int] = {}
+    scene_context_arbitration_unresolved_counts: Dict[str, int] = {}
     segment_content_states: List[str] = []
     for seg in unified_segments:
         segment_state = _normalize_content_state(seg.get('content_state')) or 'signal'
@@ -1976,6 +2237,21 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
                 scene_context_epistemic_dominant_counts[dominant_evidence] = (
                     scene_context_epistemic_dominant_counts.get(dominant_evidence, 0) + 1
                 )
+        scene_context_arbitration = seg.get("scene_context_arbitration")
+        if isinstance(scene_context_arbitration, dict):
+            resolved_by = str(scene_context_arbitration.get("resolved_by") or "").strip().lower()
+            if resolved_by:
+                scene_context_arbitration_resolved_counts[resolved_by] = (
+                    scene_context_arbitration_resolved_counts.get(resolved_by, 0) + 1
+                )
+            unresolved_axes = scene_context_arbitration.get("unresolved_axes")
+            if isinstance(unresolved_axes, list):
+                for axis in unresolved_axes:
+                    normalized_axis = str(axis or "").strip().lower()
+                    if normalized_axis:
+                        scene_context_arbitration_unresolved_counts[normalized_axis] = (
+                            scene_context_arbitration_unresolved_counts.get(normalized_axis, 0) + 1
+                        )
 
     semantic_entity_counts = {
         key: value
@@ -2012,6 +2288,16 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
     )[:20]
     top_scene_context_epistemic_dominant = sorted(
         scene_context_epistemic_dominant_counts.items(),
+        key=lambda x: x[1],
+        reverse=True,
+    )[:20]
+    top_scene_context_arbitration_resolved = sorted(
+        scene_context_arbitration_resolved_counts.items(),
+        key=lambda x: x[1],
+        reverse=True,
+    )[:20]
+    top_scene_context_arbitration_unresolved = sorted(
+        scene_context_arbitration_unresolved_counts.items(),
         key=lambda x: x[1],
         reverse=True,
     )[:20]
@@ -2057,6 +2343,13 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
         'segments_with_speaker_voice_signatures': sum(1 for seg in unified_segments if seg.get('speaker_voice_signature_count', 0) > 0),
         'segments_with_scene_context_llm': sum(1 for seg in unified_segments if seg.get('scene_context_llm')),
         'segments_with_scene_context_epistemic': sum(1 for seg in unified_segments if seg.get('scene_context_epistemic')),
+        'segments_with_scene_context_arbitration': sum(1 for seg in unified_segments if seg.get('scene_context_arbitration')),
+        'segments_with_scene_context_arbitration_conflicts': sum(
+            1
+            for seg in unified_segments
+            for arbitration in [seg.get('scene_context_arbitration')]
+            if isinstance(arbitration, dict) and arbitration.get('evidence_conflicts')
+        ),
         'top_entities': [
             {'entity': k.split(':')[0], 'type': k.split(':')[1], 'count': v}
             for k, v in top_entities
@@ -2116,6 +2409,14 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
         'top_scene_context_epistemic_dominant_evidence': [
             {'evidence': key, 'count': value}
             for key, value in top_scene_context_epistemic_dominant
+        ],
+        'top_scene_context_arbitration_resolved_by': [
+            {'resolved_by': key, 'count': value}
+            for key, value in top_scene_context_arbitration_resolved
+        ],
+        'top_scene_context_arbitration_unresolved_axes': [
+            {'axis': key, 'count': value}
+            for key, value in top_scene_context_arbitration_unresolved
         ],
         'top_objects': [
             {'entity': k.split(':')[0], 'type': k.split(':')[1], 'count': v}

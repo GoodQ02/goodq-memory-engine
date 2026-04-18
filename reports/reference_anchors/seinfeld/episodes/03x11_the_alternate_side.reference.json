@@ -1,0 +1,82 @@
+{
+  "series": "Seinfeld",
+  "season": 3,
+  "episode": 11,
+  "episode_code": "03x11",
+  "title": "The Alternate Side",
+  "status": "curated",
+  "last_verified": "2026-04-17",
+  "sources": [
+    {
+      "provider": "IMDb",
+      "source_type": "official_summary",
+      "url": "https://www.imdb.com/title/tt0697648/",
+      "notes": "Locally distilled for eval only; never fetched during runtime."
+    }
+  ],
+  "reference_summary": "Jerry deals with a stolen car, George struggles with an alternate-side parking job, Kramer obsesses over a line in a Woody Allen film, and Elaine dates Owen March before his stroke complicates everything.",
+  "beats": [
+    {
+      "id": "beat_car_stolen",
+      "text": "Jerry's car is stolen, forcing him into a rental-car thread for the episode.",
+      "importance": "core",
+      "aliases": ["stolen car", "car stolen", "rental car", "car phone"]
+    },
+    {
+      "id": "beat_alternate_side",
+      "text": "George takes Sid's alternate-side parking job and creates a mess moving cars.",
+      "importance": "core",
+      "aliases": ["alternate side", "parking job", "moving cars", "Sid"]
+    },
+    {
+      "id": "beat_pretzels",
+      "text": "Kramer gets a line in a Woody Allen movie and fixates on 'These pretzels are making me thirsty.'",
+      "importance": "core",
+      "aliases": ["Woody Allen", "pretzel", "pretzels", "making me thirsty"]
+    },
+    {
+      "id": "beat_owen_march",
+      "text": "Elaine dates Owen March, but his stroke makes breaking up impossible.",
+      "importance": "core",
+      "aliases": ["Owen March", "stroke", "break up"]
+    }
+  ],
+  "salient_concepts": [
+    {
+      "concept": "Woody Allen",
+      "tier": "primary",
+      "weight": 1.0,
+      "aliases": ["Woody"]
+    },
+    {
+      "concept": "pretzel",
+      "tier": "primary",
+      "weight": 1.0,
+      "aliases": ["pretzels", "making me thirsty"]
+    },
+    {
+      "concept": "alternate side",
+      "tier": "primary",
+      "weight": 0.9,
+      "aliases": ["parking", "moving cars", "parking job"]
+    },
+    {
+      "concept": "Owen March",
+      "tier": "primary",
+      "weight": 0.9,
+      "aliases": ["Owen", "stroke"]
+    },
+    {
+      "concept": "Upper West Side",
+      "tier": "contextual",
+      "weight": 0.5,
+      "aliases": []
+    },
+    {
+      "concept": "rental car",
+      "tier": "primary",
+      "weight": 0.8,
+      "aliases": ["stolen car", "car stolen", "car phone"]
+    }
+  ]
+}

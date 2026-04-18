@@ -7,7 +7,7 @@
 **Purpose:** Define the supported, “shippable” surface of GoodQ4All – the commands, environments, and documentation that must remain stable for production use.
 
 **Release stability note:** the current public-facing software version is
-`0.1.0`. Treat this shipping profile as a pre-1.0 contract: the supported
+`0.1.1`. Treat this shipping profile as a pre-1.0 contract: the supported
 bootstrap path and canonical runtime surface are the priority, while APIs and
 adjacent helper tooling may still evolve between releases.
 
@@ -94,7 +94,7 @@ adjacent helper tooling may still evolve between releases.
 ### Validation & Release
 
 - `CHANGELOG.md` – Public-facing release milestones and readiness checkpoints.
-- `docs/releases/RELEASE_0.1.0.md` – Current public release checkpoint narrative.
+- `docs/releases/RELEASE_0.1.1.md` – Current public release checkpoint narrative.
 - `THIRD_PARTY_NOTICES.md` – Public-facing summary of vendored components, model downloads, and upstream licensing caveats.
 - `docs/archive/audits/RELEASE_CHECKLIST.md` – Historical pre-release validation checklist.
 - Current witness-backed release baseline:

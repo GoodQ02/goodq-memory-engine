@@ -1877,6 +1877,31 @@ def _safe_read_json_dict(path_value: Any) -> Optional[Dict[str, Any]]:
         return None
 
 
+def _rehydrate_video_result_scenes_from_manifest(
+    video_result: Dict[str, Any],
+    scene_manifest_path: Any,
+) -> bool:
+    manifest = _safe_read_json_dict(scene_manifest_path)
+    raw_scenes = manifest.get('scenes') if isinstance(manifest, dict) else None
+    if not isinstance(raw_scenes, list):
+        return False
+    canonical_scenes: List[Dict[str, Any]] = []
+    for scene in raw_scenes:
+        if not isinstance(scene, dict):
+            continue
+        projected_scene = dict(scene)
+        scene_context_llm = scene.get('scene_context_llm')
+        if isinstance(scene_context_llm, dict):
+            projected_scene.setdefault('summary', scene_context_llm.get('narrative_summary'))
+            projected_scene.setdefault('tags', scene_context_llm.get('context_tags'))
+            projected_scene.setdefault('key_moments', scene_context_llm.get('key_moments'))
+        canonical_scenes.append(projected_scene)
+    if not canonical_scenes:
+        return False
+    video_result['scenes'] = canonical_scenes
+    return True
+
+
 def _ratio(numerator: int, denominator: int) -> float:
     if denominator <= 0:
         return 0.0
@@ -5411,6 +5436,10 @@ def run(
                             with open(temporal_index_path, 'r', encoding='utf-8') as f:
                                 video_result['temporal_index'] = json.load(f)
                         video_result['temporal_index_path'] = temporal_index_path
+                        _rehydrate_video_result_scenes_from_manifest(
+                            video_result,
+                            phase6_item.get('scene_manifest_path'),
+                        )
                         video_result['phase6_complete'] = bool(phase6a_success)
                         if not phase6a_success:
                             typer.echo('[PHASE 6] [WARN] Harmonization complete but Phase 6a failed; keeping phase6_complete=False', err=True)

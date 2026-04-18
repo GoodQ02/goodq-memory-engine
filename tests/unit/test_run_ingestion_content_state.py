@@ -142,3 +142,69 @@ def test_aggregate_content_summary_counts_and_sums():
 
     assert summary == {"signal": 2, "empty": 1, "processing_error": 1}
     assert sum(summary.values()) == len(scenes)
+
+
+def test_rehydrate_video_result_scenes_from_manifest_promotes_canonical_phase6_fields(tmp_path: Path):
+    run_ingestion = _load_run_ingestion_module()
+
+    manifest_path = tmp_path / "scene_manifest.json"
+    manifest_path.write_text(
+        """
+{
+  "scenes": [
+    {
+      "scene_id": "scene_0001",
+      "index": 0,
+      "scene_context_llm": {
+        "narrative_summary": "Store conversation about medicine.",
+        "context_tags": ["store", "medicine"],
+        "primary_tags": ["medicine"],
+        "contextual_tags": ["store"],
+        "structural_tags": [],
+        "key_moments": ["They mention medicine."]
+      },
+      "scene_context_epistemic": {"state": "supported"},
+      "scene_context_arbitration": {"resolved_by": "mixed"}
+    }
+  ]
+}
+        """.strip(),
+        encoding="utf-8",
+    )
+    video_result = {
+        "scenes": [
+            {
+                "scene_id": "scene_0001",
+                "index": 0,
+                "summary": None,
+                "tags": [None],
+                "key_moments": [None],
+            }
+        ]
+    }
+
+    updated = run_ingestion._rehydrate_video_result_scenes_from_manifest(
+        video_result,
+        manifest_path,
+    )
+
+    assert updated is True
+    assert video_result["scenes"] == [
+        {
+            "scene_id": "scene_0001",
+            "index": 0,
+            "scene_context_llm": {
+                "narrative_summary": "Store conversation about medicine.",
+                "context_tags": ["store", "medicine"],
+                "primary_tags": ["medicine"],
+                "contextual_tags": ["store"],
+                "structural_tags": [],
+                "key_moments": ["They mention medicine."],
+            },
+            "scene_context_epistemic": {"state": "supported"},
+            "scene_context_arbitration": {"resolved_by": "mixed"},
+            "summary": "Store conversation about medicine.",
+            "tags": ["store", "medicine"],
+            "key_moments": ["They mention medicine."],
+        }
+    ]

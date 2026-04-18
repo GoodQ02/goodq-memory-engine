@@ -82,8 +82,8 @@ summary_text = generate_scene_summary(scene_meta, cfg, use_llm=True)
 cd <project_root>
 python apply_scene_summaries.py
 
-# Verify LLM summaries in database
-python -c "import sqlite3; c=sqlite3.connect('data/memory.db').cursor(); c.execute('SELECT content FROM summaries WHERE category=\"scene_summary\" LIMIT 1'); import json; print(json.dumps(json.loads(c.fetchone()[0]), indent=2))"
+# Verify LLM summaries in the epoch-scoped memory database
+python -c "from pathlib import Path; import sqlite3, json; db=Path('<GOODQ_DATA_ROOT>')/'GoodQ_Data'/'epochs'/'<epoch>'/'memory.db'; c=sqlite3.connect(db).cursor(); c.execute('SELECT content FROM summaries WHERE category=\"scene_summary\" LIMIT 1'); print(json.dumps(json.loads(c.fetchone()[0]), indent=2))"
 ```
 
 **Expected Output:** Natural language summary instead of template format
@@ -318,7 +318,7 @@ print("TEST 2: Scene Summarization (LLM Mode)")
 print("="*80)
 
 cfg = {
-    'paths': {'db_path': '<project_root>/data/memory.db'},
+    'paths': {'db_path': '<GOODQ_DATA_ROOT>/GoodQ_Data/epochs/<epoch>/memory.db'},
     'llm': {'api_url': 'http://localhost:1234/v1/chat/completions'}
 }
 

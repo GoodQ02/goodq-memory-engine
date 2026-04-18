@@ -144,6 +144,7 @@ Phase 6b also writes additive scene-level harmonized fields back into the persis
 - `conversation_owner`
 - `scene_context_llm`
 - `scene_context_epistemic`
+- `scene_context_arbitration`
 - `continuity_key`
 - `dominant_speaker_id`
 - `dominant_speaker_share`
@@ -153,6 +154,15 @@ Phase 6b also writes additive scene-level harmonized fields back into the persis
 - `audio_emotion`
 - `music_events`
 - `time_hints`
+
+For `scene_context_llm`, the active contract is three-tiered:
+- `primary_tags`
+- `contextual_tags`
+- `structural_tags`
+
+These tier fields are expected to persist as explicit arrays even on low-signal scenes. Phase 6b
+may still read older manifests defensively, but compatibility tolerance is not the canonical write
+shape.
 
 ### Qdrant Collections
 

@@ -9,7 +9,29 @@ and related canonical docs.
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-04-17
+
+Reference checkpoint:
+[`docs/releases/RELEASE_0.1.1.md`](docs/releases/RELEASE_0.1.1.md)
+
 ### Changed
+- Published the scene-context interpretation hardening batch after the proving witness on `03x10` and `03x11` closed cleanly at `reports/fresh_ingest_runs/20260417_163530_season3_feature_ladder/`.
+- Added the additive `scene_context_arbitration` read model to canonical Phase 6 outputs and run-result projection surfaces without breaking the existing `context_tags` compatibility field.
+- Formalized the three-tier `scene_context_llm` contract with `primary_tags`, `contextual_tags`, and `structural_tags`, and tightened low-signal scene handling so tier fields persist as explicit arrays instead of `null`.
+- Hardened transcript-topic recovery in `scene_context_llm` so transcript-rich scenes stop flattening to weak setting labels when the episode beat is explicit in dialogue, including the repaired `Steve Pocatillo`, `alternate side`, and `rental car` seam family.
+- Hardened Phase 6b harmonization to tolerate legacy or malformed tier payloads safely, preventing `NoneType` tier-field crashes while preserving the canonical explicit-array write shape.
+- Added a local episode-reference evaluation lane using curated IMDb-backed anchors under `reports/reference_anchors/seinfeld/episodes/` for witness scoring only; these anchors inform beat coverage and salience evaluation without overriding runtime scene truth.
+- Promoted the proven iterative repair loop into canonical agent doctrine and tied it back to the ingest orchestration contract so future pipeline fixes stay seam-first, contract-preserving, and witness-driven.
+
+### Validated
+- The proving witness closed cleanly on both `03x10` and `03x11`, with Phase 6a and Phase 6b completing successfully and `generic_context_detected = false` on both episodes.
+- The local episode-reference eval on the proving witness improved from `5/6` core beats and `8.25/9.0` salience to `6/6` core beats and `9.0/9.0` salience.
+- Canonical manifests now persist the three-tier `scene_context_llm` payload without null tier arrays across the audited `03x10` / `03x11` proving lane.
+
+### Notes
+- Remaining interpretation differences are policy-level texture choices inside the three-tier model, not blocking seams. Examples include contextual memory cues such as `Clear Blue Sky` and lightweight structural cues such as `table`.
+
+### Included Groundwork
 - Added a next-layer implementation plan that maps existing repo scaffolding for self-auditing cognition, memory arbitration, and episode/season consolidation so the next roadmap can extend validated epistemic surfaces instead of inventing a parallel architecture.
 - Added a supplemental five-scene Season 3 audit covering dialogue-heavy, environment-heavy, low-signal, identity-adjacent, and ambiguous scenes so the campaign now has both batch-level and sample-level proof.
 - Closed the Season 3 treatment ladder into an authoritative three-step pass set, documenting the validated `03x03` `scene_context_llm` result against local WSL `vLLM` with `Qwen/Qwen2.5-0.5B-Instruct` and publishing a five-episode campaign runbook for the next treatment expansion.

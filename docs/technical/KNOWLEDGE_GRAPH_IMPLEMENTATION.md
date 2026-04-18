@@ -42,7 +42,7 @@ High-level Python API for common query patterns:
 
 ### 3. Pipeline Integration (`steps/graph_builder/`)
 
-legacy orchestration pipeline step that:
+historical compatibility/backfill surface that:
 - Extracts entities from multimodal analysis results
 - Creates graph nodes for all detected entities
 - Builds relationships automatically:
@@ -206,8 +206,11 @@ The graph can be queried via Python API:
 
 ```python
 from lib.graph_query import GraphQuery
+from pathlib import Path
 
-with GraphQuery('data/knowledge_graph.db') as gq:
+kg_path = Path("<GOODQ_DATA_ROOT>") / "GoodQ_Data" / "epochs" / "<epoch>" / "knowledge_graph.db"
+
+with GraphQuery(kg_path) as gq:
     # Find person appearances
     appearances = gq.find_person_appearances('John')
     

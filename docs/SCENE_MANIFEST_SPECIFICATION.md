@@ -93,6 +93,7 @@ Each scene entry contains the scene boundary, keyframe outputs, audio outputs, v
 - `speaker_count`
 - `scene_context_llm` (feature-gated additive interpretation)
 - `scene_context_epistemic` (additive self-audit payload describing evidence dominance, fallback mode, and limits)
+- `scene_context_arbitration` (additive read-model payload preserving disagreements, hypotheses, and unresolved axes)
 - `continuity_key`
 - `dominant_speaker_id`
 - `dominant_speaker_share`
@@ -106,6 +107,25 @@ Each scene entry contains the scene boundary, keyframe outputs, audio outputs, v
 - `conversation_owner`
 
 `speaker_ids` may still contain structural diarization labels such as `SPEAKER_00`. Those labels are not semantic identity by themselves.
+
+### `scene_context_llm` Contract
+
+When `scene_context_llm` is present, it is an additive interpretation payload with an explicit
+three-tier tag model:
+
+- `primary_tags`: meaning-driving scene topics or anchors
+- `contextual_tags`: environmental or situational memory cues
+- `structural_tags`: low-value scaffolding retained only for weak-scene continuity
+
+The compatibility field `context_tags` remains available for downstream consumers, but it is
+derived from the tiered lanes rather than replacing them.
+
+Tier-array rules:
+
+- `primary_tags`, `contextual_tags`, and `structural_tags` must be present as arrays
+- low-signal scenes still use explicit empty arrays instead of `null`
+- missing or `null` tier arrays should be treated as malformed legacy payloads, not as the
+  normative manifest shape
 
 ---
 

@@ -51,8 +51,8 @@ This is the current landing page for the active GoodQ4All docs surface.
 
 ## Release Checkpoint
 
-- Release `0.1.0`:
-  [`docs/releases/RELEASE_0.1.0.md`](releases/RELEASE_0.1.0.md)
+- Release `0.1.1`:
+  [`docs/releases/RELEASE_0.1.1.md`](releases/RELEASE_0.1.1.md)
 - Shipping profile:
   [`docs/releases/SHIP_PROFILE.md`](releases/SHIP_PROFILE.md)
 - Public changelog:

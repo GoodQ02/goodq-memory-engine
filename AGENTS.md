@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-02-12 -->
+<!-- DOC_LAST_VERIFIED: 2026-04-17 -->
 
 # GoodQ4All Agent Operating Protocol
 
@@ -69,8 +69,34 @@
 4. Validate: targeted checks only; no full reruns unless approved.
 5. Handoff: what changed, how to verify, next steps (optional).
 
+## Iterative Repair Protocol (mandatory for pipeline fixes)
+When repairing pipeline quality, scene truth, or witness failures:
+
+1. Identify one concrete seam, not a broad category.
+2. Trace the seam to a specific code path, contract mismatch, or artifact boundary.
+3. Propose the smallest fix that closes that seam.
+4. Implement only that fix.
+5. Validate on targeted scenes or focused contract tests first.
+6. Expand to a full witness rerun only after the scene-first validation passes.
+
+Do not:
+
+- bundle multiple unrelated fixes into one pass
+- refactor adjacent logic during seam repair
+- run a full witness before scene-first validation
+- change persistence, Phase 6, or orchestration contracts unless the seam requires it
+- treat eval anchors or public references as runtime truth overrides
+
+Preferred escalation order:
+
+- scene-first debug
+- contract-level unit or integration check
+- untouched episode witness
+- multi-episode witness only after the smaller gates pass
+
 ## Documentation Reading Order (authoritative)
 - docs/HANDOFF_BASEMENT_PHASE.md
+- docs/architecture/AGENT_DECISION_PROTOCOL.md
 - docs/architecture/INGEST_ORCHESTRATION_CONTRACT.md
 - docs/architecture/IDENTITY_STITCHING_CONTRACT.md
 - docs/reference/WSL_AUDIO_RUNTIME.md

@@ -398,8 +398,8 @@ if cfg.get('llm', {}).get('relationship_extraction'):
 cd <project_root>
 python apply_scene_summaries.py  # With use_llm=True
 
-# Verify output
-python -c "import sqlite3; c=sqlite3.connect('data/memory.db').cursor(); c.execute('SELECT content FROM summaries WHERE category=\"scene_summary\" LIMIT 1'); print(c.fetchone())"
+# Verify output in the epoch-scoped memory database
+python -c "from pathlib import Path; import sqlite3; db=Path('<GOODQ_DATA_ROOT>')/'GoodQ_Data'/'epochs'/'<epoch>'/'memory.db'; c=sqlite3.connect(db).cursor(); c.execute('SELECT content FROM summaries WHERE category=\"scene_summary\" LIMIT 1'); print(c.fetchone())"
 ```
 
 ### Test 2: Sample.mp4 Full Pipeline
@@ -415,9 +415,8 @@ python temp_run_sample.py
 
 ### Test 3: Agent Framework
 ```powershell
-conda activate goodq_agents
 cd <project_root>
-python agents/ingestion/scene_detector.py
+conda run -n goodq_agents python agents/ingestion/scene_detector.py
 ```
 
 ---
@@ -515,5 +514,4 @@ The infrastructure exists, LM Studio is online with capable models, but **zero L
 ---
 
 **Let's proceed with Phase 1 immediately: Enabling LLM scene summarization.**
-
 

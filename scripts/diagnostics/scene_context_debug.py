@@ -13,7 +13,7 @@ if str(REPO_ROOT) not in sys.path:
 
 from steps.common.config_loader import load_configs
 from steps.common.context_analyzer_llm import analyze_scene_context_llm
-from steps.video.cross_modal_harmonizer import _derive_scene_context_epistemic
+from steps.video.cross_modal_harmonizer import _derive_scene_context_arbitration, _derive_scene_context_epistemic
 
 
 def _load_manifest(path: Path) -> Dict[str, Any]:
@@ -83,6 +83,10 @@ def _build_scene_meta(scene: Dict[str, Any]) -> Dict[str, Any]:
         "face_count": int(scene.get("visible_face_count") or 0),
         "emotions": _build_emotions_payload(scene),
         "speakers": speakers,
+        "conversation_owner": scene.get("conversation_owner"),
+        "visible_people": scene.get("visible_people") or [],
+        "mentioned_people": scene.get("mentioned_people") or [],
+        "candidate_visible_people": scene.get("candidate_visible_people") or [],
     }
 
 
@@ -116,14 +120,17 @@ def main() -> int:
     if args.show_existing:
         _print_json("EXISTING scene_context_llm", scene.get("scene_context_llm"))
         _print_json("EXISTING scene_context_epistemic", scene.get("scene_context_epistemic"))
+        _print_json("EXISTING scene_context_arbitration", scene.get("scene_context_arbitration"))
 
     _print_json("SCENE META", scene_meta)
 
     regenerated = analyze_scene_context_llm(scene_meta, cfg)
     epistemic = _derive_scene_context_epistemic(scene_meta, regenerated) if regenerated else None
+    arbitration = _derive_scene_context_arbitration(scene_meta, regenerated, epistemic) if regenerated else None
 
     _print_json("REGENERATED scene_context_llm", regenerated)
     _print_json("REGENERATED scene_context_epistemic", epistemic)
+    _print_json("REGENERATED scene_context_arbitration", arbitration)
     return 0
 
 

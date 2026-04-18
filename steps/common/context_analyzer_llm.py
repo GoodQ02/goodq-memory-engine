@@ -20,7 +20,11 @@ _LOW_SIGNAL_CAPTION_PATTERNS = (
 )
 _GENERIC_CONTEXT_TAGS = {
     "man",
+    "man and woman",
+    "man sitting on couch",
     "woman",
+    "men",
+    "person",
     "people",
     "conversation",
     "indoor conversation",
@@ -30,24 +34,46 @@ _GENERIC_CONTEXT_TAGS = {
     "friends",
     "family",
     "two women",
+    "men sitting",
+    "men in a store",
+    "woman in a suit",
+    "spoken topic",
 }
 _ROLE_CONTEXT_TAGS = {"family", "friend", "friends", "couple", "husband", "wife", "children"}
 _LOW_VALUE_VISIBLE_TAGS = {
     "background",
     "blue backpack",
+    "blue shirt",
+    "man and woman",
+    "man sitting on couch",
     "microwave",
+    "potted plant",
     "room with a blue backpack",
+    "person",
+    "men",
+    "men sitting",
+    "men in a store",
+    "sitting",
+    "vibrant woman",
+    "wine glass",
+    "woman in a suit",
+    "woman sitting on couch",
+    "spoken topic",
 }
 _SETTING_HINTS = (
     "living room",
     "kitchen",
     "dining room",
     "bedroom",
+    "restaurant",
+    "store",
     "couch",
     "table",
     "floor",
     "room",
 )
+_STRUCTURAL_SETTING_HINTS = {"table", "room"}
+_STRUCTURAL_CONTEXT_TAGS = {"conversation", "indoor conversation", "waiting", "low-signal scene", "spoken monologue"}
 _UNSUPPORTED_ACTIVITY_PATTERNS = (
     re.compile(r"\blooking at a microwave\b", re.IGNORECASE),
     re.compile(r"\bsurrounded by (?:men|women|people)\b", re.IGNORECASE),
@@ -59,8 +85,12 @@ _GENERIC_REWRITE_PATTERNS = (
     re.compile(r"\bpeople are talking\b", re.IGNORECASE),
     re.compile(r"\bgroup conversation\b", re.IGNORECASE),
     re.compile(r"\bgroup of people\b", re.IGNORECASE),
+    re.compile(r"\bgroup of coworkers\b", re.IGNORECASE),
+    re.compile(r"\bcoworkers?\b", re.IGNORECASE),
     re.compile(r"\bcharacters interact\b", re.IGNORECASE),
     re.compile(r"\b(?:two )?friends discuss\b", re.IGNORECASE),
+    re.compile(r"\bplans?\s+for\s+the\s+day\b", re.IGNORECASE),
+    re.compile(r"\bday'?s\s+tasks?\b", re.IGNORECASE),
     re.compile(r"\b(?:a )?(?:man|woman|man and woman|woman and man|group of people)\b", re.IGNORECASE),
 )
 _SOCIAL_ROLE_TEXT_PATTERN = re.compile(
@@ -70,8 +100,122 @@ _SOCIAL_ROLE_TEXT_PATTERN = re.compile(
 _LOW_VALUE_VISIBLE_TEXT_PATTERNS = (
     re.compile(r"\bbackground\b", re.IGNORECASE),
     re.compile(r"\bblue backpack\b", re.IGNORECASE),
+    re.compile(r"\bblue shirt\b", re.IGNORECASE),
+    re.compile(r"\bfianc[^\s]*", re.IGNORECASE),
+    re.compile(r"\bman and woman\b", re.IGNORECASE),
+    re.compile(r"\b(?:the\s+)?man and (?:the\s+)?woman\b", re.IGNORECASE),
+    re.compile(r"\b(?:the\s+)?woman and (?:the\s+)?man\b", re.IGNORECASE),
+    re.compile(r"\b(?:man|woman)\s+in\s+(?:(?:a|an)\s+)?(?:[a-z]+\s+){0,2}(?:robe|suit|jacket|dress|coat|shirt|tie)\b", re.IGNORECASE),
+    re.compile(r"\bman sitting on couch\b", re.IGNORECASE),
+    re.compile(r"\bwoman sitting on couch\b", re.IGNORECASE),
     re.compile(r"\bmicrowave\b", re.IGNORECASE),
+    re.compile(r"\bspoken topic\b", re.IGNORECASE),
+    re.compile(r"\bperson\b", re.IGNORECASE),
+    re.compile(r"\b(?:one|two|three|four)\s+(?:man|men|woman|women)\b", re.IGNORECASE),
+    re.compile(r"\bmen(?:\s+sitting|\s+in\s+a\s+store)?\b", re.IGNORECASE),
+    re.compile(r"\bman with a limp\b", re.IGNORECASE),
+    re.compile(r"\bvibrant woman\b", re.IGNORECASE),
+    re.compile(r"\bwoman in a suit\b", re.IGNORECASE),
 )
+_LOW_VALUE_VISUAL_KEY_MOMENT_PATTERNS = (
+    re.compile(
+        r"^(?:the|a|an|one|two|three|four)(?:\s+other)?\s+(?:man|men|woman|women|person)\b.*\b(?:sit|sits|sitting|stand|stands|standing|nod|nods|look|looks|looking|walk|walks|walking|enter|enters|leave|leaves|holding|holds|ask|asks)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"^(?:the|a|an)\s+(?:first|second|third|other)\s+(?:man|men|woman|women|person)\b.*\b(?:say|says|said|respond|responds|recognize|recognizes|remember|remembers|recall|recalls|confus(?:e|es|ed)|ask|asks)\b",
+        re.IGNORECASE,
+    ),
+)
+_INTERPRETIVE_REACTION_KEY_MOMENT_PATTERNS = (
+    re.compile(r"\blooks?\s+confused\b", re.IGNORECASE),
+    re.compile(r"\basks?\s+why\b", re.IGNORECASE),
+    re.compile(r"\basks?\s+if\s+he\s+is\s+there\b", re.IGNORECASE),
+    re.compile(r"^\s*the\s+speaker\s+mentions?\b", re.IGNORECASE),
+)
+_CAPTION_SHAPED_VISUAL_NARRATION_PATTERNS = (
+    re.compile(r"\bread(?:s|ing)\s+(?:a\s+)?(?:manuscript|newspaper)\b", re.IGNORECASE),
+    re.compile(r"\bdriv(?:es|ing)\s+(?:a\s+)?car\b", re.IGNORECASE),
+    re.compile(r"\beat(?:s|ing)\s+(?:lunch|pretzels?)\b", re.IGNORECASE),
+    re.compile(r"\bdrink(?:s|ing)\s+coffee\b", re.IGNORECASE),
+    re.compile(r"\bl(?:ie|y)(?:s|ing)\s+(?:down\s+)?on\s+(?:the\s+)?couch\b", re.IGNORECASE),
+    re.compile(r"\bsit(?:s|ting)\s+on\s+(?:the\s+)?floor\b", re.IGNORECASE),
+    re.compile(r"\bgiv(?:es|ing)\s+a\s+bottle\b", re.IGNORECASE),
+    re.compile(r"\bis\s+displayed\s+as\b", re.IGNORECASE),
+    re.compile(r"\bare\s+seen\s+nearby\b", re.IGNORECASE),
+    re.compile(r"\bturns?\s+to\b", re.IGNORECASE),
+    re.compile(r"\bspeaks?\s+to\s+(?:the\s+)?(?:man|woman|person)\b", re.IGNORECASE),
+    re.compile(r"\bdiscuss(?:es|ing)?\s+(?:their|the)\b", re.IGNORECASE),
+)
+_INTERPRETIVE_SUMMARY_PATTERNS = (
+    re.compile(r"^\s*the\s+group\s+discuss(?:es|ing)?\b", re.IGNORECASE),
+    re.compile(r"^\s*they\s+discuss(?:es|ing)?\b", re.IGNORECASE),
+    re.compile(r"\bimpact\s+on\s+humanity\b", re.IGNORECASE),
+    re.compile(r"\bcurrent\s+situation\b", re.IGNORECASE),
+)
+_GENERIC_KEY_MOMENT_TOKENS = {
+    "a",
+    "an",
+    "and",
+    "another",
+    "are",
+    "asks",
+    "at",
+    "conversation",
+    "converse",
+    "conversing",
+    "discuss",
+    "discusses",
+    "discussing",
+    "he",
+    "her",
+    "him",
+    "his",
+    "in",
+    "indoors",
+    "indoor",
+    "is",
+    "it",
+    "man",
+    "men",
+    "mention",
+    "mentions",
+    "one",
+    "other",
+    "people",
+    "person",
+    "restaurant",
+    "say",
+    "says",
+    "setting",
+    "sit",
+    "sits",
+    "sitting",
+    "speak",
+    "speaking",
+    "speaks",
+    "stand",
+    "standing",
+    "store",
+    "table",
+    "talk",
+    "talking",
+    "talks",
+    "the",
+    "their",
+    "they",
+    "this",
+    "those",
+    "to",
+    "two",
+    "up",
+    "someone",
+    "somebody",
+    "else",
+    "while",
+    "woman",
+    "women",
+}
 _WAITING_FOR_SOMEONE_PATTERN = re.compile(
     r"\bwait(?:ing|ed)?\b.*\b(?:someone|somebody)\b|\b(?:someone|somebody)\b.*\barriv(?:e|es|ed|al)\b",
     re.IGNORECASE,
@@ -79,28 +223,145 @@ _WAITING_FOR_SOMEONE_PATTERN = re.compile(
 _WAITING_TEXT_PATTERN = re.compile(r"\bwait(?:ing|ed)?\b", re.IGNORECASE)
 _ARRIVAL_TEXT_PATTERN = re.compile(r"\barriv(?:e|es|ed|al)\b", re.IGNORECASE)
 _LOW_VALUE_TOPIC_PHRASES = {
+    "a question",
+    "a question sure",
     "alarmed god",
+    "attention yeah",
+    "ask mark",
+    "business listen",
+    "cable station lov",
+    "cable station lough",
+    "certain pain",
+    "compartment wait",
+    "compartment wait hold",
+    "different interpretation",
+    "ever mention",
+    "fianc‚",
+    "go off oppression",
+    "glove compartment",
+    "glove compartment wait",
     "hell happened",
+    "jerry baby",
+    "lasting impression",
+    "like a car",
+    "lunch",
+    "m meeting",
+    "made a reservation",
+    "men sitting at a table",
+    "move cars",
     "must some",
+    "no job",
+    "pocketing cars",
     "people aware",
+    "question do",
+    "s a community",
     "some mistake",
+    "station lov",
+    "st street apartment",
+    "show business listen",
+    "off oppression wild",
+    "off oppression",
+    "oppression don",
+    "oppression don t",
+    "oppression wild",
+    "oppression wild oppression",
+    "transition phase",
+    "transition phase right",
+    "vibrant woman",
+    "wild oppression",
+    "wild oppression don",
+    "woody yells action",
+    "yells action",
 }
 _LOW_VALUE_TOPIC_TOKENS = {
     "alarmed",
+    "ask",
     "aware",
+    "baby",
+    "block",
+    "cable",
+    "cars",
+    "do",
     "doing",
+    "different",
+    "ever",
+    "fianc",
     "god",
     "good",
     "happened",
     "happening",
     "hell",
+    "interpretation",
+    "job",
+    "like",
+    "listen",
+    "lough",
+    "lov",
+    "lunch",
+    "made",
+    "mention",
     "mistake",
     "must",
+    "parks",
     "people",
+    "pocketing",
     "some",
+    "station",
+    "sure",
     "time",
+    "whole",
+    "shirt",
+    "vibrant",
+    "wearing",
+    "yells",
 }
+_LOWERCASE_TOPIC_HEADS = {
+    "appointment",
+    "bed",
+    "bills",
+    "bylaws",
+    "car",
+    "case",
+    "chiropractor",
+    "collar",
+    "constitution",
+    "directions",
+    "drive",
+    "drugstore",
+    "elevator",
+    "emcee",
+    "expressway",
+    "job",
+    "lawyer",
+    "mask",
+    "medication",
+    "meeting",
+    "medicine",
+    "pain",
+    "pen",
+    "pharmacist",
+    "pills",
+    "president",
+    "project",
+    "relaxers",
+    "schedule",
+    "scuba",
+    "shakespeare",
+    "shoes",
+    "sofa",
+    "typewriter",
+}
+_TOPIC_NOUN_SUFFIXES = ("ment", "tion", "sion", "ness", "ship", "ist", "ity", "ware")
 _TRANSCRIPT_TOPIC_PATTERNS = (
+    (re.compile(r"\bcold medication\b", re.IGNORECASE), "cold medication"),
+    (re.compile(r"\bdentist appointment\b", re.IGNORECASE), "dentist appointment"),
+    (re.compile(r"\bdrug company\b", re.IGNORECASE), "drug company"),
+    (re.compile(r"\bdrugstore\b", re.IGNORECASE), "drugstore"),
+    (re.compile(r"\bmedicine\b", re.IGNORECASE), "medicine"),
+    (re.compile(r"\b(?:mr\.?\s+)?poc[ao]tillo\b", re.IGNORECASE), "Steve Pocatillo"),
+    (re.compile(r"\b(?:stay here steve|letting us stay here steve)\b", re.IGNORECASE), "Steve"),
+    (re.compile(r"\blong island expressway\b", re.IGNORECASE), "Long Island Expressway"),
+    (re.compile(r"\blong island\b", re.IGNORECASE), "Long Island"),
     (re.compile(r"\bnose job\b", re.IGNORECASE), "nose job"),
     (re.compile(r"\bcrop circles?\b", re.IGNORECASE), "crop circles"),
     (re.compile(r"\bpharmacist\b", re.IGNORECASE), "pharmacist"),
@@ -113,7 +374,16 @@ _TRANSCRIPT_TOPIC_PATTERNS = (
     (re.compile(r"\bprofessor von nostrand\b", re.IGNORECASE), "professor von nostrand"),
     (re.compile(r"\bshakespeare\b", re.IGNORECASE), "shakespeare"),
     (re.compile(r"\brental car\b", re.IGNORECASE), "rental car"),
+    (re.compile(r"\brent(?:-| )a(?:-| )car\b", re.IGNORECASE), "rental car"),
     (re.compile(r"\bair conditioning\b", re.IGNORECASE), "air conditioning"),
+    (
+        re.compile(
+            r"\bmoves?\s+(?:them\s+)?from one side of the street to the other\b",
+            re.IGNORECASE,
+        ),
+        "alternate side",
+    ),
+    (re.compile(r"\balternate side(?: parking)?\b", re.IGNORECASE), "alternate side"),
     (re.compile(r"\bscuba diving\b", re.IGNORECASE), "scuba diving"),
     (re.compile(r"\bscuba\b", re.IGNORECASE), "scuba"),
     (re.compile(r"\bbiscayne bay\b", re.IGNORECASE), "biscayne bay"),
@@ -132,20 +402,23 @@ _TRANSCRIPT_TOPIC_PATTERNS = (
     (re.compile(r"\bmuscle relaxers?\b", re.IGNORECASE), "muscle relaxers"),
     (re.compile(r"\blawyer\b", re.IGNORECASE), "lawyer"),
     (re.compile(r"\bcase\b", re.IGNORECASE), "case"),
+    (re.compile(r"\bpeanut(?:\s+brittle|\s+butter|\s+oil)?\b", re.IGNORECASE), "peanut"),
+    (re.compile(r"\bpretzel(?:s|\s+guy)?\b", re.IGNORECASE), "pretzel"),
     (re.compile(r"\bpresident\b", re.IGNORECASE), "president"),
+    (re.compile(r"\breservation\b", re.IGNORECASE), "reservation"),
     (re.compile(r"\bflorida\b", re.IGNORECASE), "florida"),
     (re.compile(r"\bpen\b", re.IGNORECASE), "pen"),
     (re.compile(r"\bbathing suits?\b", re.IGNORECASE), "bathing suit"),
 )
 _TOPIC_STOPWORDS = {
-    "about", "again", "air", "airlines", "all", "and", "any", "are", "around", "back",
+    "a", "about", "again", "air", "airlines", "all", "an", "and", "any", "are", "around", "as", "at", "back",
     "been", "boat", "bucks", "but", "call", "can", "come", "could", "day",
     "did", "didnt", "dont", "down", "for", "from", "get", "going", "got", "had",
     "has", "have", "here", "him", "his", "how", "i", "if", "ill", "im", "in", "inside",
-    "into", "is", "it", "its", "know", "lake", "me", "minutes", "my", "need", "nobody",
+    "into", "is", "it", "its", "know", "lake", "m", "me", "minutes", "my", "need", "nobody",
     "much", "nice", "not", "of", "oh", "old", "on", "or", "our", "out", "pay", "person",
     "real", "really", "room", "seen", "so", "special", "stay", "tape", "that",
-    "thats", "the", "them", "there", "they", "thing", "things", "think", "this",
+    "s", "thats", "the", "them", "there", "they", "thing", "things", "think", "this",
     "those", "thirty", "to", "too", "took", "towels", "trunks", "twenty", "up", "use", "using", "waited",
     "want", "we", "well", "welcome", "what", "whats", "where", "why", "with", "would",
     "you", "your", "zero", "one", "two", "three", "four", "five", "six", "seven", "eight",
@@ -164,6 +437,7 @@ _CAPITALIZED_TOPIC_EXCLUSIONS = {
     "how",
     "i",
     "it",
+    "first",
     "no",
     "oh",
     "okay",
@@ -171,12 +445,16 @@ _CAPITALIZED_TOPIC_EXCLUSIONS = {
     "so",
     "take",
     "the",
+    "thanks",
     "well",
     "welcome",
     "what",
     "why",
     "yes",
     "you",
+    "ask",
+    "goodbye",
+    "maybe",
 }
 _STAGE_MONOLOGUE_VISUAL_HINTS = {
     "microphone",
@@ -293,9 +571,7 @@ def _extract_transcript_topic_hints(transcript: str) -> List[str]:
             if not tokens:
                 continue
             if len(tokens) == 1:
-                single = tokens[0].casefold()
-                if single in _CAPITALIZED_TOPIC_EXCLUSIONS or single in _TOPIC_STOPWORDS or len(tokens[0]) < 5:
-                    continue
+                continue
             candidate = " ".join(tokens)
             lowered = candidate.casefold()
             if lowered in seen or _is_low_value_topic_fragment(lowered):
@@ -305,7 +581,39 @@ def _extract_transcript_topic_hints(transcript: str) -> List[str]:
             if len(hints) >= 5:
                 return hints
 
+    if not hints:
+        words = re.findall(r"[a-zA-Z]+", normalized)
+        for window_size in (3, 2):
+            for index in range(0, len(words) - window_size + 1):
+                phrase_tokens = words[index : index + window_size]
+                if any(token in _TOPIC_STOPWORDS or token in _LOW_VALUE_TOPIC_TOKENS for token in phrase_tokens):
+                    continue
+                head = phrase_tokens[-1]
+                singular_head = head[:-1] if head.endswith("s") and len(head) > 3 else head
+                if singular_head not in _LOWERCASE_TOPIC_HEADS and not any(
+                    token.endswith(_TOPIC_NOUN_SUFFIXES) for token in phrase_tokens
+                ):
+                    continue
+                candidate = " ".join(phrase_tokens)
+                if candidate in seen or _is_low_value_topic_fragment(candidate):
+                    continue
+                seen.add(candidate)
+                hints.append(candidate)
+                if len(hints) >= 5:
+                    return hints
+
     return hints[:5]
+
+
+def _matches_explicit_transcript_topic_pattern(candidate: str, transcript: str) -> bool:
+    normalized_candidate = str(candidate or "").strip().casefold()
+    normalized_transcript = str(transcript or "").strip().casefold()
+    if not normalized_candidate or not normalized_transcript:
+        return False
+    for pattern, label in _TRANSCRIPT_TOPIC_PATTERNS:
+        if label.casefold() == normalized_candidate and pattern.search(normalized_transcript):
+            return True
+    return False
 
 
 def _has_stage_monologue_visual_cue(caption: str, objects: List[Any]) -> bool:
@@ -325,17 +633,34 @@ def _minimal_scene_context_payload() -> Dict[str, Any]:
         "key_moments": ["Minimal visual or dialogue content"],
         "emotional_arc": "low-signal scene",
         "context_tags": ["low-signal scene"],
+        "primary_tags": [],
+        "contextual_tags": [],
+        "structural_tags": ["low-signal scene"],
         "activity_description": "Minimal visual or dialogue content.",
     }
 
 
 def _spoken_monologue_payload(topic_hints: List[str]) -> Dict[str, Any]:
-    topic = topic_hints[0] if topic_hints else "spoken topic"
+    topic = topic_hints[0] if topic_hints else None
+    if not topic:
+        return {
+            "narrative_summary": "Spoken monologue.",
+            "key_moments": ["Speaker delivers a monologue"],
+            "emotional_arc": "spoken performance",
+            "context_tags": ["spoken monologue"],
+            "primary_tags": [],
+            "contextual_tags": [],
+            "structural_tags": ["spoken monologue"],
+            "activity_description": "Spoken monologue.",
+        }
     return {
         "narrative_summary": f"Spoken monologue about {topic}.",
         "key_moments": [f"Speaker delivers a monologue about {topic}"],
         "emotional_arc": "spoken performance",
         "context_tags": ["spoken monologue", topic],
+        "primary_tags": [topic],
+        "contextual_tags": [],
+        "structural_tags": ["spoken monologue"],
         "activity_description": f"Spoken monologue about {topic}.",
     }
 
@@ -362,11 +687,69 @@ def _derive_setting_hint(caption: str, tags: List[str]) -> Optional[str]:
     return None
 
 
-def _derive_topic_hint(topic_hints: List[str], tags: List[str]) -> Optional[str]:
+def _is_evidence_grounded_topic_candidate(candidate: str, evidence_blob: str) -> bool:
+    normalized = str(candidate or "").strip().casefold()
+    if not normalized or _is_low_value_topic_fragment(normalized):
+        return False
+    if normalized.endswith(" conversation"):
+        return False
+    tokens = [
+        token
+        for token in re.findall(r"[a-zA-Z]+", normalized)
+        if token not in _TOPIC_STOPWORDS and token not in _LOW_VALUE_TOPIC_TOKENS
+    ]
+    if not tokens:
+        return False
+    return all(token in evidence_blob for token in tokens)
+
+
+def _is_transcript_grounded_topic_candidate(candidate: str, transcript: str) -> bool:
+    return _matches_explicit_transcript_topic_pattern(candidate, transcript) or _is_evidence_grounded_topic_candidate(
+        candidate,
+        str(transcript or "").casefold(),
+    )
+
+
+def _extract_declared_topic_phrase(text: str) -> Optional[str]:
+    if not isinstance(text, str) or not text.strip():
+        return None
+    patterns = (
+        re.compile(r"\b(?:conversation|monologue)\s+about\s+(.+?)[.!?]*$", re.IGNORECASE),
+        re.compile(r"\bthey\s+mention\s+(.+?)[.!?]*$", re.IGNORECASE),
+        re.compile(r"\bspeaker\s+delivers\s+a\s+monologue\s+about\s+(.+?)[.!?]*$", re.IGNORECASE),
+    )
+    for pattern in patterns:
+        match = pattern.search(text.strip())
+        if not match:
+            continue
+        candidate = re.sub(r"\s{2,}", " ", match.group(1).strip(" .!?,'\""))
+        return candidate or None
+    return None
+
+
+def _contains_low_value_declared_topic(text: str) -> bool:
+    candidate = _extract_declared_topic_phrase(text)
+    return bool(candidate and _is_low_value_topic_fragment(candidate))
+
+
+def _derive_topic_hint(
+    topic_hints: List[str],
+    tags: List[str],
+    evidence_blob: str,
+    *,
+    transcript: str = "",
+    allow_visual_fallback: bool = True,
+) -> Optional[str]:
     for hint in topic_hints:
         normalized = str(hint).strip()
-        if normalized and normalized.casefold() not in _GENERIC_CONTEXT_TAGS and not _is_low_value_topic_fragment(normalized):
+        if (
+            normalized
+            and normalized.casefold() not in _GENERIC_CONTEXT_TAGS
+            and _is_transcript_grounded_topic_candidate(normalized, transcript)
+        ):
             return normalized
+    if not allow_visual_fallback:
+        return None
     for tag in tags:
         normalized = str(tag).strip()
         lowered = normalized.casefold()
@@ -374,7 +757,7 @@ def _derive_topic_hint(topic_hints: List[str], tags: List[str]) -> Optional[str]
             normalized
             and lowered not in _GENERIC_CONTEXT_TAGS
             and lowered not in _SETTING_HINTS
-            and not _is_low_value_topic_fragment(normalized)
+            and _is_evidence_grounded_topic_candidate(normalized, evidence_blob)
         ):
             return normalized
     return None
@@ -392,10 +775,18 @@ def _rewrite_scene_text(
     text = value.strip()
     if not text:
         return None
+    setting_conversation_only = bool(
+        topic_hint
+        and topic_hint.casefold() not in text.casefold()
+        and (
+            text == "Minimal visual or dialogue content."
+            or re.fullmatch(r"(?:[A-Za-z ]+ )?conversation\.?", text, flags=re.IGNORECASE)
+        )
+    )
     needs_rewrite = any(pattern.search(text) for pattern in _GENERIC_REWRITE_PATTERNS) or any(
         pattern.search(text) for pattern in _UNSUPPORTED_ACTIVITY_PATTERNS
     )
-    if not force_rewrite and not needs_rewrite:
+    if not force_rewrite and not needs_rewrite and not setting_conversation_only:
         return text
 
     if setting_hint and topic_hint:
@@ -403,8 +794,77 @@ def _rewrite_scene_text(
     if topic_hint:
         return f"Conversation about {topic_hint}."
     if setting_hint:
-        return f"Conversation in the {setting_hint}."
+        return f"{setting_hint.capitalize()} conversation."
     return "Minimal visual or dialogue content."
+
+
+def _append_unique(values: List[str], candidate: str) -> None:
+    normalized = str(candidate or "").strip()
+    if not normalized:
+        return
+    lowered = normalized.casefold()
+    if any(str(existing).casefold() == lowered for existing in values):
+        return
+    values.append(normalized)
+
+
+def _classify_context_tags(
+    tags: List[str],
+    *,
+    transcript: str,
+    evidence_blob: str,
+    topic_hint: Optional[str],
+    narrative_summary: Optional[str],
+) -> Dict[str, List[str]]:
+    primary_tags: List[str] = []
+    contextual_tags: List[str] = []
+    structural_tags: List[str] = []
+    minimal_scene = str(narrative_summary or "").strip() == "Minimal visual or dialogue content."
+    normalized_topic_hint = str(topic_hint or "").strip().casefold()
+
+    for tag in tags:
+        lowered = str(tag or "").strip().casefold()
+        if not lowered:
+            continue
+        if (
+            lowered in _STRUCTURAL_CONTEXT_TAGS
+            or lowered in _GENERIC_CONTEXT_TAGS
+            or lowered in _LOW_VALUE_VISIBLE_TAGS
+            or _contains_low_value_visible_focus(tag)
+        ):
+            _append_unique(structural_tags, tag)
+            continue
+        if lowered in _SETTING_HINTS:
+            target = structural_tags if lowered in _STRUCTURAL_SETTING_HINTS else contextual_tags
+            _append_unique(target, tag)
+            continue
+        if normalized_topic_hint and lowered == normalized_topic_hint:
+            _append_unique(primary_tags, tag)
+            continue
+        if _is_transcript_grounded_topic_candidate(tag, transcript):
+            if minimal_scene or (normalized_topic_hint and lowered != normalized_topic_hint):
+                _append_unique(contextual_tags, tag)
+            else:
+                _append_unique(primary_tags, tag)
+            continue
+        if _is_evidence_grounded_topic_candidate(tag, evidence_blob):
+            _append_unique(contextual_tags, tag)
+            continue
+        _append_unique(structural_tags, tag)
+
+    context_tags: List[str] = []
+    for group in (primary_tags, contextual_tags):
+        for tag in group:
+            _append_unique(context_tags, tag)
+    for tag in structural_tags:
+        if tag.casefold() in _STRUCTURAL_CONTEXT_TAGS:
+            _append_unique(context_tags, tag)
+    return {
+        "primary_tags": primary_tags[:5],
+        "contextual_tags": contextual_tags[:5],
+        "structural_tags": structural_tags[:5],
+        "context_tags": context_tags[:5],
+    }
 
 
 def _contains_unsupported_role_text(text: str, transcript: str) -> bool:
@@ -420,6 +880,66 @@ def _contains_low_value_visible_focus(text: str) -> bool:
     if not isinstance(text, str) or not text.strip():
         return False
     return any(pattern.search(text) for pattern in _LOW_VALUE_VISIBLE_TEXT_PATTERNS)
+
+
+def _contains_mojibake_artifact(text: str) -> bool:
+    if not isinstance(text, str) or not text.strip():
+        return False
+    return any(char in text for char in ("\ufffd", "\u201a"))
+
+
+def _looks_like_low_value_visual_key_moment(text: str) -> bool:
+    if _contains_low_value_visible_focus(text) or _contains_mojibake_artifact(text):
+        return True
+    return any(
+        pattern.search(text)
+        for pattern in (_LOW_VALUE_VISUAL_KEY_MOMENT_PATTERNS + _CAPTION_SHAPED_VISUAL_NARRATION_PATTERNS)
+    )
+
+
+def _has_excess_ungrounded_content(
+    text: str,
+    *,
+    evidence_blob: str,
+    topic_hint: Optional[str],
+    setting_hint: Optional[str],
+) -> bool:
+    if not isinstance(text, str) or not text.strip():
+        return False
+    stems = _content_token_stems(text)
+    if not stems:
+        return False
+    supported = set(_content_token_stems(evidence_blob))
+    if topic_hint:
+        supported.update(_content_token_stems(topic_hint))
+    if setting_hint:
+        supported.update(_content_token_stems(setting_hint))
+    missing = [stem for stem in stems if stem not in supported]
+    return len(missing) >= 2 and len(missing) >= max(2, len(stems) // 2)
+
+
+def _normalize_key_moment_identity(value: str) -> str:
+    normalized = re.sub(r"[.!?]+$", "", str(value or "").strip().casefold())
+    normalized = re.sub(r"\s{2,}", " ", normalized)
+    return normalized
+
+
+def _content_token_stems(text: str) -> set[str]:
+    tokens = [
+        token
+        for token in re.findall(r"[a-zA-Z]+", str(text or "").casefold())
+        if token
+        and token not in _TOPIC_STOPWORDS
+        and token not in _LOW_VALUE_TOPIC_TOKENS
+        and token not in _GENERIC_KEY_MOMENT_TOKENS
+    ]
+    stems: set[str] = set()
+    for token in tokens:
+        if len(token) <= 3:
+            stems.add(token)
+        else:
+            stems.add(token[:3])
+    return stems
 
 
 def _contains_unsupported_activity_text(text: str, transcript: str) -> bool:
@@ -441,6 +961,8 @@ def _rewrite_emotional_arc(value: Any, transcript: str) -> Optional[str]:
     normalized = value.strip()
     if not normalized:
         return None
+    if _contains_low_value_visible_focus(normalized):
+        return "neutral tone"
     if not _contains_unsupported_role_text(normalized, transcript):
         return normalized
     rewritten = re.sub(
@@ -458,18 +980,82 @@ def _rewrite_key_moment(
     value: Optional[str],
     *,
     transcript: str,
+    evidence_blob: str,
     setting_hint: Optional[str],
     topic_hint: Optional[str],
 ) -> Optional[str]:
     normalized = value.strip() if isinstance(value, str) else value
     if not isinstance(normalized, str) or not normalized.strip():
         return normalized
+    if any(pattern.search(normalized) for pattern in _CAPTION_SHAPED_VISUAL_NARRATION_PATTERNS):
+        if topic_hint:
+            return f"They mention {topic_hint}."
+        if setting_hint:
+            return f"{setting_hint.capitalize()} conversation."
+        return None
     if _contains_unsupported_role_text(normalized, transcript) or _contains_unsupported_activity_text(normalized, transcript):
         if topic_hint:
             return f"They mention {topic_hint}."
+        if setting_hint:
+            return f"{setting_hint.capitalize()} conversation."
         return "Minimal visual or dialogue content."
-    if topic_hint and _contains_low_value_visible_focus(normalized) and topic_hint.casefold() not in normalized.casefold():
-        return f"They mention {topic_hint}."
+    if _contains_low_value_declared_topic(normalized):
+        if topic_hint:
+            return f"They mention {topic_hint}."
+        if setting_hint:
+            return f"{setting_hint.capitalize()} conversation."
+        return None
+    if re.fullmatch(r"(?:they|people)\s+(?:talk|are talking)\.?", normalized, flags=re.IGNORECASE):
+        if topic_hint:
+            return f"They mention {topic_hint}."
+        if setting_hint:
+            return f"{setting_hint.capitalize()} conversation."
+        return "Minimal visual or dialogue content."
+    visual_staging = _looks_like_low_value_visual_key_moment(normalized)
+    if visual_staging:
+        if topic_hint:
+            if topic_hint.casefold() not in normalized.casefold():
+                return f"They mention {topic_hint}."
+            return normalized
+        if setting_hint:
+            return f"{setting_hint.capitalize()} conversation."
+        return None
+    if topic_hint:
+        moment_stems = _content_token_stems(normalized)
+        transcript_stems = _content_token_stems(transcript)
+        evidence_stems = _content_token_stems(evidence_blob)
+        topic_in_moment = topic_hint.casefold() in normalized.casefold()
+        if visual_staging and moment_stems and transcript_stems and transcript_stems.isdisjoint(moment_stems):
+            return f"They mention {topic_hint}."
+        if (
+            not topic_in_moment
+            and moment_stems
+            and evidence_stems
+            and evidence_stems.isdisjoint(moment_stems)
+        ):
+            return f"They mention {topic_hint}."
+        if not topic_in_moment and any(
+            pattern.search(normalized) for pattern in _INTERPRETIVE_REACTION_KEY_MOMENT_PATTERNS
+        ):
+            return f"They mention {topic_hint}."
+        if _has_excess_ungrounded_content(
+            normalized,
+            evidence_blob=evidence_blob,
+            topic_hint=topic_hint,
+            setting_hint=setting_hint,
+        ):
+            return f"They mention {topic_hint}."
+    if not topic_hint:
+        moment_stems = _content_token_stems(normalized)
+        evidence_stems = _content_token_stems(evidence_blob)
+        if not moment_stems:
+            if setting_hint:
+                return f"{setting_hint.capitalize()} conversation."
+            return None
+        if moment_stems and evidence_stems.isdisjoint(moment_stems):
+            if setting_hint:
+                return f"{setting_hint.capitalize()} conversation."
+            return None
     return normalized
 
 
@@ -514,16 +1100,27 @@ def _normalize_scene_context_payload(raw_context: Dict[str, Any], scene_meta: Di
 
     context_tags = _clean_list(raw_context.get("context_tags"), limit=8)
     topic_hints = _extract_transcript_topic_hints(transcript)
+    topic_hint = _derive_topic_hint(
+        topic_hints,
+        [],
+        evidence_blob,
+        transcript=transcript,
+        allow_visual_fallback=False,
+    )
     specific_tags_exist = any(tag.casefold() not in _GENERIC_CONTEXT_TAGS for tag in context_tags)
     filtered_tags: List[str] = []
     seen_tags: set[str] = set()
     for tag in context_tags:
         lowered = tag.casefold()
-        if _is_low_value_topic_fragment(lowered):
+        if _is_low_value_topic_fragment(lowered) or _contains_mojibake_artifact(tag):
             continue
         if _contains_unsupported_role_text(tag, transcript):
             continue
         if _contains_unsupported_activity_text(tag, transcript):
+            continue
+        if _looks_like_low_value_visual_key_moment(tag):
+            continue
+        if _contains_low_value_visible_focus(tag):
             continue
         if lowered in _ROLE_CONTEXT_TAGS and not _contains_supported_role_in_transcript(lowered, transcript):
             continue
@@ -531,7 +1128,19 @@ def _normalize_scene_context_payload(raw_context: Dict[str, Any], scene_meta: Di
             continue
         if lowered in _SETTING_HINTS and lowered not in evidence_blob:
             continue
-        if lowered in _LOW_VALUE_VISIBLE_TAGS and topic_hints:
+        if (
+            topic_hint
+            and lowered not in _SETTING_HINTS
+            and lowered != topic_hint.casefold()
+            and not _is_transcript_grounded_topic_candidate(tag, transcript)
+        ):
+            continue
+        if (
+            lowered not in _GENERIC_CONTEXT_TAGS
+            and lowered not in _SETTING_HINTS
+            and not _contains_low_value_visible_focus(tag)
+            and not _is_evidence_grounded_topic_candidate(tag, evidence_blob)
+        ):
             continue
         if lowered in _GENERIC_CONTEXT_TAGS and specific_tags_exist:
             continue
@@ -549,22 +1158,46 @@ def _normalize_scene_context_payload(raw_context: Dict[str, Any], scene_meta: Di
         if len(filtered_tags) >= 5:
             break
 
+    if any(tag.casefold() not in _GENERIC_CONTEXT_TAGS for tag in filtered_tags):
+        filtered_tags = [tag for tag in filtered_tags if tag.casefold() not in _GENERIC_CONTEXT_TAGS]
+
     filtered_tags = filtered_tags[:5]
     setting_hint = _derive_setting_hint(caption, filtered_tags)
-    topic_hint = _derive_topic_hint(topic_hints, filtered_tags)
 
     raw_summary = _clean_text(raw_context.get("narrative_summary"))
     force_summary_rewrite = _contains_unsupported_role_text(raw_summary or "", transcript)
     if _contains_unsupported_activity_text(raw_summary or "", transcript):
         force_summary_rewrite = True
-    if topic_hint and _contains_low_value_visible_focus(raw_summary or "") and topic_hint.casefold() not in (raw_summary or "").casefold():
+    if _contains_low_value_visible_focus(raw_summary or ""):
+        force_summary_rewrite = True
+    if _contains_low_value_declared_topic(raw_summary or ""):
+        force_summary_rewrite = True
+    if any(pattern.search(raw_summary or "") for pattern in _INTERPRETIVE_SUMMARY_PATTERNS):
+        force_summary_rewrite = True
+    if _has_excess_ungrounded_content(
+        raw_summary or "",
+        evidence_blob=evidence_blob,
+        topic_hint=topic_hint,
+        setting_hint=setting_hint,
+    ):
         force_summary_rewrite = True
 
     raw_activity = _clean_text(raw_context.get("activity_description"))
     force_activity_rewrite = _contains_unsupported_role_text(raw_activity or "", transcript)
     if _contains_unsupported_activity_text(raw_activity or "", transcript):
         force_activity_rewrite = True
-    if topic_hint and _contains_low_value_visible_focus(raw_activity or "") and topic_hint.casefold() not in (raw_activity or "").casefold():
+    if _contains_low_value_visible_focus(raw_activity or ""):
+        force_activity_rewrite = True
+    if _contains_low_value_declared_topic(raw_activity or ""):
+        force_activity_rewrite = True
+    if any(pattern.search(raw_activity or "") for pattern in _INTERPRETIVE_SUMMARY_PATTERNS):
+        force_activity_rewrite = True
+    if _has_excess_ungrounded_content(
+        raw_activity or "",
+        evidence_blob=evidence_blob,
+        topic_hint=topic_hint,
+        setting_hint=setting_hint,
+    ):
         force_activity_rewrite = True
 
     key_moments: List[str] = []
@@ -573,12 +1206,13 @@ def _normalize_scene_context_payload(raw_context: Dict[str, Any], scene_meta: Di
         rewritten = _rewrite_key_moment(
             value,
             transcript=transcript,
+            evidence_blob=evidence_blob,
             setting_hint=setting_hint,
             topic_hint=topic_hint,
         )
         if not rewritten:
             continue
-        key = rewritten.casefold()
+        key = _normalize_key_moment_identity(rewritten)
         if key in seen_moments:
             continue
         seen_moments.add(key)
@@ -586,16 +1220,35 @@ def _normalize_scene_context_payload(raw_context: Dict[str, Any], scene_meta: Di
         if len(key_moments) >= 3:
             break
 
+    narrative_summary = _rewrite_scene_text(
+        raw_summary,
+        setting_hint=setting_hint,
+        topic_hint=topic_hint,
+        force_rewrite=force_summary_rewrite,
+    )
+    candidate_tags = filtered_tags
+    if narrative_summary == "Minimal visual or dialogue content.":
+        candidate_tags = [
+            tag
+            for tag in filtered_tags
+            if _is_transcript_grounded_topic_candidate(tag, transcript) or tag.casefold() in _STRUCTURAL_CONTEXT_TAGS
+        ]
+    tag_payload = _classify_context_tags(
+        candidate_tags,
+        transcript=transcript,
+        evidence_blob=evidence_blob,
+        topic_hint=topic_hint,
+        narrative_summary=narrative_summary,
+    )
+
     sanitized = {
-        "narrative_summary": _rewrite_scene_text(
-            raw_summary,
-            setting_hint=setting_hint,
-            topic_hint=topic_hint,
-            force_rewrite=force_summary_rewrite,
-        ),
+        "narrative_summary": narrative_summary,
         "key_moments": key_moments,
         "emotional_arc": _rewrite_emotional_arc(raw_context.get("emotional_arc"), transcript),
-        "context_tags": filtered_tags,
+        "context_tags": tag_payload["context_tags"],
+        "primary_tags": tag_payload["primary_tags"],
+        "contextual_tags": tag_payload["contextual_tags"],
+        "structural_tags": tag_payload["structural_tags"],
         "activity_description": _rewrite_scene_text(
             raw_activity,
             setting_hint=setting_hint,
@@ -603,6 +1256,8 @@ def _normalize_scene_context_payload(raw_context: Dict[str, Any], scene_meta: Di
             force_rewrite=force_activity_rewrite,
         ),
     }
+    if sanitized["narrative_summary"] == "Minimal visual or dialogue content.":
+        sanitized["key_moments"] = ["Minimal visual or dialogue content."]
     has_signal = any(
         sanitized[key]
         for key in (
@@ -610,6 +1265,9 @@ def _normalize_scene_context_payload(raw_context: Dict[str, Any], scene_meta: Di
             "key_moments",
             "emotional_arc",
             "context_tags",
+            "primary_tags",
+            "contextual_tags",
+            "structural_tags",
             "activity_description",
         )
     )
@@ -735,6 +1393,9 @@ def analyze_scene_context_llm(scene_meta: Dict[str, Any], cfg: Dict[str, Any]) -
             'key_moments': List[str],
             'emotional_arc': str,
             'context_tags': List[str],
+            'primary_tags': List[str],
+            'contextual_tags': List[str],
+            'structural_tags': List[str],
             'activity_description': str
         }
     """

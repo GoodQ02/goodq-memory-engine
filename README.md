@@ -12,6 +12,25 @@ GoodQ4All is a local-first multimodal memory system for long-running video, audi
 
 It ingests media into scene-level memory, persists what it learns locally, and keeps the proof path visible. The system is built around deterministic Windows-first execution, with CPU-safe baseline behavior and optional GPU / WSL2 acceleration when you want more throughput.
 
+## What This Actually Is
+
+GoodQ4All is not just an ingest runner or a benchmark harness. It is a full local memory stack with five major layers:
+
+- **Perception engine**
+  Detects scenes, extracts keyframes, runs OCR and captions, tags objects and faces, transcribes audio, tracks speakers, and generates embeddings across modalities.
+
+- **Interpretation engine**
+  Turns raw perception into scene meaning through `scene_context_llm`, epistemic evidence surfaces, arbitration, and Phase 6 multimodal harmonization.
+
+- **Memory engine**
+  Persists scene manifests, temporal indexes, SQLite memory state, knowledge graph state, and Qdrant vectors as durable local memory rather than disposable run logs.
+
+- **Retrieval engine**
+  Supports vector search, KG-backed querying, natural-language lookup, and scene-level analysis against persisted memory.
+
+- **Operations layer**
+  Exposes bootstrap, validation, watchdog, health, monitoring, and release-evidence surfaces so the system can be run and audited like infrastructure, not just a script.
+
 ## Why This Project Exists
 
 Most media-intelligence stacks are either:
@@ -114,6 +133,12 @@ UI status:
 - **Scene-centric memory**
   Every major interpretation surface is built around scenes as the atomic unit.
 
+- **Full perception-to-memory pipeline**
+  The system does not stop at captions or transcripts. It carries perception forward into harmonized scene truth, temporal rollups, graph relationships, and retrieval surfaces.
+
+- **Knowledge graph with conservative identity logic**
+  People, concepts, objects, places, speaker patterns, and identity evidence are persisted locally, with promotion rules designed to avoid hallucinated merges.
+
 - **Audit-first quality**
   The system is tuned with witnesses, diagnostics, and reference evals instead of vibes.
 
@@ -130,10 +155,13 @@ UI status:
 
 - **Host:** Windows 11 is the canonical runtime host
 - **Profiles:** `UNSET`, `BASELINE`, `GPU_ENHANCED`
+- **Perception:** scene detection, captions, OCR, object signals, face signals, transcription, diarization, emotion, and embeddings
 - **Storage:** SQLite + knowledge graph + Qdrant
 - **Memory surface:** scene manifests, temporal index, projected run outputs
 - **Core interpretation layer:** `scene_context_llm` with `primary_tags`, `contextual_tags`, and `structural_tags`
+- **Identity layer:** speaker patterns, voice-pattern matches, identity candidates, supported identities, and evidence edges
 - **Fusion layer:** Phase 6 / Phase 6b harmonization
+- **Operator surface:** API + CLI + watchdog + validation and diagnostics
 
 If you want the deeper technical picture:
 

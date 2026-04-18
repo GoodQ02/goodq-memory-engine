@@ -18,16 +18,21 @@ Read diagnostics only after you have the current supported context from:
 Diagnostics explain *why* a fix was made or *how* a seam was discovered. They
 do not override the release checkpoint.
 
-## High-Value Diagnostics
+## Diagnostic Families
 
-### Scene Context and Arbitration
+### Scene Context, Arbitration, and Eval
 
-- [`SCENE_CONTEXT_LLM_AUDIT_03x03_2026-04-11.md`](SCENE_CONTEXT_LLM_AUDIT_03x03_2026-04-11.md)
-- [`SCENE_CONTEXT_LLM_AUDIT_03x09_2026-04-12.md`](SCENE_CONTEXT_LLM_AUDIT_03x09_2026-04-12.md)
-- [`SEASON3_EPISODE_FORENSIC_AUDIT_03x05_2026-04-12.md`](SEASON3_EPISODE_FORENSIC_AUDIT_03x05_2026-04-12.md)
-- [`SEASON3_FIVE_SAMPLE_AUDIT_2026-04-12.md`](SEASON3_FIVE_SAMPLE_AUDIT_2026-04-12.md)
-- [`PERCEPTION_SURFACE_AUDIT_2026-04-09.md`](PERCEPTION_SURFACE_AUDIT_2026-04-09.md)
-- [`SCENE_SUMMARIZER_AUDIT_2026-04-09.md`](SCENE_SUMMARIZER_AUDIT_2026-04-09.md)
+Current scene-context findings are summarized back into the current release and
+runtime checkpoint documents:
+
+- [`docs/releases/RELEASE_0.1.1.md`](../releases/RELEASE_0.1.1.md)
+- [`docs/goodq4all_agent_status.md`](../goodq4all_agent_status.md)
+- [`docs/SYSTEM_SNAPSHOT.md`](../SYSTEM_SNAPSHOT.md)
+- [`reports/README.md`](../../reports/README.md)
+
+Detailed forensic reads may exist in local operational history during active
+repair loops, but the release surfaces above are the public summary of what is
+currently proven.
 
 ### Environment and Portability
 

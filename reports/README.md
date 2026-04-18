@@ -33,14 +33,20 @@ audit. They are anchors, not runtime truth overrides.
 
 ### Released Witness Evidence
 
-The repo-tracked witness bundle today is the Season 1 witness release:
+The released, front-door proof surfaces are:
 
-- [`reports/seinfeld_experiment/README.md`](seinfeld_experiment/README.md)
-- [`reports/seinfeld_experiment/diagnostics/SEASON1_WITNESS_RUN_2026-03-09.md`](seinfeld_experiment/diagnostics/SEASON1_WITNESS_RUN_2026-03-09.md)
-- [`reports/seinfeld_experiment/diagnostics/POST_WITNESS_ANALYTICS_COMPARISON_2026-03-09.md`](seinfeld_experiment/diagnostics/POST_WITNESS_ANALYTICS_COMPARISON_2026-03-09.md)
-- [`reports/seinfeld_experiment/releases/season1_witness_run_2026-03-09/README.md`](seinfeld_experiment/releases/season1_witness_run_2026-03-09/README.md)
+- [`docs/releases/RELEASE_0.1.1.md`](../docs/releases/RELEASE_0.1.1.md)
+- [`docs/releases/SHIP_PROFILE.md`](../docs/releases/SHIP_PROFILE.md)
+- [`docs/goodq4all_agent_status.md`](../docs/goodq4all_agent_status.md)
+- [`docs/SYSTEM_SNAPSHOT.md`](../docs/SYSTEM_SNAPSHOT.md)
 
-These are the long-lived, repo-visible proof artifacts.
+Those documents summarize the proving witness, current checkpoint, and what the
+project is willing to claim publicly.
+
+Repo-tracked anchors that support the current eval lane live here:
+
+- [`reports/reference_anchors/seinfeld/episodes/03x10_the_stranded.reference.json`](reference_anchors/seinfeld/episodes/03x10_the_stranded.reference.json)
+- [`reports/reference_anchors/seinfeld/episodes/03x11_the_alternate_side.reference.json`](reference_anchors/seinfeld/episodes/03x11_the_alternate_side.reference.json)
 
 ### Local Proving Runs
 

@@ -1,238 +1,187 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-03-02 -->
+<!-- DOC_LAST_VERIFIED: 2026-04-17 -->
+
+<p align="center">
+  <img src="samples/assets/q-git-square.png" alt="GoodQ4All mark" width="140" />
+</p>
 
 # GoodQ4All
 
-GoodQ4All is a local-first multimodal memory system for long-running ingestion, retrieval, and analysis across video, audio, text, embeddings, and knowledge graph context.
+GoodQ4All is a local-first multimodal memory system for long-running video, audio, and text intelligence.
 
-## Mission
+It ingests media into scene-level memory, persists what it learns locally, and keeps the proof path visible. The system is built around deterministic Windows-first execution, with CPU-safe baseline behavior and optional GPU / WSL2 acceleration when you want more throughput.
 
-- Keep memory local, auditable, and durable.
-- Treat scenes as the atomic unit of intelligence.
-- Support CPU-safe baseline execution and additive GPU/WSL acceleration.
-- Preserve operational continuity under partial failures.
+## Why This Project Exists
 
-## System Identity
+Most media-intelligence stacks are either:
 
-- Local-first operation with no required cloud runtime dependency.
-- Persistent state through SQLite + Qdrant + knowledge graph storage.
-- Watchdog-driven long-running workloads with explicit control-plane state persistence.
-- ControlAgent activation is explicit; default flows persist `disabled_no_llm_client` unless an `llm_client` is injected.
-- Audit-grade behavior: failures are visible, logged, and attributable.
+- cloud-dependent
+- opaque when they fail
+- or impressive in demos but weak under long-running, real-world ingestion
 
-## Capability Surface
+GoodQ4All is trying to be the opposite:
 
-- Vision: scene detection, captions, OCR, object and embedding extraction.
-- Audio: transcription, diarization, emotion tagging, embedding extraction.
-- Text: semantic indexing, sentiment and entity enrichment.
-- Memory: scene manifests, relational state, vector retrieval, graph context.
-- Operations: watchdog ingest, health checks, deterministic bootstrap validation.
+- local-first
+- scene-centric
+- auditable
+- resilient under partial failure
 
-## Runtime Profiles
+The design goal is simple: a working memory system is more valuable than a clever one.
 
-GoodQ4All is profile-governed, not hardware-assumption governed.
+## What Is Proven Today
 
-| Profile | Intent | Behavior |
-| --- | --- | --- |
-| `UNSET` | Legacy canonical | Preserves historical default behavior |
-| `BASELINE` | Portability-first | CPU-safe correctness, optional accelerators |
-| `GPU_ENHANCED` | Throughput-first | Enables additive CUDA/WSL acceleration |
+Release `0.1.1` is the current supported checkpoint.
 
-Strict fail-fast flags:
+What is actually proven, not just intended:
 
-- `GOODQ_REQUIRE_GPU=1`: fail when GPU capability is required but unavailable.
-- `GOODQ_REQUIRE_WSL_AUDIO=1`: fail when WSL audio path is required but unavailable.
+- The canonical runtime is Windows-first and local-first.
+- The supported surface is API + CLI + watchdog + persisted runtime artifacts.
+- Scene-context interpretation quality is witness-proven, not just anecdotal.
+- Phase 6 harmonization is operating cleanly on the proving run.
+- Episode-quality scoring now has a local offline eval lane using curated IMDb-backed anchors for audit only.
 
-## Current Status
+Current proving run and release proof path:
 
-This status section is anchored to a documented witness ingest run (`run_id=51e42006-f64d-4b13-a42a-f180bf8ba7f3`, March 1, 2026 UTC) and only states claims backed by artifacts.
+- [`docs/releases/RELEASE_0.1.1.md`](docs/releases/RELEASE_0.1.1.md)
+- [`docs/releases/SHIP_PROFILE.md`](docs/releases/SHIP_PROFILE.md)
+- [`reports/README.md`](reports/README.md)
 
-**Stability note:** GoodQ4All currently reports version `0.1.1`. Treat the
-public surface as pre-1.0 software: the supported bootstrap and canonical
-runtime path are the priority, but APIs, helper scripts, and surrounding
-tooling may still change between releases.
+Current eval result on the proving witness:
 
-- Deterministic Windows canonical runtime: witness run completed end-to-end under the canonical Windows execution path.
-- Hybrid Windows + WSL doctrine preserved: WSL remains a profile-gated compute extension, not a peer runtime.
-- Knowledge graph active: scene-linked media nodes were written for the witness video.
-- Vector parity deterministic at witness scope: phase-level parity fields resolved explicitly (`qdrant_ok=true`, `faiss_ok=not_attempted`).
-- Observability layer active: structured telemetry emitted `step_start`, `step_end`, `step_error`, progress, and heartbeat events.
-- Tagger native-crash mitigation active: witness telemetry captured one tagger native crash event while the pipeline still completed.
-- Season 1 release witness baseline published on 2026-03-09: five-episode clean-state control run with `185` scenes, `182/185` transcript coverage, `0` processing-error scenes, and a typed KG witness profile. See [`reports/seinfeld_experiment/diagnostics/SEASON1_WITNESS_RUN_2026-03-09.md`](reports/seinfeld_experiment/diagnostics/SEASON1_WITNESS_RUN_2026-03-09.md) and [`reports/seinfeld_experiment/diagnostics/POST_WITNESS_ANALYTICS_COMPARISON_2026-03-09.md`](reports/seinfeld_experiment/diagnostics/POST_WITNESS_ANALYTICS_COMPARISON_2026-03-09.md).
+- `6/6` core beats covered
+- `9.0/9.0` salience weight hit
 
-### Witness-Run Summary
+That result comes from the local episode-reference eval lane and is summarized in the release checkpoint and evidence map above.
 
-| Field | Value |
-| --- | --- |
-| `video` | `09. 2002 - 2003.mp4` |
-| `scenes_total` | `19` |
-| `transcript_scenes` | `18` |
-| `audio_backend_selected` | `windows (18/19 scenes; 1 missing)` |
-| `wsl2_unified` | `true (18/19 scenes; 1 missing)` |
-| `phase6_complete` | `true` |
-| `qdrant_points_clip` | `19` |
-| `qdrant_points_dino` | `19` |
-| `kg_media_nodes` | `19` |
-| `retry_counts` | `step_error_events=1; retry_events_observed=0` |
-| `total_duration_sec` | `1418.856` |
+## Verify It Yourself
 
-### Known Gaps
+### Fast Verification
 
-- Text/audio vector coverage can be sparse by run; do not claim full modality coverage unless run artifacts prove it.
-- `tagger` has rare native-process instability; mitigation is bounded retry plus persisted metadata, not a claim of zero native faults.
-- Distributed/multi-node support is not claimed as complete in this milestone.
+If you want the shortest honest path to “does this work on this machine?”:
 
-## Environment Contract (v2.2.0)
-
-Primary host identity and portability variables:
-
-- `GOODQ_HOST_PROFILE`
-- `GOODQ_DATA_ROOT`
-- `GOODQ_CONDA_ENV` (default fallback: `goodq_core`)
-- `GOODQ_WSL_DISTRO` (default fallback: `Ubuntu`)
-- `GOODQ_WSL_USER` (recommended explicit for strict desktop)
-- `GOODQ_WSL_WORKSPACE` (recommended explicit for strict desktop)
-- `GOODQ_REQUIRE_GPU`
-- `GOODQ_REQUIRE_WSL_AUDIO`
-
-Path abstraction contract:
-
-- Active docs and runtime surface use `<project_root>`, `<GOODQ_DATA_ROOT>`, and `<GOODQ_WSL_WORKSPACE>`.
-- Legacy literals are documented only in allowlisted legacy docs.
-
-Reference: [`docs/bootstrap/PATH_ABSTRACTION_CONTRACT.md`](docs/bootstrap/PATH_ABSTRACTION_CONTRACT.md)
-
-## Quick Start
-
-For a fresh Windows machine, the preferred entrypoint is the bootstrap installer:
-
-- Bootstrap guide: [`docs/bootstrap/INSTALL_BOOTSTRAP.md`](docs/bootstrap/INSTALL_BOOTSTRAP.md)
-- Bootstrap command: `python scripts/bootstrap_install.py`
-
-### 1. Open Repo Root
+1. Clone the repo and enter the project root.
+2. Run the bootstrap installer.
+3. Run the bootstrap validator.
+4. Start the API.
+5. Check the local health endpoint.
 
 ```powershell
 git clone <repo_url>
 cd goodq4all
-```
-
-### 2. Run Bootstrap
-
-```powershell
 python scripts/bootstrap_install.py
-```
-
-The bootstrap creates or updates the `goodq_core` orchestration environment,
-provisions the supported specialized step-env pack from the pinned stable lock
-recipes under `envs/locks/`, can prefetch the required local model cache for
-offline-ready ingest with live progress plus transient download retries, writes
-local-only overrides when missing, and checks canonical launcher prerequisites.
-
-### 3. Run Bootstrap Validation
-
-```powershell
 .\scripts\bootstrap_validate.bat
+python -m api.server
 ```
 
-This staged check validates docs governance, bootstrap semantics, and test status.
+Then open:
 
-### 4. Launch
+- `http://127.0.0.1:30000/api/health/summary`
+- `http://127.0.0.1:30000/docs`
 
-```powershell
-# PowerShell launcher
-.\LAUNCH_GOODQ.ps1
+Reference:
 
-# or Batch launcher
-.\LAUNCH_GOODQ.bat
-```
+- [`docs/bootstrap/INSTALL_BOOTSTRAP.md`](docs/bootstrap/INSTALL_BOOTSTRAP.md)
+- [`docs/reference/API.md`](docs/reference/API.md)
 
-### 5. Advanced Manual Path (Optional)
+### Full Proof Path
 
-For manual environment control, host overrides, and profile flags, use:
-- [`docs/guides/install/INSTALL.md`](docs/guides/install/INSTALL.md)
-- [`docs/guides/install/QUICKSTART.md`](docs/guides/install/QUICKSTART.md)
+If you want to verify the stronger claims, use the proving witness and release evidence directly:
 
-## Security Posture
+- [`docs/releases/RELEASE_0.1.1.md`](docs/releases/RELEASE_0.1.1.md)
+- [`reports/README.md`](reports/README.md)
+- [`docs/diagnostics/README.md`](docs/diagnostics/README.md)
 
-- Secrets live in `.env.local` only.
-- No telemetry or phone-home behavior in canonical runtime.
-- Raw sensitive query text should not be persisted in retrieval event logs.
-- Local storage is the source of truth; logs support investigation, not authority.
-- Operational posture is conservative by design: explicit config, clear failure signals, minimal trust assumptions.
-- See [`SECURITY.md`](SECURITY.md) for vulnerability reporting guidance.
+## Supported Surface Today
 
-## Model and Data Licensing
+GoodQ4All currently supports:
 
-- Some optional models require acceptance of upstream licenses or gated-access terms.
-- Model weights are downloaded directly from upstream providers; this repository does not redistribute them.
-- Public summaries may describe proprietary-media benchmarks at the metric level, but this repository does not publish transcripts or copyrighted dialogue excerpts.
-- Third-party notices and redistribution guidance live in [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
-## Documentation Map
+- local install and bootstrap on Windows
+- local API runtime
+- CLI ingestion
+- watchdog-driven long-running ingestion
+- SQLite + knowledge graph + Qdrant-backed persisted memory
+- CPU-safe baseline execution with optional GPU / WSL acceleration
 
-### Current Outcome and Evidence
+GoodQ4All does **not** currently ship a polished end-user UI. That is a future layer, not a current product claim.
 
-- Current release checkpoint:
-  [`docs/releases/RELEASE_0.1.1.md`](docs/releases/RELEASE_0.1.1.md)
-- Shipping profile:
-  [`docs/releases/SHIP_PROFILE.md`](docs/releases/SHIP_PROFILE.md)
-- Current operator state:
-  [`docs/goodq4all_agent_status.md`](docs/goodq4all_agent_status.md)
-- Current system snapshot:
-  [`docs/SYSTEM_SNAPSHOT.md`](docs/SYSTEM_SNAPSHOT.md)
-- Evidence and report map:
-  [`reports/README.md`](reports/README.md)
+UI status:
 
-### Start Here
+- [`docs/guides/ui/JUSTIFICATION_UI.md`](docs/guides/ui/JUSTIFICATION_UI.md)
 
-- Install (canonical): [`docs/guides/install/INSTALL.md`](docs/guides/install/INSTALL.md)
-- Quickstart (canonical): [`docs/guides/install/QUICKSTART.md`](docs/guides/install/QUICKSTART.md)
-- Laptop profile guide: [`docs/guides/install/LAPTOP.md`](docs/guides/install/LAPTOP.md)
-- Smoke matrix: [`docs/bootstrap/smoke_matrix_phase_a.md`](docs/bootstrap/smoke_matrix_phase_a.md)
+## What Makes It Different
 
-### Runtime Authority
+- **Scene-centric memory**
+  Every major interpretation surface is built around scenes as the atomic unit.
 
-- Handoff baseline: [`docs/HANDOFF_BASEMENT_PHASE.md`](docs/HANDOFF_BASEMENT_PHASE.md)
-- Agent status: [`docs/goodq4all_agent_status.md`](docs/goodq4all_agent_status.md)
-- System snapshot: [`docs/SYSTEM_SNAPSHOT.md`](docs/SYSTEM_SNAPSHOT.md)
-- Runtime authority memo: [`docs/RUNTIME_AUTHORITY_MEMO.md`](docs/RUNTIME_AUTHORITY_MEMO.md)
-- Data epochs: [`docs/data_epochs.md`](docs/data_epochs.md)
+- **Audit-first quality**
+  The system is tuned with witnesses, diagnostics, and reference evals instead of vibes.
 
-### Architecture and Operations
+- **Local truth boundary**
+  Public episode anchors can inform audit and scoring, but they do not overwrite runtime scene evidence.
 
-- System architecture: [`docs/architecture/SYSTEM_ARCHITECTURE.md`](docs/architecture/SYSTEM_ARCHITECTURE.md)
-- Memory storage: [`docs/architecture/MEMORY_STORAGE.md`](docs/architecture/MEMORY_STORAGE.md)
-- Vision pipeline: [`docs/architecture/components/VISION_PIPELINE.md`](docs/architecture/components/VISION_PIPELINE.md)
-- Watchdog system: [`docs/systems/WATCHDOG_SYSTEM.md`](docs/systems/WATCHDOG_SYSTEM.md)
-- Control agent: [`docs/CONTROL_AGENT.md`](docs/CONTROL_AGENT.md)
-- Multimodal fusion: [`docs/PHASE6_MULTIMODAL_FUSION.md`](docs/PHASE6_MULTIMODAL_FUSION.md)
-- CLI reference: [`docs/CLI-REFERENCE.md`](docs/CLI-REFERENCE.md)
-- Library components: [`docs/technical/LIB_COMPONENTS.md`](docs/technical/LIB_COMPONENTS.md)
+- **Controlled acceleration**
+  GPU and WSL are additive performance layers, not hidden requirements.
 
-### Governance and Drift Controls
+- **Failure visibility**
+  Optional enrichments may fail without collapsing the whole run, and the failure path is meant to remain visible.
 
-- Code of conduct: [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md)
-- Security policy: [`SECURITY.md`](SECURITY.md)
-- Governance summary: [`docs/bootstrap/doc_governance_summary.md`](docs/bootstrap/doc_governance_summary.md)
-- Authority policy: [`docs/bootstrap/doc_authority_policy.md`](docs/bootstrap/doc_authority_policy.md)
-- Authority map: [`docs/bootstrap/doc_authority_map.md`](docs/bootstrap/doc_authority_map.md)
-- Script registry: [`docs/bootstrap/SCRIPT_REGISTRY.md`](docs/bootstrap/SCRIPT_REGISTRY.md)
-- Legacy path registry: [`docs/technical/LEGACY_PATHS_DEPRECATED.md`](docs/technical/LEGACY_PATHS_DEPRECATED.md)
-- Drift lint: [`scripts/docs/doc_drift_lint.py`](scripts/docs/doc_drift_lint.py)
+## Architecture at a Glance
 
-## Validation and Quality Gates
+- **Host:** Windows 11 is the canonical runtime host
+- **Profiles:** `UNSET`, `BASELINE`, `GPU_ENHANCED`
+- **Storage:** SQLite + knowledge graph + Qdrant
+- **Memory surface:** scene manifests, temporal index, projected run outputs
+- **Core interpretation layer:** `scene_context_llm` with `primary_tags`, `contextual_tags`, and `structural_tags`
+- **Fusion layer:** Phase 6 / Phase 6b harmonization
 
-Recommended pre-push checks:
+If you want the deeper technical picture:
 
-```powershell
-python scripts/docs/doc_drift_lint.py
-python -m pytest -q  # unit suite via pytest.ini; broader integration/manual suites are separate
-.\scripts\bootstrap_validate.bat
-```
+- [`docs/architecture/SYSTEM_ARCHITECTURE.md`](docs/architecture/SYSTEM_ARCHITECTURE.md)
+- [`docs/architecture/ARCHITECTURE_REFERENCE.md`](docs/architecture/ARCHITECTURE_REFERENCE.md)
+- [`docs/architecture/MEMORY_STORAGE.md`](docs/architecture/MEMORY_STORAGE.md)
+- [`docs/PHASE6_MULTIMODAL_FUSION.md`](docs/PHASE6_MULTIMODAL_FUSION.md)
 
-## Historical Material
+## Start Here
 
-Historical reports and migration artifacts are intentionally preserved under [`docs/archive/`](docs/archive/).
+- Install: [`docs/guides/install/INSTALL.md`](docs/guides/install/INSTALL.md)
+- Quickstart: [`docs/guides/install/QUICKSTART.md`](docs/guides/install/QUICKSTART.md)
+- Laptop profile: [`docs/guides/install/LAPTOP.md`](docs/guides/install/LAPTOP.md)
+- Docs landing page: [`docs/README.md`](docs/README.md)
+- API reference: [`docs/reference/API.md`](docs/reference/API.md)
+- Current release checkpoint: [`docs/releases/RELEASE_0.1.1.md`](docs/releases/RELEASE_0.1.1.md)
+
+## Current Limitations
+
+- This is pre-1.0 software. The supported runtime path is stable enough to use, but surrounding helpers and APIs may still evolve.
+- A polished product UI is not part of the current shipping surface.
+- Some optional enrichments can still fail on individual scenes without invalidating the whole ingest.
+- Context weighting is now strong, but the project still treats some interpretation choices as policy-level texture rather than frozen truth.
+
+## Security and Data Handling
+
+- Secrets belong in `.env.local` only.
+- The canonical runtime does not require cloud execution.
+- Local storage is the source of truth.
+- Public benchmark and eval materials describe outcomes and metrics, not copyrighted transcript dumps.
+
+Reference:
+
+- [`SECURITY.md`](SECURITY.md)
+- [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)
+
+## Documentation and Evidence
+
+If you only read a few things, read these:
+
+- [`docs/releases/RELEASE_0.1.1.md`](docs/releases/RELEASE_0.1.1.md)
+- [`docs/releases/SHIP_PROFILE.md`](docs/releases/SHIP_PROFILE.md)
+- [`docs/goodq4all_agent_status.md`](docs/goodq4all_agent_status.md)
+- [`docs/SYSTEM_SNAPSHOT.md`](docs/SYSTEM_SNAPSHOT.md)
+- [`reports/README.md`](reports/README.md)
+- [`docs/diagnostics/README.md`](docs/diagnostics/README.md)
+
+Historical and superseded material is intentionally preserved under [`docs/archive/`](docs/archive/), but it is not the front door.
 
 ## License
 

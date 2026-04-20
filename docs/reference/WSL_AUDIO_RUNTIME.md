@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-04-19 -->
+<!-- DOC_LAST_VERIFIED: 2026-04-20 -->
 
 # WSL Audio Runtime Reference
 
@@ -106,6 +106,17 @@ The successful-path bridge surface should also preserve:
 This keeps partial sub-step failures visible even when the overall WSL call
 returns success.
 
+Current operator proof:
+
+- the repaired WSL path is validated on fresh Season 5 material, not just on
+  direct single-scene repros
+- the current projection smoke proves these fields persist through:
+  - `scene_ingest_results.json`
+  - `scene_manifest.json`
+  - `temporal_index.json`
+- speaker continuity is therefore no longer limited to raw processor payloads
+  or live logs
+
 ## Successful Payload Surface
 
 Successful unified WSL payloads now carry, in addition to transcript / diarization / emotion / embeddings:
@@ -127,6 +138,8 @@ Operator meaning:
 - `speaker_transcript` is the aligned speaker-owned text surface used by higher layers.
 - `speaker_voice_signatures` is the per-speaker pattern surface used by the identity stitching layer.
 - `speaker_voice_signature_meta` records whether signatures were emitted and which minimum thresholds applied.
+- `diarization_status` / `emotion_status` are part of the active persisted truth
+  surface, not debug-only side channels.
 
 Current runtime thresholds for signature emission are:
 

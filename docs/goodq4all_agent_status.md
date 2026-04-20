@@ -1,10 +1,10 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: GENERATED_SNAPSHOT -->
-<!-- DOC_LAST_VERIFIED: 2026-04-19 -->
+<!-- DOC_LAST_VERIFIED: 2026-04-20 -->
 
 # GoodQ4All Agent Status
 
-_Release-era baseline refreshed: 2026-04-19T17:00:00_
+_Release-era baseline refreshed: 2026-04-20T09:30:00_
 
 This document is a bounded operator snapshot of the current release-era
 stitching and offline-package baseline.
@@ -132,6 +132,28 @@ Audit Status: ACTIVE (2026-04-10)
   - remaining interpretation differences are policy-level texture choices inside the three-tier model rather than blocking seams
   - canonical forensic reference: `docs/diagnostics/MEMORY_ARBITRATION_FORENSIC_AUDIT_03x10_2026-04-12.md`
 
+## Post-Release Speaker / Continuity Validation
+- Season 5 transition smoke:
+  - run root: `reports/fresh_ingest_runs/20260419_144732_season5_transition_smoke/`
+  - result: `05x01` and `05x02` both passed on fresh material with `phase6_complete = true`, `qdrant_ok = true`, and `generic_context_detected = false`
+- Season 5 projection smoke:
+  - run root: `reports/fresh_ingest_runs/20260419_191136_season5_projection_smoke/`
+  - result: `05x01` and `05x02` both passed with the repaired truth surface aligned across `scene_ingest_results.json`, `scene_manifest.json`, and `temporal_index.json`
+  - observed smoke totals across both episodes:
+    - `83 / 84` scenes with `speaker_count > 0`
+    - `80 / 84` scenes with `speaker_voice_signature_count > 0`
+    - `84 / 84` scenes with `diarization_status`
+    - `84 / 84` scenes with `emotion_status`
+    - `83 / 84` scenes with `dominant_speaker_id`
+  - live KG activity in the smoke epoch now includes:
+    - `speaker` nodes
+    - `voice_pattern_match` edges
+    - `identity_candidate` edges
+    - `identity_supported` edges
+  - practical interpretation:
+    - speaker continuity is now operational in persisted output
+    - cross-episode identity stitching is active but still conservative on short smokes
+
 ## Offline Package State
 - Desktop machine audit: complete and authoritative in the workspace-adjacent pack
 - Offline bundle root: `../scratch/offline_bundle/goodq4all-offline/`
@@ -162,7 +184,9 @@ Audit Status: ACTIVE (2026-04-10)
 - Identity promotion is intentionally conservative; multi-episode evidence is required before stronger links appear.
 - Some caption/object-rich scenes still yield no persisted person entities; continue auditing the vision-semantic seam before widening inference rules.
 - Entity-noise cleanup still has a few season-level tails to inspect (`God`, `Wednesday`, `Tuesday`, `Superman`, `West`).
-- The `GOOD-SPEED-32` WSL audio bootstrap drift issue is now fixed on `main` via staged constraints plus final post-install ABI verification; pending follow-up is laptop-side confirmation of the repaired installer path rather than further desktop-side hardening.
+- `conversation_owner` remains sparse on the current short smoke and should not be treated as a primary operator-facing truth surface yet.
+- `interaction_dominance` is now genuinely live, but still sparse enough that it should be treated as additive context rather than a required output lane.
+- The `GOOD-SPEED-32` WSL audio bootstrap drift issue is now fixed on `main`; any remaining laptop follow-up is host-confirmation work rather than a desktop-side blocker.
 
 ## Recent Notable Changes
 - Restored `GPU_ENHANCED` desktop runtime through bootstrap-managed environment repair and verified CUDA-backed `goodq_core`.

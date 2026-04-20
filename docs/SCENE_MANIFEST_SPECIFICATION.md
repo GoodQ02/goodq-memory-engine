@@ -1,8 +1,8 @@
 # Scene Manifest Specification
 
 **Status:** ✅ **STABLE AND OPERATIONAL**  
-**Last Verified:** April 8, 2026  
-**Evidence:** monitored 2-episode baseline rerun and fresh benchmark artifacts produced epoch-scoped manifests with active WSL audio, Phase 6 completion, persisted speaker voice signatures, and additive harmonized perception fields
+**Last Verified:** April 20, 2026  
+**Evidence:** fresh Season 5 projection smoke artifacts produced epoch-scoped manifests with active WSL audio, persisted diarization/emotion truth, speaker continuity, and additive harmonized scene fields
 
 ---
 
@@ -100,7 +100,13 @@ Each scene entry contains the scene boundary, keyframe outputs, audio outputs, v
 - `dominance_confidence`
 - `visible_person_object_count`
 - `speaker_voice_signature_count`
+- `speaker_voice_signature_meta`
+- `diarization_status`
+- `diarization_error`
+- `diarization_note`
 - `audio_emotion`
+- `emotion_status`
+- `emotion_error`
 - `music_events`
 - `time_hints`
 - `candidate_visible_people`
@@ -331,6 +337,13 @@ Some witness runs still surface isolated native crashes in visual steps such as 
 ### 3. Voice Pattern Capture Is Distinct From Identity Promotion
 
 The presence of `speaker_voice_signatures` does not imply that identity promotion should occur. Promotion remains evidence-based and conservative.
+
+### 4. Interaction Ownership Is Additive, Not Guaranteed
+
+`conversation_owner` and `interaction_dominance` are active harmonization
+surfaces, but they may still be absent on many healthy scenes. Strong speaker
+continuity does not imply that these higher-level ownership fields will be
+dense on every episode.
 
 ---
 

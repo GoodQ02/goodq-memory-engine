@@ -1,22 +1,27 @@
+<!-- DOC_BADGE: OPERATIONAL -->
+<!-- DOC_STATUS: ACTIVE -->
+<!-- DOC_LAST_VERIFIED: 2026-04-20 -->
+
 # Qdrant Quick Reference
 
 ## 🚀 Start Qdrant
 
 ### Manual (Testing)
 ```batch
-START_QDRANT.bat
+scripts\qdrant\START_QDRANT.bat
 ```
 Keep window open. Dashboard: http://localhost:6333/dashboard
 
 ### Windows Service (Production)
 ```batch
 # Install (run as Admin)
-INSTALL_QDRANT_SERVICE.bat
+scripts\qdrant\INSTALL_QDRANT_SERVICE.bat
 
 # Manage
 net start GoodQ_Qdrant
 net stop GoodQ_Qdrant
-net restart GoodQ_Qdrant
+net stop GoodQ_Qdrant
+net start GoodQ_Qdrant
 ```
 
 ---
@@ -25,25 +30,25 @@ net restart GoodQ_Qdrant
 
 ```batch
 # 1. Start Qdrant (pick one method above)
-START_QDRANT.bat
+scripts\qdrant\START_QDRANT.bat
 
 # 2. Initialize collections
-INIT_QDRANT.bat
+scripts\qdrant\INIT_QDRANT.bat
 
 # 3. Verify health
-CHECK_QDRANT.bat
+scripts\qdrant\CHECK_QDRANT.bat
 ```
 
 ---
 
 ## 🧪 Testing
 
-```batch
-# Full system test (should now be 6/6 passing)
-test_system.bat
+```powershell
+# Runtime health / service verification
+conda run -n goodq_core python scripts\bootstrap_verify.py
 
 # Qdrant health only
-CHECK_QDRANT.bat
+scripts\qdrant\CHECK_QDRANT.bat
 
 # Dashboard
 http://localhost:6333/dashboard
@@ -121,7 +126,7 @@ taskkill /PID <PID> /F
 Get-Content <project_root>\logs\qdrant_stderr.log -Tail 50
 
 # Or run manual to see output
-START_QDRANT.bat
+scripts\qdrant\START_QDRANT.bat
 ```
 
 ### Reset Everything
@@ -133,8 +138,8 @@ net stop GoodQ_Qdrant
 rmdir /s /q <GOODQ_DATA_ROOT>\qdrant_storage
 
 # Reinitialize
-START_QDRANT.bat
-INIT_QDRANT.bat
+scripts\qdrant\START_QDRANT.bat
+scripts\qdrant\INIT_QDRANT.bat
 ```
 
 ---

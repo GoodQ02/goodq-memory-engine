@@ -1,11 +1,11 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-02-12 -->
+<!-- DOC_LAST_VERIFIED: 2026-04-20 -->
 
 # Control Agent & Self-Healing System
 
 **Status:** ⚠️ CONDITIONAL - Runtime disabled by default unless an `llm_client` is explicitly injected  
-**Last Updated:** April 1, 2026  
+**Last Updated:** April 20, 2026  
 **Version:** 1.0.0
 
 ---
@@ -449,10 +449,10 @@ agent.recovery_db.conn.close()
 
 ## Related Documentation
 
-- **Agents System:** `docs/agents.md` (coming soon)
-- **Pipeline Integration:** `docs/PIPELINE_ARCHITECTURE.md`
-- **Configuration:** `docs/CONFIGURATION.md`
-- **Canonical Watchdog Runtime:** `cli/watchdog.py`
+- **Agent operating protocol:** `AGENTS.md`
+- **Decision protocol:** `docs/architecture/AGENT_DECISION_PROTOCOL.md`
+- **Current runtime status:** `docs/goodq4all_agent_status.md`
+- **Canonical Watchdog system:** `docs/systems/WATCHDOG_SYSTEM.md`
 
 ---
 

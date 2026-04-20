@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-04-19 -->
+<!-- DOC_LAST_VERIFIED: 2026-04-20 -->
 
 # GoodQ4All Documentation
 
@@ -22,6 +22,12 @@ This is the current landing page for the active GoodQ4All docs surface.
 These operator documents are bounded release-era baselines, not live witness
 monitors. Use them to understand the supported runtime surface, then use
 released evidence and local reports for deeper proof paths.
+
+Current operator-validated additions on the active line:
+
+- Season 4 long-haul witness is fully banked as the current stress-and-stability proof.
+- Season 5 transition and projection smokes prove speaker-aware continuity on fresh material.
+- `scene_ingest_results.json`, `scene_manifest.json`, and `temporal_index.json` now align on diarization, emotion, and speaker-truth surfaces.
 
 ## Start Here
 

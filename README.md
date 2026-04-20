@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-04-17 -->
+<!-- DOC_LAST_VERIFIED: 2026-04-20 -->
 
 <p align="center">
   <img src="samples/assets/q-git-square.png" alt="GoodQ4All mark" width="140" />
@@ -59,6 +59,13 @@ What is actually proven, not just intended:
 - Scene-context interpretation quality is witness-proven, not just anecdotal.
 - Phase 6 harmonization is operating cleanly on the proving run.
 - Episode-quality scoring now has a local offline eval lane using curated IMDb-backed anchors for audit only.
+
+Post-release operator validation on the current `main` / `public` line additionally proves:
+
+- WSL audio readiness now means real offline diarization loadability, not import-only checks.
+- Successful unified audio preserves diarization and emotion sub-step truth instead of hiding partial failures behind a coarse success result.
+- Speaker continuity now persists through `scene_ingest_results.json`, `scene_manifest.json`, and `temporal_index.json`.
+- Episode-to-episode continuity is proven on fresh Season 5 material, not just on the release-era comparison witness.
 
 Current proving run and release proof path:
 

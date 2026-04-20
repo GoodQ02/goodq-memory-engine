@@ -1,774 +1,242 @@
-# GoodQ Troubleshooting Guide
+<!-- DOC_BADGE: OPERATIONAL -->
+<!-- DOC_STATUS: ACTIVE -->
+<!-- DOC_LAST_VERIFIED: 2026-04-20 -->
 
-> **Role:** Canonical troubleshooting guide for GoodQ4All. Start here for common issues when launching or running services. See `docs/guides/` for specific subsystem guides (WSL2, Qdrant, GPU).
+# Troubleshooting Guide
 
-**Last Updated:** April 1, 2026  
-**Status:** ✅ Active operator guide (verify against current epoch artifacts)
+This is the current operator-facing troubleshooting guide for GoodQ4All.
 
-Quick fixes for common issues when launching and running GoodQ services.
+Use this page for live issues in the supported runtime. Historical setup notes
+and superseded failure modes belong in archived material, not here.
 
----
+## Start Here
 
-## 🚀 Quick Fixes
-
-### Issue 1: System Won't Start
-
-**Symptoms:**
-```
-No command window appears
-LAUNCH_GOODQ.bat exits immediately
-"System health check failed"
-```
-
-**Fix:**
-```powershell
-# Run health check first
-python scripts/system_readiness_check.py
-
-# Check for missing models
-python scripts/cache_readiness_check.py
-
-# Verify Qdrant is running
-Invoke-WebRequest http://localhost:6333/health
-```
-
-**Common Causes:**
-- Qdrant service not started (Port 6333)
-- Missing conda environment (`goodq_core`)
-- Missing HuggingFace token for WSL2 audio
-
----
-
-### Issue 2: WSL2 Unified Audio Not Ready
-
-**Error:**
-```
-[ERROR] WSL2 audio worker not ready
-[ERROR] WSL workspace preflight failed
-Audio processing failed
-```
-
-**Fix:**
-```bash
-# In WSL2, verify the worker exists
-test -f "$GOODQ_WSL_WORKSPACE/process_audio.py"
-
-# Verify the workspace can see the GPU
-nvidia-smi
-
-# If the workspace is missing or stale, resync/re-bootstrap the WSL worker files
-```
-
-**Verify GPU Access:**
-```bash
-# In WSL2
-nvidia-smi
-
-# Should show:
-# CUDA Version: 12.8
-# GPU: RTX 4070 Ti SUPER
-```
-
-**Check HuggingFace Token:**
-```bash
-# In WSL2
-cat ~/.config/config.json | grep hf_token
-
-# If empty, add token:
-cd ~/goodq_audio
-nano config.json
-# Add: "hf_token": "hf_xxxxxxxxxxxxx"
-```
-
----
-
-### Issue 3: Qdrant Connection Failed
-
-**Error:**
-```
-[ERROR] Failed to connect to Qdrant
-Connection refused (port 6333)
-```
-
-**Fix:**
-```powershell
-# Check if Qdrant is running
-Get-Process qdrant -ErrorAction SilentlyContinue
-
-# If not running, start it:
-cd <project_root>\vendor\qdrant
-.\qdrant.exe
-
-# Or use the launcher:
-.\START_QDRANT.bat
-```
-
-**Verify Collections:**
-```powershell
-# Test connection
-Invoke-WebRequest http://localhost:6333/health
-
-# Check collections exist
-Invoke-WebRequest http://localhost:6333/collections
-```
-
-**Initialize if needed:**
-```batch
-INIT_QDRANT.bat
-```
-
----
-
-### Issue 4: CUDA Out of Memory
-
-**Error:**
-```
-RuntimeError: CUDA out of memory
-Tried to allocate X.XX GiB (GPU 0; 16.00 GiB total capacity)
-```
-
-**Current GPU Usage:**
-```powershell
-nvidia-smi
-
-# Expected normal usage:
-# Windows (goodq_core): 8-10GB
-# WSL2 (audio service): 4-6GB
-# Total: ~12-14GB / 16GB (85% utilization is normal)
-```
-
-**Fix:**
-```powershell
-# If over 95% utilization, clear GPU cache
-python -c "import torch; torch.cuda.empty_cache()"
-
-# Check what's using GPU
-nvidia-smi --query-compute-apps=pid,process_name,used_memory --format=csv
-```
-
-**Prevent:**
-- Don't run other GPU-heavy tasks during processing
-- WSL2 audio service + Windows vision pipeline share GPU (by design)
-- 85% utilization is normal and stable
-
----
-
-### Issue 5: Processing Stuck on Scene
-
-**Symptoms:**
-```
-[INFO] Scene 15/30 - Processing...
-(No updates for 5+ minutes)
-```
-
-**Check Progress:**
-```powershell
-# Check scene artifacts
-Get-ChildItem "logs\scene_ingest\<video>\audio\" -Recurse | Select-Object Name, Length, LastWriteTime
-
-# Check WSL2 output
-wsl ls -lh ~/goodq_audio/output/result.json
-```
-
-**If truly stuck:**
-```powershell
-# Check GPU is active
-nvidia-smi
-
-# Check WSL2 service
-wsl ps aux | grep python
-
-# Review logs
-Get-Content "logs\scene_ingest\<video>\*.log" -Tail 50
-```
-
-**Restart if needed:**
-1. Stop: Ctrl+C in command window
-2. Check GPU: `nvidia-smi` (verify nothing hung)
-3. Re-check WSL worker readiness if needed: `wsl -d <distro> -- bash -lc 'test -f \"$GOODQ_WSL_WORKSPACE/process_audio.py\" && nvidia-smi'`
-4. Resume processing
-
----
-
-### Issue 6: Entity Extraction Errors
-
-**Error:**
-```
-[ERROR] KeyError: 'transcript'
-[ERROR] Entity extraction failed
-[ERROR] Field 'objects' not found
-```
-
-**Status:** ✅ **FIXED** (December 13-14, 2025)
-
-Recent fixes applied to `steps/video/entity_extractor.py`. If you still see this:
+Run these first before changing anything:
 
 ```powershell
-# Verify you have latest code
-git pull origin main
-
-# Check entity extractor version
-Get-Content "steps\video\entity_extractor.py" | Select-String "Updated:"
-# Should show: December 13-14, 2025
+conda run -n goodq_core python scripts/system_readiness_check.py
+conda run -n goodq_core python scripts/cache_readiness_check.py
+Invoke-WebRequest http://127.0.0.1:6333/health
 ```
 
-**Verify fields are populated:**
-- `transcript` from WSL2 audio processing
-- `caption` from BLIP2 image captioning
-- `ocr_text` from Tesseract
-- `objects` from YOLOv8 detection
-
----
-
-### Issue 7: Knowledge Graph Not Updating
-
-**Symptoms:**
-```
-Entity extraction runs
-No errors shown
-knowledge_graph.db file size not growing
-```
-
-**Check:**
-```powershell
-# Verify KG database exists
-Get-ChildItem "<GOODQ_DATA_ROOT>\GoodQ_Data\epochs\*\knowledge_graph.db"
-
-# Check file size
-Get-ChildItem "<GOODQ_DATA_ROOT>\GoodQ_Data\epochs\*\knowledge_graph.db" | Select-Object Name, Length, LastWriteTime
-
-# Verify entities are being extracted
-Get-Content "logs\*.log" | Select-String "entity"
-```
-
-**Status:** ✅ **OPERATIONAL** (Dec 14, 2025)
-- Knowledge graph updates confirmed working
-- Real-time insertion active via `lib/kg_realtime_integration.py:109`
-- File should grow with each scene processed
-
----
-
-## 🔍 Diagnostic Commands
-
-### System Health Checks
-```powershell
-# Quick health check
-python scripts/system_readiness_check.py
-
-# Check model cache
-python scripts/cache_readiness_check.py
-
-# Verify all services
-# 1. Qdrant
-Invoke-WebRequest http://localhost:6333/health
-
-# 2. WSL2 unified audio worker readiness
-wsl -d <distro> -- bash -lc 'test -f "$GOODQ_WSL_WORKSPACE/process_audio.py" && echo worker_ready'
-
-# 3. GPU Status
-nvidia-smi
-# Expected: 12-14GB used, 85% utilization when processing
-```
-
-### Check Services Status
+If the issue involves accelerated audio, also verify the WSL truth surface:
 
 ```powershell
-# Check Qdrant
-Get-Process qdrant -ErrorAction SilentlyContinue
-Invoke-WebRequest http://localhost:6333/collections
-
-# Check WSL2 audio workspace
-wsl -d <distro> -- bash -lc 'test -f "$GOODQ_WSL_WORKSPACE/process_audio.py" && ls "$GOODQ_WSL_WORKSPACE"'
-
-# Check Python processes
-Get-Process python | Select-Object Id, ProcessName, WorkingSet, CPU
+conda run -n goodq_core python scripts/wsl_audio_preflight.py
 ```
 
-### Check Logs
+## What Counts As Healthy
+
+A healthy current run can still include:
+
+- occasional native vision-step crashes such as `image_caption`,
+  `object_detect`, or `image_embed_dino`
+- fallback or retry behavior on optional enrichments
+- `speaker_voice_signature_meta.status = skipped` on scenes without enough
+  diverse voiced speech
+
+Those are not necessarily run failures if:
+
+- the episode still finishes cleanly
+- `phase6_complete = true`
+- `qdrant_ok = true`
+- the failing step is surfaced truthfully in artifacts
+
+## System Will Not Start
+
+Symptoms:
+
+- launcher exits immediately
+- health summary does not come up
+- API docs are unavailable
+
+Check:
 
 ```powershell
-# Scene processing logs
-Get-ChildItem "<GOODQ_DATA_ROOT>\GoodQ_Data\epochs\*\logs\*.log" -Recurse | Select-Object FullName, Length, LastWriteTime
-
-# WSL2 audio worker output
-wsl -d <distro> -- bash -lc 'ls -lah "$GOODQ_WSL_WORKSPACE/output"'
-
-# Recent entity extraction
-Get-Content "logs\*.log" -Tail 100 | Select-String "entity"
-
-# Knowledge graph updates
-Get-ChildItem "<GOODQ_DATA_ROOT>\GoodQ_Data\epochs\*\knowledge_graph.db" | Select-Object Name, Length, LastWriteTime
+conda run -n goodq_core python scripts/system_readiness_check.py
+Invoke-WebRequest http://127.0.0.1:6333/health
 ```
 
-### Check Databases
+Most common current causes:
+
+- Qdrant is not reachable on `127.0.0.1:6333`
+- `goodq_core` is unavailable or corrupted
+- config or local cache surfaces are missing
+
+## WSL Audio Not Ready
+
+Symptoms:
+
+- host-side preflight reports WSL audio degraded
+- scenes show no speaker continuity on voiced material
+- diarization is missing across an episode
+
+Check:
 
 ```powershell
-# Memory DB
-Get-ChildItem "<GOODQ_DATA_ROOT>\GoodQ_Data\epochs\*\memory.db" | Select-Object Name, Length, LastWriteTime
-
-# Knowledge Graph DB
-Get-ChildItem "<GOODQ_DATA_ROOT>\GoodQ_Data\epochs\*\knowledge_graph.db" | Select-Object Name, Length, LastWriteTime
-
-# Qdrant collections
-Invoke-WebRequest http://localhost:6333/collections | ConvertFrom-Json
+conda run -n goodq_core python scripts/wsl_audio_preflight.py
 ```
 
-### Check Scene Artifacts
+What matters now:
+
+- `diarization_ready` means the sourced WSL runtime can load the configured
+  diarization chain offline
+- import success and token presence alone are not enough
+
+If `diarization_ready = false`, inspect:
+
+- `GOODQ_WSL_WORKSPACE`
+- the active cache root selected by the sourced runtime
+- whether the exact pyannote diarization repos exist in that active cache
+
+Reference:
+
+- `docs/reference/WSL_AUDIO_RUNTIME.md`
+
+## Qdrant Not Reachable
+
+Symptoms:
+
+- `qdrant_ok = false`
+- vector persistence fails
+- health check on port `6333` fails
+
+Check:
 
 ```powershell
-# List recent videos processed
-Get-ChildItem "<GOODQ_DATA_ROOT>\GoodQ_Data\epochs\*\processing" -Directory | Select-Object Name, LastWriteTime | Sort-Object LastWriteTime -Descending
-
-# Check specific video artifacts
-$video = "your_video_name"
-Get-ChildItem "<GOODQ_DATA_ROOT>\GoodQ_Data\epochs\*\processing\$video" -Recurse | Select-Object FullName, Length, LastWriteTime
-
-# Count scenes processed
-(Get-ChildItem "<GOODQ_DATA_ROOT>\GoodQ_Data\epochs\*\processing\$video\audio\*.wav").Count
-(Get-ChildItem "<GOODQ_DATA_ROOT>\GoodQ_Data\epochs\*\processing\$video\video\*.jpg").Count
+Invoke-WebRequest http://127.0.0.1:6333/health
+Invoke-WebRequest http://127.0.0.1:6333/collections
 ```
 
----
+If Qdrant is down, restore the local service before treating ingestion as the
+problem.
 
-## 🛠️ Advanced Fixes
+## A Run Looks Stuck
 
-### Reset Services (Nuclear Option)
+Symptoms:
 
-```powershell
-# Stop all Python processes
-Get-Process python -ErrorAction SilentlyContinue | Stop-Process -Force
+- no scene progress for several minutes
+- one episode appears frozen
 
-# Stop Qdrant
-Get-Process qdrant -ErrorAction SilentlyContinue | Stop-Process -Force
+Check the live episode log first, not old historical paths:
 
-# Reset WSL2 worker state by restarting the WSL session if needed
-wsl --shutdown
-
-# Restart everything
-.\LAUNCH_GOODQ.bat
+```text
+reports/fresh_ingest_runs/<run_root>/<episode>_scene_context_llm/ingest.stdout.log
+reports/fresh_ingest_runs/<run_root>/<episode>_scene_context_llm/ingest.stderr.log
 ```
 
-### Rebuild Conda Environment
+Then inspect the canonical epoch artifacts:
 
-```powershell
-# If goodq_core is corrupted
-conda env remove -n goodq_core
-conda create -n goodq_core python=3.10 -y
-conda activate goodq_core
-
-# Reinstall requirements
-pip install -r requirements.txt
+```text
+${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/<epoch>/processing/<episode>/
 ```
 
-### Reinitialize Qdrant
+Good questions to answer:
 
-```powershell
-# Stop Qdrant
-Get-Process qdrant | Stop-Process -Force
+- is scene count still advancing?
+- is WSL audio succeeding or downgrading?
+- is the run retrying a native scene step but continuing?
+- did the episode eventually write `scene_manifest.json` and `temporal_index.json`?
 
-# Backup data (optional)
-Copy-Item "<GOODQ_DATA_ROOT>\qdrant_storage" "<GOODQ_DATA_ROOT>\qdrant_storage_backup" -Recurse
+## Speaker Continuity Is Missing
 
-# Delete collections
-Remove-Item "<GOODQ_DATA_ROOT>\qdrant_storage\collections\*" -Recurse -Force
+If `speaker_count` is zero or absent across a voiced episode, inspect the
+persisted scene truth before assuming the runtime failed.
 
-# Start Qdrant
-cd <project_root>\vendor\qdrant
-.\qdrant.exe
+Check:
 
-# Reinitialize
-.\INIT_QDRANT.bat
+- `scene_ingest_results.json`
+- `scene_manifest.json`
+- `temporal_index.json`
+
+Look for:
+
+- `speaker_count`
+- `speaker_voice_signature_meta`
+- `diarization_status`
+- `diarization_error`
+- `dominant_speaker_id`
+
+Interpretation:
+
+- if `diarization_status` is present and `speaker_count > 0`, the repaired
+  speaker layer is active
+- if `diarization_status = success` but signatures are skipped, that usually
+  means insufficient voiced material, not a broken pipeline
+- if these fields are missing entirely, treat that as a projection or
+  persistence seam, not just a scene-quality issue
+
+## Output Looks Too Literal Or Awkward
+
+This is now usually a quality issue, not a wiring issue.
+
+Examples from older witnesses included transcript-fragment style tags such as
+awkward phrase lifts. Those are interpretation-normalization seams, not proof
+that the pipeline failed.
+
+If the run is otherwise healthy, inspect:
+
+- `narrative_summary`
+- `primary_tags`
+- `dialogue_topics`
+- transcript excerpts
+
+Use that to separate:
+
+- bad runtime truth
+- conservative but correct truth
+- low-quality phrase promotion
+
+## Useful Current Artifact Paths
+
+Run ledger:
+
+```text
+reports/fresh_ingest_runs/<run_root>/experiment_log.json
 ```
 
-### Reset WSL2 Audio Environment
+Episode output summary:
 
-```bash
-# In WSL2
-cd ~/goodq_audio
-
-# Clear output
-rm -rf output/*
-
-# Verify worker files are present
-test -f process_audio.py
+```text
+reports/fresh_ingest_runs/<run_root>/<episode>_scene_context_llm/output/scene_ingest_results.json
 ```
 
-### Clear GPU Memory
+Canonical persisted scene bundle:
 
-```powershell
-# Force clear CUDA cache
-python -c "import torch; torch.cuda.empty_cache(); torch.cuda.synchronize()"
-
-# Check freed memory
-nvidia-smi
-
-# If still stuck, restart driver (requires admin)
-# Note: This will disconnect any GPU applications
-Restart-Service -Name "NVIDIA Display Container LS"
-```
+```text
+${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/<epoch>/processing/<episode>/video/scene_manifest.json
 ```
 
-### Rebuild Environment
-```powershell
-# Full rebuild
-pwsh scripts/prepare_step_envs.ps1 -EnvPrefix goodq -ForceReinstall -LinkProject
+Canonical temporal rollup:
 
-# Specific environment
-conda env remove -n goodq_<step> -y
-pwsh scripts/prepare_step_envs.ps1 -EnvPrefix goodq -Steps <step> -LinkProject
+```text
+${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/<epoch>/processing/<episode>/temporal_index.json
 ```
 
-`prepare_step_envs.ps1` now repairs the supported specialized step-env pack by
-default. Use `-Steps` when you want a narrow repair instead of the full pack.
+Knowledge graph:
 
-### Clear and Restart
-```powershell
-# Full cleanup
-.\STOP_GOODQ.bat
-Remove-Item <project_root>\logs\*.tmp -Force -ErrorAction SilentlyContinue
-timeout /t 3
-
-# Fresh start
-.\LAUNCH_GOODQ.bat
+```text
+${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/<epoch>/knowledge_graph.db
 ```
 
----
-
-## 📊 Expected Behavior
-
-### Successful Launch
-You should see:
-- ✅ API Server window opens
-- ✅ Command Center window opens
-- ✅ Browser opens to http://localhost:30000/docs
-- ✅ No red error messages in either window
-
-### Command Center Display
-```
-== GoodQ Command Center ==
-== GPU ==
-NVIDIA GeForce RTX 4070 Ti SUPER, 16376, 1980, 0
-
-== DB / FAISS ==
-DB: {"embeddings": 2, "links": 11}
-FAISS → text:missing dino:missing clip:missing audio:2
-
-== DB↔FAISS Drift ==
-audio (id_map): faiss=2 db=2 drift=0.0%
-
-== Hot Cache (HF/Torch) ==
-HF_HOME: 367551895777 bytes
-TORCH_HOME: 367551895777 bytes
-```
-
-**Note:** "missing" indices are normal if you haven't run full ingestion yet.
-
----
-
-## 🔄 Clean Slate Procedure
-
-If nothing works, start fresh:
-
-```powershell
-# 1. Stop everything
-.\STOP_GOODQ.bat
-Get-Process | Where-Object { $_.ProcessName -like "*python*" } | Stop-Process -Force
-
-# 2. Clear temp files
-Remove-Item $env:TEMP\__conda_tmp_* -Force -ErrorAction SilentlyContinue
-Remove-Item <project_root>\logs\*.tmp -Force -ErrorAction SilentlyContinue
-
-# 3. Verify conda
-conda --version
-
-# 4. Health check
-pwsh scripts/mission_health_check.ps1 -EnvPrefix goodq
-
-# 5. Fresh launch
-.\LAUNCH_GOODQ.bat
-```
-
----
-
-## 📞 Still Having Issues?
-
-### Collect Diagnostics
-```powershell
-# Generate diagnostic bundle
-pwsh scripts/run_full_dry_run.ps1
-
-# Current status surfaces
-python -m cli.system_status
-python scripts/system_readiness_check.py
-```
-
-### What to Report
-Include:
-1. Error message (exact text)
-2. Steps to reproduce
-3. Output of health check
-4. Last 10 lines of step_runs.jsonl
-
----
-
-## ✅ Known Working Configuration
-
-- **OS:** Windows 11
-- **Python:** 3.10 (via Conda)
-- **PowerShell:** 7+
-- **GPU:** NVIDIA RTX 4070 Ti SUPER
-- **Conda:** Miniconda3
-
----
-
-## 🎯 Quick Reference
-
-| Problem | Solution |
-|---------|----------|
-| Port in use | `.\STOP_GOODQ.bat` |
-| Conda missing | Use Anaconda PowerShell Prompt |
-| Env missing | `pwsh scripts/prepare_step_envs.ps1` |
-| CUDA OOM | Reduce MaxScenes to 1 |
-| Syntax error | Update scripts (heredoc fix applied) |
-| Property missing | Normal if no ingestion run yet |
-
----
-
-*For detailed documentation, see:*
-- **LAUNCHER_GUIDE.md** - Complete launcher guide
-- **QUICK_REFERENCE.md** - Essential commands
-- **docs/guides/USER_GUIDE.md** - Full user manual
-
----
-
-*Last reviewed: October 6, 2025*
-
----
-
-### Issue 5: ImportError - AppleFrameworkLoader
-
-**Error:**
-```
-Could not import runpy module
-ImportError: cannot import name 'AppleFrameworkLoader' from 'importlib._bootstrap_external'
-```
-
-**Status:** ✅ **FIXED** (October 8, 2025)
-
-**Cause:** Base conda Python's runpy module corruption affecting `python -m pip` calls.
-
-**Solution Applied:**
-- All GoodQ scripts now use `pip` directly instead of `python -m pip`
-- Scripts updated: enable_cuda.ps1, fix_audio_emotion.ps1, index_to_chroma.ps1, lock_envs.ps1, prepare_step_envs.ps1, start_api.ps1
-
-**If Issue Persists:**
-```powershell
-# Option A: Update base conda
-conda update -n base conda python -y
-
-# Option B: Reinstall Miniconda
-# Download from: https://docs.conda.io/en/latest/miniconda.html
-```
-
----
-
-### Issue 6: goodq_face_embed Environment Failures
-
-**Error:**
-```
-ERROR: Cannot install torch==2.3.1 and facenet-pytorch==2.6.0
-ERROR: Failed building wheel for dlib
-```
-
-**Status:** ⚠️ **KNOWN ISSUE** - Non-critical (face embedding optional)
-
-**Causes:**
-1. **Dependency Conflict:** facenet-pytorch 2.6.0 requires torch<2.3.0, but GoodQ needs 2.3.1 for CUDA 12.1
-2. **Build Requirement:** dlib requires CMake for Windows compilation
-
-**Workaround:** Environment temporarily excluded from CUDA enablement. Other envs work normally.
-
-**Permanent Fix Options:**
-
-**Option A: Install CMake** (Recommended)
-```powershell
-# 1. Download from https://cmake.org/download/
-# 2. Add CMake to system PATH
-# 3. Run repair script
-<project_root>\scripts\emergency_conda_repair.ps1
-```
-
-**Option B: Use Alternative**
-Replace face-recognition with `insightface`, `deepface`, or `mediapipe` (no CMake needed)
-
-**More Info:** See `<project_root>\envs\face_embed\KNOWN_ISSUES.md`
-
----
-
----
-
-## 📚 Detailed Subsystem Guides
-
-For comprehensive troubleshooting of specific components:
-
-### WSL2 Audio System
-- **[START_HERE_WSL2.md](guides/wsl2/START_HERE_WSL2.md)** - Complete WSL2 audio setup and troubleshooting
-- **[WSL2_AUDIO_SETUP.md](guides/llm/WSL2_AUDIO_SETUP.md)** - Current optional WSL2 audio setup
-- **[WSL2_BENCHMARKS.md](guides/wsl2/WSL2_BENCHMARKS.md)** - Performance comparisons
-
-**Common WSL2 Issues:**
-- Service won't start → Check HuggingFace token in config.json
-- GPU not accessible → Verify CUDA 12.8 with `nvidia-smi` in WSL2
-- Diarization failing → Accept Pyannote model terms on HuggingFace
-- Slow processing → Enable Silero VAD in service mode
-
-### Qdrant Vector Database
-- **[QDRANT_SETUP.md](guides/QDRANT_SETUP.md)** - Installation, initialization, and usage
-- **[QDRANT_QUICKREF.md](QDRANT_QUICKREF.md)** - Quick reference for queries
-
-**Common Qdrant Issues:**
-- Connection refused → Start service with `START_QDRANT.bat`
-- Collections missing → Run `INIT_QDRANT.bat`
-- Slow queries → Check collection size with `http://localhost:6333/collections`
-- Port conflict → Qdrant uses standard port 6333
-
-### GPU Configuration
-- **[GPU_SETUP.md](guides/gpu/GPU_SETUP.md)** - GPU configuration for Windows
-- **[GPU_MANAGEMENT_GUIDE.md](guides/gpu/GPU_MANAGEMENT_GUIDE.md)** - GPU memory management
-- **[GPU_LLM_WSL_INDEX.md](guides/gpu/GPU_LLM_WSL_INDEX.md)** - Comprehensive GPU, LLM, WSL2 guide
-
-**Common GPU Issues:**
-- Out of memory → 85% utilization is normal (12-14GB / 16GB)
-- No GPU detected → Check CUDA 12.1 (Windows) or 12.8 (WSL2)
-- Slow processing → Verify GPU is not being used by other apps
-- Driver issues → Update to latest NVIDIA drivers
-
-### Environment & Installation
-- **[CONSOLIDATION_EXPLAINED.md](guides/CONSOLIDATION_EXPLAINED.md)** - Historical consolidation context
-- **[INSTALL.md](guides/general/INSTALL.md)** - Complete installation guide
-- **[LAPTOP_INSTALL_GUIDE.md](guides/general/LAPTOP_INSTALL_GUIDE.md)** - Installation for laptops
-
-**Common Environment Issues:**
-- Missing `goodq_core` → Core orchestration env is unavailable
-- Missing supported step envs → Rerun `python scripts/bootstrap_install.py` to provision the full active env pack
-- Import errors → Ensure the repo bootstrap completed and the targeted env exists before running ad hoc scripts
-- Package conflicts → Keep image/audio/video steps in their supported specialized envs unless a compatibility audit proves a safe merge
-
----
-
-## 🆘 Getting Help
-
-### Check Documentation First
-1. This troubleshooting guide (you are here)
-2. **[README.md](../README.md)** - System overview and status
-3. **[QUICK_START.md](QUICK_START.md)** - Quick start guide
-4. **[START_HERE.md](START_HERE.md)** - Complete navigation guide
-
-### Check System Status
-`powershell
-# Run health checks
-python scripts/system_readiness_check.py
-python scripts/cache_readiness_check.py
-
-# Check services
-Invoke-WebRequest http://localhost:6333/health  # Qdrant
-wsl -d <distro> -- bash -lc 'test -f "$GOODQ_WSL_WORKSPACE/process_audio.py" && echo worker_ready'   # WSL2 Audio
-nvidia-smi                                                                                             # GPU Status
-`
-
-### Review Recent Changes
-`powershell
-# Check recent documentation updates
-Get-ChildItem docs\*.md | Sort-Object LastWriteTime -Descending | Select-Object Name, LastWriteTime -First 10
-
-# Check recent code changes
-git log --oneline -n 10
-`
-
-### Collect Diagnostic Information
-If reporting an issue, collect this information:
-
-`powershell
-# System info
-nvidia-smi > diagnostic_gpu.txt
-conda info >> diagnostic_gpu.txt
-python --version >> diagnostic_gpu.txt
-
-# Service status
-Get-Process python,qdrant | Select-Object Id, ProcessName, WorkingSet > diagnostic_services.txt
-wsl ps aux | grep python >> diagnostic_services.txt
-
-# Recent logs
-Get-Content "logs\*.log" -Tail 100 > diagnostic_logs.txt
-wsl -d <distro> -- bash -lc 'ls -lah "$GOODQ_WSL_WORKSPACE/output"' >> diagnostic_logs.txt
-
-# Database status
-Get-Item "<GOODQ_DATA_ROOT>\GoodQ_Data\*.db" | Select-Object Name, Length, LastWriteTime > diagnostic_db.txt
-`
-
----
-
-## 📋 Verification Checklist
-
-Before reporting issues, verify:
-
-- [ ] **System Requirements Met**
-  - [ ] NVIDIA GPU with CUDA support (RTX 40-series or equivalent)
-  - [ ] 16GB+ RAM (32GB recommended)
-  - [ ] Windows 11 + WSL2 (Ubuntu)
-  - [ ] 100GB+ free disk space
-
-- [ ] **Services Running**
-  - [ ] Qdrant on port 6333 (`Invoke-WebRequest http://localhost:6333/health`)
-  - [ ] WSL2 audio workspace ready (`wsl -d <distro> -- bash -lc 'test -f "$GOODQ_WSL_WORKSPACE/process_audio.py"'`)
-  - [ ] GPU accessible (`nvidia-smi` shows CUDA 12.1/12.8)
-
-- [ ] **Environment Configured**
-  - [ ] goodq_core conda environment exists (`conda env list | grep goodq_core`)
-  - [ ] HuggingFace token configured in WSL2 (`wsl cat ~/.config/config.json`)
-  - [ ] Qdrant collections initialized (`Invoke-WebRequest http://localhost:6333/collections`)
-
-- [ ] **Data Paths Exist**
-  - [ ] `<GOODQ_DATA_ROOT>\GoodQ_Data\` directory exists
-  - [ ] `<GOODQ_DATA_ROOT>\GoodQ_Data\import_inbox\` for input files
-  - [ ] `<GOODQ_DATA_ROOT>\GoodQ_Data\epochs\<epoch>\processing\` for scene artifacts
-  - [ ] WSL2: `GOODQ_WSL_WORKSPACE` for audio processing
-
-- [ ] **Recent Updates Applied**
-  - [ ] Latest code from main branch (`git pull origin main`)
-  - [ ] Entity extraction fixes (Dec 13-14, 2025)
-  - [ ] Documentation sync (Dec 14, 2025)
-
----
-
-## 🔄 System Status (Stitching-Era Baseline)
-
-### ✅ Verified Operational
-- Scene detection (30 scenes processed)
-- WSL2 unified audio worker (CUDA-capable when selected)
-- Speaker diarization (52 segments, 2 speakers)
-- Entity extraction (cross-modal resolution)
-- Knowledge graph updates (real-time insertion)
-- Qdrant vector storage (3 collections active)
-- GPU utilization (85% stable, RTX 4070 Ti SUPER)
-
-### ⊘ Built But Not Wired (Phase 7 Planned)
-- FastAPI server (scaffolded in `api/`)
-- Web UI (frontend in `ui/`)
-- Multimodal search (`retrieval/multimodal_search.py`)
-
-### ⚠️ Known Issues
-- Native vision-step crashes can still surface occasionally (`image_caption`, `object_detect`, `image_embed_dino`)
-- Legacy audio steps still run alongside unified WSL2 call (cleanup planned)
-- API/UI mentioned in old docs but not yet deployed
-
----
-
-**Last Updated:** April 1, 2026  
-**Status:** Active operator guide aligned to epoch-scoped artifacts and direct WSL audio runtime  
-**Next Update:** After the next operator-surface sweep
-
----
-
-*"If you can't fix it with a shell command, try turning it off and on again."*  
-*"When in doubt, check the logs. Always check the logs."*
+## Before Escalating
+
+Verify:
+
+- `phase6_complete = true`
+- `qdrant_ok = true`
+- `generic_context_detected = false`
+- `speaker_count` and `diarization_status` on persisted outputs
+- whether the issue is isolated to one scene, one episode, or the full run
+
+That distinction matters. A single-scene optional failure and a broken witness
+are not the same problem.
+
+## Related Docs
+
+- `README.md`
+- `docs/README.md`
+- `docs/TESTING_GUIDE.md`
+- `docs/reference/WSL_AUDIO_RUNTIME.md`
+- `docs/PHASE6_MULTIMODAL_FUSION.md`
+- `docs/SCENE_MANIFEST_SPECIFICATION.md`

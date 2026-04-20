@@ -1,5 +1,9 @@
 # Qdrant Setup Guide for GoodQ4All
 
+<!-- DOC_BADGE: OPERATIONAL -->
+<!-- DOC_STATUS: ACTIVE -->
+<!-- DOC_LAST_VERIFIED: 2026-04-20 -->
+
 ## Overview
 
 Qdrant is now integrated into GoodQ4All as a **Windows native service** (no Docker required). This provides metadata filtering capabilities for your multimodal search pipeline.
@@ -77,7 +81,7 @@ instructions.
 
 ```batch
 # Right-click and "Run as Administrator"
-INSTALL_QDRANT_SERVICE.bat
+scripts\qdrant\INSTALL_QDRANT_SERVICE.bat
 ```
 
 This will:
@@ -90,20 +94,20 @@ This will:
 
 ```batch
 # Start Qdrant in foreground
-START_QDRANT.bat
+scripts\qdrant\START_QDRANT.bat
 ```
 
 Then in another terminal:
 ```batch
 # Initialize collections
-INIT_QDRANT.bat
+scripts\qdrant\INIT_QDRANT.bat
 ```
 
 Access dashboard: **http://127.0.0.1:6333/dashboard**
 
 Then initialize collections:
 ```batch
-INIT_QDRANT.bat
+scripts\qdrant\INIT_QDRANT.bat
 ```
 
 ---
@@ -120,7 +124,8 @@ net start GoodQ_Qdrant
 net stop GoodQ_Qdrant
 
 # Restart
-net stop GoodQ_Qdrant && net start GoodQ_Qdrant
+net stop GoodQ_Qdrant
+net start GoodQ_Qdrant
 ```
 
 ### Check Status
@@ -137,7 +142,7 @@ Or query: **http://127.0.0.1:6333/collections**
 
 ```batch
 # Right-click and "Run as Administrator"
-UNINSTALL_QDRANT_SERVICE.bat
+scripts\qdrant\UNINSTALL_QDRANT_SERVICE.bat
 ```
 
 ---
@@ -153,7 +158,7 @@ GoodQ4All creates 4 collections:
 | `goodq_text` | 384 | Text embeddings (transcripts, captions) |
 | `goodq_audio` | 512 | CLAP audio embeddings |
 
-These are automatically created when you run `INIT_QDRANT.bat`.
+These are automatically created when you run `scripts\qdrant\INIT_QDRANT.bat`.
 
 ---
 
@@ -229,7 +234,7 @@ Invoke-RestMethod -Uri http://localhost:6333/collections/goodq_clip
 ### 4. Run Full System Test
 
 ```batch
-test_system.bat
+conda run -n goodq_core python scripts\bootstrap_verify.py
 ```
 
 Now the Qdrant test should **PASS** instead of fail.
@@ -284,10 +289,12 @@ Features:
 ├── logs\
 │   ├── qdrant_stdout.log       # Service output (if using service)
 │   └── qdrant_stderr.log       # Service errors (if using service)
-├── START_QDRANT.bat            # Manual start script
-├── INSTALL_QDRANT_SERVICE.bat  # Service installer
-├── UNINSTALL_QDRANT_SERVICE.bat # Service uninstaller
-└── INIT_QDRANT.bat             # Collection initializer
+├── scripts\
+│   └── qdrant\
+│       ├── START_QDRANT.bat             # Manual start script
+│       ├── INSTALL_QDRANT_SERVICE.bat   # Service installer
+│       ├── UNINSTALL_QDRANT_SERVICE.bat # Service uninstaller
+│       └── INIT_QDRANT.bat              # Collection initializer
 
 <GOODQ_DATA_ROOT>\
 └── qdrant_storage\             # Database files
@@ -313,14 +320,14 @@ taskkill /PID <PID> /F
 ### Service Won't Start
 
 1. Check logs: `<project_root>\logs\qdrant_stderr.log`
-2. Re-run `INSTALL_QDRANT_SERVICE.bat` as Administrator to repair the Windows service
+2. Re-run `scripts\qdrant\INSTALL_QDRANT_SERVICE.bat` as Administrator to repair the Windows service
 3. Check config syntax: `vendor\qdrant\config.yaml`
-4. Use `START_QDRANT.bat` only as a foreground diagnostic fallback
+4. Use `scripts\qdrant\START_QDRANT.bat` only as a foreground diagnostic fallback
 
 ### Collections Not Created
 
 1. Make sure Qdrant is running
-2. Run `INIT_QDRANT.bat` again
+2. Run `scripts\qdrant\INIT_QDRANT.bat` again
 3. Check connection: `http://localhost:6333/collections`
 
 ### Ingestion Not Using Qdrant
@@ -338,17 +345,17 @@ taskkill /PID <PID> /F
 ## 🎓 Next Steps
 
 1. **Start Qdrant:**
-   - Preferred: `INSTALL_QDRANT_SERVICE.bat` (as Admin)
-   - Testing fallback: `START_QDRANT.bat`
+   - Preferred: `scripts\qdrant\INSTALL_QDRANT_SERVICE.bat` (as Admin)
+   - Testing fallback: `scripts\qdrant\START_QDRANT.bat`
 
 2. **Initialize Collections:**
    ```batch
-   INIT_QDRANT.bat
+   scripts\qdrant\INIT_QDRANT.bat
    ```
 
 3. **Run Test Ingestion:**
-   ```batch
-   test_system.bat
+   ```powershell
+   conda run -n goodq_core python scripts\bootstrap_verify.py
    ```
 
 4. **Process Real Videos:**
@@ -358,9 +365,8 @@ taskkill /PID <PID> /F
    Drop videos into `<GOODQ_DATA_ROOT>\GoodQ_Data\import_inbox\`
 
 5. **Test Multimodal Search:**
-   ```batch
-   conda activate goodq_core
-   python cli/retrieve.py "find birthday celebrations"
+   ```powershell
+   conda run -n goodq_core python cli\retrieve.py "find birthday celebrations"
    ```
 
 ---
@@ -369,10 +375,10 @@ taskkill /PID <PID> /F
 
 - **Qdrant Documentation:** https://qdrant.tech/documentation/
 - **API Reference:** http://localhost:6333/docs (when running)
-- **GoodQ Search Guide:** `docs/guides/SEARCH_GUIDE.md` (coming soon)
+- **CLI Reference:** `docs/CLI-REFERENCE.md`
 
 ---
 
 **Installation Date:** 2025-12-11  
 **Qdrant Version:** 1.7.4  
-**Status:** ✅ Ready for Production
+**Guide Status:** ✅ Current operational reference

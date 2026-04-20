@@ -1,6 +1,9 @@
 # Audio Pipeline GPU Optimization Guide
 
-> Role: Detailed canonical guide for audio-specific GPU optimization (beyond the implementation summary in `docs/AUDIO_GPU_IMPLEMENTATION_SUMMARY.md`). Start here when tuning diarization/transcription performance.
+> Role: Specialized optimization note for the older Windows-discrete audio path.
+> For the current canonical accelerated runtime, start with
+> `docs/reference/WSL_AUDIO_RUNTIME.md`. Use this guide only when auditing or
+> tuning the legacy discrete Windows audio lane deliberately.
 
 ## Overview
 

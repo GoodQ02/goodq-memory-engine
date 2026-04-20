@@ -1,10 +1,10 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: GENERATED_SNAPSHOT -->
-<!-- DOC_LAST_VERIFIED: 2026-04-19 -->
+<!-- DOC_LAST_VERIFIED: 2026-04-20 -->
 
 # System Snapshot
 
-_Release-era baseline refreshed: 2026-04-19T17:00:00_
+_Release-era baseline refreshed: 2026-04-20T09:30:00_
 
 This is a bounded release-era system snapshot. It is useful for understanding
 the supported host/runtime baseline, but it is not a live witness monitor.
@@ -128,6 +128,15 @@ the supported host/runtime baseline, but it is not a live witness monitor.
   - proving-witness local eval improved to `6/6` core beats and `9.0/9.0` salience
   - local forensic reference: `docs/diagnostics/MEMORY_ARBITRATION_FORENSIC_AUDIT_03x10_2026-04-12.md`
   - the `GOOD-SPEED-32` WSL audio bootstrap drift fix is now shipped on `main`; remaining follow-up is laptop-side confirmation of the repaired installer path.
+  - post-release projection smoke: `reports/fresh_ingest_runs/20260419_191136_season5_projection_smoke/`
+    - `05x01` and `05x02` both passed on fresh Season 5 material
+    - speaker continuity now persists end to end through `scene_ingest_results.json`, `scene_manifest.json`, and `temporal_index.json`
+    - smoke totals:
+      - `83 / 84` scenes with `speaker_count > 0`
+      - `80 / 84` scenes with `speaker_voice_signature_count > 0`
+      - `84 / 84` scenes with `diarization_status`
+      - `84 / 84` scenes with `emotion_status`
+    - current short-smoke KG state now includes `speaker`, `voice_pattern_match`, `identity_candidate`, and `identity_supported` activity instead of transcript-only continuity
 
 ## Recent Hardening
 - WSL audio readiness now requires `abi_ready=true` before bootstrap or canonical ingest will treat the workspace as healthy.

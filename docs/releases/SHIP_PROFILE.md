@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-04-19 -->
+<!-- DOC_LAST_VERIFIED: 2026-04-20 -->
 
 # GoodQ4All Shipping Profile
 
@@ -10,6 +10,14 @@
 `0.1.1`. Treat this shipping profile as a pre-1.0 contract: the supported
 bootstrap path and canonical runtime surface are the priority, while APIs and
 adjacent helper tooling may still evolve between releases.
+
+Current operator-validated addendum:
+
+- the active `main` / `public` line now preserves speaker-aware audio truth
+  through `scene_ingest_results.json`, `scene_manifest.json`, and
+  `temporal_index.json`
+- a fresh two-episode Season 5 smoke proves episode-to-episode continuity on
+  new material, not just the release-era witness lane
 
 ---
 
@@ -108,7 +116,7 @@ adjacent helper tooling may still evolve between releases.
 
 - Base orchestration: `goodq_core`.
 - Vision/audio/text steps: the `goodq_*` step environments documented in:
-  - `docs/ENVIRONMENT_INDEX.md`
+- `docs/reference/indexes/ENVIRONMENT_INDEX.md`
   - `docs/PHASE_1_GPU_FINAL_SUMMARY.md`
   - `docs/GPU_SETUP.md`
 

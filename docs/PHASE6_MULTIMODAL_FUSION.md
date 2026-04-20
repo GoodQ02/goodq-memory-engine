@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-04-08 -->
+<!-- DOC_LAST_VERIFIED: 2026-04-20 -->
 
 # Phase 6: Multimodal Fusion & Temporal Indexing
 
@@ -151,7 +151,13 @@ Phase 6b also writes additive scene-level harmonized fields back into the persis
 - `dominance_confidence`
 - `visible_person_object_count`
 - `speaker_voice_signature_count`
+- `speaker_voice_signature_meta`
+- `diarization_status`
+- `diarization_error`
+- `diarization_note`
 - `audio_emotion`
+- `emotion_status`
+- `emotion_error`
 - `music_events`
 - `time_hints`
 
@@ -229,6 +235,15 @@ That includes:
 
 This means Phase 6 is now part of memory truth, not just a convenience layer.
 
+Current operator proof:
+
+- the post-release Season 5 projection smoke proves these fields align across:
+  - `scene_ingest_results.json`
+  - `scene_manifest.json`
+  - `temporal_index.json`
+- speaker continuity is now part of the persisted Phase 6 truth surface rather
+  than a live-log-only observation
+
 ---
 
 ## Verification Checklist
@@ -258,6 +273,8 @@ Useful truth fields to grep:
 - `time_hints`
 - `speaker_voice`
 - `conversation_owner`
+- `diarization_status`
+- `emotion_status`
 
 ---
 

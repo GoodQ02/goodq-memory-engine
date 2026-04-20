@@ -8,6 +8,11 @@ _RECOMMENDED_INSTALL_COMMAND = (
     "pip install torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1 "
     "--index-url https://download.pytorch.org/whl/cu121"
 )
+_DIARIZATION_REPOS = (
+    "pyannote/speaker-diarization-3.1",
+    "pyannote/segmentation-3.0",
+    "pyannote/wespeaker-voxceleb-resnet34-LM",
+)
 
 
 def _run_wsl_probe(distro: str, script: str, *, timeout: int) -> subprocess.CompletedProcess[str]:
@@ -37,6 +42,40 @@ def _probe_package_version(distro: str, workspace: str, package_name: str) -> Op
 
 def _python_path_literal(path_value: str) -> str:
     return path_value.replace("\\", "\\\\").replace("'", "\\'")
+
+
+def _build_diarization_probe_script(workspace: str) -> str:
+    repo_list = ", ".join(repr(repo) for repo in _DIARIZATION_REPOS)
+    return (
+        f"source '{workspace}/setup_cuda_env.sh' >/dev/null 2>&1 && "
+        "python3 - <<'PY'\n"
+        "import os\n"
+        "from huggingface_hub import snapshot_download\n"
+        "token = os.getenv('PYANNOTE_TOKEN') or os.getenv('HUGGINGFACE_TOKEN') or os.getenv('HF_TOKEN')\n"
+        "if not token:\n"
+        "    print('diarization_token_missing')\n"
+        "    raise SystemExit(0)\n"
+        f"required_repos = [{repo_list}]\n"
+        "missing = []\n"
+        "for repo_id in required_repos:\n"
+        "    try:\n"
+        "        snapshot_download(repo_id=repo_id, local_files_only=True)\n"
+        "    except Exception as exc:\n"
+        "        missing.append(f'{repo_id}: {type(exc).__name__}: {exc}')\n"
+        "if missing:\n"
+        "    print('diarization_cache_missing')\n"
+        "    print(' || '.join(missing))\n"
+        "    raise SystemExit(0)\n"
+        "try:\n"
+        "    from pyannote.audio import Pipeline\n"
+        "    Pipeline.from_pretrained('pyannote/speaker-diarization-3.1', token=token)\n"
+        "except Exception as exc:\n"
+        "    print('diarization_runtime_unavailable')\n"
+        "    print(f'{type(exc).__name__}: {exc}')\n"
+        "else:\n"
+        "    print('diarization_ready')\n"
+        "PY"
+    )
 
 
 def probe_wsl_audio_runtime(distro: str, workspace: str) -> Dict[str, Any]:
@@ -149,12 +188,7 @@ def probe_wsl_audio_runtime(distro: str, workspace: str) -> Dict[str, Any]:
     else:
         result["abi_probe_stderr_tail"] = ((abi_probe.stderr or abi_probe.stdout or "").strip())[-600:]
 
-    diarization_script = (
-        f"source '{workspace}/setup_cuda_env.sh' >/dev/null 2>&1 && "
-        "python3 -c \"import os; from pyannote.audio import Pipeline; "
-        "token = os.getenv('PYANNOTE_TOKEN') or os.getenv('HUGGINGFACE_TOKEN') or os.getenv('HF_TOKEN'); "
-        "print('diarization_ready' if token else 'diarization_token_missing')\""
-    )
+    diarization_script = _build_diarization_probe_script(workspace)
     try:
         diarization_probe = _run_wsl_probe(distro, diarization_script, timeout=20)
     except Exception as exc:
@@ -165,7 +199,17 @@ def probe_wsl_audio_runtime(distro: str, workspace: str) -> Dict[str, Any]:
         diarization_stdout = (diarization_probe.stdout or "").strip()
         result["diarization_ready"] = "diarization_ready" in diarization_stdout
         if not result["diarization_ready"]:
-            result["diarization_detail"] = "pyannote importable but no HuggingFace token available"
+            diarization_lines = [line.strip() for line in diarization_stdout.splitlines() if line.strip()]
+            diarization_state = diarization_lines[0] if diarization_lines else ""
+            diarization_message = diarization_lines[1] if len(diarization_lines) > 1 else ""
+            if diarization_state == "diarization_token_missing":
+                result["diarization_detail"] = "pyannote importable but no HuggingFace token available"
+            elif diarization_state == "diarization_cache_missing":
+                result["diarization_detail"] = diarization_message or "configured offline diarization cache is incomplete"
+            elif diarization_state == "diarization_runtime_unavailable":
+                result["diarization_detail"] = diarization_message or "pyannote runtime unavailable"
+            else:
+                result["diarization_detail"] = diarization_message or "diarization probe did not report ready"
     else:
         if diarization_probe is not None:
             result["diarization_probe_stderr_tail"] = (

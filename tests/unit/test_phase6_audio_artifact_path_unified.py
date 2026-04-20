@@ -349,9 +349,21 @@ def test_harmonizer_rolls_up_audio_context_surfaces(tmp_path: Path, monkeypatch)
                         "segments": [{"start": 0.0, "end": 1.0, "text": "The crowd is going wild on Friday night."}],
                         "emotion": "neutral",
                         "emotion_scores": {"neutral": 0.9, "joy": 0.1},
+                        "diarization_status": "success",
+                        "diarization_error": None,
+                        "diarization_note": "wsl_unified",
+                        "emotion_status": "success",
+                        "emotion_error": None,
                         "music_events": music_events,
                         "time_hints": time_hints,
                         "speaker_voice_signatures": [{"speaker": "SPEAKER_00", "embedding_id": "sig-001"}],
+                        "speaker_voice_signature_meta": {
+                            "status": "ok",
+                            "emitted": 1,
+                            "attempted_speakers": 1,
+                            "min_voiced_seconds": 4.0,
+                            "min_segment_count": 2,
+                        },
                     },
                 }
             ],
@@ -386,6 +398,18 @@ def test_harmonizer_rolls_up_audio_context_surfaces(tmp_path: Path, monkeypatch)
     assert segment["metadata_time_hints"] == metadata_time_hints
     assert segment["audio_emotion"] == "neutral"
     assert segment["audio_emotion_scores"] == {"neutral": 0.9, "joy": 0.1}
+    assert segment["diarization_status"] == "success"
+    assert segment["diarization_error"] is None
+    assert segment["diarization_note"] == "wsl_unified"
+    assert segment["emotion_status"] == "success"
+    assert segment["emotion_error"] is None
+    assert segment["speaker_voice_signature_meta"] == {
+        "status": "ok",
+        "emitted": 1,
+        "attempted_speakers": 1,
+        "min_voiced_seconds": 4.0,
+        "min_segment_count": 2,
+    }
 
     assert temporal_index["segments_with_music_events"] == 1
     assert temporal_index["segments_with_time_hints"] == 1
@@ -398,6 +422,22 @@ def test_harmonizer_rolls_up_audio_context_surfaces(tmp_path: Path, monkeypatch)
     assert {"hint": "friday", "count": 1} in temporal_index["top_time_hints"]
     assert {"hint": "1991-07-04", "count": 1} in temporal_index["top_metadata_time_hints"]
     assert temporal_index["top_audio_emotions"] == [{"emotion": "neutral", "count": 1}]
+
+    persisted_manifest = json.loads(scene_manifest_path.read_text(encoding="utf-8"))
+    persisted_scene = persisted_manifest["scenes"][0]
+    assert persisted_scene["speaker_voice_signature_count"] == 1
+    assert persisted_scene["diarization_status"] == "success"
+    assert persisted_scene["diarization_error"] is None
+    assert persisted_scene["diarization_note"] == "wsl_unified"
+    assert persisted_scene["emotion_status"] == "success"
+    assert persisted_scene["emotion_error"] is None
+    assert persisted_scene["speaker_voice_signature_meta"] == {
+        "status": "ok",
+        "emitted": 1,
+        "attempted_speakers": 1,
+        "min_voiced_seconds": 4.0,
+        "min_segment_count": 2,
+    }
 
 
 def test_harmonizer_applies_scene_context_llm_when_feature_enabled(tmp_path: Path, monkeypatch) -> None:

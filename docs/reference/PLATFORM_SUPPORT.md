@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-03-26 -->
+<!-- DOC_LAST_VERIFIED: 2026-04-19 -->
 
 # Dual-Host Runtime Contract (Desktop + Laptop)
 
@@ -98,6 +98,11 @@ Current bootstrap/doctor/runtime truth surfaces distinguish:
 - `diarization_ready`
 
 This allows bootstrap and doctor to report transcription-ready but diarization-degraded states honestly instead of treating WSL audio as a single opaque boolean.
+
+`diarization_ready` is the strictest of these surfaces: it means the sourced
+WSL runtime can resolve and load the configured diarization pipeline offline
+from its active cache root. Import-only checks and token presence are not
+treated as sufficient readiness.
 
 For the current operator-facing details, see:
 

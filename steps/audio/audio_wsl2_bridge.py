@@ -183,11 +183,16 @@ def audio_unified_wsl2(audio_path: str, scene_id: str = None, duration: float = 
             'speaker_count': speaker_count,
             'diarization': result.get('diarization', []),
             'speaker_segments': result.get('diarization', []),
+            'diarization_status': result.get('diarization_status'),
+            'diarization_error': result.get('diarization_error'),
+            'diarization_note': result.get('diarization_note'),
             
             # Emotion
             'emotion': emotion,
             'emotion_scores': result.get('emotion_scores', {}),
             'audio_emotion': emotion,  # Duplicate for compatibility
+            'emotion_status': result.get('emotion_status'),
+            'emotion_error': result.get('emotion_error'),
             
             # Features
             'energy': result.get('energy'),

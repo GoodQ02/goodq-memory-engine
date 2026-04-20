@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-02-12 -->
+<!-- DOC_LAST_VERIFIED: 2026-04-19 -->
 
 # GoodQ4All Shipping Profile
 
@@ -97,10 +97,10 @@ adjacent helper tooling may still evolve between releases.
 - `docs/releases/RELEASE_0.1.1.md` – Current public release checkpoint narrative.
 - `THIRD_PARTY_NOTICES.md` – Public-facing summary of vendored components, model downloads, and upstream licensing caveats.
 - `docs/archive/audits/RELEASE_CHECKLIST.md` – Historical pre-release validation checklist.
-- Current witness-backed release baseline:
-  - `reports/seinfeld_experiment/diagnostics/SEASON1_WITNESS_RUN_2026-03-09.md`
-  - `reports/seinfeld_experiment/diagnostics/POST_WITNESS_ANALYTICS_COMPARISON_2026-03-09.md`
-  - `reports/seinfeld_experiment/releases/season1_witness_run_2026-03-09/`
+- Current released evidence path:
+  - `docs/releases/RELEASE_0.1.1.md`
+  - `reports/README.md`
+  - `docs/diagnostics/README.md`
 
 ---
 

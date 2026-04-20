@@ -1,23 +1,27 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-03-19 -->
+<!-- DOC_LAST_VERIFIED: 2026-04-19 -->
 
 # GoodQ4All Documentation
 
 This is the current landing page for the active GoodQ4All docs surface.
 
-## Current Outcome and Evidence
+## Current Outcome and Baselines
 
 - Current release checkpoint:
   [`docs/releases/RELEASE_0.1.1.md`](releases/RELEASE_0.1.1.md)
-- Current operator checkpoint:
+- Current operator baseline:
   [`docs/goodq4all_agent_status.md`](goodq4all_agent_status.md)
-- Current system snapshot:
+- Current system baseline:
   [`docs/SYSTEM_SNAPSHOT.md`](SYSTEM_SNAPSHOT.md)
 - Reports and evidence map:
   [`reports/README.md`](../reports/README.md)
 - Diagnostics index:
   [`docs/diagnostics/README.md`](diagnostics/README.md)
+
+These operator documents are bounded release-era baselines, not live witness
+monitors. Use them to understand the supported runtime surface, then use
+released evidence and local reports for deeper proof paths.
 
 ## Start Here
 
@@ -50,6 +54,8 @@ This is the current landing page for the active GoodQ4All docs surface.
   [`docs/reference/DEPENDENCIES.md`](reference/DEPENDENCIES.md)
 - Platform support:
   [`docs/reference/PLATFORM_SUPPORT.md`](reference/PLATFORM_SUPPORT.md)
+- WSL audio runtime:
+  [`docs/reference/WSL_AUDIO_RUNTIME.md`](reference/WSL_AUDIO_RUNTIME.md)
 - GPU capability matrix:
   [`docs/reference/GPU_CAPABILITY_MATRIX.md`](reference/GPU_CAPABILITY_MATRIX.md)
 

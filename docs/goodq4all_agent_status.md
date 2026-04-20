@@ -1,13 +1,16 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: GENERATED_SNAPSHOT -->
-<!-- DOC_LAST_VERIFIED: 2026-04-17 -->
+<!-- DOC_LAST_VERIFIED: 2026-04-19 -->
 
 # GoodQ4All Agent Status
 
-_Generated: 2026-04-17T19:15:00_
+_Release-era baseline refreshed: 2026-04-19T17:00:00_
 
-This document is a generated operator snapshot of the current stitching-era and offline-package baseline.
-Treat per-run artifacts and canonical runtime contracts as source of truth for live claims.
+This document is a bounded operator snapshot of the current release-era
+stitching and offline-package baseline.
+
+Use canonical runtime contracts and released evidence surfaces as source of
+truth for live claims. Do not treat this document as a live witness monitor.
 
 ## System Mode
 - MODE: Operational / Packaging / Hardening
@@ -17,7 +20,7 @@ Audit Status: ACTIVE (2026-04-10)
 | Phase | Status | Notes |
 |------|--------|-------|
 | Scene Detection | ✅ Complete | Stable |
-| Audio Extraction | ✅ Complete | Unified WSL worker + structured Windows fallback |
+| Audio Extraction | ✅ Complete | Unified WSL worker + structured Windows fallback + explicit sub-step truth surfaces |
 | Visual Captioning | ✅ Complete | Native faults surfaced as partial-scene errors |
 | CLIP Embeddings | ✅ Complete | Phase 6a persisted to Qdrant |
 | DINO Embeddings | ✅ Complete | Retry containment active for native crashes |
@@ -25,10 +28,10 @@ Audit Status: ACTIVE (2026-04-10)
 | Knowledge Graph | ✅ Complete | Realtime inserts + identity ladder active |
 | Vector Storage (Qdrant) | ✅ Wired | Port 6333 reachable |
 | Phase 6b Harmonization | ✅ Operational | Epoch-scoped temporal index is canonical |
-| Identity Stitching | ⚠️ Early Operational | speaker patterns live; promotion remains conservative |
+| Identity Stitching | ⚠️ Early Operational | speaker patterns and voice signatures can surface when voiced speech is stable; promotion remains conservative |
 | Final Report | ✅ Available | scene_ingest_results.json is canonical run summary |
 
-## Current Witness
+## Release-Era Witness Baseline
 - Locked two-season baseline witness: `reports/fresh_ingest_runs/20260409_072106_two_season_benchmark_witness/`
 - Run id: `4e35b14d-f19a-4ea4-8b4a-2213f165c6d0`
 - Current observed state: completed successfully across `17` episodes with final `pipeline.ingestion` status `completed`, `processed_videos = 17`, and Phase 6 completed across the benchmark
@@ -39,7 +42,7 @@ Audit Status: ACTIVE (2026-04-10)
   - contained `image_embed_dino` AMP-disabled retries
   - a small number of optional `audio_embed_clap` failures
 
-## Current Benchmark
+## Locked Benchmark Baseline
 - Two-season totals from the locked baseline:
   - `381` dialogue-entity scenes
   - `316` mentioned-people scenes
@@ -52,7 +55,7 @@ Audit Status: ACTIVE (2026-04-10)
 - The current authoritative baseline remains `epoch_2025_12_22`
 - `audio.metadata_time_hints`, the modernized `scene_summarizer`, and `scene_context_llm` are post-baseline additions and should be treated as treatment features rather than part of the overnight control
 
-## Active Treatment Ladder
+## Release-Era Treatment Ladder
 - Season 3 feature ladder authoritative pass roots:
   - `reports/fresh_ingest_runs/20260410_071121_season3_feature_ladder/`
   - `reports/fresh_ingest_runs/20260410_164051_season3_feature_ladder/`
@@ -102,7 +105,7 @@ Audit Status: ACTIVE (2026-04-10)
     - `docs/diagnostics/SCENE_CONTEXT_LLM_AUDIT_03x09_2026-04-12.md`
     - `docs/diagnostics/SEASON3_EPISODE_FORENSIC_AUDIT_03x05_2026-04-12.md`
 
-## Current Release Checkpoint
+## Public Release Checkpoint
 - Release checkpoint witness root: `reports/fresh_ingest_runs/20260417_163530_season3_feature_ladder/`
 - Release checkpoint witness state:
   - `03x10` passed:
@@ -121,6 +124,9 @@ Audit Status: ACTIVE (2026-04-10)
   - `scene_context_arbitration` is now a canonical additive Phase 6 output and projected witness surface
   - the three-tier `scene_context_llm` contract (`primary_tags`, `contextual_tags`, `structural_tags`) is active and persists explicit arrays instead of `null`
   - the transcript-beat seam family on `03x10` / `03x11` is closed in the proving lane, including `Steve Pocatillo`, `alternate side`, and `rental car`
+  - WSL audio readiness now requires real offline diarization loadability instead of import-and-token heuristics alone
+  - successful unified audio payloads preserve `diarization_status`, `diarization_error`, `emotion_status`, and `emotion_error` instead of hiding those fields on the success path
+  - speaker continuity surfaces (`speaker_count`, `dominant_speaker_id`, `speaker_voice_signature_count`) are part of the active runtime truth when stable voiced speech is present
   - local episode-reference eval now uses curated IMDb-backed anchor artifacts under `reports/reference_anchors/seinfeld/episodes/` for audit only; these anchors inform witness scoring but do not override runtime scene truth
   - the proving witness improved local episode-reference eval to `6/6` core beats and `9.0/9.0` salience
   - remaining interpretation differences are policy-level texture choices inside the three-tier model rather than blocking seams

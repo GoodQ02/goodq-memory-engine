@@ -91,7 +91,14 @@ fi
 if [ -n "${HUGGINGFACE_HUB_CACHE:-}" ]; then
     EMOTION_CACHE_GLOB="${HUGGINGFACE_HUB_CACHE%/}/models--ehcalabres--wav2vec2-lg-xlsr-en-speech-emotion-recognition/snapshots/*/preprocessor_config.json"
     EMBEDDING_CACHE_GLOB="${HUGGINGFACE_HUB_CACHE%/}/models--facebook--wav2vec2-base-960h/snapshots/*/preprocessor_config.json"
-    if ! has_hf_snapshot_file "$EMOTION_CACHE_GLOB" || ! has_hf_snapshot_file "$EMBEDDING_CACHE_GLOB"; then
+    DIARIZATION_CACHE_GLOB="${HUGGINGFACE_HUB_CACHE%/}/models--pyannote--speaker-diarization-3.1/snapshots/*/config.yaml"
+    SEGMENTATION_CACHE_GLOB="${HUGGINGFACE_HUB_CACHE%/}/models--pyannote--segmentation-3.0/snapshots/*/config.yaml"
+    WESPEAKER_CACHE_GLOB="${HUGGINGFACE_HUB_CACHE%/}/models--pyannote--wespeaker-voxceleb-resnet34-LM/snapshots/*/config.yaml"
+    if ! has_hf_snapshot_file "$EMOTION_CACHE_GLOB" || \
+       ! has_hf_snapshot_file "$EMBEDDING_CACHE_GLOB" || \
+       ! has_hf_snapshot_file "$DIARIZATION_CACHE_GLOB" || \
+       ! has_hf_snapshot_file "$SEGMENTATION_CACHE_GLOB" || \
+       ! has_hf_snapshot_file "$WESPEAKER_CACHE_GLOB"; then
         unset HF_HOME
         unset HUGGINGFACE_HUB_CACHE
         unset TORCH_HOME

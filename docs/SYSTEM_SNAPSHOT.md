@@ -1,10 +1,13 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: GENERATED_SNAPSHOT -->
-<!-- DOC_LAST_VERIFIED: 2026-04-17 -->
+<!-- DOC_LAST_VERIFIED: 2026-04-19 -->
 
 # System Snapshot
 
-_Generated: 2026-04-17T19:15:00_
+_Release-era baseline refreshed: 2026-04-19T17:00:00_
+
+This is a bounded release-era system snapshot. It is useful for understanding
+the supported host/runtime baseline, but it is not a live witness monitor.
 
 ## Host & OS
 - Hostname: GOOD-CUBE
@@ -78,7 +81,7 @@ _Generated: 2026-04-17T19:15:00_
 - Canonical baseline memo: `docs/testing/SEASON1_2_BASELINE_MEMO_2026-04-10.md`
 - Note: `audio.metadata_time_hints`, the modernized `scene_summarizer`, and `scene_context_llm` landed after this benchmark started and are treatment features, not part of the locked control
 
-## Active Treatment State
+## Release-Era Treatment State
 - Feature ladder authoritative pass roots:
   - `reports/fresh_ingest_runs/20260410_071121_season3_feature_ladder/`
   - `reports/fresh_ingest_runs/20260410_164051_season3_feature_ladder/`
@@ -118,6 +121,9 @@ _Generated: 2026-04-17T19:15:00_
   - additive `scene_context_arbitration` is now canonical in Phase 6 outputs and projected run summaries
   - the three-tier `scene_context_llm` contract is active, with explicit array persistence for low-signal scenes
   - transcript-beat seam closure is witness-proven on `03x10` / `03x11`, including `Steve Pocatillo`, `alternate side`, and `rental car`
+  - WSL audio readiness now requires real offline diarization loadability under the sourced runtime, not import-only checks
+  - successful unified audio outputs preserve `diarization_status` / `diarization_error` and `emotion_status` / `emotion_error` on the success path
+  - speaker continuity surfaces can now persist when stable voiced speech is present, rather than remaining structurally absent
   - local episode-reference eval now uses curated IMDb-backed anchor artifacts under `reports/reference_anchors/seinfeld/episodes/` for audit only; they score witness output without overriding runtime scene truth
   - proving-witness local eval improved to `6/6` core beats and `9.0/9.0` salience
   - local forensic reference: `docs/diagnostics/MEMORY_ARBITRATION_FORENSIC_AUDIT_03x10_2026-04-12.md`
@@ -127,3 +133,5 @@ _Generated: 2026-04-17T19:15:00_
 - WSL audio readiness now requires `abi_ready=true` before bootstrap or canonical ingest will treat the workspace as healthy.
 - Canonical WSL selection now rejects ABI-degraded runtimes instead of running in warning-only mode.
 - Cache readiness now resolves the canonical `models_cache` path correctly, avoiding false repo-local `_DATA/models` fallbacks.
+- WSL diarization readiness now depends on offline loadability of the exact configured pipeline chain.
+- Unified audio success-path payloads preserve diarization and emotion sub-step truth instead of hiding those fields behind a coarse success result.

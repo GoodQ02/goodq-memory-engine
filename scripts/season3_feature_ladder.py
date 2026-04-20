@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
+from urllib.parse import urlparse, urlunparse
 
 import yaml
 
@@ -27,6 +28,7 @@ from steps.common.config_loader import load_configs  # noqa: E402
 DEFAULT_SOURCE_DIR = REPO_ROOT / "samples" / "ingestion" / "Sein_Experiment"
 DEFAULT_EPOCH = "epoch_2025_12_23"
 DEFAULT_REPORTS_ROOT = REPO_ROOT / "reports" / "fresh_ingest_runs"
+DEFAULT_RUN_LABEL = "season3_feature_ladder"
 CONFIG_LOCAL_PATH = REPO_ROOT / "configs" / "config.local.yaml"
 BACKUP_SENTINEL = ".season3_feature_ladder_backup"
 GENERIC_CONTEXT_PHRASES = {
@@ -79,6 +81,12 @@ def _parse_episode_prefixes(raw: Optional[str]) -> tuple[str, ...]:
     if not prefixes:
         raise ValueError("episode-prefixes was provided but no usable prefixes were found")
     return prefixes
+
+
+def _sanitize_run_label(value: str) -> str:
+    cleaned = re.sub(r"[^A-Za-z0-9._-]+", "_", str(value or "").strip())
+    cleaned = cleaned.strip("._-")
+    return cleaned or DEFAULT_RUN_LABEL
 
 
 def _feature_template(feature_name: str) -> FeatureRun:
@@ -188,6 +196,31 @@ def _build_epoch_override(cfg: Dict[str, Any], epoch: str, enable_scene_context:
     wsl_distro = str(_first_non_empty(os.environ.get("GOODQ_WSL_DISTRO"), host_cfg.get("wsl_distro"), "Ubuntu")).strip()
     wsl_user = _first_non_empty(os.environ.get("GOODQ_WSL_USER"), host_cfg.get("wsl_user"))
     wsl_workspace = _first_non_empty(os.environ.get("GOODQ_WSL_WORKSPACE"), host_cfg.get("wsl_workspace"))
+    llm_cfg = cfg.get("llm") if isinstance(cfg.get("llm"), dict) else {}
+
+    def _loopback_url(raw_url: Any, default_url: str) -> str:
+        candidate = str(_first_non_empty(raw_url, default_url)).strip()
+        try:
+            parsed = urlparse(candidate)
+            if not parsed.scheme:
+                raise ValueError("missing scheme")
+            netloc = "127.0.0.1"
+            if parsed.port:
+                netloc = f"{netloc}:{parsed.port}"
+            return urlunparse((parsed.scheme, netloc, parsed.path, parsed.params, parsed.query, parsed.fragment))
+        except Exception:
+            return default_url
+
+    vllm_url = _loopback_url(llm_cfg.get("vllm_url"), "http://127.0.0.1:38005/v1")
+    api_url = _loopback_url(llm_cfg.get("api_url"), "http://127.0.0.1:38005/v1/chat/completions")
+    vllm_model = str(
+        _first_non_empty(
+            llm_cfg.get("vllm_model"),
+            llm_cfg.get("model_id"),
+            os.environ.get("GOODQ_WSL_MODEL_PATH"),
+            "meta-llama/Llama-3.2-1B-Instruct",
+        )
+    ).strip()
 
     epoch_root = f"{host_data_root}/GoodQ_Data/epochs/{epoch}"
     override: Dict[str, Any] = {
@@ -221,6 +254,9 @@ def _build_epoch_override(cfg: Dict[str, Any], epoch: str, enable_scene_context:
             "dino_collection": f"goodq_dino_{epoch}",
         },
         "llm": {
+            "api_url": api_url,
+            "vllm_url": vllm_url,
+            "vllm_model": vllm_model,
             "features": {
                 "scene_context_analysis": bool(enable_scene_context),
             }
@@ -603,7 +639,8 @@ def _load_video_result(output_path: Path, video_name: str) -> Dict[str, Any]:
 
 def _run_plan(args: argparse.Namespace) -> int:
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    root_run_dir = args.reports_root / f"{timestamp}_season3_feature_ladder"
+    run_label = _sanitize_run_label(args.run_label)
+    root_run_dir = args.reports_root / f"{timestamp}_{run_label}"
     root_run_dir.mkdir(parents=True, exist_ok=True)
     summary_path = root_run_dir / "experiment_log.json"
 
@@ -735,7 +772,7 @@ def _run_plan(args: argparse.Namespace) -> int:
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Run a one-feature-per-episode Season 3 experiment ladder against an isolated epoch."
+        description="Run a one-feature-per-episode feature witness against an isolated epoch."
     )
     parser.add_argument(
         "--source-dir",
@@ -753,6 +790,11 @@ def _parse_args() -> argparse.Namespace:
         type=Path,
         default=DEFAULT_REPORTS_ROOT,
         help="Root directory for experiment run folders.",
+    )
+    parser.add_argument(
+        "--run-label",
+        default=DEFAULT_RUN_LABEL,
+        help="Suffix label for the witness run root, e.g. season4_release_witness.",
     )
     parser.add_argument(
         "--plan-only",

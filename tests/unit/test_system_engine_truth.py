@@ -39,7 +39,7 @@ def _load_api_main():
     sys.modules["goodq_version"] = fake_goodq_version
 
     routes_pkg = types.ModuleType("api.routes")
-    for name in ["search", "scenes", "timeline", "media", "system", "run_summary", "run_index"]:
+    for name in ["search", "scenes", "timeline", "media", "system", "run_summary", "run_index", "ingest"]:
         mod = types.ModuleType(f"api.routes.{name}")
         mod.router = APIRouter()
         setattr(routes_pkg, name, mod)
@@ -79,3 +79,24 @@ def test_collect_engine_details_reports_qdrant_as_vector_db(monkeypatch) -> None
     assert engines["vector_db"]["status"] == "ready"
     assert "Qdrant" in engines["vector_db"]["description"]
     assert "ChromaDB" not in engines["vector_db"]["description"]
+
+
+def test_queue_counts_supported_ingest_files_not_video_only(tmp_path: Path) -> None:
+    api_main = _load_api_main()
+    import_inbox = tmp_path / "import_inbox"
+    processing = tmp_path / "processing"
+    processed = tmp_path / "processed"
+    failed = tmp_path / "failed"
+    for path in (import_inbox, processing, processed, failed):
+        path.mkdir(parents=True, exist_ok=True)
+
+    (import_inbox / "sample.wav").write_bytes(b"audio")
+    (import_inbox / "ignore.bin").write_bytes(b"ignored")
+
+    api_main._IMPORT_INBOX = import_inbox
+    api_main._PROCESSING_PATH = processing
+
+    queue = api_main.get_queue()
+
+    assert queue["inbox"]["count"] == 1
+    assert queue["inbox"]["files"][0]["name"] == "sample.wav"

@@ -33,6 +33,7 @@ Primary status and compatibility endpoints defined in the active API surface:
 Router-backed endpoint families mounted into the same process:
 
 - `/api/search`
+- `/api/ingest`
 - `/api/timeline`
 - `/api/media`
 - `/api/system`
@@ -51,6 +52,9 @@ Router-backed endpoint families mounted into the same process:
 ## System Mutation Policy
 
 - `POST /api/system/ingest` is intentionally disabled on the active line.
+- The active ingest write surface is the truthful facade:
+  - `POST /api/ingest/submit`
+  - `GET /api/ingest/status/{request_id}`
 - If an ingest API surface is introduced later, it must be:
   - explicit
   - confirmation-gated
@@ -59,7 +63,11 @@ Router-backed endpoint families mounted into the same process:
   - checkpointed
   - auditable
 - Any future ingest route must remain a controlled facade over the canonical runtime path rather than a second ingest engine.
+- The active ingest facade stages a single supported local file into the canonical inbox, writes a durable request record, and returns a request handle.
+- The active ingest facade does not execute ingestion, manage a second job engine, bypass watchdog, or mutate memory directly.
 - The current supported ingest surfaces remain:
+  - `POST /api/ingest/submit` for request intake only
+  - `GET /api/ingest/status/{request_id}` for request-centric lifecycle status
   - `conda run -n goodq_core python -m cli.watchdog`
   - `conda run -n goodq_core python -m cli.run_ingestion --input-dir <path>`
   - the configured `<GOODQ_DATA_ROOT>\GoodQ_Data\import_inbox`

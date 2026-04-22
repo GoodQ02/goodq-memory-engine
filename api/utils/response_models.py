@@ -171,3 +171,49 @@ class IngestRequest(BaseModel):
 class IngestResponse(SystemMutationResponse):
     """Ingest job response."""
     job_id: Optional[str] = None
+
+
+class IngestSubmitRequest(BaseModel):
+    """Truthful ingest facade submit request."""
+    file_path: str
+    confirmation_token: str
+    policy_profile: str
+    priority: int = 0
+    options: Dict[str, Any] = Field(default_factory=dict)
+
+
+class IngestSubmitResponse(BaseModel):
+    """Truthful ingest facade submit response."""
+    request_id: str
+    status: str
+    source_path: str
+    original_name: str
+    staged_path: Optional[str] = None
+    policy_profile: str
+    queue_depth_snapshot: int
+    watchdog_detection_window_seconds: int
+    pickup_estimate: str
+    budget_scope: str
+    budget_status: str
+    duplicate_of_run_id: Optional[str] = None
+
+
+class IngestStatusResponse(BaseModel):
+    """Truthful ingest facade status response."""
+    request_id: str
+    status: str
+    source_path: str
+    original_name: str
+    staged_path: Optional[str] = None
+    policy_profile: str
+    queue_depth_snapshot: int
+    watchdog_detection_window_seconds: int
+    pickup_estimate: str
+    budget_scope: str
+    budget_status: str
+    duplicate_of_run_id: Optional[str] = None
+    run_id: Optional[str] = None
+    error: Optional[str] = None
+    created_at: str
+    last_observed_at: Optional[str] = None
+    completed_at: Optional[str] = None

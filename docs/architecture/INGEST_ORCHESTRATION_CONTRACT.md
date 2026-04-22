@@ -66,15 +66,21 @@ The active API does not currently own ingest orchestration.
 Rules:
 
 1. `POST /api/system/ingest` must remain disabled unless it can act as a controlled facade over the canonical watchdog / CLI runtime.
-2. Any future ingest API surface must be:
+2. The active API may expose a narrow ingest facade only if it:
+   - validates a single supported local file
+   - writes a durable request record
+   - stages the file into the canonical inbox
+   - returns a request handle
+   - resolves status from the request ledger outward into watchdog/runtime artifacts
+3. Any ingest API surface must be:
    - explicit
    - confirmation-gated
    - policy-driven
    - budgeted
    - checkpointed
    - auditable
-3. A future ingest route must hand work into the canonical runtime path rather than introducing a second ingest engine.
-4. `POST /api/system/reindex` and `POST /api/system/reload` remain operator-only until a real policy-driven control plane exists for those maintenance actions.
+4. An ingest route must hand work into the canonical runtime path rather than introducing a second ingest engine.
+5. `POST /api/system/reindex` and `POST /api/system/reload` remain operator-only until a real policy-driven control plane exists for those maintenance actions.
 
 ### 3. Step system role
 

@@ -25,9 +25,10 @@ from goodq_version import GOODQ_VERSION
 
 from steps.common.config_loader import load_configs
 from steps.common.memory_manager import build_memory_router
+from api.utils.ingest_requests import is_supported_ingest_path
 
 # Import Phase 7 API routes
-from api.routes import search, scenes, timeline, media, system, run_summary, run_index
+from api.routes import search, scenes, timeline, media, system, run_summary, run_index, ingest
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -81,6 +82,7 @@ app.include_router(scenes.router)
 app.include_router(timeline.router)
 app.include_router(media.router)
 app.include_router(system.router)
+app.include_router(ingest.router)
 app.include_router(run_summary.router)
 app.include_router(run_index.router)
 
@@ -805,8 +807,15 @@ def get_queue() -> Dict[str, Any]:
 
     try:
         if import_inbox.exists():
-            video_exts = {'.mp4', '.mov', '.avi', '.mkv', '.webm'}
-            inbox_files = [f for f in import_inbox.iterdir() if f.suffix.lower() in video_exts]
+            inbox_files = [
+                f
+                for f in import_inbox.iterdir()
+                if f.is_file()
+                and not f.name.startswith(".")
+                and not f.name.startswith("PROCESSED_")
+                and not f.name.startswith("FAILED_")
+                and is_supported_ingest_path(f)
+            ]
             queue_data["inbox"]["count"] = len(inbox_files)
             queue_data["inbox"]["files"] = [
                 {"name": f.name, "size_mb": round(f.stat().st_size / (1024 ** 2), 2)}

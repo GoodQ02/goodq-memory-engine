@@ -9,12 +9,16 @@ from fastapi import APIRouter, HTTPException, Path as PathParam, Query
 
 from api.utils.response_models import SceneResponse
 from api.utils.loaders import DataLoader
+from retrieval.multimodal_search import MultimodalSearchEngine
+from steps.common.config_loader import load_configs
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/videos/{video_id}/scenes", tags=["scenes"])
 
 _data_loader = None
+_search_engine = None
+_config = None
 
 
 def _segment_object_labels(segment: dict) -> List[str]:
@@ -77,6 +81,18 @@ def get_data_loader():
         logger.info("[OK] Data loader initialized for scenes")
     
     return _data_loader
+
+
+def get_search_engine():
+    """Lazy-load multimodal search engine."""
+    global _search_engine, _config
+
+    if _search_engine is None:
+        _config = load_configs({})
+        _search_engine = MultimodalSearchEngine(_config)
+        logger.info("[OK] Search engine initialized for similar scenes")
+
+    return _search_engine
 
 
 @router.get("", response_model=List[SceneResponse])
@@ -155,7 +171,7 @@ async def find_similar_scenes(
     top_k: int = Query(5, description="Number of similar scenes to return")
 ):
     """
-    Find scenes visually similar to the specified scene.
+    Find semantically similar scenes using persisted multimodal scene memory.
     
     Args:
         video_id: Video identifier
@@ -172,26 +188,29 @@ async def find_similar_scenes(
         if not temporal_index:
             raise HTTPException(status_code=404, detail=f"Video not found: {video_id}")
         
-        # Find the source scene
-        source_clip_id = None
+        # Confirm the source scene exists before delegating to retrieval.
+        source_segment = None
         for segment in temporal_index.get('segments', []):
             if segment.get('scene_id') == scene_id:
-                source_clip_id = segment.get('clip_id')
+                source_segment = segment
                 break
         
-        if not source_clip_id:
+        if not source_segment:
             raise HTTPException(status_code=404, detail=f"Scene not found: {scene_id}")
-        
-        logger.warning(
-            "Similar scene search is currently unavailable video_id=%s scene_id=%s top_k=%s",
-            video_id,
-            scene_id,
-            top_k,
-        )
-        raise HTTPException(
-            status_code=501,
-            detail="Similar scene search is not wired yet; use /api/search/multimodal for current retrieval.",
-        )
+
+        engine = get_search_engine()
+        similar_results = engine.search_similar_scene(video_id=video_id, scene_id=scene_id, top_k=top_k)
+
+        scenes = []
+        for result in similar_results:
+            scene_context = result.get("scene_context") if isinstance(result.get("scene_context"), dict) else None
+            payload = result.get("payload") if isinstance(result.get("payload"), dict) else None
+            scene_payload = scene_context or payload
+            if not isinstance(scene_payload, dict):
+                continue
+            scenes.append(_build_scene_response(scene_payload))
+
+        return scenes
         
     except HTTPException:
         raise

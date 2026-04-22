@@ -34,6 +34,16 @@ class _FakeLoader:
         return self._temporal_index if video_id == "video_001" else None
 
 
+class _FakeSearchEngine:
+    def __init__(self, similar_results: list[dict]):
+        self.similar_results = similar_results
+        self.calls: list[tuple[str, int, int]] = []
+
+    def search_similar_scene(self, video_id: str, scene_id: int, top_k: int):
+        self.calls.append((video_id, scene_id, top_k))
+        return self.similar_results[:top_k]
+
+
 def _sample_temporal_index() -> dict:
     return {
         "duration": 12.0,
@@ -125,14 +135,53 @@ def test_full_timeline_surfaces_persisted_audio_truth(monkeypatch: pytest.Monkey
     assert segment.candidate_visible_people == [{"name": "anonymous_person_1"}]
 
 
-def test_similar_scene_route_returns_honest_not_implemented(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_similar_scene_route_returns_real_neighbors(monkeypatch: pytest.MonkeyPatch) -> None:
     loader = _FakeLoader(_sample_temporal_index())
     monkeypatch.setattr(scenes_module, "get_data_loader", lambda: loader)
+    similar_context = {
+        "scene_id": 202,
+        "start": 7.5,
+        "end": 11.0,
+        "duration": 3.5,
+        "full_transcript": "A similar business discussion scene.",
+        "keywords": ["business", "deal"],
+        "detected_objects": [{"label": "person"}, {"label": "desk"}],
+        "speaker_ids": ["SPEAKER_01"],
+        "audio_chunks": [4],
+        "speaker_count": 1,
+        "dominant_speaker_id": "SPEAKER_01",
+        "continuity_key": "SPEAKER_01",
+        "diarization_status": "success",
+        "emotion_status": "success",
+        "speaker_voice_signature_count": 1,
+        "speaker_voice_signature_meta": {"status": "ok", "emitted": 1},
+        "audio_emotion": "neutral",
+        "time_hints": {"explicit_dates": [], "relative_phrases": []},
+        "content_state": "signal",
+        "candidate_visible_people": [{"name": "anonymous_person_2"}],
+    }
+    engine = _FakeSearchEngine(
+        [
+            {
+                "id": "video_002:202",
+                "score": 0.91,
+                "payload": {"video_id": "video_002", "scene_id": 202},
+                "scene_context": similar_context,
+            }
+        ]
+    )
+    monkeypatch.setattr(scenes_module, "get_search_engine", lambda: engine, raising=False)
 
-    with pytest.raises(HTTPException) as exc_info:
-        asyncio.run(
-            scenes_module.find_similar_scenes(video_id="video_001", scene_id=101, top_k=5)
-        )
+    result = asyncio.run(
+        scenes_module.find_similar_scenes(video_id="video_001", scene_id=101, top_k=5)
+    )
 
-    assert exc_info.value.status_code == 501
-    assert "not wired yet" in str(exc_info.value.detail)
+    assert engine.calls == [("video_001", 101, 5)]
+    assert len(result) == 1
+    scene = result[0]
+    assert scene.scene_id == 202
+    assert scene.transcript == "A similar business discussion scene."
+    assert scene.objects == ["person", "desk"]
+    assert scene.speaker_count == 1
+    assert scene.dominant_speaker_id == "SPEAKER_01"
+    assert scene.continuity_key == "SPEAKER_01"

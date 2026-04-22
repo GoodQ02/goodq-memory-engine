@@ -226,21 +226,30 @@ _LOW_VALUE_TOPIC_PHRASES = {
     "a question",
     "a question sure",
     "alarmed god",
+    "always encouraged experimentation",
+    "apartment yep",
+    "apartment yep just",
     "attention yeah",
     "ask mark",
+    "business no",
+    "business no no",
     "business listen",
     "cable station lov",
     "cable station lough",
     "certain pain",
+    "clean apartment",
+    "clean apartment yep",
     "compartment wait",
     "compartment wait hold",
     "different interpretation",
+    "encouraged experimentation",
     "ever mention",
     "fianc‚",
     "go off oppression",
     "glove compartment",
     "glove compartment wait",
     "hell happened",
+    "jimmy shar",
     "jerry baby",
     "lasting impression",
     "like a car",
@@ -251,16 +260,32 @@ _LOW_VALUE_TOPIC_PHRASES = {
     "move cars",
     "must some",
     "no job",
+    "operation yeah",
+    "operation yeah yeah",
     "pocketing cars",
     "people aware",
+    "position he was",
     "question do",
+    "restitution because",
+    "restitution restitution",
+    "relationship respirator",
+    "relationship respirator keeping",
     "s a community",
+    "sing songy quality",
+    "songy quality",
     "some mistake",
     "station lov",
     "st street apartment",
     "show business listen",
     "off oppression wild",
     "off oppression",
+    "other business",
+    "business elsewhere",
+    "business end",
+    "business end take",
+    "business leave",
+    "other business no",
+    "negotiating negotiation",
     "oppression don",
     "oppression don t",
     "oppression wild",
@@ -406,6 +431,9 @@ _TRANSCRIPT_TOPIC_PATTERNS = (
     (re.compile(r"\bpretzel(?:s|\s+guy)?\b", re.IGNORECASE), "pretzel"),
     (re.compile(r"\bpresident\b", re.IGNORECASE), "president"),
     (re.compile(r"\breservation\b", re.IGNORECASE), "reservation"),
+    (re.compile(r"\brestitution\b", re.IGNORECASE), "restitution"),
+    (re.compile(r"\b(?:counter offer|whole deal)\b", re.IGNORECASE), "business deal"),
+    (re.compile(r"\b(?:deformed position|nothing but a claw|a claw)\b", re.IGNORECASE), "deformed hand"),
     (re.compile(r"\bflorida\b", re.IGNORECASE), "florida"),
     (re.compile(r"\bpen\b", re.IGNORECASE), "pen"),
     (re.compile(r"\bbathing suits?\b", re.IGNORECASE), "bathing suit"),
@@ -456,6 +484,21 @@ _CAPITALIZED_TOPIC_EXCLUSIONS = {
     "goodbye",
     "maybe",
 }
+_TOPIC_FRAGMENT_EDGE_TOKENS = {
+    "always",
+    "he",
+    "i",
+    "just",
+    "no",
+    "other",
+    "she",
+    "they",
+    "we",
+    "yeah",
+    "yep",
+    "you",
+}
+_TOPIC_GERUND_HEAD_ALLOWLIST = {"meeting"}
 _STAGE_MONOLOGUE_VISUAL_HINTS = {
     "microphone",
     "stage",
@@ -555,13 +598,15 @@ def _extract_transcript_topic_hints(transcript: str) -> List[str]:
                 return hints
 
     if not hints:
-        proper_name_matches = re.findall(
+        proper_name_matches = re.finditer(
             r"\b(?:[A-Z][a-z]+(?:\s+(?:von|van|de|da))?)(?:\s+[A-Z][a-z]+){0,2}\b",
             transcript_text,
         )
         for match in proper_name_matches:
-            raw_candidate = str(match or "").strip()
+            raw_candidate = str(match.group(0) or "").strip()
             if not raw_candidate:
+                continue
+            if transcript_text[match.end() : match.end() + 1] == "-":
                 continue
             tokens = [token for token in raw_candidate.split() if token]
             while tokens and tokens[0].casefold() in _CAPITALIZED_TOPIC_EXCLUSIONS.union(_TOPIC_STOPWORDS):
@@ -586,9 +631,19 @@ def _extract_transcript_topic_hints(transcript: str) -> List[str]:
         for window_size in (3, 2):
             for index in range(0, len(words) - window_size + 1):
                 phrase_tokens = words[index : index + window_size]
+                while phrase_tokens and phrase_tokens[0] in _TOPIC_FRAGMENT_EDGE_TOKENS:
+                    phrase_tokens = phrase_tokens[1:]
+                while phrase_tokens and phrase_tokens[-1] in _TOPIC_FRAGMENT_EDGE_TOKENS:
+                    phrase_tokens = phrase_tokens[:-1]
+                if len(phrase_tokens) < 2:
+                    continue
                 if any(token in _TOPIC_STOPWORDS or token in _LOW_VALUE_TOPIC_TOKENS for token in phrase_tokens):
                     continue
+                if phrase_tokens[0].endswith("ly") or phrase_tokens[0].endswith("ed"):
+                    continue
                 head = phrase_tokens[-1]
+                if head.endswith("ing") and head not in _TOPIC_GERUND_HEAD_ALLOWLIST:
+                    continue
                 singular_head = head[:-1] if head.endswith("s") and len(head) > 3 else head
                 if singular_head not in _LOWERCASE_TOPIC_HEADS and not any(
                     token.endswith(_TOPIC_NOUN_SUFFIXES) for token in phrase_tokens

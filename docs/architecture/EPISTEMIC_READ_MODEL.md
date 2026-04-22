@@ -62,7 +62,7 @@ class ProvenancePointer(TypedDict, total=False):
 
 class EvidenceHit(TypedDict, total=False):
   role: EvidenceRole
-  store: Optional[str]                # e.g. "qdrant" | "faiss" | "chroma"
+  store: Optional[str]                # e.g. "qdrant" | "faiss" | "ephemeral"
   store_ref: Optional[str]            # e.g. Qdrant collection / FAISS index name
   embedding_id: Optional[str]
   score: Optional[float]

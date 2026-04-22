@@ -46,7 +46,6 @@ _Generated: 2026-02-15_
 | `agents/self_healing_monitor.py` | Runtime Utility | Self-Healing Monitor | Manual Review | absolute path operations |
 | `agents/watchdog_agent_integration.py` | Unclear/Obsolete | Watchdog Integration with Agent Orchestrator (retired) | No | absolute path operations |
 | `cli/__init__.py` | Runtime Utility | CLI commands | Yes | None detected |
-| `cli/chroma_store.py` | Runtime Utility | OCR + caption | Yes | None detected |
 | `cli/conduits_build.py` | Runtime Utility | Conduit Pack v1 builder (offline/on-demand). | Yes | None detected |
 | `cli/conduits_kg.py` | Runtime Utility | Conduit Pack v1: UI-safe conduits for knowledge_graph.db (derived tables only). | Yes | None detected |
 | `cli/conduits_memory.py` | Runtime Utility | Conduit Pack v1: UI-safe conduits for memory.db (derived tables only). | Yes | None detected |

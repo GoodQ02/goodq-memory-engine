@@ -100,3 +100,13 @@ def test_queue_counts_supported_ingest_files_not_video_only(tmp_path: Path) -> N
 
     assert queue["inbox"]["count"] == 1
     assert queue["inbox"]["files"][0]["name"] == "sample.wav"
+
+
+def test_root_search_endpoint_points_to_canonical_search_surfaces() -> None:
+    api_main = _load_api_main()
+
+    result = api_main.search("elaine", topk=5)
+
+    assert result["status"] == "disabled"
+    assert "deprecated" in result["message"].lower()
+    assert "/api/search" in result["message"]

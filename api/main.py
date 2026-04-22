@@ -25,6 +25,7 @@ from goodq_version import GOODQ_VERSION
 
 from steps.common.config_loader import load_configs
 from steps.common.memory_manager import build_memory_router
+from steps.common.memory_store import normalize_memory_tier_list
 from api.utils.ingest_requests import is_supported_ingest_path
 
 # Import Phase 7 API routes
@@ -508,10 +509,10 @@ def _build_health_logs(health: Dict[str, Any]) -> List[Dict[str, Any]]:
 
 @app.get("/search")
 def search(q: str = Query(..., description="Search text index"), topk: int = Query(50, ge=1, le=200)) -> Dict[str, Any]:
-    """Search endpoint - currently disabled"""
+    """Legacy search entrypoint kept only as a pointer to the canonical search API."""
     return {
         "status": "disabled",
-        "message": "Search functionality is being refactored",
+        "message": "Deprecated legacy search surface; use /api/search/* for canonical Qdrant-backed retrieval.",
         "query": q,
         "results": []
     }
@@ -1371,8 +1372,8 @@ def get_memory_stats() -> Dict[str, Any]:
         "faiss": faiss_info,
         "qdrant": qdrant_info,
         "routing": {
-            "read_priority": (memory_cfg.get("routing") or {}).get("read_priority") or [],
-            "write_targets": (memory_cfg.get("routing") or {}).get("write_targets") or [],
+            "read_priority": normalize_memory_tier_list((memory_cfg.get("routing") or {}).get("read_priority") or []),
+            "write_targets": normalize_memory_tier_list((memory_cfg.get("routing") or {}).get("write_targets") or []),
         },
         "latest_run": _latest_run_preview(limit=12),
     }

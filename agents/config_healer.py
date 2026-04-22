@@ -196,18 +196,22 @@ CONFIDENCE: high/medium/low
 
             if action == "reduce_batch_size":
                 return self._reduce_batch_size()
-            elif action == "switch_to_cpu":
+            elif action in {"switch_to_cpu", "fallback_to_cpu"}:
                 return self._switch_to_cpu(step_name)
             elif action in {"use_smaller_model", "downgrade_model"}:
                 return self._use_smaller_model(step_name, target_model=error_context.get("to_model"))
+            elif action == "fallback_local_model":
+                return self._use_smaller_model(step_name, target_model=error_context.get("to_model"))
             elif action == "increase_timeout":
                 return self._increase_timeout()
-            elif action in {"skip_audio_step", "skip_step"}:
+            elif action in {"skip_audio_step", "skip_step", "skip_missing_file"}:
                 return self._skip_step(step_name or "audio_extraction")
             elif action == "partition_audio":
                 return self._partition_audio(error_context)
-            elif action == "enable_retry":
+            elif action in {"enable_retry", "retry_with_backoff"}:
                 return self._enable_retry(error_context)
+            elif action == "adjust_thresholds":
+                return self._adjust_thresholds(error_context)
             elif action == "skip_diarization":
                 return self._skip_step("diarization")
             elif action == "skip_audio_steps":
@@ -462,6 +466,35 @@ CONFIDENCE: high/medium/low
             self._save_config(config)
             return True, f"Enabled retry with pipeline.max_retries={max_retries}"
         return False, "Retry policy already enabled with requested settings"
+
+    def _adjust_thresholds(self, error_context: Dict[str, Any]) -> Tuple[bool, str]:
+        """Lower scene-detection thresholds when an empty scene result indicates under-detection."""
+        config = self._load_config()
+        step_name = str(error_context.get("step_name") or error_context.get("step") or "").strip().lower()
+        error_text = str(error_context.get("error_text") or error_context.get("error") or "").lower()
+
+        scene_step_names = {"scene_detect", "video_scene_detect", "scene_detection"}
+        scene_error = "no scenes detected" in error_text
+        if step_name not in scene_step_names and not scene_error:
+            return False, f"No bounded threshold adjustment is defined for {step_name or 'unspecified step'}"
+
+        candidate_paths = [
+            ["video", "scene_threshold"],
+            ["scene_detect", "threshold"],
+        ]
+        changes: List[str] = []
+        modified = False
+        for path in candidate_paths:
+            current = self._get_nested(config, path)
+            if isinstance(current, (int, float)) and current > 5.0:
+                new_value = max(5.0, round(float(current) * 0.9, 2))
+                modified = self._set_nested(config, path, new_value) or modified
+                changes.append(f"{'.'.join(path)}: {current} -> {new_value}")
+
+        if modified:
+            self._save_config(config)
+            return True, "Adjusted scene-detection thresholds: " + ", ".join(changes)
+        return False, "No adjustable scene-detection thresholds found"
 
     def _partition_audio(self, error_context: Dict[str, Any]) -> Tuple[bool, str]:
         """Tune chunking to favor smaller diarization workloads."""

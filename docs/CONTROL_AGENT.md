@@ -122,7 +122,7 @@ Continuous background monitoring daemon.
 patterns = [
     "timeout" → retry_with_backoff
     "memory_error" → reduce_batch_size
-    "model_not_found" → download_model
+    "model_not_found" → fallback_local_model
     "cuda_error" → fallback_to_cpu
     "empty_result" → adjust_thresholds
     "file_not_found" → skip_missing_file
@@ -130,8 +130,9 @@ patterns = [
 ```
 
 Current truth on the active line:
-- `retry_with_backoff`, `reduce_batch_size`, and `fallback_to_cpu` delegate to real healer actions when the monitor is initialized with a healer.
-- `download_model` and `adjust_thresholds` are not yet backed by a bounded runtime action and return an explicit not-mapped outcome instead of pretending to heal successfully.
+- `retry_with_backoff`, `reduce_batch_size`, `fallback_to_cpu`, `fallback_local_model`, and `skip_missing_file` delegate to real bounded healer actions when the monitor is initialized with a healer.
+- `fallback_local_model` prefers a smaller local model instead of attempting network downloads, preserving the local-first contract.
+- `adjust_thresholds` now performs bounded scene-detection threshold tuning when the failed step is a scene-detection lane, and still returns an explicit no-mapped outcome for unsupported steps instead of pretending to heal successfully.
 
 ### 4. Recovery Strategies Database (agents/recovery_strategies.py)
 

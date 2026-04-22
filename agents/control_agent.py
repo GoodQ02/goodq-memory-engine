@@ -856,6 +856,15 @@ Format your response as JSON:
                 for key, value in action_context.items():
                     print(f"     - {key}: {value}")
 
+            strategy_aliases = {
+                "retry_with_backoff": "enable_retry",
+                "fallback_to_cpu": "switch_to_cpu",
+                "fallback_local_model": "downgrade_model",
+                "skip_missing_file": "skip_step",
+                "adjust_thresholds": "adjust_thresholds",
+            }
+            normalized_strategy = strategy_aliases.get(strategy, strategy)
+
             supported_actions = {
                 "reduce_batch_size",
                 "switch_to_cpu",
@@ -863,14 +872,15 @@ Format your response as JSON:
                 "skip_step",
                 "partition_audio",
                 "downgrade_model",
+                "adjust_thresholds",
             }
 
-            if strategy not in supported_actions:
+            if normalized_strategy not in supported_actions:
                 error_msg = f"Unknown recovery strategy: {strategy}"
                 print(f"   [FAIL] Recovery failed: {error_msg}")
                 success = False
             else:
-                success, error_msg = self.healer.apply_healing_action(strategy, action_context)
+                success, error_msg = self.healer.apply_healing_action(normalized_strategy, action_context)
                 if not success:
                     print(f"   [FAIL] Recovery failed: {error_msg}")
         

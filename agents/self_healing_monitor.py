@@ -73,7 +73,7 @@ class SelfHealingMonitor:
             {
                 "pattern": "model_not_found",
                 "keywords": ["model not found", "cannot find model", "no such file"],
-                "fix_type": "download_model",
+                "fix_type": "fallback_local_model",
                 "params": {}
             },
             {
@@ -231,8 +231,8 @@ class SelfHealingMonitor:
             elif fix_type == "reduce_batch_size":
                 return await self._fix_reduce_batch_size(issue, params)
             
-            elif fix_type == "download_model":
-                return await self._fix_download_model(issue, params)
+            elif fix_type == "fallback_local_model":
+                return await self._fix_fallback_local_model(issue, params)
             
             elif fix_type == "fallback_to_cpu":
                 return await self._fix_fallback_cpu(issue, params)
@@ -284,9 +284,13 @@ class SelfHealingMonitor:
             },
         )
     
-    async def _fix_download_model(self, issue: Dict, params: Dict) -> Dict:
-        """Download missing model."""
-        return {"success": False, "error": "No real healing action is mapped for fix_type=download_model"}
+    async def _fix_fallback_local_model(self, issue: Dict, params: Dict) -> Dict:
+        """Use a smaller local fallback model instead of attempting network downloads."""
+        return await self._delegate_healing_action(
+            issue,
+            "downgrade_model",
+            {"step_name": self._failed_step_name(issue)},
+        )
     
     async def _fix_fallback_cpu(self, issue: Dict, params: Dict) -> Dict:
         """Fallback to CPU processing."""
@@ -298,15 +302,22 @@ class SelfHealingMonitor:
     
     async def _fix_adjust_thresholds(self, issue: Dict, params: Dict) -> Dict:
         """Adjust detection thresholds."""
-        return {"success": False, "error": "No real healing action is mapped for fix_type=adjust_thresholds"}
+        return await self._delegate_healing_action(
+            issue,
+            "adjust_thresholds",
+            {
+                "step_name": self._failed_step_name(issue),
+                "error_text": str(issue.get("error", "")),
+            },
+        )
     
     async def _fix_skip_missing(self, issue: Dict, params: Dict) -> Dict:
         """Skip missing file and continue."""
-        
-        return {
-            "success": True,
-            "action": "file_skipped"
-        }
+        return await self._delegate_healing_action(
+            issue,
+            "skip_step",
+            {"step_name": self._failed_step_name(issue)},
+        )
     
     async def _llm_analyze_error(self, issue: Dict):
         """Use LLM to analyze unknown error."""

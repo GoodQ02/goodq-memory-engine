@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-03-19 -->
+<!-- DOC_LAST_VERIFIED: 2026-04-21 -->
 
 # GoodQ4All API Reference
 
@@ -38,6 +38,20 @@ Router-backed endpoint families mounted into the same process:
 - `/api/system`
 - `/api/run-index`
 - `/api/run-summary`
+- `/api/videos/{video_id}/scenes`
+
+## Active Search and Scene Retrieval Notes
+
+- `POST /api/search/multimodal` is the canonical multimodal search surface.
+- `modalities=["audio"]` is a supported request path on the active line.
+- If `modalities` is omitted, the current default remains text + visual.
+- `GET /api/videos/{video_id}/scenes/{scene_id}/similar` is live and resolves similar scenes from persisted multimodal scene memory.
+- Similar-scene retrieval now uses text, visual, and audio signals where available instead of returning a placeholder response.
+
+## Scene API Truth
+
+- Scene responses now project the persisted continuity and speaker-truth layer directly from runtime artifacts.
+- Active scene read models include fields such as `speaker_count`, `dominant_speaker_id`, `continuity_key`, `diarization_status`, `emotion_status`, `speaker_voice_signature_count`, `speaker_voice_signature_meta`, `audio_emotion`, `time_hints`, `content_state`, and `candidate_visible_people`.
 
 ## Discovery Rule
 

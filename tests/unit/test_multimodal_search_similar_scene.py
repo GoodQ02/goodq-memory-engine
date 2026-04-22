@@ -68,7 +68,7 @@ def test_search_similar_scene_excludes_source_scene_and_enriches_context(monkeyp
 
     def fake_search_multimodal(query: str, top_k: int, modalities: list[str]):
         assert "business deal" in query.lower()
-        assert modalities == ["text", "visual"]
+        assert modalities == ["text", "visual", "audio"]
         return [
             {
                 "id": "video_001:101",

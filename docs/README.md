@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-04-20 -->
+<!-- DOC_LAST_VERIFIED: 2026-04-21 -->
 
 # GoodQ4All Documentation
 
@@ -28,6 +28,8 @@ Current operator-validated additions on the active line:
 - Season 4 long-haul witness is fully banked as the current stress-and-stability proof.
 - Season 5 transition and projection smokes prove speaker-aware continuity on fresh material.
 - `scene_ingest_results.json`, `scene_manifest.json`, and `temporal_index.json` now align on diarization, emotion, and speaker-truth surfaces.
+- The scene API now exposes persisted speaker-truth and continuity fields instead of a thinner compatibility projection.
+- Similar-scene search is live on the active API surface and now resolves through multimodal memory, including audio when available.
 
 ## Start Here
 

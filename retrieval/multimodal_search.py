@@ -147,6 +147,7 @@ class MultimodalSearchEngine:
         paths_cfg = (config.get("paths") or {}) if isinstance(config, dict) else {}
         phase6_cfg = (config.get("phase6") or {}) if isinstance(config, dict) else {}
         collections_cfg = (qdrant_cfg.get("collections") or {}) if isinstance(qdrant_cfg, dict) else {}
+        embedding_dims_cfg = (qdrant_cfg.get("embedding_dims") or {}) if isinstance(qdrant_cfg, dict) else {}
 
         self.qdrant_host = qdrant_cfg.get("host") or config.get("qdrant_host", "http://127.0.0.1:6333")
         self.data_root = paths_cfg.get("data_root") or config.get("data_root") or _default_data_root()
@@ -154,6 +155,12 @@ class MultimodalSearchEngine:
         self.kg_db_path = paths_cfg.get("knowledge_graph_db") or config.get("knowledge_graph_db")
         self.text_collection = collections_cfg.get("text") or "goodq_text"
         self.visual_collection = phase6_cfg.get("clip_collection") or collections_cfg.get("clip") or "goodq_clip_scenes"
+        self.audio_collection = collections_cfg.get("audio") or "goodq_audio"
+        self.collection_dims = {
+            self.text_collection: int(embedding_dims_cfg.get("text", 384)),
+            self.visual_collection: int(embedding_dims_cfg.get("clip", 512)),
+            self.audio_collection: int(embedding_dims_cfg.get("audio", 512)),
+        }
         
         # Fusion weights
         fusion_cfg = config.get('phase6', {}).get('retrieval', {}).get('fusion_weights', {})
@@ -164,6 +171,8 @@ class MultimodalSearchEngine:
         # Lazy-load models and clients
         self._clip_model = None
         self._text_model = None
+        self._audio_text_model = None
+        self._audio_text_model_error = False
         self._qdrant_clients = {}
         self._kg_scene_context: Optional[Dict[str, Dict[str, Any]]] = None
         self._kg_scene_context_error = False
@@ -969,6 +978,52 @@ class MultimodalSearchEngine:
             logger.info("[OK] Text embedding model loaded")
         except Exception as e:
             logger.error(f"Failed to load text model: {e}")
+
+    def _load_audio_text_model(self):
+        """Load CLAP text encoder for audio retrieval queries."""
+        if self._audio_text_model is not None or self._audio_text_model_error:
+            return
+
+        try:
+            import torch
+            from transformers import AutoProcessor, ClapModel
+
+            from steps.audio_embed_clap.step import (
+                _CLAP_INSTALL_HINT,
+                _CLAP_MODEL_ID,
+                _configure_model_env,
+                _resolve_local_model_dir,
+            )
+
+            models_root = _configure_model_env()
+            model_source = _resolve_local_model_dir(models_root)
+            if not model_source:
+                self._audio_text_model_error = True
+                logger.warning(
+                    "Audio search unavailable because CLAP model cache missing "
+                    "model_id=%s install_hint=\"%s\"",
+                    _CLAP_MODEL_ID,
+                    _CLAP_INSTALL_HINT,
+                )
+                return
+
+            device = "cuda" if getattr(torch, "cuda", None) and torch.cuda.is_available() else "cpu"
+            processor = AutoProcessor.from_pretrained(model_source, local_files_only=True)
+            model = ClapModel.from_pretrained(model_source, local_files_only=True).to(device).eval()
+            self._audio_text_model = {
+                "model": model,
+                "processor": processor,
+                "device": device,
+            }
+            logger.info("[OK] CLAP text encoder loaded for audio search on %s", device)
+        except Exception as e:
+            self._audio_text_model_error = True
+            logger.warning(
+                "Audio search unavailable because CLAP text encoder failed "
+                "exc_type=%s exc=%s",
+                type(e).__name__,
+                e,
+            )
     
     def _get_qdrant_client(self, collection: str):
         """Get or create Qdrant client for collection."""
@@ -988,9 +1043,12 @@ class MultimodalSearchEngine:
             log_retrieval = True
         
         # Determine dimension based on collection type
-        dim = 512 if 'clip' in collection else 384  # CLIP: 512, SBERT: 384, DINO: 768
-        if 'dino' in collection:
-            dim = 768
+        dim = self.collection_dims.get(collection)
+        if dim is None:
+            lower_collection = collection.lower()
+            dim = 512 if 'clip' in lower_collection or 'audio' in lower_collection else 384
+            if 'dino' in lower_collection:
+                dim = 768
         
         client = QdrantClient(QdrantConfig(
             host=self.qdrant_host,
@@ -1055,6 +1113,41 @@ class MultimodalSearchEngine:
         # Normalize
         embedding = embedding / (np.linalg.norm(embedding) + 1e-8)
         return embedding
+
+    def encode_text_for_audio_search(self, query: str) -> np.ndarray:
+        """
+        Encode text query for audio similarity search using CLAP text embeddings.
+
+        Args:
+            query: Search query string
+
+        Returns:
+            CLAP text embedding vector
+        """
+        self._load_audio_text_model()
+
+        if not isinstance(self._audio_text_model, dict):
+            logger.error("CLAP text encoder unavailable")
+            return np.zeros(self.collection_dims.get(self.audio_collection, 512), dtype=np.float32)
+
+        import torch
+
+        model = self._audio_text_model["model"]
+        processor = self._audio_text_model["processor"]
+        device = self._audio_text_model["device"]
+
+        inputs = processor(text=[query], return_tensors="pt", padding=True, truncation=True)
+        model_inputs = {
+            key: value.to(device) if hasattr(value, "to") else value
+            for key, value in inputs.items()
+        }
+
+        with torch.no_grad():
+            text_features = model.get_text_features(**model_inputs)
+            embedding = text_features.cpu().numpy()[0]
+
+        embedding = embedding / (np.linalg.norm(embedding) + 1e-8)
+        return embedding
     
     def search_text(self, query: str, top_k: int = 5) -> List[Dict[str, Any]]:
         """
@@ -1101,6 +1194,29 @@ class MultimodalSearchEngine:
         results = client.query(query_embedding.tolist(), top_k=top_k)
         
         return results
+
+    def search_audio(self, query: str, top_k: int = 5) -> List[Dict[str, Any]]:
+        """
+        Search CLAP audio embeddings using a text query.
+
+        Args:
+            query: Text description of audio content
+            top_k: Number of results to return
+
+        Returns:
+            List of search results with scores
+        """
+        logger.info(f"Searching audio scenes: '{query}'")
+
+        query_embedding = self.encode_text_for_audio_search(query)
+        if not np.any(query_embedding):
+            logger.warning("Audio search skipped because CLAP query encoding is unavailable")
+            return []
+
+        client = self._get_qdrant_client(self.audio_collection)
+        results = client.query(query_embedding.tolist(), top_k=top_k)
+
+        return results
     
     def search_multimodal(
         self,
@@ -1145,10 +1261,13 @@ class MultimodalSearchEngine:
                 result['score'] = result.get('score', 0.0) * self.weight_visual
                 all_results.append(result)
         
-        # TODO: Search audio modality (CLAP embeddings)
-        # if 'audio' in modalities and self.weight_audio > 0:
-        #     audio_results = self.search_audio(query, top_k=top_k)
-        #     ...
+        # Search audio modality
+        if 'audio' in modalities and self.weight_audio > 0:
+            audio_results = self.search_audio(query, top_k=per_modality_top_k)
+            for result in audio_results:
+                result['modality'] = 'audio'
+                result['score'] = result.get('score', 0.0) * self.weight_audio
+                all_results.append(result)
         
         # Fuse and rank results
         return self._fuse_scene_results(query, all_results, top_k=top_k)
@@ -1257,7 +1376,7 @@ class MultimodalSearchEngine:
             return []
 
         candidate_limit = max((top_k * 3), top_k + 4)
-        raw_results = self.search_multimodal(query, top_k=candidate_limit, modalities=["text", "visual"])
+        raw_results = self.search_multimodal(query, top_k=candidate_limit, modalities=["text", "visual", "audio"])
 
         filtered_results: List[Dict[str, Any]] = []
         seen_scene_keys: set[Tuple[str, str]] = set()

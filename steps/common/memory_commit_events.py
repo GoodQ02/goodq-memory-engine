@@ -46,7 +46,7 @@ def utc_now_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
 
-def confidence_stub() -> Dict[str, Any]:
+def default_confidence_payload() -> Dict[str, Any]:
     return {
         "intrinsic": None,
         "source": None,
@@ -57,12 +57,12 @@ def confidence_stub() -> Dict[str, Any]:
 
 
 def _normalize_confidence(confidence: Any) -> Dict[str, Any]:
-    stub = confidence_stub()
+    defaults = default_confidence_payload()
     if isinstance(confidence, dict):
-        for k in stub.keys():
+        for k in defaults.keys():
             if k in confidence:
-                stub[k] = confidence.get(k)
-    return stub
+                defaults[k] = confidence.get(k)
+    return defaults
 
 
 @dataclass

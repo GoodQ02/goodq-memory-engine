@@ -7,7 +7,7 @@ from typing import List, Dict, Any, Optional
 from pydantic import BaseModel, Field
 
 
-def confidence_stub() -> Dict[str, Any]:
+def default_confidence_payload() -> Dict[str, Any]:
     return {
         "intrinsic": None,
         "source": None,
@@ -64,7 +64,7 @@ class SearchResult(BaseModel):
     sentiment_score: Optional[float] = None
     context: Optional[Dict[str, Any]] = None
     provenance: Optional[Dict[str, Any]] = None
-    confidence: Dict[str, Any] = Field(default_factory=confidence_stub)
+    confidence: Dict[str, Any] = Field(default_factory=default_confidence_payload)
 
 
 class SearchResponse(BaseModel):
@@ -74,7 +74,7 @@ class SearchResponse(BaseModel):
     results: List[SearchResult]
     modalities_searched: List[str]
     fusion_weights: Optional[Dict[str, float]] = None
-    confidence: Dict[str, Any] = Field(default_factory=confidence_stub)
+    confidence: Dict[str, Any] = Field(default_factory=default_confidence_payload)
 
 
 class TimelineSegment(BaseModel):

@@ -11,8 +11,8 @@ logger = logging.getLogger(__name__)
 
 class MemoryRouter:
     """
-    Simple router placeholder for tiered memory.
-    Intent-aware routing to be filled in alongside read/write paths.
+    Tiered vector memory router for canonical Qdrant retrieval, optional FAISS parity,
+    and a legacy-named in-memory cache tier.
     """
 
     def __init__(self, stores: Dict[str, MemoryStore], config: Optional[MemoryConfig] = None):

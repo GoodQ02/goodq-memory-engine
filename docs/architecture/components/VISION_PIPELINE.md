@@ -147,7 +147,7 @@ Those persisted outputs are then consumed by:
 - semantic entities surfaced through the scene bundle and KG
 
 **Current Runtime Truth**
-- placeholder scaffolding is suppressed
+- thin semantic scaffolding noise is suppressed
 - the taste layer now rejects filler/fragments and known joke aliases
 - conservative place inference from captions/objects is active
 
@@ -237,7 +237,7 @@ On a healthy witness:
 1. `scene_XXXX.jpg` keyframes exist in the epoch processing tree.
 2. Scene bundles persist visual outputs in `scene_manifest.json`.
 3. `phase6_complete = true` and `qdrant_ok = true` for healthy episodes.
-4. `temporal_index.json` reflects the visual evidence rather than collapsing to placeholder summaries.
+4. `temporal_index.json` reflects the visual evidence rather than collapsing to generic summaries.
 5. Placeholder semantic junk does not dominate `top_entities`.
 
 ---

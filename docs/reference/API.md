@@ -47,7 +47,7 @@ Router-backed endpoint families mounted into the same process:
 - `modalities=["audio"]` is a supported request path on the active line.
 - If `modalities` is omitted, the current default remains text + visual.
 - `GET /api/videos/{video_id}/scenes/{scene_id}/similar` is live and resolves similar scenes from persisted multimodal scene memory.
-- Similar-scene retrieval now uses text, visual, and audio signals where available instead of returning a placeholder response.
+- Similar-scene retrieval now uses text, visual, and audio signals where available instead of returning an empty fallback path.
 
 ## System Mutation Policy
 

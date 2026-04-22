@@ -74,7 +74,7 @@ def seed_missing_assets() -> None:
 
     This seeds a single vector into the audio FAISS index (dim=512) and ensures
     'clap_id_map', 'clip_id_map', and 'dino_id_map' tables exist with at least
-    one row, using placeholder entries if needed.
+    one row, using seeded sentinel entries if needed.
     """
     import os
     import sqlite3
@@ -134,7 +134,7 @@ def seed_missing_assets() -> None:
                     now = datetime.utcnow().isoformat()
                     con.execute(
                         f"INSERT OR REPLACE INTO {table}(faiss_id, hash, source_path, created_at) VALUES (?,?,?,?)",
-                        (1, "placeholder", sample_path, now),
+                        (1, "seed_sentinel", sample_path, now),
                     )
                     changes["created"].append({table: str(p)})
         finally:
@@ -219,9 +219,9 @@ def rebuild_id_maps() -> None:
         raise typer.Exit(code=1)
 
 
-@app.command("cleanup-placeholders")
-def cleanup_placeholders() -> None:
-    """Remove any seeded placeholder rows from ID-map DBs."""
+@app.command("cleanup-seed-sentinels")
+def cleanup_seed_sentinels() -> None:
+    """Remove any seeded sentinel rows from ID-map DBs."""
     import sqlite3
     from pathlib import Path
     cfg = load_configs({})
@@ -237,7 +237,7 @@ def cleanup_placeholders() -> None:
         con = sqlite3.connect(str(p), check_same_thread=False)
         try:
             with con:
-                con.execute(f"DELETE FROM {table} WHERE hash='placeholder'")
+                con.execute(f"DELETE FROM {table} WHERE hash IN ('placeholder', 'seed_sentinel')")
                 cleaned.append({"db": str(p), "table": table})
         finally:
             try:
@@ -284,5 +284,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
 

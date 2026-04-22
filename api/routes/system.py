@@ -181,10 +181,14 @@ async def list_videos():
             
             video_item = VideoListItem(
                 video_id=video_id,
-                title=video_id,  # TODO: Extract actual title from metadata
+                title=metadata.get('title', video_id),
                 duration=metadata.get('duration'),
                 total_scenes=metadata.get('total_scenes'),
-                processed_date=None,  # TODO: Extract from file timestamp
+                processed_date=(
+                    datetime.fromtimestamp(metadata['processed_date']).isoformat()
+                    if metadata.get('processed_date')
+                    else None
+                ),
                 thumbnail=thumbnail
             )
             videos.append(video_item)
@@ -231,31 +235,6 @@ async def start_ingest(request: IngestRequest = Body(...)):
         policy=_MUTATION_POLICY,
     )
 
-    try:
-        file_path = Path(request.file_path)
-        
-        if not file_path.exists():
-            raise HTTPException(status_code=404, detail="File not found")
-        
-        # TODO: Implement actual ingest job queue
-        # For now, return placeholder response
-        
-        job_id = f"ingest_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        
-        logger.info(f"Ingest request received: {file_path} -> Job ID: {job_id}")
-        
-        return IngestResponse(
-            job_id=job_id,
-            status="queued",
-            message=f"Ingestion queued for: {file_path.name}"
-        )
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Failed to start ingest: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to start ingest: {str(e)}")
-
 
 @router.post("/reindex", response_model=SystemMutationResponse)
 async def rebuild_indexes():
@@ -284,16 +263,6 @@ async def rebuild_indexes():
         ),
     )
 
-    try:
-        # TODO: Implement actual index rebuild
-        logger.warning("Index rebuild requested but not yet implemented")
-        
-        return {"status": "success", "message": "Index rebuild not yet implemented"}
-        
-    except Exception as e:
-        logger.error(f"Failed to rebuild indexes: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to rebuild indexes: {str(e)}")
-
 
 @router.post("/reload", response_model=SystemMutationResponse)
 async def reload_config():
@@ -321,13 +290,3 @@ async def reload_config():
             "treat it as a casual API mutation."
         ),
     )
-
-    try:
-        # TODO: Implement config reload
-        logger.info("Config reload requested")
-        
-        return {"status": "success", "message": "Config reload not yet implemented"}
-        
-    except Exception as e:
-        logger.error(f"Failed to reload config: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to reload config: {str(e)}")

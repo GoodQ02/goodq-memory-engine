@@ -66,8 +66,8 @@ Post-release operator validation on the current `main` / `public` line additiona
 - Successful unified audio preserves diarization and emotion sub-step truth instead of hiding partial failures behind a coarse success result.
 - Speaker continuity now persists through `scene_ingest_results.json`, `scene_manifest.json`, and `temporal_index.json`.
 - Episode-to-episode continuity is proven on fresh Season 5 material, not just on the release-era comparison witness.
-- API scene read models now expose persisted speaker-truth and continuity fields instead of thinner placeholder projections.
-- Similar-scene retrieval is now a real multimodal feature and can fuse text, visual, and audio memory instead of falling back to a placeholder path.
+- API scene read models now expose persisted speaker-truth and continuity fields instead of thinner legacy projections.
+- Similar-scene retrieval is now a real multimodal feature and can fuse text, visual, and audio memory instead of falling back to an empty path.
 
 Current proving run and release proof path:
 

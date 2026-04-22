@@ -51,7 +51,7 @@ _Generated: 2026-02-15_
 | `cli/conduits_kg.py` | Runtime Utility | Conduit Pack v1: UI-safe conduits for knowledge_graph.db (derived tables only). | Yes | None detected |
 | `cli/conduits_memory.py` | Runtime Utility | Conduit Pack v1: UI-safe conduits for memory.db (derived tables only). | Yes | None detected |
 | `cli/conduits_processing.py` | Runtime Utility | Conduit Pack v1: UI-safe conduits for processing artifacts (derived tables only). | No | destructive actions |
-| `cli/conduits_sensitive_sources.py` | Runtime Utility | Sensitive Source Wiring Pack v1: UI-safe conduit stubs (derived-only; empty by default). | Yes | None detected |
+| `cli/conduits_sensitive_sources.py` | Runtime Utility | Sensitive Source Wiring Pack v1: UI-safe reserved conduits (derived-only; empty by default). | Yes | None detected |
 | `cli/conduits_store_stats.py` | Runtime Utility | Conduit Pack v1: UI-safe store stats conduits (counts/dims only). | Yes | None detected |
 | `cli/goodq_doctor.py` | Runtime Utility | GoodQ Doctor - Read-only ingestion preflight validator. | Manual Review | absolute path operations |
 | `cli/graph_query.py` | Runtime Utility | Knowledge Graph Query CLI | Manual Review | absolute path operations |

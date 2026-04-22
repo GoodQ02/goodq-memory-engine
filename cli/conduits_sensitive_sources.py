@@ -1,5 +1,5 @@
 """
-Sensitive Source Wiring Pack v1: UI-safe conduit stubs (derived-only; empty by default).
+Sensitive Source Wiring Pack v1: UI-safe reserved conduits (derived-only; empty by default).
 
 Non-negotiable:
 - Never store raw message text, raw health measurements (per-record), or raw wearable media here.
@@ -133,4 +133,3 @@ CREATE INDEX IF NOT EXISTS idx_wemp_entity ON wearable_entity_mentions_public(en
 
 def ensure_schema(conn: sqlite3.Connection) -> None:
     conn.executescript(_SCHEMA_SQL)
-

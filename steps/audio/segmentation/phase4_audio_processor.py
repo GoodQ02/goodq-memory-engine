@@ -216,16 +216,15 @@ class Phase4AudioProcessor:
             logger.error(f"[PHASE 4] Segment {segment_id}: WSL2 exception: {e}")
             enhanced['wsl2_error'] = str(e)
         
-        # Step 2: Audio embeddings (future integration point)
-        # TODO: Add CLAP embedding extraction via WSL2
+        # Step 2: Reserved extension hook for CLAP embedding extraction via WSL2.
+        # The canonical runtime does not currently persist this Phase 4 output.
         # enhanced['audio_embedding'] = self._extract_clap_embedding(chunk_path)
         
-        # Step 3: Emotion detection (future integration point)
-        # TODO: Add audio emotion via WSL2
+        # Step 3: Reserved extension hook for audio emotion enrichment via WSL2.
+        # The canonical runtime currently sources audio emotion from the unified audio path.
         # enhanced['audio_emotion'] = self._detect_audio_emotion(chunk_path)
         
-        # Step 4: Music detection (future integration point)
-        # TODO: Add music detection
+        # Step 4: Reserved extension hook for music detection when this path is reactivated.
         # enhanced['has_music'] = self._detect_music(chunk_path)
         
         return enhanced

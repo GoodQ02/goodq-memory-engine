@@ -122,11 +122,11 @@ The “Basement Phase” established the non-negotiable foundation for GoodQ:
 ### Sensitive Source Wiring Pack v1 (schema-only; no ingestion)
 
 - **Contract:** `docs/architecture/CANONICAL_SENSITIVE_EVENTS.md`
-- **Schema stubs (TypedDict):** `steps/common/canonical_sensitive_events.py`
-- **UI-safe empty conduit stubs:** `cli/conduits_sensitive_sources.py`
+- **Schema definitions (TypedDict):** `steps/common/canonical_sensitive_events.py`
+- **UI-safe empty reserved conduits:** `cli/conduits_sensitive_sources.py`
 - **Vault token resolver contract:** `docs/architecture/VAULT_TOKEN_RESOLVER_CONTRACT.md`
-- **Vault token resolver stub:** `steps/common/vault_token_resolver.py`
-- **Sensitive staging validator stub:** `steps/common/sensitive_staging.py`
+- **Vault token resolver hook:** `steps/common/vault_token_resolver.py`
+- **Sensitive staging validator hook:** `steps/common/sensitive_staging.py`
 
 ### Health Auto Export adapter (schema-first; dry-run only)
 
@@ -150,9 +150,9 @@ The “Basement Phase” established the non-negotiable foundation for GoodQ:
 
 These are intentionally *not* wired into ingestion yet:
 
-- **Chat ingestion:** CME schema + conduit stubs exist; no parsers/writers registered.
+- **Chat ingestion:** CME schema + reserved conduits exist; no parsers/writers registered.
 - **Health ingestion:** CHE schema + Health Auto Export adapter exist; pipeline wiring is blocked by default to avoid per-record PHI leakage.
-- **Wearable ingestion:** CWE schema + conduit stubs exist; no ingestion; vault staging is mandatory before any future processing.
+- **Wearable ingestion:** CWE schema + reserved conduits exist; no ingestion; vault staging is mandatory before any future processing.
 - **Training dataset export:** requires an explicit vault build manifest + explicit human approval; do not export raw or derived sensitive corpora by default.
 
 ---
@@ -254,7 +254,7 @@ This prints counts by category/name and a UTC date range. It does not write to d
 - **Epistemic diff engine:** `steps/common/epistemic_diff.py`
 - **Conduit builders + rollups:** `cli/conduits_build.py`, `cli/ui_conduits_rollup.py`, `cli/observability_rollup.py`
 - **Sensitive-source contracts:** `docs/architecture/CANONICAL_SENSITIVE_EVENTS.md`, `docs/architecture/VAULT_TOKEN_RESOLVER_CONTRACT.md`
-- **Sensitive schema stubs:** `steps/common/canonical_sensitive_events.py`
+- **Sensitive schema definitions:** `steps/common/canonical_sensitive_events.py`
 - **Health adapter (dry-run):** `steps/health_auto_export/adapter.py`
 - **Justification Channel UI:** `ui/justification_v1/`
 - **Inspector v0:** `ui/justification_v1/inspector/`

@@ -171,7 +171,7 @@ Runs database migration on the configured `db_path`.
 The current `cli.memory` surface also includes:
 - `seed-missing-assets`
 - `rebuild-id-maps`
-- `cleanup-placeholders`
+- `cleanup-seed-sentinels`
 - `register-scene-bundle`
 
 These are maintenance/support commands, not the primary user-facing memory flow.

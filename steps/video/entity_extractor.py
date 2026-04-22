@@ -619,7 +619,7 @@ class EntityExtractor:
             return max(0.5, min(0.99, float(score) / 15.0))
         return default
 
-    def _is_placeholder_entity_name(self, value: Any) -> bool:
+    def _is_synthetic_entity_name(self, value: Any) -> bool:
         if not isinstance(value, str):
             return False
         candidate = value.strip().upper()
@@ -628,7 +628,7 @@ class EntityExtractor:
     def _is_meaningful_person_name(self, value: Any) -> bool:
         if not self._is_valid_entity_candidate(value):
             return False
-        return not self._is_placeholder_entity_name(value)
+        return not self._is_synthetic_entity_name(value)
 
     def _is_scene_place_tag(self, value: Any, detail_sources: Set[str]) -> bool:
         if not isinstance(value, str):

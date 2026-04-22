@@ -8,7 +8,7 @@ import logging
 from fastapi import APIRouter, Query, HTTPException, Body
 from pydantic import BaseModel
 
-from api.utils.response_models import SearchResponse, SearchResult, confidence_stub
+from api.utils.response_models import SearchResponse, SearchResult, default_confidence_payload
 from api.utils.loaders import DataLoader
 from retrieval.multimodal_search import MultimodalSearchEngine
 from steps.common.config_loader import load_configs
@@ -120,7 +120,7 @@ async def search_multimodal(request: MultimodalSearchRequest = Body(...)):
                 sentiment_score=sentiment_fields["sentiment_score"],
                 context=result.get('scene_context'),
                 provenance=result.get("provenance") if isinstance(result.get("provenance"), dict) else None,
-                confidence=result.get("confidence") if isinstance(result.get("confidence"), dict) else confidence_stub(),
+                confidence=result.get("confidence") if isinstance(result.get("confidence"), dict) else default_confidence_payload(),
             )
             
             search_results.append(search_result)
@@ -180,7 +180,7 @@ async def search_text(
                 sentiment_label=sentiment_fields["sentiment_label"],
                 sentiment_score=sentiment_fields["sentiment_score"],
                 provenance=result.get("provenance") if isinstance(result.get("provenance"), dict) else None,
-                confidence=result.get("confidence") if isinstance(result.get("confidence"), dict) else confidence_stub(),
+                confidence=result.get("confidence") if isinstance(result.get("confidence"), dict) else default_confidence_payload(),
             )
             
             search_results.append(search_result)
@@ -234,7 +234,7 @@ async def search_visual(
                 sentiment_label=sentiment_fields["sentiment_label"],
                 sentiment_score=sentiment_fields["sentiment_score"],
                 provenance=result.get("provenance") if isinstance(result.get("provenance"), dict) else None,
-                confidence=result.get("confidence") if isinstance(result.get("confidence"), dict) else confidence_stub(),
+                confidence=result.get("confidence") if isinstance(result.get("confidence"), dict) else default_confidence_payload(),
             )
             
             search_results.append(search_result)

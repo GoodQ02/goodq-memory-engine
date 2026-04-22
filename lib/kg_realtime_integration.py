@@ -587,7 +587,7 @@ def _is_meaningful_generic_entity(name: str) -> bool:
     return len(substantive) >= 2
 
 
-def _is_placeholder_speaker_label(value: Any) -> bool:
+def _is_synthetic_speaker_label(value: Any) -> bool:
     if not isinstance(value, str):
         return False
     text = value.strip()
@@ -598,8 +598,8 @@ def _is_placeholder_speaker_label(value: Any) -> bool:
     return bool(_PLACEHOLDER_SPEAKER_PATTERN.fullmatch(text))
 
 
-def _scene_scoped_placeholder_speaker_name(scene_identifier: Any, speaker_label: Any) -> Optional[str]:
-    if not _is_placeholder_speaker_label(speaker_label):
+def _scene_scoped_synthetic_speaker_name(scene_identifier: Any, speaker_label: Any) -> Optional[str]:
+    if not _is_synthetic_speaker_label(speaker_label):
         return None
     scene_text = str(scene_identifier or "").strip()
     speaker_text = str(speaker_label or "").strip()
@@ -1137,7 +1137,7 @@ def _add_scene_entities(kg: KnowledgeGraph, media_id: int, scene_data: Dict[str,
         props: Optional[Dict[str, Any]] = None,
         context: Optional[Dict[str, Any]] = None,
     ) -> Optional[int]:
-        scoped_name = _scene_scoped_placeholder_speaker_name(scene_identifier, speaker_label)
+        scoped_name = _scene_scoped_synthetic_speaker_name(scene_identifier, speaker_label)
         if not scoped_name:
             return None
         speaker_props = dict(props or {})
@@ -1301,7 +1301,7 @@ def _add_scene_entities(kg: KnowledgeGraph, media_id: int, scene_data: Dict[str,
             continue
         speaker_clean = normalize_entity_name(speaker)
         emitted_speaker_ids.add(speaker_clean)
-        if _is_placeholder_speaker_label(speaker_clean):
+        if _is_synthetic_speaker_label(speaker_clean):
             speaker_node_id = add_structural_speaker(
                 speaker_clean,
                 confidence=0.8,
@@ -1319,7 +1319,7 @@ def _add_scene_entities(kg: KnowledgeGraph, media_id: int, scene_data: Dict[str,
         if speaker_node_id is not None:
             speaker_node_ids.add(speaker_node_id)
             speaker_node_by_label[speaker_clean] = speaker_node_id
-            if _is_placeholder_speaker_label(speaker_clean):
+            if _is_synthetic_speaker_label(speaker_clean):
                 anonymous_speaker_node_ids.add(speaker_node_id)
                 anonymous_speaker_context[speaker_node_id] = {
                     "speaker_label": speaker_clean,
@@ -1328,7 +1328,7 @@ def _add_scene_entities(kg: KnowledgeGraph, media_id: int, scene_data: Dict[str,
             else:
                 named_speaker_node_ids.add(speaker_node_id)
 
-        if not _is_placeholder_speaker_label(speaker_clean):
+        if not _is_synthetic_speaker_label(speaker_clean):
             person_node_id = add_and_link(
                 "person",
                 speaker_clean,
@@ -1352,7 +1352,7 @@ def _add_scene_entities(kg: KnowledgeGraph, media_id: int, scene_data: Dict[str,
     for speaker_id in _extract_speaker_ids(scene_data):
         if speaker_id in emitted_speaker_ids:
             continue
-        if _is_placeholder_speaker_label(speaker_id):
+        if _is_synthetic_speaker_label(speaker_id):
             speaker_node_id = add_structural_speaker(
                 speaker_id,
                 confidence=0.7,
@@ -1363,7 +1363,7 @@ def _add_scene_entities(kg: KnowledgeGraph, media_id: int, scene_data: Dict[str,
         if speaker_node_id is not None:
             speaker_node_ids.add(speaker_node_id)
             speaker_node_by_label[speaker_id] = speaker_node_id
-            if _is_placeholder_speaker_label(speaker_id):
+            if _is_synthetic_speaker_label(speaker_id):
                 anonymous_speaker_node_ids.add(speaker_node_id)
                 anonymous_speaker_context.setdefault(
                     speaker_node_id,
@@ -1374,7 +1374,7 @@ def _add_scene_entities(kg: KnowledgeGraph, media_id: int, scene_data: Dict[str,
                 )
             else:
                 named_speaker_node_ids.add(speaker_node_id)
-        if not _is_placeholder_speaker_label(speaker_id):
+        if not _is_synthetic_speaker_label(speaker_id):
             person_node_id = add_and_link("person", speaker_id, confidence=0.7, props={"source": "speaker_ids"})
             if person_node_id is not None:
                 person_node_ids.add(person_node_id)

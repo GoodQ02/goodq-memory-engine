@@ -192,7 +192,7 @@ Audit Status: ACTIVE (2026-04-10)
 - Restored `GPU_ENHANCED` desktop runtime through bootstrap-managed environment repair and verified CUDA-backed `goodq_core`.
 - Restored unified WSL audio with local-first/offline model resolution, diarization recovery, and non-recursive Windows fallback.
 - Hardened Phase 6 and DINO runtime behavior; Qdrant scene-vector persistence is operational and explicit.
-- Raised semantic quality by removing placeholder scaffolding and tightening alias/noise filtering.
+- Raised semantic quality by removing thin semantic scaffolding noise and tightening alias/noise filtering.
 - Added the identity formation layer: `speaker_pattern`, `voice_pattern_match`, `identity_candidate`, `identity_supported`, `identity_evidence`.
 - Removed the last active legacy launcher / WSL-toggle surfaces, collapsed compatibility adapters onto the canonical unified WSL bridge, and removed active ZenML references from runtime/bootstrap docs.
 - Installed and wired Poppler + Piper for host-complete offline parity.

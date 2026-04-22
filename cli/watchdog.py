@@ -856,7 +856,7 @@ class WatchdogProcessor:
 
         ext = doc_path.suffix.lower()
         if ext not in {'.pdf', '.txt', '.md'}:
-            logger.warning(f"Document ingestion not implemented for extension: {ext}")
+            logger.warning(f"Document ingestion skipped for unsupported extension: {ext}")
             return False
 
         doc_hash = hashlib.sha256(doc_path.name.encode()).hexdigest()[:16]

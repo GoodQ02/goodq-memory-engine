@@ -107,7 +107,7 @@ def _table_exists(conn: sqlite3.Connection, table: str) -> bool:
         return False
 
 
-def confidence_stub() -> Dict[str, Any]:
+def default_confidence_payload() -> Dict[str, Any]:
     return {
         "intrinsic": None,
         "source": None,
@@ -118,12 +118,12 @@ def confidence_stub() -> Dict[str, Any]:
 
 
 def _normalize_confidence(confidence: Any) -> Dict[str, Any]:
-    stub = confidence_stub()
+    defaults = default_confidence_payload()
     if isinstance(confidence, dict):
-        for k in stub.keys():
+        for k in defaults.keys():
             if k in confidence:
-                stub[k] = confidence.get(k)
-    return stub
+                defaults[k] = confidence.get(k)
+    return defaults
 
 
 def _parse_ts_utc(ts_utc: Any) -> Optional[datetime]:
@@ -226,7 +226,7 @@ def attach_provenance_to_hits(db_path: Optional[str], hits: List[Dict[str, Any]]
     for idx, hit in enumerate(hits):
         if not isinstance(hit, dict):
             continue
-        hit.setdefault("confidence", confidence_stub())
+        hit.setdefault("confidence", default_confidence_payload())
         if "provenance" in hit:
             continue
         norm = _normalize_qdrant_point_id(hit.get("id"))

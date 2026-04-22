@@ -94,6 +94,18 @@ class DataLoader:
         except Exception as e:
             logger.error(f"Failed to load temporal index: {e}")
             return None
+
+    def get_temporal_index_path(self, video_id: str) -> Optional[Path]:
+        """Resolve the canonical temporal index path for a processed video."""
+        path = self.processing_dir / video_id / "temporal_index.json"
+        if path.exists():
+            return path
+
+        path = self.completed_dir / video_id / "temporal_index.json"
+        if path.exists():
+            return path
+
+        return None
     
     def load_scene_manifest(self, video_id: str) -> Optional[Dict[str, Any]]:
         """
@@ -243,18 +255,33 @@ class DataLoader:
         Returns:
             Video metadata dict
         """
+        temporal_index_path = self.get_temporal_index_path(video_id)
         temporal_index = self.load_temporal_index(video_id)
         
         if not temporal_index:
             return {'video_id': video_id, 'error': 'not_found'}
-        
+
+        title = temporal_index.get('title')
+        if not isinstance(title, str) or not title.strip():
+            source_name = temporal_index.get('source_name')
+            if isinstance(source_name, str) and source_name.strip():
+                title = Path(source_name).stem
+            else:
+                title = video_id
+
+        processed_date = None
+        if temporal_index_path and temporal_index_path.exists():
+            processed_date = temporal_index_path.stat().st_mtime
+
         metadata = {
             'video_id': video_id,
+            'title': title,
             'duration': temporal_index.get('duration', 0.0),
             'total_scenes': len(temporal_index.get('segments', [])),
             'total_segments': len(temporal_index.get('segments', [])),
             'phase6_complete': temporal_index.get('phase6_complete', False),
-            'phase6_harmonized': temporal_index.get('phase6_harmonized', False)
+            'phase6_harmonized': temporal_index.get('phase6_harmonized', False),
+            'processed_date': processed_date,
         }
         
         return metadata

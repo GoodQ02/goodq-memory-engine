@@ -40,18 +40,18 @@ from scripts.wsl_audio_preflight import probe_wsl_audio_runtime
 
 _OPTIONAL_DIRECT_ENV_FALLBACK_STEPS = {"sentiment", "audio_embed_clap"}
 _PREFER_DIRECT_ENV_PYTHON_ON_WINDOWS = os.name == 'nt'
-_PLACEHOLDER_SPEAKER_PATTERN = re.compile(r"^(?:speaker|face)_\d+$", re.IGNORECASE)
-_PLACEHOLDER_IDENTITY_PATTERN = re.compile(r"^(?:unknown(?:_\d+)?|speaker_\d+|face_\d+|person_\d+)$", re.IGNORECASE)
+_SYNTHETIC_SPEAKER_PATTERN = re.compile(r"^(?:speaker|face)_\d+$", re.IGNORECASE)
+_SYNTHETIC_IDENTITY_PATTERN = re.compile(r"^(?:unknown(?:_\d+)?|speaker_\d+|face_\d+|person_\d+)$", re.IGNORECASE)
 
 
-def _is_placeholder_speaker_label(value: Any) -> bool:
+def _is_synthetic_speaker_label(value: Any) -> bool:
     if not isinstance(value, str):
         return False
-    return bool(_PLACEHOLDER_SPEAKER_PATTERN.fullmatch(value.strip()))
+    return bool(_SYNTHETIC_SPEAKER_PATTERN.fullmatch(value.strip()))
 
 
-def _scoped_placeholder_speaker_name(scope_value: Any, speaker_label: Any) -> Optional[str]:
-    if not _is_placeholder_speaker_label(speaker_label):
+def _scoped_synthetic_speaker_name(scope_value: Any, speaker_label: Any) -> Optional[str]:
+    if not _is_synthetic_speaker_label(speaker_label):
         return None
     scope_text = str(scope_value or "").strip()
     speaker_text = str(speaker_label or "").strip()
@@ -76,10 +76,10 @@ def _resolve_named_person_identity(raw_identity: Any) -> Optional[str]:
     if candidate is None:
         return None
     raw_text = str(candidate).strip()
-    if not raw_text or _PLACEHOLDER_IDENTITY_PATTERN.fullmatch(raw_text):
+    if not raw_text or _SYNTHETIC_IDENTITY_PATTERN.fullmatch(raw_text):
         return None
     normalized = normalize_entity_token(raw_text)
-    if not normalized or _PLACEHOLDER_IDENTITY_PATTERN.fullmatch(normalized):
+    if not normalized or _SYNTHETIC_IDENTITY_PATTERN.fullmatch(normalized):
         return None
     return normalized
 
@@ -99,7 +99,7 @@ def _resolve_audio_speaker_identity(raw_speaker: Any) -> Optional[tuple[str, str
         candidate = raw_speaker
 
     raw_text = str(candidate).strip() if candidate is not None else ""
-    if raw_text and _is_placeholder_speaker_label(raw_text):
+    if raw_text and _is_synthetic_speaker_label(raw_text):
         return ("speaker", raw_text)
 
     normalized = _resolve_named_person_identity(candidate)
@@ -159,7 +159,7 @@ try:
     PROGRESS_TRACKING_AVAILABLE = True
 except ImportError:
     PROGRESS_TRACKING_AVAILABLE = False
-    # Fallback stubs
+    # Compatibility shims keep the runtime CPU-safe when progress tracking is absent.
     class DummyTracker:
         def step_context(self, *args, **kwargs):
             from contextlib import contextmanager
@@ -748,7 +748,7 @@ def _process_audio_entities(kg: Any, audio: Dict[str, Any], media_id: int, times
                     node_name = speaker_name
                     node_props = {'transcript_sample': text[:100]}
                     if node_type == 'speaker':
-                        scoped_name = _scoped_placeholder_speaker_name(scene_scope, speaker_name)
+                        scoped_name = _scoped_synthetic_speaker_name(scene_scope, speaker_name)
                         if scoped_name:
                             node_name = scoped_name
                             node_props['speaker_label'] = speaker_name
@@ -785,7 +785,7 @@ def _process_audio_entities(kg: Any, audio: Dict[str, Any], media_id: int, times
                     node_name = speaker_name
                     node_props = {}
                     if node_type == 'speaker':
-                        scoped_name = _scoped_placeholder_speaker_name(scene_scope, speaker_name)
+                        scoped_name = _scoped_synthetic_speaker_name(scene_scope, speaker_name)
                         if scoped_name:
                             node_name = scoped_name
                             node_props['speaker_label'] = speaker_name

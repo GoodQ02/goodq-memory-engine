@@ -10,7 +10,7 @@ GoodQ must support high-sensitivity sources (chat logs, health exports, wearable
 This contract defines:
 - Canonical event schemas (structure only; raw content is vault-only).
 - A local vault boundary layout (path conventions only; do not populate here).
-- UI-safe conduit stubs that are allowed to be surfaced (derived, whitelisted fields only).
+- UI-safe reserved conduits that are allowed to be surfaced (derived, whitelisted fields only).
 
 ## Non‑Negotiable Safety Rules
 
@@ -123,7 +123,7 @@ Optional derived fields:
 - `transcription_ref`: vault pointer token (not transcript text)
 - `summary_ref`: vault pointer token (not full summary text)
 
-## UI‑Safe Conduits (Stubs Only)
+## UI‑Safe Reserved Conduits
 
 This wiring pack adds empty, UI-safe conduit tables (derived-only; whitelisted fields) in `memory.db`:
 
@@ -149,7 +149,7 @@ These conduits may store stable tokens and pseudonymous IDs, but must not store 
 Vault tokens are resolved to local absolute paths **only** in trusted local contexts.
 
 - Contract: `docs/architecture/VAULT_TOKEN_RESOLVER_CONTRACT.md`
-- Reference stub (structure only): `steps/common/vault_token_resolver.py`
+- Reference hook (structure only): `steps/common/vault_token_resolver.py`
 
 ## Sensitive Ingest Staging (Contract)
 
@@ -158,7 +158,7 @@ Sensitive sources must be staged out of the vault before ingestion:
 - **Must:** stage from `vault/…` into `cfg['paths']['processing']` (workspace processing area).
 - **Must not:** run ingestion steps directly on vault paths.
 - **Must not:** write sidecar files into the vault (some steps write adjacent artifacts next to the input path).
-- Optional validator stub (no staging implementation): `steps/common/sensitive_staging.py`
+- Optional validator hook (no staging implementation): `steps/common/sensitive_staging.py`
 
 ## Derived‑Only Output Enforcement (Contract)
 
@@ -196,5 +196,5 @@ Forbidden outputs (must remain vault-only by default):
 ## Basement Phase Summary (v1)
 
 - Schema contracts for CME/CHE/CWE are defined (structure-only; no ingestion).
-- UI-safe conduit stubs for messages/health/wearables exist in `memory.db` (empty by default).
+- UI-safe reserved conduits for messages/health/wearables exist in `memory.db` (empty by default).
 - Health Auto Export has a schema-first adapter (`steps/health_auto_export/adapter.py`) that supports dry-run parsing only; ingestion remains explicitly opt-in.

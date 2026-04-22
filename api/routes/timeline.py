@@ -16,6 +16,59 @@ router = APIRouter(prefix="/api/videos/{video_id}/timeline", tags=["timeline"])
 _data_loader = None
 
 
+def _segment_object_labels(segment: dict) -> list[str]:
+    """Normalize persisted object payloads into plain labels for API responses."""
+    labels = segment.get("objects")
+    if isinstance(labels, list) and labels:
+        return [str(label) for label in labels if label]
+
+    detected_objects = segment.get("detected_objects")
+    if isinstance(detected_objects, list):
+        extracted = []
+        for obj in detected_objects:
+            if isinstance(obj, dict):
+                label = obj.get("label")
+                if label:
+                    extracted.append(str(label))
+        return extracted
+
+    return []
+
+
+def _build_timeline_segment(seg: dict, truncate_transcript: bool = False) -> TimelineSegment:
+    """Project one persisted segment into the stable timeline API contract."""
+    full_transcript = seg.get("full_transcript")
+    transcript = full_transcript
+    if truncate_transcript and isinstance(full_transcript, str) and len(full_transcript) > 200:
+        transcript = f"{full_transcript[:200]}..."
+
+    return TimelineSegment(
+        segment_id=seg.get('segment_id', 0),
+        start=seg.get('start', 0.0),
+        end=seg.get('end', 0.0),
+        scene_id=seg.get('scene_id'),
+        audio_chunks=seg.get('audio_chunks', []),
+        speaker_ids=seg.get('speaker_ids', []),
+        transcript=transcript,
+        keywords=seg.get('keywords', [])[:5] if truncate_transcript else seg.get('keywords', []),
+        objects=_segment_object_labels(seg)[:5] if truncate_transcript else _segment_object_labels(seg),
+        clip_id=seg.get('clip_id'),
+        dino_id=seg.get('dino_id'),
+        representative_frame=seg.get('representative_frame'),
+        speaker_count=seg.get('speaker_count'),
+        dominant_speaker_id=seg.get('dominant_speaker_id'),
+        continuity_key=seg.get('continuity_key'),
+        diarization_status=seg.get('diarization_status'),
+        emotion_status=seg.get('emotion_status'),
+        speaker_voice_signature_count=seg.get('speaker_voice_signature_count'),
+        speaker_voice_signature_meta=seg.get('speaker_voice_signature_meta'),
+        audio_emotion=seg.get('audio_emotion'),
+        time_hints=seg.get('time_hints'),
+        content_state=seg.get('content_state'),
+        candidate_visible_people=seg.get('candidate_visible_people', []),
+    )
+
+
 def get_data_loader():
     """Lazy-load data loader."""
     global _data_loader
@@ -49,21 +102,7 @@ async def get_timeline(
         
         segments = []
         for seg in temporal_index.get('segments', []):
-            segment = TimelineSegment(
-                segment_id=seg.get('segment_id', 0),
-                start=seg.get('start', 0.0),
-                end=seg.get('end', 0.0),
-                scene_id=seg.get('scene_id'),
-                audio_chunks=seg.get('audio_chunks', []),
-                speaker_ids=seg.get('speaker_ids', []),
-                transcript=seg.get('full_transcript', '')[:200] + '...' if len(seg.get('full_transcript', '')) > 200 else seg.get('full_transcript'),
-                keywords=seg.get('keywords', [])[:5],  # Limit keywords
-                objects=seg.get('objects', [])[:5],  # Limit objects
-                clip_id=seg.get('clip_id'),
-                dino_id=seg.get('dino_id'),
-                representative_frame=seg.get('representative_frame')
-            )
-            segments.append(segment)
+            segments.append(_build_timeline_segment(seg, truncate_transcript=True))
         
         return TimelineResponse(
             video_id=video_id,
@@ -106,21 +145,7 @@ async def get_full_timeline(
         
         segments = []
         for seg in temporal_index.get('segments', []):
-            segment = TimelineSegment(
-                segment_id=seg.get('segment_id', 0),
-                start=seg.get('start', 0.0),
-                end=seg.get('end', 0.0),
-                scene_id=seg.get('scene_id'),
-                audio_chunks=seg.get('audio_chunks', []),
-                speaker_ids=seg.get('speaker_ids', []),
-                transcript=seg.get('full_transcript'),
-                keywords=seg.get('keywords', []),
-                objects=seg.get('objects', []),
-                clip_id=seg.get('clip_id'),
-                dino_id=seg.get('dino_id'),
-                representative_frame=seg.get('representative_frame')
-            )
-            segments.append(segment)
+            segments.append(_build_timeline_segment(seg, truncate_transcript=False))
         
         return TimelineResponse(
             video_id=video_id,

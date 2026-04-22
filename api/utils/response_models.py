@@ -32,6 +32,17 @@ class SceneResponse(BaseModel):
     transcript: Optional[str] = None
     speakers: List[str] = Field(default_factory=list)
     audio_chunks: List[int] = Field(default_factory=list)
+    speaker_count: Optional[int] = None
+    dominant_speaker_id: Optional[str] = None
+    continuity_key: Optional[str] = None
+    diarization_status: Optional[str] = None
+    emotion_status: Optional[str] = None
+    speaker_voice_signature_count: Optional[int] = None
+    speaker_voice_signature_meta: Optional[Dict[str, Any]] = None
+    audio_emotion: Optional[str] = None
+    time_hints: Optional[Dict[str, Any]] = None
+    content_state: Optional[str] = None
+    candidate_visible_people: List[Dict[str, Any]] = Field(default_factory=list)
 
 
 class SearchResult(BaseModel):
@@ -74,6 +85,17 @@ class TimelineSegment(BaseModel):
     clip_id: Optional[str] = None
     dino_id: Optional[str] = None
     representative_frame: Optional[str] = None
+    speaker_count: Optional[int] = None
+    dominant_speaker_id: Optional[str] = None
+    continuity_key: Optional[str] = None
+    diarization_status: Optional[str] = None
+    emotion_status: Optional[str] = None
+    speaker_voice_signature_count: Optional[int] = None
+    speaker_voice_signature_meta: Optional[Dict[str, Any]] = None
+    audio_emotion: Optional[str] = None
+    time_hints: Optional[Dict[str, Any]] = None
+    content_state: Optional[str] = None
+    candidate_visible_people: List[Dict[str, Any]] = Field(default_factory=list)
 
 
 class TimelineResponse(BaseModel):

@@ -98,6 +98,8 @@ Autonomous config modification with safety backups.
 | PyAnnote failed | • Increase warmup delay<br>• Switch to CPU<br>• Skip diarization | ⚠️ Ask LLM |
 | Whisper RuntimeError | • Use smaller model<br>• Reduce chunk size | ✅ Yes |
 
+On the active line, the control plane can now apply a bounded set of real config-healing actions when a healer is initialized. Supported delegated actions include `reduce_batch_size`, `switch_to_cpu`, `enable_retry`, `skip_step`, `partition_audio`, and model downgrades. Pattern families without a mapped bounded action still fail honestly instead of reporting simulated success.
+
 **Safety Features:**
 - All config modifications backed up to `data/config_backups/`
 - Versioned backups with timestamps
@@ -126,6 +128,10 @@ patterns = [
     "file_not_found" → skip_missing_file
 ]
 ```
+
+Current truth on the active line:
+- `retry_with_backoff`, `reduce_batch_size`, and `fallback_to_cpu` delegate to real healer actions when the monitor is initialized with a healer.
+- `download_model` and `adjust_thresholds` are not yet backed by a bounded runtime action and return an explicit not-mapped outcome instead of pretending to heal successfully.
 
 ### 4. Recovery Strategies Database (agents/recovery_strategies.py)
 

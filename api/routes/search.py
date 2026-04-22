@@ -3,7 +3,7 @@ Search API routes for GoodQ4All.
 Provides multimodal search endpoints.
 """
 from __future__ import annotations
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 import logging
 from fastapi import APIRouter, Query, HTTPException, Body
 from pydantic import BaseModel
@@ -21,6 +21,30 @@ router = APIRouter(prefix="/api/search", tags=["search"])
 _search_engine = None
 _data_loader = None
 _config = None
+
+
+def _extract_sentiment_fields(result: dict) -> Dict[str, Any]:
+    """Project sentiment from scene context first, then payload, without altering ranking behavior."""
+    scene_context = result.get("scene_context") if isinstance(result.get("scene_context"), dict) else {}
+    payload = result.get("payload") if isinstance(result.get("payload"), dict) else {}
+
+    sentiment = scene_context.get("sentiment")
+    if not isinstance(sentiment, dict):
+        sentiment = payload.get("sentiment") if isinstance(payload.get("sentiment"), dict) else None
+
+    sentiment_label = scene_context.get("sentiment_label")
+    if sentiment_label is None:
+        sentiment_label = payload.get("sentiment_label")
+
+    sentiment_score = scene_context.get("sentiment_score")
+    if sentiment_score is None:
+        sentiment_score = payload.get("sentiment_score")
+
+    return {
+        "sentiment": sentiment,
+        "sentiment_label": sentiment_label,
+        "sentiment_score": sentiment_score,
+    }
 
 
 def get_search_engine():
@@ -79,6 +103,7 @@ async def search_multimodal(request: MultimodalSearchRequest = Body(...)):
         search_results = []
         for result in results:
             payload = result.get('payload', {})
+            sentiment_fields = _extract_sentiment_fields(result)
             
             search_result = SearchResult(
                 score=result.get('score', 0.0),
@@ -90,6 +115,9 @@ async def search_multimodal(request: MultimodalSearchRequest = Body(...)):
                 transcript=payload.get('transcript'),
                 keywords=payload.get('keywords', []),
                 objects=payload.get('objects', []),
+                sentiment=sentiment_fields["sentiment"],
+                sentiment_label=sentiment_fields["sentiment_label"],
+                sentiment_score=sentiment_fields["sentiment_score"],
                 context=result.get('scene_context'),
                 provenance=result.get("provenance") if isinstance(result.get("provenance"), dict) else None,
                 confidence=result.get("confidence") if isinstance(result.get("confidence"), dict) else confidence_stub(),
@@ -139,6 +167,7 @@ async def search_text(
         search_results = []
         for result in results:
             payload = result.get('payload', {})
+            sentiment_fields = _extract_sentiment_fields(result)
             
             search_result = SearchResult(
                 score=result.get('score', 0.0),
@@ -147,6 +176,9 @@ async def search_text(
                 scene_id=payload.get('scene_id'),
                 transcript=payload.get('transcript'),
                 keywords=payload.get('keywords', []),
+                sentiment=sentiment_fields["sentiment"],
+                sentiment_label=sentiment_fields["sentiment_label"],
+                sentiment_score=sentiment_fields["sentiment_score"],
                 provenance=result.get("provenance") if isinstance(result.get("provenance"), dict) else None,
                 confidence=result.get("confidence") if isinstance(result.get("confidence"), dict) else confidence_stub(),
             )
@@ -188,6 +220,7 @@ async def search_visual(
         search_results = []
         for result in results:
             payload = result.get('payload', {})
+            sentiment_fields = _extract_sentiment_fields(result)
             
             search_result = SearchResult(
                 score=result.get('score', 0.0),
@@ -197,6 +230,9 @@ async def search_visual(
                 representative_frame=payload.get('representative_frame'),
                 objects=payload.get('objects', []),
                 keywords=payload.get('keywords', []),
+                sentiment=sentiment_fields["sentiment"],
+                sentiment_label=sentiment_fields["sentiment_label"],
+                sentiment_score=sentiment_fields["sentiment_score"],
                 provenance=result.get("provenance") if isinstance(result.get("provenance"), dict) else None,
                 confidence=result.get("confidence") if isinstance(result.get("confidence"), dict) else confidence_stub(),
             )

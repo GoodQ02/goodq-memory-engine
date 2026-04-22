@@ -76,6 +76,9 @@ def _sample_temporal_index() -> dict:
                 "speaker_voice_signature_count": 1,
                 "speaker_voice_signature_meta": {"status": "ok", "emitted": 1},
                 "audio_emotion": "fear",
+                "sentiment": {"label": "negative", "score": 0.82},
+                "sentiment_label": "negative",
+                "sentiment_score": 0.82,
                 "time_hints": {"explicit_dates": [], "relative_phrases": ["next week"]},
                 "content_state": "signal",
                 "candidate_visible_people": [{"name": "anonymous_person_1"}],
@@ -102,6 +105,9 @@ def test_list_scenes_surfaces_persisted_audio_truth(monkeypatch: pytest.MonkeyPa
     assert scene.speaker_voice_signature_count == 1
     assert scene.speaker_voice_signature_meta == {"status": "ok", "emitted": 1}
     assert scene.audio_emotion == "fear"
+    assert scene.sentiment == {"label": "negative", "score": 0.82}
+    assert scene.sentiment_label == "negative"
+    assert scene.sentiment_score == 0.82
     assert scene.time_hints == {"explicit_dates": [], "relative_phrases": ["next week"]}
     assert scene.content_state == "signal"
     assert scene.candidate_visible_people == [{"name": "anonymous_person_1"}]
@@ -130,6 +136,9 @@ def test_full_timeline_surfaces_persisted_audio_truth(monkeypatch: pytest.Monkey
     assert segment.speaker_voice_signature_count == 1
     assert segment.speaker_voice_signature_meta == {"status": "ok", "emitted": 1}
     assert segment.audio_emotion == "fear"
+    assert segment.sentiment == {"label": "negative", "score": 0.82}
+    assert segment.sentiment_label == "negative"
+    assert segment.sentiment_score == 0.82
     assert segment.time_hints == {"explicit_dates": [], "relative_phrases": ["next week"]}
     assert segment.content_state == "signal"
     assert segment.candidate_visible_people == [{"name": "anonymous_person_1"}]
@@ -156,6 +165,9 @@ def test_similar_scene_route_returns_real_neighbors(monkeypatch: pytest.MonkeyPa
         "speaker_voice_signature_count": 1,
         "speaker_voice_signature_meta": {"status": "ok", "emitted": 1},
         "audio_emotion": "neutral",
+        "sentiment": {"label": "neutral", "score": 0.51},
+        "sentiment_label": "neutral",
+        "sentiment_score": 0.51,
         "time_hints": {"explicit_dates": [], "relative_phrases": []},
         "content_state": "signal",
         "candidate_visible_people": [{"name": "anonymous_person_2"}],
@@ -185,3 +197,6 @@ def test_similar_scene_route_returns_real_neighbors(monkeypatch: pytest.MonkeyPa
     assert scene.speaker_count == 1
     assert scene.dominant_speaker_id == "SPEAKER_01"
     assert scene.continuity_key == "SPEAKER_01"
+    assert scene.sentiment == {"label": "neutral", "score": 0.51}
+    assert scene.sentiment_label == "neutral"
+    assert scene.sentiment_score == 0.51

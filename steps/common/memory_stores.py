@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 class ChromaMemory(MemoryStore):
-    """Lightweight in-memory store for short-term embeddings."""
+    """Legacy-named in-memory TTL cache for short-term embeddings, not a ChromaDB client."""
 
     def __init__(
         self,
@@ -422,5 +422,5 @@ def build_text_stores(cfg: Dict[str, Any]) -> Dict[str, MemoryStore]:
         q_client = None
     if q_client:
         stores["qdrant"] = QdrantMemory(q_client)
-    # Chroma placeholder (not implemented)
+    # The legacy-named ephemeral cache remains intentionally local and in-memory.
     return stores

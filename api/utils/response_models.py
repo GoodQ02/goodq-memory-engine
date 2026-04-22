@@ -40,6 +40,9 @@ class SceneResponse(BaseModel):
     speaker_voice_signature_count: Optional[int] = None
     speaker_voice_signature_meta: Optional[Dict[str, Any]] = None
     audio_emotion: Optional[str] = None
+    sentiment: Optional[Dict[str, Any]] = None
+    sentiment_label: Optional[str] = None
+    sentiment_score: Optional[float] = None
     time_hints: Optional[Dict[str, Any]] = None
     content_state: Optional[str] = None
     candidate_visible_people: List[Dict[str, Any]] = Field(default_factory=list)
@@ -56,6 +59,9 @@ class SearchResult(BaseModel):
     transcript: Optional[str] = None
     keywords: List[str] = Field(default_factory=list)
     objects: List[str] = Field(default_factory=list)
+    sentiment: Optional[Dict[str, Any]] = None
+    sentiment_label: Optional[str] = None
+    sentiment_score: Optional[float] = None
     context: Optional[Dict[str, Any]] = None
     provenance: Optional[Dict[str, Any]] = None
     confidence: Dict[str, Any] = Field(default_factory=confidence_stub)
@@ -93,6 +99,9 @@ class TimelineSegment(BaseModel):
     speaker_voice_signature_count: Optional[int] = None
     speaker_voice_signature_meta: Optional[Dict[str, Any]] = None
     audio_emotion: Optional[str] = None
+    sentiment: Optional[Dict[str, Any]] = None
+    sentiment_label: Optional[str] = None
+    sentiment_score: Optional[float] = None
     time_hints: Optional[Dict[str, Any]] = None
     content_state: Optional[str] = None
     candidate_visible_people: List[Dict[str, Any]] = Field(default_factory=list)

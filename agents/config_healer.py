@@ -192,15 +192,25 @@ CONFIDENCE: high/medium/low
         backup_path = self._backup_config()
         
         try:
+            step_name = error_context.get("step_name") or error_context.get("step")
+
             if action == "reduce_batch_size":
                 return self._reduce_batch_size()
             elif action == "switch_to_cpu":
-                return self._switch_to_cpu(error_context.get("step_name"))
-            elif action == "use_smaller_model":
-                return self._use_smaller_model(error_context.get("step_name"))
+                return self._switch_to_cpu(step_name)
+            elif action in {"use_smaller_model", "downgrade_model"}:
+                return self._use_smaller_model(step_name, target_model=error_context.get("to_model"))
             elif action == "increase_timeout":
                 return self._increase_timeout()
-            elif action == "skip_audio_step":
+            elif action in {"skip_audio_step", "skip_step"}:
+                return self._skip_step(step_name or "audio_extraction")
+            elif action == "partition_audio":
+                return self._partition_audio(error_context)
+            elif action == "enable_retry":
+                return self._enable_retry(error_context)
+            elif action == "skip_diarization":
+                return self._skip_step("diarization")
+            elif action == "skip_audio_steps":
                 return self._skip_step("audio_extraction")
             elif action == "mark_as_silent":
                 return self._mark_as_silent()
@@ -209,7 +219,7 @@ CONFIDENCE: high/medium/low
             elif action == "switch_to_cpu_diarization":
                 return self._switch_to_cpu("diarization")
             elif action == "use_smaller_whisper_model":
-                return self._use_smaller_whisper()
+                return self._use_smaller_whisper(error_context.get("to_model"))
             else:
                 return False, f"Unknown action: {action}"
                 
@@ -221,7 +231,7 @@ CONFIDENCE: high/medium/low
     def _backup_config(self) -> Path:
         """Create timestamped backup of current config"""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        backup_path = self.backup_dir / f"config_open.yaml.backup_{timestamp}"
+        backup_path = self.backup_dir / f"{self.config_path.name}.backup_{timestamp}"
         shutil.copy(self.config_path, backup_path)
         return backup_path
     
@@ -234,121 +244,188 @@ CONFIDENCE: high/medium/low
         """Save config with pretty formatting"""
         with open(self.config_path, 'w') as f:
             yaml.dump(config, f, default_flow_style=False, sort_keys=False)
+
+    @staticmethod
+    def _get_nested(config: Dict[str, Any], path: List[str], default: Any = None) -> Any:
+        current: Any = config
+        for part in path:
+            if not isinstance(current, dict) or part not in current:
+                return default
+            current = current[part]
+        return current
+
+    @staticmethod
+    def _set_nested(config: Dict[str, Any], path: List[str], value: Any) -> bool:
+        current: Dict[str, Any] = config
+        for part in path[:-1]:
+            next_value = current.get(part)
+            if not isinstance(next_value, dict):
+                next_value = {}
+                current[part] = next_value
+            current = next_value
+        old_value = current.get(path[-1])
+        current[path[-1]] = value
+        return old_value != value
     
     # ========== Healing Actions ==========
     
     def _reduce_batch_size(self) -> Tuple[bool, str]:
         """Reduce batch size by 50%"""
         config = self._load_config()
-        
-        # Find batch size settings
+
+        candidate_paths = [
+            ["segmentation", "phase5", "batch_size"],
+            ["pipeline", "batch_size"],
+            ["processing", "batch_size"],
+        ]
+
+        changes: List[str] = []
         modified = False
-        if "processing" in config and "batch_size" in config["processing"]:
-            old_size = config["processing"]["batch_size"]
-            new_size = max(1, old_size // 2)
-            config["processing"]["batch_size"] = new_size
-            modified = True
-            msg = f"Reduced batch size: {old_size} → {new_size}"
-        
+        for path in candidate_paths:
+            old_size = self._get_nested(config, path)
+            if isinstance(old_size, (int, float)) and old_size > 1:
+                new_size = max(1, int(old_size) // 2)
+                modified = self._set_nested(config, path, new_size) or modified
+                changes.append(f"{'.'.join(path)}: {old_size} -> {new_size}")
+
         if modified:
             self._save_config(config)
-            return True, msg
-        return False, "No batch_size found in config"
+            return True, "Reduced batch size: " + ", ".join(changes)
+        return False, "No adjustable batch_size found in config"
     
     def _switch_to_cpu(self, step_name: Optional[str] = None) -> Tuple[bool, str]:
         """Switch specified step (or all) to CPU"""
         config = self._load_config()
-        
-        if step_name:
-            # Switch specific step
-            if "steps" in config and step_name in config["steps"]:
-                config["steps"][step_name]["device"] = "cpu"
-                self._save_config(config)
-                return True, f"Switched {step_name} to CPU"
+
+        targets = []
+        normalized = (step_name or "").strip().lower()
+        if normalized in {"diarization", "audio_diarize", "phase2"}:
+            targets.append((["segmentation", "phase2", "device"], "cpu"))
+        elif normalized in {"scene_detection", "video_scene_detect", "phase5"}:
+            targets.append((["segmentation", "phase5", "use_gpu"], False))
+        elif normalized in {"all", ""}:
+            targets.extend(
+                [
+                    (["segmentation", "phase2", "device"], "cpu"),
+                    (["segmentation", "phase5", "use_gpu"], False),
+                    (["gpu", "enabled"], False),
+                ]
+            )
         else:
-            # Switch all to CPU
-            if "processing" in config:
-                config["processing"]["device"] = "cpu"
-                self._save_config(config)
-                return True, "Switched all processing to CPU"
-        
-        return False, f"Could not switch {step_name or 'all'} to CPU"
-    
-    def _use_smaller_model(self, step_name: Optional[str] = None) -> Tuple[bool, str]:
-        """Downgrade model size"""
-        config = self._load_config()
-        
-        # Model downgrade mappings
-        downgrades = {
-            "whisper-large": "whisper-medium",
-            "whisper-medium": "whisper-base",
-            "whisper-base": "whisper-tiny"
-        }
-        
+            targets.extend(
+                [
+                    (["segmentation", "phase2", "device"], "cpu"),
+                    (["segmentation", "phase5", "use_gpu"], False),
+                    (["gpu", "enabled"], False),
+                ]
+            )
+
+        changes: List[str] = []
         modified = False
-        msg = []
-        
-        if "models" in config:
-            for key, value in config["models"].items():
-                if isinstance(value, str) and value in downgrades:
-                    old_model = value
-                    new_model = downgrades[value]
-                    config["models"][key] = new_model
-                    modified = True
-                    msg.append(f"{key}: {old_model} → {new_model}")
-        
+        for path, value in targets:
+            changed = self._set_nested(config, path, value)
+            modified = changed or modified
+            if changed:
+                changes.append(f"{'.'.join(path)}={value}")
+
         if modified:
             self._save_config(config)
-            return True, "Downgraded models: " + ", ".join(msg)
-        return False, "No models to downgrade"
-    
-    def _use_smaller_whisper(self) -> Tuple[bool, str]:
+            return True, f"Switched {step_name or 'processing'} to CPU-safe mode ({', '.join(changes)})"
+
+        return False, f"No CPU fallback change applied for {step_name or 'processing'}"
+
+    def _use_smaller_model(self, step_name: Optional[str] = None, target_model: Optional[str] = None) -> Tuple[bool, str]:
+        """Downgrade model size"""
+        config = self._load_config()
+
+        normalized = (step_name or "").strip().lower()
+        if normalized in {"transcription", "whisper", "audio_transcribe", "phase4", ""}:
+            return self._use_smaller_whisper(target_model)
+
+        return False, f"No smaller-model mapping is defined for {step_name or 'unspecified step'}"
+
+    def _use_smaller_whisper(self, target_model: Optional[str] = None) -> Tuple[bool, str]:
         """Specifically downgrade Whisper model"""
         config = self._load_config()
-        
-        if "models" in config and "whisper" in config["models"]:
-            current = config["models"]["whisper"]
-            downgrades = {
-                "large-v3": "medium",
-                "large-v2": "medium",
-                "large": "medium",
-                "medium": "base",
-                "base": "tiny"
-            }
-            
-            new_model = downgrades.get(current)
-            if new_model:
-                config["models"]["whisper"] = new_model
-                self._save_config(config)
-                return True, f"Whisper model: {current} → {new_model}"
-        
-        return False, "Could not downgrade Whisper model"
+
+        current = self._get_nested(config, ["segmentation", "phase4", "whisper_model"])
+        if not isinstance(current, str):
+            return False, "Could not locate segmentation.phase4.whisper_model"
+
+        downgrades = {
+            "large-v3": "medium",
+            "large-v2": "medium",
+            "large": "medium",
+            "medium": "base",
+            "base": "tiny",
+        }
+
+        new_model = target_model or downgrades.get(current)
+        if not new_model or new_model == current:
+            return False, f"Could not downgrade Whisper model from {current}"
+
+        self._set_nested(config, ["segmentation", "phase4", "whisper_model"], new_model)
+        self._save_config(config)
+        return True, f"Whisper model: {current} -> {new_model}"
     
     def _increase_timeout(self) -> Tuple[bool, str]:
         """Increase timeout by 50%"""
         config = self._load_config()
-        
-        if "processing" in config and "timeout_sec" in config["processing"]:
-            old_timeout = config["processing"]["timeout_sec"]
-            new_timeout = int(old_timeout * 1.5)
-            config["processing"]["timeout_sec"] = new_timeout
+
+        candidate_paths = [
+            ["segmentation", "phase4", "chunk_timeout"],
+            ["segmentation", "phase4", "diarize_timeout"],
+            ["processing", "timeout_sec"],
+        ]
+        changes: List[str] = []
+        modified = False
+        for path in candidate_paths:
+            old_timeout = self._get_nested(config, path)
+            if isinstance(old_timeout, (int, float)) and old_timeout > 0:
+                new_timeout = int(float(old_timeout) * 1.5)
+                modified = self._set_nested(config, path, new_timeout) or modified
+                changes.append(f"{'.'.join(path)}: {old_timeout}s -> {new_timeout}s")
+
+        if modified:
             self._save_config(config)
-            return True, f"Timeout: {old_timeout}s → {new_timeout}s"
-        
+            return True, "Timeouts increased: " + ", ".join(changes)
+
         return False, "No timeout setting found"
     
     def _skip_step(self, step_name: str) -> Tuple[bool, str]:
         """Mark step as skippable"""
         config = self._load_config()
-        
+
+        normalized = (step_name or "").strip().lower()
+        mapped_paths = {
+            "transcription": ["segmentation", "phase4", "enable_transcription"],
+            "audio_transcribe": ["segmentation", "phase4", "enable_transcription"],
+            "diarization": ["segmentation", "phase4", "enable_diarization"],
+            "audio_diarize": ["segmentation", "phase4", "enable_diarization"],
+            "embeddings": ["segmentation", "phase4", "enable_embeddings"],
+            "audio_embed": ["segmentation", "phase4", "enable_embeddings"],
+            "emotion": ["segmentation", "phase4", "enable_emotion"],
+            "audio_emotion": ["segmentation", "phase4", "enable_emotion"],
+            "music_detection": ["segmentation", "phase4", "enable_music_detection"],
+            "audio_music_events": ["segmentation", "phase4", "enable_music_detection"],
+        }
+
+        path = mapped_paths.get(normalized)
+        if path:
+            changed = self._set_nested(config, path, False)
+            if changed:
+                self._save_config(config)
+            return (True, f"Disabled {normalized} via {'.'.join(path)}") if changed else (False, f"{normalized} already disabled")
+
         if "steps" not in config:
             config["steps"] = {}
         if step_name not in config["steps"]:
             config["steps"][step_name] = {}
-        
-        config["steps"][step_name]["skip_on_error"] = True
-        self._save_config(config)
-        return True, f"Step {step_name} now skips on error"
+
+        changed = self._set_nested(config, ["steps", step_name, "skip_on_error"], True)
+        if changed:
+            self._save_config(config)
+        return (True, f"Step {step_name} now skips on error") if changed else (False, f"Step {step_name} already skips on error")
     
     def _mark_as_silent(self) -> Tuple[bool, str]:
         """Mark file as silent (no audio processing needed)"""
@@ -364,18 +441,47 @@ CONFIDENCE: high/medium/low
     def _increase_warmup_delay(self) -> Tuple[bool, str]:
         """Increase model warmup delay"""
         config = self._load_config()
-        
-        if "models" not in config:
-            config["models"] = {}
-        if "warmup_delay_sec" not in config["models"]:
-            config["models"]["warmup_delay_sec"] = 5
-        
-        old_delay = config["models"]["warmup_delay_sec"]
-        new_delay = old_delay + 3
-        config["models"]["warmup_delay_sec"] = new_delay
+
+        old_delay = self._get_nested(config, ["segmentation", "phase4", "warmup_delay_sec"], 5)
+        new_delay = int(old_delay) + 3
+        self._set_nested(config, ["segmentation", "phase4", "warmup_delay_sec"], new_delay)
         self._save_config(config)
-        
-        return True, f"Warmup delay: {old_delay}s → {new_delay}s"
+
+        return True, f"Warmup delay: {old_delay}s -> {new_delay}s"
+
+    def _enable_retry(self, error_context: Dict[str, Any]) -> Tuple[bool, str]:
+        """Enable bounded pipeline retry behavior."""
+        config = self._load_config()
+        max_retries = int(error_context.get("max_retries") or 3)
+
+        changed = False
+        changed = self._set_nested(config, ["pipeline", "retry_on_failure"], True) or changed
+        changed = self._set_nested(config, ["pipeline", "max_retries"], max_retries) or changed
+
+        if changed:
+            self._save_config(config)
+            return True, f"Enabled retry with pipeline.max_retries={max_retries}"
+        return False, "Retry policy already enabled with requested settings"
+
+    def _partition_audio(self, error_context: Dict[str, Any]) -> Tuple[bool, str]:
+        """Tune chunking to favor smaller diarization workloads."""
+        config = self._load_config()
+
+        chunk_minutes = error_context.get("chunk_size") or error_context.get("chunk_size_minutes") or 15
+        try:
+            chunk_minutes = float(chunk_minutes)
+        except (TypeError, ValueError):
+            chunk_minutes = 15.0
+        chunk_minutes = max(1.0, min(chunk_minutes, 20.0))
+
+        changed = False
+        changed = self._set_nested(config, ["segmentation", "phase4", "chunk_size_minutes"], chunk_minutes) or changed
+        changed = self._set_nested(config, ["segmentation", "phase4", "max_parallel_chunks"], 1) or changed
+
+        if changed:
+            self._save_config(config)
+            return True, f"Enabled audio partitioning with {chunk_minutes:.0f} minute chunks and single-chunk concurrency"
+        return False, "Audio partitioning already matched the requested safety settings"
     
     def auto_heal(self, error_log: str, context: Dict[str, Any]) -> Dict[str, Any]:
         """

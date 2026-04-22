@@ -272,6 +272,7 @@ The storage contract is healthy when:
 These should not be treated as active truth:
 - root-level DB assumptions outside the epoch tree
 - ChromaDB as a primary integrated store
+- internal legacy `chroma` naming as proof that the runtime still depends on a real ChromaDB tier
 - FAISS as the primary retrieval truth
 - older `logs/scene_ingest` artifact roots
 - docs that present old service-era storage assumptions as current

@@ -8,7 +8,7 @@ from steps.common.memory_stores import build_text_stores
 
 
 def build_memory_router(cfg: Dict) -> MemoryRouter:
-    """Construct a multi-tier MemoryRouter with Chroma (tier-0), FAISS (tier-1), Qdrant (tier-2)."""
+    """Construct the active memory router with an ephemeral cache, optional FAISS parity, and canonical Qdrant retrieval."""
     memory_cfg = (cfg.get("memory") or {}) if isinstance(cfg, dict) else {}
     dims_cfg = memory_cfg.get("dims", {})
     read_priority = memory_cfg.get("routing", {}).get("read_priority", ["qdrant", "faiss", "chroma"])

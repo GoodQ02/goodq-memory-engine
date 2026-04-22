@@ -52,6 +52,8 @@ Router-backed endpoint families mounted into the same process:
 
 - Scene responses now project the persisted continuity and speaker-truth layer directly from runtime artifacts.
 - Active scene read models include fields such as `speaker_count`, `dominant_speaker_id`, `continuity_key`, `diarization_status`, `emotion_status`, `speaker_voice_signature_count`, `speaker_voice_signature_meta`, `audio_emotion`, `time_hints`, `content_state`, and `candidate_visible_people`.
+- Search, scene, and timeline responses now also expose `sentiment`, `sentiment_label`, and `sentiment_score` as first-class outward fields.
+- Sentiment is descriptive only on the active line; it should inform interpretation without silently dictating ranking or replacing stronger multimodal evidence.
 
 ## Discovery Rule
 

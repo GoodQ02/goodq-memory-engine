@@ -137,6 +137,30 @@ class SystemStatus(BaseModel):
     indexes: Dict[str, Any] = Field(default_factory=dict)
 
 
+class MutationPolicy(BaseModel):
+    """Declared policy requirements for write/control surfaces."""
+    explicit: bool = True
+    confirmation_gated: bool = True
+    policy_driven: bool = True
+    budgeted: bool = True
+    checkpointed: bool = True
+    auditable: bool = True
+
+
+class SystemMutationResponse(BaseModel):
+    """Read model for intentionally disabled or operator-only mutation routes."""
+    status: str
+    allowed: bool
+    route: str
+    mode: str
+    message: str
+    canonical_runtime_path: Optional[str] = None
+    operator_surfaces: List[str] = Field(default_factory=list)
+    required_capabilities: List[str] = Field(default_factory=list)
+    next_step: Optional[str] = None
+    policy: MutationPolicy = Field(default_factory=MutationPolicy)
+
+
 class IngestRequest(BaseModel):
     """Ingest job request."""
     file_path: str
@@ -144,8 +168,6 @@ class IngestRequest(BaseModel):
     options: Optional[Dict[str, Any]] = None
 
 
-class IngestResponse(BaseModel):
+class IngestResponse(SystemMutationResponse):
     """Ingest job response."""
-    job_id: str
-    status: str
-    message: str
+    job_id: Optional[str] = None

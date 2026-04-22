@@ -11,7 +11,14 @@ from datetime import datetime
 from fastapi import APIRouter, HTTPException, Body
 from pathlib import Path
 
-from api.utils.response_models import SystemStatus, IngestRequest, IngestResponse, VideoListItem
+from api.utils.response_models import (
+    SystemStatus,
+    IngestRequest,
+    IngestResponse,
+    VideoListItem,
+    SystemMutationResponse,
+    MutationPolicy,
+)
 from api.utils.loaders import DataLoader
 
 logger = logging.getLogger(__name__)
@@ -19,6 +26,35 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/system", tags=["system"])
 
 _data_loader = None
+_MUTATION_POLICY = MutationPolicy()
+_INGEST_REQUIRED_CAPABILITIES = [
+    "explicit confirmation token",
+    "policy profile selection",
+    "execution budget preflight",
+    "checkpointed handoff into the canonical runtime",
+    "auditable request and run records",
+]
+_OPERATOR_ONLY_REQUIRED_CAPABILITIES = [
+    "explicit operator intent",
+    "confirmation-gated maintenance session",
+    "policy profile selection",
+    "execution budget preflight",
+    "checkpointed maintenance workflow",
+    "auditable maintenance records",
+]
+_INGEST_OPERATOR_SURFACES = [
+    "conda run -n goodq_core python -m cli.watchdog",
+    "conda run -n goodq_core python -m cli.run_ingestion --input-dir <path>",
+    "<GOODQ_DATA_ROOT>/GoodQ_Data/import_inbox",
+]
+_REINDEX_OPERATOR_SURFACES = [
+    "operator-only maintenance workflow",
+    "explicit audit before index rebuild",
+]
+_RELOAD_OPERATOR_SURFACES = [
+    "operator-only maintenance workflow",
+    "explicit restart or maintenance session after config review",
+]
 
 
 def get_data_loader():
@@ -30,6 +66,30 @@ def get_data_loader():
         logger.info("[OK] Data loader initialized for system")
     
     return _data_loader
+
+
+def _build_mutation_response(
+    *,
+    route: str,
+    mode: str,
+    message: str,
+    canonical_runtime_path: str,
+    operator_surfaces: list[str],
+    required_capabilities: list[str],
+    next_step: str,
+) -> SystemMutationResponse:
+    return SystemMutationResponse(
+        status="disabled",
+        allowed=False,
+        route=route,
+        mode=mode,
+        message=message,
+        canonical_runtime_path=canonical_runtime_path,
+        operator_surfaces=operator_surfaces,
+        required_capabilities=required_capabilities,
+        next_step=next_step,
+        policy=_MUTATION_POLICY,
+    )
 
 
 @router.get("/status", response_model=SystemStatus)
@@ -147,7 +207,29 @@ async def start_ingest(request: IngestRequest = Body(...)):
     Returns:
         Ingest job ID and status
     """
-    return IngestResponse(job_id="disabled", status="disabled", message="disabled")
+    return IngestResponse(
+        job_id="disabled",
+        status="disabled",
+        allowed=False,
+        route="/api/system/ingest",
+        mode="future_controlled_facade",
+        message=(
+            "Ingest stays disabled on the API surface until it can operate as an "
+            "explicit, confirmation-gated, policy-driven, budgeted, checkpointed, "
+            "and auditable facade over the canonical watchdog/CLI runtime."
+        ),
+        canonical_runtime_path=(
+            "Use the canonical ingest path through cli.watchdog, cli.run_ingestion, "
+            "or the configured import_inbox; no supported API mutation facade exists yet."
+        ),
+        operator_surfaces=_INGEST_OPERATOR_SURFACES,
+        required_capabilities=_INGEST_REQUIRED_CAPABILITIES,
+        next_step=(
+            "Drop files into <GOODQ_DATA_ROOT>/GoodQ_Data/import_inbox for watchdog "
+            "or invoke cli.run_ingestion directly."
+        ),
+        policy=_MUTATION_POLICY,
+    )
 
     try:
         file_path = Path(request.file_path)
@@ -175,7 +257,7 @@ async def start_ingest(request: IngestRequest = Body(...)):
         raise HTTPException(status_code=500, detail=f"Failed to start ingest: {str(e)}")
 
 
-@router.post("/reindex")
+@router.post("/reindex", response_model=SystemMutationResponse)
 async def rebuild_indexes():
     """
     Rebuild all vector indexes.
@@ -183,7 +265,24 @@ async def rebuild_indexes():
     Returns:
         Success message
     """
-    return {"status": "disabled"}
+    return _build_mutation_response(
+        route="/api/system/reindex",
+        mode="operator_only",
+        message=(
+            "Reindex remains operator-only until a real policy-driven maintenance "
+            "control plane exists."
+        ),
+        canonical_runtime_path=(
+            "No supported public API facade exists for index rebuilds; use an explicit "
+            "operator maintenance workflow after audit."
+        ),
+        operator_surfaces=_REINDEX_OPERATOR_SURFACES,
+        required_capabilities=_OPERATOR_ONLY_REQUIRED_CAPABILITIES,
+        next_step=(
+            "Keep reindexing in audited operator workflows; do not trigger it through "
+            "the public API surface."
+        ),
+    )
 
     try:
         # TODO: Implement actual index rebuild
@@ -196,7 +295,7 @@ async def rebuild_indexes():
         raise HTTPException(status_code=500, detail=f"Failed to rebuild indexes: {str(e)}")
 
 
-@router.post("/reload")
+@router.post("/reload", response_model=SystemMutationResponse)
 async def reload_config():
     """
     Reload system configuration.
@@ -204,7 +303,24 @@ async def reload_config():
     Returns:
         Success message
     """
-    return {"status": "disabled"}
+    return _build_mutation_response(
+        route="/api/system/reload",
+        mode="operator_only",
+        message=(
+            "Config reload remains operator-only until a real policy-driven control "
+            "plane can make runtime mutation explicit, checkpointed, and auditable."
+        ),
+        canonical_runtime_path=(
+            "No supported public API facade exists for runtime reload; use an explicit "
+            "operator maintenance workflow after config review."
+        ),
+        operator_surfaces=_RELOAD_OPERATOR_SURFACES,
+        required_capabilities=_OPERATOR_ONLY_REQUIRED_CAPABILITIES,
+        next_step=(
+            "Keep runtime reload in explicit operator maintenance sessions; do not "
+            "treat it as a casual API mutation."
+        ),
+    )
 
     try:
         # TODO: Implement config reload

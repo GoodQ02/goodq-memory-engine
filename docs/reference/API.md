@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-04-21 -->
+<!-- DOC_LAST_VERIFIED: 2026-04-22 -->
 
 # GoodQ4All API Reference
 
@@ -47,6 +47,23 @@ Router-backed endpoint families mounted into the same process:
 - If `modalities` is omitted, the current default remains text + visual.
 - `GET /api/videos/{video_id}/scenes/{scene_id}/similar` is live and resolves similar scenes from persisted multimodal scene memory.
 - Similar-scene retrieval now uses text, visual, and audio signals where available instead of returning a placeholder response.
+
+## System Mutation Policy
+
+- `POST /api/system/ingest` is intentionally disabled on the active line.
+- If an ingest API surface is introduced later, it must be:
+  - explicit
+  - confirmation-gated
+  - policy-driven
+  - budgeted
+  - checkpointed
+  - auditable
+- Any future ingest route must remain a controlled facade over the canonical runtime path rather than a second ingest engine.
+- The current supported ingest surfaces remain:
+  - `conda run -n goodq_core python -m cli.watchdog`
+  - `conda run -n goodq_core python -m cli.run_ingestion --input-dir <path>`
+  - the configured `<GOODQ_DATA_ROOT>\GoodQ_Data\import_inbox`
+- `POST /api/system/reindex` and `POST /api/system/reload` remain operator-only and intentionally unavailable as public API mutation routes on the active line.
 
 ## Scene API Truth
 

@@ -286,7 +286,7 @@ def _collect_engine_details() -> Dict[str, Any]:
 
 
 def _collect_wsl_status() -> Dict[str, Any]:
-    """Combine the two historical WSL status endpoints into one shared helper."""
+    """Combine the previously separate WSL status checks into one shared helper."""
     import shutil
 
     status: Dict[str, Any] = {

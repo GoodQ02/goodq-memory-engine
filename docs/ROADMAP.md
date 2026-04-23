@@ -1,8 +1,17 @@
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: HISTORICAL_PLANNING_DRAFT -->
+<!-- DOC_LAST_VERIFIED: 2026-04-23 -->
+
 # GoodQ4All Development Roadmap
 
 **Project:** GoodQ4All - Multimodal Memory Intelligence System  
 **Roadmap Snapshot:** October 2025 planning draft  
 **Last Updated:** October 13, 2025
+
+> Historical planning document. This roadmap is preserved for product-history
+> context, not as active runtime truth. For the current system state and active
+> gaps, use `docs/goodq4all_agent_status.md`, `docs/SYSTEM_SNAPSHOT.md`, and
+> the canonical architecture/reference docs.
 
 ---
 

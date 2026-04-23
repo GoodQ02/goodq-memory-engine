@@ -8,6 +8,15 @@ from pathlib import Path
 from fastapi import APIRouter
 
 
+def _load_runtime_route_module(repo_root: Path):
+    module_path = repo_root / "api" / "routes" / "runtime.py"
+    spec = importlib.util.spec_from_file_location("tests.runtime_route_prune_truth", module_path)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def _load_api_main():
     repo_root = Path(__file__).resolve().parents[2]
     if str(repo_root) not in sys.path:
@@ -38,12 +47,16 @@ def _load_api_main():
     fake_goodq_version.GOODQ_VERSION = "test"
     sys.modules["goodq_version"] = fake_goodq_version
 
+    runtime_module = _load_runtime_route_module(repo_root)
+
     routes_pkg = types.ModuleType("api.routes")
     for name in ["search", "scenes", "timeline", "media", "system", "run_summary", "run_index", "ingest"]:
         mod = types.ModuleType(f"api.routes.{name}")
         mod.router = APIRouter()
         setattr(routes_pkg, name, mod)
         sys.modules[f"api.routes.{name}"] = mod
+    setattr(routes_pkg, "runtime", runtime_module)
+    sys.modules["api.routes.runtime"] = runtime_module
     sys.modules["api.routes"] = routes_pkg
 
     module_path = repo_root / "api" / "main.py"
@@ -121,3 +134,28 @@ def test_api_root_only_advertises_truthful_supported_surfaces() -> None:
         "/api/videos/{video_id}/scenes",
         "/api/system/status",
     ]
+
+
+def test_main_delegates_runtime_summary_endpoints_to_router_module() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    source = (repo_root / "api" / "main.py").read_text(encoding="utf-8")
+
+    assert "runtime" in source
+    assert "app.include_router(runtime.router)" in source
+
+    direct_runtime_paths = [
+        '@app.get("/api/status")',
+        '@app.head("/api/status")',
+        '@app.get("/api/health/summary")',
+        '@app.get("/api/engines")',
+        '@app.get("/api/queue")',
+        '@app.get("/api/gpu/stats")',
+        '@app.get("/api/wsl2-status")',
+        '@app.get("/api/models")',
+        '@app.get("/api/runs/latest/preview")',
+        '@app.get("/api/memory/stats")',
+        '@app.get("/api/read/envelope")',
+    ]
+
+    for route_marker in direct_runtime_paths:
+        assert route_marker not in source

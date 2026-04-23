@@ -8,18 +8,9 @@ from pathlib import Path
 from fastapi import APIRouter
 
 
-def _load_api_main():
-    repo_root = Path(__file__).resolve().parents[2]
+def _install_test_stubs(repo_root: Path) -> None:
     if str(repo_root) not in sys.path:
         sys.path.insert(0, str(repo_root))
-
-    fake_llm_client = types.ModuleType("lib.llm_client")
-    fake_llm_client.LLMClient = object
-    sys.modules["lib.llm_client"] = fake_llm_client
-
-    fake_model_factory = types.ModuleType("steps.common.llm_model_factory")
-    fake_model_factory.build_llm_models = lambda *args, **kwargs: {}
-    sys.modules["steps.common.llm_model_factory"] = fake_model_factory
 
     fake_config_loader = types.ModuleType("steps.common.config_loader")
     fake_config_loader.load_configs = lambda overrides=None: {
@@ -38,8 +29,21 @@ def _load_api_main():
     fake_goodq_version.GOODQ_VERSION = "test"
     sys.modules["goodq_version"] = fake_goodq_version
 
+
+def _load_api_main():
+    repo_root = Path(__file__).resolve().parents[2]
+    _install_test_stubs(repo_root)
+
+    fake_llm_client = types.ModuleType("lib.llm_client")
+    fake_llm_client.LLMClient = object
+    sys.modules["lib.llm_client"] = fake_llm_client
+
+    fake_model_factory = types.ModuleType("steps.common.llm_model_factory")
+    fake_model_factory.build_llm_models = lambda *args, **kwargs: {}
+    sys.modules["steps.common.llm_model_factory"] = fake_model_factory
+
     routes_pkg = types.ModuleType("api.routes")
-    for name in ["search", "scenes", "timeline", "media", "system", "run_summary", "run_index", "ingest"]:
+    for name in ["search", "scenes", "timeline", "media", "system", "run_summary", "run_index", "ingest", "runtime"]:
         mod = types.ModuleType(f"api.routes.{name}")
         mod.router = APIRouter()
         setattr(routes_pkg, name, mod)
@@ -48,6 +52,18 @@ def _load_api_main():
 
     module_path = repo_root / "api" / "main.py"
     spec = importlib.util.spec_from_file_location("tests.api_main_truth", module_path)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _load_runtime_route():
+    repo_root = Path(__file__).resolve().parents[2]
+    _install_test_stubs(repo_root)
+
+    module_path = repo_root / "api" / "routes" / "runtime.py"
+    spec = importlib.util.spec_from_file_location("tests.runtime_route_truth", module_path)
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -64,16 +80,16 @@ class _Response:
 
 
 def test_collect_engine_details_reports_qdrant_as_vector_db(monkeypatch) -> None:
-    api_main = _load_api_main()
+    runtime_route = _load_runtime_route()
 
     def _fake_get(url: str, timeout: int = 2):
         if url == "http://localhost:6333/collections":
             return _Response(200, {"result": {"collections": [{"name": "goodq_text"}]}})
         raise RuntimeError(f"unexpected request: {url}")
 
-    monkeypatch.setattr(api_main.requests, "get", _fake_get)
+    monkeypatch.setattr(runtime_route.requests, "get", _fake_get)
 
-    engines = api_main._collect_engine_details()
+    engines = runtime_route._collect_engine_details()
 
     assert engines["vector_db"]["name"] == "Vector Database"
     assert engines["vector_db"]["status"] == "ready"
@@ -82,7 +98,7 @@ def test_collect_engine_details_reports_qdrant_as_vector_db(monkeypatch) -> None
 
 
 def test_queue_counts_supported_ingest_files_not_video_only(tmp_path: Path) -> None:
-    api_main = _load_api_main()
+    runtime_route = _load_runtime_route()
     import_inbox = tmp_path / "import_inbox"
     processing = tmp_path / "processing"
     processed = tmp_path / "processed"
@@ -93,10 +109,10 @@ def test_queue_counts_supported_ingest_files_not_video_only(tmp_path: Path) -> N
     (import_inbox / "sample.wav").write_bytes(b"audio")
     (import_inbox / "ignore.bin").write_bytes(b"ignored")
 
-    api_main._IMPORT_INBOX = import_inbox
-    api_main._PROCESSING_PATH = processing
+    runtime_route._IMPORT_INBOX = import_inbox
+    runtime_route._PROCESSING_PATH = processing
 
-    queue = api_main.get_queue()
+    queue = runtime_route.get_queue()
 
     assert queue["inbox"]["count"] == 1
     assert queue["inbox"]["files"][0]["name"] == "sample.wav"

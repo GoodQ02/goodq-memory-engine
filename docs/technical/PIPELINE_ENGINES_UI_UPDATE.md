@@ -1,3 +1,7 @@
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: HISTORICAL_REFERENCE -->
+<!-- DOC_LAST_VERIFIED: 2026-04-22 -->
+
 # Pipeline Engines UI Update - Complete
 
 > Historical implementation report. The older `GET /api/pipeline-engines` compatibility endpoint described below is retired from the active supported API surface. Current engine/runtime truth lives at `GET /api/engines`, `GET /api/status`, and `/openapi.json`.

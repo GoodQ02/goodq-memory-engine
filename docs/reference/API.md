@@ -22,6 +22,9 @@ This is the current API reference for the supported local GoodQ4All runtime.
 
 Primary status and runtime summary endpoints defined in the active API surface:
 
+- `api/routes/runtime.py` is the read-only aggregation surface for runtime state.
+- It exists to answer "what is happening right now?" without turning into a control, mutation, or execution plane.
+
 - `GET /api/status`
 - `GET /api/health/summary`
 - `GET /api/engines`
@@ -43,6 +46,13 @@ Router-backed endpoint families mounted into the same process:
 - `/api/run-summary`
 - `/api/videos/{video_id}/scenes`
 
+## Discovery Surfaces
+
+- `GET /` is a minimal process-health and discovery pointer.
+- `GET /api` is a curated human index, not a canonical API inventory.
+- Keep `/api` intentionally incomplete so it stays useful as a front desk rather than drifting into a second contract surface.
+- Use `/docs` and `/openapi.json` for the authoritative live inventory of supported endpoints.
+
 ## Retired Legacy Surfaces
 
 The active line no longer exposes the older compatibility shell that previously lived in `api/main.py`.
@@ -51,8 +61,6 @@ The active line no longer exposes the older compatibility shell that previously 
 - Removed legacy scene and graph mirrors: `/api/scenes`, `/api/knowledge_graph`, `/api/scene/{scene_id}`
 - Removed legacy analytics placeholders: `/api/analytics/*`
 - Removed legacy operator/debug stubs: `/api/command-center`, `/api/processes`, `/api/progress`, `/api/processing/stats`, `/api/logs/watchdog`, `/api/test-audio`, `/api/chat/control-agent`
-
-Use `/docs` and `/openapi.json` for the authoritative live inventory of supported endpoints.
 
 ## Active Search and Scene Retrieval Notes
 

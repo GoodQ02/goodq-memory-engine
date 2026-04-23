@@ -150,6 +150,19 @@ def test_api_root_only_advertises_truthful_supported_surfaces() -> None:
     ]
 
 
+def test_api_root_is_curated_human_index_not_full_inventory() -> None:
+    api_main = _load_api_main()
+    client = TestClient(api_main.app)
+
+    result = client.get("/api").json()
+
+    assert "/docs" in result["endpoints"]
+    assert "/openapi.json" in result["endpoints"]
+    assert "/api/health/summary" not in result["endpoints"]
+    assert "/api/read/envelope" not in result["endpoints"]
+    assert "/api/gpu/stats" not in result["endpoints"]
+
+
 def test_main_delegates_runtime_summary_endpoints_to_router_module() -> None:
     repo_root = Path(__file__).resolve().parents[2]
     source = (repo_root / "api" / "main.py").read_text(encoding="utf-8")
@@ -183,3 +196,23 @@ def test_main_delegates_root_discovery_endpoints_to_meta_router_module() -> None
     assert "app.include_router(meta.router)" in source
     assert '@app.get("/")' not in source
     assert '@app.get("/api")' not in source
+
+
+def test_runtime_router_stays_read_only_aggregation_surface() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    source = (repo_root / "api" / "routes" / "runtime.py").read_text(encoding="utf-8")
+
+    for marker in ('@router.post("', '@router.put("', '@router.delete("', '@router.patch("'):
+        assert marker not in source
+
+
+def test_runtime_and_meta_roles_are_stated_explicitly_in_source_and_docs() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    runtime_source = (repo_root / "api" / "routes" / "runtime.py").read_text(encoding="utf-8")
+    meta_source = (repo_root / "api" / "routes" / "meta.py").read_text(encoding="utf-8")
+    api_reference = (repo_root / "docs" / "reference" / "API.md").read_text(encoding="utf-8")
+
+    assert "read-only aggregation surface" in runtime_source
+    assert "curated human index" in meta_source
+    assert "read-only aggregation surface" in api_reference
+    assert "curated human index" in api_reference

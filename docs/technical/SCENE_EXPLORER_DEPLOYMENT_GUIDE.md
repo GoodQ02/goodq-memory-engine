@@ -1,3 +1,7 @@
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: HISTORICAL_REFERENCE -->
+<!-- DOC_LAST_VERIFIED: 2026-04-22 -->
+
 # Scene Explorer - Historical Deployment Note
 > Historical note — this document originally captured the 2025 Scene Explorer rollout. Scene data endpoints still exist, but the implementation details here are no longer canonical. Old references to `api_server.py` and legacy launcher batches are preserved only as historical context.
 

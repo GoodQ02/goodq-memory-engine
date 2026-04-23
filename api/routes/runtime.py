@@ -1,3 +1,10 @@
+"""read-only aggregation surface for current runtime state.
+
+This router exists to answer "what is happening right now?" across a long-running,
+stateful local system. It must never grow into a control, mutation, or execution
+surface.
+"""
+
 from __future__ import annotations
 
 import json

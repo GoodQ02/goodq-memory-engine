@@ -1,3 +1,9 @@
+"""Meta discovery routes for the assembled API process.
+
+This router provides a curated human index, not a canonical API inventory.
+Machines should use /docs and /openapi.json for the full contract surface.
+"""
+
 from __future__ import annotations
 
 from typing import Any, Dict

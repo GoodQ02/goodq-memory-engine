@@ -1,3 +1,7 @@
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: HISTORICAL_REFERENCE -->
+<!-- DOC_LAST_VERIFIED: 2026-04-22 -->
+
 # Pipeline Engines UI - Historical Implementation Note
 > Historical note — this document originally captured the 2025 Pipeline Engines UI rollout. The old compatibility endpoint described here is no longer part of the active supported API surface. References to `api_server.py` and `GET /api/pipeline-engines` are preserved only as historical context.
 

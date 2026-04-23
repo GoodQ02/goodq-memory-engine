@@ -1,3 +1,7 @@
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: HISTORICAL_REFERENCE -->
+<!-- DOC_LAST_VERIFIED: 2026-04-22 -->
+
 # GPU Monitoring & Process Control - COMPLETE ✅
 > Historical implementation report — documents a 2025 process-manager and `api_server.py` integration that is no longer part of the canonical supported runtime. References to `process_manager.py`, `api_server.py`, and `GET /api/processes` are preserved for context only. The active line now uses `GET /api/gpu/stats`, `GET /api/engines`, and watchdog/runtime artifacts for truthful observability.
 

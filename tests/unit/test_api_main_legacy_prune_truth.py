@@ -47,66 +47,77 @@ def _load_api_main():
     sys.modules["api.routes"] = routes_pkg
 
     module_path = repo_root / "api" / "main.py"
-    spec = importlib.util.spec_from_file_location("tests.api_main_truth", module_path)
+    spec = importlib.util.spec_from_file_location("tests.api_main_legacy_prune_truth", module_path)
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
 
 
-class _Response:
-    def __init__(self, status_code: int, payload: dict):
-        self.status_code = status_code
-        self._payload = payload
-
-    def json(self):
-        return self._payload
-
-
-def test_collect_engine_details_reports_qdrant_as_vector_db(monkeypatch) -> None:
+def test_main_api_prunes_legacy_compatibility_endpoints() -> None:
     api_main = _load_api_main()
 
-    def _fake_get(url: str, timeout: int = 2):
-        if url == "http://localhost:6333/collections":
-            return _Response(200, {"result": {"collections": [{"name": "goodq_text"}]}})
-        raise RuntimeError(f"unexpected request: {url}")
+    paths = {route.path for route in api_main.app.routes}
 
-    monkeypatch.setattr(api_main.requests, "get", _fake_get)
+    retired_paths = {
+        "/search",
+        "/vector_search",
+        "/api/scenes",
+        "/api/knowledge_graph",
+        "/api/recent-activity",
+        "/api/entities",
+        "/api/entities/{entity_id}/relationships",
+        "/api/analytics/knowledge-graph",
+        "/api/analytics/timeline",
+        "/api/analytics/emotions",
+        "/api/analytics/embeddings",
+        "/api/analytics/{tab_name}",
+        "/api/pipeline-engines",
+        "/api/command-center",
+        "/api/processes",
+        "/api/processes/{name}/{action}",
+        "/api/test-audio",
+        "/api/logs/watchdog",
+        "/api/processing/stats",
+        "/api/progress",
+        "/api/scene/{scene_id}",
+        "/api/chat/control-agent",
+    }
 
-    engines = api_main._collect_engine_details()
+    assert retired_paths.isdisjoint(paths)
 
-    assert engines["vector_db"]["name"] == "Vector Database"
-    assert engines["vector_db"]["status"] == "ready"
-    assert "Qdrant" in engines["vector_db"]["description"]
-    assert "ChromaDB" not in engines["vector_db"]["description"]
+    surviving_paths = {
+        "/",
+        "/api",
+        "/api/status",
+        "/api/health/summary",
+        "/api/engines",
+        "/api/queue",
+        "/api/gpu/stats",
+        "/api/wsl2-status",
+        "/api/models",
+        "/api/runs/latest/preview",
+        "/api/memory/stats",
+        "/api/read/envelope",
+    }
 
-
-def test_queue_counts_supported_ingest_files_not_video_only(tmp_path: Path) -> None:
-    api_main = _load_api_main()
-    import_inbox = tmp_path / "import_inbox"
-    processing = tmp_path / "processing"
-    processed = tmp_path / "processed"
-    failed = tmp_path / "failed"
-    for path in (import_inbox, processing, processed, failed):
-        path.mkdir(parents=True, exist_ok=True)
-
-    (import_inbox / "sample.wav").write_bytes(b"audio")
-    (import_inbox / "ignore.bin").write_bytes(b"ignored")
-
-    api_main._IMPORT_INBOX = import_inbox
-    api_main._PROCESSING_PATH = processing
-
-    queue = api_main.get_queue()
-
-    assert queue["inbox"]["count"] == 1
-    assert queue["inbox"]["files"][0]["name"] == "sample.wav"
+    assert surviving_paths.issubset(paths)
 
 
-def test_api_root_points_to_canonical_search_surfaces() -> None:
+def test_api_root_only_advertises_truthful_supported_surfaces() -> None:
     api_main = _load_api_main()
 
     result = api_main.api_root()
 
     assert result["status"] == "ok"
-    assert "/api/search/multimodal" in result["endpoints"]
-    assert "/search?q=..." not in result["endpoints"]
+    assert result["endpoints"] == [
+        "/docs",
+        "/openapi.json",
+        "/api/status",
+        "/api/engines",
+        "/api/queue",
+        "/api/search/multimodal",
+        "/api/ingest/submit",
+        "/api/videos/{video_id}/scenes",
+        "/api/system/status",
+    ]

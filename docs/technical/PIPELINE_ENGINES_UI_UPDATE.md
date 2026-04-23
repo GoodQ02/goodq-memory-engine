@@ -1,10 +1,12 @@
 # Pipeline Engines UI Update - Complete
 
+> Historical implementation report. The older `GET /api/pipeline-engines` compatibility endpoint described below is retired from the active supported API surface. Current engine/runtime truth lives at `GET /api/engines`, `GET /api/status`, and `/openapi.json`.
+
 ## Date: 2025-11-09
 
 ## What Was Done
 
-### 1. New API Endpoint: `/api/pipeline-engines`
+### 1. Historical API Endpoint: `/api/pipeline-engines`
 - Created comprehensive endpoint that tracks all 22 pipeline processing engines
 - Categorizes engines into: Input, Video, Vision, Audio, NLP, LLM, Integration
 - Shows real-time status (active/idle) for each engine
@@ -88,7 +90,7 @@
 ## Testing
 
 ```bash
-# Test the endpoint
+# Historical endpoint test
 curl http://localhost:30000/api/pipeline-engines
 
 # Expected response includes:

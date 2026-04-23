@@ -7,7 +7,7 @@
 ## Canonical Analytics Docs
 
 - `docs/ANALYTICS_QUICK_REFERENCE.md` – Canonical quick reference for analytics commands, workflows, and configuration.
-- `docs/ANALYTICS_PAGES_COMPLETE.md` – Implementation summary for the web analytics pages and `/api/analytics/*` endpoints.
+- `docs/ANALYTICS_PAGES_COMPLETE.md` – Historical implementation summary for the web analytics pages and the retired `/api/analytics/*` endpoints.
 - `docs/PHASE7_ANALYTICS_COMPLETE.md` – Phase 7 completion report focused on analytics.
 
 ---
@@ -37,8 +37,7 @@ See `docs/ANALYTICS_QUICK_REFERENCE.md` for usage examples and parameters.
 
 - Start with:
   - `docs/ANALYTICS_QUICK_REFERENCE.md` for commands, scripts, and basic workflows.
-  - `docs/ANALYTICS_PAGES_COMPLETE.md` to understand how the analytics pages and APIs are wired into the web UI and backend.
+  - `docs/ANALYTICS_PAGES_COMPLETE.md` to understand the historical analytics page rollout and retired HTTP surfaces.
 - Use:
   - `scripts/analytics_dashboard.py` and `scripts/analytics_query.py` for day-to-day analytics work.
   - Phase and audit docs (Phase 7 and UI audits) when validating or extending analytics features.
-

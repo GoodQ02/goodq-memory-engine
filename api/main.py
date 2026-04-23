@@ -10,17 +10,11 @@ import threading
 import requests
 from collections import deque
 from urllib.parse import urlparse
-import glob
-import glob
 
-from fastapi import FastAPI, Query, Body, HTTPException
+from fastapi import FastAPI, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from typing import Optional, List, Any, Dict
-from pydantic import BaseModel
-from lib.llm_client import LLMClient
-from steps.common.llm_model_factory import build_llm_models
 from goodq_version import GOODQ_VERSION
 
 from steps.common.config_loader import load_configs
@@ -495,29 +489,6 @@ def _collect_wsl_status() -> Dict[str, Any]:
     return status
 
 
-def _build_health_logs(health: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """Compose lightweight log lines for the command-center view."""
-    entries = []
-    now = datetime.now().isoformat()
-    entries.append({"level": "info", "timestamp": now, "message": "Command center operational"})
-    entries.append({"level": "success" if health.get("api") else "error", "message": f"API: {'Healthy' if health.get('api') else 'Degraded'}"})
-    entries.append({"level": "success" if health.get("database") else "error", "message": f"Database: {'Healthy' if health.get('database') else 'Not Found'}"})
-    entries.append({"level": "success" if health.get("wsl") else "warning", "message": f"WSL/GPU: {'Healthy' if health.get('wsl') else 'Unavailable'}"})
-    entries.append({"level": "success" if health.get("pipeline") else "warning", "message": f"Pipeline: {'Active' if health.get('pipeline') else 'Standby'}"})
-    return entries
-
-
-@app.get("/search")
-def search(q: str = Query(..., description="Search text index"), topk: int = Query(50, ge=1, le=200)) -> Dict[str, Any]:
-    """Legacy search entrypoint kept only as a pointer to the canonical search API."""
-    return {
-        "status": "disabled",
-        "message": "Deprecated legacy search surface; use /api/search/* for canonical Qdrant-backed retrieval.",
-        "query": q,
-        "results": []
-    }
-
-
 @app.get("/")
 def root() -> Dict[str, Any]:
     """Root endpoint (UI is not served from this API process)."""
@@ -525,7 +496,20 @@ def root() -> Dict[str, Any]:
 
 @app.get("/api")
 def api_root() -> Dict[str, Any]:
-    return {"status": "ok", "endpoints": ["/search?q=...", "/api/status", "/api/engines", "/api/scenes", "/api/knowledge_graph"]}
+    return {
+        "status": "ok",
+        "endpoints": [
+            "/docs",
+            "/openapi.json",
+            "/api/status",
+            "/api/engines",
+            "/api/queue",
+            "/api/search/multimodal",
+            "/api/ingest/submit",
+            "/api/videos/{video_id}/scenes",
+            "/api/system/status",
+        ],
+    }
 
 
 @app.get("/api/status")
@@ -691,106 +675,6 @@ def get_engines() -> Dict[str, Any]:
     }
 
 
-@app.get("/vector_search")
-def vector_search(
-    q: str = Query(..., description="Search text"),
-    topk: int = Query(20, ge=1, le=200),
-    modality: Optional[str] = Query(None, description="Filter by modality"),
-    event: Optional[str] = Query(None, description="Filter by music/event label"),
-    tag: Optional[str] = Query(None, description="Filter by tag/entity"),
-) -> Dict[str, Any]:
-    return {
-        "status": "disabled",
-        "reason": "vector_search is deprecated; use /api/search/* for canonical Qdrant-backed retrieval",
-        "matches": [],
-    }
-
-
-@app.get("/api/scenes")
-def get_scenes() -> Dict[str, Any]:
-    """Get detected scenes from video processing"""
-    import json
-    from pathlib import Path
-    
-    # Look for scenes in data/output
-    scenes_dir = _DATA_ROOT / "output"
-    all_scenes = []
-    
-    if scenes_dir.exists():
-        for scene_file in scenes_dir.glob("**/scenes.json"):
-            try:
-                with open(scene_file, 'r') as f:
-                    data = json.load(f)
-                    scenes = data.get("scenes", [])
-                    for scene in scenes:
-                        scene["source_file"] = str(scene_file.parent.name)
-                        all_scenes.append(scene)
-            except Exception as e:
-                logger.debug(f"Failed to read scene file {scene_file}: {e}")
-                continue
-    
-    return {"scenes": all_scenes, "total": len(all_scenes)}
-
-
-@app.get("/api/knowledge_graph")
-def get_knowledge_graph() -> Dict[str, Any]:
-    """Get knowledge graph data"""
-    import json
-    from pathlib import Path
-    
-    # Look for entity data
-    # Primary KG database (SQLite)
-    kg_db = _KG_DB_PATH
-    # Legacy JSON export (fallback)
-    kg_file = _DATA_ROOT / "output" / "knowledge_graph.json"
-    
-    if kg_file.exists():
-        try:
-            with open(kg_file, 'r') as f:
-                data = json.load(f)
-                # Normalize to the expected payload shape
-                if "network" in data:
-                    network = data.get("network") or {}
-                    nodes = network.get("nodes") or []
-                    edges = network.get("edges") or network.get("links") or []
-                else:
-                    nodes = data.get("nodes") or []
-                    edges = data.get("edges") or data.get("links") or []
-                return {
-                    "network": {
-                        "nodes": nodes,
-                        "edges": edges,
-                    },
-                    "overview": {
-                        "total_entities": len(nodes),
-                        "total_relationships": len(edges),
-                        "total_media": len(data.get("media", [])) if isinstance(data.get("media"), list) else 0,
-                        "total_events": len(data.get("events", [])) if isinstance(data.get("events"), list) else 0,
-                    },
-                }
-        except:
-            pass
-    
-    # Return empty graph structure (keeps UI happy)
-    return {
-        "network": {
-            "nodes": [],
-            "edges": []
-        },
-        "overview": {
-            "total_entities": 0,
-            "total_relationships": 0,
-            "total_media": 0,
-            "total_events": 0
-        }
-    }
-
-
-class ChatRequest(BaseModel):
-    message: str
-    context: Optional[str] = None
-
-
 @app.get("/api/queue")
 def get_queue() -> Dict[str, Any]:
     """Get current processing queue"""
@@ -842,83 +726,6 @@ def get_queue() -> Dict[str, Any]:
     return queue_data
 
 
-@app.get("/api/recent-activity")
-def get_recent_activity(limit: int = Query(5, ge=1, le=100)) -> Dict[str, Any]:
-    """Get recent processing activity"""
-    return {
-        "activities": [],
-        "limit": limit
-    }
-
-
-@app.get("/api/entities")
-def get_entities(limit: int = Query(500, ge=1, le=1000)) -> Dict[str, Any]:
-    """Get detected entities"""
-    return {
-        "entities": [],
-        "total": 0,
-        "limit": limit
-    }
-
-
-@app.get("/api/entities/{entity_id}/relationships")
-def get_entity_relationships(entity_id: str) -> Dict[str, Any]:
-    """Get relationships for a specific entity"""
-    return {
-        "entity_id": entity_id,
-        "relationships": []
-    }
-
-
-@app.get("/api/analytics/knowledge-graph")
-def get_analytics_knowledge_graph() -> Dict[str, Any]:
-    """Get knowledge graph analytics"""
-    return get_knowledge_graph()
-
-
-@app.get("/api/analytics/timeline")
-def get_analytics_timeline() -> Dict[str, Any]:
-    """Get timeline analytics"""
-    return {
-        "timeline": [],
-        "start_date": None,
-        "end_date": None
-    }
-
-
-@app.get("/api/analytics/emotions")
-def get_analytics_emotions() -> Dict[str, Any]:
-    """Get emotion analytics"""
-    return {
-        "emotions": [],
-        "distribution": {}
-    }
-
-
-@app.get("/api/analytics/embeddings")
-def get_analytics_embeddings() -> Dict[str, Any]:
-    """Get embedding analytics"""
-    return {
-        "embeddings": [],
-        "dimensions": 0
-    }
-
-
-@app.get("/api/analytics/{tab_name}")
-def get_analytics_tab(tab_name: str) -> Dict[str, Any]:
-    """Get analytics for specific tab"""
-    return {
-        "tab": tab_name,
-        "data": []
-    }
-
-
-@app.get("/api/pipeline-engines")
-def get_pipeline_engines() -> Dict[str, Any]:
-    """Get pipeline engines status (alias for /api/engines)"""
-    return get_engines()
-
-
 @app.get("/api/gpu/stats")
 def get_gpu_stats() -> Dict[str, Any]:
     """Get GPU statistics"""
@@ -960,191 +767,6 @@ def get_wsl2_status() -> Dict[str, Any]:
     return _collect_wsl_status()
 
 
-@app.get("/api/command-center")
-def get_command_center() -> Dict[str, Any]:
-    """Command center status - consolidates all system info."""
-    db_healthy = _DB_PATH.exists()
-    processing_stats = get_progress()
-    model_stats = get_models()
-    wsl_status = _collect_wsl_status()
-
-    # GPU snapshot (keep consistent with /api/gpu/stats)
-    gpu_stats = get_gpu_stats()
-
-    pipeline_healthy = processing_stats.get("status") not in (None, "error", "disabled")
-    health = {
-        "api": True,
-        "database": db_healthy,
-        "wsl": wsl_status.get("available", False),
-        "pipeline": pipeline_healthy,
-    }
-
-    return {
-        "status": "active",
-        "health": health,
-        "gpu": gpu_stats,
-        "processing": processing_stats,
-        "models": model_stats,
-        "wsl": wsl_status,
-        "timestamp": datetime.now().isoformat(),
-        "logs": _build_health_logs(health),
-    }
-
-
-@app.get("/api/processes")
-def get_processes() -> Dict[str, Any]:
-    """Get running processes with GPU status"""
-    import subprocess
-    
-    # Get GPU status
-    gpu_status = {"available": False, "gpus": []}
-    try:
-        result = subprocess.run(
-            ["nvidia-smi", "--query-gpu=index,name,utilization.gpu,memory.used,memory.total,temperature.gpu,power.draw", "--format=csv,noheader,nounits"],
-            capture_output=True,
-            text=True,
-            timeout=2
-        )
-        if result.returncode == 0:
-            gpus = []
-            for line in result.stdout.strip().split('\n'):
-                if line.strip():
-                    parts = [p.strip() for p in line.split(',')]
-                    if len(parts) >= 5:
-                        gpu_id, name, util, mem_used, mem_total = parts[:5]
-                        temp = parts[5] if len(parts) > 5 else None
-                        power = parts[6] if len(parts) > 6 else None
-                        
-                        mem_used_gb = round(int(mem_used) / 1024, 1)
-                        mem_total_gb = round(int(mem_total) / 1024, 1)
-                        mem_percent = round((int(mem_used) / int(mem_total)) * 100, 1)
-                        
-                        gpus.append({
-                            "id": int(gpu_id),
-                            "name": name,
-                            "gpu_utilization": int(util),
-                            "memory_used_gb": mem_used_gb,
-                            "memory_total_gb": mem_total_gb,
-                            "memory_percent": mem_percent,
-                            "temperature_c": int(temp) if temp and temp.isdigit() else None,
-                            "power_watts": int(float(power)) if power and power.replace('.','').isdigit() else None,
-                            "process_count": 0
-                        })
-            
-            if gpus:
-                gpu_status = {"available": True, "gpus": gpus}
-    except Exception as e:
-        logger.debug(f"GPU status unavailable: {e}")
-    
-    return {
-        "processes": [],
-        "gpu_status": gpu_status
-    }
-
-
-@app.post("/api/processes/{name}/{action}")
-def control_process(name: str, action: str) -> Dict[str, Any]:
-    """Control a process (start/stop/restart)"""
-    return {
-        "process": name,
-        "action": action,
-        "success": False,
-        "message": "disabled"
-    }
-
-
-@app.post("/api/test-audio")
-def test_audio(request: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
-    """Test audio processing via WSL2"""
-    return {"success": False, "message": "disabled"}
-
-    try:
-        import subprocess
-        config_model = None
-        diarization_model = None
-        # Try native Windows path (WSL mount), then WSL cat fallback
-        try:
-            workspace_parts = [part for part in _WSL_WORKSPACE.strip("/").split("/") if part]
-            cfg_path = Path(f"\\\\wsl$\\{_WSL_DISTRO}\\" + "\\".join(workspace_parts) + "\\config.json")
-            if not cfg_path.exists():
-                cfg_path = Path(f"{_WSL_WORKSPACE}/config.json")
-            if cfg_path.exists():
-                cfg = json.loads(cfg_path.read_text())
-            else:
-                cfg = None
-            if cfg is None:
-                # Fallback: fetch via wsl cat
-                cfg_proc = subprocess.run(
-                    ["wsl", "-d", _WSL_DISTRO, "--", "cat", f"{_WSL_WORKSPACE}/config.json"],
-                    capture_output=True,
-                    text=True,
-                    timeout=3,
-                )
-                if cfg_proc.returncode == 0 and cfg_proc.stdout:
-                    cfg = json.loads(cfg_proc.stdout)
-            if cfg:
-                config_model = cfg.get("models", {}).get("whisper")
-                diarization_model = cfg.get("models", {}).get("diarization")
-        except Exception as cfg_err:
-            logger.warning(f"Audio test config read error: {cfg_err}")
-        
-        # Check if audio service is running
-        result = subprocess.run(
-            ["wsl", "-d", _WSL_DISTRO, "--", "systemctl", "is-active", "goodq-audio.service"],
-            capture_output=True,
-            text=True,
-            timeout=5
-        )
-        
-        wsl_available = result.returncode == 0
-        cuda_available = False
-        try:
-            cuda_check = subprocess.run(
-                ["wsl", "-d", _WSL_DISTRO, "--", "bash", "-lc", "nvidia-smi --query-gpu=name --format=csv,noheader,nounits | head -n1"],
-                capture_output=True,
-                text=True,
-                timeout=5
-            )
-            cuda_available = cuda_check.returncode == 0 and bool(cuda_check.stdout.strip())
-        except Exception as cuda_err:
-            logger.warning(f"Audio CUDA check failed: {cuda_err}")
-        
-        # Check if we can access the audio processing scripts
-        check_scripts = subprocess.run(
-            ["wsl", "-d", _WSL_DISTRO, "--", "test", "-d", f"{_WSL_WORKSPACE}/scripts"],
-            capture_output=True,
-            timeout=5
-        )
-        
-        scripts_available = check_scripts.returncode == 0
-        
-        return {
-            "success": wsl_available and scripts_available,
-            "model": config_model or "medium",
-            "cuda": cuda_available,
-            "diarization": bool(diarization_model),
-            "message": "Audio processing ready" if (wsl_available and scripts_available) else "WSL2 or audio scripts not available",
-            "details": {
-                "wsl2_active": wsl_available,
-                "audio_scripts": scripts_available,
-                "transcription_ready": wsl_available and scripts_available,
-                "diarization_ready": wsl_available and scripts_available and bool(diarization_model)
-            }
-        }
-    except subprocess.TimeoutExpired:
-        return {
-            "success": False,
-            "message": "WSL2 timeout - service may be slow to respond"
-        }
-    except Exception as e:
-        return {
-            "success": False,
-            "message": f"Audio test failed: {str(e)}"
-        }
-
-
-
-
 @app.get("/api/models")
 def get_models() -> Dict[str, Any]:
     """Get LLM model health status - proxies health API"""
@@ -1168,81 +790,6 @@ def get_models() -> Dict[str, Any]:
         "ollama_healthy": 0,
         "models": []
     }
-
-
-def _local_progress_stats() -> Dict[str, Any]:
-    """Best-effort processing stats based on local progress.json and filesystem."""
-    progress_file = _LOG_DIR / "progress.json"
-    processing_dir = _PROCESSING_PATH
-    processed_dir = _PROCESSING_PATH.parent / "processed"
-
-    progress = {}
-    try:
-        if progress_file.exists():
-            progress = json.loads(progress_file.read_text(encoding="utf-8"))
-    except Exception as e:
-        logger.debug(f"progress.json read failed: {e}")
-
-    details = progress.get("details", {}) if isinstance(progress, dict) else {}
-    raw_details_str = ""
-    if isinstance(details, dict):
-        raw_details_str = details.get("details") or details.get("status") or ""
-    elif isinstance(details, str):
-        raw_details_str = details
-
-    def _count_files(p: Path) -> int:
-        try:
-            return len([f for f in p.iterdir() if f.is_file()])
-        except Exception:
-            return 0
-
-    current_name = progress.get("current_file") if isinstance(progress, dict) else None
-    status = progress.get("status") if isinstance(progress, dict) else None
-    if not status:
-        status = "active" if _count_files(processing_dir) > 0 else "idle"
-
-    stats = {
-        "status": status,
-        "current_video": {
-            "name": current_name,
-            "size_gb": details.get("video_size_gb", 0),
-            "progress_percent": progress.get("progress_percent", 0) if isinstance(progress, dict) else 0,
-            "current_step": progress.get("current_step", "Idle") if isinstance(progress, dict) else "Idle",
-            "current_step_index": progress.get("current_step_index"),
-            "total_steps": progress.get("total_steps"),
-            "details": raw_details_str,
-        },
-        "scenes": {
-            "detected": details.get("scenes_detected", 0) or details.get("scenes_found", 0) or 0,
-            "frames_extracted": details.get("frames_extracted", 0),
-            "audio_clips": details.get("audio_clips", 0),
-        },
-        "processing_rate": {
-            "scenes_per_minute": 0,
-            "seconds_per_scene": 0,
-        },
-        "totals": {
-            "videos_completed": _count_files(processed_dir),
-            "videos_active": _count_files(processing_dir),
-        },
-        "timestamps": {
-            "started_at": progress.get("started_at") if isinstance(progress, dict) else None,
-            "updated_at": progress.get("updated_at") if isinstance(progress, dict) else datetime.utcnow().isoformat(),
-        },
-        "raw_progress": progress if isinstance(progress, dict) else {},
-    }
-    # Enrich with latest run snapshot from logs if available
-    latest = _latest_run_snapshot()
-    if latest.get("available"):
-        if not stats["current_video"]["name"]:
-            stats["current_video"]["name"] = latest.get("video")
-        if stats["scenes"]["detected"] == 0 and latest.get("scenes", 0) > 0:
-            stats["scenes"]["detected"] = latest.get("scenes", 0)
-            stats["scenes"]["frames_extracted"] = latest.get("frames", 0)
-            stats["scenes"]["audio_clips"] = latest.get("audio", 0)
-        stats["latest_run"] = latest
-    stats["log_tail"] = _tail_log(Path("logs/watchdog.log"))
-    return stats
 
 
 def _latest_run_snapshot(limit: int = 12) -> Dict[str, Any]:
@@ -1378,131 +925,6 @@ def get_memory_stats() -> Dict[str, Any]:
         "latest_run": _latest_run_preview(limit=12),
     }
 
-
-@app.get("/api/logs/watchdog")
-def get_watchdog_logs(lines: int = 200) -> Dict[str, Any]:
-    """Tail the watchdog log for the command center UI."""
-    return {"available": False, "lines": [], "disabled": True}
-
-    log_path = _LOG_DIR / "watchdog.log"
-    result: Dict[str, Any] = {
-        "available": log_path.exists(),
-        "path": str(log_path),
-        "lines": []
-    }
-    if not log_path.exists():
-        return result
-    try:
-        dq = deque(maxlen=lines)
-        with log_path.open("r", encoding="utf-8", errors="ignore") as f:
-            for line in f:
-                dq.append(line.rstrip("\n"))
-        result["lines"] = list(dq)
-    except Exception as e:
-        result["error"] = str(e)
-    return result
-
-
-@app.get("/api/processing/stats")
-@app.get("/api/progress")
-def get_progress() -> Dict[str, Any]:
-    """Get current processing progress - proxies processing stats API or returns fallback"""
-    return {"status": "disabled"}
-
-    try:
-        import requests
-        resp = requests.get("http://localhost:5001/api/processing/stats", timeout=2)
-        if resp.status_code == 200:
-            data = resp.json()
-            data["latest_run"] = _latest_run_snapshot()
-            data["log_tail"] = _tail_log(Path("logs/watchdog.log"))
-            return data
-    except Exception as e:
-        logger.debug(f"Processing stats API unavailable: {e}")
-    
-    # Fallback - return local snapshot based on progress.json and filesystem
-    stats = _local_progress_stats()
-    stats["latest_run"] = _latest_run_snapshot()
-    stats["log_tail"] = _tail_log(Path("logs/watchdog.log"))
-    return stats
-
-
-@app.get("/api/pipeline-engines")
-def get_pipeline_engines() -> Dict[str, Any]:
-    """Alias for /api/engines for compatibility"""
-    return get_engines()
-
-
-@app.get("/api/scene/{scene_id}")
-def get_scene(scene_id: str) -> Dict[str, Any]:
-    """Get specific scene details"""
-    return {
-        "scene_id": scene_id,
-        "details": {}
-    }
-
-
-@app.post("/api/chat/control-agent")
-def chat_with_control_agent(request: ChatRequest) -> Dict[str, Any]:
-    """Chat with the Control Agent for pipeline diagnostics and help"""
-    return {"success": False, "error": "disabled", "response": "disabled"}
-
-    try:
-        # Initialize LLM client
-        llm = LLMClient(
-            models=build_llm_models(_CFG),
-            health_check_interval=60,
-            max_retries=3,
-            timeout=30,
-            cache_ttl=300,
-            enable_health_checks=False,
-        )
-        
-        # Build context-aware prompt
-        system_prompt = """You are the GoodQ4All Control Agent, an AI assistant that helps users:
-- Diagnose pipeline errors and failures
-- Recommend configuration changes
-- Explain system status and logs
-- Suggest optimization strategies
-- Answer questions about the video processing pipeline
-
-Be concise, technical, and actionable. Format responses with markdown."""
-        
-        # Add context if provided
-        user_message = request.message
-        if request.context:
-            user_message = f"Context: {request.context}\n\nQuestion: {request.message}"
-        
-        # Get response from LLM
-        result = llm.chat(
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_message}
-            ],
-            max_tokens=500,
-            temperature=0.7
-        )
-        
-        # Extract message from OpenAI-compatible response
-        message_content = result.get("choices", [{}])[0].get("message", {}).get("content", "No response generated")
-        
-        return {
-            "success": True,
-            "response": message_content,
-            "model": llm.get_active_model(),
-            "timestamp": __import__('datetime').datetime.now().isoformat()
-        }
-        
-    except Exception as e:
-        import traceback
-        error_detail = traceback.format_exc()
-        logger.error(f"Control agent chat error: {error_detail}")
-        return {
-            "success": False,
-            "error": str(e),
-            "response": "Control Agent is currently unavailable. Please check that vLLM or Ollama is running.",
-            "timestamp": __import__('datetime').datetime.now().isoformat()
-        }
 
 # Read-only wiring: serve a precomputed EpistemicReadEnvelope bundle without accepting arbitrary queries/commands.
 @app.get("/api/read/envelope")

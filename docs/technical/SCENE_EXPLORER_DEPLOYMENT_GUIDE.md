@@ -4,7 +4,10 @@
 ## Current Runtime Truth
 
 - The canonical API surface is launched via `python -m api.server`.
-- Scene listing is currently provided through `GET /api/scenes` in the canonical API.
+- Scene listing is currently provided through the router-backed per-video surface:
+  - `GET /api/videos/{video_id}/scenes`
+  - `GET /api/videos/{video_id}/scenes/{scene_id}`
+  - `GET /api/videos/{video_id}/scenes/{scene_id}/similar`
 - The old deployment narrative around restarting `api_server.py` and using legacy web-interface batch files is no longer current runtime guidance.
 
 ## Use Instead

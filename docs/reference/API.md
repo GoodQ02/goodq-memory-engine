@@ -20,15 +20,17 @@ This is the current API reference for the supported local GoodQ4All runtime.
 
 ## Canonical Endpoint Families
 
-Primary status and compatibility endpoints defined in the active API surface:
+Primary status and runtime summary endpoints defined in the active API surface:
 
 - `GET /api/status`
 - `GET /api/health/summary`
 - `GET /api/engines`
-- `GET /api/pipeline-engines`
-- `GET /api/command-center`
-- `GET /api/processes`
-- `GET /api/scenes`
+- `GET /api/queue`
+- `GET /api/gpu/stats`
+- `GET /api/wsl2-status`
+- `GET /api/runs/latest/preview`
+- `GET /api/memory/stats`
+- `GET /api/read/envelope`
 
 Router-backed endpoint families mounted into the same process:
 
@@ -40,6 +42,17 @@ Router-backed endpoint families mounted into the same process:
 - `/api/run-index`
 - `/api/run-summary`
 - `/api/videos/{video_id}/scenes`
+
+## Retired Legacy Surfaces
+
+The active line no longer exposes the older compatibility shell that previously lived in `api/main.py`.
+
+- Removed legacy search pointers: `/search`, `/vector_search`
+- Removed legacy scene and graph mirrors: `/api/scenes`, `/api/knowledge_graph`, `/api/scene/{scene_id}`
+- Removed legacy analytics placeholders: `/api/analytics/*`
+- Removed legacy operator/debug stubs: `/api/command-center`, `/api/processes`, `/api/progress`, `/api/processing/stats`, `/api/logs/watchdog`, `/api/test-audio`, `/api/chat/control-agent`
+
+Use `/docs` and `/openapi.json` for the authoritative live inventory of supported endpoints.
 
 ## Active Search and Scene Retrieval Notes
 

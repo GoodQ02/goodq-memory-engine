@@ -4,6 +4,8 @@
 **Duration:** Complete System Analysis  
 **Status:** ✅ **COMPLETE - ZERO GUESSWORK**
 
+> Historical audit snapshot. Older endpoint references in this report, including legacy scene-listing paths, should not be treated as the active API contract. For the current runtime surface, use `docs/reference/API.md` and `/openapi.json`.
+
 ---
 
 ## 📊 EXECUTIVE SUMMARY

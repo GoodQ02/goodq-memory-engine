@@ -1,6 +1,6 @@
 # Analytics Pages - Phase Complete ✓
 
-> Historical implementation summary for the analytics pages and `/api/analytics/*` endpoints as of Phase 7. The feature remains live, but the original rollout references here should not be treated as the canonical runtime surface. For current usage, see `docs/ANALYTICS_QUICK_REFERENCE.md`, `docs/ANALYTICS_INDEX.md`, and `api/main.py`.
+> Historical implementation summary for the analytics pages and `/api/analytics/*` endpoints as of Phase 7. The analytics capability remains live through scripts and reporting workflows, but the older `/api/analytics/*` HTTP endpoints are retired from the active runtime surface. For current usage, see `docs/ANALYTICS_QUICK_REFERENCE.md` and `docs/ANALYTICS_INDEX.md`.
 
 ## Summary
 Successfully wired in comprehensive analytics pages with **100% real data streams** - NO placeholders or mock data.

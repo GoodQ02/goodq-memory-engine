@@ -1,6 +1,21 @@
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: HISTORICAL_SNAPSHOT -->
+<!-- DOC_LAST_VERIFIED: 2026-04-23 -->
+
 # GoodQ4All GPU Pipeline Diagnostic Report
 **Date**: 2025-11-13 03:55 AM  
 **Status**: 🔴 CRITICAL ISSUES FOUND
+
+> STATUS: HISTORICAL (not active runtime truth)
+>
+> This document captures a 2025 GPU diagnostic snapshot from before the current
+> runtime hardening. It is preserved for historical context only.
+>
+> Current truth updates:
+> - `entity_refine` has been retired from the live scene-detection runtime.
+> - Native vision instability is now handled through bounded retries,
+>   diagnostics, and partial-scene error surfacing rather than this older
+>   remediation plan.
 
 ---
 

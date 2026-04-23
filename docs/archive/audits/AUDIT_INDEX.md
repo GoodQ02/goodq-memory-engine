@@ -41,7 +41,7 @@
 ## GPU/Performance-Focused Reports
 
 - `docs/GPU_CONFIGURATION_REPORT.md`
-- `docs/GPU_DIAGNOSTIC_REPORT.md`
+- `docs/archive/diagnostics/GPU_DIAGNOSTIC_REPORT.md`
 - `docs/GPU_OPTIMIZATION_SESSION_REPORT.md`
 - `docs/GPU_STATUS_REPORT.md`
 - `docs/VISION_GPU_OPTIMIZATION_REPORT.md`

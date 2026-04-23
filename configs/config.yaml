@@ -267,10 +267,6 @@ video:
     min_scene_len_sec: 30.0  # Optimized for GPU processing
     max_scene_len_sec: 300.0  # Force split scenes > 5min
     max_scenes: 0
-    entity_refine: false
-    entity_sample_rate: 0.5
-    entity_min_duration: 300.0
-    entity_max_samples: 300
 
 # ============================================================================
 # PHASE 6: SCENE VISUAL EMBEDDINGS & CROSS-MODAL FUSION

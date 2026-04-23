@@ -15,7 +15,7 @@ scene_cfg = video_cfg.get('scene_detect', {})
 print(f'[VALIDATION] Video scene config:')
 print(f'  - threshold: {scene_cfg.get("threshold")}')
 print(f'  - min_scene_len_sec: {scene_cfg.get("min_scene_len_sec")}')
-print(f'  - entity_refine: {scene_cfg.get("entity_refine")}')
+print('  - entity_refine: retired')
 
 # Run ingestion
 video_path = 'L:\\goodq4all\\import_inbox\\sample.mp4'

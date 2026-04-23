@@ -58,18 +58,6 @@ def apply_optimizations():
         scene_cfg['max_scenes'] = 100
         changes.append("max_scenes: 500 → 100 (cap for testing)")
     
-    if scene_cfg.get('entity_refine', True) != False:
-        scene_cfg['entity_refine'] = False
-        changes.append("entity_refine: true → false (disable entity-based splitting)")
-    
-    if scene_cfg.get('entity_sample_rate', 1.0) != 0.25:
-        scene_cfg['entity_sample_rate'] = 0.25
-        changes.append("entity_sample_rate: 1.0 → 0.25 (sample less frequently)")
-    
-    if scene_cfg.get('entity_max_samples', 120) != 30:
-        scene_cfg['entity_max_samples'] = 30
-        changes.append("entity_max_samples: 120 → 30 (fewer samples per scene)")
-    
     # Audio optimizations
     if 'audio' not in config:
         config['audio'] = {}
@@ -106,7 +94,6 @@ def main():
     print("  - Reduce scene detection sensitivity")
     print("  - Skip short scenes")
     print("  - Cap at 100 scenes for testing")
-    print("  - Disable entity refining")
     print("  - Optimize audio chunking")
     print()
     

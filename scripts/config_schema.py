@@ -271,10 +271,6 @@ class VideoSceneDetectConfig(BaseModel):
     threshold: float = 30.0
     min_scene_len_sec: float = 300.0
     max_scenes: int = 0
-    entity_refine: bool = False
-    entity_sample_rate: float = 0.5
-    entity_min_duration: float = 300.0
-    entity_max_samples: int = 300
 
 
 class VideoConfig(BaseModel):

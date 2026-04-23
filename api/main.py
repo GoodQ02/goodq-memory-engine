@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from api.routes import ingest, media, run_index, run_summary, runtime, scenes, search, system, timeline
+from api.routes import ingest, media, meta, run_index, run_summary, runtime, scenes, search, system, timeline
 from goodq_version import GOODQ_VERSION
 from steps.common.config_loader import load_configs
 
@@ -56,6 +56,7 @@ if bool(_API_CFG.get("cors_enabled", False)):
     )
 
 # Mount canonical router-backed API surfaces.
+app.include_router(meta.router)
 app.include_router(search.router)
 app.include_router(scenes.router)
 app.include_router(timeline.router)
@@ -80,30 +81,6 @@ try:
     api_loaders.configure_from_cfg(_CFG)
 except Exception as e:
     logger.debug(f"DataLoader config injection failed: {e}")
-
-
-@app.get("/")
-def root() -> Dict[str, Any]:
-    """Root endpoint (UI is not served from this API process)."""
-    return {"status": "ok", "docs": "/docs", "openapi": "/openapi.json"}
-
-
-@app.get("/api")
-def api_root() -> Dict[str, Any]:
-    return {
-        "status": "ok",
-        "endpoints": [
-            "/docs",
-            "/openapi.json",
-            "/api/status",
-            "/api/engines",
-            "/api/queue",
-            "/api/search/multimodal",
-            "/api/ingest/submit",
-            "/api/videos/{video_id}/scenes",
-            "/api/system/status",
-        ],
-    }
 
 
 # Legacy UI/log static mounts intentionally disabled.

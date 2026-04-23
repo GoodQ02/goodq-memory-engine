@@ -6,6 +6,7 @@ import types
 from pathlib import Path
 
 from fastapi import APIRouter
+from fastapi.testclient import TestClient
 
 
 def _install_test_stubs(repo_root: Path) -> None:
@@ -42,12 +43,16 @@ def _load_api_main():
     fake_model_factory.build_llm_models = lambda *args, **kwargs: {}
     sys.modules["steps.common.llm_model_factory"] = fake_model_factory
 
+    meta_module = _load_meta_route()
+
     routes_pkg = types.ModuleType("api.routes")
     for name in ["search", "scenes", "timeline", "media", "system", "run_summary", "run_index", "ingest", "runtime"]:
         mod = types.ModuleType(f"api.routes.{name}")
         mod.router = APIRouter()
         setattr(routes_pkg, name, mod)
         sys.modules[f"api.routes.{name}"] = mod
+    setattr(routes_pkg, "meta", meta_module)
+    sys.modules["api.routes.meta"] = meta_module
     sys.modules["api.routes"] = routes_pkg
 
     module_path = repo_root / "api" / "main.py"
@@ -64,6 +69,18 @@ def _load_runtime_route():
 
     module_path = repo_root / "api" / "routes" / "runtime.py"
     spec = importlib.util.spec_from_file_location("tests.runtime_route_truth", module_path)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _load_meta_route():
+    repo_root = Path(__file__).resolve().parents[2]
+    _install_test_stubs(repo_root)
+
+    module_path = repo_root / "api" / "routes" / "meta.py"
+    spec = importlib.util.spec_from_file_location("tests.meta_route_truth", module_path)
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -120,8 +137,9 @@ def test_queue_counts_supported_ingest_files_not_video_only(tmp_path: Path) -> N
 
 def test_api_root_points_to_canonical_search_surfaces() -> None:
     api_main = _load_api_main()
+    client = TestClient(api_main.app)
 
-    result = api_main.api_root()
+    result = client.get("/api").json()
 
     assert result["status"] == "ok"
     assert "/api/search/multimodal" in result["endpoints"]

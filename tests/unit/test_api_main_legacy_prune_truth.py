@@ -6,11 +6,21 @@ import types
 from pathlib import Path
 
 from fastapi import APIRouter
+from fastapi.testclient import TestClient
 
 
 def _load_runtime_route_module(repo_root: Path):
     module_path = repo_root / "api" / "routes" / "runtime.py"
     spec = importlib.util.spec_from_file_location("tests.runtime_route_prune_truth", module_path)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _load_meta_route_module(repo_root: Path):
+    module_path = repo_root / "api" / "routes" / "meta.py"
+    spec = importlib.util.spec_from_file_location("tests.meta_route_prune_truth", module_path)
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -48,6 +58,7 @@ def _load_api_main():
     sys.modules["goodq_version"] = fake_goodq_version
 
     runtime_module = _load_runtime_route_module(repo_root)
+    meta_module = _load_meta_route_module(repo_root)
 
     routes_pkg = types.ModuleType("api.routes")
     for name in ["search", "scenes", "timeline", "media", "system", "run_summary", "run_index", "ingest"]:
@@ -55,7 +66,9 @@ def _load_api_main():
         mod.router = APIRouter()
         setattr(routes_pkg, name, mod)
         sys.modules[f"api.routes.{name}"] = mod
+    setattr(routes_pkg, "meta", meta_module)
     setattr(routes_pkg, "runtime", runtime_module)
+    sys.modules["api.routes.meta"] = meta_module
     sys.modules["api.routes.runtime"] = runtime_module
     sys.modules["api.routes"] = routes_pkg
 
@@ -119,8 +132,9 @@ def test_main_api_prunes_legacy_compatibility_endpoints() -> None:
 
 def test_api_root_only_advertises_truthful_supported_surfaces() -> None:
     api_main = _load_api_main()
+    client = TestClient(api_main.app)
 
-    result = api_main.api_root()
+    result = client.get("/api").json()
 
     assert result["status"] == "ok"
     assert result["endpoints"] == [
@@ -159,3 +173,13 @@ def test_main_delegates_runtime_summary_endpoints_to_router_module() -> None:
 
     for route_marker in direct_runtime_paths:
         assert route_marker not in source
+
+
+def test_main_delegates_root_discovery_endpoints_to_meta_router_module() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    source = (repo_root / "api" / "main.py").read_text(encoding="utf-8")
+
+    assert "meta" in source
+    assert "app.include_router(meta.router)" in source
+    assert '@app.get("/")' not in source
+    assert '@app.get("/api")' not in source

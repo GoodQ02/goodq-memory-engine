@@ -2218,10 +2218,617 @@ def test_harmonizer_conversation_owner_uses_chain_level_aligned_mentions(
     assert first_segment["conversation_owner"] == expected_owner
     assert second_segment["conversation_owner"] == expected_owner
     assert third_segment["conversation_owner"] == expected_owner
+    assert temporal_index["segments_with_speaker_aligned_mentions"] == 3
     assert temporal_index["segments_with_conversation_owner"] == 3
+    assert temporal_index["top_speaker_aligned_mentions"] == [
+        {"entity": "jerry", "type": "PERSON", "count": 2},
+        {"entity": "elaine", "type": "PERSON", "count": 1},
+    ]
     assert temporal_index["top_conversation_owners"] == [
         {"entity": "jerry", "type": "PERSON", "count": 3},
     ]
+
+
+def test_harmonizer_conversation_owner_aggregates_single_token_full_name_variants(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    processing_root = tmp_path / "processing"
+    video_id = "video_chain_owner_full_name_variant"
+    processing_dir = processing_root / video_id
+    scene_manifest_path = processing_dir / "video" / "scene_manifest.json"
+
+    _write_json(
+        scene_manifest_path,
+        {
+            "video_id": video_id,
+            "phase5_complete": True,
+            "phase6_complete": True,
+            "scenes": [
+                {
+                    "scene_id": "scene_0000",
+                    "start": 0.0,
+                    "end": 4.0,
+                    "duration": 4.0,
+                    "confidence": 0.9,
+                    "content_state": "signal",
+                    "audio": {
+                        "transcript": "Monica Seles is unstoppable.",
+                        "speaker_transcript": [
+                            {"start": 0.0, "end": 3.0, "text": "Monica Seles is unstoppable.", "speaker": "SPEAKER_00"},
+                            {"start": 3.0, "end": 4.0, "text": "Absolutely.", "speaker": "SPEAKER_01"},
+                        ],
+                    },
+                },
+                {
+                    "scene_id": "scene_0001",
+                    "start": 4.0,
+                    "end": 8.0,
+                    "duration": 4.0,
+                    "confidence": 0.9,
+                    "content_state": "signal",
+                    "audio": {
+                        "transcript": "Monica has the advantage.",
+                        "speaker_transcript": [
+                            {"start": 4.0, "end": 7.0, "text": "Monica has the advantage.", "speaker": "SPEAKER_00"},
+                            {"start": 7.0, "end": 8.0, "text": "Yep.", "speaker": "SPEAKER_01"},
+                        ],
+                    },
+                },
+            ],
+        },
+    )
+
+    audio_artifact_dir = tmp_path / "canonical_audio_artifacts"
+    _write_json(audio_artifact_dir / "segmentation.json", {"segments": []})
+    _write_json(audio_artifact_dir / "transcript.json", {"segments": []})
+    _write_json(audio_artifact_dir / "diarization.json", {"speakers": []})
+
+    def _extract_entities(**kwargs):
+        transcription = str(kwargs.get("scene_data", {}).get("transcription", ""))
+        entities = []
+        if "Monica Seles" in transcription:
+            entities.append(
+                {
+                    "name": "Monica Seles",
+                    "entity_type": "PERSON",
+                    "source_modalities": ["audio"],
+                    "source_steps": ["tagger"],
+                }
+            )
+        if "Monica has" in transcription:
+            entities.append(
+                {
+                    "name": "Monica",
+                    "entity_type": "PERSON",
+                    "source_modalities": ["audio"],
+                    "source_steps": ["tagger"],
+                }
+            )
+        return {"entity_count": len(entities), "entities": entities}
+
+    monkeypatch.setattr(harmonizer_module, "ENTITY_EXTRACTION_AVAILABLE", True)
+    monkeypatch.setattr(harmonizer_module, "extract_entities_from_scene", _extract_entities)
+
+    item = {
+        "id": video_id,
+        "source_path": str(tmp_path / "video.mp4"),
+        "processing_dir": str(processing_dir),
+        "scene_manifest_path": str(scene_manifest_path),
+        "audio_artifact_dir": str(audio_artifact_dir),
+    }
+    cfg = {"paths": {"processing": str(processing_root)}}
+
+    run_cross_modal_harmonization(item, cfg)
+    temporal_index = json.loads((processing_dir / "temporal_index.json").read_text(encoding="utf-8"))
+    first_segment = temporal_index["segments"][0]
+    second_segment = temporal_index["segments"][1]
+
+    expected_owner = {
+        "name": "Monica Seles",
+        "text": "Monica Seles",
+        "type": "PERSON",
+        "confidence": "candidate",
+        "source": "interaction_chain",
+        "continuity_key": "conversation:SPEAKER_00|SPEAKER_01",
+        "chain_length": 2,
+        "mention_dominance_ratio": 1.0,
+        "speaker_dominance_ratio": 0.75,
+        "competitor_gap": 2,
+        "evidence": {
+            "speaker_aligned_mentions": 2,
+            "total_mentions": 2,
+            "segments_involved": ["scene_0000", "scene_0001"],
+        },
+    }
+
+    assert first_segment["speaker_aligned_mentions"] == [{"text": "Monica Seles", "type": "PERSON", "count": 1}]
+    assert second_segment["speaker_aligned_mentions"] == [{"text": "Monica", "type": "PERSON", "count": 1}]
+    assert first_segment["conversation_owner"] == expected_owner
+    assert second_segment["conversation_owner"] == expected_owner
+    assert temporal_index["segments_with_conversation_owner"] == 2
+    assert temporal_index["top_conversation_owners"] == [
+        {"entity": "monica seles", "type": "PERSON", "count": 2},
+    ]
+
+
+def test_harmonizer_conversation_owner_aggregates_title_stripped_variants(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    processing_root = tmp_path / "processing"
+    video_id = "video_chain_owner_title_variant"
+    processing_dir = processing_root / video_id
+    scene_manifest_path = processing_dir / "video" / "scene_manifest.json"
+
+    _write_json(
+        scene_manifest_path,
+        {
+            "video_id": video_id,
+            "phase5_complete": True,
+            "phase6_complete": True,
+            "scenes": [
+                {
+                    "scene_id": "scene_0000",
+                    "start": 0.0,
+                    "end": 4.0,
+                    "duration": 4.0,
+                    "confidence": 0.9,
+                    "content_state": "signal",
+                    "audio": {
+                        "transcript": "Mayor Dinkins is late again.",
+                        "speaker_transcript": [
+                            {"start": 0.0, "end": 3.0, "text": "Mayor Dinkins is late again.", "speaker": "SPEAKER_00"},
+                            {"start": 3.0, "end": 4.0, "text": "Right.", "speaker": "SPEAKER_01"},
+                        ],
+                    },
+                },
+                {
+                    "scene_id": "scene_0001",
+                    "start": 4.0,
+                    "end": 8.0,
+                    "duration": 4.0,
+                    "confidence": 0.9,
+                    "content_state": "signal",
+                    "audio": {
+                        "transcript": "Dinkins never calls ahead.",
+                        "speaker_transcript": [
+                            {"start": 4.0, "end": 7.0, "text": "Dinkins never calls ahead.", "speaker": "SPEAKER_00"},
+                            {"start": 7.0, "end": 8.0, "text": "Nope.", "speaker": "SPEAKER_01"},
+                        ],
+                    },
+                },
+            ],
+        },
+    )
+
+    audio_artifact_dir = tmp_path / "canonical_audio_artifacts"
+    _write_json(audio_artifact_dir / "segmentation.json", {"segments": []})
+    _write_json(audio_artifact_dir / "transcript.json", {"segments": []})
+    _write_json(audio_artifact_dir / "diarization.json", {"speakers": []})
+
+    def _extract_entities(**kwargs):
+        transcription = str(kwargs.get("scene_data", {}).get("transcription", ""))
+        entities = []
+        if "Mayor Dinkins" in transcription:
+            entities.append(
+                {
+                    "name": "Mayor Dinkins",
+                    "entity_type": "PERSON",
+                    "source_modalities": ["audio"],
+                    "source_steps": ["tagger"],
+                }
+            )
+        if "Dinkins never" in transcription:
+            entities.append(
+                {
+                    "name": "Dinkins",
+                    "entity_type": "PERSON",
+                    "source_modalities": ["audio"],
+                    "source_steps": ["tagger"],
+                }
+            )
+        return {"entity_count": len(entities), "entities": entities}
+
+    monkeypatch.setattr(harmonizer_module, "ENTITY_EXTRACTION_AVAILABLE", True)
+    monkeypatch.setattr(harmonizer_module, "extract_entities_from_scene", _extract_entities)
+
+    item = {
+        "id": video_id,
+        "source_path": str(tmp_path / "video.mp4"),
+        "processing_dir": str(processing_dir),
+        "scene_manifest_path": str(scene_manifest_path),
+        "audio_artifact_dir": str(audio_artifact_dir),
+    }
+    cfg = {"paths": {"processing": str(processing_root)}}
+
+    run_cross_modal_harmonization(item, cfg)
+    temporal_index = json.loads((processing_dir / "temporal_index.json").read_text(encoding="utf-8"))
+    first_segment = temporal_index["segments"][0]
+    second_segment = temporal_index["segments"][1]
+
+    expected_owner = {
+        "name": "Dinkins",
+        "text": "Dinkins",
+        "type": "PERSON",
+        "confidence": "candidate",
+        "source": "interaction_chain",
+        "continuity_key": "conversation:SPEAKER_00|SPEAKER_01",
+        "chain_length": 2,
+        "mention_dominance_ratio": 1.0,
+        "speaker_dominance_ratio": 0.75,
+        "competitor_gap": 2,
+        "evidence": {
+            "speaker_aligned_mentions": 2,
+            "total_mentions": 2,
+            "segments_involved": ["scene_0000", "scene_0001"],
+        },
+    }
+
+    assert first_segment["speaker_aligned_mentions"] == [{"text": "Mayor Dinkins", "type": "PERSON", "count": 1}]
+    assert second_segment["speaker_aligned_mentions"] == [{"text": "Dinkins", "type": "PERSON", "count": 1}]
+    assert first_segment["conversation_owner"] == expected_owner
+    assert second_segment["conversation_owner"] == expected_owner
+    assert temporal_index["segments_with_conversation_owner"] == 2
+    assert temporal_index["top_conversation_owners"] == [
+        {"entity": "dinkins", "type": "PERSON", "count": 2},
+    ]
+
+
+def test_harmonizer_reports_speaker_aligned_mention_variant_groups_read_only(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    processing_root = tmp_path / "processing"
+    video_id = "video_aligned_variant_audit"
+    processing_dir = processing_root / video_id
+    scene_manifest_path = processing_dir / "video" / "scene_manifest.json"
+
+    _write_json(
+        scene_manifest_path,
+        {
+            "video_id": video_id,
+            "phase5_complete": True,
+            "phase6_complete": True,
+            "scenes": [
+                {
+                    "scene_id": "scene_0000",
+                    "start": 0.0,
+                    "end": 4.0,
+                    "duration": 4.0,
+                    "confidence": 0.9,
+                    "content_state": "signal",
+                    "audio": {
+                        "transcript": "Mayor Dinkins should be here.",
+                        "speaker_transcript": [
+                            {"start": 0.0, "end": 3.0, "text": "Mayor Dinkins should be here.", "speaker": "SPEAKER_00"},
+                            {"start": 3.0, "end": 4.0, "text": "Okay.", "speaker": "SPEAKER_01"},
+                        ],
+                    },
+                },
+                {
+                    "scene_id": "scene_0001",
+                    "start": 4.0,
+                    "end": 8.0,
+                    "duration": 4.0,
+                    "confidence": 0.9,
+                    "content_state": "signal",
+                    "audio": {
+                        "transcript": "Dinkins is late again.",
+                        "speaker_transcript": [
+                            {"start": 4.0, "end": 7.0, "text": "Dinkins is late again.", "speaker": "SPEAKER_00"},
+                            {"start": 7.0, "end": 8.0, "text": "Right.", "speaker": "SPEAKER_01"},
+                        ],
+                    },
+                },
+                {
+                    "scene_id": "scene_0002",
+                    "start": 8.0,
+                    "end": 12.0,
+                    "duration": 4.0,
+                    "confidence": 0.9,
+                    "content_state": "signal",
+                    "audio": {
+                        "transcript": "Monica Seles is playing tonight.",
+                        "speaker_transcript": [
+                            {"start": 8.0, "end": 11.0, "text": "Monica Seles is playing tonight.", "speaker": "SPEAKER_00"},
+                            {"start": 11.0, "end": 12.0, "text": "Sure.", "speaker": "SPEAKER_01"},
+                        ],
+                    },
+                },
+                {
+                    "scene_id": "scene_0003",
+                    "start": 12.0,
+                    "end": 16.0,
+                    "duration": 4.0,
+                    "confidence": 0.9,
+                    "content_state": "signal",
+                    "audio": {
+                        "transcript": "Monica has the advantage.",
+                        "speaker_transcript": [
+                            {"start": 12.0, "end": 15.0, "text": "Monica has the advantage.", "speaker": "SPEAKER_00"},
+                            {"start": 15.0, "end": 16.0, "text": "Yep.", "speaker": "SPEAKER_01"},
+                        ],
+                    },
+                },
+            ],
+        },
+    )
+
+    audio_artifact_dir = tmp_path / "canonical_audio_artifacts"
+    _write_json(audio_artifact_dir / "segmentation.json", {"segments": []})
+    _write_json(audio_artifact_dir / "transcript.json", {"segments": []})
+    _write_json(audio_artifact_dir / "diarization.json", {"speakers": []})
+
+    def _extract_entities(**kwargs):
+        transcription = str(kwargs.get("scene_data", {}).get("transcription", ""))
+        entities = []
+        if "Mayor Dinkins" in transcription:
+            entities.append(
+                {
+                    "name": "Mayor Dinkins",
+                    "entity_type": "PERSON",
+                    "source_modalities": ["audio"],
+                    "source_steps": ["tagger"],
+                }
+            )
+        if "Dinkins" in transcription and "Mayor Dinkins" not in transcription:
+            entities.append(
+                {
+                    "name": "Dinkins",
+                    "entity_type": "PERSON",
+                    "source_modalities": ["audio"],
+                    "source_steps": ["tagger"],
+                }
+            )
+        if "Monica Seles" in transcription:
+            entities.append(
+                {
+                    "name": "Monica Seles",
+                    "entity_type": "PERSON",
+                    "source_modalities": ["audio"],
+                    "source_steps": ["tagger"],
+                }
+            )
+        if "Monica has" in transcription:
+            entities.append(
+                {
+                    "name": "Monica",
+                    "entity_type": "PERSON",
+                    "source_modalities": ["audio"],
+                    "source_steps": ["tagger"],
+                }
+            )
+        return {"entity_count": len(entities), "entities": entities}
+
+    monkeypatch.setattr(harmonizer_module, "ENTITY_EXTRACTION_AVAILABLE", True)
+    monkeypatch.setattr(harmonizer_module, "extract_entities_from_scene", _extract_entities)
+
+    item = {
+        "id": video_id,
+        "source_path": str(tmp_path / "video.mp4"),
+        "processing_dir": str(processing_dir),
+        "scene_manifest_path": str(scene_manifest_path),
+        "audio_artifact_dir": str(audio_artifact_dir),
+    }
+    cfg = {"paths": {"processing": str(processing_root)}}
+
+    run_cross_modal_harmonization(item, cfg)
+    temporal_index = json.loads((processing_dir / "temporal_index.json").read_text(encoding="utf-8"))
+
+    assert temporal_index["segments_with_speaker_aligned_mentions"] == 4
+    assert temporal_index["top_speaker_aligned_mentions"] == [
+        {"entity": "dinkins", "type": "PERSON", "count": 1},
+        {"entity": "mayor dinkins", "type": "PERSON", "count": 1},
+        {"entity": "monica", "type": "PERSON", "count": 1},
+        {"entity": "monica seles", "type": "PERSON", "count": 1},
+    ]
+    assert temporal_index["speaker_aligned_mention_variant_groups"] == [
+        {
+            "group_key": "person::dinkins",
+            "type": "PERSON",
+            "reason": "title_stripped_overlap",
+            "total_count": 2,
+            "variants": [
+                {"entity": "dinkins", "count": 1},
+                {"entity": "mayor dinkins", "count": 1},
+            ],
+        },
+        {
+            "group_key": "person::monica seles",
+            "type": "PERSON",
+            "reason": "single_token_full_name_overlap",
+            "total_count": 2,
+            "variants": [
+                {"entity": "monica", "count": 1},
+                {"entity": "monica seles", "count": 1},
+            ],
+        },
+    ]
+
+
+def test_harmonizer_reports_transcript_entity_disagreement_hotspots_read_only(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    processing_root = tmp_path / "processing"
+    video_id = "video_transcript_entity_disagreement_audit"
+    processing_dir = processing_root / video_id
+    scene_manifest_path = processing_dir / "video" / "scene_manifest.json"
+
+    _write_json(
+        scene_manifest_path,
+        {
+            "video_id": video_id,
+            "phase5_complete": True,
+            "phase6_complete": True,
+            "scenes": [
+                {
+                    "scene_id": "scene_0000",
+                    "start": 0.0,
+                    "end": 4.0,
+                    "duration": 4.0,
+                    "confidence": 0.9,
+                    "content_state": "signal",
+                    "audio": {
+                        "transcript": "Mr. Costanza will see you now.",
+                        "speaker_transcript": [
+                            {"start": 0.0, "end": 4.0, "text": "Mr. Costanza will see you now.", "speaker": "SPEAKER_00"},
+                        ],
+                    },
+                },
+                {
+                    "scene_id": "scene_0001",
+                    "start": 4.0,
+                    "end": 8.0,
+                    "duration": 4.0,
+                    "confidence": 0.9,
+                    "content_state": "signal",
+                    "audio": {
+                        "transcript": "Jerry Seinfeld is waiting outside.",
+                        "speaker_transcript": [
+                            {"start": 4.0, "end": 8.0, "text": "Jerry Seinfeld is waiting outside.", "speaker": "SPEAKER_00"},
+                        ],
+                    },
+                },
+                {
+                    "scene_id": "scene_0002",
+                    "start": 8.0,
+                    "end": 12.0,
+                    "duration": 4.0,
+                    "confidence": 0.9,
+                    "content_state": "signal",
+                    "audio": {
+                        "transcript": "Monica Selis is serving for the match.",
+                        "speaker_transcript": [
+                            {"start": 8.0, "end": 12.0, "text": "Monica Selis is serving for the match.", "speaker": "SPEAKER_00"},
+                        ],
+                    },
+                },
+                {
+                    "scene_id": "scene_0003",
+                    "start": 12.0,
+                    "end": 16.0,
+                    "duration": 4.0,
+                    "confidence": 0.9,
+                    "content_state": "signal",
+                    "audio": {
+                        "transcript": "Now, Mrs. Swedler should sign here.",
+                        "speaker_transcript": [
+                            {"start": 12.0, "end": 16.0, "text": "Now, Mrs. Swedler should sign here.", "speaker": "SPEAKER_00"},
+                        ],
+                    },
+                },
+            ],
+        },
+    )
+
+    audio_artifact_dir = tmp_path / "canonical_audio_artifacts"
+    _write_json(audio_artifact_dir / "segmentation.json", {"segments": []})
+    _write_json(audio_artifact_dir / "transcript.json", {"segments": []})
+    _write_json(audio_artifact_dir / "diarization.json", {"speakers": []})
+
+    def _extract_entities(**kwargs):
+        transcription = str(kwargs.get("scene_data", {}).get("transcription", ""))
+        entities = []
+        if "Costanza" in transcription:
+            entities.append(
+                {
+                    "name": "Costanza",
+                    "entity_type": "PERSON",
+                    "source_modalities": ["audio"],
+                    "source_steps": ["tagger"],
+                }
+            )
+        if "Jerry Seinfeld" in transcription:
+            entities.append(
+                {
+                    "name": "Jerry",
+                    "entity_type": "PERSON",
+                    "source_modalities": ["audio"],
+                    "source_steps": ["tagger"],
+                }
+            )
+        if "Monica Selis" in transcription:
+            entities.append(
+                {
+                    "name": "Monica Seles",
+                    "entity_type": "PERSON",
+                    "source_modalities": ["audio"],
+                    "source_steps": ["tagger"],
+                }
+            )
+        return {"entity_count": len(entities), "entities": entities}
+
+    monkeypatch.setattr(harmonizer_module, "ENTITY_EXTRACTION_AVAILABLE", True)
+    monkeypatch.setattr(harmonizer_module, "extract_entities_from_scene", _extract_entities)
+
+    item = {
+        "id": video_id,
+        "source_path": str(tmp_path / "video.mp4"),
+        "processing_dir": str(processing_dir),
+        "scene_manifest_path": str(scene_manifest_path),
+        "audio_artifact_dir": str(audio_artifact_dir),
+    }
+    cfg = {"paths": {"processing": str(processing_root)}}
+
+    run_cross_modal_harmonization(item, cfg)
+    temporal_index = json.loads((processing_dir / "temporal_index.json").read_text(encoding="utf-8"))
+
+    assert temporal_index["segments_with_transcript_entity_disagreements"] == 4
+    category_counts = {
+        item["category"]: item["count"]
+        for item in temporal_index["transcript_entity_disagreement_category_counts"]
+    }
+    assert category_counts == {
+        "title_elision_in_entity_projection": 1,
+        "transcript_full_name_reduced_to_partial_entity": 1,
+        "transcript_spelling_drift_vs_entity_name": 1,
+        "title_bearing_transcript_name_not_resolved": 1,
+    }
+
+    families = {
+        (item["category"], item["family_key"]): item
+        for item in temporal_index["top_transcript_entity_disagreement_families"]
+    }
+    assert families[
+        ("title_elision_in_entity_projection", "title::costanza")
+    ]["example"]["transcript_candidate"] == "Mr. Costanza"
+    assert families[
+        ("transcript_full_name_reduced_to_partial_entity", "partial::jerry")
+    ]["example"]["entity_names"] == ["Jerry"]
+    assert families[
+        ("transcript_spelling_drift_vs_entity_name", "spelling::monica selis")
+    ]["example"]["entity_names"] == ["Monica Seles"]
+    assert families[
+        ("title_bearing_transcript_name_not_resolved", "title_unresolved::mrs swedler")
+    ]["example"]["transcript_candidate"] == "Mrs. Swedler"
+
+    persisted_manifest = json.loads(scene_manifest_path.read_text(encoding="utf-8"))
+    assert persisted_manifest["scenes"][0]["speaker_aligned_mentions"] == [
+        {"text": "Costanza", "type": "PERSON", "count": 1}
+    ]
+    assert persisted_manifest["scenes"][1]["speaker_aligned_mentions"] == [
+        {"text": "Jerry", "type": "PERSON", "count": 1}
+    ]
+    assert persisted_manifest["scenes"][2]["mentioned_people"] == [
+        {"text": "Monica Seles", "type": "PERSON"}
+    ]
+    assert persisted_manifest["scenes"][2].get("speaker_aligned_mentions", []) == []
+    assert persisted_manifest["scenes"][3].get("speaker_aligned_mentions", []) == []
+
+
+def test_transcript_entity_disagreement_ignores_discourse_lead_ins() -> None:
+    disagreements = harmonizer_module._segment_transcript_entity_disagreements(
+        {
+            "full_transcript": "Maybe Gwen should call later.",
+            "entities": [{"text": "Gwen", "type": "PERSON"}],
+            "mentioned_people": [{"text": "Gwen", "type": "PERSON"}],
+            "speaker_aligned_mentions": [{"text": "Gwen", "type": "PERSON", "count": 1}],
+        }
+    )
+
+    assert disagreements == []
 
 
 def test_harmonizer_does_not_promote_unknown_speaker_fallback_ids(

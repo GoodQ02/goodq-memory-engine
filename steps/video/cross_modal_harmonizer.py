@@ -6,6 +6,7 @@ Creates the multimodal knowledge graph foundation for retrieval.
 from __future__ import annotations
 from typing import Any, Dict, List, Optional
 from collections import Counter
+from difflib import SequenceMatcher
 import os
 import json
 import logging
@@ -131,6 +132,522 @@ def _normalize_entity_channel_record(entity: Any) -> Optional[Dict[str, Any]]:
         "source_modalities": modalities,
         "source_steps": steps,
     }
+
+
+_SPEAKER_ALIGNED_MENTION_TITLES = {
+    "capt", "captain", "chief", "coach", "cmdr", "commander", "detective", "doctor",
+    "dr", "governor", "gov", "judge", "lady", "madam", "mayor", "miss", "monsieur",
+    "mr", "mrs", "ms", "officer", "president", "prof", "professor", "rev",
+    "reverend", "senator", "sen", "señor", "senor", "señora", "senora", "sir",
+}
+
+_TRANSCRIPT_PERSON_TITLE_PATTERN = re.compile(
+    r"\b(?P<title>Mr|Mrs|Ms|Miss|Dr|Doctor|Prof|Professor)\.?\s+(?P<name>[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)"
+)
+_TRANSCRIPT_PERSON_FULL_NAME_PATTERN = re.compile(
+    r"\b(?P<name>[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)\b"
+)
+_TRANSCRIPT_PERSON_NON_NAME_LEAD_TOKENS = {
+    "hey",
+    "look",
+    "maybe",
+    "now",
+    "okay",
+    "ok",
+    "please",
+    "thanks",
+    "thank",
+    "well",
+}
+
+
+def _normalize_aligned_mention_variant_text(text: Any) -> str:
+    normalized = str(text or "").strip().lower()
+    if not normalized:
+        return ""
+    normalized = re.sub(r"[^\w\s'-]+", " ", normalized)
+    normalized = re.sub(r"\s+", " ", normalized).strip()
+    return normalized
+
+
+def _strip_aligned_mention_titles(text: str) -> str:
+    tokens = text.split()
+    while tokens:
+        token = tokens[0].rstrip(".")
+        if token in _SPEAKER_ALIGNED_MENTION_TITLES:
+            tokens = tokens[1:]
+            continue
+        break
+    return " ".join(tokens)
+
+
+def _serialize_entity_count_pairs(pairs: List[tuple[str, int]]) -> List[Dict[str, Any]]:
+    return [
+        {
+            "entity": key.rsplit(":", 1)[0],
+            "type": key.rsplit(":", 1)[1],
+            "count": value,
+        }
+        for key, value in pairs
+    ]
+
+
+def _normalize_transcript_person_surface(text: Any) -> str:
+    normalized = str(text or "").strip()
+    normalized = re.sub(r"\s+", " ", normalized)
+    return normalized
+
+
+def _normalize_transcript_person_key(text: Any) -> str:
+    normalized = _normalize_transcript_person_surface(text).lower()
+    normalized = re.sub(r"[^\w\s'-]+", " ", normalized)
+    normalized = re.sub(r"\s+", " ", normalized).strip()
+    return normalized
+
+
+def _extract_transcript_person_candidates(transcript: str) -> List[Dict[str, Any]]:
+    candidates: List[Dict[str, Any]] = []
+    occupied_spans: List[tuple[int, int]] = []
+    seen_keys: set[tuple[str, str]] = set()
+
+    for match in _TRANSCRIPT_PERSON_TITLE_PATTERN.finditer(transcript):
+        surface = _normalize_transcript_person_surface(match.group(0))
+        normalized = _normalize_transcript_person_key(surface)
+        if not normalized:
+            continue
+        candidate_key = ("title", normalized)
+        if candidate_key in seen_keys:
+            continue
+        name_surface = _normalize_transcript_person_surface(match.group("name"))
+        surname = name_surface.split()[-1] if name_surface else ""
+        candidates.append(
+            {
+                "kind": "title",
+                "surface": surface,
+                "normalized": normalized,
+                "title": match.group("title"),
+                "name": name_surface,
+                "surname_normalized": _normalize_transcript_person_key(surname),
+                "span": match.span(),
+            }
+        )
+        occupied_spans.append(match.span())
+        seen_keys.add(candidate_key)
+
+    def _overlaps_title(span: tuple[int, int]) -> bool:
+        for occupied in occupied_spans:
+            if span[0] < occupied[1] and occupied[0] < span[1]:
+                return True
+        return False
+
+    for match in _TRANSCRIPT_PERSON_FULL_NAME_PATTERN.finditer(transcript):
+        span = match.span()
+        if _overlaps_title(span):
+            continue
+        surface = _normalize_transcript_person_surface(match.group("name"))
+        normalized = _normalize_transcript_person_key(surface)
+        if not normalized or len(normalized.split()) < 2:
+            continue
+        leading_token = normalized.split()[0].rstrip(".")
+        if leading_token in _SPEAKER_ALIGNED_MENTION_TITLES:
+            continue
+        if leading_token in _TRANSCRIPT_PERSON_NON_NAME_LEAD_TOKENS:
+            continue
+        candidate_key = ("full", normalized)
+        if candidate_key in seen_keys:
+            continue
+        candidates.append(
+            {
+                "kind": "full",
+                "surface": surface,
+                "normalized": normalized,
+                "tokens": normalized.split(),
+                "span": span,
+            }
+        )
+        seen_keys.add(candidate_key)
+
+    return candidates
+
+
+def _segment_person_entity_names(segment: Dict[str, Any]) -> List[str]:
+    entity_names: set[str] = set()
+    for entity in segment.get("entities", []):
+        normalized_entity = _normalize_entity_rollup_record(entity)
+        if not normalized_entity:
+            continue
+        if normalized_entity["type"].upper() not in {"PERSON", "PER", "SPEAKER_IDENTITY"}:
+            continue
+        entity_names.add(normalized_entity["text"])
+    return sorted(entity_names)
+
+
+def _segment_person_channel_records(channel: Any) -> List[Dict[str, Any]]:
+    if not isinstance(channel, list):
+        return []
+
+    records: List[Dict[str, Any]] = []
+    seen_records: set[tuple[str, str, int | None]] = set()
+    for entry in channel:
+        normalized_entry = _normalize_entity_rollup_record(entry)
+        if not normalized_entry:
+            continue
+        count_value: int | None = None
+        if isinstance(entry, dict) and "count" in entry:
+            try:
+                count_value = max(int(entry.get("count", 1)), 1)
+            except (TypeError, ValueError):
+                count_value = 1
+        record_key = (
+            normalized_entry["text"],
+            normalized_entry["type"],
+            count_value,
+        )
+        if record_key in seen_records:
+            continue
+        record: Dict[str, Any] = {
+            "text": normalized_entry["text"],
+            "type": normalized_entry["type"],
+        }
+        if count_value is not None:
+            record["count"] = count_value
+        records.append(record)
+        seen_records.add(record_key)
+    return records
+
+
+def _segment_local_person_surfaces(segment: Dict[str, Any]) -> set[str]:
+    surfaces: set[str] = set()
+
+    for name in _segment_person_entity_names(segment):
+        normalized = _normalize_transcript_person_key(name)
+        if normalized:
+            surfaces.add(normalized)
+
+    for channel_name in ("mentioned_people", "speaker_aligned_mentions"):
+        for record in _segment_person_channel_records(segment.get(channel_name)):
+            normalized = _normalize_transcript_person_key(record.get("text"))
+            if normalized:
+                surfaces.add(normalized)
+
+    conversation_owner = segment.get("conversation_owner")
+    if isinstance(conversation_owner, dict):
+        normalized_owner = _normalize_transcript_person_key(conversation_owner.get("text"))
+        if normalized_owner:
+            surfaces.add(normalized_owner)
+
+    return surfaces
+
+
+def _find_partial_surface_match(candidate_tokens: List[str], local_person_surfaces: set[str]) -> Optional[str]:
+    if len(candidate_tokens) < 2:
+        return None
+    for local_surface in sorted(local_person_surfaces):
+        local_tokens = local_surface.split()
+        if len(local_tokens) != 1:
+            continue
+        if local_tokens[0] in {candidate_tokens[0], candidate_tokens[-1]}:
+            return local_tokens[0]
+    return None
+
+
+def _find_spelling_drift_surface_match(candidate_tokens: List[str], local_person_surfaces: set[str]) -> Optional[str]:
+    if len(candidate_tokens) < 2:
+        return None
+    for local_surface in sorted(local_person_surfaces):
+        local_tokens = local_surface.split()
+        if len(local_tokens) != len(candidate_tokens):
+            continue
+        if candidate_tokens[:-1] != local_tokens[:-1]:
+            continue
+        if candidate_tokens[-1] == local_tokens[-1]:
+            continue
+        similarity = SequenceMatcher(None, candidate_tokens[-1], local_tokens[-1]).ratio()
+        if similarity >= 0.75:
+            return local_surface
+    return None
+
+
+def _segment_transcript_entity_disagreements(segment: Dict[str, Any]) -> List[Dict[str, Any]]:
+    transcript = str(segment.get("full_transcript") or "").strip()
+    if not transcript:
+        return []
+
+    entity_names = _segment_person_entity_names(segment)
+    mentioned_people = _segment_person_channel_records(segment.get("mentioned_people"))
+    speaker_aligned_mentions = _segment_person_channel_records(segment.get("speaker_aligned_mentions"))
+    local_person_surfaces = _segment_local_person_surfaces(segment)
+
+    disagreements: List[Dict[str, Any]] = []
+    seen_family_keys: set[tuple[str, str]] = set()
+
+    for candidate in _extract_transcript_person_candidates(transcript):
+        category: Optional[str] = None
+        family_key: Optional[str] = None
+        reason: Optional[str] = None
+
+        if candidate["kind"] == "title":
+            surname_normalized = candidate.get("surname_normalized") or ""
+            if surname_normalized and surname_normalized in local_person_surfaces:
+                category = "title_elision_in_entity_projection"
+                family_key = f"title::{surname_normalized}"
+                reason = "transcript title form collapses cleanly to existing local person surface"
+            else:
+                category = "title_bearing_transcript_name_not_resolved"
+                family_key = f"title_unresolved::{candidate['normalized']}"
+                reason = "title-bearing transcript person reference is not represented in local person truth surfaces"
+        else:
+            candidate_tokens = candidate.get("tokens") or []
+            partial_surface_match = _find_partial_surface_match(candidate_tokens, local_person_surfaces)
+            if partial_surface_match:
+                category = "transcript_full_name_reduced_to_partial_entity"
+                family_key = f"partial::{partial_surface_match}"
+                reason = "transcript full-name surface reduced to partial local person identity"
+            else:
+                spelling_surface_match = _find_spelling_drift_surface_match(candidate_tokens, local_person_surfaces)
+                if spelling_surface_match:
+                    category = "transcript_spelling_drift_vs_entity_name"
+                    family_key = f"spelling::{candidate['normalized']}"
+                    reason = "transcript person surface differs slightly from local person entity wording"
+
+        if not category or not family_key or not reason:
+            continue
+
+        family_identity = (category, family_key)
+        if family_identity in seen_family_keys:
+            continue
+
+        disagreements.append(
+            {
+                "category": category,
+                "family_key": family_key,
+                "scene_id": segment.get("scene_id"),
+                "transcript_candidate": candidate["surface"],
+                "entity_names": entity_names,
+                "mentioned_people": mentioned_people,
+                "speaker_aligned_mentions": speaker_aligned_mentions,
+                "reason": reason,
+            }
+        )
+        seen_family_keys.add(family_identity)
+
+    return disagreements
+
+
+def _build_transcript_entity_disagreement_summary(
+    unified_segments: List[Dict[str, Any]]
+) -> Dict[str, Any]:
+    category_counts: Counter[str] = Counter()
+    family_counts: Counter[tuple[str, str]] = Counter()
+    family_examples: Dict[tuple[str, str], Dict[str, Any]] = {}
+    segments_with_disagreements = 0
+
+    for segment in unified_segments:
+        disagreements = _segment_transcript_entity_disagreements(segment)
+        if disagreements:
+            segments_with_disagreements += 1
+        for disagreement in disagreements:
+            category = disagreement["category"]
+            family_key = disagreement["family_key"]
+            category_counts[category] += 1
+            family_counts[(category, family_key)] += 1
+            family_examples.setdefault((category, family_key), disagreement)
+
+    ordered_category_counts = [
+        {"category": category, "count": count}
+        for category, count in sorted(category_counts.items(), key=lambda item: (-item[1], item[0]))
+    ]
+
+    top_families: List[Dict[str, Any]] = []
+    for (category, family_key), count in sorted(
+        family_counts.items(),
+        key=lambda item: (-item[1], item[0][0], item[0][1]),
+    )[:20]:
+        top_families.append(
+            {
+                "category": category,
+                "family_key": family_key,
+                "count": count,
+                "example": family_examples[(category, family_key)],
+            }
+        )
+
+    return {
+        "segments_with_transcript_entity_disagreements": segments_with_disagreements,
+        "transcript_entity_disagreement_category_counts": ordered_category_counts,
+        "top_transcript_entity_disagreement_families": top_families,
+    }
+
+
+def _build_speaker_aligned_mention_variant_groups(
+    speaker_aligned_mention_counts: Dict[str, int]
+) -> List[Dict[str, Any]]:
+    structured_mentions: List[Dict[str, Any]] = []
+    for key, count in speaker_aligned_mention_counts.items():
+        entity_text, entity_type = key.rsplit(":", 1)
+        normalized_entity = _normalize_aligned_mention_variant_text(entity_text)
+        if not normalized_entity:
+            continue
+        structured_mentions.append(
+            {
+                "entity": normalized_entity,
+                "type": entity_type,
+                "count": count,
+                "tokens": normalized_entity.split(),
+                "title_stripped": _strip_aligned_mention_titles(normalized_entity),
+            }
+        )
+
+    structured_mentions.sort(key=lambda item: (item["type"], item["entity"]))
+    assigned_variants: set[tuple[str, str]] = set()
+    variant_groups: List[Dict[str, Any]] = []
+
+    def _variant_payload(group_key: str, entity_type: str, reason: str, variants: List[Dict[str, Any]]) -> Dict[str, Any]:
+        ordered_variants = sorted(
+            (
+                {"entity": item["entity"], "count": item["count"]}
+                for item in variants
+            ),
+            key=lambda item: item["entity"],
+        )
+        return {
+            "group_key": group_key,
+            "type": entity_type,
+            "reason": reason,
+            "total_count": sum(item["count"] for item in variants),
+            "variants": ordered_variants,
+        }
+
+    for base_variant in structured_mentions:
+        variant_key = (base_variant["type"], base_variant["entity"])
+        if variant_key in assigned_variants or base_variant["type"] != "PERSON":
+            continue
+        titled_matches = [
+            item
+            for item in structured_mentions
+            if item["type"] == base_variant["type"]
+            and item["entity"] != base_variant["entity"]
+            and item["title_stripped"] == base_variant["entity"]
+            and (item["type"], item["entity"]) not in assigned_variants
+        ]
+        if not titled_matches:
+            continue
+        variants = [base_variant, *titled_matches]
+        variant_groups.append(
+            _variant_payload(
+                group_key=f"{base_variant['type'].lower()}::{base_variant['entity']}",
+                entity_type=base_variant["type"],
+                reason="title_stripped_overlap",
+                variants=variants,
+            )
+        )
+        assigned_variants.update((item["type"], item["entity"]) for item in variants)
+
+    for single_token_variant in structured_mentions:
+        variant_key = (single_token_variant["type"], single_token_variant["entity"])
+        if (
+            variant_key in assigned_variants
+            or single_token_variant["type"] != "PERSON"
+            or len(single_token_variant["tokens"]) != 1
+        ):
+            continue
+        full_name_matches = [
+            item
+            for item in structured_mentions
+            if item["type"] == single_token_variant["type"]
+            and len(item["tokens"]) > 1
+            and item["tokens"][0] == single_token_variant["entity"]
+            and (item["type"], item["entity"]) not in assigned_variants
+        ]
+        if len(full_name_matches) != 1:
+            continue
+        full_name_variant = full_name_matches[0]
+        variants = [single_token_variant, full_name_variant]
+        variant_groups.append(
+            _variant_payload(
+                group_key=f"{single_token_variant['type'].lower()}::{full_name_variant['entity']}",
+                entity_type=single_token_variant["type"],
+                reason="single_token_full_name_overlap",
+                variants=variants,
+            )
+        )
+        assigned_variants.update((item["type"], item["entity"]) for item in variants)
+
+    return sorted(variant_groups, key=lambda item: item["group_key"])
+
+
+def _canonicalize_chain_person_mentions(
+    person_display_names: Dict[str, str],
+    person_aligned_counts: Counter[str],
+    person_dominant_segment_counts: Counter[str],
+    person_mention_segment_ids: Dict[str, List[str]],
+) -> tuple[Dict[str, str], Counter[str], Counter[str], Dict[str, List[str]]]:
+    variant_groups = _build_speaker_aligned_mention_variant_groups(
+        {f"{key}:PERSON": value for key, value in person_aligned_counts.items()}
+    )
+    if not variant_groups:
+        return (
+            dict(person_display_names),
+            Counter(person_aligned_counts),
+            Counter(person_dominant_segment_counts),
+            {key: list(value) for key, value in person_mention_segment_ids.items()},
+        )
+
+    canonical_display_names = dict(person_display_names)
+    canonical_aligned_counts = Counter(person_aligned_counts)
+    canonical_dominant_segment_counts = Counter(person_dominant_segment_counts)
+    canonical_mention_segment_ids = {
+        key: list(value) for key, value in person_mention_segment_ids.items()
+    }
+
+    for group in variant_groups:
+        canonical_key = str(group.get("group_key") or "").split("::", 1)[-1].strip().lower()
+        if not canonical_key:
+            continue
+        variant_keys = [
+            _normalize_aligned_mention_variant_text(variant.get("entity"))
+            for variant in group.get("variants", [])
+            if isinstance(variant, dict)
+        ]
+        variant_keys = [key for key in variant_keys if key]
+        if not variant_keys:
+            continue
+
+        canonical_aligned_counts[canonical_key] = sum(
+            person_aligned_counts.get(variant_key, 0) for variant_key in variant_keys
+        )
+        canonical_dominant_segment_counts[canonical_key] = sum(
+            person_dominant_segment_counts.get(variant_key, 0) for variant_key in variant_keys
+        )
+
+        seen_scene_ids: set[str] = set()
+        merged_scene_ids: List[str] = []
+        for variant_key in variant_keys:
+            for scene_id in canonical_mention_segment_ids.get(variant_key, []):
+                normalized_scene_id = str(scene_id or "").strip()
+                if not normalized_scene_id or normalized_scene_id in seen_scene_ids:
+                    continue
+                seen_scene_ids.add(normalized_scene_id)
+                merged_scene_ids.append(normalized_scene_id)
+        canonical_mention_segment_ids[canonical_key] = sorted(merged_scene_ids)
+
+        if canonical_key in person_display_names:
+            canonical_display_names[canonical_key] = person_display_names[canonical_key]
+
+        for variant_key in variant_keys:
+            if variant_key == canonical_key:
+                continue
+            canonical_aligned_counts.pop(variant_key, None)
+            canonical_dominant_segment_counts.pop(variant_key, None)
+            canonical_mention_segment_ids.pop(variant_key, None)
+            canonical_display_names.pop(variant_key, None)
+
+    return (
+        canonical_display_names,
+        canonical_aligned_counts,
+        canonical_dominant_segment_counts,
+        canonical_mention_segment_ids,
+    )
 
 
 def _classify_entity_channel(record: Dict[str, Any]) -> Dict[str, bool]:
@@ -1294,6 +1811,18 @@ def _apply_conversation_owner_window(unified_segments: List[Dict[str, Any]]) -> 
                 if segment_dominant_speaker_id == dominant_speaker_id:
                     person_dominant_segment_counts[normalized_text] += int(person.get("count") or 1)
 
+        (
+            person_display_names,
+            person_aligned_counts,
+            person_dominant_segment_counts,
+            person_mention_segment_ids,
+        ) = _canonicalize_chain_person_mentions(
+            person_display_names,
+            person_aligned_counts,
+            person_dominant_segment_counts,
+            person_mention_segment_ids,
+        )
+
         if not person_aligned_counts:
             continue
 
@@ -2174,6 +2703,7 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
     candidate_visible_people_counts = {}
     conversation_owner_counts = {}
     interaction_dominance_counts: Dict[str, int] = {}
+    speaker_aligned_mention_counts: Dict[str, int] = {}
     music_event_counts: Dict[str, int] = {}
     time_hint_counts: Dict[str, int] = {}
     metadata_time_hint_counts: Dict[str, int] = {}
@@ -2222,6 +2752,19 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
             dominant_speaker_id = _normalize_speaker_id(interaction_dominance.get('speaker_id'))
             if dominant_speaker_id:
                 interaction_dominance_counts[dominant_speaker_id] = interaction_dominance_counts.get(dominant_speaker_id, 0) + 1
+        for mention in seg.get("speaker_aligned_mentions", []):
+            normalized_mention = _normalize_entity_rollup_record(mention)
+            if not normalized_mention:
+                continue
+            mention_key = f"{normalized_mention['text'].lower()}:{normalized_mention['type']}"
+            mention_count = mention.get("count", 1) if isinstance(mention, dict) else 1
+            try:
+                mention_count_value = max(int(mention_count), 1)
+            except (TypeError, ValueError):
+                mention_count_value = 1
+            speaker_aligned_mention_counts[mention_key] = (
+                speaker_aligned_mention_counts.get(mention_key, 0) + mention_count_value
+            )
         for event_label in _extract_music_event_labels(seg.get('music_events', [])):
             music_event_counts[event_label] = music_event_counts.get(event_label, 0) + 1
         for time_hint in _extract_time_hint_tokens(seg.get('time_hints', {})):
@@ -2288,6 +2831,20 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
     top_candidate_visible_people = sorted(candidate_visible_people_counts.items(), key=lambda x: x[1], reverse=True)[:20]
     top_conversation_owners = sorted(conversation_owner_counts.items(), key=lambda x: x[1], reverse=True)[:20]
     top_interaction_dominance = sorted(interaction_dominance_counts.items(), key=lambda x: x[1], reverse=True)[:20]
+    top_speaker_aligned_mentions = sorted(
+        speaker_aligned_mention_counts.items(),
+        key=lambda item: (
+            -item[1],
+            item[0].rsplit(":", 1)[0],
+            item[0].rsplit(":", 1)[1],
+        ),
+    )[:20]
+    speaker_aligned_mention_variant_groups = _build_speaker_aligned_mention_variant_groups(
+        speaker_aligned_mention_counts
+    )
+    transcript_entity_disagreement_summary = _build_transcript_entity_disagreement_summary(
+        unified_segments
+    )
     top_music_events = sorted(music_event_counts.items(), key=lambda x: x[1], reverse=True)[:20]
     top_time_hints = sorted(time_hint_counts.items(), key=lambda x: x[1], reverse=True)[:20]
     top_metadata_time_hints = sorted(metadata_time_hint_counts.items(), key=lambda x: x[1], reverse=True)[:20]
@@ -2348,6 +2905,7 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
         'segments_with_candidate_visible_people': sum(1 for seg in unified_segments if seg.get('candidate_visible_people')),
         'segments_with_interaction_dominance': sum(1 for seg in unified_segments if seg.get('interaction_dominance')),
         'segments_with_conversation_owner': sum(1 for seg in unified_segments if seg.get('conversation_owner')),
+        'segments_with_speaker_aligned_mentions': sum(1 for seg in unified_segments if seg.get('speaker_aligned_mentions')),
         'segments_with_music_events': sum(1 for seg in unified_segments if seg.get('music_events')),
         'segments_with_time_hints': sum(1 for seg in unified_segments if _extract_time_hint_tokens(seg.get('time_hints', {}))),
         'segments_with_metadata_time_hints': sum(1 for seg in unified_segments if _extract_time_hint_tokens(seg.get('metadata_time_hints', {}))),
@@ -2394,6 +2952,9 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
             {'entity': k.split(':')[0], 'type': k.split(':')[1], 'count': v}
             for k, v in top_conversation_owners
         ],
+        'top_speaker_aligned_mentions': _serialize_entity_count_pairs(top_speaker_aligned_mentions),
+        'speaker_aligned_mention_variant_groups': speaker_aligned_mention_variant_groups,
+        **transcript_entity_disagreement_summary,
         'top_music_events': [
             {'event': key, 'count': value}
             for key, value in top_music_events

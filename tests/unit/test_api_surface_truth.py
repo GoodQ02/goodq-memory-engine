@@ -50,6 +50,59 @@ def _sample_temporal_index() -> dict:
         "phase6_complete": True,
         "phase6_harmonized": True,
         "version": 7,
+        "segments_with_candidate_visible_people": 1,
+        "segments_with_interaction_dominance": 1,
+        "segments_with_conversation_owner": 1,
+        "segments_with_speaker_aligned_mentions": 1,
+        "top_candidate_visible_people": [{"entity": "anonymous_person_1", "type": "PERSON", "count": 1}],
+        "top_interaction_dominance": [{"speaker_id": "SPEAKER_00", "count": 1}],
+        "top_conversation_owners": [{"entity": "jerry", "type": "PERSON", "count": 1}],
+        "top_speaker_aligned_mentions": [{"entity": "jerry", "type": "PERSON", "count": 1}],
+        "speaker_aligned_mention_variant_groups": [
+            {
+                "group_key": "person::jerry seinfeld",
+                "type": "PERSON",
+                "reason": "single_token_full_name_overlap",
+                "total_count": 2,
+                "variants": [
+                    {"entity": "jerry", "count": 1},
+                    {"entity": "jerry seinfeld", "count": 1},
+                ],
+            }
+        ],
+        "segments_with_transcript_entity_disagreements": 2,
+        "transcript_entity_disagreement_category_counts": [
+            {"category": "transcript_full_name_reduced_to_partial_entity", "count": 1},
+            {"category": "title_bearing_transcript_name_not_resolved", "count": 1},
+        ],
+        "top_transcript_entity_disagreement_families": [
+            {
+                "category": "transcript_full_name_reduced_to_partial_entity",
+                "family_key": "partial::jerry",
+                "count": 1,
+                "example": {
+                    "scene_id": 101,
+                    "transcript_candidate": "Jerry Seinfeld",
+                    "entity_names": ["Jerry"],
+                    "mentioned_people": [{"text": "Jerry", "type": "PERSON"}],
+                    "speaker_aligned_mentions": [{"text": "Jerry", "type": "PERSON", "count": 1}],
+                    "reason": "transcript full-name surface reduced to partial local person identity",
+                },
+            },
+            {
+                "category": "title_bearing_transcript_name_not_resolved",
+                "family_key": "title_unresolved::mrs swedler",
+                "count": 1,
+                "example": {
+                    "scene_id": 102,
+                    "transcript_candidate": "Mrs. Swedler",
+                    "entity_names": [],
+                    "mentioned_people": [],
+                    "speaker_aligned_mentions": [],
+                    "reason": "title-bearing transcript person reference is not represented in local person truth surfaces",
+                },
+            },
+        ],
         "segments": [
             {
                 "segment_id": 1,
@@ -82,6 +135,22 @@ def _sample_temporal_index() -> dict:
                 "time_hints": {"explicit_dates": [], "relative_phrases": ["next week"]},
                 "content_state": "signal",
                 "candidate_visible_people": [{"name": "anonymous_person_1"}],
+                "speaker_aligned_mentions": [{"text": "Jerry", "type": "PERSON", "count": 1}],
+                "interaction_dominance": {
+                    "speaker_id": "SPEAKER_00",
+                    "dominant_share": 0.8,
+                    "segments": 1,
+                    "stability": 1.0,
+                    "confidence": "strong",
+                    "continuity_key": "SPEAKER_00",
+                },
+                "conversation_owner": {
+                    "text": "Jerry",
+                    "type": "PERSON",
+                    "confidence": "candidate",
+                    "source": "interaction_chain",
+                    "continuity_key": "SPEAKER_00",
+                },
             }
         ],
     }
@@ -111,6 +180,22 @@ def test_list_scenes_surfaces_persisted_audio_truth(monkeypatch: pytest.MonkeyPa
     assert scene.time_hints == {"explicit_dates": [], "relative_phrases": ["next week"]}
     assert scene.content_state == "signal"
     assert scene.candidate_visible_people == [{"name": "anonymous_person_1"}]
+    assert scene.speaker_aligned_mentions == [{"text": "Jerry", "type": "PERSON", "count": 1}]
+    assert scene.interaction_dominance == {
+        "speaker_id": "SPEAKER_00",
+        "dominant_share": 0.8,
+        "segments": 1,
+        "stability": 1.0,
+        "confidence": "strong",
+        "continuity_key": "SPEAKER_00",
+    }
+    assert scene.conversation_owner == {
+        "text": "Jerry",
+        "type": "PERSON",
+        "confidence": "candidate",
+        "source": "interaction_chain",
+        "continuity_key": "SPEAKER_00",
+    }
 
 
 def test_full_timeline_surfaces_persisted_audio_truth(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -124,6 +209,59 @@ def test_full_timeline_surfaces_persisted_audio_truth(monkeypatch: pytest.Monkey
         "phase6_complete": True,
         "phase6_harmonized": True,
         "version": 7,
+        "segments_with_candidate_visible_people": 1,
+        "segments_with_interaction_dominance": 1,
+        "segments_with_conversation_owner": 1,
+        "segments_with_speaker_aligned_mentions": 1,
+        "top_candidate_visible_people": [{"entity": "anonymous_person_1", "type": "PERSON", "count": 1}],
+        "top_interaction_dominance": [{"speaker_id": "SPEAKER_00", "count": 1}],
+        "top_conversation_owners": [{"entity": "jerry", "type": "PERSON", "count": 1}],
+        "top_speaker_aligned_mentions": [{"entity": "jerry", "type": "PERSON", "count": 1}],
+        "speaker_aligned_mention_variant_groups": [
+            {
+                "group_key": "person::jerry seinfeld",
+                "type": "PERSON",
+                "reason": "single_token_full_name_overlap",
+                "total_count": 2,
+                "variants": [
+                    {"entity": "jerry", "count": 1},
+                    {"entity": "jerry seinfeld", "count": 1},
+                ],
+            }
+        ],
+        "segments_with_transcript_entity_disagreements": 2,
+        "transcript_entity_disagreement_category_counts": [
+            {"category": "transcript_full_name_reduced_to_partial_entity", "count": 1},
+            {"category": "title_bearing_transcript_name_not_resolved", "count": 1},
+        ],
+        "top_transcript_entity_disagreement_families": [
+            {
+                "category": "transcript_full_name_reduced_to_partial_entity",
+                "family_key": "partial::jerry",
+                "count": 1,
+                "example": {
+                    "scene_id": 101,
+                    "transcript_candidate": "Jerry Seinfeld",
+                    "entity_names": ["Jerry"],
+                    "mentioned_people": [{"text": "Jerry", "type": "PERSON"}],
+                    "speaker_aligned_mentions": [{"text": "Jerry", "type": "PERSON", "count": 1}],
+                    "reason": "transcript full-name surface reduced to partial local person identity",
+                },
+            },
+            {
+                "category": "title_bearing_transcript_name_not_resolved",
+                "family_key": "title_unresolved::mrs swedler",
+                "count": 1,
+                "example": {
+                    "scene_id": 102,
+                    "transcript_candidate": "Mrs. Swedler",
+                    "entity_names": [],
+                    "mentioned_people": [],
+                    "speaker_aligned_mentions": [],
+                    "reason": "title-bearing transcript person reference is not represented in local person truth surfaces",
+                },
+            },
+        ],
     }
     assert len(response.segments) == 1
     segment = response.segments[0]
@@ -142,6 +280,38 @@ def test_full_timeline_surfaces_persisted_audio_truth(monkeypatch: pytest.Monkey
     assert segment.time_hints == {"explicit_dates": [], "relative_phrases": ["next week"]}
     assert segment.content_state == "signal"
     assert segment.candidate_visible_people == [{"name": "anonymous_person_1"}]
+    assert segment.speaker_aligned_mentions == [{"text": "Jerry", "type": "PERSON", "count": 1}]
+    assert segment.interaction_dominance == {
+        "speaker_id": "SPEAKER_00",
+        "dominant_share": 0.8,
+        "segments": 1,
+        "stability": 1.0,
+        "confidence": "strong",
+        "continuity_key": "SPEAKER_00",
+    }
+    assert segment.conversation_owner == {
+        "text": "Jerry",
+        "type": "PERSON",
+        "confidence": "candidate",
+        "source": "interaction_chain",
+        "continuity_key": "SPEAKER_00",
+    }
+
+
+def test_full_timeline_accepts_string_scene_ids(monkeypatch: pytest.MonkeyPatch) -> None:
+    temporal_index = _sample_temporal_index()
+    temporal_index["segments"][0]["scene_id"] = "scene_0001_hash"
+    temporal_index["top_transcript_entity_disagreement_families"][0]["example"]["scene_id"] = "scene_0001_hash"
+    temporal_index["top_transcript_entity_disagreement_families"][1]["example"]["scene_id"] = "scene_0002_hash"
+
+    loader = _FakeLoader(temporal_index)
+    monkeypatch.setattr(timeline_module, "get_data_loader", lambda: loader)
+
+    response = asyncio.run(timeline_module.get_full_timeline(video_id="video_001"))
+
+    assert len(response.segments) == 1
+    assert response.segments[0].scene_id == "scene_0001_hash"
+    assert response.metadata["top_transcript_entity_disagreement_families"][0]["example"]["scene_id"] == "scene_0001_hash"
 
 
 def test_similar_scene_route_returns_real_neighbors(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -171,6 +341,22 @@ def test_similar_scene_route_returns_real_neighbors(monkeypatch: pytest.MonkeyPa
         "time_hints": {"explicit_dates": [], "relative_phrases": []},
         "content_state": "signal",
         "candidate_visible_people": [{"name": "anonymous_person_2"}],
+        "speaker_aligned_mentions": [{"text": "Jerry", "type": "PERSON", "count": 1}],
+        "interaction_dominance": {
+            "speaker_id": "SPEAKER_01",
+            "dominant_share": 0.75,
+            "segments": 1,
+            "stability": 1.0,
+            "confidence": "strong",
+            "continuity_key": "SPEAKER_01",
+        },
+        "conversation_owner": {
+            "text": "Jerry",
+            "type": "PERSON",
+            "confidence": "candidate",
+            "source": "interaction_chain",
+            "continuity_key": "SPEAKER_01",
+        },
     }
     engine = _FakeSearchEngine(
         [
@@ -200,3 +386,19 @@ def test_similar_scene_route_returns_real_neighbors(monkeypatch: pytest.MonkeyPa
     assert scene.sentiment == {"label": "neutral", "score": 0.51}
     assert scene.sentiment_label == "neutral"
     assert scene.sentiment_score == 0.51
+    assert scene.speaker_aligned_mentions == [{"text": "Jerry", "type": "PERSON", "count": 1}]
+    assert scene.interaction_dominance == {
+        "speaker_id": "SPEAKER_01",
+        "dominant_share": 0.75,
+        "segments": 1,
+        "stability": 1.0,
+        "confidence": "strong",
+        "continuity_key": "SPEAKER_01",
+    }
+    assert scene.conversation_owner == {
+        "text": "Jerry",
+        "type": "PERSON",
+        "confidence": "candidate",
+        "source": "interaction_chain",
+        "continuity_key": "SPEAKER_01",
+    }

@@ -72,6 +72,9 @@ def _build_scene_response(segment: dict) -> SceneResponse:
         time_hints=segment.get("time_hints"),
         content_state=segment.get("content_state"),
         candidate_visible_people=segment.get("candidate_visible_people", []),
+        speaker_aligned_mentions=segment.get("speaker_aligned_mentions", []),
+        interaction_dominance=segment.get("interaction_dominance"),
+        conversation_owner=segment.get("conversation_owner"),
     )
 
 

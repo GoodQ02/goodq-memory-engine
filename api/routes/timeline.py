@@ -15,6 +15,21 @@ router = APIRouter(prefix="/api/videos/{video_id}/timeline", tags=["timeline"])
 
 _data_loader = None
 
+_TIMELINE_TRUTH_METADATA_FIELDS = (
+    "segments_with_candidate_visible_people",
+    "segments_with_interaction_dominance",
+    "segments_with_conversation_owner",
+    "segments_with_speaker_aligned_mentions",
+    "segments_with_transcript_entity_disagreements",
+    "top_candidate_visible_people",
+    "top_interaction_dominance",
+    "top_conversation_owners",
+    "top_speaker_aligned_mentions",
+    "speaker_aligned_mention_variant_groups",
+    "transcript_entity_disagreement_category_counts",
+    "top_transcript_entity_disagreement_families",
+)
+
 
 def _segment_object_labels(segment: dict) -> list[str]:
     """Normalize persisted object payloads into plain labels for API responses."""
@@ -69,7 +84,24 @@ def _build_timeline_segment(seg: dict, truncate_transcript: bool = False) -> Tim
         time_hints=seg.get('time_hints'),
         content_state=seg.get('content_state'),
         candidate_visible_people=seg.get('candidate_visible_people', []),
+        speaker_aligned_mentions=seg.get("speaker_aligned_mentions", []),
+        interaction_dominance=seg.get("interaction_dominance"),
+        conversation_owner=seg.get("conversation_owner"),
     )
+
+
+def _build_timeline_metadata(temporal_index: dict, include_version: bool = False) -> dict:
+    """Project additive truth-model metadata from the persisted temporal index."""
+    metadata = {
+        'phase6_complete': temporal_index.get('phase6_complete', False),
+        'phase6_harmonized': temporal_index.get('phase6_harmonized', False),
+    }
+    if include_version:
+        metadata['version'] = temporal_index.get('version', 1)
+    for field_name in _TIMELINE_TRUTH_METADATA_FIELDS:
+        if field_name in temporal_index:
+            metadata[field_name] = temporal_index[field_name]
+    return metadata
 
 
 def get_data_loader():
@@ -113,10 +145,7 @@ async def get_timeline(
             total_scenes=len(set(seg.get('scene_id') for seg in temporal_index.get('segments', []) if seg.get('scene_id') is not None)),
             total_segments=len(segments),
             segments=segments,
-            metadata={
-                'phase6_complete': temporal_index.get('phase6_complete', False),
-                'phase6_harmonized': temporal_index.get('phase6_harmonized', False)
-            }
+            metadata=_build_timeline_metadata(temporal_index)
         )
         
     except HTTPException:
@@ -156,11 +185,7 @@ async def get_full_timeline(
             total_scenes=len(set(seg.get('scene_id') for seg in temporal_index.get('segments', []) if seg.get('scene_id') is not None)),
             total_segments=len(segments),
             segments=segments,
-            metadata={
-                'phase6_complete': temporal_index.get('phase6_complete', False),
-                'phase6_harmonized': temporal_index.get('phase6_harmonized', False),
-                'version': temporal_index.get('version', 1)
-            }
+            metadata=_build_timeline_metadata(temporal_index, include_version=True)
         )
         
     except HTTPException:

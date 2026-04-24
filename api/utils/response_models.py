@@ -6,6 +6,8 @@ from __future__ import annotations
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel, Field
 
+SceneId = int | str
+
 
 def default_confidence_payload() -> Dict[str, Any]:
     return {
@@ -19,7 +21,7 @@ def default_confidence_payload() -> Dict[str, Any]:
 
 class SceneResponse(BaseModel):
     """Scene metadata response."""
-    scene_id: int
+    scene_id: SceneId
     start: float
     end: float
     duration: float
@@ -46,6 +48,9 @@ class SceneResponse(BaseModel):
     time_hints: Optional[Dict[str, Any]] = None
     content_state: Optional[str] = None
     candidate_visible_people: List[Dict[str, Any]] = Field(default_factory=list)
+    speaker_aligned_mentions: List[Dict[str, Any]] = Field(default_factory=list)
+    interaction_dominance: Optional[Dict[str, Any]] = None
+    conversation_owner: Optional[Dict[str, Any]] = None
 
 
 class SearchResult(BaseModel):
@@ -53,7 +58,7 @@ class SearchResult(BaseModel):
     score: float
     modality: str
     video_id: Optional[str] = None
-    scene_id: Optional[int] = None
+    scene_id: Optional[SceneId] = None
     timestamp: Optional[float] = None
     representative_frame: Optional[str] = None
     transcript: Optional[str] = None
@@ -82,7 +87,7 @@ class TimelineSegment(BaseModel):
     segment_id: int
     start: float
     end: float
-    scene_id: Optional[int] = None
+    scene_id: Optional[SceneId] = None
     audio_chunks: List[int] = Field(default_factory=list)
     speaker_ids: List[str] = Field(default_factory=list)
     transcript: Optional[str] = None
@@ -105,6 +110,9 @@ class TimelineSegment(BaseModel):
     time_hints: Optional[Dict[str, Any]] = None
     content_state: Optional[str] = None
     candidate_visible_people: List[Dict[str, Any]] = Field(default_factory=list)
+    speaker_aligned_mentions: List[Dict[str, Any]] = Field(default_factory=list)
+    interaction_dominance: Optional[Dict[str, Any]] = None
+    conversation_owner: Optional[Dict[str, Any]] = None
 
 
 class TimelineResponse(BaseModel):

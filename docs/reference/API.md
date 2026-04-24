@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-04-22 -->
+<!-- DOC_LAST_VERIFIED: 2026-04-24 -->
 
 # GoodQ4All API Reference
 
@@ -97,9 +97,26 @@ The active line no longer exposes the older compatibility shell that previously 
 ## Scene API Truth
 
 - Scene responses now project the persisted continuity and speaker-truth layer directly from runtime artifacts.
-- Active scene read models include fields such as `speaker_count`, `dominant_speaker_id`, `continuity_key`, `diarization_status`, `emotion_status`, `speaker_voice_signature_count`, `speaker_voice_signature_meta`, `audio_emotion`, `time_hints`, `content_state`, and `candidate_visible_people`.
+- Active scene read models include fields such as `speaker_count`, `dominant_speaker_id`, `continuity_key`, `diarization_status`, `emotion_status`, `speaker_voice_signature_count`, `speaker_voice_signature_meta`, `audio_emotion`, `time_hints`, `content_state`, `candidate_visible_people`, `speaker_aligned_mentions`, `interaction_dominance`, and `conversation_owner`.
 - Search, scene, and timeline responses now also expose `sentiment`, `sentiment_label`, and `sentiment_score` as first-class outward fields.
 - Sentiment is descriptive only on the active line; it should inform interpretation without silently dictating ranking or replacing stronger multimodal evidence.
+
+## Timeline API Truth
+
+- `GET /api/timeline/full` is the primary read-only projection of persisted temporal truth.
+- Timeline metadata now includes additive visibility rollups for the interaction ladder and transcript/entity seam:
+  - `segments_with_candidate_visible_people`
+  - `segments_with_interaction_dominance`
+  - `segments_with_conversation_owner`
+  - `segments_with_speaker_aligned_mentions`
+  - `segments_with_transcript_entity_disagreements`
+  - `top_candidate_visible_people`
+  - `top_interaction_dominance`
+  - `top_conversation_owners`
+  - `top_speaker_aligned_mentions`
+  - `transcript_entity_disagreement_category_counts`
+  - `top_transcript_entity_disagreement_families`
+- These are read-only operator surfaces over persisted scene truth. They do not change KG writes, identity promotion, or retrieval ranking.
 
 ## Discovery Rule
 

@@ -160,6 +160,11 @@ These are active quality/maturity lanes, not system-blocking failures:
 - `conversation_owner` is still sparse on current short smokes
 - `interaction_dominance` is real but not yet dense enough to treat as a
   required output lane
+- `speaker_aligned_mentions` is now visible in scene/timeline read surfaces,
+  but it remains an additive evidence lane rather than identity truth
+- transcript/entity disagreement reporting is now available as a read-only
+  audit surface and should be used to study extractor/normalization seams
+  before widening inference rules
 - transcript-fragment cleanup still has some quality tails in older Season 4
   outputs
 - identity stitching is active, but `identity_evidence` remains conservative on

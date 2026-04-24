@@ -137,10 +137,16 @@ A few surfaces are real but still conservative:
 
 - `conversation_owner`
 - `interaction_dominance`
+- `speaker_aligned_mentions`
 - `candidate_visible_people`
 - cross-episode identity promotion to stronger person evidence
 
 These should be treated as additive context, not guaranteed primary truth.
+
+Timeline read surfaces also expose transcript/entity disagreement summaries so
+you can inspect where transcript names did not become canonical person truth.
+Those disagreement rollups are visibility aids, not automatic identity
+corrections.
 
 ## Monitoring And Status
 

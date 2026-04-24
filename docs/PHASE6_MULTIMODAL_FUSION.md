@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-04-20 -->
+<!-- DOC_LAST_VERIFIED: 2026-04-24 -->
 
 # Phase 6: Multimodal Fusion & Temporal Indexing
 
@@ -115,7 +115,10 @@ The temporal index is the canonical multimodal rollup for:
   - speaker voice-signature coverage
 - interaction context including:
   - `candidate_visible_people` (conservative physical-presence candidates)
+  - `speaker_aligned_mentions` (speaker-tied mention evidence)
+  - `interaction_dominance` (chain-level dominant speaker context)
   - `conversation_owner` (dominant interaction participant, not visual presence)
+  - transcript/entity disagreement rollups for operator visibility
 
 ---
 
@@ -141,6 +144,8 @@ Phase 6b also writes additive scene-level harmonized fields back into the persis
 - `visible_people`
 - `mentioned_people`
 - `candidate_visible_people`
+- `speaker_aligned_mentions`
+- `interaction_dominance`
 - `conversation_owner`
 - `scene_context_llm`
 - `scene_context_epistemic`
@@ -234,6 +239,24 @@ That includes:
 - richer perception context from already-produced audio metadata
 
 This means Phase 6 is now part of memory truth, not just a convenience layer.
+
+The temporal index also carries additive operator-facing visibility rollups for
+the interaction ladder and transcript/entity seam. Common read-only rollups now
+include:
+- `segments_with_candidate_visible_people`
+- `segments_with_interaction_dominance`
+- `segments_with_conversation_owner`
+- `segments_with_speaker_aligned_mentions`
+- `segments_with_transcript_entity_disagreements`
+- `top_candidate_visible_people`
+- `top_interaction_dominance`
+- `top_conversation_owners`
+- `top_speaker_aligned_mentions`
+- `transcript_entity_disagreement_category_counts`
+- `top_transcript_entity_disagreement_families`
+
+These are projections over persisted scene truth. They do not alter identity
+promotion, KG writes, or retrieval ranking.
 
 Current operator proof:
 

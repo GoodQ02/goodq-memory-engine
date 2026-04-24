@@ -1,7 +1,7 @@
 # Scene Manifest Specification
 
-**Status:** ✅ **STABLE AND OPERATIONAL**  
-**Last Verified:** April 20, 2026  
+**Status:** ✅ **STABLE AND OPERATIONAL**
+**Last Verified:** April 24, 2026
 **Evidence:** fresh Season 5 projection smoke artifacts produced epoch-scoped manifests with active WSL audio, persisted diarization/emotion truth, speaker continuity, and additive harmonized scene fields
 
 ---
@@ -110,9 +110,19 @@ Each scene entry contains the scene boundary, keyframe outputs, audio outputs, v
 - `music_events`
 - `time_hints`
 - `candidate_visible_people`
+- `speaker_aligned_mentions`
+- `interaction_dominance`
 - `conversation_owner`
 
 `speaker_ids` may still contain structural diarization labels such as `SPEAKER_00`. Those labels are not semantic identity by themselves.
+
+`speaker_aligned_mentions`, `interaction_dominance`, and `conversation_owner`
+are additive interaction/read-model fields. They must not be treated as direct
+identity promotion.
+
+Transcript/entity disagreement reporting is derived later from the persisted
+scene surface at temporal-index projection time. It is an operator visibility
+layer rather than a scene-manifest write contract of its own.
 
 ### `scene_context_llm` Contract
 

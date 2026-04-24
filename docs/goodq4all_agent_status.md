@@ -186,6 +186,8 @@ Audit Status: ACTIVE (2026-04-10)
 - Entity-noise cleanup still has a few season-level tails to inspect (`God`, `Wednesday`, `Tuesday`, `Superman`, `West`).
 - `conversation_owner` remains sparse on the current short smoke and should not be treated as a primary operator-facing truth surface yet.
 - `interaction_dominance` is now genuinely live, but still sparse enough that it should be treated as additive context rather than a required output lane.
+- `speaker_aligned_mentions` is now exposed through the active scene/timeline read surfaces as an additive evidence lane.
+- transcript/entity disagreement rollups are now exposed through timeline metadata so operator audits can isolate upstream normalization seams without changing inference behavior.
 - The `GOOD-SPEED-32` WSL audio bootstrap drift issue is now fixed on `main`; any remaining laptop follow-up is host-confirmation work rather than a desktop-side blocker.
 
 ## Recent Notable Changes

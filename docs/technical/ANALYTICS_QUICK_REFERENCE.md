@@ -1,22 +1,27 @@
 # GoodQ Analytics Quick Reference Guide
 
-> Role: Canonical quick reference for the analytics system (dashboards, queries, and configuration). For implementation status of web analytics pages, see `docs/ANALYTICS_PAGES_COMPLETE.md`; for related scripts and reports, see `docs/ANALYTICS_INDEX.md`.
+> Role: Active quick reference for the analytics sidecar (dashboards, queries, and configuration). This is not the canonical runtime authority for ingest, retrieval, or system status. For historical web analytics pages, see `docs/ANALYTICS_PAGES_COMPLETE.md`; for related scripts and reports, see `docs/ANALYTICS_INDEX.md`.
 
 ## Overview
 The GoodQ Analytics system provides comprehensive insights into your video library through multi-modal analysis, LLM-powered insights, and interactive querying.
+
+Current truth:
+- analytics is a secondary reporting/inspection stack
+- it can be useful for summaries, dashboards, and exploratory querying
+- it should not be treated as the source of truth over persisted runtime artifacts, API runtime surfaces, or witness outputs
 
 ## Quick Start
 
 ### 1. Generate Global Dashboard
 ```bash
-python analytics_dashboard.py --dashboard
+python scripts/analytics_cli.py dashboard
 ```
 **Output:** `output/analytics_dashboard.md`
 **Shows:** Global statistics, library overview, emotional trends, content summary
 
 ### 2. Analyze Specific Video
 ```bash
-python analytics_dashboard.py "path/to/video.mp4"
+python scripts/analytics_cli.py analyze "path/to/video.mp4"
 ```
 **Output:** 
 - `output/[video]_analytics.json` (machine-readable)
@@ -24,7 +29,7 @@ python analytics_dashboard.py "path/to/video.mp4"
 
 ### 3. Interactive Query Session
 ```bash
-python analytics_query.py
+python scripts/analytics_cli.py query --interactive
 ```
 **Usage:** Ask natural language questions about your videos
 
@@ -383,4 +388,4 @@ For issues or questions:
 
 **Analytics System Version:** 1.0
 **Last Updated:** 2025-11-08
-**Status:** Production Ready
+**Status:** Functional secondary tooling; not canonical runtime authority

@@ -149,7 +149,6 @@ That workspace contains the direct unified worker and its helper scripts.
 - `python -m cli.monitor_ingestion`
 - `python -m cli.system_status`
 - `python -m cli.print_config`
-- `python -m cli.list_runs`
 - `python -m cli.list_inbox`
 - `python -m cli.retrieve`
 - `python -m cli.nl_query`

@@ -122,11 +122,11 @@ This doc intentionally does not freeze provider/model combinations; those may ev
 ### `run_narrative.py`
 
 **Purpose**
-- helper surface for narrative-oriented reporting around runs
+- historical compatibility shell for narrative-oriented run reporting
 
 **Current Truth**
-- auxiliary, not canonical orchestration
-- does not replace `cli/run_ingestion.py`
+- retired from the tracked runtime surface because the old run-summary backing module is gone
+- remains historical only until a truthful summary surface is explicitly restored
 
 ---
 

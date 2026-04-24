@@ -61,7 +61,7 @@ def _load_api_main():
     meta_module = _load_meta_route_module(repo_root)
 
     routes_pkg = types.ModuleType("api.routes")
-    for name in ["search", "scenes", "timeline", "media", "system", "run_summary", "run_index", "ingest"]:
+    for name in ["search", "scenes", "timeline", "media", "system", "ingest"]:
         mod = types.ModuleType(f"api.routes.{name}")
         mod.router = APIRouter()
         setattr(routes_pkg, name, mod)
@@ -108,6 +108,8 @@ def test_main_api_prunes_legacy_compatibility_endpoints() -> None:
         "/api/progress",
         "/api/scene/{scene_id}",
         "/api/chat/control-agent",
+        "/runs",
+        "/runs/{run_id}",
     }
 
     assert retired_paths.isdisjoint(paths)

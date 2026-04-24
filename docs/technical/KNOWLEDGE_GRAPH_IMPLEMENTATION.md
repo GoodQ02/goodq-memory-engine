@@ -1,10 +1,17 @@
 # Knowledge Graph Implementation Complete
 
 **Date**: October 7, 2025  
-**Status**: ✅ Fully Implemented and Tested  
+**Status**: HISTORICAL IMPLEMENTATION NOTE  
 **Version**: 1.0.0
 
 ---
+
+> Status note: the core knowledge graph runtime remains active, but the
+> historical `lib/graph_query.py` and `cli/graph_query.py` query surfaces
+> documented below are retired and are not part of the current tracked runtime.
+> Any `GraphQuery` imports or `cli/graph_query.py` examples in this file are
+> archival implementation context only and should not be treated as current
+> operator guidance.
 
 ## Executive Summary
 
@@ -31,14 +38,9 @@ A SQLite-based graph database with:
 
 ### 2. Query Interface (`lib/graph_query.py`)
 
-High-level Python API for common query patterns:
-- Find person appearances across all media
-- Get complete scene context with all entities
-- Find related scenes based on shared entities
-- Track concept evolution over time
-- Search by multiple criteria (objects, emotions, time range, confidence)
-- Generate temporal narratives
-- Entity summarization and statistics
+Historical Python query surface preserved here for reference only:
+- no longer present in the active runtime
+- older usage examples should be treated as archival context, not current operator guidance
 
 ### 3. Pipeline Integration (`steps/graph_builder/`)
 
@@ -53,16 +55,9 @@ historical compatibility/backfill surface that:
 
 ### 4. CLI Tool (`cli/graph_query.py`)
 
-Command-line interface with commands:
-- `stats` - Show graph statistics
-- `find-person` - Find all appearances of a person
-- `scene-context` - Get full context for a scene
-- `related-scenes` - Find similar scenes
-- `track-concept` - Track concept over time
-- `list-entities` - List all entities
-- `search` - Multi-criteria search
-- `story` - Generate temporal narrative
-- `export` - Export subgraph to JSON
+Historical command-line query surface:
+- retired from the active runtime
+- now kept only as a visible compatibility shell for old invocations
 
 ### 5. Testing & Validation (`scripts/test_knowledge_graph.py`)
 

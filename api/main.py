@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from api.routes import ingest, media, meta, run_index, run_summary, runtime, scenes, search, system, timeline
+from api.routes import ingest, media, meta, runtime, scenes, search, system, timeline
 from goodq_version import GOODQ_VERSION
 from steps.common.config_loader import load_configs
 
@@ -63,8 +63,6 @@ app.include_router(timeline.router)
 app.include_router(media.router)
 app.include_router(system.router)
 app.include_router(ingest.router)
-app.include_router(run_summary.router)
-app.include_router(run_index.router)
 app.include_router(runtime.router)
 
 # Enforce CONFIG_LOADING_CONTRACT: reuse the already-loaded cfg in submodules.

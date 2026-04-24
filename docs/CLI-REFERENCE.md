@@ -153,18 +153,22 @@ This is a query helper surface, not a separate memory authority.
 ### `python -m cli.memory health-check`
 
 Runs memory diagnostics against the active epoch `memory.db`.
+If the legacy `lib.memory_management` package is absent, this command now fails visibly with an explicit compatibility message.
 
 ### `python -m cli.memory backup`
 
 Creates a backup rooted at the configured `log_dir`.
+If the legacy `lib.memory_management` package is absent, this command now fails visibly with an explicit compatibility message.
 
 ### `python -m cli.memory verify-schema`
 
 Checks schema drift for the configured `db_path`.
+If the legacy `lib.memory_management` package is absent, this command now fails visibly with an explicit compatibility message.
 
 ### `python -m cli.memory migrate`
 
 Runs database migration on the configured `db_path`.
+If the legacy `lib.memory_management` package is absent, this command now fails visibly with an explicit compatibility message.
 
 ### Additional Current Subcommands
 
@@ -186,7 +190,12 @@ Lists inbox contents using the resolved config/runtime paths.
 
 ### `python -m cli.list_runs`
 
-Enumerates known runs/reruns from the runtime-facing run surfaces.
+Retired compatibility shell.
+
+Current truth:
+- the old runtime-facing run index backing module is gone
+- this command now fails visibly instead of pretending the surface still exists
+- use persisted runtime artifacts or the active read-only API/runtime surfaces instead
 
 ### `python -m cli.test_ingestion`
 

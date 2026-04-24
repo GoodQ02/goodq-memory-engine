@@ -46,3 +46,19 @@ def test_overview_filters_semantic_noise_from_tags_and_entities(tmp_path):
         {"label": "Jerry", "count": 1},
         {"label": "Vermont", "count": 1},
     ]
+
+
+def test_overview_reports_unavailable_memory_diagnostics_when_package_is_missing(tmp_path):
+    sys.modules.pop("steps.overview.step", None)
+    sys.modules.pop("lib.memory_management", None)
+    sys.modules.pop("lib.memory_management.diagnostics", None)
+
+    overview_module = importlib.import_module("steps.overview.step")
+    report = overview_module.overview(
+        [],
+        {"video_summaries": []},
+        {"paths": {"db_path": str(tmp_path / "memory.db"), "log_dir": str(tmp_path / "logs")}},
+    )
+
+    assert report["memory_health_report"]["status"] == "unavailable"
+    assert report["memory_health_report"]["error"] == "memory_management_module_missing"

@@ -42,8 +42,6 @@ Router-backed endpoint families mounted into the same process:
 - `/api/timeline`
 - `/api/media`
 - `/api/system`
-- `/api/run-index`
-- `/api/run-summary`
 - `/api/videos/{video_id}/scenes`
 
 ## Discovery Surfaces
@@ -61,6 +59,7 @@ The active line no longer exposes the older compatibility shell that previously 
 - Removed legacy scene and graph mirrors: `/api/scenes`, `/api/knowledge_graph`, `/api/scene/{scene_id}`
 - Removed legacy analytics placeholders: `/api/analytics/*`
 - Removed legacy operator/debug stubs: `/api/command-center`, `/api/processes`, `/api/progress`, `/api/processing/stats`, `/api/logs/watchdog`, `/api/test-audio`, `/api/chat/control-agent`
+- Removed broken run read shells: `/runs`, `/runs/{run_id}`
 
 ## Active Search and Scene Retrieval Notes
 

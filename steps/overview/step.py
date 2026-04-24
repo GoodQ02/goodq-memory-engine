@@ -1,12 +1,21 @@
 from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
+import json
 import os
 import sqlite3
 import time
-import json
 
-from lib.memory_management.diagnostics import run_all_diagnostics
+try:
+    from lib.memory_management.diagnostics import run_all_diagnostics
+except ModuleNotFoundError:
+    def run_all_diagnostics(_paths):
+        print("[WARN] memory diagnostics unavailable: lib.memory_management.diagnostics missing")
+        return {
+            "status": "unavailable",
+            "error": "memory_management_module_missing",
+            "detail": "lib.memory_management.diagnostics is not available in this runtime",
+        }
 
 try:
     from steps.common.tag_utils import (

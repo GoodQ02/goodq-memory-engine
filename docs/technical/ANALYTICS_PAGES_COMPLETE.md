@@ -2,6 +2,8 @@
 
 > Historical implementation summary for the analytics pages and `/api/analytics/*` endpoints as of Phase 7. The analytics capability remains live through scripts and reporting workflows, but the older `/api/analytics/*` HTTP endpoints are retired from the active runtime surface. For current usage, see `docs/ANALYTICS_QUICK_REFERENCE.md` and `docs/ANALYTICS_INDEX.md`.
 
+STATUS: HISTORICAL (not active runtime truth)
+
 ## Summary
 Successfully wired in comprehensive analytics pages with **100% real data streams** - NO placeholders or mock data.
 
@@ -190,7 +192,7 @@ Added comprehensive styles for:
 - Timeline (temporal events, date ranges)
 - Embeddings (FAISS indices, coverage metrics)
 
-### ✓ Production Ready
+### ✓ Historically Production-Ready
 - Error handling on all endpoints
 - Graceful fallbacks for missing data
 - Proper HTTP status codes
@@ -239,22 +241,20 @@ Added comprehensive styles for:
 ## Files Modified
 
 ### Backend
-- `<project_root>\api/main.py` - Current canonical home of the analytics endpoints preserved from the original rollout
+- `<project_root>\api/main.py` - Historical home of the analytics endpoints preserved from the original rollout
 
 ### Frontend
 - `<project_root>\index.html` - Added tabbed analytics interface, CSS styling, and JavaScript handlers
 
 ---
 
-## Status: ✅ PHASE COMPLETE
+## Status: Historical Phase Summary
 
-All analytics pages are fully wired with real data streams. The system is production-ready and provides comprehensive insights into:
+These analytics pages were once wired with real data streams. They are no longer the active runtime surface and should be read as historical implementation context only:
 - Memory processing status
 - Knowledge graph structure
 - Temporal timelines
 - Embedding coverage
-
-**Ready for Phase 2.3: Additional UI enhancements and integrations**
 
 ---
 

@@ -53,10 +53,10 @@ _Generated: 2026-02-15_
 | `cli/conduits_sensitive_sources.py` | Runtime Utility | Sensitive Source Wiring Pack v1: UI-safe reserved conduits (derived-only; empty by default). | Yes | None detected |
 | `cli/conduits_store_stats.py` | Runtime Utility | Conduit Pack v1: UI-safe store stats conduits (counts/dims only). | Yes | None detected |
 | `cli/goodq_doctor.py` | Runtime Utility | GoodQ Doctor - Read-only ingestion preflight validator. | Manual Review | absolute path operations |
-| `cli/graph_query.py` | Runtime Utility | Knowledge Graph Query CLI | Manual Review | absolute path operations |
+| `cli/graph_query.py` | Unclear/Obsolete | Retired compatibility shell for the historical graph query surface. | No | None detected |
 | `cli/links.py` | Runtime Utility | Utility script for links. | Yes | None detected |
 | `cli/list_inbox.py` | Runtime Utility | Utility script for list inbox. | Yes | None detected |
-| `cli/list_runs.py` | Runtime Utility | Utility script for list runs. | Yes | None detected |
+| `cli/list_runs.py` | Unclear/Obsolete | Retired compatibility shell for the old run-index surface. | No | None detected |
 | `cli/media_refs.py` | Runtime Utility | GoodQ UI-safe media reference tokens (local-only). | Yes | None detected |
 | `cli/memory.py` | Runtime Utility | exit non-zero if error or warning | No | destructive actions |
 | `cli/monitor_ingestion.py` | Runtime Utility | GoodQ4All - Live Ingestion Monitor | Manual Review | absolute path operations |
@@ -67,8 +67,8 @@ _Generated: 2026-02-15_
 | `cli/print_config.py` | Runtime Utility | Utility script for print config. | Yes | None detected |
 | `cli/retrieve.py` | Runtime Utility | Utility script for retrieve. | Yes | None detected |
 | `cli/run_ingestion.py` | Runtime Utility | Setup logger | Manual Review | absolute path operations |
-| `cli/run_narrative.py` | Runtime Utility | Utility script for run narrative. | Yes | None detected |
-| `cli/run_summary.py` | Runtime Utility | Utility script for run summary. | Yes | None detected |
+| `cli/run_narrative.py` | Unclear/Obsolete | Retired compatibility shell for the old narrative reporting surface. | No | None detected |
+| `cli/run_summary.py` | Unclear/Obsolete | Retired compatibility shell for the old run-summary surface. | No | None detected |
 | `cli/step_runner.py` | Runtime Utility | Add repo root to Python path so "steps.*" modules can be imported | Manual Review | absolute path operations |
 | `cli/system_status.py` | Runtime Utility | GoodQ4All System Status Dashboard | Manual Review | absolute path operations |
 | `cli/test_ingestion.py` | Runtime Utility | GoodQ4All End-to-End Ingestion Test Suite | Yes | None detected |
@@ -334,7 +334,7 @@ _Generated: 2026-02-15_
 | `agents/watchdog_agent_integration.py` | Unclear/Obsolete | absolute path operations |
 | `cli/conduits_processing.py` | Runtime Utility | destructive actions |
 | `cli/goodq_doctor.py` | Runtime Utility | absolute path operations |
-| `cli/graph_query.py` | Runtime Utility | absolute path operations |
+| `cli/graph_query.py` | Unclear/Obsolete | None detected |
 | `cli/memory.py` | Runtime Utility | destructive actions |
 | `cli/monitor_ingestion.py` | Runtime Utility | absolute path operations |
 | `cli/nl_query.py` | Runtime Utility | absolute path operations |

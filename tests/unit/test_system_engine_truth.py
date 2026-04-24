@@ -46,7 +46,7 @@ def _load_api_main():
     meta_module = _load_meta_route()
 
     routes_pkg = types.ModuleType("api.routes")
-    for name in ["search", "scenes", "timeline", "media", "system", "run_summary", "run_index", "ingest", "runtime"]:
+    for name in ["search", "scenes", "timeline", "media", "system", "ingest", "runtime"]:
         mod = types.ModuleType(f"api.routes.{name}")
         mod.router = APIRouter()
         setattr(routes_pkg, name, mod)

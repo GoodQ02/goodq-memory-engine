@@ -1,5 +1,12 @@
 # Knowledge Graph System
 
+> Status note: knowledge graph persistence remains active, but the historical
+> `lib/graph_query.py` and `cli/graph_query.py` query surfaces referenced in
+> this document are retired and are not part of the active runtime truth.
+> Any `GraphQuery` imports or `cli/graph_query.py` commands shown below are
+> preserved as archival reference only and should not be executed as current
+> operator guidance.
+
 ## Overview
 
 The GoodQ Knowledge Graph provides a powerful semantic layer on top of the multimodal analysis pipeline. It creates rich, queryable relationships between entities, concepts, temporal events, and media content.
@@ -16,9 +23,9 @@ The GoodQ Knowledge Graph provides a powerful semantic layer on top of the multi
    - Temporal events: time-based occurrences
 
 2. **GraphQuery** (`lib/graph_query.py`)
-   - High-level query interface
-   - Specialized query methods for common patterns
-   - Entity summarization and statistics
+   - historical query helper surface
+   - no longer present in the active runtime
+   - older examples mentioning it should be treated as archival reference only
 
 3. **Graph Builder Step** (`steps/graph_builder/`)
    - historical compatibility/backfill surface
@@ -27,8 +34,8 @@ The GoodQ Knowledge Graph provides a powerful semantic layer on top of the multi
    - Automatically creates nodes, edges, and relationships
 
 4. **CLI Tool** (`cli/graph_query.py`)
-   - Command-line interface for querying
-   - Interactive exploration of the graph
+   - retired compatibility shell
+   - kept only to fail visibly when old workflows still invoke it
 
 ## Database Schema
 

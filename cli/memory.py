@@ -1,21 +1,35 @@
 from __future__ import annotations
 import json
 import sys
+from pathlib import Path
 from typing import Optional
 
 import typer
 
 from steps.common.config_loader import load_configs
-from lib.memory_management.diagnostics import run_all_diagnostics, check_schema_drift
-from lib.memory_management.utils import create_memory_backup
-from lib.memory_management.migrate import migrate_database
 from typing import Any, Dict
 
 app = typer.Typer(add_completion=False, help="GoodQ memory management CLI")
 
 
+def _missing_memory_management(command_name: str, exc: ModuleNotFoundError) -> None:
+    typer.echo(
+        (
+            f"cli.memory {command_name} is unavailable because the legacy "
+            f"memory_management package is missing ({exc.name})."
+        ),
+        err=True,
+    )
+    raise typer.Exit(code=2)
+
+
 @app.command("health-check")
 def health_check(output_file: Optional[str] = typer.Option(None, help="Write report to file")) -> None:
+    try:
+        from lib.memory_management.diagnostics import run_all_diagnostics
+    except ModuleNotFoundError as exc:
+        _missing_memory_management("health-check", exc)
+
     cfg = load_configs({})
     paths = cfg.get("paths", {}) or {}
     report = run_all_diagnostics(paths)
@@ -31,6 +45,11 @@ def health_check(output_file: Optional[str] = typer.Option(None, help="Write rep
 
 @app.command("backup")
 def backup() -> None:
+    try:
+        from lib.memory_management.utils import create_memory_backup
+    except ModuleNotFoundError as exc:
+        _missing_memory_management("backup", exc)
+
     cfg = load_configs({})
     paths = cfg.get("paths", {}) or {}
     backup_root = (paths.get("log_dir") or ".")
@@ -40,6 +59,11 @@ def backup() -> None:
 
 @app.command("verify-schema")
 def verify_schema() -> None:
+    try:
+        from lib.memory_management.diagnostics import check_schema_drift
+    except ModuleNotFoundError as exc:
+        _missing_memory_management("verify-schema", exc)
+
     cfg = load_configs({})
     paths = cfg.get("paths", {}) or {}
     rep = check_schema_drift(paths.get("db_path") or "")
@@ -55,6 +79,11 @@ def verify_schema() -> None:
 @app.command("migrate")
 def migrate() -> None:
     """Run safe DB migration to enforce NOT NULLs and drop legacy tables."""
+    try:
+        from lib.memory_management.migrate import migrate_database
+    except ModuleNotFoundError as exc:
+        _missing_memory_management("migrate", exc)
+
     cfg = load_configs({})
     paths = cfg.get("paths", {}) or {}
     db_path = paths.get("db_path")
@@ -284,4 +313,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

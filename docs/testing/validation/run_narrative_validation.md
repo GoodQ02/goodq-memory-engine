@@ -1,22 +1,24 @@
-# Run Narrative Validation (Read-Only)
+# Run Narrative Validation (Historical Only)
 
-Purpose: record deterministic narrative checks and stdout/stderr isolation.
+STATUS: HISTORICAL (not active runtime truth)
+
+Purpose: preserve the old narrative validation procedure for reference only.
 
 ## Sample commands
 
-Success run:
+Historical success run:
 
 ```bash
 python -m cli.run_narrative <run_id> | tee narrative_success.txt
 ```
 
-Partial run:
+Historical partial run:
 
 ```bash
 python -m cli.run_narrative <run_id> | tee narrative_partial.txt
 ```
 
-Invalid run_id:
+Historical invalid run_id:
 
 ```bash
 python -m cli.run_narrative not-a-uuid 1> narrative_bad.txt 2> narrative_bad.err
@@ -28,11 +30,11 @@ Diff check for similar runs:
 git diff --no-index narrative_success.txt narrative_success_2.txt
 ```
 
-## Expected behavior
+## Historical expected behavior
 
-- Success and partial runs emit raw narrative text to stdout only.
-- Invalid or missing run_id emits errors to stderr only and exits non-zero.
-- Diff output should show only factual field differences; ordering and language remain stable.
+- This validation no longer reflects an active supported runtime surface.
+- The current `cli.run_narrative` shell now fails visibly because the old run-summary backing module is gone.
+- Do not use this document as active operator guidance.
 
 ## Artifact policy
 

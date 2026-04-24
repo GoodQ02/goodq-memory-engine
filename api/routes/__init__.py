@@ -1,5 +1,5 @@
 """API routes package for GoodQ4All."""
-from api.routes import ingest, media, meta, run_index, run_summary, runtime, scenes, search, system, timeline
+from api.routes import ingest, media, meta, runtime, scenes, search, system, timeline
 
 __all__ = [
     "meta",
@@ -8,8 +8,6 @@ __all__ = [
     "timeline",
     "media",
     "system",
-    "run_summary",
-    "run_index",
     "ingest",
     "runtime",
 ]

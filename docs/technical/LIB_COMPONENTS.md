@@ -142,6 +142,7 @@ This doc intentionally does not freeze provider/model combinations; those may ev
 
 **Current Truth**
 - enumerates run roots from current structured artifacts only
+- honors `GOODQ_RUN_REPORTS_ROOT` when a follower clone needs to read a shared artifact root
 - does not revive the retired `/runs` compatibility shell
 - does not mutate orchestration or canonical per-video truth
 

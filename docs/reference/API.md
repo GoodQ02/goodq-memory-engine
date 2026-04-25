@@ -101,7 +101,7 @@ The active line no longer exposes the older compatibility shell that previously 
 ## Scene API Truth
 
 - Scene responses now project the persisted continuity and speaker-truth layer directly from runtime artifacts.
-- Active scene read models include fields such as `speaker_count`, `dominant_speaker_id`, `continuity_key`, `diarization_status`, `emotion_status`, `speaker_voice_signature_count`, `speaker_voice_signature_meta`, `audio_emotion`, `time_hints`, `content_state`, `candidate_visible_people`, `speaker_aligned_mentions`, `interaction_dominance`, and `conversation_owner`.
+- Active scene read models include fields such as `speaker_count`, `dominant_speaker_id`, `continuity_key`, `diarization_status`, `emotion_status`, `speaker_voice_signature_count`, `speaker_voice_signature_meta`, `audio_emotion`, `time_hints`, `content_state`, `candidate_visible_people`, `speaker_aligned_mentions`, `transcript_entity_disagreements`, `interaction_dominance`, and `conversation_owner`.
 - Search, scene, and timeline responses now also expose `sentiment`, `sentiment_label`, and `sentiment_score` as first-class outward fields.
 - Sentiment is descriptive only on the active line; it should inform interpretation without silently dictating ranking or replacing stronger multimodal evidence.
 
@@ -114,11 +114,13 @@ The active line no longer exposes the older compatibility shell that previously 
   - `segments_with_conversation_owner`
   - `segments_with_speaker_aligned_mentions`
   - `segments_with_transcript_entity_disagreements`
+  - `segments_with_full_name_partial_entity_disagreements`
   - `top_candidate_visible_people`
   - `top_interaction_dominance`
   - `top_conversation_owners`
   - `top_speaker_aligned_mentions`
   - `transcript_entity_disagreement_category_counts`
+  - `top_transcript_full_name_partial_entity_families`
   - `top_transcript_entity_disagreement_families`
 - These are read-only operator surfaces over persisted scene truth. They do not change KG writes, identity promotion, or retrieval ranking.
 

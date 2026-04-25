@@ -440,18 +440,32 @@ def _build_transcript_entity_disagreement_summary(
     category_counts: Counter[str] = Counter()
     family_counts: Counter[tuple[str, str]] = Counter()
     family_examples: Dict[tuple[str, str], Dict[str, Any]] = {}
+    full_name_partial_family_counts: Counter[str] = Counter()
+    full_name_partial_examples: Dict[str, Dict[str, Any]] = {}
     segments_with_disagreements = 0
+    segments_with_full_name_partial_entity_disagreements = 0
 
     for segment in unified_segments:
-        disagreements = _segment_transcript_entity_disagreements(segment)
+        disagreements = segment.get("transcript_entity_disagreements")
+        if not isinstance(disagreements, list):
+            disagreements = _segment_transcript_entity_disagreements(segment)
         if disagreements:
             segments_with_disagreements += 1
+        if any(
+            isinstance(disagreement, dict)
+            and disagreement.get("category") == "transcript_full_name_reduced_to_partial_entity"
+            for disagreement in disagreements
+        ):
+            segments_with_full_name_partial_entity_disagreements += 1
         for disagreement in disagreements:
             category = disagreement["category"]
             family_key = disagreement["family_key"]
             category_counts[category] += 1
             family_counts[(category, family_key)] += 1
             family_examples.setdefault((category, family_key), disagreement)
+            if category == "transcript_full_name_reduced_to_partial_entity":
+                full_name_partial_family_counts[family_key] += 1
+                full_name_partial_examples.setdefault(family_key, disagreement)
 
     ordered_category_counts = [
         {"category": category, "count": count}
@@ -472,9 +486,26 @@ def _build_transcript_entity_disagreement_summary(
             }
         )
 
+    top_full_name_partial_families: List[Dict[str, Any]] = []
+    for family_key, count in sorted(
+        full_name_partial_family_counts.items(),
+        key=lambda item: (-item[1], item[0]),
+    )[:20]:
+        top_full_name_partial_families.append(
+            {
+                "family_key": family_key,
+                "count": count,
+                "example": full_name_partial_examples[family_key],
+            }
+        )
+
     return {
         "segments_with_transcript_entity_disagreements": segments_with_disagreements,
+        "segments_with_full_name_partial_entity_disagreements": (
+            segments_with_full_name_partial_entity_disagreements
+        ),
         "transcript_entity_disagreement_category_counts": ordered_category_counts,
+        "top_transcript_full_name_partial_entity_families": top_full_name_partial_families,
         "top_transcript_entity_disagreement_families": top_families,
     }
 
@@ -2690,7 +2721,9 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
     _apply_interaction_dominance_window(unified_segments)
     _apply_conversation_owner_window(unified_segments)
     _apply_scene_context_llm(unified_segments, scene_lookup, cfg)
-    
+    for segment in unified_segments:
+        segment["transcript_entity_disagreements"] = _segment_transcript_entity_disagreements(segment)
+
     # === CREATE TEMPORAL INDEX ===
     
     # Aggregate all entities across segments

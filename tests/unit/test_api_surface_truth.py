@@ -71,9 +71,24 @@ def _sample_temporal_index() -> dict:
             }
         ],
         "segments_with_transcript_entity_disagreements": 2,
+        "segments_with_full_name_partial_entity_disagreements": 1,
         "transcript_entity_disagreement_category_counts": [
             {"category": "transcript_full_name_reduced_to_partial_entity", "count": 1},
             {"category": "title_bearing_transcript_name_not_resolved", "count": 1},
+        ],
+        "top_transcript_full_name_partial_entity_families": [
+            {
+                "family_key": "partial::jerry",
+                "count": 1,
+                "example": {
+                    "scene_id": 101,
+                    "transcript_candidate": "Jerry Seinfeld",
+                    "entity_names": ["Jerry"],
+                    "mentioned_people": [{"text": "Jerry", "type": "PERSON"}],
+                    "speaker_aligned_mentions": [{"text": "Jerry", "type": "PERSON", "count": 1}],
+                    "reason": "transcript full-name surface reduced to partial local person identity",
+                },
+            }
         ],
         "top_transcript_entity_disagreement_families": [
             {
@@ -136,6 +151,18 @@ def _sample_temporal_index() -> dict:
                 "content_state": "signal",
                 "candidate_visible_people": [{"name": "anonymous_person_1"}],
                 "speaker_aligned_mentions": [{"text": "Jerry", "type": "PERSON", "count": 1}],
+                "transcript_entity_disagreements": [
+                    {
+                        "category": "transcript_full_name_reduced_to_partial_entity",
+                        "family_key": "partial::jerry",
+                        "scene_id": 101,
+                        "transcript_candidate": "Jerry Seinfeld",
+                        "entity_names": ["Jerry"],
+                        "mentioned_people": [{"text": "Jerry", "type": "PERSON"}],
+                        "speaker_aligned_mentions": [{"text": "Jerry", "type": "PERSON", "count": 1}],
+                        "reason": "transcript full-name surface reduced to partial local person identity",
+                    }
+                ],
                 "interaction_dominance": {
                     "speaker_id": "SPEAKER_00",
                     "dominant_share": 0.8,
@@ -181,6 +208,18 @@ def test_list_scenes_surfaces_persisted_audio_truth(monkeypatch: pytest.MonkeyPa
     assert scene.content_state == "signal"
     assert scene.candidate_visible_people == [{"name": "anonymous_person_1"}]
     assert scene.speaker_aligned_mentions == [{"text": "Jerry", "type": "PERSON", "count": 1}]
+    assert scene.transcript_entity_disagreements == [
+        {
+            "category": "transcript_full_name_reduced_to_partial_entity",
+            "family_key": "partial::jerry",
+            "scene_id": 101,
+            "transcript_candidate": "Jerry Seinfeld",
+            "entity_names": ["Jerry"],
+            "mentioned_people": [{"text": "Jerry", "type": "PERSON"}],
+            "speaker_aligned_mentions": [{"text": "Jerry", "type": "PERSON", "count": 1}],
+            "reason": "transcript full-name surface reduced to partial local person identity",
+        }
+    ]
     assert scene.interaction_dominance == {
         "speaker_id": "SPEAKER_00",
         "dominant_share": 0.8,
@@ -230,9 +269,24 @@ def test_full_timeline_surfaces_persisted_audio_truth(monkeypatch: pytest.Monkey
             }
         ],
         "segments_with_transcript_entity_disagreements": 2,
+        "segments_with_full_name_partial_entity_disagreements": 1,
         "transcript_entity_disagreement_category_counts": [
             {"category": "transcript_full_name_reduced_to_partial_entity", "count": 1},
             {"category": "title_bearing_transcript_name_not_resolved", "count": 1},
+        ],
+        "top_transcript_full_name_partial_entity_families": [
+            {
+                "family_key": "partial::jerry",
+                "count": 1,
+                "example": {
+                    "scene_id": 101,
+                    "transcript_candidate": "Jerry Seinfeld",
+                    "entity_names": ["Jerry"],
+                    "mentioned_people": [{"text": "Jerry", "type": "PERSON"}],
+                    "speaker_aligned_mentions": [{"text": "Jerry", "type": "PERSON", "count": 1}],
+                    "reason": "transcript full-name surface reduced to partial local person identity",
+                },
+            }
         ],
         "top_transcript_entity_disagreement_families": [
             {
@@ -281,6 +335,18 @@ def test_full_timeline_surfaces_persisted_audio_truth(monkeypatch: pytest.Monkey
     assert segment.content_state == "signal"
     assert segment.candidate_visible_people == [{"name": "anonymous_person_1"}]
     assert segment.speaker_aligned_mentions == [{"text": "Jerry", "type": "PERSON", "count": 1}]
+    assert segment.transcript_entity_disagreements == [
+        {
+            "category": "transcript_full_name_reduced_to_partial_entity",
+            "family_key": "partial::jerry",
+            "scene_id": 101,
+            "transcript_candidate": "Jerry Seinfeld",
+            "entity_names": ["Jerry"],
+            "mentioned_people": [{"text": "Jerry", "type": "PERSON"}],
+            "speaker_aligned_mentions": [{"text": "Jerry", "type": "PERSON", "count": 1}],
+            "reason": "transcript full-name surface reduced to partial local person identity",
+        }
+    ]
     assert segment.interaction_dominance == {
         "speaker_id": "SPEAKER_00",
         "dominant_share": 0.8,

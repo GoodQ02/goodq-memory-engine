@@ -49,6 +49,7 @@ class SceneResponse(BaseModel):
     content_state: Optional[str] = None
     candidate_visible_people: List[Dict[str, Any]] = Field(default_factory=list)
     speaker_aligned_mentions: List[Dict[str, Any]] = Field(default_factory=list)
+    transcript_entity_disagreements: List[Dict[str, Any]] = Field(default_factory=list)
     interaction_dominance: Optional[Dict[str, Any]] = None
     conversation_owner: Optional[Dict[str, Any]] = None
 
@@ -111,6 +112,7 @@ class TimelineSegment(BaseModel):
     content_state: Optional[str] = None
     candidate_visible_people: List[Dict[str, Any]] = Field(default_factory=list)
     speaker_aligned_mentions: List[Dict[str, Any]] = Field(default_factory=list)
+    transcript_entity_disagreements: List[Dict[str, Any]] = Field(default_factory=list)
     interaction_dominance: Optional[Dict[str, Any]] = None
     conversation_owner: Optional[Dict[str, Any]] = None
 

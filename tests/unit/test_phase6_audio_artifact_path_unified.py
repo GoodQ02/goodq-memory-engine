@@ -2776,6 +2776,7 @@ def test_harmonizer_reports_transcript_entity_disagreement_hotspots_read_only(
     temporal_index = json.loads((processing_dir / "temporal_index.json").read_text(encoding="utf-8"))
 
     assert temporal_index["segments_with_transcript_entity_disagreements"] == 4
+    assert temporal_index["segments_with_full_name_partial_entity_disagreements"] == 1
     category_counts = {
         item["category"]: item["count"]
         for item in temporal_index["transcript_entity_disagreement_category_counts"]
@@ -2803,6 +2804,74 @@ def test_harmonizer_reports_transcript_entity_disagreement_hotspots_read_only(
     assert families[
         ("title_bearing_transcript_name_not_resolved", "title_unresolved::mrs swedler")
     ]["example"]["transcript_candidate"] == "Mrs. Swedler"
+    assert temporal_index["top_transcript_full_name_partial_entity_families"] == [
+        {
+            "family_key": "partial::jerry",
+            "count": 1,
+            "example": {
+                "category": "transcript_full_name_reduced_to_partial_entity",
+                "family_key": "partial::jerry",
+                "scene_id": "scene_0001",
+                "transcript_candidate": "Jerry Seinfeld",
+                "entity_names": ["Jerry"],
+                "mentioned_people": [{"text": "Jerry", "type": "PERSON"}],
+                "speaker_aligned_mentions": [{"text": "Jerry", "type": "PERSON", "count": 1}],
+                "reason": "transcript full-name surface reduced to partial local person identity",
+            },
+        }
+    ]
+    segment_disagreements = {
+        segment["scene_id"]: segment.get("transcript_entity_disagreements", [])
+        for segment in temporal_index["segments"]
+    }
+    assert segment_disagreements["scene_0000"] == [
+        {
+            "category": "title_elision_in_entity_projection",
+            "family_key": "title::costanza",
+            "scene_id": "scene_0000",
+            "transcript_candidate": "Mr. Costanza",
+            "entity_names": ["Costanza"],
+            "mentioned_people": [{"text": "Costanza", "type": "PERSON"}],
+            "speaker_aligned_mentions": [{"text": "Costanza", "type": "PERSON", "count": 1}],
+            "reason": "transcript title form collapses cleanly to existing local person surface",
+        }
+    ]
+    assert segment_disagreements["scene_0001"] == [
+        {
+            "category": "transcript_full_name_reduced_to_partial_entity",
+            "family_key": "partial::jerry",
+            "scene_id": "scene_0001",
+            "transcript_candidate": "Jerry Seinfeld",
+            "entity_names": ["Jerry"],
+            "mentioned_people": [{"text": "Jerry", "type": "PERSON"}],
+            "speaker_aligned_mentions": [{"text": "Jerry", "type": "PERSON", "count": 1}],
+            "reason": "transcript full-name surface reduced to partial local person identity",
+        }
+    ]
+    assert segment_disagreements["scene_0002"] == [
+        {
+            "category": "transcript_spelling_drift_vs_entity_name",
+            "family_key": "spelling::monica selis",
+            "scene_id": "scene_0002",
+            "transcript_candidate": "Monica Selis",
+            "entity_names": ["Monica Seles"],
+            "mentioned_people": [{"text": "Monica Seles", "type": "PERSON"}],
+            "speaker_aligned_mentions": [],
+            "reason": "transcript person surface differs slightly from local person entity wording",
+        }
+    ]
+    assert segment_disagreements["scene_0003"] == [
+        {
+            "category": "title_bearing_transcript_name_not_resolved",
+            "family_key": "title_unresolved::mrs swedler",
+            "scene_id": "scene_0003",
+            "transcript_candidate": "Mrs. Swedler",
+            "entity_names": [],
+            "mentioned_people": [],
+            "speaker_aligned_mentions": [],
+            "reason": "title-bearing transcript person reference is not represented in local person truth surfaces",
+        }
+    ]
 
     persisted_manifest = json.loads(scene_manifest_path.read_text(encoding="utf-8"))
     assert persisted_manifest["scenes"][0]["speaker_aligned_mentions"] == [

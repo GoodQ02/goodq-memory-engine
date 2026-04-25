@@ -21,12 +21,14 @@ _TIMELINE_TRUTH_METADATA_FIELDS = (
     "segments_with_conversation_owner",
     "segments_with_speaker_aligned_mentions",
     "segments_with_transcript_entity_disagreements",
+    "segments_with_full_name_partial_entity_disagreements",
     "top_candidate_visible_people",
     "top_interaction_dominance",
     "top_conversation_owners",
     "top_speaker_aligned_mentions",
     "speaker_aligned_mention_variant_groups",
     "transcript_entity_disagreement_category_counts",
+    "top_transcript_full_name_partial_entity_families",
     "top_transcript_entity_disagreement_families",
 )
 
@@ -85,6 +87,7 @@ def _build_timeline_segment(seg: dict, truncate_transcript: bool = False) -> Tim
         content_state=seg.get('content_state'),
         candidate_visible_people=seg.get('candidate_visible_people', []),
         speaker_aligned_mentions=seg.get("speaker_aligned_mentions", []),
+        transcript_entity_disagreements=seg.get("transcript_entity_disagreements", []),
         interaction_dominance=seg.get("interaction_dominance"),
         conversation_owner=seg.get("conversation_owner"),
     )

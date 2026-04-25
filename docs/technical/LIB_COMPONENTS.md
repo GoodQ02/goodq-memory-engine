@@ -122,11 +122,48 @@ This doc intentionally does not freeze provider/model combinations; those may ev
 ### `run_narrative.py`
 
 **Purpose**
-- historical compatibility shell for narrative-oriented run reporting
+- read-only formatter for narrative-oriented run reporting
 
 **Current Truth**
-- retired from the tracked runtime surface because the old run-summary backing module is gone
-- remains historical only until a truthful summary surface is explicitly restored
+- remains outside the tracked runtime surface
+- formats `run_summary` data without adding inference or side effects
+- should only be exposed through explicitly approved read-only operator surfaces
+
+---
+
+### `run_index.py`
+
+**Purpose**
+- read-only discovery over structured run artifact roots in `reports/fresh_ingest_runs`
+
+**Used By**
+- `api/routes/runtime.py`
+- future operator-facing run listing/reporting surfaces
+
+**Current Truth**
+- enumerates run roots from current structured artifacts only
+- does not revive the retired `/runs` compatibility shell
+- does not mutate orchestration or canonical per-video truth
+
+---
+
+### `run_summary.py`
+
+**Purpose**
+- read-only stitched summary over root ledgers, per-episode run ledgers, and canonical episode artifact pointers
+
+**Used By**
+- `api/routes/runtime.py`
+- future narrative-formatting surfaces
+
+**Current Truth**
+- builds a truthful summary object from:
+  - root `experiment_log.json`
+  - per-episode `experiment_log.json`
+  - canonical `temporal_index.json`
+  - canonical `scene_manifest.json`
+- leaves unsupported legacy fields as `unknown` or `not observed`
+- does not parse raw logs as the primary source of truth
 
 ---
 

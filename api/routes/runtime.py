@@ -23,6 +23,7 @@ from fastapi import APIRouter, HTTPException, Query
 
 from api.utils.ingest_requests import is_supported_ingest_path
 from goodq_version import GOODQ_VERSION
+from lib import run_index, run_summary
 from steps.common.config_loader import load_configs
 from steps.common.memory_store import normalize_memory_tier_list
 
@@ -683,8 +684,34 @@ def _latest_run_snapshot(limit: int = 12) -> Dict[str, Any]:
 
 
 def _latest_run_preview(limit: int = 12) -> Dict[str, Any]:
-    """Inspect logs/watchdog_* folders and return a quick preview of the most recent run."""
-    return {"available": False, "disabled": True}
+    """Return a truthful preview of the most recent structured run artifact root."""
+    runs = run_index.list_runs(limit=1)
+    if not runs:
+        return {"available": False}
+
+    latest = runs[0]
+    summary = run_summary.load_run_summary(run_root=latest.get("run_root") or latest["run_id"])
+    header = summary.get("run_header") if isinstance(summary, dict) else {}
+    overview = summary.get("file_job_overview") if isinstance(summary, dict) else {}
+    outcome = summary.get("outcome_classification") if isinstance(summary, dict) else {}
+
+    return {
+        "available": True,
+        "run_id": header.get("run_id"),
+        "status": outcome.get("status") or header.get("status"),
+        "epoch": header.get("epoch"),
+        "source_dir": header.get("source_dir"),
+        "start_time": header.get("start_time"),
+        "end_time": header.get("end_time"),
+        "total_duration_seconds": header.get("total_duration_seconds"),
+        "episodes_total": overview.get("episodes_total"),
+        "episodes_completed": overview.get("episodes_completed"),
+        "episodes_failed": overview.get("episodes_failed"),
+        "episodes_running": overview.get("episodes_running"),
+        "episodes_pending": overview.get("episodes_pending"),
+        "scenes_processed": overview.get("scenes_processed"),
+        "latest_episode": summary.get("latest_episode"),
+    }
 
 
 def _tail_log(path: Path, lines: int = 50) -> List[str]:

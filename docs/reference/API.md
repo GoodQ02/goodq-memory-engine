@@ -35,6 +35,9 @@ Primary status and runtime summary endpoints defined in the active API surface:
 - `GET /api/memory/stats`
 - `GET /api/read/envelope`
 
+`GET /api/runs/latest/preview` is a read-only projection over structured run artifacts under `reports/fresh_ingest_runs`.
+It does not revive the retired `/runs` compatibility shell, and it does not parse raw logs as a primary source of truth.
+
 Router-backed endpoint families mounted into the same process:
 
 - `/api/search`

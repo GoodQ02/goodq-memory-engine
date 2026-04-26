@@ -1,16 +1,37 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: GENERATED_SNAPSHOT -->
-<!-- DOC_LAST_VERIFIED: 2026-04-20 -->
+<!-- DOC_LAST_VERIFIED: 2026-04-25 -->
 
 # GoodQ4All Agent Status
 
-_Release-era baseline refreshed: 2026-04-20T09:30:00_
+_Operational restart checkpoint refreshed: 2026-04-25T16:30:00_
 
 This document is a bounded operator snapshot of the current release-era
 stitching and offline-package baseline.
 
 Use canonical runtime contracts and released evidence surfaces as source of
 truth for live claims. Do not treat this document as a live witness monitor.
+
+## Current Restart Checkpoint
+- Branch parity:
+  - `main` -> `2e895c6` (`feat: pilot exact-pair transcript normalization`)
+  - `public` -> `ed2a265` (`feat: pilot exact-pair transcript normalization`)
+- Current state:
+  - Full Season 1 recompare witness completed successfully across `01x01` through `01x05`
+  - Full Season 2 fresh witness completed successfully across `02x01` through `02x12`
+  - Read-only operator package is restored and shipped:
+    - `lib/run_index.py`
+    - `lib/run_summary.py`
+    - `GET /api/runs/latest/preview`
+  - Upstream normalization remains in pilot state only:
+    - exact pair allowlist contains exactly `Jerry Seinfeld -> Jerry`
+    - projection-only instrumentation:
+      - `normalization_applied`
+      - `normalization_source`
+    - no extraction, KG, identity ladder, retrieval, or embedding changes
+- Current next-step bias after restart:
+  - keep normalization allowlist single-entry unless new proof clears the same gate
+  - prefer read-only audits and copy-on-write reprojection over broad runtime changes
 
 ## System Mode
 - MODE: Operational / Packaging / Hardening
@@ -213,6 +234,47 @@ Audit Status: ACTIVE (2026-04-10)
 - Confirmed the first five-episode Season 3 `scene_context_llm` campaign across `03x04` through `03x08` and added a five-scene qualitative audit covering dialogue-heavy, environment-heavy, identity-adjacent, ambiguous, and low-signal scenes.
 - Audited and explicitly marked secondary, deprecated, and experimental perception surfaces to reduce ambiguity before further integration work.
 - Hardened WSL audio readiness and selection so ABI-degraded runtimes no longer present as healthy during bootstrap or canonical ingest selection.
+- Completed the full Season 1 recompare witness:
+  - witness roots:
+    - `reports/fresh_ingest_runs/20260424_003250_season1_recompare_witness/`
+    - `reports/fresh_ingest_runs/20260424_065027_season1_remaining_witness/`
+  - totals:
+    - `5 / 5` passed
+    - `185` scenes
+    - `179` `scene_context_llm` segments
+    - `47` candidate-visible segments
+    - `23` interaction-dominance segments
+    - `3` conversation-owner segments
+    - `70` speaker-aligned-mention segments
+    - `27` transcript/entity disagreement segments
+- Completed the full Season 2 fresh witness:
+  - witness root:
+    - `reports/fresh_ingest_runs/20260424_182406_season2_fresh_witness/`
+  - totals:
+    - `12 / 12` passed
+    - `466` scenes
+    - `461` `scene_context_llm` segments
+    - `84` candidate-visible segments
+    - `47` interaction-dominance segments
+    - `7` conversation-owner segments
+    - `131` speaker-aligned-mention segments
+    - `51` transcript/entity disagreement segments
+- Restored the read-only operator run package:
+  - `run_index` discovers structured witness roots under `reports/fresh_ingest_runs`
+  - `run_summary` stitches root ledgers, per-episode ledgers, and canonical artifact pointers
+  - `/api/runs/latest/preview` now exposes truthful latest-run state without reviving retired `/runs` shells
+  - run-state freshness now projects a `pending` episode to `running` when lane-start artifacts already exist on disk
+- Published the first exact-pair upstream normalization pilot:
+  - allowlist contains exactly `Jerry Seinfeld -> Jerry`
+  - applied only at the projection / reconciliation boundary in Phase 6
+  - segment-level instrumentation now records:
+    - `normalization_applied`
+    - `normalization_source`
+  - witness-proven outcome:
+    - local disagreement reduction only
+    - no owner drift
+    - no candidate-visible drift
+    - no KG or retrieval drift
 
 ## Agent Instructions (Binding)
 - Treat the epoch processing tree and per-run artifacts as canonical, not historical `logs/scene_ingest` paths.
@@ -223,6 +285,9 @@ Audit Status: ACTIVE (2026-04-10)
 
 ## Read These First
 - docs/HANDOFF_BASEMENT_PHASE.md
+- docs/testing/SEASON1_RECOMPARE_WITNESS_MEMO_2026-04-24.md
+- docs/testing/SEASON2_FIRST_CHECKPOINT_MEMO_2026-04-25.md
+- docs/testing/SEASON1_SEASON2_FORENSIC_COMPARISON_MEMO_2026-04-25.md
 - docs/architecture/INGEST_ORCHESTRATION_CONTRACT.md
 - docs/architecture/IDENTITY_STITCHING_CONTRACT.md
 - docs/reference/WSL_AUDIO_RUNTIME.md

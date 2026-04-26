@@ -1,11 +1,42 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-02-12 -->
+<!-- DOC_LAST_VERIFIED: 2026-04-25 -->
 
 # Basement Phase Handoff (v1) — Current System State
 
 **Status:** Basement phase sealed + truth plumbing sealed (read-only).  
 **Scope:** Integrity + observability + contracts + read-only UI truth layer; no execution authority, no policy coupling.
+
+---
+
+## Current Restart Checkpoint (2026-04-25)
+
+This is the practical handoff point for a brand-new Codex session.
+
+- Latest shipped branch state:
+  - `main` -> `2e895c6`
+  - `public` -> `ed2a265`
+- Full witness state now banked:
+  - Season 1 recompare completed (`01x01`–`01x05`)
+  - Season 2 fresh witness completed (`02x01`–`02x12`)
+- Latest authoritative witness memos:
+  - `docs/testing/SEASON1_RECOMPARE_WITNESS_MEMO_2026-04-24.md`
+  - `docs/testing/SEASON2_FIRST_CHECKPOINT_MEMO_2026-04-25.md`
+  - `docs/testing/SEASON1_SEASON2_FORENSIC_COMPARISON_MEMO_2026-04-25.md`
+- Read-only operator layer is restored and should now be treated as active:
+  - `lib/run_index.py`
+  - `lib/run_summary.py`
+  - `/api/runs/latest/preview`
+- Current upstream normalization status:
+  - exact-pair pilot only
+  - allowlist contains exactly `Jerry Seinfeld -> Jerry`
+  - instrumentation fields:
+    - `normalization_applied`
+    - `normalization_source`
+  - pilot is projection-only and must not be generalized casually
+
+If resuming after restart, do not begin with a broad rerun. Begin by reading the
+three witness memos above and then confirm the current branch head.
 
 ---
 
@@ -177,11 +208,15 @@ These are intentionally *not* wired into ingestion yet:
 ### Orientation (read first)
 
 - `docs/AGENTS.md`
+- `docs/goodq4all_agent_status.md`
 - `docs/architecture/SYSTEM_MAP_v1.md`
 - `docs/architecture/MEMORY_STORAGE.md`
 - `docs/architecture/EPISTEMIC_READ_MODEL.md`
 - `docs/architecture/NON_ACTION_CONTRACT.md`
 - `docs/data_epochs.md`
+- `docs/testing/SEASON1_RECOMPARE_WITNESS_MEMO_2026-04-24.md`
+- `docs/testing/SEASON2_FIRST_CHECKPOINT_MEMO_2026-04-25.md`
+- `docs/testing/SEASON1_SEASON2_FORENSIC_COMPARISON_MEMO_2026-04-25.md`
 
 ### Verify active epoch + readiness (no ingestion)
 
@@ -239,6 +274,13 @@ This prints counts by category/name and a UTC date range. It does not write to d
 - **UI work:** consume only UI-safe conduits (see `docs/architecture/MEMORY_STORAGE.md` “Conduit Pack v1”).
 - **Sensitive ingestion:** start from the staging contract + vault resolver; do not run existing steps directly on vault paths.
 - **Training/vault phase:** requires an explicit vault build manifest + explicit approval; keep vault boundaries intact.
+- **Current pipeline/intelligence next step:** do not broaden normalization. The
+  current safe pilot is a single exact pair only. New candidates must satisfy
+  the same proof gate before implementation:
+  - appears in at least `2` segments
+  - across at least `2` scenes
+  - no competing entity surfaces
+  - no title/alias collision
 
 ---
 

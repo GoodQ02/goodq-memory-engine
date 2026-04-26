@@ -1,17 +1,17 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: GENERATED_SNAPSHOT -->
-<!-- DOC_LAST_VERIFIED: 2026-04-20 -->
+<!-- DOC_LAST_VERIFIED: 2026-04-25 -->
 
 # System Snapshot
 
-_Release-era baseline refreshed: 2026-04-20T09:30:00_
+_Operational snapshot refreshed: 2026-04-25T16:30:00_
 
 This is a bounded release-era system snapshot. It is useful for understanding
 the supported host/runtime baseline, but it is not a live witness monitor.
 
 ## Host & OS
 - Hostname: GOOD-CUBE
-- OS: Windows 10 Pro (10.0.26200)
+- OS: Windows 11 (10.0.26200)
 - Architecture: AMD64
 - Timezone: Central Standard Time
 
@@ -80,6 +80,59 @@ the supported host/runtime baseline, but it is not a live witness monitor.
   - `14` music-event scenes
 - Canonical baseline memo: `docs/testing/SEASON1_2_BASELINE_MEMO_2026-04-10.md`
 - Note: `audio.metadata_time_hints`, the modernized `scene_summarizer`, and `scene_context_llm` landed after this benchmark started and are treatment features, not part of the locked control
+
+## Current Witness State
+- Full Season 1 recompare witness:
+  - roots:
+    - `reports/fresh_ingest_runs/20260424_003250_season1_recompare_witness/`
+    - `reports/fresh_ingest_runs/20260424_065027_season1_remaining_witness/`
+  - result:
+    - `5 / 5` passed
+    - `185` total scenes
+    - `179` `scene_context_llm` segments
+    - `47` candidate-visible segments
+    - `23` interaction-dominance segments
+    - `3` conversation-owner segments
+    - `70` speaker-aligned-mention segments
+    - `27` transcript/entity disagreement segments
+- Full Season 2 fresh witness:
+  - root:
+    - `reports/fresh_ingest_runs/20260424_182406_season2_fresh_witness/`
+  - result:
+    - `12 / 12` passed
+    - `466` total scenes
+    - `461` `scene_context_llm` segments
+    - `84` candidate-visible segments
+    - `47` interaction-dominance segments
+    - `7` conversation-owner segments
+    - `131` speaker-aligned-mention segments
+    - `51` transcript/entity disagreement segments
+
+## Current Operator State
+- Active read-only run surfaces:
+  - `lib/run_index.py`
+  - `lib/run_summary.py`
+  - `/api/runs/latest/preview`
+- Current operator behavior:
+  - reads structured artifacts under `reports/fresh_ingest_runs`
+  - projects more truthful in-flight status by detecting episode lane-start artifacts
+  - does not revive retired legacy `/runs` compatibility shells
+
+## Current Upstream Normalization State
+- Exact-pair pilot only:
+  - `Jerry Seinfeld -> Jerry`
+- Scope:
+  - projection / reconciliation boundary only
+  - no extraction changes
+  - no KG changes
+  - no identity ladder changes
+  - no retrieval changes
+- Instrumentation now visible on segment read surfaces:
+  - `normalization_applied`
+  - `normalization_source`
+- Operational interpretation:
+  - this is a controlled mutation experiment, not a general normalization system
+  - no broader allowlist expansion should occur without the same proof gate
 
 ## Release-Era Treatment State
 - Feature ladder authoritative pass roots:

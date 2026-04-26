@@ -468,3 +468,23 @@ def test_similar_scene_route_returns_real_neighbors(monkeypatch: pytest.MonkeyPa
         "source": "interaction_chain",
         "continuity_key": "SPEAKER_01",
     }
+
+
+def test_scene_and_timeline_routes_surface_normalization_instrumentation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    temporal_index = _sample_temporal_index()
+    temporal_index["segments"][0]["normalization_applied"] = True
+    temporal_index["segments"][0]["normalization_source"] = "exact_pair_allowlist"
+
+    loader = _FakeLoader(temporal_index)
+    monkeypatch.setattr(scenes_module, "get_data_loader", lambda: loader)
+    monkeypatch.setattr(timeline_module, "get_data_loader", lambda: loader)
+
+    scene = asyncio.run(scenes_module.get_scene(video_id="video_001", scene_id=101))
+    timeline = asyncio.run(timeline_module.get_full_timeline(video_id="video_001"))
+
+    assert scene.normalization_applied is True
+    assert scene.normalization_source == "exact_pair_allowlist"
+    assert timeline.segments[0].normalization_applied is True
+    assert timeline.segments[0].normalization_source == "exact_pair_allowlist"

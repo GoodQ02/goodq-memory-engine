@@ -88,6 +88,8 @@ def _build_timeline_segment(seg: dict, truncate_transcript: bool = False) -> Tim
         candidate_visible_people=seg.get('candidate_visible_people', []),
         speaker_aligned_mentions=seg.get("speaker_aligned_mentions", []),
         transcript_entity_disagreements=seg.get("transcript_entity_disagreements", []),
+        normalization_applied=bool(seg.get("normalization_applied", False)),
+        normalization_source=seg.get("normalization_source"),
         interaction_dominance=seg.get("interaction_dominance"),
         conversation_owner=seg.get("conversation_owner"),
     )

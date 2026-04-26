@@ -258,6 +258,12 @@ include:
 These are projections over persisted scene truth. They do not alter identity
 promotion, KG writes, or retrieval ranking.
 
+Per-segment scene/timeline read models may also carry projection-only
+normalization instrumentation such as `normalization_applied` and
+`normalization_source` when an exact-pair reconciliation pilot is active. These
+flags do not rewrite stored transcript or expand into generalized
+normalization.
+
 Current operator proof:
 
 - the post-release Season 5 projection smoke proves these fields align across:

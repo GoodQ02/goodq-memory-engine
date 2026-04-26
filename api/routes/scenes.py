@@ -74,6 +74,8 @@ def _build_scene_response(segment: dict) -> SceneResponse:
         candidate_visible_people=segment.get("candidate_visible_people", []),
         speaker_aligned_mentions=segment.get("speaker_aligned_mentions", []),
         transcript_entity_disagreements=segment.get("transcript_entity_disagreements", []),
+        normalization_applied=bool(segment.get("normalization_applied", False)),
+        normalization_source=segment.get("normalization_source"),
         interaction_dominance=segment.get("interaction_dominance"),
         conversation_owner=segment.get("conversation_owner"),
     )

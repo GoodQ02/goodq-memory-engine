@@ -2775,15 +2775,14 @@ def test_harmonizer_reports_transcript_entity_disagreement_hotspots_read_only(
     run_cross_modal_harmonization(item, cfg)
     temporal_index = json.loads((processing_dir / "temporal_index.json").read_text(encoding="utf-8"))
 
-    assert temporal_index["segments_with_transcript_entity_disagreements"] == 4
-    assert temporal_index["segments_with_full_name_partial_entity_disagreements"] == 1
+    assert temporal_index["segments_with_transcript_entity_disagreements"] == 3
+    assert temporal_index["segments_with_full_name_partial_entity_disagreements"] == 0
     category_counts = {
         item["category"]: item["count"]
         for item in temporal_index["transcript_entity_disagreement_category_counts"]
     }
     assert category_counts == {
         "title_elision_in_entity_projection": 1,
-        "transcript_full_name_reduced_to_partial_entity": 1,
         "transcript_spelling_drift_vs_entity_name": 1,
         "title_bearing_transcript_name_not_resolved": 1,
     }
@@ -2796,32 +2795,21 @@ def test_harmonizer_reports_transcript_entity_disagreement_hotspots_read_only(
         ("title_elision_in_entity_projection", "title::costanza")
     ]["example"]["transcript_candidate"] == "Mr. Costanza"
     assert families[
-        ("transcript_full_name_reduced_to_partial_entity", "partial::jerry")
-    ]["example"]["entity_names"] == ["Jerry"]
-    assert families[
         ("transcript_spelling_drift_vs_entity_name", "spelling::monica selis")
     ]["example"]["entity_names"] == ["Monica Seles"]
     assert families[
         ("title_bearing_transcript_name_not_resolved", "title_unresolved::mrs swedler")
     ]["example"]["transcript_candidate"] == "Mrs. Swedler"
-    assert temporal_index["top_transcript_full_name_partial_entity_families"] == [
-        {
-            "family_key": "partial::jerry",
-            "count": 1,
-            "example": {
-                "category": "transcript_full_name_reduced_to_partial_entity",
-                "family_key": "partial::jerry",
-                "scene_id": "scene_0001",
-                "transcript_candidate": "Jerry Seinfeld",
-                "entity_names": ["Jerry"],
-                "mentioned_people": [{"text": "Jerry", "type": "PERSON"}],
-                "speaker_aligned_mentions": [{"text": "Jerry", "type": "PERSON", "count": 1}],
-                "reason": "transcript full-name surface reduced to partial local person identity",
-            },
-        }
-    ]
+    assert temporal_index["top_transcript_full_name_partial_entity_families"] == []
     segment_disagreements = {
         segment["scene_id"]: segment.get("transcript_entity_disagreements", [])
+        for segment in temporal_index["segments"]
+    }
+    segment_normalization = {
+        segment["scene_id"]: {
+            "normalization_applied": segment.get("normalization_applied"),
+            "normalization_source": segment.get("normalization_source"),
+        }
         for segment in temporal_index["segments"]
     }
     assert segment_disagreements["scene_0000"] == [
@@ -2836,18 +2824,7 @@ def test_harmonizer_reports_transcript_entity_disagreement_hotspots_read_only(
             "reason": "transcript title form collapses cleanly to existing local person surface",
         }
     ]
-    assert segment_disagreements["scene_0001"] == [
-        {
-            "category": "transcript_full_name_reduced_to_partial_entity",
-            "family_key": "partial::jerry",
-            "scene_id": "scene_0001",
-            "transcript_candidate": "Jerry Seinfeld",
-            "entity_names": ["Jerry"],
-            "mentioned_people": [{"text": "Jerry", "type": "PERSON"}],
-            "speaker_aligned_mentions": [{"text": "Jerry", "type": "PERSON", "count": 1}],
-            "reason": "transcript full-name surface reduced to partial local person identity",
-        }
-    ]
+    assert segment_disagreements["scene_0001"] == []
     assert segment_disagreements["scene_0002"] == [
         {
             "category": "transcript_spelling_drift_vs_entity_name",
@@ -2872,6 +2849,24 @@ def test_harmonizer_reports_transcript_entity_disagreement_hotspots_read_only(
             "reason": "title-bearing transcript person reference is not represented in local person truth surfaces",
         }
     ]
+    assert segment_normalization == {
+        "scene_0000": {
+            "normalization_applied": False,
+            "normalization_source": None,
+        },
+        "scene_0001": {
+            "normalization_applied": True,
+            "normalization_source": "exact_pair_allowlist",
+        },
+        "scene_0002": {
+            "normalization_applied": False,
+            "normalization_source": None,
+        },
+        "scene_0003": {
+            "normalization_applied": False,
+            "normalization_source": None,
+        },
+    }
 
     persisted_manifest = json.loads(scene_manifest_path.read_text(encoding="utf-8"))
     assert persisted_manifest["scenes"][0]["speaker_aligned_mentions"] == [
@@ -2883,6 +2878,10 @@ def test_harmonizer_reports_transcript_entity_disagreement_hotspots_read_only(
     assert persisted_manifest["scenes"][2]["mentioned_people"] == [
         {"text": "Monica Seles", "type": "PERSON"}
     ]
+    assert "normalization_applied" not in persisted_manifest["scenes"][0]
+    assert "normalization_source" not in persisted_manifest["scenes"][0]
+    assert "normalization_applied" not in persisted_manifest["scenes"][1]
+    assert "normalization_source" not in persisted_manifest["scenes"][1]
     assert persisted_manifest["scenes"][2].get("speaker_aligned_mentions", []) == []
     assert persisted_manifest["scenes"][3].get("speaker_aligned_mentions", []) == []
 

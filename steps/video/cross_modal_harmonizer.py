@@ -339,6 +339,22 @@ def _segment_local_person_surfaces(segment: Dict[str, Any]) -> set[str]:
     return surfaces
 
 
+_TRANSCRIPT_ENTITY_EXACT_PAIR_ALLOWLIST: Dict[tuple[str, str], Dict[str, str]] = {
+    ("Jerry Seinfeld", "jerry"): {
+        "normalized_surface": "Jerry",
+        "source": "exact_pair_allowlist",
+    }
+}
+
+
+def _resolve_transcript_entity_exact_pair_normalization(
+    transcript_surface: str,
+    local_surface: str,
+) -> Optional[Dict[str, str]]:
+    """Return a projection-only exact-pair normalization rule when one is allowlisted."""
+    return _TRANSCRIPT_ENTITY_EXACT_PAIR_ALLOWLIST.get((transcript_surface, local_surface))
+
+
 def _find_partial_surface_match(candidate_tokens: List[str], local_person_surfaces: set[str]) -> Optional[str]:
     if len(candidate_tokens) < 2:
         return None
@@ -368,10 +384,14 @@ def _find_spelling_drift_surface_match(candidate_tokens: List[str], local_person
     return None
 
 
-def _segment_transcript_entity_disagreements(segment: Dict[str, Any]) -> List[Dict[str, Any]]:
+def _segment_transcript_entity_projection(segment: Dict[str, Any]) -> Dict[str, Any]:
     transcript = str(segment.get("full_transcript") or "").strip()
     if not transcript:
-        return []
+        return {
+            "disagreements": [],
+            "normalization_applied": False,
+            "normalization_source": None,
+        }
 
     entity_names = _segment_person_entity_names(segment)
     mentioned_people = _segment_person_channel_records(segment.get("mentioned_people"))
@@ -380,6 +400,8 @@ def _segment_transcript_entity_disagreements(segment: Dict[str, Any]) -> List[Di
 
     disagreements: List[Dict[str, Any]] = []
     seen_family_keys: set[tuple[str, str]] = set()
+    normalization_applied = False
+    normalization_source: Optional[str] = None
 
     for candidate in _extract_transcript_person_candidates(transcript):
         category: Optional[str] = None
@@ -400,6 +422,14 @@ def _segment_transcript_entity_disagreements(segment: Dict[str, Any]) -> List[Di
             candidate_tokens = candidate.get("tokens") or []
             partial_surface_match = _find_partial_surface_match(candidate_tokens, local_person_surfaces)
             if partial_surface_match:
+                exact_pair_normalization = _resolve_transcript_entity_exact_pair_normalization(
+                    candidate["surface"],
+                    partial_surface_match,
+                )
+                if exact_pair_normalization:
+                    normalization_applied = True
+                    normalization_source = exact_pair_normalization["source"]
+                    continue
                 category = "transcript_full_name_reduced_to_partial_entity"
                 family_key = f"partial::{partial_surface_match}"
                 reason = "transcript full-name surface reduced to partial local person identity"
@@ -431,7 +461,15 @@ def _segment_transcript_entity_disagreements(segment: Dict[str, Any]) -> List[Di
         )
         seen_family_keys.add(family_identity)
 
-    return disagreements
+    return {
+        "disagreements": disagreements,
+        "normalization_applied": normalization_applied,
+        "normalization_source": normalization_source,
+    }
+
+
+def _segment_transcript_entity_disagreements(segment: Dict[str, Any]) -> List[Dict[str, Any]]:
+    return _segment_transcript_entity_projection(segment)["disagreements"]
 
 
 def _build_transcript_entity_disagreement_summary(
@@ -2722,7 +2760,10 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
     _apply_conversation_owner_window(unified_segments)
     _apply_scene_context_llm(unified_segments, scene_lookup, cfg)
     for segment in unified_segments:
-        segment["transcript_entity_disagreements"] = _segment_transcript_entity_disagreements(segment)
+        transcript_entity_projection = _segment_transcript_entity_projection(segment)
+        segment["transcript_entity_disagreements"] = transcript_entity_projection["disagreements"]
+        segment["normalization_applied"] = transcript_entity_projection["normalization_applied"]
+        segment["normalization_source"] = transcript_entity_projection["normalization_source"]
 
     # === CREATE TEMPORAL INDEX ===
     

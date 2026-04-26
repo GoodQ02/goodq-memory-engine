@@ -13,9 +13,11 @@
 
 This is the practical handoff point for a brand-new Codex session.
 
-- Latest shipped branch state:
+- Latest shipped runtime feature anchor:
   - `main` -> `2e895c6`
   - `public` -> `ed2a265`
+- Latest main-side docs handoff commit:
+  - `main` -> `8fbcc7d` (`docs: refresh restart handoff checkpoint`)
 - Full witness state now banked:
   - Season 1 recompare completed (`01x01`–`01x05`)
   - Season 2 fresh witness completed (`02x01`–`02x12`)

@@ -109,8 +109,8 @@ ${GOODQ_DATA_ROOT}/GoodQ_Data/qdrant_storage
 ```
 
 **Canonical Collections**
-- `goodq_text`
-- `goodq_audio`
+- `goodq_text_epoch_<epoch>`
+- `goodq_audio_epoch_<epoch>`
 - `goodq_clip_epoch_<epoch>`
 - `goodq_dino_epoch_<epoch>`
 

@@ -324,10 +324,20 @@ agent.generate_report(
 
 ### Enable/Disable Control Agent
 
-Set in `cli/run_ingestion.py`:
+Current default CLI/watchdog startup does not enable the Control Agent just
+because the module imports successfully. Runtime activation requires an
+explicit injected `llm_client`; otherwise ingestion records
+`disabled_no_llm_client` and continues deterministically without auto-healing.
+
+The import guard in `cli/run_ingestion.py` only records whether the Control
+Agent code is available:
 ```python
-CONTROL_AGENT_AVAILABLE = True  # Set to False to disable
+CONTROL_AGENT_AVAILABLE = True  # module imported, not runtime-enabled
 ```
+
+To enable Control Agent behavior, wire an approved local `llm_client` injection
+path and verify the resulting `control_agent_status` in the run context. Do not
+treat `CONTROL_AGENT_AVAILABLE` as a user-facing feature flag.
 
 ### Config Healer Settings
 

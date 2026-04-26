@@ -13,9 +13,11 @@ Use canonical runtime contracts and released evidence surfaces as source of
 truth for live claims. Do not treat this document as a live witness monitor.
 
 ## Current Restart Checkpoint
-- Branch parity:
+- Runtime feature parity:
   - `main` -> `2e895c6` (`feat: pilot exact-pair transcript normalization`)
   - `public` -> `ed2a265` (`feat: pilot exact-pair transcript normalization`)
+- Main-side docs handoff:
+  - `main` -> `8fbcc7d` (`docs: refresh restart handoff checkpoint`)
 - Current state:
   - Full Season 1 recompare witness completed successfully across `01x01` through `01x05`
   - Full Season 2 fresh witness completed successfully across `02x01` through `02x12`

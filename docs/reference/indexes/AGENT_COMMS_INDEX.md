@@ -1,27 +1,26 @@
 # GoodQ4All Agent & Copilot Communications Index
 
-**Purpose:** Explain the role of `docs/agent-communications/` and `docs/copilot_user_communications/` and highlight which documents are guidance vs historical session logs.
+**Purpose:** Explain the archived agent/Copilot communication records and point agents back to the current restart truth surfaces.
 
 ---
 
 ## What Lives Here
 
-- `docs/agent-communications/` – Agent-facing notes, checklists, cleanup summaries, and session-specific reports generated during development.
-- `docs/copilot_user_communications/` – Copilot/user-facing session summaries and overnight work reports.
-- `docs/releases/SESSION_SUMMARY.md` – Release-focused session summary.
+- `docs/archive/agent-comms/` – Historical agent-facing notes, checklists, cleanup summaries, Copilot/user-facing session summaries, and overnight work reports.
+- `docs/archive/releases/SESSION_SUMMARY.md` – Historical release-focused session summary.
 
-Most files in these directories are historical snapshots of specific sessions. Canonical technical behavior is defined in the primary architecture, status, platform, WSL, and troubleshooting docs.
+The former active agent-communications and Copilot communications directories have been retired. Treat archived files as historical snapshots only. Canonical technical behavior is defined in the primary architecture, status, platform, WSL, and troubleshooting docs.
 
 ---
 
 ## Guidance-Oriented Agent Docs
 
-- `docs/agent-communications/README.md`
-- `docs/agent-communications/MORNING_CHECKLIST.md`
-- `docs/agent-communications/START_HERE_AFTER_WORK.md`
-- `docs/agent-communications/NEXT_STEPS.md`
-- `docs/agent-communications/WELCOME_BACK.md`
-- `docs/agent-communications/MODEL_LOADING_FIXES.md`
+- `docs/archive/agent-comms/README.md`
+- `docs/archive/agent-comms/MORNING_CHECKLIST.md`
+- `docs/archive/agent-comms/START_HERE_AFTER_WORK.md`
+- `docs/archive/agent-comms/NEXT_STEPS.md`
+- `docs/archive/agent-comms/WELCOME_BACK.md`
+- `docs/archive/agent-comms/MODEL_LOADING_FIXES.md`
 
 ---
 
@@ -29,24 +28,24 @@ Most files in these directories are historical snapshots of specific sessions. C
 
 These are snapshots, not canonical runtime docs:
 
-- `docs/agent-communications/ALL_ISSUES_RESOLVED.md`
-- `docs/agent-communications/CLEANUP_SUMMARY.md`
-- `docs/agent-communications/CLEANUP_VISUAL_GUIDE.txt`
-- `docs/agent-communications/COMMIT_MESSAGE.md`
-- `docs/agent-communications/COMMIT_SUCCESS.md`
-- `docs/agent-communications/DEDUPLICATION_COMPLETE.md`
-- `docs/agent-communications/DIAGNOSIS_SUMMARY.md`
-- `docs/agent-communications/IMPLEMENTATION_COMPLETE.md`
-- `docs/agent-communications/LINT_CLEAN_SESSION.md`
-- `docs/agent-communications/OVERNIGHT_AUDIT_SUMMARY.md`
-- `docs/agent-communications/RECENT_FIXES.md`
-- `docs/agent-communications/SCENE_DETECTION_BUG_FIXED.md`
-- `docs/agent-communications/SESSION_COMPLETE.txt`
-- `docs/agent-communications/SESSION_COMPLETE_20251015.md`
-- `docs/agent-communications/SESSION_SUMMARY_2025-10-18.md`
-- `docs/agent-communications/TRANSCRIPTION_FIX_APPLIED.md`
-- `docs/agent-communications/VALIDATION_AND_NEXT_STEPS.md`
-- `docs/agent-communications/WATCHDOG_CLEANUP.md`
+- `docs/archive/agent-comms/ALL_ISSUES_RESOLVED.md`
+- `docs/archive/agent-comms/CLEANUP_SUMMARY.md`
+- `docs/archive/agent-comms/CLEANUP_VISUAL_GUIDE.txt`
+- `docs/archive/agent-comms/COMMIT_MESSAGE.md`
+- `docs/archive/agent-comms/COMMIT_SUCCESS.md`
+- `docs/archive/agent-comms/DEDUPLICATION_COMPLETE.md`
+- `docs/archive/agent-comms/DIAGNOSIS_SUMMARY.md`
+- `docs/archive/agent-comms/IMPLEMENTATION_COMPLETE.md`
+- `docs/archive/agent-comms/LINT_CLEAN_SESSION.md`
+- `docs/archive/agent-comms/OVERNIGHT_AUDIT_SUMMARY.md`
+- `docs/archive/agent-comms/RECENT_FIXES.md`
+- `docs/archive/agent-comms/SCENE_DETECTION_BUG_FIXED.md`
+- `docs/archive/agent-comms/SESSION_COMPLETE.txt`
+- `docs/archive/agent-comms/SESSION_COMPLETE_20251015.md`
+- `docs/archive/agent-comms/SESSION_SUMMARY_2025-10-18.md`
+- `docs/archive/agent-comms/TRANSCRIPTION_FIX_APPLIED.md`
+- `docs/archive/agent-comms/VALIDATION_AND_NEXT_STEPS.md`
+- `docs/archive/agent-comms/WATCHDOG_CLEANUP.md`
 
 For canonical status and current runtime truth, prefer:
 
@@ -72,17 +71,17 @@ For canonical status and current runtime truth, prefer:
 
 ## Copilot/User Communications
 
-- `docs/copilot_user_communications/MORNING_BRIEFING.md`
-- `docs/copilot_user_communications/OVERNIGHT_INDEX.md`
-- `docs/copilot_user_communications/OVERNIGHT_AUDIT_FINDINGS.md`
-- `docs/copilot_user_communications/COMPREHENSIVE_ENHANCEMENT_PLAN.md`
-- `docs/copilot_user_communications/OVERNIGHT_WORK_COMPLETE.md`
-- `docs/copilot_user_communications/OVERNIGHT_MONITORING_REPORT.md`
-- `docs/copilot_user_communications/SESSION_SUMMARY.md`
+- `docs/archive/agent-comms/MORNING_BRIEFING.md`
+- `docs/archive/agent-comms/OVERNIGHT_INDEX.md`
+- `docs/archive/agent-comms/OVERNIGHT_AUDIT_FINDINGS.md`
+- `docs/archive/agent-comms/COMPREHENSIVE_ENHANCEMENT_PLAN.md`
+- `docs/archive/agent-comms/OVERNIGHT_WORK_COMPLETE.md`
+- `docs/archive/agent-comms/OVERNIGHT_MONITORING_REPORT.md`
+- `docs/archive/agent-comms/SESSION_SUMMARY.md`
 
 Release-level session summary:
 
-- `docs/releases/SESSION_SUMMARY.md`
+- `docs/archive/releases/SESSION_SUMMARY.md`
 
 ---
 

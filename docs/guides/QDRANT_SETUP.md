@@ -153,12 +153,12 @@ GoodQ4All creates 4 collections:
 
 | Collection | Dimension | Purpose |
 |-----------|-----------|---------|
-| `goodq_clip` | 512 | CLIP visual scene embeddings |
-| `goodq_dino` | 768 | DINOv2 visual scene embeddings |
-| `goodq_text` | 384 | Text embeddings (transcripts, captions) |
-| `goodq_audio` | 512 | CLAP audio embeddings |
+| `goodq_clip_epoch_2025_12_22` | 512 | CLIP visual scene embeddings |
+| `goodq_dino_epoch_2025_12_22` | 768 | DINOv2 visual scene embeddings |
+| `goodq_text_epoch_2025_12_22` | 384 | Text embeddings (transcripts, captions) |
+| `goodq_audio_epoch_2025_12_22` | 512 | CLAP audio embeddings |
 
-These are automatically created when you run `scripts\qdrant\INIT_QDRANT.bat`.
+These names come from `configs/config.yaml`; trust the config if the active epoch changes. They are automatically created when you run `scripts\qdrant\INIT_QDRANT.bat`.
 
 ---
 
@@ -194,10 +194,10 @@ qdrant:
   enabled: true  # ← Enables Qdrant integration
   host: http://127.0.0.1:6333
   collections:
-    clip: goodq_clip
-    dino: goodq_dino
-    text: goodq_text
-    audio: goodq_audio
+    clip: goodq_clip_epoch_2025_12_22
+    dino: goodq_dino_epoch_2025_12_22
+    text: goodq_text_epoch_2025_12_22
+    audio: goodq_audio_epoch_2025_12_22
   embedding_dims:
     clip: 512
     dino: 768
@@ -228,7 +228,7 @@ $response.result.collections
 ### 3. Check Collection Details
 
 ```powershell
-Invoke-RestMethod -Uri http://localhost:6333/collections/goodq_clip
+Invoke-RestMethod -Uri http://127.0.0.1:6333/collections/goodq_clip_epoch_2025_12_22
 ```
 
 ### 4. Run Full System Test

@@ -226,7 +226,7 @@ Get-ChildItem "logs\scene_ingest\*\video\scene_manifest.json" -Recurse
 - [`docs/SCENE_MANIFEST_SPECIFICATION.md`](../SCENE_MANIFEST_SPECIFICATION.md) - Canonical artifact format
 - [`docs/architecture/SYSTEM_ARCHITECTURE.md`](../architecture/SYSTEM_ARCHITECTURE.md) - System-wide artifact locations
 - [`cli/run_ingestion.py`](../../cli/run_ingestion.py) - Runtime artifact creation (lines 931-932, 1377-1382)
-- [`config.yaml`](../../config.yaml) - Configuration file with misleading path
+- [`configs/config.yaml`](../../configs/config.yaml) - Configuration file with misleading path
 
 ---
 

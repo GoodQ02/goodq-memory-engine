@@ -34,7 +34,7 @@ See `docs/guides/watchdog/WATCHDOG_GUIDE.md` and `docs/architecture/diagrams/wat
 
 ## Agent & Cleanup Notes (Historical)
 
-- `docs/agent-communications/WATCHDOG_CLEANUP.md` – Agent-focused cleanup summary and active script list as of 2025-10-11.
+- `docs/archive/agent-comms/WATCHDOG_CLEANUP.md` – Historical agent-focused cleanup summary and active script list as of 2025-10-11.
 
 This document is useful for understanding past cleanup decisions, but `WATCHDOG_GUIDE.md`, `WATCHDOG_QUICKREF.md`, and `WATCHDOG_INDEX.md` should be treated as the current sources of truth for usage.
 

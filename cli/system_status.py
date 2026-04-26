@@ -158,8 +158,8 @@ def check_recent_ingestions(cfg: Dict[str, Any] | None):
                 phase5 = "[PASS]" if ti.get('phase5_complete') else "[FAIL]"
                 phase6 = "[PASS]" if ti.get('phase6_complete') else "[FAIL]"
                 status_items.append(f"{scene_count} scenes, P5:{phase5}, P6:{phase6}")
-            except:
-                status_items.append("temporal_index (parse error)")
+            except Exception as exc:
+                status_items.append(f"temporal_index (parse error: {exc})")
         else:
             status_items.append("[FAIL] no temporal_index")
         

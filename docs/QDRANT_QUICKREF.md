@@ -60,10 +60,12 @@ http://localhost:6333/dashboard
 
 | Name | Dim | Purpose |
 |------|-----|---------|
-| goodq_clip | 512 | Visual scenes (CLIP) |
-| goodq_dino | 768 | Visual scenes (DINO) |
-| goodq_text | 384 | Transcripts/captions |
-| goodq_audio | 512 | Audio embeddings (CLAP) |
+| goodq_clip_epoch_2025_12_22 | 512 | Visual scenes (CLIP) |
+| goodq_dino_epoch_2025_12_22 | 768 | Visual scenes (DINO) |
+| goodq_text_epoch_2025_12_22 | 384 | Transcripts/captions |
+| goodq_audio_epoch_2025_12_22 | 512 | Audio embeddings (CLAP) |
+
+Collection names are configured in `configs/config.yaml`; trust config if the active epoch changes.
 
 ---
 
@@ -146,10 +148,10 @@ scripts\qdrant\INIT_QDRANT.bat
 
 ## 🔗 URLs
 
-- **Health Check:** http://localhost:6333/health
+- **Service Check:** http://127.0.0.1:6333/
 - **Dashboard:** http://localhost:6333/dashboard
 - **API Docs:** http://localhost:6333/docs
-- **Collections:** http://localhost:6333/collections
+- **Collections:** http://127.0.0.1:6333/collections
 
 ---
 

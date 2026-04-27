@@ -20,4 +20,3 @@ runtime, or memory ownership.
 Use this folder when a document is owned by one subsystem. Keep cross-system
 contracts, canonical ingestion ownership, memory storage, and control-plane
 boundaries in the parent architecture folder.
-

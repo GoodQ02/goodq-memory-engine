@@ -52,6 +52,8 @@ Current operator-validated additions on the active line:
   [`docs/HANDOFF_BASEMENT_PHASE.md`](HANDOFF_BASEMENT_PHASE.md)
 - System snapshot:
   [`docs/SYSTEM_SNAPSHOT.md`](SYSTEM_SNAPSHOT.md)
+- Architecture index:
+  [`docs/architecture/README.md`](architecture/README.md)
 - System architecture:
   [`docs/architecture/SYSTEM_ARCHITECTURE.md`](architecture/SYSTEM_ARCHITECTURE.md)
 - Architecture diagrams:

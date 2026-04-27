@@ -1,3 +1,11 @@
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: REFERENCE_ONLY -->
+<!-- DOC_LAST_VERIFIED: 2026-04-27 -->
+
+> Historical note: This assessment captures a dated WSL/vLLM port investigation.
+> It is not a live runtime status source. Verify current ports through active
+> config, health checks, and operator docs before acting on this snapshot.
+
 # Port Architecture Assessment - WSL/vLLM Integration Issues
 
 **Date**: 2025-11-18  

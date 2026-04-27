@@ -174,6 +174,7 @@ UI status:
 
 If you want the deeper technical picture:
 
+- [`docs/architecture/README.md`](docs/architecture/README.md)
 - [`docs/architecture/SYSTEM_ARCHITECTURE.md`](docs/architecture/SYSTEM_ARCHITECTURE.md)
 - [`docs/architecture/ARCHITECTURE_REFERENCE.md`](docs/architecture/ARCHITECTURE_REFERENCE.md)
 - [`docs/architecture/MEMORY_STORAGE.md`](docs/architecture/MEMORY_STORAGE.md)

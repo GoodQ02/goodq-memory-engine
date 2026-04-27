@@ -1,3 +1,11 @@
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: REFERENCE_ONLY -->
+<!-- DOC_LAST_VERIFIED: 2026-04-27 -->
+
+> Historical note: This is a completed documentation reorganization report. It
+> is retained for provenance and is not the current docs navigation surface.
+> Use [../README.md](../README.md) and [README.md](README.md) first.
+
 # 📊 Documentation Reorganization - Completion Report
 
 **Date:** 2025-12-02 08:00 UTC  

@@ -1,3 +1,14 @@
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: REFERENCE_ONLY -->
+<!-- DOC_LAST_VERIFIED: 2026-04-27 -->
+
+> Historical note: This file records an older data-layout consolidation
+> snapshot. It is not the active runtime authority. For current path,
+> configuration, and memory contracts, use
+> [CONFIG_LOADING_CONTRACT.md](CONFIG_LOADING_CONTRACT.md),
+> [MEMORY_STORAGE.md](MEMORY_STORAGE.md), and
+> [INGEST_ORCHESTRATION_CONTRACT.md](INGEST_ORCHESTRATION_CONTRACT.md).
+
 # GoodQ4All Unified Data Configuration
 # Generated: 2025-10-10 22:53:07
 
@@ -45,5 +56,4 @@ All models are in: <GOODQ_DATA_ROOT>\models (See LEGACY_PATHS_DEPRECATED.md)\
 - No duplicate scripts
 - No scattered data directories
 - Single configuration source
-
 

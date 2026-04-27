@@ -1,3 +1,11 @@
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: REFERENCE_ONLY -->
+<!-- DOC_LAST_VERIFIED: 2026-04-27 -->
+
+> Historical note: This file describes an older repository layout and may not
+> match the current tree. Use the repository root, [../README.md](../README.md),
+> and [README.md](README.md) for current navigation.
+
 # GoodQ4All Project Structure
 
 ## Directory Organization

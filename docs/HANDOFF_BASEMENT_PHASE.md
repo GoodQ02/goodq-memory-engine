@@ -1,15 +1,15 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-04-25 -->
+<!-- DOC_LAST_VERIFIED: 2026-04-27 -->
 
 # Basement Phase Handoff (v1) — Current System State
 
-**Status:** Basement phase sealed + truth plumbing sealed (read-only).  
-**Scope:** Integrity + observability + contracts + read-only UI truth layer; no execution authority, no policy coupling.
+**Status:** Basement phase sealed + truth plumbing sealed (read-only control substrate active).
+**Scope:** Integrity + observability + contracts + read-only UI/control truth layers; no execution authority, no policy coupling.
 
 ---
 
-## Current Restart Checkpoint (2026-04-25)
+## Current Restart Checkpoint (2026-04-27)
 
 This is the practical handoff point for a brand-new Codex session.
 
@@ -29,6 +29,11 @@ This is the practical handoff point for a brand-new Codex session.
   - `lib/run_index.py`
   - `lib/run_summary.py`
   - `/api/runs/latest/preview`
+- First safe control-agent substrate is active as read-only observability:
+  - `lib/control_recurrence_report.py`
+  - `python -m cli.control_recurrence_report`
+  - tag anchor: `safe-control-substrate-v0.1.0`
+  - boundary: not healing yet. This tool does not activate `ControlAgent`, does not enable auto-healing, does not mutate configs, does not use LLMs, and does not touch `cli/run_ingestion.py`.
 - Current upstream normalization status:
   - exact-pair pilot only
   - allowlist contains exactly `Jerry Seinfeld -> Jerry`
@@ -238,6 +243,17 @@ These are intentionally *not* wired into ingestion yet:
 - `python -m cli.observability_rollup`
 - `python -m cli.observability_rollup --commits`
 
+### Run read-only control recurrence reports (no healing)
+
+- Single-run recurrence summary:
+  - `conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --run-id 20260424_182406_season2_fresh_witness`
+- Comparison JSON between witness roots:
+  - `conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --baseline-run-id 20260424_003250_season1_recompare_witness --candidate-run-id 20260424_182406_season2_fresh_witness --json`
+- Deterministic markdown operator artifact:
+  - `conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --baseline-run-id 20260424_003250_season1_recompare_witness --candidate-run-id 20260424_182406_season2_fresh_witness --write-md`
+
+This is read-only control-plane observability only. It reads existing persisted artifacts (`step_runs.jsonl`, run warnings, `scene_ingest_results.json`, `scene_manifest.json`, `temporal_index.json`, and `experiment_log.json`) and writes markdown only when `--write-md` is explicitly supplied. It is not ControlAgent activation and not healing yet.
+
 ### Run the Justification Channel (read-only; no power)
 
 - Open: `ui/justification_v1/index.html`
@@ -297,6 +313,7 @@ This prints counts by category/name and a UTC date range. It does not write to d
 - **Memory/observability core:** `steps/common/`
 - **Epistemic diff engine:** `steps/common/epistemic_diff.py`
 - **Conduit builders + rollups:** `cli/conduits_build.py`, `cli/ui_conduits_rollup.py`, `cli/observability_rollup.py`
+- **Read-only control recurrence reports:** `cli/control_recurrence_report.py`, `lib/control_recurrence_report.py`
 - **Sensitive-source contracts:** `docs/architecture/CANONICAL_SENSITIVE_EVENTS.md`, `docs/architecture/VAULT_TOKEN_RESOLVER_CONTRACT.md`
 - **Sensitive schema definitions:** `steps/common/canonical_sensitive_events.py`
 - **Health adapter (dry-run):** `steps/health_auto_export/adapter.py`

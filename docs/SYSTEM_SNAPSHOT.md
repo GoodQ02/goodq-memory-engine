@@ -1,10 +1,10 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: GENERATED_SNAPSHOT -->
-<!-- DOC_LAST_VERIFIED: 2026-04-25 -->
+<!-- DOC_LAST_VERIFIED: 2026-04-27 -->
 
 # System Snapshot
 
-_Operational snapshot refreshed: 2026-04-25T16:30:00_
+_Operational snapshot refreshed: 2026-04-27T17:42:44_
 
 This is a bounded release-era system snapshot. It is useful for understanding
 the supported host/runtime baseline, but it is not a live witness monitor.
@@ -113,10 +113,21 @@ the supported host/runtime baseline, but it is not a live witness monitor.
   - `lib/run_index.py`
   - `lib/run_summary.py`
   - `/api/runs/latest/preview`
+  - `lib/control_recurrence_report.py`
+  - `python -m cli.control_recurrence_report`
 - Current operator behavior:
   - reads structured artifacts under `reports/fresh_ingest_runs`
   - projects more truthful in-flight status by detecting episode lane-start artifacts
   - does not revive retired legacy `/runs` compatibility shells
+  - reads recurrence truth from existing `step_runs.jsonl`, run warnings, `scene_ingest_results.json`, `scene_manifest.json`, `temporal_index.json`, and `experiment_log.json`
+  - classifies recurrence families as `informational`, `watch`, `actionable`, or `blocking`
+  - emits deterministic operator hints and inspection targets without changing runtime state
+  - can write markdown to `reports/control_recurrence/` when `--write-md` is explicitly supplied
+  - boundary: not healing yet. The recurrence report does not activate `ControlAgent`, does not enable auto-healing, does not mutate configs, does not use LLMs, and does not touch `cli/run_ingestion.py`.
+- Exact control recurrence commands:
+  - `conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --run-id 20260424_182406_season2_fresh_witness`
+  - `conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --baseline-run-id 20260424_003250_season1_recompare_witness --candidate-run-id 20260424_182406_season2_fresh_witness --json`
+  - `conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --baseline-run-id 20260424_003250_season1_recompare_witness --candidate-run-id 20260424_182406_season2_fresh_witness --write-md`
 
 ## Current Upstream Normalization State
 - Exact-pair pilot only:

@@ -1,10 +1,10 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-04-01 -->
+<!-- DOC_LAST_VERIFIED: 2026-04-27 -->
 
 # GoodQ CLI Reference
 
-**Last Updated:** April 1, 2026  
+**Last Updated:** April 27, 2026
 **Status:** Runtime-conditional; verify behavior from current config, artifacts, and health checks
 
 This document is the active command-surface reference for the `cli/` package. It describes the current supported CLI layer, not historical launch paths.
@@ -108,6 +108,67 @@ python -m cli.print_config
 ```
 
 This is the fastest way to verify the effective resolved profile/path surface before a run.
+
+### `python -m cli.control_recurrence_report`
+
+**Purpose**
+- read-only control recurrence and comparison report for operator observability
+
+**Boundary**
+- not healing yet
+- does not activate or instantiate `ControlAgent`
+- does not enable auto-healing
+- does not mutate configs
+- does not use LLMs
+- does not alter or bypass `cli/run_ingestion.py`
+
+**Truth Surfaces**
+- `step_runs.jsonl`
+- run warnings
+- `scene_ingest_results.json`
+- `scene_manifest.json`
+- `temporal_index.json`
+- `experiment_log.json`
+
+**Usage**
+
+Single-run recurrence report:
+
+```powershell
+conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --run-id 20260424_182406_season2_fresh_witness
+```
+
+Comparison report as JSON:
+
+```powershell
+conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --baseline-run-id 20260424_003250_season1_recompare_witness --candidate-run-id 20260424_182406_season2_fresh_witness --json
+```
+
+Markdown operator artifact using the default output directory:
+
+```powershell
+conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --baseline-run-id 20260424_003250_season1_recompare_witness --candidate-run-id 20260424_182406_season2_fresh_witness --write-md
+```
+
+Markdown with an explicit output directory:
+
+```powershell
+conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --run-id 20260424_182406_season2_fresh_witness --write-md --output-dir reports/control_recurrence
+```
+
+**Outputs**
+- human-readable summary by default
+- stable JSON with `--json`
+- deterministic markdown with `--write-md`
+- default markdown path:
+  - single run: `reports/control_recurrence/<run_id>.md`
+  - comparison: `reports/control_recurrence/<baseline_run_id>__vs__<candidate_run_id>.md`
+
+**Current Truth**
+- groups persisted recurrence signals by run, episode/video, step, status, reason, error family, scene, and recovery outcome
+- classifies recurrence families as `informational`, `watch`, `actionable`, or `blocking`
+- emits read-only operator hints and inspection targets
+- reports Phase 6 and Qdrant health without inferring beyond persisted artifacts
 
 ---
 
@@ -243,6 +304,7 @@ The CLI truth is healthy when:
 3. `cli.monitor_ingestion` reads the active runtime log and processing roots.
 4. `cli.print_config` reflects the effective resolved profile/path truth.
 5. `cli.memory` subcommands operate against the configured epoch database paths.
+6. `cli.control_recurrence_report` reads existing run artifacts without activating healing or mutating runtime state.
 
 ---
 
@@ -260,6 +322,7 @@ The CLI truth is healthy when:
 The CLI layer is now centered on:
 - one canonical ingest owner
 - deterministic monitoring/status helpers
+- read-only control recurrence reporting
 - query/retrieval helpers
 - a focused memory maintenance surface
 

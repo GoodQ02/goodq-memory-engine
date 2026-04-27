@@ -1,11 +1,11 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-04-20 -->
+<!-- DOC_LAST_VERIFIED: 2026-04-27 -->
 
 # Control Agent & Self-Healing System
 
 **Status:** ⚠️ CONDITIONAL - Runtime disabled by default unless an `llm_client` is explicitly injected  
-**Last Updated:** April 20, 2026  
+**Last Updated:** April 27, 2026
 **Version:** 1.0.0
 
 ---
@@ -15,6 +15,44 @@
 The Control Agent is GoodQ4All's monitoring, diagnosis, and healing subsystem. In the current runtime contract, it requires explicit `llm_client` injection to initialize; default CLI flows persist a deterministic disabled state instead of attempting best-effort auto-init.
 
 **Think of it as:** An intelligent DevOps engineer that never sleeps, continuously learning optimal recovery patterns and applying fixes before you even notice problems.
+
+---
+
+## Active Read-Only Control Substrate (2026-04-27)
+
+The active control-plane surface now includes a read-only recurrence instrument:
+
+- `lib/control_recurrence_report.py`
+- `python -m cli.control_recurrence_report`
+
+Boundary: not healing yet. This instrument is not `ControlAgent` activation. It does not enable auto-healing, does not mutate configs, does not use LLMs, and does not touch `cli/run_ingestion.py`.
+
+It reads persisted runtime truth only:
+
+- `step_runs.jsonl`
+- run warnings
+- `scene_ingest_results.json`
+- `scene_manifest.json`
+- `temporal_index.json`
+- `experiment_log.json`
+
+It reports recurrence summaries, comparison deltas, category counts, recovered/unrecovered/skipped counts, Phase 6 health, Qdrant health, deterministic operator hints, and optional markdown artifacts under `reports/control_recurrence/`.
+
+Exact command examples:
+
+```powershell
+conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --run-id 20260424_182406_season2_fresh_witness
+```
+
+```powershell
+conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --baseline-run-id 20260424_003250_season1_recompare_witness --candidate-run-id 20260424_182406_season2_fresh_witness --json
+```
+
+```powershell
+conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --baseline-run-id 20260424_003250_season1_recompare_witness --candidate-run-id 20260424_182406_season2_fresh_witness --write-md
+```
+
+Use this as the first safe control-agent substrate: operator awareness and pattern visibility before any healing authority is considered.
 
 ---
 

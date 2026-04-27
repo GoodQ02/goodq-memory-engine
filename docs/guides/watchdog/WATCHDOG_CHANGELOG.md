@@ -1,6 +1,6 @@
 # Watchdog System - Development Changelog
 
-> Role: Canonical development history for the Watchdog system. Use this file to understand when features were introduced or changed. For current behavior, see `docs/WATCHDOG_GUIDE.md` and `docs/diagrams/watchdog_flow.md`.
+> Role: Canonical development history for the Watchdog system. Use this file to understand when features were introduced or changed. For current behavior, see `docs/guides/watchdog/WATCHDOG_GUIDE.md` and `docs/architecture/diagrams/watchdog_flow.md`.
 
 ## Version 1.0.0 - October 7, 2025
 
@@ -47,7 +47,7 @@ Complete implementation of automatic file ingestion system for GoodQ project.
   - File stability detection tests
 
 #### Documentation
-- **`docs/WATCHDOG_GUIDE.md`** (400+ lines)
+- **`docs/guides/watchdog/WATCHDOG_GUIDE.md`** (400+ lines)
   - Complete user guide
   - Feature overview
   - Quick start instructions
@@ -57,7 +57,7 @@ Complete implementation of automatic file ingestion system for GoodQ project.
   - Best practices
   - Future enhancements
 
-- **`docs/diagrams/watchdog_flow.md`** (500+ lines)
+- **`docs/architecture/diagrams/watchdog_flow.md`** (GitHub-renderable)
   - System architecture diagrams
   - File lifecycle flowcharts
   - State machine diagrams
@@ -71,7 +71,7 @@ Complete implementation of automatic file ingestion system for GoodQ project.
   - Quick Start updated with watchdog commands
   - Table of contents updated
 
-- **`docs/WATCHDOG_CHANGELOG.md`** (this file)
+- **`docs/guides/watchdog/WATCHDOG_CHANGELOG.md`** (this file)
   - Development history and changelog
 
 ### Features Implemented
@@ -240,7 +240,7 @@ REPROCESS_ON_START = False   # Skip already-processed files
    - Future: auto-archive after N days
 
 5. **No Network Files**: Doesn't support UNC paths or network drives
-   - Local paths only (<project_root> drive)
+   - Local configured paths only
    - Future: support remote file systems
 
 ### Security Considerations
@@ -273,16 +273,16 @@ Not applicable (initial release)
 
 To disable watchdog:
 1. Stop the watchdog process (Ctrl+C or close window)
-2. Delete `logs/watchdog_state.json` to reset registry
+2. Delete the resolved `watchdog_state.json` to reset registry
 3. Remove any Startup shortcut that targets `python -m cli.watchdog`
 4. Continue using manual ingestion via `cli/run_ingestion.py`
 
 ### Support & Troubleshooting
 
 See:
-- `docs/WATCHDOG_GUIDE.md` - Complete user guide
-- `logs/watchdog.log` - Activity log with errors
-- `logs/watchdog_state.json` - Processing history
+- `docs/guides/watchdog/WATCHDOG_GUIDE.md` - Complete user guide
+- resolved `watchdog.log` - Activity log with errors
+- resolved `watchdog_state.json` - Processing history
 - GitHub Issues - Report bugs and feature requests
 
 ### Contributors

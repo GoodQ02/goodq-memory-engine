@@ -1,541 +1,365 @@
+<!-- DOC_BADGE: CANONICAL -->
+<!-- DOC_STATUS: AUTHORITATIVE -->
+<!-- DOC_LAST_VERIFIED: 2026-04-27 -->
+
 # GoodQ Pipeline Flow Diagrams
 
-**Last Updated:** December 15, 2025  
-**Status:** ✅ Production Verified
+**Status:** Active architecture reference
+**Rendering target:** GitHub Markdown with native Mermaid support
 
-## 📊 Visual Architecture Reference
+These diagrams describe the current GoodQ4All runtime shape. They are not a
+replacement for the canonical contracts; they are a GitHub-friendly visual map
+of those contracts.
 
-This document contains ASCII and Mermaid diagrams for the GoodQ pipeline architecture. View these diagrams in a Markdown-compatible viewer or use Mermaid Live Editor.
+Primary contracts:
 
-**Evidence Source:** Forensic code analysis of `cli/run_ingestion.py`, verified active processing logs (Dec 14-15, 2025)
+- [INGEST_ORCHESTRATION_CONTRACT.md](../INGEST_ORCHESTRATION_CONTRACT.md)
+- [SYSTEM_ARCHITECTURE.md](../SYSTEM_ARCHITECTURE.md)
+- [MEMORY_STORAGE.md](../MEMORY_STORAGE.md)
+- [SCENE_MANIFEST_SPECIFICATION.md](../../SCENE_MANIFEST_SPECIFICATION.md)
+- [PHASE6_MULTIMODAL_FUSION.md](../../PHASE6_MULTIMODAL_FUSION.md)
+
+The canonical execution owner remains `cli/run_ingestion.py`. Control recurrence
+reporting is read-only observability and does not activate `ControlAgent` or
+healing.
 
 ---
 
-## 🎬 Complete Pipeline Flow (Current Production)
+## Canonical Pipeline Flow
 
 ```mermaid
-graph TD
-    A[Input Video] --> B{Video Hash Check}
-    B -->|Exists| C[Load Scene Manifest]
-    B -->|New| D[Scene Detection PySceneDetect]
-    D --> E[Create Scene Manifest]
-    
-    C --> F[Process Scenes]
-    E --> F
-    
-    F --> G{For Each Scene}
-    
-    G --> H[Visual Pipeline]
-    G --> I[Audio Pipeline WSL2]
-    
-    H --> H1[Extract Keyframe]
-    H1 --> H2[OCR Tesseract]
-    H1 --> H3[Caption BLIP]
-    H1 --> H4[Object Detect YOLO]
-    H1 --> H5[Face Embed]
-    H1 --> H6[CLIP Embed]
-    H1 --> H7[DINO Embed]
-    H1 --> H8[Tagger WD14]
-    
-    I --> I1[Extract Audio Chunk]
-    I1 --> I2[audio_unified_wsl2]
-    I2 --> I3[Transcription Whisper]
-    I2 --> I4[Diarization Pyannote]
-    I2 --> I5[Emotion Detection]
-    I2 --> I6[Audio Embeddings]
-    I1 --> I7[Metadata]
-    I1 --> I8[CLAP Embed]
-    
-    H2 --> J[Entity Extraction]
-    H3 --> J
-    H4 --> J
-    I3 --> J
-    
-    J --> K[Cross-Modal Resolution]
-    K --> L[Knowledge Graph Update]
-    
-    L --> M[Memory Storage]
-    H5 --> M
-    H6 --> M
-    H7 --> M
-    I6 --> M
-    I8 --> M
-    
-    M --> N[SQLite memory.db]
-    M --> O[SQLite knowledge_graph.db]
-    M --> P[Qdrant Vectors]
-    
-    N --> Q[Query & Retrieval]
-    O --> Q
-    P --> Q
+flowchart TB
+    OP["Operator or Watchdog"] --> CLI["cli/run_ingestion.py"]
+    CLI --> DISCOVER["Resolve config and input media"]
+    DISCOVER --> SCENE_DETECT["Scene detection"]
+    SCENE_DETECT --> MANIFEST["video/scene_manifest.json"]
+
+    MANIFEST --> LOOP{"For each scene"}
+
+    LOOP --> VISION["Vision steps"]
+    LOOP --> AUDIO["Audio steps"]
+    LOOP --> TEXT["Transcript and text signals"]
+
+    VISION --> VISION_OUT["Keyframes, OCR, captions, objects, faces, visual embeddings"]
+    AUDIO --> AUDIO_OUT["Audio chunks, transcript, diarization, emotion, audio embeddings"]
+    TEXT --> TEXT_OUT["Entities, tags, scene context, summaries"]
+
+    VISION_OUT --> SCENE_TRUTH["Scene-level truth"]
+    AUDIO_OUT --> SCENE_TRUTH
+    TEXT_OUT --> SCENE_TRUTH
+
+    SCENE_TRUTH --> KG_RT["Realtime KG update"]
+    SCENE_TRUTH --> MEM_DB["memory.db"]
+    SCENE_TRUTH --> QDRANT["Qdrant vector collections"]
+
+    SCENE_TRUTH --> PHASE6A["Phase 6a scene visual embeddings"]
+    PHASE6A --> PHASE6B["Phase 6b cross-modal harmonization"]
+    PHASE6B --> TEMPORAL["temporal_index.json"]
+    PHASE6B --> MANIFEST_UPDATE["scene_manifest.json enriched"]
+
+    KG_RT --> KG_DB["knowledge_graph.db"]
+    MEM_DB --> RUN_SUMMARY["output/scene_ingest_results.json"]
+    KG_DB --> RUN_SUMMARY
+    QDRANT --> RUN_SUMMARY
+    TEMPORAL --> RUN_SUMMARY
+    MANIFEST_UPDATE --> RUN_SUMMARY
+
+    classDef entry fill:#f8fafc,stroke:#475569,stroke-width:1px,color:#0f172a
+    classDef process fill:#ecfeff,stroke:#0891b2,stroke-width:1px,color:#164e63
+    classDef truth fill:#f0fdf4,stroke:#16a34a,stroke-width:1px,color:#14532d
+    classDef store fill:#fff7ed,stroke:#ea580c,stroke-width:1px,color:#7c2d12
+    classDef report fill:#f5f3ff,stroke:#7c3aed,stroke-width:1px,color:#3b0764
+
+    class OP,CLI,DISCOVER entry
+    class SCENE_DETECT,LOOP,VISION,AUDIO,TEXT,VISION_OUT,AUDIO_OUT,TEXT_OUT,PHASE6A,PHASE6B process
+    class MANIFEST,SCENE_TRUTH,TEMPORAL,MANIFEST_UPDATE truth
+    class KG_RT,MEM_DB,KG_DB,QDRANT store
+    class RUN_SUMMARY report
 ```
 
 ---
 
-## 🔄 Deduplication Flow
-
-```mermaid
-graph TD
-    A[Video Input] --> B[Compute Video Hash SHA256]
-    B --> C{Check Memory DB}
-    
-    C -->|Hash Found| D[Load Existing Scenes]
-    C -->|Hash Not Found| E[Run Scene Detection]
-    
-    E --> F[Generate Scene Manifests]
-    F --> G[Store Video Hash + Manifests]
-    
-    D --> H{For Each Scene}
-    G --> H
-    
-    H --> I[Compute Scene Hash]
-    I --> J{scene_has_materialized?}
-    
-    J -->|Yes| K[Log status=skipped]
-    J -->|No| L[Process Scene]
-    
-    K --> M[Load Cached Artifacts]
-    L --> N[Generate New Artifacts]
-    N --> O[register_scene_bundle]
-    
-    M --> P[Continue Pipeline]
-    O --> P
-    
-    P --> Q{More Scenes?}
-    Q -->|Yes| H
-    Q -->|No| R[Complete]
-```
-
----
-
-## 🖼️ Visual Pipeline Detail (Production)
+## Scene Truth Flow
 
 ```mermaid
 flowchart LR
-    A[Keyframe JPG] --> B[OCR Tesseract]
-    A --> C[Caption BLIP]
-    A --> D[Object Detect YOLO]
-    A --> E[Face Embed]
-    A --> F[CLIP Embed]
-    A --> G[DINO Embed]
-    A --> H[Tagger WD14]
-    
-    B --> I[Text Output]
-    C --> I
-    D --> J[objects field]
-    E --> K[Face Vectors 512d]
-    F --> L[CLIP Vectors 512d]
-    G --> M[DINO Vectors 768d]
-    H --> N[Aesthetic Tags]
-    
-    I --> O[Entity Extractor]
-    J --> O
-    
-    O --> P[Entities List]
-    
-    P --> Q[Knowledge Graph]
-    K --> R[Qdrant]
-    L --> R
-    M --> R
-    J --> S[memory.db scene_data]
-    N --> S
-```
+    subgraph Inputs["Scene inputs"]
+        VIDEO["Video frame"]
+        WAV["Scene audio"]
+        META["Video metadata"]
+    end
 
-**Artifact Locations (Verified Dec 15, 2025):**
-- Keyframes: `<project_root>\logs\scene_ingest\<video_name>\video\scene_XXXX.jpg`
-- Stored in: `memory.db` (scene_bundles table) + Qdrant collections
+    subgraph Perception["Perception steps"]
+        OCR["OCR"]
+        CAPTION["Caption"]
+        OBJECTS["Objects"]
+        FACE["Face signals"]
+        WHISPER["Transcription"]
+        DIAR["Diarization"]
+        EMOTION["Emotion"]
+        EMBED["Embeddings"]
+    end
+
+    subgraph SceneArtifacts["Authoritative scene artifacts"]
+        SM["scene_manifest.json"]
+        TI["temporal_index.json"]
+    end
+
+    VIDEO --> OCR
+    VIDEO --> CAPTION
+    VIDEO --> OBJECTS
+    VIDEO --> FACE
+    VIDEO --> EMBED
+
+    WAV --> WHISPER
+    WAV --> DIAR
+    WAV --> EMOTION
+    WAV --> EMBED
+    META --> SM
+
+    OCR --> SM
+    CAPTION --> SM
+    OBJECTS --> SM
+    FACE --> SM
+    WHISPER --> SM
+    DIAR --> SM
+    EMOTION --> SM
+    EMBED --> SM
+    SM --> TI
+
+    classDef input fill:#f8fafc,stroke:#64748b,color:#0f172a
+    classDef step fill:#ecfeff,stroke:#0891b2,color:#164e63
+    classDef artifact fill:#f0fdf4,stroke:#16a34a,color:#14532d
+
+    class VIDEO,WAV,META input
+    class OCR,CAPTION,OBJECTS,FACE,WHISPER,DIAR,EMOTION,EMBED step
+    class SM,TI artifact
+```
 
 ---
 
-## 🎵 Audio Pipeline Detail (WSL2 Unified - Production)
+## Memory Layer Architecture
+
+This section replaces the older memory-layer diagram that did not render on
+GitHub. The broken edge syntax has been replaced with conservative Mermaid
+links, and the diagram now reflects the active epoch-scoped storage contract.
 
 ```mermaid
-flowchart TD
-    A[Scene Audio WAV] --> B[WSL2: audio_unified_wsl2]
-    
-    B --> C[Whisper large-v3]
-    B --> D[Pyannote 3.1 Diarization]
-    B --> E[Silero VAD]
-    B --> F[Emotion Wav2Vec2]
-    
-    C --> G[Transcript + Timestamps]
-    D --> H[Speaker Segments]
-    E --> I[Voice Activity]
-    F --> J[8-class Emotion]
-    
-    G --> K[result.json]
-    H --> K
-    I --> K
-    J --> K
-    
-    K --> L[Embeddings 768d]
-    K --> M[Audio Features]
-    
-    A --> N[Windows: CLAP Embed]
-    
-    L --> O[Qdrant Audio]
-    N --> O
-    
-    G --> P[Entity Extractor]
-    P --> Q[Knowledge Graph]
-    
-    K --> R[memory.db scene_data]
+flowchart TB
+    subgraph TruthArtifacts["Artifact truth"]
+        SM["scene_manifest.json"]
+        TI["temporal_index.json"]
+        SIR["scene_ingest_results.json"]
+    end
+
+    subgraph SQLite["Epoch SQLite"]
+        MEM["memory.db"]
+        MEM_SCENES["scenes / segments / summaries"]
+        MEM_EMB["embedding routing metadata"]
+        MEM_AUDIT["memory_commit_events"]
+        KG["knowledge_graph.db"]
+        KG_NODES["nodes"]
+        KG_EDGES["edges"]
+        KG_MEDIA["media_nodes / node_media"]
+        KG_EVENTS["events / event_nodes"]
+    end
+
+    subgraph VectorStore["Vector storage"]
+        QT["Qdrant text/audio collections"]
+        QV["Qdrant CLIP/DINO epoch collections"]
+        FAISS["FAISS optional parity"]
+    end
+
+    subgraph Retrieval["Read surfaces"]
+        RETRIEVE["cli.retrieve / API retrieval"]
+        NLQ["cli.nl_query"]
+        REPORTS["run summaries and recurrence reports"]
+    end
+
+    SM --> MEM
+    SM --> KG
+    SM --> QV
+    SM --> TI
+    TI --> SIR
+    MEM --> SIR
+    KG --> SIR
+
+    MEM --> MEM_SCENES
+    MEM --> MEM_EMB
+    MEM --> MEM_AUDIT
+
+    KG --> KG_NODES
+    KG --> KG_EDGES
+    KG --> KG_MEDIA
+    KG --> KG_EVENTS
+
+    MEM_EMB -- embedding_id --> QT
+    MEM_EMB -- embedding_id --> QV
+    QV -- payload scene_id --> SM
+    QT -- payload scene_id --> SM
+    KG_MEDIA -- scene_id --> SM
+
+    QT --> RETRIEVE
+    QV --> RETRIEVE
+    FAISS -. configured fallback .-> RETRIEVE
+    KG --> NLQ
+    MEM --> NLQ
+    SIR --> REPORTS
+    TI --> REPORTS
+
+    classDef artifact fill:#f0fdf4,stroke:#16a34a,color:#14532d
+    classDef sqlite fill:#fff7ed,stroke:#ea580c,color:#7c2d12
+    classDef vector fill:#eef2ff,stroke:#4f46e5,color:#312e81
+    classDef read fill:#fdf4ff,stroke:#c026d3,color:#701a75
+
+    class SM,TI,SIR artifact
+    class MEM,MEM_SCENES,MEM_EMB,MEM_AUDIT,KG,KG_NODES,KG_EDGES,KG_MEDIA,KG_EVENTS sqlite
+    class QT,QV,FAISS vector
+    class RETRIEVE,NLQ,REPORTS read
 ```
 
-**Artifact Locations (Verified Dec 15, 2025):**
-- Audio chunks: `<project_root>\logs\scene_ingest\<video_name>\audio\scene_XXXX.wav`
-- WSL2 output: `\\wsl.localhost\<distro>\home\<user>\goodq_audio\output\result.json`
-- GPU: RTX 4070 Ti SUPER 16GB, CUDA 12.8
-- Models loaded: Whisper medium (service) / large-v3 (direct), Pyannote 3.1, Silero VAD, Wav2Vec2 emotion
+Storage locations:
+
+- `memory.db`: `${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/<epoch>/memory.db`
+- `knowledge_graph.db`: `${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/<epoch>/knowledge_graph.db`
+- scene manifest: `${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/<epoch>/processing/<video_name>/video/scene_manifest.json`
+- temporal index: `${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/<epoch>/processing/<video_name>/temporal_index.json`
+- run summary: `${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/<epoch>/output/scene_ingest_results.json`
+- Qdrant: `http://127.0.0.1:6333`
+
+Qdrant collection names are resolved from config. The active epoch pattern is
+`goodq_<modality>_epoch_<epoch>` for configured modality collections.
 
 ---
 
-## 💾 Memory Layer Architecture (Production)
+## Audio Runtime Flow
 
 ```mermaid
-graph TB
-    subgraph "Persistent Storage"
-        A[memory.db] --> A1[scenes table]
-        A --> A2[assets table]
-        A --> A3[scene_bundles table]
-        A --> A4[video_metadata table]
-        
-        B[knowledge_graph.db] --> B1[entities table]
-        B --> B2[relationships table]
-        B --> B3[entity_mentions table]
-        B --> B4[cross_references table]
-        
-        C[Qdrant Collections] --> C1[text_embeddings]
-        C --> C2[clip_embeddings]
-        C --> C3[dino_embeddings]
-        C --> C4[audio_embeddings]
-    end
-    
-    subgraph "Query Layer"
-        D[Semantic Search] --> C1
-        D --> C2
-        D --> C3
-        D --> C4
-        
-        E[Metadata Query] --> A1
-        E --> A2
-        E --> A3
-        
-        F[Graph Traversal] --> B1
-        F --> B2
-        F --> B3
-        
-        G[Cross-Modal] --> A
-        G --> B
-        G --> C
-    end
-    
-    C1 -.payload.scene_id.- A1
-    C2 -.payload.scene_id.- A1
-    C3 -.payload.scene_id.- A1
-    C4 -.payload.scene_id.- A1
-    B3 -.scene_id.- A1
+flowchart TB
+    SCENE_AUDIO["Scene audio chunk"] --> SELECT{"WSL audio enabled and healthy?"}
+
+    SELECT -- yes --> WSL["Direct unified WSL worker"]
+    SELECT -- no --> WIN["Windows-safe audio path"]
+
+    WSL --> WSL_OUT["transcript, diarization, emotion, embeddings, voice signatures"]
+    WIN --> WIN_OUT["available transcript/audio metadata and explicit fallback status"]
+
+    WSL_OUT --> AUDIO_TRUTH["audio truth in scene_manifest.json"]
+    WIN_OUT --> AUDIO_TRUTH
+
+    AUDIO_TRUTH --> STATUS["diarization_status / emotion_status / backend fields"]
+    AUDIO_TRUTH --> PHASE6["Phase 6 harmonization input"]
+
+    classDef choice fill:#fefce8,stroke:#ca8a04,color:#713f12
+    classDef runtime fill:#ecfeff,stroke:#0891b2,color:#164e63
+    classDef truth fill:#f0fdf4,stroke:#16a34a,color:#14532d
+
+    class SELECT choice
+    class WSL,WIN,WSL_OUT,WIN_OUT runtime
+    class AUDIO_TRUTH,STATUS,PHASE6 truth
 ```
 
-**Database Locations (Stitching-Era Baseline):**
-- memory.db: `<GOODQ_DATA_ROOT>\GoodQ_Data\epochs\<epoch>\memory.db`
-- knowledge_graph.db: `<GOODQ_DATA_ROOT>\GoodQ_Data\epochs\<epoch>\knowledge_graph.db`
-- Qdrant: `localhost:6333` (Windows service, no Docker)
-- Vector dimensions: text=384d, CLIP=512d, DINO=768d, audio=512d
+WSL is a compute extension, not a storage authority. The Windows host and the
+epoch artifact tree remain the source of truth.
 
 ---
 
-## 🏗️ Environment Isolation
+## Control Observability Boundary
 
 ```mermaid
-graph TD
-    subgraph "Base System"
-        A[Miniconda Python 3.13]
-    end
-    
-    subgraph "Isolated Environments"
-        B1[goodq_image_caption Python 3.10]
-        B2[goodq_object_detect Python 3.10]
-        B3[goodq_audio_transcribe Python 3.10]
-        B4[goodq_audio_emotion Python 3.10]
-        B5[goodq_text_embed Python 3.10]
-        B6[...18 more envs...]
-    end
-    
-    A -.creates.- B1
-    A -.creates.- B2
-    A -.creates.- B3
-    A -.creates.- B4
-    A -.creates.- B5
-    A -.creates.- B6
-    
-    B1 --> C1[torch 2.3.1 CUDA]
-    B2 --> C2[ultralytics CUDA]
-    B3 --> C3[faster-whisper CUDA]
-    B4 --> C4[transformers CUDA]
-    B5 --> C5[sentence-transformers CPU]
-    
-    B1 -.pth link.- D[<project_root>/ goodq4all]
-    B2 -.pth link.- D
-    B3 -.pth link.- D
-    B4 -.pth link.- D
-    B5 -.pth link.- D
-    
-    style B1 fill:#90EE90
-    style B2 fill:#90EE90
-    style B3 fill:#90EE90
-    style B4 fill:#90EE90
-    style B5 fill:#ADD8E6
+flowchart LR
+    STEP_RUNS["step_runs.jsonl"] --> RECURRENCE["control_recurrence_report"]
+    WARNINGS["run warnings"] --> RECURRENCE
+    SIR["scene_ingest_results.json"] --> RECURRENCE
+    SM["scene_manifest.json"] --> RECURRENCE
+    TI["temporal_index.json"] --> RECURRENCE
+    EXP["experiment_log.json"] --> RECURRENCE
+
+    RECURRENCE --> SUMMARY["human summary"]
+    RECURRENCE --> JSON["stable JSON"]
+    RECURRENCE --> MD["optional markdown"]
+
+    RECURRENCE -. does not activate .-> CA["ControlAgent"]
+    RECURRENCE -. does not mutate .-> CFG["configs"]
+    RECURRENCE -. does not orchestrate .-> INGEST["cli/run_ingestion.py"]
+
+    classDef input fill:#f8fafc,stroke:#64748b,color:#0f172a
+    classDef report fill:#f5f3ff,stroke:#7c3aed,color:#3b0764
+    classDef boundary fill:#fee2e2,stroke:#dc2626,color:#7f1d1d
+
+    class STEP_RUNS,WARNINGS,SIR,SM,TI,EXP input
+    class RECURRENCE,SUMMARY,JSON,MD report
+    class CA,CFG,INGEST boundary
 ```
+
+The recurrence report is observability only. It does not heal, mutate config, or
+replace canonical ingestion.
 
 ---
 
-## ⚡ Performance: First Run vs Deduplication
-
-```
-First Run (158 seconds)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Scene Detection     ████████████ 12s
-Image OCR           ██████ 6s (x2 scenes)
-Image Caption       ███████████████ 14s (x2 scenes)
-Object Detection    ████████████ 12s (x2 scenes)
-Face Embedding      ████████ 8s (x2 scenes)
-CLIP Embedding      ██████████ 10s (x2 scenes)
-DINO Embedding      ██████████ 10s (x2 scenes)
-Audio Metadata      ████ 4s
-Audio Diarization   ██████████████████ 18s
-Audio Transcription █████████████████████████ 25s
-Speech Emotion      ██████ 6s
-CLAP Embedding      ██████████ 10s
-Text Processing     ███████ 7s
-NER Tagging         ████████ 8s
-Memory Integration  ████████ 8s
-
-Second Run (38 seconds - 76% faster!)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Scene Detection     (skipped - dedupe)
-Image OCR           ███ 3s (partial)
-Image Caption       ███████ 7s (partial)
-Object Detection    ██████ 6s (partial)
-Face Embedding      (skipped - dedupe)
-CLIP Embedding      (skipped - dedupe)
-DINO Embedding      (skipped - dedupe)
-Audio Metadata      (skipped - dedupe)
-Audio Diarization   (skipped - dedupe)
-Audio Transcription (skipped - dedupe)
-Speech Emotion      (skipped - dedupe)
-CLAP Embedding      (skipped - dedupe)
-Text Processing     ███ 3s (partial)
-NER Tagging         ████ 4s (partial)
-Memory Integration  ██████ 6s
-```
-
----
-
-## 🔐 Data Security Model
-
-```mermaid
-graph TD
-    A[User Data] --> B{Privacy Boundary}
-    
-    B --> C[Local Processing Only]
-    C --> D[GPU/CPU on <project_root> drive]
-    
-    B -.Optional.- E[External APIs]
-    E -.User Choice.- F[OpenAI GPT]
-    E -.User Choice.- G[ElevenLabs TTS]
-    
-    D --> H[Local Storage]
-    H --> I[<GOODQ_DATA_ROOT>/GoodQ_Data (See LEGACY_PATHS_DEPRECATED.md)/]
-    H --> J[<GOODQ_DATA_ROOT>/models/]
-    
-    I --> K[SQLite Encrypted?]
-    I --> L[FAISS Indices]
-    I --> M[Step Logs]
-    
-    K --> N[Backup to NAS]
-    L --> N
-    M --> N
-    
-    N --> O[<drive>:/ UGREEN NAS]
-    O -.Optional.- P[GPG Encryption]
-    
-    style C fill:#90EE90
-    style H fill:#90EE90
-    style E fill:#FFD700
-    style F fill:#FFD700
-    style G fill:#FFD700
-```
-
----
-
-## 📊 Scalability Paths
-
-```mermaid
-graph TB
-    subgraph "Current Single Machine"
-        A1[1x RTX 4070 Ti SUPER]
-        A2[64GB RAM]
-        A3[2x 4TB NVMe]
-        A4[44TB NAS]
-    end
-    
-    subgraph "Vertical Scaling Path"
-        B1[1x RTX 6000 Ada 48GB]
-        B2[128GB RAM]
-        B3[4x 4TB NVMe RAID]
-        B4[100TB NAS 10Gb]
-    end
-    
-    subgraph "Horizontal Scaling Path"
-        C1[4x GPUs Multi-Node]
-        C2[Ray/Dask Cluster]
-        C3[Shared NAS Storage]
-        C4[Redis Coordinator]
-    end
-    
-    subgraph "Index Scaling"
-        D1[FAISS IVF-PQ]
-        D2[100M+ Vectors]
-        D3[Quantization]
-        D4[ANN Search]
-    end
-    
-    A1 -.Upgrade.- B1
-    A2 -.Upgrade.- B2
-    A3 -.Upgrade.- B3
-    A4 -.Upgrade.- B4
-    
-    B1 -.Distribute.- C1
-    B2 -.Distribute.- C2
-    B3 -.Distribute.- C3
-    B4 -.Distribute.- C4
-    
-    A1 -.Optimize.- D1
-    A2 -.Optimize.- D2
-    A3 -.Optimize.- D3
-    A4 -.Optimize.- D4
-```
-
----
-
-## 🔄 Orchestration Flow
+## Orchestration Sequence
 
 ```mermaid
 sequenceDiagram
-    participant U as User
-    participant CLI as CLI Script
-    participant ZM as legacy orchestration
-    participant SR as Step Runner
-    participant ENV as Conda Env
-    participant MEM as Memory Layer
-    
-    U->>CLI: pwsh ingest_videos_lite.ps1
-    CLI->>CLI: Sync .env.local
-    CLI->>ZM: conda run -n goodq_core
-    ZM->>ZM: Load run_ingestion.py
-    
-    loop For each video
-        ZM->>ZM: Compute video hash
-        ZM->>MEM: Check if processed
-        alt Already processed
-            MEM-->>ZM: Return cached scenes
-            ZM->>ZM: Log status=skipped
-        else New video
-            ZM->>ZM: Run scene detection
-            
-            loop For each scene
-                ZM->>SR: Execute step
-                SR->>ENV: conda run -n goodq_<step>
-                ENV->>ENV: Load model
-                ENV->>ENV: Process input
-                ENV-->>SR: Return result
-                SR->>MEM: Store artifacts
-                SR->>SR: Log to step_runs.jsonl
-                SR-->>ZM: Complete
-            end
-        end
+    participant Operator
+    participant CLI as cli/run_ingestion.py
+    participant Step as Step runner
+    participant Manifest as scene_manifest.json
+    participant KG as knowledge_graph.db
+    participant Qdrant
+    participant Phase6 as Phase 6
+    participant Output as scene_ingest_results.json
+
+    Operator->>CLI: Start canonical ingestion
+    CLI->>CLI: Resolve config and input media
+    CLI->>Manifest: Write initial scene manifest
+
+    loop For each scene
+        CLI->>Step: Execute scoped scene step
+        Step-->>CLI: Return result or visible failure
+        CLI->>Manifest: Persist scene truth
+        CLI->>KG: Persist realtime graph evidence
+        CLI->>Qdrant: Persist vectors when available
     end
-    
-    ZM-->>CLI: Pipeline complete
-    CLI-->>U: Results saved
+
+    CLI->>Phase6: Run visual embeddings and harmonization
+    Phase6->>Manifest: Persist Phase 6 fields
+    Phase6-->>CLI: Return temporal_index.json path
+    CLI->>Output: Write run summary
 ```
 
 ---
 
-## 🎯 Use Case Flow: Video Search
+## Use Case Flow: Scene Retrieval
 
 ```mermaid
-graph LR
-    A[User Query: Find scenes with dogs] --> B[Encode Query]
-    B --> C[CLIP Text Encoder]
-    C --> D[Query Vector 512d]
-    
-    D --> E[FAISS CLIP Index Search]
-    E --> F[Top-K Similar Vectors]
-    
-    F --> G[ID Map Lookup]
-    G --> H[Content Hashes]
-    
-    H --> I[SQLite Query]
-    I --> J[Scene Metadata]
-    
-    J --> K[Return Results]
-    K --> L[Scene IDs + Timestamps]
-    K --> M[Object Labels]
-    K --> N[Captions]
-    K --> O[Video Paths]
-    
-    L --> P[Display to User]
-    M --> P
-    N --> P
-    O --> P
+flowchart LR
+    QUERY["User query"] --> ENCODE["Encode query"]
+    ENCODE --> SEARCH["Qdrant-first vector search"]
+    SEARCH --> PAYLOAD["Payload scene_id / embedding provenance"]
+    PAYLOAD --> ARTIFACTS["scene_manifest.json and temporal_index.json"]
+    PAYLOAD --> KG["knowledge_graph.db"]
+    PAYLOAD --> MEM["memory.db"]
+    ARTIFACTS --> RESULT["Scene result with evidence"]
+    KG --> RESULT
+    MEM --> RESULT
+
+    classDef query fill:#f8fafc,stroke:#64748b,color:#0f172a
+    classDef search fill:#eef2ff,stroke:#4f46e5,color:#312e81
+    classDef truth fill:#f0fdf4,stroke:#16a34a,color:#14532d
+
+    class QUERY,ENCODE query
+    class SEARCH,PAYLOAD search
+    class ARTIFACTS,KG,MEM,RESULT truth
 ```
 
 ---
 
-## 📈 Monitoring Dashboard Components
+## Diagram Hygiene Notes
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    GoodQ Command Center                          │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│  GPU Status                    System Metrics                   │
-│  ┌──────────────────┐          ┌──────────────────┐            │
-│  │ RTX 4070 Ti SUPER│          │ CPU: 34%         │            │
-│  │ Temp: 67°C       │          │ RAM: 28GB/64GB   │            │
-│  │ Usage: 85%       │          │ Disk: 1.2TB/4TB  │            │
-│  │ Memory: 12GB/16GB│          │ Network: 2.5Gbps │            │
-│  └──────────────────┘          └──────────────────┘            │
-│                                                                  │
-│  Pipeline Status               Recent Steps                     │
-│  ┌──────────────────┐          ┌──────────────────┐            │
-│  │ Running: Yes     │          │ image_caption OK │            │
-│  │ Video: sample.mp4│          │ object_detect OK │            │
-│  │ Scene: 5/12      │          │ audio_diarize OK │            │
-│  │ Progress: 42%    │          │ audio_emotion OK │            │
-│  └──────────────────┘          └──────────────────┘            │
-│                                                                  │
-│  Memory Stats                  Logs Tail                        │
-│  ┌──────────────────┐          ┌──────────────────┐            │
-│  │ Scenes: 1,234    │          │ [21:06:53] CLAP  │            │
-│  │ Text Vecs: 45K   │          │ [21:06:46] tagger│            │
-│  │ Image Vecs: 23K  │          │ [21:06:44] emotion│           │
-│  │ Audio Vecs: 8.5K │          │ [21:06:40] merge │            │
-│  │ DB Size: 892MB   │          │ [21:06:20] whisper│           │
-│  └──────────────────┘          └──────────────────┘            │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
-```
-
----
-
-*Diagrams last updated: October 6, 2025*
-
-**Note:** View these diagrams in:
-- VS Code with Mermaid extension
-- GitHub (native Mermaid rendering)
-- [Mermaid Live Editor](https://mermaid.live)
-- Any Markdown viewer with Mermaid support
-
+- Mermaid blocks intentionally use conservative `flowchart` and
+  `sequenceDiagram` syntax for GitHub rendering.
+- Scene manifests and `temporal_index.json` are authoritative artifact truth.
+- Qdrant is the canonical vector store; FAISS is optional parity/fallback.
+- Optional enrichment failures must remain visible and must not halt ingestion
+  unless they invalidate the required scene/run truth.

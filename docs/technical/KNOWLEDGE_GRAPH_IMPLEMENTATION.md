@@ -75,7 +75,7 @@ Comprehensive test suite that validates:
 
 Complete documentation suite:
 - User guide (`docs/knowledge_graph.md`)
-- Architecture diagrams (`docs/diagrams/knowledge_graph_architecture.md`)
+- Architecture diagrams (`docs/architecture/diagrams/knowledge_graph_architecture.md`)
 - README integration
 - Inline code documentation
 
@@ -319,7 +319,7 @@ python cli/graph_query.py search --objects person --emotions happy --start-time 
 
 ### Documentation
 - `docs/knowledge_graph.md` (8,783 bytes) - User guide
-- `docs/diagrams/knowledge_graph_architecture.md` (12,653 bytes) - Architecture diagrams
+- `docs/architecture/diagrams/knowledge_graph_architecture.md` - Architecture diagrams
 - `KNOWLEDGE_GRAPH_IMPLEMENTATION.md` (this file) - Implementation summary
 
 ### README Updates
@@ -370,7 +370,7 @@ python cli/graph_query.py --graph-db data/test_knowledge_graph.db list-entities
 3. ✅ Automatic relationship building (co-occurrence, temporal, semantic)
 4. ✅ High-level query interface with common patterns
 5. ✅ Command-line tool for interactive exploration
-6. ✅ legacy orchestration pipeline integration
+6. ✅ canonical ingestion pipeline integration
 7. ✅ Comprehensive test suite (all passing)
 8. ✅ Complete documentation with examples
 9. ✅ Performance optimizations (indexing, batching)

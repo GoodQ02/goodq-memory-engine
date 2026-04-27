@@ -54,6 +54,8 @@ Current operator-validated additions on the active line:
   [`docs/SYSTEM_SNAPSHOT.md`](SYSTEM_SNAPSHOT.md)
 - System architecture:
   [`docs/architecture/SYSTEM_ARCHITECTURE.md`](architecture/SYSTEM_ARCHITECTURE.md)
+- Architecture diagrams:
+  [`docs/architecture/diagrams/`](architecture/diagrams/)
 - Watchdog system:
   [`docs/systems/WATCHDOG_SYSTEM.md`](systems/WATCHDOG_SYSTEM.md)
 - CLI reference:

@@ -1,316 +1,129 @@
-# GoodQ Watchdog Flow Diagram
+<!-- DOC_BADGE: CANONICAL -->
+<!-- DOC_STATUS: AUTHORITATIVE -->
+<!-- DOC_LAST_VERIFIED: 2026-04-27 -->
 
-## System Architecture
+# Watchdog Flow Diagram
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                        USER INTERACTION                          │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              │ Drag & Drop Files
-                              ↓
-┌─────────────────────────────────────────────────────────────────┐
-│                      import_inbox/                               │
-│  • video.mp4  • audio.mp3  • image.jpg  • document.pdf          │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              │ Monitor (2s poll)
-                              ↓
-┌─────────────────────────────────────────────────────────────────┐
-│                    WATCHDOG MONITOR THREAD                       │
-│  ┌───────────────────────────────────────────────────────────┐  │
-│  │ 1. Scan directory for new files                          │  │
-│  │ 2. Check file extension → determine type                 │  │
-│  │ 3. Create FileState tracker                              │  │
-│  │ 4. Monitor for stability (3s no changes)                 │  │
-│  │ 5. Compute SHA-256 hash                                  │  │
-│  │ 6. Check processed registry                              │  │
-│  └───────────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                ┌─────────────┴─────────────┐
-                │                           │
-             Known?                      Unknown?
-                │                           │
-                ↓                           ↓
-        ┌──────────────┐          ┌────────────────┐
-        │ Skip & Mark  │          │ Add to Queue   │
-        │  PROCESSED   │          │                │
-        └──────────────┘          └────────────────┘
-                                          │
-                                          ↓
-┌─────────────────────────────────────────────────────────────────┐
-│                    PROCESSING QUEUE                              │
-│  ┌────────┐  ┌────────┐  ┌────────┐                             │
-│  │ File 1 │→ │ File 2 │→ │ File 3 │→ ...                        │
-│  └────────┘  └────────┘  └────────┘                             │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              │ Dequeue
-                              ↓
-┌─────────────────────────────────────────────────────────────────┐
-│                    WORKER THREAD                                 │
-│  ┌───────────────────────────────────────────────────────────┐  │
-│  │ 1. Copy file to data/processing/                         │  │
-│  │ 2. Determine pipeline (video/audio/image/document)       │  │
-│  │ 3. Execute ingestion                                     │  │
-│  │ 4. Monitor progress                                      │  │
-│  │ 5. Capture result                                        │  │
-│  └───────────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                ┌─────────────┴─────────────┐
-                │                           │
-            SUCCESS?                     FAILURE?
-                │                           │
-                ↓                           ↓
-┌───────────────────────────┐   ┌───────────────────────────┐
-│   data/processed/         │   │     data/failed/          │
-│  PROCESSED_video.mp4      │   │   FAILED_video.mp4        │
-└───────────────────────────┘   └───────────────────────────┘
-                │                           │
-                └─────────────┬─────────────┘
-                              │
-                              ↓
-┌─────────────────────────────────────────────────────────────────┐
-│              PROCESSED FILE REGISTRY                             │
-│  logs/watchdog_state.json                                        │
-│  {                                                               │
-│    "abc123...": {                                                │
-│      "original_name": "video.mp4",                               │
-│      "status": "success",                                        │
-│      "timestamp": "2025-10-07T22:00:00"                          │
-│    }                                                             │
-│  }                                                               │
-└─────────────────────────────────────────────────────────────────┘
-```
+**Status:** Active architecture reference
+**Rendering target:** GitHub Markdown with native Mermaid support
 
-## File Lifecycle
+The Watchdog is the zero-touch ingestion monitor. It watches the configured
+import inbox and delegates video ingestion to the canonical ingestion runtime.
+It is not a second pipeline and does not make hidden runtime decisions outside
+the resolved config surface.
 
-```
-┌───────────┐
-│  NEW FILE │
-│  DETECTED │
-└─────┬─────┘
-      │
-      ↓
-┌─────────────┐     ┌──────────┐
-│  Stability  │────→│  Stable? │
-│   Check     │     └────┬─────┘
-└─────────────┘          │
-      ↑                  │ Yes
-      │ No (wait 1s)     ↓
-      └──────────┌───────────┐
-                 │ Compute   │
-                 │   Hash    │
-                 └─────┬─────┘
-                       │
-                       ↓
-                 ┌───────────┐
-                 │ Already   │──Yes──→ Skip
-                 │Processed? │
-                 └─────┬─────┘
-                       │ No
-                       ↓
-                 ┌───────────┐
-                 │   Copy    │
-                 │    to     │
-                 │Processing │
-                 └─────┬─────┘
-                       │
-                       ↓
-                 ┌───────────┐
-                 │  Execute  │
-                 │ Pipeline  │
-                 └─────┬─────┘
-                       │
-         ┌─────────────┴─────────────┐
-         │                           │
-      Success                     Failure
-         │                           │
-         ↓                           ↓
-┌────────────────┐          ┌────────────────┐
-│ Move to        │          │ Move to        │
-│ processed/     │          │ failed/        │
-│ PROCESSED_*    │          │ FAILED_*       │
-└────────┬───────┘          └────────┬───────┘
-         │                           │
-         └───────────┬───────────────┘
-                     │
-                     ↓
-              ┌─────────────┐
-              │ Update      │
-              │ Registry    │
-              └─────────────┘
-```
+Primary references:
 
-## State Machine
+- [WATCHDOG_SYSTEM.md](../../systems/WATCHDOG_SYSTEM.md)
+- [WATCHDOG_GUIDE.md](../../guides/watchdog/WATCHDOG_GUIDE.md)
+- [INGEST_ORCHESTRATION_CONTRACT.md](../INGEST_ORCHESTRATION_CONTRACT.md)
 
-```
-                    ┌─────────┐
-                    │ UNKNOWN │
-                    └────┬────┘
-                         │ File appears
-                         ↓
-                    ┌─────────┐
-                ┌───│ PENDING │
-                │   └────┬────┘
-    Size/time   │        │ Stable for 3s
-    changed     │        ↓
-                │   ┌─────────┐
-                └───│ STABLE  │
-                    └────┬────┘
-                         │ Hash computed
-                         ↓
-                    ┌─────────┐
-                ┌───│ HASHED  │
-                │   └────┬────┘
-    Already     │        │ Check registry
-    processed   │        ↓
-                │   ┌─────────┐
-                │   │ QUEUED  │
-                │   └────┬────┘
-                │        │ Worker picks up
-                │        ↓
-                │   ┌─────────┐
-                │   │PROCESSING│
-                │   └────┬────┘
-                │        │
-                │  ┌─────┴─────┐
-                │  │           │
-                │Success     Failure
-                │  │           │
-                ↓  ↓           ↓
-           ┌─────────┐   ┌─────────┐
-           │PROCESSED│   │ FAILED  │
-           └─────────┘   └─────────┘
-```
+---
 
-## Component Interaction
+## Watchdog Runtime Flow
 
-```
-┌────────────────────────────────────────────────────────────────┐
-│                    WATCHDOG PROCESS                             │
-│                                                                 │
-│  ┌──────────────┐         ┌──────────────┐                     │
-│  │   Monitor    │         │    Worker    │                     │
-│  │   Thread     │────────→│   Thread     │                     │
-│  │              │  Queue  │              │                     │
-│  └──────┬───────┘         └──────┬───────┘                     │
-│         │                        │                             │
-│         │ Scans                  │ Processes                   │
-│         ↓                        ↓                             │
-│  ┌──────────────┐         ┌──────────────┐                     │
-│  │  FileState   │         │  Ingestion   │                     │
-│  │  Tracker     │         │  Pipeline    │                     │
-│  └──────────────┘         └──────────────┘                     │
-│         │                        │                             │
-│         └────────┬───────────────┘                             │
-│                  │                                             │
-│                  ↓                                             │
-│         ┌──────────────────┐                                   │
-│         │ Processed        │                                   │
-│         │ Registry         │                                   │
-│         │ (JSON file)      │                                   │
-│         └──────────────────┘                                   │
-└────────────────────────────────────────────────────────────────┘
-```
+```mermaid
+flowchart TB
+    INBOX["Configured import_inbox"] --> MONITOR["Monitor thread"]
+    MONITOR --> STABILITY["File stability check"]
+    STABILITY --> HASH["SHA-256 hash"]
+    HASH --> REGISTRY{"Known hash in watchdog_state.json?"}
 
-## Threading Model
+    REGISTRY -- yes --> SKIP["mark processed / skip duplicate"]
+    REGISTRY -- no --> QUEUE["FIFO processing queue"]
 
-```
-Main Thread
-    │
-    ├── Monitor Thread (daemon)
-    │   │
-    │   └── while not shutdown:
-    │           scan_directory()
-    │           check_stability()
-    │           queue.put()
-    │           sleep(2s)
-    │
-    ├── Worker Thread 1 (daemon)
-    │   │
-    │   └── while not shutdown:
-    │           file = queue.get()
-    │           process_file()
-    │           queue.task_done()
-    │
-    ├── Worker Thread 2 (daemon)
-    │   │
-    │   └── (future expansion)
-    │
-    └── while True:
-            wait_for_signal()
-            on Ctrl+C:
-                shutdown.set()
-                queue.join()
-                threads.join()
-```
+    QUEUE --> WORKER["Worker thread"]
+    WORKER --> ROUTE{"File type"}
 
-## File Type Decision Tree
+    ROUTE -- video --> INGEST["cli/run_ingestion.py"]
+    ROUTE -- audio image document --> STEPS["configured step flow"]
 
-```
-                    ┌─────────┐
-                    │  File   │
-                    └────┬────┘
-                         │
-            ┌────────────┴────────────┐
-            │                         │
-        Extension?              Check bytes
-            │                    (future)
-    ┌───────┴───────┐
-    │               │
-.mp4, .avi, ...  .mp3, .wav, ...
-    │               │
-    ↓               ↓
-┌─────────┐   ┌─────────┐
-│  VIDEO  │   │  AUDIO  │
-│Pipeline │   │Pipeline │
-└─────────┘   └─────────┘
+    INGEST --> ARTIFACTS["epoch processing artifacts"]
+    STEPS --> ARTIFACTS
 
-    │               │
-.jpg, .png, ...  .pdf, .txt, ...
-    │               │
-    ↓               ↓
-┌─────────┐   ┌──────────┐
-│  IMAGE  │   │ DOCUMENT │
-│Pipeline │   │ Pipeline │
-└─────────┘   └──────────┘
-```
+    ARTIFACTS --> SUCCESS{"Success?"}
+    SUCCESS -- yes --> PROCESSED["configured processed directory"]
+    SUCCESS -- no --> FAILED["configured failed directory"]
 
-## Error Handling Flow
+    SUCCESS --> STATE["watchdog_state.json"]
+    SUCCESS --> LOGS["watchdog.log"]
 
-```
-┌──────────────┐
-│ Process File │
-└──────┬───────┘
-       │
-       ↓
-┌──────────────┐
-│ Try: Copy    │──Exception──→ Log & Mark Failed
-└──────┬───────┘
-       │ OK
-       ↓
-┌──────────────┐
-│ Try: Ingest  │──Exception──→ Log & Mark Failed
-└──────┬───────┘              Move to failed/
-       │ OK
-       ↓
-┌──────────────┐
-│ Try: Move    │──Exception──→ Log but Continue
-│  to processed│              (file processed OK)
-└──────┬───────┘
-       │ OK
-       ↓
-┌──────────────┐
-│ Update       │──Exception──→ Log Warning
-│ Registry     │              (will retry next run)
-└──────────────┘
+    classDef watch fill:#ecfeff,stroke:#0891b2,color:#164e63
+    classDef decision fill:#fefce8,stroke:#ca8a04,color:#713f12
+    classDef canonical fill:#f0fdf4,stroke:#16a34a,color:#14532d
+    classDef output fill:#f5f3ff,stroke:#7c3aed,color:#3b0764
+
+    class INBOX,MONITOR,STABILITY,HASH,QUEUE,WORKER watch
+    class REGISTRY,ROUTE,SUCCESS decision
+    class INGEST,ARTIFACTS canonical
+    class SKIP,PROCESSED,FAILED,STATE,LOGS,STEPS output
 ```
 
 ---
 
-For implementation details, see `cli/watchdog.py`
+## State Machine
 
-For usage guide, see `docs/guides/watchdog/WATCHDOG_GUIDE.md`
+```mermaid
+flowchart TB
+    START["start"] --> UNKNOWN["Unknown"]
+    UNKNOWN -- file appears --> PENDING["Pending"]
+    PENDING -- file still changing --> PENDING
+    PENDING -- stable window elapsed --> STABLE["Stable"]
+    STABLE -- hash computed --> HASHED["Hashed"]
+    HASHED -- already processed --> SKIPPED["Skipped"]
+    HASHED -- new hash --> QUEUED["Queued"]
+    QUEUED -- worker claims file --> PROCESSING["Processing"]
+    PROCESSING -- pipeline succeeds --> PROCESSED["Processed"]
+    PROCESSING -- pipeline fails --> FAILED["Failed"]
+    SKIPPED --> END["end"]
+    PROCESSED --> END
+    FAILED --> END
+
+    classDef state fill:#ecfeff,stroke:#0891b2,color:#164e63
+    classDef terminal fill:#f8fafc,stroke:#64748b,color:#0f172a
+    classDef outcome fill:#f5f3ff,stroke:#7c3aed,color:#3b0764
+
+    class UNKNOWN,PENDING,STABLE,HASHED,QUEUED,PROCESSING state
+    class START,END terminal
+    class SKIPPED,PROCESSED,FAILED outcome
+```
+
+---
+
+## Canonical Boundaries
+
+```mermaid
+flowchart LR
+    WATCHDOG["cli.watchdog"] --> CONFIG["config_loader runtime paths"]
+    WATCHDOG --> INBOX["import_inbox"]
+    WATCHDOG --> INGEST["cli/run_ingestion.py"]
+    WATCHDOG --> LOGS["epoch logs"]
+
+    INGEST --> MANIFEST["scene_manifest.json"]
+    INGEST --> TEMPORAL["temporal_index.json"]
+    INGEST --> SUMMARY["scene_ingest_results.json"]
+
+    WATCHDOG -. does not replace .-> INGEST
+    WATCHDOG -. does not own .-> PHASE6["Phase 6"]
+    WATCHDOG -. does not hide .-> ERRORS["visible errors"]
+
+    classDef watch fill:#ecfeff,stroke:#0891b2,color:#164e63
+    classDef truth fill:#f0fdf4,stroke:#16a34a,color:#14532d
+    classDef boundary fill:#fee2e2,stroke:#dc2626,color:#7f1d1d
+
+    class WATCHDOG,CONFIG,INBOX,LOGS watch
+    class INGEST,MANIFEST,TEMPORAL,SUMMARY truth
+    class PHASE6,ERRORS boundary
+```
+
+Current path families are resolved from config and environment overlays:
+
+- inbox: `${GOODQ_DATA_ROOT}/GoodQ_Data/import_inbox`
+- processing: `${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/<epoch>/processing`
+- processed: `${GOODQ_DATA_ROOT}/GoodQ_Data/processed`
+- failed: `${GOODQ_DATA_ROOT}/GoodQ_Data/failed`
+- logs: `${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/<epoch>/logs`
+
+Control Agent state may be recorded by the runtime, but AI diagnosis remains
+conditional on explicit `llm_client` injection. The read-only recurrence report
+is a separate observer and does not enable healing.

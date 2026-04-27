@@ -1,410 +1,203 @@
+<!-- DOC_BADGE: CANONICAL -->
+<!-- DOC_STATUS: AUTHORITATIVE -->
+<!-- DOC_LAST_VERIFIED: 2026-04-27 -->
+
 # Knowledge Graph Architecture
 
-## System Overview
+**Status:** Active architecture reference
+**Rendering target:** GitHub Markdown with native Mermaid support
 
-```
-┌──────────────────────────────────────────────────────────────────┐
-│                    GoodQ Multimodal Pipeline                      │
-│                                                                    │
-│  ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌─────────┐            │
-│  │ Video   │  │ Audio   │  │ Image   │  │  Text   │            │
-│  │ Ingest  │  │ Process │  │ Process │  │ Extract │            │
-│  └────┬────┘  └────┬────┘  └────┬────┘  └────┬────┘            │
-│       │            │            │            │                   │
-│       └────────────┴────────────┴────────────┘                   │
-│                        │                                          │
-│                        ▼                                          │
-│              ┌──────────────────┐                                │
-│              │ Analysis Results │                                │
-│              └────────┬─────────┘                                │
-└───────────────────────┼──────────────────────────────────────────┘
-                        │
-                        ▼
-          ┌─────────────────────────┐
-          │  Knowledge Graph Builder │
-          └────────────┬─────────────┘
-                       │
-       ┌───────────────┼───────────────┐
-       │               │               │
-       ▼               ▼               ▼
-   ┌───────┐      ┌────────┐      ┌────────┐
-   │ Nodes │      │ Edges  │      │ Media  │
-   └───┬───┘      └───┬────┘      └───┬────┘
-       │              │               │
-       └──────────────┴───────────────┘
-                      │
-                      ▼
-            ┌──────────────────┐
-            │ SQLite Database  │
-            │ knowledge_graph  │
-            │      .db         │
-            └─────────┬────────┘
-                      │
-       ┌──────────────┼──────────────┐
-       │              │              │
-       ▼              ▼              ▼
-  ┌─────────┐   ┌──────────┐   ┌────────┐
-  │   CLI   │   │ Python   │   │  API   │
-  │ Queries │   │   API    │   │ (Future)│
-  └─────────┘   └──────────┘   └────────┘
-```
+GoodQ4All's knowledge graph is an epoch-scoped SQLite-backed evidence graph. It
+does not replace scene artifacts. It links scene-level perception, structural
+speaker/face evidence, identity formation, temporal events, and retrieval
+context back to persisted scene truth.
 
-## Entity Extraction Flow
+Primary contracts:
 
-```
-Scene Analysis
-      │
-      ├─→ Object Detection ──→ Objects (dog, car, person)
-      │                              │
-      ├─→ Face Recognition  ──→ People (John, Sarah)
-      │                              │
-      ├─→ OCR / Caption     ──→ Text / Concepts
-      │                              │
-      ├─→ Audio Analysis    ──→ Speakers, Events
-      │                              │
-      ├─→ Sentiment         ──→ Emotions (happy, sad)
-      │                              │
-      └─→ EXIF / Location   ──→ Locations (beach, park)
-                                     │
-                                     ▼
-                        All become Graph Nodes
+- [MEMORY_STORAGE.md](../MEMORY_STORAGE.md)
+- [IDENTITY_STITCHING_CONTRACT.md](../IDENTITY_STITCHING_CONTRACT.md)
+- [SCENE_MANIFEST_SPECIFICATION.md](../../SCENE_MANIFEST_SPECIFICATION.md)
+- [SYSTEM_ARCHITECTURE.md](../SYSTEM_ARCHITECTURE.md)
+
+---
+
+## Graph In The Runtime
+
+```mermaid
+flowchart TB
+    SM["scene_manifest.json"] --> EXTRACT["Scene evidence extraction"]
+    TI["temporal_index.json"] --> ROLLUP["Temporal rollups"]
+
+    EXTRACT --> ENTITY["Entities and concepts"]
+    EXTRACT --> SPEAKER["Speaker and voice patterns"]
+    EXTRACT --> FACE["Face signals"]
+    EXTRACT --> MEDIA["Media nodes"]
+    ROLLUP --> EVENTS["Temporal events"]
+
+    ENTITY --> KG["knowledge_graph.db"]
+    SPEAKER --> KG
+    FACE --> KG
+    MEDIA --> KG
+    EVENTS --> KG
+
+    KG --> RETRIEVAL["Retrieval and query context"]
+    KG --> LEDGER["Identity ledger projections"]
+    KG --> AUDIT["Operator audits"]
+
+    classDef artifact fill:#f0fdf4,stroke:#16a34a,color:#14532d
+    classDef process fill:#ecfeff,stroke:#0891b2,color:#164e63
+    classDef graph fill:#fff7ed,stroke:#ea580c,color:#7c2d12
+    classDef read fill:#f5f3ff,stroke:#7c3aed,color:#3b0764
+
+    class SM,TI artifact
+    class EXTRACT,ROLLUP,ENTITY,SPEAKER,FACE,MEDIA,EVENTS process
+    class KG graph
+    class RETRIEVAL,LEDGER,AUDIT read
 ```
 
-## Graph Structure
+---
 
-### Node Types
+## Active Schema Map
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                       NODES                              │
-├─────────────────────────────────────────────────────────┤
-│                                                          │
-│  ┌──────────┐  ┌──────────┐  ┌───────────┐            │
-│  │  Person  │  │  Object  │  │ Location  │            │
-│  │          │  │          │  │           │            │
-│  │  • John  │  │  • dog   │  │  • beach  │            │
-│  │  • Sarah │  │  • car   │  │  • park   │            │
-│  └──────────┘  └──────────┘  └───────────┘            │
-│                                                          │
-│  ┌──────────┐  ┌──────────┐  ┌───────────┐            │
-│  │ Emotion  │  │ Concept  │  │   Event   │            │
-│  │          │  │          │  │           │            │
-│  │  • happy │  │  • birthday│  • scene   │            │
-│  │  • sad   │  │  • party │  │   change  │            │
-│  └──────────┘  └──────────┘  └───────────┘            │
-│                                                          │
-└─────────────────────────────────────────────────────────┘
-```
+```mermaid
+flowchart TB
+    NODES["nodes table"] --> EDGES_SOURCE["edges.source_id"]
+    NODES --> EDGES_TARGET["edges.target_id"]
+    EDGES_SOURCE --> EDGES["edges table"]
+    EDGES_TARGET --> EDGES
 
-### Edge Types
+    NODES --> NODE_MEDIA_NODE["node_media.node_id"]
+    MEDIA_NODES["media_nodes table"] --> NODE_MEDIA_MEDIA["node_media.media_id"]
+    NODE_MEDIA_NODE --> NODE_MEDIA["node_media table"]
+    NODE_MEDIA_MEDIA --> NODE_MEDIA
 
-```
-Relationship Types:
-──────────────────
+    EVENTS["events table"] --> EVENT_NODES_EVENT["event_nodes.event_id"]
+    NODES --> EVENT_NODES_NODE["event_nodes.node_id"]
+    EVENT_NODES_EVENT --> EVENT_NODES["event_nodes table"]
+    EVENT_NODES_NODE --> EVENT_NODES
 
-co_occurs          │  Entities appearing together
-                   │  Weight: Based on frequency
-                   │
-interacts_with     │  Physical/semantic interaction
-                   │  (person → object)
-                   │
-located_in         │  Spatial relationship
-                   │  (object → location)
-                   │
-has_emotion        │  Emotional state
-                   │  (person → emotion)
-                   │
-temporal_next      │  Time-based adjacency
-                   │  (scene₁ → scene₂)
-                   │
-mentions           │  Text/audio reference
-                   │  (text → entity)
+    classDef table fill:#fff7ed,stroke:#ea580c,color:#7c2d12
+    classDef link fill:#ecfeff,stroke:#0891b2,color:#164e63
+
+    class NODES,EDGES,MEDIA_NODES,NODE_MEDIA,EVENTS,EVENT_NODES table
+    class EDGES_SOURCE,EDGES_TARGET,NODE_MEDIA_NODE,NODE_MEDIA_MEDIA,EVENT_NODES_EVENT,EVENT_NODES_NODE link
 ```
 
-## Relationship Building
+Core tables:
 
-### Co-occurrence Example
+- `nodes`
+- `edges`
+- `media_nodes`
+- `node_media`
+- `events`
+- `event_nodes`
 
-```
-Scene at 10.5s contains:
-┌────────────────────────────┐
-│  Entities:                 │
-│  • Person: John            │
-│  • Object: dog             │
-│  • Location: beach         │
-│  • Emotion: happy          │
-└────────────────────────────┘
-         │
-         ▼
-    Creates Edges:
-         │
-    ┌────┴────┬────────┬─────────┐
-    │         │        │         │
-    ▼         ▼        ▼         ▼
-  John ───── dog ─── beach ─── happy
-    └──────────┴────────┴──────────┘
-     All connected with "co_occurs"
-```
+---
 
-### Temporal Linking
+## Identity Formation Ladder
 
-```
-Timeline:
-─────────────────────────────────────────────►
+```mermaid
+flowchart LR
+    SIG["speaker_voice_signatures"] --> PATTERN["speaker_pattern node"]
+    PATTERN --> MATCH["voice_pattern_match edge"]
+    MATCH --> CANDIDATE["identity_candidate edge"]
+    CANDIDATE --> SUPPORTED["identity_supported edge"]
+    SUPPORTED --> EVIDENCE["identity_evidence edge"]
 
-Scene 1          Scene 2          Scene 3
-(0-10s)         (10-20s)         (20-30s)
-   │               │                │
-   │               │                │
-Entities:      Entities:        Entities:
- • John          • John           • Sarah
- • dog           • car            • park
-   │               │                │
-   │               │                │
-   └───temporal───►│                │
-                   └───temporal────►│
+    SCENE["scene evidence"] --> PATTERN
+    SCENE --> CANDIDATE
+    CONTRA["contradiction checks"] --> SUPPORTED
+
+    classDef source fill:#f8fafc,stroke:#64748b,color:#0f172a
+    classDef ladder fill:#ecfeff,stroke:#0891b2,color:#164e63
+    classDef caution fill:#fef2f2,stroke:#dc2626,color:#7f1d1d
+
+    class SIG,SCENE source
+    class PATTERN,MATCH,CANDIDATE,SUPPORTED,EVIDENCE ladder
+    class CONTRA caution
 ```
 
-### Semantic Relationships
+Rules:
 
-```
-Domain Knowledge Applied:
+- anonymous speaker and face nodes remain structural first
+- co-presence is not identity
+- promotion requires repeated, contradiction-free evidence
+- every supported identity edge must remain explainable from scene evidence
 
-Person + Location → located_in
-  John at beach → John ──[located_in]──► beach
+---
 
-Person + Emotion → has_emotion
-  John + happy → John ──[has_emotion]──► happy
+## Common Edge Families
 
-Person + Object → interacts_with
-  John + dog → John ──[interacts_with]──► dog
+```mermaid
+flowchart TB
+    SCENE["Scene"] --> MENTIONS["mentions"]
+    SCENE --> COOCCURS["co_occurs"]
+    SCENE --> TEMPORAL["temporal_next"]
+    SCENE --> IDENTITY["identity edges"]
+    SCENE --> MEDIA["media linkage"]
 
-Object + Location → located_in
-  dog at beach → dog ──[located_in]──► beach
-```
+    MENTIONS --> PERSON["person / concept / location / object"]
+    COOCCURS --> PERSON
+    TEMPORAL --> NEXT_SCENE["next scene"]
+    IDENTITY --> SPEAKER["speaker / speaker_pattern / face"]
+    MEDIA --> ARTIFACT["scene artifact"]
 
-## Query Patterns
+    classDef scene fill:#f0fdf4,stroke:#16a34a,color:#14532d
+    classDef edge fill:#ecfeff,stroke:#0891b2,color:#164e63
+    classDef node fill:#fff7ed,stroke:#ea580c,color:#7c2d12
 
-### 1. Find Person Appearances
-
-```
-Query: "Where does John appear?"
-
-   ┌─────┐
-   │John │
-   └──┬──┘
-      │ appears_in
-      ├──────────┬──────────┬──────────┐
-      ▼          ▼          ▼          ▼
-  Scene 1    Scene 3    Scene 7    Scene 12
-  (0-10s)    (20-30s)   (60-70s)   (110-120s)
-```
-
-### 2. Co-occurrence Analysis
-
-```
-Query: "What appears with 'dog'?"
-
-        ┌─────┐
-        │ dog │
-        └──┬──┘
-           │ co_occurs
-    ┌──────┼──────┬───────┐
-    ▼      ▼      ▼       ▼
-  John   Sarah  beach   happy
-  (8x)   (3x)   (10x)   (6x)
-  
-  Numbers show co-occurrence frequency
+    class SCENE scene
+    class MENTIONS,COOCCURS,TEMPORAL,IDENTITY,MEDIA edge
+    class PERSON,NEXT_SCENE,SPEAKER,ARTIFACT node
 ```
 
-### 3. Related Scenes
+Common node types:
 
-```
-Query: "Scenes similar to Scene 5"
+- `person`
+- `location`
+- `object`
+- `concept`
+- `speaker`
+- `face`
+- `speaker_pattern`
 
-Scene 5 entities:
-  • John
-  • dog
-  • beach
+Common relationship families:
 
-Search for scenes with similar entities:
+- `mentions`
+- `co_occurs`
+- `temporal_next`
+- `voice_pattern_match`
+- `identity_candidate`
+- `identity_supported`
+- `identity_evidence`
 
-Scene 1: 3/3 match (John, dog, beach)    ← Most similar
-Scene 8: 2/3 match (dog, beach)
-Scene 3: 1/3 match (John)
-```
+---
 
-### 4. Temporal Narrative
+## Query And Audit Flow
 
-```
-Query: "Story from 0-60 seconds"
+```mermaid
+flowchart LR
+    QUERY["Operator or API query"] --> KG["knowledge_graph.db"]
+    KG --> NODES["node lookup"]
+    KG --> EDGES["bounded edge traversal"]
+    KG --> MEDIA["scene/media lookup"]
 
-Timeline 0s ────────────────────────► 60s
+    NODES --> EVIDENCE["Evidence bundle"]
+    EDGES --> EVIDENCE
+    MEDIA --> ARTIFACTS["scene_manifest.json / temporal_index.json"]
+    ARTIFACTS --> EVIDENCE
 
-Entities appearing:
-  ├─ John (0-30s)
-  ├─ Sarah (30-60s)
-  ├─ dog (0-20s)
-  └─ beach (0-60s)
+    EVIDENCE --> ANSWER["answer or audit finding"]
 
-Events:
-  ├─ Scene change (0s)
-  ├─ Scene change (10s)
-  ├─ Scene change (20s)
-  └─ Scene change (30s)
+    classDef query fill:#f8fafc,stroke:#64748b,color:#0f172a
+    classDef graph fill:#fff7ed,stroke:#ea580c,color:#7c2d12
+    classDef truth fill:#f0fdf4,stroke:#16a34a,color:#14532d
 
-Summary:
-  Locations: beach
-  People: John, Sarah
-  Objects: dog
-  Emotions: happy, excited
-```
-
-## Database Schema
-
-```
-┌──────────────────────────────────────────────┐
-│                NODES TABLE                   │
-├──────────────────────────────────────────────┤
-│ id              │ INTEGER PRIMARY KEY        │
-│ node_type       │ TEXT (person/object/etc)   │
-│ name            │ TEXT                       │
-│ properties      │ JSON                       │
-│ first_seen      │ REAL (timestamp)           │
-│ last_seen       │ REAL (timestamp)           │
-│ occurrence_count│ INTEGER                    │
-└──────────────────────────────────────────────┘
-
-┌──────────────────────────────────────────────┐
-│                EDGES TABLE                   │
-├──────────────────────────────────────────────┤
-│ id              │ INTEGER PRIMARY KEY        │
-│ source_id       │ INTEGER (FK → nodes)       │
-│ target_id       │ INTEGER (FK → nodes)       │
-│ edge_type       │ TEXT (co_occurs/etc)       │
-│ weight          │ REAL                       │
-│ properties      │ JSON                       │
-└──────────────────────────────────────────────┘
-
-┌──────────────────────────────────────────────┐
-│             MEDIA_NODES TABLE                │
-├──────────────────────────────────────────────┤
-│ id              │ INTEGER PRIMARY KEY        │
-│ media_type      │ TEXT (video/audio/etc)     │
-│ media_path      │ TEXT                       │
-│ scene_id        │ TEXT                       │
-│ timestamp_start │ REAL                       │
-│ timestamp_end   │ REAL                       │
-│ properties      │ JSON                       │
-└──────────────────────────────────────────────┘
-
-┌──────────────────────────────────────────────┐
-│             NODE_MEDIA TABLE                 │
-├──────────────────────────────────────────────┤
-│ node_id         │ INTEGER (FK → nodes)       │
-│ media_id        │ INTEGER (FK → media_nodes) │
-│ confidence      │ REAL                       │
-│ context         │ JSON (bbox, position, etc) │
-└──────────────────────────────────────────────┘
+    class QUERY query
+    class KG,NODES,EDGES,MEDIA graph
+    class ARTIFACTS,EVIDENCE,ANSWER truth
 ```
 
-## Performance Optimizations
-
-### Indexing Strategy
-
-```
-High-Priority Indices:
-─────────────────────
-✓ nodes.node_type        (frequent filtering)
-✓ nodes.name             (lookup by name)
-✓ edges.source_id        (graph traversal)
-✓ edges.target_id        (reverse traversal)
-✓ edges.edge_type        (relationship filtering)
-✓ media_nodes.media_path (content lookup)
-✓ temporal_events.timestamp (temporal queries)
-
-Composite Indices (future):
-───────────────────────────
-• (node_type, occurrence_count) for top entities
-• (source_id, edge_type) for typed traversal
-• (timestamp_start, timestamp_end) for range queries
-```
-
-### Query Optimization
-
-```
-Efficient Patterns:
-─────────────────
-
-✓ Limit traversal depth (max_depth=2)
-✓ Filter by weight threshold (min_weight)
-✓ Use specific edge types when possible
-✓ Paginate large result sets
-✓ Cache frequently accessed subgraphs
-
-Avoid:
-─────
-✗ Full graph scans without filters
-✗ Deep recursion without limits
-✗ Unbounded temporal windows
-```
-
-## Future Enhancements
-
-```
-Planned Features:
-────────────────
-
-1. Advanced NLP
-   └─► Named Entity Recognition (spaCy)
-   └─► Relationship extraction from text
-   └─► Coreference resolution
-
-2. Face Recognition
-   └─► Link face embeddings to people
-   └─► Track same person across scenes
-   └─► Person clustering
-
-3. Graph Algorithms
-   └─► PageRank for importance
-   └─► Community detection
-   └─► Shortest path queries
-   └─► Centrality metrics
-
-4. Visualization
-   └─► Web-based graph explorer
-   └─► D3.js/Cytoscape.js rendering
-   └─► Interactive query builder
-
-5. Advanced Queries
-   └─► Pattern matching (Cypher-like)
-   └─► Graph ML embeddings
-   └─► Anomaly detection
-```
-
-## Integration Points
-
-```
-┌─────────────────────────────────────────────┐
-│         Knowledge Graph Integrations         │
-├─────────────────────────────────────────────┤
-│                                              │
-│  Input:                                      │
-│  ├─► Pipeline analysis results               │
-│  ├─► Scene manifests                         │
-│  └─► Entity extractions                      │
-│                                              │
-│  Output:                                     │
-│  ├─► Semantic search API                     │
-│  ├─► Recommendation engine                   │
-│  ├─► Timeline generator                      │
-│  ├─► Related content finder                  │
-│  └─► Context provider for LLM               │
-│                                              │
-│  Future:                                     │
-│  ├─► Real-time updates                       │
-│  ├─► Federated graphs                        │
-│  └─► External knowledge bases                │
-│                                              │
-└─────────────────────────────────────────────┘
-```
+GoodQ graph reads should remain bounded and evidence-backed. The graph can
+summarize relationships, but scene manifests and temporal indexes remain the
+authoritative scene truth surfaces.

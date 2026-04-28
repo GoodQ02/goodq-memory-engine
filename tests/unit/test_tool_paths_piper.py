@@ -4,6 +4,10 @@ from steps.common.tool_paths import resolve_piper
 
 
 def test_resolve_piper_prefers_env_and_top_level_tts(monkeypatch):
+    monkeypatch.delenv("GOODQ_PIPER_EXE", raising=False)
+    monkeypatch.delenv("GOODQ_PIPER_VOICE_PATH", raising=False)
+    monkeypatch.delenv("GOODQ_PIPER_OUT_DIR", raising=False)
+
     cfg = {
         "tts": {
             "piper_exe": "C:/Tools/piper/piper.exe",

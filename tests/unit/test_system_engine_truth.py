@@ -5,8 +5,40 @@ import sys
 import types
 from pathlib import Path
 
+import pytest
 from fastapi import APIRouter
 from fastapi.testclient import TestClient
+
+
+_STUBBED_MODULES = [
+    "api.routes",
+    "api.routes.control_recurrence",
+    "api.routes.ingest",
+    "api.routes.media",
+    "api.routes.meta",
+    "api.routes.runtime",
+    "api.routes.scenes",
+    "api.routes.search",
+    "api.routes.system",
+    "api.routes.timeline",
+    "lib.llm_client",
+    "steps.common.config_loader",
+    "steps.common.llm_model_factory",
+    "steps.common.memory_manager",
+    "goodq_version",
+]
+
+
+@pytest.fixture(autouse=True)
+def _restore_stubbed_modules():
+    previous = {name: sys.modules.get(name) for name in _STUBBED_MODULES}
+    missing = {name for name, module in previous.items() if module is None}
+    yield
+    for name in _STUBBED_MODULES:
+        if name in missing:
+            sys.modules.pop(name, None)
+        else:
+            sys.modules[name] = previous[name]
 
 
 def _install_test_stubs(repo_root: Path) -> None:
@@ -20,6 +52,22 @@ def _install_test_stubs(repo_root: Path) -> None:
         "host": {},
         "api": {},
     }
+    def _fake_get_runtime_paths(cfg=None, *keys, **kwargs):
+        paths = (cfg or {}).get("paths", {}) if isinstance(cfg, dict) else {}
+        values = {
+            "data_root": "data",
+            "db_path": "data/memory.db",
+            "knowledge_graph_db": "data/knowledge_graph.db",
+            "processing": "data/processing",
+            "log_dir": "data/logs",
+            "import_inbox": "data/import_inbox",
+        }
+        values.update(paths)
+        for key in keys:
+            values.setdefault(key, key)
+        return values
+
+    fake_config_loader.get_runtime_paths = _fake_get_runtime_paths
     sys.modules["steps.common.config_loader"] = fake_config_loader
 
     fake_memory_manager = types.ModuleType("steps.common.memory_manager")
@@ -46,7 +94,7 @@ def _load_api_main():
     meta_module = _load_meta_route()
 
     routes_pkg = types.ModuleType("api.routes")
-    for name in ["search", "scenes", "timeline", "media", "system", "ingest", "runtime"]:
+    for name in ["search", "scenes", "timeline", "media", "system", "ingest", "runtime", "control_recurrence"]:
         mod = types.ModuleType(f"api.routes.{name}")
         mod.router = APIRouter()
         setattr(routes_pkg, name, mod)

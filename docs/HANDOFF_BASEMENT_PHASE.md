@@ -31,9 +31,14 @@ This is the practical handoff point for a brand-new Codex session.
   - `/api/runs/latest/preview`
 - First safe control-agent substrate is active as read-only observability:
   - `lib/control_recurrence_report.py`
+  - `lib/control_recurrence_index.py`
   - `python -m cli.control_recurrence_report`
-  - tag anchor: `safe-control-substrate-v0.1.0`
-  - boundary: not healing yet. This tool does not activate `ControlAgent`, does not enable auto-healing, does not mutate configs, does not use LLMs, and does not touch `cli/run_ingestion.py`.
+  - `/api/control-recurrence/reports`
+  - `/api/control-recurrence/reports/latest`
+  - `/api/control-recurrence/reports/{report_id}`
+  - `/api/control-recurrence/reports/{report_id}/markdown`
+  - tag anchor: `control-recurrence-v0.3.0`
+  - boundary: not healing yet. This tool/API does not activate `ControlAgent`, does not enable auto-healing, does not mutate configs, does not use LLMs, does not generate reports from the API, and does not touch `cli/run_ingestion.py`.
 - Current upstream normalization status:
   - exact-pair pilot only
   - allowlist contains exactly `Jerry Seinfeld -> Jerry`
@@ -251,8 +256,16 @@ These are intentionally *not* wired into ingestion yet:
   - `conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --baseline-run-id 20260424_003250_season1_recompare_witness --candidate-run-id 20260424_182406_season2_fresh_witness --json`
 - Deterministic markdown operator artifact:
   - `conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --baseline-run-id 20260424_003250_season1_recompare_witness --candidate-run-id 20260424_182406_season2_fresh_witness --write-md`
+- Durable markdown + JSON artifacts and index update:
+  - `conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --run-id 20260424_182406_season2_fresh_witness --write-md --write-json-file`
+- List indexed artifacts from the CLI:
+  - `conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --list-reports --json`
+- Read the existing index from the local API:
+  - `curl http://127.0.0.1:30000/api/control-recurrence/reports`
+- Read the latest indexed entry from the local API:
+  - `curl http://127.0.0.1:30000/api/control-recurrence/reports/latest`
 
-This is read-only control-plane observability only. It reads existing persisted artifacts (`step_runs.jsonl`, run warnings, `scene_ingest_results.json`, `scene_manifest.json`, `temporal_index.json`, and `experiment_log.json`) and writes markdown only when `--write-md` is explicitly supplied. It is not ControlAgent activation and not healing yet.
+This is read-only control-plane observability only. The CLI reads existing persisted artifacts (`step_runs.jsonl`, run warnings, `scene_ingest_results.json`, `scene_manifest.json`, `temporal_index.json`, and `experiment_log.json`) and writes artifacts only when explicitly asked. The API reads only `reports/control_recurrence/index.json` and indexed artifacts. It does not generate reports, trigger ingestion, activate ControlAgent, or heal.
 
 ### Run the Justification Channel (read-only; no power)
 
@@ -313,7 +326,7 @@ This prints counts by category/name and a UTC date range. It does not write to d
 - **Memory/observability core:** `steps/common/`
 - **Epistemic diff engine:** `steps/common/epistemic_diff.py`
 - **Conduit builders + rollups:** `cli/conduits_build.py`, `cli/ui_conduits_rollup.py`, `cli/observability_rollup.py`
-- **Read-only control recurrence reports:** `cli/control_recurrence_report.py`, `lib/control_recurrence_report.py`
+- **Read-only control recurrence reports:** `cli/control_recurrence_report.py`, `lib/control_recurrence_report.py`, `lib/control_recurrence_index.py`, `api/routes/control_recurrence.py`
 - **Sensitive-source contracts:** `docs/architecture/CANONICAL_SENSITIVE_EVENTS.md`, `docs/architecture/VAULT_TOKEN_RESOLVER_CONTRACT.md`
 - **Sensitive schema definitions:** `steps/common/canonical_sensitive_events.py`
 - **Health adapter (dry-run):** `steps/health_auto_export/adapter.py`

@@ -5,8 +5,40 @@ import sys
 import types
 from pathlib import Path
 
+import pytest
 from fastapi import APIRouter
 from fastapi.testclient import TestClient
+
+
+_STUBBED_MODULES = [
+    "api.routes",
+    "api.routes.control_recurrence",
+    "api.routes.ingest",
+    "api.routes.media",
+    "api.routes.meta",
+    "api.routes.runtime",
+    "api.routes.scenes",
+    "api.routes.search",
+    "api.routes.system",
+    "api.routes.timeline",
+    "lib.llm_client",
+    "steps.common.config_loader",
+    "steps.common.llm_model_factory",
+    "steps.common.memory_manager",
+    "goodq_version",
+]
+
+
+@pytest.fixture(autouse=True)
+def _restore_stubbed_modules():
+    previous = {name: sys.modules.get(name) for name in _STUBBED_MODULES}
+    missing = {name for name, module in previous.items() if module is None}
+    yield
+    for name in _STUBBED_MODULES:
+        if name in missing:
+            sys.modules.pop(name, None)
+        else:
+            sys.modules[name] = previous[name]
 
 
 def _load_runtime_route_module(repo_root: Path):
@@ -47,6 +79,22 @@ def _load_api_main():
         "host": {},
         "api": {},
     }
+    def _fake_get_runtime_paths(cfg=None, *keys, **kwargs):
+        paths = (cfg or {}).get("paths", {}) if isinstance(cfg, dict) else {}
+        values = {
+            "data_root": "data",
+            "db_path": "data/memory.db",
+            "knowledge_graph_db": "data/knowledge_graph.db",
+            "processing": "data/processing",
+            "log_dir": "data/logs",
+            "import_inbox": "data/import_inbox",
+        }
+        values.update(paths)
+        for key in keys:
+            values.setdefault(key, key)
+        return values
+
+    fake_config_loader.get_runtime_paths = _fake_get_runtime_paths
     sys.modules["steps.common.config_loader"] = fake_config_loader
 
     fake_memory_manager = types.ModuleType("steps.common.memory_manager")
@@ -61,7 +109,7 @@ def _load_api_main():
     meta_module = _load_meta_route_module(repo_root)
 
     routes_pkg = types.ModuleType("api.routes")
-    for name in ["search", "scenes", "timeline", "media", "system", "ingest"]:
+    for name in ["search", "scenes", "timeline", "media", "system", "ingest", "control_recurrence"]:
         mod = types.ModuleType(f"api.routes.{name}")
         mod.router = APIRouter()
         setattr(routes_pkg, name, mod)
@@ -188,6 +236,18 @@ def test_main_delegates_runtime_summary_endpoints_to_router_module() -> None:
 
     for route_marker in direct_runtime_paths:
         assert route_marker not in source
+
+
+def test_main_mounts_control_recurrence_router_without_inline_execution_paths() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    source = (repo_root / "api" / "main.py").read_text(encoding="utf-8")
+    route_source = (repo_root / "api" / "routes" / "control_recurrence.py").read_text(encoding="utf-8")
+
+    assert "control_recurrence" in source
+    assert "app.include_router(control_recurrence.router)" in source
+    assert "build_control_recurrence_report" not in route_source
+    assert "build_control_recurrence_comparison" not in route_source
+    assert "run_ingestion" not in route_source
 
 
 def test_main_delegates_root_discovery_endpoints_to_meta_router_module() -> None:

@@ -23,7 +23,12 @@ The Control Agent is GoodQ4All's monitoring, diagnosis, and healing subsystem. I
 The active control-plane surface now includes a read-only recurrence instrument:
 
 - `lib/control_recurrence_report.py`
+- `lib/control_recurrence_index.py`
 - `python -m cli.control_recurrence_report`
+- `GET /api/control-recurrence/reports`
+- `GET /api/control-recurrence/reports/latest`
+- `GET /api/control-recurrence/reports/{report_id}`
+- `GET /api/control-recurrence/reports/{report_id}/markdown`
 
 Boundary: not healing yet. This instrument is not `ControlAgent` activation. It does not enable auto-healing, does not mutate configs, does not use LLMs, and does not touch `cli/run_ingestion.py`.
 
@@ -37,6 +42,8 @@ It reads persisted runtime truth only:
 - `experiment_log.json`
 
 It reports recurrence summaries, comparison deltas, category counts, recovered/unrecovered/skipped counts, Phase 6 health, Qdrant health, deterministic operator hints, and optional markdown/JSON artifacts under `reports/control_recurrence/`. Durable artifact discovery is recorded in `reports/control_recurrence/index.json`.
+
+The API surface reads only that existing index and the indexed artifacts. It does not regenerate reports, trigger ingestion, execute commands, scan arbitrary project paths, or form a second orchestration path.
 
 Exact command examples:
 
@@ -58,6 +65,18 @@ conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_rep
 
 ```powershell
 conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --list-reports --json
+```
+
+```powershell
+curl http://127.0.0.1:30000/api/control-recurrence/reports
+```
+
+```powershell
+curl http://127.0.0.1:30000/api/control-recurrence/reports/latest
+```
+
+```powershell
+curl http://127.0.0.1:30000/api/control-recurrence/reports/20260424_182406_season2_fresh_witness
 ```
 
 Use this as the first safe control-agent substrate: operator awareness and pattern visibility before any healing authority is considered.

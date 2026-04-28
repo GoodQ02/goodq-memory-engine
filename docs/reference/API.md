@@ -34,6 +34,10 @@ Primary status and runtime summary endpoints defined in the active API surface:
 - `GET /api/runs/latest/preview`
 - `GET /api/memory/stats`
 - `GET /api/read/envelope`
+- `GET /api/control-recurrence/reports`
+- `GET /api/control-recurrence/reports/latest`
+- `GET /api/control-recurrence/reports/{report_id}`
+- `GET /api/control-recurrence/reports/{report_id}/markdown`
 
 `GET /api/runs/latest/preview` is a read-only projection over structured run artifacts under `reports/fresh_ingest_runs`.
 It does not revive the retired `/runs` compatibility shell, and it does not parse raw logs as a primary source of truth.
@@ -47,6 +51,7 @@ Router-backed endpoint families mounted into the same process:
 - `/api/timeline`
 - `/api/media`
 - `/api/system`
+- `/api/control-recurrence`
 - `/api/videos/{video_id}/scenes`
 
 ## Discovery Surfaces
@@ -55,6 +60,35 @@ Router-backed endpoint families mounted into the same process:
 - `GET /api` is a curated human index, not a canonical API inventory.
 - Keep `/api` intentionally incomplete so it stays useful as a front desk rather than drifting into a second contract surface.
 - Use `/docs` and `/openapi.json` for the authoritative live inventory of supported endpoints.
+
+## Control Recurrence API
+
+`/api/control-recurrence` is a read-only service window over the durable recurrence artifacts under `reports/control_recurrence/`.
+
+- `GET /api/control-recurrence/reports` reads `reports/control_recurrence/index.json` and returns the parsed index, or a structured empty response when the index is missing.
+- `GET /api/control-recurrence/reports/latest` returns the newest indexed report entry by `created_or_updated_at` or indexed artifact mtime.
+- `GET /api/control-recurrence/reports/{report_id}` returns the indexed durable JSON report content when `json_path` is present.
+- `GET /api/control-recurrence/reports/{report_id}/markdown` returns indexed markdown content as `text/plain` when `markdown_path` is present.
+
+Examples:
+
+```powershell
+curl http://127.0.0.1:30000/api/control-recurrence/reports
+```
+
+```powershell
+curl http://127.0.0.1:30000/api/control-recurrence/reports/latest
+```
+
+```powershell
+curl http://127.0.0.1:30000/api/control-recurrence/reports/20260424_182406_season2_fresh_witness
+```
+
+```powershell
+curl http://127.0.0.1:30000/api/control-recurrence/reports/20260424_003250_season1_recompare_witness__vs__20260424_182406_season2_fresh_witness/markdown
+```
+
+Boundary: the API does not generate reports, heal, mutate configs, activate `ControlAgent`, execute commands, use LLMs, trigger ingestion, or touch `cli/run_ingestion.py`. It only reads the existing index and indexed artifacts under `reports/control_recurrence/`.
 
 ## Retired Legacy Surfaces
 

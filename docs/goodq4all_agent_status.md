@@ -27,16 +27,24 @@ truth for live claims. Do not treat this document as a live witness monitor.
     - `GET /api/runs/latest/preview`
   - First safe control-agent substrate is active as read-only observability:
     - `lib/control_recurrence_report.py`
+    - `lib/control_recurrence_index.py`
     - `python -m cli.control_recurrence_report`
     - default durable output: `reports/control_recurrence/`
     - artifact index: `reports/control_recurrence/index.json`
-    - boundary: not healing yet. It does not activate `ControlAgent`, does not enable auto-healing, does not mutate configs, does not use LLMs, and does not touch `cli/run_ingestion.py`.
+    - local API read surface:
+      - `GET /api/control-recurrence/reports`
+      - `GET /api/control-recurrence/reports/latest`
+      - `GET /api/control-recurrence/reports/{report_id}`
+      - `GET /api/control-recurrence/reports/{report_id}/markdown`
+    - boundary: not healing yet. It does not activate `ControlAgent`, does not enable auto-healing, does not mutate configs, does not use LLMs, does not generate reports from the API, and does not touch `cli/run_ingestion.py`.
   - Exact operator examples:
     - `conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --run-id 20260424_182406_season2_fresh_witness`
     - `conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --baseline-run-id 20260424_003250_season1_recompare_witness --candidate-run-id 20260424_182406_season2_fresh_witness --json`
     - `conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --baseline-run-id 20260424_003250_season1_recompare_witness --candidate-run-id 20260424_182406_season2_fresh_witness --write-md`
     - `conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --run-id 20260424_182406_season2_fresh_witness --write-md --write-json-file`
     - `conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --list-reports --json`
+    - `curl http://127.0.0.1:30000/api/control-recurrence/reports`
+    - `curl http://127.0.0.1:30000/api/control-recurrence/reports/latest`
   - Upstream normalization remains in pilot state only:
     - exact pair allowlist contains exactly `Jerry Seinfeld -> Jerry`
     - projection-only instrumentation:

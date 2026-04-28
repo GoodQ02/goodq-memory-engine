@@ -40,6 +40,7 @@ This is the practical handoff point for a brand-new Codex session.
   - `/api/control-recurrence/reports/{report_id}/markdown`
   - `/api/control-recurrence/reports/{report_id}/recommendations`
   - tag anchor: `control-recurrence-v0.4.0`
+  - release note: `docs/releases/CONTROL_RECURRENCE_v0.4.0.md`
   - boundary: not healing yet. This tool/API does not activate `ControlAgent`, does not enable auto-healing, does not mutate configs, does not execute commands, does not use LLMs, does not generate reports from the API, and does not touch `cli/run_ingestion.py`.
 - Current upstream normalization status:
   - exact-pair pilot only

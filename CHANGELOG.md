@@ -9,6 +9,19 @@ and related canonical docs.
 
 ## [Unreleased]
 
+### Added
+- Published the `control-recurrence-v0.4.0` operator release note:
+  [`docs/releases/CONTROL_RECURRENCE_v0.4.0.md`](docs/releases/CONTROL_RECURRENCE_v0.4.0.md).
+- Added the read-only deterministic control recurrence recommendation draft
+  surface for existing durable recurrence JSON reports. This includes
+  `--recommendations-for <report_id>` and
+  `GET /api/control-recurrence/reports/{report_id}/recommendations`.
+
+### Boundary
+- The v0.4.0 recommendation draft layer does not activate `ControlAgent`, heal,
+  mutate configs, execute commands, use LLMs, generate reports from the API,
+  trigger ingestion, or touch `cli/run_ingestion.py`.
+
 ## [0.1.1] - 2026-04-17
 
 Reference checkpoint:

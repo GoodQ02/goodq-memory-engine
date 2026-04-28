@@ -42,6 +42,8 @@ class ProgressTracker:
             "current_step_index": 0,
             "progress_percent": 0,
             "started_at": None,
+            "run_started_at": None,
+            "file_started_at": None,
             "updated_at": None,
             "estimated_completion": None,
             "details": {},
@@ -53,6 +55,13 @@ class ProgressTracker:
     def start_processing(self, filename: str, total_steps: int = 20, run_id: Optional[str] = None):
         """Start processing a new file"""
         with self._write_lock:
+            now = datetime.now().isoformat()
+            previous_run_id = self.current_state.get("run_id")
+            previous_run_started_at = self.current_state.get("run_started_at")
+            if run_id and previous_run_id == run_id and previous_run_started_at:
+                run_started_at = previous_run_started_at
+            else:
+                run_started_at = now
             self.current_state = {
                 "status": "processing",
                 "current_file": filename,
@@ -62,8 +71,10 @@ class ProgressTracker:
                 "total_steps": total_steps,
                 "current_step_index": 0,
                 "progress_percent": 0,
-                "started_at": datetime.now().isoformat(),
-                "updated_at": datetime.now().isoformat(),
+                "started_at": now,
+                "run_started_at": run_started_at,
+                "file_started_at": now,
+                "updated_at": now,
                 "estimated_completion": None,
                 "details": {},
                 "errors": [],

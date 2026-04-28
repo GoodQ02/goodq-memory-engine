@@ -560,6 +560,20 @@ def test_sentiment_guards_skip_invalid_text_inputs(
             False,
         ),
         (
+            "audio_emotion",
+            {"audio_emotion_meta": {"status": "unavailable"}},
+            "skipped",
+            "audio_emotion_unavailable",
+            False,
+        ),
+        (
+            "emotion_classify",
+            {"emotion_meta": {"status": "no_text"}},
+            "skipped",
+            "emotion_classify_no_text",
+            False,
+        ),
+        (
             "sentiment",
             {"sentiment_meta": {"status": "skipped", "reason": "too_short"}},
             "skipped",
@@ -584,3 +598,18 @@ def test_step_runner_meta_outcome_preserves_optional_skip_observability(
     assert extra is not None
     assert extra["reason"] == expected_reason
     assert extra["embedding_emitted"] is expected_embedding
+
+
+def test_step_runner_meta_outcome_surfaces_optional_structured_error():
+    from cli.step_runner import _derive_step_log_outcome
+
+    status, error, extra = _derive_step_log_outcome(
+        "image_caption",
+        {"caption_meta": {"status": "error", "error": "CUDA out of memory"}},
+        verbose=False,
+    )
+
+    assert status == "error"
+    assert error == "CUDA out of memory"
+    assert extra is not None
+    assert extra["reason"] == "image_caption_error"

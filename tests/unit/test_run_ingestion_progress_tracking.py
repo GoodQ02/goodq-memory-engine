@@ -132,3 +132,31 @@ def test_run_updates_and_finishes_progress_tracker(monkeypatch, tmp_path: Path):
     assert any(step_name == "Scene Reuse" for step_name, _, _ in tracker.updated)
     assert any(step_name == "Scene 1/1" for step_name, _, _ in tracker.updated)
     assert tracker.finished[-1] == "completed"
+
+
+def test_progress_tracker_keeps_run_started_at_across_files(monkeypatch, tmp_path: Path):
+    from steps.common.progress_tracker import ProgressTracker
+
+    tracker = ProgressTracker()
+    monkeypatch.setattr(tracker, "progress_file", tmp_path / "progress.json")
+    monkeypatch.setattr(
+        tracker,
+        "current_state",
+        {
+            "status": "idle",
+            "current_file": None,
+            "run_id": None,
+            "run_started_at": None,
+        },
+    )
+
+    tracker.start_processing("one.mp4", total_steps=2, run_id="run-a")
+    first = tracker.get_state()
+    tracker.finish_processing("completed")
+    tracker.start_processing("two.mp4", total_steps=2, run_id="run-a")
+    second = tracker.get_state()
+
+    assert first["run_started_at"] == first["started_at"]
+    assert second["run_started_at"] == first["run_started_at"]
+    assert second["file_started_at"] == second["started_at"]
+    assert second["current_file"] == "two.mp4"

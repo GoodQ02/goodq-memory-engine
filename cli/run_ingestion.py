@@ -1303,6 +1303,19 @@ def _record_audio_backend_event(run_context: Optional[Dict[str, Any]], event: Di
     events.append(dict(event))
 
 
+def _audio_backend_events_since(
+    run_context: Optional[Dict[str, Any]],
+    start_index: int,
+) -> List[Dict[str, Any]]:
+    if not isinstance(run_context, dict):
+        return []
+    events = run_context.get('audio_backend_events')
+    if not isinstance(events, list):
+        return []
+    start_index = max(0, int(start_index or 0))
+    return [dict(event) for event in events[start_index:] if isinstance(event, dict)]
+
+
 def _resolve_audio_backend_attribution(
     audio_info: Optional[Dict[str, Any]],
     *,
@@ -4658,6 +4671,7 @@ def run(
         # Initialize progress tracking
         if PROGRESS_TRACKING_AVAILABLE:
             tracker.start_processing(video_path.name, total_steps=4, run_id=run_id)
+        audio_backend_event_start = len(run_context.get('audio_backend_events') or [])
         
         scene_overrides: Dict[str, Any] = {}
         if max_scenes:
@@ -5235,7 +5249,7 @@ def run(
             'audio_backend_selected': run_audio_backend_selected,
             'audio_backend_effective': run_audio_backend_effective,
             'audio_backend_downgraded': run_audio_backend_downgraded,
-            'audio_backend_events': list(run_context.get('audio_backend_events') or []),
+            'audio_backend_events': _audio_backend_events_since(run_context, audio_backend_event_start),
             'audio_runtime_contract': audio_runtime_contract,
             'content_summary': content_summary,
             'qdrant_ok': scene_qdrant_status,

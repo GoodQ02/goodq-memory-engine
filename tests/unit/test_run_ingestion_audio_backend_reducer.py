@@ -72,3 +72,19 @@ def test_aggregate_audio_backend_contract(scene_outputs, expected):
     assert result is not None
     assert result in {"wsl", "windows", "mixed", "none"}
     assert result == expected
+
+
+def test_audio_backend_events_since_keeps_video_scope():
+    run_ingestion = _load_run_ingestion_module()
+    run_context = {
+        "audio_backend_events": [
+            {"scene_id": "scene_a", "downgrade_reason": "windows_unavailable_in_scene"},
+            {"scene_id": "scene_b", "downgrade_reason": "wsl_unavailable_in_scene"},
+        ]
+    }
+
+    events = run_ingestion._audio_backend_events_since(run_context, 1)
+
+    assert events == [{"scene_id": "scene_b", "downgrade_reason": "wsl_unavailable_in_scene"}]
+    events[0]["scene_id"] = "mutated"
+    assert run_context["audio_backend_events"][1]["scene_id"] == "scene_b"

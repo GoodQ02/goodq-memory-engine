@@ -21,6 +21,9 @@ _PATH_FALLBACK_WARNED = False
 
 _EXPLICIT_META_STATUS_FIELD_BY_STEP = {
     "audio_embed_clap": "clap_meta",
+    "audio_emotion": "audio_emotion_meta",
+    "emotion_classify": "emotion_meta",
+    "image_caption": "caption_meta",
     "sentiment": "sentiment_meta",
 }
 

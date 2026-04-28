@@ -390,7 +390,9 @@ def test_audio_embed_clap_failure_preserves_transcript_payload(monkeypatch, tmp_
     ]
 
 
-def test_audio_embed_clap_skips_invalid_audio_before_model_load(tmp_path: Path):
+def test_audio_embed_clap_skips_invalid_audio_before_model_load(monkeypatch, tmp_path: Path):
+    monkeypatch.delenv("GOODQ_REQUIRE_GPU", raising=False)
+    monkeypatch.setenv("GOODQ_NO_AUTO_GPU", "1")
     from steps.audio_embed_clap.step import audio_embed_clap
 
     audio_path = tmp_path / "silent.wav"
@@ -403,6 +405,8 @@ def test_audio_embed_clap_skips_invalid_audio_before_model_load(tmp_path: Path):
 
 
 def test_audio_embed_clap_reports_missing_model_cache(monkeypatch, tmp_path: Path):
+    monkeypatch.delenv("GOODQ_REQUIRE_GPU", raising=False)
+    monkeypatch.setenv("GOODQ_NO_AUTO_GPU", "1")
     from steps.audio_embed_clap import step as clap_step
 
     audio_path = tmp_path / "valid.wav"
@@ -421,6 +425,37 @@ def test_audio_embed_clap_reports_missing_model_cache(monkeypatch, tmp_path: Pat
     assert result["clap_meta"]["reason"] == "model_not_cached"
     assert result["clap_meta"]["model"] == "laion/clap-htsat-unfused"
     assert "bootstrap_models.py" in result["clap_meta"]["install_hint"]
+
+
+def test_audio_embed_clap_qdrant_payload_keeps_scene_video_metadata(monkeypatch) -> None:
+    monkeypatch.delenv("GOODQ_REQUIRE_GPU", raising=False)
+    monkeypatch.setenv("GOODQ_NO_AUTO_GPU", "1")
+    from steps.audio_embed_clap.step import _build_qdrant_audio_payload
+
+    payload = _build_qdrant_audio_payload(
+        {
+            "scene_id": "scene-alpha",
+            "scene_index": 7,
+            "video_id": "video-alpha",
+            "video_hash": "hash-alpha",
+            "scene": {"start": 12.5, "end": 15.0, "duration": 2.5},
+        },
+        source_path="processing/audio/scene_0007.wav",
+        faiss_id=12345,
+    )
+
+    assert payload == {
+        "source_path": "processing/audio/scene_0007.wav",
+        "modality": "audio",
+        "faiss_id": 12345,
+        "scene_id": "scene-alpha",
+        "video_id": "video-alpha",
+        "video_hash": "hash-alpha",
+        "start": 12.5,
+        "end": 15.0,
+        "duration": 2.5,
+        "scene_index": 7,
+    }
 
 
 @pytest.mark.parametrize(

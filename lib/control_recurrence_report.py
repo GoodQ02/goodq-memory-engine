@@ -3098,6 +3098,16 @@ def _coalesce_runtime_event_duplicates(signals: Sequence[Dict[str, Any]]) -> Lis
         for signal in signals
         if signal.get("source") == "runtime.events" and signal.get("scene_id")
     }
+    runtime_specific_run_level = {
+        (
+            signal.get("run_id"),
+            signal.get("step_name"),
+            signal.get("error_family"),
+            signal.get("recovery_outcome"),
+        )
+        for signal in signals
+        if signal.get("source") == "runtime.events" and signal.get("scene_id")
+    }
     stderr_keys = {
         (
             signal.get("run_id"),
@@ -3118,16 +3128,33 @@ def _coalesce_runtime_event_duplicates(signals: Sequence[Dict[str, Any]]) -> Lis
             signal.get("error_family"),
             signal.get("recovery_outcome"),
         )
+        run_level_key = (
+            signal.get("run_id"),
+            signal.get("step_name"),
+            signal.get("error_family"),
+            signal.get("recovery_outcome"),
+        )
         if (
             signal.get("source") in {"run.warnings", "runtime.stderr"}
             and not signal.get("scene_id")
             and key in runtime_specific
         ):
             continue
+        if _is_scene_less_native_retry_signal(signal) and run_level_key in runtime_specific_run_level:
+            continue
         if signal.get("source") == "run.warnings" and not signal.get("scene_id") and key in stderr_keys:
             continue
         out.append(signal)
     return out
+
+
+def _is_scene_less_native_retry_signal(signal: Dict[str, Any]) -> bool:
+    if signal.get("source") not in {"run.warnings", "runtime.stderr"}:
+        return False
+    if signal.get("scene_id"):
+        return False
+    family = _clean_str(signal.get("error_family")) or ""
+    return family.startswith("native_crash_retry:") or family.startswith("native_subprocess_crash:")
 
 
 def _dedupe_paths(values: Iterable[Path]) -> List[Path]:
@@ -3146,10 +3173,11 @@ def _dedupe_signals(signals: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
     seen = set()
     out: List[Dict[str, Any]] = []
     for signal in signals:
+        video_id = None if _is_scene_less_native_retry_signal(signal) else signal.get("video_id")
         key = (
             signal.get("source"),
             signal.get("run_id"),
-            signal.get("video_id"),
+            video_id,
             signal.get("step_name"),
             signal.get("status"),
             signal.get("reason"),

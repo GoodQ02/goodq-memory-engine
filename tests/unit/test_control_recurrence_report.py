@@ -498,6 +498,133 @@ def test_control_recurrence_report_discovers_multi_video_direct_run_root(tmp_pat
     }
 
 
+def test_control_recurrence_report_does_not_fan_out_shared_stderr_retry(
+    tmp_path: Path,
+) -> None:
+    run_root = tmp_path / "reports" / "fresh_ingest_runs" / "direct_multi_retry"
+    epoch_root = tmp_path / "GoodQ_Data" / "epochs" / "epoch_multi_retry"
+    runtime_run_id = "runtime-multi-retry"
+    stdout_path = run_root / "ingestion.stdout.log"
+    stderr_path = run_root / "ingestion.stderr.log"
+    output_items = []
+
+    for index, video_id in enumerate(("video-one", "video-two"), start=1):
+        video_name = f"01x0{index} - Direct Multi Retry {index}.mp4"
+        scene_id = f"scene-{index}"
+        processing_dir = epoch_root / "processing" / video_name.replace(".mp4", "")
+        scene_manifest_path = processing_dir / "video" / "scene_manifest.json"
+        temporal_index_path = processing_dir / "temporal_index.json"
+        scenes = [{"scene_id": scene_id, "index": 0, "content_state": "signal"}]
+        _write_json(
+            scene_manifest_path,
+            {
+                "video_id": video_id,
+                "phase5_complete": True,
+                "phase6_complete": True,
+                "phase6_harmonized": True,
+                "phase6_vector_commit": {"qdrant_ok": True, "vector_points_attempted": 2},
+                "scenes": scenes,
+            },
+        )
+        _write_json(
+            temporal_index_path,
+            {
+                "video_id": video_id,
+                "phase5_complete": True,
+                "phase6_complete": True,
+                "phase6_harmonized": True,
+                "total_scenes": 1,
+                "segments": scenes,
+            },
+        )
+        output_items.append(
+            {
+                "video_id": video_id,
+                "video_hash": video_id,
+                "video_name": video_name,
+                "phase6_complete": True,
+                "qdrant_ok": True,
+                "phase6_qdrant_ok": True,
+                "scenes": scenes,
+                "temporal_index_path": str(temporal_index_path),
+            }
+        )
+
+    _write_json(run_root / "output" / "scene_ingest_results.json", output_items)
+    _write_json(
+        run_root / "workspace" / "_resolved_config.json",
+        {
+            "run": {"id": runtime_run_id, "pipeline": "scene_ingest_cli", "warnings": []},
+            "paths": {"log_dir": str(epoch_root / "logs")},
+        },
+    )
+    _append_jsonl(epoch_root / "logs" / "step_runs.jsonl", [])
+    stdout_path.write_text(
+        json.dumps(
+            {
+                "event": "step_error",
+                "timestamp": "2026-04-28T10:00:00Z",
+                "run_id": runtime_run_id,
+                "step": "step.object_detect",
+                "error": "returncode_3221226505",
+                "metadata": {
+                    "video_id": "video-one",
+                    "scene_id": "scene-1",
+                    "scene_index": 0,
+                },
+            }
+        )
+        + "\n"
+        + json.dumps(
+            {
+                "event": "step_retry",
+                "timestamp": "2026-04-28T10:00:01Z",
+                "run_id": runtime_run_id,
+                "step": "object_detect",
+                "metadata": {
+                    "video_id": "video-one",
+                    "scene_id": "scene-1",
+                    "scene_index": 0,
+                    "native_retry_attempt": 1,
+                    "native_retry_mode": "cpu_fallback",
+                },
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    stderr_path.write_text(
+        "[RUN] Native crash detected for step=object_detect return_code=3221226505 "
+        "status_code=0xC0000409 retry=1/1 mode=cpu_fallback\n"
+        "[retry] [WARN] Native crash for object_detect (0xC0000409); retrying via cpu_fallback\n",
+        encoding="utf-8",
+    )
+
+    report = build_control_recurrence_report(run_root=run_root)
+
+    families = {row["error_family"]: row for row in report["top_repeated_failure_families"]}
+    assert families["native_crash_retry:0xC0000409"]["count"] == 1
+    assert report["recovered_vs_unrecovered_failures"]["recovered"] == 1
+    assert [
+        row
+        for row in report["scenes_affected"]
+        if "native_crash_retry:0xC0000409" in row["error_families"]
+    ] == [
+        {
+            "video_id": "video-one",
+            "episode": "01x01 - Direct Multi Retry 1.mp4",
+            "scene_id": "scene-1",
+            "scene_index": 0,
+            "signal_count": 1,
+            "error_families": ["native_crash_retry:0xC0000409"],
+            "step_names": ["object_detect"],
+            "recovery_outcomes": ["recovered_retry"],
+            "categories": ["actionable"],
+            "highest_category": "actionable",
+        }
+    ]
+
+
 def test_control_recurrence_report_uses_operator_metadata_paths_and_stderr_retry(tmp_path: Path) -> None:
     run_root = tmp_path / "reports" / "fresh_ingest_runs" / "direct_metadata"
     epoch_root = tmp_path / "GoodQ_Data" / "epochs" / "epoch_metadata"

@@ -32,6 +32,51 @@ _SILENCE_RMS_THRESHOLD = 8
 _SILENCE_PEAK_THRESHOLD = 24
 
 
+def _normalize_scene_id(value: Any) -> Optional[str]:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        text = value.strip()
+        return text or None
+    try:
+        return f"scene_{int(value):04d}"
+    except Exception:
+        text = str(value).strip()
+        return text or None
+
+
+def _build_qdrant_audio_payload(item: Dict[str, Any], *, source_path: str, faiss_id: int) -> Dict[str, Any]:
+    payload: Dict[str, Any] = {
+        "source_path": source_path,
+        "modality": "audio",
+        "faiss_id": faiss_id,
+    }
+
+    scene_id = _normalize_scene_id(item.get("scene_id") or item.get("scene_index"))
+    if scene_id:
+        payload["scene_id"] = scene_id
+
+    video_id = item.get("video_id") or item.get("video_hash")
+    if video_id is not None:
+        payload["video_id"] = str(video_id)
+
+    video_hash = item.get("video_hash") or item.get("video_id")
+    if video_hash is not None:
+        payload["video_hash"] = str(video_hash)
+
+    scene = item.get("scene")
+    if isinstance(scene, dict):
+        for key in ("start", "end", "duration"):
+            if scene.get(key) is not None:
+                payload[key] = scene.get(key)
+
+    scene_index = item.get("scene_index")
+    if scene_index is not None:
+        payload["scene_index"] = scene_index
+
+    return payload
+
+
 def _torchaudio_preflight() -> bool:
     if importlib.util.find_spec("torchaudio") is not None:
         return True
@@ -470,11 +515,7 @@ def audio_embed_clap(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
                 qdrant_ok = bool(q_client.upsert([{
                     "id": h,
                     "vector": feats[0].tolist(),
-                    "payload": {
-                        "source_path": path,
-                        "modality": "audio",
-                        "faiss_id": faiss_id,
-                    }
+                    "payload": _build_qdrant_audio_payload(item, source_path=path, faiss_id=faiss_id),
                 }]))
                 if not qdrant_ok:
                     qdrant_reason = "upsert_failed"

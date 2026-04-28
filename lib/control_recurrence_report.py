@@ -582,7 +582,7 @@ def _render_markdown_single(report: Dict[str, Any]) -> str:
     lines.append("- Mode: `read_only_observability`")
     lines.append("")
     lines.append("## Run")
-    lines.append(f"- Run root(s): {_md_join_code(scope.get('run_roots') or [])}")
+    lines.append(f"- Run root(s): {_md_join_code_paths(scope.get('run_roots') or [])}")
     lines.append(f"- Episodes: `{int(scope.get('episodes') or 0)}`")
     lines.append(f"- Signals: `{int(scope.get('signals') or 0)}`")
     lines.append("")
@@ -881,6 +881,12 @@ def _md_join_code(values: Sequence[Any]) -> str:
     return ", ".join(f"`{_md_text(value)}`" for value in values)
 
 
+def _md_join_code_paths(values: Sequence[Any]) -> str:
+    if not values:
+        return "`none`"
+    return ", ".join(f"`{_md_path_text(value)}`" for value in values)
+
+
 def _markdown_bullets(values: Sequence[Any]) -> List[str]:
     if not values:
         return ["- none"]
@@ -895,6 +901,17 @@ def _md_text(value: Any) -> str:
     if value is None:
         return "none"
     return str(value)
+
+
+def _md_path_text(value: Any) -> str:
+    text = _md_text(value)
+    try:
+        path = Path(text)
+        if path.is_absolute():
+            return str(path.relative_to(_REPO_ROOT)).replace("\\", "/")
+    except Exception:
+        return text
+    return text
 
 
 def _comparison_run_summary(report: Dict[str, Any], *, label: str) -> Dict[str, Any]:

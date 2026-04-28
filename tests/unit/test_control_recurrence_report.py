@@ -4,7 +4,11 @@ import json
 from pathlib import Path
 
 from cli.control_recurrence_report import main as recurrence_cli_main
-from lib.control_recurrence_report import build_control_recurrence_comparison, build_control_recurrence_report
+from lib.control_recurrence_report import (
+    build_control_recurrence_comparison,
+    build_control_recurrence_report,
+    render_markdown_report,
+)
 
 
 def _write_json(path: Path, payload: object) -> None:
@@ -678,6 +682,38 @@ def test_control_recurrence_cli_writes_single_run_markdown(tmp_path: Path, capsy
     assert "## Blocking Signals" in text
     assert "## Read-Only Disclaimer" in text
     assert "Markdown written:" in capsys.readouterr().err
+
+
+def test_markdown_single_report_uses_repo_relative_run_roots() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    run_root = repo_root / "reports" / "fresh_ingest_runs" / "portable_run"
+    report = {
+        "report": {"generated_at_utc": "2026-04-28T00:00:00+00:00"},
+        "scope": {
+            "run_roots": [str(run_root)],
+            "episodes": 1,
+            "signals": 0,
+        },
+        "recommendation": {"status": "pass", "reasons": []},
+        "recurrence_classification": {
+            "highest_category": "informational",
+            "category_counts": {},
+            "blocking_families": [],
+        },
+        "recovered_vs_unrecovered_failures": {},
+        "phase6_qdrant_truth": {
+            "status": "healthy",
+            "healthy": True,
+            "episodes_healthy": 1,
+            "episodes_total": 1,
+        },
+        "top_repeated_failure_families": [],
+    }
+
+    text = render_markdown_report(report)
+
+    assert "`reports/fresh_ingest_runs/portable_run`" in text
+    assert str(repo_root) not in text
 
 
 def test_control_recurrence_cli_writes_comparison_markdown(tmp_path: Path, capsys) -> None:

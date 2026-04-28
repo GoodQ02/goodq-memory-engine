@@ -174,12 +174,25 @@ List indexed recurrence artifacts as JSON:
 conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --list-reports --json
 ```
 
+Deterministic operator recommendation draft for an indexed durable report:
+
+```powershell
+conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --recommendations-for 20260424_182406_season2_fresh_witness
+```
+
+Recommendation draft as JSON:
+
+```powershell
+conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --recommendations-for 20260424_003250_season1_recompare_witness__vs__20260424_182406_season2_fresh_witness --json
+```
+
 **Outputs**
 - human-readable summary by default
 - stable JSON with `--json`
 - deterministic markdown with `--write-md`
 - durable JSON artifact with `--write-json-file`
 - durable artifact index at `reports/control_recurrence/index.json`
+- deterministic read-only inspection draft with `--recommendations-for <report_id>`
 - default markdown path:
   - single run: `reports/control_recurrence/<run_id>.md`
   - comparison: `reports/control_recurrence/<baseline_run_id>__vs__<candidate_run_id>.md`
@@ -192,6 +205,7 @@ conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_rep
 - classifies recurrence families as `informational`, `watch`, `actionable`, or `blocking`
 - emits read-only operator hints and inspection targets
 - indexes durable report artifacts for API/UI/Codex discovery without regenerating reports in list mode
+- drafts deterministic operator inspection steps from existing durable JSON reports without executing commands, healing, mutating configs, triggering ingestion, or generating reports
 - reports Phase 6 and Qdrant health without inferring beyond persisted artifacts
 
 ---

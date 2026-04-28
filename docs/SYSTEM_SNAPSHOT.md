@@ -115,11 +115,13 @@ the supported host/runtime baseline, but it is not a live witness monitor.
   - `/api/runs/latest/preview`
   - `lib/control_recurrence_report.py`
   - `lib/control_recurrence_index.py`
+  - `lib/control_recurrence_recommendations.py`
   - `python -m cli.control_recurrence_report`
   - `/api/control-recurrence/reports`
   - `/api/control-recurrence/reports/latest`
   - `/api/control-recurrence/reports/{report_id}`
   - `/api/control-recurrence/reports/{report_id}/markdown`
+  - `/api/control-recurrence/reports/{report_id}/recommendations`
 - Current operator behavior:
   - reads structured artifacts under `reports/fresh_ingest_runs`
   - projects more truthful in-flight status by detecting episode lane-start artifacts
@@ -131,15 +133,18 @@ the supported host/runtime baseline, but it is not a live witness monitor.
   - can write durable JSON artifacts with `--write-json-file`
   - records durable artifact discovery in `reports/control_recurrence/index.json`
   - exposes a local read-only API over the existing recurrence index and indexed artifacts
-  - boundary: not healing yet. The recurrence report/API does not activate `ControlAgent`, does not enable auto-healing, does not mutate configs, does not use LLMs, does not generate reports from the API, and does not touch `cli/run_ingestion.py`.
+  - drafts deterministic operator inspection steps from existing durable JSON reports
+  - boundary: not healing yet. The recurrence report/API does not activate `ControlAgent`, does not enable auto-healing, does not mutate configs, does not execute commands, does not use LLMs, does not generate reports from the API, and does not touch `cli/run_ingestion.py`.
 - Exact control recurrence commands:
   - `conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --run-id 20260424_182406_season2_fresh_witness`
   - `conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --baseline-run-id 20260424_003250_season1_recompare_witness --candidate-run-id 20260424_182406_season2_fresh_witness --json`
   - `conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --baseline-run-id 20260424_003250_season1_recompare_witness --candidate-run-id 20260424_182406_season2_fresh_witness --write-md`
   - `conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --run-id 20260424_182406_season2_fresh_witness --write-md --write-json-file`
   - `conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --list-reports --json`
+  - `conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --recommendations-for 20260424_003250_season1_recompare_witness__vs__20260424_182406_season2_fresh_witness`
   - `curl http://127.0.0.1:30000/api/control-recurrence/reports`
   - `curl http://127.0.0.1:30000/api/control-recurrence/reports/latest`
+  - `curl http://127.0.0.1:30000/api/control-recurrence/reports/20260424_003250_season1_recompare_witness__vs__20260424_182406_season2_fresh_witness/recommendations`
 
 ## Current Upstream Normalization State
 - Exact-pair pilot only:

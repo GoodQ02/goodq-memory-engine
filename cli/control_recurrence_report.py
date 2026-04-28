@@ -7,6 +7,7 @@ Invoke:
   python -m cli.control_recurrence_report --baseline-run-id 20260424_003250_season1_recompare_witness --candidate-run-id 20260424_182406_season2_fresh_witness
   python -m cli.control_recurrence_report --run-id 20260424_182406_season2_fresh_witness --write-md
   python -m cli.control_recurrence_report --list-reports
+  python -m cli.control_recurrence_report --recommendations-for 20260424_182406_season2_fresh_witness
 """
 
 from __future__ import annotations
@@ -30,6 +31,10 @@ from lib.control_recurrence_report import (
     write_json_report_file,
     write_markdown_report,
 )
+from lib.control_recurrence_recommendations import (
+    build_recommendation_draft,
+    render_recommendation_draft,
+)
 
 
 os.environ.setdefault("PYTHONDONTWRITEBYTECODE", "1")
@@ -52,9 +57,18 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
     parser.add_argument("--write-md", action="store_true", help="Write deterministic markdown operator artifact")
     parser.add_argument("--write-json-file", action="store_true", help="Write durable JSON operator artifact")
     parser.add_argument("--list-reports", action="store_true", help="List indexed durable recurrence reports")
+    parser.add_argument("--recommendations-for", help="Build a read-only recommendation draft for an indexed report id")
     parser.add_argument("--output-dir", help="Artifact output directory (default: reports/control_recurrence)")
     args = parser.parse_args(list(argv) if argv is not None else None)
     output_dir = Path(args.output_dir) if args.output_dir else None
+
+    if args.recommendations_for:
+        draft, status_code = build_recommendation_draft(args.recommendations_for, base_dir=output_dir)
+        if args.json:
+            print(json.dumps(draft, indent=2, ensure_ascii=False))
+        else:
+            print(render_recommendation_draft(draft))
+        return 0 if status_code == 200 and draft.get("status") == "ok" else 2
 
     if args.list_reports:
         index = read_report_index(output_dir=output_dir)

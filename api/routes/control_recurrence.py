@@ -6,6 +6,7 @@ from fastapi import APIRouter
 from fastapi.responses import JSONResponse, PlainTextResponse
 
 from lib import control_recurrence_index
+from lib.control_recurrence_recommendations import build_recommendation_draft
 
 
 router = APIRouter(prefix="/api/control-recurrence", tags=["control-recurrence"])
@@ -30,6 +31,16 @@ def get_control_recurrence_report(report_id: str):
     """Return durable JSON content for an indexed recurrence report."""
 
     payload, status_code = control_recurrence_index.load_report_json(report_id)
+    if status_code != 200:
+        return JSONResponse(status_code=status_code, content=payload)
+    return payload
+
+
+@router.get("/reports/{report_id}/recommendations")
+def get_control_recurrence_report_recommendations(report_id: str):
+    """Return a deterministic read-only operator recommendation draft."""
+
+    payload, status_code = build_recommendation_draft(report_id)
     if status_code != 200:
         return JSONResponse(status_code=status_code, content=payload)
     return payload

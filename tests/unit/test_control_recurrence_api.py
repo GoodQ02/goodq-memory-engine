@@ -243,3 +243,62 @@ def test_control_recurrence_api_malformed_artifact_returns_warning(monkeypatch, 
     assert malformed["reason"] == "json_artifact_malformed"
     assert missing["status"] == "not_available"
     assert missing["reason"] == "json_artifact_missing"
+
+
+def test_control_recurrence_api_recommendations_endpoint(monkeypatch, tmp_path: Path) -> None:
+    report_dir = tmp_path / "reports" / "control_recurrence"
+    _write_index(
+        report_dir,
+        [
+            {
+                "report_type": "single_run",
+                "report_id": "run_a",
+                "run_id": "run_a",
+                "json_path": "run_a.json",
+                "recommendation_status": "WARN",
+                "highest_category": "actionable",
+                "total_signals": 1,
+                "blocking_signal_count": 0,
+                "created_or_updated_at": "2026-04-27T00:00:00+00:00",
+            }
+        ],
+    )
+    (report_dir / "run_a.json").write_text(
+        json.dumps(
+            {
+                "report": {"name": "control_recurrence_report"},
+                "scope": {"signals": 1},
+                "recommendation": {"status": "warn", "highest_category": "actionable"},
+                "recurrence_classification": {
+                    "highest_category": "actionable",
+                    "signal_counts": {"blocking": 0, "actionable": 1, "watch": 0, "informational": 0},
+                    "families": [
+                        {
+                            "error_family": "native_crash_retry:0xC0000409",
+                            "category": "actionable",
+                            "count": 1,
+                        }
+                    ],
+                },
+                "top_repeated_failure_families": [
+                    {
+                        "error_family": "native_crash_retry:0xC0000409",
+                        "category": "actionable",
+                        "count": 1,
+                        "step_names": ["image_embed_dino"],
+                    }
+                ],
+                "recovered_vs_unrecovered_failures": {"recovered_retry": 1},
+                "phase6_qdrant_truth": {"healthy": True, "episodes": [{"qdrant_ok": True}]},
+            }
+        ),
+        encoding="utf-8",
+    )
+    client = _client(monkeypatch, report_dir)
+
+    payload = client.get("/api/control-recurrence/reports/run_a/recommendations").json()
+
+    assert payload["status"] == "ok"
+    assert payload["report_id"] == "run_a"
+    assert payload["highest_category"] == "actionable"
+    assert payload["safety_boundary"]["llm_usage"] == "not_used"

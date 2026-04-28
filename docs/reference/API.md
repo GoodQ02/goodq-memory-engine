@@ -38,6 +38,7 @@ Primary status and runtime summary endpoints defined in the active API surface:
 - `GET /api/control-recurrence/reports/latest`
 - `GET /api/control-recurrence/reports/{report_id}`
 - `GET /api/control-recurrence/reports/{report_id}/markdown`
+- `GET /api/control-recurrence/reports/{report_id}/recommendations`
 
 `GET /api/runs/latest/preview` is a read-only projection over structured run artifacts under `reports/fresh_ingest_runs`.
 It does not revive the retired `/runs` compatibility shell, and it does not parse raw logs as a primary source of truth.
@@ -69,6 +70,7 @@ Router-backed endpoint families mounted into the same process:
 - `GET /api/control-recurrence/reports/latest` returns the newest indexed report entry by `created_or_updated_at` or indexed artifact mtime.
 - `GET /api/control-recurrence/reports/{report_id}` returns the indexed durable JSON report content when `json_path` is present.
 - `GET /api/control-recurrence/reports/{report_id}/markdown` returns indexed markdown content as `text/plain` when `markdown_path` is present.
+- `GET /api/control-recurrence/reports/{report_id}/recommendations` returns a deterministic read-only operator inspection draft from the indexed durable JSON report.
 
 Examples:
 
@@ -88,7 +90,11 @@ curl http://127.0.0.1:30000/api/control-recurrence/reports/20260424_182406_seaso
 curl http://127.0.0.1:30000/api/control-recurrence/reports/20260424_003250_season1_recompare_witness__vs__20260424_182406_season2_fresh_witness/markdown
 ```
 
-Boundary: the API does not generate reports, heal, mutate configs, activate `ControlAgent`, execute commands, use LLMs, trigger ingestion, or touch `cli/run_ingestion.py`. It only reads the existing index and indexed artifacts under `reports/control_recurrence/`.
+```powershell
+curl http://127.0.0.1:30000/api/control-recurrence/reports/20260424_003250_season1_recompare_witness__vs__20260424_182406_season2_fresh_witness/recommendations
+```
+
+Boundary: the API does not generate reports, heal, mutate configs, activate `ControlAgent`, execute commands, use LLMs, trigger ingestion, or touch `cli/run_ingestion.py`. Recommendation drafts are inspection-only and carry no execution authority. The API only reads the existing index and indexed artifacts under `reports/control_recurrence/`.
 
 ## Retired Legacy Surfaces
 

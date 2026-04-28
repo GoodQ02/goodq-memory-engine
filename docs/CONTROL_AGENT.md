@@ -24,13 +24,15 @@ The active control-plane surface now includes a read-only recurrence instrument:
 
 - `lib/control_recurrence_report.py`
 - `lib/control_recurrence_index.py`
+- `lib/control_recurrence_recommendations.py`
 - `python -m cli.control_recurrence_report`
 - `GET /api/control-recurrence/reports`
 - `GET /api/control-recurrence/reports/latest`
 - `GET /api/control-recurrence/reports/{report_id}`
 - `GET /api/control-recurrence/reports/{report_id}/markdown`
+- `GET /api/control-recurrence/reports/{report_id}/recommendations`
 
-Boundary: not healing yet. This instrument is not `ControlAgent` activation. It does not enable auto-healing, does not mutate configs, does not use LLMs, and does not touch `cli/run_ingestion.py`.
+Boundary: not healing yet. This instrument is not `ControlAgent` activation. It does not enable auto-healing, does not mutate configs, does not execute commands, does not use LLMs, and does not touch `cli/run_ingestion.py`.
 
 It reads persisted runtime truth only:
 
@@ -41,7 +43,7 @@ It reads persisted runtime truth only:
 - `temporal_index.json`
 - `experiment_log.json`
 
-It reports recurrence summaries, comparison deltas, category counts, recovered/unrecovered/skipped counts, Phase 6 health, Qdrant health, deterministic operator hints, and optional markdown/JSON artifacts under `reports/control_recurrence/`. Durable artifact discovery is recorded in `reports/control_recurrence/index.json`.
+It reports recurrence summaries, comparison deltas, category counts, recovered/unrecovered/skipped counts, Phase 6 health, Qdrant health, deterministic operator hints, deterministic inspection-only recommendation drafts, and optional markdown/JSON artifacts under `reports/control_recurrence/`. Durable artifact discovery is recorded in `reports/control_recurrence/index.json`.
 
 The API surface reads only that existing index and the indexed artifacts. It does not regenerate reports, trigger ingestion, execute commands, scan arbitrary project paths, or form a second orchestration path.
 
@@ -68,6 +70,10 @@ conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_rep
 ```
 
 ```powershell
+conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --recommendations-for 20260424_003250_season1_recompare_witness__vs__20260424_182406_season2_fresh_witness
+```
+
+```powershell
 curl http://127.0.0.1:30000/api/control-recurrence/reports
 ```
 
@@ -77,6 +83,10 @@ curl http://127.0.0.1:30000/api/control-recurrence/reports/latest
 
 ```powershell
 curl http://127.0.0.1:30000/api/control-recurrence/reports/20260424_182406_season2_fresh_witness
+```
+
+```powershell
+curl http://127.0.0.1:30000/api/control-recurrence/reports/20260424_003250_season1_recompare_witness__vs__20260424_182406_season2_fresh_witness/recommendations
 ```
 
 Use this as the first safe control-agent substrate: operator awareness and pattern visibility before any healing authority is considered.

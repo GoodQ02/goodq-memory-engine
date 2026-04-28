@@ -6,6 +6,7 @@ Invoke:
   python -m cli.control_recurrence_report --run-id 20260424_182406_season2_fresh_witness --json
   python -m cli.control_recurrence_report --baseline-run-id 20260424_003250_season1_recompare_witness --candidate-run-id 20260424_182406_season2_fresh_witness
   python -m cli.control_recurrence_report --run-id 20260424_182406_season2_fresh_witness --write-md
+  python -m cli.control_recurrence_report --list-reports
 """
 
 from __future__ import annotations
@@ -20,8 +21,13 @@ from typing import Iterable, Optional
 from lib.control_recurrence_report import (
     build_control_recurrence_comparison,
     build_control_recurrence_report,
+    read_report_index,
+    render_report_index,
     render_text_comparison,
     render_text_report,
+    report_index_path,
+    update_report_index,
+    write_json_report_file,
     write_markdown_report,
 )
 
@@ -44,8 +50,19 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
     parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON")
     parser.add_argument("--limit", type=int, default=12, help="Maximum rows per text section")
     parser.add_argument("--write-md", action="store_true", help="Write deterministic markdown operator artifact")
-    parser.add_argument("--output-dir", help="Markdown output directory (default: reports/control_recurrence)")
+    parser.add_argument("--write-json-file", action="store_true", help="Write durable JSON operator artifact")
+    parser.add_argument("--list-reports", action="store_true", help="List indexed durable recurrence reports")
+    parser.add_argument("--output-dir", help="Artifact output directory (default: reports/control_recurrence)")
     args = parser.parse_args(list(argv) if argv is not None else None)
+    output_dir = Path(args.output_dir) if args.output_dir else None
+
+    if args.list_reports:
+        index = read_report_index(output_dir=output_dir)
+        if args.json:
+            print(json.dumps(index, indent=2, ensure_ascii=False))
+        else:
+            print(render_report_index(index))
+        return 0
 
     comparison_requested = any(
         (
@@ -72,8 +89,14 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
                 reports_root=Path(args.reports_root) if args.reports_root else None,
             )
             if args.write_md:
-                md_path = write_markdown_report(report, output_dir=Path(args.output_dir) if args.output_dir else None)
+                md_path = write_markdown_report(report, output_dir=output_dir)
                 print(f"Markdown written: {md_path}", file=sys.stderr)
+            if args.write_json_file:
+                json_path = write_json_report_file(report, output_dir=output_dir)
+                print(f"JSON written: {json_path}", file=sys.stderr)
+            if args.write_md or args.write_json_file:
+                update_report_index(output_dir=output_dir)
+                print(f"Index written: {report_index_path(output_dir=output_dir)}", file=sys.stderr)
             if args.json:
                 print(json.dumps(report, indent=2, ensure_ascii=False))
             else:
@@ -88,8 +111,14 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             step_runs_path=Path(args.step_runs) if args.step_runs else None,
         )
         if args.write_md:
-            md_path = write_markdown_report(report, output_dir=Path(args.output_dir) if args.output_dir else None)
+            md_path = write_markdown_report(report, output_dir=output_dir)
             print(f"Markdown written: {md_path}", file=sys.stderr)
+        if args.write_json_file:
+            json_path = write_json_report_file(report, output_dir=output_dir)
+            print(f"JSON written: {json_path}", file=sys.stderr)
+        if args.write_md or args.write_json_file:
+            update_report_index(output_dir=output_dir)
+            print(f"Index written: {report_index_path(output_dir=output_dir)}", file=sys.stderr)
     except Exception as exc:
         print(f"FAIL: recurrence report failed: {exc}", file=sys.stderr)
         return 2

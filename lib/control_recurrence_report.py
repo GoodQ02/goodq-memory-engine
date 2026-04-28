@@ -45,6 +45,7 @@ _BLOCKING_FAMILIES = {
 }
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _DEFAULT_MARKDOWN_OUTPUT_DIR = _REPO_ROOT / "reports" / "control_recurrence"
+_INDEX_FILENAME = "index.json"
 
 
 @dataclass(frozen=True)
@@ -549,13 +550,155 @@ def render_text_comparison(comparison: Dict[str, Any], *, limit: int = 12) -> st
 def write_markdown_report(report: Dict[str, Any], output_dir: str | Path | None = None) -> Path:
     """Write a deterministic markdown operator artifact for a report or comparison."""
 
-    out_dir = Path(output_dir) if output_dir is not None else _DEFAULT_MARKDOWN_OUTPUT_DIR
+    out_dir = _resolve_output_dir(output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     name = _markdown_filename(report)
     path = out_dir / name
     text = render_markdown_report(report)
     path.write_text(text, encoding="utf-8")
     return path
+
+
+def write_json_report_file(report: Dict[str, Any], output_dir: str | Path | None = None) -> Path:
+    """Write a durable JSON report artifact with the existing report shape."""
+
+    out_dir = _resolve_output_dir(output_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    path = out_dir / _json_filename(report)
+    payload = _portable_artifact_payload(report, output_dir=out_dir)
+    path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    return path
+
+
+def update_report_index(output_dir: str | Path | None = None) -> Dict[str, Any]:
+    """Rebuild the durable report index from artifacts under the output directory."""
+
+    out_dir = _resolve_output_dir(output_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    entries_by_id: Dict[str, Dict[str, Any]] = {}
+    warnings: List[str] = []
+
+    for json_path in sorted(out_dir.glob("*.json"), key=lambda p: p.name):
+        if json_path.name == _INDEX_FILENAME:
+            continue
+        try:
+            payload = json.loads(json_path.read_text(encoding="utf-8"))
+        except Exception as exc:
+            warnings.append(f"malformed_json:{json_path.name}:{type(exc).__name__}:{exc}")
+            continue
+        if not isinstance(payload, dict):
+            warnings.append(f"malformed_json:{json_path.name}:root_not_object")
+            continue
+        entry = _index_entry_from_report(payload, json_path=json_path, output_dir=out_dir)
+        entries_by_id.setdefault(entry["report_id"], {}).update(entry)
+
+    for md_path in sorted(out_dir.glob("*.md"), key=lambda p: p.name):
+        report_id = md_path.stem
+        entry = entries_by_id.setdefault(report_id, _index_entry_from_markdown_path(md_path, output_dir=out_dir))
+        entry["markdown_path"] = _artifact_path_text(md_path, output_dir=out_dir)
+        if not entry.get("created_or_updated_at"):
+            entry["created_or_updated_at"] = _file_mtime_utc(md_path)
+
+    reports = [entries_by_id[key] for key in sorted(entries_by_id)]
+    index = {
+        "index": {
+            "name": "control_recurrence_index",
+            "version": "0.2.0",
+            "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+            "output_dir": _artifact_path_text(out_dir, output_dir=out_dir),
+        },
+        "reports": reports,
+        "warnings": warnings,
+    }
+    index_path = out_dir / _INDEX_FILENAME
+    index_path.write_text(json.dumps(index, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    return index
+
+
+def report_index_path(output_dir: str | Path | None = None) -> Path:
+    return _resolve_output_dir(output_dir) / _INDEX_FILENAME
+
+
+def read_report_index(output_dir: str | Path | None = None) -> Dict[str, Any]:
+    """Read a previously written recurrence report index without regenerating reports."""
+
+    out_dir = _resolve_output_dir(output_dir)
+    index_path = out_dir / _INDEX_FILENAME
+    if not index_path.is_file():
+        return {
+            "index": {
+                "name": "control_recurrence_index",
+                "version": "0.2.0",
+                "generated_at_utc": None,
+                "output_dir": _artifact_path_text(out_dir, output_dir=out_dir),
+            },
+            "reports": [],
+            "warnings": [f"index_missing:{_INDEX_FILENAME}"],
+        }
+    try:
+        payload = json.loads(index_path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        return {
+            "index": {
+                "name": "control_recurrence_index",
+                "version": "0.2.0",
+                "generated_at_utc": None,
+                "output_dir": _artifact_path_text(out_dir, output_dir=out_dir),
+            },
+            "reports": [],
+            "warnings": [f"index_malformed:{type(exc).__name__}:{exc}"],
+        }
+    if not isinstance(payload, dict):
+        return {
+            "index": {
+                "name": "control_recurrence_index",
+                "version": "0.2.0",
+                "generated_at_utc": None,
+                "output_dir": _artifact_path_text(out_dir, output_dir=out_dir),
+            },
+            "reports": [],
+            "warnings": ["index_malformed:root_not_object"],
+        }
+    payload.setdefault("reports", [])
+    payload.setdefault("warnings", [])
+    return payload
+
+
+def render_report_index(index: Dict[str, Any]) -> str:
+    """Render a concise human-readable report index."""
+
+    reports = index.get("reports") if isinstance(index, dict) else []
+    warnings = index.get("warnings") if isinstance(index, dict) else []
+    lines = [
+        "GoodQ Control Recurrence Report Index",
+        "====================================",
+        "Mode: read-only observability listing",
+        f"Reports: {len(reports or [])}",
+    ]
+    if not reports:
+        lines.append("")
+        lines.append("No control recurrence reports indexed.")
+    for entry in reports or []:
+        if not isinstance(entry, dict):
+            continue
+        label = entry.get("report_id") or "unknown"
+        report_type = entry.get("report_type") or "unknown"
+        status = entry.get("recommendation_status") or "unknown"
+        category = entry.get("highest_category") or "none"
+        signals = int(entry.get("total_signals") or 0)
+        lines.append("")
+        lines.append(f"- {label}")
+        lines.append(f"  type={report_type} recommendation={status} highest_category={category} signals={signals}")
+        if entry.get("markdown_path"):
+            lines.append(f"  markdown={entry.get('markdown_path')}")
+        if entry.get("json_path"):
+            lines.append(f"  json={entry.get('json_path')}")
+    if warnings:
+        lines.append("")
+        lines.append("Warnings:")
+        for warning in warnings:
+            lines.append(f"  - {warning}")
+    return "\n".join(lines)
 
 
 def render_markdown_report(report: Dict[str, Any]) -> str:
@@ -852,12 +995,20 @@ def _candidate_family_rows_from_comparison(comparison: Dict[str, Any]) -> List[D
 
 
 def _markdown_filename(report: Dict[str, Any]) -> str:
+    return f"{_artifact_stem(report)}.md"
+
+
+def _json_filename(report: Dict[str, Any]) -> str:
+    return f"{_artifact_stem(report)}.json"
+
+
+def _artifact_stem(report: Dict[str, Any]) -> str:
     meta = report.get("report") if isinstance(report, dict) else {}
     if isinstance(meta, dict) and meta.get("name") == "control_recurrence_comparison":
         baseline_id = _md_filename_part(_nested_get(report, ("baseline", "run_id")) or "baseline")
         candidate_id = _md_filename_part(_nested_get(report, ("candidate", "run_id")) or "candidate")
-        return f"{baseline_id}__vs__{candidate_id}.md"
-    return f"{_md_filename_part(_single_report_run_id(report))}.md"
+        return f"{baseline_id}__vs__{candidate_id}"
+    return _md_filename_part(_single_report_run_id(report))
 
 
 def _single_report_run_id(report: Dict[str, Any]) -> str:
@@ -912,6 +1063,173 @@ def _md_path_text(value: Any) -> str:
     except Exception:
         return text
     return text
+
+
+def _resolve_output_dir(output_dir: str | Path | None = None) -> Path:
+    return Path(output_dir) if output_dir is not None else _DEFAULT_MARKDOWN_OUTPUT_DIR
+
+
+def _portable_artifact_payload(value: Any, *, output_dir: Path) -> Any:
+    if isinstance(value, dict):
+        return {str(key): _portable_artifact_payload(item, output_dir=output_dir) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_portable_artifact_payload(item, output_dir=output_dir) for item in value]
+    if isinstance(value, tuple):
+        return [_portable_artifact_payload(item, output_dir=output_dir) for item in value]
+    if isinstance(value, str):
+        return _portable_path_text(value, output_dir=output_dir)
+    return value
+
+
+def _portable_path_text(value: str, *, output_dir: Path) -> str:
+    if not _looks_like_absolute_path(value):
+        return value
+    path = Path(value)
+    for base in (output_dir, _REPO_ROOT):
+        try:
+            return str(path.relative_to(base)).replace("\\", "/")
+        except Exception:
+            continue
+    return "external/" + "/".join(part for part in path.parts[1:] if part)
+
+
+def _looks_like_absolute_path(value: str) -> bool:
+    return bool(re.match(r"^[A-Za-z]:[\\/]", value)) or value.startswith("\\\\")
+
+
+def _artifact_path_text(path: Path, *, output_dir: Path) -> str:
+    try:
+        return str(path.relative_to(output_dir)).replace("\\", "/")
+    except Exception:
+        try:
+            return str(path.relative_to(_REPO_ROOT)).replace("\\", "/")
+        except Exception:
+            return _portable_path_text(str(path), output_dir=output_dir)
+
+
+def _index_entry_from_report(report: Dict[str, Any], *, json_path: Path, output_dir: Path) -> Dict[str, Any]:
+    report_type = _report_type(report)
+    report_id = _report_id(report)
+    recommendation = report.get("recommendation") if isinstance(report.get("recommendation"), dict) else {}
+    entry: Dict[str, Any] = {
+        "report_type": report_type,
+        "report_id": report_id,
+        "json_path": _artifact_path_text(json_path, output_dir=output_dir),
+        "recommendation_status": recommendation.get("status") or "unknown",
+        "highest_category": _index_highest_category(report),
+        "total_signals": _index_total_signals(report),
+        "blocking_signal_count": _index_blocking_signal_count(report),
+        "phase6_health_summary": _index_phase6_health_summary(report),
+        "qdrant_health_summary": _index_qdrant_health_summary(report),
+        "created_or_updated_at": _nested_get(report, ("report", "generated_at_utc")) or _file_mtime_utc(json_path),
+    }
+    if report_type == "comparison":
+        entry["baseline_run_id"] = _nested_get(report, ("baseline", "run_id"))
+        entry["candidate_run_id"] = _nested_get(report, ("candidate", "run_id"))
+    else:
+        entry["run_id"] = _single_report_run_id(report)
+    md_path = json_path.with_suffix(".md")
+    if md_path.is_file():
+        entry["markdown_path"] = _artifact_path_text(md_path, output_dir=output_dir)
+    return entry
+
+
+def _index_entry_from_markdown_path(path: Path, *, output_dir: Path) -> Dict[str, Any]:
+    report_id = path.stem
+    entry: Dict[str, Any] = {
+        "report_type": "comparison" if "__vs__" in report_id else "single_run",
+        "report_id": report_id,
+        "markdown_path": _artifact_path_text(path, output_dir=output_dir),
+        "recommendation_status": "unknown",
+        "highest_category": "unknown",
+        "total_signals": 0,
+        "blocking_signal_count": 0,
+        "phase6_health_summary": {"status": "unknown"},
+        "qdrant_health_summary": {"status": "unknown"},
+        "created_or_updated_at": _file_mtime_utc(path),
+    }
+    if entry["report_type"] == "comparison":
+        baseline, _, candidate = report_id.partition("__vs__")
+        entry["baseline_run_id"] = baseline or None
+        entry["candidate_run_id"] = candidate or None
+    else:
+        entry["run_id"] = report_id
+    return entry
+
+
+def _report_type(report: Dict[str, Any]) -> str:
+    meta = report.get("report") if isinstance(report, dict) else {}
+    if isinstance(meta, dict) and meta.get("name") == "control_recurrence_comparison":
+        return "comparison"
+    return "single_run"
+
+
+def _report_id(report: Dict[str, Any]) -> str:
+    return _artifact_stem(report)
+
+
+def _index_highest_category(report: Dict[str, Any]) -> str:
+    value = _nested_get(report, ("recommendation", "highest_category"))
+    if value:
+        return str(value)
+    value = _nested_get(report, ("recurrence_classification", "highest_category"))
+    if value:
+        return str(value)
+    value = _nested_get(report, ("candidate", "recurrence_classification", "highest_category"))
+    return str(value or "none")
+
+
+def _index_total_signals(report: Dict[str, Any]) -> int:
+    if _report_type(report) == "comparison":
+        return int(_nested_get(report, ("candidate", "signals")) or 0)
+    return int(_nested_get(report, ("scope", "signals")) or 0)
+
+
+def _index_blocking_signal_count(report: Dict[str, Any]) -> int:
+    if _report_type(report) == "comparison":
+        return int(_nested_get(report, ("candidate", "recurrence_classification", "signal_counts", "blocking")) or 0)
+    return int(_nested_get(report, ("recurrence_classification", "signal_counts", "blocking")) or 0)
+
+
+def _index_phase6_health_summary(report: Dict[str, Any]) -> Dict[str, Any]:
+    if _report_type(report) == "comparison":
+        delta = _nested_get(report, ("delta", "phase6_health_delta"))
+        if isinstance(delta, dict):
+            return {
+                "status": delta.get("status") or "unknown",
+                "baseline_healthy_episodes": int(delta.get("baseline_healthy_episodes") or 0),
+                "candidate_healthy_episodes": int(delta.get("candidate_healthy_episodes") or 0),
+                "delta_healthy_episodes": int(delta.get("delta_healthy_episodes") or 0),
+            }
+    health = report.get("phase6_qdrant_truth") if isinstance(report.get("phase6_qdrant_truth"), dict) else {}
+    return {
+        "status": health.get("status") or "unknown",
+        "healthy": bool(health.get("healthy")),
+        "episodes_healthy": int(health.get("episodes_healthy") or 0),
+        "episodes_total": int(health.get("episodes_total") or 0),
+    }
+
+
+def _index_qdrant_health_summary(report: Dict[str, Any]) -> Dict[str, Any]:
+    if _report_type(report) == "comparison":
+        delta = _nested_get(report, ("delta", "qdrant_health_delta"))
+        if isinstance(delta, dict):
+            return {
+                "status": delta.get("status") or "unknown",
+                "baseline_healthy_episodes": int(delta.get("baseline_healthy_episodes") or 0),
+                "candidate_healthy_episodes": int(delta.get("candidate_healthy_episodes") or 0),
+                "delta_healthy_episodes": int(delta.get("delta_healthy_episodes") or 0),
+            }
+    health = report.get("phase6_qdrant_truth") if isinstance(report.get("phase6_qdrant_truth"), dict) else {}
+    episodes = health.get("episodes") if isinstance(health, dict) else []
+    total = len(episodes or [])
+    healthy = sum(1 for row in episodes or [] if isinstance(row, dict) and row.get("qdrant_ok") is True)
+    status = "healthy" if total > 0 and healthy == total else ("unknown" if total == 0 else "degraded")
+    return {"status": status, "episodes_healthy": healthy, "episodes_total": total}
+
+
+def _file_mtime_utc(path: Path) -> str:
+    return datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc).isoformat()
 
 
 def _comparison_run_summary(report: Dict[str, Any], *, label: str) -> Dict[str, Any]:

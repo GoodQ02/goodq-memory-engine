@@ -123,11 +123,15 @@ the supported host/runtime baseline, but it is not a live witness monitor.
   - classifies recurrence families as `informational`, `watch`, `actionable`, or `blocking`
   - emits deterministic operator hints and inspection targets without changing runtime state
   - can write markdown to `reports/control_recurrence/` when `--write-md` is explicitly supplied
+  - can write durable JSON artifacts with `--write-json-file`
+  - records durable artifact discovery in `reports/control_recurrence/index.json`
   - boundary: not healing yet. The recurrence report does not activate `ControlAgent`, does not enable auto-healing, does not mutate configs, does not use LLMs, and does not touch `cli/run_ingestion.py`.
 - Exact control recurrence commands:
   - `conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --run-id 20260424_182406_season2_fresh_witness`
   - `conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --baseline-run-id 20260424_003250_season1_recompare_witness --candidate-run-id 20260424_182406_season2_fresh_witness --json`
   - `conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --baseline-run-id 20260424_003250_season1_recompare_witness --candidate-run-id 20260424_182406_season2_fresh_witness --write-md`
+  - `conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --run-id 20260424_182406_season2_fresh_witness --write-md --write-json-file`
+  - `conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --list-reports --json`
 
 ## Current Upstream Normalization State
 - Exact-pair pilot only:

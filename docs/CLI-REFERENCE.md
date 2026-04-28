@@ -156,18 +156,42 @@ Markdown with an explicit output directory:
 conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --run-id 20260424_182406_season2_fresh_witness --write-md --output-dir reports/control_recurrence
 ```
 
+Durable markdown + JSON artifacts and index update:
+
+```powershell
+conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --run-id 20260424_182406_season2_fresh_witness --write-md --write-json-file
+```
+
+List indexed recurrence artifacts:
+
+```powershell
+conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --list-reports
+```
+
+List indexed recurrence artifacts as JSON:
+
+```powershell
+conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --list-reports --json
+```
+
 **Outputs**
 - human-readable summary by default
 - stable JSON with `--json`
 - deterministic markdown with `--write-md`
+- durable JSON artifact with `--write-json-file`
+- durable artifact index at `reports/control_recurrence/index.json`
 - default markdown path:
   - single run: `reports/control_recurrence/<run_id>.md`
   - comparison: `reports/control_recurrence/<baseline_run_id>__vs__<candidate_run_id>.md`
+- default JSON artifact path:
+  - single run: `reports/control_recurrence/<run_id>.json`
+  - comparison: `reports/control_recurrence/<baseline_run_id>__vs__<candidate_run_id>.json`
 
 **Current Truth**
 - groups persisted recurrence signals by run, episode/video, step, status, reason, error family, scene, and recovery outcome
 - classifies recurrence families as `informational`, `watch`, `actionable`, or `blocking`
 - emits read-only operator hints and inspection targets
+- indexes durable report artifacts for API/UI/Codex discovery without regenerating reports in list mode
 - reports Phase 6 and Qdrant health without inferring beyond persisted artifacts
 
 ---

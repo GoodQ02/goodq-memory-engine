@@ -28,12 +28,15 @@ truth for live claims. Do not treat this document as a live witness monitor.
   - First safe control-agent substrate is active as read-only observability:
     - `lib/control_recurrence_report.py`
     - `python -m cli.control_recurrence_report`
-    - default markdown output: `reports/control_recurrence/`
+    - default durable output: `reports/control_recurrence/`
+    - artifact index: `reports/control_recurrence/index.json`
     - boundary: not healing yet. It does not activate `ControlAgent`, does not enable auto-healing, does not mutate configs, does not use LLMs, and does not touch `cli/run_ingestion.py`.
   - Exact operator examples:
     - `conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --run-id 20260424_182406_season2_fresh_witness`
     - `conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --baseline-run-id 20260424_003250_season1_recompare_witness --candidate-run-id 20260424_182406_season2_fresh_witness --json`
     - `conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --baseline-run-id 20260424_003250_season1_recompare_witness --candidate-run-id 20260424_182406_season2_fresh_witness --write-md`
+    - `conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --run-id 20260424_182406_season2_fresh_witness --write-md --write-json-file`
+    - `conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --list-reports --json`
   - Upstream normalization remains in pilot state only:
     - exact pair allowlist contains exactly `Jerry Seinfeld -> Jerry`
     - projection-only instrumentation:
@@ -223,7 +226,7 @@ Audit Status: ACTIVE (2026-04-10)
 - The `GOOD-SPEED-32` WSL audio bootstrap drift issue is now fixed on `main`; any remaining laptop follow-up is host-confirmation work rather than a desktop-side blocker.
 
 ## Recent Notable Changes
-- Added the first safe read-only control-agent substrate: a recurrence report CLI/library that groups persisted run signals, classifies recurrence families, emits deterministic operator hints, compares two run ids, and can export markdown without enabling healing or changing canonical ingestion.
+- Added the first safe read-only control-agent substrate: a recurrence report CLI/library that groups persisted run signals, classifies recurrence families, emits deterministic operator hints, compares two run ids, and can export markdown/JSON artifacts plus an index without enabling healing or changing canonical ingestion.
 - Restored `GPU_ENHANCED` desktop runtime through bootstrap-managed environment repair and verified CUDA-backed `goodq_core`.
 - Restored unified WSL audio with local-first/offline model resolution, diarization recovery, and non-recursive Windows fallback.
 - Hardened Phase 6 and DINO runtime behavior; Qdrant scene-vector persistence is operational and explicit.

@@ -129,6 +129,40 @@ def _episode_artifacts(
     return run_dir
 
 
+def _simple_run_fixture(
+    tmp_path: Path,
+    run_name: str,
+    *,
+    episode_name: str = "01x01 - Good News, Bad News.mp4",
+    run_id: str = "runtime-simple",
+    video_id: str = "video-simple",
+) -> tuple[Path, Path]:
+    reports_root = tmp_path / "reports" / "fresh_ingest_runs"
+    run_root = reports_root / run_name
+    epoch_root = tmp_path / "GoodQ_Data" / "epochs" / f"epoch_{run_name}"
+    episode_dir = episode_name.replace(".mp4", "_scene_context_llm").replace(" ", "_")
+    ep = _episode_artifacts(
+        run_root=run_root,
+        epoch_root=epoch_root,
+        episode_dir_name=episode_dir,
+        episode_name=episode_name,
+        run_id=run_id,
+        video_id=video_id,
+        scene_ids=[f"{run_name}-scene"],
+        speaker_skip_index=None,
+    )
+    _write_json(
+        run_root / "experiment_log.json",
+        {
+            "epoch": f"epoch_{run_name}",
+            "status": "completed",
+            "plan": [{"episode": episode_name, "status": "passed", "run_dir": str(ep)}],
+        },
+    )
+    _append_jsonl(epoch_root / "logs" / "step_runs.jsonl", [])
+    return reports_root, run_root
+
+
 def test_control_recurrence_report_groups_current_truth_surfaces(tmp_path: Path) -> None:
     reports_root = tmp_path / "reports" / "fresh_ingest_runs"
     run_root = reports_root / "20260424_182406_season2_fresh_witness"
@@ -789,3 +823,173 @@ def test_control_recurrence_cli_writes_comparison_markdown(tmp_path: Path, capsy
     assert "## Blocking Signals" in text
     assert "## Read-Only Disclaimer" in text
     assert "Markdown written:" in capsys.readouterr().err
+
+
+def test_control_recurrence_cli_writes_single_run_json_file(tmp_path: Path, capsys) -> None:
+    reports_root, _ = _simple_run_fixture(tmp_path, "single_run")
+    output_dir = tmp_path / "artifacts"
+
+    assert (
+        recurrence_cli_main(
+            [
+                "--run-id",
+                "single_run",
+                "--reports-root",
+                str(reports_root),
+                "--write-json-file",
+                "--output-dir",
+                str(output_dir),
+            ]
+        )
+        == 0
+    )
+
+    json_path = output_dir / "single_run.json"
+    assert json_path.is_file()
+    payload = json.loads(json_path.read_text(encoding="utf-8"))
+    assert payload["report"]["name"] == "control_recurrence_report"
+    assert payload["scope"]["episodes"] == 1
+    assert ":\\\\" not in json_path.read_text(encoding="utf-8")
+    err = capsys.readouterr().err
+    assert "JSON written:" in err
+    assert "Index written:" in err
+
+
+def test_control_recurrence_cli_writes_comparison_json_file(tmp_path: Path) -> None:
+    reports_root, _ = _simple_run_fixture(
+        tmp_path,
+        "baseline_run",
+        episode_name="01x01 - Good News, Bad News.mp4",
+        run_id="baseline-runtime",
+        video_id="baseline-video",
+    )
+    _simple_run_fixture(
+        tmp_path,
+        "candidate_run",
+        episode_name="01x02 - The Stakeout.mp4",
+        run_id="candidate-runtime",
+        video_id="candidate-video",
+    )
+    output_dir = tmp_path / "artifacts"
+
+    assert (
+        recurrence_cli_main(
+            [
+                "--baseline-run-id",
+                "baseline_run",
+                "--candidate-run-id",
+                "candidate_run",
+                "--reports-root",
+                str(reports_root),
+                "--write-json-file",
+                "--output-dir",
+                str(output_dir),
+            ]
+        )
+        == 0
+    )
+
+    json_path = output_dir / "baseline_run__vs__candidate_run.json"
+    assert json_path.is_file()
+    payload = json.loads(json_path.read_text(encoding="utf-8"))
+    assert payload["report"]["name"] == "control_recurrence_comparison"
+    assert payload["baseline"]["run_id"] == "baseline_run"
+    assert payload["candidate"]["run_id"] == "candidate_run"
+
+
+def test_control_recurrence_index_creation_update_and_list_modes(tmp_path: Path, capsys) -> None:
+    reports_root, _ = _simple_run_fixture(tmp_path, "single_run")
+    _simple_run_fixture(
+        tmp_path,
+        "candidate_run",
+        episode_name="01x02 - The Stakeout.mp4",
+        run_id="candidate-runtime",
+        video_id="candidate-video",
+    )
+    output_dir = tmp_path / "artifacts"
+
+    assert (
+        recurrence_cli_main(
+            [
+                "--run-id",
+                "single_run",
+                "--reports-root",
+                str(reports_root),
+                "--write-md",
+                "--write-json-file",
+                "--output-dir",
+                str(output_dir),
+            ]
+        )
+        == 0
+    )
+    assert (
+        recurrence_cli_main(
+            [
+                "--baseline-run-id",
+                "single_run",
+                "--candidate-run-id",
+                "candidate_run",
+                "--reports-root",
+                str(reports_root),
+                "--write-json-file",
+                "--output-dir",
+                str(output_dir),
+            ]
+        )
+        == 0
+    )
+
+    index_path = output_dir / "index.json"
+    assert index_path.is_file()
+    index = json.loads(index_path.read_text(encoding="utf-8"))
+    entries = {entry["report_id"]: entry for entry in index["reports"]}
+    assert set(entries) == {"single_run", "single_run__vs__candidate_run"}
+    assert entries["single_run"]["report_type"] == "single_run"
+    assert entries["single_run"]["run_id"] == "single_run"
+    assert entries["single_run"]["markdown_path"] == "single_run.md"
+    assert entries["single_run"]["json_path"] == "single_run.json"
+    assert entries["single_run__vs__candidate_run"]["report_type"] == "comparison"
+    assert entries["single_run__vs__candidate_run"]["baseline_run_id"] == "single_run"
+    assert entries["single_run__vs__candidate_run"]["candidate_run_id"] == "candidate_run"
+
+    capsys.readouterr()
+    assert recurrence_cli_main(["--list-reports", "--output-dir", str(output_dir)]) == 0
+    human = capsys.readouterr().out
+    assert "GoodQ Control Recurrence Report Index" in human
+    assert "single_run" in human
+    assert "single_run__vs__candidate_run" in human
+
+    assert recurrence_cli_main(["--list-reports", "--output-dir", str(output_dir), "--json"]) == 0
+    listed = json.loads(capsys.readouterr().out)
+    assert len(listed["reports"]) == 2
+    assert {entry["report_id"] for entry in listed["reports"]} == {"single_run", "single_run__vs__candidate_run"}
+
+
+def test_control_recurrence_json_stdout_stays_valid_with_json_file_write(tmp_path: Path, capsys) -> None:
+    reports_root, _ = _simple_run_fixture(tmp_path, "single_run")
+    output_dir = tmp_path / "artifacts"
+
+    assert (
+        recurrence_cli_main(
+            [
+                "--run-id",
+                "single_run",
+                "--reports-root",
+                str(reports_root),
+                "--json",
+                "--write-json-file",
+                "--output-dir",
+                str(output_dir),
+            ]
+        )
+        == 0
+    )
+
+    captured = capsys.readouterr()
+    stdout_payload = json.loads(captured.out)
+    file_payload = json.loads((output_dir / "single_run.json").read_text(encoding="utf-8"))
+    assert stdout_payload["report"]["name"] == "control_recurrence_report"
+    assert file_payload["report"]["name"] == "control_recurrence_report"
+    assert "JSON written:" in captured.err
+    assert "Index written:" in captured.err

@@ -36,7 +36,7 @@ It reads persisted runtime truth only:
 - `temporal_index.json`
 - `experiment_log.json`
 
-It reports recurrence summaries, comparison deltas, category counts, recovered/unrecovered/skipped counts, Phase 6 health, Qdrant health, deterministic operator hints, and optional markdown artifacts under `reports/control_recurrence/`.
+It reports recurrence summaries, comparison deltas, category counts, recovered/unrecovered/skipped counts, Phase 6 health, Qdrant health, deterministic operator hints, and optional markdown/JSON artifacts under `reports/control_recurrence/`. Durable artifact discovery is recorded in `reports/control_recurrence/index.json`.
 
 Exact command examples:
 
@@ -50,6 +50,14 @@ conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_rep
 
 ```powershell
 conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --baseline-run-id 20260424_003250_season1_recompare_witness --candidate-run-id 20260424_182406_season2_fresh_witness --write-md
+```
+
+```powershell
+conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --run-id 20260424_182406_season2_fresh_witness --write-md --write-json-file
+```
+
+```powershell
+conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --list-reports --json
 ```
 
 Use this as the first safe control-agent substrate: operator awareness and pattern visibility before any healing authority is considered.

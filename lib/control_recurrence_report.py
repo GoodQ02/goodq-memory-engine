@@ -63,6 +63,8 @@ class _EpisodeScope:
     temporal_index_path: Optional[Path]
     resolved_config_path: Optional[Path]
     episode_log_path: Optional[Path]
+    stdout_path: Optional[Path] = None
+    stderr_path: Optional[Path] = None
 
 
 def build_control_recurrence_report(
@@ -123,6 +125,7 @@ def build_control_recurrence_report(
         files_read.extend(step_files)
         warnings.extend(step_warnings)
 
+    signals = _coalesce_runtime_event_duplicates(signals)
     signals = _dedupe_signals(signals)
     for signal in signals:
         if not signal.get("recovery_outcome"):
@@ -157,17 +160,18 @@ def build_control_recurrence_report(
                 "scene_ingest_results.json",
                 "scene_manifest.json",
                 "temporal_index.json",
+                "direct-run operator logs when wrapper experiment_log.json is absent",
             ],
         },
         "scope": {
-            "run_roots": [str(p) for p in run_roots],
+            "run_roots": [_display_path(p) for p in run_roots],
             "episodes": len(episodes),
             "runtime_run_ids": sorted(
                 {e.runtime_run_id for e in episodes if isinstance(e.runtime_run_id, str) and e.runtime_run_id}
             ),
             "videos": sorted({e.video_name or e.episode for e in episodes if e.video_name or e.episode}),
             "signals": len(signals),
-            "step_runs_files": [str(p) for p in step_paths],
+            "step_runs_files": [_display_path(p) for p in step_paths],
         },
         "recurrence_summary": grouped,
         "top_repeated_failure_families": family_rows,
@@ -180,8 +184,8 @@ def build_control_recurrence_report(
         "operator_hints": operator_guidance["operator_hints"],
         "inspection_targets": operator_guidance["inspection_targets"],
         "evidence": {
-            "files_read": _dedupe_strings(files_read),
-            "warnings": _dedupe_strings(warnings),
+            "files_read": _dedupe_strings(_display_text(value) for value in files_read),
+            "warnings": _dedupe_strings(_display_text(value) for value in warnings),
         },
     }
 
@@ -1860,8 +1864,18 @@ def _load_run_scope(run_root: Path) -> Tuple[List[_EpisodeScope], List[str], Lis
     files_read: List[str] = []
     warnings: List[str] = []
     root_log = run_root / "experiment_log.json"
+    if not root_log.is_file():
+        direct_scopes = _load_direct_run_scope(run_root, files_read, warnings)
+        if direct_scopes:
+            return direct_scopes, files_read, warnings
+        warnings.append(f"run_root_missing_experiment_log: {run_root}")
+        return [], files_read, warnings
+
     payload = _load_json(root_log, files_read, warnings)
     if not isinstance(payload, dict):
+        direct_scopes = _load_direct_run_scope(run_root, files_read, warnings)
+        if direct_scopes:
+            return direct_scopes, files_read, warnings
         warnings.append(f"run_root_missing_experiment_log: {run_root}")
         return [], files_read, warnings
 
@@ -1921,10 +1935,73 @@ def _load_run_scope(run_root: Path) -> Tuple[List[_EpisodeScope], List[str], Lis
                 temporal_index_path=temporal_path,
                 resolved_config_path=resolved_config_path if resolved_config_path.is_file() else None,
                 episode_log_path=episode_log_path if episode_log_path.is_file() else None,
+                stdout_path=None,
+                stderr_path=None,
             )
         )
 
     return scopes, files_read, warnings
+
+
+def _load_direct_run_scope(run_root: Path, files_read: List[str], warnings: List[str]) -> List[_EpisodeScope]:
+    """Discover a single direct cli.run_ingestion run root without a wrapper ledger."""
+
+    output_path = run_root / "output" / "scene_ingest_results.json"
+    resolved_config_path = run_root / "workspace" / "_resolved_config.json"
+    operator_metadata_path = run_root / "operator_run_metadata.json"
+    result_items = _load_result_items(output_path, files_read, warnings)
+    resolved_config = _load_json(resolved_config_path, files_read, warnings)
+    operator_metadata = (
+        _load_json(operator_metadata_path, files_read, warnings)
+        if operator_metadata_path.is_file()
+        else {}
+    )
+
+    result_item = result_items[0] if result_items and isinstance(result_items[0], dict) else {}
+    run_cfg = resolved_config.get("run") if isinstance(resolved_config, dict) else {}
+    paths_cfg = resolved_config.get("paths") if isinstance(resolved_config, dict) else {}
+    if not isinstance(run_cfg, dict):
+        run_cfg = {}
+    if not isinstance(paths_cfg, dict):
+        paths_cfg = {}
+
+    if not result_item and not run_cfg:
+        return []
+
+    video_id = _clean_str(result_item.get("video_id")) or _clean_str(result_item.get("video_hash"))
+    video_hash = _clean_str(result_item.get("video_hash")) or video_id
+    video_name = _clean_str(result_item.get("video_name")) or run_root.name
+    temporal_path = _path_from(result_item.get("temporal_index_path"))
+    manifest_path = _derive_manifest_path(temporal_path)
+    step_log_dir = _path_from(paths_cfg.get("log_dir"))
+    step_path = step_log_dir / "step_runs.jsonl" if step_log_dir is not None else None
+
+    stdout_path = _path_from(operator_metadata.get("stdout")) if isinstance(operator_metadata, dict) else None
+    stderr_path = _path_from(operator_metadata.get("stderr")) if isinstance(operator_metadata, dict) else None
+    if stdout_path is None:
+        stdout_path = run_root / "ingestion.stdout.log"
+    if stderr_path is None:
+        stderr_path = run_root / "ingestion.stderr.log"
+
+    return [
+        _EpisodeScope(
+            report_run_id=run_root.name,
+            episode=video_name or run_root.name,
+            run_dir=run_root,
+            runtime_run_id=_clean_str(run_cfg.get("id")),
+            video_id=video_id,
+            video_hash=video_hash,
+            video_name=video_name,
+            step_runs_path=step_path,
+            output_path=output_path if output_path.is_file() else None,
+            scene_manifest_path=manifest_path,
+            temporal_index_path=temporal_path,
+            resolved_config_path=resolved_config_path if resolved_config_path.is_file() else None,
+            episode_log_path=None,
+            stdout_path=stdout_path if stdout_path.is_file() else None,
+            stderr_path=stderr_path if stderr_path.is_file() else None,
+        )
+    ]
 
 
 def _load_episode_artifact_signals(episode: _EpisodeScope) -> Tuple[List[Dict[str, Any]], List[str], List[str], Dict[str, Any]]:
@@ -1946,6 +2023,11 @@ def _load_episode_artifact_signals(episode: _EpisodeScope) -> Tuple[List[Dict[st
                 if isinstance(warning, dict):
                     signals.append(_signal_from_run_warning(episode, warning))
 
+    runtime_event_signals, runtime_files, runtime_warnings = _load_runtime_event_signals(episode)
+    signals.extend(runtime_event_signals)
+    files_read.extend(runtime_files)
+    warnings.extend(runtime_warnings)
+
     scene_status_surface = _select_scene_status_surface(result_item, manifest, temporal)
     if scene_status_surface is not None:
         surface_name, data, scenes_key = scene_status_surface
@@ -1958,6 +2040,122 @@ def _load_episode_artifact_signals(episode: _EpisodeScope) -> Tuple[List[Dict[st
     health = _episode_health(episode, result_item, manifest, temporal)
     signals.extend(_artifact_health_signals(episode, result_item, manifest, temporal))
     return signals, files_read, warnings, health
+
+
+def _load_runtime_event_signals(episode: _EpisodeScope) -> Tuple[List[Dict[str, Any]], List[str], List[str]]:
+    signals: List[Dict[str, Any]] = []
+    files_read: List[str] = []
+    warnings: List[str] = []
+    if episode.stdout_path is None:
+        return signals, files_read, warnings
+    if not episode.stdout_path.is_file():
+        return signals, files_read, warnings
+
+    events: List[Dict[str, Any]] = []
+    try:
+        lines = episode.stdout_path.read_text(encoding="utf-8", errors="replace").splitlines()
+    except Exception as exc:
+        warnings.append(f"runtime_stdout_unreadable: {episode.stdout_path}: {exc}")
+        return signals, files_read, warnings
+
+    files_read.append(str(episode.stdout_path))
+    for line in lines:
+        stripped = line.strip()
+        if not stripped.startswith("{"):
+            continue
+        try:
+            event = json.loads(stripped)
+        except Exception:
+            continue
+        if isinstance(event, dict):
+            events.append(event)
+
+    for index, event in enumerate(events):
+        if event.get("event") != "step_error":
+            continue
+        step = _clean_step_name(event.get("step"))
+        error = _clean_str(event.get("error")) or "step_error"
+        metadata = event.get("metadata")
+        if not isinstance(metadata, dict):
+            metadata = {}
+        return_code = _return_code_from_error(error)
+        if return_code is None:
+            continue
+        retry_event = _find_runtime_retry_event(events[index + 1 :], event, metadata)
+        recovered = retry_event is not None
+        code = "native_crash_retry" if recovered else None
+        family = _classify_error_family(
+            step=step,
+            status="warning" if recovered else "error",
+            reason=code or error,
+            message=f"returncode={return_code}",
+            code=code,
+            row={"return_code": return_code},
+        )
+        signals.append(
+            {
+                "source": "runtime.events",
+                "run_id": _clean_str(event.get("run_id")) or episode.runtime_run_id,
+                "report_run_id": episode.report_run_id,
+                "episode": episode.video_name or episode.episode,
+                "video_id": _clean_str(metadata.get("video_id")) or episode.video_id,
+                "step_name": step,
+                "status": "warning" if recovered else "error",
+                "reason": "native_crash_retry" if recovered else error,
+                "error_family": family,
+                "scene_id": _clean_str(metadata.get("scene_id")),
+                "scene_index": metadata.get("scene_index"),
+                "recovery_outcome": "recovered_retry" if recovered else None,
+                "optional": False,
+                "message": error,
+                "ts": _clean_str(event.get("timestamp")),
+            }
+        )
+
+    return signals, files_read, warnings
+
+
+def _clean_step_name(value: Any) -> str:
+    step = _clean_str(value) or "unknown_step"
+    if step.startswith("step."):
+        return step[5:]
+    return step
+
+
+def _return_code_from_error(value: Any) -> Optional[int]:
+    text = _clean_str(value)
+    if not text:
+        return None
+    match = re.search(r"(?:returncode|return_code)[_=]([-]?\d+)", text, re.IGNORECASE)
+    if not match:
+        return None
+    return _coerce_int(match.group(1))
+
+
+def _find_runtime_retry_event(
+    events: Sequence[Dict[str, Any]],
+    failed_event: Dict[str, Any],
+    failed_metadata: Dict[str, Any],
+) -> Optional[Dict[str, Any]]:
+    failed_step = _clean_step_name(failed_event.get("step"))
+    failed_run = _clean_str(failed_event.get("run_id"))
+    failed_scene = _clean_str(failed_metadata.get("scene_id"))
+    for event in events:
+        event_name = _clean_str(event.get("event"))
+        if event_name not in {"step_start", "step_retry"}:
+            continue
+        if _clean_step_name(event.get("step")) != failed_step:
+            continue
+        if failed_run and _clean_str(event.get("run_id")) != failed_run:
+            continue
+        metadata = event.get("metadata")
+        if not isinstance(metadata, dict):
+            metadata = {}
+        if failed_scene and _clean_str(metadata.get("scene_id")) != failed_scene:
+            continue
+        if _clean_str(metadata.get("native_retry_mode")) or _coerce_int(metadata.get("native_retry_attempt")):
+            return event
+    return None
 
 
 def _artifact_presence_signals(episode: _EpisodeScope) -> List[Dict[str, Any]]:
@@ -2641,6 +2839,28 @@ def _derive_manifest_path(temporal_path: Optional[Path]) -> Optional[Path]:
     return temporal_path.parent / "video" / "scene_manifest.json"
 
 
+def _display_path(path: Path) -> str:
+    try:
+        return str(path.resolve().relative_to(_REPO_ROOT))
+    except Exception:
+        raw = str(path)
+    return _sanitize_drive_root(raw)
+
+
+def _display_text(value: Any) -> str:
+    text = str(value)
+    try:
+        repo_raw = str(_REPO_ROOT.resolve())
+        text = text.replace(repo_raw, ".")
+    except Exception:
+        pass
+    return _sanitize_drive_root(text)
+
+
+def _sanitize_drive_root(text: str) -> str:
+    return re.sub(r"\b[A-Za-z]:[\\/]", "<local>/", text)
+
+
 def _replace_episode_step_path(episode: _EpisodeScope, path: Path) -> _EpisodeScope:
     return _EpisodeScope(
         report_run_id=episode.report_run_id,
@@ -2656,6 +2876,8 @@ def _replace_episode_step_path(episode: _EpisodeScope, path: Path) -> _EpisodeSc
         temporal_index_path=episode.temporal_index_path,
         resolved_config_path=episode.resolved_config_path,
         episode_log_path=episode.episode_log_path,
+        stdout_path=episode.stdout_path,
+        stderr_path=episode.stderr_path,
     )
 
 
@@ -2699,6 +2921,37 @@ def _dedupe_strings(values: Iterable[str]) -> List[str]:
             continue
         seen.add(value)
         out.append(value)
+    return out
+
+
+def _coalesce_runtime_event_duplicates(signals: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    runtime_specific = {
+        (
+            signal.get("run_id"),
+            signal.get("video_id"),
+            signal.get("step_name"),
+            signal.get("error_family"),
+            signal.get("recovery_outcome"),
+        )
+        for signal in signals
+        if signal.get("source") == "runtime.events" and signal.get("scene_id")
+    }
+    out: List[Dict[str, Any]] = []
+    for signal in signals:
+        key = (
+            signal.get("run_id"),
+            signal.get("video_id"),
+            signal.get("step_name"),
+            signal.get("error_family"),
+            signal.get("recovery_outcome"),
+        )
+        if (
+            signal.get("source") == "run.warnings"
+            and not signal.get("scene_id")
+            and key in runtime_specific
+        ):
+            continue
+        out.append(signal)
     return out
 
 

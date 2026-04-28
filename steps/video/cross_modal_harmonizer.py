@@ -2958,6 +2958,12 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
             video_id,
         )
 
+    content_summary = {
+        'signal': sum(1 for state in segment_content_states if state == 'signal'),
+        'empty': sum(1 for state in segment_content_states if state == 'empty'),
+        'processing_error': sum(1 for state in segment_content_states if state == 'processing_error'),
+    } if segment_content_states else None
+
     temporal_index = {
         'version': 1,
         'video_id': video_id,
@@ -3081,11 +3087,7 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
             'audio_scene_count': len(audio_scene_ids),
             'transcript_scene_count': len(transcript_scene_ids),
         },
-        'content_summary': {
-            'signal': sum(1 for state in segment_content_states if state == 'signal'),
-            'empty': sum(1 for state in segment_content_states if state == 'empty'),
-            'processing_error': sum(1 for state in segment_content_states if state == 'processing_error'),
-        } if segment_content_states else None,
+        'content_summary': content_summary,
         
         # Processing metadata
         'phase5_complete': scene_data.get('phase5_complete', False),
@@ -3105,6 +3107,9 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
     # Persist additive harmonized fields back into scene_manifest.json so the
     # per-scene truth surface stays auditable and aligned with temporal_index.
     _persist_harmonized_scene_fields(scene_data, unified_segments)
+    scene_data['phase5_complete'] = bool(scene_data.get('phase5_complete')) or bool(unified_segments)
+    scene_data['total_scenes'] = len(unified_segments)
+    scene_data['content_summary'] = content_summary
     atomic_write_json(Path(scene_manifest_path), scene_data)
     
     logger.info(f"[HARMONIZER] [OK] Created temporal index with {len(unified_segments)} multimodal segments")

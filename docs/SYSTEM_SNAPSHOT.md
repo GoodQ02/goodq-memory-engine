@@ -1,10 +1,10 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: GENERATED_SNAPSHOT -->
-<!-- DOC_LAST_VERIFIED: 2026-04-27 -->
+<!-- DOC_LAST_VERIFIED: 2026-04-28 -->
 
 # System Snapshot
 
-_Operational snapshot refreshed: 2026-04-27T17:42:44_
+_Operational snapshot refreshed: 2026-04-28T06:35:08-05:00_
 
 This is a bounded release-era system snapshot. It is useful for understanding
 the supported host/runtime baseline, but it is not a live witness monitor.
@@ -127,6 +127,7 @@ the supported host/runtime baseline, but it is not a live witness monitor.
   - projects more truthful in-flight status by detecting episode lane-start artifacts
   - does not revive retired legacy `/runs` compatibility shells
   - reads recurrence truth from existing `step_runs.jsonl`, run warnings, `scene_ingest_results.json`, `scene_manifest.json`, `temporal_index.json`, and `experiment_log.json`
+  - supports direct canonical run roots without a wrapper `experiment_log.json` by reading existing `operator_run_metadata.json`, `output/scene_ingest_results.json`, `workspace/_resolved_config.json`, canonical `step_runs.jsonl`, and captured ingestion stdout events
   - classifies recurrence families as `informational`, `watch`, `actionable`, or `blocking`
   - emits deterministic operator hints and inspection targets without changing runtime state
   - can write markdown to `reports/control_recurrence/` when `--write-md` is explicitly supplied
@@ -137,6 +138,7 @@ the supported host/runtime baseline, but it is not a live witness monitor.
   - boundary: not healing yet. The recurrence report/API does not activate `ControlAgent`, does not enable auto-healing, does not mutate configs, does not execute commands, does not use LLMs, does not generate reports from the API, and does not touch `cli/run_ingestion.py`.
 - Exact control recurrence commands:
   - `conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --run-id 20260424_182406_season2_fresh_witness`
+  - `conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --run-root reports/fresh_ingest_runs/<direct_run_root>`
   - `conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --baseline-run-id 20260424_003250_season1_recompare_witness --candidate-run-id 20260424_182406_season2_fresh_witness --json`
   - `conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --baseline-run-id 20260424_003250_season1_recompare_witness --candidate-run-id 20260424_182406_season2_fresh_witness --write-md`
   - `conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --run-id 20260424_182406_season2_fresh_witness --write-md --write-json-file`

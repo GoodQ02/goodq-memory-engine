@@ -1,11 +1,11 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-04-27 -->
+<!-- DOC_LAST_VERIFIED: 2026-04-28 -->
 
 # Control Agent & Self-Healing System
 
 **Status:** ⚠️ CONDITIONAL - Runtime disabled by default unless an `llm_client` is explicitly injected  
-**Last Updated:** April 27, 2026
+**Last Updated:** April 28, 2026
 **Version:** 1.0.0
 
 ---
@@ -18,7 +18,7 @@ The Control Agent is GoodQ4All's monitoring, diagnosis, and healing subsystem. I
 
 ---
 
-## Active Read-Only Control Substrate (2026-04-27)
+## Active Read-Only Control Substrate (2026-04-28)
 
 The active control-plane surface now includes a read-only recurrence instrument:
 
@@ -42,8 +42,9 @@ It reads persisted runtime truth only:
 - `scene_manifest.json`
 - `temporal_index.json`
 - `experiment_log.json`
+- `operator_run_metadata.json` and captured ingestion stdout events when a direct canonical run root has no wrapper `experiment_log.json`
 
-It reports recurrence summaries, comparison deltas, category counts, recovered/unrecovered/skipped counts, Phase 6 health, Qdrant health, deterministic operator hints, deterministic inspection-only recommendation drafts, and optional markdown/JSON artifacts under `reports/control_recurrence/`. Durable artifact discovery is recorded in `reports/control_recurrence/index.json`.
+It reports recurrence summaries, comparison deltas, category counts, recovered/unrecovered/skipped counts, Phase 6 health, Qdrant health, deterministic operator hints, deterministic inspection-only recommendation drafts, and optional markdown/JSON artifacts under `reports/control_recurrence/`. Durable artifact discovery is recorded in `reports/control_recurrence/index.json`. Direct `cli.run_ingestion` run roots are supported read-only through existing output/workspace/operator-log artifacts; this does not create a second execution path.
 
 The API surface reads only that existing index and the indexed artifacts. It does not regenerate reports, trigger ingestion, execute commands, scan arbitrary project paths, or form a second orchestration path.
 
@@ -51,6 +52,10 @@ Exact command examples:
 
 ```powershell
 conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --run-id 20260424_182406_season2_fresh_witness
+```
+
+```powershell
+conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --run-root reports/fresh_ingest_runs/<direct_run_root> --write-md --write-json-file
 ```
 
 ```powershell

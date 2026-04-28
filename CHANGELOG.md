@@ -10,6 +10,11 @@ and related canonical docs.
 ## [Unreleased]
 
 ### Added
+- Published the `control-recurrence-v0.4.1` operator release note:
+  [`docs/releases/CONTROL_RECURRENCE_v0.4.1.md`](docs/releases/CONTROL_RECURRENCE_v0.4.1.md).
+- Extended read-only control recurrence reporting to direct canonical
+  `cli.run_ingestion` run roots that do not have wrapper `experiment_log.json`
+  ledgers, using existing output/workspace/operator-log artifacts only.
 - Published the `control-recurrence-v0.4.0` operator release note:
   [`docs/releases/CONTROL_RECURRENCE_v0.4.0.md`](docs/releases/CONTROL_RECURRENCE_v0.4.0.md).
 - Added the read-only deterministic control recurrence recommendation draft
@@ -18,6 +23,9 @@ and related canonical docs.
   `GET /api/control-recurrence/reports/{report_id}/recommendations`.
 
 ### Boundary
+- The v0.4.1 direct-run map does not generate reports unless explicitly asked,
+  does not trigger ingestion, does not import or activate `ControlAgent`, and
+  does not create a second execution path.
 - The v0.4.0 recommendation draft layer does not activate `ControlAgent`, heal,
   mutate configs, execute commands, use LLMs, generate reports from the API,
   trigger ingestion, or touch `cli/run_ingestion.py`.

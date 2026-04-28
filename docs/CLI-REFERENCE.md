@@ -129,6 +129,7 @@ This is the fastest way to verify the effective resolved profile/path surface be
 - `scene_manifest.json`
 - `temporal_index.json`
 - `experiment_log.json`
+- `operator_run_metadata.json` and captured ingestion stdout events for direct canonical run roots that do not have a wrapper `experiment_log.json`
 
 **Usage**
 
@@ -136,6 +137,12 @@ Single-run recurrence report:
 
 ```powershell
 conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --run-id 20260424_182406_season2_fresh_witness
+```
+
+Direct canonical run-root recurrence report:
+
+```powershell
+conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --run-root reports/fresh_ingest_runs/<direct_run_root>
 ```
 
 Comparison report as JSON:

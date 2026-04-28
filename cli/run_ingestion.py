@@ -5251,6 +5251,7 @@ def run(
             'audio_backend_downgraded': run_audio_backend_downgraded,
             'audio_backend_events': _audio_backend_events_since(run_context, audio_backend_event_start),
             'audio_runtime_contract': audio_runtime_contract,
+            'phase5_complete': True,
             'content_summary': content_summary,
             'qdrant_ok': scene_qdrant_status,
             'faiss_ok': scene_faiss_status,
@@ -5316,6 +5317,9 @@ def run(
             scene_manifest = {
                 'video_id': video_hash,
                 'video_path': str(video_path),
+                'phase5_complete': True,
+                'total_scenes': len(scene_outputs),
+                'content_summary': content_summary,
                 'scenes': [
                     {
                         'video_id': video_hash,
@@ -5450,10 +5454,13 @@ def run(
                             with open(temporal_index_path, 'r', encoding='utf-8') as f:
                                 video_result['temporal_index'] = json.load(f)
                         video_result['temporal_index_path'] = temporal_index_path
-                        _rehydrate_video_result_scenes_from_manifest(
+                        if _rehydrate_video_result_scenes_from_manifest(
                             video_result,
                             phase6_item.get('scene_manifest_path'),
-                        )
+                        ):
+                            video_result['content_summary'] = _aggregate_content_summary(
+                                video_result.get('scenes', [])
+                            )
                         video_result['phase6_complete'] = bool(phase6a_success)
                         if not phase6a_success:
                             typer.echo('[PHASE 6] [WARN] Harmonization complete but Phase 6a failed; keeping phase6_complete=False', err=True)

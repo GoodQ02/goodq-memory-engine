@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-04-27 -->
+<!-- DOC_LAST_VERIFIED: 2026-04-28 -->
 
 # Basement Phase Handoff (v1) — Current System State
 
@@ -9,7 +9,7 @@
 
 ---
 
-## Current Restart Checkpoint (2026-04-27)
+## Current Restart Checkpoint (2026-04-28)
 
 This is the practical handoff point for a brand-new Codex session.
 
@@ -39,8 +39,10 @@ This is the practical handoff point for a brand-new Codex session.
   - `/api/control-recurrence/reports/{report_id}`
   - `/api/control-recurrence/reports/{report_id}/markdown`
   - `/api/control-recurrence/reports/{report_id}/recommendations`
-  - tag anchor: `control-recurrence-v0.4.0`
-  - release note: `docs/releases/CONTROL_RECURRENCE_v0.4.0.md`
+  - tag anchor: `control-recurrence-v0.4.1`
+  - release notes:
+    - `docs/releases/CONTROL_RECURRENCE_v0.4.0.md`
+    - `docs/releases/CONTROL_RECURRENCE_v0.4.1.md`
   - boundary: not healing yet. This tool/API does not activate `ControlAgent`, does not enable auto-healing, does not mutate configs, does not execute commands, does not use LLMs, does not generate reports from the API, and does not touch `cli/run_ingestion.py`.
 - Current upstream normalization status:
   - exact-pair pilot only
@@ -255,6 +257,8 @@ These are intentionally *not* wired into ingestion yet:
 
 - Single-run recurrence summary:
   - `conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --run-id 20260424_182406_season2_fresh_witness`
+- Direct canonical run-root recurrence summary:
+  - `conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --run-root reports/fresh_ingest_runs/<direct_run_root>`
 - Comparison JSON between witness roots:
   - `conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --baseline-run-id 20260424_003250_season1_recompare_witness --candidate-run-id 20260424_182406_season2_fresh_witness --json`
 - Deterministic markdown operator artifact:
@@ -272,7 +276,7 @@ These are intentionally *not* wired into ingestion yet:
 - Read deterministic inspection recommendations from the local API:
   - `curl http://127.0.0.1:30000/api/control-recurrence/reports/20260424_003250_season1_recompare_witness__vs__20260424_182406_season2_fresh_witness/recommendations`
 
-This is read-only control-plane observability only. The CLI reads existing persisted artifacts (`step_runs.jsonl`, run warnings, `scene_ingest_results.json`, `scene_manifest.json`, `temporal_index.json`, and `experiment_log.json`) and writes artifacts only when explicitly asked. Recommendation drafts read existing durable JSON reports and return inspection steps only. The API reads only `reports/control_recurrence/index.json` and indexed artifacts. It does not generate reports, trigger ingestion, activate ControlAgent, execute commands, mutate configs, or heal.
+This is read-only control-plane observability only. The CLI reads existing persisted artifacts (`step_runs.jsonl`, run warnings, `scene_ingest_results.json`, `scene_manifest.json`, `temporal_index.json`, and `experiment_log.json`). For direct canonical run roots without a wrapper ledger, it can also read existing `operator_run_metadata.json`, `output/scene_ingest_results.json`, `workspace/_resolved_config.json`, canonical `step_runs.jsonl`, and captured ingestion stdout events. It writes artifacts only when explicitly asked. Recommendation drafts read existing durable JSON reports and return inspection steps only. The API reads only `reports/control_recurrence/index.json` and indexed artifacts. It does not generate reports, trigger ingestion, activate ControlAgent, execute commands, mutate configs, or heal.
 
 ### Run the Justification Channel (read-only; no power)
 

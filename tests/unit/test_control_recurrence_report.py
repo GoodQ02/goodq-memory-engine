@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 from cli.control_recurrence_report import main as recurrence_cli_main
@@ -267,6 +268,147 @@ def test_control_recurrence_report_groups_current_truth_surfaces(tmp_path: Path)
     assert {"audio_embed_clap", "sentiment", "speaker_voice_signature"}.issubset(optional_steps)
     assert report["recovered_vs_unrecovered_failures"]["recovered"] >= 2
     assert any(row["scene_id"] == "scene-b" for row in report["scenes_affected"])
+
+
+def test_control_recurrence_report_discovers_direct_run_root_without_experiment_log(tmp_path: Path) -> None:
+    reports_root = tmp_path / "reports" / "fresh_ingest_runs"
+    run_root = reports_root / "direct_control_run"
+    epoch_root = tmp_path / "GoodQ_Data" / "epochs" / "epoch_direct"
+    processing_dir = epoch_root / "processing" / "01x01 - Direct Control"
+    scene_manifest_path = processing_dir / "video" / "scene_manifest.json"
+    temporal_index_path = processing_dir / "temporal_index.json"
+    output_path = run_root / "output" / "scene_ingest_results.json"
+    stdout_path = run_root / "ingestion.stdout.log"
+    video_id = "video-direct"
+    runtime_run_id = "runtime-direct"
+
+    scenes = [
+        {
+            "scene_id": "scene-a",
+            "index": 0,
+            "content_state": "signal",
+            "speaker_voice_signature_meta": {"status": "skipped", "reason": "insufficient_diverse_speech"},
+        }
+    ]
+    _write_json(
+        output_path,
+        [
+            {
+                "video_id": video_id,
+                "video_hash": video_id,
+                "video_name": "01x01 - Direct Control.mp4",
+                "phase6_complete": True,
+                "qdrant_ok": True,
+                "phase6_qdrant_ok": True,
+                "scenes": scenes,
+                "temporal_index_path": str(temporal_index_path),
+            }
+        ],
+    )
+    _write_json(
+        scene_manifest_path,
+        {
+            "video_id": video_id,
+            "phase5_complete": True,
+            "phase6_complete": True,
+            "phase6_harmonized": True,
+            "phase6_vector_commit": {"qdrant_ok": True, "vector_points_attempted": 2},
+            "scenes": scenes,
+        },
+    )
+    _write_json(
+        temporal_index_path,
+        {
+            "video_id": video_id,
+            "phase5_complete": True,
+            "phase6_complete": True,
+            "phase6_harmonized": True,
+            "total_scenes": 1,
+            "segments": scenes,
+        },
+    )
+    _write_json(
+        run_root / "workspace" / "_resolved_config.json",
+        {
+            "run": {"id": runtime_run_id, "pipeline": "scene_ingest_cli", "warnings": []},
+            "paths": {"log_dir": str(epoch_root / "logs")},
+        },
+    )
+    _write_json(
+        run_root / "operator_run_metadata.json",
+        {
+            "label": run_root.name,
+            "stdout": str(stdout_path),
+            "stderr": str(run_root / "ingestion.stderr.log"),
+        },
+    )
+    _append_jsonl(
+        epoch_root / "logs" / "step_runs.jsonl",
+        [
+            {
+                "ts": "2026-04-28T05:00:00",
+                "step": "sentiment",
+                "status": "skipped",
+                "error": "",
+                "run_id": runtime_run_id,
+                "video_id": video_id,
+                "scene_id": "scene-a",
+                "scene_index": 0,
+                "extra": {"reason": "no_text"},
+            }
+        ],
+    )
+    stdout_path.parent.mkdir(parents=True, exist_ok=True)
+    stdout_path.write_text(
+        "\n".join(
+            [
+                json.dumps(
+                    {
+                        "timestamp": "2026-04-28T05:01:00Z",
+                        "run_id": runtime_run_id,
+                        "event": "step_error",
+                        "step": "step.image_caption",
+                        "error": "returncode_3221226505",
+                        "metadata": {
+                            "video_id": video_id,
+                            "scene_id": "scene-a",
+                            "scene_index": 0,
+                            "native_retry_attempt": 0,
+                        },
+                    }
+                ),
+                json.dumps(
+                    {
+                        "timestamp": "2026-04-28T05:01:01Z",
+                        "run_id": runtime_run_id,
+                        "event": "step_start",
+                        "step": "step.image_caption",
+                        "metadata": {
+                            "video_id": video_id,
+                            "scene_id": "scene-a",
+                            "scene_index": 0,
+                            "native_retry_attempt": 1,
+                            "native_retry_mode": "gpu_amp_disabled",
+                        },
+                    }
+                ),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    report = build_control_recurrence_report(run_root=run_root)
+
+    assert report["scope"]["episodes"] == 1
+    assert report["scope"]["runtime_run_ids"] == [runtime_run_id]
+    assert report["phase6_qdrant_truth"]["healthy"] is True
+    families = {row["error_family"]: row for row in report["top_repeated_failure_families"]}
+    assert families["native_crash_retry:0xC0000409"]["category"] == "actionable"
+    assert families["native_crash_retry:0xC0000409"]["count"] == 1
+    assert families["no_text"]["category"] == "informational"
+    assert "run_root_missing_experiment_log" not in json.dumps(report)
+    assert not re.search(r"\b[A-Za-z]:[\\/]", json.dumps(report))
 
 
 def test_control_recurrence_cli_emits_text(tmp_path: Path, capsys) -> None:

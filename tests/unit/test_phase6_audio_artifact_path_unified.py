@@ -1151,6 +1151,10 @@ def test_harmonizer_rollup_uses_payload_truth_and_normalized_entities(
     temporal_index = json.loads((processing_dir / "temporal_index.json").read_text(encoding="utf-8"))
 
     assert temporal_index["content_summary"] == {"signal": 1, "empty": 0, "processing_error": 0}
+    persisted_manifest = json.loads(scene_manifest_path.read_text(encoding="utf-8"))
+    assert persisted_manifest["phase5_complete"] is True
+    assert persisted_manifest["total_scenes"] == 1
+    assert persisted_manifest["content_summary"] == temporal_index["content_summary"]
     assert temporal_index["total_entities"] == 2
     assert temporal_index["unique_entities"] == 2
     assert temporal_index["top_entities"] == [

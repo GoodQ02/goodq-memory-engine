@@ -9,6 +9,7 @@ from lib.control_recurrence_report import (
     build_control_recurrence_comparison,
     build_control_recurrence_report,
     render_markdown_report,
+    update_report_index,
 )
 
 
@@ -408,6 +409,178 @@ def test_control_recurrence_report_discovers_direct_run_root_without_experiment_
     assert families["native_crash_retry:0xC0000409"]["count"] == 1
     assert families["no_text"]["category"] == "informational"
     assert "run_root_missing_experiment_log" not in json.dumps(report)
+    assert not re.search(r"\b[A-Za-z]:[\\/]", json.dumps(report))
+
+
+def test_control_recurrence_report_discovers_multi_video_direct_run_root(tmp_path: Path) -> None:
+    run_root = tmp_path / "reports" / "fresh_ingest_runs" / "direct_multi"
+    epoch_root = tmp_path / "GoodQ_Data" / "epochs" / "epoch_multi"
+    runtime_run_id = "runtime-multi"
+    output_items = []
+    step_rows = []
+
+    for index, video_id in enumerate(("video-one", "video-two"), start=1):
+        video_name = f"01x0{index} - Direct Multi {index}.mp4"
+        scene_id = f"scene-{index}"
+        processing_dir = epoch_root / "processing" / video_name.replace(".mp4", "")
+        scene_manifest_path = processing_dir / "video" / "scene_manifest.json"
+        temporal_index_path = processing_dir / "temporal_index.json"
+        scenes = [{"scene_id": scene_id, "index": 0, "content_state": "signal"}]
+        _write_json(
+            scene_manifest_path,
+            {
+                "video_id": video_id,
+                "phase5_complete": True,
+                "phase6_complete": True,
+                "phase6_harmonized": True,
+                "phase6_vector_commit": {"qdrant_ok": True, "vector_points_attempted": 2},
+                "scenes": scenes,
+            },
+        )
+        _write_json(
+            temporal_index_path,
+            {
+                "video_id": video_id,
+                "phase5_complete": True,
+                "phase6_complete": True,
+                "phase6_harmonized": True,
+                "total_scenes": 1,
+                "segments": scenes,
+            },
+        )
+        output_items.append(
+            {
+                "video_id": video_id,
+                "video_hash": video_id,
+                "video_name": video_name,
+                "phase6_complete": True,
+                "qdrant_ok": True,
+                "phase6_qdrant_ok": True,
+                "scenes": scenes,
+                "temporal_index_path": str(temporal_index_path),
+            }
+        )
+        step_rows.append(
+            {
+                "ts": "2026-04-28T05:00:00",
+                "step": "sentiment",
+                "status": "skipped",
+                "error": "",
+                "run_id": runtime_run_id,
+                "video_id": video_id,
+                "scene_id": scene_id,
+                "scene_index": 0,
+                "extra": {"reason": "no_text"},
+            }
+        )
+
+    _write_json(run_root / "output" / "scene_ingest_results.json", output_items)
+    _write_json(
+        run_root / "workspace" / "_resolved_config.json",
+        {
+            "run": {"id": runtime_run_id, "pipeline": "scene_ingest_cli", "warnings": []},
+            "paths": {"log_dir": str(epoch_root / "logs")},
+        },
+    )
+    _append_jsonl(epoch_root / "logs" / "step_runs.jsonl", step_rows)
+
+    report = build_control_recurrence_report(run_root=run_root)
+
+    assert report["scope"]["episodes"] == 2
+    assert report["scope"]["runtime_run_ids"] == [runtime_run_id]
+    assert report["phase6_qdrant_truth"]["episodes_total"] == 2
+    assert report["phase6_qdrant_truth"]["healthy"] is True
+    families = {row["error_family"]: row for row in report["top_repeated_failure_families"]}
+    assert families["no_text"]["count"] == 2
+    assert {row["episode"] for row in report["scenes_affected"]} == {
+        "01x01 - Direct Multi 1.mp4",
+        "01x02 - Direct Multi 2.mp4",
+    }
+
+
+def test_control_recurrence_report_uses_operator_metadata_paths_and_stderr_retry(tmp_path: Path) -> None:
+    run_root = tmp_path / "reports" / "fresh_ingest_runs" / "direct_metadata"
+    epoch_root = tmp_path / "GoodQ_Data" / "epochs" / "epoch_metadata"
+    output_path = run_root / "custom_output" / "scene_ingest_results.json"
+    workspace_path = run_root / "custom_workspace"
+    stderr_path = run_root / "logs" / "ingestion.stderr.log"
+    video_id = "video-metadata"
+    runtime_run_id = "runtime-metadata"
+    processing_dir = epoch_root / "processing" / "01x01 - Metadata"
+    scene_manifest_path = processing_dir / "video" / "scene_manifest.json"
+    temporal_index_path = processing_dir / "temporal_index.json"
+    scenes = [{"scene_id": "scene-meta", "index": 0, "content_state": "signal"}]
+
+    _write_json(
+        output_path,
+        [
+            {
+                "video_id": video_id,
+                "video_hash": video_id,
+                "video_name": "01x01 - Metadata.mp4",
+                "phase6_complete": True,
+                "qdrant_ok": True,
+                "phase6_qdrant_ok": True,
+                "scenes": scenes,
+                "temporal_index_path": str(temporal_index_path),
+            }
+        ],
+    )
+    _write_json(
+        scene_manifest_path,
+        {
+            "video_id": video_id,
+            "phase5_complete": True,
+            "phase6_complete": True,
+            "phase6_harmonized": True,
+            "phase6_vector_commit": {"qdrant_ok": True, "vector_points_attempted": 2},
+            "scenes": scenes,
+        },
+    )
+    _write_json(
+        temporal_index_path,
+        {
+            "video_id": video_id,
+            "phase5_complete": True,
+            "phase6_complete": True,
+            "phase6_harmonized": True,
+            "total_scenes": 1,
+            "segments": scenes,
+        },
+    )
+    _write_json(
+        workspace_path / "_resolved_config.json",
+        {
+            "run": {"id": runtime_run_id, "pipeline": "scene_ingest_cli", "warnings": []},
+            "paths": {"log_dir": str(epoch_root / "logs")},
+        },
+    )
+    _write_json(
+        run_root / "operator_run_metadata.json",
+        {
+            "label": run_root.name,
+            "output": str(output_path),
+            "workspace": str(workspace_path),
+            "stderr": str(stderr_path),
+        },
+    )
+    _append_jsonl(epoch_root / "logs" / "step_runs.jsonl", [])
+    stderr_path.parent.mkdir(parents=True, exist_ok=True)
+    stderr_path.write_text(
+        "[RUN] Native crash detected for step=image_caption return_code=3221226505 "
+        "status_code=0xC0000409 retry=1/2 mode=gpu_amp_disabled\n"
+        "[retry] [WARN] Native crash for image_caption (0xC0000409); retrying via gpu_amp_disabled\n",
+        encoding="utf-8",
+    )
+
+    report = build_control_recurrence_report(run_root=run_root)
+
+    assert report["scope"]["episodes"] == 1
+    assert report["phase6_qdrant_truth"]["healthy"] is True
+    families = {row["error_family"]: row for row in report["top_repeated_failure_families"]}
+    assert families["native_crash_retry:0xC0000409"]["count"] == 1
+    assert report["recovered_vs_unrecovered_failures"]["recovered"] == 1
+    assert any("ingestion.stderr.log" in path for path in report["evidence"]["files_read"])
     assert not re.search(r"\b[A-Za-z]:[\\/]", json.dumps(report))
 
 
@@ -1106,6 +1279,20 @@ def test_control_recurrence_index_creation_update_and_list_modes(tmp_path: Path,
     listed = json.loads(capsys.readouterr().out)
     assert len(listed["reports"]) == 2
     assert {entry["report_id"] for entry in listed["reports"]} == {"single_run", "single_run__vs__candidate_run"}
+
+
+def test_control_recurrence_index_marks_markdown_only_entries(tmp_path: Path) -> None:
+    output_dir = tmp_path / "artifacts"
+    output_dir.mkdir(parents=True)
+    (output_dir / "legacy_only.md").write_text("# Legacy report\n", encoding="utf-8")
+
+    index = update_report_index(output_dir=output_dir)
+
+    entries = {entry["report_id"]: entry for entry in index["reports"]}
+    assert entries["legacy_only"]["artifact_status"] == "markdown_only"
+    assert entries["legacy_only"]["markdown_path"] == "legacy_only.md"
+    assert "json_path" not in entries["legacy_only"]
+    assert "markdown_only_without_json:legacy_only" in index["warnings"]
 
 
 def test_control_recurrence_json_stdout_stays_valid_with_json_file_write(tmp_path: Path, capsys) -> None:

@@ -65,6 +65,7 @@ class _EpisodeScope:
     episode_log_path: Optional[Path]
     stdout_path: Optional[Path] = None
     stderr_path: Optional[Path] = None
+    output_item_index: Optional[int] = None
 
 
 def build_control_recurrence_report(
@@ -100,9 +101,7 @@ def build_control_recurrence_report(
         explicit_step_path = Path(step_runs_path)
         episodes = [_replace_episode_step_path(episode, explicit_step_path) for episode in episodes]
 
-    episode_by_runtime_id = {
-        e.runtime_run_id: e for e in episodes if isinstance(e.runtime_run_id, str) and e.runtime_run_id.strip()
-    }
+    episode_by_runtime_id = _unique_episode_map((e.runtime_run_id, e) for e in episodes)
     episode_by_video_id = {
         e.video_id: e for e in episodes if isinstance(e.video_id, str) and e.video_id.strip()
     }
@@ -603,6 +602,19 @@ def update_report_index(output_dir: str | Path | None = None) -> Dict[str, Any]:
         if not entry.get("created_or_updated_at"):
             entry["created_or_updated_at"] = _file_mtime_utc(md_path)
 
+    for report_id, entry in entries_by_id.items():
+        has_json = bool(entry.get("json_path"))
+        has_markdown = bool(entry.get("markdown_path"))
+        if has_json and has_markdown:
+            entry["artifact_status"] = "complete"
+        elif has_json:
+            entry["artifact_status"] = "json_only"
+        elif has_markdown:
+            entry["artifact_status"] = "markdown_only"
+            warnings.append(f"markdown_only_without_json:{report_id}")
+        else:
+            entry["artifact_status"] = "missing"
+
     reports = [entries_by_id[key] for key in sorted(entries_by_id)]
     index = {
         "index": {
@@ -690,9 +702,13 @@ def render_report_index(index: Dict[str, Any]) -> str:
         status = entry.get("recommendation_status") or "unknown"
         category = entry.get("highest_category") or "none"
         signals = int(entry.get("total_signals") or 0)
+        artifact_status = entry.get("artifact_status") or "unknown"
         lines.append("")
         lines.append(f"- {label}")
-        lines.append(f"  type={report_type} recommendation={status} highest_category={category} signals={signals}")
+        lines.append(
+            f"  type={report_type} recommendation={status} highest_category={category} "
+            f"signals={signals} artifacts={artifact_status}"
+        )
         if entry.get("markdown_path"):
             lines.append(f"  markdown={entry.get('markdown_path')}")
         if entry.get("json_path"):
@@ -1119,6 +1135,7 @@ def _index_entry_from_report(report: Dict[str, Any], *, json_path: Path, output_
         "report_type": report_type,
         "report_id": report_id,
         "json_path": _artifact_path_text(json_path, output_dir=output_dir),
+        "artifact_status": "json_only",
         "recommendation_status": recommendation.get("status") or "unknown",
         "highest_category": _index_highest_category(report),
         "total_signals": _index_total_signals(report),
@@ -1135,6 +1152,7 @@ def _index_entry_from_report(report: Dict[str, Any], *, json_path: Path, output_
     md_path = json_path.with_suffix(".md")
     if md_path.is_file():
         entry["markdown_path"] = _artifact_path_text(md_path, output_dir=output_dir)
+        entry["artifact_status"] = "complete"
     return entry
 
 
@@ -1144,6 +1162,7 @@ def _index_entry_from_markdown_path(path: Path, *, output_dir: Path) -> Dict[str
         "report_type": "comparison" if "__vs__" in report_id else "single_run",
         "report_id": report_id,
         "markdown_path": _artifact_path_text(path, output_dir=output_dir),
+        "artifact_status": "markdown_only",
         "recommendation_status": "unknown",
         "highest_category": "unknown",
         "total_signals": 0,
@@ -1937,6 +1956,7 @@ def _load_run_scope(run_root: Path) -> Tuple[List[_EpisodeScope], List[str], Lis
                 episode_log_path=episode_log_path if episode_log_path.is_file() else None,
                 stdout_path=None,
                 stderr_path=None,
+                output_item_index=None,
             )
         )
 
@@ -1944,20 +1964,31 @@ def _load_run_scope(run_root: Path) -> Tuple[List[_EpisodeScope], List[str], Lis
 
 
 def _load_direct_run_scope(run_root: Path, files_read: List[str], warnings: List[str]) -> List[_EpisodeScope]:
-    """Discover a single direct cli.run_ingestion run root without a wrapper ledger."""
+    """Discover direct cli.run_ingestion run roots without a wrapper ledger."""
 
-    output_path = run_root / "output" / "scene_ingest_results.json"
-    resolved_config_path = run_root / "workspace" / "_resolved_config.json"
     operator_metadata_path = run_root / "operator_run_metadata.json"
-    result_items = _load_result_items(output_path, files_read, warnings)
-    resolved_config = _load_json(resolved_config_path, files_read, warnings)
     operator_metadata = (
         _load_json(operator_metadata_path, files_read, warnings)
         if operator_metadata_path.is_file()
         else {}
     )
+    if not isinstance(operator_metadata, dict):
+        operator_metadata = {}
 
-    result_item = result_items[0] if result_items and isinstance(result_items[0], dict) else {}
+    default_output_path = run_root / "output" / "scene_ingest_results.json"
+    output_path = default_output_path if default_output_path.is_file() else _path_from(operator_metadata.get("output"))
+    if output_path is None:
+        output_path = default_output_path
+
+    default_resolved_config_path = run_root / "workspace" / "_resolved_config.json"
+    metadata_workspace = _path_from(operator_metadata.get("workspace"))
+    resolved_config_path = default_resolved_config_path
+    if not resolved_config_path.is_file() and metadata_workspace is not None:
+        resolved_config_path = metadata_workspace / "_resolved_config.json"
+
+    result_items = _load_result_items(output_path, files_read, warnings)
+    resolved_config = _load_json(resolved_config_path, files_read, warnings)
+
     run_cfg = resolved_config.get("run") if isinstance(resolved_config, dict) else {}
     paths_cfg = resolved_config.get("paths") if isinstance(resolved_config, dict) else {}
     if not isinstance(run_cfg, dict):
@@ -1965,14 +1996,9 @@ def _load_direct_run_scope(run_root: Path, files_read: List[str], warnings: List
     if not isinstance(paths_cfg, dict):
         paths_cfg = {}
 
-    if not result_item and not run_cfg:
+    if not result_items and not run_cfg:
         return []
 
-    video_id = _clean_str(result_item.get("video_id")) or _clean_str(result_item.get("video_hash"))
-    video_hash = _clean_str(result_item.get("video_hash")) or video_id
-    video_name = _clean_str(result_item.get("video_name")) or run_root.name
-    temporal_path = _path_from(result_item.get("temporal_index_path"))
-    manifest_path = _derive_manifest_path(temporal_path)
     step_log_dir = _path_from(paths_cfg.get("log_dir"))
     step_path = step_log_dir / "step_runs.jsonl" if step_log_dir is not None else None
 
@@ -1983,8 +2009,19 @@ def _load_direct_run_scope(run_root: Path, files_read: List[str], warnings: List
     if stderr_path is None:
         stderr_path = run_root / "ingestion.stderr.log"
 
-    return [
-        _EpisodeScope(
+    if not result_items:
+        result_items = [{}]
+
+    scopes: List[_EpisodeScope] = []
+    for output_item_index, result_item in enumerate(result_items):
+        if not isinstance(result_item, dict):
+            result_item = {}
+        video_id = _clean_str(result_item.get("video_id")) or _clean_str(result_item.get("video_hash"))
+        video_hash = _clean_str(result_item.get("video_hash")) or video_id
+        video_name = _clean_str(result_item.get("video_name")) or run_root.name
+        temporal_path = _path_from(result_item.get("temporal_index_path"))
+        manifest_path = _derive_manifest_path(temporal_path)
+        scopes.append(_EpisodeScope(
             report_run_id=run_root.name,
             episode=video_name or run_root.name,
             run_dir=run_root,
@@ -2000,8 +2037,9 @@ def _load_direct_run_scope(run_root: Path, files_read: List[str], warnings: List
             episode_log_path=None,
             stdout_path=stdout_path if stdout_path.is_file() else None,
             stderr_path=stderr_path if stderr_path.is_file() else None,
-        )
-    ]
+            output_item_index=output_item_index,
+        ))
+    return scopes
 
 
 def _load_episode_artifact_signals(episode: _EpisodeScope) -> Tuple[List[Dict[str, Any]], List[str], List[str], Dict[str, Any]]:
@@ -2010,7 +2048,7 @@ def _load_episode_artifact_signals(episode: _EpisodeScope) -> Tuple[List[Dict[st
     signals: List[Dict[str, Any]] = []
 
     result_items = _load_result_items(episode.output_path, files_read, warnings)
-    result_item = result_items[0] if result_items and isinstance(result_items[0], dict) else {}
+    result_item = _select_episode_result_item(episode, result_items)
     manifest = _load_json(episode.scene_manifest_path, files_read, warnings) if episode.scene_manifest_path else None
     temporal = _load_json(episode.temporal_index_path, files_read, warnings) if episode.temporal_index_path else None
     resolved = _load_json(episode.resolved_config_path, files_read, warnings) if episode.resolved_config_path else None
@@ -2042,33 +2080,54 @@ def _load_episode_artifact_signals(episode: _EpisodeScope) -> Tuple[List[Dict[st
     return signals, files_read, warnings, health
 
 
+def _select_episode_result_item(episode: _EpisodeScope, result_items: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
+    if episode.output_item_index is not None:
+        try:
+            item = result_items[int(episode.output_item_index)]
+        except Exception:
+            item = None
+        if isinstance(item, dict):
+            return item
+
+    for item in result_items:
+        if not isinstance(item, dict):
+            continue
+        item_video_id = _clean_str(item.get("video_id")) or _clean_str(item.get("video_hash"))
+        item_video_hash = _clean_str(item.get("video_hash")) or item_video_id
+        item_video_name = _clean_str(item.get("video_name"))
+        if episode.video_id and item_video_id == episode.video_id:
+            return item
+        if episode.video_hash and item_video_hash == episode.video_hash:
+            return item
+        if episode.video_name and item_video_name == episode.video_name:
+            return item
+
+    return result_items[0] if result_items and isinstance(result_items[0], dict) else {}
+
+
 def _load_runtime_event_signals(episode: _EpisodeScope) -> Tuple[List[Dict[str, Any]], List[str], List[str]]:
     signals: List[Dict[str, Any]] = []
     files_read: List[str] = []
     warnings: List[str] = []
-    if episode.stdout_path is None:
-        return signals, files_read, warnings
-    if not episode.stdout_path.is_file():
-        return signals, files_read, warnings
-
     events: List[Dict[str, Any]] = []
-    try:
-        lines = episode.stdout_path.read_text(encoding="utf-8", errors="replace").splitlines()
-    except Exception as exc:
-        warnings.append(f"runtime_stdout_unreadable: {episode.stdout_path}: {exc}")
-        return signals, files_read, warnings
-
-    files_read.append(str(episode.stdout_path))
-    for line in lines:
-        stripped = line.strip()
-        if not stripped.startswith("{"):
-            continue
+    if episode.stdout_path is not None and episode.stdout_path.is_file():
         try:
-            event = json.loads(stripped)
-        except Exception:
-            continue
-        if isinstance(event, dict):
-            events.append(event)
+            lines = episode.stdout_path.read_text(encoding="utf-8", errors="replace").splitlines()
+        except Exception as exc:
+            warnings.append(f"runtime_stdout_unreadable: {episode.stdout_path}: {exc}")
+            lines = []
+
+        files_read.append(str(episode.stdout_path))
+        for line in lines:
+            stripped = line.strip()
+            if not stripped.startswith("{"):
+                continue
+            try:
+                event = json.loads(stripped)
+            except Exception:
+                continue
+            if isinstance(event, dict):
+                events.append(event)
 
     for index, event in enumerate(events):
         if event.get("event") != "step_error":
@@ -2112,7 +2171,90 @@ def _load_runtime_event_signals(episode: _EpisodeScope) -> Tuple[List[Dict[str, 
             }
         )
 
+    stderr_signals, stderr_files, stderr_warnings = _load_stderr_native_retry_signals(episode)
+    signals.extend(stderr_signals)
+    files_read.extend(stderr_files)
+    warnings.extend(stderr_warnings)
     return signals, files_read, warnings
+
+
+def _load_stderr_native_retry_signals(episode: _EpisodeScope) -> Tuple[List[Dict[str, Any]], List[str], List[str]]:
+    signals: List[Dict[str, Any]] = []
+    files_read: List[str] = []
+    warnings: List[str] = []
+    if episode.stderr_path is None or not episode.stderr_path.is_file():
+        return signals, files_read, warnings
+    try:
+        lines = episode.stderr_path.read_text(encoding="utf-8", errors="replace").splitlines()
+    except Exception as exc:
+        warnings.append(f"runtime_stderr_unreadable: {episode.stderr_path}: {exc}")
+        return signals, files_read, warnings
+
+    files_read.append(str(episode.stderr_path))
+    seen = set()
+    for line in lines:
+        parsed = _parse_native_crash_stderr_line(line)
+        if parsed is None:
+            continue
+        step, return_code, status_code = parsed
+        key = (step, return_code, status_code)
+        if key in seen:
+            continue
+        seen.add(key)
+        family = _classify_error_family(
+            step=step,
+            status="warning",
+            reason="native_crash_retry",
+            message=f"returncode={return_code}" if return_code is not None else None,
+            code="native_crash_retry",
+            row={"return_code": return_code, "status_code_hex": status_code},
+        )
+        signals.append(
+            {
+                "source": "runtime.stderr",
+                "run_id": episode.runtime_run_id,
+                "report_run_id": episode.report_run_id,
+                "episode": episode.video_name or episode.episode,
+                "video_id": episode.video_id,
+                "step_name": step,
+                "status": "warning",
+                "reason": "native_crash_retry",
+                "error_family": family,
+                "scene_id": None,
+                "scene_index": None,
+                "recovery_outcome": "recovered_retry",
+                "optional": False,
+                "message": line.strip(),
+                "ts": None,
+            }
+        )
+    return signals, files_read, warnings
+
+
+def _parse_native_crash_stderr_line(line: str) -> Optional[Tuple[str, Optional[int], Optional[str]]]:
+    text = line.strip()
+    if not text or "native crash" not in text.lower():
+        return None
+    detected = re.search(
+        r"Native crash detected for step=(?P<step>[^\s]+).*?return_code=(?P<return_code>[-]?\d+).*?status_code=(?P<status_code>0x[0-9A-Fa-f]+)",
+        text,
+        re.IGNORECASE,
+    )
+    if detected:
+        return (
+            _clean_step_name(detected.group("step")),
+            _coerce_int(detected.group("return_code")),
+            _normalize_status_code_hex(detected.group("status_code")),
+        )
+
+    retry = re.search(
+        r"Native crash for (?P<step>[^\s]+).*?\((?P<status_code>0x[0-9A-Fa-f]+)\).*?retry",
+        text,
+        re.IGNORECASE,
+    )
+    if retry:
+        return (_clean_step_name(retry.group("step")), None, _normalize_status_code_hex(retry.group("status_code")))
+    return None
 
 
 def _clean_step_name(value: Any) -> str:
@@ -2130,6 +2272,15 @@ def _return_code_from_error(value: Any) -> Optional[int]:
     if not match:
         return None
     return _coerce_int(match.group(1))
+
+
+def _normalize_status_code_hex(value: Any) -> Optional[str]:
+    text = _clean_str(value)
+    if not text:
+        return None
+    if text.lower().startswith("0x"):
+        return "0x" + text[2:].upper()
+    return text
 
 
 def _find_runtime_retry_event(
@@ -2297,9 +2448,9 @@ def _load_step_run_signals(
         if not isinstance(row, dict):
             continue
 
-        episode = episode_by_runtime_id.get(_clean_str(row.get("run_id")) or "")
+        episode = episode_by_video_id.get(_clean_str(row.get("video_id")) or "")
         if episode is None:
-            episode = episode_by_video_id.get(_clean_str(row.get("video_id")) or "")
+            episode = episode_by_runtime_id.get(_clean_str(row.get("run_id")) or "")
         if episode is None:
             continue
 
@@ -2729,7 +2880,7 @@ def _classify_error_family(
     message_s = (message or "").strip().lower()
     code_s = (code or "").strip().lower()
 
-    status_code = _clean_str(row.get("status_code_hex")) if isinstance(row, dict) else None
+    status_code = _normalize_status_code_hex(row.get("status_code_hex")) if isinstance(row, dict) else None
     return_code = _coerce_int(row.get("return_code")) if isinstance(row, dict) else None
     if return_code is None:
         match = re.search(r"returncode=([-]?\d+)", message_s)
@@ -2861,6 +3012,16 @@ def _sanitize_drive_root(text: str) -> str:
     return re.sub(r"\b[A-Za-z]:[\\/]", "<local>/", text)
 
 
+def _unique_episode_map(pairs: Iterable[Tuple[Optional[str], _EpisodeScope]]) -> Dict[str, _EpisodeScope]:
+    buckets: Dict[str, List[_EpisodeScope]] = {}
+    for key, episode in pairs:
+        clean_key = _clean_str(key)
+        if not clean_key:
+            continue
+        buckets.setdefault(clean_key, []).append(episode)
+    return {key: values[0] for key, values in buckets.items() if len(values) == 1}
+
+
 def _replace_episode_step_path(episode: _EpisodeScope, path: Path) -> _EpisodeScope:
     return _EpisodeScope(
         report_run_id=episode.report_run_id,
@@ -2878,6 +3039,7 @@ def _replace_episode_step_path(episode: _EpisodeScope, path: Path) -> _EpisodeSc
         episode_log_path=episode.episode_log_path,
         stdout_path=episode.stdout_path,
         stderr_path=episode.stderr_path,
+        output_item_index=episode.output_item_index,
     )
 
 
@@ -2936,6 +3098,17 @@ def _coalesce_runtime_event_duplicates(signals: Sequence[Dict[str, Any]]) -> Lis
         for signal in signals
         if signal.get("source") == "runtime.events" and signal.get("scene_id")
     }
+    stderr_keys = {
+        (
+            signal.get("run_id"),
+            signal.get("video_id"),
+            signal.get("step_name"),
+            signal.get("error_family"),
+            signal.get("recovery_outcome"),
+        )
+        for signal in signals
+        if signal.get("source") == "runtime.stderr"
+    }
     out: List[Dict[str, Any]] = []
     for signal in signals:
         key = (
@@ -2946,10 +3119,12 @@ def _coalesce_runtime_event_duplicates(signals: Sequence[Dict[str, Any]]) -> Lis
             signal.get("recovery_outcome"),
         )
         if (
-            signal.get("source") == "run.warnings"
+            signal.get("source") in {"run.warnings", "runtime.stderr"}
             and not signal.get("scene_id")
             and key in runtime_specific
         ):
+            continue
+        if signal.get("source") == "run.warnings" and not signal.get("scene_id") and key in stderr_keys:
             continue
         out.append(signal)
     return out

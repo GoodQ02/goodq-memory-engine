@@ -10,6 +10,11 @@ and related canonical docs.
 ## [Unreleased]
 
 ### Added
+- Published the `control-recurrence-v0.4.2` operator release note:
+  [`docs/releases/CONTROL_RECURRENCE_v0.4.2.md`](docs/releases/CONTROL_RECURRENCE_v0.4.2.md).
+- Hardened direct canonical recurrence mapping for multi-video direct run roots,
+  operator metadata output/workspace fallbacks, stderr-only recovered native
+  retry visibility, and explicit markdown-only index warnings.
 - Published the `control-recurrence-v0.4.1` operator release note:
   [`docs/releases/CONTROL_RECURRENCE_v0.4.1.md`](docs/releases/CONTROL_RECURRENCE_v0.4.1.md).
 - Extended read-only control recurrence reporting to direct canonical
@@ -23,6 +28,9 @@ and related canonical docs.
   `GET /api/control-recurrence/reports/{report_id}/recommendations`.
 
 ### Boundary
+- The v0.4.2 hardening pass remains read-only. It expands artifact discovery
+  only; it does not trigger ingestion, generate reports from the API, heal,
+  mutate configs, use LLMs, or activate `ControlAgent`.
 - The v0.4.1 direct-run map does not generate reports unless explicitly asked,
   does not trigger ingestion, does not import or activate `ControlAgent`, and
   does not create a second execution path.

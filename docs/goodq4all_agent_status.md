@@ -4,7 +4,7 @@
 
 # GoodQ4All Agent Status
 
-_Operational restart checkpoint refreshed: 2026-04-28T06:35:08-05:00_
+_Operational restart checkpoint refreshed: 2026-04-28T07:35:00-05:00_
 
 This document is a bounded operator snapshot of the current release-era
 stitching and offline-package baseline.
@@ -33,6 +33,7 @@ truth for live claims. Do not treat this document as a live witness monitor.
     - default durable output: `reports/control_recurrence/`
     - artifact index: `reports/control_recurrence/index.json`
     - direct canonical run roots without wrapper `experiment_log.json` are discoverable from existing output/workspace/operator-log artifacts
+    - direct run discovery supports one or more videos, metadata-described output/workspace paths, and captured stdout/stderr retry evidence
     - local API read surface:
       - `GET /api/control-recurrence/reports`
       - `GET /api/control-recurrence/reports/latest`

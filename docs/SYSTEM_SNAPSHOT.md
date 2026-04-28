@@ -4,7 +4,7 @@
 
 # System Snapshot
 
-_Operational snapshot refreshed: 2026-04-28T06:35:08-05:00_
+_Operational snapshot refreshed: 2026-04-28T07:35:00-05:00_
 
 This is a bounded release-era system snapshot. It is useful for understanding
 the supported host/runtime baseline, but it is not a live witness monitor.
@@ -127,12 +127,14 @@ the supported host/runtime baseline, but it is not a live witness monitor.
   - projects more truthful in-flight status by detecting episode lane-start artifacts
   - does not revive retired legacy `/runs` compatibility shells
   - reads recurrence truth from existing `step_runs.jsonl`, run warnings, `scene_ingest_results.json`, `scene_manifest.json`, `temporal_index.json`, and `experiment_log.json`
-  - supports direct canonical run roots without a wrapper `experiment_log.json` by reading existing `operator_run_metadata.json`, `output/scene_ingest_results.json`, `workspace/_resolved_config.json`, canonical `step_runs.jsonl`, and captured ingestion stdout events
+  - supports direct canonical run roots without a wrapper `experiment_log.json` by reading existing `operator_run_metadata.json`, `output/scene_ingest_results.json`, `workspace/_resolved_config.json`, canonical `step_runs.jsonl`, and captured ingestion stdout/stderr events
+  - supports multi-video direct run roots and metadata-described output/workspace paths without creating a second execution path
   - classifies recurrence families as `informational`, `watch`, `actionable`, or `blocking`
   - emits deterministic operator hints and inspection targets without changing runtime state
   - can write markdown to `reports/control_recurrence/` when `--write-md` is explicitly supplied
   - can write durable JSON artifacts with `--write-json-file`
   - records durable artifact discovery in `reports/control_recurrence/index.json`
+  - marks legacy markdown-only index entries explicitly with `artifact_status=markdown_only` and an index warning
   - exposes a local read-only API over the existing recurrence index and indexed artifacts
   - drafts deterministic operator inspection steps from existing durable JSON reports
   - boundary: not healing yet. The recurrence report/API does not activate `ControlAgent`, does not enable auto-healing, does not mutate configs, does not execute commands, does not use LLMs, does not generate reports from the API, and does not touch `cli/run_ingestion.py`.

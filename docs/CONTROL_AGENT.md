@@ -42,9 +42,9 @@ It reads persisted runtime truth only:
 - `scene_manifest.json`
 - `temporal_index.json`
 - `experiment_log.json`
-- `operator_run_metadata.json` and captured ingestion stdout events when a direct canonical run root has no wrapper `experiment_log.json`
+- `operator_run_metadata.json` and captured ingestion stdout/stderr events when a direct canonical run root has no wrapper `experiment_log.json`
 
-It reports recurrence summaries, comparison deltas, category counts, recovered/unrecovered/skipped counts, Phase 6 health, Qdrant health, deterministic operator hints, deterministic inspection-only recommendation drafts, and optional markdown/JSON artifacts under `reports/control_recurrence/`. Durable artifact discovery is recorded in `reports/control_recurrence/index.json`. Direct `cli.run_ingestion` run roots are supported read-only through existing output/workspace/operator-log artifacts; this does not create a second execution path.
+It reports recurrence summaries, comparison deltas, category counts, recovered/unrecovered/skipped counts, Phase 6 health, Qdrant health, deterministic operator hints, deterministic inspection-only recommendation drafts, and optional markdown/JSON artifacts under `reports/control_recurrence/`. Durable artifact discovery is recorded in `reports/control_recurrence/index.json`. Direct `cli.run_ingestion` run roots are supported read-only through existing output/workspace/operator-log artifacts, including multi-video direct roots; this does not create a second execution path.
 
 The API surface reads only that existing index and the indexed artifacts. It does not regenerate reports, trigger ingestion, execute commands, scan arbitrary project paths, or form a second orchestration path.
 

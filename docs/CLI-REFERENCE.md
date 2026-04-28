@@ -1,10 +1,10 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-04-27 -->
+<!-- DOC_LAST_VERIFIED: 2026-04-28 -->
 
 # GoodQ CLI Reference
 
-**Last Updated:** April 27, 2026
+**Last Updated:** April 28, 2026
 **Status:** Runtime-conditional; verify behavior from current config, artifacts, and health checks
 
 This document is the active command-surface reference for the `cli/` package. It describes the current supported CLI layer, not historical launch paths.
@@ -129,7 +129,7 @@ This is the fastest way to verify the effective resolved profile/path surface be
 - `scene_manifest.json`
 - `temporal_index.json`
 - `experiment_log.json`
-- `operator_run_metadata.json` and captured ingestion stdout events for direct canonical run roots that do not have a wrapper `experiment_log.json`
+- `operator_run_metadata.json` plus captured ingestion stdout/stderr events for direct canonical run roots that do not have a wrapper `experiment_log.json`
 
 **Usage**
 
@@ -212,6 +212,8 @@ conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_rep
 - classifies recurrence families as `informational`, `watch`, `actionable`, or `blocking`
 - emits read-only operator hints and inspection targets
 - indexes durable report artifacts for API/UI/Codex discovery without regenerating reports in list mode
+- marks legacy markdown-only index entries explicitly with `artifact_status=markdown_only`
+- supports direct canonical run roots with one or more videos, including metadata-described output/workspace paths
 - drafts deterministic operator inspection steps from existing durable JSON reports without executing commands, healing, mutating configs, triggering ingestion, or generating reports
 - reports Phase 6 and Qdrant health without inferring beyond persisted artifacts
 

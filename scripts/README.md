@@ -14,6 +14,7 @@ This file classifies scripts that were previously ambiguous in audits so they ar
 | `scripts/generate_system_snapshot.py` | Active utility | Generates system snapshot docs from current runtime state. |
 | `scripts/generate_goodq4all_agent_status.py` | Active utility | Regenerates agent status documentation artifacts. |
 | `scripts/health/pull_health_export.py` | Active utility | Pulls and normalizes health export data for reporting. |
+| `scripts/dev/run_pytest.ps1` | Active developer utility | Runs pytest through the configured conda environment with repo-local temp isolation to avoid shared Windows TEMP contention. |
 | `scripts/vllm_control.bat` | Active utility | Manual control wrapper for local vLLM services on Windows. |
 | `scripts/wsl/install_audio_service.sh` | Active utility | Installs and configures WSL audio service components. |
 | `scripts/wsl/smoke_wsl_memory.sh` | Active utility | WSL smoke probe for memory/runtime readiness. |

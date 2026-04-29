@@ -22,10 +22,22 @@ Use this for normal validation and CI parity:
 python -m pytest -q
 ```
 
+On Windows, when running tests through conda from an agent or long-lived shell, prefer the repo wrapper so conda uses repo-local temp files under `tmp/conda_run` instead of shared Windows TEMP:
+
+```powershell
+.\scripts\dev\run_pytest.ps1
+```
+
 Or run only the unit tree explicitly:
 
 ```powershell
 python -m pytest tests/unit -q
+```
+
+Wrapper equivalent:
+
+```powershell
+.\scripts\dev\run_pytest.ps1 tests/unit -q
 ```
 
 ### Manual Integration Check

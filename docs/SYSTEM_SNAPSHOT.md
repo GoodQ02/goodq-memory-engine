@@ -129,11 +129,14 @@ the supported host/runtime baseline, but it is not a live witness monitor.
   - reads recurrence truth from existing `step_runs.jsonl`, run warnings, `scene_ingest_results.json`, `scene_manifest.json`, `temporal_index.json`, and `experiment_log.json`
   - supports direct canonical run roots without a wrapper `experiment_log.json` by reading existing `operator_run_metadata.json`, `output/scene_ingest_results.json`, `workspace/_resolved_config.json`, canonical `step_runs.jsonl`, and captured ingestion stdout/stderr events
   - supports multi-video direct run roots and metadata-described output/workspace paths without creating a second execution path
+  - treats `control-recurrence-v0.4.1` as a valid sealed milestone for direct-run discoverability and truth-surface alignment, with current `main` beyond it through `control-recurrence-v0.4.2` plus retry attribution/coalescing tightening
+  - treats bounded direct-run discovery limits as expected when required artifacts are absent, not as recurrence-layer boundary violations
   - classifies recurrence families as `informational`, `watch`, `actionable`, or `blocking`
   - emits deterministic operator hints and inspection targets without changing runtime state
   - can write markdown to `reports/control_recurrence/` when `--write-md` is explicitly supplied
   - can write durable JSON artifacts with `--write-json-file`
   - records durable artifact discovery in `reports/control_recurrence/index.json`
+  - treats untracked local `reports/control_recurrence/index.json` state as workspace artifact hygiene unless it is intentionally tracked
   - marks legacy markdown-only index entries explicitly with `artifact_status=markdown_only` and an index warning
   - exposes a local read-only API over the existing recurrence index and indexed artifacts
   - drafts deterministic operator inspection steps from existing durable JSON reports

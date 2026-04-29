@@ -10,6 +10,10 @@ and related canonical docs.
 ## [Unreleased]
 
 ### Added
+- Documented the post-seal audit result for `control-recurrence-v0.4.1`:
+  the tag remains a valid sealed milestone, while current `main` is beyond it
+  with `control-recurrence-v0.4.2` plus retry attribution/coalescing
+  tightening.
 - Published the `control-recurrence-v0.4.2` operator release note:
   [`docs/releases/CONTROL_RECURRENCE_v0.4.2.md`](docs/releases/CONTROL_RECURRENCE_v0.4.2.md).
 - Hardened direct canonical recurrence mapping for multi-video direct run roots,
@@ -28,6 +32,9 @@ and related canonical docs.
   `GET /api/control-recurrence/reports/{report_id}/recommendations`.
 
 ### Boundary
+- The post-seal audit found no recurrence-layer boundary violation. Local
+  `reports/control_recurrence/index.json` state is workspace artifact hygiene
+  unless it is explicitly tracked as a repo surface.
 - The v0.4.2 hardening pass remains read-only. It expands artifact discovery
   only; it does not trigger ingestion, generate reports from the API, heal,
   mutate configs, use LLMs, or activate `ControlAgent`.

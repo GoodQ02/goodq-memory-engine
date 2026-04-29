@@ -34,6 +34,8 @@ truth for live claims. Do not treat this document as a live witness monitor.
     - artifact index: `reports/control_recurrence/index.json`
     - direct canonical run roots without wrapper `experiment_log.json` are discoverable from existing output/workspace/operator-log artifacts
     - direct run discovery supports one or more videos, metadata-described output/workspace paths, and captured stdout/stderr retry evidence
+    - post-seal status: `control-recurrence-v0.4.1` remains a valid sealed milestone for direct-run discoverability and truth-surface alignment; current `main` is beyond it with `control-recurrence-v0.4.2` plus retry attribution/coalescing tightening
+    - bounded direct-run discovery limits are expected when required artifacts are absent; local `reports/control_recurrence/index.json` state is workspace artifact hygiene unless explicitly tracked
     - local API read surface:
       - `GET /api/control-recurrence/reports`
       - `GET /api/control-recurrence/reports/latest`

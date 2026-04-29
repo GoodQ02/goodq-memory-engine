@@ -105,6 +105,9 @@ def build_control_recurrence_report(
     episode_by_video_id = {
         e.video_id: e for e in episodes if isinstance(e.video_id, str) and e.video_id.strip()
     }
+    target_runtime_run_ids = sorted(
+        {e.runtime_run_id for e in episodes if isinstance(e.runtime_run_id, str) and e.runtime_run_id.strip()}
+    )
 
     for episode in episodes:
         episode_signals, episode_files, episode_warnings, episode_health = _load_episode_artifact_signals(episode)
@@ -114,21 +117,37 @@ def build_control_recurrence_report(
         health_by_episode.append(episode_health)
 
     step_paths = _dedupe_paths(e.step_runs_path for e in episodes if e.step_runs_path is not None)
+    step_run_scope = {
+        "strict_run_id_filter_applied": False,
+        "target_run_ids": target_runtime_run_ids,
+        "excluded_run_ids": {},
+        "limited_run_id_scope": False,
+    }
     for path in step_paths:
-        step_signals, step_files, step_warnings = _load_step_run_signals(
+        step_signals, step_files, step_warnings, step_scope_info = _load_step_run_signals(
             path=path,
             episode_by_runtime_id=episode_by_runtime_id,
             episode_by_video_id=episode_by_video_id,
+            target_runtime_run_ids=target_runtime_run_ids,
         )
         signals.extend(step_signals)
         files_read.extend(step_files)
         warnings.extend(step_warnings)
+        step_run_scope["strict_run_id_filter_applied"] = bool(
+            step_run_scope["strict_run_id_filter_applied"] or step_scope_info.get("strict_run_id_filter_applied")
+        )
+        step_run_scope["limited_run_id_scope"] = bool(
+            step_run_scope["limited_run_id_scope"] or step_scope_info.get("limited_run_id_scope")
+        )
+        excluded = step_run_scope["excluded_run_ids"]
+        for excluded_run_id, count in (step_scope_info.get("excluded_run_ids") or {}).items():
+            excluded[excluded_run_id] = int(excluded.get(excluded_run_id, 0)) + int(count or 0)
 
-    signals = _coalesce_runtime_event_duplicates(signals)
-    signals = _dedupe_signals(signals)
     for signal in signals:
         if not signal.get("recovery_outcome"):
             signal["recovery_outcome"] = _infer_recovery_outcome(signal, health_by_episode, signals)
+    signals = _coalesce_runtime_event_duplicates(signals)
+    signals = _dedupe_signals(signals)
 
     phase6_health = _phase6_health_summary(health_by_episode)
     grouped = _group_signals(signals)
@@ -171,6 +190,7 @@ def build_control_recurrence_report(
             "videos": sorted({e.video_name or e.episode for e in episodes if e.video_name or e.episode}),
             "signals": len(signals),
             "step_runs_files": [_display_path(p) for p in step_paths],
+            "step_run_scope": step_run_scope,
         },
         "recurrence_summary": grouped,
         "top_repeated_failure_families": family_rows,
@@ -319,6 +339,15 @@ def render_text_report(report: Dict[str, Any], *, limit: int = 12) -> str:
     lines.append(f"Run roots: {len(scope.get('run_roots') or [])}")
     lines.append(f"Episodes: {scope.get('episodes', 0)}")
     lines.append(f"Signals: {scope.get('signals', 0)}")
+    step_scope = scope.get("step_run_scope") if isinstance(scope.get("step_run_scope"), dict) else {}
+    if step_scope:
+        lines.append(
+            "Step run scope: strict_run_id_filter={strict} limited_run_id_scope={limited} excluded_run_ids={excluded}".format(
+                strict=bool(step_scope.get("strict_run_id_filter_applied")),
+                limited=bool(step_scope.get("limited_run_id_scope")),
+                excluded=len(step_scope.get("excluded_run_ids") or {}),
+            )
+        )
     lines.append("")
 
     lines.append("Recommendation")
@@ -748,6 +777,11 @@ def _render_markdown_single(report: Dict[str, Any]) -> str:
     lines.append(f"- Run root(s): {_md_join_code_paths(scope.get('run_roots') or [])}")
     lines.append(f"- Episodes: `{int(scope.get('episodes') or 0)}`")
     lines.append(f"- Signals: `{int(scope.get('signals') or 0)}`")
+    step_scope = scope.get("step_run_scope") if isinstance(scope.get("step_run_scope"), dict) else {}
+    if step_scope:
+        lines.append(f"- Step run strict run_id filter: `{str(bool(step_scope.get('strict_run_id_filter_applied'))).lower()}`")
+        lines.append(f"- Step run limited scope warning: `{str(bool(step_scope.get('limited_run_id_scope'))).lower()}`")
+        lines.append(f"- Excluded run IDs: `{len(step_scope.get('excluded_run_ids') or {})}`")
     lines.append("")
     lines.extend(_markdown_recommendation(recommendation, classification.get("highest_category")))
     lines.append("")
@@ -1995,6 +2029,14 @@ def _load_direct_run_scope(run_root: Path, files_read: List[str], warnings: List
         run_cfg = {}
     if not isinstance(paths_cfg, dict):
         paths_cfg = {}
+    operator_run_cfg = operator_metadata.get("run") if isinstance(operator_metadata, dict) else {}
+    if not isinstance(operator_run_cfg, dict):
+        operator_run_cfg = {}
+    metadata_run_id = (
+        _clean_str(operator_metadata.get("run_id"))
+        or _clean_str(operator_metadata.get("runtime_run_id"))
+        or _clean_str(operator_run_cfg.get("id"))
+    )
 
     if not result_items and not run_cfg:
         return []
@@ -2019,13 +2061,19 @@ def _load_direct_run_scope(run_root: Path, files_read: List[str], warnings: List
         video_id = _clean_str(result_item.get("video_id")) or _clean_str(result_item.get("video_hash"))
         video_hash = _clean_str(result_item.get("video_hash")) or video_id
         video_name = _clean_str(result_item.get("video_name")) or run_root.name
+        runtime_run_id = (
+            metadata_run_id
+            or _clean_str(result_item.get("run_id"))
+            or _clean_str(result_item.get("runtime_run_id"))
+            or _clean_str(run_cfg.get("id"))
+        )
         temporal_path = _path_from(result_item.get("temporal_index_path"))
         manifest_path = _derive_manifest_path(temporal_path)
         scopes.append(_EpisodeScope(
             report_run_id=run_root.name,
             episode=video_name or run_root.name,
             run_dir=run_root,
-            runtime_run_id=_clean_str(run_cfg.get("id")),
+            runtime_run_id=runtime_run_id,
             video_id=video_id,
             video_hash=video_hash,
             video_name=video_name,
@@ -2053,12 +2101,13 @@ def _load_episode_artifact_signals(episode: _EpisodeScope) -> Tuple[List[Dict[st
     temporal = _load_json(episode.temporal_index_path, files_read, warnings) if episode.temporal_index_path else None
     resolved = _load_json(episode.resolved_config_path, files_read, warnings) if episode.resolved_config_path else None
     signals.extend(_artifact_presence_signals(episode))
+    scene_ids, scene_indices = _episode_scene_identity_sets(result_item, manifest, temporal)
 
     if isinstance(resolved, dict):
         run_cfg = resolved.get("run")
         if isinstance(run_cfg, dict):
             for warning in run_cfg.get("warnings") or []:
-                if isinstance(warning, dict):
+                if isinstance(warning, dict) and _warning_applies_to_episode(warning, episode, scene_ids, scene_indices):
                     signals.append(_signal_from_run_warning(episode, warning))
 
     runtime_event_signals, runtime_files, runtime_warnings = _load_runtime_event_signals(episode)
@@ -2078,6 +2127,59 @@ def _load_episode_artifact_signals(episode: _EpisodeScope) -> Tuple[List[Dict[st
     health = _episode_health(episode, result_item, manifest, temporal)
     signals.extend(_artifact_health_signals(episode, result_item, manifest, temporal))
     return signals, files_read, warnings, health
+
+
+def _episode_scene_identity_sets(
+    result_item: Any,
+    manifest: Any,
+    temporal: Any,
+) -> Tuple[set[str], set[str]]:
+    scene_ids: set[str] = set()
+    scene_indices: set[str] = set()
+    candidates = (
+        (result_item if isinstance(result_item, dict) else {}, "scenes"),
+        (manifest if isinstance(manifest, dict) else {}, "scenes"),
+        (temporal if isinstance(temporal, dict) else {}, "segments"),
+    )
+    for payload, key in candidates:
+        items = payload.get(key)
+        if not isinstance(items, list):
+            continue
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            scene_id = _clean_str(item.get("scene_id"))
+            if scene_id:
+                scene_ids.add(scene_id)
+            for index_key in ("index", "scene_index"):
+                if item.get(index_key) is not None:
+                    scene_indices.add(str(item.get(index_key)))
+    return scene_ids, scene_indices
+
+
+def _warning_applies_to_episode(
+    warning: Dict[str, Any],
+    episode: _EpisodeScope,
+    scene_ids: set[str],
+    scene_indices: set[str],
+) -> bool:
+    context = warning.get("context")
+    if not isinstance(context, dict):
+        return True
+
+    warning_video = _clean_str(context.get("video_id")) or _clean_str(context.get("video_hash"))
+    if warning_video and warning_video not in {episode.video_id, episode.video_hash}:
+        return False
+
+    scene_id = _clean_str(context.get("scene_id"))
+    if scene_id and scene_ids:
+        return scene_id in scene_ids
+
+    scene_index = context.get("scene_index")
+    if scene_index is not None and scene_indices:
+        return str(scene_index) in scene_indices
+
+    return True
 
 
 def _select_episode_result_item(episode: _EpisodeScope, result_items: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
@@ -2165,7 +2267,7 @@ def _load_runtime_event_signals(episode: _EpisodeScope) -> Tuple[List[Dict[str, 
                 "scene_id": _clean_str(metadata.get("scene_id")),
                 "scene_index": metadata.get("scene_index"),
                 "recovery_outcome": "recovered_retry" if recovered else None,
-                "optional": False,
+                "optional": _is_optional_runtime_step(step),
                 "message": error,
                 "ts": _clean_str(event.get("timestamp")),
             }
@@ -2223,12 +2325,29 @@ def _load_stderr_native_retry_signals(episode: _EpisodeScope) -> Tuple[List[Dict
                 "scene_id": None,
                 "scene_index": None,
                 "recovery_outcome": "recovered_retry",
-                "optional": False,
+                "optional": _is_optional_runtime_step(step),
                 "message": line.strip(),
                 "ts": None,
             }
         )
     return signals, files_read, warnings
+
+
+def _is_optional_runtime_step(step: Any) -> bool:
+    step_name = (_clean_step_name(step) or "").lower()
+    return step_name in {
+        "audio_embed_clap",
+        "audio_emotion",
+        "audio_backend",
+        "diarization",
+        "emotion",
+        "image_caption",
+        "object_detect",
+        "ocr",
+        "sentiment",
+        "speaker_voice_signature",
+        "speaker_voice_signature_meta",
+    }
 
 
 def _parse_native_crash_stderr_line(line: str) -> Optional[Tuple[str, Optional[int], Optional[str]]]:
@@ -2423,21 +2542,30 @@ def _load_step_run_signals(
     path: Path,
     episode_by_runtime_id: Dict[str, _EpisodeScope],
     episode_by_video_id: Dict[str, _EpisodeScope],
-) -> Tuple[List[Dict[str, Any]], List[str], List[str]]:
+    target_runtime_run_ids: Sequence[str],
+) -> Tuple[List[Dict[str, Any]], List[str], List[str], Dict[str, Any]]:
     files_read: List[str] = []
     warnings: List[str] = []
     signals: List[Dict[str, Any]] = []
+    target_run_ids = {str(value) for value in target_runtime_run_ids if str(value).strip()}
+    scope_info: Dict[str, Any] = {
+        "strict_run_id_filter_applied": bool(target_run_ids),
+        "target_run_ids": sorted(target_run_ids),
+        "excluded_run_ids": {},
+        "limited_run_id_scope": False,
+    }
     if not path.is_file():
         warnings.append(f"step_runs_missing: {path}")
-        return signals, files_read, warnings
+        return signals, files_read, warnings, scope_info
 
     files_read.append(str(path))
     try:
         lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
     except Exception as exc:
         warnings.append(f"step_runs_unreadable: {path}: {exc}")
-        return signals, files_read, warnings
+        return signals, files_read, warnings, scope_info
 
+    excluded_run_ids: Counter[str] = Counter()
     for line in lines:
         if not line.strip():
             continue
@@ -2448,18 +2576,39 @@ def _load_step_run_signals(
         if not isinstance(row, dict):
             continue
 
-        episode = episode_by_video_id.get(_clean_str(row.get("video_id")) or "")
-        if episode is None:
-            episode = episode_by_runtime_id.get(_clean_str(row.get("run_id")) or "")
-        if episode is None:
-            continue
-
         status = (_clean_str(row.get("status")) or "unknown").lower()
         if status in _OK_STATUSES:
             continue
+
+        row_run_id = _clean_str(row.get("run_id")) or ""
+        row_video_id = _clean_str(row.get("video_id")) or ""
+        if target_run_ids:
+            if row_run_id not in target_run_ids:
+                excluded_run_ids[row_run_id or "<missing>"] += 1
+                continue
+            episode = episode_by_video_id.get(row_video_id)
+            if episode is None:
+                episode = episode_by_runtime_id.get(row_run_id)
+        else:
+            scope_info["limited_run_id_scope"] = True
+            episode = episode_by_video_id.get(row_video_id)
+            if episode is None:
+                episode = episode_by_runtime_id.get(row_run_id)
+        if episode is None:
+            continue
+
         signals.append(_signal_from_step_row(episode, row))
 
-    return signals, files_read, warnings
+    if excluded_run_ids:
+        scope_info["excluded_run_ids"] = dict(sorted(excluded_run_ids.items()))
+        warnings.append(
+            "excluded_run_ids: "
+            + ", ".join(f"{run_id}={count}" for run_id, count in sorted(excluded_run_ids.items()))
+        )
+    if scope_info["limited_run_id_scope"]:
+        warnings.append("limited_run_id_scope: target runtime run_id unavailable; step_runs filtered without strict run_id")
+
+    return signals, files_read, warnings, scope_info
 
 
 def _signal_from_step_row(episode: _EpisodeScope, row: Dict[str, Any]) -> Dict[str, Any]:
@@ -2686,8 +2835,9 @@ def _group_signals(signals: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
             },
         )
         row["count"] += 1
-        if signal.get("source") and signal.get("source") not in row["sources"]:
-            row["sources"].append(signal.get("source"))
+        for source in _signal_surface_names(signal):
+            if source not in row["sources"]:
+                row["sources"].append(source)
         if signal.get("scene_index") is not None and signal.get("scene_index") not in row["scene_indices"]:
             row["scene_indices"].append(signal.get("scene_index"))
         row["optional"] = bool(row.get("optional") or signal.get("optional"))
@@ -2711,6 +2861,7 @@ def _top_families(signals: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
                 "scenes": 0,
                 "step_names": [],
                 "statuses": [],
+                "sources": [],
                 "recovery_outcomes": Counter(),
                 "_episode_set": set(),
                 "_run_set": set(),
@@ -2728,6 +2879,9 @@ def _top_families(signals: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
             row["step_names"].append(signal.get("step_name"))
         if signal.get("status") and signal.get("status") not in row["statuses"]:
             row["statuses"].append(signal.get("status"))
+        for source in _signal_surface_names(signal):
+            if source not in row["sources"]:
+                row["sources"].append(source)
         row["recovery_outcomes"].update([signal.get("recovery_outcome") or "unknown"])
 
     rows: List[Dict[str, Any]] = []
@@ -2741,6 +2895,7 @@ def _top_families(signals: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
                 "scenes": len(row["_scene_set"]),
                 "step_names": sorted(row["step_names"]),
                 "statuses": sorted(row["statuses"]),
+                "sources": sorted(row["sources"]),
                 "recovery_outcomes": dict(row["recovery_outcomes"]),
             }
         )
@@ -3009,7 +3164,8 @@ def _display_text(value: Any) -> str:
 
 
 def _sanitize_drive_root(text: str) -> str:
-    return re.sub(r"\b[A-Za-z]:[\\/]", "<local>/", text)
+    sanitized = re.sub(r"\b[A-Za-z]:[\\/]", "<local>/", text)
+    return re.sub(r"\\\\" + r"wsl" + r"\$", "<wsl>", sanitized, flags=re.IGNORECASE)
 
 
 def _unique_episode_map(pairs: Iterable[Tuple[Optional[str], _EpisodeScope]]) -> Dict[str, _EpisodeScope]:
@@ -3087,65 +3243,153 @@ def _dedupe_strings(values: Iterable[str]) -> List[str]:
 
 
 def _coalesce_runtime_event_duplicates(signals: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    runtime_specific = {
-        (
-            signal.get("run_id"),
-            signal.get("video_id"),
-            signal.get("step_name"),
-            signal.get("error_family"),
-            signal.get("recovery_outcome"),
+    native_signals = [signal for signal in signals if _is_native_crash_signal(signal)]
+    scene_specific: Dict[Tuple[Any, ...], List[Tuple[Any, Any, Any]]] = {}
+    for signal in native_signals:
+        if not signal.get("scene_id"):
+            continue
+        scene_specific.setdefault(_native_run_level_key(signal), []).append(
+            (signal.get("video_id"), signal.get("scene_id"), signal.get("scene_index"))
         )
-        for signal in signals
-        if signal.get("source") == "runtime.events" and signal.get("scene_id")
-    }
-    runtime_specific_run_level = {
-        (
-            signal.get("run_id"),
-            signal.get("step_name"),
-            signal.get("error_family"),
-            signal.get("recovery_outcome"),
-        )
-        for signal in signals
-        if signal.get("source") == "runtime.events" and signal.get("scene_id")
-    }
-    stderr_keys = {
-        (
-            signal.get("run_id"),
-            signal.get("video_id"),
-            signal.get("step_name"),
-            signal.get("error_family"),
-            signal.get("recovery_outcome"),
-        )
-        for signal in signals
-        if signal.get("source") == "runtime.stderr"
-    }
-    out: List[Dict[str, Any]] = []
+
+    groups: Dict[Tuple[Any, ...], List[Dict[str, Any]]] = {}
+    passthrough: List[Dict[str, Any]] = []
     for signal in signals:
-        key = (
-            signal.get("run_id"),
-            signal.get("video_id"),
-            signal.get("step_name"),
-            signal.get("error_family"),
-            signal.get("recovery_outcome"),
-        )
-        run_level_key = (
-            signal.get("run_id"),
-            signal.get("step_name"),
-            signal.get("error_family"),
-            signal.get("recovery_outcome"),
-        )
-        if (
-            signal.get("source") in {"run.warnings", "runtime.stderr"}
-            and not signal.get("scene_id")
-            and key in runtime_specific
-        ):
+        if not _is_native_crash_signal(signal):
+            passthrough.append(signal)
             continue
-        if _is_scene_less_native_retry_signal(signal) and run_level_key in runtime_specific_run_level:
-            continue
-        if signal.get("source") == "run.warnings" and not signal.get("scene_id") and key in stderr_keys:
-            continue
-        out.append(signal)
+        groups.setdefault(_native_coalesce_key(signal, scene_specific), []).append(signal)
+
+    out: List[Dict[str, Any]] = []
+    for group in groups.values():
+        out.append(_merge_native_crash_signals(group))
+    out.extend(passthrough)
     return out
+
+
+def _is_native_crash_signal(signal: Dict[str, Any]) -> bool:
+    family = _clean_str(signal.get("error_family")) or ""
+    return family.startswith("native_crash_retry:") or family.startswith("native_subprocess_crash:")
+
+
+def _native_run_level_key(signal: Dict[str, Any]) -> Tuple[Any, ...]:
+    return (
+        signal.get("run_id"),
+        signal.get("step_name"),
+        _native_family_code(signal),
+        _native_recovery_class(signal),
+    )
+
+
+def _native_coalesce_key(
+    signal: Dict[str, Any],
+    scene_specific: Dict[Tuple[Any, ...], List[Tuple[Any, Any, Any]]],
+) -> Tuple[Any, ...]:
+    video_id = signal.get("video_id")
+    scene_id = signal.get("scene_id")
+    scene_index = signal.get("scene_index")
+    if not scene_id and signal.get("source") in {"run.warnings", "runtime.stderr"}:
+        candidates = scene_specific.get(_native_run_level_key(signal), [])
+        unique_candidates = list(dict.fromkeys(candidates))
+        if len(unique_candidates) == 1:
+            video_id, scene_id, scene_index = unique_candidates[0]
+    return (
+        signal.get("run_id"),
+        video_id,
+        scene_id,
+        scene_index,
+        signal.get("step_name"),
+        _native_family_code(signal),
+        _native_recovery_class(signal),
+    )
+
+
+def _native_family_code(signal: Dict[str, Any]) -> str:
+    family = _clean_str(signal.get("error_family")) or ""
+    if ":" in family:
+        return family.split(":", 1)[1] or "unknown"
+    return "unknown"
+
+
+def _native_recovery_class(signal: Dict[str, Any]) -> str:
+    recovery = _clean_str(signal.get("recovery_outcome")) or ""
+    if recovery.startswith("unrecovered"):
+        return "unrecovered"
+    if recovery.startswith("recovered"):
+        return "recovered"
+    status = str(signal.get("status") or "").lower()
+    if status in _ERROR_STATUSES:
+        return "unrecovered"
+    if status == "warning":
+        return "recovered"
+    return recovery or "unknown"
+
+
+def _merge_native_crash_signals(group: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
+    ordered = list(group)
+    if len(ordered) == 1:
+        signal = dict(ordered[0])
+        signal["sources"] = _signal_surface_names(signal)
+        return signal
+
+    preferred = _preferred_native_signal(ordered)
+    merged = dict(preferred)
+    sources = _dedupe_strings(source for signal in ordered for source in _signal_surface_names(signal))
+    unrecovered = any(_native_recovery_class(signal) == "unrecovered" for signal in ordered)
+    code = _native_family_code(preferred)
+    if unrecovered:
+        merged["error_family"] = f"native_subprocess_crash:{code}"
+        merged["status"] = "error"
+        merged["recovery_outcome"] = "unrecovered"
+    else:
+        merged["error_family"] = f"native_crash_retry:{code}"
+        merged["status"] = "warning"
+        merged["reason"] = "native_crash_retry"
+        merged["recovery_outcome"] = _preferred_recovered_outcome(ordered)
+    merged["source"] = "coalesced.native_retry"
+    merged["sources"] = sources
+    merged["source_count"] = len(sources)
+    merged["optional"] = any(bool(signal.get("optional")) for signal in ordered)
+    merged["provenance"] = {"surfaces": sources}
+
+    for field in ("video_id", "scene_id", "scene_index", "run_id", "episode", "report_run_id", "step_name", "ts"):
+        if not merged.get(field):
+            merged[field] = next((signal.get(field) for signal in ordered if signal.get(field)), merged.get(field))
+    return merged
+
+
+def _preferred_native_signal(signals: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
+    source_rank = {
+        "step_runs.jsonl": 0,
+        "runtime.events": 1,
+        "run.warnings": 2,
+        "runtime.stderr": 3,
+    }
+    return sorted(
+        signals,
+        key=lambda signal: (
+            source_rank.get(str(signal.get("source")), 9),
+            0 if signal.get("scene_id") else 1,
+            str(signal.get("ts") or ""),
+        ),
+    )[0]
+
+
+def _preferred_recovered_outcome(signals: Sequence[Dict[str, Any]]) -> str:
+    outcomes = [_clean_str(signal.get("recovery_outcome")) for signal in signals]
+    if "recovered_retry" in outcomes:
+        return "recovered_retry"
+    if "recovered_optional_continued" in outcomes:
+        return "recovered_optional_continued"
+    return next((outcome for outcome in outcomes if outcome and outcome.startswith("recovered")), "recovered_retry")
+
+
+def _signal_surface_names(signal: Dict[str, Any]) -> List[str]:
+    sources = signal.get("sources")
+    if isinstance(sources, list):
+        return [str(source) for source in sources if str(source).strip()]
+    source = _clean_str(signal.get("source"))
+    return [source] if source else []
 
 
 def _is_scene_less_native_retry_signal(signal: Dict[str, Any]) -> bool:

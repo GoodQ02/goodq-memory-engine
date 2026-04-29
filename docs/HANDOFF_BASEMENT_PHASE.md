@@ -40,6 +40,7 @@ This is the practical handoff point for a brand-new Codex session.
   - `/api/control-recurrence/reports/{report_id}/markdown`
   - `/api/control-recurrence/reports/{report_id}/recommendations`
   - tag anchor: `control-recurrence-v0.4.2`
+  - current-state capsule: `docs/releases/CONTROL_RECURRENCE_v0.4.2.md`
   - seal note: `control-recurrence-v0.4.1` remains a valid sealed milestone for direct-run discoverability and truth-surface alignment; current `main` is beyond it with `control-recurrence-v0.4.2` plus retry attribution/coalescing tightening
   - direct-run discovery is bounded by existing required artifacts; absent aggregate output, operator metadata, temporal paths, or resolved log paths produce limited/missing-artifact observability rather than a boundary violation
   - local `reports/control_recurrence/index.json` state is workspace artifact hygiene unless the file is explicitly tracked

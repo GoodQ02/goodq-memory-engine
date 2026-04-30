@@ -24,13 +24,26 @@ _EXPLICIT_META_STATUS_FIELD_BY_STEP = {
     "audio_emotion": "audio_emotion_meta",
     "emotion_classify": "emotion_meta",
     "image_caption": "caption_meta",
+    "image_embed_clip": "clip_meta",
+    "image_embed_dino": "dino_meta",
+    "image_ocr": "ocr_meta",
     "sentiment": "sentiment_meta",
 }
 
 _META_ERROR_STATUSES = {"error"}
-_META_SKIPPED_STATUSES = {"skipped", "no_text", "no_file", "unavailable", "no_index_path"}
+_META_SKIPPED_STATUSES = {
+    "dependency_missing",
+    "no_file",
+    "no_index_path",
+    "no_source_path",
+    "no_text",
+    "skipped",
+    "unavailable",
+}
 _EMBEDDING_EMISSION_BY_STEP = {
     "audio_embed_clap": True,
+    "image_embed_clip": True,
+    "image_embed_dino": True,
     "sentiment": False,
 }
 

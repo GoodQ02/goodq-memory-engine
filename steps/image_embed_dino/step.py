@@ -121,6 +121,9 @@ def image_embed_dino(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
     path = item.get("source_path")
     if not isinstance(path, str) or not os.path.isfile(path):
         return {"dino_meta": {"status": "no_file"}}
+    index_path = (cfg.get("paths", {}) or {}).get("faiss_dino_path")
+    if not index_path:
+        return {"dino_meta": {"status": "no_index_path", "reason": "direct_faiss_index_unconfigured"}}
     model_loaded_now = _load()
     if _DINO["model"] is None:
         return {"dino_meta": {"status": "unavailable"}}
@@ -172,9 +175,6 @@ def image_embed_dino(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
         )
         feats = out.last_hidden_state[:, 0, :].detach().cpu().numpy().astype("float32")
         # write to faiss
-        index_path = (cfg.get("paths", {}) or {}).get("faiss_dino_path")
-        if not index_path:
-            return {"dino_meta": {"status": "no_index_path"}}
         os.makedirs(os.path.dirname(index_path), exist_ok=True)
         if os.path.isfile(index_path):
             index = faiss.read_index(index_path)

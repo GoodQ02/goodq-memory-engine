@@ -206,6 +206,45 @@ def _content_fingerprint(item: Dict[str, Any]) -> str:
     return h.hexdigest()
 
 
+def _coerce_scene_identity(item: Dict[str, Any]) -> Optional[str]:
+    scene_id = item.get("scene_id")
+    if scene_id is not None:
+        scene_text = str(scene_id).strip()
+        if scene_text:
+            return scene_text
+
+    scene_index = item.get("scene_index")
+    if scene_index is None:
+        return None
+
+    try:
+        return f"scene_{int(scene_index):04d}"
+    except (TypeError, ValueError):
+        scene_text = str(scene_index).strip()
+        return scene_text or None
+
+
+def _text_embedding_identity(item: Dict[str, Any], content_hash: Optional[str] = None) -> str:
+    """Use scene scope for scene text so identical captions do not overwrite."""
+    base_hash = content_hash or _content_fingerprint(item)
+    scene_identity = _coerce_scene_identity(item)
+    video_identity = item.get("video_id") or item.get("video_hash")
+    if scene_identity is None and video_identity is None:
+        return base_hash
+
+    modality = str(item.get("modality") or "text").strip() or "text"
+    identity_parts = {
+        "component": "text_embed",
+        "content_hash": base_hash,
+        "modality": modality,
+        "scene": scene_identity,
+        "video": str(video_identity) if video_identity is not None else None,
+    }
+    return hashlib.sha256(
+        json.dumps(identity_parts, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("utf-8")
+    ).hexdigest()
+
+
 def _gather_text(item: Dict[str, Any]) -> Optional[str]:
     # Pull text from known fields in priority order
     for k in ("frame_text", "transcript", "text", "ocr_text", "caption"):
@@ -744,11 +783,24 @@ def text_embed(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
             payload_meta["start"] = scene_window.get("start")
             payload_meta["end"] = scene_window.get("end")
 
+        content_hash = _content_fingerprint(item)
+        embedding_id = _text_embedding_identity(item, content_hash)
+        scene_identity = _coerce_scene_identity(item)
+        video_identity = item.get("video_id") or item.get("video_hash")
+        if scene_identity is not None:
+            identity_scope = "scene"
+        elif video_identity is not None:
+            identity_scope = "video"
+        else:
+            identity_scope = "content"
+        payload_meta["content_fingerprint"] = content_hash
+        payload_meta["embedding_identity_scope"] = identity_scope
+
         # Route writes via MemoryRouter (faiss + qdrant as configured)
         stores = build_text_stores(cfg)
         router = MemoryRouter(stores)
         payload = {
-            "id": _content_fingerprint(item),
+            "id": embedding_id,
             "vector": vector_list,
             "payload": payload_meta,
         }
@@ -758,9 +810,7 @@ def text_embed(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
         embedding_ok = False
         embedding_reason = None
         try:
-            scene_id = item.get("scene_id") or item.get("scene_index")
-            if scene_id is not None and not isinstance(scene_id, str):
-                scene_id = f"scene_{int(scene_id):04d}"
+            scene_id = _coerce_scene_identity(item)
             upsert_embedding(cfg, payload["id"], None, item.get("source_path", ""), item.get("modality", ""), scene_id=scene_id)
             embedding_ok = True
         except Exception as e:
@@ -776,11 +826,7 @@ def text_embed(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
         try:
             from steps.common.memory_commit_events import MemoryCommitEvent, emit_memory_commit_event, utc_now_iso
 
-            scene_id = item.get("scene_id") or item.get("scene_index")
-            if scene_id is not None and not isinstance(scene_id, str):
-                scene_id = f"scene_{int(scene_id):04d}"
-            elif scene_id is not None:
-                scene_id = str(scene_id)
+            scene_id = _coerce_scene_identity(item)
 
             qdrant_ref = None
             try:
@@ -842,6 +888,8 @@ def text_embed(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
                         "text_len": len(text) if isinstance(text, str) else None,
                         "semantic_text_len": len(semantic_text) if isinstance(semantic_text, str) else None,
                         "source_path": item.get("source_path"),
+                        "content_fingerprint": content_hash,
+                        "embedding_identity_scope": identity_scope,
                     },
                 ),
             )

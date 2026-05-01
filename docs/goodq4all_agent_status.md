@@ -1,10 +1,10 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: GENERATED_SNAPSHOT -->
-<!-- DOC_LAST_VERIFIED: 2026-04-28 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-01 -->
 
 # GoodQ4All Agent Status
 
-_Operational restart checkpoint refreshed: 2026-04-28T07:35:00-05:00_
+_Operational restart checkpoint aligned: 2026-05-01._
 
 This document is a bounded operator snapshot of the current release-era
 stitching and offline-package baseline.
@@ -13,11 +13,10 @@ Use canonical runtime contracts and released evidence surfaces as source of
 truth for live claims. Do not treat this document as a live witness monitor.
 
 ## Current Restart Checkpoint
-- Runtime feature parity:
-  - `main` -> `2e895c6` (`feat: pilot exact-pair transcript normalization`)
-  - `public` -> `ed2a265` (`feat: pilot exact-pair transcript normalization`)
-- Main-side docs handoff:
-  - `main` -> `8fbcc7d` (`docs: refresh restart handoff checkpoint`)
+- Current local workspace:
+  - `main` -> `9afeae8` (`fix: add audio qdrant payload provenance`)
+- Current public-facing branch:
+  - `public` / `origin/public` -> `e5cd974` (`fix: tighten recurrence attribution and audio payloads`)
 - Current state:
   - Full Season 1 recompare witness completed successfully across `01x01` through `01x05`
   - Full Season 2 fresh witness completed successfully across `02x01` through `02x12`
@@ -29,12 +28,13 @@ truth for live claims. Do not treat this document as a live witness monitor.
     - `lib/control_recurrence_report.py`
     - `lib/control_recurrence_index.py`
     - `lib/control_recurrence_recommendations.py`
+    - `lib/control_recurrence_trend.py`
     - `python -m cli.control_recurrence_report`
     - default durable output: `reports/control_recurrence/`
     - artifact index: `reports/control_recurrence/index.json`
     - direct canonical run roots without wrapper `experiment_log.json` are discoverable from existing output/workspace/operator-log artifacts
     - direct run discovery supports one or more videos, metadata-described output/workspace paths, and captured stdout/stderr retry evidence
-    - post-seal status: `control-recurrence-v0.4.1` remains a valid sealed milestone for direct-run discoverability and truth-surface alignment; current `main` is beyond it with `control-recurrence-v0.4.2` plus retry attribution/coalescing tightening
+    - post-seal status: `control-recurrence-v0.4.1` remains a valid sealed milestone for direct-run discoverability and truth-surface alignment; latest control recurrence tag is `control-recurrence-v0.4.2`, with current source beyond it for read-only trend mode and audio Qdrant provenance hardening
     - bounded direct-run discovery limits are expected when required artifacts are absent; local `reports/control_recurrence/index.json` state is workspace artifact hygiene unless explicitly tracked
     - local API read surface:
       - `GET /api/control-recurrence/reports`
@@ -51,6 +51,7 @@ truth for live claims. Do not treat this document as a live witness monitor.
     - `conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --run-id 20260424_182406_season2_fresh_witness --write-md --write-json-file`
     - `conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --list-reports --json`
     - `conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --recommendations-for 20260424_003250_season1_recompare_witness__vs__20260424_182406_season2_fresh_witness`
+    - `conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --trend --json`
     - `curl http://127.0.0.1:30000/api/control-recurrence/reports`
     - `curl http://127.0.0.1:30000/api/control-recurrence/reports/latest`
     - `curl http://127.0.0.1:30000/api/control-recurrence/reports/20260424_003250_season1_recompare_witness__vs__20260424_182406_season2_fresh_witness/recommendations`
@@ -63,6 +64,7 @@ truth for live claims. Do not treat this document as a live witness monitor.
 - Current next-step bias after restart:
   - keep normalization allowlist single-entry unless new proof clears the same gate
   - prefer read-only audits and copy-on-write reprojection over broad runtime changes
+  - treat legacy audio vector presence as insufficient current-run proof unless run/timestamp provenance exists
 
 ## System Mode
 - MODE: Operational / Packaging / Hardening

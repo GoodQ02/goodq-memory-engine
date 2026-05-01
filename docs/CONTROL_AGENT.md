@@ -1,30 +1,31 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-04-28 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-01 -->
 
 # Control Agent & Self-Healing System
 
 **Status:** ⚠️ CONDITIONAL - Runtime disabled by default unless an `llm_client` is explicitly injected  
-**Last Updated:** April 28, 2026
+**Last Updated:** May 1, 2026
 **Version:** 1.0.0
 
 ---
 
 ## Overview
 
-The Control Agent is GoodQ4All's monitoring, diagnosis, and healing subsystem. In the current runtime contract, it requires explicit `llm_client` injection to initialize; default CLI flows persist a deterministic disabled state instead of attempting best-effort auto-init.
+The Control Agent is GoodQ4All's conditional monitoring, diagnosis, and healing subsystem. In the current runtime contract, it requires explicit `llm_client` injection to initialize; default CLI flows persist a deterministic disabled state instead of attempting best-effort auto-init.
 
-**Think of it as:** An intelligent DevOps engineer that never sleeps, continuously learning optimal recovery patterns and applying fixes before you even notice problems.
+Current reality: the active control surface is observer-only. It can summarize and trend existing recurrence artifacts, but it cannot heal, mutate configs, trigger ingestion, or take execution authority.
 
 ---
 
-## Active Read-Only Control Substrate (2026-04-28)
+## Active Read-Only Control Substrate (2026-05-01)
 
 The active control-plane surface now includes a read-only recurrence instrument:
 
 - `lib/control_recurrence_report.py`
 - `lib/control_recurrence_index.py`
 - `lib/control_recurrence_recommendations.py`
+- `lib/control_recurrence_trend.py`
 - `python -m cli.control_recurrence_report`
 - `GET /api/control-recurrence/reports`
 - `GET /api/control-recurrence/reports/latest`
@@ -32,7 +33,7 @@ The active control-plane surface now includes a read-only recurrence instrument:
 - `GET /api/control-recurrence/reports/{report_id}/markdown`
 - `GET /api/control-recurrence/reports/{report_id}/recommendations`
 
-Boundary: not healing yet. This instrument is not `ControlAgent` activation. It does not enable auto-healing, does not mutate configs, does not execute commands, does not use LLMs, and does not touch `cli/run_ingestion.py`.
+Boundary: not healing yet. This instrument is not `ControlAgent` activation. It does not enable auto-healing, does not mutate configs, does not execute commands, does not use LLMs, does not generate reports from the API, and does not touch `cli/run_ingestion.py`.
 
 It reads persisted runtime truth only:
 
@@ -44,7 +45,7 @@ It reads persisted runtime truth only:
 - `experiment_log.json`
 - `operator_run_metadata.json` and captured ingestion stdout/stderr events when a direct canonical run root has no wrapper `experiment_log.json`
 
-It reports recurrence summaries, comparison deltas, category counts, recovered/unrecovered/skipped counts, Phase 6 health, Qdrant health, deterministic operator hints, deterministic inspection-only recommendation drafts, and optional markdown/JSON artifacts under `reports/control_recurrence/`. Durable artifact discovery is recorded in `reports/control_recurrence/index.json`. Direct `cli.run_ingestion` run roots are supported read-only through existing output/workspace/operator-log artifacts, including multi-video direct roots; this does not create a second execution path.
+It reports recurrence summaries, comparison deltas, category counts, recovered/unrecovered/skipped counts, Phase 6 health, Qdrant health, deterministic operator hints, deterministic inspection-only recommendation drafts, conservative trend summaries over existing durable JSON reports, and optional markdown/JSON artifacts under `reports/control_recurrence/`. Durable artifact discovery is recorded in `reports/control_recurrence/index.json`. Direct `cli.run_ingestion` run roots are supported read-only through existing output/workspace/operator-log artifacts, including multi-video direct roots; this does not create a second execution path.
 
 The API surface reads only that existing index and the indexed artifacts. It does not regenerate reports, trigger ingestion, execute commands, scan arbitrary project paths, or form a second orchestration path.
 
@@ -76,6 +77,10 @@ conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_rep
 
 ```powershell
 conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --recommendations-for 20260424_003250_season1_recompare_witness__vs__20260424_182406_season2_fresh_witness
+```
+
+```powershell
+conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --trend --json
 ```
 
 ```powershell
@@ -299,6 +304,10 @@ if control_agent:
 
 ## Usage Examples
 
+These examples describe direct module-level `ControlAgent` APIs after an
+operator has explicitly injected an approved local `llm_client`. They are not
+the canonical CLI/watchdog runtime path.
+
 ### Manual Diagnosis
 
 ```python
@@ -325,10 +334,10 @@ print(diagnosis)
 # }
 ```
 
-### Automatic Healing
+### Conditional Auto-Heal API (Disabled in Canonical Runtime)
 
 ```python
-# Trigger auto-healing
+# Only valid after explicit local llm_client injection outside canonical ingest.
 result = agent.auto_heal_failure(
     error=Exception("CUDA OOM during processing"),
     step_name="face_embed",
@@ -365,37 +374,25 @@ agent.generate_report(
 
 ---
 
-## Example Healing Workflow
+## Canonical Runtime Boundary
 
 ```
 1. Video processing starts
-   └─> Control Agent initialized
+   -> cli.run_ingestion.py remains the canonical execution owner
 
-2. Step "face_embed" fails with CUDA OOM
-   └─> Error caught by run_ingestion.py
-       └─> Calls agent.auto_heal_failure()
+2. Control Agent module availability may be checked
+   -> availability is not activation
 
-3. Control Agent analyzes error
-   ├─> Checks HEALING_RULES (pattern match: "CUDA out of memory")
-   ├─> Checks recovery_strategies DB (current success-rate metadata)
-   └─> Recommended: reduce_batch_size (auto_apply=True)
+3. No injected llm_client is present by default
+   -> runtime records disabled_no_llm_client
 
-4. Config Healer applies fix
-   ├─> Backs up current config
-   ├─> Modifies batch_size: 32 → 16
-   ├─> Saves new config
-   └─> Returns success=True
+4. Optional failures are persisted in truth surfaces
+   -> step_runs.jsonl, run warnings, manifests, temporal index
 
-5. Step retries with new config
-   └─> Success! (execution time: 52s, GPU: 7800MB)
+5. Read-only recurrence tools inspect persisted artifacts
+   -> summaries, comparisons, recommendations, trends
 
-6. Control Agent learns
-   ├─> Records successful healing in recovery_history
-   ├─> Updates success_rate in error_patterns
-   └─> Stores optimal config in success_patterns
-
-7. Next time same error occurs
-   └─> Healing is even faster (learned pattern applied immediately)
+6. No automatic config mutation, command execution, ingestion trigger, or healing occurs
 ```
 
 ---

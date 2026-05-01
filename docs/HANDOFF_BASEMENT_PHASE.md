@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-04-28 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-01 -->
 
 # Basement Phase Handoff (v1) — Current System State
 
@@ -9,15 +9,14 @@
 
 ---
 
-## Current Restart Checkpoint (2026-04-28)
+## Current Restart Checkpoint (2026-05-01)
 
 This is the practical handoff point for a brand-new Codex session.
 
-- Latest shipped runtime feature anchor:
-  - `main` -> `2e895c6`
-  - `public` -> `ed2a265`
-- Restart handoff checkpoint commit:
-  - `main` -> `8fbcc7d` (`docs: refresh restart handoff checkpoint`)
+- Current local workspace head:
+  - `main` -> `9afeae8` (`fix: add audio qdrant payload provenance`)
+- Current public-facing branch head:
+  - `public` / `origin/public` -> `e5cd974` (`fix: tighten recurrence attribution and audio payloads`)
 - Full witness state now banked:
   - Season 1 recompare completed (`01x01`–`01x05`)
   - Season 2 fresh witness completed (`02x01`–`02x12`)
@@ -33,6 +32,7 @@ This is the practical handoff point for a brand-new Codex session.
   - `lib/control_recurrence_report.py`
   - `lib/control_recurrence_index.py`
   - `lib/control_recurrence_recommendations.py`
+  - `lib/control_recurrence_trend.py`
   - `python -m cli.control_recurrence_report`
   - `/api/control-recurrence/reports`
   - `/api/control-recurrence/reports/latest`
@@ -42,6 +42,7 @@ This is the practical handoff point for a brand-new Codex session.
   - tag anchor: `control-recurrence-v0.4.2`
   - current-state capsule: `docs/releases/CONTROL_RECURRENCE_v0.4.2.md`
   - seal note: `control-recurrence-v0.4.1` remains a valid sealed milestone for direct-run discoverability and truth-surface alignment; current `main` is beyond it with `control-recurrence-v0.4.2` plus retry attribution/coalescing tightening
+  - source state beyond the latest control-recurrence tag includes the read-only trend helper/CLI mode and the CLAP audio Qdrant payload provenance patch
   - direct-run discovery is bounded by existing required artifacts; absent aggregate output, operator metadata, temporal paths, or resolved log paths produce limited/missing-artifact observability rather than a boundary violation
   - local `reports/control_recurrence/index.json` state is workspace artifact hygiene unless the file is explicitly tracked
   - release notes:
@@ -274,6 +275,8 @@ These are intentionally *not* wired into ingestion yet:
   - `conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --list-reports --json`
 - Draft deterministic operator inspection recommendations from an indexed report:
   - `conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --recommendations-for 20260424_003250_season1_recompare_witness__vs__20260424_182406_season2_fresh_witness`
+- Derive conservative trends from indexed durable JSON reports:
+  - `conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --trend --json`
 - Read the existing index from the local API:
   - `curl http://127.0.0.1:30000/api/control-recurrence/reports`
 - Read the latest indexed entry from the local API:
@@ -281,7 +284,7 @@ These are intentionally *not* wired into ingestion yet:
 - Read deterministic inspection recommendations from the local API:
   - `curl http://127.0.0.1:30000/api/control-recurrence/reports/20260424_003250_season1_recompare_witness__vs__20260424_182406_season2_fresh_witness/recommendations`
 
-This is read-only control-plane observability only. The CLI reads existing persisted artifacts (`step_runs.jsonl`, run warnings, `scene_ingest_results.json`, `scene_manifest.json`, `temporal_index.json`, and `experiment_log.json`). For direct canonical run roots without a wrapper ledger, it can also read existing `operator_run_metadata.json`, `output/scene_ingest_results.json`, `workspace/_resolved_config.json`, canonical `step_runs.jsonl`, and captured ingestion stdout/stderr events. Direct roots may contain one or more videos, and metadata-described output/workspace paths are read only when present. It writes artifacts only when explicitly asked. Recommendation drafts read existing durable JSON reports and return inspection steps only. The API reads only `reports/control_recurrence/index.json` and indexed artifacts. It does not generate reports, trigger ingestion, activate ControlAgent, execute commands, mutate configs, or heal.
+This is read-only control-plane observability only. The CLI reads existing persisted artifacts (`step_runs.jsonl`, run warnings, `scene_ingest_results.json`, `scene_manifest.json`, `temporal_index.json`, and `experiment_log.json`). For direct canonical run roots without a wrapper ledger, it can also read existing `operator_run_metadata.json`, `output/scene_ingest_results.json`, `workspace/_resolved_config.json`, canonical `step_runs.jsonl`, and captured ingestion stdout/stderr events. Direct roots may contain one or more videos, and metadata-described output/workspace paths are read only when present. It writes artifacts only when explicitly asked. Recommendation drafts read existing durable JSON reports and return inspection steps only. Trend mode reads only the recurrence artifact index and indexed durable JSON reports; it does not reconstruct trend data from markdown or raw run roots. The API reads only `reports/control_recurrence/index.json` and indexed artifacts. It does not generate reports, trigger ingestion, activate ControlAgent, execute commands, mutate configs, or heal.
 
 ### Run the Justification Channel (read-only; no power)
 

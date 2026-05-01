@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-04-21 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-01 -->
 
 <p align="center">
   <img src="samples/assets/q-git-square.png" alt="GoodQ4All mark" width="140" />
@@ -11,6 +11,8 @@
 GoodQ4All is a local-first multimodal memory system for long-running video, audio, and text intelligence.
 
 It ingests media into scene-level memory, persists what it learns locally, and keeps the proof path visible. The system is built around deterministic Windows-first execution, with CPU-safe baseline behavior and optional GPU / WSL2 acceleration when you want more throughput.
+
+GoodQ4All's thesis is simple: machine memory should earn every claim it makes.
 
 ## What This Actually Is
 
@@ -68,6 +70,7 @@ Post-release operator validation on the current `main` / `public` line additiona
 - Episode-to-episode continuity is proven on fresh Season 5 material, not just on the release-era comparison witness.
 - API scene read models now expose persisted speaker-truth and continuity fields instead of thinner legacy projections.
 - Similar-scene retrieval is now a real multimodal feature and can fuse text, visual, and audio memory instead of falling back to an empty path.
+- Read-only control recurrence reporting can compare witnesses, index durable artifacts, draft deterministic inspection plans, and derive conservative trends from existing JSON reports without healing or mutation.
 
 Current proving run and release proof path:
 
@@ -195,6 +198,7 @@ If you want the deeper technical picture:
 - This is pre-1.0 software. The supported runtime path is stable enough to use, but surrounding helpers and APIs may still evolve.
 - A polished product UI is not part of the current shipping surface.
 - Some optional enrichments can still fail on individual scenes without invalidating the whole ingest.
+- Legacy audio vectors may lack current-run provenance; future CLAP Qdrant audio payloads now include run/timestamp metadata when available.
 - Context weighting is now strong, but the project still treats some interpretation choices as policy-level texture rather than frozen truth.
 
 ## Security and Data Handling

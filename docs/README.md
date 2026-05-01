@@ -1,10 +1,12 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-04-22 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-01 -->
 
 # GoodQ4All Documentation
 
 This is the current landing page for the active GoodQ4All docs surface.
+
+Machine memory should earn every claim it makes.
 
 ## Current Outcome and Baselines
 
@@ -32,6 +34,8 @@ Current operator-validated additions on the active line:
 - Similar-scene search is live on the active API surface and now resolves through multimodal memory, including audio when available.
 - The ingest write surface is now a truthful request facade: it stages supported local files into the canonical inbox, returns a request handle, and leaves execution ownership with watchdog plus `cli.run_ingestion`.
 - System mutation routes remain intentionally guarded: canonical write surfaces are still CLI, watchdog, and `import_inbox`, while `/api/system/reindex` and `/api/system/reload` stay operator-only.
+- Read-only control recurrence now includes durable artifact indexing, API access, deterministic recommendation drafts, and conservative trend summaries from existing JSON reports. It does not heal, mutate configs, trigger ingestion, or activate `ControlAgent`.
+- Future CLAP Qdrant audio payloads carry run/timestamp provenance when available; legacy audio vector presence should not be treated as current-run proof without those fields.
 
 ## Start Here
 

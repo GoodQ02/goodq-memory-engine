@@ -1,10 +1,10 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: GENERATED_SNAPSHOT -->
-<!-- DOC_LAST_VERIFIED: 2026-04-28 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-01 -->
 
 # System Snapshot
 
-_Operational snapshot refreshed: 2026-04-28T07:35:00-05:00_
+_Operational operator-state alignment refreshed: 2026-05-01._
 
 This is a bounded release-era system snapshot. It is useful for understanding
 the supported host/runtime baseline, but it is not a live witness monitor.
@@ -116,6 +116,7 @@ the supported host/runtime baseline, but it is not a live witness monitor.
   - `lib/control_recurrence_report.py`
   - `lib/control_recurrence_index.py`
   - `lib/control_recurrence_recommendations.py`
+  - `lib/control_recurrence_trend.py`
   - `python -m cli.control_recurrence_report`
   - `/api/control-recurrence/reports`
   - `/api/control-recurrence/reports/latest`
@@ -129,13 +130,15 @@ the supported host/runtime baseline, but it is not a live witness monitor.
   - reads recurrence truth from existing `step_runs.jsonl`, run warnings, `scene_ingest_results.json`, `scene_manifest.json`, `temporal_index.json`, and `experiment_log.json`
   - supports direct canonical run roots without a wrapper `experiment_log.json` by reading existing `operator_run_metadata.json`, `output/scene_ingest_results.json`, `workspace/_resolved_config.json`, canonical `step_runs.jsonl`, and captured ingestion stdout/stderr events
   - supports multi-video direct run roots and metadata-described output/workspace paths without creating a second execution path
-  - treats `control-recurrence-v0.4.1` as a valid sealed milestone for direct-run discoverability and truth-surface alignment, with current `main` beyond it through `control-recurrence-v0.4.2` plus retry attribution/coalescing tightening
+  - treats `control-recurrence-v0.4.1` as a valid sealed milestone for direct-run discoverability and truth-surface alignment, with the latest control recurrence tag at `control-recurrence-v0.4.2`
+  - current source beyond the latest control recurrence tag includes read-only recurrence trend mode and CLAP audio Qdrant payload provenance hardening
   - treats bounded direct-run discovery limits as expected when required artifacts are absent, not as recurrence-layer boundary violations
   - classifies recurrence families as `informational`, `watch`, `actionable`, or `blocking`
   - emits deterministic operator hints and inspection targets without changing runtime state
   - can write markdown to `reports/control_recurrence/` when `--write-md` is explicitly supplied
   - can write durable JSON artifacts with `--write-json-file`
   - records durable artifact discovery in `reports/control_recurrence/index.json`
+  - derives conservative trends from the recurrence artifact index and indexed durable JSON reports only
   - treats untracked local `reports/control_recurrence/index.json` state as workspace artifact hygiene unless it is intentionally tracked
   - marks legacy markdown-only index entries explicitly with `artifact_status=markdown_only` and an index warning
   - exposes a local read-only API over the existing recurrence index and indexed artifacts
@@ -149,6 +152,7 @@ the supported host/runtime baseline, but it is not a live witness monitor.
   - `conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --run-id 20260424_182406_season2_fresh_witness --write-md --write-json-file`
   - `conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --list-reports --json`
   - `conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --recommendations-for 20260424_003250_season1_recompare_witness__vs__20260424_182406_season2_fresh_witness`
+  - `conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --trend --json`
   - `curl http://127.0.0.1:30000/api/control-recurrence/reports`
   - `curl http://127.0.0.1:30000/api/control-recurrence/reports/latest`
   - `curl http://127.0.0.1:30000/api/control-recurrence/reports/20260424_003250_season1_recompare_witness__vs__20260424_182406_season2_fresh_witness/recommendations`

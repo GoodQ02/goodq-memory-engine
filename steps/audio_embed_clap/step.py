@@ -7,7 +7,7 @@ from steps.common.qdrant_client import build_qdrant_client
 from typing import Any, Dict, Optional
 from contextlib import nullcontext
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timezone
 import importlib.util
 from pathlib import Path
 import audioop
@@ -45,12 +45,42 @@ def _normalize_scene_id(value: Any) -> Optional[str]:
         return text or None
 
 
-def _build_qdrant_audio_payload(item: Dict[str, Any], *, source_path: str, faiss_id: int) -> Dict[str, Any]:
+def _resolve_run_id(item: Dict[str, Any], cfg: Optional[Dict[str, Any]] = None) -> Optional[str]:
+    for value in (
+        item.get("run_id"),
+        item.get("runtime_run_id"),
+        (cfg.get("run") or {}).get("id") if isinstance(cfg, dict) and isinstance(cfg.get("run"), dict) else None,
+        os.environ.get("GOODQ_RUN_ID"),
+    ):
+        if value is not None and str(value).strip():
+            return str(value).strip()
+    return None
+
+
+def _build_qdrant_audio_payload(
+    item: Dict[str, Any],
+    *,
+    source_path: str,
+    faiss_id: int,
+    embedding_id: str,
+    created_at: str,
+    cfg: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
     payload: Dict[str, Any] = {
         "source_path": source_path,
         "modality": "audio",
         "faiss_id": faiss_id,
+        "embedding_id": embedding_id,
+        "component": "audio_embed_clap",
+        "step": "audio_embed_clap",
+        "model": _CLAP_MODEL_ID,
+        "created_at": created_at,
+        "commit_ts_utc": created_at,
     }
+
+    run_id = _resolve_run_id(item, cfg)
+    if run_id:
+        payload["run_id"] = run_id
 
     scene_id = _normalize_scene_id(item.get("scene_id") or item.get("scene_index"))
     if scene_id:
@@ -73,6 +103,10 @@ def _build_qdrant_audio_payload(item: Dict[str, Any], *, source_path: str, faiss
     scene_index = item.get("scene_index")
     if scene_index is not None:
         payload["scene_index"] = scene_index
+
+    audio_backend_effective = item.get("audio_backend_effective")
+    if audio_backend_effective is not None:
+        payload["audio_backend_effective"] = audio_backend_effective
 
     return payload
 
@@ -501,6 +535,12 @@ def audio_embed_clap(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
             faiss_id = getattr(index, 'ntotal', 0) - 1
         faiss.write_index(index, index_path)
         faiss_ok = True
+        try:
+            from steps.common.memory_commit_events import utc_now_iso
+
+            commit_ts_utc = utc_now_iso()
+        except Exception:
+            commit_ts_utc = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
         # Optional Qdrant dual-write
         qdrant_attempted = False
@@ -515,7 +555,14 @@ def audio_embed_clap(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
                 qdrant_ok = bool(q_client.upsert([{
                     "id": h,
                     "vector": feats[0].tolist(),
-                    "payload": _build_qdrant_audio_payload(item, source_path=path, faiss_id=faiss_id),
+                    "payload": _build_qdrant_audio_payload(
+                        item,
+                        source_path=path,
+                        faiss_id=faiss_id,
+                        embedding_id=h,
+                        created_at=commit_ts_utc,
+                        cfg=cfg,
+                    ),
                 }]))
                 if not qdrant_ok:
                     qdrant_reason = "upsert_failed"
@@ -585,7 +632,7 @@ def audio_embed_clap(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
             )
 
         try:
-            from steps.common.memory_commit_events import MemoryCommitEvent, emit_memory_commit_event, utc_now_iso
+            from steps.common.memory_commit_events import MemoryCommitEvent, emit_memory_commit_event
 
             scene_id = item.get("scene_id") or item.get("scene_index")
             if scene_id is not None and not isinstance(scene_id, str):
@@ -595,7 +642,7 @@ def audio_embed_clap(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
             emit_memory_commit_event(
                 cfg,
                 MemoryCommitEvent(
-                    ts_utc=utc_now_iso(),
+                    ts_utc=commit_ts_utc,
                     scene_id=scene_id,
                     video_id=str(item.get("video_id")) if item.get("video_id") is not None else None,
                     modality=str(item.get("modality") or "audio") or "audio",
@@ -613,7 +660,12 @@ def audio_embed_clap(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
                             "reason": embedding_reason,
                         },
                     },
-                    details={"faiss_id": faiss_id, "source_path": path},
+                    details={
+                        "faiss_id": faiss_id,
+                        "source_path": path,
+                        "run_id": _resolve_run_id(item, cfg),
+                        "created_at": commit_ts_utc,
+                    },
                 ),
             )
         except Exception as e:

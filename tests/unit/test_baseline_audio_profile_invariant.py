@@ -439,15 +439,26 @@ def test_audio_embed_clap_qdrant_payload_keeps_scene_video_metadata(monkeypatch)
             "video_id": "video-alpha",
             "video_hash": "hash-alpha",
             "scene": {"start": 12.5, "end": 15.0, "duration": 2.5},
+            "audio_backend_effective": "wsl",
         },
         source_path="processing/audio/scene_0007.wav",
         faiss_id=12345,
+        embedding_id="embedding-alpha",
+        created_at="2026-04-30T12:05:43+00:00",
+        cfg={"run": {"id": "run-alpha"}},
     )
 
     assert payload == {
         "source_path": "processing/audio/scene_0007.wav",
         "modality": "audio",
         "faiss_id": 12345,
+        "embedding_id": "embedding-alpha",
+        "component": "audio_embed_clap",
+        "step": "audio_embed_clap",
+        "model": "laion/clap-htsat-unfused",
+        "created_at": "2026-04-30T12:05:43+00:00",
+        "commit_ts_utc": "2026-04-30T12:05:43+00:00",
+        "run_id": "run-alpha",
         "scene_id": "scene-alpha",
         "video_id": "video-alpha",
         "video_hash": "hash-alpha",
@@ -455,7 +466,34 @@ def test_audio_embed_clap_qdrant_payload_keeps_scene_video_metadata(monkeypatch)
         "end": 15.0,
         "duration": 2.5,
         "scene_index": 7,
+        "audio_backend_effective": "wsl",
     }
+
+
+def test_audio_embed_clap_qdrant_payload_without_run_id_does_not_claim_current_run(monkeypatch) -> None:
+    monkeypatch.delenv("GOODQ_RUN_ID", raising=False)
+    monkeypatch.delenv("GOODQ_REQUIRE_GPU", raising=False)
+    monkeypatch.setenv("GOODQ_NO_AUTO_GPU", "1")
+    from steps.audio_embed_clap.step import _build_qdrant_audio_payload
+
+    payload = _build_qdrant_audio_payload(
+        {
+            "scene_id": "scene-alpha",
+            "scene_index": 7,
+            "video_id": "video-alpha",
+        },
+        source_path="processing/audio/scene_0007.wav",
+        faiss_id=12345,
+        embedding_id="embedding-alpha",
+        created_at="2026-04-30T12:05:43+00:00",
+    )
+
+    assert payload["scene_id"] == "scene-alpha"
+    assert payload["embedding_id"] == "embedding-alpha"
+    assert payload["component"] == "audio_embed_clap"
+    assert payload["model"] == "laion/clap-htsat-unfused"
+    assert payload["created_at"] == "2026-04-30T12:05:43+00:00"
+    assert "run_id" not in payload
 
 
 @pytest.mark.parametrize(

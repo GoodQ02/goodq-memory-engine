@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import json
+import subprocess
 import sys
 import types
+import urllib.error
 from pathlib import Path
 
 
@@ -115,3 +118,48 @@ def test_check_torch_cuda_runtime_fails_when_gpu_profile_uses_cpu_only_torch(mon
     assert len(results) == 1
     assert results[0].status == "fail"
     assert "CPU-only" in results[0].detail
+
+
+def test_ci_profile_warns_for_missing_specialized_step_envs(monkeypatch, tmp_path: Path):
+    from scripts import bootstrap_verify
+
+    for _, _, lock_rel_path in bootstrap_verify.SUPPORTED_STEP_ENVS:
+        lock_path = tmp_path / lock_rel_path
+        lock_path.parent.mkdir(parents=True, exist_ok=True)
+        lock_path.write_text("# synthetic lock\n", encoding="utf-8")
+
+    monkeypatch.setattr(bootstrap_verify, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(bootstrap_verify, "_detect_conda", lambda: tmp_path / "conda.exe")
+    monkeypatch.setattr(
+        bootstrap_verify.subprocess,
+        "run",
+        lambda *args, **kwargs: subprocess.CompletedProcess(
+            args[0],
+            0,
+            json.dumps({"envs": [str(tmp_path / "envs" / "goodq_core")]}),
+            "",
+        ),
+    )
+
+    desktop_results = bootstrap_verify._check_step_env_pack(profile="desktop")
+    ci_results = bootstrap_verify._check_step_env_pack(profile="ci")
+
+    assert all(result.status == "fail" for result in desktop_results if result.name.startswith("step_env:"))
+    assert all(result.status == "warn" for result in ci_results if result.name.startswith("step_env:"))
+    assert any("CI profile verifies lock recipes" in result.detail for result in ci_results)
+
+
+def test_ci_profile_qdrant_runtime_warning_states_desktop_service_not_proven(monkeypatch):
+    from scripts import bootstrap_verify
+
+    def raise_url_error(*args, **kwargs):
+        raise urllib.error.URLError("connection refused")
+
+    monkeypatch.setattr(bootstrap_verify.urllib.request, "urlopen", raise_url_error)
+    monkeypatch.setattr(bootstrap_verify, "_inspect_windows_service", lambda service_name: {"exists": "false"})
+
+    result = bootstrap_verify._check_qdrant_runtime({}, profile="ci")
+
+    assert result.status == "warn"
+    assert "CI profile does not prove desktop Qdrant service readiness" in result.detail
+    assert "preferred remediation" in result.detail

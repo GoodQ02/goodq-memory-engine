@@ -143,6 +143,14 @@ If Qdrant is unavailable, the bootstrap recommends repairing or installing the
 Windows `GoodQ_Qdrant` service first, attempts the existing service installer
 when the operator consents, and mentions the foreground start helper only as a
 manual testing fallback.
+
+GitHub Actions uses `scripts/bootstrap_verify.py --json --profile ci` as a
+baseline repo/environment sanity contract. The CI profile requires tracked lock
+recipes and core repo checks, but it does not prove desktop Qdrant service
+readiness or provision the specialized step environment pack. The default
+desktop verifier profile remains the operator-facing bootstrap/runtime check,
+and ingestion witnesses still require Qdrant to be reachable.
+
 When the installer must cross a UAC elevation boundary, bootstrap now passes the
 already-resolved canonical storage/log paths into the service installer so the
 admin hop does not have to rediscover the Python/Conda runtime before creating

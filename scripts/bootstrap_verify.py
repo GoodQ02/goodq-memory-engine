@@ -121,7 +121,7 @@ def _detect_conda() -> Path | None:
     return None
 
 
-def _check_step_env_pack() -> List[CheckResult]:
+def _check_step_env_pack(profile: str = "desktop") -> List[CheckResult]:
     conda_exe = _detect_conda()
     if not conda_exe:
         return [CheckResult("step_env_pack", "warn", "conda not found; unable to verify supported step environments")]
@@ -146,7 +146,11 @@ def _check_step_env_pack() -> List[CheckResult]:
         if env_name.lower() in present:
             results.append(CheckResult(f"step_env:{env_name}", "pass", f"present ({desc}); lock={lock_rel_path}"))
         else:
-            results.append(CheckResult(f"step_env:{env_name}", "fail", f"missing ({desc}); lock={lock_rel_path}"))
+            status = "warn" if profile == "ci" else "fail"
+            detail = f"missing ({desc}); lock={lock_rel_path}"
+            if profile == "ci":
+                detail += "; CI profile verifies lock recipes but does not require specialized step env provisioning"
+            results.append(CheckResult(f"step_env:{env_name}", status, detail))
     return results
 
 
@@ -193,7 +197,7 @@ def _resolve_qdrant_url(cfg: Dict[str, Any]) -> str:
     return "http://127.0.0.1:6333"
 
 
-def _check_qdrant_runtime(cfg: Dict[str, Any]) -> CheckResult:
+def _check_qdrant_runtime(cfg: Dict[str, Any], profile: str = "desktop") -> CheckResult:
     url = _resolve_qdrant_url(cfg)
     try:
         with urllib.request.urlopen(f"{url.rstrip('/')}/collections", timeout=5) as response:
@@ -218,7 +222,11 @@ def _check_qdrant_runtime(cfg: Dict[str, Any]) -> CheckResult:
     return CheckResult(
         "qdrant_runtime",
         "warn",
-        f"unreachable at {url} ({detail}); {service_detail}; preferred remediation: {installer}",
+        (
+            f"unreachable at {url} ({detail}); {service_detail}; "
+            f"{'CI profile does not prove desktop Qdrant service readiness; ' if profile == 'ci' else ''}"
+            f"preferred remediation: {installer}"
+        ),
     )
 
 
@@ -527,21 +535,24 @@ def _check_env_resolution(cfg: Dict[str, Any]) -> List[CheckResult]:
     return results
 
 
-def build_report() -> Dict[str, Any]:
+def build_report(profile: str = "desktop") -> Dict[str, Any]:
+    if profile not in {"desktop", "ci"}:
+        raise ValueError(f"unsupported bootstrap verify profile: {profile}")
+
     checks: List[CheckResult] = []
 
     config_check, cfg = _check_config_load()
     checks.append(config_check)
     checks.extend(_check_required_folders())
     checks.append(_check_qdrant_binary())
-    checks.append(_check_qdrant_runtime(cfg))
+    checks.append(_check_qdrant_runtime(cfg, profile=profile))
     checks.append(_check_ffmpeg())
     checks.append(_check_pdftotext(cfg))
     checks.extend(_check_required_model_cache(cfg))
     checks.append(_check_wsl_flag())
     checks.extend(_check_wsl_audio_workspace())
     checks.extend(_check_torch_cuda_runtime())
-    checks.extend(_check_step_env_pack())
+    checks.extend(_check_step_env_pack(profile=profile))
     checks.extend(_check_env_resolution(cfg))
 
     statuses = [entry.status for entry in checks]
@@ -568,9 +579,15 @@ def _print_human(report: Dict[str, Any]) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Read-only bootstrap verification for clone readiness")
     parser.add_argument("--json", action="store_true", help="emit JSON output")
+    parser.add_argument(
+        "--profile",
+        choices=("desktop", "ci"),
+        default="desktop",
+        help="verification contract to apply; ci does not require desktop service or specialized step env provisioning",
+    )
     args = parser.parse_args()
 
-    report = build_report()
+    report = build_report(profile=args.profile)
     if args.json:
         json.dump(report, sys.stdout, indent=2)
         sys.stdout.write("\n")

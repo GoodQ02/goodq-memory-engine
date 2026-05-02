@@ -42,7 +42,7 @@ jobs:
 
       - name: Bootstrap verification
         shell: pwsh
-        run: conda run -n goodq_core python scripts/bootstrap_verify.py --json
+        run: conda run -n goodq_core python scripts/bootstrap_verify.py --json --profile ci
 
       - name: Unit test suite
         shell: pwsh

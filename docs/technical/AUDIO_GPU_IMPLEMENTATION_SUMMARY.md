@@ -4,7 +4,9 @@
 
 ## 🎯 Objective
 
-Optimize audio processing (speaker diarization + transcription) with GPU acceleration to achieve **2-5x speedup** without compromising stability or accuracy.
+Optimize audio processing (speaker diarization + transcription) with GPU acceleration while preserving stability, accuracy, and observable fallback behavior.
+
+> Current status note: the speedup numbers below are historical/expected targets, not a fresh same-scene CPU-vs-WSL witness result. Current runtime truth should be taken from `step_runs.jsonl` and the read-only control recurrence latency summary.
 
 ## ✅ What Was Implemented
 
@@ -44,8 +46,8 @@ Optimize audio processing (speaker diarization + transcription) with GPU acceler
 - Performance metrics logging
 - GPU stats in metadata
 
-**Benefits:**
-- 2-3x faster than CPU
+**Expected benefits:**
+- Potentially faster than CPU when the WSL/GPU path is healthy
 - Stable memory usage
 - No hanging on long audio
 - Detailed progress tracking
@@ -59,8 +61,8 @@ Optimize audio processing (speaker diarization + transcription) with GPU acceler
 - Periodic cache clearing
 - Performance tracking
 
-**Benefits:**
-- 8-12x faster than CPU
+**Expected benefits:**
+- Potentially faster than CPU when the GPU transcription path is healthy
 - Efficient memory use
 - Parallel chunk processing
 - Word-level timestamps preserved
@@ -107,7 +109,9 @@ Optimize audio processing (speaker diarization + transcription) with GPU acceler
 - **TEST_AUDIO_GPU.bat** - One-click test suite launcher
 - Integration with existing `LAUNCH_GOODQ.bat`
 
-## 📊 Expected Performance
+## 📊 Historical / Expected Performance Targets
+
+These figures are retained as implementation targets and historical expectations. Treat them as verified only after a same-scene CPU-vs-WSL timing witness for the current environment.
 
 ### Typical Results (NVIDIA RTX 3060 12GB)
 
@@ -282,7 +286,7 @@ steps/audio_transcribe/step.py              # GPU optimization integrated
 
 ## ✨ Key Benefits
 
-1. **2-5x Faster Processing** - Massive time savings
+1. **Observable Acceleration Path** - Speedups must be proven by current timing evidence
 2. **Zero Configuration** - Works automatically
 3. **Safe & Stable** - No crashes or hangs
 4. **Self-Optimizing** - Learns and improves
@@ -299,7 +303,7 @@ steps/audio_transcribe/step.py              # GPU optimization integrated
 2. ✅ Check performance with `audio_gpu_report.py`
 3. ✅ Monitor with `audio_gpu_monitor.py` (optional)
 4. ✅ Review optimization suggestions
-5. ✅ Enjoy the speedup!
+5. ✅ Compare current timing evidence before making speedup claims
 
 ### For Developers
 

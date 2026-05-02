@@ -130,6 +130,7 @@ the supported host/runtime baseline, but it is not a live witness monitor.
   - reads recurrence truth from existing `step_runs.jsonl`, run warnings, `scene_ingest_results.json`, `scene_manifest.json`, `temporal_index.json`, and `experiment_log.json`
   - supports direct canonical run roots without a wrapper `experiment_log.json` by reading existing `operator_run_metadata.json`, `output/scene_ingest_results.json`, `workspace/_resolved_config.json`, canonical `step_runs.jsonl`, and captured ingestion stdout/stderr events
   - supports multi-video direct run roots and metadata-described output/workspace paths without creating a second execution path
+  - surfaces read-only step latency evidence from existing `step_runs.jsonl` `duration_ms` rows, including p50/p95/max by step, slow outlier counts, timeout-boundary exceedance counts, and WSL audio timing buckets
   - treats `control-recurrence-v0.4.1` as a valid sealed milestone for direct-run discoverability and truth-surface alignment, with the latest control recurrence tag at `control-recurrence-v0.4.2`
   - current source beyond the latest control recurrence tag includes read-only recurrence trend mode and CLAP audio Qdrant payload provenance hardening
   - audio-vector success is provenance-defined by `docs/architecture/AUDIO_VECTOR_PROVENANCE_CONTRACT.md`
@@ -148,7 +149,7 @@ the supported host/runtime baseline, but it is not a live witness monitor.
   - marks legacy markdown-only index entries explicitly with `artifact_status=markdown_only` and an index warning
   - exposes a local read-only API over the existing recurrence index and indexed artifacts
   - drafts deterministic operator inspection steps from existing durable JSON reports
-  - boundary: not healing yet. The recurrence report/API does not activate `ControlAgent`, does not enable auto-healing, does not mutate configs, does not execute commands, does not use LLMs, does not generate reports from the API, and does not touch `cli/run_ingestion.py`.
+  - boundary: not healing yet. The recurrence report/API latency evidence is observer-only; it does not activate `ControlAgent`, does not enable auto-healing, does not mutate configs, does not execute commands, does not use LLMs, does not generate reports from the API, and does not touch `cli/run_ingestion.py`.
 - Exact control recurrence commands:
   - `conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --run-id 20260424_182406_season2_fresh_witness`
   - `conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --run-root reports/fresh_ingest_runs/<direct_run_root>`

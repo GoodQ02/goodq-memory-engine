@@ -561,6 +561,7 @@ def test_control_recurrence_report_filters_direct_step_runs_by_runtime_run_id(tm
                 "ts": "2026-04-29T01:00:00",
                 "step": "sentiment",
                 "status": "skipped",
+                "duration_ms": 25.0,
                 "run_id": current_run_id,
                 "video_id": video_id,
                 "scene_id": "scene-current",
@@ -568,10 +569,21 @@ def test_control_recurrence_report_filters_direct_step_runs_by_runtime_run_id(tm
                 "extra": {"reason": "no_text"},
             },
             {
+                "ts": "2026-04-29T01:01:00",
+                "step": "image_caption",
+                "status": "ok",
+                "duration_ms": 1200.0,
+                "run_id": current_run_id,
+                "video_id": video_id,
+                "scene_id": "scene-current",
+                "scene_index": 0,
+            },
+            {
                 "ts": "2026-04-28T01:00:00",
                 "step": "image_caption",
                 "status": "error",
                 "error": "stale baseline failure",
+                "duration_ms": 999999.0,
                 "run_id": stale_run_id,
                 "video_id": video_id,
                 "scene_id": "scene-stale",
@@ -587,8 +599,14 @@ def test_control_recurrence_report_filters_direct_step_runs_by_runtime_run_id(tm
     assert report["scope"]["step_run_scope"]["strict_run_id_filter_applied"] is True
     assert report["scope"]["step_run_scope"]["excluded_run_ids"] == {stale_run_id: 1}
     assert {row["run_id"] for row in report["recurrence_summary"]} == {current_run_id}
+    latency = report["step_latency_summary"]
+    assert latency["duration_row_count"] == 2
+    latency_steps = {row["step_name"]: row for row in latency["steps"]}
+    assert latency_steps["image_caption"]["ok_count"] == 1
+    assert latency_steps["image_caption"]["max_ms"] == 1200.0
     rendered = json.dumps(report)
     assert "stale baseline failure" not in rendered
+    assert "999999" not in rendered
 
 
 def test_control_recurrence_report_warns_when_runtime_run_id_missing(tmp_path: Path) -> None:
@@ -657,6 +675,90 @@ def test_control_recurrence_report_warns_when_runtime_run_id_missing(tmp_path: P
     assert report["scope"]["step_run_scope"]["limited_run_id_scope"] is True
     assert any("limited_run_id_scope" in warning for warning in report["evidence"]["warnings"])
     assert report["scope"]["signals"] == 1
+
+
+def test_control_recurrence_comparison_includes_latency_delta(tmp_path: Path) -> None:
+    reports_root = tmp_path / "reports" / "fresh_ingest_runs"
+    baseline_root = reports_root / "baseline_latency"
+    candidate_root = reports_root / "candidate_latency"
+    baseline_epoch = tmp_path / "GoodQ_Data" / "epochs" / "epoch_baseline_latency"
+    candidate_epoch = tmp_path / "GoodQ_Data" / "epochs" / "epoch_candidate_latency"
+    baseline_ep = _episode_artifacts(
+        run_root=baseline_root,
+        epoch_root=baseline_epoch,
+        episode_dir_name="01x01_scene_context_llm",
+        episode_name="01x01 - Good News, Bad News.mp4",
+        run_id="baseline-runtime",
+        video_id="baseline-video",
+        scene_ids=["baseline-scene"],
+        speaker_skip_index=None,
+    )
+    candidate_ep = _episode_artifacts(
+        run_root=candidate_root,
+        epoch_root=candidate_epoch,
+        episode_dir_name="01x01_scene_context_llm",
+        episode_name="01x01 - Good News, Bad News.mp4",
+        run_id="candidate-runtime",
+        video_id="candidate-video",
+        scene_ids=["candidate-scene"],
+        speaker_skip_index=None,
+    )
+    _write_json(
+        baseline_root / "experiment_log.json",
+        {
+            "epoch": "epoch_baseline_latency",
+            "status": "completed",
+            "plan": [{"episode": "01x01 - Good News, Bad News.mp4", "status": "passed", "run_dir": str(baseline_ep)}],
+        },
+    )
+    _write_json(
+        candidate_root / "experiment_log.json",
+        {
+            "epoch": "epoch_candidate_latency",
+            "status": "completed",
+            "plan": [{"episode": "01x01 - Good News, Bad News.mp4", "status": "passed", "run_dir": str(candidate_ep)}],
+        },
+    )
+    _append_jsonl(
+        baseline_epoch / "logs" / "step_runs.jsonl",
+        [
+            {
+                "ts": "2026-05-01T01:00:00",
+                "step": "audio_unified_wsl2",
+                "status": "ok",
+                "duration_ms": 20000.0,
+                "run_id": "baseline-runtime",
+                "video_id": "baseline-video",
+            }
+        ],
+    )
+    _append_jsonl(
+        candidate_epoch / "logs" / "step_runs.jsonl",
+        [
+            {
+                "ts": "2026-05-01T02:00:00",
+                "step": "audio_unified_wsl2",
+                "status": "ok",
+                "duration_ms": 45000.0,
+                "run_id": "candidate-runtime",
+                "video_id": "candidate-video",
+            }
+        ],
+    )
+
+    comparison = build_control_recurrence_comparison(
+        baseline_run_id="baseline_latency",
+        candidate_run_id="candidate_latency",
+        reports_root=reports_root,
+    )
+
+    delta = comparison["delta"]["step_latency_delta"]
+    assert delta["baseline_duration_row_count"] == 1
+    assert delta["candidate_duration_row_count"] == 1
+    rows = {row["step_name"]: row for row in delta["steps"]}
+    assert rows["audio_unified_wsl2"]["p95_delta_ms"] == 25000.0
+    assert rows["audio_unified_wsl2"]["trend_status"] == "increased"
+    assert comparison["candidate"]["step_latency_summary"]["wsl_audio_steps"][0]["step_name"] == "audio_unified_wsl2"
 
 
 def test_control_recurrence_report_does_not_fan_out_shared_stderr_retry(
@@ -1158,6 +1260,7 @@ def test_control_recurrence_cli_emits_text(tmp_path: Path, capsys) -> None:
     assert "Operator Hints" in out
     assert "Inspection Targets" in out
     assert "Category Counts" in out
+    assert "Step Latency Summary" in out
     assert "Final Phase 6 / Qdrant Truth" in out
 
 
@@ -1567,6 +1670,7 @@ def test_control_recurrence_cli_writes_single_run_markdown(tmp_path: Path, capsy
     assert "# GoodQ Control Recurrence Report" in text
     assert "## Recommendation" in text
     assert "## Category Counts" in text
+    assert "## Step Latency Summary" in text
     assert "## Recovered / Unrecovered / Skipped Counts" in text
     assert "## Phase 6 Health" in text
     assert "## Qdrant Health" in text
@@ -1677,6 +1781,7 @@ def test_control_recurrence_cli_writes_comparison_markdown(tmp_path: Path, capsy
     assert "# GoodQ Control Recurrence Comparison" in text
     assert "Baseline run ID: `baseline_run`" in text
     assert "Candidate run ID: `candidate_run`" in text
+    assert "## Step Latency Delta" in text
     assert "## New / Increased / Resolved Families" in text
     assert "## Blocking Signals" in text
     assert "## Read-Only Disclaimer" in text

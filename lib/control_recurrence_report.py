@@ -46,6 +46,9 @@ _BLOCKING_FAMILIES = {
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _DEFAULT_MARKDOWN_OUTPUT_DIR = _REPO_ROOT / "reports" / "control_recurrence"
 _INDEX_FILENAME = "index.json"
+_DEFAULT_STEP_TIMEOUT_BOUNDARY_MS = 1_800_000
+_SLOW_STEP_OUTLIER_MS = 60_000
+_TOP_LATENCY_ROWS_PER_STEP = 5
 
 
 @dataclass(frozen=True)
@@ -90,6 +93,7 @@ def build_control_recurrence_report(
     episodes: List[_EpisodeScope] = []
     health_by_episode: List[Dict[str, Any]] = []
     signals: List[Dict[str, Any]] = []
+    latency_rows: List[Dict[str, Any]] = []
 
     for selected_root in run_roots:
         episode_scopes, root_files, root_warnings = _load_run_scope(selected_root)
@@ -124,13 +128,14 @@ def build_control_recurrence_report(
         "limited_run_id_scope": False,
     }
     for path in step_paths:
-        step_signals, step_files, step_warnings, step_scope_info = _load_step_run_signals(
+        step_signals, step_latency_rows, step_files, step_warnings, step_scope_info = _load_step_run_signals(
             path=path,
             episode_by_runtime_id=episode_by_runtime_id,
             episode_by_video_id=episode_by_video_id,
             target_runtime_run_ids=target_runtime_run_ids,
         )
         signals.extend(step_signals)
+        latency_rows.extend(step_latency_rows)
         files_read.extend(step_files)
         warnings.extend(step_warnings)
         step_run_scope["strict_run_id_filter_applied"] = bool(
@@ -150,6 +155,7 @@ def build_control_recurrence_report(
     signals = _dedupe_signals(signals)
 
     phase6_health = _phase6_health_summary(health_by_episode)
+    latency_summary = _step_latency_summary(latency_rows)
     grouped = _group_signals(signals)
     family_rows = _attach_family_categories(_top_families(signals), phase6_health)
     _attach_operator_hints_to_families(family_rows)
@@ -192,6 +198,7 @@ def build_control_recurrence_report(
             "step_runs_files": [_display_path(p) for p in step_paths],
             "step_run_scope": step_run_scope,
         },
+        "step_latency_summary": latency_summary,
         "recurrence_summary": grouped,
         "top_repeated_failure_families": family_rows,
         "optional_enrichment_skips": optional_skips,
@@ -241,6 +248,10 @@ def build_control_recurrence_comparison(
     baseline_recovery = _safe_int_map(baseline.get("recovered_vs_unrecovered_failures"))
     candidate_recovery = _safe_int_map(candidate.get("recovered_vs_unrecovered_failures"))
     family_categories = _merged_family_categories(baseline, candidate)
+    latency_delta = _latency_delta(
+        baseline.get("step_latency_summary"),
+        candidate.get("step_latency_summary"),
+    )
 
     family_delta_map = _count_delta_map(baseline_family_counts, candidate_family_counts)
     _attach_delta_categories(family_delta_map, family_categories)
@@ -275,6 +286,7 @@ def build_control_recurrence_comparison(
             _count_delta_map(baseline_episode_counts, candidate_episode_counts),
             key_name="episode_video",
         ),
+        "step_latency_delta": latency_delta,
         "phase6_health_delta": phase6_delta,
         "qdrant_health_delta": qdrant_delta,
     }
@@ -330,6 +342,7 @@ def render_text_report(report: Dict[str, Any], *, limit: int = 12) -> str:
     recovery = report.get("recovered_vs_unrecovered_failures") if isinstance(report, dict) else {}
     classification = report.get("recurrence_classification") if isinstance(report, dict) else {}
     recommendation = report.get("recommendation") if isinstance(report, dict) else {}
+    latency = report.get("step_latency_summary") if isinstance(report, dict) else {}
 
     lines.append("GoodQ Control Recurrence Report")
     lines.append("================================")
@@ -378,6 +391,9 @@ def render_text_report(report: Dict[str, Any], *, limit: int = 12) -> str:
         lines.append(
             f"  - {category}: families={family_counts.get(category, 0)} signals={signal_counts.get(category, 0)}"
         )
+    lines.append("")
+
+    lines.extend(_text_step_latency_summary(latency, limit=limit))
     lines.append("")
 
     lines.append("Recurrence Summary")
@@ -553,6 +569,9 @@ def render_text_comparison(comparison: Dict[str, Any], *, limit: int = 12) -> st
         lines.append("  - none")
     lines.append("")
 
+    lines.extend(_text_step_latency_delta(delta.get("step_latency_delta") or {}, limit=limit))
+    lines.append("")
+
     lines.append("Per-Episode/Video Changes")
     for row in (delta.get("per_episode_video_changes") or [])[:limit]:
         lines.append(
@@ -577,6 +596,69 @@ def render_text_comparison(comparison: Dict[str, Any], *, limit: int = 12) -> st
     )
 
     return "\n".join(lines)
+
+
+def _text_step_latency_summary(latency: Dict[str, Any], *, limit: int) -> List[str]:
+    lines = ["Step Latency Summary"]
+    if not isinstance(latency, dict) or not latency.get("duration_row_count"):
+        lines.append("  - no step duration rows found")
+        return lines
+    lines.append(
+        "  - rows={rows} steps={steps} slow_outliers={slow} timeout_exceedances={timeout}".format(
+            rows=int(latency.get("duration_row_count") or 0),
+            steps=int(latency.get("step_count") or 0),
+            slow=int(latency.get("slow_outlier_count") or 0),
+            timeout=int(latency.get("timeout_boundary_exceedance_count") or 0),
+        )
+    )
+    for row in (latency.get("steps") or [])[:limit]:
+        if not isinstance(row, dict):
+            continue
+        lines.append(
+            "  - step={step_name} rows={count} ok={ok_count} non_ok={non_ok_count} "
+            "p50_ms={p50_ms} p95_ms={p95_ms} max_ms={max_ms} slow_outliers={slow_outlier_count} "
+            "timeout_exceedances={timeout_boundary_exceedance_count}".format(
+                step_name=row.get("step_name") or "unknown_step",
+                count=int(row.get("count") or 0),
+                ok_count=int(row.get("ok_count") or 0),
+                non_ok_count=int(row.get("non_ok_count") or 0),
+                p50_ms=_format_ms_text(row.get("p50_ms")),
+                p95_ms=_format_ms_text(row.get("p95_ms")),
+                max_ms=_format_ms_text(row.get("max_ms")),
+                slow_outlier_count=int(row.get("slow_outlier_count") or 0),
+                timeout_boundary_exceedance_count=int(row.get("timeout_boundary_exceedance_count") or 0),
+            )
+        )
+    return lines
+
+
+def _text_step_latency_delta(delta: Dict[str, Any], *, limit: int) -> List[str]:
+    lines = ["Step Latency Delta"]
+    if not isinstance(delta, dict) or not delta.get("steps"):
+        lines.append("  - no comparable step latency rows found")
+        return lines
+    lines.append(
+        "  - status={status} baseline_rows={baseline} candidate_rows={candidate}".format(
+            status=delta.get("status") or "unknown",
+            baseline=int(delta.get("baseline_duration_row_count") or 0),
+            candidate=int(delta.get("candidate_duration_row_count") or 0),
+        )
+    )
+    for row in (delta.get("steps") or [])[:limit]:
+        if not isinstance(row, dict):
+            continue
+        lines.append(
+            "  - step={step_name} rows={baseline_count}->{candidate_count} "
+            "p95_delta_ms={p95_delta_ms} max_delta_ms={max_delta_ms} status={trend_status}".format(
+                step_name=row.get("step_name") or "unknown_step",
+                baseline_count=int(row.get("baseline_count") or 0),
+                candidate_count=int(row.get("candidate_count") or 0),
+                p95_delta_ms=_format_ms_text(row.get("p95_delta_ms")),
+                max_delta_ms=_format_ms_text(row.get("max_delta_ms")),
+                trend_status=row.get("trend_status") or "unknown",
+            )
+        )
+    return lines
 
 
 def write_markdown_report(report: Dict[str, Any], output_dir: str | Path | None = None) -> Path:
@@ -764,6 +846,7 @@ def _render_markdown_single(report: Dict[str, Any]) -> str:
     classification = report.get("recurrence_classification") if isinstance(report, dict) else {}
     recovery = report.get("recovered_vs_unrecovered_failures") if isinstance(report, dict) else {}
     health = report.get("phase6_qdrant_truth") if isinstance(report, dict) else {}
+    latency = report.get("step_latency_summary") if isinstance(report, dict) else {}
     run_id = _single_report_run_id(report)
 
     lines: List[str] = []
@@ -786,6 +869,8 @@ def _render_markdown_single(report: Dict[str, Any]) -> str:
     lines.extend(_markdown_recommendation(recommendation, classification.get("highest_category")))
     lines.append("")
     lines.extend(_markdown_category_counts(classification))
+    lines.append("")
+    lines.extend(_markdown_step_latency_summary(latency))
     lines.append("")
     lines.extend(_markdown_recovery_counts(recovery))
     lines.append("")
@@ -810,6 +895,7 @@ def _render_markdown_comparison(comparison: Dict[str, Any]) -> str:
     total = delta.get("total_recurrence_signals") if isinstance(delta, dict) else {}
     recovery = delta.get("recovery_counts") if isinstance(delta, dict) else {}
     category_counts = delta.get("category_counts") if isinstance(delta, dict) else {}
+    latency_delta = delta.get("step_latency_delta") if isinstance(delta, dict) else {}
     phase6 = delta.get("phase6_health_delta") if isinstance(delta, dict) else {}
     qdrant = delta.get("qdrant_health_delta") if isinstance(delta, dict) else {}
 
@@ -845,6 +931,8 @@ def _render_markdown_comparison(comparison: Dict[str, Any]) -> str:
         )
     lines.append("")
     lines.extend(_markdown_recovery_delta_counts(recovery))
+    lines.append("")
+    lines.extend(_markdown_step_latency_delta(latency_delta))
     lines.append("")
     lines.extend(_markdown_phase6_delta(phase6))
     lines.append("")
@@ -906,6 +994,32 @@ def _markdown_recovery_counts(recovery: Dict[str, Any]) -> List[str]:
     return lines
 
 
+def _markdown_step_latency_summary(latency: Dict[str, Any]) -> List[str]:
+    lines = ["## Step Latency Summary"]
+    if not isinstance(latency, dict) or not latency.get("duration_row_count"):
+        lines.append("No step duration rows found.")
+        return lines
+    lines.append(f"- Source: `{_md_text(latency.get('source'))}`")
+    lines.append(f"- Duration rows: `{int(latency.get('duration_row_count') or 0)}`")
+    lines.append(f"- Timeout boundary ms: `{int(latency.get('timeout_boundary_ms') or 0)}`")
+    lines.append(f"- Slow outlier threshold ms: `{int(latency.get('slow_outlier_threshold_ms') or 0)}`")
+    lines.append(f"- Timeout boundary exceedances: `{int(latency.get('timeout_boundary_exceedance_count') or 0)}`")
+    lines.append("")
+    lines.append("| Step | Rows | OK | Non-OK | p50 ms | p95 ms | Max ms | Slow Outliers | Timeout Exceedances |")
+    lines.append("|---|---:|---:|---:|---:|---:|---:|---:|---:|")
+    for row in (latency.get("steps") or [])[:12]:
+        if not isinstance(row, dict):
+            continue
+        lines.append(
+            f"| {_md_cell(row.get('step_name'))} | {int(row.get('count') or 0)} | "
+            f"{int(row.get('ok_count') or 0)} | {int(row.get('non_ok_count') or 0)} | "
+            f"{_format_ms_cell(row.get('p50_ms'))} | {_format_ms_cell(row.get('p95_ms'))} | "
+            f"{_format_ms_cell(row.get('max_ms'))} | {int(row.get('slow_outlier_count') or 0)} | "
+            f"{int(row.get('timeout_boundary_exceedance_count') or 0)} |"
+        )
+    return lines
+
+
 def _markdown_recovery_delta_counts(recovery: Dict[str, Any]) -> List[str]:
     lines = ["## Recovered / Unrecovered / Skipped Counts"]
     lines.append("| Outcome | Baseline | Candidate | Delta |")
@@ -915,6 +1029,28 @@ def _markdown_recovery_delta_counts(recovery: Dict[str, Any]) -> List[str]:
         lines.append(
             f"| {_md_cell(key)} | {int(row.get('baseline_count') or 0)} | "
             f"{int(row.get('candidate_count') or 0)} | {int(row.get('delta') or 0)} |"
+        )
+    return lines
+
+
+def _markdown_step_latency_delta(delta: Dict[str, Any]) -> List[str]:
+    lines = ["## Step Latency Delta"]
+    if not isinstance(delta, dict) or not delta.get("steps"):
+        lines.append("No comparable step latency rows found.")
+        return lines
+    lines.append(f"- Status: `{_md_text(delta.get('status') or 'unknown')}`")
+    lines.append(f"- Baseline duration rows: `{int(delta.get('baseline_duration_row_count') or 0)}`")
+    lines.append(f"- Candidate duration rows: `{int(delta.get('candidate_duration_row_count') or 0)}`")
+    lines.append("")
+    lines.append("| Step | Baseline Rows | Candidate Rows | p95 Delta ms | Max Delta ms | Status |")
+    lines.append("|---|---:|---:|---:|---:|---|")
+    for row in (delta.get("steps") or [])[:12]:
+        if not isinstance(row, dict):
+            continue
+        lines.append(
+            f"| {_md_cell(row.get('step_name'))} | {int(row.get('baseline_count') or 0)} | "
+            f"{int(row.get('candidate_count') or 0)} | {_format_ms_cell(row.get('p95_delta_ms'))} | "
+            f"{_format_ms_cell(row.get('max_delta_ms'))} | {_md_cell(row.get('trend_status'))} |"
         )
     return lines
 
@@ -1305,6 +1441,7 @@ def _comparison_run_summary(report: Dict[str, Any], *, label: str) -> Dict[str, 
         "recommendation": report.get("recommendation") or {},
         "operator_hints": report.get("operator_hints") or [],
         "inspection_targets": report.get("inspection_targets") or [],
+        "step_latency_summary": report.get("step_latency_summary") or {},
         "phase6_qdrant_truth": {
             "status": health.get("status") if isinstance(health, dict) else "unknown",
             "healthy": bool(health.get("healthy")) if isinstance(health, dict) else False,
@@ -2543,10 +2680,11 @@ def _load_step_run_signals(
     episode_by_runtime_id: Dict[str, _EpisodeScope],
     episode_by_video_id: Dict[str, _EpisodeScope],
     target_runtime_run_ids: Sequence[str],
-) -> Tuple[List[Dict[str, Any]], List[str], List[str], Dict[str, Any]]:
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[str], List[str], Dict[str, Any]]:
     files_read: List[str] = []
     warnings: List[str] = []
     signals: List[Dict[str, Any]] = []
+    latency_rows: List[Dict[str, Any]] = []
     target_run_ids = {str(value) for value in target_runtime_run_ids if str(value).strip()}
     scope_info: Dict[str, Any] = {
         "strict_run_id_filter_applied": bool(target_run_ids),
@@ -2556,14 +2694,14 @@ def _load_step_run_signals(
     }
     if not path.is_file():
         warnings.append(f"step_runs_missing: {path}")
-        return signals, files_read, warnings, scope_info
+        return signals, latency_rows, files_read, warnings, scope_info
 
     files_read.append(str(path))
     try:
         lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
     except Exception as exc:
         warnings.append(f"step_runs_unreadable: {path}: {exc}")
-        return signals, files_read, warnings, scope_info
+        return signals, latency_rows, files_read, warnings, scope_info
 
     excluded_run_ids: Counter[str] = Counter()
     for line in lines:
@@ -2574,10 +2712,6 @@ def _load_step_run_signals(
         except Exception:
             continue
         if not isinstance(row, dict):
-            continue
-
-        status = (_clean_str(row.get("status")) or "unknown").lower()
-        if status in _OK_STATUSES:
             continue
 
         row_run_id = _clean_str(row.get("run_id")) or ""
@@ -2597,6 +2731,14 @@ def _load_step_run_signals(
         if episode is None:
             continue
 
+        latency_row = _latency_from_step_row(episode, row)
+        if latency_row is not None:
+            latency_rows.append(latency_row)
+
+        status = (_clean_str(row.get("status")) or "unknown").lower()
+        if status in _OK_STATUSES:
+            continue
+
         signals.append(_signal_from_step_row(episode, row))
 
     if excluded_run_ids:
@@ -2608,7 +2750,26 @@ def _load_step_run_signals(
     if scope_info["limited_run_id_scope"]:
         warnings.append("limited_run_id_scope: target runtime run_id unavailable; step_runs filtered without strict run_id")
 
-    return signals, files_read, warnings, scope_info
+    return signals, latency_rows, files_read, warnings, scope_info
+
+
+def _latency_from_step_row(episode: _EpisodeScope, row: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    duration_ms = _coerce_float(row.get("duration_ms"))
+    if duration_ms is None:
+        return None
+    return {
+        "source": "step_runs.jsonl",
+        "report_run_id": episode.report_run_id,
+        "run_id": _clean_str(row.get("run_id")) or episode.runtime_run_id,
+        "episode": episode.video_name or episode.episode,
+        "video_id": _clean_str(row.get("video_id")) or episode.video_id,
+        "step_name": _clean_str(row.get("step")) or "unknown_step",
+        "status": (_clean_str(row.get("status")) or "unknown").lower(),
+        "duration_ms": duration_ms,
+        "scene_id": _clean_str(row.get("scene_id")),
+        "scene_index": row.get("scene_index"),
+        "ts": _clean_str(row.get("ts")),
+    }
 
 
 def _signal_from_step_row(episode: _EpisodeScope, row: Dict[str, Any]) -> Dict[str, Any]:
@@ -2966,6 +3127,170 @@ def _scenes_affected(signals: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return rows
 
 
+def _step_latency_summary(rows: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
+    """Summarize persisted step duration rows without changing recurrence signals."""
+
+    valid_rows = [row for row in rows if _coerce_float(row.get("duration_ms")) is not None]
+    if not valid_rows:
+        return {
+            "mode": "read_only_latency_observability",
+            "source": "step_runs.jsonl duration_ms",
+            "status": "empty",
+            "duration_row_count": 0,
+            "step_count": 0,
+            "timeout_boundary_ms": _DEFAULT_STEP_TIMEOUT_BOUNDARY_MS,
+            "slow_outlier_threshold_ms": _SLOW_STEP_OUTLIER_MS,
+            "timeout_boundary_exceedance_count": 0,
+            "slow_outlier_count": 0,
+            "steps": [],
+            "wsl_audio_steps": [],
+            "warnings": ["no_step_duration_rows"],
+        }
+
+    buckets: Dict[str, List[Dict[str, Any]]] = {}
+    for row in valid_rows:
+        step = _clean_str(row.get("step_name")) or "unknown_step"
+        buckets.setdefault(step, []).append(row)
+
+    step_rows = [_summarize_latency_step(step, items) for step, items in buckets.items()]
+    step_rows.sort(key=lambda row: (-float(row.get("max_ms") or 0.0), str(row.get("step_name"))))
+    wsl_audio_steps = [row for row in step_rows if _is_wsl_audio_step(str(row.get("step_name") or ""))]
+
+    return {
+        "mode": "read_only_latency_observability",
+        "source": "step_runs.jsonl duration_ms",
+        "status": "available",
+        "duration_row_count": len(valid_rows),
+        "step_count": len(step_rows),
+        "timeout_boundary_ms": _DEFAULT_STEP_TIMEOUT_BOUNDARY_MS,
+        "slow_outlier_threshold_ms": _SLOW_STEP_OUTLIER_MS,
+        "timeout_boundary_exceedance_count": sum(int(row.get("timeout_boundary_exceedance_count") or 0) for row in step_rows),
+        "slow_outlier_count": sum(int(row.get("slow_outlier_count") or 0) for row in step_rows),
+        "steps": step_rows,
+        "wsl_audio_steps": wsl_audio_steps,
+        "warnings": [],
+    }
+
+
+def _summarize_latency_step(step: str, rows: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
+    durations = sorted(float(row.get("duration_ms") or 0.0) for row in rows)
+    statuses = Counter(str(row.get("status") or "unknown").lower() for row in rows)
+    ok_count = sum(count for status, count in statuses.items() if status in _OK_STATUSES)
+    non_ok_count = len(rows) - ok_count
+    top_rows = sorted(rows, key=lambda row: float(row.get("duration_ms") or 0.0), reverse=True)[
+        :_TOP_LATENCY_ROWS_PER_STEP
+    ]
+    return {
+        "step_name": step,
+        "count": len(rows),
+        "ok_count": ok_count,
+        "non_ok_count": non_ok_count,
+        "status_counts": dict(sorted(statuses.items())),
+        "min_ms": _round_ms(durations[0]) if durations else None,
+        "p50_ms": _round_ms(_percentile(durations, 50)),
+        "p95_ms": _round_ms(_percentile(durations, 95)),
+        "max_ms": _round_ms(durations[-1]) if durations else None,
+        "avg_ms": _round_ms(sum(durations) / len(durations)) if durations else None,
+        "slow_outlier_count": sum(1 for value in durations if value >= _SLOW_STEP_OUTLIER_MS),
+        "timeout_boundary_exceedance_count": sum(1 for value in durations if value >= _DEFAULT_STEP_TIMEOUT_BOUNDARY_MS),
+        "top_durations": [_latency_row_excerpt(row) for row in top_rows],
+    }
+
+
+def _latency_row_excerpt(row: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "duration_ms": _round_ms(row.get("duration_ms")),
+        "status": row.get("status"),
+        "run_id": row.get("run_id"),
+        "episode": row.get("episode"),
+        "video_id": row.get("video_id"),
+        "scene_id": row.get("scene_id"),
+        "scene_index": row.get("scene_index"),
+        "ts": row.get("ts"),
+    }
+
+
+def _latency_delta(baseline: Any, candidate: Any) -> Dict[str, Any]:
+    baseline_summary = baseline if isinstance(baseline, dict) else {}
+    candidate_summary = candidate if isinstance(candidate, dict) else {}
+    baseline_steps = _latency_steps_by_name(baseline_summary)
+    candidate_steps = _latency_steps_by_name(candidate_summary)
+    step_rows: List[Dict[str, Any]] = []
+
+    for step in sorted(set(baseline_steps) | set(candidate_steps)):
+        base = baseline_steps.get(step, {})
+        cand = candidate_steps.get(step, {})
+        row = {
+            "step_name": step,
+            "baseline_count": int(base.get("count") or 0),
+            "candidate_count": int(cand.get("count") or 0),
+            "baseline_p50_ms": _round_ms(base.get("p50_ms")),
+            "candidate_p50_ms": _round_ms(cand.get("p50_ms")),
+            "p50_delta_ms": _delta_ms(base.get("p50_ms"), cand.get("p50_ms")),
+            "baseline_p95_ms": _round_ms(base.get("p95_ms")),
+            "candidate_p95_ms": _round_ms(cand.get("p95_ms")),
+            "p95_delta_ms": _delta_ms(base.get("p95_ms"), cand.get("p95_ms")),
+            "baseline_max_ms": _round_ms(base.get("max_ms")),
+            "candidate_max_ms": _round_ms(cand.get("max_ms")),
+            "max_delta_ms": _delta_ms(base.get("max_ms"), cand.get("max_ms")),
+            "slow_outlier_delta": int(cand.get("slow_outlier_count") or 0) - int(base.get("slow_outlier_count") or 0),
+            "timeout_boundary_exceedance_delta": int(cand.get("timeout_boundary_exceedance_count") or 0)
+            - int(base.get("timeout_boundary_exceedance_count") or 0),
+        }
+        row["trend_status"] = _latency_trend_status(row)
+        step_rows.append(row)
+
+    step_rows.sort(
+        key=lambda row: (
+            -abs(float(row.get("p95_delta_ms") or 0.0)),
+            -abs(float(row.get("max_delta_ms") or 0.0)),
+            str(row.get("step_name")),
+        )
+    )
+    return {
+        "mode": "read_only_latency_delta",
+        "status": "available" if step_rows else "empty",
+        "baseline_duration_row_count": int(baseline_summary.get("duration_row_count") or 0),
+        "candidate_duration_row_count": int(candidate_summary.get("duration_row_count") or 0),
+        "timeout_boundary_ms": _DEFAULT_STEP_TIMEOUT_BOUNDARY_MS,
+        "slow_outlier_threshold_ms": _SLOW_STEP_OUTLIER_MS,
+        "steps": step_rows,
+    }
+
+
+def _latency_steps_by_name(summary: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+    out: Dict[str, Dict[str, Any]] = {}
+    for row in summary.get("steps") or []:
+        if not isinstance(row, dict):
+            continue
+        step = _clean_str(row.get("step_name"))
+        if step:
+            out[step] = row
+    return out
+
+
+def _latency_trend_status(row: Dict[str, Any]) -> str:
+    baseline_count = int(row.get("baseline_count") or 0)
+    candidate_count = int(row.get("candidate_count") or 0)
+    if baseline_count <= 0 and candidate_count > 0:
+        return "new"
+    if baseline_count > 0 and candidate_count <= 0:
+        return "resolved"
+    delta = _coerce_float(row.get("p95_delta_ms"))
+    if delta is None:
+        return "insufficient_data"
+    if delta > 0:
+        return "increased"
+    if delta < 0:
+        return "decreased"
+    return "stable"
+
+
+def _is_wsl_audio_step(step_name: str) -> bool:
+    step = step_name.lower()
+    return "wsl" in step and "audio" in step
+
+
 def _phase6_health_summary(episodes: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
     rows = list(episodes)
     healthy = bool(rows) and all(bool(row.get("healthy")) for row in rows)
@@ -3211,6 +3536,51 @@ def _coerce_int(value: Any) -> Optional[int]:
         return int(value)
     except Exception:
         return None
+
+
+def _coerce_float(value: Any) -> Optional[float]:
+    try:
+        return float(value)
+    except Exception:
+        return None
+
+
+def _round_ms(value: Any) -> Optional[float]:
+    numeric = _coerce_float(value)
+    if numeric is None:
+        return None
+    return round(numeric, 3)
+
+
+def _delta_ms(baseline: Any, candidate: Any) -> Optional[float]:
+    base = _coerce_float(baseline)
+    cand = _coerce_float(candidate)
+    if base is None or cand is None:
+        return None
+    return _round_ms(cand - base)
+
+
+def _percentile(values: Sequence[float], percentile: int) -> Optional[float]:
+    if not values:
+        return None
+    ordered = sorted(float(value) for value in values)
+    if len(ordered) == 1:
+        return ordered[0]
+    rank = (len(ordered) - 1) * (float(percentile) / 100.0)
+    lower = int(rank)
+    upper = min(lower + 1, len(ordered) - 1)
+    weight = rank - lower
+    return ordered[lower] + (ordered[upper] - ordered[lower]) * weight
+
+
+def _format_ms_text(value: Any) -> str:
+    numeric = _round_ms(value)
+    return "n/a" if numeric is None else f"{numeric:.3f}"
+
+
+def _format_ms_cell(value: Any) -> str:
+    numeric = _round_ms(value)
+    return "n/a" if numeric is None else f"{numeric:.3f}"
 
 
 def _nested_get(value: Any, path: Sequence[str]) -> Any:

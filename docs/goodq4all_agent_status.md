@@ -35,6 +35,7 @@ truth for live claims. Do not treat this document as a live witness monitor.
     - artifact index: `reports/control_recurrence/index.json`
     - direct canonical run roots without wrapper `experiment_log.json` are discoverable from existing output/workspace/operator-log artifacts
     - direct run discovery supports one or more videos, metadata-described output/workspace paths, and captured stdout/stderr retry evidence
+    - recurrence reports now include read-only step latency evidence from existing `step_runs.jsonl` `duration_ms` rows, including p50/p95/max, slow outlier counts, timeout-boundary exceedance counts, and WSL audio timing buckets
     - post-seal status: `control-recurrence-v0.4.1` remains a valid sealed milestone for direct-run discoverability and truth-surface alignment; latest control recurrence tag is `control-recurrence-v0.4.2`, with current source beyond it for read-only trend mode and audio Qdrant provenance hardening
     - bounded direct-run discovery limits are expected when required artifacts are absent; local `reports/control_recurrence/index.json` state is workspace artifact hygiene unless explicitly tracked
     - local API read surface:
@@ -43,7 +44,7 @@ truth for live claims. Do not treat this document as a live witness monitor.
       - `GET /api/control-recurrence/reports/{report_id}`
       - `GET /api/control-recurrence/reports/{report_id}/markdown`
       - `GET /api/control-recurrence/reports/{report_id}/recommendations`
-    - boundary: not healing yet. It does not activate `ControlAgent`, does not enable auto-healing, does not mutate configs, does not execute commands, does not use LLMs, does not generate reports from the API, and does not touch `cli/run_ingestion.py`.
+    - boundary: not healing yet. Latency evidence is observer-only; it does not activate `ControlAgent`, does not enable auto-healing, does not mutate configs, does not execute commands, does not use LLMs, does not generate reports from the API, and does not touch `cli/run_ingestion.py`.
   - Exact operator examples:
     - `conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --run-id 20260424_182406_season2_fresh_witness`
     - `conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --run-root reports/fresh_ingest_runs/<direct_run_root>`

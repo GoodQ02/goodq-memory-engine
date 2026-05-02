@@ -22,6 +22,7 @@ Covered surfaces:
 - audio vector provenance
 - control recurrence reports
 - control recurrence recommendation drafts
+- persistent store alignment audit
 - API previews and read models
 
 Not covered here:
@@ -53,6 +54,7 @@ Not covered here:
 | control recurrence report | `lib/control_recurrence_report.py` | Read-only recurrence intelligence | derived from persisted artifacts | operator-facing and `ui_safe` after path hygiene |
 | control recurrence index | `lib/control_recurrence_index.py` | Discoverable report filing cabinet | derived index | `ui_safe` when paths are relative/sanitized |
 | recommendation draft | `lib/control_recurrence_recommendations.py` | Deterministic inspection plan | derived from durable recurrence JSON | operator-facing; no execution authority |
+| persistent store alignment audit | `lib/persistent_store_alignment.py`, `cli/persistent_store_alignment_audit.py` | Read-only alignment proof between canonical scene results, memory.db, and KG | derived/operator | counts, statuses, and scene IDs only; no raw paths, transcripts, or vector payloads |
 | API previews | `api/routes/runtime.py`, API routers | Local read-model projections | derived | `ui_safe` local API surface |
 
 ## Canonical Artifact Hierarchy
@@ -65,6 +67,8 @@ Use this precedence when the same fact appears in more than one surface:
 4. Run summary/API preview surfaces for local read-only status projections.
 5. Control recurrence reports for cross-artifact recurrence intelligence.
 6. Recommendation drafts for deterministic operator inspection steps.
+7. Persistent store alignment audits for read-only scene-presence agreement
+   between canonical scene results, memory.db, and knowledge_graph.db.
 
 Derived surfaces may summarize, classify, or reformat canonical truth. They must
 not silently override canonical artifact fields.
@@ -190,6 +194,46 @@ Compatibility surfaces:
 - `scene_modality_coverage.audio_clap_basis` must state that basis explicitly.
 - `scene_modality_coverage.audio_vector_provenance_state` carries the doctrine
   label UI consumers should prefer when displaying audio-vector status.
+
+## Persistent Store Alignment Audit
+
+Command:
+
+```text
+python -m cli.persistent_store_alignment_audit --scene-results <scene_ingest_results.json> --json
+```
+
+Primary contract:
+
+- read-only operator audit over an existing `scene_ingest_results.json`,
+  `memory.db`, and `knowledge_graph.db`
+- confirms canonical scene IDs are present in memory scene rows and KG
+  `media_nodes`
+- summarizes memory segments, embedding modality rows, memory commit events,
+  KG media nodes, and KG node-media links
+- explicitly states that persistent scene presence is not current-run vector
+  proof
+- does not scan arbitrary run roots, build conduits, mutate databases, trigger
+  ingestion, or return raw paths
+
+Stable top-level fields:
+
+- `mode`
+- `status`
+- `source`
+- `canonical`
+- `memory`
+- `knowledge_graph`
+- `alignment`
+- `safety_boundary`
+
+Operator language rule:
+
+- Use this audit to answer whether canonical scene identities are represented
+  in persistent stores.
+- Do not use it to prove current-run audio-vector success, CLAP/Qdrant
+  freshness, or model quality. Those remain governed by the audio vector
+  provenance contract and canonical scene truth.
 
 ## `temporal_index.json`
 

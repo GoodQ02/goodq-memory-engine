@@ -94,6 +94,7 @@ def build_control_recurrence_report(
     health_by_episode: List[Dict[str, Any]] = []
     signals: List[Dict[str, Any]] = []
     latency_rows: List[Dict[str, Any]] = []
+    step_coverage_rows: List[Dict[str, Any]] = []
 
     for selected_root in run_roots:
         episode_scopes, root_files, root_warnings = _load_run_scope(selected_root)
@@ -128,7 +129,14 @@ def build_control_recurrence_report(
         "limited_run_id_scope": False,
     }
     for path in step_paths:
-        step_signals, step_latency_rows, step_files, step_warnings, step_scope_info = _load_step_run_signals(
+        (
+            step_signals,
+            step_latency_rows,
+            step_coverage,
+            step_files,
+            step_warnings,
+            step_scope_info,
+        ) = _load_step_run_signals(
             path=path,
             episode_by_runtime_id=episode_by_runtime_id,
             episode_by_video_id=episode_by_video_id,
@@ -136,6 +144,7 @@ def build_control_recurrence_report(
         )
         signals.extend(step_signals)
         latency_rows.extend(step_latency_rows)
+        step_coverage_rows.extend(step_coverage)
         files_read.extend(step_files)
         warnings.extend(step_warnings)
         step_run_scope["strict_run_id_filter_applied"] = bool(
@@ -163,6 +172,7 @@ def build_control_recurrence_report(
     _attach_row_categories(grouped, family_categories)
     optional_skips = _optional_enrichment_skips(signals)
     _attach_row_categories(optional_skips, family_categories)
+    optional_coverage = _optional_enrichment_coverage(step_coverage_rows)
     recovery_counts = _recovery_counts(signals)
     affected = _scenes_affected(signals)
     _attach_scene_categories(affected, family_categories)
@@ -202,6 +212,7 @@ def build_control_recurrence_report(
         "recurrence_summary": grouped,
         "top_repeated_failure_families": family_rows,
         "optional_enrichment_skips": optional_skips,
+        "optional_enrichment_coverage": optional_coverage,
         "recovered_vs_unrecovered_failures": recovery_counts,
         "scenes_affected": affected,
         "phase6_qdrant_truth": phase6_health,
@@ -252,6 +263,10 @@ def build_control_recurrence_comparison(
         baseline.get("step_latency_summary"),
         candidate.get("step_latency_summary"),
     )
+    optional_coverage_delta = _optional_enrichment_coverage_delta(
+        baseline.get("optional_enrichment_coverage"),
+        candidate.get("optional_enrichment_coverage"),
+    )
 
     family_delta_map = _count_delta_map(baseline_family_counts, candidate_family_counts)
     _attach_delta_categories(family_delta_map, family_categories)
@@ -287,6 +302,7 @@ def build_control_recurrence_comparison(
             key_name="episode_video",
         ),
         "step_latency_delta": latency_delta,
+        "optional_enrichment_coverage_delta": optional_coverage_delta,
         "phase6_health_delta": phase6_delta,
         "qdrant_health_delta": qdrant_delta,
     }
@@ -343,6 +359,7 @@ def render_text_report(report: Dict[str, Any], *, limit: int = 12) -> str:
     classification = report.get("recurrence_classification") if isinstance(report, dict) else {}
     recommendation = report.get("recommendation") if isinstance(report, dict) else {}
     latency = report.get("step_latency_summary") if isinstance(report, dict) else {}
+    optional_coverage = report.get("optional_enrichment_coverage") if isinstance(report, dict) else {}
 
     lines.append("GoodQ Control Recurrence Report")
     lines.append("================================")
@@ -394,6 +411,8 @@ def render_text_report(report: Dict[str, Any], *, limit: int = 12) -> str:
     lines.append("")
 
     lines.extend(_text_step_latency_summary(latency, limit=limit))
+    lines.append("")
+    lines.extend(_text_optional_enrichment_coverage(optional_coverage, limit=limit))
     lines.append("")
 
     lines.append("Recurrence Summary")
@@ -467,6 +486,7 @@ def render_text_comparison(comparison: Dict[str, Any], *, limit: int = 12) -> st
     delta = comparison.get("delta") if isinstance(comparison, dict) else {}
     recommendation = comparison.get("recommendation") if isinstance(comparison, dict) else {}
     total = delta.get("total_recurrence_signals") if isinstance(delta, dict) else {}
+    coverage_delta = delta.get("optional_enrichment_coverage_delta") if isinstance(delta, dict) else {}
     phase6 = delta.get("phase6_health_delta") if isinstance(delta, dict) else {}
     qdrant = delta.get("qdrant_health_delta") if isinstance(delta, dict) else {}
 
@@ -571,6 +591,8 @@ def render_text_comparison(comparison: Dict[str, Any], *, limit: int = 12) -> st
 
     lines.extend(_text_step_latency_delta(delta.get("step_latency_delta") or {}, limit=limit))
     lines.append("")
+    lines.extend(_text_optional_enrichment_coverage_delta(coverage_delta, limit=limit))
+    lines.append("")
 
     lines.append("Per-Episode/Video Changes")
     for row in (delta.get("per_episode_video_changes") or [])[:limit]:
@@ -655,6 +677,68 @@ def _text_step_latency_delta(delta: Dict[str, Any], *, limit: int) -> List[str]:
                 candidate_count=int(row.get("candidate_count") or 0),
                 p95_delta_ms=_format_ms_text(row.get("p95_delta_ms")),
                 max_delta_ms=_format_ms_text(row.get("max_delta_ms")),
+                trend_status=row.get("trend_status") or "unknown",
+            )
+        )
+    return lines
+
+
+def _text_optional_enrichment_coverage(coverage: Dict[str, Any], *, limit: int) -> List[str]:
+    lines = ["Optional Enrichment Coverage"]
+    if not isinstance(coverage, dict) or not coverage.get("steps"):
+        lines.append("  - no optional step coverage rows found")
+        return lines
+    lines.append(
+        "  - rows={rows} steps={steps} non_ok={non_ok}".format(
+            rows=int(coverage.get("total_rows") or 0),
+            steps=int(coverage.get("step_count") or 0),
+            non_ok=int(coverage.get("non_ok_rows") or 0),
+        )
+    )
+    for row in (coverage.get("steps") or [])[:limit]:
+        if not isinstance(row, dict):
+            continue
+        lines.append(
+            "  - step={step_name} rows={total_rows} ok={ok_count} skipped={skipped_count} "
+            "errors={error_count} warnings={warning_count} emitted={embedding_emitted_count} scenes={scene_count}".format(
+                step_name=row.get("step_name") or "unknown_step",
+                total_rows=int(row.get("total_rows") or 0),
+                ok_count=int(row.get("ok_count") or 0),
+                skipped_count=int(row.get("skipped_count") or 0),
+                error_count=int(row.get("error_count") or 0),
+                warning_count=int(row.get("warning_count") or 0),
+                embedding_emitted_count=int(row.get("embedding_emitted_count") or 0),
+                scene_count=int(row.get("scene_count") or 0),
+            )
+        )
+    return lines
+
+
+def _text_optional_enrichment_coverage_delta(delta: Dict[str, Any], *, limit: int) -> List[str]:
+    lines = ["Optional Enrichment Coverage Delta"]
+    if not isinstance(delta, dict) or not delta.get("steps"):
+        lines.append("  - no comparable optional enrichment coverage rows found")
+        return lines
+    lines.append(
+        "  - status={status} baseline_rows={baseline} candidate_rows={candidate} baseline_non_ok={base_non_ok} candidate_non_ok={cand_non_ok}".format(
+            status=delta.get("status") or "unknown",
+            baseline=int(delta.get("baseline_total_rows") or 0),
+            candidate=int(delta.get("candidate_total_rows") or 0),
+            base_non_ok=int(delta.get("baseline_non_ok_rows") or 0),
+            cand_non_ok=int(delta.get("candidate_non_ok_rows") or 0),
+        )
+    )
+    for row in (delta.get("steps") or [])[:limit]:
+        if not isinstance(row, dict):
+            continue
+        lines.append(
+            "  - step={step_name} rows={baseline_total_rows}->{candidate_total_rows} "
+            "non_ok_delta={non_ok_delta} emitted_delta={embedding_emitted_delta} status={trend_status}".format(
+                step_name=row.get("step_name") or "unknown_step",
+                baseline_total_rows=int(row.get("baseline_total_rows") or 0),
+                candidate_total_rows=int(row.get("candidate_total_rows") or 0),
+                non_ok_delta=int(row.get("non_ok_delta") or 0),
+                embedding_emitted_delta=int(row.get("embedding_emitted_delta") or 0),
                 trend_status=row.get("trend_status") or "unknown",
             )
         )
@@ -847,6 +931,7 @@ def _render_markdown_single(report: Dict[str, Any]) -> str:
     recovery = report.get("recovered_vs_unrecovered_failures") if isinstance(report, dict) else {}
     health = report.get("phase6_qdrant_truth") if isinstance(report, dict) else {}
     latency = report.get("step_latency_summary") if isinstance(report, dict) else {}
+    optional_coverage = report.get("optional_enrichment_coverage") if isinstance(report, dict) else {}
     run_id = _single_report_run_id(report)
 
     lines: List[str] = []
@@ -872,6 +957,8 @@ def _render_markdown_single(report: Dict[str, Any]) -> str:
     lines.append("")
     lines.extend(_markdown_step_latency_summary(latency))
     lines.append("")
+    lines.extend(_markdown_optional_enrichment_coverage(optional_coverage))
+    lines.append("")
     lines.extend(_markdown_recovery_counts(recovery))
     lines.append("")
     lines.extend(_markdown_phase6_health(health))
@@ -896,6 +983,7 @@ def _render_markdown_comparison(comparison: Dict[str, Any]) -> str:
     recovery = delta.get("recovery_counts") if isinstance(delta, dict) else {}
     category_counts = delta.get("category_counts") if isinstance(delta, dict) else {}
     latency_delta = delta.get("step_latency_delta") if isinstance(delta, dict) else {}
+    coverage_delta = delta.get("optional_enrichment_coverage_delta") if isinstance(delta, dict) else {}
     phase6 = delta.get("phase6_health_delta") if isinstance(delta, dict) else {}
     qdrant = delta.get("qdrant_health_delta") if isinstance(delta, dict) else {}
 
@@ -933,6 +1021,8 @@ def _render_markdown_comparison(comparison: Dict[str, Any]) -> str:
     lines.extend(_markdown_recovery_delta_counts(recovery))
     lines.append("")
     lines.extend(_markdown_step_latency_delta(latency_delta))
+    lines.append("")
+    lines.extend(_markdown_optional_enrichment_coverage_delta(coverage_delta))
     lines.append("")
     lines.extend(_markdown_phase6_delta(phase6))
     lines.append("")
@@ -1020,6 +1110,29 @@ def _markdown_step_latency_summary(latency: Dict[str, Any]) -> List[str]:
     return lines
 
 
+def _markdown_optional_enrichment_coverage(coverage: Dict[str, Any]) -> List[str]:
+    lines = ["## Optional Enrichment Coverage"]
+    if not isinstance(coverage, dict) or not coverage.get("steps"):
+        lines.append("No optional step coverage rows found.")
+        return lines
+    lines.append(f"- Source: `{_md_text(coverage.get('source'))}`")
+    lines.append(f"- Total rows: `{int(coverage.get('total_rows') or 0)}`")
+    lines.append(f"- Non-OK rows: `{int(coverage.get('non_ok_rows') or 0)}`")
+    lines.append("")
+    lines.append("| Step | Rows | OK | Skipped | Errors | Warnings | Emitted | Scenes |")
+    lines.append("|---|---:|---:|---:|---:|---:|---:|---:|")
+    for row in (coverage.get("steps") or [])[:12]:
+        if not isinstance(row, dict):
+            continue
+        lines.append(
+            f"| {_md_cell(row.get('step_name'))} | {int(row.get('total_rows') or 0)} | "
+            f"{int(row.get('ok_count') or 0)} | {int(row.get('skipped_count') or 0)} | "
+            f"{int(row.get('error_count') or 0)} | {int(row.get('warning_count') or 0)} | "
+            f"{int(row.get('embedding_emitted_count') or 0)} | {int(row.get('scene_count') or 0)} |"
+        )
+    return lines
+
+
 def _markdown_recovery_delta_counts(recovery: Dict[str, Any]) -> List[str]:
     lines = ["## Recovered / Unrecovered / Skipped Counts"]
     lines.append("| Outcome | Baseline | Candidate | Delta |")
@@ -1051,6 +1164,28 @@ def _markdown_step_latency_delta(delta: Dict[str, Any]) -> List[str]:
             f"| {_md_cell(row.get('step_name'))} | {int(row.get('baseline_count') or 0)} | "
             f"{int(row.get('candidate_count') or 0)} | {_format_ms_cell(row.get('p95_delta_ms'))} | "
             f"{_format_ms_cell(row.get('max_delta_ms'))} | {_md_cell(row.get('trend_status'))} |"
+        )
+    return lines
+
+
+def _markdown_optional_enrichment_coverage_delta(delta: Dict[str, Any]) -> List[str]:
+    lines = ["## Optional Enrichment Coverage Delta"]
+    if not isinstance(delta, dict) or not delta.get("steps"):
+        lines.append("No comparable optional enrichment coverage rows found.")
+        return lines
+    lines.append(f"- Status: `{_md_text(delta.get('status') or 'unknown')}`")
+    lines.append(f"- Baseline rows: `{int(delta.get('baseline_total_rows') or 0)}`")
+    lines.append(f"- Candidate rows: `{int(delta.get('candidate_total_rows') or 0)}`")
+    lines.append("")
+    lines.append("| Step | Baseline Rows | Candidate Rows | Non-OK Delta | Emitted Delta | Status |")
+    lines.append("|---|---:|---:|---:|---:|---|")
+    for row in (delta.get("steps") or [])[:12]:
+        if not isinstance(row, dict):
+            continue
+        lines.append(
+            f"| {_md_cell(row.get('step_name'))} | {int(row.get('baseline_total_rows') or 0)} | "
+            f"{int(row.get('candidate_total_rows') or 0)} | {int(row.get('non_ok_delta') or 0)} | "
+            f"{int(row.get('embedding_emitted_delta') or 0)} | {_md_cell(row.get('trend_status'))} |"
         )
     return lines
 
@@ -1442,6 +1577,7 @@ def _comparison_run_summary(report: Dict[str, Any], *, label: str) -> Dict[str, 
         "operator_hints": report.get("operator_hints") or [],
         "inspection_targets": report.get("inspection_targets") or [],
         "step_latency_summary": report.get("step_latency_summary") or {},
+        "optional_enrichment_coverage": report.get("optional_enrichment_coverage") or {},
         "phase6_qdrant_truth": {
             "status": health.get("status") if isinstance(health, dict) else "unknown",
             "healthy": bool(health.get("healthy")) if isinstance(health, dict) else False,
@@ -2479,6 +2615,9 @@ def _is_optional_runtime_step(step: Any) -> bool:
         "diarization",
         "emotion",
         "image_caption",
+        "image_embed_clip",
+        "image_embed_dino",
+        "image_ocr",
         "object_detect",
         "ocr",
         "sentiment",
@@ -2680,11 +2819,12 @@ def _load_step_run_signals(
     episode_by_runtime_id: Dict[str, _EpisodeScope],
     episode_by_video_id: Dict[str, _EpisodeScope],
     target_runtime_run_ids: Sequence[str],
-) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[str], List[str], Dict[str, Any]]:
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]], List[str], List[str], Dict[str, Any]]:
     files_read: List[str] = []
     warnings: List[str] = []
     signals: List[Dict[str, Any]] = []
     latency_rows: List[Dict[str, Any]] = []
+    coverage_rows: List[Dict[str, Any]] = []
     target_run_ids = {str(value) for value in target_runtime_run_ids if str(value).strip()}
     scope_info: Dict[str, Any] = {
         "strict_run_id_filter_applied": bool(target_run_ids),
@@ -2694,14 +2834,14 @@ def _load_step_run_signals(
     }
     if not path.is_file():
         warnings.append(f"step_runs_missing: {path}")
-        return signals, latency_rows, files_read, warnings, scope_info
+        return signals, latency_rows, coverage_rows, files_read, warnings, scope_info
 
     files_read.append(str(path))
     try:
         lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
     except Exception as exc:
         warnings.append(f"step_runs_unreadable: {path}: {exc}")
-        return signals, latency_rows, files_read, warnings, scope_info
+        return signals, latency_rows, coverage_rows, files_read, warnings, scope_info
 
     excluded_run_ids: Counter[str] = Counter()
     for line in lines:
@@ -2731,6 +2871,8 @@ def _load_step_run_signals(
         if episode is None:
             continue
 
+        coverage_rows.append(_coverage_from_step_row(episode, row))
+
         latency_row = _latency_from_step_row(episode, row)
         if latency_row is not None:
             latency_rows.append(latency_row)
@@ -2750,7 +2892,7 @@ def _load_step_run_signals(
     if scope_info["limited_run_id_scope"]:
         warnings.append("limited_run_id_scope: target runtime run_id unavailable; step_runs filtered without strict run_id")
 
-    return signals, latency_rows, files_read, warnings, scope_info
+    return signals, latency_rows, coverage_rows, files_read, warnings, scope_info
 
 
 def _latency_from_step_row(episode: _EpisodeScope, row: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -2766,6 +2908,29 @@ def _latency_from_step_row(episode: _EpisodeScope, row: Dict[str, Any]) -> Optio
         "step_name": _clean_str(row.get("step")) or "unknown_step",
         "status": (_clean_str(row.get("status")) or "unknown").lower(),
         "duration_ms": duration_ms,
+        "scene_id": _clean_str(row.get("scene_id")),
+        "scene_index": row.get("scene_index"),
+        "ts": _clean_str(row.get("ts")),
+    }
+
+
+def _coverage_from_step_row(episode: _EpisodeScope, row: Dict[str, Any]) -> Dict[str, Any]:
+    step = _clean_str(row.get("step")) or "unknown_step"
+    status = (_clean_str(row.get("status")) or "unknown").lower()
+    extra = row.get("extra") if isinstance(row.get("extra"), dict) else {}
+    reason = _extract_reason(row) or status
+    return {
+        "source": "step_runs.jsonl",
+        "report_run_id": episode.report_run_id,
+        "run_id": _clean_str(row.get("run_id")) or episode.runtime_run_id,
+        "episode": episode.video_name or episode.episode,
+        "video_id": _clean_str(row.get("video_id")) or episode.video_id,
+        "step_name": step,
+        "status": status,
+        "reason": reason,
+        "meta_status": _first_nested_status(extra.get("result_meta")),
+        "embedding_emitted": extra.get("embedding_emitted") if isinstance(extra.get("embedding_emitted"), bool) else None,
+        "optional": bool(extra.get("optional")) or _is_optional_runtime_step(step),
         "scene_id": _clean_str(row.get("scene_id")),
         "scene_index": row.get("scene_index"),
         "ts": _clean_str(row.get("ts")),
@@ -3073,6 +3238,77 @@ def _optional_enrichment_skips(signals: Sequence[Dict[str, Any]]) -> List[Dict[s
     return _group_signals(optional)
 
 
+def _optional_enrichment_coverage(rows: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
+    optional_rows = [row for row in rows if bool(row.get("optional"))]
+    if not optional_rows:
+        return {
+            "mode": "read_only_optional_enrichment_coverage",
+            "source": "step_runs.jsonl structured step outcomes",
+            "status": "empty",
+            "total_rows": 0,
+            "step_count": 0,
+            "non_ok_rows": 0,
+            "steps": [],
+            "warnings": ["no_optional_step_rows"],
+        }
+
+    buckets: Dict[str, List[Dict[str, Any]]] = {}
+    for row in optional_rows:
+        step = _clean_step_name(row.get("step_name"))
+        buckets.setdefault(step, []).append(row)
+
+    step_rows = [_optional_enrichment_step_coverage(step, items) for step, items in buckets.items()]
+    step_rows.sort(key=lambda row: (-int(row.get("non_ok_count") or 0), -int(row.get("total_rows") or 0), str(row.get("step_name"))))
+    return {
+        "mode": "read_only_optional_enrichment_coverage",
+        "source": "step_runs.jsonl structured step outcomes",
+        "status": "available",
+        "total_rows": len(optional_rows),
+        "step_count": len(step_rows),
+        "non_ok_rows": sum(int(row.get("non_ok_count") or 0) for row in step_rows),
+        "steps": step_rows,
+        "warnings": [],
+    }
+
+
+def _optional_enrichment_step_coverage(step: str, rows: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
+    status_counts = Counter(str(row.get("status") or "unknown").lower() for row in rows)
+    reason_counts = Counter(
+        str(row.get("reason") or row.get("status") or "unknown").lower()
+        for row in rows
+        if str(row.get("status") or "unknown").lower() not in _OK_STATUSES
+    )
+    meta_status_counts = Counter(
+        str(row.get("meta_status") or "unknown").lower()
+        for row in rows
+        if row.get("meta_status") is not None
+    )
+    emitted_count = sum(1 for row in rows if row.get("embedding_emitted") is True)
+    scene_keys = {
+        (row.get("episode"), row.get("scene_id") or row.get("scene_index"))
+        for row in rows
+        if row.get("scene_id") is not None or row.get("scene_index") is not None
+    }
+    episodes = sorted({str(row.get("episode")) for row in rows if row.get("episode")})
+    non_ok_count = sum(count for status, count in status_counts.items() if status not in _OK_STATUSES)
+    return {
+        "step_name": step,
+        "total_rows": len(rows),
+        "ok_count": sum(count for status, count in status_counts.items() if status in _OK_STATUSES),
+        "skipped_count": sum(count for status, count in status_counts.items() if status in _SKIP_STATUSES),
+        "error_count": sum(count for status, count in status_counts.items() if status in _ERROR_STATUSES),
+        "warning_count": int(status_counts.get("warning") or 0),
+        "non_ok_count": non_ok_count,
+        "status_counts": dict(sorted(status_counts.items())),
+        "reason_counts": dict(sorted(reason_counts.items())),
+        "meta_status_counts": dict(sorted(meta_status_counts.items())),
+        "embedding_emitted_count": emitted_count,
+        "scene_count": len(scene_keys),
+        "episodes": episodes,
+        "episode_count": len(episodes),
+    }
+
+
 def _recovery_counts(signals: Sequence[Dict[str, Any]]) -> Dict[str, int]:
     counts = Counter()
     for signal in signals:
@@ -3258,6 +3494,79 @@ def _latency_delta(baseline: Any, candidate: Any) -> Dict[str, Any]:
     }
 
 
+def _optional_enrichment_coverage_delta(baseline: Any, candidate: Any) -> Dict[str, Any]:
+    baseline_summary = baseline if isinstance(baseline, dict) else {}
+    candidate_summary = candidate if isinstance(candidate, dict) else {}
+    baseline_steps = _optional_coverage_steps_by_name(baseline_summary)
+    candidate_steps = _optional_coverage_steps_by_name(candidate_summary)
+    rows: List[Dict[str, Any]] = []
+
+    for step in sorted(set(baseline_steps) | set(candidate_steps)):
+        base = baseline_steps.get(step, {})
+        cand = candidate_steps.get(step, {})
+        row = {
+            "step_name": step,
+            "baseline_total_rows": int(base.get("total_rows") or 0),
+            "candidate_total_rows": int(cand.get("total_rows") or 0),
+            "total_rows_delta": int(cand.get("total_rows") or 0) - int(base.get("total_rows") or 0),
+            "baseline_ok_count": int(base.get("ok_count") or 0),
+            "candidate_ok_count": int(cand.get("ok_count") or 0),
+            "ok_delta": int(cand.get("ok_count") or 0) - int(base.get("ok_count") or 0),
+            "baseline_non_ok_count": int(base.get("non_ok_count") or 0),
+            "candidate_non_ok_count": int(cand.get("non_ok_count") or 0),
+            "non_ok_delta": int(cand.get("non_ok_count") or 0) - int(base.get("non_ok_count") or 0),
+            "baseline_embedding_emitted_count": int(base.get("embedding_emitted_count") or 0),
+            "candidate_embedding_emitted_count": int(cand.get("embedding_emitted_count") or 0),
+            "embedding_emitted_delta": int(cand.get("embedding_emitted_count") or 0)
+            - int(base.get("embedding_emitted_count") or 0),
+        }
+        row["trend_status"] = _coverage_delta_status(row)
+        rows.append(row)
+
+    rows.sort(
+        key=lambda row: (
+            -abs(int(row.get("non_ok_delta") or 0)),
+            -abs(int(row.get("total_rows_delta") or 0)),
+            str(row.get("step_name")),
+        )
+    )
+    return {
+        "mode": "read_only_optional_enrichment_coverage_delta",
+        "status": "available" if rows else "empty",
+        "baseline_total_rows": int(baseline_summary.get("total_rows") or 0),
+        "candidate_total_rows": int(candidate_summary.get("total_rows") or 0),
+        "baseline_non_ok_rows": int(baseline_summary.get("non_ok_rows") or 0),
+        "candidate_non_ok_rows": int(candidate_summary.get("non_ok_rows") or 0),
+        "steps": rows,
+    }
+
+
+def _optional_coverage_steps_by_name(summary: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+    out: Dict[str, Dict[str, Any]] = {}
+    for row in summary.get("steps") or []:
+        if not isinstance(row, dict):
+            continue
+        step = _clean_str(row.get("step_name"))
+        if step:
+            out[step] = row
+    return out
+
+
+def _coverage_delta_status(row: Dict[str, Any]) -> str:
+    baseline_total = int(row.get("baseline_total_rows") or 0)
+    candidate_total = int(row.get("candidate_total_rows") or 0)
+    if baseline_total <= 0 and candidate_total > 0:
+        return "new"
+    if baseline_total > 0 and candidate_total <= 0:
+        return "resolved"
+    non_ok_delta = int(row.get("non_ok_delta") or 0)
+    if non_ok_delta > 0:
+        return "increased"
+    if non_ok_delta < 0:
+        return "decreased"
+    return "stable"
+
+
 def _latency_steps_by_name(summary: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
     out: Dict[str, Dict[str, Any]] = {}
     for row in summary.get("steps") or []:
@@ -3423,6 +3732,23 @@ def _first_nested_reason(value: Any) -> Optional[str]:
     elif isinstance(value, list):
         for child in value:
             found = _first_nested_reason(child)
+            if found:
+                return found
+    return None
+
+
+def _first_nested_status(value: Any) -> Optional[str]:
+    if isinstance(value, dict):
+        status = _clean_str(value.get("status"))
+        if status:
+            return status.lower()
+        for child in value.values():
+            found = _first_nested_status(child)
+            if found:
+                return found
+    elif isinstance(value, list):
+        for child in value:
+            found = _first_nested_status(child)
             if found:
                 return found
     return None

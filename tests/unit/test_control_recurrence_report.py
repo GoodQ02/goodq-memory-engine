@@ -247,6 +247,48 @@ def test_control_recurrence_report_groups_current_truth_surfaces(tmp_path: Path)
                 "run_id": "runtime-ep2",
                 "video_id": "video-ep2",
             },
+            {
+                "ts": "2026-04-25T03:01:00",
+                "step": "image_ocr",
+                "status": "skipped",
+                "run_id": "runtime-ep2",
+                "video_id": "video-ep2",
+                "scene_id": "scene-c",
+                "scene_index": 0,
+                "extra": {
+                    "reason": "image_ocr_pytesseract",
+                    "result_meta": {"ocr_meta": {"status": "dependency_missing", "reason": "pytesseract"}},
+                    "embedding_emitted": False,
+                },
+            },
+            {
+                "ts": "2026-04-25T03:02:00",
+                "step": "image_embed_dino",
+                "status": "skipped",
+                "run_id": "runtime-ep2",
+                "video_id": "video-ep2",
+                "scene_id": "scene-c",
+                "scene_index": 0,
+                "extra": {
+                    "reason": "image_embed_dino_direct_faiss_index_unconfigured",
+                    "result_meta": {"dino_meta": {"status": "no_index_path", "reason": "direct_faiss_index_unconfigured"}},
+                    "embedding_emitted": False,
+                },
+            },
+            {
+                "ts": "2026-04-25T03:03:00",
+                "step": "image_embed_clip",
+                "status": "skipped",
+                "run_id": "runtime-ep2",
+                "video_id": "video-ep2",
+                "scene_id": "scene-c",
+                "scene_index": 0,
+                "extra": {
+                    "reason": "image_embed_clip_direct_faiss_index_unconfigured",
+                    "result_meta": {"clip_meta": {"status": "no_index_path", "reason": "direct_faiss_index_unconfigured"}},
+                    "embedding_emitted": False,
+                },
+            },
         ],
     )
 
@@ -267,7 +309,12 @@ def test_control_recurrence_report_groups_current_truth_surfaces(tmp_path: Path)
     assert report["recurrence_classification"]["highest_category"] == "actionable"
 
     optional_steps = {row["step_name"] for row in report["optional_enrichment_skips"]}
-    assert {"audio_embed_clap", "sentiment", "speaker_voice_signature"}.issubset(optional_steps)
+    assert {"audio_embed_clap", "sentiment", "speaker_voice_signature", "image_ocr", "image_embed_dino", "image_embed_clip"}.issubset(optional_steps)
+    coverage_steps = {row["step_name"]: row for row in report["optional_enrichment_coverage"]["steps"]}
+    assert coverage_steps["image_caption"]["ok_count"] == 1
+    assert coverage_steps["image_ocr"]["meta_status_counts"]["dependency_missing"] == 1
+    assert coverage_steps["image_embed_dino"]["reason_counts"]["image_embed_dino_direct_faiss_index_unconfigured"] == 1
+    assert coverage_steps["image_embed_clip"]["skipped_count"] == 1
     assert report["recovered_vs_unrecovered_failures"]["recovered"] >= 2
     assert any(row["scene_id"] == "scene-b" for row in report["scenes_affected"])
 
@@ -729,6 +776,19 @@ def test_control_recurrence_comparison_includes_latency_delta(tmp_path: Path) ->
                 "duration_ms": 20000.0,
                 "run_id": "baseline-runtime",
                 "video_id": "baseline-video",
+            },
+            {
+                "ts": "2026-05-01T01:01:00",
+                "step": "image_ocr",
+                "status": "ok",
+                "run_id": "baseline-runtime",
+                "video_id": "baseline-video",
+                "scene_id": "baseline-scene",
+                "scene_index": 0,
+                "extra": {
+                    "result_meta": {"ocr_meta": {"status": "ok"}},
+                    "embedding_emitted": False,
+                },
             }
         ],
     )
@@ -742,6 +802,20 @@ def test_control_recurrence_comparison_includes_latency_delta(tmp_path: Path) ->
                 "duration_ms": 45000.0,
                 "run_id": "candidate-runtime",
                 "video_id": "candidate-video",
+            },
+            {
+                "ts": "2026-05-01T02:01:00",
+                "step": "image_ocr",
+                "status": "skipped",
+                "run_id": "candidate-runtime",
+                "video_id": "candidate-video",
+                "scene_id": "candidate-scene",
+                "scene_index": 0,
+                "extra": {
+                    "reason": "image_ocr_pytesseract",
+                    "result_meta": {"ocr_meta": {"status": "dependency_missing", "reason": "pytesseract"}},
+                    "embedding_emitted": False,
+                },
             }
         ],
     )
@@ -759,6 +833,9 @@ def test_control_recurrence_comparison_includes_latency_delta(tmp_path: Path) ->
     assert rows["audio_unified_wsl2"]["p95_delta_ms"] == 25000.0
     assert rows["audio_unified_wsl2"]["trend_status"] == "increased"
     assert comparison["candidate"]["step_latency_summary"]["wsl_audio_steps"][0]["step_name"] == "audio_unified_wsl2"
+    coverage_rows = {row["step_name"]: row for row in comparison["delta"]["optional_enrichment_coverage_delta"]["steps"]}
+    assert coverage_rows["image_ocr"]["non_ok_delta"] == 1
+    assert coverage_rows["image_ocr"]["trend_status"] == "increased"
 
 
 def test_control_recurrence_report_does_not_fan_out_shared_stderr_retry(

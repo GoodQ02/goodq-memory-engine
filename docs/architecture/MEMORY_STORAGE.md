@@ -171,6 +171,21 @@ Storage identity must remain deterministic. Changes to embedding identity, point
 
 Write success must be interpreted per store. A row-level success flag is not permission to assume every possible store contains the same memory.
 
+### Audio Vector Success Requires Run Provenance
+
+For CLAP audio vectors, current-run success is not proven by scene-id presence
+in Qdrant. A scene counts as current-run audio-vector covered only when the
+scene payload has `clap_meta.status == ok` and the Qdrant audio payload has the
+same `run_id` plus required provenance fields.
+
+Legacy audio points with missing `run_id`, stale points from another `run_id`,
+and `clap_meta.status == skipped` or `error` are not current-run success.
+Consumers should expose narrower states such as
+`provenance_unverified_audio_vector_exists`, `legacy_audio_vector_present`,
+`audio_vector_skipped`, or `audio_vector_error`.
+
+See `docs/architecture/AUDIO_VECTOR_PROVENANCE_CONTRACT.md`.
+
 ---
 
 ## Identity-Aware Storage Truth
@@ -237,6 +252,11 @@ Ingestion writes to:
 - Qdrant vector collections
 - FAISS only when configured as an additional target
 
+For audio retrieval health, count Qdrant audio payloads by matching `run_id`,
+not by `scene_id` alone. The supported CLAP audio provenance marker includes
+`run_id`, `embedding_id`, `component`, `step`, `model`, `created_at`, and
+`commit_ts_utc` when available.
+
 ### Important Constraint
 
 Storage docs must not describe a FAISS-first world or a root-level DB world as if it were current runtime truth.
@@ -263,7 +283,9 @@ The storage contract is healthy when:
 2. `scene_manifest.json` exists under the epoch processing tree.
 3. `scene_ingest_results.json` exists under the epoch output tree.
 4. successful witnesses show `qdrant_ok = true`.
-5. fresh stitching-era runs can persist speaker voice signatures and pattern edges without breaking the scene bundle contract.
+5. current-run CLAP audio coverage equals scenes where `clap_meta.status == ok`
+   and Qdrant audio payloads have matching `run_id` provenance.
+6. fresh stitching-era runs can persist speaker voice signatures and pattern edges without breaking the scene bundle contract.
 
 ---
 

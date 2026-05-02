@@ -224,6 +224,10 @@ conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_rep
 - drafts deterministic operator inspection steps from existing durable JSON reports without executing commands, healing, mutating configs, triggering ingestion, or generating reports
 - derives conservative trends only from `reports/control_recurrence/index.json` and durable JSON artifacts referenced by that index
 - reports Phase 6 and Qdrant health without inferring beyond persisted artifacts
+- must apply the audio-vector provenance contract for CLAP/Qdrant coverage:
+  current-run audio vector success requires `clap_meta.status == ok` plus a
+  Qdrant audio payload with matching `run_id`; scene-id-only matches are not
+  current-run proof
 
 ---
 

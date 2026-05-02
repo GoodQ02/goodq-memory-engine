@@ -19,6 +19,7 @@ Covered surfaces:
 - `temporal_index.json`
 - `scene_ingest_results.json`
 - run summary projection
+- audio vector provenance
 - control recurrence reports
 - control recurrence recommendation drafts
 - API previews and read models
@@ -134,8 +135,51 @@ Primary contract:
 | Diarization | `diarization`, `diarization_meta`, `diarization_status`, `diarization_error` | authoritative/operator | Status is UI-safe; raw errors are local/operator. |
 | Speaker alignment | `speaker_transcript`, `speaker_voice_signatures`, `speaker_voice_signature_meta` | authoritative/operator | Voice signatures support stitching but do not equal identity by themselves. |
 | Emotion | `emotions`, `emotion_meta`, `emotion_status`, `emotion_error` | authoritative/operator | Optional enrichment; unavailable is not necessarily failure. |
-| Embeddings | `embeddings`, `embedding_dim` | authoritative/operator | Internal vector payload and dimensionality. |
+| CLAP status | `clap_meta.status`, `clap_meta.reason` | authoritative/operator, ui_safe summary | Current-run audio vector coverage requires `clap_meta.status == ok` plus matching Qdrant run provenance. |
+| Embeddings | `embeddings`, `embedding_dim` | authoritative/operator | Internal vector payload and dimensionality. This field alone does not prove current-run Qdrant audio-vector success. |
 | Runtime attribution | `wsl2_unified`, `gpu_used`, device/engine meta fields | operator | Useful for runtime audits; not product-facing truth. |
+
+## Audio Vector Provenance
+
+Contract:
+
+```text
+docs/architecture/AUDIO_VECTOR_PROVENANCE_CONTRACT.md
+```
+
+Primary rule:
+
+- current-run audio vector success is proven only by `clap_meta.status == ok`
+  and a Qdrant audio payload with matching `run_id` and required provenance
+  fields
+- matching `scene_id` alone is not proof
+- legacy audio vectors with missing `run_id` are provenance-unverified, not
+  current-run success
+- Qdrant audio points with a different `run_id` are stale for the audited run
+- `clap_meta.status == skipped` or `clap_meta.status == error` must not be
+  counted as current-run audio vector coverage
+
+Required Qdrant audio payload fields for active-line CLAP commits:
+
+- `run_id`
+- `embedding_id`
+- `component`
+- `step`
+- `model`
+- `created_at`
+- `commit_ts_utc`
+
+Preferred read-model labels:
+
+- `current_run_audio_vector_proven`
+- `provenance_unverified_audio_vector_exists`
+- `legacy_audio_vector_present`
+- `audio_vector_absent`
+- `audio_vector_skipped`
+- `audio_vector_error`
+
+Avoid using unqualified `audio_vector_exists` as a current-run success claim.
+If compatibility requires it, pair it with an explicit provenance field.
 
 ## `temporal_index.json`
 

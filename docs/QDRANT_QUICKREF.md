@@ -60,12 +60,18 @@ http://localhost:6333/dashboard
 
 | Name | Dim | Purpose |
 |------|-----|---------|
-| goodq_clip_epoch_2025_12_22 | 512 | Visual scenes (CLIP) |
-| goodq_dino_epoch_2025_12_22 | 768 | Visual scenes (DINO) |
-| goodq_text_epoch_2025_12_22 | 384 | Transcripts/captions |
-| goodq_audio_epoch_2025_12_22 | 512 | Audio embeddings (CLAP) |
+| goodq_clip_epoch_<epoch> | 512 | Visual scenes (CLIP) |
+| goodq_dino_epoch_<epoch> | 768 | Visual scenes (DINO) |
+| goodq_text_epoch_<epoch> | 384 | Transcripts/captions |
+| goodq_audio_epoch_<epoch> | 512 | Audio embeddings (CLAP) |
 
 Collection names are configured in `configs/config.yaml`; trust config if the active epoch changes.
+
+For CLAP audio coverage, do not treat a matching `scene_id` as current-run
+success by itself. Current-run audio-vector success requires `clap_meta.status
+== ok` plus a Qdrant audio payload with matching `run_id` and required
+provenance fields. See
+`docs/architecture/AUDIO_VECTOR_PROVENANCE_CONTRACT.md`.
 
 ---
 

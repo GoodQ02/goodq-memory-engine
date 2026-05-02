@@ -234,6 +234,9 @@ The `audio` object contains scene audio outputs, backend attribution, diarizatio
   "emotion_meta": {
     "status": "ok"
   },
+  "clap_meta": {
+    "status": "ok"
+  },
   "embeddings": [],
   "embedding_dim": 768,
   "wsl2_unified": true,
@@ -270,6 +273,25 @@ They are the input surface for the ladder defined in `docs/architecture/IDENTITY
 `speaker_voice_signatures` should only be emitted when the runtime has enough stable voiced speech:
 - at least `4.0` seconds total voiced duration
 - at least `2` distinct usable segments
+
+### CLAP Audio Vector Success
+
+`audio.clap_meta` is the scene-level CLAP status surface.
+
+Current-run audio vector success is proven only when:
+
+- `audio.clap_meta.status == ok`
+- the Qdrant audio collection contains a payload for the same `scene_id`
+- the Qdrant payload has the same runtime `run_id`
+- required provenance fields are present on that payload
+
+Matching `scene_id` alone is not proof. Legacy Qdrant audio points without
+`run_id`, points from a different `run_id`, `clap_meta.status == error`, and
+`clap_meta.status == skipped` are not current-run audio vector success.
+
+Use `docs/architecture/AUDIO_VECTOR_PROVENANCE_CONTRACT.md` as the full
+consumer contract for audits, UI/API read models, retrieval status, and
+control recurrence reporting.
 
 ---
 

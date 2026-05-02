@@ -35,7 +35,7 @@ Current operator-validated additions on the active line:
 - The ingest write surface is now a truthful request facade: it stages supported local files into the canonical inbox, returns a request handle, and leaves execution ownership with watchdog plus `cli.run_ingestion`.
 - System mutation routes remain intentionally guarded: canonical write surfaces are still CLI, watchdog, and `import_inbox`, while `/api/system/reindex` and `/api/system/reload` stay operator-only.
 - Read-only control recurrence now includes durable artifact indexing, API access, deterministic recommendation drafts, and conservative trend summaries from existing JSON reports. It does not heal, mutate configs, trigger ingestion, or activate `ControlAgent`.
-- Future CLAP Qdrant audio payloads carry run/timestamp provenance when available; legacy audio vector presence should not be treated as current-run proof without those fields.
+- Audio-vector success is now provenance-defined: current-run CLAP/Qdrant coverage requires `clap_meta.status == ok` plus a Qdrant audio payload with matching `run_id` and required provenance fields. Legacy scene-id matches are not current-run proof.
 
 ## Start Here
 
@@ -74,6 +74,8 @@ Current operator-validated additions on the active line:
   [`docs/reference/PLATFORM_SUPPORT.md`](reference/PLATFORM_SUPPORT.md)
 - WSL audio runtime:
   [`docs/reference/WSL_AUDIO_RUNTIME.md`](reference/WSL_AUDIO_RUNTIME.md)
+- Audio vector provenance contract:
+  [`docs/architecture/AUDIO_VECTOR_PROVENANCE_CONTRACT.md`](architecture/AUDIO_VECTOR_PROVENANCE_CONTRACT.md)
 - GPU capability matrix:
   [`docs/reference/GPU_CAPABILITY_MATRIX.md`](reference/GPU_CAPABILITY_MATRIX.md)
 

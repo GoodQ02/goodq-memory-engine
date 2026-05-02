@@ -14,7 +14,8 @@
 This is the practical handoff point for a brand-new Codex session.
 
 - Current local workspace head:
-  - `main` -> `9afeae8` (`fix: add audio qdrant payload provenance`)
+  - `main` / `origin/main` are the active source line; confirm the exact head with `git log -1 --oneline`
+  - source includes the CLAP audio Qdrant payload provenance patch, its runtime-path test, and public ethos/control-truth docs through `5ae2d61`
 - Current public-facing branch head:
   - `public` / `origin/public` -> `e5cd974` (`fix: tighten recurrence attribution and audio payloads`)
 - Full witness state now banked:
@@ -57,6 +58,12 @@ This is the practical handoff point for a brand-new Codex session.
     - `normalization_applied`
     - `normalization_source`
   - pilot is projection-only and must not be generalized casually
+- Current audio-vector success doctrine:
+  - contract: `docs/architecture/AUDIO_VECTOR_PROVENANCE_CONTRACT.md`
+  - current-run CLAP/Qdrant audio coverage requires `clap_meta.status == ok` plus a Qdrant audio payload with matching `run_id` and required provenance fields
+  - scene-id-only Qdrant audio matches are stale or provenance-unverified, not current-run proof
+  - one-episode baseline witness: `20260501_114445_audio_qdrant_provenance_02x01_witness` showed `40 / 40` CLAP ok scenes with current-run Qdrant provenance
+  - two-episode boundary witness: `20260501_153532_audio_qdrant_provenance_s2_two_episode_witness` showed `75 / 75` CLAP ok scenes with current-run Qdrant provenance across `78` scenes; `2` optional CLAP errors and `1` `audio_silent` skip did not receive current-run Qdrant credit
 
 If resuming after restart, do not begin with a broad rerun. Begin by reading the
 three witness memos above and then confirm the current branch head.

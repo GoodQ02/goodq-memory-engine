@@ -198,7 +198,7 @@ If you want the deeper technical picture:
 - This is pre-1.0 software. The supported runtime path is stable enough to use, but surrounding helpers and APIs may still evolve.
 - A polished product UI is not part of the current shipping surface.
 - Some optional enrichments can still fail on individual scenes without invalidating the whole ingest.
-- Legacy audio vectors may lack current-run provenance; future CLAP Qdrant audio payloads now include run/timestamp metadata when available.
+- Audio-vector success is provenance-defined: current-run CLAP/Qdrant coverage requires `clap_meta.status == ok` plus a Qdrant audio payload with matching `run_id` and required provenance fields. Legacy scene-id matches are not current-run proof.
 - Context weighting is now strong, but the project still treats some interpretation choices as policy-level texture rather than frozen truth.
 
 ## Security and Data Handling

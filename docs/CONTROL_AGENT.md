@@ -49,6 +49,13 @@ It reports recurrence summaries, comparison deltas, category counts, recovered/u
 
 The API surface reads only that existing index and the indexed artifacts. It does not regenerate reports, trigger ingestion, execute commands, scan arbitrary project paths, or form a second orchestration path.
 
+Audio-vector interpretation boundary: recurrence reports, trend summaries, API
+payloads, and operator recommendations must use the audio provenance contract
+when discussing CLAP/Qdrant coverage. Current-run audio vector success requires
+`clap_meta.status == ok` plus a Qdrant audio payload with matching `run_id` and
+required provenance fields. Scene-id-only Qdrant matches are
+provenance-unverified, not current-run proof.
+
 Exact command examples:
 
 ```powershell

@@ -32,6 +32,7 @@ the same claim.
 | [INGEST_ORCHESTRATION_CONTRACT.md](INGEST_ORCHESTRATION_CONTRACT.md) | Canonical ingestion ownership and orchestration boundary. |
 | [OUTPUT_SCHEMA_INVENTORY.md](OUTPUT_SCHEMA_INVENTORY.md) | Authoritative inventory of persisted output surfaces and derived read-model contracts. |
 | [MEMORY_STORAGE.md](MEMORY_STORAGE.md) | Current persisted memory and storage architecture. |
+| [AUDIO_VECTOR_PROVENANCE_CONTRACT.md](AUDIO_VECTOR_PROVENANCE_CONTRACT.md) | Current-run CLAP/Qdrant audio-vector success definition. |
 | [CONFIG_LOADING_CONTRACT.md](CONFIG_LOADING_CONTRACT.md) | Current layered config-loading contract. |
 
 ## Scene, Memory, and Identity Contracts

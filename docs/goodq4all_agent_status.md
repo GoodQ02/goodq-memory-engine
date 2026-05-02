@@ -14,7 +14,8 @@ truth for live claims. Do not treat this document as a live witness monitor.
 
 ## Current Restart Checkpoint
 - Current local workspace:
-  - `main` -> `9afeae8` (`fix: add audio qdrant payload provenance`)
+  - `main` / `origin/main` are the active source line; confirm the exact head with `git log -1 --oneline`
+  - source includes the CLAP audio Qdrant payload provenance patch, its runtime-path test, and public ethos/control-truth docs through `5ae2d61`
 - Current public-facing branch:
   - `public` / `origin/public` -> `e5cd974` (`fix: tighten recurrence attribution and audio payloads`)
 - Current state:
@@ -61,10 +62,33 @@ truth for live claims. Do not treat this document as a live witness monitor.
       - `normalization_applied`
       - `normalization_source`
     - no extraction, KG, identity ladder, retrieval, or embedding changes
-- Current next-step bias after restart:
-  - keep normalization allowlist single-entry unless new proof clears the same gate
-  - prefer read-only audits and copy-on-write reprojection over broad runtime changes
-  - treat legacy audio vector presence as insufficient current-run proof unless run/timestamp provenance exists
+  - Current next-step bias after restart:
+    - keep normalization allowlist single-entry unless new proof clears the same gate
+    - prefer read-only audits and copy-on-write reprojection over broad runtime changes
+    - treat audio-vector success as provenance-defined: `clap_meta.status == ok` plus a Qdrant audio payload with matching `run_id` and required provenance fields
+    - treat legacy or stale scene-id-only audio vector presence as insufficient current-run proof
+
+## Audio Vector Provenance Doctrine
+- Contract:
+  - `docs/architecture/AUDIO_VECTOR_PROVENANCE_CONTRACT.md`
+- Current-run CLAP/Qdrant audio coverage requires:
+  - scene audio `clap_meta.status == ok`
+  - Qdrant audio payload with matching `run_id`
+  - matching `scene_id`
+  - matching `video_id` when available
+  - required provenance fields: `run_id`, `embedding_id`, `component`, `step`, `model`, `created_at`, `commit_ts_utc`
+- Non-proof states:
+  - matching `scene_id` only
+  - missing `run_id`
+  - different `run_id`
+  - legacy payload with missing provenance
+  - `clap_meta.status == error`
+  - `clap_meta.status == skipped`
+- Witness evidence:
+  - one-episode baseline `20260501_114445_audio_qdrant_provenance_02x01_witness`: `40` scenes, `40` CLAP ok, `40` current-run Qdrant audio points with provenance
+  - two-episode boundary witness `20260501_153532_audio_qdrant_provenance_s2_two_episode_witness`: `78` scenes, `75` CLAP ok, `75` current-run Qdrant audio points with provenance, `2` optional CLAP errors, `1` `audio_silent` skip
+- Consumer rule:
+  - audits, UI, retrieval status, and recurrence reports must count current-run audio vectors by matching `run_id`, not by scene-id presence alone
 
 ## System Mode
 - MODE: Operational / Packaging / Hardening

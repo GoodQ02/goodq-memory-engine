@@ -71,12 +71,17 @@ ${GOODQ_DATA_ROOT}/GoodQ_Data/qdrant_storage
 
 **Canonical Collections**
 
-- `goodq_text`
-- `goodq_audio`
+- `goodq_text_epoch_<epoch>`
+- `goodq_audio_epoch_<epoch>`
 - `goodq_clip_epoch_<epoch>`
 - `goodq_dino_epoch_<epoch>`
 
 FAISS remains optional parity or fallback only. It is not the current operator truth for retrieval.
+
+For CLAP audio coverage, current-run vector success requires
+`clap_meta.status == ok` plus a Qdrant audio payload with matching `run_id` and
+required provenance fields. A matching `scene_id` alone is not proof. See
+`AUDIO_VECTOR_PROVENANCE_CONTRACT.md`.
 
 ---
 

@@ -132,6 +132,11 @@ the supported host/runtime baseline, but it is not a live witness monitor.
   - supports multi-video direct run roots and metadata-described output/workspace paths without creating a second execution path
   - treats `control-recurrence-v0.4.1` as a valid sealed milestone for direct-run discoverability and truth-surface alignment, with the latest control recurrence tag at `control-recurrence-v0.4.2`
   - current source beyond the latest control recurrence tag includes read-only recurrence trend mode and CLAP audio Qdrant payload provenance hardening
+  - audio-vector success is provenance-defined by `docs/architecture/AUDIO_VECTOR_PROVENANCE_CONTRACT.md`
+  - current-run CLAP/Qdrant audio coverage requires `clap_meta.status == ok` plus a Qdrant audio payload with matching `run_id` and required provenance fields
+  - legacy, stale, or scene-id-only Qdrant audio points are not current-run proof
+  - one-episode audio-provenance baseline showed `40 / 40` CLAP ok scenes with current-run Qdrant provenance
+  - two-episode boundary witness showed `75 / 75` CLAP ok scenes with current-run Qdrant provenance across `78` scenes, while `2` optional CLAP errors and `1` `audio_silent` skip remained uncredited in current-run Qdrant
   - treats bounded direct-run discovery limits as expected when required artifacts are absent, not as recurrence-layer boundary violations
   - classifies recurrence families as `informational`, `watch`, `actionable`, or `blocking`
   - emits deterministic operator hints and inspection targets without changing runtime state

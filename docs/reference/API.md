@@ -113,6 +113,11 @@ The active line no longer exposes the older compatibility shell that previously 
 - If `modalities` is omitted, the current default remains text + visual.
 - `GET /api/videos/{video_id}/scenes/{scene_id}/similar` is live and resolves similar scenes from persisted multimodal scene memory.
 - Similar-scene retrieval now uses text, visual, and audio signals where available instead of returning an empty fallback path.
+- Audio-vector coverage in API and retrieval read models must follow
+  `docs/architecture/AUDIO_VECTOR_PROVENANCE_CONTRACT.md`: current-run audio
+  vector success requires `clap_meta.status == ok` plus a Qdrant audio payload
+  with matching `run_id` and required provenance fields. A matching `scene_id`
+  alone is not current-run proof.
 
 ## System Mutation Policy
 

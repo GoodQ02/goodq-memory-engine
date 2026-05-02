@@ -165,6 +165,7 @@ def build_control_recurrence_report(
 
     phase6_health = _phase6_health_summary(health_by_episode)
     latency_summary = _step_latency_summary(latency_rows)
+    environment_summary = _environment_summary(step_coverage_rows, signals)
     grouped = _group_signals(signals)
     family_rows = _attach_family_categories(_top_families(signals), phase6_health)
     _attach_operator_hints_to_families(family_rows)
@@ -209,6 +210,7 @@ def build_control_recurrence_report(
             "step_run_scope": step_run_scope,
         },
         "step_latency_summary": latency_summary,
+        "environment_summary": environment_summary,
         "recurrence_summary": grouped,
         "top_repeated_failure_families": family_rows,
         "optional_enrichment_skips": optional_skips,
@@ -359,6 +361,7 @@ def render_text_report(report: Dict[str, Any], *, limit: int = 12) -> str:
     classification = report.get("recurrence_classification") if isinstance(report, dict) else {}
     recommendation = report.get("recommendation") if isinstance(report, dict) else {}
     latency = report.get("step_latency_summary") if isinstance(report, dict) else {}
+    environment_summary = report.get("environment_summary") if isinstance(report, dict) else {}
     optional_coverage = report.get("optional_enrichment_coverage") if isinstance(report, dict) else {}
 
     lines.append("GoodQ Control Recurrence Report")
@@ -411,6 +414,8 @@ def render_text_report(report: Dict[str, Any], *, limit: int = 12) -> str:
     lines.append("")
 
     lines.extend(_text_step_latency_summary(latency, limit=limit))
+    lines.append("")
+    lines.extend(_text_environment_summary(environment_summary, limit=limit))
     lines.append("")
     lines.extend(_text_optional_enrichment_coverage(optional_coverage, limit=limit))
     lines.append("")
@@ -683,6 +688,34 @@ def _text_step_latency_delta(delta: Dict[str, Any], *, limit: int) -> List[str]:
     return lines
 
 
+def _text_environment_summary(summary: Dict[str, Any], *, limit: int) -> List[str]:
+    lines = ["Environment Summary"]
+    if not isinstance(summary, dict) or summary.get("status") == "empty":
+        lines.append("  - no environment rows found")
+        return lines
+    env_counts = summary.get("env_counts") if isinstance(summary.get("env_counts"), dict) else {}
+    lines.append(
+        "  - rows={rows} envs={envs} native_retry_fingerprints={fingerprints}".format(
+            rows=int(summary.get("step_row_count") or 0),
+            envs=len(env_counts),
+            fingerprints=len(summary.get("native_retry_env_fingerprints") or []),
+        )
+    )
+    for env_name, count in list(env_counts.items())[:limit]:
+        lines.append(f"  - env={env_name} rows={count}")
+    for row in (summary.get("native_retry_env_fingerprints") or [])[:limit]:
+        if not isinstance(row, dict):
+            continue
+        lines.append(
+            "  - native_retry step={step} family={family} fingerprint={fingerprint}".format(
+                step=row.get("step_name") or "unknown_step",
+                family=row.get("error_family") or "unknown",
+                fingerprint=row.get("fingerprint") or "raw_available",
+            )
+        )
+    return lines
+
+
 def _text_optional_enrichment_coverage(coverage: Dict[str, Any], *, limit: int) -> List[str]:
     lines = ["Optional Enrichment Coverage"]
     if not isinstance(coverage, dict) or not coverage.get("steps"):
@@ -931,6 +964,7 @@ def _render_markdown_single(report: Dict[str, Any]) -> str:
     recovery = report.get("recovered_vs_unrecovered_failures") if isinstance(report, dict) else {}
     health = report.get("phase6_qdrant_truth") if isinstance(report, dict) else {}
     latency = report.get("step_latency_summary") if isinstance(report, dict) else {}
+    environment_summary = report.get("environment_summary") if isinstance(report, dict) else {}
     optional_coverage = report.get("optional_enrichment_coverage") if isinstance(report, dict) else {}
     run_id = _single_report_run_id(report)
 
@@ -956,6 +990,8 @@ def _render_markdown_single(report: Dict[str, Any]) -> str:
     lines.extend(_markdown_category_counts(classification))
     lines.append("")
     lines.extend(_markdown_step_latency_summary(latency))
+    lines.append("")
+    lines.extend(_markdown_environment_summary(environment_summary))
     lines.append("")
     lines.extend(_markdown_optional_enrichment_coverage(optional_coverage))
     lines.append("")
@@ -1107,6 +1143,23 @@ def _markdown_step_latency_summary(latency: Dict[str, Any]) -> List[str]:
             f"{_format_ms_cell(row.get('max_ms'))} | {int(row.get('slow_outlier_count') or 0)} | "
             f"{int(row.get('timeout_boundary_exceedance_count') or 0)} |"
         )
+    return lines
+
+
+def _markdown_environment_summary(summary: Dict[str, Any]) -> List[str]:
+    lines = ["## Environment Summary"]
+    if not isinstance(summary, dict) or summary.get("status") == "empty":
+        lines.append("No environment rows found.")
+        return lines
+    env_counts = summary.get("env_counts") if isinstance(summary.get("env_counts"), dict) else {}
+    lines.append(f"- Source: `{_md_text(summary.get('source'))}`")
+    lines.append(f"- Step rows: `{int(summary.get('step_row_count') or 0)}`")
+    lines.append(f"- Native retry fingerprints: `{len(summary.get('native_retry_env_fingerprints') or [])}`")
+    lines.append("")
+    lines.append("| Environment | Rows |")
+    lines.append("|---|---:|")
+    for env_name, count in env_counts.items():
+        lines.append(f"| {_md_cell(env_name)} | {int(count or 0)} |")
     return lines
 
 
@@ -1577,6 +1630,7 @@ def _comparison_run_summary(report: Dict[str, Any], *, label: str) -> Dict[str, 
         "operator_hints": report.get("operator_hints") or [],
         "inspection_targets": report.get("inspection_targets") or [],
         "step_latency_summary": report.get("step_latency_summary") or {},
+        "environment_summary": report.get("environment_summary") or {},
         "optional_enrichment_coverage": report.get("optional_enrichment_coverage") or {},
         "phase6_qdrant_truth": {
             "status": health.get("status") if isinstance(health, dict) else "unknown",
@@ -2928,6 +2982,7 @@ def _coverage_from_step_row(episode: _EpisodeScope, row: Dict[str, Any]) -> Dict
         "step_name": step,
         "status": status,
         "reason": reason,
+        "env": _clean_str(row.get("env")),
         "meta_status": _first_nested_status(extra.get("result_meta")),
         "embedding_emitted": extra.get("embedding_emitted") if isinstance(extra.get("embedding_emitted"), bool) else None,
         "optional": bool(extra.get("optional")) or _is_optional_runtime_step(step),
@@ -2987,6 +3042,7 @@ def _signal_from_run_warning(episode: _EpisodeScope, warning: Dict[str, Any]) ->
         "recovery_outcome": "recovered_retry" if code == "native_crash_retry" else None,
         "optional": code.startswith("optional_"),
         "message": message,
+        "env_fingerprint": _clean_str(context.get("env_fingerprint")),
         "ts": _clean_str(warning.get("ts_utc")),
     }
 
@@ -3307,6 +3363,100 @@ def _optional_enrichment_step_coverage(step: str, rows: Sequence[Dict[str, Any]]
         "episodes": episodes,
         "episode_count": len(episodes),
     }
+
+
+def _environment_summary(step_rows: Sequence[Dict[str, Any]], signals: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
+    env_counts = Counter(
+        _clean_str(row.get("env")) or "unknown"
+        for row in step_rows
+        if _clean_str(row.get("env"))
+    )
+    step_envs: Dict[str, Counter[str]] = {}
+    for row in step_rows:
+        step = _clean_step_name(row.get("step_name"))
+        env = _clean_str(row.get("env")) or "unknown"
+        if env == "unknown":
+            continue
+        step_envs.setdefault(step, Counter()).update([env])
+
+    fingerprint_rows: List[Dict[str, Any]] = []
+    seen_fingerprints = set()
+    for signal in signals:
+        raw = _clean_str(signal.get("env_fingerprint"))
+        if not raw:
+            continue
+        parsed = _parse_env_fingerprint(raw)
+        key = (
+            signal.get("run_id"),
+            signal.get("step_name"),
+            parsed.get("fingerprint") or raw,
+        )
+        if key in seen_fingerprints:
+            continue
+        seen_fingerprints.add(key)
+        fingerprint_rows.append(
+            {
+                "run_id": signal.get("run_id"),
+                "episode": signal.get("episode"),
+                "video_id": signal.get("video_id"),
+                "step_name": signal.get("step_name"),
+                "error_family": signal.get("error_family"),
+                "fingerprint": parsed.get("fingerprint"),
+                "event": parsed.get("event"),
+                "env": _sanitized_env_fingerprint_values(parsed.get("env")),
+                "raw_available": bool(raw),
+            }
+        )
+
+    steps = [
+        {
+            "step_name": step,
+            "env_counts": dict(sorted(counter.items())),
+            "env_names": sorted(counter),
+        }
+        for step, counter in sorted(step_envs.items())
+    ]
+    return {
+        "mode": "read_only_environment_observability",
+        "source": "step_runs.jsonl env fields and persisted native retry env_fingerprint warnings",
+        "status": "available" if env_counts or fingerprint_rows else "empty",
+        "step_row_count": len(step_rows),
+        "env_counts": dict(sorted(env_counts.items())),
+        "step_envs": steps,
+        "native_retry_env_fingerprints": fingerprint_rows,
+        "warnings": [] if env_counts or fingerprint_rows else ["no_environment_rows"],
+    }
+
+
+def _parse_env_fingerprint(raw: str) -> Dict[str, Any]:
+    text = raw.strip()
+    if not text:
+        return {}
+    start = text.find("{")
+    if start > 0:
+        text = text[start:]
+    try:
+        payload = json.loads(text)
+    except Exception:
+        return {"raw": raw}
+    return payload if isinstance(payload, dict) else {"raw": raw}
+
+
+def _sanitized_env_fingerprint_values(value: Any) -> Dict[str, Any]:
+    if not isinstance(value, dict):
+        return {}
+    sanitized: Dict[str, Any] = {}
+    for key, item in sorted(value.items()):
+        clean_key = _clean_str(key)
+        if not clean_key:
+            continue
+        if isinstance(item, str):
+            sanitized[clean_key] = _display_text(item)
+        elif item is None or isinstance(item, (bool, int, float)):
+            sanitized[clean_key] = item
+        else:
+            sanitized[clean_key] = _display_text(item)
+    return sanitized
 
 
 def _recovery_counts(signals: Sequence[Dict[str, Any]]) -> Dict[str, int]:
@@ -4048,7 +4198,7 @@ def _merge_native_crash_signals(group: Sequence[Dict[str, Any]]) -> Dict[str, An
     merged["optional"] = any(bool(signal.get("optional")) for signal in ordered)
     merged["provenance"] = {"surfaces": sources}
 
-    for field in ("video_id", "scene_id", "scene_index", "run_id", "episode", "report_run_id", "step_name", "ts"):
+    for field in ("video_id", "scene_id", "scene_index", "run_id", "episode", "report_run_id", "step_name", "ts", "env_fingerprint"):
         if not merged.get(field):
             merged[field] = next((signal.get(field) for signal in ordered if signal.get(field)), merged.get(field))
     return merged

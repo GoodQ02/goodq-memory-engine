@@ -148,6 +148,7 @@ def test_single_run_recurrence_report_contract_includes_observer_sections(tmp_pa
             "report",
             "scope",
             "step_latency_summary",
+            "environment_summary",
             "recurrence_summary",
             "top_repeated_failure_families",
             "optional_enrichment_skips",
@@ -160,6 +161,10 @@ def test_single_run_recurrence_report_contract_includes_observer_sections(tmp_pa
             "inspection_targets",
             "evidence",
         },
+    )
+    _assert_keys(
+        report["environment_summary"],
+        {"mode", "source", "status", "step_row_count", "env_counts", "step_envs", "native_retry_env_fingerprints", "warnings"},
     )
     _assert_keys(
         report["optional_enrichment_coverage"],

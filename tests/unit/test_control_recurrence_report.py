@@ -189,7 +189,12 @@ def test_control_recurrence_report_groups_current_truth_surfaces(tmp_path: Path)
             {
                 "code": "native_crash_retry",
                 "message": "Retrying step after native subprocess crash",
-                "context": {"step": "image_embed_dino", "return_code": 3221226505, "attempt": 1},
+                "context": {
+                    "step": "image_embed_dino",
+                    "return_code": 3221226505,
+                    "attempt": 1,
+                    "env_fingerprint": '{"event":"subprocess_env_fingerprint","step":"image_embed_dino","fingerprint":"envabc123","env":{"OMP_NUM_THREADS":"1"}}',
+                },
                 "ts_utc": "2026-04-25T02:24:20+00:00",
             },
         ],
@@ -244,6 +249,7 @@ def test_control_recurrence_report_groups_current_truth_surfaces(tmp_path: Path)
                 "ts": "2026-04-25T03:00:00",
                 "step": "image_caption",
                 "status": "ok",
+                "env": "goodq_image_caption",
                 "run_id": "runtime-ep2",
                 "video_id": "video-ep2",
             },
@@ -251,6 +257,7 @@ def test_control_recurrence_report_groups_current_truth_surfaces(tmp_path: Path)
                 "ts": "2026-04-25T03:01:00",
                 "step": "image_ocr",
                 "status": "skipped",
+                "env": "goodq_image_caption",
                 "run_id": "runtime-ep2",
                 "video_id": "video-ep2",
                 "scene_id": "scene-c",
@@ -265,6 +272,7 @@ def test_control_recurrence_report_groups_current_truth_surfaces(tmp_path: Path)
                 "ts": "2026-04-25T03:02:00",
                 "step": "image_embed_dino",
                 "status": "skipped",
+                "env": "goodq_image_caption",
                 "run_id": "runtime-ep2",
                 "video_id": "video-ep2",
                 "scene_id": "scene-c",
@@ -279,6 +287,7 @@ def test_control_recurrence_report_groups_current_truth_surfaces(tmp_path: Path)
                 "ts": "2026-04-25T03:03:00",
                 "step": "image_embed_clip",
                 "status": "skipped",
+                "env": "goodq_image_caption",
                 "run_id": "runtime-ep2",
                 "video_id": "video-ep2",
                 "scene_id": "scene-c",
@@ -315,6 +324,10 @@ def test_control_recurrence_report_groups_current_truth_surfaces(tmp_path: Path)
     assert coverage_steps["image_ocr"]["meta_status_counts"]["dependency_missing"] == 1
     assert coverage_steps["image_embed_dino"]["reason_counts"]["image_embed_dino_direct_faiss_index_unconfigured"] == 1
     assert coverage_steps["image_embed_clip"]["skipped_count"] == 1
+    assert report["environment_summary"]["env_counts"]["goodq_image_caption"] == 4
+    fingerprints = report["environment_summary"]["native_retry_env_fingerprints"]
+    assert fingerprints[0]["fingerprint"] == "envabc123"
+    assert fingerprints[0]["env"]["OMP_NUM_THREADS"] == "1"
     assert report["recovered_vs_unrecovered_failures"]["recovered"] >= 2
     assert any(row["scene_id"] == "scene-b" for row in report["scenes_affected"])
 

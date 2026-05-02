@@ -33,6 +33,8 @@ CREATE TABLE IF NOT EXISTS scene_modality_coverage (
   has_clip INTEGER NOT NULL,
   has_dino INTEGER NOT NULL,
   has_audio_clap INTEGER NOT NULL,
+  audio_clap_basis TEXT NOT NULL DEFAULT 'memory_commit_events_only_not_current_run_qdrant_proof',
+  audio_vector_provenance_state TEXT NOT NULL DEFAULT 'audio_vector_absent',
   has_text_frame INTEGER NOT NULL,
   has_text_transcript INTEGER NOT NULL,
   provenance_coverage_pct REAL,
@@ -57,6 +59,10 @@ CREATE TABLE IF NOT EXISTS scene_index_public (
 CREATE INDEX IF NOT EXISTS idx_sip_video ON scene_index_public(video_id);
 CREATE INDEX IF NOT EXISTS idx_sip_scene ON scene_index_public(scene_id);
 """
+
+_AUDIO_CLAP_BASIS = "memory_commit_events_only_not_current_run_qdrant_proof"
+_AUDIO_VECTOR_PRESENT_UNVERIFIED = "provenance_unverified_audio_vector_exists"
+_AUDIO_VECTOR_ABSENT = "audio_vector_absent"
 
 
 def _load_configs() -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
@@ -87,6 +93,23 @@ def _best_effort_wal(conn: sqlite3.Connection) -> None:
         conn.execute("PRAGMA synchronous=NORMAL")
     except Exception:
         pass
+
+
+def _ensure_scene_modality_coverage_semantics(conn: sqlite3.Connection) -> None:
+    """Add non-breaking doctrine columns to older derived UI coverage tables."""
+
+    rows = conn.execute("PRAGMA table_info(scene_modality_coverage)").fetchall()
+    columns = {str(row[1]) for row in rows}
+    if "audio_clap_basis" not in columns:
+        conn.execute(
+            "ALTER TABLE scene_modality_coverage "
+            f"ADD COLUMN audio_clap_basis TEXT NOT NULL DEFAULT '{_AUDIO_CLAP_BASIS}'"
+        )
+    if "audio_vector_provenance_state" not in columns:
+        conn.execute(
+            "ALTER TABLE scene_modality_coverage "
+            f"ADD COLUMN audio_vector_provenance_state TEXT NOT NULL DEFAULT '{_AUDIO_VECTOR_ABSENT}'"
+        )
 
 
 def _posix(path: str) -> str:
@@ -220,6 +243,7 @@ def _discover_processing_artifacts(processing_root: str) -> Tuple[Dict[str, _Vid
 
 
 def _update_scene_modality_coverage(conn: sqlite3.Connection) -> int:
+    _ensure_scene_modality_coverage_semantics(conn)
     rows = conn.execute(
         """
         SELECT
@@ -250,6 +274,7 @@ def _update_scene_modality_coverage(conn: sqlite3.Connection) -> int:
     ) in rows:
         c = int(has_clip or 0) + int(has_dino or 0) + int(has_audio_clap or 0) + int(has_text_frame or 0) + int(has_text_transcript or 0)
         pct = float(c) / 5.0
+        audio_vector_state = _AUDIO_VECTOR_PRESENT_UNVERIFIED if int(has_audio_clap or 0) else _AUDIO_VECTOR_ABSENT
         out.append(
             (
                 video_id,
@@ -257,6 +282,8 @@ def _update_scene_modality_coverage(conn: sqlite3.Connection) -> int:
                 int(has_clip or 0),
                 int(has_dino or 0),
                 int(has_audio_clap or 0),
+                _AUDIO_CLAP_BASIS,
+                audio_vector_state,
                 int(has_text_frame or 0),
                 int(has_text_transcript or 0),
                 pct,
@@ -269,14 +296,17 @@ def _update_scene_modality_coverage(conn: sqlite3.Connection) -> int:
             """
             INSERT INTO scene_modality_coverage(
               video_id, scene_id,
-              has_clip, has_dino, has_audio_clap, has_text_frame, has_text_transcript,
+              has_clip, has_dino, has_audio_clap, audio_clap_basis, audio_vector_provenance_state,
+              has_text_frame, has_text_transcript,
               provenance_coverage_pct, last_commit_ts_utc
             )
-            VALUES (?,?,?,?,?,?,?,?,?)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?)
             ON CONFLICT(video_id, scene_id) DO UPDATE SET
               has_clip = excluded.has_clip,
               has_dino = excluded.has_dino,
               has_audio_clap = excluded.has_audio_clap,
+              audio_clap_basis = excluded.audio_clap_basis,
+              audio_vector_provenance_state = excluded.audio_vector_provenance_state,
               has_text_frame = excluded.has_text_frame,
               has_text_transcript = excluded.has_text_transcript,
               provenance_coverage_pct = excluded.provenance_coverage_pct,
@@ -364,6 +394,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
     try:
         _best_effort_wal(conn)
         conn.executescript(_SCHEMA_SQL)
+        _ensure_scene_modality_coverage_semantics(conn)
 
         video_flags: Dict[str, _VideoFlags] = {}
         scene_media: Dict[Tuple[str, str], List[Dict[str, str]]] = {}

@@ -181,6 +181,16 @@ Preferred read-model labels:
 Avoid using unqualified `audio_vector_exists` as a current-run success claim.
 If compatibility requires it, pair it with an explicit provenance field.
 
+Compatibility surfaces:
+
+- `GET /api/memory/stats` may expose `faiss.audio_vectors`; this is a FAISS
+  storage count only, not current-run Qdrant audio-vector proof.
+- `scene_modality_coverage.has_audio_clap` is UI-safe memory-commit presence
+  from `memory_commit_events`, not current-run Qdrant proof.
+- `scene_modality_coverage.audio_clap_basis` must state that basis explicitly.
+- `scene_modality_coverage.audio_vector_provenance_state` carries the doctrine
+  label UI consumers should prefer when displaying audio-vector status.
+
 ## `temporal_index.json`
 
 Location:

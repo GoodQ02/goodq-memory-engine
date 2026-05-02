@@ -268,6 +268,18 @@ def test_runtime_router_stays_read_only_aggregation_surface() -> None:
         assert marker not in source
 
 
+def test_memory_stats_labels_faiss_audio_count_as_storage_not_current_run_proof() -> None:
+    api_main = _load_api_main()
+    client = TestClient(api_main.app)
+
+    result = client.get("/api/memory/stats").json()
+
+    semantics = result["audio_vector_semantics"]
+    assert semantics["faiss.audio_vectors"] == "faiss_index_count_only_not_current_run_qdrant_proof"
+    assert semantics["current_run_success_contract"] == "docs/architecture/AUDIO_VECTOR_PROVENANCE_CONTRACT.md"
+    assert "clap_meta.status == ok" in semantics["current_run_success_requires"]
+
+
 def test_runtime_and_meta_roles_are_stated_explicitly_in_source_and_docs() -> None:
     repo_root = Path(__file__).resolve().parents[2]
     runtime_source = (repo_root / "api" / "routes" / "runtime.py").read_text(encoding="utf-8")

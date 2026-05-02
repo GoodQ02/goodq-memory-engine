@@ -758,6 +758,15 @@ def get_memory_stats() -> Dict[str, Any]:
         "clip_vectors": _faiss_count(paths.get("faiss_clip_path") or ""),
         "audio_vectors": _faiss_count(paths.get("faiss_audio_path") or ""),
     }
+    audio_vector_semantics = {
+        "faiss.audio_vectors": "faiss_index_count_only_not_current_run_qdrant_proof",
+        "current_run_success_contract": "docs/architecture/AUDIO_VECTOR_PROVENANCE_CONTRACT.md",
+        "current_run_success_requires": [
+            "clap_meta.status == ok",
+            "qdrant_audio_payload.run_id matches audited runtime run_id",
+            "required qdrant audio provenance fields are present",
+        ],
+    }
 
     qdrant_info = {"available": False, "collections": 0}
     try:
@@ -772,6 +781,7 @@ def get_memory_stats() -> Dict[str, Any]:
     return {
         "faiss": faiss_info,
         "qdrant": qdrant_info,
+        "audio_vector_semantics": audio_vector_semantics,
         "routing": {
             "read_priority": normalize_memory_tier_list((memory_cfg.get("routing") or {}).get("read_priority") or []),
             "write_targets": normalize_memory_tier_list((memory_cfg.get("routing") or {}).get("write_targets") or []),

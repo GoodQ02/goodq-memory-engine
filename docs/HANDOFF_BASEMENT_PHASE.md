@@ -261,6 +261,10 @@ These are intentionally *not* wired into ingestion yet:
 
 2) Build UI rollups (scene spine + modality coverage):
 - `python -m cli.ui_conduits_rollup`
+  - `scene_modality_coverage.has_audio_clap` is memory-commit presence only.
+    Prefer `audio_vector_provenance_state` for UI status language; it is not
+    current-run Qdrant proof unless the audio-vector provenance contract is
+    satisfied.
 
 3) Build observability rollups (optional; additive):
 - `python -m cli.observability_rollup`

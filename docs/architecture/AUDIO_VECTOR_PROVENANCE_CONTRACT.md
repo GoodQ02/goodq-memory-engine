@@ -91,6 +91,18 @@ Avoid using unqualified `audio_vector_exists` as a current-run success claim.
 If a read model keeps that field for compatibility, it must pair it with a
 provenance field that says whether the vector is current-run proven.
 
+Compatibility fields that predate this doctrine must be read narrowly:
+
+- `faiss.audio_vectors` means FAISS audio index count only. It is not
+  current-run Qdrant proof.
+- `scene_modality_coverage.has_audio_clap` means an audio CLAP commit was found
+  in `memory_commit_events`. It is not current-run Qdrant proof unless paired
+  with the stricter run-provenance checks above.
+- `scene_modality_coverage.audio_vector_provenance_state` should carry the
+  doctrine state for UI consumers. `provenance_unverified_audio_vector_exists`
+  means storage evidence exists but current-run Qdrant proof has not been
+  established.
+
 ## Recurrence And Audit Rules
 
 Control recurrence reports and witness audits should compare:

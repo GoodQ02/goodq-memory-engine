@@ -45,6 +45,12 @@ It does not revive the retired `/runs` compatibility shell, and it does not pars
 If a clone uses a shared witness-report tree instead of a repo-local one, set
 `GOODQ_RUN_REPORTS_ROOT` to point the read-only run surfaces at that artifact root.
 
+`GET /api/memory/stats` exposes storage-tier counts. `faiss.audio_vectors` is a
+FAISS index count only and is not current-run Qdrant audio-vector proof. Use
+the response `audio_vector_semantics` object and
+`docs/architecture/AUDIO_VECTOR_PROVENANCE_CONTRACT.md` before presenting any
+current-run CLAP/Qdrant coverage label.
+
 Router-backed endpoint families mounted into the same process:
 
 - `/api/search`

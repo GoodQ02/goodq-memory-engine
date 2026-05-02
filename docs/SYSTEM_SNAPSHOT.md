@@ -120,6 +120,7 @@ the supported host/runtime baseline, but it is not a live witness monitor.
   - `python -m cli.control_recurrence_report`
   - `/api/control-recurrence/reports`
   - `/api/control-recurrence/reports/latest`
+  - `/api/control-recurrence/reports/trend`
   - `/api/control-recurrence/reports/{report_id}`
   - `/api/control-recurrence/reports/{report_id}/markdown`
   - `/api/control-recurrence/reports/{report_id}/recommendations`
@@ -161,6 +162,7 @@ the supported host/runtime baseline, but it is not a live witness monitor.
   - `conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --trend --json`
   - `curl http://127.0.0.1:30000/api/control-recurrence/reports`
   - `curl http://127.0.0.1:30000/api/control-recurrence/reports/latest`
+  - `curl http://127.0.0.1:30000/api/control-recurrence/reports/trend`
   - `curl http://127.0.0.1:30000/api/control-recurrence/reports/20260424_003250_season1_recompare_witness__vs__20260424_182406_season2_fresh_witness/recommendations`
 
 ## Current Upstream Normalization State

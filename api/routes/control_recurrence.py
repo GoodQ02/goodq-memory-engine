@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse, PlainTextResponse
 
 from lib import control_recurrence_index
 from lib.control_recurrence_recommendations import build_recommendation_draft
+from lib.control_recurrence_trend import build_control_recurrence_trend
 
 
 router = APIRouter(prefix="/api/control-recurrence", tags=["control-recurrence"])
@@ -24,6 +25,13 @@ def latest_control_recurrence_report() -> Dict[str, Any]:
     """Return the latest indexed recurrence report entry."""
 
     return control_recurrence_index.latest_report_entry()
+
+
+@router.get("/reports/trend")
+def get_control_recurrence_reports_trend() -> Dict[str, Any]:
+    """Return a derived read-only trend over indexed recurrence report JSON."""
+
+    return build_control_recurrence_trend()
 
 
 @router.get("/reports/{report_id}")

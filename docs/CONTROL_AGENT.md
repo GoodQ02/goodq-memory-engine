@@ -5,7 +5,7 @@
 # Control Agent & Self-Healing System
 
 **Status:** ⚠️ CONDITIONAL - Runtime disabled by default unless an `llm_client` is explicitly injected  
-**Last Updated:** May 1, 2026
+**Last Updated:** May 2, 2026
 **Version:** 1.0.0
 
 ---
@@ -18,7 +18,7 @@ Current reality: the active control surface is observer-only. It can summarize a
 
 ---
 
-## Active Read-Only Control Substrate (2026-05-01)
+## Active Read-Only Control Substrate (2026-05-02)
 
 The active control-plane surface now includes a read-only recurrence instrument:
 
@@ -29,6 +29,7 @@ The active control-plane surface now includes a read-only recurrence instrument:
 - `python -m cli.control_recurrence_report`
 - `GET /api/control-recurrence/reports`
 - `GET /api/control-recurrence/reports/latest`
+- `GET /api/control-recurrence/reports/trend`
 - `GET /api/control-recurrence/reports/{report_id}`
 - `GET /api/control-recurrence/reports/{report_id}/markdown`
 - `GET /api/control-recurrence/reports/{report_id}/recommendations`
@@ -96,6 +97,10 @@ curl http://127.0.0.1:30000/api/control-recurrence/reports
 
 ```powershell
 curl http://127.0.0.1:30000/api/control-recurrence/reports/latest
+```
+
+```powershell
+curl http://127.0.0.1:30000/api/control-recurrence/reports/trend
 ```
 
 ```powershell

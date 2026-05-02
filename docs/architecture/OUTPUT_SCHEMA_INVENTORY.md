@@ -437,6 +437,7 @@ Supported read-model examples:
 - `GET /api/runs/latest/preview`
 - `GET /api/control-recurrence/reports`
 - `GET /api/control-recurrence/reports/latest`
+- `GET /api/control-recurrence/reports/trend`
 - `GET /api/control-recurrence/reports/{report_id}`
 - `GET /api/control-recurrence/reports/{report_id}/markdown`
 - `GET /api/control-recurrence/reports/{report_id}/recommendations`

@@ -41,6 +41,7 @@ truth for live claims. Do not treat this document as a live witness monitor.
     - local API read surface:
       - `GET /api/control-recurrence/reports`
       - `GET /api/control-recurrence/reports/latest`
+      - `GET /api/control-recurrence/reports/trend`
       - `GET /api/control-recurrence/reports/{report_id}`
       - `GET /api/control-recurrence/reports/{report_id}/markdown`
       - `GET /api/control-recurrence/reports/{report_id}/recommendations`
@@ -56,6 +57,7 @@ truth for live claims. Do not treat this document as a live witness monitor.
     - `conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --trend --json`
     - `curl http://127.0.0.1:30000/api/control-recurrence/reports`
     - `curl http://127.0.0.1:30000/api/control-recurrence/reports/latest`
+    - `curl http://127.0.0.1:30000/api/control-recurrence/reports/trend`
     - `curl http://127.0.0.1:30000/api/control-recurrence/reports/20260424_003250_season1_recompare_witness__vs__20260424_182406_season2_fresh_witness/recommendations`
   - Upstream normalization remains in pilot state only:
     - exact pair allowlist contains exactly `Jerry Seinfeld -> Jerry`

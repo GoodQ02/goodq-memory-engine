@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-04-24 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-02 -->
 
 # GoodQ4All API Reference
 
@@ -36,6 +36,7 @@ Primary status and runtime summary endpoints defined in the active API surface:
 - `GET /api/read/envelope`
 - `GET /api/control-recurrence/reports`
 - `GET /api/control-recurrence/reports/latest`
+- `GET /api/control-recurrence/reports/trend`
 - `GET /api/control-recurrence/reports/{report_id}`
 - `GET /api/control-recurrence/reports/{report_id}/markdown`
 - `GET /api/control-recurrence/reports/{report_id}/recommendations`
@@ -74,6 +75,7 @@ Router-backed endpoint families mounted into the same process:
 
 - `GET /api/control-recurrence/reports` reads `reports/control_recurrence/index.json` and returns the parsed index, or a structured empty response when the index is missing.
 - `GET /api/control-recurrence/reports/latest` returns the newest indexed report entry by `created_or_updated_at` or indexed artifact mtime.
+- `GET /api/control-recurrence/reports/trend` returns a derived read-only trend over indexed durable JSON reports.
 - `GET /api/control-recurrence/reports/{report_id}` returns the indexed durable JSON report content when `json_path` is present.
 - `GET /api/control-recurrence/reports/{report_id}/markdown` returns indexed markdown content as `text/plain` when `markdown_path` is present.
 - `GET /api/control-recurrence/reports/{report_id}/recommendations` returns a deterministic read-only operator inspection draft from the indexed durable JSON report.
@@ -86,6 +88,10 @@ curl http://127.0.0.1:30000/api/control-recurrence/reports
 
 ```powershell
 curl http://127.0.0.1:30000/api/control-recurrence/reports/latest
+```
+
+```powershell
+curl http://127.0.0.1:30000/api/control-recurrence/reports/trend
 ```
 
 ```powershell

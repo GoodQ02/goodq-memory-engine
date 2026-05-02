@@ -149,7 +149,10 @@ baseline repo/environment sanity contract. The CI profile requires tracked lock
 recipes and core repo checks, but it does not prove desktop Qdrant service
 readiness or provision the specialized step environment pack. The default
 desktop verifier profile remains the operator-facing bootstrap/runtime check,
-and ingestion witnesses still require Qdrant to be reachable.
+and ingestion witnesses still require Qdrant to be reachable. CI also binds
+`GOODQ_DATA_ROOT` to a runner-local workspace directory so import-time unit tests
+do not assume the desktop data drive exists. CodeQL is gated off while the
+repository is private unless code scanning is enabled for the repository.
 
 When the installer must cross a UAC elevation boundary, bootstrap now passes the
 already-resolved canonical storage/log paths into the service installer so the

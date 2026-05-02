@@ -25,9 +25,18 @@ on:
 jobs:
   bootstrap-baseline:
     runs-on: windows-latest
+    env:
+      GOODQ_DATA_ROOT: ${{ github.workspace }}\_ci\GoodQ_Data
+      GOODQ_HOST_PROFILE: BASELINE
+      GOODQ_REQUIRE_GPU: "0"
+      GOODQ_REQUIRE_WSL_AUDIO: "0"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Prepare CI data root
+        shell: pwsh
+        run: New-Item -ItemType Directory -Force -Path "$env:GOODQ_DATA_ROOT" | Out-Null
 
       - name: Setup Miniconda
         uses: conda-incubator/setup-miniconda@v3

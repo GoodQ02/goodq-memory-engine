@@ -69,27 +69,26 @@ Compare-Object `
 | Environment | Packages | Lock File |
 |-------------|----------|-----------|
 | audio_diarize | 203 | audio_diarize.lock.txt |
-| audio_embed | 166 | audio_embed.lock.txt |
-| audio_emotion | 165 | audio_emotion.lock.txt |
-| audio_metadata | 161 | audio_metadata.lock.txt |
-| audio_transcribe | 157 | audio_transcribe.lock.txt |
+| audio_embed | 46 | audio_embed.lock.txt |
+| audio_emotion | 45 | audio_emotion.lock.txt |
+| audio_metadata | 25 | audio_metadata.lock.txt |
+| audio_transcribe | 54 | audio_transcribe.lock.txt |
 | emotion_classify | 153 | emotion_classify.lock.txt |
-| face_embed | 66 | face_embed.lock.txt |
+| face_embed | 26 | face_embed.lock.txt |
 | home_assistant_status | 145 | home_assistant_status.lock.txt |
-| image_caption | 156 | image_caption.lock.txt |
+| image_caption | 38 | image_caption.lock.txt |
 | llm_chat | 145 | llm_chat.lock.txt |
-| object_detect | 162 | object_detect.lock.txt |
-| object_track | 146 | object_track.lock.txt |
+| object_detect | 40 | object_detect.lock.txt |
 | object_track_yolo | 152 | object_track_yolo.lock.txt |
 | ocr | 147 | ocr.lock.txt |
 | pdf_text | 145 | pdf_text.lock.txt |
 | sentiment | 152 | sentiment.lock.txt |
 | system_metrics | 148 | system_metrics.lock.txt |
 | tagger | 152 | tagger.lock.txt |
-| text_embed | 162 | text_embed.lock.txt |
+| text_embed | 57 | text_embed.lock.txt |
 | tts | 145 | tts.lock.txt |
-| video_scene_detect | 147 | video_scene_detect.lock.txt |
-**Total:** 21 environments, 3,169 packages locked
+| video_scene_detect | 7 | video_scene_detect.lock.txt |
+**Total:** 20 environments, 2,025 package lines locked
 
 `prepare_step_envs.ps1` no longer provisions every environment by default. The
 supported manual repair surface now targets the same specialized step-env pack

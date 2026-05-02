@@ -12,10 +12,13 @@ on:
       - "CONTRIBUTING.md"
       - "docs/**"
       - "configs/**"
+      - "envs/**"
       - "scripts/**"
       - "steps/**"
       - "tests/**"
       - "environment.yml"
+      - "environment.gpu.yml"
+      - "wsl2_audio/**"
       - "setup.py"
       - "pytest.ini"
 

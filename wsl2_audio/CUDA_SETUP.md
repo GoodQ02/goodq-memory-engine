@@ -2,15 +2,25 @@
 
 ## Summary
 
-Your WSL2 Ubuntu environment is **properly configured** for CUDA/cuDNN-accelerated audio processing!
+This is an operator note for validating the WSL2 audio CUDA/cuDNN runtime.
+The active project lane is the conservative WSL audio stack documented in
+`docs/reference/WSL_AUDIO_RUNTIME.md` and pinned in
+`wsl2_audio/requirements-bootstrap-constraints.txt`.
 
 ### Current Configuration
 
-- **GPU**: NVIDIA GeForce RTX 4070 Ti SUPER
-- **CUDA Version**: 12.8 (Driver 13.0)
-- **PyTorch**: 2.8.0+cu128
-- **cuDNN**: 9.10.2 (version 91002)
-- **Status**: ✓ All systems operational
+- **GPU**: local NVIDIA GPU when available
+- **Host driver CUDA report**: may be newer than the package lane
+- **Project WSL audio torch lane**: `torch==2.5.1+cu121`
+- **Project WSL audio torchvision lane**: `torchvision==0.20.1+cu121`
+- **Project WSL audio torchaudio lane**: `torchaudio==2.5.1+cu121`
+- **Bootstrap constraints**: `wsl2_audio/requirements-bootstrap-constraints.txt`
+- **Status rule**: run the diagnostics below on the target machine before
+  treating the local WSL audio worker as ready
+
+`wsl2_audio/requirements-locked.txt` may still contain a historical package
+snapshot and is not the bootstrap-authoritative WSL audio torch lane until it is
+regenerated from a validated worker.
 
 ## Quick Start
 
@@ -100,7 +110,7 @@ python3 -c "import torch; print(f'CUDA: {torch.cuda.is_available()}, GPU: {torch
 
 Expected output:
 ```
-CUDA: True, GPU: NVIDIA GeForce RTX 4070 Ti SUPER
+CUDA: True, GPU: <local NVIDIA GPU>
 ```
 
 ### cuDNN Test
@@ -148,14 +158,17 @@ Should show:
 1. **Always use `setup_cuda_env.sh` instead of direct venv activation** when working with CUDA/GPU operations
 2. PyTorch has cuDNN bundled but uses the pip-installed version when available
 3. WSL2 accesses GPU through the Windows NVIDIA driver (no separate driver needed in WSL)
-4. The environment is compatible with PyTorch 2.8.0+cu128
+4. The current GoodQ WSL audio package lane is `2.5.1+cu121`; do not promote
+   to a newer CUDA/PyTorch lane without a targeted WSL audio smoke and witness
+   proving the change
 
 ## Next Steps
 
-Your environment is ready! You can now:
+After diagnostics pass, the WSL audio worker can:
+
 - Run audio processing with GPU acceleration
 - Use faster-whisper with CUDA
 - Run pyannote.audio models on GPU
-- Train/inference with transformers models on CUDA
+- Run transformers inference on CUDA
 
 For any issues, run `python3 ~/goodq_audio/check_cuda.py` to diagnose.

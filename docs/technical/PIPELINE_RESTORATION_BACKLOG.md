@@ -198,15 +198,20 @@ Needed:
 Current state:
 
 - preflight recommends `2.5.1+cu121`
-- `wsl2_audio/setup_wsl2_audio.sh` still installs unpinned `torch torchvision torchaudio`
-- `wsl2_audio/requirements-locked.txt` still reflects a `2.8.0` lane
+- `wsl2_audio/setup_wsl2_audio.sh` pins and validates the same `2.5.1+cu121` lane
+- `wsl2_audio/requirements-bootstrap-constraints.txt` is the bootstrap
+  constraints surface for that lane
+- `wsl2_audio/requirements-locked.txt` still reflects a historical `2.8.0`
+  snapshot and should not be treated as bootstrap-authoritative until
+  regenerated from a validated worker
 - `scripts/install_pipeline_wsl.py` still reflects an older `2.3.1+cu121` lane
 
 Needed:
 
-1. choose one canonical WSL matrix
-2. align installer, lockfile, setup script, and preflight
-3. revalidate WSL transcription and optional diarization on that single matrix
+1. keep the canonical WSL matrix at `2.5.1+cu121` unless a targeted witness proves a promotion
+2. align or retire legacy installer paths that still encode older lanes
+3. regenerate `wsl2_audio/requirements-locked.txt` only after a targeted WSL audio smoke validates the active worker
+4. revalidate WSL transcription and optional diarization on that single matrix
 
 ### P1. Legacy Windows diarization quarantine or alignment
 

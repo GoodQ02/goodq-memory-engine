@@ -51,6 +51,7 @@ def _report(
     family_counts: dict[str, int],
     category_counts: dict[str, int] | None = None,
     recovery_counts: dict[str, int] | None = None,
+    latency_steps: list[dict] | None = None,
     recommendation_status: str = "warn",
     highest_category: str = "watch",
     phase6_healthy: int = 1,
@@ -104,6 +105,19 @@ def _report(
             "highest_category": highest_category,
             "reasons": [f"highest recurrence category is {highest_category}"],
         },
+        "step_latency_summary": {
+            "mode": "read_only_latency_observability",
+            "source": "step_runs.jsonl duration_ms",
+            "status": "available" if latency_steps else "empty",
+            "duration_row_count": sum(int(row.get("count") or 0) for row in latency_steps or []),
+            "step_count": len(latency_steps or []),
+            "slow_outlier_count": sum(int(row.get("slow_outlier_count") or 0) for row in latency_steps or []),
+            "timeout_boundary_exceedance_count": sum(
+                int(row.get("timeout_boundary_exceedance_count") or 0) for row in latency_steps or []
+            ),
+            "steps": latency_steps or [],
+            "warnings": [] if latency_steps else ["no_step_duration_rows"],
+        },
     }
 
 
@@ -148,6 +162,84 @@ def test_control_recurrence_trend_computes_json_backed_trends(tmp_path: Path) ->
     phase6 = [row for row in trend["health_trends"] if row["health_key"] == "phase6"][0]
     assert phase6["trend_status"] == "stable"
     assert trend["safety_boundary"]["raw_run_roots_scanned"] == "not_attempted"
+
+
+def test_control_recurrence_trend_derives_latency_from_json_reports(tmp_path: Path) -> None:
+    report_dir = tmp_path / "reports" / "control_recurrence"
+    _write_json(
+        report_dir / "run_a.json",
+        _report(
+            videos=["episode-a.mp4"],
+            family_counts={"no_text": 1},
+            latency_steps=[
+                {
+                    "step_name": "image_caption",
+                    "count": 2,
+                    "p50_ms": 1000.0,
+                    "p95_ms": 1200.0,
+                    "max_ms": 1300.0,
+                    "slow_outlier_count": 0,
+                    "timeout_boundary_exceedance_count": 0,
+                },
+                {
+                    "step_name": "audio_unified_wsl2",
+                    "count": 2,
+                    "p50_ms": 25000.0,
+                    "p95_ms": 30000.0,
+                    "max_ms": 31000.0,
+                    "slow_outlier_count": 0,
+                    "timeout_boundary_exceedance_count": 0,
+                },
+            ],
+        ),
+    )
+    _write_json(
+        report_dir / "run_b.json",
+        _report(
+            videos=["episode-a.mp4"],
+            family_counts={"no_text": 1},
+            latency_steps=[
+                {
+                    "step_name": "image_caption",
+                    "count": 2,
+                    "p50_ms": 1000.0,
+                    "p95_ms": 1500.0,
+                    "max_ms": 2500.0,
+                    "slow_outlier_count": 1,
+                    "timeout_boundary_exceedance_count": 0,
+                },
+                {
+                    "step_name": "audio_unified_wsl2",
+                    "count": 2,
+                    "p50_ms": 23000.0,
+                    "p95_ms": 29000.0,
+                    "max_ms": 30000.0,
+                    "slow_outlier_count": 0,
+                    "timeout_boundary_exceedance_count": 0,
+                },
+            ],
+        ),
+    )
+    _write_index(
+        report_dir,
+        [
+            _index_entry("run_a", created="2026-04-29T00:00:00+00:00"),
+            _index_entry("run_b", created="2026-04-29T01:00:00+00:00"),
+        ],
+    )
+
+    trend = build_control_recurrence_trend(base_dir=report_dir)
+    by_step = {row["step_name"]: row for row in trend["latency_trends"]}
+
+    assert trend["report_timeline"][0]["latency_summary"]["duration_row_count"] == 4
+    assert by_step["image_caption"]["trend_status"] == "increased"
+    assert by_step["image_caption"]["p95_delta_ms"] == 300.0
+    assert by_step["image_caption"]["slow_outlier_delta"] == 1
+    assert by_step["audio_unified_wsl2"]["trend_status"] == "decreased"
+    assert by_step["audio_unified_wsl2"]["source"] == "existing recurrence JSON step_latency_summary"
+    rendered = json.dumps(trend)
+    for forbidden in ("improved", "regressed", "fixed", "healed", "safer"):
+        assert forbidden not in rendered
 
 
 def test_control_recurrence_trend_marks_markdown_only_metadata(tmp_path: Path) -> None:

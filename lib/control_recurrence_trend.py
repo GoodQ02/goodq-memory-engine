@@ -73,6 +73,7 @@ def build_control_recurrence_trend(base_dir: str | None = None) -> Dict[str, Any
         "category_trends": _category_trends(groups),
         "recovery_trends": _recovery_trends(groups),
         "health_trends": _health_trends(groups),
+        "latency_trends": _latency_trends(groups),
         "recommendation_history": _recommendation_history(loaded_reports),
         "scope_warnings": scope_warnings,
         "safety_boundary": dict(_SAFETY_BOUNDARY),
@@ -107,6 +108,21 @@ def render_text_trend(trend: Dict[str, Any], *, limit: int = 12) -> str:
         )
     if not family_rows:
         lines.append("- No comparable family trend rows.")
+
+    latency_rows = trend.get("latency_trends") or []
+    if latency_rows:
+        lines.append("")
+        lines.append("Latency Trends:")
+        for row in latency_rows[: max(1, int(limit or 12))]:
+            lines.append(
+                "- {step}: {status} p95_delta_ms={p95_delta} max_delta_ms={max_delta} timeout_delta={timeout_delta}".format(
+                    step=row.get("step_name", "unknown_step"),
+                    status=row.get("trend_status", "unknown"),
+                    p95_delta=row.get("p95_delta_ms"),
+                    max_delta=row.get("max_delta_ms"),
+                    timeout_delta=row.get("timeout_boundary_exceedance_delta", 0),
+                )
+            )
 
     warnings = trend.get("scope_warnings") or []
     if warnings:
@@ -175,6 +191,7 @@ def _timeline_row_from_entry(
             "artifact_status": entry.get("artifact_status") or ("json_backed" if report_payload else "metadata_only"),
             "scope_signature": scope_signature,
             "warning_flags": _dedupe(warning_flags),
+            "latency_summary": _latency_timeline_summary(report_payload),
             "phase6_health_summary": entry.get("phase6_health_summary") or {},
             "qdrant_health_summary": entry.get("qdrant_health_summary") or {},
         },
@@ -397,6 +414,97 @@ def _health_trends(groups: Dict[str, List[Dict[str, Any]]]) -> List[Dict[str, An
     return rows
 
 
+def _latency_trends(groups: Dict[str, List[Dict[str, Any]]]) -> List[Dict[str, Any]]:
+    rows: List[Dict[str, Any]] = []
+    for key, items in sorted(groups.items()):
+        step_names = sorted({step for item in items for step in _latency_steps(item["report"])})
+        for step in step_names:
+            counts_by_report: Dict[str, int] = {}
+            p50_by_report: Dict[str, Optional[float]] = {}
+            p95_by_report: Dict[str, Optional[float]] = {}
+            max_by_report: Dict[str, Optional[float]] = {}
+            slow_outliers_by_report: Dict[str, int] = {}
+            timeout_exceedances_by_report: Dict[str, int] = {}
+
+            for item in items:
+                report_id = item["timeline"]["report_id"]
+                row = _latency_steps(item["report"]).get(step, {})
+                counts_by_report[report_id] = _safe_int(row.get("count"))
+                p50_by_report[report_id] = _safe_float(row.get("p50_ms"))
+                p95_by_report[report_id] = _safe_float(row.get("p95_ms"))
+                max_by_report[report_id] = _safe_float(row.get("max_ms"))
+                slow_outliers_by_report[report_id] = _safe_int(row.get("slow_outlier_count"))
+                timeout_exceedances_by_report[report_id] = _safe_int(row.get("timeout_boundary_exceedance_count"))
+
+            ordered_counts = list(counts_by_report.values())
+            ordered_p50 = list(p50_by_report.values())
+            ordered_p95 = list(p95_by_report.values())
+            ordered_max = list(max_by_report.values())
+            ordered_slow = list(slow_outliers_by_report.values())
+            ordered_timeout = list(timeout_exceedances_by_report.values())
+            previous_count = ordered_counts[-2] if len(ordered_counts) >= 2 else 0
+            latest_count = ordered_counts[-1] if ordered_counts else 0
+            previous_p50 = ordered_p50[-2] if len(ordered_p50) >= 2 else None
+            latest_p50 = ordered_p50[-1] if ordered_p50 else None
+            previous_p95 = ordered_p95[-2] if len(ordered_p95) >= 2 else None
+            latest_p95 = ordered_p95[-1] if ordered_p95 else None
+            previous_max = ordered_max[-2] if len(ordered_max) >= 2 else None
+            latest_max = ordered_max[-1] if ordered_max else None
+            previous_slow = ordered_slow[-2] if len(ordered_slow) >= 2 else 0
+            latest_slow = ordered_slow[-1] if ordered_slow else 0
+            previous_timeout = ordered_timeout[-2] if len(ordered_timeout) >= 2 else 0
+            latest_timeout = ordered_timeout[-1] if ordered_timeout else 0
+
+            rows.append(
+                {
+                    "step_name": step,
+                    "scope_signature": key,
+                    "trend_status": _latency_trend_label(
+                        previous_count=previous_count,
+                        latest_count=latest_count,
+                        previous_p95=previous_p95,
+                        latest_p95=latest_p95,
+                        comparable=len(items) >= 2,
+                    ),
+                    "report_count": len(items),
+                    "source": "existing recurrence JSON step_latency_summary",
+                    "counts_by_report": counts_by_report,
+                    "p50_ms_by_report": p50_by_report,
+                    "p95_ms_by_report": p95_by_report,
+                    "max_ms_by_report": max_by_report,
+                    "slow_outlier_counts_by_report": slow_outliers_by_report,
+                    "timeout_boundary_exceedance_counts_by_report": timeout_exceedances_by_report,
+                    "latest_count": latest_count,
+                    "previous_count": previous_count,
+                    "count_delta": latest_count - previous_count,
+                    "latest_p50_ms": _round_ms(latest_p50),
+                    "previous_p50_ms": _round_ms(previous_p50),
+                    "p50_delta_ms": _delta_ms(previous_p50, latest_p50),
+                    "latest_p95_ms": _round_ms(latest_p95),
+                    "previous_p95_ms": _round_ms(previous_p95),
+                    "p95_delta_ms": _delta_ms(previous_p95, latest_p95),
+                    "latest_max_ms": _round_ms(latest_max),
+                    "previous_max_ms": _round_ms(previous_max),
+                    "max_delta_ms": _delta_ms(previous_max, latest_max),
+                    "latest_slow_outlier_count": latest_slow,
+                    "previous_slow_outlier_count": previous_slow,
+                    "slow_outlier_delta": latest_slow - previous_slow,
+                    "latest_timeout_boundary_exceedance_count": latest_timeout,
+                    "previous_timeout_boundary_exceedance_count": previous_timeout,
+                    "timeout_boundary_exceedance_delta": latest_timeout - previous_timeout,
+                }
+            )
+
+    rows.sort(
+        key=lambda row: (
+            -abs(float(row.get("p95_delta_ms") or 0.0)),
+            -abs(float(row.get("max_delta_ms") or 0.0)),
+            str(row.get("step_name")),
+        )
+    )
+    return rows
+
+
 def _recommendation_history(loaded_reports: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     rows: List[Dict[str, Any]] = []
     for item in sorted(loaded_reports, key=lambda row: _parse_time(_nested(row, ("timeline", "created_or_updated_at")))):
@@ -516,6 +624,55 @@ def _health_status(report: Dict[str, Any], health_key: str) -> str:
     return str(health.get("status") or "unknown")
 
 
+def _latency_timeline_summary(report: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    latency = report.get("step_latency_summary") if isinstance(report, dict) else {}
+    if not isinstance(latency, dict):
+        latency = {}
+    return {
+        "status": str(latency.get("status") or "unavailable"),
+        "duration_row_count": _safe_int(latency.get("duration_row_count")),
+        "step_count": _safe_int(latency.get("step_count")),
+        "slow_outlier_count": _safe_int(latency.get("slow_outlier_count")),
+        "timeout_boundary_exceedance_count": _safe_int(latency.get("timeout_boundary_exceedance_count")),
+    }
+
+
+def _latency_steps(report: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+    latency = report.get("step_latency_summary") if isinstance(report.get("step_latency_summary"), dict) else {}
+    rows = latency.get("steps") if isinstance(latency.get("steps"), list) else []
+    out: Dict[str, Dict[str, Any]] = {}
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        step = str(row.get("step_name") or "").strip()
+        if step:
+            out[step] = row
+    return out
+
+
+def _latency_trend_label(
+    *,
+    previous_count: int,
+    latest_count: int,
+    previous_p95: Optional[float],
+    latest_p95: Optional[float],
+    comparable: bool,
+) -> str:
+    if not comparable:
+        return "insufficient_comparable_data"
+    if previous_count <= 0 and latest_count > 0:
+        return "new"
+    if previous_count > 0 and latest_count <= 0:
+        return "resolved"
+    if previous_p95 is None or latest_p95 is None:
+        return "insufficient_data"
+    if latest_p95 > previous_p95:
+        return "increased"
+    if latest_p95 < previous_p95:
+        return "decreased"
+    return "stable"
+
+
 def _trend_label(previous: int, latest: int, *, comparable: bool) -> str:
     if not comparable:
         return "insufficient_comparable_data"
@@ -606,6 +763,30 @@ def _safe_int(value: Any) -> int:
         return int(value or 0)
     except Exception:
         return 0
+
+
+def _safe_float(value: Any) -> Optional[float]:
+    try:
+        if value is None:
+            return None
+        return float(value)
+    except Exception:
+        return None
+
+
+def _round_ms(value: Any) -> Optional[float]:
+    number = _safe_float(value)
+    if number is None:
+        return None
+    return round(number, 3)
+
+
+def _delta_ms(previous: Any, latest: Any) -> Optional[float]:
+    previous_number = _safe_float(previous)
+    latest_number = _safe_float(latest)
+    if previous_number is None or latest_number is None:
+        return None
+    return _round_ms(latest_number - previous_number)
 
 
 def _dedupe(values: Iterable[str]) -> List[str]:

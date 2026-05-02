@@ -198,7 +198,8 @@ Always test after updating locks:
 pwsh scripts/ingest_videos_lite.ps1 -MaxVideos 1 -MaxScenes 1
 
 # Check for errors
-Get-Content L:\GoodQ_Data\logs\step_runs.jsonl -Tail 100 | `
+$dataRoot = $env:GOODQ_DATA_ROOT
+Get-Content (Join-Path $dataRoot "GoodQ_Data/logs/step_runs.jsonl") -Tail 100 | `
     Select-String '"status":"error"'
 ```
 

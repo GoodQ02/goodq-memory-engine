@@ -2371,12 +2371,20 @@ def _load_direct_run_scope(run_root: Path, files_read: List[str], warnings: List
     step_log_dir = _path_from(paths_cfg.get("log_dir"))
     step_path = step_log_dir / "step_runs.jsonl" if step_log_dir is not None else None
 
-    stdout_path = _path_from(operator_metadata.get("stdout")) if isinstance(operator_metadata, dict) else None
-    stderr_path = _path_from(operator_metadata.get("stderr")) if isinstance(operator_metadata, dict) else None
-    if stdout_path is None:
-        stdout_path = run_root / "ingestion.stdout.log"
-    if stderr_path is None:
-        stderr_path = run_root / "ingestion.stderr.log"
+    stdout_path = _first_existing_run_path(
+        [
+            _path_from(operator_metadata.get("stdout")) if isinstance(operator_metadata, dict) else None,
+            run_root / "ingestion.stdout.log",
+            run_root / "ingest.stdout.log",
+        ]
+    )
+    stderr_path = _first_existing_run_path(
+        [
+            _path_from(operator_metadata.get("stderr")) if isinstance(operator_metadata, dict) else None,
+            run_root / "ingestion.stderr.log",
+            run_root / "ingest.stderr.log",
+        ]
+    )
 
     if not result_items:
         result_items = [{}]
@@ -2410,11 +2418,18 @@ def _load_direct_run_scope(run_root: Path, files_read: List[str], warnings: List
             temporal_index_path=temporal_path,
             resolved_config_path=resolved_config_path if resolved_config_path.is_file() else None,
             episode_log_path=None,
-            stdout_path=stdout_path if stdout_path.is_file() else None,
-            stderr_path=stderr_path if stderr_path.is_file() else None,
+            stdout_path=stdout_path,
+            stderr_path=stderr_path,
             output_item_index=output_item_index,
         ))
     return scopes
+
+
+def _first_existing_run_path(candidates: Sequence[Optional[Path]]) -> Optional[Path]:
+    for candidate in candidates:
+        if candidate is not None and candidate.is_file():
+            return candidate
+    return None
 
 
 def _load_episode_artifact_signals(episode: _EpisodeScope) -> Tuple[List[Dict[str, Any]], List[str], List[str], Dict[str, Any]]:
@@ -2570,6 +2585,9 @@ def _load_runtime_event_signals(episode: _EpisodeScope) -> Tuple[List[Dict[str, 
         if return_code is None:
             continue
         retry_event = _find_runtime_retry_event(events[index + 1 :], event, metadata)
+        retry_metadata = retry_event.get("metadata") if isinstance(retry_event, dict) else {}
+        if not isinstance(retry_metadata, dict):
+            retry_metadata = {}
         recovered = retry_event is not None
         code = "native_crash_retry" if recovered else None
         family = _classify_error_family(
@@ -2587,12 +2605,15 @@ def _load_runtime_event_signals(episode: _EpisodeScope) -> Tuple[List[Dict[str, 
                 "report_run_id": episode.report_run_id,
                 "episode": episode.video_name or episode.episode,
                 "video_id": _clean_str(metadata.get("video_id")) or episode.video_id,
+                "env": _clean_str(metadata.get("env")) or _clean_str(metadata.get("env_name")),
                 "step_name": step,
                 "status": "warning" if recovered else "error",
                 "reason": "native_crash_retry" if recovered else error,
                 "error_family": family,
                 "scene_id": _clean_str(metadata.get("scene_id")),
                 "scene_index": metadata.get("scene_index"),
+                "return_code": return_code,
+                "retry_mode": _clean_str(retry_metadata.get("native_retry_mode")),
                 "recovery_outcome": "recovered_retry" if recovered else None,
                 "optional": _is_optional_runtime_step(step),
                 "message": error,
@@ -2625,8 +2646,8 @@ def _load_stderr_native_retry_signals(episode: _EpisodeScope) -> Tuple[List[Dict
         parsed = _parse_native_crash_stderr_line(line)
         if parsed is None:
             continue
-        step, return_code, status_code = parsed
-        key = (step, return_code, status_code)
+        step, return_code, status_code, retry_mode = parsed
+        key = (step, return_code, status_code, retry_mode)
         if key in seen:
             continue
         seen.add(key)
@@ -2651,6 +2672,8 @@ def _load_stderr_native_retry_signals(episode: _EpisodeScope) -> Tuple[List[Dict
                 "error_family": family,
                 "scene_id": None,
                 "scene_index": None,
+                "return_code": return_code,
+                "retry_mode": retry_mode,
                 "recovery_outcome": "recovered_retry",
                 "optional": _is_optional_runtime_step(step),
                 "message": line.strip(),
@@ -2680,7 +2703,7 @@ def _is_optional_runtime_step(step: Any) -> bool:
     }
 
 
-def _parse_native_crash_stderr_line(line: str) -> Optional[Tuple[str, Optional[int], Optional[str]]]:
+def _parse_native_crash_stderr_line(line: str) -> Optional[Tuple[str, Optional[int], Optional[str], Optional[str]]]:
     text = line.strip()
     if not text or "native crash" not in text.lower():
         return None
@@ -2694,6 +2717,7 @@ def _parse_native_crash_stderr_line(line: str) -> Optional[Tuple[str, Optional[i
             _clean_step_name(detected.group("step")),
             _coerce_int(detected.group("return_code")),
             _normalize_status_code_hex(detected.group("status_code")),
+            _native_retry_mode_from_text(text),
         )
 
     retry = re.search(
@@ -2702,7 +2726,22 @@ def _parse_native_crash_stderr_line(line: str) -> Optional[Tuple[str, Optional[i
         re.IGNORECASE,
     )
     if retry:
-        return (_clean_step_name(retry.group("step")), None, _normalize_status_code_hex(retry.group("status_code")))
+        return (
+            _clean_step_name(retry.group("step")),
+            None,
+            _normalize_status_code_hex(retry.group("status_code")),
+            _native_retry_mode_from_text(text),
+        )
+    return None
+
+
+def _native_retry_mode_from_text(text: str) -> Optional[str]:
+    mode = re.search(r"\bmode=(?P<mode>[A-Za-z0-9_\-]+)", text)
+    if mode:
+        return _clean_str(mode.group("mode"))
+    via = re.search(r"\bvia\s+(?P<mode>[A-Za-z0-9_\-]+)", text, re.IGNORECASE)
+    if via:
+        return _clean_str(via.group("mode"))
     return None
 
 
@@ -3039,9 +3078,12 @@ def _signal_from_run_warning(episode: _EpisodeScope, warning: Dict[str, Any]) ->
         "error_family": family,
         "scene_id": _clean_str(context.get("scene_id")),
         "scene_index": context.get("scene_index"),
+        "return_code": _coerce_int(context.get("return_code")),
+        "retry_mode": _clean_str(context.get("native_retry_mode")) or _clean_str(context.get("retry_mode")),
         "recovery_outcome": "recovered_retry" if code == "native_crash_retry" else None,
         "optional": code.startswith("optional_"),
         "message": message,
+        "env": _clean_str(context.get("env")),
         "env_fingerprint": _clean_str(context.get("env_fingerprint")),
         "ts": _clean_str(warning.get("ts_utc")),
     }
@@ -4090,12 +4132,17 @@ def _dedupe_strings(values: Iterable[str]) -> List[str]:
 
 def _coalesce_runtime_event_duplicates(signals: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
     native_signals = [signal for signal in signals if _is_native_crash_signal(signal)]
-    scene_specific: Dict[Tuple[Any, ...], List[Tuple[Any, Any, Any]]] = {}
+    scene_specific: Dict[Tuple[Any, ...], List[Tuple[Any, Any, Any, Any]]] = {}
     for signal in native_signals:
         if not signal.get("scene_id"):
             continue
         scene_specific.setdefault(_native_run_level_key(signal), []).append(
-            (signal.get("video_id"), signal.get("scene_id"), signal.get("scene_index"))
+            (
+                signal.get("video_id"),
+                signal.get("scene_id"),
+                signal.get("scene_index"),
+                _native_retry_mode(signal),
+            )
         )
 
     groups: Dict[Tuple[Any, ...], List[Dict[str, Any]]] = {}
@@ -4129,16 +4176,20 @@ def _native_run_level_key(signal: Dict[str, Any]) -> Tuple[Any, ...]:
 
 def _native_coalesce_key(
     signal: Dict[str, Any],
-    scene_specific: Dict[Tuple[Any, ...], List[Tuple[Any, Any, Any]]],
+    scene_specific: Dict[Tuple[Any, ...], List[Tuple[Any, Any, Any, Any]]],
 ) -> Tuple[Any, ...]:
     video_id = signal.get("video_id")
     scene_id = signal.get("scene_id")
     scene_index = signal.get("scene_index")
+    retry_mode = _native_retry_mode(signal)
     if not scene_id and signal.get("source") in {"run.warnings", "runtime.stderr"}:
         candidates = scene_specific.get(_native_run_level_key(signal), [])
         unique_candidates = list(dict.fromkeys(candidates))
         if len(unique_candidates) == 1:
-            video_id, scene_id, scene_index = unique_candidates[0]
+            video_id, scene_id, scene_index, candidate_retry_mode = unique_candidates[0]
+            retry_mode = retry_mode or candidate_retry_mode
+    elif scene_id and not retry_mode:
+        retry_mode = _native_retry_mode_for_scene(signal, scene_specific)
     return (
         signal.get("run_id"),
         video_id,
@@ -4147,7 +4198,29 @@ def _native_coalesce_key(
         signal.get("step_name"),
         _native_family_code(signal),
         _native_recovery_class(signal),
+        retry_mode,
     )
+
+
+def _native_retry_mode(signal: Dict[str, Any]) -> Optional[str]:
+    return _clean_str(signal.get("retry_mode")) or None
+
+
+def _native_retry_mode_for_scene(
+    signal: Dict[str, Any],
+    scene_specific: Dict[Tuple[Any, ...], List[Tuple[Any, Any, Any, Any]]],
+) -> Optional[str]:
+    candidates = scene_specific.get(_native_run_level_key(signal), [])
+    modes = [
+        retry_mode
+        for video_id, scene_id, scene_index, retry_mode in candidates
+        if retry_mode
+        and (not signal.get("video_id") or video_id == signal.get("video_id"))
+        and scene_id == signal.get("scene_id")
+        and (signal.get("scene_index") is None or scene_index == signal.get("scene_index"))
+    ]
+    unique_modes = list(dict.fromkeys(modes))
+    return unique_modes[0] if len(unique_modes) == 1 else None
 
 
 def _native_family_code(signal: Dict[str, Any]) -> str:
@@ -4198,7 +4271,20 @@ def _merge_native_crash_signals(group: Sequence[Dict[str, Any]]) -> Dict[str, An
     merged["optional"] = any(bool(signal.get("optional")) for signal in ordered)
     merged["provenance"] = {"surfaces": sources}
 
-    for field in ("video_id", "scene_id", "scene_index", "run_id", "episode", "report_run_id", "step_name", "ts", "env_fingerprint"):
+    for field in (
+        "video_id",
+        "scene_id",
+        "scene_index",
+        "run_id",
+        "episode",
+        "report_run_id",
+        "step_name",
+        "ts",
+        "env",
+        "env_fingerprint",
+        "return_code",
+        "retry_mode",
+    ):
         if not merged.get(field):
             merged[field] = next((signal.get(field) for signal in ordered if signal.get(field)), merged.get(field))
     return merged

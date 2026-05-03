@@ -857,8 +857,8 @@ def test_control_recurrence_report_does_not_fan_out_shared_stderr_retry(
     run_root = tmp_path / "reports" / "fresh_ingest_runs" / "direct_multi_retry"
     epoch_root = tmp_path / "GoodQ_Data" / "epochs" / "epoch_multi_retry"
     runtime_run_id = "runtime-multi-retry"
-    stdout_path = run_root / "ingestion.stdout.log"
-    stderr_path = run_root / "ingestion.stderr.log"
+    stdout_path = run_root / "ingest.stdout.log"
+    stderr_path = run_root / "ingest.stderr.log"
     output_items = []
 
     for index, video_id in enumerate(("video-one", "video-two"), start=1):

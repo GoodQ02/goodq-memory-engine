@@ -1,5 +1,7 @@
-torch==2.3.1
-torchvision==0.18.1
+# Canonical reproducible install recipe: ../locks/object_detect.lock.txt
+# Keep these direct-install hints aligned with the lock's base Torch lane.
+torch==2.5.1
+torchvision==0.20.1
 ultralytics==8.2.103
 opencv-python-headless==4.10.0.84
 numpy==1.26.4

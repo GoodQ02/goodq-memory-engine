@@ -129,7 +129,7 @@ This is the fastest way to verify the effective resolved profile/path surface be
 - `scene_manifest.json`
 - `temporal_index.json`
 - `experiment_log.json`
-- `operator_run_metadata.json` plus captured ingestion stdout/stderr events for direct canonical run roots that do not have a wrapper `experiment_log.json`
+- `operator_run_metadata.json` plus captured ingestion stdout/stderr events for direct canonical run roots that do not have a wrapper `experiment_log.json`; shared stdout events are scoped by persisted video/scene identity before recurrence aggregation
 
 **Usage**
 

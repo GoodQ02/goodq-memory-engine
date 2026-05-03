@@ -1,10 +1,10 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: GENERATED_SNAPSHOT -->
-<!-- DOC_LAST_VERIFIED: 2026-05-01 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-03 -->
 
 # GoodQ4All Agent Status
 
-_Operational restart checkpoint aligned: 2026-05-01._
+_Operational restart checkpoint aligned: 2026-05-03._
 
 This document is a bounded operator snapshot of the current release-era
 stitching and offline-package baseline.
@@ -15,7 +15,7 @@ truth for live claims. Do not treat this document as a live witness monitor.
 ## Current Restart Checkpoint
 - Current local workspace:
   - `main` / `origin/main` are the active source line; confirm the exact head with `git log -1 --oneline`
-  - source includes the CLAP audio Qdrant payload provenance patch, its runtime-path test, and public ethos/control-truth docs through `5ae2d61`
+  - source includes the shared runtime recurrence scoping fix through `a036f75`
 - Current public-facing branch:
   - `public` / `origin/public` -> `e5cd974` (`fix: tighten recurrence attribution and audio payloads`)
 - Current state:
@@ -36,7 +36,8 @@ truth for live claims. Do not treat this document as a live witness monitor.
     - direct canonical run roots without wrapper `experiment_log.json` are discoverable from existing output/workspace/operator-log artifacts
     - direct run discovery supports one or more videos, metadata-described output/workspace paths, and captured stdout/stderr retry evidence
     - recurrence reports now include read-only step latency evidence from existing `step_runs.jsonl` `duration_ms` rows, including p50/p95/max, slow outlier counts, timeout-boundary exceedance counts, and WSL audio timing buckets
-    - post-seal status: `control-recurrence-v0.4.1` remains a valid sealed milestone for direct-run discoverability and truth-surface alignment; latest control recurrence tag is `control-recurrence-v0.4.2`, with current source beyond it for read-only trend mode and audio Qdrant provenance hardening
+    - shared direct-run stdout events are scoped by persisted video/scene identity before becoming recurrence signals, so multi-video direct roots do not borrow native retry evidence across episodes
+    - post-seal status: `control-recurrence-v0.4.1` remains a valid sealed milestone for direct-run discoverability and truth-surface alignment; latest control recurrence tag is `control-recurrence-v0.4.2`, with current source beyond it for read-only trend mode, audio Qdrant provenance hardening, native model smoke diagnostics, and shared runtime recurrence scoping
     - bounded direct-run discovery limits are expected when required artifacts are absent; local `reports/control_recurrence/index.json` state is workspace artifact hygiene unless explicitly tracked
     - local API read surface:
       - `GET /api/control-recurrence/reports`

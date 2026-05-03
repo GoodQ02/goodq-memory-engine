@@ -131,9 +131,10 @@ the supported host/runtime baseline, but it is not a live witness monitor.
   - reads recurrence truth from existing `step_runs.jsonl`, run warnings, `scene_ingest_results.json`, `scene_manifest.json`, `temporal_index.json`, and `experiment_log.json`
   - supports direct canonical run roots without a wrapper `experiment_log.json` by reading existing `operator_run_metadata.json`, `output/scene_ingest_results.json`, `workspace/_resolved_config.json`, canonical `step_runs.jsonl`, and captured ingestion stdout/stderr events
   - supports multi-video direct run roots and metadata-described output/workspace paths without creating a second execution path
+  - scopes shared direct-run stdout events by persisted video/scene identity before turning them into recurrence signals
   - surfaces read-only step latency evidence from existing `step_runs.jsonl` `duration_ms` rows, including p50/p95/max by step, slow outlier counts, timeout-boundary exceedance counts, and WSL audio timing buckets
   - treats `control-recurrence-v0.4.1` as a valid sealed milestone for direct-run discoverability and truth-surface alignment, with the latest control recurrence tag at `control-recurrence-v0.4.2`
-  - current source beyond the latest control recurrence tag includes read-only recurrence trend mode and CLAP audio Qdrant payload provenance hardening
+  - current source beyond the latest control recurrence tag includes read-only recurrence trend mode, CLAP audio Qdrant payload provenance hardening, native model smoke diagnostics, and shared runtime recurrence scoping through `a036f75`
   - audio-vector success is provenance-defined by `docs/architecture/AUDIO_VECTOR_PROVENANCE_CONTRACT.md`
   - current-run CLAP/Qdrant audio coverage requires `clap_meta.status == ok` plus a Qdrant audio payload with matching `run_id` and required provenance fields
   - legacy, stale, or scene-id-only Qdrant audio points are not current-run proof

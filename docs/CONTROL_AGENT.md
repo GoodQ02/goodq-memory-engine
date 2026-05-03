@@ -1,11 +1,11 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-05-01 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-03 -->
 
 # Control Agent & Self-Healing System
 
 **Status:** ⚠️ CONDITIONAL - Runtime disabled by default unless an `llm_client` is explicitly injected  
-**Last Updated:** May 2, 2026
+**Last Updated:** May 3, 2026
 **Version:** 1.0.0
 
 ---
@@ -18,7 +18,7 @@ Current reality: the active control surface is observer-only. It can summarize a
 
 ---
 
-## Active Read-Only Control Substrate (2026-05-02)
+## Active Read-Only Control Substrate (2026-05-03)
 
 The active control-plane surface now includes a read-only recurrence instrument:
 
@@ -47,6 +47,11 @@ It reads persisted runtime truth only:
 - `operator_run_metadata.json` and captured ingestion stdout/stderr events when a direct canonical run root has no wrapper `experiment_log.json`
 
 It reports recurrence summaries, comparison deltas, category counts, recovered/unrecovered/skipped counts, Phase 6 health, Qdrant health, deterministic operator hints, deterministic inspection-only recommendation drafts, conservative trend summaries over existing durable JSON reports, and optional markdown/JSON artifacts under `reports/control_recurrence/`. Durable artifact discovery is recorded in `reports/control_recurrence/index.json`. Direct `cli.run_ingestion` run roots are supported read-only through existing output/workspace/operator-log artifacts, including multi-video direct roots; this does not create a second execution path.
+
+For multi-video direct roots, shared captured stdout events are scoped by
+persisted video and scene identity before recurrence aggregation. Recovered
+native retry witnesses still coalesce once across run warnings, runtime events,
+stderr text, and `step_runs.jsonl`.
 
 The API surface reads only that existing index and the indexed artifacts. It does not regenerate reports, trigger ingestion, execute commands, scan arbitrary project paths, or form a second orchestration path.
 

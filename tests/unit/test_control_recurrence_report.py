@@ -921,8 +921,8 @@ def test_control_recurrence_report_does_not_fan_out_shared_stderr_retry(
                 "step": "step.object_detect",
                 "error": "returncode_3221226505",
                 "metadata": {
-                    "video_id": "video-one",
-                    "scene_id": "scene-1",
+                    "video_id": "video-two",
+                    "scene_id": "scene-2",
                     "scene_index": 0,
                 },
             }
@@ -935,8 +935,8 @@ def test_control_recurrence_report_does_not_fan_out_shared_stderr_retry(
                 "run_id": runtime_run_id,
                 "step": "object_detect",
                 "metadata": {
-                    "video_id": "video-one",
-                    "scene_id": "scene-1",
+                    "video_id": "video-two",
+                    "scene_id": "scene-2",
                     "scene_index": 0,
                     "native_retry_attempt": 1,
                     "native_retry_mode": "cpu_fallback",
@@ -964,9 +964,9 @@ def test_control_recurrence_report_does_not_fan_out_shared_stderr_retry(
         if "native_crash_retry:0xC0000409" in row["error_families"]
     ] == [
         {
-            "video_id": "video-one",
-            "episode": "01x01 - Direct Multi Retry 1.mp4",
-            "scene_id": "scene-1",
+            "video_id": "video-two",
+            "episode": "01x02 - Direct Multi Retry 2.mp4",
+            "scene_id": "scene-2",
             "scene_index": 0,
             "signal_count": 1,
             "error_families": ["native_crash_retry:0xC0000409"],

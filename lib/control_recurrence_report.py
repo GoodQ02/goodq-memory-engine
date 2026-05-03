@@ -2452,7 +2452,11 @@ def _load_episode_artifact_signals(episode: _EpisodeScope) -> Tuple[List[Dict[st
                 if isinstance(warning, dict) and _warning_applies_to_episode(warning, episode, scene_ids, scene_indices):
                     signals.append(_signal_from_run_warning(episode, warning))
 
-    runtime_event_signals, runtime_files, runtime_warnings = _load_runtime_event_signals(episode)
+    runtime_event_signals, runtime_files, runtime_warnings = _load_runtime_event_signals(
+        episode,
+        scene_ids,
+        scene_indices,
+    )
     signals.extend(runtime_event_signals)
     files_read.extend(runtime_files)
     warnings.extend(runtime_warnings)
@@ -2549,7 +2553,11 @@ def _select_episode_result_item(episode: _EpisodeScope, result_items: Sequence[D
     return result_items[0] if result_items and isinstance(result_items[0], dict) else {}
 
 
-def _load_runtime_event_signals(episode: _EpisodeScope) -> Tuple[List[Dict[str, Any]], List[str], List[str]]:
+def _load_runtime_event_signals(
+    episode: _EpisodeScope,
+    scene_ids: set[str],
+    scene_indices: set[str],
+) -> Tuple[List[Dict[str, Any]], List[str], List[str]]:
     signals: List[Dict[str, Any]] = []
     files_read: List[str] = []
     warnings: List[str] = []
@@ -2570,7 +2578,7 @@ def _load_runtime_event_signals(episode: _EpisodeScope) -> Tuple[List[Dict[str, 
                 event = json.loads(stripped)
             except Exception:
                 continue
-            if isinstance(event, dict):
+            if isinstance(event, dict) and _runtime_event_applies_to_episode(event, episode, scene_ids, scene_indices):
                 events.append(event)
 
     for index, event in enumerate(events):
@@ -2626,6 +2634,32 @@ def _load_runtime_event_signals(episode: _EpisodeScope) -> Tuple[List[Dict[str, 
     files_read.extend(stderr_files)
     warnings.extend(stderr_warnings)
     return signals, files_read, warnings
+
+
+def _runtime_event_applies_to_episode(
+    event: Dict[str, Any],
+    episode: _EpisodeScope,
+    scene_ids: set[str],
+    scene_indices: set[str],
+) -> bool:
+    metadata = event.get("metadata")
+    if not isinstance(metadata, dict):
+        return True
+
+    event_video = _clean_str(metadata.get("video_id")) or _clean_str(metadata.get("video_hash"))
+    episode_videos = {value for value in (episode.video_id, episode.video_hash) if value}
+    if event_video and episode_videos and event_video not in episode_videos:
+        return False
+
+    scene_id = _clean_str(metadata.get("scene_id"))
+    if scene_id and scene_ids:
+        return scene_id in scene_ids
+
+    scene_index = metadata.get("scene_index")
+    if scene_index is not None and scene_indices:
+        return str(scene_index) in scene_indices
+
+    return True
 
 
 def _load_stderr_native_retry_signals(episode: _EpisodeScope) -> Tuple[List[Dict[str, Any]], List[str], List[str]]:

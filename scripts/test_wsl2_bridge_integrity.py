@@ -163,6 +163,79 @@ class WSL2BridgeIntegrityTests(unittest.TestCase):
         self.assertEqual(stat_calls["count"], 2)
         self.assertIn("result_json_freshness_probe_retried", result.get("stderr_warnings", []))
 
+    def test_success_payload_carries_compact_runtime_probe(self) -> None:
+        scene_file = self._make_scene_file("scene_0004.wav")
+        bridge = self._make_bridge()
+
+        def fake_run(cmd, capture_output=True, text=True, timeout=None):  # noqa: ANN001
+            cmd_str = " ".join(str(part) for part in cmd)
+            if "process_audio.py" in cmd_str:
+                return _Result(
+                    returncode=0,
+                    stdout=(
+                        f'{{"status":"success","audio_file":"/mnt/l/path/scene_0004.wav",'
+                        f'"transcription":"hello","request_uuid":"{self.TEST_UUID}"}}'
+                    ),
+                )
+            if "stat -c %Y" in cmd_str:
+                return _Result(returncode=0, stdout=str(int(time.time())))
+            return _Result(returncode=0, stdout="")
+
+        with patch("wsl2_audio_bridge.uuid.uuid4", return_value=uuid.UUID(self.TEST_UUID)), patch(
+            "wsl2_audio_bridge.subprocess.run", side_effect=fake_run
+        ), patch(
+            "wsl2_audio_bridge.probe_wsl_audio_runtime",
+            return_value={
+                "workspace_ready": True,
+                "runtime_ready": True,
+                "process_import_ready": True,
+                "transcription_ready": True,
+                "abi_ready": True,
+                "diarization_ready": True,
+                "torch_lane_status": "differs_from_expected",
+                "expected_torch_lane": {
+                    "torch": "2.5.1+cu121",
+                    "torchvision": "0.20.1+cu121",
+                    "torchaudio": "2.5.1+cu121",
+                },
+                "torchcodec_ready": False,
+                "torchcodec_detail": "ffmpeg_shared_library_unavailable",
+                "runtime_warnings": [
+                    "torch_lane_differs_from_expected",
+                    "torchcodec_decoder_unavailable",
+                ],
+                "runtime_black_box": {
+                    "active_env_kind": "env",
+                    "python_version": "3.10.12",
+                    "package_versions": {
+                        "torch": "2.8.0+cu128",
+                        "torchvision": "0.23.0+cu128",
+                        "torchaudio": "2.8.0+cu128",
+                        "torchcodec": "0.10.0",
+                    },
+                    "torchcodec": {
+                        "ready": False,
+                        "error_families": ["ffmpeg_shared_library_unavailable"],
+                    },
+                    "ffmpeg": {
+                        "available": True,
+                        "version_first_line": "ffmpeg version 4.4.2",
+                    },
+                    "ffmpeg_libraries": {"libraries": ["libavutil.so.56"]},
+                },
+                "detail": "workspace, transcription runtime, process import, ABI, and diarization checks are ready",
+            },
+        ):
+            result = bridge.process_audio(str(scene_file), timeout=5)
+
+        self.assertEqual(result.get("status"), "success")
+        runtime_probe = result.get("bridge_runtime_probe") or {}
+        self.assertEqual(runtime_probe.get("torch_lane_status"), "differs_from_expected")
+        self.assertFalse(runtime_probe.get("torchcodec_ready"))
+        self.assertEqual(runtime_probe.get("active_env_kind"), "env")
+        self.assertIn("torchcodec_decoder_unavailable", runtime_probe.get("runtime_warnings", []))
+        self.assertEqual(runtime_probe.get("package_versions", {}).get("torch"), "2.8.0+cu128")
+
     def test_abi_degraded_runtime_is_rejected_before_processing(self) -> None:
         scene_file = self._make_scene_file("scene_0004.wav")
         bridge = self._make_bridge()

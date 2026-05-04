@@ -1,9 +1,17 @@
 from __future__ import annotations
 
+import argparse
+import json
+import os
 import subprocess
 from typing import Any, Dict, Optional
 
 
+_EXPECTED_TORCH_LANE = {
+    "torch": "2.5.1+cu121",
+    "torchvision": "0.20.1+cu121",
+    "torchaudio": "2.5.1+cu121",
+}
 _RECOMMENDED_INSTALL_COMMAND = (
     "pip install torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1 "
     "--index-url https://download.pytorch.org/whl/cu121"
@@ -42,6 +50,168 @@ def _probe_package_version(distro: str, workspace: str, package_name: str) -> Op
 
 def _python_path_literal(path_value: str) -> str:
     return path_value.replace("\\", "\\\\").replace("'", "\\'")
+
+
+def _tail(value: str, limit: int = 900) -> str:
+    return str(value or "")[-limit:]
+
+
+def _classify_torch_lane(package_versions: Dict[str, Optional[str]]) -> str:
+    observed = {name: package_versions.get(name) for name in _EXPECTED_TORCH_LANE}
+    if not all(observed.values()):
+        return "unknown"
+    if all(str(observed[name]) == expected for name, expected in _EXPECTED_TORCH_LANE.items()):
+        return "matches_expected"
+    return "differs_from_expected"
+
+
+def _classify_torchcodec_error(message: str) -> list[str]:
+    text = str(message or "").lower()
+    families: list[str] = []
+    if "libavutil.so" in text or "libavcodec.so" in text or "libavformat.so" in text:
+        families.append("ffmpeg_shared_library_unavailable")
+    if "undefined symbol" in text:
+        families.append("torch_abi_symbol_mismatch")
+    if "not compatible" in text and "torchcodec" in text:
+        families.append("torchcodec_torch_version_mismatch")
+    return families or ["torchcodec_unavailable"]
+
+
+def _probe_wsl_audio_black_box(distro: str, workspace: str) -> Dict[str, Any]:
+    """Return optional WSL audio runtime diagnostics without changing readiness."""
+
+    script = (
+        f"source '{workspace}/setup_cuda_env.sh' >/dev/null 2>&1 && "
+        "python3 - <<'PY'\n"
+        "import importlib.metadata as md\n"
+        "import json\n"
+        "import os\n"
+        "import re\n"
+        "import shutil\n"
+        "import subprocess\n"
+        "import sys\n"
+        "import traceback\n"
+        "\n"
+        "packages = ['torch', 'torchvision', 'torchaudio', 'torchcodec', 'pyannote.audio', 'faster-whisper']\n"
+        "versions = {}\n"
+        "for package in packages:\n"
+        "    try:\n"
+        "        versions[package] = md.version(package)\n"
+        "    except Exception:\n"
+        "        versions[package] = None\n"
+        "\n"
+        "payload = {\n"
+        "    'source': 'wsl_audio_preflight',\n"
+        "    'python_version': sys.version.split()[0],\n"
+        "    'active_env_kind': os.path.basename(sys.prefix.rstrip('/')),\n"
+        "    'package_versions': versions,\n"
+        "}\n"
+        "\n"
+        "try:\n"
+        "    import torch\n"
+        "    payload['torch'] = {\n"
+        "        'version': getattr(torch, '__version__', None),\n"
+        "        'cuda_compiled': getattr(torch.version, 'cuda', None),\n"
+        "        'cuda_available': bool(torch.cuda.is_available()),\n"
+        "        'cuda_device_count': int(torch.cuda.device_count()) if torch.cuda.is_available() else 0,\n"
+        "        'cuda_device_name': torch.cuda.get_device_name(0) if torch.cuda.is_available() else None,\n"
+        "    }\n"
+        "except Exception as exc:\n"
+        "    payload['torch'] = {'error_type': type(exc).__name__, 'error_tail': str(exc)[-500:]}\n"
+        "\n"
+        "try:\n"
+        "    import torchvision\n"
+        "    from torchvision.ops import nms\n"
+        "    payload['torchvision_abi'] = {'ready': True}\n"
+        "except Exception as exc:\n"
+        "    payload['torchvision_abi'] = {\n"
+        "        'ready': False,\n"
+        "        'error_type': type(exc).__name__,\n"
+        "        'error_tail': str(exc)[-700:],\n"
+        "    }\n"
+        "\n"
+        "try:\n"
+        "    import torchaudio\n"
+        "    payload['torchaudio'] = {'import_ready': True}\n"
+        "except Exception as exc:\n"
+        "    payload['torchaudio'] = {\n"
+        "        'import_ready': False,\n"
+        "        'error_type': type(exc).__name__,\n"
+        "        'error_tail': str(exc)[-700:],\n"
+        "    }\n"
+        "\n"
+        "try:\n"
+        "    import torchcodec\n"
+        "    payload['torchcodec'] = {'ready': True}\n"
+        "except Exception as exc:\n"
+        "    error_text = str(exc) + '\\n' + traceback.format_exc()\n"
+        "    payload['torchcodec'] = {\n"
+        "        'ready': False,\n"
+        "        'error_type': type(exc).__name__,\n"
+        "        'error_tail': error_text[-1200:],\n"
+        "    }\n"
+        "\n"
+        "ffmpeg = {'available': False}\n"
+        "ffmpeg_path = shutil.which('ffmpeg')\n"
+        "if ffmpeg_path:\n"
+        "    ffmpeg['available'] = True\n"
+        "    try:\n"
+        "        proc = subprocess.run(['ffmpeg', '-version'], capture_output=True, text=True, timeout=10)\n"
+        "        ffmpeg['returncode'] = proc.returncode\n"
+        "        lines = (proc.stdout or proc.stderr or '').splitlines()\n"
+        "        ffmpeg['version_first_line'] = lines[0] if lines else ''\n"
+        "    except Exception as exc:\n"
+        "        ffmpeg['error_type'] = type(exc).__name__\n"
+        "        ffmpeg['error_tail'] = str(exc)[-500:]\n"
+        "payload['ffmpeg'] = ffmpeg\n"
+        "\n"
+        "try:\n"
+        "    proc = subprocess.run(\n"
+        "        ['bash', '-lc', \"ldconfig -p | grep -E 'libav(util|codec|format)'\"],\n"
+        "        capture_output=True,\n"
+        "        text=True,\n"
+        "        timeout=10,\n"
+        "    )\n"
+        "    libraries = sorted(set(re.findall(r'(libav(?:util|codec|format)\\\\.so\\\\.[0-9]+)', proc.stdout or '')))\n"
+        "    payload['ffmpeg_libraries'] = {\n"
+        "        'returncode': proc.returncode,\n"
+        "        'libraries': libraries[:30],\n"
+        "        'stderr_tail': (proc.stderr or '')[-300:],\n"
+        "    }\n"
+        "except Exception as exc:\n"
+        "    payload['ffmpeg_libraries'] = {'error_type': type(exc).__name__, 'error_tail': str(exc)[-500:]}\n"
+        "\n"
+        "print(json.dumps(payload, sort_keys=True))\n"
+        "PY"
+    )
+    try:
+        completed = _run_wsl_probe(distro, script, timeout=35)
+    except Exception as exc:
+        return {
+            "source": "wsl_audio_preflight",
+            "probe_error_type": type(exc).__name__,
+            "probe_error_tail": _tail(str(exc)),
+        }
+    if completed.returncode != 0:
+        return {
+            "source": "wsl_audio_preflight",
+            "probe_returncode": completed.returncode,
+            "probe_stderr_tail": _tail(completed.stderr),
+            "probe_stdout_tail": _tail(completed.stdout),
+        }
+    try:
+        payload = json.loads((completed.stdout or "").strip())
+    except json.JSONDecodeError:
+        return {
+            "source": "wsl_audio_preflight",
+            "probe_returncode": completed.returncode,
+            "probe_json_error": "invalid_json",
+            "probe_stdout_tail": _tail(completed.stdout),
+            "probe_stderr_tail": _tail(completed.stderr),
+        }
+    if not isinstance(payload, dict):
+        return {"source": "wsl_audio_preflight", "probe_json_error": "non_object_json"}
+    return payload
 
 
 def _build_diarization_probe_script(workspace: str) -> str:
@@ -92,6 +262,11 @@ def probe_wsl_audio_runtime(distro: str, workspace: str) -> Dict[str, Any]:
         "ready": False,
         "detail": "unresolved",
         "detected_versions": {},
+        "expected_torch_lane": dict(_EXPECTED_TORCH_LANE),
+        "runtime_black_box": {},
+        "runtime_warnings": [],
+        "torch_lane_status": "unknown",
+        "torchcodec_ready": None,
         "recommended_install_command": _RECOMMENDED_INSTALL_COMMAND,
     }
     workspace = result["workspace"]
@@ -197,6 +372,9 @@ def probe_wsl_audio_runtime(distro: str, workspace: str) -> Dict[str, Any]:
 
     if diarization_probe is not None and diarization_probe.returncode == 0:
         diarization_stdout = (diarization_probe.stdout or "").strip()
+        diarization_stderr = (diarization_probe.stderr or "").strip()
+        if diarization_stderr:
+            result["diarization_probe_stderr_tail"] = diarization_stderr[-600:]
         result["diarization_ready"] = "diarization_ready" in diarization_stdout
         if not result["diarization_ready"]:
             diarization_lines = [line.strip() for line in diarization_stdout.splitlines() if line.strip()]
@@ -217,13 +395,48 @@ def probe_wsl_audio_runtime(distro: str, workspace: str) -> Dict[str, Any]:
             )[-600:]
         result["diarization_detail"] = "pyannote runtime unavailable"
 
-    result["detected_versions"] = {
-        "torch": _probe_package_version(distro, workspace, "torch"),
-        "torchvision": _probe_package_version(distro, workspace, "torchvision"),
-        "torchaudio": _probe_package_version(distro, workspace, "torchaudio"),
-        "pyannote.audio": _probe_package_version(distro, workspace, "pyannote.audio"),
-        "faster-whisper": _probe_package_version(distro, workspace, "faster-whisper"),
-    }
+    black_box = _probe_wsl_audio_black_box(distro, workspace)
+    result["runtime_black_box"] = black_box
+    package_versions = black_box.get("package_versions") if isinstance(black_box, dict) else None
+    if isinstance(package_versions, dict):
+        result["detected_versions"] = {
+            "torch": package_versions.get("torch"),
+            "torchvision": package_versions.get("torchvision"),
+            "torchaudio": package_versions.get("torchaudio"),
+            "pyannote.audio": package_versions.get("pyannote.audio"),
+            "faster-whisper": package_versions.get("faster-whisper"),
+        }
+    else:
+        result["detected_versions"] = {
+            "torch": _probe_package_version(distro, workspace, "torch"),
+            "torchvision": _probe_package_version(distro, workspace, "torchvision"),
+            "torchaudio": _probe_package_version(distro, workspace, "torchaudio"),
+            "pyannote.audio": _probe_package_version(distro, workspace, "pyannote.audio"),
+            "faster-whisper": _probe_package_version(distro, workspace, "faster-whisper"),
+        }
+    if isinstance(package_versions, dict):
+        result["torch_lane_status"] = _classify_torch_lane(package_versions)
+    else:
+        result["torch_lane_status"] = _classify_torch_lane(result["detected_versions"])
+    runtime_warnings: list[str] = []
+    if result["torch_lane_status"] == "differs_from_expected":
+        runtime_warnings.append("torch_lane_differs_from_expected")
+    torchcodec = black_box.get("torchcodec") if isinstance(black_box, dict) else None
+    if isinstance(torchcodec, dict):
+        result["torchcodec_ready"] = bool(torchcodec.get("ready"))
+        if not result["torchcodec_ready"]:
+            error_tail = str(torchcodec.get("error_tail") or "")
+            families = _classify_torchcodec_error(error_tail)
+            torchcodec["error_families"] = families
+            result["torchcodec_detail"] = ", ".join(families)
+            runtime_warnings.append("torchcodec_decoder_unavailable")
+    pyannote_import = black_box.get("pyannote_import") if isinstance(black_box, dict) else None
+    pyannote_warning_text = str(result.get("diarization_probe_stderr_tail") or "")
+    if isinstance(pyannote_import, dict):
+        pyannote_warning_text += "\n" + str(pyannote_import.get("warning_tail") or "")
+    if "torchcodec" in pyannote_warning_text.lower():
+        runtime_warnings.append("pyannote_warned_torchcodec_decoder_unavailable")
+    result["runtime_warnings"] = sorted(set(runtime_warnings))
 
     result["ready"] = True
     if result["abi_ready"] and result["diarization_ready"]:
@@ -233,3 +446,42 @@ def probe_wsl_audio_runtime(distro: str, workspace: str) -> Dict[str, Any]:
     else:
         result["detail"] = "transcription runtime ready; process_audio import ready; torchvision ABI unavailable (diarization may be degraded)"
     return result
+
+
+def _default_wsl_workspace() -> str:
+    explicit = str(os.environ.get("GOODQ_WSL_WORKSPACE") or "").strip()
+    if explicit:
+        return explicit.rstrip("/")
+    wsl_user = str(os.environ.get("GOODQ_WSL_USER") or os.environ.get("USERNAME") or "goodq").strip()
+    return f"/home/{wsl_user}/goodq_audio"
+
+
+def main(argv: Optional[list[str]] = None) -> int:
+    parser = argparse.ArgumentParser(description="Inspect the WSL audio runtime without mutating it.")
+    parser.add_argument(
+        "--distro",
+        default=str(os.environ.get("GOODQ_WSL_DISTRO") or "Ubuntu").strip() or "Ubuntu",
+        help="WSL distro to inspect. Defaults to GOODQ_WSL_DISTRO or Ubuntu.",
+    )
+    parser.add_argument(
+        "--workspace",
+        default=_default_wsl_workspace(),
+        help="WSL audio workspace. Defaults to GOODQ_WSL_WORKSPACE or /home/<user>/goodq_audio.",
+    )
+    parser.add_argument(
+        "--compact",
+        action="store_true",
+        help="Emit compact JSON on one line.",
+    )
+    args = parser.parse_args(argv)
+
+    result = probe_wsl_audio_runtime(args.distro, args.workspace)
+    if args.compact:
+        print(json.dumps(result, sort_keys=True))
+    else:
+        print(json.dumps(result, indent=2, sort_keys=True))
+    return 0 if bool(result.get("ready")) else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-05-03 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-04 -->
 
 # WSL Audio Runtime Reference
 
@@ -58,6 +58,46 @@ Interpretation:
 
 - transcription-ready but diarization-degraded is a valid warning state
 - a single WSL warning does not automatically mean the whole audio worker is unusable
+
+## Runtime Black Box Recorder
+
+The WSL audio preflight now emits a read-only runtime recorder payload. Run it
+directly when accelerated audio behavior needs inspection:
+
+```powershell
+conda run -n goodq_core python scripts/wsl_audio_preflight.py --compact
+```
+
+The recorder does not install packages, mutate WSL, change configs, or select
+an audio backend. It records the sourced WSL runtime as observed:
+
+- `runtime_black_box.package_versions`
+- `runtime_black_box.torch`
+- `runtime_black_box.torchvision_abi`
+- `runtime_black_box.torchaudio`
+- `runtime_black_box.torchcodec`
+- `runtime_black_box.ffmpeg`
+- `runtime_black_box.ffmpeg_libraries`
+- `torch_lane_status`
+- `torchcodec_ready`
+- `torchcodec_detail`
+- `runtime_warnings`
+
+The bridge preserves a compact copy as `bridge_runtime_probe` on success and
+error payloads so scene-level WSL audio outcomes can be audited without
+guessing which runtime produced them.
+
+Current interpretation rules:
+
+- `torch_lane_status=differs_from_expected` is an environment truth warning,
+  not an ingestion failure by itself.
+- `torchcodec_ready=false` means torchcodec-backed decoding is unavailable;
+  if the WSL worker still completes through its active decoding path, this is
+  a surfaced degradation, not a hidden success.
+- `pyannote_warned_torchcodec_decoder_unavailable` records that pyannote saw
+  the decoder warning during the existing diarization probe.
+- These fields are observer truth only. They must not trigger package changes,
+  healing, or reruns without a separate operator decision.
 
 ## Bootstrap / Doctor Meaning
 

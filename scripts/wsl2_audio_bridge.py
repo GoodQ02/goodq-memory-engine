@@ -20,6 +20,42 @@ _WORKSPACE_PREFLIGHT_TIMEOUTS = (5, 10)
 _WORKSPACE_PREFLIGHT_RETRY_DELAY_SEC = 0.25
 
 
+def _compact_runtime_probe(probe: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    if not isinstance(probe, dict):
+        return {}
+    black_box = probe.get("runtime_black_box") if isinstance(probe.get("runtime_black_box"), dict) else {}
+    torchcodec = black_box.get("torchcodec") if isinstance(black_box.get("torchcodec"), dict) else {}
+    ffmpeg = black_box.get("ffmpeg") if isinstance(black_box.get("ffmpeg"), dict) else {}
+    ffmpeg_libraries = (
+        black_box.get("ffmpeg_libraries")
+        if isinstance(black_box.get("ffmpeg_libraries"), dict)
+        else {}
+    )
+    package_versions = (
+        black_box.get("package_versions")
+        if isinstance(black_box.get("package_versions"), dict)
+        else probe.get("detected_versions")
+    )
+    return {
+        "source": "wsl_audio_preflight",
+        "runtime_ready": bool(probe.get("runtime_ready")),
+        "abi_ready": bool(probe.get("abi_ready")),
+        "diarization_ready": bool(probe.get("diarization_ready")),
+        "torch_lane_status": probe.get("torch_lane_status"),
+        "expected_torch_lane": probe.get("expected_torch_lane"),
+        "package_versions": package_versions or {},
+        "active_env_kind": black_box.get("active_env_kind"),
+        "python_version": black_box.get("python_version"),
+        "torchcodec_ready": probe.get("torchcodec_ready"),
+        "torchcodec_detail": probe.get("torchcodec_detail"),
+        "torchcodec_error_families": torchcodec.get("error_families") or [],
+        "ffmpeg_available": ffmpeg.get("available"),
+        "ffmpeg_version_first_line": ffmpeg.get("version_first_line"),
+        "ffmpeg_libraries": ffmpeg_libraries.get("libraries") or [],
+        "runtime_warnings": probe.get("runtime_warnings") or [],
+    }
+
+
 class WSL2AudioBridge:
     """Bridge to WSL2 audio processing"""
     _workspace_warning_keys: set[str] = set()
@@ -202,6 +238,7 @@ class WSL2AudioBridge:
         print(f"Processing: {audio_path.name}")
         process_started_epoch = time.time()
         requested_scene_file = Path(str(wsl_input).replace("\\", "/")).name
+        runtime_probe: Optional[Dict[str, Any]] = None
 
         def _stderr_warnings(stderr: str, max_lines: int = 50, max_chars: int = 300) -> list[str]:
             warnings: list[str] = []
@@ -309,6 +346,9 @@ class WSL2AudioBridge:
                 payload["stderr_warnings"] = stderr_warnings
             if env_warnings:
                 payload["bridge_env_warnings"] = env_warnings
+            compact_probe = _compact_runtime_probe(runtime_probe)
+            if compact_probe:
+                payload["bridge_runtime_probe"] = compact_probe
             return payload
 
         # Execute in WSL2
@@ -522,6 +562,9 @@ class WSL2AudioBridge:
                 output.setdefault("stderr_warnings", stderr_warnings)
             if env_warnings:
                 output.setdefault("bridge_env_warnings", env_warnings)
+            compact_probe = _compact_runtime_probe(runtime_probe)
+            if compact_probe:
+                output.setdefault("bridge_runtime_probe", compact_probe)
             output.setdefault("returncode", result.returncode)
             output.setdefault("wsl_returncode", result.returncode)
             output.setdefault("requested_scene_file", requested_scene_file)
@@ -559,6 +602,7 @@ class WSL2AudioBridge:
                 "requested_request_uuid": request_uuid,
                 "returned_request_uuid": None,
                 "used_fallback_result_json": False,
+                "bridge_runtime_probe": _compact_runtime_probe(runtime_probe),
             }
             
     def check_status(self):

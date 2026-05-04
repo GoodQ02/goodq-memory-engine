@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-04-20 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-03 -->
 
 # WSL Audio Runtime Reference
 
@@ -79,6 +79,38 @@ Additional operator truth:
   - `python -m pip check == 0`
   - the validated torch / torchvision / torchaudio trio still installed
   - successful `torchvision.ops.nms` import before the environment is considered ready
+
+## Current Cost / Scheduling Doctrine
+
+WSL audio health and WSL audio cost are separate operator questions.
+
+Recent controlled witnesses from 2026-05-01 through 2026-05-03 show the
+unified WSL path is stable and truthful, but expensive enough to drive
+full-run scheduling:
+
+- evidence window: `234` `audio_unified_wsl2` step rows across four fresh
+  witnesses
+- status: all observed `audio_unified_wsl2` rows completed `ok`
+- WSL audio timing: about `58.2s` p50 and `62.1s` p95 per scene
+- WSL audio share: about `61.6%` to `63.9%` of summed step duration in the
+  recent one- and two-episode witnesses
+- typical one-episode cost: about `36` to `39` summed WSL-audio minutes for
+  `38` to `40` scenes
+- typical two-episode cost: about `75` to `77` summed WSL-audio minutes for
+  `78` scenes
+
+The recent data only weakly correlates WSL worker duration with scene-audio
+duration. Treat the current path as a mostly per-scene fixed-cost lane until a
+same-scene CPU-vs-WSL timing witness proves otherwise.
+
+Operator implications:
+
+- healthy WSL audio means usable and truthful, not automatically cheap
+- schedule multi-episode and full-season witnesses around the WSL audio budget
+- use `step_runs.jsonl` and the read-only control recurrence latency summary
+  for current timing truth
+- do not use historical projected GPU speedup tables as the current scheduling
+  contract without a fresh same-scene comparison
 
 ## Runtime Error Surfacing
 

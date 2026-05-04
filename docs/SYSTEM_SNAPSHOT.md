@@ -1,10 +1,10 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: GENERATED_SNAPSHOT -->
-<!-- DOC_LAST_VERIFIED: 2026-05-01 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-03 -->
 
 # System Snapshot
 
-_Operational operator-state alignment refreshed: 2026-05-01._
+_Operational operator-state alignment refreshed: 2026-05-03._
 
 This is a bounded release-era system snapshot. It is useful for understanding
 the supported host/runtime baseline, but it is not a live witness monitor.
@@ -152,6 +152,11 @@ the supported host/runtime baseline, but it is not a live witness monitor.
   - exposes a local read-only API over the existing recurrence index and indexed artifacts
   - drafts deterministic operator inspection steps from existing durable JSON reports
   - boundary: not healing yet. The recurrence report/API latency evidence is observer-only; it does not activate `ControlAgent`, does not enable auto-healing, does not mutate configs, does not execute commands, does not use LLMs, does not generate reports from the API, and does not touch `cli/run_ingestion.py`.
+- Current WSL audio scheduling truth:
+  - recent controlled witnesses from 2026-05-01 through 2026-05-03 show unified WSL audio is healthy but expensive
+  - `audio_unified_wsl2` p50/p95 is about `58.2s` / `62.1s` per scene across `234` observed rows
+  - WSL audio consumed roughly `61.6%` to `63.9%` of summed step duration in recent one- and two-episode witnesses
+  - use `step_runs.jsonl` and recurrence latency summaries for current scheduling truth; do not treat historical projected GPU speedup tables as current scheduling proof
 - Exact control recurrence commands:
   - `conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --run-id 20260424_182406_season2_fresh_witness`
   - `conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --run-root reports/fresh_ingest_runs/<direct_run_root>`

@@ -71,6 +71,7 @@ truth for live claims. Do not treat this document as a live witness monitor.
     - prefer read-only audits and copy-on-write reprojection over broad runtime changes
     - treat audio-vector success as provenance-defined: `clap_meta.status == ok` plus a Qdrant audio payload with matching `run_id` and required provenance fields
     - treat legacy or stale scene-id-only audio vector presence as insufficient current-run proof
+    - treat unified WSL audio as healthy but scheduling-expensive until a same-scene CPU-vs-WSL witness proves a cheaper current lane; recent controlled witnesses show about `58.2s` p50 / `62.1s` p95 per `audio_unified_wsl2` scene and roughly `61.6%` to `63.9%` of summed step duration
 
 ## Audio Vector Provenance Doctrine
 - Contract:
@@ -276,6 +277,7 @@ Audit Status: ACTIVE (2026-04-10)
 - Added the first safe read-only control-agent substrate: a recurrence report CLI/library that groups persisted run signals, classifies recurrence families, emits deterministic operator hints, compares two run ids, and can export markdown/JSON artifacts plus an index without enabling healing or changing canonical ingestion.
 - Restored `GPU_ENHANCED` desktop runtime through bootstrap-managed environment repair and verified CUDA-backed `goodq_core`.
 - Restored unified WSL audio with local-first/offline model resolution, diarization recovery, and non-recursive Windows fallback.
+- Recorded WSL audio scheduling doctrine: current unified WSL audio is stable and truthful, but recent witnesses show it dominates summed step time and must be budgeted explicitly for multi-episode/full-season runs.
 - Hardened Phase 6 and DINO runtime behavior; Qdrant scene-vector persistence is operational and explicit.
 - Raised semantic quality by removing thin semantic scaffolding noise and tightening alias/noise filtering.
 - Added the identity formation layer: `speaker_pattern`, `voice_pattern_match`, `identity_candidate`, `identity_supported`, `identity_evidence`.

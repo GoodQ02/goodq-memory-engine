@@ -6,7 +6,9 @@
 
 Optimize audio processing (speaker diarization + transcription) with GPU acceleration while preserving stability, accuracy, and observable fallback behavior.
 
-> Current status note: the speedup numbers below are historical/expected targets, not a fresh same-scene CPU-vs-WSL witness result. Current runtime truth should be taken from `step_runs.jsonl` and the read-only control recurrence latency summary.
+> Current status note: the speedup numbers below are historical/expected targets, not a fresh same-scene CPU-vs-WSL witness result. Current runtime truth should be taken from `step_runs.jsonl`, `docs/reference/WSL_AUDIO_RUNTIME.md`, and the read-only control recurrence latency summary.
+>
+> As of the 2026-05-01 through 2026-05-03 controlled witnesses, unified WSL audio is healthy but scheduling-expensive: about `58.2s` p50 and `62.1s` p95 per scene across `234` observed `audio_unified_wsl2` rows, consuming roughly `61.6%` to `63.9%` of summed step duration in recent one- and two-episode witnesses.
 
 ## ✅ What Was Implemented
 
@@ -111,7 +113,7 @@ Optimize audio processing (speaker diarization + transcription) with GPU acceler
 
 ## 📊 Historical / Expected Performance Targets
 
-These figures are retained as implementation targets and historical expectations. Treat them as verified only after a same-scene CPU-vs-WSL timing witness for the current environment.
+These figures are retained as implementation targets and historical expectations. They are not the current scheduling contract. Treat them as verified only after a same-scene CPU-vs-WSL timing witness for the current environment.
 
 ### Typical Results (NVIDIA RTX 3060 12GB)
 

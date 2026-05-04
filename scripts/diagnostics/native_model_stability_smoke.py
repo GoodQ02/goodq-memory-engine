@@ -30,6 +30,7 @@ TARGETS: dict[str, dict[str, Any]] = {
         "step": "object_detect",
         "component": "YOLO",
         "model": "ultralytics/yolov8n",
+        "loader": "yolo",
         "imports": ["torch", "torchvision", "ultralytics", "numpy", "PIL"],
         "packages": ["torch", "torchvision", "torchaudio", "ultralytics", "numpy", "pillow"],
         "model_candidates": ["models/yolov8n.pt", "yolov8n.pt"],
@@ -39,27 +40,33 @@ TARGETS: dict[str, dict[str, Any]] = {
         "step": "image_caption",
         "component": "BLIP captioning",
         "model": "Salesforce/blip-image-captioning-base",
+        "loader": "blip",
         "imports": ["torch", "torchvision", "transformers", "PIL"],
         "packages": ["torch", "torchvision", "torchaudio", "transformers", "timm", "pillow"],
         "model_candidates": [],
+        "required_files": ["config.json", "preprocessor_config.json"],
     },
     "image_embed_dino": {
         "env": "goodq_image_caption",
         "step": "image_embed_dino",
         "component": "DINO",
         "model": "facebook/dinov2-base",
+        "loader": "auto_model",
         "imports": ["torch", "torchvision", "transformers", "PIL"],
         "packages": ["torch", "torchvision", "torchaudio", "transformers", "timm", "pillow"],
         "model_candidates": [],
+        "required_files": ["config.json", "preprocessor_config.json"],
     },
     "audio_embed_clap": {
         "env": "goodq_audio_embed",
         "step": "audio_embed_clap",
         "component": "CLAP",
         "model": "laion/clap-htsat-unfused",
+        "loader": "clap",
         "imports": ["torch", "torchaudio", "transformers", "numpy"],
         "packages": ["torch", "torchaudio", "transformers", "numpy", "librosa", "soundfile"],
         "model_candidates": [],
+        "required_files": ["config.json", "preprocessor_config.json", "pytorch_model.bin"],
     },
 }
 
@@ -67,6 +74,8 @@ TARGETS: dict[str, dict[str, Any]] = {
 CHILD_PROBE = r"""
 import importlib
 import importlib.metadata as metadata
+import contextlib
+import io
 import json
 import os
 import pathlib
@@ -147,32 +156,91 @@ def _missing_cache_error(exc):
     )
 
 
+def _resolve_models_root():
+    try:
+        with contextlib.redirect_stdout(io.StringIO()):
+            from steps.common.config_loader import get_runtime_paths, load_configs
+
+            runtime_paths = get_runtime_paths(load_configs({}), "models_cache")
+        models_root = pathlib.Path(runtime_paths["models_cache"]).resolve()
+    except Exception:
+        return None
+    os.environ["HF_HOME"] = str(models_root)
+    os.environ["TORCH_HOME"] = str(models_root)
+    os.environ.setdefault("HF_HUB_CACHE", str(models_root / "hub"))
+    os.environ.setdefault("TRANSFORMERS_CACHE", str(models_root / "transformers"))
+    return models_root
+
+
+def _resolve_hf_snapshot(models_root, model, required_files):
+    if not models_root:
+        return None
+    repo_cache = models_root / "hub" / f"models--{model.replace('/', '--')}"
+    snapshots_dir = repo_cache / "snapshots"
+    candidates = []
+    refs_main = repo_cache / "refs" / "main"
+    if refs_main.is_file():
+        ref = refs_main.read_text(encoding="utf-8", errors="ignore").strip()
+        if ref:
+            candidates.append(snapshots_dir / ref)
+    if snapshots_dir.is_dir():
+        candidates.extend(sorted((p for p in snapshots_dir.iterdir() if p.is_dir()), reverse=True))
+    required = tuple(required_files or ("config.json",))
+    for candidate in candidates:
+        if all((candidate / name).is_file() for name in required):
+            return candidate
+    return None
+
+
 def _try_model_load(target, allow_downloads):
     model = target.get("model")
     step = target.get("step")
-    candidates = [pathlib.Path(p) for p in target.get("model_candidates", [])]
+    loader = target.get("loader")
+    models_root = _resolve_models_root()
+    candidates = []
+    for candidate in target.get("model_candidates", []):
+        path = pathlib.Path(candidate)
+        candidates.append(path)
+        if models_root is not None and not path.is_absolute():
+            candidates.append(models_root / path)
     local_path = next((p for p in candidates if p.exists()), None)
+    hf_source = _resolve_hf_snapshot(models_root, model, target.get("required_files", []))
     started = time.perf_counter()
     try:
-        if step == "object_detect":
+        if loader == "yolo" or step == "object_detect":
             if local_path is None and not allow_downloads:
                 return {"attempted": False, "status": "missing_model_cache", "elapsed_ms": 0.0}
             from ultralytics import YOLO
 
             YOLO(str(local_path or model))
-        elif step == "audio_embed_clap":
-            from transformers import ClapModel
-
-            ClapModel.from_pretrained(model, local_files_only=not allow_downloads)
-        else:
-            if not allow_downloads:
+        elif loader == "clap" or step == "audio_embed_clap":
+            if hf_source is None and not allow_downloads:
                 return {"attempted": False, "status": "missing_model_cache", "elapsed_ms": 0.0}
-            from transformers import AutoModel
+            from transformers import AutoFeatureExtractor, ClapModel
 
-            AutoModel.from_pretrained(model, local_files_only=False)
+            source = str(hf_source) if hf_source is not None else model
+            AutoFeatureExtractor.from_pretrained(source, local_files_only=not allow_downloads)
+            ClapModel.from_pretrained(source, local_files_only=not allow_downloads)
+        elif loader == "blip":
+            if hf_source is None and not allow_downloads:
+                return {"attempted": False, "status": "missing_model_cache", "elapsed_ms": 0.0}
+            from transformers import BlipForConditionalGeneration, BlipProcessor
+
+            source = str(hf_source) if hf_source is not None else model
+            BlipProcessor.from_pretrained(source, local_files_only=not allow_downloads)
+            BlipForConditionalGeneration.from_pretrained(source, local_files_only=not allow_downloads)
+        else:
+            if hf_source is None and not allow_downloads:
+                return {"attempted": False, "status": "missing_model_cache", "elapsed_ms": 0.0}
+            from transformers import AutoModel, AutoProcessor
+
+            source = str(hf_source) if hf_source is not None else model
+            AutoProcessor.from_pretrained(source, local_files_only=not allow_downloads)
+            AutoModel.from_pretrained(source, local_files_only=not allow_downloads)
         return {
             "attempted": True,
             "status": "ok",
+            "source": "local_cache" if local_path is not None or hf_source is not None else "model_id",
             "elapsed_ms": round((time.perf_counter() - started) * 1000, 3),
         }
     except Exception as exc:

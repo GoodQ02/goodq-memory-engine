@@ -88,3 +88,25 @@ def test_no_model_load_is_default():
     assert args.model_load is False
     assert args.no_model_load is False
     assert args.allow_downloads is False
+
+
+def test_model_load_targets_record_runtime_like_loaders():
+    smoke = _load_module()
+
+    assert smoke.TARGETS["object_detect"]["loader"] == "yolo"
+    assert smoke.TARGETS["image_caption"]["loader"] == "blip"
+    assert smoke.TARGETS["image_embed_dino"]["loader"] == "auto_model"
+    assert smoke.TARGETS["audio_embed_clap"]["loader"] == "clap"
+    assert "pytorch_model.bin" in smoke.TARGETS["audio_embed_clap"]["required_files"]
+
+
+def test_child_probe_uses_goodq_model_cache_for_model_loads():
+    smoke = _load_module()
+
+    child = smoke.CHILD_PROBE
+
+    assert "get_runtime_paths(load_configs({}), \"models_cache\")" in child
+    assert "HF_HOME" in child
+    assert "BlipForConditionalGeneration" in child
+    assert "AutoFeatureExtractor" in child
+    assert "ClapModel" in child

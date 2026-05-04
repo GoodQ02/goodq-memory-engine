@@ -76,6 +76,10 @@ truth for live claims. Do not treat this document as a live witness monitor.
     - one-episode black-box witness `20260504_074335_wsl_black_box_02x02_witness` completed `38 / 38` `audio_unified_wsl2` rows ok, persisted `bridge_runtime_probe` on all scene results and all canonical scene-manifest scenes, and kept Phase 6/Qdrant healthy
     - that witness observed the sourced WSL worker on `torch==2.8.0+cu128`, `torchvision==0.23.0+cu128`, and `torchaudio==2.8.0+cu128`; this is recorded as `torch_lane_status=differs_from_expected`, not as an ingestion failure
     - `torchcodec_ready=false` remained visible in the recorder; the active worker succeeded through preloaded-audio handling, so this is a surfaced environment warning, not hidden success and not authorization for package mutation
+    - lane classification: `WSL_AUDIO_LANE_OBSERVED_FUNCTIONAL_DRIFT_CU128`
+    - bootstrap target remains `torch` / `torchvision` / `torchaudio` on `2.5.1+cu121`; the observed sourced WSL worker lane is `2.8.0+cu128`
+    - the active lane was functionally observed through repeated no-ingestion probes and no current ingestion blocker was found from the witness, but it is not bootstrap-approved, not lane-approved for promotion, and not a package recommendation
+    - promotion requires a future explicit lane-promotion audit; do not change packages, configs, source, ingestion behavior, or lockfiles from this drift classification alone
 
 ## Audio Vector Provenance Doctrine
 - Contract:

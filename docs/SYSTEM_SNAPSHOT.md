@@ -160,6 +160,9 @@ the supported host/runtime baseline, but it is not a live witness monitor.
   - black-box witness `20260504_074335_wsl_black_box_02x02_witness` completed `38 / 38` WSL audio rows ok and persisted `bridge_runtime_probe` in all scene results and all canonical scene-manifest scenes
   - the witnessed sourced WSL worker reported `torch==2.8.0+cu128`, `torchvision==0.23.0+cu128`, `torchaudio==2.8.0+cu128`, `torch_lane_status=differs_from_expected`, and `torchcodec_ready=false`
   - this is an environment truth warning surfaced by the recorder; it is not an ingestion failure and not approval for package mutation
+  - lane classification: `WSL_AUDIO_LANE_OBSERVED_FUNCTIONAL_DRIFT_CU128`
+  - bootstrap target remains `torch` / `torchvision` / `torchaudio` on `2.5.1+cu121`; the observed `2.8.0+cu128` lane was functionally observed through repeated no-ingestion probes and no current ingestion blocker was found from the witness, but it is not bootstrap-approved, not lane-approved for promotion, and not a package recommendation
+  - promotion requires a future explicit lane-promotion audit before any bootstrap target, config, package, source, or lockfile change
   - use `step_runs.jsonl`, recurrence latency summaries, and surface-equivalent probes for current scheduling truth; do not treat historical projected GPU speedup tables as current scheduling proof
 - Exact control recurrence commands:
   - `conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --run-id 20260424_182406_season2_fresh_witness`

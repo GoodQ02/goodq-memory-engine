@@ -113,6 +113,7 @@ The “Basement Phase” established the non-negotiable foundation for GoodQ:
 - **WSL2 audio components:** `steps/audio/audio_wsl2_bridge.py`, `scripts/wsl2_audio_bridge.py`, `wsl2_audio/process_audio.py`.
 - **Primary logs for audits:** epoch `logs/step_runs.jsonl`, epoch `processing/<video>/`, and the WSL worker output/workspace.
 - **WSL audio black-box recorder:** `bridge_runtime_probe` is expected on unified WSL audio scene outputs and canonical scene-manifest scene audio payloads. The 2026-05-04 witness `20260504_074335_wsl_black_box_02x02_witness` proved all `38` scenes carried it; the active sourced worker reported `torch_lane_status=differs_from_expected` and `torchcodec_ready=false` while Phase 6/Qdrant remained healthy.
+- **WSL audio lane classification:** `WSL_AUDIO_LANE_OBSERVED_FUNCTIONAL_DRIFT_CU128`. Bootstrap target remains `torch` / `torchvision` / `torchaudio` on `2.5.1+cu121`; the observed sourced WSL worker lane is `2.8.0+cu128`. That lane was functionally observed through repeated no-ingestion probes and no current ingestion blocker was found from the witness, but it is not bootstrap-approved, not lane-approved for promotion, and not a package recommendation. `torchcodec_ready=false` remains a watch item; promotion requires a future explicit lane-promotion audit before any bootstrap, config, package, source, or lockfile change.
 
 ---
 

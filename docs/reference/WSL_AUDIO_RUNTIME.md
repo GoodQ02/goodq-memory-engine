@@ -43,6 +43,30 @@ Notes:
   runtime recorder reports a different installed lane, that is environment truth
   to investigate, not a reason to pretend the target lane is installed.
 
+## WSL Audio Torch Lane Doctrine
+
+- Bootstrap target: `torch` / `torchvision` / `torchaudio` on `2.5.1+cu121`
+- Active observed sourced worker lane: `2.8.0+cu128`
+- Classification: `WSL_AUDIO_LANE_OBSERVED_FUNCTIONAL_DRIFT_CU128`
+- Approval state: not bootstrap-approved, not lane-approved for promotion, and
+  not a package recommendation
+
+Decision notes:
+
+- Repeated no-ingestion preflight observed the active lane as functionally ready:
+  GPU, transcription, ABI, and diarization checks passed.
+- Repeated no-ingestion short-audio probes processed speech successfully through
+  the unified WSL worker.
+- There is no ingestion blocker from the active lane based on current evidence.
+- `torchcodec_ready=false` remains a watch item caused by decoder/library/ABI
+  mismatch; current runtime succeeds through preloaded-audio handling.
+- The pin-origin audit confirmed `2.5.1+cu121` is an enforced bootstrap/runtime
+  contract, so the observed `2.8.0+cu128` lane is recorded as functional drift
+  only.
+- Bootstrap target must not change without a future explicit lane-promotion
+  pass. That pass must decide whether the torchcodec watch item is acceptable
+  doctrine or must be fixed first.
+
 ## Readiness States
 
 Current preflight / bootstrap / doctor surfaces distinguish:

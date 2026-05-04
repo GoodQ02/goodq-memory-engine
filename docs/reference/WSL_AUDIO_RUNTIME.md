@@ -34,11 +34,14 @@ Notes:
 
 - `GOODQ_REQUIRE_WSL_AUDIO=1` converts WSL audio into a fail-fast requirement.
 - `GOODQ_WSL_USER` and `GOODQ_WSL_WORKSPACE` are part of deterministic host setup on accelerated systems.
-- The current conservative WSL audio torch lane is:
+- The configured expected / bootstrap-target WSL audio torch lane is:
   - `torch==2.5.1+cu121`
   - `torchvision==0.20.1+cu121`
   - `torchaudio==2.5.1+cu121`
 - The bootstrap installers now stage and honor `wsl2_audio/requirements-bootstrap-constraints.txt` to keep later dependency installs from drifting off that lane.
+- The active sourced worker must still be inspected on the target machine. If the
+  runtime recorder reports a different installed lane, that is environment truth
+  to investigate, not a reason to pretend the target lane is installed.
 
 ## Readiness States
 
@@ -89,11 +92,14 @@ guessing which runtime produced them.
 
 Current interpretation rules:
 
-- `torch_lane_status=differs_from_expected` is an environment truth warning,
-  not an ingestion failure by itself.
+- `torch_lane_status=differs_from_expected` means the sourced worker differs
+  from the configured expected lane. It is an environment truth warning, not an
+  ingestion failure by itself.
 - `torchcodec_ready=false` means torchcodec-backed decoding is unavailable;
   if the WSL worker still completes through its active decoding path, this is
   a surfaced degradation, not a hidden success.
+- `torchcodec_ready=false` is not the same as `abi_ready=false`; the current
+  WSL worker can still complete by passing preloaded audio into the model stack.
 - `pyannote_warned_torchcodec_decoder_unavailable` records that pyannote saw
   the decoder warning during the existing diarization probe.
 - These fields are observer truth only. They must not trigger package changes,
@@ -141,6 +147,29 @@ full-run scheduling:
 
 The recent data only weakly correlates WSL worker duration with scene-audio
 duration. Treat the current path as a mostly per-scene fixed-cost lane.
+
+Black-box witness on 2026-05-04:
+
+- run root: `reports/fresh_ingest_runs/20260504_074335_wsl_black_box_02x02_witness/`
+- runtime run id: `8a093042-6d8d-461e-81d6-5061e6d5d08b`
+- source episode: `02x02 - The Pony Remark`
+- scenes: `38`
+- `audio_unified_wsl2`: `38 / 38` ok
+- `bridge_runtime_probe`: present in all `38` scene results and all `38`
+  canonical scene-manifest scenes
+- observed worker lane: `torch==2.8.0+cu128`,
+  `torchvision==0.23.0+cu128`, `torchaudio==2.8.0+cu128`
+- recorder status: `torch_lane_status=differs_from_expected`,
+  `torchcodec_ready=false`, `torchcodec_detail` includes
+  `ffmpeg_shared_library_unavailable` and `torch_abi_symbol_mismatch`
+- Phase 6 and Qdrant: healthy
+- recurrence readout: one recovered optional native retry in `object_detect`,
+  one expected `audio_silent` CLAP skip on the final short scene, and no
+  unrecovered failures
+
+Operator meaning: this witness proves the recorder reaches scene-level truth
+surfaces and exposes the active WSL lane precisely. It does not approve a
+package promotion or downgrade by itself.
 
 Same-scene timing probes on 2026-05-04 used three existing `02x02` scene
 chunks from `reports/fresh_ingest_runs/20260503_135503_native_retry_attribution_02x02_witness/`.

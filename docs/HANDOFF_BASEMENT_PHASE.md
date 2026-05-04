@@ -15,7 +15,7 @@ This is the practical handoff point for a brand-new Codex session.
 
 - Current local workspace head:
   - `main` / `origin/main` are the active source line; confirm the exact head with `git log -1 --oneline`
-  - source includes the CLAP audio Qdrant payload provenance patch, its runtime-path test, and public ethos/control-truth docs through `5ae2d61`
+  - source includes the WSL audio runtime black-box diagnostics through `05ae539`
 - Current public-facing branch head:
   - `public` / `origin/public` -> `e5cd974` (`fix: tighten recurrence attribution and audio payloads`)
 - Full witness state now banked:
@@ -43,7 +43,7 @@ This is the practical handoff point for a brand-new Codex session.
   - tag anchor: `control-recurrence-v0.4.2`
   - current-state capsule: `docs/releases/CONTROL_RECURRENCE_v0.4.2.md`
   - seal note: `control-recurrence-v0.4.1` remains a valid sealed milestone for direct-run discoverability and truth-surface alignment; current `main` is beyond it with `control-recurrence-v0.4.2` plus retry attribution/coalescing tightening
-  - source state beyond the latest control-recurrence tag includes the read-only trend helper/CLI mode, the CLAP audio Qdrant payload provenance patch, native model smoke diagnostics, and shared runtime recurrence scoping through `a036f75`
+  - source state beyond the latest control-recurrence tag includes the read-only trend helper/CLI mode, the CLAP audio Qdrant payload provenance patch, native model smoke diagnostics, shared runtime recurrence scoping, and WSL audio runtime black-box diagnostics through `05ae539`
   - shared direct-run stdout events are scoped by persisted video/scene identity before recurrence aggregation
   - direct-run discovery is bounded by existing required artifacts; absent aggregate output, operator metadata, temporal paths, or resolved log paths produce limited/missing-artifact observability rather than a boundary violation
   - local `reports/control_recurrence/index.json` state is workspace artifact hygiene unless the file is explicitly tracked
@@ -112,6 +112,7 @@ The “Basement Phase” established the non-negotiable foundation for GoodQ:
   - `Processing: scene_XXXX.wav` followed by an error → audio exists; WSL2 processing failed (do not treat as “no audio”).
 - **WSL2 audio components:** `steps/audio/audio_wsl2_bridge.py`, `scripts/wsl2_audio_bridge.py`, `wsl2_audio/process_audio.py`.
 - **Primary logs for audits:** epoch `logs/step_runs.jsonl`, epoch `processing/<video>/`, and the WSL worker output/workspace.
+- **WSL audio black-box recorder:** `bridge_runtime_probe` is expected on unified WSL audio scene outputs and canonical scene-manifest scene audio payloads. The 2026-05-04 witness `20260504_074335_wsl_black_box_02x02_witness` proved all `38` scenes carried it; the active sourced worker reported `torch_lane_status=differs_from_expected` and `torchcodec_ready=false` while Phase 6/Qdrant remained healthy.
 
 ---
 

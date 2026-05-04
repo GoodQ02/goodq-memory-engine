@@ -1,10 +1,10 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: GENERATED_SNAPSHOT -->
-<!-- DOC_LAST_VERIFIED: 2026-05-03 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-04 -->
 
 # GoodQ4All Agent Status
 
-_Operational restart checkpoint aligned: 2026-05-03._
+_Operational restart checkpoint aligned: 2026-05-04._
 
 This document is a bounded operator snapshot of the current release-era
 stitching and offline-package baseline.
@@ -15,7 +15,7 @@ truth for live claims. Do not treat this document as a live witness monitor.
 ## Current Restart Checkpoint
 - Current local workspace:
   - `main` / `origin/main` are the active source line; confirm the exact head with `git log -1 --oneline`
-  - source includes the shared runtime recurrence scoping fix through `a036f75`
+  - source includes the WSL audio runtime black-box diagnostics through `05ae539`
 - Current public-facing branch:
   - `public` / `origin/public` -> `e5cd974` (`fix: tighten recurrence attribution and audio payloads`)
 - Current state:
@@ -37,7 +37,7 @@ truth for live claims. Do not treat this document as a live witness monitor.
     - direct run discovery supports one or more videos, metadata-described output/workspace paths, and captured stdout/stderr retry evidence
     - recurrence reports now include read-only step latency evidence from existing `step_runs.jsonl` `duration_ms` rows, including p50/p95/max, slow outlier counts, timeout-boundary exceedance counts, and WSL audio timing buckets
     - shared direct-run stdout events are scoped by persisted video/scene identity before becoming recurrence signals, so multi-video direct roots do not borrow native retry evidence across episodes
-    - post-seal status: `control-recurrence-v0.4.1` remains a valid sealed milestone for direct-run discoverability and truth-surface alignment; latest control recurrence tag is `control-recurrence-v0.4.2`, with current source beyond it for read-only trend mode, audio Qdrant provenance hardening, native model smoke diagnostics, and shared runtime recurrence scoping
+    - post-seal status: `control-recurrence-v0.4.1` remains a valid sealed milestone for direct-run discoverability and truth-surface alignment; latest control recurrence tag is `control-recurrence-v0.4.2`, with current source beyond it for read-only trend mode, audio Qdrant provenance hardening, native model smoke diagnostics, shared runtime recurrence scoping, and WSL audio runtime black-box diagnostics
     - bounded direct-run discovery limits are expected when required artifacts are absent; local `reports/control_recurrence/index.json` state is workspace artifact hygiene unless explicitly tracked
     - local API read surface:
       - `GET /api/control-recurrence/reports`
@@ -73,6 +73,9 @@ truth for live claims. Do not treat this document as a live witness monitor.
     - treat legacy or stale scene-id-only audio vector presence as insufficient current-run proof
     - treat unified WSL audio as healthy but scheduling-expensive; recent controlled witnesses show about `58.2s` p50 / `62.1s` p95 per `audio_unified_wsl2` scene and roughly `61.6%` to `63.9%` of summed step duration
     - same-scene probes on 2026-05-04 found a diagnostic forced-CPU Windows transcript-only path can finish faster for sampled `02x02` scenes, but it does not produce the unified WSL diarization, emotion, speaker-count, or speaker-signature surfaces and is not an equivalent replacement
+    - one-episode black-box witness `20260504_074335_wsl_black_box_02x02_witness` completed `38 / 38` `audio_unified_wsl2` rows ok, persisted `bridge_runtime_probe` on all scene results and all canonical scene-manifest scenes, and kept Phase 6/Qdrant healthy
+    - that witness observed the sourced WSL worker on `torch==2.8.0+cu128`, `torchvision==0.23.0+cu128`, and `torchaudio==2.8.0+cu128`; this is recorded as `torch_lane_status=differs_from_expected`, not as an ingestion failure
+    - `torchcodec_ready=false` remained visible in the recorder; the active worker succeeded through preloaded-audio handling, so this is a surfaced environment warning, not hidden success and not authorization for package mutation
 
 ## Audio Vector Provenance Doctrine
 - Contract:

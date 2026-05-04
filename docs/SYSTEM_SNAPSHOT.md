@@ -1,10 +1,10 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: GENERATED_SNAPSHOT -->
-<!-- DOC_LAST_VERIFIED: 2026-05-03 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-04 -->
 
 # System Snapshot
 
-_Operational operator-state alignment refreshed: 2026-05-03._
+_Operational operator-state alignment refreshed: 2026-05-04._
 
 This is a bounded release-era system snapshot. It is useful for understanding
 the supported host/runtime baseline, but it is not a live witness monitor.
@@ -134,7 +134,7 @@ the supported host/runtime baseline, but it is not a live witness monitor.
   - scopes shared direct-run stdout events by persisted video/scene identity before turning them into recurrence signals
   - surfaces read-only step latency evidence from existing `step_runs.jsonl` `duration_ms` rows, including p50/p95/max by step, slow outlier counts, timeout-boundary exceedance counts, and WSL audio timing buckets
   - treats `control-recurrence-v0.4.1` as a valid sealed milestone for direct-run discoverability and truth-surface alignment, with the latest control recurrence tag at `control-recurrence-v0.4.2`
-  - current source beyond the latest control recurrence tag includes read-only recurrence trend mode, CLAP audio Qdrant payload provenance hardening, native model smoke diagnostics, and shared runtime recurrence scoping through `a036f75`
+  - current source beyond the latest control recurrence tag includes read-only recurrence trend mode, CLAP audio Qdrant payload provenance hardening, native model smoke diagnostics, shared runtime recurrence scoping, and WSL audio runtime black-box diagnostics through `05ae539`
   - audio-vector success is provenance-defined by `docs/architecture/AUDIO_VECTOR_PROVENANCE_CONTRACT.md`
   - current-run CLAP/Qdrant audio coverage requires `clap_meta.status == ok` plus a Qdrant audio payload with matching `run_id` and required provenance fields
   - legacy, stale, or scene-id-only Qdrant audio points are not current-run proof
@@ -157,6 +157,9 @@ the supported host/runtime baseline, but it is not a live witness monitor.
   - `audio_unified_wsl2` p50/p95 is about `58.2s` / `62.1s` per scene across `234` observed rows
   - WSL audio consumed roughly `61.6%` to `63.9%` of summed step duration in recent one- and two-episode witnesses
   - same-scene probes on 2026-05-04 showed diagnostic forced-CPU Windows transcript-only processing was faster on sampled `02x02` scenes, but it omitted the unified WSL diarization, emotion, speaker-count, and speaker-signature surfaces
+  - black-box witness `20260504_074335_wsl_black_box_02x02_witness` completed `38 / 38` WSL audio rows ok and persisted `bridge_runtime_probe` in all scene results and all canonical scene-manifest scenes
+  - the witnessed sourced WSL worker reported `torch==2.8.0+cu128`, `torchvision==0.23.0+cu128`, `torchaudio==2.8.0+cu128`, `torch_lane_status=differs_from_expected`, and `torchcodec_ready=false`
+  - this is an environment truth warning surfaced by the recorder; it is not an ingestion failure and not approval for package mutation
   - use `step_runs.jsonl`, recurrence latency summaries, and surface-equivalent probes for current scheduling truth; do not treat historical projected GPU speedup tables as current scheduling proof
 - Exact control recurrence commands:
   - `conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --run-id 20260424_182406_season2_fresh_witness`

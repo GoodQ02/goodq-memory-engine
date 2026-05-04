@@ -3,7 +3,7 @@
 ## Summary
 
 This is an operator note for validating the WSL2 audio CUDA/cuDNN runtime.
-The active project lane is the conservative WSL audio stack documented in
+The configured expected / bootstrap-target project lane is the conservative WSL audio stack documented in
 `docs/reference/WSL_AUDIO_RUNTIME.md` and pinned in
 `wsl2_audio/requirements-bootstrap-constraints.txt`.
 
@@ -11,16 +11,17 @@ The active project lane is the conservative WSL audio stack documented in
 
 - **GPU**: local NVIDIA GPU when available
 - **Host driver CUDA report**: may be newer than the package lane
-- **Project WSL audio torch lane**: `torch==2.5.1+cu121`
-- **Project WSL audio torchvision lane**: `torchvision==0.20.1+cu121`
-- **Project WSL audio torchaudio lane**: `torchaudio==2.5.1+cu121`
+- **Bootstrap-target WSL audio torch lane**: `torch==2.5.1+cu121`
+- **Bootstrap-target WSL audio torchvision lane**: `torchvision==0.20.1+cu121`
+- **Bootstrap-target WSL audio torchaudio lane**: `torchaudio==2.5.1+cu121`
 - **Bootstrap constraints**: `wsl2_audio/requirements-bootstrap-constraints.txt`
 - **Status rule**: run the diagnostics below on the target machine before
   treating the local WSL audio worker as ready
 
 `wsl2_audio/requirements-locked.txt` may still contain a historical package
 snapshot and is not the bootstrap-authoritative WSL audio torch lane until it is
-regenerated from a validated worker.
+regenerated from a validated worker. The active sourced worker may also differ
+from the bootstrap target; trust the runtime recorder for observed truth.
 
 ## Quick Start
 
@@ -158,9 +159,9 @@ Should show:
 1. **Always use `setup_cuda_env.sh` instead of direct venv activation** when working with CUDA/GPU operations
 2. PyTorch has cuDNN bundled but uses the pip-installed version when available
 3. WSL2 accesses GPU through the Windows NVIDIA driver (no separate driver needed in WSL)
-4. The current GoodQ WSL audio package lane is `2.5.1+cu121`; do not promote
-   to a newer CUDA/PyTorch lane without a targeted WSL audio smoke and witness
-   proving the change
+4. The configured GoodQ WSL audio bootstrap target is `2.5.1+cu121`; do not
+   promote or downgrade the active runtime lane without a targeted WSL audio
+   smoke and witness proving the change
 
 ## Next Steps
 

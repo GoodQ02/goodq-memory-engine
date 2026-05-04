@@ -100,8 +100,24 @@ full-run scheduling:
   `78` scenes
 
 The recent data only weakly correlates WSL worker duration with scene-audio
-duration. Treat the current path as a mostly per-scene fixed-cost lane until a
-same-scene CPU-vs-WSL timing witness proves otherwise.
+duration. Treat the current path as a mostly per-scene fixed-cost lane.
+
+Same-scene timing probes on 2026-05-04 used three existing `02x02` scene
+chunks from `reports/fresh_ingest_runs/20260503_135503_native_retry_attribution_02x02_witness/`.
+They compared the canonical unified WSL worker against a diagnostic forced-CPU
+Windows transcript-only path:
+
+- scenes sampled: `9`, `22`, and `33`
+- WSL unified timing: about `49.4s` to `59.1s`
+- Windows forced-CPU transcript-only timing: about `28.9s` to `31.4s`
+- transcript overlap stayed high: word-set overlap about `0.882` to `1.000`
+- WSL produced extra persisted surfaces that the transcript-only probe did not:
+  diarization, speaker counts, emotion, and speaker voice signature inputs
+
+Operator meaning: the current WSL lane is not just "transcription on Linux".
+It is the unified audio intelligence bundle. A cheaper transcript-only path is
+real evidence for future scheduling work, but it is not an equivalent
+replacement for unified WSL audio.
 
 Operator implications:
 
@@ -110,7 +126,8 @@ Operator implications:
 - use `step_runs.jsonl` and the read-only control recurrence latency summary
   for current timing truth
 - do not use historical projected GPU speedup tables as the current scheduling
-  contract without a fresh same-scene comparison
+  contract without a fresh same-scene comparison for the specific audio surface
+  being considered
 
 ## Runtime Error Surfacing
 

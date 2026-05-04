@@ -156,7 +156,8 @@ the supported host/runtime baseline, but it is not a live witness monitor.
   - recent controlled witnesses from 2026-05-01 through 2026-05-03 show unified WSL audio is healthy but expensive
   - `audio_unified_wsl2` p50/p95 is about `58.2s` / `62.1s` per scene across `234` observed rows
   - WSL audio consumed roughly `61.6%` to `63.9%` of summed step duration in recent one- and two-episode witnesses
-  - use `step_runs.jsonl` and recurrence latency summaries for current scheduling truth; do not treat historical projected GPU speedup tables as current scheduling proof
+  - same-scene probes on 2026-05-04 showed diagnostic forced-CPU Windows transcript-only processing was faster on sampled `02x02` scenes, but it omitted the unified WSL diarization, emotion, speaker-count, and speaker-signature surfaces
+  - use `step_runs.jsonl`, recurrence latency summaries, and surface-equivalent probes for current scheduling truth; do not treat historical projected GPU speedup tables as current scheduling proof
 - Exact control recurrence commands:
   - `conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --run-id 20260424_182406_season2_fresh_witness`
   - `conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --run-root reports/fresh_ingest_runs/<direct_run_root>`

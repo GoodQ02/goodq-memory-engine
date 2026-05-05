@@ -1,10 +1,10 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: GENERATED_SNAPSHOT -->
-<!-- DOC_LAST_VERIFIED: 2026-05-04 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-05 -->
 
 # System Snapshot
 
-_Operational operator-state alignment refreshed: 2026-05-04._
+_Operational operator-state alignment refreshed: 2026-05-05._
 
 This is a bounded release-era system snapshot. It is useful for understanding
 the supported host/runtime baseline, but it is not a live witness monitor.
@@ -51,15 +51,17 @@ the supported host/runtime baseline, but it is not a live witness monitor.
 - LM Studio (1234): not reachable
 
 ## Offline Packaging State
-- Workspace-adjacent machine-audit pack: present
-- Workspace-adjacent offline bundle root: present
-- Repo payload staged into offline bundle: present
-- Transport reconciliation final gap report: `HIGH` confidence
-- Phase 1 self-extracting installer: present
+- Workspace-adjacent machine-audit pack: present and preserved as rebuild input
+- Previous offline bundle payload and self-extracting installer: retired from circulation after stale-bundle audit
+- Current validated offline bundle / installer: none in circulation
+- Active rebuild plan: `docs/bootstrap/OFFLINE_BUNDLE_REBUILD_PLAN.md`
 - Closure state:
-  - Linux wheels: complete
-  - Windows wheels: complete
-  - Host payloads: complete
+  - Linux WSL audio wheelhouse: open until canonical `2.5.1+cu121` torch-family evidence is proven or explicitly marked incomplete
+  - Windows wheels: rebuild input only until the new staged payload validates
+  - Host payloads: rebuild input only until the new staged payload validates
+- Packaging doctrine:
+  - `WSL_AUDIO_LANE_OBSERVED_FUNCTIONAL_DRIFT_CU128` is drift evidence, not an offline bundle target
+  - bootstrap target remains the canonical WSL audio `2.5.1+cu121` torch family
 - Current large local asset work:
   - required model cache: present locally
   - NRC lexicon: present locally

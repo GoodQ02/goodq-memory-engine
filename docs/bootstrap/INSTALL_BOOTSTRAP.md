@@ -32,6 +32,19 @@ The bootstrap intentionally reuses existing project surfaces:
 - [`configs/config.local.example.yaml`](../../configs/config.local.example.yaml)
 - [`.env.local.template`](../../.env.local.template)
 
+## Offline Bundle Status
+
+The previous workspace-adjacent offline bundle generation has been retired from
+circulation after a stale-bundle audit. No current offline installer or archive
+is packaging truth until the rebuild plan is completed and validated.
+
+Current rebuild plan:
+
+- [`OFFLINE_BUNDLE_REBUILD_PLAN.md`](OFFLINE_BUNDLE_REBUILD_PLAN.md)
+
+The rebuild must preserve the canonical WSL audio bootstrap target and must not
+package the observed cu128 WSL drift lane as an offline target.
+
 ## What It Prompts For
 
 On a normal interactive run, the bootstrap prompts for:

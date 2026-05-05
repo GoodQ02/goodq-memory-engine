@@ -1,10 +1,10 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: GENERATED_SNAPSHOT -->
-<!-- DOC_LAST_VERIFIED: 2026-05-04 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-05 -->
 
 # GoodQ4All Agent Status
 
-_Operational restart checkpoint aligned: 2026-05-04._
+_Operational restart checkpoint aligned: 2026-05-05._
 
 This document is a bounded operator snapshot of the current release-era
 stitching and offline-package baseline.
@@ -246,15 +246,19 @@ Audit Status: ACTIVE (2026-04-10)
     - cross-episode identity stitching is active but still conservative on short smokes
 
 ## Offline Package State
-- Desktop machine audit: complete and authoritative in the workspace-adjacent pack
-- Offline bundle root: `../scratch/offline_bundle/goodq4all-offline/`
+- Desktop machine audit: complete and preserved as rebuild input in the workspace-adjacent pack
+- Offline bundle root: no validated current offline bundle is in circulation
 - Machine-audit working copy: `../scratch/install_manifest/20260403_machine_audit/`
-- Transport reconciliation: final gap report is `HIGH` confidence with canonical + follower + Linux runtime marked complete
-- Phase 1 installer artifact: `../scratch/offline_bundle/GoodQ_Installer.exe`
+- Active rebuild plan: `docs/bootstrap/OFFLINE_BUNDLE_REBUILD_PLAN.md`
+- Transport reconciliation: historical input only until the new staged payload validates
+- Previous Phase 1 installer artifact: retired from circulation after stale-bundle audit
 - Closure status:
-  - Linux wheels: complete
-  - Windows wheels: complete
-  - Host payloads: complete
+  - Linux WSL audio wheelhouse: open until canonical `2.5.1+cu121` torch-family evidence is proven or explicitly marked incomplete
+  - Windows wheels: rebuild input only until the new staged payload validates
+  - Host payloads: rebuild input only until the new staged payload validates
+- Packaging doctrine:
+  - `WSL_AUDIO_LANE_OBSERVED_FUNCTIONAL_DRIFT_CU128` is functional drift evidence, not a package recommendation and not an offline bundle target
+  - bootstrap target remains the canonical WSL audio `2.5.1+cu121` torch family
 - Host parity additions now installed and wired:
   - Poppler / `pdftotext`
   - Piper + `en_US-joe-medium` voice
@@ -291,8 +295,8 @@ Audit Status: ACTIVE (2026-04-10)
 - Added the identity formation layer: `speaker_pattern`, `voice_pattern_match`, `identity_candidate`, `identity_supported`, `identity_evidence`.
 - Removed the last active legacy launcher / WSL-toggle surfaces, collapsed compatibility adapters onto the canonical unified WSL bridge, and removed active ZenML references from runtime/bootstrap docs.
 - Installed and wired Poppler + Piper for host-complete offline parity.
-- Closed the desktop offline package audit and staged the current offline bundle under `../scratch/offline_bundle/goodq4all-offline/`.
-- Built the first self-extracting offline installer wrapper and staged the repo mirror into the offline bundle.
+- Retired the stale offline bundle generation from circulation and recorded the rebuild as a GoodQ ExecPlan before creating any replacement package artifacts.
+- Added the GoodQ ExecPlan protocol for restartable, high-risk, or multi-session work such as offline bundle rebuilds.
 - Restored the monitored multi-episode ingestion baseline on the current branch and verified the new perception wiring in fresh epoch artifacts.
 - Confirmed that interaction ownership remains an additive next-step concern rather than a reason to loosen visible-person promotion.
 - Completed the first full 5-episode benchmark witness from pushed `main` so desktop and laptop summaries can be compared against the same benchmarked branch state.
@@ -353,7 +357,7 @@ Audit Status: ACTIVE (2026-04-10)
 - Trust the direct unified WSL worker contract over older queue-service-era notes.
 - Keep segmentation on the legacy production path until an explicit promotion decision is approved.
 - Operate surgically: verify through targeted tests, witness artifacts, or focused reruns before widening scope.
-- For next-session offline work, treat the workspace-adjacent offline bundle and machine-audit manifests as packaging truth, not older first-pass harvest files.
+- For next-session offline work, treat `docs/bootstrap/OFFLINE_BUNDLE_REBUILD_PLAN.md` plus the preserved machine-audit pack as rebuild inputs. Do not treat retired offline bundle artifacts as current packaging truth.
 
 ## Read These First
 - docs/HANDOFF_BASEMENT_PHASE.md

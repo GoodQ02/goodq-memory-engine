@@ -106,7 +106,7 @@ def test_wsl_audio_env_values_share_model_cache_and_tokens(monkeypatch, tmp_path
             user="goodq",
             home="/home/goodq",
             workspace="/home/goodq/goodq_audio",
-            windows_workspace=Path(r"\\wsl$\Ubuntu-22.04\home\goodq\goodq_audio"),
+            windows_workspace=Path("wsl_workspace_placeholder"),
         ),
     )
 
@@ -341,7 +341,7 @@ def test_probe_wsl_audio_workspace_ready_requires_abi(monkeypatch):
             user="goodq",
             home="/home/goodq",
             workspace="/home/goodq/goodq_audio",
-            windows_workspace=Path(r"\\wsl$\Ubuntu-22.04\home\goodq\goodq_audio"),
+            windows_workspace=Path("wsl_workspace_placeholder"),
         )
     )
 

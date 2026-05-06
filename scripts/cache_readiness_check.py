@@ -23,6 +23,11 @@ except Exception:  # pragma: no cover
     get_runtime_paths = None  # type: ignore[assignment]
     load_configs = None  # type: ignore[assignment]
 
+try:
+    from scripts.wsl_audio_preflight import WSL_DIARIZATION_MODEL_REPOS
+except Exception:  # pragma: no cover
+    from wsl_audio_preflight import WSL_DIARIZATION_MODEL_REPOS
+
 
 def _default_models_dir() -> Path:
     if load_configs and get_runtime_paths:
@@ -44,7 +49,10 @@ MODEL_SNAPSHOTS = {
     "facebook/dinov2-base": "models--facebook--dinov2-base",
     "sentence-transformers/all-MiniLM-L6-v2": "models--sentence-transformers--all-MiniLM-L6-v2",
     "laion/clap-htsat-unfused": "models--laion--clap-htsat-unfused",
-    "pyannote/speaker-diarization@2.1": "models--pyannote--speaker-diarization",
+    **{
+        repo_id: f"models--{repo_id.replace('/', '--')}"
+        for repo_id in WSL_DIARIZATION_MODEL_REPOS
+    },
     "openai/whisper-large-v3": "models--openai--whisper-large-v3",
     "Systran/faster-whisper-large-v3": "models--Systran--faster-whisper-large-v3",
     "Systran/faster-whisper-medium": "models--Systran--faster-whisper-medium",

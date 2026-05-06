@@ -16,11 +16,12 @@ _RECOMMENDED_INSTALL_COMMAND = (
     "pip install torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1 "
     "--index-url https://download.pytorch.org/whl/cu121"
 )
-_DIARIZATION_REPOS = (
+WSL_DIARIZATION_MODEL_REPOS = (
     "pyannote/speaker-diarization-3.1",
     "pyannote/segmentation-3.0",
     "pyannote/wespeaker-voxceleb-resnet34-LM",
 )
+_DIARIZATION_REPOS = WSL_DIARIZATION_MODEL_REPOS
 
 
 def _run_wsl_probe(distro: str, script: str, *, timeout: int) -> subprocess.CompletedProcess[str]:

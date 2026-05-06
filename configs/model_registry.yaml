@@ -31,18 +31,26 @@ huggingface_models:
     model_type: audio-embedding
     required: true
   pyannote_diarization:
-    repo_id: pyannote/speaker-diarization
-    revision: 25bcc7e3631933a02af5ee39379797d704aee3f8
+    repo_id: pyannote/speaker-diarization-3.1
+    revision: 84fd25912480287da0247647c3d2b4853cb3ee5d
     model_type: audio-diarization
     required: true
     requires_auth: true
     auth_token_env: PYANNOTE_TOKEN
   pyannote_segmentation:
-    repo_id: pyannote/segmentation
-    revision: 660b9e20307a2b0cdb400d0f80aadc04a701fc54
+    repo_id: pyannote/segmentation-3.0
+    revision: e66f3d3b9eb0873085418a7b813d3b369bf160bb
     model_type: audio-segmentation
     required: true
     requires_auth: true
+    auth_token_env: PYANNOTE_TOKEN
+  pyannote_wespeaker:
+    repo_id: pyannote/wespeaker-voxceleb-resnet34-LM
+    revision: 837717ddb9ff5507820346191109dc79c958d614
+    model_type: audio-speaker-embedding
+    required: true
+    requires_auth: true
+    auth_token_env: PYANNOTE_TOKEN
   whisper_large_v3:
     repo_id: openai/whisper-large-v3
     revision: 06f233fe06e710322aca913c1bc4249a0d71fce1

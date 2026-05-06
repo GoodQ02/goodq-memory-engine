@@ -21,6 +21,7 @@ if VENDOR_DIR.exists():
     sys.path.append(str(VENDOR_DIR))
 
 from dataset_specs import DATASET_SPECS, find_local_copy
+from wsl_audio_preflight import WSL_DIARIZATION_MODEL_REPOS
 
 try:
     from dotenv import load_dotenv  # type: ignore
@@ -317,7 +318,10 @@ def gather_path_checks(cfg: Dict[str, Any]) -> List[CheckResult]:
         checks.append(CheckResult("models_root", "red", str(models_root)))
 
     layers = [
-        models_root / "hub" / "models--pyannote--speaker-diarization",
+        *(
+            models_root / "hub" / f"models--{repo_id.replace('/', '--')}"
+            for repo_id in WSL_DIARIZATION_MODEL_REPOS
+        ),
         models_root / "hf" / "datasets",
     ]
     for layer in layers:
@@ -414,7 +418,7 @@ def build_report() -> Dict[str, Any]:
     path_results = gather_path_checks(cfg)
     dataset_results = gather_dataset_checks(_dataset_cache_root())
     token = os.environ.get("PYANNOTE_TOKEN") or os.environ.get("HF_TOKEN")
-    hf_result = check_hf_access("pyannote/speaker-diarization", token, revision="2.1")
+    hf_result = check_hf_access(WSL_DIARIZATION_MODEL_REPOS[0], token)
     conda_results = gather_conda_checks(bool(token), RUNTIME_CFG)
 
     report_sections: Dict[str, Any] = {

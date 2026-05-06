@@ -21,6 +21,11 @@ sys.path.insert(0, str(_REPO_ROOT))
 if _VENDOR_DIR.exists():
     sys.path.append(str(_VENDOR_DIR))
 
+try:
+    from scripts.wsl_audio_preflight import WSL_DIARIZATION_MODEL_REPOS
+except Exception:  # pragma: no cover
+    from wsl_audio_preflight import WSL_DIARIZATION_MODEL_REPOS
+
 
 DEFAULT_DOWNLOAD_RETRIES = 4
 YOLO_URL = "https://github.com/ultralytics/assets/releases/download/v8.2.0/yolov8n.pt"
@@ -401,7 +406,7 @@ def build_wanted_models(registry: Dict | None) -> List[str]:
         "facebook/dinov2-base",
         "sentence-transformers/all-MiniLM-L6-v2",
         "laion/clap-htsat-unfused",
-        "pyannote/speaker-diarization",
+        *WSL_DIARIZATION_MODEL_REPOS,
         "openai/whisper-large-v3",
         "Systran/faster-whisper-large-v3",
         "Systran/faster-whisper-medium",

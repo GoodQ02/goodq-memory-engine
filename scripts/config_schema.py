@@ -207,7 +207,7 @@ class Phase2Config(BaseModel):
     enabled: bool = False
     min_duration_off: float = 0.0
     min_duration_on: float = 0.0
-    model: str = "pyannote/segmentation"
+    model: str = "pyannote/segmentation-3.0"
     device: str = "cuda"
     use_auth_token: Optional[str] = None
 

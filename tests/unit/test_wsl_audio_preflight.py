@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 
-def test_build_diarization_probe_uses_current_pyannote_token_kwarg():
+def test_build_diarization_probe_uses_pyannote_auth_kwarg_compatibility():
     from scripts.wsl_audio_preflight import _build_diarization_probe_script
 
     script = _build_diarization_probe_script("/home/goodq/goodq_audio")
 
-    assert "use_auth_token" not in script
+    assert "use_auth_token=token" in script
     assert "Pipeline.from_pretrained('pyannote/speaker-diarization-3.1', token=token)" in script
+    assert "unexpected keyword" in script
 
 
 def test_probe_wsl_audio_runtime_allows_abi_degraded_transcription(monkeypatch):

@@ -55,6 +55,17 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+def _load_pyannote_pipeline(pipeline_cls: Any, model_name: str, token: str):
+    """Load pyannote across the 3.x/4.x auth kwarg boundary."""
+    try:
+        return pipeline_cls.from_pretrained(model_name, use_auth_token=token)
+    except TypeError as exc:
+        message = str(exc)
+        if "use_auth_token" not in message or "unexpected keyword" not in message:
+            raise
+        return pipeline_cls.from_pretrained(model_name, token=token)
+
+
 @dataclass
 class GPUConfig:
     """GPU configuration"""
@@ -253,9 +264,10 @@ class AudioService:
             
             if hf_token:
                 logger.info(f"Loading diarization model: {diarization_model}")
-                self.diarization_pipeline = Pipeline.from_pretrained(
+                self.diarization_pipeline = _load_pyannote_pipeline(
+                    Pipeline,
                     diarization_model,
-                    token=hf_token
+                    hf_token,
                 )
                 if str(gpu_config.get("device", "cuda")).lower() == "cuda" and torch.cuda.is_available():
                     self.diarization_pipeline.to(torch.device("cuda"))

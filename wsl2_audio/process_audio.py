@@ -182,6 +182,17 @@ def _resolve_secret(raw_value, env_key=None):
     return None
 
 
+def _load_pyannote_pipeline(pipeline_cls, model_name: str, token: str):
+    """Load pyannote across the 3.x/4.x auth kwarg boundary."""
+    try:
+        return pipeline_cls.from_pretrained(model_name, use_auth_token=token)
+    except TypeError as exc:
+        message = str(exc)
+        if "use_auth_token" not in message or "unexpected keyword" not in message:
+            raise
+        return pipeline_cls.from_pretrained(model_name, token=token)
+
+
 def clear_gpu_memory():
     """Clear GPU memory cache and run garbage collection"""
     if torch.cuda.is_available():
@@ -553,9 +564,10 @@ def process_audio(audio_file, output_dir):
                 if hf_token:
                     os.environ.setdefault("HUGGINGFACE_TOKEN", hf_token)
                     os.environ.setdefault("HF_TOKEN", hf_token)
-                    diarization_pipeline = DiarizationPipeline.from_pretrained(
+                    diarization_pipeline = _load_pyannote_pipeline(
+                        DiarizationPipeline,
                         result["diarization_model"],
-                        token=hf_token
+                        hf_token,
                     )
                     diarization_pipeline.to(torch.device(device))
                     

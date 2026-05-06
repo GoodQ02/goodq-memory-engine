@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import types
+import sys
 from pathlib import Path
 
 import torch
@@ -38,9 +39,9 @@ def test_process_audio_uses_waveform_dict_for_diarization(monkeypatch, tmp_path:
 
     class _FakePipelineFactory:
         @staticmethod
-        def from_pretrained(model_name, token=None):
+        def from_pretrained(model_name, use_auth_token=None):
             captured["model_name"] = model_name
-            captured["token"] = token
+            captured["token"] = use_auth_token
             return _FakePipeline()
 
     monkeypatch.setattr(mod, "_load_runtime_config", lambda: {
@@ -72,6 +73,57 @@ def test_process_audio_uses_waveform_dict_for_diarization(monkeypatch, tmp_path:
     assert isinstance(captured["audio_input"], dict)
     assert captured["audio_input"]["sample_rate"] == 16000
     assert torch.equal(captured["audio_input"]["waveform"], waveform)
+
+
+def test_process_audio_diarization_loader_falls_back_to_token_kwarg():
+    from wsl2_audio import process_audio as mod
+
+    captured = {}
+
+    class _FakePipeline:
+        pass
+
+    class _FakePipelineFactory:
+        calls = 0
+
+        @classmethod
+        def from_pretrained(cls, model_name, **kwargs):
+            cls.calls += 1
+            if "use_auth_token" in kwargs:
+                raise TypeError("Pipeline.from_pretrained() got an unexpected keyword argument 'use_auth_token'")
+            captured["model_name"] = model_name
+            captured["token"] = kwargs.get("token")
+            return _FakePipeline()
+
+    pipeline = mod._load_pyannote_pipeline(_FakePipelineFactory, "pyannote/speaker-diarization-3.1", "test-token")
+
+    assert isinstance(pipeline, _FakePipeline)
+    assert _FakePipelineFactory.calls == 2
+    assert captured["model_name"] == "pyannote/speaker-diarization-3.1"
+    assert captured["token"] == "test-token"
+
+
+def test_audio_service_diarization_loader_prefers_use_auth_token(monkeypatch):
+    monkeypatch.setitem(sys.modules, "soundfile", types.ModuleType("soundfile"))
+    from wsl2_audio import audio_service as mod
+
+    captured = {}
+
+    class _FakePipeline:
+        pass
+
+    class _FakePipelineFactory:
+        @staticmethod
+        def from_pretrained(model_name, **kwargs):
+            captured["model_name"] = model_name
+            captured["use_auth_token"] = kwargs.get("use_auth_token")
+            return _FakePipeline()
+
+    pipeline = mod._load_pyannote_pipeline(_FakePipelineFactory, "pyannote/speaker-diarization-3.1", "test-token")
+
+    assert isinstance(pipeline, _FakePipeline)
+    assert captured["model_name"] == "pyannote/speaker-diarization-3.1"
+    assert captured["use_auth_token"] == "test-token"
 
 
 def test_select_speaker_signature_segments_requires_diversity():

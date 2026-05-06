@@ -233,10 +233,12 @@ def test_wsl_bootstrap_constraints_match_python310_cu121_lane() -> None:
     assert pinned["torchvision"] == "0.20.1+cu121"
     assert pinned["torchaudio"] == "2.5.1+cu121"
     assert pinned["pyannote.audio"] == "3.3.2"
+    assert pinned["huggingface-hub"] == "0.35.3"
     assert pinned["numpy"] == "2.2.6"
     assert pinned["scipy"] == "1.15.3"
 
     assert "pyannote.audio==4.0.3" not in constraints
+    assert "huggingface-hub==1.13.0" not in constraints
     assert "numpy==2.3.5" not in constraints
     assert "scipy==1.16.3" not in constraints
 

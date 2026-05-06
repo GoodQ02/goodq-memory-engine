@@ -4,6 +4,7 @@ import argparse
 import json
 import os
 import subprocess
+from pathlib import Path
 from typing import Any, Dict, Optional
 
 
@@ -22,6 +23,37 @@ WSL_DIARIZATION_MODEL_REPOS = (
     "pyannote/wespeaker-voxceleb-resnet34-LM",
 )
 _DIARIZATION_REPOS = WSL_DIARIZATION_MODEL_REPOS
+WSL_AUDIO_REQUIRED_CACHE_REPOS = (
+    "ehcalabres/wav2vec2-lg-xlsr-en-speech-emotion-recognition",
+    "facebook/wav2vec2-base-960h",
+    *WSL_DIARIZATION_MODEL_REPOS,
+)
+
+
+def _load_pinned_model_revisions() -> Dict[str, str]:
+    registry_path = Path(__file__).resolve().parents[1] / "configs" / "model_registry.yaml"
+    if not registry_path.exists():
+        return {}
+    try:
+        import yaml  # type: ignore
+    except Exception:
+        return {}
+    try:
+        registry = yaml.safe_load(registry_path.read_text(encoding="utf-8")) or {}
+    except Exception:
+        return {}
+    models = registry.get("huggingface_models") if isinstance(registry, dict) else {}
+    if not isinstance(models, dict):
+        return {}
+    revisions: Dict[str, str] = {}
+    for model_info in models.values():
+        if not isinstance(model_info, dict):
+            continue
+        repo_id = str(model_info.get("repo_id") or "").strip()
+        revision = str(model_info.get("revision") or "").strip()
+        if repo_id and revision:
+            revisions[repo_id] = revision
+    return revisions
 
 
 def _run_wsl_probe(distro: str, script: str, *, timeout: int) -> subprocess.CompletedProcess[str]:
@@ -216,7 +248,13 @@ def _probe_wsl_audio_black_box(distro: str, workspace: str) -> Dict[str, Any]:
 
 
 def _build_diarization_probe_script(workspace: str) -> str:
-    repo_list = ", ".join(repr(repo) for repo in _DIARIZATION_REPOS)
+    repo_list = ", ".join(repr(repo) for repo in WSL_AUDIO_REQUIRED_CACHE_REPOS)
+    pinned_revisions = {
+        repo_id: revision
+        for repo_id, revision in _load_pinned_model_revisions().items()
+        if repo_id in WSL_AUDIO_REQUIRED_CACHE_REPOS
+    }
+    revision_map = json.dumps(pinned_revisions, sort_keys=True)
     return (
         f"source '{workspace}/setup_cuda_env.sh' >/dev/null 2>&1 && "
         "python3 - <<'PY'\n"
@@ -227,10 +265,14 @@ def _build_diarization_probe_script(workspace: str) -> str:
         "    print('diarization_token_missing')\n"
         "    raise SystemExit(0)\n"
         f"required_repos = [{repo_list}]\n"
+        f"pinned_revisions = {revision_map}\n"
         "missing = []\n"
         "for repo_id in required_repos:\n"
         "    try:\n"
-        "        snapshot_download(repo_id=repo_id, local_files_only=True)\n"
+        "        kwargs = {'repo_id': repo_id, 'local_files_only': True}\n"
+        "        if pinned_revisions.get(repo_id):\n"
+        "            kwargs['revision'] = pinned_revisions[repo_id]\n"
+        "        snapshot_download(**kwargs)\n"
         "    except Exception as exc:\n"
         "        missing.append(f'{repo_id}: {type(exc).__name__}: {exc}')\n"
         "if missing:\n"

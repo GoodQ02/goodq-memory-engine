@@ -81,6 +81,12 @@ huggingface_models:
     revision: b520c9c46a719e36e1b9a91cad2cb5d0668757d8
     model_type: audio-classification
     required: true
+  wav2vec2_base_960h:
+    repo_id: facebook/wav2vec2-base-960h
+    revision: 22aad52d435eb6dbaf354bdad9b0da84ce7d6156
+    model_type: audio-embedding
+    required: true
+    notes: WSL audio process_audio embedding cache gate
   bert_ner:
     repo_id: dslim/bert-base-NER
     revision: d1a3e8f13f8c3566299d95fcfc9a8d2382a9affc

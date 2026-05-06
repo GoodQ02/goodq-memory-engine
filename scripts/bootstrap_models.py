@@ -413,6 +413,7 @@ def build_wanted_models(registry: Dict | None) -> List[str]:
         "Systran/faster-whisper-tiny",
         "superb/hubert-large-superb-er",
         "ehcalabres/wav2vec2-lg-xlsr-en-speech-emotion-recognition",
+        "facebook/wav2vec2-base-960h",
     ]
 
 

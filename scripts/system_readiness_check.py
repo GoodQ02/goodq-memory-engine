@@ -21,7 +21,7 @@ if VENDOR_DIR.exists():
     sys.path.append(str(VENDOR_DIR))
 
 from dataset_specs import DATASET_SPECS, find_local_copy
-from wsl_audio_preflight import WSL_DIARIZATION_MODEL_REPOS
+from wsl_audio_preflight import WSL_AUDIO_REQUIRED_CACHE_REPOS, WSL_DIARIZATION_MODEL_REPOS
 
 try:
     from dotenv import load_dotenv  # type: ignore
@@ -320,7 +320,7 @@ def gather_path_checks(cfg: Dict[str, Any]) -> List[CheckResult]:
     layers = [
         *(
             models_root / "hub" / f"models--{repo_id.replace('/', '--')}"
-            for repo_id in WSL_DIARIZATION_MODEL_REPOS
+            for repo_id in WSL_AUDIO_REQUIRED_CACHE_REPOS
         ),
         models_root / "hf" / "datasets",
     ]

@@ -11,6 +11,17 @@ def test_build_diarization_probe_uses_pyannote_auth_kwarg_compatibility():
     assert "unexpected keyword" in script
 
 
+def test_build_diarization_probe_uses_pinned_offline_revisions():
+    from scripts.wsl_audio_preflight import WSL_DIARIZATION_MODEL_REPOS, _build_diarization_probe_script
+
+    script = _build_diarization_probe_script("/home/goodq/goodq_audio")
+
+    assert "pinned_revisions" in script
+    assert "revision" in script
+    for repo_id in WSL_DIARIZATION_MODEL_REPOS:
+        assert repo_id in script
+
+
 def test_probe_wsl_audio_runtime_allows_abi_degraded_transcription(monkeypatch):
     from scripts import wsl_audio_preflight
 

@@ -24,9 +24,9 @@ except Exception:  # pragma: no cover
     load_configs = None  # type: ignore[assignment]
 
 try:
-    from scripts.wsl_audio_preflight import WSL_DIARIZATION_MODEL_REPOS
+    from scripts.wsl_audio_preflight import WSL_AUDIO_REQUIRED_CACHE_REPOS
 except Exception:  # pragma: no cover
-    from wsl_audio_preflight import WSL_DIARIZATION_MODEL_REPOS
+    from wsl_audio_preflight import WSL_AUDIO_REQUIRED_CACHE_REPOS
 
 
 def _default_models_dir() -> Path:
@@ -51,7 +51,7 @@ MODEL_SNAPSHOTS = {
     "laion/clap-htsat-unfused": "models--laion--clap-htsat-unfused",
     **{
         repo_id: f"models--{repo_id.replace('/', '--')}"
-        for repo_id in WSL_DIARIZATION_MODEL_REPOS
+        for repo_id in WSL_AUDIO_REQUIRED_CACHE_REPOS
     },
     "openai/whisper-large-v3": "models--openai--whisper-large-v3",
     "Systran/faster-whisper-large-v3": "models--Systran--faster-whisper-large-v3",
@@ -119,7 +119,7 @@ def build_inventory(models_dir: Path) -> List[CacheItem]:
     for model_id, folder in MODEL_SNAPSHOTS.items():
         items.append(CacheItem(name=model_id, path=hub_root / folder, kind="model"))
     items.append(CacheItem(name="yolov8n.pt", path=models_dir / YOLO_PATH, kind="asset"))
-    items.append(CacheItem(name="NRC-Emotion-Lexicon", path=models_dir / LEXICON_PATH, kind="asset"))
+    items.append(CacheItem(name="NRC-Emotion-Lexicon", path=models_dir / LEXICON_PATH, kind="asset", optional=True))
     items.append(CacheItem(name="HF datasets cache", path=models_dir / DATASET_ROOT, kind="dataset", optional=True))
     return items
 

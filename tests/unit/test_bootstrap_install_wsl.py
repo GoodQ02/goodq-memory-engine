@@ -218,6 +218,29 @@ def test_wsl_audio_installers_use_bootstrap_constraints_and_post_install_validat
         assert "torchvision.ops import nms" in content
 
 
+def test_wsl_bootstrap_constraints_match_python310_cu121_lane() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    constraints_path = repo_root / "wsl2_audio" / "requirements-bootstrap-constraints.txt"
+    constraints = constraints_path.read_text(encoding="utf-8").splitlines()
+
+    pinned = {
+        line.split("==", 1)[0]: line.split("==", 1)[1]
+        for line in constraints
+        if "==" in line and not line.strip().startswith("#")
+    }
+
+    assert pinned["torch"] == "2.5.1+cu121"
+    assert pinned["torchvision"] == "0.20.1+cu121"
+    assert pinned["torchaudio"] == "2.5.1+cu121"
+    assert pinned["pyannote.audio"] == "3.3.2"
+    assert pinned["numpy"] == "2.2.6"
+    assert pinned["scipy"] == "1.15.3"
+
+    assert "pyannote.audio==4.0.3" not in constraints
+    assert "numpy==2.3.5" not in constraints
+    assert "scipy==1.16.3" not in constraints
+
+
 def test_resolve_wsl_python_prefers_venv(monkeypatch):
     from steps.audio_transcribe import step
 

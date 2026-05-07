@@ -1,3 +1,7 @@
+<!-- DOC_BADGE: CANONICAL -->
+<!-- DOC_STATUS: AUTHORITATIVE -->
+<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
+
 # Canonical Sensitive Events (High-Sensitivity Source Wiring Pack v1)
 
 **Status:** ✅ Contract (schema-only, no ingestion)  

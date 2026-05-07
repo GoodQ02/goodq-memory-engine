@@ -1,3 +1,7 @@
+<!-- DOC_BADGE: OPERATIONAL -->
+<!-- DOC_STATUS: ACTIVE_GUIDE -->
+<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
+
 # GPU Setup Guide
 
 > Role: Canonical GPU setup guide for GoodQ4All `GPU_ENHANCED` profile. Use this document to configure acceleration tiers. For runtime management patterns, see `docs/GPU_MANAGEMENT_GUIDE.md` and `docs/guides/gpu/GPU_OPTIMIZATION_GUIDE.md`.
@@ -36,14 +40,16 @@ Each pipeline step runs in its own isolated conda environment with specific depe
 ## Prerequisites (`GPU_ENHANCED`)
 
 ### Hardware Requirements
-- **NVIDIA GPU** with CUDA Compute Capability 3.5+
-- **16GB+ VRAM** recommended for optimal performance
-- Your system: **NVIDIA GeForce RTX 4070 Ti SUPER** (16GB VRAM) ✅
+- **NVIDIA GPU** with CUDA support for accelerated paths
+- **16GB+ VRAM** recommended for full `GPU_ENHANCED` throughput
+- Specific GPU model, VRAM, and driver evidence are host-specific; verify the
+  active machine with `nvidia-smi`, `python -m cli.system_status`, and the
+  targeted bootstrap/readiness checks.
 
 ### Software Requirements
-1. **NVIDIA Drivers**: Version 525+ (You have: 581.80 ✅)
-2. **CUDA**: Installed via PyTorch (automatic)
-3. **Conda**: For environment management ✅
+1. **NVIDIA Drivers**: current enough for the selected PyTorch CUDA wheel family
+2. **CUDA runtime**: provided by the pinned PyTorch/step-env wheel family
+3. **Conda**: for environment management
 
 ## Quick Setup
 

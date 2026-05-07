@@ -1,3 +1,7 @@
+<!-- DOC_BADGE: CANONICAL -->
+<!-- DOC_STATUS: AUTHORITATIVE -->
+<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
+
 # Epistemic Read Model Contract (v1)
 
 **Purpose:** Freeze a shared, stable language for how GoodQ represents answers, evidence, uncertainty, and explicit limits.  

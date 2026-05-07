@@ -1,3 +1,7 @@
+<!-- DOC_BADGE: OPERATIONAL -->
+<!-- DOC_STATUS: ACTIVE_GUIDE -->
+<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
+
 # vLLM systemd Service Setup - Advanced Operator Reference
 
 **Status:** Advanced operator reference. Prefer `scripts/wsl/install_vllm_service.sh` for the supported setup path when the repo checkout is available from WSL.

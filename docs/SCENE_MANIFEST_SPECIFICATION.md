@@ -1,3 +1,7 @@
+<!-- DOC_BADGE: CANONICAL -->
+<!-- DOC_STATUS: AUTHORITATIVE -->
+<!-- DOC_LAST_VERIFIED: 2026-04-24 -->
+
 # Scene Manifest Specification
 
 **Status:** ✅ **STABLE AND OPERATIONAL**

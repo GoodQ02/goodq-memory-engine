@@ -1,3 +1,7 @@
+<!-- DOC_BADGE: OPERATIONAL -->
+<!-- DOC_STATUS: ACTIVE_GUIDE -->
+<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
+
 # GPU Pipeline Optimization Guide
 
 > Role: Canonical end-to-end optimization guide for `GPU_ENHANCED`. Start here when tuning GPU performance; use `docs/guides/gpu/GPU_SETUP.md` for installation/enablement and `docs/GPU_MANAGEMENT_GUIDE.md` for management API details.
@@ -18,11 +22,19 @@ $env:GOODQ_HOST_PROFILE = "GPU_ENHANCED"
 
 ## System Configuration
 
-### Hardware Detected
-- **GPU**: NVIDIA GeForce RTX 4070 Ti SUPER
-- **VRAM**: 16 GB
-- **CUDA**: Version 13.0
-- **Compute Capability**: 8.9
+### Hardware Evidence
+
+GPU model, VRAM, driver-reported CUDA version, and compute capability are
+host-specific. Do not treat a previous workstation's `nvidia-smi` output as the
+project contract. Verify the active host before tuning:
+
+```powershell
+nvidia-smi
+python -m cli.system_status
+```
+
+The runtime wheel lane remains controlled by the pinned environment and
+bootstrap contracts, not by the driver-reported CUDA maximum alone.
 
 ### Enabled Optimizations
 - ✅ TF32 precision (faster matrix operations on Ampere+ GPUs)

@@ -1,4 +1,8 @@
-## Canonical Runtime Configuration Loading Contract (Proposal)
+<!-- DOC_BADGE: CANONICAL -->
+<!-- DOC_STATUS: AUTHORITATIVE -->
+<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
+
+# Canonical Runtime Configuration Loading Contract
 
 ### 1) Single Source of Truth
 - **Canonical runtime config:** `configs/config.yaml`
@@ -27,7 +31,7 @@
 
 ### 5) Windows ↔ WSL2 Interop
 - `configs/config.yaml` may contain Windows-style drive paths (`<drive>:/...`); `load_configs()` normalizes these automatically when executed under WSL/Linux.
-- WSL2 audio services currently use JSON configs (`wsl2_audio/config.json`, `wsl2_audio/bridge_config.json`). These remain **subsystem-local**; core runtime code must not treat `~/goodq_audio/config.json` (or `\\wsl$` reads) as authoritative runtime configuration—those reads are diagnostics-only.
+- WSL2 audio services currently use JSON configs (`wsl2_audio/config.json`, `wsl2_audio/bridge_config.json`). These remain **subsystem-local**; core runtime code must not treat `~/goodq_audio/config.json` or direct WSL UNC-share reads as authoritative runtime configuration; those reads are diagnostics-only.
 
 ### 6) What’s Allowed (Runtime vs Tooling)
 - **Runtime code (API/CLI/watchers/services):** may call `load_configs()` at entry points; may read env vars; may read subsystem-local JSON only inside that subsystem.

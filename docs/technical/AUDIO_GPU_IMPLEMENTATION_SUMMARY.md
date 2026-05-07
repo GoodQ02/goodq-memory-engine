@@ -1,6 +1,15 @@
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: REFERENCE_ONLY -->
+<!-- DOC_CANONICAL_POINTER: docs/reference/WSL_AUDIO_RUNTIME.md -->
+<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
+
 # Audio Pipeline GPU Optimization - Implementation Summary
 
-> Role: Canonical implementation summary for audio pipeline GPU optimization (diarization + transcription). For configuration and environment setup, see `docs/GPU_SETUP.md` and `docs/GPU_OPTIMIZATION_GUIDE.md`.
+> Role: Historical implementation summary for audio pipeline GPU optimization
+> (diarization + transcription). For current configuration and environment
+> setup, see `docs/guides/gpu/GPU_SETUP.md`,
+> `docs/guides/gpu/GPU_OPTIMIZATION_GUIDE.md`, and
+> `docs/reference/WSL_AUDIO_RUNTIME.md`.
 
 ## 🎯 Objective
 

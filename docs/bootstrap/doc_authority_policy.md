@@ -2,7 +2,7 @@
 
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-02-12 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
 
 ## Purpose
 
@@ -25,6 +25,43 @@ Time-bound release notes, prior states, and session snapshots preserved for audi
 ### EXPERIMENTAL
 
 Drafts, analysis notes, exploratory docs, and temporary planning artifacts.
+
+## Durable Documentation Shape
+
+GoodQ documentation should prefer durable contract sheets over completion
+snapshots. A subsystem should normally have:
+
+1. one canonical contract or specification when it defines runtime behavior
+2. one operational guide or index when operators need commands or navigation
+3. historical notes only under `docs/archive/` or clearly marked
+   `HISTORICAL`/`REFERENCE_ONLY`
+
+Avoid creating new "final", "complete", "phase", or task-completion documents
+for ordinary fixes. Record small task outcomes in commit messages, release
+notes, status snapshots, or the relevant existing contract only when the
+runtime contract changes.
+
+If a document name overstates its authority, rename or rebadge it in a
+docs-only cleanup pass before treating it as current truth.
+
+## Folder Purpose Rules
+
+Use the existing folders as authority boundaries:
+
+- `docs/architecture/`: runtime contracts, cross-component boundaries, and
+  architecture maps
+- `docs/architecture/components/`: subsystem-specific architecture contracts
+- `docs/bootstrap/`: bootstrap, documentation governance, and installation
+  contract surfaces
+- `docs/reference/`: stable operator and API references
+- `docs/guides/`: task-oriented operational guides
+- `docs/systems/`: current system runbooks and daemon/service doctrine
+- `docs/technical/`: implementation notes and technical contracts; historical
+  items must be explicitly marked
+- `docs/testing/` and `docs/diagnostics/`: evidence, witness memos, and
+  targeted audits
+- `docs/releases/`: release notes and release-scoped status
+- `docs/archive/`: historical material only; never current runtime authority
 
 ## Badge Templates (HTML Comments)
 

@@ -1,3 +1,7 @@
+<!-- DOC_BADGE: OPERATIONAL -->
+<!-- DOC_STATUS: ACTIVE -->
+<!-- DOC_LAST_VERIFIED: 2026-03-20 -->
+
 # Error Handling & Recovery System
 
 **Status:** Operational with conditional Control Agent support  

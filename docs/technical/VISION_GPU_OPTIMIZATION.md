@@ -1,6 +1,15 @@
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: REFERENCE_ONLY -->
+<!-- DOC_CANONICAL_POINTER: docs/architecture/components/VISION_PIPELINE.md -->
+<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
+
 # Vision Stack GPU Optimization - Implementation Report
 
-> Role: Canonical implementation report for vision-specific GPU optimization. For overall GPU strategy, see `docs/GPU_OPTIMIZATION_GUIDE.md`; for archived measurements and historical context, see `docs/archive/reports/VISION_GPU_OPTIMIZATION_REPORT.md`.
+> Role: Historical implementation report for vision-specific GPU optimization.
+> For current vision architecture, see
+> `docs/architecture/components/VISION_PIPELINE.md`. For current GPU operator
+> guidance, see `docs/guides/gpu/GPU_SETUP.md` and
+> `docs/guides/gpu/GPU_OPTIMIZATION_GUIDE.md`.
 
 **Date:** 2025-11-12  
 **Status:** ✅ Ready for Testing

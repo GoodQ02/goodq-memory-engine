@@ -1,6 +1,13 @@
+<!-- DOC_BADGE: OPERATIONAL -->
+<!-- DOC_STATUS: GENERATED_SNAPSHOT -->
+<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
+
 # Environment Template Reconciliation
 
 Generated: 2026-02-18 (static reconciliation)
+
+This is a static reconciliation snapshot. Treat it as historical diagnostic
+evidence unless a current config/bootstrap contract restates the same claim.
 
 ## Baseline
 
@@ -121,4 +128,3 @@ Generated: 2026-02-18 (static reconciliation)
   - PyAnnote inheritance: `PYANNOTE_TOKEN` inherits canonical token when unset
   - Runtime fallback support remains for `PYANNOTE_AUDIO_AUTH`
   - Contract is documented in `.env.template`
-

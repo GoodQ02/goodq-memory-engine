@@ -1,6 +1,13 @@
+<!-- DOC_BADGE: OPERATIONAL -->
+<!-- DOC_STATUS: GENERATED_SNAPSHOT -->
+<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
+
 # SCRIPT_REGISTRY
 
 _Generated: 2026-02-15_
+
+This is a generated discovery snapshot, not runtime authority. Re-audit a
+script before using this file to justify execution, deletion, or promotion.
 
 ## Scope
 

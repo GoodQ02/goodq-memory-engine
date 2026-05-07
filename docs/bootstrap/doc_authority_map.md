@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: CURATED_AUTHORITY_INDEX -->
-<!-- DOC_LAST_VERIFIED: 2026-04-02 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
 
 # Documentation Authority Map
 
@@ -50,6 +50,16 @@ These documents define current runtime, architecture, identity, and operator tru
 - [SCENE_MANIFEST_SPECIFICATION.md](../SCENE_MANIFEST_SPECIFICATION.md)
 - [VISION_PIPELINE.md](../architecture/components/VISION_PIPELINE.md)
 - [LIB_COMPONENTS.md](../technical/LIB_COMPONENTS.md)
+- [CONFIG_LOADING_CONTRACT.md](../architecture/CONFIG_LOADING_CONTRACT.md)
+
+### Read Model, Restraint, And Sensitive Source Contracts
+
+- [EPISTEMIC_READ_MODEL.md](../architecture/EPISTEMIC_READ_MODEL.md)
+- [NON_ACTION_CONTRACT.md](../architecture/NON_ACTION_CONTRACT.md)
+- [VISUAL_PROJECTION_CONTRACT_v1.md](../architecture/VISUAL_PROJECTION_CONTRACT_v1.md)
+- [CANONICAL_SENSITIVE_EVENTS.md](../architecture/CANONICAL_SENSITIVE_EVENTS.md)
+- [VAULT_TOKEN_RESOLVER_CONTRACT.md](../architecture/VAULT_TOKEN_RESOLVER_CONTRACT.md)
+- [LLM_CLIENT_INJECTION_CONTRACT.md](../architecture/LLM_CLIENT_INJECTION_CONTRACT.md)
 
 ### Runtime Operator Authority
 
@@ -62,6 +72,7 @@ These documents define current runtime, architecture, identity, and operator tru
 
 ### Documentation Governance Authority
 
+- [INSTALL_BOOTSTRAP.md](./INSTALL_BOOTSTRAP.md)
 - [doc_authority_policy.md](./doc_authority_policy.md)
 - [doc_archive_plan.md](./doc_archive_plan.md)
 - [doc_governance_summary.md](./doc_governance_summary.md)

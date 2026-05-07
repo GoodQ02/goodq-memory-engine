@@ -1,3 +1,7 @@
+<!-- DOC_BADGE: OPERATIONAL -->
+<!-- DOC_STATUS: ACTIVE_POINTER -->
+<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
+
 # GoodQ4All Agent & Copilot Communications Index
 
 **Purpose:** Explain the archived agent/Copilot communication records and point agents back to the current restart truth surfaces.

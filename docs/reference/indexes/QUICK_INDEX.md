@@ -1,3 +1,7 @@
+<!-- DOC_BADGE: OPERATIONAL -->
+<!-- DOC_STATUS: ACTIVE -->
+<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
+
 # GoodQ4All Quickstart & Reference Index
 
 **Purpose:** Unified entrypoint for current quickstart, launch, API, and quick reference docs.

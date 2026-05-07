@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-05-01 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
 
 # GoodQ4All Documentation
 
@@ -78,6 +78,44 @@ Current operator-validated additions on the active line:
   [`docs/architecture/AUDIO_VECTOR_PROVENANCE_CONTRACT.md`](architecture/AUDIO_VECTOR_PROVENANCE_CONTRACT.md)
 - GPU capability matrix:
   [`docs/reference/GPU_CAPABILITY_MATRIX.md`](reference/GPU_CAPABILITY_MATRIX.md)
+
+## Documentation Organization
+
+Use this folder as a current-docs surface, not a pile of completion notes.
+GoodQ docs should converge toward one durable contract or specification per
+system, plus operational guides that point to those contracts.
+
+Authority and organization rules:
+
+- Documentation authority policy:
+  [`docs/bootstrap/doc_authority_policy.md`](bootstrap/doc_authority_policy.md)
+- Curated authority map:
+  [`docs/bootstrap/doc_authority_map.md`](bootstrap/doc_authority_map.md)
+- Archive plan:
+  [`docs/bootstrap/doc_archive_plan.md`](bootstrap/doc_archive_plan.md)
+
+Folder roles:
+
+- `architecture/`: runtime contracts, system maps, and cross-component
+  boundaries.
+- `architecture/components/`: subsystem-specific architecture contracts.
+- `bootstrap/`: install, bootstrap, offline bundle, and documentation
+  governance contracts.
+- `reference/`: stable API, dependency, platform, WSL, and operator reference
+  material.
+- `guides/`: task-oriented operator guides.
+- `systems/`: current system runbooks and daemon/service doctrine.
+- `technical/`: implementation notes and technical contracts; historical notes
+  must be marked.
+- `testing/` and `diagnostics/`: witness evidence, audits, and targeted
+  validation notes.
+- `releases/`: release-scoped notes.
+- `archive/`: historical material only; not current runtime authority.
+
+Avoid adding new "final", "complete", "phase", or task-summary documents for
+ordinary fixes. Prefer updating the existing contract when behavior changes,
+the release note when a phase closes, or a status snapshot when operator state
+changes.
 
 ## Operations
 

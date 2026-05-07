@@ -1,3 +1,7 @@
+<!-- DOC_BADGE: CANONICAL -->
+<!-- DOC_STATUS: AUTHORITATIVE -->
+<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
+
 # Visual Projection Contract (v1)
 
 **Status:** ✅ Contract (read-only; projection semantics only)  
@@ -241,4 +245,3 @@ Visual Projection v1 must not:
 4) **Comparative**
 - Bundle A and B are compared.
 - Unchanged scenes remain anchored; newly added evidence appears as an added presence on B with an explicit absence slot on A; removed evidence appears as a hole on B with the prior presence on A.
-

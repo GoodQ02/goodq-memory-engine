@@ -1,4 +1,15 @@
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: REFERENCE_ONLY -->
+<!-- DOC_CANONICAL_POINTER: docs/bootstrap/doc_authority_map.md -->
+<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
+
 GoodQ4All Authority Memo
+
+Historical note: this memo is preserved as a runtime-authority consolidation
+snapshot. It no longer outranks the current documentation authority map,
+architecture contracts, bootstrap contracts, or live persisted runtime truth
+surfaces.
+
 Status: Declarative; Zero-Change; Canonical
 Effective Date: Upon commit
 Scope: Runtime authority only (no architectural change)

@@ -1,3 +1,7 @@
+<!-- DOC_BADGE: CANONICAL -->
+<!-- DOC_STATUS: AUTHORITATIVE -->
+<!-- DOC_LAST_VERIFIED: 2026-04-01 -->
+
 # GoodQ4All Architecture Reference
 
 **Last Updated:** April 1, 2026  

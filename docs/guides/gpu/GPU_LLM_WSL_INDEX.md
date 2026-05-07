@@ -1,3 +1,7 @@
+<!-- DOC_BADGE: OPERATIONAL -->
+<!-- DOC_STATUS: ACTIVE -->
+<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
+
 # GoodQ4All GPU, LLM, and WSL2 Index
 
 **Purpose:** Single current entrypoint for GPU optimization, local LLM/vLLM
@@ -11,7 +15,11 @@ infrastructure, and optional WSL2 audio/operator docs.
 - `docs/guides/gpu/GPU_MANAGEMENT_GUIDE.md` – GPU management patterns.
 - `docs/guides/gpu/GPU_OPTIMIZATION_GUIDE.md` – System-wide GPU optimization.
 - `docs/guides/gpu/GPU_QUICK_START.md` – Day-to-day GPU operator quickstart.
-- `docs/technical/VISION_GPU_OPTIMIZATION.md` – Current vision GPU implementation reference.
+- `docs/architecture/components/VISION_PIPELINE.md` – Current vision architecture contract.
+
+Historical vision GPU implementation notes remain useful for background, but
+they do not override the current vision pipeline contract or live witness
+artifacts.
 
 ## Canonical LLM and vLLM Docs
 
@@ -19,12 +27,15 @@ infrastructure, and optional WSL2 audio/operator docs.
 - `docs/guides/llm/LLM_CLIENT_GUIDE.md` – Current client contract and usage.
 - `docs/guides/llm/VLLM_SYSTEMD_SETUP.md` – Advanced vLLM operator setup for WSL/systemd hosts.
 
-## Canonical WSL2 Audio Docs
+## Current WSL2 Audio Docs
 
-- `docs/guides/wsl2/START_HERE_WSL2.md` – Primary WSL2 entrypoint.
-- `docs/guides/llm/WSL2_AUDIO_SETUP.md` – Optional WSL2 audio setup.
-- `docs/guides/wsl2/WSL2_AUDIO_FEASIBILITY_ANALYSIS.md` – Feasibility and tradeoff analysis.
-- `docs/guides/wsl2/WSL2_BENCHMARKS.md` – WSL2 audio/GPU benchmark notes.
+- `docs/reference/WSL_AUDIO_RUNTIME.md` – Canonical WSL audio runtime and bootstrap lane doctrine.
+- `wsl2_audio/README.md` – Worker-local setup and runtime notes.
+- `docs/guides/wsl2/START_HERE_WSL2.md` – Redirect to current install/bootstrap entrypoints.
+
+Historical WSL2 setup, feasibility, and benchmark notes are useful background
+only. They do not override the current WSL audio runtime contract or bootstrap
+constraints.
 
 ## Related Watchdog Docs
 

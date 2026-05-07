@@ -1,6 +1,14 @@
+<!-- DOC_BADGE: OPERATIONAL -->
+<!-- DOC_STATUS: GENERATED_SNAPSHOT -->
+<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
+
 # Environment Variable Inventory
 
 Generated: 2026-02-18 (static scan)
+
+This is a static discovery snapshot, not the current environment contract.
+Re-run the relevant audit before using it for package, bootstrap, or runtime
+changes.
 
 Scan scope: `configs/`, `api/`, `steps/`, `lib/`, `scripts/`, `wsl2_audio/`, `cli/`, `agents/`, `LAUNCH_GOODQ.ps1`, `LAUNCH_GOODQ.bat`.
 

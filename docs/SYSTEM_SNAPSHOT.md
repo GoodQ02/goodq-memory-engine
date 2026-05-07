@@ -1,10 +1,10 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: GENERATED_SNAPSHOT -->
-<!-- DOC_LAST_VERIFIED: 2026-05-05 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
 
 # System Snapshot
 
-_Operational operator-state alignment refreshed: 2026-05-05._
+_Operational operator-state alignment refreshed: 2026-05-07._
 
 This is a bounded release-era system snapshot. It is useful for understanding
 the supported host/runtime baseline, but it is not a live witness monitor.
@@ -111,6 +111,12 @@ the supported host/runtime baseline, but it is not a live witness monitor.
     - `51` transcript/entity disagreement segments
 
 ## Current Operator State
+- Pause checkpoint, 2026-05-07:
+  - docs-clearance commit `103b17f` added `docs/reference/indexes/DOCS_FORENSICS_INDEX.md`
+  - active docs status markers are complete for Markdown/text docs under `docs/`
+  - historical WSL audio emotion sample output is archived at `docs/archive/diagnostics/wsl2_audio_emotion_sample_output.json`
+  - the next known work item is an incoming laptop bootstrap audit; do not restart broad docs cleanup before reading it
+  - remaining repo-root cleanup candidates are tracked in `docs/reference/indexes/DOCS_FORENSICS_INDEX.md` as watch items
 - Active read-only run surfaces:
   - `lib/run_index.py`
   - `lib/run_summary.py`

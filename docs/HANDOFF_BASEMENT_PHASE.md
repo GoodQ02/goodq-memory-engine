@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-05-01 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
 
 # Basement Phase Handoff (v1) — Current System State
 
@@ -9,10 +9,17 @@
 
 ---
 
-## Current Restart Checkpoint (2026-05-01)
+## Current Restart Checkpoint (2026-05-07)
 
 This is the practical handoff point for a brand-new Codex session.
 
+- Pause checkpoint:
+  - latest local docs-clearance commit: `103b17f` (`docs: add documentation forensics index`)
+  - documentation clearance is sealed enough to proceed later from `docs/reference/indexes/DOCS_FORENSICS_INDEX.md`
+  - all active Markdown/text docs under `docs/` carry explicit `DOC_STATUS` metadata
+  - `docs/archive/diagnostics/wsl2_audio_emotion_sample_output.json` is preserved historical WSL audio emotion-output evidence, not current runtime authority
+  - local `reports/control_recurrence/` artifacts remain workspace hygiene unless intentionally promoted
+  - next operator input expected: laptop bootstrap audit with two remaining items; analyze that before resuming project-root cleanup
 - Current local workspace head:
   - `main` / `origin/main` are the active source line; confirm the exact head with `git log -1 --oneline`
   - source includes the WSL audio runtime black-box diagnostics through `05ae539`

@@ -15,6 +15,15 @@
 
 The former active agent-communications and Copilot communications directories have been retired. Treat archived files as historical snapshots only. Canonical technical behavior is defined in the primary architecture, status, platform, WSL, and troubleshooting docs.
 
+## Current Pause Point
+
+As of 2026-05-07, the docs-clearance pass is sealed by commit `103b17f`
+(`docs: add documentation forensics index`). Use
+`docs/reference/indexes/DOCS_FORENSICS_INDEX.md` as the documentation rolodex
+before future cleanup. The next expected operator input is a laptop bootstrap
+audit with two remaining items; analyze that audit before continuing repo-root
+cleanup or lint work.
+
 ---
 
 ## Guidance-Oriented Agent Docs

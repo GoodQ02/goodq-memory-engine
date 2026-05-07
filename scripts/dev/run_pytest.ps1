@@ -1,4 +1,8 @@
+[CmdletBinding(PositionalBinding = $false)]
 param(
+    [ValidateSet("goodq_core")]
+    [string]$CondaEnv = "goodq_core",
+
     [Parameter(ValueFromRemainingArguments = $true)]
     [string[]]$PytestArgs
 )
@@ -10,7 +14,6 @@ $bindings = Join-Path $repoRoot "scripts\_lib\interpreter_bindings.ps1"
 . $bindings
 
 $condaExe = Get-GoodQCondaExe
-$condaEnv = Get-GoodQCondaEnv
 $localTemp = Join-Path $repoRoot "tmp\conda_run"
 New-Item -ItemType Directory -Force -Path $localTemp | Out-Null
 
@@ -22,7 +25,10 @@ try {
     $env:TEMP = $localTemp
     $env:TMP = $localTemp
 
-    $argsToPass = @("run", "--no-capture-output", "-n", $condaEnv, "python", "-m", "pytest")
+    Write-Host "[INFO] Running pytest through canonical Conda env: $CondaEnv"
+    Write-Host "[INFO] Repo-local TEMP/TMP: $localTemp"
+
+    $argsToPass = @("run", "--no-capture-output", "-n", $CondaEnv, "python", "-m", "pytest")
     if ($PytestArgs -and $PytestArgs.Count -gt 0) {
         $argsToPass += $PytestArgs
     } else {

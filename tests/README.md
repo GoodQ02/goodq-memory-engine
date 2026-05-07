@@ -16,29 +16,26 @@ The supported automated test suite is the `pytest` unit suite under `tests/unit`
 
 ### Unit Suite
 
-Use this for normal validation and CI parity:
+CI uses the canonical Python environment directly:
 
 ```powershell
 python -m pytest -q
 ```
 
-On Windows, when running tests through conda from an agent or long-lived shell, prefer the repo wrapper so conda uses repo-local temp files under `tmp/conda_run` instead of shared Windows TEMP:
+On Windows, local agents and long-lived shells should use the repo wrapper. It always runs through the canonical `goodq_core` Conda environment and scopes Conda temp files under `tmp/conda_run` instead of shared Windows TEMP:
 
 ```powershell
 .\scripts\dev\run_pytest.ps1
 ```
 
-Or run only the unit tree explicitly:
-
-```powershell
-python -m pytest tests/unit -q
-```
-
-Wrapper equivalent:
+To run only the unit tree locally:
 
 ```powershell
 .\scripts\dev\run_pytest.ps1 tests/unit -q
 ```
+
+Use direct `python -m pytest ...` only inside an already-bound canonical environment such as CI or an explicit `conda run -n goodq_core ...` command.
+
 
 ### Manual Integration Check
 

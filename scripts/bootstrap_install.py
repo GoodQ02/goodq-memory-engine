@@ -1283,8 +1283,27 @@ def _run_wsl_bash(
     )
 
 
-def _run_wsl_bash_interactive(wsl_ctx: WslAudioContext, script: str) -> subprocess.CompletedProcess[str]:
-    return _run(["wsl", "-d", wsl_ctx.distro, "--", "bash", "-lc", script], capture=False)
+def _run_wsl_bash_interactive(
+    wsl_ctx: WslAudioContext,
+    script: str,
+    *,
+    timeout_sec: int | None = None,
+) -> subprocess.CompletedProcess[str]:
+    try:
+        return subprocess.run(
+            ["wsl", "-d", wsl_ctx.distro, "--", "bash", "-lc", script],
+            capture_output=False,
+            text=True,
+            timeout=timeout_sec,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as exc:
+        return subprocess.CompletedProcess(
+            exc.cmd,
+            124,
+            stdout="",
+            stderr=f"WSL interactive command timed out after {timeout_sec}s",
+        )
 
 
 def _normalize_wsl_shell_asset(path: Path) -> bool:
@@ -1354,10 +1373,32 @@ def _wsl_interactive_sudo_preauth(wsl_ctx: WslAudioContext) -> tuple[bool, str]:
         return False, "stdin is not interactive; cannot show WSL sudo password prompt"
     _print("[INFO] WSL audio setup may ask for your Linux sudo password.")
     _print("[INFO] If WSL asks for sudo, type the password in this terminal and press Enter. Input will not echo.")
-    completed = _run_wsl_bash_interactive(wsl_ctx, "sudo -v")
+    completed = _run_wsl_bash_interactive(wsl_ctx, "sudo -v", timeout_sec=120)
     if completed.returncode == 0:
         return True, "sudo credentials cached"
     return False, _completed_output(completed) or "WSL sudo pre-authentication failed"
+
+
+def _wsl_sudo_ready_for_setup(wsl_ctx: WslAudioContext, *, assume_yes: bool) -> tuple[bool, str]:
+    sudo_ready, sudo_detail = _wsl_passwordless_sudo_ready(wsl_ctx)
+    if sudo_ready:
+        return True, sudo_detail
+    if assume_yes or not sys.stdin.isatty():
+        mode = "--yes mode" if assume_yes else "non-interactive stdin"
+        return False, f"{sudo_detail}; {mode} cannot prompt for WSL sudo password"
+    return _wsl_interactive_sudo_preauth(wsl_ctx)
+
+
+def _print_wsl_audio_setup_sudo_handoff(wsl_ctx: WslAudioContext, detail: str, workspace_detail: str) -> None:
+    _print(f"[WARN] WSL audio workspace is not ready: {workspace_detail}")
+    _print("[WARN] WSL audio runtime setup requires a Linux sudo password.")
+    _print("[INFO] WSL audio setup status: PENDING_SUDO")
+    if detail:
+        _print(f"[INFO] WSL sudo preflight detail: {detail}")
+    _print("[INFO] Complete this once inside WSL, then rerun bootstrap:")
+    _print(f"  wsl -d {wsl_ctx.distro}")
+    _print(f"  cd {wsl_ctx.workspace}")
+    _print("  bash ./setup_wsl2_audio.sh")
 
 
 def ensure_wsl_audio_ready(ctx: BootstrapContext, *, assume_yes: bool) -> bool:
@@ -1392,11 +1433,12 @@ def ensure_wsl_audio_ready(ctx: BootstrapContext, *, assume_yes: bool) -> bool:
     ready, detail = _probe_wsl_audio_workspace_ready(wsl_ctx)
     if not ready:
         _print("[INFO] Provisioning WSL audio runtime. Your Linux password may be requested by sudo.")
-        sudo_ready, sudo_detail = _wsl_interactive_sudo_preauth(wsl_ctx)
+        sudo_ready, sudo_detail = _wsl_sudo_ready_for_setup(wsl_ctx, assume_yes=assume_yes)
         if sudo_ready:
             _print(f"[OK] WSL sudo preflight: {sudo_detail}")
         else:
-            _print(f"[WARN] WSL sudo preflight did not complete: {sudo_detail}")
+            _print_wsl_audio_setup_sudo_handoff(wsl_ctx, sudo_detail, detail)
+            return False
         setup_script = (
             f"cd {_bash_quote(wsl_ctx.workspace)} && "
             "set -a && [ -f ./.goodq_env ] && source ./.goodq_env; set +a && "

@@ -210,6 +210,38 @@ def test_snapshot_reports_error_when_cache_layout_is_not_runtime_compatible(monk
     assert "cache layout incomplete" in result["error"]
 
 
+def test_snapshot_writes_main_ref_for_pinned_revision(monkeypatch, tmp_path: Path):
+    from scripts import bootstrap_models
+
+    pinned_revision = "84fd25912480287da0247647c3d2b4853cb3ee5d"
+
+    def fake_snapshot_download(**kwargs):
+        snapshot_dir = (
+            tmp_path
+            / "hub"
+            / "models--pyannote--speaker-diarization-3.1"
+            / "snapshots"
+            / pinned_revision
+        )
+        snapshot_dir.mkdir(parents=True)
+        (snapshot_dir / "config.yaml").write_text("pipeline: test\n", encoding="utf-8")
+        return str(snapshot_dir)
+
+    monkeypatch.setitem(sys.modules, "huggingface_hub", types.SimpleNamespace(snapshot_download=fake_snapshot_download))
+
+    result = bootstrap_models.snapshot(
+        "pyannote/speaker-diarization-3.1",
+        revision=pinned_revision,
+        models_root=tmp_path,
+        retries=1,
+        progress_label="1/1",
+    )
+
+    assert result["status"] == "ok"
+    ref_path = tmp_path / "hub" / "models--pyannote--speaker-diarization-3.1" / "refs" / "main"
+    assert ref_path.read_text(encoding="utf-8").strip() == pinned_revision
+
+
 def test_main_writes_incremental_progress_and_partial_report(monkeypatch, tmp_path: Path):
     from scripts import bootstrap_models
 

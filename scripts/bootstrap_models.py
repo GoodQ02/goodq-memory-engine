@@ -189,6 +189,23 @@ def _cache_snapshot_present(models_root: Path, repo_id: str) -> bool:
     return False
 
 
+def _normalize_main_ref_for_pinned_snapshot(
+    models_root: Path,
+    repo_id: str,
+    requested_revision: str | None,
+    resolved_dir: str,
+) -> None:
+    if not requested_revision:
+        return
+    resolved_path = Path(resolved_dir)
+    resolved_revision = resolved_path.name if resolved_path.parent.name == "snapshots" else requested_revision
+    if not resolved_revision:
+        return
+    refs_dir = _repo_cache_dir(models_root, repo_id) / "refs"
+    refs_dir.mkdir(parents=True, exist_ok=True)
+    (refs_dir / "main").write_text(f"{resolved_revision}\n", encoding="utf-8")
+
+
 def _build_report(
     *,
     models_root: Path,
@@ -285,6 +302,7 @@ def snapshot(
                     "error": f"cache layout incomplete for {repo_id} under {cache_dir}",
                     "attempts": str(attempt),
                 }
+            _normalize_main_ref_for_pinned_snapshot(target_models_root, repo_id, revision, resolved_dir)
             elapsed_sec = round(time.time() - started, 1)
             if progress_cb:
                 progress_cb(current_attempt=attempt, last_event="snapshot_ready")

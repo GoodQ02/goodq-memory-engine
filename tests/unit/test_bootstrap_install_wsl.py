@@ -447,7 +447,14 @@ def test_ensure_wsl_audio_ready_preauths_sudo_before_heartbeat_setup(monkeypatch
     probe_results = iter([(False, "diarization unavailable"), (True, "ready")])
     events: list[str] = []
 
+    class TtyStdin:
+        @staticmethod
+        def isatty():
+            return True
+
     def fake_run_wsl_bash(_wsl_ctx, script, **kwargs):
+        if script == "sudo -n true":
+            return subprocess.CompletedProcess(["wsl"], 1, "", "sudo: a password is required")
         if "setup_wsl2_audio.sh" in script:
             events.append(f"setup:{kwargs.get('heartbeat_label')}")
         if script == "test -d /run/systemd/system":
@@ -465,11 +472,54 @@ def test_ensure_wsl_audio_ready_preauths_sudo_before_heartbeat_setup(monkeypatch
     monkeypatch.setattr(bootstrap_install, "_probe_wsl_audio_workspace_ready", lambda *_args, **_kwargs: next(probe_results))
     monkeypatch.setattr(bootstrap_install, "_wsl_interactive_sudo_preauth", fake_preauth)
     monkeypatch.setattr(bootstrap_install, "resolve_models_cache_root", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(bootstrap_install.sys, "stdin", TtyStdin())
 
-    ready = bootstrap_install.ensure_wsl_audio_ready(ctx, assume_yes=True)
+    ready = bootstrap_install.ensure_wsl_audio_ready(ctx, assume_yes=False)
 
     assert ready is True
     assert events == ["preauth", "setup:WSL audio bootstrap"]
+
+
+def test_ensure_wsl_audio_ready_yes_mode_does_not_enter_interactive_sudo(monkeypatch, tmp_path: Path):
+    from scripts import bootstrap_install
+
+    ctx = _ctx(tmp_path)
+    wsl_ctx = bootstrap_install.WslAudioContext(
+        distro="Ubuntu-22.04",
+        user="goodq",
+        home="/home/goodq",
+        workspace="/home/goodq/goodq_audio",
+        windows_workspace=tmp_path / "wsl_stage",
+    )
+    messages: list[str] = []
+    seen_scripts: list[str] = []
+
+    def fake_run_wsl_bash(_wsl_ctx, script, **_kwargs):
+        seen_scripts.append(script)
+        if script == "sudo -n true":
+            return subprocess.CompletedProcess(["wsl"], 1, "", "sudo: a password is required")
+        return subprocess.CompletedProcess(["wsl"], 0, "", "")
+
+    def fail_interactive(_wsl_ctx):
+        raise AssertionError("interactive sudo preauth must not run in --yes mode")
+
+    monkeypatch.setattr(bootstrap_install, "_resolve_wsl_audio_context", lambda _ctx: wsl_ctx)
+    monkeypatch.setattr(bootstrap_install, "_run_wsl_bash", fake_run_wsl_bash)
+    monkeypatch.setattr(bootstrap_install, "_sync_wsl_audio_assets", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(bootstrap_install, "_write_wsl_audio_env_file", lambda *_args, **_kwargs: tmp_path / ".goodq_env")
+    monkeypatch.setattr(bootstrap_install, "_probe_wsl_audio_workspace_ready", lambda *_args, **_kwargs: (False, "diarization unavailable"))
+    monkeypatch.setattr(bootstrap_install, "_wsl_interactive_sudo_preauth", fail_interactive)
+    monkeypatch.setattr(bootstrap_install, "_print", messages.append)
+    monkeypatch.setattr(bootstrap_install, "resolve_models_cache_root", lambda *_args, **_kwargs: None)
+
+    ready = bootstrap_install.ensure_wsl_audio_ready(ctx, assume_yes=True)
+
+    assert ready is False
+    assert "sudo -n true" in seen_scripts
+    assert not any("setup_wsl2_audio.sh" in script for script in seen_scripts)
+    joined = "\n".join(messages)
+    assert "PENDING_SUDO" in joined
+    assert "diarization unavailable" in joined
 
 
 def test_wsl_interactive_sudo_preauth_uses_interactive_runner(monkeypatch):
@@ -488,10 +538,12 @@ def test_wsl_interactive_sudo_preauth_uses_interactive_runner(monkeypatch):
         windows_workspace=Path("wsl_workspace_placeholder"),
     )
     seen_scripts: list[str] = []
+    seen_timeouts: list[int | None] = []
     messages: list[str] = []
 
-    def fake_interactive(_wsl_ctx, script):
+    def fake_interactive(_wsl_ctx, script, **kwargs):
         seen_scripts.append(script)
+        seen_timeouts.append(kwargs.get("timeout_sec"))
         return subprocess.CompletedProcess(["wsl"], 0, "", "")
 
     monkeypatch.setattr(bootstrap_install.sys, "stdin", TtyStdin())
@@ -503,4 +555,5 @@ def test_wsl_interactive_sudo_preauth_uses_interactive_runner(monkeypatch):
     assert ready is True
     assert detail == "sudo credentials cached"
     assert seen_scripts == ["sudo -v"]
+    assert seen_timeouts == [120]
     assert "If WSL asks for sudo" in "\n".join(messages)

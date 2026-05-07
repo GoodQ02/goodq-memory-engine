@@ -372,3 +372,135 @@ def test_probe_wsl_audio_workspace_ready_requires_abi(monkeypatch):
 
     assert ready is False
     assert "torchvision ABI unavailable" in detail
+
+
+def test_probe_wsl_audio_workspace_ready_requires_diarization(monkeypatch):
+    from scripts import bootstrap_install
+
+    monkeypatch.setattr(
+        bootstrap_install,
+        "probe_wsl_audio_runtime",
+        lambda *_args, **_kwargs: {
+            "runtime_ready": True,
+            "abi_ready": True,
+            "diarization_ready": False,
+            "detail": "transcription runtime ready; process_audio import ready; diarization unavailable",
+            "diarization_detail": "Pipeline.from_pretrained() got an unexpected keyword argument 'token'",
+        },
+    )
+
+    ready, detail = bootstrap_install._probe_wsl_audio_workspace_ready(
+        bootstrap_install.WslAudioContext(
+            distro="Ubuntu-22.04",
+            user="goodq",
+            home="/home/goodq",
+            workspace="/home/goodq/goodq_audio",
+            windows_workspace=Path("wsl_workspace_placeholder"),
+        )
+    )
+
+    assert ready is False
+    assert "diarization unavailable" in detail
+
+
+def test_probe_wsl_audio_workspace_ready_allows_missing_diarization_token(monkeypatch):
+    from scripts import bootstrap_install
+
+    monkeypatch.setattr(
+        bootstrap_install,
+        "probe_wsl_audio_runtime",
+        lambda *_args, **_kwargs: {
+            "runtime_ready": True,
+            "abi_ready": True,
+            "diarization_ready": False,
+            "detail": "transcription runtime ready; process_audio import ready; diarization unavailable",
+            "diarization_detail": "pyannote importable but no HuggingFace token available",
+        },
+    )
+
+    ready, detail = bootstrap_install._probe_wsl_audio_workspace_ready(
+        bootstrap_install.WslAudioContext(
+            distro="Ubuntu-22.04",
+            user="goodq",
+            home="/home/goodq",
+            workspace="/home/goodq/goodq_audio",
+            windows_workspace=Path("wsl_workspace_placeholder"),
+        )
+    )
+
+    assert ready is True
+    assert "diarization unavailable" in detail
+
+
+def test_ensure_wsl_audio_ready_preauths_sudo_before_heartbeat_setup(monkeypatch, tmp_path: Path):
+    from scripts import bootstrap_install
+
+    ctx = _ctx(tmp_path)
+    wsl_ctx = bootstrap_install.WslAudioContext(
+        distro="Ubuntu-22.04",
+        user="goodq",
+        home="/home/goodq",
+        workspace="/home/goodq/goodq_audio",
+        windows_workspace=tmp_path / "wsl_stage",
+    )
+
+    probe_results = iter([(False, "diarization unavailable"), (True, "ready")])
+    events: list[str] = []
+
+    def fake_run_wsl_bash(_wsl_ctx, script, **kwargs):
+        if "setup_wsl2_audio.sh" in script:
+            events.append(f"setup:{kwargs.get('heartbeat_label')}")
+        if script == "test -d /run/systemd/system":
+            return subprocess.CompletedProcess(["wsl"], 1, "", "")
+        return subprocess.CompletedProcess(["wsl"], 0, "", "")
+
+    def fake_preauth(_wsl_ctx):
+        events.append("preauth")
+        return True, "sudo credentials cached"
+
+    monkeypatch.setattr(bootstrap_install, "_resolve_wsl_audio_context", lambda _ctx: wsl_ctx)
+    monkeypatch.setattr(bootstrap_install, "_run_wsl_bash", fake_run_wsl_bash)
+    monkeypatch.setattr(bootstrap_install, "_sync_wsl_audio_assets", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(bootstrap_install, "_write_wsl_audio_env_file", lambda *_args, **_kwargs: tmp_path / ".goodq_env")
+    monkeypatch.setattr(bootstrap_install, "_probe_wsl_audio_workspace_ready", lambda *_args, **_kwargs: next(probe_results))
+    monkeypatch.setattr(bootstrap_install, "_wsl_interactive_sudo_preauth", fake_preauth)
+    monkeypatch.setattr(bootstrap_install, "resolve_models_cache_root", lambda *_args, **_kwargs: None)
+
+    ready = bootstrap_install.ensure_wsl_audio_ready(ctx, assume_yes=True)
+
+    assert ready is True
+    assert events == ["preauth", "setup:WSL audio bootstrap"]
+
+
+def test_wsl_interactive_sudo_preauth_uses_interactive_runner(monkeypatch):
+    from scripts import bootstrap_install
+
+    class TtyStdin:
+        @staticmethod
+        def isatty():
+            return True
+
+    wsl_ctx = bootstrap_install.WslAudioContext(
+        distro="Ubuntu-22.04",
+        user="goodq",
+        home="/home/goodq",
+        workspace="/home/goodq/goodq_audio",
+        windows_workspace=Path("wsl_workspace_placeholder"),
+    )
+    seen_scripts: list[str] = []
+    messages: list[str] = []
+
+    def fake_interactive(_wsl_ctx, script):
+        seen_scripts.append(script)
+        return subprocess.CompletedProcess(["wsl"], 0, "", "")
+
+    monkeypatch.setattr(bootstrap_install.sys, "stdin", TtyStdin())
+    monkeypatch.setattr(bootstrap_install, "_run_wsl_bash_interactive", fake_interactive)
+    monkeypatch.setattr(bootstrap_install, "_print", messages.append)
+
+    ready, detail = bootstrap_install._wsl_interactive_sudo_preauth(wsl_ctx)
+
+    assert ready is True
+    assert detail == "sudo credentials cached"
+    assert seen_scripts == ["sudo -v"]
+    assert "If WSL asks for sudo" in "\n".join(messages)

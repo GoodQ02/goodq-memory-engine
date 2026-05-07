@@ -1283,6 +1283,10 @@ def _run_wsl_bash(
     )
 
 
+def _run_wsl_bash_interactive(wsl_ctx: WslAudioContext, script: str) -> subprocess.CompletedProcess[str]:
+    return _run(["wsl", "-d", wsl_ctx.distro, "--", "bash", "-lc", script], capture=False)
+
+
 def _normalize_wsl_shell_asset(path: Path) -> bool:
     if path.suffix.lower() != ".sh" or not path.exists():
         return False
@@ -1310,10 +1314,25 @@ def _sync_wsl_audio_assets(ctx: BootstrapContext, wsl_ctx: WslAudioContext) -> N
     _run_wsl_bash(wsl_ctx, f"chmod +x {chmod_targets}")
 
 
+def _diarization_gap_requires_wsl_repair(probe: dict[str, object]) -> bool:
+    if bool(probe.get("diarization_ready")):
+        return False
+    detail = str(probe.get("diarization_detail") or probe.get("detail") or "").lower()
+    if "no huggingface token available" in detail:
+        return False
+    if "offline diarization cache is incomplete" in detail:
+        return False
+    return True
+
+
 def _probe_wsl_audio_workspace_ready(wsl_ctx: WslAudioContext) -> tuple[bool, str]:
     probe = probe_wsl_audio_runtime(wsl_ctx.distro, wsl_ctx.workspace)
     detail = str(probe.get("detail") or "WSL audio workspace probe failed")
-    if bool(probe.get("runtime_ready")) and bool(probe.get("abi_ready")):
+    if (
+        bool(probe.get("runtime_ready"))
+        and bool(probe.get("abi_ready"))
+        and not _diarization_gap_requires_wsl_repair(probe)
+    ):
         return True, detail
     return False, detail
 
@@ -1328,6 +1347,17 @@ def _wsl_passwordless_sudo_ready(wsl_ctx: WslAudioContext) -> tuple[bool, str]:
     if completed.returncode == 0:
         return True, "passwordless sudo available"
     return False, _completed_output(completed) or "sudo password required"
+
+
+def _wsl_interactive_sudo_preauth(wsl_ctx: WslAudioContext) -> tuple[bool, str]:
+    if not sys.stdin.isatty():
+        return False, "stdin is not interactive; cannot show WSL sudo password prompt"
+    _print("[INFO] WSL audio setup may ask for your Linux sudo password.")
+    _print("[INFO] If WSL asks for sudo, type the password in this terminal and press Enter. Input will not echo.")
+    completed = _run_wsl_bash_interactive(wsl_ctx, "sudo -v")
+    if completed.returncode == 0:
+        return True, "sudo credentials cached"
+    return False, _completed_output(completed) or "WSL sudo pre-authentication failed"
 
 
 def ensure_wsl_audio_ready(ctx: BootstrapContext, *, assume_yes: bool) -> bool:
@@ -1362,6 +1392,11 @@ def ensure_wsl_audio_ready(ctx: BootstrapContext, *, assume_yes: bool) -> bool:
     ready, detail = _probe_wsl_audio_workspace_ready(wsl_ctx)
     if not ready:
         _print("[INFO] Provisioning WSL audio runtime. Your Linux password may be requested by sudo.")
+        sudo_ready, sudo_detail = _wsl_interactive_sudo_preauth(wsl_ctx)
+        if sudo_ready:
+            _print(f"[OK] WSL sudo preflight: {sudo_detail}")
+        else:
+            _print(f"[WARN] WSL sudo preflight did not complete: {sudo_detail}")
         setup_script = (
             f"cd {_bash_quote(wsl_ctx.workspace)} && "
             "set -a && [ -f ./.goodq_env ] && source ./.goodq_env; set +a && "

@@ -1,3 +1,8 @@
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: REFERENCE_ONLY -->
+<!-- DOC_CANONICAL_POINTER: docs/technical/MODEL_LOCKDOWN.md -->
+<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
+
 # Model Lockdown Implementation Summary
 
 **Date**: October 6, 2025  

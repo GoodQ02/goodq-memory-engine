@@ -91,6 +91,8 @@ Authority and organization rules:
   [`docs/bootstrap/doc_authority_policy.md`](bootstrap/doc_authority_policy.md)
 - Curated authority map:
   [`docs/bootstrap/doc_authority_map.md`](bootstrap/doc_authority_map.md)
+- Docs forensics index:
+  [`docs/reference/indexes/DOCS_FORENSICS_INDEX.md`](reference/indexes/DOCS_FORENSICS_INDEX.md)
 - Archive plan:
   [`docs/bootstrap/doc_archive_plan.md`](bootstrap/doc_archive_plan.md)
 

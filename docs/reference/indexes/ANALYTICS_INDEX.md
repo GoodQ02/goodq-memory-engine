@@ -1,3 +1,7 @@
+<!-- DOC_BADGE: OPERATIONAL -->
+<!-- DOC_STATUS: ACTIVE_POINTER -->
+<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
+
 # GoodQ4All Analytics Index
 
 **Purpose:** Central entrypoint for analytics-related documentation and tools. Use this to navigate the secondary analytics/reporting stack, not the canonical runtime authority.

@@ -1,3 +1,8 @@
+<!-- DOC_BADGE: OPERATIONAL -->
+<!-- DOC_STATUS: REFERENCE_ONLY -->
+<!-- DOC_CANONICAL_POINTER: docs/systems/WATCHDOG_SYSTEM.md -->
+<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
+
 # Watchdog System - Development Changelog
 
 > Role: Canonical development history for the Watchdog system. Use this file to understand when features were introduced or changed. For current behavior, see `docs/guides/watchdog/WATCHDOG_GUIDE.md` and `docs/architecture/diagrams/watchdog_flow.md`.

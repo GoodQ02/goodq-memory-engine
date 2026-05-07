@@ -1,3 +1,8 @@
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: REFERENCE_ONLY -->
+<!-- DOC_CANONICAL_POINTER: docs/reference/GPU_CAPABILITY_MATRIX.md -->
+<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
+
 # Phase 1 GPU Implementation - Production Test Results
 
 ## Test Date: 2025-11-11

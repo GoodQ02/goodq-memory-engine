@@ -12,6 +12,8 @@ This older documentation index path is kept to preserve incoming links.
   [`docs/README.md`](../../README.md)
 - Quick reference index:
   [`docs/reference/indexes/QUICK_INDEX.md`](QUICK_INDEX.md)
+- Docs forensics index:
+  [`docs/reference/indexes/DOCS_FORENSICS_INDEX.md`](DOCS_FORENSICS_INDEX.md)
 - API reference:
   [`docs/reference/API.md`](../API.md)
 - Reference contracts:

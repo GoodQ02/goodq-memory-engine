@@ -1,3 +1,7 @@
+<!-- DOC_BADGE: OPERATIONAL -->
+<!-- DOC_STATUS: ACTIVE_POINTER -->
+<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
+
 # GoodQ4All Code Cleanup Index
 
 **Purpose:** Maintain a truthful map of the remaining manual-review utility surface after the large archive and quarantine passes.

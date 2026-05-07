@@ -1,3 +1,8 @@
+<!-- DOC_BADGE: OPERATIONAL -->
+<!-- DOC_STATUS: ACTIVE_POINTER -->
+<!-- DOC_CANONICAL_POINTER: docs/architecture/INGEST_ORCHESTRATION_CONTRACT.md -->
+<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
+
 # Pipelines Architecture
 
 **Status:** Active (Compatibility Reference)  

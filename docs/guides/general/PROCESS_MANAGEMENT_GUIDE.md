@@ -1,3 +1,8 @@
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: REFERENCE_ONLY -->
+<!-- DOC_CANONICAL_POINTER: docs/guides/general/LAUNCH_INSTRUCTIONS.md -->
+<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
+
 # GoodQ4All Process Management System - Historical Note
 > Historical note — the old `process_manager.py` stack was retired from the tracked surface on 2026-03-14 because it depended on deleted legacy launchers (`api_server.py`, `scripts/watchdog_ingest.py`, and `analytics_dashboard.py`).
 

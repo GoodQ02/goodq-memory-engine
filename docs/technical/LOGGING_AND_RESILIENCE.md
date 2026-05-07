@@ -1,3 +1,8 @@
+<!-- DOC_BADGE: OPERATIONAL -->
+<!-- DOC_STATUS: REFERENCE_ONLY -->
+<!-- DOC_CANONICAL_POINTER: docs/systems/WATCHDOG_SYSTEM.md -->
+<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
+
 # Logging and Resilience Architecture
 
 **Last Updated**: December 15, 2025  

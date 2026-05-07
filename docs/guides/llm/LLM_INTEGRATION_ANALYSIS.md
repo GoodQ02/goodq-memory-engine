@@ -1,3 +1,8 @@
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: REFERENCE_ONLY -->
+<!-- DOC_CANONICAL_POINTER: docs/guides/llm/LLM_INFRASTRUCTURE.md -->
+<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
+
 # 🤖 LLM Integration Status & Action Plan
 **Analysis Date:** 2025-11-08  
 **Status:** CRITICAL - LLMs Available But NOT Fully Integrated in Pipeline
@@ -514,4 +519,3 @@ The infrastructure exists, LM Studio is online with capable models, but **zero L
 ---
 
 **Let's proceed with Phase 1 immediately: Enabling LLM scene summarization.**
-

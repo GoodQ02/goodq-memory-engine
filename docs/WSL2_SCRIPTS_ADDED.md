@@ -66,7 +66,8 @@ Now they're preserved in the repository at:
    - Whisper, Pyannote, Silero VAD, Wav2Vec2
    - Not bootstrap-authoritative until regenerated from a validated worker
 
-2. **sample_output.json** - Example result.json structure
+2. **sample_output.json** - Example result.json structure; preserved as
+   `docs/archive/diagnostics/wsl2_audio_emotion_sample_output.json`
    - Transcription format
    - Diarization segments
    - Emotion classifications

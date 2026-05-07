@@ -1,3 +1,8 @@
+<!-- DOC_BADGE: OPERATIONAL -->
+<!-- DOC_STATUS: REFERENCE_ONLY -->
+<!-- DOC_CANONICAL_POINTER: docs/bootstrap/INSTALL_BOOTSTRAP.md -->
+<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
+
 # Secrets Env Migration (One-Time)
 
 This repo now reads runtime credentials from `.env.local` instead of tracked files.

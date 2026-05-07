@@ -92,6 +92,13 @@ Forbidden:
 - [x] 2026-05-07 - Reclassified older vision GPU implementation notes as
   historical/reference material and pointed current GPU navigation at the
   active vision pipeline contract.
+- [x] 2026-05-07 - Classified the remaining active unlabeled docs and added
+  explicit status metadata to every active Markdown/text document under
+  `docs/`.
+- [x] 2026-05-07 - Preserved the WSL audio sample output as an archived
+  diagnostic relic instead of deleting it.
+- [x] 2026-05-07 - Added `docs/reference/indexes/DOCS_FORENSICS_INDEX.md` as the
+  agent/operator lookup surface for future docs cleanup and hidden-intel audits.
 
 ## Surprises & Discoveries
 
@@ -127,6 +134,12 @@ Forbidden:
   Evidence: untracked recurrence artifacts remain under
   `reports/control_recurrence/`, and this ExecPlan is the only untracked docs
   file created by the audit.
+
+- Observation: The docs folder now has explicit status metadata on every active
+  Markdown/text document.
+  Evidence: post-cleanup scan found zero active Markdown/text docs without
+  `DOC_STATUS`; the only remaining active-doc non-metadata relic was moved under
+  `docs/archive/diagnostics/`.
 
 ## Decision Log
 

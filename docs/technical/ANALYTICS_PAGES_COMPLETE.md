@@ -1,3 +1,8 @@
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: REFERENCE_ONLY -->
+<!-- DOC_CANONICAL_POINTER: docs/reference/indexes/ANALYTICS_INDEX.md -->
+<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
+
 # Analytics Pages - Phase Complete ✓
 
 > Historical implementation summary for the analytics pages and `/api/analytics/*` endpoints as of Phase 7. The analytics capability remains live through scripts and reporting workflows, but the older `/api/analytics/*` HTTP endpoints are retired from the active runtime surface. For current usage, see `docs/ANALYTICS_QUICK_REFERENCE.md` and `docs/ANALYTICS_INDEX.md`.

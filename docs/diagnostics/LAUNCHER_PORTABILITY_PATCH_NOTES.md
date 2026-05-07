@@ -1,3 +1,7 @@
+<!-- DOC_BADGE: OPERATIONAL -->
+<!-- DOC_STATUS: OPERATOR_NOTE -->
+<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
+
 # Launcher Portability Patch Notes
 
 Date: 2026-02-18

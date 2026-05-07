@@ -1,3 +1,7 @@
+<!-- DOC_BADGE: OPERATIONAL -->
+<!-- DOC_STATUS: ACTIVE_GUIDE -->
+<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
+
 # GoodQ Watchdog - Quick Reference Card
 
 > Role: Quick command and operations reference for the Watchdog system. For full explanations, edge cases, and troubleshooting, use `docs/guides/watchdog/WATCHDOG_GUIDE.md` and `docs/guides/watchdog/WATCHDOG_INDEX.md`.

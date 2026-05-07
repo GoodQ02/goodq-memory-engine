@@ -83,6 +83,7 @@ These docs are safe discovery/index surfaces for humans and agents, but they do 
 
 - [SCRIPT_REGISTRY.md](./SCRIPT_REGISTRY.md)
 - [QUICK_INDEX.md](../reference/indexes/QUICK_INDEX.md)
+- [DOCS_FORENSICS_INDEX.md](../reference/indexes/DOCS_FORENSICS_INDEX.md)
 - [AGENT_COMMS_INDEX.md](../reference/indexes/AGENT_COMMS_INDEX.md)
 - [REPO_GROUNDED_CLEANUP_CHECKLIST.md](./REPO_GROUNDED_CLEANUP_CHECKLIST.md)
 

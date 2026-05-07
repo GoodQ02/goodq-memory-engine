@@ -1,3 +1,8 @@
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: REFERENCE_ONLY -->
+<!-- DOC_CANONICAL_POINTER: docs/reference/GPU_CAPABILITY_MATRIX.md -->
+<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
+
 # GPU Isolation Strategy for GoodQ4All Pipeline
 
 ## Current Hardware Status

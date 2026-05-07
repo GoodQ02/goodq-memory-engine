@@ -1,3 +1,8 @@
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: REFERENCE_ONLY -->
+<!-- DOC_CANONICAL_POINTER: docs/guides/gpu/GPU_SETUP.md -->
+<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
+
 # GPU Resource Management - Phase 1 Complete
 
 ## Overview

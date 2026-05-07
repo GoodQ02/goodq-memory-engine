@@ -1,5 +1,10 @@
 # GoodQ4All v1.4.0 - WSL2 GPU Acceleration Benchmarks
 
+> Historical benchmark note: this page records a 2025 benchmark snapshot. It is
+> not the current WSL audio bootstrap target or package recommendation. Current
+> setup truth lives in `docs/reference/WSL_AUDIO_RUNTIME.md` and
+> `wsl2_audio/requirements-bootstrap-constraints.txt`.
+
 **Date**: 2025-11-15  
 **System**: Windows 11 + WSL2 Ubuntu  
 **GPU**: NVIDIA GeForce RTX 4070 Ti SUPER (16GB VRAM)  
@@ -163,7 +168,8 @@ if bridge.check_status():
 ## Credits
 
 - **Architecture**: Hybrid Windows/WSL2 design
-- **GPU Acceleration**: PyTorch 2.9.1 + CUDA 12.8
+- **GPU Acceleration**: Historical benchmark lane; not the current bootstrap
+  target
 - **Models**: OpenAI Whisper, PyAnnote.audio
 - **Coordination**: Two-agent strategy (Windows + WSL Copilot)
 

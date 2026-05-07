@@ -14,14 +14,18 @@ The configured expected / bootstrap-target project lane is the conservative WSL 
 - **Bootstrap-target WSL audio torch lane**: `torch==2.5.1+cu121`
 - **Bootstrap-target WSL audio torchvision lane**: `torchvision==0.20.1+cu121`
 - **Bootstrap-target WSL audio torchaudio lane**: `torchaudio==2.5.1+cu121`
+- **Bootstrap-target WSL diarization lane**: `pyannote.audio==3.3.2`
+  paired with `huggingface-hub==0.35.3`
 - **Bootstrap constraints**: `wsl2_audio/requirements-bootstrap-constraints.txt`
 - **Status rule**: run the diagnostics below on the target machine before
   treating the local WSL audio worker as ready
 
 `wsl2_audio/requirements-locked.txt` may still contain a historical package
 snapshot and is not the bootstrap-authoritative WSL audio torch lane until it is
-regenerated from a validated worker. The active sourced worker may also differ
-from the bootstrap target; trust the runtime recorder for observed truth.
+regenerated from a validated worker. It also must not override the PyAnnote /
+Hugging Face Hub compatibility pair in the bootstrap constraints. The active
+sourced worker may also differ from the bootstrap target; trust the runtime
+recorder for observed truth.
 
 ## Quick Start
 

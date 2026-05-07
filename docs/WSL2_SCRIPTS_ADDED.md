@@ -1,4 +1,9 @@
-# 🎉 WSL2 Files Added - Repository Complete!
+# WSL2 Files Added - Historical Import Note
+
+> Historical note: this document records a 2025 import of WSL2 audio files into
+> the repository. It is not the current bootstrap authority. For current WSL
+> audio setup and package truth, use `docs/reference/WSL_AUDIO_RUNTIME.md` and
+> `wsl2_audio/requirements-bootstrap-constraints.txt`.
 
 **Date:** December 15, 2025 01:26 UTC  
 **Repository:** https://github.com/JoesDomingo/Goodq4all  
@@ -35,7 +40,8 @@ Now they're preserved in the repository at:
 
 ### 📚 Documentation (8 files)
 
-1. **CUDA_SETUP.md** - Complete CUDA 12.8 installation guide
+1. **CUDA_SETUP.md** - Historical CUDA setup guide; current lane doctrine lives
+   in `docs/reference/WSL_AUDIO_RUNTIME.md`
 2. **HF_CLI_LOGIN_GUIDE.md** - HuggingFace CLI authentication
 3. **HF_TOKEN_SETUP.md** - Token configuration walkthrough
 4. **HF_TOKEN_SETUP_COMPLETE.md** - Setup completion verification
@@ -51,9 +57,9 @@ Now they're preserved in the repository at:
 
 ### 📄 Reference Files (4 files)
 
-1. **requirements-locked.txt** - Locked Python dependencies
+1. **requirements-locked.txt** - Historical package snapshot
    - Whisper, Pyannote, Silero VAD, Wav2Vec2
-   - Exact versions for reproducibility
+   - Not bootstrap-authoritative until regenerated from a validated worker
 
 2. **sample_output.json** - Example result.json structure
    - Transcription format
@@ -75,7 +81,8 @@ Now they're preserved in the repository at:
 
 ### ✅ Reproducibility
 - Complete WSL2 setup now documented
-- Dependencies locked (requirements-locked.txt)
+- Dependencies preserved as historical import data; active bootstrap uses
+  `wsl2_audio/requirements-bootstrap-constraints.txt`
 - Setup scripts preserved
 
 ### ✅ Troubleshooting

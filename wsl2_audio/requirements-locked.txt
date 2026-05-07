@@ -1,3 +1,7 @@
+# Historical package snapshot only.
+# Current bootstrap authority: wsl2_audio/requirements-bootstrap-constraints.txt
+# Do not use this file to install or repair the active WSL audio worker until it
+# is regenerated from a validated runtime lane.
 accelerate==1.12.0
 aiohappyeyeballs==2.6.1
 aiohttp==3.13.2

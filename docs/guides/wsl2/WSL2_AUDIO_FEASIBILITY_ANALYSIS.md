@@ -1,5 +1,11 @@
 # WSL2 Audio Processing Offload - Feasibility Analysis
 
+> Historical feasibility note: this 2025 analysis is not the current WSL audio
+> setup guide. Do not run the unpinned package commands below for current
+> installs. Use `wsl2_audio/README.md`, `docs/reference/WSL_AUDIO_RUNTIME.md`,
+> and `wsl2_audio/requirements-bootstrap-constraints.txt` for the active
+> bootstrap contract.
+
 ## Current Status Check (2025-11-13)
 
 ### ✅ WSL2 Infrastructure Ready
@@ -100,12 +106,8 @@ python3 -c "import torch; print('CUDA:', torch.cuda.is_available())"
 python3 -m venv ~/goodq_audio_wsl
 source ~/goodq_audio_wsl/bin/activate
 
-# Install audio processing tools
-pip install faster-whisper
-pip install pyannote.audio
-pip install torch-audiomentations
-pip install silero-vad
-pip install soundfile librosa
+# Install audio processing tools through the current repo constraints.
+# Do not install unpinned pyannote/torch packages from this historical note.
 ```
 
 ### Phase 4: Bridge Layer (60 min)

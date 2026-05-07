@@ -242,7 +242,12 @@ the supported host/runtime baseline, but it is not a live witness monitor.
   - local episode-reference eval now uses curated IMDb-backed anchor artifacts under `reports/reference_anchors/seinfeld/episodes/` for audit only; they score witness output without overriding runtime scene truth
   - proving-witness local eval improved to `6/6` core beats and `9.0/9.0` salience
   - local forensic reference: `docs/diagnostics/MEMORY_ARBITRATION_FORENSIC_AUDIT_03x10_2026-04-12.md`
-  - the `GOOD-SPEED-32` WSL audio bootstrap drift fix is now shipped on `main`; remaining follow-up is laptop-side confirmation of the repaired installer path.
+  - the `GOOD-SPEED-32` WSL audio bootstrap drift fixes are now shipped on
+    `main`: current source pins the WSL bootstrap lane to
+    `pyannote.audio==3.3.2` plus `huggingface-hub==0.35.3`, includes
+    `facebook/wav2vec2-base-960h` in the authoritative bootstrap model cache
+    set, and treats `wsl2_audio/requirements-locked.txt` as historical until
+    regenerated from a validated worker.
   - post-release projection smoke: `reports/fresh_ingest_runs/20260419_191136_season5_projection_smoke/`
     - `05x01` and `05x02` both passed on fresh Season 5 material
     - speaker continuity now persists end to end through `scene_ingest_results.json`, `scene_manifest.json`, and `temporal_index.json`

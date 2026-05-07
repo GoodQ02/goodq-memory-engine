@@ -1,5 +1,10 @@
 # WSL2 Audio Processing - Comprehensive Test Results
 
+> Historical test snapshot: this file records a prior WSL audio environment and
+> is not current bootstrap authority. For current package and readiness truth,
+> use `docs/reference/WSL_AUDIO_RUNTIME.md` and
+> `wsl2_audio/requirements-bootstrap-constraints.txt`.
+
 **Test Date:** December 12, 2024  
 **Status:** ✅ ALL TESTS PASSED - SYSTEM FULLY OPERATIONAL
 

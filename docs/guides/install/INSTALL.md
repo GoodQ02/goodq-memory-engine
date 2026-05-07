@@ -20,6 +20,12 @@ pipeline from the pinned stable recipes under `envs/locks/`, writes local-only
 overrides when missing, performs lightweight verification, and launches the
 canonical launcher surface.
 
+When `GPU_ENHANCED` / WSL audio is enabled, the bootstrap path stages the WSL
+audio constraints from `wsl2_audio/requirements-bootstrap-constraints.txt`.
+Do not repair WSL audio with unpinned package upgrades; use the bootstrap/setup
+path so the `pyannote.audio==3.3.2` / `huggingface-hub==0.35.3` pair remains
+intact.
+
 ## Performance Profiles
 
 GoodQ4All supports three profile semantics:

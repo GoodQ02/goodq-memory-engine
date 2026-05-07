@@ -81,7 +81,9 @@ This will:
   - `torch==2.5.1+cu121`
   - `torchvision==0.20.1+cu121`
   - `torchaudio==2.5.1+cu121`
-- Install faster-whisper, pyannote.audio, Silero VAD
+- Install faster-whisper, `pyannote.audio==3.3.2`,
+  `huggingface-hub==0.35.3`, Silero VAD, and related audio packages through
+  `wsl2_audio/requirements-bootstrap-constraints.txt`
 - Generate default configuration
 
 The active sourced worker must be verified on the target machine. If the
@@ -329,12 +331,19 @@ wsl watch -n 1 nvidia-smi
 
 ## Maintenance
 
-### Update Models
+### Update Models / Packages
 
-```bash
-cd ~/goodq_audio
-source venv/bin/activate
-pip install --upgrade faster-whisper pyannote.audio
+Do not run broad `pip install --upgrade` commands in the WSL audio venv. The
+runtime depends on the pinned bootstrap constraints in
+`wsl2_audio/requirements-bootstrap-constraints.txt`, including the
+`pyannote.audio==3.3.2` / `huggingface-hub==0.35.3` compatibility pair.
+
+To repair or refresh the WSL audio environment, pull the latest repo and rerun
+the bootstrap/setup path so the constraints file is restaged into the WSL
+workspace. Confirm readiness with:
+
+```powershell
+conda run -n goodq_core python scripts/wsl_audio_preflight.py --compact
 ```
 
 ### Clean Cache

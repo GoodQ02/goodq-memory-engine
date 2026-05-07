@@ -1,5 +1,11 @@
 # WSL2 Audio Processing Setup for GoodQ4All
 
+> Current operator note: this page is retained as background setup context.
+> For the active bootstrap contract, use `wsl2_audio/README.md`,
+> `docs/reference/WSL_AUDIO_RUNTIME.md`, and
+> `wsl2_audio/requirements-bootstrap-constraints.txt`. Do not run unpinned
+> `pip install` or broad package-upgrade commands for the WSL audio worker.
+
 ## Overview
 
 This guide sets up GPU-accelerated audio processing in WSL2 Ubuntu, offloading Whisper transcription and diarization from Windows to a more optimized Linux environment.
@@ -51,21 +57,19 @@ pip install --upgrade pip
 ### Step 3: Install PyTorch with CUDA
 
 ```bash
-# Install PyTorch with CUDA 12.1 support
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+# The active bootstrap path installs the pinned CUDA 12.1 trio through
+# wsl2_audio/setup_wsl2_audio.sh and requirements-bootstrap-constraints.txt.
 ```
 
 ### Step 4: Install Audio Libraries
 
 ```bash
-# Core audio processing
-pip install faster-whisper openai-whisper pyannote.audio
-
-# Audio utilities
-pip install librosa soundfile scipy numpy
-
-# Optional: Silero VAD
-pip install silero-vad
+# The active bootstrap path installs audio packages through:
+# wsl2_audio/requirements-bootstrap-constraints.txt
+#
+# Current critical pair:
+# pyannote.audio==3.3.2
+# huggingface-hub==0.35.3
 ```
 
 ### Step 5: Verify Installation
@@ -208,13 +212,11 @@ cd goodq_audio
 python3 -m venv venv
 source venv/bin/activate
 
-# 3. Install PyTorch
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+# 3. Install runtime packages through the repo constraints
+# Use the active repo setup script or constraints file. Do not install
+# unpinned torch/pyannote packages here.
 
-# 4. Install audio libs
-pip install faster-whisper openai-whisper pyannote.audio librosa soundfile scipy
-
-# 5. Test
+# 4. Test
 python -c "import torch; print('CUDA:', torch.cuda.is_available())"
 ```
 
@@ -287,4 +289,3 @@ If issues persist:
 2. Check GPU access: `wsl -d Ubuntu -- nvidia-smi`
 3. Check Python in WSL2: `wsl -d Ubuntu -- python3 --version`
 4. Review logs in `~/goodq_audio/logs/`
-

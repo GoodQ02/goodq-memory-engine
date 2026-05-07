@@ -88,6 +88,15 @@ If `diarization_ready = false`, inspect:
 - `GOODQ_WSL_WORKSPACE`
 - the active cache root selected by the sourced runtime
 - whether the exact pyannote diarization repos exist in that active cache
+- the WSL venv package pair:
+  - `pyannote.audio==3.3.2`
+  - `huggingface-hub==0.35.3`
+
+If the error mentions `Pipeline.from_pretrained()` or `hf_hub_download()` with
+unexpected `token` / `use_auth_token` arguments, treat it as WSL dependency
+drift. Pull the latest repo and rerun the bootstrap/setup path so
+`wsl2_audio/requirements-bootstrap-constraints.txt` is restaged into the WSL
+workspace. Do not fix this with broad package upgrades.
 
 Reference:
 

@@ -283,7 +283,13 @@ Audit Status: ACTIVE (2026-04-10)
 - `interaction_dominance` is now genuinely live, but still sparse enough that it should be treated as additive context rather than a required output lane.
 - `speaker_aligned_mentions` is now exposed through the active scene/timeline read surfaces as an additive evidence lane.
 - transcript/entity disagreement rollups are now exposed through timeline metadata so operator audits can isolate upstream normalization seams without changing inference behavior.
-- The `GOOD-SPEED-32` WSL audio bootstrap drift issue is now fixed on `main`; any remaining laptop follow-up is host-confirmation work rather than a desktop-side blocker.
+- The `GOOD-SPEED-32` WSL audio bootstrap drift issue is now fixed on `main`;
+  current source pins the WSL bootstrap lane to `pyannote.audio==3.3.2` plus
+  `huggingface-hub==0.35.3`, adds `facebook/wav2vec2-base-960h` to the
+  authoritative bootstrap model cache set, and treats the stale
+  `wsl2_audio/requirements-locked.txt` snapshot as historical only.
+  Remaining laptop follow-up is host-confirmation work rather than a
+  desktop-side blocker.
 
 ## Recent Notable Changes
 - Added the first safe read-only control-agent substrate: a recurrence report CLI/library that groups persisted run signals, classifies recurrence families, emits deterministic operator hints, compares two run ids, and can export markdown/JSON artifacts plus an index without enabling healing or changing canonical ingestion.

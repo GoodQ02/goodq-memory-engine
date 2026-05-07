@@ -27,7 +27,7 @@ Policy target applied: system should stay functional without a GPU; GPU use shou
 |---|---|---|---|---|
 | `GPU_ENHANCED` runtime profile | CUDA is intentionally expected only when the accelerated host profile or strict flags are selected; `BASELINE` must remain CPU-safe | Optional optimization (platform profile) | CUDA-assumed when explicitly selected | `AGENTS.md:19`, `AGENTS.md:45`, `configs/config.yaml:139`, `configs/config.yaml:140`, `docs/reference/PLATFORM_SUPPORT.md:1` |
 | WSL2 unified audio worker (`process_audio.py`) | Accelerated audio path prefers CUDA when available and is configured from live runtime settings | Inference | CUDA-assumed in accelerated path | `configs/config.yaml:221`, `configs/config.yaml:229`, `wsl2_audio/process_audio.py:527`, `wsl2_audio/process_audio.py:621`, `wsl2_audio/process_audio.py:727` |
-| WSL2 audio bootstrap constraints | Active WSL audio setup pins the conservative CUDA 12.1 torch lane; historical lock snapshots may lag until regenerated | Optional optimization (runtime packaging) | CUDA-assumed | `wsl2_audio/requirements-bootstrap-constraints.txt`, `wsl2_audio/setup_wsl2_audio.sh`, `docs/reference/WSL_AUDIO_RUNTIME.md` |
+| WSL2 audio bootstrap constraints | Active WSL audio setup pins the conservative CUDA 12.1 torch lane and the PyAnnote/Hugging Face Hub compatibility pair; historical lock snapshots may lag until regenerated | Optional optimization (runtime packaging) | CUDA-assumed | `wsl2_audio/requirements-bootstrap-constraints.txt`, `wsl2_audio/setup_wsl2_audio.sh`, `docs/reference/WSL_AUDIO_RUNTIME.md` |
 
 ## 3) Components That Must Remain CPU-Safe
 

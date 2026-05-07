@@ -38,7 +38,12 @@ Notes:
   - `torch==2.5.1+cu121`
   - `torchvision==0.20.1+cu121`
   - `torchaudio==2.5.1+cu121`
+- The configured WSL diarization compatibility lane includes:
+  - `pyannote.audio==3.3.2`
+  - `huggingface-hub==0.35.3`
 - The bootstrap installers now stage and honor `wsl2_audio/requirements-bootstrap-constraints.txt` to keep later dependency installs from drifting off that lane.
+- `wsl2_audio/requirements-locked.txt` is historical until regenerated from a
+  validated worker; it must not override the bootstrap constraints.
 - The active sourced worker must still be inspected on the target machine. If the
   runtime recorder reports a different installed lane, that is environment truth
   to investigate, not a reason to pretend the target lane is installed.
@@ -145,6 +150,9 @@ Additional operator truth:
 - `diarization_ready=true` is only valid when the sourced runtime can load the
   configured diarization repo chain offline; import success and token presence
   alone are not enough
+- `pyannote.audio==3.3.2` must remain paired with
+  `huggingface-hub==0.35.3`; newer hub API lanes can pass `pip check` while
+  still breaking PyAnnote runtime loading
 - WSL bootstrap installers must end with:
   - `python -m pip check == 0`
   - the validated torch / torchvision / torchaudio trio still installed

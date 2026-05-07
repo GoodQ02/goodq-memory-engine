@@ -22,6 +22,11 @@ python scripts/bootstrap_install.py
 This provisions `goodq_core` plus the supported specialized step-env pack from
 the pinned lock recipes in `envs/locks/` for full pipeline capability.
 
+If WSL audio is enabled, bootstrap stages the WSL audio package constraints
+from `wsl2_audio/requirements-bootstrap-constraints.txt`. Avoid unpinned WSL
+audio package upgrades; they can pass `pip check` while breaking diarization
+runtime compatibility.
+
 ## 3. Validate and Launch
 
 ```powershell

@@ -93,15 +93,16 @@ truth for live claims. Do not treat this document as a live witness monitor.
   - read-only audit completed using `docs/reference/indexes/DOCS_FORENSICS_INDEX.md` as the routing map
   - validation passed: docs drift lint, `git diff --check`, and the canonical test wrapper with `493` passing unit tests and `5` warnings
   - tracked source state was clean; untracked recurrence artifacts under `reports/control_recurrence/` remain workspace hygiene unless intentionally promoted
-  - cache-authority fix `a1d34df` is in current main history; current pause head is `25ff2a7` after docs/root cleanup and local scratch-dir ignore hygiene
+  - cache-authority fix `a1d34df` is in current main history; HF cache ref newline fix `684308a` now writes generated `refs/main` files as raw commit hash bytes with no trailing newline
 - Current readiness notes:
   - Qdrant responded locally
   - WSL audio preflight returned ready with diarization ready, while retaining the observed cu128 drift lane and `torchcodec_ready=false`
   - laptop bootstrap audit confirmed the WSL audio cache-authority seam is patched forward: `facebook/wav2vec2-base-960h` is now part of the authoritative bootstrap model cache set, WSL preflight uses pinned offline revisions, and optional NRC lexicon handling matches registry optionality
+  - follow-up laptop audit confirmed `18 / 18` model prefetch and pinned offline PyAnnote lookup, but default `main` offline lookup still failed when `refs/main` ended with LF; `684308a` patches that exact runtime cache-ref seam
   - model prefetch reports should now expect `18 / 18` assets including YOLO and the WSL runtime cache gate
-  - local focused verification after receiving the audit passed: `30` cache/WSL authority tests with `4` warnings
+  - local focused verification after the newline fix passed: `48` bootstrap/cache/WSL authority tests with `4` warnings
 - Pause instruction:
-  - pause here for the fresh laptop bootstrap audit; read and classify that audit before resuming script-registry cleanup, source repair, witness work, or broad validation
+  - next gate is fresh laptop pull, rerun bootstrap/validation, confirm default offline `main` lookup and `diarization_ready=true`, then one controlled `GPU_ENHANCED` scene witness before broader ingestion
 - Ranked next cleanup/audit seams:
   1. Completed: the `17` tracked `steps/*/step.py.backup_*` files beside active modules were removed after audit proved no active runtime/test consumers; `*.backup*` is now ignored.
   2. Completed: the retired root `config.json` scene-detection override and its obsolete fixer/monitor helper scripts were removed after audit proved canonical runtime config flows through `configs/config.yaml` and `steps.common.config_loader`.

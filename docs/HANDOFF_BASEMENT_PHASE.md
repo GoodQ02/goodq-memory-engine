@@ -88,9 +88,13 @@ these findings:
   authoritative bootstrap model cache set, makes WSL preflight use pinned
   offline revisions, and aligns optional NRC lexicon handling with registry
   optionality.
-- Pause here for the fresh laptop bootstrap audit. Read and classify that audit
-  before resuming script-registry cleanup, source repair, witness work, or broad
-  validation.
+- Follow-up laptop audit confirmed `18 / 18` model prefetch and pinned offline
+  PyAnnote lookup, but default `main` offline lookup still failed when generated
+  Hugging Face `refs/main` files ended with LF. Runtime fix `684308a` now writes
+  generated `refs/main` files as raw commit hash bytes with no trailing newline.
+- Next gate is fresh laptop pull, rerun bootstrap/validation, confirm default
+  offline `main` lookup and `diarization_ready=true`, then run one controlled
+  `GPU_ENHANCED` scene witness before any broader ingestion run.
 - Validation passed: `python scripts/docs/doc_drift_lint.py`, `git diff --check`,
   and `powershell -ExecutionPolicy Bypass -File scripts/dev/run_pytest.ps1 -q`
   (`493` passed, `5` warnings).
@@ -104,6 +108,8 @@ these findings:
 - Model prefetch reports should now expect `18 / 18` assets including YOLO and
   the WSL runtime cache gate. Any lower count should be treated as a bootstrap
   cache-authority or host-cache readiness seam, not an ingestion failure.
+- Local focused verification after the HF ref newline fix passed `48`
+  bootstrap/cache/WSL authority tests with `4` warnings.
 - Repo-root cleanup seam completed: the `17` tracked `steps/*/step.py.backup_*`
   files beside active step modules were removed from the active tree after
   audit showed no active runtime/test consumers. `*.backup*` is ignored to

@@ -22,7 +22,7 @@ truth for live claims. Do not treat this document as a live witness monitor.
   - immediate next action after pause: analyze the incoming laptop bootstrap audit before continuing project-root cleanup
 - Current local workspace:
   - `main` / `origin/main` are the active source line; confirm the exact head with `git log -1 --oneline`
-  - source includes the WSL audio runtime black-box diagnostics through `05ae539`
+  - source includes WSL audio bootstrap noninteractive/cache hardening through `41230ab`
 - Current public-facing branch:
   - `public` / `origin/public` -> `e5cd974` (`fix: tighten recurrence attribution and audio payloads`)
 - Current state:
@@ -87,6 +87,23 @@ truth for live claims. Do not treat this document as a live witness monitor.
     - bootstrap target remains `torch` / `torchvision` / `torchaudio` on `2.5.1+cu121`; the observed sourced WSL worker lane is `2.8.0+cu128`
     - the active lane was functionally observed through repeated no-ingestion probes and no current ingestion blocker was found from the witness, but it is not bootstrap-approved, not lane-approved for promotion, and not a package recommendation
     - promotion requires a future explicit lane-promotion audit; do not change packages, configs, source, ingestion behavior, or lockfiles from this drift classification alone
+
+## Project-Root Audit Checkpoint (2026-05-07)
+- Docs-index-guided audit status:
+  - read-only audit completed using `docs/reference/indexes/DOCS_FORENSICS_INDEX.md` as the routing map
+  - validation passed: docs drift lint, `git diff --check`, and the canonical test wrapper with `492` passing unit tests and `5` warnings
+  - tracked source state was clean; untracked recurrence artifacts under `reports/control_recurrence/` remain workspace hygiene unless intentionally promoted
+- Current readiness notes:
+  - Qdrant responded locally
+  - WSL audio preflight returned ready with diarization ready, while retaining the observed cu128 drift lane and `torchcodec_ready=false`
+  - desktop cache readiness still reported the current PyAnnote trio missing from the Windows model cache; treat as local readiness watch until bootstrap/model prefetch evidence refreshes it
+  - laptop bootstrap audit confirmed `--yes` exits visibly instead of hanging and model prefetch reaches `18 / 18`; remaining WSL diarization degradation traced to CRLF in generated HF `refs/main` and `.goodq_env` artifacts, now patched to write LF-only UTF-8 bytes
+- Ranked next cleanup/audit seams:
+  1. Audit the `17` tracked `steps/*/step.py.backup_*` files beside active modules, then remove or archive only after references are proven absent.
+  2. Audit root `config.json` and the scene-detection helper scripts that still point at it before changing either surface.
+  3. Refresh or clearly quarantine `docs/bootstrap/SCRIPT_REGISTRY.md`; it is a stale generated aid, not runtime authority.
+  4. Keep default pytest on the canonical wrapper; avoid broad `pytest .` until archived script harnesses are explicitly excluded.
+  5. Next source seam after cleanup triage: silent observability/provenance drops in observer, memory commit, retrieval event, provenance, API status, and audio helper paths.
 
 ## Audio Vector Provenance Doctrine
 - Contract:

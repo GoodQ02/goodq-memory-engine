@@ -115,8 +115,11 @@ the supported host/runtime baseline, but it is not a live witness monitor.
   - docs-clearance commit `103b17f` added `docs/reference/indexes/DOCS_FORENSICS_INDEX.md`
   - active docs status markers are complete for Markdown/text docs under `docs/`
   - historical WSL audio emotion sample output is archived at `docs/archive/diagnostics/wsl2_audio_emotion_sample_output.json`
-  - the next known work item is an incoming laptop bootstrap audit; do not restart broad docs cleanup before reading it
-  - remaining repo-root cleanup candidates are tracked in `docs/reference/indexes/DOCS_FORENSICS_INDEX.md` as watch items
+  - project-root audit checkpoint from 2026-05-07 is recorded in `docs/HANDOFF_BASEMENT_PHASE.md` and `docs/goodq4all_agent_status.md`
+  - the next known work item is the incoming laptop bootstrap audit; read it before starting a new witness or broad cleanup pass
+  - remaining repo-root cleanup candidates are tracked in `docs/reference/indexes/DOCS_FORENSICS_INDEX.md` and ranked in the status handoff
+  - highest-confidence cleanup seam is the `17` tracked `steps/*/step.py.backup_*` files beside active step modules
+  - next source seam after cleanup triage is silent observability/provenance loss in observer, memory commit, retrieval event, provenance, API status, and audio helper paths
 - Active read-only run surfaces:
   - `lib/run_index.py`
   - `lib/run_summary.py`

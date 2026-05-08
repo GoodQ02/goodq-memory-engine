@@ -203,7 +203,7 @@ def _normalize_main_ref_for_pinned_snapshot(
         return
     refs_dir = _repo_cache_dir(models_root, repo_id) / "refs"
     refs_dir.mkdir(parents=True, exist_ok=True)
-    (refs_dir / "main").write_text(f"{resolved_revision}\n", encoding="utf-8")
+    (refs_dir / "main").write_bytes(f"{resolved_revision}\n".encode("utf-8"))
 
 
 def _build_report(

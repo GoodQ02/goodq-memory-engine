@@ -129,7 +129,14 @@ These are outside the docs-folder clearance and should be handled in separate
 repo-root audits:
 
 - tracked backup files beside active step modules
+  - 2026-05-07 audit found `17` tracked `steps/*/step.py.backup_*` siblings
+    beside active modules; prove no references before removal or archival
 - scratch/temp directories at repo root
 - legacy test and archive folders outside `docs/archive/`
 - script registry entries classified as unclear/obsolete
+  - 2026-05-07 audit found `docs/bootstrap/SCRIPT_REGISTRY.md` stale as a
+    generated snapshot; use it as an audit aid, not execution authority
 - source files with broad `except:` or placeholder `TODO` comments
+  - next source seam is silent observability/provenance loss in observer,
+    memory commit, retrieval event, provenance, API status, and audio helper
+    paths

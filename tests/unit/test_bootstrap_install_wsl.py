@@ -117,6 +117,31 @@ def test_wsl_audio_env_values_share_model_cache_and_tokens(monkeypatch, tmp_path
     assert values["HUGGINGFACE_HUB_CACHE"] == "/mnt/c/models/hub"
 
 
+def test_write_wsl_audio_env_file_uses_lf_line_endings(tmp_path: Path):
+    from scripts import bootstrap_install
+
+    wsl_ctx = bootstrap_install.WslAudioContext(
+        distro="Ubuntu-22.04",
+        user="goodq",
+        home="/home/goodq",
+        workspace="/home/goodq/goodq_audio",
+        windows_workspace=tmp_path / "wsl_stage",
+    )
+
+    env_path = bootstrap_install._write_wsl_audio_env_file(
+        wsl_ctx,
+        {
+            "HF_HOME": "/mnt/c/models",
+            "HUGGINGFACE_HUB_CACHE": "/mnt/c/models/hub",
+        },
+    )
+
+    raw = env_path.read_bytes()
+    assert b"\r" not in raw
+    assert raw.endswith(b'\n')
+    assert b'HUGGINGFACE_HUB_CACHE="/mnt/c/models/hub"\n' in raw
+
+
 def test_sync_wsl_audio_assets_normalizes_shell_line_endings(monkeypatch, tmp_path: Path):
     from scripts import bootstrap_install
 

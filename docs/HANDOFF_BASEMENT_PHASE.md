@@ -22,7 +22,7 @@ This is the practical handoff point for a brand-new Codex session.
   - next operator input expected: laptop bootstrap audit with two remaining items; analyze that before resuming project-root cleanup
 - Current local workspace head:
   - `main` / `origin/main` are the active source line; confirm the exact head with `git log -1 --oneline`
-  - source includes the WSL audio runtime black-box diagnostics through `05ae539`
+  - source includes WSL audio bootstrap noninteractive/cache hardening through `41230ab`
 - Current public-facing branch head:
   - `public` / `origin/public` -> `e5cd974` (`fix: tighten recurrence attribution and audio payloads`)
 - Full witness state now banked:
@@ -76,6 +76,42 @@ This is the practical handoff point for a brand-new Codex session.
 
 If resuming after restart, do not begin with a broad rerun. Begin by reading the
 three witness memos above and then confirm the current branch head.
+
+### Project-Root Audit Pause Note (2026-05-07)
+
+The docs-index-guided project audit is read-only complete enough to resume from
+these findings:
+
+- Validation passed: `python scripts/docs/doc_drift_lint.py`, `git diff --check`,
+  and `powershell -ExecutionPolicy Bypass -File scripts/dev/run_pytest.ps1 -q`
+  (`492` passed, `5` warnings).
+- Tracked source state was clean; the only expected local workspace artifacts
+  were untracked recurrence report files under `reports/control_recurrence/`.
+- Active docs lint clean. Archive docs still contain historical drive-root
+  examples by design and remain non-authoritative.
+- Qdrant answered locally. WSL audio preflight returned ready with diarization
+  ready, while the sourced worker still reported the observed cu128 drift lane
+  and `torchcodec_ready=false`.
+- Desktop cache readiness still reported the three current PyAnnote repos as
+  missing from the Windows model cache; treat that as a local readiness watch
+  item until bootstrap/model prefetch evidence refreshes it.
+- Incoming laptop bootstrap audit confirmed `--yes` no longer hangs and model
+  prefetch reaches `18 / 18`, but surfaced a final WSL diarization gate caused
+  by CRLF in generated Hugging Face `refs/main` and `.goodq_env` artifacts; the
+  matching patch writes those generated files as LF-only UTF-8 bytes.
+- Highest-confidence repo-root cleanup seam: the `17` tracked
+  `steps/*/step.py.backup_*` files beside active step modules. Audit references
+  before removal or archival.
+- Script registry status: `docs/bootstrap/SCRIPT_REGISTRY.md` is a stale
+  generated audit aid, not runtime authority. Canonical script surfaces remain
+  root launchers, bootstrap installer/validator/model prefetch, interpreter
+  bindings, `cli.run_ingestion`, watchdog, and the unified WSL bridge.
+- Test boundary status: default pytest is bounded to `tests/unit`; broad
+  explicit collection such as `pytest .` can still wander into retired
+  `scripts/archive/legacy_validation/root/test_*.py` harnesses.
+- Next source seam, after cleanup triage: silent observability/provenance drops
+  in observer, memory commit events, retrieval events, provenance attachment,
+  API status probes, and audio helper paths.
 
 ---
 

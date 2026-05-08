@@ -240,6 +240,7 @@ def test_snapshot_writes_main_ref_for_pinned_revision(monkeypatch, tmp_path: Pat
     assert result["status"] == "ok"
     ref_path = tmp_path / "hub" / "models--pyannote--speaker-diarization-3.1" / "refs" / "main"
     assert ref_path.read_text(encoding="utf-8").strip() == pinned_revision
+    assert ref_path.read_bytes() == f"{pinned_revision}\n".encode("utf-8")
 
 
 def test_main_writes_incremental_progress_and_partial_report(monkeypatch, tmp_path: Path):

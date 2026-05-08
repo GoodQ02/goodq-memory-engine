@@ -82,10 +82,15 @@ three witness memos above and then confirm the current branch head.
 The docs-index-guided project audit is read-only complete enough to resume from
 these findings:
 
-- Current pushed main pause head is `19304b7` (`chore: retire stale scene
-  detection config surfaces`). If resuming after this checkpoint, first read
-  the fresh laptop bootstrap audit supplied by the operator before choosing the
-  next cleanup seam, source repair, witness run, or broad validation pass.
+- Laptop bootstrap audit received and classified: WSL audio cache authority is
+  patched forward on main by `a1d34df` and followed by later docs/root-cleanup
+  commits through `a79d615`. The fix adds `facebook/wav2vec2-base-960h` to the
+  authoritative bootstrap model cache set, makes WSL preflight use pinned
+  offline revisions, and aligns optional NRC lexicon handling with registry
+  optionality.
+- Next gate is host validation on the laptop: fresh pull, rerun
+  bootstrap/validation, confirm `diarization_ready=true`, then run one
+  controlled `GPU_ENHANCED` scene witness before any broader ingestion run.
 - Validation passed: `python scripts/docs/doc_drift_lint.py`, `git diff --check`,
   and `powershell -ExecutionPolicy Bypass -File scripts/dev/run_pytest.ps1 -q`
   (`493` passed, `5` warnings).
@@ -96,13 +101,9 @@ these findings:
 - Qdrant answered locally. WSL audio preflight returned ready with diarization
   ready, while the sourced worker still reported the observed cu128 drift lane
   and `torchcodec_ready=false`.
-- Desktop cache readiness still reported the three current PyAnnote repos as
-  missing from the Windows model cache; treat that as a local readiness watch
-  item until bootstrap/model prefetch evidence refreshes it.
-- Incoming laptop bootstrap audit confirmed `--yes` no longer hangs and model
-  prefetch reaches `18 / 18`, but surfaced a final WSL diarization gate caused
-  by CRLF in generated Hugging Face `refs/main` and `.goodq_env` artifacts; the
-  matching patch writes those generated files as LF-only UTF-8 bytes.
+- Model prefetch reports should now expect `18 / 18` assets including YOLO and
+  the WSL runtime cache gate. Any lower count should be treated as a bootstrap
+  cache-authority or host-cache readiness seam, not an ingestion failure.
 - Repo-root cleanup seam completed: the `17` tracked `steps/*/step.py.backup_*`
   files beside active step modules were removed from the active tree after
   audit showed no active runtime/test consumers. `*.backup*` is ignored to

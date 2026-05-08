@@ -1,10 +1,10 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: GENERATED_SNAPSHOT -->
-<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-08 -->
 
 # GoodQ4All Agent Status
 
-_Operational restart checkpoint aligned: 2026-05-07._
+_Operational restart checkpoint aligned: 2026-05-08._
 
 This document is a bounded operator snapshot of the current release-era
 stitching and offline-package baseline.
@@ -13,6 +13,18 @@ Use canonical runtime contracts and released evidence surfaces as source of
 truth for live claims. Do not treat this document as a live witness monitor.
 
 ## Current Restart Checkpoint
+- Pause checkpoint, 2026-05-08:
+  - latest runtime/source fixes on `main`:
+    - `3a06342` (`fix: load runtime pyannote from canonical cache`)
+    - `86f032d` (`fix: align image step gpu budget mapping`)
+  - same fixes are mirrored to `public`:
+    - `e2e0b9d` (`fix: load runtime pyannote from canonical cache`)
+    - `2a7b918` (`fix: align image step gpu budget mapping`)
+  - laptop `GPU_ENHANCED` one-scene witness `20260508_104105_laptop_gpu_enhanced_one_scene_witness` completed with run id `02fdd2d9-7868-442b-8628-2550ed976820`
+  - witness passed bootstrap/preflight, WSL torch lane `2.5.1+cu121`, Qdrant reachability, WSL audio execution, transcript persistence, CLAP/audio embedding, text embedding, Phase 6a/6b, `phase6_complete=true`, and `qdrant_ok=true`
+  - witness found live runtime PyAnnote still needed the canonical HF cache dir in `wsl2_audio/process_audio.py` and `wsl2_audio/audio_service.py`; `3a06342` patches both runtime loaders
+  - witness found laptop image-caption OOM was consistent with the active `scripts.gpu_config` map missing image-step budgets; `86f032d` aligns image-caption/DINO/CLIP budgets with the canonical vision step contract
+  - remaining watch item: WSL-side Wav2Vec emotion/embedding enrichment reports `transformers not installed`; this is optional and should be handled as a future package-lane audit, not folded into the runtime cache or GPU-budget patches
 - Pause checkpoint, 2026-05-07:
   - latest local docs-clearance commit: `103b17f` (`docs: add documentation forensics index`)
   - docs folder is now indexed for future agent lookup through `docs/reference/indexes/DOCS_FORENSICS_INDEX.md`
@@ -22,9 +34,9 @@ truth for live claims. Do not treat this document as a live witness monitor.
   - immediate next action after pause: analyze the incoming laptop bootstrap audit before continuing project-root cleanup
 - Current local workspace:
   - `main` / `origin/main` are the active source line; confirm the exact head with `git log -1 --oneline`
-  - source includes WSL audio bootstrap noninteractive/cache hardening through `41230ab`
+  - source includes WSL runtime PyAnnote cache-dir loading and image-step GPU budget alignment through `86f032d`
 - Current public-facing branch:
-  - `public` / `origin/public` -> `e5cd974` (`fix: tighten recurrence attribution and audio payloads`)
+  - `public` / `origin/public` includes the public-safe WSL runtime cache-dir and image-step GPU budget fixes through `2a7b918`
 - Current state:
   - Full Season 1 recompare witness completed successfully across `01x01` through `01x05`
   - Full Season 2 fresh witness completed successfully across `02x01` through `02x12`

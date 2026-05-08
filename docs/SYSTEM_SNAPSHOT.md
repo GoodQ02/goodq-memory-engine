@@ -1,10 +1,10 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: GENERATED_SNAPSHOT -->
-<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-08 -->
 
 # System Snapshot
 
-_Operational operator-state alignment refreshed: 2026-05-07._
+_Operational operator-state alignment refreshed: 2026-05-08._
 
 This is a bounded release-era system snapshot. It is useful for understanding
 the supported host/runtime baseline, but it is not a live witness monitor.
@@ -111,8 +111,10 @@ the supported host/runtime baseline, but it is not a live witness monitor.
     - `51` transcript/entity disagreement segments
 
 ## Current Operator State
-- Pause checkpoint, 2026-05-07:
-  - current runtime fix checkpoint is `af6fff3` (`fix: load wsl pyannote from canonical cache`)
+- Pause checkpoint, 2026-05-08:
+  - current runtime/source fix checkpoint is `86f032d` (`fix: align image step gpu budget mapping`)
+  - WSL runtime PyAnnote cache-dir fix `3a06342` is included in current main history
+  - image-step GPU budget mapping fix `86f032d` is included in current main history
   - WSL audio cache-authority fix `a1d34df` is included in current main history
   - HF cache ref newline fix `684308a` is included in current main history
   - docs-clearance commit `103b17f` added `docs/reference/indexes/DOCS_FORENSICS_INDEX.md`
@@ -123,7 +125,11 @@ the supported host/runtime baseline, but it is not a live witness monitor.
   - latest laptop audit found preflight still did not pass canonical cache env into PyAnnote pipeline load; `af6fff3` passes that cache dir through both auth compatibility paths
   - final laptop bootstrap validation passed on current `main`: bootstrap install exit `0`, model prefetch `18 / 18`, WSL preflight `ready=true`, `diarization_ready=true`, raw CR/LF-free HF refs, offline default and pinned lookups ok, and `bootstrap_validate.bat` pass
   - remaining laptop note is non-fatal persistent WSL audio service install state `PENDING_SUDO`; direct WSL audio execution is ready
-  - next gate is one controlled `GPU_ENHANCED` scene witness on the freshly validated laptop/bootstrap state
+  - laptop `GPU_ENHANCED` one-scene witness `20260508_104105_laptop_gpu_enhanced_one_scene_witness` completed with run id `02fdd2d9-7868-442b-8628-2550ed976820`
+  - witness passed WSL audio execution, transcript persistence, CLAP/audio embedding, text embedding, Phase 6a/6b, `phase6_complete=true`, and `qdrant_ok=true`
+  - witness found runtime PyAnnote needed canonical HF cache-dir pass-through in the live WSL loaders; `3a06342` patches that runtime seam
+  - witness found laptop image-caption OOM was consistent with missing image-step budgets in `scripts.gpu_config`; `86f032d` maps image-caption/DINO/CLIP to the shared image env with explicit budgets
+  - remaining watch item is optional WSL-side Wav2Vec emotion/embedding enrichment reporting `transformers not installed`; treat this as a future package-lane audit, not as a bootstrap or ingestion blocker
   - remaining repo-root cleanup candidates are tracked in `docs/reference/indexes/DOCS_FORENSICS_INDEX.md` and ranked in the status handoff
   - tracked step backup cleanup is complete: `17` `steps/*/step.py.backup_*` siblings were removed from the active tree and `*.backup*` is now ignored
   - root scene-detection config cleanup is complete: retired root `config.json` and obsolete fixer/monitor helpers were removed; canonical runtime config remains `configs/config.yaml`

@@ -130,6 +130,13 @@ $RECYCLE.BIN/
 !docs/**/*.svg
 
 # ===== WORKSPACE DIRECTORIES =====
+/_DATA/
+/_tmp/
+/.codex_scratch/
+/.tmp/
+/.tmp_codex/
+/.tmp_codex_tests/
+/.tmp_codex_verify/
 import_inbox/
 output/
 exports/

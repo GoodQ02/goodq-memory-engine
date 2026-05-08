@@ -121,7 +121,9 @@ the supported host/runtime baseline, but it is not a live witness monitor.
   - project-root audit checkpoint from 2026-05-07 is recorded in `docs/HANDOFF_BASEMENT_PHASE.md` and `docs/goodq4all_agent_status.md`
   - follow-up laptop audit found HF default `main` offline lookup still failed with LF-terminated generated `refs/main`; `684308a` writes those refs without trailing newline
   - latest laptop audit found preflight still did not pass canonical cache env into PyAnnote pipeline load; `af6fff3` passes that cache dir through both auth compatibility paths
-  - next gate is fresh laptop pull, bootstrap/validation, `diarization_ready=true`, then one controlled `GPU_ENHANCED` scene witness
+  - final laptop bootstrap validation passed on current `main`: bootstrap install exit `0`, model prefetch `18 / 18`, WSL preflight `ready=true`, `diarization_ready=true`, raw CR/LF-free HF refs, offline default and pinned lookups ok, and `bootstrap_validate.bat` pass
+  - remaining laptop note is non-fatal persistent WSL audio service install state `PENDING_SUDO`; direct WSL audio execution is ready
+  - next gate is one controlled `GPU_ENHANCED` scene witness on the freshly validated laptop/bootstrap state
   - remaining repo-root cleanup candidates are tracked in `docs/reference/indexes/DOCS_FORENSICS_INDEX.md` and ranked in the status handoff
   - tracked step backup cleanup is complete: `17` `steps/*/step.py.backup_*` siblings were removed from the active tree and `*.backup*` is now ignored
   - root scene-detection config cleanup is complete: retired root `config.json` and obsolete fixer/monitor helpers were removed; canonical runtime config remains `configs/config.yaml`

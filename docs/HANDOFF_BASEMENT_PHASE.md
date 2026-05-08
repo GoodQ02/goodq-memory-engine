@@ -97,9 +97,16 @@ these findings:
   cache, but WSL preflight itself was not passing `cache_dir`. Runtime fix
   `af6fff3` passes the sourced WSL Hugging Face cache env into both PyAnnote
   compatibility load paths.
-- Next gate is fresh laptop pull, rerun bootstrap/validation, confirm default
-  `diarization_ready=true`, then run one controlled `GPU_ENHANCED` scene
-  witness before any broader ingestion run.
+- Final laptop bootstrap validation on current `main` passed: bootstrap install
+  exited `0`, model prefetch reported `18 / 18`, WSL preflight returned
+  `ready=true` and `diarization_ready=true`, HF refs were raw 40-byte hashes
+  with no CR/LF, offline default and pinned lookups succeeded, and
+  `bootstrap_validate.bat` passed.
+- Remaining laptop note is non-fatal persistent WSL audio service install state
+  `PENDING_SUDO`; direct WSL audio execution is ready and the existing service
+  process was left untouched.
+- Next gate is one controlled `GPU_ENHANCED` scene witness on the freshly
+  validated laptop/bootstrap state before any broader ingestion run.
 - Validation passed: `python scripts/docs/doc_drift_lint.py`, `git diff --check`,
   and `powershell -ExecutionPolicy Bypass -File scripts/dev/run_pytest.ps1 -q`
   (`493` passed, `5` warnings).

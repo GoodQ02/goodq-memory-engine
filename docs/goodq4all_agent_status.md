@@ -100,10 +100,12 @@ truth for live claims. Do not treat this document as a live witness monitor.
   - laptop bootstrap audit confirmed the WSL audio cache-authority seam is patched forward: `facebook/wav2vec2-base-960h` is now part of the authoritative bootstrap model cache set, WSL preflight uses pinned offline revisions, and optional NRC lexicon handling matches registry optionality
   - follow-up laptop audit confirmed `18 / 18` model prefetch and pinned offline PyAnnote lookup, but default `main` offline lookup still failed when `refs/main` ended with LF; `684308a` patches that exact runtime cache-ref seam
   - latest laptop audit confirmed default offline `main` lookup and `Pipeline.from_pretrained(..., cache_dir=...)` both work when pointed at the canonical cache, but preflight itself was not passing `cache_dir`; `af6fff3` patches that exact readiness gate
+  - final laptop bootstrap validation on current `main` passed: bootstrap install exited `0`, model prefetch reported `18 / 18`, WSL preflight returned `ready=true` and `diarization_ready=true`, HF refs were raw 40-byte hashes with no CR/LF, offline default and pinned lookups succeeded, and `bootstrap_validate.bat` passed
+  - remaining laptop note is non-fatal persistent WSL audio service install state `PENDING_SUDO`; direct WSL audio execution is ready and the existing service process was left untouched
   - model prefetch reports should now expect `18 / 18` assets including YOLO and the WSL runtime cache gate
   - local focused verification after the preflight cache fix passed: `48` bootstrap/cache/WSL authority tests with `4` warnings
 - Pause instruction:
-  - next gate is fresh laptop pull, rerun bootstrap/validation, confirm `diarization_ready=true`, then one controlled `GPU_ENHANCED` scene witness before broader ingestion
+  - next gate is one controlled `GPU_ENHANCED` scene witness on the freshly validated laptop/bootstrap state before broader ingestion
 - Ranked next cleanup/audit seams:
   1. Completed: the `17` tracked `steps/*/step.py.backup_*` files beside active modules were removed after audit proved no active runtime/test consumers; `*.backup*` is now ignored.
   2. Completed: the retired root `config.json` scene-detection override and its obsolete fixer/monitor helper scripts were removed after audit proved canonical runtime config flows through `configs/config.yaml` and `steps.common.config_loader`.

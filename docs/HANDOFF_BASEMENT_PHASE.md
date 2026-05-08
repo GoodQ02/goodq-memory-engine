@@ -82,6 +82,10 @@ three witness memos above and then confirm the current branch head.
 The docs-index-guided project audit is read-only complete enough to resume from
 these findings:
 
+- Current pushed main pause head is `19304b7` (`chore: retire stale scene
+  detection config surfaces`). If resuming after this checkpoint, first read
+  the fresh laptop bootstrap audit supplied by the operator before choosing the
+  next cleanup seam, source repair, witness run, or broad validation pass.
 - Validation passed: `python scripts/docs/doc_drift_lint.py`, `git diff --check`,
   and `powershell -ExecutionPolicy Bypass -File scripts/dev/run_pytest.ps1 -q`
   (`493` passed, `5` warnings).

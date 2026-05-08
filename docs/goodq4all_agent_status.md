@@ -93,11 +93,14 @@ truth for live claims. Do not treat this document as a live witness monitor.
   - read-only audit completed using `docs/reference/indexes/DOCS_FORENSICS_INDEX.md` as the routing map
   - validation passed: docs drift lint, `git diff --check`, and the canonical test wrapper with `493` passing unit tests and `5` warnings
   - tracked source state was clean; untracked recurrence artifacts under `reports/control_recurrence/` remain workspace hygiene unless intentionally promoted
+  - current pushed main pause head is `19304b7` (`chore: retire stale scene detection config surfaces`)
 - Current readiness notes:
   - Qdrant responded locally
   - WSL audio preflight returned ready with diarization ready, while retaining the observed cu128 drift lane and `torchcodec_ready=false`
   - desktop cache readiness still reported the current PyAnnote trio missing from the Windows model cache; treat as local readiness watch until bootstrap/model prefetch evidence refreshes it
   - laptop bootstrap audit confirmed `--yes` exits visibly instead of hanging and model prefetch reaches `18 / 18`; remaining WSL diarization degradation traced to CRLF in generated HF `refs/main` and `.goodq_env` artifacts, now patched to write LF-only UTF-8 bytes
+- Pause instruction:
+  - the next operator input is expected to be a fresh laptop bootstrap audit; read and classify that audit before starting another cleanup seam, source repair, witness run, or broad validation pass
 - Ranked next cleanup/audit seams:
   1. Completed: the `17` tracked `steps/*/step.py.backup_*` files beside active modules were removed after audit proved no active runtime/test consumers; `*.backup*` is now ignored.
   2. Completed: the retired root `config.json` scene-detection override and its obsolete fixer/monitor helper scripts were removed after audit proved canonical runtime config flows through `configs/config.yaml` and `steps.common.config_loader`.

@@ -112,15 +112,17 @@ the supported host/runtime baseline, but it is not a live witness monitor.
 
 ## Current Operator State
 - Pause checkpoint, 2026-05-07:
-  - WSL audio cache-authority fix `a1d34df` is included in current main history; current content checkpoint after docs/root cleanup is `a79d615`
+  - current pause head is `25ff2a7` (`chore: ignore local scratch directories`)
+  - WSL audio cache-authority fix `a1d34df` is included in current main history
   - docs-clearance commit `103b17f` added `docs/reference/indexes/DOCS_FORENSICS_INDEX.md`
   - active docs status markers are complete for Markdown/text docs under `docs/`
   - historical WSL audio emotion sample output is archived at `docs/archive/diagnostics/wsl2_audio_emotion_sample_output.json`
   - project-root audit checkpoint from 2026-05-07 is recorded in `docs/HANDOFF_BASEMENT_PHASE.md` and `docs/goodq4all_agent_status.md`
-  - latest laptop bootstrap audit is consumed; next gate is fresh laptop pull, bootstrap/validation, `diarization_ready=true`, then one controlled `GPU_ENHANCED` scene witness
+  - pause here for the fresh laptop bootstrap audit; read and classify that audit before starting a new script-registry cleanup seam, source repair, witness, or broad validation pass
   - remaining repo-root cleanup candidates are tracked in `docs/reference/indexes/DOCS_FORENSICS_INDEX.md` and ranked in the status handoff
   - tracked step backup cleanup is complete: `17` `steps/*/step.py.backup_*` siblings were removed from the active tree and `*.backup*` is now ignored
   - root scene-detection config cleanup is complete: retired root `config.json` and obsolete fixer/monitor helpers were removed; canonical runtime config remains `configs/config.yaml`
+  - repo-root scratch hygiene is complete: local scratch/workspace directories are root-ignored; do not stage scratch contents or recurrence artifacts unless intentionally promoted
   - model prefetch reports should now expect `18 / 18` assets including YOLO and the WSL runtime cache gate
   - next source seam after cleanup triage is silent observability/provenance loss in observer, memory commit, retrieval event, provenance, API status, and audio helper paths
 - Active read-only run surfaces:

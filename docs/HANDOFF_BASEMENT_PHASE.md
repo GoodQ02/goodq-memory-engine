@@ -84,13 +84,13 @@ these findings:
 
 - Laptop bootstrap audit received and classified: WSL audio cache authority is
   patched forward on main by `a1d34df` and followed by later docs/root-cleanup
-  commits through `a79d615`. The fix adds `facebook/wav2vec2-base-960h` to the
+  commits through `25ff2a7`. The fix adds `facebook/wav2vec2-base-960h` to the
   authoritative bootstrap model cache set, makes WSL preflight use pinned
   offline revisions, and aligns optional NRC lexicon handling with registry
   optionality.
-- Next gate is host validation on the laptop: fresh pull, rerun
-  bootstrap/validation, confirm `diarization_ready=true`, then run one
-  controlled `GPU_ENHANCED` scene witness before any broader ingestion run.
+- Pause here for the fresh laptop bootstrap audit. Read and classify that audit
+  before resuming script-registry cleanup, source repair, witness work, or broad
+  validation.
 - Validation passed: `python scripts/docs/doc_drift_lint.py`, `git diff --check`,
   and `powershell -ExecutionPolicy Bypass -File scripts/dev/run_pytest.ps1 -q`
   (`493` passed, `5` warnings).
@@ -112,6 +112,9 @@ these findings:
   scene-detection override and its obsolete fixer/monitor helper scripts were
   removed after reference checks showed canonical runtime config is
   `configs/config.yaml` via `steps.common.config_loader`.
+- Repo-root scratch hygiene completed: local scratch/workspace directories are
+  root-ignored as local artifacts. Do not stage scratch contents or recurrence
+  artifacts unless intentionally promoted.
 - Script registry status: `docs/bootstrap/SCRIPT_REGISTRY.md` is a stale
   generated audit aid, not runtime authority. Canonical script surfaces remain
   root launchers, bootstrap installer/validator/model prefetch, interpreter

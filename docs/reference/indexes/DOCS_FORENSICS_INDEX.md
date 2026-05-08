@@ -137,6 +137,9 @@ repo-root audits:
     override plus obsolete fixer/monitor helper scripts after reference checks
     showed canonical runtime config is `configs/config.yaml`
 - scratch/temp directories at repo root
+  - 2026-05-07 audit found local scratch/workspace directories and added
+    root-specific ignore rules; keep these as local artifacts unless a file is
+    explicitly promoted
 - legacy test and archive folders outside `docs/archive/`
 - script registry entries classified as unclear/obsolete
   - 2026-05-07 audit found `docs/bootstrap/SCRIPT_REGISTRY.md` stale as a

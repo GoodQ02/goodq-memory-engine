@@ -93,7 +93,7 @@ truth for live claims. Do not treat this document as a live witness monitor.
   - read-only audit completed using `docs/reference/indexes/DOCS_FORENSICS_INDEX.md` as the routing map
   - validation passed: docs drift lint, `git diff --check`, and the canonical test wrapper with `493` passing unit tests and `5` warnings
   - tracked source state was clean; untracked recurrence artifacts under `reports/control_recurrence/` remain workspace hygiene unless intentionally promoted
-  - cache-authority fix `a1d34df` is in current main history; current content checkpoint after docs/root cleanup is `a79d615`
+  - cache-authority fix `a1d34df` is in current main history; current pause head is `25ff2a7` after docs/root cleanup and local scratch-dir ignore hygiene
 - Current readiness notes:
   - Qdrant responded locally
   - WSL audio preflight returned ready with diarization ready, while retaining the observed cu128 drift lane and `torchcodec_ready=false`
@@ -101,13 +101,14 @@ truth for live claims. Do not treat this document as a live witness monitor.
   - model prefetch reports should now expect `18 / 18` assets including YOLO and the WSL runtime cache gate
   - local focused verification after receiving the audit passed: `30` cache/WSL authority tests with `4` warnings
 - Pause instruction:
-  - next gate is host validation on the laptop: fresh pull, rerun bootstrap/validation, confirm `diarization_ready=true`, then run one controlled `GPU_ENHANCED` scene witness before any broader ingestion run
+  - pause here for the fresh laptop bootstrap audit; read and classify that audit before resuming script-registry cleanup, source repair, witness work, or broad validation
 - Ranked next cleanup/audit seams:
   1. Completed: the `17` tracked `steps/*/step.py.backup_*` files beside active modules were removed after audit proved no active runtime/test consumers; `*.backup*` is now ignored.
   2. Completed: the retired root `config.json` scene-detection override and its obsolete fixer/monitor helper scripts were removed after audit proved canonical runtime config flows through `configs/config.yaml` and `steps.common.config_loader`.
-  3. Refresh or clearly quarantine `docs/bootstrap/SCRIPT_REGISTRY.md`; it is a stale generated aid, not runtime authority.
-  4. Keep default pytest on the canonical wrapper; avoid broad `pytest .` until archived script harnesses are explicitly excluded.
-  5. Next source seam after cleanup triage: silent observability/provenance drops in observer, memory commit, retrieval event, provenance, API status, and audio helper paths.
+  3. Completed: local repo-root scratch/workspace directories are root-ignored; do not stage local scratch contents or recurrence artifacts unless intentionally promoted.
+  4. Refresh or clearly quarantine `docs/bootstrap/SCRIPT_REGISTRY.md`; it is a stale generated aid, not runtime authority.
+  5. Keep default pytest on the canonical wrapper; avoid broad `pytest .` until archived script harnesses are explicitly excluded.
+  6. Next source seam after cleanup triage: silent observability/provenance drops in observer, memory commit, retrieval event, provenance, API status, and audio helper paths.
 
 ## Audio Vector Provenance Doctrine
 - Contract:

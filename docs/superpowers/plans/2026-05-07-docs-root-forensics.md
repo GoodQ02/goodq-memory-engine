@@ -102,6 +102,9 @@ Forbidden:
 - [x] 2026-05-07 - Removed the `17` tracked `steps/*/step.py.backup_*`
   siblings from the active tree after a reference audit found no active
   runtime/test consumers.
+- [x] 2026-05-07 - Removed the retired root `config.json` scene-detection
+  override plus obsolete fixer/monitor helper scripts after reference checks
+  showed canonical runtime config is `configs/config.yaml`.
 
 ## Surprises & Discoveries
 
@@ -128,6 +131,15 @@ Forbidden:
 
 - Observation: Several tracked backup files lived beside active step modules
   and have now been removed from the active tree.
+  Evidence: reference checks found no active runtime/test consumers for the
+  `steps/*/step.py.backup_*` siblings.
+
+- Observation: A retired root `config.json` still carried historical
+  5-minute scene-detection settings, but active runtime paths use
+  `configs/config.yaml` through `steps.common.config_loader`.
+  Evidence: `cli.run_ingestion`, `cli.step_runner`, and
+  `steps/video_scene_detect/step.py` read loaded config payloads; the old fixer
+  and monitor helper scripts were isolated and already classified obsolete.
   Evidence: `steps/audio_diarize/step.py.backup_before_chunking`,
   `steps/audio_diarize/step.py.backup_pre_gpu_refactor`, and
   `steps/audio_transcribe/step.py.backup_pre_gpu_refactor` were tracked

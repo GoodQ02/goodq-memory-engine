@@ -132,6 +132,10 @@ repo-root audits:
   - 2026-05-07 audit found and removed `17` tracked
     `steps/*/step.py.backup_*` siblings from the active tree after reference
     checks found no active runtime/test consumers
+- root scene-detection config relic
+  - 2026-05-07 audit found and removed the retired root `config.json`
+    override plus obsolete fixer/monitor helper scripts after reference checks
+    showed canonical runtime config is `configs/config.yaml`
 - scratch/temp directories at repo root
 - legacy test and archive folders outside `docs/archive/`
 - script registry entries classified as unclear/obsolete

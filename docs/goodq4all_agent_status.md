@@ -91,7 +91,7 @@ truth for live claims. Do not treat this document as a live witness monitor.
 ## Project-Root Audit Checkpoint (2026-05-07)
 - Docs-index-guided audit status:
   - read-only audit completed using `docs/reference/indexes/DOCS_FORENSICS_INDEX.md` as the routing map
-  - validation passed: docs drift lint, `git diff --check`, and the canonical test wrapper with `492` passing unit tests and `5` warnings
+  - validation passed: docs drift lint, `git diff --check`, and the canonical test wrapper with `493` passing unit tests and `5` warnings
   - tracked source state was clean; untracked recurrence artifacts under `reports/control_recurrence/` remain workspace hygiene unless intentionally promoted
 - Current readiness notes:
   - Qdrant responded locally
@@ -100,7 +100,7 @@ truth for live claims. Do not treat this document as a live witness monitor.
   - laptop bootstrap audit confirmed `--yes` exits visibly instead of hanging and model prefetch reaches `18 / 18`; remaining WSL diarization degradation traced to CRLF in generated HF `refs/main` and `.goodq_env` artifacts, now patched to write LF-only UTF-8 bytes
 - Ranked next cleanup/audit seams:
   1. Completed: the `17` tracked `steps/*/step.py.backup_*` files beside active modules were removed after audit proved no active runtime/test consumers; `*.backup*` is now ignored.
-  2. Audit root `config.json` and the scene-detection helper scripts that still point at it before changing either surface.
+  2. Completed: the retired root `config.json` scene-detection override and its obsolete fixer/monitor helper scripts were removed after audit proved canonical runtime config flows through `configs/config.yaml` and `steps.common.config_loader`.
   3. Refresh or clearly quarantine `docs/bootstrap/SCRIPT_REGISTRY.md`; it is a stale generated aid, not runtime authority.
   4. Keep default pytest on the canonical wrapper; avoid broad `pytest .` until archived script harnesses are explicitly excluded.
   5. Next source seam after cleanup triage: silent observability/provenance drops in observer, memory commit, retrieval event, provenance, API status, and audio helper paths.

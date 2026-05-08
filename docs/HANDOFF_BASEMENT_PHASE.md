@@ -84,7 +84,7 @@ these findings:
 
 - Validation passed: `python scripts/docs/doc_drift_lint.py`, `git diff --check`,
   and `powershell -ExecutionPolicy Bypass -File scripts/dev/run_pytest.ps1 -q`
-  (`492` passed, `5` warnings).
+  (`493` passed, `5` warnings).
 - Tracked source state was clean; the only expected local workspace artifacts
   were untracked recurrence report files under `reports/control_recurrence/`.
 - Active docs lint clean. Archive docs still contain historical drive-root
@@ -103,6 +103,10 @@ these findings:
   files beside active step modules were removed from the active tree after
   audit showed no active runtime/test consumers. `*.backup*` is ignored to
   prevent recurrence.
+- Repo-root config seam completed: the retired root `config.json`
+  scene-detection override and its obsolete fixer/monitor helper scripts were
+  removed after reference checks showed canonical runtime config is
+  `configs/config.yaml` via `steps.common.config_loader`.
 - Script registry status: `docs/bootstrap/SCRIPT_REGISTRY.md` is a stale
   generated audit aid, not runtime authority. Canonical script surfaces remain
   root launchers, bootstrap installer/validator/model prefetch, interpreter

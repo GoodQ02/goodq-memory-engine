@@ -152,7 +152,7 @@ script before using this file to justify execution, deletion, or promotion.
 | `scripts/find_transcription_data.py` | Runtime Utility | Get video hash | Yes | None detected |
 | `scripts/fix_imports.py` | Unclear/Obsolete | Pattern to replace | No | absolute path operations |
 | `scripts/fix_pyannote_gpu.py` | Unclear/Obsolete | Fix PyAnnote GPU transfer API usage across the codebase | No | None detected |
-| `scripts/fix_scene_detection_config.py` | Unclear/Obsolete | Fix scene detection configuration to use 5-minute minimum scenes | No | None detected |
+| `scripts/fix_scene_detection_config.py` (retired) | Unclear/Obsolete | Removed after audit proved canonical scene-detection config flows through `configs/config.yaml`, not the retired root `config.json`. | No | None detected |
 | `scripts/full_diagnostic_check.py` | Unclear/Obsolete | Full Diagnostic Check - Analyze Complete Ingestion Results | No | absolute path operations |
 | `scripts/generate_goodq4all_agent_status.py` | Runtime Utility | Monitoring/status utility for generate goodq4all agent status. | Yes | None detected |
 | `scripts/generate_system_snapshot.py` | Runtime Utility | Utility script for generate system snapshot. | Yes | None detected |
@@ -178,7 +178,7 @@ script before using this file to justify execution, deletion, or promotion.
 | `scripts/monitor_ingestion_progress.py` | Unclear/Obsolete | GoodQ Mission Progress Monitor | No | absolute path operations |
 | `scripts/monitor_ingestion_realtime.py` | Unclear/Obsolete | Real-time Ingestion Monitor | No | absolute path operations |
 | `scripts/monitor_processing.py` | Unclear/Obsolete | Real-time processing monitor for GoodQ ingestion | No | None detected |
-| `scripts/monitor_scene_detection.py` | Unclear/Obsolete | Monitor GoodQ ingestion with scene detection verification | No | None detected |
+| `scripts/monitor_scene_detection.py` (retired) | Unclear/Obsolete | Removed after audit found hardcoded historical scene-length and memory-db assumptions outside the canonical runtime config path. | No | None detected |
 | `scripts/monitoring/monitor_ingestion.bat` | Unclear/Obsolete | GoodQ4All - Live Ingestion Monitor (Non-Intrusive) | No | environment mutation |
 | `scripts/monitoring/monitor_live.bat` | Unclear/Obsolete | Check running processes | No | None detected |
 | `scripts/optimize_config.py` | Unclear/Obsolete | GoodQ Configuration Optimizer | No | absolute path operations |

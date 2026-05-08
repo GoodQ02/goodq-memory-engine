@@ -157,6 +157,7 @@ htmlcov/
 .venv_install_audit/
 temp_dir_inventory.json
 temp_repo_inventory.json
+/config.json
 
 # ===== DOCUMENTATION BUILD =====
 docs/_build/

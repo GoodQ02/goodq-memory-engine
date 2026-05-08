@@ -99,9 +99,10 @@ these findings:
   prefetch reaches `18 / 18`, but surfaced a final WSL diarization gate caused
   by CRLF in generated Hugging Face `refs/main` and `.goodq_env` artifacts; the
   matching patch writes those generated files as LF-only UTF-8 bytes.
-- Highest-confidence repo-root cleanup seam: the `17` tracked
-  `steps/*/step.py.backup_*` files beside active step modules. Audit references
-  before removal or archival.
+- Repo-root cleanup seam completed: the `17` tracked `steps/*/step.py.backup_*`
+  files beside active step modules were removed from the active tree after
+  audit showed no active runtime/test consumers. `*.backup*` is ignored to
+  prevent recurrence.
 - Script registry status: `docs/bootstrap/SCRIPT_REGISTRY.md` is a stale
   generated audit aid, not runtime authority. Canonical script surfaces remain
   root launchers, bootstrap installer/validator/model prefetch, interpreter

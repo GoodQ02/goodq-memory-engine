@@ -99,6 +99,9 @@ Forbidden:
   diagnostic relic instead of deleting it.
 - [x] 2026-05-07 - Added `docs/reference/indexes/DOCS_FORENSICS_INDEX.md` as the
   agent/operator lookup surface for future docs cleanup and hidden-intel audits.
+- [x] 2026-05-07 - Removed the `17` tracked `steps/*/step.py.backup_*`
+  siblings from the active tree after a reference audit found no active
+  runtime/test consumers.
 
 ## Surprises & Discoveries
 
@@ -123,11 +126,14 @@ Forbidden:
   Evidence: active docs contain `WSL_AUDIO_LANE_OBSERVED_FUNCTIONAL_DRIFT_CU128`
   and do not contain the rejected candidate/approved cu128 labels.
 
-- Observation: Several tracked backup files live beside active step modules.
+- Observation: Several tracked backup files lived beside active step modules
+  and have now been removed from the active tree.
   Evidence: `steps/audio_diarize/step.py.backup_before_chunking`,
   `steps/audio_diarize/step.py.backup_pre_gpu_refactor`, and
-  `steps/audio_transcribe/step.py.backup_pre_gpu_refactor` are tracked source-tree
-  files outside `docs/archive/`.
+  `steps/audio_transcribe/step.py.backup_pre_gpu_refactor` were tracked
+  source-tree files outside `docs/archive/`; the 2026-05-07 cleanup removed
+  all `17` `steps/*/step.py.backup_*` siblings and added `*.backup*` to
+  `.gitignore`.
 
 - Observation: Local workspace artifacts remain present and intentionally
   unstaged.

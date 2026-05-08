@@ -99,7 +99,7 @@ truth for live claims. Do not treat this document as a live witness monitor.
   - desktop cache readiness still reported the current PyAnnote trio missing from the Windows model cache; treat as local readiness watch until bootstrap/model prefetch evidence refreshes it
   - laptop bootstrap audit confirmed `--yes` exits visibly instead of hanging and model prefetch reaches `18 / 18`; remaining WSL diarization degradation traced to CRLF in generated HF `refs/main` and `.goodq_env` artifacts, now patched to write LF-only UTF-8 bytes
 - Ranked next cleanup/audit seams:
-  1. Audit the `17` tracked `steps/*/step.py.backup_*` files beside active modules, then remove or archive only after references are proven absent.
+  1. Completed: the `17` tracked `steps/*/step.py.backup_*` files beside active modules were removed after audit proved no active runtime/test consumers; `*.backup*` is now ignored.
   2. Audit root `config.json` and the scene-detection helper scripts that still point at it before changing either surface.
   3. Refresh or clearly quarantine `docs/bootstrap/SCRIPT_REGISTRY.md`; it is a stale generated aid, not runtime authority.
   4. Keep default pytest on the canonical wrapper; avoid broad `pytest .` until archived script harnesses are explicitly excluded.

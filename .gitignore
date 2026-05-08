@@ -92,6 +92,7 @@ zenml_store/
 *.temp
 *.bak
 *.backup
+*.backup*
 ~*
 
 # ===== WINDOWS =====

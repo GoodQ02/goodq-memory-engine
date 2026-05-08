@@ -129,8 +129,9 @@ These are outside the docs-folder clearance and should be handled in separate
 repo-root audits:
 
 - tracked backup files beside active step modules
-  - 2026-05-07 audit found `17` tracked `steps/*/step.py.backup_*` siblings
-    beside active modules; prove no references before removal or archival
+  - 2026-05-07 audit found and removed `17` tracked
+    `steps/*/step.py.backup_*` siblings from the active tree after reference
+    checks found no active runtime/test consumers
 - scratch/temp directories at repo root
 - legacy test and archive folders outside `docs/archive/`
 - script registry entries classified as unclear/obsolete

@@ -24,7 +24,7 @@ truth for live claims. Do not treat this document as a live witness monitor.
   - witness passed bootstrap/preflight, WSL torch lane `2.5.1+cu121`, Qdrant reachability, WSL audio execution, transcript persistence, CLAP/audio embedding, text embedding, Phase 6a/6b, `phase6_complete=true`, and `qdrant_ok=true`
   - witness found live runtime PyAnnote still needed the canonical HF cache dir in `wsl2_audio/process_audio.py` and `wsl2_audio/audio_service.py`; `3a06342` patches both runtime loaders
   - witness found laptop image-caption OOM was consistent with the active `scripts.gpu_config` map missing image-step budgets; `86f032d` aligns image-caption/DINO/CLIP budgets with the canonical vision step contract
-  - remaining watch item: WSL-side Wav2Vec emotion/embedding enrichment reports `transformers not installed`; this is optional and should be handled as a future package-lane audit, not folded into the runtime cache or GPU-budget patches
+  - remaining watch item: WSL-side Wav2Vec emotion/embedding enrichment reports `transformers not installed`; this is optional and should be handled as a future package-lane audit, not folded into the runtime cache or GPU-budget patches. Implementation plan: `docs/superpowers/plans/2026-05-08-wsl-wav2vec-transformers-lane.md`
 - Pause checkpoint, 2026-05-07:
   - latest local docs-clearance commit: `103b17f` (`docs: add documentation forensics index`)
   - docs folder is now indexed for future agent lookup through `docs/reference/indexes/DOCS_FORENSICS_INDEX.md`

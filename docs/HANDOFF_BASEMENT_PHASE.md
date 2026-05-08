@@ -24,7 +24,7 @@ This is the practical handoff point for a brand-new Codex session.
   - witness passed WSL audio execution, transcript persistence, CLAP/audio embedding, text embedding, Phase 6a/6b, `phase6_complete=true`, and `qdrant_ok=true`
   - witness found runtime PyAnnote needed the canonical HF cache dir in the live WSL loaders; `3a06342` patches `wsl2_audio/process_audio.py` and `wsl2_audio/audio_service.py`
   - witness found laptop image-caption OOM was consistent with missing image-step budgets in `scripts.gpu_config`; `86f032d` maps image-caption/DINO/CLIP to the shared image env with explicit step budgets
-  - remaining watch item: WSL-side Wav2Vec emotion/embedding enrichment reports `transformers not installed`; treat this as a future package-lane audit, not an ingestion blocker
+  - remaining watch item: WSL-side Wav2Vec emotion/embedding enrichment reports `transformers not installed`; treat this as a future package-lane audit, not an ingestion blocker. Implementation plan: `docs/superpowers/plans/2026-05-08-wsl-wav2vec-transformers-lane.md`
 - Prior pause checkpoint:
   - latest local docs-clearance commit: `103b17f` (`docs: add documentation forensics index`)
   - documentation clearance is sealed enough to proceed later from `docs/reference/indexes/DOCS_FORENSICS_INDEX.md`
@@ -97,7 +97,7 @@ these findings:
 - Laptop one-scene `GPU_ENHANCED` witness `20260508_104105_laptop_gpu_enhanced_one_scene_witness` completed successfully enough to validate the bootstrap/runtime lane, but found two source seams now patched:
   - runtime PyAnnote loaders needed canonical HF cache-dir pass-through (`3a06342`)
   - image-caption/DINO/CLIP needed explicit `scripts.gpu_config` step budgets for the shared image env (`86f032d`)
-- Remaining non-blocking witness watch item: WSL-side Wav2Vec emotion/embedding enrichment is unavailable when `transformers` is absent from the WSL venv. Do not silently treat the archived WSL emotion sample output as current truth; evaluate this as a future package-lane audit if full WSL-side emotion/embedding enrichment is required.
+- Remaining non-blocking witness watch item: WSL-side Wav2Vec emotion/embedding enrichment is unavailable when `transformers` is absent from the WSL venv. Do not silently treat the archived WSL emotion sample output as current truth; evaluate this as a future package-lane audit if full WSL-side emotion/embedding enrichment is required. Implementation plan: `docs/superpowers/plans/2026-05-08-wsl-wav2vec-transformers-lane.md`
 - Laptop bootstrap audit received and classified: WSL audio cache authority is
   patched forward on main by `a1d34df` and followed by later docs/root-cleanup
   commits through `25ff2a7`. The fix adds `facebook/wav2vec2-base-960h` to the

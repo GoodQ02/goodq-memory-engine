@@ -93,16 +93,17 @@ truth for live claims. Do not treat this document as a live witness monitor.
   - read-only audit completed using `docs/reference/indexes/DOCS_FORENSICS_INDEX.md` as the routing map
   - validation passed: docs drift lint, `git diff --check`, and the canonical test wrapper with `493` passing unit tests and `5` warnings
   - tracked source state was clean; untracked recurrence artifacts under `reports/control_recurrence/` remain workspace hygiene unless intentionally promoted
-  - cache-authority fix `a1d34df` is in current main history; HF cache ref newline fix `684308a` now writes generated `refs/main` files as raw commit hash bytes with no trailing newline
+  - cache-authority fix `a1d34df` is in current main history; HF cache ref newline fix `684308a` writes generated `refs/main` files as raw commit hash bytes; WSL PyAnnote preflight cache fix `af6fff3` loads the pipeline from the canonical WSL Hugging Face cache env
 - Current readiness notes:
   - Qdrant responded locally
   - WSL audio preflight returned ready with diarization ready, while retaining the observed cu128 drift lane and `torchcodec_ready=false`
   - laptop bootstrap audit confirmed the WSL audio cache-authority seam is patched forward: `facebook/wav2vec2-base-960h` is now part of the authoritative bootstrap model cache set, WSL preflight uses pinned offline revisions, and optional NRC lexicon handling matches registry optionality
   - follow-up laptop audit confirmed `18 / 18` model prefetch and pinned offline PyAnnote lookup, but default `main` offline lookup still failed when `refs/main` ended with LF; `684308a` patches that exact runtime cache-ref seam
+  - latest laptop audit confirmed default offline `main` lookup and `Pipeline.from_pretrained(..., cache_dir=...)` both work when pointed at the canonical cache, but preflight itself was not passing `cache_dir`; `af6fff3` patches that exact readiness gate
   - model prefetch reports should now expect `18 / 18` assets including YOLO and the WSL runtime cache gate
-  - local focused verification after the newline fix passed: `48` bootstrap/cache/WSL authority tests with `4` warnings
+  - local focused verification after the preflight cache fix passed: `48` bootstrap/cache/WSL authority tests with `4` warnings
 - Pause instruction:
-  - next gate is fresh laptop pull, rerun bootstrap/validation, confirm default offline `main` lookup and `diarization_ready=true`, then one controlled `GPU_ENHANCED` scene witness before broader ingestion
+  - next gate is fresh laptop pull, rerun bootstrap/validation, confirm `diarization_ready=true`, then one controlled `GPU_ENHANCED` scene witness before broader ingestion
 - Ranked next cleanup/audit seams:
   1. Completed: the `17` tracked `steps/*/step.py.backup_*` files beside active modules were removed after audit proved no active runtime/test consumers; `*.backup*` is now ignored.
   2. Completed: the retired root `config.json` scene-detection override and its obsolete fixer/monitor helper scripts were removed after audit proved canonical runtime config flows through `configs/config.yaml` and `steps.common.config_loader`.

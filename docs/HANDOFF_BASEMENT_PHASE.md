@@ -92,9 +92,14 @@ these findings:
   PyAnnote lookup, but default `main` offline lookup still failed when generated
   Hugging Face `refs/main` files ended with LF. Runtime fix `684308a` now writes
   generated `refs/main` files as raw commit hash bytes with no trailing newline.
+- Latest laptop audit confirmed default offline `main` lookup and
+  `Pipeline.from_pretrained(..., cache_dir=...)` work against the canonical
+  cache, but WSL preflight itself was not passing `cache_dir`. Runtime fix
+  `af6fff3` passes the sourced WSL Hugging Face cache env into both PyAnnote
+  compatibility load paths.
 - Next gate is fresh laptop pull, rerun bootstrap/validation, confirm default
-  offline `main` lookup and `diarization_ready=true`, then run one controlled
-  `GPU_ENHANCED` scene witness before any broader ingestion run.
+  `diarization_ready=true`, then run one controlled `GPU_ENHANCED` scene
+  witness before any broader ingestion run.
 - Validation passed: `python scripts/docs/doc_drift_lint.py`, `git diff --check`,
   and `powershell -ExecutionPolicy Bypass -File scripts/dev/run_pytest.ps1 -q`
   (`493` passed, `5` warnings).
@@ -108,7 +113,7 @@ these findings:
 - Model prefetch reports should now expect `18 / 18` assets including YOLO and
   the WSL runtime cache gate. Any lower count should be treated as a bootstrap
   cache-authority or host-cache readiness seam, not an ingestion failure.
-- Local focused verification after the HF ref newline fix passed `48`
+- Local focused verification after the WSL PyAnnote preflight cache fix passed `48`
   bootstrap/cache/WSL authority tests with `4` warnings.
 - Repo-root cleanup seam completed: the `17` tracked `steps/*/step.py.backup_*`
   files beside active step modules were removed from the active tree after

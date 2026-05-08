@@ -112,14 +112,16 @@ the supported host/runtime baseline, but it is not a live witness monitor.
 
 ## Current Operator State
 - Pause checkpoint, 2026-05-07:
-  - current runtime fix checkpoint is `684308a` (`fix: write hf cache refs without newline`)
+  - current runtime fix checkpoint is `af6fff3` (`fix: load wsl pyannote from canonical cache`)
   - WSL audio cache-authority fix `a1d34df` is included in current main history
+  - HF cache ref newline fix `684308a` is included in current main history
   - docs-clearance commit `103b17f` added `docs/reference/indexes/DOCS_FORENSICS_INDEX.md`
   - active docs status markers are complete for Markdown/text docs under `docs/`
   - historical WSL audio emotion sample output is archived at `docs/archive/diagnostics/wsl2_audio_emotion_sample_output.json`
   - project-root audit checkpoint from 2026-05-07 is recorded in `docs/HANDOFF_BASEMENT_PHASE.md` and `docs/goodq4all_agent_status.md`
   - follow-up laptop audit found HF default `main` offline lookup still failed with LF-terminated generated `refs/main`; `684308a` writes those refs without trailing newline
-  - next gate is fresh laptop pull, bootstrap/validation, default offline `main` lookup, `diarization_ready=true`, then one controlled `GPU_ENHANCED` scene witness
+  - latest laptop audit found preflight still did not pass canonical cache env into PyAnnote pipeline load; `af6fff3` passes that cache dir through both auth compatibility paths
+  - next gate is fresh laptop pull, bootstrap/validation, `diarization_ready=true`, then one controlled `GPU_ENHANCED` scene witness
   - remaining repo-root cleanup candidates are tracked in `docs/reference/indexes/DOCS_FORENSICS_INDEX.md` and ranked in the status handoff
   - tracked step backup cleanup is complete: `17` `steps/*/step.py.backup_*` siblings were removed from the active tree and `*.backup*` is now ignored
   - root scene-detection config cleanup is complete: retired root `config.json` and obsolete fixer/monitor helpers were removed; canonical runtime config remains `configs/config.yaml`

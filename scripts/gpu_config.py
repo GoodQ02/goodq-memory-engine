@@ -12,9 +12,16 @@ GPU_MEMORY_LIMITS = {
     "goodq_audio_transcribe": 0.20,  # Whisper transcription
     "goodq_emotion_classify": 0.18,  # Emotion classification
     "goodq_face_embed": 0.20,  # Face embeddings
+    "goodq_image_caption": 0.20,  # BLIP captioning / shared image env
     "goodq_object_detect": 0.25,  # Object detection (YOLO)
     "goodq_ocr": 0.20,  # OCR
     "goodq_text_embed": 0.15,  # Text embeddings
+}
+
+STEP_MEMORY_LIMITS = {
+    "image_caption": 0.20,  # BLIP or fallback image captioning
+    "image_embed_clip": 0.25,  # CLIP ViT
+    "image_embed_dino": 0.25,  # DINOv2
 }
 
 # Apply memory limit for current environment
@@ -51,13 +58,16 @@ def setup_step_gpu(step_name):
         "audio_transcribe": "goodq_audio_transcribe",
         "emotion_classify": "goodq_emotion_classify",
         "face_embed": "goodq_face_embed",
+        "image_caption": "goodq_image_caption",
+        "image_embed_clip": "goodq_image_caption",
+        "image_embed_dino": "goodq_image_caption",
         "object_detect": "goodq_object_detect",
         "ocr": "goodq_ocr",
         "text_embed": "goodq_text_embed",
     }
     
     env_name = step_to_env.get(step_name, os.environ.get('CONDA_DEFAULT_ENV', 'unknown'))
-    fraction = GPU_MEMORY_LIMITS.get(env_name, 0.15)
+    fraction = STEP_MEMORY_LIMITS.get(step_name, GPU_MEMORY_LIMITS.get(env_name, 0.15))
     
     # Determine device
     device = "cuda" if torch.cuda.is_available() else "cpu"

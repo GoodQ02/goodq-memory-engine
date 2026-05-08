@@ -12,6 +12,13 @@
 
 ## Current Evidence
 
+- Execution checkpoint, 2026-05-08: the lane was qualified on the laptop with
+  pinned `transformers==4.43.3`, `tokenizers==0.19.1`, and
+  `safetensors==0.7.0`; no forbidden torch/PyAnnote/hub/numpy/scipy drift was
+  observed, no-ingestion WSL smoke succeeded, and one-scene witness
+  `20260508_173240_laptop_gpu_enhanced_one_scene_witness_wav2vec_artifact_fields`
+  passed with Phase 6 complete, Qdrant ok, diarization success, Wav2Vec
+  enrichment success, and `embedding_dim=768`.
 - `wsl2_audio/process_audio.py` already contains optional Wav2Vec emotion and embedding paths guarded by `TRANSFORMERS_AVAILABLE`.
 - When `transformers` is absent, runtime surfaces are truthful:
   - `emotion_status = "unavailable"`

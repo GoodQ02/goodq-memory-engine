@@ -85,11 +85,19 @@ Current preflight / bootstrap / doctor surfaces distinguish:
 - `diarization_ready`
   - the sourced WSL runtime can resolve and load the configured diarization
     pipeline offline from its active cache root
+- `wav2vec_enrichment_ready`
+  - the sourced WSL runtime can import the pinned Wav2Vec dependency lane and
+    resolve the configured Wav2Vec emotion / embedding models from the
+    canonical cache
 
 Interpretation:
 
 - transcription-ready but diarization-degraded is a valid warning state
 - a single WSL warning does not automatically mean the whole audio worker is unusable
+- `wav2vec_enrichment_ready=false` is not a base WSL audio failure by itself.
+  It means optional emotion, Wav2Vec embeddings, or speaker voice signatures
+  may be unavailable and must be surfaced through `emotion_status`,
+  `embeddings_status`, and `speaker_voice_signature_meta`.
 
 ## Runtime Black Box Recorder
 
@@ -113,6 +121,7 @@ an audio backend. It records the sourced WSL runtime as observed:
 - `torch_lane_status`
 - `torchcodec_ready`
 - `torchcodec_detail`
+- `wav2vec_enrichment_ready`
 - `runtime_warnings`
 
 The bridge preserves a compact copy as `bridge_runtime_probe` on success and

@@ -193,6 +193,7 @@ def audio_unified_wsl2(audio_path: str, scene_id: str = None, duration: float = 
             'audio_emotion': emotion,  # Duplicate for compatibility
             'emotion_status': result.get('emotion_status'),
             'emotion_error': result.get('emotion_error'),
+            'emotion_note': result.get('emotion_note'),
             
             # Features
             'energy': result.get('energy'),
@@ -201,6 +202,9 @@ def audio_unified_wsl2(audio_path: str, scene_id: str = None, duration: float = 
             # Embeddings
             'embeddings': result.get('embeddings', []),
             'embedding_dim': result.get('embedding_dim', 768),
+            'embeddings_status': result.get('embeddings_status'),
+            'embeddings_error': result.get('embeddings_error'),
+            'embeddings_note': result.get('embeddings_note'),
             'speaker_voice_signatures': result.get('speaker_voice_signatures', []),
             'speaker_voice_signature_meta': result.get('speaker_voice_signature_meta', {}),
             

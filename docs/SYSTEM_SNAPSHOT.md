@@ -129,7 +129,9 @@ the supported host/runtime baseline, but it is not a live witness monitor.
   - witness passed WSL audio execution, transcript persistence, CLAP/audio embedding, text embedding, Phase 6a/6b, `phase6_complete=true`, and `qdrant_ok=true`
   - witness found runtime PyAnnote needed canonical HF cache-dir pass-through in the live WSL loaders; `3a06342` patches that runtime seam
   - witness found laptop image-caption OOM was consistent with missing image-step budgets in `scripts.gpu_config`; `86f032d` maps image-caption/DINO/CLIP to the shared image env with explicit budgets
-  - remaining watch item is optional WSL-side Wav2Vec emotion/embedding enrichment reporting `transformers not installed`; treat this as a future package-lane audit, not as a bootstrap or ingestion blocker. Implementation plan: `docs/superpowers/plans/2026-05-08-wsl-wav2vec-transformers-lane.md`
+  - WSL-side Wav2Vec emotion/embedding enrichment lane is now qualified with pinned `transformers==4.43.3`, `tokenizers==0.19.1`, and `safetensors==0.7.0`; preflight reports `wav2vec_enrichment_ready` separately from base WSL readiness
+  - laptop one-scene witness `20260508_173240_laptop_gpu_enhanced_one_scene_witness_wav2vec_artifact_fields` passed with Phase 6 complete, Qdrant ok, BLIP caption ok, diarization success, Wav2Vec enrichment success, and `embedding_dim=768`
+  - remaining WSL audio watch item is non-fatal `torchcodec_decoder_unavailable`; current runtime succeeds through preloaded-audio handling
   - remaining repo-root cleanup candidates are tracked in `docs/reference/indexes/DOCS_FORENSICS_INDEX.md` and ranked in the status handoff
   - tracked step backup cleanup is complete: `17` `steps/*/step.py.backup_*` siblings were removed from the active tree and `*.backup*` is now ignored
   - root scene-detection config cleanup is complete: retired root `config.json` and obsolete fixer/monitor helpers were removed; canonical runtime config remains `configs/config.yaml`

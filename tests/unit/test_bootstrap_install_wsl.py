@@ -242,6 +242,11 @@ def test_wsl_audio_installers_use_bootstrap_constraints_and_post_install_validat
     ):
         assert "torchvision.ops import nms" in content
 
+    for content in (shell_content, quick_content):
+        assert "transformers" in content
+        assert "tokenizers" in content
+        assert "safetensors" in content
+
 
 def test_wsl_bootstrap_constraints_match_python310_cu121_lane() -> None:
     repo_root = Path(__file__).resolve().parents[2]
@@ -259,11 +264,16 @@ def test_wsl_bootstrap_constraints_match_python310_cu121_lane() -> None:
     assert pinned["torchaudio"] == "2.5.1+cu121"
     assert pinned["pyannote.audio"] == "3.3.2"
     assert pinned["huggingface-hub"] == "0.35.3"
+    assert pinned["transformers"] == "4.43.3"
+    assert pinned["tokenizers"] == "0.19.1"
+    assert pinned["safetensors"] == "0.7.0"
     assert pinned["numpy"] == "2.2.6"
     assert pinned["scipy"] == "1.15.3"
 
     assert "pyannote.audio==4.0.3" not in constraints
     assert "huggingface-hub==1.13.0" not in constraints
+    assert "transformers==4.57.3" not in constraints
+    assert "tokenizers==0.22.1" not in constraints
     assert "numpy==2.3.5" not in constraints
     assert "scipy==1.16.3" not in constraints
 

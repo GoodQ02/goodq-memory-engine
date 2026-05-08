@@ -125,7 +125,7 @@ def _probe_wsl_audio_black_box(distro: str, workspace: str) -> Dict[str, Any]:
         "import sys\n"
         "import traceback\n"
         "\n"
-        "packages = ['torch', 'torchvision', 'torchaudio', 'torchcodec', 'pyannote.audio', 'faster-whisper']\n"
+        "packages = ['torch', 'torchvision', 'torchaudio', 'torchcodec', 'pyannote.audio', 'faster-whisper', 'transformers', 'tokenizers', 'safetensors']\n"
         "versions = {}\n"
         "for package in packages:\n"
         "    try:\n"
@@ -298,6 +298,43 @@ def _build_diarization_probe_script(workspace: str) -> str:
     )
 
 
+def _build_wav2vec_enrichment_probe_script(workspace: str) -> str:
+    return (
+        f"source '{workspace}/setup_cuda_env.sh' >/dev/null 2>&1 && "
+        "python3 - <<'PY'\n"
+        "import os\n"
+        "try:\n"
+        "    from transformers import Wav2Vec2FeatureExtractor, Wav2Vec2ForSequenceClassification, Wav2Vec2Model\n"
+        "    cache_dir = os.getenv('HUGGINGFACE_HUB_CACHE') or os.getenv('HF_HUB_CACHE') or None\n"
+        "    Wav2Vec2ForSequenceClassification.from_pretrained(\n"
+        "        'ehcalabres/wav2vec2-lg-xlsr-en-speech-emotion-recognition',\n"
+        "        cache_dir=cache_dir,\n"
+        "        local_files_only=True,\n"
+        "    )\n"
+        "    Wav2Vec2FeatureExtractor.from_pretrained(\n"
+        "        'ehcalabres/wav2vec2-lg-xlsr-en-speech-emotion-recognition',\n"
+        "        cache_dir=cache_dir,\n"
+        "        local_files_only=True,\n"
+        "    )\n"
+        "    Wav2Vec2Model.from_pretrained(\n"
+        "        'facebook/wav2vec2-base-960h',\n"
+        "        cache_dir=cache_dir,\n"
+        "        local_files_only=True,\n"
+        "    )\n"
+        "    Wav2Vec2FeatureExtractor.from_pretrained(\n"
+        "        'facebook/wav2vec2-base-960h',\n"
+        "        cache_dir=cache_dir,\n"
+        "        local_files_only=True,\n"
+        "    )\n"
+        "except Exception as exc:\n"
+        "    print('wav2vec_enrichment_unavailable')\n"
+        "    print(f'{type(exc).__name__}: {exc}')\n"
+        "else:\n"
+        "    print('wav2vec_enrichment_ready')\n"
+        "PY"
+    )
+
+
 def probe_wsl_audio_runtime(distro: str, workspace: str) -> Dict[str, Any]:
     result: Dict[str, Any] = {
         "distro": str(distro or "").strip() or "Ubuntu",
@@ -307,6 +344,7 @@ def probe_wsl_audio_runtime(distro: str, workspace: str) -> Dict[str, Any]:
         "transcription_ready": False,
         "process_import_ready": False,
         "diarization_ready": False,
+        "wav2vec_enrichment_ready": False,
         "runtime_ready": False,
         "abi_ready": False,
         "ready": False,
@@ -445,6 +483,36 @@ def probe_wsl_audio_runtime(distro: str, workspace: str) -> Dict[str, Any]:
             )[-600:]
         result["diarization_detail"] = "pyannote runtime unavailable"
 
+    wav2vec_script = _build_wav2vec_enrichment_probe_script(workspace)
+    try:
+        wav2vec_probe = _run_wsl_probe(distro, wav2vec_script, timeout=35)
+    except Exception as exc:
+        wav2vec_probe = None
+        result["wav2vec_enrichment_detail"] = f"{type(exc).__name__}: {exc}"
+
+    if wav2vec_probe is not None and wav2vec_probe.returncode == 0:
+        wav2vec_stdout = (wav2vec_probe.stdout or "").strip()
+        wav2vec_stderr = (wav2vec_probe.stderr or "").strip()
+        if wav2vec_stderr:
+            result["wav2vec_enrichment_probe_stderr_tail"] = wav2vec_stderr[-600:]
+        result["wav2vec_enrichment_ready"] = "wav2vec_enrichment_ready" in wav2vec_stdout
+        if not result["wav2vec_enrichment_ready"]:
+            wav2vec_lines = [line.strip() for line in wav2vec_stdout.splitlines() if line.strip()]
+            result["wav2vec_enrichment_detail"] = (
+                wav2vec_lines[1]
+                if len(wav2vec_lines) > 1
+                else "Wav2Vec enrichment probe did not report ready"
+            )
+    else:
+        if wav2vec_probe is not None:
+            result["wav2vec_enrichment_probe_stderr_tail"] = (
+                (wav2vec_probe.stderr or wav2vec_probe.stdout or "").strip()
+            )[-600:]
+        result["wav2vec_enrichment_detail"] = result.get(
+            "wav2vec_enrichment_detail",
+            "Wav2Vec enrichment runtime unavailable",
+        )
+
     black_box = _probe_wsl_audio_black_box(distro, workspace)
     result["runtime_black_box"] = black_box
     package_versions = black_box.get("package_versions") if isinstance(black_box, dict) else None
@@ -455,6 +523,9 @@ def probe_wsl_audio_runtime(distro: str, workspace: str) -> Dict[str, Any]:
             "torchaudio": package_versions.get("torchaudio"),
             "pyannote.audio": package_versions.get("pyannote.audio"),
             "faster-whisper": package_versions.get("faster-whisper"),
+            "transformers": package_versions.get("transformers"),
+            "tokenizers": package_versions.get("tokenizers"),
+            "safetensors": package_versions.get("safetensors"),
         }
     else:
         result["detected_versions"] = {
@@ -463,6 +534,9 @@ def probe_wsl_audio_runtime(distro: str, workspace: str) -> Dict[str, Any]:
             "torchaudio": _probe_package_version(distro, workspace, "torchaudio"),
             "pyannote.audio": _probe_package_version(distro, workspace, "pyannote.audio"),
             "faster-whisper": _probe_package_version(distro, workspace, "faster-whisper"),
+            "transformers": _probe_package_version(distro, workspace, "transformers"),
+            "tokenizers": _probe_package_version(distro, workspace, "tokenizers"),
+            "safetensors": _probe_package_version(distro, workspace, "safetensors"),
         }
     if isinstance(package_versions, dict):
         result["torch_lane_status"] = _classify_torch_lane(package_versions)
@@ -486,6 +560,8 @@ def probe_wsl_audio_runtime(distro: str, workspace: str) -> Dict[str, Any]:
         pyannote_warning_text += "\n" + str(pyannote_import.get("warning_tail") or "")
     if "torchcodec" in pyannote_warning_text.lower():
         runtime_warnings.append("pyannote_warned_torchcodec_decoder_unavailable")
+    if not result["wav2vec_enrichment_ready"]:
+        runtime_warnings.append("wav2vec_enrichment_unavailable")
     result["runtime_warnings"] = sorted(set(runtime_warnings))
 
     result["ready"] = True

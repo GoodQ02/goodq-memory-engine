@@ -645,11 +645,14 @@ def process_audio(audio_file, output_dir):
         emotion_device = "cpu"  # Force CPU to save GPU memory
         if TRANSFORMERS_AVAILABLE:
             try:
+                wav2vec_cache_dir = _resolve_hf_cache_dir()
                 emotion_model = Wav2Vec2ForSequenceClassification.from_pretrained(
-                    "ehcalabres/wav2vec2-lg-xlsr-en-speech-emotion-recognition"
+                    "ehcalabres/wav2vec2-lg-xlsr-en-speech-emotion-recognition",
+                    cache_dir=wav2vec_cache_dir,
                 )
                 emotion_extractor = Wav2Vec2FeatureExtractor.from_pretrained(
-                    "ehcalabres/wav2vec2-lg-xlsr-en-speech-emotion-recognition"
+                    "ehcalabres/wav2vec2-lg-xlsr-en-speech-emotion-recognition",
+                    cache_dir=wav2vec_cache_dir,
                 )
                 emotion_model.to(emotion_device)
                 
@@ -724,7 +727,11 @@ def process_audio(audio_file, output_dir):
         print("Processing: Embeddings...", file=sys.stderr)
         if TRANSFORMERS_AVAILABLE:
             try:
-                embed_model = Wav2Vec2Model.from_pretrained("facebook/wav2vec2-base-960h")
+                wav2vec_cache_dir = _resolve_hf_cache_dir()
+                embed_model = Wav2Vec2Model.from_pretrained(
+                    "facebook/wav2vec2-base-960h",
+                    cache_dir=wav2vec_cache_dir,
+                )
                 embed_model.to(device)
                 
                 if sr != 16000:
@@ -733,7 +740,10 @@ def process_audio(audio_file, output_dir):
                 else:
                     waveform_16k = waveform
                 
-                embed_extractor = Wav2Vec2FeatureExtractor.from_pretrained("facebook/wav2vec2-base-960h")
+                embed_extractor = Wav2Vec2FeatureExtractor.from_pretrained(
+                    "facebook/wav2vec2-base-960h",
+                    cache_dir=wav2vec_cache_dir,
+                )
                 inputs = embed_extractor(
                     waveform_16k.numpy().flatten(),
                     sampling_rate=16000,

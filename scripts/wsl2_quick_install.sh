@@ -48,7 +48,7 @@ if [ ! -f "$BOOTSTRAP_CONSTRAINTS_FILE" ]; then
   echo "ERROR: Missing WSL bootstrap constraints file: $BOOTSTRAP_CONSTRAINTS_FILE"
   exit 1
 fi
-pip install --constraint "$BOOTSTRAP_CONSTRAINTS_FILE" faster-whisper openai-whisper pyannote.audio
+pip install --constraint "$BOOTSTRAP_CONSTRAINTS_FILE" faster-whisper openai-whisper pyannote.audio transformers tokenizers safetensors
 pip install --constraint "$BOOTSTRAP_CONSTRAINTS_FILE" librosa soundfile scipy numpy
 python -m pip check
 python - <<'PYEOF'

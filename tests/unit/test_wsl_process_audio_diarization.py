@@ -253,3 +253,80 @@ def test_build_speaker_voice_signatures_emits_signature_for_diverse_segments():
     assert signature["embedding_dim"] == 2
     assert signature["segment_count"] == 2
     assert abs(sum(value * value for value in signature["embedding"]) - 1.0) < 1e-6
+
+
+def test_process_audio_wav2vec_loads_use_canonical_hf_cache(monkeypatch, tmp_path: Path):
+    from wsl2_audio import process_audio as mod
+
+    audio_file = tmp_path / "sample.wav"
+    audio_file.write_bytes(b"wav")
+    output_dir = tmp_path / "out"
+    waveform = torch.zeros((1, 16000))
+    captured: dict[str, list[dict[str, object]]] = {"calls": []}
+
+    class _FakeWhisperModel:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def transcribe(self, *args, **kwargs):
+            info = types.SimpleNamespace(language="en", language_probability=1.0)
+            return iter(()), info
+
+    class _FakeFeatureExtractor:
+        @classmethod
+        def from_pretrained(cls, model_name, **kwargs):
+            captured["calls"].append({"kind": "extractor", "model": model_name, **kwargs})
+            return cls()
+
+        def __call__(self, audio, sampling_rate, return_tensors, padding):
+            return {"input_values": torch.zeros((1, 16000))}
+
+    class _FakeEmotionModel:
+        @classmethod
+        def from_pretrained(cls, model_name, **kwargs):
+            captured["calls"].append({"kind": "emotion_model", "model": model_name, **kwargs})
+            return cls()
+
+        def to(self, device):
+            return self
+
+        def __call__(self, **kwargs):
+            return types.SimpleNamespace(logits=torch.tensor([[0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]]))
+
+    class _FakeEmbeddingModel:
+        @classmethod
+        def from_pretrained(cls, model_name, **kwargs):
+            captured["calls"].append({"kind": "embedding_model", "model": model_name, **kwargs})
+            return cls()
+
+        def to(self, device):
+            return self
+
+        def __call__(self, **kwargs):
+            return types.SimpleNamespace(last_hidden_state=torch.ones((1, 2, 3)))
+
+    monkeypatch.setattr(mod, "_load_runtime_config", lambda: {
+        "gpu": {"device": "cpu", "compute_type": "int8", "memory_fraction": 0.8},
+        "models": {"whisper": "medium", "diarization": "pyannote/speaker-diarization-3.1"},
+        "diarization": {"enabled": False},
+        "processing": {"language": "en", "beam_size": 5},
+        "_sources": [],
+    })
+    monkeypatch.setattr(mod, "require_gpu", lambda: False)
+    monkeypatch.setattr(mod, "resolve_wsl_gpu_config", lambda cfg: dict(cfg))
+    monkeypatch.setattr(mod.torch.cuda, "is_available", lambda: False)
+    monkeypatch.setattr(mod.torchaudio, "load", lambda _: (waveform.clone(), 16000))
+    monkeypatch.setattr(mod, "WhisperModel", _FakeWhisperModel)
+    monkeypatch.setattr(mod, "TRANSFORMERS_AVAILABLE", True)
+    monkeypatch.setattr(mod, "Wav2Vec2ForSequenceClassification", _FakeEmotionModel)
+    monkeypatch.setattr(mod, "Wav2Vec2FeatureExtractor", _FakeFeatureExtractor)
+    monkeypatch.setattr(mod, "Wav2Vec2Model", _FakeEmbeddingModel)
+    monkeypatch.setattr(mod, "clear_gpu_memory", lambda: None)
+    monkeypatch.setenv("HUGGINGFACE_HUB_CACHE", "/mnt/c/models/hub")
+
+    result = mod.process_audio(str(audio_file), str(output_dir))
+
+    assert result["emotion_status"] == "success"
+    assert result["embeddings_status"] == "success"
+    assert captured["calls"]
+    assert all(call.get("cache_dir") == "/mnt/c/models/hub" for call in captured["calls"])

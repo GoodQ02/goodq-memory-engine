@@ -41,6 +41,7 @@ def _compact_runtime_probe(probe: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         "runtime_ready": bool(probe.get("runtime_ready")),
         "abi_ready": bool(probe.get("abi_ready")),
         "diarization_ready": bool(probe.get("diarization_ready")),
+        "wav2vec_enrichment_ready": bool(probe.get("wav2vec_enrichment_ready")),
         "torch_lane_status": probe.get("torch_lane_status"),
         "expected_torch_lane": probe.get("expected_torch_lane"),
         "package_versions": package_versions or {},

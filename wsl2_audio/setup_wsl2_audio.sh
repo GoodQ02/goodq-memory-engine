@@ -106,6 +106,9 @@ pip install -q \
     --constraint "$BOOTSTRAP_CONSTRAINTS_FILE" \
     faster-whisper \
     pyannote.audio \
+    transformers \
+    tokenizers \
+    safetensors \
     soundfile \
     librosa \
     noisereduce \

@@ -39,9 +39,10 @@ def test_process_audio_uses_waveform_dict_for_diarization(monkeypatch, tmp_path:
 
     class _FakePipelineFactory:
         @staticmethod
-        def from_pretrained(model_name, use_auth_token=None):
+        def from_pretrained(model_name, use_auth_token=None, cache_dir=None):
             captured["model_name"] = model_name
             captured["token"] = use_auth_token
+            captured["cache_dir"] = cache_dir
             return _FakePipeline()
 
     monkeypatch.setattr(mod, "_load_runtime_config", lambda: {
@@ -61,6 +62,7 @@ def test_process_audio_uses_waveform_dict_for_diarization(monkeypatch, tmp_path:
     monkeypatch.setattr(mod, "TRANSFORMERS_AVAILABLE", False)
     monkeypatch.setattr(mod, "clear_gpu_memory", lambda: None)
     monkeypatch.setenv("HF_TOKEN", "test-token")
+    monkeypatch.setenv("HUGGINGFACE_HUB_CACHE", "/mnt/c/models/hub")
 
     result = mod.process_audio(str(audio_file), str(output_dir))
 
@@ -70,6 +72,7 @@ def test_process_audio_uses_waveform_dict_for_diarization(monkeypatch, tmp_path:
     assert result["speaker_count"] == 1
     assert captured["model_name"] == "pyannote/speaker-diarization-3.1"
     assert captured["token"] == "test-token"
+    assert captured["cache_dir"] == "/mnt/c/models/hub"
     assert isinstance(captured["audio_input"], dict)
     assert captured["audio_input"]["sample_rate"] == 16000
     assert torch.equal(captured["audio_input"]["waveform"], waveform)
@@ -93,14 +96,21 @@ def test_process_audio_diarization_loader_falls_back_to_token_kwarg():
                 raise TypeError("Pipeline.from_pretrained() got an unexpected keyword argument 'use_auth_token'")
             captured["model_name"] = model_name
             captured["token"] = kwargs.get("token")
+            captured["cache_dir"] = kwargs.get("cache_dir")
             return _FakePipeline()
 
-    pipeline = mod._load_pyannote_pipeline(_FakePipelineFactory, "pyannote/speaker-diarization-3.1", "test-token")
+    pipeline = mod._load_pyannote_pipeline(
+        _FakePipelineFactory,
+        "pyannote/speaker-diarization-3.1",
+        "test-token",
+        cache_dir="/mnt/c/models/hub",
+    )
 
     assert isinstance(pipeline, _FakePipeline)
     assert _FakePipelineFactory.calls == 2
     assert captured["model_name"] == "pyannote/speaker-diarization-3.1"
     assert captured["token"] == "test-token"
+    assert captured["cache_dir"] == "/mnt/c/models/hub"
 
 
 def test_audio_service_diarization_loader_prefers_use_auth_token(monkeypatch):
@@ -117,13 +127,73 @@ def test_audio_service_diarization_loader_prefers_use_auth_token(monkeypatch):
         def from_pretrained(model_name, **kwargs):
             captured["model_name"] = model_name
             captured["use_auth_token"] = kwargs.get("use_auth_token")
+            captured["cache_dir"] = kwargs.get("cache_dir")
             return _FakePipeline()
 
-    pipeline = mod._load_pyannote_pipeline(_FakePipelineFactory, "pyannote/speaker-diarization-3.1", "test-token")
+    pipeline = mod._load_pyannote_pipeline(
+        _FakePipelineFactory,
+        "pyannote/speaker-diarization-3.1",
+        "test-token",
+        cache_dir="/mnt/c/models/hub",
+    )
 
     assert isinstance(pipeline, _FakePipeline)
     assert captured["model_name"] == "pyannote/speaker-diarization-3.1"
     assert captured["use_auth_token"] == "test-token"
+    assert captured["cache_dir"] == "/mnt/c/models/hub"
+
+
+def test_audio_service_load_models_uses_canonical_hf_cache(monkeypatch):
+    monkeypatch.setitem(sys.modules, "soundfile", types.ModuleType("soundfile"))
+    from wsl2_audio import audio_service as mod
+
+    captured = {}
+
+    class _FakeWhisperModel:
+        def __init__(self, *args, **kwargs):
+            captured["whisper"] = {"args": args, "kwargs": kwargs}
+
+    class _FakePipeline:
+        pass
+
+    class _FakePipelineFactory:
+        @staticmethod
+        def from_pretrained(model_name, **kwargs):
+            captured["diarization_model"] = model_name
+            captured["diarization_kwargs"] = kwargs
+            return _FakePipeline()
+
+    pyannote_mod = types.ModuleType("pyannote")
+    pyannote_audio_mod = types.ModuleType("pyannote.audio")
+    pyannote_audio_mod.Pipeline = _FakePipelineFactory
+    monkeypatch.setitem(sys.modules, "pyannote", pyannote_mod)
+    monkeypatch.setitem(sys.modules, "pyannote.audio", pyannote_audio_mod)
+
+    monkeypatch.setattr(mod, "WhisperModel", _FakeWhisperModel)
+    monkeypatch.setattr(mod.torch.cuda, "is_available", lambda: False)
+    monkeypatch.setattr(mod.torch.hub, "load", lambda **_kwargs: ("vad", [None, None, None, None, "collect"]))
+    monkeypatch.setenv("PYANNOTE_TOKEN", "test-token")
+    monkeypatch.setenv("HUGGINGFACE_HUB_CACHE", "/mnt/c/models/hub")
+
+    service = object.__new__(mod.AudioService)
+    service.config = {
+        "gpu": {"device": "cpu", "compute_type": "int8"},
+        "models": {
+            "whisper": "medium",
+            "diarization": "pyannote/speaker-diarization-3.1",
+        },
+        "huggingface_token_env": "PYANNOTE_TOKEN",
+    }
+    service.whisper_model = None
+    service.diarization_pipeline = None
+    service.vad_model = None
+
+    service._load_models()
+
+    assert service.diarization_pipeline is not None
+    assert captured["diarization_model"] == "pyannote/speaker-diarization-3.1"
+    assert captured["diarization_kwargs"]["use_auth_token"] == "test-token"
+    assert captured["diarization_kwargs"]["cache_dir"] == "/mnt/c/models/hub"
 
 
 def test_select_speaker_signature_segments_requires_diversity():

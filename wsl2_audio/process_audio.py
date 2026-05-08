@@ -182,15 +182,25 @@ def _resolve_secret(raw_value, env_key=None):
     return None
 
 
-def _load_pyannote_pipeline(pipeline_cls, model_name: str, token: str):
+def _resolve_hf_cache_dir() -> Optional[str]:
+    """Return the canonical HF cache path exported by bootstrap, when present."""
+    return os.getenv("HUGGINGFACE_HUB_CACHE") or os.getenv("HF_HUB_CACHE") or None
+
+
+def _load_pyannote_pipeline(pipeline_cls, model_name: str, token: str, cache_dir: Optional[str] = None):
     """Load pyannote across the 3.x/4.x auth kwarg boundary."""
+    kwargs = {"use_auth_token": token}
+    if cache_dir:
+        kwargs["cache_dir"] = cache_dir
     try:
-        return pipeline_cls.from_pretrained(model_name, use_auth_token=token)
+        return pipeline_cls.from_pretrained(model_name, **kwargs)
     except TypeError as exc:
         message = str(exc)
         if "use_auth_token" not in message or "unexpected keyword" not in message:
             raise
-        return pipeline_cls.from_pretrained(model_name, token=token)
+        kwargs.pop("use_auth_token", None)
+        kwargs["token"] = token
+        return pipeline_cls.from_pretrained(model_name, **kwargs)
 
 
 def clear_gpu_memory():
@@ -568,6 +578,7 @@ def process_audio(audio_file, output_dir):
                         DiarizationPipeline,
                         result["diarization_model"],
                         hf_token,
+                        cache_dir=_resolve_hf_cache_dir(),
                     )
                     diarization_pipeline.to(torch.device(device))
                     

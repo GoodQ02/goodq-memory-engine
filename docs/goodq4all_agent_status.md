@@ -14,6 +14,7 @@ truth for live claims. Do not treat this document as a live witness monitor.
 
 ## Current Restart Checkpoint
 - Pause checkpoint, 2026-05-08:
+  - status: Wav2Vec WSL enrichment is one-episode validated on laptop `GPU_ENHANCED`.
   - latest runtime/source fixes on `main`:
     - `3a06342` (`fix: load runtime pyannote from canonical cache`)
     - `86f032d` (`fix: align image step gpu budget mapping`)
@@ -26,6 +27,8 @@ truth for live claims. Do not treat this document as a live witness monitor.
   - witness found laptop image-caption OOM was consistent with the active `scripts.gpu_config` map missing image-step budgets; `86f032d` aligns image-caption/DINO/CLIP budgets with the canonical vision step contract
   - WSL-side Wav2Vec emotion/embedding enrichment lane is now qualified with pinned `transformers==4.43.3`, `tokenizers==0.19.1`, and `safetensors==0.7.0`; base WSL readiness remains separate from `wav2vec_enrichment_ready`
   - laptop one-scene witness `20260508_173240_laptop_gpu_enhanced_one_scene_witness_wav2vec_artifact_fields` passed with Phase 6 complete, Qdrant ok, BLIP caption ok, diarization success, Wav2Vec enrichment success, and `embedding_dim=768`
+  - post-pull laptop one-scene witness `20260508_191455_laptop_gpu_enhanced_one_scene_witness_wav2vec_post_pull` on `7a7fd15` exited `0` and confirmed the same live artifact fields: WSL runtime ready, diarization success, `wav2vec_enrichment_ready=true`, Wav2Vec emotion success, Wav2Vec embeddings success with `embedding_dim=768`, speaker signature `status=ok`, BLIP caption ok, Phase 6 complete, and Qdrant ok
+  - one-episode laptop witness `20260508_214134_laptop_gpu_enhanced_one_episode_witness_wav2vec_post_pull` on `7a7fd15` exited `0` across `33` scenes: WSL audio success `33 / 33`, diarization success `33 / 33`, `wav2vec_enrichment_ready=true` `33 / 33`, Wav2Vec emotion success `33 / 33`, Wav2Vec embeddings success `33 / 33` with `embedding_dim=768`, BLIP caption ok `33 / 33`, CLAP ok `33 / 33`, transcript/full text present `33 / 33`, Phase 6 complete, and Qdrant ok
   - remaining WSL audio watch item is non-fatal `torchcodec_decoder_unavailable`; current runtime succeeds through preloaded-audio handling
   - WSL Wav2Vec qualification plan/proof trail: `docs/superpowers/plans/2026-05-08-wsl-wav2vec-transformers-lane.md`
 - Pause checkpoint, 2026-05-07:

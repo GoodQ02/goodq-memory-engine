@@ -112,6 +112,7 @@ the supported host/runtime baseline, but it is not a live witness monitor.
 
 ## Current Operator State
 - Pause checkpoint, 2026-05-08:
+  - status: Wav2Vec WSL enrichment is one-episode validated on laptop `GPU_ENHANCED`.
   - current runtime/source fix checkpoint is `86f032d` (`fix: align image step gpu budget mapping`)
   - WSL runtime PyAnnote cache-dir fix `3a06342` is included in current main history
   - image-step GPU budget mapping fix `86f032d` is included in current main history
@@ -131,6 +132,8 @@ the supported host/runtime baseline, but it is not a live witness monitor.
   - witness found laptop image-caption OOM was consistent with missing image-step budgets in `scripts.gpu_config`; `86f032d` maps image-caption/DINO/CLIP to the shared image env with explicit budgets
   - WSL-side Wav2Vec emotion/embedding enrichment lane is now qualified with pinned `transformers==4.43.3`, `tokenizers==0.19.1`, and `safetensors==0.7.0`; preflight reports `wav2vec_enrichment_ready` separately from base WSL readiness
   - laptop one-scene witness `20260508_173240_laptop_gpu_enhanced_one_scene_witness_wav2vec_artifact_fields` passed with Phase 6 complete, Qdrant ok, BLIP caption ok, diarization success, Wav2Vec enrichment success, and `embedding_dim=768`
+  - post-pull laptop one-scene witness `20260508_191455_laptop_gpu_enhanced_one_scene_witness_wav2vec_post_pull` on `7a7fd15` exited `0` and confirmed the same live artifact fields: WSL runtime ready, diarization success, `wav2vec_enrichment_ready=true`, Wav2Vec emotion success, Wav2Vec embeddings success with `embedding_dim=768`, speaker signature `status=ok`, BLIP caption ok, Phase 6 complete, and Qdrant ok
+  - one-episode laptop witness `20260508_214134_laptop_gpu_enhanced_one_episode_witness_wav2vec_post_pull` on `7a7fd15` exited `0` across `33` scenes: WSL audio success `33 / 33`, diarization success `33 / 33`, `wav2vec_enrichment_ready=true` `33 / 33`, Wav2Vec emotion success `33 / 33`, Wav2Vec embeddings success `33 / 33` with `embedding_dim=768`, BLIP caption ok `33 / 33`, CLAP ok `33 / 33`, transcript/full text present `33 / 33`, Phase 6 complete, and Qdrant ok
   - remaining WSL audio watch item is non-fatal `torchcodec_decoder_unavailable`; current runtime succeeds through preloaded-audio handling
   - remaining repo-root cleanup candidates are tracked in `docs/reference/indexes/DOCS_FORENSICS_INDEX.md` and ranked in the status handoff
   - tracked step backup cleanup is complete: `17` `steps/*/step.py.backup_*` siblings were removed from the active tree and `*.backup*` is now ignored

@@ -18,7 +18,14 @@
   observed, no-ingestion WSL smoke succeeded, and one-scene witness
   `20260508_173240_laptop_gpu_enhanced_one_scene_witness_wav2vec_artifact_fields`
   passed with Phase 6 complete, Qdrant ok, diarization success, Wav2Vec
-  enrichment success, and `embedding_dim=768`.
+  enrichment success, and `embedding_dim=768`. Post-pull laptop witness
+  `20260508_191455_laptop_gpu_enhanced_one_scene_witness_wav2vec_post_pull`
+  on `7a7fd15` exited `0` and confirmed the same live artifact fields.
+  Follow-up one-episode laptop witness
+  `20260508_214134_laptop_gpu_enhanced_one_episode_witness_wav2vec_post_pull`
+  exited `0` across `33` scenes with WSL audio, diarization, Wav2Vec emotion,
+  Wav2Vec embeddings, BLIP caption, CLAP, transcript/full-text, Phase 6, and
+  Qdrant all healthy.
 - `wsl2_audio/process_audio.py` already contains optional Wav2Vec emotion and embedding paths guarded by `TRANSFORMERS_AVAILABLE`.
 - When `transformers` is absent, runtime surfaces are truthful:
   - `emotion_status = "unavailable"`

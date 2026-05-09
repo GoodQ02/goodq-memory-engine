@@ -1,19 +1,28 @@
 <!-- DOC_BADGE: DESIGN -->
-<!-- DOC_STATUS: PROPOSED -->
-<!-- DOC_LAST_VERIFIED: 2026-04-29 -->
+<!-- DOC_STATUS: IMPLEMENTED_CONTRACT -->
+<!-- DOC_LAST_VERIFIED: 2026-05-09 -->
 
 # Control Recurrence Trend Design
 
 ## Status And Scope
 
-Status: proposed / design-only.
+Status: implemented as a read-only derived trend contract.
 
-This document defines a future read-only `control_recurrence_trend` layer. The
-layer is not implemented yet.
+This document defined the future read-only `control_recurrence_trend` layer.
+That layer now exists in the active source as `lib/control_recurrence_trend.py`,
+`python -m cli.control_recurrence_report --trend`, and
+`GET /api/control-recurrence/reports/trend`.
 
-The trend layer would be a derived operator memory surface over existing
-control recurrence artifacts. It must not become a second recurrence engine, a
-healing system, an ingestion trigger, or a mutation-capable control plane.
+The trend layer is a derived operator memory surface over existing control
+recurrence artifacts. It must not become a second recurrence engine, a healing
+system, an ingestion trigger, or a mutation-capable control plane.
+
+The active implementation is source-complete for pre-UI consumption, but it is
+not a new authority over recurrence truth. It derives only from
+`reports/control_recurrence/index.json` and indexed durable JSON artifacts.
+The latest formal control-recurrence tag remains `control-recurrence-v0.4.2`;
+v0.5 trend behavior is documented in
+[`CONTROL_RECURRENCE_v0.5_STATUS.md`](CONTROL_RECURRENCE_v0.5_STATUS.md).
 
 ## Purpose
 
@@ -48,9 +57,9 @@ Not allowed inputs:
 Markdown-only index entries may appear in a trend timeline as metadata-only
 entries. They must not be reconstructed into fake recurrence trend data.
 
-## Proposed Output Shape
+## Output Shape
 
-The future derived trend output should use stable top-level keys:
+The derived trend output uses stable top-level keys:
 
 | Field | Purpose |
 | --- | --- |
@@ -171,9 +180,9 @@ Those stronger claims are allowed only when compared reports share a comparable
 derived `scope_signature` and the specific claim is supported by existing JSON
 fields. Even then, prefer the more precise trend language above.
 
-## Minimal Future Implementation Sketch
+## Implementation Shape
 
-This outline is non-binding and does not authorize implementation.
+The active implementation follows this shape:
 
 1. Load `reports/control_recurrence/index.json`.
 2. Filter JSON-backed entries.
@@ -185,12 +194,9 @@ This outline is non-binding and does not authorize implementation.
 8. Emit a derived trend summary with `scope_warnings` and `safety_boundary`.
 9. Never mutate source artifacts.
 
-The implementation should be a read-only helper plus optional CLI/API surface
-only after this design boundary is accepted.
-
 ## Validation Expectations For Future Implementation
 
-Future implementation should include:
+The implementation is expected to keep:
 
 - unit tests with temp index and temp JSON fixtures
 - markdown-only entry warning test

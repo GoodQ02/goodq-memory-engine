@@ -143,6 +143,8 @@ changes.
   [`docs/releases/RELEASE_0.1.1.md`](releases/RELEASE_0.1.1.md)
 - Shipping profile:
   [`docs/releases/SHIP_PROFILE.md`](releases/SHIP_PROFILE.md)
+- Control recurrence v0.5 source status:
+  [`docs/releases/CONTROL_RECURRENCE_v0.5_STATUS.md`](releases/CONTROL_RECURRENCE_v0.5_STATUS.md)
 - Public changelog:
   [`CHANGELOG.md`](../CHANGELOG.md)
 

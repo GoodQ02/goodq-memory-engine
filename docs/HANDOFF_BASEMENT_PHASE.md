@@ -69,6 +69,7 @@ This is the practical handoff point for a brand-new Codex session.
   - current-state capsule: `docs/releases/CONTROL_RECURRENCE_v0.4.2.md`
   - seal note: `control-recurrence-v0.4.1` remains a valid sealed milestone for direct-run discoverability and truth-surface alignment; current `main` is beyond it with `control-recurrence-v0.4.2` plus retry attribution/coalescing tightening
   - source state beyond the latest control-recurrence tag includes the read-only trend helper/CLI mode, the CLAP audio Qdrant payload provenance patch, native model smoke diagnostics, shared runtime recurrence scoping, and WSL audio runtime black-box diagnostics through `05ae539`
+  - control recurrence is source-complete as a read-only observability layer for pre-UI and portability work; v0.5 status is recorded in `docs/releases/CONTROL_RECURRENCE_v0.5_STATUS.md`
   - shared direct-run stdout events are scoped by persisted video/scene identity before recurrence aggregation
   - direct-run discovery is bounded by existing required artifacts; absent aggregate output, operator metadata, temporal paths, or resolved log paths produce limited/missing-artifact observability rather than a boundary violation
   - local `reports/control_recurrence/index.json` state is workspace artifact hygiene unless the file is explicitly tracked
@@ -76,6 +77,7 @@ This is the practical handoff point for a brand-new Codex session.
     - `docs/releases/CONTROL_RECURRENCE_v0.4.0.md`
     - `docs/releases/CONTROL_RECURRENCE_v0.4.1.md`
     - `docs/releases/CONTROL_RECURRENCE_v0.4.2.md`
+    - `docs/releases/CONTROL_RECURRENCE_v0.5_STATUS.md`
     - `docs/releases/CONTROL_RECURRENCE_SHARED_RUNTIME_SCOPING_2026-05-03.md`
   - boundary: not healing yet. This tool/API does not activate `ControlAgent`, does not enable auto-healing, does not mutate configs, does not execute commands, does not use LLMs, does not generate reports from the API, and does not touch `cli/run_ingestion.py`.
 - Current upstream normalization status:

@@ -66,8 +66,10 @@ Only valid when the API process is running:
 
 ## Important Note
 
-GoodQ4All does not currently ship a supported production UI. Use the API docs,
-CLI, watchdog, manifests, and logs as the supported operational surface.
+GoodQ4All does not currently ship a production operator dashboard. Use the
+read-only Justification Channel at `ui/justification_v1/` for truth-layer UI
+inspection; operational control remains API docs, CLI, watchdog, manifests,
+and logs.
 
 ## Related Docs
 

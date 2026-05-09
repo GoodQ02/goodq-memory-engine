@@ -148,8 +148,10 @@ changes.
 
 ## Important Note
 
-GoodQ4All does not currently ship a supported production UI. The supported
-surface is the API, CLI, watchdog, and persisted runtime artifacts.
+GoodQ4All does not currently ship a production operator dashboard. The
+supported UI surface is the read-only Justification Channel at
+`ui/justification_v1/`; operational control remains API, CLI, watchdog, and
+persisted runtime artifacts.
 
 - UI status:
   [`docs/guides/ui/JUSTIFICATION_UI.md`](guides/ui/JUSTIFICATION_UI.md)

@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-05-08 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-09 -->
 
 # Basement Phase Handoff (v1) — Current System State
 
@@ -21,6 +21,7 @@ This is the practical handoff point for a brand-new Codex session.
   - same fixes are mirrored to public:
     - `e2e0b9d` (`fix: load runtime pyannote from canonical cache`)
     - `2a7b918` (`fix: align image step gpu budget mapping`)
+  - public hygiene also includes `67ce408` (`chore: prune public legacy archives`) and `279c825` (`chore: tighten public utility path hygiene`)
   - laptop `GPU_ENHANCED` one-scene witness `20260508_104105_laptop_gpu_enhanced_one_scene_witness` completed with run id `02fdd2d9-7868-442b-8628-2550ed976820`
   - witness passed WSL audio execution, transcript persistence, CLAP/audio embedding, text embedding, Phase 6a/6b, `phase6_complete=true`, and `qdrant_ok=true`
   - witness found runtime PyAnnote needed the canonical HF cache dir in the live WSL loaders; `3a06342` patches `wsl2_audio/process_audio.py` and `wsl2_audio/audio_service.py`
@@ -41,7 +42,7 @@ This is the practical handoff point for a brand-new Codex session.
   - `main` / `origin/main` are the active source line; confirm the exact head with `git log -1 --oneline`
   - source includes WSL runtime PyAnnote cache-dir loading and image-step GPU budget alignment through `86f032d`
 - Current public-facing branch head:
-  - `public` / `origin/public` includes public-safe WSL runtime cache-dir and image-step GPU budget fixes through `2a7b918`
+  - `public` / `origin/public` includes public-safe WSL runtime cache-dir and image-step GPU budget fixes through `2a7b918`, plus public archive pruning and utility path hygiene through `279c825`
 - Full witness state now banked:
   - Season 1 recompare completed (`01x01`–`01x05`)
   - Season 2 fresh witness completed (`02x01`–`02x12`)

@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-05-01 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-09 -->
 
 <p align="center">
   <img src="samples/assets/q-git-square.png" alt="GoodQ4All mark" width="140" />
@@ -14,6 +14,20 @@ It ingests media into scene-level memory, persists what it learns locally, and k
 
 GoodQ4All's thesis is simple: machine memory should earn every claim it makes.
 
+## First Success Loop
+
+If you are new here, start by making one memory:
+
+1. Bootstrap and validate the repo.
+2. Start Watchdog.
+3. Drop one small media file into the configured `import_inbox`.
+4. Open the local API docs.
+5. Confirm scene artifacts were written.
+
+Guide:
+
+- [`docs/guides/FIRST_RUN.md`](docs/guides/FIRST_RUN.md)
+
 ## What This Actually Is
 
 GoodQ4All is not just an ingest runner or a benchmark harness. It is a full local memory stack with five major layers:
@@ -22,7 +36,7 @@ GoodQ4All is not just an ingest runner or a benchmark harness. It is a full loca
   Detects scenes, extracts keyframes, runs OCR and captions, tags objects and faces, transcribes audio, tracks speakers, and generates embeddings across modalities.
 
 - **Interpretation engine**
-  Turns raw perception into scene meaning through `scene_context_llm`, epistemic evidence surfaces, arbitration, and Phase 6 multimodal harmonization.
+  Turns raw perception into scene meaning through `scene_context_llm`, epistemic evidence surfaces, arbitration, and Phase 6 multimodal harmonization. Phase 6 is the final harmonization step that turns per-scene outputs into coherent temporal and vector memory.
 
 - **Memory engine**
   Persists scene manifests, temporal indexes, SQLite memory state, knowledge graph state, and Qdrant vectors as durable local memory rather than disposable run logs.
@@ -87,6 +101,14 @@ That result comes from the local episode-reference eval lane and is summarized i
 
 ## Verify It Yourself
 
+### What Runs What
+
+- `LAUNCH_GOODQ.ps1` checks readiness and opens operator monitors.
+- Watchdog watches the configured `import_inbox`.
+- `cli.run_ingestion` owns actual ingestion.
+- The API is a local read and inspection surface.
+- Runtime artifacts are the durable proof.
+
 ### Fast Verification
 
 If you want the shortest honest path to “does this work on this machine?”:
@@ -112,6 +134,7 @@ Then open:
 
 Reference:
 
+- [`docs/guides/FIRST_RUN.md`](docs/guides/FIRST_RUN.md)
 - [`docs/bootstrap/INSTALL_BOOTSTRAP.md`](docs/bootstrap/INSTALL_BOOTSTRAP.md)
 - [`docs/reference/API.md`](docs/reference/API.md)
 
@@ -186,6 +209,7 @@ If you want the deeper technical picture:
 
 ## Start Here
 
+- First run: [`docs/guides/FIRST_RUN.md`](docs/guides/FIRST_RUN.md)
 - Install: [`docs/guides/install/INSTALL.md`](docs/guides/install/INSTALL.md)
 - Quickstart: [`docs/guides/install/QUICKSTART.md`](docs/guides/install/QUICKSTART.md)
 - Laptop profile: [`docs/guides/install/LAPTOP.md`](docs/guides/install/LAPTOP.md)

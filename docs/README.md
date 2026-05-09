@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-09 -->
 
 # GoodQ4All Documentation
 
@@ -39,6 +39,8 @@ Current operator-validated additions on the active line:
 
 ## Start Here
 
+- First run:
+  [`docs/guides/FIRST_RUN.md`](guides/FIRST_RUN.md)
 - Install:
   [`docs/guides/install/INSTALL.md`](guides/install/INSTALL.md)
 - Quickstart:
@@ -49,6 +51,13 @@ Current operator-validated additions on the active line:
   [`docs/reference/API.md`](reference/API.md)
 - Quick references:
   [`docs/reference/indexes/QUICK_INDEX.md`](reference/indexes/QUICK_INDEX.md)
+
+## Paths By Role
+
+- New user: start with [`docs/guides/FIRST_RUN.md`](guides/FIRST_RUN.md).
+- Operator: use [`docs/guides/general/LAUNCH_INSTRUCTIONS.md`](guides/general/LAUNCH_INSTRUCTIONS.md), then Watchdog and API docs.
+- Contributor: read [`CONTRIBUTING.md`](../CONTRIBUTING.md), then the architecture index.
+- Auditor: start with release notes, reports, diagnostics, and the current system snapshot.
 
 ## Runtime Authority
 

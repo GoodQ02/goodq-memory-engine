@@ -1,10 +1,12 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-02-19 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-09 -->
 
 # GoodQ4All Quickstart
 
 Use this when you need the shortest clean path from clone to launch on Windows.
+If this is your first time with the repo, run the full first-success loop in
+[`docs/guides/FIRST_RUN.md`](../FIRST_RUN.md) after bootstrap validation.
 
 ## 1. Clone and Open the Repo
 
@@ -34,7 +36,43 @@ runtime compatibility.
 .\LAUNCH_GOODQ.ps1
 ```
 
-## 4. Optional Runtime Overrides
+The launcher is safe by default. It checks readiness and opens operator
+monitors; it does not start ingestion unless you explicitly request it.
+
+## 4. Process One File
+
+Start Watchdog in a terminal you can leave open:
+
+```powershell
+conda run --no-capture-output -n goodq_core python -m cli.watchdog
+```
+
+Drop one small media file into:
+
+```text
+<GOODQ_DATA_ROOT>\GoodQ_Data\import_inbox\
+```
+
+Then start the local API in another terminal:
+
+```powershell
+conda run --no-capture-output -n goodq_core python -m api.server
+```
+
+Open:
+
+- `http://127.0.0.1:30000/api/health/summary`
+- `http://127.0.0.1:30000/docs`
+
+Expected proof: the file leaves `import_inbox`, a processing workspace contains
+`scene_ingest_results.json`, and scene outputs include `scene_manifest.json`
+and `temporal_index.json`.
+
+For the more guided version, use [`docs/guides/FIRST_RUN.md`](../FIRST_RUN.md).
+For Watchdog details, use
+[`docs/guides/watchdog/WATCHDOG_QUICKREF.md`](../watchdog/WATCHDOG_QUICKREF.md).
+
+## 5. Optional Runtime Overrides
 
 ```powershell
 $env:GOODQ_HOST_PROFILE = "BASELINE"
@@ -48,7 +86,7 @@ $env:GOODQ_REQUIRE_WSL_AUDIO = "1"
 Use strict flags only when you want fail-fast enforcement of optional
 accelerators.
 
-## 5. Deep Validation (Optional)
+## 6. Deep Validation (Optional)
 
 ```powershell
 python scripts/smoke_phase_a.py

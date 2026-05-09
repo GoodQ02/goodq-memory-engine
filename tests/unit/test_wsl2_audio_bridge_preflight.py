@@ -23,8 +23,8 @@ class _Result:
 def test_workspace_preflight_retries_once_after_timeout(monkeypatch):
     bridge_module = _load_bridge_module()
 
-    monkeypatch.setenv("GOODQ_WSL_USER", "jdben")
-    monkeypatch.setenv("GOODQ_WSL_WORKSPACE", "/home/jdben/goodq_audio")
+    monkeypatch.setenv("GOODQ_WSL_USER", "testuser")
+    monkeypatch.setenv("GOODQ_WSL_WORKSPACE", "/home/testuser/goodq_audio")
     monkeypatch.delenv("GOODQ_REQUIRE_WSL_AUDIO", raising=False)
 
     calls = {"count": 0}
@@ -42,4 +42,3 @@ def test_workspace_preflight_retries_once_after_timeout(monkeypatch):
 
     assert bridge._ensure_workspace_ready() is True
     assert calls["count"] == 2
-

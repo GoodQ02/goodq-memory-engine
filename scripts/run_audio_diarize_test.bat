@@ -5,8 +5,8 @@ cd /d "%~dp0\.."
 echo Testing goodq_audio_diarize environment...
 echo.
 
-REM Use the full path to the environment's python
-set PYTHON_EXE=C:\Users\jdben\miniconda3\envs\goodq_audio_diarize\python.exe
+REM Use the current user's standard Miniconda environment path.
+set PYTHON_EXE=%USERPROFILE%\miniconda3\envs\goodq_audio_diarize\python.exe
 
 if not exist "%PYTHON_EXE%" (
     echo ERROR: Environment not found at %PYTHON_EXE%

@@ -17,10 +17,10 @@ It is **not** a generic design note. It reflects the machine state verified on 2
 
 ## Machine Snapshot
 
-Verified facts for this workstation:
+Verified facts for this workstation, with local user paths anonymized:
 - WSL distro: `Ubuntu-22.04`
-- WSL user: `jdben`
-- WSL home: `/home/jdben`
+- WSL user: `goodq`
+- WSL home: `/home/goodq`
 - WSL Python: `3.10.12`
 - GPU visible in WSL: `NVIDIA GeForce RTX 4070 Ti SUPER`
 - GPU driver visible in WSL: `595.79`
@@ -81,7 +81,7 @@ Important integration note:
 For this machine, prefer a WSL-local model path over a mounted Windows path.
 
 Recommended initial bootstrap model path:
-- `/home/jdben/models/Qwen2.5-0.5B-Instruct`
+- `/home/goodq/models/Qwen2.5-0.5B-Instruct`
 
 Why:
 - avoids mount latency and path translation issues
@@ -144,7 +144,7 @@ mkdir -p ~/models
 Then place or download the model into:
 
 ```bash
-/home/jdben/models/Qwen2.5-0.5B-Instruct
+/home/goodq/models/Qwen2.5-0.5B-Instruct
 ```
 
 The exact download method can vary, but the success criterion is simple:
@@ -161,7 +161,7 @@ From Windows PowerShell, run this from the repo root:
 
 ```powershell
 $repoWsl = wsl -d Ubuntu-22.04 -- wslpath .
-wsl -d Ubuntu-22.04 -- bash -lc "cd '$repoWsl/scripts/wsl' && GOODQ_WSL_USER=jdben GOODQ_WSL_MODEL_PATH=/home/jdben/models/Qwen2.5-0.5B-Instruct ./install_vllm_service.sh"
+wsl -d Ubuntu-22.04 -- bash -lc "cd '$repoWsl/scripts/wsl' && GOODQ_WSL_USER=goodq GOODQ_WSL_MODEL_PATH=/home/goodq/models/Qwen2.5-0.5B-Instruct ./install_vllm_service.sh"
 ```
 
 On this machine, `sudo` is interactive, so expect a password prompt during:
@@ -211,8 +211,8 @@ Recommended minimum override:
 ```yaml
 host:
   wsl_distro: Ubuntu-22.04
-  wsl_user: jdben
-  wsl_workspace: /home/jdben/goodq_audio
+  wsl_user: goodq
+  wsl_workspace: /home/goodq/goodq_audio
 
 llm:
   api_url: http://localhost:38005/v1/chat/completions

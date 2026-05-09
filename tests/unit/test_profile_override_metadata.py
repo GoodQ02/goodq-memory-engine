@@ -75,9 +75,9 @@ def test_baseline_forced_wsl_persists_profile_override_metadata(monkeypatch, tmp
     monkeypatch.setattr(run_ingestion, "_compute_sha256", lambda *a, **k: "videohash")
     monkeypatch.setattr(run_ingestion, "_build_knowledge_graph_from_results", lambda *a, **k: None)
     monkeypatch.setattr(run_ingestion.shutil, "which", lambda name: "wsl" if name == "wsl" else None)
-    monkeypatch.setenv("USERNAME", "jdben")
+    monkeypatch.setenv("USERNAME", "testuser")
     monkeypatch.delenv("GOODQ_WSL_USER", raising=False)
-    monkeypatch.setenv("GOODQ_WSL_WORKSPACE", "/home/jdben/goodq_audio")
+    monkeypatch.setenv("GOODQ_WSL_WORKSPACE", "/home/testuser/goodq_audio")
 
     def _fake_subprocess_run(cmd, *args, **kwargs):
         if cmd and cmd[0] == "git":

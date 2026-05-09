@@ -491,7 +491,7 @@ def _run_wsl_faster_whisper_venv(input_path: str) -> Dict[str, Any]:
             os.environ.get("GOODQ_WSL_USER")
             or os.environ.get("USERNAME")
             or os.environ.get("USER")
-            or "jdben"
+            or "goodq"
         )
         wsl_workspace = f"/home/{wsl_user}/goodq_audio"
     wsl_workspace = wsl_workspace.rstrip("/")

@@ -356,10 +356,10 @@ def test_run_step_retries_optional_steps_via_direct_env_python_on_conda_tmp_fail
             "returncode": 1,
             "stdout": "",
             "stderr": (
-                "Failed to run 'conda activate \"C:\\\\Users\\\\jdben\\\\miniconda3\\\\envs\\\\goodq_core\"'\n"
+                "Failed to run 'conda activate \"%USERPROFILE%\\\\miniconda3\\\\envs\\\\goodq_core\"'\n"
                 "The process cannot access the file because it is being used by another process.\n"
                 "ERROR conda.cli.main_run:execute(127): `conda run python ...` failed\n"
-                "C:\\Users\\jdben\\AppData\\Local\\Temp\\__conda_tmp_17331.txt"
+                "%TEMP%\\__conda_tmp_17331.txt"
             ),
         },
         {
@@ -692,21 +692,21 @@ def test_resolve_audio_runtime_contract_falls_back_from_stale_env_workspace(
     monkeypatch.setattr(run_ingestion, "require_wsl_audio", lambda: False)
     monkeypatch.setattr(run_ingestion.shutil, "which", lambda name: "wsl" if name == "wsl" else None)
     monkeypatch.setenv("GOODQ_WSL_DISTRO", "Ubuntu-22.04")
-    monkeypatch.setenv("GOODQ_WSL_USER", "jdben")
-    monkeypatch.setenv("GOODQ_WSL_WORKSPACE", "/home/jdben/projects/goodq4all")
+    monkeypatch.setenv("GOODQ_WSL_USER", "testuser")
+    monkeypatch.setenv("GOODQ_WSL_WORKSPACE", "/home/testuser/projects/goodq4all")
 
     probed_workspaces = []
 
     def _fake_probe(distro, workspace):
         probed_workspaces.append(workspace)
-        if workspace == "/home/jdben/projects/goodq4all":
+        if workspace == "/home/testuser/projects/goodq4all":
             return {
                 "workspace_ready": False,
                 "runtime_ready": False,
                 "abi_ready": False,
                 "detail": "workspace missing required files",
             }
-        if workspace == "/home/jdben/goodq_audio":
+        if workspace == "/home/testuser/goodq_audio":
             return {
                 "workspace_ready": True,
                 "runtime_ready": True,
@@ -720,24 +720,24 @@ def test_resolve_audio_runtime_contract_falls_back_from_stale_env_workspace(
     cfg = {
         "host": {
             "wsl_distro": "Ubuntu-22.04",
-            "wsl_user": "jdben",
-            "wsl_workspace": "/home/jdben/goodq_audio",
+            "wsl_user": "testuser",
+            "wsl_workspace": "/home/testuser/goodq_audio",
         }
     }
 
     contract = run_ingestion._resolve_audio_runtime_contract(cfg)
 
     assert probed_workspaces == [
-        "/home/jdben/projects/goodq4all",
-        "/home/jdben/goodq_audio",
+        "/home/testuser/projects/goodq4all",
+        "/home/testuser/goodq_audio",
     ]
     assert contract["selected"] == "wsl"
     assert contract["reason"] == "wsl_runtime_ready"
-    assert contract["wsl_audio_workspace"] == "/home/jdben/goodq_audio"
+    assert contract["wsl_audio_workspace"] == "/home/testuser/goodq_audio"
     assert contract["wsl_workspace_source"] == "config"
     assert contract["workspace_ready"] is True
     assert contract["wsl_runtime_ready"] is True
-    assert os.environ["GOODQ_WSL_WORKSPACE"] == "/home/jdben/goodq_audio"
+    assert os.environ["GOODQ_WSL_WORKSPACE"] == "/home/testuser/goodq_audio"
 
 
 def test_resolve_audio_runtime_contract_falls_back_from_stale_env_distro(
@@ -749,8 +749,8 @@ def test_resolve_audio_runtime_contract_falls_back_from_stale_env_distro(
     monkeypatch.setattr(run_ingestion, "require_wsl_audio", lambda: False)
     monkeypatch.setattr(run_ingestion.shutil, "which", lambda name: "wsl" if name == "wsl" else None)
     monkeypatch.setenv("GOODQ_WSL_DISTRO", "Ubuntu")
-    monkeypatch.setenv("GOODQ_WSL_USER", "jdben")
-    monkeypatch.setenv("GOODQ_WSL_WORKSPACE", "/home/jdben/goodq_audio")
+    monkeypatch.setenv("GOODQ_WSL_USER", "testuser")
+    monkeypatch.setenv("GOODQ_WSL_WORKSPACE", "/home/testuser/goodq_audio")
 
     probed_targets = []
 
@@ -777,22 +777,22 @@ def test_resolve_audio_runtime_contract_falls_back_from_stale_env_distro(
     cfg = {
         "host": {
             "wsl_distro": "Ubuntu-22.04",
-            "wsl_user": "jdben",
-            "wsl_workspace": "/home/jdben/goodq_audio",
+            "wsl_user": "testuser",
+            "wsl_workspace": "/home/testuser/goodq_audio",
         }
     }
 
     contract = run_ingestion._resolve_audio_runtime_contract(cfg)
 
     assert probed_targets == [
-        ("Ubuntu", "/home/jdben/goodq_audio"),
-        ("Ubuntu-22.04", "/home/jdben/goodq_audio"),
+        ("Ubuntu", "/home/testuser/goodq_audio"),
+        ("Ubuntu-22.04", "/home/testuser/goodq_audio"),
     ]
     assert contract["selected"] == "wsl"
     assert contract["reason"] == "wsl_runtime_ready"
     assert contract["wsl_distro"] == "Ubuntu-22.04"
     assert contract["wsl_distro_source"] == "config"
-    assert contract["wsl_audio_workspace"] == "/home/jdben/goodq_audio"
+    assert contract["wsl_audio_workspace"] == "/home/testuser/goodq_audio"
     assert contract["workspace_ready"] is True
     assert "GOODQ_WSL_DISTRO=Ubuntu was unavailable" in contract["workspace_check_message"]
     assert os.environ["GOODQ_WSL_DISTRO"] == "Ubuntu-22.04"
@@ -807,8 +807,8 @@ def test_resolve_audio_runtime_contract_requires_distro_in_failure_message(
     monkeypatch.setattr(run_ingestion, "require_wsl_audio", lambda: True)
     monkeypatch.setattr(run_ingestion.shutil, "which", lambda name: "wsl" if name == "wsl" else None)
     monkeypatch.setenv("GOODQ_WSL_DISTRO", "Ubuntu")
-    monkeypatch.setenv("GOODQ_WSL_USER", "jdben")
-    monkeypatch.setenv("GOODQ_WSL_WORKSPACE", "/home/jdben/goodq_audio")
+    monkeypatch.setenv("GOODQ_WSL_USER", "testuser")
+    monkeypatch.setenv("GOODQ_WSL_WORKSPACE", "/home/testuser/goodq_audio")
     monkeypatch.setattr(
         run_ingestion,
         "probe_wsl_audio_runtime",
@@ -823,8 +823,8 @@ def test_resolve_audio_runtime_contract_requires_distro_in_failure_message(
     cfg = {
         "host": {
             "wsl_distro": "Ubuntu-22.04",
-            "wsl_user": "jdben",
-            "wsl_workspace": "/home/jdben/goodq_audio",
+            "wsl_user": "testuser",
+            "wsl_workspace": "/home/testuser/goodq_audio",
         }
     }
 
@@ -832,8 +832,8 @@ def test_resolve_audio_runtime_contract_requires_distro_in_failure_message(
         run_ingestion._resolve_audio_runtime_contract(cfg)
 
     message = str(excinfo.value)
-    assert "Ubuntu:/home/jdben/goodq_audio" in message
-    assert "Ubuntu-22.04:/home/jdben/goodq_audio" in message
+    assert "Ubuntu:/home/testuser/goodq_audio" in message
+    assert "Ubuntu-22.04:/home/testuser/goodq_audio" in message
     assert "GOODQ_WSL_DISTRO, GOODQ_WSL_USER and GOODQ_WSL_WORKSPACE" in message
 
 
@@ -846,8 +846,8 @@ def test_resolve_audio_runtime_contract_rejects_abi_degraded_transcription_runti
     monkeypatch.setattr(run_ingestion, "require_wsl_audio", lambda: False)
     monkeypatch.setattr(run_ingestion.shutil, "which", lambda name: "wsl" if name == "wsl" else None)
     monkeypatch.setenv("GOODQ_WSL_DISTRO", "Ubuntu-22.04")
-    monkeypatch.setenv("GOODQ_WSL_USER", "jdben")
-    monkeypatch.setenv("GOODQ_WSL_WORKSPACE", "/home/jdben/goodq_audio")
+    monkeypatch.setenv("GOODQ_WSL_USER", "testuser")
+    monkeypatch.setenv("GOODQ_WSL_WORKSPACE", "/home/testuser/goodq_audio")
     monkeypatch.setattr(
         run_ingestion,
         "probe_wsl_audio_runtime",
@@ -863,8 +863,8 @@ def test_resolve_audio_runtime_contract_rejects_abi_degraded_transcription_runti
         {
             "host": {
                 "wsl_distro": "Ubuntu-22.04",
-                "wsl_user": "jdben",
-                "wsl_workspace": "/home/jdben/goodq_audio",
+                "wsl_user": "testuser",
+                "wsl_workspace": "/home/testuser/goodq_audio",
             }
         }
     )

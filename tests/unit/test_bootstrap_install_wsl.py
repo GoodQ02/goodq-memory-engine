@@ -115,6 +115,8 @@ def test_wsl_audio_env_values_share_model_cache_and_tokens(monkeypatch, tmp_path
     assert values["HF_HOME"] == "/mnt/c/models"
     assert values["TORCH_HOME"] == "/mnt/c/models"
     assert values["HUGGINGFACE_HUB_CACHE"] == "/mnt/c/models/hub"
+    assert values["HF_HUB_CACHE"] == "/mnt/c/models/hub"
+    assert values["PYANNOTE_CACHE"] == "/mnt/c/models/hub"
 
 
 def test_write_wsl_audio_env_file_uses_lf_line_endings(tmp_path: Path):
@@ -133,6 +135,8 @@ def test_write_wsl_audio_env_file_uses_lf_line_endings(tmp_path: Path):
         {
             "HF_HOME": "/mnt/c/models",
             "HUGGINGFACE_HUB_CACHE": "/mnt/c/models/hub",
+            "HF_HUB_CACHE": "/mnt/c/models/hub",
+            "PYANNOTE_CACHE": "/mnt/c/models/hub",
         },
     )
 
@@ -140,6 +144,8 @@ def test_write_wsl_audio_env_file_uses_lf_line_endings(tmp_path: Path):
     assert b"\r" not in raw
     assert raw.endswith(b'\n')
     assert b'HUGGINGFACE_HUB_CACHE="/mnt/c/models/hub"\n' in raw
+    assert b'HF_HUB_CACHE="/mnt/c/models/hub"\n' in raw
+    assert b'PYANNOTE_CACHE="/mnt/c/models/hub"\n' in raw
 
 
 def test_sync_wsl_audio_assets_normalizes_shell_line_endings(monkeypatch, tmp_path: Path):
@@ -246,6 +252,15 @@ def test_wsl_audio_installers_use_bootstrap_constraints_and_post_install_validat
         assert "transformers" in content
         assert "tokenizers" in content
         assert "safetensors" in content
+
+
+def test_wsl_setup_exports_pyannote_cache_alias_for_nested_model_loads() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    setup_content = (repo_root / "wsl2_audio" / "setup_cuda_env.sh").read_text(encoding="utf-8")
+
+    assert "export HF_HUB_CACHE=\"${HF_HUB_CACHE:-$HUGGINGFACE_HUB_CACHE}\"" in setup_content
+    assert "export PYANNOTE_CACHE=\"${PYANNOTE_CACHE:-$HUGGINGFACE_HUB_CACHE}\"" in setup_content
+    assert "unset PYANNOTE_CACHE" in setup_content
 
 
 def test_wsl_bootstrap_constraints_match_python310_cu121_lane() -> None:

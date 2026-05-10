@@ -1250,6 +1250,8 @@ def _wsl_audio_env_values(ctx: BootstrapContext, wsl_ctx: WslAudioContext) -> di
         values["HF_HOME"] = wsl_models_root
         values["TORCH_HOME"] = wsl_models_root
         values["HUGGINGFACE_HUB_CACHE"] = f"{wsl_models_root.rstrip('/')}/hub"
+        values["HF_HUB_CACHE"] = values["HUGGINGFACE_HUB_CACHE"]
+        values["PYANNOTE_CACHE"] = values["HUGGINGFACE_HUB_CACHE"]
 
     return values
 

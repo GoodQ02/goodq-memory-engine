@@ -29,12 +29,14 @@ if [ -f "$ENV_FILE" ]; then
         GOODQ_WSL_DISTRO \
         GOODQ_WSL_USER \
         GOODQ_WSL_WORKSPACE \
+        HF_HUB_CACHE \
         HF_HOME \
         HF_HUB_TOKEN \
         HF_TOKEN \
         HUGGINGFACE_HUB_CACHE \
         HUGGINGFACE_HUB_TOKEN \
         HUGGINGFACE_TOKEN \
+        PYANNOTE_CACHE \
         PYANNOTE_TOKEN \
         TORCH_HOME
     do
@@ -85,6 +87,11 @@ else
     fi
 fi
 
+if [ -n "${HUGGINGFACE_HUB_CACHE:-}" ]; then
+    export HF_HUB_CACHE="${HF_HUB_CACHE:-$HUGGINGFACE_HUB_CACHE}"
+    export PYANNOTE_CACHE="${PYANNOTE_CACHE:-$HUGGINGFACE_HUB_CACHE}"
+fi
+
 # Prefer the staged shared HF cache when it is complete, but fall back to the
 # local WSL cache if required audio models are missing there. This keeps the
 # runtime offline-first without depending on an incomplete mounted cache.
@@ -100,7 +107,9 @@ if [ -n "${HUGGINGFACE_HUB_CACHE:-}" ]; then
        ! has_hf_snapshot_file "$SEGMENTATION_CACHE_GLOB" || \
        ! has_hf_snapshot_file "$WESPEAKER_CACHE_GLOB"; then
         unset HF_HOME
+        unset HF_HUB_CACHE
         unset HUGGINGFACE_HUB_CACHE
+        unset PYANNOTE_CACHE
         unset TORCH_HOME
         export GOODQ_WSL_AUDIO_CACHE_FALLBACK="local"
     fi

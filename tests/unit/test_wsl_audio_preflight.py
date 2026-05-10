@@ -8,6 +8,9 @@ def test_build_diarization_probe_uses_pyannote_auth_kwarg_compatibility():
 
     assert "use_auth_token=token" in script
     assert "cache_dir = os.getenv('HUGGINGFACE_HUB_CACHE') or os.getenv('HF_HUB_CACHE') or None" in script
+    assert "os.environ.setdefault('HF_HUB_CACHE', cache_dir)" in script
+    assert "os.environ.setdefault('PYANNOTE_CACHE', cache_dir)" in script
+    assert "kwargs['cache_dir'] = cache_dir" in script
     assert "Pipeline.from_pretrained('pyannote/speaker-diarization-3.1', use_auth_token=token, cache_dir=cache_dir)" in script
     assert "Pipeline.from_pretrained('pyannote/speaker-diarization-3.1', token=token, cache_dir=cache_dir)" in script
     assert "unexpected keyword" in script

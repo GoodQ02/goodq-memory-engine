@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import types
 import sys
+import os
 from pathlib import Path
 
 import torch
@@ -113,6 +114,18 @@ def test_process_audio_diarization_loader_falls_back_to_token_kwarg():
     assert captured["cache_dir"] == "/mnt/c/models/hub"
 
 
+def test_process_audio_hf_cache_resolver_exports_pyannote_aliases(monkeypatch):
+    from wsl2_audio import process_audio as mod
+
+    monkeypatch.setenv("HUGGINGFACE_HUB_CACHE", "/mnt/c/models/hub")
+    monkeypatch.delenv("HF_HUB_CACHE", raising=False)
+    monkeypatch.delenv("PYANNOTE_CACHE", raising=False)
+
+    assert mod._resolve_hf_cache_dir() == "/mnt/c/models/hub"
+    assert os.environ["HF_HUB_CACHE"] == "/mnt/c/models/hub"
+    assert os.environ["PYANNOTE_CACHE"] == "/mnt/c/models/hub"
+
+
 def test_audio_service_diarization_loader_prefers_use_auth_token(monkeypatch):
     monkeypatch.setitem(sys.modules, "soundfile", types.ModuleType("soundfile"))
     from wsl2_audio import audio_service as mod
@@ -141,6 +154,19 @@ def test_audio_service_diarization_loader_prefers_use_auth_token(monkeypatch):
     assert captured["model_name"] == "pyannote/speaker-diarization-3.1"
     assert captured["use_auth_token"] == "test-token"
     assert captured["cache_dir"] == "/mnt/c/models/hub"
+
+
+def test_audio_service_hf_cache_resolver_exports_pyannote_aliases(monkeypatch):
+    monkeypatch.setitem(sys.modules, "soundfile", types.ModuleType("soundfile"))
+    from wsl2_audio import audio_service as mod
+
+    monkeypatch.setenv("HUGGINGFACE_HUB_CACHE", "/mnt/c/models/hub")
+    monkeypatch.delenv("HF_HUB_CACHE", raising=False)
+    monkeypatch.delenv("PYANNOTE_CACHE", raising=False)
+
+    assert mod._resolve_hf_cache_dir() == "/mnt/c/models/hub"
+    assert os.environ["HF_HUB_CACHE"] == "/mnt/c/models/hub"
+    assert os.environ["PYANNOTE_CACHE"] == "/mnt/c/models/hub"
 
 
 def test_audio_service_load_models_uses_canonical_hf_cache(monkeypatch):

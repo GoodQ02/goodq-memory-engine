@@ -96,7 +96,7 @@ reports, or machine-specific absolute paths into the bundle.
   - packed `goodq_core` environment or equivalent offline Conda package cache
   - packed supported step envs or equivalent offline Conda/pip closure
   - package manifests and hashes
-- Approximate size: staged Conda/package evidence is 4,159,075,625 bytes.
+- Approximate size: staged Windows env payload is 9,796,661,595 bytes.
 - Hash strategy: hash packed env archives and package cache files; keep lock
   file hashes beside the payload.
 - Validation command:
@@ -106,11 +106,13 @@ reports, or machine-specific absolute paths into the bundle.
 - Known gaps:
   - Conda tarballs referenced by the current GoodQ envs are staged and
     hash-computed: 209 tarballs, zero missing Conda tarballs.
-  - Windows pip wheelhouse is not sealed: 123 unique pip package wheels are not
-    available in the local wheel cache.
+  - Windows pip wheelhouse is staged and hash-computed: 152 wheel/archive files,
+    155 exact PyPI requirements verified with a Python 3.10 no-index download
+    probe, and one source-owned package covered by the source pack.
   - the staged env evidence intentionally uses sanitized `pip list` exports
     instead of `pip freeze`, because freeze output can include non-portable
     build-origin paths.
+  - restore rehearsal on a disposable target is still pending.
   - old installer helpers with network package lanes must not be treated as
     authoritative env closure.
 - Exclusion rules:
@@ -128,7 +130,7 @@ reports, or machine-specific absolute paths into the bundle.
   - `%GOODQ_REPO_ROOT%/scripts/wsl_audio_preflight.py`
   - `%GOODQ_WSL_AUDIO_PACK_ROOT%/linux_wheels_cp310_cu121`
   - `%GOODQ_WSL_AUDIO_PACK_ROOT%/linux_wheels_cp310_cu121_manifest.json`
-  - `%GOODQ_WSL_DISTRO_EXPORT_ROOT%/goodq-audio-*.tar` once created
+  - `%GOODQ_WSL_DISTRO_EXPORT_ROOT%/goodq-audio-*.tar`
 - Destination paths:
   - `%GOODQ_OFFLINE_BUNDLE_ROOT%/env/wsl_audio`
 - Expected contents:
@@ -144,20 +146,22 @@ reports, or machine-specific absolute paths into the bundle.
 - Approximate size:
   - sealed wheelhouse evidence is 3,153,798,893 bytes.
   - staged apt archive evidence is 185,684,393 bytes.
-  - WSL distro export size is not known yet because no export is sealed.
+  - WSL distro export is 48,162,938,880 bytes.
 - Hash strategy: use the wheelhouse manifest and hash any WSL distro export or
   system package bundle separately.
 - Validation command:
   - `python scripts/wsl_audio_preflight.py --compact`
   - `python -m pytest tests/unit/test_wsl_audio_preflight.py`
 - Known gaps:
-  - no exported WSL distro tar is created or hash-sealed yet.
+  - WSL distro export is created and hash-sealed as a private restore payload;
+    import/preflight restore rehearsal is still pending.
   - WSL apt archive cache is staged and hash-computed, but it is not a complete
-    apt closure yet.
+    apt closure and is now supplemental evidence rather than the preferred
+    restore path.
   - direct setup package archives are missing for `python3-pip`,
     `python3-venv`, `sox`, and `git`.
   - setup still has apt and direct pip install assumptions unless run against a
-    prepared offline path.
+    prepared offline path or replaced by distro import.
   - exact script parity may require `psutil` and `watchdog` wheels, or a script
     correction proving those utilities are unnecessary.
 - Exclusion rules:
@@ -227,28 +231,23 @@ reports, or machine-specific absolute paths into the bundle.
   - Poppler utilities
   - Piper executable and `en_US-joe-medium` voice plus voice sidecar JSON
 - Approximate size:
-  - Qdrant: 65,280,000 bytes
+  - total staged host tools pack: 741,766,692 bytes
+  - Qdrant staged payload: 65,290,775 bytes
   - NSSM: 368,640 bytes
-  - FFmpeg source evidence: 299,079,168 bytes
-  - Tesseract source evidence: 249,434,472 bytes
-  - Poppler source evidence: 55,859,662 bytes
-  - Piper source evidence: 102,052,310 bytes
+  - FFmpeg staged payload: 299,079,168 bytes
+  - Tesseract staged payload: 249,434,472 bytes
+  - Poppler staged payload: 55,859,662 bytes
+  - Piper staged payload: 102,052,310 bytes
 - Hash strategy: hash executables, model files, voice metadata, and tool
-  directory trees after copying them into the final host tools pack. Source
-  evidence hashes are useful for planning, but they do not by themselves seal a
-  portable installer payload.
+  directory trees after copying them into the final host tools pack.
 - Validation command:
   - `python scripts/system_readiness_check.py --json`
   - `python scripts/bootstrap_verify.py --json`
 - Known gaps:
-  - host tools are installed locally and source-evidence hashes exist, but they
-    are not staged as a portable pack.
-  - Qdrant and NSSM payloads are present in the source tree, but the final
-    host tools pack still needs a copy-and-hash manifest.
-  - FFmpeg, Tesseract, and Poppler are source-discovered only until copied into
-    `%GOODQ_OFFLINE_BUNDLE_ROOT%/tools`.
-  - Piper is located through configured environment variables, but is not yet
-    staged or hash-sealed; do not call Piper sealed yet.
+  - host tools are copied into the staged portable pack and hash-sealed.
+  - staged payload checks passed for FFmpeg, Tesseract, Poppler, Piper, Qdrant,
+    and NSSM.
+  - restore rehearsal through the offline installer is still pending.
 - Exclusion rules:
   - exclude installer download caches unless explicitly chosen.
   - exclude mutable service logs and local service state.
@@ -357,9 +356,9 @@ for example `not_available_not_staged`. Optional packs that are intentionally
 excluded from the base installer must use an explicit deferred status rather
 than a silent `pending`.
 
-The current scratch manifest is a source-evidence partial seal, not a final
-offline archive. It proves the current referenced sources where they exist and
-keeps the remaining closure gaps visible.
+The current scratch manifest includes source evidence plus staged, hash-sealed
+core payloads. It is still not a final offline archive. Restore rehearsal and
+final packaging remain separate gates.
 
 ## Closure Gates
 

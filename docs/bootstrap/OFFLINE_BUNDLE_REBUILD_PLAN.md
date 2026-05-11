@@ -121,18 +121,22 @@ Forbidden:
   current GoodQ envs: 209 tarballs, zero missing Conda tarballs.
 - [x] 2026-05-11 - Staged and hash-computed current WSL apt archive evidence:
   181 `.deb` files.
-- [x] 2026-05-11 - Classified host-tool hashes as source evidence only; do not
-  call FFmpeg, Tesseract, Poppler, Piper, Qdrant, or NSSM sealed until copied
-  into the final host tools pack and hash-manifested there.
-- [ ] Seal the Windows pip wheelhouse. Current gap: 123 unique pip package
-  wheels are not locally staged.
-- [ ] Seal the WSL system package closure. Current gap: direct setup package
-  archives are missing for `python3-pip`, `python3-venv`, `sox`, and `git`.
-- [ ] Create and hash a WSL audio distro export as the preferred near-term
-  offline restore strategy, or explicitly choose and prove a complete offline
-  system-package strategy.
-- [ ] Copy and hash-seal the host tools pack, including Piper executable,
-  `en_US-joe-medium` voice, and voice sidecar JSON.
+- [x] 2026-05-11 - Classified host-tool hashes as source evidence only until
+  copied into the final host tools pack and hash-manifested there.
+- [x] 2026-05-11 - Copied and hash-sealed the host tools pack, including
+  FFmpeg, Tesseract, Poppler, Piper, Qdrant, and NSSM; staged pack size is
+  741,766,692 bytes across 541 files.
+- [x] 2026-05-11 - Sealed the Windows pip wheelhouse: 155 exact PyPI
+  requirements verified from the Python 3.10 wheelhouse, plus one source-owned
+  package covered by the source pack.
+- [x] 2026-05-11 - Created and hash-sealed a private WSL audio distro export as
+  the preferred near-term offline restore payload; export size is
+  48,162,938,880 bytes.
+- [ ] Restore-rehearse the sealed Windows env payload, host tools pack, and WSL
+  distro export on a disposable target before creating a final installer.
+- [ ] Treat the WSL apt archive cache as supplemental partial evidence only.
+  Direct setup package archives are still missing for `python3-pip`,
+  `python3-venv`, `sox`, and `git`.
 - [ ] Keep standalone legacy root-level model cache copies out of the base
   bundle unless a future manifest proves they are required.
 - [ ] Validate the staged payload before creating archive or installer
@@ -174,9 +178,20 @@ Forbidden:
 - Observation: Installed host tools are not the same as a portable offline
   host tools pack.
   Evidence: FFmpeg, Tesseract, Poppler, Piper, Qdrant, and NSSM are discovered
-  or present locally, and source-evidence hashes exist, but the final
-  `%GOODQ_OFFLINE_BUNDLE_ROOT%/tools` payload has not been copied and
-  hash-sealed. Piper remains unsealed.
+  or present locally, but source-evidence hashes alone were not enough to seal
+  the portable pack.
+
+- Observation: The host tools gap is now closed at the staged-payload level.
+  Evidence: the staged host tools pack contains FFmpeg, Tesseract, Poppler,
+  Piper, Qdrant, and NSSM with a deterministic pack hash, and staged-tool
+  version/TTS smoke checks passed.
+
+- Observation: The Windows pip gap was a real restore gap but needed exact
+  interpreter handling.
+  Evidence: an initial default-Python attempt used the wrong ABI, so the
+  wheelhouse was rebuilt with the canonical `goodq_core` Python 3.10
+  interpreter and then verified with local no-index downloads for all exact
+  PyPI requirements.
 
 ## Decision Log
 

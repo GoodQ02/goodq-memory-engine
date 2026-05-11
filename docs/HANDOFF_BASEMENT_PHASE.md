@@ -32,15 +32,18 @@ This is the practical handoff point for a brand-new Codex session.
   - offline bundle contract: `docs/bootstrap/OFFLINE_BUNDLE_CONTRACT.md`.
     Generated scratch manifests and local recurrence artifacts are not staged
     unless explicitly promoted.
-  - current offline source-evidence state: 16 artifacts hash-computed, 2
-    artifacts partial hash-computed, 2 optional artifacts deferred, zero
-    pending hashes.
-  - remaining offline closure gaps: Windows pip wheelhouse has 123 unique wheel
-    gaps; preferred WSL restore is a hash-sealed WSL audio distro export, while
-    current apt archive evidence remains partial and missing direct setup
-    package archives for `python3-pip`, `python3-venv`, `sox`, and `git`;
-    host-tool hashes are source evidence only until copied into the final tools
-    pack, and Piper is not sealed yet.
+  - current offline manifest state: 10 source artifacts hash-computed, 8 staged
+    payload artifacts hash-computed, 1 supplemental artifact partial
+    hash-computed, 2 optional artifacts deferred, zero pending hashes.
+  - current offline staged-payload state: Windows env payload, host tools pack,
+    and private WSL audio distro export are copied and hash-sealed in the local
+    offline stage; the pip wheelhouse passed Python 3.10 no-index verification
+    for 155 exact PyPI requirements, and Piper TTS smoke passed from staged
+    files.
+  - remaining offline closure gap: restore rehearsal is pending on a disposable
+    target before creating any final archive or installer. WSL apt archive
+    evidence remains supplemental partial evidence, not the preferred restore
+    path.
   - after a restart, first run `git status --short --branch` and confirm whether
     the latest offline bundle contract/status commits have landed on `main`.
 

@@ -37,17 +37,22 @@ truth for live claims. Do not treat this document as a live witness monitor.
     `docs/bootstrap/OFFLINE_BUNDLE_CONTRACT.md`; scratch manifests remain local
     generated artifacts unless intentionally promoted.
   - current offline bundle source-evidence state:
-    - 16 artifacts hash-computed
-    - 2 artifacts partial hash-computed
+    - 10 source artifacts hash-computed
+    - 8 staged payload artifacts hash-computed
+    - 1 supplemental artifact partial hash-computed
     - 2 optional artifacts deferred from the base installer
     - zero pending hashes
-  - Windows Conda tarball evidence is staged and hash-computed; the Windows
-    pip wheelhouse is still open with 123 unique wheel gaps.
-  - WSL audio wheelhouse evidence is staged on the canonical cu121 lane; WSL
-    apt archive evidence is staged, but direct setup package archives are still
-    missing for `python3-pip`, `python3-venv`, `sox`, and `git`.
-  - current safe next move after restart: seal the Windows pip wheelhouse or
-    WSL apt package gaps before creating any final offline archive or installer.
+  - Windows env payload is staged and hash-sealed: 209 Conda tarballs plus a
+    Python 3.10 no-index verified pip wheelhouse for 155 exact PyPI
+    requirements; the source-owned `goodq4all` package is covered by the
+    source pack.
+  - WSL audio wheelhouse evidence is staged on the canonical cu121 lane, and a
+    private WSL audio distro export is hash-sealed as the preferred near-term
+    offline restore payload.
+  - Host tools pack is staged and hash-sealed: FFmpeg, Tesseract, Poppler,
+    Piper, Qdrant, and NSSM; staged Piper TTS smoke passed.
+  - current safe next move after restart: restore-rehearse the staged payloads
+    on a disposable target before creating any final archive or installer.
 - Pause checkpoint, 2026-05-08:
   - status: Wav2Vec WSL enrichment is one-episode validated on laptop `GPU_ENHANCED`.
   - latest runtime/source fixes on `main`:
@@ -344,10 +349,10 @@ Audit Status: ACTIVE (2026-04-10)
 - Closure status:
   - Linux WSL audio wheelhouse: canonical `2.5.1+cu121` torch-family evidence is staged and hash-computed
   - Windows Conda tarballs: staged and hash-computed from current GoodQ envs
-  - Windows pip wheelhouse: open; 123 unique pip wheel gaps remain
-  - WSL restore strategy: preferred near-term path is a hash-sealed WSL audio distro export; current apt archive evidence is partial and direct package archives are missing for `python3-pip`, `python3-venv`, `sox`, and `git`
-  - Host payloads: source evidence hash-computed only; not yet copied into a final offline bundle root
-  - Piper: located through config/environment source evidence, but not staged or hash-sealed
+  - Windows pip wheelhouse: sealed in staged payload; 155 exact PyPI requirements verified with Python 3.10 no-index download checks
+  - WSL restore strategy: private WSL audio distro export is hash-sealed; apt archive evidence remains supplemental partial evidence with direct package archives missing for `python3-pip`, `python3-venv`, `sox`, and `git`
+  - Host payloads: copied and hash-sealed into staged tools pack
+  - Piper: staged, hash-sealed, and smoke-tested with `en_US-joe-medium`
 - Packaging doctrine:
   - `WSL_AUDIO_LANE_OBSERVED_FUNCTIONAL_DRIFT_CU128` is functional drift evidence, not a package recommendation and not an offline bundle target
   - bootstrap target remains the canonical WSL audio `2.5.1+cu121` torch family

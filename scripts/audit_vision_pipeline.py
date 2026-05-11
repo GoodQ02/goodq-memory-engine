@@ -10,6 +10,21 @@ import json
 from pathlib import Path
 from datetime import datetime
 
+
+def model_cache_root():
+    explicit = os.environ.get("GOODQ_MODEL_CACHE_ROOT") or os.environ.get("HF_HOME")
+    if explicit:
+        return Path(explicit)
+    try:
+        from steps.common.config_loader import get_runtime_paths, load_configs
+        return Path(get_runtime_paths(load_configs({}), "models_cache")["models_cache"])
+    except Exception:
+        data_root = os.environ.get("GOODQ_DATA_ROOT")
+        if data_root:
+            return Path(data_root) / "models"
+        return Path.home() / ".goodq" / "models"
+
+
 def run_cmd(cmd, timeout=120):
     """Run command and return output"""
     try:
@@ -330,7 +345,7 @@ def check_model_caching():
             print(f"    Size: {size_mb:.1f} MB")
     
     # Check for cached models
-    cache_dir = Path("L:/models")
+    cache_dir = model_cache_root()
     if cache_dir.exists():
         print(f"\nModels cached in {cache_dir}:")
         

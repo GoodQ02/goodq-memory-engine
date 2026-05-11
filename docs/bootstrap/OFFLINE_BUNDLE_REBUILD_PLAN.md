@@ -95,6 +95,10 @@ Forbidden:
 - A token-named file was observed in scratch legacy-reference material; legacy
   scratch material must not be circulated into the new bundle without explicit
   sanitization.
+- The standalone legacy root-level model cache was audited after the bundle
+  contract pass. Its nonzero material model payload files matched the
+  canonical model cache by hash; only non-runtime cache logs were unmatched.
+  It is drift evidence, not packaging authority.
 
 ## Progress
 
@@ -110,6 +114,8 @@ Forbidden:
   source commit, file inventory, and accepted offline assets.
 - [ ] Resolve the canonical Linux WSL audio wheelhouse gap or mark WSL offline
   restore incomplete; do not substitute observed cu128 drift wheels.
+- [ ] Keep standalone legacy root-level model cache copies out of the base
+  bundle unless a future manifest proves they are required.
 - [ ] Validate the staged payload before creating archive or installer
   artifacts.
 - [ ] Package a new offline archive or self-extracting installer only after the
@@ -139,6 +145,12 @@ Forbidden:
   Evidence: the bundle had already been replaced by source-side doctrine and
   recent bootstrap fixes; old artifacts were removed from circulation rather
   than preserved as active package truth.
+
+- Observation: The legacy root-level model cache does not add current runtime
+  model coverage.
+  Evidence: the cache drift audit matched all nonzero material model payloads
+  by hash in the canonical model cache; unmatched files were non-runtime cache
+  logs only.
 
 ## Decision Log
 
@@ -282,6 +294,8 @@ The future rebuild is accepted only when:
   marked incomplete
 - model cache excludes incomplete downloads unless intentionally retained with
   a reason
+- standalone legacy model-cache roots are excluded unless explicitly justified
+  by the staged manifest
 - token-like files are excluded
 - generated installer artifacts are created only after staged payload validation
 - extraction smoke confirms the packaged contents match the validated stage

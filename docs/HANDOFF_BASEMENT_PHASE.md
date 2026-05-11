@@ -9,12 +9,43 @@
 
 ---
 
-## Current Restart Checkpoint (2026-05-08)
+## Current Restart Checkpoint (2026-05-11)
 
 This is the practical handoff point for a brand-new Codex session.
 
 - Pause checkpoint:
+  - status: portability/bootstrap prep is active; continue from the offline
+    bundle contract and model-cache drift cleanup before UI or broad witness
+    work.
+  - canonical model cache authority is `<GOODQ_DATA_ROOT>/models` or an
+    explicitly staged `%GOODQ_MODEL_CACHE_ROOT%`.
+  - the legacy root-level model cache was audited and contained no unique
+    material model payloads compared with the canonical cache; nonzero payloads
+    matched by hash and unmatched files were non-runtime cache logs.
+  - active helper/template surfaces have been aligned or are staged for commit:
+    `.env.model_cache`, `scripts/audit_vision_pipeline.py`,
+    `scripts/download_datasets.py`, `scripts/prepare_step_envs.ps1`,
+    `scripts/utilities/gpu_config.py`, and legacy utility probes resolve model
+    cache paths through config/env rather than fixed-drive roots.
+  - non-archive tracked source/docs were scanned for the old model-root literal
+    and returned no hits; archive hits remain historical and non-authoritative.
+  - offline bundle contract: `docs/bootstrap/OFFLINE_BUNDLE_CONTRACT.md`.
+    Generated scratch manifests and local recurrence artifacts are not staged
+    unless explicitly promoted.
+  - after a restart, first run `git status --short --branch` and confirm whether
+    the model-cache drift cleanup commit has landed on `main` and `public`.
+
+- Previous pause checkpoint, 2026-05-08:
   - status: Wav2Vec WSL enrichment is one-episode validated on laptop `GPU_ENHANCED`.
+  - WSL-side Wav2Vec emotion/embedding enrichment lane is qualified with pinned
+    `transformers==4.43.3`, `tokenizers==0.19.1`, and `safetensors==0.7.0`;
+    base WSL readiness remains separate from `wav2vec_enrichment_ready`.
+  - one-episode laptop witness `20260508_214134_laptop_gpu_enhanced_one_episode_witness_wav2vec_post_pull` exited `0` across `33` scenes with WSL audio, diarization, Wav2Vec emotion/embedding, BLIP caption, CLAP, transcripts, Phase 6, and Qdrant all clean.
+  - remaining WSL audio watch item is non-fatal `torchcodec_decoder_unavailable`; current runtime succeeds through preloaded-audio handling.
+
+- Detailed 2026-05-08 state:
+  - Pause checkpoint:
+    - status: Wav2Vec WSL enrichment is one-episode validated on laptop `GPU_ENHANCED`.
   - latest runtime/source fixes on main:
     - `3a06342` (`fix: load runtime pyannote from canonical cache`)
     - `86f032d` (`fix: align image step gpu budget mapping`)

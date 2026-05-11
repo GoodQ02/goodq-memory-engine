@@ -9,6 +9,7 @@ without requiring Docker containers.
 
 import os
 import logging
+from pathlib import Path
 from typing import Optional
 
 logger = logging.getLogger(__name__)
@@ -28,6 +29,20 @@ class GPUManager:
         "object_detect": 0.30,      # YOLO v8
         "default": 0.20             # Fallback for other steps
     }
+
+    @staticmethod
+    def _model_cache_root() -> Path:
+        explicit = os.environ.get("GOODQ_MODEL_CACHE_ROOT") or os.environ.get("HF_HOME")
+        if explicit:
+            return Path(explicit)
+        try:
+            from steps.common.config_loader import get_runtime_paths, load_configs
+            return Path(get_runtime_paths(load_configs({}), "models_cache")["models_cache"])
+        except Exception:
+            data_root = os.environ.get("GOODQ_DATA_ROOT")
+            if data_root:
+                return Path(data_root) / "models"
+            return Path.home() / ".goodq" / "models"
     
     @staticmethod
     def configure_gpu(step_name: str = "default", gpu_id: int = 0) -> dict:
@@ -45,9 +60,10 @@ class GPUManager:
         os.environ.setdefault("CUDA_VISIBLE_DEVICES", str(gpu_id))
         
         # Model caching paths
-        os.environ.setdefault("HF_HOME", "L:/models")
-        os.environ.setdefault("TORCH_HOME", "L:/models")
-        os.environ.setdefault("TRANSFORMERS_CACHE", "L:/models/transformers")
+        model_cache = GPUManager._model_cache_root()
+        os.environ.setdefault("HF_HOME", str(model_cache))
+        os.environ.setdefault("TORCH_HOME", str(model_cache))
+        os.environ.setdefault("TRANSFORMERS_CACHE", str(model_cache / "transformers"))
         
         # Disable unnecessary features
         os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "0"

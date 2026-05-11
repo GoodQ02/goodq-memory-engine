@@ -21,6 +21,16 @@ function Test-Command($name) {
   $null -ne (Get-Command $name -ErrorAction SilentlyContinue)
 }
 
+function Resolve-ModelCacheRoot {
+  if (-not [string]::IsNullOrWhiteSpace($env:GOODQ_MODEL_CACHE_ROOT)) {
+    return $env:GOODQ_MODEL_CACHE_ROOT
+  }
+  if (-not [string]::IsNullOrWhiteSpace($env:GOODQ_DATA_ROOT)) {
+    return (Join-Path $env:GOODQ_DATA_ROOT 'models')
+  }
+  return $null
+}
+
 if ($condaExe -eq 'conda' -and -not (Test-Command 'conda')) { Fail 'conda not found on PATH. Please install Miniconda/Anaconda.' }
 
 $repoRoot = (Get-Item -LiteralPath (Join-Path $PSScriptRoot '..')).FullName
@@ -40,12 +50,18 @@ $defaultSteps = @(
 
 # Ensure critical environment variables are set and persisted consistently
 try {
+  $modelCacheRoot = Resolve-ModelCacheRoot
   $vars = @{
-    'HF_HOME'    = 'L:\\models'
-    'TORCH_HOME' = 'L:\\models'
     'HF_HUB_ENABLE_HF_TRANSFER' = '1'
     'GOODQ_API_HOST' = '127.0.0.1'
     'GOODQ_API_PORT' = '30000'
+  }
+  if ($modelCacheRoot) {
+    $vars['HF_HOME'] = $modelCacheRoot
+    $vars['TORCH_HOME'] = $modelCacheRoot
+    $vars['TRANSFORMERS_CACHE'] = (Join-Path $modelCacheRoot 'transformers')
+  } else {
+    Write-Warn 'GOODQ_DATA_ROOT is not set; leaving model cache env vars unchanged'
   }
   Write-Note 'Setting core environment variables (HF_HOME, TORCH_HOME, API host/port)'
   & (Join-Path $PSScriptRoot 'set_env_vars.ps1') -Vars $vars -Persist -AppendToEnvLocal

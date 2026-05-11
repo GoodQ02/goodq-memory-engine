@@ -5,14 +5,24 @@ import os
 import sys
 from pathlib import Path
 
+def model_cache_root() -> Path:
+    explicit = os.environ.get("GOODQ_MODEL_CACHE_ROOT") or os.environ.get("HF_HOME")
+    if explicit:
+        return Path(explicit)
+    data_root = os.environ.get("GOODQ_DATA_ROOT")
+    if data_root:
+        return Path(data_root) / "models"
+    return Path.home() / ".goodq" / "models"
+
 print("="*80)
 print("[SYMBOL] HUGGINGFACE AUTHENTICATION & MODEL LOADING TEST")
 print("="*80)
 
 # Set cache directories
-os.environ["HF_HOME"] = "L:/models"
-os.environ["TORCH_HOME"] = "L:/models"
-os.environ["TRANSFORMERS_CACHE"] = "L:/models/transformers"
+_model_cache = model_cache_root()
+os.environ["HF_HOME"] = str(_model_cache)
+os.environ["TORCH_HOME"] = str(_model_cache)
+os.environ["TRANSFORMERS_CACHE"] = str(_model_cache / "transformers")
 
 print(f"\n[DIR] Cache Directories:")
 print(f"   HF_HOME: {os.environ.get('HF_HOME')}")

@@ -1,10 +1,10 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: GENERATED_SNAPSHOT -->
-<!-- DOC_LAST_VERIFIED: 2026-05-08 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-11 -->
 
 # System Snapshot
 
-_Operational operator-state alignment refreshed: 2026-05-08._
+_Operational operator-state alignment refreshed: 2026-05-11._
 
 This is a bounded release-era system snapshot. It is useful for understanding
 the supported host/runtime baseline, but it is not a live witness monitor.
@@ -55,6 +55,7 @@ the supported host/runtime baseline, but it is not a live witness monitor.
 - Previous offline bundle payload and self-extracting installer: retired from circulation after stale-bundle audit
 - Current validated offline bundle / installer: none in circulation
 - Active rebuild plan: `docs/bootstrap/OFFLINE_BUNDLE_REBUILD_PLAN.md`
+- Active offline bundle contract: `docs/bootstrap/OFFLINE_BUNDLE_CONTRACT.md`
 - Closure state:
   - Linux WSL audio wheelhouse: open until canonical `2.5.1+cu121` torch-family evidence is proven or explicitly marked incomplete
   - Windows wheels: rebuild input only until the new staged payload validates
@@ -64,6 +65,8 @@ the supported host/runtime baseline, but it is not a live witness monitor.
   - bootstrap target remains the canonical WSL audio `2.5.1+cu121` torch family
 - Current large local asset work:
   - required model cache: present locally
+  - canonical model cache authority: `<GOODQ_DATA_ROOT>/models` or an explicitly staged `%GOODQ_MODEL_CACHE_ROOT%`
+  - legacy root-level model cache: audited as duplicate material payload only; unmatched files were non-runtime cache logs, so it is drift evidence rather than package authority
   - NRC lexicon: present locally
   - dataset prefetch: active / large cache already materialized
 
@@ -111,6 +114,21 @@ the supported host/runtime baseline, but it is not a live witness monitor.
     - `51` transcript/entity disagreement segments
 
 ## Current Operator State
+- Pause checkpoint, 2026-05-11:
+  - status: portability/bootstrap prep is active; next work should continue from
+    model-cache drift cleanup and offline bundle staging, not broad ingestion or
+    UI work.
+  - active cache authority cleanup is staged around `.env.model_cache`,
+    `scripts/audit_vision_pipeline.py`, `scripts/download_datasets.py`,
+    `scripts/prepare_step_envs.ps1`, `scripts/utilities/gpu_config.py`, and
+    legacy utility probes.
+  - these surfaces resolve model cache paths through `GOODQ_MODEL_CACHE_ROOT`,
+    `GOODQ_DATA_ROOT`, or configured `models_cache`; they must not reintroduce
+    fixed-drive model-cache roots.
+  - non-archive tracked source/docs were scanned after cleanup and no old
+    model-root literal hits remained; archive hits are historical only.
+  - generated scratch manifests and local recurrence artifacts remain unstaged
+    unless intentionally promoted.
 - Pause checkpoint, 2026-05-08:
   - status: Wav2Vec WSL enrichment is one-episode validated on laptop `GPU_ENHANCED`.
   - current runtime/source fix checkpoint is `86f032d` (`fix: align image step gpu budget mapping`)

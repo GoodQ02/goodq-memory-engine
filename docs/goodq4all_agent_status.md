@@ -4,7 +4,7 @@
 
 # GoodQ4All Agent Status
 
-_Operational restart checkpoint aligned: 2026-05-08._
+_Operational restart checkpoint aligned: 2026-05-11._
 
 This document is a bounded operator snapshot of the current release-era
 stitching and offline-package baseline.
@@ -13,6 +13,31 @@ Use canonical runtime contracts and released evidence surfaces as source of
 truth for live claims. Do not treat this document as a live witness monitor.
 
 ## Current Restart Checkpoint
+- Pause checkpoint, 2026-05-11:
+  - status: portability/bootstrap prep is active; do not start broad ingestion
+    or UI work before confirming the current git head and reviewing the offline
+    bundle contract.
+  - canonical model cache authority is `<GOODQ_DATA_ROOT>/models` or an
+    explicitly staged `%GOODQ_MODEL_CACHE_ROOT%`.
+  - the legacy root-level model cache was audited: all nonzero material model
+    payload files matched the canonical model cache by hash; unmatched files
+    were non-runtime cache logs only.
+  - legacy root-level model cache references are now treated as drift risk, not
+    runtime or packaging authority.
+  - active helper/template cleanup is in progress for this checkpoint:
+    `.env.model_cache`, `scripts/audit_vision_pipeline.py`,
+    `scripts/download_datasets.py`, `scripts/prepare_step_envs.ps1`,
+    `scripts/utilities/gpu_config.py`, and legacy utility probes now resolve
+    the model cache from `GOODQ_MODEL_CACHE_ROOT`, `GOODQ_DATA_ROOT`, or the
+    configured `models_cache` path instead of a fixed root.
+  - non-archive tracked source/docs were scanned for the old model-root literal
+    after cleanup and returned no hits; remaining hits are archived historical
+    material only.
+  - active offline bundle contract is documented in
+    `docs/bootstrap/OFFLINE_BUNDLE_CONTRACT.md`; scratch manifests remain local
+    generated artifacts unless intentionally promoted.
+  - current safe next move after restart: finish validation, commit/push the
+    model-cache drift cleanup, then continue the offline bundle staging audit.
 - Pause checkpoint, 2026-05-08:
   - status: Wav2Vec WSL enrichment is one-episode validated on laptop `GPU_ENHANCED`.
   - latest runtime/source fixes on `main`:

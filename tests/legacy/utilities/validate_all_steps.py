@@ -23,6 +23,16 @@ import sqlite3
 PROJECT_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
+def model_cache_root() -> Path:
+    explicit = os.environ.get("GOODQ_MODEL_CACHE_ROOT") or os.environ.get("HF_HOME")
+    if explicit:
+        return Path(explicit)
+    data_root = os.environ.get("GOODQ_DATA_ROOT")
+    if data_root:
+        return Path(data_root) / "models"
+    return Path.home() / ".goodq" / "models"
+
+
 # Step definitions - mapping to their environments
 STEP_DEFINITIONS = {
     # Core AI Processing Steps (17 total)
@@ -237,7 +247,7 @@ class StepValidator:
     
     def test_model_cache(self, env_name: str, test_type: str) -> Tuple[bool, str]:
         """Check if required models are accessible"""
-        models_dir = Path("L:/models")
+        models_dir = model_cache_root()
         if not models_dir.exists():
             return False, "Model cache directory not found"
         
@@ -245,7 +255,7 @@ class StepValidator:
         test_code = "import os; print(os.environ.get('HF_HOME', 'NOT_SET'))"
         success, stdout, stderr = self.run_test_in_env(env_name, test_code)
         
-        if "L:\\models" in stdout or "L:/models" in stdout:
+        if str(models_dir) in stdout:
             return True, f"Model cache configured: {stdout.strip()}"
         else:
             return False, f"HF_HOME not configured correctly: {stdout.strip()}"

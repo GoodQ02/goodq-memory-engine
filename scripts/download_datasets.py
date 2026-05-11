@@ -17,12 +17,25 @@ from datasets import load_dataset
 from dataset_specs import DATASET_SPECS, DatasetSpec, find_local_copy
 
 
+def _models_cache_root() -> Path:
+    explicit = os.environ.get('GOODQ_MODEL_CACHE_ROOT') or os.environ.get('HF_HOME')
+    if explicit:
+        return Path(explicit)
+    try:
+        from steps.common.config_loader import get_runtime_paths, load_configs
+        return Path(get_runtime_paths(load_configs({}), 'models_cache')['models_cache'])
+    except Exception:
+        data_root = os.environ.get('GOODQ_DATA_ROOT')
+        if data_root:
+            return Path(data_root) / 'models'
+        return Path.home() / '.goodq' / 'models'
+
+
 def _dataset_cache_root() -> Path:
     cache = os.environ.get('HF_DATASETS_CACHE')
     if cache:
         return Path(cache)
-    hf_home = os.environ.get('HF_HOME') or 'L:/models'
-    return Path(hf_home) / 'hf' / 'datasets'
+    return _models_cache_root() / 'hf' / 'datasets'
 
 
 def _load_dataset(spec: DatasetSpec, cache_root: Path) -> Dict[str, Any]:

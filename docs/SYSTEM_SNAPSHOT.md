@@ -71,7 +71,10 @@ the supported host/runtime baseline, but it is not a live witness monitor.
   - canonical model cache authority: `<GOODQ_DATA_ROOT>/models` or an explicitly staged `%GOODQ_MODEL_CACHE_ROOT%`
   - legacy root-level model cache: audited as duplicate material payload only; unmatched files were non-runtime cache logs, so it is drift evidence rather than package authority
   - NRC lexicon: present locally
-  - dataset prefetch: active / large cache already materialized
+  - dataset corpus: optional eval/research/training material only; it is not a
+    base installer dependency
+  - memory snapshot: none selected by design; base install should create new
+    SQLite, KG, and Qdrant memory rather than inherit witness/test memory
 
 ## Benchmark State
 - Locked two-season benchmark witness: `reports/fresh_ingest_runs/20260409_072106_two_season_benchmark_witness/`

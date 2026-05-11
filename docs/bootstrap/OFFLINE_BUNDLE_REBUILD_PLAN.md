@@ -137,6 +137,13 @@ Forbidden:
 - [ ] Treat the WSL apt archive cache as supplemental partial evidence only.
   Direct setup package archives are still missing for `python3-pip`,
   `python3-venv`, `sox`, and `git`.
+- [ ] Keep the optional dataset corpus out of the base installer. Runtime
+  required model/cache assets belong in `model_cache_pack`; the large dataset
+  corpus is eval/research/training material only until a separate corpus
+  manifest is selected and hash-sealed.
+- [ ] Keep base memory clean. Do not include Seinfeld/test-run memory or home
+  movie memory unless an operator deliberately creates a separate private or
+  witness memory snapshot pack.
 - [ ] Keep standalone legacy root-level model cache copies out of the base
   bundle unless a future manifest proves they are required.
 - [ ] Validate the staged payload before creating archive or installer
@@ -192,6 +199,17 @@ Forbidden:
   wheelhouse was rebuilt with the canonical `goodq_core` Python 3.10
   interpreter and then verified with local no-index downloads for all exact
   PyPI requirements.
+
+- Observation: The large dataset cache is not runtime authority.
+  Evidence: runtime-required model/cache assets are already represented by the
+  model cache pack and model registry checks. The dataset corpus is optional
+  eval/research/training material and must remain separate from the base
+  installer.
+
+- Observation: No memory snapshot is selected by design.
+  Evidence: base GoodQ should boot clean and create new SQLite, KG, and Qdrant
+  state through normal runtime. Witness/test-run memory is optional history, not
+  installer seed memory.
 
 ## Decision Log
 

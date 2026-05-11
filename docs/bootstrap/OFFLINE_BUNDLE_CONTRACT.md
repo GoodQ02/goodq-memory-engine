@@ -262,23 +262,35 @@ reports, or machine-specific absolute paths into the bundle.
 - Destination paths:
   - `%GOODQ_OFFLINE_BUNDLE_ROOT%/optional/datasets`
 - Expected contents:
-  - optional HF dataset cache and download blobs selected by manifest
+  - optional HF dataset cache and download blobs selected by a dataset-corpus
+    manifest
+  - evaluation, research, synthetic-test, and future training corpora only
+  - no runtime-required model snapshots, weights, lexicons, tool payloads, or
+    memory databases
 - Approximate size: about 1.3 TB on the current workstation.
 - Hash strategy: manifest by dataset namespace, split, cache file, size, and
   hash. Keep this pack separate from base runtime.
 - Validation command:
-  - `python scripts/system_readiness_check.py --json`
+  - optional corpus inventory and selected-dataset load checks after a corpus
+    manifest is chosen
 - Known gaps:
-  - dataset cache has not been classified into runtime-required vs eval-only
-    subsets.
+  - runtime-required assets are classified into `model_cache_pack`, not this
+    pack.
+  - optional dataset corpus is not inventoried or hash-sealed yet.
+  - base installer must not include the optional dataset corpus by default.
 - Exclusion rules:
+  - exclude all runtime-required model/cache assets; those belong in
+    `model_cache_pack`.
   - exclude home-movie targets, Seinfeld/test-run memory, generated ingestion
     outputs, and private user media unless an operator creates a separate
     private corpus pack.
+  - exclude this pack from public artifacts unless the selected corpus manifest
+    is explicitly public-safe.
 
 ### optional_memory_snapshot_pack
 
-- Purpose: preserve an existing GoodQ memory state for migration or rollback.
+- Purpose: preserve an existing GoodQ memory state for migration, rollback, or
+  a deliberately selected private/witness memory install.
 - Required: no.
 - Source paths:
   - `%GOODQ_DATA_ROOT%/GoodQ_Data`
@@ -290,6 +302,11 @@ reports, or machine-specific absolute paths into the bundle.
   - Qdrant storage snapshot
   - epoch metadata
   - snapshot manifest
+- Base installer behavior:
+  - boot cleanly with no preloaded GoodQ memory.
+  - create new SQLite, KG, and Qdrant memory state through normal runtime.
+  - never inherit witness/test-run memory unless an operator explicitly installs
+    a separate memory snapshot pack.
 - Approximate size: pending selected snapshot.
 - Hash strategy: snapshot database files and Qdrant collection files after
   services are stopped or a safe export is produced.
@@ -297,11 +314,14 @@ reports, or machine-specific absolute paths into the bundle.
   - `python scripts/bootstrap_verify.py --json`
   - Qdrant collection health check after restore
 - Known gaps:
-  - no clean memory snapshot pack has been selected.
+  - no clean memory snapshot pack has been selected; this is intentional and
+    not a base-installer blocker.
 - Exclusion rules:
   - do not include Seinfeld/test-run memory in the base installer.
   - do not include personal home-movie memory unless this is an explicitly
     private operator snapshot.
+  - do not include live Qdrant/SQLite files unless services are stopped or a
+    safe export/snapshot procedure is used.
 
 ## Legacy Helper Quarantine Rules
 

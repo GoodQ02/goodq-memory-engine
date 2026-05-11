@@ -362,7 +362,11 @@ Audit Status: ACTIVE (2026-04-10)
 - Optional asset state:
   - required model cache: present locally
   - NRC lexicon: staged locally
-  - dataset prefetch: active locally and growing the Hugging Face datasets cache under the local model root
+  - dataset corpus: optional eval/research/training material only; do not include
+    the large dataset cache in the base installer
+  - memory snapshot: none selected by design; base GoodQ should boot clean and
+    create new memory unless a separate private/witness memory pack is
+    deliberately installed
 
 ## Storage & Memory Health
 - SQLite (epoch-scoped memory.db): healthy

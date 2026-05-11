@@ -128,6 +128,7 @@ reports, or machine-specific absolute paths into the bundle.
   - `%GOODQ_REPO_ROOT%/scripts/wsl_audio_preflight.py`
   - `%GOODQ_WSL_AUDIO_PACK_ROOT%/linux_wheels_cp310_cu121`
   - `%GOODQ_WSL_AUDIO_PACK_ROOT%/linux_wheels_cp310_cu121_manifest.json`
+  - `%GOODQ_WSL_DISTRO_EXPORT_ROOT%/goodq-audio-*.tar` once created
 - Destination paths:
   - `%GOODQ_OFFLINE_BUNDLE_ROOT%/env/wsl_audio`
 - Expected contents:
@@ -138,16 +139,19 @@ reports, or machine-specific absolute paths into the bundle.
   - `torchaudio==2.5.1+cu121`
   - `transformers==4.43.3`, `tokenizers==0.19.1`, `safetensors==0.7.0`
   - offline install probe report
-  - either an offline system package strategy or a validated WSL distro export
+  - preferred near-term restore strategy: a validated WSL distro export
+  - staged apt archive evidence only as supplemental package-level evidence
 - Approximate size:
   - sealed wheelhouse evidence is 3,153,798,893 bytes.
   - staged apt archive evidence is 185,684,393 bytes.
+  - WSL distro export size is not known yet because no export is sealed.
 - Hash strategy: use the wheelhouse manifest and hash any WSL distro export or
   system package bundle separately.
 - Validation command:
   - `python scripts/wsl_audio_preflight.py --compact`
   - `python -m pytest tests/unit/test_wsl_audio_preflight.py`
 - Known gaps:
+  - no exported WSL distro tar is created or hash-sealed yet.
   - WSL apt archive cache is staged and hash-computed, but it is not a complete
     apt closure yet.
   - direct setup package archives are missing for `python3-pip`,
@@ -225,18 +229,26 @@ reports, or machine-specific absolute paths into the bundle.
 - Approximate size:
   - Qdrant: 65,280,000 bytes
   - NSSM: 368,640 bytes
-  - Piper executable: 509,952 bytes
-  - Piper Joe voice model: 63,201,294 bytes
-  - FFmpeg, Tesseract, and Poppler sizes pending staged manifest
+  - FFmpeg source evidence: 299,079,168 bytes
+  - Tesseract source evidence: 249,434,472 bytes
+  - Poppler source evidence: 55,859,662 bytes
+  - Piper source evidence: 102,052,310 bytes
 - Hash strategy: hash executables, model files, voice metadata, and tool
-  directory trees.
+  directory trees after copying them into the final host tools pack. Source
+  evidence hashes are useful for planning, but they do not by themselves seal a
+  portable installer payload.
 - Validation command:
   - `python scripts/system_readiness_check.py --json`
   - `python scripts/bootstrap_verify.py --json`
 - Known gaps:
-  - host tools are installed locally but not staged as a portable pack.
+  - host tools are installed locally and source-evidence hashes exist, but they
+    are not staged as a portable pack.
+  - Qdrant and NSSM payloads are present in the source tree, but the final
+    host tools pack still needs a copy-and-hash manifest.
+  - FFmpeg, Tesseract, and Poppler are source-discovered only until copied into
+    `%GOODQ_OFFLINE_BUNDLE_ROOT%/tools`.
   - Piper is located through configured environment variables, but is not yet
-    staged or hash-sealed.
+    staged or hash-sealed; do not call Piper sealed yet.
 - Exclusion rules:
   - exclude installer download caches unless explicitly chosen.
   - exclude mutable service logs and local service state.
@@ -357,10 +369,10 @@ Before building any final archive or installer:
 2. Required model cache pack is copied and hash-sealed.
 3. Windows env closure is either packed or fully backed by offline Conda/pip
    package caches.
-4. WSL audio has either an offline system package strategy or a validated WSL
-   distro export.
-5. Host tools pack includes FFmpeg, Tesseract, Poppler, Piper, Qdrant, and
-   NSSM.
+4. WSL audio has a validated, hash-sealed WSL distro export, or an explicitly
+   validated complete offline system package strategy.
+5. Host tools pack includes copied and hash-sealed FFmpeg, Tesseract, Poppler,
+   Piper, Qdrant, and NSSM payloads.
 6. Token/path hygiene scan passes.
 7. Legacy helper quarantine list is enforced.
 8. Base installer does not include optional datasets or memory snapshots.

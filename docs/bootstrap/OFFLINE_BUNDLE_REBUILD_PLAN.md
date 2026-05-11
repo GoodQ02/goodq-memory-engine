@@ -121,10 +121,18 @@ Forbidden:
   current GoodQ envs: 209 tarballs, zero missing Conda tarballs.
 - [x] 2026-05-11 - Staged and hash-computed current WSL apt archive evidence:
   181 `.deb` files.
+- [x] 2026-05-11 - Classified host-tool hashes as source evidence only; do not
+  call FFmpeg, Tesseract, Poppler, Piper, Qdrant, or NSSM sealed until copied
+  into the final host tools pack and hash-manifested there.
 - [ ] Seal the Windows pip wheelhouse. Current gap: 123 unique pip package
   wheels are not locally staged.
 - [ ] Seal the WSL system package closure. Current gap: direct setup package
   archives are missing for `python3-pip`, `python3-venv`, `sox`, and `git`.
+- [ ] Create and hash a WSL audio distro export as the preferred near-term
+  offline restore strategy, or explicitly choose and prove a complete offline
+  system-package strategy.
+- [ ] Copy and hash-seal the host tools pack, including Piper executable,
+  `en_US-joe-medium` voice, and voice sidecar JSON.
 - [ ] Keep standalone legacy root-level model cache copies out of the base
   bundle unless a future manifest proves they are required.
 - [ ] Validate the staged payload before creating archive or installer
@@ -163,6 +171,13 @@ Forbidden:
   by hash in the canonical model cache; unmatched files were non-runtime cache
   logs only.
 
+- Observation: Installed host tools are not the same as a portable offline
+  host tools pack.
+  Evidence: FFmpeg, Tesseract, Poppler, Piper, Qdrant, and NSSM are discovered
+  or present locally, and source-evidence hashes exist, but the final
+  `%GOODQ_OFFLINE_BUNDLE_ROOT%/tools` payload has not been copied and
+  hash-sealed. Piper remains unsealed.
+
 ## Decision Log
 
 - Decision: Retire the previous offline bundle generation instead of labeling
@@ -181,6 +196,14 @@ Forbidden:
   Rationale: The observed lane is classified as functional drift only. Future
   promotion requires an explicit lane-promotion audit.
   Date/Author: 2026-05-05 / Codex
+
+- Decision: Prefer a WSL audio distro export for the near-term offline restore
+  strategy.
+  Rationale: The wheelhouse is strong, but reconstructing WSL from apt package
+  archives still has direct package gaps. A validated `wsl --export` tar gives
+  the installer a reproducible offline runtime target without depending on apt
+  resolver behavior during install.
+  Date/Author: 2026-05-11 / Codex
 
 - Decision: Create a rebuild plan before authoring or running a new packager.
   Rationale: Offline packaging is restart-sensitive and can reintroduce old

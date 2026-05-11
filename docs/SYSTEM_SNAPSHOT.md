@@ -60,8 +60,9 @@ the supported host/runtime baseline, but it is not a live witness monitor.
   - Linux WSL audio wheelhouse: canonical `2.5.1+cu121` torch-family evidence is staged and hash-computed
   - Windows Conda tarballs: staged and hash-computed from current GoodQ envs
   - Windows pip wheelhouse: open; 123 unique pip wheel gaps remain
-  - WSL system packages: partial apt archive evidence staged; direct package archives missing for `python3-pip`, `python3-venv`, `sox`, and `git`
-  - Host payloads: source evidence hash-computed; not yet copied into a final offline bundle root
+  - WSL restore strategy: preferred near-term path is a hash-sealed WSL audio distro export; current apt archive evidence is partial and direct package archives are missing for `python3-pip`, `python3-venv`, `sox`, and `git`
+  - Host payloads: source evidence hash-computed only; not yet copied into a final offline bundle root
+  - Piper: located through config/environment source evidence, but not staged or hash-sealed
 - Packaging doctrine:
   - `WSL_AUDIO_LANE_OBSERVED_FUNCTIONAL_DRIFT_CU128` is drift evidence, not an offline bundle target
   - bootstrap target remains the canonical WSL audio `2.5.1+cu121` torch family

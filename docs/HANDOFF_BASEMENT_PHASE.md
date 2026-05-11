@@ -36,8 +36,11 @@ This is the practical handoff point for a brand-new Codex session.
     artifacts partial hash-computed, 2 optional artifacts deferred, zero
     pending hashes.
   - remaining offline closure gaps: Windows pip wheelhouse has 123 unique wheel
-    gaps; WSL apt archive evidence is partial and missing direct setup package
-    archives for `python3-pip`, `python3-venv`, `sox`, and `git`.
+    gaps; preferred WSL restore is a hash-sealed WSL audio distro export, while
+    current apt archive evidence remains partial and missing direct setup
+    package archives for `python3-pip`, `python3-venv`, `sox`, and `git`;
+    host-tool hashes are source evidence only until copied into the final tools
+    pack, and Piper is not sealed yet.
   - after a restart, first run `git status --short --branch` and confirm whether
     the latest offline bundle contract/status commits have landed on `main`.
 

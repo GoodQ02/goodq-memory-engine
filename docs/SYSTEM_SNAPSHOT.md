@@ -51,15 +51,17 @@ the supported host/runtime baseline, but it is not a live witness monitor.
 - LM Studio (1234): not reachable
 
 ## Offline Packaging State
-- Workspace-adjacent machine-audit pack: present and preserved as rebuild input
+- Workspace-adjacent machine-audit pack: removed from active scratch; do not use it as rebuild authority
 - Previous offline bundle payload and self-extracting installer: retired from circulation after stale-bundle audit
 - Current validated offline bundle / installer: none in circulation
 - Active rebuild plan: `docs/bootstrap/OFFLINE_BUNDLE_REBUILD_PLAN.md`
 - Active offline bundle contract: `docs/bootstrap/OFFLINE_BUNDLE_CONTRACT.md`
 - Closure state:
-  - Linux WSL audio wheelhouse: open until canonical `2.5.1+cu121` torch-family evidence is proven or explicitly marked incomplete
-  - Windows wheels: rebuild input only until the new staged payload validates
-  - Host payloads: rebuild input only until the new staged payload validates
+  - Linux WSL audio wheelhouse: canonical `2.5.1+cu121` torch-family evidence is staged and hash-computed
+  - Windows Conda tarballs: staged and hash-computed from current GoodQ envs
+  - Windows pip wheelhouse: open; 123 unique pip wheel gaps remain
+  - WSL system packages: partial apt archive evidence staged; direct package archives missing for `python3-pip`, `python3-venv`, `sox`, and `git`
+  - Host payloads: source evidence hash-computed; not yet copied into a final offline bundle root
 - Packaging doctrine:
   - `WSL_AUDIO_LANE_OBSERVED_FUNCTIONAL_DRIFT_CU128` is drift evidence, not an offline bundle target
   - bootstrap target remains the canonical WSL audio `2.5.1+cu121` torch family

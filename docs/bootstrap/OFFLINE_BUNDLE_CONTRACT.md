@@ -6,7 +6,7 @@
 
 ## Status
 
-Status: ACTIVE CONTRACT, SOURCE-EVIDENCE PARTIAL SEAL
+Status: ACTIVE CONTRACT, SOURCE-EVIDENCE PARTIAL SEAL WITH ENV GAPS
 
 This contract defines the packs required to turn a vanilla Windows machine into
 a GoodQ-capable local pipeline runner without internet access. It does not
@@ -38,8 +38,8 @@ reports, or machine-specific absolute paths into the bundle.
 | Pack | Status | Purpose |
 | --- | --- | --- |
 | `base_source_pack` | Required | Clean source payload, docs, configs, tests, vendor helpers, and bootstrap entrypoints. |
-| `windows_env_pack` | Required | Offline-restorable Windows Conda/pip environments for core and supported step envs. |
-| `wsl_audio_pack` | Required for full desktop parity | Offline WSL audio runtime payload on the canonical cu121 lane. |
+| `windows_env_pack` | Required, partial seal | Offline-restorable Windows Conda/pip environments for core and supported step envs. |
+| `wsl_audio_pack` | Required for full desktop parity, partial seal | Offline WSL audio runtime payload on the canonical cu121 lane. |
 | `model_cache_pack` | Required | Runtime model cache, YOLO weight, lexicons, and HF snapshot structure. |
 | `host_tools_pack` | Required | External tools needed by the Windows host: Qdrant, service helpers, FFmpeg, Tesseract, Poppler, Piper. |
 | `optional_dataset_corpus_pack` | Optional | Large HF dataset/eval/training corpus, separate from base runtime. |
@@ -87,16 +87,16 @@ reports, or machine-specific absolute paths into the bundle.
   - `%GOODQ_REPO_ROOT%/environment.yml`
   - `%GOODQ_REPO_ROOT%/environment.gpu.yml`
   - `%GOODQ_REPO_ROOT%/envs/locks`
-  - future `%GOODQ_WINDOWS_ENV_PACK_ROOT%/conda-pack`
-  - future `%GOODQ_WINDOWS_ENV_PACK_ROOT%/conda-pkgs`
-  - future `%GOODQ_WINDOWS_ENV_PACK_ROOT%/pip-wheels`
+  - `%GOODQ_WINDOWS_ENV_PACK_ROOT%/conda-pkgs`
+  - `%GOODQ_WINDOWS_ENV_PACK_ROOT%/env-exports`
+  - `%GOODQ_WINDOWS_ENV_PACK_ROOT%/pip-wheels`
 - Destination paths:
   - `%GOODQ_OFFLINE_BUNDLE_ROOT%/env/windows`
 - Expected contents:
   - packed `goodq_core` environment or equivalent offline Conda package cache
   - packed supported step envs or equivalent offline Conda/pip closure
   - package manifests and hashes
-- Approximate size: pending environment closure generation.
+- Approximate size: staged Conda/package evidence is 4,159,075,625 bytes.
 - Hash strategy: hash packed env archives and package cache files; keep lock
   file hashes beside the payload.
 - Validation command:
@@ -104,7 +104,13 @@ reports, or machine-specific absolute paths into the bundle.
   - `python -m pytest tests/unit/test_bootstrap_install_wsl.py`
   - targeted import checks from each restored env
 - Known gaps:
-  - lock recipes exist, but no complete Windows offline env closure is staged.
+  - Conda tarballs referenced by the current GoodQ envs are staged and
+    hash-computed: 209 tarballs, zero missing Conda tarballs.
+  - Windows pip wheelhouse is not sealed: 123 unique pip package wheels are not
+    available in the local wheel cache.
+  - the staged env evidence intentionally uses sanitized `pip list` exports
+    instead of `pip freeze`, because freeze output can include non-portable
+    build-origin paths.
   - old installer helpers with network package lanes must not be treated as
     authoritative env closure.
 - Exclusion rules:
@@ -133,14 +139,19 @@ reports, or machine-specific absolute paths into the bundle.
   - `transformers==4.43.3`, `tokenizers==0.19.1`, `safetensors==0.7.0`
   - offline install probe report
   - either an offline system package strategy or a validated WSL distro export
-- Approximate size: sealed wheelhouse is 3,153,755,236 bytes.
+- Approximate size:
+  - sealed wheelhouse evidence is 3,153,798,893 bytes.
+  - staged apt archive evidence is 185,684,393 bytes.
 - Hash strategy: use the wheelhouse manifest and hash any WSL distro export or
   system package bundle separately.
 - Validation command:
   - `python scripts/wsl_audio_preflight.py --compact`
   - `python -m pytest tests/unit/test_wsl_audio_preflight.py`
 - Known gaps:
-  - WSL system package closure is not sealed.
+  - WSL apt archive cache is staged and hash-computed, but it is not a complete
+    apt closure yet.
+  - direct setup package archives are missing for `python3-pip`,
+    `python3-venv`, `sox`, and `git`.
   - setup still has apt and direct pip install assumptions unless run against a
     prepared offline path.
   - exact script parity may require `psutil` and `watchdog` wheels, or a script

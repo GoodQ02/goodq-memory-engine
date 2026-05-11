@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-05-09 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-11 -->
 
 # Basement Phase Handoff (v1) — Current System State
 
@@ -32,8 +32,14 @@ This is the practical handoff point for a brand-new Codex session.
   - offline bundle contract: `docs/bootstrap/OFFLINE_BUNDLE_CONTRACT.md`.
     Generated scratch manifests and local recurrence artifacts are not staged
     unless explicitly promoted.
+  - current offline source-evidence state: 16 artifacts hash-computed, 2
+    artifacts partial hash-computed, 2 optional artifacts deferred, zero
+    pending hashes.
+  - remaining offline closure gaps: Windows pip wheelhouse has 123 unique wheel
+    gaps; WSL apt archive evidence is partial and missing direct setup package
+    archives for `python3-pip`, `python3-venv`, `sox`, and `git`.
   - after a restart, first run `git status --short --branch` and confirm whether
-    the model-cache drift cleanup commit has landed on `main` and `public`.
+    the latest offline bundle contract/status commits have landed on `main`.
 
 - Previous pause checkpoint, 2026-05-08:
   - status: Wav2Vec WSL enrichment is one-episode validated on laptop `GPU_ENHANCED`.

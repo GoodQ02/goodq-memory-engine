@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: GENERATED_SNAPSHOT -->
-<!-- DOC_LAST_VERIFIED: 2026-05-09 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-11 -->
 
 # GoodQ4All Agent Status
 
@@ -36,8 +36,18 @@ truth for live claims. Do not treat this document as a live witness monitor.
   - active offline bundle contract is documented in
     `docs/bootstrap/OFFLINE_BUNDLE_CONTRACT.md`; scratch manifests remain local
     generated artifacts unless intentionally promoted.
-  - current safe next move after restart: finish validation, commit/push the
-    model-cache drift cleanup, then continue the offline bundle staging audit.
+  - current offline bundle source-evidence state:
+    - 16 artifacts hash-computed
+    - 2 artifacts partial hash-computed
+    - 2 optional artifacts deferred from the base installer
+    - zero pending hashes
+  - Windows Conda tarball evidence is staged and hash-computed; the Windows
+    pip wheelhouse is still open with 123 unique wheel gaps.
+  - WSL audio wheelhouse evidence is staged on the canonical cu121 lane; WSL
+    apt archive evidence is staged, but direct setup package archives are still
+    missing for `python3-pip`, `python3-venv`, `sox`, and `git`.
+  - current safe next move after restart: seal the Windows pip wheelhouse or
+    WSL apt package gaps before creating any final offline archive or installer.
 - Pause checkpoint, 2026-05-08:
   - status: Wav2Vec WSL enrichment is one-episode validated on laptop `GPU_ENHANCED`.
   - latest runtime/source fixes on `main`:
@@ -324,16 +334,19 @@ Audit Status: ACTIVE (2026-04-10)
     - cross-episode identity stitching is active but still conservative on short smokes
 
 ## Offline Package State
-- Desktop machine audit: complete and preserved as rebuild input in the workspace-adjacent pack
+- Desktop machine audit: removed from active scratch; do not use it as rebuild authority
 - Offline bundle root: no validated current offline bundle is in circulation
-- Machine-audit working copy: `../scratch/install_manifest/20260403_machine_audit/`
+- Machine-audit working copy: removed from active scratch
 - Active rebuild plan: `docs/bootstrap/OFFLINE_BUNDLE_REBUILD_PLAN.md`
-- Transport reconciliation: historical input only until the new staged payload validates
+- Transport reconciliation: use current source-evidence manifests; old
+  machine-audit payload is unavailable
 - Previous Phase 1 installer artifact: retired from circulation after stale-bundle audit
 - Closure status:
-  - Linux WSL audio wheelhouse: open until canonical `2.5.1+cu121` torch-family evidence is proven or explicitly marked incomplete
-  - Windows wheels: rebuild input only until the new staged payload validates
-  - Host payloads: rebuild input only until the new staged payload validates
+  - Linux WSL audio wheelhouse: canonical `2.5.1+cu121` torch-family evidence is staged and hash-computed
+  - Windows Conda tarballs: staged and hash-computed from current GoodQ envs
+  - Windows pip wheelhouse: open; 123 unique pip wheel gaps remain
+  - WSL system packages: partial apt archive evidence staged; direct package archives missing for `python3-pip`, `python3-venv`, `sox`, and `git`
+  - Host payloads: source evidence hash-computed; not yet copied into a final offline bundle root
 - Packaging doctrine:
   - `WSL_AUDIO_LANE_OBSERVED_FUNCTIONAL_DRIFT_CU128` is functional drift evidence, not a package recommendation and not an offline bundle target
   - bootstrap target remains the canonical WSL audio `2.5.1+cu121` torch family

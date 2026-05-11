@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE_EXECPLAN -->
-<!-- DOC_LAST_VERIFIED: 2026-05-05 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-11 -->
 
 # Offline Bundle Rebuild ExecPlan
 
@@ -72,8 +72,8 @@ Forbidden:
   installer payload, archive, and self-extracting installer. The remaining
   offline-bundle scratch directory contains only small historical scripts,
   readmes, and logs.
-- The preserved machine-audit pack remains useful rebuild input, but it is not
-  itself a validated current offline bundle.
+- The previous machine-audit pack has been removed from the active scratch
+  surface and must not be treated as current rebuild input.
 - The old staged repo had no git metadata and could not prove its exact source
   commit.
 - The old staged/offline repo was missing
@@ -107,13 +107,24 @@ Forbidden:
 - [x] 2026-05-05 - Removed the obsolete staged payload, extracted installer
   payload, archive, and self-extracting installer from circulation after
   containment review.
-- [x] 2026-05-05 - Preserved the machine-audit pack as rebuild input.
+- [x] 2026-05-05 - Preserved the machine-audit pack as temporary rebuild input.
 - [x] 2026-05-05 - Added the GoodQ ExecPlan protocol.
 - [x] 2026-05-05 - Drafted this offline bundle rebuild ExecPlan.
-- [ ] Build a current staged payload from `main` with a manifest that records
-  source commit, file inventory, and accepted offline assets.
-- [ ] Resolve the canonical Linux WSL audio wheelhouse gap or mark WSL offline
-  restore incomplete; do not substitute observed cu128 drift wheels.
+- [x] 2026-05-11 - Removed the old machine-audit pack from the active scratch
+  surface; it is no longer available as rebuild authority.
+- [x] 2026-05-11 - Built a source-evidence manifest from current source and
+  accepted local assets. Current summary: 16 computed artifacts, 2 partial
+  computed artifacts, 2 optional deferred artifacts, zero pending hashes.
+- [x] 2026-05-11 - Resolved the canonical Linux WSL audio wheelhouse evidence
+  with the cu121 lane; do not substitute observed cu128 drift wheels.
+- [x] 2026-05-11 - Staged and hash-computed Windows Conda package tarballs from
+  current GoodQ envs: 209 tarballs, zero missing Conda tarballs.
+- [x] 2026-05-11 - Staged and hash-computed current WSL apt archive evidence:
+  181 `.deb` files.
+- [ ] Seal the Windows pip wheelhouse. Current gap: 123 unique pip package
+  wheels are not locally staged.
+- [ ] Seal the WSL system package closure. Current gap: direct setup package
+  archives are missing for `python3-pip`, `python3-venv`, `sox`, and `git`.
 - [ ] Keep standalone legacy root-level model cache copies out of the base
   bundle unless a future manifest proves they are required.
 - [ ] Validate the staged payload before creating archive or installer

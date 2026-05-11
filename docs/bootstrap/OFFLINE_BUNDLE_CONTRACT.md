@@ -1,12 +1,12 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE_CONTRACT -->
-<!-- DOC_LAST_VERIFIED: 2026-05-10 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-11 -->
 
 # Offline Bundle Contract
 
 ## Status
 
-Status: ACTIVE CONTRACT, DRY-RUN ONLY
+Status: ACTIVE CONTRACT, SOURCE-EVIDENCE PARTIAL SEAL
 
 This contract defines the packs required to turn a vanilla Windows machine into
 a GoodQ-capable local pipeline runner without internet access. It does not
@@ -137,7 +137,7 @@ reports, or machine-specific absolute paths into the bundle.
 - Hash strategy: use the wheelhouse manifest and hash any WSL distro export or
   system package bundle separately.
 - Validation command:
-  - `python scripts/wsl_audio_preflight.py --json`
+  - `python scripts/wsl_audio_preflight.py --compact`
   - `python -m pytest tests/unit/test_wsl_audio_preflight.py`
 - Known gaps:
   - WSL system package closure is not sealed.
@@ -309,9 +309,10 @@ Known surfaces needing exclusion or explicit review before packaging:
 These files may remain useful as historical intel. They are not offline bundle
 authority unless a separate audit promotes them.
 
-## Dry-Run Manifest Contract
+## Dry-Run / Source-Evidence Manifest Contract
 
-The dry-run manifest must include one object per planned artifact:
+The dry-run or source-evidence manifest must include one object per planned
+artifact:
 
 - `pack_id`
 - `artifact_id`
@@ -320,12 +321,22 @@ The dry-run manifest must include one object per planned artifact:
 - `required`
 - `size_bytes`
 - `sha256_status`
+- `sha256` when the referenced source exists and is hash-computed
 - `verification_method`
 - `notes`
 
-`sha256_status` must remain `pending` until the actual staging pass hashes the
-selected payload. A missing `size_bytes` means the pack is aggregate-only or not
-yet staged, not that the artifact is optional.
+For existing sources, `sha256_status` must be `computed` and `size_bytes` must
+be populated. Directory or aggregate artifacts may use a deterministic tree hash
+over sorted relative path, file size, and file SHA-256 records.
+
+For sources that are not yet staged, `sha256_status` must explicitly say why,
+for example `not_available_not_staged`. Optional packs that are intentionally
+excluded from the base installer must use an explicit deferred status rather
+than a silent `pending`.
+
+The current scratch manifest is a source-evidence partial seal, not a final
+offline archive. It proves the current referenced sources where they exist and
+keeps the remaining closure gaps visible.
 
 ## Closure Gates
 

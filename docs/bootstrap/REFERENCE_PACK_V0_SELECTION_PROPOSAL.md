@@ -32,6 +32,10 @@ The manifest is the policy layer. The inventory ledger is the current
 classification layer. This proposal only selects candidates for follow-up
 review.
 
+Follow-up source/license review matrix:
+
+- [REFERENCE_PACK_V0_LICENSE_REVIEW_MATRIX.md](REFERENCE_PACK_V0_LICENSE_REVIEW_MATRIX.md)
+
 ## 3. Selection Principles
 
 - Runtime assets stay separate from optional corpora.

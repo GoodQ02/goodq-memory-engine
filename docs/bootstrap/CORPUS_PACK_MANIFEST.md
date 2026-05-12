@@ -25,6 +25,10 @@ Current Reference Pack v0 proposal:
 
 - `docs/bootstrap/REFERENCE_PACK_V0_SELECTION_PROPOSAL.md`
 
+Current Reference Pack v0 license/source review:
+
+- `docs/bootstrap/REFERENCE_PACK_V0_LICENSE_REVIEW_MATRIX.md`
+
 ## Doctrine
 
 GoodQ keeps these lanes separate:

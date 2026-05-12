@@ -37,6 +37,8 @@ Start here for current truth:
   [`docs/bootstrap/doc_authority_map.md`](../../bootstrap/doc_authority_map.md)
 - documentation authority policy:
   [`docs/bootstrap/doc_authority_policy.md`](../../bootstrap/doc_authority_policy.md)
+- corpus/reference pack manifest:
+  [`docs/bootstrap/CORPUS_PACK_MANIFEST.md`](../../bootstrap/CORPUS_PACK_MANIFEST.md)
 - docs landing page:
   [`docs/README.md`](../../README.md)
 - quick reference index:
@@ -58,6 +60,19 @@ changes:
 - `docs/architecture/AUDIO_VECTOR_PROVENANCE_CONTRACT.md`
 - `docs/architecture/CONFIG_LOADING_CONTRACT.md`
 - `docs/architecture/components/VISION_PIPELINE.md`
+
+### Offline Bundle And Corpus Routing
+
+Use these before packaging, copying, deleting, or promoting offline assets:
+
+- `docs/bootstrap/OFFLINE_BUNDLE_CONTRACT.md`
+- `docs/bootstrap/OFFLINE_BUNDLE_REBUILD_PLAN.md`
+- `docs/bootstrap/CORPUS_PACK_MANIFEST.md`
+
+These docs classify runtime assets, optional dataset corpora, optional
+reference-bank material, synthetic debug fixtures, generated witnesses, and
+memory snapshots. Do not use local sample media or scaffold artifacts as product
+memory or installer content unless a selected manifest explicitly allows it.
 
 ### Operator Status And Handoff
 

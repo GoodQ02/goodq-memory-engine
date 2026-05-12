@@ -72,6 +72,7 @@ These documents define current runtime, architecture, identity, and operator tru
 
 ### Documentation Governance Authority
 
+- [CORPUS_PACK_MANIFEST.md](./CORPUS_PACK_MANIFEST.md)
 - [INSTALL_BOOTSTRAP.md](./INSTALL_BOOTSTRAP.md)
 - [doc_authority_policy.md](./doc_authority_policy.md)
 - [doc_archive_plan.md](./doc_archive_plan.md)

@@ -73,6 +73,11 @@ the supported host/runtime baseline, but it is not a live witness monitor.
   - NRC lexicon: present locally
   - dataset corpus: optional eval/research/training material only; it is not a
     base installer dependency
+  - reference bank: optional external knowledge substrate only; it may
+    contextualize output but is not GoodQ personal memory and is not a base
+    installer payload until a separate manifest is selected
+  - synthetic debug kit: future owned preflight/demo fixture lane only; do not
+    substitute Seinfeld/test-run media for it
   - memory snapshot: none selected by design; base install should create new
     SQLite, KG, and Qdrant memory rather than inherit witness/test memory
 

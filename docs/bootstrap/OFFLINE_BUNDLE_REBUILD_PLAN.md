@@ -141,6 +141,9 @@ Forbidden:
   required model/cache assets belong in `model_cache_pack`; the large dataset
   corpus is eval/research/training material only until a separate corpus
   manifest is selected and hash-sealed.
+- [ ] Keep external reference banks and the future owned synthetic debug kit out
+  of the base installer. Package them only through separate selected manifests,
+  and never treat either pack as GoodQ personal memory.
 - [ ] Keep base memory clean. Do not include Seinfeld/test-run memory or home
   movie memory unless an operator deliberately creates a separate private or
   witness memory snapshot pack.
@@ -210,6 +213,13 @@ Forbidden:
   Evidence: base GoodQ should boot clean and create new SQLite, KG, and Qdrant
   state through normal runtime. Witness/test-run memory is optional history, not
   installer seed memory.
+
+- Observation: Reference knowledge and owned debug fixtures are separate pack
+  lanes, not base memory.
+  Evidence: external references can contextualize results, and an owned
+  synthetic fixture can prove pipeline behavior, but neither should be installed
+  as personal memory or bundled into the base installer without a selected
+  manifest.
 
 ## Decision Log
 

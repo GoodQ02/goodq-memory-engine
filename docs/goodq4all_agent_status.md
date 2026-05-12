@@ -364,6 +364,11 @@ Audit Status: ACTIVE (2026-04-10)
   - NRC lexicon: staged locally
   - dataset corpus: optional eval/research/training material only; do not include
     the large dataset cache in the base installer
+  - reference bank: optional external knowledge substrate only; it may
+    contextualize output but is not GoodQ personal memory and is not a base
+    installer payload until a separate manifest is selected
+  - synthetic debug kit: future owned preflight/demo fixture lane only; do not
+    substitute Seinfeld/test-run media for it
   - memory snapshot: none selected by design; base GoodQ should boot clean and
     create new memory unless a separate private/witness memory pack is
     deliberately installed

@@ -13,6 +13,10 @@ a GoodQ-capable local pipeline runner without internet access. It does not
 authorize copying large payloads, installing packages, mutating runtime config,
 fetching from the internet, or changing ingestion behavior.
 
+Use `docs/bootstrap/CORPUS_PACK_MANIFEST.md` to classify optional corpus,
+reference-bank, synthetic debug kit, foreign scaffold, and memory-snapshot
+surfaces before any optional pack is copied or sealed.
+
 The base installer must be a wrapper over validated payloads. It must not be
 the first artifact that discovers what belongs in the bundle.
 
@@ -27,11 +31,21 @@ Bundle manifests must use portable tokens instead of local drive roots:
 - `%GOODQ_HOST_TOOLS_ROOT%` - staged host tool payload root
 - `%GOODQ_WINDOWS_ENV_PACK_ROOT%` - staged Windows Conda/pip env payload root
 - `%GOODQ_WSL_AUDIO_PACK_ROOT%` - staged WSL audio payload root
+- `%GOODQ_REFERENCE_BANK_ROOT%` - optional staged external reference bank root
+- `%GOODQ_SYNTHETIC_DEBUG_KIT_ROOT%` - optional staged owned debug fixture root
 - `%GOODQ_DATASET_CORPUS_ROOT%` - optional staged dataset corpus root
 - `%GOODQ_MEMORY_SNAPSHOT_ROOT%` - optional staged memory snapshot root
 
 Do not write tokens, passwords, local `.env` files, raw config dumps, generated
 reports, or machine-specific absolute paths into the bundle.
+
+## Lean Base Rule
+
+The base installer is "lean" by authority, not necessarily tiny by byte count.
+It may include required source, environments, host tools, WSL runtime payloads,
+and runtime model caches. It must not include optional reference banks, optional
+dataset corpora, synthetic debug media, private home media, Seinfeld/test-run
+memory, generated witnesses, or unselected memory snapshots.
 
 ## Pack Overview
 
@@ -42,6 +56,8 @@ reports, or machine-specific absolute paths into the bundle.
 | `wsl_audio_pack` | Required for full desktop parity, partial seal | Offline WSL audio runtime payload on the canonical cu121 lane. |
 | `model_cache_pack` | Required | Runtime model cache, YOLO weight, lexicons, and HF snapshot structure. |
 | `host_tools_pack` | Required | External tools needed by the Windows host: Qdrant, service helpers, FFmpeg, Tesseract, Poppler, Piper. |
+| `optional_reference_bank_pack` | Optional | Licensed external reference substrate for contextual lookup, separate from GoodQ personal memory. |
+| `optional_synthetic_debug_kit_pack` | Optional | Owned, deterministic debug/preflight fixture media and expected outputs, separate from user memory. |
 | `optional_dataset_corpus_pack` | Optional | Large HF dataset/eval/training corpus, separate from base runtime. |
 | `optional_memory_snapshot_pack` | Optional | Existing SQLite/Qdrant/epoch memory state, separate from clean bootstrap. |
 
@@ -267,6 +283,8 @@ reports, or machine-specific absolute paths into the bundle.
   - evaluation, research, synthetic-test, and future training corpora only
   - no runtime-required model snapshots, weights, lexicons, tool payloads, or
     memory databases
+  - no general reference-bank payloads unless a selected manifest explicitly
+    classifies them here rather than in `optional_reference_bank_pack`
 - Approximate size: about 1.3 TB on the current workstation.
 - Hash strategy: manifest by dataset namespace, split, cache file, size, and
   hash. Keep this pack separate from base runtime.
@@ -286,6 +304,69 @@ reports, or machine-specific absolute paths into the bundle.
     private corpus pack.
   - exclude this pack from public artifacts unless the selected corpus manifest
     is explicitly public-safe.
+
+### optional_reference_bank_pack
+
+- Purpose: preserve licensed external knowledge references that can contextualize
+  GoodQ outputs without becoming personal memory.
+- Required: no.
+- Source paths:
+  - `%GOODQ_REFERENCE_BANK_ROOT%`
+- Destination paths:
+  - `%GOODQ_OFFLINE_BUNDLE_ROOT%/optional/reference_bank`
+- Expected contents:
+  - selected Wikipedia/Wikidata dumps, map extracts, astronomy/solar data,
+    public preparedness references, dictionaries, and similar references
+  - source URL, source date, license, refresh cadence, size, and hash for each
+    selected reference asset
+  - explicit labels distinguishing "observed in user media" from "external
+    reference context"
+- Base installer behavior:
+  - boot without this pack.
+  - never treat reference-bank facts as GoodQ personal memory.
+  - never say "I remember" for a fact that only came from this pack.
+- Approximate size: pending selected reference-bank manifest.
+- Hash strategy: manifest each selected reference asset by namespace, version or
+  source date, size, and SHA-256.
+- Validation command:
+  - selected-reference load checks after a reference-bank manifest is chosen
+- Known gaps:
+  - no reference-bank manifest has been selected or hash-sealed yet.
+  - licensing/redistribution review is required per selected source.
+- Exclusion rules:
+  - exclude Seinfeld/test-run material, private user media, generated witnesses,
+    secrets, tokens, and any reference with unclear redistribution rights.
+  - exclude this pack from public artifacts unless the selected manifest is
+    explicitly public-safe.
+
+### optional_synthetic_debug_kit_pack
+
+- Purpose: provide owned, deterministic media fixtures for preflight,
+  transparency demos, and repeatable pipeline-health checks.
+- Required: no.
+- Source paths:
+  - `%GOODQ_SYNTHETIC_DEBUG_KIT_ROOT%`
+- Destination paths:
+  - `%GOODQ_OFFLINE_BUNDLE_ROOT%/optional/synthetic_debug_kit`
+- Expected contents:
+  - short owned video/audio/image/PDF fixtures
+  - expected transcript, object, caption, OCR, audio, vector, scene, and Phase 6
+    assertions
+  - fixture license/ownership note and hash manifest
+- Base installer behavior:
+  - may validate without this pack when other smoke fixtures are available.
+  - must not use copyrighted scaffold media as a replacement for this pack.
+  - must not install fixture outputs into GoodQ personal memory unless an
+    operator deliberately runs a smoke ingest.
+- Approximate size: pending created fixture.
+- Hash strategy: hash source fixtures and expected-output contracts.
+- Validation command:
+  - owned-fixture smoke test after the kit is created and selected
+- Known gaps:
+  - no owned synthetic debug kit has been produced or selected yet.
+- Exclusion rules:
+  - exclude Seinfeld/test-run media, private home media, generated witness
+    outputs, and any non-owned fixture media.
 
 ### optional_memory_snapshot_pack
 
@@ -394,4 +475,5 @@ Before building any final archive or installer:
    Piper, Qdrant, and NSSM payloads.
 6. Token/path hygiene scan passes.
 7. Legacy helper quarantine list is enforced.
-8. Base installer does not include optional datasets or memory snapshots.
+8. Base installer does not include optional datasets, reference banks,
+   synthetic debug kits, or memory snapshots.

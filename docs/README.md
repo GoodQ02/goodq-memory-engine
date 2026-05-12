@@ -102,6 +102,8 @@ Authority and organization rules:
   [`docs/bootstrap/doc_authority_map.md`](bootstrap/doc_authority_map.md)
 - Docs forensics index:
   [`docs/reference/indexes/DOCS_FORENSICS_INDEX.md`](reference/indexes/DOCS_FORENSICS_INDEX.md)
+- Corpus/reference pack manifest:
+  [`docs/bootstrap/CORPUS_PACK_MANIFEST.md`](bootstrap/CORPUS_PACK_MANIFEST.md)
 - Archive plan:
   [`docs/bootstrap/doc_archive_plan.md`](bootstrap/doc_archive_plan.md)
 

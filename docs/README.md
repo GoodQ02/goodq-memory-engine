@@ -110,6 +110,8 @@ Authority and organization rules:
   [`docs/bootstrap/REFERENCE_PACK_V0_SELECTION_PROPOSAL.md`](bootstrap/REFERENCE_PACK_V0_SELECTION_PROPOSAL.md)
 - Reference Pack v0 license review matrix:
   [`docs/bootstrap/REFERENCE_PACK_V0_LICENSE_REVIEW_MATRIX.md`](bootstrap/REFERENCE_PACK_V0_LICENSE_REVIEW_MATRIX.md)
+- Reference Pack v0 source evidence appendix:
+  [`docs/bootstrap/REFERENCE_PACK_V0_SOURCE_EVIDENCE_APPENDIX.md`](bootstrap/REFERENCE_PACK_V0_SOURCE_EVIDENCE_APPENDIX.md)
 - Archive plan:
   [`docs/bootstrap/doc_archive_plan.md`](bootstrap/doc_archive_plan.md)
 

@@ -40,6 +40,7 @@
 - `docs/bootstrap/CORPUS_PACK_INVENTORY_LEDGER.md` – First candidate inventory ledger for corpus, reference-bank, scaffold, private-media, and optional dataset pack selection.
 - `docs/bootstrap/REFERENCE_PACK_V0_SELECTION_PROPOSAL.md` – Conservative first optional reference-pack candidate proposal; no payload movement authorized.
 - `docs/bootstrap/REFERENCE_PACK_V0_LICENSE_REVIEW_MATRIX.md` – Source/license review matrix for Reference Pack v0 candidates; no payload movement authorized.
+- `docs/bootstrap/REFERENCE_PACK_V0_SOURCE_EVIDENCE_APPENDIX.md` – Source-evidence appendix for Reference Pack v0 candidate clearance; no payload movement authorized.
 
 ---
 

@@ -84,6 +84,7 @@ These docs are safe discovery/index surfaces for humans and agents, but they do 
 
 - [SCRIPT_REGISTRY.md](./SCRIPT_REGISTRY.md)
 - [CORPUS_PACK_INVENTORY_LEDGER.md](./CORPUS_PACK_INVENTORY_LEDGER.md)
+- [REFERENCE_PACK_V0_SELECTION_PROPOSAL.md](./REFERENCE_PACK_V0_SELECTION_PROPOSAL.md)
 - [QUICK_INDEX.md](../reference/indexes/QUICK_INDEX.md)
 - [DOCS_FORENSICS_INDEX.md](../reference/indexes/DOCS_FORENSICS_INDEX.md)
 - [AGENT_COMMS_INDEX.md](../reference/indexes/AGENT_COMMS_INDEX.md)

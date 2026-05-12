@@ -69,6 +69,7 @@ Use these before packaging, copying, deleting, or promoting offline assets:
 - `docs/bootstrap/OFFLINE_BUNDLE_REBUILD_PLAN.md`
 - `docs/bootstrap/CORPUS_PACK_MANIFEST.md`
 - `docs/bootstrap/CORPUS_PACK_INVENTORY_LEDGER.md`
+- `docs/bootstrap/REFERENCE_PACK_V0_SELECTION_PROPOSAL.md`
 
 These docs classify runtime assets, optional dataset corpora, optional
 reference-bank material, synthetic debug fixtures, generated witnesses, and

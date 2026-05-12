@@ -106,6 +106,8 @@ Authority and organization rules:
   [`docs/bootstrap/CORPUS_PACK_MANIFEST.md`](bootstrap/CORPUS_PACK_MANIFEST.md)
 - Corpus/reference inventory ledger:
   [`docs/bootstrap/CORPUS_PACK_INVENTORY_LEDGER.md`](bootstrap/CORPUS_PACK_INVENTORY_LEDGER.md)
+- Reference Pack v0 selection proposal:
+  [`docs/bootstrap/REFERENCE_PACK_V0_SELECTION_PROPOSAL.md`](bootstrap/REFERENCE_PACK_V0_SELECTION_PROPOSAL.md)
 - Archive plan:
   [`docs/bootstrap/doc_archive_plan.md`](bootstrap/doc_archive_plan.md)
 

@@ -21,6 +21,10 @@ Current candidate inventory ledger:
 
 - `docs/bootstrap/CORPUS_PACK_INVENTORY_LEDGER.md`
 
+Current Reference Pack v0 proposal:
+
+- `docs/bootstrap/REFERENCE_PACK_V0_SELECTION_PROPOSAL.md`
+
 ## Doctrine
 
 GoodQ keeps these lanes separate:

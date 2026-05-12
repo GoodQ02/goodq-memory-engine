@@ -99,7 +99,7 @@ This command is a lightweight health surface, not a full readiness audit.
 ### `python -m cli.print_config`
 
 **Purpose**
-- print resolved runtime configuration as JSON
+- print sanitized resolved runtime configuration as operator JSON
 
 **Usage**
 
@@ -108,6 +108,9 @@ python -m cli.print_config
 ```
 
 This is the fastest way to verify the effective resolved profile/path surface before a run.
+Secrets are always redacted, and stdout is valid JSON by default. Local path values are
+tokenized for display unless `--include-local-values` is supplied; that option still
+redacts all secret-bearing values. There is no supported raw-secret print mode.
 
 ### `python -m cli.control_recurrence_report`
 

@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-12 -->
 
 # Canonical Runtime Configuration Loading Contract
 
@@ -28,6 +28,12 @@
 - Runtime code MAY read environment variables directly (e.g., `os.getenv(...)`) for secrets and host-specific values.
 - Runtime code MUST NOT parse `.env.local` itself; only `load_configs()` performs `.env.local` loading for runtime.
 - `.env.local` is a **local developer convenience**, not an authoritative config file; externally-provided environment variables remain authoritative (consistent with default `python-dotenv` behavior).
+
+### 4a) Display and Logging Redaction
+- `load_configs()` returns raw runtime config for runtime consumers; do not weaken or redact that object before passing it to runtime code.
+- Display, logging, resolved-config snapshots, and other operator surfaces MUST sanitize config-like payloads through `steps/common/config_redaction.py`.
+- `cli.print_config` prints sanitized operator JSON by default and has no supported raw-secret print mode.
+- Local path tokenization is display-only; it must not change runtime config semantics or persisted runtime paths.
 
 ### 5) Windows ↔ WSL2 Interop
 - `configs/config.yaml` may contain Windows-style drive paths (`<drive>:/...`); `load_configs()` normalizes these automatically when executed under WSL/Linux.

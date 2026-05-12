@@ -104,6 +104,8 @@ Authority and organization rules:
   [`docs/reference/indexes/DOCS_FORENSICS_INDEX.md`](reference/indexes/DOCS_FORENSICS_INDEX.md)
 - Corpus/reference pack manifest:
   [`docs/bootstrap/CORPUS_PACK_MANIFEST.md`](bootstrap/CORPUS_PACK_MANIFEST.md)
+- Corpus/reference inventory ledger:
+  [`docs/bootstrap/CORPUS_PACK_INVENTORY_LEDGER.md`](bootstrap/CORPUS_PACK_INVENTORY_LEDGER.md)
 - Archive plan:
   [`docs/bootstrap/doc_archive_plan.md`](bootstrap/doc_archive_plan.md)
 

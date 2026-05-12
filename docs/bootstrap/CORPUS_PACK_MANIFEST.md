@@ -17,6 +17,10 @@ It is subordinate to:
 It does not authorize downloads, ingestion, package changes, model changes,
 copying large payloads, or memory snapshot creation.
 
+Current candidate inventory ledger:
+
+- `docs/bootstrap/CORPUS_PACK_INVENTORY_LEDGER.md`
+
 ## Doctrine
 
 GoodQ keeps these lanes separate:

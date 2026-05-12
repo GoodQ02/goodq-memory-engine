@@ -83,6 +83,7 @@ These documents define current runtime, architecture, identity, and operator tru
 These docs are safe discovery/index surfaces for humans and agents, but they do not override canonical contracts.
 
 - [SCRIPT_REGISTRY.md](./SCRIPT_REGISTRY.md)
+- [CORPUS_PACK_INVENTORY_LEDGER.md](./CORPUS_PACK_INVENTORY_LEDGER.md)
 - [QUICK_INDEX.md](../reference/indexes/QUICK_INDEX.md)
 - [DOCS_FORENSICS_INDEX.md](../reference/indexes/DOCS_FORENSICS_INDEX.md)
 - [AGENT_COMMS_INDEX.md](../reference/indexes/AGENT_COMMS_INDEX.md)

@@ -103,7 +103,6 @@ This is the practical handoff point for a brand-new Codex session.
   - `lib/control_recurrence_report.py`
   - `lib/control_recurrence_index.py`
   - `lib/control_recurrence_recommendations.py`
-  - `lib/control_recurrence_trend.py`
   - `python -m cli.control_recurrence_report`
   - `/api/control-recurrence/reports`
   - `/api/control-recurrence/reports/latest`
@@ -112,9 +111,9 @@ This is the practical handoff point for a brand-new Codex session.
   - `/api/control-recurrence/reports/{report_id}/recommendations`
   - tag anchor: `control-recurrence-v0.4.2`
   - current-state capsule: `docs/releases/CONTROL_RECURRENCE_v0.4.2.md`
-  - seal note: `control-recurrence-v0.4.1` remains a valid sealed milestone for direct-run discoverability and truth-surface alignment; current `main` is beyond it with `control-recurrence-v0.4.2` plus retry attribution/coalescing tightening
-  - source state beyond the latest control-recurrence tag includes the read-only trend helper/CLI mode, the CLAP audio Qdrant payload provenance patch, native model smoke diagnostics, shared runtime recurrence scoping, and WSL audio runtime black-box diagnostics through `05ae539`
-  - control recurrence is source-complete as a read-only observability layer for pre-UI and portability work; v0.5 status is recorded in `docs/releases/CONTROL_RECURRENCE_v0.5_STATUS.md`
+  - seal note: `control-recurrence-v0.4.1` remains a valid sealed milestone for direct-run discoverability and truth-surface alignment; the public preview branch is code-backed through the v0.4.2 read-only report/index/recommendation surface
+  - v0.5 trend/provenance work is not live on the public preview branch unless the corresponding implementation files, CLI flags, API routes, and tests are present in the checked-out tree
+  - control recurrence public-preview alignment is recorded in `docs/releases/CONTROL_RECURRENCE_v0.5_STATUS.md`
   - shared direct-run stdout events are scoped by persisted video/scene identity before recurrence aggregation
   - direct-run discovery is bounded by existing required artifacts; absent aggregate output, operator metadata, temporal paths, or resolved log paths produce limited/missing-artifact observability rather than a boundary violation
   - local `reports/control_recurrence/index.json` state is workspace artifact hygiene unless the file is explicitly tracked
@@ -123,7 +122,6 @@ This is the practical handoff point for a brand-new Codex session.
     - `docs/releases/CONTROL_RECURRENCE_v0.4.1.md`
     - `docs/releases/CONTROL_RECURRENCE_v0.4.2.md`
     - `docs/releases/CONTROL_RECURRENCE_v0.5_STATUS.md`
-    - `docs/releases/CONTROL_RECURRENCE_SHARED_RUNTIME_SCOPING_2026-05-03.md`
   - boundary: not healing yet. This tool/API does not activate `ControlAgent`, does not enable auto-healing, does not mutate configs, does not execute commands, does not use LLMs, does not generate reports from the API, and does not touch `cli/run_ingestion.py`.
 - Current upstream normalization status:
   - exact-pair pilot only
@@ -132,12 +130,11 @@ This is the practical handoff point for a brand-new Codex session.
     - `normalization_applied`
     - `normalization_source`
   - pilot is projection-only and must not be generalized casually
-- Current audio-vector success doctrine:
-  - contract: `docs/architecture/AUDIO_VECTOR_PROVENANCE_CONTRACT.md`
-  - current-run CLAP/Qdrant audio coverage requires `clap_meta.status == ok` plus a Qdrant audio payload with matching `run_id` and required provenance fields
-  - scene-id-only Qdrant audio matches are stale or provenance-unverified, not current-run proof
-  - one-episode baseline witness: `20260501_114445_audio_qdrant_provenance_02x01_witness` showed `40 / 40` CLAP ok scenes with current-run Qdrant provenance
-  - two-episode boundary witness: `20260501_153532_audio_qdrant_provenance_s2_two_episode_witness` showed `75 / 75` CLAP ok scenes with current-run Qdrant provenance across `78` scenes; `2` optional CLAP errors and `1` `audio_silent` skip did not receive current-run Qdrant credit
+- Current audio-vector public-preview boundary:
+  - the public preview branch does not ship `docs/architecture/AUDIO_VECTOR_PROVENANCE_CONTRACT.md`
+  - public-preview CLAP/Qdrant audio payload code is not enough to prove current-run audio vectors by `run_id`
+  - scene-id-only Qdrant audio matches must be treated as provenance-unverified, not current-run proof
+  - any stronger audio-vector provenance claim belongs to a branch that includes the contract, payload fields, and tests together
 
 If resuming after restart, do not begin with a broad rerun. Begin by reading the
 three witness memos above and then confirm the current branch head.
@@ -409,9 +406,8 @@ These are intentionally *not* wired into ingestion yet:
 2) Build UI rollups (scene spine + modality coverage):
 - `python -m cli.ui_conduits_rollup`
   - `scene_modality_coverage.has_audio_clap` is memory-commit presence only.
-    Prefer `audio_vector_provenance_state` for UI status language; it is not
-    current-run Qdrant proof unless the audio-vector provenance contract is
-    satisfied.
+    The public preview branch does not expose `audio_vector_provenance_state`,
+    so do not describe this rollup as current-run Qdrant proof.
 
 3) Build observability rollups (optional; additive):
 - `python -m cli.observability_rollup`
@@ -433,8 +429,8 @@ These are intentionally *not* wired into ingestion yet:
   - `conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --list-reports --json`
 - Draft deterministic operator inspection recommendations from an indexed report:
   - `conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --recommendations-for 20260424_003250_season1_recompare_witness__vs__20260424_182406_season2_fresh_witness`
-- Derive conservative trends from indexed durable JSON reports:
-  - `conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --trend --json`
+- Trend mode is development-line/proposed on the public preview branch unless
+  `lib/control_recurrence_trend.py` and the `--trend` CLI flag are present.
 - Read the existing index from the local API:
   - `curl http://127.0.0.1:30000/api/control-recurrence/reports`
 - Read the latest indexed entry from the local API:
@@ -442,7 +438,7 @@ These are intentionally *not* wired into ingestion yet:
 - Read deterministic inspection recommendations from the local API:
   - `curl http://127.0.0.1:30000/api/control-recurrence/reports/20260424_003250_season1_recompare_witness__vs__20260424_182406_season2_fresh_witness/recommendations`
 
-This is read-only control-plane observability only. The CLI reads existing persisted artifacts (`step_runs.jsonl`, run warnings, `scene_ingest_results.json`, `scene_manifest.json`, `temporal_index.json`, and `experiment_log.json`). For direct canonical run roots without a wrapper ledger, it can also read existing `operator_run_metadata.json`, `output/scene_ingest_results.json`, `workspace/_resolved_config.json`, canonical `step_runs.jsonl`, and captured ingestion stdout/stderr events. Direct roots may contain one or more videos, and metadata-described output/workspace paths are read only when present. Recurrence reports include observer-only latency summaries from existing `step_runs.jsonl` `duration_ms` rows; those summaries do not alter recurrence classification or trigger remediation. It writes artifacts only when explicitly asked. Recommendation drafts read existing durable JSON reports and return inspection steps only. Trend mode reads only the recurrence artifact index and indexed durable JSON reports; it does not reconstruct trend data from markdown or raw run roots. The API reads only `reports/control_recurrence/index.json` and indexed artifacts. It does not generate reports, trigger ingestion, activate ControlAgent, execute commands, mutate configs, or heal.
+This is read-only control-plane observability only. The CLI reads existing persisted artifacts (`step_runs.jsonl`, run warnings, `scene_ingest_results.json`, `scene_manifest.json`, `temporal_index.json`, and `experiment_log.json`). For direct canonical run roots without a wrapper ledger, it can also read existing `operator_run_metadata.json`, `output/scene_ingest_results.json`, `workspace/_resolved_config.json`, canonical `step_runs.jsonl`, and captured ingestion stdout/stderr events. Direct roots may contain one or more videos, and metadata-described output/workspace paths are read only when present. Recurrence reports include observer-only latency summaries from existing `step_runs.jsonl` `duration_ms` rows; those summaries do not alter recurrence classification or trigger remediation. It writes artifacts only when explicitly asked. Recommendation drafts read existing durable JSON reports and return inspection steps only. The public preview API reads only `reports/control_recurrence/index.json` and indexed artifacts. It does not generate reports, trigger ingestion, activate ControlAgent, execute commands, mutate configs, or heal.
 
 ### Run the Justification Channel (read-only; no power)
 

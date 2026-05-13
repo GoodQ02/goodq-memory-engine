@@ -48,12 +48,16 @@ If a clone uses a shared witness-report tree instead of a repo-local one, set
 Router-backed endpoint families mounted into the same process:
 
 - `/api/search`
-- `/api/ingest`
-- `/api/timeline`
+- `/api/videos/{video_id}/timeline`
 - `/api/media`
 - `/api/system`
 - `/api/control-recurrence`
 - `/api/videos/{video_id}/scenes`
+
+The public preview branch does not mount a live `/api/ingest` router. Ingest
+facade response models may exist in code as design scaffolding, but they are
+not a supported API surface unless `/docs` or `/openapi.json` for the running
+build lists the corresponding routes.
 
 ## Discovery Surfaces
 
@@ -117,22 +121,22 @@ The active line no longer exposes the older compatibility endpoints that used to
 ## System Mutation Policy
 
 - `POST /api/system/ingest` is intentionally disabled on the active line.
-- The active ingest write surface is the truthful facade:
-  - `POST /api/ingest/submit`
-  - `GET /api/ingest/status/{request_id}`
-- If an ingest API surface is introduced later, it must be:
+- No live public-preview ingest API facade is currently mounted for request
+  intake or request-status lookup.
+- If an ingest API surface is introduced or promoted later, it must be:
   - explicit
   - confirmation-gated
   - policy-driven
   - budgeted
   - checkpointed
   - auditable
-- Any future ingest route must remain a controlled facade over the canonical runtime path rather than a second ingest engine.
-- The active ingest facade stages a single supported local file into the canonical inbox, writes a durable request record, and returns a request handle.
-- The active ingest facade does not execute ingestion, manage a second job engine, bypass watchdog, or mutate memory directly.
+- Any future ingest route must remain a controlled facade over the canonical
+  runtime path rather than a second ingest engine.
+- A designed ingest facade would stage a single supported local file into the
+  canonical inbox, write a durable request record, and return a request handle.
+- A designed ingest facade must not execute ingestion, manage a second job
+  engine, bypass watchdog, or mutate memory directly.
 - The current supported ingest surfaces remain:
-  - `POST /api/ingest/submit` for request intake only
-  - `GET /api/ingest/status/{request_id}` for request-centric lifecycle status
   - `conda run -n goodq_core python -m cli.watchdog`
   - `conda run -n goodq_core python -m cli.run_ingestion --input-dir <path>`
   - the configured `<GOODQ_DATA_ROOT>\GoodQ_Data\import_inbox`

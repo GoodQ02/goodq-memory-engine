@@ -2,8 +2,8 @@
 
 ## Supported Surface
 
-The supported publication and release surface for GoodQ4All is the `public`
-branch. The canonical public entrypoints are:
+The supported publication and release surface for GoodQ4All is the `main`
+branch of the public repository. The canonical public entrypoints are:
 
 - `python scripts/bootstrap_install.py`
 - `LAUNCH_GOODQ.ps1`

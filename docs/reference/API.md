@@ -22,7 +22,7 @@ This is the current API reference for the supported local GoodQ4All runtime.
 
 Primary status and runtime summary endpoints defined in the active API surface:
 
-- On the public branch, the read-only runtime aggregation surface remains mounted from `api/main.py`.
+- On the public preview branch, the read-only runtime aggregation surface remains mounted from `api/main.py`.
 - It exists to answer "what is happening right now?" without turning into a control, mutation, or execution plane.
 
 - `GET /api/status`

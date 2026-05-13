@@ -30,17 +30,22 @@ def test_bootstrap_print_redacts_secret_shapes(monkeypatch):
     field_name = "token"
     fake_hf_value = "hf_" + "abcdefghijklmnopqrstuvwxyz"
     fake_openai_key = "sk-" + "testsecretsecretsecretsecret"
-    synthetic_sensitive_value = "redaction-fixture-value"
 
-    bootstrap_install._print(
-        f"{field_name}={fake_hf_value} password={synthetic_sensitive_value} Authorization: Bearer {fake_openai_key}"
-    )
+    bootstrap_install._print(f"{field_name}={fake_hf_value} Authorization: Bearer {fake_openai_key}")
 
     written = fake_stdout.getvalue()
     assert "***REDACTED***" in written
     assert fake_hf_value not in written
     assert fake_openai_key not in written
-    assert synthetic_sensitive_value not in written
+
+
+def test_bootstrap_redaction_masks_sensitive_assignment_keys():
+    synthetic_sensitive_value = "redaction-fixture-value"
+
+    redacted = bootstrap_install._redact_console_text(f"password={synthetic_sensitive_value}")
+
+    assert "***REDACTED***" in redacted
+    assert synthetic_sensitive_value not in redacted
 
 
 def test_bootstrap_console_security_notice_states_secret_boundary(monkeypatch):

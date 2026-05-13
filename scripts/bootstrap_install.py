@@ -198,16 +198,20 @@ def _redact_console_text(value: object) -> str:
     return SENSITIVE_ASSIGNMENT_RE.sub(lambda match: f"{match.group(1)}{match.group(2)}***REDACTED***", text)
 
 
-def _print(text: str) -> None:
-    console_text = _redact_console_text(text)
+def _encode_console_text(value: str) -> str:
+    encoding = getattr(sys.stdout, "encoding", None)
+    if not encoding:
+        return value
     try:
-        # codeql[py/clear-text-logging-sensitive-data]
-        print(console_text, flush=True)
-    except UnicodeEncodeError:
-        encoding = getattr(sys.stdout, "encoding", None) or "utf-8"
-        safe = console_text.encode(encoding, errors="replace").decode(encoding, errors="replace")
-        sys.stdout.write(f"{safe}\n")
-        sys.stdout.flush()
+        return value.encode(encoding, errors="replace").decode(encoding, errors="replace")
+    except LookupError:
+        return value
+
+
+def _print(text: str) -> None:
+    console_text = _encode_console_text(_redact_console_text(text))
+    # codeql[py/clear-text-logging-sensitive-data]
+    print(console_text, flush=True)
 
 
 def print_console_security_notice() -> None:

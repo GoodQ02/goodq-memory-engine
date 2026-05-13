@@ -144,7 +144,7 @@ torchcodec==0.7.0
 torchmetrics==1.8.2
 torchvision==0.23.0
 tqdm==4.67.1
-transformers==4.57.3
+transformers==5.8.1
 triton==3.4.0
 typer-slim==0.20.0
 typing_extensions==4.15.0

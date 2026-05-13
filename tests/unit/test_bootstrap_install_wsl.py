@@ -517,3 +517,4 @@ def test_wsl_interactive_sudo_preauth_uses_interactive_runner(monkeypatch):
     assert detail == "sudo credentials cached"
     assert seen_scripts == ["sudo -v"]
     assert "If WSL asks for sudo" in "\n".join(messages)
+    assert "credential" in "\n".join(messages)

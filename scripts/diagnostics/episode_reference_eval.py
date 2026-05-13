@@ -316,9 +316,9 @@ def main() -> int:
     parser.add_argument("--run-root", required=True, type=Path, help="Path to a witness run root.")
     parser.add_argument(
         "--reference-root",
+        required=True,
         type=Path,
-        default=Path("reports/reference_anchors/seinfeld/episodes"),
-        help="Directory containing *.reference.json anchor files.",
+        help="Directory containing local *.reference.json anchor files.",
     )
     args = parser.parse_args()
 

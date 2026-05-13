@@ -7,6 +7,7 @@ import ctypes
 import json
 import os
 import platform
+import re
 import shutil
 import subprocess
 import sys
@@ -14,6 +15,7 @@ import threading
 import textwrap
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
@@ -43,6 +45,11 @@ CHOCO_FFMPEG_PACKAGE = "ffmpeg"
 CHOCO_NSSM_PACKAGE = "nssm"
 STEP_ENV_PYTHON = "3.10"
 TORCH_CUDA_INDEX_URL = "https://download.pytorch.org/whl/cu121"
+SENSITIVE_ASSIGNMENT_RE = re.compile(
+    r"(?i)\b(token|secret|password|authorization|credential|api[_-]?key)(\s*[:=]\s*)([^\s,;]+)"
+)
+BEARER_TOKEN_RE = re.compile(r"(?i)\bbearer\s+[A-Za-z0-9._~+/=-]+")
+TOKEN_SHAPE_RE = re.compile(r"\b(?:hf_[A-Za-z0-9]{20,}|sk-[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9_]{20,})\b")
 
 
 @dataclass
@@ -180,12 +187,20 @@ WSL_AUDIO_ASSET_RELATIVE_PATHS: tuple[str, ...] = (
 )
 
 
-def _print(msg: str) -> None:
+def _redact_console_text(value: object) -> str:
+    text = str(value)
+    text = BEARER_TOKEN_RE.sub("Bearer ***REDACTED***", text)
+    text = TOKEN_SHAPE_RE.sub("***REDACTED***", text)
+    return SENSITIVE_ASSIGNMENT_RE.sub(lambda match: f"{match.group(1)}{match.group(2)}***REDACTED***", text)
+
+
+def _print(text: str) -> None:
+    console_text = _redact_console_text(text)
     try:
-        print(msg, flush=True)
+        print(console_text, flush=True)
     except UnicodeEncodeError:
         encoding = getattr(sys.stdout, "encoding", None) or "utf-8"
-        safe = str(msg).encode(encoding, errors="replace").decode(encoding, errors="replace")
+        safe = console_text.encode(encoding, errors="replace").decode(encoding, errors="replace")
         print(safe, flush=True)
 
 
@@ -706,8 +721,16 @@ def _is_conda_tos_block(detail: str) -> bool:
     return (
         "terms of service" in lowered
         or "conda tos" in lowered
-        or ("repo.anaconda.com" in lowered and "accept" in lowered and "channel" in lowered)
+        or (_has_conda_tos_channel_url(detail) and "accept" in lowered and "channel" in lowered)
     )
+
+
+def _has_conda_tos_channel_url(detail: str) -> bool:
+    for raw_url in re.findall(r"https?://[^\s)>\]]+", str(detail or "")):
+        parsed = urllib.parse.urlparse(raw_url.rstrip(".,;:"))
+        if parsed.hostname == "repo.anaconda.com" and parsed.path.startswith("/pkgs/"):
+            return True
+    return False
 
 
 def _is_transient_conda_network_error(detail: str) -> bool:
@@ -1345,15 +1368,15 @@ def _wsl_has_systemd(wsl_ctx: WslAudioContext) -> bool:
 def _wsl_passwordless_sudo_ready(wsl_ctx: WslAudioContext) -> tuple[bool, str]:
     completed = _run_wsl_bash(wsl_ctx, "sudo -n true")
     if completed.returncode == 0:
-        return True, "passwordless sudo available"
-    return False, _completed_output(completed) or "sudo password required"
+        return True, "sudo available without prompt"
+    return False, _completed_output(completed) or "sudo prompt required"
 
 
 def _wsl_interactive_sudo_preauth(wsl_ctx: WslAudioContext) -> tuple[bool, str]:
     if not sys.stdin.isatty():
-        return False, "stdin is not interactive; cannot show WSL sudo password prompt"
-    _print("[INFO] WSL audio setup may ask for your Linux sudo password.")
-    _print("[INFO] If WSL asks for sudo, type the password in this terminal and press Enter. Input will not echo.")
+        return False, "stdin is not interactive; cannot show WSL sudo credential prompt"
+    _print("[INFO] WSL audio setup may ask for your Linux sudo credential.")
+    _print("[INFO] If WSL asks for sudo, type the credential in this terminal and press Enter. Input will not echo.")
     completed = _run_wsl_bash_interactive(wsl_ctx, "sudo -v")
     if completed.returncode == 0:
         return True, "sudo credentials cached"
@@ -1420,7 +1443,7 @@ def ensure_wsl_audio_ready(ctx: BootstrapContext, *, assume_yes: bool) -> bool:
     if _wsl_has_systemd(wsl_ctx):
         sudo_ready, sudo_detail = _wsl_passwordless_sudo_ready(wsl_ctx)
         if not sudo_ready:
-            _print("[WARN] WSL audio workspace is ready, but persistent service install requires a Linux sudo password.")
+            _print("[WARN] WSL audio workspace is ready, but persistent service install requires a Linux sudo credential.")
             _print("[INFO] WSL audio service status: PENDING_SUDO")
             if sudo_detail:
                 _print(f"[INFO] WSL sudo preflight detail: {sudo_detail}")

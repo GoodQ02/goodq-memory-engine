@@ -84,8 +84,10 @@ This is the practical handoff point for a brand-new Codex session.
 - Current local workspace head:
   - `main` / `origin/main` are the active source line; confirm the exact head with `git log -1 --oneline`
   - source includes WSL runtime PyAnnote cache-dir loading and image-step GPU budget alignment through `86f032d`
-- Current public-facing branch head:
-  - `public` / `origin/public` includes public-safe WSL runtime cache-dir and image-step GPU budget fixes through `2a7b918`, plus public archive pruning and utility path hygiene through `279c825`
+- Current public-facing export:
+  - `GoodQ02/goodq4all` uses `main` as the public default branch; the legacy
+    `public` branch was removed from the fresh public repository after the
+    clean export was established.
 - Full witness state now banked:
   - Season 1 recompare completed (`01x01`–`01x05`)
   - Season 2 fresh witness completed (`02x01`–`02x12`)

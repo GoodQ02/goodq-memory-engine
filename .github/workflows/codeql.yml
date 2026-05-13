@@ -4,11 +4,9 @@ on:
   push:
     branches:
       - main
-      - public
   pull_request:
     branches:
       - main
-      - public
   schedule:
     - cron: "0 9 * * 1"
 
@@ -33,6 +31,7 @@ jobs:
         uses: github/codeql-action/init@v3
         with:
           languages: ${{ matrix.language }}
+          config-file: ./.github/codeql/codeql-config.yml
 
       - name: Autobuild
         uses: github/codeql-action/autobuild@v3

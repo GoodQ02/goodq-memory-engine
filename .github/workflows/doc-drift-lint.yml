@@ -2,11 +2,16 @@ name: doc-drift-lint
 
 on:
   pull_request:
+    branches:
+      - main
     paths:
       - "README*.md"
       - "docs/**"
       - "AGENTS.md"
       - "scripts/docs/doc_drift_lint.py"
+
+permissions:
+  contents: read
 
 jobs:
   docs-drift-lint:

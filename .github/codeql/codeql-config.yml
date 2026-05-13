@@ -1,0 +1,4 @@
+name: goodq-codeql
+
+paths-ignore:
+  - vendor/**

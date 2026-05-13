@@ -197,11 +197,13 @@ def _redact_console_text(value: object) -> str:
 def _print(text: str) -> None:
     console_text = _redact_console_text(text)
     try:
-        print(console_text, flush=True)  # lgtm[py/clear-text-logging-sensitive-data]
+        # codeql[py/clear-text-logging-sensitive-data]
+        print(console_text, flush=True)
     except UnicodeEncodeError:
         encoding = getattr(sys.stdout, "encoding", None) or "utf-8"
         safe = console_text.encode(encoding, errors="replace").decode(encoding, errors="replace")
-        print(safe, flush=True)  # lgtm[py/clear-text-logging-sensitive-data]
+        # codeql[py/clear-text-logging-sensitive-data]
+        print(safe, flush=True)
 
 
 def _fail(msg: str, exit_code: int = 1) -> int:

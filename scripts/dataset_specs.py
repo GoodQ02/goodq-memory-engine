@@ -1,4 +1,5 @@
 from __future__ import annotations
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
@@ -25,7 +26,19 @@ class DatasetSpec:
         return f"{self.path}/{self.name}" if self.name else self.path
 
 
-DEFAULT_VENDOR_ROOT = Path('L:/datasets/vendor')
+def _default_vendor_root() -> Path:
+    override = os.environ.get("GOODQ_DATASET_VENDOR_ROOT")
+    if override:
+        return Path(override).expanduser()
+
+    corpus_root = os.environ.get("GOODQ_DATASET_CORPUS_ROOT")
+    if corpus_root:
+        return Path(corpus_root).expanduser() / "vendor"
+
+    return Path("datasets") / "vendor"
+
+
+DEFAULT_VENDOR_ROOT = _default_vendor_root()
 
 
 DATASET_SPECS: List[DatasetSpec] = []

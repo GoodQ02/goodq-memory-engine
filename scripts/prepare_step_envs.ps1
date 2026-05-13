@@ -88,8 +88,7 @@ for target in paths:
         with open(p / 'goodq4all_local.pth', 'w', encoding='utf-8') as fh:
             # Add the parent of the repo root to sys.path so that the
             # package 'goodq4all' (which lives at $repoRoot) can be imported
-            # as a top-level module. E.g., if repoRoot is L:\\goodq4all,
-            # we must add L:\\ to sys.path.
+            # as a top-level module by adding the repo parent to sys.path.
             fh.write(str(root.parent))
         written = True
         break

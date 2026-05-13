@@ -3,8 +3,33 @@
 
 import sqlite3
 import json
+import argparse
+import os
+from pathlib import Path
 
-db_path = "L:\\goodq4all\\data\\memory.db"
+REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
+def _default_db_path() -> Path:
+    for env_name in ("GOODQ_DB_PATH", "GOODQ_MEMORY_DB_PATH"):
+        value = os.environ.get(env_name)
+        if value:
+            return Path(value).expanduser()
+
+    data_root = os.environ.get("GOODQ_DATA_ROOT")
+    if data_root:
+        return Path(data_root).expanduser() / "GoodQ_Data" / "memory.db"
+
+    return REPO_ROOT / "data" / "memory.db"
+
+
+parser = argparse.ArgumentParser(description="Analyze GoodQ scene output from memory.db")
+parser.add_argument("--db-path", type=Path, default=_default_db_path(), help="Path to memory.db")
+args = parser.parse_args()
+db_path = args.db_path.expanduser()
+
+if not db_path.exists():
+    raise SystemExit(f"[ERROR] Database not found: {db_path}")
 
 conn = sqlite3.connect(db_path)
 cursor = conn.cursor()

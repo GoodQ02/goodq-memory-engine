@@ -1,4 +1,4 @@
-torch==2.5.1+cu121
+torch==2.12.0
 torchvision==0.20.1+cu121
 torchaudio==2.5.1+cu121
 faster-whisper==1.2.1

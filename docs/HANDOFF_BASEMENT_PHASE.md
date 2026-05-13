@@ -1,0 +1,512 @@
+<!-- DOC_BADGE: CANONICAL -->
+<!-- DOC_STATUS: AUTHORITATIVE -->
+<!-- DOC_LAST_VERIFIED: 2026-05-11 -->
+
+# Basement Phase Handoff (v1) — Current System State
+
+**Status:** Basement phase sealed + truth plumbing sealed (read-only control substrate active).
+**Scope:** Integrity + observability + contracts + read-only UI/control truth layers; no execution authority, no policy coupling.
+
+---
+
+## Current Restart Checkpoint (2026-05-11)
+
+This is the practical handoff point for a brand-new Codex session.
+
+- Pause checkpoint:
+  - status: portability/bootstrap prep is active; continue from the offline
+    bundle contract and model-cache drift cleanup before UI or broad witness
+    work.
+  - canonical model cache authority is `<GOODQ_DATA_ROOT>/models` or an
+    explicitly staged `%GOODQ_MODEL_CACHE_ROOT%`.
+  - the legacy root-level model cache was audited and contained no unique
+    material model payloads compared with the canonical cache; nonzero payloads
+    matched by hash and unmatched files were non-runtime cache logs.
+  - active helper/template surfaces have been aligned or are staged for commit:
+    `.env.model_cache`, `scripts/audit_vision_pipeline.py`,
+    `scripts/download_datasets.py`, `scripts/prepare_step_envs.ps1`,
+    `scripts/utilities/gpu_config.py`, and legacy utility probes resolve model
+    cache paths through config/env rather than fixed-drive roots.
+  - non-archive tracked source/docs were scanned for the old model-root literal
+    and returned no hits; archive hits remain historical and non-authoritative.
+  - offline bundle contract: `docs/bootstrap/OFFLINE_BUNDLE_CONTRACT.md`.
+    Generated scratch manifests and local recurrence artifacts are not staged
+    unless explicitly promoted.
+  - current offline manifest state: 10 source artifacts hash-computed, 8 staged
+    payload artifacts hash-computed, 1 supplemental artifact partial
+    hash-computed, 2 optional artifacts deferred, zero pending hashes.
+  - current offline staged-payload state: Windows env payload, host tools pack,
+    and private WSL audio distro export are copied and hash-sealed in the local
+    offline stage; the pip wheelhouse passed Python 3.10 no-index verification
+    for 155 exact PyPI requirements, and Piper TTS smoke passed from staged
+    files.
+  - remaining offline closure gap: restore rehearsal is pending on a disposable
+    target before creating any final archive or installer. WSL apt archive
+    evidence remains supplemental partial evidence, not the preferred restore
+    path.
+  - after a restart, first run `git status --short --branch` and confirm whether
+    the latest offline bundle contract/status commits have landed on `main`.
+
+- Previous pause checkpoint, 2026-05-08:
+  - status: Wav2Vec WSL enrichment is one-episode validated on laptop `GPU_ENHANCED`.
+  - WSL-side Wav2Vec emotion/embedding enrichment lane is qualified with pinned
+    `transformers==4.43.3`, `tokenizers==0.19.1`, and `safetensors==0.7.0`;
+    base WSL readiness remains separate from `wav2vec_enrichment_ready`.
+  - one-episode laptop witness `20260508_214134_laptop_gpu_enhanced_one_episode_witness_wav2vec_post_pull` exited `0` across `33` scenes with WSL audio, diarization, Wav2Vec emotion/embedding, BLIP caption, CLAP, transcripts, Phase 6, and Qdrant all clean.
+  - remaining WSL audio watch item is non-fatal `torchcodec_decoder_unavailable`; current runtime succeeds through preloaded-audio handling.
+
+- Detailed 2026-05-08 state:
+  - Pause checkpoint:
+    - status: Wav2Vec WSL enrichment is one-episode validated on laptop `GPU_ENHANCED`.
+  - latest runtime/source fixes on main:
+    - `3a06342` (`fix: load runtime pyannote from canonical cache`)
+    - `86f032d` (`fix: align image step gpu budget mapping`)
+  - same fixes are mirrored to public:
+    - `e2e0b9d` (`fix: load runtime pyannote from canonical cache`)
+    - `2a7b918` (`fix: align image step gpu budget mapping`)
+  - public hygiene also includes `67ce408` (`chore: prune public legacy archives`) and `279c825` (`chore: tighten public utility path hygiene`)
+  - laptop `GPU_ENHANCED` one-scene witness `20260508_104105_laptop_gpu_enhanced_one_scene_witness` completed with run id `02fdd2d9-7868-442b-8628-2550ed976820`
+  - witness passed WSL audio execution, transcript persistence, CLAP/audio embedding, text embedding, Phase 6a/6b, `phase6_complete=true`, and `qdrant_ok=true`
+  - witness found runtime PyAnnote needed the canonical HF cache dir in the live WSL loaders; `3a06342` patches `wsl2_audio/process_audio.py` and `wsl2_audio/audio_service.py`
+  - witness found laptop image-caption OOM was consistent with missing image-step budgets in `scripts.gpu_config`; `86f032d` maps image-caption/DINO/CLIP to the shared image env with explicit step budgets
+  - WSL-side Wav2Vec emotion/embedding enrichment lane is now qualified with pinned `transformers==4.43.3`, `tokenizers==0.19.1`, and `safetensors==0.7.0`; base WSL readiness remains separate from `wav2vec_enrichment_ready`
+  - laptop one-scene witness `20260508_173240_laptop_gpu_enhanced_one_scene_witness_wav2vec_artifact_fields` passed with Phase 6 complete, Qdrant ok, BLIP caption ok, diarization success, Wav2Vec enrichment success, and `embedding_dim=768`
+  - post-pull laptop one-scene witness `20260508_191455_laptop_gpu_enhanced_one_scene_witness_wav2vec_post_pull` on `7a7fd15` exited `0` and confirmed the same live artifact fields: WSL runtime ready, diarization success, `wav2vec_enrichment_ready=true`, Wav2Vec emotion success, Wav2Vec embeddings success with `embedding_dim=768`, speaker signature `status=ok`, BLIP caption ok, Phase 6 complete, and Qdrant ok
+  - one-episode laptop witness `20260508_214134_laptop_gpu_enhanced_one_episode_witness_wav2vec_post_pull` on `7a7fd15` exited `0` across `33` scenes: WSL audio success `33 / 33`, diarization success `33 / 33`, `wav2vec_enrichment_ready=true` `33 / 33`, Wav2Vec emotion success `33 / 33`, Wav2Vec embeddings success `33 / 33` with `embedding_dim=768`, BLIP caption ok `33 / 33`, CLAP ok `33 / 33`, transcript/full text present `33 / 33`, Phase 6 complete, and Qdrant ok
+  - remaining WSL audio watch item is non-fatal `torchcodec_decoder_unavailable`; current runtime succeeds through preloaded-audio handling
+- Prior pause checkpoint:
+  - latest local docs-clearance commit: `103b17f` (`docs: add documentation forensics index`)
+  - documentation clearance is sealed enough to proceed later from `docs/reference/indexes/DOCS_FORENSICS_INDEX.md`
+  - all active Markdown/text docs under `docs/` carry explicit `DOC_STATUS` metadata
+  - `docs/archive/diagnostics/wsl2_audio_emotion_sample_output.json` is preserved historical WSL audio emotion-output evidence, not current runtime authority
+  - local `reports/control_recurrence/` artifacts remain workspace hygiene unless intentionally promoted
+  - next operator input expected: laptop bootstrap audit with two remaining items; analyze that before resuming project-root cleanup
+- Current local workspace head:
+  - `main` / `origin/main` are the active source line; confirm the exact head with `git log -1 --oneline`
+  - source includes WSL runtime PyAnnote cache-dir loading and image-step GPU budget alignment through `86f032d`
+- Current public-facing branch head:
+  - `public` / `origin/public` includes public-safe WSL runtime cache-dir and image-step GPU budget fixes through `2a7b918`, plus public archive pruning and utility path hygiene through `279c825`
+- Full witness state now banked:
+  - Season 1 recompare completed (`01x01`–`01x05`)
+  - Season 2 fresh witness completed (`02x01`–`02x12`)
+- Latest authoritative witness memos:
+  - `docs/testing/SEASON1_RECOMPARE_WITNESS_MEMO_2026-04-24.md`
+  - `docs/testing/SEASON2_FIRST_CHECKPOINT_MEMO_2026-04-25.md`
+  - `docs/testing/SEASON1_SEASON2_FORENSIC_COMPARISON_MEMO_2026-04-25.md`
+- Read-only operator layer is restored and should now be treated as active:
+  - `lib/run_index.py`
+  - `lib/run_summary.py`
+  - `/api/runs/latest/preview`
+- First safe control-agent substrate is active as read-only observability:
+  - `lib/control_recurrence_report.py`
+  - `lib/control_recurrence_index.py`
+  - `lib/control_recurrence_recommendations.py`
+  - `lib/control_recurrence_trend.py`
+  - `python -m cli.control_recurrence_report`
+  - `/api/control-recurrence/reports`
+  - `/api/control-recurrence/reports/latest`
+  - `/api/control-recurrence/reports/{report_id}`
+  - `/api/control-recurrence/reports/{report_id}/markdown`
+  - `/api/control-recurrence/reports/{report_id}/recommendations`
+  - tag anchor: `control-recurrence-v0.4.2`
+  - current-state capsule: `docs/releases/CONTROL_RECURRENCE_v0.4.2.md`
+  - seal note: `control-recurrence-v0.4.1` remains a valid sealed milestone for direct-run discoverability and truth-surface alignment; current `main` is beyond it with `control-recurrence-v0.4.2` plus retry attribution/coalescing tightening
+  - source state beyond the latest control-recurrence tag includes the read-only trend helper/CLI mode, the CLAP audio Qdrant payload provenance patch, native model smoke diagnostics, shared runtime recurrence scoping, and WSL audio runtime black-box diagnostics through `05ae539`
+  - control recurrence is source-complete as a read-only observability layer for pre-UI and portability work; v0.5 status is recorded in `docs/releases/CONTROL_RECURRENCE_v0.5_STATUS.md`
+  - shared direct-run stdout events are scoped by persisted video/scene identity before recurrence aggregation
+  - direct-run discovery is bounded by existing required artifacts; absent aggregate output, operator metadata, temporal paths, or resolved log paths produce limited/missing-artifact observability rather than a boundary violation
+  - local `reports/control_recurrence/index.json` state is workspace artifact hygiene unless the file is explicitly tracked
+  - release notes:
+    - `docs/releases/CONTROL_RECURRENCE_v0.4.0.md`
+    - `docs/releases/CONTROL_RECURRENCE_v0.4.1.md`
+    - `docs/releases/CONTROL_RECURRENCE_v0.4.2.md`
+    - `docs/releases/CONTROL_RECURRENCE_v0.5_STATUS.md`
+    - `docs/releases/CONTROL_RECURRENCE_SHARED_RUNTIME_SCOPING_2026-05-03.md`
+  - boundary: not healing yet. This tool/API does not activate `ControlAgent`, does not enable auto-healing, does not mutate configs, does not execute commands, does not use LLMs, does not generate reports from the API, and does not touch `cli/run_ingestion.py`.
+- Current upstream normalization status:
+  - exact-pair pilot only
+  - allowlist contains exactly `Jerry Seinfeld -> Jerry`
+  - instrumentation fields:
+    - `normalization_applied`
+    - `normalization_source`
+  - pilot is projection-only and must not be generalized casually
+- Current audio-vector success doctrine:
+  - contract: `docs/architecture/AUDIO_VECTOR_PROVENANCE_CONTRACT.md`
+  - current-run CLAP/Qdrant audio coverage requires `clap_meta.status == ok` plus a Qdrant audio payload with matching `run_id` and required provenance fields
+  - scene-id-only Qdrant audio matches are stale or provenance-unverified, not current-run proof
+  - one-episode baseline witness: `20260501_114445_audio_qdrant_provenance_02x01_witness` showed `40 / 40` CLAP ok scenes with current-run Qdrant provenance
+  - two-episode boundary witness: `20260501_153532_audio_qdrant_provenance_s2_two_episode_witness` showed `75 / 75` CLAP ok scenes with current-run Qdrant provenance across `78` scenes; `2` optional CLAP errors and `1` `audio_silent` skip did not receive current-run Qdrant credit
+
+If resuming after restart, do not begin with a broad rerun. Begin by reading the
+three witness memos above and then confirm the current branch head.
+
+### Project-Root Audit Pause Note (2026-05-08)
+
+The docs-index-guided project audit is read-only complete enough to resume from
+these findings:
+
+- Laptop one-scene `GPU_ENHANCED` witness `20260508_104105_laptop_gpu_enhanced_one_scene_witness` completed successfully enough to validate the bootstrap/runtime lane, but found two source seams now patched:
+  - runtime PyAnnote loaders needed canonical HF cache-dir pass-through (`3a06342`)
+  - image-caption/DINO/CLIP needed explicit `scripts.gpu_config` step budgets for the shared image env (`86f032d`)
+- WSL-side Wav2Vec emotion/embedding enrichment is no longer an open package-lane item. The lane is qualified with pinned `transformers==4.43.3`, `tokenizers==0.19.1`, and `safetensors==0.7.0`, and preflight reports `wav2vec_enrichment_ready` separately from base WSL readiness. Do not silently treat the archived WSL emotion sample output as current truth; use the current WSL payload fields instead. Qualification plan/proof trail: `docs/superpowers/plans/2026-05-08-wsl-wav2vec-transformers-lane.md`
+- Laptop bootstrap audit received and classified: WSL audio cache authority is
+  patched forward on main by `a1d34df` and followed by later docs/root-cleanup
+  commits through `25ff2a7`. The fix adds `facebook/wav2vec2-base-960h` to the
+  authoritative bootstrap model cache set, makes WSL preflight use pinned
+  offline revisions, and aligns optional NRC lexicon handling with registry
+  optionality.
+- Follow-up laptop audit confirmed `18 / 18` model prefetch and pinned offline
+  PyAnnote lookup, but default `main` offline lookup still failed when generated
+  Hugging Face `refs/main` files ended with LF. Runtime fix `684308a` now writes
+  generated `refs/main` files as raw commit hash bytes with no trailing newline.
+- Latest laptop audit confirmed default offline `main` lookup and
+  `Pipeline.from_pretrained(..., cache_dir=...)` work against the canonical
+  cache, but WSL preflight itself was not passing `cache_dir`. Runtime fix
+  `af6fff3` passes the sourced WSL Hugging Face cache env into both PyAnnote
+  compatibility load paths.
+- Final laptop bootstrap validation on current `main` passed: bootstrap install
+  exited `0`, model prefetch reported `18 / 18`, WSL preflight returned
+  `ready=true` and `diarization_ready=true`, HF refs were raw 40-byte hashes
+  with no CR/LF, offline default and pinned lookups succeeded, and
+  `bootstrap_validate.bat` passed.
+- Remaining laptop note is non-fatal persistent WSL audio service install state
+  `PENDING_SUDO`; direct WSL audio execution is ready and the existing service
+  process was left untouched.
+- Next gate is one controlled `GPU_ENHANCED` scene witness on the freshly
+  validated laptop/bootstrap state before any broader ingestion run.
+- Validation passed: `python scripts/docs/doc_drift_lint.py`, `git diff --check`,
+  and `powershell -ExecutionPolicy Bypass -File scripts/dev/run_pytest.ps1 -q`
+  (`493` passed, `5` warnings).
+- Tracked source state was clean; the only expected local workspace artifacts
+  were untracked recurrence report files under `reports/control_recurrence/`.
+- Active docs lint clean. Archive docs still contain historical drive-root
+  examples by design and remain non-authoritative.
+- Qdrant answered locally. WSL audio preflight returned ready with diarization
+  ready, while the sourced worker still reported the observed cu128 drift lane
+  and `torchcodec_ready=false`.
+- Model prefetch reports should now expect `18 / 18` assets including YOLO and
+  the WSL runtime cache gate. Any lower count should be treated as a bootstrap
+  cache-authority or host-cache readiness seam, not an ingestion failure.
+- Local focused verification after the WSL PyAnnote preflight cache fix passed `48`
+  bootstrap/cache/WSL authority tests with `4` warnings.
+- Repo-root cleanup seam completed: the `17` tracked `steps/*/step.py.backup_*`
+  files beside active step modules were removed from the active tree after
+  audit showed no active runtime/test consumers. `*.backup*` is ignored to
+  prevent recurrence.
+- Repo-root config seam completed: the retired root `config.json`
+  scene-detection override and its obsolete fixer/monitor helper scripts were
+  removed after reference checks showed canonical runtime config is
+  `configs/config.yaml` via `steps.common.config_loader`.
+- Repo-root scratch hygiene completed: local scratch/workspace directories are
+  root-ignored as local artifacts. Do not stage scratch contents or recurrence
+  artifacts unless intentionally promoted.
+- Script registry status: `docs/bootstrap/SCRIPT_REGISTRY.md` is a stale
+  generated audit aid, not runtime authority. Canonical script surfaces remain
+  root launchers, bootstrap installer/validator/model prefetch, interpreter
+  bindings, `cli.run_ingestion`, watchdog, and the unified WSL bridge.
+- Test boundary status: default pytest is bounded to `tests/unit`; broad
+  explicit collection such as `pytest .` can still wander into retired
+  `scripts/archive/legacy_validation/root/test_*.py` harnesses.
+- Next source seam, after cleanup triage: silent observability/provenance drops
+  in observer, memory commit events, retrieval events, provenance attachment,
+  API status probes, and audio helper paths.
+
+---
+
+## A) Phase Scope
+
+The “Basement Phase” established the non-negotiable foundation for GoodQ:
+- **Memory Integrity v1:** auditable writes, explainable reads, and inert observability (no reinforcement/policy yet).
+- **Epistemic representation:** a stable contract for how answers/evidence/limits are represented (schema + semantics).
+- **Truth layer UI (read-only):** a deterministic Justification Channel that renders envelopes literally (no actions).
+- **Comparative understanding (read-only):** structural diffs between two envelopes without implying correctness.
+- **UI-safe conduits:** additive, whitelisted, path-sanitized derived tables/views for later UI/visualization layers.
+- **Sensitive-source wiring:** schema + vault boundary contracts for chat/health/wearables (no ingestion).
+- **Deterministic execution:** explicit interpreter binding for conda + WSL invocations (no PATH drift).
+- **Model storeroom tooling:** pin/verify ML model revisions + hashes for offline-repeatable operation.
+
+---
+
+## Version Anchors (Tags)
+
+- `basement-v1.0.0` — integrity foundation + observability + conduits + sensitive wiring + interpreter bindings + model tooling.
+- `data-epoch-v1.0.0` — epoch isolation + safe launcher defaults (dry-run unless explicitly started).
+- `non-action-v1.0.0` — Non-Action Contract v1 (declarative restraint; no enforcement).
+- `justification-ui-v1.0.3` — Justification Channel v1 (literal renderer + safety substrate + navigation hardening).
+- `goodq-inspector-v0.1.0` — GoodQ Inspector v0 (observer-only UI maintenance).
+- `justification-readonly-v1.0.0` — Read-Only Wiring Phase v1 (explicit data sources; honest dont_know failures).
+- `epistemic-diff-v1.0.0` — Epistemic Diff Engine v1 (structural comparison).
+- `justification-diff-ui-v1.0.0` — comparative diff rendering (mode=compare; read-only).
+- `visual-projection-v1.0.0` — Visual Projection Contract v1 (meaning-before-motion).
+- `situational-projection-v1.0.0` — situational awareness projection (mode=project; read-only).
+- `system-map-v1.0.0` — System Map v1 (authoritative orientation): `docs/architecture/SYSTEM_MAP_v1.md`.
+- `wsl2-audio-bridge-v1.0.1` — WSL2 audio bridge syntax fix (f-string backslash).
+
+---
+
+## Runtime Snapshot (Operational)
+
+- **Active epoch + stores:** `docs/data_epochs.md` + `configs/config.yaml` (`paths.*`, `qdrant.collections.*`, `phase6.*`).
+- **Safe launcher default:** `LAUNCH_GOODQ.ps1` defaults to `-DryRun` unless `-StartIngestion` is explicitly passed.
+- **No-audio vs processing failure (critical distinction):**
+  - `  [OK] No audio track in video (video-only)` → no audio stream (`_extract_audio_chunk()` returned `None`).
+  - `Processing: scene_XXXX.wav` followed by an error → audio exists; WSL2 processing failed (do not treat as “no audio”).
+- **WSL2 audio components:** `steps/audio/audio_wsl2_bridge.py`, `scripts/wsl2_audio_bridge.py`, `wsl2_audio/process_audio.py`.
+- **Primary logs for audits:** epoch `logs/step_runs.jsonl`, epoch `processing/<video>/`, and the WSL worker output/workspace.
+- **WSL audio black-box recorder:** `bridge_runtime_probe` is expected on unified WSL audio scene outputs and canonical scene-manifest scene audio payloads. The 2026-05-04 witness `20260504_074335_wsl_black_box_02x02_witness` proved all `38` scenes carried it; the active sourced worker reported `torch_lane_status=differs_from_expected` and `torchcodec_ready=false` while Phase 6/Qdrant remained healthy.
+- **WSL audio lane classification:** `WSL_AUDIO_LANE_OBSERVED_FUNCTIONAL_DRIFT_CU128`. Bootstrap target remains `torch` / `torchvision` / `torchaudio` on `2.5.1+cu121`; the observed sourced WSL worker lane is `2.8.0+cu128`. That lane was functionally observed through repeated no-ingestion probes and no current ingestion blocker was found from the witness, but it is not bootstrap-approved, not lane-approved for promotion, and not a package recommendation. `torchcodec_ready=false` remains a watch item; promotion requires a future explicit lane-promotion audit before any bootstrap, config, package, source, or lockfile change.
+
+---
+
+## Current Watch List (Known Ongoing Issues)
+
+- **Intermittent WSL2 audio unified failures:** some scenes have extracted audio chunks (`Processing: scene_XXXX.wav`) but WSL2 processing returns an error (often alongside benign stderr warnings); treat this as *audio-present processing failure*, not “no audio”. Start investigation at `scripts/wsl2_audio_bridge.py` + `wsl2_audio/process_audio.py` and confirm the extracted `.wav` exists/has non-trivial size in the epoch `processing/<video>/audio/` tree.
+- **Status pages can be stale:** `docs/goodq4all_agent_status.md` is a snapshot and may lag current tags; use `git tag --list` + `docs/HANDOFF_BASEMENT_PHASE.md` + `docs/architecture/SYSTEM_MAP_v1.md` for authoritative anchors.
+
+---
+
+## B) What Is COMPLETE
+
+### Memory Integrity v1
+
+- **Audited memory writes:** `steps/common/memory_commit_events.py`
+- **Audited retrieval hits (observability only):** `steps/common/retrieval_events.py`
+- **Provenance threading:** `steps/common/memory_provenance.py`
+- **Temporal confidence (read-time, non-destructive):** `steps/common/memory_provenance.py`
+- **Doctrine:** `docs/architecture/MEMORY_STORAGE.md`
+
+### Observability rollups (growth-safe, additive)
+
+- **On-demand rollups:** `cli/observability_rollup.py` (`retrieval_events_daily`, `memory_commit_events_daily`)
+- **Health report:** `cli/observability_health.py`
+
+### Epistemic Read Model + formatter (integrity-only)
+
+- **Contract:** `docs/architecture/EPISTEMIC_READ_MODEL.md`
+- **Deterministic formatter (non-authoritative):** `steps/common/epistemic_formatter.py`
+
+### Non-Action Contract v1 (declarative restraint; no enforcement)
+
+- **Contract:** `docs/architecture/NON_ACTION_CONTRACT.md`
+- **Pure evaluator (no wiring):** `steps/common/non_action_contract.py`
+- **Note:** declarative only; enforcement is deferred by design; future UI/agents/pipelines must consult this contract.
+
+### UI truth layer (read-only; invariant-safe)
+
+- **Legacy UI archived:** `archive/legacy_ui/README.md`
+- **Justification Channel v1:** `ui/justification_v1/` (literal renderer; no actions)
+- **Integrity harness + golden test:** `ui/justification_v1/static/js/integrity.js`, `ui/justification_v1/static/js/test_render.js`
+- **GoodQ Inspector v0 (observer-only):** `ui/justification_v1/inspector/`
+- **Read-only wiring (explicit sources):** `justification-readonly-v1.0.0` (`GET /api/read/envelope` + local JSON loader)
+- **Comparative diff UI (read-only):** `justification-diff-ui-v1.0.0` (mode=compare)
+- **Situational awareness projection (read-only):** `situational-projection-v1.0.0` (mode=project; contract `docs/architecture/VISUAL_PROJECTION_CONTRACT_v1.md`)
+
+### Comparative understanding (read-only diffs)
+
+- **Epistemic Diff Engine v1:** `steps/common/epistemic_diff.py`
+- **Tests:** `tests/unit/test_epistemic_diff_smoke.py`
+
+### System Map (authoritative orientation)
+
+- **Contract map:** `docs/architecture/SYSTEM_MAP_v1.md`
+- **Witness proof:** `docs/proof_of_concept/WITNESS_RUN_001.md`
+
+### Data epochs (preserved + isolated; local-first)
+
+- **Epoch record + rules:** `docs/data_epochs.md`
+- **Epoch-bound configuration:** `configs/config.yaml` (paths + Qdrant collection names are epoch-scoped)
+- **Safe-by-default launcher:** `LAUNCH_GOODQ.ps1` (`-DryRun`, `-StartIngestion`)
+
+### Conduit Pack v1 (UI-safe, whitelisted)
+
+- **Builder:** `python -m cli.conduits_build` (`cli/conduits_build.py`)
+- **Modules:** `cli/conduits_memory.py`, `cli/conduits_kg.py`, `cli/conduits_processing.py`, `cli/conduits_store_stats.py`
+- **UI rollups:** `python -m cli.ui_conduits_rollup` (`cli/ui_conduits_rollup.py`)
+- **Media ref token resolver (local-only):** `cli/media_refs.py`
+- **Doctrine:** `docs/architecture/MEMORY_STORAGE.md`
+
+### Sensitive Source Wiring Pack v1 (schema-only; no ingestion)
+
+- **Contract:** `docs/architecture/CANONICAL_SENSITIVE_EVENTS.md`
+- **Schema definitions (TypedDict):** `steps/common/canonical_sensitive_events.py`
+- **UI-safe empty reserved conduits:** `cli/conduits_sensitive_sources.py`
+- **Vault token resolver contract:** `docs/architecture/VAULT_TOKEN_RESOLVER_CONTRACT.md`
+- **Vault token resolver hook:** `steps/common/vault_token_resolver.py`
+- **Sensitive staging validator hook:** `steps/common/sensitive_staging.py`
+
+### Health Auto Export adapter (schema-first; dry-run only)
+
+- **Adapter module:** `steps/health_auto_export/adapter.py` (read-only; emits CHE objects; redacts raw values)
+
+### Interpreter Binding Pack v1 (deterministic conda/WSL)
+
+- **Shell helpers:** `scripts/_lib/interpreter_bindings.ps1`, `scripts/_lib/interpreter_bindings.bat`
+- **Python conda resolution:** `steps/common/tool_paths.py` (used by `steps/common/conda_runner.py`)
+- **WSL distro binding:** `GOODQ_WSL_DISTRO` (default `Ubuntu`) used by WSL entrypoints and scripts.
+
+### Model storeroom (pinned + hashed; offline tooling)
+
+- **Registry:** `configs/model_registry.yaml`
+- **Pin revisions + hashes:** `scripts/pin_model_versions.py` (launcher: `scripts/PIN_MODEL_VERSIONS.bat`)
+- **Verify lockdown:** `scripts/verify_model_lockdown.py` / `scripts/utils/verify_model_lockdown.py` (launcher: `scripts/VERIFY_MODEL_LOCKDOWN.bat`)
+
+---
+
+## C) What Is BLOCKED BY DESIGN
+
+These are intentionally *not* wired into ingestion yet:
+
+- **Chat ingestion:** CME schema + reserved conduits exist; no parsers/writers registered.
+- **Health ingestion:** CHE schema + Health Auto Export adapter exist; pipeline wiring is blocked by default to avoid per-record PHI leakage.
+- **Wearable ingestion:** CWE schema + reserved conduits exist; no ingestion; vault staging is mandatory before any future processing.
+- **Training dataset export:** requires an explicit vault build manifest + explicit human approval; do not export raw or derived sensitive corpora by default.
+
+---
+
+## D) Safety & Invariants (Non-Negotiables)
+
+- **Vault-only raw sensitive data:** raw message text / raw health values / raw wearable media must never appear in memory/KG/conduits by default.
+- **Derived-only outputs:** only whitelisted, non-identifying derived fields may reach UI-safe conduits.
+- **No raw queries in retrieval observability:** `retrieval_events` must never store raw user queries.
+- **Confidence is not policy:** confidence fields are informational; no gating/reranking/refusal coupling without an explicit policy layer.
+- **Audit absence is not evidence:** missing observability rows can be “disabled” or “best-effort dropped”.
+- **Committed is per-target truth:** store-level truth lives in `targets_json`; row-level `committed=true` means all *attempted* targets succeeded.
+- **Composite identity:** future joins must use `(store_type, store_ref, embedding_id)` when possible (avoid ID-only assumptions).
+- **No implicit interpreter selection:** avoid `conda activate` and implicit `python`; use explicit conda exe + `conda run`.
+- **WSL calls are distro-scoped:** use `GOODQ_WSL_DISTRO` and invoke `wsl -d <distro> -- ...`.
+- **Scope discipline:** agents must not modify files outside verified runtime entry points unless explicitly instructed.
+
+---
+
+## E) How To Resume Safely
+
+### Orientation (read first)
+
+- `docs/AGENTS.md`
+- `docs/goodq4all_agent_status.md`
+- `docs/architecture/SYSTEM_MAP_v1.md`
+- `docs/architecture/MEMORY_STORAGE.md`
+- `docs/architecture/EPISTEMIC_READ_MODEL.md`
+- `docs/architecture/NON_ACTION_CONTRACT.md`
+- `docs/data_epochs.md`
+- `docs/testing/SEASON1_RECOMPARE_WITNESS_MEMO_2026-04-24.md`
+- `docs/testing/SEASON2_FIRST_CHECKPOINT_MEMO_2026-04-25.md`
+- `docs/testing/SEASON1_SEASON2_FORENSIC_COMPARISON_MEMO_2026-04-25.md`
+
+### Verify active epoch + readiness (no ingestion)
+
+- `python -m cli.print_config`
+- `python -m cli.goodq_doctor`
+- `.\LAUNCH_GOODQ.ps1 -DryRun`
+
+### Build/refresh UI-safe conduits (no ingestion)
+
+1) Build all conduit schemas:
+- `python -m cli.conduits_build`
+
+2) Build UI rollups (scene spine + modality coverage):
+- `python -m cli.ui_conduits_rollup`
+  - `scene_modality_coverage.has_audio_clap` is memory-commit presence only.
+    Prefer `audio_vector_provenance_state` for UI status language; it is not
+    current-run Qdrant proof unless the audio-vector provenance contract is
+    satisfied.
+
+3) Build observability rollups (optional; additive):
+- `python -m cli.observability_rollup`
+- `python -m cli.observability_rollup --commits`
+
+### Run read-only control recurrence reports (no healing)
+
+- Single-run recurrence summary:
+  - `conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --run-id 20260424_182406_season2_fresh_witness`
+- Direct canonical run-root recurrence summary:
+  - `conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --run-root reports/fresh_ingest_runs/<direct_run_root>`
+- Comparison JSON between witness roots:
+  - `conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --baseline-run-id 20260424_003250_season1_recompare_witness --candidate-run-id 20260424_182406_season2_fresh_witness --json`
+- Deterministic markdown operator artifact:
+  - `conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --baseline-run-id 20260424_003250_season1_recompare_witness --candidate-run-id 20260424_182406_season2_fresh_witness --write-md`
+- Durable markdown + JSON artifacts and index update:
+  - `conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --run-id 20260424_182406_season2_fresh_witness --write-md --write-json-file`
+- List indexed artifacts from the CLI:
+  - `conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --list-reports --json`
+- Draft deterministic operator inspection recommendations from an indexed report:
+  - `conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --recommendations-for 20260424_003250_season1_recompare_witness__vs__20260424_182406_season2_fresh_witness`
+- Derive conservative trends from indexed durable JSON reports:
+  - `conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --trend --json`
+- Read the existing index from the local API:
+  - `curl http://127.0.0.1:30000/api/control-recurrence/reports`
+- Read the latest indexed entry from the local API:
+  - `curl http://127.0.0.1:30000/api/control-recurrence/reports/latest`
+- Read deterministic inspection recommendations from the local API:
+  - `curl http://127.0.0.1:30000/api/control-recurrence/reports/20260424_003250_season1_recompare_witness__vs__20260424_182406_season2_fresh_witness/recommendations`
+
+This is read-only control-plane observability only. The CLI reads existing persisted artifacts (`step_runs.jsonl`, run warnings, `scene_ingest_results.json`, `scene_manifest.json`, `temporal_index.json`, and `experiment_log.json`). For direct canonical run roots without a wrapper ledger, it can also read existing `operator_run_metadata.json`, `output/scene_ingest_results.json`, `workspace/_resolved_config.json`, canonical `step_runs.jsonl`, and captured ingestion stdout/stderr events. Direct roots may contain one or more videos, and metadata-described output/workspace paths are read only when present. Recurrence reports include observer-only latency summaries from existing `step_runs.jsonl` `duration_ms` rows; those summaries do not alter recurrence classification or trigger remediation. It writes artifacts only when explicitly asked. Recommendation drafts read existing durable JSON reports and return inspection steps only. Trend mode reads only the recurrence artifact index and indexed durable JSON reports; it does not reconstruct trend data from markdown or raw run roots. The API reads only `reports/control_recurrence/index.json` and indexed artifacts. It does not generate reports, trigger ingestion, activate ControlAgent, execute commands, mutate configs, or heal.
+
+### Run the Justification Channel (read-only; no power)
+
+- Open: `ui/justification_v1/index.html`
+- Golden render check (browser console):
+  - Load `ui/justification_v1/static/js/test_render.js` and run `GoodQJustificationTests.run()`
+- Enable Inspector v0 (observer-only):
+  - `?inspector=1` (or set `window.GOODQ_INSPECTOR_ENABLED = true` in console)
+- Comparison mode (EpistemicDiff v1 renderer; read-only):
+  - `ui/justification_v1/index.html?mode=compare&diff_source=file&diff_path=<relative_diff.json>`
+  - Diff JSON must conform to EpistemicDiff v1 (output of `steps/common/epistemic_diff.py`)
+- Load a local bundle (explicit):
+  - `ui/justification_v1/index.html?source=file&path=<relative_bundle.json>`
+  - Bundle shape: `{ "envelope": {...}, "nonActionDecisions": [...] }`
+- Load from read-only API (explicit):
+  - Set `GOODQ_READONLY_ENVELOPE_PATH` to a precomputed bundle JSON path
+  - Run API: `python api/server.py` (default port `30000`)
+  - Open UI: `ui/justification_v1/index.html?source=api&api_base=http://localhost:30000`
+
+### Run Epistemic diff smoke tests (read-only)
+
+- `python -m pytest tests/unit/test_epistemic_diff_smoke.py -q`
+
+### Run the Health Auto Export adapter (dry-run only)
+
+- `python -m steps.health_auto_export.adapter <vault_or_staged_health_auto_export.json>`
+
+This prints counts by category/name and a UTC date range. It does not write to databases.
+
+### Verify model storeroom / offline readiness
+
+- `scripts\\VERIFY_MODEL_LOCKDOWN.bat`
+- (Optional) `scripts\\PIN_MODEL_VERSIONS.bat` (networked; updates pinned SHAs in `configs/model_registry.yaml`)
+
+### Where to start next
+
+- **UI work:** consume only UI-safe conduits (see `docs/architecture/MEMORY_STORAGE.md` “Conduit Pack v1”).
+- **Sensitive ingestion:** start from the staging contract + vault resolver; do not run existing steps directly on vault paths.
+- **Training/vault phase:** requires an explicit vault build manifest + explicit approval; keep vault boundaries intact.
+- **Current pipeline/intelligence next step:** do not broaden normalization. The
+  current safe pilot is a single exact pair only. New candidates must satisfy
+  the same proof gate before implementation:
+  - appears in at least `2` segments
+  - across at least `2` scenes
+  - no competing entity surfaces
+  - no title/alias collision
+
+---
+
+## F) Key Directories & Files
+
+- **Architecture + doctrine:** `docs/architecture/`
+- **System map:** `docs/architecture/SYSTEM_MAP_v1.md`
+- **Epoch tracking:** `docs/data_epochs.md`
+- **Basement operating protocol:** `docs/AGENTS.md`
+- **Launcher:** `LAUNCH_GOODQ.ps1`, `LAUNCH_GOODQ.bat`
+- **Ingestion entrypoint:** `cli/run_ingestion.py`
+- **Memory/observability core:** `steps/common/`
+- **Epistemic diff engine:** `steps/common/epistemic_diff.py`
+- **Conduit builders + rollups:** `cli/conduits_build.py`, `cli/ui_conduits_rollup.py`, `cli/observability_rollup.py`
+- **Read-only control recurrence reports:** `cli/control_recurrence_report.py`, `lib/control_recurrence_report.py`, `lib/control_recurrence_index.py`, `lib/control_recurrence_recommendations.py`, `api/routes/control_recurrence.py`
+- **Sensitive-source contracts:** `docs/architecture/CANONICAL_SENSITIVE_EVENTS.md`, `docs/architecture/VAULT_TOKEN_RESOLVER_CONTRACT.md`
+- **Sensitive schema definitions:** `steps/common/canonical_sensitive_events.py`
+- **Health adapter (dry-run):** `steps/health_auto_export/adapter.py`
+- **Justification Channel UI:** `ui/justification_v1/`
+- **Inspector v0:** `ui/justification_v1/inspector/`
+- **Interpreter binding helpers:** `scripts/_lib/interpreter_bindings.ps1`, `scripts/_lib/interpreter_bindings.bat`
+- **WSL2 audio bridge:** `scripts/wsl2_audio_bridge.py`, `steps/audio/audio_wsl2_bridge.py`, `wsl2_audio/`
+- **Model pin/verify tooling:** `configs/model_registry.yaml`, `scripts/pin_model_versions.py`, `scripts/utils/verify_model_lockdown.py`

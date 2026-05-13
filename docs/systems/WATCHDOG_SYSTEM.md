@@ -1,0 +1,528 @@
+<!-- DOC_BADGE: CANONICAL -->
+<!-- DOC_STATUS: AUTHORITATIVE -->
+<!-- DOC_LAST_VERIFIED: 2026-03-19 -->
+
+# Watchdog Automatic Ingestion System
+
+**Status**: **OPERATIONAL** (config-resolved runtime)  
+**Location**: `cli/watchdog.py` (Canonical)  
+**Legacy Note**: `scripts/watchdog_ingest.py` has been retired from the supported surface.
+
+---
+
+## Overview
+
+The Watchdog is GoodQ's **zero-touch ingestion system**. It monitors the configured import inbox and processes supported files through the canonical ingestion runtime. Runtime paths are resolved from `configs/config.yaml`, local overrides, and environment variables via `config_loader`.
+
+`BASELINE` remains fully supported on Windows without WSL. If the active runtime contract enables WSL audio, video ingestion may delegate scene-audio work to the WSL bridge; otherwise the Windows-local audio path remains the default.
+
+### What It Does
+
+- **Monitors**: `<GOODQ_DATA_ROOT>\GoodQ_Data\import_inbox` every 2 seconds
+- **Detects**: Video, audio, image, and document files
+- **Validates**: Waits 3 seconds for file stability (copy completion)
+- **Deduplicates**: SHA-256 hash prevents reprocessing identical files
+- **Processes**: Routes to appropriate pipeline (video/audio/image/document)
+- **Tracks**: Control-plane state on every run; AI diagnosis is available only when an `llm_client` is explicitly injected
+- **Archives**: Moves to configured `processed/` (success) or `failed/` (error) directories
+
+---
+
+## Features
+
+### Confirmed Operational (Dec 14, 2025)
+
+| Feature | Implementation | Status |
+|---------|---------------|--------|
+| **File Detection** | 2s polling loop, FileState tracking | Active |
+| **Stability Check** | 3s wait + size/mtime comparison | Active |
+| **Hash Deduplication** | SHA-256 streaming, registry in JSON | Active |
+| **Control Agent Integration** | Optional `llm_client` injection; state always recorded, AI diagnosis conditional | Conditional |
+| **Single-Instance Lock** | PID-based lockfile, stale lock detection | Active |
+| **Multi-Format Support** | Video, audio, image, PDF/text documents | Active |
+| **Progress Tracking** | `progress_tracker` integration | Active |
+| **Graceful Shutdown** | Queue drain, thread join on Ctrl+C | Active |
+
+---
+
+## Supported File Types
+
+### Video (via Direct Ingestion)
+```
+.mp4, .avi, .mov, .mkv, .wmv, .flv, .webm, .m4v
+```
+**Pipeline**: `pipelines/direct_ingestion.py` -> Full scene detection, audio/video analysis
+
+### Audio (via Conda Step Runner)
+```
+.mp3, .wav, .flac, .m4a, .aac, .ogg, .wma
+```
+**Steps**: Transcription -> CLAP embedding -> Emotion -> Metadata -> Text embed -> Sentiment
+
+### Image (via Conda Step Runner)
+```
+.jpg, .jpeg, .png, .bmp, .gif, .tiff, .webp
+```
+**Steps**: OCR -> Caption -> Object Detection -> Face Embed -> DINO/CLIP -> Text Embed
+
+### Documents (via Conda Step Runner)
+```
+.pdf, .txt, .md, .doc, .docx
+```
+**Steps**: PDF text extraction -> Text embed -> Sentiment -> Emotion -> Tagging
+
+---
+
+## Architecture
+
+### Component Diagram
+```text
++--------------------------- Watchdog System ---------------------------+
+|                                                                       |
+|  Monitor Thread --2s poll--> FileState Tracker                        |
+|        |                                                              |
+|        +--3s stability check--> SHA-256 Hash                          |
+|                                   |                                   |
+|                                   +--> Processed Registry lookup      |
+|                                               |                       |
+|                                               +--> Queue (FIFO)       |
+|                                                         |             |
+|                                                         v             |
+|                                                   Worker Thread       |
+|                                                         |             |
+|            +----------------------+---------------------+----------+  |
+|            |                      |                                |  |
+|       Video Pipeline       Audio/Image Conda Steps     Document Pipeline |
+|            |                      |                                |  |
+|            +----------------------+--------------------------------+  |
+|                                   |                                   |
+|                              Control Agent                            |
++-----------------------------------------------------------------------+
+```
+
+### Dataflow
+
+```text
+import_inbox/video.mp4
+    |
+    +-> [Monitor detects]
+FileState(path, size, mtime)
+    |
+    +-> [Wait 3s, check stable]
+Compute SHA-256 hash
+    |
+    +-> [Check registry]
+Already processed? --YES--> Rename PROCESSED_*, skip
+    |
+   NO
+    |
+    +-> [Add to queue]
+Worker thread pulls from queue
+    |
+    +-> [Copy to processing/]
+<GOODQ_DATA_ROOT>/GoodQ_Data/processing/video_<hash>/video.mp4
+    |
+    +-> [Route by file type]
+    |
+    +-> VIDEO: run_direct_ingestion() -> Scene detect -> Runtime-selected audio -> Vision -> KG
+    |
+    +-> AUDIO: Conda steps -> Transcribe -> Embed -> Emotion -> Metadata
+    |
+    +-> IMAGE: Conda steps -> OCR -> Caption -> Detect -> Embed
+    |
+    +-> DOCUMENT: Conda steps -> Extract text -> Embed -> Sentiment
+    |
+    +-> [Success?]
+       |
+      YES                              NO
+       |                               |
+       v                               v
+<GOODQ_DATA_ROOT>/GoodQ_Data/processed/    <GOODQ_DATA_ROOT>/GoodQ_Data/failed/
+PROCESSED_video.mp4                        FAILED_video.mp4
+```
+
+---
+
+
+## Key Configuration
+
+### File Locations (Resolved at Runtime)
+
+The watchdog does **not** use repo-root hardcoded directories. `cli/watchdog.py` resolves runtime paths through `load_configs()` + `get_runtime_paths()` using the active config and local overrides.
+
+```python
+WATCH_DIR = "<GOODQ_DATA_ROOT>/GoodQ_Data/import_inbox"
+PROCESSING_DIR = "<GOODQ_DATA_ROOT>/GoodQ_Data/epochs/<epoch>/processing"
+PROCESSED_DIR = "<GOODQ_DATA_ROOT>/GoodQ_Data/processed"
+FAILED_DIR = "<GOODQ_DATA_ROOT>/GoodQ_Data/failed"
+STATE_FILE = "<GOODQ_DATA_ROOT>/GoodQ_Data/epochs/<epoch>/logs/watchdog_state.json"
+LOCK_FILE = "<GOODQ_DATA_ROOT>/GoodQ_Data/epochs/<epoch>/logs/watchdog.lock"
+LOG_FILE = "<GOODQ_DATA_ROOT>/GoodQ_Data/epochs/<epoch>/logs/watchdog.log"
+```
+
+### Timing Parameters
+
+```python
+POLL_INTERVAL = 2.0      # Scan directory every 2 seconds
+STABILITY_WAIT = 3.0     # File must be unchanged for 3s
+MAX_WORKERS = 1          # Process one file at a time
+```
+
+### Timeouts (Dynamic, based on file size)
+
+```python
+# Minimum 8 hours, +3 hours per GB
+timeout_seconds = max(28800, int(file_size_gb * 10800))
+
+# Per-step timeout for conda runner
+GOODQ_STEP_TIMEOUT_MS = 600_000  # 10 minutes per step
+```
+
+---
+
+## Control Agent Integration
+
+The Watchdog records control-plane state on every run. AI-powered diagnosis is available only when `agents/control_agent.py` is available **and** an `llm_client` is explicitly injected:
+
+### Hooks
+```python
+# Default runtime
+control_agent_status = "disabled_no_llm_client"
+
+# Optional injected runtime
+control_agent = ControlAgent(llm_client=...)
+diagnosis = control_agent.analyze_error(error, context)
+```
+
+### AI Diagnosis Example
+```
+[BOT] AI Diagnosis: Audio diarization timeout - speaker overlap detected
+[BOT] AI Recommendation: Increase VAD threshold to 0.5, reduce max_speakers to 3
+```
+
+---
+
+## Usage
+
+### Start Watchdog
+
+#### Option 1: PowerShell
+```powershell
+conda run -n goodq_core python -m cli.watchdog
+```
+
+#### Option 2: Status Snapshot
+```powershell
+python scripts/utils/check_watchdog_status.py
+```
+
+### Drop Files
+```
+1. Copy files to <GOODQ_DATA_ROOT>\GoodQ_Data\import_inbox\
+2. Watchdog detects within 2 seconds
+3. Wait 3 seconds for stability check
+4. Processing begins automatically
+5. Monitor logs or console for progress
+```
+
+### Monitor Progress
+
+#### View Live Logs
+```powershell
+Get-Content <GOODQ_DATA_ROOT>\GoodQ_Data\epochs\<epoch>\logs\watchdog.log -Wait -Tail 20
+```
+
+#### Check Processed Registry
+```powershell
+Get-Content <GOODQ_DATA_ROOT>\GoodQ_Data\epochs\<epoch>\logs\watchdog_state.json | ConvertFrom-Json | Format-List
+```
+
+#### Check If Watchdog Running
+```powershell
+Get-Process | Where-Object {$_.CommandLine -like "*watchdog*"}
+```
+
+---
+
+## State Management
+
+### Processed Registry (`watchdog_state.json`)
+
+```json
+{
+  "a3f5b8c2e1d9f4a6...": {
+    "original_name": "interview_clip.mp4",
+    "status": "success",
+    "timestamp": "2025-12-14T15:23:10.123456"
+  },
+  "7d2e9f1a4b6c8e3d...": {
+    "original_name": "corrupted_audio.wav",
+    "status": "failed",
+    "error": "Audio file truncated",
+    "timestamp": "2025-12-14T16:45:22.654321"
+  }
+}
+```
+
+### Single-Instance Locking
+
+```python
+# Creates <GOODQ_DATA_ROOT>/GoodQ_Data/epochs/<epoch>/logs/watchdog.lock with PID
+# On startup:
+#   - If lock exists, check if PID is alive
+#   - If alive: exit (already running)
+#   - If dead: remove stale lock, create new one
+# On shutdown: remove lock
+```
+
+---
+
+## Pipeline Details
+
+### Video Processing (`ingest_video`)
+
+1. **Copy to temp**: `processing/video_<hash>/video.mp4`
+2. **Call**: `pipelines.direct_ingestion.run_direct_ingestion()`
+3. **Stages**:
+   - Scene detection (scenedetect)
+   - Per-scene loop:
+     - Extract keyframe -> Vision pipeline
+     - Extract audio chunk -> runtime-selected audio backend (Windows default; WSL bridge when enabled)
+     - Entity extraction
+     - Knowledge graph update
+4. **Cleanup**: Remove temp dir on success, preserve on failure
+
+### Audio Processing (`ingest_audio`)
+
+```python
+step_plan = [
+    ("goodq_audio_transcribe", "audio_transcribe"),      # Whisper
+    ("goodq_audio_embed", "audio_embed_clap"),           # CLAP embeddings
+    ("goodq_audio_emotion", "audio_emotion"),            # Wav2Vec2 emotion
+    ("goodq_audio_metadata", "audio_metadata"),          # Duration, channels
+    ("goodq_audio_metadata", "audio_time_hints"),        # Temporal markers
+    ("goodq_audio_metadata", "audio_music_events"),      # Music detection
+    ("goodq_text_embed", "text_embed"),                  # Sentence embeddings
+    ("goodq_core", "sentiment"),                         # Sentiment analysis
+    ("goodq_core", "emotion_classify"),                 # Text emotion
+    ("goodq_core", "tagger")                            # Taxonomy tags
+]
+```
+
+### Image Processing (`ingest_image`)
+
+```python
+step_plan = [
+    ("goodq_image_caption", "image_ocr"),                # Tesseract OCR
+    ("goodq_image_caption", "image_caption"),            # BLIP captioning
+    ("goodq_object_detect", "object_detect"),            # YOLO detection
+    ("goodq_face_embed", "face_embed"),                  # Face embeddings
+    ("goodq_image_caption", "image_exif"),               # EXIF metadata
+    ("goodq_image_caption", "image_embed_dino"),         # DINOv2 embeddings
+    ("goodq_image_caption", "image_embed_clip"),         # CLIP embeddings
+    ("goodq_text_embed", "text_embed"),                  # Text embeddings
+    ("goodq_core", "sentiment"),                         # Sentiment
+    ("goodq_core", "emotion_classify"),                 # Emotion
+    ("goodq_core", "tagger")                            # Tags
+]
+```
+
+---
+
+## Troubleshooting
+
+### Watchdog Not Starting
+
+**Symptom**: Script exits immediately
+
+**Diagnosis**:
+```powershell
+# Check for existing instance
+Get-Content <GOODQ_DATA_ROOT>\GoodQ_Data\epochs\<epoch>\logs\watchdog.lock
+```
+
+**Fix**:
+```powershell
+# If stale lock, delete manually
+Remove-Item <GOODQ_DATA_ROOT>\GoodQ_Data\epochs\<epoch>\logs\watchdog.lock -Force
+```
+
+---
+
+### Files Not Detected
+
+**Symptom**: Dropped files ignored
+
+**Diagnosis**:
+1. Check file extension is supported
+2. Verify watch directory exists
+3. Check logs for errors
+
+**Fix**:
+```powershell
+# Verify directory
+Test-Path <GOODQ_DATA_ROOT>\GoodQ_Data\import_inbox
+
+# Check logs
+Get-Content <GOODQ_DATA_ROOT>\GoodQ_Data\epochs\<epoch>\logs\watchdog.log -Tail 50
+```
+
+---
+
+### Processing Hangs
+
+**Symptom**: File stuck in processing
+
+**Diagnosis**:
+- Check GPU memory (may be full from vLLM)
+- Check the active audio backend for the run. WSL audio service health matters only when the run selected WSL; `BASELINE` normally uses the Windows-local path.
+- Check per-step timeout (10 min default)
+
+**Fix**:
+```powershell
+# Check GPU
+nvidia-smi
+
+# Recheck the WSL worker only if the run selected WSL audio
+wsl -d <distro> -- bash -lc 'test -f "$GOODQ_WSL_WORKSPACE/process_audio.py" && nvidia-smi'
+
+# Kill watchdog, increase timeout in code
+# GOODQ_STEP_TIMEOUT_MS = 1200_000  # 20 minutes
+```
+
+---
+
+### Duplicate Files Skipped
+
+**Symptom**: File marked PROCESSED without ingestion
+
+**Diagnosis**: SHA-256 hash already in registry
+
+**Fix**:
+```powershell
+# View registry
+Get-Content <GOODQ_DATA_ROOT>\GoodQ_Data\epochs\<epoch>\logs\watchdog_state.json | ConvertFrom-Json
+
+# Remove specific hash to force reprocess
+# Edit JSON manually or delete entire file to reset
+```
+
+---
+
+## Performance Notes
+
+- **Single-threaded** (`MAX_WORKERS = 1`) to prevent GPU memory contention
+- **Hash computation** is streaming (no full file load)
+- **File stability check** prevents incomplete copies
+- **Timeout scaling** prevents premature kills on large files
+- **Control Agent** adds ~50ms overhead per event (negligible)
+
+---
+
+## Legacy Watchdog Note
+
+The supported watchdog surface is now **only** `cli/watchdog.py`.
+
+- Historical references to `scripts/watchdog_ingest.py` are retained only in archived material.
+- Operational guidance, tests, and launch commands should target `python -m cli.watchdog`.
+
+---
+
+## Integration Points
+
+### With Config System
+- **Loads**: `steps/common/config_loader.py::load_configs()`
+- **Uses**: Database paths, model settings, thresholds
+- **Run context**: Injects `run.id`, `run.pipeline`, `run.git_sha`
+
+### With Progress Tracker
+- **Start**: `start_processing(filename, total_steps)`
+- **Finish**: `finish_processing("completed" | "failed")`
+- **Errors**: `add_error(error_msg, step_name)`
+
+### With Knowledge Graph
+- Indirect via `run_direct_ingestion()` -> `update_kg_for_scene()`
+- Entities written to `knowledge_graph.db`
+
+### With Memory DB
+- Indirect via `run_direct_ingestion()` -> `register_scene_bundle()`
+- Scene bundles written to `memory.db`
+
+---
+
+## Future Enhancements
+
+### Planned (Not Yet Implemented)
+- [ ] Parallel processing (increase `MAX_WORKERS`)
+- [ ] Priority queue (size/type-based scheduling)
+- [ ] Email/webhook notifications
+- [ ] Remote API for upload
+- [ ] Web UI for queue management
+- [ ] Cloud storage sync (S3, Drive)
+
+### Already Implemented (But Latent)
+- [OK] Control Agent state recording (active)
+- [Conditional] AI diagnosis when `llm_client` is explicitly injected
+- [OK] Hash-based deduplication (active)
+- [OK] Multi-format support (active)
+- [OK] Graceful shutdown (active)
+
+---
+
+## Security & Reliability
+
+### Security
+- [OK] Single-instance lock prevents concurrent runs
+- [OK] No network access required
+- [OK] Files never leave local system
+- [OK] State file is plaintext JSON (auditable)
+- [Note] Runs with user permissions (no privilege escalation)
+
+### Reliability
+- [OK] Hash-based deduplication (collision-resistant)
+- [OK] File stability check (prevents partial reads)
+- [OK] Processed registry persistence across restarts
+- [OK] Temp files preserved on failure (debugging)
+- [OK] Stale lock detection (auto-recovery)
+- [OK] Graceful shutdown (queue drain)
+
+---
+
+## Testing
+
+### Unit Tests
+```bash
+conda run -n goodq_core python tests\integration\test_watchdog.py
+```
+
+### Integration Tests
+```powershell
+# Drop test file
+Copy-Item samples\smoke\sample.mp4 <GOODQ_DATA_ROOT>\GoodQ_Data\import_inbox\
+
+# Monitor logs
+Get-Content <GOODQ_DATA_ROOT>\GoodQ_Data\epochs\<epoch>\logs\watchdog.log -Wait -Tail 20
+
+# Verify moved to processed
+Test-Path <GOODQ_DATA_ROOT>\GoodQ_Data\processed\PROCESSED_sample.mp4
+```
+
+---
+
+## Summary
+
+The Watchdog system is **production-ready** and **operational** in the current config-resolved runtime. It provides:
+
+- **Zero-touch ingestion** for all supported media types
+- **Visible control-plane state** with optional AI diagnostics
+- **Robust deduplication** via SHA-256 hashing
+- **Graceful error handling** with preservation of failed files
+- **Comprehensive logging** for auditing and debugging
+
+**Canonical Implementation**: `cli/watchdog.py`  
+**Legacy duplicate**: retired from the supported surface and kept only in historical references if present
+
+---
+
+**Last Updated**: December 14, 2025  
+**Verified By**: Forensic code audit + live system testing

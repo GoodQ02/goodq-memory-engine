@@ -1,0 +1,17 @@
+torch==2.5.1+cu121
+torchvision==0.20.1+cu121
+torchaudio==2.5.1+cu121
+faster-whisper==1.2.1
+pyannote.audio==3.3.2
+huggingface-hub==0.35.3
+transformers==4.43.3
+tokenizers==0.19.1
+safetensors==0.7.0
+silero-vad==6.2.0
+speechbrain==1.0.3
+librosa==0.11.0
+soundfile==0.13.1
+noisereduce==3.0.3
+pydub==0.25.1
+numpy==2.2.6
+scipy==1.15.3

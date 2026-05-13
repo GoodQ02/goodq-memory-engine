@@ -1,0 +1,194 @@
+#!/bin/bash
+################################################################################
+# GoodQ4All - WSL2 Audio Processing Environment Setup
+# 
+# This script sets up a GPU-accelerated audio processing environment in WSL2
+# with faster-whisper, pyannote.audio, and Silero VAD
+################################################################################
+
+set -e
+
+echo "================================================================================"
+echo "  GoodQ4All WSL2 Audio Processing Setup"
+echo "================================================================================"
+echo ""
+
+# Color codes
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+TORCH_VERSION='2.5.1+cu121'
+TORCHVISION_VERSION='0.20.1+cu121'
+TORCHAUDIO_VERSION='2.5.1+cu121'
+TORCH_INDEX_URL='https://download.pytorch.org/whl/cu121'
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BOOTSTRAP_CONSTRAINTS_FILE="$SCRIPT_DIR/requirements-bootstrap-constraints.txt"
+
+# Project paths
+WSL_HOME="${GOODQ_WSL_WORKSPACE:-$HOME/goodq_audio}"
+VENV_PATH="$WSL_HOME/venv"
+QUEUE_DIR="$WSL_HOME/queue_in"
+QUEUE_OUT_DIR="$WSL_HOME/queue_out"
+OUTPUT_DIR="$WSL_HOME/output"
+LOGS_DIR="$WSL_HOME/logs"
+MODELS_DIR="$WSL_HOME/models"
+
+echo "[1/10] Creating directory structure..."
+mkdir -p "$WSL_HOME"
+mkdir -p "$QUEUE_DIR/pending"
+mkdir -p "$QUEUE_DIR/processing"
+mkdir -p "$QUEUE_DIR/completed"
+mkdir -p "$QUEUE_DIR/failed"
+mkdir -p "$QUEUE_OUT_DIR"
+mkdir -p "$OUTPUT_DIR"
+mkdir -p "$LOGS_DIR"
+mkdir -p "$MODELS_DIR"
+
+echo "[2/10] Checking CUDA availability..."
+if ! nvidia-smi &> /dev/null; then
+    echo -e "${RED}ERROR: nvidia-smi not found. CUDA passthrough not configured.${NC}"
+    echo "Please ensure you have:"
+    echo "  1. Latest NVIDIA drivers for WSL2"
+    echo "  2. Windows 11 or Windows 10 with WSL2 support"
+    exit 1
+fi
+
+GPU_NAME=$(nvidia-smi --query-gpu=name --format=csv,noheader | head -n 1)
+GPU_MEMORY=$(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits | head -n 1)
+echo -e "${GREEN}✓ GPU detected: $GPU_NAME ($GPU_MEMORY MB)${NC}"
+
+echo "[3/10] Installing system dependencies..."
+sudo apt-get update -qq
+sudo apt-get install -y -qq \
+    python3-pip \
+    python3-venv \
+    ffmpeg \
+    libsndfile1 \
+    sox \
+    git \
+    curl
+
+echo "[4/10] Creating Python virtual environment..."
+if [ ! -d "$VENV_PATH" ]; then
+    python3 -m venv "$VENV_PATH"
+fi
+
+source "$VENV_PATH/bin/activate"
+
+echo "[5/10] Installing PyTorch with CUDA 12.1..."
+pip install -q --upgrade pip wheel setuptools
+pip install -q \
+    "torch==${TORCH_VERSION}" \
+    "torchvision==${TORCHVISION_VERSION}" \
+    "torchaudio==${TORCHAUDIO_VERSION}" \
+    --index-url "${TORCH_INDEX_URL}"
+
+echo "[6/10] Verifying PyTorch CUDA..."
+python3 << 'PYEOF'
+import torch
+if torch.cuda.is_available():
+    print(f"✓ PyTorch CUDA available: {torch.version.cuda}")
+    print(f"✓ GPU count: {torch.cuda.device_count()}")
+    print(f"✓ Current GPU: {torch.cuda.get_device_name(0)}")
+else:
+    print("✗ PyTorch CUDA NOT available")
+    exit(1)
+PYEOF
+
+echo "[7/10] Installing audio processing libraries..."
+if [ ! -f "$BOOTSTRAP_CONSTRAINTS_FILE" ]; then
+    echo -e "${RED}ERROR: Missing WSL bootstrap constraints file: $BOOTSTRAP_CONSTRAINTS_FILE${NC}"
+    exit 1
+fi
+
+pip install -q \
+    --constraint "$BOOTSTRAP_CONSTRAINTS_FILE" \
+    faster-whisper \
+    pyannote.audio \
+    transformers \
+    tokenizers \
+    safetensors \
+    soundfile \
+    librosa \
+    noisereduce \
+    pydub
+
+echo "[8/10] Installing Silero VAD..."
+pip install -q --constraint "$BOOTSTRAP_CONSTRAINTS_FILE" silero-vad
+
+echo "[9/10] Installing utilities..."
+pip install -q \
+    --constraint "$BOOTSTRAP_CONSTRAINTS_FILE" \
+    numpy \
+    scipy \
+    tqdm \
+    psutil \
+    watchdog
+
+echo "[9.5/10] Verifying WSL audio runtime..."
+python3 -m pip check
+python3 << 'PYEOF'
+import importlib.metadata as md
+import torch
+import torchaudio
+import torchvision
+from torchvision.ops import nms
+
+expected = {
+    "torch": "2.5.1+cu121",
+    "torchvision": "0.20.1+cu121",
+    "torchaudio": "2.5.1+cu121",
+}
+actual = {name: md.version(name) for name in expected}
+bad = [f"{name}={actual[name]} (expected {version})" for name, version in expected.items() if actual[name] != version]
+if bad:
+    raise SystemExit("WSL audio runtime drift detected: " + "; ".join(bad))
+print("✓ WSL audio runtime validated")
+PYEOF
+
+echo "[10/10] Creating service configuration..."
+cat > "$WSL_HOME/config.json" <<EOF
+{
+  "queue_dir": "queue_in",
+  "output_dir": "queue_out",
+  "logs_dir": "logs",
+  "huggingface_token": "\${PYANNOTE_TOKEN}",
+  "huggingface_token_env": "PYANNOTE_TOKEN",
+  "models": {
+    "whisper": "large-v3",
+    "diarization": "pyannote/speaker-diarization-3.1"
+  },
+  "gpu": {
+    "device": "cuda",
+    "memory_fraction": 0.8,
+    "compute_type": "float16"
+  },
+  "processing": {
+    "chunk_duration_minutes": 30,
+    "vad_threshold": 0.5,
+    "min_speech_duration_ms": 250,
+    "min_silence_duration_ms": 100
+  }
+}
+EOF
+
+echo ""
+echo "================================================================================"
+echo "  Setup Complete!"
+echo "================================================================================"
+echo ""
+echo "Environment details:"
+echo "  - WSL Home: $WSL_HOME"
+echo "  - Virtual Env: $VENV_PATH"
+echo "  - Queue Dir: $QUEUE_DIR"
+echo "  - Queue Out: $QUEUE_OUT_DIR"
+echo "  - Output Dir: $OUTPUT_DIR"
+echo ""
+echo "To activate the environment:"
+echo "  source $VENV_PATH/bin/activate"
+echo ""
+echo "Next steps:"
+echo "  1. Export PYANNOTE_TOKEN in WSL before using diarization"
+echo "  2. Run the audio service: python3 audio_service.py"
+echo ""

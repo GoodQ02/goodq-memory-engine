@@ -1,0 +1,35 @@
+name: goodq_core
+channels:
+  - pytorch
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.10
+  - pip
+  - numpy
+  - pandas
+  - pyyaml
+  - python-dotenv
+  - requests
+  - fastapi
+  - uvicorn
+  - typer
+  - pytest
+  - pytorch
+  - torchvision
+  - torchaudio
+  - cpuonly
+  - imageio-ffmpeg
+  - pip:
+      - -e .
+      - transformers
+      - sentence-transformers
+      - qdrant-client
+      - faster-whisper
+#
+# Public BASELINE environment only.
+# GPU_ENHANCED uses environment.gpu.yml to add CUDA-backed throughput packages.
+# goodq_core is the orchestration/base runtime env.
+# The bootstrap also provisions the supported specialized step environments
+# declared under envs/*/requirements.txt for steps that still require isolated
+# dependency boundaries.

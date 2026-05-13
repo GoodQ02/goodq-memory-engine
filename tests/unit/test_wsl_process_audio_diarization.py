@@ -1,0 +1,332 @@
+from __future__ import annotations
+
+import types
+import sys
+from pathlib import Path
+
+import torch
+
+
+def test_process_audio_uses_waveform_dict_for_diarization(monkeypatch, tmp_path: Path):
+    from wsl2_audio import process_audio as mod
+
+    audio_file = tmp_path / "sample.wav"
+    audio_file.write_bytes(b"wav")
+    output_dir = tmp_path / "out"
+
+    waveform = torch.zeros((1, 16000))
+    captured = {}
+
+    class _FakeWhisperModel:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def transcribe(self, *args, **kwargs):
+            info = types.SimpleNamespace(language="en", language_probability=1.0)
+            return iter(()), info
+
+    class _FakeAnnotation:
+        def itertracks(self, yield_label=False):
+            yield (types.SimpleNamespace(start=0.0, end=1.0), "track_0", "speaker_0")
+
+    class _FakePipeline:
+        def to(self, device):
+            captured["device"] = str(device)
+
+        def __call__(self, audio_input):
+            captured["audio_input"] = audio_input
+            return _FakeAnnotation()
+
+    class _FakePipelineFactory:
+        @staticmethod
+        def from_pretrained(model_name, use_auth_token=None, cache_dir=None):
+            captured["model_name"] = model_name
+            captured["token"] = use_auth_token
+            captured["cache_dir"] = cache_dir
+            return _FakePipeline()
+
+    monkeypatch.setattr(mod, "_load_runtime_config", lambda: {
+        "gpu": {"device": "cpu", "compute_type": "int8", "memory_fraction": 0.8},
+        "models": {"whisper": "medium", "diarization": "pyannote/speaker-diarization-3.1"},
+        "diarization": {"enabled": True},
+        "processing": {"language": "en", "beam_size": 5},
+        "_sources": [],
+    })
+    monkeypatch.setattr(mod, "require_gpu", lambda: False)
+    monkeypatch.setattr(mod, "resolve_wsl_gpu_config", lambda cfg: dict(cfg))
+    monkeypatch.setattr(mod.torch.cuda, "is_available", lambda: False)
+    monkeypatch.setattr(mod.torchaudio, "load", lambda _: (waveform.clone(), 16000))
+    monkeypatch.setattr(mod, "WhisperModel", _FakeWhisperModel)
+    monkeypatch.setattr(mod, "DIARIZATION_AVAILABLE", True)
+    monkeypatch.setattr(mod, "DiarizationPipeline", _FakePipelineFactory, raising=False)
+    monkeypatch.setattr(mod, "TRANSFORMERS_AVAILABLE", False)
+    monkeypatch.setattr(mod, "clear_gpu_memory", lambda: None)
+    monkeypatch.setenv("HF_TOKEN", "test-token")
+    monkeypatch.setenv("HUGGINGFACE_HUB_CACHE", "/mnt/c/models/hub")
+
+    result = mod.process_audio(str(audio_file), str(output_dir))
+
+    assert result["status"] == "success"
+    assert result["device"] == "cpu"
+    assert result["diarization_status"] == "success"
+    assert result["speaker_count"] == 1
+    assert captured["model_name"] == "pyannote/speaker-diarization-3.1"
+    assert captured["token"] == "test-token"
+    assert captured["cache_dir"] == "/mnt/c/models/hub"
+    assert isinstance(captured["audio_input"], dict)
+    assert captured["audio_input"]["sample_rate"] == 16000
+    assert torch.equal(captured["audio_input"]["waveform"], waveform)
+
+
+def test_process_audio_diarization_loader_falls_back_to_token_kwarg():
+    from wsl2_audio import process_audio as mod
+
+    captured = {}
+
+    class _FakePipeline:
+        pass
+
+    class _FakePipelineFactory:
+        calls = 0
+
+        @classmethod
+        def from_pretrained(cls, model_name, **kwargs):
+            cls.calls += 1
+            if "use_auth_token" in kwargs:
+                raise TypeError("Pipeline.from_pretrained() got an unexpected keyword argument 'use_auth_token'")
+            captured["model_name"] = model_name
+            captured["token"] = kwargs.get("token")
+            captured["cache_dir"] = kwargs.get("cache_dir")
+            return _FakePipeline()
+
+    pipeline = mod._load_pyannote_pipeline(
+        _FakePipelineFactory,
+        "pyannote/speaker-diarization-3.1",
+        "test-token",
+        cache_dir="/mnt/c/models/hub",
+    )
+
+    assert isinstance(pipeline, _FakePipeline)
+    assert _FakePipelineFactory.calls == 2
+    assert captured["model_name"] == "pyannote/speaker-diarization-3.1"
+    assert captured["token"] == "test-token"
+    assert captured["cache_dir"] == "/mnt/c/models/hub"
+
+
+def test_audio_service_diarization_loader_prefers_use_auth_token(monkeypatch):
+    monkeypatch.setitem(sys.modules, "soundfile", types.ModuleType("soundfile"))
+    from wsl2_audio import audio_service as mod
+
+    captured = {}
+
+    class _FakePipeline:
+        pass
+
+    class _FakePipelineFactory:
+        @staticmethod
+        def from_pretrained(model_name, **kwargs):
+            captured["model_name"] = model_name
+            captured["use_auth_token"] = kwargs.get("use_auth_token")
+            captured["cache_dir"] = kwargs.get("cache_dir")
+            return _FakePipeline()
+
+    pipeline = mod._load_pyannote_pipeline(
+        _FakePipelineFactory,
+        "pyannote/speaker-diarization-3.1",
+        "test-token",
+        cache_dir="/mnt/c/models/hub",
+    )
+
+    assert isinstance(pipeline, _FakePipeline)
+    assert captured["model_name"] == "pyannote/speaker-diarization-3.1"
+    assert captured["use_auth_token"] == "test-token"
+    assert captured["cache_dir"] == "/mnt/c/models/hub"
+
+
+def test_audio_service_load_models_uses_canonical_hf_cache(monkeypatch):
+    monkeypatch.setitem(sys.modules, "soundfile", types.ModuleType("soundfile"))
+    from wsl2_audio import audio_service as mod
+
+    captured = {}
+
+    class _FakeWhisperModel:
+        def __init__(self, *args, **kwargs):
+            captured["whisper"] = {"args": args, "kwargs": kwargs}
+
+    class _FakePipeline:
+        pass
+
+    class _FakePipelineFactory:
+        @staticmethod
+        def from_pretrained(model_name, **kwargs):
+            captured["diarization_model"] = model_name
+            captured["diarization_kwargs"] = kwargs
+            return _FakePipeline()
+
+    pyannote_mod = types.ModuleType("pyannote")
+    pyannote_audio_mod = types.ModuleType("pyannote.audio")
+    pyannote_audio_mod.Pipeline = _FakePipelineFactory
+    monkeypatch.setitem(sys.modules, "pyannote", pyannote_mod)
+    monkeypatch.setitem(sys.modules, "pyannote.audio", pyannote_audio_mod)
+
+    monkeypatch.setattr(mod, "WhisperModel", _FakeWhisperModel)
+    monkeypatch.setattr(mod.torch.cuda, "is_available", lambda: False)
+    monkeypatch.setattr(mod.torch.hub, "load", lambda **_kwargs: ("vad", [None, None, None, None, "collect"]))
+    monkeypatch.setenv("PYANNOTE_TOKEN", "test-token")
+    monkeypatch.setenv("HUGGINGFACE_HUB_CACHE", "/mnt/c/models/hub")
+
+    service = object.__new__(mod.AudioService)
+    service.config = {
+        "gpu": {"device": "cpu", "compute_type": "int8"},
+        "models": {
+            "whisper": "medium",
+            "diarization": "pyannote/speaker-diarization-3.1",
+        },
+        "huggingface_token_env": "PYANNOTE_TOKEN",
+    }
+    service.whisper_model = None
+    service.diarization_pipeline = None
+    service.vad_model = None
+
+    service._load_models()
+
+    assert service.diarization_pipeline is not None
+    assert captured["diarization_model"] == "pyannote/speaker-diarization-3.1"
+    assert captured["diarization_kwargs"]["use_auth_token"] == "test-token"
+    assert captured["diarization_kwargs"]["cache_dir"] == "/mnt/c/models/hub"
+
+
+def test_select_speaker_signature_segments_requires_diversity():
+    from wsl2_audio import process_audio as mod
+
+    single_segment = mod._select_speaker_signature_segments(
+        [{"speaker": "SPEAKER_00", "start": 0.0, "end": 4.2}]
+    )
+    assert single_segment == []
+
+    diverse_segments = mod._select_speaker_signature_segments(
+        [
+            {"speaker": "SPEAKER_00", "start": 0.0, "end": 2.1},
+            {"speaker": "SPEAKER_00", "start": 3.0, "end": 5.2},
+        ]
+    )
+    assert len(diverse_segments) == 1
+    assert diverse_segments[0]["speaker"] == "SPEAKER_00"
+    assert diverse_segments[0]["selected_segment_count"] == 2
+    assert diverse_segments[0]["voiced_seconds"] >= 4.0
+
+
+def test_build_speaker_voice_signatures_emits_signature_for_diverse_segments():
+    from wsl2_audio import process_audio as mod
+
+    waveform = torch.ones((1, 16000 * 6), dtype=torch.float32)
+
+    class _FakeExtractor:
+        def __call__(self, audio, sampling_rate, return_tensors, padding):
+            assert sampling_rate == 16000
+            return {"input_values": torch.tensor([[1.0, 1.0, 1.0]], dtype=torch.float32)}
+
+    class _FakeModel:
+        def __call__(self, **kwargs):
+            return types.SimpleNamespace(
+                last_hidden_state=torch.tensor(
+                    [[[1.0, 0.0], [1.0, 0.0], [1.0, 0.0]]],
+                    dtype=torch.float32,
+                )
+            )
+
+    result = mod._build_speaker_voice_signatures(
+        waveform,
+        [
+            {"speaker": "SPEAKER_00", "start": 0.0, "end": 2.2},
+            {"speaker": "SPEAKER_00", "start": 3.0, "end": 5.2},
+        ],
+        embed_model=_FakeModel(),
+        embed_extractor=_FakeExtractor(),
+        device="cpu",
+    )
+
+    assert result["meta"]["status"] == "ok"
+    assert result["meta"]["emitted"] == 1
+    signature = result["signatures"][0]
+    assert signature["speaker"] == "SPEAKER_00"
+    assert signature["embedding_dim"] == 2
+    assert signature["segment_count"] == 2
+    assert abs(sum(value * value for value in signature["embedding"]) - 1.0) < 1e-6
+
+
+def test_process_audio_wav2vec_loads_use_canonical_hf_cache(monkeypatch, tmp_path: Path):
+    from wsl2_audio import process_audio as mod
+
+    audio_file = tmp_path / "sample.wav"
+    audio_file.write_bytes(b"wav")
+    output_dir = tmp_path / "out"
+    waveform = torch.zeros((1, 16000))
+    captured: dict[str, list[dict[str, object]]] = {"calls": []}
+
+    class _FakeWhisperModel:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def transcribe(self, *args, **kwargs):
+            info = types.SimpleNamespace(language="en", language_probability=1.0)
+            return iter(()), info
+
+    class _FakeFeatureExtractor:
+        @classmethod
+        def from_pretrained(cls, model_name, **kwargs):
+            captured["calls"].append({"kind": "extractor", "model": model_name, **kwargs})
+            return cls()
+
+        def __call__(self, audio, sampling_rate, return_tensors, padding):
+            return {"input_values": torch.zeros((1, 16000))}
+
+    class _FakeEmotionModel:
+        @classmethod
+        def from_pretrained(cls, model_name, **kwargs):
+            captured["calls"].append({"kind": "emotion_model", "model": model_name, **kwargs})
+            return cls()
+
+        def to(self, device):
+            return self
+
+        def __call__(self, **kwargs):
+            return types.SimpleNamespace(logits=torch.tensor([[0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]]))
+
+    class _FakeEmbeddingModel:
+        @classmethod
+        def from_pretrained(cls, model_name, **kwargs):
+            captured["calls"].append({"kind": "embedding_model", "model": model_name, **kwargs})
+            return cls()
+
+        def to(self, device):
+            return self
+
+        def __call__(self, **kwargs):
+            return types.SimpleNamespace(last_hidden_state=torch.ones((1, 2, 3)))
+
+    monkeypatch.setattr(mod, "_load_runtime_config", lambda: {
+        "gpu": {"device": "cpu", "compute_type": "int8", "memory_fraction": 0.8},
+        "models": {"whisper": "medium", "diarization": "pyannote/speaker-diarization-3.1"},
+        "diarization": {"enabled": False},
+        "processing": {"language": "en", "beam_size": 5},
+        "_sources": [],
+    })
+    monkeypatch.setattr(mod, "require_gpu", lambda: False)
+    monkeypatch.setattr(mod, "resolve_wsl_gpu_config", lambda cfg: dict(cfg))
+    monkeypatch.setattr(mod.torch.cuda, "is_available", lambda: False)
+    monkeypatch.setattr(mod.torchaudio, "load", lambda _: (waveform.clone(), 16000))
+    monkeypatch.setattr(mod, "WhisperModel", _FakeWhisperModel)
+    monkeypatch.setattr(mod, "TRANSFORMERS_AVAILABLE", True)
+    monkeypatch.setattr(mod, "Wav2Vec2ForSequenceClassification", _FakeEmotionModel)
+    monkeypatch.setattr(mod, "Wav2Vec2FeatureExtractor", _FakeFeatureExtractor)
+    monkeypatch.setattr(mod, "Wav2Vec2Model", _FakeEmbeddingModel)
+    monkeypatch.setattr(mod, "clear_gpu_memory", lambda: None)
+    monkeypatch.setenv("HUGGINGFACE_HUB_CACHE", "/mnt/c/models/hub")
+
+    result = mod.process_audio(str(audio_file), str(output_dir))
+
+    assert result["emotion_status"] == "success"
+    assert result["embeddings_status"] == "success"
+    assert captured["calls"]
+    assert all(call.get("cache_dir") == "/mnt/c/models/hub" for call in captured["calls"])

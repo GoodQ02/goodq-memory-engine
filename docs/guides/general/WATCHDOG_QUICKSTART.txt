@@ -1,0 +1,50 @@
+╔══════════════════════════════════════════════════════════════╗
+║                  GOODQ WATCHDOG QUICK START                  ║
+╚══════════════════════════════════════════════════════════════╝
+
+NOTE: This is a text-mode quickstart helper and may reflect an earlier directory layout. For the canonical, up-to-date Watchdog behavior and paths, always prefer `docs/guides/watchdog/WATCHDOG_GUIDE.md`, `docs/guides/watchdog/WATCHDOG_QUICKREF.md`, and `docs/guides/watchdog/WATCHDOG_INDEX.md`.
+
+📂 DROP FILES HERE: <GOODQ_DATA_ROOT>\GoodQ_Data\import_inbox\
+
+🚀 START WATCHDOG:
+   conda run -n goodq_core python -m cli.watchdog
+   - Monitors the configured import inbox
+   - Automatically processes new files
+   - Uses the canonical config-resolved runtime
+
+📊 CHECK STATUS (One-Time):
+   python scripts/utils/check_watchdog_status.py
+   - Shows current file counts
+   - Displays recent activity
+
+📈 LIVE MONITOR (Auto-Refresh):
+   scripts/monitoring/monitor_live.bat
+   - Updates every 5 seconds
+   - Shows live processing progress
+   - Ctrl+C to stop
+
+📋 FILE LOCATIONS AFTER PROCESSING:
+   ✓ Success → <GOODQ_DATA_ROOT>\GoodQ_Data\processed\
+   ✗ Failed  → <GOODQ_DATA_ROOT>\GoodQ_Data\failed\
+   ⏳ Active → <GOODQ_DATA_ROOT>\GoodQ_Data\epochs\<epoch>\processing\
+
+📝 LOGS:
+   Main log: <GOODQ_DATA_ROOT>\GoodQ_Data\epochs\<epoch>\logs\watchdog.log
+   State:    <GOODQ_DATA_ROOT>\GoodQ_Data\epochs\<epoch>\logs\watchdog_state.json
+
+🎯 SUPPORTED FILE TYPES:
+   Video:    .mp4, .avi, .mov, .mkv, .wmv, .flv, .webm
+   Audio:    .mp3, .wav, .flac, .ogg, .m4a, .aac
+   Image:    .jpg, .jpeg, .png, .gif, .bmp, .tiff, .webp
+   Document: .pdf, .txt, .doc, .docx
+
+⚡ QUICK WORKFLOW:
+   1. Start `conda run -n goodq_core python -m cli.watchdog`
+   2. Drop files into <GOODQ_DATA_ROOT>\GoodQ_Data\import_inbox\
+   3. Run `scripts/monitoring/monitor_live.bat` if you want live status
+   4. Find completed files in <GOODQ_DATA_ROOT>\GoodQ_Data\processed\
+
+🛑 STOP WATCHDOG:
+   Press Ctrl+C in the watchdog window
+
+💡 TIP: Leave watchdog running and just drop files!

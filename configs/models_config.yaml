@@ -1,0 +1,51 @@
+# GoodQ4All LLM Models Configuration
+# This file defines all available LLM models for the system
+
+models:
+  # Fast inference model (vLLM on WSL2)
+  llama1b_speed:
+    name: "Llama-1B-Speed"
+    base_url: "http://localhost:38005/v1"
+    model_id: "${GOODQ_WSL_MODEL_PATH:-meta-llama/Llama-3.2-1B-Instruct}"
+    engine: "vllm"
+    category: "speed"
+    gpu_accelerated: true
+    max_tokens: 8192
+    temperature: 0.7
+    description: "Fastest model for quick responses"
+    
+  # Balanced model (Ollama)
+  phi4_ollama:
+    name: "Phi4-Ollama"
+    base_url: "http://localhost:31434/v1"
+    model_id: "phi4"
+    engine: "ollama"
+    category: "balanced"
+    gpu_accelerated: true
+    max_tokens: 16384
+    temperature: 0.7
+    description: "Microsoft Phi-4 via Ollama for quality responses"
+
+# Model selection strategies
+strategies:
+  prefer_speed:
+    primary: "llama1b_speed"
+    fallback: "phi4_ollama"
+    
+  prefer_quality:
+    primary: "phi4_ollama"
+    fallback: "llama1b_speed"
+    
+  default: "prefer_speed"
+
+# Health check settings
+health:
+  enabled: false  # Disable healthchecks during ingestion
+  check_interval_seconds: 30
+  timeout_seconds: 10
+  retry_attempts: 3
+  
+# Usage quotas (optional, for future rate limiting)
+quotas:
+  requests_per_minute: 60
+  tokens_per_day: 1000000

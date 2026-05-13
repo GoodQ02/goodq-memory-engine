@@ -1,0 +1,20 @@
+{
+  "device": "cuda",
+  "compute_type": "float16",
+  "whisper": {
+    "model": "medium"
+  },
+  "diarization": {
+    "enabled": true,
+    "min_speakers": 1,
+    "max_speakers": 6,
+    "vad_threshold": 0.6
+  },
+  "paths": {
+    "logs_dir": "logs",
+    "models_dir": "models"
+  },
+  "queue_dir": "queue_in",
+  "queue_out_dir": "queue_out",
+  "status_file": "audio_service_status.json"
+}

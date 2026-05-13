@@ -1,0 +1,102 @@
+# GoodQ4All Open-Source Configuration
+# Minimal configuration for external API integrations
+# This file contains only non-sensitive configuration values
+
+# ============================================================================
+# OPENAI CONFIGURATION
+# ============================================================================
+openai:
+  model: gpt-4o
+  embedding_model: text-embedding-3-large
+  embedding_dimensions: 3072
+  max_tokens: 4096
+  temperature: 0.7
+  api_base: https://api.openai.com/v1
+
+# ============================================================================
+# ANTHROPIC CONFIGURATION (Optional)
+# ============================================================================
+anthropic:
+  model: claude-3-5-sonnet-20241022
+  max_tokens: 4096
+  temperature: 0.7
+
+# ============================================================================
+# QDRANT CONFIGURATION
+# ============================================================================
+qdrant:
+  host: localhost
+  port: 6333
+  grpc_port: 6334
+  collection_prefix: goodq_
+  
+  collections:
+    multimodal:
+      name: goodq_multimodal_memory
+      vector_size: 3072
+      distance: Cosine
+    
+    scene:
+      name: goodq_scene_embeddings
+      vector_size: 768
+      distance: Cosine
+    
+    audio:
+      name: goodq_audio_embeddings
+      vector_size: 512
+      distance: Cosine
+    
+    kg:
+      name: goodq_knowledge_graph
+      vector_size: 3072
+      distance: Cosine
+
+# ============================================================================
+# MODEL ENDPOINTS
+# ============================================================================
+models:
+  # Local models (on device)
+  local:
+    whisper_model: large-v3
+    dino_model: facebook/dinov2-base
+    clip_model: openai/clip-vit-large-patch14
+    
+  # Cloud models (API-based)
+  cloud:
+    llm_provider: openai
+    embedding_provider: openai
+    
+# ============================================================================
+# PIPELINE SETTINGS
+# ============================================================================
+pipeline:
+  # Processing settings
+  max_parallel_videos: 2
+  chunk_size: 1000
+  batch_size: 32
+  
+  # Feature extraction
+  audio:
+    sample_rate: 16000
+    hop_length: 512
+    n_mels: 128
+  
+  video:
+    fps_extract: 1.0
+    frame_resize: [224, 224]
+    scene_threshold: 0.3
+  
+  # Memory settings
+  memory:
+    max_context_window: 10000
+    embedding_cache_enabled: true
+    metadata_retention_days: 365
+
+# ============================================================================
+# LOGGING
+# ============================================================================
+logging:
+  level: INFO
+  format: "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+  console_output: true
+  file_output: true

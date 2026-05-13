@@ -1,0 +1,19 @@
+# Local-only GoodQ overrides
+# Copy this file to config.local.yaml and keep it out of version control.
+
+user:
+  name: Example User
+  nickname: Local Operator
+  background: Private local deployment details belong here
+
+host:
+  data_root: ${GOODQ_DATA_ROOT:-./_DATA}
+  wsl_user: ${GOODQ_WSL_USER:-auto}
+  wsl_workspace: ${GOODQ_WSL_WORKSPACE:-auto}
+
+tts:
+  elevenlabs_voice_id: ${ELEVENLABS_VOICE_ID:-example_voice_id}
+
+home_assistant:
+  url: ${GOODQ_HOME_ASSISTANT_URL:-http://localhost:8123}
+  token: ${HA_TOKEN:-}

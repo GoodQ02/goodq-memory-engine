@@ -1,0 +1,122 @@
+<!-- DOC_BADGE: CANONICAL -->
+<!-- DOC_STATUS: AUTHORITATIVE -->
+<!-- DOC_LAST_VERIFIED: 2026-02-19 -->
+
+# GoodQ4All Install
+
+This is the canonical install and bootstrap guide.
+
+## Preferred Fresh-Machine Path
+
+For a fresh Windows machine, use the bootstrap installer first:
+
+```powershell
+python scripts/bootstrap_install.py
+```
+
+That path creates or updates the `goodq_core` orchestration environment,
+provisions the supported specialized step-env pack required by the active
+pipeline from the pinned stable recipes under `envs/locks/`, writes local-only
+overrides when missing, performs lightweight verification, and launches the
+canonical launcher surface.
+
+When `GPU_ENHANCED` / WSL audio is enabled, the bootstrap path stages the WSL
+audio constraints from `wsl2_audio/requirements-bootstrap-constraints.txt`.
+Do not repair WSL audio with unpinned package upgrades; use the bootstrap/setup
+path so the `pyannote.audio==3.3.2` / `huggingface-hub==0.35.3` pair remains
+intact.
+
+## Performance Profiles
+
+GoodQ4All supports three profile semantics:
+
+- `UNSET`: legacy canonical behavior (default when `GOODQ_HOST_PROFILE` is not set).
+- `BASELINE`: CPU-safe portability mode.
+- `GPU_ENHANCED`: additive acceleration mode (CUDA/WSL when available).
+
+Profile selection:
+
+```powershell
+$env:GOODQ_HOST_PROFILE = "BASELINE"
+# or
+$env:GOODQ_HOST_PROFILE = "GPU_ENHANCED"
+```
+
+Strict fail-fast controls:
+
+```powershell
+$env:GOODQ_REQUIRE_GPU = "1"
+$env:GOODQ_REQUIRE_WSL_AUDIO = "1"
+```
+
+- Keep strict flags off for permissive/dev flows.
+- Enable strict flags for deterministic desktop enforcement.
+
+## Host and Path Abstraction
+
+Canonical portability variables:
+
+- `GOODQ_DATA_ROOT`: data root override (default fallback remains platform contract).
+- `GOODQ_CONDA_ENV`: interpreter env override (default: `goodq_core`).
+- `GOODQ_WSL_DISTRO`: WSL distro override (default: `Ubuntu`).
+- `GOODQ_WSL_USER`: optional explicit WSL user.
+- `GOODQ_WSL_WORKSPACE`: optional explicit WSL workspace.
+
+Example:
+
+```powershell
+$env:GOODQ_DATA_ROOT = "<path_to_data_root>"
+$env:GOODQ_CONDA_ENV = "goodq_core"
+$env:GOODQ_WSL_DISTRO = "Ubuntu"
+$env:GOODQ_WSL_USER = "<wsl_user>"
+$env:GOODQ_WSL_WORKSPACE = "/home/<wsl_user>/goodq_audio"
+```
+
+## Manual Setup (Advanced / Existing Environment)
+
+Use this path when you need deterministic manual control instead of the bootstrap
+installer.
+
+1. Clone and open `<project_root>`.
+2. Create the baseline core environment:
+
+```powershell
+conda env create -f environment.yml
+conda activate goodq_core
+```
+
+3. Configure local-only overrides:
+
+```powershell
+Copy-Item configs\config.local.example.yaml configs\config.local.yaml
+Copy-Item .env.local.template .env.local
+```
+
+4. Add required tokens or private integration endpoints only to those local files.
+5. Select runtime profile (`BASELINE` or `GPU_ENHANCED`).
+6. Run bootstrap validation:
+
+```powershell
+.\scripts\bootstrap_validate.bat
+```
+
+7. Launch:
+
+```powershell
+.\LAUNCH_GOODQ.ps1
+```
+
+## Smoke Matrix
+
+Use the Phase A smoke matrix when validating profile and fail-fast behavior:
+
+- Guide: [`docs/bootstrap/smoke_matrix_phase_a.md`](../../bootstrap/smoke_matrix_phase_a.md)
+- Runner: [`scripts/smoke_phase_a.py`](../../../scripts/smoke_phase_a.py)
+- Logs: `logs/bootstrap_smoke/`
+
+## Related Canonical Docs
+
+- Quickstart: [`docs/guides/install/QUICKSTART.md`](QUICKSTART.md)
+- Laptop profile guide: [`docs/guides/install/LAPTOP.md`](LAPTOP.md)
+- Public benchmark summary: [`docs/experiments/SEINFELD_EXPERIMENT_SUMMARY.md`](../../experiments/SEINFELD_EXPERIMENT_SUMMARY.md)
+- Path contract: [`docs/bootstrap/PATH_ABSTRACTION_CONTRACT.md`](../../bootstrap/PATH_ABSTRACTION_CONTRACT.md)

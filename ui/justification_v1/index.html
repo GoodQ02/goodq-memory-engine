@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>GoodQ — Justification Channel v1</title>
+    <link rel="stylesheet" href="./static/css/app.css" />
+  </head>
+  <body>
+    <main id="app" aria-label="Justification Channel v1">
+      <section id="jc-controls" aria-label="Data source controls"></section>
+      <div id="jc-view" aria-label="Justification view"></div>
+      <pre id="jc-output" class="jc-raw-output" aria-label="Justification output (canonical text)"></pre>
+    </main>
+    <script src="./static/js/types_epistemic.js"></script>
+    <script src="./static/js/types_non_action.js"></script>
+    <script src="./static/js/integrity.js"></script>
+    <script>
+      // Optional, observer-only Inspector v0 (disabled by default).
+      window.GOODQ_INSPECTOR_ENABLED = false;
+    </script>
+    <script src="./inspector/inspector.js"></script>
+    <script src="./static/js/app.js"></script>
+  </body>
+</html>

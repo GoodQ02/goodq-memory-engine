@@ -1,0 +1,93 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+from lib.run_index import list_runs
+
+
+def _write_json(path: Path, payload: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+
+def test_list_runs_prefers_newest_root_and_tracks_progress(tmp_path: Path) -> None:
+    reports_root = tmp_path / "reports" / "fresh_ingest_runs"
+
+    completed_root = reports_root / "20260424_003250_season1_recompare_witness"
+    _write_json(
+        completed_root / "experiment_log.json",
+        {
+            "ts_utc": "2026-04-24T00:32:50+00:00",
+            "epoch": "epoch_2026_04_24_season1_recompare_witness",
+            "source_dir": "samples\\ingestion\\Sein_Experiment",
+            "status": "completed",
+            "plan": [
+                {"episode": "01x01 - Good News, Bad News.mp4", "status": "passed"},
+            ],
+        },
+    )
+
+    running_root = reports_root / "20260424_182406_season2_fresh_witness"
+    _write_json(
+        running_root / "experiment_log.json",
+        {
+            "ts_utc": "2026-04-24T23:24:06+00:00",
+            "epoch": "epoch_2026_04_24_season2_witness",
+            "source_dir": "samples\\ingestion\\Sein_Experiment",
+            "status": "running",
+            "plan": [
+                {"episode": "02x01 - The Ex-Girlfriend.mp4", "status": "passed"},
+                {"episode": "02x02 - The Pony Remark.mp4", "status": "pending"},
+            ],
+        },
+    )
+
+    runs = list_runs(reports_root=reports_root)
+
+    assert [run["run_id"] for run in runs] == [
+        "20260424_182406_season2_fresh_witness",
+        "20260424_003250_season1_recompare_witness",
+    ]
+    assert runs[0]["status"] == "running"
+    assert runs[0]["episodes_total"] == 2
+    assert runs[0]["episodes_completed"] == 1
+    assert runs[0]["episodes_pending"] == 1
+    assert runs[0]["latest_episode"]["episode"] == "02x02 - The Pony Remark.mp4"
+    assert runs[1]["status"] == "completed"
+    assert runs[1]["episodes_completed"] == 1
+
+
+def test_list_runs_projects_pending_lane_as_running_when_activity_files_exist(tmp_path: Path) -> None:
+    reports_root = tmp_path / "reports" / "fresh_ingest_runs"
+    running_root = reports_root / "20260424_182406_season2_fresh_witness"
+    active_run_dir = running_root / "02x02_scene_context_llm"
+
+    _write_json(
+        running_root / "experiment_log.json",
+        {
+            "ts_utc": "2026-04-24T23:24:06+00:00",
+            "epoch": "epoch_2026_04_24_season2_witness",
+            "source_dir": "samples\\ingestion\\Sein_Experiment",
+            "status": "running",
+            "plan": [
+                {"episode": "02x01 - The Ex-Girlfriend.mp4", "status": "passed"},
+                {
+                    "episode": "02x02 - The Pony Remark.mp4",
+                    "status": "pending",
+                    "run_dir": str(active_run_dir),
+                },
+            ],
+        },
+    )
+    (active_run_dir / "workspace").mkdir(parents=True, exist_ok=True)
+    (active_run_dir / "workspace" / "_resolved_config.json").write_text("{}", encoding="utf-8")
+    (active_run_dir / "ingest.stdout.log").write_text("[STEP 03/16] object_detect\n", encoding="utf-8")
+
+    runs = list_runs(reports_root=reports_root)
+
+    assert runs[0]["episodes_completed"] == 1
+    assert runs[0]["episodes_running"] == 1
+    assert runs[0]["episodes_pending"] == 0
+    assert runs[0]["latest_episode"]["episode"] == "02x02 - The Pony Remark.mp4"
+    assert runs[0]["latest_episode"]["status"] == "running"

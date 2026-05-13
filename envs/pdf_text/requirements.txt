@@ -1,0 +1,1 @@
+# Uses poppler's pdftotext via PATH; no Python deps required

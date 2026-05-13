@@ -1,0 +1,55 @@
+name: ci
+
+on:
+  push:
+    branches:
+      - main
+      - public
+  pull_request:
+    paths:
+      - ".github/workflows/**"
+      - "README.md"
+      - "CONTRIBUTING.md"
+      - "docs/**"
+      - "configs/**"
+      - "scripts/**"
+      - "steps/**"
+      - "tests/**"
+      - "environment.yml"
+      - "setup.py"
+      - "pytest.ini"
+
+jobs:
+  bootstrap-baseline:
+    runs-on: windows-latest
+    env:
+      GOODQ_DATA_ROOT: ${{ github.workspace }}\_ci\GoodQ_Data
+      GOODQ_HOST_PROFILE: BASELINE
+      GOODQ_REQUIRE_GPU: "0"
+      GOODQ_REQUIRE_WSL_AUDIO: "0"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare CI data root
+        shell: pwsh
+        run: New-Item -ItemType Directory -Force -Path "$env:GOODQ_DATA_ROOT" | Out-Null
+
+      - name: Setup Miniconda
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          activate-environment: goodq_core
+          auto-activate-base: false
+          environment-file: environment.yml
+
+      - name: Documentation drift lint
+        shell: pwsh
+        run: conda run -n goodq_core python scripts/docs/doc_drift_lint.py
+
+      - name: Bootstrap verification
+        shell: pwsh
+        run: conda run -n goodq_core python scripts/bootstrap_verify.py --json --profile ci
+
+      - name: Unit test suite
+        shell: pwsh
+        run: conda run -n goodq_core python -m pytest -q

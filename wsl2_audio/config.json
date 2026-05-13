@@ -1,0 +1,17 @@
+{
+  "queue_dir": "queue_in",
+  "output_dir": "queue_out",
+  "logs_dir": "logs",
+  "huggingface_token": "${PYANNOTE_TOKEN}",
+  "huggingface_token_env": "PYANNOTE_TOKEN",
+  "gpu": {
+    "device": "cuda",
+    "memory_fraction": 0.8,
+    "compute_type": "float16"
+  },
+  "models": {
+    "whisper": "medium",
+    "diarization": "pyannote/speaker-diarization-3.1"
+  },
+  "status_file": "audio_service_status.json"
+}

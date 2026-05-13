@@ -1,0 +1,33 @@
+name: goodq_core
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.10
+  - pip
+  - numpy
+  - pandas
+  - pyyaml
+  - python-dotenv
+  - requests
+  - fastapi
+  - uvicorn
+  - typer
+  - pytest
+  - pytorch
+  - pytorch-cuda=12.1
+  - torchvision
+  - torchaudio
+  - imageio-ffmpeg
+  - pip:
+      - -e .
+      - transformers
+      - sentence-transformers
+      - qdrant-client
+      - faster-whisper
+#
+# Public GPU_ENHANCED environment overlay.
+# This keeps the shared goodq_core name but allows bootstrap_install.py
+# to select CUDA-backed packages only when the operator enables GPU mode.

@@ -1,0 +1,30 @@
+storage:
+  # Where Qdrant stores its data
+  # Default local path; production scripts override via
+  # QDRANT__STORAGE__STORAGE_PATH derived from GOODQ_DATA_ROOT.
+  storage_path: ./storage
+  # Use mmap for large datasets
+  on_disk_payload: true
+
+service:
+  # HTTP API
+  http_port: 6333
+  # gRPC API
+  grpc_port: 6334
+  # Bind to localhost only (security)
+  host: 127.0.0.1
+  # Enable CORS for local development
+  enable_cors: true
+
+# Performance tuning for your RTX 4070 Ti SUPER
+optimizer:
+  # Number of segments to keep in memory
+  memmap_threshold: 50000
+  # Indexing threshold
+  indexing_threshold: 20000
+  # Flush interval (seconds)
+  flush_interval_sec: 5
+
+# Logging
+log_level: INFO
+

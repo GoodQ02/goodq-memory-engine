@@ -30,13 +30,28 @@ def test_bootstrap_print_redacts_secret_shapes(monkeypatch):
     field_name = "token"
     fake_hf_value = "hf_" + "abcdefghijklmnopqrstuvwxyz"
     fake_openai_key = "sk-" + "testsecretsecretsecretsecret"
+    synthetic_sensitive_value = "redaction-fixture-value"
 
-    bootstrap_install._print(f"{field_name}={fake_hf_value} Bearer {fake_openai_key}")
+    bootstrap_install._print(
+        f"{field_name}={fake_hf_value} password={synthetic_sensitive_value} Authorization: Bearer {fake_openai_key}"
+    )
 
     written = fake_stdout.getvalue()
     assert "***REDACTED***" in written
     assert fake_hf_value not in written
     assert fake_openai_key not in written
+    assert synthetic_sensitive_value not in written
+
+
+def test_bootstrap_console_security_notice_states_secret_boundary(monkeypatch):
+    fake_stdout = io.StringIO()
+    monkeypatch.setattr(sys, "stdout", fake_stdout)
+
+    bootstrap_install.print_console_security_notice()
+
+    written = fake_stdout.getvalue()
+    assert "Secret values are redacted" in written
+    assert "not raw tokens" in written
 
 
 def test_conda_tos_block_uses_anaconda_channel_url():

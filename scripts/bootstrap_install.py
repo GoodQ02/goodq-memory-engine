@@ -50,6 +50,10 @@ SENSITIVE_ASSIGNMENT_RE = re.compile(
 )
 BEARER_TOKEN_RE = re.compile(r"(?i)\bbearer\s+[A-Za-z0-9._~+/=-]+")
 TOKEN_SHAPE_RE = re.compile(r"\b(?:hf_[A-Za-z0-9]{20,}|sk-[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9_]{20,})\b")
+CONSOLE_SECURITY_NOTICE = (
+    "[INFO] Secret values are redacted from bootstrap console output; "
+    "generated local config stores placeholders or environment references, not raw tokens."
+)
 
 
 @dataclass
@@ -204,6 +208,10 @@ def _print(text: str) -> None:
         safe = console_text.encode(encoding, errors="replace").decode(encoding, errors="replace")
         # codeql[py/clear-text-logging-sensitive-data]
         print(safe, flush=True)
+
+
+def print_console_security_notice() -> None:
+    _print(CONSOLE_SECURITY_NOTICE)
 
 
 def _fail(msg: str, exit_code: int = 1) -> int:
@@ -1985,6 +1993,7 @@ def print_inspection(ctx: BootstrapContext) -> None:
     _print("")
     _print("GoodQ Bootstrap Inspection")
     _print("=========================")
+    print_console_security_notice()
     _print(f"repo_root        : {ctx.repo_root}")
     _print(f"windows_host     : {_is_windows()}")
     _print(f"python           : {sys.version.split()[0]} ({sys.executable})")

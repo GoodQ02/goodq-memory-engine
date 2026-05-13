@@ -469,7 +469,7 @@ def test_ensure_wsl_audio_ready_preauths_sudo_before_heartbeat_setup(monkeypatch
 
     def fake_preauth(_wsl_ctx):
         events.append("preauth")
-        return True, "sudo credentials cached"
+        return True, "sudo authentication cached"
 
     monkeypatch.setattr(bootstrap_install, "_resolve_wsl_audio_context", lambda _ctx: wsl_ctx)
     monkeypatch.setattr(bootstrap_install, "_run_wsl_bash", fake_run_wsl_bash)
@@ -514,7 +514,7 @@ def test_wsl_interactive_sudo_preauth_uses_interactive_runner(monkeypatch):
     ready, detail = bootstrap_install._wsl_interactive_sudo_preauth(wsl_ctx)
 
     assert ready is True
-    assert detail == "sudo credentials cached"
+    assert detail == "sudo authentication cached"
     assert seen_scripts == ["sudo -v"]
     assert "If WSL asks for sudo" in "\n".join(messages)
-    assert "credential" in "\n".join(messages)
+    assert "authentication" in "\n".join(messages)

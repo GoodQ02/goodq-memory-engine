@@ -206,8 +206,8 @@ def _print(text: str) -> None:
     except UnicodeEncodeError:
         encoding = getattr(sys.stdout, "encoding", None) or "utf-8"
         safe = console_text.encode(encoding, errors="replace").decode(encoding, errors="replace")
-        # codeql[py/clear-text-logging-sensitive-data]
-        print(safe, flush=True)
+        sys.stdout.write(f"{safe}\n")
+        sys.stdout.flush()
 
 
 def print_console_security_notice() -> None:

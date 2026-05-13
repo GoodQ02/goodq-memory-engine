@@ -1,5 +1,5 @@
 fastapi
 uvicorn[standard]
 chromadb==0.5.5
-langchain-community==0.2.12
+langchain-community==0.4.1
 langchain-text-splitters==0.2.2

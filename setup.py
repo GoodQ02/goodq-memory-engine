@@ -24,7 +24,7 @@ setup(
         # Optional local Windows fallback transcription dependency used by
         # run_ingestion when BASELINE selects the windows backend.
         "audio-transcribe-local": [
-            "faster-whisper==1.0.3",
+            "faster-whisper==1.2.1",
         ],
     },
 )

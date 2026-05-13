@@ -114,7 +114,7 @@ pytorch-metric-learning==2.9.0
 pytz==2025.2
 PyYAML==6.0.3
 regex==2025.11.3
-requests==2.32.5
+requests==2.34.0
 rich==14.2.0
 ruamel.yaml==0.18.16
 ruamel.yaml.clib==0.2.15

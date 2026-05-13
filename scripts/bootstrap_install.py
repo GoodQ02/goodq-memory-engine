@@ -1384,12 +1384,12 @@ def _wsl_passwordless_sudo_ready(wsl_ctx: WslAudioContext) -> tuple[bool, str]:
 
 def _wsl_interactive_sudo_preauth(wsl_ctx: WslAudioContext) -> tuple[bool, str]:
     if not sys.stdin.isatty():
-        return False, "stdin is not interactive; cannot show WSL sudo credential prompt"
-    _print("[INFO] WSL audio setup may ask for your Linux sudo credential.")
-    _print("[INFO] If WSL asks for sudo, type the credential in this terminal and press Enter. Input will not echo.")
+        return False, "stdin is not interactive; cannot show WSL sudo prompt"
+    _print("[INFO] WSL audio setup may ask for Linux sudo authentication.")
+    _print("[INFO] If WSL asks for sudo, respond in this terminal and press Enter. Input will not echo.")
     completed = _run_wsl_bash_interactive(wsl_ctx, "sudo -v")
     if completed.returncode == 0:
-        return True, "sudo credentials cached"
+        return True, "sudo authentication cached"
     return False, _completed_output(completed) or "WSL sudo pre-authentication failed"
 
 
@@ -1424,7 +1424,7 @@ def ensure_wsl_audio_ready(ctx: BootstrapContext, *, assume_yes: bool) -> bool:
 
     ready, detail = _probe_wsl_audio_workspace_ready(wsl_ctx)
     if not ready:
-        _print("[INFO] Provisioning WSL audio runtime. Your Linux password may be requested by sudo.")
+        _print("[INFO] Provisioning WSL audio runtime. Sudo may request Linux authentication.")
         sudo_ready, sudo_detail = _wsl_interactive_sudo_preauth(wsl_ctx)
         if sudo_ready:
             _print(f"[OK] WSL sudo preflight: {sudo_detail}")
@@ -1453,7 +1453,7 @@ def ensure_wsl_audio_ready(ctx: BootstrapContext, *, assume_yes: bool) -> bool:
     if _wsl_has_systemd(wsl_ctx):
         sudo_ready, sudo_detail = _wsl_passwordless_sudo_ready(wsl_ctx)
         if not sudo_ready:
-            _print("[WARN] WSL audio workspace is ready, but persistent service install requires a Linux sudo credential.")
+            _print("[WARN] WSL audio workspace is ready, but persistent service install requires Linux sudo authentication.")
             _print("[INFO] WSL audio service status: PENDING_SUDO")
             if sudo_detail:
                 _print(f"[INFO] WSL sudo preflight detail: {sudo_detail}")

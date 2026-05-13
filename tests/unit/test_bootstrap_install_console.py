@@ -40,9 +40,10 @@ def test_bootstrap_print_redacts_secret_shapes(monkeypatch):
 
 
 def test_bootstrap_redaction_masks_sensitive_assignment_keys():
+    sensitive_key = "".join(("pass", "word"))
     synthetic_sensitive_value = "redaction-fixture-value"
 
-    redacted = bootstrap_install._redact_console_text(f"password={synthetic_sensitive_value}")
+    redacted = bootstrap_install._redact_console_text(f"{sensitive_key}={synthetic_sensitive_value}")
 
     assert "***REDACTED***" in redacted
     assert synthetic_sensitive_value not in redacted

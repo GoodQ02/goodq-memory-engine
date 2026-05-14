@@ -19,6 +19,26 @@ This notice is a public-facing summary, not legal advice.
   still review Qdrant's upstream project licensing and notices when
   redistributing or repackaging builds.
 
+### Vendored NSSM Service Helper
+
+- Path: [`vendor/nssm.exe`](vendor/nssm.exe)
+- Purpose: Windows service wrapper used by the Qdrant service install and
+  uninstall scripts
+- Local artifact: NSSM 64-bit `2.24-101-g897c7ad`; SHA256
+  `EEE9C44C29C2BE011F1F1E43BB8C3FCA888CB81053022EC5A0060035DE16D848`
+- Upstream source: [`https://nssm.cc/`](https://nssm.cc/),
+  [`https://nssm.cc/download`](https://nssm.cc/download), and
+  [`https://git.nssm.cc/nssm/nssm`](https://git.nssm.cc/nssm/nssm)
+- Upstream artifact check: `https://nssm.cc/ci/nssm-2.24-101-g897c7ad.zip`
+  has SHA256
+  `99F5045FFFBFFB745D67FE3A065A953C4A3D9C253B868892D9B685B0EE7D07B8`;
+  its internal `win64/nssm.exe` has SHA256
+  `EEE9C44C29C2BE011F1F1E43BB8C3FCA888CB81053022EC5A0060035DE16D848`,
+  matching the tracked local artifact.
+- License note: the upstream NSSM download page and source README identify
+  NSSM as public domain. Future host-tools release assets should still record
+  the restore validation result before repackaging.
+
 ### Vendored Python Packages
 
 - Path: [`vendor/`](vendor/)

@@ -126,14 +126,22 @@ Forbidden:
 - [x] 2026-05-11 - Copied and hash-sealed the host tools pack, including
   FFmpeg, Tesseract, Poppler, Piper, Qdrant, and NSSM; staged pack size is
   741,766,692 bytes across 541 files.
+- [x] 2026-05-13 - Built and restore-validated the host-tools release asset
+  `goodq4all-0.1.1-host-tools-windows-x86_64.zip` from the sealed staged
+  host-tools payload. Final asset SHA256 is
+  `FB764714AF96E3E8DCD64AF0603134AD60FD501B3E2DD70130EFEA897F0FE603`;
+  final asset size is 741,956,588 bytes; restored NSSM SHA256 is
+  `EEE9C44C29C2BE011F1F1E43BB8C3FCA888CB81053022EC5A0060035DE16D848`.
 - [x] 2026-05-11 - Sealed the Windows pip wheelhouse: 155 exact PyPI
   requirements verified from the Python 3.10 wheelhouse, plus one source-owned
   package covered by the source pack.
 - [x] 2026-05-11 - Created and hash-sealed a private WSL audio distro export as
   the preferred near-term offline restore payload; export size is
   48,162,938,880 bytes.
-- [ ] Restore-rehearse the sealed Windows env payload, host tools pack, and WSL
-  distro export on a disposable target before creating a final installer.
+- [ ] Restore-rehearse the sealed Windows env payload and WSL distro export on
+  a disposable target before creating a final installer. The host-tools release
+  asset has passed archive restore validation, but the full installer rehearsal
+  is still pending.
 - [ ] Treat the WSL apt archive cache as supplemental partial evidence only.
   Direct setup package archives are still missing for `python3-pip`,
   `python3-venv`, `sox`, and `git`.
@@ -195,6 +203,14 @@ Forbidden:
   Evidence: the staged host tools pack contains FFmpeg, Tesseract, Poppler,
   Piper, Qdrant, and NSSM with a deterministic pack hash, and staged-tool
   version/TTS smoke checks passed.
+
+- Observation: The host tools release asset now has a repo-supported builder
+  and restore validator.
+  Evidence: `scripts/releases/host_tools_asset.py` built
+  `goodq4all-0.1.1-host-tools-windows-x86_64.zip` from the staged
+  `host_tools_pack`; restore validation confirmed required files, notices, and
+  manifests, and the restored NSSM binary matched the upstream/tracked
+  checksum.
 
 - Observation: The Windows pip gap was a real restore gap but needed exact
   interpreter handling.

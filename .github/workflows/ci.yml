@@ -50,6 +50,10 @@ jobs:
         shell: pwsh
         run: conda run -n goodq_core python scripts/docs/doc_drift_lint.py
 
+      - name: Model registry static validation
+        shell: pwsh
+        run: conda run -n goodq_core python scripts/validate_model_registry.py
+
       - name: Bootstrap verification
         shell: pwsh
         run: conda run -n goodq_core python scripts/bootstrap_verify.py --json --profile ci

@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: First-run guide
+    url: https://github.com/GoodQ02/goodq4all/blob/main/docs/guides/FIRST_RUN.md
+    about: Start here before filing first-run setup problems.
+  - name: Security reporting
+    url: https://github.com/GoodQ02/goodq4all/blob/main/SECURITY.md
+    about: Use the security process for private vulnerability reports.

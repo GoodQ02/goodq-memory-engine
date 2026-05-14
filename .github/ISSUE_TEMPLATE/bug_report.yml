@@ -1,0 +1,75 @@
+name: Bug Report
+description: Report a reproducible problem in the public preview surface.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please remove secrets, tokens, private paths, and personal media details before submitting.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What went wrong?
+    validations:
+      required: true
+  - type: input
+    id: commit
+    attributes:
+      label: Commit or release
+      description: Paste the commit SHA or release tag you tested.
+      placeholder: v0.1.1 or commit SHA
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Affected surface
+      options:
+        - First run / bootstrap
+        - CLI
+        - API
+        - Watchdog
+        - Persisted artifacts
+        - Documentation
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+      description: List the smallest command sequence or action path that reproduces the problem.
+      placeholder: |
+        1. Clone the repository.
+        2. Run the documented bootstrap command.
+        3. Observe the failure.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What did you expect to happen?
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Redacted logs or console output
+      description: Include only the relevant lines. Do not paste secrets, private media paths, or local config values.
+      render: text
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety check
+      options:
+        - label: I removed secrets, tokens, private paths, and personal media details from this report.
+          required: true

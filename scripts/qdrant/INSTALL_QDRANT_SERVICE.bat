@@ -109,7 +109,7 @@ REM Configure service
 "%NSSM_EXE%" set GoodQ_Qdrant AppDirectory "%QDRANT_APPDIR%"
 "%NSSM_EXE%" set GoodQ_Qdrant AppStdout "%QDRANT_STDOUT%"
 "%NSSM_EXE%" set GoodQ_Qdrant AppStderr "%QDRANT_STDERR%"
-"%NSSM_EXE%" set GoodQ_Qdrant AppEnvironmentExtra "QDRANT__STORAGE__STORAGE_PATH=%QDRANT_STORAGE_PATH%"
+"%NSSM_EXE%" set GoodQ_Qdrant AppEnvironmentExtra "QDRANT__STORAGE__STORAGE_PATH=%QDRANT_STORAGE_PATH%" "QDRANT__TELEMETRY_DISABLED=true"
 
 echo [OK] Service installed
 echo.
@@ -132,7 +132,8 @@ echo - Service Name: GoodQ_Qdrant
 echo - HTTP API: http://localhost:6333
 echo - gRPC API: http://localhost:6334
 echo - Data: %QDRANT_STORAGE_PATH%
-echo - Logs: %REPO_ROOT%\logs\qdrant_*.log
+echo - Logs: %GOODQ_LOG_DIR%\qdrant_*.log
+echo - Telemetry: disabled
 echo.
 echo The service will start automatically on system boot.
 echo.

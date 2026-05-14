@@ -105,8 +105,8 @@ results = engine.search_audio(
 ```
 Binary:  <project_root>\vendor\qdrant\qdrant.exe
 Config:  <project_root>\vendor\qdrant\config.yaml
-Data:    <GOODQ_DATA_ROOT>\qdrant_storage
-Logs:    <project_root>\logs\qdrant_*.log (if service)
+Data:    resolved qdrant_storage path from canonical config
+Logs:    <GOODQ_LOG_DIR>\qdrant_*.log (if service)
 ```
 
 ---
@@ -125,7 +125,7 @@ taskkill /PID <PID> /F
 ### Check Logs
 ```powershell
 # Service logs
-Get-Content <project_root>\logs\qdrant_stderr.log -Tail 50
+Get-Content <GOODQ_LOG_DIR>\qdrant_stderr.log -Tail 50
 
 # Or run manual to see output
 scripts\qdrant\START_QDRANT.bat
@@ -137,7 +137,7 @@ scripts\qdrant\START_QDRANT.bat
 net stop GoodQ_Qdrant
 
 # Delete data (WARNING: loses all vectors!)
-rmdir /s /q <GOODQ_DATA_ROOT>\qdrant_storage
+rmdir /s /q <resolved qdrant_storage>
 
 # Reinitialize
 scripts\qdrant\START_QDRANT.bat

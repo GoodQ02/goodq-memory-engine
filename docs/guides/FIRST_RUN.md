@@ -109,6 +109,10 @@ Optional enrichments can fail on individual scenes without invalidating the
 entire run. Treat the manifest, temporal index, step logs, and API health as
 the first truth surfaces.
 
+If `pdftotext` / Poppler is missing, PDF ingestion is not ready yet. Video,
+audio, image, and text first-run checks can still proceed; install Poppler and
+set `GOODQ_POPPLER_BIN` or put `pdftotext` on `PATH` before testing PDFs.
+
 ## After First Success
 
 - For install details, read [`docs/guides/install/INSTALL.md`](install/INSTALL.md).

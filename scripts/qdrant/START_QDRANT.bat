@@ -16,6 +16,7 @@ if "%QDRANT_STORAGE_PATH%"=="" (
 )
 if not exist "%QDRANT_STORAGE_PATH%" mkdir "%QDRANT_STORAGE_PATH%"
 set "QDRANT__STORAGE__STORAGE_PATH=%QDRANT_STORAGE_PATH%"
+set "QDRANT__TELEMETRY_DISABLED=true"
 if not exist "%REPO_ROOT%\vendor\qdrant\qdrant.exe" (
   echo [ERROR] Missing Qdrant binary at "%REPO_ROOT%\vendor\qdrant\qdrant.exe"
   echo [INFO] Preferred fix: run scripts\qdrant\INSTALL_QDRANT_SERVICE.bat
@@ -29,6 +30,7 @@ echo ========================================
 echo.
 echo Starting Qdrant on http://localhost:6333...
 echo Data directory: %QDRANT_STORAGE_PATH%
+echo Telemetry: disabled
 echo.
 echo Press Ctrl+C to stop Qdrant
 echo.

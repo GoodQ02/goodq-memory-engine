@@ -112,6 +112,8 @@ Use this folder as a current-docs surface, not a pile of completion notes. The c
 
 - Release `0.1.1`:
   [`docs/releases/RELEASE_0.1.1.md`](releases/RELEASE_0.1.1.md)
+- Public preview release draft:
+  [`docs/releases/PUBLIC_PREVIEW_RELEASE_DRAFT.md`](releases/PUBLIC_PREVIEW_RELEASE_DRAFT.md)
 - Shipping profile:
   [`docs/releases/SHIP_PROFILE.md`](releases/SHIP_PROFILE.md)
 - Control recurrence v0.5 source status:

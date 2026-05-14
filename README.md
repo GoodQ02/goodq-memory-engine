@@ -218,8 +218,21 @@ If you want the deeper technical picture:
 
 - This is pre-1.0 software. The supported runtime path is stable enough to use, but surrounding helpers and APIs may still evolve.
 - A polished product UI is not part of the current shipping surface.
+- Docker and Docker Compose are not supported install paths yet.
 - Some optional enrichments can still fail on individual scenes without invalidating the whole ingest.
 - Context weighting is now strong, but the project still treats some interpretation choices as policy-level texture rather than frozen truth.
+
+## What's Next
+
+Near-term public-preview work is focused on making the first success loop easier
+without changing the runtime contract:
+
+- owned or permissively licensed synthetic demo fixtures
+- a read-only status surface over existing health, Watchdog, and artifact data
+- careful performance notes backed by current timing evidence
+- portability exploration after the Windows-first path stays stable
+
+See [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 ## Security and Data Handling
 

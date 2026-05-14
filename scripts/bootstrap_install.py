@@ -798,6 +798,27 @@ def _is_transient_conda_network_error(detail: str) -> bool:
     )
 
 
+def _is_transient_pip_network_error(detail: str) -> bool:
+    lowered = detail.lower()
+    return any(
+        token in lowered
+        for token in (
+            "incompleteread",
+            "protocolerror",
+            "connection broken",
+            "readtimeout",
+            "read timed out",
+            "connectionreseterror",
+            "connection reset",
+            "chunkedencodingerror",
+            "temporary failure in name resolution",
+            "temporarily unavailable",
+            "remote end closed connection",
+            "connection aborted",
+        )
+    )
+
+
 def _accept_conda_tos(conda_exe: Path, *, assume_yes: bool) -> None:
     _print("")
     _print("[WARN] Conda channel Terms of Service are not yet accepted for this machine.")
@@ -995,7 +1016,30 @@ def _ensure_step_env_conda_packages(conda_exe: Path, repo_root: Path, spec: Step
 def _install_step_env_from_lock(conda_exe: Path, repo_root: Path, spec: StepEnvSpec) -> None:
     lock_path = repo_root / spec.lock_rel_path
     pip_env = _isolated_process_env()
-    upgrade = _run(
+
+    def _run_pip_with_retry(cmd: list[str], *, phase: str) -> None:
+        for attempt in range(1, 4):
+            completed = _run(
+                cmd,
+                cwd=repo_root,
+                env=pip_env,
+                heartbeat_label=f"Step env {phase} ({spec.name})",
+                heartbeat_artifacts=(lock_path,),
+            )
+            if completed.returncode == 0:
+                return
+
+            detail = _completed_output(completed) or f"{phase} failed for {spec.name}"
+            if attempt < 3 and _is_transient_pip_network_error(detail):
+                _print(
+                    f"[WARN] Transient pip download failure for {spec.name} "
+                    f"during {phase} (attempt {attempt}/3). Retrying..."
+                )
+                time.sleep(attempt * 2)
+                continue
+            raise RuntimeError(detail)
+
+    _run_pip_with_retry(
         [
             str(conda_exe),
             "run",
@@ -1011,14 +1055,8 @@ def _install_step_env_from_lock(conda_exe: Path, repo_root: Path, spec: StepEnvS
             "--no-user",
             "--isolated",
         ],
-        cwd=repo_root,
-        env=pip_env,
-        heartbeat_label=f"Step env pip upgrade ({spec.name})",
-        heartbeat_artifacts=(lock_path,),
+        phase="pip upgrade",
     )
-    if upgrade.returncode != 0:
-        detail = (upgrade.stderr or upgrade.stdout).strip() or f"pip upgrade failed for {spec.name}"
-        raise RuntimeError(detail)
 
     install_cmd = [
         str(conda_exe),
@@ -1039,16 +1077,7 @@ def _install_step_env_from_lock(conda_exe: Path, repo_root: Path, spec: StepEnvS
     if _lock_uses_cuda_wheels(lock_path):
         install_cmd.extend(["--extra-index-url", TORCH_CUDA_INDEX_URL])
 
-    install = _run(
-        install_cmd,
-        cwd=repo_root,
-        env=pip_env,
-        heartbeat_label=f"Step env lock install ({spec.name})",
-        heartbeat_artifacts=(lock_path,),
-    )
-    if install.returncode != 0:
-        detail = (install.stderr or install.stdout).strip() or f"lock install failed for {spec.name}"
-        raise RuntimeError(detail)
+    _run_pip_with_retry(install_cmd, phase="lock install")
 
 
 def _validate_step_env(conda_exe: Path, repo_root: Path, spec: StepEnvSpec) -> list[str]:

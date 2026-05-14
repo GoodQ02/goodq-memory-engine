@@ -92,6 +92,34 @@ python scripts/bootstrap_install.py --disable-gpu --disable-wsl-audio
 python scripts/bootstrap_install.py --skip-model-prefetch
 ```
 
+## Bootstrap Hygiene For Repeated Test Runs
+
+If a first install has been retried several times, use the hygiene helper before
+declaring success. It does not delete anything. It records the current
+install-relevant state and prints a reviewed manual reset plan.
+
+```powershell
+# Snapshot current GoodQ bootstrap state.
+python scripts/bootstrap_hygiene.py snapshot --output .tmp_bootstrap_hygiene\before.json
+
+# Print a clean Windows-only reset plan using a fresh data root.
+python scripts/bootstrap_hygiene.py plan-reset --fresh-data-root "%USERPROFILE%\GoodQ_Bootstrap_Test"
+```
+
+For a practical laptop retest, the clean baseline is:
+
+- archive `.env.local` and `configs/config.local.yaml`
+- remove only GoodQ Conda envs: `goodq_core` and the supported `goodq_*` step
+  env pack
+- keep existing user media and old data roots untouched
+- rerun bootstrap with a new `--data-root`
+- keep WSL audio disabled when narrowing the Windows-only path
+- run bootstrap validation and the dry-run launcher before starting ingestion
+
+This avoids a false positive from partial Conda envs or old local config while
+preserving package caches, model caches, and user data unless the operator
+chooses to test those separately.
+
 ## Capability Model
 
 The bootstrap classifies the machine into:

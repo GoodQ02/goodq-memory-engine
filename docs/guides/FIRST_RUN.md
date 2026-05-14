@@ -44,6 +44,10 @@ Expected result:
 - validation reports pass, possibly with documented warnings for optional
   components
 
+If this is not the first attempt on the machine, run the bootstrap hygiene
+snapshot first and review the reset plan in
+[`docs/bootstrap/INSTALL_BOOTSTRAP.md`](../bootstrap/INSTALL_BOOTSTRAP.md).
+
 ## 2. Check Readiness
 
 Run the safe launcher first:

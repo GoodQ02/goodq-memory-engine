@@ -47,6 +47,7 @@ STEP_ENV_PYTHON = "3.10"
 TORCH_CUDA_INDEX_URL = "https://download.pytorch.org/whl/cu121"
 PIP_DOWNLOAD_RETRIES = "5"
 PIP_DOWNLOAD_TIMEOUT_SEC = "60"
+PIP_DOWNLOAD_RESUME_RETRIES = "20"
 SENSITIVE_ASSIGNMENT_RE = re.compile(
     r"(?i)\b(token|secret|password|authorization|credential|api[_-]?key)(\s*[:=]\s*)([^\s,;]+)"
 )
@@ -969,6 +970,12 @@ def _isolated_process_env() -> dict[str, str]:
     return env
 
 
+def _cached_pip_process_env() -> dict[str, str]:
+    env = _isolated_process_env()
+    env.pop("PIP_NO_CACHE_DIR", None)
+    return env
+
+
 def _read_lock_lines(lock_path: Path) -> list[str]:
     return [
         line.strip()
@@ -1022,7 +1029,7 @@ def _ensure_step_env_conda_packages(conda_exe: Path, repo_root: Path, spec: Step
 
 def _install_step_env_from_lock(conda_exe: Path, repo_root: Path, spec: StepEnvSpec) -> None:
     lock_path = repo_root / spec.lock_rel_path
-    pip_env = _isolated_process_env()
+    pip_env = _cached_pip_process_env()
 
     def _run_pip_with_retry(cmd: list[str], *, phase: str) -> None:
         for attempt in range(1, 4):
@@ -1082,11 +1089,12 @@ def _install_step_env_from_lock(conda_exe: Path, repo_root: Path, spec: StepEnvS
         PIP_DOWNLOAD_RETRIES,
         "--timeout",
         PIP_DOWNLOAD_TIMEOUT_SEC,
+        "--resume-retries",
+        PIP_DOWNLOAD_RESUME_RETRIES,
         "--build-constraint",
         str(lock_path),
         "-r",
         str(lock_path),
-        "--no-cache-dir",
         "--no-user",
         "--isolated",
         "--no-deps",

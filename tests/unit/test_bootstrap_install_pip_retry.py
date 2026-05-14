@@ -148,13 +148,15 @@ def test_step_env_lock_install_does_not_retry_non_transient_pip_error(monkeypatc
 def test_step_env_lock_install_keeps_no_deps(monkeypatch, tmp_path):
     _write_lock(tmp_path)
     install_cmd: list[str] | None = None
+    install_env: dict[str, str] | None = None
 
     def fake_run(cmd: list[str], **_kwargs) -> subprocess.CompletedProcess[str]:
-        nonlocal install_cmd
+        nonlocal install_cmd, install_env
         if "--upgrade" in cmd:
             return _completed(cmd)
         if "-r" in cmd:
             install_cmd = cmd
+            install_env = _kwargs.get("env")
             return _completed(cmd)
         raise AssertionError(f"unexpected command: {cmd}")
 
@@ -165,6 +167,10 @@ def test_step_env_lock_install_keeps_no_deps(monkeypatch, tmp_path):
     assert install_cmd is not None
     assert "--no-deps" in install_cmd
     assert "--build-constraint" in install_cmd
+    assert "--no-cache-dir" not in install_cmd
+    assert "--resume-retries" in install_cmd
+    assert install_env is not None
+    assert "PIP_NO_CACHE_DIR" not in install_env
 
 
 def test_cuda_step_env_lock_install_keeps_extra_index_and_pip_resilience_flags(monkeypatch, tmp_path):
@@ -191,5 +197,6 @@ def test_cuda_step_env_lock_install_keeps_extra_index_and_pip_resilience_flags(m
     assert bootstrap_install.TORCH_CUDA_INDEX_URL in install_cmd
     assert "--retries" in install_cmd
     assert "--timeout" in install_cmd
+    assert "--resume-retries" in install_cmd
     assert "--build-constraint" in install_cmd
     assert str(lock_path) in install_cmd

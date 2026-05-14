@@ -723,6 +723,42 @@ def _conda_tos_commands(conda_exe: Path) -> list[list[str]]:
     ]
 
 
+def _conda_tos_view_command(conda_exe: Path) -> list[str]:
+    cmd = [str(conda_exe), "tos", "view", "--override-channels", "--json"]
+    for channel in CONDA_TOS_CHANNELS:
+        cmd.extend(["--channel", channel])
+    return cmd
+
+
+def _collect_conda_tos_accepted_values(payload: object) -> list[bool]:
+    values: list[bool] = []
+    if isinstance(payload, dict):
+        for key, value in payload.items():
+            if str(key).lower() == "tos_accepted":
+                if isinstance(value, bool):
+                    values.append(value)
+                elif isinstance(value, str) and value.strip().lower() in {"true", "false"}:
+                    values.append(value.strip().lower() == "true")
+                continue
+            values.extend(_collect_conda_tos_accepted_values(value))
+    elif isinstance(payload, list):
+        for item in payload:
+            values.extend(_collect_conda_tos_accepted_values(item))
+    return values
+
+
+def _conda_tos_acceptance_needed(stdout: str) -> Optional[bool]:
+    try:
+        payload = json.loads(stdout or "")
+    except json.JSONDecodeError:
+        return None
+
+    accepted_values = _collect_conda_tos_accepted_values(payload)
+    if not accepted_values:
+        return None
+    return any(value is False for value in accepted_values)
+
+
 def _conda_tos_instruction_block() -> str:
     commands = "\n".join(
         f"  conda tos accept --override-channels --channel {channel}" for channel in CONDA_TOS_CHANNELS
@@ -774,6 +810,34 @@ def _accept_conda_tos(conda_exe: Path, *, assume_yes: bool) -> None:
             detail = _completed_output(completed) or "conda tos accept failed"
             raise RuntimeError(f"{detail}\n\n{_conda_tos_instruction_block()}")
     _print("[OK] Accepted required Conda channel Terms of Service")
+
+
+def preflight_conda_tos(conda_exe: Path, *, assume_yes: bool) -> None:
+    try:
+        completed = _run(_conda_tos_view_command(conda_exe))
+    except Exception as exc:  # noqa: BLE001
+        _print(f"[WARN] Conda Terms of Service preflight was inconclusive: {exc}")
+        _print("[INFO] Bootstrap will continue and fall back to Conda environment-creation ToS retry if needed.")
+        return
+
+    if completed.returncode != 0:
+        detail = _completed_output(completed) or "conda tos view returned a non-zero exit code"
+        _print(f"[WARN] Conda Terms of Service preflight was inconclusive: {detail}")
+        _print("[INFO] Bootstrap will continue and fall back to Conda environment-creation ToS retry if needed.")
+        return
+
+    acceptance_needed = _conda_tos_acceptance_needed(completed.stdout or "")
+    if acceptance_needed is None:
+        _print("[WARN] Conda Terms of Service preflight was inconclusive: no usable tos_accepted state returned.")
+        _print("[INFO] Bootstrap will continue and fall back to Conda environment-creation ToS retry if needed.")
+        return
+
+    if acceptance_needed:
+        _print("[INFO] Bootstrap is paused for operator consent before package installation can continue.")
+        _accept_conda_tos(conda_exe, assume_yes=assume_yes)
+        return
+
+    _print("[OK] Conda Terms of Service preflight passed")
 
 
 def _run_conda_with_tos_retry(
@@ -2124,6 +2188,7 @@ def main() -> int:
     wsl_ready = True
     if not args.verify_only:
         try:
+            preflight_conda_tos(ctx.conda_exe, assume_yes=args.yes)
             ensure_conda_env(ctx.conda_exe, ctx.repo_root, ctx.environment_yml, assume_yes=args.yes)
             ensure_supported_step_envs(ctx, assume_yes=args.yes)
             prepare_local_files(ctx)

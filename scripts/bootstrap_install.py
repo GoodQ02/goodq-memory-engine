@@ -45,6 +45,8 @@ CHOCO_FFMPEG_PACKAGE = "ffmpeg"
 CHOCO_NSSM_PACKAGE = "nssm"
 STEP_ENV_PYTHON = "3.10"
 TORCH_CUDA_INDEX_URL = "https://download.pytorch.org/whl/cu121"
+PIP_DOWNLOAD_RETRIES = "5"
+PIP_DOWNLOAD_TIMEOUT_SEC = "60"
 SENSITIVE_ASSIGNMENT_RE = re.compile(
     r"(?i)\b(token|secret|password|authorization|credential|api[_-]?key)(\s*[:=]\s*)([^\s,;]+)"
 )
@@ -800,6 +802,8 @@ def _is_transient_conda_network_error(detail: str) -> bool:
 
 def _is_transient_pip_network_error(detail: str) -> bool:
     lowered = detail.lower()
+    if re.search(r"\b(?:http|status(?: code)?)\s*(?:500|502|503|504)\b", lowered):
+        return True
     return any(
         token in lowered
         for token in (
@@ -811,7 +815,10 @@ def _is_transient_pip_network_error(detail: str) -> bool:
             "connectionreseterror",
             "connection reset",
             "chunkedencodingerror",
+            "sslerror",
+            "tls handshake",
             "temporary failure in name resolution",
+            "name or service not known",
             "temporarily unavailable",
             "remote end closed connection",
             "connection aborted",
@@ -1049,6 +1056,10 @@ def _install_step_env_from_lock(conda_exe: Path, repo_root: Path, spec: StepEnvS
             "-m",
             "pip",
             "install",
+            "--retries",
+            PIP_DOWNLOAD_RETRIES,
+            "--timeout",
+            PIP_DOWNLOAD_TIMEOUT_SEC,
             "--upgrade",
             "pip",
             "--no-cache-dir",
@@ -1067,6 +1078,10 @@ def _install_step_env_from_lock(conda_exe: Path, repo_root: Path, spec: StepEnvS
         "-m",
         "pip",
         "install",
+        "--retries",
+        PIP_DOWNLOAD_RETRIES,
+        "--timeout",
+        PIP_DOWNLOAD_TIMEOUT_SEC,
         "-r",
         str(lock_path),
         "--no-cache-dir",

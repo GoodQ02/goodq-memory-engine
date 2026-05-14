@@ -59,6 +59,15 @@ def test_step_env_lock_install_retries_transient_pip_transport_failure(monkeypat
     assert any("Transient pip download failure for goodq_video_scene_detect" in message for message in messages)
 
 
+def test_pip_transient_detection_includes_ssl_and_temporary_http_5xx():
+    assert bootstrap_install._is_transient_pip_network_error(
+        "pip._vendor.requests.exceptions.SSLError: TLS handshake timed out"
+    )
+    assert bootstrap_install._is_transient_pip_network_error(
+        "HTTPSConnectionPool(host='download.pytorch.org'): HTTP 503 Service Unavailable"
+    )
+
+
 def test_step_env_lock_install_raises_after_transient_pip_retry_ceiling(monkeypatch, tmp_path):
     _write_lock(tmp_path)
     lock_attempts = 0
@@ -123,3 +132,29 @@ def test_step_env_lock_install_keeps_no_deps(monkeypatch, tmp_path):
 
     assert install_cmd is not None
     assert "--no-deps" in install_cmd
+
+
+def test_cuda_step_env_lock_install_keeps_extra_index_and_pip_resilience_flags(monkeypatch, tmp_path):
+    lock_path = _write_lock(tmp_path)
+    lock_path.write_text("torch==2.5.1+cu121\ntorchvision==0.20.1+cu121\n", encoding="utf-8")
+    install_cmd: list[str] | None = None
+
+    def fake_run(cmd: list[str], **_kwargs) -> subprocess.CompletedProcess[str]:
+        nonlocal install_cmd
+        if "--upgrade" in cmd:
+            return _completed(cmd)
+        if "-r" in cmd:
+            install_cmd = cmd
+            return _completed(cmd)
+        raise AssertionError(f"unexpected command: {cmd}")
+
+    monkeypatch.setattr(bootstrap_install, "_run", fake_run)
+
+    bootstrap_install._install_step_env_from_lock(Path("conda"), tmp_path, _step_spec())
+
+    assert install_cmd is not None
+    assert "--no-deps" in install_cmd
+    assert "--extra-index-url" in install_cmd
+    assert bootstrap_install.TORCH_CUDA_INDEX_URL in install_cmd
+    assert "--retries" in install_cmd
+    assert "--timeout" in install_cmd

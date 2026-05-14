@@ -18,7 +18,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Callable, Iterable, Optional
 
 try:
@@ -1819,6 +1819,22 @@ def inspect_windows_service(name: str) -> dict[str, str]:
         f"  $cim = Get-CimInstance Win32_Service -Filter \"Name='{name}'\"; "
         "  if ($cim) { 'start_mode=' + $cim.StartMode } "
         "} catch { } "
+        f"$paramPath = 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\{_quote_ps(name)}\\Parameters'; "
+        "if (Test-Path $paramPath) { "
+        "  try { "
+        "    $params = Get-ItemProperty -Path $paramPath; "
+        "    foreach ($key in @('AppEnvironmentExtra','AppStdout','AppStderr','AppDirectory')) { "
+        "      $value = $params.$key; "
+        "      if ($null -ne $value) { "
+        "        if ($value -is [array]) { $rendered = ($value -join ';;') } else { $rendered = [string]$value } "
+        "        if ($key -eq 'AppEnvironmentExtra') { 'app_environment_extra=' + $rendered } "
+        "        elseif ($key -eq 'AppStdout') { 'app_stdout=' + $rendered } "
+        "        elseif ($key -eq 'AppStderr') { 'app_stderr=' + $rendered } "
+        "        elseif ($key -eq 'AppDirectory') { 'app_directory=' + $rendered } "
+        "      } "
+        "    } "
+        "  } catch { } "
+        "} "
         "}"
     )
     completed = _run_powershell(command)
@@ -1829,6 +1845,56 @@ def inspect_windows_service(name: str) -> dict[str, str]:
         key, value = line.split("=", 1)
         info[key.strip()] = value.strip()
     return info
+
+
+def _normalize_service_path(value: str) -> str:
+    cleaned = str(value or "").strip().strip("\"'")
+    return cleaned.replace("/", "\\").rstrip("\\").lower()
+
+
+def _service_path_matches(actual: str, expected: str) -> bool:
+    return _normalize_service_path(actual) == _normalize_service_path(expected)
+
+
+def _parse_service_environment_extra(raw_value: str) -> dict[str, str]:
+    env: dict[str, str] = {}
+    normalized = str(raw_value or "").replace("\x00", ";;")
+    for entry in re.split(r";;|;", normalized):
+        if "=" not in entry:
+            continue
+        key, value = entry.split("=", 1)
+        env[key.strip().upper()] = value.strip()
+    return env
+
+
+def _qdrant_service_alignment_issues(
+    service_info: dict[str, str],
+    qdrant_storage: str,
+    log_dir: str,
+) -> list[str]:
+    if service_info.get("exists") != "true":
+        return []
+
+    expected_stdout = str(PureWindowsPath(log_dir) / "qdrant_stdout.log")
+    expected_stderr = str(PureWindowsPath(log_dir) / "qdrant_stderr.log")
+    env_extra = _parse_service_environment_extra(service_info.get("app_environment_extra", ""))
+    issues: list[str] = []
+
+    storage_path = env_extra.get("QDRANT__STORAGE__STORAGE_PATH", "")
+    if not storage_path or not _service_path_matches(storage_path, qdrant_storage):
+        issues.append("storage path does not match active runtime root")
+
+    telemetry_disabled = env_extra.get("QDRANT__TELEMETRY_DISABLED", "")
+    if telemetry_disabled.lower() != "true":
+        issues.append("telemetry disabled flag is missing from service environment")
+
+    if not _service_path_matches(service_info.get("app_stdout", ""), expected_stdout):
+        issues.append("stdout log path does not match active runtime log root")
+
+    if not _service_path_matches(service_info.get("app_stderr", ""), expected_stderr):
+        issues.append("stderr log path does not match active runtime log root")
+
+    return issues
 
 
 def _qdrant_repair_instruction(ctx: BootstrapContext) -> str:
@@ -1929,28 +1995,10 @@ def _wait_for_qdrant(url: str, timeout_sec: int = 20) -> tuple[bool, str]:
     return False, last_detail
 
 
-def ensure_qdrant_ready(ctx: BootstrapContext, *, assume_yes: bool) -> bool:
-    qdrant_url = resolve_qdrant_url(ctx.conda_exe, ctx.repo_root)
-    qdrant_ok, qdrant_detail = check_qdrant(qdrant_url)
-    service_info = inspect_windows_service(QDRANT_SERVICE_NAME)
-    elevated = _is_admin()
-    lifecycle_state = _qdrant_lifecycle_state(qdrant_ok, service_info)
-    if qdrant_ok:
-        _print(f"[OK] qdrant: {qdrant_detail}")
-        _print_qdrant_handoff(ctx, state=lifecycle_state, elevated=elevated, qdrant_url=qdrant_url)
-        return True
-
+def _repair_qdrant_service(ctx: BootstrapContext, *, assume_yes: bool, elevated: bool, qdrant_url: str) -> bool:
     qdrant_exe = ctx.repo_root / "vendor" / "qdrant" / "qdrant.exe"
     qdrant_cfg = ctx.repo_root / "vendor" / "qdrant" / "config.yaml"
 
-    _print(f"[WARN] qdrant: {qdrant_detail}")
-    _print_qdrant_handoff(ctx, state=lifecycle_state, elevated=elevated, qdrant_url=qdrant_url)
-    if service_info.get("exists") == "true":
-        status = service_info.get("status", "unknown")
-        start_mode = service_info.get("start_mode", "unknown")
-        _print(f"[INFO] Qdrant service status: {status} (start mode: {start_mode})")
-    else:
-        _print("[INFO] Qdrant service status: not installed")
     _print(f"[INFO] Repo Qdrant binary: {'present' if qdrant_exe.exists() else 'missing'} at {qdrant_exe}")
     _print(f"[INFO] Repo Qdrant config: {'present' if qdrant_cfg.exists() else 'missing'} at {qdrant_cfg}")
 
@@ -1989,6 +2037,39 @@ def ensure_qdrant_ready(ctx: BootstrapContext, *, assume_yes: bool) -> bool:
     _print_qdrant_handoff(ctx, state=lifecycle_state, elevated=elevated, qdrant_url=qdrant_url)
     _print(_qdrant_repair_instruction(ctx))
     return False
+
+
+def ensure_qdrant_ready(ctx: BootstrapContext, *, assume_yes: bool) -> bool:
+    qdrant_url = resolve_qdrant_url(ctx.conda_exe, ctx.repo_root)
+    qdrant_ok, qdrant_detail = check_qdrant(qdrant_url)
+    service_info = inspect_windows_service(QDRANT_SERVICE_NAME)
+    elevated = _is_admin()
+    lifecycle_state = _qdrant_lifecycle_state(qdrant_ok, service_info)
+    if qdrant_ok:
+        _print(f"[OK] qdrant: {qdrant_detail}")
+        _print_qdrant_handoff(ctx, state=lifecycle_state, elevated=elevated, qdrant_url=qdrant_url)
+        try:
+            qdrant_storage, log_dir = resolve_qdrant_runtime_paths(ctx.conda_exe, ctx.repo_root)
+            alignment_issues = _qdrant_service_alignment_issues(service_info, qdrant_storage, log_dir)
+        except Exception as exc:  # noqa: BLE001
+            _print(f"[WARN] Qdrant service alignment check was inconclusive: {exc}")
+            return True
+        if alignment_issues:
+            _print("[WARN] QDRANT_RUNNING_BUT_STALE_CONFIG: reachable service does not match active runtime paths.")
+            for issue in alignment_issues:
+                _print(f"[WARN] Qdrant service alignment: {issue}")
+            return _repair_qdrant_service(ctx, assume_yes=assume_yes, elevated=elevated, qdrant_url=qdrant_url)
+        return True
+
+    _print(f"[WARN] qdrant: {qdrant_detail}")
+    _print_qdrant_handoff(ctx, state=lifecycle_state, elevated=elevated, qdrant_url=qdrant_url)
+    if service_info.get("exists") == "true":
+        status = service_info.get("status", "unknown")
+        start_mode = service_info.get("start_mode", "unknown")
+        _print(f"[INFO] Qdrant service status: {status} (start mode: {start_mode})")
+    else:
+        _print("[INFO] Qdrant service status: not installed")
+    return _repair_qdrant_service(ctx, assume_yes=assume_yes, elevated=elevated, qdrant_url=qdrant_url)
 
 
 def run_bootstrap_verify(conda_exe: Path, repo_root: Path) -> tuple[bool, str]:

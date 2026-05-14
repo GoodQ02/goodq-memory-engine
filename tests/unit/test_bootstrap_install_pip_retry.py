@@ -59,6 +59,38 @@ def test_step_env_lock_install_retries_transient_pip_transport_failure(monkeypat
     assert any("Transient pip download failure for goodq_video_scene_detect" in message for message in messages)
 
 
+def test_step_env_lock_install_retries_nested_backend_dependency_transport_failure(monkeypatch, tmp_path):
+    _write_lock(tmp_path)
+    messages: list[str] = []
+    lock_attempts = 0
+    transient_output = (
+        "installing backend dependencies for reverse_geocoder did not run successfully\n"
+        "pip._vendor.urllib3.exceptions.ProtocolError: "
+        "('Connection broken: IncompleteRead(11751040 bytes read, 1153580 more expected)', "
+        "IncompleteRead(11751040 bytes read, 1153580 more expected))"
+    )
+
+    def fake_run(cmd: list[str], **_kwargs) -> subprocess.CompletedProcess[str]:
+        nonlocal lock_attempts
+        if "--upgrade" in cmd:
+            return _completed(cmd)
+        if "-r" in cmd:
+            lock_attempts += 1
+            if lock_attempts == 1:
+                return _completed(cmd, returncode=1, stdout=transient_output)
+            return _completed(cmd)
+        raise AssertionError(f"unexpected command: {cmd}")
+
+    monkeypatch.setattr(bootstrap_install, "_run", fake_run)
+    monkeypatch.setattr(bootstrap_install, "_print", lambda message: messages.append(message))
+    monkeypatch.setattr(bootstrap_install.time, "sleep", lambda _seconds: None)
+
+    bootstrap_install._install_step_env_from_lock(Path("conda"), tmp_path, _step_spec())
+
+    assert lock_attempts == 2
+    assert any("during lock install (attempt 1/3)" in message for message in messages)
+
+
 def test_pip_transient_detection_includes_ssl_and_temporary_http_5xx():
     assert bootstrap_install._is_transient_pip_network_error(
         "pip._vendor.requests.exceptions.SSLError: TLS handshake timed out"
@@ -132,6 +164,7 @@ def test_step_env_lock_install_keeps_no_deps(monkeypatch, tmp_path):
 
     assert install_cmd is not None
     assert "--no-deps" in install_cmd
+    assert "--build-constraint" in install_cmd
 
 
 def test_cuda_step_env_lock_install_keeps_extra_index_and_pip_resilience_flags(monkeypatch, tmp_path):
@@ -158,3 +191,5 @@ def test_cuda_step_env_lock_install_keeps_extra_index_and_pip_resilience_flags(m
     assert bootstrap_install.TORCH_CUDA_INDEX_URL in install_cmd
     assert "--retries" in install_cmd
     assert "--timeout" in install_cmd
+    assert "--build-constraint" in install_cmd
+    assert str(lock_path) in install_cmd

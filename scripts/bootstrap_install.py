@@ -1082,6 +1082,8 @@ def _install_step_env_from_lock(conda_exe: Path, repo_root: Path, spec: StepEnvS
         PIP_DOWNLOAD_RETRIES,
         "--timeout",
         PIP_DOWNLOAD_TIMEOUT_SEC,
+        "--build-constraint",
+        str(lock_path),
         "-r",
         str(lock_path),
         "--no-cache-dir",

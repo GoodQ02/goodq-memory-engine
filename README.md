@@ -299,6 +299,7 @@ If you want the deeper technical picture:
 - Docs landing page: [`docs/README.md`](docs/README.md)
 - API reference: [`docs/reference/API.md`](docs/reference/API.md)
 - Current release checkpoint: [`docs/releases/RELEASE_0.1.1.md`](docs/releases/RELEASE_0.1.1.md)
+- Support and reporting: [`SUPPORT.md`](SUPPORT.md)
 
 ## Current Limitations
 
@@ -317,6 +318,7 @@ If you want the deeper technical picture:
 
 Reference:
 
+- [`SUPPORT.md`](SUPPORT.md)
 - [`SECURITY.md`](SECURITY.md)
 - [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)
 

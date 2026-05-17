@@ -1,5 +1,11 @@
 blank_issues_enabled: false
 contact_links:
+  - name: Support guide
+    url: https://github.com/GoodQ02/goodq4all/blob/main/SUPPORT.md
+    about: Choose the right issue template, discussion path, or security route.
+  - name: Community discussions
+    url: https://github.com/GoodQ02/goodq4all/discussions
+    about: Ask general questions or discuss operator notes that are not bugs.
   - name: First-run guide
     url: https://github.com/GoodQ02/goodq4all/blob/main/docs/guides/FIRST_RUN.md
     about: Start here before filing first-run setup problems.

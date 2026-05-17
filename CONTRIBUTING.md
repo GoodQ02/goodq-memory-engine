@@ -201,9 +201,13 @@ When updating documentation:
 
 ## 📞 Getting Help
 
-- **GitHub Issues** – For bugs and feature requests
-- **Discussions** – For questions and community support
-- **Security** – Do not post secrets or private data in public issues
+- **Support guide** – Use [`SUPPORT.md`](SUPPORT.md) to choose the right
+  issue template, discussion path, or private security route.
+- **GitHub Issues** – For reproducible bugs, first-run problems, and scoped
+  feature requests.
+- **Discussions** – For questions, operator notes, and community support.
+- **Security** – Follow [`SECURITY.md`](SECURITY.md). Do not post secrets,
+  vulnerability details, or private data in public issues.
 
 ## 🎖️ Recognition
 

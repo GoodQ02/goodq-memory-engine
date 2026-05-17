@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-05-09 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-17 -->
 
 <p align="center">
   <img src="samples/assets/q-git-square.png" alt="GoodQ4All mark" width="140" />
@@ -30,6 +30,24 @@ Start with the two-minute onboarding film if you want to see the install and fir
   <a href="docs/guides/DEMO.md">Read the demo guide</a>
 </p>
 
+## Before You Start
+
+GoodQ4All's supported first-run host is Windows 11 with PowerShell. The runtime
+is local-first and CPU-safe by default; GPU and WSL2 acceleration are optional.
+
+Have these ready before running the installer:
+
+- Windows 11
+- Git
+- Miniconda or Anaconda available to the current shell
+- Python 3.10 or newer
+- at least 25 GB free for the baseline install path
+- optional: NVIDIA GPU and WSL2 Ubuntu for accelerated lanes
+
+macOS and Linux are not first-run hosts for this repository today. See
+[`docs/reference/PLATFORM_SUPPORT.md`](docs/reference/PLATFORM_SUPPORT.md) for
+the current platform contract.
+
 ## Visual First Run
 
 Each frame below is pulled from the final onboarding film and paired with the action it narrates. Click any frame to enlarge it.
@@ -38,8 +56,8 @@ Each frame below is pulled from the final onboarding film and paired with the ac
 | --- | --- | --- |
 | 1 | Clone the official source:<br>`git clone https://github.com/GoodQ02/goodq4all.git` | <a href="samples/assets/demo-steps/01-clone-official-source.jpg"><img src="samples/assets/demo-steps/01-clone-official-source.jpg" alt="Clone the GoodQ4All repository" width="300" /></a> |
 | 2 | Enter the project cabin:<br>`cd goodq4all` | <a href="samples/assets/demo-steps/02-enter-project-cabin.jpg"><img src="samples/assets/demo-steps/02-enter-project-cabin.jpg" alt="Enter the GoodQ4All project folder" width="300" /></a> |
-| 3 | Run the bootstrap installer:<br>`python scripts/bootstrap_install.py`<br><sub>The frame shows an option-expanded CPU-safe invocation of the same installer.</sub> | <a href="samples/assets/demo-steps/03-bootstrap-installer.jpg"><img src="samples/assets/demo-steps/03-bootstrap-installer.jpg" alt="Run the bootstrap installer" width="300" /></a> |
-| 4 | Optional local config:<br>keep `.env.local` in the repo root when using local model, cache, or provider settings. | <a href="samples/assets/demo-steps/04-env-local-root.jpg"><img src="samples/assets/demo-steps/04-env-local-root.jpg" alt="Place env local configuration in the repo root" width="300" /></a> |
+| 3 | Run the bootstrap installer:<br>`python scripts/bootstrap_install.py`<br><sub>CPU-safe first-run variant: `python scripts/bootstrap_install.py --disable-gpu --disable-wsl-audio --skip-model-prefetch`.</sub> | <a href="samples/assets/demo-steps/03-bootstrap-installer.jpg"><img src="samples/assets/demo-steps/03-bootstrap-installer.jpg" alt="Run the bootstrap installer" width="300" /></a> |
+| 4 | Optional local config:<br>copy `.env.local.template` to `.env.local` when using local model, cache, or provider settings. | <a href="samples/assets/demo-steps/04-env-local-root.jpg"><img src="samples/assets/demo-steps/04-env-local-root.jpg" alt="Place env local configuration in the repo root" width="300" /></a> |
 | 5 | Validate the bootstrap:<br>`.\scripts\bootstrap_validate.bat` | <a href="samples/assets/demo-steps/05-bootstrap-validator.jpg"><img src="samples/assets/demo-steps/05-bootstrap-validator.jpg" alt="Run the bootstrap validator" width="300" /></a> |
 | 6 | Run the launcher/readiness check:<br>`.\LAUNCH_GOODQ.ps1` | <a href="samples/assets/demo-steps/06-launch-goodq.jpg"><img src="samples/assets/demo-steps/06-launch-goodq.jpg" alt="Launch GoodQ4All readiness checks" width="300" /></a> |
 | 7 | Start Watchdog, then drop one small media file into `import_inbox`:<br>`conda run --no-capture-output -n goodq_core python -m cli.watchdog` | <a href="samples/assets/demo-steps/07-watchdog-observes.jpg"><img src="samples/assets/demo-steps/07-watchdog-observes.jpg" alt="Watchdog observes the imported media file" width="300" /></a> |
@@ -49,11 +67,12 @@ Each frame below is pulled from the final onboarding film and paired with the ac
 
 If you are new here, start by making one memory:
 
-1. Bootstrap and validate the repo.
-2. Start Watchdog.
-3. Drop one small media file into the configured `import_inbox`.
-4. Open the local API docs.
-5. Confirm scene artifacts were written.
+1. Confirm the Windows 11, Conda, Git, and free-space prerequisites above.
+2. Bootstrap and validate the repo.
+3. Start Watchdog.
+4. Drop one small media file into the configured `import_inbox`.
+5. Open the local API docs.
+6. Confirm scene artifacts were written.
 
 Guide:
 
@@ -113,6 +132,9 @@ Post-release operator validation on the current `main` / `public` line additiona
 - Successful unified audio preserves diarization and emotion sub-step truth instead of hiding partial failures behind a coarse success result.
 - Speaker continuity now persists through `scene_ingest_results.json`, `scene_manifest.json`, and `temporal_index.json`.
 - Episode-to-episode continuity is proven on fresh Season 5 material, not just on the release-era comparison witness.
+- API scene read models now expose persisted speaker-truth and continuity fields instead of thinner legacy projections.
+- Similar-scene retrieval is now a real multimodal feature and can fuse text, visual, and audio memory instead of falling back to an empty path.
+- Read-only control recurrence reporting can compare witnesses, index durable artifacts, draft deterministic inspection plans, and derive conservative trends from existing JSON reports without healing or mutation.
 
 Current proving run and release proof path:
 
@@ -139,7 +161,9 @@ That result comes from the local episode-reference eval lane and is summarized i
 
 ### First Local Run
 
-If you want the shortest honest path to “does this work on this machine?”, run the first success loop rather than only starting the API:
+If you want the shortest honest path to "does this work on this machine?", run
+the same first success loop with the actual commands rather than only starting
+the API:
 
 1. Clone the repo and enter the project root.
 2. Run the bootstrap installer.
@@ -160,13 +184,22 @@ python scripts/bootstrap_install.py
 
 `LAUNCH_GOODQ.ps1` checks readiness and opens operator monitors. It does not start ingestion by itself.
 
+The launcher also has `LAUNCH_GOODQ.bat` for double-click or classic Command
+Prompt use. Both wrappers reach the same readiness surface.
+
+If you skipped the Qdrant service prompt during bootstrap, the first launcher
+run may report one Qdrant readiness warning. Install or repair the service later
+with `scripts\qdrant\INSTALL_QDRANT_SERVICE.bat`.
+
 Leave Watchdog running in one terminal:
 
 ```powershell
 conda run --no-capture-output -n goodq_core python -m cli.watchdog
 ```
 
-Copy one small media file into the configured `import_inbox`, then start the API in another terminal:
+Copy one small media file into the configured inbox, then start the API in
+another terminal. `GOODQ_DATA_ROOT` is the base root; the runtime derives the
+drop zone as `<GOODQ_DATA_ROOT>\GoodQ_Data\import_inbox\`.
 
 ```powershell
 conda run --no-capture-output -n goodq_core python -m api.server
@@ -176,6 +209,9 @@ Then open:
 
 - `http://127.0.0.1:30000/api/health/summary`
 - `http://127.0.0.1:30000/docs`
+
+The host and port default to `GOODQ_API_HOST=127.0.0.1` and
+`GOODQ_API_PORT=30000` and can be overridden in `.env.local`.
 
 Reference:
 
@@ -268,21 +304,9 @@ If you want the deeper technical picture:
 
 - This is pre-1.0 software. The supported runtime path is stable enough to use, but surrounding helpers and APIs may still evolve.
 - A polished product UI is not part of the current shipping surface.
-- Docker and Docker Compose are not supported install paths yet.
 - Some optional enrichments can still fail on individual scenes without invalidating the whole ingest.
+- Audio-vector success is provenance-defined: current-run CLAP/Qdrant coverage requires `clap_meta.status == ok` plus a Qdrant audio payload with matching `run_id` and required provenance fields. Legacy scene-id matches are not current-run proof.
 - Context weighting is now strong, but the project still treats some interpretation choices as policy-level texture rather than frozen truth.
-
-## What's Next
-
-Near-term public-preview work is focused on making the first success loop easier
-without changing the runtime contract:
-
-- owned or permissively licensed synthetic demo fixtures
-- a read-only status surface over existing health, Watchdog, and artifact data
-- careful performance notes backed by current timing evidence
-- portability exploration after the Windows-first path stays stable
-
-See [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 ## Security and Data Handling
 

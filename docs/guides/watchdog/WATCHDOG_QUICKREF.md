@@ -1,3 +1,7 @@
+<!-- DOC_BADGE: OPERATIONAL -->
+<!-- DOC_STATUS: ACTIVE_GUIDE -->
+<!-- DOC_LAST_VERIFIED: 2026-05-17 -->
+
 # GoodQ Watchdog - Quick Reference Card
 
 > Role: Quick command and operations reference for the Watchdog system. For full explanations, edge cases, and troubleshooting, use `docs/guides/watchdog/WATCHDOG_GUIDE.md` and `docs/guides/watchdog/WATCHDOG_INDEX.md`.
@@ -11,8 +15,8 @@ Drop files in the configured import inbox and Watchdog auto-processes them.
 
 | Task | Command |
 |------|---------|
-| **Start Watchdog** | `conda run -n goodq_core python -m cli.watchdog` |
-| **Check Status** | `python scripts/utils/check_watchdog_status.py` |
+| **Start Watchdog** | `conda run --no-capture-output -n goodq_core python -m cli.watchdog` |
+| **Check Status** | `conda run --no-capture-output -n goodq_core python scripts/utils/check_watchdog_status.py` |
 | **Live Monitor** | `scripts/monitoring/monitor_live.bat` |
 | **Stop Watchdog** | `Ctrl+C` in watchdog window |
 
@@ -24,6 +28,9 @@ Drop files in the configured import inbox and Watchdog auto-processes them.
 <GOODQ_DATA_ROOT>\GoodQ_Data\import_inbox\
 ```
 
+`GOODQ_DATA_ROOT` is the configured base root. The runtime derives the
+`GoodQ_Data` folder beneath it.
+
 ---
 
 ## Supported Files
@@ -34,6 +41,9 @@ Drop files in the configured import inbox and Watchdog auto-processes them.
 | Audio | `.mp3` `.wav` `.flac` `.m4a` `.aac` `.ogg` `.wma` |
 | Image | `.jpg` `.jpeg` `.png` `.bmp` `.gif` `.tiff` `.webp` |
 | Document | `.pdf` `.txt` `.md` `.doc` `.docx` |
+
+PDF ingestion requires Poppler / `pdftotext`. `.doc` and `.docx` extraction
+depends on the local document extraction tools available on the host.
 
 ---
 
@@ -76,7 +86,7 @@ Drop files in the configured import inbox and Watchdog auto-processes them.
 
 ### Check if Running
 ```powershell
-Get-Process python | Where-Object {$_.CommandLine -like '*watchdog*'}
+conda run --no-capture-output -n goodq_core python scripts/utils/check_watchdog_status.py
 ```
 
 ### View Live Logs
@@ -107,7 +117,7 @@ Get-Content <GOODQ_DATA_ROOT>\GoodQ_Data\epochs\<epoch>\logs\watchdog_state.json
 
 ### Run Tests
 ```batch
-conda run -n goodq_core python tests\integration\test_watchdog.py
+conda run --no-capture-output -n goodq_core python tests\integration\test_watchdog.py
 ```
 
 ---
@@ -136,24 +146,20 @@ conda run -n goodq_core python tests\integration\test_watchdog.py
 
 ## Configuration
 
-Adjust the watchdog constants in `cli/watchdog.py`:
-
-```python
-POLL_INTERVAL = 2.0      # Scan every 2 seconds
-STABILITY_WAIT = 3.0     # Wait 3s for stability
-MAX_WORKERS = 1          # Process 1 file at a time
-```
+Use the config-resolved runtime paths and watchdog settings. Do not edit
+`cli/watchdog.py` as an operator knob unless you are making a source change with
+tests.
 
 ---
 
 ## Status Dashboard
 
 When you run `python scripts/utils/check_watchdog_status.py`, you see:
-- ✅ Watchdog running status
-- 📊 File counts (inbox, processing, processed, failed)
-- 📁 Recent inbox files
-- 📈 All-time statistics
-- 📝 Recent log activity
+- Watchdog running status
+- File counts (inbox, processing, processed, failed)
+- Recent inbox files
+- All-time statistics
+- Recent log activity
 
 ---
 

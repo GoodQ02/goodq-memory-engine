@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: PUBLIC_RELEASE_STATUS -->
-<!-- DOC_LAST_VERIFIED: 2026-05-13 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-17 -->
 
 # GoodQ4All Agent Status
 
@@ -41,6 +41,9 @@ The first public success loop should prove:
 - uncertainty and limits remain explicit
 
 Use `docs/guides/FIRST_RUN.md` as the first-run entrypoint.
+
+Start with the guided demo in `docs/guides/DEMO.md` when a visual walkthrough is
+more useful than reading the command list first.
 
 ## Release Watch Items
 

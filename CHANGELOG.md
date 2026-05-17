@@ -10,6 +10,12 @@ and related canonical docs.
 ## [Unreleased]
 
 ### Added
+- Added the 2026-05-17 visual first-run command-card surface, guided demo
+  guide, and public/profile mirror alignment for the onboarding film.
+- Documented the post-seal audit result for `control-recurrence-v0.4.1`:
+  the tag remains a valid sealed milestone, while current `main` is beyond it
+  with `control-recurrence-v0.4.2` plus retry attribution/coalescing
+  tightening.
 - Published the `control-recurrence-v0.4.2` operator release note:
   [`docs/releases/CONTROL_RECURRENCE_v0.4.2.md`](docs/releases/CONTROL_RECURRENCE_v0.4.2.md).
 - Hardened direct canonical recurrence mapping for multi-video direct run roots,
@@ -28,6 +34,9 @@ and related canonical docs.
   `GET /api/control-recurrence/reports/{report_id}/recommendations`.
 
 ### Boundary
+- The post-seal audit found no recurrence-layer boundary violation. Local
+  `reports/control_recurrence/index.json` state is workspace artifact hygiene
+  unless it is explicitly tracked as a repo surface.
 - The v0.4.2 hardening pass remains read-only. It expands artifact discovery
   only; it does not trigger ingestion, generate reports from the API, heal,
   mutate configs, use LLMs, or activate `ControlAgent`.
@@ -49,7 +58,7 @@ Reference checkpoint:
 - Formalized the three-tier `scene_context_llm` contract with `primary_tags`, `contextual_tags`, and `structural_tags`, and tightened low-signal scene handling so tier fields persist as explicit arrays instead of `null`.
 - Hardened transcript-topic recovery in `scene_context_llm` so transcript-rich scenes stop flattening to weak setting labels when the episode beat is explicit in dialogue, including the repaired `Steve Pocatillo`, `alternate side`, and `rental car` seam family.
 - Hardened Phase 6b harmonization to tolerate legacy or malformed tier payloads safely, preventing `NoneType` tier-field crashes while preserving the canonical explicit-array write shape.
-- Documented the local episode-reference evaluation lane and aggregate witness metrics while excluding copyrighted third-party reference anchors from public release artifacts; private anchors do not override runtime scene truth.
+- Added a local episode-reference evaluation lane using curated IMDb-backed anchors under `reports/reference_anchors/seinfeld/episodes/` for witness scoring only; these anchors inform beat coverage and salience evaluation without overriding runtime scene truth.
 - Promoted the proven iterative repair loop into canonical agent doctrine and tied it back to the ingest orchestration contract so future pipeline fixes stay seam-first, contract-preserving, and witness-driven.
 
 ### Validated

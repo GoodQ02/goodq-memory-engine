@@ -1,3 +1,8 @@
+<!-- DOC_BADGE: OPERATIONAL -->
+<!-- DOC_STATUS: REFERENCE_ONLY -->
+<!-- DOC_CANONICAL_POINTER: docs/systems/WATCHDOG_SYSTEM.md -->
+<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
+
 # Logging and Resilience Architecture
 
 **Last Updated**: December 15, 2025  
@@ -230,7 +235,7 @@ config = validate_and_heal_config("config.yaml")
 Unattended monitoring with automatic restart:
 
 **Features**:
-- Polls `samples/smoke/` every 60 seconds
+- Polls the configured runtime `import_inbox` on the watchdog interval
 - Launches `run_ingestion.py` subprocess per video
 - Timeout protection (kills if hung >2 hours)
 - Exit code checking (logs failures, continues)

@@ -1,5 +1,6 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
+<!-- DOC_LAST_VERIFIED: 2026-05-17 -->
 
 # GoodQ Bootstrap Installer
 
@@ -32,6 +33,19 @@ The bootstrap intentionally reuses existing project surfaces:
 - [`configs/config.local.example.yaml`](../../configs/config.local.example.yaml)
 - [`.env.local.template`](../../.env.local.template)
 
+## Offline Bundle Status
+
+The previous workspace-adjacent offline bundle generation has been retired from
+circulation after a stale-bundle audit. No current offline installer or archive
+is packaging truth until the rebuild plan is completed and validated.
+
+Current rebuild plan:
+
+- [`OFFLINE_BUNDLE_REBUILD_PLAN.md`](OFFLINE_BUNDLE_REBUILD_PLAN.md)
+
+The rebuild must preserve the canonical WSL audio bootstrap target and must not
+package the observed cu128 WSL drift lane as an offline target.
+
 ## What It Prompts For
 
 On a normal interactive run, the bootstrap prompts for:
@@ -51,12 +65,11 @@ It also reports whether Hugging Face / PyAnnote auth was detected from `.env.loc
 Default portable data root:
 
 - a local Windows data root chosen by the bootstrap installer
-- current default implementation: `GOODQ_DATA_ROOT` points at the base root on the
-  system drive
-- the runtime then derives:
-  - `GoodQ_Data/`
-  - `models/`
-  - `qdrant_storage/`
+- `GOODQ_DATA_ROOT` is the base root written to `.env.local`
+- the runtime derives `GoodQ_Data/` beneath that base root, so the import inbox
+  path is `<GOODQ_DATA_ROOT>\GoodQ_Data\import_inbox\`
+- model cache and Qdrant storage are also derived from the configured local
+  root unless explicitly overridden
 
 Private machine configuration is written only to:
 
@@ -92,34 +105,6 @@ python scripts/bootstrap_install.py --disable-gpu --disable-wsl-audio
 python scripts/bootstrap_install.py --skip-model-prefetch
 ```
 
-## Bootstrap Hygiene For Repeated Test Runs
-
-If a first install has been retried several times, use the hygiene helper before
-declaring success. It does not delete anything. It records the current
-install-relevant state and prints a reviewed manual reset plan.
-
-```powershell
-# Snapshot current GoodQ bootstrap state.
-python scripts/bootstrap_hygiene.py snapshot --output .tmp_bootstrap_hygiene\before.json
-
-# Print a clean Windows-only reset plan using a fresh data root.
-python scripts/bootstrap_hygiene.py plan-reset --fresh-data-root "%USERPROFILE%\GoodQ_Bootstrap_Test"
-```
-
-For a practical laptop retest, the clean baseline is:
-
-- archive `.env.local` and `configs/config.local.yaml`
-- remove only GoodQ Conda envs: `goodq_core` and the supported `goodq_*` step
-  env pack
-- keep existing user media and old data roots untouched
-- rerun bootstrap with a new `--data-root`
-- keep WSL audio disabled when narrowing the Windows-only path
-- run bootstrap validation and the dry-run launcher before starting ingestion
-
-This avoids a false positive from partial Conda envs or old local config while
-preserving package caches, model caches, and user data unless the operator
-chooses to test those separately.
-
 ## Capability Model
 
 The bootstrap classifies the machine into:
@@ -138,7 +123,7 @@ WSL distro selection:
 
 - if `GOODQ_WSL_DISTRO` is already set, the bootstrap preserves it
 - otherwise it prefers the first Ubuntu-like distro detected on the host
-- if no Ubuntu-like distro is present, it falls back to the existing default behavior
+- if no Ubuntu-like distro is present, it falls back to the installer default
 
 Environment selection:
 

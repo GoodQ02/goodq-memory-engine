@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: PUBLIC_RELEASE_SNAPSHOT -->
-<!-- DOC_LAST_VERIFIED: 2026-05-13 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-17 -->
 
 # System Snapshot
 
@@ -57,10 +57,11 @@ Relevant docs:
 
 The intended public proof path is narrow:
 
-1. install/bootstrap the local runtime
-2. start local services on loopback
-3. ingest an operator-owned file through the supported local path
-4. inspect generated scene artifacts and local API read surfaces
-5. confirm failures remain visible rather than silently hidden
+1. watch the guided demo or read `docs/guides/DEMO.md`
+2. install/bootstrap the local runtime
+3. start local services on loopback
+4. ingest an operator-owned file through the supported local path
+5. inspect generated scene artifacts and local API read surfaces
+6. confirm failures remain visible rather than silently hidden
 
 Use `docs/guides/FIRST_RUN.md` for the public first-run path.

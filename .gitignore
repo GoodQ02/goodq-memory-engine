@@ -92,6 +92,7 @@ zenml_store/
 *.temp
 *.bak
 *.backup
+*.backup*
 ~*
 
 # ===== WINDOWS =====
@@ -129,7 +130,16 @@ $RECYCLE.BIN/
 !docs/**/*.svg
 
 # ===== WORKSPACE DIRECTORIES =====
+/_DATA/
+/_tmp/
+/.codex_scratch/
+/.tmp/
+/.tmp_codex/
+/.tmp_codex_tests/
+/.tmp_codex_verify/
 import_inbox/
+/smoke_inbox/
+/test_input/
 output/
 exports/
 run_exports/
@@ -156,6 +166,7 @@ htmlcov/
 .venv_install_audit/
 temp_dir_inventory.json
 temp_repo_inventory.json
+/config.json
 
 # ===== DOCUMENTATION BUILD =====
 docs/_build/

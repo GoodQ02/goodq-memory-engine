@@ -92,6 +92,51 @@ def test_check_wsl_audio_workspace_warns_when_abi_is_degraded(monkeypatch):
     assert "transcription-ready" in results[0].detail
 
 
+def test_check_wsl_audio_workspace_uses_detected_ubuntu_like_distro_when_unset(monkeypatch):
+    from scripts import bootstrap_verify
+
+    calls = []
+
+    monkeypatch.setattr(
+        bootstrap_verify,
+        "_ENV_FILE_VALUES",
+        {
+            "GOODQ_REQUIRE_WSL_AUDIO": "1",
+            "GOODQ_WSL_USER": "goodq",
+            "GOODQ_WSL_WORKSPACE": "/home/goodq/goodq_audio",
+        },
+    )
+    monkeypatch.delenv("GOODQ_WSL_DISTRO", raising=False)
+    monkeypatch.setattr(
+        bootstrap_verify.subprocess,
+        "run",
+        lambda args, **kwargs: subprocess.CompletedProcess(
+            args,
+            0,
+            stdout="Debian\nUbuntu-20.04\n",
+            stderr="",
+        ),
+    )
+    monkeypatch.setattr(
+        bootstrap_verify,
+        "probe_wsl_audio_runtime",
+        lambda distro, workspace: calls.append((distro, workspace))
+        or {
+            "workspace_ready": True,
+            "runtime_ready": True,
+            "abi_ready": True,
+            "diarization_ready": True,
+            "detail": "ready",
+        },
+    )
+
+    results = bootstrap_verify._check_wsl_audio_workspace()
+
+    assert calls == [("Ubuntu-20.04", "/home/goodq/goodq_audio")]
+    assert results[0].status == "pass"
+    assert "distro=Ubuntu-20.04" in results[0].detail
+
+
 def test_check_torch_cuda_runtime_fails_when_gpu_profile_uses_cpu_only_torch(monkeypatch):
     from scripts import bootstrap_verify
 

@@ -123,7 +123,7 @@ WSL distro selection:
 
 - if `GOODQ_WSL_DISTRO` is already set, the bootstrap preserves it
 - otherwise it prefers the first Ubuntu-like distro detected on the host
-- if no Ubuntu-like distro is present, it falls back to the installer default
+- if no Ubuntu-like distro is present, it falls back to the installer default (`Ubuntu`)
 
 Environment selection:
 

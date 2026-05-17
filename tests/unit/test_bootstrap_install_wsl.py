@@ -64,6 +64,21 @@ def test_collect_context_preserves_explicit_wsl_request_when_wsl_missing(monkeyp
     assert ctx.wsl_distro == "Ubuntu-22.04"
 
 
+def test_detect_wsl_falls_back_to_generic_ubuntu_when_wsl_is_missing(monkeypatch):
+    from scripts import bootstrap_install
+
+    def missing_wsl(command, **kwargs):
+        raise FileNotFoundError("wsl")
+
+    monkeypatch.setattr(bootstrap_install, "_run", missing_wsl)
+
+    available, detail, distro = bootstrap_install.detect_wsl()
+
+    assert available is False
+    assert detail == "wsl not found"
+    assert distro == "Ubuntu"
+
+
 def test_write_env_local_only_enables_wsl_after_workspace_is_resolved(tmp_path: Path):
     from scripts import bootstrap_install
 

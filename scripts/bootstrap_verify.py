@@ -25,6 +25,7 @@ if str(REPO_ROOT) not in sys.path:
 
 
 QDRANT_SERVICE_NAME = "GoodQ_Qdrant"
+DEFAULT_WSL_DISTRO = "Ubuntu"
 SUPPORTED_STEP_ENVS: tuple[tuple[str, str, str], ...] = (
     ("goodq_video_scene_detect", "scene detection", "envs/locks/video_scene_detect.lock.txt"),
     ("goodq_image_caption", "ocr, captioning, exif, clip, dino", "envs/locks/image_caption.lock.txt"),
@@ -69,6 +70,24 @@ _ENV_FILE_VALUES = _load_env_file(REPO_ROOT / ".env.local")
 
 def _env_or_file(name: str) -> str:
     return (_ENV_FILE_VALUES.get(name) or os.environ.get(name) or "").strip()
+
+
+def _detect_wsl_distro(default: str = DEFAULT_WSL_DISTRO) -> tuple[bool, str, List[str]]:
+    try:
+        completed = subprocess.run(["wsl", "-l", "-q"], capture_output=True, text=True)
+    except FileNotFoundError:
+        return False, default, []
+    if completed.returncode != 0:
+        return False, default, []
+    raw_stdout = (completed.stdout or "").replace("\x00", "")
+    distros = [line.strip() for line in raw_stdout.splitlines() if line.strip()]
+    if not distros:
+        return True, default, []
+    ubuntu_like = [candidate for candidate in distros if candidate.lower().startswith("ubuntu")]
+    if ubuntu_like:
+        chosen = next((candidate for candidate in ubuntu_like if candidate.lower() == "ubuntu"), None) or ubuntu_like[0]
+        return True, chosen, distros
+    return True, distros[0], distros
 
 
 def _check_config_load() -> tuple[CheckResult, Dict[str, Any]]:
@@ -394,17 +413,12 @@ def _check_wsl_flag() -> CheckResult:
     value = _env_or_file("GOODQ_WSL_DISTRO")
     if value:
         return CheckResult("wsl_flag", "pass", f"GOODQ_WSL_DISTRO={value}")
-    try:
-        completed = subprocess.run(["wsl", "-l", "-q"], capture_output=True, text=True)
-    except FileNotFoundError:
+    available, chosen, distros = _detect_wsl_distro()
+    if not available:
         return CheckResult("wsl_flag", "warn", "GOODQ_WSL_DISTRO not set and WSL is unavailable")
-    raw_stdout = (completed.stdout or "").replace("\x00", "")
-    distros = [line.strip() for line in raw_stdout.splitlines() if line.strip()]
-    ubuntu_like = [candidate for candidate in distros if candidate.lower().startswith("ubuntu")]
-    if ubuntu_like:
-        chosen = next((candidate for candidate in ubuntu_like if candidate.lower() == "ubuntu"), None) or ubuntu_like[0]
+    if distros:
         return CheckResult("wsl_flag", "warn", f"GOODQ_WSL_DISTRO unset (runtime auto-selects {chosen})")
-    return CheckResult("wsl_flag", "warn", "GOODQ_WSL_DISTRO unset (runtime default is Ubuntu)")
+    return CheckResult("wsl_flag", "warn", f"GOODQ_WSL_DISTRO unset (runtime default is {DEFAULT_WSL_DISTRO})")
 
 
 def _is_truthy(value: str) -> bool:
@@ -415,7 +429,12 @@ def _check_wsl_audio_workspace() -> List[CheckResult]:
     if not _is_truthy(_env_or_file("GOODQ_REQUIRE_WSL_AUDIO")):
         return []
 
-    distro = (_env_or_file("GOODQ_WSL_DISTRO") or "Ubuntu-22.04").strip() or "Ubuntu-22.04"
+    configured_distro = _env_or_file("GOODQ_WSL_DISTRO")
+    if configured_distro:
+        distro = configured_distro
+    else:
+        _, detected_distro, _ = _detect_wsl_distro()
+        distro = detected_distro.strip() or DEFAULT_WSL_DISTRO
     wsl_user = (_env_or_file("GOODQ_WSL_USER") or os.environ.get("USERNAME") or os.environ.get("USER") or "user").strip()
     workspace = (_env_or_file("GOODQ_WSL_WORKSPACE") or f"/home/{wsl_user}/goodq_audio").strip()
     if workspace.lower() == "auto":

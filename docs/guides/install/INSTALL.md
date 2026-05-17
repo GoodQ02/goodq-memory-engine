@@ -72,7 +72,7 @@ Canonical portability variables:
 
 - `GOODQ_DATA_ROOT`: data root override (default fallback remains platform contract).
 - `GOODQ_CONDA_ENV`: interpreter env override (default: `goodq_core`).
-- `GOODQ_WSL_DISTRO`: WSL distro override (default: `Ubuntu`).
+- `GOODQ_WSL_DISTRO`: optional WSL distro override; leave unset to auto-select an Ubuntu-like distro.
 - `GOODQ_WSL_USER`: optional explicit WSL user.
 - `GOODQ_WSL_WORKSPACE`: optional explicit WSL workspace.
 
@@ -81,7 +81,8 @@ Example:
 ```powershell
 $env:GOODQ_DATA_ROOT = "<path_to_data_root>"
 $env:GOODQ_CONDA_ENV = "goodq_core"
-$env:GOODQ_WSL_DISTRO = "Ubuntu"
+# Optional: set GOODQ_WSL_DISTRO only when auto-detection should not choose.
+# $env:GOODQ_WSL_DISTRO = "<wsl_distro>"
 $env:GOODQ_WSL_USER = "<wsl_user>"
 $env:GOODQ_WSL_WORKSPACE = "/home/<wsl_user>/goodq_audio"
 ```
@@ -91,7 +92,7 @@ that base, including `<GOODQ_DATA_ROOT>\GoodQ_Data\import_inbox\`.
 
 When `GOODQ_WSL_DISTRO` is not set, bootstrap preserves an explicit local
 setting, otherwise it prefers the first Ubuntu-like distro detected and falls
-back to the installer default.
+back to the installer default (`Ubuntu`).
 
 ## Manual Setup (Advanced / Existing Environment)
 

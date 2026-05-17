@@ -2,8 +2,8 @@
 
 ## Supported Surface
 
-The supported publication and release surface for GoodQ4All is the `public`
-branch. The canonical public entrypoints are:
+The supported publication and release surface for GoodQ4All is the `main`
+branch of the public repository. The canonical public entrypoints are:
 
 - `python scripts/bootstrap_install.py`
 - `LAUNCH_GOODQ.ps1`
@@ -23,6 +23,19 @@ GoodQ4All is designed around a conservative local-first posture:
 - Windows-native `GoodQ_Qdrant` service as the canonical Qdrant path
 - optional integrations only when explicitly configured by the operator
 - local persistence as the system of record
+
+## Dependency and Scanning Automation
+
+The public repository uses source-owned GitHub Actions for baseline validation,
+documentation drift checks, CodeQL analysis, and dependency review on pull
+requests. Dependabot broad version-update pull requests are intentionally
+suppressed because GoodQ4All keeps runtime, WSL, CUDA, model, and step-env
+dependency lanes pinned. Security advisories and dependency alerts still require
+maintainer review before any lockfile, environment, or installer lane changes.
+
+Do not treat an automated dependency bump as safe by default. Dependency
+changes that affect runtime lanes should include the relevant bootstrap,
+validation, and witness evidence before promotion.
 
 ## Reporting a Vulnerability
 

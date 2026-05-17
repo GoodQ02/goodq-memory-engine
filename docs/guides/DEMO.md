@@ -5,9 +5,9 @@
 
 This short onboarding film walks through the first local GoodQ4All procedure: clone the repo, enter the project, run bootstrap install, keep `.env.local` in the project root when using local model/cache configuration, validate the bootstrap, run the launcher/readiness check, start Watchdog, drop media into the import inbox, start the API, and watch ingestion produce proof artifacts.
 
-[![Watch Welcome Aboard GoodQ4All](../../samples/assets/goodq4all-demo-poster.jpg)](https://github.com/GoodQ02/goodq4all/releases/download/demo-final-2026-05-17/GOODQ4ALL_DEMO_FINAL.mp4)
+[![Watch Welcome Aboard GoodQ4All](../../samples/assets/goodq4all-demo-poster.jpg)](https://github.com/GoodQ02/.github/releases/download/welcome-aboard-goodq4all-2026-05-17/GOODQ4ALL_DEMO_FINAL.mp4)
 
-- [Watch the final demo](https://github.com/GoodQ02/goodq4all/releases/download/demo-final-2026-05-17/GOODQ4ALL_DEMO_FINAL.mp4)
+- [Watch the final demo](https://github.com/GoodQ02/.github/releases/download/welcome-aboard-goodq4all-2026-05-17/GOODQ4ALL_DEMO_FINAL.mp4)
 - Runtime: `2:06.8`
 - SHA256: `695C17AC42208397E370875EF2B14229BF16758EEC0B14350271CD35C38C4780`
 

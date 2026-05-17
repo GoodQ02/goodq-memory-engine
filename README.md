@@ -19,13 +19,13 @@ GoodQ4All's thesis is simple: machine memory should earn every claim it makes.
 Start with the two-minute onboarding film if you want to see the install and first ingestion path before reading the deeper docs.
 
 <p align="center">
-  <a href="https://github.com/GoodQ02/goodq4all/releases/download/demo-final-2026-05-17/GOODQ4ALL_DEMO_FINAL.mp4">
+  <a href="https://github.com/GoodQ02/.github/releases/download/welcome-aboard-goodq4all-2026-05-17/GOODQ4ALL_DEMO_FINAL.mp4">
     <img src="samples/assets/goodq4all-demo-poster.jpg" alt="Watch Welcome Aboard GoodQ4All" width="760" />
   </a>
 </p>
 
 <p align="center">
-  <a href="https://github.com/GoodQ02/goodq4all/releases/download/demo-final-2026-05-17/GOODQ4ALL_DEMO_FINAL.mp4">Watch the 2-minute guided demo</a>
+  <a href="https://github.com/GoodQ02/.github/releases/download/welcome-aboard-goodq4all-2026-05-17/GOODQ4ALL_DEMO_FINAL.mp4">Watch the 2-minute guided demo</a>
   ·
   <a href="docs/guides/DEMO.md">Read the demo guide</a>
 </p>

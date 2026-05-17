@@ -24,6 +24,19 @@ GoodQ4All is designed around a conservative local-first posture:
 - optional integrations only when explicitly configured by the operator
 - local persistence as the system of record
 
+## Dependency and Scanning Automation
+
+The public repository uses source-owned GitHub Actions for baseline validation,
+documentation drift checks, CodeQL analysis, and dependency review on pull
+requests. Dependabot broad version-update pull requests are intentionally
+suppressed because GoodQ4All keeps runtime, WSL, CUDA, model, and step-env
+dependency lanes pinned. Security advisories and dependency alerts still require
+maintainer review before any lockfile, environment, or installer lane changes.
+
+Do not treat an automated dependency bump as safe by default. Dependency
+changes that affect runtime lanes should include the relevant bootstrap,
+validation, and witness evidence before promotion.
+
 ## Reporting a Vulnerability
 
 Please do not open public issues for suspected vulnerabilities.

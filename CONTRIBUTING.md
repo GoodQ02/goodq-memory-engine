@@ -47,6 +47,8 @@ git checkout -b feature/your-amazing-feature
 - **Formatter:** Prefer Black-compatible formatting for Python changes.
 - **Linting:** Keep changes PEP 8 friendly; run local lint tools when they are
   available in your environment.
+- **Validator scope:** `scripts/bootstrap_validate.bat` does not currently run
+  Black or Flake8; include any formatter/linter commands you used in PR notes.
 - **Type Hints:** Required for all new functions
 - **Docstrings:** Google-style docstrings for public APIs
 
@@ -144,15 +146,25 @@ We love new ideas! When suggesting features:
 ### Local Testing
 Before submitting a PR:
 
-```bash
-# Unit suite configured by pytest.ini
-python -m pytest -q
+```powershell
+# Canonical local validation wrapper on Windows
+.\scripts\bootstrap_validate.bat
+```
 
-# Docs/public-surface drift checks
-python scripts/docs/doc_drift_lint.py
+`bootstrap_validate.bat` currently runs these stages:
 
-# Bootstrap/install readiness checks
-scripts/bootstrap_validate.bat
+1. Environment info for ambient Python, the bound `goodq_core` Conda env, branch, commit, and CWD.
+2. Documentation governance via `scripts/docs/doc_drift_lint.py`.
+3. Bootstrap readiness via `scripts/bootstrap_verify.py --json`.
+4. The pytest suite via `python -m pytest -q` inside the bound Conda env.
+5. Optional non-fatal system signals for Qdrant, WSL, and CUDA.
+
+For faster targeted checks while iterating:
+
+```powershell
+conda run --no-capture-output -n goodq_core python -m pytest -q
+conda run --no-capture-output -n goodq_core python scripts/docs/doc_drift_lint.py
+conda run --no-capture-output -n goodq_core python scripts/bootstrap_verify.py --json
 ```
 
 ### Integration Testing

@@ -342,7 +342,9 @@ The “Basement Phase” established the non-negotiable foundation for GoodQ:
 
 - **Shell helpers:** `scripts/_lib/interpreter_bindings.ps1`, `scripts/_lib/interpreter_bindings.bat`
 - **Python conda resolution:** `steps/common/tool_paths.py` (used by `steps/common/conda_runner.py`)
-- **WSL distro binding:** `GOODQ_WSL_DISTRO` (default `Ubuntu`) used by WSL entrypoints and scripts.
+- **WSL distro binding:** `GOODQ_WSL_DISTRO` is used by WSL entrypoints and
+  scripts when explicitly set; bootstrap/validation otherwise prefer the first
+  Ubuntu-like distro detected on the host.
 
 ### Model storeroom (pinned + hashed; offline tooling)
 

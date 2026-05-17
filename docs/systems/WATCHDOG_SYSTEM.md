@@ -498,13 +498,13 @@ conda run -n goodq_core python tests\integration\test_watchdog.py
 ### Integration Tests
 ```powershell
 # Drop test file
-Copy-Item samples\smoke\sample.mp4 <GOODQ_DATA_ROOT>\GoodQ_Data\import_inbox\
+Copy-Item .\path\to\owned-small-media.mp4 <GOODQ_DATA_ROOT>\GoodQ_Data\import_inbox\
 
 # Monitor logs
 Get-Content <GOODQ_DATA_ROOT>\GoodQ_Data\epochs\<epoch>\logs\watchdog.log -Wait -Tail 20
 
 # Verify moved to processed
-Test-Path <GOODQ_DATA_ROOT>\GoodQ_Data\processed\PROCESSED_sample.mp4
+Get-ChildItem <GOODQ_DATA_ROOT>\GoodQ_Data\processed
 ```
 
 ---

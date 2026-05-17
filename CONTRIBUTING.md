@@ -44,8 +44,9 @@ git checkout -b feature/your-amazing-feature
 ## 📋 Code Standards
 
 ### Python Style
-- **Formatter:** Black (`black .`)
-- **Linting:** Flake8 for PEP 8 compliance
+- **Formatter:** Prefer Black-compatible formatting for Python changes.
+- **Linting:** Keep changes PEP 8 friendly; run local lint tools when they are
+  available in your environment.
 - **Type Hints:** Required for all new functions
 - **Docstrings:** Google-style docstrings for public APIs
 

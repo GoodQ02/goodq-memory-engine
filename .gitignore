@@ -138,6 +138,8 @@ $RECYCLE.BIN/
 /.tmp_codex_tests/
 /.tmp_codex_verify/
 import_inbox/
+/smoke_inbox/
+/test_input/
 output/
 exports/
 run_exports/

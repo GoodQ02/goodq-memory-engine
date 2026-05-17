@@ -1,10 +1,10 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: GENERATED_SNAPSHOT -->
-<!-- DOC_LAST_VERIFIED: 2026-05-11 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-17 -->
 
 # GoodQ4All Agent Status
 
-_Operational restart checkpoint aligned: 2026-05-11._
+_Operational restart checkpoint aligned: 2026-05-17._
 
 This document is a bounded operator snapshot of the current release-era
 stitching and offline-package baseline.
@@ -13,6 +13,23 @@ Use canonical runtime contracts and released evidence surfaces as source of
 truth for live claims. Do not treat this document as a live witness monitor.
 
 ## Current Restart Checkpoint
+- Pause checkpoint, 2026-05-17:
+  - status: first-run truth closure is active on `dev`; this pass is
+    onboarding/docs/template/root-fixture hygiene, not runtime architecture
+    change.
+  - local source line: `dev` / `origin/dev`; current audited head before this
+    pass was `3bba58e` (`docs: add visual first-run command cards`).
+  - public mirror state before this pass: sibling `goodq4all_public` on
+    `main` / `origin/main` at `af0093b` (`docs: add visual first-run command cards`).
+  - org profile state before this pass: sibling `goodq02_profile` on
+    `main` / `origin/main` at `1dd113b` (`docs: add visual first-run command cards`).
+  - selected policy: keep installer data-root behavior unchanged for this
+    pass; document `GOODQ_DATA_ROOT` as the base root and the runtime inbox as
+    `<GOODQ_DATA_ROOT>\GoodQ_Data\import_inbox\`.
+  - root `smoke_inbox/` and `test_input/` are local scratch inbox names only;
+    they must not be presented as supported first-run drop zones.
+  - current safe next move after restart: finish targeted validation, then
+    mirror only public-safe docs to the public/profile repos.
 - Pause checkpoint, 2026-05-11:
   - status: portability/bootstrap prep is active; do not start broad ingestion
     or UI work before confirming the current git head and reviewing the offline
@@ -80,10 +97,13 @@ truth for live claims. Do not treat this document as a live witness monitor.
   - only expected untracked local artifacts at pause were recurrence report artifacts under `reports/control_recurrence/`
   - immediate next action after pause: analyze the incoming laptop bootstrap audit before continuing project-root cleanup
 - Current local workspace:
-  - `main` / `origin/main` are the active source line; confirm the exact head with `git log -1 --oneline`
-  - source includes WSL runtime PyAnnote cache-dir loading and image-step GPU budget alignment through `86f032d`
+  - `dev` / `origin/dev` is the active local source line for this workspace;
+    confirm the exact head with `git log -1 --oneline`
+  - source includes the May 17 visual first-run command-card docs through
+    `3bba58e` before this first-run truth-closure pass
 - Current public-facing branch:
-  - `public` / `origin/public` includes the public-safe WSL runtime cache-dir and image-step GPU budget fixes through `2a7b918`, plus public archive pruning and utility path hygiene through `279c825`
+  - sibling `goodq4all_public` uses `main` / `origin/main`; before this pass it
+    was clean at `af0093b` with the visual first-run command cards mirrored
 - Current state:
   - Full Season 1 recompare witness completed successfully across `01x01` through `01x05`
   - Full Season 2 fresh witness completed successfully across `02x01` through `02x12`

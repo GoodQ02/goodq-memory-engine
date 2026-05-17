@@ -1,12 +1,15 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-05-09 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-17 -->
 
 # GoodQ4All Quickstart
 
 Use this when you need the shortest clean path from clone to launch on Windows.
 If this is your first time with the repo, run the full first-success loop in
 [`docs/guides/FIRST_RUN.md`](../FIRST_RUN.md) after bootstrap validation.
+
+Supported quickstart host: Windows 11 with Git, Conda, Python 3.10+, and enough
+local disk space for the selected install path.
 
 ## 1. Clone and Open the Repo
 
@@ -52,6 +55,8 @@ Drop one small media file into:
 ```text
 <GOODQ_DATA_ROOT>\GoodQ_Data\import_inbox\
 ```
+
+`GOODQ_DATA_ROOT` is the base root; the runtime derives `GoodQ_Data` beneath it.
 
 Then start the local API in another terminal:
 

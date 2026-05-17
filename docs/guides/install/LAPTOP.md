@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-02-19 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-17 -->
 
 # GoodQ4All Laptop Guide
 
@@ -27,10 +27,14 @@ $env:GOODQ_HOST_PROFILE = "GPU_ENHANCED"
 ```powershell
 $env:GOODQ_DATA_ROOT = "<path_to_data_root>"
 $env:GOODQ_CONDA_ENV = "goodq_core"
-$env:GOODQ_WSL_DISTRO = "Ubuntu"
+$env:GOODQ_WSL_DISTRO = "<wsl_distro>"
 $env:GOODQ_WSL_USER = "<wsl_user>"
 $env:GOODQ_WSL_WORKSPACE = "/home/<wsl_user>/goodq_audio"
 ```
+
+Leave `GOODQ_WSL_DISTRO` unset unless you need a deterministic distro binding.
+Bootstrap and validation prefer the first Ubuntu-like distro detected on the
+host when no explicit value is provided.
 
 ## Validation
 

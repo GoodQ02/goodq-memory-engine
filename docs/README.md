@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-05-09 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-17 -->
 
 # GoodQ4All Documentation
 
@@ -39,6 +39,8 @@ Current operator-validated additions on the active line:
 
 ## Start Here
 
+- Guided demo:
+  [`docs/guides/DEMO.md`](guides/DEMO.md)
 - First run:
   [`docs/guides/FIRST_RUN.md`](guides/FIRST_RUN.md)
 - Install:
@@ -54,7 +56,7 @@ Current operator-validated additions on the active line:
 
 ## Paths By Role
 
-- New user: start with [`docs/guides/FIRST_RUN.md`](guides/FIRST_RUN.md).
+- New user: watch the guided demo, then run [`docs/guides/FIRST_RUN.md`](guides/FIRST_RUN.md).
 - Operator: use [`docs/guides/general/LAUNCH_INSTRUCTIONS.md`](guides/general/LAUNCH_INSTRUCTIONS.md), then Watchdog and API docs.
 - Contributor: read [`CONTRIBUTING.md`](../CONTRIBUTING.md), then the architecture index.
 - Auditor: start with release notes, reports, diagnostics, and the current system snapshot.

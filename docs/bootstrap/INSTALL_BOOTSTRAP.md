@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-17 -->
 
 # GoodQ Bootstrap Installer
 
@@ -65,12 +65,11 @@ It also reports whether Hugging Face / PyAnnote auth was detected from `.env.loc
 Default portable data root:
 
 - a local Windows data root chosen by the bootstrap installer
-- current default implementation: `GOODQ_DATA_ROOT` points at the base root on the
-  system drive
-- the runtime then derives:
-  - `GoodQ_Data/`
-  - `models/`
-  - `qdrant_storage/`
+- `GOODQ_DATA_ROOT` is the base root written to `.env.local`
+- the runtime derives `GoodQ_Data/` beneath that base root, so the import inbox
+  path is `<GOODQ_DATA_ROOT>\GoodQ_Data\import_inbox\`
+- model cache and Qdrant storage are also derived from the configured local
+  root unless explicitly overridden
 
 Private machine configuration is written only to:
 
@@ -124,7 +123,7 @@ WSL distro selection:
 
 - if `GOODQ_WSL_DISTRO` is already set, the bootstrap preserves it
 - otherwise it prefers the first Ubuntu-like distro detected on the host
-- if no Ubuntu-like distro is present, it falls back to the existing default behavior
+- if no Ubuntu-like distro is present, it falls back to the installer default
 
 Environment selection:
 

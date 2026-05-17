@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-02-19 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-17 -->
 
 # GoodQ4All Install
 
@@ -8,7 +8,17 @@ This is the canonical install and bootstrap guide.
 
 ## Preferred Fresh-Machine Path
 
-For a fresh Windows machine, use the bootstrap installer first:
+For a fresh Windows 11 machine, use the bootstrap installer first. macOS and
+Linux are not supported first-run hosts for this repository today; see
+[`docs/reference/PLATFORM_SUPPORT.md`](../../reference/PLATFORM_SUPPORT.md).
+
+Prerequisites:
+
+- Git
+- Miniconda or Anaconda visible to the shell
+- Python 3.10 or newer
+- at least 25 GB free for the baseline path
+- optional: NVIDIA GPU and WSL2 Ubuntu for accelerated lanes
 
 ```powershell
 python scripts/bootstrap_install.py
@@ -19,6 +29,10 @@ provisions the supported specialized step-env pack required by the active
 pipeline from the pinned stable recipes under `envs/locks/`, writes local-only
 overrides when missing, performs lightweight verification, and launches the
 canonical launcher surface.
+
+For local secrets or provider settings, copy `.env.local.template` to
+`.env.local` and edit `.env.local`. The broader `.env.template` is a contract
+reference for maintainers and advanced operators.
 
 When `GPU_ENHANCED` / WSL audio is enabled, the bootstrap path stages the WSL
 audio constraints from `wsl2_audio/requirements-bootstrap-constraints.txt`.
@@ -71,6 +85,13 @@ $env:GOODQ_WSL_DISTRO = "Ubuntu"
 $env:GOODQ_WSL_USER = "<wsl_user>"
 $env:GOODQ_WSL_WORKSPACE = "/home/<wsl_user>/goodq_audio"
 ```
+
+`GOODQ_DATA_ROOT` is the base root. Runtime paths derive `GoodQ_Data` beneath
+that base, including `<GOODQ_DATA_ROOT>\GoodQ_Data\import_inbox\`.
+
+When `GOODQ_WSL_DISTRO` is not set, bootstrap preserves an explicit local
+setting, otherwise it prefers the first Ubuntu-like distro detected and falls
+back to the installer default.
 
 ## Manual Setup (Advanced / Existing Environment)
 

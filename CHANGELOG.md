@@ -10,6 +10,8 @@ and related canonical docs.
 ## [Unreleased]
 
 ### Added
+- Added the 2026-05-17 visual first-run command-card surface, guided demo
+  guide, and public/profile mirror alignment for the onboarding film.
 - Documented the post-seal audit result for `control-recurrence-v0.4.1`:
   the tag remains a valid sealed milestone, while current `main` is beyond it
   with `control-recurrence-v0.4.2` plus retry attribution/coalescing

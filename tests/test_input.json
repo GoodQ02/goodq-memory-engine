@@ -1,1 +1,1 @@
-{"modality":"video","source_path":"samples/ingestion/sample.mp4"}
+{"modality":"media","source_path":"<path-to-owned-small-media>","note":"No public sample.mp4 fixture is shipped. Replace this placeholder before running manual ingestion tests."}

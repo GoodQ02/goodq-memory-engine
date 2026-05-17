@@ -1,10 +1,10 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: GENERATED_SNAPSHOT -->
-<!-- DOC_LAST_VERIFIED: 2026-05-11 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-17 -->
 
 # System Snapshot
 
-_Operational operator-state alignment refreshed: 2026-05-11._
+_Operational operator-state alignment refreshed: 2026-05-17._
 
 This is a bounded release-era system snapshot. It is useful for understanding
 the supported host/runtime baseline, but it is not a live witness monitor.
@@ -125,6 +125,18 @@ the supported host/runtime baseline, but it is not a live witness monitor.
     - `51` transcript/entity disagreement segments
 
 ## Current Operator State
+- Pause checkpoint, 2026-05-17:
+  - status: first-run truth closure is active on the local `dev` branch.
+  - current audited local head before this pass: `3bba58e` (`docs: add visual first-run command cards`).
+  - public mirror before this pass: sibling `goodq4all_public` on `main` /
+    `origin/main` at `af0093b`.
+  - org profile before this pass: sibling `goodq02_profile` on `main` /
+    `origin/main` at `1dd113b`.
+  - scope: onboarding docs, install docs, environment template clarity, sample
+    fixture hygiene, changelog, and public-safe mirrors only.
+  - data-root policy: do not change installer runtime defaults in this pass;
+    document `GOODQ_DATA_ROOT` as the base root and
+    `<GOODQ_DATA_ROOT>\GoodQ_Data\import_inbox\` as the derived first-run inbox.
 - Pause checkpoint, 2026-05-11:
   - status: portability/bootstrap prep is active; next work should continue from
     model-cache drift cleanup and offline bundle staging, not broad ingestion or
@@ -142,7 +154,7 @@ the supported host/runtime baseline, but it is not a live witness monitor.
     unless intentionally promoted.
 - Pause checkpoint, 2026-05-08:
   - status: Wav2Vec WSL enrichment is one-episode validated on laptop `GPU_ENHANCED`.
-  - current runtime/source fix checkpoint is `86f032d` (`fix: align image step gpu budget mapping`)
+  - May 8 runtime/source fix checkpoint was `86f032d` (`fix: align image step gpu budget mapping`)
   - WSL runtime PyAnnote cache-dir fix `3a06342` is included in current main history
   - image-step GPU budget mapping fix `86f032d` is included in current main history
   - WSL audio cache-authority fix `a1d34df` is included in current main history
@@ -195,7 +207,7 @@ the supported host/runtime baseline, but it is not a live witness monitor.
   - scopes shared direct-run stdout events by persisted video/scene identity before turning them into recurrence signals
   - surfaces read-only step latency evidence from existing `step_runs.jsonl` `duration_ms` rows, including p50/p95/max by step, slow outlier counts, timeout-boundary exceedance counts, and WSL audio timing buckets
   - treats `control-recurrence-v0.4.1` as a valid sealed milestone for direct-run discoverability and truth-surface alignment, with the latest control recurrence tag at `control-recurrence-v0.4.2`
-  - current source beyond the latest control recurrence tag includes read-only recurrence trend mode, CLAP audio Qdrant payload provenance hardening, native model smoke diagnostics, shared runtime recurrence scoping, and WSL audio runtime black-box diagnostics through `05ae539`
+  - current `dev` source beyond the latest control recurrence tag includes read-only recurrence trend mode, CLAP audio Qdrant payload provenance hardening, native model smoke diagnostics, shared runtime recurrence scoping, WSL audio runtime black-box diagnostics, and visual first-run docs through `3bba58e` before this first-run truth-closure pass
   - control recurrence is source-complete as a read-only observability layer for pre-UI and portability work; v0.5 status is recorded in `docs/releases/CONTROL_RECURRENCE_v0.5_STATUS.md`
   - audio-vector success is provenance-defined by `docs/architecture/AUDIO_VECTOR_PROVENANCE_CONTRACT.md`
   - current-run CLAP/Qdrant audio coverage requires `clap_meta.status == ok` plus a Qdrant audio payload with matching `run_id` and required provenance fields

@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-05-09 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-17 -->
 
 # First Run
 
@@ -17,6 +17,22 @@ architecture, release proof, or broad tuning.
 - Watchdog can see one file in the configured inbox.
 - Ingestion can create scene memory.
 - The API can expose local inspection routes.
+
+## Before You Start
+
+Supported first-run host: Windows 11 with PowerShell.
+
+Have these available before running the installer:
+
+- Git
+- Miniconda or Anaconda visible to the shell
+- Python 3.10 or newer
+- at least 25 GB free for the baseline path
+- optional: NVIDIA GPU and WSL2 Ubuntu for accelerated lanes
+
+macOS and Linux are not supported first-run hosts for this repository today.
+Use [`docs/reference/PLATFORM_SUPPORT.md`](../reference/PLATFORM_SUPPORT.md) for
+the current platform contract.
 
 ## Mental Model
 
@@ -38,11 +54,31 @@ python scripts/bootstrap_install.py
 .\scripts\bootstrap_validate.bat
 ```
 
+If you want a CPU-safe installer pass without GPU, WSL audio, or model prefetch:
+
+```powershell
+python scripts/bootstrap_install.py --disable-gpu --disable-wsl-audio --skip-model-prefetch
+```
+
 Expected result:
 
 - bootstrap completes without blocking errors
 - validation reports pass, possibly with documented warnings for optional
   components
+
+During an interactive run, the installer may ask for:
+
+- the base data root directory
+- whether to enable GPU acceleration
+- whether to enable WSL audio acceleration
+- whether to install the supported step environment pack
+- whether to prefetch local model caches
+- Conda Terms of Service acceptance when Conda requires it
+- FFmpeg and Qdrant service installation or repair when missing
+
+For local secrets or provider settings, copy `.env.local.template` to
+`.env.local` and edit `.env.local` only. `.env.template` is a broad environment
+contract reference, not the first file new users should edit.
 
 ## 2. Check Readiness
 
@@ -69,6 +105,10 @@ Watchdog watches:
 <GOODQ_DATA_ROOT>\GoodQ_Data\import_inbox\
 ```
 
+`GOODQ_DATA_ROOT` is the base root selected by bootstrap or `.env.local`. The
+runtime derives `GoodQ_Data` beneath it, so the first-run drop zone is always
+the path shape shown above.
+
 ## 4. Drop One File
 
 Copy one small local media file into the inbox:
@@ -79,6 +119,11 @@ Copy-Item .\path\to\sample.mp4 <GOODQ_DATA_ROOT>\GoodQ_Data\import_inbox\
 
 Use a short file for the first run. Larger videos are normal later, but the
 first success loop should be easy to inspect.
+
+PDF ingestion requires Poppler / `pdftotext`. `.doc` and `.docx` extraction
+depends on the local document extraction tools available on the host, so use a
+small video, audio, image, text, or known-supported PDF file for the cleanest
+first run.
 
 ## 5. Start The API
 
@@ -92,6 +137,9 @@ Then open:
 
 - `http://127.0.0.1:30000/api/health/summary`
 - `http://127.0.0.1:30000/docs`
+
+These default to `GOODQ_API_HOST=127.0.0.1` and `GOODQ_API_PORT=30000`. Override
+them in `.env.local` only when you intentionally change the local API binding.
 
 ## 6. Confirm Success
 
@@ -108,6 +156,10 @@ For a successful first run, expect:
 Optional enrichments can fail on individual scenes without invalidating the
 entire run. Treat the manifest, temporal index, step logs, and API health as
 the first truth surfaces.
+
+If you skipped Qdrant service installation during bootstrap, the launcher may
+show one Qdrant readiness warning. That is expected until the service is
+installed or repaired with `scripts\qdrant\INSTALL_QDRANT_SERVICE.bat`.
 
 ## After First Success
 

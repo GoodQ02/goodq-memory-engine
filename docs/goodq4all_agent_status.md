@@ -14,22 +14,29 @@ truth for live claims. Do not treat this document as a live witness monitor.
 
 ## Current Restart Checkpoint
 - Pause checkpoint, 2026-05-17:
-  - status: first-run truth closure is active on `dev`; this pass is
-    onboarding/docs/template/root-fixture hygiene, not runtime architecture
-    change.
-  - local source line: `dev` / `origin/dev`; current audited head before this
-    pass was `3bba58e` (`docs: add visual first-run command cards`).
-  - public mirror state before this pass: sibling `goodq4all_public` on
-    `main` / `origin/main` at `af0093b` (`docs: add visual first-run command cards`).
-  - org profile state before this pass: sibling `goodq02_profile` on
-    `main` / `origin/main` at `1dd113b` (`docs: add visual first-run command cards`).
-  - selected policy: keep installer data-root behavior unchanged for this
-    pass; document `GOODQ_DATA_ROOT` as the base root and the runtime inbox as
+  - status: first-run truth closure is pushed on `dev`; current work is
+    follow-on agent-facing truth refresh and remaining OPUS checklist triage,
+    not runtime architecture change.
+  - local source line: `dev` / `origin/dev`; first-run closure checkpoints
+    pushed on 2026-05-17 are `e8ae169` (`docs: close first-run truth gaps`)
+    and `588b8c2` (`fix: align wsl distro fallback`). Verify the live head
+    with `git log -1 --oneline`.
+  - public mirror line: sibling `goodq4all_public` on `main` / `origin/main`;
+    public-safe closure checkpoints pushed on 2026-05-17 are `0b9ac99`
+    (`docs: mirror first-run truth closure`) and `0ccf271`
+    (`fix: align wsl distro fallback`).
+  - org profile line: sibling `goodq02_profile` on `main` / `origin/main` at
+    `f789962` (`docs: clarify goodq4all first-run path`).
+  - selected policy: installer data-root behavior remains unchanged; active
+    docs define `GOODQ_DATA_ROOT` as the base root and the runtime inbox as
     `<GOODQ_DATA_ROOT>\GoodQ_Data\import_inbox\`.
-  - root `smoke_inbox/` and `test_input/` are local scratch inbox names only;
-    they must not be presented as supported first-run drop zones.
-  - current safe next move after restart: finish targeted validation, then
-    mirror only public-safe docs to the public/profile repos.
+  - root `smoke_inbox/` and `test_input/` are now ignored local scratch inbox
+    names only; they are not supported first-run drop zones.
+  - WSL distro fallback now uses the generic `Ubuntu` alias when no detected
+    Ubuntu-like distro is available, while preserving explicit local settings.
+  - current safe next move after restart: continue the OPUS checklist from the
+    smallest remaining doc/runtime mismatch, then mirror only public-safe
+    changes to public/profile repos.
 - Pause checkpoint, 2026-05-11:
   - status: portability/bootstrap prep is active; do not start broad ingestion
     or UI work before confirming the current git head and reviewing the offline
@@ -99,11 +106,12 @@ truth for live claims. Do not treat this document as a live witness monitor.
 - Current local workspace:
   - `dev` / `origin/dev` is the active local source line for this workspace;
     confirm the exact head with `git log -1 --oneline`
-  - source includes the May 17 visual first-run command-card docs through
-    `3bba58e` before this first-run truth-closure pass
+  - source includes the May 17 first-run truth closure and WSL distro fallback
+    alignment through pushed checkpoint `588b8c2` before this doc-status
+    refresh
 - Current public-facing branch:
-  - sibling `goodq4all_public` uses `main` / `origin/main`; before this pass it
-    was clean at `af0093b` with the visual first-run command cards mirrored
+  - sibling `goodq4all_public` uses `main` / `origin/main`; public-safe
+    first-run truth closure is mirrored through pushed checkpoint `0ccf271`
 - Current state:
   - Full Season 1 recompare witness completed successfully across `01x01` through `01x05`
   - Full Season 2 fresh witness completed successfully across `02x01` through `02x12`

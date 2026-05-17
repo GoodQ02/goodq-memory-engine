@@ -126,14 +126,22 @@ the supported host/runtime baseline, but it is not a live witness monitor.
 
 ## Current Operator State
 - Pause checkpoint, 2026-05-17:
-  - status: first-run truth closure is active on the local `dev` branch.
-  - current audited local head before this pass: `3bba58e` (`docs: add visual first-run command cards`).
-  - public mirror before this pass: sibling `goodq4all_public` on `main` /
-    `origin/main` at `af0093b`.
-  - org profile before this pass: sibling `goodq02_profile` on `main` /
-    `origin/main` at `1dd113b`.
+  - status: first-run truth closure is pushed on the local `dev` branch;
+    current work is follow-on agent-facing truth refresh and remaining OPUS
+    checklist triage.
+  - local closure checkpoints pushed on 2026-05-17: `e8ae169`
+    (`docs: close first-run truth gaps`) and `588b8c2`
+    (`fix: align wsl distro fallback`). Verify the live head with
+    `git log -1 --oneline`.
+  - public mirror checkpoints pushed on 2026-05-17: sibling
+    `goodq4all_public` on `main` / `origin/main` through `0b9ac99`
+    (`docs: mirror first-run truth closure`) and `0ccf271`
+    (`fix: align wsl distro fallback`).
+  - org profile checkpoint: sibling `goodq02_profile` on `main` /
+    `origin/main` at `f789962` (`docs: clarify goodq4all first-run path`).
   - scope: onboarding docs, install docs, environment template clarity, sample
-    fixture hygiene, changelog, and public-safe mirrors only.
+    fixture hygiene, WSL distro fallback alignment, changelog, and public-safe
+    mirrors only.
   - data-root policy: do not change installer runtime defaults in this pass;
     document `GOODQ_DATA_ROOT` as the base root and
     `<GOODQ_DATA_ROOT>\GoodQ_Data\import_inbox\` as the derived first-run inbox.
@@ -207,7 +215,7 @@ the supported host/runtime baseline, but it is not a live witness monitor.
   - scopes shared direct-run stdout events by persisted video/scene identity before turning them into recurrence signals
   - surfaces read-only step latency evidence from existing `step_runs.jsonl` `duration_ms` rows, including p50/p95/max by step, slow outlier counts, timeout-boundary exceedance counts, and WSL audio timing buckets
   - treats `control-recurrence-v0.4.1` as a valid sealed milestone for direct-run discoverability and truth-surface alignment, with the latest control recurrence tag at `control-recurrence-v0.4.2`
-  - current `dev` source beyond the latest control recurrence tag includes read-only recurrence trend mode, CLAP audio Qdrant payload provenance hardening, native model smoke diagnostics, shared runtime recurrence scoping, WSL audio runtime black-box diagnostics, and visual first-run docs through `3bba58e` before this first-run truth-closure pass
+  - current `dev` source beyond the latest control recurrence tag includes read-only recurrence trend mode, CLAP audio Qdrant payload provenance hardening, native model smoke diagnostics, shared runtime recurrence scoping, WSL audio runtime black-box diagnostics, first-run truth closure, and WSL distro fallback alignment through pushed checkpoint `588b8c2` before this doc-status refresh
   - control recurrence is source-complete as a read-only observability layer for pre-UI and portability work; v0.5 status is recorded in `docs/releases/CONTROL_RECURRENCE_v0.5_STATUS.md`
   - audio-vector success is provenance-defined by `docs/architecture/AUDIO_VECTOR_PROVENANCE_CONTRACT.md`
   - current-run CLAP/Qdrant audio coverage requires `clap_meta.status == ok` plus a Qdrant audio payload with matching `run_id` and required provenance fields

@@ -10,6 +10,10 @@ and related canonical docs.
 ## [Unreleased]
 
 ### Added
+- Closed the 2026-05-17 first-time user audit gaps for prerequisite/host
+  framing, local env template guidance, root scratch inbox hygiene, sample
+  fixture expectations, Qdrant readiness messaging, and WSL distro fallback
+  alignment.
 - Added the 2026-05-17 visual first-run command-card surface, guided demo
   guide, and public/profile mirror alignment for the onboarding film.
 - Documented the post-seal audit result for `control-recurrence-v0.4.1`:

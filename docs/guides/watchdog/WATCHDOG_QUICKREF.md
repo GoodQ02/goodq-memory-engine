@@ -30,6 +30,8 @@ Drop files in the configured import inbox and Watchdog auto-processes them.
 
 `GOODQ_DATA_ROOT` is the configured base root. The runtime derives the
 `GoodQ_Data` folder beneath it.
+If the bootstrap summary already ends in `GoodQ_Data`, use that folder
+directly; do not append a second `GoodQ_Data` segment.
 
 ---
 

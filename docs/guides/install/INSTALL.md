@@ -89,6 +89,9 @@ $env:GOODQ_WSL_WORKSPACE = "/home/<wsl_user>/goodq_audio"
 
 `GOODQ_DATA_ROOT` is the base root. Runtime paths derive `GoodQ_Data` beneath
 that base, including `<GOODQ_DATA_ROOT>\GoodQ_Data\import_inbox\`.
+If the bootstrap summary shows a selected path that already ends in
+`GoodQ_Data`, use that folder directly as the runtime data root; do not append
+another `GoodQ_Data` segment.
 
 When `GOODQ_WSL_DISTRO` is not set, bootstrap preserves an explicit local
 setting, otherwise it prefers the first Ubuntu-like distro detected and falls

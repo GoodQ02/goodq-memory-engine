@@ -68,6 +68,9 @@ Default portable data root:
 - `GOODQ_DATA_ROOT` is the base root written to `.env.local`
 - the runtime derives `GoodQ_Data/` beneath that base root, so the import inbox
   path is `<GOODQ_DATA_ROOT>\GoodQ_Data\import_inbox\`
+- if the bootstrap summary shows a selected path that already ends in
+  `GoodQ_Data`, that folder is the runtime data root; do not append another
+  `GoodQ_Data` segment
 - model cache and Qdrant storage are also derived from the configured local
   root unless explicitly overridden
 

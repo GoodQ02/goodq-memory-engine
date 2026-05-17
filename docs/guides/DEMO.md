@@ -3,7 +3,7 @@
 
 # Welcome Aboard GoodQ4All
 
-This short onboarding film walks through the first local GoodQ4All procedure: clone the repo, enter the project, run bootstrap install, keep `.env.local` in the project root when using local model/cache configuration, validate the bootstrap, launch GoodQ4All, drop media into the import inbox, and watch ingestion produce proof artifacts.
+This short onboarding film walks through the first local GoodQ4All procedure: clone the repo, enter the project, run bootstrap install, keep `.env.local` in the project root when using local model/cache configuration, validate the bootstrap, run the launcher/readiness check, start Watchdog, drop media into the import inbox, start the API, and watch ingestion produce proof artifacts.
 
 [![Watch Welcome Aboard GoodQ4All](../../samples/assets/goodq4all-demo-poster.jpg)](https://github.com/GoodQ02/goodq4all/releases/download/demo-final-2026-05-17/GOODQ4ALL_DEMO_FINAL.mp4)
 
@@ -20,9 +20,11 @@ The demo is a guided proof path, not a new product surface. It shows the support
 3. Run the bootstrap installer.
 4. Keep `.env.local` in the repo root when using local model/cache/provider configuration.
 5. Run bootstrap validation.
-6. Launch the local API/runtime.
-7. Drop a media file into `import_inbox`.
-8. Watch GoodQ4All ingest the file and write scene/proof artifacts.
+6. Run `LAUNCH_GOODQ.ps1` to check readiness and open operator monitors.
+7. Start Watchdog in one terminal.
+8. Drop a media file into `import_inbox`.
+9. Start the local API in another terminal.
+10. Watch GoodQ4All ingest the file and write scene/proof artifacts.
 
 ## Commands Shown
 
@@ -31,7 +33,21 @@ git clone https://github.com/GoodQ02/goodq4all.git
 cd goodq4all
 python scripts/bootstrap_install.py
 .\scripts\bootstrap_validate.bat
-python -m api.server
+.\LAUNCH_GOODQ.ps1
+```
+
+`LAUNCH_GOODQ.ps1` checks readiness and opens operator monitors. It does not start ingestion by itself.
+
+Start Watchdog in one terminal:
+
+```powershell
+conda run --no-capture-output -n goodq_core python -m cli.watchdog
+```
+
+Drop one small media file into the configured `import_inbox`, then start the API in another terminal:
+
+```powershell
+conda run --no-capture-output -n goodq_core python -m api.server
 ```
 
 Then open:
@@ -42,6 +58,7 @@ Then open:
 ## Related Docs
 
 - [First Run](FIRST_RUN.md)
+- [Watchdog Quick Reference](watchdog/WATCHDOG_QUICKREF.md)
 - [Install Bootstrap](../bootstrap/INSTALL_BOOTSTRAP.md)
 - [API Reference](../reference/API.md)
 

@@ -125,22 +125,39 @@ That result comes from the local episode-reference eval lane and is summarized i
 - The API is a local read and inspection surface.
 - Runtime artifacts are the durable proof.
 
-### Fast Verification
+### First Local Run
 
-If you want the shortest honest path to “does this work on this machine?”:
+If you want the shortest honest path to “does this work on this machine?”, run the first success loop rather than only starting the API:
 
 1. Clone the repo and enter the project root.
 2. Run the bootstrap installer.
 3. Run the bootstrap validator.
-4. Start the API.
-5. Check the local health endpoint.
+4. Run the safe launcher/readiness check.
+5. Start Watchdog in one terminal.
+6. Drop one small media file into the configured `import_inbox`.
+7. Start the API in another terminal.
+8. Inspect health and local docs.
 
 ```powershell
 git clone https://github.com/GoodQ02/goodq4all.git
 cd goodq4all
 python scripts/bootstrap_install.py
 .\scripts\bootstrap_validate.bat
-python -m api.server
+.\LAUNCH_GOODQ.ps1
+```
+
+`LAUNCH_GOODQ.ps1` checks readiness and opens operator monitors. It does not start ingestion by itself.
+
+Leave Watchdog running in one terminal:
+
+```powershell
+conda run --no-capture-output -n goodq_core python -m cli.watchdog
+```
+
+Copy one small media file into the configured `import_inbox`, then start the API in another terminal:
+
+```powershell
+conda run --no-capture-output -n goodq_core python -m api.server
 ```
 
 Then open:
@@ -151,6 +168,7 @@ Then open:
 Reference:
 
 - [`docs/guides/FIRST_RUN.md`](docs/guides/FIRST_RUN.md)
+- [`docs/guides/watchdog/WATCHDOG_QUICKREF.md`](docs/guides/watchdog/WATCHDOG_QUICKREF.md)
 - [`docs/bootstrap/INSTALL_BOOTSTRAP.md`](docs/bootstrap/INSTALL_BOOTSTRAP.md)
 - [`docs/reference/API.md`](docs/reference/API.md)
 

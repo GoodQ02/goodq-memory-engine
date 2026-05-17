@@ -1,13 +1,14 @@
 # Samples
 
-This directory contains example artifacts used for ingestion and smoke-testing workflows.
+This directory contains documentation assets and optional local sample scaffolding.
 
 ## Structure
 
-- `samples/ingestion/`
-  - Optional local-only location for operator-provided ingestion examples.
 - `samples/assets/`
   - Documentation/demo media assets (for example, reference PNG assets).
+- `samples/ingestion/`
+  - Optional local location for operator-provided ingestion examples. It is not
+    a first-run inbox and may be absent from public checkouts until created.
 
 ## Usage Notes
 

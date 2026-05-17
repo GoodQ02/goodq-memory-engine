@@ -14,6 +14,20 @@ It ingests media into scene-level memory, persists what it learns locally, and k
 
 GoodQ4All's thesis is simple: machine memory should earn every claim it makes.
 
+## Watch The Guided Demo
+
+<p align="center">
+  <a href="https://github.com/GoodQ02/goodq4all/releases/download/demo-final-2026-05-17/GOODQ4ALL_DEMO_FINAL.mp4">
+    <img src="samples/assets/goodq4all-demo-poster.jpg" alt="Watch Welcome Aboard GoodQ4All" width="760" />
+  </a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/GoodQ02/goodq4all/releases/download/demo-final-2026-05-17/GOODQ4ALL_DEMO_FINAL.mp4">Watch the guided demo</a>
+  ·
+  <a href="docs/guides/DEMO.md">Read the demo guide</a>
+</p>
+
 ## First Success Loop
 
 If you are new here, start by making one memory:
@@ -117,7 +131,7 @@ If you want the shortest honest path to “does this work on this machine?”:
 5. Check the local health endpoint.
 
 ```powershell
-git clone <repo_url>
+git clone https://github.com/GoodQ02/goodq4all.git
 cd goodq4all
 python scripts/bootstrap_install.py
 .\scripts\bootstrap_validate.bat
@@ -206,6 +220,7 @@ If you want the deeper technical picture:
 
 ## Start Here
 
+- Guided demo: [`docs/guides/DEMO.md`](docs/guides/DEMO.md)
 - First run: [`docs/guides/FIRST_RUN.md`](docs/guides/FIRST_RUN.md)
 - Install: [`docs/guides/install/INSTALL.md`](docs/guides/install/INSTALL.md)
 - Quickstart: [`docs/guides/install/QUICKSTART.md`](docs/guides/install/QUICKSTART.md)

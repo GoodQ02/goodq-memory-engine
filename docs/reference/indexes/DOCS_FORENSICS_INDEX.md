@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE_POINTER -->
-<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-17 -->
 
 # Documentation Forensics Index
 
@@ -28,6 +28,9 @@ As of this pass:
 - local recurrence artifacts under `reports/control_recurrence/` remain
   workspace artifacts and are not documentation sources unless intentionally
   promoted
+- local generated branding exports under `branding/*.html` and scratch payloads
+  under `scratch/` remain workspace artifacts unless a release/demo surface
+  intentionally promotes them
 
 ## Authority Lookups
 

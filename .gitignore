@@ -140,6 +140,7 @@ $RECYCLE.BIN/
 import_inbox/
 /smoke_inbox/
 /test_input/
+/scratch/
 output/
 exports/
 run_exports/
@@ -167,6 +168,11 @@ htmlcov/
 temp_dir_inventory.json
 temp_repo_inventory.json
 /config.json
+
+# ===== LOCAL GENERATED DOC/OBSERVABILITY ARTIFACTS =====
+branding/*.html
+reports/control_recurrence/*.md
+reports/control_recurrence/*.json
 
 # ===== DOCUMENTATION BUILD =====
 docs/_build/

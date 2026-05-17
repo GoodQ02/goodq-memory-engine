@@ -59,6 +59,21 @@ Important:
 - the authoritative released outcome is always summarized back into the release
   and snapshot docs above
 
+### Control Recurrence Outputs
+
+Read-only control recurrence reports can be written under
+`reports/control_recurrence/` for local operator inspection.
+
+Important:
+
+- generated recurrence markdown, JSON reports, and `index.json` are local
+  workspace artifacts by default
+- promote only deliberately selected, sanitized audit packs
+- current source status belongs in
+  [`docs/releases/CONTROL_RECURRENCE_v0.5_STATUS.md`](../docs/releases/CONTROL_RECURRENCE_v0.5_STATUS.md)
+- public proof should use released summaries and public-safe methodology, not
+  local generated recurrence artifacts by default
+
 ## Historical and Exploratory Families
 
 These report families are useful for forensic work and backtracking, but they

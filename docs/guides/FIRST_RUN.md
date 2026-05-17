@@ -108,6 +108,8 @@ Watchdog watches:
 `GOODQ_DATA_ROOT` is the base root selected by bootstrap or `.env.local`. The
 runtime derives `GoodQ_Data` beneath it, so the first-run drop zone is always
 the path shape shown above.
+If bootstrap reports a selected data root that already ends in `GoodQ_Data`,
+use that folder directly; do not append a second `GoodQ_Data` segment.
 
 ## 4. Drop One File
 

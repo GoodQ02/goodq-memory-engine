@@ -58,6 +58,7 @@ a reproducible product vulnerability:
 
 ## Related Policies
 
+- Support routing: [`SUPPORT.md`](SUPPORT.md)
 - Contributor expectations: [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md)
 - Bootstrap guide: [`docs/bootstrap/INSTALL_BOOTSTRAP.md`](docs/bootstrap/INSTALL_BOOTSTRAP.md)
 - Shipping profile: [`docs/releases/SHIP_PROFILE.md`](docs/releases/SHIP_PROFILE.md)

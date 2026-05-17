@@ -59,6 +59,8 @@ Current operator-validated additions on the active line:
 - New user: watch the guided demo, then run [`docs/guides/FIRST_RUN.md`](guides/FIRST_RUN.md).
 - Operator: use [`docs/guides/general/LAUNCH_INSTRUCTIONS.md`](guides/general/LAUNCH_INSTRUCTIONS.md), then Watchdog and API docs.
 - Contributor: read [`CONTRIBUTING.md`](../CONTRIBUTING.md), then the architecture index.
+- Support request: read [`SUPPORT.md`](../SUPPORT.md), then choose the
+  matching issue template or discussion path.
 - Auditor: start with release notes, reports, diagnostics, and the current system snapshot.
 
 ## Runtime Authority

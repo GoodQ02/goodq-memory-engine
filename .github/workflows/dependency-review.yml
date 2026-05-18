@@ -4,13 +4,6 @@ on:
   push:
     branches:
       - main
-    paths:
-      - ".github/workflows/dependency-review.yml"
-      - "environment*.yml"
-      - "requirements*.txt"
-      - "pyproject.toml"
-      - "setup.py"
-      - "package*.json"
   pull_request:
     branches:
       - main

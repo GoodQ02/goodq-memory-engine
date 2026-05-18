@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE_NOTE -->
-<!-- DOC_LAST_VERIFIED: 2026-05-09 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-17 -->
 
 # GoodQ4All UI Status
 
@@ -40,6 +40,22 @@ v1 under `ui/justification_v1/`.
 - Consume UI-safe conduits and read-only API routes only.
 - Keep every source explicit to the operator.
 - Do not introduce a second runtime contract or hidden execution path.
+
+## Pre-UI Audit Snapshot
+
+Last checked: 2026-05-17.
+
+- No active README or roadmap item blocks read-only UI exploration.
+- The next non-UI technical seam remains silent observability/provenance loss
+  across observer, memory-commit, retrieval-event, provenance, API status, and
+  audio-helper paths.
+- Keep future UI work observer-only until a separate control-surface design is
+  approved.
+- Use `docs/architecture/OUTPUT_SCHEMA_INVENTORY.md` and
+  `docs/architecture/MEMORY_STORAGE.md` as the schema and data-hygiene
+  boundary.
+- Treat optional synthetic-fixture and release-asset polish as roadmap work, not
+  prerequisites for the existing Justification Channel scaffold.
 
 ## Use Instead
 

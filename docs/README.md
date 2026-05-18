@@ -14,6 +14,8 @@ This is the current landing page for the active GoodQ4All docs surface.
   [`docs/goodq4all_agent_status.md`](goodq4all_agent_status.md)
 - Current system baseline:
   [`docs/SYSTEM_SNAPSHOT.md`](SYSTEM_SNAPSHOT.md)
+- Current roadmap:
+  [`docs/ROADMAP.md`](ROADMAP.md)
 - Reports and evidence map:
   [`reports/README.md`](../reports/README.md)
 - Diagnostics index:

@@ -5,6 +5,11 @@
 
 # Truthful Ingest Facade Implementation Plan
 
+> Status note (2026-05-17): This is a historical implementation plan, not an
+> active TODO queue. The active ingest facade is documented in
+> `docs/reference/API.md` and
+> `docs/architecture/INGEST_ORCHESTRATION_CONTRACT.md`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add a truthful ingest facade that stages requests into the canonical inbox, records a durable request ledger, and exposes request-centric status without creating a second ingest engine.

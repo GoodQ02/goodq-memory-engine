@@ -1,4 +1,14 @@
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: QUALIFIED_PROOF_TRAIL -->
+<!-- DOC_LAST_VERIFIED: 2026-05-17 -->
+
 # WSL Wav2Vec Transformers Lane Implementation Plan
+
+> Status note (2026-05-17): This is the original qualification plan, not an
+> active TODO queue. The lane is qualified and one-episode validated; current
+> runtime truth lives in `docs/reference/WSL_AUDIO_RUNTIME.md`,
+> `docs/HANDOFF_BASEMENT_PHASE.md`, `docs/SYSTEM_SNAPSHOT.md`, and
+> `docs/goodq4all_agent_status.md`.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 

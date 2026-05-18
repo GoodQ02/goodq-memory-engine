@@ -1,15 +1,19 @@
 <!-- DOC_BADGE: OPERATIONAL -->
-<!-- DOC_STATUS: ACTIVE_EXECPLAN -->
+<!-- DOC_STATUS: REFERENCE_ONLY -->
 <!-- DOC_LAST_VERIFIED: 2026-05-07 -->
 
 # Docs And Root Forensics ExecPlan
 
-Status: ACTIVE
+Status: COMPLETE / REFERENCE_ONLY
 Branch: main
 Public-safe: yes
 
 This ExecPlan is subordinate to `AGENTS.md` and the canonical GoodQ runtime
 contracts. It must be updated as work proceeds.
+
+> Status note (2026-05-17): The audit cycle is complete enough to serve as a
+> reference trail, not an active TODO queue. Current follow-up routing lives in
+> `docs/reference/indexes/DOCS_FORENSICS_INDEX.md` and the restart handoff docs.
 
 ## Purpose / Operator Outcome
 

@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-05-17 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-19 -->
 
 # GoodQ4All Documentation
 
@@ -164,12 +164,22 @@ changes.
 - Public changelog:
   [`CHANGELOG.md`](../CHANGELOG.md)
 
-## Important Note
+## Current UI Surface
 
-GoodQ4All does not currently ship a production operator dashboard. The
-supported UI surface is the read-only Justification Channel at
-`ui/justification_v1/`; operational control remains API, CLI, watchdog, and
-persisted runtime artifacts.
+GoodQ4All now ships a local read-only operator console at
+`ui/operator_console_v1/`, served by the API process at
+`/ui/operator_console_v1/`. It is an inspection cockpit for runtime state,
+proof/evidence, retrieval, storage, recurrence reports, video inventory, and
+scene/timeline projections.
+
+The console is not a control plane. It does not trigger ingestion, reindex
+memory, heal configs, mutate persistence, generate recurrence reports, or
+activate ControlAgent. Operational write paths remain CLI, watchdog,
+`import_inbox`, persisted runtime artifacts, and the deliberately constrained
+ingest request facade.
+
+The Justification Channel remains the literal envelope renderer at
+`ui/justification_v1/`.
 
 - UI status:
   [`docs/guides/ui/JUSTIFICATION_UI.md`](guides/ui/JUSTIFICATION_UI.md)

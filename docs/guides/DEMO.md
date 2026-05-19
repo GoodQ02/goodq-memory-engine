@@ -1,5 +1,5 @@
 <!-- DOC_STATUS: GUIDE -->
-<!-- DOC_LAST_VERIFIED: 2026-05-17 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-19 -->
 
 # Welcome Aboard GoodQ4All
 
@@ -54,6 +54,7 @@ Then open:
 
 - `http://127.0.0.1:30000/api/health/summary`
 - `http://127.0.0.1:30000/docs`
+- `http://127.0.0.1:30000/ui/operator_console_v1/`
 
 ## Visual Play-By-Play
 
@@ -81,4 +82,5 @@ These frames are pulled from the final onboarding film so the commands, narratio
 
 - Keep `.env.local` local-only and out of commits.
 - GoodQ4All remains local-first; no cloud dependency is required for the supported runtime path.
-- The demo does not claim a polished end-user UI. It is an instructional film for the current API, CLI, watchdog, and ingestion surface.
+- The demo may show the read-only operator console as an inspection surface, but
+  it should not imply a polished consumer app or any UI-triggered ingestion.

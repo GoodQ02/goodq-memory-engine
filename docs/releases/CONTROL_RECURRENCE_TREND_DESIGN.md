@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: DESIGN -->
 <!-- DOC_STATUS: IMPLEMENTED_CONTRACT -->
-<!-- DOC_LAST_VERIFIED: 2026-05-09 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-19 -->
 
 # Control Recurrence Trend Design
 
@@ -17,8 +17,8 @@ The trend layer is a derived operator memory surface over existing control
 recurrence artifacts. It must not become a second recurrence engine, a healing
 system, an ingestion trigger, or a mutation-capable control plane.
 
-The active implementation is source-complete for pre-UI consumption, but it is
-not a new authority over recurrence truth. It derives only from
+The active implementation is source-complete for API and Operator Console
+consumption, but it is not a new authority over recurrence truth. It derives only from
 `reports/control_recurrence/index.json` and indexed durable JSON artifacts.
 The latest formal control-recurrence tag remains `control-recurrence-v0.4.2`;
 v0.5 trend behavior is documented in

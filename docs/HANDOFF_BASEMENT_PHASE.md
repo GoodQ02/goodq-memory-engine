@@ -1,21 +1,48 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-05-11 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-19 -->
 
 # Basement Phase Handoff (v1) — Current System State
 
-**Status:** Basement phase sealed + truth plumbing sealed (read-only control substrate active).
+**Status:** Basement phase sealed + truth plumbing sealed (read-only operator console and control substrate active).
 **Scope:** Integrity + observability + contracts + read-only UI/control truth layers; no execution authority, no policy coupling.
 
 ---
 
-## Current Restart Checkpoint (2026-05-11)
+## Current Restart Checkpoint (2026-05-19)
 
 This is the practical handoff point for a brand-new Codex session.
 
 - Pause checkpoint:
+  - status: operator visibility envelopes are implemented, locally verified,
+    and pushed. Local source line is `dev` / `origin/dev` at `50c9107`
+    (`feat: expose operator visibility envelopes`). Public-facing mirror is
+    `main` / `origin/main` in the sibling public checkout at `98df1e3`
+    (`feat: expose operator visibility envelopes`). Verify live heads with
+    `git log -1 --oneline`.
+  - supported browser UI now includes the read-only Operator Console v1 at
+    `/ui/operator_console_v1/`, served by the API process. It exposes Flight
+    Deck orientation, proof/evidence status, retrieval inspection,
+    storage/runtime summaries, recurrence report readouts, video inventory, and
+    scene/timeline projections.
+  - the Operator Console is observer-only. It must not trigger ingestion,
+    reindex memory, heal configs, mutate persistence, generate reports, or
+    activate ControlAgent.
+  - live local route check on 2026-05-19 returned `200` for
+    `/ui/operator_console_v1/` and contained Flight Deck, Proof Panel, and
+    Retrieval Console surfaces.
+  - API read models currently aligned for UI inspection include
+    `/api/runs/latest/evidence`, `/api/runs/latest/preview`,
+    `/api/system/videos`, `/api/videos/{video_id}/timeline/full`,
+    `/api/videos/{video_id}/scenes`, `/api/storage/summary`, and
+    `/api/search/multimodal`.
+  - next safe work is schema/read-model enrichment or UI clarity only after
+    targeted route verification; do not broaden ingestion, add control actions,
+    or mutate recurrence/control surfaces from the UI.
+
+- Previous pause checkpoint, 2026-05-11:
   - status: portability/bootstrap prep is active; continue from the offline
-    bundle contract and model-cache drift cleanup before UI or broad witness
+    bundle contract and model-cache drift cleanup before further UI or broad witness
     work.
   - canonical model cache authority is `<GOODQ_DATA_ROOT>/models` or an
     explicitly staged `%GOODQ_MODEL_CACHE_ROOT%`.
@@ -82,10 +109,13 @@ This is the practical handoff point for a brand-new Codex session.
   - local `reports/control_recurrence/` artifacts remain workspace hygiene unless intentionally promoted
   - next operator input expected: laptop bootstrap audit with two remaining items; analyze that before resuming project-root cleanup
 - Current local workspace head:
-  - `main` / `origin/main` are the active source line; confirm the exact head with `git log -1 --oneline`
-  - source includes WSL runtime PyAnnote cache-dir loading and image-step GPU budget alignment through `86f032d`
+  - `dev` / `origin/dev` are the active local source line; confirm the exact
+    head with `git log -1 --oneline`
+  - source includes the operator visibility envelope checkpoint through
+    `50c9107`
 - Current public-facing branch head:
-  - `public` / `origin/public` includes public-safe WSL runtime cache-dir and image-step GPU budget fixes through `2a7b918`, plus public archive pruning and utility path hygiene through `279c825`
+  - sibling public checkout `main` / `origin/main` includes the public-safe
+    operator visibility envelope checkpoint through `98df1e3`
 - Full witness state now banked:
   - Season 1 recompare completed (`01x01`–`01x05`)
   - Season 2 fresh witness completed (`02x01`–`02x12`)
@@ -112,7 +142,7 @@ This is the practical handoff point for a brand-new Codex session.
   - current-state capsule: `docs/releases/CONTROL_RECURRENCE_v0.4.2.md`
   - seal note: `control-recurrence-v0.4.1` remains a valid sealed milestone for direct-run discoverability and truth-surface alignment; current `main` is beyond it with `control-recurrence-v0.4.2` plus retry attribution/coalescing tightening
   - source state beyond the latest control-recurrence tag includes the read-only trend helper/CLI mode, the CLAP audio Qdrant payload provenance patch, native model smoke diagnostics, shared runtime recurrence scoping, and WSL audio runtime black-box diagnostics through `05ae539`
-  - control recurrence is source-complete as a read-only observability layer for pre-UI and portability work; v0.5 status is recorded in `docs/releases/CONTROL_RECURRENCE_v0.5_STATUS.md`
+  - control recurrence is source-complete as a read-only observability layer for operator-console and portability work; v0.5 status is recorded in `docs/releases/CONTROL_RECURRENCE_v0.5_STATUS.md`
   - shared direct-run stdout events are scoped by persisted video/scene identity before recurrence aggregation
   - direct-run discovery is bounded by existing required artifacts; absent aggregate output, operator metadata, temporal paths, or resolved log paths produce limited/missing-artifact observability rather than a boundary violation
   - local `reports/control_recurrence/index.json` state is workspace artifact hygiene unless the file is explicitly tracked
@@ -218,9 +248,12 @@ these findings:
 The “Basement Phase” established the non-negotiable foundation for GoodQ:
 - **Memory Integrity v1:** auditable writes, explainable reads, and inert observability (no reinforcement/policy yet).
 - **Epistemic representation:** a stable contract for how answers/evidence/limits are represented (schema + semantics).
-- **Truth layer UI (read-only):** a deterministic Justification Channel that renders envelopes literally (no actions).
+- **Truth layer UI (read-only):** Operator Console v1 for local inspection plus
+  a deterministic Justification Channel that renders envelopes literally (no
+  actions).
 - **Comparative understanding (read-only):** structural diffs between two envelopes without implying correctness.
-- **UI-safe conduits:** additive, whitelisted, path-sanitized derived tables/views for later UI/visualization layers.
+- **UI-safe conduits:** additive, whitelisted, path-sanitized derived
+  tables/views for read-only operator views and later visualization layers.
 - **Sensitive-source wiring:** schema + vault boundary contracts for chat/health/wearables (no ingestion).
 - **Deterministic execution:** explicit interpreter binding for conda + WSL invocations (no PATH drift).
 - **Model storeroom tooling:** pin/verify ML model revisions + hashes for offline-repeatable operation.
@@ -289,11 +322,14 @@ The “Basement Phase” established the non-negotiable foundation for GoodQ:
 
 - **Contract:** `docs/architecture/NON_ACTION_CONTRACT.md`
 - **Pure evaluator (no wiring):** `steps/common/non_action_contract.py`
-- **Note:** declarative only; enforcement is deferred by design; future UI/agents/pipelines must consult this contract.
+- **Note:** declarative only; enforcement is deferred by design; new UI/agents/pipelines must consult this contract.
 
 ### UI truth layer (read-only; invariant-safe)
 
 - **Legacy UI archived:** `archive/legacy_ui/README.md`
+- **Operator Console v1:** `ui/operator_console_v1/` (Flight Deck, proof,
+  retrieval, storage/runtime, recurrence, video, and timeline inspection; no
+  actions)
 - **Justification Channel v1:** `ui/justification_v1/` (literal renderer; no actions)
 - **Integrity harness + golden test:** `ui/justification_v1/static/js/integrity.js`, `ui/justification_v1/static/js/test_render.js`
 - **GoodQ Inspector v0 (observer-only):** `ui/justification_v1/inspector/`
@@ -444,6 +480,18 @@ These are intentionally *not* wired into ingestion yet:
 
 This is read-only control-plane observability only. The CLI reads existing persisted artifacts (`step_runs.jsonl`, run warnings, `scene_ingest_results.json`, `scene_manifest.json`, `temporal_index.json`, and `experiment_log.json`). For direct canonical run roots without a wrapper ledger, it can also read existing `operator_run_metadata.json`, `output/scene_ingest_results.json`, `workspace/_resolved_config.json`, canonical `step_runs.jsonl`, and captured ingestion stdout/stderr events. Direct roots may contain one or more videos, and metadata-described output/workspace paths are read only when present. Recurrence reports include observer-only latency summaries from existing `step_runs.jsonl` `duration_ms` rows; those summaries do not alter recurrence classification or trigger remediation. It writes artifacts only when explicitly asked. Recommendation drafts read existing durable JSON reports and return inspection steps only. Trend mode reads only the recurrence artifact index and indexed durable JSON reports; it does not reconstruct trend data from markdown or raw run roots. The API reads only `reports/control_recurrence/index.json` and indexed artifacts. It does not generate reports, trigger ingestion, activate ControlAgent, execute commands, mutate configs, or heal.
 
+### Run the Operator Console (read-only; no power)
+
+- Start API:
+  - `conda run --no-capture-output -n goodq_core python -m api.server`
+- Open:
+  - `http://127.0.0.1:30000/ui/operator_console_v1/`
+- Optional explicit API base:
+  - `http://127.0.0.1:30000/ui/operator_console_v1/?api_base=http%3A%2F%2F127.0.0.1%3A30000`
+- Boundary: observer-only. It reads API routes and persisted artifacts; it does
+  not trigger ingestion, reindex memory, mutate persistence, heal configs,
+  generate reports, or activate ControlAgent.
+
 ### Run the Justification Channel (read-only; no power)
 
 - Open: `ui/justification_v1/index.html`
@@ -459,7 +507,7 @@ This is read-only control-plane observability only. The CLI reads existing persi
   - Bundle shape: `{ "envelope": {...}, "nonActionDecisions": [...] }`
 - Load from read-only API (explicit):
   - Set `GOODQ_READONLY_ENVELOPE_PATH` to a precomputed bundle JSON path
-  - Run API: `python api/server.py` (default port `30000`)
+  - Run API: `python -m api.server` (default port `30000`)
   - Open UI: `ui/justification_v1/index.html?source=api&api_base=http://localhost:30000`
 
 ### Run Epistemic diff smoke tests (read-only)
@@ -479,7 +527,9 @@ This prints counts by category/name and a UTC date range. It does not write to d
 
 ### Where to start next
 
-- **UI work:** consume only UI-safe conduits (see `docs/architecture/MEMORY_STORAGE.md` “Conduit Pack v1”).
+- **UI work:** consume only read-only API routes, persisted artifacts, and
+  UI-safe conduits (see `docs/architecture/MEMORY_STORAGE.md` “Conduit Pack
+  v1”).
 - **Sensitive ingestion:** start from the staging contract + vault resolver; do not run existing steps directly on vault paths.
 - **Training/vault phase:** requires an explicit vault build manifest + explicit approval; keep vault boundaries intact.
 - **Current pipeline/intelligence next step:** do not broaden normalization. The
@@ -507,6 +557,7 @@ This prints counts by category/name and a UTC date range. It does not write to d
 - **Sensitive-source contracts:** `docs/architecture/CANONICAL_SENSITIVE_EVENTS.md`, `docs/architecture/VAULT_TOKEN_RESOLVER_CONTRACT.md`
 - **Sensitive schema definitions:** `steps/common/canonical_sensitive_events.py`
 - **Health adapter (dry-run):** `steps/health_auto_export/adapter.py`
+- **Operator Console UI:** `ui/operator_console_v1/`
 - **Justification Channel UI:** `ui/justification_v1/`
 - **Inspector v0:** `ui/justification_v1/inspector/`
 - **Interpreter binding helpers:** `scripts/_lib/interpreter_bindings.ps1`, `scripts/_lib/interpreter_bindings.bat`

@@ -1,11 +1,11 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-04-29 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-19 -->
 
 # Output Schema Inventory
 
-This document inventories the active GoodQ4All output surfaces that future UI,
-API, Codex, and operator layers are allowed to consume.
+This document inventories the active GoodQ4All output surfaces that UI, API,
+Codex, and operator layers are allowed to consume.
 
 It does not introduce a new runtime schema, execution path, validator, or
 mutation layer. It is a read-only map of existing persisted artifacts and

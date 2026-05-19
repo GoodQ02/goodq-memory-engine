@@ -1,13 +1,13 @@
 <!-- DOC_BADGE: RELEASE -->
 <!-- DOC_STATUS: OPERATOR_NOTE -->
-<!-- DOC_LAST_VERIFIED: 2026-05-09 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-19 -->
 
 # Control Recurrence v0.5 Source Status
 
 ## Verdict
 
 Control Recurrence is source-complete as a read-only operational memory layer
-for pre-UI use.
+for API and Operator Console inspection use.
 
 The latest formal tag remains `control-recurrence-v0.4.2`. The active source
 after that tag adds v0.5 trend behavior and related observer hardening, but it

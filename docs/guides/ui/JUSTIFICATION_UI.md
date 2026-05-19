@@ -1,26 +1,37 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE_NOTE -->
-<!-- DOC_LAST_VERIFIED: 2026-05-17 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-19 -->
 
 # GoodQ4All UI Status
 
-GoodQ4All does not currently ship a production operator dashboard. It does
-ship one supported read-only truth-layer scaffold: the Justification Channel
-v1 under `ui/justification_v1/`.
+GoodQ4All ships local read-only UI surfaces for inspection. The current primary
+surface is the Operator Console v1 under `ui/operator_console_v1/`; the
+Justification Channel v1 remains available under `ui/justification_v1/` for
+literal envelope rendering.
 
 ## Current Runtime Truth
 
 - The supported release surface is the local API, CLI, watchdog, manifests, and
   persisted memory artifacts.
-- The API process does not serve a supported browser UI at `GET /`.
+- The API process serves supported read-only browser surfaces under `/ui/*`.
+- `GET /` remains JSON discovery, not a browser shell.
+- The Operator Console reads only local API routes and persisted artifacts. It
+  is the current Flight Deck / proof / retrieval / storage / recurrence /
+  timeline inspection cockpit.
 - The Justification Channel may load only explicit read-only sources: bundled
   example data, a user-selected local JSON file, or `GET /api/read/envelope`
   through an explicit API base.
-- It renders envelopes literally. It has no action buttons, no mutation path,
-  no ingestion trigger, no healing trigger, and no ControlAgent activation.
+- UI surfaces have no mutation path, no ingestion trigger, no reindex trigger,
+  no config healing trigger, no report-generation trigger, and no ControlAgent
+  activation.
 
 ## Supported UI Surface
 
+- `ui/operator_console_v1/index.html`
+- Operator console local route:
+  `http://127.0.0.1:30000/ui/operator_console_v1/`
+- Operator console README:
+  [`ui/operator_console_v1/README.md`](../../../ui/operator_console_v1/README.md)
 - `ui/justification_v1/index.html`
 - Golden render smoke:
   `ui/justification_v1/static/js/test_render.js`
@@ -29,10 +40,10 @@ v1 under `ui/justification_v1/`.
 
 ## Not Supported
 
-- No production operator dashboard is shipped yet.
 - No browser shell is served from the API root.
-- No UI surface may rerun ingestion, mutate memory, heal configs, or activate
-  ControlAgent.
+- No polished consumer memory browser is shipped yet.
+- No UI surface may rerun ingestion, reindex memory, mutate memory, heal
+  configs, generate recurrence reports, or activate ControlAgent.
 - Archived UI notes are historical only and should not override this page.
 
 ## Before Future UI Work
@@ -43,19 +54,16 @@ v1 under `ui/justification_v1/`.
 
 ## Pre-UI Audit Snapshot
 
-Last checked: 2026-05-17.
+Last checked: 2026-05-19.
 
-- No active README or roadmap item blocks read-only UI exploration.
-- The next non-UI technical seam remains silent observability/provenance loss
-  across observer, memory-commit, retrieval-event, provenance, API status, and
-  audio-helper paths.
+- The operator console is active as a read-only local inspection surface.
 - Keep future UI work observer-only until a separate control-surface design is
   approved.
 - Use `docs/architecture/OUTPUT_SCHEMA_INVENTORY.md` and
   `docs/architecture/MEMORY_STORAGE.md` as the schema and data-hygiene
   boundary.
 - Treat optional synthetic-fixture and release-asset polish as roadmap work, not
-  prerequisites for the existing Justification Channel scaffold.
+  prerequisites for the existing read-only UI surfaces.
 
 ## Use Instead
 

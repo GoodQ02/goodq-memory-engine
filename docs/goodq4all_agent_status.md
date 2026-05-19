@@ -1,10 +1,10 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: GENERATED_SNAPSHOT -->
-<!-- DOC_LAST_VERIFIED: 2026-05-17 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-19 -->
 
 # GoodQ4All Agent Status
 
-_Operational restart checkpoint aligned: 2026-05-17._
+_Operational restart checkpoint aligned: 2026-05-19._
 
 This document is a bounded operator snapshot of the current release-era
 stitching and offline-package baseline.
@@ -13,6 +13,31 @@ Use canonical runtime contracts and released evidence surfaces as source of
 truth for live claims. Do not treat this document as a live witness monitor.
 
 ## Current Restart Checkpoint
+- Pause checkpoint, 2026-05-19:
+  - status: read-only operator visibility envelopes are implemented, verified,
+    and pushed on both source lines. Local workspace is `dev` / `origin/dev`
+    at `50c9107` (`feat: expose operator visibility envelopes`). Public mirror
+    is sibling public checkout `main` / `origin/main` at `98df1e3`
+    (`feat: expose operator visibility envelopes`).
+  - supported UI now includes Operator Console v1 at
+    `/ui/operator_console_v1/`, served by the API process. The older
+    Justification Channel remains available at `/ui/justification_v1/`.
+  - Operator Console panels currently cover Flight Deck orientation,
+    proof/evidence status, retrieval inspection, storage/runtime summaries,
+    recurrence report readouts, video inventory, selected timeline, and
+    Justification Channel handoff.
+  - verified live local route on 2026-05-19:
+    `/ui/operator_console_v1/?api_base=http%3A%2F%2F127.0.0.1%3A30000`
+    returned `200` and included Flight Deck, Proof Panel, and Retrieval Console
+    markup.
+  - verified read-only API surfaces for the console include latest run evidence,
+    latest run preview, system videos, full timeline, scenes, storage summary,
+    and multimodal search. Treat them as inspection surfaces only.
+  - boundary: no UI action may trigger ingestion, reindex memory, mutate
+    persistence, heal configs, generate recurrence reports, or activate
+    ControlAgent.
+  - next safe move after restart: continue with targeted schema/read-model or UI
+    clarity passes only after route-level verification against real data.
 - Pause checkpoint, 2026-05-17:
   - status: first-run truth closure is pushed on `dev`; current work is
     follow-on agent-facing truth refresh and remaining OPUS checklist triage,
@@ -106,12 +131,12 @@ truth for live claims. Do not treat this document as a live witness monitor.
 - Current local workspace:
   - `dev` / `origin/dev` is the active local source line for this workspace;
     confirm the exact head with `git log -1 --oneline`
-  - source includes the May 17 first-run truth closure and WSL distro fallback
-    alignment through pushed checkpoint `588b8c2` before this doc-status
-    refresh
+  - source includes the May 19 operator visibility envelope checkpoint through
+    pushed checkpoint `50c9107`
 - Current public-facing branch:
   - sibling `goodq4all_public` uses `main` / `origin/main`; public-safe
-    first-run truth closure is mirrored through pushed checkpoint `0ccf271`
+    operator visibility envelope work is mirrored through pushed checkpoint
+    `98df1e3`
 - Current state:
   - Full Season 1 recompare witness completed successfully across `01x01` through `01x05`
   - Full Season 2 fresh witness completed successfully across `02x01` through `02x12`
@@ -119,6 +144,13 @@ truth for live claims. Do not treat this document as a live witness monitor.
     - `lib/run_index.py`
     - `lib/run_summary.py`
     - `GET /api/runs/latest/preview`
+    - `GET /api/runs/latest/evidence`
+    - `GET /api/storage/summary`
+    - `GET /api/system/videos`
+    - `GET /api/videos/{video_id}/timeline/full`
+    - `GET /api/videos/{video_id}/scenes`
+    - `POST /api/search/multimodal`
+    - `ui/operator_console_v1/` (observer-only local operator console)
   - First safe control-agent substrate is active as read-only observability:
     - `lib/control_recurrence_report.py`
     - `lib/control_recurrence_index.py`
@@ -132,7 +164,7 @@ truth for live claims. Do not treat this document as a live witness monitor.
     - recurrence reports now include read-only step latency evidence from existing `step_runs.jsonl` `duration_ms` rows, including p50/p95/max, slow outlier counts, timeout-boundary exceedance counts, and WSL audio timing buckets
     - shared direct-run stdout events are scoped by persisted video/scene identity before becoming recurrence signals, so multi-video direct roots do not borrow native retry evidence across episodes
     - post-seal status: `control-recurrence-v0.4.1` remains a valid sealed milestone for direct-run discoverability and truth-surface alignment; latest control recurrence tag is `control-recurrence-v0.4.2`, with current source beyond it for read-only trend mode, audio Qdrant provenance hardening, native model smoke diagnostics, shared runtime recurrence scoping, and WSL audio runtime black-box diagnostics
-    - control recurrence is source-complete as a read-only observability layer for pre-UI and portability work; v0.5 status is recorded in `docs/releases/CONTROL_RECURRENCE_v0.5_STATUS.md`
+    - control recurrence is source-complete as a read-only observability layer for operator-console and portability work; v0.5 status is recorded in `docs/releases/CONTROL_RECURRENCE_v0.5_STATUS.md`
     - bounded direct-run discovery limits are expected when required artifacts are absent; local `reports/control_recurrence/index.json` state is workspace artifact hygiene unless explicitly tracked
     - local API read surface:
       - `GET /api/control-recurrence/reports`

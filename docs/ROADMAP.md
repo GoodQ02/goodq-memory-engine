@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-05-14 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-19 -->
 
 # GoodQ4All Public Preview Roadmap
 
@@ -21,6 +21,7 @@ The supported public-preview surface is:
 
 - local Windows-first bootstrap and validation
 - API + CLI + Watchdog + persisted runtime artifacts
+- read-only Operator Console v1 for local inspection
 - scene manifests, temporal indexes, SQLite memory, knowledge graph state, and
   Qdrant vectors as local truth surfaces
 - CPU-safe baseline behavior with optional GPU and WSL acceleration
@@ -33,7 +34,7 @@ The supported public-preview surface is:
 
 GoodQ4All public preview does not currently ship:
 
-- a production end-user UI
+- a polished production end-user memory browser
 - Docker or Docker Compose support
 - healthcare, clinical, compliance, or regulatory claims
 - autonomous mutation, healing, or ControlAgent activation by default
@@ -54,7 +55,7 @@ Status: active release-readiness work.
 - Keep public release packaging evidence separate from generated release
   assets.
 - Keep README, release docs, and docs indexes aligned with the supported
-  surface: API, CLI, Watchdog, and persisted artifacts.
+  surface: API, CLI, Watchdog, Operator Console, and persisted artifacts.
 - Add GitHub repository topics and concise discovery metadata outside the code
   tree.
 
@@ -66,9 +67,9 @@ Status: recommended next polish after the public-preview checkpoint.
   artifacts.
 - Record a short demo GIF or video only after the synthetic fixture is
   selected and its rights are clear.
-- Add a read-only status surface over existing health, Watchdog, and artifact
-  data. It must not trigger ingestion, mutate memory, heal configs, or activate
-  ControlAgent.
+- Continue hardening the read-only Operator Console over existing health,
+  Watchdog, and artifact data. It must not trigger ingestion, mutate memory,
+  heal configs, or activate ControlAgent.
 - Publish careful performance notes based on existing timing surfaces such as
   `step_runs.jsonl`, release evidence, and WSL audio timing probes.
 - Improve model-cache operator messaging where it helps first-run clarity,

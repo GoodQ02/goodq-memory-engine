@@ -843,6 +843,27 @@ def _resolve_audio_emotion(scene_audio_payload: Dict[str, Any]) -> tuple[Optiona
     return (normalized_emotion or None), emotion_scores
 
 
+def _resolve_audio_sentiment(
+    scene_audio_payload: Dict[str, Any],
+) -> tuple[Optional[Dict[str, Any]], Optional[str], Optional[float]]:
+    sentiment = scene_audio_payload.get("sentiment")
+    if not isinstance(sentiment, dict):
+        return None, None, None
+
+    label = sentiment.get("label")
+    normalized_label = str(label).strip() if label is not None else None
+
+    score_value: Optional[float] = None
+    raw_score = sentiment.get("score")
+    if raw_score is not None:
+        try:
+            score_value = float(raw_score)
+        except (TypeError, ValueError):
+            score_value = None
+
+    return sentiment, normalized_label or None, score_value
+
+
 def _resolve_scene_music_events(scene_audio_payload: Dict[str, Any]) -> List[Any]:
     music_events = scene_audio_payload.get("music_events")
     return music_events if isinstance(music_events, list) else []
@@ -2064,6 +2085,9 @@ def _persist_harmonized_scene_fields(
         "metadata_time_hints",
         "audio_emotion",
         "audio_emotion_scores",
+        "sentiment",
+        "sentiment_label",
+        "sentiment_score",
         "scene_context_llm",
         "scene_context_epistemic",
         "scene_context_arbitration",
@@ -2664,6 +2688,7 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
         time_hints = _resolve_scene_time_hints(scene_audio_payload)
         metadata_time_hints = _resolve_scene_metadata_time_hints(scene_audio_payload)
         audio_emotion, audio_emotion_scores = _resolve_audio_emotion(scene_audio_payload)
+        sentiment, sentiment_label, sentiment_score = _resolve_audio_sentiment(scene_audio_payload)
         speaker_voice_signatures = scene_audio_payload.get('speaker_voice_signatures') if isinstance(scene_audio_payload.get('speaker_voice_signatures'), list) else []
         candidate_visibility = _derive_candidate_visible_people(
             entity_channels=entity_channels,
@@ -2729,6 +2754,9 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
             'metadata_time_hints': metadata_time_hints,
             'audio_emotion': audio_emotion,
             'audio_emotion_scores': audio_emotion_scores,
+            'sentiment': sentiment,
+            'sentiment_label': sentiment_label,
+            'sentiment_score': sentiment_score,
             'emotion_status': scene_audio_payload.get('emotion_status'),
             'emotion_error': scene_audio_payload.get('emotion_error'),
             'scene_context_llm': None,

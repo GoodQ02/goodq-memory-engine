@@ -104,6 +104,87 @@ def test_latest_run_preview_uses_read_only_summary_projection(monkeypatch) -> No
     assert preview["latest_episode"]["episode"] == "02x06 - The Statue.mp4"
 
 
+def test_latest_run_preview_redacts_local_paths(monkeypatch) -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    if str(repo_root) not in sys.path:
+        sys.path.insert(0, str(repo_root))
+
+    fake_config_loader = types.ModuleType("steps.common.config_loader")
+    fake_config_loader.load_configs = lambda overrides=None: {
+        "paths": {"data_root": "data", "db_path": "data/memory.db"},
+        "host": {},
+        "memory": {},
+        "llm": {},
+    }
+    monkeypatch.setitem(sys.modules, "steps.common.config_loader", fake_config_loader)
+
+    fake_memory_store = types.ModuleType("steps.common.memory_store")
+    fake_memory_store.normalize_memory_tier_list = lambda values: values
+    monkeypatch.setitem(sys.modules, "steps.common.memory_store", fake_memory_store)
+
+    fake_ingest_requests = types.ModuleType("api.utils.ingest_requests")
+    fake_ingest_requests.is_supported_ingest_path = lambda path: True
+    monkeypatch.setitem(sys.modules, "api.utils.ingest_requests", fake_ingest_requests)
+
+    fake_goodq_version = types.ModuleType("goodq_version")
+    fake_goodq_version.GOODQ_VERSION = "test"
+    monkeypatch.setitem(sys.modules, "goodq_version", fake_goodq_version)
+
+    runtime = _load_runtime_route_module(repo_root)
+
+    monkeypatch.setattr(
+        runtime.run_index,
+        "list_runs",
+        lambda reports_root=None, limit=None: [
+            {
+                "run_id": "20260424_182406_season2_fresh_witness",
+                "status": "running",
+                "epoch": "epoch_2026_04_24_season2_witness",
+                "run_root": r"L:\_DATA\GoodQ_Data\reports\run_001",
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        runtime.run_summary,
+        "load_run_summary",
+        lambda run_root, reports_root=None: {
+            "run_header": {
+                "run_id": "20260424_182406_season2_fresh_witness",
+                "status": "running",
+                "epoch": "epoch_2026_04_24_season2_witness",
+                "source_dir": r"L:\_DATA\GoodQ_Data\import_inbox\home_movies",
+            },
+            "file_job_overview": {"episodes_total": 1, "scenes_processed": 3},
+            "outcome_classification": {"status": "running"},
+            "latest_episode": {
+                "episode": r"L:\_DATA\GoodQ_Data\import_inbox\home_movies\summer.mp4",
+                "status": "running",
+                "scene_count": 3,
+                "canonical_episode_artifacts": [
+                    r"L:\_DATA\GoodQ_Data\epochs\demo\processing\summer\temporal_index.json"
+                ],
+                "files_read": [
+                    r"L:\_DATA\GoodQ_Data\epochs\demo\processing\summer\scene_ingest_results.json"
+                ],
+            },
+        },
+    )
+
+    preview = runtime._latest_run_preview()
+    serialized = json.dumps(preview)
+
+    assert "L:" not in serialized
+    assert "_DATA" not in serialized
+    assert preview["source_dir"] == "<local-only>"
+    assert preview["source_dir_redacted"] is True
+    assert preview["raw_paths"] == "redacted"
+    assert preview["latest_episode"]["episode"] == "summer.mp4"
+    assert preview["latest_episode"]["artifact_count"] == 2
+    assert preview["latest_episode"]["artifact_paths_redacted"] is True
+    assert "canonical_episode_artifacts" not in preview["latest_episode"]
+    assert "files_read" not in preview["latest_episode"]
+
+
 def test_storage_summary_redacts_paths_and_reports_bounded_sizes(monkeypatch, tmp_path: Path) -> None:
     repo_root = Path(__file__).resolve().parents[2]
     if str(repo_root) not in sys.path:

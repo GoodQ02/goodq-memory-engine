@@ -5,12 +5,12 @@ Provides multimodal search endpoints.
 from __future__ import annotations
 from typing import Any, Dict, List, Optional
 import logging
-from pathlib import Path
 from fastapi import APIRouter, Query, HTTPException, Body
 from pydantic import BaseModel
 
 from api.utils.response_models import SearchResponse, SearchResult, default_confidence_payload
 from api.utils.loaders import DataLoader
+from api.utils.media_projection import representative_frame_projection
 from retrieval.multimodal_search import MultimodalSearchEngine
 from steps.common.config_loader import load_configs
 
@@ -22,165 +22,6 @@ router = APIRouter(prefix="/api/search", tags=["search"])
 _search_engine = None
 _data_loader = None
 _config = None
-
-_SEARCH_CONTEXT_FIELDS = (
-    "start",
-    "end",
-    "duration",
-    "content_state",
-    "audio_emotion",
-    "time_hints",
-    "speaker_ids",
-    "speaker_count",
-    "dominant_speaker_id",
-    "continuity_key",
-    "clip_id",
-    "dino_id",
-    "scene_context_llm",
-    "scene_context_epistemic",
-    "scene_context_arbitration",
-    "interaction_dominance",
-    "conversation_owner",
-)
-
-
-def _value_present(value: Any) -> bool:
-    if value is None:
-        return False
-    if isinstance(value, (str, list, dict, tuple, set)):
-        return bool(value)
-    return True
-
-
-def _segment_object_labels(segment: dict) -> List[str]:
-    """Normalize persisted object payloads into plain labels for search responses."""
-    labels = segment.get("objects")
-    if isinstance(labels, list) and labels:
-        return [str(label) for label in labels if label]
-
-    detected_objects = segment.get("detected_objects")
-    if isinstance(detected_objects, list):
-        extracted = []
-        for obj in detected_objects:
-            if isinstance(obj, dict):
-                label = obj.get("label")
-                if label:
-                    extracted.append(str(label))
-        return extracted
-
-    return []
-
-
-def _frame_name(frame_ref: Any) -> Optional[str]:
-    if not isinstance(frame_ref, str) or not frame_ref.strip():
-        return None
-    return Path(frame_ref).name
-
-
-def _find_temporal_scene(
-    loader: Any,
-    scene_id: Any,
-    video_id: Any = None,
-) -> tuple[Optional[str], Optional[Dict[str, Any]]]:
-    """Find a persisted temporal-index scene without trusting vector payload hashes."""
-    if scene_id is None:
-        return None, None
-
-    candidates: List[str] = []
-    try:
-        listed = loader.list_processed_videos()
-        if isinstance(listed, list):
-            candidates.extend(str(item) for item in listed if item)
-    except Exception as e:
-        logger.warning("Search hydration could not list processed videos error=%s", e)
-
-    if video_id and (not candidates or str(video_id) in candidates):
-        candidates.insert(0, str(video_id))
-
-    seen: set[str] = set()
-    target = str(scene_id)
-    for candidate in candidates:
-        if not candidate or candidate in seen:
-            continue
-        seen.add(candidate)
-        try:
-            temporal_index = loader.load_temporal_index(candidate)
-        except Exception as e:
-            logger.warning("Search hydration temporal load failed video_id=%s error=%s", candidate, e)
-            continue
-        if not isinstance(temporal_index, dict):
-            continue
-        segments = temporal_index.get("segments")
-        if not isinstance(segments, list):
-            continue
-        for segment in segments:
-            if isinstance(segment, dict) and str(segment.get("scene_id")) == target:
-                return candidate, segment
-
-    return None, None
-
-
-def _hydrate_search_result(result: Dict[str, Any]) -> Dict[str, Any]:
-    """Attach persisted scene truth to a vector hit when the temporal index can prove it."""
-    payload = result.get("payload") if isinstance(result.get("payload"), dict) else {}
-    scene_id = payload.get("scene_id")
-    if scene_id is None:
-        return result
-
-    try:
-        loader = get_data_loader()
-        canonical_video_id, segment = _find_temporal_scene(loader, scene_id, payload.get("video_id"))
-    except Exception as e:
-        logger.warning("Search hydration skipped scene_id=%s error=%s", scene_id, e)
-        return result
-
-    if not canonical_video_id or not isinstance(segment, dict):
-        return result
-
-    hydrated_payload = dict(payload)
-    hydrated_payload["video_id"] = canonical_video_id
-    hydrated_payload["scene_id"] = segment.get("scene_id", scene_id)
-    if not _value_present(hydrated_payload.get("timestamp")):
-        hydrated_payload["timestamp"] = segment.get("start")
-    if not _value_present(hydrated_payload.get("representative_frame")):
-        hydrated_payload["representative_frame"] = _frame_name(segment.get("representative_frame"))
-    if not _value_present(hydrated_payload.get("transcript")):
-        hydrated_payload["transcript"] = (
-            segment.get("full_transcript")
-            or segment.get("transcript")
-            or payload.get("text_preview")
-        )
-    if not _value_present(hydrated_payload.get("keywords")):
-        hydrated_payload["keywords"] = segment.get("keywords", [])
-    if not _value_present(hydrated_payload.get("objects")):
-        hydrated_payload["objects"] = _segment_object_labels(segment)
-    for field_name in ("sentiment", "sentiment_label", "sentiment_score"):
-        if not _value_present(hydrated_payload.get(field_name)):
-            hydrated_payload[field_name] = segment.get(field_name)
-
-    context = result.get("scene_context") if isinstance(result.get("scene_context"), dict) else {}
-    hydrated_context = dict(context)
-    hydrated_context.setdefault("video_id", canonical_video_id)
-    hydrated_context.setdefault("scene_id", hydrated_payload["scene_id"])
-    if _value_present(hydrated_payload.get("transcript")):
-        hydrated_context.setdefault("transcript", hydrated_payload["transcript"])
-    if _value_present(hydrated_payload.get("objects")):
-        hydrated_context.setdefault("objects", hydrated_payload["objects"])
-    for field_name in _SEARCH_CONTEXT_FIELDS:
-        value = segment.get(field_name)
-        if _value_present(value):
-            hydrated_context.setdefault(field_name, value)
-
-    provenance = result.get("provenance") if isinstance(result.get("provenance"), dict) else {}
-    hydrated_provenance = dict(provenance)
-    hydrated_provenance.setdefault("hydrated_from", "temporal_index")
-    hydrated_provenance.setdefault("canonical_video_id", canonical_video_id)
-
-    enriched = dict(result)
-    enriched["payload"] = hydrated_payload
-    enriched["scene_context"] = hydrated_context or None
-    enriched["provenance"] = hydrated_provenance
-    return enriched
 
 
 def _extract_sentiment_fields(result: dict) -> Dict[str, Any]:
@@ -205,6 +46,331 @@ def _extract_sentiment_fields(result: dict) -> Dict[str, Any]:
         "sentiment_label": sentiment_label,
         "sentiment_score": sentiment_score,
     }
+
+
+def _list_strings(value: Any) -> List[str]:
+    if not isinstance(value, list):
+        return []
+    return [str(item) for item in value if item is not None and str(item).strip()]
+
+
+def _list_dicts(value: Any) -> List[Dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if isinstance(item, dict)]
+
+
+def _segment_object_labels(segment: dict) -> List[str]:
+    labels = _list_strings(segment.get("objects"))
+    if labels:
+        return labels
+
+    detected_objects = segment.get("detected_objects")
+    if not isinstance(detected_objects, list):
+        return []
+
+    extracted = []
+    for obj in detected_objects:
+        if isinstance(obj, dict) and obj.get("label"):
+            extracted.append(str(obj["label"]))
+    return extracted
+
+
+def _segment_id_candidates(segment: dict) -> set[str]:
+    candidates: set[str] = set()
+    for key in ("scene_id", "segment_id", "id", "index", "scene_index"):
+        value = segment.get(key)
+        if value is not None and str(value).strip():
+            candidates.add(str(value).strip())
+            try:
+                candidates.add(f"scene_{int(value):04d}")
+            except (TypeError, ValueError):
+                pass
+    return candidates
+
+
+def _segment_transcript(segment: dict) -> Optional[str]:
+    for key in ("full_transcript", "transcript", "text"):
+        value = segment.get(key)
+        if isinstance(value, str) and value.strip():
+            return value
+    return None
+
+
+def _kg_evidence(segment: dict) -> Dict[str, Any]:
+    entities = _list_dicts(segment.get("scene_present_entities"))
+    relationships = _list_dicts(segment.get("relationships")) or _list_dicts(segment.get("kg_relationships"))
+    entity_count = len(entities)
+    relationship_count = len(relationships)
+    if relationship_count:
+        relationship_state = "observed"
+    elif entity_count:
+        relationship_state = "entity_presence_only"
+    else:
+        relationship_state = "not_observed"
+    return {
+        "source": "timeline_scene_entities",
+        "entity_count": entity_count,
+        "relationship_count": relationship_count,
+        "relationship_state": relationship_state,
+    }
+
+
+def _timeline_enrichment_context(segment: dict) -> Dict[str, Any]:
+    start = segment.get("start")
+    end = segment.get("end")
+    kg_evidence = _kg_evidence(segment)
+    context = {
+        "start": start,
+        "end": end,
+        "duration": (end - start) if isinstance(start, (int, float)) and isinstance(end, (int, float)) else segment.get("duration"),
+        "transcript": _segment_transcript(segment),
+        "tags": _list_strings(segment.get("tags")),
+        "objects": _segment_object_labels(segment),
+        "audio_emotion": segment.get("audio_emotion"),
+        "audio_emotion_scores": segment.get("audio_emotion_scores"),
+        "scene_present_entities": _list_dicts(segment.get("scene_present_entities")),
+        "relationships": _list_dicts(segment.get("relationships")) or _list_dicts(segment.get("kg_relationships")),
+        "kg_evidence": kg_evidence if kg_evidence["entity_count"] or kg_evidence["relationship_count"] else None,
+        "speaker_count": segment.get("speaker_count"),
+        "dominant_speaker_id": segment.get("dominant_speaker_id"),
+        "continuity_key": segment.get("continuity_key"),
+        "scene_context_llm": segment.get("scene_context_llm") if isinstance(segment.get("scene_context_llm"), dict) else None,
+        "scene_context_epistemic": segment.get("scene_context_epistemic") if isinstance(segment.get("scene_context_epistemic"), dict) else None,
+        "scene_context_arbitration": segment.get("scene_context_arbitration") if isinstance(segment.get("scene_context_arbitration"), dict) else None,
+    }
+    return {key: value for key, value in context.items() if value not in (None, [], {})}
+
+
+def _lookup_timeline_enrichment(payload: dict) -> Dict[str, Any]:
+    """Hydrate a search payload from persisted timeline data when a scene match is available."""
+    scene_id = payload.get("scene_id")
+    if scene_id is None or not str(scene_id).strip():
+        return {}
+
+    loader = get_data_loader()
+    search_video_id = str(payload.get("video_id")).strip() if payload.get("video_id") is not None else None
+    video_ids: List[str] = []
+
+    try:
+        processed_video_ids = list(loader.list_processed_videos())
+    except Exception as exc:
+        logger.debug("retrieval enrichment video inventory unavailable error=%s", exc)
+        processed_video_ids = []
+
+    if search_video_id and search_video_id in processed_video_ids:
+        video_ids.append(search_video_id)
+    elif search_video_id and not processed_video_ids:
+        video_ids.append(search_video_id)
+
+    for video_id in processed_video_ids:
+        if video_id not in video_ids:
+            video_ids.append(video_id)
+
+    wanted_scene = str(scene_id).strip()
+    for video_id in video_ids:
+        try:
+            temporal_index = loader.load_temporal_index(video_id)
+        except Exception as exc:
+            logger.debug("retrieval enrichment timeline load failed video_id=%s error=%s", video_id, exc)
+            continue
+        if not isinstance(temporal_index, dict):
+            continue
+
+        segments = temporal_index.get("segments")
+        if not isinstance(segments, list):
+            continue
+
+        for segment in segments:
+            if not isinstance(segment, dict) or wanted_scene not in _segment_id_candidates(segment):
+                continue
+
+            try:
+                metadata = loader.get_video_metadata(video_id)
+            except Exception:
+                metadata = {}
+            if not isinstance(metadata, dict):
+                metadata = {}
+
+            start = segment.get("start")
+            end = segment.get("end")
+            duration = (end - start) if isinstance(start, (int, float)) and isinstance(end, (int, float)) else segment.get("duration")
+            context = _timeline_enrichment_context(segment)
+            kg_evidence = context.get("kg_evidence") if isinstance(context.get("kg_evidence"), dict) else _kg_evidence(segment)
+            entities = _list_dicts(segment.get("scene_present_entities"))
+            relationships = _list_dicts(segment.get("relationships")) or _list_dicts(segment.get("kg_relationships"))
+            return {
+                "timeline_video_id": video_id,
+                "display_title": metadata.get("title") or video_id,
+                "start": start,
+                "end": end,
+                "duration": duration,
+                "timestamp": start,
+                "transcript": _segment_transcript(segment),
+                "keywords": _list_strings(segment.get("tags")) or _list_strings(segment.get("keywords")),
+                "tags": _list_strings(segment.get("tags")),
+                "objects": _segment_object_labels(segment),
+                "audio_emotion": segment.get("audio_emotion"),
+                "audio_emotion_scores": segment.get("audio_emotion_scores"),
+                "scene_present_entities": entities,
+                "kg_relationships": relationships,
+                "kg_evidence": kg_evidence,
+                "context": context,
+                "scene_context_llm": context.get("scene_context_llm"),
+                "scene_context_epistemic": context.get("scene_context_epistemic"),
+                "scene_context_arbitration": context.get("scene_context_arbitration"),
+                "provenance": {
+                    "search_video_id": search_video_id,
+                    "timeline_video_id": video_id,
+                    "scene_id": wanted_scene,
+                    "enrichment": "timeline_segment",
+                    "kg_source": kg_evidence.get("source"),
+                    "entity_count": kg_evidence.get("entity_count", 0),
+                    "relationship_count": kg_evidence.get("relationship_count", 0),
+                },
+            }
+    return {}
+
+
+def _merge_dicts(base: Optional[Dict[str, Any]], extra: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    if not isinstance(base, dict) and not isinstance(extra, dict):
+        return None
+    merged: Dict[str, Any] = {}
+    if isinstance(base, dict):
+        merged.update(base)
+    if isinstance(extra, dict):
+        merged.update(extra)
+    return merged
+
+
+def _looks_like_local_path(value: str) -> bool:
+    text = value.strip()
+    return (
+        len(text) >= 3
+        and text[1] == ":"
+        and text[2] in ("\\", "/")
+    ) or (
+        text.startswith("\\\\")
+        or text.startswith("file://")
+        or text.startswith("~/")
+        or "\\GOODCUBE\\" in text
+        or "\\_DATA\\" in text
+        or "/GOODCUBE/" in text
+        or "/_DATA/" in text
+        or "\\GoodQ_Data\\" in text
+        or "/GoodQ_Data/" in text
+    )
+
+
+def _sanitize_local_path_values(value: Any) -> tuple[Any, bool]:
+    if isinstance(value, dict):
+        sanitized: Dict[str, Any] = {}
+        redacted = False
+        for key, child in value.items():
+            safe_child, child_redacted = _sanitize_local_path_values(child)
+            sanitized[key] = safe_child
+            redacted = redacted or child_redacted
+        return sanitized, redacted
+
+    if isinstance(value, list):
+        sanitized_list = []
+        redacted = False
+        for child in value:
+            safe_child, child_redacted = _sanitize_local_path_values(child)
+            sanitized_list.append(safe_child)
+            redacted = redacted or child_redacted
+        return sanitized_list, redacted
+
+    if isinstance(value, str) and _looks_like_local_path(value):
+        return "<local-only>", True
+
+    return value, False
+
+
+def _sanitize_read_model_mapping(value: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    if not isinstance(value, dict):
+        return value
+
+    sanitized, redacted = _sanitize_local_path_values(value)
+    if redacted and isinstance(sanitized, dict):
+        sanitized["raw_paths"] = "redacted"
+    return sanitized
+
+
+def _safe_number(value: Any) -> Optional[float]:
+    if isinstance(value, (int, float)):
+        return float(value)
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _enriched_confidence(result: dict, enrichment: Dict[str, Any]) -> Dict[str, Any]:
+    confidence = result.get("confidence") if isinstance(result.get("confidence"), dict) else default_confidence_payload()
+    confidence = dict(confidence)
+    score = _safe_number(result.get("score"))
+    if score is not None:
+        if confidence.get("intrinsic") is None:
+            confidence["intrinsic"] = score
+        if confidence.get("overall") is None:
+            confidence["overall"] = score
+
+    if enrichment:
+        if confidence.get("source") is None:
+            confidence["source"] = "timeline_segment"
+        epistemic = enrichment.get("scene_context_epistemic")
+        if isinstance(epistemic, dict):
+            state = epistemic.get("state")
+            dominant = epistemic.get("dominant_evidence")
+            if state:
+                confidence["evidence_state"] = state
+            if dominant:
+                confidence["dominant_evidence"] = dominant
+    return confidence
+
+
+def _build_search_result(result: dict, modality: Optional[str] = None) -> SearchResult:
+    payload = result.get("payload", {}) if isinstance(result.get("payload"), dict) else {}
+    sentiment_fields = _extract_sentiment_fields(result)
+    enrichment = _lookup_timeline_enrichment(payload)
+    result_context = result.get("scene_context") if isinstance(result.get("scene_context"), dict) else None
+    context = _merge_dicts(enrichment.get("context"), result_context)
+    provenance = _merge_dicts(enrichment.get("provenance"), result.get("provenance") if isinstance(result.get("provenance"), dict) else None)
+    video_id = payload.get("video_id")
+    frame_projection = representative_frame_projection(str(video_id or ""), payload.get("representative_frame"))
+
+    return SearchResult(
+        score=result.get("score", 0.0),
+        modality=modality or result.get("modality", "unknown"),
+        video_id=video_id,
+        timeline_video_id=enrichment.get("timeline_video_id"),
+        display_title=enrichment.get("display_title"),
+        scene_id=payload.get("scene_id"),
+        start=enrichment.get("start"),
+        end=enrichment.get("end"),
+        duration=enrichment.get("duration"),
+        timestamp=payload.get("timestamp", enrichment.get("timestamp")),
+        **frame_projection,
+        transcript=payload.get("transcript", enrichment.get("transcript")),
+        keywords=payload.get("keywords") or enrichment.get("keywords") or [],
+        tags=enrichment.get("tags") or [],
+        objects=payload.get("objects") or enrichment.get("objects") or [],
+        audio_emotion=enrichment.get("audio_emotion"),
+        audio_emotion_scores=enrichment.get("audio_emotion_scores"),
+        scene_present_entities=enrichment.get("scene_present_entities") or [],
+        kg_relationships=enrichment.get("kg_relationships") or [],
+        kg_evidence=enrichment.get("kg_evidence"),
+        sentiment=sentiment_fields["sentiment"],
+        sentiment_label=sentiment_fields["sentiment_label"],
+        sentiment_score=sentiment_fields["sentiment_score"],
+        context=_sanitize_read_model_mapping(context),
+        scene_context_llm=enrichment.get("scene_context_llm"),
+        scene_context_epistemic=enrichment.get("scene_context_epistemic"),
+        scene_context_arbitration=enrichment.get("scene_context_arbitration"),
+        provenance=_sanitize_read_model_mapping(provenance),
+        confidence=_enriched_confidence(result, enrichment),
+    )
 
 
 def get_search_engine():
@@ -262,29 +428,7 @@ async def search_multimodal(request: MultimodalSearchRequest = Body(...)):
         # Convert to response format
         search_results = []
         for result in results:
-            result = _hydrate_search_result(result)
-            payload = result.get('payload', {})
-            sentiment_fields = _extract_sentiment_fields(result)
-            
-            search_result = SearchResult(
-                score=result.get('score', 0.0),
-                modality=result.get('modality', 'unknown'),
-                video_id=payload.get('video_id'),
-                scene_id=payload.get('scene_id'),
-                timestamp=payload.get('timestamp'),
-                representative_frame=payload.get('representative_frame'),
-                transcript=payload.get('transcript'),
-                keywords=payload.get('keywords', []),
-                objects=payload.get('objects', []),
-                sentiment=sentiment_fields["sentiment"],
-                sentiment_label=sentiment_fields["sentiment_label"],
-                sentiment_score=sentiment_fields["sentiment_score"],
-                context=result.get('scene_context'),
-                provenance=result.get("provenance") if isinstance(result.get("provenance"), dict) else None,
-                confidence=result.get("confidence") if isinstance(result.get("confidence"), dict) else default_confidence_payload(),
-            )
-            
-            search_results.append(search_result)
+            search_results.append(_build_search_result(result))
         
         modalities_searched = request.modalities if request.modalities else ['text', 'visual']
         
@@ -327,25 +471,7 @@ async def search_text(
         
         search_results = []
         for result in results:
-            result = _hydrate_search_result(result)
-            payload = result.get('payload', {})
-            sentiment_fields = _extract_sentiment_fields(result)
-            
-            search_result = SearchResult(
-                score=result.get('score', 0.0),
-                modality='text',
-                video_id=payload.get('video_id'),
-                scene_id=payload.get('scene_id'),
-                transcript=payload.get('transcript'),
-                keywords=payload.get('keywords', []),
-                sentiment=sentiment_fields["sentiment"],
-                sentiment_label=sentiment_fields["sentiment_label"],
-                sentiment_score=sentiment_fields["sentiment_score"],
-                provenance=result.get("provenance") if isinstance(result.get("provenance"), dict) else None,
-                confidence=result.get("confidence") if isinstance(result.get("confidence"), dict) else default_confidence_payload(),
-            )
-            
-            search_results.append(search_result)
+            search_results.append(_build_search_result(result, modality="text"))
         
         return SearchResponse(
             query=q,
@@ -381,26 +507,7 @@ async def search_visual(
         
         search_results = []
         for result in results:
-            result = _hydrate_search_result(result)
-            payload = result.get('payload', {})
-            sentiment_fields = _extract_sentiment_fields(result)
-            
-            search_result = SearchResult(
-                score=result.get('score', 0.0),
-                modality='visual',
-                video_id=payload.get('video_id'),
-                scene_id=payload.get('scene_id'),
-                representative_frame=payload.get('representative_frame'),
-                objects=payload.get('objects', []),
-                keywords=payload.get('keywords', []),
-                sentiment=sentiment_fields["sentiment"],
-                sentiment_label=sentiment_fields["sentiment_label"],
-                sentiment_score=sentiment_fields["sentiment_score"],
-                provenance=result.get("provenance") if isinstance(result.get("provenance"), dict) else None,
-                confidence=result.get("confidence") if isinstance(result.get("confidence"), dict) else default_confidence_payload(),
-            )
-            
-            search_results.append(search_result)
+            search_results.append(_build_search_result(result, modality="visual"))
         
         return SearchResponse(
             query=q,

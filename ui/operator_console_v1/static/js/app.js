@@ -1500,9 +1500,21 @@
   }
 
   function retrievalResultKey(result, index) {
-    const video = result && result.video_id ? String(result.video_id) : "video";
+    const video = retrievalTimelineVideoId(result) || (result && result.video_id ? String(result.video_id) : "video");
     const scene = result && result.scene_id !== null && result.scene_id !== undefined ? String(result.scene_id) : "scene";
     return `${video}:${scene}:${index}`;
+  }
+
+  function retrievalTimelineVideoId(result) {
+    if (!result || typeof result !== "object") return null;
+    return valueObserved(result.timeline_video_id)
+      ? String(result.timeline_video_id)
+      : (valueObserved(result.video_id) ? String(result.video_id) : null);
+  }
+
+  function retrievalVideoLabel(result) {
+    if (!result || typeof result !== "object") return "Not observed";
+    return result.display_title || result.timeline_video_id || result.video_id || "Not observed";
   }
 
   function normalizeSearchResults(response) {
@@ -1572,8 +1584,8 @@
 
   function resultTimeLabel(result) {
     const context = result && result.context && typeof result.context === "object" ? result.context : {};
-    const start = retrievalNumber(context.start);
-    const end = retrievalNumber(context.end);
+    const start = retrievalNumber(context.start ?? (result && result.start));
+    const end = retrievalNumber(context.end ?? (result && result.end));
     if (start !== null && end !== null) return `${formatTime(start)}-${formatTime(end)}`;
     const timestamp = retrievalNumber(result ? result.timestamp : null);
     if (timestamp !== null) return `${formatTime(timestamp)}`;
@@ -1586,8 +1598,9 @@
   }
 
   function canOpenRetrievalResult(result) {
-    if (!result || !valueObserved(result.video_id) || !valueObserved(result.scene_id)) return false;
-    return videoInventoryIds().has(String(result.video_id));
+    const videoId = retrievalTimelineVideoId(result);
+    if (!result || !valueObserved(videoId) || !valueObserved(result.scene_id)) return false;
+    return videoInventoryIds().has(String(videoId));
   }
 
   function objectHasAny(data, keys) {
@@ -1632,6 +1645,42 @@
     return Array.isArray(objects) ? objects.map((item) => safeString(item, "object")).filter(Boolean) : [];
   }
 
+  function retrievalEntityLabels(result) {
+    const context = retrievalContext(result);
+    const entities = Array.isArray(result && result.scene_present_entities) && result.scene_present_entities.length
+      ? result.scene_present_entities
+      : context.scene_present_entities;
+    if (!Array.isArray(entities)) return [];
+    return entities
+      .map((item) => {
+        if (!item || typeof item !== "object") return null;
+        const text = item.text || item.label || item.name || item.identity;
+        const type = item.type || item.entity_type;
+        if (!valueObserved(text)) return null;
+        return type ? `${safeString(text, "entity")} (${safeString(type, "entity_type")})` : safeString(text, "entity");
+      })
+      .filter(Boolean);
+  }
+
+  function retrievalKgEvidence(result) {
+    const context = retrievalContext(result);
+    const evidence = result && result.kg_evidence && typeof result.kg_evidence === "object"
+      ? result.kg_evidence
+      : context.kg_evidence;
+    return evidence && typeof evidence === "object" ? evidence : {};
+  }
+
+  function retrievalRelationshipCount(result) {
+    const context = retrievalContext(result);
+    const relationships = Array.isArray(result && result.kg_relationships) && result.kg_relationships.length
+      ? result.kg_relationships
+      : context.relationships;
+    if (Array.isArray(relationships)) return relationships.length;
+    const evidence = retrievalKgEvidence(result);
+    const count = retrievalNumber(evidence.relationship_count);
+    return count !== null ? count : 0;
+  }
+
   function retrievalSentimentLabel(result) {
     const context = retrievalContext(result);
     const sentiment = result && result.sentiment && typeof result.sentiment === "object" ? result.sentiment : context.sentiment;
@@ -1646,16 +1695,22 @@
   function retrievalEvidenceFacts(result) {
     const context = retrievalContext(result);
     const objects = retrievalObjectLabels(result);
+    const entities = retrievalEntityLabels(result);
+    const kgEvidence = retrievalKgEvidence(result);
+    const relationshipCount = retrievalRelationshipCount(result);
     const llmSummary = retrievalLlmSummary(result);
     const llmTags = retrievalLlmTags(result);
     const epistemic = context.scene_context_epistemic && typeof context.scene_context_epistemic === "object" ? context.scene_context_epistemic : {};
     const arbitration = context.scene_context_arbitration && typeof context.scene_context_arbitration === "object" ? context.scene_context_arbitration : {};
     const facts = [
-      ["Episode", result && result.video_id],
+      ["Episode", retrievalVideoLabel(result)],
+      ["Search id", result && result.timeline_video_id && result.video_id !== result.timeline_video_id ? result.video_id : null],
       ["Time", resultTimeLabel(result)],
       ["Transcript", valueObserved(result && result.transcript) || valueObserved(context.transcript) ? "Observed" : "Not observed"],
       ["Objects", objects.length ? `${objects.slice(0, 4).join(", ")}${objects.length > 4 ? "..." : ""}` : "Not observed"],
-      ["Audio emotion", context.audio_emotion || "Not observed"],
+      ["KG entities", entities.length ? `${entities.slice(0, 4).join(", ")}${entities.length > 4 ? "..." : ""}` : "Not observed"],
+      ["KG evidence", valueObserved(kgEvidence.relationship_state) ? `${safeString(kgEvidence.relationship_state, "kg_evidence")} | ${relationshipCount} relationships` : "Not observed"],
+      ["Audio emotion", (result && result.audio_emotion) || context.audio_emotion || "Not observed"],
       ["Speaker continuity", context.continuity_key || (context.speaker_count ? `${context.speaker_count} speakers` : "Not observed")],
       ["Scene context LLM", llmSummary || (context.scene_context_llm ? "Observed" : "Not observed")],
       ["LLM tags", llmTags.length ? llmTags.join(", ") : "Not observed"],
@@ -1664,9 +1719,9 @@
       ["Sentiment", retrievalSentimentLabel(result) || "Not persisted"],
     ];
     if (result && result.provenance && typeof result.provenance === "object") {
-      facts.push(["Provenance", result.provenance.hydrated_from || result.provenance.source || "Returned"]);
+      facts.push(["Provenance", result.provenance.enrichment || result.provenance.hydrated_from || result.provenance.source || "Returned"]);
     }
-    return facts;
+    return facts.filter(([, value]) => value !== null && value !== undefined && value !== "");
   }
 
   function appendRetrievalEvidence(container, result, selectedIndex, signals, percent) {
@@ -1706,6 +1761,9 @@
     const context = retrievalContext(result);
     const percent = scorePercent(result);
     const objects = retrievalObjectLabels(result);
+    const entities = retrievalEntityLabels(result);
+    const relationshipCount = retrievalRelationshipCount(result);
+    const kgEvidence = retrievalKgEvidence(result);
     const textObserved =
       modality.includes("text") ||
       valueObserved(result && result.transcript) ||
@@ -1723,7 +1781,10 @@
     const kgObserved =
       provenanceMentions(result, "kg") ||
       provenanceMentions(result, "graph") ||
-      objectHasAny(context, ["entity_links", "kg_links", "knowledge_graph", "relationships"]);
+      objectHasAny(context, ["entity_links", "kg_links", "knowledge_graph", "relationships", "scene_present_entities", "kg_evidence"]) ||
+      entities.length > 0 ||
+      relationshipCount > 0 ||
+      valueObserved(kgEvidence.relationship_state);
     const speakerObserved = objectHasAny(context, ["continuity_key", "dominant_speaker_id", "speaker_count", "speaker_ids"]);
 
     return [
@@ -1749,11 +1810,15 @@
         missing: "Audio vector not yet proven",
       },
       {
-        label: "KG Relationship",
+        label: "KG / Entity Evidence",
         observed: kgObserved,
         strength: null,
-        note: kgObserved ? "Graph relationship evidence returned" : "No KG relationship returned",
-        missing: "KG relationship not exposed",
+        note: kgObserved
+          ? (relationshipCount > 0
+            ? `Relationships observed: ${relationshipCount}`
+            : (entities.length ? `Entities observed: ${entities.slice(0, 3).join(", ")}; relationship not asserted` : "KG evidence returned"))
+          : "No KG or entity evidence returned",
+        missing: "KG/entity evidence not exposed",
       },
       {
         label: "Speaker Continuity",
@@ -1976,7 +2041,7 @@
     const entry = selectedRetrievalEntry();
     const result = entry ? entry.result : null;
     if (!canOpenRetrievalResult(result)) return;
-    state.selectedVideoId = String(result.video_id);
+    state.selectedVideoId = retrievalTimelineVideoId(result);
     state.selectedSceneKey = String(result.scene_id);
     renderVideos();
     showLoading(qs("#timeline-panel"));
@@ -1993,6 +2058,16 @@
 
   function safeVideoTitle(video) {
     return safeString(video.title || video.video_id || "Untitled video", "title");
+  }
+
+  function thumbnailEnvelopeLabel(video) {
+    if (video && video.thumbnail_available && valueObserved(video.thumbnail_endpoint)) {
+      const parts = ["Thumbnail: local API ready"];
+      if (video.thumbnail_path_redacted) parts.push("raw path redacted");
+      return parts.join(" | ");
+    }
+    if (video && video.thumbnail_available) return "Thumbnail: available | endpoint not exposed";
+    return "Thumbnail: not exposed";
   }
 
   function renderVideos() {
@@ -2029,6 +2104,7 @@
         `${safeString(video.total_scenes, "total_scenes")} scenes | ${safeString(video.processed_date, "processed_date")}`,
         "video-meta"
       );
+      appendText(label, "span", thumbnailEnvelopeLabel(video), "video-meta");
       button.appendChild(label);
       button.appendChild(makeBadge(id === state.selectedVideoId ? "selected" : "open", id === state.selectedVideoId ? "ok" : ""));
       list.appendChild(button);

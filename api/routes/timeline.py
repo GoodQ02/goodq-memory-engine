@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException, Path as PathParam
 
 from api.utils.response_models import TimelineResponse, TimelineSegment
 from api.utils.loaders import DataLoader
+from api.utils.media_projection import frame_paths_projection, representative_frame_projection
 
 logger = logging.getLogger(__name__)
 
@@ -60,12 +61,14 @@ def _segment_object_labels(segment: dict) -> list[str]:
     return []
 
 
-def _build_timeline_segment(seg: dict, truncate_transcript: bool = False) -> TimelineSegment:
+def _build_timeline_segment(video_id: str, seg: dict, truncate_transcript: bool = False) -> TimelineSegment:
     """Project one persisted segment into the stable timeline API contract."""
     full_transcript = seg.get("full_transcript")
     transcript = full_transcript
     if truncate_transcript and isinstance(full_transcript, str) and len(full_transcript) > 200:
         transcript = f"{full_transcript[:200]}..."
+    frame_projection = representative_frame_projection(video_id, seg.get('representative_frame'))
+    frame_paths = frame_paths_projection(video_id, seg.get('frame_paths', []))
 
     return TimelineSegment(
         segment_id=seg.get('segment_id', 0),
@@ -79,7 +82,8 @@ def _build_timeline_segment(seg: dict, truncate_transcript: bool = False) -> Tim
         objects=_segment_object_labels(seg)[:5] if truncate_transcript else _segment_object_labels(seg),
         clip_id=seg.get('clip_id'),
         dino_id=seg.get('dino_id'),
-        representative_frame=seg.get('representative_frame'),
+        **frame_projection,
+        **{key: value for key, value in frame_paths.items() if key != "frame_paths"},
         visual_caption=seg.get('visual_caption'),
         ocr_text=seg.get('ocr_text'),
         ocr_date_candidates=seg.get('ocr_date_candidates', []),
@@ -91,6 +95,8 @@ def _build_timeline_segment(seg: dict, truncate_transcript: bool = False) -> Tim
         speaker_voice_signature_count=seg.get('speaker_voice_signature_count'),
         speaker_voice_signature_meta=seg.get('speaker_voice_signature_meta'),
         audio_emotion=seg.get('audio_emotion'),
+        audio_emotion_scores=seg.get('audio_emotion_scores'),
+        clap_meta=seg.get('clap_meta'),
         sentiment=seg.get("sentiment"),
         sentiment_label=seg.get("sentiment_label"),
         sentiment_score=seg.get("sentiment_score"),
@@ -101,8 +107,6 @@ def _build_timeline_segment(seg: dict, truncate_transcript: bool = False) -> Tim
         scene_context_llm=seg.get('scene_context_llm'),
         scene_context_epistemic=seg.get('scene_context_epistemic'),
         scene_context_arbitration=seg.get('scene_context_arbitration'),
-        audio_emotion_scores=seg.get('audio_emotion_scores'),
-        clap_meta=seg.get('clap_meta'),
         content_state=seg.get('content_state'),
         candidate_visible_people=seg.get('candidate_visible_people', []),
         speaker_aligned_mentions=seg.get("speaker_aligned_mentions", []),
@@ -161,7 +165,7 @@ async def get_timeline(
         
         segments = []
         for seg in temporal_index.get('segments', []):
-            segments.append(_build_timeline_segment(seg, truncate_transcript=True))
+            segments.append(_build_timeline_segment(video_id, seg, truncate_transcript=True))
         
         return TimelineResponse(
             video_id=video_id,
@@ -201,7 +205,7 @@ async def get_full_timeline(
         
         segments = []
         for seg in temporal_index.get('segments', []):
-            segments.append(_build_timeline_segment(seg, truncate_transcript=False))
+            segments.append(_build_timeline_segment(video_id, seg, truncate_transcript=False))
         
         return TimelineResponse(
             video_id=video_id,

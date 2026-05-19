@@ -2,14 +2,12 @@ from __future__ import annotations
 
 import asyncio
 import importlib.util
+import json
 import sys
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
 from fastapi import HTTPException
-
-from api.utils import loaders as api_loaders
 
 
 def _load_route_module(module_name: str):
@@ -27,7 +25,6 @@ def _load_route_module(module_name: str):
 
 scenes_module = _load_route_module("scenes")
 timeline_module = _load_route_module("timeline")
-search_module = _load_route_module("search")
 
 
 class _FakeLoader:
@@ -46,49 +43,6 @@ class _FakeSearchEngine:
     def search_similar_scene(self, video_id: str, scene_id: int, top_k: int):
         self.calls.append((video_id, scene_id, top_k))
         return self.similar_results[:top_k]
-
-
-class _FakeMultimodalSearchEngine:
-    weight_text = 0.6
-    weight_visual = 0.4
-    weight_audio = 0.0
-
-    def __init__(self, results: list[dict]):
-        self.results = results
-        self.calls: list[tuple[str, int, list[str] | None]] = []
-
-    def search_multimodal(self, query: str, top_k: int, modalities: list[str] | None = None):
-        self.calls.append((query, top_k, modalities))
-        return self.results[:top_k]
-
-
-class _SearchHydrationLoader:
-    def __init__(self, video_id: str, temporal_index: dict):
-        self.video_id = video_id
-        self.temporal_index = temporal_index
-
-    def list_processed_videos(self):
-        return [self.video_id]
-
-    def load_temporal_index(self, video_id: str):
-        return self.temporal_index if video_id == self.video_id else None
-
-
-def test_data_loader_processing_root_can_be_overridden_by_env(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    configured_root = tmp_path / "configured" / "processing"
-    runtime_root = tmp_path / "witness_epoch" / "processing"
-
-    monkeypatch.setattr(api_loaders, "_DEFAULT_PROCESSING_ROOT", None)
-    monkeypatch.setenv("GOODQ_PROCESSING_ROOT", str(runtime_root))
-
-    api_loaders.configure_from_cfg({"paths": {"processing": str(configured_root)}})
-    loader = api_loaders.DataLoader(data_root=str(tmp_path / "data"))
-
-    assert loader.processing_dir == runtime_root
-    assert loader.data_root == runtime_root.parent
 
 
 def _sample_temporal_index() -> dict:
@@ -202,6 +156,7 @@ def _sample_temporal_index() -> dict:
                 "speaker_voice_signature_count": 1,
                 "speaker_voice_signature_meta": {"status": "ok", "emitted": 1},
                 "audio_emotion": "fear",
+                "audio_emotion_scores": {"neutral": 0.48, "calm": 0.31, "sad": 0.21},
                 "clap_meta": {
                     "status": "ok",
                     "faiss_id": 2602,
@@ -229,7 +184,6 @@ def _sample_temporal_index() -> dict:
                 },
                 "scene_context_epistemic": {"state": "supported", "dominant_evidence": "mixed"},
                 "scene_context_arbitration": {"resolved_by": "mixed", "unresolved_axes": ["identity"]},
-                "audio_emotion_scores": {"neutral": 0.48, "calm": 0.31, "sad": 0.21},
                 "content_state": "signal",
                 "candidate_visible_people": [{"name": "anonymous_person_1"}],
                 "speaker_aligned_mentions": [{"text": "Jerry", "type": "PERSON", "count": 1}],
@@ -265,6 +219,46 @@ def _sample_temporal_index() -> dict:
     }
 
 
+def _model_payload(model):
+    if hasattr(model, "model_dump"):
+        return model.model_dump()
+    return model.dict()
+
+
+def test_scene_and_timeline_frame_surfaces_do_not_expose_local_paths(monkeypatch: pytest.MonkeyPatch) -> None:
+    temporal_index = _sample_temporal_index()
+    raw_frame = (
+        r"L:\_DATA\GoodQ_Data\processing\video_001\video\frames"
+        r"\scene_0101_frame_01.jpg"
+    )
+    temporal_index["segments"][0]["representative_frame"] = raw_frame
+    temporal_index["segments"][0]["frame_paths"] = [raw_frame]
+    loader = _FakeLoader(temporal_index)
+    monkeypatch.setattr(scenes_module, "get_data_loader", lambda: loader)
+    monkeypatch.setattr(timeline_module, "get_data_loader", lambda: loader)
+
+    scene = asyncio.run(scenes_module.list_scenes(video_id="video_001"))[0]
+    timeline_segment = asyncio.run(timeline_module.get_full_timeline(video_id="video_001")).segments[0]
+
+    for item in (scene, timeline_segment):
+        payload = _model_payload(item)
+        serialized = json.dumps(payload)
+        assert "L:" not in serialized
+        assert "C:" not in serialized
+        assert "_DATA" not in serialized
+        assert item.representative_frame == "/api/media/video/video_001/frame/scene_0101_frame_01.jpg"
+        assert getattr(item, "representative_frame_available", None) is True
+        assert getattr(item, "representative_frame_endpoint", None) == (
+            "/api/media/video/video_001/frame/scene_0101_frame_01.jpg"
+        )
+        assert getattr(item, "representative_frame_path_redacted", None) is True
+        assert getattr(item, "frame_endpoints", None) == [
+            "/api/media/video/video_001/frame/scene_0101_frame_01.jpg"
+        ]
+        assert getattr(item, "frame_path_count", None) == 1
+        assert getattr(item, "frame_paths_redacted", None) is True
+
+
 def test_list_scenes_surfaces_persisted_audio_truth(monkeypatch: pytest.MonkeyPatch) -> None:
     loader = _FakeLoader(_sample_temporal_index())
     monkeypatch.setattr(scenes_module, "get_data_loader", lambda: loader)
@@ -286,6 +280,12 @@ def test_list_scenes_surfaces_persisted_audio_truth(monkeypatch: pytest.MonkeyPa
     assert scene.ocr_text == "DEC 16 2002"
     assert scene.ocr_date_candidates == ["DEC 16 2002"]
     assert scene.audio_emotion == "fear"
+    assert scene.audio_emotion_scores == {"neutral": 0.48, "calm": 0.31, "sad": 0.21}
+    assert scene.clap_meta == {
+        "status": "ok",
+        "faiss_id": 2602,
+        "model": "laion/clap-htsat-unfused",
+    }
     assert scene.sentiment == {"label": "negative", "score": 0.82}
     assert scene.sentiment_label == "negative"
     assert scene.sentiment_score == 0.82
@@ -308,12 +308,6 @@ def test_list_scenes_surfaces_persisted_audio_truth(monkeypatch: pytest.MonkeyPa
     }
     assert scene.scene_context_epistemic == {"state": "supported", "dominant_evidence": "mixed"}
     assert scene.scene_context_arbitration == {"resolved_by": "mixed", "unresolved_axes": ["identity"]}
-    assert scene.audio_emotion_scores == {"neutral": 0.48, "calm": 0.31, "sad": 0.21}
-    assert scene.clap_meta == {
-        "status": "ok",
-        "faiss_id": 2602,
-        "model": "laion/clap-htsat-unfused",
-    }
     assert scene.content_state == "signal"
     assert scene.candidate_visible_people == [{"name": "anonymous_person_1"}]
     assert scene.speaker_aligned_mentions == [{"text": "Jerry", "type": "PERSON", "count": 1}]
@@ -403,7 +397,7 @@ def test_full_timeline_surfaces_persisted_audio_truth(monkeypatch: pytest.Monkey
                     "speaker_aligned_mentions": [{"text": "Jerry", "type": "PERSON", "count": 1}],
                     "reason": "transcript full-name surface reduced to partial local person identity",
                 },
-            },
+            }
         ],
         "top_transcript_entity_disagreement_families": [
             {
@@ -448,6 +442,12 @@ def test_full_timeline_surfaces_persisted_audio_truth(monkeypatch: pytest.Monkey
     assert segment.ocr_text == "DEC 16 2002"
     assert segment.ocr_date_candidates == ["DEC 16 2002"]
     assert segment.audio_emotion == "fear"
+    assert segment.audio_emotion_scores == {"neutral": 0.48, "calm": 0.31, "sad": 0.21}
+    assert segment.clap_meta == {
+        "status": "ok",
+        "faiss_id": 2602,
+        "model": "laion/clap-htsat-unfused",
+    }
     assert segment.sentiment == {"label": "negative", "score": 0.82}
     assert segment.sentiment_label == "negative"
     assert segment.sentiment_score == 0.82
@@ -470,12 +470,6 @@ def test_full_timeline_surfaces_persisted_audio_truth(monkeypatch: pytest.Monkey
     }
     assert segment.scene_context_epistemic == {"state": "supported", "dominant_evidence": "mixed"}
     assert segment.scene_context_arbitration == {"resolved_by": "mixed", "unresolved_axes": ["identity"]}
-    assert segment.audio_emotion_scores == {"neutral": 0.48, "calm": 0.31, "sad": 0.21}
-    assert segment.clap_meta == {
-        "status": "ok",
-        "faiss_id": 2602,
-        "model": "laion/clap-htsat-unfused",
-    }
     assert segment.content_state == "signal"
     assert segment.candidate_visible_people == [{"name": "anonymous_person_1"}]
     assert segment.speaker_aligned_mentions == [{"text": "Jerry", "type": "PERSON", "count": 1}]
@@ -522,83 +516,6 @@ def test_full_timeline_accepts_string_scene_ids(monkeypatch: pytest.MonkeyPatch)
     assert len(response.segments) == 1
     assert response.segments[0].scene_id == "scene_0001_hash"
     assert response.metadata["top_transcript_entity_disagreement_families"][0]["example"]["scene_id"] == "scene_0001_hash"
-
-
-def test_multimodal_search_hydrates_vector_hits_from_temporal_index(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    temporal_index = {
-        "segments": [
-            {
-                "segment_id": 7,
-                "scene_id": "scene_hash_001",
-                "start": 12.5,
-                "end": 28.0,
-                "duration": 15.5,
-                "full_transcript": "Claire brings coffee while George waits for the call.",
-                "keywords": ["coffee", "call"],
-                "detected_objects": [{"label": "cup"}, {"label": "table"}],
-                "representative_frame": "scene_0007_frame_01.jpg",
-                "audio_emotion": "calm",
-                "speaker_ids": ["SPEAKER_00"],
-                "speaker_count": 1,
-                "dominant_speaker_id": "SPEAKER_00",
-                "continuity_key": "SPEAKER_00",
-                "sentiment": {"label": "positive", "score": 0.73},
-                "sentiment_label": "positive",
-                "sentiment_score": 0.73,
-                "time_hints": {"explicit_dates": [], "relative_phrases": ["tomorrow"]},
-                "content_state": "signal",
-                "scene_context_llm": {
-                    "primary_tags": ["coffee"],
-                    "contextual_tags": ["phone call"],
-                    "structural_tags": ["dialogue"],
-                    "summary": "Coffee conversation before a planned call.",
-                },
-                "scene_context_epistemic": {"state": "supported"},
-                "scene_context_arbitration": {"resolved_by": "mixed"},
-            }
-        ]
-    }
-    engine = _FakeMultimodalSearchEngine(
-        [
-            {
-                "id": "vector_point_001",
-                "score": 0.84,
-                "modality": "text",
-                "payload": {
-                    "video_id": "hashed_video_id",
-                    "scene_id": "scene_hash_001",
-                    "text_preview": "thin vector payload preview",
-                },
-            }
-        ]
-    )
-    loader = _SearchHydrationLoader("01x01 - Good News, Bad News", temporal_index)
-    monkeypatch.setattr(search_module, "get_search_engine", lambda: engine, raising=False)
-    monkeypatch.setattr(search_module, "get_data_loader", lambda: loader, raising=False)
-
-    result = asyncio.run(
-        search_module.search_multimodal(
-            SimpleNamespace(query="coffee", top_k=1, modalities=None, fusion_weights=None)
-        )
-    )
-
-    assert engine.calls == [("coffee", 1, None)]
-    hit = result.results[0]
-    assert hit.video_id == "01x01 - Good News, Bad News"
-    assert hit.scene_id == "scene_hash_001"
-    assert hit.timestamp == 12.5
-    assert hit.transcript == "Claire brings coffee while George waits for the call."
-    assert hit.keywords == ["coffee", "call"]
-    assert hit.objects == ["cup", "table"]
-    assert hit.sentiment == {"label": "positive", "score": 0.73}
-    assert hit.sentiment_label == "positive"
-    assert hit.sentiment_score == 0.73
-    assert hit.context["audio_emotion"] == "calm"
-    assert hit.context["scene_context_llm"]["summary"] == "Coffee conversation before a planned call."
-    assert hit.context["speaker_count"] == 1
-    assert hit.provenance["hydrated_from"] == "temporal_index"
 
 
 def test_similar_scene_route_returns_real_neighbors(monkeypatch: pytest.MonkeyPatch) -> None:

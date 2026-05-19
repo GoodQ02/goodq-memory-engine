@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import asyncio
 import importlib.util
+import json
 import sys
 from pathlib import Path
-from urllib.parse import quote
 
 
 def _load_route_module(module_name: str):
@@ -21,6 +21,59 @@ def _load_route_module(module_name: str):
 
 
 system_module = _load_route_module("system")
+
+
+class _FakeVideoLoader:
+    def list_processed_videos(self):
+        return ["video_001"]
+
+    def get_video_metadata(self, video_id: str):
+        assert video_id == "video_001"
+        return {
+            "title": "Example Memory",
+            "duration": 12.5,
+            "total_scenes": 1,
+            "processed_date": 1_700_000_000,
+        }
+
+    def load_temporal_index(self, video_id: str):
+        assert video_id == "video_001"
+        return {
+            "segments": [
+                {
+                    "representative_frame": (
+                        r"L:\_DATA\GoodQ_Data\processing\video_001\video\frames"
+                        r"\scene_0000_frame_01.jpg"
+                    )
+                }
+            ]
+        }
+
+
+def _model_payload(model):
+    if hasattr(model, "model_dump"):
+        return model.model_dump()
+    return model.dict()
+
+
+def test_videos_route_projects_thumbnail_without_exposing_local_paths(monkeypatch) -> None:
+    monkeypatch.setattr(system_module, "get_data_loader", lambda: _FakeVideoLoader())
+
+    response = asyncio.run(system_module.list_videos())
+
+    assert len(response) == 1
+    video = response[0]
+    payload = _model_payload(video)
+    serialized = json.dumps(payload)
+    assert "L:" not in serialized
+    assert "C:" not in serialized
+    assert "_DATA" not in serialized
+    assert getattr(video, "thumbnail_available", None) is True
+    assert getattr(video, "thumbnail_endpoint", None) == (
+        "/api/media/video/video_001/frame/scene_0000_frame_01.jpg"
+    )
+    assert getattr(video, "thumbnail_path_redacted", None) is True
+    assert video.thumbnail == "/api/media/video/video_001/frame/scene_0000_frame_01.jpg"
 
 
 def test_ingest_route_declares_guarded_future_facade() -> None:
@@ -75,43 +128,3 @@ def test_reload_route_declares_operator_only_policy() -> None:
     assert response.policy.auditable is True
     assert any("maintenance workflow" in item for item in response.operator_surfaces)
     assert any("maintenance" in item for item in response.required_capabilities)
-
-
-def test_video_list_thumbnail_uses_media_route_not_local_path() -> None:
-    class FakeLoader:
-        def list_processed_videos(self):
-            return ["demo video"]
-
-        def get_video_metadata(self, video_id):
-            return {
-                "title": video_id,
-                "duration": 12.0,
-                "total_scenes": 1,
-                "processed_date": None,
-            }
-
-        def load_temporal_index(self, video_id):
-            return {
-                "segments": [
-                    {
-                        "representative_frame": (
-                            r"L:\_DATA\GoodQ_Data\epochs\epoch_demo\processing"
-                            r"\demo video\video\frames\scene_0000_frame_01.jpg"
-                        )
-                    }
-                ]
-            }
-
-    original_loader = system_module._data_loader
-    system_module._data_loader = FakeLoader()
-    try:
-        videos = asyncio.run(system_module.list_videos())
-    finally:
-        system_module._data_loader = original_loader
-
-    assert len(videos) == 1
-    assert videos[0].thumbnail == (
-        f"/api/media/video/{quote('demo video', safe='')}/frame/scene_0000_frame_01.jpg"
-    )
-    assert "L:" not in videos[0].thumbnail
-    assert "\\" not in videos[0].thumbnail

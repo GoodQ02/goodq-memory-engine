@@ -4,15 +4,18 @@
 
 # GoodQ4All UI Status
 
-GoodQ4All does not currently ship a production operator dashboard. It does
-ship one supported read-only truth-layer scaffold: the Justification Channel
-v1 under `ui/justification_v1/`.
+GoodQ4All does not currently ship a polished end-user product UI. It does
+ship two read-only local UI surfaces: the Justification Channel v1 under
+`ui/justification_v1/` and the Operator Console v1 under
+`ui/operator_console_v1/`.
 
 ## Current Runtime Truth
 
 - The supported release surface is the local API, CLI, watchdog, manifests, and
   persisted memory artifacts.
 - The API process does not serve a supported browser UI at `GET /`.
+- The Operator Console is a static localhost-served observer surface for
+  current API, memory, run, recurrence, video, and timeline status.
 - The Justification Channel may load only explicit read-only sources: bundled
   example data, a user-selected local JSON file, or `GET /api/read/envelope`
   through an explicit API base.
@@ -26,10 +29,13 @@ v1 under `ui/justification_v1/`.
   `ui/justification_v1/static/js/test_render.js`
 - Optional inspector mode:
   `ui/justification_v1/inspector/inspector.js`
+- `ui/operator_console_v1/index.html`
+- Operator console contract:
+  `docs/guides/ui/OPERATOR_CONSOLE_V1.md`
 
 ## Not Supported
 
-- No production operator dashboard is shipped yet.
+- No polished end-user product UI is shipped yet.
 - No browser shell is served from the API root.
 - No UI surface may rerun ingestion, mutate memory, heal configs, or activate
   ControlAgent.
@@ -40,6 +46,8 @@ v1 under `ui/justification_v1/`.
 - Consume UI-safe conduits and read-only API routes only.
 - Keep every source explicit to the operator.
 - Do not introduce a second runtime contract or hidden execution path.
+- Keep control/mutation routes out of browser UI unless a separate
+  control-surface design is approved.
 
 ## Pre-UI Audit Snapshot
 

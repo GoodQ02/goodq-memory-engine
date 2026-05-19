@@ -8,6 +8,7 @@ Invoke:
   python -m cli.control_recurrence_report --run-id 20260424_182406_season2_fresh_witness --write-md
   python -m cli.control_recurrence_report --list-reports
   python -m cli.control_recurrence_report --recommendations-for 20260424_182406_season2_fresh_witness
+  python -m cli.control_recurrence_report --trend --json
 """
 
 from __future__ import annotations
@@ -35,6 +36,10 @@ from lib.control_recurrence_recommendations import (
     build_recommendation_draft,
     render_recommendation_draft,
 )
+from lib.control_recurrence_trend import (
+    build_control_recurrence_trend,
+    render_text_trend,
+)
 
 
 os.environ.setdefault("PYTHONDONTWRITEBYTECODE", "1")
@@ -57,10 +62,19 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
     parser.add_argument("--write-md", action="store_true", help="Write deterministic markdown operator artifact")
     parser.add_argument("--write-json-file", action="store_true", help="Write durable JSON operator artifact")
     parser.add_argument("--list-reports", action="store_true", help="List indexed durable recurrence reports")
+    parser.add_argument("--trend", action="store_true", help="Build a read-only derived trend from indexed JSON reports")
     parser.add_argument("--recommendations-for", help="Build a read-only recommendation draft for an indexed report id")
     parser.add_argument("--output-dir", help="Artifact output directory (default: reports/control_recurrence)")
     args = parser.parse_args(list(argv) if argv is not None else None)
     output_dir = Path(args.output_dir) if args.output_dir else None
+
+    if args.trend:
+        trend = build_control_recurrence_trend(base_dir=str(output_dir) if output_dir else None)
+        if args.json:
+            print(json.dumps(trend, indent=2, ensure_ascii=False))
+        else:
+            print(render_text_trend(trend, limit=max(1, int(args.limit or 12))))
+        return 2 if trend.get("trend_report", {}).get("status") == "empty" else 0
 
     if args.recommendations_for:
         draft, status_code = build_recommendation_draft(args.recommendations_for, base_dir=output_dir)

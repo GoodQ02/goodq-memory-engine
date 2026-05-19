@@ -19,11 +19,6 @@ def default_confidence_payload() -> Dict[str, Any]:
     }
 
 
-def confidence_stub() -> Dict[str, Any]:
-    """Compatibility helper for older search surfaces still expecting this name."""
-    return default_confidence_payload()
-
-
 class SceneResponse(BaseModel):
     """Scene metadata response."""
     scene_id: SceneId

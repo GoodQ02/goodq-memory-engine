@@ -246,11 +246,12 @@ GoodQ4All currently supports:
 - SQLite + knowledge graph + Qdrant-backed persisted memory
 - CPU-safe baseline execution with optional GPU / WSL acceleration
 
-GoodQ4All does **not** currently ship a polished end-user UI. That is a future layer, not a current product claim.
+GoodQ4All does **not** currently ship a polished end-user UI. It does include read-only local operator surfaces for inspection and proof review.
 
 UI status:
 
 - [`docs/guides/ui/JUSTIFICATION_UI.md`](docs/guides/ui/JUSTIFICATION_UI.md)
+- [`docs/guides/ui/OPERATOR_CONSOLE_V1.md`](docs/guides/ui/OPERATOR_CONSOLE_V1.md)
 
 ## What Makes It Different
 
@@ -311,7 +312,7 @@ If you want the deeper technical picture:
 ## Current Limitations
 
 - This is pre-1.0 software. The supported runtime path is stable enough to use, but surrounding helpers and APIs may still evolve.
-- A polished product UI is not part of the current shipping surface.
+- A polished product UI is not part of the current shipping surface; current browser surfaces are read-only local operator tools.
 - Some optional enrichments can still fail on individual scenes without invalidating the whole ingest.
 - Audio-vector success is provenance-defined: current-run CLAP/Qdrant coverage requires `clap_meta.status == ok` plus a Qdrant audio payload with matching `run_id` and required provenance fields. Legacy scene-id matches are not current-run proof.
 - Context weighting is now strong, but the project still treats some interpretation choices as policy-level texture rather than frozen truth.

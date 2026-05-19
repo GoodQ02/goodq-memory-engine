@@ -3,6 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Protocol, runtime_checkable
 
+LEGACY_MEMORY_TIER_ALIASES: Dict[str, str] = {
+    "chroma": "ephemeral",
+}
+
 
 @runtime_checkable
 class MemoryStore(Protocol):
@@ -48,3 +52,28 @@ class MemoryConfig:
         if mod in {"audio", "sound", "voice"}:
             return self.dims.audio
         return None
+
+
+def normalize_memory_tier_name(name: Optional[str]) -> Optional[str]:
+    """Map legacy tier labels onto the canonical memory-tier vocabulary."""
+    if not isinstance(name, str):
+        return None
+    normalized = name.strip().lower()
+    if not normalized:
+        return None
+    return LEGACY_MEMORY_TIER_ALIASES.get(normalized, normalized)
+
+
+def normalize_memory_tier_list(names: Optional[List[str]]) -> List[str]:
+    """Normalize a tier list while preserving order and removing duplicates."""
+    if not isinstance(names, list):
+        return []
+    normalized: List[str] = []
+    seen: set[str] = set()
+    for name in names:
+        tier = normalize_memory_tier_name(name)
+        if not tier or tier in seen:
+            continue
+        normalized.append(tier)
+        seen.add(tier)
+    return normalized

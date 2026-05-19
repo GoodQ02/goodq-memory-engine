@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 from datetime import datetime, timezone
 from pathlib import Path
@@ -9,6 +10,7 @@ from typing import Any, Dict, Optional, Tuple
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_REPORT_DIR = _REPO_ROOT / "reports" / "control_recurrence"
+_REPORT_DIR_ENV = "GOODQ_CONTROL_RECURRENCE_REPORTS_ROOT"
 _INDEX_FILENAME = "index.json"
 _DRIVE_ROOT_RE = re.compile(r"[A-Za-z]:[\\/][^\s,\"'`<>)]*")
 
@@ -138,7 +140,12 @@ def load_report_markdown(report_id: str, base_dir: str | Path | None = None) -> 
 
 
 def _resolve_report_dir(base_dir: str | Path | None = None) -> Path:
-    return Path(base_dir) if base_dir is not None else DEFAULT_REPORT_DIR
+    if base_dir is not None:
+        return Path(base_dir)
+    env_value = os.environ.get(_REPORT_DIR_ENV, "").strip()
+    if env_value:
+        return Path(env_value)
+    return DEFAULT_REPORT_DIR
 
 
 def _lookup_entry(

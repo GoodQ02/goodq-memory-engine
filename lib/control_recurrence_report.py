@@ -94,6 +94,7 @@ def build_control_recurrence_report(
     health_by_episode: List[Dict[str, Any]] = []
     signals: List[Dict[str, Any]] = []
     latency_rows: List[Dict[str, Any]] = []
+    step_coverage_rows: List[Dict[str, Any]] = []
 
     for selected_root in run_roots:
         episode_scopes, root_files, root_warnings = _load_run_scope(selected_root)
@@ -109,6 +110,9 @@ def build_control_recurrence_report(
     episode_by_video_id = {
         e.video_id: e for e in episodes if isinstance(e.video_id, str) and e.video_id.strip()
     }
+    target_runtime_run_ids = sorted(
+        {e.runtime_run_id for e in episodes if isinstance(e.runtime_run_id, str) and e.runtime_run_id.strip()}
+    )
 
     for episode in episodes:
         episode_signals, episode_files, episode_warnings, episode_health = _load_episode_artifact_signals(episode)
@@ -118,25 +122,50 @@ def build_control_recurrence_report(
         health_by_episode.append(episode_health)
 
     step_paths = _dedupe_paths(e.step_runs_path for e in episodes if e.step_runs_path is not None)
+    step_run_scope = {
+        "strict_run_id_filter_applied": False,
+        "target_run_ids": target_runtime_run_ids,
+        "excluded_run_ids": {},
+        "limited_run_id_scope": False,
+    }
     for path in step_paths:
-        step_signals, step_latency_rows, step_files, step_warnings = _load_step_run_signals(
+        (
+            step_signals,
+            step_latency_rows,
+            step_coverage,
+            step_files,
+            step_warnings,
+            step_scope_info,
+        ) = _load_step_run_signals(
             path=path,
             episode_by_runtime_id=episode_by_runtime_id,
             episode_by_video_id=episode_by_video_id,
+            target_runtime_run_ids=target_runtime_run_ids,
         )
         signals.extend(step_signals)
         latency_rows.extend(step_latency_rows)
+        step_coverage_rows.extend(step_coverage)
         files_read.extend(step_files)
         warnings.extend(step_warnings)
+        step_run_scope["strict_run_id_filter_applied"] = bool(
+            step_run_scope["strict_run_id_filter_applied"] or step_scope_info.get("strict_run_id_filter_applied")
+        )
+        step_run_scope["limited_run_id_scope"] = bool(
+            step_run_scope["limited_run_id_scope"] or step_scope_info.get("limited_run_id_scope")
+        )
+        excluded = step_run_scope["excluded_run_ids"]
+        for excluded_run_id, count in (step_scope_info.get("excluded_run_ids") or {}).items():
+            excluded[excluded_run_id] = int(excluded.get(excluded_run_id, 0)) + int(count or 0)
 
-    signals = _coalesce_runtime_event_duplicates(signals)
-    signals = _dedupe_signals(signals)
     for signal in signals:
         if not signal.get("recovery_outcome"):
             signal["recovery_outcome"] = _infer_recovery_outcome(signal, health_by_episode, signals)
+    signals = _coalesce_runtime_event_duplicates(signals)
+    signals = _dedupe_signals(signals)
 
     phase6_health = _phase6_health_summary(health_by_episode)
     latency_summary = _step_latency_summary(latency_rows)
+    environment_summary = _environment_summary(step_coverage_rows, signals)
     grouped = _group_signals(signals)
     family_rows = _attach_family_categories(_top_families(signals), phase6_health)
     _attach_operator_hints_to_families(family_rows)
@@ -144,6 +173,7 @@ def build_control_recurrence_report(
     _attach_row_categories(grouped, family_categories)
     optional_skips = _optional_enrichment_skips(signals)
     _attach_row_categories(optional_skips, family_categories)
+    optional_coverage = _optional_enrichment_coverage(step_coverage_rows)
     recovery_counts = _recovery_counts(signals)
     affected = _scenes_affected(signals)
     _attach_scene_categories(affected, family_categories)
@@ -177,11 +207,14 @@ def build_control_recurrence_report(
             "videos": sorted({e.video_name or e.episode for e in episodes if e.video_name or e.episode}),
             "signals": len(signals),
             "step_runs_files": [_display_path(p) for p in step_paths],
+            "step_run_scope": step_run_scope,
         },
         "step_latency_summary": latency_summary,
+        "environment_summary": environment_summary,
         "recurrence_summary": grouped,
         "top_repeated_failure_families": family_rows,
         "optional_enrichment_skips": optional_skips,
+        "optional_enrichment_coverage": optional_coverage,
         "recovered_vs_unrecovered_failures": recovery_counts,
         "scenes_affected": affected,
         "phase6_qdrant_truth": phase6_health,
@@ -232,6 +265,10 @@ def build_control_recurrence_comparison(
         baseline.get("step_latency_summary"),
         candidate.get("step_latency_summary"),
     )
+    optional_coverage_delta = _optional_enrichment_coverage_delta(
+        baseline.get("optional_enrichment_coverage"),
+        candidate.get("optional_enrichment_coverage"),
+    )
 
     family_delta_map = _count_delta_map(baseline_family_counts, candidate_family_counts)
     _attach_delta_categories(family_delta_map, family_categories)
@@ -267,6 +304,7 @@ def build_control_recurrence_comparison(
             key_name="episode_video",
         ),
         "step_latency_delta": latency_delta,
+        "optional_enrichment_coverage_delta": optional_coverage_delta,
         "phase6_health_delta": phase6_delta,
         "qdrant_health_delta": qdrant_delta,
     }
@@ -323,6 +361,8 @@ def render_text_report(report: Dict[str, Any], *, limit: int = 12) -> str:
     classification = report.get("recurrence_classification") if isinstance(report, dict) else {}
     recommendation = report.get("recommendation") if isinstance(report, dict) else {}
     latency = report.get("step_latency_summary") if isinstance(report, dict) else {}
+    environment_summary = report.get("environment_summary") if isinstance(report, dict) else {}
+    optional_coverage = report.get("optional_enrichment_coverage") if isinstance(report, dict) else {}
 
     lines.append("GoodQ Control Recurrence Report")
     lines.append("================================")
@@ -332,6 +372,15 @@ def render_text_report(report: Dict[str, Any], *, limit: int = 12) -> str:
     lines.append(f"Run roots: {len(scope.get('run_roots') or [])}")
     lines.append(f"Episodes: {scope.get('episodes', 0)}")
     lines.append(f"Signals: {scope.get('signals', 0)}")
+    step_scope = scope.get("step_run_scope") if isinstance(scope.get("step_run_scope"), dict) else {}
+    if step_scope:
+        lines.append(
+            "Step run scope: strict_run_id_filter={strict} limited_run_id_scope={limited} excluded_run_ids={excluded}".format(
+                strict=bool(step_scope.get("strict_run_id_filter_applied")),
+                limited=bool(step_scope.get("limited_run_id_scope")),
+                excluded=len(step_scope.get("excluded_run_ids") or {}),
+            )
+        )
     lines.append("")
 
     lines.append("Recommendation")
@@ -365,6 +414,10 @@ def render_text_report(report: Dict[str, Any], *, limit: int = 12) -> str:
     lines.append("")
 
     lines.extend(_text_step_latency_summary(latency, limit=limit))
+    lines.append("")
+    lines.extend(_text_environment_summary(environment_summary, limit=limit))
+    lines.append("")
+    lines.extend(_text_optional_enrichment_coverage(optional_coverage, limit=limit))
     lines.append("")
 
     lines.append("Recurrence Summary")
@@ -438,6 +491,7 @@ def render_text_comparison(comparison: Dict[str, Any], *, limit: int = 12) -> st
     delta = comparison.get("delta") if isinstance(comparison, dict) else {}
     recommendation = comparison.get("recommendation") if isinstance(comparison, dict) else {}
     total = delta.get("total_recurrence_signals") if isinstance(delta, dict) else {}
+    coverage_delta = delta.get("optional_enrichment_coverage_delta") if isinstance(delta, dict) else {}
     phase6 = delta.get("phase6_health_delta") if isinstance(delta, dict) else {}
     qdrant = delta.get("qdrant_health_delta") if isinstance(delta, dict) else {}
 
@@ -542,6 +596,8 @@ def render_text_comparison(comparison: Dict[str, Any], *, limit: int = 12) -> st
 
     lines.extend(_text_step_latency_delta(delta.get("step_latency_delta") or {}, limit=limit))
     lines.append("")
+    lines.extend(_text_optional_enrichment_coverage_delta(coverage_delta, limit=limit))
+    lines.append("")
 
     lines.append("Per-Episode/Video Changes")
     for row in (delta.get("per_episode_video_changes") or [])[:limit]:
@@ -626,6 +682,96 @@ def _text_step_latency_delta(delta: Dict[str, Any], *, limit: int) -> List[str]:
                 candidate_count=int(row.get("candidate_count") or 0),
                 p95_delta_ms=_format_ms_text(row.get("p95_delta_ms")),
                 max_delta_ms=_format_ms_text(row.get("max_delta_ms")),
+                trend_status=row.get("trend_status") or "unknown",
+            )
+        )
+    return lines
+
+
+def _text_environment_summary(summary: Dict[str, Any], *, limit: int) -> List[str]:
+    lines = ["Environment Summary"]
+    if not isinstance(summary, dict) or summary.get("status") == "empty":
+        lines.append("  - no environment rows found")
+        return lines
+    env_counts = summary.get("env_counts") if isinstance(summary.get("env_counts"), dict) else {}
+    lines.append(
+        "  - rows={rows} envs={envs} native_retry_fingerprints={fingerprints}".format(
+            rows=int(summary.get("step_row_count") or 0),
+            envs=len(env_counts),
+            fingerprints=len(summary.get("native_retry_env_fingerprints") or []),
+        )
+    )
+    for env_name, count in list(env_counts.items())[:limit]:
+        lines.append(f"  - env={env_name} rows={count}")
+    for row in (summary.get("native_retry_env_fingerprints") or [])[:limit]:
+        if not isinstance(row, dict):
+            continue
+        lines.append(
+            "  - native_retry step={step} family={family} fingerprint={fingerprint}".format(
+                step=row.get("step_name") or "unknown_step",
+                family=row.get("error_family") or "unknown",
+                fingerprint=row.get("fingerprint") or "raw_available",
+            )
+        )
+    return lines
+
+
+def _text_optional_enrichment_coverage(coverage: Dict[str, Any], *, limit: int) -> List[str]:
+    lines = ["Optional Enrichment Coverage"]
+    if not isinstance(coverage, dict) or not coverage.get("steps"):
+        lines.append("  - no optional step coverage rows found")
+        return lines
+    lines.append(
+        "  - rows={rows} steps={steps} non_ok={non_ok}".format(
+            rows=int(coverage.get("total_rows") or 0),
+            steps=int(coverage.get("step_count") or 0),
+            non_ok=int(coverage.get("non_ok_rows") or 0),
+        )
+    )
+    for row in (coverage.get("steps") or [])[:limit]:
+        if not isinstance(row, dict):
+            continue
+        lines.append(
+            "  - step={step_name} rows={total_rows} ok={ok_count} skipped={skipped_count} "
+            "errors={error_count} warnings={warning_count} emitted={embedding_emitted_count} scenes={scene_count}".format(
+                step_name=row.get("step_name") or "unknown_step",
+                total_rows=int(row.get("total_rows") or 0),
+                ok_count=int(row.get("ok_count") or 0),
+                skipped_count=int(row.get("skipped_count") or 0),
+                error_count=int(row.get("error_count") or 0),
+                warning_count=int(row.get("warning_count") or 0),
+                embedding_emitted_count=int(row.get("embedding_emitted_count") or 0),
+                scene_count=int(row.get("scene_count") or 0),
+            )
+        )
+    return lines
+
+
+def _text_optional_enrichment_coverage_delta(delta: Dict[str, Any], *, limit: int) -> List[str]:
+    lines = ["Optional Enrichment Coverage Delta"]
+    if not isinstance(delta, dict) or not delta.get("steps"):
+        lines.append("  - no comparable optional enrichment coverage rows found")
+        return lines
+    lines.append(
+        "  - status={status} baseline_rows={baseline} candidate_rows={candidate} baseline_non_ok={base_non_ok} candidate_non_ok={cand_non_ok}".format(
+            status=delta.get("status") or "unknown",
+            baseline=int(delta.get("baseline_total_rows") or 0),
+            candidate=int(delta.get("candidate_total_rows") or 0),
+            base_non_ok=int(delta.get("baseline_non_ok_rows") or 0),
+            cand_non_ok=int(delta.get("candidate_non_ok_rows") or 0),
+        )
+    )
+    for row in (delta.get("steps") or [])[:limit]:
+        if not isinstance(row, dict):
+            continue
+        lines.append(
+            "  - step={step_name} rows={baseline_total_rows}->{candidate_total_rows} "
+            "non_ok_delta={non_ok_delta} emitted_delta={embedding_emitted_delta} status={trend_status}".format(
+                step_name=row.get("step_name") or "unknown_step",
+                baseline_total_rows=int(row.get("baseline_total_rows") or 0),
+                candidate_total_rows=int(row.get("candidate_total_rows") or 0),
+                non_ok_delta=int(row.get("non_ok_delta") or 0),
+                embedding_emitted_delta=int(row.get("embedding_emitted_delta") or 0),
                 trend_status=row.get("trend_status") or "unknown",
             )
         )
@@ -818,6 +964,8 @@ def _render_markdown_single(report: Dict[str, Any]) -> str:
     recovery = report.get("recovered_vs_unrecovered_failures") if isinstance(report, dict) else {}
     health = report.get("phase6_qdrant_truth") if isinstance(report, dict) else {}
     latency = report.get("step_latency_summary") if isinstance(report, dict) else {}
+    environment_summary = report.get("environment_summary") if isinstance(report, dict) else {}
+    optional_coverage = report.get("optional_enrichment_coverage") if isinstance(report, dict) else {}
     run_id = _single_report_run_id(report)
 
     lines: List[str] = []
@@ -831,12 +979,21 @@ def _render_markdown_single(report: Dict[str, Any]) -> str:
     lines.append(f"- Run root(s): {_md_join_code_paths(scope.get('run_roots') or [])}")
     lines.append(f"- Episodes: `{int(scope.get('episodes') or 0)}`")
     lines.append(f"- Signals: `{int(scope.get('signals') or 0)}`")
+    step_scope = scope.get("step_run_scope") if isinstance(scope.get("step_run_scope"), dict) else {}
+    if step_scope:
+        lines.append(f"- Step run strict run_id filter: `{str(bool(step_scope.get('strict_run_id_filter_applied'))).lower()}`")
+        lines.append(f"- Step run limited scope warning: `{str(bool(step_scope.get('limited_run_id_scope'))).lower()}`")
+        lines.append(f"- Excluded run IDs: `{len(step_scope.get('excluded_run_ids') or {})}`")
     lines.append("")
     lines.extend(_markdown_recommendation(recommendation, classification.get("highest_category")))
     lines.append("")
     lines.extend(_markdown_category_counts(classification))
     lines.append("")
     lines.extend(_markdown_step_latency_summary(latency))
+    lines.append("")
+    lines.extend(_markdown_environment_summary(environment_summary))
+    lines.append("")
+    lines.extend(_markdown_optional_enrichment_coverage(optional_coverage))
     lines.append("")
     lines.extend(_markdown_recovery_counts(recovery))
     lines.append("")
@@ -862,6 +1019,7 @@ def _render_markdown_comparison(comparison: Dict[str, Any]) -> str:
     recovery = delta.get("recovery_counts") if isinstance(delta, dict) else {}
     category_counts = delta.get("category_counts") if isinstance(delta, dict) else {}
     latency_delta = delta.get("step_latency_delta") if isinstance(delta, dict) else {}
+    coverage_delta = delta.get("optional_enrichment_coverage_delta") if isinstance(delta, dict) else {}
     phase6 = delta.get("phase6_health_delta") if isinstance(delta, dict) else {}
     qdrant = delta.get("qdrant_health_delta") if isinstance(delta, dict) else {}
 
@@ -899,6 +1057,8 @@ def _render_markdown_comparison(comparison: Dict[str, Any]) -> str:
     lines.extend(_markdown_recovery_delta_counts(recovery))
     lines.append("")
     lines.extend(_markdown_step_latency_delta(latency_delta))
+    lines.append("")
+    lines.extend(_markdown_optional_enrichment_coverage_delta(coverage_delta))
     lines.append("")
     lines.extend(_markdown_phase6_delta(phase6))
     lines.append("")
@@ -986,6 +1146,46 @@ def _markdown_step_latency_summary(latency: Dict[str, Any]) -> List[str]:
     return lines
 
 
+def _markdown_environment_summary(summary: Dict[str, Any]) -> List[str]:
+    lines = ["## Environment Summary"]
+    if not isinstance(summary, dict) or summary.get("status") == "empty":
+        lines.append("No environment rows found.")
+        return lines
+    env_counts = summary.get("env_counts") if isinstance(summary.get("env_counts"), dict) else {}
+    lines.append(f"- Source: `{_md_text(summary.get('source'))}`")
+    lines.append(f"- Step rows: `{int(summary.get('step_row_count') or 0)}`")
+    lines.append(f"- Native retry fingerprints: `{len(summary.get('native_retry_env_fingerprints') or [])}`")
+    lines.append("")
+    lines.append("| Environment | Rows |")
+    lines.append("|---|---:|")
+    for env_name, count in env_counts.items():
+        lines.append(f"| {_md_cell(env_name)} | {int(count or 0)} |")
+    return lines
+
+
+def _markdown_optional_enrichment_coverage(coverage: Dict[str, Any]) -> List[str]:
+    lines = ["## Optional Enrichment Coverage"]
+    if not isinstance(coverage, dict) or not coverage.get("steps"):
+        lines.append("No optional step coverage rows found.")
+        return lines
+    lines.append(f"- Source: `{_md_text(coverage.get('source'))}`")
+    lines.append(f"- Total rows: `{int(coverage.get('total_rows') or 0)}`")
+    lines.append(f"- Non-OK rows: `{int(coverage.get('non_ok_rows') or 0)}`")
+    lines.append("")
+    lines.append("| Step | Rows | OK | Skipped | Errors | Warnings | Emitted | Scenes |")
+    lines.append("|---|---:|---:|---:|---:|---:|---:|---:|")
+    for row in (coverage.get("steps") or [])[:12]:
+        if not isinstance(row, dict):
+            continue
+        lines.append(
+            f"| {_md_cell(row.get('step_name'))} | {int(row.get('total_rows') or 0)} | "
+            f"{int(row.get('ok_count') or 0)} | {int(row.get('skipped_count') or 0)} | "
+            f"{int(row.get('error_count') or 0)} | {int(row.get('warning_count') or 0)} | "
+            f"{int(row.get('embedding_emitted_count') or 0)} | {int(row.get('scene_count') or 0)} |"
+        )
+    return lines
+
+
 def _markdown_recovery_delta_counts(recovery: Dict[str, Any]) -> List[str]:
     lines = ["## Recovered / Unrecovered / Skipped Counts"]
     lines.append("| Outcome | Baseline | Candidate | Delta |")
@@ -1017,6 +1217,28 @@ def _markdown_step_latency_delta(delta: Dict[str, Any]) -> List[str]:
             f"| {_md_cell(row.get('step_name'))} | {int(row.get('baseline_count') or 0)} | "
             f"{int(row.get('candidate_count') or 0)} | {_format_ms_cell(row.get('p95_delta_ms'))} | "
             f"{_format_ms_cell(row.get('max_delta_ms'))} | {_md_cell(row.get('trend_status'))} |"
+        )
+    return lines
+
+
+def _markdown_optional_enrichment_coverage_delta(delta: Dict[str, Any]) -> List[str]:
+    lines = ["## Optional Enrichment Coverage Delta"]
+    if not isinstance(delta, dict) or not delta.get("steps"):
+        lines.append("No comparable optional enrichment coverage rows found.")
+        return lines
+    lines.append(f"- Status: `{_md_text(delta.get('status') or 'unknown')}`")
+    lines.append(f"- Baseline rows: `{int(delta.get('baseline_total_rows') or 0)}`")
+    lines.append(f"- Candidate rows: `{int(delta.get('candidate_total_rows') or 0)}`")
+    lines.append("")
+    lines.append("| Step | Baseline Rows | Candidate Rows | Non-OK Delta | Emitted Delta | Status |")
+    lines.append("|---|---:|---:|---:|---:|---|")
+    for row in (delta.get("steps") or [])[:12]:
+        if not isinstance(row, dict):
+            continue
+        lines.append(
+            f"| {_md_cell(row.get('step_name'))} | {int(row.get('baseline_total_rows') or 0)} | "
+            f"{int(row.get('candidate_total_rows') or 0)} | {int(row.get('non_ok_delta') or 0)} | "
+            f"{int(row.get('embedding_emitted_delta') or 0)} | {_md_cell(row.get('trend_status'))} |"
         )
     return lines
 
@@ -1408,6 +1630,8 @@ def _comparison_run_summary(report: Dict[str, Any], *, label: str) -> Dict[str, 
         "operator_hints": report.get("operator_hints") or [],
         "inspection_targets": report.get("inspection_targets") or [],
         "step_latency_summary": report.get("step_latency_summary") or {},
+        "environment_summary": report.get("environment_summary") or {},
+        "optional_enrichment_coverage": report.get("optional_enrichment_coverage") or {},
         "phase6_qdrant_truth": {
             "status": health.get("status") if isinstance(health, dict) else "unknown",
             "healthy": bool(health.get("healthy")) if isinstance(health, dict) else False,
@@ -2132,6 +2356,14 @@ def _load_direct_run_scope(run_root: Path, files_read: List[str], warnings: List
         run_cfg = {}
     if not isinstance(paths_cfg, dict):
         paths_cfg = {}
+    operator_run_cfg = operator_metadata.get("run") if isinstance(operator_metadata, dict) else {}
+    if not isinstance(operator_run_cfg, dict):
+        operator_run_cfg = {}
+    metadata_run_id = (
+        _clean_str(operator_metadata.get("run_id"))
+        or _clean_str(operator_metadata.get("runtime_run_id"))
+        or _clean_str(operator_run_cfg.get("id"))
+    )
 
     if not result_items and not run_cfg:
         return []
@@ -2139,12 +2371,20 @@ def _load_direct_run_scope(run_root: Path, files_read: List[str], warnings: List
     step_log_dir = _path_from(paths_cfg.get("log_dir"))
     step_path = step_log_dir / "step_runs.jsonl" if step_log_dir is not None else None
 
-    stdout_path = _path_from(operator_metadata.get("stdout")) if isinstance(operator_metadata, dict) else None
-    stderr_path = _path_from(operator_metadata.get("stderr")) if isinstance(operator_metadata, dict) else None
-    if stdout_path is None:
-        stdout_path = run_root / "ingestion.stdout.log"
-    if stderr_path is None:
-        stderr_path = run_root / "ingestion.stderr.log"
+    stdout_path = _first_existing_run_path(
+        [
+            _path_from(operator_metadata.get("stdout")) if isinstance(operator_metadata, dict) else None,
+            run_root / "ingestion.stdout.log",
+            run_root / "ingest.stdout.log",
+        ]
+    )
+    stderr_path = _first_existing_run_path(
+        [
+            _path_from(operator_metadata.get("stderr")) if isinstance(operator_metadata, dict) else None,
+            run_root / "ingestion.stderr.log",
+            run_root / "ingest.stderr.log",
+        ]
+    )
 
     if not result_items:
         result_items = [{}]
@@ -2156,13 +2396,19 @@ def _load_direct_run_scope(run_root: Path, files_read: List[str], warnings: List
         video_id = _clean_str(result_item.get("video_id")) or _clean_str(result_item.get("video_hash"))
         video_hash = _clean_str(result_item.get("video_hash")) or video_id
         video_name = _clean_str(result_item.get("video_name")) or run_root.name
+        runtime_run_id = (
+            metadata_run_id
+            or _clean_str(result_item.get("run_id"))
+            or _clean_str(result_item.get("runtime_run_id"))
+            or _clean_str(run_cfg.get("id"))
+        )
         temporal_path = _path_from(result_item.get("temporal_index_path"))
         manifest_path = _derive_manifest_path(temporal_path)
         scopes.append(_EpisodeScope(
             report_run_id=run_root.name,
             episode=video_name or run_root.name,
             run_dir=run_root,
-            runtime_run_id=_clean_str(run_cfg.get("id")),
+            runtime_run_id=runtime_run_id,
             video_id=video_id,
             video_hash=video_hash,
             video_name=video_name,
@@ -2172,11 +2418,18 @@ def _load_direct_run_scope(run_root: Path, files_read: List[str], warnings: List
             temporal_index_path=temporal_path,
             resolved_config_path=resolved_config_path if resolved_config_path.is_file() else None,
             episode_log_path=None,
-            stdout_path=stdout_path if stdout_path.is_file() else None,
-            stderr_path=stderr_path if stderr_path.is_file() else None,
+            stdout_path=stdout_path,
+            stderr_path=stderr_path,
             output_item_index=output_item_index,
         ))
     return scopes
+
+
+def _first_existing_run_path(candidates: Sequence[Optional[Path]]) -> Optional[Path]:
+    for candidate in candidates:
+        if candidate is not None and candidate.is_file():
+            return candidate
+    return None
 
 
 def _load_episode_artifact_signals(episode: _EpisodeScope) -> Tuple[List[Dict[str, Any]], List[str], List[str], Dict[str, Any]]:
@@ -2190,15 +2443,20 @@ def _load_episode_artifact_signals(episode: _EpisodeScope) -> Tuple[List[Dict[st
     temporal = _load_json(episode.temporal_index_path, files_read, warnings) if episode.temporal_index_path else None
     resolved = _load_json(episode.resolved_config_path, files_read, warnings) if episode.resolved_config_path else None
     signals.extend(_artifact_presence_signals(episode))
+    scene_ids, scene_indices = _episode_scene_identity_sets(result_item, manifest, temporal)
 
     if isinstance(resolved, dict):
         run_cfg = resolved.get("run")
         if isinstance(run_cfg, dict):
             for warning in run_cfg.get("warnings") or []:
-                if isinstance(warning, dict):
+                if isinstance(warning, dict) and _warning_applies_to_episode(warning, episode, scene_ids, scene_indices):
                     signals.append(_signal_from_run_warning(episode, warning))
 
-    runtime_event_signals, runtime_files, runtime_warnings = _load_runtime_event_signals(episode)
+    runtime_event_signals, runtime_files, runtime_warnings = _load_runtime_event_signals(
+        episode,
+        scene_ids,
+        scene_indices,
+    )
     signals.extend(runtime_event_signals)
     files_read.extend(runtime_files)
     warnings.extend(runtime_warnings)
@@ -2215,6 +2473,59 @@ def _load_episode_artifact_signals(episode: _EpisodeScope) -> Tuple[List[Dict[st
     health = _episode_health(episode, result_item, manifest, temporal)
     signals.extend(_artifact_health_signals(episode, result_item, manifest, temporal))
     return signals, files_read, warnings, health
+
+
+def _episode_scene_identity_sets(
+    result_item: Any,
+    manifest: Any,
+    temporal: Any,
+) -> Tuple[set[str], set[str]]:
+    scene_ids: set[str] = set()
+    scene_indices: set[str] = set()
+    candidates = (
+        (result_item if isinstance(result_item, dict) else {}, "scenes"),
+        (manifest if isinstance(manifest, dict) else {}, "scenes"),
+        (temporal if isinstance(temporal, dict) else {}, "segments"),
+    )
+    for payload, key in candidates:
+        items = payload.get(key)
+        if not isinstance(items, list):
+            continue
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            scene_id = _clean_str(item.get("scene_id"))
+            if scene_id:
+                scene_ids.add(scene_id)
+            for index_key in ("index", "scene_index"):
+                if item.get(index_key) is not None:
+                    scene_indices.add(str(item.get(index_key)))
+    return scene_ids, scene_indices
+
+
+def _warning_applies_to_episode(
+    warning: Dict[str, Any],
+    episode: _EpisodeScope,
+    scene_ids: set[str],
+    scene_indices: set[str],
+) -> bool:
+    context = warning.get("context")
+    if not isinstance(context, dict):
+        return True
+
+    warning_video = _clean_str(context.get("video_id")) or _clean_str(context.get("video_hash"))
+    if warning_video and warning_video not in {episode.video_id, episode.video_hash}:
+        return False
+
+    scene_id = _clean_str(context.get("scene_id"))
+    if scene_id and scene_ids:
+        return scene_id in scene_ids
+
+    scene_index = context.get("scene_index")
+    if scene_index is not None and scene_indices:
+        return str(scene_index) in scene_indices
+
+    return True
 
 
 def _select_episode_result_item(episode: _EpisodeScope, result_items: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
@@ -2242,7 +2553,11 @@ def _select_episode_result_item(episode: _EpisodeScope, result_items: Sequence[D
     return result_items[0] if result_items and isinstance(result_items[0], dict) else {}
 
 
-def _load_runtime_event_signals(episode: _EpisodeScope) -> Tuple[List[Dict[str, Any]], List[str], List[str]]:
+def _load_runtime_event_signals(
+    episode: _EpisodeScope,
+    scene_ids: set[str],
+    scene_indices: set[str],
+) -> Tuple[List[Dict[str, Any]], List[str], List[str]]:
     signals: List[Dict[str, Any]] = []
     files_read: List[str] = []
     warnings: List[str] = []
@@ -2263,7 +2578,7 @@ def _load_runtime_event_signals(episode: _EpisodeScope) -> Tuple[List[Dict[str, 
                 event = json.loads(stripped)
             except Exception:
                 continue
-            if isinstance(event, dict):
+            if isinstance(event, dict) and _runtime_event_applies_to_episode(event, episode, scene_ids, scene_indices):
                 events.append(event)
 
     for index, event in enumerate(events):
@@ -2278,6 +2593,9 @@ def _load_runtime_event_signals(episode: _EpisodeScope) -> Tuple[List[Dict[str, 
         if return_code is None:
             continue
         retry_event = _find_runtime_retry_event(events[index + 1 :], event, metadata)
+        retry_metadata = retry_event.get("metadata") if isinstance(retry_event, dict) else {}
+        if not isinstance(retry_metadata, dict):
+            retry_metadata = {}
         recovered = retry_event is not None
         code = "native_crash_retry" if recovered else None
         family = _classify_error_family(
@@ -2295,14 +2613,17 @@ def _load_runtime_event_signals(episode: _EpisodeScope) -> Tuple[List[Dict[str, 
                 "report_run_id": episode.report_run_id,
                 "episode": episode.video_name or episode.episode,
                 "video_id": _clean_str(metadata.get("video_id")) or episode.video_id,
+                "env": _clean_str(metadata.get("env")) or _clean_str(metadata.get("env_name")),
                 "step_name": step,
                 "status": "warning" if recovered else "error",
                 "reason": "native_crash_retry" if recovered else error,
                 "error_family": family,
                 "scene_id": _clean_str(metadata.get("scene_id")),
                 "scene_index": metadata.get("scene_index"),
+                "return_code": return_code,
+                "retry_mode": _clean_str(retry_metadata.get("native_retry_mode")),
                 "recovery_outcome": "recovered_retry" if recovered else None,
-                "optional": False,
+                "optional": _is_optional_runtime_step(step),
                 "message": error,
                 "ts": _clean_str(event.get("timestamp")),
             }
@@ -2313,6 +2634,32 @@ def _load_runtime_event_signals(episode: _EpisodeScope) -> Tuple[List[Dict[str, 
     files_read.extend(stderr_files)
     warnings.extend(stderr_warnings)
     return signals, files_read, warnings
+
+
+def _runtime_event_applies_to_episode(
+    event: Dict[str, Any],
+    episode: _EpisodeScope,
+    scene_ids: set[str],
+    scene_indices: set[str],
+) -> bool:
+    metadata = event.get("metadata")
+    if not isinstance(metadata, dict):
+        return True
+
+    event_video = _clean_str(metadata.get("video_id")) or _clean_str(metadata.get("video_hash"))
+    episode_videos = {value for value in (episode.video_id, episode.video_hash) if value}
+    if event_video and episode_videos and event_video not in episode_videos:
+        return False
+
+    scene_id = _clean_str(metadata.get("scene_id"))
+    if scene_id and scene_ids:
+        return scene_id in scene_ids
+
+    scene_index = metadata.get("scene_index")
+    if scene_index is not None and scene_indices:
+        return str(scene_index) in scene_indices
+
+    return True
 
 
 def _load_stderr_native_retry_signals(episode: _EpisodeScope) -> Tuple[List[Dict[str, Any]], List[str], List[str]]:
@@ -2333,8 +2680,8 @@ def _load_stderr_native_retry_signals(episode: _EpisodeScope) -> Tuple[List[Dict
         parsed = _parse_native_crash_stderr_line(line)
         if parsed is None:
             continue
-        step, return_code, status_code = parsed
-        key = (step, return_code, status_code)
+        step, return_code, status_code, retry_mode = parsed
+        key = (step, return_code, status_code, retry_mode)
         if key in seen:
             continue
         seen.add(key)
@@ -2359,8 +2706,10 @@ def _load_stderr_native_retry_signals(episode: _EpisodeScope) -> Tuple[List[Dict
                 "error_family": family,
                 "scene_id": None,
                 "scene_index": None,
+                "return_code": return_code,
+                "retry_mode": retry_mode,
                 "recovery_outcome": "recovered_retry",
-                "optional": False,
+                "optional": _is_optional_runtime_step(step),
                 "message": line.strip(),
                 "ts": None,
             }
@@ -2368,7 +2717,27 @@ def _load_stderr_native_retry_signals(episode: _EpisodeScope) -> Tuple[List[Dict
     return signals, files_read, warnings
 
 
-def _parse_native_crash_stderr_line(line: str) -> Optional[Tuple[str, Optional[int], Optional[str]]]:
+def _is_optional_runtime_step(step: Any) -> bool:
+    step_name = (_clean_step_name(step) or "").lower()
+    return step_name in {
+        "audio_embed_clap",
+        "audio_emotion",
+        "audio_backend",
+        "diarization",
+        "emotion",
+        "image_caption",
+        "image_embed_clip",
+        "image_embed_dino",
+        "image_ocr",
+        "object_detect",
+        "ocr",
+        "sentiment",
+        "speaker_voice_signature",
+        "speaker_voice_signature_meta",
+    }
+
+
+def _parse_native_crash_stderr_line(line: str) -> Optional[Tuple[str, Optional[int], Optional[str], Optional[str]]]:
     text = line.strip()
     if not text or "native crash" not in text.lower():
         return None
@@ -2382,6 +2751,7 @@ def _parse_native_crash_stderr_line(line: str) -> Optional[Tuple[str, Optional[i
             _clean_step_name(detected.group("step")),
             _coerce_int(detected.group("return_code")),
             _normalize_status_code_hex(detected.group("status_code")),
+            _native_retry_mode_from_text(text),
         )
 
     retry = re.search(
@@ -2390,7 +2760,22 @@ def _parse_native_crash_stderr_line(line: str) -> Optional[Tuple[str, Optional[i
         re.IGNORECASE,
     )
     if retry:
-        return (_clean_step_name(retry.group("step")), None, _normalize_status_code_hex(retry.group("status_code")))
+        return (
+            _clean_step_name(retry.group("step")),
+            None,
+            _normalize_status_code_hex(retry.group("status_code")),
+            _native_retry_mode_from_text(text),
+        )
+    return None
+
+
+def _native_retry_mode_from_text(text: str) -> Optional[str]:
+    mode = re.search(r"\bmode=(?P<mode>[A-Za-z0-9_\-]+)", text)
+    if mode:
+        return _clean_str(mode.group("mode"))
+    via = re.search(r"\bvia\s+(?P<mode>[A-Za-z0-9_\-]+)", text, re.IGNORECASE)
+    if via:
+        return _clean_str(via.group("mode"))
     return None
 
 
@@ -2560,22 +2945,32 @@ def _load_step_run_signals(
     path: Path,
     episode_by_runtime_id: Dict[str, _EpisodeScope],
     episode_by_video_id: Dict[str, _EpisodeScope],
-) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[str], List[str]]:
+    target_runtime_run_ids: Sequence[str],
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]], List[str], List[str], Dict[str, Any]]:
     files_read: List[str] = []
     warnings: List[str] = []
     signals: List[Dict[str, Any]] = []
     latency_rows: List[Dict[str, Any]] = []
+    coverage_rows: List[Dict[str, Any]] = []
+    target_run_ids = {str(value) for value in target_runtime_run_ids if str(value).strip()}
+    scope_info: Dict[str, Any] = {
+        "strict_run_id_filter_applied": bool(target_run_ids),
+        "target_run_ids": sorted(target_run_ids),
+        "excluded_run_ids": {},
+        "limited_run_id_scope": False,
+    }
     if not path.is_file():
         warnings.append(f"step_runs_missing: {path}")
-        return signals, latency_rows, files_read, warnings
+        return signals, latency_rows, coverage_rows, files_read, warnings, scope_info
 
     files_read.append(str(path))
     try:
         lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
     except Exception as exc:
         warnings.append(f"step_runs_unreadable: {path}: {exc}")
-        return signals, latency_rows, files_read, warnings
+        return signals, latency_rows, coverage_rows, files_read, warnings, scope_info
 
+    excluded_run_ids: Counter[str] = Counter()
     for line in lines:
         if not line.strip():
             continue
@@ -2586,11 +2981,24 @@ def _load_step_run_signals(
         if not isinstance(row, dict):
             continue
 
-        episode = episode_by_video_id.get(_clean_str(row.get("video_id")) or "")
-        if episode is None:
-            episode = episode_by_runtime_id.get(_clean_str(row.get("run_id")) or "")
+        row_run_id = _clean_str(row.get("run_id")) or ""
+        row_video_id = _clean_str(row.get("video_id")) or ""
+        if target_run_ids:
+            if row_run_id not in target_run_ids:
+                excluded_run_ids[row_run_id or "<missing>"] += 1
+                continue
+            episode = episode_by_video_id.get(row_video_id)
+            if episode is None:
+                episode = episode_by_runtime_id.get(row_run_id)
+        else:
+            scope_info["limited_run_id_scope"] = True
+            episode = episode_by_video_id.get(row_video_id)
+            if episode is None:
+                episode = episode_by_runtime_id.get(row_run_id)
         if episode is None:
             continue
+
+        coverage_rows.append(_coverage_from_step_row(episode, row))
 
         latency_row = _latency_from_step_row(episode, row)
         if latency_row is not None:
@@ -2599,9 +3007,19 @@ def _load_step_run_signals(
         status = (_clean_str(row.get("status")) or "unknown").lower()
         if status in _OK_STATUSES:
             continue
+
         signals.append(_signal_from_step_row(episode, row))
 
-    return signals, latency_rows, files_read, warnings
+    if excluded_run_ids:
+        scope_info["excluded_run_ids"] = dict(sorted(excluded_run_ids.items()))
+        warnings.append(
+            "excluded_run_ids: "
+            + ", ".join(f"{run_id}={count}" for run_id, count in sorted(excluded_run_ids.items()))
+        )
+    if scope_info["limited_run_id_scope"]:
+        warnings.append("limited_run_id_scope: target runtime run_id unavailable; step_runs filtered without strict run_id")
+
+    return signals, latency_rows, coverage_rows, files_read, warnings, scope_info
 
 
 def _latency_from_step_row(episode: _EpisodeScope, row: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -2617,6 +3035,30 @@ def _latency_from_step_row(episode: _EpisodeScope, row: Dict[str, Any]) -> Optio
         "step_name": _clean_str(row.get("step")) or "unknown_step",
         "status": (_clean_str(row.get("status")) or "unknown").lower(),
         "duration_ms": duration_ms,
+        "scene_id": _clean_str(row.get("scene_id")),
+        "scene_index": row.get("scene_index"),
+        "ts": _clean_str(row.get("ts")),
+    }
+
+
+def _coverage_from_step_row(episode: _EpisodeScope, row: Dict[str, Any]) -> Dict[str, Any]:
+    step = _clean_str(row.get("step")) or "unknown_step"
+    status = (_clean_str(row.get("status")) or "unknown").lower()
+    extra = row.get("extra") if isinstance(row.get("extra"), dict) else {}
+    reason = _extract_reason(row) or status
+    return {
+        "source": "step_runs.jsonl",
+        "report_run_id": episode.report_run_id,
+        "run_id": _clean_str(row.get("run_id")) or episode.runtime_run_id,
+        "episode": episode.video_name or episode.episode,
+        "video_id": _clean_str(row.get("video_id")) or episode.video_id,
+        "step_name": step,
+        "status": status,
+        "reason": reason,
+        "env": _clean_str(row.get("env")),
+        "meta_status": _first_nested_status(extra.get("result_meta")),
+        "embedding_emitted": extra.get("embedding_emitted") if isinstance(extra.get("embedding_emitted"), bool) else None,
+        "optional": bool(extra.get("optional")) or _is_optional_runtime_step(step),
         "scene_id": _clean_str(row.get("scene_id")),
         "scene_index": row.get("scene_index"),
         "ts": _clean_str(row.get("ts")),
@@ -2670,9 +3112,13 @@ def _signal_from_run_warning(episode: _EpisodeScope, warning: Dict[str, Any]) ->
         "error_family": family,
         "scene_id": _clean_str(context.get("scene_id")),
         "scene_index": context.get("scene_index"),
+        "return_code": _coerce_int(context.get("return_code")),
+        "retry_mode": _clean_str(context.get("native_retry_mode")) or _clean_str(context.get("retry_mode")),
         "recovery_outcome": "recovered_retry" if code == "native_crash_retry" else None,
         "optional": code.startswith("optional_"),
         "message": message,
+        "env": _clean_str(context.get("env")),
+        "env_fingerprint": _clean_str(context.get("env_fingerprint")),
         "ts": _clean_str(warning.get("ts_utc")),
     }
 
@@ -2847,8 +3293,9 @@ def _group_signals(signals: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
             },
         )
         row["count"] += 1
-        if signal.get("source") and signal.get("source") not in row["sources"]:
-            row["sources"].append(signal.get("source"))
+        for source in _signal_surface_names(signal):
+            if source not in row["sources"]:
+                row["sources"].append(source)
         if signal.get("scene_index") is not None and signal.get("scene_index") not in row["scene_indices"]:
             row["scene_indices"].append(signal.get("scene_index"))
         row["optional"] = bool(row.get("optional") or signal.get("optional"))
@@ -2872,6 +3319,7 @@ def _top_families(signals: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
                 "scenes": 0,
                 "step_names": [],
                 "statuses": [],
+                "sources": [],
                 "recovery_outcomes": Counter(),
                 "_episode_set": set(),
                 "_run_set": set(),
@@ -2889,6 +3337,9 @@ def _top_families(signals: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
             row["step_names"].append(signal.get("step_name"))
         if signal.get("status") and signal.get("status") not in row["statuses"]:
             row["statuses"].append(signal.get("status"))
+        for source in _signal_surface_names(signal):
+            if source not in row["sources"]:
+                row["sources"].append(source)
         row["recovery_outcomes"].update([signal.get("recovery_outcome") or "unknown"])
 
     rows: List[Dict[str, Any]] = []
@@ -2902,6 +3353,7 @@ def _top_families(signals: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
                 "scenes": len(row["_scene_set"]),
                 "step_names": sorted(row["step_names"]),
                 "statuses": sorted(row["statuses"]),
+                "sources": sorted(row["sources"]),
                 "recovery_outcomes": dict(row["recovery_outcomes"]),
             }
         )
@@ -2916,6 +3368,171 @@ def _optional_enrichment_skips(signals: Sequence[Dict[str, Any]]) -> List[Dict[s
         if bool(signal.get("optional")) and str(signal.get("status") or "").lower() in (_SKIP_STATUSES | _ERROR_STATUSES | {"warning"})
     ]
     return _group_signals(optional)
+
+
+def _optional_enrichment_coverage(rows: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
+    optional_rows = [row for row in rows if bool(row.get("optional"))]
+    if not optional_rows:
+        return {
+            "mode": "read_only_optional_enrichment_coverage",
+            "source": "step_runs.jsonl structured step outcomes",
+            "status": "empty",
+            "total_rows": 0,
+            "step_count": 0,
+            "non_ok_rows": 0,
+            "steps": [],
+            "warnings": ["no_optional_step_rows"],
+        }
+
+    buckets: Dict[str, List[Dict[str, Any]]] = {}
+    for row in optional_rows:
+        step = _clean_step_name(row.get("step_name"))
+        buckets.setdefault(step, []).append(row)
+
+    step_rows = [_optional_enrichment_step_coverage(step, items) for step, items in buckets.items()]
+    step_rows.sort(key=lambda row: (-int(row.get("non_ok_count") or 0), -int(row.get("total_rows") or 0), str(row.get("step_name"))))
+    return {
+        "mode": "read_only_optional_enrichment_coverage",
+        "source": "step_runs.jsonl structured step outcomes",
+        "status": "available",
+        "total_rows": len(optional_rows),
+        "step_count": len(step_rows),
+        "non_ok_rows": sum(int(row.get("non_ok_count") or 0) for row in step_rows),
+        "steps": step_rows,
+        "warnings": [],
+    }
+
+
+def _optional_enrichment_step_coverage(step: str, rows: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
+    status_counts = Counter(str(row.get("status") or "unknown").lower() for row in rows)
+    reason_counts = Counter(
+        str(row.get("reason") or row.get("status") or "unknown").lower()
+        for row in rows
+        if str(row.get("status") or "unknown").lower() not in _OK_STATUSES
+    )
+    meta_status_counts = Counter(
+        str(row.get("meta_status") or "unknown").lower()
+        for row in rows
+        if row.get("meta_status") is not None
+    )
+    emitted_count = sum(1 for row in rows if row.get("embedding_emitted") is True)
+    scene_keys = {
+        (row.get("episode"), row.get("scene_id") or row.get("scene_index"))
+        for row in rows
+        if row.get("scene_id") is not None or row.get("scene_index") is not None
+    }
+    episodes = sorted({str(row.get("episode")) for row in rows if row.get("episode")})
+    non_ok_count = sum(count for status, count in status_counts.items() if status not in _OK_STATUSES)
+    return {
+        "step_name": step,
+        "total_rows": len(rows),
+        "ok_count": sum(count for status, count in status_counts.items() if status in _OK_STATUSES),
+        "skipped_count": sum(count for status, count in status_counts.items() if status in _SKIP_STATUSES),
+        "error_count": sum(count for status, count in status_counts.items() if status in _ERROR_STATUSES),
+        "warning_count": int(status_counts.get("warning") or 0),
+        "non_ok_count": non_ok_count,
+        "status_counts": dict(sorted(status_counts.items())),
+        "reason_counts": dict(sorted(reason_counts.items())),
+        "meta_status_counts": dict(sorted(meta_status_counts.items())),
+        "embedding_emitted_count": emitted_count,
+        "scene_count": len(scene_keys),
+        "episodes": episodes,
+        "episode_count": len(episodes),
+    }
+
+
+def _environment_summary(step_rows: Sequence[Dict[str, Any]], signals: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
+    env_counts = Counter(
+        _clean_str(row.get("env")) or "unknown"
+        for row in step_rows
+        if _clean_str(row.get("env"))
+    )
+    step_envs: Dict[str, Counter[str]] = {}
+    for row in step_rows:
+        step = _clean_step_name(row.get("step_name"))
+        env = _clean_str(row.get("env")) or "unknown"
+        if env == "unknown":
+            continue
+        step_envs.setdefault(step, Counter()).update([env])
+
+    fingerprint_rows: List[Dict[str, Any]] = []
+    seen_fingerprints = set()
+    for signal in signals:
+        raw = _clean_str(signal.get("env_fingerprint"))
+        if not raw:
+            continue
+        parsed = _parse_env_fingerprint(raw)
+        key = (
+            signal.get("run_id"),
+            signal.get("step_name"),
+            parsed.get("fingerprint") or raw,
+        )
+        if key in seen_fingerprints:
+            continue
+        seen_fingerprints.add(key)
+        fingerprint_rows.append(
+            {
+                "run_id": signal.get("run_id"),
+                "episode": signal.get("episode"),
+                "video_id": signal.get("video_id"),
+                "step_name": signal.get("step_name"),
+                "error_family": signal.get("error_family"),
+                "fingerprint": parsed.get("fingerprint"),
+                "event": parsed.get("event"),
+                "env": _sanitized_env_fingerprint_values(parsed.get("env")),
+                "raw_available": bool(raw),
+            }
+        )
+
+    steps = [
+        {
+            "step_name": step,
+            "env_counts": dict(sorted(counter.items())),
+            "env_names": sorted(counter),
+        }
+        for step, counter in sorted(step_envs.items())
+    ]
+    return {
+        "mode": "read_only_environment_observability",
+        "source": "step_runs.jsonl env fields and persisted native retry env_fingerprint warnings",
+        "status": "available" if env_counts or fingerprint_rows else "empty",
+        "step_row_count": len(step_rows),
+        "env_counts": dict(sorted(env_counts.items())),
+        "step_envs": steps,
+        "native_retry_env_fingerprints": fingerprint_rows,
+        "warnings": [] if env_counts or fingerprint_rows else ["no_environment_rows"],
+    }
+
+
+def _parse_env_fingerprint(raw: str) -> Dict[str, Any]:
+    text = raw.strip()
+    if not text:
+        return {}
+    start = text.find("{")
+    if start > 0:
+        text = text[start:]
+    try:
+        payload = json.loads(text)
+    except Exception:
+        return {"raw": raw}
+    return payload if isinstance(payload, dict) else {"raw": raw}
+
+
+def _sanitized_env_fingerprint_values(value: Any) -> Dict[str, Any]:
+    if not isinstance(value, dict):
+        return {}
+    sanitized: Dict[str, Any] = {}
+    for key, item in sorted(value.items()):
+        clean_key = _clean_str(key)
+        if not clean_key:
+            continue
+        if isinstance(item, str):
+            sanitized[clean_key] = _display_text(item)
+        elif item is None or isinstance(item, (bool, int, float)):
+            sanitized[clean_key] = item
+        else:
+            sanitized[clean_key] = _display_text(item)
+    return sanitized
 
 
 def _recovery_counts(signals: Sequence[Dict[str, Any]]) -> Dict[str, int]:
@@ -3103,6 +3720,79 @@ def _latency_delta(baseline: Any, candidate: Any) -> Dict[str, Any]:
     }
 
 
+def _optional_enrichment_coverage_delta(baseline: Any, candidate: Any) -> Dict[str, Any]:
+    baseline_summary = baseline if isinstance(baseline, dict) else {}
+    candidate_summary = candidate if isinstance(candidate, dict) else {}
+    baseline_steps = _optional_coverage_steps_by_name(baseline_summary)
+    candidate_steps = _optional_coverage_steps_by_name(candidate_summary)
+    rows: List[Dict[str, Any]] = []
+
+    for step in sorted(set(baseline_steps) | set(candidate_steps)):
+        base = baseline_steps.get(step, {})
+        cand = candidate_steps.get(step, {})
+        row = {
+            "step_name": step,
+            "baseline_total_rows": int(base.get("total_rows") or 0),
+            "candidate_total_rows": int(cand.get("total_rows") or 0),
+            "total_rows_delta": int(cand.get("total_rows") or 0) - int(base.get("total_rows") or 0),
+            "baseline_ok_count": int(base.get("ok_count") or 0),
+            "candidate_ok_count": int(cand.get("ok_count") or 0),
+            "ok_delta": int(cand.get("ok_count") or 0) - int(base.get("ok_count") or 0),
+            "baseline_non_ok_count": int(base.get("non_ok_count") or 0),
+            "candidate_non_ok_count": int(cand.get("non_ok_count") or 0),
+            "non_ok_delta": int(cand.get("non_ok_count") or 0) - int(base.get("non_ok_count") or 0),
+            "baseline_embedding_emitted_count": int(base.get("embedding_emitted_count") or 0),
+            "candidate_embedding_emitted_count": int(cand.get("embedding_emitted_count") or 0),
+            "embedding_emitted_delta": int(cand.get("embedding_emitted_count") or 0)
+            - int(base.get("embedding_emitted_count") or 0),
+        }
+        row["trend_status"] = _coverage_delta_status(row)
+        rows.append(row)
+
+    rows.sort(
+        key=lambda row: (
+            -abs(int(row.get("non_ok_delta") or 0)),
+            -abs(int(row.get("total_rows_delta") or 0)),
+            str(row.get("step_name")),
+        )
+    )
+    return {
+        "mode": "read_only_optional_enrichment_coverage_delta",
+        "status": "available" if rows else "empty",
+        "baseline_total_rows": int(baseline_summary.get("total_rows") or 0),
+        "candidate_total_rows": int(candidate_summary.get("total_rows") or 0),
+        "baseline_non_ok_rows": int(baseline_summary.get("non_ok_rows") or 0),
+        "candidate_non_ok_rows": int(candidate_summary.get("non_ok_rows") or 0),
+        "steps": rows,
+    }
+
+
+def _optional_coverage_steps_by_name(summary: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+    out: Dict[str, Dict[str, Any]] = {}
+    for row in summary.get("steps") or []:
+        if not isinstance(row, dict):
+            continue
+        step = _clean_str(row.get("step_name"))
+        if step:
+            out[step] = row
+    return out
+
+
+def _coverage_delta_status(row: Dict[str, Any]) -> str:
+    baseline_total = int(row.get("baseline_total_rows") or 0)
+    candidate_total = int(row.get("candidate_total_rows") or 0)
+    if baseline_total <= 0 and candidate_total > 0:
+        return "new"
+    if baseline_total > 0 and candidate_total <= 0:
+        return "resolved"
+    non_ok_delta = int(row.get("non_ok_delta") or 0)
+    if non_ok_delta > 0:
+        return "increased"
+    if non_ok_delta < 0:
+        return "decreased"
+    return "stable"
+
+
 def _latency_steps_by_name(summary: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
     out: Dict[str, Dict[str, Any]] = {}
     for row in summary.get("steps") or []:
@@ -3273,6 +3963,23 @@ def _first_nested_reason(value: Any) -> Optional[str]:
     return None
 
 
+def _first_nested_status(value: Any) -> Optional[str]:
+    if isinstance(value, dict):
+        status = _clean_str(value.get("status"))
+        if status:
+            return status.lower()
+        for child in value.values():
+            found = _first_nested_status(child)
+            if found:
+                return found
+    elif isinstance(value, list):
+        for child in value:
+            found = _first_nested_status(child)
+            if found:
+                return found
+    return None
+
+
 def _load_result_items(path: Optional[Path], files_read: List[str], warnings: List[str]) -> List[Dict[str, Any]]:
     if path is None:
         return []
@@ -3334,7 +4041,8 @@ def _display_text(value: Any) -> str:
 
 
 def _sanitize_drive_root(text: str) -> str:
-    return re.sub(r"\b[A-Za-z]:[\\/]", "<local>/", text)
+    sanitized = re.sub(r"\b[A-Za-z]:[\\/]", "<local>/", text)
+    return re.sub(r"\\\\" + r"wsl" + r"\$", "<wsl>", sanitized, flags=re.IGNORECASE)
 
 
 def _unique_episode_map(pairs: Iterable[Tuple[Optional[str], _EpisodeScope]]) -> Dict[str, _EpisodeScope]:
@@ -3457,65 +4165,197 @@ def _dedupe_strings(values: Iterable[str]) -> List[str]:
 
 
 def _coalesce_runtime_event_duplicates(signals: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    runtime_specific = {
-        (
-            signal.get("run_id"),
-            signal.get("video_id"),
-            signal.get("step_name"),
-            signal.get("error_family"),
-            signal.get("recovery_outcome"),
+    native_signals = [signal for signal in signals if _is_native_crash_signal(signal)]
+    scene_specific: Dict[Tuple[Any, ...], List[Tuple[Any, Any, Any, Any]]] = {}
+    for signal in native_signals:
+        if not signal.get("scene_id"):
+            continue
+        scene_specific.setdefault(_native_run_level_key(signal), []).append(
+            (
+                signal.get("video_id"),
+                signal.get("scene_id"),
+                signal.get("scene_index"),
+                _native_retry_mode(signal),
+            )
         )
-        for signal in signals
-        if signal.get("source") == "runtime.events" and signal.get("scene_id")
-    }
-    runtime_specific_run_level = {
-        (
-            signal.get("run_id"),
-            signal.get("step_name"),
-            signal.get("error_family"),
-            signal.get("recovery_outcome"),
-        )
-        for signal in signals
-        if signal.get("source") == "runtime.events" and signal.get("scene_id")
-    }
-    stderr_keys = {
-        (
-            signal.get("run_id"),
-            signal.get("video_id"),
-            signal.get("step_name"),
-            signal.get("error_family"),
-            signal.get("recovery_outcome"),
-        )
-        for signal in signals
-        if signal.get("source") == "runtime.stderr"
-    }
-    out: List[Dict[str, Any]] = []
+
+    groups: Dict[Tuple[Any, ...], List[Dict[str, Any]]] = {}
+    passthrough: List[Dict[str, Any]] = []
     for signal in signals:
-        key = (
-            signal.get("run_id"),
-            signal.get("video_id"),
-            signal.get("step_name"),
-            signal.get("error_family"),
-            signal.get("recovery_outcome"),
-        )
-        run_level_key = (
-            signal.get("run_id"),
-            signal.get("step_name"),
-            signal.get("error_family"),
-            signal.get("recovery_outcome"),
-        )
-        if (
-            signal.get("source") in {"run.warnings", "runtime.stderr"}
-            and not signal.get("scene_id")
-            and key in runtime_specific
-        ):
+        if not _is_native_crash_signal(signal):
+            passthrough.append(signal)
             continue
-        if _is_scene_less_native_retry_signal(signal) and run_level_key in runtime_specific_run_level:
-            continue
-        if signal.get("source") == "run.warnings" and not signal.get("scene_id") and key in stderr_keys:
-            continue
-        out.append(signal)
+        groups.setdefault(_native_coalesce_key(signal, scene_specific), []).append(signal)
+
+    out: List[Dict[str, Any]] = []
+    for group in groups.values():
+        out.append(_merge_native_crash_signals(group))
+    out.extend(passthrough)
     return out
+
+
+def _is_native_crash_signal(signal: Dict[str, Any]) -> bool:
+    family = _clean_str(signal.get("error_family")) or ""
+    return family.startswith("native_crash_retry:") or family.startswith("native_subprocess_crash:")
+
+
+def _native_run_level_key(signal: Dict[str, Any]) -> Tuple[Any, ...]:
+    return (
+        signal.get("run_id"),
+        signal.get("step_name"),
+        _native_family_code(signal),
+        _native_recovery_class(signal),
+    )
+
+
+def _native_coalesce_key(
+    signal: Dict[str, Any],
+    scene_specific: Dict[Tuple[Any, ...], List[Tuple[Any, Any, Any, Any]]],
+) -> Tuple[Any, ...]:
+    video_id = signal.get("video_id")
+    scene_id = signal.get("scene_id")
+    scene_index = signal.get("scene_index")
+    retry_mode = _native_retry_mode(signal)
+    if not scene_id and signal.get("source") in {"run.warnings", "runtime.stderr"}:
+        candidates = scene_specific.get(_native_run_level_key(signal), [])
+        unique_candidates = list(dict.fromkeys(candidates))
+        if len(unique_candidates) == 1:
+            video_id, scene_id, scene_index, candidate_retry_mode = unique_candidates[0]
+            retry_mode = retry_mode or candidate_retry_mode
+    elif scene_id and not retry_mode:
+        retry_mode = _native_retry_mode_for_scene(signal, scene_specific)
+    return (
+        signal.get("run_id"),
+        video_id,
+        scene_id,
+        scene_index,
+        signal.get("step_name"),
+        _native_family_code(signal),
+        _native_recovery_class(signal),
+        retry_mode,
+    )
+
+
+def _native_retry_mode(signal: Dict[str, Any]) -> Optional[str]:
+    return _clean_str(signal.get("retry_mode")) or None
+
+
+def _native_retry_mode_for_scene(
+    signal: Dict[str, Any],
+    scene_specific: Dict[Tuple[Any, ...], List[Tuple[Any, Any, Any, Any]]],
+) -> Optional[str]:
+    candidates = scene_specific.get(_native_run_level_key(signal), [])
+    modes = [
+        retry_mode
+        for video_id, scene_id, scene_index, retry_mode in candidates
+        if retry_mode
+        and (not signal.get("video_id") or video_id == signal.get("video_id"))
+        and scene_id == signal.get("scene_id")
+        and (signal.get("scene_index") is None or scene_index == signal.get("scene_index"))
+    ]
+    unique_modes = list(dict.fromkeys(modes))
+    return unique_modes[0] if len(unique_modes) == 1 else None
+
+
+def _native_family_code(signal: Dict[str, Any]) -> str:
+    family = _clean_str(signal.get("error_family")) or ""
+    if ":" in family:
+        return family.split(":", 1)[1] or "unknown"
+    return "unknown"
+
+
+def _native_recovery_class(signal: Dict[str, Any]) -> str:
+    recovery = _clean_str(signal.get("recovery_outcome")) or ""
+    if recovery.startswith("unrecovered"):
+        return "unrecovered"
+    if recovery.startswith("recovered"):
+        return "recovered"
+    status = str(signal.get("status") or "").lower()
+    if status in _ERROR_STATUSES:
+        return "unrecovered"
+    if status == "warning":
+        return "recovered"
+    return recovery or "unknown"
+
+
+def _merge_native_crash_signals(group: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
+    ordered = list(group)
+    if len(ordered) == 1:
+        signal = dict(ordered[0])
+        signal["sources"] = _signal_surface_names(signal)
+        return signal
+
+    preferred = _preferred_native_signal(ordered)
+    merged = dict(preferred)
+    sources = _dedupe_strings(source for signal in ordered for source in _signal_surface_names(signal))
+    unrecovered = any(_native_recovery_class(signal) == "unrecovered" for signal in ordered)
+    code = _native_family_code(preferred)
+    if unrecovered:
+        merged["error_family"] = f"native_subprocess_crash:{code}"
+        merged["status"] = "error"
+        merged["recovery_outcome"] = "unrecovered"
+    else:
+        merged["error_family"] = f"native_crash_retry:{code}"
+        merged["status"] = "warning"
+        merged["reason"] = "native_crash_retry"
+        merged["recovery_outcome"] = _preferred_recovered_outcome(ordered)
+    merged["source"] = "coalesced.native_retry"
+    merged["sources"] = sources
+    merged["source_count"] = len(sources)
+    merged["optional"] = any(bool(signal.get("optional")) for signal in ordered)
+    merged["provenance"] = {"surfaces": sources}
+
+    for field in (
+        "video_id",
+        "scene_id",
+        "scene_index",
+        "run_id",
+        "episode",
+        "report_run_id",
+        "step_name",
+        "ts",
+        "env",
+        "env_fingerprint",
+        "return_code",
+        "retry_mode",
+    ):
+        if not merged.get(field):
+            merged[field] = next((signal.get(field) for signal in ordered if signal.get(field)), merged.get(field))
+    return merged
+
+
+def _preferred_native_signal(signals: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
+    source_rank = {
+        "step_runs.jsonl": 0,
+        "runtime.events": 1,
+        "run.warnings": 2,
+        "runtime.stderr": 3,
+    }
+    return sorted(
+        signals,
+        key=lambda signal: (
+            source_rank.get(str(signal.get("source")), 9),
+            0 if signal.get("scene_id") else 1,
+            str(signal.get("ts") or ""),
+        ),
+    )[0]
+
+
+def _preferred_recovered_outcome(signals: Sequence[Dict[str, Any]]) -> str:
+    outcomes = [_clean_str(signal.get("recovery_outcome")) for signal in signals]
+    if "recovered_retry" in outcomes:
+        return "recovered_retry"
+    if "recovered_optional_continued" in outcomes:
+        return "recovered_optional_continued"
+    return next((outcome for outcome in outcomes if outcome and outcome.startswith("recovered")), "recovered_retry")
+
+
+def _signal_surface_names(signal: Dict[str, Any]) -> List[str]:
+    sources = signal.get("sources")
+    if isinstance(sources, list):
+        return [str(source) for source in sources if str(source).strip()]
+    source = _clean_str(signal.get("source"))
+    return [source] if source else []
 
 
 def _is_scene_less_native_retry_signal(signal: Dict[str, Any]) -> bool:

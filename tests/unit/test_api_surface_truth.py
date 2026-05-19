@@ -4,9 +4,12 @@ import asyncio
 import importlib.util
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from fastapi import HTTPException
+
+from api.utils import loaders as api_loaders
 
 
 def _load_route_module(module_name: str):
@@ -24,6 +27,7 @@ def _load_route_module(module_name: str):
 
 scenes_module = _load_route_module("scenes")
 timeline_module = _load_route_module("timeline")
+search_module = _load_route_module("search")
 
 
 class _FakeLoader:
@@ -42,6 +46,49 @@ class _FakeSearchEngine:
     def search_similar_scene(self, video_id: str, scene_id: int, top_k: int):
         self.calls.append((video_id, scene_id, top_k))
         return self.similar_results[:top_k]
+
+
+class _FakeMultimodalSearchEngine:
+    weight_text = 0.6
+    weight_visual = 0.4
+    weight_audio = 0.0
+
+    def __init__(self, results: list[dict]):
+        self.results = results
+        self.calls: list[tuple[str, int, list[str] | None]] = []
+
+    def search_multimodal(self, query: str, top_k: int, modalities: list[str] | None = None):
+        self.calls.append((query, top_k, modalities))
+        return self.results[:top_k]
+
+
+class _SearchHydrationLoader:
+    def __init__(self, video_id: str, temporal_index: dict):
+        self.video_id = video_id
+        self.temporal_index = temporal_index
+
+    def list_processed_videos(self):
+        return [self.video_id]
+
+    def load_temporal_index(self, video_id: str):
+        return self.temporal_index if video_id == self.video_id else None
+
+
+def test_data_loader_processing_root_can_be_overridden_by_env(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    configured_root = tmp_path / "configured" / "processing"
+    runtime_root = tmp_path / "witness_epoch" / "processing"
+
+    monkeypatch.setattr(api_loaders, "_DEFAULT_PROCESSING_ROOT", None)
+    monkeypatch.setenv("GOODQ_PROCESSING_ROOT", str(runtime_root))
+
+    api_loaders.configure_from_cfg({"paths": {"processing": str(configured_root)}})
+    loader = api_loaders.DataLoader(data_root=str(tmp_path / "data"))
+
+    assert loader.processing_dir == runtime_root
+    assert loader.data_root == runtime_root.parent
 
 
 def _sample_temporal_index() -> dict:
@@ -378,6 +425,83 @@ def test_full_timeline_accepts_string_scene_ids(monkeypatch: pytest.MonkeyPatch)
     assert len(response.segments) == 1
     assert response.segments[0].scene_id == "scene_0001_hash"
     assert response.metadata["top_transcript_entity_disagreement_families"][0]["example"]["scene_id"] == "scene_0001_hash"
+
+
+def test_multimodal_search_hydrates_vector_hits_from_temporal_index(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    temporal_index = {
+        "segments": [
+            {
+                "segment_id": 7,
+                "scene_id": "scene_hash_001",
+                "start": 12.5,
+                "end": 28.0,
+                "duration": 15.5,
+                "full_transcript": "Claire brings coffee while George waits for the call.",
+                "keywords": ["coffee", "call"],
+                "detected_objects": [{"label": "cup"}, {"label": "table"}],
+                "representative_frame": "scene_0007_frame_01.jpg",
+                "audio_emotion": "calm",
+                "speaker_ids": ["SPEAKER_00"],
+                "speaker_count": 1,
+                "dominant_speaker_id": "SPEAKER_00",
+                "continuity_key": "SPEAKER_00",
+                "sentiment": {"label": "positive", "score": 0.73},
+                "sentiment_label": "positive",
+                "sentiment_score": 0.73,
+                "time_hints": {"explicit_dates": [], "relative_phrases": ["tomorrow"]},
+                "content_state": "signal",
+                "scene_context_llm": {
+                    "primary_tags": ["coffee"],
+                    "contextual_tags": ["phone call"],
+                    "structural_tags": ["dialogue"],
+                    "summary": "Coffee conversation before a planned call.",
+                },
+                "scene_context_epistemic": {"state": "supported"},
+                "scene_context_arbitration": {"resolved_by": "mixed"},
+            }
+        ]
+    }
+    engine = _FakeMultimodalSearchEngine(
+        [
+            {
+                "id": "vector_point_001",
+                "score": 0.84,
+                "modality": "text",
+                "payload": {
+                    "video_id": "hashed_video_id",
+                    "scene_id": "scene_hash_001",
+                    "text_preview": "thin vector payload preview",
+                },
+            }
+        ]
+    )
+    loader = _SearchHydrationLoader("01x01 - Good News, Bad News", temporal_index)
+    monkeypatch.setattr(search_module, "get_search_engine", lambda: engine, raising=False)
+    monkeypatch.setattr(search_module, "get_data_loader", lambda: loader, raising=False)
+
+    result = asyncio.run(
+        search_module.search_multimodal(
+            SimpleNamespace(query="coffee", top_k=1, modalities=None, fusion_weights=None)
+        )
+    )
+
+    assert engine.calls == [("coffee", 1, None)]
+    hit = result.results[0]
+    assert hit.video_id == "01x01 - Good News, Bad News"
+    assert hit.scene_id == "scene_hash_001"
+    assert hit.timestamp == 12.5
+    assert hit.transcript == "Claire brings coffee while George waits for the call."
+    assert hit.keywords == ["coffee", "call"]
+    assert hit.objects == ["cup", "table"]
+    assert hit.sentiment == {"label": "positive", "score": 0.73}
+    assert hit.sentiment_label == "positive"
+    assert hit.sentiment_score == 0.73
+    assert hit.context["audio_emotion"] == "calm"
+    assert hit.context["scene_context_llm"]["summary"] == "Coffee conversation before a planned call."
+    assert hit.context["speaker_count"] == 1
+    assert hit.provenance["hydrated_from"] == "temporal_index"
 
 
 def test_similar_scene_route_returns_real_neighbors(monkeypatch: pytest.MonkeyPatch) -> None:

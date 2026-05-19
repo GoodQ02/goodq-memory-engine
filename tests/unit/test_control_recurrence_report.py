@@ -5,6 +5,7 @@ import re
 from pathlib import Path
 
 from cli.control_recurrence_report import main as recurrence_cli_main
+from lib.control_recurrence_hygiene import audit_control_recurrence_path_hygiene
 from lib.control_recurrence_report import (
     build_control_recurrence_comparison,
     build_control_recurrence_report,
@@ -188,7 +189,12 @@ def test_control_recurrence_report_groups_current_truth_surfaces(tmp_path: Path)
             {
                 "code": "native_crash_retry",
                 "message": "Retrying step after native subprocess crash",
-                "context": {"step": "image_embed_dino", "return_code": 3221226505, "attempt": 1},
+                "context": {
+                    "step": "image_embed_dino",
+                    "return_code": 3221226505,
+                    "attempt": 1,
+                    "env_fingerprint": '{"event":"subprocess_env_fingerprint","step":"image_embed_dino","fingerprint":"envabc123","env":{"OMP_NUM_THREADS":"1"}}',
+                },
                 "ts_utc": "2026-04-25T02:24:20+00:00",
             },
         ],
@@ -243,8 +249,54 @@ def test_control_recurrence_report_groups_current_truth_surfaces(tmp_path: Path)
                 "ts": "2026-04-25T03:00:00",
                 "step": "image_caption",
                 "status": "ok",
+                "env": "goodq_image_caption",
                 "run_id": "runtime-ep2",
                 "video_id": "video-ep2",
+            },
+            {
+                "ts": "2026-04-25T03:01:00",
+                "step": "image_ocr",
+                "status": "skipped",
+                "env": "goodq_image_caption",
+                "run_id": "runtime-ep2",
+                "video_id": "video-ep2",
+                "scene_id": "scene-c",
+                "scene_index": 0,
+                "extra": {
+                    "reason": "image_ocr_pytesseract",
+                    "result_meta": {"ocr_meta": {"status": "dependency_missing", "reason": "pytesseract"}},
+                    "embedding_emitted": False,
+                },
+            },
+            {
+                "ts": "2026-04-25T03:02:00",
+                "step": "image_embed_dino",
+                "status": "skipped",
+                "env": "goodq_image_caption",
+                "run_id": "runtime-ep2",
+                "video_id": "video-ep2",
+                "scene_id": "scene-c",
+                "scene_index": 0,
+                "extra": {
+                    "reason": "image_embed_dino_direct_faiss_index_unconfigured",
+                    "result_meta": {"dino_meta": {"status": "no_index_path", "reason": "direct_faiss_index_unconfigured"}},
+                    "embedding_emitted": False,
+                },
+            },
+            {
+                "ts": "2026-04-25T03:03:00",
+                "step": "image_embed_clip",
+                "status": "skipped",
+                "env": "goodq_image_caption",
+                "run_id": "runtime-ep2",
+                "video_id": "video-ep2",
+                "scene_id": "scene-c",
+                "scene_index": 0,
+                "extra": {
+                    "reason": "image_embed_clip_direct_faiss_index_unconfigured",
+                    "result_meta": {"clip_meta": {"status": "no_index_path", "reason": "direct_faiss_index_unconfigured"}},
+                    "embedding_emitted": False,
+                },
             },
         ],
     )
@@ -257,16 +309,25 @@ def test_control_recurrence_report_groups_current_truth_surfaces(tmp_path: Path)
     assert report["phase6_qdrant_truth"]["healthy"] is True
 
     families = {row["error_family"]: row for row in report["top_repeated_failure_families"]}
-    assert "native_subprocess_crash:0xC0000409" in families
     assert "native_crash_retry:0xC0000409" in families
     assert "no_text" in families
     assert "insufficient_diverse_speech" in families
-    assert families["native_subprocess_crash:0xC0000409"]["category"] == "actionable"
+    assert families["native_crash_retry:0xC0000409"]["count"] == 2
+    assert families["native_crash_retry:0xC0000409"]["category"] == "actionable"
     assert families["insufficient_diverse_speech"]["category"] == "informational"
     assert report["recurrence_classification"]["highest_category"] == "actionable"
 
     optional_steps = {row["step_name"] for row in report["optional_enrichment_skips"]}
-    assert {"audio_embed_clap", "sentiment", "speaker_voice_signature"}.issubset(optional_steps)
+    assert {"audio_embed_clap", "sentiment", "speaker_voice_signature", "image_ocr", "image_embed_dino", "image_embed_clip"}.issubset(optional_steps)
+    coverage_steps = {row["step_name"]: row for row in report["optional_enrichment_coverage"]["steps"]}
+    assert coverage_steps["image_caption"]["ok_count"] == 1
+    assert coverage_steps["image_ocr"]["meta_status_counts"]["dependency_missing"] == 1
+    assert coverage_steps["image_embed_dino"]["reason_counts"]["image_embed_dino_direct_faiss_index_unconfigured"] == 1
+    assert coverage_steps["image_embed_clip"]["skipped_count"] == 1
+    assert report["environment_summary"]["env_counts"]["goodq_image_caption"] == 4
+    fingerprints = report["environment_summary"]["native_retry_env_fingerprints"]
+    assert fingerprints[0]["fingerprint"] == "envabc123"
+    assert fingerprints[0]["env"]["OMP_NUM_THREADS"] == "1"
     assert report["recovered_vs_unrecovered_failures"]["recovered"] >= 2
     assert any(row["scene_id"] == "scene-b" for row in report["scenes_affected"])
 
@@ -466,24 +527,11 @@ def test_control_recurrence_report_discovers_multi_video_direct_run_root(tmp_pat
                 "step": "sentiment",
                 "status": "skipped",
                 "error": "",
-                "duration_ms": 25.0 + index,
                 "run_id": runtime_run_id,
                 "video_id": video_id,
                 "scene_id": scene_id,
                 "scene_index": 0,
                 "extra": {"reason": "no_text"},
-            }
-        )
-        step_rows.append(
-            {
-                "ts": "2026-04-28T05:00:30",
-                "step": "audio_unified_wsl2",
-                "status": "ok",
-                "duration_ms": 20000.0 * index,
-                "run_id": runtime_run_id,
-                "video_id": video_id,
-                "scene_id": scene_id,
-                "scene_index": 0,
             }
         )
 
@@ -505,16 +553,302 @@ def test_control_recurrence_report_discovers_multi_video_direct_run_root(tmp_pat
     assert report["phase6_qdrant_truth"]["healthy"] is True
     families = {row["error_family"]: row for row in report["top_repeated_failure_families"]}
     assert families["no_text"]["count"] == 2
-    latency = report["step_latency_summary"]
-    assert latency["duration_row_count"] == 4
-    latency_steps = {row["step_name"]: row for row in latency["steps"]}
-    assert latency_steps["audio_unified_wsl2"]["ok_count"] == 2
-    assert latency_steps["audio_unified_wsl2"]["max_ms"] == 40000.0
-    assert latency["wsl_audio_steps"][0]["step_name"] == "audio_unified_wsl2"
     assert {row["episode"] for row in report["scenes_affected"]} == {
         "01x01 - Direct Multi 1.mp4",
         "01x02 - Direct Multi 2.mp4",
     }
+
+
+def test_control_recurrence_report_filters_direct_step_runs_by_runtime_run_id(tmp_path: Path) -> None:
+    run_root = tmp_path / "reports" / "fresh_ingest_runs" / "direct_same_video"
+    epoch_root = tmp_path / "GoodQ_Data" / "epochs" / "epoch_same_video"
+    processing_dir = epoch_root / "processing" / "01x01 - Same Video"
+    scene_manifest_path = processing_dir / "video" / "scene_manifest.json"
+    temporal_index_path = processing_dir / "temporal_index.json"
+    video_id = "video-repeat"
+    current_run_id = "runtime-current"
+    stale_run_id = "runtime-stale"
+    scenes = [{"scene_id": "scene-current", "index": 0, "content_state": "signal"}]
+
+    _write_json(
+        run_root / "output" / "scene_ingest_results.json",
+        [
+            {
+                "video_id": video_id,
+                "video_hash": video_id,
+                "video_name": "01x01 - Same Video.mp4",
+                "phase6_complete": True,
+                "qdrant_ok": True,
+                "phase6_qdrant_ok": True,
+                "scenes": scenes,
+                "temporal_index_path": str(temporal_index_path),
+            }
+        ],
+    )
+    _write_json(
+        scene_manifest_path,
+        {
+            "video_id": video_id,
+            "phase5_complete": True,
+            "phase6_complete": True,
+            "phase6_harmonized": True,
+            "phase6_vector_commit": {"qdrant_ok": True, "vector_points_attempted": 2},
+            "scenes": scenes,
+        },
+    )
+    _write_json(
+        temporal_index_path,
+        {
+            "video_id": video_id,
+            "phase5_complete": True,
+            "phase6_complete": True,
+            "phase6_harmonized": True,
+            "total_scenes": 1,
+            "segments": scenes,
+        },
+    )
+    _write_json(
+        run_root / "workspace" / "_resolved_config.json",
+        {
+            "run": {"id": current_run_id, "pipeline": "scene_ingest_cli", "warnings": []},
+            "paths": {"log_dir": str(epoch_root / "logs")},
+        },
+    )
+    _append_jsonl(
+        epoch_root / "logs" / "step_runs.jsonl",
+        [
+            {
+                "ts": "2026-04-29T01:00:00",
+                "step": "sentiment",
+                "status": "skipped",
+                "duration_ms": 25.0,
+                "run_id": current_run_id,
+                "video_id": video_id,
+                "scene_id": "scene-current",
+                "scene_index": 0,
+                "extra": {"reason": "no_text"},
+            },
+            {
+                "ts": "2026-04-29T01:01:00",
+                "step": "image_caption",
+                "status": "ok",
+                "duration_ms": 1200.0,
+                "run_id": current_run_id,
+                "video_id": video_id,
+                "scene_id": "scene-current",
+                "scene_index": 0,
+            },
+            {
+                "ts": "2026-04-28T01:00:00",
+                "step": "image_caption",
+                "status": "error",
+                "error": "stale baseline failure",
+                "duration_ms": 999999.0,
+                "run_id": stale_run_id,
+                "video_id": video_id,
+                "scene_id": "scene-stale",
+                "scene_index": 1,
+                "extra": {"reason": "stale_failure"},
+            },
+        ],
+    )
+
+    report = build_control_recurrence_report(run_root=run_root)
+
+    assert report["scope"]["signals"] == 1
+    assert report["scope"]["step_run_scope"]["strict_run_id_filter_applied"] is True
+    assert report["scope"]["step_run_scope"]["excluded_run_ids"] == {stale_run_id: 1}
+    assert {row["run_id"] for row in report["recurrence_summary"]} == {current_run_id}
+    latency = report["step_latency_summary"]
+    assert latency["duration_row_count"] == 2
+    latency_steps = {row["step_name"]: row for row in latency["steps"]}
+    assert latency_steps["image_caption"]["ok_count"] == 1
+    assert latency_steps["image_caption"]["max_ms"] == 1200.0
+    rendered = json.dumps(report)
+    assert "stale baseline failure" not in rendered
+    assert "999999" not in rendered
+
+
+def test_control_recurrence_report_warns_when_runtime_run_id_missing(tmp_path: Path) -> None:
+    run_root = tmp_path / "reports" / "fresh_ingest_runs" / "direct_missing_runtime"
+    epoch_root = tmp_path / "GoodQ_Data" / "epochs" / "epoch_missing_runtime"
+    processing_dir = epoch_root / "processing" / "01x01 - Missing Runtime"
+    scene_manifest_path = processing_dir / "video" / "scene_manifest.json"
+    temporal_index_path = processing_dir / "temporal_index.json"
+    video_id = "video-missing-runtime"
+    scenes = [{"scene_id": "scene-one", "index": 0, "content_state": "signal"}]
+
+    _write_json(
+        run_root / "output" / "scene_ingest_results.json",
+        [
+            {
+                "video_id": video_id,
+                "video_hash": video_id,
+                "video_name": "01x01 - Missing Runtime.mp4",
+                "phase6_complete": True,
+                "qdrant_ok": True,
+                "phase6_qdrant_ok": True,
+                "scenes": scenes,
+                "temporal_index_path": str(temporal_index_path),
+            }
+        ],
+    )
+    _write_json(
+        scene_manifest_path,
+        {
+            "video_id": video_id,
+            "phase6_complete": True,
+            "phase6_harmonized": True,
+            "phase6_vector_commit": {"qdrant_ok": True},
+            "scenes": scenes,
+        },
+    )
+    _write_json(
+        temporal_index_path,
+        {
+            "video_id": video_id,
+            "phase6_complete": True,
+            "phase6_harmonized": True,
+            "total_scenes": 1,
+            "segments": scenes,
+        },
+    )
+    _write_json(run_root / "workspace" / "_resolved_config.json", {"run": {"warnings": []}, "paths": {"log_dir": str(epoch_root / "logs")}})
+    _append_jsonl(
+        epoch_root / "logs" / "step_runs.jsonl",
+        [
+            {
+                "ts": "2026-04-29T02:00:00",
+                "step": "sentiment",
+                "status": "skipped",
+                "video_id": video_id,
+                "scene_id": "scene-one",
+                "scene_index": 0,
+                "extra": {"reason": "no_text"},
+            }
+        ],
+    )
+
+    report = build_control_recurrence_report(run_root=run_root)
+
+    assert report["scope"]["step_run_scope"]["strict_run_id_filter_applied"] is False
+    assert report["scope"]["step_run_scope"]["limited_run_id_scope"] is True
+    assert any("limited_run_id_scope" in warning for warning in report["evidence"]["warnings"])
+    assert report["scope"]["signals"] == 1
+
+
+def test_control_recurrence_comparison_includes_latency_delta(tmp_path: Path) -> None:
+    reports_root = tmp_path / "reports" / "fresh_ingest_runs"
+    baseline_root = reports_root / "baseline_latency"
+    candidate_root = reports_root / "candidate_latency"
+    baseline_epoch = tmp_path / "GoodQ_Data" / "epochs" / "epoch_baseline_latency"
+    candidate_epoch = tmp_path / "GoodQ_Data" / "epochs" / "epoch_candidate_latency"
+    baseline_ep = _episode_artifacts(
+        run_root=baseline_root,
+        epoch_root=baseline_epoch,
+        episode_dir_name="01x01_scene_context_llm",
+        episode_name="01x01 - Good News, Bad News.mp4",
+        run_id="baseline-runtime",
+        video_id="baseline-video",
+        scene_ids=["baseline-scene"],
+        speaker_skip_index=None,
+    )
+    candidate_ep = _episode_artifacts(
+        run_root=candidate_root,
+        epoch_root=candidate_epoch,
+        episode_dir_name="01x01_scene_context_llm",
+        episode_name="01x01 - Good News, Bad News.mp4",
+        run_id="candidate-runtime",
+        video_id="candidate-video",
+        scene_ids=["candidate-scene"],
+        speaker_skip_index=None,
+    )
+    _write_json(
+        baseline_root / "experiment_log.json",
+        {
+            "epoch": "epoch_baseline_latency",
+            "status": "completed",
+            "plan": [{"episode": "01x01 - Good News, Bad News.mp4", "status": "passed", "run_dir": str(baseline_ep)}],
+        },
+    )
+    _write_json(
+        candidate_root / "experiment_log.json",
+        {
+            "epoch": "epoch_candidate_latency",
+            "status": "completed",
+            "plan": [{"episode": "01x01 - Good News, Bad News.mp4", "status": "passed", "run_dir": str(candidate_ep)}],
+        },
+    )
+    _append_jsonl(
+        baseline_epoch / "logs" / "step_runs.jsonl",
+        [
+            {
+                "ts": "2026-05-01T01:00:00",
+                "step": "audio_unified_wsl2",
+                "status": "ok",
+                "duration_ms": 20000.0,
+                "run_id": "baseline-runtime",
+                "video_id": "baseline-video",
+            },
+            {
+                "ts": "2026-05-01T01:01:00",
+                "step": "image_ocr",
+                "status": "ok",
+                "run_id": "baseline-runtime",
+                "video_id": "baseline-video",
+                "scene_id": "baseline-scene",
+                "scene_index": 0,
+                "extra": {
+                    "result_meta": {"ocr_meta": {"status": "ok"}},
+                    "embedding_emitted": False,
+                },
+            }
+        ],
+    )
+    _append_jsonl(
+        candidate_epoch / "logs" / "step_runs.jsonl",
+        [
+            {
+                "ts": "2026-05-01T02:00:00",
+                "step": "audio_unified_wsl2",
+                "status": "ok",
+                "duration_ms": 45000.0,
+                "run_id": "candidate-runtime",
+                "video_id": "candidate-video",
+            },
+            {
+                "ts": "2026-05-01T02:01:00",
+                "step": "image_ocr",
+                "status": "skipped",
+                "run_id": "candidate-runtime",
+                "video_id": "candidate-video",
+                "scene_id": "candidate-scene",
+                "scene_index": 0,
+                "extra": {
+                    "reason": "image_ocr_pytesseract",
+                    "result_meta": {"ocr_meta": {"status": "dependency_missing", "reason": "pytesseract"}},
+                    "embedding_emitted": False,
+                },
+            }
+        ],
+    )
+
+    comparison = build_control_recurrence_comparison(
+        baseline_run_id="baseline_latency",
+        candidate_run_id="candidate_latency",
+        reports_root=reports_root,
+    )
+
+    delta = comparison["delta"]["step_latency_delta"]
+    assert delta["baseline_duration_row_count"] == 1
+    assert delta["candidate_duration_row_count"] == 1
+    rows = {row["step_name"]: row for row in delta["steps"]}
+    assert rows["audio_unified_wsl2"]["p95_delta_ms"] == 25000.0
+    assert rows["audio_unified_wsl2"]["trend_status"] == "increased"
+    assert comparison["candidate"]["step_latency_summary"]["wsl_audio_steps"][0]["step_name"] == "audio_unified_wsl2"
+    coverage_rows = {row["step_name"]: row for row in comparison["delta"]["optional_enrichment_coverage_delta"]["steps"]}
+    assert coverage_rows["image_ocr"]["non_ok_delta"] == 1
+    assert coverage_rows["image_ocr"]["trend_status"] == "increased"
 
 
 def test_control_recurrence_report_does_not_fan_out_shared_stderr_retry(
@@ -523,8 +857,8 @@ def test_control_recurrence_report_does_not_fan_out_shared_stderr_retry(
     run_root = tmp_path / "reports" / "fresh_ingest_runs" / "direct_multi_retry"
     epoch_root = tmp_path / "GoodQ_Data" / "epochs" / "epoch_multi_retry"
     runtime_run_id = "runtime-multi-retry"
-    stdout_path = run_root / "ingestion.stdout.log"
-    stderr_path = run_root / "ingestion.stderr.log"
+    stdout_path = run_root / "ingest.stdout.log"
+    stderr_path = run_root / "ingest.stderr.log"
     output_items = []
 
     for index, video_id in enumerate(("video-one", "video-two"), start=1):
@@ -587,8 +921,8 @@ def test_control_recurrence_report_does_not_fan_out_shared_stderr_retry(
                 "step": "step.object_detect",
                 "error": "returncode_3221226505",
                 "metadata": {
-                    "video_id": "video-one",
-                    "scene_id": "scene-1",
+                    "video_id": "video-two",
+                    "scene_id": "scene-2",
                     "scene_index": 0,
                 },
             }
@@ -601,8 +935,8 @@ def test_control_recurrence_report_does_not_fan_out_shared_stderr_retry(
                 "run_id": runtime_run_id,
                 "step": "object_detect",
                 "metadata": {
-                    "video_id": "video-one",
-                    "scene_id": "scene-1",
+                    "video_id": "video-two",
+                    "scene_id": "scene-2",
                     "scene_index": 0,
                     "native_retry_attempt": 1,
                     "native_retry_mode": "cpu_fallback",
@@ -630,9 +964,9 @@ def test_control_recurrence_report_does_not_fan_out_shared_stderr_retry(
         if "native_crash_retry:0xC0000409" in row["error_families"]
     ] == [
         {
-            "video_id": "video-one",
-            "episode": "01x01 - Direct Multi Retry 1.mp4",
-            "scene_id": "scene-1",
+            "video_id": "video-two",
+            "episode": "01x02 - Direct Multi Retry 2.mp4",
+            "scene_id": "scene-2",
             "scene_index": 0,
             "signal_count": 1,
             "error_families": ["native_crash_retry:0xC0000409"],
@@ -644,88 +978,259 @@ def test_control_recurrence_report_does_not_fan_out_shared_stderr_retry(
     ]
 
 
-def test_control_recurrence_comparison_includes_latency_delta(tmp_path: Path) -> None:
+def test_control_recurrence_report_coalesces_recovered_native_retry_surfaces(tmp_path: Path) -> None:
     reports_root = tmp_path / "reports" / "fresh_ingest_runs"
-    baseline_root = reports_root / "baseline_latency"
-    candidate_root = reports_root / "candidate_latency"
-    baseline_epoch = tmp_path / "GoodQ_Data" / "epochs" / "epoch_baseline_latency"
-    candidate_epoch = tmp_path / "GoodQ_Data" / "epochs" / "epoch_candidate_latency"
-    baseline_ep = _episode_artifacts(
-        run_root=baseline_root,
-        epoch_root=baseline_epoch,
-        episode_dir_name="01x01_scene_context_llm",
-        episode_name="01x01 - Good News, Bad News.mp4",
-        run_id="baseline-runtime",
-        video_id="baseline-video",
-        scene_ids=["baseline-scene"],
+    run_root = reports_root / "native_coalesce"
+    epoch_root = tmp_path / "GoodQ_Data" / "epochs" / "epoch_native_coalesce"
+    stdout_path = run_root / "ingestion.stdout.log"
+    run_id = "runtime-native-coalesce"
+    video_id = "video-native-coalesce"
+    scene_id = "scene-native"
+    ep = _episode_artifacts(
+        run_root=run_root,
+        epoch_root=epoch_root,
+        episode_dir_name="02x01_scene_context_llm",
+        episode_name="02x01 - Native Coalesce.mp4",
+        run_id=run_id,
+        video_id=video_id,
+        scene_ids=[scene_id],
         speaker_skip_index=None,
-    )
-    candidate_ep = _episode_artifacts(
-        run_root=candidate_root,
-        epoch_root=candidate_epoch,
-        episode_dir_name="01x01_scene_context_llm",
-        episode_name="01x01 - Good News, Bad News.mp4",
-        run_id="candidate-runtime",
-        video_id="candidate-video",
-        scene_ids=["candidate-scene"],
-        speaker_skip_index=None,
-    )
-    _write_json(
-        baseline_root / "experiment_log.json",
-        {
-            "epoch": "epoch_baseline_latency",
-            "status": "completed",
-            "plan": [{"episode": "01x01 - Good News, Bad News.mp4", "status": "passed", "run_dir": str(baseline_ep)}],
-        },
-    )
-    _write_json(
-        candidate_root / "experiment_log.json",
-        {
-            "epoch": "epoch_candidate_latency",
-            "status": "completed",
-            "plan": [{"episode": "01x01 - Good News, Bad News.mp4", "status": "passed", "run_dir": str(candidate_ep)}],
-        },
-    )
-    _append_jsonl(
-        baseline_epoch / "logs" / "step_runs.jsonl",
-        [
+        warnings=[
             {
-                "ts": "2026-05-01T01:00:00",
-                "step": "audio_unified_wsl2",
-                "status": "ok",
-                "duration_ms": 20000.0,
-                "run_id": "baseline-runtime",
-                "video_id": "baseline-video",
+                "code": "native_crash_retry",
+                "message": "Retrying step after native subprocess crash",
+                "context": {
+                    "step": "audio_embed_clap",
+                    "scene_id": scene_id,
+                    "scene_index": 0,
+                    "return_code": 3221226505,
+                    "attempt": 1,
+                },
+                "ts_utc": "2026-04-29T02:24:20+00:00",
             }
         ],
     )
-    _append_jsonl(
-        candidate_epoch / "logs" / "step_runs.jsonl",
+    temporal_index_path = epoch_root / "processing" / "02x01 - Native Coalesce" / "temporal_index.json"
+    _write_json(
+        run_root / "output" / "scene_ingest_results.json",
         [
             {
-                "ts": "2026-05-01T02:00:00",
-                "step": "audio_unified_wsl2",
-                "status": "ok",
-                "duration_ms": 45000.0,
-                "run_id": "candidate-runtime",
-                "video_id": "candidate-video",
+                "video_id": video_id,
+                "video_hash": video_id,
+                "video_name": "02x01 - Native Coalesce.mp4",
+                "phase6_complete": True,
+                "qdrant_ok": True,
+                "phase6_qdrant_ok": True,
+                "scenes": [{"scene_id": scene_id, "index": 0, "content_state": "signal"}],
+                "temporal_index_path": str(temporal_index_path),
+            }
+        ],
+    )
+    _write_json(
+        run_root / "workspace" / "_resolved_config.json",
+        {
+            "run": {
+                "id": run_id,
+                "pipeline": "scene_ingest_cli",
+                "warnings": [
+                    {
+                        "code": "native_crash_retry",
+                        "message": "Retrying step after native subprocess crash",
+                        "context": {
+                            "step": "audio_embed_clap",
+                            "scene_id": scene_id,
+                            "scene_index": 0,
+                            "return_code": 3221226505,
+                            "attempt": 1,
+                        },
+                        "ts_utc": "2026-04-29T02:24:20+00:00",
+                    }
+                ],
+            },
+            "paths": {"log_dir": str(epoch_root / "logs")},
+        },
+    )
+    _write_json(
+        run_root / "operator_run_metadata.json",
+        {"label": run_root.name, "stdout": str(stdout_path)},
+    )
+    _append_jsonl(
+        epoch_root / "logs" / "step_runs.jsonl",
+        [
+            {
+                "ts": "2026-04-29T02:24:20",
+                "step": "audio_embed_clap",
+                "status": "error",
+                "error": "Step audio_embed_clap failed [returncode=3221226505]",
+                "run_id": run_id,
+                "video_id": video_id,
+                "scene_id": scene_id,
+                "scene_index": 0,
+                "extra": {"reason": "optional_step_failed", "optional": True},
+            }
+        ],
+    )
+    stdout_path.write_text(
+        json.dumps(
+            {
+                "timestamp": "2026-04-29T02:24:20Z",
+                "run_id": run_id,
+                "event": "step_error",
+                "step": "step.audio_embed_clap",
+                "error": "returncode=3221226505",
+                "metadata": {"video_id": video_id, "scene_id": scene_id, "scene_index": 0},
+            }
+        )
+        + "\n"
+        + json.dumps(
+            {
+                "timestamp": "2026-04-29T02:24:21Z",
+                "run_id": run_id,
+                "event": "step_retry",
+                "step": "audio_embed_clap",
+                "metadata": {
+                    "video_id": video_id,
+                    "scene_id": scene_id,
+                    "scene_index": 0,
+                    "native_retry_attempt": 1,
+                    "native_retry_mode": "cpu_fallback",
+                },
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    report = build_control_recurrence_report(run_id=run_root.name, reports_root=reports_root)
+
+    families = {row["error_family"]: row for row in report["top_repeated_failure_families"]}
+    native = families["native_crash_retry:0xC0000409"]
+    assert native["count"] == 1
+    assert native["category"] == "actionable"
+    assert native["sources"] == ["run.warnings", "runtime.events", "step_runs.jsonl"]
+    summary = [
+        row for row in report["recurrence_summary"] if row["error_family"] == "native_crash_retry:0xC0000409"
+    ]
+    assert len(summary) == 1
+    assert summary[0]["sources"] == ["run.warnings", "runtime.events", "step_runs.jsonl"]
+    assert report["recurrence_classification"]["highest_category"] == "actionable"
+    assert report["recommendation"]["status"] == "warn"
+    assert report["recovered_vs_unrecovered_failures"]["recovered"] == 1
+
+
+def test_control_recurrence_report_does_not_over_coalesce_native_retries(tmp_path: Path) -> None:
+    reports_root = tmp_path / "reports" / "fresh_ingest_runs"
+    run_root = reports_root / "native_distinct_scenes"
+    epoch_root = tmp_path / "GoodQ_Data" / "epochs" / "epoch_native_distinct"
+    run_id = "runtime-native-distinct"
+    video_id = "video-native-distinct"
+    scene_ids = ["scene-one", "scene-two"]
+    ep = _episode_artifacts(
+        run_root=run_root,
+        epoch_root=epoch_root,
+        episode_dir_name="02x02_scene_context_llm",
+        episode_name="02x02 - Native Distinct.mp4",
+        run_id=run_id,
+        video_id=video_id,
+        scene_ids=scene_ids,
+        speaker_skip_index=None,
+    )
+    _write_json(
+        run_root / "experiment_log.json",
+        {
+            "epoch": "epoch_native_distinct",
+            "status": "completed",
+            "plan": [{"episode": "02x02 - Native Distinct.mp4", "status": "passed", "run_dir": str(ep)}],
+        },
+    )
+    _append_jsonl(
+        epoch_root / "logs" / "step_runs.jsonl",
+        [
+            {
+                "ts": "2026-04-29T03:00:00",
+                "step": "audio_embed_clap",
+                "status": "error",
+                "error": "Step audio_embed_clap failed [returncode=3221226505]",
+                "run_id": run_id,
+                "video_id": video_id,
+                "scene_id": "scene-one",
+                "scene_index": 0,
+                "extra": {"reason": "optional_step_failed", "optional": True},
+            },
+            {
+                "ts": "2026-04-29T03:01:00",
+                "step": "audio_embed_clap",
+                "status": "error",
+                "error": "Step audio_embed_clap failed [returncode=3221226505]",
+                "run_id": run_id,
+                "video_id": video_id,
+                "scene_id": "scene-two",
+                "scene_index": 1,
+                "extra": {"reason": "optional_step_failed", "optional": True},
+            },
+        ],
+    )
+
+    report = build_control_recurrence_report(run_id=run_root.name, reports_root=reports_root)
+
+    families = {row["error_family"]: row for row in report["top_repeated_failure_families"]}
+    assert families["native_subprocess_crash:0xC0000409"]["count"] == 2
+    native_scenes = [
+        row["scene_id"]
+        for row in report["scenes_affected"]
+        if "native_subprocess_crash:0xC0000409" in row["error_families"]
+    ]
+    assert sorted(native_scenes) == scene_ids
+
+
+def test_control_recurrence_report_keeps_unrecovered_native_crash_blocking(tmp_path: Path) -> None:
+    reports_root = tmp_path / "reports" / "fresh_ingest_runs"
+    run_root = reports_root / "native_unrecovered"
+    epoch_root = tmp_path / "GoodQ_Data" / "epochs" / "epoch_native_unrecovered"
+    run_id = "runtime-native-unrecovered"
+    video_id = "video-native-unrecovered"
+    scene_id = "scene-unrecovered"
+    ep = _episode_artifacts(
+        run_root=run_root,
+        epoch_root=epoch_root,
+        episode_dir_name="02x03_scene_context_llm",
+        episode_name="02x03 - Native Unrecovered.mp4",
+        run_id=run_id,
+        video_id=video_id,
+        scene_ids=[scene_id],
+        speaker_skip_index=None,
+    )
+    _write_json(
+        run_root / "experiment_log.json",
+        {
+            "epoch": "epoch_native_unrecovered",
+            "status": "completed",
+            "plan": [{"episode": "02x03 - Native Unrecovered.mp4", "status": "passed", "run_dir": str(ep)}],
+        },
+    )
+    _append_jsonl(
+        epoch_root / "logs" / "step_runs.jsonl",
+        [
+            {
+                "ts": "2026-04-29T04:00:00",
+                "step": "image_embed_dino",
+                "status": "error",
+                "error": "Step image_embed_dino failed [returncode=3221226505]",
+                "run_id": run_id,
+                "video_id": video_id,
+                "scene_id": scene_id,
+                "scene_index": 0,
+                "extra": {"reason": "native_failure", "optional": False},
             }
         ],
     )
 
-    comparison = build_control_recurrence_comparison(
-        baseline_run_id="baseline_latency",
-        candidate_run_id="candidate_latency",
-        reports_root=reports_root,
-    )
+    report = build_control_recurrence_report(run_id=run_root.name, reports_root=reports_root)
 
-    delta = comparison["delta"]["step_latency_delta"]
-    assert delta["baseline_duration_row_count"] == 1
-    assert delta["candidate_duration_row_count"] == 1
-    rows = {row["step_name"]: row for row in delta["steps"]}
-    assert rows["audio_unified_wsl2"]["p95_delta_ms"] == 25000.0
-    assert rows["audio_unified_wsl2"]["trend_status"] == "increased"
-    assert comparison["candidate"]["step_latency_summary"]["wsl_audio_steps"][0]["step_name"] == "audio_unified_wsl2"
+    families = {row["error_family"]: row for row in report["top_repeated_failure_families"]}
+    assert families["native_subprocess_crash:0xC0000409"]["category"] == "blocking"
+    assert report["recurrence_classification"]["highest_category"] == "blocking"
+    assert report["recommendation"]["status"] == "fail"
 
 
 def test_control_recurrence_report_uses_operator_metadata_paths_and_stderr_retry(tmp_path: Path) -> None:
@@ -1526,6 +2031,27 @@ def test_control_recurrence_index_marks_markdown_only_entries(tmp_path: Path) ->
     assert entries["legacy_only"]["markdown_path"] == "legacy_only.md"
     assert "json_path" not in entries["legacy_only"]
     assert "markdown_only_without_json:legacy_only" in index["warnings"]
+
+
+def test_control_recurrence_path_hygiene_separates_artifacts_from_log_chatter() -> None:
+    local_path = "C:" + "\\Users\\operator\\goodq\\reports\\control_recurrence\\run.md"
+    wsl_pattern_text = "\\\\" + "wsl$"
+
+    result = audit_control_recurrence_path_hygiene(
+        durable_artifacts={
+            "run.json": '{"report": {"name": "control_recurrence_report"}}',
+            "run.md": "# Control Recurrence Report\n",
+        },
+        operational_outputs={"stderr": f"Markdown written: {local_path}"},
+        audit_pattern_text=[r"\b[A-Za-z]:[\\/]", wsl_pattern_text],
+    )
+
+    assert result["status"] == "pass"
+    assert result["report_artifact_leakage"] == []
+    assert result["operational_output_path_chatter"] == [
+        {"source": "stderr", "pattern": "drive_root", "offset": 18}
+    ]
+    assert result["pattern_self_hits_ignored"] == 1
 
 
 def test_control_recurrence_json_stdout_stays_valid_with_json_file_write(tmp_path: Path, capsys) -> None:

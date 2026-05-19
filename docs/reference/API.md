@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-04-24 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-02 -->
 
 # GoodQ4All API Reference
 
@@ -15,14 +15,14 @@ This is the current API reference for the supported local GoodQ4All runtime.
 - OpenAPI docs: `GET /docs`
 - OpenAPI schema: `GET /openapi.json`
 - Supported surface: API + CLI + watchdog/runtime artifacts
-- No supported product UI is currently served by the API process
+- Supported local UI surfaces are served by the API process under `/ui/*`
 - `LAUNCH_GOODQ` does not start the API process by default
 
 ## Canonical Endpoint Families
 
 Primary status and runtime summary endpoints defined in the active API surface:
 
-- On the public preview branch, the read-only runtime aggregation surface remains mounted from `api/main.py`.
+- `api/routes/runtime.py` is the read-only aggregation surface for runtime state.
 - It exists to answer "what is happening right now?" without turning into a control, mutation, or execution plane.
 
 - `GET /api/status`
@@ -32,10 +32,12 @@ Primary status and runtime summary endpoints defined in the active API surface:
 - `GET /api/gpu/stats`
 - `GET /api/wsl2-status`
 - `GET /api/runs/latest/preview`
+- `GET /api/runs/latest/evidence`
 - `GET /api/memory/stats`
 - `GET /api/read/envelope`
 - `GET /api/control-recurrence/reports`
 - `GET /api/control-recurrence/reports/latest`
+- `GET /api/control-recurrence/reports/trend`
 - `GET /api/control-recurrence/reports/{report_id}`
 - `GET /api/control-recurrence/reports/{report_id}/markdown`
 - `GET /api/control-recurrence/reports/{report_id}/recommendations`
@@ -45,19 +47,27 @@ It does not revive the retired `/runs` compatibility shell, and it does not pars
 If a clone uses a shared witness-report tree instead of a repo-local one, set
 `GOODQ_RUN_REPORTS_ROOT` to point the read-only run surfaces at that artifact root.
 
+`GET /api/runs/latest/evidence` is a sanitized read-only projection for UI
+observability. It summarizes the latest run's `step_runs.jsonl`, temporal index,
+scene ingest result, emotion/sentiment rollups, and graph/store status when
+those referenced artifacts exist. It omits raw paths, raw logs, stdout/stderr,
+and mutation controls.
+
+`GET /api/memory/stats` exposes storage-tier counts. `faiss.audio_vectors` is a
+FAISS index count only and is not current-run Qdrant audio-vector proof. Use
+the response `audio_vector_semantics` object and
+`docs/architecture/AUDIO_VECTOR_PROVENANCE_CONTRACT.md` before presenting any
+current-run CLAP/Qdrant coverage label.
+
 Router-backed endpoint families mounted into the same process:
 
 - `/api/search`
-- `/api/videos/{video_id}/timeline`
+- `/api/ingest`
+- `/api/timeline`
 - `/api/media`
 - `/api/system`
 - `/api/control-recurrence`
 - `/api/videos/{video_id}/scenes`
-
-The public preview branch does not mount a live `/api/ingest` router. Ingest
-facade response models may exist in code as design scaffolding, but they are
-not a supported API surface unless `/docs` or `/openapi.json` for the running
-build lists the corresponding routes.
 
 ## Discovery Surfaces
 
@@ -70,8 +80,14 @@ build lists the corresponding routes.
 
 `/api/control-recurrence` is a read-only service window over the durable recurrence artifacts under `reports/control_recurrence/`.
 
+If recurrence reports live outside the public clone, set
+`GOODQ_CONTROL_RECURRENCE_REPORTS_ROOT` to point the API at that existing local
+artifact root. The API still only reads `index.json` and indexed relative
+artifacts; it does not generate or repair reports.
+
 - `GET /api/control-recurrence/reports` reads `reports/control_recurrence/index.json` and returns the parsed index, or a structured empty response when the index is missing.
 - `GET /api/control-recurrence/reports/latest` returns the newest indexed report entry by `created_or_updated_at` or indexed artifact mtime.
+- `GET /api/control-recurrence/reports/trend` returns a derived read-only trend over indexed durable JSON reports.
 - `GET /api/control-recurrence/reports/{report_id}` returns the indexed durable JSON report content when `json_path` is present.
 - `GET /api/control-recurrence/reports/{report_id}/markdown` returns indexed markdown content as `text/plain` when `markdown_path` is present.
 - `GET /api/control-recurrence/reports/{report_id}/recommendations` returns a deterministic read-only operator inspection draft from the indexed durable JSON report.
@@ -84,6 +100,10 @@ curl http://127.0.0.1:30000/api/control-recurrence/reports
 
 ```powershell
 curl http://127.0.0.1:30000/api/control-recurrence/reports/latest
+```
+
+```powershell
+curl http://127.0.0.1:30000/api/control-recurrence/reports/trend
 ```
 
 ```powershell
@@ -102,7 +122,7 @@ Boundary: the API does not generate reports, heal, mutate configs, activate `Con
 
 ## Retired Legacy Surfaces
 
-The active line no longer exposes the older compatibility endpoints that used to live alongside the main public API process in `api/main.py`.
+The active line no longer exposes the older compatibility shell that previously lived in `api/main.py`.
 
 - Removed legacy search pointers: `/search`, `/vector_search`
 - Removed legacy scene and graph mirrors: `/api/scenes`, `/api/knowledge_graph`, `/api/scene/{scene_id}`
@@ -115,28 +135,41 @@ The active line no longer exposes the older compatibility endpoints that used to
 - `POST /api/search/multimodal` is the canonical multimodal search surface.
 - `modalities=["audio"]` is a supported request path on the active line.
 - If `modalities` is omitted, the current default remains text + visual.
+- Search responses hydrate vector hits from the configured temporal indexes
+  when the returned `scene_id` can be matched. Hydrated fields include the
+  canonical `video_id`, timestamp, transcript, keywords, object labels,
+  sentiment fields when persisted, and a provenance note of
+  `hydrated_from: temporal_index`.
+- If the API is being pointed at a witness epoch that differs from the checked-in
+  default config, set `GOODQ_PROCESSING_ROOT` to that epoch's `processing`
+  directory so search hydration and run evidence inspect the same artifacts.
 - `GET /api/videos/{video_id}/scenes/{scene_id}/similar` is live and resolves similar scenes from persisted multimodal scene memory.
 - Similar-scene retrieval now uses text, visual, and audio signals where available instead of returning an empty fallback path.
+- Audio-vector coverage in API and retrieval read models must follow
+  `docs/architecture/AUDIO_VECTOR_PROVENANCE_CONTRACT.md`: current-run audio
+  vector success requires `clap_meta.status == ok` plus a Qdrant audio payload
+  with matching `run_id` and required provenance fields. A matching `scene_id`
+  alone is not current-run proof.
 
 ## System Mutation Policy
 
 - `POST /api/system/ingest` is intentionally disabled on the active line.
-- No live public-preview ingest API facade is currently mounted for request
-  intake or request-status lookup.
-- If an ingest API surface is introduced or promoted later, it must be:
+- The active ingest write surface is the truthful facade:
+  - `POST /api/ingest/submit`
+  - `GET /api/ingest/status/{request_id}`
+- If an ingest API surface is introduced later, it must be:
   - explicit
   - confirmation-gated
   - policy-driven
   - budgeted
   - checkpointed
   - auditable
-- Any future ingest route must remain a controlled facade over the canonical
-  runtime path rather than a second ingest engine.
-- A designed ingest facade would stage a single supported local file into the
-  canonical inbox, write a durable request record, and return a request handle.
-- A designed ingest facade must not execute ingestion, manage a second job
-  engine, bypass watchdog, or mutate memory directly.
+- Any future ingest route must remain a controlled facade over the canonical runtime path rather than a second ingest engine.
+- The active ingest facade stages a single supported local file into the canonical inbox, writes a durable request record, and returns a request handle.
+- The active ingest facade does not execute ingestion, manage a second job engine, bypass watchdog, or mutate memory directly.
 - The current supported ingest surfaces remain:
+  - `POST /api/ingest/submit` for request intake only
+  - `GET /api/ingest/status/{request_id}` for request-centric lifecycle status
   - `conda run -n goodq_core python -m cli.watchdog`
   - `conda run -n goodq_core python -m cli.run_ingestion --input-dir <path>`
   - the configured `<GOODQ_DATA_ROOT>\GoodQ_Data\import_inbox`
@@ -152,7 +185,7 @@ The active line no longer exposes the older compatibility endpoints that used to
 
 ## Timeline API Truth
 
-- `GET /api/timeline/full` is the primary read-only projection of persisted temporal truth.
+- `GET /api/videos/{video_id}/timeline/full` is the primary read-only projection of persisted temporal truth.
 - Timeline metadata now includes additive visibility rollups for the interaction ladder and transcript/entity seam:
   - `segments_with_candidate_visible_people`
   - `segments_with_interaction_dominance`

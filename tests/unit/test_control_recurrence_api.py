@@ -73,6 +73,35 @@ def test_control_recurrence_api_lists_reports(monkeypatch, tmp_path: Path) -> No
     assert payload["reports"][0]["json_path"] == "run_a.json"
 
 
+def test_control_recurrence_api_honors_report_root_env(monkeypatch, tmp_path: Path) -> None:
+    report_dir = tmp_path / "external" / "control_recurrence"
+    _write_index(
+        report_dir,
+        [
+            {
+                "report_type": "single_run",
+                "report_id": "env_run",
+                "run_id": "env_run",
+                "json_path": "env_run.json",
+                "recommendation_status": "PASS",
+                "highest_category": "informational",
+                "total_signals": 0,
+                "blocking_signal_count": 0,
+                "created_or_updated_at": "2026-04-27T00:00:00+00:00",
+            }
+        ],
+    )
+    monkeypatch.setenv("GOODQ_CONTROL_RECURRENCE_REPORTS_ROOT", str(report_dir))
+    app = FastAPI()
+    app.include_router(control_recurrence.router)
+    client = TestClient(app)
+
+    payload = client.get("/api/control-recurrence/reports/latest").json()
+
+    assert payload["status"] == "ok"
+    assert payload["report"]["report_id"] == "env_run"
+
+
 def test_control_recurrence_api_latest_selects_newest(monkeypatch, tmp_path: Path) -> None:
     report_dir = tmp_path / "reports" / "control_recurrence"
     _write_index(
@@ -109,6 +138,58 @@ def test_control_recurrence_api_latest_selects_newest(monkeypatch, tmp_path: Pat
     assert payload["status"] == "ok"
     assert payload["report"]["report_id"] == "new_run"
     assert payload["report"]["recommendation_status"] == "WARN"
+
+
+def test_control_recurrence_api_exposes_read_only_trend(monkeypatch, tmp_path: Path) -> None:
+    report_dir = tmp_path / "reports" / "control_recurrence"
+    _write_index(
+        report_dir,
+        [
+            {
+                "report_type": "single_run",
+                "report_id": "run_a",
+                "run_id": "run_a",
+                "json_path": "run_a.json",
+                "recommendation_status": "PASS",
+                "highest_category": "informational",
+                "total_signals": 0,
+                "blocking_signal_count": 0,
+                "created_or_updated_at": "2026-04-27T00:00:00+00:00",
+            }
+        ],
+    )
+    (report_dir / "run_a.json").write_text(
+        json.dumps(
+            {
+                "report": {"name": "control_recurrence_report", "version": "test-schema-v1"},
+                "scope": {"run_roots": ["run_a"], "videos": ["episode-a.mp4"], "signals": 0},
+                "top_repeated_failure_families": [],
+                "recurrence_classification": {
+                    "highest_category": "none",
+                    "signal_counts": {"informational": 0, "watch": 0, "actionable": 0, "blocking": 0},
+                    "families": [],
+                },
+                "recovered_vs_unrecovered_failures": {"recovered": 0, "unrecovered": 0, "skipped": 0, "unknown": 0},
+                "phase6_qdrant_truth": {
+                    "healthy": True,
+                    "status": "healthy",
+                    "episodes_total": 1,
+                    "episodes_healthy": 1,
+                    "episodes": [{"episode": "episode-a.mp4", "qdrant_ok": True}],
+                },
+                "recommendation": {"status": "pass", "highest_category": "none", "reasons": []},
+            }
+        ),
+        encoding="utf-8",
+    )
+    client = _client(monkeypatch, report_dir)
+
+    payload = client.get("/api/control-recurrence/reports/trend").json()
+
+    assert payload["trend_report"]["name"] == "control_recurrence_trend"
+    assert payload["report_window"]["json_backed_reports"] == 1
+    assert payload["safety_boundary"]["reports_generated"] == "not_triggered"
+    assert payload["safety_boundary"]["ingestion"] == "not_triggered"
 
 
 def test_control_recurrence_api_fetches_report_json(monkeypatch, tmp_path: Path) -> None:

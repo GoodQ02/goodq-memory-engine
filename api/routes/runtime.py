@@ -10,8 +10,10 @@ from __future__ import annotations
 import json
 import logging
 import os
+import shutil
 import subprocess
 import sys
+import time
 from collections import Counter, deque
 from datetime import datetime
 from pathlib import Path
@@ -56,6 +58,10 @@ _LOG_DIR = Path(_PATHS_CFG.get("log_dir") or (_PROJECT_ROOT / "logs"))
 _DB_PATH = Path(_PATHS_CFG.get("db_path") or (_DATA_ROOT / "memory.db"))
 _PROCESSING_PATH = Path(_PATHS_CFG.get("processing") or (_DATA_ROOT / "processing"))
 _IMPORT_INBOX = Path(_PATHS_CFG.get("import_inbox") or (_DATA_ROOT / "import_inbox"))
+_QDRANT_STORAGE = Path(_PATHS_CFG.get("qdrant_storage") or (_DATA_ROOT.parent / "qdrant_storage"))
+_FAISS_DIR = Path(_PATHS_CFG.get("faiss_dir") or (_DATA_ROOT / "faiss"))
+_MODEL_CACHE = Path(_PATHS_CFG.get("model_cache") or os.environ.get("HF_HOME") or (_DATA_ROOT / "cache"))
+_REPORTS_ROOT = Path(os.environ.get("GOODQ_RUN_REPORTS_ROOT") or (_DATA_ROOT / "reports"))
 _WSL_DISTRO = str(os.environ.get("GOODQ_WSL_DISTRO") or _HOST_CFG.get("wsl_distro") or "Ubuntu")
 _WSL_USER = str(os.environ.get("GOODQ_WSL_USER") or "").strip()
 if not _WSL_USER or _WSL_USER.lower() == "auto":
@@ -607,6 +613,140 @@ def get_queue() -> Dict[str, Any]:
         logger.warning(f"Queue status error: {e}")
 
     return queue_data
+
+
+def _bytes_to_mb(value: int) -> float:
+    return round(value / (1024 ** 2), 2)
+
+
+def _bytes_to_gb(value: int) -> float:
+    return round(value / (1024 ** 3), 2)
+
+
+def _safe_dir_size(path: Path, *, max_entries: int = 20000, max_seconds: float = 1.25) -> Dict[str, Any]:
+    """Bounded directory size scan for UI diagnostics; never returns raw paths."""
+    if not path.exists():
+        return {
+            "exists": False,
+            "size_mb": 0,
+            "file_count": 0,
+            "dir_count": 0,
+            "scan_status": "not_configured",
+        }
+    if path.is_file():
+        try:
+            return {
+                "exists": True,
+                "size_mb": _bytes_to_mb(path.stat().st_size),
+                "file_count": 1,
+                "dir_count": 0,
+                "scan_status": "complete",
+            }
+        except Exception as exc:
+            logger.debug("storage file stat failed name=%s error=%s", path.name, exc)
+            return {"exists": True, "size_mb": 0, "file_count": 0, "dir_count": 0, "scan_status": "unreadable"}
+
+    started = time.monotonic()
+    total = 0
+    file_count = 0
+    dir_count = 0
+    scanned = 0
+    stack = [path]
+    partial_reason: str | None = None
+
+    while stack:
+        if scanned >= max_entries:
+            partial_reason = "entry_limit"
+            break
+        if time.monotonic() - started > max_seconds:
+            partial_reason = "time_limit"
+            break
+        current = stack.pop()
+        try:
+            with os.scandir(current) as entries:
+                for entry in entries:
+                    scanned += 1
+                    if scanned >= max_entries:
+                        partial_reason = "entry_limit"
+                        break
+                    try:
+                        if entry.is_symlink():
+                            continue
+                        if entry.is_dir(follow_symlinks=False):
+                            dir_count += 1
+                            stack.append(Path(entry.path))
+                        elif entry.is_file(follow_symlinks=False):
+                            file_count += 1
+                            total += entry.stat(follow_symlinks=False).st_size
+                    except Exception:
+                        continue
+        except Exception as exc:
+            logger.debug("storage directory scan skipped name=%s error=%s", current.name, exc)
+            continue
+
+    status = "partial" if partial_reason else "complete"
+    return {
+        "exists": True,
+        "size_mb": _bytes_to_mb(total),
+        "file_count": file_count,
+        "dir_count": dir_count,
+        "scan_status": status,
+        "partial_reason": partial_reason,
+    }
+
+
+def _storage_row(name: str, label: str, path: Path) -> Dict[str, Any]:
+    row = {
+        "name": name,
+        "label": label,
+        "path_label": label,
+        "path_redacted": True,
+    }
+    row.update(_safe_dir_size(path))
+    return row
+
+
+@router.get("/api/storage/summary")
+def get_storage_summary() -> Dict[str, Any]:
+    """Read-only storage growth surface with redacted local paths."""
+    processed_dir = _PROCESSING_PATH.parent / "processed"
+    failed_dir = _PROCESSING_PATH.parent / "failed"
+    rows = [
+        _storage_row("data_root", "<GOODQ_DATA_ROOT>\\GoodQ_Data", _DATA_ROOT),
+        _storage_row("import_inbox", "<GOODQ_DATA_ROOT>\\GoodQ_Data\\import_inbox", _IMPORT_INBOX),
+        _storage_row("processing", "<GOODQ_DATA_ROOT>\\GoodQ_Data\\epochs\\<epoch>\\processing", _PROCESSING_PATH),
+        _storage_row("processed", "<GOODQ_DATA_ROOT>\\GoodQ_Data\\processed", processed_dir),
+        _storage_row("failed", "<GOODQ_DATA_ROOT>\\GoodQ_Data\\failed", failed_dir),
+        _storage_row("logs", "<GOODQ_DATA_ROOT>\\GoodQ_Data\\epochs\\<epoch>\\logs", _LOG_DIR),
+        _storage_row("qdrant_storage", "<GOODQ_DATA_ROOT>\\qdrant_storage", _QDRANT_STORAGE),
+        _storage_row("faiss", "<GOODQ_DATA_ROOT>\\GoodQ_Data\\epochs\\<epoch>\\faiss", _FAISS_DIR),
+        _storage_row("model_cache", "<GOODQ_DATA_ROOT>\\GoodQ_Data\\cache", _MODEL_CACHE),
+        _storage_row("report_artifacts", "<GOODQ_DATA_ROOT>\\GoodQ_Data\\reports", _REPORTS_ROOT),
+    ]
+
+    disk: Dict[str, Any]
+    try:
+        usage = shutil.disk_usage(str(_DATA_ROOT if _DATA_ROOT.exists() else _PROJECT_ROOT))
+        disk = {
+            "available": True,
+            "scope": "data root volume",
+            "free_gb": _bytes_to_gb(usage.free),
+            "total_gb": _bytes_to_gb(usage.total),
+            "used_gb": _bytes_to_gb(usage.used),
+            "used_percent": round((usage.used / usage.total) * 100, 1) if usage.total else None,
+        }
+    except Exception as exc:
+        logger.warning("storage disk usage unavailable error=%s", exc)
+        disk = {"available": False, "scope": "data root volume"}
+
+    return {
+        "status": "ok" if any(row.get("exists") for row in rows) else "not_configured",
+        "mode": "read_only",
+        "raw_paths": "redacted",
+        "scan_policy": {"max_entries_per_root": 20000, "max_seconds_per_root": 1.25},
+        "disk": disk,
+        "roots": rows,
+    }
 
 
 @router.get("/api/gpu/stats")

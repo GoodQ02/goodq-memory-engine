@@ -38,11 +38,28 @@
     run: "/api/runs/latest/preview",
     runEvidence: "/api/runs/latest/evidence",
     memory: "/api/memory/stats",
+    storage: "/api/storage/summary",
     recurrence: "/api/control-recurrence/reports/latest",
     trend: "/api/control-recurrence/reports/trend",
     videos: "/api/system/videos",
     envelope: "/api/read/envelope",
   };
+
+  const STATE_GRAMMAR = Object.freeze({
+    READY: { label: "Ready", kind: "ok" },
+    RUNNING: { label: "Running", kind: "ok" },
+    IDLE: { label: "Idle", kind: "info" },
+    PARTIAL: { label: "Partial", kind: "warn" },
+    OPTIONAL_OFFLINE: { label: "Optional Offline", kind: "warn" },
+    NOT_CONFIGURED: { label: "Not Configured", kind: "unknown" },
+    NOT_EXPOSED: { label: "Not Exposed", kind: "unknown" },
+    NO_CURRENT_RUN_EVIDENCE: { label: "No Current-Run Evidence", kind: "unknown" },
+    HISTORICAL_ONLY: { label: "Historical Only", kind: "historical" },
+    MISMATCH: { label: "Mismatch", kind: "error" },
+    NEEDS_EXPLANATION: { label: "Needs Explanation", kind: "warn" },
+    FAULT: { label: "Fault", kind: "error" },
+    UNKNOWN: { label: "Unknown", kind: "unknown" },
+  });
 
   const diagnosticEndpointNames = new Set(["engines", "gpu", "wsl", "queue"]);
   const optionalEndpointNames = new Set(["envelope"]);
@@ -149,7 +166,25 @@
     if (["ok", "active", "available", "healthy", "success", "running", "passed", "ready", "true"].includes(text)) {
       return "ok";
     }
-    if (["warn", "warning", "partial_success", "idle", "unknown", "unavailable", "degraded", "skipped", "not_installed", "inactive"].includes(text)) {
+    if (["idle", "historical only"].includes(text)) {
+      return text === "idle" ? "info" : "historical";
+    }
+    if ([
+      "warn",
+      "warning",
+      "partial_success",
+      "partial",
+      "unknown",
+      "unavailable",
+      "optional offline",
+      "not configured",
+      "not exposed",
+      "no current-run evidence",
+      "degraded",
+      "skipped",
+      "not_installed",
+      "inactive",
+    ].includes(text)) {
       return "warn";
     }
     if (["error", "failed", "unhealthy", "false"].includes(text)) {
@@ -170,16 +205,41 @@
     return Number.isFinite(number) ? number : null;
   }
 
+  function grammarState(name, note, title) {
+    const base = STATE_GRAMMAR[name] || STATE_GRAMMAR.UNKNOWN;
+    return { label: base.label, kind: base.kind, note: note || "", title: title || "" };
+  }
+
   function statusLabel(value) {
-    const kind = statusKind(value);
-    if (kind === "ok") return { label: "Nominal", kind: "ok" };
-    if (kind === "error") return { label: "Fault", kind: "error" };
-    if (kind === "warn") return { label: "Caution", kind: "warn" };
-    return { label: "Not observed", kind: "unknown" };
+    const text = String(value || "").toLowerCase();
+    if (["ok", "active", "available", "healthy", "success", "passed", "ready", "true"].includes(text)) {
+      return grammarState("READY");
+    }
+    if (text === "running") return grammarState("RUNNING");
+    if (text === "idle") return grammarState("IDLE");
+    if (["degraded", "partial", "partial_success", "warn", "warning"].includes(text)) return grammarState("PARTIAL");
+    if (["unavailable", "inactive", "not_installed", "skipped"].includes(text)) return grammarState("OPTIONAL_OFFLINE");
+    if (["error", "failed", "unhealthy", "false"].includes(text)) return grammarState("FAULT");
+    return grammarState("UNKNOWN");
   }
 
   function notObserved(note) {
-    return { label: "Not observed", kind: "unknown", note: note || "" };
+    return grammarState("NOT_EXPOSED", note);
+  }
+
+  function apiEnvironment() {
+    try {
+      const url = new URL(state.apiBase);
+      const hostPort = `${url.hostname}${url.port ? `:${url.port}` : ""}`;
+      if (!LOCAL_HOSTS.has(url.hostname)) {
+        return { label: `API: ${hostPort} [Non-local]`, kind: "error" };
+      }
+      if (url.port === "30000") return { label: `API: ${hostPort} [Live Data]`, kind: "live" };
+      if (url.port === "30003") return { label: `API: ${hostPort} [Demo]`, kind: "demo" };
+      return { label: `API: ${hostPort} [Local Custom]`, kind: "warn" };
+    } catch (_e) {
+      return { label: "API: Not observed", kind: "unknown" };
+    }
   }
 
   function flightChip(name, label, kind) {
@@ -202,6 +262,20 @@
     if (status.note) appendText(label, "small", status.note);
     row.appendChild(label);
     row.appendChild(flightChip(name, status.label, status.kind));
+    container.appendChild(row);
+  }
+
+  function appendFirstRunStep(container, index, title, stateInfo, note) {
+    const row = document.createElement("div");
+    row.className = "first-run-step";
+    row.setAttribute("data-testid", `first-run-step-${index}`);
+    appendText(row, "span", String(index), "first-run-step-index");
+
+    const label = document.createElement("div");
+    appendText(label, "span", title);
+    if (note) appendText(label, "small", note);
+    row.appendChild(label);
+    row.appendChild(flightChip(title, stateInfo.label, stateInfo.kind));
     container.appendChild(row);
   }
 
@@ -432,6 +506,7 @@
     [
       "#flight-system-map",
       "#flight-first-run",
+      "#first-run-guide",
       "#flight-runtime-contract",
       "#proof-list",
       "#gaps-list",
@@ -444,6 +519,7 @@
       "#temporal-surface-panel",
       "#diagnostics-panel",
       "#machine-panel",
+      "#storage-panel",
       "#memory-panel",
       "#health-panel",
       "#video-panel",
@@ -469,6 +545,13 @@
     connection.appendChild(dot);
     appendText(connection, "span", connected ? `${status} from ${state.apiBase}` : `No response from ${state.apiBase}`);
 
+    const pill = qs("#api-environment-pill");
+    if (pill) {
+      const environment = apiEnvironment();
+      pill.className = `api-pill ${connected ? environment.kind : "error"}`;
+      pill.textContent = connected ? environment.label : `API: ${state.apiBase.replace(/^https?:\/\//, "")} [No Response]`;
+    }
+
     const boundary = qs("#boundary-panel");
     clear(boundary);
     const boundaryDot = document.createElement("span");
@@ -481,11 +564,13 @@
   function renderFlightDeck() {
     const systemMap = qs("#flight-system-map");
     const firstRun = qs("#flight-first-run");
+    const firstRunGuide = qs("#first-run-guide");
     const contract = qs("#flight-runtime-contract");
-    if (!systemMap || !firstRun || !contract) return;
+    if (!systemMap || !firstRun || !firstRunGuide || !contract) return;
 
     clear(systemMap);
     clear(firstRun);
+    clear(firstRunGuide);
     clear(contract);
 
     const status = state.data.status || {};
@@ -502,33 +587,40 @@
     const audioEngine = engineDetails.audio_diarization || engines.audio_diarization || {};
     const processingCount = numberValue(queue.processing?.count);
     const inboxCount = numberValue(queue.inbox?.count);
+    const processedCount = numberValue(queue.processed?.count);
+    const stepRows = numberValue(evidence.step_runs?.row_count);
     const sceneCount = numberValue(run.scenes_processed);
     const firstMemoryCreated = run.available === true && sceneCount !== null && sceneCount > 0;
     const latestRunAgo = relativeTime(latestRunTimestamp(run));
+    const pipelineStatus = String(status.processing?.status || status.components?.pipeline || "").toLowerCase();
+    const pipelineRunning = Boolean(pipelineStatus && !["idle", "inactive", "unknown", "unavailable"].includes(pipelineStatus));
+    const processingFolderNote =
+      processingCount !== null
+        ? `${processingCount} processing folder item${processingCount === 1 ? "" : "s"}`
+        : "Queue reachable";
 
-    appendFlightRow(systemMap, "Launcher", notObserved("Launcher state is not exposed"), "flight-launcher-status");
+    appendFlightRow(systemMap, "Launcher", grammarState("NOT_EXPOSED", "Launcher state is not exposed"), "flight-launcher-status");
     appendFlightRow(
       systemMap,
       "API Service",
       state.errors.status
-        ? { label: "Fault", kind: "error", note: "Status endpoint unavailable" }
+        ? grammarState("FAULT", "Status endpoint unavailable")
         : {
             ...statusLabel(status.status),
             note: "Local read API",
             title: state.apiBase,
-          },
+      },
       "flight-api-status"
     );
-    appendFlightRow(systemMap, "Watchdog", notObserved("Process state is not exposed"), "flight-watchdog-status");
+    appendFlightRow(systemMap, "Watchdog", grammarState("NOT_EXPOSED", "Process state is not exposed"), "flight-watchdog-status");
     appendFlightRow(
       systemMap,
       "Ingestion Engine",
       state.errors.queue || !state.data.queue
-        ? notObserved("Queue endpoint unavailable")
+        ? grammarState("NOT_EXPOSED", "Queue endpoint unavailable")
         : {
-            label: processingCount && processingCount > 0 ? "Processing" : "Idle",
-            kind: "ok",
-            note: processingCount !== null ? `${processingCount} active` : "Queue reachable",
+            ...(pipelineRunning ? grammarState("RUNNING") : grammarState("IDLE")),
+            note: pipelineRunning ? safeString(status.processing?.current_video || pipelineStatus, "current_video") : processingFolderNote,
           },
       "flight-ingestion-status"
     );
@@ -537,11 +629,11 @@
       "SQLite",
       status.database && typeof status.database.exists === "boolean"
         ? {
-            label: status.database.exists ? "Nominal" : "Caution",
+            label: status.database.exists ? "Ready" : "Needs Explanation",
             kind: status.database.exists ? "ok" : "warn",
             note: status.database.exists ? "Local store observed" : "Store not observed",
           }
-        : notObserved("Database probe missing"),
+        : grammarState("NOT_EXPOSED", "Database probe missing"),
       "flight-sqlite-status"
     );
     appendFlightRow(
@@ -549,14 +641,14 @@
       "Qdrant",
       memory.qdrant && typeof memory.qdrant.available === "boolean"
         ? {
-            label: memory.qdrant.available ? "Nominal" : "Caution",
+            label: memory.qdrant.available ? "Ready" : "Optional Offline",
             kind: memory.qdrant.available ? "ok" : "warn",
             note: memory.qdrant.available
               ? `${safeString(memory.qdrant.collections, "collections")} collections`
               : "Vector store unreachable",
             title: qdrantEngine.port ? `http://127.0.0.1:${qdrantEngine.port}` : "",
           }
-        : notObserved("Memory stats unavailable"),
+        : grammarState("NOT_EXPOSED", "Memory stats unavailable"),
       "flight-qdrant-status"
     );
     appendFlightRow(
@@ -565,32 +657,41 @@
       graph.status
         ? statusLabel(graph.status)
         : state.errors.runEvidence
-          ? notObserved("Evidence endpoint unavailable")
-          : notObserved("Graph rollup missing"),
+          ? grammarState("NOT_EXPOSED", "Evidence endpoint unavailable")
+          : grammarState("NOT_EXPOSED", "Graph rollup missing"),
       "flight-kg-status"
     );
 
     appendFlightRow(
       firstRun,
+      "Qdrant Reachable",
+      memory.qdrant?.available === true
+        ? grammarState("READY", `${safeString(memory.qdrant.collections, "collections")} collections`)
+        : grammarState("OPTIONAL_OFFLINE", "Vector store not reachable from this view"),
+      "flight-first-run-qdrant"
+    );
+    appendFlightRow(
+      firstRun,
       "Import Inbox",
       state.errors.queue || !state.data.queue
-        ? notObserved("Inbox count unavailable")
+        ? grammarState("NOT_EXPOSED", "Inbox count unavailable")
         : {
-            label: inboxCount && inboxCount > 0 ? `${inboxCount} file${inboxCount === 1 ? "" : "s"}` : "Empty",
-            kind: inboxCount && inboxCount > 0 ? "ok" : "warn",
+            ...(inboxCount && inboxCount > 0 ? grammarState("READY") : grammarState("IDLE")),
+            label: inboxCount && inboxCount > 0 ? `${inboxCount} file${inboxCount === 1 ? "" : "s"}` : "Idle",
             note: IMPORT_INBOX_LABEL,
           },
       "flight-import-inbox"
     );
-    appendFlightRow(firstRun, "Watchdog", notObserved("Process state is not exposed"), "flight-first-run-watchdog");
+    appendFlightRow(firstRun, "Watchdog", grammarState("NOT_EXPOSED", "Process state is not exposed"), "flight-first-run-watchdog");
     appendFlightRow(
       firstRun,
-      "Processing Queue",
+      "Running Tasks",
       state.errors.queue || !state.data.queue
-        ? notObserved("Queue count unavailable")
+        ? grammarState("NOT_EXPOSED", "Queue count unavailable")
         : {
-            label: processingCount !== null ? `${processingCount} active` : "Not observed",
-            kind: processingCount !== null ? "ok" : "unknown",
+            ...(pipelineRunning ? grammarState("RUNNING") : grammarState("IDLE")),
+            label: pipelineRunning ? "Running" : "0 running",
+            note: processingFolderNote,
           },
       "flight-processing-queue"
     );
@@ -603,7 +704,7 @@
             kind: "ok",
             note: safeString(run.status || "observed", "status"),
           }
-        : notObserved("No run preview"),
+        : grammarState("NO_CURRENT_RUN_EVIDENCE", "No run preview"),
       "flight-latest-run"
     );
     appendFlightRow(
@@ -616,10 +717,49 @@
             note: `${sceneCount} scenes observed`,
           }
         : run.available
-          ? { label: "Not yet created", kind: "warn", note: "No scene count observed" }
-          : notObserved("No run preview"),
+          ? grammarState("NEEDS_EXPLANATION", "No scene count observed")
+          : grammarState("NO_CURRENT_RUN_EVIDENCE", "No run preview"),
       "flight-first-memory"
     );
+
+    appendText(firstRunGuide, "div", "Make One Memory", "first-run-guide-title");
+    appendFirstRunStep(
+      firstRunGuide,
+      1,
+      "Confirm local API",
+      state.errors.status ? grammarState("FAULT") : grammarState("READY"),
+      state.apiBase
+    );
+    appendFirstRunStep(
+      firstRunGuide,
+      2,
+      "Drop one supported file",
+      inboxCount && inboxCount > 0 ? grammarState("READY") : grammarState("IDLE"),
+      inboxCount && inboxCount > 0 ? "File name redacted; waiting for watchdog pickup" : IMPORT_INBOX_LABEL
+    );
+    appendFirstRunStep(
+      firstRunGuide,
+      3,
+      "Watch processing",
+      pipelineRunning ? grammarState("RUNNING") : grammarState("IDLE"),
+      `${pipelineRunning ? 1 : 0} running; processed ${processedCount || 0}; ${processingFolderNote}`
+    );
+    appendFirstRunStep(
+      firstRunGuide,
+      4,
+      "Open first scene memory",
+      firstMemoryCreated ? grammarState("READY") : grammarState("NO_CURRENT_RUN_EVIDENCE"),
+      firstMemoryCreated ? `${sceneCount} scenes available` : "No current-run scene memory yet"
+    );
+    if (stepRows !== null) {
+      appendFirstRunStep(
+        firstRunGuide,
+        5,
+        "Review proof ledger",
+        stepRows > 0 ? grammarState("HISTORICAL_ONLY") : grammarState("NO_CURRENT_RUN_EVIDENCE"),
+        `${stepRows} recent step rows`
+      );
+    }
 
     const gpuLabel =
       gpu.available === true
@@ -1303,6 +1443,47 @@
           { name: "processed", count: queue.processed?.count, size: "" },
           { name: "failed", count: queue.failed?.count, size: "" },
         ]
+      );
+    }
+  }
+
+  function renderStorage() {
+    const node = qs("#storage-panel");
+    if (!node) return;
+    clear(node);
+    if (state.errors.storage) return showError(node, `Storage summary unavailable: ${state.errors.storage}`);
+    const storage = state.data.storage || {};
+    const disk = storage.disk || {};
+    const roots = Array.isArray(storage.roots) ? storage.roots : [];
+
+    node.appendChild(panelHeader("Storage and growth", "Read-only local capacity and artifact growth", storage.status || "unknown"));
+    renderKv(node, storage, ["status", "mode", "raw_paths"]);
+    appendText(node, "h3", "Data volume", "panel-subtitle");
+    renderKv(node, disk, ["available", "scope", "free_gb", "used_gb", "total_gb", "used_percent"]);
+
+    const rows = roots.map((row) => ({
+      label: row.label || row.name,
+      status: row.exists ? row.scan_status || "complete" : "not configured",
+      size_mb: row.exists ? row.size_mb : "",
+      count: row.exists ? row.file_count : "",
+    }));
+    renderSimpleTable(
+      node,
+      [
+        { key: "label", label: "Surface" },
+        { key: "status", label: "State", badge: true },
+        { key: "size_mb", label: "MB" },
+        { key: "count", label: "Files" },
+      ],
+      rows
+    );
+
+    if (storage.scan_policy) {
+      appendText(
+        node,
+        "p",
+        `Bounded scan: ${safeString(storage.scan_policy.max_entries_per_root, "max_entries")} entries/root, ${safeString(storage.scan_policy.max_seconds_per_root, "max_seconds")}s/root.`,
+        "panel-subtitle"
       );
     }
   }
@@ -2473,6 +2654,7 @@
     renderTemporalSurface();
     renderDiagnostics();
     renderMachine();
+    renderStorage();
     renderMemory();
     renderHealth();
     renderVideos();

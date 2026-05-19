@@ -104,6 +104,68 @@ def test_latest_run_preview_uses_read_only_summary_projection(monkeypatch) -> No
     assert preview["latest_episode"]["episode"] == "02x06 - The Statue.mp4"
 
 
+def test_storage_summary_redacts_paths_and_reports_bounded_sizes(monkeypatch, tmp_path: Path) -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    if str(repo_root) not in sys.path:
+        sys.path.insert(0, str(repo_root))
+
+    data_root = tmp_path / "GoodQ_Data"
+    import_inbox = data_root / "import_inbox"
+    processing = data_root / "epochs" / "epoch_test" / "processing"
+    logs = data_root / "epochs" / "epoch_test" / "logs"
+    faiss = data_root / "epochs" / "epoch_test" / "faiss"
+    qdrant = tmp_path / "qdrant_storage"
+    cache = data_root / "cache"
+    reports = data_root / "reports"
+    for path in (import_inbox, processing, logs, faiss, qdrant, cache, reports):
+        path.mkdir(parents=True)
+    (import_inbox / "sample.mp4").write_bytes(b"abc")
+    (logs / "step_runs.jsonl").write_text("{}", encoding="utf-8")
+
+    fake_config_loader = types.ModuleType("steps.common.config_loader")
+    fake_config_loader.load_configs = lambda overrides=None: {
+        "paths": {
+            "data_root": str(data_root),
+            "db_path": str(data_root / "memory.db"),
+            "import_inbox": str(import_inbox),
+            "processing": str(processing),
+            "log_dir": str(logs),
+            "faiss_dir": str(faiss),
+            "qdrant_storage": str(qdrant),
+            "model_cache": str(cache),
+        },
+        "host": {},
+        "memory": {},
+        "llm": {},
+    }
+    monkeypatch.setitem(sys.modules, "steps.common.config_loader", fake_config_loader)
+
+    fake_memory_store = types.ModuleType("steps.common.memory_store")
+    fake_memory_store.normalize_memory_tier_list = lambda values: values
+    monkeypatch.setitem(sys.modules, "steps.common.memory_store", fake_memory_store)
+
+    fake_ingest_requests = types.ModuleType("api.utils.ingest_requests")
+    fake_ingest_requests.is_supported_ingest_path = lambda path: True
+    monkeypatch.setitem(sys.modules, "api.utils.ingest_requests", fake_ingest_requests)
+
+    fake_goodq_version = types.ModuleType("goodq_version")
+    fake_goodq_version.GOODQ_VERSION = "test"
+    monkeypatch.setitem(sys.modules, "goodq_version", fake_goodq_version)
+    monkeypatch.setenv("GOODQ_RUN_REPORTS_ROOT", str(reports))
+
+    runtime = _load_runtime_route_module(repo_root)
+    summary = runtime.get_storage_summary()
+
+    assert summary["status"] == "ok"
+    assert summary["mode"] == "read_only"
+    assert summary["raw_paths"] == "redacted"
+    assert summary["disk"]["available"] is True
+    assert any(row["name"] == "import_inbox" and row["exists"] for row in summary["roots"])
+    serialized = json.dumps(summary)
+    assert str(tmp_path) not in serialized
+    assert "sample.mp4" not in serialized
+
+
 def test_latest_run_evidence_summarizes_artifacts_without_paths(monkeypatch, tmp_path: Path) -> None:
     repo_root = Path(__file__).resolve().parents[2]
     if str(repo_root) not in sys.path:

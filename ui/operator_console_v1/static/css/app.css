@@ -179,6 +179,42 @@ a {
   white-space: nowrap;
 }
 
+.api-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid rgba(255, 179, 0, 0.34);
+  border-radius: 6px;
+  background: rgba(255, 179, 0, 0.08);
+  color: var(--flight-amber);
+  font-family: "Courier New", ui-monospace, monospace;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+
+.api-pill.ok,
+.api-pill.live {
+  border-color: rgba(0, 200, 83, 0.44);
+  background: rgba(0, 200, 83, 0.08);
+  color: var(--flight-green);
+}
+
+.api-pill.warn,
+.api-pill.demo {
+  border-color: rgba(255, 171, 0, 0.48);
+  background: rgba(255, 171, 0, 0.08);
+  color: #ffab00;
+}
+
+.api-pill.error {
+  border-color: rgba(255, 82, 82, 0.48);
+  background: rgba(255, 82, 82, 0.08);
+  color: var(--flight-red);
+}
+
 .status-dot,
 .pulse-dot {
   width: 9px;
@@ -417,10 +453,75 @@ a {
   border-color: rgba(255, 171, 0, 0.48);
 }
 
+.flight-chip.info,
+.proof-chip.info,
+.badge.info {
+  color: var(--cyan);
+  background: rgba(142, 199, 192, 0.08);
+  border-color: rgba(142, 199, 192, 0.45);
+}
+
+.flight-chip.historical,
+.proof-chip.historical,
+.badge.historical {
+  color: #d7c7ff;
+  background: rgba(215, 199, 255, 0.08);
+  border-color: rgba(215, 199, 255, 0.42);
+}
+
 .flight-actions {
   display: flex;
   gap: 10px;
   margin-top: 18px;
+}
+
+.first-run-guide {
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255, 179, 0, 0.14);
+}
+
+.first-run-guide-title {
+  color: var(--flight-amber);
+  font-family: "Courier New", ui-monospace, monospace;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.first-run-step {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  min-height: 30px;
+  color: #e8e8e8;
+  font-size: 12px;
+}
+
+.first-run-step-index {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border: 1px solid rgba(255, 179, 0, 0.34);
+  border-radius: 50%;
+  color: var(--flight-amber);
+  font-family: "Courier New", ui-monospace, monospace;
+  font-size: 10px;
+}
+
+.first-run-step small {
+  display: block;
+  margin-top: 2px;
+  overflow: hidden;
+  color: var(--flight-muted);
+  font-family: "Courier New", ui-monospace, monospace;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .flight-button {

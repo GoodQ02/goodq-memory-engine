@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import logging
 import os
+from pathlib import Path
 from typing import Any, Dict, List
 
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 
@@ -18,6 +20,8 @@ logger = logging.getLogger(__name__)
 app = FastAPI(title="GoodQ Retrieval API", version=GOODQ_VERSION)
 _CFG = load_configs({})
 _API_CFG: Dict[str, Any] = _CFG.get("api", {}) or {}
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+_OPERATOR_CONSOLE_DIR = _REPO_ROOT / "ui" / "operator_console_v1"
 
 
 def _resolve_allowed_origins() -> List[str]:
@@ -65,6 +69,13 @@ app.include_router(system.router)
 app.include_router(ingest.router)
 app.include_router(runtime.router)
 app.include_router(control_recurrence.router)
+
+if _OPERATOR_CONSOLE_DIR.exists():
+    app.mount(
+        "/ui/operator_console_v1",
+        StaticFiles(directory=str(_OPERATOR_CONSOLE_DIR), html=True),
+        name="operator_console_v1",
+    )
 
 # Enforce CONFIG_LOADING_CONTRACT: reuse the already-loaded cfg in submodules.
 # (api/routes/search.py lazily calls load_configs() otherwise; keep it lazy but non-reloading.)

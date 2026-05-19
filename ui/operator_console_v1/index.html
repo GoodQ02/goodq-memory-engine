@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>GoodQ4All Operator Console</title>
+    <link rel="stylesheet" href="./static/css/app.css?v=20260519-runtime-clarity" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <a class="brand" href="#overview" aria-label="GoodQ4All Operator Console">
+          <span class="brand-mark" aria-hidden="true">GQ</span>
+          <span>
+            <strong>GoodQ4All</strong>
+            <small>Local Runtime Console</small>
+          </span>
+        </a>
+
+        <form class="api-form" id="api-form">
+          <label for="api-base">API base</label>
+          <input id="api-base" name="api_base" type="url" spellcheck="false" />
+          <button class="icon-button" type="submit" title="Refresh read-only surfaces" aria-label="Refresh">
+            <span aria-hidden="true">REF</span>
+          </button>
+        </form>
+
+        <div class="connection" id="connection-status" aria-live="polite">
+          <span class="status-dot unknown" aria-hidden="true"></span>
+          <span>Not connected</span>
+        </div>
+
+        <div class="api-pill unknown" id="api-environment-pill" data-testid="api-environment-pill" aria-live="polite">
+          API: Not observed
+        </div>
+      </header>
+
+      <aside class="rail" aria-label="Console sections">
+        <a href="#flight-deck">Flight Deck</a>
+        <a href="#proof-panel">Proof</a>
+        <a href="#retrieval-console">Retrieval</a>
+        <a href="#overview">Overview</a>
+        <a href="#runs">Runs</a>
+        <a href="#surfaces">Surfaces</a>
+        <a href="#diagnostics">Diagnostics</a>
+        <a href="#storage-panel">Storage</a>
+        <a href="#memory">Memory</a>
+        <a href="#videos">Videos</a>
+        <a href="#scene-inspector">Scene Inspector</a>
+        <a href="#evidence">Evidence</a>
+      </aside>
+
+      <main class="content">
+        <section class="flight-deck" id="flight-deck" aria-labelledby="flight-deck-title" data-testid="flight-deck">
+          <div class="flight-header" data-testid="flight-deck-header">
+            <strong>GOODQ4ALL</strong>
+            <div class="flight-title" id="flight-deck-title">FLIGHT DECK</div>
+            <span class="flight-version" data-testid="flight-deck-version">v0.1.1</span>
+          </div>
+
+          <div class="flight-grid">
+            <article class="flight-panel" aria-labelledby="flight-system-map-title" data-testid="flight-system-map-card">
+              <div class="flight-panel-heading">
+                <h2 id="flight-system-map-title">System Map</h2>
+              </div>
+              <div class="flight-status-list" id="flight-system-map" data-testid="flight-system-map"></div>
+            </article>
+
+            <article class="flight-panel" aria-labelledby="flight-first-run-title" data-testid="flight-first-run-card">
+              <div class="flight-panel-heading">
+                <h2 id="flight-first-run-title">First-Run Observer</h2>
+              </div>
+              <div class="flight-status-list flight-status-list-roomy" id="flight-first-run" data-testid="flight-first-run"></div>
+              <div class="first-run-guide" id="first-run-guide" data-testid="first-run-guide" aria-label="Make one memory checklist"></div>
+              <div class="flight-actions">
+                <a class="flight-button primary" href="#runs" data-testid="open-latest-run">Open Latest Run</a>
+                <a
+                  class="flight-button"
+                  href="https://github.com/GoodQ02/goodq4all/blob/main/docs/guides/FIRST_RUN.md"
+                  target="_blank"
+                  rel="noreferrer"
+                  data-testid="view-first-run-docs"
+                >
+                  View First Run
+                </a>
+              </div>
+            </article>
+          </div>
+
+          <aside class="flight-contract" id="flight-runtime-contract" data-testid="flight-runtime-contract">
+            Runtime contract not observed.
+          </aside>
+        </section>
+
+        <section class="proof-panel" id="proof-panel" aria-labelledby="proof-panel-title" data-testid="proof-panel">
+          <div class="proof-header">
+            <div>
+              <p class="proof-kicker">Visibility first</p>
+              <h2 id="proof-panel-title">Proof Panel</h2>
+            </div>
+            <div class="proof-density" data-testid="proof-density">
+              Evidence coverage <strong id="proof-density-value">0%</strong>
+            </div>
+          </div>
+
+          <div class="proof-grid">
+            <article class="proof-card" aria-labelledby="current-run-proof-title" data-testid="current-run-proof">
+              <div class="proof-card-header">
+                <h3 id="current-run-proof-title">Current Run Proof</h3>
+              </div>
+              <div class="proof-list" id="proof-list" data-testid="proof-list"></div>
+              <div class="proof-score" data-testid="proof-score">
+                <span class="proof-score-label">Observed Signals</span>
+                <strong id="proof-score-value">0</strong>
+                <span id="proof-score-max">/ 0</span>
+              </div>
+            </article>
+
+            <article class="proof-card" aria-labelledby="provenance-gaps-title" data-testid="provenance-gaps">
+              <div class="proof-card-header">
+                <h3 id="provenance-gaps-title">Provenance Gaps</h3>
+              </div>
+              <div class="proof-list" id="gaps-list" data-testid="gaps-list"></div>
+            </article>
+          </div>
+
+          <article class="proof-inspector" aria-labelledby="proof-inspector-title" data-testid="proof-inspector">
+            <div class="proof-card-header">
+              <h3 id="proof-inspector-title">Latest Evidence Inspector</h3>
+            </div>
+            <div class="proof-inspector-grid" id="proof-inspector-grid" data-testid="proof-inspector-grid"></div>
+            <div class="proof-actions">
+              <a class="proof-button primary" href="#surfaces" data-testid="open-evidence-surfaces">Open Evidence</a>
+              <a class="proof-button" href="#videos" data-testid="open-timeline-surface">Open Timeline</a>
+              <a class="proof-button" id="proof-api-docs" href="/docs" target="_blank" rel="noreferrer" data-testid="open-api-docs">Open API Docs</a>
+            </div>
+          </article>
+        </section>
+
+        <section class="retrieval-console" id="retrieval-console" aria-labelledby="retrieval-console-title" data-testid="retrieval-console">
+          <div class="retrieval-header">
+            <div>
+              <p class="proof-kicker">Calm forensic inquiry</p>
+              <h2 id="retrieval-console-title">Retrieval Console</h2>
+            </div>
+            <div class="retrieval-mode" data-testid="retrieval-mode">
+              Query mode: <strong>Natural</strong>
+            </div>
+          </div>
+
+          <form class="retrieval-query" id="retrieval-form" data-testid="retrieval-form">
+            <label for="retrieval-query-input">What do you want to find in memory?</label>
+            <div class="retrieval-query-row">
+              <input
+                id="retrieval-query-input"
+                name="query"
+                type="search"
+                autocomplete="off"
+                spellcheck="false"
+                placeholder="Search memory..."
+                data-testid="retrieval-query-input"
+              />
+              <button class="retrieval-button" type="button" disabled title="Advanced filters are not exposed yet" data-testid="retrieval-advanced">
+                Advanced
+              </button>
+              <button class="retrieval-button primary" type="submit" data-testid="retrieval-run-query">Run Query</button>
+            </div>
+          </form>
+
+          <div class="retrieval-grid">
+            <article class="retrieval-card" aria-labelledby="retrieval-results-title" data-testid="retrieval-results-card">
+              <div class="retrieval-card-header">
+                <h3 id="retrieval-results-title">Results</h3>
+                <span id="retrieval-results-count">0</span>
+              </div>
+              <div class="retrieval-results-list" id="retrieval-results-list" data-testid="retrieval-results-list"></div>
+              <div class="retrieval-load-row">
+                <button class="retrieval-button" type="button" id="retrieval-load-more" data-testid="retrieval-load-more">Load More</button>
+              </div>
+            </article>
+
+            <article class="retrieval-card" aria-labelledby="retrieval-explain-title" data-testid="retrieval-explanation-card">
+              <div class="retrieval-card-header">
+                <h3 id="retrieval-explain-title">Why This Matched</h3>
+                <span id="retrieval-selected-score">Not observed</span>
+              </div>
+              <div class="retrieval-explanation" id="retrieval-explanation" data-testid="retrieval-explanation"></div>
+            </article>
+          </div>
+
+          <article class="retrieval-preview" aria-labelledby="retrieval-preview-title" data-testid="retrieval-preview">
+            <div>
+              <h3 id="retrieval-preview-title">Selected Result Preview</h3>
+              <p id="retrieval-preview-copy">Run a query to inspect one memory result.</p>
+            </div>
+            <div class="retrieval-preview-actions">
+              <button class="retrieval-button primary" type="button" id="retrieval-open-scene" data-testid="retrieval-open-scene">Open in Scene Inspector</button>
+              <a class="retrieval-button" href="#videos" id="retrieval-view-timeline" data-testid="retrieval-view-timeline">View Full Timeline</a>
+              <button class="retrieval-button" type="button" disabled title="Natural-language match explanations are a future endpoint" data-testid="retrieval-explain-match">
+                Explain Match
+              </button>
+            </div>
+          </article>
+        </section>
+
+        <section class="section hero" id="overview" aria-labelledby="overview-title">
+          <div>
+            <p class="section-kicker">Observer-only</p>
+            <h1 id="overview-title">Runtime Overview</h1>
+          </div>
+          <div class="boundary-panel" id="boundary-panel">
+            <span class="status-dot unknown" aria-hidden="true"></span>
+            <span>Awaiting local API</span>
+          </div>
+        </section>
+
+        <section class="summary-grid" id="summary-grid" aria-label="Runtime summary"></section>
+
+        <section class="section two-column" id="runs" aria-labelledby="runs-title">
+          <div class="section-heading">
+            <p class="section-kicker">Latest run</p>
+            <h2 id="runs-title">Run preview</h2>
+          </div>
+          <div class="panel" id="run-panel"></div>
+          <div class="panel" id="recurrence-panel"></div>
+          <div class="panel" id="recurrence-trend-panel"></div>
+        </section>
+
+        <section class="section two-column" id="surfaces" aria-labelledby="surfaces-title">
+          <div class="section-heading">
+            <p class="section-kicker">Evidence surfaces</p>
+            <h2 id="surfaces-title">Step, temporal, and graph truth</h2>
+          </div>
+          <div class="panel" id="surface-panel"></div>
+          <div class="panel" id="temporal-surface-panel"></div>
+        </section>
+
+        <section class="section two-column" id="diagnostics" aria-labelledby="diagnostics-title">
+          <div class="section-heading">
+            <p class="section-kicker">Diagnostics</p>
+            <h2 id="diagnostics-title">Engines, hardware, and queue</h2>
+          </div>
+          <div class="panel" id="diagnostics-panel"></div>
+          <div class="panel" id="machine-panel"></div>
+          <div class="panel" id="storage-panel" data-testid="storage-panel"></div>
+        </section>
+
+        <section class="section two-column" id="memory" aria-labelledby="memory-title">
+          <div class="section-heading">
+            <p class="section-kicker">Persistence</p>
+            <h2 id="memory-title">Memory and engine health</h2>
+          </div>
+          <div class="panel" id="memory-panel"></div>
+          <div class="panel" id="health-panel"></div>
+        </section>
+
+        <section class="section split" id="videos" aria-labelledby="videos-title">
+          <div class="section-heading">
+            <p class="section-kicker">Scene inventory</p>
+            <h2 id="videos-title">Videos and selected timeline</h2>
+          </div>
+          <div class="panel video-panel" id="video-panel"></div>
+          <div class="panel timeline-panel" id="timeline-panel"></div>
+        </section>
+
+        <section class="section" id="scene-inspector" aria-labelledby="scene-inspector-title" data-testid="scene-inspector">
+          <div class="section-heading">
+            <p class="section-kicker">Scene schema</p>
+            <h2 id="scene-inspector-title">Selected Scene Inspector</h2>
+          </div>
+          <div class="scene-inspector-grid">
+            <article class="panel scene-detail-panel" id="scene-detail-panel" data-testid="scene-detail-panel"></article>
+            <article class="panel scene-modality-panel" id="scene-modality-panel" data-testid="scene-modality-panel"></article>
+            <article class="panel scene-schema-panel" id="scene-schema-panel" data-testid="scene-schema-panel"></article>
+          </div>
+        </section>
+
+        <section class="section" id="evidence" aria-labelledby="evidence-title">
+          <div class="section-heading">
+            <p class="section-kicker">Read-only handoff</p>
+            <h2 id="evidence-title">Justification Channel</h2>
+          </div>
+          <div class="panel evidence-panel" id="evidence-panel"></div>
+        </section>
+      </main>
+    </div>
+
+    <template id="loading-template">
+      <div class="empty-state">
+        <span class="pulse-dot" aria-hidden="true"></span>
+        <span>Loading local read surface...</span>
+      </div>
+    </template>
+
+    <script src="./static/js/app.js?v=20260519-runtime-clarity-3"></script>
+  </body>
+</html>

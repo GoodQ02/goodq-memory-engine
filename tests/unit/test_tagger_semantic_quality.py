@@ -66,6 +66,31 @@ def test_tagger_filters_noisy_entities_before_persisting(monkeypatch):
     assert result["entity_details"][0]["type"] == "PERSON"
 
 
+def test_tagger_promotes_concrete_caption_memory_tags(monkeypatch):
+    item = {
+        "caption": "a girl playing a trumpet in a room",
+        "objects": [{"label": "person"}],
+        "time_hints": {"explicit_dates": ["2002-12-16"], "months": ["december"]},
+    }
+
+    monkeypatch.setattr(tagger_step, "_extract_entities_transformers", lambda _text, _cfg: ([], []))
+
+    result = tagger_step.tagger(item, {})
+
+    assert result["tags"][:4] == ["indoor", "music", "performance", "trumpet"]
+    assert "december" in result["tags"]
+    assert "person" not in result["tags"]
+    assert {
+        (detail["label"], tuple(detail["sources"]))
+        for detail in result["tag_details"]
+        if detail["label"] in {"trumpet", "music", "performance"}
+    } == {
+        ("trumpet", ("caption",)),
+        ("music", ("caption_inference",)),
+        ("performance", ("caption_inference",)),
+    }
+
+
 def test_tagger_rejects_contextual_artifact_entities_and_fake_ner_fallback(monkeypatch):
     item = {
         "transcript": "Shirt grabs the underwear. Oh my God. This is the signal. George arrives.",

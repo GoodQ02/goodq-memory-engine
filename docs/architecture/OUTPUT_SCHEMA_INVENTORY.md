@@ -485,7 +485,7 @@ Supported read-model examples:
 - `GET /api/control-recurrence/reports/{report_id}`
 - `GET /api/control-recurrence/reports/{report_id}/markdown`
 - `GET /api/control-recurrence/reports/{report_id}/recommendations`
-- `GET /api/timeline/full`
+- `GET /api/videos/{video_id}/timeline/full`
 - `GET /api/videos/{video_id}/scenes/{scene_id}/similar`
 
 ### `/api/runs/latest/preview`

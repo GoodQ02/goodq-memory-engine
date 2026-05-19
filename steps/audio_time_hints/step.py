@@ -10,6 +10,13 @@ MONTHS = (
     "july","august","september","october","november","december"
 )
 WEEKDAYS = ("monday","tuesday","wednesday","thursday","friday","saturday","sunday")
+MONTH_NUMBERS = {name: index + 1 for index, name in enumerate(MONTHS)}
+MONTH_PATTERN = "|".join(MONTHS)
+
+
+def _add_unique(values: List[str], value: str) -> None:
+    if value and value not in values:
+        values.append(value)
 
 
 def _collect_time_hints(text: str) -> Dict[str, Any]:
@@ -42,19 +49,42 @@ def _collect_time_hints(text: str) -> Dict[str, Any]:
             else:
                 dt = datetime.fromisoformat(raw)
                 iso = dt.date().isoformat()
-            if iso and iso not in hints["explicit_dates"]:
-                hints["explicit_dates"].append(iso)
+            if iso:
+                _add_unique(hints["explicit_dates"], iso)
         except Exception as e:
             print(f'[ERROR] Exception in step.py line 47: {str(e)}')
             continue
 
-    # month names and weekdays
-    for i, name in enumerate(MONTHS):
-        if name in t and name not in hints["months"]:
-            hints["months"].append(name)
+    # month-name dates like December 16 2002 or March 4, 1991
+    for m in re.finditer(
+        rf"\b({MONTH_PATTERN})\s+(\d{{1,2}})(?:st|nd|rd|th)?(?:,?\s+(\d{{2,4}}))?\b",
+        t,
+    ):
+        month = m.group(1)
+        _add_unique(hints["months"], month)
+        year = m.group(3)
+        if year:
+            try:
+                if len(year) == 2:
+                    year = "20" + year
+                dt = datetime(int(year), MONTH_NUMBERS[month], int(m.group(2)))
+                _add_unique(hints["explicit_dates"], dt.date().isoformat())
+            except Exception as e:
+                print(f'[ERROR] Exception in step.py month-date normalization: {str(e)}')
+
+    # Month names alone are only temporal when they appear with temporal context.
+    for m in re.finditer(
+        rf"\b(?:in|during|on|by|before|after|since|until|last|next|this)\s+({MONTH_PATTERN})\b",
+        t,
+    ):
+        _add_unique(hints["months"], m.group(1))
+    for m in re.finditer(rf"\b({MONTH_PATTERN})\s+(?:of\s+)?\d{{4}}\b", t):
+        _add_unique(hints["months"], m.group(1))
+
+    # weekdays
     for name in WEEKDAYS:
-        if name in t and name not in hints["weekdays"]:
-            hints["weekdays"].append(name)
+        if name in t:
+            _add_unique(hints["weekdays"], name)
 
     # simple relative phrases
     rel_patterns = [
@@ -67,8 +97,7 @@ def _collect_time_hints(text: str) -> Dict[str, Any]:
     for rp in rel_patterns:
         for m in re.finditer(rp, t):
             phrase = m.group(0)
-            if phrase and phrase not in hints["relative_phrases"]:
-                hints["relative_phrases"].append(phrase)
+            _add_unique(hints["relative_phrases"], phrase)
 
     return hints
 

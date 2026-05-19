@@ -951,6 +951,58 @@ def _promote_metadata_time_hints(audio_payload: Any) -> None:
         audio_payload['metadata_time_hints'] = tag_time_hints
 
 
+def _time_hints_have_values(time_hints: Any) -> bool:
+    if not isinstance(time_hints, dict):
+        return False
+    for key, value in time_hints.items():
+        if str(key).strip().lower() == 'first_seen_ts':
+            continue
+        if isinstance(value, list) and value:
+            return True
+        if isinstance(value, dict) and value:
+            return True
+        if isinstance(value, str) and value.strip():
+            return True
+    return False
+
+
+def _merge_time_hint_dicts(*hint_sources: Any) -> Dict[str, Any]:
+    merged: Dict[str, Any] = {}
+    for hints in hint_sources:
+        if not isinstance(hints, dict):
+            continue
+        for key, value in hints.items():
+            if value in (None, '', []):
+                continue
+            if isinstance(value, list):
+                existing = merged.setdefault(key, [])
+                if not isinstance(existing, list):
+                    continue
+                for item in value:
+                    if item not in existing:
+                        existing.append(item)
+                continue
+            if isinstance(value, dict):
+                existing_dict = merged.setdefault(key, {})
+                if isinstance(existing_dict, dict):
+                    existing_dict.update(value)
+                continue
+            merged[key] = value
+    return merged
+
+
+def _resolve_scene_time_hints(audio_payload: Dict[str, Any], frame_payload: Dict[str, Any]) -> Dict[str, Any]:
+    audio_hints = audio_payload.get('time_hints')
+    frame_hints = frame_payload.get('time_hints')
+    if _time_hints_have_values(audio_hints) and _time_hints_have_values(frame_hints):
+        return _merge_time_hint_dicts(audio_hints, frame_hints)
+    if _time_hints_have_values(audio_hints):
+        return audio_hints
+    if _time_hints_have_values(frame_hints):
+        return frame_hints
+    return audio_hints if isinstance(audio_hints, dict) else {}
+
+
 def _build_kg_scene_data(
     scene: Dict[str, Any],
     *,
@@ -1000,7 +1052,7 @@ def _build_kg_scene_data(
         'speaker_voice_signatures': audio_payload.get('speaker_voice_signatures'),
         'speaker_voice_signature_meta': audio_payload.get('speaker_voice_signature_meta'),
         'music_events': audio_payload.get('music_events'),
-        'time_hints': audio_payload.get('time_hints') or frame_payload.get('time_hints'),
+        'time_hints': _resolve_scene_time_hints(audio_payload, frame_payload),
         'metadata_time_hints': audio_payload.get('metadata_time_hints'),
         'keyframe': frame_payload,
         'audio': audio_payload,

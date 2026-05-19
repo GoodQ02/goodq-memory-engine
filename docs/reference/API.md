@@ -165,7 +165,7 @@ The active line no longer exposes the older compatibility shell that previously 
 
 ## Timeline API Truth
 
-- `GET /api/timeline/full` is the primary read-only projection of persisted temporal truth.
+- `GET /api/videos/{video_id}/timeline/full` is the primary read-only projection of persisted temporal truth.
 - Timeline metadata now includes additive visibility rollups for the interaction ladder and transcript/entity seam:
   - `segments_with_candidate_visible_people`
   - `segments_with_interaction_dominance`

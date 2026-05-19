@@ -26,7 +26,7 @@ Purpose: verify that high-value pipeline intelligence moves from durable artifac
 | CLAP audio commit | Present in `scene.audio.clap_meta` | Present in `/timeline/full` and `/scenes` as `clap_meta` | Public operator Scene Inspector renders commit metadata with strict proof wording | Cleared as commit metadata | `clap_meta.status=ok`, `faiss_id=2602` | Keep current-run Qdrant proof separate from scene `clap_meta` |
 | Scene-present entities | Present in manifest and temporal segment | Present in `/timeline/full` and `/scenes` as `tags`, `tag_details`, and `scene_present_entities` | Public operator Scene Inspector renders memory tags, tag provenance, and scene-present entities | Cleared | `Indoor`, `Music`, `Performance`, `Trumpet`, `December`; regression guard uses `trumpet` and `music` rows | Keep provenance labels distinct from canonical KG truth |
 | Scene context LLM | Optional; present only when the feature produces `scene_context_llm` | Present in `/timeline/full` and `/scenes` when persisted, with context rollups in timeline metadata | Public operator Scene Inspector renders scene context summary when exposed | Cleared for projection | Regression guard uses `narrative_summary`, `scene_context_epistemic`, and `scene_context_arbitration` | Runtime remains optional; absence still means not present for that run |
-| Recurrence/control | Existing witness/demo report available on public/demo API | `/api/runs/latest/preview` available on `30003` | Existing console surfaces recurrence/read-only status | Pending | Season 2 fresh witness preview returns 466 scenes | Audit after scene-level truth pass |
+| Recurrence/control | Existing recurrence index, durable JSON reports, trend derivation, and recommendation drafts | Present through `/api/control-recurrence/reports/latest`, `/trend`, and `/{report_id}/recommendations` | Public operator console shows latest recurrence, trend empty states, and read-only recommendation draft boundary | Cleared for read-only visibility | Static UI guard plus recurrence API/recommendation/trend tests passed | Do not convert recommendations into mutation controls |
 
 ## Current Finding
 
@@ -97,4 +97,23 @@ Validation:
 - Private: `39 passed` for `test_phase6_audio_artifact_path_unified.py`, `test_api_surface_truth.py`, and `test_runtime_run_preview.py`.
 - Public: `45 passed` for the same API/runtime scope plus the operator console static guard.
 
-Remaining high-value trail: recurrence/control reports are already visible through the run preview/console path, but a separate read-only recurrence drilldown audit should verify recommendation draft, trend, and empty-state wording without mixing it into this scene evidence pass.
+Next candidate investigated: recurrence/control drilldown. This is resolved in the Recurrence Control Pass below.
+
+## Recurrence Control Pass
+
+Status: cleared for read-only UI visibility.
+
+What changed:
+
+- The public operator console now fetches the deterministic recommendation draft for the latest indexed recurrence report.
+- The recurrence panel renders `Recommended next inspection`, top priorities, inspection plan rows, defer-mutation reason, and a visible safety boundary.
+- The trend panel now explains empty comparable trend states instead of silently rendering an empty table.
+- The public UI guide now lists the recommendations endpoint and repeats the no-mutation boundary.
+
+Validation:
+
+- Public RED guard failed on missing recommendations endpoint/copy.
+- Public GREEN guard passed for the recurrence UI boundary.
+- Public: `27 passed` for `test_operator_console_static.py`, `test_control_recurrence_api.py`, `test_control_recurrence_recommendations.py`, and `test_control_recurrence_trend.py`.
+
+Remaining high-value trail: storage/growth and media-preview panels are intentionally not started in this pass. The current evidence cockpit now exposes the durable scene evidence, optional context, retrieval context, and read-only recurrence controls without adding execution authority.

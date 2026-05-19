@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: PUBLIC_RELEASE_SNAPSHOT -->
-<!-- DOC_LAST_VERIFIED: 2026-05-17 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-19 -->
 
 # System Snapshot
 
@@ -24,6 +24,10 @@ state should be copied into a public release.
 - CLI: canonical ingest and operator utilities.
 - Watchdog/import inbox: supported automation surface for local file intake.
 - API: local read/inspection surface, not a public cloud service.
+- Operator Console v1: local read-only inspection cockpit served under
+  `/ui/operator_console_v1/`.
+- Justification Channel: local read-only envelope renderer served under
+  `/ui/justification_v1/`.
 - Durable evidence: scene manifests, temporal indexes, run summaries, SQLite
   state, knowledge graph state, and Qdrant vector state when configured.
 
@@ -32,7 +36,8 @@ state should be copied into a public release.
 - This is not a finished consumer application.
 - This is not a healthcare, clinical, compliance, or emergency-response
   product.
-- This is not a polished product UI release.
+- This is not a polished consumer memory browser release; current UI surfaces
+  are read-only local operator inspection surfaces.
 - This is not an autonomous control-agent or self-healing release.
 - This is not a full offline installer release.
 - This does not ship private memory, witness outputs, runtime databases, raw

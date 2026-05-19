@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: PUBLIC_RELEASE_STATUS -->
-<!-- DOC_LAST_VERIFIED: 2026-05-17 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-19 -->
 
 # GoodQ4All Agent Status
 
@@ -18,6 +18,8 @@ summary.
   SQLite state, knowledge graph state, and Qdrant vectors when configured.
 - API posture: local read/inspection surface on loopback, not a hosted public
   service.
+- UI posture: read-only Operator Console v1 plus the Justification Channel,
+  both served locally under `/ui/*`; no UI execution authority.
 
 ## Operator Boundaries
 
@@ -27,8 +29,8 @@ summary.
 - Runtime config is raw for runtime consumers, but display/logging/operator
   surfaces must sanitize config-like payloads before output.
 - Public release docs must not claim healthcare readiness, autonomous control,
-  polished UI maturity, full offline-installer maturity, or post-1.0 API
-  stability.
+  polished consumer UI maturity, full offline-installer maturity, or post-1.0
+  API stability.
 
 ## Public First-Run Bias
 
@@ -37,7 +39,8 @@ The first public success loop should prove:
 - local bootstrap can prepare the runtime
 - one operator-owned input can become scene-level memory
 - persisted scene artifacts are inspectable
-- local API/CLI surfaces can read that state
+- local API/CLI surfaces and the read-only Operator Console can inspect that
+  state
 - uncertainty and limits remain explicit
 
 Use `docs/guides/FIRST_RUN.md` as the first-run entrypoint.

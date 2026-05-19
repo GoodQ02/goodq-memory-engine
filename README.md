@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-05-17 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-19 -->
 
 <p align="center">
   <img src="samples/assets/q-git-square.png" alt="GoodQ4All mark" width="140" />
@@ -241,12 +241,21 @@ GoodQ4All currently supports:
 
 - local install and bootstrap on Windows
 - local API runtime
+- read-only local operator console served by the API process
 - CLI ingestion
 - watchdog-driven long-running ingestion
 - SQLite + knowledge graph + Qdrant-backed persisted memory
 - CPU-safe baseline execution with optional GPU / WSL acceleration
 
-GoodQ4All does **not** currently ship a polished end-user UI. It does include read-only local operator surfaces for inspection and proof review.
+GoodQ4All now ships a local read-only operator console at
+`/ui/operator_console_v1/`. It exposes runtime orientation, proof/evidence
+status, retrieval inspection, storage/runtime summaries, recurrence reports,
+video inventory, and scene/timeline read models.
+
+The console is an inspection surface only. It does not trigger ingestion,
+reindex memory, heal configs, mutate persistence, generate reports, or activate
+ControlAgent. A polished consumer memory browser and confirmation-gated
+mutation UI remain future layers, not current product claims.
 
 UI status:
 

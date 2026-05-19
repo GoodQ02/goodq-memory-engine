@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-05-02 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-19 -->
 
 # GoodQ4All API Reference
 
@@ -15,7 +15,8 @@ This is the current API reference for the supported local GoodQ4All runtime.
 - OpenAPI docs: `GET /docs`
 - OpenAPI schema: `GET /openapi.json`
 - Supported surface: API + CLI + watchdog/runtime artifacts
-- Supported local UI surfaces are served by the API process under `/ui/*`
+- Read-only operator console: `GET /ui/operator_console_v1/`
+- Read-only envelope renderer: `GET /ui/justification_v1/`
 - `LAUNCH_GOODQ` does not start the API process by default
 
 ## Canonical Endpoint Families
@@ -27,6 +28,7 @@ Primary status and runtime summary endpoints defined in the active API surface:
 
 - `GET /api/status`
 - `GET /api/health/summary`
+- `GET /api/storage/summary`
 - `GET /api/engines`
 - `GET /api/queue`
 - `GET /api/gpu/stats`
@@ -35,6 +37,9 @@ Primary status and runtime summary endpoints defined in the active API surface:
 - `GET /api/runs/latest/evidence`
 - `GET /api/memory/stats`
 - `GET /api/read/envelope`
+- `GET /api/system/videos`
+- `GET /api/videos/{video_id}/timeline/full`
+- `GET /api/videos/{video_id}/scenes`
 - `GET /api/control-recurrence/reports`
 - `GET /api/control-recurrence/reports/latest`
 - `GET /api/control-recurrence/reports/trend`
@@ -68,6 +73,22 @@ Router-backed endpoint families mounted into the same process:
 - `/api/system`
 - `/api/control-recurrence`
 - `/api/videos/{video_id}/scenes`
+
+## Browser UI Surfaces
+
+The API process serves two read-only browser surfaces:
+
+- `/ui/operator_console_v1/` is the current operator console. It consumes the
+  read-only API and persisted artifacts for Flight Deck status, proof/evidence,
+  retrieval inspection, storage/runtime summaries, recurrence report readouts,
+  video inventory, and scene/timeline projections.
+- `/ui/justification_v1/` is the literal Justification Channel envelope
+  renderer.
+
+Neither surface is a control plane. They do not trigger ingestion, reindex
+memory, heal configs, mutate persistence, generate recurrence reports, or
+activate ControlAgent. API `GET /` intentionally remains JSON discovery rather
+than a browser shell.
 
 ## Discovery Surfaces
 

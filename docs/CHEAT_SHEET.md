@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-03-19 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-19 -->
 
 # GoodQ4All Cheat Sheet
 
@@ -57,6 +57,7 @@ Only valid when the API process is running:
 - OpenAPI docs: `http://127.0.0.1:30000/docs`
 - Health summary: `http://127.0.0.1:30000/api/health/summary`
 - Status: `http://127.0.0.1:30000/api/status`
+- Operator console: `http://127.0.0.1:30000/ui/operator_console_v1/`
 
 ## Key Paths
 
@@ -64,12 +65,17 @@ Only valid when the API process is running:
 - Processing: `<GOODQ_DATA_ROOT>\GoodQ_Data\epochs\<epoch>\processing\`
 - Logs: `<GOODQ_DATA_ROOT>\GoodQ_Data\logs\`
 
-## Important Note
+## UI Boundary
 
-GoodQ4All does not currently ship a production operator dashboard. Use the
-read-only Justification Channel at `ui/justification_v1/` for truth-layer UI
-inspection; operational control remains API docs, CLI, watchdog, manifests,
-and logs.
+GoodQ4All ships a local read-only operator console at
+`ui/operator_console_v1/`. Use it for Flight Deck status, proof/evidence,
+retrieval inspection, storage/runtime summaries, recurrence readouts, video
+inventory, and scene/timeline projections.
+
+This console is observer-only: no ingestion trigger, no reindex, no config
+healing, no persistence mutation, no report generation, and no ControlAgent
+activation. The older Justification Channel at `ui/justification_v1/` remains
+the literal envelope renderer.
 
 ## Related Docs
 

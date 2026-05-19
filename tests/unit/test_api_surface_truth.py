@@ -101,10 +101,18 @@ def _sample_temporal_index() -> dict:
         "segments_with_interaction_dominance": 1,
         "segments_with_conversation_owner": 1,
         "segments_with_speaker_aligned_mentions": 1,
+        "segments_with_scene_context_llm": 1,
+        "segments_with_scene_context_epistemic": 1,
+        "segments_with_scene_context_arbitration": 1,
         "top_candidate_visible_people": [{"entity": "anonymous_person_1", "type": "PERSON", "count": 1}],
         "top_interaction_dominance": [{"speaker_id": "SPEAKER_00", "count": 1}],
         "top_conversation_owners": [{"entity": "jerry", "type": "PERSON", "count": 1}],
         "top_speaker_aligned_mentions": [{"entity": "jerry", "type": "PERSON", "count": 1}],
+        "top_scene_context_tags": [{"tag": "planning", "count": 1}],
+        "top_scene_context_epistemic_states": [{"state": "supported", "count": 1}],
+        "top_scene_context_epistemic_dominant_evidence": [{"evidence": "mixed", "count": 1}],
+        "top_scene_context_arbitration_resolved_by": [{"resolved_by": "mixed", "count": 1}],
+        "top_scene_context_arbitration_unresolved_axes": [{"axis": "identity", "count": 1}],
         "speaker_aligned_mention_variant_groups": [
             {
                 "group_key": "person::jerry seinfeld",
@@ -194,6 +202,11 @@ def _sample_temporal_index() -> dict:
                 "speaker_voice_signature_count": 1,
                 "speaker_voice_signature_meta": {"status": "ok", "emitted": 1},
                 "audio_emotion": "fear",
+                "clap_meta": {
+                    "status": "ok",
+                    "faiss_id": 2602,
+                    "model": "laion/clap-htsat-unfused",
+                },
                 "sentiment": {"label": "negative", "score": 0.82},
                 "sentiment_label": "negative",
                 "sentiment_score": 0.82,
@@ -208,6 +221,14 @@ def _sample_temporal_index() -> dict:
                     {"text": "trumpet", "type": "OBJECT", "source": "caption"},
                     {"text": "music", "type": "CONCEPT", "source": "tagger"},
                 ],
+                "scene_context_llm": {
+                    "narrative_summary": "A young musician performs indoors during a dated family recording.",
+                    "context_tags": ["performance", "music"],
+                    "activity_description": "Trumpet performance",
+                    "source": "scene_context_llm",
+                },
+                "scene_context_epistemic": {"state": "supported", "dominant_evidence": "mixed"},
+                "scene_context_arbitration": {"resolved_by": "mixed", "unresolved_axes": ["identity"]},
                 "audio_emotion_scores": {"neutral": 0.48, "calm": 0.31, "sad": 0.21},
                 "content_state": "signal",
                 "candidate_visible_people": [{"name": "anonymous_person_1"}],
@@ -279,7 +300,20 @@ def test_list_scenes_surfaces_persisted_audio_truth(monkeypatch: pytest.MonkeyPa
         {"text": "trumpet", "type": "OBJECT", "source": "caption"},
         {"text": "music", "type": "CONCEPT", "source": "tagger"},
     ]
+    assert scene.scene_context_llm == {
+        "narrative_summary": "A young musician performs indoors during a dated family recording.",
+        "context_tags": ["performance", "music"],
+        "activity_description": "Trumpet performance",
+        "source": "scene_context_llm",
+    }
+    assert scene.scene_context_epistemic == {"state": "supported", "dominant_evidence": "mixed"}
+    assert scene.scene_context_arbitration == {"resolved_by": "mixed", "unresolved_axes": ["identity"]}
     assert scene.audio_emotion_scores == {"neutral": 0.48, "calm": 0.31, "sad": 0.21}
+    assert scene.clap_meta == {
+        "status": "ok",
+        "faiss_id": 2602,
+        "model": "laion/clap-htsat-unfused",
+    }
     assert scene.content_state == "signal"
     assert scene.candidate_visible_people == [{"name": "anonymous_person_1"}]
     assert scene.speaker_aligned_mentions == [{"text": "Jerry", "type": "PERSON", "count": 1}]
@@ -327,10 +361,18 @@ def test_full_timeline_surfaces_persisted_audio_truth(monkeypatch: pytest.Monkey
         "segments_with_interaction_dominance": 1,
         "segments_with_conversation_owner": 1,
         "segments_with_speaker_aligned_mentions": 1,
+        "segments_with_scene_context_llm": 1,
+        "segments_with_scene_context_epistemic": 1,
+        "segments_with_scene_context_arbitration": 1,
         "top_candidate_visible_people": [{"entity": "anonymous_person_1", "type": "PERSON", "count": 1}],
         "top_interaction_dominance": [{"speaker_id": "SPEAKER_00", "count": 1}],
         "top_conversation_owners": [{"entity": "jerry", "type": "PERSON", "count": 1}],
         "top_speaker_aligned_mentions": [{"entity": "jerry", "type": "PERSON", "count": 1}],
+        "top_scene_context_tags": [{"tag": "planning", "count": 1}],
+        "top_scene_context_epistemic_states": [{"state": "supported", "count": 1}],
+        "top_scene_context_epistemic_dominant_evidence": [{"evidence": "mixed", "count": 1}],
+        "top_scene_context_arbitration_resolved_by": [{"resolved_by": "mixed", "count": 1}],
+        "top_scene_context_arbitration_unresolved_axes": [{"axis": "identity", "count": 1}],
         "speaker_aligned_mention_variant_groups": [
             {
                 "group_key": "person::jerry seinfeld",
@@ -420,7 +462,20 @@ def test_full_timeline_surfaces_persisted_audio_truth(monkeypatch: pytest.Monkey
         {"text": "trumpet", "type": "OBJECT", "source": "caption"},
         {"text": "music", "type": "CONCEPT", "source": "tagger"},
     ]
+    assert segment.scene_context_llm == {
+        "narrative_summary": "A young musician performs indoors during a dated family recording.",
+        "context_tags": ["performance", "music"],
+        "activity_description": "Trumpet performance",
+        "source": "scene_context_llm",
+    }
+    assert segment.scene_context_epistemic == {"state": "supported", "dominant_evidence": "mixed"}
+    assert segment.scene_context_arbitration == {"resolved_by": "mixed", "unresolved_axes": ["identity"]}
     assert segment.audio_emotion_scores == {"neutral": 0.48, "calm": 0.31, "sad": 0.21}
+    assert segment.clap_meta == {
+        "status": "ok",
+        "faiss_id": 2602,
+        "model": "laion/clap-htsat-unfused",
+    }
     assert segment.content_state == "signal"
     assert segment.candidate_visible_people == [{"name": "anonymous_person_1"}]
     assert segment.speaker_aligned_mentions == [{"text": "Jerry", "type": "PERSON", "count": 1}]

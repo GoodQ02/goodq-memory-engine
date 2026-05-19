@@ -366,6 +366,11 @@ def test_harmonizer_rolls_up_audio_context_surfaces(tmp_path: Path, monkeypatch)
                             "min_voiced_seconds": 4.0,
                             "min_segment_count": 2,
                         },
+                        "clap_meta": {
+                            "status": "ok",
+                            "faiss_id": 2602,
+                            "model": "laion/clap-htsat-unfused",
+                        },
                     },
                     "keyframe": {
                         "caption": "a girl playing a trumpet in a room",
@@ -423,6 +428,11 @@ def test_harmonizer_rolls_up_audio_context_surfaces(tmp_path: Path, monkeypatch)
         "min_voiced_seconds": 4.0,
         "min_segment_count": 2,
     }
+    assert segment["clap_meta"] == {
+        "status": "ok",
+        "faiss_id": 2602,
+        "model": "laion/clap-htsat-unfused",
+    }
 
     assert temporal_index["segments_with_music_events"] == 1
     assert temporal_index["segments_with_time_hints"] == 1
@@ -453,6 +463,11 @@ def test_harmonizer_rolls_up_audio_context_surfaces(tmp_path: Path, monkeypatch)
         "attempted_speakers": 1,
         "min_voiced_seconds": 4.0,
         "min_segment_count": 2,
+    }
+    assert persisted_scene["clap_meta"] == {
+        "status": "ok",
+        "faiss_id": 2602,
+        "model": "laion/clap-htsat-unfused",
     }
 
 

@@ -2088,6 +2088,7 @@ def _persist_harmonized_scene_fields(
         "metadata_time_hints",
         "audio_emotion",
         "audio_emotion_scores",
+        "clap_meta",
         "sentiment",
         "sentiment_label",
         "sentiment_score",
@@ -2715,6 +2716,7 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
         metadata_time_hints = _resolve_scene_metadata_time_hints(scene_audio_payload)
         audio_emotion, audio_emotion_scores = _resolve_audio_emotion(scene_audio_payload)
         sentiment, sentiment_label, sentiment_score = _resolve_audio_sentiment(scene_audio_payload)
+        clap_meta = scene_audio_payload.get('clap_meta') if isinstance(scene_audio_payload.get('clap_meta'), dict) else None
         speaker_voice_signatures = scene_audio_payload.get('speaker_voice_signatures') if isinstance(scene_audio_payload.get('speaker_voice_signatures'), list) else []
         candidate_visibility = _derive_candidate_visible_people(
             entity_channels=entity_channels,
@@ -2783,6 +2785,7 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
             'metadata_time_hints': metadata_time_hints,
             'audio_emotion': audio_emotion,
             'audio_emotion_scores': audio_emotion_scores,
+            'clap_meta': clap_meta,
             'sentiment': sentiment,
             'sentiment_label': sentiment_label,
             'sentiment_score': sentiment_score,

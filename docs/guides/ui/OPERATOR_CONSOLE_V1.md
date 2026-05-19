@@ -50,9 +50,10 @@ certainty. A signal counts as observed only when the existing API reports a
 sanitized artifact, status, or count that proves the UI row.
 
 The provenance gaps card must remain conservative. Current-run Qdrant audio
-proof is shown as `Not exposed` until the API returns a current-run audio proof
-contract. FAISS audio counts may be displayed as count-only signals, but they
-must not be labeled as current-run proof.
+proof must come from the runtime audio proof contract. Scene-level `clap_meta`
+is commit metadata only and must not be labeled as current-run Qdrant proof.
+FAISS audio counts may be displayed as count-only signals, but they must not be
+labeled as current-run proof.
 
 Proof Panel actions are navigation only:
 
@@ -127,11 +128,13 @@ The inspector renders:
 - Selected scene facts: scene id, time span, continuity key, speaker evidence,
   emotion/sentiment, and normalization state.
 - Scene memory evidence: memory tags, tag provenance, time hints, visual
-  caption, OCR text, OCR date candidates, and scene-present entities when the
-  timeline API exposes them.
+  caption, OCR text, OCR date candidates, CLAP commit metadata, and
+  scene context summaries, and scene-present entities when the timeline API
+  exposes them.
 - Modality coverage: visual frame presence, visual embedding ids, visual
   caption, OCR text, object detections, transcript text, audio chunks, speaker
-  identity, visible people, aligned mentions, sentiment, and temporal hints.
+  identity, visible people, aligned mentions, sentiment, audio emotion review,
+  CLAP commit metadata, scene context LLM evidence, and temporal hints.
 - Schema projection: scalar/array/object/empty field counts plus expected-field
   presence for the current timeline row.
 

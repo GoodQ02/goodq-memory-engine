@@ -52,7 +52,11 @@ class SceneResponse(BaseModel):
     tags: List[str] = Field(default_factory=list)
     tag_details: List[Dict[str, Any]] = Field(default_factory=list)
     scene_present_entities: List[Dict[str, Any]] = Field(default_factory=list)
+    scene_context_llm: Optional[Dict[str, Any]] = None
+    scene_context_epistemic: Optional[Dict[str, Any]] = None
+    scene_context_arbitration: Optional[Dict[str, Any]] = None
     audio_emotion_scores: Optional[Dict[str, Any]] = None
+    clap_meta: Optional[Dict[str, Any]] = None
     content_state: Optional[str] = None
     candidate_visible_people: List[Dict[str, Any]] = Field(default_factory=list)
     speaker_aligned_mentions: List[Dict[str, Any]] = Field(default_factory=list)
@@ -124,7 +128,11 @@ class TimelineSegment(BaseModel):
     tags: List[str] = Field(default_factory=list)
     tag_details: List[Dict[str, Any]] = Field(default_factory=list)
     scene_present_entities: List[Dict[str, Any]] = Field(default_factory=list)
+    scene_context_llm: Optional[Dict[str, Any]] = None
+    scene_context_epistemic: Optional[Dict[str, Any]] = None
+    scene_context_arbitration: Optional[Dict[str, Any]] = None
     audio_emotion_scores: Optional[Dict[str, Any]] = None
+    clap_meta: Optional[Dict[str, Any]] = None
     content_state: Optional[str] = None
     candidate_visible_people: List[Dict[str, Any]] = Field(default_factory=list)
     speaker_aligned_mentions: List[Dict[str, Any]] = Field(default_factory=list)

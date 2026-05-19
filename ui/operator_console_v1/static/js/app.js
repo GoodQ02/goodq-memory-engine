@@ -1801,6 +1801,7 @@
 
   function segmentSummary(segment) {
     const candidates = [
+      segment.scene_context_llm && segment.scene_context_llm.narrative_summary,
       segment.scene_context_llm && segment.scene_context_llm.summary,
       segment.transcript,
       segment.visual_caption,
@@ -1965,6 +1966,26 @@
     return `${text} (${type})${source}`;
   }
 
+  function formatSceneContextRows(context) {
+    if (!context || typeof context !== "object" || Array.isArray(context)) return [];
+    const rows = [];
+    const summary = context.narrative_summary || context.summary;
+    if (valueObserved(summary)) rows.push(`summary: ${safeString(summary, "scene_context_summary")}`);
+    if (valueObserved(context.activity_description)) {
+      rows.push(`activity: ${safeString(context.activity_description, "scene_context_activity")}`);
+    }
+    if (valueObserved(context.emotional_arc)) {
+      rows.push(`arc: ${safeString(context.emotional_arc, "scene_context_arc")}`);
+    }
+    const tags = []
+      .concat(stringList(context.primary_tags))
+      .concat(stringList(context.contextual_tags))
+      .concat(stringList(context.context_tags))
+      .concat(stringList(context.structural_tags));
+    if (tags.length) rows.push(`tags: ${[...new Set(tags)].slice(0, 8).join(", ")}`);
+    return rows;
+  }
+
   function numericDuration(segment) {
     const start = Number(segment.start);
     const end = Number(segment.end);
@@ -2045,6 +2066,10 @@
     const memoryTags = stringList(segment.tags);
     const tagDetails = Array.isArray(segment.tag_details) ? segment.tag_details : [];
     const sceneEntities = Array.isArray(segment.scene_present_entities) ? segment.scene_present_entities : [];
+    const sceneContext = segment.scene_context_llm && typeof segment.scene_context_llm === "object" && !Array.isArray(segment.scene_context_llm)
+      ? segment.scene_context_llm
+      : {};
+    const sceneContextRows = formatSceneContextRows(sceneContext);
     const visualCaptionRows = valueObserved(segment.visual_caption)
       ? [safeString(segment.visual_caption, "visual_caption")]
       : [];
@@ -2053,6 +2078,18 @@
       : [];
     const ocrDateCandidates = stringList(segment.ocr_date_candidates, 8);
     const audioScoreCount = objectCount(segment.audio_emotion_scores);
+    const clapMeta = segment.clap_meta && typeof segment.clap_meta === "object" && !Array.isArray(segment.clap_meta)
+      ? segment.clap_meta
+      : {};
+    const clapCommitObserved = valueObserved(clapMeta.status);
+    const clapCommitRows = clapCommitObserved
+      ? [
+          `status=${safeString(clapMeta.status, "clap_status")}`,
+          clapMeta.faiss_id !== undefined && clapMeta.faiss_id !== null ? `faiss_id=${safeString(clapMeta.faiss_id, "clap_faiss_id")}` : null,
+          clapMeta.model ? `model=${safeString(clapMeta.model, "clap_model")}` : null,
+          "commit metadata only; not current-run Qdrant proof",
+        ].filter(Boolean)
+      : [];
     const disagreementCount = arrayCount(segment.transcript_entity_disagreements);
     const timeHintCount = objectCount(segment.time_hints);
     const timeHintValues = flattenTimeHints(segment.time_hints);
@@ -2101,6 +2138,18 @@
     appendSceneEvidenceRows(evidence, "Visual caption", visualCaptionRows, "No visual caption exposed");
     appendSceneEvidenceRows(evidence, "OCR text", ocrTextRows, "No OCR text exposed");
     appendSceneChipGroup(evidence, "OCR date candidates", ocrDateCandidates, "No OCR date candidates exposed");
+    appendSceneEvidenceRows(
+      evidence,
+      "CLAP commit status",
+      clapCommitRows,
+      "No CLAP commit metadata exposed"
+    );
+    appendSceneEvidenceRows(
+      evidence,
+      "Scene context summary",
+      sceneContextRows,
+      "No scene_context_llm exposed"
+    );
     appendSceneEvidenceRows(
       evidence,
       "Scene entities",
@@ -2157,6 +2206,20 @@
       valueObserved(segment.audio_emotion) || audioScoreCount > 0,
       audioEmotionNote(segment)
     );
+    appendSceneSignal(
+      modalityList,
+      "CLAP commit metadata",
+      clapCommitObserved,
+      clapCommitObserved
+        ? `status ${safeString(clapMeta.status, "clap_status")}; commit metadata only; not current-run Qdrant proof`
+        : "No CLAP commit metadata exposed"
+    );
+    appendSceneSignal(
+      modalityList,
+      "Scene context LLM",
+      sceneContextRows.length > 0 || valueObserved(segment.scene_context_epistemic) || valueObserved(segment.scene_context_arbitration),
+      sceneContextRows.length > 0 ? sceneContextRows[0] : "No scene_context_llm evidence exposed"
+    );
     appendSceneSignal(modalityList, "Temporal hints", timeHintCount > 0, `${timeHintCount} hint fields`);
     if (disagreementCount > 0) {
       appendSceneSignal(modalityList, "Entity disagreements", true, `${disagreementCount} disagreement rows`);
@@ -2202,6 +2265,10 @@
       "sentiment_label",
       "audio_emotion",
       "audio_emotion_scores",
+      "clap_meta",
+      "scene_context_llm",
+      "scene_context_epistemic",
+      "scene_context_arbitration",
     ];
     const schemaList = document.createElement("div");
     schemaList.className = "schema-field-list";

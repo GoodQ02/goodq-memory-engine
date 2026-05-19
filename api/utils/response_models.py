@@ -45,10 +45,18 @@ class SceneResponse(BaseModel):
     speaker_voice_signature_count: Optional[int] = None
     speaker_voice_signature_meta: Optional[Dict[str, Any]] = None
     audio_emotion: Optional[str] = None
+    audio_emotion_scores: Optional[Dict[str, Any]] = None
+    clap_meta: Optional[Dict[str, Any]] = None
     sentiment: Optional[Dict[str, Any]] = None
     sentiment_label: Optional[str] = None
     sentiment_score: Optional[float] = None
     time_hints: Optional[Dict[str, Any]] = None
+    tags: List[str] = Field(default_factory=list)
+    tag_details: List[Dict[str, Any]] = Field(default_factory=list)
+    scene_present_entities: List[Dict[str, Any]] = Field(default_factory=list)
+    scene_context_llm: Optional[Dict[str, Any]] = None
+    scene_context_epistemic: Optional[Dict[str, Any]] = None
+    scene_context_arbitration: Optional[Dict[str, Any]] = None
     content_state: Optional[str] = None
     candidate_visible_people: List[Dict[str, Any]] = Field(default_factory=list)
     speaker_aligned_mentions: List[Dict[str, Any]] = Field(default_factory=list)
@@ -113,10 +121,18 @@ class TimelineSegment(BaseModel):
     speaker_voice_signature_count: Optional[int] = None
     speaker_voice_signature_meta: Optional[Dict[str, Any]] = None
     audio_emotion: Optional[str] = None
+    audio_emotion_scores: Optional[Dict[str, Any]] = None
+    clap_meta: Optional[Dict[str, Any]] = None
     sentiment: Optional[Dict[str, Any]] = None
     sentiment_label: Optional[str] = None
     sentiment_score: Optional[float] = None
     time_hints: Optional[Dict[str, Any]] = None
+    tags: List[str] = Field(default_factory=list)
+    tag_details: List[Dict[str, Any]] = Field(default_factory=list)
+    scene_present_entities: List[Dict[str, Any]] = Field(default_factory=list)
+    scene_context_llm: Optional[Dict[str, Any]] = None
+    scene_context_epistemic: Optional[Dict[str, Any]] = None
+    scene_context_arbitration: Optional[Dict[str, Any]] = None
     content_state: Optional[str] = None
     candidate_visible_people: List[Dict[str, Any]] = Field(default_factory=list)
     speaker_aligned_mentions: List[Dict[str, Any]] = Field(default_factory=list)

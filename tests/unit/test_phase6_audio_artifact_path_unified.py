@@ -349,6 +349,8 @@ def test_harmonizer_rolls_up_audio_context_surfaces(tmp_path: Path, monkeypatch)
                         "segments": [{"start": 0.0, "end": 1.0, "text": "The crowd is going wild on Friday night."}],
                         "emotion": "neutral",
                         "emotion_scores": {"neutral": 0.9, "joy": 0.1},
+                        "sentiment": {"label": "POSITIVE", "score": 0.91},
+                        "sentiment_meta": {"engine": "hf"},
                         "diarization_status": "success",
                         "diarization_error": None,
                         "diarization_note": "wsl_unified",
@@ -398,6 +400,9 @@ def test_harmonizer_rolls_up_audio_context_surfaces(tmp_path: Path, monkeypatch)
     assert segment["metadata_time_hints"] == metadata_time_hints
     assert segment["audio_emotion"] == "neutral"
     assert segment["audio_emotion_scores"] == {"neutral": 0.9, "joy": 0.1}
+    assert segment["sentiment"] == {"label": "POSITIVE", "score": 0.91}
+    assert segment["sentiment_label"] == "POSITIVE"
+    assert segment["sentiment_score"] == 0.91
     assert segment["diarization_status"] == "success"
     assert segment["diarization_error"] is None
     assert segment["diarization_note"] == "wsl_unified"
@@ -425,6 +430,9 @@ def test_harmonizer_rolls_up_audio_context_surfaces(tmp_path: Path, monkeypatch)
 
     persisted_manifest = json.loads(scene_manifest_path.read_text(encoding="utf-8"))
     persisted_scene = persisted_manifest["scenes"][0]
+    assert persisted_scene["sentiment"] == {"label": "POSITIVE", "score": 0.91}
+    assert persisted_scene["sentiment_label"] == "POSITIVE"
+    assert persisted_scene["sentiment_score"] == 0.91
     assert persisted_scene["speaker_voice_signature_count"] == 1
     assert persisted_scene["diarization_status"] == "success"
     assert persisted_scene["diarization_error"] is None

@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE_NOTE -->
-<!-- DOC_LAST_VERIFIED: 2026-05-18 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-19 -->
 
 # GoodQ4All Operator Console v1
 
@@ -126,9 +126,12 @@ The inspector renders:
 
 - Selected scene facts: scene id, time span, continuity key, speaker evidence,
   emotion/sentiment, and normalization state.
-- Modality coverage: visual frame presence, visual embedding ids, object
-  detections, transcript text, audio chunks, speaker identity, visible people,
-  aligned mentions, sentiment, and temporal hints.
+- Scene memory evidence: memory tags, tag provenance, time hints, visual
+  caption, OCR text, OCR date candidates, and scene-present entities when the
+  timeline API exposes them.
+- Modality coverage: visual frame presence, visual embedding ids, visual
+  caption, OCR text, object detections, transcript text, audio chunks, speaker
+  identity, visible people, aligned mentions, sentiment, and temporal hints.
 - Schema projection: scalar/array/object/empty field counts plus expected-field
   presence for the current timeline row.
 

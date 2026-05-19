@@ -2080,6 +2080,9 @@ def _persist_harmonized_scene_fields(
         "visible_person_object_count",
         "visible_anonymous_people_count",
         "visible_person_confidence",
+        "visual_caption",
+        "ocr_text",
+        "ocr_date_candidates",
         "music_events",
         "time_hints",
         "metadata_time_hints",
@@ -2683,6 +2686,29 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
             speaker_ids = []
 
         # Prefer live scene payload truth; fallback to the legacy Phase 6 object artifact.
+        keyframe_payload = scene.get('keyframe') if isinstance(scene.get('keyframe'), dict) else {}
+        visual_caption = (
+            scene.get('visual_caption')
+            or scene.get('caption')
+            or keyframe_payload.get('caption')
+            or ''
+        )
+        ocr_text = scene.get('ocr_text') or keyframe_payload.get('ocr_text') or ''
+        raw_ocr_date_candidates = (
+            scene.get('ocr_date_candidates')
+            or scene.get('date_candidates')
+            or keyframe_payload.get('date_candidates')
+            or []
+        )
+        if isinstance(raw_ocr_date_candidates, list):
+            ocr_date_candidates = [
+                str(candidate).strip()
+                for candidate in raw_ocr_date_candidates
+                if str(candidate or '').strip()
+            ]
+        else:
+            candidate_text = str(raw_ocr_date_candidates or '').strip()
+            ocr_date_candidates = [candidate_text] if candidate_text else []
         scene_objects = _resolve_scene_objects(scene, scene_id, objects_data)
         music_events = _resolve_scene_music_events(scene_audio_payload)
         time_hints = _resolve_scene_time_hints(scene_audio_payload)
@@ -2715,6 +2741,9 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
             'dino_id': scene.get('dino_id'),
             'representative_frame': scene.get('representative_frame'),
             'frame_count': scene.get('frame_count', 0),
+            'visual_caption': visual_caption,
+            'ocr_text': ocr_text,
+            'ocr_date_candidates': ocr_date_candidates,
             
             # Audio alignment
             'audio_chunks': audio_chunk_ids,

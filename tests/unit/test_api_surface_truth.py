@@ -186,6 +186,9 @@ def _sample_temporal_index() -> dict:
                 "clip_id": "clip_001",
                 "dino_id": "dino_001",
                 "representative_frame": "frame_0001.jpg",
+                "visual_caption": "a girl playing a trumpet in a room",
+                "ocr_text": "DEC 16 2002",
+                "ocr_date_candidates": ["DEC 16 2002"],
                 "diarization_status": "success",
                 "emotion_status": "success",
                 "speaker_voice_signature_count": 1,
@@ -258,6 +261,9 @@ def test_list_scenes_surfaces_persisted_audio_truth(monkeypatch: pytest.MonkeyPa
     assert scene.emotion_status == "success"
     assert scene.speaker_voice_signature_count == 1
     assert scene.speaker_voice_signature_meta == {"status": "ok", "emitted": 1}
+    assert scene.visual_caption == "a girl playing a trumpet in a room"
+    assert scene.ocr_text == "DEC 16 2002"
+    assert scene.ocr_date_candidates == ["DEC 16 2002"]
     assert scene.audio_emotion == "fear"
     assert scene.sentiment == {"label": "negative", "score": 0.82}
     assert scene.sentiment_label == "negative"
@@ -396,6 +402,9 @@ def test_full_timeline_surfaces_persisted_audio_truth(monkeypatch: pytest.Monkey
     assert segment.emotion_status == "success"
     assert segment.speaker_voice_signature_count == 1
     assert segment.speaker_voice_signature_meta == {"status": "ok", "emitted": 1}
+    assert segment.visual_caption == "a girl playing a trumpet in a room"
+    assert segment.ocr_text == "DEC 16 2002"
+    assert segment.ocr_date_candidates == ["DEC 16 2002"]
     assert segment.audio_emotion == "fear"
     assert segment.sentiment == {"label": "negative", "score": 0.82}
     assert segment.sentiment_label == "negative"

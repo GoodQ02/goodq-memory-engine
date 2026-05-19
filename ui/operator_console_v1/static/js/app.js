@@ -1803,6 +1803,7 @@
     const candidates = [
       segment.scene_context_llm && segment.scene_context_llm.summary,
       segment.transcript,
+      segment.visual_caption,
       segment.caption,
       segment.full_transcript,
       segment.content_state,
@@ -2044,6 +2045,13 @@
     const memoryTags = stringList(segment.tags);
     const tagDetails = Array.isArray(segment.tag_details) ? segment.tag_details : [];
     const sceneEntities = Array.isArray(segment.scene_present_entities) ? segment.scene_present_entities : [];
+    const visualCaptionRows = valueObserved(segment.visual_caption)
+      ? [safeString(segment.visual_caption, "visual_caption")]
+      : [];
+    const ocrTextRows = valueObserved(segment.ocr_text)
+      ? [safeString(segment.ocr_text, "ocr_text")]
+      : [];
+    const ocrDateCandidates = stringList(segment.ocr_date_candidates, 8);
     const audioScoreCount = objectCount(segment.audio_emotion_scores);
     const disagreementCount = arrayCount(segment.transcript_entity_disagreements);
     const timeHintCount = objectCount(segment.time_hints);
@@ -2090,6 +2098,9 @@
       "No tag provenance exposed"
     );
     appendSceneChipGroup(evidence, "Time hints", timeHintValues.slice(0, 6), "No time hints exposed");
+    appendSceneEvidenceRows(evidence, "Visual caption", visualCaptionRows, "No visual caption exposed");
+    appendSceneEvidenceRows(evidence, "OCR text", ocrTextRows, "No OCR text exposed");
+    appendSceneChipGroup(evidence, "OCR date candidates", ocrDateCandidates, "No OCR date candidates exposed");
     appendSceneEvidenceRows(
       evidence,
       "Scene entities",
@@ -2112,6 +2123,18 @@
       "Visual embeddings",
       valueObserved(segment.clip_id) || valueObserved(segment.dino_id),
       `CLIP ${valueObserved(segment.clip_id) ? "observed" : "missing"}; DINO ${valueObserved(segment.dino_id) ? "observed" : "missing"}`
+    );
+    appendSceneSignal(
+      modalityList,
+      "Visual caption",
+      valueObserved(segment.visual_caption),
+      valueObserved(segment.visual_caption) ? safeString(segment.visual_caption, "visual_caption") : "No visual caption exposed"
+    );
+    appendSceneSignal(
+      modalityList,
+      "OCR text",
+      valueObserved(segment.ocr_text),
+      valueObserved(segment.ocr_text) ? safeString(segment.ocr_text, "ocr_text") : "No OCR text exposed"
     );
     appendSceneSignal(modalityList, "Object detections", arrayCount(segment.objects) > 0, `${arrayCount(segment.objects)} objects`);
     appendSceneSignal(modalityList, "Transcript text", valueObserved(segment.transcript || segment.full_transcript), "Scene-level speech text");
@@ -2162,6 +2185,9 @@
       "end",
       "transcript",
       "representative_frame",
+      "visual_caption",
+      "ocr_text",
+      "ocr_date_candidates",
       "clip_id",
       "dino_id",
       "speaker_ids",

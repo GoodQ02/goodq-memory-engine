@@ -27,6 +27,9 @@ class SceneResponse(BaseModel):
     duration: float
     representative_frame: Optional[str] = None
     frame_paths: List[str] = Field(default_factory=list)
+    visual_caption: Optional[str] = None
+    ocr_text: Optional[str] = None
+    ocr_date_candidates: List[str] = Field(default_factory=list)
     clip_id: Optional[str] = None
     dino_id: Optional[str] = None
     keywords: List[str] = Field(default_factory=list)
@@ -103,6 +106,9 @@ class TimelineSegment(BaseModel):
     clip_id: Optional[str] = None
     dino_id: Optional[str] = None
     representative_frame: Optional[str] = None
+    visual_caption: Optional[str] = None
+    ocr_text: Optional[str] = None
+    ocr_date_candidates: List[str] = Field(default_factory=list)
     speaker_count: Optional[int] = None
     dominant_speaker_id: Optional[str] = None
     continuity_key: Optional[str] = None

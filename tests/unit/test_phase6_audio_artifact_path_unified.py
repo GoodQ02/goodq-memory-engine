@@ -367,6 +367,11 @@ def test_harmonizer_rolls_up_audio_context_surfaces(tmp_path: Path, monkeypatch)
                             "min_segment_count": 2,
                         },
                     },
+                    "keyframe": {
+                        "caption": "a girl playing a trumpet in a room",
+                        "ocr_text": "DEC 16 2002",
+                        "date_candidates": ["DEC 16 2002"],
+                    },
                 }
             ],
         },
@@ -398,6 +403,9 @@ def test_harmonizer_rolls_up_audio_context_surfaces(tmp_path: Path, monkeypatch)
     assert segment["music_events"] == music_events
     assert segment["time_hints"] == time_hints
     assert segment["metadata_time_hints"] == metadata_time_hints
+    assert segment["visual_caption"] == "a girl playing a trumpet in a room"
+    assert segment["ocr_text"] == "DEC 16 2002"
+    assert segment["ocr_date_candidates"] == ["DEC 16 2002"]
     assert segment["audio_emotion"] == "neutral"
     assert segment["audio_emotion_scores"] == {"neutral": 0.9, "joy": 0.1}
     assert segment["sentiment"] == {"label": "POSITIVE", "score": 0.91}

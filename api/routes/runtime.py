@@ -16,7 +16,7 @@ import sys
 import time
 from collections import Counter, deque
 from datetime import datetime
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any, Dict, List
 from urllib.parse import urlparse
 
@@ -706,6 +706,50 @@ def _storage_row(name: str, label: str, path: Path) -> Dict[str, Any]:
     return row
 
 
+def _safe_name_label(value: Any) -> Any:
+    if not isinstance(value, str):
+        return value
+
+    raw = value.strip()
+    if not raw:
+        return value
+
+    windows_name = PureWindowsPath(raw).name
+    posix_name = PurePosixPath(raw).name
+    name = windows_name if len(windows_name) <= len(posix_name) else posix_name
+    return name or value
+
+
+def _path_redacted_label(value: Any) -> str | None:
+    if isinstance(value, str) and value.strip():
+        return "<local-only>"
+    return None
+
+
+def _latest_episode_preview(episode: Any) -> Dict[str, Any] | None:
+    if not isinstance(episode, dict):
+        return None
+
+    artifact_count = 0
+    artifact_paths_redacted = False
+    for key in ("canonical_episode_artifacts", "files_read"):
+        values = episode.get(key)
+        if isinstance(values, list):
+            artifact_count += len(values)
+            artifact_paths_redacted = artifact_paths_redacted or bool(values)
+
+    return {
+        "episode": _safe_name_label(episode.get("episode")),
+        "status": episode.get("status"),
+        "scene_count": episode.get("scene_count"),
+        "phase6_complete": episode.get("phase6_complete"),
+        "qdrant_ok": episode.get("qdrant_ok"),
+        "ts_utc": episode.get("ts_utc"),
+        "artifact_count": artifact_count,
+        "artifact_paths_redacted": artifact_paths_redacted,
+    }
+
+
 @router.get("/api/storage/summary")
 def get_storage_summary() -> Dict[str, Any]:
     """Read-only storage growth surface with redacted local paths."""
@@ -844,13 +888,16 @@ def _latest_run_preview(limit: int = 12) -> Dict[str, Any]:
     header = summary.get("run_header") if isinstance(summary, dict) else {}
     overview = summary.get("file_job_overview") if isinstance(summary, dict) else {}
     outcome = summary.get("outcome_classification") if isinstance(summary, dict) else {}
+    latest_episode = _latest_episode_preview(summary.get("latest_episode"))
 
     return {
         "available": True,
         "run_id": header.get("run_id"),
         "status": outcome.get("status") or header.get("status"),
         "epoch": header.get("epoch"),
-        "source_dir": header.get("source_dir"),
+        "source_dir": _path_redacted_label(header.get("source_dir")),
+        "source_dir_redacted": bool(header.get("source_dir")),
+        "raw_paths": "redacted",
         "start_time": header.get("start_time"),
         "end_time": header.get("end_time"),
         "total_duration_seconds": header.get("total_duration_seconds"),
@@ -860,7 +907,7 @@ def _latest_run_preview(limit: int = 12) -> Dict[str, Any]:
         "episodes_running": overview.get("episodes_running"),
         "episodes_pending": overview.get("episodes_pending"),
         "scenes_processed": overview.get("scenes_processed"),
-        "latest_episode": summary.get("latest_episode"),
+        "latest_episode": latest_episode,
     }
 
 

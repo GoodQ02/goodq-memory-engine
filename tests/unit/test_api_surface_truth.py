@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import importlib.util
+import json
 import sys
 from pathlib import Path
 
@@ -216,6 +217,46 @@ def _sample_temporal_index() -> dict:
             }
         ],
     }
+
+
+def _model_payload(model):
+    if hasattr(model, "model_dump"):
+        return model.model_dump()
+    return model.dict()
+
+
+def test_scene_and_timeline_frame_surfaces_do_not_expose_local_paths(monkeypatch: pytest.MonkeyPatch) -> None:
+    temporal_index = _sample_temporal_index()
+    raw_frame = (
+        r"L:\_DATA\GoodQ_Data\processing\video_001\video\frames"
+        r"\scene_0101_frame_01.jpg"
+    )
+    temporal_index["segments"][0]["representative_frame"] = raw_frame
+    temporal_index["segments"][0]["frame_paths"] = [raw_frame]
+    loader = _FakeLoader(temporal_index)
+    monkeypatch.setattr(scenes_module, "get_data_loader", lambda: loader)
+    monkeypatch.setattr(timeline_module, "get_data_loader", lambda: loader)
+
+    scene = asyncio.run(scenes_module.list_scenes(video_id="video_001"))[0]
+    timeline_segment = asyncio.run(timeline_module.get_full_timeline(video_id="video_001")).segments[0]
+
+    for item in (scene, timeline_segment):
+        payload = _model_payload(item)
+        serialized = json.dumps(payload)
+        assert "L:" not in serialized
+        assert "C:" not in serialized
+        assert "_DATA" not in serialized
+        assert item.representative_frame == "/api/media/video/video_001/frame/scene_0101_frame_01.jpg"
+        assert getattr(item, "representative_frame_available", None) is True
+        assert getattr(item, "representative_frame_endpoint", None) == (
+            "/api/media/video/video_001/frame/scene_0101_frame_01.jpg"
+        )
+        assert getattr(item, "representative_frame_path_redacted", None) is True
+        assert getattr(item, "frame_endpoints", None) == [
+            "/api/media/video/video_001/frame/scene_0101_frame_01.jpg"
+        ]
+        assert getattr(item, "frame_path_count", None) == 1
+        assert getattr(item, "frame_paths_redacted", None) is True
 
 
 def test_list_scenes_surfaces_persisted_audio_truth(monkeypatch: pytest.MonkeyPatch) -> None:

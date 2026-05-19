@@ -9,6 +9,7 @@ from fastapi import APIRouter, HTTPException, Path as PathParam, Query
 
 from api.utils.response_models import SceneResponse
 from api.utils.loaders import DataLoader
+from api.utils.media_projection import frame_paths_projection, representative_frame_projection
 from retrieval.multimodal_search import MultimodalSearchEngine
 from steps.common.config_loader import load_configs
 
@@ -40,17 +41,19 @@ def _segment_object_labels(segment: dict) -> List[str]:
     return []
 
 
-def _build_scene_response(segment: dict) -> SceneResponse:
+def _build_scene_response(video_id: str, segment: dict) -> SceneResponse:
     """Project one persisted timeline segment into the stable scene API contract."""
     start = segment.get("start", 0.0)
     end = segment.get("end", 0.0)
+    frame_projection = representative_frame_projection(video_id, segment.get("representative_frame"))
+    frame_paths = frame_paths_projection(video_id, segment.get("frame_paths", []))
     return SceneResponse(
         scene_id=segment.get("scene_id", 0),
         start=start,
         end=end,
         duration=segment.get("duration", end - start),
-        representative_frame=segment.get("representative_frame"),
-        frame_paths=segment.get("frame_paths", []),
+        **frame_projection,
+        **frame_paths,
         visual_caption=segment.get("visual_caption"),
         ocr_text=segment.get("ocr_text"),
         ocr_date_candidates=segment.get("ocr_date_candidates", []),
@@ -137,7 +140,7 @@ async def list_scenes(
         
         scenes = []
         for segment in temporal_index.get('segments', []):
-            scenes.append(_build_scene_response(segment))
+            scenes.append(_build_scene_response(video_id, segment))
         
         return scenes
         
@@ -173,7 +176,7 @@ async def get_scene(
         # Find the scene
         for segment in temporal_index.get('segments', []):
             if segment.get('scene_id') == scene_id:
-                return _build_scene_response(segment)
+                return _build_scene_response(video_id, segment)
         
         raise HTTPException(status_code=404, detail=f"Scene not found: {scene_id}")
         
@@ -228,7 +231,12 @@ async def find_similar_scenes(
             scene_payload = scene_context or payload
             if not isinstance(scene_payload, dict):
                 continue
-            scenes.append(_build_scene_response(scene_payload))
+            result_video_id = (
+                scene_payload.get("video_id")
+                or (payload or {}).get("video_id")
+                or video_id
+            )
+            scenes.append(_build_scene_response(str(result_video_id), scene_payload))
 
         return scenes
         

@@ -20,6 +20,7 @@ from api.utils.response_models import (
     MutationPolicy,
 )
 from api.utils.loaders import DataLoader
+from api.utils.media_projection import thumbnail_projection
 
 logger = logging.getLogger(__name__)
 
@@ -172,12 +173,13 @@ async def list_videos():
         for video_id in video_ids:
             metadata = loader.get_video_metadata(video_id)
             
-            # Get thumbnail (representative frame from first scene)
-            thumbnail = None
+            # Get thumbnail projection from the first scene without exposing local paths.
+            thumbnail_reference = None
             temporal_index = loader.load_temporal_index(video_id)
             if temporal_index and temporal_index.get('segments'):
                 first_segment = temporal_index['segments'][0]
-                thumbnail = first_segment.get('representative_frame')
+                thumbnail_reference = first_segment.get('representative_frame')
+            projected_thumbnail = thumbnail_projection(video_id, thumbnail_reference)
             
             video_item = VideoListItem(
                 video_id=video_id,
@@ -189,7 +191,7 @@ async def list_videos():
                     if metadata.get('processed_date')
                     else None
                 ),
-                thumbnail=thumbnail
+                **projected_thumbnail,
             )
             videos.append(video_item)
         

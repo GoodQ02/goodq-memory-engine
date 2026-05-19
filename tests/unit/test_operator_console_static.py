@@ -55,3 +55,24 @@ def test_operator_console_surfaces_runtime_clarity_state_grammar_and_storage() -
     assert "Storage and growth" in app_js
     assert "Make One Memory" in app_js
     assert "File name redacted" in app_js
+
+
+def test_retrieval_console_uses_timeline_handoff_id_for_enriched_results() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    app_js = (repo_root / "ui" / "operator_console_v1" / "static" / "js" / "app.js").read_text(encoding="utf-8")
+
+    assert "timeline_video_id" in app_js
+    assert "retrievalTimelineVideoId" in app_js
+    assert "scene_present_entities" in app_js
+    assert "kg_evidence" in app_js
+    assert "KG / Entity Evidence" in app_js
+
+
+def test_video_inventory_surfaces_thumbnail_visibility_envelope() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    app_js = (repo_root / "ui" / "operator_console_v1" / "static" / "js" / "app.js").read_text(encoding="utf-8")
+
+    assert "thumbnailEnvelopeLabel" in app_js
+    assert "Thumbnail: local API ready" in app_js
+    assert "raw path redacted" in app_js
+    assert "Thumbnail: not exposed" in app_js

@@ -26,7 +26,13 @@ class SceneResponse(BaseModel):
     end: float
     duration: float
     representative_frame: Optional[str] = None
+    representative_frame_available: bool = False
+    representative_frame_endpoint: Optional[str] = None
+    representative_frame_path_redacted: bool = False
     frame_paths: List[str] = Field(default_factory=list)
+    frame_endpoints: List[str] = Field(default_factory=list)
+    frame_path_count: int = 0
+    frame_paths_redacted: bool = False
     visual_caption: Optional[str] = None
     ocr_text: Optional[str] = None
     ocr_date_candidates: List[str] = Field(default_factory=list)
@@ -72,16 +78,33 @@ class SearchResult(BaseModel):
     score: float
     modality: str
     video_id: Optional[str] = None
+    timeline_video_id: Optional[str] = None
+    display_title: Optional[str] = None
     scene_id: Optional[SceneId] = None
+    start: Optional[float] = None
+    end: Optional[float] = None
+    duration: Optional[float] = None
     timestamp: Optional[float] = None
     representative_frame: Optional[str] = None
+    representative_frame_available: bool = False
+    representative_frame_endpoint: Optional[str] = None
+    representative_frame_path_redacted: bool = False
     transcript: Optional[str] = None
     keywords: List[str] = Field(default_factory=list)
+    tags: List[str] = Field(default_factory=list)
     objects: List[str] = Field(default_factory=list)
+    audio_emotion: Optional[str] = None
+    audio_emotion_scores: Optional[Dict[str, Any]] = None
+    scene_present_entities: List[Dict[str, Any]] = Field(default_factory=list)
+    kg_relationships: List[Dict[str, Any]] = Field(default_factory=list)
+    kg_evidence: Optional[Dict[str, Any]] = None
     sentiment: Optional[Dict[str, Any]] = None
     sentiment_label: Optional[str] = None
     sentiment_score: Optional[float] = None
     context: Optional[Dict[str, Any]] = None
+    scene_context_llm: Optional[Dict[str, Any]] = None
+    scene_context_epistemic: Optional[Dict[str, Any]] = None
+    scene_context_arbitration: Optional[Dict[str, Any]] = None
     provenance: Optional[Dict[str, Any]] = None
     confidence: Dict[str, Any] = Field(default_factory=default_confidence_payload)
 
@@ -110,6 +133,12 @@ class TimelineSegment(BaseModel):
     clip_id: Optional[str] = None
     dino_id: Optional[str] = None
     representative_frame: Optional[str] = None
+    representative_frame_available: bool = False
+    representative_frame_endpoint: Optional[str] = None
+    representative_frame_path_redacted: bool = False
+    frame_endpoints: List[str] = Field(default_factory=list)
+    frame_path_count: int = 0
+    frame_paths_redacted: bool = False
     visual_caption: Optional[str] = None
     ocr_text: Optional[str] = None
     ocr_date_candidates: List[str] = Field(default_factory=list)
@@ -161,6 +190,9 @@ class VideoListItem(BaseModel):
     total_scenes: Optional[int] = None
     processed_date: Optional[str] = None
     thumbnail: Optional[str] = None
+    thumbnail_available: bool = False
+    thumbnail_endpoint: Optional[str] = None
+    thumbnail_path_redacted: bool = False
 
 
 class SystemStatus(BaseModel):

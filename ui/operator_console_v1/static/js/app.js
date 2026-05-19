@@ -344,6 +344,8 @@
       }
     });
 
+    await refreshRecurrenceRecommendation();
+
     const videos = Array.isArray(state.data.videos) ? state.data.videos : [];
     if (!state.selectedVideoId && videos.length) {
       state.selectedVideoId = videos[0].video_id || videos[0].id || null;
@@ -394,6 +396,22 @@
       state.data.timeline = null;
       state.selectedSceneKey = null;
       state.errors.timeline = error instanceof Error ? error.message : String(error);
+    }
+  }
+
+  async function refreshRecurrenceRecommendation() {
+    const report = state.data.recurrence && state.data.recurrence.report ? state.data.recurrence.report : {};
+    const reportId = report.report_id;
+    state.data.recurrenceRecommendation = null;
+    state.errors.recurrenceRecommendation = null;
+    if (!reportId) return;
+    try {
+      state.data.recurrenceRecommendation = await fetchJson(
+        "recurrenceRecommendation",
+        `/api/control-recurrence/reports/${encodeURIComponent(reportId)}/recommendations`
+      );
+    } catch (error) {
+      state.errors.recurrenceRecommendation = error instanceof Error ? error.message : String(error);
     }
   }
 
@@ -980,6 +998,57 @@
     container.appendChild(table);
   }
 
+  function renderTextList(container, title, rows, emptyText) {
+    appendText(container, "h3", title, "panel-subtitle");
+    const list = document.createElement("div");
+    list.className = "mini-list";
+    if (Array.isArray(rows) && rows.length) {
+      rows.slice(0, 5).forEach((item, index) => {
+        const row = document.createElement("div");
+        row.className = "mini-row";
+        appendText(row, "span", `${index + 1}. ${safeString(item, title)}`);
+        list.appendChild(row);
+      });
+    } else {
+      appendText(list, "span", emptyText, "scene-chip-empty");
+    }
+    container.appendChild(list);
+  }
+
+  function renderRecurrenceRecommendation(container, reportId) {
+    appendText(container, "h3", "Recommended next inspection", "panel-subtitle");
+    const boundary =
+      "This panel only reads existing durable recurrence reports. It does not generate reports, trigger ingestion, heal, mutate configs, or activate ControlAgent.";
+    if (!reportId) {
+      appendText(container, "p", `No recommendation draft available. ${boundary}`, "panel-subtitle");
+      return;
+    }
+    if (state.errors.recurrenceRecommendation) {
+      appendInlineError(container, `Recommendation draft unavailable: ${state.errors.recurrenceRecommendation}`);
+      appendText(container, "p", boundary, "panel-subtitle");
+      return;
+    }
+    const draft = state.data.recurrenceRecommendation || {};
+    if (draft.status !== "ok") {
+      appendText(container, "p", `No recommendation draft available. ${boundary}`, "panel-subtitle");
+      return;
+    }
+    renderKv(container, draft, ["recommendation_status", "highest_category", "defer_mutation_reason"]);
+    renderTextList(
+      container,
+      "Top operator priorities",
+      draft.top_operator_priorities,
+      "No operator priorities were produced."
+    );
+    renderTextList(
+      container,
+      "Inspection plan",
+      draft.inspection_plan,
+      "No inspection steps were produced."
+    );
+    appendText(container, "p", boundary, "panel-subtitle");
+  }
+
   function renderRun() {
     const node = qs("#run-panel");
     clear(node);
@@ -1027,6 +1096,7 @@
       "qdrant_health_summary",
       "created_or_updated_at",
     ]);
+    renderRecurrenceRecommendation(node, report.report_id);
   }
 
   function renderRecurrenceTrend() {
@@ -1045,16 +1115,26 @@
       "comparable_scope_groups",
       "scope_group_count",
     ]);
-    renderSimpleTable(
-      node,
-      [
-        { key: "error_family", label: "Family" },
-        { key: "category", label: "Category", badge: true },
-        { key: "latest_count", label: "Latest" },
-        { key: "trend_status", label: "Trend", badge: true },
-      ],
-      Array.isArray(trend.family_trends) ? trend.family_trends.slice(0, 5) : []
-    );
+    const familyTrends = Array.isArray(trend.family_trends) ? trend.family_trends.slice(0, 5) : [];
+    if (familyTrends.length) {
+      renderSimpleTable(
+        node,
+        [
+          { key: "error_family", label: "Family" },
+          { key: "category", label: "Category", badge: true },
+          { key: "latest_count", label: "Latest" },
+          { key: "trend_status", label: "Trend", badge: true },
+        ],
+        familyTrends
+      );
+    } else {
+      appendText(
+        node,
+        "p",
+        "No comparable trend rows yet. This does not mean no recurrence exists. This view needs indexed recurrence JSON reports with comparable scope.",
+        "panel-subtitle"
+      );
+    }
   }
 
   function renderMemory() {

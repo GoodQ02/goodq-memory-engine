@@ -215,6 +215,7 @@ The console may consume these local read surfaces:
 - `GET /api/memory/stats`
 - `GET /api/control-recurrence/reports/latest`
 - `GET /api/control-recurrence/reports/trend`
+- `GET /api/control-recurrence/reports/{report_id}/recommendations`
 - `POST /api/search/multimodal`
 - `GET /api/system/videos`
 - `GET /api/videos/{video_id}/timeline/full`
@@ -232,6 +233,12 @@ The console may consume these local read surfaces:
 
 The console must not convert recommendations into action buttons. It may render
 recommendations only as read-only inspection signals.
+
+The recurrence panel may fetch the deterministic recommendation draft for the
+latest indexed report and show operator priorities or inspection steps. It must
+also render the safety boundary in visible copy: the panel only reads existing
+durable recurrence reports and does not generate reports, trigger ingestion,
+heal, mutate configs, or activate `ControlAgent`.
 
 ## Data Hygiene
 

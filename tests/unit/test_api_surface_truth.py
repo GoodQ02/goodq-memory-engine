@@ -195,6 +195,17 @@ def _sample_temporal_index() -> dict:
                 "sentiment_label": "negative",
                 "sentiment_score": 0.82,
                 "time_hints": {"explicit_dates": [], "relative_phrases": ["next week"]},
+                "tags": ["indoor", "music", "performance", "trumpet", "december"],
+                "tag_details": [
+                    {"label": "trumpet", "score": 3.5, "sources": ["caption"]},
+                    {"label": "music", "score": 2.75, "sources": ["caption_inference"]},
+                    {"label": "december", "score": 1.5, "sources": ["time_hint"]},
+                ],
+                "scene_present_entities": [
+                    {"text": "trumpet", "type": "OBJECT", "source": "caption"},
+                    {"text": "music", "type": "CONCEPT", "source": "tagger"},
+                ],
+                "audio_emotion_scores": {"neutral": 0.48, "calm": 0.31, "sad": 0.21},
                 "content_state": "signal",
                 "candidate_visible_people": [{"name": "anonymous_person_1"}],
                 "speaker_aligned_mentions": [{"text": "Jerry", "type": "PERSON", "count": 1}],
@@ -252,6 +263,17 @@ def test_list_scenes_surfaces_persisted_audio_truth(monkeypatch: pytest.MonkeyPa
     assert scene.sentiment_label == "negative"
     assert scene.sentiment_score == 0.82
     assert scene.time_hints == {"explicit_dates": [], "relative_phrases": ["next week"]}
+    assert scene.tags == ["indoor", "music", "performance", "trumpet", "december"]
+    assert scene.tag_details == [
+        {"label": "trumpet", "score": 3.5, "sources": ["caption"]},
+        {"label": "music", "score": 2.75, "sources": ["caption_inference"]},
+        {"label": "december", "score": 1.5, "sources": ["time_hint"]},
+    ]
+    assert scene.scene_present_entities == [
+        {"text": "trumpet", "type": "OBJECT", "source": "caption"},
+        {"text": "music", "type": "CONCEPT", "source": "tagger"},
+    ]
+    assert scene.audio_emotion_scores == {"neutral": 0.48, "calm": 0.31, "sad": 0.21}
     assert scene.content_state == "signal"
     assert scene.candidate_visible_people == [{"name": "anonymous_person_1"}]
     assert scene.speaker_aligned_mentions == [{"text": "Jerry", "type": "PERSON", "count": 1}]
@@ -379,6 +401,17 @@ def test_full_timeline_surfaces_persisted_audio_truth(monkeypatch: pytest.Monkey
     assert segment.sentiment_label == "negative"
     assert segment.sentiment_score == 0.82
     assert segment.time_hints == {"explicit_dates": [], "relative_phrases": ["next week"]}
+    assert segment.tags == ["indoor", "music", "performance", "trumpet", "december"]
+    assert segment.tag_details == [
+        {"label": "trumpet", "score": 3.5, "sources": ["caption"]},
+        {"label": "music", "score": 2.75, "sources": ["caption_inference"]},
+        {"label": "december", "score": 1.5, "sources": ["time_hint"]},
+    ]
+    assert segment.scene_present_entities == [
+        {"text": "trumpet", "type": "OBJECT", "source": "caption"},
+        {"text": "music", "type": "CONCEPT", "source": "tagger"},
+    ]
+    assert segment.audio_emotion_scores == {"neutral": 0.48, "calm": 0.31, "sad": 0.21}
     assert segment.content_state == "signal"
     assert segment.candidate_visible_people == [{"name": "anonymous_person_1"}]
     assert segment.speaker_aligned_mentions == [{"text": "Jerry", "type": "PERSON", "count": 1}]

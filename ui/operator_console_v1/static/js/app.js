@@ -1858,6 +1858,112 @@
     return value && typeof value === "object" && !Array.isArray(value) ? Object.keys(value).length : 0;
   }
 
+  function stringList(value, limit) {
+    if (!Array.isArray(value)) return [];
+    const cleaned = value
+      .map((item) => String(item || "").trim())
+      .filter(Boolean);
+    return Number.isFinite(limit) ? cleaned.slice(0, limit) : cleaned;
+  }
+
+  function sortedScorePairs(scores) {
+    if (!scores || typeof scores !== "object" || Array.isArray(scores)) return [];
+    return Object.entries(scores)
+      .map(([label, rawScore]) => [label, Number(rawScore)])
+      .filter(([label, score]) => label && Number.isFinite(score))
+      .sort((a, b) => b[1] - a[1]);
+  }
+
+  function formatPercent(score) {
+    if (!Number.isFinite(score)) return "score not observed";
+    const normalized = score > 1 ? score / 100 : score;
+    return `${Math.round(normalized * 100)}%`;
+  }
+
+  function audioEmotionLabel(segment) {
+    if (valueObserved(segment.audio_emotion)) return safeString(segment.audio_emotion, "audio_emotion");
+    const top = sortedScorePairs(segment.audio_emotion_scores)[0];
+    if (top) {
+      const reviewLabel = top[1] >= 0.5 ? "Review signal" : "Raw score";
+      return `${reviewLabel}: ${top[0]} ${formatPercent(top[1])}`;
+    }
+    return segment.emotion_status || "Not observed";
+  }
+
+  function audioEmotionNote(segment) {
+    const top = sortedScorePairs(segment.audio_emotion_scores)[0];
+    if (valueObserved(segment.audio_emotion)) {
+      return `Promoted label; ${top ? `top raw score ${top[0]} ${formatPercent(top[1])}` : "raw scores not exposed"}`;
+    }
+    if (top) {
+      const scope = top[1] >= 0.5 ? "reviewable by operator" : "below promotion threshold";
+      return `${top[0]} ${formatPercent(top[1])}; ${scope}`;
+    }
+    return "No raw audio emotion scores exposed";
+  }
+
+  function flattenTimeHints(hints) {
+    if (!hints || typeof hints !== "object" || Array.isArray(hints)) return [];
+    const values = [];
+    Object.entries(hints).forEach(([key, rawValue]) => {
+      const items = Array.isArray(rawValue) ? rawValue : valueObserved(rawValue) ? [rawValue] : [];
+      items.forEach((item) => {
+        const text = String(item || "").trim();
+        if (text) values.push(`${key}: ${text}`);
+      });
+    });
+    return values;
+  }
+
+  function appendSceneChipGroup(container, label, items, emptyText) {
+    const group = document.createElement("div");
+    group.className = "scene-chip-group";
+    appendText(group, "span", label, "scene-chip-label");
+    const chips = document.createElement("div");
+    chips.className = "scene-chip-list";
+    if (items.length) {
+      items.forEach((item) => appendText(chips, "span", item, "scene-memory-chip"));
+    } else {
+      appendText(chips, "span", emptyText, "scene-chip-empty");
+    }
+    group.appendChild(chips);
+    container.appendChild(group);
+  }
+
+  function appendSceneEvidenceRows(container, label, rows, emptyText) {
+    const group = document.createElement("div");
+    group.className = "scene-evidence-group";
+    appendText(group, "span", label, "scene-chip-label");
+    const list = document.createElement("div");
+    list.className = "scene-evidence-list";
+    if (rows.length) {
+      rows.forEach((rowText) => appendText(list, "span", rowText, "scene-evidence-row"));
+    } else {
+      appendText(list, "span", emptyText, "scene-chip-empty");
+    }
+    group.appendChild(list);
+    container.appendChild(group);
+  }
+
+  function formatTagDetail(detail) {
+    if (!detail || typeof detail !== "object") return null;
+    const label = detail.label || detail.tag || detail.name;
+    if (!label) return null;
+    const sources = stringList(detail.sources).join(", ") || detail.source || "source not exposed";
+    const score = Number(detail.score);
+    const scoreText = Number.isFinite(score) ? `score ${Math.round(score * 100) / 100}` : "score not exposed";
+    return `${label} | ${sources} | ${scoreText}`;
+  }
+
+  function formatSceneEntity(entity) {
+    if (!entity || typeof entity !== "object") return null;
+    const text = entity.text || entity.entity || entity.name || entity.label;
+    if (!text) return null;
+    const type = entity.type || "entity";
+    const source = entity.source ? ` | ${entity.source}` : "";
+    return `${text} (${type})${source}`;
+  }
+
   function numericDuration(segment) {
     const start = Number(segment.start);
     const end = Number(segment.end);
@@ -1935,8 +2041,13 @@
     const speakerIds = Array.isArray(segment.speaker_ids) ? segment.speaker_ids : [];
     const visiblePeople = Array.isArray(segment.candidate_visible_people) ? segment.candidate_visible_people : [];
     const alignedMentions = Array.isArray(segment.speaker_aligned_mentions) ? segment.speaker_aligned_mentions : [];
+    const memoryTags = stringList(segment.tags);
+    const tagDetails = Array.isArray(segment.tag_details) ? segment.tag_details : [];
+    const sceneEntities = Array.isArray(segment.scene_present_entities) ? segment.scene_present_entities : [];
+    const audioScoreCount = objectCount(segment.audio_emotion_scores);
     const disagreementCount = arrayCount(segment.transcript_entity_disagreements);
     const timeHintCount = objectCount(segment.time_hints);
+    const timeHintValues = flattenTimeHints(segment.time_hints);
     const inventory = fieldInventory(segment);
 
     detail.appendChild(panelHeader("Selected scene", `${sceneLabel} | ${startEnd}`, segment.content_state || "read-only"));
@@ -1955,7 +2066,7 @@
       ["Continuity key", segment.continuity_key || "Not observed"],
       ["Dominant speaker", segment.dominant_speaker_id || "Not observed"],
       ["Speaker count", segment.speaker_count ?? (speakerIds.length || "Not observed")],
-      ["Audio emotion", segment.audio_emotion || segment.emotion_status || "Not observed"],
+      ["Audio emotion", audioEmotionLabel(segment)],
       ["Sentiment", segment.sentiment_label || "Not observed"],
       [
         "Normalization",
@@ -1967,6 +2078,25 @@
       ],
     ].forEach(([label, value]) => appendSceneFact(facts, label, value));
     detail.appendChild(facts);
+
+    const evidence = document.createElement("div");
+    evidence.className = "scene-evidence-block";
+    appendText(evidence, "h3", "Scene memory evidence", "scene-evidence-title");
+    appendSceneChipGroup(evidence, "Memory tags", memoryTags.slice(0, 10), "No memory tags exposed");
+    appendSceneEvidenceRows(
+      evidence,
+      "Tag provenance",
+      tagDetails.map(formatTagDetail).filter(Boolean).slice(0, 6),
+      "No tag provenance exposed"
+    );
+    appendSceneChipGroup(evidence, "Time hints", timeHintValues.slice(0, 6), "No time hints exposed");
+    appendSceneEvidenceRows(
+      evidence,
+      "Scene entities",
+      sceneEntities.map(formatSceneEntity).filter(Boolean).slice(0, 6),
+      "No scene-present entities exposed"
+    );
+    detail.appendChild(evidence);
 
     modality.appendChild(panelHeader("Modality coverage", "Evidence visible in selected timeline row", "read-only"));
     const modalityList = document.createElement("div");
@@ -1989,11 +2119,20 @@
     appendSceneSignal(modalityList, "Speaker identity", speakerIds.length > 0 || valueObserved(segment.dominant_speaker_id), `${speakerIds.length} speaker ids`);
     appendSceneSignal(modalityList, "Visible people", visiblePeople.length > 0, `${visiblePeople.length} candidates`);
     appendSceneSignal(modalityList, "Aligned mentions", alignedMentions.length > 0, `${alignedMentions.length} mention links`);
+    appendSceneSignal(modalityList, "Memory tags", memoryTags.length > 0, `${memoryTags.length} tags exposed`);
+    appendSceneSignal(modalityList, "Tag provenance", tagDetails.length > 0, `${tagDetails.length} provenance rows`);
+    appendSceneSignal(modalityList, "Scene-present entities", sceneEntities.length > 0, `${sceneEntities.length} entity rows`);
     appendSceneSignal(
       modalityList,
       "Sentiment analysis",
       valueObserved(segment.sentiment_label) || valueObserved(segment.sentiment_score),
       safeString(segment.sentiment_score ?? "score not observed", "sentiment_score")
+    );
+    appendSceneSignal(
+      modalityList,
+      "Audio emotion review",
+      valueObserved(segment.audio_emotion) || audioScoreCount > 0,
+      audioEmotionNote(segment)
     );
     appendSceneSignal(modalityList, "Temporal hints", timeHintCount > 0, `${timeHintCount} hint fields`);
     if (disagreementCount > 0) {
@@ -2031,8 +2170,12 @@
       "content_state",
       "continuity_key",
       "time_hints",
+      "tags",
+      "tag_details",
+      "scene_present_entities",
       "sentiment_label",
       "audio_emotion",
+      "audio_emotion_scores",
     ];
     const schemaList = document.createElement("div");
     schemaList.className = "schema-field-list";

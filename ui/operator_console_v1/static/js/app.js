@@ -70,9 +70,14 @@
   const diagnosticEndpointNames = new Set(["engines", "gpu", "wsl", "queue"]);
   const optionalEndpointNames = new Set(["envelope"]);
   const endpointTimeoutMs = {
+    status: 30000,
+    health: 30000,
     engines: 25000,
     wsl: 18000,
+    run: 30000,
+    runEvidence: 30000,
     audioProvenance: 25000,
+    memory: 30000,
     retrieval: 30000,
   };
   const IMPORT_INBOX_LABEL = "<GOODQ_DATA_ROOT>\\GoodQ_Data\\import_inbox";
@@ -443,6 +448,82 @@
     chip.setAttribute("aria-label", `${item.label} proof status: ${chip.textContent}`);
     row.appendChild(chip);
     container.appendChild(row);
+  }
+
+  function appendAudioInventoryDrilldown(container, audioProvenance) {
+    const rows = Array.isArray(audioProvenance?.runs) && audioProvenance.runs.length
+      ? audioProvenance.runs
+      : audioProvenance?.latest_run
+        ? [audioProvenance.latest_run]
+        : [];
+
+    const panel = document.createElement("div");
+    panel.className = "audio-inventory-drilldown";
+    panel.setAttribute("data-testid", "audio-inventory-drilldown");
+
+    const header = document.createElement("div");
+    header.className = "audio-inventory-header";
+    appendText(header, "strong", "Audio Provenance Inventory");
+    appendText(header, "span", "Run-tagged Qdrant audio payloads; historical until matched to the selected run.");
+    panel.appendChild(header);
+
+    if (!rows.length) {
+      appendText(panel, "p", "No run-tagged Qdrant audio inventory rows returned.", "audio-inventory-empty");
+      container.appendChild(panel);
+      return;
+    }
+
+    rows.slice(0, 6).forEach((row) => {
+      const pointCount = numberValue(row.provenance_capable_points ?? row.point_count ?? row.points);
+      const sceneCount = numberValue(row.scene_count ?? row.scenes);
+      const videoCount = numberValue(row.video_count ?? row.videos);
+      const latestTs = row.latest_timestamp || row.latest_ts || row.latest_commit_ts_utc || row.latest_created_at;
+      const missingFields = Array.isArray(row.missing_required_fields)
+        ? row.missing_required_fields
+        : Object.keys(row.missing_required_fields || {});
+
+      const item = document.createElement("div");
+      item.className = "audio-inventory-row";
+
+      const identity = document.createElement("div");
+      appendText(identity, "span", "Run", "audio-inventory-label");
+      const runId = appendText(identity, "strong", compactIdentifier(row.run_id, { key: "run_id", max: 26 }), "compact-id");
+      runId.title = safeString(row.run_id || "Not observed", "run_id");
+      item.appendChild(identity);
+
+      const counts = document.createElement("div");
+      appendText(counts, "span", "Payloads", "audio-inventory-label");
+      appendText(
+        counts,
+        "strong",
+        pointCount !== null ? `${pointCount} points` : "Not observed",
+        "audio-inventory-value"
+      );
+      appendText(
+        counts,
+        "small",
+        `${sceneCount !== null ? sceneCount : "?"} scenes | ${videoCount !== null ? videoCount : "?"} videos`,
+        "audio-inventory-note"
+      );
+      item.appendChild(counts);
+
+      const latest = document.createElement("div");
+      appendText(latest, "span", "Latest", "audio-inventory-label");
+      appendText(latest, "strong", latestTs ? relativeTime(latestTs) : "Not observed", "audio-inventory-value");
+      item.appendChild(latest);
+
+      const stateWrap = document.createElement("div");
+      appendText(stateWrap, "span", "Scope", "audio-inventory-label");
+      stateWrap.appendChild(makeBadge(missingFields.length ? "Needs Explanation" : "Historical Only", missingFields.length ? "warn" : "historical"));
+      if (missingFields.length) {
+        appendText(stateWrap, "small", `Missing: ${missingFields.slice(0, 3).join(", ")}`, "audio-inventory-note");
+      }
+      item.appendChild(stateWrap);
+
+      panel.appendChild(item);
+    });
+
+    container.appendChild(panel);
   }
 
   function evidenceNote(value, suffix) {
@@ -1212,6 +1293,7 @@
       appendText(cell, "strong", safeString(value, label));
       inspector.appendChild(cell);
     });
+    appendAudioInventoryDrilldown(inspector, audioProvenance);
   }
 
   function metric(label, value, note, kind) {

@@ -1,10 +1,10 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: GENERATED_SNAPSHOT -->
-<!-- DOC_LAST_VERIFIED: 2026-05-19 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-20 -->
 
 # System Snapshot
 
-_Operational operator-state alignment refreshed: 2026-05-19._
+_Operational operator-state alignment refreshed: 2026-05-20._
 
 This is a bounded release-era system snapshot. It is useful for understanding
 the supported host/runtime baseline, but it is not a live witness monitor.
@@ -125,6 +125,17 @@ the supported host/runtime baseline, but it is not a live witness monitor.
     - `51` transcript/entity disagreement segments
 
 ## Current Operator State
+- Pause checkpoint, 2026-05-20:
+  - latest run evidence and audio provenance inventory are intentionally
+    separate: `/api/runs/latest/evidence` reports strict current-run proof for
+    the indexed run scope, while `/api/runs/audio-proof/latest` reports
+    run-tagged Qdrant audio inventory as historical until a row matches the
+    selected run.
+  - run indexing now includes standalone/direct roots with
+    `output/scene_ingest_results.json` and no root `experiment_log.json`; those
+    roots are labeled with `scope=scene_ingest_results`.
+  - active `audio_embed_clap` scene output echoes safe provenance fields in
+    `audio.clap_meta` when available.
 - Pause checkpoint, 2026-05-19:
   - status: read-only operator visibility envelopes are implemented, verified,
     and pushed. Local workspace is `dev` / `origin/dev` at `50c9107`
@@ -142,7 +153,8 @@ the supported host/runtime baseline, but it is not a live witness monitor.
     `/ui/operator_console_v1/` and contained Flight Deck, Proof Panel, and
     Retrieval Console surfaces.
   - active read-only API/UI surfaces include `/api/runs/latest/evidence`,
-    `/api/runs/latest/preview`, `/api/system/videos`,
+    `/api/runs/latest/preview`, `/api/runs/audio-proof/latest`,
+    `/api/system/videos`,
     `/api/videos/{video_id}/timeline/full`, `/api/videos/{video_id}/scenes`,
     `/api/storage/summary`, `/api/search/multimodal`, and
     `/ui/operator_console_v1/`.
@@ -218,6 +230,8 @@ the supported host/runtime baseline, but it is not a live witness monitor.
   - `lib/run_index.py`
   - `lib/run_summary.py`
   - `/api/runs/latest/preview`
+  - `/api/runs/latest/evidence`
+  - `/api/runs/audio-proof/latest`
   - `lib/control_recurrence_report.py`
   - `lib/control_recurrence_index.py`
   - `lib/control_recurrence_recommendations.py`

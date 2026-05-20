@@ -239,7 +239,19 @@ The `audio` object contains scene audio outputs, backend attribution, diarizatio
     "status": "ok"
   },
   "clap_meta": {
-    "status": "ok"
+    "status": "ok",
+    "provenance_version": 1,
+    "component": "audio_embed_clap",
+    "step": "audio_embed_clap",
+    "model": "laion/clap-htsat-unfused",
+    "run_id": "<runtime-run-id>",
+    "embedding_id": "<content-fingerprint>",
+    "commit_ts_utc": "2026-05-20T00:00:00+00:00",
+    "faiss_id": 12345,
+    "faiss_committed": true,
+    "qdrant_attempted": true,
+    "qdrant_committed": true,
+    "qdrant_collection": "goodq_audio"
   },
   "embeddings": [],
   "embedding_dim": 768,
@@ -281,6 +293,13 @@ They are the input surface for the ladder defined in `docs/architecture/IDENTITY
 ### CLAP Audio Vector Success
 
 `audio.clap_meta` is the scene-level CLAP status surface.
+
+Active writers should echo safe provenance fields such as `run_id`,
+`embedding_id`, `commit_ts_utc`, `qdrant_attempted`, `qdrant_committed`, and
+`qdrant_collection` when available. These fields help operators connect the
+scene artifact to Qdrant inventory without exposing raw audio paths. Older
+artifacts may only contain `status`, `index_path`, and `faiss_id`; consumers
+must label that as limited metadata rather than assuming current-run proof.
 
 Current-run audio vector success is proven only when:
 

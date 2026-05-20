@@ -139,7 +139,7 @@ Primary contract:
 | Diarization | `diarization`, `diarization_meta`, `diarization_status`, `diarization_error` | authoritative/operator | Status is UI-safe; raw errors are local/operator. |
 | Speaker alignment | `speaker_transcript`, `speaker_voice_signatures`, `speaker_voice_signature_meta` | authoritative/operator | Voice signatures support stitching but do not equal identity by themselves. |
 | Emotion | `emotions`, `emotion_meta`, `emotion_status`, `emotion_error` | authoritative/operator | Optional enrichment; unavailable is not necessarily failure. |
-| CLAP status | `clap_meta.status`, `clap_meta.reason` | authoritative/operator, ui_safe summary | Current-run audio vector coverage requires `clap_meta.status == ok` plus matching Qdrant run provenance. |
+| CLAP status and provenance | `clap_meta.status`, `clap_meta.reason`, `clap_meta.run_id`, `clap_meta.embedding_id`, `clap_meta.commit_ts_utc`, `clap_meta.qdrant_attempted`, `clap_meta.qdrant_committed`, `clap_meta.qdrant_collection` | authoritative/operator, ui_safe summary | Current-run audio vector coverage requires `clap_meta.status == ok` plus matching Qdrant run provenance. Scene metadata helps traceability but does not replace Qdrant proof. |
 | Embeddings | `embeddings`, `embedding_dim` | authoritative/operator | Internal vector payload and dimensionality. This field alone does not prove current-run Qdrant audio-vector success. |
 | Runtime attribution | `wsl2_unified`, `gpu_used`, device/engine meta fields | operator | Useful for runtime audits; not product-facing truth. |
 
@@ -172,6 +172,13 @@ Required Qdrant audio payload fields for active-line CLAP commits:
 - `model`
 - `created_at`
 - `commit_ts_utc`
+
+Active scene-level `clap_meta` should echo safe provenance fields when they are
+available from the writer: `run_id`, `embedding_id`, `commit_ts_utc`,
+`qdrant_attempted`, `qdrant_committed`, and `qdrant_collection`. The echo
+allows UI/API consumers to explain why a scene can or cannot be matched to the
+Qdrant audio inventory. It is not a substitute for matching the Qdrant payload
+`run_id` to the audited run.
 
 Preferred read-model labels:
 

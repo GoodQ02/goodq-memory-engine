@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-05-01 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-20 -->
 
 # Audio Vector Provenance Contract
 
@@ -20,6 +20,12 @@ Current-run audio vector success is proven only when both conditions hold:
    same runtime `run_id` and required provenance fields.
 
 Scene-id presence alone is not proof.
+
+Active scene artifacts may also echo safe provenance fields in
+`audio.clap_meta` so a scene result can be linked back to Qdrant inventory.
+Historical artifacts may only contain `status`, `index_path`, and `faiss_id`;
+that absence should be reported as missing projection metadata, not silently
+treated as current-run proof.
 
 ## Required Qdrant Provenance Fields
 
@@ -44,6 +50,33 @@ Expected supporting fields include:
 
 Consumers must treat `component=audio_embed_clap` and
 `step=audio_embed_clap` as the CLAP audio-vector source marker.
+
+## Scene-Level CLAP Metadata
+
+Active-line `audio_embed_clap` returns these safe scene-level metadata fields
+when a CLAP commit completes:
+
+- `status`
+- `provenance_version`
+- `component`
+- `step`
+- `model`
+- `run_id` when a runtime run id is available
+- `embedding_id`
+- `commit_ts_utc`
+- `faiss_id`
+- `faiss_committed`
+- `qdrant_attempted`
+- `qdrant_committed`
+- `qdrant_collection` when a Qdrant collection was resolved
+- `sqlite_map_attempted`
+- `sqlite_map_committed`
+- `sqlite_embeddings_committed`
+- `audio_backend_effective` when present
+
+These fields improve traceability from scene output to Qdrant inventory. They
+do not prove current-run audio coverage unless the matching Qdrant payload
+checks in this contract also pass.
 
 ## Success Definition
 

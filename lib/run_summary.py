@@ -15,8 +15,15 @@ def load_run_summary(run_root: str | Path, reports_root: str | Path | None = Non
     root_path = _resolve_run_root(run_root=run_root, reports_root=reports_root)
     effective_reports_root = run_index.resolve_reports_root(reports_root=root_path.parent)
     root_log = root_path / "experiment_log.json"
-    payload = _load_json(root_log)
+    payload = _load_json(root_log) if root_log.is_file() else None
     if not isinstance(payload, dict):
+        scene_results_path = root_path / "output" / "scene_ingest_results.json"
+        if scene_results_path.is_file():
+            return _load_standalone_scene_results_summary(
+                root_path=root_path,
+                scene_results_path=scene_results_path,
+                reports_root=effective_reports_root,
+            )
         raise FileNotFoundError(f"Run root is missing a readable experiment log: {root_path}")
 
     plan = payload.get("plan")
@@ -116,6 +123,91 @@ def load_run_summary(run_root: str | Path, reports_root: str | Path | None = Non
         "episodes": episode_records,
     }
     return summary
+
+
+def _load_standalone_scene_results_summary(
+    *,
+    root_path: Path,
+    scene_results_path: Path,
+    reports_root: Path,
+) -> Dict[str, Any]:
+    index_entries = run_index.list_runs(reports_root=reports_root)
+    index_entry = next((entry for entry in index_entries if entry["run_id"] == root_path.name), None) or {
+        "run_id": root_path.name,
+        "run_kind": "standalone_scene_results",
+        "scope": "scene_ingest_results",
+        "status": "unknown",
+        "epoch": None,
+        "source_dir": None,
+        "started_at": None,
+        "episodes_total": 0,
+        "episodes_completed": 0,
+        "episodes_failed": 0,
+        "episodes_running": 0,
+        "episodes_pending": 0,
+        "scenes_processed": 0,
+        "latest_episode": None,
+    }
+
+    latest_episode = index_entry.get("latest_episode")
+    if not isinstance(latest_episode, dict):
+        latest_episode = {
+            "episode": "Standalone scene results",
+            "status": index_entry.get("status") or "unknown",
+            "run_dir": str(root_path),
+            "scene_count": index_entry.get("scenes_processed") or 0,
+            "files_read": [str(scene_results_path)],
+            "canonical_episode_artifacts": [],
+            "errors": [],
+            "warnings": [],
+        }
+
+    files_read = [str(scene_results_path)]
+    if isinstance(latest_episode.get("files_read"), list):
+        files_read.extend(str(value) for value in latest_episode["files_read"] if isinstance(value, str))
+
+    return {
+        "run_header": {
+            "run_id": index_entry["run_id"],
+            "run_kind": index_entry.get("run_kind") or "standalone_scene_results",
+            "scope": index_entry.get("scope") or "scene_ingest_results",
+            "epoch": index_entry.get("epoch"),
+            "status": index_entry.get("status"),
+            "source_dir": index_entry.get("source_dir"),
+            "start_time": index_entry.get("started_at"),
+            "end_time": "unknown",
+            "total_duration_seconds": "unknown",
+            "trigger_source": "unknown",
+        },
+        "file_job_overview": {
+            "input_files": [latest_episode.get("episode")] if latest_episode.get("episode") else [],
+            "episodes_total": index_entry.get("episodes_total", 0),
+            "episodes_completed": index_entry.get("episodes_completed", 0),
+            "episodes_failed": index_entry.get("episodes_failed", 0),
+            "episodes_running": index_entry.get("episodes_running", 0),
+            "episodes_pending": index_entry.get("episodes_pending", 0),
+            "scenes_processed": index_entry.get("scenes_processed", latest_episode.get("scene_count") or 0),
+            "steps_executed": "unknown",
+        },
+        "audio_wsl2_summary": {
+            "jobs_found": "unknown",
+            "notes": "not observed",
+        },
+        "agent_activity": [],
+        "errors_warnings": {
+            "errors": latest_episode.get("errors") if isinstance(latest_episode.get("errors"), list) else [],
+            "warnings": latest_episode.get("warnings") if isinstance(latest_episode.get("warnings"), list) else [],
+        },
+        "outcome_classification": {
+            "status": _classify_outcome(index_entry=index_entry, root_status=str(index_entry.get("status") or "unknown")),
+        },
+        "evidence": {
+            "files_read": _dedupe_preserve_order(files_read),
+            "canonical_episode_artifacts": [],
+        },
+        "latest_episode": latest_episode,
+        "episodes": [latest_episode],
+    }
 
 
 def _resolve_run_root(run_root: str | Path, reports_root: str | Path | None = None) -> Path:

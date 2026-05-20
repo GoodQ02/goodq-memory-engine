@@ -620,6 +620,16 @@ def test_audio_embed_clap_runtime_upsert_sends_qdrant_provenance(monkeypatch, tm
     )
 
     assert result["clap_meta"]["status"] == "ok"
+    assert result["clap_meta"]["component"] == "audio_embed_clap"
+    assert result["clap_meta"]["step"] == "audio_embed_clap"
+    assert result["clap_meta"]["model"] == "laion/clap-htsat-unfused"
+    assert result["clap_meta"]["run_id"] == "run-alpha"
+    assert result["clap_meta"]["embedding_id"] == "0123456789abcdef0123456789abcdef"
+    assert result["clap_meta"]["commit_ts_utc"] == "2026-05-01T12:00:00+00:00"
+    assert result["clap_meta"]["qdrant_attempted"] is True
+    assert result["clap_meta"]["qdrant_committed"] is True
+    assert result["clap_meta"]["qdrant_collection"] == "goodq_audio_test"
+    assert "source_path" not in result["clap_meta"]
     assert len(faiss_writes) == 1
     assert len(qdrant_points) == 1
     assert len(sqlite_embeddings) == 1

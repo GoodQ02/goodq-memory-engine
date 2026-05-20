@@ -91,3 +91,31 @@ def test_list_runs_projects_pending_lane_as_running_when_activity_files_exist(tm
     assert runs[0]["episodes_pending"] == 0
     assert runs[0]["latest_episode"]["episode"] == "02x02 - The Pony Remark.mp4"
     assert runs[0]["latest_episode"]["status"] == "running"
+
+
+def test_list_runs_indexes_standalone_scene_results_without_experiment_log(tmp_path: Path) -> None:
+    reports_root = tmp_path / "reports" / "fresh_ingest_runs"
+    run_root = reports_root / "20260519_home_memory_scene_probe"
+
+    _write_json(
+        run_root / "output" / "scene_ingest_results.json",
+        {
+            "scenes": [
+                {"scene_id": "scene-a", "video_id": "home-video"},
+                {"scene_id": "scene-b", "video_id": "home-video"},
+            ],
+        },
+    )
+
+    runs = list_runs(reports_root=reports_root)
+
+    assert len(runs) == 1
+    assert runs[0]["run_id"] == "20260519_home_memory_scene_probe"
+    assert runs[0]["run_kind"] == "standalone_scene_results"
+    assert runs[0]["scope"] == "scene_ingest_results"
+    assert runs[0]["status"] == "completed"
+    assert runs[0]["episodes_total"] == 1
+    assert runs[0]["episodes_completed"] == 1
+    assert runs[0]["scenes_processed"] == 2
+    assert runs[0]["latest_episode"]["scene_count"] == 2
+    assert runs[0]["latest_episode"]["run_dir"] == str(run_root)

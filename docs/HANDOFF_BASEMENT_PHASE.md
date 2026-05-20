@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-05-19 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-20 -->
 
 # Basement Phase Handoff (v1) — Current System State
 
@@ -9,11 +9,25 @@
 
 ---
 
-## Current Restart Checkpoint (2026-05-19)
+## Current Restart Checkpoint (2026-05-20)
 
 This is the practical handoff point for a brand-new Codex session.
 
 - Pause checkpoint:
+  - status: latest operator-console proof work now separates strict latest-run
+    audio evidence from historical Qdrant audio inventory.
+  - supported read-only audio proof surfaces:
+    - `/api/runs/latest/evidence` for the indexed latest run scope
+    - `/api/runs/audio-proof/latest` for run-tagged Qdrant audio inventory
+  - direct/standalone report roots with `output/scene_ingest_results.json` and
+    no root `experiment_log.json` are now indexed as
+    `scope=scene_ingest_results`; do not describe them as structured
+    wrapper-ledger runs.
+  - active `audio_embed_clap` scene output echoes safe provenance fields in
+    `audio.clap_meta` when available, but current-run proof still requires a
+    Qdrant payload with matching `run_id`.
+
+- Previous pause checkpoint, 2026-05-19:
   - status: operator visibility envelopes are implemented, locally verified,
     and pushed. Local source line is `dev` / `origin/dev` at `50c9107`
     (`feat: expose operator visibility envelopes`). Public-facing mirror is
@@ -33,6 +47,7 @@ This is the practical handoff point for a brand-new Codex session.
     Retrieval Console surfaces.
   - API read models currently aligned for UI inspection include
     `/api/runs/latest/evidence`, `/api/runs/latest/preview`,
+    `/api/runs/audio-proof/latest`,
     `/api/system/videos`, `/api/videos/{video_id}/timeline/full`,
     `/api/videos/{video_id}/scenes`, `/api/storage/summary`, and
     `/api/search/multimodal`.

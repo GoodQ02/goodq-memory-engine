@@ -1,10 +1,10 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: GENERATED_SNAPSHOT -->
-<!-- DOC_LAST_VERIFIED: 2026-05-19 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-20 -->
 
 # GoodQ4All Agent Status
 
-_Operational restart checkpoint aligned: 2026-05-19._
+_Operational restart checkpoint aligned: 2026-05-20._
 
 This document is a bounded operator snapshot of the current release-era
 stitching and offline-package baseline.
@@ -13,6 +13,23 @@ Use canonical runtime contracts and released evidence surfaces as source of
 truth for live claims. Do not treat this document as a live witness monitor.
 
 ## Current Restart Checkpoint
+- Pause checkpoint, 2026-05-20:
+  - status: operator proof visibility now separates strict latest-run audio
+    evidence from run-tagged Qdrant audio inventory.
+  - active read-only surfaces include:
+    - `GET /api/runs/latest/evidence` for the indexed latest run scope
+    - `GET /api/runs/audio-proof/latest` for historical run-tagged Qdrant
+      audio inventory
+  - run discovery now recognizes standalone/direct run roots that expose
+    `output/scene_ingest_results.json` without a root `experiment_log.json`.
+    These are labeled with `scope=scene_ingest_results` and must not be
+    described as structured wrapper-ledger runs.
+  - active `audio_embed_clap` scene output now echoes safe provenance fields in
+    `audio.clap_meta` when available, including `run_id`, `embedding_id`,
+    `commit_ts_utc`, Qdrant attempted/committed status, and Qdrant collection.
+  - boundary: the Qdrant inventory can prove that run-tagged audio payloads
+    exist, but it does not make latest-run audio proof current unless the
+    payload `run_id` matches the run being audited.
 - Pause checkpoint, 2026-05-19:
   - status: read-only operator visibility envelopes are implemented, verified,
     and pushed on both source lines. Local workspace is `dev` / `origin/dev`

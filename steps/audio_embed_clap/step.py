@@ -676,6 +676,36 @@ def audio_embed_clap(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
                 type(e).__name__,
                 e,
             )
-        return {"clap_meta": {"status": "ok", "index_path": index_path, "faiss_id": faiss_id}}
+        clap_meta: Dict[str, Any] = {
+            "status": "ok",
+            "index_path": index_path,
+            "faiss_id": faiss_id,
+            "provenance_version": 1,
+            "component": "audio_embed_clap",
+            "step": "audio_embed_clap",
+            "model": _CLAP_MODEL_ID,
+            "embedding_id": h,
+            "commit_ts_utc": commit_ts_utc,
+            "faiss_committed": bool(faiss_ok),
+            "qdrant_attempted": bool(qdrant_attempted),
+            "qdrant_committed": bool(qdrant_ok),
+            "sqlite_map_attempted": bool(map_db),
+            "sqlite_map_committed": bool(map_ok),
+            "sqlite_embeddings_committed": bool(embedding_ok),
+        }
+        run_id = _resolve_run_id(item, cfg)
+        if run_id:
+            clap_meta["run_id"] = run_id
+        if qdrant_collection:
+            clap_meta["qdrant_collection"] = qdrant_collection
+        if qdrant_reason:
+            clap_meta["qdrant_reason"] = qdrant_reason
+        if map_reason:
+            clap_meta["sqlite_map_reason"] = map_reason
+        if embedding_reason:
+            clap_meta["sqlite_embeddings_reason"] = embedding_reason
+        if item.get("audio_backend_effective") is not None:
+            clap_meta["audio_backend_effective"] = item.get("audio_backend_effective")
+        return {"clap_meta": clap_meta}
     except Exception as e:
         return {"clap_meta": {"status": "error", "error": str(e)}}

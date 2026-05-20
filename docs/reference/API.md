@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-05-19 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-20 -->
 
 # GoodQ4All API Reference
 
@@ -35,6 +35,7 @@ Primary status and runtime summary endpoints defined in the active API surface:
 - `GET /api/wsl2-status`
 - `GET /api/runs/latest/preview`
 - `GET /api/runs/latest/evidence`
+- `GET /api/runs/audio-proof/latest`
 - `GET /api/memory/stats`
 - `GET /api/read/envelope`
 - `GET /api/system/videos`
@@ -47,10 +48,24 @@ Primary status and runtime summary endpoints defined in the active API surface:
 - `GET /api/control-recurrence/reports/{report_id}/markdown`
 - `GET /api/control-recurrence/reports/{report_id}/recommendations`
 
-`GET /api/runs/latest/preview` is a read-only projection over structured run artifacts under `reports/fresh_ingest_runs`.
+`GET /api/runs/latest/preview` is a read-only projection over indexed run artifacts under `reports/fresh_ingest_runs`.
 It does not revive the retired `/runs` compatibility shell, and it does not parse raw logs as a primary source of truth.
 If a clone uses a shared witness-report tree instead of a repo-local one, set
 `GOODQ_RUN_REPORTS_ROOT` to point the read-only run surfaces at that artifact root.
+The run index supports both wrapper-ledger roots with root `experiment_log.json`
+and standalone/direct roots that expose `output/scene_ingest_results.json`.
+Standalone roots are labeled with `scope=scene_ingest_results`; they are not
+presented as structured wrapper-ledger runs.
+
+`GET /api/runs/latest/evidence` reports proof for the currently indexed latest
+run scope. Its `audio_vector_proof` object is the strict current-run
+CLAP/Qdrant verdict for that scope.
+
+`GET /api/runs/audio-proof/latest` is a separate read-only Qdrant inventory. It
+lists run-tagged audio payloads with required provenance fields so operators can
+see that audio proof exists historically. It must not be used to turn the
+latest-run `audio_vector_proof` green unless the payload `run_id` matches the
+run being audited.
 
 `GET /api/memory/stats` exposes storage-tier counts. `faiss.audio_vectors` is a
 FAISS index count only and is not current-run Qdrant audio-vector proof. Use
@@ -75,7 +90,8 @@ The API process serves two read-only browser surfaces:
 - `/ui/operator_console_v1/` is the current operator console. It consumes the
   read-only API and persisted artifacts for Flight Deck status, proof/evidence,
   retrieval inspection, storage/runtime summaries, recurrence report readouts,
-  video inventory, and scene/timeline projections.
+  video inventory, scene/timeline projections, and the compact audio provenance
+  inventory drilldown.
 - `/ui/justification_v1/` is the literal Justification Channel envelope
   renderer.
 
@@ -152,6 +168,11 @@ The active line no longer exposes the older compatibility shell that previously 
   vector success requires `clap_meta.status == ok` plus a Qdrant audio payload
   with matching `run_id` and required provenance fields. A matching `scene_id`
   alone is not current-run proof.
+- Active CLAP scene outputs now echo safe provenance fields in
+  `audio.clap_meta` when available: `run_id`, `embedding_id`, `commit_ts_utc`,
+  `qdrant_attempted`, `qdrant_committed`, and `qdrant_collection`. These fields
+  help link scene artifacts to the Qdrant inventory but still do not replace
+  the strict current-run proof check above.
 
 ## System Mutation Policy
 

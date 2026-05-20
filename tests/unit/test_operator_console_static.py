@@ -132,8 +132,8 @@ def test_operator_console_surfaces_audio_emotion_distribution() -> None:
     app_js = (repo_root / "ui" / "operator_console_v1" / "static" / "js" / "app.js").read_text(encoding="utf-8")
     app_css = (repo_root / "ui" / "operator_console_v1" / "static" / "css" / "app.css").read_text(encoding="utf-8")
 
-    assert "app.css?v=20260520-linked-media-evidence-1" in index_html
-    assert "20260520-linked-media-evidence-1" in index_html
+    assert "app.css?v=20260520-retrieval-scene-lineage-3" in index_html
+    assert "20260520-retrieval-scene-lineage-3" in index_html
     assert "renderAudioEmotionDistribution" in app_js
     assert "Audio Emotion Distribution" in app_js
     assert "Audio classifier labels, latest temporal index" in app_js
@@ -152,7 +152,7 @@ def test_retrieval_console_surfaces_scene_context_lens() -> None:
     app_js = (repo_root / "ui" / "operator_console_v1" / "static" / "js" / "app.js").read_text(encoding="utf-8")
     app_css = (repo_root / "ui" / "operator_console_v1" / "static" / "css" / "app.css").read_text(encoding="utf-8")
 
-    assert "20260520-linked-media-evidence-1" in index_html
+    assert "20260520-retrieval-scene-lineage-3" in index_html
     assert "appendRetrievalSceneContextLens" in app_js
     assert "Scene Context Lens" in app_js
     assert "Emotional arc" in app_js
@@ -170,7 +170,7 @@ def test_scene_inspector_surfaces_compact_evidence_summary() -> None:
     app_js = (repo_root / "ui" / "operator_console_v1" / "static" / "js" / "app.js").read_text(encoding="utf-8")
     app_css = (repo_root / "ui" / "operator_console_v1" / "static" / "css" / "app.css").read_text(encoding="utf-8")
 
-    assert "20260520-linked-media-evidence-1" in index_html
+    assert "20260520-retrieval-scene-lineage-3" in index_html
     assert "appendSceneEvidenceSummary" in app_js
     assert "Scene Evidence Summary" in app_js
     assert "Meaning source" in app_js
@@ -190,7 +190,7 @@ def test_media_preview_links_visual_proof_to_scene_evidence_summary() -> None:
     app_js = (repo_root / "ui" / "operator_console_v1" / "static" / "js" / "app.js").read_text(encoding="utf-8")
     app_css = (repo_root / "ui" / "operator_console_v1" / "static" / "css" / "app.css").read_text(encoding="utf-8")
 
-    assert "20260520-linked-media-evidence-1" in index_html
+    assert "20260520-retrieval-scene-lineage-3" in index_html
     assert "previewMeaningPayload" in app_js
     assert "appendPreviewEvidenceBridge" in app_js
     assert "Visual proof linked to selected scene evidence summary" in app_js
@@ -203,3 +203,24 @@ def test_media_preview_links_visual_proof_to_scene_evidence_summary() -> None:
     assert ".preview-meaning-card" in app_css
     assert ".preview-signal-compact" in app_css
     assert ".scene-evidence-actions" in app_css
+
+
+def test_retrieval_handoff_surfaces_shared_scene_lineage() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    index_html = (repo_root / "ui" / "operator_console_v1" / "index.html").read_text(encoding="utf-8")
+    app_js = (repo_root / "ui" / "operator_console_v1" / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    app_css = (repo_root / "ui" / "operator_console_v1" / "static" / "css" / "app.css").read_text(encoding="utf-8")
+
+    assert "20260520-retrieval-scene-lineage-3" in index_html
+    assert "setRetrievalSceneLineage" in app_js
+    assert "lineageMatchesScene" in app_js
+    assert "appendSceneLineageBridge" in app_js
+    assert "appendRetrievalLineageStrip" in app_js
+    assert "Scene handoff confirmed" in app_js
+    assert "retrieval -> timeline -> inspector -> preview" in app_js
+    assert "Same selected scene id" in app_js
+    assert "Timeline handoff unresolved" in app_js
+
+    assert ".scene-lineage-bridge" in app_css
+    assert ".retrieval-lineage-strip" in app_css
+    assert ".preview-lineage-note" in app_css

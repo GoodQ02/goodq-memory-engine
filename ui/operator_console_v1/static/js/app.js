@@ -1874,6 +1874,7 @@
   }
 
   function retrievalSceneContextLlm(result) {
+    if (result && result.scene_context_llm && typeof result.scene_context_llm === "object") return result.scene_context_llm;
     const context = retrievalContext(result);
     return context.scene_context_llm && typeof context.scene_context_llm === "object" ? context.scene_context_llm : null;
   }
@@ -1898,6 +1899,67 @@
       .concat(Array.isArray(llm.context_tags) ? llm.context_tags : [])
       .concat(Array.isArray(llm.structural_tags) ? llm.structural_tags : []);
     return [...new Set(tags.map((tag) => safeString(tag, "scene_context_tag")).filter(Boolean))];
+  }
+
+  function retrievalLlmKeyMoments(result) {
+    const llm = retrievalSceneContextLlm(result);
+    if (!llm || !Array.isArray(llm.key_moments)) return [];
+    return llm.key_moments.map((moment) => safeString(moment, "key_moment")).filter(Boolean);
+  }
+
+  function appendRetrievalSceneContextLens(container, result) {
+    const lens = document.createElement("section");
+    lens.className = "retrieval-context-lens";
+    lens.setAttribute("data-testid", "retrieval-context-lens");
+    appendText(lens, "h5", "Scene Context Lens");
+
+    const llm = retrievalSceneContextLlm(result);
+    if (!llm) {
+      appendText(lens, "p", "No scene_context_llm payload returned for this retrieval result.", "retrieval-context-empty");
+      container.appendChild(lens);
+      return;
+    }
+
+    const summary = retrievalLlmSummary(result);
+    if (summary) appendText(lens, "p", summary, "retrieval-context-summary");
+
+    const facts = [
+      ["Emotional arc", llm.emotional_arc || llm.emotion_arc || llm.affective_summary],
+      ["Activity", llm.activity_description],
+      ["Source", llm.source],
+    ].filter(([, value]) => valueObserved(value));
+    if (facts.length) {
+      const dl = document.createElement("dl");
+      dl.className = "retrieval-context-facts";
+      facts.forEach(([label, value]) => {
+        const dt = document.createElement("dt");
+        dt.textContent = label;
+        const dd = document.createElement("dd");
+        dd.textContent = safeString(value, label);
+        dl.appendChild(dt);
+        dl.appendChild(dd);
+      });
+      lens.appendChild(dl);
+    }
+
+    const moments = retrievalLlmKeyMoments(result);
+    if (moments.length) {
+      appendText(lens, "strong", "Key moments", "retrieval-context-label");
+      const ul = document.createElement("ul");
+      ul.className = "retrieval-key-moments";
+      moments.slice(0, 3).forEach((moment) => appendText(ul, "li", moment));
+      lens.appendChild(ul);
+    }
+
+    const tags = retrievalLlmTags(result);
+    if (tags.length) {
+      const strip = document.createElement("div");
+      strip.className = "retrieval-tag-strip";
+      tags.slice(0, 8).forEach((tag) => appendText(strip, "span", tag));
+      lens.appendChild(strip);
+    }
+
+    container.appendChild(lens);
   }
 
   function retrievalObjectLabels(result) {
@@ -2024,6 +2086,7 @@
       grid.appendChild(dd);
     });
     panel.appendChild(grid);
+    appendRetrievalSceneContextLens(panel, result);
 
     const footer = document.createElement("p");
     footer.className = "retrieval-evidence-footer";

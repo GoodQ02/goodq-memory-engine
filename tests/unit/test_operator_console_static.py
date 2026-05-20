@@ -124,3 +124,23 @@ def test_operator_console_surfaces_read_only_media_preview_layer() -> None:
     assert ".keyframe-container" in app_css
     assert ".modality-strip" in app_css
     assert ".mini-timeline" in app_css
+
+
+def test_operator_console_surfaces_audio_emotion_distribution() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    index_html = (repo_root / "ui" / "operator_console_v1" / "index.html").read_text(encoding="utf-8")
+    app_js = (repo_root / "ui" / "operator_console_v1" / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    app_css = (repo_root / "ui" / "operator_console_v1" / "static" / "css" / "app.css").read_text(encoding="utf-8")
+
+    assert "app.css?v=20260520-emotion-distribution-1" in index_html
+    assert "20260520-emotion-distribution-1" in index_html
+    assert "renderAudioEmotionDistribution" in app_js
+    assert "Audio Emotion Distribution" in app_js
+    assert "Audio classifier labels, latest temporal index" in app_js
+    assert "Text sentiment labels not present in this run" in app_js
+    assert "emotion-bar-list" in app_js
+    assert "${count}/${denominator}" in app_js
+
+    assert ".emotion-distribution" in app_css
+    assert ".emotion-bar-fill" in app_css
+    assert ".sentiment-empty-state" in app_css

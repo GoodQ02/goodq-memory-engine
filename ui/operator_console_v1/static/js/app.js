@@ -1226,6 +1226,84 @@
     container.appendChild(list);
   }
 
+  function renderAudioEmotionDistribution(container, sentiment, temporal) {
+    const rows = Array.isArray(sentiment.top_audio_emotions) ? sentiment.top_audio_emotions : [];
+    const total = numberValue(sentiment.segments_total ?? temporal.total_scenes);
+    const covered = numberValue(sentiment.segments_with_audio_emotion ?? temporal.segments_with_audio_emotion);
+
+    appendText(container, "h3", "Audio Emotion Distribution", "panel-subtitle");
+    const panel = document.createElement("div");
+    panel.className = "emotion-distribution";
+    panel.setAttribute("data-testid", "audio-emotion-distribution");
+
+    appendIndicatorStrip(
+      panel,
+      [
+        {
+          label: "Coverage",
+          value: covered !== null && total !== null ? `${covered}/${total}` : "Not exposed",
+          note: "Audio classifier labels, latest temporal index",
+          kind: covered !== null && total !== null && covered === total ? "ok" : "warn",
+        },
+        {
+          label: "Label families",
+          value: String(rows.length),
+          note: rows.length ? "observed emotion buckets" : "no buckets returned",
+          kind: rows.length ? "info" : "unknown",
+        },
+        {
+          label: "Text sentiment",
+          value: numberValue(sentiment.segments_with_sentiment) ? "Observed" : "Not present",
+          note: "tracked separately from audio emotion",
+          kind: numberValue(sentiment.segments_with_sentiment) ? "ok" : "unknown",
+        },
+      ],
+      "emotion-rollup-strip"
+    );
+
+    if (!rows.length) {
+      appendText(panel, "p", "No audio emotion labels present in this run.", "sentiment-empty-state");
+      container.appendChild(panel);
+      return;
+    }
+
+    const rowSum = rows.reduce((sum, row) => sum + (numberValue(row.count) || 0), 0);
+    const denominator = total || rowSum || 1;
+    const list = document.createElement("div");
+    list.className = "emotion-bar-list";
+    rows.slice(0, 8).forEach((row) => {
+      const count = numberValue(row.count) || 0;
+      const percent = denominator ? Math.max(4, Math.min(100, Math.round((count / denominator) * 100))) : 0;
+      const item = document.createElement("div");
+      item.className = "emotion-bar-row";
+      item.setAttribute("aria-label", `${safeString(row.label || "unknown", "label")}: ${count}/${denominator} scenes`);
+
+      const label = document.createElement("span");
+      label.className = "emotion-bar-label";
+      label.textContent = safeString(row.label || "unknown", "label");
+      item.appendChild(label);
+
+      const track = document.createElement("div");
+      track.className = "emotion-bar-track";
+      const fill = document.createElement("span");
+      fill.className = "emotion-bar-fill";
+      fill.style.width = `${percent}%`;
+      track.appendChild(fill);
+      item.appendChild(track);
+
+      appendText(item, "strong", `${count}/${denominator}`, "emotion-bar-count");
+      list.appendChild(item);
+    });
+    panel.appendChild(list);
+
+    if (!numberValue(sentiment.segments_with_sentiment)) {
+      appendText(panel, "p", "Text sentiment labels not present in this run.", "sentiment-empty-state");
+    } else {
+      renderMiniList(panel, "Sentiment labels", sentiment.sentiment_labels, "label", "count");
+    }
+    container.appendChild(panel);
+  }
+
   function renderRecentSteps(container, rows) {
     if (!Array.isArray(rows) || !rows.length) return;
     appendText(container, "h3", "Recent step rows", "panel-subtitle");
@@ -1476,8 +1554,7 @@
     ]);
     appendText(node, "h3", "Emotion and sentiment summary", "panel-subtitle");
     renderKv(node, sentiment, ["status", "segments_total", "segments_with_audio_emotion", "segments_with_sentiment", "average_sentiment_score"]);
-    renderMiniList(node, "Top audio emotions", sentiment.top_audio_emotions, "label", "count");
-    renderMiniList(node, "Sentiment labels", sentiment.sentiment_labels, "label", "count");
+    renderAudioEmotionDistribution(node, sentiment, temporal);
   }
 
   function renderDiagnostics() {

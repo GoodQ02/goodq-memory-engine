@@ -1837,6 +1837,69 @@ h3 {
   font-size: 12px;
 }
 
+.emotion-distribution {
+  display: grid;
+  gap: 12px;
+  margin-top: 10px;
+  padding: 12px;
+  border: 1px solid rgba(139, 97, 32, 0.22);
+  border-radius: 6px;
+  background: rgba(247, 244, 233, 0.48);
+}
+
+.emotion-rollup-strip {
+  margin: 0;
+}
+
+.emotion-bar-list {
+  display: grid;
+  gap: 8px;
+}
+
+.emotion-bar-row {
+  display: grid;
+  grid-template-columns: minmax(88px, 0.24fr) minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+}
+
+.emotion-bar-label {
+  color: var(--panel-muted);
+  font-size: 12px;
+  text-transform: capitalize;
+  overflow-wrap: anywhere;
+}
+
+.emotion-bar-track {
+  min-width: 0;
+  height: 10px;
+  border: 1px solid rgba(139, 97, 32, 0.28);
+  border-radius: 999px;
+  background: rgba(17, 19, 18, 0.08);
+  overflow: hidden;
+}
+
+.emotion-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--amber), var(--cyan));
+  box-shadow: 0 0 12px rgba(142, 199, 192, 0.22);
+}
+
+.emotion-bar-count {
+  color: var(--panel-ink);
+  font-family: "Courier New", ui-monospace, monospace;
+  font-size: 12px;
+}
+
+.sentiment-empty-state {
+  margin: 0;
+  color: var(--panel-muted);
+  font-size: 12px;
+}
+
 .scene-summary {
   margin: 0 0 14px;
   padding: 12px;

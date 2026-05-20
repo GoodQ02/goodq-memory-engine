@@ -21,6 +21,10 @@
       selectedKey: null,
       error: null,
     },
+    mediaPreview: {
+      open: false,
+      source: null,
+    },
     loading: false,
     loadingDiagnostics: false,
     data: {},
@@ -122,6 +126,19 @@
     return `${state.apiBase}${path}`;
   }
 
+  function mediaEndpointUrl(path) {
+    if (!valueObserved(path) || typeof path !== "string") return null;
+    const trimmed = path.trim();
+    if (trimmed.startsWith("/api/")) return endpointUrl(trimmed);
+    try {
+      const url = new URL(trimmed);
+      if (LOCAL_HOSTS.has(url.hostname) && url.pathname.startsWith("/api/")) return trimmed;
+    } catch (_e) {
+      return null;
+    }
+    return null;
+  }
+
   function hasPathValue(value) {
     if (typeof value !== "string") return false;
     const trimmed = value.trim();
@@ -197,6 +214,80 @@
     const badge = document.createElement("span");
     badge.className = `badge ${kind || statusKind(text)}`;
     badge.textContent = text || "unknown";
+    return badge;
+  }
+
+  function makeStatusDot(kind, label) {
+    const dot = document.createElement("span");
+    dot.className = `state-dot-mini ${kind || "unknown"}`;
+    dot.title = label || "State indicator";
+    dot.setAttribute("aria-label", label || "State indicator");
+    return dot;
+  }
+
+  function appendIndicatorStrip(container, items, className) {
+    const strip = document.createElement("div");
+    strip.className = `indicator-strip ${className || ""}`.trim();
+    items.forEach((item) => {
+      const card = document.createElement("div");
+      card.className = `indicator-card ${item.kind || "unknown"}`;
+      if (item.title) card.title = item.title;
+      const dot = document.createElement("span");
+      dot.className = `indicator-dot ${item.kind || "unknown"}`;
+      dot.setAttribute("aria-hidden", "true");
+      card.appendChild(dot);
+      const copy = document.createElement("div");
+      appendText(copy, "span", item.label, "indicator-label");
+      appendText(copy, "strong", item.value, "indicator-value");
+      if (item.note) appendText(copy, "small", item.note, "indicator-note");
+      card.appendChild(copy);
+      strip.appendChild(card);
+    });
+    container.appendChild(strip);
+  }
+
+  function compactIdentifier(value, options) {
+    const opts = options || {};
+    const fallback = opts.fallback || "Not observed";
+    if (!valueObserved(value)) return fallback;
+    const text = safeString(value, opts.key || "id");
+    const max = opts.max || 18;
+    if (text.length <= max || text === "[local-only]") return text;
+    const leading = opts.leading || 10;
+    const trailing = opts.trailing || 4;
+    return `${text.slice(0, leading)}...${text.slice(-trailing)}`;
+  }
+
+  function sceneDisplayLabel(value, fallbackIndex) {
+    const fallback = Number.isFinite(fallbackIndex) ? `Result ${fallbackIndex + 1}` : "scene";
+    return `Scene ${compactIdentifier(value, { fallback, key: "scene_id", max: 18, leading: 10, trailing: 4 })}`;
+  }
+
+  function confidenceBand(percent) {
+    if (percent === null || percent === undefined) {
+      return {
+        label: "No score",
+        kind: "unknown",
+        note: "Search endpoint did not return a confidence score",
+      };
+    }
+    if (percent >= 80) return { label: "Strong match", kind: "ok", note: "High-confidence retrieval result" };
+    if (percent >= 50) return { label: "Reviewable match", kind: "info", note: "Useful for human inspection" };
+    if (percent >= 15) return { label: "Exploratory match", kind: "warn", note: "Low confidence; inspect evidence before relying on it" };
+    return { label: "Low signal", kind: "unknown", note: "Returned by search, but weakly supported" };
+  }
+
+  function confidenceLabel(percent) {
+    const band = confidenceBand(percent);
+    return percent === null || percent === undefined ? band.label : `${band.label} ${percentLabel(percent)}`;
+  }
+
+  function makeConfidenceBadge(percent) {
+    const band = confidenceBand(percent);
+    const badge = document.createElement("span");
+    badge.className = `confidence-badge ${band.kind}`;
+    badge.textContent = confidenceLabel(percent);
+    badge.title = band.note;
     return badge;
   }
 
@@ -596,7 +687,7 @@
     const pipelineRunning = Boolean(pipelineStatus && !["idle", "inactive", "unknown", "unavailable"].includes(pipelineStatus));
     const processingFolderNote =
       processingCount !== null
-        ? `${processingCount} processing folder item${processingCount === 1 ? "" : "s"}`
+        ? `Historical processing artifacts: ${processingCount}`
         : "Queue reachable";
 
     appendFlightRow(systemMap, "Launcher", grammarState("NOT_EXPOSED", "Launcher state is not exposed"), "flight-launcher-status");
@@ -691,7 +782,7 @@
         : {
             ...(pipelineRunning ? grammarState("RUNNING") : grammarState("IDLE")),
             label: pipelineRunning ? "Running" : "0 running",
-            note: processingFolderNote,
+            note: pipelineRunning ? processingFolderNote : `Backlog not exposed; ${processingFolderNote}`,
           },
       "flight-processing-queue"
     );
@@ -742,7 +833,7 @@
       3,
       "Watch processing",
       pipelineRunning ? grammarState("RUNNING") : grammarState("IDLE"),
-      `${pipelineRunning ? 1 : 0} running; processed ${processedCount || 0}; ${processingFolderNote}`
+      `Running ${pipelineRunning ? 1 : 0}; processed ${processedCount || 0}; ${processingFolderNote}`
     );
     appendFirstRunStep(
       firstRunGuide,
@@ -937,11 +1028,47 @@
     const proofDisplayRows = proofRows.concat(
       supplementalChecks.filter((row) => row.label === "CLAP memory commit" || row.label === "Current-run Qdrant audio proof")
     );
+    const coreObserved = proofRows.filter((row) => row.state.observed).length;
+    const optionalObserved = supplementalChecks.filter((row) => row.state.observed).length;
+    appendIndicatorStrip(
+      proofList,
+      [
+        {
+          label: "Core proof",
+          value: `${coreObserved}/${proofRows.length}`,
+          note: "scene, temporal, graph",
+          kind: coreObserved === proofRows.length ? "ok" : "warn",
+        },
+        {
+          label: "Optional enrichment",
+          value: `${optionalObserved}/${supplementalChecks.length}`,
+          note: "sentiment, CLAP, FAISS",
+          kind: optionalObserved === supplementalChecks.length ? "ok" : "warn",
+        },
+        {
+          label: "Audio vector proof",
+          value: audioProofObserved
+            ? `${provenAudioCount || 0}/${clapOkCount || 0}`
+            : `0/${clapOkCount || 0}`,
+          note: "current-run Qdrant",
+          kind: audioProofObserved ? "ok" : "unknown",
+          title: audioProofNote,
+        },
+      ],
+      "proof-rollup-strip"
+    );
     proofDisplayRows.forEach((row) => {
+      const compactStatus = row.label === "Current-run Qdrant audio proof"
+        ? row.state.label
+        : row.state.observed
+          ? "On"
+          : row.state.kind === "warn"
+            ? "Review"
+            : "Off";
       appendProofItem(proofList, {
         label: row.label,
         note: row.state.note,
-        status: row.state.label,
+        status: compactStatus,
         kind: row.state.kind,
       });
     });
@@ -1037,18 +1164,28 @@
     );
     grid.appendChild(
       metric(
-        "Engine health",
-        health.overall ? health.overall.status : "unknown",
-        health.overall ? `${health.overall.healthy}/${health.overall.total} healthy` : "No health summary",
-        health.overall ? statusKind(health.overall.status) : "warn"
+        "Core runtime",
+        status.database?.exists === true && memory.qdrant?.available === true ? "Ready" : "Partial",
+        `SQLite ${status.database?.exists === true ? "ready" : "not exposed"}; Qdrant ${memory.qdrant?.available === true ? "ready" : "not observed"}`,
+        status.database?.exists === true && memory.qdrant?.available === true ? "ok" : "warn"
       )
     );
+    const optionalHealthy = numberValue(health.overall?.healthy);
+    const optionalTotal = numberValue(health.overall?.total);
     grid.appendChild(
       metric(
         "Latest run",
         run.status || "unknown",
         run.available ? `${safeString(run.scenes_processed, "scenes_processed")} scenes processed` : "No run preview",
         statusKind(run.status)
+      )
+    );
+    grid.appendChild(
+      metric(
+        "Optional model services",
+        optionalTotal !== null && optionalHealthy === optionalTotal ? "Ready" : "Optional Offline",
+        optionalTotal !== null ? `${optionalHealthy || 0}/${optionalTotal} optional services ready` : "Health summary pending",
+        optionalTotal !== null && optionalHealthy === optionalTotal ? "ok" : "warn"
       )
     );
     grid.appendChild(
@@ -1362,7 +1499,33 @@
         port: item.port || "",
       }));
 
-    node.appendChild(panelHeader("Engine diagnostics", "Read-only probes; path-bearing descriptions are omitted", overall.status || "unknown"));
+    const readyCount = rows.filter((row) => statusKind(row.status) === "ok").length;
+    const optionalOffline = Math.max(0, rows.length - readyCount);
+    node.appendChild(panelHeader("Runtime diagnostics", "Core runtime separated from optional services; path-bearing descriptions are omitted", optionalOffline ? "Partial" : "Ready"));
+    appendIndicatorStrip(
+      node,
+      [
+        {
+          label: "Core runtime",
+          value: "Ready",
+          note: "API, SQLite, and Qdrant are shown in Flight Deck",
+          kind: "ok",
+        },
+        {
+          label: "Optional model services",
+          value: optionalOffline ? "Offline" : "Ready",
+          note: `${readyCount}/${rows.length} probes ready`,
+          kind: optionalOffline ? "warn" : "ok",
+        },
+        {
+          label: "Diagnostic rows",
+          value: String(rows.length),
+          note: "expanded below",
+          kind: rows.length ? "info" : "unknown",
+        },
+      ],
+      "diagnostics-rollup-strip"
+    );
     renderKv(node, overall, ["status", "total", "healthy", "unhealthy"]);
     renderSimpleTable(
       node,
@@ -1493,7 +1656,28 @@
     clear(node);
     if (state.errors.health) return showError(node, `Health summary unavailable: ${state.errors.health}`);
     const health = state.data.health || {};
-    node.appendChild(panelHeader("Engine health", "Model service readiness", health.overall?.status || "unknown"));
+    const healthy = numberValue(health.overall?.healthy);
+    const total = numberValue(health.overall?.total);
+    const optionalReady = healthy !== null && total !== null && healthy === total;
+    node.appendChild(panelHeader("Optional model services", "Read-only LLM service probes; core memory readiness is in Flight Deck", optionalReady ? "Ready" : "Optional Offline"));
+    appendIndicatorStrip(
+      node,
+      [
+        {
+          label: "Core runtime",
+          value: "See Flight Deck",
+          note: "memory path is evaluated separately",
+          kind: "info",
+        },
+        {
+          label: "Optional model services",
+          value: total !== null ? `${healthy || 0}/${total}` : "Not exposed",
+          note: optionalReady ? "all optional services ready" : "offline does not block memory reads",
+          kind: optionalReady ? "ok" : "warn",
+        },
+      ],
+      "health-rollup-strip"
+    );
     renderKv(node, health.overall || {}, ["status", "total", "healthy", "unhealthy"]);
     renderKv(node, health.vllm || {}, ["status", "healthy", "total"]);
     renderKv(node, health.ollama || {}, ["status", "healthy", "total"]);
@@ -1564,7 +1748,7 @@
 
   function resultSceneLabel(result, fallbackIndex) {
     const id = result && result.scene_id !== null && result.scene_id !== undefined ? result.scene_id : `Result ${fallbackIndex + 1}`;
-    return `Scene ${safeString(id, "scene_id")}`;
+    return sceneDisplayLabel(id, fallbackIndex);
   }
 
   function resultSummary(result) {
@@ -1704,7 +1888,7 @@
     const arbitration = context.scene_context_arbitration && typeof context.scene_context_arbitration === "object" ? context.scene_context_arbitration : {};
     const facts = [
       ["Episode", retrievalVideoLabel(result)],
-      ["Search id", result && result.timeline_video_id && result.video_id !== result.timeline_video_id ? result.video_id : null],
+      ["Search id", result && result.timeline_video_id && result.video_id !== result.timeline_video_id ? compactIdentifier(result.video_id, { key: "search_id", max: 22, leading: 12, trailing: 6 }) : null],
       ["Time", resultTimeLabel(result)],
       ["Transcript", valueObserved(result && result.transcript) || valueObserved(context.transcript) ? "Observed" : "Not observed"],
       ["Objects", objects.length ? `${objects.slice(0, 4).join(", ")}${objects.length > 4 ? "..." : ""}` : "Not observed"],
@@ -1729,6 +1913,27 @@
     panel.className = "retrieval-evidence-digest";
     panel.setAttribute("data-testid", "retrieval-evidence-digest");
     appendText(panel, "h4", "Selected Evidence");
+    const band = confidenceBand(percent);
+    const observedSignals = Array.isArray(signals) ? signals.filter((row) => row.observed).length : 0;
+    appendIndicatorStrip(
+      panel,
+      [
+        {
+          label: "Match band",
+          value: band.label,
+          note: percentLabel(percent),
+          kind: band.kind,
+          title: band.note,
+        },
+        {
+          label: "Evidence signals",
+          value: `${observedSignals}/${Array.isArray(signals) ? signals.length : 0}`,
+          note: "returned by search response",
+          kind: observedSignals ? "info" : "unknown",
+        },
+      ],
+      "retrieval-rollup-strip"
+    );
     appendText(panel, "p", resultSummary(result), "retrieval-evidence-summary");
 
     const grid = document.createElement("dl");
@@ -1743,10 +1948,9 @@
     });
     panel.appendChild(grid);
 
-    const observedSignals = Array.isArray(signals) ? signals.filter((row) => row.observed).length : 0;
     const footer = document.createElement("p");
     footer.className = "retrieval-evidence-footer";
-    footer.textContent = `${resultSceneLabel(result, selectedIndex)} | ${observedSignals} signals observed | ${percentLabel(percent)} returned score`;
+    footer.textContent = `${resultSceneLabel(result, selectedIndex)} | ${observedSignals} signals observed | ${confidenceLabel(percent)}`;
     panel.appendChild(footer);
     container.appendChild(panel);
   }
@@ -1860,7 +2064,7 @@
       wrap.appendChild(value);
       item.appendChild(wrap);
     } else {
-      item.appendChild(makeBadge(row.observed ? "Observed" : "Not proven", row.observed ? "ok" : "unknown"));
+      item.appendChild(makeBadge(row.observed ? "On" : "Off", row.observed ? "ok" : "unknown"));
     }
     container.appendChild(item);
   }
@@ -1941,21 +2145,25 @@
       row.addEventListener("click", () => {
         state.retrieval.selectedKey = key;
         renderRetrievalConsole();
+        openMediaPreview("retrieval");
       });
       const label = document.createElement("div");
-      appendText(label, "strong", resultSceneLabel(result, index));
+      const sceneLabel = appendText(label, "strong", resultSceneLabel(result, index), "compact-id");
+      if (result && result.scene_id !== null && result.scene_id !== undefined) {
+        sceneLabel.title = safeString(result.scene_id, "scene_id");
+      }
       appendText(label, "span", `${resultTimeLabel(result)} | ${safeString(result.modality || "unknown", "modality")}`, "retrieval-result-meta");
       appendText(label, "span", resultSummary(result), "retrieval-result-summary");
       row.appendChild(label);
       const percent = scorePercent(result);
-      row.appendChild(makeBadge(percentLabel(percent), percent !== null && percent >= 80 ? "ok" : "warn"));
+      row.appendChild(makeConfidenceBadge(percent));
       list.appendChild(row);
     });
 
     const selected = selectedRetrievalEntry();
     const result = selected ? selected.result : null;
     const percent = scorePercent(result);
-    selectedScore.textContent = percentLabel(percent);
+    selectedScore.textContent = confidenceLabel(percent);
 
     const signalList = document.createElement("div");
     signalList.className = "retrieval-signal-list";
@@ -1986,7 +2194,7 @@
 
     const observedSignals = signals.filter((row) => row.observed).length;
     const handoffNote = canOpenRetrievalResult(result) ? "" : " | timeline handoff not resolved";
-    previewCopy.textContent = `${resultSceneLabel(result, selected.index)} | ${resultTimeLabel(result)} | ${observedSignals} signals observed | ${percentLabel(percent)} returned score${handoffNote}. ${resultSummary(result)}`;
+    previewCopy.textContent = `${resultSceneLabel(result, selected.index)} | ${resultTimeLabel(result)} | ${observedSignals} signals observed | ${confidenceLabel(percent)}${handoffNote}. ${resultSummary(result)}`;
     openScene.disabled = !canOpenRetrievalResult(result);
     if (openScene.disabled) {
       viewTimeline.setAttribute("aria-disabled", "true");
@@ -2053,6 +2261,7 @@
     renderVideos();
     renderTimeline();
     renderSceneInspector();
+    openMediaPreview("timeline");
     window.location.hash = targetHash || "scene-inspector";
   }
 
@@ -2070,6 +2279,20 @@
     return "Thumbnail: not exposed";
   }
 
+  function thumbnailStatusCompact(video) {
+    if (video && video.thumbnail_available && valueObserved(video.thumbnail_endpoint)) {
+      return {
+        label: "Thumb",
+        kind: "ok",
+        note: video.thumbnail_path_redacted ? "Thumbnail ready; path redacted" : "Thumbnail ready",
+      };
+    }
+    if (video && video.thumbnail_available) {
+      return { label: "Thumb", kind: "warn", note: "Thumbnail exists; endpoint not exposed" };
+    }
+    return { label: "No thumb", kind: "unknown", note: "Thumbnail not exposed" };
+  }
+
   function renderVideos() {
     const node = qs("#video-panel");
     clear(node);
@@ -2081,12 +2304,15 @@
     list.className = "video-list";
     videos.forEach((video) => {
       const id = video.video_id || video.id || "";
+      const thumbnailStatus = thumbnailStatusCompact(video);
       const button = document.createElement("button");
       button.type = "button";
       button.className = `video-button ${id === state.selectedVideoId ? "selected" : ""}`;
+      button.title = thumbnailEnvelopeLabel(video);
       button.addEventListener("click", async () => {
         state.selectedVideoId = id;
         state.selectedSceneKey = null;
+        if (state.mediaPreview.open) state.mediaPreview.source = "timeline";
         renderVideos();
         showLoading(qs("#timeline-panel"));
         showLoading(qs("#scene-detail-panel"));
@@ -2095,6 +2321,7 @@
         await refreshTimeline();
         renderTimeline();
         renderSceneInspector();
+        renderMediaPreview();
       });
       const label = document.createElement("span");
       appendText(label, "span", safeVideoTitle(video), "video-title");
@@ -2104,9 +2331,11 @@
         `${safeString(video.total_scenes, "total_scenes")} scenes | ${safeString(video.processed_date, "processed_date")}`,
         "video-meta"
       );
-      appendText(label, "span", thumbnailEnvelopeLabel(video), "video-meta");
+      appendText(label, "span", thumbnailStatus.note, "video-meta");
       button.appendChild(label);
-      button.appendChild(makeBadge(id === state.selectedVideoId ? "selected" : "open", id === state.selectedVideoId ? "ok" : ""));
+      button.appendChild(
+        makeStatusDot(id === state.selectedVideoId ? "ok" : thumbnailStatus.kind, id === state.selectedVideoId ? "Selected video" : thumbnailStatus.note)
+      );
       list.appendChild(button);
     });
 
@@ -2179,6 +2408,258 @@
       key: segmentKey(segments[selectedIndex], selectedIndex),
       segment: segments[selectedIndex],
     };
+  }
+
+  function openMediaPreview(source) {
+    state.mediaPreview.open = true;
+    state.mediaPreview.source = source || "timeline";
+    renderMediaPreview();
+  }
+
+  function closeMediaPreview() {
+    state.mediaPreview.open = false;
+    renderMediaPreview();
+  }
+
+  function previewCount(value) {
+    if (Array.isArray(value)) return value.length;
+    if (value && typeof value === "object") return Object.keys(value).length;
+    return valueObserved(value) ? 1 : 0;
+  }
+
+  function previewArray(value) {
+    if (Array.isArray(value)) return value;
+    if (value && typeof value === "object") return Object.values(value);
+    return valueObserved(value) ? [value] : [];
+  }
+
+  function mediaPreviewEvidence(raw, context) {
+    const objects = retrievalObjectLabels(raw).length
+      ? retrievalObjectLabels(raw)
+      : stringList(raw && raw.objects, 4);
+    const faces = previewCount(raw && (raw.faces || raw.face_ids || raw.candidate_visible_people || context.candidate_visible_people));
+    const transcript = valueObserved(raw && raw.transcript) || valueObserved(context.transcript) || valueObserved(raw && raw.full_transcript);
+    const audioEmotion = valueObserved(raw && raw.audio_emotion) || valueObserved(context.audio_emotion) || valueObserved(raw && raw.audio_emotion_scores);
+    const frame = valueObserved(raw && (raw.representative_frame_endpoint || raw.representative_frame || context.representative_frame_endpoint || context.representative_frame));
+    const clapMeta = raw && raw.clap_meta && typeof raw.clap_meta === "object" ? raw.clap_meta : context.clap_meta;
+    const currentRunAudioProof =
+      raw && (raw.current_run_qdrant_audio_proven || raw.current_run_audio_vector_proven || raw.audio_qdrant_current_run_proven);
+
+    return [
+      { label: frame ? "Keyframe present" : "Keyframe not exposed", observed: frame, kind: frame ? "ok" : "unknown" },
+      { label: transcript ? "Transcript present" : "Transcript not exposed", observed: transcript, kind: transcript ? "ok" : "unknown" },
+      { label: objects.length ? `${objects.length} objects` : "Objects not exposed", observed: objects.length > 0, kind: objects.length ? "ok" : "unknown" },
+      { label: faces ? `${faces} face signals` : "Face signals not exposed", observed: faces > 0, kind: faces ? "info" : "unknown" },
+      { label: audioEmotion ? "Audio emotion reviewable" : "Audio emotion not exposed", observed: audioEmotion, kind: audioEmotion ? "info" : "unknown" },
+      {
+        label: currentRunAudioProof
+          ? "Current-run audio proof exposed"
+          : valueObserved(clapMeta)
+            ? "CLAP metadata present"
+            : "Current-run audio proof not exposed",
+        observed: Boolean(currentRunAudioProof || valueObserved(clapMeta)),
+        kind: currentRunAudioProof ? "ok" : valueObserved(clapMeta) ? "info" : "unknown",
+      },
+    ];
+  }
+
+  function mediaPreviewPayload() {
+    if (state.mediaPreview.source === "retrieval") {
+      const entry = selectedRetrievalEntry();
+      if (entry && entry.result) {
+        const result = entry.result;
+        const context = retrievalContext(result);
+        const frameEndpoint =
+          result.representative_frame_endpoint ||
+          context.representative_frame_endpoint ||
+          result.representative_frame ||
+          context.representative_frame;
+        return {
+          source: "Retrieval",
+          raw: result,
+          context,
+          index: entry.index,
+          sceneId: result.scene_id || `Result ${entry.index + 1}`,
+          label: resultSceneLabel(result, entry.index),
+          start: retrievalNumber(context.start ?? result.start),
+          end: retrievalNumber(context.end ?? result.end),
+          confidence: scorePercent(result),
+          summary: resultSummary(result),
+          frameUrl: mediaEndpointUrl(frameEndpoint),
+          evidence: mediaPreviewEvidence(result, context),
+        };
+      }
+    }
+
+    const entry = selectedSegmentEntry();
+    if (!entry) return null;
+    const segment = entry.segment || {};
+    const frameEndpoint = segment.representative_frame_endpoint || segment.representative_frame;
+    return {
+      source: "Timeline",
+      raw: segment,
+      context: {},
+      index: entry.index,
+      sceneId: segment.scene_id || segment.index || entry.key,
+      label: sceneDisplayLabel(segment.scene_id || segment.index || entry.key, entry.index),
+      start: numberValue(segment.start),
+      end: numberValue(segment.end),
+      confidence: null,
+      summary: segmentSummary(segment),
+      frameUrl: mediaEndpointUrl(frameEndpoint),
+      evidence: mediaPreviewEvidence(segment, {}),
+    };
+  }
+
+  function appendModalityDot(container, label, active, title) {
+    const dot = document.createElement("span");
+    dot.className = `modality-dot ${active ? "active" : ""}`;
+    dot.textContent = label;
+    dot.title = title;
+    dot.setAttribute("aria-label", `${title}: ${active ? "present" : "not exposed"}`);
+    container.appendChild(dot);
+  }
+
+  function appendPreviewEvidenceRow(container, row) {
+    const item = document.createElement("div");
+    item.className = "summary-row";
+    appendText(item, "span", row.label);
+    item.appendChild(makeStatusDot(row.kind, row.label));
+    container.appendChild(item);
+  }
+
+  function renderMediaPreview() {
+    const panel = qs("#media-preview-panel");
+    if (!panel) return;
+    clear(panel);
+    panel.className = `media-preview-panel ${state.mediaPreview.open ? "active" : ""}`;
+    panel.setAttribute("aria-hidden", state.mediaPreview.open ? "false" : "true");
+
+    if (!state.mediaPreview.open) {
+      const empty = document.createElement("div");
+      empty.className = "preview-empty";
+      appendText(empty, "strong", "Media Preview");
+      appendText(empty, "span", "Select a scene from inventory, timeline, or retrieval to preview.");
+      panel.appendChild(empty);
+      return;
+    }
+
+    const payload = mediaPreviewPayload();
+    if (!payload) {
+      const empty = document.createElement("div");
+      empty.className = "preview-empty";
+      appendText(empty, "strong", "No scene selected");
+      appendText(empty, "span", "Select a scene from inventory, timeline, or retrieval to preview.");
+      const close = document.createElement("button");
+      close.type = "button";
+      close.className = "preview-close";
+      close.textContent = "Close";
+      close.addEventListener("click", closeMediaPreview);
+      empty.appendChild(close);
+      panel.appendChild(empty);
+      return;
+    }
+
+    const header = document.createElement("div");
+    header.className = "preview-header";
+    const meta = document.createElement("div");
+    appendText(meta, "span", payload.label, "scene-id").title = safeString(payload.sceneId, "scene_id");
+    appendText(
+      meta,
+      "span",
+      `${formatTime(payload.start)} - ${formatTime(payload.end)}`,
+      "duration"
+    );
+    header.appendChild(meta);
+    if (payload.confidence !== null && payload.confidence !== undefined) {
+      header.appendChild(makeConfidenceBadge(payload.confidence));
+    } else {
+      header.appendChild(makeBadge(payload.source, "info"));
+    }
+    const close = document.createElement("button");
+    close.type = "button";
+    close.className = "preview-close";
+    close.textContent = "Close";
+    close.addEventListener("click", closeMediaPreview);
+    header.appendChild(close);
+    panel.appendChild(header);
+
+    const frameBox = document.createElement("div");
+    frameBox.className = "keyframe-container";
+    if (payload.frameUrl) {
+      const image = document.createElement("img");
+      image.className = "keyframe";
+      image.src = payload.frameUrl;
+      image.alt = "Scene keyframe";
+      image.loading = "lazy";
+      frameBox.appendChild(image);
+    } else {
+      appendText(frameBox, "span", "No redacted keyframe exposed", "keyframe-fallback");
+    }
+    const overlay = document.createElement("div");
+    overlay.className = "crt-overlay";
+    overlay.setAttribute("aria-hidden", "true");
+    frameBox.appendChild(overlay);
+    panel.appendChild(frameBox);
+
+    const miniTimeline = document.createElement("div");
+    miniTimeline.className = "mini-timeline";
+    appendText(miniTimeline, "span", formatTime(payload.start));
+    const rail = document.createElement("div");
+    rail.className = "mini-timeline-rail";
+    const playhead = document.createElement("span");
+    playhead.className = "playhead";
+    playhead.style.left = "0%";
+    rail.appendChild(playhead);
+    miniTimeline.appendChild(rail);
+    appendText(miniTimeline, "span", formatTime(payload.end));
+    panel.appendChild(miniTimeline);
+
+    const raw = payload.raw || {};
+    const context = payload.context || {};
+    const modality = document.createElement("div");
+    modality.className = "modality-strip";
+    appendModalityDot(modality, "V", Boolean(payload.frameUrl || valueObserved(raw.objects)), "Video evidence");
+    appendModalityDot(modality, "A", Boolean(valueObserved(raw.audio_emotion) || valueObserved(context.audio_emotion) || valueObserved(raw.audio_emotion_scores)), "Audio evidence");
+    appendModalityDot(modality, "T", Boolean(valueObserved(raw.transcript) || valueObserved(context.transcript) || valueObserved(raw.full_transcript)), "Text evidence");
+    appendModalityDot(modality, "F", Boolean(previewCount(raw.faces || raw.face_ids || raw.candidate_visible_people || context.candidate_visible_people)), "Face evidence");
+    appendModalityDot(modality, "O", Boolean(previewArray(raw.objects || context.objects).length), "Object evidence");
+    panel.appendChild(modality);
+
+    const transcript = document.createElement("div");
+    transcript.className = "transcript";
+    appendText(transcript, "p", payload.summary || "No transcript or scene summary exposed.");
+    panel.appendChild(transcript);
+
+    const evidence = document.createElement("div");
+    evidence.className = "evidence-summary";
+    payload.evidence.forEach((row) => appendPreviewEvidenceRow(evidence, row));
+    panel.appendChild(evidence);
+
+    const actions = document.createElement("div");
+    actions.className = "preview-actions";
+    const play = document.createElement("button");
+    play.type = "button";
+    play.className = "retrieval-button";
+    play.textContent = "Clip playback not exposed";
+    play.title = "Clip playback not exposed by the read-only API surface.";
+    play.disabled = true;
+    actions.appendChild(play);
+
+    const inspector = document.createElement("a");
+    inspector.className = "retrieval-button primary";
+    inspector.href = "#scene-inspector";
+    inspector.textContent = "Open Full Inspector";
+    actions.appendChild(inspector);
+
+    const exportButton = document.createElement("button");
+    exportButton.type = "button";
+    exportButton.className = "retrieval-button";
+    exportButton.textContent = "Export manifest not exposed";
+    exportButton.title = "Export manifest not exposed by the read-only API surface.";
+    exportButton.disabled = true;
+    actions.appendChild(exportButton);
+    panel.appendChild(actions);
   }
 
   function valueObserved(value) {
@@ -2346,7 +2827,7 @@
     appendText(labelWrap, "strong", label);
     appendText(labelWrap, "span", note || "", "scene-signal-note");
     row.appendChild(labelWrap);
-    row.appendChild(makeBadge(observed ? "Observed" : "Not observed", observed ? "ok" : "unknown"));
+    row.appendChild(makeBadge(observed ? "On" : "Off", observed ? "ok" : "unknown"));
     container.appendChild(row);
   }
 
@@ -2395,7 +2876,8 @@
     }
 
     const segment = entry.segment || {};
-    const sceneLabel = safeString(segment.scene_id || segment.segment_id || `Scene ${entry.index + 1}`, "scene_id");
+    const rawSceneId = segment.scene_id || segment.segment_id || `Scene ${entry.index + 1}`;
+    const sceneLabel = sceneDisplayLabel(rawSceneId, entry.index);
     const startEnd = `${formatTime(segment.start)}-${formatTime(segment.end)}`;
     const speakerIds = Array.isArray(segment.speaker_ids) ? segment.speaker_ids : [];
     const visiblePeople = Array.isArray(segment.candidate_visible_people) ? segment.candidate_visible_people : [];
@@ -2441,7 +2923,7 @@
     const facts = document.createElement("div");
     facts.className = "scene-fact-list";
     [
-      ["Scene ID", segment.scene_id || segment.segment_id || "Not observed"],
+      ["Scene ID", compactIdentifier(rawSceneId, { key: "scene_id", max: 22, leading: 12, trailing: 6 })],
       ["Timeline index", entry.index + 1],
       ["Duration", numericDuration(segment)],
       ["Content state", segment.content_state || "Not observed"],
@@ -2496,6 +2978,45 @@
     detail.appendChild(evidence);
 
     modality.appendChild(panelHeader("Modality coverage", "Evidence visible in selected timeline row", "read-only"));
+    const modalityStates = [
+      valueObserved(segment.representative_frame),
+      valueObserved(segment.clip_id) || valueObserved(segment.dino_id),
+      valueObserved(segment.visual_caption),
+      valueObserved(segment.ocr_text),
+      arrayCount(segment.objects) > 0,
+      valueObserved(segment.transcript || segment.full_transcript),
+      arrayCount(segment.audio_chunks) > 0,
+      speakerIds.length > 0 || valueObserved(segment.dominant_speaker_id),
+      visiblePeople.length > 0,
+      alignedMentions.length > 0,
+      memoryTags.length > 0,
+      tagDetails.length > 0,
+      sceneEntities.length > 0,
+      valueObserved(segment.sentiment_label) || valueObserved(segment.sentiment_score),
+      valueObserved(segment.audio_emotion) || audioScoreCount > 0,
+      clapCommitObserved,
+      sceneContextRows.length > 0 || valueObserved(segment.scene_context_epistemic) || valueObserved(segment.scene_context_arbitration),
+      timeHintCount > 0,
+    ];
+    const modalityObserved = modalityStates.filter(Boolean).length;
+    appendIndicatorStrip(
+      modality,
+      [
+        {
+          label: "Scene modalities",
+          value: `${modalityObserved}/${modalityStates.length}`,
+          note: "present in selected scene",
+          kind: modalityObserved >= Math.ceil(modalityStates.length * 0.5) ? "ok" : "warn",
+        },
+        {
+          label: "Optional gaps",
+          value: String(modalityStates.length - modalityObserved),
+          note: "visible below",
+          kind: modalityStates.length - modalityObserved ? "warn" : "ok",
+        },
+      ],
+      "modality-rollup-strip"
+    );
     const modalityList = document.createElement("div");
     modalityList.className = "scene-signal-list";
     appendSceneSignal(
@@ -2607,17 +3128,50 @@
       "scene_context_epistemic",
       "scene_context_arbitration",
     ];
+    const fieldStates = expectedFields.map((key) => ({ key, status: fieldStatus(segment, key) }));
+    const presentFields = fieldStates.filter((item) => item.status.kind === "ok" || item.status.label === "present redacted").length;
+    const emptyFields = fieldStates.filter((item) => item.status.label === "empty").length;
+    const missingFields = fieldStates.filter((item) => item.status.label === "missing").length;
+    appendIndicatorStrip(
+      schema,
+      [
+        {
+          label: "Field coverage",
+          value: `${presentFields}/${fieldStates.length}`,
+          note: "present or redacted",
+          kind: presentFields >= Math.ceil(fieldStates.length * 0.5) ? "ok" : "warn",
+        },
+        {
+          label: "Empty",
+          value: String(emptyFields),
+          note: "keys present without values",
+          kind: emptyFields ? "warn" : "ok",
+        },
+        {
+          label: "Missing",
+          value: String(missingFields),
+          note: "not exposed in row",
+          kind: missingFields ? "unknown" : "ok",
+        },
+      ],
+      "field-status-rollup"
+    );
     const schemaList = document.createElement("div");
     schemaList.className = "schema-field-list";
-    expectedFields.forEach((key) => {
-      const status = fieldStatus(segment, key);
+    fieldStates.forEach(({ key, status }) => {
       const row = document.createElement("div");
       row.className = "schema-field-row";
       appendText(row, "span", key, "schema-field-key");
       row.appendChild(makeBadge(status.label, status.kind));
       schemaList.appendChild(row);
     });
-    schema.appendChild(schemaList);
+    const schemaDetails = document.createElement("details");
+    schemaDetails.className = "schema-field-details";
+    const schemaSummary = document.createElement("summary");
+    schemaSummary.textContent = "Field detail rows";
+    schemaDetails.appendChild(schemaSummary);
+    schemaDetails.appendChild(schemaList);
+    schema.appendChild(schemaDetails);
 
     const boundary = document.createElement("div");
     boundary.className = "scene-boundary-note";
@@ -2661,14 +3215,19 @@
         state.selectedSceneKey = key;
         renderTimeline();
         renderSceneInspector();
+        openMediaPreview("timeline");
       });
       appendText(row, "div", `${formatTime(segment.start)}-${formatTime(segment.end)}`, "timeline-time");
       const body = document.createElement("div");
       body.className = "timeline-body";
-      appendText(body, "strong", safeString(segment.scene_id || segment.index || "scene", "scene_id"));
+      const fullSceneId = segment.scene_id || segment.index || "scene";
+      const sceneTitle = appendText(body, "strong", sceneDisplayLabel(fullSceneId, index), "compact-id");
+      sceneTitle.title = safeString(fullSceneId, "scene_id");
       appendText(body, "span", segmentSummary(segment));
       row.appendChild(body);
-      row.appendChild(makeBadge(selected ? "selected" : safeString(segment.content_state || "state", "content_state"), selected ? "ok" : ""));
+      row.appendChild(
+        makeStatusDot(selected ? "ok" : statusKind(segment.content_state || "state"), selected ? "Selected scene" : `Scene state: ${safeString(segment.content_state || "state", "content_state")}`)
+      );
       list.appendChild(row);
     });
     node.appendChild(list);
@@ -2736,6 +3295,7 @@
     renderVideos();
     renderTimeline();
     renderSceneInspector();
+    renderMediaPreview();
     renderEvidence();
   }
 

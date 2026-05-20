@@ -76,3 +76,51 @@ def test_video_inventory_surfaces_thumbnail_visibility_envelope() -> None:
     assert "Thumbnail: local API ready" in app_js
     assert "raw path redacted" in app_js
     assert "Thumbnail: not exposed" in app_js
+
+
+def test_operator_console_visual_grammar_reduces_repeated_binary_noise() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    app_js = (repo_root / "ui" / "operator_console_v1" / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    app_css = (repo_root / "ui" / "operator_console_v1" / "static" / "css" / "app.css").read_text(encoding="utf-8")
+
+    assert "confidenceBand" in app_js
+    assert "Strong match" in app_js
+    assert "Reviewable match" in app_js
+    assert "Exploratory match" in app_js
+    assert "Low signal" in app_js
+    assert "compactIdentifier" in app_js
+    assert "proof-rollup-strip" in app_js
+    assert "appendIndicatorStrip" in app_js
+    assert "Core runtime" in app_js
+    assert "Optional model services" in app_js
+    assert "Historical processing artifacts" in app_js
+    assert "thumbnailStatusCompact" in app_js
+    assert "field-status-rollup" in app_js
+    assert "makeStatusDot" in app_js
+    assert "schema-field-details" in app_js
+
+    assert ".indicator-strip" in app_css
+    assert ".confidence-badge" in app_css
+    assert ".compact-id" in app_css
+    assert ".state-dot-mini" in app_css
+
+
+def test_operator_console_surfaces_read_only_media_preview_layer() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    index_html = (repo_root / "ui" / "operator_console_v1" / "index.html").read_text(encoding="utf-8")
+    app_js = (repo_root / "ui" / "operator_console_v1" / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    app_css = (repo_root / "ui" / "operator_console_v1" / "static" / "css" / "app.css").read_text(encoding="utf-8")
+
+    assert 'data-testid="media-preview"' in index_html
+    assert "renderMediaPreview" in app_js
+    assert "mediaPreviewPayload" in app_js
+    assert "representative_frame_endpoint" in app_js
+    assert "Scene keyframe" in app_js
+    assert "Clip playback not exposed" in app_js
+    assert "Export manifest not exposed" in app_js
+    assert "Select a scene from inventory, timeline, or retrieval to preview." in app_js
+
+    assert ".media-preview-panel" in app_css
+    assert ".keyframe-container" in app_css
+    assert ".modality-strip" in app_css
+    assert ".mini-timeline" in app_css

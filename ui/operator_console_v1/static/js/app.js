@@ -25,6 +25,7 @@
       open: false,
       source: null,
     },
+    sceneLineage: null,
     loading: false,
     loadingDiagnostics: false,
     data: {},
@@ -1778,6 +1779,56 @@
     return result.display_title || result.timeline_video_id || result.video_id || "Not observed";
   }
 
+  function setRetrievalSceneLineage(result, index, stateLabel) {
+    if (!result || typeof result !== "object") {
+      state.sceneLineage = null;
+      return null;
+    }
+    const lineage = {
+      source: "retrieval",
+      stateLabel: stateLabel || "retrieval selected",
+      query: state.retrieval.query || "",
+      sceneId: valueObserved(result.scene_id) ? String(result.scene_id) : "",
+      videoId: retrievalTimelineVideoId(result) || "",
+      displayTitle: retrievalVideoLabel(result),
+      resultLabel: resultSceneLabel(result, index || 0),
+      timeLabel: resultTimeLabel(result),
+    };
+    state.sceneLineage = lineage;
+    return lineage;
+  }
+
+  function setTimelineSceneLineage(segment, index) {
+    state.sceneLineage = {
+      source: "timeline",
+      stateLabel: "timeline selected",
+      query: "",
+      sceneId: valueObserved(segment && segment.scene_id) ? String(segment.scene_id) : segmentKey(segment || {}, index || 0),
+      videoId: state.selectedVideoId || "",
+      displayTitle: state.selectedVideoId || "Selected timeline",
+      resultLabel: sceneDisplayLabel(segment && (segment.scene_id || segment.index || segmentKey(segment, index || 0)), index || 0),
+      timeLabel: segment ? `${formatTime(segment.start)}-${formatTime(segment.end)}` : "time not returned",
+    };
+    return state.sceneLineage;
+  }
+
+  function lineageMatchesScene(lineage, segment) {
+    if (!lineage || !segment) return false;
+    const sceneId = valueObserved(segment.scene_id) ? String(segment.scene_id) : "";
+    if (!valueObserved(lineage.sceneId) || lineage.sceneId !== sceneId) return false;
+    const segmentVideoId = retrievalTimelineVideoId(segment) || state.selectedVideoId || "";
+    return !valueObserved(lineage.videoId) || !valueObserved(segmentVideoId) || lineage.videoId === segmentVideoId;
+  }
+
+  function lineageSummaryText(lineage, segment) {
+    if (!lineage) return "Timeline selected scene";
+    if (lineage.source === "retrieval" && lineageMatchesScene(lineage, segment)) {
+      return "Scene handoff confirmed | retrieval -> timeline -> inspector -> preview | Same selected scene id";
+    }
+    if (lineage.source === "retrieval") return "Retrieval handoff pending timeline confirmation";
+    return "Timeline selected scene";
+  }
+
   function normalizeSearchResults(response) {
     return response && Array.isArray(response.results) ? response.results : [];
   }
@@ -1853,15 +1904,9 @@
     return "time not returned";
   }
 
-  function videoInventoryIds() {
-    const videos = Array.isArray(state.data.videos) ? state.data.videos : [];
-    return new Set(videos.map((video) => String(video.video_id || video.id || "")).filter(Boolean));
-  }
-
   function canOpenRetrievalResult(result) {
     const videoId = retrievalTimelineVideoId(result);
-    if (!result || !valueObserved(videoId) || !valueObserved(result.scene_id)) return false;
-    return videoInventoryIds().has(String(videoId));
+    return Boolean(result && valueObserved(videoId) && valueObserved(result.scene_id));
   }
 
   function objectHasAny(data, keys) {
@@ -2209,6 +2254,33 @@
     container.appendChild(item);
   }
 
+  function appendRetrievalLineageStrip(container, result, selectedIndex) {
+    const existing = qs("#retrieval-lineage-strip");
+    if (existing) existing.remove();
+    const strip = document.createElement("div");
+    strip.id = "retrieval-lineage-strip";
+    strip.className = "retrieval-lineage-strip";
+    strip.setAttribute("data-testid", "retrieval-lineage-strip");
+    if (!result) {
+      appendText(strip, "span", "No selected retrieval handoff.");
+      container.appendChild(strip);
+      return;
+    }
+
+    const canOpen = canOpenRetrievalResult(result);
+    [
+      ["Handoff target", retrievalVideoLabel(result)],
+      ["Scene", resultSceneLabel(result, selectedIndex || 0)],
+      ["Status", canOpen ? "Ready for inspector" : "Timeline handoff unresolved"],
+    ].forEach(([label, value]) => {
+      const item = document.createElement("div");
+      appendText(item, "span", label);
+      appendText(item, "strong", value);
+      strip.appendChild(item);
+    });
+    container.appendChild(strip);
+  }
+
   function renderRetrievalConsole() {
     const input = qs("#retrieval-query-input");
     const count = qs("#retrieval-results-count");
@@ -2219,9 +2291,12 @@
     const loadMore = qs("#retrieval-load-more");
     const openScene = qs("#retrieval-open-scene");
     const viewTimeline = qs("#retrieval-view-timeline");
+    const previewPanel = qs('[data-testid="retrieval-preview"]');
     if (!input || !count || !list || !explanation || !selectedScore || !previewCopy || !loadMore || !openScene || !viewTimeline) {
       return;
     }
+    const staleLineage = qs("#retrieval-lineage-strip");
+    if (staleLineage) staleLineage.remove();
 
     if (document.activeElement !== input) input.value = state.retrieval.query || "";
     clear(list);
@@ -2284,6 +2359,7 @@
       row.setAttribute("data-testid", selected ? "selected-retrieval-result" : "retrieval-result");
       row.addEventListener("click", () => {
         state.retrieval.selectedKey = key;
+        setRetrievalSceneLineage(result, index, "retrieval selected");
         renderRetrievalConsole();
         openMediaPreview("retrieval");
       });
@@ -2317,7 +2393,7 @@
     if (!valueObserved(result && result.provenance)) missing.push("Detailed provenance envelope not returned");
     if (!retrievalSentimentLabel(result)) missing.push("Sentiment label not persisted for this scene");
     if (!valueObserved(context.scene_context_llm)) missing.push("scene_context_llm not present in configured search epoch");
-    if (result && valueObserved(result.video_id) && !canOpenRetrievalResult(result)) {
+    if (result && !canOpenRetrievalResult(result)) {
       missing.push("Timeline handoff id not exposed by search response");
     }
     const missingBox = document.createElement("div");
@@ -2335,6 +2411,7 @@
     const observedSignals = signals.filter((row) => row.observed).length;
     const handoffNote = canOpenRetrievalResult(result) ? "" : " | timeline handoff not resolved";
     previewCopy.textContent = `${resultSceneLabel(result, selected.index)} | ${resultTimeLabel(result)} | ${observedSignals} signals observed | ${confidenceLabel(percent)}${handoffNote}. ${resultSummary(result)}`;
+    if (previewPanel) appendRetrievalLineageStrip(previewPanel, result, selected.index);
     openScene.disabled = !canOpenRetrievalResult(result);
     if (openScene.disabled) {
       viewTimeline.setAttribute("aria-disabled", "true");
@@ -2389,6 +2466,7 @@
     const entry = selectedRetrievalEntry();
     const result = entry ? entry.result : null;
     if (!canOpenRetrievalResult(result)) return;
+    setRetrievalSceneLineage(result, entry.index, "retrieval -> inspector");
     state.selectedVideoId = retrievalTimelineVideoId(result);
     state.selectedSceneKey = String(result.scene_id);
     renderVideos();
@@ -2398,6 +2476,7 @@
     showLoading(qs("#scene-schema-panel"));
     await refreshTimeline();
     state.selectedSceneKey = String(result.scene_id);
+    setRetrievalSceneLineage(result, entry.index, "retrieval -> timeline -> inspector");
     renderVideos();
     renderTimeline();
     renderSceneInspector();
@@ -2452,6 +2531,7 @@
       button.addEventListener("click", async () => {
         state.selectedVideoId = id;
         state.selectedSceneKey = null;
+        state.sceneLineage = null;
         if (state.mediaPreview.open) state.mediaPreview.source = "timeline";
         renderVideos();
         showLoading(qs("#timeline-panel"));
@@ -2707,10 +2787,20 @@
 
   function appendPreviewEvidenceBridge(container, payload) {
     const meaning = payload.meaning || {};
+    const sceneLike = previewSceneLike(payload.raw, payload.context);
+    const lineage = state.sceneLineage;
     const bridge = document.createElement("section");
     bridge.className = "preview-evidence-bridge";
     bridge.setAttribute("data-testid", "preview-evidence-bridge");
     appendText(bridge, "h3", "Visual proof linked to selected scene evidence summary");
+    appendText(
+      bridge,
+      "p",
+      lineageMatchesScene(lineage, sceneLike)
+        ? "Scene handoff confirmed | retrieval -> timeline -> inspector -> preview | Same selected scene id"
+        : "Preview follows the currently selected scene.",
+      "preview-lineage-note"
+    );
 
     const rollup = document.createElement("div");
     rollup.className = "preview-signal-compact";
@@ -3173,6 +3263,7 @@
       ],
       "scene-summary-rollup"
     );
+    appendSceneLineageBridge(panel, segment);
 
     const meaning = document.createElement("div");
     meaning.className = "scene-meaning-card";
@@ -3238,6 +3329,28 @@
     actions.appendChild(previewButton);
     panel.appendChild(actions);
     container.appendChild(panel);
+  }
+
+  function appendSceneLineageBridge(container, segment) {
+    const lineage = state.sceneLineage;
+    const bridge = document.createElement("div");
+    bridge.className = "scene-lineage-bridge";
+    bridge.setAttribute("data-testid", "scene-lineage-bridge");
+    appendText(bridge, "strong", lineageSummaryText(lineage, segment));
+
+    const row = document.createElement("div");
+    [
+      ["Source", lineage && lineage.source === "retrieval" ? "Retrieval result" : "Timeline"],
+      ["Episode", lineage && lineage.displayTitle ? lineage.displayTitle : (state.selectedVideoId || "Selected video")],
+      ["Scene", lineage && lineage.resultLabel ? lineage.resultLabel : sceneDisplayLabel(segment.scene_id || segment.index || "scene", 0)],
+      ["Query", lineage && lineage.query ? lineage.query : "not a search handoff"],
+    ].forEach(([label, value]) => {
+      const item = document.createElement("span");
+      item.textContent = `${label}: ${safeString(value, label)}`;
+      row.appendChild(item);
+    });
+    bridge.appendChild(row);
+    container.appendChild(bridge);
   }
 
   function numericDuration(segment) {
@@ -3650,6 +3763,7 @@
       row.setAttribute("data-testid", selected ? "selected-timeline-row" : "timeline-row");
       row.addEventListener("click", () => {
         state.selectedSceneKey = key;
+        setTimelineSceneLineage(segment, index);
         renderTimeline();
         renderSceneInspector();
         openMediaPreview("timeline");

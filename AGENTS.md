@@ -147,3 +147,16 @@ Preferred escalation order:
 - Don't: assume context; over-optimize; rewrite working systems; hide failures.
 
 Always use the OpenAI developer documentation MCP server if you need to work with the OpenAI API, ChatGPT Apps SDK, Codex, or related docs without me having to explicitly ask.
+
+## Exploration and reading files
+
+- **Think first.** Before read/list/search tool calls, decide the known files/resources needed for the current step.
+- **Batch related reads.** If multiple known files or searches are needed, read them together.
+- **Use `multi_tool_use.parallel`** for parallel read/list/search operations when it is available.
+- **Keep batches bounded to the current scope.** Do not broaden the task just to maximize parallelism.
+- **Make sequential calls only when the next file/resource cannot be known until a prior result is inspected.**
+- **Workflow:** plan known reads → issue one parallel batch → analyze results → repeat only if new, unpredictable reads arise.
+
+**Additional notes:**
+- Prefer parallelism for read-only operations such as `rg`, `Get-Content`, `Get-ChildItem`, `git show`, `nl`, and `wc`.
+- Do not parallelize by composing custom shell scripts or chaining noisy commands when `multi_tool_use.parallel` is available.

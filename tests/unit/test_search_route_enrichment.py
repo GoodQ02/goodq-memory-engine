@@ -80,6 +80,10 @@ class _FakeDataLoader:
                     "scene_id": "hashed-scene-id",
                     "start": 12.5,
                     "end": 42.25,
+                    "representative_frame": (
+                        r"L:\_DATA\GoodQ_Data\processing\family_memory_probe\video\frames"
+                        r"\scene_0007_frame_01.jpg"
+                    ),
                     "full_transcript": "Grandma laughs while everyone gathers in the kitchen.",
                     "tags": ["kitchen", "family gathering"],
                     "objects": ["table", "birthday cake"],
@@ -129,6 +133,10 @@ def test_multimodal_search_enriches_hashed_results_from_timeline(monkeypatch) ->
     assert result.start == 12.5
     assert result.end == 42.25
     assert result.timestamp == 12.5
+    assert result.representative_frame == "/api/media/video/family_memory_probe/frame/scene_0007_frame_01.jpg"
+    assert result.representative_frame_available is True
+    assert result.representative_frame_endpoint == "/api/media/video/family_memory_probe/frame/scene_0007_frame_01.jpg"
+    assert result.representative_frame_path_redacted is True
     assert result.transcript == "Grandma laughs while everyone gathers in the kitchen."
     assert result.keywords == ["kitchen", "family gathering"]
     assert result.objects == ["table", "birthday cake"]
@@ -137,6 +145,10 @@ def test_multimodal_search_enriches_hashed_results_from_timeline(monkeypatch) ->
         "start": 12.5,
         "end": 42.25,
         "duration": 29.75,
+        "representative_frame": "/api/media/video/family_memory_probe/frame/scene_0007_frame_01.jpg",
+        "representative_frame_available": True,
+        "representative_frame_endpoint": "/api/media/video/family_memory_probe/frame/scene_0007_frame_01.jpg",
+        "representative_frame_path_redacted": True,
         "transcript": "Grandma laughs while everyone gathers in the kitchen.",
         "tags": ["kitchen", "family gathering"],
         "objects": ["table", "birthday cake"],

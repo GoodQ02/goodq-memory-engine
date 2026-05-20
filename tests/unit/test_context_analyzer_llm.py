@@ -42,6 +42,9 @@ def test_build_scene_context_prompts_enforces_grounded_dry_contract() -> None:
             "face_count": 2,
             "emotions": [{"label": "angry", "score": 0.72}],
             "speakers": ["SPEAKER_00", "SPEAKER_01"],
+            "ocr_text": "DEC 16 2002",
+            "music_events": [{"label": "applause", "context": "APPLAUSE"}],
+            "time_hints": {"explicit_dates": ["2002-12-16"], "months": ["december"]},
         }
     )
 
@@ -56,6 +59,9 @@ def test_build_scene_context_prompts_enforces_grounded_dry_contract() -> None:
 
     assert "Visible caption:" in user_prompt
     assert "Visible objects:" in user_prompt
+    assert "Visible text: DEC 16 2002" in user_prompt
+    assert "Audio/music events: applause, APPLAUSE" in user_prompt
+    assert "Time hints: 2002-12-16, december" in user_prompt
     assert "Transcript excerpt:" in user_prompt
     assert "Transcript topic hints:" in user_prompt
     assert "Audio emotion signal:" in user_prompt
@@ -298,6 +304,34 @@ def test_normalize_scene_context_payload_filters_generic_tags_and_promotes_topic
         "context_tags": ["rental car", "living room", "air conditioning", "florida"],
         "activity_description": "Living room conversation about rental car.",
     }, primary_tags=["rental car"], contextual_tags=["living room", "air conditioning", "florida"], structural_tags=[])
+
+
+def test_normalize_scene_context_payload_promotes_grounded_activity_over_minimal_summary() -> None:
+    result = analyzer._normalize_scene_context_payload(  # type: ignore[attr-defined]
+        {
+            "narrative_summary": "Minimal visual or dialogue content.",
+            "key_moments": ["Minimal visual or dialogue content."],
+            "emotional_arc": "Positive emotions as she performs and receives applause",
+            "context_tags": ["applause"],
+            "activity_description": "A girl plays the trumpet in a room, receiving applause from others.",
+        },
+        {
+            "caption": "a girl playing a trumpet in a room",
+            "transcript": "Thank you. Thank you very much. APPLAUSE",
+            "objects": [{"label": "person"}],
+            "ocr_text": "DEC 16 2002",
+            "music_events": [{"label": "applause", "context": "APPLAUSE"}],
+            "time_hints": {"explicit_dates": ["2002-12-16"], "months": ["december"]},
+        },
+    )
+
+    _assert_context_payload(result, {
+        "narrative_summary": "A girl plays the trumpet in a room, receiving applause from others.",
+        "key_moments": ["A girl plays the trumpet in a room, receiving applause from others."],
+        "emotional_arc": "Positive emotions as she performs and receives applause",
+        "context_tags": ["applause"],
+        "activity_description": "A girl plays the trumpet in a room, receiving applause from others.",
+    }, primary_tags=[], contextual_tags=["applause"], structural_tags=[])
 
 
 def test_normalize_scene_context_payload_drops_grounded_fragment_residue() -> None:

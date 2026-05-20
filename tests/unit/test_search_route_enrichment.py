@@ -88,6 +88,9 @@ class _FakeDataLoader:
                     "tags": ["kitchen", "family gathering"],
                     "objects": ["table", "birthday cake"],
                     "audio_emotion": "happy",
+                    "sentiment": {"label": "positive", "score": 0.91},
+                    "sentiment_label": "positive",
+                    "sentiment_score": 0.91,
                     "scene_present_entities": [
                         {"text": "Grandma", "type": "PERSON"},
                         {"text": "Kitchen", "type": "LOCATION"},
@@ -141,6 +144,9 @@ def test_multimodal_search_enriches_hashed_results_from_timeline(monkeypatch) ->
     assert result.keywords == ["kitchen", "family gathering"]
     assert result.objects == ["table", "birthday cake"]
     assert result.audio_emotion == "happy"
+    assert result.sentiment == {"label": "positive", "score": 0.91}
+    assert result.sentiment_label == "positive"
+    assert result.sentiment_score == 0.91
     assert result.context == {
         "start": 12.5,
         "end": 42.25,
@@ -153,6 +159,9 @@ def test_multimodal_search_enriches_hashed_results_from_timeline(monkeypatch) ->
         "tags": ["kitchen", "family gathering"],
         "objects": ["table", "birthday cake"],
         "audio_emotion": "happy",
+        "sentiment": {"label": "positive", "score": 0.91},
+        "sentiment_label": "positive",
+        "sentiment_score": 0.91,
         "scene_present_entities": [
             {"text": "Grandma", "type": "PERSON"},
             {"text": "Kitchen", "type": "LOCATION"},

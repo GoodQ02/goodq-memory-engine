@@ -149,6 +149,9 @@ def _timeline_enrichment_context(segment: dict) -> Dict[str, Any]:
         "objects": _segment_object_labels(segment),
         "audio_emotion": segment.get("audio_emotion"),
         "audio_emotion_scores": segment.get("audio_emotion_scores"),
+        "sentiment": segment.get("sentiment") if isinstance(segment.get("sentiment"), dict) else None,
+        "sentiment_label": segment.get("sentiment_label"),
+        "sentiment_score": segment.get("sentiment_score"),
         "scene_present_entities": _list_dicts(segment.get("scene_present_entities")),
         "relationships": _list_dicts(segment.get("relationships")) or _list_dicts(segment.get("kg_relationships")),
         "kg_evidence": kg_evidence if kg_evidence["entity_count"] or kg_evidence["relationship_count"] else None,
@@ -235,6 +238,9 @@ def _lookup_timeline_enrichment(payload: dict) -> Dict[str, Any]:
                 "objects": _segment_object_labels(segment),
                 "audio_emotion": segment.get("audio_emotion"),
                 "audio_emotion_scores": segment.get("audio_emotion_scores"),
+                "sentiment": context.get("sentiment"),
+                "sentiment_label": context.get("sentiment_label"),
+                "sentiment_score": context.get("sentiment_score"),
                 "scene_present_entities": entities,
                 "kg_relationships": relationships,
                 "kg_evidence": kg_evidence,
@@ -357,6 +363,12 @@ def _build_search_result(result: dict, modality: Optional[str] = None) -> Search
     payload = result.get("payload", {}) if isinstance(result.get("payload"), dict) else {}
     sentiment_fields = _extract_sentiment_fields(result)
     enrichment = _lookup_timeline_enrichment(payload)
+    if sentiment_fields["sentiment"] is None and isinstance(enrichment.get("sentiment"), dict):
+        sentiment_fields["sentiment"] = enrichment.get("sentiment")
+    if sentiment_fields["sentiment_label"] is None:
+        sentiment_fields["sentiment_label"] = enrichment.get("sentiment_label")
+    if sentiment_fields["sentiment_score"] is None:
+        sentiment_fields["sentiment_score"] = enrichment.get("sentiment_score")
     result_context = result.get("scene_context") if isinstance(result.get("scene_context"), dict) else None
     context = _merge_dicts(enrichment.get("context"), result_context)
     provenance = _merge_dicts(enrichment.get("provenance"), result.get("provenance") if isinstance(result.get("provenance"), dict) else None)

@@ -2043,6 +2043,7 @@ def _apply_scene_context_llm(
             continue
 
         keyframe_payload = scene.get("keyframe") if isinstance(scene.get("keyframe"), dict) else {}
+        scene_audio_payload = scene.get("audio") if isinstance(scene.get("audio"), dict) else {}
         transcript_text = str(segment.get("full_transcript") or "").strip()
         scene_objects = segment.get("detected_objects")
         if not isinstance(scene_objects, list):
@@ -2079,6 +2080,15 @@ def _apply_scene_context_llm(
             "caption": scene.get("caption") or keyframe_payload.get("caption") or "",
             "transcript": transcript_text,
             "objects": scene_objects,
+            "ocr_text": segment.get("ocr_text") or scene.get("ocr_text") or keyframe_payload.get("ocr_text") or "",
+            "music_events": segment.get("music_events") or scene.get("music_events") or scene_audio_payload.get("music_events") or [],
+            "time_hints": segment.get("time_hints") or scene.get("time_hints") or keyframe_payload.get("time_hints") or scene_audio_payload.get("time_hints") or {},
+            "metadata_time_hints": (
+                segment.get("metadata_time_hints")
+                or scene.get("metadata_time_hints")
+                or scene_audio_payload.get("metadata_time_hints")
+                or {}
+            ),
             "face_count": face_count,
             "emotions": emotions_payload,
             "speakers": segment.get("speaker_ids") or [],

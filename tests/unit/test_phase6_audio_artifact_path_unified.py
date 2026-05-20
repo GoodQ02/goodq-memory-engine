@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any, Dict
 
 from steps.video import cross_modal_harmonizer as harmonizer_module
 from steps.video.cross_modal_harmonizer import run_cross_modal_harmonization
@@ -497,7 +498,10 @@ def test_harmonizer_applies_scene_context_llm_when_feature_enabled(tmp_path: Pat
                         "segments": [{"start": 0.0, "end": 2.0, "text": "Jerry tells George the plan."}],
                         "emotion": "anxious",
                         "emotion_scores": {"anxious": 0.7, "neutral": 0.3},
+                        "music_events": [{"label": "applause", "context": "APPLAUSE"}],
+                        "time_hints": {"explicit_dates": ["2002-12-16"], "months": ["december"]},
                     },
+                    "ocr_text": "DEC 16 2002",
                     "keyframe": {
                         "objects": [{"label": "person", "score": 0.95}],
                         "faces": [{"bbox": [0, 0, 10, 10], "confidence": 0.9}],
@@ -513,17 +517,23 @@ def test_harmonizer_applies_scene_context_llm_when_feature_enabled(tmp_path: Pat
     _write_json(audio_artifact_dir / "segmentation.json", {"segments": []})
 
     monkeypatch.setattr(harmonizer_module, "SCENE_CONTEXT_LLM_AVAILABLE", True)
-    monkeypatch.setattr(
-        harmonizer_module,
-        "analyze_scene_context_llm",
-        lambda scene_meta, cfg: {
+    captured_scene_meta: Dict[str, Any] = {}
+
+    def _fake_analyze_scene_context_llm(scene_meta: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
+        captured_scene_meta.update(scene_meta)
+        return {
             "narrative_summary": "Jerry outlines a tense plan to George in the kitchen.",
             "key_moments": ["Jerry explains the plan", "George listens carefully"],
             "emotional_arc": "tense but controlled",
             "context_tags": ["planning", "kitchen", "conversation"],
             "activity_description": "Two friends discuss their next move.",
             "relationships": [{"entities": ["Jerry", "George"], "type": "conversation"}],
-        },
+        }
+
+    monkeypatch.setattr(
+        harmonizer_module,
+        "analyze_scene_context_llm",
+        _fake_analyze_scene_context_llm,
     )
 
     item = {
@@ -543,6 +553,10 @@ def test_harmonizer_applies_scene_context_llm_when_feature_enabled(tmp_path: Pat
 
     temporal_index = json.loads((processing_dir / "temporal_index.json").read_text(encoding="utf-8"))
     segment = temporal_index["segments"][0]
+
+    assert captured_scene_meta["ocr_text"] == "DEC 16 2002"
+    assert captured_scene_meta["music_events"] == [{"label": "applause", "context": "APPLAUSE"}]
+    assert captured_scene_meta["time_hints"] == {"explicit_dates": ["2002-12-16"], "months": ["december"]}
 
     assert segment["scene_context_llm"] == {
         "narrative_summary": "Jerry outlines a tense plan to George in the kitchen.",

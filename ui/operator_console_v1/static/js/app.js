@@ -403,6 +403,27 @@
     };
   }
 
+  function projectionGapNote(projection) {
+    if (!projection || typeof projection !== "object") return "projection summary not exposed";
+    const missing = numberValue(projection.missing_projection_count);
+    const fields = projection.fields && typeof projection.fields === "object" ? projection.fields : {};
+    const fieldNotes = ["visual_caption", "sentiment", "clap_meta"]
+      .map((field) => {
+        const row = fields[field] || {};
+        const count = numberValue(row.missing_from_temporal);
+        return count ? `${field}: ${count}` : null;
+      })
+      .filter(Boolean);
+    if (projection.status === "gap_detected") {
+      const prefix = missing !== null ? `${missing} missing projections` : "missing projections";
+      return fieldNotes.length
+        ? `${prefix}; ${fieldNotes.join(", ")} source truth not projected`
+        : `${prefix}; source truth not projected`;
+    }
+    if (projection.status === "ok") return "source truth projected into temporal index";
+    return projection.reason || "projection summary not exposed";
+  }
+
   function appendProofItem(container, item) {
     const row = document.createElement("div");
     row.className = "proof-item";
@@ -923,6 +944,7 @@
     const temporal = evidence.temporal_index || {};
     const sentiment = evidence.sentiment || {};
     const graph = evidence.knowledge_graph || {};
+    const projection = evidence.projection_gaps || {};
     const audioProof = evidence.audio_vector_proof || {};
     const latestEpisode = evidence.latest_episode || run.latest_episode || {};
     const memory = state.data.memory || {};
@@ -936,6 +958,9 @@
     const temporalScenes = numberValue(temporal.total_scenes);
     const graphScenes = numberValue(graph.scene_count);
     const runScenes = numberValue(run.scenes_processed);
+    const projectionMissing = numberValue(projection.missing_projection_count);
+    const projectionReady = projection.status === "ok";
+    const projectionGapDetected = projection.status === "gap_detected";
     const audioProofStatus = String(audioProof.status || "unavailable");
     const audioProofObserved = audioProofStatus === "current_run_audio_vector_proven";
     const audioProofPartial = audioProofStatus === "partial";
@@ -1005,6 +1030,16 @@
         missingNote: "Scene results do not report CLAP-ok audio commits for this run",
       },
       {
+        label: "Projection gap check",
+        state: {
+          observed: projectionReady,
+          label: projectionReady ? "Ready" : projectionGapDetected ? "Needs Explanation" : "Not Exposed",
+          kind: projectionReady ? "ok" : projectionGapDetected ? "warn" : "unknown",
+          note: projectionGapNote(projection),
+        },
+        missingNote: projectionGapNote(projection),
+      },
+      {
         label: "Current-run Qdrant audio proof",
         state: {
           observed: audioProofObserved,
@@ -1027,7 +1062,11 @@
     ];
 
     const proofDisplayRows = proofRows.concat(
-      supplementalChecks.filter((row) => row.label === "CLAP memory commit" || row.label === "Current-run Qdrant audio proof")
+      supplementalChecks.filter((row) => (
+        row.label === "CLAP memory commit"
+        || row.label === "Projection gap check"
+        || row.label === "Current-run Qdrant audio proof"
+      ))
     );
     const coreObserved = proofRows.filter((row) => row.state.observed).length;
     const optionalObserved = supplementalChecks.filter((row) => row.state.observed).length;
@@ -1054,6 +1093,13 @@
           note: "current-run Qdrant",
           kind: audioProofObserved ? "ok" : "unknown",
           title: audioProofNote,
+        },
+        {
+          label: "Projection gaps",
+          value: projectionMissing !== null ? String(projectionMissing) : "Not exposed",
+          note: "source truth vs temporal index",
+          kind: projectionReady ? "ok" : projectionGapDetected ? "warn" : "unknown",
+          title: projectionGapNote(projection),
         },
       ],
       "proof-rollup-strip"

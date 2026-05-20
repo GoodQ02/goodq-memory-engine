@@ -960,6 +960,7 @@ def _latest_run_evidence(limit: int = 24) -> Dict[str, Any]:
         "temporal_index": _summarize_temporal_index(temporal_payload),
         "sentiment": _summarize_sentiment(temporal_payload),
         "knowledge_graph": _summarize_knowledge_graph(scene_results_payload, latest_episode),
+        "projection_gaps": _summarize_projection_gaps(temporal_payload, scene_results_payload),
         "audio_vector_proof": _summarize_audio_vector_proof(
             header=header,
             latest_episode=latest_episode,
@@ -983,6 +984,7 @@ def _empty_run_evidence(reason: str) -> Dict[str, Any]:
         "temporal_index": {"status": "unavailable", "reason": reason},
         "sentiment": {"status": "unavailable", "reason": reason},
         "knowledge_graph": {"status": "unavailable", "reason": reason},
+        "projection_gaps": {"status": "unavailable", "reason": reason},
         "audio_vector_proof": {"status": "unavailable", "reason": reason, "label": "Not Exposed"},
         "safety_boundary": _run_evidence_safety_boundary(),
     }
@@ -1232,6 +1234,188 @@ def _summarize_knowledge_graph(payload: Any, episode: Dict[str, Any]) -> Dict[st
         "content_summary": record.get("content_summary"),
         "modality_status": _simple_mapping(record.get("modality_status")),
     }
+
+
+def _summarize_projection_gaps(temporal_payload: Any, scene_results_payload: Any) -> Dict[str, Any]:
+    """Compare source scene truth with temporal-index projection without returning raw values."""
+
+    scene_records = _scene_records_from_results(scene_results_payload)
+    if not scene_records:
+        return {"status": "unavailable", "reason": "scene_records_missing"}
+    if not isinstance(temporal_payload, dict):
+        return {"status": "unavailable", "reason": "temporal_index_missing"}
+
+    segments = temporal_payload.get("segments") if isinstance(temporal_payload.get("segments"), list) else []
+    segments_by_id: Dict[str, Dict[str, Any]] = {}
+    for segment in segments:
+        if not isinstance(segment, dict):
+            continue
+        for candidate in _projection_scene_id_candidates(segment):
+            segments_by_id.setdefault(candidate, segment)
+
+    field_names = ("visual_caption", "sentiment", "clap_meta")
+    source_present: Counter[str] = Counter()
+    temporal_present: Counter[str] = Counter()
+    missing_from_temporal: Counter[str] = Counter()
+    sample_missing: List[Dict[str, Any]] = []
+
+    for segment in segments:
+        if not isinstance(segment, dict):
+            continue
+        for field in field_names:
+            if _projection_temporal_observed(segment, field):
+                temporal_present[field] += 1
+
+    for index, scene in enumerate(scene_records):
+        if not isinstance(scene, dict):
+            continue
+        segment = _projection_matching_segment(scene, index, segments, segments_by_id)
+        missing_fields: List[str] = []
+        for field in field_names:
+            if not _projection_source_observed(scene, field):
+                continue
+            source_present[field] += 1
+            if not _projection_temporal_observed(segment, field):
+                missing_from_temporal[field] += 1
+                missing_fields.append(field)
+        if missing_fields and len(sample_missing) < 8:
+            sample_missing.append(
+                {
+                    "scene_id": _projection_scene_label(scene, index),
+                    "fields": missing_fields,
+                }
+            )
+
+    fields: Dict[str, Dict[str, Any]] = {}
+    for field in field_names:
+        missing = int(missing_from_temporal.get(field, 0))
+        fields[field] = {
+            "source_present": int(source_present.get(field, 0)),
+            "temporal_present": int(temporal_present.get(field, 0)),
+            "missing_from_temporal": missing,
+            "status": "gap_detected" if missing else "ok",
+        }
+
+    total_missing = sum(int(missing_from_temporal.get(field, 0)) for field in field_names)
+    return {
+        "status": "gap_detected" if total_missing else "ok",
+        "mode": "read_only",
+        "source": "scene_ingest_results_vs_temporal_index",
+        "scene_scope_count": len(scene_records),
+        "temporal_scene_count": len(segments),
+        "missing_projection_count": total_missing,
+        "fields": fields,
+        "sample_missing": sample_missing,
+    }
+
+
+def _projection_scene_id_candidates(record: Dict[str, Any]) -> List[str]:
+    candidates: List[str] = []
+    for key in ("scene_id", "id", "segment_id"):
+        value = record.get(key)
+        if value is not None and str(value).strip():
+            candidates.append(str(value).strip())
+    for key in ("index", "scene_index"):
+        value = record.get(key)
+        if value is None:
+            continue
+        try:
+            candidates.append(f"scene_{int(value):04d}")
+        except Exception:
+            text = str(value).strip()
+            if text:
+                candidates.append(text)
+
+    seen: set[str] = set()
+    out: List[str] = []
+    for candidate in candidates:
+        if candidate not in seen:
+            seen.add(candidate)
+            out.append(candidate)
+    return out
+
+
+def _projection_matching_segment(
+    scene: Dict[str, Any],
+    index: int,
+    segments: List[Any],
+    segments_by_id: Dict[str, Dict[str, Any]],
+) -> Dict[str, Any]:
+    for candidate in _projection_scene_id_candidates(scene):
+        segment = segments_by_id.get(candidate)
+        if isinstance(segment, dict):
+            return segment
+    if 0 <= index < len(segments) and isinstance(segments[index], dict):
+        return segments[index]
+    return {}
+
+
+def _projection_scene_label(scene: Dict[str, Any], index: int) -> str:
+    for key in ("scene_id", "id"):
+        value = scene.get(key)
+        if value is not None and str(value).strip():
+            return str(value).strip()
+    value = scene.get("index", scene.get("scene_index", index))
+    try:
+        return f"scene_{int(value):04d}"
+    except Exception:
+        return f"scene_{index:04d}"
+
+
+def _projection_source_observed(scene: Dict[str, Any], field: str) -> bool:
+    keyframe = scene.get("keyframe") if isinstance(scene.get("keyframe"), dict) else {}
+    audio = scene.get("audio") if isinstance(scene.get("audio"), dict) else {}
+    if field == "visual_caption":
+        return _projection_value_observed(_first_projection_value(
+            scene.get("visual_caption"),
+            scene.get("caption"),
+            keyframe.get("caption"),
+        ))
+    if field == "sentiment":
+        return _projection_value_observed(_first_projection_value(
+            scene.get("sentiment"),
+            scene.get("sentiment_label"),
+            scene.get("sentiment_score"),
+            audio.get("sentiment"),
+            audio.get("sentiment_label"),
+            audio.get("sentiment_score"),
+        ))
+    if field == "clap_meta":
+        return _projection_value_observed(_first_projection_value(scene.get("clap_meta"), audio.get("clap_meta")))
+    return False
+
+
+def _projection_temporal_observed(segment: Dict[str, Any], field: str) -> bool:
+    if not isinstance(segment, dict):
+        return False
+    if field == "visual_caption":
+        return _projection_value_observed(segment.get("visual_caption"))
+    if field == "sentiment":
+        return _projection_value_observed(_first_projection_value(
+            segment.get("sentiment"),
+            segment.get("sentiment_label"),
+            segment.get("sentiment_score"),
+        ))
+    if field == "clap_meta":
+        return _projection_value_observed(segment.get("clap_meta"))
+    return False
+
+
+def _first_projection_value(*values: Any) -> Any:
+    for value in values:
+        if _projection_value_observed(value):
+            return value
+    return None
+
+
+def _projection_value_observed(value: Any) -> bool:
+    if value is None:
+        return False
+    if isinstance(value, str):
+        return bool(value.strip())
+    if isinstance(value, (list, dict, tuple, set)):
+        return bool(value)
+    return True
 
 
 def _summarize_audio_vector_proof(

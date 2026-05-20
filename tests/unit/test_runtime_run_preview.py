@@ -323,8 +323,24 @@ def test_latest_run_evidence_summarizes_artifacts_without_paths(monkeypatch, tmp
                 "segments_with_audio_emotion": 2,
                 "top_audio_emotions": [{"label": "calm", "count": 2}],
                 "segments": [
-                    {"audio_emotion": "calm", "sentiment": {"label": "positive", "score": 0.91}},
-                    {"audio_emotion": "calm", "sentiment_label": "neutral", "sentiment_score": 0.52},
+                    {
+                        "scene_id": "scene-a",
+                        "audio_emotion": "calm",
+                        "sentiment": {"label": "positive", "score": 0.91},
+                    },
+                    {
+                        "scene_id": "scene-b",
+                        "audio_emotion": "calm",
+                        "sentiment_label": "neutral",
+                        "sentiment_score": 0.52,
+                        "visual_caption": "projected caption",
+                        "clap_meta": {"status": "ok"},
+                    },
+                    {
+                        "scene_id": "scene-c",
+                        "audio_emotion": "calm",
+                        "sentiment_score": 0.0,
+                    },
                 ],
             }
         ),
@@ -342,6 +358,28 @@ def test_latest_run_evidence_summarizes_artifacts_without_paths(monkeypatch, tmp
                 "control_agent_status": "observed",
                 "modality_status": {"audio": "ok", "vision": "ok"},
                 "content_summary": "graph projection ready",
+                "scenes": [
+                    {
+                        "scene_id": "scene-a",
+                        "keyframe": {"caption": "source caption"},
+                        "audio": {
+                            "sentiment": {"label": "positive", "score": 0.91},
+                            "clap_meta": {"status": "ok"},
+                        },
+                    },
+                    {
+                        "scene_id": "scene-b",
+                        "keyframe": {"caption": "projected caption"},
+                        "audio": {
+                            "sentiment": {"label": "neutral", "score": 0.52},
+                            "clap_meta": {"status": "ok"},
+                        },
+                    },
+                    {
+                        "scene_id": "scene-c",
+                        "sentiment_score": 0.0,
+                    },
+                ],
             }
         ),
         encoding="utf-8",
@@ -412,9 +450,35 @@ def test_latest_run_evidence_summarizes_artifacts_without_paths(monkeypatch, tmp
     assert evidence["audio_vector_proof"]["runtime_run_id_resolved"] is True
     assert evidence["audio_vector_proof"]["runtime_run_id_source"] == "run_header.run_id"
     assert evidence["audio_vector_proof"]["reason"] == "no_qdrant_payloads_matched_run_id"
+    projection_gaps = evidence["projection_gaps"]
+    assert projection_gaps["status"] == "gap_detected"
+    assert projection_gaps["scene_scope_count"] == 3
+    assert projection_gaps["fields"]["visual_caption"] == {
+        "source_present": 2,
+        "temporal_present": 1,
+        "missing_from_temporal": 1,
+        "status": "gap_detected",
+    }
+    assert projection_gaps["fields"]["sentiment"] == {
+        "source_present": 3,
+        "temporal_present": 3,
+        "missing_from_temporal": 0,
+        "status": "ok",
+    }
+    assert projection_gaps["fields"]["clap_meta"] == {
+        "source_present": 2,
+        "temporal_present": 1,
+        "missing_from_temporal": 1,
+        "status": "gap_detected",
+    }
+    assert projection_gaps["sample_missing"][0] == {
+        "scene_id": "scene-a",
+        "fields": ["visual_caption", "clap_meta"],
+    }
     serialized = json.dumps(evidence)
     assert str(tmp_path) not in serialized
     assert "source_path" not in serialized
+    assert "source caption" not in serialized
 
 
 def test_audio_vector_proof_resolves_run_header_run_id_without_overclaiming(monkeypatch) -> None:

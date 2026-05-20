@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-05-19 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-20 -->
 
 # GoodQ4All Documentation
 
@@ -10,6 +10,10 @@ Machine memory should earn every claim it makes.
 
 ## Current Outcome and Baselines
 
+- Current agent first-read:
+  [`docs/agent/CURRENT_STATE.md`](agent/CURRENT_STATE.md)
+- Machine-readable current state:
+  [`docs/agent/current_state.json`](agent/current_state.json)
 - Current release checkpoint:
   [`docs/releases/RELEASE_0.1.1.md`](releases/RELEASE_0.1.1.md)
 - Current operator baseline:
@@ -22,6 +26,8 @@ Machine memory should earn every claim it makes.
   [`reports/README.md`](../reports/README.md)
 - Diagnostics index:
   [`docs/diagnostics/README.md`](diagnostics/README.md)
+- Current clean-start audit:
+  [`docs/diagnostics/MEMORY_CLEAN_START_AUDIT_2026-05-20.md`](diagnostics/MEMORY_CLEAN_START_AUDIT_2026-05-20.md)
 
 These operator documents are bounded release-era baselines, not live witness
 monitors. Use them to understand the supported runtime surface, then use
@@ -67,8 +73,8 @@ Current operator-validated additions on the active line:
 
 ## Runtime Authority
 
-- Basement handoff:
-  [`docs/HANDOFF_BASEMENT_PHASE.md`](HANDOFF_BASEMENT_PHASE.md)
+- Agent state and clean-start office:
+  [`docs/agent/README.md`](agent/README.md)
 - System snapshot:
   [`docs/SYSTEM_SNAPSHOT.md`](SYSTEM_SNAPSHOT.md)
 - Architecture index:
@@ -93,6 +99,8 @@ Current operator-validated additions on the active line:
   [`docs/architecture/AUDIO_VECTOR_PROVENANCE_CONTRACT.md`](architecture/AUDIO_VECTOR_PROVENANCE_CONTRACT.md)
 - GPU capability matrix:
   [`docs/reference/GPU_CAPABILITY_MATRIX.md`](reference/GPU_CAPABILITY_MATRIX.md)
+- Sealed basement record:
+  [`docs/HANDOFF_BASEMENT_PHASE.md`](HANDOFF_BASEMENT_PHASE.md)
 
 ## Documentation Organization
 

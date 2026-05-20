@@ -1,8 +1,15 @@
-<!-- DOC_BADGE: CANONICAL -->
-<!-- DOC_STATUS: AUTHORITATIVE -->
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: SEALED_BASEMENT_RECORD -->
+<!-- DOC_CANONICAL_POINTER: docs/agent/CURRENT_STATE.md -->
 <!-- DOC_LAST_VERIFIED: 2026-05-20 -->
 
-# Basement Phase Handoff (v1) — Current System State
+# Basement Phase Handoff (v1) — Sealed Historical Record
+
+> Current first-read agent state now lives in
+> `docs/agent/CURRENT_STATE.md` with a machine-readable mirror at
+> `docs/agent/current_state.json`. This basement handoff is preserved as a
+> sealed historical/proof record and should not be used as the active scratchpad
+> for new-agent restart state.
 
 **Status:** Basement phase sealed + truth plumbing sealed (read-only operator console and control substrate active).
 **Scope:** Integrity + observability + contracts + read-only UI/control truth layers; no execution authority, no policy coupling.

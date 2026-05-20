@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: CURATED_AUTHORITY_INDEX -->
-<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-20 -->
 
 # Documentation Authority Map
 
@@ -40,7 +40,6 @@ These documents define current runtime, architecture, identity, and operator tru
 
 ### Runtime And Architecture Contracts
 
-- [HANDOFF_BASEMENT_PHASE.md](../HANDOFF_BASEMENT_PHASE.md)
 - [INGEST_ORCHESTRATION_CONTRACT.md](../architecture/INGEST_ORCHESTRATION_CONTRACT.md)
 - [IDENTITY_STITCHING_CONTRACT.md](../architecture/IDENTITY_STITCHING_CONTRACT.md)
 - [SYSTEM_ARCHITECTURE.md](../architecture/SYSTEM_ARCHITECTURE.md)
@@ -63,6 +62,10 @@ These documents define current runtime, architecture, identity, and operator tru
 
 ### Runtime Operator Authority
 
+- [Agent current state](../agent/CURRENT_STATE.md)
+- [Agent current state JSON](../agent/current_state.json)
+- [Agent office index](../agent/README.md)
+- [Clean memory start workflow](../agent/workflows/CLEAN_MEMORY_START.md)
 - [WSL_AUDIO_RUNTIME.md](../reference/WSL_AUDIO_RUNTIME.md)
 - [WATCHDOG_SYSTEM.md](../systems/WATCHDOG_SYSTEM.md)
 - [CONTROL_AGENT.md](../CONTROL_AGENT.md)
@@ -95,6 +98,7 @@ These docs are safe discovery/index surfaces for humans and agents, but they do 
 
 These docs remain in the repo because they are useful historical records, but they must never be treated as current operator or runtime authority.
 
+- [HANDOFF_BASEMENT_PHASE.md](../HANDOFF_BASEMENT_PHASE.md)
 - [ARTIFACT_LOCATION_CONTRACT.md](../technical/ARTIFACT_LOCATION_CONTRACT.md)
 - [PIPELINE_RESTORATION_BACKLOG.md](../technical/PIPELINE_RESTORATION_BACKLOG.md)
 - [PHASE5_FINAL_ACTIVATION_SUMMARY.md](../technical/PHASE5_FINAL_ACTIVATION_SUMMARY.md)

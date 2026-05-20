@@ -1,0 +1,71 @@
+{
+  "schema_version": 1,
+  "last_verified": "2026-05-20",
+  "project": "GoodQ4All",
+  "agent_first_read": "docs/agent/CURRENT_STATE.md",
+  "human_index": "docs/agent/README.md",
+  "operating_protocol": "AGENTS.md",
+  "runtime": {
+    "primary_os": "Windows 11",
+    "api_base": "http://127.0.0.1:30000",
+    "qdrant_base": "http://127.0.0.1:6333",
+    "conda_env": "goodq_core",
+    "profile": "BASELINE",
+    "wsl_distro": "Ubuntu-22.04",
+    "operator_console": {
+      "path": "/ui/operator_console_v1/",
+      "authority": "read_only"
+    }
+  },
+  "clean_start": {
+    "prior_pipeline_memory_is_disposable": true,
+    "prior_home_movie_tests_are_disposable": true,
+    "fresh_epoch": "epoch_2026_05_20_home_memory_clean",
+    "tracked_cleanup_summary": "docs/diagnostics/MEMORY_CLEAN_START_AUDIT_2026-05-20.md",
+    "qdrant_cleanup_manifest_dir": "reports/local_housekeeping/2026-05-20-memory-clean-start",
+    "qdrant_pre_cleanup": {
+      "collections": 68,
+      "epochs": 17,
+      "points": 17767
+    },
+    "qdrant_post_cleanup": {
+      "deleted_goodq_collections": 68,
+      "delete_errors": 0,
+      "collections": 4,
+      "points": 0,
+      "status": "fresh_collections_initialized"
+    },
+    "generated_report_cleanup": {
+      "deleted_targets": 17,
+      "reclaimed_mb": 6098.19,
+      "latest_evidence_route": "no_indexed_runs"
+    },
+    "epoch_filesystem_cleanup": {
+      "removed_epochs": 16,
+      "retained_epoch_stubs": 1,
+      "retained_stub": "epoch_2025_12_22 service-held qdrant logs",
+      "reclaimed_mb": 5244.99,
+      "fresh_database_exists": false,
+      "fresh_database_scenes": 0
+    },
+    "fresh_qdrant_collections": {
+      "clip": "goodq_clip_epoch_2026_05_20_home_memory_clean",
+      "dino": "goodq_dino_epoch_2026_05_20_home_memory_clean",
+      "text": "goodq_text_epoch_2026_05_20_home_memory_clean",
+      "audio": "goodq_audio_epoch_2026_05_20_home_memory_clean"
+    }
+  },
+  "known_historical_echoes": [
+    "Seinfeld and Season witness memory in old epochs",
+    "epoch_2025_12_22 or epoch_2025_12_23 described as clean by older docs",
+    "basement handoff used as a rolling scratchpad",
+    "legacy scene-id-only audio vectors treated as current-run proof"
+  ],
+  "canonical_links": [
+    "docs/architecture/CONFIG_LOADING_CONTRACT.md",
+    "docs/architecture/MEMORY_STORAGE.md",
+    "docs/architecture/AUDIO_VECTOR_PROVENANCE_CONTRACT.md",
+    "docs/reference/API.md",
+    "docs/agent/workflows/CLEAN_MEMORY_START.md"
+  ]
+}

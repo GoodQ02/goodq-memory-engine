@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE_POINTER -->
-<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-20 -->
 
 # GoodQ4All Agent & Copilot Communications Index
 
@@ -17,12 +17,11 @@ The former active agent-communications and Copilot communications directories ha
 
 ## Current Pause Point
 
-As of 2026-05-07, the docs-clearance pass is sealed by commit `103b17f`
-(`docs: add documentation forensics index`). Use
-`docs/reference/indexes/DOCS_FORENSICS_INDEX.md` as the documentation rolodex
-before future cleanup. The next expected operator input is a laptop bootstrap
-audit with two remaining items; analyze that audit before continuing repo-root
-cleanup or lint work.
+As of 2026-05-20, the active agent first-read has moved to
+`docs/agent/CURRENT_STATE.md` with a machine-readable mirror at
+`docs/agent/current_state.json`. Use this index only to interpret archived
+agent/Copilot notes. Do not route fresh agents through archived communications
+or the sealed basement handoff before the current agent state layer.
 
 ---
 
@@ -62,7 +61,9 @@ These are snapshots, not canonical runtime docs:
 
 For canonical status and current runtime truth, prefer:
 
-- `docs/HANDOFF_BASEMENT_PHASE.md`
+- `docs/agent/CURRENT_STATE.md`
+- `docs/agent/current_state.json`
+- `docs/agent/README.md`
 - `docs/architecture/INGEST_ORCHESTRATION_CONTRACT.md`
 - `docs/architecture/IDENTITY_STITCHING_CONTRACT.md`
 - `docs/reference/WSL_AUDIO_RUNTIME.md`
@@ -78,6 +79,7 @@ For canonical status and current runtime truth, prefer:
 - `docs/PHASE6_MULTIMODAL_FUSION.md`
 - `docs/CLI-REFERENCE.md`
 - `docs/technical/LIB_COMPONENTS.md`
+- `docs/HANDOFF_BASEMENT_PHASE.md` only as sealed historical basement record
 - `CHANGELOG.md`
 
 ---
@@ -101,7 +103,9 @@ Release-level session summary:
 ## How Agents Should Treat These Docs
 
 - Primary truth first:
-  - `docs/HANDOFF_BASEMENT_PHASE.md`
+  - `docs/agent/CURRENT_STATE.md`
+  - `docs/agent/current_state.json`
+  - `docs/agent/README.md`
   - `docs/architecture/INGEST_ORCHESTRATION_CONTRACT.md`
   - `docs/architecture/IDENTITY_STITCHING_CONTRACT.md`
   - `docs/reference/WSL_AUDIO_RUNTIME.md`

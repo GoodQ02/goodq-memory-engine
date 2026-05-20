@@ -10,7 +10,10 @@ from pathlib import Path
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from goodq4all.steps.common.config_loader import load_configs
+try:
+    from steps.common.config_loader import load_configs
+except ModuleNotFoundError:
+    from goodq4all.steps.common.config_loader import load_configs
 
 
 def wait_for_qdrant(host: str, max_retries: int = 10, delay: int = 2):
@@ -19,7 +22,7 @@ def wait_for_qdrant(host: str, max_retries: int = 10, delay: int = 2):
     
     for i in range(max_retries):
         try:
-            response = requests.get(f"{host}/health", timeout=2)
+            response = requests.get(f"{host.rstrip('/')}/collections", timeout=2)
             if response.status_code == 200:
                 print(f"[OK] Qdrant is healthy!")
                 return True

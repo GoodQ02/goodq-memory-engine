@@ -1998,6 +1998,106 @@ h3 {
   overflow-wrap: anywhere;
 }
 
+.scene-evidence-summary-panel {
+  display: grid;
+  gap: 12px;
+  margin: 0 0 14px;
+  padding: 12px;
+  border: 1px solid rgba(142, 199, 192, 0.24);
+  border-radius: 6px;
+  background: rgba(142, 199, 192, 0.08);
+}
+
+.scene-meaning-card {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid rgba(139, 97, 32, 0.18);
+  border-radius: 6px;
+  background: rgba(247, 244, 233, 0.54);
+}
+
+.scene-meaning-summary,
+.scene-meaning-empty {
+  margin: 0;
+  color: var(--panel-ink);
+  font-size: 13px;
+  line-height: 1.42;
+  overflow-wrap: anywhere;
+}
+
+.scene-meaning-empty {
+  color: var(--panel-muted);
+}
+
+.scene-meaning-meta {
+  color: var(--panel-muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.scene-key-moment-list,
+.scene-gap-list {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding-left: 18px;
+  color: var(--panel-muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.scene-tag-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.scene-tag-strip span {
+  max-width: 100%;
+  padding: 3px 6px;
+  border: 1px solid rgba(139, 97, 32, 0.24);
+  border-radius: 999px;
+  background: rgba(255, 179, 0, 0.12);
+  color: #7a5518;
+  font-size: 11px;
+  line-height: 1;
+  overflow-wrap: anywhere;
+}
+
+.scene-signal-chip-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+}
+
+.scene-signal-chip {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--panel-line);
+  border-radius: 6px;
+  background: rgba(247, 244, 233, 0.42);
+}
+
+.scene-signal-chip.observed {
+  border-color: rgba(35, 122, 56, 0.22);
+}
+
+.scene-signal-chip.missing {
+  border-color: rgba(139, 97, 32, 0.18);
+}
+
+.scene-signal-chip strong {
+  display: block;
+  color: var(--panel-ink);
+  font-size: 12px;
+  line-height: 1.2;
+}
+
 .scene-fact-list,
 .scene-signal-list,
 .schema-field-list {

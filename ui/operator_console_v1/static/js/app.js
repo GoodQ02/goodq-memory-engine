@@ -2944,6 +2944,210 @@
     return rows;
   }
 
+  function sceneContextObject(segment) {
+    return segment && segment.scene_context_llm && typeof segment.scene_context_llm === "object" && !Array.isArray(segment.scene_context_llm)
+      ? segment.scene_context_llm
+      : {};
+  }
+
+  function sceneContextTags(segment) {
+    const context = sceneContextObject(segment);
+    const tags = []
+      .concat(stringList(segment && segment.tags, 8))
+      .concat(Array.isArray(context.context_tags) ? context.context_tags : [])
+      .concat(Array.isArray(context.primary_tags) ? context.primary_tags : [])
+      .concat(Array.isArray(context.contextual_tags) ? context.contextual_tags : [])
+      .concat(Array.isArray(context.structural_tags) ? context.structural_tags : []);
+    return [...new Set(tags.map((tag) => safeString(tag, "scene_tag")).filter(Boolean))];
+  }
+
+  function sceneKeyMoments(segment) {
+    const context = sceneContextObject(segment);
+    return Array.isArray(context.key_moments)
+      ? context.key_moments.map((moment) => safeString(moment, "key_moment")).filter(Boolean)
+      : [];
+  }
+
+  function sceneMeaningSource(segment) {
+    const context = sceneContextObject(segment);
+    const epistemic = segment && segment.scene_context_epistemic && typeof segment.scene_context_epistemic === "object"
+      ? segment.scene_context_epistemic
+      : {};
+    const arbitration = segment && segment.scene_context_arbitration && typeof segment.scene_context_arbitration === "object"
+      ? segment.scene_context_arbitration
+      : {};
+    return context.source || epistemic.dominant_evidence || epistemic.evidence_family || arbitration.resolved_by || "Not observed";
+  }
+
+  function sceneMeaningSummary(segment) {
+    const context = sceneContextObject(segment);
+    return (
+      context.narrative_summary ||
+      context.summary ||
+      context.activity_description ||
+      segment.visual_caption ||
+      segment.transcript ||
+      segment.full_transcript ||
+      null
+    );
+  }
+
+  function sceneEvidenceSignalFamilies(segment) {
+    const context = sceneContextObject(segment);
+    const epistemic = segment && segment.scene_context_epistemic && typeof segment.scene_context_epistemic === "object"
+      ? segment.scene_context_epistemic
+      : {};
+    const speakerIds = Array.isArray(segment.speaker_ids) ? segment.speaker_ids : [];
+    const visiblePeople = Array.isArray(segment.candidate_visible_people) ? segment.candidate_visible_people : [];
+    const alignedMentions = Array.isArray(segment.speaker_aligned_mentions) ? segment.speaker_aligned_mentions : [];
+    const sceneEntities = Array.isArray(segment.scene_present_entities) ? segment.scene_present_entities : [];
+    const clapMeta = segment.clap_meta && typeof segment.clap_meta === "object" && !Array.isArray(segment.clap_meta)
+      ? segment.clap_meta
+      : {};
+    return [
+      {
+        label: "Meaning lens",
+        observed: valueObserved(sceneMeaningSummary(segment)) || sceneKeyMoments(segment).length > 0,
+        note: valueObserved(context.source) ? `source: ${safeString(context.source, "scene_context_source")}` : "scene_context_llm not exposed",
+      },
+      {
+        label: "Transcript",
+        observed: valueObserved(segment.transcript || segment.full_transcript),
+        note: valueObserved(segment.transcript || segment.full_transcript) ? "scene-level speech text" : "transcript not exposed",
+      },
+      {
+        label: "Visual proof",
+        observed:
+          valueObserved(segment.representative_frame) ||
+          valueObserved(segment.clip_id) ||
+          valueObserved(segment.dino_id) ||
+          arrayCount(segment.objects) > 0 ||
+          valueObserved(segment.visual_caption) ||
+          valueObserved(segment.ocr_text),
+        note: `${arrayCount(segment.objects)} objects; frame ${valueObserved(segment.representative_frame) ? "present" : "not exposed"}`,
+      },
+      {
+        label: "Audio review",
+        observed: valueObserved(segment.audio_emotion) || objectCount(segment.audio_emotion_scores) > 0,
+        note: audioEmotionNote(segment),
+      },
+      {
+        label: "Identity",
+        observed: speakerIds.length > 0 || valueObserved(segment.dominant_speaker_id) || visiblePeople.length > 0 || alignedMentions.length > 0,
+        note: `${speakerIds.length || 0} speaker ids; ${visiblePeople.length || 0} visible people`,
+      },
+      {
+        label: "Entities / KG",
+        observed: sceneEntities.length > 0 || valueObserved(epistemic.evidence_family),
+        note: sceneEntities.length ? `${sceneEntities.length} scene-present entities` : (epistemic.evidence_family ? `evidence family: ${safeString(epistemic.evidence_family, "evidence_family")}` : "entity evidence not exposed"),
+      },
+      {
+        label: "Temporal hints",
+        observed: flattenTimeHints(segment.time_hints).length > 0,
+        note: `${flattenTimeHints(segment.time_hints).length} time hints`,
+      },
+      {
+        label: "Sentiment",
+        observed: valueObserved(segment.sentiment_label) || valueObserved(segment.sentiment_score),
+        note: valueObserved(segment.sentiment_label) ? safeString(segment.sentiment_label, "sentiment_label") : "text sentiment label not persisted",
+      },
+      {
+        label: "CLAP commit",
+        observed: valueObserved(clapMeta.status),
+        note: valueObserved(clapMeta.status) ? `status ${safeString(clapMeta.status, "clap_status")}; not current-run Qdrant proof` : "CLAP commit metadata not exposed",
+      },
+    ];
+  }
+
+  function appendSceneEvidenceSummary(container, segment) {
+    const panel = document.createElement("section");
+    panel.className = "scene-evidence-summary-panel";
+    panel.setAttribute("data-testid", "scene-evidence-summary");
+    appendText(panel, "h3", "Scene Evidence Summary", "scene-evidence-title");
+
+    const families = sceneEvidenceSignalFamilies(segment);
+    const observed = families.filter((item) => item.observed).length;
+    const source = sceneMeaningSource(segment);
+    appendIndicatorStrip(
+      panel,
+      [
+        {
+          label: "Meaning source",
+          value: safeString(source, "meaning_source"),
+          note: "scene_context_llm / epistemic envelope",
+          kind: valueObserved(source) && source !== "Not observed" ? "info" : "unknown",
+        },
+        {
+          label: "Evidence present",
+          value: `${observed}/${families.length}`,
+          note: "high-value signal families",
+          kind: observed >= Math.ceil(families.length * 0.5) ? "ok" : "warn",
+        },
+        {
+          label: "Evidence gaps",
+          value: String(families.length - observed),
+          note: "optional or absent signals",
+          kind: families.length - observed ? "warn" : "ok",
+        },
+      ],
+      "scene-summary-rollup"
+    );
+
+    const meaning = document.createElement("div");
+    meaning.className = "scene-meaning-card";
+    const summary = sceneMeaningSummary(segment);
+    appendText(
+      meaning,
+      "p",
+      summary ? safeString(summary, "scene_meaning_summary") : "No scene meaning summary exposed for this selected scene.",
+      summary ? "scene-meaning-summary" : "scene-meaning-empty"
+    );
+    const context = sceneContextObject(segment);
+    if (valueObserved(context.emotional_arc)) {
+      appendText(meaning, "span", `Emotional arc: ${safeString(context.emotional_arc, "emotional_arc")}`, "scene-meaning-meta");
+    }
+    const moments = sceneKeyMoments(segment);
+    if (moments.length) {
+      const list = document.createElement("ul");
+      list.className = "scene-key-moment-list";
+      moments.slice(0, 3).forEach((moment) => appendText(list, "li", moment));
+      meaning.appendChild(list);
+    }
+    const tags = sceneContextTags(segment);
+    if (tags.length) {
+      const strip = document.createElement("div");
+      strip.className = "scene-tag-strip";
+      tags.slice(0, 8).forEach((tag) => appendText(strip, "span", tag));
+      meaning.appendChild(strip);
+    }
+    panel.appendChild(meaning);
+
+    const grid = document.createElement("div");
+    grid.className = "scene-signal-chip-grid";
+    families.forEach((item) => {
+      const chip = document.createElement("div");
+      chip.className = `scene-signal-chip ${item.observed ? "observed" : "missing"}`;
+      chip.appendChild(makeStatusDot(item.observed ? "ok" : "unknown", `${item.label}: ${item.observed ? "present" : "not exposed"}`));
+      const body = document.createElement("div");
+      appendText(body, "strong", item.label);
+      appendText(body, "span", item.note, "scene-signal-note");
+      chip.appendChild(body);
+      grid.appendChild(chip);
+    });
+    panel.appendChild(grid);
+
+    const gaps = families.filter((item) => !item.observed);
+    const gapList = document.createElement("ul");
+    gapList.className = "scene-gap-list";
+    if (!gaps.length) {
+      appendText(gapList, "li", "No optional evidence gaps surfaced for this selected scene.");
+    } else {
+      gaps.slice(0, 5).forEach((item) => appendText(gapList, "li", `${item.label}: ${item.note}`));
+    }
+    panel.appendChild(gapList);
+    container.appendChild(panel);
+  }
+
   function numericDuration(segment) {
     const start = Number(segment.start);
     const end = Number(segment.end);
@@ -3059,6 +3263,7 @@
     summary.className = "scene-summary";
     appendText(summary, "p", segmentSummary(segment));
     detail.appendChild(summary);
+    appendSceneEvidenceSummary(detail, segment);
 
     const facts = document.createElement("div");
     facts.className = "scene-fact-list";

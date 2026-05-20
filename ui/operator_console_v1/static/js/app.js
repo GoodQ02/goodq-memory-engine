@@ -2603,6 +2603,41 @@
     ];
   }
 
+  function previewSceneLike(raw, context) {
+    const base = context && typeof context === "object" ? context : {};
+    const source = raw && typeof raw === "object" ? raw : {};
+    return {
+      ...base,
+      ...source,
+      scene_context_llm: source.scene_context_llm || base.scene_context_llm,
+      scene_context_epistemic: source.scene_context_epistemic || base.scene_context_epistemic,
+      scene_context_arbitration: source.scene_context_arbitration || base.scene_context_arbitration,
+      transcript: source.transcript || base.transcript,
+      full_transcript: source.full_transcript || base.full_transcript,
+      representative_frame: source.representative_frame || base.representative_frame,
+      representative_frame_endpoint: source.representative_frame_endpoint || base.representative_frame_endpoint,
+      objects: Array.isArray(source.objects) && source.objects.length ? source.objects : base.objects,
+      tags: Array.isArray(source.tags) && source.tags.length ? source.tags : base.tags,
+      audio_emotion: source.audio_emotion || base.audio_emotion,
+      audio_emotion_scores: source.audio_emotion_scores || base.audio_emotion_scores,
+    };
+  }
+
+  function previewMeaningPayload(raw, context) {
+    const scene = previewSceneLike(raw, context);
+    const families = sceneEvidenceSignalFamilies(scene);
+    const observed = families.filter((item) => item.observed).length;
+    return {
+      summary: sceneMeaningSummary(scene),
+      source: sceneMeaningSource(scene),
+      tags: sceneContextTags(scene),
+      moments: sceneKeyMoments(scene),
+      families,
+      observed,
+      gaps: families.filter((item) => !item.observed),
+    };
+  }
+
   function mediaPreviewPayload() {
     if (state.mediaPreview.source === "retrieval") {
       const entry = selectedRetrievalEntry();
@@ -2627,6 +2662,7 @@
           summary: resultSummary(result),
           frameUrl: mediaEndpointUrl(frameEndpoint),
           evidence: mediaPreviewEvidence(result, context),
+          meaning: previewMeaningPayload(result, context),
         };
       }
     }
@@ -2648,6 +2684,7 @@
       summary: segmentSummary(segment),
       frameUrl: mediaEndpointUrl(frameEndpoint),
       evidence: mediaPreviewEvidence(segment, {}),
+      meaning: previewMeaningPayload(segment, {}),
     };
   }
 
@@ -2666,6 +2703,49 @@
     appendText(item, "span", row.label);
     item.appendChild(makeStatusDot(row.kind, row.label));
     container.appendChild(item);
+  }
+
+  function appendPreviewEvidenceBridge(container, payload) {
+    const meaning = payload.meaning || {};
+    const bridge = document.createElement("section");
+    bridge.className = "preview-evidence-bridge";
+    bridge.setAttribute("data-testid", "preview-evidence-bridge");
+    appendText(bridge, "h3", "Visual proof linked to selected scene evidence summary");
+
+    const rollup = document.createElement("div");
+    rollup.className = "preview-signal-compact";
+    [
+      ["Meaning source", meaning.source || "Not observed"],
+      ["Evidence present", `${meaning.observed || 0}/${Array.isArray(meaning.families) ? meaning.families.length : 0}`],
+      ["Evidence gaps", String(Array.isArray(meaning.gaps) ? meaning.gaps.length : 0)],
+    ].forEach(([label, value]) => {
+      const item = document.createElement("div");
+      appendText(item, "span", label);
+      appendText(item, "strong", safeString(value, label));
+      rollup.appendChild(item);
+    });
+    bridge.appendChild(rollup);
+
+    const card = document.createElement("div");
+    card.className = "preview-meaning-card";
+    appendText(card, "p", meaning.summary ? safeString(meaning.summary, "preview_meaning_summary") : "No scene meaning summary exposed for this preview.");
+    if (Array.isArray(meaning.moments) && meaning.moments.length) {
+      appendText(card, "span", `Key moment: ${meaning.moments[0]}`, "preview-meaning-meta");
+    }
+    if (Array.isArray(meaning.tags) && meaning.tags.length) {
+      const strip = document.createElement("div");
+      strip.className = "scene-tag-strip";
+      meaning.tags.slice(0, 5).forEach((tag) => appendText(strip, "span", tag));
+      card.appendChild(strip);
+    }
+    bridge.appendChild(card);
+
+    const link = document.createElement("a");
+    link.className = "retrieval-button primary";
+    link.href = "#scene-inspector";
+    link.textContent = "Open Evidence Summary";
+    bridge.appendChild(link);
+    container.appendChild(bridge);
   }
 
   function renderMediaPreview() {
@@ -2741,6 +2821,7 @@
     overlay.setAttribute("aria-hidden", "true");
     frameBox.appendChild(overlay);
     panel.appendChild(frameBox);
+    appendPreviewEvidenceBridge(panel, payload);
 
     const miniTimeline = document.createElement("div");
     miniTimeline.className = "mini-timeline";
@@ -3145,6 +3226,17 @@
       gaps.slice(0, 5).forEach((item) => appendText(gapList, "li", `${item.label}: ${item.note}`));
     }
     panel.appendChild(gapList);
+    const actions = document.createElement("div");
+    actions.className = "scene-evidence-actions";
+    const previewButton = document.createElement("button");
+    previewButton.type = "button";
+    previewButton.className = "retrieval-button primary scene-open-visual-proof";
+    previewButton.setAttribute("data-testid", "scene-open-visual-proof");
+    previewButton.textContent = "Open Visual Proof";
+    previewButton.title = "Open the linked media preview for this selected scene.";
+    previewButton.addEventListener("click", () => openMediaPreview("timeline"));
+    actions.appendChild(previewButton);
+    panel.appendChild(actions);
     container.appendChild(panel);
   }
 

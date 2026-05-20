@@ -54,6 +54,18 @@ def test_latest_run_preview_uses_read_only_summary_projection(monkeypatch) -> No
     runtime = _load_runtime_route_module(repo_root)
 
     monkeypatch.setattr(
+        runtime,
+        "_scroll_qdrant_audio_payloads",
+        lambda runtime_run_id, collection_candidates: {"status": "ok", "collection": "goodq_audio_epoch_test", "payloads": []},
+    )
+    monkeypatch.setattr(
+        runtime,
+        "_sample_qdrant_audio_payloads",
+        lambda collection_candidates: {"status": "ok", "collection": "goodq_audio_epoch_test", "sample_count": 0},
+        raising=False,
+    )
+
+    monkeypatch.setattr(
         runtime.run_index,
         "list_runs",
         lambda reports_root=None, limit=None: [
@@ -274,6 +286,16 @@ def test_latest_run_evidence_summarizes_artifacts_without_paths(monkeypatch, tmp
     monkeypatch.setitem(sys.modules, "goodq_version", fake_goodq_version)
 
     runtime = _load_runtime_route_module(repo_root)
+    monkeypatch.setattr(
+        runtime,
+        "_scroll_qdrant_audio_payloads",
+        lambda runtime_run_id, collection_candidates: {"status": "ok", "collection": "goodq_audio_epoch_test", "payloads": []},
+    )
+    monkeypatch.setattr(
+        runtime,
+        "_sample_qdrant_audio_payloads",
+        lambda collection_candidates: {"status": "ok", "collection": "goodq_audio_epoch_test", "sample_count": 0},
+    )
 
     run_dir = tmp_path / "run" / "02x01"
     run_dir.mkdir(parents=True)
@@ -387,10 +409,80 @@ def test_latest_run_evidence_summarizes_artifacts_without_paths(monkeypatch, tmp
     assert evidence["knowledge_graph"]["status"] == "ok"
     assert evidence["knowledge_graph"]["qdrant_ok"] is True
     assert evidence["audio_vector_proof"]["status"] == "no_current_run_evidence"
-    assert evidence["audio_vector_proof"]["runtime_run_id_resolved"] is False
+    assert evidence["audio_vector_proof"]["runtime_run_id_resolved"] is True
+    assert evidence["audio_vector_proof"]["runtime_run_id_source"] == "run_header.run_id"
+    assert evidence["audio_vector_proof"]["reason"] == "no_qdrant_payloads_matched_run_id"
     serialized = json.dumps(evidence)
     assert str(tmp_path) not in serialized
     assert "source_path" not in serialized
+
+
+def test_audio_vector_proof_resolves_run_header_run_id_without_overclaiming(monkeypatch) -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    if str(repo_root) not in sys.path:
+        sys.path.insert(0, str(repo_root))
+
+    fake_config_loader = types.ModuleType("steps.common.config_loader")
+    fake_config_loader.load_configs = lambda overrides=None: {
+        "paths": {"data_root": "data", "db_path": "data/memory.db"},
+        "host": {},
+        "memory": {},
+        "llm": {},
+        "qdrant": {"enabled": True, "host": "http://127.0.0.1:6333", "collections": {"audio": "goodq_audio_test"}},
+    }
+    monkeypatch.setitem(sys.modules, "steps.common.config_loader", fake_config_loader)
+
+    fake_memory_store = types.ModuleType("steps.common.memory_store")
+    fake_memory_store.normalize_memory_tier_list = lambda values: values
+    monkeypatch.setitem(sys.modules, "steps.common.memory_store", fake_memory_store)
+
+    fake_ingest_requests = types.ModuleType("api.utils.ingest_requests")
+    fake_ingest_requests.is_supported_ingest_path = lambda path: True
+    monkeypatch.setitem(sys.modules, "api.utils.ingest_requests", fake_ingest_requests)
+
+    fake_goodq_version = types.ModuleType("goodq_version")
+    fake_goodq_version.GOODQ_VERSION = "test"
+    monkeypatch.setitem(sys.modules, "goodq_version", fake_goodq_version)
+
+    runtime = _load_runtime_route_module(repo_root)
+
+    monkeypatch.setattr(
+        runtime,
+        "_scroll_qdrant_audio_payloads",
+        lambda runtime_run_id, collection_candidates: {"status": "ok", "collection": "goodq_audio_epoch_test", "payloads": []},
+    )
+    monkeypatch.setattr(
+        runtime,
+        "_sample_qdrant_audio_payloads",
+        lambda collection_candidates: {
+            "status": "ok",
+            "collection": "goodq_audio_epoch_test",
+            "sample_count": 2,
+            "missing_required_fields": {"run_id": 2, "embedding_id": 2},
+        },
+        raising=False,
+    )
+
+    proof = runtime._summarize_audio_vector_proof(
+        header={"epoch": "epoch_test", "run_id": "run-summary-alpha"},
+        latest_episode={},
+        temporal_payload={"total_scenes": 2, "video_id": "video-a"},
+        scene_results_payload={
+            "scenes": [
+                {"scene_id": "scene-a", "video_id": "video-a", "audio": {"clap_meta": {"status": "ok"}}},
+                {"scene_id": "scene-b", "video_id": "video-a", "audio": {"clap_meta": {"status": "ok"}}},
+            ]
+        },
+    )
+
+    assert proof["runtime_run_id_resolved"] is True
+    assert proof["runtime_run_id_source"] == "run_header.run_id"
+    assert proof["status"] == "no_current_run_evidence"
+    assert proof["reason"] == "no_qdrant_payloads_matched_run_id"
+    assert proof["current_run_qdrant_proven"] == 0
+    assert proof["qdrant_run_matched_points"] == 0
+    assert proof["audio_payload_sample"]["sample_count"] == 2
+    assert proof["audio_payload_sample"]["missing_required_fields"]["run_id"] == 2
 
 
 def test_audio_vector_proof_counts_current_run_qdrant_payloads(monkeypatch) -> None:

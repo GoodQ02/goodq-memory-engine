@@ -1309,30 +1309,37 @@ def _summarize_audio_vector_proof(
 
     proof = _evaluate_qdrant_audio_payloads(payloads, scene_ids=scene_ids, video_ids=video_ids)
     base.update(proof)
+    if not payloads:
+        base["audio_payload_sample"] = _sample_qdrant_audio_payloads(collection_candidates)
     clap_ok = int(base["clap_ok"] or 0)
     proven = int(base["current_run_qdrant_proven"] or 0)
 
     if proven and (clap_ok == 0 or proven >= clap_ok):
         status = "current_run_audio_vector_proven"
         label = "Proven"
+        reason = "run_matched_payloads_satisfy_contract"
         impact = "Run-matched CLAP/Qdrant audio payloads satisfy the current-run provenance contract."
     elif proven:
         status = "partial"
         label = "Partial"
+        reason = "partial_current_run_audio_vector_coverage"
         impact = "Some run-matched audio vectors are proven, but coverage is not complete for CLAP-ok scenes."
     elif payloads:
         status = "provenance_unverified_audio_vector_exists"
         label = "Historical Only"
+        reason = "run_matched_payloads_missing_required_provenance"
         impact = "Run-matched audio points exist, but required provenance or scene/video matching is incomplete."
     else:
         status = "no_current_run_evidence"
         label = "No Current-Run Evidence"
+        reason = "no_qdrant_payloads_matched_run_id"
         impact = "No Qdrant audio payloads match the audited runtime run id."
 
     return {
         **base,
         "status": status,
         "label": label,
+        "reason": reason,
         "impact": impact,
     }
 
@@ -1430,7 +1437,7 @@ def _resolve_runtime_audio_run_id(
     ):
         if not isinstance(source, dict):
             continue
-        for key in ("runtime_run_id", "goodq_run_id", "qdrant_run_id", "vector_run_id"):
+        for key in ("runtime_run_id", "goodq_run_id", "qdrant_run_id", "vector_run_id", "run_id"):
             candidates.append((f"{source_name}.{key}", source.get(key)))
 
     for source, value in candidates:
@@ -1533,6 +1540,66 @@ def _scroll_qdrant_audio_payloads(runtime_run_id: str, collection_candidates: Li
             logger.warning("audio vector proof qdrant read failed collection=%s error=%s", collection, exc)
 
     return {"status": last_error or "qdrant_unavailable", "payloads": []}
+
+
+def _sample_qdrant_audio_payloads(collection_candidates: List[str]) -> Dict[str, Any]:
+    """Sample audio payload shape without exposing raw Qdrant payload values."""
+
+    base_url = _qdrant_base_url()
+    last_error: str | None = None
+    for collection in collection_candidates:
+        try:
+            body: Dict[str, Any] = {
+                "limit": 32,
+                "with_payload": True,
+                "with_vector": False,
+                "filter": {"must": [{"key": "modality", "match": {"value": "audio"}}]},
+            }
+            resp = requests.post(
+                f"{base_url}/collections/{collection}/points/scroll",
+                json=body,
+                timeout=5,
+            )
+            if resp.status_code == 404:
+                last_error = "collection_not_found"
+                continue
+            if resp.status_code != 200:
+                last_error = f"qdrant_status_{resp.status_code}"
+                continue
+
+            data = resp.json().get("result", {}) or {}
+            points = data.get("points") if isinstance(data.get("points"), list) else []
+            payloads = [
+                point.get("payload")
+                for point in points
+                if isinstance(point, dict) and isinstance(point.get("payload"), dict)
+            ]
+            return {
+                "status": "ok",
+                "collection": collection,
+                "sample_count": len(payloads),
+                "payloads_have_run_id": any(payload.get("run_id") for payload in payloads),
+                "missing_required_fields": _missing_required_field_counts(payloads),
+            }
+        except Exception as exc:
+            last_error = f"exception:{type(exc).__name__}"
+            logger.warning("audio vector proof qdrant sample failed collection=%s error=%s", collection, exc)
+
+    return {
+        "status": last_error or "qdrant_unavailable",
+        "sample_count": 0,
+        "payloads_have_run_id": False,
+        "missing_required_fields": {},
+    }
+
+
+def _missing_required_field_counts(payloads: List[Dict[str, Any]]) -> Dict[str, int]:
+    missing_required: Counter[str] = Counter()
+    for payload in payloads:
+        for field in _AUDIO_QDRANT_REQUIRED_FIELDS:
+            if not payload.get(field):
+                missing_required[field] += 1
+    return dict(sorted(missing_required.items()))
 
 
 def _evaluate_qdrant_audio_payloads(

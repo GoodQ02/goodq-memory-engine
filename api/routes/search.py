@@ -97,6 +97,26 @@ def _segment_transcript(segment: dict) -> Optional[str]:
     return None
 
 
+def _segment_representative_frame_reference(segment: dict) -> Any:
+    for key in (
+        "representative_frame",
+        "representative_frame_path",
+        "representative_frame_endpoint",
+        "thumbnail",
+        "keyframe",
+    ):
+        value = segment.get(key)
+        if value not in (None, "", [], {}):
+            return value
+
+    frame_paths = segment.get("frame_paths")
+    if isinstance(frame_paths, list):
+        for value in frame_paths:
+            if value not in (None, "", [], {}):
+                return value
+    return None
+
+
 def _kg_evidence(segment: dict) -> Dict[str, Any]:
     entities = _list_dicts(segment.get("scene_present_entities"))
     relationships = _list_dicts(segment.get("relationships")) or _list_dicts(segment.get("kg_relationships"))
@@ -195,7 +215,9 @@ def _lookup_timeline_enrichment(payload: dict) -> Dict[str, Any]:
             start = segment.get("start")
             end = segment.get("end")
             duration = (end - start) if isinstance(start, (int, float)) and isinstance(end, (int, float)) else segment.get("duration")
+            frame_projection = representative_frame_projection(video_id, _segment_representative_frame_reference(segment))
             context = _timeline_enrichment_context(segment)
+            context.update({key: value for key, value in frame_projection.items() if value not in (None, [], {})})
             kg_evidence = context.get("kg_evidence") if isinstance(context.get("kg_evidence"), dict) else _kg_evidence(segment)
             entities = _list_dicts(segment.get("scene_present_entities"))
             relationships = _list_dicts(segment.get("relationships")) or _list_dicts(segment.get("kg_relationships"))
@@ -206,6 +228,7 @@ def _lookup_timeline_enrichment(payload: dict) -> Dict[str, Any]:
                 "end": end,
                 "duration": duration,
                 "timestamp": start,
+                **frame_projection,
                 "transcript": _segment_transcript(segment),
                 "keywords": _list_strings(segment.get("tags")) or _list_strings(segment.get("keywords")),
                 "tags": _list_strings(segment.get("tags")),
@@ -338,7 +361,14 @@ def _build_search_result(result: dict, modality: Optional[str] = None) -> Search
     context = _merge_dicts(enrichment.get("context"), result_context)
     provenance = _merge_dicts(enrichment.get("provenance"), result.get("provenance") if isinstance(result.get("provenance"), dict) else None)
     video_id = payload.get("video_id")
-    frame_projection = representative_frame_projection(str(video_id or ""), payload.get("representative_frame"))
+    frame_projection = {
+        "representative_frame": enrichment.get("representative_frame"),
+        "representative_frame_available": bool(enrichment.get("representative_frame_available")),
+        "representative_frame_endpoint": enrichment.get("representative_frame_endpoint"),
+        "representative_frame_path_redacted": bool(enrichment.get("representative_frame_path_redacted")),
+    }
+    if not frame_projection["representative_frame_endpoint"]:
+        frame_projection = representative_frame_projection(str(video_id or ""), payload.get("representative_frame"))
 
     return SearchResult(
         score=result.get("score", 0.0),

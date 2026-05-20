@@ -2278,6 +2278,55 @@
     return facts.filter(([, value]) => value !== null && value !== undefined && value !== "");
   }
 
+  function retrievalFrameEndpoint(result) {
+    if (!result) return null;
+    const context = retrievalContext(result);
+    return (
+      result.representative_frame_endpoint ||
+      context.representative_frame_endpoint ||
+      result.representative_frame ||
+      context.representative_frame
+    );
+  }
+
+  function appendRetrievalVisualProof(container, result) {
+    if (!container) return;
+    const stale = qs("#retrieval-visual-proof");
+    if (stale) stale.remove();
+    if (!result) return;
+
+    const frameUrl = mediaEndpointUrl(retrievalFrameEndpoint(result));
+    const panel = document.createElement("div");
+    panel.id = "retrieval-visual-proof";
+    panel.className = "retrieval-visual-proof";
+    panel.setAttribute("data-testid", "retrieval-visual-proof");
+
+    const frame = document.createElement("div");
+    frame.className = "retrieval-visual-frame";
+    if (frameUrl) {
+      const image = document.createElement("img");
+      image.src = frameUrl;
+      image.alt = "Retrieval result keyframe";
+      image.loading = "lazy";
+      frame.appendChild(image);
+    } else {
+      appendText(frame, "span", "No redacted keyframe exposed", "retrieval-visual-empty");
+    }
+    panel.appendChild(frame);
+
+    const copy = document.createElement("div");
+    appendText(copy, "strong", "Visual proof");
+    appendText(
+      copy,
+      "span",
+      frameUrl ? "Redacted keyframe endpoint linked to this selected result." : "No redacted keyframe endpoint returned for this result."
+    );
+    panel.appendChild(copy);
+
+    const actions = container.querySelector(".retrieval-preview-actions");
+    container.insertBefore(panel, actions || null);
+  }
+
   function appendRetrievalEvidence(container, result, selectedIndex, signals, percent) {
     const panel = document.createElement("div");
     panel.className = "retrieval-evidence-digest";
@@ -2483,6 +2532,8 @@
     }
     const staleLineage = qs("#retrieval-lineage-strip");
     if (staleLineage) staleLineage.remove();
+    const staleVisualProof = qs("#retrieval-visual-proof");
+    if (staleVisualProof) staleVisualProof.remove();
 
     if (document.activeElement !== input) input.value = state.retrieval.query || "";
     clear(list);
@@ -2597,6 +2648,7 @@
     const observedSignals = signals.filter((row) => row.observed).length;
     const handoffNote = canOpenRetrievalResult(result) ? "" : " | timeline handoff not resolved";
     previewCopy.textContent = `${resultSceneLabel(result, selected.index)} | ${resultTimeLabel(result)} | ${observedSignals} signals observed | ${confidenceLabel(percent)}${handoffNote}. ${resultSummary(result)}`;
+    if (previewPanel) appendRetrievalVisualProof(previewPanel, result);
     if (previewPanel) appendRetrievalLineageStrip(previewPanel, result, selected.index);
     openScene.disabled = !canOpenRetrievalResult(result);
     if (openScene.disabled) {

@@ -706,3 +706,129 @@ def test_audio_vector_proof_rejects_legacy_payloads_without_required_fields(monk
     assert proof["qdrant_run_matched_points"] == 1
     assert proof["missing_required_fields"]["embedding_id"] == 1
     assert proof["missing_required_fields"]["component"] == 1
+
+
+def test_audio_provenance_snapshot_lists_run_tagged_qdrant_audio_without_latest_run_claim(monkeypatch) -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    if str(repo_root) not in sys.path:
+        sys.path.insert(0, str(repo_root))
+
+    fake_config_loader = types.ModuleType("steps.common.config_loader")
+    fake_config_loader.load_configs = lambda overrides=None: {
+        "paths": {"data_root": "data", "db_path": "data/memory.db"},
+        "host": {},
+        "memory": {},
+        "llm": {},
+        "qdrant": {"enabled": True, "host": "http://127.0.0.1:6333", "collections": {"audio": "goodq_audio_epoch_test"}},
+    }
+    monkeypatch.setitem(sys.modules, "steps.common.config_loader", fake_config_loader)
+
+    fake_memory_store = types.ModuleType("steps.common.memory_store")
+    fake_memory_store.normalize_memory_tier_list = lambda values: values
+    monkeypatch.setitem(sys.modules, "steps.common.memory_store", fake_memory_store)
+
+    fake_ingest_requests = types.ModuleType("api.utils.ingest_requests")
+    fake_ingest_requests.is_supported_ingest_path = lambda path: True
+    monkeypatch.setitem(sys.modules, "api.utils.ingest_requests", fake_ingest_requests)
+
+    fake_goodq_version = types.ModuleType("goodq_version")
+    fake_goodq_version.GOODQ_VERSION = "test"
+    monkeypatch.setitem(sys.modules, "goodq_version", fake_goodq_version)
+
+    runtime = _load_runtime_route_module(repo_root)
+
+    def fake_get(url, timeout=None):
+        assert url.endswith("/collections")
+        return _FakeResponse(
+            200,
+            {
+                "result": {
+                    "collections": [
+                        {"name": "goodq_text"},
+                        {"name": "goodq_audio_legacy"},
+                        {"name": "goodq_audio_epoch_test"},
+                    ]
+                }
+            },
+        )
+
+    def fake_post(url, json=None, timeout=None):
+        assert json["with_payload"] is True
+        if "goodq_audio_legacy" in url:
+            return _FakeResponse(
+                200,
+                {"result": {"points": [{"payload": {"faiss_id": 1, "modality": "audio", "source_path": r"L:\secret.wav"}}]}},
+            )
+        if "goodq_audio_epoch_test" in url:
+            return _FakeResponse(
+                200,
+                {
+                    "result": {
+                        "points": [
+                            {
+                                "payload": {
+                                    "run_id": "run-old",
+                                    "scene_id": "scene-a",
+                                    "video_id": "video-a",
+                                    "embedding_id": "embed-old",
+                                    "component": "audio_embed_clap",
+                                    "step": "audio_embed_clap",
+                                    "model": "laion/clap-htsat-unfused",
+                                    "created_at": "2026-05-01T00:00:00Z",
+                                    "commit_ts_utc": "2026-05-01T00:00:00Z",
+                                    "modality": "audio",
+                                }
+                            },
+                            {
+                                "payload": {
+                                    "run_id": "run-new",
+                                    "scene_id": "scene-b",
+                                    "video_id": "video-b",
+                                    "embedding_id": "embed-new",
+                                    "component": "audio_embed_clap",
+                                    "step": "audio_embed_clap",
+                                    "model": "laion/clap-htsat-unfused",
+                                    "created_at": "2026-05-02T00:00:00Z",
+                                    "commit_ts_utc": "2026-05-02T00:00:00Z",
+                                    "modality": "audio",
+                                    "source_path": r"L:\private\scene_0001.wav",
+                                }
+                            },
+                            {
+                                "payload": {
+                                    "run_id": "run-new",
+                                    "scene_id": "scene-c",
+                                    "video_id": "video-b",
+                                    "component": "audio_embed_clap",
+                                    "step": "audio_embed_clap",
+                                    "model": "laion/clap-htsat-unfused",
+                                    "created_at": "2026-05-02T00:01:00Z",
+                                    "commit_ts_utc": "2026-05-02T00:01:00Z",
+                                    "modality": "audio",
+                                }
+                            },
+                        ],
+                        "next_page_offset": None,
+                    }
+                },
+            )
+        raise AssertionError(url)
+
+    monkeypatch.setattr(runtime.requests, "get", fake_get)
+    monkeypatch.setattr(runtime.requests, "post", fake_post)
+
+    snapshot = runtime._latest_audio_provenance_snapshot(limit=2)
+
+    assert snapshot["status"] == "ok"
+    assert snapshot["mode"] == "read_only"
+    assert snapshot["latest_run"]["run_id"] == "run-new"
+    assert snapshot["latest_run"]["collection"] == "goodq_audio_epoch_test"
+    assert snapshot["latest_run"]["run_tagged_points"] == 2
+    assert snapshot["latest_run"]["provenance_capable_points"] == 1
+    assert snapshot["latest_run"]["missing_required_fields"]["embedding_id"] == 1
+    assert snapshot["legacy_audio_points_sampled"] == 1
+    assert snapshot["runs"][0]["run_id"] == "run-new"
+    assert snapshot["runs"][1]["run_id"] == "run-old"
+    serialized = json.dumps(snapshot)
+    assert "source_path" not in serialized
+    assert "secret.wav" not in serialized

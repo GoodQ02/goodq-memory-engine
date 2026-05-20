@@ -42,6 +42,7 @@
     queue: "/api/queue",
     run: "/api/runs/latest/preview",
     runEvidence: "/api/runs/latest/evidence",
+    audioProvenance: "/api/runs/audio-proof/latest",
     memory: "/api/memory/stats",
     storage: "/api/storage/summary",
     recurrence: "/api/control-recurrence/reports/latest",
@@ -71,6 +72,7 @@
   const endpointTimeoutMs = {
     engines: 25000,
     wsl: 18000,
+    audioProvenance: 25000,
     retrieval: 30000,
   };
   const IMPORT_INBOX_LABEL = "<GOODQ_DATA_ROOT>\\GoodQ_Data\\import_inbox";
@@ -946,6 +948,8 @@
     const graph = evidence.knowledge_graph || {};
     const projection = evidence.projection_gaps || {};
     const audioProof = evidence.audio_vector_proof || {};
+    const audioProvenance = state.data.audioProvenance || {};
+    const latestAudioInventoryRun = audioProvenance.latest_run || {};
     const latestEpisode = evidence.latest_episode || run.latest_episode || {};
     const memory = state.data.memory || {};
     const faissAudioCount = numberValue(memory.faiss?.audio_vectors);
@@ -969,6 +973,13 @@
     const audioProofNote = provenAudioCount !== null && clapOkCount !== null
       ? `${provenAudioCount} / ${clapOkCount} CLAP-ok scenes`
       : audioProof.impact || "Run-matched Qdrant proof not reported";
+    const provenanceCapablePoints = numberValue(audioProvenance.provenance_capable_points);
+    const runTaggedAudioRuns = numberValue(audioProvenance.run_tagged_audio_runs);
+    const latestInventoryPoints = numberValue(latestAudioInventoryRun.provenance_capable_points);
+    const audioInventoryObserved = audioProvenance.status === "ok" && provenanceCapablePoints !== null && provenanceCapablePoints > 0;
+    const audioInventoryNote = audioInventoryObserved
+      ? `${provenanceCapablePoints} provenance-capable payloads across ${runTaggedAudioRuns || 0} run-tagged runs`
+      : audioProvenance.impact || "Separate Qdrant inventory not exposed";
 
     const proofRows = [
       {
@@ -1050,6 +1061,16 @@
         missingNote: audioProof.impact || "FAISS audio count is not current-run Qdrant proof",
       },
       {
+        label: "Run-tagged Qdrant audio inventory",
+        state: {
+          observed: audioInventoryObserved,
+          label: audioInventoryObserved ? "Observed" : (audioProvenance.label || "Not Exposed"),
+          kind: audioInventoryObserved ? "historical" : "unknown",
+          note: audioInventoryNote,
+        },
+        missingNote: "Separate inventory does not override latest structured-run proof",
+      },
+      {
         label: "FAISS audio count",
         state: {
           observed: faissAudioCount !== null && faissAudioCount > 0,
@@ -1066,6 +1087,7 @@
         row.label === "CLAP memory commit"
         || row.label === "Projection gap check"
         || row.label === "Current-run Qdrant audio proof"
+        || row.label === "Run-tagged Qdrant audio inventory"
       ))
     );
     const coreObserved = proofRows.filter((row) => row.state.observed).length;
@@ -1090,9 +1112,18 @@
           value: audioProofObserved
             ? `${provenAudioCount || 0}/${clapOkCount || 0}`
             : `0/${clapOkCount || 0}`,
-          note: "current-run Qdrant",
+          note: "Latest structured run",
           kind: audioProofObserved ? "ok" : "unknown",
           title: audioProofNote,
+        },
+        {
+          label: "Audio inventory",
+          value: audioInventoryObserved
+            ? `${latestInventoryPoints || 0} latest`
+            : "Not exposed",
+          note: "run-tagged Qdrant",
+          kind: audioInventoryObserved ? "historical" : "unknown",
+          title: `${audioInventoryNote}; does not override latest structured-run proof`,
         },
         {
           label: "Projection gaps",
@@ -1107,6 +1138,8 @@
     proofDisplayRows.forEach((row) => {
       const compactStatus = row.label === "Current-run Qdrant audio proof"
         ? row.state.label
+        : row.label === "Run-tagged Qdrant audio inventory"
+          ? row.state.label
         : row.state.observed
           ? "On"
           : row.state.kind === "warn"
@@ -1166,6 +1199,9 @@
       ["Step rows", stepRows !== null ? stepRows : "Not observed"],
       ["Phase 6", graph.phase6_complete === true || temporal.phase6_complete === true ? "Complete" : "Not observed"],
       ["Qdrant", graph.qdrant_ok === true || graph.phase6_qdrant_ok === true ? "Observed" : "Not observed"],
+      ["Latest structured run audio", audioProofLabel],
+      ["Audio inventory run", latestAudioInventoryRun.run_id ? compactIdentifier(latestAudioInventoryRun.run_id, { key: "run_id", max: 22 }) : "Not observed"],
+      ["Inventory proof points", latestInventoryPoints !== null ? `${latestInventoryPoints} provenance-capable` : "Not observed"],
       ["Safety boundary", evidence.safety_boundary?.mode || "read_only"],
     ];
 

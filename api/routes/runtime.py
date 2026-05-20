@@ -1726,6 +1726,237 @@ def _scroll_qdrant_audio_payloads(runtime_run_id: str, collection_candidates: Li
     return {"status": last_error or "qdrant_unavailable", "payloads": []}
 
 
+def _qdrant_audio_collection_names() -> Dict[str, Any]:
+    base_url = _qdrant_base_url()
+    try:
+        resp = requests.get(f"{base_url}/collections", timeout=5)
+        if resp.status_code != 200:
+            return {"status": f"qdrant_status_{resp.status_code}", "collections": []}
+        collections = resp.json().get("result", {}).get("collections", []) or []
+        names = [
+            str(item.get("name")).strip()
+            for item in collections
+            if isinstance(item, dict) and item.get("name") and "audio" in str(item.get("name")).lower()
+        ]
+        return {"status": "ok", "collections": sorted(set(names))}
+    except Exception as exc:
+        logger.warning("audio provenance qdrant collection list failed error=%s", exc)
+        return {"status": f"exception:{type(exc).__name__}", "collections": []}
+
+
+def _scroll_qdrant_audio_collection_payloads(collection: str, *, max_pages: int = 100) -> Dict[str, Any]:
+    base_url = _qdrant_base_url()
+    payloads: List[Dict[str, Any]] = []
+    offset = None
+    try:
+        for _ in range(max_pages):
+            body: Dict[str, Any] = {
+                "limit": 256,
+                "with_payload": True,
+                "with_vector": False,
+                "filter": {"must": [{"key": "modality", "match": {"value": "audio"}}]},
+            }
+            if offset is not None:
+                body["offset"] = offset
+            resp = requests.post(
+                f"{base_url}/collections/{collection}/points/scroll",
+                json=body,
+                timeout=5,
+            )
+            if resp.status_code == 404:
+                return {"status": "collection_not_found", "collection": collection, "payloads": payloads}
+            if resp.status_code != 200:
+                return {"status": f"qdrant_status_{resp.status_code}", "collection": collection, "payloads": payloads}
+            data = resp.json().get("result", {}) or {}
+            points = data.get("points") if isinstance(data.get("points"), list) else []
+            for point in points:
+                point_payload = point.get("payload") if isinstance(point, dict) else None
+                if isinstance(point_payload, dict):
+                    payloads.append(point_payload)
+            offset = data.get("next_page_offset")
+            if offset is None:
+                return {"status": "ok", "collection": collection, "payloads": payloads}
+    except Exception as exc:
+        logger.warning("audio provenance qdrant collection scan failed collection=%s error=%s", collection, exc)
+        return {"status": f"exception:{type(exc).__name__}", "collection": collection, "payloads": payloads}
+    return {"status": "page_cap_reached", "collection": collection, "payloads": payloads}
+
+
+def _latest_audio_provenance_snapshot(limit: int = 8) -> Dict[str, Any]:
+    """Read-only inventory of run-tagged Qdrant audio payloads.
+
+    This intentionally stays separate from latest structured-run proof. It can
+    show that provenance-capable audio payloads exist without claiming they
+    prove the currently selected /api/runs/latest/evidence run.
+    """
+
+    collection_result = _qdrant_audio_collection_names()
+    collections = collection_result.get("collections") if isinstance(collection_result.get("collections"), list) else []
+    base: Dict[str, Any] = {
+        "status": "not_exposed",
+        "label": "Not Exposed",
+        "mode": "read_only",
+        "source": "qdrant audio payload inventory; not latest structured run proof",
+        "contract": "docs/architecture/AUDIO_VECTOR_PROVENANCE_CONTRACT.md",
+        "required_payload_fields": list(_AUDIO_QDRANT_REQUIRED_FIELDS),
+        "scanned_collections": len(collections),
+        "collections": collections,
+        "run_tagged_audio_runs": 0,
+        "run_tagged_audio_points": 0,
+        "provenance_capable_points": 0,
+        "legacy_audio_points_sampled": 0,
+        "runs": [],
+        "latest_run": None,
+        "safety_boundary": {
+            "mode": "read_only",
+            "mutation": False,
+            "latest_run_claim": False,
+        },
+    }
+    if collection_result.get("status") != "ok":
+        return {
+            **base,
+            "reason": collection_result.get("status") or "qdrant_unavailable",
+            "impact": "Qdrant collection inventory could not be read without mutating state.",
+        }
+    if not collections:
+        return {
+            **base,
+            "status": "no_audio_collections",
+            "label": "Not Exposed",
+            "reason": "no_audio_collections_returned",
+            "impact": "No Qdrant audio collections are visible to the read-only inventory.",
+        }
+
+    runs: Dict[str, Dict[str, Any]] = {}
+    scan_errors: Dict[str, str] = {}
+
+    for collection in collections:
+        scan = _scroll_qdrant_audio_collection_payloads(collection)
+        if scan.get("status") not in {"ok", "page_cap_reached"}:
+            scan_errors[collection] = str(scan.get("status") or "unavailable")
+        payloads = scan.get("payloads") if isinstance(scan.get("payloads"), list) else []
+        for payload in payloads:
+            if str(payload.get("modality") or "").strip().lower() != "audio":
+                continue
+            run_id = str(payload.get("run_id") or "").strip()
+            if not run_id:
+                base["legacy_audio_points_sampled"] += 1
+                continue
+            row = runs.setdefault(
+                run_id,
+                {
+                    "run_id": run_id,
+                    "collections": set(),
+                    "run_tagged_points": 0,
+                    "provenance_capable_points": 0,
+                    "scene_ids": set(),
+                    "video_ids": set(),
+                    "latest_commit_ts_utc": None,
+                    "latest_provenance_ts_utc": None,
+                    "missing_required_fields": Counter(),
+                    "component_mismatch_count": 0,
+                    "step_mismatch_count": 0,
+                    "sample_payload_keys": set(),
+                },
+            )
+            row["collections"].add(collection)
+            row["run_tagged_points"] += 1
+            for key in payload.keys():
+                if _is_safe_payload_shape_key(key):
+                    row["sample_payload_keys"].add(str(key))
+            scene_id = payload.get("scene_id")
+            if scene_id is not None and str(scene_id).strip():
+                row["scene_ids"].add(str(scene_id).strip())
+            video_id = payload.get("video_id") or payload.get("video_hash")
+            if video_id is not None and str(video_id).strip():
+                row["video_ids"].add(str(video_id).strip())
+
+            commit_ts = str(payload.get("commit_ts_utc") or payload.get("created_at") or "").strip()
+            if commit_ts and (not row["latest_commit_ts_utc"] or commit_ts > row["latest_commit_ts_utc"]):
+                row["latest_commit_ts_utc"] = commit_ts
+
+            missing = [field for field in _AUDIO_QDRANT_REQUIRED_FIELDS if not payload.get(field)]
+            for field in missing:
+                row["missing_required_fields"][field] += 1
+            component_ok = payload.get("component") == "audio_embed_clap"
+            step_ok = payload.get("step") == "audio_embed_clap"
+            if not component_ok:
+                row["component_mismatch_count"] += 1
+            if not step_ok:
+                row["step_mismatch_count"] += 1
+            if not missing and component_ok and step_ok:
+                row["provenance_capable_points"] += 1
+                if commit_ts and (not row["latest_provenance_ts_utc"] or commit_ts > row["latest_provenance_ts_utc"]):
+                    row["latest_provenance_ts_utc"] = commit_ts
+
+    normalized_runs: List[Dict[str, Any]] = []
+    for row in runs.values():
+        collection_list = sorted(row["collections"])
+        normalized_runs.append(
+            {
+                "run_id": row["run_id"],
+                "collection": collection_list[0] if len(collection_list) == 1 else "multiple",
+                "collections": collection_list,
+                "run_tagged_points": row["run_tagged_points"],
+                "provenance_capable_points": row["provenance_capable_points"],
+                "scene_count": len(row["scene_ids"]),
+                "video_count": len(row["video_ids"]),
+                "latest_commit_ts_utc": row["latest_commit_ts_utc"],
+                "latest_provenance_ts_utc": row["latest_provenance_ts_utc"],
+                "missing_required_fields": dict(sorted(row["missing_required_fields"].items())),
+                "component_mismatch_count": row["component_mismatch_count"],
+                "step_mismatch_count": row["step_mismatch_count"],
+                "sample_payload_keys": sorted(row["sample_payload_keys"]),
+            }
+        )
+
+    normalized_runs.sort(
+        key=lambda row: (
+            row.get("latest_provenance_ts_utc") or "",
+            row.get("latest_commit_ts_utc") or "",
+            row.get("provenance_capable_points") or 0,
+        ),
+        reverse=True,
+    )
+    latest_run = next((row for row in normalized_runs if row.get("provenance_capable_points")), None)
+    limited_runs = normalized_runs[: max(1, int(limit or 1))]
+
+    base.update(
+        {
+            "run_tagged_audio_runs": len(normalized_runs),
+            "run_tagged_audio_points": sum(int(row.get("run_tagged_points") or 0) for row in normalized_runs),
+            "provenance_capable_points": sum(int(row.get("provenance_capable_points") or 0) for row in normalized_runs),
+            "runs": limited_runs,
+            "latest_run": latest_run,
+            "scan_errors": scan_errors,
+        }
+    )
+    if latest_run:
+        return {
+            **base,
+            "status": "ok",
+            "label": "Run-Tagged Audio Proof Exists",
+            "reason": "run_tagged_qdrant_audio_payloads_satisfy_contract",
+            "impact": "Separate Qdrant inventory found run-tagged audio payloads with required provenance fields. This does not override latest structured-run proof.",
+        }
+    if normalized_runs:
+        return {
+            **base,
+            "status": "historical_only",
+            "label": "Historical Only",
+            "reason": "run_tagged_audio_payloads_missing_required_provenance",
+            "impact": "Run-tagged audio payloads exist, but required provenance fields are incomplete.",
+        }
+    return {
+        **base,
+        "status": "no_run_tagged_audio",
+        "label": "No Run-Tagged Audio",
+        "reason": "no_audio_payloads_with_run_id",
+        "impact": "Audio collections are visible, but the inventory did not find run-tagged audio payloads.",
+    }
+
+
 def _sample_qdrant_audio_payloads(collection_candidates: List[str]) -> Dict[str, Any]:
     """Sample audio payload shape without exposing raw Qdrant payload values."""
 
@@ -1784,6 +2015,13 @@ def _missing_required_field_counts(payloads: List[Dict[str, Any]]) -> Dict[str, 
             if not payload.get(field):
                 missing_required[field] += 1
     return dict(sorted(missing_required.items()))
+
+
+def _is_safe_payload_shape_key(key: Any) -> bool:
+    text = str(key or "").strip().lower()
+    if not text:
+        return False
+    return not any(token in text for token in ("path", "dir", "file", "root", "stdout", "stderr", "trace", "raw"))
 
 
 def _evaluate_qdrant_audio_payloads(
@@ -1961,6 +2199,11 @@ def latest_run_preview(limit: int = 12) -> Dict[str, Any]:
 @router.get("/api/runs/latest/evidence")
 def latest_run_evidence(limit: int = Query(default=24, ge=1, le=100)) -> Dict[str, Any]:
     return _latest_run_evidence(limit=limit)
+
+
+@router.get("/api/runs/audio-proof/latest")
+def latest_audio_provenance_snapshot(limit: int = Query(default=8, ge=1, le=24)) -> Dict[str, Any]:
+    return _latest_audio_provenance_snapshot(limit=limit)
 
 
 def _faiss_count(path: str) -> int:

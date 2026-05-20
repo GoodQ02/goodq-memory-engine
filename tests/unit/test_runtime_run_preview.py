@@ -419,7 +419,13 @@ def test_latest_run_evidence_summarizes_artifacts_without_paths(monkeypatch, tmp
         runtime.run_summary,
         "load_run_summary",
         lambda run_root, reports_root=None: {
-            "run_header": {"run_id": "run_a", "status": "success", "epoch": "epoch_test"},
+            "run_header": {
+                "run_id": "run_a",
+                "status": "success",
+                "epoch": "epoch_test",
+                "run_kind": "standalone_scene_results",
+                "scope": "scene_ingest_results",
+            },
             "file_job_overview": {"episodes_total": 1, "episodes_completed": 1, "episodes_failed": 0, "scenes_processed": 2},
             "outcome_classification": {"status": "success"},
             "latest_episode": {
@@ -440,6 +446,8 @@ def test_latest_run_evidence_summarizes_artifacts_without_paths(monkeypatch, tmp
     evidence = runtime._latest_run_evidence()
 
     assert evidence["available"] is True
+    assert evidence["run"]["run_kind"] == "standalone_scene_results"
+    assert evidence["run"]["scope"] == "scene_ingest_results"
     assert evidence["artifact_presence"]["step_runs_jsonl"] is True
     assert evidence["step_runs"]["row_count"] == 2
     assert evidence["temporal_index"]["total_scenes"] == 2
@@ -547,6 +555,139 @@ def test_audio_vector_proof_resolves_run_header_run_id_without_overclaiming(monk
     assert proof["qdrant_run_matched_points"] == 0
     assert proof["audio_payload_sample"]["sample_count"] == 2
     assert proof["audio_payload_sample"]["missing_required_fields"]["run_id"] == 2
+
+
+def test_audio_vector_proof_prefers_scene_clap_run_id_over_report_slug(monkeypatch) -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    if str(repo_root) not in sys.path:
+        sys.path.insert(0, str(repo_root))
+
+    fake_config_loader = types.ModuleType("steps.common.config_loader")
+    fake_config_loader.load_configs = lambda overrides=None: {
+        "paths": {"data_root": "data", "db_path": "data/memory.db"},
+        "host": {},
+        "memory": {},
+        "llm": {},
+        "qdrant": {"enabled": True, "host": "http://127.0.0.1:6333", "collections": {"audio": "goodq_audio_test"}},
+    }
+    monkeypatch.setitem(sys.modules, "steps.common.config_loader", fake_config_loader)
+
+    fake_memory_store = types.ModuleType("steps.common.memory_store")
+    fake_memory_store.normalize_memory_tier_list = lambda values: values
+    monkeypatch.setitem(sys.modules, "steps.common.memory_store", fake_memory_store)
+
+    fake_ingest_requests = types.ModuleType("api.utils.ingest_requests")
+    fake_ingest_requests.is_supported_ingest_path = lambda path: True
+    monkeypatch.setitem(sys.modules, "api.utils.ingest_requests", fake_ingest_requests)
+
+    fake_goodq_version = types.ModuleType("goodq_version")
+    fake_goodq_version.GOODQ_VERSION = "test"
+    monkeypatch.setitem(sys.modules, "goodq_version", fake_goodq_version)
+
+    runtime = _load_runtime_route_module(repo_root)
+
+    def fake_post(url, json=None, timeout=None):
+        assert json["filter"]["must"][0]["match"]["value"] == "runtime-run-alpha"
+        return _FakeResponse(
+            200,
+            {
+                "result": {
+                    "points": [
+                        {
+                            "payload": {
+                                "run_id": "runtime-run-alpha",
+                                "scene_id": "scene-a",
+                                "video_id": "video-a",
+                                "embedding_id": "embed-a",
+                                "component": "audio_embed_clap",
+                                "step": "audio_embed_clap",
+                                "model": "laion/clap-htsat-unfused",
+                                "created_at": "2026-05-20T00:00:00Z",
+                                "commit_ts_utc": "2026-05-20T00:00:00Z",
+                                "modality": "audio",
+                            }
+                        }
+                    ],
+                    "next_page_offset": None,
+                }
+            },
+        )
+
+    monkeypatch.setattr(runtime.requests, "post", fake_post)
+
+    proof = runtime._summarize_audio_vector_proof(
+        header={"epoch": "epoch_test", "run_id": "standalone_report_folder_slug"},
+        latest_episode={},
+        temporal_payload={"total_scenes": 1, "video_id": "video-a"},
+        scene_results_payload={
+            "scenes": [
+                {
+                    "scene_id": "scene-a",
+                    "video_id": "video-a",
+                    "audio": {"clap_meta": {"status": "ok", "run_id": "runtime-run-alpha"}},
+                }
+            ]
+        },
+    )
+
+    assert proof["runtime_run_id_resolved"] is True
+    assert proof["runtime_run_id_source"] == "scene_results.scenes.audio.clap_meta.run_id"
+    assert proof["status"] == "current_run_audio_vector_proven"
+    assert proof["current_run_qdrant_proven"] == 1
+
+
+def test_sentiment_summary_uses_scene_results_when_temporal_index_missing(monkeypatch) -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    if str(repo_root) not in sys.path:
+        sys.path.insert(0, str(repo_root))
+
+    fake_config_loader = types.ModuleType("steps.common.config_loader")
+    fake_config_loader.load_configs = lambda overrides=None: {
+        "paths": {"data_root": "data", "db_path": "data/memory.db"},
+        "host": {},
+        "memory": {},
+        "llm": {},
+    }
+    monkeypatch.setitem(sys.modules, "steps.common.config_loader", fake_config_loader)
+
+    fake_memory_store = types.ModuleType("steps.common.memory_store")
+    fake_memory_store.normalize_memory_tier_list = lambda values: values
+    monkeypatch.setitem(sys.modules, "steps.common.memory_store", fake_memory_store)
+
+    fake_ingest_requests = types.ModuleType("api.utils.ingest_requests")
+    fake_ingest_requests.is_supported_ingest_path = lambda path: True
+    monkeypatch.setitem(sys.modules, "api.utils.ingest_requests", fake_ingest_requests)
+
+    fake_goodq_version = types.ModuleType("goodq_version")
+    fake_goodq_version.GOODQ_VERSION = "test"
+    monkeypatch.setitem(sys.modules, "goodq_version", fake_goodq_version)
+
+    runtime = _load_runtime_route_module(repo_root)
+
+    summary = runtime._summarize_sentiment(
+        None,
+        scene_results_payload={
+            "scenes": [
+                {
+                    "audio": {
+                        "transcript": "hello from the scene",
+                        "audio_emotion": "warm",
+                        "sentiment": {"label": "positive", "score": 0.82},
+                    }
+                },
+                {"audio": {"full_text": "second scene", "emotion": "calm"}},
+            ]
+        },
+    )
+
+    assert summary["status"] == "ok"
+    assert summary["source"] == "scene_ingest_results"
+    assert summary["segments_total"] == 2
+    assert summary["segments_with_transcript"] == 2
+    assert summary["segments_with_audio_emotion"] == 2
+    assert summary["segments_with_sentiment"] == 1
+    assert summary["top_audio_emotions"] == [{"label": "warm", "count": 1}, {"label": "calm", "count": 1}]
+    assert summary["sentiment_labels"] == [{"label": "positive", "count": 1}]
 
 
 def test_audio_vector_proof_counts_current_run_qdrant_payloads(monkeypatch) -> None:

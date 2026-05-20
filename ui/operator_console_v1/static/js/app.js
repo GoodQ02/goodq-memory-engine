@@ -1022,6 +1022,10 @@
 
     const run = state.data.run || {};
     const evidence = state.data.runEvidence || {};
+    const evidenceRun = evidence.run || {};
+    const runScope = evidenceRun.scope || run.scope || "";
+    const runKind = evidenceRun.run_kind || run.run_kind || "";
+    const standaloneSceneScope = runScope === "scene_ingest_results" || runKind === "standalone_scene_results";
     const artifacts = evidence.artifact_presence || {};
     const steps = evidence.step_runs || {};
     const temporal = evidence.temporal_index || {};
@@ -1037,6 +1041,7 @@
     const sceneContextCount = numberValue(temporal.segments_with_scene_context_llm);
     const audioEmotionCount = numberValue(sentiment.segments_with_audio_emotion ?? temporal.segments_with_audio_emotion);
     const sentimentCount = numberValue(sentiment.segments_with_sentiment);
+    const transcriptCount = numberValue(sentiment.segments_with_transcript ?? temporal.segments_with_transcript);
     const clapOkCount = numberValue(audioProof.clap_ok);
     const provenAudioCount = numberValue(audioProof.current_run_qdrant_proven);
     const stepRows = numberValue(steps.row_count);
@@ -1061,17 +1066,31 @@
     const audioInventoryNote = audioInventoryObserved
       ? `${provenanceCapablePoints} provenance-capable payloads across ${runTaggedAudioRuns || 0} run-tagged runs`
       : audioProvenance.impact || "Separate Qdrant inventory not exposed";
+    const sceneResultsFallbackNote = sentiment.source === "scene_ingest_results" ? "Scene results fallback" : "";
+    const stepLedgerMissingLabel = standaloneSceneScope ? "Standalone scope" : "Not observed";
+    const temporalMissingLabel = standaloneSceneScope ? "Standalone scope" : "Not observed";
+    const stepLedgerMissingNote = standaloneSceneScope
+      ? "Direct scene probes do not generate wrapper step ledgers."
+      : "step_runs.jsonl missing or unreadable";
+    const temporalMissingNote = standaloneSceneScope
+      ? "Direct scene probes do not generate temporal indexes."
+      : "temporal_index.json missing or unreadable";
+    const temporalEvidenceNote = temporalScenes !== null
+      ? evidenceNote(temporalScenes, "scenes")
+      : standaloneSceneScope
+        ? "Standalone scene probe"
+        : "";
 
     const proofRows = [
       {
         label: "Step run ledger",
-        state: proofState(artifacts.step_runs_jsonl === true && hasOkStatus(steps.status), "Observed", "Not observed", evidenceNote(stepRows, "rows"), "warn"),
-        missingNote: "step_runs.jsonl missing or unreadable",
+        state: proofState(artifacts.step_runs_jsonl === true && hasOkStatus(steps.status), "Observed", stepLedgerMissingLabel, stepRows !== null ? evidenceNote(stepRows, "rows") : standaloneSceneScope ? "Standalone scene probe" : "", standaloneSceneScope ? "historical" : "warn"),
+        missingNote: stepLedgerMissingNote,
       },
       {
         label: "Temporal index",
-        state: proofState(artifacts.temporal_index_json === true && hasOkStatus(temporal.status), "Observed", "Not observed", evidenceNote(temporalScenes, "scenes"), "warn"),
-        missingNote: "temporal_index.json missing or unreadable",
+        state: proofState(artifacts.temporal_index_json === true && hasOkStatus(temporal.status), "Observed", temporalMissingLabel, temporalEvidenceNote, standaloneSceneScope ? "historical" : "warn"),
+        missingNote: temporalMissingNote,
       },
       {
         label: "Scene ingest results",
@@ -1085,13 +1104,13 @@
       },
       {
         label: "Audio emotion signal",
-        state: proofState(temporal.has_audio === true, "Observed", "Not observed", audioEmotionCount !== null ? `${audioEmotionCount} emotion rows` : "", "unknown"),
-        missingNote: "Latest temporal index does not report audio",
+        state: proofState(temporal.has_audio === true || (audioEmotionCount !== null && audioEmotionCount > 0), "Observed", "Not observed", audioEmotionCount !== null ? `${audioEmotionCount} emotion rows ${sceneResultsFallbackNote}`.trim() : "", "unknown"),
+        missingNote: standaloneSceneScope ? "Scene results fallback did not report audio emotion" : "Latest temporal index does not report audio",
       },
       {
         label: "Transcript Audio",
-        state: proofState(temporal.has_transcripts === true, "Observed", "Not observed", evidenceNote(sentiment.segments_total, "segments"), "unknown"),
-        missingNote: "Latest temporal index does not report transcripts",
+        state: proofState(temporal.has_transcripts === true || (transcriptCount !== null && transcriptCount > 0), "Observed", "Not observed", transcriptCount !== null ? `${transcriptCount} transcript scenes ${sceneResultsFallbackNote}`.trim() : evidenceNote(sentiment.segments_total, "segments"), "unknown"),
+        missingNote: standaloneSceneScope ? "Scene results fallback did not report transcripts" : "Latest temporal index does not report transcripts",
       },
       {
         label: "Knowledge Graph",
@@ -1125,9 +1144,9 @@
         label: "Projection gap check",
         state: {
           observed: projectionReady,
-          label: projectionReady ? "Ready" : projectionGapDetected ? "Needs Explanation" : "Not Exposed",
-          kind: projectionReady ? "ok" : projectionGapDetected ? "warn" : "unknown",
-          note: projectionGapNote(projection),
+          label: projectionReady ? "Ready" : projectionGapDetected ? "Needs Explanation" : standaloneSceneScope ? "Standalone scope" : "Not Exposed",
+          kind: projectionReady ? "ok" : projectionGapDetected ? "warn" : standaloneSceneScope ? "historical" : "unknown",
+          note: standaloneSceneScope && !projectionReady && !projectionGapDetected ? "Direct scene probes do not generate temporal projection comparisons." : projectionGapNote(projection),
         },
         missingNote: projectionGapNote(projection),
       },
@@ -1223,6 +1242,8 @@
           ? row.state.label
         : row.state.observed
           ? "On"
+          : row.state.kind === "historical"
+            ? "Scope"
           : row.state.kind === "warn"
             ? "Review"
             : "Off";
@@ -1273,6 +1294,7 @@
 
     const inspectorRows = [
       ["Run", run.run_id || evidence.run?.run_id || "Not observed"],
+      ["Run scope", standaloneSceneScope ? "Standalone scene probe" : (runScope || runKind || "Structured run")],
       ["Latest episode", latestEpisode.episode || "Not observed"],
       ["Latest timestamp", latestEpisode.ts_utc ? relativeTime(latestEpisode.ts_utc) : relativeTime(latestRunTimestamp(run))],
       ["Run scenes", runScenes !== null ? runScenes : "Not observed"],

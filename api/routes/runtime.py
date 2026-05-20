@@ -893,6 +893,8 @@ def _latest_run_preview(limit: int = 12) -> Dict[str, Any]:
     return {
         "available": True,
         "run_id": header.get("run_id"),
+        "run_kind": header.get("run_kind") or latest.get("run_kind"),
+        "scope": header.get("scope") or latest.get("scope"),
         "status": outcome.get("status") or header.get("status"),
         "epoch": header.get("epoch"),
         "source_dir": _path_redacted_label(header.get("source_dir")),
@@ -943,6 +945,8 @@ def _latest_run_evidence(limit: int = 24) -> Dict[str, Any]:
         "available": True,
         "run": {
             "run_id": header.get("run_id") or latest.get("run_id"),
+            "run_kind": header.get("run_kind") or latest.get("run_kind"),
+            "scope": header.get("scope") or latest.get("scope"),
             "status": outcome.get("status") or header.get("status") or latest.get("status"),
             "epoch": header.get("epoch") or latest.get("epoch"),
             "episodes_total": overview.get("episodes_total"),
@@ -958,7 +962,7 @@ def _latest_run_evidence(limit: int = 24) -> Dict[str, Any]:
         },
         "step_runs": _summarize_step_runs(step_runs_path, limit=limit),
         "temporal_index": _summarize_temporal_index(temporal_payload),
-        "sentiment": _summarize_sentiment(temporal_payload),
+        "sentiment": _summarize_sentiment(temporal_payload, scene_results_payload=scene_results_payload),
         "knowledge_graph": _summarize_knowledge_graph(scene_results_payload, latest_episode),
         "projection_gaps": _summarize_projection_gaps(temporal_payload, scene_results_payload),
         "audio_vector_proof": _summarize_audio_vector_proof(
@@ -1163,18 +1167,70 @@ def _summarize_temporal_index(payload: Any) -> Dict[str, Any]:
     }
 
 
-def _summarize_sentiment(payload: Any) -> Dict[str, Any]:
+def _summarize_sentiment(payload: Any, *, scene_results_payload: Any = None) -> Dict[str, Any]:
     if not isinstance(payload, dict):
-        return {"status": "unavailable", "reason": "temporal_index_missing"}
+        scene_records = _scene_records_from_results(scene_results_payload)
+        if not scene_records:
+            return {"status": "unavailable", "reason": "temporal_index_missing"}
+
+        audio_emotions: Counter[str] = Counter()
+        sentiment_labels: Counter[str] = Counter()
+        sentiment_scores: List[float] = []
+        transcript_count = 0
+
+        for scene in scene_records:
+            audio = scene.get("audio") if isinstance(scene.get("audio"), dict) else {}
+            transcript = audio.get("transcript") or audio.get("full_text") or scene.get("transcript") or scene.get("full_text")
+            segments = audio.get("segments") if isinstance(audio.get("segments"), list) else scene.get("segments")
+            if (isinstance(transcript, str) and transcript.strip()) or (isinstance(segments, list) and segments):
+                transcript_count += 1
+
+            audio_emotion = audio.get("audio_emotion") or audio.get("emotion") or scene.get("audio_emotion")
+            if isinstance(audio_emotion, str) and audio_emotion.strip():
+                audio_emotions[audio_emotion.strip().lower()] += 1
+
+            label = audio.get("sentiment_label") or scene.get("sentiment_label")
+            score = audio.get("sentiment_score") if audio.get("sentiment_score") is not None else scene.get("sentiment_score")
+            sentiment = audio.get("sentiment") if isinstance(audio.get("sentiment"), dict) else scene.get("sentiment")
+            if isinstance(sentiment, dict):
+                label = label or sentiment.get("label")
+                score = score if score is not None else sentiment.get("score")
+            if isinstance(label, str) and label.strip():
+                sentiment_labels[label.strip().lower()] += 1
+            score_value = _safe_float(score)
+            if score_value is not None:
+                sentiment_scores.append(score_value)
+
+        return {
+            "status": "ok" if audio_emotions or sentiment_labels or transcript_count else "not_observed",
+            "source": "scene_ingest_results",
+            "segments_total": len(scene_records),
+            "segments_with_transcript": transcript_count,
+            "segments_with_audio_emotion": sum(audio_emotions.values()),
+            "segments_with_sentiment": sum(sentiment_labels.values()),
+            "top_audio_emotions": [
+                {"label": label, "count": count}
+                for label, count in audio_emotions.most_common(8)
+            ],
+            "sentiment_labels": [
+                {"label": label, "count": count}
+                for label, count in sentiment_labels.most_common(8)
+            ],
+            "average_sentiment_score": _round_number(sum(sentiment_scores) / len(sentiment_scores)) if sentiment_scores else None,
+        }
 
     segments = payload.get("segments") if isinstance(payload.get("segments"), list) else []
     audio_emotions: Counter[str] = Counter()
     sentiment_labels: Counter[str] = Counter()
     sentiment_scores: List[float] = []
+    transcript_count = 0
 
     for segment in segments:
         if not isinstance(segment, dict):
             continue
+        transcript = segment.get("transcript") or segment.get("full_text")
+        if (isinstance(transcript, str) and transcript.strip()) or isinstance(segment.get("segments"), list):
+            transcript_count += 1
         audio_emotion = segment.get("audio_emotion")
         if isinstance(audio_emotion, str) and audio_emotion.strip():
             audio_emotions[audio_emotion.strip().lower()] += 1
@@ -1197,7 +1253,9 @@ def _summarize_sentiment(payload: Any) -> Dict[str, Any]:
 
     return {
         "status": "ok" if audio_emotions or sentiment_labels or top_audio else "not_observed",
+        "source": "temporal_index",
         "segments_total": len(segments),
+        "segments_with_transcript": payload.get("segments_with_transcript") or transcript_count,
         "segments_with_audio_emotion": payload.get("segments_with_audio_emotion") or sum(audio_emotions.values()),
         "segments_with_sentiment": sum(sentiment_labels.values()),
         "top_audio_emotions": top_audio,
@@ -1621,10 +1679,44 @@ def _resolve_runtime_audio_run_id(
     ):
         if not isinstance(source, dict):
             continue
-        for key in ("runtime_run_id", "goodq_run_id", "qdrant_run_id", "vector_run_id", "run_id"):
+        for key in ("runtime_run_id", "goodq_run_id", "qdrant_run_id", "vector_run_id"):
             candidates.append((f"{source_name}.{key}", source.get(key)))
 
     for source, value in candidates:
+        if value is not None and str(value).strip():
+            return str(value).strip(), source
+
+    scene_clap_run_ids: List[str] = []
+    seen_scene_clap_run_ids: set[str] = set()
+    for scene in _scene_records_from_results(scene_results_payload):
+        audio = scene.get("audio") if isinstance(scene.get("audio"), dict) else {}
+        for source_name, clap_meta in (
+            ("scene_results.scenes.audio.clap_meta.run_id", audio.get("clap_meta")),
+            ("scene_results.scenes.clap_meta.run_id", scene.get("clap_meta")),
+        ):
+            if not isinstance(clap_meta, dict):
+                continue
+            value = clap_meta.get("run_id")
+            if value is None or not str(value).strip():
+                continue
+            run_id = str(value).strip()
+            if run_id not in seen_scene_clap_run_ids:
+                seen_scene_clap_run_ids.add(run_id)
+                scene_clap_run_ids.append(run_id)
+                clap_source = source_name
+    if len(scene_clap_run_ids) == 1:
+        return scene_clap_run_ids[0], clap_source
+
+    generic_candidates: List[tuple[str, Any]] = []
+    for source_name, source in (
+        ("run_header", header),
+        ("latest_episode", latest_episode),
+        ("scene_results", _first_result_record(scene_results_payload)),
+    ):
+        if isinstance(source, dict):
+            generic_candidates.append((f"{source_name}.run_id", source.get("run_id")))
+
+    for source, value in generic_candidates:
         if value is not None and str(value).strip():
             return str(value).strip(), source
     return None, None

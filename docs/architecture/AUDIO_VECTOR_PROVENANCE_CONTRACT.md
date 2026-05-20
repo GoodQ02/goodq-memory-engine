@@ -78,6 +78,12 @@ These fields improve traceability from scene output to Qdrant inventory. They
 do not prove current-run audio coverage unless the matching Qdrant payload
 checks in this contract also pass.
 
+For standalone/direct scene-result roots, the report-folder identifier may be a
+human slug rather than the runtime UUID used by Qdrant payloads. Read models may
+use a unique scene-level `audio.clap_meta.run_id` as the audited runtime run id
+for current-run proof. Explicit header fields such as `runtime_run_id`,
+`goodq_run_id`, `qdrant_run_id`, or `vector_run_id` still take precedence.
+
 ## Success Definition
 
 A scene is `current_run_audio_vector_proven` only when:

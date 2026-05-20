@@ -55,11 +55,19 @@ If a clone uses a shared witness-report tree instead of a repo-local one, set
 The run index supports both wrapper-ledger roots with root `experiment_log.json`
 and standalone/direct roots that expose `output/scene_ingest_results.json`.
 Standalone roots are labeled with `scope=scene_ingest_results`; they are not
-presented as structured wrapper-ledger runs.
+presented as structured wrapper-ledger runs. Both `/api/runs/latest/preview`
+and `/api/runs/latest/evidence` expose `run_kind` and `scope` so UI consumers
+can explain missing wrapper-only artifacts without treating them as pipeline
+failures.
 
 `GET /api/runs/latest/evidence` reports proof for the currently indexed latest
 run scope. Its `audio_vector_proof` object is the strict current-run
-CLAP/Qdrant verdict for that scope.
+CLAP/Qdrant verdict for that scope. When standalone scene results expose a
+unique `audio.clap_meta.run_id`, the projector uses that runtime provenance id
+for the Qdrant comparison instead of the report-folder slug. If
+`temporal_index.json` is absent, the `sentiment` object can still report
+transcript, audio-emotion, and sentiment counts from `scene_ingest_results.json`
+with `source=scene_ingest_results`.
 
 `GET /api/runs/audio-proof/latest` is a separate read-only Qdrant inventory. It
 lists run-tagged audio payloads with required provenance fields so operators can

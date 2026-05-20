@@ -132,8 +132,8 @@ def test_operator_console_surfaces_audio_emotion_distribution() -> None:
     app_js = (repo_root / "ui" / "operator_console_v1" / "static" / "js" / "app.js").read_text(encoding="utf-8")
     app_css = (repo_root / "ui" / "operator_console_v1" / "static" / "css" / "app.css").read_text(encoding="utf-8")
 
-    assert "app.css?v=20260520-retrieval-context-lens-1" in index_html
-    assert "20260520-retrieval-context-lens-1" in index_html
+    assert "app.css?v=20260520-scene-evidence-summary-1" in index_html
+    assert "20260520-scene-evidence-summary-1" in index_html
     assert "renderAudioEmotionDistribution" in app_js
     assert "Audio Emotion Distribution" in app_js
     assert "Audio classifier labels, latest temporal index" in app_js
@@ -152,7 +152,7 @@ def test_retrieval_console_surfaces_scene_context_lens() -> None:
     app_js = (repo_root / "ui" / "operator_console_v1" / "static" / "js" / "app.js").read_text(encoding="utf-8")
     app_css = (repo_root / "ui" / "operator_console_v1" / "static" / "css" / "app.css").read_text(encoding="utf-8")
 
-    assert "20260520-retrieval-context-lens-1" in index_html
+    assert "20260520-scene-evidence-summary-1" in index_html
     assert "appendRetrievalSceneContextLens" in app_js
     assert "Scene Context Lens" in app_js
     assert "Emotional arc" in app_js
@@ -162,3 +162,23 @@ def test_retrieval_console_surfaces_scene_context_lens() -> None:
     assert ".retrieval-context-lens" in app_css
     assert ".retrieval-key-moments" in app_css
     assert ".retrieval-tag-strip" in app_css
+
+
+def test_scene_inspector_surfaces_compact_evidence_summary() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    index_html = (repo_root / "ui" / "operator_console_v1" / "index.html").read_text(encoding="utf-8")
+    app_js = (repo_root / "ui" / "operator_console_v1" / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    app_css = (repo_root / "ui" / "operator_console_v1" / "static" / "css" / "app.css").read_text(encoding="utf-8")
+
+    assert "20260520-scene-evidence-summary-1" in index_html
+    assert "appendSceneEvidenceSummary" in app_js
+    assert "Scene Evidence Summary" in app_js
+    assert "Meaning source" in app_js
+    assert "Evidence present" in app_js
+    assert "Evidence gaps" in app_js
+    assert "No scene meaning summary exposed for this selected scene." in app_js
+
+    assert ".scene-evidence-summary-panel" in app_css
+    assert ".scene-meaning-card" in app_css
+    assert ".scene-signal-chip-grid" in app_css
+    assert ".scene-gap-list" in app_css

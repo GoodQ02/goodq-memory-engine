@@ -95,6 +95,11 @@ class SearchResult(BaseModel):
     objects: List[str] = Field(default_factory=list)
     audio_emotion: Optional[str] = None
     audio_emotion_scores: Optional[Dict[str, Any]] = None
+    clap_meta: Optional[Dict[str, Any]] = None
+    audio_vector_proof: Optional[Dict[str, Any]] = None
+    current_run_qdrant_audio_proven: bool = False
+    current_run_audio_vector_proven: bool = False
+    audio_qdrant_current_run_proven: bool = False
     scene_present_entities: List[Dict[str, Any]] = Field(default_factory=list)
     kg_relationships: List[Dict[str, Any]] = Field(default_factory=list)
     kg_evidence: Optional[Dict[str, Any]] = None

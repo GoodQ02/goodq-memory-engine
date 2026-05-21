@@ -231,3 +231,59 @@ def test_text_search_redacts_provenance_paths_and_projects_frame_endpoint(monkey
     assert getattr(result, "representative_frame_path_redacted", None) is True
     assert result.provenance["ref"] == "<local-only>"
     assert result.provenance["raw_paths"] == "redacted"
+
+
+class _FakeAudioProofDataLoader(_FakeDataLoader):
+    def load_temporal_index(self, video_id: str):
+        payload = super().load_temporal_index(video_id)
+        payload["segments"][0]["clap_meta"] = {
+            "status": "ok",
+            "run_id": "run-audio-proof",
+            "qdrant_collection": "goodq_audio_epoch_probe",
+            "scene_id": "hashed-scene-id",
+            "video_id": "hashed-video-id",
+        }
+        return payload
+
+
+def test_multimodal_search_projects_current_run_audio_proof(monkeypatch) -> None:
+    monkeypatch.setattr(search_module, "get_search_engine", lambda: _FakeSearchEngine())
+    monkeypatch.setattr(search_module, "get_data_loader", lambda: _FakeAudioProofDataLoader())
+    monkeypatch.setattr(
+        search_module,
+        "_audio_qdrant_collection_candidates",
+        lambda epoch, *, header=None: ["goodq_audio_epoch_probe"],
+    )
+    monkeypatch.setattr(
+        search_module,
+        "_scroll_qdrant_audio_payloads",
+        lambda runtime_run_id, collection_candidates: {
+            "status": "ok",
+            "collection": "goodq_audio_epoch_probe",
+            "payloads": [
+                {
+                    "run_id": runtime_run_id,
+                    "scene_id": "hashed-scene-id",
+                    "video_id": "hashed-video-id",
+                    "modality": "audio",
+                    "embedding_id": "audio-1",
+                    "component": "audio_embed_clap",
+                    "step": "audio_embed_clap",
+                    "model": "laion/clap-htsat-unfused",
+                    "created_at": "2026-05-20T00:00:00Z",
+                    "commit_ts_utc": "2026-05-20T00:00:01Z",
+                }
+            ],
+        },
+    )
+
+    request = search_module.MultimodalSearchRequest(query="kitchen", top_k=1)
+
+    response = asyncio.run(search_module.search_multimodal(request))
+
+    result = response.results[0]
+    assert result.clap_meta["status"] == "ok"
+    assert result.audio_vector_proof["status"] == "current_run_audio_vector_proven"
+    assert result.audio_vector_proof["current_run_qdrant_proven"] == 1
+    assert result.current_run_qdrant_audio_proven is True
+    assert result.current_run_audio_vector_proven is True

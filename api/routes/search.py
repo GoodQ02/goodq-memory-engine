@@ -11,6 +11,11 @@ from pydantic import BaseModel
 from api.utils.response_models import SearchResponse, SearchResult, default_confidence_payload
 from api.utils.loaders import DataLoader
 from api.utils.media_projection import representative_frame_projection
+from api.routes.runtime import (
+    _audio_qdrant_collection_candidates,
+    _evaluate_qdrant_audio_payloads,
+    _scroll_qdrant_audio_payloads,
+)
 from retrieval.multimodal_search import MultimodalSearchEngine
 from steps.common.config_loader import load_configs
 
@@ -149,6 +154,7 @@ def _timeline_enrichment_context(segment: dict) -> Dict[str, Any]:
         "objects": _segment_object_labels(segment),
         "audio_emotion": segment.get("audio_emotion"),
         "audio_emotion_scores": segment.get("audio_emotion_scores"),
+        "clap_meta": segment.get("clap_meta") if isinstance(segment.get("clap_meta"), dict) else None,
         "sentiment": segment.get("sentiment") if isinstance(segment.get("sentiment"), dict) else None,
         "sentiment_label": segment.get("sentiment_label"),
         "sentiment_score": segment.get("sentiment_score"),
@@ -238,6 +244,7 @@ def _lookup_timeline_enrichment(payload: dict) -> Dict[str, Any]:
                 "objects": _segment_object_labels(segment),
                 "audio_emotion": segment.get("audio_emotion"),
                 "audio_emotion_scores": segment.get("audio_emotion_scores"),
+                "clap_meta": segment.get("clap_meta") if isinstance(segment.get("clap_meta"), dict) else None,
                 "sentiment": context.get("sentiment"),
                 "sentiment_label": context.get("sentiment_label"),
                 "sentiment_score": context.get("sentiment_score"),
@@ -259,6 +266,82 @@ def _lookup_timeline_enrichment(payload: dict) -> Dict[str, Any]:
                 },
             }
     return {}
+
+
+def _search_audio_vector_proof(payload: dict, enrichment: Dict[str, Any]) -> Dict[str, Any]:
+    """Project strict current-run audio proof for a retrieved scene without changing ranking."""
+
+    context = enrichment.get("context") if isinstance(enrichment.get("context"), dict) else {}
+    clap_meta = context.get("clap_meta") if isinstance(context.get("clap_meta"), dict) else enrichment.get("clap_meta")
+    if not isinstance(clap_meta, dict):
+        return {
+            "status": "not_exposed",
+            "label": "Not Exposed",
+            "current_run_qdrant_proven": 0,
+            "qdrant_run_matched_points": 0,
+            "reason": "clap_meta_missing",
+        }
+
+    runtime_run_id = str(clap_meta.get("run_id") or "").strip()
+    if not runtime_run_id:
+        return {
+            "status": "no_current_run_evidence",
+            "label": "No Current-Run Evidence",
+            "current_run_qdrant_proven": 0,
+            "qdrant_run_matched_points": 0,
+            "reason": "clap_run_id_missing",
+        }
+
+    header: Dict[str, Any] = {}
+    collection = str(clap_meta.get("qdrant_collection") or "").strip()
+    if collection:
+        header["qdrant_audio_collection"] = collection
+
+    collection_candidates = _audio_qdrant_collection_candidates(None, header=header)
+    qdrant_result = _scroll_qdrant_audio_payloads(runtime_run_id, collection_candidates)
+    payloads = qdrant_result.get("payloads") if isinstance(qdrant_result.get("payloads"), list) else []
+
+    scene_ids = {
+        str(value).strip()
+        for value in (
+            payload.get("scene_id"),
+            clap_meta.get("scene_id"),
+            enrichment.get("provenance", {}).get("scene_id") if isinstance(enrichment.get("provenance"), dict) else None,
+        )
+        if value is not None and str(value).strip()
+    }
+    video_ids = {
+        str(value).strip()
+        for value in (
+            payload.get("video_id"),
+            clap_meta.get("video_id"),
+            payload.get("video_hash"),
+            clap_meta.get("video_hash"),
+        )
+        if value is not None and str(value).strip()
+    }
+
+    proof = _evaluate_qdrant_audio_payloads(payloads, scene_ids=scene_ids, video_ids=video_ids)
+    current_run_proven = int(proof.get("current_run_qdrant_proven") or 0)
+    base = {
+        "status": "current_run_audio_vector_proven" if current_run_proven else "no_current_run_evidence",
+        "label": "Proven" if current_run_proven else "No Current-Run Evidence",
+        "runtime_run_id": runtime_run_id,
+        "collection": qdrant_result.get("collection"),
+        "collection_candidates": collection_candidates,
+        "qdrant_run_matched_points": len(payloads),
+        "reason": "run_matched_payloads_satisfy_contract" if current_run_proven else "no_qdrant_payloads_matched_scene",
+    }
+    if qdrant_result.get("status") != "ok":
+        base.update(
+            {
+                "status": "not_exposed",
+                "label": "Not Exposed",
+                "reason": qdrant_result.get("status") or "qdrant_unavailable",
+            }
+        )
+    base.update(proof)
+    return base
 
 
 def _merge_dicts(base: Optional[Dict[str, Any]], extra: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
@@ -373,6 +456,9 @@ def _build_search_result(result: dict, modality: Optional[str] = None) -> Search
     context = _merge_dicts(enrichment.get("context"), result_context)
     provenance = _merge_dicts(enrichment.get("provenance"), result.get("provenance") if isinstance(result.get("provenance"), dict) else None)
     video_id = payload.get("video_id")
+    clap_meta = enrichment.get("clap_meta")
+    audio_vector_proof = _search_audio_vector_proof(payload, enrichment)
+    current_run_audio_proven = audio_vector_proof.get("status") == "current_run_audio_vector_proven"
     frame_projection = {
         "representative_frame": enrichment.get("representative_frame"),
         "representative_frame_available": bool(enrichment.get("representative_frame_available")),
@@ -400,6 +486,11 @@ def _build_search_result(result: dict, modality: Optional[str] = None) -> Search
         objects=payload.get("objects") or enrichment.get("objects") or [],
         audio_emotion=enrichment.get("audio_emotion"),
         audio_emotion_scores=enrichment.get("audio_emotion_scores"),
+        clap_meta=clap_meta if isinstance(clap_meta, dict) else None,
+        audio_vector_proof=audio_vector_proof,
+        current_run_qdrant_audio_proven=current_run_audio_proven,
+        current_run_audio_vector_proven=current_run_audio_proven,
+        audio_qdrant_current_run_proven=current_run_audio_proven,
         scene_present_entities=enrichment.get("scene_present_entities") or [],
         kg_relationships=enrichment.get("kg_relationships") or [],
         kg_evidence=enrichment.get("kg_evidence"),

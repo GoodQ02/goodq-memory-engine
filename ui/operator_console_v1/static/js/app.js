@@ -2388,6 +2388,16 @@
     const entities = retrievalEntityLabels(result);
     const relationshipCount = retrievalRelationshipCount(result);
     const kgEvidence = retrievalKgEvidence(result);
+    const audioProof = result && result.audio_vector_proof && typeof result.audio_vector_proof === "object"
+      ? result.audio_vector_proof
+      : {};
+    const currentRunAudioProof = Boolean(
+      result && (
+        result.current_run_qdrant_audio_proven ||
+        result.current_run_audio_vector_proven ||
+        result.audio_qdrant_current_run_proven
+      )
+    ) || audioProof.status === "current_run_audio_vector_proven";
     const textObserved =
       modality.includes("text") ||
       valueObserved(result && result.transcript) ||
@@ -2399,6 +2409,7 @@
       arrayCount(result && result.objects) > 0 ||
       objectHasAny(context, ["representative_frame", "clip_id", "dino_id", "objects"]);
     const audioObserved =
+      currentRunAudioProof ||
       modality.includes("audio") ||
       provenanceMentions(result, "audio") ||
       objectHasAny(context, ["audio_emotion", "audio_chunks", "clap_meta"]);
@@ -2430,8 +2441,12 @@
         label: "Audio Overlap",
         observed: audioObserved,
         strength: modality.includes("audio") ? percent : null,
-        note: audioObserved ? (context.audio_emotion ? `Audio emotion: ${safeString(context.audio_emotion, "audio_emotion")}` : "Audio modality or audio provenance observed") : "No current-run audio proof returned",
-        missing: "Audio vector not yet proven",
+        note: currentRunAudioProof
+          ? "Current-run Qdrant audio proof returned"
+          : audioObserved
+            ? (context.audio_emotion ? `Audio emotion: ${safeString(context.audio_emotion, "audio_emotion")}` : "Audio modality or audio provenance observed")
+            : "No current-run audio proof returned",
+        missing: "Current-run audio proof not returned",
       },
       {
         label: "KG / Entity Evidence",

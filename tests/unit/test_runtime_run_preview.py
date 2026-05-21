@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import sys
 import types
 from pathlib import Path
@@ -594,6 +595,201 @@ def test_latest_run_evidence_follows_scene_results_temporal_index_path(monkeypat
     assert evidence["artifact_presence"]["temporal_index_json"] is True
     assert evidence["temporal_index"]["status"] == "ok"
     assert evidence["temporal_index"]["total_scenes"] == 1
+
+
+def test_latest_run_evidence_prefers_newer_configured_output_over_stale_report_root(monkeypatch, tmp_path: Path) -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    if str(repo_root) not in sys.path:
+        sys.path.insert(0, str(repo_root))
+
+    epoch_root = tmp_path / "GoodQ_Data" / "epochs" / "epoch_test"
+    output_dir = epoch_root / "output"
+    log_dir = epoch_root / "logs"
+    temporal_path = epoch_root / "processing" / "family" / "temporal_index.json"
+    direct_scene_results_path = output_dir / "scene_ingest_results.json"
+    report_root = tmp_path / "reports" / "fresh_ingest_runs" / "old_scene_probe"
+    report_scene_results_path = report_root / "output" / "scene_ingest_results.json"
+
+    fake_config_loader = types.ModuleType("steps.common.config_loader")
+    fake_config_loader.load_configs = lambda overrides=None: {
+        "paths": {
+            "data_root": str(tmp_path / "GoodQ_Data"),
+            "db_path": str(epoch_root / "memory.db"),
+            "output_directory": str(output_dir),
+            "log_dir": str(log_dir),
+        },
+        "host": {},
+        "memory": {},
+        "llm": {},
+        "qdrant": {"enabled": True, "host": "http://127.0.0.1:6333", "collections": {"audio": "goodq_audio_test"}},
+    }
+    monkeypatch.setitem(sys.modules, "steps.common.config_loader", fake_config_loader)
+
+    fake_memory_store = types.ModuleType("steps.common.memory_store")
+    fake_memory_store.normalize_memory_tier_list = lambda values: values
+    monkeypatch.setitem(sys.modules, "steps.common.memory_store", fake_memory_store)
+
+    fake_ingest_requests = types.ModuleType("api.utils.ingest_requests")
+    fake_ingest_requests.is_supported_ingest_path = lambda path: True
+    monkeypatch.setitem(sys.modules, "api.utils.ingest_requests", fake_ingest_requests)
+
+    fake_goodq_version = types.ModuleType("goodq_version")
+    fake_goodq_version.GOODQ_VERSION = "test"
+    monkeypatch.setitem(sys.modules, "goodq_version", fake_goodq_version)
+
+    temporal_path.parent.mkdir(parents=True)
+    temporal_path.write_text(
+        json.dumps(
+            {
+                "version": "test",
+                "total_scenes": 1,
+                "segments": [
+                    {
+                        "scene_id": "scene-current",
+                        "video_id": "video-current",
+                        "clap_meta": {"run_id": "current-runtime", "status": "ok"},
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    direct_scene_results_path.parent.mkdir(parents=True)
+    direct_scene_results_path.write_text(
+        json.dumps(
+            {
+                "video_name": "family.mp4",
+                "video_id": "video-current",
+                "temporal_index_path": str(temporal_path),
+                "scenes": [
+                    {
+                        "scene_id": "scene-current",
+                        "video_id": "video-current",
+                        "audio": {
+                            "clap_meta": {
+                                "run_id": "current-runtime",
+                                "status": "ok",
+                                "embedding_id": "emb-current",
+                            }
+                        },
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    report_scene_results_path.parent.mkdir(parents=True)
+    report_scene_results_path.write_text(
+        json.dumps(
+            {
+                "video_name": "family.mp4",
+                "video_id": "video-current",
+                "temporal_index_path": str(temporal_path),
+                "scenes": [
+                    {
+                        "scene_id": "scene-stale",
+                        "video_id": "video-current",
+                        "audio": {"clap_meta": {"run_id": "stale-runtime", "status": "ok"}},
+                    },
+                    {
+                        "scene_id": "scene-stale-2",
+                        "video_id": "video-current",
+                        "audio": {"clap_meta": {"run_id": "stale-runtime", "status": "ok"}},
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    os.utime(report_scene_results_path, (1_000_000_000, 1_000_000_000))
+
+    runtime = _load_runtime_route_module(repo_root)
+
+    monkeypatch.setattr(
+        runtime.run_index,
+        "list_runs",
+        lambda reports_root=None, limit=None: [
+            {
+                "run_id": "old_scene_probe",
+                "run_kind": "standalone_scene_results",
+                "scope": "scene_ingest_results",
+                "status": "completed",
+                "epoch": "epoch_test",
+                "run_root": str(report_root),
+                "scene_results_path": str(report_scene_results_path),
+                "scenes_processed": 2,
+                "latest_episode": {
+                    "episode": "family.mp4",
+                    "status": "completed",
+                    "run_dir": str(report_root),
+                    "scene_count": 2,
+                    "files_read": [str(report_scene_results_path)],
+                    "canonical_episode_artifacts": [],
+                    "errors": [],
+                    "warnings": [],
+                },
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        runtime.run_summary,
+        "load_run_summary",
+        lambda run_root, reports_root=None: {
+            "run_header": {
+                "run_id": "old_scene_probe",
+                "status": "success",
+                "epoch": "epoch_test",
+                "run_kind": "standalone_scene_results",
+                "scope": "scene_ingest_results",
+            },
+            "file_job_overview": {"episodes_total": 1, "episodes_completed": 1, "episodes_failed": 0, "scenes_processed": 2},
+            "outcome_classification": {"status": "success"},
+            "latest_episode": {
+                "episode": "family.mp4",
+                "status": "completed",
+                "run_dir": str(report_root),
+                "scene_count": 2,
+                "files_read": [str(report_scene_results_path)],
+                "canonical_episode_artifacts": [],
+                "errors": [],
+                "warnings": [],
+            },
+        },
+    )
+    monkeypatch.setattr(
+        runtime,
+        "_scroll_qdrant_audio_payloads",
+        lambda runtime_run_id, collection_candidates: {
+            "status": "ok",
+            "collection": "goodq_audio_test",
+            "payloads": [
+                {
+                    "run_id": "current-runtime",
+                    "modality": "audio",
+                    "scene_id": "scene-current",
+                    "video_id": "video-current",
+                    "embedding_id": "emb-current",
+                    "component": "audio_embed_clap",
+                    "step": "audio_embed_clap",
+                    "model": "laion/clap",
+                    "created_at": "2026-05-21T00:00:00Z",
+                    "commit_ts_utc": "2026-05-21T00:00:00Z",
+                }
+            ]
+            if runtime_run_id == "current-runtime"
+            else [],
+        },
+    )
+
+    evidence = runtime._latest_run_evidence()
+
+    assert evidence["run"]["run_id"] == "current-runtime"
+    assert evidence["run"]["run_kind"] == "configured_scene_results"
+    assert evidence["run"]["scope"] == "configured_output_scene_results"
+    assert evidence["temporal_index"]["total_scenes"] == 1
+    assert evidence["projection_gaps"]["status"] == "ok"
+    assert evidence["audio_vector_proof"]["status"] == "current_run_audio_vector_proven"
+    assert evidence["audio_vector_proof"]["current_run_qdrant_proven"] == 1
 
 
 def test_audio_vector_proof_resolves_run_header_run_id_without_overclaiming(monkeypatch) -> None:

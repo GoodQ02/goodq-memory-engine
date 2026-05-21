@@ -170,8 +170,36 @@
         "provenance_capable_points": 2
       },
       "known_followups": [
-        "latest-run evidence can mix refreshed temporal artifacts with an older standalone report-root run id after ad hoc direct CLI reruns",
-        "strict /api/runs/latest/evidence audio proof may say No Current-Run Evidence until latest-run indexing or direct CLI metadata is aligned",
+        "latest-run direct output selector seam superseded by direct_output_selector_validation",
+        "Control Agent remains disabled until an llm_client is explicitly injected"
+      ]
+    },
+    "direct_output_selector_validation": {
+      "status": "completed",
+      "source_scope": "same_first_redacted_family_media_file",
+      "video_count": 1,
+      "scene_count": 1,
+      "runtime_run_id": "c6fe8dc1-d3d1-4685-b784-bdc0c84fba22",
+      "api_projection": {
+        "latest_preview_scope": "configured_output_scene_results",
+        "latest_evidence_scope": "configured_output_scene_results",
+        "pipeline_status": "idle"
+      },
+      "evidence": {
+        "audio_vector_proof": "current_run_audio_vector_proven",
+        "audio_vector_proof_count": "1/1",
+        "temporal_index": "ok",
+        "temporal_scene_count": 1,
+        "projection_gaps": "ok",
+        "scene_context_llm": "1/1 temporal segments"
+      },
+      "root_cause": [
+        "explicit report-root probes write under reports/fresh_ingest_runs",
+        "direct/default CLI probes write to configured epoch output and mutable processing artifacts",
+        "old latest-run selector considered report roots only",
+        "new selector considers both report roots and configured CLI output, then chooses the freshest read-only scope"
+      ],
+      "known_followups": [
         "Control Agent remains disabled until an llm_client is explicitly injected"
       ]
     }

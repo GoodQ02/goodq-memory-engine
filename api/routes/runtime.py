@@ -896,12 +896,12 @@ def _latest_run_snapshot(limit: int = 12) -> Dict[str, Any]:
 
 def _latest_run_preview(limit: int = 12) -> Dict[str, Any]:
     """Return a truthful preview of the most recent structured run artifact root."""
-    runs = run_index.list_runs(limit=1)
+    runs = _runtime_visible_runs(limit=1)
     if not runs:
         return {"available": False}
 
     latest = runs[0]
-    summary = run_summary.load_run_summary(run_root=latest.get("run_root") or latest["run_id"])
+    summary = _load_runtime_visible_run_summary(latest)
     header = summary.get("run_header") if isinstance(summary, dict) else {}
     overview = summary.get("file_job_overview") if isinstance(summary, dict) else {}
     outcome = summary.get("outcome_classification") if isinstance(summary, dict) else {}
@@ -932,13 +932,13 @@ def _latest_run_preview(limit: int = 12) -> Dict[str, Any]:
 
 def _latest_run_evidence(limit: int = 24) -> Dict[str, Any]:
     """Return sanitized read-only evidence projections for the latest structured run."""
-    runs = run_index.list_runs(limit=1)
+    runs = _runtime_visible_runs(limit=1)
     if not runs:
         return _empty_run_evidence("no_indexed_runs")
 
     latest = runs[0]
     try:
-        summary = run_summary.load_run_summary(run_root=latest.get("run_root") or latest["run_id"])
+        summary = _load_runtime_visible_run_summary(latest)
     except Exception as exc:
         logger.warning("latest run evidence summary unavailable error=%s", exc)
         return _empty_run_evidence("summary_unavailable")
@@ -992,6 +992,178 @@ def _latest_run_evidence(limit: int = 24) -> Dict[str, Any]:
         ),
         "safety_boundary": _run_evidence_safety_boundary(),
     }
+
+
+def _runtime_visible_runs(limit: int | None = None) -> List[Dict[str, Any]]:
+    """Return report-index runs plus the current configured CLI output, newest first."""
+
+    runs = list(run_index.list_runs(limit=None))
+    configured = _configured_scene_results_run()
+    if configured is not None:
+        configured_path = str(configured.get("scene_results_path") or "")
+        runs = [
+            run
+            for run in runs
+            if str(run.get("scene_results_path") or "") != configured_path
+        ]
+        runs.append(configured)
+
+    runs.sort(key=lambda run: (_run_entry_mtime(run), str(run.get("run_id") or "")), reverse=True)
+    if isinstance(limit, int) and limit >= 0:
+        return runs[:limit]
+    return runs
+
+
+def _load_runtime_visible_run_summary(run: Dict[str, Any]) -> Dict[str, Any]:
+    if run.get("scope") == "configured_output_scene_results":
+        return _configured_scene_results_summary(run)
+    return run_summary.load_run_summary(run_root=run.get("run_root") or run["run_id"])
+
+
+def _configured_scene_results_run() -> Dict[str, Any] | None:
+    output_dir = _PATHS_CFG.get("output_directory")
+    if not output_dir:
+        return None
+    scene_results_path = (Path(str(output_dir)) / "scene_ingest_results.json").resolve()
+    if not scene_results_path.is_file():
+        return None
+
+    payload = _load_json_any(scene_results_path)
+    if payload is None:
+        return None
+
+    scene_records = _scene_records_from_results(payload)
+    scene_count = len(scene_records)
+    runtime_run_id, runtime_source = _resolve_runtime_audio_run_id({}, {}, payload)
+    first_record = _first_result_record(payload)
+    video_name = _first_text_value(
+        first_record.get("video_name") if isinstance(first_record, dict) else None,
+        first_record.get("video") if isinstance(first_record, dict) else None,
+        first_record.get("filename") if isinstance(first_record, dict) else None,
+        "Configured CLI output",
+    )
+    run_id = runtime_run_id or f"configured_output:{scene_results_path.parent.parent.name}"
+    stat = scene_results_path.stat()
+
+    return {
+        "run_id": run_id,
+        "runtime_run_id": runtime_run_id,
+        "runtime_run_id_source": runtime_source,
+        "run_kind": "configured_scene_results",
+        "scope": "configured_output_scene_results",
+        "run_root": str(scene_results_path.parent.parent),
+        "root_log_path": None,
+        "scene_results_path": str(scene_results_path),
+        "status": "completed" if scene_count > 0 else "unknown",
+        "epoch": _epoch_name_from_path(scene_results_path),
+        "source_dir": None,
+        "started_at": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+        "episodes_total": 1 if scene_count > 0 else 0,
+        "episodes_completed": 1 if scene_count > 0 else 0,
+        "episodes_failed": 0,
+        "episodes_running": 0,
+        "episodes_pending": 0,
+        "scenes_processed": scene_count,
+        "latest_episode": {
+            "episode": video_name,
+            "status": "completed" if scene_count > 0 else "unknown",
+            "run_dir": str(scene_results_path.parent.parent),
+            "scene_count": scene_count,
+            "files_read": [str(scene_results_path)],
+            "canonical_episode_artifacts": [],
+            "errors": [],
+            "warnings": [],
+        },
+        "_sort_ts": stat.st_mtime,
+    }
+
+
+def _configured_scene_results_summary(run: Dict[str, Any]) -> Dict[str, Any]:
+    latest_episode = run.get("latest_episode") if isinstance(run.get("latest_episode"), dict) else {}
+    qdrant_cfg = _CFG.get("qdrant") if isinstance(_CFG.get("qdrant"), dict) else {}
+    qdrant_collections = qdrant_cfg.get("collections") if isinstance(qdrant_cfg.get("collections"), dict) else {}
+    return {
+        "run_header": {
+            "run_id": run.get("run_id"),
+            "runtime_run_id": run.get("runtime_run_id"),
+            "runtime_run_id_source": run.get("runtime_run_id_source"),
+            "qdrant_collections": qdrant_collections,
+            "run_kind": run.get("run_kind") or "configured_scene_results",
+            "scope": run.get("scope") or "configured_output_scene_results",
+            "epoch": run.get("epoch"),
+            "status": run.get("status"),
+            "source_dir": run.get("source_dir"),
+            "start_time": run.get("started_at"),
+            "end_time": "unknown",
+            "total_duration_seconds": "unknown",
+            "trigger_source": "cli.run_ingestion",
+        },
+        "file_job_overview": {
+            "input_files": [latest_episode.get("episode")] if latest_episode.get("episode") else [],
+            "episodes_total": run.get("episodes_total", 0),
+            "episodes_completed": run.get("episodes_completed", 0),
+            "episodes_failed": run.get("episodes_failed", 0),
+            "episodes_running": run.get("episodes_running", 0),
+            "episodes_pending": run.get("episodes_pending", 0),
+            "scenes_processed": run.get("scenes_processed", latest_episode.get("scene_count") or 0),
+            "steps_executed": "unknown",
+        },
+        "audio_wsl2_summary": {
+            "jobs_found": "unknown",
+            "notes": "not observed",
+        },
+        "agent_activity": [],
+        "errors_warnings": {
+            "errors": latest_episode.get("errors") if isinstance(latest_episode.get("errors"), list) else [],
+            "warnings": latest_episode.get("warnings") if isinstance(latest_episode.get("warnings"), list) else [],
+        },
+        "outcome_classification": {
+            "status": run.get("status") or "unknown",
+        },
+        "evidence": {
+            "files_read": latest_episode.get("files_read") if isinstance(latest_episode.get("files_read"), list) else [],
+            "canonical_episode_artifacts": [],
+        },
+        "latest_episode": latest_episode,
+        "episodes": [latest_episode] if latest_episode else [],
+    }
+
+
+def _run_entry_mtime(run: Dict[str, Any]) -> float:
+    if isinstance(run.get("_sort_ts"), (int, float)):
+        return float(run["_sort_ts"])
+    for key in ("scene_results_path", "root_log_path", "config_path"):
+        value = run.get(key)
+        if isinstance(value, str) and value.strip():
+            try:
+                return Path(value).stat().st_mtime
+            except Exception:
+                continue
+    value = run.get("run_root")
+    if isinstance(value, str) and value.strip():
+        try:
+            return Path(value).stat().st_mtime
+        except Exception:
+            return 0.0
+    return 0.0
+
+
+def _epoch_name_from_path(path: Path) -> str | None:
+    parts = path.parts
+    for index, part in enumerate(parts):
+        if part.lower() == "epochs" and index + 1 < len(parts):
+            return parts[index + 1]
+    db_dir = _PATHS_CFG.get("db_dir")
+    if db_dir:
+        return Path(str(db_dir)).name
+    return None
+
+
+def _first_text_value(*values: Any) -> str | None:
+    for value in values:
+        if value is not None and str(value).strip():
+            return str(value).strip()
+    return None
 
 
 def _empty_run_evidence(reason: str) -> Dict[str, Any]:

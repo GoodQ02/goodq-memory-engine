@@ -185,12 +185,45 @@ Validated improvements:
 
 Known follow-up from the rerun:
 
-- `/api/runs/latest/evidence` can still mix the latest refreshed temporal
-  artifacts with an older standalone report-root run id. In that state strict
-  latest-run audio proof truthfully reports `No Current-Run Evidence`, while
-  `/api/runs/audio-proof/latest` shows the new run-tagged Qdrant payloads.
-  Fix latest-run indexing or direct CLI run metadata before relying on the
-  dashboard's strict latest-run audio proof after ad hoc reruns.
+- Superseded by the direct-output selector validation below. The old symptom
+  was that `/api/runs/latest/evidence` could mix the latest refreshed temporal
+  artifacts with an older standalone report-root run id after ad hoc direct CLI
+  reruns.
+
+## Latest Direct-Output Selector Validation
+
+A one-scene direct/default CLI probe completed after the LLM/KG validation
+rerun. This intentionally used the configured runtime output path instead of a
+new `reports/fresh_ingest_runs` report root.
+
+Scope:
+
+- Source scope: same first redacted FAMILY media file.
+- Probe scope: `1` video, `1` scene.
+- Runtime run id: `c6fe8dc1-d3d1-4685-b784-bdc0c84fba22`.
+- Pipeline status after probe: idle.
+
+Validated selector fix:
+
+- `/api/runs/latest/preview` and `/api/runs/latest/evidence` now prefer the
+  newer configured CLI output when it is fresher than repo-local report roots.
+- Latest evidence run scope: `configured_output_scene_results`.
+- Current-run audio proof: `1 / 1` CLAP-ok scene proven against run-matched
+  Qdrant payloads.
+- Projection gaps: `ok`.
+- Qdrant audio inventory still remains separate and read-only; it does not
+  override latest structured-run proof.
+
+Root cause confirmed:
+
+- Explicit report-root probes wrote immutable-looking copies under
+  `reports/fresh_ingest_runs`.
+- Direct/default CLI probes wrote to the configured epoch output and mutable
+  processing artifacts, but did not create a newer report-root entry.
+- The old selector only considered report roots, so it could pair stale
+  report-root scene results with refreshed temporal artifacts from the active
+  epoch. The selector now considers both surfaces and chooses the freshest
+  read-only scope.
 
 ## Do Not Investigate First
 
@@ -218,8 +251,7 @@ they are active again:
    `reports/local_housekeeping/2026-05-20-memory-clean-start/` if working on
    this local machine.
 2. Confirm local config points to the fresh home-memory epoch.
-3. Fix latest-run indexing/direct CLI metadata so `/api/runs/latest/evidence`
-   selects the newest ad hoc scene rerun consistently.
-4. Inspect the operator console against the completed LLM/KG validation rerun.
-5. If the scene evidence is acceptable, decide whether to run the first full
+3. Inspect the operator console against the latest direct-output selector
+   validation run.
+4. If the scene evidence is acceptable, decide whether to run the first full
    source video or do one more UI pass for the latest-run proof scope banner.

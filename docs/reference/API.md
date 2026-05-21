@@ -48,17 +48,19 @@ Primary status and runtime summary endpoints defined in the active API surface:
 - `GET /api/control-recurrence/reports/{report_id}/markdown`
 - `GET /api/control-recurrence/reports/{report_id}/recommendations`
 
-`GET /api/runs/latest/preview` is a read-only projection over indexed run artifacts under `reports/fresh_ingest_runs`.
+`GET /api/runs/latest/preview` is a read-only projection over indexed run artifacts under `reports/fresh_ingest_runs` plus the configured direct CLI output file when that output is newer than the indexed report roots.
 It does not revive the retired `/runs` compatibility shell, and it does not parse raw logs as a primary source of truth.
 If a clone uses a shared witness-report tree instead of a repo-local one, set
 `GOODQ_RUN_REPORTS_ROOT` to point the read-only run surfaces at that artifact root.
 The run index supports both wrapper-ledger roots with root `experiment_log.json`
 and standalone/direct roots that expose `output/scene_ingest_results.json`.
 Standalone roots are labeled with `scope=scene_ingest_results`; they are not
-presented as structured wrapper-ledger runs. Both `/api/runs/latest/preview`
-and `/api/runs/latest/evidence` expose `run_kind` and `scope` so UI consumers
-can explain missing wrapper-only artifacts without treating them as pipeline
-failures.
+presented as structured wrapper-ledger runs. Configured direct CLI output is
+labeled with `scope=configured_output_scene_results`; it represents the active
+runtime output, not a wrapper-ledger report root. Both
+`/api/runs/latest/preview` and `/api/runs/latest/evidence` expose `run_kind` and
+`scope` so UI consumers can explain missing wrapper-only artifacts without
+treating them as pipeline failures.
 
 `GET /api/runs/latest/evidence` reports proof for the currently indexed latest
 run scope. Its `audio_vector_proof` object is the strict current-run

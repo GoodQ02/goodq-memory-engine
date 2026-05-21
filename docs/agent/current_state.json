@@ -79,7 +79,7 @@
       "reclaimed_mb": 5244.99,
       "fresh_database_exists": true,
       "fresh_database_scenes": 1,
-      "fresh_database_note": "current configured-output validation after FAISS memory-path repair"
+      "fresh_database_note": "port 30000 is rebound to the _02 clean target; database is intentionally absent/empty until next ingestion"
     },
     "fresh_qdrant_collections": {
       "clip": "goodq_clip_epoch_2026_05_21_family_full_clean_02",
@@ -256,6 +256,36 @@
         "previous_validation_epoch": "epoch_2026_05_21_family_full_clean_01 audio FAISS was legacy non-idmap residue from prior probes",
         "current_target_epoch": "epoch_2026_05_21_family_full_clean_02",
         "required_before_broad_run": "confirm target FAISS files are absent or explicit-ID indexes"
+      },
+      "preflight_refresh_2026_05_21": {
+        "api_restarted_after_config_epoch_switch": true,
+        "api_status": {
+          "database_exists": false,
+          "database_scenes": 0,
+          "pipeline_status": "idle"
+        },
+        "latest_evidence": {
+          "available": false,
+          "reason": "no_indexed_runs"
+        },
+        "fresh_qdrant_counts": {
+          "clip": 0,
+          "dino": 0,
+          "text": 0,
+          "audio": 0
+        },
+        "fresh_faiss_directory_exists": false,
+        "previous_epoch_faiss_audit": {
+          "text": "IndexIDMap2",
+          "clip": "IndexIDMap2",
+          "dino": "IndexIDMap2",
+          "audio": "legacy IndexHNSWFlat, do not reuse"
+        },
+        "repair_applied": [
+          "shared FAISS memory writes reject vectors without explicit IDs",
+          "direct CLIP writer exposes FAISS, Qdrant, SQLite map, and SQLite embedding commit fields",
+          "direct DINO writer exposes FAISS, Qdrant, SQLite map, and SQLite embedding commit fields"
+        ]
       }
     }
   },

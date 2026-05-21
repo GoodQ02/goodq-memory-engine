@@ -15,6 +15,11 @@ def create_hnsw_id_index(faiss_module: Any, dim: int, links: int = 32) -> Any:
 
 def add_with_required_ids(index: Any, vectors: Any, ids: Any) -> None:
     """Add vectors to FAISS only when explicit stable IDs are supported."""
+    try:
+        if len(vectors) != len(ids):
+            raise RuntimeError("faiss_id_count_mismatch")
+    except TypeError:
+        pass
     add_with_ids = getattr(index, "add_with_ids", None)
     if not callable(add_with_ids):
         raise RuntimeError("faiss_index_lacks_add_with_ids")

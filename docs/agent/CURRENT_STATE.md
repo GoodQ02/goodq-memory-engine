@@ -60,8 +60,10 @@ Pre-clean audit found and cleared:
   `interrupted_ingestion` through `/api/runs/latest/evidence`.
 - Prior filesystem epochs were removed except for a small
   `epoch_2025_12_22` log stub held open by the Qdrant Windows service.
-- Active API status on port `30000` reports the latest configured-output
-  one-scene validation run after the FAISS memory-path repair below.
+- Active API status on port `30000` is now rebound to the fresh `_02` clean
+  target. It intentionally reports no database scenes and
+  `/api/runs/latest/evidence` returns `no_indexed_runs` until the next scene is
+  ingested.
 
 Fresh local validation epoch:
 
@@ -287,6 +289,25 @@ Known previous-epoch residue:
   earlier validation probes.
 - The current target is the fresh `_02` epoch. Before a broad home-movie run,
   confirm all `_02` FAISS targets are absent or explicit-ID indexes.
+
+Follow-up preflight refresh on 2026-05-21:
+
+- Port `30000` API was restarted after `config.local.yaml` moved to `_02`.
+- `/api/status` now reports `database.exists=false`, `database.scenes=0`, and
+  pipeline `idle`; this is the expected clean-run launch state.
+- `/api/runs/latest/evidence` now reports `available=false` with reason
+  `no_indexed_runs`; this prevents stale `_01` evidence from appearing as the
+  current scope before ingestion.
+- The four `_02` Qdrant collections are green with `0` points.
+- The `_02` FAISS directory does not exist yet. This is acceptable; the next
+  writers must create fresh explicit-ID indexes.
+- The old `_01` text, CLIP, and DINO FAISS indexes read as `IndexIDMap2`.
+- The old `_01` audio FAISS index reads as legacy `IndexHNSWFlat` and must not
+  be reused.
+- Shared FAISS memory writes now reject vectors without explicit IDs instead
+  of silently using position-based `add`.
+- Direct CLIP and DINO writers now return provenance-style commit fields for
+  FAISS, Qdrant, SQLite id-map, and SQLite embedding writes.
 
 ## Do Not Investigate First
 

@@ -74,6 +74,7 @@ def test_run_artifact_phase6_truth_propagation(monkeypatch, tmp_path: Path):
 
     def _run_step(env_name, step_name, payload, cfg_json):
         if step_name == "scene_visual_embeddings":
+            assert env_name == "goodq_image_caption"
             return {"phase6_status": "failed", "error": "vector_commit_failed"}
         if step_name == "cross_modal_harmonization":
             return {"harmonization_status": "complete", "temporal_index_path": None}

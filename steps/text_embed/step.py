@@ -8,6 +8,7 @@ import logging
 import re
 
 from steps.common.memory import upsert_embedding
+from steps.common.faiss_utils import create_hnsw_id_index
 from steps.common.memory_router import MemoryRouter
 from steps.common.memory_stores import build_text_stores
 
@@ -171,9 +172,7 @@ def _open_faiss(path: str):
     if index is None:
         # HNSW index for cosine similarity
         dim = 384  # all-MiniLM-L6-v2
-        index = faiss.IndexHNSWFlat(dim, 32)
-        index.hnsw.efConstruction = 200
-        index.hnsw.efSearch = 50
+        index = create_hnsw_id_index(faiss, dim)
         faiss.write_index(index, path)
     _FAISS = faiss
     return index, faiss

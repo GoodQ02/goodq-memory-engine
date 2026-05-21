@@ -69,7 +69,13 @@ class PathsConfig(BaseModel):
     db_path: str
     knowledge_graph_db: str
     faiss_dir: str
+    faiss_index_path: Optional[str] = None
+    faiss_clip_path: Optional[str] = None
+    faiss_dino_path: Optional[str] = None
     faiss_audio_path: Optional[str] = None
+    clip_id_map_db: Optional[str] = None
+    dino_id_map_db: Optional[str] = None
+    clap_id_map_db: Optional[str] = None
     qdrant_storage: Optional[str] = None
     watchdog_state_file: Optional[str] = None
     watchdog_lock_file: Optional[str] = None

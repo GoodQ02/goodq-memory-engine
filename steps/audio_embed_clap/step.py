@@ -1,5 +1,6 @@
 from __future__ import annotations
 # GPU Configuration - Auto-configured on import
+from steps.common.faiss_utils import add_with_required_ids, create_hnsw_id_index
 from steps.common.gpu_config import configure_gpu, get_device, clear_cache, print_memory_stats
 from steps.common.qdrant_client import build_qdrant_client
 
@@ -512,27 +513,13 @@ def audio_embed_clap(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
         if os.path.isfile(index_path):
             index = faiss.read_index(index_path)
         else:
-            index = faiss.IndexHNSWFlat(feats.shape[1], 32)
-            index.hnsw.efConstruction = 200
-            index.hnsw.efSearch = 50
+            index = create_hnsw_id_index(faiss, feats.shape[1])
 
         # Stable 64-bit ID derived from content fingerprint
         h = _content_fingerprint(item)
-        try:
-            uid = np.array([int(h[:16], 16) % (2**63 - 1)], dtype='int64')
-            index.add_with_ids(feats.astype("float32"), uid)
-            faiss_id = int(uid[0])
-        except Exception as e:
-            logger.warning(
-                "audio_embed_clap operation fallback operation=%s source_path=%s exc_type=%s exc=%s",
-                "faiss.add_with_ids_to_add",
-                path,
-                type(e).__name__,
-                e,
-            )
-            index.add(feats.astype("float32"))
-            # best-effort: last ID is ntotal-1 but only valid for flat add
-            faiss_id = getattr(index, 'ntotal', 0) - 1
+        uid = np.array([int(h[:16], 16) % (2**63 - 1)], dtype='int64')
+        add_with_required_ids(index, feats.astype("float32"), uid)
+        faiss_id = int(uid[0])
         faiss.write_index(index, index_path)
         faiss_ok = True
         try:

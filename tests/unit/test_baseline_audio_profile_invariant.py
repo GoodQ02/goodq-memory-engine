@@ -559,6 +559,7 @@ def test_audio_embed_clap_runtime_upsert_sends_qdrant_provenance(monkeypatch, tm
 
     fake_faiss = types.ModuleType("faiss")
     fake_faiss.IndexHNSWFlat = _FakeIndex
+    fake_faiss.IndexIDMap2 = lambda base: base
     fake_faiss.read_index = lambda _path: _FakeIndex(3, 32)
     fake_faiss.write_index = lambda index, path: faiss_writes.append((index, path))
 

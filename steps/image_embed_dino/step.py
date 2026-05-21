@@ -7,6 +7,7 @@ import os
 import logging
 import json
 import sys
+from steps.common.faiss_utils import add_with_required_ids, create_hnsw_id_index
 
 logger = logging.getLogger(__name__)
 
@@ -179,29 +180,42 @@ def image_embed_dino(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
         if os.path.isfile(index_path):
             index = faiss.read_index(index_path)
         else:
-            index = faiss.IndexHNSWFlat(feats.shape[1], 32)
-            index.hnsw.efConstruction = 200
-            index.hnsw.efSearch = 50
+            index = create_hnsw_id_index(faiss, feats.shape[1])
 
         # stable ID from content fingerprint
         from steps.text_embed.step import _content_fingerprint
         h = _content_fingerprint(item)
+        import numpy as np  # type: ignore
+        uid = np.array([int(h[:16], 16) % (2**63 - 1)], dtype='int64')
+        add_with_required_ids(index, feats.astype("float32"), uid)
+        faiss_id = int(uid[0])
+        faiss.write_index(index, index_path)
+        # Optional Qdrant dual-write.
         try:
-            import numpy as np  # type: ignore
-            uid = np.array([int(h[:16], 16) % (2**63 - 1)], dtype='int64')
-            index.add_with_ids(feats.astype("float32"), uid)
-            faiss_id = int(uid[0])
+            from steps.common.qdrant_client import build_qdrant_client
+
+            q_client = build_qdrant_client(cfg, dim=feats.shape[1], key="dino")
+            if q_client:
+                q_client.upsert([{
+                    "id": h,
+                    "vector": feats[0].tolist(),
+                    "payload": {
+                        "source_path": path,
+                        "modality": "dino",
+                        "model": "dino",
+                        "scene_id": item.get("scene_id"),
+                        "video_id": item.get("video_id") or item.get("video_hash"),
+                        "faiss_id": faiss_id,
+                    }
+                }])
         except Exception as e:
             logger.warning(
-                "image_embed_dino operation fallback operation=%s source_path=%s exc_type=%s exc=%s",
-                "faiss.add_with_ids_to_add",
+                "image_embed_dino operation failed operation=%s source_path=%s exc_type=%s exc=%s",
+                "qdrant.upsert",
                 path,
                 type(e).__name__,
                 e,
             )
-            index.add(feats.astype("float32"))
-            faiss_id = getattr(index, 'ntotal', 0) - 1
-        faiss.write_index(index, index_path)
         # map table
         map_db = (cfg.get("paths", {}) or {}).get("dino_id_map_db")
         if map_db:
@@ -235,17 +249,14 @@ def image_embed_dino(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
                         type(e).__name__,
                         e,
                     )
-        # Upsert generic embedding metadata for recall
-        # NOTE: DINO uses modality="image" (not "dino") by design.
-        # This allows DINO and CLIP embeddings to be queried together as visual content.
-        # To distinguish: check dino_id_map.sqlite or the specific FAISS index used.
-        # See docs/ARCHITECTURE_REFERENCE.md for full explanation.
+        # Upsert generic embedding metadata for recall. Keep DINO distinct from
+        # CLIP so the shared keyframe hash does not collapse visual modalities.
         try:
             from steps.common.memory import upsert_embedding
             scene_id = item.get("scene_id") or item.get("scene_index")
             if scene_id is not None and not isinstance(scene_id, str):
                 scene_id = f"scene_{int(scene_id):04d}"
-            upsert_embedding(cfg, h, faiss_id, path, item.get("modality", "image") or "image", scene_id=scene_id)
+            upsert_embedding(cfg, h, faiss_id, path, "dino", scene_id=scene_id)
         except Exception as e:
             logger.warning(
                 "image_embed_dino operation failed operation=%s source_path=%s exc_type=%s exc=%s",

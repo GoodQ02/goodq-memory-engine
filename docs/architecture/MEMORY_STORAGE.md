@@ -1,10 +1,10 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-04-01 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-21 -->
 
 # Memory & Storage Architecture
 
-**Last Updated:** April 1, 2026  
+**Last Updated:** May 21, 2026
 **Status:** ✅ Operational, with epoch-scoped SQLite + Qdrant as the active storage contract
 
 ---
@@ -125,6 +125,24 @@ FAISS remains optional as:
 
 It is not the canonical first-class retrieval truth.
 
+Configured FAISS paths are epoch-scoped:
+
+```text
+${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/<epoch>/faiss/
+├── text/faiss_text.index
+├── clip/faiss_clip.index
+├── dino/faiss_dino.index
+├── audio/clap_id_map.sqlite
+├── clip/clip_id_map.sqlite
+├── dino/dino_id_map.sqlite
+└── goodq_audio_<epoch>.index
+```
+
+FAISS commits must use explicit stable IDs. New HNSW indexes are wrapped in
+`IndexIDMap2`, and writers must not silently downgrade from `add_with_ids` to
+position-based `add`. A legacy non-IDMap FAISS file is historical evidence, not
+a valid target for new strict FAISS parity writes.
+
 ---
 
 ## Artifact Storage
@@ -170,6 +188,14 @@ Storage identity must remain deterministic. Changes to embedding identity, point
 ### Per-Target Commit Truth Matters
 
 Write success must be interpreted per store. A row-level success flag is not permission to assume every possible store contains the same memory.
+
+### Explicit FAISS IDs Are Required
+
+When FAISS is configured, a successful FAISS commit means the vector was written
+with a deterministic explicit ID and any configured SQLite ID map was updated.
+Sequential FAISS row positions are not stable provenance. If an existing FAISS
+index cannot accept explicit IDs, the writer must fail visibly for that FAISS
+target rather than reporting a best-effort success.
 
 ### Audio Vector Success Requires Run Provenance
 

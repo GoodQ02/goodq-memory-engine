@@ -39,6 +39,33 @@ def test_validated_config_preserves_llm_runtime_contract():
     assert llm.get("features", {}).get("scene_context_analysis") is True
 
 
+def test_config_derives_modality_faiss_paths_from_faiss_dir(tmp_path):
+    epoch_dir = tmp_path / "epoch_under_test"
+    faiss_dir = epoch_dir / "faiss"
+
+    result = load_configs({
+        "paths": {
+            "db_dir": str(epoch_dir),
+            "faiss_dir": str(faiss_dir),
+        }
+    })
+
+    paths = result.get("paths", {})
+    expected_suffixes = {
+        "faiss_index_path": "/faiss/text/faiss_text.index",
+        "faiss_clip_path": "/faiss/clip/faiss_clip.index",
+        "faiss_dino_path": "/faiss/dino/faiss_dino.index",
+        "clip_id_map_db": "/faiss/clip/clip_id_map.sqlite",
+        "dino_id_map_db": "/faiss/dino/dino_id_map.sqlite",
+        "clap_id_map_db": "/faiss/audio/clap_id_map.sqlite",
+    }
+
+    for key, suffix in expected_suffixes.items():
+        value = paths.get(key)
+        assert isinstance(value, str), f"{key} should be derived from paths.faiss_dir"
+        assert value.replace("\\", "/").endswith(suffix)
+
+
 def test_config_values():
     """Test that all critical settings have correct values"""
     print("=" * 70)

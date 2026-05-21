@@ -51,19 +51,22 @@ Pre-clean audit found and cleared:
   `interrupted_ingestion` through `/api/runs/latest/evidence`.
 - Prior filesystem epochs were removed except for a small
   `epoch_2025_12_22` log stub held open by the Qdrant Windows service.
-- Active API status on port `30000` reports `database.exists=true` and
-  `database.scenes=2` after the second small-scene probe below.
+- Active API status on port `30000` reports the latest configured-output
+  one-scene validation run after the FAISS memory-path repair below.
 
-Fresh local test epoch:
+Fresh local validation epoch:
 
-- `epoch_2026_05_20_home_memory_clean_02`
+- `epoch_2026_05_21_family_full_clean_01`
 
-The fresh epoch should use empty Qdrant collections:
+The active validation epoch uses these Qdrant collections:
 
-- `goodq_clip_epoch_2026_05_20_home_memory_clean_02`
-- `goodq_dino_epoch_2026_05_20_home_memory_clean_02`
-- `goodq_text_epoch_2026_05_20_home_memory_clean_02`
-- `goodq_audio_epoch_2026_05_20_home_memory_clean_02`
+- `goodq_clip_epoch_2026_05_21_family_full_clean_01`
+- `goodq_dino_epoch_2026_05_21_family_full_clean_01`
+- `goodq_text_epoch_2026_05_21_family_full_clean_01`
+- `goodq_audio_epoch_2026_05_21_family_full_clean_01`
+
+This epoch contains validation/probe data. Do not treat it as an untouched
+full-home-movie run seed without a clean-start audit.
 
 Preserved interrupted-run collections may also exist:
 
@@ -229,6 +232,53 @@ Root cause confirmed:
   epoch. The selector now considers both surfaces and chooses the freshest
   read-only scope.
 
+## FAISS Memory Path Audit And Repair
+
+A one-scene FAISS validation run completed against the active validation epoch
+after the memory-path repair.
+
+Scope:
+
+- Source scope: first redacted FAMILY media file.
+- Probe scope: `1` video, `1` scene.
+- Runtime run id: `e85a53c7-97b7-48bb-a6f5-56b78f066fa9`.
+- Configured-output backup:
+  `reports/local_housekeeping/2026-05-21-home-movie-preflight/one_scene_faiss_validation_run/configured_output_backup/scene_ingest_results.before_one_scene_faiss_validation.json`
+
+Validated:
+
+- Text FAISS path is configured under the active epoch and reads as an
+  explicit-ID `IndexIDMap2` from the text embedding environment.
+- CLIP FAISS path is configured under the active epoch and reads as an
+  explicit-ID `IndexIDMap2` from the visual embedding environment.
+- DINO FAISS path is configured under the active epoch and reads as an
+  explicit-ID `IndexIDMap2` from the visual embedding environment.
+- Phase 6a runs in `goodq_image_caption`, writes Qdrant as canonical vector
+  truth, and writes configured CLIP/DINO FAISS parity when explicit-ID support
+  is available.
+- `/api/runs/latest/evidence` reports projection gaps `ok`, Phase 6 Qdrant
+  `ok`, Phase 6 FAISS `ok`, and current-run audio proof `Proven` for the
+  validation run.
+- Realtime KG scene update resolved entities during the validation run.
+
+Repair applied:
+
+- FAISS writers now require explicit stable IDs for claimed FAISS commits.
+- New HNSW FAISS indexes are wrapped in `IndexIDMap2`.
+- Direct audio, CLIP, DINO, text-router, and Phase 6 FAISS writes no longer
+  silently downgrade from `add_with_ids` to position-based `add`.
+- CLIP/DINO direct writers keep separate modalities, Qdrant collections, FAISS
+  indexes, ID maps, and SQLite embedding rows.
+
+Known active-epoch residue:
+
+- The active audio FAISS file currently reads as a legacy non-IDMap HNSW index
+  from the audio embedding environment. It is validation residue from earlier
+  probes, not an acceptable target for the next strict full-run FAISS parity
+  pass.
+- Before a broad home-movie run, perform a clean-start preflight or fresh epoch
+  rollover so audio FAISS starts as an explicit-ID index.
+
 ## Do Not Investigate First
 
 These are known historical/proving-ground echoes unless a current audit proves
@@ -254,8 +304,10 @@ they are active again:
 1. Capture or inspect the cleanup manifest in
    `reports/local_housekeeping/2026-05-20-memory-clean-start/` if working on
    this local machine.
-2. Confirm local config points to the fresh home-memory epoch.
+2. Confirm local config points to the intended fresh home-memory epoch.
 3. Use the Operator Console Current Scope strip as the preflight check: API
    `30000`, run source, temporal scope, audio proof, selected browsing target,
    and read-only mode should be visible before broad ingestion.
-4. If the scene evidence is acceptable, run the first full source video.
+4. Confirm all configured FAISS targets in the target epoch are either absent
+   or explicit-ID indexes before broad ingestion.
+5. If the scene evidence is acceptable, run the first full source video.

@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE_RUNBOOK -->
-<!-- DOC_LAST_VERIFIED: 2026-05-20 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-21 -->
 
 # Clean Memory Start Workflow
 
@@ -53,20 +53,29 @@ The original cleanup pass used:
 epoch_2026_05_20_home_memory_clean
 ```
 
-After the 2026-05-20 power-loss audit, the current clean rerun target advanced
-to:
+After the 2026-05-20 power-loss audit, the clean rerun target advanced to:
 
 ```text
 epoch_2026_05_20_home_memory_clean_02
 ```
 
-Expected Qdrant collections for the current clean rerun target:
+The 2026-05-21 FAISS validation pass then used this validation epoch:
 
 ```text
-goodq_clip_epoch_2026_05_20_home_memory_clean_02
-goodq_dino_epoch_2026_05_20_home_memory_clean_02
-goodq_text_epoch_2026_05_20_home_memory_clean_02
-goodq_audio_epoch_2026_05_20_home_memory_clean_02
+epoch_2026_05_21_family_full_clean_01
+```
+
+That epoch contains probe data and one legacy audio FAISS residue from earlier
+tests. Treat it as validation evidence, not the broad-run seed.
+
+For the next broad home-memory run, create or select a fresh epoch and confirm
+its configured collections follow this pattern:
+
+```text
+goodq_clip_<fresh_epoch>
+goodq_dino_<fresh_epoch>
+goodq_text_<fresh_epoch>
+goodq_audio_<fresh_epoch>
 ```
 
 Validate with:
@@ -122,6 +131,10 @@ PY
 
 Expected: only the fresh epoch collections are present, all with `points_count`
 equal to `0`.
+
+Also verify configured FAISS targets in the fresh epoch are either absent or
+explicit-ID indexes. Legacy non-IDMap FAISS files must not be reused for a
+strict memory pass.
 
 ## 5. Rerun One Scene First
 

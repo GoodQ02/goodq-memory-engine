@@ -39,7 +39,8 @@
   "clean_start": {
     "prior_pipeline_memory_is_disposable": true,
     "prior_home_movie_tests_are_disposable": true,
-    "fresh_epoch": "epoch_2026_05_20_home_memory_clean_02",
+    "fresh_epoch": "epoch_2026_05_21_family_full_clean_01",
+    "fresh_epoch_note": "validation/probe epoch, not an untouched full-home-movie run seed",
     "tracked_cleanup_summary": "docs/diagnostics/MEMORY_CLEAN_START_AUDIT_2026-05-20.md",
     "tracked_power_loss_summary": "docs/diagnostics/POWER_LOSS_INGESTION_AUDIT_2026-05-20.md",
     "qdrant_cleanup_manifest_dir": "reports/local_housekeeping/2026-05-20-memory-clean-start",
@@ -73,13 +74,14 @@
       "retained_stub": "epoch_2025_12_22 service-held qdrant logs",
       "reclaimed_mb": 5244.99,
       "fresh_database_exists": true,
-      "fresh_database_scenes": 2
+      "fresh_database_scenes": 1,
+      "fresh_database_note": "current configured-output validation after FAISS memory-path repair"
     },
     "fresh_qdrant_collections": {
-      "clip": "goodq_clip_epoch_2026_05_20_home_memory_clean_02",
-      "dino": "goodq_dino_epoch_2026_05_20_home_memory_clean_02",
-      "text": "goodq_text_epoch_2026_05_20_home_memory_clean_02",
-      "audio": "goodq_audio_epoch_2026_05_20_home_memory_clean_02"
+      "clip": "goodq_clip_epoch_2026_05_21_family_full_clean_01",
+      "dino": "goodq_dino_epoch_2026_05_21_family_full_clean_01",
+      "text": "goodq_text_epoch_2026_05_21_family_full_clean_01",
+      "audio": "goodq_audio_epoch_2026_05_21_family_full_clean_01"
     },
     "preserved_interrupted_qdrant_collections": {
       "clip": "goodq_clip_epoch_2026_05_20_home_memory_clean",
@@ -221,6 +223,35 @@
       "known_followups": [
         "Control Agent remains disabled until an llm_client is explicitly injected"
       ]
+    },
+    "faiss_memory_path_validation": {
+      "status": "completed",
+      "source_scope": "first_redacted_family_media_file",
+      "video_count": 1,
+      "scene_count": 1,
+      "runtime_run_id": "e85a53c7-97b7-48bb-a6f5-56b78f066fa9",
+      "configured_output_backup": "reports/local_housekeeping/2026-05-21-home-movie-preflight/one_scene_faiss_validation_run/configured_output_backup/scene_ingest_results.before_one_scene_faiss_validation.json",
+      "validated": {
+        "text_faiss": "configured_explicit_id_index",
+        "clip_faiss": "configured_explicit_id_index",
+        "dino_faiss": "configured_explicit_id_index",
+        "phase6_environment": "goodq_image_caption",
+        "phase6_qdrant": "ok",
+        "phase6_faiss": "ok",
+        "projection_gaps": "ok",
+        "audio_proof": "current_run_audio_vector_proven",
+        "realtime_kg_entities_resolved": 4
+      },
+      "repair_applied": [
+        "new HNSW FAISS indexes are wrapped in IndexIDMap2",
+        "FAISS writers require explicit stable IDs for claimed commits",
+        "audio, CLIP, DINO, text-router, and Phase 6 no longer downgrade to position-based add for ID-bearing writes",
+        "CLIP and DINO direct writers keep distinct modalities, collections, indexes, ID maps, and SQLite embedding rows"
+      ],
+      "active_epoch_residue": {
+        "audio_faiss": "legacy_non_idmap_hnsw_from_prior_validation_probes",
+        "required_before_broad_run": "clean-start preflight or fresh epoch rollover so audio FAISS starts as an explicit-ID index"
+      }
     }
   },
   "known_historical_echoes": [

@@ -5373,7 +5373,7 @@ def run(
             try:
                 # Phase 6a: Scene Visual Embeddings (CLIP + DINO)
                 typer.echo('[PHASE 6a] Generating scene visual embeddings...')
-                embeddings_result = _run_step('goodq_core', 'scene_visual_embeddings', phase6_item, cfg_json)
+                embeddings_result = _run_step('goodq_image_caption', 'scene_visual_embeddings', phase6_item, cfg_json)
                 if tracker is not None:
                     tracker.update_step(
                         "Phase 6a",

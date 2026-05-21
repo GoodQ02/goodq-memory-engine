@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-05-20 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-21 -->
 
 # Audio Vector Provenance Contract
 
@@ -77,6 +77,11 @@ when a CLAP commit completes:
 These fields improve traceability from scene output to Qdrant inventory. They
 do not prove current-run audio coverage unless the matching Qdrant payload
 checks in this contract also pass.
+
+`faiss_committed=true` is valid only when the CLAP vector was written to a
+FAISS index that accepts explicit stable IDs. A legacy FAISS file that accepts
+only position-based `add` is not a valid current-line FAISS commit target, even
+if it contains audio vectors.
 
 For standalone/direct scene-result roots, the report-folder identifier may be a
 human slug rather than the runtime UUID used by Qdrant payloads. Read models may

@@ -53,8 +53,8 @@
       "retained_epoch_stubs": 1,
       "retained_stub": "epoch_2025_12_22 service-held qdrant logs",
       "reclaimed_mb": 5244.99,
-      "fresh_database_exists": false,
-      "fresh_database_scenes": 0
+      "fresh_database_exists": true,
+      "fresh_database_scenes": 1
     },
     "fresh_qdrant_collections": {
       "clip": "goodq_clip_epoch_2026_05_20_home_memory_clean_02",
@@ -67,6 +67,39 @@
       "dino": "goodq_dino_epoch_2026_05_20_home_memory_clean",
       "text": "goodq_text_epoch_2026_05_20_home_memory_clean",
       "audio": "goodq_audio_epoch_2026_05_20_home_memory_clean"
+    },
+    "scene_first_probe": {
+      "status": "completed",
+      "source_scope": "first_redacted_family_media_file",
+      "video_count": 1,
+      "scene_count": 1,
+      "scene_duration_seconds": 53.787,
+      "api_projection": {
+        "database_exists": true,
+        "database_scenes": 1,
+        "pipeline_status": "idle"
+      },
+      "fresh_qdrant_counts": {
+        "clip": 1,
+        "dino": 1,
+        "text": 2,
+        "audio": 1
+      },
+      "evidence": {
+        "visual_vectors": "present",
+        "text_vectors": "present",
+        "audio_vector": "present",
+        "transcript": "present",
+        "ocr": "present",
+        "caption": "present",
+        "sentiment": "present",
+        "clap_status": "ok",
+        "audio_vector_proof": "current_run_audio_vector_proven"
+      },
+      "known_followups": [
+        "standalone latest-evidence report marks temporal_index_missing even though the configured data-root temporal index exists",
+        "entity extraction produced no KG entities for the first scene"
+      ]
     }
   },
   "known_historical_echoes": [

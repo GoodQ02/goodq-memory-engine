@@ -51,8 +51,8 @@ Pre-clean audit found and cleared:
   `interrupted_ingestion` through `/api/runs/latest/evidence`.
 - Prior filesystem epochs were removed except for a small
   `epoch_2025_12_22` log stub held open by the Qdrant Windows service.
-- Active API status on port `30000` reports `database.exists=false` and
-  `database.scenes=0` for the current fresh epoch.
+- Active API status on port `30000` reports `database.exists=true` and
+  `database.scenes=1` after the scene-first probe below.
 
 Fresh local test epoch:
 
@@ -74,6 +74,48 @@ Preserved interrupted-run collections may also exist:
 
 These are evidence for the power-loss audit, not the target memory surface for
 the next run.
+
+## Latest Scene-First Probe
+
+The first post-power-loss scene probe completed successfully in the fresh
+`epoch_2026_05_20_home_memory_clean_02` epoch.
+
+Scope:
+
+- Source scope: first redacted FAMILY media file.
+- Probe scope: `1` video, `1` scene.
+- Scene duration: `53.787` seconds.
+- Runtime run id resolved from `scene_results.scenes.audio.clap_meta.run_id`.
+- Pipeline status after probe: idle.
+
+Observed fresh collection counts after the probe:
+
+- `goodq_clip_epoch_2026_05_20_home_memory_clean_02`: `1`
+- `goodq_dino_epoch_2026_05_20_home_memory_clean_02`: `1`
+- `goodq_text_epoch_2026_05_20_home_memory_clean_02`: `2`
+- `goodq_audio_epoch_2026_05_20_home_memory_clean_02`: `1`
+
+High-value scene evidence surfaced:
+
+- Visual vectors: present.
+- Text vectors: present.
+- Audio vector: present.
+- Transcript: present.
+- OCR: present.
+- Caption: present.
+- Sentiment: present.
+- CLAP status: `ok`.
+- `/api/runs/latest/evidence` audio vector proof:
+  `current_run_audio_vector_proven`.
+
+Known follow-up from the probe:
+
+- The standalone scene result contains a `temporal_index_path`, and the
+  configured data-root artifact exists, but `/api/runs/latest/evidence` reports
+  `temporal_index_missing` for the standalone report because the temporal index
+  is not co-located under that report folder.
+- Entity extraction produced no KG entities for the first scene. Treat this as
+  a content/sequence follow-up, not a failed run.
 
 ## Do Not Investigate First
 
@@ -101,5 +143,6 @@ they are active again:
    `reports/local_housekeeping/2026-05-20-memory-clean-start/` if working on
    this local machine.
 2. Confirm local config points to the fresh home-memory epoch.
-3. Run one small home-movie scene through the pipeline and inspect the operator
-   console before broad ingestion.
+3. Inspect the operator console against the completed scene-first probe.
+4. If the scene evidence is acceptable, run the next small scene or first full
+   source video before broad ingestion.

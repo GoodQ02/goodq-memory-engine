@@ -33,6 +33,25 @@ _EMBEDDING_EMISSION_BY_STEP = {
     "audio_embed_clap": True,
     "sentiment": False,
 }
+OPENMP_GUARD_STEPS = {
+    "audio_embed_clap",
+    "image_embed_clip",
+    "image_embed_dino",
+    "scene_visual_embeddings",
+    "text_embed",
+}
+OPENMP_GUARD_ENV = {
+    "KMP_DUPLICATE_LIB_OK": "TRUE",
+    "OMP_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+}
+
+
+def apply_step_runtime_guards(step_name: str) -> None:
+    if step_name not in OPENMP_GUARD_STEPS:
+        return
+    for key, value in OPENMP_GUARD_ENV.items():
+        os.environ.setdefault(key, value)
 
 
 def _emit_subprocess_env_fingerprint(step_name: str) -> None:
@@ -284,6 +303,8 @@ def main() -> None:
     ap.add_argument("--cfg", help="Path to full resolved config JSON", required=False)
     ap.add_argument("--verbose", action="store_true", help="Enable verbose logging of step metadata")
     args = ap.parse_args()
+
+    apply_step_runtime_guards(args.step)
 
     item = None
     if args.in_path:

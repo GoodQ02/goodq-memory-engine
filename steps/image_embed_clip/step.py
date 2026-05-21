@@ -6,6 +6,7 @@ from datetime import datetime
 import os
 import logging
 import sys
+from steps.common.faiss_utils import add_with_required_ids, create_hnsw_id_index
 
 logger = logging.getLogger(__name__)
 
@@ -112,31 +113,28 @@ def image_embed_clip(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
         if os.path.isfile(index_path):
             index = faiss.read_index(index_path)
         else:
-            index = faiss.IndexHNSWFlat(feats.shape[1], 32)
-            index.hnsw.efConstruction = 200
-            index.hnsw.efSearch = 50
+            index = create_hnsw_id_index(faiss, feats.shape[1])
         # stable ID from content fingerprint
         h = _content_fingerprint(item)
-        try:
-            import numpy as np  # type: ignore
-            uid = np.array([int(h[:16], 16) % (2**63 - 1)], dtype='int64')
-            index.add_with_ids(feats.astype("float32"), uid)
-            faiss_id = int(uid[0])
-        except Exception as e:
-            index.add(feats.astype("float32"))
-            faiss_id = getattr(index, 'ntotal', 0) - 1
+        import numpy as np  # type: ignore
+        uid = np.array([int(h[:16], 16) % (2**63 - 1)], dtype='int64')
+        add_with_required_ids(index, feats.astype("float32"), uid)
+        faiss_id = int(uid[0])
         faiss.write_index(index, index_path)
 
         # Optional Qdrant dual-write
         try:
-            q_client = build_qdrant_client(cfg, dim=feats.shape[1], key="image")
+            q_client = build_qdrant_client(cfg, dim=feats.shape[1], key="clip")
             if q_client:
                 q_client.upsert([{
                     "id": h,
                     "vector": feats[0].tolist(),
                     "payload": {
                         "source_path": path,
-                        "modality": "image",
+                        "modality": "clip",
+                        "model": "clip",
+                        "scene_id": item.get("scene_id"),
+                        "video_id": item.get("video_id") or item.get("video_hash"),
                         "faiss_id": faiss_id,
                     }
                 }])
@@ -165,17 +163,14 @@ def image_embed_clip(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
                 except Exception as e:
                     print(f'[ERROR] Exception in step.py line 89: {str(e)}')
                     pass
-        # Upsert generic embedding metadata for recall
-        # NOTE: CLIP uses modality="image" (not "clip") by design.
-        # This allows CLIP and DINO embeddings to be queried together as visual content.
-        # To distinguish: check clip_id_map.sqlite or the specific FAISS index used.
-        # See docs/ARCHITECTURE_REFERENCE.md for full explanation.
+        # Upsert generic embedding metadata for recall. Keep CLIP distinct from
+        # DINO so the shared keyframe hash does not collapse visual modalities.
         try:
             from steps.common.memory import upsert_embedding
             scene_id = item.get("scene_id") or item.get("scene_index")
             if scene_id is not None and not isinstance(scene_id, str):
                 scene_id = f"scene_{int(scene_id):04d}"
-            upsert_embedding(cfg, h, faiss_id, path, item.get("modality", "image") or "image", scene_id=scene_id)
+            upsert_embedding(cfg, h, faiss_id, path, "clip", scene_id=scene_id)
         except Exception as e:
             print(f'[ERROR] Exception in step.py line 96: {str(e)}')
             pass

@@ -322,3 +322,139 @@ def test_phase6_uses_nested_qdrant_host(monkeypatch, tmp_path: Path):
     assert manifest["phase6_status"] == "complete"
     assert "phase6_error" not in manifest
     assert seen_hosts == ["http://10.0.0.9:6333", "http://10.0.0.9:6333"]
+
+
+def test_phase6_writes_configured_faiss_parity(monkeypatch, tmp_path: Path):
+    video_id = "v_test"
+    processing_root = tmp_path / "processing"
+    manifest_dir = processing_root / video_id / "video"
+    manifest_dir.mkdir(parents=True, exist_ok=True)
+
+    video_path = tmp_path / "video.mp4"
+    video_path.write_bytes(b"0")
+    frame_path = manifest_dir / "scene_0000.jpg"
+    frame_path.write_bytes(b"frame")
+
+    manifest_path = manifest_dir / "scene_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "video_id": video_id,
+                "scenes": [
+                    {
+                        "scene_id": "scene_0",
+                        "index": 0,
+                        "start": 0.0,
+                        "end": 1.0,
+                        "duration": 1.0,
+                        "confidence": 0.9,
+                    }
+                ],
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+
+    mod_extractor = types.ModuleType("steps.video.scene_frame_extractor")
+    mod_embedder = types.ModuleType("steps.video.scene_embedder")
+    mod_pooler = types.ModuleType("steps.video.embedding_pooler")
+    mod_qdrant = types.ModuleType("steps.common.qdrant_client")
+    mod_faiss = types.ModuleType("faiss")
+
+    def _extract_scene_frames(**kwargs):
+        return {"scene_0": [{"path": str(frame_path)}]}
+
+    def _embed_scene_frames(scene_frames, model_type="clip", batch_size=8):
+        dim = 512 if model_type == "clip" else 768
+        return {"scene_0": [[0.0] * dim]}
+
+    def _pool_multiple_scenes(embeddings, strategy="mean"):
+        sample = next(iter(embeddings.values()))
+        dim = len(sample[0])
+        return {"scene_0": _FakeVec(dim)}
+
+    class _QdrantConfig:
+        def __init__(self, host, collection, dim, distance="Cosine"):
+            self.host = host
+            self.collection = collection
+            self.dim = dim
+            self.distance = distance
+
+    class _QdrantClient:
+        def __init__(self, cfg):
+            self.cfg = cfg
+
+        def upsert(self, points):
+            return True
+
+    class _FakeHnswIndex:
+        def __init__(self, dim, links):
+            self.dim = dim
+            self.links = links
+            self.hnsw = types.SimpleNamespace(efConstruction=None, efSearch=None)
+
+    class _FakeIdMapIndex:
+        def __init__(self, base):
+            self.base = base
+            self.added_ids = []
+            self.ntotal = 0
+
+        def add_with_ids(self, _vecs, ids):
+            self.added_ids.extend(int(value) for value in ids)
+            self.ntotal += len(ids)
+
+    written_indexes = []
+
+    def _write_index(index, path):
+        written_indexes.append((str(path), index))
+
+    mod_extractor.extract_scene_frames = _extract_scene_frames
+    mod_embedder.embed_scene_frames = _embed_scene_frames
+    mod_embedder._MODELS = {"clip": {"model": object()}, "dino": {"model": object()}}
+    mod_pooler.pool_multiple_scenes = _pool_multiple_scenes
+    mod_qdrant.QdrantClient = _QdrantClient
+    mod_qdrant.QdrantConfig = _QdrantConfig
+    mod_faiss.IndexHNSWFlat = _FakeHnswIndex
+    mod_faiss.IndexIDMap2 = _FakeIdMapIndex
+    mod_faiss.write_index = _write_index
+
+    monkeypatch.setitem(sys.modules, "steps.video.scene_frame_extractor", mod_extractor)
+    monkeypatch.setitem(sys.modules, "steps.video.scene_embedder", mod_embedder)
+    monkeypatch.setitem(sys.modules, "steps.video.embedding_pooler", mod_pooler)
+    monkeypatch.setitem(sys.modules, "steps.common.qdrant_client", mod_qdrant)
+    monkeypatch.setitem(sys.modules, "faiss", mod_faiss)
+
+    item = {"id": video_id, "source_path": str(video_path)}
+    cfg = {
+        "paths": {
+            "processing": str(processing_root),
+            "db_path": str(tmp_path / "memory.db"),
+            "log_dir": str(tmp_path),
+            "faiss_clip_path": str(tmp_path / "faiss" / "clip.index"),
+            "faiss_dino_path": str(tmp_path / "faiss" / "dino.index"),
+            "clip_id_map_db": str(tmp_path / "faiss" / "clip_id_map.sqlite"),
+            "dino_id_map_db": str(tmp_path / "faiss" / "dino_id_map.sqlite"),
+        },
+        "phase6": {
+            "enabled": True,
+            "retrieval": {"enable": True},
+            "clip_collection": "clip_test",
+            "dino_collection": "dino_test",
+        },
+        "qdrant": {"host": "http://127.0.0.1:6333"},
+    }
+
+    result = run_scene_visual_embeddings(item, cfg)
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+
+    assert result["phase6_status"] == "complete"
+    assert result["qdrant_ok"] is True
+    assert result["faiss_ok"] is True
+    assert result["faiss_clip_committed"] is True
+    assert result["faiss_dino_committed"] is True
+    assert manifest["phase6_vector_commit"]["faiss_ok"] is True
+    assert manifest["phase6_vector_commit"]["faiss_clip_committed"] is True
+    assert manifest["phase6_vector_commit"]["faiss_dino_committed"] is True
+    assert manifest["scenes"][0]["faiss_ok"] is True
+    assert len(written_indexes) == 2

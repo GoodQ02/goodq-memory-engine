@@ -442,12 +442,20 @@ def test_audio_embed_clap_qdrant_payload_keeps_scene_video_metadata(monkeypatch)
         },
         source_path="processing/audio/scene_0007.wav",
         faiss_id=12345,
+        embedding_id="embedding-alpha",
+        created_at="2026-04-30T12:05:43+00:00",
     )
 
     assert payload == {
         "source_path": "processing/audio/scene_0007.wav",
         "modality": "audio",
         "faiss_id": 12345,
+        "embedding_id": "embedding-alpha",
+        "component": "audio_embed_clap",
+        "step": "audio_embed_clap",
+        "model": "laion/clap-htsat-unfused",
+        "created_at": "2026-04-30T12:05:43+00:00",
+        "commit_ts_utc": "2026-04-30T12:05:43+00:00",
         "scene_id": "scene-alpha",
         "video_id": "video-alpha",
         "video_hash": "hash-alpha",
@@ -456,6 +464,192 @@ def test_audio_embed_clap_qdrant_payload_keeps_scene_video_metadata(monkeypatch)
         "duration": 2.5,
         "scene_index": 7,
     }
+
+
+def test_audio_embed_clap_qdrant_payload_without_run_id_does_not_claim_current_run(monkeypatch) -> None:
+    monkeypatch.delenv("GOODQ_RUN_ID", raising=False)
+    monkeypatch.delenv("GOODQ_REQUIRE_GPU", raising=False)
+    monkeypatch.setenv("GOODQ_NO_AUTO_GPU", "1")
+    from steps.audio_embed_clap.step import _build_qdrant_audio_payload
+
+    payload = _build_qdrant_audio_payload(
+        {
+            "scene_id": "scene-alpha",
+            "scene_index": 7,
+            "video_id": "video-alpha",
+        },
+        source_path="processing/audio/scene_0007.wav",
+        faiss_id=12345,
+        embedding_id="embedding-alpha",
+        created_at="2026-04-30T12:05:43+00:00",
+    )
+
+    assert payload["scene_id"] == "scene-alpha"
+    assert payload["embedding_id"] == "embedding-alpha"
+    assert payload["component"] == "audio_embed_clap"
+    assert payload["model"] == "laion/clap-htsat-unfused"
+    assert payload["created_at"] == "2026-04-30T12:05:43+00:00"
+    assert "run_id" not in payload
+
+
+def test_audio_embed_clap_runtime_upsert_sends_qdrant_provenance(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.delenv("GOODQ_REQUIRE_GPU", raising=False)
+    monkeypatch.setenv("GOODQ_NO_AUTO_GPU", "1")
+    from steps.audio_embed_clap import step as clap_step
+
+    audio_path = tmp_path / "scene.wav"
+    _write_silent_wav(audio_path, frames=16000)
+
+    import numpy as np
+
+    class _FakeInputFeatures:
+        def to(self, _device):
+            return self
+
+    class _FakeFeatures:
+        def detach(self):
+            return self
+
+        def cpu(self):
+            return self
+
+        def numpy(self):
+            return np.array([[0.25, 0.5, 0.75]], dtype="float32")
+
+    class _FakeProcessor:
+        def __call__(self, **_kwargs):
+            return {"input_features": _FakeInputFeatures()}
+
+    class _FakeModel:
+        def get_audio_features(self, *, input_features):
+            assert isinstance(input_features, _FakeInputFeatures)
+            return _FakeFeatures()
+
+    qdrant_points = []
+    emitted_events = []
+    sqlite_embeddings = []
+    faiss_writes = []
+
+    class _FakeQdrantClient:
+        cfg = types.SimpleNamespace(collection="goodq_audio_test")
+
+        def upsert(self, points):
+            qdrant_points.extend(points)
+            return True
+
+    class _FakeIndex:
+        def __init__(self, _dim, _neighbors):
+            self.hnsw = types.SimpleNamespace(efConstruction=None, efSearch=None)
+            self.ntotal = 0
+
+        def add_with_ids(self, feats, ids):
+            assert feats.shape == (1, 3)
+            self.ntotal += len(ids)
+
+        def add(self, feats):
+            self.ntotal += len(feats)
+
+    fake_torch = types.ModuleType("torch")
+    fake_librosa = types.ModuleType("librosa")
+    fake_librosa.load = lambda _path, sr, mono: (np.array([0.1, -0.2], dtype="float32"), sr)
+
+    fake_faiss = types.ModuleType("faiss")
+    fake_faiss.IndexHNSWFlat = _FakeIndex
+    fake_faiss.IndexIDMap2 = lambda base: base
+    fake_faiss.read_index = lambda _path: _FakeIndex(3, 32)
+    fake_faiss.write_index = lambda index, path: faiss_writes.append((index, path))
+
+    fake_text_step = types.ModuleType("steps.text_embed.step")
+    fake_text_step._content_fingerprint = lambda _item: "0123456789abcdef0123456789abcdef"
+
+    fake_memory = types.ModuleType("steps.common.memory")
+
+    def _fake_upsert_embedding(*args, **kwargs):
+        sqlite_embeddings.append((args, kwargs))
+
+    fake_memory.upsert_embedding = _fake_upsert_embedding
+
+    fake_commit_events = types.ModuleType("steps.common.memory_commit_events")
+    fake_commit_events.utc_now_iso = lambda: "2026-05-01T12:00:00+00:00"
+
+    class _FakeMemoryCommitEvent:
+        def __init__(self, **kwargs):
+            self.__dict__.update(kwargs)
+
+    fake_commit_events.MemoryCommitEvent = _FakeMemoryCommitEvent
+    fake_commit_events.emit_memory_commit_event = lambda _cfg, event: emitted_events.append(event)
+
+    monkeypatch.setitem(sys.modules, "torch", fake_torch)
+    monkeypatch.setitem(sys.modules, "librosa", fake_librosa)
+    monkeypatch.setitem(sys.modules, "faiss", fake_faiss)
+    monkeypatch.setitem(sys.modules, "steps.text_embed.step", fake_text_step)
+    monkeypatch.setitem(sys.modules, "steps.common.memory", fake_memory)
+    monkeypatch.setitem(sys.modules, "steps.common.memory_commit_events", fake_commit_events)
+
+    monkeypatch.setattr(clap_step, "_inspect_audio_input", lambda _path: None)
+    monkeypatch.setattr(clap_step, "_torchaudio_preflight", lambda: True)
+    monkeypatch.setattr(clap_step, "_preferred_device", lambda: "cpu")
+    monkeypatch.setattr(clap_step, "_load", lambda _device: (True, None))
+    monkeypatch.setattr(clap_step, "build_qdrant_client", lambda _cfg, dim, key: _FakeQdrantClient())
+    monkeypatch.setitem(clap_step._CLAP, "model", _FakeModel())
+    monkeypatch.setitem(clap_step._CLAP, "proc", _FakeProcessor())
+    monkeypatch.setitem(clap_step._CLAP, "device", "cpu")
+    monkeypatch.setitem(clap_step._CLAP, "model_dir", str(tmp_path / "models"))
+
+    result = clap_step.audio_embed_clap(
+        {
+            "source_path": str(audio_path),
+            "scene_id": "scene-alpha",
+            "scene_index": 7,
+            "video_id": "video-alpha",
+            "video_hash": "hash-alpha",
+            "scene": {"start": 12.5, "end": 15.0, "duration": 2.5},
+            "audio_backend_effective": "wsl",
+        },
+        {
+            "run": {"id": "run-alpha"},
+            "vad_enabled": False,
+            "paths": {
+                "faiss_audio_path": str(tmp_path / "faiss" / "audio.index"),
+                "db_path": str(tmp_path / "memory.db"),
+            },
+        },
+    )
+
+    assert result["clap_meta"]["status"] == "ok"
+    assert result["clap_meta"]["component"] == "audio_embed_clap"
+    assert result["clap_meta"]["step"] == "audio_embed_clap"
+    assert result["clap_meta"]["model"] == "laion/clap-htsat-unfused"
+    assert result["clap_meta"]["run_id"] == "run-alpha"
+    assert result["clap_meta"]["embedding_id"] == "0123456789abcdef0123456789abcdef"
+    assert result["clap_meta"]["commit_ts_utc"] == "2026-05-01T12:00:00+00:00"
+    assert result["clap_meta"]["qdrant_attempted"] is True
+    assert result["clap_meta"]["qdrant_committed"] is True
+    assert result["clap_meta"]["qdrant_collection"] == "goodq_audio_test"
+    assert "source_path" not in result["clap_meta"]
+    assert len(faiss_writes) == 1
+    assert len(qdrant_points) == 1
+    assert len(sqlite_embeddings) == 1
+    assert len(emitted_events) == 1
+
+    point = qdrant_points[0]
+    assert point["id"] == "0123456789abcdef0123456789abcdef"
+    assert point["vector"] == [0.25, 0.5, 0.75]
+
+    payload = point["payload"]
+    assert payload["run_id"] == "run-alpha"
+    assert payload["embedding_id"] == "0123456789abcdef0123456789abcdef"
+    assert payload["component"] == "audio_embed_clap"
+    assert payload["step"] == "audio_embed_clap"
+    assert payload["model"] == "laion/clap-htsat-unfused"
+    assert payload["created_at"] == "2026-05-01T12:00:00+00:00"
+    assert payload["commit_ts_utc"] == "2026-05-01T12:00:00+00:00"
+    assert payload["source_path"] == str(audio_path)
+    assert payload["scene_id"] == "scene-alpha"
+    assert payload["video_id"] == "video-alpha"
+    assert payload["video_hash"] == "hash-alpha"
+    assert payload["scene_index"] == 7
+    assert payload["audio_backend_effective"] == "wsl"
 
 
 @pytest.mark.parametrize(

@@ -1,5 +1,6 @@
 from __future__ import annotations
 # GPU Configuration - Auto-configured on import
+from steps.common.faiss_utils import add_with_required_ids, create_hnsw_id_index
 from steps.common.gpu_config import configure_gpu, get_device, clear_cache, print_memory_stats
 from steps.common.qdrant_client import build_qdrant_client
 
@@ -7,7 +8,7 @@ from steps.common.qdrant_client import build_qdrant_client
 from typing import Any, Dict, Optional
 from contextlib import nullcontext
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timezone
 import importlib.util
 from pathlib import Path
 import audioop
@@ -45,12 +46,42 @@ def _normalize_scene_id(value: Any) -> Optional[str]:
         return text or None
 
 
-def _build_qdrant_audio_payload(item: Dict[str, Any], *, source_path: str, faiss_id: int) -> Dict[str, Any]:
+def _resolve_run_id(item: Dict[str, Any], cfg: Optional[Dict[str, Any]] = None) -> Optional[str]:
+    for value in (
+        item.get("run_id"),
+        item.get("runtime_run_id"),
+        (cfg.get("run") or {}).get("id") if isinstance(cfg, dict) and isinstance(cfg.get("run"), dict) else None,
+        os.environ.get("GOODQ_RUN_ID"),
+    ):
+        if value is not None and str(value).strip():
+            return str(value).strip()
+    return None
+
+
+def _build_qdrant_audio_payload(
+    item: Dict[str, Any],
+    *,
+    source_path: str,
+    faiss_id: int,
+    embedding_id: str,
+    created_at: str,
+    cfg: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
     payload: Dict[str, Any] = {
         "source_path": source_path,
         "modality": "audio",
         "faiss_id": faiss_id,
+        "embedding_id": embedding_id,
+        "component": "audio_embed_clap",
+        "step": "audio_embed_clap",
+        "model": _CLAP_MODEL_ID,
+        "created_at": created_at,
+        "commit_ts_utc": created_at,
     }
+
+    run_id = _resolve_run_id(item, cfg)
+    if run_id:
+        payload["run_id"] = run_id
 
     scene_id = _normalize_scene_id(item.get("scene_id") or item.get("scene_index"))
     if scene_id:
@@ -73,6 +104,10 @@ def _build_qdrant_audio_payload(item: Dict[str, Any], *, source_path: str, faiss
     scene_index = item.get("scene_index")
     if scene_index is not None:
         payload["scene_index"] = scene_index
+
+    audio_backend_effective = item.get("audio_backend_effective")
+    if audio_backend_effective is not None:
+        payload["audio_backend_effective"] = audio_backend_effective
 
     return payload
 
@@ -478,29 +513,21 @@ def audio_embed_clap(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
         if os.path.isfile(index_path):
             index = faiss.read_index(index_path)
         else:
-            index = faiss.IndexHNSWFlat(feats.shape[1], 32)
-            index.hnsw.efConstruction = 200
-            index.hnsw.efSearch = 50
+            index = create_hnsw_id_index(faiss, feats.shape[1])
 
         # Stable 64-bit ID derived from content fingerprint
         h = _content_fingerprint(item)
-        try:
-            uid = np.array([int(h[:16], 16) % (2**63 - 1)], dtype='int64')
-            index.add_with_ids(feats.astype("float32"), uid)
-            faiss_id = int(uid[0])
-        except Exception as e:
-            logger.warning(
-                "audio_embed_clap operation fallback operation=%s source_path=%s exc_type=%s exc=%s",
-                "faiss.add_with_ids_to_add",
-                path,
-                type(e).__name__,
-                e,
-            )
-            index.add(feats.astype("float32"))
-            # best-effort: last ID is ntotal-1 but only valid for flat add
-            faiss_id = getattr(index, 'ntotal', 0) - 1
+        uid = np.array([int(h[:16], 16) % (2**63 - 1)], dtype='int64')
+        add_with_required_ids(index, feats.astype("float32"), uid)
+        faiss_id = int(uid[0])
         faiss.write_index(index, index_path)
         faiss_ok = True
+        try:
+            from steps.common.memory_commit_events import utc_now_iso
+
+            commit_ts_utc = utc_now_iso()
+        except Exception:
+            commit_ts_utc = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
         # Optional Qdrant dual-write
         qdrant_attempted = False
@@ -515,7 +542,14 @@ def audio_embed_clap(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
                 qdrant_ok = bool(q_client.upsert([{
                     "id": h,
                     "vector": feats[0].tolist(),
-                    "payload": _build_qdrant_audio_payload(item, source_path=path, faiss_id=faiss_id),
+                    "payload": _build_qdrant_audio_payload(
+                        item,
+                        source_path=path,
+                        faiss_id=faiss_id,
+                        embedding_id=h,
+                        created_at=commit_ts_utc,
+                        cfg=cfg,
+                    ),
                 }]))
                 if not qdrant_ok:
                     qdrant_reason = "upsert_failed"
@@ -585,7 +619,7 @@ def audio_embed_clap(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
             )
 
         try:
-            from steps.common.memory_commit_events import MemoryCommitEvent, emit_memory_commit_event, utc_now_iso
+            from steps.common.memory_commit_events import MemoryCommitEvent, emit_memory_commit_event
 
             scene_id = item.get("scene_id") or item.get("scene_index")
             if scene_id is not None and not isinstance(scene_id, str):
@@ -595,7 +629,7 @@ def audio_embed_clap(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
             emit_memory_commit_event(
                 cfg,
                 MemoryCommitEvent(
-                    ts_utc=utc_now_iso(),
+                    ts_utc=commit_ts_utc,
                     scene_id=scene_id,
                     video_id=str(item.get("video_id")) if item.get("video_id") is not None else None,
                     modality=str(item.get("modality") or "audio") or "audio",
@@ -613,7 +647,12 @@ def audio_embed_clap(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
                             "reason": embedding_reason,
                         },
                     },
-                    details={"faiss_id": faiss_id, "source_path": path},
+                    details={
+                        "faiss_id": faiss_id,
+                        "source_path": path,
+                        "run_id": _resolve_run_id(item, cfg),
+                        "created_at": commit_ts_utc,
+                    },
                 ),
             )
         except Exception as e:
@@ -624,6 +663,36 @@ def audio_embed_clap(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
                 type(e).__name__,
                 e,
             )
-        return {"clap_meta": {"status": "ok", "index_path": index_path, "faiss_id": faiss_id}}
+        clap_meta: Dict[str, Any] = {
+            "status": "ok",
+            "index_path": index_path,
+            "faiss_id": faiss_id,
+            "provenance_version": 1,
+            "component": "audio_embed_clap",
+            "step": "audio_embed_clap",
+            "model": _CLAP_MODEL_ID,
+            "embedding_id": h,
+            "commit_ts_utc": commit_ts_utc,
+            "faiss_committed": bool(faiss_ok),
+            "qdrant_attempted": bool(qdrant_attempted),
+            "qdrant_committed": bool(qdrant_ok),
+            "sqlite_map_attempted": bool(map_db),
+            "sqlite_map_committed": bool(map_ok),
+            "sqlite_embeddings_committed": bool(embedding_ok),
+        }
+        run_id = _resolve_run_id(item, cfg)
+        if run_id:
+            clap_meta["run_id"] = run_id
+        if qdrant_collection:
+            clap_meta["qdrant_collection"] = qdrant_collection
+        if qdrant_reason:
+            clap_meta["qdrant_reason"] = qdrant_reason
+        if map_reason:
+            clap_meta["sqlite_map_reason"] = map_reason
+        if embedding_reason:
+            clap_meta["sqlite_embeddings_reason"] = embedding_reason
+        if item.get("audio_backend_effective") is not None:
+            clap_meta["audio_backend_effective"] = item.get("audio_backend_effective")
+        return {"clap_meta": clap_meta}
     except Exception as e:
         return {"clap_meta": {"status": "error", "error": str(e)}}

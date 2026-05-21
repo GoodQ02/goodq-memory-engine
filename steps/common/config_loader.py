@@ -142,6 +142,22 @@ def _ensure_runtime_path_defaults(cfg: Dict[str, Any]) -> Dict[str, Any]:
         paths_cfg.setdefault("knowledge_graph_db", f"{base_db_dir}/knowledge_graph.db")
         paths_cfg.setdefault("faiss_dir", f"{base_db_dir}/faiss")
 
+    faiss_dir = paths_cfg.get("faiss_dir")
+    if isinstance(faiss_dir, str) and faiss_dir.strip():
+        base_faiss_dir = faiss_dir.rstrip("/\\")
+
+        def set_path_default(key: str, relative_path: str) -> None:
+            existing = paths_cfg.get(key)
+            if not (isinstance(existing, str) and existing.strip()):
+                paths_cfg[key] = f"{base_faiss_dir}/{relative_path}"
+
+        set_path_default("faiss_index_path", "text/faiss_text.index")
+        set_path_default("faiss_clip_path", "clip/faiss_clip.index")
+        set_path_default("faiss_dino_path", "dino/faiss_dino.index")
+        set_path_default("clip_id_map_db", "clip/clip_id_map.sqlite")
+        set_path_default("dino_id_map_db", "dino/dino_id_map.sqlite")
+        set_path_default("clap_id_map_db", "audio/clap_id_map.sqlite")
+
     log_dir = paths_cfg.get("log_dir")
     if isinstance(log_dir, str) and log_dir.strip():
         base_log_dir = log_dir.rstrip("/\\")
@@ -282,19 +298,19 @@ def load_configs(overrides: Dict[str, Any] | None = None) -> Dict[str, Any]:
     if not os.path.isfile(unified_config_path):
         raise FileNotFoundError(f"Canonical config not found: {unified_config_path}")
     
-    raw_cfg = _ensure_runtime_path_defaults(_normalize_paths(_read_yaml(unified_config_path)))
+    raw_cfg = _normalize_paths(_read_yaml(unified_config_path))
 
     local_config_path = os.path.join(base_dir, "config.local.yaml")
     if os.path.isfile(local_config_path):
         local_cfg = _normalize_paths(_read_yaml(local_config_path))
         if isinstance(local_cfg, dict):
             _deep_merge(raw_cfg, local_cfg)
-            raw_cfg = _ensure_runtime_path_defaults(raw_cfg)
-    
+
     # Apply overrides before validation
     if overrides:
         _deep_merge(raw_cfg, overrides)
-        raw_cfg = _ensure_runtime_path_defaults(raw_cfg)
+
+    raw_cfg = _ensure_runtime_path_defaults(raw_cfg)
     
     # Validate against Pydantic schema (optional - graceful degradation)
     try:

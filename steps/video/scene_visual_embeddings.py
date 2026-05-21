@@ -5,9 +5,11 @@ Integrates frame extraction, embedding generation, pooling, and vector storage.
 """
 from __future__ import annotations
 from typing import Any, Dict, List, Optional
+import hashlib
 import os
 import json
 import logging
+import sqlite3
 from pathlib import Path
 
 from steps.common.atomic_io import atomic_write_json
@@ -72,6 +74,158 @@ def _mirror_scene_vector_status(
         else:
             scene['qdrant_ok'] = bool(qdrant_ok is True)
             scene['faiss_ok'] = faiss_ok
+
+
+def _write_scene_faiss_points(
+    cfg: Dict[str, Any],
+    *,
+    points: List[Dict[str, Any]],
+    index_path: Optional[str],
+    id_map_db: Optional[str],
+    map_table: str,
+    modality: str,
+    dim: int,
+) -> Dict[str, Any]:
+    if not points:
+        return {"attempted": False, "committed": False, "reason": "no_points", "count": 0, "index_path": index_path}
+    if not isinstance(index_path, str) or not index_path.strip():
+        return {
+            "attempted": False,
+            "committed": False,
+            "reason": f"{modality}_faiss_index_unconfigured",
+            "count": 0,
+            "index_path": index_path,
+        }
+
+    try:
+        import faiss  # type: ignore
+        import numpy as np  # type: ignore
+
+        from steps.common.faiss_utils import add_with_required_ids, create_hnsw_id_index
+        from steps.common.memory import to_faiss_id, upsert_embedding
+
+        os.makedirs(os.path.dirname(index_path), exist_ok=True)
+        if os.path.isfile(index_path):
+            index = faiss.read_index(index_path)
+        else:
+            index = create_hnsw_id_index(faiss, dim)
+
+        vectors: List[List[float]] = []
+        faiss_ids: List[int] = []
+        provenance_rows: List[Dict[str, Any]] = []
+        for point in points:
+            if not isinstance(point, dict):
+                continue
+            vector = point.get("vector")
+            point_id = point.get("id")
+            payload = point.get("payload") if isinstance(point.get("payload"), dict) else {}
+            if point_id is None or not isinstance(vector, list) or len(vector) != dim:
+                continue
+            faiss_id = to_faiss_id(point_id)
+            vectors.append(vector)
+            faiss_ids.append(faiss_id)
+            source_path = payload.get("source_path") or payload.get("representative_frame") or payload.get("video_path") or ""
+            hash_hex = hashlib.sha256(str(point_id).encode("utf-8")).hexdigest()
+            provenance_rows.append(
+                {
+                    "faiss_id": faiss_id,
+                    "hash": hash_hex,
+                    "source_path": str(source_path or ""),
+                    "scene_id": str(payload.get("scene_id")) if payload.get("scene_id") is not None else None,
+                }
+            )
+
+        if not vectors:
+            return {
+                "attempted": True,
+                "committed": False,
+                "reason": "no_valid_vectors",
+                "count": 0,
+                "index_path": index_path,
+            }
+
+        np_vecs = np.array(vectors, dtype="float32")
+        np_ids = np.array(faiss_ids, dtype="int64")
+        try:
+            add_with_required_ids(index, np_vecs, np_ids)
+        except Exception as add_exc:
+            logger.warning(
+                "[PHASE6] FAISS scene vector write failed operation=%s modality=%s index_path=%s exc_type=%s exc=%s",
+                "add_with_ids",
+                modality,
+                index_path,
+                type(add_exc).__name__,
+                add_exc,
+            )
+            return {
+                "attempted": True,
+                "committed": False,
+                "reason": "add_with_ids_failed",
+                "count": 0,
+                "index_path": index_path,
+            }
+
+        faiss.write_index(index, index_path)
+
+        if isinstance(id_map_db, str) and id_map_db.strip():
+            os.makedirs(os.path.dirname(id_map_db), exist_ok=True)
+            conn = sqlite3.connect(id_map_db)
+            try:
+                with conn:
+                    conn.execute(
+                        f"CREATE TABLE IF NOT EXISTS {map_table} (faiss_id INTEGER PRIMARY KEY, hash TEXT, source_path TEXT, created_at TEXT)"
+                    )
+                    for row in provenance_rows:
+                        conn.execute(
+                            f"INSERT OR REPLACE INTO {map_table}(faiss_id, hash, source_path, created_at) VALUES (?,?,?,datetime('now'))",
+                            (row["faiss_id"], row["hash"], row["source_path"]),
+                        )
+            finally:
+                conn.close()
+
+        for row in provenance_rows:
+            try:
+                upsert_embedding(
+                    cfg,
+                    row["hash"],
+                    row["faiss_id"],
+                    row["source_path"],
+                    modality,
+                    scene_id=row["scene_id"],
+                )
+            except Exception as e:
+                logger.warning(
+                    "[PHASE6] FAISS scene provenance write failed operation=%s modality=%s scene_id=%s exc_type=%s exc=%s",
+                    "upsert_embedding",
+                    modality,
+                    row.get("scene_id"),
+                    type(e).__name__,
+                    e,
+                )
+
+        return {
+            "attempted": True,
+            "committed": True,
+            "reason": None,
+            "count": len(vectors),
+            "index_path": index_path,
+        }
+    except Exception as e:
+        logger.warning(
+            "[PHASE6] FAISS scene vector write failed operation=%s modality=%s index_path=%s exc_type=%s exc=%s",
+            "write_scene_faiss_points",
+            modality,
+            index_path,
+            type(e).__name__,
+            e,
+        )
+        return {
+            "attempted": True,
+            "committed": False,
+            "reason": f"{type(e).__name__}:{e}",
+            "count": 0,
+            "index_path": index_path,
+        }
 
 
 def _stage10_18_debug(*parts: Any) -> None:
@@ -367,6 +521,16 @@ def run_scene_visual_embeddings(item: Dict[str, Any], cfg: Dict[str, Any]) -> Di
         retrieval_enabled = retrieval_cfg.get('enable', True)
         clip_ok = True
         dino_ok = True
+        clip_points: List[Dict[str, Any]] = []
+        dino_points: List[Dict[str, Any]] = []
+        clip_faiss_result: Dict[str, Any] = {
+            "attempted": False,
+            "committed": False,
+            "reason": "retrieval_disabled",
+            "count": 0,
+            "index_path": None,
+        }
+        dino_faiss_result: Dict[str, Any] = dict(clip_faiss_result)
         if retrieval_enabled:
             logger.info("[PHASE6] Storing embeddings in Qdrant")
             host_value = _resolve_qdrant_host(cfg)
@@ -385,9 +549,14 @@ def run_scene_visual_embeddings(item: Dict[str, Any], cfg: Dict[str, Any]) -> Di
                 distance='Cosine'
             ))
             
-            clip_points = []
             for scene_id, embedding in pooled_clip.items():
                 point_id = f"clip_scene_{video_id}_{scene_id}"
+                frames = scene_frames.get(scene_id) if isinstance(scene_frames, dict) else None
+                representative_frame = None
+                if isinstance(frames, list) and frames:
+                    frame = frames[len(frames) // 2]
+                    if isinstance(frame, dict):
+                        representative_frame = frame.get("path")
                 clip_points.append({
                     "id": point_id,
                     "vector": embedding.tolist(),
@@ -395,7 +564,9 @@ def run_scene_visual_embeddings(item: Dict[str, Any], cfg: Dict[str, Any]) -> Di
                         "video_id": video_id,
                         "scene_id": scene_id,
                         "type": "scene",
-                        "model": "clip"
+                        "model": "clip",
+                        "video_path": video_path,
+                        "representative_frame": representative_frame,
                     }
                 })
             
@@ -453,9 +624,14 @@ def run_scene_visual_embeddings(item: Dict[str, Any], cfg: Dict[str, Any]) -> Di
                 distance='Cosine'
             ))
             
-            dino_points = []
             for scene_id, embedding in pooled_dino.items():
                 point_id = f"dino_scene_{video_id}_{scene_id}"
+                frames = scene_frames.get(scene_id) if isinstance(scene_frames, dict) else None
+                representative_frame = None
+                if isinstance(frames, list) and frames:
+                    frame = frames[len(frames) // 2]
+                    if isinstance(frame, dict):
+                        representative_frame = frame.get("path")
                 dino_points.append({
                     "id": point_id,
                     "vector": embedding.tolist(),
@@ -463,7 +639,9 @@ def run_scene_visual_embeddings(item: Dict[str, Any], cfg: Dict[str, Any]) -> Di
                         "video_id": video_id,
                         "scene_id": scene_id,
                         "type": "scene",
-                        "model": "dino"
+                        "model": "dino",
+                        "video_path": video_path,
+                        "representative_frame": representative_frame,
                     }
                 })
             
@@ -511,6 +689,66 @@ def run_scene_visual_embeddings(item: Dict[str, Any], cfg: Dict[str, Any]) -> Di
                         e,
                     )
                 logger.info(f"  [SYMBOL] Stored {len(dino_points)} DINO scene embeddings")
+
+            paths_cfg = (cfg.get("paths") or {}) if isinstance(cfg, dict) else {}
+            clip_faiss_result = _write_scene_faiss_points(
+                cfg,
+                points=clip_points,
+                index_path=paths_cfg.get("faiss_clip_path"),
+                id_map_db=paths_cfg.get("clip_id_map_db"),
+                map_table="clip_id_map",
+                modality="clip",
+                dim=512,
+            )
+            dino_faiss_result = _write_scene_faiss_points(
+                cfg,
+                points=dino_points,
+                index_path=paths_cfg.get("faiss_dino_path"),
+                id_map_db=paths_cfg.get("dino_id_map_db"),
+                map_table="dino_id_map",
+                modality="dino",
+                dim=768,
+            )
+            try:
+                from steps.common.memory_commit_events import MemoryCommitEvent, emit_memory_commit_events, utc_now_iso
+
+                ts_utc = utc_now_iso()
+                faiss_events: List[MemoryCommitEvent] = []
+                for modality, points, result in (
+                    ("clip", clip_points, clip_faiss_result),
+                    ("dino", dino_points, dino_faiss_result),
+                ):
+                    for p in points:
+                        payload = p.get("payload") if isinstance(p.get("payload"), dict) else {}
+                        faiss_events.append(
+                            MemoryCommitEvent(
+                                ts_utc=ts_utc,
+                                scene_id=str(payload.get("scene_id")) if payload.get("scene_id") is not None else None,
+                                video_id=str(payload.get("video_id")) if payload.get("video_id") is not None else None,
+                                modality=modality,
+                                model=modality,
+                                embedding_id=str(p.get("id")) if p.get("id") is not None else None,
+                                component=f"scene_visual_embeddings.{modality}.faiss",
+                                targets={
+                                    "faiss": {
+                                        "attempted": bool(result.get("attempted")),
+                                        "committed": bool(result.get("committed")),
+                                        "ref": result.get("index_path"),
+                                        "reason": result.get("reason"),
+                                        "count": result.get("count"),
+                                    }
+                                },
+                                details={"phase6_scene_faiss_parity": True},
+                            )
+                        )
+                emit_memory_commit_events(cfg, faiss_events)
+            except Exception as e:
+                logger.warning(
+                    "[PHASE6] Commit event emission failed operation=%s exc_type=%s exc=%s",
+                    "emit_memory_commit_events.faiss",
+                    type(e).__name__,
+                    e,
+                )
         
         # === STEP 6: Update Scene Manifest ===
         # Add embedding IDs to scene metadata
@@ -541,7 +779,12 @@ def run_scene_visual_embeddings(item: Dict[str, Any], cfg: Dict[str, Any]) -> Di
             if retrieval_enabled and phase6_vector_points_attempted > 0
             else 'not_attempted'
         )
-        phase6_faiss_ok: Any = 'not_attempted'
+        faiss_attempted = bool(clip_faiss_result.get("attempted") or dino_faiss_result.get("attempted"))
+        phase6_faiss_ok: Any = (
+            bool(clip_faiss_result.get("committed") and dino_faiss_result.get("committed"))
+            if faiss_attempted
+            else 'not_attempted'
+        )
         vector_commit_success = bool(phase6_qdrant_ok is True or phase6_qdrant_ok == 'not_attempted')
         scene_data['phase6_complete'] = vector_commit_success
         scene_data['phase6_status'] = 'complete' if vector_commit_success else 'failed'
@@ -557,6 +800,10 @@ def run_scene_visual_embeddings(item: Dict[str, Any], cfg: Dict[str, Any]) -> Di
             'vector_points_attempted': phase6_vector_points_attempted,
             'qdrant_ok': phase6_qdrant_ok,
             'faiss_ok': phase6_faiss_ok,
+            'faiss_clip_committed': bool(clip_faiss_result.get("committed")),
+            'faiss_dino_committed': bool(dino_faiss_result.get("committed")),
+            'faiss_clip_reason': clip_faiss_result.get("reason"),
+            'faiss_dino_reason': dino_faiss_result.get("reason"),
         }
         _mirror_scene_vector_status(
             scenes,
@@ -601,6 +848,10 @@ def run_scene_visual_embeddings(item: Dict[str, Any], cfg: Dict[str, Any]) -> Di
             "dino_committed": bool(dino_ok),
             "qdrant_ok": phase6_qdrant_ok,
             "faiss_ok": phase6_faiss_ok,
+            "faiss_clip_committed": bool(clip_faiss_result.get("committed")),
+            "faiss_dino_committed": bool(dino_faiss_result.get("committed")),
+            "faiss_clip_reason": clip_faiss_result.get("reason"),
+            "faiss_dino_reason": dino_faiss_result.get("reason"),
             "gpu_device": clip_device,
         }
     except Exception as e:

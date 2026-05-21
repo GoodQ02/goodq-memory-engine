@@ -6,6 +6,7 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from steps.common.memory import to_faiss_id
+from steps.common.faiss_utils import add_with_required_ids, create_hnsw_id_index
 from steps.common.memory_store import MemoryStore
 from steps.common.qdrant_client import QdrantClient, build_qdrant_client
 
@@ -184,9 +185,7 @@ class FaissMemory(MemoryStore):
         os.makedirs(os.path.dirname(self.index_path), exist_ok=True)
         if os.path.isfile(self.index_path):
             return faiss.read_index(self.index_path), faiss
-        index = faiss.IndexHNSWFlat(self.dim, 32)
-        index.hnsw.efConstruction = 200
-        index.hnsw.efSearch = 50
+        index = create_hnsw_id_index(faiss, self.dim)
         faiss.write_index(index, self.index_path)
         return index, faiss
 
@@ -211,7 +210,7 @@ class FaissMemory(MemoryStore):
             np_vecs = np.array(vecs, dtype="float32")
             if ids:
                 np_ids = np.array(ids, dtype="int64")
-                index.add_with_ids(np_vecs, np_ids)
+                add_with_required_ids(index, np_vecs, np_ids)
             else:
                 index.add(np_vecs)
             faiss.write_index(index, self.index_path)

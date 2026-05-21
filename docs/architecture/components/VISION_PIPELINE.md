@@ -1,11 +1,11 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-04-01 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-21 -->
 
 # Vision Processing Pipeline
 
-**Status:** ✅ Production operational  
-**Last Verified:** April 1, 2026  
+**Status:** ✅ Production operational
+**Last Verified:** May 21, 2026
 **Scope:** Keyframe processing during scene ingestion and the visual outputs consumed by Phase 6 and realtime KG updates
 
 ---
@@ -119,6 +119,11 @@ Those persisted outputs are then consumed by:
 
 **Current Runtime Truth**
 - DINO is operational
+- direct DINO writes to the configured DINO FAISS index and `dino_id_map`
+- direct DINO requires explicit-ID FAISS support; legacy non-IDMap indexes fail
+  visibly instead of falling back to position-based writes
+- generic embedding metadata uses modality `dino`, not a collapsed `image`
+  label
 - native crashes may still occur
 - ingestion now contains staged containment:
   - first attempt: normal GPU
@@ -135,6 +140,11 @@ Those persisted outputs are then consumed by:
 - `clip_meta`
 
 **Behavior**
+- direct CLIP writes to the configured CLIP FAISS index and `clip_id_map`
+- direct CLIP requires explicit-ID FAISS support; legacy non-IDMap indexes fail
+  visibly instead of falling back to position-based writes
+- generic embedding metadata uses modality `clip`, not a collapsed `image`
+  label
 - CLIP and DINO are committed during Phase 6a when successful
 
 ### 7. `tagger`
@@ -167,6 +177,7 @@ The visual stack contributes to these important scene-bundle fields:
 - `clip_id`
 - `dino_id`
 - `qdrant_ok`
+- `faiss_ok`
 
 When steps fail partially, the scene should still retain:
 - the true failing step
@@ -183,8 +194,16 @@ When steps fail partially, the scene should still retain:
 - scene-level `clip_id`
 - scene-level `dino_id`
 - `qdrant_ok`
+- `faiss_ok`
 - top-level `phase6_status`
 - top-level `phase6_complete`
+
+Phase 6a is launched through the visual embedding environment
+`goodq_image_caption`, which owns CLIP/DINO/Torch/FAISS dependencies. It writes
+Qdrant as the canonical vector surface and writes FAISS parity when configured.
+If FAISS parity cannot be written, the scene remains Qdrant-valid but the
+manifest must expose the FAISS reason instead of silently reporting success.
+Phase 6a also requires explicit-ID FAISS support for its parity writes.
 
 ### Phase 6b
 
@@ -237,8 +256,11 @@ On a healthy witness:
 1. `scene_XXXX.jpg` keyframes exist in the epoch processing tree.
 2. Scene bundles persist visual outputs in `scene_manifest.json`.
 3. `phase6_complete = true` and `qdrant_ok = true` for healthy episodes.
-4. `temporal_index.json` reflects the visual evidence rather than collapsing to placeholder summaries.
-5. Placeholder semantic junk does not dominate `top_entities`.
+4. `faiss_ok = true` only when configured CLIP/DINO FAISS parity writes used
+   explicit stable IDs.
+5. `temporal_index.json` reflects the visual evidence rather than collapsing to
+   placeholder summaries.
+6. Placeholder semantic junk does not dominate `top_entities`.
 
 ---
 

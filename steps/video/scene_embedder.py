@@ -1,7 +1,7 @@
 """
 Phase 6: Scene Embedder
 Generates CLIP and DINO embeddings for video scene frames.
-Runs on goodq_core (CUDA 12.1) with batch processing for GPU efficiency.
+Runs in the visual embedding environment with batch processing for GPU efficiency.
 """
 from __future__ import annotations
 from typing import Any, Dict, List, Optional, Tuple
@@ -78,7 +78,17 @@ def _load_clip_model():
         from transformers import CLIPModel, CLIPProcessor
         
         processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch16")
-        model = CLIPModel.from_pretrained("openai/clip-vit-base-patch16", use_safetensors=True).to(device).eval()
+        try:
+            model = CLIPModel.from_pretrained("openai/clip-vit-base-patch16", use_safetensors=True)
+        except Exception as safetensors_exc:
+            logger.warning(
+                "[PHASE6] CLIP safetensors load unavailable; falling back to cached default weights "
+                "exc_type=%s exc=%s",
+                type(safetensors_exc).__name__,
+                safetensors_exc,
+            )
+            model = CLIPModel.from_pretrained("openai/clip-vit-base-patch16")
+        model = model.to(device).eval()
         
         _MODELS["clip"].update({
             "model": model,

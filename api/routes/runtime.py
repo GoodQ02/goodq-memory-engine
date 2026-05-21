@@ -1436,9 +1436,25 @@ def _summarize_sentiment(payload: Any, *, scene_results_payload: Any = None) -> 
 
         for scene in scene_records:
             audio = scene.get("audio") if isinstance(scene.get("audio"), dict) else {}
-            transcript = audio.get("transcript") or audio.get("full_text") or scene.get("transcript") or scene.get("full_text")
+            transcript = (
+                audio.get("transcript")
+                or audio.get("full_text")
+                or audio.get("full_transcript")
+                or scene.get("transcript")
+                or scene.get("full_text")
+                or scene.get("full_transcript")
+            )
             segments = audio.get("segments") if isinstance(audio.get("segments"), list) else scene.get("segments")
-            if (isinstance(transcript, str) and transcript.strip()) or (isinstance(segments, list) and segments):
+            transcript_segments = (
+                audio.get("transcript_segments")
+                if isinstance(audio.get("transcript_segments"), list)
+                else scene.get("transcript_segments")
+            )
+            if (
+                (isinstance(transcript, str) and transcript.strip())
+                or (isinstance(segments, list) and segments)
+                or (isinstance(transcript_segments, list) and transcript_segments)
+            ):
                 transcript_count += 1
 
             audio_emotion = audio.get("audio_emotion") or audio.get("emotion") or scene.get("audio_emotion")
@@ -1485,8 +1501,12 @@ def _summarize_sentiment(payload: Any, *, scene_results_payload: Any = None) -> 
     for segment in segments:
         if not isinstance(segment, dict):
             continue
-        transcript = segment.get("transcript") or segment.get("full_text")
-        if (isinstance(transcript, str) and transcript.strip()) or isinstance(segment.get("segments"), list):
+        transcript = segment.get("transcript") or segment.get("full_text") or segment.get("full_transcript")
+        if (
+            (isinstance(transcript, str) and transcript.strip())
+            or isinstance(segment.get("segments"), list)
+            or (isinstance(segment.get("transcript_segments"), list) and segment.get("transcript_segments"))
+        ):
             transcript_count += 1
         audio_emotion = segment.get("audio_emotion")
         if isinstance(audio_emotion, str) and audio_emotion.strip():
@@ -2570,18 +2590,57 @@ def latest_audio_provenance_snapshot(limit: int = Query(default=8, ge=1, le=24))
     return _latest_audio_provenance_snapshot(limit=limit)
 
 
-def _faiss_count(path: str) -> int:
+def _sqlite_table_count(path: str, table: str) -> int:
+    if not path or not os.path.isfile(path):
+        return 0
+    try:
+        con = sqlite3.connect(path)
+        try:
+            row = con.execute(f'SELECT COUNT(*) FROM "{table}"').fetchone()
+        finally:
+            con.close()
+        return int(row[0] or 0) if row else 0
+    except Exception:
+        return 0
+
+
+def _sqlite_embedding_count(db_path: str, modalities: tuple[str, ...]) -> int:
+    if not db_path or not os.path.isfile(db_path):
+        return 0
+    try:
+        con = sqlite3.connect(db_path)
+        try:
+            placeholders = ",".join("?" for _ in modalities)
+            row = con.execute(
+                f"SELECT COUNT(*) FROM embeddings WHERE modality IN ({placeholders})",
+                modalities,
+            ).fetchone()
+        finally:
+            con.close()
+        return int(row[0] or 0) if row else 0
+    except Exception:
+        return 0
+
+
+def _positive_count(*values: int) -> int:
+    for value in values:
+        if value > 0:
+            return value
+    return 0
+
+
+def _faiss_count(path: str, *, fallback_count: int = 0) -> int:
+    if not os.path.isfile(path):
+        return 0
     try:
         import faiss  # type: ignore
     except Exception:
-        return 0
-    if not os.path.isfile(path):
-        return 0
+        return fallback_count
     try:
         idx = faiss.read_index(path)
         return int(getattr(idx, "ntotal", 0))
     except Exception:
-        return 0
+        return fallback_count
 
 
 @router.get("/api/memory/stats")
@@ -2589,11 +2648,34 @@ def get_memory_stats() -> Dict[str, Any]:
     """Lightweight memory stats across tiers (faiss/qdrant)."""
     paths = (_CFG.get("paths") or {}) if isinstance(_CFG, dict) else {}
     memory_cfg = (_CFG.get("memory") or {}) if isinstance(_CFG, dict) else {}
+    db_path = paths.get("db_path") or ""
 
     faiss_info = {
-        "text_vectors": _faiss_count(paths.get("faiss_index_path") or ""),
-        "clip_vectors": _faiss_count(paths.get("faiss_clip_path") or ""),
-        "audio_vectors": _faiss_count(paths.get("faiss_audio_path") or ""),
+        "text_vectors": _faiss_count(
+            paths.get("faiss_index_path") or "",
+            fallback_count=_sqlite_embedding_count(db_path, ("text", "audio_transcript", "frame_text")),
+        ),
+        "clip_vectors": _faiss_count(
+            paths.get("faiss_clip_path") or "",
+            fallback_count=_positive_count(
+                _sqlite_table_count(paths.get("clip_id_map_db") or "", "clip_id_map"),
+                _sqlite_embedding_count(db_path, ("clip",)),
+            ),
+        ),
+        "dino_vectors": _faiss_count(
+            paths.get("faiss_dino_path") or "",
+            fallback_count=_positive_count(
+                _sqlite_table_count(paths.get("dino_id_map_db") or "", "dino_id_map"),
+                _sqlite_embedding_count(db_path, ("dino",)),
+            ),
+        ),
+        "audio_vectors": _faiss_count(
+            paths.get("faiss_audio_path") or "",
+            fallback_count=_positive_count(
+                _sqlite_table_count(paths.get("clap_id_map_db") or "", "clap_id_map"),
+                _sqlite_embedding_count(db_path, ("audio",)),
+            ),
+        ),
     }
     audio_vector_semantics = {
         "faiss.audio_vectors": "faiss_index_count_only_not_current_run_qdrant_proof",

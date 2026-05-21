@@ -1979,7 +1979,7 @@
     const memory = state.data.memory || {};
     node.appendChild(panelHeader("Memory stores", "SQLite, KG, Qdrant, and FAISS projection", "read-only"));
     renderKv(node, memory.qdrant || {}, ["available", "collections"]);
-    renderKv(node, memory.faiss || {}, ["text_vectors", "clip_vectors", "audio_vectors"]);
+    renderKv(node, memory.faiss || {}, ["text_vectors", "clip_vectors", "dino_vectors", "audio_vectors"]);
     if (memory.audio_vector_semantics) {
       renderKv(node, memory.audio_vector_semantics, ["faiss.audio_vectors", "current_run_success_contract"]);
     }

@@ -286,6 +286,84 @@
           "direct CLIP writer exposes FAISS, Qdrant, SQLite map, and SQLite embedding commit fields",
           "direct DINO writer exposes FAISS, Qdrant, SQLite map, and SQLite embedding commit fields"
         ]
+      },
+      "post_repair_clean_probe_2026_05_21": {
+        "status": "completed",
+        "source_scope": "first_redacted_family_media_file",
+        "video_count": 1,
+        "scene_count": 1,
+        "runtime_run_id": "724376e0-d265-48e9-8891-1cf402ee7b6c",
+        "api_projection": {
+          "latest_evidence_scope": "configured_output_scene_results",
+          "database_exists": true,
+          "database_scenes": 1,
+          "pipeline_status": "idle",
+          "projection_gaps": "ok",
+          "temporal_scene_count": 1,
+          "scene_context_llm": "1/1 temporal segments",
+          "sentiment_segments_with_transcript": 1
+        },
+        "qdrant_counts": {
+          "clip": 2,
+          "dino": 2,
+          "text": 2,
+          "audio": 1
+        },
+        "faiss_indexes": {
+          "text": "IndexIDMap2 ntotal=2",
+          "clip": "IndexIDMap2 ntotal=2",
+          "dino": "IndexIDMap2 ntotal=2",
+          "audio": "IndexIDMap2 ntotal=1"
+        },
+        "memory_stats_faiss_counts": {
+          "text": 2,
+          "clip": 2,
+          "dino": 2,
+          "audio": 1
+        },
+        "faiss_id_maps": {
+          "clap": 1,
+          "clip": 2,
+          "dino": 2
+        },
+        "sqlite_memory_counts": {
+          "scenes": 1,
+          "segments": 24,
+          "embeddings": 7,
+          "memory_commit_events": 7,
+          "links": 53
+        },
+        "knowledge_graph_counts": {
+          "nodes": 13,
+          "edges": 24,
+          "events": 1,
+          "media_nodes": 1,
+          "node_media": 37
+        },
+        "evidence": {
+          "audio_vector_proof": "current_run_audio_vector_proven",
+          "audio_vector_proof_count": "1/1",
+          "audio_emotion": "raw_score_not_promoted",
+          "top_audio_emotion_score": "neutral 0.132",
+          "promotion_threshold": 0.5,
+          "sentiment": "present",
+          "transcript": "present"
+        },
+        "repair_applied": [
+          "api sentiment summary now counts temporal full_transcript as transcript evidence",
+          "scene-results fallback sentiment summary also counts full_transcript and transcript_segments",
+          "api memory stats fall back to persisted SQLite embedding/id-map counts when direct FAISS reading is unavailable and the FAISS index file exists"
+        ],
+        "operator_console": {
+          "proof_panel_evidence_coverage": "100%",
+          "observed_signals": "15/15",
+          "audio_proof_label": "Proven",
+          "faiss_audio_count_label": "Count present"
+        },
+        "known_followups": [
+          "standalone emotion_classify may remain skipped while unified audio emotion raw scores are visible",
+          "raw audio-emotion scores should stay visible without being promoted to hard labels below threshold"
+        ]
       }
     }
   },

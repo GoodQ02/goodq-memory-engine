@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import sqlite3
 import sys
 import types
 from pathlib import Path
@@ -978,7 +979,7 @@ def test_sentiment_summary_uses_scene_results_when_temporal_index_missing(monkey
                         "sentiment": {"label": "positive", "score": 0.82},
                     }
                 },
-                {"audio": {"full_text": "second scene", "emotion": "calm"}},
+                {"audio": {"full_transcript": "second scene", "emotion": "calm"}},
             ]
         },
     )
@@ -1025,6 +1026,7 @@ def test_sentiment_summary_surfaces_unpromoted_audio_emotion_scores(monkeypatch)
         {
             "segments": [
                 {
+                    "full_transcript": "transcript present but audio emotion was not promoted",
                     "audio_emotion": None,
                     "audio_emotion_scores": {
                         "angry": 0.1307,
@@ -1038,6 +1040,7 @@ def test_sentiment_summary_surfaces_unpromoted_audio_emotion_scores(monkeypatch)
         }
     )
 
+    assert summary["segments_with_transcript"] == 1
     assert summary["segments_with_audio_emotion"] == 0
     assert summary["top_audio_emotions"] == []
     assert summary["top_audio_emotion_score_signals"] == [
@@ -1049,6 +1052,52 @@ def test_sentiment_summary_surfaces_unpromoted_audio_emotion_scores(monkeypatch)
             "scope": "raw_score_not_promoted",
         }
     ]
+
+
+def test_faiss_count_falls_back_to_sqlite_count_when_faiss_unavailable(monkeypatch, tmp_path) -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    if str(repo_root) not in sys.path:
+        sys.path.insert(0, str(repo_root))
+
+    fake_config_loader = types.ModuleType("steps.common.config_loader")
+    fake_config_loader.load_configs = lambda overrides=None: {
+        "paths": {"data_root": "data", "db_path": "data/memory.db"},
+        "host": {},
+        "memory": {},
+        "llm": {},
+    }
+    monkeypatch.setitem(sys.modules, "steps.common.config_loader", fake_config_loader)
+
+    fake_memory_store = types.ModuleType("steps.common.memory_store")
+    fake_memory_store.normalize_memory_tier_list = lambda values: values
+    monkeypatch.setitem(sys.modules, "steps.common.memory_store", fake_memory_store)
+
+    fake_ingest_requests = types.ModuleType("api.utils.ingest_requests")
+    fake_ingest_requests.is_supported_ingest_path = lambda path: True
+    monkeypatch.setitem(sys.modules, "api.utils.ingest_requests", fake_ingest_requests)
+
+    fake_goodq_version = types.ModuleType("goodq_version")
+    fake_goodq_version.GOODQ_VERSION = "test"
+    monkeypatch.setitem(sys.modules, "goodq_version", fake_goodq_version)
+
+    runtime = _load_runtime_route_module(repo_root)
+    index_path = tmp_path / "audio.index"
+    index_path.write_bytes(b"placeholder index bytes")
+    map_path = tmp_path / "clap_id_map.sqlite"
+    con = sqlite3.connect(map_path)
+    try:
+        con.execute("CREATE TABLE clap_id_map (faiss_id INTEGER PRIMARY KEY, hash TEXT)")
+        con.executemany("INSERT INTO clap_id_map (faiss_id, hash) VALUES (?, ?)", [(1, "a"), (2, "b")])
+        con.commit()
+    finally:
+        con.close()
+
+    monkeypatch.setitem(sys.modules, "faiss", None)
+
+    fallback_count = runtime._sqlite_table_count(str(map_path), "clap_id_map")
+    assert fallback_count == 2
+    assert runtime._faiss_count(str(index_path), fallback_count=fallback_count) == 2
+    assert runtime._faiss_count(str(tmp_path / "missing.index"), fallback_count=2) == 0
 
 
 def test_audio_vector_proof_counts_current_run_qdrant_payloads(monkeypatch) -> None:

@@ -309,6 +309,38 @@ Follow-up preflight refresh on 2026-05-21:
 - Direct CLIP and DINO writers now return provenance-style commit fields for
   FAISS, Qdrant, SQLite id-map, and SQLite embedding writes.
 
+Follow-up clean `_02` ingestion probe on 2026-05-21:
+
+- Probe scope: first redacted FAMILY media file, `1` video, `1` scene.
+- Runtime run id: `724376e0-d265-48e9-8891-1cf402ee7b6c`.
+- Pipeline status after probe: idle.
+- `/api/status` reports `database.exists=true` and `database.scenes=1`.
+- `_02` Qdrant counts: CLIP `2`, DINO `2`, text `2`, audio `1`.
+- `_02` FAISS indexes all read as explicit-ID `IndexIDMap2`:
+  text `2`, CLIP `2`, DINO `2`, audio `1`.
+- FAISS id-map tables exist and are populated: CLAP `1`, CLIP `2`, DINO `2`.
+- SQLite memory has `1` scene, `24` segments, `7` embeddings, `7` memory commit
+  events, and `53` links.
+- Knowledge graph has `13` nodes, `24` edges, `1` event, `1` media node, and
+  `37` node-media links.
+- `/api/runs/latest/evidence` selects the configured output run, reports
+  projection gaps `ok`, temporal scope `1` scene, scene-context LLM `1 / 1`,
+  and current-run audio proof `Proven` for `1 / 1` CLAP-ok scenes.
+- `/api/memory/stats` reports count-only FAISS storage visibility for the same
+  scope: text `2`, CLIP `2`, DINO `2`, audio `1`.
+- API sentiment summary now counts temporal `full_transcript` as transcript
+  evidence. The same route now reports `segments_with_transcript=1` for this
+  run after the read-model fix.
+- API memory stats now fall back to persisted SQLite embedding/id-map counts
+  when the API environment cannot import FAISS, but only when the corresponding
+  FAISS index file exists.
+- Operator Console proof-panel refresh against port `30000` showed evidence
+  coverage `100%`, observed signals `15 / 15`, current-run audio proof
+  `Proven`, and FAISS audio count `Count present`.
+- Audio emotion is intentionally not promoted for this scene: raw neutral score
+  is about `0.132`, below the `0.5` promotion threshold, so the UI should show
+  raw/not-promoted evidence rather than a hard emotion label.
+
 ## Do Not Investigate First
 
 These are known historical/proving-ground echoes unless a current audit proves
@@ -340,6 +372,5 @@ they are active again:
    and read-only mode should be visible before broad ingestion.
 4. Start local LLM support with `scripts/start_vllm_servers.bat` and verify
    `http://127.0.0.1:38005/v1/models` before LLM-backed scene analysis.
-5. Confirm all configured FAISS targets in the target epoch are either absent
-   or explicit-ID indexes before broad ingestion.
-6. If the scene evidence is acceptable, run the first full source video.
+5. If the scene evidence remains acceptable in the Operator Console, run the
+   first full source video.

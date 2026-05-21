@@ -20,6 +20,25 @@ def test_config_loads_segmentation_activation_as_string():
     assert segmentation.get('activation') == 'off'
 
 
+def test_validated_config_preserves_llm_runtime_contract():
+    scripts_path = str(Path(__file__).resolve().parents[2] / "scripts")
+    inserted = False
+    if scripts_path not in sys.path:
+        sys.path.insert(0, scripts_path)
+        inserted = True
+    try:
+        result = load_configs({})
+    finally:
+        if inserted:
+            sys.path.remove(scripts_path)
+
+    llm = result.get("llm", {})
+    assert llm.get("vllm_url")
+    assert llm.get("ollama_url")
+    assert llm.get("vllm_model")
+    assert llm.get("features", {}).get("scene_context_analysis") is True
+
+
 def test_config_values():
     """Test that all critical settings have correct values"""
     print("=" * 70)

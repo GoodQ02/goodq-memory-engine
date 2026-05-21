@@ -1019,13 +1019,15 @@ def _build_kg_scene_data(
     for modality_data in (frame_payload, audio_payload):
         typed_entities = modality_data.get('ner_entities')
         fallback_entities = modality_data.get('entities')
+        detail_entities = modality_data.get('entity_details')
         if isinstance(typed_entities, list) and typed_entities:
             merged_entities.extend(typed_entities)
-            continue
         if isinstance(fallback_entities, list):
             merged_entities.extend(fallback_entities)
         elif isinstance(fallback_entities, str) and fallback_entities.strip():
             merged_entities.append(fallback_entities.strip())
+        if isinstance(detail_entities, list):
+            merged_entities.extend(detail_entities)
 
     return {
         'scene_id': scene_id,

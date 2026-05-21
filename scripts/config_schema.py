@@ -104,6 +104,11 @@ class RuntimeConfigSection(BaseModel):
 class LLMConfig(BaseModel):
     api_url: str
     model_id: str
+    features: Dict[str, Any] = Field(default_factory=dict)
+    vllm_url: Optional[str] = None
+    vllm_model: Optional[str] = None
+    ollama_url: Optional[str] = None
+    ollama_model: Optional[str] = None
 
 
 class TTSConfig(BaseModel):

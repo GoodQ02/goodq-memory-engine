@@ -176,6 +176,15 @@ def _sample_temporal_index() -> dict:
                     {"text": "trumpet", "type": "OBJECT", "source": "caption"},
                     {"text": "music", "type": "CONCEPT", "source": "tagger"},
                 ],
+                "entities": [
+                    {"text": "trumpet", "type": "OBJECT", "source": "caption"},
+                    {"text": "Jerry", "type": "PERSON", "source": "transcript_ner"},
+                ],
+                "dialogue_mentioned_entities": [
+                    {"text": "Jerry", "type": "PERSON", "source": "transcript_ner"}
+                ],
+                "mentioned_people": [{"text": "Jerry", "type": "PERSON"}],
+                "visible_people": [{"text": "anonymous_person_1", "type": "PERSON"}],
                 "scene_context_llm": {
                     "narrative_summary": "A young musician performs indoors during a dated family recording.",
                     "context_tags": ["performance", "music"],
@@ -300,6 +309,15 @@ def test_list_scenes_surfaces_persisted_audio_truth(monkeypatch: pytest.MonkeyPa
         {"text": "trumpet", "type": "OBJECT", "source": "caption"},
         {"text": "music", "type": "CONCEPT", "source": "tagger"},
     ]
+    assert scene.entities == [
+        {"text": "trumpet", "type": "OBJECT", "source": "caption"},
+        {"text": "Jerry", "type": "PERSON", "source": "transcript_ner"},
+    ]
+    assert scene.dialogue_mentioned_entities == [
+        {"text": "Jerry", "type": "PERSON", "source": "transcript_ner"}
+    ]
+    assert scene.mentioned_people == [{"text": "Jerry", "type": "PERSON"}]
+    assert scene.visible_people == [{"text": "anonymous_person_1", "type": "PERSON"}]
     assert scene.scene_context_llm == {
         "narrative_summary": "A young musician performs indoors during a dated family recording.",
         "context_tags": ["performance", "music"],
@@ -462,6 +480,15 @@ def test_full_timeline_surfaces_persisted_audio_truth(monkeypatch: pytest.Monkey
         {"text": "trumpet", "type": "OBJECT", "source": "caption"},
         {"text": "music", "type": "CONCEPT", "source": "tagger"},
     ]
+    assert segment.entities == [
+        {"text": "trumpet", "type": "OBJECT", "source": "caption"},
+        {"text": "Jerry", "type": "PERSON", "source": "transcript_ner"},
+    ]
+    assert segment.dialogue_mentioned_entities == [
+        {"text": "Jerry", "type": "PERSON", "source": "transcript_ner"}
+    ]
+    assert segment.mentioned_people == [{"text": "Jerry", "type": "PERSON"}]
+    assert segment.visible_people == [{"text": "anonymous_person_1", "type": "PERSON"}]
     assert segment.scene_context_llm == {
         "narrative_summary": "A young musician performs indoors during a dated family recording.",
         "context_tags": ["performance", "music"],

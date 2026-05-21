@@ -123,12 +123,23 @@ def _segment_representative_frame_reference(segment: dict) -> Any:
 
 
 def _kg_evidence(segment: dict) -> Dict[str, Any]:
-    entities = _list_dicts(segment.get("scene_present_entities"))
+    scene_present_entities = _list_dicts(segment.get("scene_present_entities"))
+    entities = _list_dicts(segment.get("entities"))
+    dialogue_mentioned_entities = _list_dicts(segment.get("dialogue_mentioned_entities"))
+    mentioned_people = _list_dicts(segment.get("mentioned_people"))
+    candidate_visible_people = _list_dicts(segment.get("candidate_visible_people"))
+    speaker_aligned_mentions = _list_dicts(segment.get("speaker_aligned_mentions"))
     relationships = _list_dicts(segment.get("relationships")) or _list_dicts(segment.get("kg_relationships"))
-    entity_count = len(entities)
+    entity_count = len(scene_present_entities) or len(entities) or len(dialogue_mentioned_entities) or len(mentioned_people)
     relationship_count = len(relationships)
     if relationship_count:
         relationship_state = "observed"
+    elif len(scene_present_entities):
+        relationship_state = "entity_presence_only"
+    elif len(dialogue_mentioned_entities) or len(mentioned_people):
+        relationship_state = "dialogue_entity_mentions_only"
+    elif len(candidate_visible_people) or len(speaker_aligned_mentions):
+        relationship_state = "candidate_identity_only"
     elif entity_count:
         relationship_state = "entity_presence_only"
     else:
@@ -136,6 +147,11 @@ def _kg_evidence(segment: dict) -> Dict[str, Any]:
     return {
         "source": "timeline_scene_entities",
         "entity_count": entity_count,
+        "scene_present_count": len(scene_present_entities),
+        "dialogue_mentioned_count": len(dialogue_mentioned_entities),
+        "mentioned_people_count": len(mentioned_people),
+        "candidate_visible_people_count": len(candidate_visible_people),
+        "speaker_aligned_mention_count": len(speaker_aligned_mentions),
         "relationship_count": relationship_count,
         "relationship_state": relationship_state,
     }
@@ -159,8 +175,20 @@ def _timeline_enrichment_context(segment: dict) -> Dict[str, Any]:
         "sentiment_label": segment.get("sentiment_label"),
         "sentiment_score": segment.get("sentiment_score"),
         "scene_present_entities": _list_dicts(segment.get("scene_present_entities")),
+        "entities": _list_dicts(segment.get("entities")),
+        "dialogue_mentioned_entities": _list_dicts(segment.get("dialogue_mentioned_entities")),
+        "mentioned_people": _list_dicts(segment.get("mentioned_people")),
+        "visible_people": _list_dicts(segment.get("visible_people")),
+        "candidate_visible_people": _list_dicts(segment.get("candidate_visible_people")),
+        "speaker_aligned_mentions": _list_dicts(segment.get("speaker_aligned_mentions")),
+        "transcript_entity_disagreements": _list_dicts(segment.get("transcript_entity_disagreements")),
         "relationships": _list_dicts(segment.get("relationships")) or _list_dicts(segment.get("kg_relationships")),
-        "kg_evidence": kg_evidence if kg_evidence["entity_count"] or kg_evidence["relationship_count"] else None,
+        "kg_evidence": kg_evidence if (
+            kg_evidence["entity_count"]
+            or kg_evidence["relationship_count"]
+            or kg_evidence["candidate_visible_people_count"]
+            or kg_evidence["speaker_aligned_mention_count"]
+        ) else None,
         "speaker_count": segment.get("speaker_count"),
         "dominant_speaker_id": segment.get("dominant_speaker_id"),
         "continuity_key": segment.get("continuity_key"),
@@ -249,6 +277,13 @@ def _lookup_timeline_enrichment(payload: dict) -> Dict[str, Any]:
                 "sentiment_label": context.get("sentiment_label"),
                 "sentiment_score": context.get("sentiment_score"),
                 "scene_present_entities": entities,
+                "entities": _list_dicts(segment.get("entities")),
+                "dialogue_mentioned_entities": _list_dicts(segment.get("dialogue_mentioned_entities")),
+                "mentioned_people": _list_dicts(segment.get("mentioned_people")),
+                "visible_people": _list_dicts(segment.get("visible_people")),
+                "candidate_visible_people": _list_dicts(segment.get("candidate_visible_people")),
+                "speaker_aligned_mentions": _list_dicts(segment.get("speaker_aligned_mentions")),
+                "transcript_entity_disagreements": _list_dicts(segment.get("transcript_entity_disagreements")),
                 "kg_relationships": relationships,
                 "kg_evidence": kg_evidence,
                 "context": context,
@@ -457,6 +492,7 @@ def _build_search_result(result: dict, modality: Optional[str] = None) -> Search
     provenance = _merge_dicts(enrichment.get("provenance"), result.get("provenance") if isinstance(result.get("provenance"), dict) else None)
     video_id = payload.get("video_id")
     clap_meta = enrichment.get("clap_meta")
+    safe_clap_meta = _sanitize_read_model_mapping(clap_meta) if isinstance(clap_meta, dict) else None
     audio_vector_proof = _search_audio_vector_proof(payload, enrichment)
     current_run_audio_proven = audio_vector_proof.get("status") == "current_run_audio_vector_proven"
     frame_projection = {
@@ -486,12 +522,19 @@ def _build_search_result(result: dict, modality: Optional[str] = None) -> Search
         objects=payload.get("objects") or enrichment.get("objects") or [],
         audio_emotion=enrichment.get("audio_emotion"),
         audio_emotion_scores=enrichment.get("audio_emotion_scores"),
-        clap_meta=clap_meta if isinstance(clap_meta, dict) else None,
+        clap_meta=safe_clap_meta,
         audio_vector_proof=audio_vector_proof,
         current_run_qdrant_audio_proven=current_run_audio_proven,
         current_run_audio_vector_proven=current_run_audio_proven,
         audio_qdrant_current_run_proven=current_run_audio_proven,
         scene_present_entities=enrichment.get("scene_present_entities") or [],
+        entities=enrichment.get("entities") or [],
+        dialogue_mentioned_entities=enrichment.get("dialogue_mentioned_entities") or [],
+        mentioned_people=enrichment.get("mentioned_people") or [],
+        visible_people=enrichment.get("visible_people") or [],
+        candidate_visible_people=enrichment.get("candidate_visible_people") or [],
+        speaker_aligned_mentions=enrichment.get("speaker_aligned_mentions") or [],
+        transcript_entity_disagreements=enrichment.get("transcript_entity_disagreements") or [],
         kg_relationships=enrichment.get("kg_relationships") or [],
         kg_evidence=enrichment.get("kg_evidence"),
         sentiment=sentiment_fields["sentiment"],

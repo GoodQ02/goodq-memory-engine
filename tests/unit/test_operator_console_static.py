@@ -64,6 +64,12 @@ def test_retrieval_console_uses_timeline_handoff_id_for_enriched_results() -> No
     assert "timeline_video_id" in app_js
     assert "retrievalTimelineVideoId" in app_js
     assert "scene_present_entities" in app_js
+    assert "dialogue_mentioned_entities" in app_js
+    assert "sceneEntityEvidenceBuckets" in app_js
+    assert "Dialogue-mentioned entities" in app_js
+    assert "not scene-present identity" in app_js
+    assert "Candidate visible people" in app_js
+    assert "Entity evidence" in app_js
     assert "kg_evidence" in app_js
     assert "KG / Entity Evidence" in app_js
 
@@ -132,8 +138,8 @@ def test_operator_console_surfaces_audio_emotion_distribution() -> None:
     app_js = (repo_root / "ui" / "operator_console_v1" / "static" / "js" / "app.js").read_text(encoding="utf-8")
     app_css = (repo_root / "ui" / "operator_console_v1" / "static" / "css" / "app.css").read_text(encoding="utf-8")
 
-    assert "app.css?v=20260520-retrieval-visual-proof-1" in index_html
-    assert "20260520-retrieval-visual-proof-1" in index_html
+    assert "app.css?v=20260520-entity-evidence-1" in index_html
+    assert "20260520-entity-evidence-1" in index_html
     assert "renderAudioEmotionDistribution" in app_js
     assert "Audio Emotion Distribution" in app_js
     assert "Audio classifier labels, latest temporal index" in app_js
@@ -210,7 +216,7 @@ def test_retrieval_console_surfaces_scene_context_lens() -> None:
     app_js = (repo_root / "ui" / "operator_console_v1" / "static" / "js" / "app.js").read_text(encoding="utf-8")
     app_css = (repo_root / "ui" / "operator_console_v1" / "static" / "css" / "app.css").read_text(encoding="utf-8")
 
-    assert "20260520-retrieval-visual-proof-1" in index_html
+    assert "20260520-entity-evidence-1" in index_html
     assert "appendRetrievalSceneContextLens" in app_js
     assert "Scene Context Lens" in app_js
     assert "Emotional arc" in app_js
@@ -228,7 +234,7 @@ def test_scene_inspector_surfaces_compact_evidence_summary() -> None:
     app_js = (repo_root / "ui" / "operator_console_v1" / "static" / "js" / "app.js").read_text(encoding="utf-8")
     app_css = (repo_root / "ui" / "operator_console_v1" / "static" / "css" / "app.css").read_text(encoding="utf-8")
 
-    assert "20260520-retrieval-visual-proof-1" in index_html
+    assert "20260520-entity-evidence-1" in index_html
     assert "appendSceneEvidenceSummary" in app_js
     assert "Scene Evidence Summary" in app_js
     assert "Meaning source" in app_js
@@ -248,7 +254,7 @@ def test_media_preview_links_visual_proof_to_scene_evidence_summary() -> None:
     app_js = (repo_root / "ui" / "operator_console_v1" / "static" / "js" / "app.js").read_text(encoding="utf-8")
     app_css = (repo_root / "ui" / "operator_console_v1" / "static" / "css" / "app.css").read_text(encoding="utf-8")
 
-    assert "20260520-retrieval-visual-proof-1" in index_html
+    assert "20260520-entity-evidence-1" in index_html
     assert "previewMeaningPayload" in app_js
     assert "appendPreviewEvidenceBridge" in app_js
     assert "Visual proof linked to selected scene evidence summary" in app_js
@@ -269,7 +275,7 @@ def test_retrieval_handoff_surfaces_shared_scene_lineage() -> None:
     app_js = (repo_root / "ui" / "operator_console_v1" / "static" / "js" / "app.js").read_text(encoding="utf-8")
     app_css = (repo_root / "ui" / "operator_console_v1" / "static" / "css" / "app.css").read_text(encoding="utf-8")
 
-    assert "20260520-retrieval-visual-proof-1" in index_html
+    assert "20260520-entity-evidence-1" in index_html
     assert "setRetrievalSceneLineage" in app_js
     assert "lineageMatchesScene" in app_js
     assert "appendSceneLineageBridge" in app_js
@@ -290,7 +296,7 @@ def test_retrieval_preview_surfaces_visual_proof_keyframe() -> None:
     app_js = (repo_root / "ui" / "operator_console_v1" / "static" / "js" / "app.js").read_text(encoding="utf-8")
     app_css = (repo_root / "ui" / "operator_console_v1" / "static" / "css" / "app.css").read_text(encoding="utf-8")
 
-    assert "20260520-retrieval-visual-proof-1" in index_html
+    assert "20260520-entity-evidence-1" in index_html
     assert "appendRetrievalVisualProof" in app_js
     assert "retrievalFrameEndpoint" in app_js
     assert "Retrieval result keyframe" in app_js

@@ -95,6 +95,17 @@ class _FakeDataLoader:
                         {"text": "Grandma", "type": "PERSON"},
                         {"text": "Kitchen", "type": "LOCATION"},
                     ],
+                    "entities": [
+                        {"text": "Grandma", "type": "PERSON", "source": "transcript_ner"},
+                        {"text": "Kitchen", "type": "LOCATION", "source": "caption"},
+                    ],
+                    "dialogue_mentioned_entities": [
+                        {"text": "Grandma", "type": "PERSON", "source": "transcript_ner"}
+                    ],
+                    "mentioned_people": [{"text": "Grandma", "type": "PERSON"}],
+                    "visible_people": [{"text": "anonymous_person_1", "type": "PERSON"}],
+                    "candidate_visible_people": [{"name": "anonymous_person_1"}],
+                    "speaker_aligned_mentions": [{"text": "Grandma", "type": "PERSON", "count": 1}],
                     "relationships": [
                         {
                             "type": "co_present",
@@ -166,12 +177,28 @@ def test_multimodal_search_enriches_hashed_results_from_timeline(monkeypatch) ->
             {"text": "Grandma", "type": "PERSON"},
             {"text": "Kitchen", "type": "LOCATION"},
         ],
+        "entities": [
+            {"text": "Grandma", "type": "PERSON", "source": "transcript_ner"},
+            {"text": "Kitchen", "type": "LOCATION", "source": "caption"},
+        ],
+        "dialogue_mentioned_entities": [
+            {"text": "Grandma", "type": "PERSON", "source": "transcript_ner"}
+        ],
+        "mentioned_people": [{"text": "Grandma", "type": "PERSON"}],
+        "visible_people": [{"text": "anonymous_person_1", "type": "PERSON"}],
+        "candidate_visible_people": [{"name": "anonymous_person_1"}],
+        "speaker_aligned_mentions": [{"text": "Grandma", "type": "PERSON", "count": 1}],
         "relationships": [
             {"type": "co_present", "entities": ["Grandma", "Kitchen"], "source": "scene_kg"}
         ],
         "kg_evidence": {
             "source": "timeline_scene_entities",
             "entity_count": 2,
+            "scene_present_count": 2,
+            "dialogue_mentioned_count": 1,
+            "mentioned_people_count": 1,
+            "candidate_visible_people_count": 1,
+            "speaker_aligned_mention_count": 1,
             "relationship_count": 1,
             "relationship_state": "observed",
         },
@@ -186,12 +213,28 @@ def test_multimodal_search_enriches_hashed_results_from_timeline(monkeypatch) ->
         {"text": "Grandma", "type": "PERSON"},
         {"text": "Kitchen", "type": "LOCATION"},
     ]
+    assert result.entities == [
+        {"text": "Grandma", "type": "PERSON", "source": "transcript_ner"},
+        {"text": "Kitchen", "type": "LOCATION", "source": "caption"},
+    ]
+    assert result.dialogue_mentioned_entities == [
+        {"text": "Grandma", "type": "PERSON", "source": "transcript_ner"}
+    ]
+    assert result.mentioned_people == [{"text": "Grandma", "type": "PERSON"}]
+    assert result.visible_people == [{"text": "anonymous_person_1", "type": "PERSON"}]
+    assert result.candidate_visible_people == [{"name": "anonymous_person_1"}]
+    assert result.speaker_aligned_mentions == [{"text": "Grandma", "type": "PERSON", "count": 1}]
     assert result.kg_relationships == [
         {"type": "co_present", "entities": ["Grandma", "Kitchen"], "source": "scene_kg"}
     ]
     assert result.kg_evidence == {
         "source": "timeline_scene_entities",
         "entity_count": 2,
+        "scene_present_count": 2,
+        "dialogue_mentioned_count": 1,
+        "mentioned_people_count": 1,
+        "candidate_visible_people_count": 1,
+        "speaker_aligned_mention_count": 1,
         "relationship_count": 1,
         "relationship_state": "observed",
     }
@@ -238,6 +281,7 @@ class _FakeAudioProofDataLoader(_FakeDataLoader):
         payload = super().load_temporal_index(video_id)
         payload["segments"][0]["clap_meta"] = {
             "status": "ok",
+            "index_path": r"L:\_DATA\GoodQ_Data\epochs\probe\faiss\audio.index",
             "run_id": "run-audio-proof",
             "qdrant_collection": "goodq_audio_epoch_probe",
             "scene_id": "hashed-scene-id",
@@ -276,6 +320,9 @@ def test_multimodal_search_projects_current_run_audio_proof(monkeypatch) -> None
             ],
         },
     )
+    search_module.MultimodalSearchRequest.model_rebuild(
+        _types_namespace={"List": List, "Optional": Optional, "dict": dict}
+    )
 
     request = search_module.MultimodalSearchRequest(query="kitchen", top_k=1)
 
@@ -283,6 +330,8 @@ def test_multimodal_search_projects_current_run_audio_proof(monkeypatch) -> None
 
     result = response.results[0]
     assert result.clap_meta["status"] == "ok"
+    assert result.clap_meta["index_path"] == "<local-only>"
+    assert result.clap_meta["raw_paths"] == "redacted"
     assert result.audio_vector_proof["status"] == "current_run_audio_vector_proven"
     assert result.audio_vector_proof["current_run_qdrant_proven"] == 1
     assert result.current_run_qdrant_audio_proven is True

@@ -132,6 +132,33 @@ def test_build_kg_scene_data_exposes_speaker_voice_signatures_for_realtime_stitc
     assert payload["speaker_voice_signature_meta"] == {"status": "ok", "emitted": 1}
 
 
+def test_build_kg_scene_data_carries_entity_details_into_realtime_kg_payload():
+    scene = {"index": 4, "start": 20.0, "end": 30.0}
+    audio = {
+        "entity_details": [
+            {"label": "Avery", "type": "PERSON", "score": 9.5, "sources": ["ner"]},
+        ],
+    }
+    frame = {
+        "entity_details": [
+            {"label": "Backyard", "type": "LOCATION", "score": 7.0, "sources": ["vision_semantic"]},
+        ],
+    }
+
+    payload = run_ingestion._build_kg_scene_data(
+        scene,
+        scene_id="scene_delta",
+        video_id="video_alpha",
+        frame_data=frame,
+        audio_data=audio,
+    )
+
+    assert payload["entities"] == [
+        {"label": "Backyard", "type": "LOCATION", "score": 7.0, "sources": ["vision_semantic"]},
+        {"label": "Avery", "type": "PERSON", "score": 9.5, "sources": ["ner"]},
+    ]
+
+
 def test_persist_frame_semantic_entities_promotes_non_object_vision_signal():
     item = {
         "caption": "Jerry stands in the apartment kitchen.",

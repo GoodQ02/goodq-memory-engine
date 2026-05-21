@@ -60,6 +60,10 @@ class SceneResponse(BaseModel):
     tags: List[str] = Field(default_factory=list)
     tag_details: List[Dict[str, Any]] = Field(default_factory=list)
     scene_present_entities: List[Dict[str, Any]] = Field(default_factory=list)
+    entities: List[Dict[str, Any]] = Field(default_factory=list)
+    dialogue_mentioned_entities: List[Dict[str, Any]] = Field(default_factory=list)
+    mentioned_people: List[Dict[str, Any]] = Field(default_factory=list)
+    visible_people: List[Dict[str, Any]] = Field(default_factory=list)
     scene_context_llm: Optional[Dict[str, Any]] = None
     scene_context_epistemic: Optional[Dict[str, Any]] = None
     scene_context_arbitration: Optional[Dict[str, Any]] = None
@@ -101,6 +105,13 @@ class SearchResult(BaseModel):
     current_run_audio_vector_proven: bool = False
     audio_qdrant_current_run_proven: bool = False
     scene_present_entities: List[Dict[str, Any]] = Field(default_factory=list)
+    entities: List[Dict[str, Any]] = Field(default_factory=list)
+    dialogue_mentioned_entities: List[Dict[str, Any]] = Field(default_factory=list)
+    mentioned_people: List[Dict[str, Any]] = Field(default_factory=list)
+    visible_people: List[Dict[str, Any]] = Field(default_factory=list)
+    candidate_visible_people: List[Dict[str, Any]] = Field(default_factory=list)
+    speaker_aligned_mentions: List[Dict[str, Any]] = Field(default_factory=list)
+    transcript_entity_disagreements: List[Dict[str, Any]] = Field(default_factory=list)
     kg_relationships: List[Dict[str, Any]] = Field(default_factory=list)
     kg_evidence: Optional[Dict[str, Any]] = None
     sentiment: Optional[Dict[str, Any]] = None
@@ -164,6 +175,10 @@ class TimelineSegment(BaseModel):
     tags: List[str] = Field(default_factory=list)
     tag_details: List[Dict[str, Any]] = Field(default_factory=list)
     scene_present_entities: List[Dict[str, Any]] = Field(default_factory=list)
+    entities: List[Dict[str, Any]] = Field(default_factory=list)
+    dialogue_mentioned_entities: List[Dict[str, Any]] = Field(default_factory=list)
+    mentioned_people: List[Dict[str, Any]] = Field(default_factory=list)
+    visible_people: List[Dict[str, Any]] = Field(default_factory=list)
     scene_context_llm: Optional[Dict[str, Any]] = None
     scene_context_epistemic: Optional[Dict[str, Any]] = None
     scene_context_arbitration: Optional[Dict[str, Any]] = None

@@ -2199,19 +2199,84 @@
     return Array.isArray(objects) ? objects.map((item) => safeString(item, "object")).filter(Boolean) : [];
   }
 
+  function evidenceList(source, key) {
+    return Array.isArray(source && source[key]) ? source[key] : [];
+  }
+
+  function entityEvidenceBuckets(source, fallback) {
+    const primary = source || {};
+    const secondary = fallback || {};
+    const fromEither = (key) => {
+      const primaryList = evidenceList(primary, key);
+      return primaryList.length ? primaryList : evidenceList(secondary, key);
+    };
+    const scenePresent = fromEither("scene_present_entities");
+    const dialogueMentioned = fromEither("dialogue_mentioned_entities");
+    const mentionedPeople = fromEither("mentioned_people");
+    const candidateVisible = fromEither("candidate_visible_people");
+    const visiblePeople = fromEither("visible_people");
+    const speakerAligned = fromEither("speaker_aligned_mentions");
+    const entities = fromEither("entities");
+    return {
+      scenePresent,
+      entities,
+      dialogueMentioned,
+      mentionedPeople,
+      candidateVisible,
+      visiblePeople,
+      speakerAligned,
+      total:
+        scenePresent.length +
+        dialogueMentioned.length +
+        mentionedPeople.length +
+        candidateVisible.length +
+        visiblePeople.length +
+        speakerAligned.length,
+    };
+  }
+
+  function sceneEntityEvidenceBuckets(segment) {
+    return entityEvidenceBuckets(segment, {});
+  }
+
+  function formatEntityLabel(item) {
+    if (!item || typeof item !== "object") return null;
+    const text = item.text || item.label || item.name || item.identity || item.entity;
+    const type = item.type || item.entity_type;
+    if (!valueObserved(text)) return null;
+    return type ? `${safeString(text, "entity")} (${safeString(type, "entity_type")})` : safeString(text, "entity");
+  }
+
+  function entityEvidenceSummaryNote(buckets) {
+    if (!buckets || buckets.total <= 0) return "entity evidence not exposed";
+    if (buckets.scenePresent.length) return `${buckets.scenePresent.length} scene-present entities`;
+    if (buckets.dialogueMentioned.length) return `${buckets.dialogueMentioned.length} dialogue mentions; not scene-present identity`;
+    if (buckets.mentionedPeople.length) return `${buckets.mentionedPeople.length} mentioned people; not scene-present identity`;
+    if (buckets.candidateVisible.length || buckets.visiblePeople.length) {
+      return `${buckets.candidateVisible.length + buckets.visiblePeople.length} candidate visible people`;
+    }
+    if (buckets.speakerAligned.length) return `${buckets.speakerAligned.length} speaker-aligned mention links`;
+    return `${buckets.total} entity evidence rows`;
+  }
+
   function retrievalEntityLabels(result) {
     const context = retrievalContext(result);
-    const entities = Array.isArray(result && result.scene_present_entities) && result.scene_present_entities.length
-      ? result.scene_present_entities
-      : context.scene_present_entities;
+    const buckets = entityEvidenceBuckets(result, context);
+    const entities = (
+      buckets.scenePresent.length
+        ? buckets.scenePresent
+        : buckets.dialogueMentioned.length
+          ? buckets.dialogueMentioned
+          : buckets.mentionedPeople.length
+            ? buckets.mentionedPeople
+            : buckets.candidateVisible.length
+              ? buckets.candidateVisible
+              : buckets.entities
+    );
     if (!Array.isArray(entities)) return [];
     return entities
       .map((item) => {
-        if (!item || typeof item !== "object") return null;
-        const text = item.text || item.label || item.name || item.identity;
-        const type = item.type || item.entity_type;
-        if (!valueObserved(text)) return null;
-        return type ? `${safeString(text, "entity")} (${safeString(type, "entity_type")})` : safeString(text, "entity");
+        return formatEntityLabel(item);
       })
       .filter(Boolean);
   }
@@ -2386,6 +2451,7 @@
     const percent = scorePercent(result);
     const objects = retrievalObjectLabels(result);
     const entities = retrievalEntityLabels(result);
+    const entityBuckets = entityEvidenceBuckets(result, context);
     const relationshipCount = retrievalRelationshipCount(result);
     const kgEvidence = retrievalKgEvidence(result);
     const audioProof = result && result.audio_vector_proof && typeof result.audio_vector_proof === "object"
@@ -2416,7 +2482,19 @@
     const kgObserved =
       provenanceMentions(result, "kg") ||
       provenanceMentions(result, "graph") ||
-      objectHasAny(context, ["entity_links", "kg_links", "knowledge_graph", "relationships", "scene_present_entities", "kg_evidence"]) ||
+      objectHasAny(context, [
+        "entity_links",
+        "kg_links",
+        "knowledge_graph",
+        "relationships",
+        "scene_present_entities",
+        "dialogue_mentioned_entities",
+        "mentioned_people",
+        "candidate_visible_people",
+        "speaker_aligned_mentions",
+        "kg_evidence",
+      ]) ||
+      entityBuckets.total > 0 ||
       entities.length > 0 ||
       relationshipCount > 0 ||
       valueObserved(kgEvidence.relationship_state);
@@ -2455,9 +2533,11 @@
         note: kgObserved
           ? (relationshipCount > 0
             ? `Relationships observed: ${relationshipCount}`
-            : (entities.length ? `Entities observed: ${entities.slice(0, 3).join(", ")}; relationship not asserted` : "KG evidence returned"))
+            : (entities.length
+              ? `${entityEvidenceSummaryNote(entityBuckets)}: ${entities.slice(0, 3).join(", ")}; relationship not asserted`
+              : entityEvidenceSummaryNote(entityBuckets)))
           : "No KG or entity evidence returned",
-        missing: "KG/entity evidence not exposed",
+        missing: "Entity evidence not exposed",
       },
       {
         label: "Speaker Continuity",
@@ -3424,7 +3504,7 @@
     const speakerIds = Array.isArray(segment.speaker_ids) ? segment.speaker_ids : [];
     const visiblePeople = Array.isArray(segment.candidate_visible_people) ? segment.candidate_visible_people : [];
     const alignedMentions = Array.isArray(segment.speaker_aligned_mentions) ? segment.speaker_aligned_mentions : [];
-    const sceneEntities = Array.isArray(segment.scene_present_entities) ? segment.scene_present_entities : [];
+    const entityBuckets = sceneEntityEvidenceBuckets(segment);
     const clapMeta = segment.clap_meta && typeof segment.clap_meta === "object" && !Array.isArray(segment.clap_meta)
       ? segment.clap_meta
       : {};
@@ -3461,9 +3541,9 @@
         note: `${speakerIds.length || 0} speaker ids; ${visiblePeople.length || 0} visible people`,
       },
       {
-        label: "Entities / KG",
-        observed: sceneEntities.length > 0 || valueObserved(epistemic.evidence_family),
-        note: sceneEntities.length ? `${sceneEntities.length} scene-present entities` : (epistemic.evidence_family ? `evidence family: ${safeString(epistemic.evidence_family, "evidence_family")}` : "entity evidence not exposed"),
+        label: "Entity evidence",
+        observed: entityBuckets.total > 0 || valueObserved(epistemic.evidence_family),
+        note: entityBuckets.total ? entityEvidenceSummaryNote(entityBuckets) : (epistemic.evidence_family ? `evidence family: ${safeString(epistemic.evidence_family, "evidence_family")}` : "entity evidence not exposed"),
       },
       {
         label: "Temporal hints",
@@ -3687,6 +3767,7 @@
     const memoryTags = stringList(segment.tags);
     const tagDetails = Array.isArray(segment.tag_details) ? segment.tag_details : [];
     const sceneEntities = Array.isArray(segment.scene_present_entities) ? segment.scene_present_entities : [];
+    const entityBuckets = sceneEntityEvidenceBuckets(segment);
     const sceneContext = segment.scene_context_llm && typeof segment.scene_context_llm === "object" && !Array.isArray(segment.scene_context_llm)
       ? segment.scene_context_llm
       : {};
@@ -3774,9 +3855,33 @@
     );
     appendSceneEvidenceRows(
       evidence,
-      "Scene entities",
+      "Scene-present entities",
       sceneEntities.map(formatSceneEntity).filter(Boolean).slice(0, 6),
       "No scene-present entities exposed"
+    );
+    appendSceneEvidenceRows(
+      evidence,
+      "Dialogue-mentioned entities",
+      entityBuckets.dialogueMentioned.map(formatSceneEntity).filter(Boolean).slice(0, 6),
+      "No dialogue-mentioned entities exposed"
+    );
+    appendSceneEvidenceRows(
+      evidence,
+      "Mentioned people",
+      entityBuckets.mentionedPeople.map(formatSceneEntity).filter(Boolean).slice(0, 6),
+      "No mentioned people exposed"
+    );
+    appendSceneEvidenceRows(
+      evidence,
+      "Candidate visible people",
+      entityBuckets.candidateVisible.concat(entityBuckets.visiblePeople).map(formatSceneEntity).filter(Boolean).slice(0, 6),
+      "No candidate visible people exposed"
+    );
+    appendSceneEvidenceRows(
+      evidence,
+      "Speaker-aligned mentions",
+      entityBuckets.speakerAligned.map(formatSceneEntity).filter(Boolean).slice(0, 6),
+      "No speaker-aligned mentions exposed"
     );
     detail.appendChild(evidence);
 
@@ -3794,7 +3899,7 @@
       alignedMentions.length > 0,
       memoryTags.length > 0,
       tagDetails.length > 0,
-      sceneEntities.length > 0,
+      entityBuckets.total > 0,
       valueObserved(segment.sentiment_label) || valueObserved(segment.sentiment_score),
       valueObserved(segment.audio_emotion) || audioScoreCount > 0,
       clapCommitObserved,
@@ -3854,7 +3959,10 @@
     appendSceneSignal(modalityList, "Aligned mentions", alignedMentions.length > 0, `${alignedMentions.length} mention links`);
     appendSceneSignal(modalityList, "Memory tags", memoryTags.length > 0, `${memoryTags.length} tags exposed`);
     appendSceneSignal(modalityList, "Tag provenance", tagDetails.length > 0, `${tagDetails.length} provenance rows`);
+    appendSceneSignal(modalityList, "Entity evidence", entityBuckets.total > 0, entityEvidenceSummaryNote(entityBuckets));
     appendSceneSignal(modalityList, "Scene-present entities", sceneEntities.length > 0, `${sceneEntities.length} entity rows`);
+    appendSceneSignal(modalityList, "Dialogue-mentioned entities", entityBuckets.dialogueMentioned.length > 0, `${entityBuckets.dialogueMentioned.length} dialogue rows`);
+    appendSceneSignal(modalityList, "Candidate visible people", entityBuckets.candidateVisible.length + entityBuckets.visiblePeople.length > 0, `${entityBuckets.candidateVisible.length + entityBuckets.visiblePeople.length} candidate rows`);
     appendSceneSignal(
       modalityList,
       "Sentiment analysis",
@@ -3923,6 +4031,12 @@
       "tags",
       "tag_details",
       "scene_present_entities",
+      "entities",
+      "dialogue_mentioned_entities",
+      "mentioned_people",
+      "candidate_visible_people",
+      "visible_people",
+      "speaker_aligned_mentions",
       "sentiment_label",
       "audio_emotion",
       "audio_emotion_scores",

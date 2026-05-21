@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE_AGENT_STATE -->
-<!-- DOC_LAST_VERIFIED: 2026-05-20 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-21 -->
 
 # GoodQ4All Current Agent State
 
@@ -52,7 +52,7 @@ Pre-clean audit found and cleared:
 - Prior filesystem epochs were removed except for a small
   `epoch_2025_12_22` log stub held open by the Qdrant Windows service.
 - Active API status on port `30000` reports `database.exists=true` and
-  `database.scenes=1` after the scene-first probe below.
+  `database.scenes=2` after the second small-scene probe below.
 
 Fresh local test epoch:
 
@@ -75,7 +75,7 @@ Preserved interrupted-run collections may also exist:
 These are evidence for the power-loss audit, not the target memory surface for
 the next run.
 
-## Latest Scene-First Probe
+## Latest Small-Scene Probes
 
 The first post-power-loss scene probe completed successfully in the fresh
 `epoch_2026_05_20_home_memory_clean_02` epoch.
@@ -112,8 +112,85 @@ High-value scene evidence surfaced:
 
 Known follow-up from the probe:
 
-- Entity extraction produced no KG entities for the first scene. Treat this as
-  a content/sequence follow-up, not a failed run.
+- Entity extraction produced no scene-present KG entities for the first scene.
+  Treat this as a content/sequence follow-up, not a failed run.
+
+The second small-scene probe then completed successfully against the same
+fresh epoch.
+
+Scope:
+
+- Source scope: same first redacted FAMILY media file.
+- Probe scope: `1` video, `2` scenes.
+- Runtime run id: `80160289-208d-4303-bd42-5cc0d36976ab`.
+- Pipeline status after probe: idle.
+
+Observed fresh collection counts after the second probe:
+
+- `goodq_clip_epoch_2026_05_20_home_memory_clean_02`: `2`
+- `goodq_dino_epoch_2026_05_20_home_memory_clean_02`: `2`
+- `goodq_text_epoch_2026_05_20_home_memory_clean_02`: `4`
+- `goodq_audio_epoch_2026_05_20_home_memory_clean_02`: `2`
+
+High-value second-probe evidence surfaced:
+
+- `/api/runs/latest/evidence` temporal index projection: `ok`, `2` scenes.
+- Current-run audio proof: `2 / 2` CLAP-ok scenes proven against run-matched
+  Qdrant payloads.
+- Text sentiment labels: present for both scenes.
+- Dialogue-mentioned entities, mentioned people, visible-person candidates,
+  and speaker-aligned mentions are now projected through timeline, scene, and
+  search read models.
+- Operator console scene evidence now distinguishes scene-present entities
+  from dialogue/candidate identity evidence instead of reporting all entity
+  evidence as not exposed.
+- Search read models redact local CLAP/FAISS paths at the top-level
+  `clap_meta` surface.
+
+Superseded follow-ups from the second probe:
+
+- Optional `scene_context_llm` and realtime KG entity resolution were retested
+  in the validation rerun below.
+- Scene-present entities remain stricter than dialogue/candidate evidence; do
+  not collapse those labels in the UI or API.
+
+## LLM and Realtime KG Validation Rerun
+
+A follow-up two-scene rerun completed on the fresh epoch after starting the
+existing local vLLM backend.
+
+Scope:
+
+- Source scope: same first redacted FAMILY media file.
+- Probe scope: `1` video, `2` scenes.
+- Runtime run id: `69b204f3-afb7-4812-9a43-0a1251107731`.
+- Pipeline status after probe: idle.
+- Local vLLM primary: healthy on `127.0.0.1:38005`.
+- Ollama fallback: offline; fallback chain is limited but primary LLM calls
+  work.
+- Control Agent: still disabled because it requires an injected `llm_client`;
+  this is separate from vLLM API health.
+
+Validated improvements:
+
+- `scene_context_llm`: present for `2 / 2` temporal segments.
+- Realtime KG update: no longer reports the old missing-key zero; the rerun
+  logged resolved entities for scene processing.
+- KG DB after the rerun contains person, location, and generic entity nodes
+  for the two-scene scope.
+- Separate Qdrant audio inventory shows the new runtime run id has `2`
+  run-tagged, provenance-capable audio points in the fresh audio collection.
+- `scripts/test_llm_client.py` now initializes from the validated config
+  surface and successfully talks to the vLLM primary.
+
+Known follow-up from the rerun:
+
+- `/api/runs/latest/evidence` can still mix the latest refreshed temporal
+  artifacts with an older standalone report-root run id. In that state strict
+  latest-run audio proof truthfully reports `No Current-Run Evidence`, while
+  `/api/runs/audio-proof/latest` shows the new run-tagged Qdrant payloads.
+  Fix latest-run indexing or direct CLI run metadata before relying on the
+  dashboard's strict latest-run audio proof after ad hoc reruns.
 
 ## Do Not Investigate First
 
@@ -141,6 +218,8 @@ they are active again:
    `reports/local_housekeeping/2026-05-20-memory-clean-start/` if working on
    this local machine.
 2. Confirm local config points to the fresh home-memory epoch.
-3. Inspect the operator console against the completed scene-first probe.
-4. If the scene evidence is acceptable, run the next small scene or first full
-   source video before broad ingestion.
+3. Fix latest-run indexing/direct CLI metadata so `/api/runs/latest/evidence`
+   selects the newest ad hoc scene rerun consistently.
+4. Inspect the operator console against the completed LLM/KG validation rerun.
+5. If the scene evidence is acceptable, decide whether to run the first full
+   source video or do one more UI pass for the latest-run proof scope banner.

@@ -902,6 +902,10 @@ def _iter_entity_items(value: Any) -> List[Dict[str, Any]]:
         if not isinstance(item, dict):
             continue
         raw_name = item.get("name") or item.get("text") or item.get("entity") or item.get("value")
+        name_from_label = False
+        if not raw_name and isinstance(item.get("label"), str):
+            raw_name = item.get("label")
+            name_from_label = True
         if not isinstance(raw_name, str) or not raw_name.strip():
             continue
         if not _is_valid_entity_token(raw_name):
@@ -909,10 +913,12 @@ def _iter_entity_items(value: Any) -> List[Dict[str, Any]]:
         normalized_name = normalize_entity_name(raw_name)
         if not normalized_name:
             continue
-        raw_type = item.get("type") or item.get("label") or item.get("entity_type")
+        raw_type = item.get("type") or item.get("entity_type")
+        if raw_type is None and not name_from_label:
+            raw_type = item.get("label")
         ent_type = raw_type.strip().upper() if isinstance(raw_type, str) and raw_type.strip() else None
         sources: List[str] = []
-        for key in ("source_step", "source_steps", "source", "source_modality", "source_modalities"):
+        for key in ("source_step", "source_steps", "source", "sources", "source_modality", "source_modalities"):
             source_value = item.get(key)
             if isinstance(source_value, str) and source_value.strip():
                 sources.append(source_value.strip().lower())
@@ -1063,7 +1069,12 @@ def _add_scene_entities(kg: KnowledgeGraph, media_id: int, scene_data: Dict[str,
         "links_added": 0,
         "edges_added": 0,
         "events_added": 0,
+        "entities_resolved": 0,
+        "person_entities_resolved": 0,
+        "location_entities_resolved": 0,
+        "generic_entities_resolved": 0,
     }
+    resolved_entity_node_ids: set[int] = set()
 
     def add_and_link(
         node_type: str,
@@ -1100,6 +1111,20 @@ def _add_scene_entities(kg: KnowledgeGraph, media_id: int, scene_data: Dict[str,
         for _ in range(repeat_count):
             kg.add_node(node_type=node_type, name=name, properties=props or {}, timestamp=ts)
             counts["nodes_added"] += 1
+
+    def mark_entity_resolved(node_id: Optional[int], node_type: str) -> None:
+        if node_id is None or node_id in resolved_entity_node_ids:
+            return
+        if node_type not in {"person", "location", "entity"}:
+            return
+        resolved_entity_node_ids.add(node_id)
+        counts["entities_resolved"] += 1
+        if node_type == "person":
+            counts["person_entities_resolved"] += 1
+        elif node_type == "location":
+            counts["location_entities_resolved"] += 1
+        else:
+            counts["generic_entities_resolved"] += 1
 
     scene_identifier = scene_data.get("scene_id")
     if not isinstance(scene_identifier, str) or not scene_identifier.strip():
@@ -1206,6 +1231,7 @@ def _add_scene_entities(kg: KnowledgeGraph, media_id: int, scene_data: Dict[str,
         if person_node_id is not None:
             person_node_ids.add(person_node_id)
             person_node_names[person_node_id] = identity_name
+            mark_entity_resolved(person_node_id, "person")
             kg.add_edge(
                 face_node_id,
                 person_node_id,
@@ -1239,6 +1265,7 @@ def _add_scene_entities(kg: KnowledgeGraph, media_id: int, scene_data: Dict[str,
             if node_id is not None:
                 person_node_ids.add(node_id)
                 person_node_names[node_id] = ent_name
+                mark_entity_resolved(node_id, "person")
                 bump_node_occurrences("person", ent_name, mentions, props=props)
             continue
         if node_type == "location":
@@ -1246,18 +1273,21 @@ def _add_scene_entities(kg: KnowledgeGraph, media_id: int, scene_data: Dict[str,
             node_id = add_and_link("location", ent_name, confidence=0.7, props=props)
             if node_id is not None:
                 location_node_ids.add(node_id)
+                mark_entity_resolved(node_id, "location")
                 bump_node_occurrences("location", ent_name, mentions, props=props)
             continue
         if not _is_meaningful_generic_entity(ent_name):
             continue
         node_id = add_and_link("entity", ent_name, confidence=0.7)
         if node_id is not None:
+            mark_entity_resolved(node_id, "entity")
             bump_node_occurrences("entity", ent_name, mentions)
 
     for location in _extract_location_labels(scene_data):
         node_id = add_and_link("location", location, confidence=0.7, props={"source": "scene_location"})
         if node_id is not None:
             location_node_ids.add(node_id)
+            mark_entity_resolved(node_id, "location")
 
     emotions = scene_data.get("emotions")
     if isinstance(emotions, dict):
@@ -1339,6 +1369,7 @@ def _add_scene_entities(kg: KnowledgeGraph, media_id: int, scene_data: Dict[str,
             if person_node_id is not None:
                 person_node_ids.add(person_node_id)
                 person_node_names[person_node_id] = speaker_clean
+                mark_entity_resolved(person_node_id, "person")
                 if speaker_node_id is not None:
                     kg.add_edge(
                         speaker_node_id,
@@ -1379,6 +1410,7 @@ def _add_scene_entities(kg: KnowledgeGraph, media_id: int, scene_data: Dict[str,
             if person_node_id is not None:
                 person_node_ids.add(person_node_id)
                 person_node_names[person_node_id] = speaker_id
+                mark_entity_resolved(person_node_id, "person")
                 if speaker_node_id is not None:
                     kg.add_edge(
                         speaker_node_id,
@@ -1732,6 +1764,7 @@ def update_kg_for_scene(
         "scene_id": scene_id,
         "video_id": canonical_video_id,
         "media_id": media_id,
+        "entities_resolved": int(ingest_counts.get("entities_resolved", 0) or 0),
         "ingest_counts": ingest_counts,
         "relationship_counts": rel_counts,
         "statistics": stats,

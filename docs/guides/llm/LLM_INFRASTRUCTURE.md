@@ -1,3 +1,7 @@
+<!-- DOC_BADGE: OPERATIONAL -->
+<!-- DOC_STATUS: ACTIVE_GUIDE -->
+<!-- DOC_LAST_VERIFIED: 2026-05-21 -->
+
 # GoodQ4All LLM Infrastructure
 
 ## Current Supported Contract
@@ -67,6 +71,14 @@ After installation, the supported service is:
 sudo systemctl status vllm-llama1b
 ```
 
+On Windows, prefer `scripts/start_vllm_servers.bat` for operator sessions. It
+starts the systemd service and a single named `goodq-vllm-keepalive` process so
+WSL does not tear down while the model warms up.
+
+On the primary workstation, the Windows Task Scheduler task
+`GoodQ4All vLLM WSL Startup` may call this wrapper at user logon. Treat that as
+a local machine fixture, not a portable repo requirement.
+
 ### Manual Recovery / Operator Reference
 
 Use:
@@ -75,6 +87,7 @@ Use:
 ### Windows Convenience Launcher
 
 Use `scripts/start_vllm_servers.bat` if you want a Windows wrapper for the current systemd-backed primary endpoint.
+Use `scripts/stop_vllm_servers.bat` to stop the service and clear the keepalive anchor.
 
 The older `scripts/start_llm_servers.bat` launcher has been retired with the direct-start multi-model chain it depended on.
 
@@ -85,7 +98,7 @@ The older raw-process helper `scripts/wsl/start_all_vllm.sh` has also been retir
 From Windows:
 
 ```powershell
-curl http://localhost:38005/v1/models
+curl http://127.0.0.1:38005/v1/models
 curl http://localhost:31434/v1/models
 ```
 
@@ -109,7 +122,7 @@ wsl -d <GOODQ_WSL_DISTRO> -- nvidia-smi
 ### vLLM Service Status
 
 ```bash
-wsl -d <GOODQ_WSL_DISTRO> -- sudo systemctl status vllm-llama1b
+wsl -d <GOODQ_WSL_DISTRO> -u root -- systemctl status vllm-llama1b
 ```
 
 ### vLLM Logs
@@ -121,7 +134,7 @@ wsl -d <GOODQ_WSL_DISTRO> -- journalctl -u vllm-llama1b -f
 ### Restart vLLM
 
 ```bash
-wsl -d <GOODQ_WSL_DISTRO> -- sudo systemctl restart vllm-llama1b
+wsl -d <GOODQ_WSL_DISTRO> -u root -- systemctl restart vllm-llama1b
 ```
 
 ### Restart WSL Networking
@@ -137,13 +150,13 @@ wsl --shutdown
 Check the service first:
 
 ```bash
-wsl -d <GOODQ_WSL_DISTRO> -- sudo systemctl status vllm-llama1b
+wsl -d <GOODQ_WSL_DISTRO> -u root -- systemctl status vllm-llama1b
 ```
 
 If needed:
 
 ```bash
-wsl -d <GOODQ_WSL_DISTRO> -- sudo systemctl restart vllm-llama1b
+wsl -d <GOODQ_WSL_DISTRO> -u root -- systemctl restart vllm-llama1b
 ```
 
 ### Connection Refused from Windows

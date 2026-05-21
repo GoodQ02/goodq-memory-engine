@@ -19,6 +19,9 @@ Runtime authority remains with:
 - isolated step execution: `cli/step_runner.py`
 - watchdog: `cli/watchdog.py`
 - WSL audio bridge: `scripts/wsl2_audio_bridge.py`, `wsl2_audio/`
+- WSL vLLM service helpers: `scripts/vllm_control.bat`,
+  `scripts/test_vllm_from_windows.ps1`,
+  `scripts/wsl/install_vllm_service.sh`
 
 ## Public Archive Policy
 
@@ -43,4 +46,5 @@ Use these docs first:
 - [`tests/README.md`](../../tests/README.md)
 - [`docs/CLI-REFERENCE.md`](../CLI-REFERENCE.md)
 - [`docs/guides/install/QUICKSTART.md`](../guides/install/QUICKSTART.md)
+- [`docs/guides/llm/VLLM_SYSTEMD_SETUP.md`](../guides/llm/VLLM_SYSTEMD_SETUP.md)
 - [`docs/reference/WSL_AUDIO_RUNTIME.md`](../reference/WSL_AUDIO_RUNTIME.md)

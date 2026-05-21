@@ -34,10 +34,13 @@ goto menu
 :status
 echo.
 echo [INFO] Service status
-wsl -d %GOODQ_WSL_DISTRO% -- bash -lc "systemctl is-active vllm-llama1b || true; systemctl is-active ollama || true"
+wsl -d %GOODQ_WSL_DISTRO% -u root -- bash -lc "systemctl is-active vllm-llama1b || true; systemctl is-active ollama || true"
 echo.
 echo [INFO] Listening ports (WSL)
 wsl -d %GOODQ_WSL_DISTRO% -- bash -lc "ss -lntp | grep -E ':38005|:38004|:31434' || true"
+echo.
+echo [INFO] WSL keepalive anchor
+wsl -d %GOODQ_WSL_DISTRO% -- bash -lc "pgrep -af '[g]oodq-vllm-keepalive' || true"
 echo.
 pause
 goto menu
@@ -53,19 +56,19 @@ goto menu
 :watch_vllm_systemd
 echo Launching log follower in a new window.
 echo Close that window to stop following logs.
-start "GoodQ vLLM (systemd)" wsl -d %GOODQ_WSL_DISTRO% -- bash -lc "sudo journalctl -u vllm-llama1b -f --no-pager"
+start "GoodQ vLLM (systemd)" wsl -d %GOODQ_WSL_DISTRO% -u root -- journalctl -u vllm-llama1b -f --no-pager
 goto menu
 
 :watch_vllm_file
 echo Launching log follower in a new window.
 echo Close that window to stop following logs.
-start "GoodQ vLLM (file)" wsl -d %GOODQ_WSL_DISTRO% -- bash -lc "tail -f ~/vllm_server/logs/llama-1b-speed.log"
+start "GoodQ vLLM (file)" wsl -d %GOODQ_WSL_DISTRO% -- bash -lc "tail -f ~/vllm_server/logs/vllm-service.log"
 goto menu
 
 :watch_ollama
 echo Launching log follower in a new window.
 echo Close that window to stop following logs.
-start "GoodQ Ollama (systemd)" wsl -d %GOODQ_WSL_DISTRO% -- bash -lc "sudo journalctl -u ollama -f --no-pager"
+start "GoodQ Ollama (systemd)" wsl -d %GOODQ_WSL_DISTRO% -u root -- journalctl -u ollama -f --no-pager
 goto menu
 
 :end

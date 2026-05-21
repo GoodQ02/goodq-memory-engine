@@ -32,6 +32,10 @@
     "llm": {
       "vllm_primary": "healthy",
       "vllm_base": "http://127.0.0.1:38005/v1",
+      "vllm_service": "systemd_enabled",
+      "vllm_model": "/home/jdben/models/Qwen2.5-0.5B-Instruct",
+      "wsl_keepalive": "goodq-vllm-keepalive",
+      "windows_logon_task": "GoodQ4All vLLM WSL Startup",
       "ollama_fallback": "offline",
       "fallback_chain": "limited_primary_healthy"
     }
@@ -39,8 +43,8 @@
   "clean_start": {
     "prior_pipeline_memory_is_disposable": true,
     "prior_home_movie_tests_are_disposable": true,
-    "fresh_epoch": "epoch_2026_05_21_family_full_clean_01",
-    "fresh_epoch_note": "validation/probe epoch, not an untouched full-home-movie run seed",
+    "fresh_epoch": "epoch_2026_05_21_family_full_clean_02",
+    "fresh_epoch_note": "current clean target for the next home-movie pass; previous _01 epoch contains validation/probe residue",
     "tracked_cleanup_summary": "docs/diagnostics/MEMORY_CLEAN_START_AUDIT_2026-05-20.md",
     "tracked_power_loss_summary": "docs/diagnostics/POWER_LOSS_INGESTION_AUDIT_2026-05-20.md",
     "qdrant_cleanup_manifest_dir": "reports/local_housekeeping/2026-05-20-memory-clean-start",
@@ -78,10 +82,10 @@
       "fresh_database_note": "current configured-output validation after FAISS memory-path repair"
     },
     "fresh_qdrant_collections": {
-      "clip": "goodq_clip_epoch_2026_05_21_family_full_clean_01",
-      "dino": "goodq_dino_epoch_2026_05_21_family_full_clean_01",
-      "text": "goodq_text_epoch_2026_05_21_family_full_clean_01",
-      "audio": "goodq_audio_epoch_2026_05_21_family_full_clean_01"
+      "clip": "goodq_clip_epoch_2026_05_21_family_full_clean_02",
+      "dino": "goodq_dino_epoch_2026_05_21_family_full_clean_02",
+      "text": "goodq_text_epoch_2026_05_21_family_full_clean_02",
+      "audio": "goodq_audio_epoch_2026_05_21_family_full_clean_02"
     },
     "preserved_interrupted_qdrant_collections": {
       "clip": "goodq_clip_epoch_2026_05_20_home_memory_clean",
@@ -249,8 +253,9 @@
         "CLIP and DINO direct writers keep distinct modalities, collections, indexes, ID maps, and SQLite embedding rows"
       ],
       "active_epoch_residue": {
-        "audio_faiss": "legacy_non_idmap_hnsw_from_prior_validation_probes",
-        "required_before_broad_run": "clean-start preflight or fresh epoch rollover so audio FAISS starts as an explicit-ID index"
+        "previous_validation_epoch": "epoch_2026_05_21_family_full_clean_01 audio FAISS was legacy non-idmap residue from prior probes",
+        "current_target_epoch": "epoch_2026_05_21_family_full_clean_02",
+        "required_before_broad_run": "confirm target FAISS files are absent or explicit-ID indexes"
       }
     }
   },

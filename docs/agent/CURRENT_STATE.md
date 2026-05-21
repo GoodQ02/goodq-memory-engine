@@ -22,6 +22,15 @@ test runs, is disposable and should not seed the next run.
 - Current profile from runtime config: `BASELINE`
 - WSL distro from runtime config: `Ubuntu-22.04`
 - Operator console: read-only UI, no ingestion/control authority
+- Local vLLM primary: `http://127.0.0.1:38005/v1`, systemd unit
+  `vllm-llama1b.service`, model
+  `/home/jdben/models/Qwen2.5-0.5B-Instruct`
+- WSL vLLM lifetime: Windows operator sessions should start through
+  `scripts/start_vllm_servers.bat`, which starts one named
+  `goodq-vllm-keepalive` anchor so WSL remains alive while vLLM serves.
+- Windows logon fixture: Task Scheduler task `GoodQ4All vLLM WSL Startup`
+  invokes the same wrapper with pauses disabled.
+- Ollama fallback: optional/offline unless started separately.
 
 ## Clean-Start Checkpoint
 
@@ -56,17 +65,19 @@ Pre-clean audit found and cleared:
 
 Fresh local validation epoch:
 
-- `epoch_2026_05_21_family_full_clean_01`
+- `epoch_2026_05_21_family_full_clean_02`
 
 The active validation epoch uses these Qdrant collections:
 
-- `goodq_clip_epoch_2026_05_21_family_full_clean_01`
-- `goodq_dino_epoch_2026_05_21_family_full_clean_01`
-- `goodq_text_epoch_2026_05_21_family_full_clean_01`
-- `goodq_audio_epoch_2026_05_21_family_full_clean_01`
+- `goodq_clip_epoch_2026_05_21_family_full_clean_02`
+- `goodq_dino_epoch_2026_05_21_family_full_clean_02`
+- `goodq_text_epoch_2026_05_21_family_full_clean_02`
+- `goodq_audio_epoch_2026_05_21_family_full_clean_02`
 
-This epoch contains validation/probe data. Do not treat it as an untouched
-full-home-movie run seed without a clean-start audit.
+This epoch is the current clean target for the next home-movie pass. A
+preflight check on 2026-05-21 showed the four target Qdrant collections green
+with `0` points. The previous `_01` epoch contains validation/probe residue and
+must not seed the broad run.
 
 Preserved interrupted-run collections may also exist:
 
@@ -270,14 +281,12 @@ Repair applied:
 - CLIP/DINO direct writers keep separate modalities, Qdrant collections, FAISS
   indexes, ID maps, and SQLite embedding rows.
 
-Known active-epoch residue:
+Known previous-epoch residue:
 
-- The active audio FAISS file currently reads as a legacy non-IDMap HNSW index
-  from the audio embedding environment. It is validation residue from earlier
-  probes, not an acceptable target for the next strict full-run FAISS parity
-  pass.
-- Before a broad home-movie run, perform a clean-start preflight or fresh epoch
-  rollover so audio FAISS starts as an explicit-ID index.
+- The previous `_01` audio FAISS file read as a legacy non-IDMap HNSW index from
+  earlier validation probes.
+- The current target is the fresh `_02` epoch. Before a broad home-movie run,
+  confirm all `_02` FAISS targets are absent or explicit-ID indexes.
 
 ## Do Not Investigate First
 
@@ -308,6 +317,8 @@ they are active again:
 3. Use the Operator Console Current Scope strip as the preflight check: API
    `30000`, run source, temporal scope, audio proof, selected browsing target,
    and read-only mode should be visible before broad ingestion.
-4. Confirm all configured FAISS targets in the target epoch are either absent
+4. Start local LLM support with `scripts/start_vllm_servers.bat` and verify
+   `http://127.0.0.1:38005/v1/models` before LLM-backed scene analysis.
+5. Confirm all configured FAISS targets in the target epoch are either absent
    or explicit-ID indexes before broad ingestion.
-5. If the scene evidence is acceptable, run the first full source video.
+6. If the scene evidence is acceptable, run the first full source video.

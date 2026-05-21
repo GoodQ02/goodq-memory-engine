@@ -229,9 +229,9 @@ script before using this file to justify execution, deletion, or promotion.
 | `scripts/smoke_phase_a.py` | Runtime Utility | Utility script for smoke phase a. | Manual Review | absolute path operations |
 | `scripts/start_api.ps1` | Runtime Utility | Manual PowerShell wrapper for the canonical local `api.server` bind surface. | Yes | environment mutation |
 | `scripts/start_llm_servers.bat` (retired) | Unclear/Obsolete | Historical Windows launcher removed after the older direct-start WSL multi-model chain drifted from the current systemd-backed vLLM contract. | No | absolute path operations |
-| `scripts/start_vllm_servers.bat` | Runtime Utility | GoodQ4All vLLM service startup wrapper for the current systemd-backed primary endpoint. | Yes | None detected |
+| `scripts/start_vllm_servers.bat` | Runtime Utility | GoodQ4All vLLM service startup wrapper for the current systemd-backed primary endpoint plus the WSL keepalive anchor. | Yes | None detected |
 | `scripts/status_vllm_servers.bat` | Runtime Utility | GoodQ4All vLLM Server Status Check | Yes | None detected |
-| `scripts/stop_vllm_servers.bat` | Runtime Utility | GoodQ4All vLLM Server Stop Script | Yes | None detected |
+| `scripts/stop_vllm_servers.bat` | Runtime Utility | GoodQ4All vLLM stop wrapper; stops the canonical service and clears the WSL keepalive anchor/stale vLLM processes. | Yes | None detected |
 | `scripts/sync_env_local.ps1` | Unclear/Obsolete | Utility script for sync env local. | No | None detected |
 | `scripts/sync_faiss_to_qdrant.py` | Runtime Utility | One-time helper to push FAISS vectors into Qdrant for long-term storage. | Yes | None detected |
 | `scripts/system_readiness_check.py` | Dev Utility | System readiness checker for the goodq4all stack. | Manual Review | absolute path operations |

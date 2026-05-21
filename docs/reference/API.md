@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-05-19 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-20 -->
 
 # GoodQ4All API Reference
 
@@ -35,6 +35,7 @@ Primary status and runtime summary endpoints defined in the active API surface:
 - `GET /api/wsl2-status`
 - `GET /api/runs/latest/preview`
 - `GET /api/runs/latest/evidence`
+- `GET /api/runs/audio-proof/latest`
 - `GET /api/memory/stats`
 - `GET /api/read/envelope`
 - `GET /api/system/videos`
@@ -47,16 +48,36 @@ Primary status and runtime summary endpoints defined in the active API surface:
 - `GET /api/control-recurrence/reports/{report_id}/markdown`
 - `GET /api/control-recurrence/reports/{report_id}/recommendations`
 
-`GET /api/runs/latest/preview` is a read-only projection over structured run artifacts under `reports/fresh_ingest_runs`.
+`GET /api/runs/latest/preview` is a read-only projection over indexed run artifacts under `reports/fresh_ingest_runs` plus the configured direct CLI output file when that output is newer than the indexed report roots.
 It does not revive the retired `/runs` compatibility shell, and it does not parse raw logs as a primary source of truth.
 If a clone uses a shared witness-report tree instead of a repo-local one, set
 `GOODQ_RUN_REPORTS_ROOT` to point the read-only run surfaces at that artifact root.
+The run index supports both wrapper-ledger roots with root `experiment_log.json`
+and standalone/direct roots that expose `output/scene_ingest_results.json`.
+Standalone roots are labeled with `scope=scene_ingest_results`; they are not
+presented as structured wrapper-ledger runs. Configured direct CLI output is
+labeled with `scope=configured_output_scene_results`; it represents the active
+runtime output, not a wrapper-ledger report root. Both
+`/api/runs/latest/preview` and `/api/runs/latest/evidence` expose `run_kind` and
+`scope` so UI consumers can explain missing wrapper-only artifacts without
+treating them as pipeline failures.
 
-`GET /api/runs/latest/evidence` is a sanitized read-only projection for UI
-observability. It summarizes the latest run's `step_runs.jsonl`, temporal index,
-scene ingest result, emotion/sentiment rollups, and graph/store status when
-those referenced artifacts exist. It omits raw paths, raw logs, stdout/stderr,
-and mutation controls.
+`GET /api/runs/latest/evidence` reports proof for the currently indexed latest
+run scope. Its `audio_vector_proof` object is the strict current-run
+CLAP/Qdrant verdict for that scope. When standalone scene results expose a
+unique `audio.clap_meta.run_id`, the projector uses that runtime provenance id
+for the Qdrant comparison instead of the report-folder slug. If
+`temporal_index.json` is not co-located with the report but a standalone
+`scene_ingest_results.json` exposes a valid `temporal_index_path`, the projector
+follows that explicit read-only pointer. If no temporal index is available, the
+`sentiment` object can still report transcript, audio-emotion, and sentiment
+counts from `scene_ingest_results.json` with `source=scene_ingest_results`.
+
+`GET /api/runs/audio-proof/latest` is a separate read-only Qdrant inventory. It
+lists run-tagged audio payloads with required provenance fields so operators can
+see that audio proof exists historically. It must not be used to turn the
+latest-run `audio_vector_proof` green unless the payload `run_id` matches the
+run being audited.
 
 `GET /api/memory/stats` exposes storage-tier counts. `faiss.audio_vectors` is a
 FAISS index count only and is not current-run Qdrant audio-vector proof. Use
@@ -79,9 +100,13 @@ Router-backed endpoint families mounted into the same process:
 The API process serves two read-only browser surfaces:
 
 - `/ui/operator_console_v1/` is the current operator console. It consumes the
-  read-only API and persisted artifacts for Flight Deck status, proof/evidence,
-  retrieval inspection, storage/runtime summaries, recurrence report readouts,
-  video inventory, and scene/timeline projections.
+  read-only API and persisted artifacts for the Current Scope strip, Flight
+  Deck status, proof/evidence, retrieval inspection, storage/runtime summaries,
+  recurrence report readouts, video inventory, scene/timeline projections, and
+  the compact audio provenance inventory drilldown. The Current Scope strip is
+  the top-level browser context: API base, latest run, run source, temporal
+  scope, strict audio proof, browsing target, selected scene, and read-only
+  mode.
 - `/ui/justification_v1/` is the literal Justification Channel envelope
   renderer.
 
@@ -100,11 +125,6 @@ than a browser shell.
 ## Control Recurrence API
 
 `/api/control-recurrence` is a read-only service window over the durable recurrence artifacts under `reports/control_recurrence/`.
-
-If recurrence reports live outside the public clone, set
-`GOODQ_CONTROL_RECURRENCE_REPORTS_ROOT` to point the API at that existing local
-artifact root. The API still only reads `index.json` and indexed relative
-artifacts; it does not generate or repair reports.
 
 - `GET /api/control-recurrence/reports` reads `reports/control_recurrence/index.json` and returns the parsed index, or a structured empty response when the index is missing.
 - `GET /api/control-recurrence/reports/latest` returns the newest indexed report entry by `created_or_updated_at` or indexed artifact mtime.
@@ -156,14 +176,6 @@ The active line no longer exposes the older compatibility shell that previously 
 - `POST /api/search/multimodal` is the canonical multimodal search surface.
 - `modalities=["audio"]` is a supported request path on the active line.
 - If `modalities` is omitted, the current default remains text + visual.
-- Search responses hydrate vector hits from the configured temporal indexes
-  when the returned `scene_id` can be matched. Hydrated fields include the
-  canonical `video_id`, timestamp, transcript, keywords, object labels,
-  sentiment fields when persisted, and a provenance note of
-  `hydrated_from: temporal_index`.
-- If the API is being pointed at a witness epoch that differs from the checked-in
-  default config, set `GOODQ_PROCESSING_ROOT` to that epoch's `processing`
-  directory so search hydration and run evidence inspect the same artifacts.
 - `GET /api/videos/{video_id}/scenes/{scene_id}/similar` is live and resolves similar scenes from persisted multimodal scene memory.
 - Similar-scene retrieval now uses text, visual, and audio signals where available instead of returning an empty fallback path.
 - Audio-vector coverage in API and retrieval read models must follow
@@ -171,6 +183,11 @@ The active line no longer exposes the older compatibility shell that previously 
   vector success requires `clap_meta.status == ok` plus a Qdrant audio payload
   with matching `run_id` and required provenance fields. A matching `scene_id`
   alone is not current-run proof.
+- Active CLAP scene outputs now echo safe provenance fields in
+  `audio.clap_meta` when available: `run_id`, `embedding_id`, `commit_ts_utc`,
+  `qdrant_attempted`, `qdrant_committed`, and `qdrant_collection`. These fields
+  help link scene artifacts to the Qdrant inventory but still do not replace
+  the strict current-run proof check above.
 
 ## System Mutation Policy
 

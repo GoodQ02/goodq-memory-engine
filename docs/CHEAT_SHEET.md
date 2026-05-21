@@ -68,9 +68,9 @@ Only valid when the API process is running:
 ## UI Boundary
 
 GoodQ4All ships a local read-only operator console at
-`ui/operator_console_v1/`. Use it for Flight Deck status, proof/evidence,
-retrieval inspection, storage/runtime summaries, recurrence readouts, video
-inventory, and scene/timeline projections.
+`ui/operator_console_v1/`. Use it for the Current Scope strip, Flight Deck
+status, proof/evidence, retrieval inspection, storage/runtime summaries,
+recurrence readouts, video inventory, and scene/timeline projections.
 
 This console is observer-only: no ingestion trigger, no reindex, no config
 healing, no persistence mutation, no report generation, and no ControlAgent

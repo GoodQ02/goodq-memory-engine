@@ -40,7 +40,25 @@ python -m api.server
 This surface is read-only. It does not trigger ingestion, reindexing, config
 healing, report generation, or ControlAgent behavior.
 
-Current panels cover runtime summary, latest run, recurrence latest/trend,
-step-run evidence, temporal/emotion rollups, graph/store truth, engine
-diagnostics, GPU/WSL/queue counters, memory stores, video inventory, selected
-timeline, and Justification Channel handoff.
+Current panels cover the Current Scope strip, Flight Deck orientation, runtime
+summary, latest indexed/direct run, recurrence latest/trend, step-run evidence,
+temporal/emotion rollups, graph/store truth, engine diagnostics, GPU/WSL/queue
+counters, memory stores, video inventory, selected timeline, scene evidence
+summaries, media preview, retrieval handoff, and Justification Channel handoff.
+
+The Current Scope strip is the first operator context surface. It shows the
+active API base, latest run id, run source, temporal scene scope, strict audio
+proof state, currently browsed video/timeline, selected scene, and read-only
+mode. Run source labels are intentionally conservative: configured direct CLI
+output appears as `Direct CLI Output`, standalone scene results appear as
+`Standalone Scene Probe`, and wrapper-ledger report roots remain separate.
+
+Audio proof is intentionally split:
+
+- latest run evidence uses `/api/runs/latest/evidence` and reports strict
+  current-run CLAP/Qdrant proof for the selected indexed run scope
+- audio provenance inventory uses `/api/runs/audio-proof/latest` and shows
+  run-tagged Qdrant audio payloads as historical inventory until a row matches
+  the selected run
+
+Do not interpret the inventory drilldown as current-run proof by itself.

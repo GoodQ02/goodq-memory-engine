@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE_NOTE -->
-<!-- DOC_LAST_VERIFIED: 2026-05-19 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-21 -->
 
 # GoodQ4All Operator Console v1
 
@@ -11,9 +11,30 @@ gaining execution authority.
 
 This is not a polished end-user product UI. It is an operator inspection layer.
 
+## Current Scope
+
+The first console surface is the Current Scope strip. It is the read-only
+preflight context for the page and prevents operators from confusing runtime
+scope with selected browsing scope.
+
+The Current Scope strip contains:
+
+- API base and environment label.
+- Latest run id.
+- Run source, such as `Direct CLI Output` or `Standalone Scene Probe`.
+- Temporal scene scope.
+- Strict current-run audio proof state.
+- Currently browsed video or timeline target.
+- Selected scene.
+- Read-only mode.
+
+The strip must never promote inventory-only evidence into current-run proof.
+If strict proof is unavailable, it should say so instead of borrowing a
+historical Qdrant inventory signal.
+
 ## Flight Deck
 
-The first console surface is the Flight Deck. It is a read-only cockpit view
+The next console surface is the Flight Deck. It is a read-only cockpit view
 that sits above the older overview cards and makes the operating model visible
 before the data drilldowns.
 

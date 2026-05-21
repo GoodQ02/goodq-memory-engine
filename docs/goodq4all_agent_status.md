@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: PUBLIC_RELEASE_STATUS -->
-<!-- DOC_LAST_VERIFIED: 2026-05-19 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-21 -->
 
 # GoodQ4All Agent Status
 
@@ -19,7 +19,10 @@ summary.
 - API posture: local read/inspection surface on loopback, not a hosted public
   service.
 - UI posture: read-only Operator Console v1 plus the Justification Channel,
-  both served locally under `/ui/*`; no UI execution authority.
+  both served locally under `/ui/*`; no UI execution authority. Operator
+  Console v1 opens with a Current Scope strip for API base, latest run, run
+  source, temporal scope, strict audio proof, browsing target, selected scene,
+  and read-only mode.
 
 ## Operator Boundaries
 

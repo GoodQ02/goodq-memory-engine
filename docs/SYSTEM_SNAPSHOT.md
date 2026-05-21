@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: PUBLIC_RELEASE_SNAPSHOT -->
-<!-- DOC_LAST_VERIFIED: 2026-05-19 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-21 -->
 
 # System Snapshot
 
@@ -25,7 +25,9 @@ state should be copied into a public release.
 - Watchdog/import inbox: supported automation surface for local file intake.
 - API: local read/inspection surface, not a public cloud service.
 - Operator Console v1: local read-only inspection cockpit served under
-  `/ui/operator_console_v1/`.
+  `/ui/operator_console_v1/`, with a Current Scope preflight strip for API
+  base, latest run, run source, temporal scope, strict audio proof, browsing
+  target, selected scene, and read-only mode.
 - Justification Channel: local read-only envelope renderer served under
   `/ui/justification_v1/`.
 - Durable evidence: scene manifests, temporal indexes, run summaries, SQLite

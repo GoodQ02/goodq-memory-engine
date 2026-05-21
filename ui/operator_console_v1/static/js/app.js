@@ -42,6 +42,7 @@
     queue: "/api/queue",
     run: "/api/runs/latest/preview",
     runEvidence: "/api/runs/latest/evidence",
+    audioProvenance: "/api/runs/audio-proof/latest",
     memory: "/api/memory/stats",
     storage: "/api/storage/summary",
     recurrence: "/api/control-recurrence/reports/latest",
@@ -66,11 +67,45 @@
     UNKNOWN: { label: "Unknown", kind: "unknown" },
   });
 
+  const RUN_SCOPE_GRAMMAR = Object.freeze({
+    configured_output_scene_results: {
+      label: "Direct CLI Output",
+      kind: "ok",
+      note: "configured output file; active runtime evidence",
+    },
+    scene_ingest_results: {
+      label: "Standalone Scene Probe",
+      kind: "historical",
+      note: "direct scene output; wrapper ledger may be absent",
+    },
+    standalone_scene_results: {
+      label: "Standalone Scene Probe",
+      kind: "historical",
+      note: "direct scene output; wrapper ledger may be absent",
+    },
+    wrapper_report_root: {
+      label: "Wrapper Report Root",
+      kind: "ok",
+      note: "orchestrated report artifact root",
+    },
+    structured_run: {
+      label: "Structured Run",
+      kind: "info",
+      note: "latest structured run projection",
+    },
+  });
+
   const diagnosticEndpointNames = new Set(["engines", "gpu", "wsl", "queue"]);
   const optionalEndpointNames = new Set(["envelope"]);
   const endpointTimeoutMs = {
+    status: 30000,
+    health: 30000,
     engines: 25000,
     wsl: 18000,
+    run: 30000,
+    runEvidence: 30000,
+    audioProvenance: 25000,
+    memory: 30000,
     retrieval: 30000,
   };
   const IMPORT_INBOX_LABEL = "<GOODQ_DATA_ROOT>\\GoodQ_Data\\import_inbox";
@@ -334,6 +369,40 @@
     }
   }
 
+  function runScopeDescriptor(evidenceRun, run) {
+    const scope = String((evidenceRun && evidenceRun.scope) || (run && run.scope) || "").trim();
+    const runKind = String((evidenceRun && evidenceRun.run_kind) || (run && run.run_kind) || "").trim();
+    const descriptor = RUN_SCOPE_GRAMMAR[scope] || RUN_SCOPE_GRAMMAR[runKind] || RUN_SCOPE_GRAMMAR.structured_run;
+    if (!scope && !runKind && !(run && run.available)) {
+      return {
+        label: "No Run Selected",
+        kind: "unknown",
+        note: "latest run evidence not observed",
+        raw: "",
+      };
+    }
+    return {
+      label: descriptor.label,
+      kind: descriptor.kind,
+      note: descriptor.note,
+      raw: scope || runKind || "structured_run",
+    };
+  }
+
+  function appendScopeItem(container, label, value, kind, note, title) {
+    const item = document.createElement("div");
+    item.className = `scope-item ${kind || "unknown"}`;
+    item.setAttribute("data-testid", `scope-item-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`);
+    if (title) item.title = title;
+    const text = document.createElement("div");
+    appendText(text, "span", label, "scope-label");
+    appendText(text, "strong", safeString(value, label), "scope-value");
+    if (note) appendText(text, "small", note, "scope-note");
+    item.appendChild(text);
+    item.appendChild(makeStatusDot(kind || "unknown", `${label}: ${safeString(value, label)}`));
+    container.appendChild(item);
+  }
+
   function flightChip(name, label, kind) {
     const chip = document.createElement("span");
     chip.className = `flight-chip ${kind || statusKind(label)}`;
@@ -403,6 +472,27 @@
     };
   }
 
+  function projectionGapNote(projection) {
+    if (!projection || typeof projection !== "object") return "projection summary not exposed";
+    const missing = numberValue(projection.missing_projection_count);
+    const fields = projection.fields && typeof projection.fields === "object" ? projection.fields : {};
+    const fieldNotes = ["visual_caption", "sentiment", "clap_meta"]
+      .map((field) => {
+        const row = fields[field] || {};
+        const count = numberValue(row.missing_from_temporal);
+        return count ? `${field}: ${count}` : null;
+      })
+      .filter(Boolean);
+    if (projection.status === "gap_detected") {
+      const prefix = missing !== null ? `${missing} missing projections` : "missing projections";
+      return fieldNotes.length
+        ? `${prefix}; ${fieldNotes.join(", ")} source truth not projected`
+        : `${prefix}; source truth not projected`;
+    }
+    if (projection.status === "ok") return "source truth projected into temporal index";
+    return projection.reason || "projection summary not exposed";
+  }
+
   function appendProofItem(container, item) {
     const row = document.createElement("div");
     row.className = "proof-item";
@@ -420,6 +510,82 @@
     chip.setAttribute("aria-label", `${item.label} proof status: ${chip.textContent}`);
     row.appendChild(chip);
     container.appendChild(row);
+  }
+
+  function appendAudioInventoryDrilldown(container, audioProvenance) {
+    const rows = Array.isArray(audioProvenance?.runs) && audioProvenance.runs.length
+      ? audioProvenance.runs
+      : audioProvenance?.latest_run
+        ? [audioProvenance.latest_run]
+        : [];
+
+    const panel = document.createElement("div");
+    panel.className = "audio-inventory-drilldown";
+    panel.setAttribute("data-testid", "audio-inventory-drilldown");
+
+    const header = document.createElement("div");
+    header.className = "audio-inventory-header";
+    appendText(header, "strong", "Audio Provenance Inventory");
+    appendText(header, "span", "Run-tagged Qdrant audio payloads; historical until matched to the selected run.");
+    panel.appendChild(header);
+
+    if (!rows.length) {
+      appendText(panel, "p", "No run-tagged Qdrant audio inventory rows returned.", "audio-inventory-empty");
+      container.appendChild(panel);
+      return;
+    }
+
+    rows.slice(0, 6).forEach((row) => {
+      const pointCount = numberValue(row.provenance_capable_points ?? row.point_count ?? row.points);
+      const sceneCount = numberValue(row.scene_count ?? row.scenes);
+      const videoCount = numberValue(row.video_count ?? row.videos);
+      const latestTs = row.latest_timestamp || row.latest_ts || row.latest_commit_ts_utc || row.latest_created_at;
+      const missingFields = Array.isArray(row.missing_required_fields)
+        ? row.missing_required_fields
+        : Object.keys(row.missing_required_fields || {});
+
+      const item = document.createElement("div");
+      item.className = "audio-inventory-row";
+
+      const identity = document.createElement("div");
+      appendText(identity, "span", "Run", "audio-inventory-label");
+      const runId = appendText(identity, "strong", compactIdentifier(row.run_id, { key: "run_id", max: 26 }), "compact-id");
+      runId.title = safeString(row.run_id || "Not observed", "run_id");
+      item.appendChild(identity);
+
+      const counts = document.createElement("div");
+      appendText(counts, "span", "Payloads", "audio-inventory-label");
+      appendText(
+        counts,
+        "strong",
+        pointCount !== null ? `${pointCount} points` : "Not observed",
+        "audio-inventory-value"
+      );
+      appendText(
+        counts,
+        "small",
+        `${sceneCount !== null ? sceneCount : "?"} scenes | ${videoCount !== null ? videoCount : "?"} videos`,
+        "audio-inventory-note"
+      );
+      item.appendChild(counts);
+
+      const latest = document.createElement("div");
+      appendText(latest, "span", "Latest", "audio-inventory-label");
+      appendText(latest, "strong", latestTs ? relativeTime(latestTs) : "Not observed", "audio-inventory-value");
+      item.appendChild(latest);
+
+      const stateWrap = document.createElement("div");
+      appendText(stateWrap, "span", "Scope", "audio-inventory-label");
+      stateWrap.appendChild(makeBadge(missingFields.length ? "Needs Explanation" : "Historical Only", missingFields.length ? "warn" : "historical"));
+      if (missingFields.length) {
+        appendText(stateWrap, "small", `Missing: ${missingFields.slice(0, 3).join(", ")}`, "audio-inventory-note");
+      }
+      item.appendChild(stateWrap);
+
+      panel.appendChild(item);
+    });
+
+    container.appendChild(panel);
   }
 
   function evidenceNote(value, suffix) {
@@ -596,6 +762,7 @@
 
   function renderLoadingShell() {
     [
+      "#scope-banner-grid",
       "#flight-system-map",
       "#flight-first-run",
       "#first-run-guide",
@@ -651,6 +818,101 @@
     boundaryDot.setAttribute("aria-hidden", "true");
     boundary.appendChild(boundaryDot);
     appendText(boundary, "span", local ? "Local machine boundary" : "Non-local API base");
+  }
+
+  function renderScopeBanner() {
+    const grid = qs("#scope-banner-grid");
+    if (!grid) return;
+    clear(grid);
+
+    const connected = state.data.status && !state.errors.status;
+    const run = state.data.run || {};
+    const evidence = state.data.runEvidence || {};
+    const evidenceRun = evidence.run || {};
+    const scope = runScopeDescriptor(evidenceRun, run);
+    const latestEpisode = evidence.latest_episode || run.latest_episode || {};
+    const selected = selectedSegmentEntry();
+    const selectedSegment = selected && selected.segment ? selected.segment : {};
+    const runId = run.run_id || evidenceRun.run_id || latestEpisode.run_id || "";
+    const sceneCount = numberValue(run.scenes_processed ?? latestEpisode.scene_count ?? evidence.temporal_index?.total_scenes);
+    const temporalCount = numberValue(evidence.temporal_index?.total_scenes);
+    const audioProof = evidence.audio_vector_proof || {};
+    const audioProofStatus = String(audioProof.status || "").toLowerCase();
+    const audioProofKind = audioProofStatus === "current_run_audio_vector_proven" ? "ok" : audioProofStatus === "partial" ? "warn" : "unknown";
+    const audioProofLabel = audioProof.label || (audioProofKind === "ok" ? "Proven" : "No Current-Run Evidence");
+    const selectedSceneValue = selected
+      ? `${sceneDisplayLabel(selectedSegment.scene_id || selectedSegment.index || selected.key, selected.index)} ${formatTime(selectedSegment.start)}-${formatTime(selectedSegment.end)}`
+      : "Not selected";
+    const selectedSceneNote = state.sceneLineage
+      ? `${state.sceneLineage.source} handoff`
+      : "timeline selection";
+    const environment = apiEnvironment();
+    const apiKind = environment.kind === "live" ? "ok" : environment.kind;
+
+    appendScopeItem(
+      grid,
+      "API",
+      connected ? environment.label.replace(/^API:\s*/, "") : "No Response",
+      connected ? apiKind : "error",
+      connected ? "local read surface" : state.errors.status || "status endpoint unavailable",
+      state.apiBase
+    );
+    appendScopeItem(
+      grid,
+      "Latest Run",
+      runId ? compactIdentifier(runId, { key: "run_id", max: 24 }) : "Not observed",
+      runId ? "ok" : "unknown",
+      sceneCount !== null ? `${sceneCount} scene${sceneCount === 1 ? "" : "s"} in selected run scope` : "scene count not exposed",
+      runId
+    );
+    appendScopeItem(
+      grid,
+      "Run Source",
+      scope.label,
+      scope.kind,
+      scope.note,
+      scope.raw
+    );
+    appendScopeItem(
+      grid,
+      "Temporal Scope",
+      temporalCount !== null ? `${temporalCount} scene${temporalCount === 1 ? "" : "s"}` : "Not observed",
+      temporalCount !== null ? "info" : "unknown",
+      temporalCount !== null ? "latest temporal projection" : "temporal index not exposed",
+      ""
+    );
+    appendScopeItem(
+      grid,
+      "Audio Proof",
+      audioProofLabel,
+      audioProofKind,
+      audioProof.impact || "strict run-matched CLAP/Qdrant verdict",
+      audioProofStatus
+    );
+    appendScopeItem(
+      grid,
+      "Browsing",
+      state.selectedVideoId || latestEpisode.episode || "Not observed",
+      state.selectedVideoId || latestEpisode.episode ? "info" : "unknown",
+      "selected inventory/timeline target",
+      state.selectedVideoId || latestEpisode.episode || ""
+    );
+    appendScopeItem(
+      grid,
+      "Selected Scene",
+      selectedSceneValue,
+      selected ? "ok" : "unknown",
+      selected ? selectedSceneNote : "select a timeline or retrieval row",
+      selectedSegment.scene_id || selectedSceneValue
+    );
+    appendScopeItem(
+      grid,
+      "Mode",
+      "Read-only",
+      "ok",
+      "does not mutate memory, ingestion, or config",
+      "operator console boundary"
+    );
   }
 
   function renderFlightDeck() {
@@ -918,24 +1180,35 @@
 
     const run = state.data.run || {};
     const evidence = state.data.runEvidence || {};
+    const evidenceRun = evidence.run || {};
+    const runScope = evidenceRun.scope || run.scope || "";
+    const runKind = evidenceRun.run_kind || run.run_kind || "";
+    const standaloneSceneScope = runScope === "scene_ingest_results" || runKind === "standalone_scene_results";
     const artifacts = evidence.artifact_presence || {};
     const steps = evidence.step_runs || {};
     const temporal = evidence.temporal_index || {};
     const sentiment = evidence.sentiment || {};
     const graph = evidence.knowledge_graph || {};
+    const projection = evidence.projection_gaps || {};
     const audioProof = evidence.audio_vector_proof || {};
+    const audioProvenance = state.data.audioProvenance || {};
+    const latestAudioInventoryRun = audioProvenance.latest_run || {};
     const latestEpisode = evidence.latest_episode || run.latest_episode || {};
     const memory = state.data.memory || {};
     const faissAudioCount = numberValue(memory.faiss?.audio_vectors);
     const sceneContextCount = numberValue(temporal.segments_with_scene_context_llm);
     const audioEmotionCount = numberValue(sentiment.segments_with_audio_emotion ?? temporal.segments_with_audio_emotion);
     const sentimentCount = numberValue(sentiment.segments_with_sentiment);
+    const transcriptCount = numberValue(sentiment.segments_with_transcript ?? temporal.segments_with_transcript);
     const clapOkCount = numberValue(audioProof.clap_ok);
     const provenAudioCount = numberValue(audioProof.current_run_qdrant_proven);
     const stepRows = numberValue(steps.row_count);
     const temporalScenes = numberValue(temporal.total_scenes);
     const graphScenes = numberValue(graph.scene_count);
     const runScenes = numberValue(run.scenes_processed);
+    const projectionMissing = numberValue(projection.missing_projection_count);
+    const projectionReady = projection.status === "ok";
+    const projectionGapDetected = projection.status === "gap_detected";
     const audioProofStatus = String(audioProof.status || "unavailable");
     const audioProofObserved = audioProofStatus === "current_run_audio_vector_proven";
     const audioProofPartial = audioProofStatus === "partial";
@@ -944,17 +1217,38 @@
     const audioProofNote = provenAudioCount !== null && clapOkCount !== null
       ? `${provenAudioCount} / ${clapOkCount} CLAP-ok scenes`
       : audioProof.impact || "Run-matched Qdrant proof not reported";
+    const provenanceCapablePoints = numberValue(audioProvenance.provenance_capable_points);
+    const runTaggedAudioRuns = numberValue(audioProvenance.run_tagged_audio_runs);
+    const latestInventoryPoints = numberValue(latestAudioInventoryRun.provenance_capable_points);
+    const audioInventoryObserved = audioProvenance.status === "ok" && provenanceCapablePoints !== null && provenanceCapablePoints > 0;
+    const audioInventoryNote = audioInventoryObserved
+      ? `${provenanceCapablePoints} provenance-capable payloads across ${runTaggedAudioRuns || 0} run-tagged runs`
+      : audioProvenance.impact || "Separate Qdrant inventory not exposed";
+    const sceneResultsFallbackNote = sentiment.source === "scene_ingest_results" ? "Scene results fallback" : "";
+    const stepLedgerMissingLabel = standaloneSceneScope ? "Standalone scope" : "Not observed";
+    const temporalMissingLabel = standaloneSceneScope ? "Standalone scope" : "Not observed";
+    const stepLedgerMissingNote = standaloneSceneScope
+      ? "Direct scene probes do not generate wrapper step ledgers."
+      : "step_runs.jsonl missing or unreadable";
+    const temporalMissingNote = standaloneSceneScope
+      ? "Direct scene probes do not generate temporal indexes."
+      : "temporal_index.json missing or unreadable";
+    const temporalEvidenceNote = temporalScenes !== null
+      ? evidenceNote(temporalScenes, "scenes")
+      : standaloneSceneScope
+        ? "Standalone scene probe"
+        : "";
 
     const proofRows = [
       {
         label: "Step run ledger",
-        state: proofState(artifacts.step_runs_jsonl === true && hasOkStatus(steps.status), "Observed", "Not observed", evidenceNote(stepRows, "rows"), "warn"),
-        missingNote: "step_runs.jsonl missing or unreadable",
+        state: proofState(artifacts.step_runs_jsonl === true && hasOkStatus(steps.status), "Observed", stepLedgerMissingLabel, stepRows !== null ? evidenceNote(stepRows, "rows") : standaloneSceneScope ? "Standalone scene probe" : "", standaloneSceneScope ? "historical" : "warn"),
+        missingNote: stepLedgerMissingNote,
       },
       {
         label: "Temporal index",
-        state: proofState(artifacts.temporal_index_json === true && hasOkStatus(temporal.status), "Observed", "Not observed", evidenceNote(temporalScenes, "scenes"), "warn"),
-        missingNote: "temporal_index.json missing or unreadable",
+        state: proofState(artifacts.temporal_index_json === true && hasOkStatus(temporal.status), "Observed", temporalMissingLabel, temporalEvidenceNote, standaloneSceneScope ? "historical" : "warn"),
+        missingNote: temporalMissingNote,
       },
       {
         label: "Scene ingest results",
@@ -968,13 +1262,13 @@
       },
       {
         label: "Audio emotion signal",
-        state: proofState(temporal.has_audio === true, "Observed", "Not observed", audioEmotionCount !== null ? `${audioEmotionCount} emotion rows` : "", "unknown"),
-        missingNote: "Latest temporal index does not report audio",
+        state: proofState(temporal.has_audio === true || (audioEmotionCount !== null && audioEmotionCount > 0), "Observed", "Not observed", audioEmotionCount !== null ? `${audioEmotionCount} emotion rows ${sceneResultsFallbackNote}`.trim() : "", "unknown"),
+        missingNote: standaloneSceneScope ? "Scene results fallback did not report audio emotion" : "Latest temporal index does not report audio",
       },
       {
         label: "Transcript Audio",
-        state: proofState(temporal.has_transcripts === true, "Observed", "Not observed", evidenceNote(sentiment.segments_total, "segments"), "unknown"),
-        missingNote: "Latest temporal index does not report transcripts",
+        state: proofState(temporal.has_transcripts === true || (transcriptCount !== null && transcriptCount > 0), "Observed", "Not observed", transcriptCount !== null ? `${transcriptCount} transcript scenes ${sceneResultsFallbackNote}`.trim() : evidenceNote(sentiment.segments_total, "segments"), "unknown"),
+        missingNote: standaloneSceneScope ? "Scene results fallback did not report transcripts" : "Latest temporal index does not report transcripts",
       },
       {
         label: "Knowledge Graph",
@@ -1005,6 +1299,16 @@
         missingNote: "Scene results do not report CLAP-ok audio commits for this run",
       },
       {
+        label: "Projection gap check",
+        state: {
+          observed: projectionReady,
+          label: projectionReady ? "Ready" : projectionGapDetected ? "Needs Explanation" : standaloneSceneScope ? "Standalone scope" : "Not Exposed",
+          kind: projectionReady ? "ok" : projectionGapDetected ? "warn" : standaloneSceneScope ? "historical" : "unknown",
+          note: standaloneSceneScope && !projectionReady && !projectionGapDetected ? "Direct scene probes do not generate temporal projection comparisons." : projectionGapNote(projection),
+        },
+        missingNote: projectionGapNote(projection),
+      },
+      {
         label: "Current-run Qdrant audio proof",
         state: {
           observed: audioProofObserved,
@@ -1013,6 +1317,16 @@
           note: audioProofNote,
         },
         missingNote: audioProof.impact || "FAISS audio count is not current-run Qdrant proof",
+      },
+      {
+        label: "Run-tagged Qdrant audio inventory",
+        state: {
+          observed: audioInventoryObserved,
+          label: audioInventoryObserved ? "Observed" : (audioProvenance.label || "Not Exposed"),
+          kind: audioInventoryObserved ? "historical" : "unknown",
+          note: audioInventoryNote,
+        },
+        missingNote: "Separate inventory does not override latest structured-run proof",
       },
       {
         label: "FAISS audio count",
@@ -1027,7 +1341,12 @@
     ];
 
     const proofDisplayRows = proofRows.concat(
-      supplementalChecks.filter((row) => row.label === "CLAP memory commit" || row.label === "Current-run Qdrant audio proof")
+      supplementalChecks.filter((row) => (
+        row.label === "CLAP memory commit"
+        || row.label === "Projection gap check"
+        || row.label === "Current-run Qdrant audio proof"
+        || row.label === "Run-tagged Qdrant audio inventory"
+      ))
     );
     const coreObserved = proofRows.filter((row) => row.state.observed).length;
     const optionalObserved = supplementalChecks.filter((row) => row.state.observed).length;
@@ -1051,9 +1370,25 @@
           value: audioProofObserved
             ? `${provenAudioCount || 0}/${clapOkCount || 0}`
             : `0/${clapOkCount || 0}`,
-          note: "current-run Qdrant",
+          note: "Latest structured run",
           kind: audioProofObserved ? "ok" : "unknown",
           title: audioProofNote,
+        },
+        {
+          label: "Audio inventory",
+          value: audioInventoryObserved
+            ? `${latestInventoryPoints || 0} latest`
+            : "Not exposed",
+          note: "run-tagged Qdrant",
+          kind: audioInventoryObserved ? "historical" : "unknown",
+          title: `${audioInventoryNote}; does not override latest structured-run proof`,
+        },
+        {
+          label: "Projection gaps",
+          value: projectionMissing !== null ? String(projectionMissing) : "Not exposed",
+          note: "source truth vs temporal index",
+          kind: projectionReady ? "ok" : projectionGapDetected ? "warn" : "unknown",
+          title: projectionGapNote(projection),
         },
       ],
       "proof-rollup-strip"
@@ -1061,8 +1396,12 @@
     proofDisplayRows.forEach((row) => {
       const compactStatus = row.label === "Current-run Qdrant audio proof"
         ? row.state.label
+        : row.label === "Run-tagged Qdrant audio inventory"
+          ? row.state.label
         : row.state.observed
           ? "On"
+          : row.state.kind === "historical"
+            ? "Scope"
           : row.state.kind === "warn"
             ? "Review"
             : "Off";
@@ -1113,6 +1452,7 @@
 
     const inspectorRows = [
       ["Run", run.run_id || evidence.run?.run_id || "Not observed"],
+      ["Run scope", standaloneSceneScope ? "Standalone scene probe" : (runScope || runKind || "Structured run")],
       ["Latest episode", latestEpisode.episode || "Not observed"],
       ["Latest timestamp", latestEpisode.ts_utc ? relativeTime(latestEpisode.ts_utc) : relativeTime(latestRunTimestamp(run))],
       ["Run scenes", runScenes !== null ? runScenes : "Not observed"],
@@ -1120,6 +1460,9 @@
       ["Step rows", stepRows !== null ? stepRows : "Not observed"],
       ["Phase 6", graph.phase6_complete === true || temporal.phase6_complete === true ? "Complete" : "Not observed"],
       ["Qdrant", graph.qdrant_ok === true || graph.phase6_qdrant_ok === true ? "Observed" : "Not observed"],
+      ["Latest structured run audio", audioProofLabel],
+      ["Audio inventory run", latestAudioInventoryRun.run_id ? compactIdentifier(latestAudioInventoryRun.run_id, { key: "run_id", max: 22 }) : "Not observed"],
+      ["Inventory proof points", latestInventoryPoints !== null ? `${latestInventoryPoints} provenance-capable` : "Not observed"],
       ["Safety boundary", evidence.safety_boundary?.mode || "read_only"],
     ];
 
@@ -1130,6 +1473,7 @@
       appendText(cell, "strong", safeString(value, label));
       inspector.appendChild(cell);
     });
+    appendAudioInventoryDrilldown(inspector, audioProvenance);
   }
 
   function metric(label, value, note, kind) {
@@ -2013,19 +2357,84 @@
     return Array.isArray(objects) ? objects.map((item) => safeString(item, "object")).filter(Boolean) : [];
   }
 
+  function evidenceList(source, key) {
+    return Array.isArray(source && source[key]) ? source[key] : [];
+  }
+
+  function entityEvidenceBuckets(source, fallback) {
+    const primary = source || {};
+    const secondary = fallback || {};
+    const fromEither = (key) => {
+      const primaryList = evidenceList(primary, key);
+      return primaryList.length ? primaryList : evidenceList(secondary, key);
+    };
+    const scenePresent = fromEither("scene_present_entities");
+    const dialogueMentioned = fromEither("dialogue_mentioned_entities");
+    const mentionedPeople = fromEither("mentioned_people");
+    const candidateVisible = fromEither("candidate_visible_people");
+    const visiblePeople = fromEither("visible_people");
+    const speakerAligned = fromEither("speaker_aligned_mentions");
+    const entities = fromEither("entities");
+    return {
+      scenePresent,
+      entities,
+      dialogueMentioned,
+      mentionedPeople,
+      candidateVisible,
+      visiblePeople,
+      speakerAligned,
+      total:
+        scenePresent.length +
+        dialogueMentioned.length +
+        mentionedPeople.length +
+        candidateVisible.length +
+        visiblePeople.length +
+        speakerAligned.length,
+    };
+  }
+
+  function sceneEntityEvidenceBuckets(segment) {
+    return entityEvidenceBuckets(segment, {});
+  }
+
+  function formatEntityLabel(item) {
+    if (!item || typeof item !== "object") return null;
+    const text = item.text || item.label || item.name || item.identity || item.entity;
+    const type = item.type || item.entity_type;
+    if (!valueObserved(text)) return null;
+    return type ? `${safeString(text, "entity")} (${safeString(type, "entity_type")})` : safeString(text, "entity");
+  }
+
+  function entityEvidenceSummaryNote(buckets) {
+    if (!buckets || buckets.total <= 0) return "entity evidence not exposed";
+    if (buckets.scenePresent.length) return `${buckets.scenePresent.length} scene-present entities`;
+    if (buckets.dialogueMentioned.length) return `${buckets.dialogueMentioned.length} dialogue mentions; not scene-present identity`;
+    if (buckets.mentionedPeople.length) return `${buckets.mentionedPeople.length} mentioned people; not scene-present identity`;
+    if (buckets.candidateVisible.length || buckets.visiblePeople.length) {
+      return `${buckets.candidateVisible.length + buckets.visiblePeople.length} candidate visible people`;
+    }
+    if (buckets.speakerAligned.length) return `${buckets.speakerAligned.length} speaker-aligned mention links`;
+    return `${buckets.total} entity evidence rows`;
+  }
+
   function retrievalEntityLabels(result) {
     const context = retrievalContext(result);
-    const entities = Array.isArray(result && result.scene_present_entities) && result.scene_present_entities.length
-      ? result.scene_present_entities
-      : context.scene_present_entities;
+    const buckets = entityEvidenceBuckets(result, context);
+    const entities = (
+      buckets.scenePresent.length
+        ? buckets.scenePresent
+        : buckets.dialogueMentioned.length
+          ? buckets.dialogueMentioned
+          : buckets.mentionedPeople.length
+            ? buckets.mentionedPeople
+            : buckets.candidateVisible.length
+              ? buckets.candidateVisible
+              : buckets.entities
+    );
     if (!Array.isArray(entities)) return [];
     return entities
       .map((item) => {
-        if (!item || typeof item !== "object") return null;
-        const text = item.text || item.label || item.name || item.identity;
-        const type = item.type || item.entity_type;
-        if (!valueObserved(text)) return null;
-        return type ? `${safeString(text, "entity")} (${safeString(type, "entity_type")})` : safeString(text, "entity");
+        return formatEntityLabel(item);
       })
       .filter(Boolean);
   }
@@ -2092,6 +2501,55 @@
     return facts.filter(([, value]) => value !== null && value !== undefined && value !== "");
   }
 
+  function retrievalFrameEndpoint(result) {
+    if (!result) return null;
+    const context = retrievalContext(result);
+    return (
+      result.representative_frame_endpoint ||
+      context.representative_frame_endpoint ||
+      result.representative_frame ||
+      context.representative_frame
+    );
+  }
+
+  function appendRetrievalVisualProof(container, result) {
+    if (!container) return;
+    const stale = qs("#retrieval-visual-proof");
+    if (stale) stale.remove();
+    if (!result) return;
+
+    const frameUrl = mediaEndpointUrl(retrievalFrameEndpoint(result));
+    const panel = document.createElement("div");
+    panel.id = "retrieval-visual-proof";
+    panel.className = "retrieval-visual-proof";
+    panel.setAttribute("data-testid", "retrieval-visual-proof");
+
+    const frame = document.createElement("div");
+    frame.className = "retrieval-visual-frame";
+    if (frameUrl) {
+      const image = document.createElement("img");
+      image.src = frameUrl;
+      image.alt = "Retrieval result keyframe";
+      image.loading = "lazy";
+      frame.appendChild(image);
+    } else {
+      appendText(frame, "span", "No redacted keyframe exposed", "retrieval-visual-empty");
+    }
+    panel.appendChild(frame);
+
+    const copy = document.createElement("div");
+    appendText(copy, "strong", "Visual proof");
+    appendText(
+      copy,
+      "span",
+      frameUrl ? "Redacted keyframe endpoint linked to this selected result." : "No redacted keyframe endpoint returned for this result."
+    );
+    panel.appendChild(copy);
+
+    const actions = container.querySelector(".retrieval-preview-actions");
+    container.insertBefore(panel, actions || null);
+  }
+
   function appendRetrievalEvidence(container, result, selectedIndex, signals, percent) {
     const panel = document.createElement("div");
     panel.className = "retrieval-evidence-digest";
@@ -2151,8 +2609,19 @@
     const percent = scorePercent(result);
     const objects = retrievalObjectLabels(result);
     const entities = retrievalEntityLabels(result);
+    const entityBuckets = entityEvidenceBuckets(result, context);
     const relationshipCount = retrievalRelationshipCount(result);
     const kgEvidence = retrievalKgEvidence(result);
+    const audioProof = result && result.audio_vector_proof && typeof result.audio_vector_proof === "object"
+      ? result.audio_vector_proof
+      : {};
+    const currentRunAudioProof = Boolean(
+      result && (
+        result.current_run_qdrant_audio_proven ||
+        result.current_run_audio_vector_proven ||
+        result.audio_qdrant_current_run_proven
+      )
+    ) || audioProof.status === "current_run_audio_vector_proven";
     const textObserved =
       modality.includes("text") ||
       valueObserved(result && result.transcript) ||
@@ -2164,13 +2633,26 @@
       arrayCount(result && result.objects) > 0 ||
       objectHasAny(context, ["representative_frame", "clip_id", "dino_id", "objects"]);
     const audioObserved =
+      currentRunAudioProof ||
       modality.includes("audio") ||
       provenanceMentions(result, "audio") ||
       objectHasAny(context, ["audio_emotion", "audio_chunks", "clap_meta"]);
     const kgObserved =
       provenanceMentions(result, "kg") ||
       provenanceMentions(result, "graph") ||
-      objectHasAny(context, ["entity_links", "kg_links", "knowledge_graph", "relationships", "scene_present_entities", "kg_evidence"]) ||
+      objectHasAny(context, [
+        "entity_links",
+        "kg_links",
+        "knowledge_graph",
+        "relationships",
+        "scene_present_entities",
+        "dialogue_mentioned_entities",
+        "mentioned_people",
+        "candidate_visible_people",
+        "speaker_aligned_mentions",
+        "kg_evidence",
+      ]) ||
+      entityBuckets.total > 0 ||
       entities.length > 0 ||
       relationshipCount > 0 ||
       valueObserved(kgEvidence.relationship_state);
@@ -2195,8 +2677,12 @@
         label: "Audio Overlap",
         observed: audioObserved,
         strength: modality.includes("audio") ? percent : null,
-        note: audioObserved ? (context.audio_emotion ? `Audio emotion: ${safeString(context.audio_emotion, "audio_emotion")}` : "Audio modality or audio provenance observed") : "No current-run audio proof returned",
-        missing: "Audio vector not yet proven",
+        note: currentRunAudioProof
+          ? "Current-run Qdrant audio proof returned"
+          : audioObserved
+            ? (context.audio_emotion ? `Audio emotion: ${safeString(context.audio_emotion, "audio_emotion")}` : "Audio modality or audio provenance observed")
+            : "No current-run audio proof returned",
+        missing: "Current-run audio proof not returned",
       },
       {
         label: "KG / Entity Evidence",
@@ -2205,9 +2691,11 @@
         note: kgObserved
           ? (relationshipCount > 0
             ? `Relationships observed: ${relationshipCount}`
-            : (entities.length ? `Entities observed: ${entities.slice(0, 3).join(", ")}; relationship not asserted` : "KG evidence returned"))
+            : (entities.length
+              ? `${entityEvidenceSummaryNote(entityBuckets)}: ${entities.slice(0, 3).join(", ")}; relationship not asserted`
+              : entityEvidenceSummaryNote(entityBuckets)))
           : "No KG or entity evidence returned",
-        missing: "KG/entity evidence not exposed",
+        missing: "Entity evidence not exposed",
       },
       {
         label: "Speaker Continuity",
@@ -2297,6 +2785,8 @@
     }
     const staleLineage = qs("#retrieval-lineage-strip");
     if (staleLineage) staleLineage.remove();
+    const staleVisualProof = qs("#retrieval-visual-proof");
+    if (staleVisualProof) staleVisualProof.remove();
 
     if (document.activeElement !== input) input.value = state.retrieval.query || "";
     clear(list);
@@ -2411,6 +2901,7 @@
     const observedSignals = signals.filter((row) => row.observed).length;
     const handoffNote = canOpenRetrievalResult(result) ? "" : " | timeline handoff not resolved";
     previewCopy.textContent = `${resultSceneLabel(result, selected.index)} | ${resultTimeLabel(result)} | ${observedSignals} signals observed | ${confidenceLabel(percent)}${handoffNote}. ${resultSummary(result)}`;
+    if (previewPanel) appendRetrievalVisualProof(previewPanel, result);
     if (previewPanel) appendRetrievalLineageStrip(previewPanel, result, selected.index);
     openScene.disabled = !canOpenRetrievalResult(result);
     if (openScene.disabled) {
@@ -3171,7 +3662,7 @@
     const speakerIds = Array.isArray(segment.speaker_ids) ? segment.speaker_ids : [];
     const visiblePeople = Array.isArray(segment.candidate_visible_people) ? segment.candidate_visible_people : [];
     const alignedMentions = Array.isArray(segment.speaker_aligned_mentions) ? segment.speaker_aligned_mentions : [];
-    const sceneEntities = Array.isArray(segment.scene_present_entities) ? segment.scene_present_entities : [];
+    const entityBuckets = sceneEntityEvidenceBuckets(segment);
     const clapMeta = segment.clap_meta && typeof segment.clap_meta === "object" && !Array.isArray(segment.clap_meta)
       ? segment.clap_meta
       : {};
@@ -3208,9 +3699,9 @@
         note: `${speakerIds.length || 0} speaker ids; ${visiblePeople.length || 0} visible people`,
       },
       {
-        label: "Entities / KG",
-        observed: sceneEntities.length > 0 || valueObserved(epistemic.evidence_family),
-        note: sceneEntities.length ? `${sceneEntities.length} scene-present entities` : (epistemic.evidence_family ? `evidence family: ${safeString(epistemic.evidence_family, "evidence_family")}` : "entity evidence not exposed"),
+        label: "Entity evidence",
+        observed: entityBuckets.total > 0 || valueObserved(epistemic.evidence_family),
+        note: entityBuckets.total ? entityEvidenceSummaryNote(entityBuckets) : (epistemic.evidence_family ? `evidence family: ${safeString(epistemic.evidence_family, "evidence_family")}` : "entity evidence not exposed"),
       },
       {
         label: "Temporal hints",
@@ -3434,6 +3925,7 @@
     const memoryTags = stringList(segment.tags);
     const tagDetails = Array.isArray(segment.tag_details) ? segment.tag_details : [];
     const sceneEntities = Array.isArray(segment.scene_present_entities) ? segment.scene_present_entities : [];
+    const entityBuckets = sceneEntityEvidenceBuckets(segment);
     const sceneContext = segment.scene_context_llm && typeof segment.scene_context_llm === "object" && !Array.isArray(segment.scene_context_llm)
       ? segment.scene_context_llm
       : {};
@@ -3521,9 +4013,33 @@
     );
     appendSceneEvidenceRows(
       evidence,
-      "Scene entities",
+      "Scene-present entities",
       sceneEntities.map(formatSceneEntity).filter(Boolean).slice(0, 6),
       "No scene-present entities exposed"
+    );
+    appendSceneEvidenceRows(
+      evidence,
+      "Dialogue-mentioned entities",
+      entityBuckets.dialogueMentioned.map(formatSceneEntity).filter(Boolean).slice(0, 6),
+      "No dialogue-mentioned entities exposed"
+    );
+    appendSceneEvidenceRows(
+      evidence,
+      "Mentioned people",
+      entityBuckets.mentionedPeople.map(formatSceneEntity).filter(Boolean).slice(0, 6),
+      "No mentioned people exposed"
+    );
+    appendSceneEvidenceRows(
+      evidence,
+      "Candidate visible people",
+      entityBuckets.candidateVisible.concat(entityBuckets.visiblePeople).map(formatSceneEntity).filter(Boolean).slice(0, 6),
+      "No candidate visible people exposed"
+    );
+    appendSceneEvidenceRows(
+      evidence,
+      "Speaker-aligned mentions",
+      entityBuckets.speakerAligned.map(formatSceneEntity).filter(Boolean).slice(0, 6),
+      "No speaker-aligned mentions exposed"
     );
     detail.appendChild(evidence);
 
@@ -3541,7 +4057,7 @@
       alignedMentions.length > 0,
       memoryTags.length > 0,
       tagDetails.length > 0,
-      sceneEntities.length > 0,
+      entityBuckets.total > 0,
       valueObserved(segment.sentiment_label) || valueObserved(segment.sentiment_score),
       valueObserved(segment.audio_emotion) || audioScoreCount > 0,
       clapCommitObserved,
@@ -3601,7 +4117,10 @@
     appendSceneSignal(modalityList, "Aligned mentions", alignedMentions.length > 0, `${alignedMentions.length} mention links`);
     appendSceneSignal(modalityList, "Memory tags", memoryTags.length > 0, `${memoryTags.length} tags exposed`);
     appendSceneSignal(modalityList, "Tag provenance", tagDetails.length > 0, `${tagDetails.length} provenance rows`);
+    appendSceneSignal(modalityList, "Entity evidence", entityBuckets.total > 0, entityEvidenceSummaryNote(entityBuckets));
     appendSceneSignal(modalityList, "Scene-present entities", sceneEntities.length > 0, `${sceneEntities.length} entity rows`);
+    appendSceneSignal(modalityList, "Dialogue-mentioned entities", entityBuckets.dialogueMentioned.length > 0, `${entityBuckets.dialogueMentioned.length} dialogue rows`);
+    appendSceneSignal(modalityList, "Candidate visible people", entityBuckets.candidateVisible.length + entityBuckets.visiblePeople.length > 0, `${entityBuckets.candidateVisible.length + entityBuckets.visiblePeople.length} candidate rows`);
     appendSceneSignal(
       modalityList,
       "Sentiment analysis",
@@ -3670,6 +4189,12 @@
       "tags",
       "tag_details",
       "scene_present_entities",
+      "entities",
+      "dialogue_mentioned_entities",
+      "mentioned_people",
+      "candidate_visible_people",
+      "visible_people",
+      "speaker_aligned_mentions",
       "sentiment_label",
       "audio_emotion",
       "audio_emotion_scores",
@@ -3829,6 +4354,7 @@
   function render() {
     qs("#api-base").value = state.apiBase;
     renderConnection();
+    renderScopeBanner();
     renderFlightDeck();
     renderProofPanel();
     renderRetrievalConsole();

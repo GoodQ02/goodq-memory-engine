@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-05-19 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-21 -->
 
 # Basement Phase Handoff (v1) — Current System State
 
@@ -9,21 +9,19 @@
 
 ---
 
-## Current Restart Checkpoint (2026-05-19)
+## Current Restart Checkpoint (2026-05-21)
 
 This is the practical handoff point for a brand-new Codex session.
 
 - Pause checkpoint:
   - status: public-facing operator visibility envelopes are implemented,
-    locally verified, and pushed. This public checkout is `main` /
-    `origin/main` at `98df1e3` (`feat: expose operator visibility envelopes`).
-    The sibling dev source line is `dev` / `origin/dev` at `50c9107`. Verify
-    live heads with `git log -1 --oneline`.
+    locally verified, and maintained on the public `main` line. Verify live
+    heads with `git log -1 --oneline`.
   - supported browser UI now includes the read-only Operator Console v1 at
-    `/ui/operator_console_v1/`, served by the API process. It exposes Flight
-    Deck orientation, proof/evidence status, retrieval inspection,
-    storage/runtime summaries, recurrence report readouts, video inventory, and
-    scene/timeline projections.
+    `/ui/operator_console_v1/`, served by the API process. It exposes Current
+    Scope, Flight Deck orientation, proof/evidence status, retrieval
+    inspection, storage/runtime summaries, recurrence report readouts, video
+    inventory, and scene/timeline projections.
   - the Operator Console is observer-only. It must not trigger ingestion,
     reindex memory, heal configs, mutate persistence, generate reports, or
     activate ControlAgent.

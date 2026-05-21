@@ -11,6 +11,7 @@ import json
 import logging
 import os
 import shutil
+import sqlite3
 import subprocess
 import sys
 import time
@@ -417,6 +418,28 @@ def _collect_wsl_status() -> Dict[str, Any]:
     return status
 
 
+def _database_status(db_path: str | Path | None = None) -> Dict[str, Any]:
+    path = Path(db_path) if db_path is not None else _DB_PATH
+    data = {"exists": False, "scenes": 0}
+    try:
+        data["exists"] = path.exists()
+        if not data["exists"]:
+            return data
+
+        read_only_uri = f"{path.resolve().as_uri()}?mode=ro"
+        with sqlite3.connect(read_only_uri, uri=True, timeout=0.2) as conn:
+            table_row = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='scenes'"
+            ).fetchone()
+            if table_row is None:
+                return data
+            count_row = conn.execute("SELECT COUNT(*) FROM scenes").fetchone()
+            data["scenes"] = int((count_row or [0])[0] or 0)
+    except Exception as exc:
+        logger.warning("api status database scene count unavailable path=%s error=%s", path, exc)
+    return data
+
+
 @router.get("/api/status")
 @router.head("/api/status")
 def get_status() -> Dict[str, Any]:
@@ -458,13 +481,7 @@ def get_status() -> Dict[str, Any]:
     except Exception:
         pass
 
-    database_data = {"exists": False, "scenes": 0}
-    try:
-        database_data["exists"] = _DB_PATH.exists()
-        if database_data["exists"]:
-            database_data["scenes"] = 1
-    except Exception:
-        pass
+    database_data = _database_status()
 
     wsl_status = _collect_wsl_status()
 
@@ -879,12 +896,12 @@ def _latest_run_snapshot(limit: int = 12) -> Dict[str, Any]:
 
 def _latest_run_preview(limit: int = 12) -> Dict[str, Any]:
     """Return a truthful preview of the most recent structured run artifact root."""
-    runs = run_index.list_runs(limit=1)
+    runs = _runtime_visible_runs(limit=1)
     if not runs:
         return {"available": False}
 
     latest = runs[0]
-    summary = run_summary.load_run_summary(run_root=latest.get("run_root") or latest["run_id"])
+    summary = _load_runtime_visible_run_summary(latest)
     header = summary.get("run_header") if isinstance(summary, dict) else {}
     overview = summary.get("file_job_overview") if isinstance(summary, dict) else {}
     outcome = summary.get("outcome_classification") if isinstance(summary, dict) else {}
@@ -893,6 +910,8 @@ def _latest_run_preview(limit: int = 12) -> Dict[str, Any]:
     return {
         "available": True,
         "run_id": header.get("run_id"),
+        "run_kind": header.get("run_kind") or latest.get("run_kind"),
+        "scope": header.get("scope") or latest.get("scope"),
         "status": outcome.get("status") or header.get("status"),
         "epoch": header.get("epoch"),
         "source_dir": _path_redacted_label(header.get("source_dir")),
@@ -913,13 +932,13 @@ def _latest_run_preview(limit: int = 12) -> Dict[str, Any]:
 
 def _latest_run_evidence(limit: int = 24) -> Dict[str, Any]:
     """Return sanitized read-only evidence projections for the latest structured run."""
-    runs = run_index.list_runs(limit=1)
+    runs = _runtime_visible_runs(limit=1)
     if not runs:
         return _empty_run_evidence("no_indexed_runs")
 
     latest = runs[0]
     try:
-        summary = run_summary.load_run_summary(run_root=latest.get("run_root") or latest["run_id"])
+        summary = _load_runtime_visible_run_summary(latest)
     except Exception as exc:
         logger.warning("latest run evidence summary unavailable error=%s", exc)
         return _empty_run_evidence("summary_unavailable")
@@ -932,17 +951,21 @@ def _latest_run_evidence(limit: int = 24) -> Dict[str, Any]:
     outcome = summary.get("outcome_classification") if isinstance(summary.get("outcome_classification"), dict) else {}
     latest_episode = summary.get("latest_episode") if isinstance(summary.get("latest_episode"), dict) else {}
 
-    temporal_path = _episode_artifact_path(latest_episode, "temporal_index.json")
     scene_results_path = _episode_artifact_path(latest_episode, "scene_ingest_results.json")
+    scene_results_payload = _load_json_any(scene_results_path)
+    temporal_path = _episode_artifact_path(latest_episode, "temporal_index.json")
+    if temporal_path is None:
+        temporal_path = _artifact_path_from_scene_results(scene_results_payload, "temporal_index.json")
     step_runs_path = _find_step_runs_path(latest_episode, [temporal_path, scene_results_path])
 
     temporal_payload = _load_json_any(temporal_path)
-    scene_results_payload = _load_json_any(scene_results_path)
 
     return {
         "available": True,
         "run": {
             "run_id": header.get("run_id") or latest.get("run_id"),
+            "run_kind": header.get("run_kind") or latest.get("run_kind"),
+            "scope": header.get("scope") or latest.get("scope"),
             "status": outcome.get("status") or header.get("status") or latest.get("status"),
             "epoch": header.get("epoch") or latest.get("epoch"),
             "episodes_total": overview.get("episodes_total"),
@@ -958,8 +981,9 @@ def _latest_run_evidence(limit: int = 24) -> Dict[str, Any]:
         },
         "step_runs": _summarize_step_runs(step_runs_path, limit=limit),
         "temporal_index": _summarize_temporal_index(temporal_payload),
-        "sentiment": _summarize_sentiment(temporal_payload),
+        "sentiment": _summarize_sentiment(temporal_payload, scene_results_payload=scene_results_payload),
         "knowledge_graph": _summarize_knowledge_graph(scene_results_payload, latest_episode),
+        "projection_gaps": _summarize_projection_gaps(temporal_payload, scene_results_payload),
         "audio_vector_proof": _summarize_audio_vector_proof(
             header=header,
             latest_episode=latest_episode,
@@ -968,6 +992,178 @@ def _latest_run_evidence(limit: int = 24) -> Dict[str, Any]:
         ),
         "safety_boundary": _run_evidence_safety_boundary(),
     }
+
+
+def _runtime_visible_runs(limit: int | None = None) -> List[Dict[str, Any]]:
+    """Return report-index runs plus the current configured CLI output, newest first."""
+
+    runs = list(run_index.list_runs(limit=None))
+    configured = _configured_scene_results_run()
+    if configured is not None:
+        configured_path = str(configured.get("scene_results_path") or "")
+        runs = [
+            run
+            for run in runs
+            if str(run.get("scene_results_path") or "") != configured_path
+        ]
+        runs.append(configured)
+
+    runs.sort(key=lambda run: (_run_entry_mtime(run), str(run.get("run_id") or "")), reverse=True)
+    if isinstance(limit, int) and limit >= 0:
+        return runs[:limit]
+    return runs
+
+
+def _load_runtime_visible_run_summary(run: Dict[str, Any]) -> Dict[str, Any]:
+    if run.get("scope") == "configured_output_scene_results":
+        return _configured_scene_results_summary(run)
+    return run_summary.load_run_summary(run_root=run.get("run_root") or run["run_id"])
+
+
+def _configured_scene_results_run() -> Dict[str, Any] | None:
+    output_dir = _PATHS_CFG.get("output_directory")
+    if not output_dir:
+        return None
+    scene_results_path = (Path(str(output_dir)) / "scene_ingest_results.json").resolve()
+    if not scene_results_path.is_file():
+        return None
+
+    payload = _load_json_any(scene_results_path)
+    if payload is None:
+        return None
+
+    scene_records = _scene_records_from_results(payload)
+    scene_count = len(scene_records)
+    runtime_run_id, runtime_source = _resolve_runtime_audio_run_id({}, {}, payload)
+    first_record = _first_result_record(payload)
+    video_name = _first_text_value(
+        first_record.get("video_name") if isinstance(first_record, dict) else None,
+        first_record.get("video") if isinstance(first_record, dict) else None,
+        first_record.get("filename") if isinstance(first_record, dict) else None,
+        "Configured CLI output",
+    )
+    run_id = runtime_run_id or f"configured_output:{scene_results_path.parent.parent.name}"
+    stat = scene_results_path.stat()
+
+    return {
+        "run_id": run_id,
+        "runtime_run_id": runtime_run_id,
+        "runtime_run_id_source": runtime_source,
+        "run_kind": "configured_scene_results",
+        "scope": "configured_output_scene_results",
+        "run_root": str(scene_results_path.parent.parent),
+        "root_log_path": None,
+        "scene_results_path": str(scene_results_path),
+        "status": "completed" if scene_count > 0 else "unknown",
+        "epoch": _epoch_name_from_path(scene_results_path),
+        "source_dir": None,
+        "started_at": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+        "episodes_total": 1 if scene_count > 0 else 0,
+        "episodes_completed": 1 if scene_count > 0 else 0,
+        "episodes_failed": 0,
+        "episodes_running": 0,
+        "episodes_pending": 0,
+        "scenes_processed": scene_count,
+        "latest_episode": {
+            "episode": video_name,
+            "status": "completed" if scene_count > 0 else "unknown",
+            "run_dir": str(scene_results_path.parent.parent),
+            "scene_count": scene_count,
+            "files_read": [str(scene_results_path)],
+            "canonical_episode_artifacts": [],
+            "errors": [],
+            "warnings": [],
+        },
+        "_sort_ts": stat.st_mtime,
+    }
+
+
+def _configured_scene_results_summary(run: Dict[str, Any]) -> Dict[str, Any]:
+    latest_episode = run.get("latest_episode") if isinstance(run.get("latest_episode"), dict) else {}
+    qdrant_cfg = _CFG.get("qdrant") if isinstance(_CFG.get("qdrant"), dict) else {}
+    qdrant_collections = qdrant_cfg.get("collections") if isinstance(qdrant_cfg.get("collections"), dict) else {}
+    return {
+        "run_header": {
+            "run_id": run.get("run_id"),
+            "runtime_run_id": run.get("runtime_run_id"),
+            "runtime_run_id_source": run.get("runtime_run_id_source"),
+            "qdrant_collections": qdrant_collections,
+            "run_kind": run.get("run_kind") or "configured_scene_results",
+            "scope": run.get("scope") or "configured_output_scene_results",
+            "epoch": run.get("epoch"),
+            "status": run.get("status"),
+            "source_dir": run.get("source_dir"),
+            "start_time": run.get("started_at"),
+            "end_time": "unknown",
+            "total_duration_seconds": "unknown",
+            "trigger_source": "cli.run_ingestion",
+        },
+        "file_job_overview": {
+            "input_files": [latest_episode.get("episode")] if latest_episode.get("episode") else [],
+            "episodes_total": run.get("episodes_total", 0),
+            "episodes_completed": run.get("episodes_completed", 0),
+            "episodes_failed": run.get("episodes_failed", 0),
+            "episodes_running": run.get("episodes_running", 0),
+            "episodes_pending": run.get("episodes_pending", 0),
+            "scenes_processed": run.get("scenes_processed", latest_episode.get("scene_count") or 0),
+            "steps_executed": "unknown",
+        },
+        "audio_wsl2_summary": {
+            "jobs_found": "unknown",
+            "notes": "not observed",
+        },
+        "agent_activity": [],
+        "errors_warnings": {
+            "errors": latest_episode.get("errors") if isinstance(latest_episode.get("errors"), list) else [],
+            "warnings": latest_episode.get("warnings") if isinstance(latest_episode.get("warnings"), list) else [],
+        },
+        "outcome_classification": {
+            "status": run.get("status") or "unknown",
+        },
+        "evidence": {
+            "files_read": latest_episode.get("files_read") if isinstance(latest_episode.get("files_read"), list) else [],
+            "canonical_episode_artifacts": [],
+        },
+        "latest_episode": latest_episode,
+        "episodes": [latest_episode] if latest_episode else [],
+    }
+
+
+def _run_entry_mtime(run: Dict[str, Any]) -> float:
+    if isinstance(run.get("_sort_ts"), (int, float)):
+        return float(run["_sort_ts"])
+    for key in ("scene_results_path", "root_log_path", "config_path"):
+        value = run.get(key)
+        if isinstance(value, str) and value.strip():
+            try:
+                return Path(value).stat().st_mtime
+            except Exception:
+                continue
+    value = run.get("run_root")
+    if isinstance(value, str) and value.strip():
+        try:
+            return Path(value).stat().st_mtime
+        except Exception:
+            return 0.0
+    return 0.0
+
+
+def _epoch_name_from_path(path: Path) -> str | None:
+    parts = path.parts
+    for index, part in enumerate(parts):
+        if part.lower() == "epochs" and index + 1 < len(parts):
+            return parts[index + 1]
+    db_dir = _PATHS_CFG.get("db_dir")
+    if db_dir:
+        return Path(str(db_dir)).name
+    return None
+
+
+def _first_text_value(*values: Any) -> str | None:
+    for value in values:
+        if value is not None and str(value).strip():
+            return str(value).strip()
+    return None
 
 
 def _empty_run_evidence(reason: str) -> Dict[str, Any]:
@@ -983,6 +1179,7 @@ def _empty_run_evidence(reason: str) -> Dict[str, Any]:
         "temporal_index": {"status": "unavailable", "reason": reason},
         "sentiment": {"status": "unavailable", "reason": reason},
         "knowledge_graph": {"status": "unavailable", "reason": reason},
+        "projection_gaps": {"status": "unavailable", "reason": reason},
         "audio_vector_proof": {"status": "unavailable", "reason": reason, "label": "Not Exposed"},
         "safety_boundary": _run_evidence_safety_boundary(),
     }
@@ -1033,6 +1230,37 @@ def _episode_artifact_path(episode: Dict[str, Any], filename: str) -> Path | Non
             for candidate in run_dir.rglob(filename):
                 if candidate.is_file():
                     return candidate
+    return None
+
+
+def _artifact_path_from_scene_results(payload: Any, filename: str) -> Path | None:
+    """Follow explicit artifact pointers embedded in standalone scene results."""
+
+    def iter_pointer_values(value: Any, depth: int = 0):
+        if depth > 4:
+            return
+        if isinstance(value, dict):
+            for key in (
+                "temporal_index_path",
+                "temporal_index_json",
+                "temporal_index_file",
+                "path",
+            ):
+                candidate = value.get(key)
+                if isinstance(candidate, str) and candidate.strip():
+                    yield candidate
+            for child in value.values():
+                if isinstance(child, (dict, list)):
+                    yield from iter_pointer_values(child, depth + 1)
+        elif isinstance(value, list):
+            for child in value[:32]:
+                if isinstance(child, (dict, list)):
+                    yield from iter_pointer_values(child, depth + 1)
+
+    for value in iter_pointer_values(payload):
+        candidate = Path(value)
+        if candidate.name == filename and candidate.is_file():
+            return candidate
     return None
 
 
@@ -1161,18 +1389,70 @@ def _summarize_temporal_index(payload: Any) -> Dict[str, Any]:
     }
 
 
-def _summarize_sentiment(payload: Any) -> Dict[str, Any]:
+def _summarize_sentiment(payload: Any, *, scene_results_payload: Any = None) -> Dict[str, Any]:
     if not isinstance(payload, dict):
-        return {"status": "unavailable", "reason": "temporal_index_missing"}
+        scene_records = _scene_records_from_results(scene_results_payload)
+        if not scene_records:
+            return {"status": "unavailable", "reason": "temporal_index_missing"}
+
+        audio_emotions: Counter[str] = Counter()
+        sentiment_labels: Counter[str] = Counter()
+        sentiment_scores: List[float] = []
+        transcript_count = 0
+
+        for scene in scene_records:
+            audio = scene.get("audio") if isinstance(scene.get("audio"), dict) else {}
+            transcript = audio.get("transcript") or audio.get("full_text") or scene.get("transcript") or scene.get("full_text")
+            segments = audio.get("segments") if isinstance(audio.get("segments"), list) else scene.get("segments")
+            if (isinstance(transcript, str) and transcript.strip()) or (isinstance(segments, list) and segments):
+                transcript_count += 1
+
+            audio_emotion = audio.get("audio_emotion") or audio.get("emotion") or scene.get("audio_emotion")
+            if isinstance(audio_emotion, str) and audio_emotion.strip():
+                audio_emotions[audio_emotion.strip().lower()] += 1
+
+            label = audio.get("sentiment_label") or scene.get("sentiment_label")
+            score = audio.get("sentiment_score") if audio.get("sentiment_score") is not None else scene.get("sentiment_score")
+            sentiment = audio.get("sentiment") if isinstance(audio.get("sentiment"), dict) else scene.get("sentiment")
+            if isinstance(sentiment, dict):
+                label = label or sentiment.get("label")
+                score = score if score is not None else sentiment.get("score")
+            if isinstance(label, str) and label.strip():
+                sentiment_labels[label.strip().lower()] += 1
+            score_value = _safe_float(score)
+            if score_value is not None:
+                sentiment_scores.append(score_value)
+
+        return {
+            "status": "ok" if audio_emotions or sentiment_labels or transcript_count else "not_observed",
+            "source": "scene_ingest_results",
+            "segments_total": len(scene_records),
+            "segments_with_transcript": transcript_count,
+            "segments_with_audio_emotion": sum(audio_emotions.values()),
+            "segments_with_sentiment": sum(sentiment_labels.values()),
+            "top_audio_emotions": [
+                {"label": label, "count": count}
+                for label, count in audio_emotions.most_common(8)
+            ],
+            "sentiment_labels": [
+                {"label": label, "count": count}
+                for label, count in sentiment_labels.most_common(8)
+            ],
+            "average_sentiment_score": _round_number(sum(sentiment_scores) / len(sentiment_scores)) if sentiment_scores else None,
+        }
 
     segments = payload.get("segments") if isinstance(payload.get("segments"), list) else []
     audio_emotions: Counter[str] = Counter()
     sentiment_labels: Counter[str] = Counter()
     sentiment_scores: List[float] = []
+    transcript_count = 0
 
     for segment in segments:
         if not isinstance(segment, dict):
             continue
+        transcript = segment.get("transcript") or segment.get("full_text")
+        if (isinstance(transcript, str) and transcript.strip()) or isinstance(segment.get("segments"), list):
+            transcript_count += 1
         audio_emotion = segment.get("audio_emotion")
         if isinstance(audio_emotion, str) and audio_emotion.strip():
             audio_emotions[audio_emotion.strip().lower()] += 1
@@ -1195,7 +1475,9 @@ def _summarize_sentiment(payload: Any) -> Dict[str, Any]:
 
     return {
         "status": "ok" if audio_emotions or sentiment_labels or top_audio else "not_observed",
+        "source": "temporal_index",
         "segments_total": len(segments),
+        "segments_with_transcript": payload.get("segments_with_transcript") or transcript_count,
         "segments_with_audio_emotion": payload.get("segments_with_audio_emotion") or sum(audio_emotions.values()),
         "segments_with_sentiment": sum(sentiment_labels.values()),
         "top_audio_emotions": top_audio,
@@ -1234,6 +1516,188 @@ def _summarize_knowledge_graph(payload: Any, episode: Dict[str, Any]) -> Dict[st
     }
 
 
+def _summarize_projection_gaps(temporal_payload: Any, scene_results_payload: Any) -> Dict[str, Any]:
+    """Compare source scene truth with temporal-index projection without returning raw values."""
+
+    scene_records = _scene_records_from_results(scene_results_payload)
+    if not scene_records:
+        return {"status": "unavailable", "reason": "scene_records_missing"}
+    if not isinstance(temporal_payload, dict):
+        return {"status": "unavailable", "reason": "temporal_index_missing"}
+
+    segments = temporal_payload.get("segments") if isinstance(temporal_payload.get("segments"), list) else []
+    segments_by_id: Dict[str, Dict[str, Any]] = {}
+    for segment in segments:
+        if not isinstance(segment, dict):
+            continue
+        for candidate in _projection_scene_id_candidates(segment):
+            segments_by_id.setdefault(candidate, segment)
+
+    field_names = ("visual_caption", "sentiment", "clap_meta")
+    source_present: Counter[str] = Counter()
+    temporal_present: Counter[str] = Counter()
+    missing_from_temporal: Counter[str] = Counter()
+    sample_missing: List[Dict[str, Any]] = []
+
+    for segment in segments:
+        if not isinstance(segment, dict):
+            continue
+        for field in field_names:
+            if _projection_temporal_observed(segment, field):
+                temporal_present[field] += 1
+
+    for index, scene in enumerate(scene_records):
+        if not isinstance(scene, dict):
+            continue
+        segment = _projection_matching_segment(scene, index, segments, segments_by_id)
+        missing_fields: List[str] = []
+        for field in field_names:
+            if not _projection_source_observed(scene, field):
+                continue
+            source_present[field] += 1
+            if not _projection_temporal_observed(segment, field):
+                missing_from_temporal[field] += 1
+                missing_fields.append(field)
+        if missing_fields and len(sample_missing) < 8:
+            sample_missing.append(
+                {
+                    "scene_id": _projection_scene_label(scene, index),
+                    "fields": missing_fields,
+                }
+            )
+
+    fields: Dict[str, Dict[str, Any]] = {}
+    for field in field_names:
+        missing = int(missing_from_temporal.get(field, 0))
+        fields[field] = {
+            "source_present": int(source_present.get(field, 0)),
+            "temporal_present": int(temporal_present.get(field, 0)),
+            "missing_from_temporal": missing,
+            "status": "gap_detected" if missing else "ok",
+        }
+
+    total_missing = sum(int(missing_from_temporal.get(field, 0)) for field in field_names)
+    return {
+        "status": "gap_detected" if total_missing else "ok",
+        "mode": "read_only",
+        "source": "scene_ingest_results_vs_temporal_index",
+        "scene_scope_count": len(scene_records),
+        "temporal_scene_count": len(segments),
+        "missing_projection_count": total_missing,
+        "fields": fields,
+        "sample_missing": sample_missing,
+    }
+
+
+def _projection_scene_id_candidates(record: Dict[str, Any]) -> List[str]:
+    candidates: List[str] = []
+    for key in ("scene_id", "id", "segment_id"):
+        value = record.get(key)
+        if value is not None and str(value).strip():
+            candidates.append(str(value).strip())
+    for key in ("index", "scene_index"):
+        value = record.get(key)
+        if value is None:
+            continue
+        try:
+            candidates.append(f"scene_{int(value):04d}")
+        except Exception:
+            text = str(value).strip()
+            if text:
+                candidates.append(text)
+
+    seen: set[str] = set()
+    out: List[str] = []
+    for candidate in candidates:
+        if candidate not in seen:
+            seen.add(candidate)
+            out.append(candidate)
+    return out
+
+
+def _projection_matching_segment(
+    scene: Dict[str, Any],
+    index: int,
+    segments: List[Any],
+    segments_by_id: Dict[str, Dict[str, Any]],
+) -> Dict[str, Any]:
+    for candidate in _projection_scene_id_candidates(scene):
+        segment = segments_by_id.get(candidate)
+        if isinstance(segment, dict):
+            return segment
+    if 0 <= index < len(segments) and isinstance(segments[index], dict):
+        return segments[index]
+    return {}
+
+
+def _projection_scene_label(scene: Dict[str, Any], index: int) -> str:
+    for key in ("scene_id", "id"):
+        value = scene.get(key)
+        if value is not None and str(value).strip():
+            return str(value).strip()
+    value = scene.get("index", scene.get("scene_index", index))
+    try:
+        return f"scene_{int(value):04d}"
+    except Exception:
+        return f"scene_{index:04d}"
+
+
+def _projection_source_observed(scene: Dict[str, Any], field: str) -> bool:
+    keyframe = scene.get("keyframe") if isinstance(scene.get("keyframe"), dict) else {}
+    audio = scene.get("audio") if isinstance(scene.get("audio"), dict) else {}
+    if field == "visual_caption":
+        return _projection_value_observed(_first_projection_value(
+            scene.get("visual_caption"),
+            scene.get("caption"),
+            keyframe.get("caption"),
+        ))
+    if field == "sentiment":
+        return _projection_value_observed(_first_projection_value(
+            scene.get("sentiment"),
+            scene.get("sentiment_label"),
+            scene.get("sentiment_score"),
+            audio.get("sentiment"),
+            audio.get("sentiment_label"),
+            audio.get("sentiment_score"),
+        ))
+    if field == "clap_meta":
+        return _projection_value_observed(_first_projection_value(scene.get("clap_meta"), audio.get("clap_meta")))
+    return False
+
+
+def _projection_temporal_observed(segment: Dict[str, Any], field: str) -> bool:
+    if not isinstance(segment, dict):
+        return False
+    if field == "visual_caption":
+        return _projection_value_observed(segment.get("visual_caption"))
+    if field == "sentiment":
+        return _projection_value_observed(_first_projection_value(
+            segment.get("sentiment"),
+            segment.get("sentiment_label"),
+            segment.get("sentiment_score"),
+        ))
+    if field == "clap_meta":
+        return _projection_value_observed(segment.get("clap_meta"))
+    return False
+
+
+def _first_projection_value(*values: Any) -> Any:
+    for value in values:
+        if _projection_value_observed(value):
+            return value
+    return None
+
+
+def _projection_value_observed(value: Any) -> bool:
+    if value is None:
+        return False
+    if isinstance(value, str):
+        return bool(value.strip())
+    if isinstance(value, (list, dict, tuple, set)):
+        return bool(value)
+    return True
+
+
 def _summarize_audio_vector_proof(
     *,
     header: Dict[str, Any],
@@ -1252,7 +1716,7 @@ def _summarize_audio_vector_proof(
         latest_episode,
         scene_results_payload,
     )
-    collection_candidates = _audio_qdrant_collection_candidates(header.get("epoch"))
+    collection_candidates = _audio_qdrant_collection_candidates(header.get("epoch"), header=header)
     base = {
         "contract": "docs/architecture/AUDIO_VECTOR_PROVENANCE_CONTRACT.md",
         "scenes_total": scene_total,
@@ -1437,10 +1901,44 @@ def _resolve_runtime_audio_run_id(
     ):
         if not isinstance(source, dict):
             continue
-        for key in ("runtime_run_id", "goodq_run_id", "qdrant_run_id", "vector_run_id", "run_id"):
+        for key in ("runtime_run_id", "goodq_run_id", "qdrant_run_id", "vector_run_id"):
             candidates.append((f"{source_name}.{key}", source.get(key)))
 
     for source, value in candidates:
+        if value is not None and str(value).strip():
+            return str(value).strip(), source
+
+    scene_clap_run_ids: List[str] = []
+    seen_scene_clap_run_ids: set[str] = set()
+    for scene in _scene_records_from_results(scene_results_payload):
+        audio = scene.get("audio") if isinstance(scene.get("audio"), dict) else {}
+        for source_name, clap_meta in (
+            ("scene_results.scenes.audio.clap_meta.run_id", audio.get("clap_meta")),
+            ("scene_results.scenes.clap_meta.run_id", scene.get("clap_meta")),
+        ):
+            if not isinstance(clap_meta, dict):
+                continue
+            value = clap_meta.get("run_id")
+            if value is None or not str(value).strip():
+                continue
+            run_id = str(value).strip()
+            if run_id not in seen_scene_clap_run_ids:
+                seen_scene_clap_run_ids.add(run_id)
+                scene_clap_run_ids.append(run_id)
+                clap_source = source_name
+    if len(scene_clap_run_ids) == 1:
+        return scene_clap_run_ids[0], clap_source
+
+    generic_candidates: List[tuple[str, Any]] = []
+    for source_name, source in (
+        ("run_header", header),
+        ("latest_episode", latest_episode),
+        ("scene_results", _first_result_record(scene_results_payload)),
+    ):
+        if isinstance(source, dict):
+            generic_candidates.append((f"{source_name}.run_id", source.get("run_id")))
+
+    for source, value in generic_candidates:
         if value is not None and str(value).strip():
             return str(value).strip(), source
     return None, None
@@ -1455,8 +1953,22 @@ def _first_result_record(payload: Any) -> Dict[str, Any]:
     return payload if isinstance(payload, dict) else {}
 
 
-def _audio_qdrant_collection_candidates(epoch: Any) -> List[str]:
+def _audio_qdrant_collection_candidates(epoch: Any, *, header: Dict[str, Any] | None = None) -> List[str]:
     candidates: List[str] = []
+    if isinstance(header, dict):
+        header_collections = header.get("qdrant_collections")
+        header_audio_collection = None
+        if isinstance(header_collections, dict):
+            header_audio_collection = header_collections.get("audio")
+        for value in (
+            header_audio_collection,
+            header.get("audio_collection"),
+            header.get("qdrant_audio_collection"),
+        ):
+            text = str(value).strip() if value is not None else ""
+            if text:
+                candidates.append(text)
+
     epoch_s = str(epoch).strip() if epoch is not None else ""
     if epoch_s:
         candidates.append(f"goodq_audio_{epoch_s}")
@@ -1542,6 +2054,237 @@ def _scroll_qdrant_audio_payloads(runtime_run_id: str, collection_candidates: Li
     return {"status": last_error or "qdrant_unavailable", "payloads": []}
 
 
+def _qdrant_audio_collection_names() -> Dict[str, Any]:
+    base_url = _qdrant_base_url()
+    try:
+        resp = requests.get(f"{base_url}/collections", timeout=5)
+        if resp.status_code != 200:
+            return {"status": f"qdrant_status_{resp.status_code}", "collections": []}
+        collections = resp.json().get("result", {}).get("collections", []) or []
+        names = [
+            str(item.get("name")).strip()
+            for item in collections
+            if isinstance(item, dict) and item.get("name") and "audio" in str(item.get("name")).lower()
+        ]
+        return {"status": "ok", "collections": sorted(set(names))}
+    except Exception as exc:
+        logger.warning("audio provenance qdrant collection list failed error=%s", exc)
+        return {"status": f"exception:{type(exc).__name__}", "collections": []}
+
+
+def _scroll_qdrant_audio_collection_payloads(collection: str, *, max_pages: int = 100) -> Dict[str, Any]:
+    base_url = _qdrant_base_url()
+    payloads: List[Dict[str, Any]] = []
+    offset = None
+    try:
+        for _ in range(max_pages):
+            body: Dict[str, Any] = {
+                "limit": 256,
+                "with_payload": True,
+                "with_vector": False,
+                "filter": {"must": [{"key": "modality", "match": {"value": "audio"}}]},
+            }
+            if offset is not None:
+                body["offset"] = offset
+            resp = requests.post(
+                f"{base_url}/collections/{collection}/points/scroll",
+                json=body,
+                timeout=5,
+            )
+            if resp.status_code == 404:
+                return {"status": "collection_not_found", "collection": collection, "payloads": payloads}
+            if resp.status_code != 200:
+                return {"status": f"qdrant_status_{resp.status_code}", "collection": collection, "payloads": payloads}
+            data = resp.json().get("result", {}) or {}
+            points = data.get("points") if isinstance(data.get("points"), list) else []
+            for point in points:
+                point_payload = point.get("payload") if isinstance(point, dict) else None
+                if isinstance(point_payload, dict):
+                    payloads.append(point_payload)
+            offset = data.get("next_page_offset")
+            if offset is None:
+                return {"status": "ok", "collection": collection, "payloads": payloads}
+    except Exception as exc:
+        logger.warning("audio provenance qdrant collection scan failed collection=%s error=%s", collection, exc)
+        return {"status": f"exception:{type(exc).__name__}", "collection": collection, "payloads": payloads}
+    return {"status": "page_cap_reached", "collection": collection, "payloads": payloads}
+
+
+def _latest_audio_provenance_snapshot(limit: int = 8) -> Dict[str, Any]:
+    """Read-only inventory of run-tagged Qdrant audio payloads.
+
+    This intentionally stays separate from latest structured-run proof. It can
+    show that provenance-capable audio payloads exist without claiming they
+    prove the currently selected /api/runs/latest/evidence run.
+    """
+
+    collection_result = _qdrant_audio_collection_names()
+    collections = collection_result.get("collections") if isinstance(collection_result.get("collections"), list) else []
+    base: Dict[str, Any] = {
+        "status": "not_exposed",
+        "label": "Not Exposed",
+        "mode": "read_only",
+        "source": "qdrant audio payload inventory; not latest structured run proof",
+        "contract": "docs/architecture/AUDIO_VECTOR_PROVENANCE_CONTRACT.md",
+        "required_payload_fields": list(_AUDIO_QDRANT_REQUIRED_FIELDS),
+        "scanned_collections": len(collections),
+        "collections": collections,
+        "run_tagged_audio_runs": 0,
+        "run_tagged_audio_points": 0,
+        "provenance_capable_points": 0,
+        "legacy_audio_points_sampled": 0,
+        "runs": [],
+        "latest_run": None,
+        "safety_boundary": {
+            "mode": "read_only",
+            "mutation": False,
+            "latest_run_claim": False,
+        },
+    }
+    if collection_result.get("status") != "ok":
+        return {
+            **base,
+            "reason": collection_result.get("status") or "qdrant_unavailable",
+            "impact": "Qdrant collection inventory could not be read without mutating state.",
+        }
+    if not collections:
+        return {
+            **base,
+            "status": "no_audio_collections",
+            "label": "Not Exposed",
+            "reason": "no_audio_collections_returned",
+            "impact": "No Qdrant audio collections are visible to the read-only inventory.",
+        }
+
+    runs: Dict[str, Dict[str, Any]] = {}
+    scan_errors: Dict[str, str] = {}
+
+    for collection in collections:
+        scan = _scroll_qdrant_audio_collection_payloads(collection)
+        if scan.get("status") not in {"ok", "page_cap_reached"}:
+            scan_errors[collection] = str(scan.get("status") or "unavailable")
+        payloads = scan.get("payloads") if isinstance(scan.get("payloads"), list) else []
+        for payload in payloads:
+            if str(payload.get("modality") or "").strip().lower() != "audio":
+                continue
+            run_id = str(payload.get("run_id") or "").strip()
+            if not run_id:
+                base["legacy_audio_points_sampled"] += 1
+                continue
+            row = runs.setdefault(
+                run_id,
+                {
+                    "run_id": run_id,
+                    "collections": set(),
+                    "run_tagged_points": 0,
+                    "provenance_capable_points": 0,
+                    "scene_ids": set(),
+                    "video_ids": set(),
+                    "latest_commit_ts_utc": None,
+                    "latest_provenance_ts_utc": None,
+                    "missing_required_fields": Counter(),
+                    "component_mismatch_count": 0,
+                    "step_mismatch_count": 0,
+                    "sample_payload_keys": set(),
+                },
+            )
+            row["collections"].add(collection)
+            row["run_tagged_points"] += 1
+            for key in payload.keys():
+                if _is_safe_payload_shape_key(key):
+                    row["sample_payload_keys"].add(str(key))
+            scene_id = payload.get("scene_id")
+            if scene_id is not None and str(scene_id).strip():
+                row["scene_ids"].add(str(scene_id).strip())
+            video_id = payload.get("video_id") or payload.get("video_hash")
+            if video_id is not None and str(video_id).strip():
+                row["video_ids"].add(str(video_id).strip())
+
+            commit_ts = str(payload.get("commit_ts_utc") or payload.get("created_at") or "").strip()
+            if commit_ts and (not row["latest_commit_ts_utc"] or commit_ts > row["latest_commit_ts_utc"]):
+                row["latest_commit_ts_utc"] = commit_ts
+
+            missing = [field for field in _AUDIO_QDRANT_REQUIRED_FIELDS if not payload.get(field)]
+            for field in missing:
+                row["missing_required_fields"][field] += 1
+            component_ok = payload.get("component") == "audio_embed_clap"
+            step_ok = payload.get("step") == "audio_embed_clap"
+            if not component_ok:
+                row["component_mismatch_count"] += 1
+            if not step_ok:
+                row["step_mismatch_count"] += 1
+            if not missing and component_ok and step_ok:
+                row["provenance_capable_points"] += 1
+                if commit_ts and (not row["latest_provenance_ts_utc"] or commit_ts > row["latest_provenance_ts_utc"]):
+                    row["latest_provenance_ts_utc"] = commit_ts
+
+    normalized_runs: List[Dict[str, Any]] = []
+    for row in runs.values():
+        collection_list = sorted(row["collections"])
+        normalized_runs.append(
+            {
+                "run_id": row["run_id"],
+                "collection": collection_list[0] if len(collection_list) == 1 else "multiple",
+                "collections": collection_list,
+                "run_tagged_points": row["run_tagged_points"],
+                "provenance_capable_points": row["provenance_capable_points"],
+                "scene_count": len(row["scene_ids"]),
+                "video_count": len(row["video_ids"]),
+                "latest_commit_ts_utc": row["latest_commit_ts_utc"],
+                "latest_provenance_ts_utc": row["latest_provenance_ts_utc"],
+                "missing_required_fields": dict(sorted(row["missing_required_fields"].items())),
+                "component_mismatch_count": row["component_mismatch_count"],
+                "step_mismatch_count": row["step_mismatch_count"],
+                "sample_payload_keys": sorted(row["sample_payload_keys"]),
+            }
+        )
+
+    normalized_runs.sort(
+        key=lambda row: (
+            row.get("latest_provenance_ts_utc") or "",
+            row.get("latest_commit_ts_utc") or "",
+            row.get("provenance_capable_points") or 0,
+        ),
+        reverse=True,
+    )
+    latest_run = next((row for row in normalized_runs if row.get("provenance_capable_points")), None)
+    limited_runs = normalized_runs[: max(1, int(limit or 1))]
+
+    base.update(
+        {
+            "run_tagged_audio_runs": len(normalized_runs),
+            "run_tagged_audio_points": sum(int(row.get("run_tagged_points") or 0) for row in normalized_runs),
+            "provenance_capable_points": sum(int(row.get("provenance_capable_points") or 0) for row in normalized_runs),
+            "runs": limited_runs,
+            "latest_run": latest_run,
+            "scan_errors": scan_errors,
+        }
+    )
+    if latest_run:
+        return {
+            **base,
+            "status": "ok",
+            "label": "Run-Tagged Audio Proof Exists",
+            "reason": "run_tagged_qdrant_audio_payloads_satisfy_contract",
+            "impact": "Separate Qdrant inventory found run-tagged audio payloads with required provenance fields. This does not override latest structured-run proof.",
+        }
+    if normalized_runs:
+        return {
+            **base,
+            "status": "historical_only",
+            "label": "Historical Only",
+            "reason": "run_tagged_audio_payloads_missing_required_provenance",
+            "impact": "Run-tagged audio payloads exist, but required provenance fields are incomplete.",
+        }
+    return {
+        **base,
+        "status": "no_run_tagged_audio",
+        "label": "No Run-Tagged Audio",
+        "reason": "no_audio_payloads_with_run_id",
+        "impact": "Audio collections are visible, but the inventory did not find run-tagged audio payloads.",
+    }
+
+
 def _sample_qdrant_audio_payloads(collection_candidates: List[str]) -> Dict[str, Any]:
     """Sample audio payload shape without exposing raw Qdrant payload values."""
 
@@ -1600,6 +2343,13 @@ def _missing_required_field_counts(payloads: List[Dict[str, Any]]) -> Dict[str, 
             if not payload.get(field):
                 missing_required[field] += 1
     return dict(sorted(missing_required.items()))
+
+
+def _is_safe_payload_shape_key(key: Any) -> bool:
+    text = str(key or "").strip().lower()
+    if not text:
+        return False
+    return not any(token in text for token in ("path", "dir", "file", "root", "stdout", "stderr", "trace", "raw"))
 
 
 def _evaluate_qdrant_audio_payloads(
@@ -1777,6 +2527,11 @@ def latest_run_preview(limit: int = 12) -> Dict[str, Any]:
 @router.get("/api/runs/latest/evidence")
 def latest_run_evidence(limit: int = Query(default=24, ge=1, le=100)) -> Dict[str, Any]:
     return _latest_run_evidence(limit=limit)
+
+
+@router.get("/api/runs/audio-proof/latest")
+def latest_audio_provenance_snapshot(limit: int = Query(default=8, ge=1, le=24)) -> Dict[str, Any]:
+    return _latest_audio_provenance_snapshot(limit=limit)
 
 
 def _faiss_count(path: str) -> int:

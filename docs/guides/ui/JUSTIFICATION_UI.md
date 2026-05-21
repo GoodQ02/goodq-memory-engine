@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE_NOTE -->
-<!-- DOC_LAST_VERIFIED: 2026-05-19 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-21 -->
 
 # GoodQ4All UI Status
 
@@ -16,8 +16,8 @@ literal envelope rendering.
 - The API process serves supported read-only browser surfaces under `/ui/*`.
 - `GET /` remains JSON discovery, not a browser shell.
 - The Operator Console reads only local API routes and persisted artifacts. It
-  is the current Flight Deck / proof / retrieval / storage / recurrence /
-  timeline inspection cockpit.
+  is the current scope / Flight Deck / proof / retrieval / storage /
+  recurrence / timeline inspection cockpit.
 - The Justification Channel may load only explicit read-only sources: bundled
   example data, a user-selected local JSON file, or `GET /api/read/envelope`
   through an explicit API base.
@@ -55,9 +55,12 @@ literal envelope rendering.
 
 ## UI Audit Snapshot
 
-Last checked: 2026-05-19.
+Last checked: 2026-05-21.
 
 - The operator console is active as a read-only local inspection surface.
+- The Current Scope strip is the top-level context surface for API base,
+  latest run, run source, temporal scope, strict audio proof, browsing target,
+  selected scene, and read-only mode.
 - Keep future UI work observer-only until a separate control-surface design is
   approved.
 - Use `docs/architecture/OUTPUT_SCHEMA_INVENTORY.md` and

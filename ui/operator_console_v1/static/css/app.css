@@ -272,6 +272,97 @@ a {
   padding: 28px;
 }
 
+.scope-banner {
+  display: grid;
+  grid-template-columns: minmax(138px, 0.16fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: stretch;
+  margin: 0 0 18px;
+  padding: 14px;
+  border: 1px solid rgba(255, 179, 0, 0.24);
+  border-radius: 6px;
+  background:
+    linear-gradient(90deg, rgba(255, 179, 0, 0.09), transparent 42%),
+    rgba(22, 26, 32, 0.82);
+  color: #e8e8e8;
+}
+
+.scope-kicker {
+  margin: 0 0 4px;
+  color: var(--flight-muted);
+  font-family: "Courier New", ui-monospace, monospace;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.1;
+  text-transform: uppercase;
+}
+
+.scope-banner > div:first-child strong {
+  color: var(--flight-amber);
+  font-size: 13px;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.scope-banner-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(168px, 1fr));
+  gap: 8px;
+}
+
+.scope-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 58px;
+  padding: 10px;
+  border: 1px solid rgba(168, 173, 183, 0.22);
+  border-radius: 6px;
+  background: rgba(15, 17, 21, 0.56);
+}
+
+.scope-item.ok,
+.scope-item.live {
+  border-color: rgba(0, 200, 83, 0.28);
+}
+
+.scope-item.warn,
+.scope-item.demo {
+  border-color: rgba(255, 171, 0, 0.36);
+}
+
+.scope-item.error {
+  border-color: rgba(255, 82, 82, 0.38);
+}
+
+.scope-item.historical {
+  border-color: rgba(215, 199, 255, 0.34);
+}
+
+.scope-label,
+.scope-note {
+  display: block;
+  overflow: hidden;
+  color: var(--flight-muted);
+  font-family: "Courier New", ui-monospace, monospace;
+  font-size: 10px;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scope-value {
+  display: block;
+  overflow: hidden;
+  margin: 3px 0;
+  color: #f7f1d2;
+  font-size: 12px;
+  line-height: 1.22;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .flight-deck {
   position: relative;
   margin: 0 0 28px;
@@ -2767,6 +2858,14 @@ h3 {
     flex-direction: column;
   }
 
+  .scope-banner {
+    grid-template-columns: 1fr;
+  }
+
+  .scope-banner-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .retrieval-evidence-grid {
     grid-template-columns: minmax(96px, 0.34fr) minmax(0, 1fr);
   }
@@ -2798,6 +2897,10 @@ h3 {
 
   .connection {
     width: 100%;
+  }
+
+  .scope-banner-grid {
+    grid-template-columns: 1fr;
   }
 
   .content {

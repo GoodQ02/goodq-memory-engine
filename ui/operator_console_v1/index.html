@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>GoodQ4All Operator Console</title>
-    <link rel="stylesheet" href="./static/css/app.css?v=20260520-entity-evidence-1" />
+    <link rel="stylesheet" href="./static/css/app.css?v=20260521-scope-banner-1" />
   </head>
   <body>
     <div class="app-shell">
@@ -51,6 +51,22 @@
       </aside>
 
       <main class="content">
+        <section
+          class="scope-banner"
+          id="scope-banner"
+          data-testid="scope-banner"
+          aria-label="Current runtime scope"
+          aria-live="polite"
+        >
+          <div>
+            <p class="scope-kicker">You are here</p>
+            <strong>Current Scope</strong>
+          </div>
+          <div class="scope-banner-grid" id="scope-banner-grid" data-testid="scope-banner-grid">
+            <span>Awaiting local API.</span>
+          </div>
+        </section>
+
         <section class="flight-deck" id="flight-deck" aria-labelledby="flight-deck-title" data-testid="flight-deck">
           <div class="flight-header" data-testid="flight-deck-header">
             <strong>GOODQ4ALL</strong>
@@ -300,6 +316,6 @@
       </div>
     </template>
 
-    <script src="./static/js/app.js?v=20260520-entity-evidence-1"></script>
+    <script src="./static/js/app.js?v=20260521-scope-banner-1"></script>
   </body>
 </html>

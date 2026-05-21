@@ -36,11 +36,22 @@ def test_operator_console_surfaces_runtime_clarity_state_grammar_and_storage() -
     repo_root = Path(__file__).resolve().parents[2]
     index_html = (repo_root / "ui" / "operator_console_v1" / "index.html").read_text(encoding="utf-8")
     app_js = (repo_root / "ui" / "operator_console_v1" / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    app_css = (repo_root / "ui" / "operator_console_v1" / "static" / "css" / "app.css").read_text(encoding="utf-8")
 
     assert "api-environment-pill" in index_html
+    assert 'data-testid="scope-banner"' in index_html
+    assert 'data-testid="scope-banner-grid"' in index_html
     assert "[Live Data]" in app_js
     assert "[Demo]" in app_js
     assert "STATE_GRAMMAR" in app_js
+    assert "RUN_SCOPE_GRAMMAR" in app_js
+    assert "renderScopeBanner" in app_js
+    assert "Direct CLI Output" in app_js
+    assert "Standalone Scene Probe" in app_js
+    assert "strict run-matched CLAP/Qdrant verdict" in app_js
+    assert "does not mutate memory, ingestion, or config" in app_js
+    assert ".scope-banner" in app_css
+    assert ".scope-item" in app_css
     for label in [
         "Ready",
         "Optional Offline",
@@ -138,8 +149,8 @@ def test_operator_console_surfaces_audio_emotion_distribution() -> None:
     app_js = (repo_root / "ui" / "operator_console_v1" / "static" / "js" / "app.js").read_text(encoding="utf-8")
     app_css = (repo_root / "ui" / "operator_console_v1" / "static" / "css" / "app.css").read_text(encoding="utf-8")
 
-    assert "app.css?v=20260520-entity-evidence-1" in index_html
-    assert "20260520-entity-evidence-1" in index_html
+    assert "app.css?v=20260521-scope-banner-1" in index_html
+    assert "20260521-scope-banner-1" in index_html
     assert "renderAudioEmotionDistribution" in app_js
     assert "Audio Emotion Distribution" in app_js
     assert "Audio classifier labels, latest temporal index" in app_js
@@ -216,7 +227,7 @@ def test_retrieval_console_surfaces_scene_context_lens() -> None:
     app_js = (repo_root / "ui" / "operator_console_v1" / "static" / "js" / "app.js").read_text(encoding="utf-8")
     app_css = (repo_root / "ui" / "operator_console_v1" / "static" / "css" / "app.css").read_text(encoding="utf-8")
 
-    assert "20260520-entity-evidence-1" in index_html
+    assert "20260521-scope-banner-1" in index_html
     assert "appendRetrievalSceneContextLens" in app_js
     assert "Scene Context Lens" in app_js
     assert "Emotional arc" in app_js
@@ -234,7 +245,7 @@ def test_scene_inspector_surfaces_compact_evidence_summary() -> None:
     app_js = (repo_root / "ui" / "operator_console_v1" / "static" / "js" / "app.js").read_text(encoding="utf-8")
     app_css = (repo_root / "ui" / "operator_console_v1" / "static" / "css" / "app.css").read_text(encoding="utf-8")
 
-    assert "20260520-entity-evidence-1" in index_html
+    assert "20260521-scope-banner-1" in index_html
     assert "appendSceneEvidenceSummary" in app_js
     assert "Scene Evidence Summary" in app_js
     assert "Meaning source" in app_js
@@ -254,7 +265,7 @@ def test_media_preview_links_visual_proof_to_scene_evidence_summary() -> None:
     app_js = (repo_root / "ui" / "operator_console_v1" / "static" / "js" / "app.js").read_text(encoding="utf-8")
     app_css = (repo_root / "ui" / "operator_console_v1" / "static" / "css" / "app.css").read_text(encoding="utf-8")
 
-    assert "20260520-entity-evidence-1" in index_html
+    assert "20260521-scope-banner-1" in index_html
     assert "previewMeaningPayload" in app_js
     assert "appendPreviewEvidenceBridge" in app_js
     assert "Visual proof linked to selected scene evidence summary" in app_js
@@ -275,7 +286,7 @@ def test_retrieval_handoff_surfaces_shared_scene_lineage() -> None:
     app_js = (repo_root / "ui" / "operator_console_v1" / "static" / "js" / "app.js").read_text(encoding="utf-8")
     app_css = (repo_root / "ui" / "operator_console_v1" / "static" / "css" / "app.css").read_text(encoding="utf-8")
 
-    assert "20260520-entity-evidence-1" in index_html
+    assert "20260521-scope-banner-1" in index_html
     assert "setRetrievalSceneLineage" in app_js
     assert "lineageMatchesScene" in app_js
     assert "appendSceneLineageBridge" in app_js
@@ -296,7 +307,7 @@ def test_retrieval_preview_surfaces_visual_proof_keyframe() -> None:
     app_js = (repo_root / "ui" / "operator_console_v1" / "static" / "js" / "app.js").read_text(encoding="utf-8")
     app_css = (repo_root / "ui" / "operator_console_v1" / "static" / "css" / "app.css").read_text(encoding="utf-8")
 
-    assert "20260520-entity-evidence-1" in index_html
+    assert "20260521-scope-banner-1" in index_html
     assert "appendRetrievalVisualProof" in app_js
     assert "retrievalFrameEndpoint" in app_js
     assert "Retrieval result keyframe" in app_js

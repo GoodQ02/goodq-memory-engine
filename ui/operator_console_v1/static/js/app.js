@@ -67,6 +67,34 @@
     UNKNOWN: { label: "Unknown", kind: "unknown" },
   });
 
+  const RUN_SCOPE_GRAMMAR = Object.freeze({
+    configured_output_scene_results: {
+      label: "Direct CLI Output",
+      kind: "ok",
+      note: "configured output file; active runtime evidence",
+    },
+    scene_ingest_results: {
+      label: "Standalone Scene Probe",
+      kind: "historical",
+      note: "direct scene output; wrapper ledger may be absent",
+    },
+    standalone_scene_results: {
+      label: "Standalone Scene Probe",
+      kind: "historical",
+      note: "direct scene output; wrapper ledger may be absent",
+    },
+    wrapper_report_root: {
+      label: "Wrapper Report Root",
+      kind: "ok",
+      note: "orchestrated report artifact root",
+    },
+    structured_run: {
+      label: "Structured Run",
+      kind: "info",
+      note: "latest structured run projection",
+    },
+  });
+
   const diagnosticEndpointNames = new Set(["engines", "gpu", "wsl", "queue"]);
   const optionalEndpointNames = new Set(["envelope"]);
   const endpointTimeoutMs = {
@@ -339,6 +367,40 @@
     } catch (_e) {
       return { label: "API: Not observed", kind: "unknown" };
     }
+  }
+
+  function runScopeDescriptor(evidenceRun, run) {
+    const scope = String((evidenceRun && evidenceRun.scope) || (run && run.scope) || "").trim();
+    const runKind = String((evidenceRun && evidenceRun.run_kind) || (run && run.run_kind) || "").trim();
+    const descriptor = RUN_SCOPE_GRAMMAR[scope] || RUN_SCOPE_GRAMMAR[runKind] || RUN_SCOPE_GRAMMAR.structured_run;
+    if (!scope && !runKind && !(run && run.available)) {
+      return {
+        label: "No Run Selected",
+        kind: "unknown",
+        note: "latest run evidence not observed",
+        raw: "",
+      };
+    }
+    return {
+      label: descriptor.label,
+      kind: descriptor.kind,
+      note: descriptor.note,
+      raw: scope || runKind || "structured_run",
+    };
+  }
+
+  function appendScopeItem(container, label, value, kind, note, title) {
+    const item = document.createElement("div");
+    item.className = `scope-item ${kind || "unknown"}`;
+    item.setAttribute("data-testid", `scope-item-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`);
+    if (title) item.title = title;
+    const text = document.createElement("div");
+    appendText(text, "span", label, "scope-label");
+    appendText(text, "strong", safeString(value, label), "scope-value");
+    if (note) appendText(text, "small", note, "scope-note");
+    item.appendChild(text);
+    item.appendChild(makeStatusDot(kind || "unknown", `${label}: ${safeString(value, label)}`));
+    container.appendChild(item);
   }
 
   function flightChip(name, label, kind) {
@@ -700,6 +762,7 @@
 
   function renderLoadingShell() {
     [
+      "#scope-banner-grid",
       "#flight-system-map",
       "#flight-first-run",
       "#first-run-guide",
@@ -755,6 +818,101 @@
     boundaryDot.setAttribute("aria-hidden", "true");
     boundary.appendChild(boundaryDot);
     appendText(boundary, "span", local ? "Local machine boundary" : "Non-local API base");
+  }
+
+  function renderScopeBanner() {
+    const grid = qs("#scope-banner-grid");
+    if (!grid) return;
+    clear(grid);
+
+    const connected = state.data.status && !state.errors.status;
+    const run = state.data.run || {};
+    const evidence = state.data.runEvidence || {};
+    const evidenceRun = evidence.run || {};
+    const scope = runScopeDescriptor(evidenceRun, run);
+    const latestEpisode = evidence.latest_episode || run.latest_episode || {};
+    const selected = selectedSegmentEntry();
+    const selectedSegment = selected && selected.segment ? selected.segment : {};
+    const runId = run.run_id || evidenceRun.run_id || latestEpisode.run_id || "";
+    const sceneCount = numberValue(run.scenes_processed ?? latestEpisode.scene_count ?? evidence.temporal_index?.total_scenes);
+    const temporalCount = numberValue(evidence.temporal_index?.total_scenes);
+    const audioProof = evidence.audio_vector_proof || {};
+    const audioProofStatus = String(audioProof.status || "").toLowerCase();
+    const audioProofKind = audioProofStatus === "current_run_audio_vector_proven" ? "ok" : audioProofStatus === "partial" ? "warn" : "unknown";
+    const audioProofLabel = audioProof.label || (audioProofKind === "ok" ? "Proven" : "No Current-Run Evidence");
+    const selectedSceneValue = selected
+      ? `${sceneDisplayLabel(selectedSegment.scene_id || selectedSegment.index || selected.key, selected.index)} ${formatTime(selectedSegment.start)}-${formatTime(selectedSegment.end)}`
+      : "Not selected";
+    const selectedSceneNote = state.sceneLineage
+      ? `${state.sceneLineage.source} handoff`
+      : "timeline selection";
+    const environment = apiEnvironment();
+    const apiKind = environment.kind === "live" ? "ok" : environment.kind;
+
+    appendScopeItem(
+      grid,
+      "API",
+      connected ? environment.label.replace(/^API:\s*/, "") : "No Response",
+      connected ? apiKind : "error",
+      connected ? "local read surface" : state.errors.status || "status endpoint unavailable",
+      state.apiBase
+    );
+    appendScopeItem(
+      grid,
+      "Latest Run",
+      runId ? compactIdentifier(runId, { key: "run_id", max: 24 }) : "Not observed",
+      runId ? "ok" : "unknown",
+      sceneCount !== null ? `${sceneCount} scene${sceneCount === 1 ? "" : "s"} in selected run scope` : "scene count not exposed",
+      runId
+    );
+    appendScopeItem(
+      grid,
+      "Run Source",
+      scope.label,
+      scope.kind,
+      scope.note,
+      scope.raw
+    );
+    appendScopeItem(
+      grid,
+      "Temporal Scope",
+      temporalCount !== null ? `${temporalCount} scene${temporalCount === 1 ? "" : "s"}` : "Not observed",
+      temporalCount !== null ? "info" : "unknown",
+      temporalCount !== null ? "latest temporal projection" : "temporal index not exposed",
+      ""
+    );
+    appendScopeItem(
+      grid,
+      "Audio Proof",
+      audioProofLabel,
+      audioProofKind,
+      audioProof.impact || "strict run-matched CLAP/Qdrant verdict",
+      audioProofStatus
+    );
+    appendScopeItem(
+      grid,
+      "Browsing",
+      state.selectedVideoId || latestEpisode.episode || "Not observed",
+      state.selectedVideoId || latestEpisode.episode ? "info" : "unknown",
+      "selected inventory/timeline target",
+      state.selectedVideoId || latestEpisode.episode || ""
+    );
+    appendScopeItem(
+      grid,
+      "Selected Scene",
+      selectedSceneValue,
+      selected ? "ok" : "unknown",
+      selected ? selectedSceneNote : "select a timeline or retrieval row",
+      selectedSegment.scene_id || selectedSceneValue
+    );
+    appendScopeItem(
+      grid,
+      "Mode",
+      "Read-only",
+      "ok",
+      "does not mutate memory, ingestion, or config",
+      "operator console boundary"
+    );
   }
 
   function renderFlightDeck() {
@@ -4196,6 +4354,7 @@
   function render() {
     qs("#api-base").value = state.apiBase;
     renderConnection();
+    renderScopeBanner();
     renderFlightDeck();
     renderProofPanel();
     renderRetrievalConsole();

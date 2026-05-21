@@ -584,6 +584,25 @@ def test_sentiment_guards_skip_invalid_text_inputs(
     assert result["sentiment_meta"]["reason"] == expected_reason
 
 
+def test_emotion_classify_surfaces_model_unavailable_reason(monkeypatch):
+    from steps.emotion_classify import step as emotion_step
+
+    monkeypatch.setitem(emotion_step._EMO, "model", None)
+    monkeypatch.setitem(emotion_step._EMO, "tok", None)
+    monkeypatch.setitem(emotion_step._EMO, "labels", [])
+    monkeypatch.setitem(emotion_step._EMO, "device", "cpu")
+    monkeypatch.setitem(emotion_step._EMO, "error", "torch.load safety gate requires torch 2.6")
+    monkeypatch.setattr(emotion_step, "_load_emotion", lambda: None)
+
+    result = emotion_step.emotion_classify({"transcript": "family memory with laughter"}, {"config": {}})
+
+    assert result["emotions"] is None
+    assert result["emotion_meta"]["status"] == "unavailable"
+    assert result["emotion_meta"]["engine"] == "cardiffnlp"
+    assert result["emotion_meta"]["reason"] == "model_load_failed"
+    assert "torch.load safety gate" in result["emotion_meta"]["error"]
+
+
 @pytest.mark.parametrize(
     ("step_name", "result", "expected_status", "expected_reason", "expected_embedding"),
     [

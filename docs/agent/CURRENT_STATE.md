@@ -213,6 +213,10 @@ Validated selector fix:
 - Projection gaps: `ok`.
 - Qdrant audio inventory still remains separate and read-only; it does not
   override latest structured-run proof.
+- Operator Console v1 now includes a Current Scope strip above Flight Deck.
+  Live validation against port `30000` showed the selected API, latest run,
+  run source `Direct CLI Output`, temporal scope `1` scene, strict audio proof
+  `Proven`, selected browsing target, selected scene, and read-only mode.
 
 Root cause confirmed:
 
@@ -251,7 +255,7 @@ they are active again:
    `reports/local_housekeeping/2026-05-20-memory-clean-start/` if working on
    this local machine.
 2. Confirm local config points to the fresh home-memory epoch.
-3. Inspect the operator console against the latest direct-output selector
-   validation run.
-4. If the scene evidence is acceptable, decide whether to run the first full
-   source video or do one more UI pass for the latest-run proof scope banner.
+3. Use the Operator Console Current Scope strip as the preflight check: API
+   `30000`, run source, temporal scope, audio proof, selected browsing target,
+   and read-only mode should be visible before broad ingestion.
+4. If the scene evidence is acceptable, run the first full source video.

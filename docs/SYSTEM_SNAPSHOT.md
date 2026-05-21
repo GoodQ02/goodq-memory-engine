@@ -1,10 +1,10 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: GENERATED_SNAPSHOT -->
-<!-- DOC_LAST_VERIFIED: 2026-05-20 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-21 -->
 
 # System Snapshot
 
-_Operational operator-state alignment refreshed: 2026-05-20._
+_Operational operator-state alignment refreshed: 2026-05-21._
 
 This is a bounded release-era system snapshot. It is useful for understanding
 the supported host/runtime baseline, but it is not a live witness monitor.
@@ -145,10 +145,13 @@ the supported host/runtime baseline, but it is not a live witness monitor.
   - supported browser UI now includes Operator Console v1 at
     `/ui/operator_console_v1/`, served by the API process, plus the
     Justification Channel at `/ui/justification_v1/`.
-  - Operator Console panels currently cover Flight Deck orientation,
-    proof/evidence status, retrieval inspection, storage/runtime summaries,
-    recurrence report readouts, video inventory, selected timeline, and
-    Justification Channel handoff.
+  - Operator Console panels currently cover Current Scope, Flight Deck
+    orientation, proof/evidence status, retrieval inspection, storage/runtime
+    summaries, recurrence report readouts, video inventory, selected timeline,
+    and Justification Channel handoff.
+  - Current Scope is the browser-side preflight strip for API base, latest run,
+    run source, temporal scope, strict audio proof, browsing target, selected
+    scene, and read-only mode.
   - live local route check on 2026-05-19 returned `200` for
     `/ui/operator_console_v1/` and contained Flight Deck, Proof Panel, and
     Retrieval Console surfaces.

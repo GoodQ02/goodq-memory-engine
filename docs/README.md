@@ -176,9 +176,9 @@ changes.
 
 GoodQ4All now ships a local read-only operator console at
 `ui/operator_console_v1/`, served by the API process at
-`/ui/operator_console_v1/`. It is an inspection cockpit for runtime state,
-proof/evidence, retrieval, storage, recurrence reports, video inventory, and
-scene/timeline projections.
+`/ui/operator_console_v1/`. It is an inspection cockpit for current scope,
+runtime state, proof/evidence, retrieval, storage, recurrence reports, video
+inventory, and scene/timeline projections.
 
 The console is not a control plane. It does not trigger ingestion, reindex
 memory, heal configs, mutate persistence, generate recurrence reports, or

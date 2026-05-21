@@ -14,7 +14,20 @@
     "wsl_distro": "Ubuntu-22.04",
     "operator_console": {
       "path": "/ui/operator_console_v1/",
-      "authority": "read_only"
+      "authority": "read_only",
+      "current_scope_strip": {
+        "status": "implemented",
+        "surfaces": [
+          "api_base",
+          "latest_run",
+          "run_source",
+          "temporal_scope",
+          "audio_proof",
+          "browsing_target",
+          "selected_scene",
+          "read_only_mode"
+        ]
+      }
     },
     "llm": {
       "vllm_primary": "healthy",
@@ -192,6 +205,12 @@
         "temporal_scene_count": 1,
         "projection_gaps": "ok",
         "scene_context_llm": "1/1 temporal segments"
+      },
+      "operator_console": {
+        "current_scope_strip": "validated",
+        "run_source_label": "Direct CLI Output",
+        "audio_proof_label": "Proven",
+        "mode": "read_only"
       },
       "root_cause": [
         "explicit report-root probes write under reports/fresh_ingest_runs",

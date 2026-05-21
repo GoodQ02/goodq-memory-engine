@@ -1,10 +1,10 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: GENERATED_SNAPSHOT -->
-<!-- DOC_LAST_VERIFIED: 2026-05-20 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-21 -->
 
 # GoodQ4All Agent Status
 
-_Operational restart checkpoint aligned: 2026-05-20._
+_Operational restart checkpoint aligned: 2026-05-21._
 
 This document is a bounded operator snapshot of the current release-era
 stitching and offline-package baseline.
@@ -13,6 +13,18 @@ Use canonical runtime contracts and released evidence surfaces as source of
 truth for live claims. Do not treat this document as a live witness monitor.
 
 ## Current Restart Checkpoint
+- Pause checkpoint, 2026-05-21:
+  - `/api/runs/latest/preview` and `/api/runs/latest/evidence` now consider
+    both indexed report roots and the configured direct CLI output file, then
+    choose the freshest read-only scope.
+  - configured direct CLI output is surfaced as
+    `scope=configured_output_scene_results`; the operator console labels this
+    as `Direct CLI Output`.
+  - Operator Console v1 now opens with a Current Scope strip above Flight Deck:
+    API base, latest run, run source, temporal scope, strict audio proof,
+    browsing target, selected scene, and read-only mode.
+  - latest validated direct-output probe showed strict audio proof as
+    `current_run_audio_vector_proven` for `1 / 1` CLAP-ok scene.
 - Pause checkpoint, 2026-05-20:
   - status: operator proof visibility now separates strict latest-run audio
     evidence from run-tagged Qdrant audio inventory.
@@ -39,10 +51,10 @@ truth for live claims. Do not treat this document as a live witness monitor.
   - supported UI now includes Operator Console v1 at
     `/ui/operator_console_v1/`, served by the API process. The older
     Justification Channel remains available at `/ui/justification_v1/`.
-  - Operator Console panels currently cover Flight Deck orientation,
-    proof/evidence status, retrieval inspection, storage/runtime summaries,
-    recurrence report readouts, video inventory, selected timeline, and
-    Justification Channel handoff.
+  - Operator Console panels currently cover Current Scope, Flight Deck
+    orientation, proof/evidence status, retrieval inspection, storage/runtime
+    summaries, recurrence report readouts, video inventory, selected timeline,
+    and Justification Channel handoff.
   - verified live local route on 2026-05-19:
     `/ui/operator_console_v1/?api_base=http%3A%2F%2F127.0.0.1%3A30000`
     returned `200` and included Flight Deck, Proof Panel, and Retrieval Console

@@ -249,9 +249,9 @@ GoodQ4All currently supports:
 - CPU-safe baseline execution with optional GPU / WSL acceleration
 
 GoodQ4All now ships a local read-only operator console at
-`/ui/operator_console_v1/`. It exposes the Flight Deck, proof/evidence status,
-retrieval inspection, storage/runtime summaries, recurrence reports, video
-inventory, and scene/timeline read models.
+`/ui/operator_console_v1/`. It exposes the Current Scope strip, Flight Deck,
+proof/evidence status, retrieval inspection, storage/runtime summaries,
+recurrence reports, video inventory, and scene/timeline read models.
 
 The console is an inspection surface only. It does not trigger ingestion,
 reindex memory, heal configs, mutate persistence, generate reports, or activate

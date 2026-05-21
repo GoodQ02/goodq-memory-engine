@@ -100,10 +100,13 @@ Router-backed endpoint families mounted into the same process:
 The API process serves two read-only browser surfaces:
 
 - `/ui/operator_console_v1/` is the current operator console. It consumes the
-  read-only API and persisted artifacts for Flight Deck status, proof/evidence,
-  retrieval inspection, storage/runtime summaries, recurrence report readouts,
-  video inventory, scene/timeline projections, and the compact audio provenance
-  inventory drilldown.
+  read-only API and persisted artifacts for the Current Scope strip, Flight
+  Deck status, proof/evidence, retrieval inspection, storage/runtime summaries,
+  recurrence report readouts, video inventory, scene/timeline projections, and
+  the compact audio provenance inventory drilldown. The Current Scope strip is
+  the top-level browser context: API base, latest run, run source, temporal
+  scope, strict audio proof, browsing target, selected scene, and read-only
+  mode.
 - `/ui/justification_v1/` is the literal Justification Channel envelope
   renderer.
 

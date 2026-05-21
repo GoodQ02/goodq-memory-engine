@@ -1389,6 +1389,40 @@ def _summarize_temporal_index(payload: Any) -> Dict[str, Any]:
     }
 
 
+def _audio_emotion_score_buckets_from_records(records: List[Dict[str, Any]], *, nested_audio: bool = False) -> List[Dict[str, Any]]:
+    buckets: Dict[str, List[float]] = {}
+    for record in records:
+        if not isinstance(record, dict):
+            continue
+        source = record.get("audio") if nested_audio and isinstance(record.get("audio"), dict) else record
+        scores = source.get("audio_emotion_scores") or source.get("emotion_scores")
+        if not isinstance(scores, dict):
+            continue
+        normalized_scores: Dict[str, float] = {}
+        for label, score in scores.items():
+            normalized_label = str(label or "").strip().lower()
+            score_value = _safe_float(score)
+            if normalized_label and score_value is not None:
+                normalized_scores[normalized_label] = score_value
+        if not normalized_scores:
+            continue
+        top_label, top_score = max(normalized_scores.items(), key=lambda item: item[1])
+        buckets.setdefault(top_label, []).append(top_score)
+
+    rows: List[Dict[str, Any]] = []
+    for label, values in buckets.items():
+        rows.append(
+            {
+                "label": label,
+                "count": len(values),
+                "average_score": _round_number(sum(values) / len(values)),
+                "max_score": _round_number(max(values)),
+                "scope": "raw_score_not_promoted",
+            }
+        )
+    return sorted(rows, key=lambda row: (row.get("count") or 0, row.get("max_score") or 0), reverse=True)[:8]
+
+
 def _summarize_sentiment(payload: Any, *, scene_results_payload: Any = None) -> Dict[str, Any]:
     if not isinstance(payload, dict):
         scene_records = _scene_records_from_results(scene_results_payload)
@@ -1434,6 +1468,7 @@ def _summarize_sentiment(payload: Any, *, scene_results_payload: Any = None) -> 
                 {"label": label, "count": count}
                 for label, count in audio_emotions.most_common(8)
             ],
+            "top_audio_emotion_score_signals": _audio_emotion_score_buckets_from_records(scene_records, nested_audio=True),
             "sentiment_labels": [
                 {"label": label, "count": count}
                 for label, count in sentiment_labels.most_common(8)
@@ -1481,6 +1516,7 @@ def _summarize_sentiment(payload: Any, *, scene_results_payload: Any = None) -> 
         "segments_with_audio_emotion": payload.get("segments_with_audio_emotion") or sum(audio_emotions.values()),
         "segments_with_sentiment": sum(sentiment_labels.values()),
         "top_audio_emotions": top_audio,
+        "top_audio_emotion_score_signals": _audio_emotion_score_buckets_from_records(segments),
         "sentiment_labels": [
             {"label": label, "count": count}
             for label, count in sentiment_labels.most_common(8)

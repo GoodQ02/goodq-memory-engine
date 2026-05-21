@@ -993,6 +993,64 @@ def test_sentiment_summary_uses_scene_results_when_temporal_index_missing(monkey
     assert summary["sentiment_labels"] == [{"label": "positive", "count": 1}]
 
 
+def test_sentiment_summary_surfaces_unpromoted_audio_emotion_scores(monkeypatch) -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    if str(repo_root) not in sys.path:
+        sys.path.insert(0, str(repo_root))
+
+    fake_config_loader = types.ModuleType("steps.common.config_loader")
+    fake_config_loader.load_configs = lambda overrides=None: {
+        "paths": {"data_root": "data", "db_path": "data/memory.db"},
+        "host": {},
+        "memory": {},
+        "llm": {},
+    }
+    monkeypatch.setitem(sys.modules, "steps.common.config_loader", fake_config_loader)
+
+    fake_memory_store = types.ModuleType("steps.common.memory_store")
+    fake_memory_store.normalize_memory_tier_list = lambda values: values
+    monkeypatch.setitem(sys.modules, "steps.common.memory_store", fake_memory_store)
+
+    fake_ingest_requests = types.ModuleType("api.utils.ingest_requests")
+    fake_ingest_requests.is_supported_ingest_path = lambda path: True
+    monkeypatch.setitem(sys.modules, "api.utils.ingest_requests", fake_ingest_requests)
+
+    fake_goodq_version = types.ModuleType("goodq_version")
+    fake_goodq_version.GOODQ_VERSION = "test"
+    monkeypatch.setitem(sys.modules, "goodq_version", fake_goodq_version)
+
+    runtime = _load_runtime_route_module(repo_root)
+
+    summary = runtime._summarize_sentiment(
+        {
+            "segments": [
+                {
+                    "audio_emotion": None,
+                    "audio_emotion_scores": {
+                        "angry": 0.1307,
+                        "calm": 0.1208,
+                        "sad": 0.1409,
+                    },
+                    "sentiment_label": "positive",
+                    "sentiment_score": 0.99,
+                }
+            ]
+        }
+    )
+
+    assert summary["segments_with_audio_emotion"] == 0
+    assert summary["top_audio_emotions"] == []
+    assert summary["top_audio_emotion_score_signals"] == [
+        {
+            "label": "sad",
+            "count": 1,
+            "average_score": 0.141,
+            "max_score": 0.141,
+            "scope": "raw_score_not_promoted",
+        }
+    ]
+
+
 def test_audio_vector_proof_counts_current_run_qdrant_payloads(monkeypatch) -> None:
     repo_root = Path(__file__).resolve().parents[2]
     if str(repo_root) not in sys.path:

@@ -354,6 +354,97 @@
     return grammarState("NOT_EXPOSED", note);
   }
 
+  function llmServiceState(service, label, options) {
+    const opts = options || {};
+    const healthy = numberValue(service?.healthy);
+    const total = numberValue(service?.total);
+    const rawStatus = String(service?.status || "").toLowerCase();
+    const ready = statusKind(rawStatus) === "ok" || (healthy !== null && healthy > 0);
+    const countNote = total !== null ? `${healthy || 0}/${total} probes ready` : "probe count not exposed";
+    if (ready) {
+      return {
+        label,
+        value: "Ready",
+        note: opts.primary ? `primary LLM path; ${countNote}` : `optional service ready; ${countNote}`,
+        kind: "ok",
+      };
+    }
+    if (opts.optional) {
+      return {
+        label,
+        value: "Optional Offline",
+        note: `${opts.role || "fallback"} offline; core memory and read/search remain usable`,
+        kind: "warn",
+      };
+    }
+    return {
+      label,
+      value: "Needs Explanation",
+      note: `${opts.role || "primary service"} not ready; LLM enrichments may be unavailable`,
+      kind: "warn",
+    };
+  }
+
+  function gpuReservationState(gpu) {
+    const used = numberValue(gpu?.memory_used_mb ?? gpu?.gpu_memory_used);
+    const total = numberValue(gpu?.memory_total_mb ?? gpu?.gpu_memory_total);
+    const reportedPercent = numberValue(gpu?.memory_percent);
+    const percent = reportedPercent !== null
+      ? reportedPercent
+      : (used !== null && total ? Math.round((used / total) * 100) : null);
+    const utilization = numberValue(gpu?.utilization_percent ?? gpu?.gpu_utilization);
+    if (percent === null) {
+      return {
+        label: "GPU memory",
+        value: "Not Exposed",
+        note: "memory reservation probe not returned",
+        kind: "unknown",
+      };
+    }
+    const reservedIdle = percent >= 80 && (utilization === null || utilization <= 5);
+    return {
+      label: "GPU memory",
+      value: reservedIdle ? "Reserved" : `${percent}% used`,
+      note: reservedIdle
+        ? "high memory with low utilization; likely model/runtime reservation before a long run"
+        : "GPU memory pressure is visible before ingestion",
+      kind: reservedIdle ? "warn" : "info",
+    };
+  }
+
+  function latestStepByName(stepName) {
+    const rows = state.data.runEvidence?.step_runs?.recent;
+    if (!Array.isArray(rows)) return null;
+    return rows.slice().reverse().find((row) => row && row.step === stepName) || null;
+  }
+
+  function wslAudioState(wsl) {
+    const latestAudioStep = latestStepByName("audio_unified_wsl2");
+    if (latestAudioStep && statusKind(latestAudioStep.status) === "ok") {
+      return {
+        label: "WSL audio",
+        value: "Last Run OK",
+        note: "latest evidence shows the WSL audio step completed",
+        kind: "ok",
+      };
+    }
+    const raw = String(wsl?.audio_processing || "").toLowerCase();
+    if (statusKind(raw) === "ok") {
+      return {
+        label: "WSL audio",
+        value: "Ready",
+        note: "runtime probe reports audio processing available",
+        kind: "ok",
+      };
+    }
+    return {
+      label: "WSL audio",
+      value: "Optional Offline",
+      note: "preflight probe unavailable; inspect latest step rows before treating as a run failure",
+      kind: "warn",
+    };
+  }
+
   function apiEnvironment() {
     try {
       const url = new URL(state.apiBase);
@@ -1573,6 +1664,9 @@
 
   function renderAudioEmotionDistribution(container, sentiment, temporal) {
     const rows = Array.isArray(sentiment.top_audio_emotions) ? sentiment.top_audio_emotions : [];
+    const rawScoreRows = Array.isArray(sentiment.top_audio_emotion_score_signals)
+      ? sentiment.top_audio_emotion_score_signals
+      : [];
     const total = numberValue(sentiment.segments_total ?? temporal.total_scenes);
     const covered = numberValue(sentiment.segments_with_audio_emotion ?? temporal.segments_with_audio_emotion);
 
@@ -1597,6 +1691,12 @@
           kind: rows.length ? "info" : "unknown",
         },
         {
+          label: "Raw score buckets",
+          value: String(rawScoreRows.length),
+          note: rawScoreRows.length ? "reviewable scores; not promoted labels" : "no raw score buckets returned",
+          kind: rawScoreRows.length ? "info" : "unknown",
+        },
+        {
           label: "Text sentiment",
           value: numberValue(sentiment.segments_with_sentiment) ? "Observed" : "Not present",
           note: "tracked separately from audio emotion",
@@ -1607,7 +1707,42 @@
     );
 
     if (!rows.length) {
-      appendText(panel, "p", "No audio emotion labels present in this run.", "sentiment-empty-state");
+      appendText(panel, "p", "No promoted audio emotion labels present in this run.", "sentiment-empty-state");
+      if (rawScoreRows.length) {
+        appendText(
+          panel,
+          "p",
+          "Raw audio emotion score buckets are available for operator review; they are not promoted as current-run labels.",
+          "sentiment-empty-state"
+        );
+        const rawList = document.createElement("div");
+        rawList.className = "emotion-bar-list";
+        rawScoreRows.slice(0, 8).forEach((row) => {
+          const score = numberValue(row.max_score ?? row.average_score) || 0;
+          const count = numberValue(row.count) || 0;
+          const percent = Math.max(4, Math.min(100, Math.round(score * 100)));
+          const item = document.createElement("div");
+          item.className = "emotion-bar-row";
+          item.setAttribute("aria-label", `${safeString(row.label || "unknown", "label")}: raw score ${formatPercent(score)}`);
+
+          const label = document.createElement("span");
+          label.className = "emotion-bar-label";
+          label.textContent = safeString(row.label || "unknown", "label");
+          item.appendChild(label);
+
+          const track = document.createElement("div");
+          track.className = "emotion-bar-track";
+          const fill = document.createElement("span");
+          fill.className = "emotion-bar-fill";
+          fill.style.width = `${percent}%`;
+          track.appendChild(fill);
+          item.appendChild(track);
+
+          appendText(item, "span", `${formatPercent(score)} raw | ${count} scene${count === 1 ? "" : "s"}`, "emotion-bar-count");
+          rawList.appendChild(item);
+        });
+        panel.appendChild(rawList);
+      }
       container.appendChild(panel);
       return;
     }
@@ -1982,13 +2117,32 @@
     if (state.errors.gpu) {
       appendInlineError(node, `GPU stats unavailable: ${state.errors.gpu}`);
     } else {
+      const gpu = state.data.gpu || state.data.status?.gpu || {};
       appendText(node, "h3", "GPU", "panel-subtitle");
-      renderKv(node, state.data.gpu || {}, [
+      appendIndicatorStrip(
+        node,
+        [
+          gpuReservationState(gpu),
+          {
+            label: "GPU utilization",
+            value: numberValue(gpu.utilization_percent ?? gpu.gpu_utilization) !== null
+              ? `${numberValue(gpu.utilization_percent ?? gpu.gpu_utilization)}%`
+              : "Not Exposed",
+            note: "low utilization with high memory can be normal while vLLM holds a model",
+            kind: "info",
+          },
+        ],
+        "machine-rollup-strip"
+      );
+      renderKv(node, gpu, [
         "available",
         "name",
         "utilization_percent",
+        "gpu_utilization",
         "memory_used_mb",
+        "gpu_memory_used",
         "memory_total_mb",
+        "gpu_memory_total",
         "memory_percent",
         "temperature_c",
       ]);
@@ -1997,8 +2151,22 @@
     if (state.errors.wsl) {
       appendInlineError(node, `WSL status unavailable: ${state.errors.wsl}`);
     } else {
+      const wsl = state.data.wsl || state.data.status?.wsl || {};
       appendText(node, "h3", "WSL", "panel-subtitle");
-      renderKv(node, state.data.wsl || {}, [
+      appendIndicatorStrip(
+        node,
+        [
+          wslAudioState(wsl),
+          {
+            label: "WSL distro",
+            value: hasOkStatus(wsl.status) || wsl.active === true ? "Running" : "Not Observed",
+            note: "WSL is a compute extension, not memory truth",
+            kind: hasOkStatus(wsl.status) || wsl.active === true ? "ok" : "unknown",
+          },
+        ],
+        "machine-rollup-strip"
+      );
+      renderKv(node, wsl, [
         "available",
         "status",
         "active",
@@ -2100,9 +2268,44 @@
       ],
       "health-rollup-strip"
     );
+    appendIndicatorStrip(
+      node,
+      [
+        llmServiceState(health.vllm, "Primary LLM (vLLM)", { primary: true, role: "primary LLM path" }),
+        llmServiceState(health.ollama, "Optional fallback (Ollama)", { optional: true, role: "fallback LLM service" }),
+      ],
+      "llm-service-strip"
+    );
+    renderSimpleTable(
+      node,
+      [
+        { key: "name", label: "Service" },
+        { key: "state", label: "State", badge: true },
+        { key: "readiness", label: "Readiness" },
+        { key: "note", label: "Meaning" },
+      ],
+      [
+        (() => {
+          const serviceState = llmServiceState(health.vllm, "Primary LLM (vLLM)", { primary: true, role: "primary LLM path" });
+          return {
+            name: "vLLM",
+            state: serviceState.value,
+            readiness: `${numberValue(health.vllm?.healthy) || 0}/${numberValue(health.vllm?.total) || 0}`,
+            note: serviceState.note,
+          };
+        })(),
+        (() => {
+          const serviceState = llmServiceState(health.ollama, "Optional fallback (Ollama)", { optional: true, role: "fallback LLM service" });
+          return {
+            name: "Ollama",
+            state: serviceState.value,
+            readiness: `${numberValue(health.ollama?.healthy) || 0}/${numberValue(health.ollama?.total) || 0}`,
+            note: serviceState.note,
+          };
+        })(),
+      ]
+    );
     renderKv(node, health.overall || {}, ["status", "total", "healthy", "unhealthy"]);
-    renderKv(node, health.vllm || {}, ["status", "healthy", "total"]);
-    renderKv(node, health.ollama || {}, ["status", "healthy", "total"]);
   }
 
   function retrievalResultKey(result, index) {

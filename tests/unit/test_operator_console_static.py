@@ -110,6 +110,11 @@ def test_operator_console_visual_grammar_reduces_repeated_binary_noise() -> None
     assert "appendIndicatorStrip" in app_js
     assert "Core runtime" in app_js
     assert "Optional model services" in app_js
+    assert "Primary LLM (vLLM)" in app_js
+    assert "Optional fallback (Ollama)" in app_js
+    assert "core memory and read/search remain usable" in app_js
+    assert "high memory with low utilization; likely model/runtime reservation before a long run" in app_js
+    assert "WSL audio" in app_js
     assert "Historical processing artifacts" in app_js
     assert "thumbnailStatusCompact" in app_js
     assert "field-status-rollup" in app_js
@@ -154,6 +159,9 @@ def test_operator_console_surfaces_audio_emotion_distribution() -> None:
     assert "renderAudioEmotionDistribution" in app_js
     assert "Audio Emotion Distribution" in app_js
     assert "Audio classifier labels, latest temporal index" in app_js
+    assert "Raw score buckets" in app_js
+    assert "reviewable scores; not promoted labels" in app_js
+    assert "Raw audio emotion score buckets are available for operator review" in app_js
     assert "Text sentiment labels not present in this run" in app_js
     assert "emotion-bar-list" in app_js
     assert "${count}/${denominator}" in app_js

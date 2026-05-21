@@ -28,7 +28,7 @@ try:
 except ImportError:
     from steps.common.lexicon import score_nrc_emotions
 
-_EMO = {"model": None, "tok": None, "labels": [], "device": "cpu"}
+_EMO = {"model": None, "tok": None, "labels": [], "device": "cpu", "error": None}
 
 
 def _load_emotion():
@@ -54,12 +54,12 @@ def _load_emotion():
             "joy","love","nervousness","optimism","pride","realization","relief","remorse","sadness",
             "surprise","neutral",
         ]
-        _EMO.update({"model": model, "tok": tok, "labels": labels, "device": device})
+        _EMO.update({"model": model, "tok": tok, "labels": labels, "device": device, "error": None})
         logger.info(f"[OK] Emotion model loaded on {device} (GPU config: {gpu_config['memory_fraction']:.1%} memory)")
     except Exception as e:
         logger.error(f"[FAIL] Failed to load emotion model: {str(e)}")
         logger.info("[WARN]  Falling back to CPU mode")
-        _EMO.update({"model": None, "tok": None, "labels": [], "device": "cpu"})
+        _EMO.update({"model": None, "tok": None, "labels": [], "device": "cpu", "error": str(e)})
         # Clear any partial GPU allocations
         GPUManager.clear_cache()
 
@@ -121,7 +121,10 @@ def emotion_classify(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
 
     # If nothing else worked
     if _EMO["model"] is None:
-        return {"emotions": None, "emotion_meta": {"status": "unavailable", "engine": "cardiffnlp"}}
+        meta = {"status": "unavailable", "engine": "cardiffnlp", "reason": "model_load_failed"}
+        if _EMO.get("error"):
+            meta["error"] = str(_EMO.get("error"))[:500]
+        return {"emotions": None, "emotion_meta": meta}
     try:
         import torch  # type: ignore
         import json as _json  # local alias

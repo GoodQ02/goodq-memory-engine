@@ -849,6 +849,78 @@ def test_audio_vector_proof_rejects_legacy_payloads_without_required_fields(monk
     assert proof["missing_required_fields"]["component"] == 1
 
 
+def test_audio_vector_proof_prefers_run_header_collection_over_current_config(monkeypatch) -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    if str(repo_root) not in sys.path:
+        sys.path.insert(0, str(repo_root))
+
+    fake_config_loader = types.ModuleType("steps.common.config_loader")
+    fake_config_loader.load_configs = lambda overrides=None: {
+        "paths": {"data_root": "data", "db_path": "data/memory.db"},
+        "host": {},
+        "memory": {},
+        "llm": {},
+        "qdrant": {"enabled": True, "host": "http://127.0.0.1:6333", "collections": {"audio": "goodq_audio_fresh_epoch"}},
+    }
+    monkeypatch.setitem(sys.modules, "steps.common.config_loader", fake_config_loader)
+
+    fake_memory_store = types.ModuleType("steps.common.memory_store")
+    fake_memory_store.normalize_memory_tier_list = lambda values: values
+    monkeypatch.setitem(sys.modules, "steps.common.memory_store", fake_memory_store)
+
+    fake_ingest_requests = types.ModuleType("api.utils.ingest_requests")
+    fake_ingest_requests.is_supported_ingest_path = lambda path: True
+    monkeypatch.setitem(sys.modules, "api.utils.ingest_requests", fake_ingest_requests)
+
+    fake_goodq_version = types.ModuleType("goodq_version")
+    fake_goodq_version.GOODQ_VERSION = "test"
+    monkeypatch.setitem(sys.modules, "goodq_version", fake_goodq_version)
+
+    runtime = _load_runtime_route_module(repo_root)
+
+    observed: dict[str, list[str]] = {}
+
+    def fake_scroll(runtime_run_id, collection_candidates):
+        observed["collection_candidates"] = list(collection_candidates)
+        return {
+            "status": "ok",
+            "collection": collection_candidates[0],
+            "payloads": [
+                {
+                    "run_id": runtime_run_id,
+                    "scene_id": "scene-a",
+                    "video_id": "video-a",
+                    "embedding_id": "embed-a",
+                    "component": "audio_embed_clap",
+                    "step": "audio_embed_clap",
+                    "model": "laion/clap-htsat-unfused",
+                    "created_at": "2026-05-20T00:00:00Z",
+                    "commit_ts_utc": "2026-05-20T00:00:00Z",
+                }
+            ],
+        }
+
+    monkeypatch.setattr(runtime, "_scroll_qdrant_audio_payloads", fake_scroll)
+
+    proof = runtime._summarize_audio_vector_proof(
+        header={
+            "runtime_run_id": "runtime-power-loss",
+            "qdrant_collections": {"audio": "goodq_audio_power_loss_epoch"},
+        },
+        latest_episode={},
+        temporal_payload={},
+        scene_results_payload={},
+    )
+
+    assert observed["collection_candidates"][:2] == [
+        "goodq_audio_power_loss_epoch",
+        "goodq_audio_fresh_epoch",
+    ]
+    assert proof["collection"] == "goodq_audio_power_loss_epoch"
+    assert proof["status"] == "current_run_audio_vector_proven"
+    assert proof["current_run_qdrant_proven"] == 1
+
+
 def test_audio_provenance_snapshot_lists_run_tagged_qdrant_audio_without_latest_run_claim(monkeypatch) -> None:
     repo_root = Path(__file__).resolve().parents[2]
     if str(repo_root) not in sys.path:

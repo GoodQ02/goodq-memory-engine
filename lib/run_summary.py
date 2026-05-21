@@ -24,6 +24,13 @@ def load_run_summary(run_root: str | Path, reports_root: str | Path | None = Non
                 scene_results_path=scene_results_path,
                 reports_root=effective_reports_root,
             )
+        interrupted_config_path = _find_interrupted_config(root_path)
+        if interrupted_config_path is not None:
+            return _load_interrupted_ingestion_summary(
+                root_path=root_path,
+                config_path=interrupted_config_path,
+                reports_root=effective_reports_root,
+            )
         raise FileNotFoundError(f"Run root is missing a readable experiment log: {root_path}")
 
     plan = payload.get("plan")
@@ -210,6 +217,98 @@ def _load_standalone_scene_results_summary(
     }
 
 
+def _load_interrupted_ingestion_summary(
+    *,
+    root_path: Path,
+    config_path: Path,
+    reports_root: Path,
+) -> Dict[str, Any]:
+    index_entries = run_index.list_runs(reports_root=reports_root)
+    index_entry = next((entry for entry in index_entries if entry["run_id"] == root_path.name), None) or {
+        "run_id": root_path.name,
+        "runtime_run_id": None,
+        "qdrant_collections": {},
+        "run_kind": "interrupted_ingestion",
+        "scope": "resolved_config_only",
+        "status": "interrupted",
+        "epoch": None,
+        "source_dir": None,
+        "started_at": None,
+        "episodes_total": 1,
+        "episodes_completed": 0,
+        "episodes_failed": 0,
+        "episodes_running": 0,
+        "episodes_pending": 0,
+        "scenes_processed": 0,
+        "latest_episode": None,
+    }
+
+    latest_episode = index_entry.get("latest_episode")
+    if not isinstance(latest_episode, dict):
+        latest_episode = {
+            "episode": root_path.name,
+            "status": "interrupted",
+            "run_dir": str(root_path),
+            "scene_count": 0,
+            "files_read": [str(config_path)],
+            "canonical_episode_artifacts": [],
+            "errors": [],
+            "warnings": ["final_scene_ingest_results_missing"],
+        }
+
+    files_read = [str(config_path)]
+    if isinstance(latest_episode.get("files_read"), list):
+        files_read.extend(str(value) for value in latest_episode["files_read"] if isinstance(value, str))
+
+    warnings = latest_episode.get("warnings") if isinstance(latest_episode.get("warnings"), list) else []
+    errors = latest_episode.get("errors") if isinstance(latest_episode.get("errors"), list) else []
+
+    return {
+        "run_header": {
+            "run_id": index_entry["run_id"],
+            "runtime_run_id": index_entry.get("runtime_run_id"),
+            "qdrant_collections": index_entry.get("qdrant_collections") or {},
+            "run_kind": index_entry.get("run_kind") or "interrupted_ingestion",
+            "scope": index_entry.get("scope") or "resolved_config_only",
+            "epoch": index_entry.get("epoch"),
+            "status": index_entry.get("status") or "interrupted",
+            "source_dir": index_entry.get("source_dir"),
+            "start_time": index_entry.get("started_at"),
+            "end_time": "unknown",
+            "total_duration_seconds": "unknown",
+            "trigger_source": "unknown",
+        },
+        "file_job_overview": {
+            "input_files": [],
+            "episodes_total": index_entry.get("episodes_total", 1),
+            "episodes_completed": index_entry.get("episodes_completed", 0),
+            "episodes_failed": index_entry.get("episodes_failed", 0),
+            "episodes_running": index_entry.get("episodes_running", 0),
+            "episodes_pending": index_entry.get("episodes_pending", 0),
+            "scenes_processed": index_entry.get("scenes_processed", 0),
+            "steps_executed": "unknown",
+        },
+        "audio_wsl2_summary": {
+            "jobs_found": "unknown",
+            "notes": "not observed",
+        },
+        "agent_activity": [],
+        "errors_warnings": {
+            "errors": errors,
+            "warnings": warnings,
+        },
+        "outcome_classification": {
+            "status": "interrupted",
+        },
+        "evidence": {
+            "files_read": _dedupe_preserve_order(files_read),
+            "canonical_episode_artifacts": [],
+        },
+        "latest_episode": latest_episode,
+        "episodes": [latest_episode],
+    }
+
+
 def _resolve_run_root(run_root: str | Path, reports_root: str | Path | None = None) -> Path:
     candidate = Path(str(run_root))
     if candidate.is_absolute():
@@ -223,6 +322,14 @@ def _load_json(path: Path) -> Dict[str, Any] | None:
     except Exception as exc:
         logger.warning("run_summary failed to parse path=%s error=%s", path, exc)
         return None
+
+
+def _find_interrupted_config(run_root: Path) -> Optional[Path]:
+    for relative_path in (Path("_resolved_config.json"), Path("workspace") / "_resolved_config.json"):
+        candidate = run_root / relative_path
+        if candidate.is_file():
+            return candidate
+    return None
 
 
 def _load_episode_record(plan_item: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -286,6 +393,8 @@ def _classify_outcome(index_entry: Dict[str, Any], root_status: str) -> str:
     running = int(index_entry.get("episodes_running") or 0)
     pending = int(index_entry.get("episodes_pending") or 0)
 
+    if status == "interrupted":
+        return "interrupted"
     if status == "running" or running > 0 or pending > 0:
         return "running"
     if completed > 0 and failed > 0:

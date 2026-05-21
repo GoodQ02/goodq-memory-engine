@@ -20,6 +20,10 @@ _ACTIVITY_FILES = (
     Path("ingest.stderr.log"),
     Path("workspace") / "_resolved_config.json",
 )
+_INTERRUPTED_CONFIG_FILES = (
+    Path("_resolved_config.json"),
+    Path("workspace") / "_resolved_config.json",
+)
 
 
 def resolve_reports_root(reports_root: str | Path | None = None) -> Path:
@@ -54,6 +58,12 @@ def list_runs(reports_root: str | Path | None = None, limit: int | None = None) 
         if scene_results_path.is_file():
             scene_results_payload = _load_json_any(scene_results_path)
             runs.append(_build_standalone_scene_results_entry(candidate, scene_results_payload, scene_results_path))
+            continue
+
+        interrupted_config_path = _find_interrupted_config(candidate)
+        if interrupted_config_path is not None:
+            interrupted_payload = _load_json(interrupted_config_path) or {}
+            runs.append(_build_interrupted_ingestion_entry(candidate, interrupted_payload, interrupted_config_path))
 
     runs.sort(key=lambda item: (item.get("_sort_ts", 0.0), item["run_id"]), reverse=True)
     for run in runs:
@@ -145,6 +155,72 @@ def _build_standalone_scene_results_entry(run_root: Path, payload: Any, scene_re
     }
 
 
+def _find_interrupted_config(run_root: Path) -> Optional[Path]:
+    for relative_path in _INTERRUPTED_CONFIG_FILES:
+        candidate = run_root / relative_path
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def _build_interrupted_ingestion_entry(run_root: Path, payload: Dict[str, Any], config_path: Path) -> Dict[str, Any]:
+    run_cfg = payload.get("run")
+    if not isinstance(run_cfg, dict):
+        run_cfg = {}
+    paths_cfg = payload.get("paths")
+    if not isinstance(paths_cfg, dict):
+        paths_cfg = {}
+    qdrant_cfg = payload.get("qdrant")
+    if not isinstance(qdrant_cfg, dict):
+        qdrant_cfg = {}
+    qdrant_collections = _normalized_collection_map(qdrant_cfg.get("collections"))
+
+    runtime_run_id = _first_text(
+        run_cfg.get("id"),
+        run_cfg.get("run_id"),
+        payload.get("runtime_run_id"),
+        payload.get("run_id"),
+    )
+    epoch = _first_text(run_cfg.get("epoch"), payload.get("epoch"))
+    source_dir = _first_text(run_cfg.get("source_dir"), payload.get("source_dir"))
+    started_at = _first_text(run_cfg.get("started_at"), payload.get("started_at"), payload.get("ts_utc"))
+
+    latest_episode = {
+        "episode": run_root.name,
+        "status": "interrupted",
+        "run_dir": str(run_root),
+        "scene_count": 0,
+        "files_read": [str(config_path)],
+        "canonical_episode_artifacts": [],
+        "errors": [],
+        "warnings": ["final_scene_ingest_results_missing"],
+    }
+
+    return {
+        "run_id": run_root.name,
+        "runtime_run_id": runtime_run_id,
+        "run_kind": "interrupted_ingestion",
+        "scope": "resolved_config_only",
+        "run_root": str(run_root),
+        "root_log_path": None,
+        "config_path": str(config_path),
+        "status": "interrupted",
+        "epoch": epoch,
+        "source_dir": source_dir,
+        "started_at": started_at,
+        "data_root": _first_text(paths_cfg.get("data_root")),
+        "qdrant_collections": qdrant_collections,
+        "episodes_total": 1,
+        "episodes_completed": 0,
+        "episodes_failed": 0,
+        "episodes_running": 0,
+        "episodes_pending": 0,
+        "scenes_processed": 0,
+        "latest_episode": latest_episode,
+        "_sort_ts": config_path.stat().st_mtime,
+    }
+
+
 def _iter_scene_result_items(payload: Any) -> Iterator[Dict[str, Any]]:
     if isinstance(payload, dict):
         yield payload
@@ -177,6 +253,31 @@ def _scene_results_video_names(payload: Any) -> List[str]:
         if text and text not in names:
             names.append(text)
     return names
+
+
+def _first_text(*values: Any) -> Optional[str]:
+    for value in values:
+        if value is None:
+            continue
+        text = str(value).strip()
+        if text:
+            return text
+    return None
+
+
+def _normalized_collection_map(value: Any) -> Dict[str, str]:
+    if not isinstance(value, dict):
+        return {}
+    out: Dict[str, str] = {}
+    for key, raw in value.items():
+        if not isinstance(key, str):
+            continue
+        if isinstance(raw, dict):
+            raw = raw.get("name")
+        text = _first_text(raw)
+        if text:
+            out[key] = text
+    return out
 
 
 def _count_episode_statuses(plan: Iterable[Dict[str, Any]]) -> Dict[str, int]:

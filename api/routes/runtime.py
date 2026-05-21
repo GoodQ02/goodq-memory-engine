@@ -11,6 +11,7 @@ import json
 import logging
 import os
 import shutil
+import sqlite3
 import subprocess
 import sys
 import time
@@ -417,6 +418,28 @@ def _collect_wsl_status() -> Dict[str, Any]:
     return status
 
 
+def _database_status(db_path: str | Path | None = None) -> Dict[str, Any]:
+    path = Path(db_path) if db_path is not None else _DB_PATH
+    data = {"exists": False, "scenes": 0}
+    try:
+        data["exists"] = path.exists()
+        if not data["exists"]:
+            return data
+
+        read_only_uri = f"{path.resolve().as_uri()}?mode=ro"
+        with sqlite3.connect(read_only_uri, uri=True, timeout=0.2) as conn:
+            table_row = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='scenes'"
+            ).fetchone()
+            if table_row is None:
+                return data
+            count_row = conn.execute("SELECT COUNT(*) FROM scenes").fetchone()
+            data["scenes"] = int((count_row or [0])[0] or 0)
+    except Exception as exc:
+        logger.warning("api status database scene count unavailable path=%s error=%s", path, exc)
+    return data
+
+
 @router.get("/api/status")
 @router.head("/api/status")
 def get_status() -> Dict[str, Any]:
@@ -458,13 +481,7 @@ def get_status() -> Dict[str, Any]:
     except Exception:
         pass
 
-    database_data = {"exists": False, "scenes": 0}
-    try:
-        database_data["exists"] = _DB_PATH.exists()
-        if database_data["exists"]:
-            database_data["scenes"] = 1
-    except Exception:
-        pass
+    database_data = _database_status()
 
     wsl_status = _collect_wsl_status()
 
@@ -1494,7 +1511,7 @@ def _summarize_audio_vector_proof(
         latest_episode,
         scene_results_payload,
     )
-    collection_candidates = _audio_qdrant_collection_candidates(header.get("epoch"))
+    collection_candidates = _audio_qdrant_collection_candidates(header.get("epoch"), header=header)
     base = {
         "contract": "docs/architecture/AUDIO_VECTOR_PROVENANCE_CONTRACT.md",
         "scenes_total": scene_total,
@@ -1731,8 +1748,22 @@ def _first_result_record(payload: Any) -> Dict[str, Any]:
     return payload if isinstance(payload, dict) else {}
 
 
-def _audio_qdrant_collection_candidates(epoch: Any) -> List[str]:
+def _audio_qdrant_collection_candidates(epoch: Any, *, header: Dict[str, Any] | None = None) -> List[str]:
     candidates: List[str] = []
+    if isinstance(header, dict):
+        header_collections = header.get("qdrant_collections")
+        header_audio_collection = None
+        if isinstance(header_collections, dict):
+            header_audio_collection = header_collections.get("audio")
+        for value in (
+            header_audio_collection,
+            header.get("audio_collection"),
+            header.get("qdrant_audio_collection"),
+        ):
+            text = str(value).strip() if value is not None else ""
+            if text:
+                candidates.append(text)
+
     epoch_s = str(epoch).strip() if epoch is not None else ""
     if epoch_s:
         candidates.append(f"goodq_audio_{epoch_s}")

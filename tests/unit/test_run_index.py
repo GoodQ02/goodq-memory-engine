@@ -119,3 +119,37 @@ def test_list_runs_indexes_standalone_scene_results_without_experiment_log(tmp_p
     assert runs[0]["scenes_processed"] == 2
     assert runs[0]["latest_episode"]["scene_count"] == 2
     assert runs[0]["latest_episode"]["run_dir"] == str(run_root)
+
+
+def test_list_runs_indexes_resolved_config_only_root_as_interrupted(tmp_path: Path) -> None:
+    reports_root = tmp_path / "reports" / "fresh_ingest_runs"
+    run_root = reports_root / "20260520_power_loss_interrupted"
+
+    _write_json(
+        run_root / "_resolved_config.json",
+        {
+            "run": {"id": "runtime-power-loss"},
+            "qdrant": {"collections": {"audio": "goodq_audio_epoch_power_loss"}},
+            "paths": {"data_root": "GoodQ_Data/epochs/epoch_home_clean"},
+        },
+    )
+    (run_root / "output").mkdir(parents=True, exist_ok=True)
+
+    runs = list_runs(reports_root=reports_root)
+
+    assert len(runs) == 1
+    assert runs[0]["run_id"] == "20260520_power_loss_interrupted"
+    assert runs[0]["run_kind"] == "interrupted_ingestion"
+    assert runs[0]["scope"] == "resolved_config_only"
+    assert runs[0]["status"] == "interrupted"
+    assert runs[0]["runtime_run_id"] == "runtime-power-loss"
+    assert runs[0]["qdrant_collections"]["audio"] == "goodq_audio_epoch_power_loss"
+    assert runs[0]["episodes_total"] == 1
+    assert runs[0]["episodes_completed"] == 0
+    assert runs[0]["episodes_failed"] == 0
+    assert runs[0]["episodes_running"] == 0
+    assert runs[0]["episodes_pending"] == 0
+    assert runs[0]["scenes_processed"] == 0
+    assert runs[0]["latest_episode"]["status"] == "interrupted"
+    assert runs[0]["latest_episode"]["scene_count"] == 0
+    assert str(run_root / "_resolved_config.json") in runs[0]["latest_episode"]["files_read"]

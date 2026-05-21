@@ -65,9 +65,11 @@ run scope. Its `audio_vector_proof` object is the strict current-run
 CLAP/Qdrant verdict for that scope. When standalone scene results expose a
 unique `audio.clap_meta.run_id`, the projector uses that runtime provenance id
 for the Qdrant comparison instead of the report-folder slug. If
-`temporal_index.json` is absent, the `sentiment` object can still report
-transcript, audio-emotion, and sentiment counts from `scene_ingest_results.json`
-with `source=scene_ingest_results`.
+`temporal_index.json` is not co-located with the report but a standalone
+`scene_ingest_results.json` exposes a valid `temporal_index_path`, the projector
+follows that explicit read-only pointer. If no temporal index is available, the
+`sentiment` object can still report transcript, audio-emotion, and sentiment
+counts from `scene_ingest_results.json` with `source=scene_ingest_results`.
 
 `GET /api/runs/audio-proof/latest` is a separate read-only Qdrant inventory. It
 lists run-tagged audio payloads with required provenance fields so operators can

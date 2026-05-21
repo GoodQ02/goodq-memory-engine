@@ -489,6 +489,113 @@ def test_latest_run_evidence_summarizes_artifacts_without_paths(monkeypatch, tmp
     assert "source caption" not in serialized
 
 
+def test_latest_run_evidence_follows_scene_results_temporal_index_path(monkeypatch, tmp_path: Path) -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    if str(repo_root) not in sys.path:
+        sys.path.insert(0, str(repo_root))
+
+    fake_config_loader = types.ModuleType("steps.common.config_loader")
+    fake_config_loader.load_configs = lambda overrides=None: {
+        "paths": {"data_root": "data", "db_path": "data/memory.db"},
+        "host": {},
+        "memory": {},
+        "llm": {},
+        "qdrant": {"enabled": True, "host": "http://127.0.0.1:6333", "collections": {"audio": "goodq_audio_test"}},
+    }
+    monkeypatch.setitem(sys.modules, "steps.common.config_loader", fake_config_loader)
+
+    fake_memory_store = types.ModuleType("steps.common.memory_store")
+    fake_memory_store.normalize_memory_tier_list = lambda values: values
+    monkeypatch.setitem(sys.modules, "steps.common.memory_store", fake_memory_store)
+
+    fake_ingest_requests = types.ModuleType("api.utils.ingest_requests")
+    fake_ingest_requests.is_supported_ingest_path = lambda path: True
+    monkeypatch.setitem(sys.modules, "api.utils.ingest_requests", fake_ingest_requests)
+
+    fake_goodq_version = types.ModuleType("goodq_version")
+    fake_goodq_version.GOODQ_VERSION = "test"
+    monkeypatch.setitem(sys.modules, "goodq_version", fake_goodq_version)
+
+    runtime = _load_runtime_route_module(repo_root)
+    monkeypatch.setattr(
+        runtime,
+        "_scroll_qdrant_audio_payloads",
+        lambda runtime_run_id, collection_candidates: {"status": "ok", "collection": "goodq_audio_epoch_test", "payloads": []},
+    )
+    monkeypatch.setattr(
+        runtime,
+        "_sample_qdrant_audio_payloads",
+        lambda collection_candidates: {"status": "ok", "collection": "goodq_audio_epoch_test", "sample_count": 0},
+        raising=False,
+    )
+
+    run_dir = tmp_path / "run" / "standalone_scene_probe"
+    scene_results_path = run_dir / "output" / "scene_ingest_results.json"
+    scene_results_path.parent.mkdir(parents=True)
+    temporal_path = tmp_path / "GoodQ_Data" / "epochs" / "epoch_test" / "processing" / "family" / "temporal_index.json"
+    temporal_path.parent.mkdir(parents=True)
+    temporal_path.write_text(
+        json.dumps(
+            {
+                "version": "test",
+                "total_scenes": 1,
+                "total_duration": 53.787,
+                "segments": [{"scene_id": "scene-a", "audio_emotion": "calm"}],
+            }
+        ),
+        encoding="utf-8",
+    )
+    scene_results_path.write_text(
+        json.dumps(
+            [
+                {
+                    "video_id": "video-a",
+                    "temporal_index_path": str(temporal_path),
+                    "scenes": [{"scene_id": "scene-a", "audio": {"clap_meta": {"status": "ok"}}}],
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(
+        runtime.run_index,
+        "list_runs",
+        lambda reports_root=None, limit=None: [{"run_id": "standalone_scene_probe", "status": "success", "epoch": "epoch_test"}],
+    )
+    monkeypatch.setattr(
+        runtime.run_summary,
+        "load_run_summary",
+        lambda run_root, reports_root=None: {
+            "run_header": {
+                "run_id": "standalone_scene_probe",
+                "status": "success",
+                "epoch": "epoch_test",
+                "run_kind": "standalone_scene_results",
+                "scope": "scene_ingest_results",
+            },
+            "file_job_overview": {"episodes_total": 1, "episodes_completed": 1, "episodes_failed": 0, "scenes_processed": 1},
+            "outcome_classification": {"status": "success"},
+            "latest_episode": {
+                "episode": "family.mp4",
+                "status": "passed",
+                "run_dir": str(run_dir),
+                "scene_count": 1,
+                "files_read": [str(scene_results_path)],
+                "errors": [],
+                "warnings": [],
+            },
+        },
+    )
+
+    evidence = runtime._latest_run_evidence()
+
+    assert evidence["artifact_presence"]["scene_ingest_results_json"] is True
+    assert evidence["artifact_presence"]["temporal_index_json"] is True
+    assert evidence["temporal_index"]["status"] == "ok"
+    assert evidence["temporal_index"]["total_scenes"] == 1
+
+
 def test_audio_vector_proof_resolves_run_header_run_id_without_overclaiming(monkeypatch) -> None:
     repo_root = Path(__file__).resolve().parents[2]
     if str(repo_root) not in sys.path:

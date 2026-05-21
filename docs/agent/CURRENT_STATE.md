@@ -107,13 +107,11 @@ High-value scene evidence surfaced:
 - CLAP status: `ok`.
 - `/api/runs/latest/evidence` audio vector proof:
   `current_run_audio_vector_proven`.
+- `/api/runs/latest/evidence` temporal index projection: `ok`, `1` scene.
+- `/api/runs/latest/evidence` projection gaps: `ok`.
 
 Known follow-up from the probe:
 
-- The standalone scene result contains a `temporal_index_path`, and the
-  configured data-root artifact exists, but `/api/runs/latest/evidence` reports
-  `temporal_index_missing` for the standalone report because the temporal index
-  is not co-located under that report folder.
 - Entity extraction produced no KG entities for the first scene. Treat this as
   a content/sequence follow-up, not a failed run.
 

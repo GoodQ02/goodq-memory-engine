@@ -951,12 +951,14 @@ def _latest_run_evidence(limit: int = 24) -> Dict[str, Any]:
     outcome = summary.get("outcome_classification") if isinstance(summary.get("outcome_classification"), dict) else {}
     latest_episode = summary.get("latest_episode") if isinstance(summary.get("latest_episode"), dict) else {}
 
-    temporal_path = _episode_artifact_path(latest_episode, "temporal_index.json")
     scene_results_path = _episode_artifact_path(latest_episode, "scene_ingest_results.json")
+    scene_results_payload = _load_json_any(scene_results_path)
+    temporal_path = _episode_artifact_path(latest_episode, "temporal_index.json")
+    if temporal_path is None:
+        temporal_path = _artifact_path_from_scene_results(scene_results_payload, "temporal_index.json")
     step_runs_path = _find_step_runs_path(latest_episode, [temporal_path, scene_results_path])
 
     temporal_payload = _load_json_any(temporal_path)
-    scene_results_payload = _load_json_any(scene_results_path)
 
     return {
         "available": True,
@@ -1056,6 +1058,37 @@ def _episode_artifact_path(episode: Dict[str, Any], filename: str) -> Path | Non
             for candidate in run_dir.rglob(filename):
                 if candidate.is_file():
                     return candidate
+    return None
+
+
+def _artifact_path_from_scene_results(payload: Any, filename: str) -> Path | None:
+    """Follow explicit artifact pointers embedded in standalone scene results."""
+
+    def iter_pointer_values(value: Any, depth: int = 0):
+        if depth > 4:
+            return
+        if isinstance(value, dict):
+            for key in (
+                "temporal_index_path",
+                "temporal_index_json",
+                "temporal_index_file",
+                "path",
+            ):
+                candidate = value.get(key)
+                if isinstance(candidate, str) and candidate.strip():
+                    yield candidate
+            for child in value.values():
+                if isinstance(child, (dict, list)):
+                    yield from iter_pointer_values(child, depth + 1)
+        elif isinstance(value, list):
+            for child in value[:32]:
+                if isinstance(child, (dict, list)):
+                    yield from iter_pointer_values(child, depth + 1)
+
+    for value in iter_pointer_values(payload):
+        candidate = Path(value)
+        if candidate.name == filename and candidate.is_file():
+            return candidate
     return None
 
 

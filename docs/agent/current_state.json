@@ -94,10 +94,11 @@
         "caption": "present",
         "sentiment": "present",
         "clap_status": "ok",
-        "audio_vector_proof": "current_run_audio_vector_proven"
+        "audio_vector_proof": "current_run_audio_vector_proven",
+        "temporal_index": "ok",
+        "projection_gaps": "ok"
       },
       "known_followups": [
-        "standalone latest-evidence report marks temporal_index_missing even though the configured data-root temporal index exists",
         "entity extraction produced no KG entities for the first scene"
       ]
     }

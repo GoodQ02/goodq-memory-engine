@@ -31,6 +31,7 @@ memory surfaces.
 Tracked cleanup audit summary:
 
 - `docs/diagnostics/MEMORY_CLEAN_START_AUDIT_2026-05-20.md`
+- `docs/diagnostics/POWER_LOSS_INGESTION_AUDIT_2026-05-20.md`
 
 Pre-clean audit found and cleared:
 
@@ -41,25 +42,38 @@ Pre-clean audit found and cleared:
   legacy epoch test memory.
 - Cleanup result: all `68` old `goodq_` collections deleted successfully; `0`
   delete errors.
-- Post-clean state: `4` fresh home-memory collections exist, all green, all
-  with `0` points.
-- Generated runtime reports were cleaned so `/api/runs/latest/evidence` now
-  returns `no_indexed_runs` instead of old probe data.
+- Initial post-clean state: `4` fresh home-memory collections existed, all
+  green, all with `0` points.
+- A power loss interrupted the first full home-memory run in
+  `epoch_2026_05_20_home_memory_clean`. That epoch is preserved as forensic
+  evidence and must not seed the next clean run.
+- Generated runtime reports now expose the preserved interrupted run as
+  `interrupted_ingestion` through `/api/runs/latest/evidence`.
 - Prior filesystem epochs were removed except for a small
   `epoch_2025_12_22` log stub held open by the Qdrant Windows service.
 - Active API status on port `30000` reports `database.exists=false` and
-  `database.scenes=0` for the fresh epoch.
+  `database.scenes=0` for the current fresh epoch.
 
 Fresh local test epoch:
 
-- `epoch_2026_05_20_home_memory_clean`
+- `epoch_2026_05_20_home_memory_clean_02`
 
 The fresh epoch should use empty Qdrant collections:
+
+- `goodq_clip_epoch_2026_05_20_home_memory_clean_02`
+- `goodq_dino_epoch_2026_05_20_home_memory_clean_02`
+- `goodq_text_epoch_2026_05_20_home_memory_clean_02`
+- `goodq_audio_epoch_2026_05_20_home_memory_clean_02`
+
+Preserved interrupted-run collections may also exist:
 
 - `goodq_clip_epoch_2026_05_20_home_memory_clean`
 - `goodq_dino_epoch_2026_05_20_home_memory_clean`
 - `goodq_text_epoch_2026_05_20_home_memory_clean`
 - `goodq_audio_epoch_2026_05_20_home_memory_clean`
+
+These are evidence for the power-loss audit, not the target memory surface for
+the next run.
 
 ## Do Not Investigate First
 

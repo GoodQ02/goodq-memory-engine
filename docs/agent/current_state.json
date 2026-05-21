@@ -20,8 +20,9 @@
   "clean_start": {
     "prior_pipeline_memory_is_disposable": true,
     "prior_home_movie_tests_are_disposable": true,
-    "fresh_epoch": "epoch_2026_05_20_home_memory_clean",
+    "fresh_epoch": "epoch_2026_05_20_home_memory_clean_02",
     "tracked_cleanup_summary": "docs/diagnostics/MEMORY_CLEAN_START_AUDIT_2026-05-20.md",
+    "tracked_power_loss_summary": "docs/diagnostics/POWER_LOSS_INGESTION_AUDIT_2026-05-20.md",
     "qdrant_cleanup_manifest_dir": "reports/local_housekeeping/2026-05-20-memory-clean-start",
     "qdrant_pre_cleanup": {
       "collections": 68,
@@ -33,12 +34,19 @@
       "delete_errors": 0,
       "collections": 4,
       "points": 0,
-      "status": "fresh_collections_initialized"
+      "status": "initial_fresh_collections_initialized"
+    },
+    "power_loss_interruption": {
+      "interrupted_epoch": "epoch_2026_05_20_home_memory_clean",
+      "interrupted_run": "family_1987_1988_full_20260520_144133",
+      "status": "preserved_forensic_evidence_not_clean_run_seed",
+      "latest_evidence_route": "interrupted_ingestion_preserved",
+      "current_run_audio_vector_proven": 7
     },
     "generated_report_cleanup": {
       "deleted_targets": 17,
       "reclaimed_mb": 6098.19,
-      "latest_evidence_route": "no_indexed_runs"
+      "latest_evidence_route": "interrupted_ingestion_preserved"
     },
     "epoch_filesystem_cleanup": {
       "removed_epochs": 16,
@@ -49,6 +57,12 @@
       "fresh_database_scenes": 0
     },
     "fresh_qdrant_collections": {
+      "clip": "goodq_clip_epoch_2026_05_20_home_memory_clean_02",
+      "dino": "goodq_dino_epoch_2026_05_20_home_memory_clean_02",
+      "text": "goodq_text_epoch_2026_05_20_home_memory_clean_02",
+      "audio": "goodq_audio_epoch_2026_05_20_home_memory_clean_02"
+    },
+    "preserved_interrupted_qdrant_collections": {
       "clip": "goodq_clip_epoch_2026_05_20_home_memory_clean",
       "dino": "goodq_dino_epoch_2026_05_20_home_memory_clean",
       "text": "goodq_text_epoch_2026_05_20_home_memory_clean",

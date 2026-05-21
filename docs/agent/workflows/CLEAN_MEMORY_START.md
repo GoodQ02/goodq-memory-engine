@@ -43,20 +43,30 @@ PY
 
 ## 2. Point Local Runtime At A Fresh Epoch
 
-Use local ignored config for operator-specific paths. The fresh epoch for this
-cleanup pass is:
+Use local ignored config for operator-specific paths. The active fresh epoch for
+this machine is recorded in `docs/agent/CURRENT_STATE.md` and
+`docs/agent/current_state.json`.
+
+The original cleanup pass used:
 
 ```text
 epoch_2026_05_20_home_memory_clean
 ```
 
-Expected Qdrant collections:
+After the 2026-05-20 power-loss audit, the current clean rerun target advanced
+to:
 
 ```text
-goodq_clip_epoch_2026_05_20_home_memory_clean
-goodq_dino_epoch_2026_05_20_home_memory_clean
-goodq_text_epoch_2026_05_20_home_memory_clean
-goodq_audio_epoch_2026_05_20_home_memory_clean
+epoch_2026_05_20_home_memory_clean_02
+```
+
+Expected Qdrant collections for the current clean rerun target:
+
+```text
+goodq_clip_epoch_2026_05_20_home_memory_clean_02
+goodq_dino_epoch_2026_05_20_home_memory_clean_02
+goodq_text_epoch_2026_05_20_home_memory_clean_02
+goodq_audio_epoch_2026_05_20_home_memory_clean_02
 ```
 
 Validate with:

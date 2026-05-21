@@ -140,3 +140,31 @@ def test_add_with_required_ids_wraps_add_with_ids_failure():
 
     with pytest.raises(RuntimeError, match="faiss_add_with_ids_failed"):
         add_with_required_ids(_RawHnswLikeIndex(), [[0.1, 0.2]], [42])
+
+
+def test_add_with_required_ids_rejects_vector_id_mismatch():
+    class _IdMapIndex:
+        def add_with_ids(self, _vecs, _ids):
+            raise AssertionError("mismatched vector/id counts must fail before FAISS")
+
+    with pytest.raises(RuntimeError, match="faiss_id_count_mismatch"):
+        add_with_required_ids(_IdMapIndex(), [[0.1, 0.2], [0.3, 0.4]], [42])
+
+
+def test_faiss_memory_rejects_vectors_without_explicit_ids(monkeypatch, tmp_path):
+    fake_index = _FakeIndex()
+    fake_faiss = _FakeFaiss()
+
+    store = FaissMemory(index_path=str(tmp_path / "memory.index"), dim=4)
+    monkeypatch.setattr(store, "_load_index", lambda: (fake_index, fake_faiss))
+
+    ok = store.insert([
+        {
+            "vector": [0.1, 0.2, 0.3, 0.4],
+            "payload": {"scene_id": "scene_0000", "modality": "clip"},
+        }
+    ])
+
+    assert ok is False
+    assert fake_index.added_ids is None
+    assert fake_faiss.write_calls == 0

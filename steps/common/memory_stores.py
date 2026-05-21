@@ -197,6 +197,7 @@ class FaissMemory(MemoryStore):
             import numpy as np  # type: ignore
             vecs = []
             ids = []
+            missing_id_count = 0
             for v in vectors:
                 vec = v.get("vector")
                 vid = v.get("id")
@@ -205,14 +206,25 @@ class FaissMemory(MemoryStore):
                 vecs.append(vec)
                 if vid is not None:
                     ids.append(to_faiss_id(vid))
+                else:
+                    missing_id_count += 1
             if not vecs:
                 return False
+            if missing_id_count or len(ids) != len(vecs):
+                logger.warning(
+                    "memory_stores operation failed store=%s operation=%s index_path=%s reason=%s vector_count=%s id_count=%s missing_id_count=%s",
+                    "faiss",
+                    "insert",
+                    self.index_path,
+                    "explicit_ids_required",
+                    len(vecs),
+                    len(ids),
+                    missing_id_count,
+                )
+                return False
             np_vecs = np.array(vecs, dtype="float32")
-            if ids:
-                np_ids = np.array(ids, dtype="int64")
-                add_with_required_ids(index, np_vecs, np_ids)
-            else:
-                index.add(np_vecs)
+            np_ids = np.array(ids, dtype="int64")
+            add_with_required_ids(index, np_vecs, np_ids)
             faiss.write_index(index, self.index_path)
             return True
         except Exception as e:

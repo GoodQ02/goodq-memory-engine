@@ -191,12 +191,18 @@ def image_embed_dino(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
         faiss_id = int(uid[0])
         faiss.write_index(index, index_path)
         # Optional Qdrant dual-write.
+        qdrant_attempted = False
+        qdrant_ok = False
+        qdrant_reason = None
+        qdrant_collection = None
         try:
             from steps.common.qdrant_client import build_qdrant_client
 
             q_client = build_qdrant_client(cfg, dim=feats.shape[1], key="dino")
             if q_client:
-                q_client.upsert([{
+                qdrant_attempted = True
+                qdrant_collection = getattr(getattr(q_client, "cfg", None), "collection", None)
+                qdrant_ok = bool(q_client.upsert([{
                     "id": h,
                     "vector": feats[0].tolist(),
                     "payload": {
@@ -207,8 +213,15 @@ def image_embed_dino(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
                         "video_id": item.get("video_id") or item.get("video_hash"),
                         "faiss_id": faiss_id,
                     }
-                }])
+                }]))
+                if not qdrant_ok:
+                    qdrant_reason = "upsert_failed"
+            else:
+                qdrant_reason = "client_unavailable"
         except Exception as e:
+            qdrant_attempted = True
+            qdrant_ok = False
+            qdrant_reason = f"exception:{type(e).__name__}"
             logger.warning(
                 "image_embed_dino operation failed operation=%s source_path=%s exc_type=%s exc=%s",
                 "qdrant.upsert",
@@ -218,7 +231,10 @@ def image_embed_dino(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
             )
         # map table
         map_db = (cfg.get("paths", {}) or {}).get("dino_id_map_db")
+        map_ok = False
+        map_reason = None
         if map_db:
+            con = None
             try:
                 os.makedirs(os.path.dirname(map_db), exist_ok=True)
                 con = sqlite3.connect(map_db, check_same_thread=False)
@@ -230,7 +246,9 @@ def image_embed_dino(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
                         "INSERT OR REPLACE INTO dino_id_map(faiss_id, hash, source_path, created_at) VALUES (?,?,?,?)",
                         (faiss_id, h, path, datetime.utcnow().isoformat()),
                     )
+                map_ok = True
             except Exception as e:
+                map_reason = f"exception:{type(e).__name__}"
                 logger.warning(
                     "image_embed_dino operation failed operation=%s map_db=%s exc_type=%s exc=%s",
                     "sqlite_map.upsert",
@@ -240,7 +258,8 @@ def image_embed_dino(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
                 )
             finally:
                 try:
-                    con.close()  # type: ignore
+                    if con is not None:
+                        con.close()
                 except Exception as e:
                     logger.warning(
                         "image_embed_dino operation failed operation=%s map_db=%s exc_type=%s exc=%s",
@@ -251,13 +270,17 @@ def image_embed_dino(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
                     )
         # Upsert generic embedding metadata for recall. Keep DINO distinct from
         # CLIP so the shared keyframe hash does not collapse visual modalities.
+        embedding_ok = False
+        embedding_reason = None
         try:
             from steps.common.memory import upsert_embedding
             scene_id = item.get("scene_id") or item.get("scene_index")
             if scene_id is not None and not isinstance(scene_id, str):
                 scene_id = f"scene_{int(scene_id):04d}"
             upsert_embedding(cfg, h, faiss_id, path, "dino", scene_id=scene_id)
+            embedding_ok = True
         except Exception as e:
+            embedding_reason = f"exception:{type(e).__name__}"
             logger.warning(
                 "image_embed_dino operation failed operation=%s source_path=%s exc_type=%s exc=%s",
                 "sqlite_embeddings.upsert",
@@ -265,7 +288,31 @@ def image_embed_dino(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
                 type(e).__name__,
                 e,
             )
-        return {"dino_meta": {"status": "ok", "index_path": index_path, "faiss_id": faiss_id}}
+        dino_meta: Dict[str, Any] = {
+            "status": "ok",
+            "index_path": index_path,
+            "faiss_id": faiss_id,
+            "provenance_version": 1,
+            "component": "image_embed_dino",
+            "step": "image_embed_dino",
+            "model": "facebook/dinov2-base",
+            "embedding_id": h,
+            "faiss_committed": True,
+            "qdrant_attempted": bool(qdrant_attempted),
+            "qdrant_committed": bool(qdrant_ok),
+            "sqlite_map_attempted": bool(map_db),
+            "sqlite_map_committed": bool(map_ok),
+            "sqlite_embeddings_committed": bool(embedding_ok),
+        }
+        if qdrant_collection:
+            dino_meta["qdrant_collection"] = qdrant_collection
+        if qdrant_reason:
+            dino_meta["qdrant_reason"] = qdrant_reason
+        if map_reason:
+            dino_meta["sqlite_map_reason"] = map_reason
+        if embedding_reason:
+            dino_meta["sqlite_embeddings_reason"] = embedding_reason
+        return {"dino_meta": dino_meta}
     except Exception as e:
         logger.exception(
             "image_embed_dino operation failed source_path=%s device=%s image_size=%s tensor_shape=%s model_loaded_now=%s amp_enabled=%s gpu_memory_before=%s",

@@ -123,10 +123,16 @@ def image_embed_clip(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
         faiss.write_index(index, index_path)
 
         # Optional Qdrant dual-write
+        qdrant_attempted = False
+        qdrant_ok = False
+        qdrant_reason = None
+        qdrant_collection = None
         try:
             q_client = build_qdrant_client(cfg, dim=feats.shape[1], key="clip")
             if q_client:
-                q_client.upsert([{
+                qdrant_attempted = True
+                qdrant_collection = getattr(getattr(q_client, "cfg", None), "collection", None)
+                qdrant_ok = bool(q_client.upsert([{
                     "id": h,
                     "vector": feats[0].tolist(),
                     "payload": {
@@ -137,12 +143,28 @@ def image_embed_clip(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
                         "video_id": item.get("video_id") or item.get("video_hash"),
                         "faiss_id": faiss_id,
                     }
-                }])
-        except Exception:
-            pass
+                }]))
+                if not qdrant_ok:
+                    qdrant_reason = "upsert_failed"
+            else:
+                qdrant_reason = "client_unavailable"
+        except Exception as e:
+            qdrant_attempted = True
+            qdrant_ok = False
+            qdrant_reason = f"exception:{type(e).__name__}"
+            logger.warning(
+                "image_embed_clip operation failed operation=%s source_path=%s exc_type=%s exc=%s",
+                "qdrant.upsert",
+                path,
+                type(e).__name__,
+                e,
+            )
         # map table
         map_db = (cfg.get("paths", {}) or {}).get("clip_id_map_db")
+        map_ok = False
+        map_reason = None
         if map_db:
+            con = None
             try:
                 os.makedirs(os.path.dirname(map_db), exist_ok=True)
                 con = sqlite3.connect(map_db, check_same_thread=False)
@@ -154,27 +176,73 @@ def image_embed_clip(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
                         "INSERT OR REPLACE INTO clip_id_map(faiss_id, hash, source_path, created_at) VALUES (?,?,?,?)",
                         (faiss_id, h, path, datetime.utcnow().isoformat()),
                     )
+                map_ok = True
             except Exception as e:
-                print(f'[ERROR] Exception in step.py line 83: {str(e)}')
-                pass
+                map_reason = f"exception:{type(e).__name__}"
+                logger.warning(
+                    "image_embed_clip operation failed operation=%s map_db=%s exc_type=%s exc=%s",
+                    "sqlite_map.upsert",
+                    map_db,
+                    type(e).__name__,
+                    e,
+                )
             finally:
                 try:
-                    con.close()  # type: ignore
+                    if con is not None:
+                        con.close()
                 except Exception as e:
-                    print(f'[ERROR] Exception in step.py line 89: {str(e)}')
-                    pass
+                    logger.warning(
+                        "image_embed_clip operation failed operation=%s map_db=%s exc_type=%s exc=%s",
+                        "sqlite_map.close",
+                        map_db,
+                        type(e).__name__,
+                        e,
+                    )
         # Upsert generic embedding metadata for recall. Keep CLIP distinct from
         # DINO so the shared keyframe hash does not collapse visual modalities.
+        embedding_ok = False
+        embedding_reason = None
         try:
             from steps.common.memory import upsert_embedding
             scene_id = item.get("scene_id") or item.get("scene_index")
             if scene_id is not None and not isinstance(scene_id, str):
                 scene_id = f"scene_{int(scene_id):04d}"
             upsert_embedding(cfg, h, faiss_id, path, "clip", scene_id=scene_id)
+            embedding_ok = True
         except Exception as e:
-            print(f'[ERROR] Exception in step.py line 96: {str(e)}')
-            pass
-        return {"clip_meta": {"status": "ok", "index_path": index_path, "faiss_id": faiss_id}}
+            embedding_reason = f"exception:{type(e).__name__}"
+            logger.warning(
+                "image_embed_clip operation failed operation=%s source_path=%s exc_type=%s exc=%s",
+                "sqlite_embeddings.upsert",
+                path,
+                type(e).__name__,
+                e,
+            )
+        clip_meta: Dict[str, Any] = {
+            "status": "ok",
+            "index_path": index_path,
+            "faiss_id": faiss_id,
+            "provenance_version": 1,
+            "component": "image_embed_clip",
+            "step": "image_embed_clip",
+            "model": "openai/clip-vit-base-patch16",
+            "embedding_id": h,
+            "faiss_committed": True,
+            "qdrant_attempted": bool(qdrant_attempted),
+            "qdrant_committed": bool(qdrant_ok),
+            "sqlite_map_attempted": bool(map_db),
+            "sqlite_map_committed": bool(map_ok),
+            "sqlite_embeddings_committed": bool(embedding_ok),
+        }
+        if qdrant_collection:
+            clip_meta["qdrant_collection"] = qdrant_collection
+        if qdrant_reason:
+            clip_meta["qdrant_reason"] = qdrant_reason
+        if map_reason:
+            clip_meta["sqlite_map_reason"] = map_reason
+        if embedding_reason:
+            clip_meta["sqlite_embeddings_reason"] = embedding_reason
+        return {"clip_meta": clip_meta}
     except Exception as e:
         print(f"[ERROR] CLIP embedding failed: {str(e)}")
         return {"clip_meta": {"status": "error", "error": str(e)}}

@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import shlex
 import shutil
 import sqlite3
 import subprocess
@@ -68,6 +69,10 @@ _WSL_DISTRO = str(os.environ.get("GOODQ_WSL_DISTRO") or _HOST_CFG.get("wsl_distr
 _WSL_USER = str(os.environ.get("GOODQ_WSL_USER") or "").strip()
 if not _WSL_USER or _WSL_USER.lower() == "auto":
     _WSL_USER = str(os.environ.get("USER") or os.environ.get("USERNAME") or os.environ.get("LOGNAME") or "user")
+_WSL_WORKSPACE = str(os.environ.get("GOODQ_WSL_WORKSPACE") or _HOST_CFG.get("wsl_workspace") or "").strip()
+if not _WSL_WORKSPACE or _WSL_WORKSPACE.lower() == "auto":
+    _WSL_WORKSPACE = f"/home/{_WSL_USER}/goodq_audio"
+_WSL_WORKSPACE = _WSL_WORKSPACE.rstrip("/")
 
 
 def _get_ollama_models_url(cfg: Dict[str, Any]) -> tuple[str | None, int | None]:
@@ -314,6 +319,8 @@ def _collect_wsl_status() -> Dict[str, Any]:
         "vllm_service": "unknown",
         "audio_processing": "unknown",
         "faster_whisper": "not_installed",
+        "faster_whisper_version": None,
+        "audio_probe": "not_checked",
         "active": False,
         "performance_boost": "2-5× faster",
         "gpu_name": None,
@@ -362,14 +369,39 @@ def _collect_wsl_status() -> Dict[str, Any]:
                 "--",
                 "bash",
                 "-lc",
-                "python3 - <<'PY'\nimport importlib.util\nok = importlib.util.find_spec('faster_whisper') is not None\nprint('ok' if ok else 'error')\nPY",
+                (
+                    f"if test -f {shlex.quote(f'{_WSL_WORKSPACE}/setup_cuda_env.sh')}; then\n"
+                    f"  source {shlex.quote(f'{_WSL_WORKSPACE}/setup_cuda_env.sh')} >/dev/null 2>&1\n"
+                    "fi\n"
+                    "python3 - <<'PY'\n"
+                    "import importlib.metadata as md\n"
+                    "import importlib.util\n"
+                    "ok = importlib.util.find_spec('faster_whisper') is not None\n"
+                    "if ok:\n"
+                    "    try:\n"
+                    "        version = md.version('faster-whisper')\n"
+                    "    except Exception:\n"
+                    "        version = ''\n"
+                    "    print(f'ok:{version}' if version else 'ok')\n"
+                    "else:\n"
+                    "    print('error')\n"
+                    "PY"
+                ),
             ],
             capture_output=True,
             text=True,
-            timeout=3,
+            timeout=10,
         )
-        status["audio_processing"] = "available" if "ok" in audio_check.stdout else "unavailable"
-        status["faster_whisper"] = "ready" if "ok" in audio_check.stdout else "not_installed"
+        status["audio_probe"] = "configured_worker"
+        audio_stdout = (audio_check.stdout or "").strip()
+        if audio_check.returncode == 0 and audio_stdout.startswith("ok"):
+            status["audio_processing"] = "available"
+            status["faster_whisper"] = "ready"
+            _, _, version = audio_stdout.partition(":")
+            status["faster_whisper_version"] = version.strip() or None
+        else:
+            status["audio_processing"] = "unavailable"
+            status["faster_whisper"] = "not_installed"
     except Exception as e:
         logger.debug(f"WSL2 audio check skipped: {e}")
 
@@ -404,7 +436,7 @@ def _collect_wsl_status() -> Dict[str, Any]:
                 "--",
                 "bash",
                 "-lc",
-                "nvidia-smi --query-gpu=cuda_version --format=csv,noheader,nounits | head -n1",
+                "nvidia-smi | sed -n 's/.*CUDA Version: \\([^ |]*\\).*/\\1/p' | head -n1",
             ],
             capture_output=True,
             text=True,

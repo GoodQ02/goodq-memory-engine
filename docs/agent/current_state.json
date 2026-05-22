@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_verified": "2026-05-21",
+  "last_verified": "2026-05-22",
   "project": "GoodQ4All",
   "agent_first_read": "docs/agent/CURRENT_STATE.md",
   "human_index": "docs/agent/README.md",
@@ -36,15 +36,19 @@
       "vllm_model": "/home/jdben/models/Qwen2.5-0.5B-Instruct",
       "wsl_keepalive": "goodq-vllm-keepalive",
       "windows_logon_task": "GoodQ4All vLLM WSL Startup",
-      "ollama_fallback": "offline",
-      "fallback_chain": "limited_primary_healthy"
+      "ollama_fallback": "healthy_windows_fallback",
+      "fallback_chain": "healthy_vllm_primary_and_ollama_quality_fallback",
+      "ollama_base": "http://127.0.0.1:31434/v1",
+      "ollama_model": "phi4:latest",
+      "ollama_windows_logon_task": "GoodQ4All Ollama Fallback Startup",
+      "ollama_start_script": "scripts/start_ollama_fallback.ps1"
     }
   },
   "clean_start": {
     "prior_pipeline_memory_is_disposable": true,
     "prior_home_movie_tests_are_disposable": true,
-    "fresh_epoch": "epoch_2026_05_21_family_full_clean_04",
-    "fresh_epoch_note": "current emotion-ranking clip probe evidence epoch; reset Qdrant and use a fresh epoch before the next probe or broad home-movie pass; previous _01, _02, and aborted _03 attempts also contain residue",
+    "fresh_epoch": "epoch_2026_05_22_runtime_fallback_probe_02",
+    "fresh_epoch_note": "current runtime fallback, WSL audio, sentiment, entity, Qdrant, and FAISS validation epoch; reset Qdrant and use a fresh epoch before the broad home-movie pass; previous validation epochs contain residue",
     "tracked_cleanup_summary": "docs/diagnostics/MEMORY_CLEAN_START_AUDIT_2026-05-20.md",
     "tracked_power_loss_summary": "docs/diagnostics/POWER_LOSS_INGESTION_AUDIT_2026-05-20.md",
     "qdrant_cleanup_manifest_dir": "reports/local_housekeeping/2026-05-20-memory-clean-start",
@@ -82,10 +86,10 @@
       "fresh_database_note": "port 30000 is bound to the _04 clean clip probe epoch and currently reports the 1-scene FAMILY clip probe; reset/fresh epoch required before the next probe"
     },
     "fresh_qdrant_collections": {
-      "clip": "goodq_clip_epoch_2026_05_21_family_full_clean_04",
-      "dino": "goodq_dino_epoch_2026_05_21_family_full_clean_04",
-      "text": "goodq_text_epoch_2026_05_21_family_full_clean_04",
-      "audio": "goodq_audio_epoch_2026_05_21_family_full_clean_04"
+      "clip": "goodq_clip_epoch_2026_05_22_runtime_fallback_probe_02",
+      "dino": "goodq_dino_epoch_2026_05_22_runtime_fallback_probe_02",
+      "text": "goodq_text_epoch_2026_05_22_runtime_fallback_probe_02",
+      "audio": "goodq_audio_epoch_2026_05_22_runtime_fallback_probe_02"
     },
     "preserved_interrupted_qdrant_collections": {
       "clip": "goodq_clip_epoch_2026_05_20_home_memory_clean",
@@ -174,7 +178,7 @@
       },
       "llm": {
         "vllm_primary": "healthy",
-        "ollama_fallback": "offline",
+        "ollama_fallback": "offline_at_time_superseded_by_runtime_fallback_probe",
         "scene_context_llm": "2/2 temporal segments"
       },
       "knowledge_graph": {
@@ -254,8 +258,8 @@
       ],
       "active_epoch_residue": {
         "previous_validation_epoch": "epoch_2026_05_21_family_full_clean_01 audio FAISS was legacy non-idmap residue from prior probes",
-        "current_target_epoch": "epoch_2026_05_21_family_full_clean_04",
-        "required_before_broad_run": "reset Qdrant and confirm target FAISS files are absent or explicit-ID indexes"
+        "current_target_epoch": "epoch_2026_05_22_runtime_fallback_probe_02",
+        "required_before_broad_run": "reset Qdrant and confirm target FAISS files are absent or explicit-ID indexes in a new fresh epoch"
       },
       "preflight_refresh_2026_05_21": {
         "checkpoint_kind": "pre_probe_clean_launch_state",
@@ -518,6 +522,53 @@
         ],
         "next_probe_rule": "reset Qdrant and use a new fresh epoch before the next probe or broad home-movie run"
       }
+    },
+    "runtime_fallback_audio_entity_validation": {
+      "status": "completed",
+      "source_scope": "first_redacted_family_media_file",
+      "video_count": 1,
+      "scene_count": 3,
+      "runtime_run_id": "785b5eae-ff3e-4cae-9b64-37bbf2151a74",
+      "api_projection": {
+        "database_exists": true,
+        "database_scenes": 3,
+        "pipeline_status": "idle",
+        "wsl_audio": "available",
+        "faster_whisper": "ready",
+        "faster_whisper_version": "1.2.1"
+      },
+      "llm": {
+        "vllm_primary": "healthy",
+        "ollama_fallback": "healthy",
+        "configured_models_healthy": "2/2",
+        "prefer_speed": "vllm_primary",
+        "prefer_quality": "ollama_phi4"
+      },
+      "evidence": {
+        "audio_vector_proof": "current_run_audio_vector_proven",
+        "audio_vector_proof_count": "3/3",
+        "qdrant_counts": {
+          "audio": 3,
+          "text": 6,
+          "clip": 6,
+          "dino": 6
+        },
+        "faiss_indexes": "audio_text_clip_dino_indexidmap2",
+        "sentiment_segments": "3/3",
+        "text_emotion_rankings": "3/3",
+        "audio_emotion_rankings": "3/3",
+        "entity_segments": "3/3",
+        "total_entities": 10,
+        "unique_entities": 10,
+        "ambiguous_person_nonperson_label_conflicts": 0,
+        "step_rows": 57,
+        "failed_steps": 0,
+        "warning_steps": 0
+      },
+      "known_followups": [
+        "retrieval result-level audio proof explanation still includes collection-scope mismatch counts for non-selected scenes; strict latest-run audio proof remains green",
+        "reset Qdrant and verify fresh/explicit-ID FAISS targets before broad home-movie run"
+      ]
     }
   },
   "known_historical_echoes": [

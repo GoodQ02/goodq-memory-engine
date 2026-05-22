@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE_AGENT_STATE -->
-<!-- DOC_LAST_VERIFIED: 2026-05-21 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-22 -->
 
 # GoodQ4All Current Agent State
 
@@ -30,7 +30,9 @@ test runs, is disposable and should not seed the next run.
   `goodq-vllm-keepalive` anchor so WSL remains alive while vLLM serves.
 - Windows logon fixture: Task Scheduler task `GoodQ4All vLLM WSL Startup`
   invokes the same wrapper with pauses disabled.
-- Ollama fallback: optional/offline unless started separately.
+- Ollama fallback: healthy Windows fallback on `http://127.0.0.1:31434/v1`
+  when started through `scripts/start_ollama_fallback.ps1`; Windows logon
+  fixture `GoodQ4All Ollama Fallback Startup` invokes the same wrapper.
 
 ## Clean-Start Checkpoint
 
@@ -60,27 +62,78 @@ Pre-clean audit found and cleared:
   `interrupted_ingestion` through `/api/runs/latest/evidence`.
 - Prior filesystem epochs were removed except for a small
   `epoch_2025_12_22` log stub held open by the Qdrant Windows service.
-- Active API status on port `30000` is bound to the `_04` clean clip probe
-  epoch. It currently reports the latest `1`-scene FAMILY clip probe, not an
-  empty broad-run seed. Reset Qdrant and use a fresh epoch before the next probe
-  or broad home-memory run.
+- Active API status on port `30000` is bound to the
+  `epoch_2026_05_22_runtime_fallback_probe_02` validation epoch. It currently
+  reports a fresh `3`-scene FAMILY clip probe with clean Qdrant/FAISS evidence,
+  not an empty broad-run seed. Reset Qdrant and use a fresh epoch before the
+  broad home-memory run.
 
 Fresh local validation epoch:
 
-- `epoch_2026_05_21_family_full_clean_04`
+- `epoch_2026_05_22_runtime_fallback_probe_02`
 
 The active validation epoch uses these Qdrant collections:
 
-- `goodq_clip_epoch_2026_05_21_family_full_clean_04`
-- `goodq_dino_epoch_2026_05_21_family_full_clean_04`
-- `goodq_text_epoch_2026_05_21_family_full_clean_04`
-- `goodq_audio_epoch_2026_05_21_family_full_clean_04`
+- `goodq_clip_epoch_2026_05_22_runtime_fallback_probe_02`
+- `goodq_dino_epoch_2026_05_22_runtime_fallback_probe_02`
+- `goodq_text_epoch_2026_05_22_runtime_fallback_probe_02`
+- `goodq_audio_epoch_2026_05_22_runtime_fallback_probe_02`
 
-This epoch now contains validation/probe evidence. It is useful for audit and UI
-verification, but it must not seed the next probe or broad home-movie pass
-unless the operator deliberately resets Qdrant and verifies fresh/explicit-ID
-FAISS targets first. The previous `_01`, `_02`, and aborted `_03` attempts also
+This epoch now contains runtime fallback, WSL audio, sentiment, entity, Qdrant,
+and FAISS validation evidence. It is useful for audit and UI verification, but
+it must not seed the broad home-movie pass unless the operator deliberately
+resets Qdrant and verifies fresh/explicit-ID FAISS targets first. The previous
+`_01`, `_02`, `_03`, `_04`, and runtime fallback probe `_01` attempts also
 contain validation or partial probe residue and must not seed the broad run.
+
+## Runtime Fallback, Audio, Sentiment, And Entity Validation
+
+A fresh three-scene probe completed in
+`epoch_2026_05_22_runtime_fallback_probe_02` after installing/configuring the
+Windows Ollama fallback and validating the sourced WSL audio worker.
+
+Scope:
+
+- Source scope: first redacted FAMILY media file.
+- Probe scope: `1` video, `3` scenes.
+- Runtime run id: `785b5eae-ff3e-4cae-9b64-37bbf2151a74`.
+- Pipeline status after probe: idle.
+
+Validated runtime posture:
+
+- Local vLLM primary: healthy on `127.0.0.1:38005`.
+- Windows Ollama fallback: healthy on `127.0.0.1:31434`, model
+  `phi4:latest`.
+- Fallback chain: `2 / 2` configured LLM endpoints healthy;
+  `prefer_speed` uses vLLM, `prefer_quality` uses Ollama/Phi4.
+- API `/api/status` WSL probe now checks the configured WSL audio worker, not
+  plain WSL `python3`.
+- WSL audio status: `available`; `faster_whisper` status: `ready`; observed
+  version: `1.2.1`.
+
+Validated memory/evidence posture:
+
+- Current-run audio proof: `3 / 3` CLAP-ok scenes proven against run-matched
+  Qdrant payloads.
+- Qdrant point counts: audio `3`, text `6`, CLIP `6`, DINO `6`; all fresh
+  validation collections green.
+- FAISS indexes: audio, text, CLIP, and DINO are all explicit-ID
+  `IndexIDMap2` indexes with expected point counts.
+- Sentiment: `3 / 3` scenes have sentiment labels, text-emotion rankings, audio
+  emotion scores, and audio-emotion rankings.
+- Entity evidence: `3 / 3` scenes have channelized entity evidence; latest
+  evidence reports `10` total and `10` unique entities.
+- Ambiguous same-label person/non-person promotion was patched and retested;
+  the probe now reports `0` ambiguous person/non-person label conflicts.
+- Scene-context LLM evidence is present in the retrieval read model and remains
+  transcript-dominant when visual/audio signals are weaker.
+
+Known follow-up from this validation:
+
+- Retrieval result-level audio proof still exposes collection-scope mismatch
+  counts when explaining one selected scene, even though strict latest-run
+  audio proof is green. Treat this as UI/API explanation polish, not a current
+  ingestion failure.
 
 Preserved interrupted-run collections may also exist:
 
@@ -183,8 +236,9 @@ Scope:
 - Runtime run id: `69b204f3-afb7-4812-9a43-0a1251107731`.
 - Pipeline status after probe: idle.
 - Local vLLM primary: healthy on `127.0.0.1:38005`.
-- Ollama fallback: offline; fallback chain is limited but primary LLM calls
-  work.
+- Ollama fallback at that time: offline. This is superseded by the
+  2026-05-22 runtime fallback validation above, where Windows Ollama/Phi4 is
+  healthy.
 - Control Agent: still disabled because it requires an injected `llm_client`;
   this is separate from vLLM API health.
 

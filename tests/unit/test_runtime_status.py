@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import subprocess
 import sqlite3
 import sys
 import types
@@ -56,3 +57,45 @@ def test_database_status_reports_zero_for_missing_database(tmp_path: Path, monke
     runtime = _load_runtime_route_module(repo_root, monkeypatch, db_path)
 
     assert runtime._database_status(db_path) == {"exists": False, "scenes": 0}
+
+
+def test_wsl_status_probes_configured_audio_worker(tmp_path: Path, monkeypatch) -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    db_path = tmp_path / "memory.db"
+
+    runtime = _load_runtime_route_module(repo_root, monkeypatch, db_path)
+    runtime._WSL_DISTRO = "Ubuntu-22.04"
+    runtime._WSL_WORKSPACE = "/home/goodq/goodq_audio"
+
+    monkeypatch.setattr("shutil.which", lambda name: "wsl.exe" if name == "wsl" else None)
+
+    def _completed(args: list[str], stdout: str = "", returncode: int = 0):
+        return subprocess.CompletedProcess(args=args, returncode=returncode, stdout=stdout, stderr="")
+
+    def _fake_run(args, *, capture_output, text, timeout):
+        if args == ["wsl", "--status"]:
+            return _completed(args, "Default Distribution: Ubuntu-22.04\n")
+        if args == ["wsl", "-l", "-v"]:
+            return _completed(args, "Ubuntu-22.04 Running 2\n")
+        if args == ["wsl", "-d", "Ubuntu-22.04", "--", "systemctl", "is-active", "vllm-llama1b.service"]:
+            return _completed(args, "active\n")
+        if args[:5] == ["wsl", "-d", "Ubuntu-22.04", "--", "bash"]:
+            script = args[-1]
+            if "faster_whisper" in script:
+                assert "source /home/goodq/goodq_audio/setup_cuda_env.sh" in script
+                return _completed(args, "ok:1.2.1\n")
+            if "--query-gpu=name" in script:
+                return _completed(args, "NVIDIA RTX Test, 16384, 1024, 999.00\n")
+            if "CUDA Version" in script:
+                return _completed(args, "13.2\n")
+        raise AssertionError(f"unexpected subprocess call: {args!r}")
+
+    monkeypatch.setattr(runtime.subprocess, "run", _fake_run)
+
+    status = runtime._collect_wsl_status()
+
+    assert status["audio_probe"] == "configured_worker"
+    assert status["audio_processing"] == "available"
+    assert status["faster_whisper"] == "ready"
+    assert status["faster_whisper_version"] == "1.2.1"
+    assert status["cuda_version"] == "13.2"

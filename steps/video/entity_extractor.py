@@ -414,6 +414,7 @@ class EntityExtractor:
             return entities
 
         timestamps = [payload.get("start_time", 0)]
+        ambiguous_person_labels = self._ambiguous_person_labels(payload)
 
         ner_entities = payload.get("ner_entities")
         if isinstance(ner_entities, list):
@@ -424,8 +425,11 @@ class EntityExtractor:
                 entity_type = self._normalize_typed_entity_type(entity.get("type"))
                 if entity_type is None or not self._is_valid_entity_candidate(name):
                     continue
-                if entity_type == "person" and not self._is_meaningful_person_name(name):
-                    continue
+                if entity_type == "person":
+                    if self._is_ambiguous_person_label(name, ambiguous_person_labels):
+                        continue
+                    if not self._is_meaningful_person_name(name):
+                        continue
                 entities.append(ExtractedEntity(
                     entity_id=f"{scene_id}_{modality}_ner_{idx}",
                     entity_type=entity_type,
@@ -455,8 +459,11 @@ class EntityExtractor:
                 if entity_type is None and "ner" not in detail_sources:
                     continue
                 entity_type = entity_type or "concept"
-                if entity_type == "person" and not self._is_meaningful_person_name(name):
-                    continue
+                if entity_type == "person":
+                    if self._is_ambiguous_person_label(name, ambiguous_person_labels):
+                        continue
+                    if not self._is_meaningful_person_name(name):
+                        continue
 
                 entities.append(ExtractedEntity(
                     entity_id=f"{scene_id}_{modality}_detail_{idx}",
@@ -646,6 +653,41 @@ class EntityExtractor:
         if not self._is_valid_entity_candidate(value):
             return False
         return not self._is_synthetic_entity_name(value)
+
+    def _entity_key(self, value: Any) -> str:
+        if not isinstance(value, str):
+            return ""
+        return re.sub(r"[^a-z0-9]+", "", value.strip().lower())
+
+    def _is_family_name(self, value: Any) -> bool:
+        if not isinstance(value, str):
+            return False
+        return value.strip().lower() in self.family_names
+
+    def _ambiguous_person_labels(self, payload: Dict[str, Any]) -> Set[str]:
+        """Find labels that structured NER also typed as non-person evidence."""
+        labels: Set[str] = set()
+        for key in ("ner_entities", "entity_details"):
+            records = payload.get(key)
+            if not isinstance(records, list):
+                continue
+            for record in records:
+                if not isinstance(record, dict):
+                    continue
+                name = record.get("name") or record.get("label")
+                entity_type = self._normalize_typed_entity_type(record.get("type"))
+                if entity_type is None or entity_type == "person":
+                    continue
+                label_key = self._entity_key(name)
+                if label_key:
+                    labels.add(label_key)
+        return labels
+
+    def _is_ambiguous_person_label(self, value: Any, ambiguous_person_labels: Set[str]) -> bool:
+        if self._is_family_name(value):
+            return False
+        label_key = self._entity_key(value)
+        return bool(label_key and label_key in ambiguous_person_labels)
 
     def _is_scene_place_tag(self, value: Any, detail_sources: Set[str]) -> bool:
         if not isinstance(value, str):

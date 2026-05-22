@@ -106,6 +106,17 @@ That epoch is the current evidence surface for the repaired sentiment and
 emotion-ranking path. It should also be treated as occupied probe evidence, not
 a seed for the next clean pass.
 
+The 2026-05-22 runtime fallback/audio/entity validation then used:
+
+```text
+epoch_2026_05_22_runtime_fallback_probe_02
+```
+
+That epoch is the current evidence surface for the Windows Ollama fallback,
+configured WSL `faster-whisper` probe, current-run audio proof, sentiment,
+entity hygiene, Qdrant, and explicit-ID FAISS validation. It is occupied probe
+evidence, not a broad home-memory seed.
+
 For the next broad home-memory run, create or select a fresh epoch and confirm
 its configured collections follow this pattern:
 

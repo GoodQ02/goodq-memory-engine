@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-05-04 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-22 -->
 
 # WSL Audio Runtime Reference
 
@@ -51,23 +51,20 @@ Notes:
 ## WSL Audio Torch Lane Doctrine
 
 - Bootstrap target: `torch` / `torchvision` / `torchaudio` on `2.5.1+cu121`
-- Active observed sourced worker lane: `2.8.0+cu128`
-- Classification: `WSL_AUDIO_LANE_OBSERVED_FUNCTIONAL_DRIFT_CU128`
-- Approval state: not bootstrap-approved, not lane-approved for promotion, and
-  not a package recommendation
+- Active observed sourced worker lane: `2.5.1+cu121`
+- Active `faster-whisper` lane: `1.2.1`
+- Classification: `WSL_AUDIO_LANE_MATCHES_BOOTSTRAP_TARGET`
+- Approval state: bootstrap-approved lane observed in the sourced worker
 
 Decision notes:
 
-- Repeated no-ingestion preflight observed the active lane as functionally ready:
-  GPU, transcription, ABI, and diarization checks passed.
-- Repeated no-ingestion short-audio probes processed speech successfully through
-  the unified WSL worker.
+- Runtime fallback validation on 2026-05-22 observed the active lane as
+  functionally ready: GPU, transcription, ABI, and diarization checks passed.
+- A fresh three-scene probe processed speech successfully through the unified
+  WSL worker with strict WSL audio required.
 - There is no ingestion blocker from the active lane based on current evidence.
 - `torchcodec_ready=false` remains a watch item caused by decoder/library/ABI
   mismatch; current runtime succeeds through preloaded-audio handling.
-- The pin-origin audit confirmed `2.5.1+cu121` is an enforced bootstrap/runtime
-  contract, so the observed `2.8.0+cu128` lane is recorded as functional drift
-  only.
 - Bootstrap target must not change without a future explicit lane-promotion
   pass. That pass must decide whether the torchcodec watch item is acceptable
   doctrine or must be fixed first.
@@ -143,6 +140,11 @@ Current interpretation rules:
 - These fields are observer truth only. They must not trigger package changes,
   healing, or reruns without a separate operator decision.
 
+The API `/api/status` WSL probe must source the configured worker
+`setup_cuda_env.sh` under `GOODQ_WSL_WORKSPACE` before checking
+`faster_whisper`. A plain WSL `python3` import check is not authoritative for
+GoodQ audio readiness.
+
 ## Bootstrap / Doctor Meaning
 
 - bootstrap and doctor treat WSL audio as:
@@ -190,6 +192,10 @@ The recent data only weakly correlates WSL worker duration with scene-audio
 duration. Treat the current path as a mostly per-scene fixed-cost lane.
 
 Black-box witness on 2026-05-04:
+
+Historical note: the following worker lane describes that witness only. The
+current 2026-05-22 sourced worker lane is recorded above and matches the
+bootstrap target.
 
 - run root: `reports/fresh_ingest_runs/20260504_074335_wsl_black_box_02x02_witness/`
 - runtime run id: `8a093042-6d8d-461e-81d6-5061e6d5d08b`

@@ -1,0 +1,38 @@
+param(
+    [string]$OllamaExe = "$env:LOCALAPPDATA\Programs\Ollama\ollama.exe",
+    [string]$ListenHost = $env:OLLAMA_HOST,
+    [string]$Models = $env:OLLAMA_MODELS
+)
+
+$ErrorActionPreference = "Stop"
+
+if ([string]::IsNullOrWhiteSpace($ListenHost)) {
+    $ListenHost = "127.0.0.1:31434"
+}
+
+if ([string]::IsNullOrWhiteSpace($Models) -and -not [string]::IsNullOrWhiteSpace($env:GOODQ_DATA_ROOT)) {
+    $Models = Join-Path $env:GOODQ_DATA_ROOT "models\ollama"
+}
+
+if ([string]::IsNullOrWhiteSpace($OllamaExe) -or -not (Test-Path -LiteralPath $OllamaExe)) {
+    throw "Ollama executable not found at '$OllamaExe'. Install Ollama for Windows first."
+}
+
+if (-not [string]::IsNullOrWhiteSpace($Models)) {
+    New-Item -ItemType Directory -Force -Path $Models | Out-Null
+    $env:OLLAMA_MODELS = $Models
+}
+
+$env:OLLAMA_HOST = $ListenHost
+
+$alreadyListening = Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue |
+    Where-Object { $_.LocalAddress -in @("127.0.0.1", "::1") -and $_.LocalPort -eq ([Uri]"http://$ListenHost").Port } |
+    Select-Object -First 1
+
+if ($alreadyListening) {
+    Write-Output "Ollama already listening on $ListenHost"
+    exit 0
+}
+
+Start-Process -FilePath $OllamaExe -ArgumentList "serve" -WindowStyle Hidden
+Write-Output "Started Ollama fallback on $ListenHost"

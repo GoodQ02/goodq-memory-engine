@@ -191,9 +191,10 @@ class EntityExtractor:
             has_tags = bool(scene_data.get('tags'))
             has_faces = bool(scene_data.get('faces'))
             if has_transcript or has_caption or has_ocr or has_objects or has_tags or has_faces:
-                logger.warning(
-                    "[ENTITY] No entities found in current extraction pass. "
-                    "Data available: transcript=%s, caption=%s, ocr=%s, objects=%s, tags=%s, faces=%s",
+                logger.info(
+                    "[ENTITY] Preliminary extraction pass resolved 0 entities; "
+                    "later transcript/temporal KG passes may still resolve entities. "
+                    "Inputs: transcript=%s, caption=%s, ocr=%s, objects=%s, tags=%s, faces=%s",
                     has_transcript,
                     has_caption,
                     has_ocr,

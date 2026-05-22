@@ -776,6 +776,46 @@ def _path_redacted_label(value: Any) -> str | None:
     return None
 
 
+def _timeline_video_id_from_path_value(value: Any) -> str | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
+
+    raw = value.strip()
+    for path_cls in (PureWindowsPath, PurePosixPath):
+        parsed = path_cls(raw)
+        if parsed.name == "temporal_index.json" and parsed.parent.name:
+            return str(parsed.parent.name)
+        if parsed.name == "scene_manifest.json":
+            if parsed.parent.name == "video" and parsed.parent.parent.name:
+                return str(parsed.parent.parent.name)
+            if parsed.parent.name:
+                return str(parsed.parent.name)
+    return None
+
+
+def _timeline_video_id_from_episode(episode: Dict[str, Any]) -> str | None:
+    for key in ("timeline_video_id", "processing_video_id"):
+        value = episode.get(key)
+        if isinstance(value, str) and value.strip():
+            return str(_safe_name_label(value))
+
+    for key in ("temporal_index_path", "scene_manifest_path"):
+        value = episode.get(key)
+        resolved = _timeline_video_id_from_path_value(value)
+        if resolved:
+            return resolved
+
+    for key in ("canonical_episode_artifacts", "files_read"):
+        values = episode.get(key)
+        if not isinstance(values, list):
+            continue
+        for value in values:
+            resolved = _timeline_video_id_from_path_value(value)
+            if resolved:
+                return resolved
+    return None
+
+
 def _latest_episode_preview(episode: Any) -> Dict[str, Any] | None:
     if not isinstance(episode, dict):
         return None
@@ -790,6 +830,7 @@ def _latest_episode_preview(episode: Any) -> Dict[str, Any] | None:
 
     return {
         "episode": _safe_name_label(episode.get("episode")),
+        "timeline_video_id": _timeline_video_id_from_episode(episode),
         "status": episode.get("status"),
         "scene_count": episode.get("scene_count"),
         "phase6_complete": episode.get("phase6_complete"),
@@ -1083,6 +1124,9 @@ def _configured_scene_results_run() -> Dict[str, Any] | None:
         first_record.get("filename") if isinstance(first_record, dict) else None,
         "Configured CLI output",
     )
+    timeline_video_id = _timeline_video_id_from_path_value(
+        first_record.get("temporal_index_path") if isinstance(first_record, dict) else None
+    )
     run_id = runtime_run_id or f"configured_output:{scene_results_path.parent.parent.name}"
     stat = scene_results_path.stat()
 
@@ -1107,6 +1151,7 @@ def _configured_scene_results_run() -> Dict[str, Any] | None:
         "scenes_processed": scene_count,
         "latest_episode": {
             "episode": video_name,
+            "timeline_video_id": timeline_video_id,
             "status": "completed" if scene_count > 0 else "unknown",
             "run_dir": str(scene_results_path.parent.parent),
             "scene_count": scene_count,
@@ -1242,6 +1287,7 @@ def _run_evidence_safety_boundary() -> Dict[str, str]:
 def _episode_evidence_summary(episode: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "episode": episode.get("episode"),
+        "timeline_video_id": _timeline_video_id_from_episode(episode),
         "status": episode.get("status"),
         "scene_count": episode.get("scene_count"),
         "phase6_complete": episode.get("phase6_complete"),

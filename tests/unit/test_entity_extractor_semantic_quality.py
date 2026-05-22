@@ -96,6 +96,31 @@ def test_entity_extractor_preserves_family_name_text_matching_without_ner():
     assert ("He", "concept") not in entities
 
 
+def test_entity_extractor_filters_ambiguous_person_labels_from_structured_ner():
+    result = extract_entities_from_scene(
+        scene_data={
+            "audio": {
+                "transcript": "Mercury appears in the narration as an object, not a person.",
+                "ner_entities": [
+                    {"name": "Mercury", "type": "MISC", "source_step": "tagger"},
+                    {"name": "Mercury", "type": "PER", "source_step": "tagger"},
+                ],
+                "entity_details": [
+                    {"label": "Mercury", "type": "MISC", "score": 8.0, "sources": ["ner"]},
+                    {"label": "Mercury", "type": "PER", "score": 7.5, "sources": ["ner"]},
+                ],
+            }
+        },
+        scene_id="scene_0010",
+        video_id="video_123",
+    )
+
+    entities = _entity_map(result)
+
+    assert ("Mercury", "concept") in entities
+    assert ("Mercury", "person") not in entities
+
+
 def test_entity_extractor_adds_safe_vision_place_inference():
     result = extract_entities_from_scene(
         scene_data={

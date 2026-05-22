@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: PUBLIC_RELEASE_STATUS -->
-<!-- DOC_LAST_VERIFIED: 2026-05-21 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-22 -->
 
 # GoodQ4All Agent Status
 
@@ -26,6 +26,20 @@ summary.
 
 ## Current Public Mirror Checkpoint
 
+- 2026-05-22 public-safe mirror status: local Ollama fallback and configured
+  WSL audio readiness are now represented more truthfully in runtime status and
+  agent-facing workflows. The public release still treats these as local
+  operator-managed services, not cloud dependencies.
+- API runtime status now checks the configured WSL audio worker before
+  reporting `faster_whisper` readiness, avoiding false negatives from plain WSL
+  Python environments.
+- A fresh scene-first validation pattern confirmed strict current-run audio
+  proof, sentiment, text-emotion rankings, audio-emotion rankings, channelized
+  entity evidence, Qdrant vectors, and explicit-ID FAISS indexes on a clean
+  validation epoch.
+- A reusable evidence-first runtime repair workflow was added to the source
+  agent office so future operators can repair one capability seam at a time
+  before broad reruns.
 - 2026-05-21 public-safe mirror status: the local read-only API and Operator
   Console now surface transcript, sentiment, text-emotion ranking, audio-emotion
   ranking, and strict current-run audio-vector proof when those artifacts are

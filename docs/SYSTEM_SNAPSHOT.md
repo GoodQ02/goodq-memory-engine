@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: PUBLIC_RELEASE_SNAPSHOT -->
-<!-- DOC_LAST_VERIFIED: 2026-05-21 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-22 -->
 
 # System Snapshot
 
@@ -18,6 +18,10 @@ state should be copied into a public release.
   preview posture.
 - Required network posture: local services bind to loopback unless an operator
   deliberately overrides that setting.
+- Optional local LLM fallback: Ollama can be used as a Windows-side fallback
+  when configured on loopback.
+- Optional WSL audio readiness: runtime status should probe the configured WSL
+  worker environment, not an unrelated plain WSL Python environment.
 
 ## Supported Preview Surface
 
@@ -32,6 +36,8 @@ state should be copied into a public release.
   `/ui/justification_v1/`.
 - Durable evidence: scene manifests, temporal indexes, run summaries, SQLite
   state, knowledge graph state, and Qdrant vector state when configured.
+- Runtime repair doctrine: fix one evidence seam at a time, validate with a
+  focused test, then run a fresh scene-first probe before broad ingestion.
 
 ## Explicit Non-Claims
 

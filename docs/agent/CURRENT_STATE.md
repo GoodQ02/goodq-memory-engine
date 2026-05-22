@@ -71,28 +71,29 @@ Pre-clean audit found and cleared:
 - Prior filesystem epochs were removed except for a small
   `epoch_2025_12_22` log stub held open by the Qdrant Windows service.
 - Active API status on port `30000` is bound to the
-  `epoch_2026_05_22_runtime_fallback_probe_02` validation epoch. It currently
-  reports a fresh `3`-scene FAMILY clip probe with clean Qdrant/FAISS evidence,
+  `epoch_2026_05_22_family_probe_10scene_01` validation epoch. It currently
+  reports a fresh `10`-scene FAMILY probe with clean Qdrant/FAISS evidence,
   not an empty broad-run seed. Reset Qdrant and use a fresh epoch before the
   broad home-memory run.
 
 Fresh local validation epoch:
 
-- `epoch_2026_05_22_runtime_fallback_probe_02`
+- `epoch_2026_05_22_family_probe_10scene_01`
 
 The active validation epoch uses these Qdrant collections:
 
-- `goodq_clip_epoch_2026_05_22_runtime_fallback_probe_02`
-- `goodq_dino_epoch_2026_05_22_runtime_fallback_probe_02`
-- `goodq_text_epoch_2026_05_22_runtime_fallback_probe_02`
-- `goodq_audio_epoch_2026_05_22_runtime_fallback_probe_02`
+- `goodq_clip_epoch_2026_05_22_family_probe_10scene_01`
+- `goodq_dino_epoch_2026_05_22_family_probe_10scene_01`
+- `goodq_text_epoch_2026_05_22_family_probe_10scene_01`
+- `goodq_audio_epoch_2026_05_22_family_probe_10scene_01`
 
 This epoch now contains runtime fallback, WSL audio, sentiment, entity, Qdrant,
-and FAISS validation evidence. It is useful for audit and UI verification, but
-it must not seed the broad home-movie pass unless the operator deliberately
-resets Qdrant and verifies fresh/explicit-ID FAISS targets first. The previous
-`_01`, `_02`, `_03`, `_04`, and runtime fallback probe `_01` attempts also
-contain validation or partial probe residue and must not seed the broad run.
+FAISS, and Operator Console freshness validation evidence. It is useful for
+audit and UI verification, but it must not seed the broad home-movie pass unless
+the operator deliberately resets Qdrant and verifies fresh/explicit-ID FAISS
+targets first. The previous `_01`, `_02`, `_03`, `_04`, and runtime fallback
+probe attempts also contain validation or partial probe residue and must not
+seed the broad run.
 
 ## Runtime Fallback, Audio, Sentiment, And Entity Validation
 
@@ -350,8 +351,9 @@ Known previous-epoch residue:
 
 - The previous `_01` audio FAISS file read as a legacy non-IDMap HNSW index from
   earlier validation probes.
-- The current target is the fresh `_02` epoch. Before a broad home-movie run,
-  confirm all `_02` FAISS targets are absent or explicit-ID indexes.
+- The current target is `epoch_2026_05_22_family_probe_10scene_01`. Before a
+  broad home-movie run, use a fresh epoch or reset Qdrant and confirm target
+  FAISS files are absent or explicit-ID indexes.
 
 Follow-up preflight refresh on 2026-05-21:
 
@@ -479,6 +481,31 @@ Clean `_04` emotion-ranking clip probe on 2026-05-21:
   no-input extraction pass when transcript/caption/OCR/object/tag inputs are not
   available yet. Later transcript/temporal passes can still resolve entities;
   this is no longer a total KG absence signal.
+
+Operator Console freshness and route-id pass on 2026-05-22:
+
+- Active validation scope:
+  `epoch_2026_05_22_family_probe_10scene_01`, `10` scenes, runtime run id
+  `571ee750-6a6e-4744-93a3-4bc19373d273`.
+- `/api/runs/latest/preview` and `/api/runs/latest/evidence` now expose the
+  processing folder id as `timeline_video_id`. For the active probe this is
+  `family_probe_1987_1988_45m_15m`.
+- Per-video timeline/drilldown routes should use `timeline_video_id` or the
+  processing folder id, not the SQLite/video hash. A hash-route `404` is not
+  data loss by itself.
+- Operator Console GET reads use no-store request cache-busting, media/keyframe
+  URLs are cache-bound to the current run scope, and stale selected
+  video/scene/retrieval state is cleared when the API/run/video inventory scope
+  changes.
+- The Current Scope strip includes a Refresh item so operators can see when the
+  local read surface was refreshed and that it is using the no-store boundary.
+- Live post-restart validation against port `30000` reports temporal scope
+  `10`, current-run audio proof `Proven` for `10 / 10` CLAP-ok scenes, entity
+  evidence `54` total entities, sentiment labels for `10 / 10` scenes, and text
+  emotion ranking for `10 / 10` scenes.
+- Early `[ENTITY]` zero-entity messages with available partial inputs are now
+  preliminary extraction notices at info level. They do not mean the late
+  transcript/temporal KG pass failed.
 
 ## Do Not Investigate First
 

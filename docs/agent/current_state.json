@@ -25,8 +25,16 @@
           "audio_proof",
           "browsing_target",
           "selected_scene",
+          "refresh_boundary",
           "read_only_mode"
         ]
+      },
+      "refresh_boundary": {
+        "status": "implemented",
+        "api_reads": "no_store_cache_busted",
+        "media_cache": "bound_to_current_run_scope",
+        "stale_selection": "cleared_when_api_run_or_video_inventory_scope_changes",
+        "drilldown_id": "timeline_video_id_processing_folder_id_not_sqlite_hash"
       }
     },
     "llm": {
@@ -47,8 +55,8 @@
   "clean_start": {
     "prior_pipeline_memory_is_disposable": true,
     "prior_home_movie_tests_are_disposable": true,
-    "fresh_epoch": "epoch_2026_05_22_runtime_fallback_probe_02",
-    "fresh_epoch_note": "current runtime fallback, WSL audio, sentiment, entity, Qdrant, and FAISS validation epoch; reset Qdrant and use a fresh epoch before the broad home-movie pass; previous validation epochs contain residue",
+    "fresh_epoch": "epoch_2026_05_22_family_probe_10scene_01",
+    "fresh_epoch_note": "current 10-scene FAMILY validation epoch with runtime fallback, WSL audio, sentiment, entity, Qdrant, FAISS, and Operator Console freshness evidence; reset Qdrant and use a fresh epoch before the broad home-movie pass; previous validation epochs contain residue",
     "tracked_cleanup_summary": "docs/diagnostics/MEMORY_CLEAN_START_AUDIT_2026-05-20.md",
     "tracked_power_loss_summary": "docs/diagnostics/POWER_LOSS_INGESTION_AUDIT_2026-05-20.md",
     "qdrant_cleanup_manifest_dir": "reports/local_housekeeping/2026-05-20-memory-clean-start",
@@ -83,13 +91,13 @@
       "reclaimed_mb": 5244.99,
       "fresh_database_exists": true,
       "fresh_database_scenes": 1,
-      "fresh_database_note": "port 30000 is bound to the _04 clean clip probe epoch and currently reports the 1-scene FAMILY clip probe; reset/fresh epoch required before the next probe"
+      "fresh_database_note": "port 30000 is bound to the family_probe_10scene_01 validation epoch and currently reports the 10-scene FAMILY probe; reset/fresh epoch required before the broad home-movie run"
     },
     "fresh_qdrant_collections": {
-      "clip": "goodq_clip_epoch_2026_05_22_runtime_fallback_probe_02",
-      "dino": "goodq_dino_epoch_2026_05_22_runtime_fallback_probe_02",
-      "text": "goodq_text_epoch_2026_05_22_runtime_fallback_probe_02",
-      "audio": "goodq_audio_epoch_2026_05_22_runtime_fallback_probe_02"
+      "clip": "goodq_clip_epoch_2026_05_22_family_probe_10scene_01",
+      "dino": "goodq_dino_epoch_2026_05_22_family_probe_10scene_01",
+      "text": "goodq_text_epoch_2026_05_22_family_probe_10scene_01",
+      "audio": "goodq_audio_epoch_2026_05_22_family_probe_10scene_01"
     },
     "preserved_interrupted_qdrant_collections": {
       "clip": "goodq_clip_epoch_2026_05_20_home_memory_clean",
@@ -258,7 +266,7 @@
       ],
       "active_epoch_residue": {
         "previous_validation_epoch": "epoch_2026_05_21_family_full_clean_01 audio FAISS was legacy non-idmap residue from prior probes",
-        "current_target_epoch": "epoch_2026_05_22_runtime_fallback_probe_02",
+        "current_target_epoch": "epoch_2026_05_22_family_probe_10scene_01",
         "required_before_broad_run": "reset Qdrant and confirm target FAISS files are absent or explicit-ID indexes in a new fresh epoch"
       },
       "preflight_refresh_2026_05_21": {
@@ -420,6 +428,37 @@
           "operator console shows ranked audio coverage separately from promoted labels and can display text emotion rankings when present"
         ],
         "next_probe_rule": "reset Qdrant, start a fresh epoch or verify FAISS absent/new IDMap indexes, then rerun a scene-first probe before broad ingestion"
+      },
+      "ten_scene_ui_freshness_validation_2026_05_22": {
+        "status": "completed",
+        "epoch": "epoch_2026_05_22_family_probe_10scene_01",
+        "source_scope": "first_redacted_family_media_file",
+        "video_count": 1,
+        "scene_count": 10,
+        "runtime_run_id": "571ee750-6a6e-4744-93a3-4bc19373d273",
+        "timeline_video_id": "family_probe_1987_1988_45m_15m",
+        "api_projection": {
+          "latest_preview_scope": "configured_output_scene_results",
+          "latest_evidence_scope": "configured_output_scene_results",
+          "database_exists": true,
+          "database_scenes": 10,
+          "pipeline_status": "idle",
+          "temporal_scene_count": 10,
+          "audio_vector_proof": "current_run_audio_vector_proven",
+          "audio_vector_proof_count": "10/10",
+          "entity_total": 54,
+          "sentiment_segments_with_sentiment": 10,
+          "segments_with_text_emotion_ranking": 10
+        },
+        "operator_console": {
+          "api_reads": "no_store_cache_busted",
+          "media_cache": "bound_to_current_run_scope",
+          "stale_selection": "cleared_when_api_run_or_video_inventory_scope_changes",
+          "current_scope_refresh_item": "implemented",
+          "per_video_route_id": "timeline_video_id_processing_folder_id_not_sqlite_hash"
+        },
+        "entity_log_boundary": "early zero-entity extraction with partial inputs is an info-level preliminary timing notice; late transcript/temporal KG may still resolve entities",
+        "next_probe_rule": "reset Qdrant and FAISS targets before broad ingestion; use timeline_video_id for UI drilldowns"
       },
       "aborted_full_source_probe_2026_05_21": {
         "status": "stopped_pre_step_ledger",

@@ -828,10 +828,13 @@ def test_latest_run_evidence_prefers_newer_configured_output_over_stale_report_r
     )
 
     evidence = runtime._latest_run_evidence()
+    preview = runtime._latest_run_preview()
 
     assert evidence["run"]["run_id"] == "current-runtime"
     assert evidence["run"]["run_kind"] == "configured_scene_results"
     assert evidence["run"]["scope"] == "configured_output_scene_results"
+    assert evidence["latest_episode"]["timeline_video_id"] == "family"
+    assert preview["latest_episode"]["timeline_video_id"] == "family"
     assert evidence["temporal_index"]["total_scenes"] == 1
     assert evidence["projection_gaps"]["status"] == "ok"
     assert evidence["audio_vector_proof"]["status"] == "current_run_audio_vector_proven"

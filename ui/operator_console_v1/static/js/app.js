@@ -31,6 +31,8 @@
     data: {},
     errors: {},
     lastRefresh: null,
+    refreshNonce: "initial",
+    scopeSignature: "",
   };
 
   const endpoints = {
@@ -162,13 +164,34 @@
     return `${state.apiBase}${path}`;
   }
 
+  function withCacheBuster(urlText, key, value) {
+    if (!valueObserved(urlText)) return urlText;
+    try {
+      const url = new URL(String(urlText), window.location.href);
+      url.searchParams.set(key, String(value || Date.now()));
+      return url.toString();
+    } catch (_e) {
+      return urlText;
+    }
+  }
+
+  function requestUrl(path) {
+    return withCacheBuster(endpointUrl(path), "__goodq_refresh", state.refreshNonce || Date.now());
+  }
+
+  function mediaCacheToken() {
+    return state.scopeSignature || state.refreshNonce || "initial";
+  }
+
   function mediaEndpointUrl(path) {
     if (!valueObserved(path) || typeof path !== "string") return null;
     const trimmed = path.trim();
-    if (trimmed.startsWith("/api/")) return endpointUrl(trimmed);
+    if (trimmed.startsWith("/api/")) return withCacheBuster(endpointUrl(trimmed), "__goodq_scope", mediaCacheToken());
     try {
       const url = new URL(trimmed);
-      if (LOCAL_HOSTS.has(url.hostname) && url.pathname.startsWith("/api/")) return trimmed;
+      if (LOCAL_HOSTS.has(url.hostname) && url.pathname.startsWith("/api/")) {
+        return withCacheBuster(trimmed, "__goodq_scope", mediaCacheToken());
+      }
     } catch (_e) {
       return null;
     }
@@ -702,13 +725,77 @@
     node.appendChild(wrap);
   }
 
+  function inventoryVideoIds(videos) {
+    if (!Array.isArray(videos)) return [];
+    return videos
+      .map((video) => (video && (video.video_id || video.id) ? String(video.video_id || video.id) : ""))
+      .filter(Boolean);
+  }
+
+  function latestEpisodeTimelineId() {
+    const run = state.data.run || {};
+    const evidence = state.data.runEvidence || {};
+    const latestEpisode = evidence.latest_episode || run.latest_episode || {};
+    if (valueObserved(latestEpisode.timeline_video_id)) return String(latestEpisode.timeline_video_id);
+    return null;
+  }
+
+  function runtimeScopeSignature(videos) {
+    const run = state.data.run || {};
+    const evidence = state.data.runEvidence || {};
+    const evidenceRun = evidence.run || {};
+    const latestEpisode = evidence.latest_episode || run.latest_episode || {};
+    return [
+      state.apiBase,
+      evidenceRun.run_id || run.run_id || latestEpisode.run_id || "",
+      evidenceRun.epoch || run.epoch || "",
+      evidenceRun.scope || run.scope || "",
+      latestEpisode.timeline_video_id || latestEpisode.episode || "",
+      latestEpisode.scene_count || run.scenes_processed || evidence.temporal_index?.total_scenes || "",
+      inventoryVideoIds(videos).join(","),
+    ].join("|");
+  }
+
+  function clearRunScopedState() {
+    state.selectedSceneKey = null;
+    state.sceneLineage = null;
+    state.retrieval.response = null;
+    state.retrieval.results = [];
+    state.retrieval.selectedKey = null;
+    state.retrieval.error = null;
+    state.retrieval.hasRun = false;
+    state.mediaPreview.source = null;
+  }
+
+  function reconcileSelectedVideo(videos) {
+    const ids = inventoryVideoIds(videos);
+    const nextSignature = runtimeScopeSignature(videos);
+    if (state.scopeSignature && state.scopeSignature !== nextSignature) {
+      clearRunScopedState();
+    }
+    state.scopeSignature = nextSignature;
+
+    const current = valueObserved(state.selectedVideoId) ? String(state.selectedVideoId) : null;
+    if (current && ids.includes(current)) return;
+
+    const hinted = latestEpisodeTimelineId();
+    const next = hinted && ids.includes(hinted) ? hinted : (ids[0] || null);
+    if (current !== next) {
+      state.selectedSceneKey = null;
+      state.sceneLineage = null;
+      state.mediaPreview.source = null;
+    }
+    state.selectedVideoId = next;
+  }
+
   async function fetchJson(name, path) {
     const controller = new AbortController();
     const timer = window.setTimeout(() => controller.abort(), endpointTimeoutMs[name] || 12000);
     try {
-      const response = await fetch(endpointUrl(path), {
+      const response = await fetch(requestUrl(path), {
         method: "GET",
-        headers: { Accept: "application/json" },
+        cache: "no-store",
+        headers: { Accept: "application/json", "Cache-Control": "no-store" },
         signal: controller.signal,
       });
       if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
@@ -725,9 +812,11 @@
     try {
       const response = await fetch(endpointUrl(path), {
         method: "POST",
+        cache: "no-store",
         headers: {
           Accept: "application/json",
           "Content-Type": "application/json",
+          "Cache-Control": "no-store",
         },
         body: JSON.stringify(payload || {}),
         signal: controller.signal,
@@ -744,6 +833,7 @@
   async function refreshAll() {
     state.loading = true;
     state.loadingDiagnostics = false;
+    state.refreshNonce = String(Date.now());
     state.errors = {};
     renderLoadingShell();
 
@@ -770,9 +860,7 @@
     await refreshRecurrenceRecommendation();
 
     const videos = Array.isArray(state.data.videos) ? state.data.videos : [];
-    if (!state.selectedVideoId && videos.length) {
-      state.selectedVideoId = videos[0].video_id || videos[0].id || null;
-    }
+    reconcileSelectedVideo(videos);
     await refreshTimeline();
 
     state.loading = false;
@@ -893,7 +981,8 @@
     dot.className = `status-dot ${kind}`;
     dot.setAttribute("aria-hidden", "true");
     connection.appendChild(dot);
-    appendText(connection, "span", connected ? `${status} from ${state.apiBase}` : `No response from ${state.apiBase}`);
+    const refreshLabel = state.lastRefresh ? ` | refreshed ${state.lastRefresh.toLocaleTimeString()}` : "";
+    appendText(connection, "span", connected ? `${status} from ${state.apiBase}${refreshLabel}` : `No response from ${state.apiBase}`);
 
     const pill = qs("#api-environment-pill");
     if (pill) {
@@ -931,6 +1020,7 @@
     const audioProofStatus = String(audioProof.status || "").toLowerCase();
     const audioProofKind = audioProofStatus === "current_run_audio_vector_proven" ? "ok" : audioProofStatus === "partial" ? "warn" : "unknown";
     const audioProofLabel = audioProof.label || (audioProofKind === "ok" ? "Proven" : "No Current-Run Evidence");
+    const browsingValue = state.selectedVideoId || latestEpisode.timeline_video_id || latestEpisode.episode || "";
     const selectedSceneValue = selected
       ? `${sceneDisplayLabel(selectedSegment.scene_id || selectedSegment.index || selected.key, selected.index)} ${formatTime(selectedSegment.start)}-${formatTime(selectedSegment.end)}`
       : "Not selected";
@@ -983,10 +1073,10 @@
     appendScopeItem(
       grid,
       "Browsing",
-      state.selectedVideoId || latestEpisode.episode || "Not observed",
-      state.selectedVideoId || latestEpisode.episode ? "info" : "unknown",
-      "selected inventory/timeline target",
-      state.selectedVideoId || latestEpisode.episode || ""
+      browsingValue || "Not observed",
+      browsingValue ? "info" : "unknown",
+      "selected inventory/timeline folder id",
+      browsingValue
     );
     appendScopeItem(
       grid,
@@ -995,6 +1085,14 @@
       selected ? "ok" : "unknown",
       selected ? selectedSceneNote : "select a timeline or retrieval row",
       selectedSegment.scene_id || selectedSceneValue
+    );
+    appendScopeItem(
+      grid,
+      "Refresh",
+      state.lastRefresh ? relativeTime(state.lastRefresh.toISOString()) : "Pending",
+      state.lastRefresh ? "info" : "unknown",
+      "no-store API reads; media cache tied to current run scope",
+      state.refreshNonce || ""
     );
     appendScopeItem(
       grid,

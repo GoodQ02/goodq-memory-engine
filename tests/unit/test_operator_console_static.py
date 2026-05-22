@@ -89,6 +89,24 @@ def test_retrieval_console_uses_timeline_handoff_id_for_enriched_results() -> No
     assert "KG / Entity Evidence" in app_js
 
 
+def test_operator_console_uses_no_store_refresh_and_run_scope_cache_boundary() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    app_js = (repo_root / "ui" / "operator_console_v1" / "static" / "js" / "app.js").read_text(encoding="utf-8")
+
+    assert "requestUrl" in app_js
+    assert "__goodq_refresh" in app_js
+    assert "__goodq_scope" in app_js
+    assert 'cache: "no-store"' in app_js
+    assert '"Cache-Control": "no-store"' in app_js
+    assert "scopeSignature" in app_js
+    assert "runtimeScopeSignature" in app_js
+    assert "reconcileSelectedVideo" in app_js
+    assert "clearRunScopedState" in app_js
+    assert "latestEpisodeTimelineId" in app_js
+    assert "selected inventory/timeline folder id" in app_js
+    assert "no-store API reads; media cache tied to current run scope" in app_js
+
+
 def test_video_inventory_surfaces_thumbnail_visibility_envelope() -> None:
     repo_root = Path(__file__).resolve().parents[2]
     app_js = (repo_root / "ui" / "operator_console_v1" / "static" / "js" / "app.js").read_text(encoding="utf-8")

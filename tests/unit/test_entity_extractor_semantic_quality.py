@@ -1,3 +1,5 @@
+import logging
+
 from steps.video.entity_extractor import extract_entities_from_scene
 
 
@@ -116,3 +118,17 @@ def test_entity_extractor_adds_safe_vision_place_inference():
     assert ("Apartment", "location") in entities
     assert ("Kitchen", "location") in entities
     assert ("Dining Room", "location") in entities
+
+
+def test_entity_extractor_labels_no_input_pass_without_warning(caplog):
+    caplog.set_level(logging.INFO, logger="steps.video.entity_extractor")
+
+    result = extract_entities_from_scene(
+        scene_data={},
+        scene_id="scene_early_frame_pass",
+        video_id="video_123",
+    )
+
+    assert result["entities"] == []
+    assert "No entity-bearing inputs available yet" in caplog.text
+    assert not [record for record in caplog.records if record.levelno >= logging.WARNING]

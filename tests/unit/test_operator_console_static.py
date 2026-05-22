@@ -81,6 +81,10 @@ def test_retrieval_console_uses_timeline_handoff_id_for_enriched_results() -> No
     assert "not scene-present identity" in app_js
     assert "Candidate visible people" in app_js
     assert "Entity evidence" in app_js
+    assert "Entity evidence summary" in app_js
+    assert "segments_with_any_entity_evidence" in app_js
+    assert "top_dialogue_mentioned_entities" in app_js
+    assert "top_speaker_aligned_mentions" in app_js
     assert "kg_evidence" in app_js
     assert "KG / Entity Evidence" in app_js
 

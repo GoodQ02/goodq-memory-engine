@@ -30,6 +30,14 @@ truth for live claims. Do not treat this document as a live witness monitor.
   - latest evidence route reports transcript `1 / 1`, sentiment `1 / 1`, text
     emotion ranking `1 / 1`, audio emotion ranking `1 / 1`, and strict
     current-run audio proof `Proven`.
+  - latest evidence route now also exposes channelized entity evidence instead
+    of a KG-only boolean: `4` temporal-index entities are present in the active
+    clip probe, with dialogue-mentioned entities, candidate visible people, and
+    speaker-aligned mentions separated from strict scene-present identity.
+  - retrieval read models preserve the same channel split through
+    `POST /api/search/multimodal`; live local validation returned `kg_evidence`
+    from `timeline_scene_entities` with dialogue mentions and candidate-visible
+    identity evidence intact.
   - runtime run id:
     `7c811231-b85c-4489-91b4-672d7bae57be`.
   - top text-emotion signal is `admiration` with score about `0.955`; top
@@ -39,6 +47,8 @@ truth for live claims. Do not treat this document as a live witness monitor.
   - `emotion_classify` now completes after loading the CardiffNLP emotion model
     through safetensors; previous `_02` artifacts remain useful pre-repair
     evidence but should not be used to judge the repaired path.
+  - realtime KG no-input passes are no longer labeled as total entity absence;
+    later transcript/temporal passes remain the authority for entity evidence.
   - next safe move before any further probe or broad home-movie run: reset
     Qdrant again and use a new fresh epoch, or deliberately reset the active
     epoch and verify FAISS targets are absent or explicit-ID indexes.

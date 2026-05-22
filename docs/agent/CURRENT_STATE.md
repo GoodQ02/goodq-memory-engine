@@ -398,10 +398,25 @@ Clean `_04` emotion-ranking clip probe on 2026-05-21:
   audio-emotion score signal is `surprise` with score about `0.135`, below the
   `0.5` promotion threshold. This is the intended distinction between ranked
   review evidence and promoted emotion labels.
-- Scene context LLM evidence is present and transcript-dominant; KG resolved
-  `4` dialogue entities after transcript became available. Realtime KG still
-  logs an early no-entity observation before transcript is present, so the next
-  KG polish seam is ordering/labeling rather than total absence.
+- Scene context LLM evidence is present and transcript-dominant.
+- Entity evidence is now projected through `/api/runs/latest/evidence` as a
+  channelized envelope instead of a KG-only boolean. The active clip probe
+  reports `4` total entities from the temporal index, with dialogue-mentioned
+  entities, candidate-visible people, and speaker-aligned mentions surfaced
+  separately from strict scene-present identity.
+- The Operator Console proof/surface panels now expose entity counts, top
+  dialogue mentions, candidate visible people, speaker-aligned mentions, and
+  channel status. Do not collapse `scene_present=0` into "no entities"; it means
+  no strict scene-present identity was proven in that scope.
+- Live retrieval validation against `POST /api/search/multimodal` for the active
+  clip topic returns the selected scene with entity channels and `kg_evidence`
+  preserved: `4` entities, `0` strict scene-present entities, `4`
+  dialogue-mentioned entities, `1` candidate visible person, and `1`
+  speaker-aligned mention.
+- The early realtime KG "no entities found" observation is now labeled as a
+  no-input extraction pass when transcript/caption/OCR/object/tag inputs are not
+  available yet. Later transcript/temporal passes can still resolve entities;
+  this is no longer a total KG absence signal.
 
 ## Do Not Investigate First
 

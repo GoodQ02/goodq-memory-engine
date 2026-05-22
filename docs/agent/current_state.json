@@ -479,8 +479,41 @@
           "scene_context_epistemic_state": "supported",
           "kg_dialogue_entities_resolved": 4
         },
+        "entity_evidence_projection": {
+          "status": "implemented",
+          "api_route": "/api/runs/latest/evidence",
+          "source": "temporal_index",
+          "total_entities": 4,
+          "unique_entities": 4,
+          "segments_with_any_entity_evidence": 1,
+          "segments_with_scene_present_entities": 0,
+          "segments_with_dialogue_mentioned_entities": 1,
+          "segments_with_candidate_visible_people": 1,
+          "segments_with_speaker_aligned_mentions": 1,
+          "top_entities": [
+            "charlie",
+            "pan american games",
+            "indiana",
+            "jose"
+          ],
+          "top_candidate_visible_people": [
+            "anonymous_person_1"
+          ],
+          "retrieval_validation": {
+            "api_route": "POST /api/search/multimodal",
+            "query_scope": "active clip topic",
+            "entity_count": 4,
+            "scene_present_count": 0,
+            "dialogue_mentioned_count": 4,
+            "candidate_visible_people_count": 1,
+            "speaker_aligned_mention_count": 1,
+            "kg_source": "timeline_scene_entities"
+          },
+          "interpretation": "entity evidence is channel-specific; scene-present identity, dialogue mentions, candidate visible people, and speaker-aligned mentions must stay separate"
+        },
         "known_followups": [
-          "realtime KG logs an early no-entity observation before transcript is present, then resolves dialogue entities after transcript; next KG polish should label or reorder that early observation",
+          "early realtime KG no-entity observations now label no-input extraction passes instead of implying total KG absence",
+          "scene-present identity remains strict; scene_present=0 must not hide dialogue/candidate/speaker entity evidence",
           "full-source scene-first probes are expensive because scene detection scans the whole source before max-scenes truncation; use short clips for targeted sentiment and retrieval experiments"
         ],
         "next_probe_rule": "reset Qdrant and use a new fresh epoch before the next probe or broad home-movie run"

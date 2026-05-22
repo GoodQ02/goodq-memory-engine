@@ -324,11 +324,29 @@ def test_latest_run_evidence_summarizes_artifacts_without_paths(monkeypatch, tmp
                 "has_transcripts": True,
                 "segments_with_audio_emotion": 2,
                 "top_audio_emotions": [{"label": "calm", "count": 2}],
+                "total_entities": 4,
+                "unique_entities": 3,
+                "segments_with_scene_present_entities": 1,
+                "segments_with_dialogue_mentioned_entities": 1,
+                "segments_with_candidate_visible_people": 1,
+                "segments_with_speaker_aligned_mentions": 1,
+                "top_entities": [
+                    {"entity": "grandma", "type": "person", "count": 2},
+                    {"entity": "kitchen", "type": "location", "count": 1},
+                ],
+                "top_scene_present_entities": [{"entity": "Kitchen", "type": "LOCATION", "count": 1}],
+                "top_dialogue_mentioned_entities": [{"entity": "Grandma", "type": "PERSON", "count": 1}],
+                "top_candidate_visible_people": [{"entity": "anonymous_person_1", "type": "PERSON", "count": 1}],
+                "top_speaker_aligned_mentions": [{"entity": "Grandma", "type": "PERSON", "count": 1}],
                 "segments": [
                     {
                         "scene_id": "scene-a",
                         "audio_emotion": "calm",
                         "sentiment": {"label": "positive", "score": 0.91},
+                        "scene_present_entities": [{"text": "Kitchen", "type": "LOCATION"}],
+                        "dialogue_mentioned_entities": [{"text": "Grandma", "type": "PERSON"}],
+                        "candidate_visible_people": [{"text": "anonymous_person_1", "type": "PERSON"}],
+                        "speaker_aligned_mentions": [{"text": "Grandma", "type": "PERSON", "count": 1}],
                     },
                     {
                         "scene_id": "scene-b",
@@ -456,6 +474,33 @@ def test_latest_run_evidence_summarizes_artifacts_without_paths(monkeypatch, tmp
     assert evidence["sentiment"]["segments_with_audio_emotion"] == 2
     assert evidence["knowledge_graph"]["status"] == "ok"
     assert evidence["knowledge_graph"]["qdrant_ok"] is True
+    assert evidence["entity_evidence"] == {
+        "status": "ok",
+        "source": "temporal_index",
+        "scene_scope_count": 2,
+        "total_entities": 4,
+        "unique_entities": 3,
+        "segments_with_any_entity_evidence": 1,
+        "segments_with_scene_present_entities": 1,
+        "segments_with_dialogue_mentioned_entities": 1,
+        "segments_with_candidate_visible_people": 1,
+        "segments_with_speaker_aligned_mentions": 1,
+        "top_entities": [
+            {"label": "grandma", "count": 2},
+            {"label": "kitchen", "count": 1},
+        ],
+        "top_scene_present_entities": [{"label": "Kitchen", "count": 1}],
+        "top_dialogue_mentioned_entities": [{"label": "Grandma", "count": 1}],
+        "top_candidate_visible_people": [{"label": "anonymous_person_1", "count": 1}],
+        "top_speaker_aligned_mentions": [{"label": "Grandma", "count": 1}],
+        "channel_status": {
+            "scene_present": "ok",
+            "dialogue_mentioned": "ok",
+            "candidate_visible": "ok",
+            "speaker_aligned": "ok",
+        },
+        "interpretation": "Entity evidence is channel-specific; dialogue mentions and candidate visibility are not the same as scene-present identity.",
+    }
     assert evidence["audio_vector_proof"]["status"] == "no_current_run_evidence"
     assert evidence["audio_vector_proof"]["runtime_run_id_resolved"] is True
     assert evidence["audio_vector_proof"]["runtime_run_id_source"] == "run_header.run_id"

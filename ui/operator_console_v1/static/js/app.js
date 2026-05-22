@@ -1280,6 +1280,7 @@
     const temporal = evidence.temporal_index || {};
     const sentiment = evidence.sentiment || {};
     const graph = evidence.knowledge_graph || {};
+    const entityEvidence = evidence.entity_evidence || {};
     const projection = evidence.projection_gaps || {};
     const audioProof = evidence.audio_vector_proof || {};
     const audioProvenance = state.data.audioProvenance || {};
@@ -1288,6 +1289,7 @@
     const memory = state.data.memory || {};
     const faissAudioCount = numberValue(memory.faiss?.audio_vectors);
     const sceneContextCount = numberValue(temporal.segments_with_scene_context_llm);
+    const entityEvidenceCount = numberValue(entityEvidence.segments_with_any_entity_evidence);
     const audioEmotionCount = numberValue(sentiment.segments_with_audio_emotion ?? temporal.segments_with_audio_emotion);
     const sentimentCount = numberValue(sentiment.segments_with_sentiment);
     const transcriptCount = numberValue(sentiment.segments_with_transcript ?? temporal.segments_with_transcript);
@@ -1365,6 +1367,11 @@
         label: "Knowledge Graph",
         state: proofState(hasOkStatus(graph.status), "Observed", "Not observed", evidenceNote(graphScenes, "scenes"), "warn"),
         missingNote: "Knowledge graph rollup unavailable",
+      },
+      {
+        label: "Entity evidence",
+        state: proofState(entityEvidenceCount !== null && entityEvidenceCount > 0, "Observed", "Not observed", entityEvidenceCount !== null ? `${entityEvidenceCount} segments` : "", "warn"),
+        missingNote: "No entity channels reported; scene-present, dialogue-mentioned, candidate-visible, and speaker-aligned evidence are checked separately",
       },
       {
         label: "Qdrant scene proof",
@@ -1455,6 +1462,13 @@
           value: `${optionalObserved}/${supplementalChecks.length}`,
           note: "sentiment, CLAP, FAISS",
           kind: optionalObserved === supplementalChecks.length ? "ok" : "warn",
+        },
+        {
+          label: "Entity channels",
+          value: entityEvidenceCount !== null ? `${entityEvidenceCount}/${temporalScenes || 0}` : "Not exposed",
+          note: "channel-specific identity evidence",
+          kind: entityEvidenceCount !== null && entityEvidenceCount > 0 ? "ok" : "unknown",
+          title: entityEvidence.interpretation || "Entity evidence remains separated by channel",
         },
         {
           label: "Audio vector proof",
@@ -2013,6 +2027,7 @@
     const evidence = state.data.runEvidence || {};
     const stepRuns = evidence.step_runs || {};
     const graph = evidence.knowledge_graph || {};
+    const entityEvidence = evidence.entity_evidence || {};
 
     node.appendChild(panelHeader("Evidence surfaces", "Sanitized artifact presence and step history", evidence.available ? "read-only" : "offline"));
     renderKv(node, evidence.artifact_presence || {}, ["step_runs_jsonl", "temporal_index_json", "scene_ingest_results_json"]);
@@ -2028,7 +2043,43 @@
       "phase6_complete",
       "phase6_qdrant_ok",
       "control_agent_status",
+      "entity_status",
+      "total_entities",
+      "segments_with_any_entity_evidence",
     ]);
+    appendText(node, "h3", "Entity evidence summary", "panel-subtitle");
+    appendIndicatorStrip(
+      node,
+      [
+        {
+          label: "Any entity evidence",
+          value: evidenceNote(entityEvidence.segments_with_any_entity_evidence, "segments") || "Not observed",
+          note: "scene-present, dialogue, candidate, or speaker-aligned",
+          kind: numberValue(entityEvidence.segments_with_any_entity_evidence) > 0 ? "ok" : "unknown",
+        },
+        {
+          label: "Scene-present",
+          value: evidenceNote(entityEvidence.segments_with_scene_present_entities, "segments") || "Not observed",
+          note: "stricter identity/location presence",
+          kind: numberValue(entityEvidence.segments_with_scene_present_entities) > 0 ? "ok" : "unknown",
+        },
+        {
+          label: "Dialogue-mentioned",
+          value: evidenceNote(entityEvidence.segments_with_dialogue_mentioned_entities, "segments") || "Not observed",
+          note: "transcript-derived mentions",
+          kind: numberValue(entityEvidence.segments_with_dialogue_mentioned_entities) > 0 ? "historical" : "unknown",
+        },
+        {
+          label: "Speaker-aligned",
+          value: evidenceNote(entityEvidence.segments_with_speaker_aligned_mentions, "segments") || "Not observed",
+          note: "mention tied to speaker evidence",
+          kind: numberValue(entityEvidence.segments_with_speaker_aligned_mentions) > 0 ? "historical" : "unknown",
+        },
+      ],
+      "entity-evidence-strip"
+    );
+    renderMiniList(node, "Top entities", entityEvidence.top_entities, "label", "count");
+    renderMiniList(node, "Top candidate visible people", entityEvidence.top_candidate_visible_people, "label", "count");
   }
 
   function renderTemporalSurface() {
@@ -2038,6 +2089,7 @@
     const evidence = state.data.runEvidence || {};
     const temporal = evidence.temporal_index || {};
     const sentiment = evidence.sentiment || {};
+    const entityEvidence = evidence.entity_evidence || {};
 
     node.appendChild(panelHeader("Temporal index", "Scene continuity, modality, and tone rollups", temporal.status || "unknown"));
     renderKv(node, temporal, [
@@ -2056,6 +2108,22 @@
     appendText(node, "h3", "Emotion and sentiment summary", "panel-subtitle");
     renderKv(node, sentiment, ["status", "segments_total", "segments_with_audio_emotion", "segments_with_sentiment", "average_sentiment_score"]);
     renderAudioEmotionDistribution(node, sentiment, temporal);
+    appendText(node, "h3", "Entity evidence summary", "panel-subtitle");
+    renderKv(node, entityEvidence, [
+      "status",
+      "source",
+      "scene_scope_count",
+      "total_entities",
+      "unique_entities",
+      "segments_with_any_entity_evidence",
+      "segments_with_scene_present_entities",
+      "segments_with_dialogue_mentioned_entities",
+      "segments_with_candidate_visible_people",
+      "segments_with_speaker_aligned_mentions",
+    ]);
+    renderMiniList(node, "Top dialogue-mentioned entities", entityEvidence.top_dialogue_mentioned_entities, "label", "count");
+    renderMiniList(node, "Top speaker-aligned mentions", entityEvidence.top_speaker_aligned_mentions, "label", "count");
+    if (entityEvidence.interpretation) appendText(node, "p", entityEvidence.interpretation, "panel-subtitle");
   }
 
   function renderDiagnostics() {

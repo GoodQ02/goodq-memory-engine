@@ -188,7 +188,24 @@ class EntityExtractor:
             has_caption = bool(scene_data.get('caption'))
             has_ocr = bool(scene_data.get('ocr_text'))
             has_objects = bool(scene_data.get('objects') or scene_data.get('detected_objects'))
-            logger.warning(f"[ENTITY] No entities found. Data available: transcript={has_transcript}, caption={has_caption}, ocr={has_ocr}, objects={has_objects}")
+            has_tags = bool(scene_data.get('tags'))
+            has_faces = bool(scene_data.get('faces'))
+            if has_transcript or has_caption or has_ocr or has_objects or has_tags or has_faces:
+                logger.warning(
+                    "[ENTITY] No entities found in current extraction pass. "
+                    "Data available: transcript=%s, caption=%s, ocr=%s, objects=%s, tags=%s, faces=%s",
+                    has_transcript,
+                    has_caption,
+                    has_ocr,
+                    has_objects,
+                    has_tags,
+                    has_faces,
+                )
+            else:
+                logger.info(
+                    "[ENTITY] No entity-bearing inputs available yet for current extraction pass; "
+                    "later audio/temporal passes may still resolve entities."
+                )
         
         return entities
     

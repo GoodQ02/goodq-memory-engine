@@ -13,6 +13,35 @@ Use canonical runtime contracts and released evidence surfaces as source of
 truth for live claims. Do not treat this document as a live witness monitor.
 
 ## Current Restart Checkpoint
+- Pause checkpoint, 2026-05-21 evening:
+  - status: clean sentiment and emotion-ranking probe is validated on the
+    active local source line.
+  - active API on port `30000` is bound to
+    `epoch_2026_05_21_family_full_clean_04`, a clean clip-probe evidence
+    epoch, not a broad-run seed.
+  - the latest local probe used a short clip extracted from the first redacted
+    FAMILY media file to avoid full-source scene-detection cost during
+    scene-first validation.
+  - Qdrant was reset before the probe; fresh `_04` collections started at `0`
+    points and populated to text `2`, CLIP `2`, DINO `2`, audio `1`.
+  - FAISS targets were absent before the probe and now read as explicit-ID
+    indexes: text `IndexIDMap2` `2`, CLIP `IndexIDMap2` `2`, DINO
+    `IndexIDMap2` `2`, audio `IndexIDMap2` `1`.
+  - latest evidence route reports transcript `1 / 1`, sentiment `1 / 1`, text
+    emotion ranking `1 / 1`, audio emotion ranking `1 / 1`, and strict
+    current-run audio proof `Proven`.
+  - runtime run id:
+    `7c811231-b85c-4489-91b4-672d7bae57be`.
+  - top text-emotion signal is `admiration` with score about `0.955`; top
+    audio-emotion score signal is `surprise` with score about `0.135`, below
+    the `0.5` promotion threshold. Treat this as ranked review evidence, not a
+    promoted hard audio-emotion label.
+  - `emotion_classify` now completes after loading the CardiffNLP emotion model
+    through safetensors; previous `_02` artifacts remain useful pre-repair
+    evidence but should not be used to judge the repaired path.
+  - next safe move before any further probe or broad home-movie run: reset
+    Qdrant again and use a new fresh epoch, or deliberately reset the active
+    epoch and verify FAISS targets are absent or explicit-ID indexes.
 - Pause checkpoint, 2026-05-21:
   - `/api/runs/latest/preview` and `/api/runs/latest/evidence` now consider
     both indexed report roots and the configured direct CLI output file, then

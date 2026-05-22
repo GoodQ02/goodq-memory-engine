@@ -79,7 +79,7 @@ def test_harmonizer_merges_audio_and_visual_time_hints() -> None:
 
 
 def test_harmonizer_does_not_promote_flat_audio_emotion_distribution() -> None:
-    from steps.video.cross_modal_harmonizer import _resolve_audio_emotion
+    from steps.video.cross_modal_harmonizer import _rank_audio_emotion_scores, _resolve_audio_emotion
 
     label, scores = _resolve_audio_emotion(
         {
@@ -94,6 +94,32 @@ def test_harmonizer_does_not_promote_flat_audio_emotion_distribution() -> None:
 
     assert label is None
     assert scores["angry"] == 0.14
+    assert _rank_audio_emotion_scores(scores, promoted_label=label) == [
+        {
+            "label": "angry",
+            "score": 0.14,
+            "rank": 1,
+            "promoted": False,
+            "promotion_threshold": 0.5,
+            "scope": "ranked_score_not_promoted",
+        },
+        {
+            "label": "neutral",
+            "score": 0.13,
+            "rank": 2,
+            "promoted": False,
+            "promotion_threshold": 0.5,
+            "scope": "ranked_score_not_promoted",
+        },
+        {
+            "label": "happy",
+            "score": 0.12,
+            "rank": 3,
+            "promoted": False,
+            "promotion_threshold": 0.5,
+            "scope": "ranked_score_not_promoted",
+        },
+    ]
 
 
 def test_harmonizer_promotes_audio_emotion_at_human_review_threshold() -> None:

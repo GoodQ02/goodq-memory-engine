@@ -43,8 +43,8 @@
   "clean_start": {
     "prior_pipeline_memory_is_disposable": true,
     "prior_home_movie_tests_are_disposable": true,
-    "fresh_epoch": "epoch_2026_05_21_family_full_clean_02",
-    "fresh_epoch_note": "current clean target for the next home-movie pass; previous _01 epoch contains validation/probe residue",
+    "fresh_epoch": "epoch_2026_05_21_family_full_clean_04",
+    "fresh_epoch_note": "current emotion-ranking clip probe evidence epoch; reset Qdrant and use a fresh epoch before the next probe or broad home-movie pass; previous _01, _02, and aborted _03 attempts also contain residue",
     "tracked_cleanup_summary": "docs/diagnostics/MEMORY_CLEAN_START_AUDIT_2026-05-20.md",
     "tracked_power_loss_summary": "docs/diagnostics/POWER_LOSS_INGESTION_AUDIT_2026-05-20.md",
     "qdrant_cleanup_manifest_dir": "reports/local_housekeeping/2026-05-20-memory-clean-start",
@@ -79,13 +79,13 @@
       "reclaimed_mb": 5244.99,
       "fresh_database_exists": true,
       "fresh_database_scenes": 1,
-      "fresh_database_note": "port 30000 is rebound to the _02 clean target; database is intentionally absent/empty until next ingestion"
+      "fresh_database_note": "port 30000 is bound to the _04 clean clip probe epoch and currently reports the 1-scene FAMILY clip probe; reset/fresh epoch required before the next probe"
     },
     "fresh_qdrant_collections": {
-      "clip": "goodq_clip_epoch_2026_05_21_family_full_clean_02",
-      "dino": "goodq_dino_epoch_2026_05_21_family_full_clean_02",
-      "text": "goodq_text_epoch_2026_05_21_family_full_clean_02",
-      "audio": "goodq_audio_epoch_2026_05_21_family_full_clean_02"
+      "clip": "goodq_clip_epoch_2026_05_21_family_full_clean_04",
+      "dino": "goodq_dino_epoch_2026_05_21_family_full_clean_04",
+      "text": "goodq_text_epoch_2026_05_21_family_full_clean_04",
+      "audio": "goodq_audio_epoch_2026_05_21_family_full_clean_04"
     },
     "preserved_interrupted_qdrant_collections": {
       "clip": "goodq_clip_epoch_2026_05_20_home_memory_clean",
@@ -254,10 +254,12 @@
       ],
       "active_epoch_residue": {
         "previous_validation_epoch": "epoch_2026_05_21_family_full_clean_01 audio FAISS was legacy non-idmap residue from prior probes",
-        "current_target_epoch": "epoch_2026_05_21_family_full_clean_02",
-        "required_before_broad_run": "confirm target FAISS files are absent or explicit-ID indexes"
+        "current_target_epoch": "epoch_2026_05_21_family_full_clean_04",
+        "required_before_broad_run": "reset Qdrant and confirm target FAISS files are absent or explicit-ID indexes"
       },
       "preflight_refresh_2026_05_21": {
+        "checkpoint_kind": "pre_probe_clean_launch_state",
+        "note": "historical checkpoint before the _02 validation probes; not the current occupied validation state",
         "api_restarted_after_config_epoch_switch": true,
         "api_status": {
           "database_exists": false,
@@ -361,9 +363,127 @@
           "faiss_audio_count_label": "Count present"
         },
         "known_followups": [
-          "standalone emotion_classify may remain skipped while unified audio emotion raw scores are visible",
+          "superseded by emotion ranking repair; rerun a clean probe to populate text_emotion_ranking in current artifacts",
           "raw audio-emotion scores should stay visible without being promoted to hard labels below threshold"
         ]
+      },
+      "ten_scene_validation_probe_2026_05_21": {
+        "status": "completed",
+        "source_scope": "first_redacted_family_media_file",
+        "video_count": 1,
+        "scene_count": 10,
+        "runtime_run_id": "52ccf932-7a63-4243-801b-c108bf79157a",
+        "api_projection": {
+          "latest_evidence_scope": "configured_output_scene_results",
+          "database_exists": true,
+          "database_scenes": 10,
+          "pipeline_status": "idle",
+          "projection_gaps": "ok",
+          "temporal_scene_count": 10,
+          "sentiment_segments_with_transcript": 10,
+          "sentiment_segments_with_sentiment": 10,
+          "audio_vector_proof": "current_run_audio_vector_proven",
+          "audio_vector_proof_count": "10/10",
+          "segments_with_audio_emotion_scores": 10,
+          "segments_with_audio_emotion_ranking": 10,
+          "segments_with_text_emotion_ranking": 0
+        },
+        "qdrant_counts": {
+          "clip": 20,
+          "dino": 20,
+          "text": 20,
+          "audio": 10
+        },
+        "evidence": {
+          "audio_emotion_status": "raw_scores_ranked_not_promoted",
+          "promoted_audio_labels": "0/10",
+          "promotion_threshold": 0.5,
+          "top_audio_emotion_score_signals": [
+            "fear",
+            "angry",
+            "disgust",
+            "calm",
+            "neutral"
+          ],
+          "sentiment": "present",
+          "text_emotion_ranking": "not present in this pre-repair run; requires clean rerun after emotion_classify safetensors repair"
+        },
+        "repair_applied": [
+          "emotion_classify loads Hugging Face sequence classifier weights with safetensors",
+          "emotion_classify GPU logging treats memory_fraction as optional",
+          "harmonizer persists audio emotion rankings, top candidates, text emotion rankings, and sentiment metadata into scene manifests and temporal indexes",
+          "api read models expose emotion rankings and promotion policy to scene, timeline, search, and latest evidence surfaces",
+          "operator console shows ranked audio coverage separately from promoted labels and can display text emotion rankings when present"
+        ],
+        "next_probe_rule": "reset Qdrant, start a fresh epoch or verify FAISS absent/new IDMap indexes, then rerun a scene-first probe before broad ingestion"
+      },
+      "aborted_full_source_probe_2026_05_21": {
+        "status": "stopped_pre_step_ledger",
+        "epoch": "epoch_2026_05_21_family_full_clean_03",
+        "reason": "full-source scene detection remained active for more than 7 minutes because max-scenes limits processing after detection, not detector scan scope",
+        "outcome": "partial runtime scaffolding only; do not treat as evidence or broad-run seed"
+      },
+      "emotion_ranking_clip_probe_2026_05_21": {
+        "status": "completed",
+        "epoch": "epoch_2026_05_21_family_full_clean_04",
+        "source_scope": "short local clip extracted from first redacted family media file",
+        "video_count": 1,
+        "scene_count": 1,
+        "runtime_run_id": "7c811231-b85c-4489-91b4-672d7bae57be",
+        "preflight": {
+          "qdrant_points_before_probe": 0,
+          "faiss_targets_before_probe": "absent",
+          "full_source_probe_replaced_by_clip": true
+        },
+        "api_projection": {
+          "latest_evidence_scope": "configured_output_scene_results",
+          "database_exists": true,
+          "database_scenes": 1,
+          "projection_gaps": "ok",
+          "temporal_scene_count": 1,
+          "sentiment_segments_with_transcript": 1,
+          "sentiment_segments_with_sentiment": 1,
+          "segments_with_audio_emotion_scores": 1,
+          "segments_with_audio_emotion_ranking": 1,
+          "segments_with_text_emotion_ranking": 1,
+          "audio_vector_proof": "current_run_audio_vector_proven",
+          "audio_vector_proof_count": "1/1"
+        },
+        "qdrant_counts": {
+          "clip": 2,
+          "dino": 2,
+          "text": 2,
+          "audio": 1
+        },
+        "faiss_indexes": {
+          "text": "IndexIDMap2 ntotal=2",
+          "clip": "IndexIDMap2 ntotal=2",
+          "dino": "IndexIDMap2 ntotal=2",
+          "audio": "IndexIDMap2 ntotal=1"
+        },
+        "step_runs": {
+          "rows": 21,
+          "status": "all_ok",
+          "sentiment": "ok",
+          "emotion_classify": "ok",
+          "audio_embed_clap": "ok",
+          "scene_visual_embeddings": "ok",
+          "cross_modal_harmonization": "ok"
+        },
+        "evidence": {
+          "top_text_emotion": "admiration 0.955",
+          "top_audio_emotion_score_signal": "surprise 0.135 raw_score_not_promoted",
+          "audio_promotion_threshold": 0.5,
+          "sentiment": "positive",
+          "scene_context_llm": "present",
+          "scene_context_epistemic_state": "supported",
+          "kg_dialogue_entities_resolved": 4
+        },
+        "known_followups": [
+          "realtime KG logs an early no-entity observation before transcript is present, then resolves dialogue entities after transcript; next KG polish should label or reorder that early observation",
+          "full-source scene-first probes are expensive because scene detection scans the whole source before max-scenes truncation; use short clips for targeted sentiment and retrieval experiments"
+        ],
+        "next_probe_rule": "reset Qdrant and use a new fresh epoch before the next probe or broad home-movie run"
       }
     }
   },

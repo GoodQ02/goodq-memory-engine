@@ -52,10 +52,16 @@ class SceneResponse(BaseModel):
     speaker_voice_signature_meta: Optional[Dict[str, Any]] = None
     audio_emotion: Optional[str] = None
     audio_emotion_scores: Optional[Dict[str, Any]] = None
+    audio_emotion_ranking: List[Dict[str, Any]] = Field(default_factory=list)
+    audio_emotion_top_candidate: Optional[Dict[str, Any]] = None
+    audio_emotion_promotion_threshold: Optional[float] = None
+    text_emotion_ranking: List[Dict[str, Any]] = Field(default_factory=list)
+    text_emotion_meta: Optional[Dict[str, Any]] = None
     clap_meta: Optional[Dict[str, Any]] = None
     sentiment: Optional[Dict[str, Any]] = None
     sentiment_label: Optional[str] = None
     sentiment_score: Optional[float] = None
+    sentiment_meta: Optional[Dict[str, Any]] = None
     time_hints: Optional[Dict[str, Any]] = None
     tags: List[str] = Field(default_factory=list)
     tag_details: List[Dict[str, Any]] = Field(default_factory=list)
@@ -99,6 +105,11 @@ class SearchResult(BaseModel):
     objects: List[str] = Field(default_factory=list)
     audio_emotion: Optional[str] = None
     audio_emotion_scores: Optional[Dict[str, Any]] = None
+    audio_emotion_ranking: List[Dict[str, Any]] = Field(default_factory=list)
+    audio_emotion_top_candidate: Optional[Dict[str, Any]] = None
+    audio_emotion_promotion_threshold: Optional[float] = None
+    text_emotion_ranking: List[Dict[str, Any]] = Field(default_factory=list)
+    text_emotion_meta: Optional[Dict[str, Any]] = None
     clap_meta: Optional[Dict[str, Any]] = None
     audio_vector_proof: Optional[Dict[str, Any]] = None
     current_run_qdrant_audio_proven: bool = False
@@ -117,6 +128,7 @@ class SearchResult(BaseModel):
     sentiment: Optional[Dict[str, Any]] = None
     sentiment_label: Optional[str] = None
     sentiment_score: Optional[float] = None
+    sentiment_meta: Optional[Dict[str, Any]] = None
     context: Optional[Dict[str, Any]] = None
     scene_context_llm: Optional[Dict[str, Any]] = None
     scene_context_epistemic: Optional[Dict[str, Any]] = None
@@ -167,10 +179,16 @@ class TimelineSegment(BaseModel):
     speaker_voice_signature_meta: Optional[Dict[str, Any]] = None
     audio_emotion: Optional[str] = None
     audio_emotion_scores: Optional[Dict[str, Any]] = None
+    audio_emotion_ranking: List[Dict[str, Any]] = Field(default_factory=list)
+    audio_emotion_top_candidate: Optional[Dict[str, Any]] = None
+    audio_emotion_promotion_threshold: Optional[float] = None
+    text_emotion_ranking: List[Dict[str, Any]] = Field(default_factory=list)
+    text_emotion_meta: Optional[Dict[str, Any]] = None
     clap_meta: Optional[Dict[str, Any]] = None
     sentiment: Optional[Dict[str, Any]] = None
     sentiment_label: Optional[str] = None
     sentiment_score: Optional[float] = None
+    sentiment_meta: Optional[Dict[str, Any]] = None
     time_hints: Optional[Dict[str, Any]] = None
     tags: List[str] = Field(default_factory=list)
     tag_details: List[Dict[str, Any]] = Field(default_factory=list)

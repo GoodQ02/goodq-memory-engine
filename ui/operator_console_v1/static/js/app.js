@@ -1667,8 +1667,19 @@
     const rawScoreRows = Array.isArray(sentiment.top_audio_emotion_score_signals)
       ? sentiment.top_audio_emotion_score_signals
       : [];
+    const textEmotionRows = Array.isArray(sentiment.top_text_emotions)
+      ? sentiment.top_text_emotions
+      : Array.isArray(temporal.top_text_emotions)
+        ? temporal.top_text_emotions
+        : [];
     const total = numberValue(sentiment.segments_total ?? temporal.total_scenes);
-    const covered = numberValue(sentiment.segments_with_audio_emotion ?? temporal.segments_with_audio_emotion);
+    const promotedCovered = numberValue(sentiment.segments_with_audio_emotion ?? temporal.segments_with_audio_emotion);
+    const rankedCovered = numberValue(
+      sentiment.segments_with_audio_emotion_ranking ??
+      temporal.segments_with_audio_emotion_ranking ??
+      sentiment.segments_with_audio_emotion_scores ??
+      temporal.segments_with_audio_emotion_scores
+    );
 
     appendText(container, "h3", "Audio Emotion Distribution", "panel-subtitle");
     const panel = document.createElement("div");
@@ -1679,10 +1690,16 @@
       panel,
       [
         {
-          label: "Coverage",
-          value: covered !== null && total !== null ? `${covered}/${total}` : "Not exposed",
-          note: "Audio classifier labels, latest temporal index",
-          kind: covered !== null && total !== null && covered === total ? "ok" : "warn",
+          label: "Ranked coverage",
+          value: rankedCovered !== null && total !== null ? `${rankedCovered}/${total}` : "Not exposed",
+          note: "reviewable audio emotion rankings, latest temporal index",
+          kind: rankedCovered !== null && total !== null && rankedCovered === total ? "ok" : "warn",
+        },
+        {
+          label: "Promoted labels",
+          value: promotedCovered !== null && total !== null ? `${promotedCovered}/${total}` : "Not exposed",
+          note: "strict threshold labels only",
+          kind: promotedCovered ? "info" : "unknown",
         },
         {
           label: "Label families",
@@ -1720,14 +1737,15 @@
         rawScoreRows.slice(0, 8).forEach((row) => {
           const score = numberValue(row.max_score ?? row.average_score) || 0;
           const count = numberValue(row.count) || 0;
+          const emotionLabel = row.label || row.emotion || "unknown";
           const percent = Math.max(4, Math.min(100, Math.round(score * 100)));
           const item = document.createElement("div");
           item.className = "emotion-bar-row";
-          item.setAttribute("aria-label", `${safeString(row.label || "unknown", "label")}: raw score ${formatPercent(score)}`);
+          item.setAttribute("aria-label", `${safeString(emotionLabel, "label")}: raw score ${formatPercent(score)}`);
 
           const label = document.createElement("span");
           label.className = "emotion-bar-label";
-          label.textContent = safeString(row.label || "unknown", "label");
+          label.textContent = safeString(emotionLabel, "label");
           item.appendChild(label);
 
           const track = document.createElement("div");
@@ -1780,6 +1798,9 @@
       appendText(panel, "p", "Text sentiment labels not present in this run.", "sentiment-empty-state");
     } else {
       renderMiniList(panel, "Sentiment labels", sentiment.sentiment_labels, "label", "count");
+    }
+    if (textEmotionRows.length) {
+      renderMiniList(panel, "Text emotion rankings", textEmotionRows, "emotion", "count");
     }
     container.appendChild(panel);
   }
@@ -3353,7 +3374,13 @@
       : stringList(raw && raw.objects, 4);
     const faces = previewCount(raw && (raw.faces || raw.face_ids || raw.candidate_visible_people || context.candidate_visible_people));
     const transcript = valueObserved(raw && raw.transcript) || valueObserved(context.transcript) || valueObserved(raw && raw.full_transcript);
-    const audioEmotion = valueObserved(raw && raw.audio_emotion) || valueObserved(context.audio_emotion) || valueObserved(raw && raw.audio_emotion_scores);
+    const audioEmotion =
+      valueObserved(raw && raw.audio_emotion) ||
+      valueObserved(context.audio_emotion) ||
+      valueObserved(raw && raw.audio_emotion_scores) ||
+      valueObserved(raw && raw.audio_emotion_ranking) ||
+      valueObserved(context.audio_emotion_ranking);
+    const textEmotion = valueObserved(raw && raw.text_emotion_ranking) || valueObserved(context.text_emotion_ranking);
     const frame = valueObserved(raw && (raw.representative_frame_endpoint || raw.representative_frame || context.representative_frame_endpoint || context.representative_frame));
     const clapMeta = raw && raw.clap_meta && typeof raw.clap_meta === "object" ? raw.clap_meta : context.clap_meta;
     const currentRunAudioProof =
@@ -3365,6 +3392,7 @@
       { label: objects.length ? `${objects.length} objects` : "Objects not exposed", observed: objects.length > 0, kind: objects.length ? "ok" : "unknown" },
       { label: faces ? `${faces} face signals` : "Face signals not exposed", observed: faces > 0, kind: faces ? "info" : "unknown" },
       { label: audioEmotion ? "Audio emotion reviewable" : "Audio emotion not exposed", observed: audioEmotion, kind: audioEmotion ? "info" : "unknown" },
+      { label: textEmotion ? "Text emotion ranking present" : "Text emotion ranking not exposed", observed: textEmotion, kind: textEmotion ? "info" : "unknown" },
       {
         label: currentRunAudioProof
           ? "Current-run audio proof exposed"
@@ -3699,6 +3727,21 @@
       .sort((a, b) => b[1] - a[1]);
   }
 
+  function topAudioEmotionCandidate(segment) {
+    if (segment.audio_emotion_top_candidate && typeof segment.audio_emotion_top_candidate === "object" && !Array.isArray(segment.audio_emotion_top_candidate)) {
+      const label = safeString(segment.audio_emotion_top_candidate.label || "unknown", "audio_emotion_top_candidate");
+      const score = Number(segment.audio_emotion_top_candidate.score);
+      return Number.isFinite(score) ? [label, score] : null;
+    }
+    if (Array.isArray(segment.audio_emotion_ranking) && segment.audio_emotion_ranking.length) {
+      const row = segment.audio_emotion_ranking[0] || {};
+      const label = safeString(row.label || "unknown", "audio_emotion_ranking");
+      const score = Number(row.score);
+      return Number.isFinite(score) ? [label, score] : null;
+    }
+    return sortedScorePairs(segment.audio_emotion_scores)[0] || null;
+  }
+
   function formatPercent(score) {
     if (!Number.isFinite(score)) return "score not observed";
     const normalized = score > 1 ? score / 100 : score;
@@ -3707,7 +3750,7 @@
 
   function audioEmotionLabel(segment) {
     if (valueObserved(segment.audio_emotion)) return safeString(segment.audio_emotion, "audio_emotion");
-    const top = sortedScorePairs(segment.audio_emotion_scores)[0];
+    const top = topAudioEmotionCandidate(segment);
     if (top) {
       const reviewLabel = top[1] >= 0.5 ? "Review signal" : "Raw score";
       return `${reviewLabel}: ${top[0]} ${formatPercent(top[1])}`;
@@ -3716,7 +3759,7 @@
   }
 
   function audioEmotionNote(segment) {
-    const top = sortedScorePairs(segment.audio_emotion_scores)[0];
+    const top = topAudioEmotionCandidate(segment);
     if (valueObserved(segment.audio_emotion)) {
       return `Promoted label; ${top ? `top raw score ${top[0]} ${formatPercent(top[1])}` : "raw scores not exposed"}`;
     }
@@ -4141,6 +4184,7 @@
       : [];
     const ocrDateCandidates = stringList(segment.ocr_date_candidates, 8);
     const audioScoreCount = objectCount(segment.audio_emotion_scores);
+    const textEmotionCount = arrayCount(segment.text_emotion_ranking);
     const clapMeta = segment.clap_meta && typeof segment.clap_meta === "object" && !Array.isArray(segment.clap_meta)
       ? segment.clap_meta
       : {};
@@ -4262,6 +4306,7 @@
       tagDetails.length > 0,
       entityBuckets.total > 0,
       valueObserved(segment.sentiment_label) || valueObserved(segment.sentiment_score),
+      textEmotionCount > 0,
       valueObserved(segment.audio_emotion) || audioScoreCount > 0,
       clapCommitObserved,
       sceneContextRows.length > 0 || valueObserved(segment.scene_context_epistemic) || valueObserved(segment.scene_context_arbitration),
@@ -4329,6 +4374,14 @@
       "Sentiment analysis",
       valueObserved(segment.sentiment_label) || valueObserved(segment.sentiment_score),
       safeString(segment.sentiment_score ?? "score not observed", "sentiment_score")
+    );
+    appendSceneSignal(
+      modalityList,
+      "Text emotion ranking",
+      textEmotionCount > 0,
+      textEmotionCount > 0
+        ? `${textEmotionCount} ranked transcript emotion signal${textEmotionCount === 1 ? "" : "s"}`
+        : "No transcript emotion ranking exposed"
     );
     appendSceneSignal(
       modalityList,

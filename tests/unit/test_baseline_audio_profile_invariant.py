@@ -801,6 +801,55 @@ def test_emotion_classify_surfaces_model_unavailable_reason(monkeypatch):
     assert "torch.load safety gate" in result["emotion_meta"]["error"]
 
 
+def test_emotion_classify_loads_sequence_model_with_safetensors(monkeypatch):
+    import sys
+    import types
+
+    from steps.emotion_classify import step as emotion_step
+
+    monkeypatch.setitem(emotion_step._EMO, "model", None)
+    monkeypatch.setitem(emotion_step._EMO, "tok", None)
+    monkeypatch.setitem(emotion_step._EMO, "labels", [])
+    monkeypatch.setitem(emotion_step._EMO, "device", "cpu")
+    monkeypatch.setitem(emotion_step._EMO, "error", None)
+    monkeypatch.setattr(
+        emotion_step,
+        "setup_step_gpu",
+        lambda step_name: {"device": "cpu", "step_name": step_name},
+    )
+
+    fake_torch = types.ModuleType("torch")
+    fake_transformers = types.ModuleType("transformers")
+    model_kwargs = {}
+
+    class FakeTokenizer:
+        @classmethod
+        def from_pretrained(cls, name):
+            return cls()
+
+    class FakeModel:
+        @classmethod
+        def from_pretrained(cls, name, **kwargs):
+            model_kwargs.update(kwargs)
+            return cls()
+
+        def to(self, device):
+            return self
+
+        def eval(self):
+            return self
+
+    fake_transformers.AutoTokenizer = FakeTokenizer
+    fake_transformers.AutoModelForSequenceClassification = FakeModel
+    monkeypatch.setitem(sys.modules, "torch", fake_torch)
+    monkeypatch.setitem(sys.modules, "transformers", fake_transformers)
+
+    emotion_step._load_emotion()
+
+    assert model_kwargs["use_safetensors"] is True
+    assert emotion_step._EMO["model"] is not None
+
+
 @pytest.mark.parametrize(
     ("step_name", "result", "expected_status", "expected_reason", "expected_embedding"),
     [

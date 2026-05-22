@@ -60,26 +60,27 @@ Pre-clean audit found and cleared:
   `interrupted_ingestion` through `/api/runs/latest/evidence`.
 - Prior filesystem epochs were removed except for a small
   `epoch_2025_12_22` log stub held open by the Qdrant Windows service.
-- Active API status on port `30000` is now rebound to the fresh `_02` clean
-  target. It intentionally reports no database scenes and
-  `/api/runs/latest/evidence` returns `no_indexed_runs` until the next scene is
-  ingested.
+- Active API status on port `30000` is bound to the `_04` clean clip probe
+  epoch. It currently reports the latest `1`-scene FAMILY clip probe, not an
+  empty broad-run seed. Reset Qdrant and use a fresh epoch before the next probe
+  or broad home-memory run.
 
 Fresh local validation epoch:
 
-- `epoch_2026_05_21_family_full_clean_02`
+- `epoch_2026_05_21_family_full_clean_04`
 
 The active validation epoch uses these Qdrant collections:
 
-- `goodq_clip_epoch_2026_05_21_family_full_clean_02`
-- `goodq_dino_epoch_2026_05_21_family_full_clean_02`
-- `goodq_text_epoch_2026_05_21_family_full_clean_02`
-- `goodq_audio_epoch_2026_05_21_family_full_clean_02`
+- `goodq_clip_epoch_2026_05_21_family_full_clean_04`
+- `goodq_dino_epoch_2026_05_21_family_full_clean_04`
+- `goodq_text_epoch_2026_05_21_family_full_clean_04`
+- `goodq_audio_epoch_2026_05_21_family_full_clean_04`
 
-This epoch is the current clean target for the next home-movie pass. A
-preflight check on 2026-05-21 showed the four target Qdrant collections green
-with `0` points. The previous `_01` epoch contains validation/probe residue and
-must not seed the broad run.
+This epoch now contains validation/probe evidence. It is useful for audit and UI
+verification, but it must not seed the next probe or broad home-movie pass
+unless the operator deliberately resets Qdrant and verifies fresh/explicit-ID
+FAISS targets first. The previous `_01`, `_02`, and aborted `_03` attempts also
+contain validation or partial probe residue and must not seed the broad run.
 
 Preserved interrupted-run collections may also exist:
 
@@ -292,15 +293,18 @@ Known previous-epoch residue:
 
 Follow-up preflight refresh on 2026-05-21:
 
+Pre-probe `_02` launch checkpoint:
+
 - Port `30000` API was restarted after `config.local.yaml` moved to `_02`.
-- `/api/status` now reports `database.exists=false`, `database.scenes=0`, and
-  pipeline `idle`; this is the expected clean-run launch state.
-- `/api/runs/latest/evidence` now reports `available=false` with reason
-  `no_indexed_runs`; this prevents stale `_01` evidence from appearing as the
-  current scope before ingestion.
-- The four `_02` Qdrant collections are green with `0` points.
-- The `_02` FAISS directory does not exist yet. This is acceptable; the next
-  writers must create fresh explicit-ID indexes.
+- At that checkpoint, `/api/status` reported `database.exists=false`,
+  `database.scenes=0`, and pipeline `idle`; this was the expected clean-run
+  launch state before the validation probes below.
+- At that checkpoint, `/api/runs/latest/evidence` reported `available=false`
+  with reason `no_indexed_runs`; this prevented stale `_01` evidence from
+  appearing as the current scope before ingestion.
+- The four `_02` Qdrant collections were green with `0` points.
+- The `_02` FAISS directory did not exist yet. This was acceptable because the
+  writers needed to create fresh explicit-ID indexes.
 - The old `_01` text, CLIP, and DINO FAISS indexes read as `IndexIDMap2`.
 - The old `_01` audio FAISS index reads as legacy `IndexHNSWFlat` and must not
   be reused.
@@ -340,6 +344,64 @@ Follow-up clean `_02` ingestion probe on 2026-05-21:
 - Audio emotion is intentionally not promoted for this scene: raw neutral score
   is about `0.132`, below the `0.5` promotion threshold, so the UI should show
   raw/not-promoted evidence rather than a hard emotion label.
+
+Follow-up `10`-scene validation probe on 2026-05-21:
+
+- Probe scope: first redacted FAMILY media file, `1` video, `10` scenes.
+- Runtime run id: `52ccf932-7a63-4243-801b-c108bf79157a`.
+- Pipeline status after probe: idle.
+- `/api/status` reports `database.exists=true` and `database.scenes=10`.
+- `_02` Qdrant counts after the run: text `20`, CLIP `20`, DINO `20`, audio
+  `10`.
+- `/api/runs/latest/evidence` selects the configured output run, reports
+  projection gaps `ok`, temporal scope `10` scenes, sentiment labels for
+  `10 / 10` scenes, current-run audio proof `Proven`, and `10 / 10`
+  run-matched Qdrant audio points.
+- Runtime evidence now distinguishes strict audio-emotion labels from ranked
+  review evidence: promoted labels `0 / 10`, ranked audio-emotion score
+  segments `10 / 10`.
+- Text emotion classification was repaired after this run by loading the
+  CardiffNLP emotion model with `use_safetensors=True` and by not assuming
+  `memory_fraction` is present in the GPU config. Existing `_02` artifacts
+  still show `segments_with_text_emotion_ranking=0`; the next clean probe should
+  populate `text_emotion_ranking` if `emotion_classify` remains healthy.
+- Operator Console assets were cache-busted with
+  `20260521-emotion-ranking-1`; the audio-emotion panel should show ranked
+  coverage separately from promoted labels.
+- Before the next probe, follow `docs/agent/workflows/CLEAN_MEMORY_START.md`:
+  use a fresh epoch or reset Qdrant and verify FAISS targets are absent or
+  explicit-ID indexes.
+
+Clean `_04` emotion-ranking clip probe on 2026-05-21:
+
+- Probe scope: short local clip extracted from the first redacted FAMILY media
+  file, `1` video, `1` scene.
+- Runtime run id: `7c811231-b85c-4489-91b4-672d7bae57be`.
+- Full-source probe attempt against `_03` was stopped before step-ledger writes
+  because `--max-scenes 1` still required full-video scene detection. Treat
+  `_03` as partial scaffolding, not evidence for broad ingestion.
+- `_04` started from a verified clean boundary: fresh Qdrant collections had
+  `0` points, and configured FAISS/id-map targets were absent.
+- `/api/status` reports `database.exists=true` and `database.scenes=1`.
+- `_04` Qdrant counts after the probe: text `2`, CLIP `2`, DINO `2`, audio `1`.
+- FAISS indexes read as explicit-ID `IndexIDMap2`: text `2`, CLIP `2`, DINO
+  `2`, audio `1`.
+- `step_runs.jsonl` contains `21` rows, all `ok`; `sentiment`,
+  `emotion_classify`, `audio_embed_clap`, `scene_visual_embeddings`, and
+  `cross_modal_harmonization` all completed.
+- `/api/runs/latest/evidence` selects the configured output run, reports
+  projection gaps `ok`, temporal scope `1` scene, transcript `1 / 1`,
+  sentiment `1 / 1`, text emotion ranking `1 / 1`, ranked audio-emotion scores
+  `1 / 1`, current-run audio proof `Proven`, and `1 / 1` run-matched Qdrant
+  audio points.
+- Top text-emotion signal is `admiration` with score about `0.955`; top
+  audio-emotion score signal is `surprise` with score about `0.135`, below the
+  `0.5` promotion threshold. This is the intended distinction between ranked
+  review evidence and promoted emotion labels.
+- Scene context LLM evidence is present and transcript-dominant; KG resolved
+  `4` dialogue entities after transcript became available. Realtime KG still
+  logs an early no-entity observation before transcript is present, so the next
+  KG polish seam is ordering/labeling rather than total absence.
 
 ## Do Not Investigate First
 

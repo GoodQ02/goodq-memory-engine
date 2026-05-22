@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import sys
+import types
+
 import numpy as np
 import pytest
 
@@ -158,3 +161,80 @@ def test_search_multimodal_defaults_stay_text_and_visual_only(
 
     assert results == []
     assert calls == [("text", 10), ("visual", 10)]
+
+
+def test_visual_query_loader_uses_safetensors(monkeypatch: pytest.MonkeyPatch) -> None:
+    engine = _engine()
+    calls: list[dict[str, object]] = []
+
+    class _FakeProcessor:
+        @classmethod
+        def from_pretrained(cls, model_id: str):
+            assert model_id == "openai/clip-vit-base-patch16"
+            return cls()
+
+    class _FakeModel:
+        @classmethod
+        def from_pretrained(cls, model_id: str, **kwargs):
+            assert model_id == "openai/clip-vit-base-patch16"
+            calls.append(kwargs)
+            return cls()
+
+        def eval(self):
+            return self
+
+    fake_transformers = types.ModuleType("transformers")
+    fake_transformers.CLIPModel = _FakeModel
+    fake_transformers.CLIPProcessor = _FakeProcessor
+    monkeypatch.setitem(sys.modules, "transformers", fake_transformers)
+
+    engine._load_clip_model()
+
+    assert calls == [{"use_safetensors": True}]
+
+
+def test_visual_query_encoder_accepts_pooled_model_output(monkeypatch: pytest.MonkeyPatch) -> None:
+    engine = _engine()
+
+    class _NoGrad:
+        def __enter__(self):
+            return None
+
+        def __exit__(self, *_args):
+            return False
+
+    class _FakeTensor:
+        def detach(self):
+            return self
+
+        def cpu(self):
+            return self
+
+        def numpy(self):
+            values = np.zeros((1, 512), dtype=np.float32)
+            values[0, 0] = 3.0
+            values[0, 1] = 4.0
+            return values
+
+    class _FakeOutput:
+        pooler_output = _FakeTensor()
+
+    class _FakeModel:
+        def get_text_features(self, **_inputs):
+            return _FakeOutput()
+
+    class _FakeProcessor:
+        def __call__(self, **_kwargs):
+            return {"input_ids": object()}
+
+    fake_torch = types.ModuleType("torch")
+    fake_torch.no_grad = lambda: _NoGrad()
+    monkeypatch.setitem(sys.modules, "torch", fake_torch)
+    engine._clip_model = {"model": _FakeModel(), "processor": _FakeProcessor()}
+
+    embedding = engine.encode_text_for_visual_search("woman at table")
+
+    assert embedding.shape == (512,)
+    assert embedding[0] == pytest.approx(0.6)
+    assert embedding[1] == pytest.approx(0.8)
+    assert np.linalg.norm(embedding) == pytest.approx(1.0)

@@ -958,7 +958,7 @@ class MultimodalSearchEngine:
             from transformers import CLIPModel, CLIPProcessor
             
             processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch16")
-            model = CLIPModel.from_pretrained("openai/clip-vit-base-patch16").eval()
+            model = CLIPModel.from_pretrained("openai/clip-vit-base-patch16", use_safetensors=True).eval()
             
             self._clip_model = {'model': model, 'processor': processor}
             logger.info("[OK] CLIP model loaded for text encoding")
@@ -1108,7 +1108,11 @@ class MultimodalSearchEngine:
         
         with torch.no_grad():
             text_features = model.get_text_features(**inputs)
-            embedding = text_features.cpu().numpy()[0]
+            if hasattr(text_features, "pooler_output"):
+                text_features = text_features.pooler_output
+            elif hasattr(text_features, "text_embeds"):
+                text_features = text_features.text_embeds
+            embedding = text_features.detach().cpu().numpy()[0]
         
         # Normalize
         embedding = embedding / (np.linalg.norm(embedding) + 1e-8)

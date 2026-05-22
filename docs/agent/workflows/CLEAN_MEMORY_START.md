@@ -13,6 +13,23 @@ This workflow may delete Qdrant collections whose names begin with `goodq_`.
 Do not delete filesystem epochs until they have been measured and the operator
 has confirmed bulk artifact cleanup is desired.
 
+## Probe Run Rule
+
+Treat every scene probe that is meant to validate retrieval, sentiment,
+emotion, KG, or vector proof as a clean-run experiment:
+
+- use a fresh epoch name for the probe
+- manifest existing `goodq_` Qdrant collections before deletion
+- delete and recreate the active `goodq_` Qdrant collections before the probe
+- verify the fresh collections are empty before ingestion
+- verify the configured FAISS targets are absent or explicit-ID indexes before
+  ingestion
+- do not reuse an epoch that already contains probe vectors, even if the prior
+  probe was small
+
+This prevents stale Qdrant points or prior FAISS residue from looking like new
+scene truth.
+
 ## 1. Capture The Qdrant Manifest
 
 Record collection names and point counts before deletion:
@@ -67,6 +84,27 @@ epoch_2026_05_21_family_full_clean_01
 
 That epoch contains probe data and one legacy audio FAISS residue from earlier
 tests. Treat it as validation evidence, not the broad-run seed.
+
+The follow-up 2026-05-21 validation probes then used:
+
+```text
+epoch_2026_05_21_family_full_clean_02
+```
+
+That epoch now contains the 1-scene and 10-scene FAMILY validation probes. It is
+useful evidence, but it is not a pristine seed for the next probe or broad
+home-memory run. Reset Qdrant and use a fresh epoch, or deliberately reset the
+active epoch and verify all FAISS targets before ingestion.
+
+The 2026-05-21 emotion-ranking validation used a short local clip and:
+
+```text
+epoch_2026_05_21_family_full_clean_04
+```
+
+That epoch is the current evidence surface for the repaired sentiment and
+emotion-ranking path. It should also be treated as occupied probe evidence, not
+a seed for the next clean pass.
 
 For the next broad home-memory run, create or select a fresh epoch and confirm
 its configured collections follow this pattern:

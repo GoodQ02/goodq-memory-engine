@@ -350,6 +350,11 @@ def test_harmonizer_rolls_up_audio_context_surfaces(tmp_path: Path, monkeypatch)
                         "segments": [{"start": 0.0, "end": 1.0, "text": "The crowd is going wild on Friday night."}],
                         "emotion": "neutral",
                         "emotion_scores": {"neutral": 0.9, "joy": 0.1},
+                        "emotions": [
+                            {"label": "amusement", "score": 0.64},
+                            {"label": "joy", "score": 0.31},
+                        ],
+                        "emotion_meta": {"engine": "hf", "status": "ok"},
                         "sentiment": {"label": "POSITIVE", "score": 0.91},
                         "sentiment_meta": {"engine": "hf"},
                         "diarization_status": "success",
@@ -414,9 +419,41 @@ def test_harmonizer_rolls_up_audio_context_surfaces(tmp_path: Path, monkeypatch)
     assert segment["ocr_date_candidates"] == ["DEC 16 2002"]
     assert segment["audio_emotion"] == "neutral"
     assert segment["audio_emotion_scores"] == {"neutral": 0.9, "joy": 0.1}
+    assert segment["audio_emotion_top_candidate"] == {
+        "label": "neutral",
+        "score": 0.9,
+        "rank": 1,
+        "promoted": True,
+        "promotion_threshold": 0.5,
+        "scope": "promoted_label",
+    }
+    assert segment["audio_emotion_ranking"] == [
+        {
+            "label": "neutral",
+            "score": 0.9,
+            "rank": 1,
+            "promoted": True,
+            "promotion_threshold": 0.5,
+            "scope": "promoted_label",
+        },
+        {
+            "label": "joy",
+            "score": 0.1,
+            "rank": 2,
+            "promoted": False,
+            "promotion_threshold": 0.5,
+            "scope": "ranked_score_not_promoted",
+        },
+    ]
+    assert segment["text_emotion_ranking"] == [
+        {"label": "amusement", "score": 0.64, "rank": 1},
+        {"label": "joy", "score": 0.31, "rank": 2},
+    ]
+    assert segment["text_emotion_meta"] == {"engine": "hf", "status": "ok"}
     assert segment["sentiment"] == {"label": "POSITIVE", "score": 0.91}
     assert segment["sentiment_label"] == "POSITIVE"
     assert segment["sentiment_score"] == 0.91
+    assert segment["sentiment_meta"] == {"engine": "hf"}
     assert segment["diarization_status"] == "success"
     assert segment["diarization_error"] is None
     assert segment["diarization_note"] == "wsl_unified"
@@ -439,6 +476,10 @@ def test_harmonizer_rolls_up_audio_context_surfaces(tmp_path: Path, monkeypatch)
     assert temporal_index["segments_with_time_hints"] == 1
     assert temporal_index["segments_with_metadata_time_hints"] == 1
     assert temporal_index["segments_with_audio_emotion"] == 1
+    assert temporal_index["segments_with_audio_emotion_ranking"] == 1
+    assert temporal_index["segments_with_audio_emotion_scores"] == 1
+    assert temporal_index["segments_with_text_emotion_ranking"] == 1
+    assert temporal_index["segments_with_sentiment"] == 1
     assert temporal_index["segments_with_speaker_voice_signatures"] == 1
     assert {"event": "applause", "count": 1} in temporal_index["top_music_events"]
     assert {"event": "laugh", "count": 1} in temporal_index["top_music_events"]
@@ -446,12 +487,35 @@ def test_harmonizer_rolls_up_audio_context_surfaces(tmp_path: Path, monkeypatch)
     assert {"hint": "friday", "count": 1} in temporal_index["top_time_hints"]
     assert {"hint": "1991-07-04", "count": 1} in temporal_index["top_metadata_time_hints"]
     assert temporal_index["top_audio_emotions"] == [{"emotion": "neutral", "count": 1}]
+    assert temporal_index["top_audio_emotion_score_signals"] == [
+        {
+            "emotion": "neutral",
+            "count": 1,
+            "average_score": 0.9,
+            "max_score": 0.9,
+            "scope": "ranked_score_signal",
+        }
+    ]
+    assert temporal_index["top_text_emotions"] == [
+        {
+            "emotion": "amusement",
+            "count": 1,
+            "average_score": 0.64,
+            "max_score": 0.64,
+        }
+    ]
+    assert temporal_index["top_sentiment_labels"] == [{"label": "positive", "count": 1}]
 
     persisted_manifest = json.loads(scene_manifest_path.read_text(encoding="utf-8"))
     persisted_scene = persisted_manifest["scenes"][0]
     assert persisted_scene["sentiment"] == {"label": "POSITIVE", "score": 0.91}
     assert persisted_scene["sentiment_label"] == "POSITIVE"
     assert persisted_scene["sentiment_score"] == 0.91
+    assert persisted_scene["sentiment_meta"] == {"engine": "hf"}
+    assert persisted_scene["text_emotion_ranking"] == [
+        {"label": "amusement", "score": 0.64, "rank": 1},
+        {"label": "joy", "score": 0.31, "rank": 2},
+    ]
     assert persisted_scene["speaker_voice_signature_count"] == 1
     assert persisted_scene["diarization_status"] == "success"
     assert persisted_scene["diarization_error"] is None

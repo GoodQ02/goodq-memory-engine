@@ -43,6 +43,7 @@ _AUDIO_QDRANT_REQUIRED_FIELDS = (
     "created_at",
     "commit_ts_utc",
 )
+_AUDIO_EMOTION_PROMOTION_THRESHOLD = 0.5
 
 _CFG = load_configs({})
 _PATHS_CFG: Dict[str, Any] = _CFG.get("paths", {}) or {}
@@ -1423,6 +1424,48 @@ def _audio_emotion_score_buckets_from_records(records: List[Dict[str, Any]], *, 
     return sorted(rows, key=lambda row: (row.get("count") or 0, row.get("max_score") or 0), reverse=True)[:8]
 
 
+def _count_audio_emotion_score_records(records: List[Dict[str, Any]], *, nested_audio: bool = False) -> int:
+    count = 0
+    for record in records:
+        if not isinstance(record, dict):
+            continue
+        source = record.get("audio") if nested_audio and isinstance(record.get("audio"), dict) else record
+        scores = source.get("audio_emotion_scores") or source.get("emotion_scores")
+        if isinstance(scores, dict) and any(_safe_float(value) is not None for value in scores.values()):
+            count += 1
+    return count
+
+
+def _text_emotion_buckets_from_records(records: List[Dict[str, Any]], *, nested_audio: bool = False) -> List[Dict[str, Any]]:
+    buckets: Dict[str, List[float]] = {}
+    for record in records:
+        if not isinstance(record, dict):
+            continue
+        source = record.get("audio") if nested_audio and isinstance(record.get("audio"), dict) else record
+        ranking = source.get("text_emotion_ranking") or source.get("emotions")
+        if not isinstance(ranking, list):
+            continue
+        for row in ranking[:1]:
+            if not isinstance(row, dict):
+                continue
+            label = str(row.get("label") or row.get("emotion") or "").strip().lower()
+            score = _safe_float(row.get("score"))
+            if label and score is not None:
+                buckets.setdefault(label, []).append(score)
+
+    rows: List[Dict[str, Any]] = []
+    for label, values in buckets.items():
+        rows.append(
+            {
+                "emotion": label,
+                "count": len(values),
+                "average_score": _round_number(sum(values) / len(values)),
+                "max_score": _round_number(max(values)),
+            }
+        )
+    return sorted(rows, key=lambda row: (row.get("count") or 0, row.get("max_score") or 0), reverse=True)[:8]
+
+
 def _summarize_sentiment(payload: Any, *, scene_results_payload: Any = None) -> Dict[str, Any]:
     if not isinstance(payload, dict):
         scene_records = _scene_records_from_results(scene_results_payload)
@@ -1433,6 +1476,8 @@ def _summarize_sentiment(payload: Any, *, scene_results_payload: Any = None) -> 
         sentiment_labels: Counter[str] = Counter()
         sentiment_scores: List[float] = []
         transcript_count = 0
+        audio_score_count = _count_audio_emotion_score_records(scene_records, nested_audio=True)
+        text_emotion_rows = _text_emotion_buckets_from_records(scene_records, nested_audio=True)
 
         for scene in scene_records:
             audio = scene.get("audio") if isinstance(scene.get("audio"), dict) else {}
@@ -1474,29 +1519,43 @@ def _summarize_sentiment(payload: Any, *, scene_results_payload: Any = None) -> 
                 sentiment_scores.append(score_value)
 
         return {
-            "status": "ok" if audio_emotions or sentiment_labels or transcript_count else "not_observed",
+            "status": "ok" if audio_emotions or sentiment_labels or transcript_count or audio_score_count else "not_observed",
             "source": "scene_ingest_results",
-            "segments_total": len(scene_records),
-            "segments_with_transcript": transcript_count,
-            "segments_with_audio_emotion": sum(audio_emotions.values()),
-            "segments_with_sentiment": sum(sentiment_labels.values()),
+                "segments_total": len(scene_records),
+                "segments_with_transcript": transcript_count,
+                "segments_with_audio_emotion": sum(audio_emotions.values()),
+                "segments_with_audio_emotion_scores": audio_score_count,
+                "segments_with_audio_emotion_ranking": audio_score_count,
+                "segments_with_text_emotion_ranking": sum(row.get("count", 0) for row in text_emotion_rows),
+                "segments_with_sentiment": sum(sentiment_labels.values()),
             "top_audio_emotions": [
                 {"label": label, "count": count}
                 for label, count in audio_emotions.most_common(8)
             ],
-            "top_audio_emotion_score_signals": _audio_emotion_score_buckets_from_records(scene_records, nested_audio=True),
-            "sentiment_labels": [
+                "top_audio_emotion_score_signals": _audio_emotion_score_buckets_from_records(scene_records, nested_audio=True),
+                "top_text_emotions": text_emotion_rows,
+                "sentiment_labels": [
                 {"label": label, "count": count}
                 for label, count in sentiment_labels.most_common(8)
             ],
-            "average_sentiment_score": _round_number(sum(sentiment_scores) / len(sentiment_scores)) if sentiment_scores else None,
-        }
+                "average_sentiment_score": _round_number(sum(sentiment_scores) / len(sentiment_scores)) if sentiment_scores else None,
+                "audio_emotion_policy": {
+                    "promoted_label_threshold": _AUDIO_EMOTION_PROMOTION_THRESHOLD,
+                    "promoted_labels": sum(audio_emotions.values()),
+                    "ranked_score_segments": audio_score_count,
+                    "scope": "ranked_scores_do_not_equal_labels",
+                },
+            }
 
     segments = payload.get("segments") if isinstance(payload.get("segments"), list) else []
     audio_emotions: Counter[str] = Counter()
     sentiment_labels: Counter[str] = Counter()
     sentiment_scores: List[float] = []
     transcript_count = 0
+    audio_score_count = _count_audio_emotion_score_records(segments)
+    text_emotion_rows = payload.get("top_text_emotions") if isinstance(payload.get("top_text_emotions"), list) else None
+    if text_emotion_rows is None:
+        text_emotion_rows = _text_emotion_buckets_from_records(segments)
 
     for segment in segments:
         if not isinstance(segment, dict):
@@ -1529,19 +1588,32 @@ def _summarize_sentiment(payload: Any, *, scene_results_payload: Any = None) -> 
         top_audio = [{"label": label, "count": count} for label, count in audio_emotions.most_common(8)]
 
     return {
-        "status": "ok" if audio_emotions or sentiment_labels or top_audio else "not_observed",
+        "status": "ok" if audio_emotions or sentiment_labels or top_audio or audio_score_count else "not_observed",
         "source": "temporal_index",
         "segments_total": len(segments),
         "segments_with_transcript": payload.get("segments_with_transcript") or transcript_count,
         "segments_with_audio_emotion": payload.get("segments_with_audio_emotion") or sum(audio_emotions.values()),
+        "segments_with_audio_emotion_scores": payload.get("segments_with_audio_emotion_scores") or audio_score_count,
+        "segments_with_audio_emotion_ranking": payload.get("segments_with_audio_emotion_ranking") or audio_score_count,
+        "segments_with_text_emotion_ranking": payload.get("segments_with_text_emotion_ranking")
+        or sum(row.get("count", 0) for row in text_emotion_rows if isinstance(row, dict)),
         "segments_with_sentiment": sum(sentiment_labels.values()),
         "top_audio_emotions": top_audio,
         "top_audio_emotion_score_signals": _audio_emotion_score_buckets_from_records(segments),
+        "top_text_emotions": text_emotion_rows,
         "sentiment_labels": [
             {"label": label, "count": count}
             for label, count in sentiment_labels.most_common(8)
         ],
         "average_sentiment_score": _round_number(sum(sentiment_scores) / len(sentiment_scores)) if sentiment_scores else None,
+        "audio_emotion_policy": payload.get("audio_emotion_policy")
+        if isinstance(payload.get("audio_emotion_policy"), dict)
+        else {
+            "promoted_label_threshold": _AUDIO_EMOTION_PROMOTION_THRESHOLD,
+            "promoted_labels": payload.get("segments_with_audio_emotion") or sum(audio_emotions.values()),
+            "ranked_score_segments": payload.get("segments_with_audio_emotion_ranking") or audio_score_count,
+            "scope": "ranked_scores_do_not_equal_labels",
+        },
     }
 
 

@@ -45,7 +45,7 @@ def _load_emotion():
 
         name = "cardiffnlp/twitter-roberta-base-emotion-multilabel-latest"
         tok = AutoTokenizer.from_pretrained(name)
-        model = AutoModelForSequenceClassification.from_pretrained(name)
+        model = AutoModelForSequenceClassification.from_pretrained(name, use_safetensors=True)
         
         model = model.to(device).eval()
         labels = [
@@ -55,7 +55,11 @@ def _load_emotion():
             "surprise","neutral",
         ]
         _EMO.update({"model": model, "tok": tok, "labels": labels, "device": device, "error": None})
-        logger.info(f"[OK] Emotion model loaded on {device} (GPU config: {gpu_config['memory_fraction']:.1%} memory)")
+        memory_fraction = gpu_config.get("memory_fraction")
+        if isinstance(memory_fraction, (int, float)):
+            logger.info(f"[OK] Emotion model loaded on {device} (GPU config: {memory_fraction:.1%} memory)")
+        else:
+            logger.info(f"[OK] Emotion model loaded on {device}")
     except Exception as e:
         logger.error(f"[FAIL] Failed to load emotion model: {str(e)}")
         logger.info("[WARN]  Falling back to CPU mode")

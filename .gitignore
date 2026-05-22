@@ -162,6 +162,7 @@ scripts/internal/*
 .coverage
 htmlcov/
 .tox/
+.playwright-mcp/
 
 # ===== LOCAL BOOTSTRAP/INVENTORY ARTIFACTS =====
 .venv_install_audit/

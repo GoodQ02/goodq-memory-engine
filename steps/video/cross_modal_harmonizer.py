@@ -18,6 +18,7 @@ from steps.common.atomic_io import atomic_write_json
 from steps.common.config_loader import get_runtime_paths
 
 logger = logging.getLogger(__name__)
+_AUDIO_EMOTION_PROMOTION_THRESHOLD = 0.5
 
 try:
     from steps.video.entity_extractor import extract_entities_from_scene, EntityExtractor
@@ -835,12 +836,80 @@ def _resolve_audio_emotion(scene_audio_payload: Dict[str, Any]) -> tuple[Optiona
 
     raw_emotion = scene_audio_payload.get("emotion") or scene_audio_payload.get("audio_emotion")
     normalized_emotion = str(raw_emotion or "").strip().lower() if raw_emotion else ""
-    if not normalized_emotion and emotion_scores:
-        normalized_emotion = max(emotion_scores.items(), key=lambda item: item[1])[0]
+    if emotion_scores:
+        top_label, top_score = max(emotion_scores.items(), key=lambda item: item[1])
+        promoted_score = emotion_scores.get(normalized_emotion)
+        if promoted_score is None or promoted_score < _AUDIO_EMOTION_PROMOTION_THRESHOLD:
+            normalized_emotion = top_label if top_score >= _AUDIO_EMOTION_PROMOTION_THRESHOLD else ""
     if normalized_emotion in {"", "unknown", "unavailable", "none", "null"}:
         normalized_emotion = ""
 
     return (normalized_emotion or None), emotion_scores
+
+
+def _rank_audio_emotion_scores(
+    emotion_scores: Dict[str, float],
+    *,
+    promoted_label: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    promoted = str(promoted_label or "").strip().lower()
+    rows: List[Dict[str, Any]] = []
+    normalized_scores: List[tuple[str, float]] = []
+    for label, score in emotion_scores.items():
+        normalized_label = str(label or "").strip().lower()
+        if not normalized_label:
+            continue
+        try:
+            normalized_scores.append((normalized_label, float(score)))
+        except (TypeError, ValueError):
+            continue
+    for rank, (label, score) in enumerate(
+        sorted(normalized_scores, key=lambda item: (-item[1], item[0])),
+        start=1,
+    ):
+        is_promoted = bool(promoted and label == promoted and score >= _AUDIO_EMOTION_PROMOTION_THRESHOLD)
+        rows.append(
+            {
+                "label": label,
+                "score": round(score, 3),
+                "rank": rank,
+                "promoted": is_promoted,
+                "promotion_threshold": _AUDIO_EMOTION_PROMOTION_THRESHOLD,
+                "scope": "promoted_label" if is_promoted else "ranked_score_not_promoted",
+            }
+        )
+    return rows
+
+
+def _rank_text_emotions(raw_emotions: Any) -> List[Dict[str, Any]]:
+    rows: List[tuple[str, float]] = []
+    if isinstance(raw_emotions, dict):
+        iterable = raw_emotions.items()
+    elif isinstance(raw_emotions, list):
+        iterable = []
+        for item in raw_emotions:
+            if not isinstance(item, dict):
+                continue
+            iterable.append((item.get("label") or item.get("emotion"), item.get("score")))
+    else:
+        iterable = []
+
+    for label, score in iterable:
+        normalized_label = str(label or "").strip().lower()
+        if not normalized_label:
+            continue
+        try:
+            rows.append((normalized_label, float(score)))
+        except (TypeError, ValueError):
+            continue
+
+    return [
+        {"label": label, "score": round(score, 3), "rank": rank}
+        for rank, (label, score) in enumerate(
+            sorted(rows, key=lambda item: (-item[1], item[0])),
+            start=1,
+        )
+    ]
 
 
 def _resolve_audio_sentiment(
@@ -2088,10 +2157,16 @@ def _persist_harmonized_scene_fields(
         "metadata_time_hints",
         "audio_emotion",
         "audio_emotion_scores",
+        "audio_emotion_ranking",
+        "audio_emotion_top_candidate",
+        "audio_emotion_promotion_threshold",
+        "text_emotion_ranking",
+        "text_emotion_meta",
         "clap_meta",
         "sentiment",
         "sentiment_label",
         "sentiment_score",
+        "sentiment_meta",
         "scene_context_llm",
         "scene_context_epistemic",
         "scene_context_arbitration",
@@ -2715,7 +2790,20 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
         time_hints = _resolve_scene_time_hints(scene_audio_payload)
         metadata_time_hints = _resolve_scene_metadata_time_hints(scene_audio_payload)
         audio_emotion, audio_emotion_scores = _resolve_audio_emotion(scene_audio_payload)
+        audio_emotion_ranking = _rank_audio_emotion_scores(audio_emotion_scores, promoted_label=audio_emotion)
+        audio_emotion_top_candidate = audio_emotion_ranking[0] if audio_emotion_ranking else None
+        text_emotion_ranking = _rank_text_emotions(scene_audio_payload.get("emotions"))
+        text_emotion_meta = (
+            scene_audio_payload.get("emotion_meta")
+            if isinstance(scene_audio_payload.get("emotion_meta"), dict)
+            else None
+        )
         sentiment, sentiment_label, sentiment_score = _resolve_audio_sentiment(scene_audio_payload)
+        sentiment_meta = (
+            scene_audio_payload.get("sentiment_meta")
+            if isinstance(scene_audio_payload.get("sentiment_meta"), dict)
+            else None
+        )
         clap_meta = scene_audio_payload.get('clap_meta') if isinstance(scene_audio_payload.get('clap_meta'), dict) else None
         speaker_voice_signatures = scene_audio_payload.get('speaker_voice_signatures') if isinstance(scene_audio_payload.get('speaker_voice_signatures'), list) else []
         candidate_visibility = _derive_candidate_visible_people(
@@ -2785,10 +2873,16 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
             'metadata_time_hints': metadata_time_hints,
             'audio_emotion': audio_emotion,
             'audio_emotion_scores': audio_emotion_scores,
+            'audio_emotion_ranking': audio_emotion_ranking,
+            'audio_emotion_top_candidate': audio_emotion_top_candidate,
+            'audio_emotion_promotion_threshold': _AUDIO_EMOTION_PROMOTION_THRESHOLD,
+            'text_emotion_ranking': text_emotion_ranking,
+            'text_emotion_meta': text_emotion_meta,
             'clap_meta': clap_meta,
             'sentiment': sentiment,
             'sentiment_label': sentiment_label,
             'sentiment_score': sentiment_score,
+            'sentiment_meta': sentiment_meta,
             'emotion_status': scene_audio_payload.get('emotion_status'),
             'emotion_error': scene_audio_payload.get('emotion_error'),
             'scene_context_llm': None,
@@ -2842,6 +2936,9 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
     time_hint_counts: Dict[str, int] = {}
     metadata_time_hint_counts: Dict[str, int] = {}
     audio_emotion_counts: Dict[str, int] = {}
+    audio_emotion_score_counts: Dict[str, List[float]] = {}
+    text_emotion_score_counts: Dict[str, List[float]] = {}
+    sentiment_label_counts: Dict[str, int] = {}
     scene_context_tag_counts: Dict[str, int] = {}
     scene_context_epistemic_state_counts: Dict[str, int] = {}
     scene_context_epistemic_dominant_counts: Dict[str, int] = {}
@@ -2908,6 +3005,35 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
         normalized_audio_emotion = str(seg.get('audio_emotion') or '').strip().lower()
         if normalized_audio_emotion:
             audio_emotion_counts[normalized_audio_emotion] = audio_emotion_counts.get(normalized_audio_emotion, 0) + 1
+        audio_emotion_ranking = seg.get("audio_emotion_ranking")
+        if isinstance(audio_emotion_ranking, list):
+            for row in audio_emotion_ranking[:1]:
+                if not isinstance(row, dict):
+                    continue
+                label = str(row.get("label") or "").strip().lower()
+                score = row.get("score")
+                try:
+                    score_value = float(score)
+                except (TypeError, ValueError):
+                    continue
+                if label:
+                    audio_emotion_score_counts.setdefault(label, []).append(score_value)
+        text_emotion_ranking = seg.get("text_emotion_ranking")
+        if isinstance(text_emotion_ranking, list):
+            for row in text_emotion_ranking[:1]:
+                if not isinstance(row, dict):
+                    continue
+                label = str(row.get("label") or "").strip().lower()
+                score = row.get("score")
+                try:
+                    score_value = float(score)
+                except (TypeError, ValueError):
+                    continue
+                if label:
+                    text_emotion_score_counts.setdefault(label, []).append(score_value)
+        sentiment_label = str(seg.get("sentiment_label") or "").strip().lower()
+        if sentiment_label:
+            sentiment_label_counts[sentiment_label] = sentiment_label_counts.get(sentiment_label, 0) + 1
         scene_context_llm = seg.get("scene_context_llm")
         if isinstance(scene_context_llm, dict):
             for tag in scene_context_llm.get("context_tags", []):
@@ -2983,6 +3109,7 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
     top_time_hints = sorted(time_hint_counts.items(), key=lambda x: x[1], reverse=True)[:20]
     top_metadata_time_hints = sorted(metadata_time_hint_counts.items(), key=lambda x: x[1], reverse=True)[:20]
     top_audio_emotions = sorted(audio_emotion_counts.items(), key=lambda x: x[1], reverse=True)[:20]
+    top_sentiment_labels = sorted(sentiment_label_counts.items(), key=lambda x: x[1], reverse=True)[:20]
     top_scene_context_tags = sorted(scene_context_tag_counts.items(), key=lambda x: x[1], reverse=True)[:20]
     top_scene_context_epistemic_states = sorted(
         scene_context_epistemic_state_counts.items(),
@@ -3004,6 +3131,39 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
         key=lambda x: x[1],
         reverse=True,
     )[:20]
+
+    def _serialize_score_rollup(
+        buckets: Dict[str, List[float]],
+        *,
+        key_name: str,
+        scope: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        rows: List[Dict[str, Any]] = []
+        for label, values in buckets.items():
+            clean_values = [float(value) for value in values if isinstance(value, (int, float))]
+            if not clean_values:
+                continue
+            row: Dict[str, Any] = {
+                key_name: label,
+                "count": len(clean_values),
+                "average_score": round(sum(clean_values) / len(clean_values), 3),
+                "max_score": round(max(clean_values), 3),
+            }
+            if scope:
+                row["scope"] = scope
+            rows.append(row)
+        return sorted(
+            rows,
+            key=lambda row: (row.get("count") or 0, row.get("max_score") or 0),
+            reverse=True,
+        )[:20]
+
+    top_audio_emotion_score_signals = _serialize_score_rollup(
+        audio_emotion_score_counts,
+        key_name="emotion",
+        scope="ranked_score_signal",
+    )
+    top_text_emotions = _serialize_score_rollup(text_emotion_score_counts, key_name="emotion")
     
     has_audio_payload_truth = any(s.get('has_audio') for s in unified_segments)
     has_transcript_payload_truth = any(s.get('has_transcript') for s in unified_segments)
@@ -3050,6 +3210,10 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
         'segments_with_time_hints': sum(1 for seg in unified_segments if _extract_time_hint_tokens(seg.get('time_hints', {}))),
         'segments_with_metadata_time_hints': sum(1 for seg in unified_segments if _extract_time_hint_tokens(seg.get('metadata_time_hints', {}))),
         'segments_with_audio_emotion': sum(1 for seg in unified_segments if seg.get('audio_emotion')),
+        'segments_with_audio_emotion_scores': sum(1 for seg in unified_segments if seg.get('audio_emotion_scores')),
+        'segments_with_audio_emotion_ranking': sum(1 for seg in unified_segments if seg.get('audio_emotion_ranking')),
+        'segments_with_text_emotion_ranking': sum(1 for seg in unified_segments if seg.get('text_emotion_ranking')),
+        'segments_with_sentiment': sum(1 for seg in unified_segments if seg.get('sentiment_label')),
         'segments_with_speaker_voice_signatures': sum(1 for seg in unified_segments if seg.get('speaker_voice_signature_count', 0) > 0),
         'segments_with_scene_context_llm': sum(1 for seg in unified_segments if seg.get('scene_context_llm')),
         'segments_with_scene_context_epistemic': sum(1 for seg in unified_segments if seg.get('scene_context_epistemic')),
@@ -3111,6 +3275,18 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
             {'emotion': key, 'count': value}
             for key, value in top_audio_emotions
         ],
+        'top_audio_emotion_score_signals': top_audio_emotion_score_signals,
+        'top_text_emotions': top_text_emotions,
+        'top_sentiment_labels': [
+            {'label': key, 'count': value}
+            for key, value in top_sentiment_labels
+        ],
+        'audio_emotion_policy': {
+            'promoted_label_threshold': _AUDIO_EMOTION_PROMOTION_THRESHOLD,
+            'promoted_labels': sum(1 for seg in unified_segments if seg.get('audio_emotion')),
+            'ranked_score_segments': sum(1 for seg in unified_segments if seg.get('audio_emotion_ranking')),
+            'scope': 'ranked_scores_do_not_equal_labels',
+        },
         'top_scene_context_tags': [
             {'tag': key, 'count': value}
             for key, value in top_scene_context_tags

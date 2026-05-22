@@ -24,6 +24,21 @@ summary.
   source, temporal scope, strict audio proof, browsing target, selected scene,
   and read-only mode.
 
+## Current Public Mirror Checkpoint
+
+- 2026-05-21 public-safe mirror status: the local read-only API and Operator
+  Console now surface transcript, sentiment, text-emotion ranking, audio-emotion
+  ranking, and strict current-run audio-vector proof when those artifacts are
+  present in the active run.
+- Recent clean probe validation used a short operator-owned clip, a fresh epoch,
+  reset Qdrant collections, and fresh explicit-ID FAISS indexes before checking
+  the evidence route and UI read models.
+- Audio emotion rankings are review evidence until they meet the configured
+  promotion threshold; the UI should show ranked signal without over-claiming a
+  hard label.
+- Before any broad personal-memory run, reset disposable vector/index state or
+  start a fresh epoch, then validate one scene first.
+
 ## Operator Boundaries
 
 - ControlAgent and healing are not part of the public preview release surface.

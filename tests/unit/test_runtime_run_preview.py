@@ -1042,6 +1042,8 @@ def test_sentiment_summary_surfaces_unpromoted_audio_emotion_scores(monkeypatch)
 
     assert summary["segments_with_transcript"] == 1
     assert summary["segments_with_audio_emotion"] == 0
+    assert summary["segments_with_audio_emotion_scores"] == 1
+    assert summary["segments_with_audio_emotion_ranking"] == 1
     assert summary["top_audio_emotions"] == []
     assert summary["top_audio_emotion_score_signals"] == [
         {
@@ -1052,6 +1054,12 @@ def test_sentiment_summary_surfaces_unpromoted_audio_emotion_scores(monkeypatch)
             "scope": "raw_score_not_promoted",
         }
     ]
+    assert summary["audio_emotion_policy"] == {
+        "promoted_label_threshold": 0.5,
+        "promoted_labels": 0,
+        "ranked_score_segments": 1,
+        "scope": "ranked_scores_do_not_equal_labels",
+    }
 
 
 def test_faiss_count_falls_back_to_sqlite_count_when_faiss_unavailable(monkeypatch, tmp_path) -> None:

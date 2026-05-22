@@ -13,6 +13,14 @@ Prepare the local-first GoodQ4All runtime for a clean home-movie memory test.
 Prior proving-ground memory, including Seinfeld/sample/test and prior home-movie
 test runs, is disposable and should not seed the next run.
 
+## Active Agent Workflows
+
+- `docs/agent/workflows/CLEAN_MEMORY_START.md`: clean-slate Qdrant, epoch, and
+  FAISS preparation before personal-memory ingestion.
+- `docs/agent/workflows/EVIDENCE_FIRST_RUNTIME_REPAIR.md`: evidence-first repair
+  loop for capability gaps where config, runtime, persistence, and UI surfaces
+  must be reconciled before broad reruns.
+
 ## Verified Runtime Posture
 
 - Local API target: `http://127.0.0.1:30000`

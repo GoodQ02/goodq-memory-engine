@@ -583,5 +583,16 @@
     "docs/architecture/AUDIO_VECTOR_PROVENANCE_CONTRACT.md",
     "docs/reference/API.md",
     "docs/agent/workflows/CLEAN_MEMORY_START.md"
-  ]
+  ],
+  "agent_workflows": {
+    "clean_memory_start": {
+      "path": "docs/agent/workflows/CLEAN_MEMORY_START.md",
+      "use_when": "preparing fresh Qdrant, epoch, and FAISS surfaces before personal-memory ingestion"
+    },
+    "evidence_first_runtime_repair": {
+      "path": "docs/agent/workflows/EVIDENCE_FIRST_RUNTIME_REPAIR.md",
+      "use_when": "a runtime capability looks absent, stale, partially proven, or mismatched across config, API, persistence, and UI surfaces",
+      "validated_from": "runtime_fallback_audio_entity_validation"
+    }
+  }
 }

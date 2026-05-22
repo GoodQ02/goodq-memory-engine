@@ -1,10 +1,10 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: GENERATED_SNAPSHOT -->
-<!-- DOC_LAST_VERIFIED: 2026-05-21 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-22 -->
 
 # GoodQ4All Agent Status
 
-_Operational restart checkpoint aligned: 2026-05-21._
+_Operational restart checkpoint aligned: 2026-05-22._
 
 This document is a bounded operator snapshot of the current release-era
 stitching and offline-package baseline.
@@ -13,7 +13,42 @@ Use canonical runtime contracts and released evidence surfaces as source of
 truth for live claims. Do not treat this document as a live witness monitor.
 
 ## Current Restart Checkpoint
+- Pause checkpoint, 2026-05-22:
+  - status: local fallback/audio/entity repair is validated and committed on
+    the active source line.
+  - active API on port `30000` is bound to
+    `epoch_2026_05_22_runtime_fallback_probe_02`, a three-scene validation
+    epoch, not a broad-run seed.
+  - Windows Ollama fallback is healthy on `127.0.0.1:31434` with
+    `phi4:latest`; Task Scheduler fixture
+    `GoodQ4All Ollama Fallback Startup` invokes
+    `scripts/start_ollama_fallback.ps1`.
+  - vLLM primary remains healthy on `127.0.0.1:38005`; LLM client validation
+    reports `2 / 2` configured models healthy, speed-preferred on vLLM and
+    quality-preferred on Ollama/Phi4.
+  - API `/api/status` now checks the configured WSL worker runtime before
+    reporting `faster_whisper`; live status reports WSL audio `available` and
+    `faster_whisper` `1.2.1` ready.
+  - latest three-scene probe run id:
+    `785b5eae-ff3e-4cae-9b64-37bbf2151a74`.
+  - strict current-run audio proof is `3 / 3` CLAP-ok scenes proven against
+    run-matched Qdrant payloads.
+  - Qdrant validation counts are audio `3`, text `6`, CLIP `6`, DINO `6`, all
+    green.
+  - FAISS validation confirms audio, text, CLIP, and DINO indexes are
+    explicit-ID `IndexIDMap2` with expected counts.
+  - sentiment, text-emotion rankings, audio-emotion rankings, and channelized
+    entity evidence are present for `3 / 3` scenes.
+  - ambiguous same-label person/non-person promotion is patched and retested;
+    the validation probe reports `0` ambiguous conflicts.
+  - new reusable agent workflow:
+    `docs/agent/workflows/EVIDENCE_FIRST_RUNTIME_REPAIR.md`.
+  - next safe move before broad home-movie ingestion: reset Qdrant again, use a
+    new fresh epoch, verify FAISS starts absent or explicit-ID, then run a
+    scene-first probe before the full source.
 - Pause checkpoint, 2026-05-21 evening:
+  - historical note: superseded by the 2026-05-22 runtime fallback/audio/entity
+    validation above.
   - status: clean sentiment and emotion-ranking probe is validated on the
     active local source line.
   - active API on port `30000` is bound to

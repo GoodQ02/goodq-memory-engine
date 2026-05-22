@@ -1,6 +1,6 @@
 ---
 name: goodq4all-operator
-description: Use for GoodQ4All repo runtime audits, clean memory starts, Qdrant cleanup, ingestion validation, operator-console visibility, and agent-facing documentation truth maintenance.
+description: Use for GoodQ4All repo runtime audits, clean memory starts, Qdrant cleanup, ingestion validation, local fallback/audio repair, operator-console visibility, and agent-facing documentation truth maintenance.
 ---
 
 # GoodQ4All Operator
@@ -52,3 +52,15 @@ Follow `docs/agent/workflows/CLEAN_MEMORY_START.md`. The safe pattern is:
 4. initialize fresh empty collections
 5. run one scene first
 6. inspect evidence before broad ingestion
+
+## Evidence-First Runtime Repair
+
+Follow `docs/agent/workflows/EVIDENCE_FIRST_RUNTIME_REPAIR.md` when a capability
+looks absent, stale, or partially proven. The short pattern is:
+
+1. name one seam
+2. prove config/runtime/persistence/UI truth separately
+3. patch the boundary, not the symptom
+4. validate with a focused test
+5. rerun a fresh scene-first probe
+6. update current-state docs so the next agent does not chase the stale theory

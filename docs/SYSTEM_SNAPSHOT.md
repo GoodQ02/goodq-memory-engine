@@ -1,10 +1,10 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: GENERATED_SNAPSHOT -->
-<!-- DOC_LAST_VERIFIED: 2026-05-21 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-22 -->
 
 # System Snapshot
 
-_Operational operator-state alignment refreshed: 2026-05-21._
+_Operational operator-state alignment refreshed: 2026-05-22._
 
 This is a bounded release-era system snapshot. It is useful for understanding
 the supported host/runtime baseline, but it is not a live witness monitor.
@@ -47,7 +47,8 @@ the supported host/runtime baseline, but it is not a live witness monitor.
 
 ## Local Services (Presence Check)
 - Qdrant (6333): reachable
-- Ollama (unknown): unavailable
+- Ollama fallback (31434): reachable, `phi4:latest`
+- vLLM primary (38005): reachable
 - LM Studio (1234): not reachable
 
 ## Offline Packaging State
@@ -125,6 +126,27 @@ the supported host/runtime baseline, but it is not a live witness monitor.
     - `51` transcript/entity disagreement segments
 
 ## Current Operator State
+- Pause checkpoint, 2026-05-22:
+  - Windows Ollama fallback is installed and reachable on `127.0.0.1:31434`;
+    startup is managed by the user-level task
+    `GoodQ4All Ollama Fallback Startup`.
+  - WSL audio status through API `/api/status`: configured worker probe,
+    `faster_whisper=ready`, observed version `1.2.1`.
+  - Fresh validation epoch:
+    `epoch_2026_05_22_runtime_fallback_probe_02`.
+  - Latest fresh validation run:
+    `785b5eae-ff3e-4cae-9b64-37bbf2151a74`, `1` video, `3` scenes.
+  - Strict current-run audio proof: `3 / 3` scenes proven against run-matched
+    Qdrant audio payloads.
+  - Qdrant validation counts: audio `3`, text `6`, CLIP `6`, DINO `6`.
+  - FAISS validation: audio, text, CLIP, and DINO indexes are explicit-ID
+    `IndexIDMap2`.
+  - Sentiment, text emotion rankings, audio emotion rankings, and channelized
+    entity evidence are present for `3 / 3` scenes.
+  - Active agent workflow added:
+    `docs/agent/workflows/EVIDENCE_FIRST_RUNTIME_REPAIR.md`.
+  - The active validation epoch is occupied probe evidence; reset Qdrant and
+    use a new fresh epoch before broad home-movie ingestion.
 - Pause checkpoint, 2026-05-20:
   - latest run evidence and audio provenance inventory are intentionally
     separate: `/api/runs/latest/evidence` reports strict current-run proof for

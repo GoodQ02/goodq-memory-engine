@@ -98,6 +98,8 @@ Preferred escalation order:
 - docs/agent/CURRENT_STATE.md
 - docs/agent/current_state.json
 - docs/agent/README.md
+- docs/agent/workflows/EVIDENCE_FIRST_RUNTIME_REPAIR.md
+- docs/agent/workflows/CLEAN_MEMORY_START.md
 - docs/architecture/AGENT_DECISION_PROTOCOL.md
 - docs/architecture/INGEST_ORCHESTRATION_CONTRACT.md
 - docs/architecture/IDENTITY_STITCHING_CONTRACT.md

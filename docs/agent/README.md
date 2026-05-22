@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE_AGENT_OFFICE_INDEX -->
-<!-- DOC_LAST_VERIFIED: 2026-05-21 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-22 -->
 
 # GoodQ4All Agent Office
 
@@ -22,6 +22,14 @@ basement-era handoff logs.
 - `current_state.json`: compact normalized state for agents and tools.
 - `workflows/`: durable operator runbooks that should stay smaller than the
   canonical architecture docs.
+
+## Active Workflows
+
+- `workflows/CLEAN_MEMORY_START.md`: safe clean-slate Qdrant/epoch/FAISS
+  preparation before personal-memory ingestion.
+- `workflows/EVIDENCE_FIRST_RUNTIME_REPAIR.md`: targeted runtime repair loop
+  for capability gaps where config, API, persistence, and UI evidence must be
+  reconciled before broad reruns.
 
 ## What Does Not Live Here
 

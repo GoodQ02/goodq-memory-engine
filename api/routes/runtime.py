@@ -961,6 +961,13 @@ def _latest_run_evidence(limit: int = 24) -> Dict[str, Any]:
 
     temporal_payload = _load_json_any(temporal_path)
 
+    entity_evidence = _summarize_entity_evidence(temporal_payload, scene_results_payload=scene_results_payload)
+    knowledge_graph = _summarize_knowledge_graph(scene_results_payload, latest_episode)
+    if entity_evidence.get("status") in {"ok", "partial"}:
+        knowledge_graph["entity_status"] = entity_evidence.get("status")
+        knowledge_graph["total_entities"] = entity_evidence.get("total_entities")
+        knowledge_graph["segments_with_any_entity_evidence"] = entity_evidence.get("segments_with_any_entity_evidence")
+
     return {
         "available": True,
         "run": {
@@ -983,7 +990,8 @@ def _latest_run_evidence(limit: int = 24) -> Dict[str, Any]:
         "step_runs": _summarize_step_runs(step_runs_path, limit=limit),
         "temporal_index": _summarize_temporal_index(temporal_payload),
         "sentiment": _summarize_sentiment(temporal_payload, scene_results_payload=scene_results_payload),
-        "knowledge_graph": _summarize_knowledge_graph(scene_results_payload, latest_episode),
+        "entity_evidence": entity_evidence,
+        "knowledge_graph": knowledge_graph,
         "projection_gaps": _summarize_projection_gaps(temporal_payload, scene_results_payload),
         "audio_vector_proof": _summarize_audio_vector_proof(
             header=header,
@@ -1387,6 +1395,138 @@ def _summarize_temporal_index(payload: Any) -> Dict[str, Any]:
         "segments_with_music_events": payload.get("segments_with_music_events"),
         "top_time_hints": _safe_top_values(payload.get("top_time_hints")),
         "top_scene_context_tags": _safe_top_values(payload.get("top_scene_context_tags")),
+    }
+
+
+_ENTITY_CHANNEL_FIELDS = (
+    "scene_present_entities",
+    "dialogue_mentioned_entities",
+    "candidate_visible_people",
+    "speaker_aligned_mentions",
+)
+
+
+def _count_records_with_list(records: List[Dict[str, Any]], field_name: str) -> int:
+    return sum(
+        1
+        for record in records
+        if isinstance(record.get(field_name), list) and len(record.get(field_name) or []) > 0
+    )
+
+
+def _entity_top_values_from_records(records: List[Dict[str, Any]], field_name: str) -> List[Dict[str, Any]]:
+    counts: Counter[str] = Counter()
+    for record in records:
+        values = record.get(field_name)
+        if not isinstance(values, list):
+            continue
+        for item in values:
+            if isinstance(item, dict):
+                label = item.get("text") or item.get("name") or item.get("entity") or item.get("label")
+            else:
+                label = item
+            if label is None:
+                continue
+            text = str(label).strip()
+            if text:
+                counts[text] += 1
+    return [{"label": label, "count": count} for label, count in counts.most_common(8)]
+
+
+def _summarize_entity_evidence(payload: Any, *, scene_results_payload: Any = None) -> Dict[str, Any]:
+    """Project entity channels without collapsing dialogue/candidate evidence into identity truth."""
+
+    if isinstance(payload, dict):
+        segments = payload.get("segments") if isinstance(payload.get("segments"), list) else []
+        scene_scope_count = payload.get("total_scenes") or len(segments)
+        scene_present = payload.get("segments_with_scene_present_entities")
+        dialogue_mentioned = payload.get("segments_with_dialogue_mentioned_entities")
+        candidate_visible = payload.get("segments_with_candidate_visible_people")
+        speaker_aligned = payload.get("segments_with_speaker_aligned_mentions")
+        if scene_present is None:
+            scene_present = _count_records_with_list(segments, "scene_present_entities")
+        if dialogue_mentioned is None:
+            dialogue_mentioned = _count_records_with_list(segments, "dialogue_mentioned_entities")
+        if candidate_visible is None:
+            candidate_visible = _count_records_with_list(segments, "candidate_visible_people")
+        if speaker_aligned is None:
+            speaker_aligned = _count_records_with_list(segments, "speaker_aligned_mentions")
+        segments_with_any = sum(
+            1
+            for segment in segments
+            if any(isinstance(segment.get(field), list) and segment.get(field) for field in _ENTITY_CHANNEL_FIELDS)
+        )
+        total_entities = payload.get("total_entities")
+        if total_entities is None:
+            total_entities = sum(len(segment.get("entities") or []) for segment in segments if isinstance(segment.get("entities"), list))
+        unique_entities = payload.get("unique_entities")
+        status = "ok" if any(
+            int(value or 0) > 0
+            for value in (total_entities, scene_present, dialogue_mentioned, candidate_visible, speaker_aligned)
+        ) else "not_observed"
+        return {
+            "status": status,
+            "source": "temporal_index",
+            "scene_scope_count": scene_scope_count,
+            "total_entities": int(total_entities or 0),
+            "unique_entities": int(unique_entities or 0),
+            "segments_with_any_entity_evidence": segments_with_any,
+            "segments_with_scene_present_entities": int(scene_present or 0),
+            "segments_with_dialogue_mentioned_entities": int(dialogue_mentioned or 0),
+            "segments_with_candidate_visible_people": int(candidate_visible or 0),
+            "segments_with_speaker_aligned_mentions": int(speaker_aligned or 0),
+            "top_entities": _safe_top_values(payload.get("top_entities")),
+            "top_scene_present_entities": _safe_top_values(payload.get("top_scene_present_entities")),
+            "top_dialogue_mentioned_entities": _safe_top_values(payload.get("top_dialogue_mentioned_entities")),
+            "top_candidate_visible_people": _safe_top_values(payload.get("top_candidate_visible_people")),
+            "top_speaker_aligned_mentions": _safe_top_values(payload.get("top_speaker_aligned_mentions")),
+            "channel_status": {
+                "scene_present": "ok" if int(scene_present or 0) > 0 else "not_observed",
+                "dialogue_mentioned": "ok" if int(dialogue_mentioned or 0) > 0 else "not_observed",
+                "candidate_visible": "ok" if int(candidate_visible or 0) > 0 else "not_observed",
+                "speaker_aligned": "ok" if int(speaker_aligned or 0) > 0 else "not_observed",
+            },
+            "interpretation": "Entity evidence is channel-specific; dialogue mentions and candidate visibility are not the same as scene-present identity.",
+        }
+
+    scene_records = _scene_records_from_results(scene_results_payload)
+    if not scene_records:
+        return {"status": "unavailable", "reason": "entity_sources_missing"}
+
+    scene_present = _count_records_with_list(scene_records, "scene_present_entities")
+    dialogue_mentioned = _count_records_with_list(scene_records, "dialogue_mentioned_entities")
+    candidate_visible = _count_records_with_list(scene_records, "candidate_visible_people")
+    speaker_aligned = _count_records_with_list(scene_records, "speaker_aligned_mentions")
+    segments_with_any = sum(
+        1
+        for scene in scene_records
+        if any(isinstance(scene.get(field), list) and scene.get(field) for field in _ENTITY_CHANNEL_FIELDS)
+    )
+    total_entities = sum(len(scene.get("entities") or []) for scene in scene_records if isinstance(scene.get("entities"), list))
+    status = "ok" if any(value > 0 for value in (total_entities, scene_present, dialogue_mentioned, candidate_visible, speaker_aligned)) else "not_observed"
+    return {
+        "status": status,
+        "source": "scene_ingest_results",
+        "scene_scope_count": len(scene_records),
+        "total_entities": total_entities,
+        "unique_entities": None,
+        "segments_with_any_entity_evidence": segments_with_any,
+        "segments_with_scene_present_entities": scene_present,
+        "segments_with_dialogue_mentioned_entities": dialogue_mentioned,
+        "segments_with_candidate_visible_people": candidate_visible,
+        "segments_with_speaker_aligned_mentions": speaker_aligned,
+        "top_entities": _entity_top_values_from_records(scene_records, "entities"),
+        "top_scene_present_entities": _entity_top_values_from_records(scene_records, "scene_present_entities"),
+        "top_dialogue_mentioned_entities": _entity_top_values_from_records(scene_records, "dialogue_mentioned_entities"),
+        "top_candidate_visible_people": _entity_top_values_from_records(scene_records, "candidate_visible_people"),
+        "top_speaker_aligned_mentions": _entity_top_values_from_records(scene_records, "speaker_aligned_mentions"),
+        "channel_status": {
+            "scene_present": "ok" if scene_present > 0 else "not_observed",
+            "dialogue_mentioned": "ok" if dialogue_mentioned > 0 else "not_observed",
+            "candidate_visible": "ok" if candidate_visible > 0 else "not_observed",
+            "speaker_aligned": "ok" if speaker_aligned > 0 else "not_observed",
+        },
+        "interpretation": "Entity evidence is channel-specific; dialogue mentions and candidate visibility are not the same as scene-present identity.",
     }
 
 

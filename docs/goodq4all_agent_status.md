@@ -30,6 +30,12 @@ summary.
   Console now surface transcript, sentiment, text-emotion ranking, audio-emotion
   ranking, and strict current-run audio-vector proof when those artifacts are
   present in the active run.
+- Latest evidence read models now expose channelized entity evidence instead
+  of collapsing KG state to a boolean. Dialogue-mentioned entities,
+  candidate-visible people, speaker-aligned mentions, and strict scene-present
+  identity remain separate.
+- Retrieval read models preserve that same entity channel split through
+  `POST /api/search/multimodal` when timeline scene evidence is available.
 - Recent clean probe validation used a short operator-owned clip, a fresh epoch,
   reset Qdrant collections, and fresh explicit-ID FAISS indexes before checking
   the evidence route and UI read models.

@@ -122,6 +122,61 @@ def test_operator_console_surfaces_focus_queue_anomaly_tokens_and_scene_health()
     assert ".scene-health-badge.warn" in app_css
 
 
+def test_operator_console_surfaces_guided_mode_without_endpoint_forking() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    index_html = (repo_root / "ui" / "operator_console_v1" / "index.html").read_text(encoding="utf-8")
+    app_js = (repo_root / "ui" / "operator_console_v1" / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    app_css = (repo_root / "ui" / "operator_console_v1" / "static" / "css" / "app.css").read_text(encoding="utf-8")
+
+    assert 'data-testid="view-mode-toggle"' in index_html
+    assert 'data-view-mode="guided"' in index_html
+    assert 'data-guided="primary"' in index_html
+    assert 'data-guided="operator"' in index_html
+    assert 'data-guided-nav="primary"' in index_html
+    assert 'data-guided-nav="operator"' in index_html
+    assert 'id="guided-mode-button"' in index_html
+    assert 'id="operator-mode-button"' in index_html
+
+    assert "VIEW_MODE_KEY" in app_js
+    assert "goodq_operator_view_mode" in app_js
+    assert "readInitialViewMode" in app_js
+    assert "applyViewMode" in app_js
+    assert "setViewMode" in app_js
+    assert "Guided mode hides operator-only panels" in app_js
+    assert 'dataset.viewMode = state.viewMode' in app_js
+    assert 'state.viewMode === "guided"' in app_js
+
+    assert ".view-mode-toggle" in app_css
+    assert '.app-shell[data-view-mode="guided"] [data-guided="operator"]' in app_css
+    assert '.app-shell[data-view-mode="guided"] [data-guided-nav="operator"]' in app_css
+
+
+def test_operator_console_modes_have_distinct_visual_orientation() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    index_html = (repo_root / "ui" / "operator_console_v1" / "index.html").read_text(encoding="utf-8")
+    app_js = (repo_root / "ui" / "operator_console_v1" / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    app_css = (repo_root / "ui" / "operator_console_v1" / "static" / "css" / "app.css").read_text(encoding="utf-8")
+
+    assert 'data-testid="operator-mode-banner"' in index_html
+    assert 'data-operator-mode-status' in index_html
+    assert 'class="section split guided-surface"' in index_html
+    assert 'class="section guided-surface"' in index_html
+
+    assert "updateActiveRail" in app_js
+    assert "rail-active" in app_js
+    assert "aria-current" in app_js
+    assert "hashchange" in app_js
+    assert 'window.addEventListener("hashchange", updateActiveRail);\n    updateActiveRail();' in app_js
+
+    assert ".guided-surface" in app_css
+    assert ".guided-surface#scene-inspector" in app_css
+    assert ".operator-mode-banner" in app_css
+    assert '.app-shell[data-view-mode="operator"] .operator-mode-banner' in app_css
+    assert '.app-shell[data-view-mode="operator"] [data-guided="operator"]:target' in app_css
+    assert ".rail a.rail-active" in app_css
+    assert '.rail a[data-guided-nav="operator"].rail-active' in app_css
+
+
 def test_retrieval_console_uses_timeline_handoff_id_for_enriched_results() -> None:
     repo_root = Path(__file__).resolve().parents[2]
     app_js = (repo_root / "ui" / "operator_console_v1" / "static" / "js" / "app.js").read_text(encoding="utf-8")

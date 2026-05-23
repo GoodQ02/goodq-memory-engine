@@ -2,6 +2,7 @@
   "use strict";
 
   const DEFAULT_API_BASE = "http://127.0.0.1:30000";
+  const VIEW_MODE_KEY = "goodq_operator_view_mode";
   const LOCAL_HOSTS = new Set(["127.0.0.1", "localhost", "::1"]);
   const PATH_KEY_RE = /(^|_)(path|dir|file|files|files_read|artifact|artifacts|thumbnail|stdout|stderr|trace|raw|root)(_|$)/i;
   const WINDOWS_ABS_RE = /^[A-Za-z]:[\\/]/;
@@ -9,6 +10,7 @@
 
   const state = {
     apiBase: DEFAULT_API_BASE,
+    viewMode: "guided",
     selectedVideoId: null,
     selectedSceneKey: null,
     retrieval: {
@@ -158,6 +160,83 @@
     } catch (_e) {
       return false;
     }
+  }
+
+  function normalizeViewMode(value) {
+    return value === "operator" ? "operator" : "guided";
+  }
+
+  function readStoredViewMode() {
+    try {
+      return window.localStorage.getItem(VIEW_MODE_KEY);
+    } catch (error) {
+      console.warn("View mode storage unavailable; defaulting to guided mode.", error);
+      return null;
+    }
+  }
+
+  function writeStoredViewMode(mode) {
+    try {
+      window.localStorage.setItem(VIEW_MODE_KEY, mode);
+    } catch (error) {
+      console.warn("View mode preference could not be saved.", error);
+    }
+  }
+
+  function readInitialViewMode() {
+    const params = new URLSearchParams(window.location.search);
+    return normalizeViewMode(params.get("mode") || readStoredViewMode() || "guided");
+  }
+
+  function applyViewMode() {
+    const shell = qs("#app-shell");
+    if (shell) shell.dataset.viewMode = state.viewMode;
+    const guidedMode = state.viewMode === "guided";
+    document.querySelectorAll('[data-guided="operator"], [data-guided-nav="operator"]').forEach((node) => {
+      node.hidden = guidedMode;
+      node.setAttribute("aria-hidden", guidedMode ? "true" : "false");
+    });
+    document.querySelectorAll('[data-guided="primary"], [data-guided-nav="primary"]').forEach((node) => {
+      node.hidden = false;
+      node.setAttribute("aria-hidden", "false");
+    });
+    document.querySelectorAll("[data-mode]").forEach((button) => {
+      const active = button.getAttribute("data-mode") === state.viewMode;
+      button.classList.toggle("active", active);
+      button.setAttribute("aria-pressed", active ? "true" : "false");
+    });
+    const toggle = qs('[data-testid="view-mode-toggle"]');
+    if (toggle) {
+      toggle.title = guidedMode
+        ? "Guided mode hides operator-only panels while preserving anomaly visibility."
+        : "Operator mode shows every read-only diagnostic and evidence panel.";
+      toggle.setAttribute(
+        "aria-label",
+        guidedMode
+          ? "Console view mode. Guided mode hides operator-only panels."
+          : "Console view mode. Operator mode shows all read-only panels."
+      );
+    }
+  }
+
+  function setViewMode(mode) {
+    state.viewMode = normalizeViewMode(mode);
+    writeStoredViewMode(state.viewMode);
+    applyViewMode();
+    updateActiveRail();
+  }
+
+  function updateActiveRail() {
+    const activeHash = window.location.hash || "#operator-focus";
+    document.querySelectorAll('.rail a[href^="#"]').forEach((link) => {
+      const active = link.getAttribute("href") === activeHash;
+      link.classList.toggle("rail-active", active);
+      if (active) {
+        link.setAttribute("aria-current", "location");
+      } else {
+        link.removeAttribute("aria-current");
+      }
+    });
   }
 
   function endpointUrl(path) {
@@ -5255,6 +5334,8 @@
 
   function render() {
     qs("#api-base").value = state.apiBase;
+    applyViewMode();
+    updateActiveRail();
     renderConnection();
     renderScopeBanner();
     renderOperatorFocusPanel();
@@ -5287,7 +5368,14 @@
 
   function init() {
     state.apiBase = readInitialApiBase();
+    state.viewMode = readInitialViewMode();
     qs("#api-base").value = state.apiBase;
+    applyViewMode();
+    document.querySelectorAll("[data-mode]").forEach((button) => {
+      button.addEventListener("click", () => setViewMode(button.getAttribute("data-mode")));
+    });
+    window.addEventListener("hashchange", updateActiveRail);
+    updateActiveRail();
     qs("#api-form").addEventListener("submit", (event) => {
       event.preventDefault();
       state.apiBase = normalizeApiBase(qs("#api-base").value);

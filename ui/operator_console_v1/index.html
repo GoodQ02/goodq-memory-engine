@@ -5,10 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>GoodQ4All Operator Console</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='8' fill='%23161a20'/%3E%3Ctext x='32' y='40' text-anchor='middle' font-family='monospace' font-size='22' fill='%23ffb300'%3EGQ%3C/text%3E%3C/svg%3E" />
-    <link rel="stylesheet" href="./static/css/app.css?v=20260521-emotion-ranking-1-witness-spine-1-focus-queue-1" />
+    <link rel="stylesheet" href="./static/css/app.css?v=20260521-emotion-ranking-1-witness-spine-1-focus-queue-1-guided-mode-2" />
   </head>
   <body>
-    <div class="app-shell">
+    <div class="app-shell" id="app-shell" data-view-mode="guided" data-testid="app-shell">
       <header class="topbar">
         <a class="brand" href="#overview" aria-label="GoodQ4All Operator Console">
           <span class="brand-mark" aria-hidden="true">GQ</span>
@@ -31,26 +31,31 @@
           <span>Not connected</span>
         </div>
 
+        <div class="view-mode-toggle" data-testid="view-mode-toggle" role="group" aria-label="Console view mode">
+          <button id="guided-mode-button" type="button" data-mode="guided" aria-pressed="true">Guided</button>
+          <button id="operator-mode-button" type="button" data-mode="operator" aria-pressed="false">Operator</button>
+        </div>
+
         <div class="api-pill unknown" id="api-environment-pill" data-testid="api-environment-pill" aria-live="polite">
           API: Not observed
         </div>
       </header>
 
       <aside class="rail" aria-label="Console sections">
-        <a href="#witness-spine">Witness</a>
-        <a href="#operator-focus">Focus</a>
-        <a href="#flight-deck">Flight Deck</a>
-        <a href="#proof-panel">Proof</a>
-        <a href="#retrieval-console">Retrieval</a>
-        <a href="#overview">Overview</a>
-        <a href="#runs">Runs</a>
-        <a href="#surfaces">Surfaces</a>
-        <a href="#diagnostics">Diagnostics</a>
-        <a href="#storage-panel">Storage</a>
-        <a href="#memory">Memory</a>
-        <a href="#videos">Videos</a>
-        <a href="#scene-inspector">Scene Inspector</a>
-        <a href="#evidence">Evidence</a>
+        <a href="#operator-focus" data-guided-nav="primary">Focus</a>
+        <a href="#witness-spine" data-guided-nav="primary">Witness</a>
+        <a href="#flight-deck" data-guided-nav="primary">Flight Deck</a>
+        <a href="#retrieval-console" data-guided-nav="primary">Retrieval</a>
+        <a href="#videos" data-guided-nav="primary">Videos</a>
+        <a href="#scene-inspector" data-guided-nav="primary">Scene Inspector</a>
+        <a href="#proof-panel" data-guided-nav="primary">Proof</a>
+        <a href="#overview" data-guided-nav="operator">Overview</a>
+        <a href="#runs" data-guided-nav="operator">Runs</a>
+        <a href="#surfaces" data-guided-nav="operator">Surfaces</a>
+        <a href="#diagnostics" data-guided-nav="operator">Diagnostics</a>
+        <a href="#storage-panel" data-guided-nav="operator">Storage</a>
+        <a href="#memory" data-guided-nav="operator">Memory</a>
+        <a href="#evidence" data-guided-nav="operator">Evidence</a>
       </aside>
 
       <main class="content">
@@ -60,6 +65,7 @@
           data-testid="scope-banner"
           aria-label="Current runtime scope"
           aria-live="polite"
+          data-guided="primary"
         >
           <div>
             <p class="scope-kicker">You are here</p>
@@ -71,10 +77,22 @@
         </section>
 
         <section
+          class="operator-mode-banner"
+          data-guided="operator"
+          data-testid="operator-mode-banner"
+          data-operator-mode-status
+          aria-label="Operator mode status"
+        >
+          <strong>Operator View Active</strong>
+          <span>All read-only diagnostics, storage, memory, and evidence panels are visible.</span>
+        </section>
+
+        <section
           class="operator-focus-panel"
           id="operator-focus"
           aria-labelledby="operator-focus-title"
           data-testid="operator-focus-panel"
+          data-guided="primary"
         >
           <div class="operator-focus-header">
             <div>
@@ -88,7 +106,7 @@
           </div>
         </section>
 
-        <section class="witness-spine" id="witness-spine" aria-labelledby="witness-spine-title" data-testid="witness-spine">
+        <section class="witness-spine" id="witness-spine" aria-labelledby="witness-spine-title" data-testid="witness-spine" data-guided="primary">
           <div class="witness-spine-header">
             <div>
               <p class="scope-kicker">Truth spine</p>
@@ -101,7 +119,7 @@
           </div>
         </section>
 
-        <section class="flight-deck" id="flight-deck" aria-labelledby="flight-deck-title" data-testid="flight-deck">
+        <section class="flight-deck" id="flight-deck" aria-labelledby="flight-deck-title" data-testid="flight-deck" data-guided="primary">
           <div class="flight-header" data-testid="flight-deck-header">
             <strong>GOODQ4ALL</strong>
             <div class="flight-title" id="flight-deck-title">FLIGHT DECK</div>
@@ -142,7 +160,7 @@
           </aside>
         </section>
 
-        <section class="proof-panel" id="proof-panel" aria-labelledby="proof-panel-title" data-testid="proof-panel">
+        <section class="proof-panel" id="proof-panel" aria-labelledby="proof-panel-title" data-testid="proof-panel" data-guided="primary">
           <div class="proof-header">
             <div>
               <p class="proof-kicker">Visibility first</p>
@@ -187,7 +205,7 @@
           </article>
         </section>
 
-        <section class="retrieval-console" id="retrieval-console" aria-labelledby="retrieval-console-title" data-testid="retrieval-console">
+        <section class="retrieval-console" id="retrieval-console" aria-labelledby="retrieval-console-title" data-testid="retrieval-console" data-guided="primary">
           <div class="retrieval-header">
             <div>
               <p class="proof-kicker">Calm forensic inquiry</p>
@@ -253,7 +271,7 @@
           </article>
         </section>
 
-        <section class="section hero" id="overview" aria-labelledby="overview-title">
+        <section class="section hero" id="overview" aria-labelledby="overview-title" data-guided="operator">
           <div>
             <p class="section-kicker">Observer-only</p>
             <h1 id="overview-title">Runtime Overview</h1>
@@ -264,9 +282,9 @@
           </div>
         </section>
 
-        <section class="summary-grid" id="summary-grid" aria-label="Runtime summary"></section>
+        <section class="summary-grid" id="summary-grid" aria-label="Runtime summary" data-guided="operator"></section>
 
-        <section class="section two-column" id="runs" aria-labelledby="runs-title">
+        <section class="section two-column" id="runs" aria-labelledby="runs-title" data-guided="operator">
           <div class="section-heading">
             <p class="section-kicker">Latest run</p>
             <h2 id="runs-title">Run preview</h2>
@@ -276,7 +294,7 @@
           <div class="panel" id="recurrence-trend-panel"></div>
         </section>
 
-        <section class="section two-column" id="surfaces" aria-labelledby="surfaces-title">
+        <section class="section two-column" id="surfaces" aria-labelledby="surfaces-title" data-guided="operator">
           <div class="section-heading">
             <p class="section-kicker">Evidence surfaces</p>
             <h2 id="surfaces-title">Step, temporal, and graph truth</h2>
@@ -285,7 +303,7 @@
           <div class="panel" id="temporal-surface-panel"></div>
         </section>
 
-        <section class="section two-column" id="diagnostics" aria-labelledby="diagnostics-title">
+        <section class="section two-column" id="diagnostics" aria-labelledby="diagnostics-title" data-guided="operator">
           <div class="section-heading">
             <p class="section-kicker">Diagnostics</p>
             <h2 id="diagnostics-title">Engines, hardware, and queue</h2>
@@ -295,7 +313,7 @@
           <div class="panel" id="storage-panel" data-testid="storage-panel"></div>
         </section>
 
-        <section class="section two-column" id="memory" aria-labelledby="memory-title">
+        <section class="section two-column" id="memory" aria-labelledby="memory-title" data-guided="operator">
           <div class="section-heading">
             <p class="section-kicker">Persistence</p>
             <h2 id="memory-title">Memory and engine health</h2>
@@ -304,7 +322,7 @@
           <div class="panel" id="health-panel"></div>
         </section>
 
-        <section class="section split" id="videos" aria-labelledby="videos-title">
+        <section class="section split guided-surface" id="videos" aria-labelledby="videos-title" data-guided="primary">
           <div class="section-heading">
             <p class="section-kicker">Scene inventory</p>
             <h2 id="videos-title">Videos and selected timeline</h2>
@@ -313,7 +331,7 @@
           <div class="panel timeline-panel" id="timeline-panel"></div>
         </section>
 
-        <section class="section" id="scene-inspector" aria-labelledby="scene-inspector-title" data-testid="scene-inspector">
+        <section class="section guided-surface" id="scene-inspector" aria-labelledby="scene-inspector-title" data-testid="scene-inspector" data-guided="primary">
           <div class="section-heading">
             <p class="section-kicker">Scene schema</p>
             <h2 id="scene-inspector-title">Selected Scene Inspector</h2>
@@ -325,7 +343,7 @@
           </div>
         </section>
 
-        <section class="section" id="evidence" aria-labelledby="evidence-title">
+        <section class="section" id="evidence" aria-labelledby="evidence-title" data-guided="operator">
           <div class="section-heading">
             <p class="section-kicker">Read-only handoff</p>
             <h2 id="evidence-title">Justification Channel</h2>
@@ -350,6 +368,6 @@
       </div>
     </template>
 
-    <script src="./static/js/app.js?v=20260521-emotion-ranking-1-witness-spine-1-focus-queue-1"></script>
+    <script src="./static/js/app.js?v=20260521-emotion-ranking-1-witness-spine-1-focus-queue-1-guided-mode-2"></script>
   </body>
 </html>

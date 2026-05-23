@@ -25,6 +25,8 @@
   --flight-green: #00c853;
   --flight-red: #ff5252;
   --flight-muted: #8a8f9a;
+  --operator-cyan: #8ec7c0;
+  --operator-cyan-soft: rgba(142, 199, 192, 0.1);
   --shadow: 0 18px 50px rgba(0, 0, 0, 0.28);
   --radius: 8px;
   font-family:
@@ -79,6 +81,16 @@ a {
   border-bottom: 1px solid var(--line);
   background: rgba(17, 19, 18, 0.94);
   backdrop-filter: blur(12px);
+}
+
+.app-shell[data-view-mode="guided"] .topbar {
+  border-bottom-color: rgba(255, 179, 0, 0.22);
+  box-shadow: 0 1px 0 rgba(255, 179, 0, 0.08);
+}
+
+.app-shell[data-view-mode="operator"] .topbar {
+  border-bottom-color: rgba(142, 199, 192, 0.32);
+  box-shadow: 0 1px 0 rgba(142, 199, 192, 0.12);
 }
 
 .brand {
@@ -215,6 +227,55 @@ a {
   color: var(--flight-red);
 }
 
+.view-mode-toggle {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 3px;
+  border: 1px solid rgba(255, 179, 0, 0.3);
+  border-radius: 7px;
+  background: rgba(15, 17, 21, 0.74);
+}
+
+.view-mode-toggle button {
+  min-height: 24px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--flight-muted);
+  font-family: "Courier New", ui-monospace, monospace;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.view-mode-toggle button:hover,
+.view-mode-toggle button:focus-visible {
+  color: #f4f1df;
+  outline: 1px solid rgba(255, 179, 0, 0.34);
+  outline-offset: 1px;
+}
+
+.view-mode-toggle button.active,
+.view-mode-toggle button[aria-pressed="true"] {
+  background: rgba(255, 179, 0, 0.12);
+  color: var(--flight-amber);
+  box-shadow: inset 0 0 12px rgba(255, 179, 0, 0.08);
+}
+
+.app-shell[data-view-mode="operator"] .view-mode-toggle button.active,
+.app-shell[data-view-mode="operator"] .view-mode-toggle button[aria-pressed="true"] {
+  background: var(--operator-cyan-soft);
+  color: var(--operator-cyan);
+  box-shadow: inset 0 0 12px rgba(142, 199, 192, 0.08);
+}
+
+.app-shell[data-view-mode="guided"] [data-guided="operator"],
+.app-shell[data-view-mode="guided"] [data-guided-nav="operator"] {
+  display: none !important;
+}
+
 .status-dot,
 .pulse-dot {
   width: 9px;
@@ -267,6 +328,23 @@ a {
   color: var(--text);
 }
 
+.rail a.rail-active {
+  color: var(--text);
+  background: rgba(255, 179, 0, 0.1);
+  box-shadow: inset 3px 0 0 rgba(255, 179, 0, 0.72);
+}
+
+.app-shell[data-view-mode="operator"] .rail a[data-guided-nav="operator"] {
+  color: #aebcba;
+}
+
+.app-shell[data-view-mode="operator"] .rail a[data-guided-nav="operator"]:hover,
+.rail a[data-guided-nav="operator"].rail-active {
+  background: rgba(142, 199, 192, 0.1);
+  color: #e9fbf8;
+  box-shadow: inset 3px 0 0 rgba(142, 199, 192, 0.78);
+}
+
 .content {
   width: min(1380px, 100%);
   padding: 28px;
@@ -295,6 +373,39 @@ a {
   font-weight: 700;
   line-height: 1.1;
   text-transform: uppercase;
+}
+
+.operator-mode-banner {
+  display: none;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  margin: 0 0 18px;
+  padding: 12px 14px;
+  border: 1px solid rgba(142, 199, 192, 0.3);
+  border-radius: 6px;
+  background:
+    linear-gradient(90deg, rgba(142, 199, 192, 0.12), transparent 44%),
+    rgba(13, 20, 22, 0.86);
+  color: #e9fbf8;
+  box-shadow: inset 0 0 18px rgba(142, 199, 192, 0.05);
+}
+
+.app-shell[data-view-mode="operator"] .operator-mode-banner {
+  display: grid;
+}
+
+.operator-mode-banner strong {
+  color: var(--operator-cyan);
+  font-family: "Courier New", ui-monospace, monospace;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.operator-mode-banner span {
+  color: #b9c9c6;
+  font-size: 13px;
+  line-height: 1.35;
 }
 
 .scope-banner > div:first-child strong {
@@ -2106,6 +2217,42 @@ a {
 
 .section {
   margin: 0 0 24px;
+}
+
+.guided-surface {
+  scroll-margin-top: 88px;
+  padding: 16px;
+  border: 1px solid rgba(255, 179, 0, 0.22);
+  border-radius: 6px;
+  background:
+    linear-gradient(135deg, rgba(255, 179, 0, 0.07), transparent 46%),
+    rgba(22, 26, 32, 0.72);
+  box-shadow: inset 0 0 22px rgba(255, 179, 0, 0.03);
+}
+
+.guided-surface#scene-inspector {
+  border-color: rgba(255, 179, 0, 0.32);
+  background:
+    linear-gradient(135deg, rgba(255, 179, 0, 0.09), transparent 44%),
+    rgba(22, 26, 32, 0.78);
+}
+
+.guided-surface .section-heading h2 {
+  color: #f4f1df;
+}
+
+.guided-surface .section-kicker {
+  color: var(--flight-amber);
+}
+
+.app-shell[data-view-mode="operator"] [data-guided="operator"] {
+  scroll-margin-top: 88px;
+}
+
+.app-shell[data-view-mode="operator"] [data-guided="operator"]:target {
+  outline: 2px solid rgba(142, 199, 192, 0.5);
+  outline-offset: 6px;
+  box-shadow: 0 0 0 1px rgba(142, 199, 192, 0.12);
 }
 
 .hero {

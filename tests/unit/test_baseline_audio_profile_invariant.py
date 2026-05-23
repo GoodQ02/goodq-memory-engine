@@ -427,6 +427,19 @@ def test_audio_embed_clap_reports_missing_model_cache(monkeypatch, tmp_path: Pat
     assert "bootstrap_models.py" in result["clap_meta"]["install_hint"]
 
 
+def test_audio_embed_clap_force_cpu_env_overrides_cuda(monkeypatch) -> None:
+    monkeypatch.delenv("GOODQ_REQUIRE_GPU", raising=False)
+    monkeypatch.setenv("GOODQ_NO_AUTO_GPU", "1")
+    monkeypatch.setenv("GOODQ_CLAP_FORCE_CPU", "1")
+    from steps.audio_embed_clap import step as clap_step
+
+    fake_torch = types.ModuleType("torch")
+    fake_torch.cuda = types.SimpleNamespace(is_available=lambda: True)
+    monkeypatch.setitem(sys.modules, "torch", fake_torch)
+
+    assert clap_step._preferred_device() == "cpu"
+
+
 def test_audio_embed_clap_qdrant_payload_keeps_scene_video_metadata(monkeypatch) -> None:
     monkeypatch.delenv("GOODQ_REQUIRE_GPU", raising=False)
     monkeypatch.setenv("GOODQ_NO_AUTO_GPU", "1")

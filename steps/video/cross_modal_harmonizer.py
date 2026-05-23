@@ -2054,14 +2054,32 @@ def _apply_scene_context_llm(
             continue
 
         keyframe_payload = scene.get("keyframe") if isinstance(scene.get("keyframe"), dict) else {}
+        scene_audio_payload = scene.get("audio") if isinstance(scene.get("audio"), dict) else {}
         transcript_text = str(segment.get("full_transcript") or "").strip()
         scene_objects = segment.get("detected_objects")
         if not isinstance(scene_objects, list):
+            scene_objects = scene.get("objects")
+        if not isinstance(scene_objects, list):
+            scene_objects = keyframe_payload.get("objects")
+        if not isinstance(scene_objects, list):
             scene_objects = []
         face_count = int(segment.get("visible_face_count") or 0)
-
-        if not transcript_text and not scene_objects and face_count <= 0:
-            continue
+        caption_text = str(scene.get("caption") or keyframe_payload.get("caption") or "").strip()
+        ocr_text = str(segment.get("ocr_text") or scene.get("ocr_text") or keyframe_payload.get("ocr_text") or "").strip()
+        music_events = segment.get("music_events") or scene.get("music_events") or scene_audio_payload.get("music_events") or []
+        time_hints = (
+            segment.get("time_hints")
+            or scene.get("time_hints")
+            or keyframe_payload.get("time_hints")
+            or scene_audio_payload.get("time_hints")
+            or {}
+        )
+        metadata_time_hints = (
+            segment.get("metadata_time_hints")
+            or scene.get("metadata_time_hints")
+            or scene_audio_payload.get("metadata_time_hints")
+            or {}
+        )
 
         emotions_payload: List[Dict[str, Any]] = []
         emotion_scores = segment.get("audio_emotion_scores")
@@ -2083,13 +2101,30 @@ def _apply_scene_context_llm(
         elif isinstance(segment.get("audio_emotion"), str) and segment.get("audio_emotion"):
             emotions_payload.append({"label": str(segment.get("audio_emotion")).strip().lower(), "score": 1.0})
 
+        if (
+            not transcript_text
+            and not scene_objects
+            and face_count <= 0
+            and not caption_text
+            and not ocr_text
+            and not music_events
+            and not time_hints
+            and not metadata_time_hints
+            and not emotions_payload
+        ):
+            continue
+
         scene_meta = {
             "index": scene.get("index"),
             "start": segment.get("start"),
             "end": segment.get("end"),
-            "caption": scene.get("caption") or keyframe_payload.get("caption") or "",
+            "caption": caption_text,
             "transcript": transcript_text,
             "objects": scene_objects,
+            "ocr_text": ocr_text,
+            "music_events": music_events,
+            "time_hints": time_hints,
+            "metadata_time_hints": metadata_time_hints,
             "face_count": face_count,
             "emotions": emotions_payload,
             "speakers": segment.get("speaker_ids") or [],

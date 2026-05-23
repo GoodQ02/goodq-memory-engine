@@ -1826,6 +1826,12 @@
           kind: rawScoreRows.length ? "info" : "unknown",
         },
         {
+          label: "Human-review tier",
+          value: rawScoreRows.length ? "Available" : "Not exposed",
+          note: "over-threshold scores guide review; labels stay unpromoted until policy allows",
+          kind: rawScoreRows.length ? "historical" : "unknown",
+        },
+        {
           label: "Text sentiment",
           value: numberValue(sentiment.segments_with_sentiment) ? "Observed" : "Not present",
           note: "tracked separately from audio emotion",
@@ -2113,6 +2119,12 @@
     node.appendChild(panelHeader("Memory stores", "SQLite, KG, Qdrant, and FAISS projection", "read-only"));
     renderKv(node, memory.qdrant || {}, ["available", "collections"]);
     renderKv(node, memory.faiss || {}, ["text_vectors", "clip_vectors", "dino_vectors", "audio_vectors"]);
+    appendText(
+      node,
+      "p",
+      "Vector counts are commits, not scenes. CLIP/DINO may include original scene vectors plus Phase 6 scene-level commits.",
+      "panel-subtitle"
+    );
     if (memory.audio_vector_semantics) {
       renderKv(node, memory.audio_vector_semantics, ["faiss.audio_vectors", "current_run_success_contract"]);
     }
@@ -2124,13 +2136,47 @@
     if (state.errors.runEvidence) return showError(node, `Run evidence unavailable: ${state.errors.runEvidence}`);
     const evidence = state.data.runEvidence || {};
     const stepRuns = evidence.step_runs || {};
+    const runtimeStepErrors = evidence.runtime_step_errors || {};
+    const latestEpisode = evidence.latest_episode || {};
     const graph = evidence.knowledge_graph || {};
     const entityEvidence = evidence.entity_evidence || {};
 
     node.appendChild(panelHeader("Evidence surfaces", "Sanitized artifact presence and step history", evidence.available ? "read-only" : "offline"));
     renderKv(node, evidence.artifact_presence || {}, ["step_runs_jsonl", "temporal_index_json", "scene_ingest_results_json"]);
+    appendIndicatorStrip(
+      node,
+      [
+        {
+          label: "Episode errors",
+          value: safeString(latestEpisode.error_count ?? 0, "error_count"),
+          note: "terminal step errors folded into episode scope",
+          kind: numberValue(latestEpisode.error_count) > 0 ? "warn" : "ok",
+        },
+        {
+          label: "Recovered step errors",
+          value: safeString(runtimeStepErrors.recovered_count ?? 0, "recovered_count"),
+          note: `${safeString(runtimeStepErrors.native_recovered_count ?? 0, "native_recovered_count")} native recovered`,
+          kind: numberValue(runtimeStepErrors.recovered_count) > 0 ? "historical" : "ok",
+        },
+        {
+          label: "Step skips",
+          value: safeString(stepRuns.skipped_count ?? latestEpisode.step_skipped_count ?? 0, "skipped_count"),
+          note: "expected optional gaps remain visible",
+          kind: numberValue(stepRuns.skipped_count ?? latestEpisode.step_skipped_count) > 0 ? "historical" : "ok",
+        },
+      ],
+      "runtime-problem-strip"
+    );
+    appendText(
+      node,
+      "p",
+      "Home-memory labels and transcript snippets stay local; redact before sharing public screenshots.",
+      "panel-subtitle"
+    );
     renderKv(node, stepRuns, ["status", "row_count", "recent_count", "failed_count", "warning_count", "latest_ts_utc"]);
+    renderKv(node, runtimeStepErrors, ["status", "event_count", "recovered_count", "terminal_count", "native_error_count", "native_recovered_count"]);
     renderMiniList(node, "Top step activity", stepRuns.top_steps, "step", "count");
+    renderMiniList(node, "Recovered step errors", runtimeStepErrors.recent, "step", "category");
     renderRecentSteps(node, stepRuns.recent);
     appendText(node, "h3", "Graph and store truth", "panel-subtitle");
     renderKv(node, graph, [

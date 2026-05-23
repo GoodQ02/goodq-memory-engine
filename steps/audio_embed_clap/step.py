@@ -167,6 +167,8 @@ def _resolve_local_model_dir(models_root: Path) -> Optional[str]:
 
 
 def _preferred_device() -> str:
+    if str(os.environ.get("GOODQ_CLAP_FORCE_CPU") or "").strip().lower() in {"1", "true", "yes", "on"}:
+        return "cpu"
     try:
         import torch  # type: ignore
 

@@ -20,6 +20,10 @@ do not override the release checkpoint.
 
 ## Diagnostic Families
 
+### Home-Memory Witness Runs
+
+- [`HOME_MEMORY_WITNESS_RUN_2026-05-22.md`](HOME_MEMORY_WITNESS_RUN_2026-05-22.md)
+
 ### Scene Context, Arbitration, and Eval
 
 Current scene-context findings are summarized back into the current release and

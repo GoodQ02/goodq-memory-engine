@@ -1244,6 +1244,150 @@ def test_audio_vector_proof_counts_current_run_qdrant_payloads(monkeypatch) -> N
     assert proof["collection"] == "goodq_audio_epoch_test"
 
 
+def test_latest_evidence_folds_step_and_runtime_log_problems_into_episode(monkeypatch, tmp_path) -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    if str(repo_root) not in sys.path:
+        sys.path.insert(0, str(repo_root))
+
+    epoch_root = tmp_path / "epoch_problem_projection"
+    output_dir = epoch_root / "output"
+    logs_dir = epoch_root / "logs"
+    processing_dir = epoch_root / "processing" / "family-video"
+    output_dir.mkdir(parents=True)
+    logs_dir.mkdir(parents=True)
+    processing_dir.mkdir(parents=True)
+
+    temporal_path = processing_dir / "temporal_index.json"
+    temporal_path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "total_scenes": 2,
+                "segments": [
+                    {"scene_id": "scene-a", "full_transcript": "hello", "clap_meta": {"status": "ok"}},
+                    {"scene_id": "scene-b", "full_transcript": "", "clap_meta": {"status": "error"}},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    (output_dir / "scene_ingest_results.json").write_text(
+        json.dumps(
+            {
+                "scenes": [
+                    {
+                        "scene_id": "scene-a",
+                        "video_id": "video-a",
+                        "temporal_index_path": str(temporal_path),
+                        "audio": {"clap_meta": {"status": "ok", "run_id": "runtime-run-alpha"}},
+                    },
+                    {
+                        "scene_id": "scene-b",
+                        "video_id": "video-a",
+                        "audio": {"clap_meta": {"status": "error", "run_id": "runtime-run-alpha"}},
+                    },
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    (logs_dir / "step_runs.jsonl").write_text(
+        "\n".join(
+            [
+                json.dumps({"ts": "2026-05-22T00:00:01Z", "scene_index": 0, "step": "image_embed_dino", "status": "ok"}),
+                json.dumps({"ts": "2026-05-22T00:00:02Z", "scene_index": 1, "step": "sentiment", "status": "skipped", "extra": {"reason": "sentiment_no_text"}}),
+                json.dumps(
+                    {
+                        "ts": "2026-05-22T00:00:03Z",
+                        "scene_index": 1,
+                        "step": "audio_embed_clap",
+                        "status": "error",
+                        "error": "Step audio_embed_clap failed (goodq_audio_embed) [returncode=3221226505]\nSTDERR: reason=no_speech_detected",
+                        "extra": {"reason": "optional_step_failed", "optional": True},
+                    }
+                ),
+            ]
+        ),
+        encoding="utf-8",
+    )
+    (logs_dir / "full_ingestion_probe.log").write_text(
+        json.dumps(
+            {
+                "timestamp": 1779448346.44,
+                "run_id": "runtime-run-alpha",
+                "event": "step_error",
+                "step": "step.image_embed_dino",
+                "error": "returncode_3221226505",
+                "metadata": {"scene_index": 0, "env": "goodq_image_caption"},
+            }
+        )
+        + "\n"
+        + json.dumps(
+            {
+                "timestamp": 1779448347.44,
+                "run_id": "runtime-run-alpha",
+                "event": "step_error",
+                "step": "step.audio_embed_clap",
+                "error": "returncode_3221226505",
+                "metadata": {"scene_index": 1, "env": "goodq_audio_embed"},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    fake_config_loader = types.ModuleType("steps.common.config_loader")
+    fake_config_loader.load_configs = lambda overrides=None: {
+        "paths": {
+            "data_root": "data",
+            "db_path": str(epoch_root / "memory.db"),
+            "output_directory": str(output_dir),
+        },
+        "host": {},
+        "memory": {},
+        "llm": {},
+        "qdrant": {"enabled": True, "host": "http://127.0.0.1:6333", "collections": {"audio": "goodq_audio_test"}},
+    }
+    monkeypatch.setitem(sys.modules, "steps.common.config_loader", fake_config_loader)
+
+    fake_memory_store = types.ModuleType("steps.common.memory_store")
+    fake_memory_store.normalize_memory_tier_list = lambda values: values
+    monkeypatch.setitem(sys.modules, "steps.common.memory_store", fake_memory_store)
+
+    fake_ingest_requests = types.ModuleType("api.utils.ingest_requests")
+    fake_ingest_requests.is_supported_ingest_path = lambda path: True
+    monkeypatch.setitem(sys.modules, "api.utils.ingest_requests", fake_ingest_requests)
+
+    fake_goodq_version = types.ModuleType("goodq_version")
+    fake_goodq_version.GOODQ_VERSION = "test"
+    monkeypatch.setitem(sys.modules, "goodq_version", fake_goodq_version)
+
+    runtime = _load_runtime_route_module(repo_root)
+    monkeypatch.setattr(runtime.run_index, "list_runs", lambda reports_root=None, limit=None: [])
+    monkeypatch.setattr(
+        runtime,
+        "_scroll_qdrant_audio_payloads",
+        lambda runtime_run_id, collection_candidates: {"status": "ok", "collection": "goodq_audio_test", "payloads": []},
+    )
+    monkeypatch.setattr(
+        runtime,
+        "_sample_qdrant_audio_payloads",
+        lambda collection_candidates: {"status": "ok", "collection": "goodq_audio_test", "sample_count": 0},
+        raising=False,
+    )
+
+    evidence = runtime._latest_run_evidence()
+
+    assert evidence["latest_episode"]["error_count"] == 1
+    assert evidence["latest_episode"]["warning_count"] == 2
+    assert evidence["latest_episode"]["step_failed_count"] == 1
+    assert evidence["latest_episode"]["step_skipped_count"] == 1
+    assert evidence["latest_episode"]["recovered_step_error_count"] == 1
+    assert evidence["step_runs"]["skipped_count"] == 1
+    assert evidence["runtime_step_errors"]["recovered_count"] == 1
+    assert evidence["runtime_step_errors"]["terminal_count"] == 1
+    assert evidence["runtime_step_errors"]["native_error_count"] == 2
+
+
 def test_audio_vector_proof_rejects_legacy_payloads_without_required_fields(monkeypatch) -> None:
     repo_root = Path(__file__).resolve().parents[2]
     if str(repo_root) not in sys.path:

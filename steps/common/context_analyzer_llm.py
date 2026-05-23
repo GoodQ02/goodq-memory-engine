@@ -640,6 +640,74 @@ def _minimal_scene_context_payload() -> Dict[str, Any]:
     }
 
 
+def _scene_context_failure_fallback_payload(scene_meta: Dict[str, Any]) -> Dict[str, Any]:
+    """Return a conservative, evidence-grounded payload when the LLM path fails."""
+    transcript = str(scene_meta.get("transcript") or "").strip()
+    transcript_word_count = len(re.findall(r"\b\w+\b", transcript))
+    caption = str(scene_meta.get("caption") or "").strip()
+    objects = scene_meta.get("objects", [])
+    object_labels: List[str] = []
+    if isinstance(objects, list):
+        for obj in objects[:10]:
+            if isinstance(obj, dict):
+                label = str(obj.get("label") or "").strip()
+            else:
+                label = str(obj).strip()
+            if label:
+                object_labels.append(label)
+
+    topic_hints = _extract_transcript_topic_hints(transcript)
+    setting_hint = _derive_setting_hint(caption, object_labels)
+    emotion_label = None
+    emotions = scene_meta.get("emotions")
+    if isinstance(emotions, list):
+        for item in emotions:
+            if isinstance(item, dict):
+                label = str(item.get("label") or "").strip().lower()
+            else:
+                label = str(item).strip().lower()
+            if label:
+                emotion_label = label
+                break
+    emotional_arc = f"{emotion_label} audio emotion signal" if emotion_label else "neutral tone"
+
+    if topic_hints:
+        topic = topic_hints[0]
+        tags = [topic]
+        if setting_hint:
+            tags.append(setting_hint)
+        raw_payload = {
+            "narrative_summary": (
+                f"{setting_hint.capitalize()} conversation about {topic}."
+                if setting_hint
+                else f"Conversation about {topic}."
+            ),
+            "key_moments": [f"They mention {topic}."],
+            "emotional_arc": emotional_arc,
+            "context_tags": tags,
+            "activity_description": (
+                f"{setting_hint.capitalize()} conversation about {topic}."
+                if setting_hint
+                else f"Conversation about {topic}."
+            ),
+        }
+        return _normalize_scene_context_payload(raw_payload, scene_meta) or _minimal_scene_context_payload()
+
+    if transcript_word_count >= 3:
+        tags = [setting_hint] if setting_hint else ["conversation"]
+        summary = f"{setting_hint.capitalize()} conversation." if setting_hint else "Spoken or dialogue evidence present."
+        raw_payload = {
+            "narrative_summary": summary,
+            "key_moments": [summary],
+            "emotional_arc": emotional_arc,
+            "context_tags": tags,
+            "activity_description": summary,
+        }
+        return _normalize_scene_context_payload(raw_payload, scene_meta) or _minimal_scene_context_payload()
+
+    return _minimal_scene_context_payload()
+
+
 def _spoken_monologue_payload(topic_hints: List[str]) -> Dict[str, Any]:
     topic = topic_hints[0] if topic_hints else None
     if not topic:
@@ -1451,20 +1519,24 @@ def analyze_scene_context_llm(scene_meta: Dict[str, Any], cfg: Dict[str, Any]) -
             try:
                 parsed = json.loads(content)
                 logger.info("Scene %s context analyzed via LLM", scene_meta.get("index", 0))
-                return _normalize_scene_context_payload(parsed, scene_meta)
+                normalized = _normalize_scene_context_payload(parsed, scene_meta)
+                if normalized:
+                    return normalized
+                logger.warning("LLM context normalized to empty payload; using grounded fallback")
+                return _scene_context_failure_fallback_payload(scene_meta)
             except json.JSONDecodeError as e:
                 logger.warning(f"Failed to parse LLM context JSON: {content[:100]}")
-                return None
+                return _scene_context_failure_fallback_payload(scene_meta)
         else:
             logger.warning(f"LLM API returned status {response.status_code}")
-            return None
+            return _scene_context_failure_fallback_payload(scene_meta)
             
     except requests.Timeout:
         logger.warning("LLM context analysis timed out")
-        return None
+        return _scene_context_failure_fallback_payload(scene_meta)
     except Exception as e:
         logger.warning(f"LLM context analysis failed: {e}")
-        return None
+        return _scene_context_failure_fallback_payload(scene_meta)
 
 
 def analyze_emotional_progression(scenes: List[Dict[str, Any]], cfg: Dict[str, Any]) -> Optional[Dict[str, Any]]:

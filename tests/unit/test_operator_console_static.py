@@ -196,6 +196,19 @@ def test_operator_console_surfaces_audio_emotion_distribution() -> None:
     assert ".sentiment-empty-state" in app_css
 
 
+def test_operator_console_surfaces_runtime_problem_scope_and_privacy_notes() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    app_js = (repo_root / "ui" / "operator_console_v1" / "static" / "js" / "app.js").read_text(encoding="utf-8")
+
+    assert "runtime_step_errors" in app_js
+    assert "Recovered step errors" in app_js
+    assert "native recovered" in app_js
+    assert "Vector counts are commits, not scenes" in app_js
+    assert "CLIP/DINO may include original scene vectors plus Phase 6 scene-level commits" in app_js
+    assert "Home-memory labels and transcript snippets stay local" in app_js
+    assert "Human-review tier" in app_js
+
+
 def test_proof_panel_surfaces_projection_gap_summary() -> None:
     repo_root = Path(__file__).resolve().parents[2]
     app_js = (repo_root / "ui" / "operator_console_v1" / "static" / "js" / "app.js").read_text(encoding="utf-8")

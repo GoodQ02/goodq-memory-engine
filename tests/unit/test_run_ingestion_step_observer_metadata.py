@@ -683,6 +683,70 @@ def test_run_step_retries_object_detect_with_cpu_fallback_after_native_crash(
     assert end_meta["scene_id"] == "scene_0013"
 
 
+def test_run_step_retries_audio_embed_clap_with_cpu_fallback_after_native_crash(
+    monkeypatch,
+    tmp_path: Path,
+):
+    run_ingestion = _load_run_ingestion_module()
+    observer = _RecorderObserver()
+    cfg_json = _write_cfg(tmp_path)
+    direct_env_python = tmp_path / "goodq_audio_embed_python.exe"
+    direct_env_python.write_text("", encoding="utf-8")
+
+    import configs.python_paths as python_paths
+
+    _FakeSequencedPopen.calls = []
+    _FakeSequencedPopen.captured_envs = []
+    _FakeSequencedPopen.responses = [
+        {
+            "pid": 13101,
+            "returncode": 3221226505,
+            "stdout": "",
+            "stderr": "native clap crash on gpu attempt",
+        },
+        {
+            "pid": 13102,
+            "returncode": 0,
+            "stdout": "{}",
+            "stderr": "",
+        },
+    ]
+
+    monkeypatch.setattr(run_ingestion, "_PIPELINE_OBSERVER", observer)
+    monkeypatch.setattr(run_ingestion, "resolve_conda", lambda: "conda")
+    monkeypatch.setattr(run_ingestion.shutil, "which", lambda _: "conda")
+    monkeypatch.setattr(run_ingestion.subprocess, "Popen", _FakeSequencedPopen)
+    monkeypatch.setattr(run_ingestion, "_control_agent_runtime_enabled", lambda: False)
+    monkeypatch.setattr(python_paths, "get_env_python", lambda name: direct_env_python)
+
+    payload = {
+        "source_path": str(tmp_path / "scene_0140.wav"),
+        "video_id": "video_test_clap",
+        "scene_id": "scene_0140",
+        "scene_index": 140,
+    }
+
+    result = run_ingestion._run_step(
+        env_name="goodq_audio_embed",
+        step_name="audio_embed_clap",
+        payload=payload,
+        cfg_json=cfg_json,
+    )
+
+    assert result == {}
+    assert len(_FakeSequencedPopen.calls) == 2
+    first_env, second_env = _FakeSequencedPopen.captured_envs
+    assert first_env.get("GOODQ_CLAP_FORCE_CPU") != "1"
+    assert second_env["GOODQ_CLAP_FORCE_CPU"] == "1"
+
+    end_events = [event for event in observer.events if event[0] == "step_end" and event[1] == "step.audio_embed_clap"]
+    assert end_events
+    end_meta = end_events[-1][2]
+    assert end_meta["native_retry_attempt"] == 1
+    assert end_meta["native_retry_mode"] == "cpu_fallback"
+    assert end_meta["scene_id"] == "scene_0140"
+
+
 def test_resolve_audio_runtime_contract_falls_back_from_stale_env_workspace(
     monkeypatch,
 ):

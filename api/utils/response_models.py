@@ -147,6 +147,7 @@ class SearchResponse(BaseModel):
     results: List[SearchResult]
     modalities_searched: List[str]
     fusion_weights: Optional[Dict[str, float]] = None
+    diagnostics: Optional[Dict[str, Any]] = None
     confidence: Dict[str, Any] = Field(default_factory=default_confidence_payload)
 
 

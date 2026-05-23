@@ -159,6 +159,7 @@
         "audio_embed_clap now preserves non-speech audio embedding intent and retries Windows native crashes once with GOODQ_CLAP_FORCE_CPU=1",
         "validate the CLAP CPU fallback on the next scene-first or broad ingestion run; the completed full run still contains one pre-mitigation optional terminal CLAP error",
         "scene_context_llm coverage root cause was patched after the full run: future harmonization uses conservative grounded fallback for LLM response failures and treats visual/audio-only evidence as eligible context signal; the completed full-run artifact remains 137/141 until rerun or re-harmonized",
+        "retrieval audio proof and retrieval audio query are visibly separate: current-run CLAP/Qdrant proof remains scene evidence, while the audio-only text-query lane reports torch_safetensors_required from the goodq_core CLAP text encoder and is surfaced as retrieval diagnostics instead of silent absent memory",
         "completed direct CLI progress must remain non-active in API and UI status"
       ]
     },

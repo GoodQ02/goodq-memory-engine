@@ -500,6 +500,22 @@ def test_retrieval_console_surfaces_find_similar_scene_action() -> None:
     assert ".retrieval-similar-row" in app_css
 
 
+def test_retrieval_console_surfaces_diagnostics_and_full_transcript() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    app_js = (repo_root / "ui" / "operator_console_v1" / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    app_css = (repo_root / "ui" / "operator_console_v1" / "static" / "css" / "app.css").read_text(encoding="utf-8")
+
+    assert "retrievalDiagnosticsForModality" in app_js
+    assert "Audio text-query encoder unavailable" in app_js
+    assert "appendRetrievalDiagnostics" in app_js
+    assert "retrievalFullTranscript" in app_js
+    assert "Show Full Transcript" in app_js
+    assert "Hide Full Transcript" in app_js
+    assert ".retrieval-diagnostics" in app_css
+    assert ".retrieval-transcript-panel" in app_css
+    assert ".retrieval-transcript-text" in app_css
+
+
 def test_retrieval_load_more_uses_requested_window_not_reported_total() -> None:
     repo_root = Path(__file__).resolve().parents[2]
     app_js = (repo_root / "ui" / "operator_console_v1" / "static" / "js" / "app.js").read_text(encoding="utf-8")

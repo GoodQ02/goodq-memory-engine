@@ -29,6 +29,13 @@ class _FakeSearchEngine:
         self.weight_visual = 0.4
         self.weight_audio = 0.1
         self.calls: list[tuple[str, int, list[str] | None]] = []
+        self.diagnostics = {
+            "audio": {
+                "status": "unavailable",
+                "label": "Audio text-query encoder unavailable",
+                "reason": "torch_safetensors_required",
+            }
+        }
 
     def search_multimodal(self, query: str, top_k: int, modalities: list[str] | None = None):
         self.calls.append((query, top_k, modalities))
@@ -46,6 +53,9 @@ class _FakeSearchEngine:
                 },
             }
         ]
+
+    def last_search_diagnostics(self):
+        return self.diagnostics
 
 
 def test_multimodal_search_route_supports_audio_requests(monkeypatch) -> None:
@@ -68,3 +78,4 @@ def test_multimodal_search_route_supports_audio_requests(monkeypatch) -> None:
     assert response.total_results == 1
     assert response.results[0].modality == "audio"
     assert response.results[0].scene_id == 101
+    assert response.diagnostics == engine.diagnostics

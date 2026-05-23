@@ -22,6 +22,54 @@ def _default_data_root() -> str:
         return explicit_data_root
     return str(Path("GoodQ_Data"))
 
+
+_CLAP_MODEL_ID = "laion/clap-htsat-unfused"
+_CLAP_INSTALL_HINT = "conda run -n goodq_core python scripts/bootstrap_models.py"
+
+
+def _classify_audio_text_encoder_error(exc: Exception) -> str:
+    message = f"{type(exc).__name__}: {exc}".lower()
+    if "torch.load" in message and ("2.6" in message or "safetensors" in message):
+        return "torch_safetensors_required"
+    if "goodq_require_gpu=1" in message and "goodq_no_auto_gpu=1" in message:
+        return "gpu_flag_profile_conflict"
+    return f"{type(exc).__name__}: {exc}"
+
+
+def _configure_clap_text_model_env(models_root: Path) -> None:
+    os.environ["HF_HOME"] = str(models_root)
+    os.environ["TORCH_HOME"] = str(models_root)
+    os.environ.setdefault("HF_HUB_CACHE", str(models_root / "hub"))
+    os.environ.setdefault("TRANSFORMERS_CACHE", str(models_root / "transformers"))
+    os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "0"
+    os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+
+
+def _resolve_local_clap_model_dir(models_root: Path) -> Optional[str]:
+    repo_cache = models_root / "hub" / f"models--{_CLAP_MODEL_ID.replace('/', '--')}"
+    snapshots_dir = repo_cache / "snapshots"
+    refs_main = repo_cache / "refs" / "main"
+    required = ("config.json", "preprocessor_config.json")
+    candidates: List[Path] = []
+
+    if refs_main.is_file():
+        revision = refs_main.read_text(encoding="utf-8").strip()
+        if revision:
+            candidates.append(snapshots_dir / revision)
+
+    if snapshots_dir.is_dir():
+        candidates.extend(sorted(snapshots_dir.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True))
+
+    seen: set[Path] = set()
+    for candidate in candidates:
+        if candidate in seen or not candidate.is_dir():
+            continue
+        seen.add(candidate)
+        has_weights = (candidate / "model.safetensors").is_file() or (candidate / "pytorch_model.bin").is_file()
+        if has_weights and all((candidate / name).is_file() for name in required):
+            return str(candidate)
+    return None
+
 _QUERY_STOPWORDS = {
     "a", "an", "and", "at", "for", "from", "in", "into", "of", "on", "or", "the", "to", "with",
 }
@@ -173,9 +221,32 @@ class MultimodalSearchEngine:
         self._text_model = None
         self._audio_text_model = None
         self._audio_text_model_error = False
+        self._audio_text_model_error_reason: Optional[str] = None
         self._qdrant_clients = {}
         self._kg_scene_context: Optional[Dict[str, Dict[str, Any]]] = None
         self._kg_scene_context_error = False
+        self._last_search_diagnostics: Dict[str, Dict[str, Any]] = {}
+
+    def _models_cache_root(self) -> Path:
+        paths_cfg = (self.config.get("paths") or {}) if isinstance(self.config, dict) else {}
+        models_cache = paths_cfg.get("models_cache") if isinstance(paths_cfg, dict) else None
+        if isinstance(models_cache, str) and models_cache.strip():
+            return Path(models_cache).resolve()
+        data_root = Path(str(self.data_root)).resolve()
+        return data_root.parent / "models"
+
+    def _reset_search_diagnostics(self) -> None:
+        self._last_search_diagnostics = {}
+
+    def _set_search_diagnostic(self, modality: str, *, status: str, label: str, reason: str) -> None:
+        self._last_search_diagnostics[str(modality)] = {
+            "status": status,
+            "label": label,
+            "reason": reason,
+        }
+
+    def last_search_diagnostics(self) -> Dict[str, Dict[str, Any]]:
+        return dict(self._last_search_diagnostics)
 
     def _tokenize_terms(self, value: Any) -> List[str]:
         if not isinstance(value, str):
@@ -988,17 +1059,12 @@ class MultimodalSearchEngine:
             import torch
             from transformers import AutoProcessor, ClapModel
 
-            from steps.audio_embed_clap.step import (
-                _CLAP_INSTALL_HINT,
-                _CLAP_MODEL_ID,
-                _configure_model_env,
-                _resolve_local_model_dir,
-            )
-
-            models_root = _configure_model_env()
-            model_source = _resolve_local_model_dir(models_root)
+            models_root = self._models_cache_root()
+            _configure_clap_text_model_env(models_root)
+            model_source = _resolve_local_clap_model_dir(models_root)
             if not model_source:
                 self._audio_text_model_error = True
+                self._audio_text_model_error_reason = "model_not_cached"
                 logger.warning(
                     "Audio search unavailable because CLAP model cache missing "
                     "model_id=%s install_hint=\"%s\"",
@@ -1007,7 +1073,14 @@ class MultimodalSearchEngine:
                 )
                 return
 
-            device = "cuda" if getattr(torch, "cuda", None) and torch.cuda.is_available() else "cpu"
+            try:
+                from steps.common.profile_config import gpu_auto_config_enabled
+
+                gpu_enabled = gpu_auto_config_enabled()
+            except Exception:
+                gpu_enabled = os.environ.get("GOODQ_NO_AUTO_GPU") != "1"
+            force_cpu = str(os.environ.get("GOODQ_CLAP_FORCE_CPU") or "").strip().lower() in {"1", "true", "yes", "on"}
+            device = "cuda" if not force_cpu and gpu_enabled and getattr(torch, "cuda", None) and torch.cuda.is_available() else "cpu"
             processor = AutoProcessor.from_pretrained(model_source, local_files_only=True)
             model = ClapModel.from_pretrained(model_source, local_files_only=True).to(device).eval()
             self._audio_text_model = {
@@ -1015,9 +1088,11 @@ class MultimodalSearchEngine:
                 "processor": processor,
                 "device": device,
             }
+            self._audio_text_model_error_reason = None
             logger.info("[OK] CLAP text encoder loaded for audio search on %s", device)
         except Exception as e:
             self._audio_text_model_error = True
+            self._audio_text_model_error_reason = _classify_audio_text_encoder_error(e)
             logger.warning(
                 "Audio search unavailable because CLAP text encoder failed "
                 "exc_type=%s exc=%s",
@@ -1214,11 +1289,31 @@ class MultimodalSearchEngine:
 
         query_embedding = self.encode_text_for_audio_search(query)
         if not np.any(query_embedding):
+            self._set_search_diagnostic(
+                "audio",
+                status="unavailable",
+                label="Audio text-query encoder unavailable",
+                reason=self._audio_text_model_error_reason or "clap_query_embedding_unavailable",
+            )
             logger.warning("Audio search skipped because CLAP query encoding is unavailable")
             return []
 
         client = self._get_qdrant_client(self.audio_collection)
         results = client.query(query_embedding.tolist(), top_k=top_k)
+        if results:
+            self._set_search_diagnostic(
+                "audio",
+                status="ready",
+                label="Audio search active",
+                reason="qdrant_audio_search_returned_results",
+            )
+        else:
+            self._set_search_diagnostic(
+                "audio",
+                status="no_results",
+                label="Audio search returned no matching scenes",
+                reason="qdrant_audio_search_empty",
+            )
 
         return results
     
@@ -1242,6 +1337,7 @@ class MultimodalSearchEngine:
         """
         if modalities is None:
             modalities = ['text', 'visual']
+        self._reset_search_diagnostics()
         
         logger.info(f"Multimodal search: '{query}' across {modalities}")
         

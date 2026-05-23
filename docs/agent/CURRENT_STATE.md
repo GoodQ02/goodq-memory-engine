@@ -149,6 +149,12 @@ Known follow-up from this validation:
   parse, or normalization failures and treat visual/audio evidence as eligible
   context signal. The completed full-run artifact remains `137 / 141` until the
   affected scene scope is rerun or re-harmonized.
+- Retrieval audio proof and retrieval audio query are now visibly separate:
+  current-run CLAP/Qdrant proof remains scene-level evidence, while the
+  audio-only text-query lane currently reports
+  `torch_safetensors_required` from the `goodq_core` CLAP text encoder. The
+  Operator Console surfaces this as retrieval diagnostics instead of silently
+  presenting zero audio results as absent audio memory.
 - Keep the direct CLI progress bridge as read-only status; completed progress
   must remain non-active so the UI does not imply ingestion is still running.
 

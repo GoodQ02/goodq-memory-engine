@@ -163,6 +163,34 @@ def test_search_multimodal_defaults_stay_text_and_visual_only(
     assert calls == [("text", 10), ("visual", 10)]
 
 
+def test_search_multimodal_records_audio_encoder_unavailable_diagnostic(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    engine = _engine()
+
+    monkeypatch.setattr(engine, "search_text", lambda query, top_k: [])
+    monkeypatch.setattr(engine, "search_visual", lambda query, top_k: [])
+    monkeypatch.setattr(
+        engine,
+        "encode_text_for_audio_search",
+        lambda query: np.zeros(512, dtype=np.float32),
+    )
+    engine._audio_text_model_error_reason = "torch_safetensors_required"
+
+    results = engine.search_multimodal(
+        "couch",
+        top_k=3,
+        modalities=["audio"],
+    )
+
+    assert results == []
+    assert engine.last_search_diagnostics()["audio"] == {
+        "status": "unavailable",
+        "label": "Audio text-query encoder unavailable",
+        "reason": "torch_safetensors_required",
+    }
+
+
 def test_visual_query_loader_uses_safetensors(monkeypatch: pytest.MonkeyPatch) -> None:
     engine = _engine()
     calls: list[dict[str, object]] = []

@@ -176,6 +176,10 @@ The active line no longer exposes the older compatibility shell that previously 
 - `POST /api/search/multimodal` is the canonical multimodal search surface.
 - `modalities=["audio"]` is a supported request path on the active line.
 - If `modalities` is omitted, the current default remains text + visual.
+- Search responses may include `diagnostics` keyed by modality. Treat these as
+  query-lane diagnostics, not memory-proof verdicts. For example, audio proof
+  can be current-run proven for a result while the audio text-query encoder
+  reports `torch_safetensors_required`.
 - `GET /api/videos/{video_id}/scenes/{scene_id}/similar` is live and resolves similar scenes from persisted multimodal scene memory.
 - Similar-scene retrieval now uses text, visual, and audio signals where available instead of returning an empty fallback path.
 - Audio-vector coverage in API and retrieval read models must follow

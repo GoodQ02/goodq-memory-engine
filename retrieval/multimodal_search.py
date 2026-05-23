@@ -1223,6 +1223,10 @@ class MultimodalSearchEngine:
 
         with torch.no_grad():
             text_features = model.get_text_features(**model_inputs)
+            if hasattr(text_features, "pooler_output"):
+                text_features = text_features.pooler_output
+            elif hasattr(text_features, "text_embeds"):
+                text_features = text_features.text_embeds
             embedding = text_features.cpu().numpy()[0]
 
         embedding = embedding / (np.linalg.norm(embedding) + 1e-8)

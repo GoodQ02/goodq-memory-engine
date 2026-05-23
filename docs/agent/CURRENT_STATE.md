@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE_AGENT_STATE -->
-<!-- DOC_LAST_VERIFIED: 2026-05-22 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-23 -->
 
 # GoodQ4All Current Agent State
 
@@ -151,10 +151,11 @@ Known follow-up from this validation:
   affected scene scope is rerun or re-harmonized.
 - Retrieval audio proof and retrieval audio query are now visibly separate:
   current-run CLAP/Qdrant proof remains scene-level evidence, while the
-  audio-only text-query lane currently reports
-  `torch_safetensors_required` from the `goodq_core` CLAP text encoder. The
-  Operator Console surfaces this as retrieval diagnostics instead of silently
-  presenting zero audio results as absent audio memory.
+  audio-only text-query lane uses the same pinned
+  `laion/clap-htsat-unfused` embedding space. The local pinned CLAP snapshot now
+  includes `model.safetensors`, and the `goodq_core` retrieval encoder returns
+  nonzero 512-d query vectors instead of the prior CLAP weight-format loader
+  failure.
 - Keep the direct CLI progress bridge as read-only status; completed progress
   must remain non-active so the UI does not imply ingestion is still running.
 
@@ -604,6 +605,8 @@ they are active again:
    `http://127.0.0.1:38005/v1/models` before LLM-backed scene analysis.
 5. Validate the new CLAP native-crash CPU fallback on the next scene-first or
    broad ingestion run.
-6. If the current full-run evidence remains acceptable in the Operator Console,
+6. Restart the API process before browser-level retrieval verification if it was
+   already running before the CLAP retrieval encoder patch.
+7. If the current full-run evidence remains acceptable in the Operator Console,
    start the next personal-memory source in a fresh epoch or deliberate reset
    scope.

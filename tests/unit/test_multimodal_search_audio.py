@@ -266,3 +266,57 @@ def test_visual_query_encoder_accepts_pooled_model_output(monkeypatch: pytest.Mo
     assert embedding[0] == pytest.approx(0.6)
     assert embedding[1] == pytest.approx(0.8)
     assert np.linalg.norm(embedding) == pytest.approx(1.0)
+
+
+def test_audio_query_encoder_accepts_pooled_model_output(monkeypatch: pytest.MonkeyPatch) -> None:
+    engine = _engine()
+
+    class _NoGrad:
+        def __enter__(self):
+            return None
+
+        def __exit__(self, *_args):
+            return False
+
+    class _FakeTensor:
+        def to(self, _device):
+            return self
+
+        def detach(self):
+            return self
+
+        def cpu(self):
+            return self
+
+        def numpy(self):
+            values = np.zeros((1, 512), dtype=np.float32)
+            values[0, 0] = 5.0
+            values[0, 1] = 12.0
+            return values
+
+    class _FakeOutput:
+        pooler_output = _FakeTensor()
+
+    class _FakeModel:
+        def get_text_features(self, **_inputs):
+            return _FakeOutput()
+
+    class _FakeProcessor:
+        def __call__(self, **_kwargs):
+            return {"input_ids": _FakeTensor()}
+
+    fake_torch = types.ModuleType("torch")
+    fake_torch.no_grad = lambda: _NoGrad()
+    monkeypatch.setitem(sys.modules, "torch", fake_torch)
+    engine._audio_text_model = {
+        "model": _FakeModel(),
+        "processor": _FakeProcessor(),
+        "device": "cpu",
+    }
+
+    embedding = engine.encode_text_for_audio_search("family laughing")
+
+    assert embedding.shape == (512,)
+    assert embedding[0] == pytest.approx(5.0 / 13.0)
+    assert embedding[1] == pytest.approx(12.0 / 13.0)
+    assert np.linalg.norm(embedding) == pytest.approx(1.0)

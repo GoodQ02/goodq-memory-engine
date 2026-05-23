@@ -3140,6 +3140,28 @@
     return retrievalModalitiesSearched().includes(String(name || "").toLowerCase());
   }
 
+  function retrievalDiagnostics() {
+    const diagnostics = state.retrieval.response && state.retrieval.response.diagnostics;
+    return diagnostics && typeof diagnostics === "object" ? diagnostics : {};
+  }
+
+  function retrievalDiagnosticsForModality(name) {
+    const diagnostics = retrievalDiagnostics();
+    const diagnostic = diagnostics[String(name || "").toLowerCase()];
+    return diagnostic && typeof diagnostic === "object" ? diagnostic : null;
+  }
+
+  function retrievalDiagnosticRows() {
+    return Object.entries(retrievalDiagnostics())
+      .filter(([, diagnostic]) => diagnostic && typeof diagnostic === "object")
+      .map(([modality, diagnostic]) => ({
+        modality,
+        status: safeString(diagnostic.status || "unknown", "diagnostic_status"),
+        label: safeString(diagnostic.label || `${modality} diagnostic`, "diagnostic_label"),
+        reason: safeString(diagnostic.reason || "no_reason_returned", "diagnostic_reason"),
+      }));
+  }
+
   function retrievalSearchedModalityLabel() {
     const modalities = retrievalModalitiesSearched();
     return modalities.length ? modalities.join(" + ") : "text + visual default";
@@ -3290,6 +3312,17 @@
       result && Array.isArray(result.objects) && result.objects.length ? result.objects.join(", ") : null,
     ];
     return safeString(candidates.find(Boolean) || "No transcript or scene context returned.", "summary");
+  }
+
+  function retrievalFullTranscript(result) {
+    const context = retrievalContext(result);
+    return safeString(
+      (result && result.transcript) ||
+      context.full_transcript ||
+      context.transcript ||
+      "",
+      "transcript"
+    ).trim();
   }
 
   function resultTimeLabel(result) {
@@ -3605,6 +3638,40 @@
     container.insertBefore(panel, actions || null);
   }
 
+  function appendRetrievalDiagnostics(container) {
+    const rows = retrievalDiagnosticRows();
+    if (!container || !rows.length) return;
+    const panel = document.createElement("section");
+    panel.className = "retrieval-diagnostics";
+    panel.setAttribute("data-testid", "retrieval-diagnostics");
+    appendText(panel, "h4", "Retrieval Diagnostics");
+    rows.forEach((row) => {
+      const item = document.createElement("div");
+      item.className = "retrieval-diagnostic-row";
+      appendText(item, "strong", row.label);
+      appendText(item, "span", `${row.modality}: ${row.reason}`);
+      item.appendChild(makeBadge(row.status === "ready" ? "Ready" : row.status, row.status === "ready" ? "ok" : "warn"));
+      panel.appendChild(item);
+    });
+    container.appendChild(panel);
+  }
+
+  function appendRetrievalFullTranscript(container, result) {
+    const transcript = retrievalFullTranscript(result);
+    if (!container || !transcript) return;
+    const panel = document.createElement("details");
+    panel.className = "retrieval-transcript-panel";
+    panel.setAttribute("data-testid", "retrieval-transcript-panel");
+    const summary = document.createElement("summary");
+    summary.textContent = "Show Full Transcript";
+    panel.addEventListener("toggle", () => {
+      summary.textContent = panel.open ? "Hide Full Transcript" : "Show Full Transcript";
+    });
+    panel.appendChild(summary);
+    appendText(panel, "p", transcript, "retrieval-transcript-text");
+    container.appendChild(panel);
+  }
+
   function appendRetrievalEvidence(container, result, selectedIndex, signals, percent) {
     const panel = document.createElement("div");
     panel.className = "retrieval-evidence-digest";
@@ -3638,6 +3705,8 @@
       "retrieval-rollup-strip"
     );
     appendText(panel, "p", resultSummary(result), "retrieval-evidence-summary");
+    appendRetrievalDiagnostics(panel);
+    appendRetrievalFullTranscript(panel, result);
 
     const grid = document.createElement("dl");
     grid.className = "retrieval-evidence-grid";
@@ -3684,6 +3753,7 @@
     const audioProof = result && result.audio_vector_proof && typeof result.audio_vector_proof === "object"
       ? result.audio_vector_proof
       : {};
+    const audioDiagnostic = retrievalDiagnosticsForModality("audio");
     const currentRunAudioProof = Boolean(
       result && (
         result.current_run_qdrant_audio_proven ||
@@ -3763,8 +3833,8 @@
             : (audioSearched ? "Audio surface searched; current-run audio proof present" : "Current-run Qdrant audio proof present; audio query not requested"))
           : audioObserved
             ? (context.audio_emotion ? `Audio evidence present: ${safeString(context.audio_emotion, "audio_emotion")}` : "Audio provenance observed")
-            : (audioSearched ? "No current-run audio proof returned" : "Audio query not requested"),
-        missing: audioSearched ? "Current-run audio proof not returned" : "Audio query path not used",
+            : (audioDiagnostic ? `${audioDiagnostic.label || "Audio text-query encoder unavailable"}: ${audioDiagnostic.reason || "No reason returned"}` : (audioSearched ? "No current-run audio proof returned" : "Audio query not requested")),
+        missing: audioDiagnostic ? `${audioDiagnostic.label || "Audio text-query encoder unavailable"} (${audioDiagnostic.reason || "no_reason_returned"})` : (audioSearched ? "Current-run audio proof not returned" : "Audio query path not used"),
       },
       {
         label: "KG / Entity Evidence",
@@ -4062,6 +4132,7 @@
     if (!results.length) {
       appendRetrievalEmpty(list, `No ${retrievalSelectedModalityLabel().toLowerCase()} memory results returned for this query.`);
       appendRetrievalEmpty(explanation, "No selected result. Try a different local-memory query or surface.");
+      appendRetrievalDiagnostics(explanation);
       selectedScore.textContent = "0 results";
       previewCopy.textContent = "No selected result.";
       openScene.disabled = true;

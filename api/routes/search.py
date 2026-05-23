@@ -683,7 +683,8 @@ async def search_multimodal(request: MultimodalSearchRequest = Body(...)):
                 'text': engine.weight_text,
                 'visual': engine.weight_visual,
                 'audio': engine.weight_audio
-            }
+            },
+            diagnostics=engine.last_search_diagnostics() if hasattr(engine, "last_search_diagnostics") else None,
         )
         
     except Exception as e:

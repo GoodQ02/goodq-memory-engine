@@ -29,6 +29,12 @@ http://127.0.0.1:8000/ui/operator_console_v1/
 The console reads from `http://127.0.0.1:30000` by default. Use `?api_base=...`
 to point it at another local API base.
 
+The console opens in Guided mode by default. Guided mode keeps the focus,
+witness, flight-deck, retrieval, video, scene, and proof surfaces visible while
+hiding operator-only diagnostics. Use `?mode=operator` or the Guided / Operator
+toggle to expose every read-only panel. On narrow screens, the section rail is
+an internal horizontal scroller so the page body remains fixed-width.
+
 For richer local metrics, start the API with optional read-only artifact roots:
 
 ```powershell

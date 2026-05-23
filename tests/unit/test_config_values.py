@@ -6,11 +6,27 @@ Validates that settings are being loaded correctly
 import sys
 from pathlib import Path
 
+import yaml
+
 # Add project root to path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 from steps.common.config_loader import load_configs
+
+
+def test_config_clap_model_matches_registry_authority():
+    result = load_configs({})
+    registry_path = Path(__file__).resolve().parents[2] / "configs" / "model_registry.yaml"
+    registry = yaml.safe_load(registry_path.read_text(encoding="utf-8"))
+    registry_model = (
+        registry.get("huggingface_models", {})
+        .get("clap_audio", {})
+        .get("repo_id")
+    )
+
+    assert registry_model == "laion/clap-htsat-unfused"
+    assert result.get("segmentation", {}).get("phase4", {}).get("clap_model") == registry_model
 
 
 def test_config_loads_segmentation_activation_as_string():

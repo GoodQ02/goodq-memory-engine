@@ -90,3 +90,52 @@ def test_search_similar_scene_excludes_source_scene_and_enriches_context(monkeyp
     assert len(results) == 1
     assert results[0]["payload"] == {"video_id": "video_002", "scene_id": 202}
     assert results[0]["scene_context"] == similar_context
+
+
+def test_search_similar_scene_accepts_string_scene_ids(monkeypatch) -> None:
+    engine = _engine()
+    source_context = {
+        "scene_id": "scene_hash_source",
+        "primary_tags": ["family couch"],
+        "keywords": ["living room"],
+    }
+    similar_context = {
+        "scene_id": "scene_hash_neighbor",
+        "start": 12.0,
+        "end": 18.0,
+        "duration": 6.0,
+        "full_transcript": "A related family scene.",
+    }
+
+    contexts = {
+        ("video_hash", "scene_hash_source"): source_context,
+        ("video_hash", "scene_hash_neighbor"): similar_context,
+    }
+
+    def fake_retrieve_scene_context(video_id: str, scene_id: int | str):
+        return contexts.get((video_id, str(scene_id)))
+
+    def fake_search_multimodal(query: str, top_k: int, modalities: list[str]):
+        assert "family couch" in query.lower()
+        assert modalities == ["text", "visual", "audio"]
+        return [
+            {
+                "id": "video_hash:scene_hash_source",
+                "score": 0.99,
+                "payload": {"video_id": "video_hash", "scene_id": "scene_hash_source"},
+            },
+            {
+                "id": "video_hash:scene_hash_neighbor",
+                "score": 0.83,
+                "payload": {"video_id": "video_hash", "scene_id": "scene_hash_neighbor"},
+            },
+        ]
+
+    monkeypatch.setattr(engine, "retrieve_scene_context", fake_retrieve_scene_context)
+    monkeypatch.setattr(engine, "search_multimodal", fake_search_multimodal)
+
+    results = engine.search_similar_scene(video_id="video_hash", scene_id="scene_hash_source", top_k=5)
+
+    assert len(results) == 1
+    assert results[0]["payload"] == {"video_id": "video_hash", "scene_id": "scene_hash_neighbor"}
+    assert results[0]["scene_context"] == similar_context

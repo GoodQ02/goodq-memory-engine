@@ -1276,7 +1276,7 @@ class MultimodalSearchEngine:
         # Fuse and rank results
         return self._fuse_scene_results(query, all_results, top_k=top_k)
     
-    def retrieve_scene_context(self, video_id: str, scene_id: int) -> Optional[Dict[str, Any]]:
+    def retrieve_scene_context(self, video_id: str, scene_id: int | str) -> Optional[Dict[str, Any]]:
         """
         Retrieve full multimodal context for a specific scene.
         
@@ -1302,7 +1302,7 @@ class MultimodalSearchEngine:
         
         # Find matching scene
         for segment in temporal_index.get('segments', []):
-            if segment.get('scene_id') == scene_id:
+            if str(segment.get('scene_id')) == str(scene_id):
                 return segment
         
         return None
@@ -1369,7 +1369,7 @@ class MultimodalSearchEngine:
 
         return ". ".join(phrases[:8])
 
-    def search_similar_scene(self, video_id: str, scene_id: int, top_k: int = 5) -> List[Dict[str, Any]]:
+    def search_similar_scene(self, video_id: str, scene_id: int | str, top_k: int = 5) -> List[Dict[str, Any]]:
         """Search for semantically similar scenes using persisted scene memory as the query source."""
         source_context = self.retrieve_scene_context(video_id, scene_id)
         if not isinstance(source_context, dict):
@@ -1385,6 +1385,8 @@ class MultimodalSearchEngine:
         filtered_results: List[Dict[str, Any]] = []
         seen_scene_keys: set[Tuple[str, str]] = set()
         source_scene_key = (str(video_id), str(scene_id))
+        source_scene_id = str(scene_id)
+        source_scene_id_is_global = not source_scene_id.isdigit()
 
         for result in raw_results:
             payload = result.get("payload") if isinstance(result.get("payload"), dict) else {}
@@ -1394,15 +1396,14 @@ class MultimodalSearchEngine:
                 continue
 
             scene_key = (str(result_video_id), str(result_scene_id))
-            if scene_key == source_scene_key or scene_key in seen_scene_keys:
+            if (
+                scene_key == source_scene_key
+                or (source_scene_id_is_global and str(result_scene_id) == source_scene_id)
+                or scene_key in seen_scene_keys
+            ):
                 continue
 
-            try:
-                scene_id_int = int(result_scene_id)
-            except (TypeError, ValueError):
-                continue
-
-            scene_context = self.retrieve_scene_context(str(result_video_id), scene_id_int)
+            scene_context = self.retrieve_scene_context(str(result_video_id), result_scene_id)
             enriched_result = dict(result)
             if isinstance(scene_context, dict):
                 enriched_result["scene_context"] = scene_context

@@ -3,7 +3,7 @@ Scene API routes for GoodQ4All.
 Provides access to scene-level data and metadata.
 """
 from __future__ import annotations
-from typing import List
+from typing import Any, Dict, List
 import logging
 from fastapi import APIRouter, HTTPException, Path as PathParam, Query
 
@@ -41,13 +41,47 @@ def _segment_object_labels(segment: dict) -> List[str]:
     return []
 
 
+def _list_dicts(value: Any) -> List[Dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    rows: List[Dict[str, Any]] = []
+    for item in value:
+        if isinstance(item, dict):
+            rows.append(item)
+        elif isinstance(item, str) and item.strip():
+            rows.append({"text": item.strip()})
+    return rows
+
+
+def _scene_sentiment_payload(segment: dict) -> tuple[dict | None, str | None]:
+    sentiment = segment.get("sentiment")
+    sentiment_payload = sentiment if isinstance(sentiment, dict) else None
+    sentiment_label = segment.get("sentiment_label")
+    if sentiment_label is None and isinstance(sentiment, str) and sentiment.strip():
+        sentiment_label = sentiment.strip()
+    if sentiment_label is None and isinstance(sentiment_payload, dict):
+        label = sentiment_payload.get("label")
+        if isinstance(label, str) and label.strip():
+            sentiment_label = label.strip()
+    return sentiment_payload, sentiment_label
+
+
+def _find_temporal_segment(temporal_index: dict, scene_id: object) -> dict | None:
+    for segment in temporal_index.get("segments", []):
+        if isinstance(segment, dict) and str(segment.get("scene_id")) == str(scene_id):
+            return segment
+    return None
+
+
 def _build_scene_response(video_id: str, segment: dict) -> SceneResponse:
     """Project one persisted timeline segment into the stable scene API contract."""
     start = segment.get("start", 0.0)
     end = segment.get("end", 0.0)
     frame_projection = representative_frame_projection(video_id, segment.get("representative_frame"))
     frame_paths = frame_paths_projection(video_id, segment.get("frame_paths", []))
+    sentiment_payload, sentiment_label = _scene_sentiment_payload(segment)
     return SceneResponse(
+        video_id=video_id,
         scene_id=segment.get("scene_id", 0),
         start=start,
         end=end,
@@ -79,25 +113,25 @@ def _build_scene_response(video_id: str, segment: dict) -> SceneResponse:
         text_emotion_ranking=segment.get("text_emotion_ranking") or [],
         text_emotion_meta=segment.get("text_emotion_meta"),
         clap_meta=segment.get("clap_meta"),
-        sentiment=segment.get("sentiment"),
-        sentiment_label=segment.get("sentiment_label"),
+        sentiment=sentiment_payload,
+        sentiment_label=sentiment_label,
         sentiment_score=segment.get("sentiment_score"),
         sentiment_meta=segment.get("sentiment_meta"),
         time_hints=segment.get("time_hints"),
         tags=segment.get("tags", []),
         tag_details=segment.get("tag_details", []),
-        scene_present_entities=segment.get("scene_present_entities", []),
-        entities=segment.get("entities", []),
-        dialogue_mentioned_entities=segment.get("dialogue_mentioned_entities", []),
-        mentioned_people=segment.get("mentioned_people", []),
-        visible_people=segment.get("visible_people", []),
+        scene_present_entities=_list_dicts(segment.get("scene_present_entities")),
+        entities=_list_dicts(segment.get("entities")),
+        dialogue_mentioned_entities=_list_dicts(segment.get("dialogue_mentioned_entities")),
+        mentioned_people=_list_dicts(segment.get("mentioned_people")),
+        visible_people=_list_dicts(segment.get("visible_people")),
         scene_context_llm=segment.get("scene_context_llm"),
         scene_context_epistemic=segment.get("scene_context_epistemic"),
         scene_context_arbitration=segment.get("scene_context_arbitration"),
         content_state=segment.get("content_state"),
-        candidate_visible_people=segment.get("candidate_visible_people", []),
-        speaker_aligned_mentions=segment.get("speaker_aligned_mentions", []),
-        transcript_entity_disagreements=segment.get("transcript_entity_disagreements", []),
+        candidate_visible_people=_list_dicts(segment.get("candidate_visible_people")),
+        speaker_aligned_mentions=_list_dicts(segment.get("speaker_aligned_mentions")),
+        transcript_entity_disagreements=_list_dicts(segment.get("transcript_entity_disagreements")),
         normalization_applied=bool(segment.get("normalization_applied", False)),
         normalization_source=segment.get("normalization_source"),
         interaction_dominance=segment.get("interaction_dominance"),
@@ -200,7 +234,7 @@ async def get_scene(
 @router.get("/{scene_id}/similar", response_model=List[SceneResponse])
 async def find_similar_scenes(
     video_id: str = PathParam(..., description="Video identifier"),
-    scene_id: int = PathParam(..., description="Scene identifier"),
+    scene_id: str = PathParam(..., description="Scene identifier"),
     top_k: int = Query(5, description="Number of similar scenes to return")
 ):
     """
@@ -222,11 +256,7 @@ async def find_similar_scenes(
             raise HTTPException(status_code=404, detail=f"Video not found: {video_id}")
         
         # Confirm the source scene exists before delegating to retrieval.
-        source_segment = None
-        for segment in temporal_index.get('segments', []):
-            if segment.get('scene_id') == scene_id:
-                source_segment = segment
-                break
+        source_segment = _find_temporal_segment(temporal_index, scene_id)
         
         if not source_segment:
             raise HTTPException(status_code=404, detail=f"Scene not found: {scene_id}")
@@ -238,13 +268,20 @@ async def find_similar_scenes(
         for result in similar_results:
             scene_context = result.get("scene_context") if isinstance(result.get("scene_context"), dict) else None
             payload = result.get("payload") if isinstance(result.get("payload"), dict) else None
+            hydrated_from_current_video = False
+            payload_scene_id = (payload or {}).get("scene_id")
+            if payload_scene_id is not None:
+                same_video_segment = _find_temporal_segment(temporal_index, payload_scene_id)
+                if same_video_segment is not None:
+                    scene_context = same_video_segment
+                    hydrated_from_current_video = True
             scene_payload = scene_context or payload
             if not isinstance(scene_payload, dict):
                 continue
             result_video_id = (
-                scene_payload.get("video_id")
-                or (payload or {}).get("video_id")
-                or video_id
+                video_id
+                if hydrated_from_current_video
+                else scene_payload.get("video_id") or (payload or {}).get("video_id") or video_id
             )
             scenes.append(_build_scene_response(str(result_video_id), scene_payload))
 

@@ -142,6 +142,42 @@ def test_analyze_scene_context_llm_uses_new_prompt_contract(monkeypatch) -> None
     }, primary_tags=["rental car"], contextual_tags=["living room"], structural_tags=[])
 
 
+def test_analyze_scene_context_llm_uses_grounded_fallback_for_bad_llm_json(monkeypatch) -> None:
+    class _Response:
+        status_code = 200
+
+        def json(self) -> dict[str, Any]:
+            return {"choices": [{"message": {"content": "not json"}}]}
+
+    def _fake_post(*args, **kwargs):  # type: ignore[no-untyped-def]
+        return _Response()
+
+    monkeypatch.setattr(analyzer.requests, "post", _fake_post)
+
+    result = analyzer.analyze_scene_context_llm(
+        {
+            "index": 4,
+            "start": 126.0,
+            "end": 154.0,
+            "caption": "two people are talking in a living room",
+            "transcript": "How much is the rental car? Twenty-five bucks a day.",
+            "objects": [{"label": "person"}],
+            "face_count": 0,
+            "emotions": [{"label": "neutral", "score": 0.7}],
+            "speakers": ["SPEAKER_00"],
+        },
+        {"llm": {"api_url": "http://localhost:38005/v1/chat/completions", "timeout": 12}},
+    )
+
+    _assert_context_payload(result, {
+        "narrative_summary": "Living room conversation about rental car.",
+        "key_moments": ["They mention rental car."],
+        "emotional_arc": "neutral audio emotion signal",
+        "context_tags": ["rental car", "living room"],
+        "activity_description": "Living room conversation about rental car.",
+    }, primary_tags=["rental car"], contextual_tags=["living room"], structural_tags=[])
+
+
 def test_analyze_scene_context_llm_uses_low_signal_fallback_without_call(monkeypatch) -> None:
     called = {"value": False}
 

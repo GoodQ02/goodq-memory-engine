@@ -372,16 +372,36 @@ def _search_audio_vector_proof(payload: dict, enrichment: Dict[str, Any]) -> Dic
         if value is not None and str(value).strip()
     }
 
-    proof = _evaluate_qdrant_audio_payloads(payloads, scene_ids=scene_ids, video_ids=video_ids)
+    collection_proof = _evaluate_qdrant_audio_payloads(payloads, scene_ids=scene_ids, video_ids=video_ids)
+    result_payloads = [
+        item
+        for item in payloads
+        if isinstance(item, dict)
+        and (not scene_ids or str(item.get("scene_id") or "").strip() in scene_ids)
+        and (
+            not video_ids
+            or str(item.get("video_id") or item.get("video_hash") or "").strip() in video_ids
+        )
+    ]
+    proof = _evaluate_qdrant_audio_payloads(result_payloads, scene_ids=scene_ids, video_ids=video_ids)
     current_run_proven = int(proof.get("current_run_qdrant_proven") or 0)
     base = {
         "status": "current_run_audio_vector_proven" if current_run_proven else "no_current_run_evidence",
         "label": "Proven" if current_run_proven else "No Current-Run Evidence",
+        "proof_scope": "retrieval_result_scene",
         "runtime_run_id": runtime_run_id,
         "collection": qdrant_result.get("collection"),
         "collection_candidates": collection_candidates,
         "qdrant_run_matched_points": len(payloads),
+        "qdrant_result_candidate_points": len(result_payloads),
         "reason": "run_matched_payloads_satisfy_contract" if current_run_proven else "no_qdrant_payloads_matched_scene",
+        "collection_scope": {
+            "qdrant_run_matched_points": len(payloads),
+            "current_run_qdrant_proven": int(collection_proof.get("current_run_qdrant_proven") or 0),
+            "scene_mismatch_count": int(collection_proof.get("scene_mismatch_count") or 0),
+            "video_mismatch_count": int(collection_proof.get("video_mismatch_count") or 0),
+            "required_fields_missing_count": int(collection_proof.get("required_fields_missing_count") or 0),
+        },
     }
     if qdrant_result.get("status") != "ok":
         base.update(

@@ -508,6 +508,16 @@ def _resolve_native_retry_strategy(
                 'cpu_fallback',
             )
         return (1, None, None)
+    if step_name == 'audio_embed_clap':
+        if retry_attempt == 1:
+            return (
+                1,
+                {
+                    'GOODQ_CLAP_FORCE_CPU': '1',
+                },
+                'cpu_fallback',
+            )
+        return (1, None, None)
     if step_name == 'image_embed_dino':
         if retry_attempt == 1:
             return (

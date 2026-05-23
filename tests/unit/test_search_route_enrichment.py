@@ -336,3 +336,63 @@ def test_multimodal_search_projects_current_run_audio_proof(monkeypatch) -> None
     assert result.audio_vector_proof["current_run_qdrant_proven"] == 1
     assert result.current_run_qdrant_audio_proven is True
     assert result.current_run_audio_vector_proven is True
+
+
+def test_multimodal_search_keeps_audio_mismatches_collection_scoped(monkeypatch) -> None:
+    monkeypatch.setattr(search_module, "get_search_engine", lambda: _FakeSearchEngine())
+    monkeypatch.setattr(search_module, "get_data_loader", lambda: _FakeAudioProofDataLoader())
+    monkeypatch.setattr(
+        search_module,
+        "_audio_qdrant_collection_candidates",
+        lambda epoch, *, header=None: ["goodq_audio_epoch_probe"],
+    )
+    monkeypatch.setattr(
+        search_module,
+        "_scroll_qdrant_audio_payloads",
+        lambda runtime_run_id, collection_candidates: {
+            "status": "ok",
+            "collection": "goodq_audio_epoch_probe",
+            "payloads": [
+                {
+                    "run_id": runtime_run_id,
+                    "scene_id": "hashed-scene-id",
+                    "video_id": "hashed-video-id",
+                    "modality": "audio",
+                    "embedding_id": "audio-1",
+                    "component": "audio_embed_clap",
+                    "step": "audio_embed_clap",
+                    "model": "laion/clap-htsat-unfused",
+                    "created_at": "2026-05-20T00:00:00Z",
+                    "commit_ts_utc": "2026-05-20T00:00:01Z",
+                },
+                {
+                    "run_id": runtime_run_id,
+                    "scene_id": "other-scene-id",
+                    "video_id": "hashed-video-id",
+                    "modality": "audio",
+                    "embedding_id": "audio-2",
+                    "component": "audio_embed_clap",
+                    "step": "audio_embed_clap",
+                    "model": "laion/clap-htsat-unfused",
+                    "created_at": "2026-05-20T00:00:02Z",
+                    "commit_ts_utc": "2026-05-20T00:00:03Z",
+                },
+            ],
+        },
+    )
+    search_module.MultimodalSearchRequest.model_rebuild(
+        _types_namespace={"List": List, "Optional": Optional, "dict": dict}
+    )
+
+    request = search_module.MultimodalSearchRequest(query="kitchen", top_k=1)
+
+    response = asyncio.run(search_module.search_multimodal(request))
+
+    proof = response.results[0].audio_vector_proof
+    assert proof["status"] == "current_run_audio_vector_proven"
+    assert proof["proof_scope"] == "retrieval_result_scene"
+    assert proof["qdrant_result_candidate_points"] == 1
+    assert proof["current_run_qdrant_proven"] == 1
+    assert proof["scene_mismatch_count"] == 0
+    assert proof["collection_scope"]["qdrant_run_matched_points"] == 2
+    assert proof["collection_scope"]["scene_mismatch_count"] == 1

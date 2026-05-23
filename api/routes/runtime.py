@@ -473,6 +473,64 @@ def _database_status(db_path: str | Path | None = None) -> Dict[str, Any]:
     return data
 
 
+def _parse_iso_datetime(value: Any) -> datetime | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    text = value.strip()
+    if text.endswith("Z"):
+        text = f"{text[:-1]}+00:00"
+    try:
+        parsed = datetime.fromisoformat(text)
+        if parsed.tzinfo is not None:
+            return parsed.replace(tzinfo=None)
+        return parsed
+    except Exception:
+        return None
+
+
+def _collect_cli_progress(*, now: datetime | None = None) -> Dict[str, Any]:
+    """Read the local CLI progress ledger without asserting stale progress is live."""
+
+    progress_path = _LOG_DIR / "progress.json"
+    if not progress_path.is_file():
+        return {"available": False, "reason": "progress_json_missing"}
+
+    try:
+        payload = json.loads(progress_path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        logger.warning("api status cli progress unreadable path=%s error=%s", progress_path, exc)
+        return {"available": False, "reason": "progress_json_unreadable"}
+
+    if not isinstance(payload, dict):
+        return {"available": False, "reason": "progress_json_invalid"}
+
+    now_value = now or datetime.now()
+    updated_at = _parse_iso_datetime(payload.get("updated_at"))
+    age_seconds = None
+    if updated_at is not None:
+        age_seconds = max(0.0, (now_value - updated_at).total_seconds())
+    status = str(payload.get("status") or "unknown").lower()
+    details = payload.get("details") if isinstance(payload.get("details"), dict) else {}
+    fresh = age_seconds is not None and age_seconds <= 300
+    active = fresh and status in {"active", "running", "processing", "in_progress"}
+    return {
+        "available": True,
+        "source": "logs/progress.json",
+        "active": active,
+        "fresh": fresh,
+        "status": status,
+        "current_video": payload.get("current_file"),
+        "run_id": payload.get("run_id"),
+        "current_step": payload.get("current_step"),
+        "progress_percent": _round_number(payload.get("progress_percent")) or 0,
+        "updated_at": payload.get("updated_at"),
+        "age_seconds": _round_number(age_seconds),
+        "stage": details.get("stage"),
+        "scene_index": details.get("scene_index"),
+        "scenes_total": details.get("scenes_total") or details.get("scenes_found"),
+    }
+
+
 @router.get("/api/status")
 @router.head("/api/status")
 def get_status() -> Dict[str, Any]:
@@ -502,6 +560,8 @@ def get_status() -> Dict[str, Any]:
     except Exception as e:
         logger.debug(f"Model health checks failed: {e}")
 
+    cli_progress = _collect_cli_progress()
+
     try:
         resp = requests.get("http://localhost:5001/api/processing/stats", timeout=0.3)
         if resp.status_code == 200:
@@ -513,6 +573,15 @@ def get_status() -> Dict[str, Any]:
             }
     except Exception:
         pass
+
+    if cli_progress.get("available"):
+        if cli_progress.get("active") and str(processing_data.get("status") or "").lower() in {"idle", "unknown", "unavailable", ""}:
+            processing_data = {
+                "status": cli_progress.get("status") or "running",
+                "current_video": cli_progress.get("current_video"),
+                "progress_percent": cli_progress.get("progress_percent", 0),
+            }
+        processing_data["cli_progress"] = cli_progress
 
     database_data = _database_status()
 
@@ -1041,6 +1110,13 @@ def _latest_run_evidence(limit: int = 24) -> Dict[str, Any]:
         knowledge_graph["total_entities"] = entity_evidence.get("total_entities")
         knowledge_graph["segments_with_any_entity_evidence"] = entity_evidence.get("segments_with_any_entity_evidence")
 
+    step_runs_summary = _summarize_step_runs(step_runs_path, limit=limit)
+    runtime_step_errors = _summarize_runtime_step_errors(
+        _find_runtime_log_paths(latest_episode, [temporal_path, scene_results_path]),
+        completed_step_keys=_completed_step_keys_from_step_runs(step_runs_path),
+        limit=limit,
+    )
+
     return {
         "available": True,
         "run": {
@@ -1054,13 +1130,18 @@ def _latest_run_evidence(limit: int = 24) -> Dict[str, Any]:
             "episodes_failed": overview.get("episodes_failed"),
             "scenes_processed": overview.get("scenes_processed"),
         },
-        "latest_episode": _episode_evidence_summary(latest_episode),
+        "latest_episode": _episode_evidence_summary(
+            latest_episode,
+            step_runs_summary=step_runs_summary,
+            runtime_step_errors=runtime_step_errors,
+        ),
         "artifact_presence": {
             "step_runs_jsonl": bool(step_runs_path and step_runs_path.is_file()),
             "temporal_index_json": bool(temporal_path and temporal_path.is_file()),
             "scene_ingest_results_json": bool(scene_results_path and scene_results_path.is_file()),
         },
-        "step_runs": _summarize_step_runs(step_runs_path, limit=limit),
+        "step_runs": step_runs_summary,
+        "runtime_step_errors": runtime_step_errors,
         "temporal_index": _summarize_temporal_index(temporal_payload),
         "sentiment": _summarize_sentiment(temporal_payload, scene_results_payload=scene_results_payload),
         "entity_evidence": entity_evidence,
@@ -1262,6 +1343,7 @@ def _empty_run_evidence(reason: str) -> Dict[str, Any]:
             "scene_ingest_results_json": False,
         },
         "step_runs": {"status": "unavailable", "reason": reason},
+        "runtime_step_errors": {"status": "unavailable", "reason": reason},
         "temporal_index": {"status": "unavailable", "reason": reason},
         "sentiment": {"status": "unavailable", "reason": reason},
         "knowledge_graph": {"status": "unavailable", "reason": reason},
@@ -1284,7 +1366,21 @@ def _run_evidence_safety_boundary() -> Dict[str, str]:
     }
 
 
-def _episode_evidence_summary(episode: Dict[str, Any]) -> Dict[str, Any]:
+def _episode_evidence_summary(
+    episode: Dict[str, Any],
+    *,
+    step_runs_summary: Dict[str, Any] | None = None,
+    runtime_step_errors: Dict[str, Any] | None = None,
+) -> Dict[str, Any]:
+    step_runs_summary = step_runs_summary if isinstance(step_runs_summary, dict) else {}
+    runtime_step_errors = runtime_step_errors if isinstance(runtime_step_errors, dict) else {}
+    episode_errors = len(episode.get("errors") or []) if isinstance(episode.get("errors"), list) else 0
+    episode_warnings = len(episode.get("warnings") or []) if isinstance(episode.get("warnings"), list) else 0
+    step_failed_count = int(step_runs_summary.get("failed_count") or 0)
+    step_skipped_count = int(step_runs_summary.get("skipped_count") or 0)
+    step_warning_count = int(step_runs_summary.get("warning_count") or 0)
+    recovered_step_error_count = int(runtime_step_errors.get("recovered_count") or 0)
+    native_recovered_error_count = int(runtime_step_errors.get("native_recovered_count") or 0)
     return {
         "episode": episode.get("episode"),
         "timeline_video_id": _timeline_video_id_from_episode(episode),
@@ -1293,8 +1389,12 @@ def _episode_evidence_summary(episode: Dict[str, Any]) -> Dict[str, Any]:
         "phase6_complete": episode.get("phase6_complete"),
         "qdrant_ok": episode.get("qdrant_ok"),
         "ts_utc": episode.get("ts_utc"),
-        "error_count": len(episode.get("errors") or []) if isinstance(episode.get("errors"), list) else 0,
-        "warning_count": len(episode.get("warnings") or []) if isinstance(episode.get("warnings"), list) else 0,
+        "error_count": episode_errors + step_failed_count,
+        "warning_count": episode_warnings + step_warning_count + recovered_step_error_count,
+        "step_failed_count": step_failed_count,
+        "step_skipped_count": step_skipped_count,
+        "recovered_step_error_count": recovered_step_error_count,
+        "native_recovered_error_count": native_recovered_error_count,
     }
 
 
@@ -1374,6 +1474,27 @@ def _find_step_runs_path(episode: Dict[str, Any], artifact_paths: List[Path | No
     return None
 
 
+def _find_runtime_log_paths(episode: Dict[str, Any], artifact_paths: List[Path | None]) -> List[Path]:
+    candidates: List[Path] = []
+    run_dir_value = episode.get("run_dir")
+    if isinstance(run_dir_value, str) and run_dir_value.strip():
+        run_dir = Path(run_dir_value)
+        for log_dir in (run_dir / "logs", run_dir):
+            if log_dir.is_dir():
+                candidates.extend(path for path in log_dir.glob("*.log") if path.is_file())
+
+    for artifact_path in artifact_paths:
+        if artifact_path is None:
+            continue
+        for parent in artifact_path.parents:
+            log_dir = parent / "logs"
+            if log_dir.is_dir():
+                candidates.extend(path for path in log_dir.glob("*.log") if path.is_file())
+
+    unique: Dict[str, Path] = {str(path.resolve()): path for path in candidates}
+    return sorted(unique.values(), key=lambda path: path.stat().st_mtime, reverse=True)[:8]
+
+
 def _load_json_any(path: Path | None) -> Any:
     if path is None or not path.is_file():
         return None
@@ -1384,9 +1505,9 @@ def _load_json_any(path: Path | None) -> Any:
         return None
 
 
-def _summarize_step_runs(path: Path | None, limit: int = 24) -> Dict[str, Any]:
+def _load_step_run_rows(path: Path | None) -> tuple[List[Dict[str, Any]], int]:
     if path is None or not path.is_file():
-        return {"status": "unavailable", "reason": "step_runs_jsonl_missing"}
+        return [], 0
 
     rows: List[Dict[str, Any]] = []
     malformed = 0
@@ -1405,6 +1526,70 @@ def _summarize_step_runs(path: Path | None, limit: int = 24) -> Dict[str, Any]:
                     rows.append(value)
     except Exception as exc:
         logger.warning("latest run evidence step_runs unreadable error=%s", exc)
+        return [], -1
+    return rows, malformed
+
+
+def _normalize_step_name(value: Any) -> str:
+    text = str(value or "").strip()
+    if text.startswith("step."):
+        text = text.split(".", 1)[1]
+    return text
+
+
+def _step_scene_index(value: Any) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    try:
+        text = str(value).strip()
+        if not text:
+            return None
+        return int(text)
+    except Exception:
+        return None
+
+
+def _step_problem_summary(row: Dict[str, Any]) -> Dict[str, Any]:
+    extra = row.get("extra") if isinstance(row.get("extra"), dict) else {}
+    error_text = str(row.get("error") or "")
+    status = str(row.get("status") or "").lower()
+    native_error = "3221226505" in error_text or "0xc0000409" in error_text.lower()
+    no_speech_vad_fallback = "no_speech_detected" in error_text
+    return {
+        "ts": row.get("ts") or row.get("ts_utc") or row.get("timestamp"),
+        "scene_index": _step_scene_index(row.get("scene_index")),
+        "step": _normalize_step_name(row.get("step") or row.get("step_name")),
+        "status": row.get("status"),
+        "modality": row.get("modality"),
+        "optional": bool(extra.get("optional")),
+        "reason": extra.get("reason") or ("error_text_present" if error_text and status != "skipped" else None),
+        "native_error": native_error,
+        "no_speech_vad_fallback": no_speech_vad_fallback,
+    }
+
+
+def _completed_step_keys_from_step_runs(path: Path | None) -> set[tuple[int, str]]:
+    rows, _malformed = _load_step_run_rows(path)
+    completed: set[tuple[int, str]] = set()
+    for row in rows:
+        status = str(row.get("status") or "").lower()
+        if status not in {"ok", "success", "completed"}:
+            continue
+        scene_index = _step_scene_index(row.get("scene_index"))
+        step = _normalize_step_name(row.get("step") or row.get("step_name"))
+        if scene_index is not None and step:
+            completed.add((scene_index, step))
+    return completed
+
+
+def _summarize_step_runs(path: Path | None, limit: int = 24) -> Dict[str, Any]:
+    if path is None or not path.is_file():
+        return {"status": "unavailable", "reason": "step_runs_jsonl_missing"}
+
+    rows, malformed = _load_step_run_rows(path)
+    if malformed < 0:
         return {"status": "unavailable", "reason": "step_runs_unreadable"}
 
     status_counts = Counter(str(row.get("status") or "unknown").lower() for row in rows)
@@ -1414,11 +1599,29 @@ def _summarize_step_runs(path: Path | None, limit: int = 24) -> Dict[str, Any]:
 
     failed_count = 0
     warning_count = malformed
+    skipped_count = 0
+    optional_failed_count = 0
+    native_error_count = 0
+    no_speech_vad_fallback_count = 0
+    problems: List[Dict[str, Any]] = []
     for row in rows:
         status = str(row.get("status") or "").lower()
         error_text = str(row.get("error") or "").strip()
+        extra = row.get("extra") if isinstance(row.get("extra"), dict) else {}
         if status in {"error", "failed", "fail"} or error_text:
             failed_count += 1
+            if extra.get("optional") is True:
+                optional_failed_count += 1
+            problem = _step_problem_summary(row)
+            if problem["native_error"]:
+                native_error_count += 1
+            if problem["no_speech_vad_fallback"]:
+                no_speech_vad_fallback_count += 1
+            problems.append(problem)
+        if status == "skipped":
+            skipped_count += 1
+            warning_count += 1
+            problems.append(_step_problem_summary(row))
         if status in {"warn", "warning"} or row.get("warning"):
             warning_count += 1
 
@@ -1428,6 +1631,10 @@ def _summarize_step_runs(path: Path | None, limit: int = 24) -> Dict[str, Any]:
         "row_count": len(rows),
         "recent_count": len(recent_rows),
         "failed_count": failed_count,
+        "skipped_count": skipped_count,
+        "optional_failed_count": optional_failed_count,
+        "native_error_count": native_error_count,
+        "no_speech_vad_fallback_count": no_speech_vad_fallback_count,
         "warning_count": warning_count,
         "malformed_count": malformed,
         "latest_ts_utc": _latest_timestamp(rows),
@@ -1437,6 +1644,7 @@ def _summarize_step_runs(path: Path | None, limit: int = 24) -> Dict[str, Any]:
             {"step": step, "count": count}
             for step, count in step_counts.most_common(8)
         ],
+        "problems": problems[-max(1, min(int(limit or 24), 100)) :],
         "recent": [
             {
                 "ts": row.get("ts") or row.get("ts_utc") or row.get("timestamp"),
@@ -1447,6 +1655,83 @@ def _summarize_step_runs(path: Path | None, limit: int = 24) -> Dict[str, Any]:
             }
             for row in recent_rows[-8:]
         ],
+    }
+
+
+def _summarize_runtime_step_errors(
+    log_paths: List[Path],
+    *,
+    completed_step_keys: set[tuple[int, str]],
+    limit: int = 24,
+) -> Dict[str, Any]:
+    if not log_paths:
+        return {"status": "unavailable", "reason": "runtime_logs_missing"}
+
+    events: List[Dict[str, Any]] = []
+    malformed = 0
+    for path in log_paths[:8]:
+        try:
+            with path.open("r", encoding="utf-8", errors="ignore") as handle:
+                for raw_line in handle:
+                    line = raw_line.strip()
+                    if not line or '"step_error"' not in line:
+                        continue
+                    try:
+                        value = json.loads(line)
+                    except Exception:
+                        malformed += 1
+                        continue
+                    if isinstance(value, dict) and value.get("event") == "step_error":
+                        events.append(value)
+        except Exception as exc:
+            logger.warning("latest run evidence runtime log unreadable name=%s error=%s", path.name, exc)
+
+    recovered_count = 0
+    terminal_count = 0
+    native_error_count = 0
+    native_recovered_count = 0
+    no_speech_vad_fallback_count = 0
+    summarized: List[Dict[str, Any]] = []
+    for event in events:
+        metadata = event.get("metadata") if isinstance(event.get("metadata"), dict) else {}
+        step = _normalize_step_name(event.get("step"))
+        scene_index = _step_scene_index(metadata.get("scene_index"))
+        error_text = str(event.get("error") or "")
+        native_error = "3221226505" in error_text or "0xc0000409" in error_text.lower()
+        recovered = scene_index is not None and bool(step) and (scene_index, step) in completed_step_keys
+        if recovered:
+            recovered_count += 1
+        else:
+            terminal_count += 1
+        if native_error:
+            native_error_count += 1
+            if recovered:
+                native_recovered_count += 1
+        if "no_speech_detected" in error_text:
+            no_speech_vad_fallback_count += 1
+        summarized.append(
+            {
+                "ts": event.get("timestamp") or event.get("ts") or event.get("ts_utc"),
+                "scene_index": scene_index,
+                "step": step,
+                "error_family": "returncode_3221226505" if native_error else (error_text or "step_error"),
+                "env": metadata.get("env"),
+                "recovered": recovered,
+                "category": "recovered_retry" if recovered else "terminal_step_error",
+            }
+        )
+
+    return {
+        "status": "ok" if events else "empty",
+        "log_count": len(log_paths),
+        "event_count": len(events),
+        "recovered_count": recovered_count,
+        "terminal_count": terminal_count,
+        "native_error_count": native_error_count,
+        "native_recovered_count": native_recovered_count,
+        "no_speech_vad_fallback_count": no_speech_vad_fallback_count,
+        "malformed_count": malformed,
+        "recent": summarized[-max(1, min(int(limit or 24), 100)) :],
     }
 
 

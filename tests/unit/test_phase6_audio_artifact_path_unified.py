@@ -662,6 +662,95 @@ def test_harmonizer_applies_scene_context_llm_when_feature_enabled(tmp_path: Pat
     assert persisted_scene["scene_context_arbitration"] == segment["scene_context_arbitration"]
 
 
+def test_harmonizer_applies_scene_context_llm_to_visual_audio_signal_without_transcript(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    processing_root = tmp_path / "processing"
+    video_id = "video_scene_context_visual_audio"
+    processing_dir = processing_root / video_id
+    scene_manifest_path = processing_dir / "video" / "scene_manifest.json"
+
+    _write_json(
+        scene_manifest_path,
+        {
+            "video_id": video_id,
+            "phase5_complete": True,
+            "phase6_complete": True,
+            "scenes": [
+                {
+                    "scene_id": "scene_0000",
+                    "index": 0,
+                    "start": 0.0,
+                    "end": 4.0,
+                    "duration": 4.0,
+                    "confidence": 0.9,
+                    "caption": "a birthday cake on a kitchen table",
+                    "audio": {
+                        "transcript": "",
+                        "segments": [],
+                        "emotion": "happy",
+                        "emotion_scores": {"happy": 0.8, "neutral": 0.2},
+                    },
+                    "ocr_text": "HAPPY BIRTHDAY",
+                    "keyframe": {"objects": [], "faces": []},
+                }
+            ],
+        },
+    )
+
+    audio_artifact_dir = tmp_path / "canonical_audio_artifacts"
+    _write_json(audio_artifact_dir / "transcript.json", {"segments": []})
+    _write_json(audio_artifact_dir / "diarization.json", {"speakers": []})
+    _write_json(audio_artifact_dir / "segmentation.json", {"segments": []})
+
+    monkeypatch.setattr(harmonizer_module, "SCENE_CONTEXT_LLM_AVAILABLE", True)
+    captured_scene_meta: Dict[str, Any] = {}
+
+    def _fake_analyze_scene_context_llm(scene_meta: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
+        captured_scene_meta.update(scene_meta)
+        return {
+            "narrative_summary": "Minimal visual or dialogue content.",
+            "key_moments": ["Minimal visual or dialogue content."],
+            "emotional_arc": "low-signal scene",
+            "context_tags": ["low-signal scene"],
+            "primary_tags": [],
+            "contextual_tags": [],
+            "structural_tags": ["low-signal scene"],
+            "activity_description": "Minimal visual or dialogue content.",
+        }
+
+    monkeypatch.setattr(
+        harmonizer_module,
+        "analyze_scene_context_llm",
+        _fake_analyze_scene_context_llm,
+    )
+
+    item = {
+        "id": video_id,
+        "source_path": str(tmp_path / "video.mp4"),
+        "processing_dir": str(processing_dir),
+        "scene_manifest_path": str(scene_manifest_path),
+        "audio_artifact_dir": str(audio_artifact_dir),
+    }
+    cfg = {
+        "paths": {"processing": str(processing_root)},
+        "llm": {"features": {"scene_context_analysis": True}},
+    }
+
+    result = run_cross_modal_harmonization(item, cfg)
+    assert result["harmonization_status"] == "complete"
+
+    assert captured_scene_meta["caption"] == "a birthday cake on a kitchen table"
+    assert captured_scene_meta["ocr_text"] == "HAPPY BIRTHDAY"
+    assert captured_scene_meta["emotions"] == [{"label": "happy", "score": 0.8}, {"label": "neutral", "score": 0.2}]
+
+    temporal_index = json.loads((processing_dir / "temporal_index.json").read_text(encoding="utf-8"))
+    segment = temporal_index["segments"][0]
+    assert segment["scene_context_llm"]["structural_tags"] == ["low-signal scene"]
+    assert temporal_index["segments_with_scene_context_llm"] == 1
+
+
 def test_scene_context_epistemic_marks_low_signal_fallback() -> None:
     result = harmonizer_module._derive_scene_context_epistemic(  # type: ignore[attr-defined]
         {

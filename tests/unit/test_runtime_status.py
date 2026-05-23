@@ -1,17 +1,19 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import subprocess
 import sqlite3
 import sys
 import types
+from datetime import datetime, timedelta
 from pathlib import Path
 
 
-def _load_runtime_route_module(repo_root: Path, monkeypatch, db_path: Path):
+def _load_runtime_route_module(repo_root: Path, monkeypatch, db_path: Path, *, log_dir: Path | None = None):
     fake_config_loader = types.ModuleType("steps.common.config_loader")
     fake_config_loader.load_configs = lambda overrides=None: {
-        "paths": {"data_root": str(db_path.parent), "db_path": str(db_path)},
+        "paths": {"data_root": str(db_path.parent), "db_path": str(db_path), "log_dir": str(log_dir or db_path.parent / "logs")},
         "host": {},
         "memory": {},
         "llm": {},
@@ -99,3 +101,66 @@ def test_wsl_status_probes_configured_audio_worker(tmp_path: Path, monkeypatch) 
     assert status["faster_whisper"] == "ready"
     assert status["faster_whisper_version"] == "1.2.1"
     assert status["cuda_version"] == "13.2"
+
+
+def test_cli_progress_reader_marks_fresh_running_progress_active(tmp_path: Path, monkeypatch) -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    db_path = tmp_path / "memory.db"
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    now = datetime(2026, 5, 22, 12, 0, 0)
+    (log_dir / "progress.json").write_text(
+        json.dumps(
+            {
+                "status": "running",
+                "current_file": "home-video.mp4",
+                "run_id": "run-alpha",
+                "progress_percent": 42.5,
+                "updated_at": now.isoformat(),
+                "details": {"stage": "scene_loop", "scene_index": 19, "scenes_total": 141},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    runtime = _load_runtime_route_module(repo_root, monkeypatch, db_path, log_dir=log_dir)
+
+    progress = runtime._collect_cli_progress(now=now + timedelta(seconds=30))
+
+    assert progress["available"] is True
+    assert progress["active"] is True
+    assert progress["status"] == "running"
+    assert progress["current_video"] == "home-video.mp4"
+    assert progress["progress_percent"] == 42.5
+    assert progress["stage"] == "scene_loop"
+    assert progress["scene_index"] == 19
+    assert progress["scenes_total"] == 141
+
+
+def test_cli_progress_reader_keeps_completed_progress_non_active(tmp_path: Path, monkeypatch) -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    db_path = tmp_path / "memory.db"
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    now = datetime(2026, 5, 22, 12, 0, 0)
+    (log_dir / "progress.json").write_text(
+        json.dumps(
+            {
+                "status": "completed",
+                "current_file": "home-video.mp4",
+                "run_id": "run-alpha",
+                "progress_percent": 100,
+                "updated_at": now.isoformat(),
+                "details": {"stage": "cross_modal_harmonization"},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    runtime = _load_runtime_route_module(repo_root, monkeypatch, db_path, log_dir=log_dir)
+
+    progress = runtime._collect_cli_progress(now=now + timedelta(seconds=30))
+
+    assert progress["available"] is True
+    assert progress["active"] is False
+    assert progress["status"] == "completed"

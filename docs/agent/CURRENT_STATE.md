@@ -51,6 +51,7 @@ Tracked cleanup audit summary:
 
 - `docs/diagnostics/MEMORY_CLEAN_START_AUDIT_2026-05-20.md`
 - `docs/diagnostics/POWER_LOSS_INGESTION_AUDIT_2026-05-20.md`
+- `docs/diagnostics/HOME_MEMORY_WITNESS_RUN_2026-05-22.md`
 
 Pre-clean audit found and cleared:
 
@@ -71,29 +72,85 @@ Pre-clean audit found and cleared:
 - Prior filesystem epochs were removed except for a small
   `epoch_2025_12_22` log stub held open by the Qdrant Windows service.
 - Active API status on port `30000` is bound to the
-  `epoch_2026_05_22_family_probe_10scene_01` validation epoch. It currently
-  reports a fresh `10`-scene FAMILY probe with clean Qdrant/FAISS evidence,
-  not an empty broad-run seed. Reset Qdrant and use a fresh epoch before the
-  broad home-memory run.
+  `epoch_2026_05_22_family_full_01` validation epoch. It currently reports
+  the completed first broad FAMILY home-memory run with `141` scenes, fresh
+  Qdrant/FAISS evidence, and visible step-error scope. Use a new fresh epoch or
+  a deliberate clean reset before the next broad personal-memory run.
 
-Fresh local validation epoch:
+Latest full home-memory validation epoch:
 
-- `epoch_2026_05_22_family_probe_10scene_01`
+- `epoch_2026_05_22_family_full_01`
 
 The active validation epoch uses these Qdrant collections:
 
-- `goodq_clip_epoch_2026_05_22_family_probe_10scene_01`
-- `goodq_dino_epoch_2026_05_22_family_probe_10scene_01`
-- `goodq_text_epoch_2026_05_22_family_probe_10scene_01`
-- `goodq_audio_epoch_2026_05_22_family_probe_10scene_01`
+- `goodq_clip_epoch_2026_05_22_family_full_01`
+- `goodq_dino_epoch_2026_05_22_family_full_01`
+- `goodq_text_epoch_2026_05_22_family_full_01`
+- `goodq_audio_epoch_2026_05_22_family_full_01`
 
 This epoch now contains runtime fallback, WSL audio, sentiment, entity, Qdrant,
-FAISS, and Operator Console freshness validation evidence. It is useful for
-audit and UI verification, but it must not seed the broad home-movie pass unless
-the operator deliberately resets Qdrant and verifies fresh/explicit-ID FAISS
-targets first. The previous `_01`, `_02`, `_03`, `_04`, and runtime fallback
-probe attempts also contain validation or partial probe residue and must not
-seed the broad run.
+FAISS, Operator Console freshness validation, and runtime problem-scope
+evidence. It is useful for audit and UI verification, but it must not seed the
+next broad personal-memory pass unless the operator deliberately keeps this
+scope. The previous `_01`, `_02`, `_03`, `_04`, ten-scene, and runtime fallback
+probe attempts also contain validation or partial probe residue and must not be
+treated as the active full-run scope.
+
+## Latest Full Home-Memory Validation Run
+
+The first broad FAMILY home-memory run completed in
+`epoch_2026_05_22_family_full_01`.
+
+Scope:
+
+- Source scope: first redacted FAMILY media file.
+- Probe scope: `1` video, `141` scenes.
+- Runtime run id: `364f6a6b-37fb-4613-bf06-4c2099c9e6c8`.
+- Pipeline status after run: idle.
+- `/api/status.processing.cli_progress`: available, status `completed`,
+  active `false`, progress `100`.
+
+Validated memory/evidence posture:
+
+- Current-run audio proof: `140 / 141`; one optional `audio_embed_clap`
+  terminal error remains visible.
+- Step ledger: `2536` ok, `3` skipped, `1` error.
+- Runtime step-error logs: `6` native step-error events, `5` recovered,
+  `1` terminal.
+- Qdrant point counts: audio `140`, text `281`, CLIP `282`, DINO `282`.
+- FAISS indexes: audio, text, CLIP, and DINO are all explicit-ID
+  `IndexIDMap2` indexes in the active epoch.
+- SQLite memory projection: `141` scenes and `985` embeddings.
+- Knowledge graph projection: `838` nodes, `2738` edges, and `141` events.
+- Entity evidence: `504` total entities, `198` unique entities, and
+  `120 / 141` scenes with any entity evidence.
+- Sentiment: `139 / 141` sentiment labels, `140 / 141` text-emotion rankings,
+  and `141 / 141` audio-emotion score rankings.
+- Scene-context LLM: `137 / 141` temporal segments.
+- Projection gaps: `ok`, `0` missing.
+- Operator Console Evidence Surfaces expose episode errors, recovered step
+  errors, step skips, vector-count scope notes, human-review audio tier, and
+  home-memory privacy note.
+
+Known follow-up from this validation:
+
+- Native CLAP crash mitigation now preserves non-speech audio embedding
+  intent: `audio_embed_clap` keeps the original audio fallback when speech VAD
+  finds no speech, and a Windows native crash retries once with
+  `GOODQ_CLAP_FORCE_CPU=1`.
+- Validate the CLAP CPU fallback on the next scene-first or broad ingestion
+  run; the completed full run still truthfully contains one pre-mitigation
+  optional terminal CLAP error.
+- Scene-context LLM coverage root cause was audited after the full run:
+  the `4` missing temporal segments were signal-bearing, but the analyzer could
+  collapse to no payload when the LLM response path failed, and caption/OCR/audio
+  signal alone was not always sufficient to enter scene-context projection.
+  Future runs now use a conservative grounded fallback for LLM transport,
+  parse, or normalization failures and treat visual/audio evidence as eligible
+  context signal. The completed full-run artifact remains `137 / 141` until the
+  affected scene scope is rerun or re-harmonized.
+- Keep the direct CLI progress bridge as read-only status; completed progress
+  must remain non-active so the UI does not imply ingestion is still running.
 
 ## Runtime Fallback, Audio, Sentiment, And Entity Validation
 
@@ -139,10 +196,10 @@ Validated memory/evidence posture:
 
 Known follow-up from this validation:
 
-- Retrieval result-level audio proof still exposes collection-scope mismatch
-  counts when explaining one selected scene, even though strict latest-run
-  audio proof is green. Treat this as UI/API explanation polish, not a current
-  ingestion failure.
+- Retrieval result-level audio proof explanation was polished after this
+  validation: selected-scene proof now stays top-level under
+  `proof_scope=retrieval_result_scene`, while run-wide mismatch diagnostics are
+  nested under `collection_scope`. Strict latest-run audio proof remains green.
 
 Preserved interrupted-run collections may also exist:
 
@@ -351,9 +408,10 @@ Known previous-epoch residue:
 
 - The previous `_01` audio FAISS file read as a legacy non-IDMap HNSW index from
   earlier validation probes.
-- The current target is `epoch_2026_05_22_family_probe_10scene_01`. Before a
-  broad home-movie run, use a fresh epoch or reset Qdrant and confirm target
-  FAISS files are absent or explicit-ID indexes.
+- The old ten-scene target was `epoch_2026_05_22_family_probe_10scene_01`; the
+  current completed full-run target is `epoch_2026_05_22_family_full_01`.
+  Before another broad home-memory run, use a fresh epoch or reset Qdrant and
+  confirm target FAISS files are absent or explicit-ID indexes.
 
 Follow-up preflight refresh on 2026-05-21:
 
@@ -538,5 +596,8 @@ they are active again:
    and read-only mode should be visible before broad ingestion.
 4. Start local LLM support with `scripts/start_vllm_servers.bat` and verify
    `http://127.0.0.1:38005/v1/models` before LLM-backed scene analysis.
-5. If the scene evidence remains acceptable in the Operator Console, run the
-   first full source video.
+5. Validate the new CLAP native-crash CPU fallback on the next scene-first or
+   broad ingestion run.
+6. If the current full-run evidence remains acceptable in the Operator Console,
+   start the next personal-memory source in a fresh epoch or deliberate reset
+   scope.

@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>GoodQ4All Operator Console</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='8' fill='%23161a20'/%3E%3Ctext x='32' y='40' text-anchor='middle' font-family='monospace' font-size='22' fill='%23ffb300'%3EGQ%3C/text%3E%3C/svg%3E" />
-    <link rel="stylesheet" href="./static/css/app.css?v=20260521-emotion-ranking-1" />
+    <link rel="stylesheet" href="./static/css/app.css?v=20260521-emotion-ranking-1-witness-spine-1-focus-queue-1" />
   </head>
   <body>
     <div class="app-shell">
@@ -37,6 +37,8 @@
       </header>
 
       <aside class="rail" aria-label="Console sections">
+        <a href="#witness-spine">Witness</a>
+        <a href="#operator-focus">Focus</a>
         <a href="#flight-deck">Flight Deck</a>
         <a href="#proof-panel">Proof</a>
         <a href="#retrieval-console">Retrieval</a>
@@ -65,6 +67,37 @@
           </div>
           <div class="scope-banner-grid" id="scope-banner-grid" data-testid="scope-banner-grid">
             <span>Awaiting local API.</span>
+          </div>
+        </section>
+
+        <section
+          class="operator-focus-panel"
+          id="operator-focus"
+          aria-labelledby="operator-focus-title"
+          data-testid="operator-focus-panel"
+        >
+          <div class="operator-focus-header">
+            <div>
+              <p class="scope-kicker">Operator focus</p>
+              <h2 id="operator-focus-title">What Should I Look At?</h2>
+            </div>
+            <span class="operator-focus-boundary">Ranked review queue from latest read-only evidence</span>
+          </div>
+          <div class="operator-focus-list" id="operator-focus-list" data-testid="operator-focus-list">
+            <span>Awaiting latest evidence.</span>
+          </div>
+        </section>
+
+        <section class="witness-spine" id="witness-spine" aria-labelledby="witness-spine-title" data-testid="witness-spine">
+          <div class="witness-spine-header">
+            <div>
+              <p class="scope-kicker">Truth spine</p>
+              <h2 id="witness-spine-title">Witness Spine</h2>
+            </div>
+            <span class="witness-spine-boundary" data-testid="witness-spine-boundary">No private labels shown here</span>
+          </div>
+          <div class="witness-metric-grid" id="witness-spine-grid" data-testid="witness-spine-grid">
+            <span>Awaiting latest evidence.</span>
           </div>
         </section>
 
@@ -317,6 +350,6 @@
       </div>
     </template>
 
-    <script src="./static/js/app.js?v=20260521-emotion-ranking-1"></script>
+    <script src="./static/js/app.js?v=20260521-emotion-ranking-1-witness-spine-1-focus-queue-1"></script>
   </body>
 </html>

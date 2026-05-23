@@ -68,6 +68,60 @@ def test_operator_console_surfaces_runtime_clarity_state_grammar_and_storage() -
     assert "File name redacted" in app_js
 
 
+def test_operator_console_surfaces_witness_truth_spine() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    index_html = (repo_root / "ui" / "operator_console_v1" / "index.html").read_text(encoding="utf-8")
+    app_js = (repo_root / "ui" / "operator_console_v1" / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    app_css = (repo_root / "ui" / "operator_console_v1" / "static" / "css" / "app.css").read_text(encoding="utf-8")
+
+    assert 'data-testid="witness-spine"' in index_html
+    assert 'data-testid="witness-spine-grid"' in index_html
+    assert "#witness-spine" in index_html
+
+    assert "renderWitnessSpine" in app_js
+    assert "Witness Spine" in app_js
+    assert "Passed with visible follow-up" in app_js
+    assert "Step ledger" in app_js
+    assert "Current-run audio proof" in app_js
+    assert "Projection gaps" in app_js
+    assert "Cognitive signal coverage" in app_js
+    assert "Persistence agreement" in app_js
+    assert "Qdrant + FAISS + SQLite + KG" in app_js
+    assert "No private labels shown here" in app_js
+
+    assert ".witness-spine" in app_css
+    assert ".witness-metric-grid" in app_css
+    assert ".witness-verdict-card" in app_css
+    assert ".witness-proof-card" in app_css
+
+
+def test_operator_console_surfaces_focus_queue_anomaly_tokens_and_scene_health() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    index_html = (repo_root / "ui" / "operator_console_v1" / "index.html").read_text(encoding="utf-8")
+    app_js = (repo_root / "ui" / "operator_console_v1" / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    app_css = (repo_root / "ui" / "operator_console_v1" / "static" / "css" / "app.css").read_text(encoding="utf-8")
+
+    assert 'data-testid="operator-focus-panel"' in index_html
+    assert 'data-testid="operator-focus-list"' in index_html
+    assert "#operator-focus" in index_html
+
+    assert "renderOperatorFocusPanel" in app_js
+    assert "focusReviewItems" in app_js
+    assert "What Should I Look At?" in app_js
+    assert "Terminal step failure" in app_js
+    assert "Recovered step errors" in app_js
+    assert "witness-token-strip" in app_js
+    assert "sceneHealthState" in app_js
+    assert "Scene health" in app_js
+    assert "makeSceneHealthBadge" in app_js
+
+    assert ".operator-focus-panel" in app_css
+    assert ".operator-focus-list" in app_css
+    assert ".focus-review-item.error" in app_css
+    assert ".witness-token.error" in app_css
+    assert ".scene-health-badge.warn" in app_css
+
+
 def test_retrieval_console_uses_timeline_handoff_id_for_enriched_results() -> None:
     repo_root = Path(__file__).resolve().parents[2]
     app_js = (repo_root / "ui" / "operator_console_v1" / "static" / "js" / "app.js").read_text(encoding="utf-8")

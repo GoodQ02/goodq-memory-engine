@@ -7,6 +7,12 @@
   const PATH_KEY_RE = /(^|_)(path|dir|file|files|files_read|artifact|artifacts|thumbnail|stdout|stderr|trace|raw|root)(_|$)/i;
   const WINDOWS_ABS_RE = /^[A-Za-z]:[\\/]/;
   const UNC_RE = /^\\\\/;
+  const RETRIEVAL_MODALITY_OPTIONS = Object.freeze({
+    text: { label: "Text", modalities: ["text"] },
+    visual: { label: "Visual", modalities: ["visual"] },
+    audio: { label: "Audio", modalities: ["audio"] },
+    all: { label: "All", modalities: ["text", "visual", "audio"] },
+  });
 
   const state = {
     apiBase: DEFAULT_API_BASE,
@@ -22,6 +28,11 @@
       results: [],
       selectedKey: null,
       error: null,
+      modalityMode: "all",
+      similarLoading: false,
+      similarError: null,
+      similarResults: [],
+      similarSourceKey: null,
     },
     mediaPreview: {
       open: false,
@@ -3101,6 +3112,154 @@
     return Number.isFinite(number) ? number : null;
   }
 
+  function normalizeRetrievalModalityMode(value) {
+    const mode = String(value || "").toLowerCase();
+    return Object.prototype.hasOwnProperty.call(RETRIEVAL_MODALITY_OPTIONS, mode) ? mode : "all";
+  }
+
+  function selectedRetrievalModalityOption() {
+    return RETRIEVAL_MODALITY_OPTIONS[normalizeRetrievalModalityMode(state.retrieval.modalityMode)];
+  }
+
+  function retrievalSelectedModalityLabel() {
+    return selectedRetrievalModalityOption().label;
+  }
+
+  function retrievalModalitiesForRequest() {
+    return [...selectedRetrievalModalityOption().modalities];
+  }
+
+  function retrievalModalitiesSearched() {
+    const modalities = state.retrieval.response && Array.isArray(state.retrieval.response.modalities_searched)
+      ? state.retrieval.response.modalities_searched
+      : [];
+    return modalities.map((item) => safeString(item, "modality").toLowerCase()).filter(Boolean);
+  }
+
+  function retrievalModalitySearched(name) {
+    return retrievalModalitiesSearched().includes(String(name || "").toLowerCase());
+  }
+
+  function retrievalSearchedModalityLabel() {
+    const modalities = retrievalModalitiesSearched();
+    return modalities.length ? modalities.join(" + ") : "text + visual default";
+  }
+
+  function scoreValuePercent(value) {
+    const number = retrievalNumber(value);
+    if (number === null) return null;
+    const normalized = number <= 1 ? number * 100 : number;
+    return Math.max(0, Math.min(100, Math.round(normalized)));
+  }
+
+  function retrievalResultModalities(result) {
+    const raw = result && Array.isArray(result.modalities) ? result.modalities : [];
+    const values = raw
+      .map((item) => safeString(item, "modality").toLowerCase().trim())
+      .filter((item) => item && item !== "null");
+    const fallback = result && valueObserved(result.modality) ? safeString(result.modality, "modality").toLowerCase().trim() : null;
+    if (fallback && fallback !== "null") values.push(fallback);
+    return [...new Set(values)];
+  }
+
+  function retrievalModalityScores(result) {
+    const raw = result && result.modality_scores && typeof result.modality_scores === "object" ? result.modality_scores : {};
+    const scores = {};
+    Object.entries(raw).forEach(([key, value]) => {
+      const percent = scoreValuePercent(value);
+      if (key && percent !== null) scores[String(key).toLowerCase()] = percent;
+    });
+    return scores;
+  }
+
+  function appendRetrievalContributionStrip(container, result) {
+    if (!container || !result) return;
+    const modalities = retrievalResultModalities(result);
+    if (!modalities.length) return;
+    const scores = retrievalModalityScores(result);
+    const strip = document.createElement("div");
+    strip.className = "retrieval-contribution-strip";
+    strip.setAttribute("aria-label", "Scene modality contributions");
+    modalities.forEach((modality) => {
+      const chip = document.createElement("span");
+      chip.className = "retrieval-contribution-chip";
+      chip.setAttribute("data-retrieval-contribution", modality);
+      const percent = scores[modality];
+      chip.textContent = `${modality} ${percent !== undefined ? percentLabel(percent) : "present"}`;
+      chip.title = percent !== undefined
+        ? `${modality} contribution returned by fused search`
+        : `${modality} evidence present; no separate contribution score returned`;
+      strip.appendChild(chip);
+    });
+    container.appendChild(strip);
+  }
+
+  function renderRetrievalModalitySelector() {
+    document.querySelectorAll("[data-retrieval-modality]").forEach((button) => {
+      const active = button.getAttribute("data-retrieval-modality") === normalizeRetrievalModalityMode(state.retrieval.modalityMode);
+      button.classList.toggle("active", active);
+      button.setAttribute("aria-pressed", active ? "true" : "false");
+    });
+  }
+
+  function retrievalSuggestionChips() {
+    const evidence = state.data.runEvidence || {};
+    const temporal = evidence.temporal_index || {};
+    const entityEvidence = evidence.entity_evidence || {};
+    const sources = [
+      ["tag", temporal.top_scene_context_tags],
+      ["entity", entityEvidence.top_entities],
+      ["present", entityEvidence.top_scene_present_entities],
+      ["dialogue", entityEvidence.top_dialogue_mentioned_entities],
+    ];
+    const seen = new Set();
+    const chips = [];
+    sources.forEach(([source, rows]) => {
+      if (!Array.isArray(rows)) return;
+      rows.forEach((row) => {
+        const label = safeString(row && row.label, "search_suggestion").trim();
+        if (!label) return;
+        const key = label.toLowerCase();
+        if (seen.has(key)) return;
+        seen.add(key);
+        chips.push({
+          label,
+          source,
+          count: retrievalNumber(row && row.count),
+        });
+      });
+    });
+    return chips.slice(0, 10);
+  }
+
+  function renderRetrievalSuggestionChips() {
+    const strip = qs("#retrieval-suggestion-strip");
+    if (!strip) return;
+    clear(strip);
+    appendText(strip, "span", "Try searches from observed tags/entities", "retrieval-suggestion-label");
+    const chips = retrievalSuggestionChips();
+    if (!chips.length) {
+      appendText(strip, "span", "No observed tag/entity suggestions exposed yet.", "retrieval-context-empty");
+      return;
+    }
+    chips.forEach((chip) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "retrieval-suggestion-chip";
+      button.setAttribute("data-retrieval-suggestion", chip.label);
+      button.title = `Observed ${chip.source}; runs a read-only retrieval query.`;
+      button.appendChild(document.createTextNode(chip.label));
+      if (chip.count !== null) appendText(button, "small", String(chip.count));
+      button.addEventListener("click", () => {
+        const input = qs("#retrieval-query-input");
+        if (input) input.value = chip.label;
+        state.retrieval.limit = 10;
+        runRetrievalQuery({ resetLimit: true });
+      });
+      strip.appendChild(button);
+    });
+  }
+
   function scorePercent(result) {
     const confidence = result && result.confidence && typeof result.confidence === "object" ? retrievalNumber(result.confidence.overall) : null;
     const score = confidence !== null ? confidence : retrievalNumber(result ? result.score : null);
@@ -3378,6 +3537,7 @@
       ["Episode", retrievalVideoLabel(result)],
       ["Search id", result && result.timeline_video_id && result.video_id !== result.timeline_video_id ? compactIdentifier(result.video_id, { key: "search_id", max: 22, leading: 12, trailing: 6 }) : null],
       ["Time", resultTimeLabel(result)],
+      ["Matched modalities", retrievalResultModalities(result).join(", ") || "Not observed"],
       ["Transcript", valueObserved(result && result.transcript) || valueObserved(context.transcript) ? "Observed" : "Not observed"],
       ["Objects", objects.length ? `${objects.slice(0, 4).join(", ")}${objects.length > 4 ? "..." : ""}` : "Not observed"],
       ["KG entities", entities.length ? `${entities.slice(0, 4).join(", ")}${entities.length > 4 ? "..." : ""}` : "Not observed"],
@@ -3468,6 +3628,12 @@
           note: "returned by search response",
           kind: observedSignals ? "info" : "unknown",
         },
+        {
+          label: "Searched surfaces",
+          value: retrievalSearchedModalityLabel(),
+          note: "from API modalities_searched",
+          kind: "info",
+        },
       ],
       "retrieval-rollup-strip"
     );
@@ -3500,8 +3666,16 @@
 
   function retrievalSignalRows(result) {
     const modality = safeString(result && result.modality ? result.modality : "unknown", "modality").toLowerCase();
+    const resultModalities = retrievalResultModalities(result);
+    const modalityMatched = (name) => resultModalities.includes(name) || modality.includes(name);
+    const textMatched = modalityMatched("text");
+    const visualMatched = modalityMatched("visual");
+    const audioMatched = modalityMatched("audio");
     const context = retrievalContext(result);
     const percent = scorePercent(result);
+    const textSearched = retrievalModalitySearched("text");
+    const visualSearched = retrievalModalitySearched("visual");
+    const audioSearched = retrievalModalitySearched("audio");
     const objects = retrievalObjectLabels(result);
     const entities = retrievalEntityLabels(result);
     const entityBuckets = entityEvidenceBuckets(result, context);
@@ -3518,18 +3692,18 @@
       )
     ) || audioProof.status === "current_run_audio_vector_proven";
     const textObserved =
-      modality.includes("text") ||
+      textMatched ||
       valueObserved(result && result.transcript) ||
       arrayCount(result && result.keywords) > 0 ||
       objectHasAny(context, ["transcript", "full_transcript", "summary"]);
     const visualObserved =
-      modality.includes("visual") ||
+      visualMatched ||
       valueObserved(result && result.representative_frame) ||
       arrayCount(result && result.objects) > 0 ||
       objectHasAny(context, ["representative_frame", "clip_id", "dino_id", "objects"]);
     const audioObserved =
       currentRunAudioProof ||
-      modality.includes("audio") ||
+      audioMatched ||
       provenanceMentions(result, "audio") ||
       objectHasAny(context, ["audio_emotion", "audio_chunks", "clap_meta"]);
     const kgObserved =
@@ -3555,33 +3729,47 @@
 
     return [
       {
-        label: "Text Match",
+        label: "Text Evidence",
         observed: textObserved,
-        strength: modality.includes("text") ? percent : null,
-        note: textObserved ? "Transcript or text payload returned by search response" : "No transcript or text proof returned",
-        missing: "Text proof not returned for this result",
+        usedForMatch: textMatched,
+        strength: textMatched ? percent : null,
+        note: textObserved
+          ? (textMatched
+            ? "Text match contributed to returned rank"
+            : (textSearched ? "Text surface searched; transcript evidence returned" : "Transcript evidence returned; text query not requested"))
+          : "No transcript or text proof returned",
+        missing: textSearched ? "Text proof not returned for this result" : "Text query path not used",
       },
       {
-        label: "Visual Similarity",
+        label: "Visual Evidence",
         observed: visualObserved,
-        strength: modality.includes("visual") ? percent : null,
-        note: visualObserved ? (objects.length ? `Objects observed: ${objects.slice(0, 3).join(", ")}` : "Visual payload or visual modality observed") : "No visual payload returned",
-        missing: "Visual similarity not proven by this response",
+        usedForMatch: visualMatched,
+        strength: visualMatched ? percent : null,
+        note: visualObserved
+          ? (visualMatched
+            ? (objects.length ? `Visual match with objects: ${objects.slice(0, 3).join(", ")}` : "Visual similarity contributed to returned rank")
+            : (visualSearched ? "Visual surface searched; selected row is not a visual match" : "Visual proof present; visual query not requested"))
+          : "No visual payload returned",
+        missing: visualSearched ? "Visual proof not returned for this result" : "Visual query path not used",
       },
       {
-        label: "Audio Overlap",
+        label: "Audio Proof",
         observed: audioObserved,
-        strength: modality.includes("audio") ? percent : null,
+        usedForMatch: audioMatched,
+        strength: audioMatched ? percent : null,
         note: currentRunAudioProof
-          ? "Current-run Qdrant audio proof returned"
+          ? (audioMatched
+            ? "Audio similarity contributed to returned rank"
+            : (audioSearched ? "Audio surface searched; current-run audio proof present" : "Current-run Qdrant audio proof present; audio query not requested"))
           : audioObserved
-            ? (context.audio_emotion ? `Audio emotion: ${safeString(context.audio_emotion, "audio_emotion")}` : "Audio modality or audio provenance observed")
-            : "No current-run audio proof returned",
-        missing: "Current-run audio proof not returned",
+            ? (context.audio_emotion ? `Audio evidence present: ${safeString(context.audio_emotion, "audio_emotion")}` : "Audio provenance observed")
+            : (audioSearched ? "No current-run audio proof returned" : "Audio query not requested"),
+        missing: audioSearched ? "Current-run audio proof not returned" : "Audio query path not used",
       },
       {
         label: "KG / Entity Evidence",
         observed: kgObserved,
+        usedForMatch: false,
         strength: null,
         note: kgObserved
           ? (relationshipCount > 0
@@ -3595,6 +3783,7 @@
       {
         label: "Speaker Continuity",
         observed: speakerObserved,
+        usedForMatch: false,
         strength: null,
         note: speakerObserved ? (context.continuity_key ? `Continuity: ${safeString(context.continuity_key, "continuity_key")}` : "Speaker continuity evidence returned") : "No speaker continuity returned",
         missing: "Speaker continuity not exposed",
@@ -3637,6 +3826,18 @@
     container.appendChild(item);
   }
 
+  function appendRetrievalSignalGroup(container, title, rows, emptyMessage) {
+    const group = document.createElement("section");
+    group.className = "retrieval-signal-group";
+    appendText(group, "h4", title);
+    if (!rows.length) {
+      appendText(group, "p", emptyMessage, "retrieval-context-empty");
+    } else {
+      rows.forEach((row) => appendRetrievalSignal(group, row));
+    }
+    container.appendChild(group);
+  }
+
   function appendRetrievalLineageStrip(container, result, selectedIndex) {
     const existing = qs("#retrieval-lineage-strip");
     if (existing) existing.remove();
@@ -3664,6 +3865,106 @@
     container.appendChild(strip);
   }
 
+  function resetRetrievalSimilar() {
+    state.retrieval.similarLoading = false;
+    state.retrieval.similarError = null;
+    state.retrieval.similarResults = [];
+    state.retrieval.similarSourceKey = null;
+  }
+
+  function similarSceneAsRetrievalResult(scene, sourceResult) {
+    const videoId = valueObserved(scene && scene.video_id)
+      ? String(scene.video_id)
+      : retrievalTimelineVideoId(sourceResult);
+    return {
+      score: scene && scene.similarity_score !== undefined ? scene.similarity_score : null,
+      modality: "similar",
+      modalities: [],
+      modality_scores: {},
+      video_id: videoId,
+      timeline_video_id: videoId,
+      display_title: sourceResult && sourceResult.display_title,
+      scene_id: scene && scene.scene_id,
+      start: scene && scene.start,
+      end: scene && scene.end,
+      duration: scene && scene.duration,
+      representative_frame: scene && scene.representative_frame,
+      representative_frame_available: Boolean(scene && scene.representative_frame_available),
+      representative_frame_endpoint: scene && scene.representative_frame_endpoint,
+      representative_frame_path_redacted: Boolean(scene && scene.representative_frame_path_redacted),
+      transcript: scene && scene.transcript,
+      keywords: Array.isArray(scene && scene.keywords) ? scene.keywords : [],
+      tags: Array.isArray(scene && scene.tags) ? scene.tags : [],
+      objects: Array.isArray(scene && scene.objects) ? scene.objects : [],
+      audio_emotion: scene && scene.audio_emotion,
+      sentiment: scene && scene.sentiment,
+      sentiment_label: scene && scene.sentiment_label,
+      sentiment_score: scene && scene.sentiment_score,
+      scene_context_llm: scene && scene.scene_context_llm,
+      scene_context_epistemic: scene && scene.scene_context_epistemic,
+      scene_context_arbitration: scene && scene.scene_context_arbitration,
+      scene_present_entities: Array.isArray(scene && scene.scene_present_entities) ? scene.scene_present_entities : [],
+      entities: Array.isArray(scene && scene.entities) ? scene.entities : [],
+      dialogue_mentioned_entities: Array.isArray(scene && scene.dialogue_mentioned_entities) ? scene.dialogue_mentioned_entities : [],
+      mentioned_people: Array.isArray(scene && scene.mentioned_people) ? scene.mentioned_people : [],
+      visible_people: Array.isArray(scene && scene.visible_people) ? scene.visible_people : [],
+      candidate_visible_people: Array.isArray(scene && scene.candidate_visible_people) ? scene.candidate_visible_people : [],
+      speaker_aligned_mentions: Array.isArray(scene && scene.speaker_aligned_mentions) ? scene.speaker_aligned_mentions : [],
+      context: scene || {},
+      provenance: { source: "similar_scene_route", source_scene_id: sourceResult && sourceResult.scene_id },
+    };
+  }
+
+  function renderRetrievalSimilarPanel(sourceResult, sourceIndex) {
+    const panel = qs("#retrieval-similar-panel");
+    if (!panel) return;
+    clear(panel);
+    const sourceKey = sourceResult ? retrievalResultKey(sourceResult, sourceIndex || 0) : null;
+    const ownsCurrentSelection = sourceKey && state.retrieval.similarSourceKey === sourceKey;
+    if (!ownsCurrentSelection && !state.retrieval.similarLoading) {
+      panel.hidden = true;
+      return;
+    }
+
+    panel.hidden = false;
+    appendText(panel, "h4", "Similar Scenes");
+    if (state.retrieval.similarLoading) {
+      appendText(panel, "p", "Searching persisted multimodal scene memory...", "retrieval-similar-empty");
+      return;
+    }
+    if (state.retrieval.similarError) {
+      appendText(panel, "p", `Similar-scene search unavailable: ${safeString(state.retrieval.similarError, "status")}`, "retrieval-similar-empty");
+      return;
+    }
+    const rows = Array.isArray(state.retrieval.similarResults) ? state.retrieval.similarResults : [];
+    if (!rows.length) {
+      appendText(panel, "p", "No similar scenes returned for this selected scene.", "retrieval-similar-empty");
+      return;
+    }
+
+    const list = document.createElement("div");
+    list.className = "retrieval-similar-list";
+    rows.slice(0, 6).forEach((scene, index) => {
+      const projected = similarSceneAsRetrievalResult(scene, sourceResult);
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "retrieval-similar-row";
+      button.setAttribute("data-testid", "retrieval-similar-row");
+      appendText(button, "strong", resultSceneLabel(projected, index), "compact-id");
+      appendText(button, "span", resultTimeLabel(projected), "retrieval-result-meta");
+      appendText(button, "span", resultSummary(projected), "retrieval-result-summary");
+      button.addEventListener("click", async () => {
+        state.retrieval.results = [projected, ...state.retrieval.results];
+        state.retrieval.selectedKey = retrievalResultKey(projected, 0);
+        state.retrieval.similarResults = [];
+        state.retrieval.similarSourceKey = null;
+        await selectRetrievalResultSurface("scene-inspector");
+      });
+      list.appendChild(button);
+    });
+    panel.appendChild(list);
+  }
+
   function renderRetrievalConsole() {
     const input = qs("#retrieval-query-input");
     const count = qs("#retrieval-results-count");
@@ -3674,14 +3975,32 @@
     const loadMore = qs("#retrieval-load-more");
     const openScene = qs("#retrieval-open-scene");
     const viewTimeline = qs("#retrieval-view-timeline");
+    const findSimilar = qs("#retrieval-find-similar");
     const previewPanel = qs('[data-testid="retrieval-preview"]');
-    if (!input || !count || !list || !explanation || !selectedScore || !previewCopy || !loadMore || !openScene || !viewTimeline) {
+    if (!input || !count || !list || !explanation || !selectedScore || !previewCopy || !loadMore || !openScene || !viewTimeline || !findSimilar) {
       return;
     }
     const staleLineage = qs("#retrieval-lineage-strip");
     if (staleLineage) staleLineage.remove();
     const staleVisualProof = qs("#retrieval-visual-proof");
     if (staleVisualProof) staleVisualProof.remove();
+    renderRetrievalModalitySelector();
+    renderRetrievalSuggestionChips();
+    const mode = qs('[data-testid="retrieval-mode"]');
+    if (mode) {
+      clear(mode);
+      const modeLine = document.createElement("span");
+      modeLine.appendChild(document.createTextNode("Query mode: "));
+      appendText(modeLine, "strong", "Natural");
+      modeLine.appendChild(document.createTextNode(" "));
+      mode.appendChild(modeLine);
+      appendText(
+        mode,
+        "span",
+        state.retrieval.hasRun ? `Searched: ${retrievalSearchedModalityLabel()}` : `Selected: ${retrievalSelectedModalityLabel()}`,
+        "retrieval-mode-detail"
+      );
+    }
 
     if (document.activeElement !== input) input.value = state.retrieval.query || "";
     clear(list);
@@ -3691,7 +4010,18 @@
     const results = state.retrieval.results || [];
     const total = state.retrieval.response?.total_results ?? results.length;
     count.textContent = state.retrieval.hasRun ? `(${safeString(total, "total_results")})` : "(idle)";
-    loadMore.disabled = state.retrieval.loading || !state.retrieval.query || results.length >= total;
+    const canLoadMore = Boolean(
+      state.retrieval.hasRun &&
+      !state.retrieval.loading &&
+      state.retrieval.query &&
+      results.length > 0 &&
+      results.length >= state.retrieval.limit
+    );
+    loadMore.disabled = !canLoadMore;
+    loadMore.textContent = canLoadMore ? "Load More" : (results.length ? "All Returned" : "Load More");
+    loadMore.title = canLoadMore
+      ? "Request a larger read-only result window."
+      : "The current read-only response returned fewer rows than the requested window.";
 
     if (!state.retrieval.hasRun) {
       appendRetrievalEmpty(list, "Enter a natural-language query to search local memory.");
@@ -3699,6 +4029,8 @@
       selectedScore.textContent = "Not observed";
       previewCopy.textContent = "Run a query to inspect one memory result.";
       openScene.disabled = true;
+      findSimilar.disabled = true;
+      renderRetrievalSimilarPanel(null, 0);
       viewTimeline.setAttribute("aria-disabled", "true");
       return;
     }
@@ -3709,6 +4041,8 @@
       selectedScore.textContent = "Searching";
       previewCopy.textContent = "Searching local memory read surfaces...";
       openScene.disabled = true;
+      findSimilar.disabled = true;
+      renderRetrievalSimilarPanel(null, 0);
       viewTimeline.setAttribute("aria-disabled", "true");
       return;
     }
@@ -3719,16 +4053,20 @@
       selectedScore.textContent = "Offline";
       previewCopy.textContent = "Search endpoint unavailable. No memory state was changed.";
       openScene.disabled = true;
+      findSimilar.disabled = true;
+      renderRetrievalSimilarPanel(null, 0);
       viewTimeline.setAttribute("aria-disabled", "true");
       return;
     }
 
     if (!results.length) {
-      appendRetrievalEmpty(list, "No memory results returned for this query.");
-      appendRetrievalEmpty(explanation, "No selected result. Try a different local-memory query.");
+      appendRetrievalEmpty(list, `No ${retrievalSelectedModalityLabel().toLowerCase()} memory results returned for this query.`);
+      appendRetrievalEmpty(explanation, "No selected result. Try a different local-memory query or surface.");
       selectedScore.textContent = "0 results";
       previewCopy.textContent = "No selected result.";
       openScene.disabled = true;
+      findSimilar.disabled = true;
+      renderRetrievalSimilarPanel(null, 0);
       viewTimeline.setAttribute("aria-disabled", "true");
       return;
     }
@@ -3744,6 +4082,7 @@
       row.setAttribute("data-testid", selected ? "selected-retrieval-result" : "retrieval-result");
       row.addEventListener("click", () => {
         state.retrieval.selectedKey = key;
+        resetRetrievalSimilar();
         setRetrievalSceneLineage(result, index, "retrieval selected");
         renderRetrievalConsole();
         openMediaPreview("retrieval");
@@ -3753,8 +4092,15 @@
       if (result && result.scene_id !== null && result.scene_id !== undefined) {
         sceneLabel.title = safeString(result.scene_id, "scene_id");
       }
-      appendText(label, "span", `${resultTimeLabel(result)} | ${safeString(result.modality || "unknown", "modality")}`, "retrieval-result-meta");
+      const matchedModalities = retrievalResultModalities(result);
+      appendText(
+        label,
+        "span",
+        `${resultTimeLabel(result)} | ${matchedModalities.length ? matchedModalities.join(" + ") : safeString(result.modality || "unknown", "modality")}`,
+        "retrieval-result-meta"
+      );
       appendText(label, "span", resultSummary(result), "retrieval-result-summary");
+      appendRetrievalContributionStrip(label, result);
       row.appendChild(label);
       const percent = scorePercent(result);
       const status = document.createElement("div");
@@ -3770,12 +4116,29 @@
     const percent = scorePercent(result);
     selectedScore.textContent = confidenceLabel(percent);
 
-    const signalList = document.createElement("div");
-    signalList.className = "retrieval-signal-list";
     const signals = retrievalSignalRows(result);
     appendRetrievalEvidence(explanation, result, selected.index, signals, percent);
-    signals.forEach((row) => appendRetrievalSignal(signalList, row));
-    explanation.appendChild(signalList);
+    const signalSections = document.createElement("div");
+    signalSections.className = "retrieval-signal-sections";
+    appendRetrievalSignalGroup(
+      signalSections,
+      "Used for match",
+      signals.filter((row) => row.usedForMatch),
+      "No returned signal claimed direct ranking contribution."
+    );
+    appendRetrievalSignalGroup(
+      signalSections,
+      "Evidence present",
+      signals.filter((row) => row.observed && !row.usedForMatch),
+      "No additional evidence surfaced for this result."
+    );
+    appendRetrievalSignalGroup(
+      signalSections,
+      "Not used",
+      signals.filter((row) => !row.observed),
+      "No unavailable signal rows surfaced by this response."
+    );
+    explanation.appendChild(signalSections);
 
     const missing = signals.filter((row) => !row.observed).map((row) => row.missing);
     const context = retrievalContext(result);
@@ -3802,13 +4165,18 @@
     previewCopy.textContent = `${resultSceneLabel(result, selected.index)} | ${resultTimeLabel(result)} | ${observedSignals} signals observed | ${confidenceLabel(percent)}${handoffNote}. ${resultSummary(result)}`;
     if (previewPanel) appendRetrievalVisualProof(previewPanel, result);
     if (previewPanel) appendRetrievalLineageStrip(previewPanel, result, selected.index);
+    renderRetrievalSimilarPanel(result, selected.index);
     openScene.disabled = !canOpenRetrievalResult(result);
+    findSimilar.disabled = !canOpenRetrievalResult(result) || state.retrieval.similarLoading;
+    findSimilar.textContent = state.retrieval.similarLoading ? "Finding Similar..." : "Find Similar Scenes";
     if (openScene.disabled) {
       viewTimeline.setAttribute("aria-disabled", "true");
       openScene.title = "Search result video id is not present in the timeline inventory.";
+      findSimilar.title = "Search result video id is not present in the timeline inventory.";
     } else {
       viewTimeline.removeAttribute("aria-disabled");
       openScene.title = "";
+      findSimilar.title = "Find similar scenes from the selected persisted scene memory.";
     }
   }
 
@@ -3836,6 +4204,7 @@
       const response = await postJson("retrieval", "/api/search/multimodal", {
         query,
         top_k: state.retrieval.limit,
+        modalities: retrievalModalitiesForRequest(),
       });
       state.retrieval.response = response;
       state.retrieval.results = normalizeSearchResults(response);
@@ -3872,6 +4241,29 @@
     renderSceneInspector();
     openMediaPreview("timeline");
     window.location.hash = targetHash || "scene-inspector";
+  }
+
+  async function findSimilarScenesForSelected() {
+    const entry = selectedRetrievalEntry();
+    const result = entry ? entry.result : null;
+    if (!canOpenRetrievalResult(result)) return;
+    const videoId = retrievalTimelineVideoId(result);
+    const sceneId = result.scene_id;
+    state.retrieval.similarLoading = true;
+    state.retrieval.similarError = null;
+    state.retrieval.similarResults = [];
+    state.retrieval.similarSourceKey = retrievalResultKey(result, entry.index);
+    renderRetrievalConsole();
+    try {
+      const path = `/api/videos/${encodeURIComponent(videoId)}/scenes/${encodeURIComponent(String(sceneId))}/similar?top_k=6`;
+      const response = await fetchJson("retrievalSimilarScenes", path);
+      state.retrieval.similarResults = Array.isArray(response) ? response : [];
+    } catch (error) {
+      state.retrieval.similarError = error instanceof Error ? error.message : String(error);
+    } finally {
+      state.retrieval.similarLoading = false;
+      renderRetrievalConsole();
+    }
   }
 
   function safeVideoTitle(video) {
@@ -5390,8 +5782,22 @@
       state.retrieval.limit += 10;
       runRetrievalQuery({ useExistingQuery: true });
     });
+    document.querySelectorAll("[data-retrieval-modality]").forEach((button) => {
+      button.addEventListener("click", () => {
+        state.retrieval.modalityMode = normalizeRetrievalModalityMode(button.getAttribute("data-retrieval-modality"));
+        state.retrieval.limit = 10;
+        if (state.retrieval.hasRun && state.retrieval.query) {
+          runRetrievalQuery({ useExistingQuery: true });
+        } else {
+          renderRetrievalConsole();
+        }
+      });
+    });
     qs("#retrieval-open-scene").addEventListener("click", () => {
       selectRetrievalResultSurface("scene-inspector");
+    });
+    qs("#retrieval-find-similar").addEventListener("click", () => {
+      findSimilarScenesForSelected();
     });
     qs("#retrieval-view-timeline").addEventListener("click", (event) => {
       if (!selectedRetrievalEntry()) return;

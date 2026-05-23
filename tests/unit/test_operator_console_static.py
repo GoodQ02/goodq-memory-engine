@@ -404,6 +404,111 @@ def test_retrieval_console_surfaces_scene_context_lens() -> None:
     assert ".retrieval-tag-strip" in app_css
 
 
+def test_retrieval_console_explains_search_scope_vs_evidence_presence() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    app_js = (repo_root / "ui" / "operator_console_v1" / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    app_css = (repo_root / "ui" / "operator_console_v1" / "static" / "css" / "app.css").read_text(encoding="utf-8")
+
+    assert "retrievalModalitiesSearched" in app_js
+    assert "Searched surfaces" in app_js
+    assert "from API modalities_searched" in app_js
+    assert "Text Evidence" in app_js
+    assert "Visual Evidence" in app_js
+    assert "Audio Proof" in app_js
+    assert "Current-run Qdrant audio proof present; audio query not requested" in app_js
+    assert "Searched: ${retrievalSearchedModalityLabel()}" in app_js
+    assert ".retrieval-mode-detail" in app_css
+
+
+def test_retrieval_console_has_modality_selector_and_sends_explicit_modalities() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    index_html = (repo_root / "ui" / "operator_console_v1" / "index.html").read_text(encoding="utf-8")
+    app_js = (repo_root / "ui" / "operator_console_v1" / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    app_css = (repo_root / "ui" / "operator_console_v1" / "static" / "css" / "app.css").read_text(encoding="utf-8")
+
+    assert 'data-testid="retrieval-modality-selector"' in index_html
+    assert 'data-retrieval-modality="text"' in index_html
+    assert 'data-retrieval-modality="visual"' in index_html
+    assert 'data-retrieval-modality="audio"' in index_html
+    assert 'data-retrieval-modality="all"' in index_html
+    assert 'modalityMode: "all"' in app_js
+    assert "RETRIEVAL_MODALITY_OPTIONS" in app_js
+    assert "retrievalModalitiesForRequest" in app_js
+    assert "modalities: retrievalModalitiesForRequest()" in app_js
+    assert "retrievalSelectedModalityLabel" in app_js
+    assert ".retrieval-modality-selector" in app_css
+    assert ".retrieval-modality-button" in app_css
+
+
+def test_retrieval_console_surfaces_observed_search_chips() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    index_html = (repo_root / "ui" / "operator_console_v1" / "index.html").read_text(encoding="utf-8")
+    app_js = (repo_root / "ui" / "operator_console_v1" / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    app_css = (repo_root / "ui" / "operator_console_v1" / "static" / "css" / "app.css").read_text(encoding="utf-8")
+
+    assert 'data-testid="retrieval-suggestion-strip"' in index_html
+    assert "Try searches from observed tags/entities" in app_js
+    assert "retrievalSuggestionChips" in app_js
+    assert "top_scene_context_tags" in app_js
+    assert "top_entities" in app_js
+    assert "data-retrieval-suggestion" in app_js
+    assert ".retrieval-suggestion-strip" in app_css
+    assert ".retrieval-suggestion-chip" in app_css
+
+
+def test_retrieval_console_splits_match_explanation_by_use() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    app_js = (repo_root / "ui" / "operator_console_v1" / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    app_css = (repo_root / "ui" / "operator_console_v1" / "static" / "css" / "app.css").read_text(encoding="utf-8")
+
+    assert "appendRetrievalSignalGroup" in app_js
+    assert "Used for match" in app_js
+    assert "Evidence present" in app_js
+    assert "Not used" in app_js
+    assert "usedForMatch" in app_js
+    assert ".retrieval-signal-sections" in app_css
+    assert ".retrieval-signal-group" in app_css
+
+
+def test_retrieval_console_groups_result_rows_by_scene_contributions() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    app_js = (repo_root / "ui" / "operator_console_v1" / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    app_css = (repo_root / "ui" / "operator_console_v1" / "static" / "css" / "app.css").read_text(encoding="utf-8")
+
+    assert "retrievalResultModalities" in app_js
+    assert "retrievalModalityScores" in app_js
+    assert "appendRetrievalContributionStrip" in app_js
+    assert "Matched modalities" in app_js
+    assert "data-retrieval-contribution" in app_js
+    assert ".retrieval-contribution-strip" in app_css
+    assert ".retrieval-contribution-chip" in app_css
+
+
+def test_retrieval_console_surfaces_find_similar_scene_action() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    index_html = (repo_root / "ui" / "operator_console_v1" / "index.html").read_text(encoding="utf-8")
+    app_js = (repo_root / "ui" / "operator_console_v1" / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    app_css = (repo_root / "ui" / "operator_console_v1" / "static" / "css" / "app.css").read_text(encoding="utf-8")
+
+    assert 'data-testid="retrieval-find-similar"' in index_html
+    assert 'data-testid="retrieval-similar-panel"' in index_html
+    assert "findSimilarScenesForSelected" in app_js
+    assert "/similar?top_k=6" in app_js
+    assert "similarSceneAsRetrievalResult" in app_js
+    assert "Similar Scenes" in app_js
+    assert ".retrieval-similar-panel" in app_css
+    assert ".retrieval-similar-row" in app_css
+
+
+def test_retrieval_load_more_uses_requested_window_not_reported_total() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    app_js = (repo_root / "ui" / "operator_console_v1" / "static" / "js" / "app.js").read_text(encoding="utf-8")
+
+    assert "results.length >= state.retrieval.limit" in app_js
+    assert "Request a larger read-only result window." in app_js
+    assert "All Returned" in app_js
+
+
 def test_scene_inspector_surfaces_compact_evidence_summary() -> None:
     repo_root = Path(__file__).resolve().parents[2]
     index_html = (repo_root / "ui" / "operator_console_v1" / "index.html").read_text(encoding="utf-8")

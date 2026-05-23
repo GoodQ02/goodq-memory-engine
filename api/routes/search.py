@@ -489,6 +489,28 @@ def _safe_number(value: Any) -> Optional[float]:
         return None
 
 
+def _safe_modality_scores(result: dict) -> Dict[str, float]:
+    raw = result.get("modality_scores")
+    if not isinstance(raw, dict):
+        return {}
+    scores: Dict[str, float] = {}
+    for key, value in raw.items():
+        number = _safe_number(value)
+        if key is not None and number is not None:
+            scores[str(key)] = number
+    return scores
+
+
+def _safe_modalities(result: dict) -> List[str]:
+    raw = result.get("modalities")
+    if isinstance(raw, list):
+        values = [str(item) for item in raw if item is not None and str(item).strip()]
+        if values:
+            return values
+    modality = result.get("modality")
+    return [str(modality)] if modality is not None and str(modality).strip() else []
+
+
 def _enriched_confidence(result: dict, enrichment: Dict[str, Any]) -> Dict[str, Any]:
     confidence = result.get("confidence") if isinstance(result.get("confidence"), dict) else default_confidence_payload()
     confidence = dict(confidence)
@@ -543,6 +565,8 @@ def _build_search_result(result: dict, modality: Optional[str] = None) -> Search
     return SearchResult(
         score=result.get("score", 0.0),
         modality=modality or result.get("modality", "unknown"),
+        modalities=_safe_modalities(result),
+        modality_scores=_safe_modality_scores(result),
         video_id=video_id,
         timeline_video_id=enrichment.get("timeline_video_id"),
         display_title=enrichment.get("display_title"),

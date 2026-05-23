@@ -1157,7 +1157,7 @@ class MultimodalSearchEngine:
         # Fuse and rank results
         return self._fuse_scene_results(query, all_results, top_k=top_k)
     
-    def retrieve_scene_context(self, video_id: str, scene_id: int) -> Optional[Dict[str, Any]]:
+    def retrieve_scene_context(self, video_id: str, scene_id: int | str) -> Optional[Dict[str, Any]]:
         """
         Retrieve full multimodal context for a specific scene.
         
@@ -1183,10 +1183,119 @@ class MultimodalSearchEngine:
         
         # Find matching scene
         for segment in temporal_index.get('segments', []):
-            if segment.get('scene_id') == scene_id:
+            if str(segment.get('scene_id')) == str(scene_id):
                 return segment
         
         return None
+
+    def _scene_object_labels(self, scene_context: Dict[str, Any]) -> List[str]:
+        labels = scene_context.get("objects")
+        if isinstance(labels, list) and labels:
+            return [str(label) for label in labels if label]
+
+        detected_objects = scene_context.get("detected_objects")
+        if isinstance(detected_objects, list):
+            extracted: List[str] = []
+            for obj in detected_objects:
+                if not isinstance(obj, dict):
+                    continue
+                label = obj.get("label")
+                if label:
+                    extracted.append(str(label))
+            return extracted
+
+        return []
+
+    def build_scene_similarity_query(self, scene_context: Dict[str, Any]) -> str:
+        """Build a compact semantic query from persisted scene memory."""
+        phrases: List[str] = []
+        seen: set[str] = set()
+
+        def _add_phrase(value: Any) -> None:
+            if not isinstance(value, str):
+                return
+            phrase = value.strip()
+            if not phrase:
+                return
+            lowered = phrase.lower()
+            if lowered in seen:
+                return
+            seen.add(lowered)
+            phrases.append(phrase)
+
+        def _add_many(values: Any, limit: int) -> None:
+            if not isinstance(values, list):
+                return
+            count = 0
+            for item in values:
+                if not isinstance(item, str):
+                    continue
+                _add_phrase(item)
+                count += 1
+                if count >= limit:
+                    break
+
+        _add_many(scene_context.get("primary_tags"), limit=3)
+        _add_many(scene_context.get("dialogue_topics"), limit=3)
+        _add_many(scene_context.get("keywords"), limit=4)
+        _add_phrase(scene_context.get("narrative_summary"))
+        _add_phrase(scene_context.get("activity_description"))
+        _add_phrase(scene_context.get("audio_emotion"))
+        _add_many(self._scene_object_labels(scene_context), limit=3)
+
+        if not phrases:
+            transcript = scene_context.get("full_transcript")
+            if isinstance(transcript, str) and transcript.strip():
+                _add_phrase(" ".join(transcript.split()[:20]))
+
+        return ". ".join(phrases[:8])
+
+    def search_similar_scene(self, video_id: str, scene_id: int | str, top_k: int = 5) -> List[Dict[str, Any]]:
+        """Search for semantically similar scenes using persisted scene memory as the query source."""
+        source_context = self.retrieve_scene_context(video_id, scene_id)
+        if not isinstance(source_context, dict):
+            return []
+
+        query = self.build_scene_similarity_query(source_context)
+        if not query:
+            return []
+
+        candidate_limit = max((top_k * 3), top_k + 4)
+        raw_results = self.search_multimodal(query, top_k=candidate_limit, modalities=["text", "visual", "audio"])
+
+        filtered_results: List[Dict[str, Any]] = []
+        seen_scene_keys: set[Tuple[str, str]] = set()
+        source_scene_key = (str(video_id), str(scene_id))
+        source_scene_id = str(scene_id)
+        source_scene_id_is_global = not source_scene_id.isdigit()
+
+        for result in raw_results:
+            payload = result.get("payload") if isinstance(result.get("payload"), dict) else {}
+            result_video_id = payload.get("video_id")
+            result_scene_id = payload.get("scene_id")
+            if result_video_id is None or result_scene_id is None:
+                continue
+
+            scene_key = (str(result_video_id), str(result_scene_id))
+            if (
+                scene_key == source_scene_key
+                or (source_scene_id_is_global and str(result_scene_id) == source_scene_id)
+                or scene_key in seen_scene_keys
+            ):
+                continue
+
+            scene_context = self.retrieve_scene_context(str(result_video_id), result_scene_id)
+            enriched_result = dict(result)
+            if isinstance(scene_context, dict):
+                enriched_result["scene_context"] = scene_context
+
+            filtered_results.append(enriched_result)
+            seen_scene_keys.add(scene_key)
+
+            if len(filtered_results) >= top_k:
+                break
+
+        return filtered_results
 
 
 def multimodal_search(query: str, config: Dict[str, Any], top_k: int = 10) -> List[Dict[str, Any]]:

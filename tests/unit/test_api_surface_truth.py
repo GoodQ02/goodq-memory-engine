@@ -38,9 +38,9 @@ class _FakeLoader:
 class _FakeSearchEngine:
     def __init__(self, similar_results: list[dict]):
         self.similar_results = similar_results
-        self.calls: list[tuple[str, int, int]] = []
+        self.calls: list[tuple[str, int | str, int]] = []
 
-    def search_similar_scene(self, video_id: str, scene_id: int, top_k: int):
+    def search_similar_scene(self, video_id: str, scene_id: int | str, top_k: int):
         self.calls.append((video_id, scene_id, top_k))
         return self.similar_results[:top_k]
 
@@ -581,6 +581,7 @@ def test_similar_scene_route_returns_real_neighbors(monkeypatch: pytest.MonkeyPa
     assert engine.calls == [("video_001", 101, 5)]
     assert len(result) == 1
     scene = result[0]
+    assert scene.video_id == "video_002"
     assert scene.scene_id == 202
     assert scene.transcript == "A similar business discussion scene."
     assert scene.objects == ["person", "desk"]
@@ -606,6 +607,59 @@ def test_similar_scene_route_returns_real_neighbors(monkeypatch: pytest.MonkeyPa
         "source": "interaction_chain",
         "continuity_key": "SPEAKER_01",
     }
+
+
+def test_similar_scene_route_accepts_string_scene_ids(monkeypatch: pytest.MonkeyPatch) -> None:
+    temporal_index = _sample_temporal_index()
+    temporal_index["segments"][0]["scene_id"] = "scene_hash_source"
+    neighbor_segment = dict(temporal_index["segments"][0])
+    neighbor_segment.update(
+        {
+            "scene_id": "scene_hash_neighbor",
+            "full_transcript": "A hydrated similar family memory scene.",
+            "sentiment": "positive",
+            "sentiment_label": None,
+            "entities": ["Family"],
+        }
+    )
+    temporal_index["segments"].append(neighbor_segment)
+    loader = _FakeLoader(temporal_index)
+    monkeypatch.setattr(scenes_module, "get_data_loader", lambda: loader)
+    similar_context = {
+        "scene_id": "scene_hash_neighbor",
+        "start": 7.5,
+        "end": 11.0,
+        "duration": 3.5,
+        "full_transcript": "A raw payload scene that should be timeline-hydrated.",
+        "keywords": ["family", "living room"],
+        "detected_objects": [{"label": "couch"}],
+        "sentiment": "positive",
+        "entities": ["Family"],
+    }
+    engine = _FakeSearchEngine(
+        [
+            {
+                "id": "video_001:scene_hash_neighbor",
+                "score": 0.82,
+                "payload": {"video_id": "video_001", "scene_id": "scene_hash_neighbor"},
+                "scene_context": similar_context,
+            }
+        ]
+    )
+    monkeypatch.setattr(scenes_module, "get_search_engine", lambda: engine, raising=False)
+
+    result = asyncio.run(
+        scenes_module.find_similar_scenes(video_id="video_001", scene_id="scene_hash_source", top_k=5)
+    )
+
+    assert engine.calls == [("video_001", "scene_hash_source", 5)]
+    assert len(result) == 1
+    assert result[0].video_id == "video_001"
+    assert result[0].scene_id == "scene_hash_neighbor"
+    assert result[0].transcript == "A hydrated similar family memory scene."
+    assert result[0].sentiment is None
+    assert result[0].sentiment_label == "positive"
+    assert result[0].entities == [{"text": "Family"}]
 
 
 def test_scene_and_timeline_routes_surface_normalization_instrumentation(

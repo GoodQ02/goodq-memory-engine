@@ -21,6 +21,7 @@ def default_confidence_payload() -> Dict[str, Any]:
 
 class SceneResponse(BaseModel):
     """Scene metadata response."""
+    video_id: Optional[str] = None
     scene_id: SceneId
     start: float
     end: float
@@ -87,6 +88,8 @@ class SearchResult(BaseModel):
     """Search result with score and metadata."""
     score: float
     modality: str
+    modalities: List[str] = Field(default_factory=list)
+    modality_scores: Dict[str, float] = Field(default_factory=dict)
     video_id: Optional[str] = None
     timeline_video_id: Optional[str] = None
     display_title: Optional[str] = None

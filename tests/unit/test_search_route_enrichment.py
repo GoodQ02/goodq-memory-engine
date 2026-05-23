@@ -35,6 +35,8 @@ class _FakeSearchEngine:
             {
                 "score": 0.51,
                 "modality": "text",
+                "modalities": ["text", "visual"],
+                "modality_scores": {"text": 0.51, "visual": 0.22, "audio": "not-a-number"},
                 "payload": {
                     "video_id": "hashed-video-id",
                     "scene_id": "hashed-scene-id",
@@ -142,6 +144,8 @@ def test_multimodal_search_enriches_hashed_results_from_timeline(monkeypatch) ->
 
     result = response.results[0]
     assert result.video_id == "hashed-video-id"
+    assert result.modalities == ["text", "visual"]
+    assert result.modality_scores == {"text": 0.51, "visual": 0.22}
     assert result.timeline_video_id == "family_memory_probe"
     assert result.display_title == "Family Memory Probe"
     assert result.start == 12.5

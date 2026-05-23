@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>GoodQ4All Operator Console</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='8' fill='%23161a20'/%3E%3Ctext x='32' y='40' text-anchor='middle' font-family='monospace' font-size='22' fill='%23ffb300'%3EGQ%3C/text%3E%3C/svg%3E" />
-    <link rel="stylesheet" href="./static/css/app.css?v=20260521-emotion-ranking-1-witness-spine-1-focus-queue-1-guided-mode-2-readability-1" />
+    <link rel="stylesheet" href="./static/css/app.css?v=20260521-emotion-ranking-1-witness-spine-1-focus-queue-1-guided-mode-2-readability-1-retrieval-scope-1-modality-selector-1-search-chips-1-explain-groups-1" />
   </head>
   <body>
     <div class="app-shell" id="app-shell" data-view-mode="guided" data-testid="app-shell">
@@ -233,6 +233,18 @@
               </button>
               <button class="retrieval-button primary" type="submit" data-testid="retrieval-run-query">Run Query</button>
             </div>
+            <div class="retrieval-modality-selector" data-testid="retrieval-modality-selector" role="group" aria-label="Retrieval modality">
+              <button class="retrieval-modality-button" type="button" data-retrieval-modality="text" aria-pressed="false">Text</button>
+              <button class="retrieval-modality-button" type="button" data-retrieval-modality="visual" aria-pressed="false">Visual</button>
+              <button class="retrieval-modality-button" type="button" data-retrieval-modality="audio" aria-pressed="false">Audio</button>
+              <button class="retrieval-modality-button active" type="button" data-retrieval-modality="all" aria-pressed="true">All</button>
+            </div>
+            <div
+              class="retrieval-suggestion-strip"
+              id="retrieval-suggestion-strip"
+              data-testid="retrieval-suggestion-strip"
+              aria-label="Try searches from observed tags and entities"
+            ></div>
           </form>
 
           <div class="retrieval-grid">
@@ -264,10 +276,12 @@
             <div class="retrieval-preview-actions">
               <button class="retrieval-button primary" type="button" id="retrieval-open-scene" data-testid="retrieval-open-scene">Open in Scene Inspector</button>
               <a class="retrieval-button" href="#videos" id="retrieval-view-timeline" data-testid="retrieval-view-timeline">View Full Timeline</a>
+              <button class="retrieval-button" type="button" id="retrieval-find-similar" data-testid="retrieval-find-similar">Find Similar Scenes</button>
               <button class="retrieval-button" type="button" disabled title="Natural-language match explanations are a future endpoint" data-testid="retrieval-explain-match">
                 Explain Match
               </button>
             </div>
+            <div class="retrieval-similar-panel" id="retrieval-similar-panel" data-testid="retrieval-similar-panel" hidden></div>
           </article>
         </section>
 
@@ -368,6 +382,6 @@
       </div>
     </template>
 
-    <script src="./static/js/app.js?v=20260521-emotion-ranking-1-witness-spine-1-focus-queue-1-guided-mode-2-readability-1"></script>
+    <script src="./static/js/app.js?v=20260521-emotion-ranking-1-witness-spine-1-focus-queue-1-guided-mode-2-readability-1-retrieval-scope-1-modality-selector-1-search-chips-1-explain-groups-1"></script>
   </body>
 </html>

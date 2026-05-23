@@ -1909,16 +1909,25 @@ a {
   box-shadow: 0 24px 80px rgba(0, 0, 0, 0.38);
   opacity: 0;
   pointer-events: none;
-  transform: translateX(calc(100% + 28px));
+  visibility: hidden;
+  transform: translateX(0);
   transition:
     opacity 220ms ease,
-    transform 260ms ease;
+    visibility 0s linear 220ms;
+}
+
+.media-preview-panel:not(.active) {
+  visibility: hidden;
 }
 
 .media-preview-panel.active {
   opacity: 1;
   pointer-events: auto;
+  visibility: visible;
   transform: translateX(0);
+  transition:
+    opacity 220ms ease,
+    visibility 0s;
 }
 
 .preview-empty {
@@ -3288,6 +3297,7 @@ h3 {
     position: static;
     display: flex;
     gap: 6px;
+    contain: inline-size;
     min-height: 0;
     padding: 10px 14px;
     overflow-x: auto;
@@ -3483,6 +3493,11 @@ h3 {
 
   .proof-inspector-grid {
     grid-template-columns: 1fr;
+  }
+
+  .audio-inventory-row {
+    grid-template-columns: 1fr;
+    align-items: start;
   }
 
   .indicator-strip {

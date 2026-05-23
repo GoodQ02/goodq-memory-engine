@@ -177,6 +177,16 @@ def test_operator_console_modes_have_distinct_visual_orientation() -> None:
     assert '.rail a[data-guided-nav="operator"].rail-active' in app_css
 
 
+def test_operator_console_mobile_readability_prevents_off_canvas_overflow() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    app_css = (repo_root / "ui" / "operator_console_v1" / "static" / "css" / "app.css").read_text(encoding="utf-8")
+
+    assert ".media-preview-panel:not(.active)" in app_css
+    assert "visibility: hidden" in app_css
+    assert "contain: inline-size" in app_css
+    assert ".audio-inventory-row {\n    grid-template-columns: 1fr;" in app_css
+
+
 def test_retrieval_console_uses_timeline_handoff_id_for_enriched_results() -> None:
     repo_root = Path(__file__).resolve().parents[2]
     app_js = (repo_root / "ui" / "operator_console_v1" / "static" / "js" / "app.js").read_text(encoding="utf-8")

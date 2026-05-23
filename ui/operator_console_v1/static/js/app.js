@@ -942,6 +942,8 @@
   function renderLoadingShell() {
     [
       "#scope-banner-grid",
+      "#operator-focus-list",
+      "#witness-spine-grid",
       "#flight-system-map",
       "#flight-first-run",
       "#first-run-guide",
@@ -1102,6 +1104,384 @@
       "does not mutate memory, ingestion, or config",
       "operator console boundary"
     );
+  }
+
+  function coverageRatio(count, total) {
+    const observed = numberValue(count);
+    const scope = numberValue(total);
+    if (observed === null || scope === null || scope <= 0) return null;
+    return Math.max(0, Math.min(100, Math.round((observed / scope) * 100)));
+  }
+
+  function countOfTotal(count, total, suffix) {
+    const observed = numberValue(count);
+    const scope = numberValue(total);
+    if (observed === null && scope === null) return "Not observed";
+    if (observed !== null && scope !== null && scope > 0) return `${observed}/${scope} ${suffix || ""}`.trim();
+    if (observed !== null) return `${observed} ${suffix || ""}`.trim();
+    return `0/${scope} ${suffix || ""}`.trim();
+  }
+
+  function witnessMetricKind(count, total, fallbackKind) {
+    const ratio = coverageRatio(count, total);
+    if (ratio === null) return fallbackKind || "unknown";
+    if (ratio >= 95) return "ok";
+    if (ratio >= 50) return "warn";
+    return "unknown";
+  }
+
+  function appendWitnessCard(container, item) {
+    const card = document.createElement("article");
+    card.className = `witness-proof-card ${item.kind || "unknown"}`;
+    card.setAttribute("data-testid", item.testId || `witness-card-${item.label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`);
+    if (item.title) card.title = item.title;
+
+    const heading = document.createElement("div");
+    heading.className = "witness-card-heading";
+    appendText(heading, "span", item.label);
+    heading.appendChild(makeStatusDot(item.kind || "unknown", `${item.label}: ${item.value}`));
+    card.appendChild(heading);
+
+    appendText(card, "strong", safeString(item.value, item.label), "witness-card-value");
+    if (item.note) appendText(card, "small", item.note, "witness-card-note");
+    if (Array.isArray(item.tokens) && item.tokens.length) appendWitnessTokenStrip(card, item.tokens);
+    container.appendChild(card);
+  }
+
+  function appendWitnessTokenStrip(container, tokens) {
+    const strip = document.createElement("div");
+    strip.className = "witness-token-strip";
+    tokens.forEach((token) => {
+      const pill = document.createElement("span");
+      pill.className = `witness-token ${token.kind || "unknown"}`;
+      pill.textContent = `${safeString(token.value, token.label)} ${safeString(token.label, "label")}`.trim();
+      if (token.title) pill.title = token.title;
+      strip.appendChild(pill);
+    });
+    container.appendChild(strip);
+  }
+
+  function addFocusItem(items, options) {
+    const count = numberValue(options.count);
+    if (count === null || count <= 0) return;
+    items.push({
+      label: options.label,
+      value: options.value || String(count),
+      note: options.note || "",
+      kind: options.kind || "warn",
+      target: options.target || "#surfaces",
+      priority: options.priority || 50,
+    });
+  }
+
+  function focusReviewItems() {
+    const runPreview = state.data.run || {};
+    const evidence = state.data.runEvidence || {};
+    const latestEpisode = evidence.latest_episode || runPreview.latest_episode || {};
+    const steps = evidence.step_runs || {};
+    const runtimeErrors = evidence.runtime_step_errors || {};
+    const temporal = evidence.temporal_index || {};
+    const sentiment = evidence.sentiment || {};
+    const entityEvidence = evidence.entity_evidence || {};
+    const projection = evidence.projection_gaps || {};
+    const audioProof = evidence.audio_vector_proof || {};
+    const runScenes = numberValue(evidence.run?.scenes_processed ?? latestEpisode.scene_count ?? temporal.total_scenes ?? runPreview.scenes_processed);
+    const cognitiveTotal = numberValue(sentiment.segments_total ?? temporal.total_scenes ?? runScenes);
+    const items = [];
+
+    const terminalFailures = numberValue(runtimeErrors.terminal_count ?? steps.failed_count ?? latestEpisode.step_failed_count);
+    addFocusItem(items, {
+      label: "Terminal step failure",
+      count: terminalFailures,
+      value: `${terminalFailures} failed`,
+      note: "Inspect the failed step family before treating the run as fully clean.",
+      kind: "error",
+      target: "#surfaces",
+      priority: 10,
+    });
+
+    const recoveredSteps = numberValue(latestEpisode.recovered_step_error_count ?? runtimeErrors.recovered_count);
+    addFocusItem(items, {
+      label: "Recovered step errors",
+      count: recoveredSteps,
+      value: `${recoveredSteps} recovered`,
+      note: "Recovered rows are not blockers, but they are useful optimization evidence.",
+      kind: "warn",
+      target: "#surfaces",
+      priority: 20,
+    });
+
+    const skippedSteps = numberValue(steps.skipped_count ?? latestEpisode.step_skipped_count);
+    addFocusItem(items, {
+      label: "Skipped steps",
+      count: skippedSteps,
+      value: `${skippedSteps} skipped`,
+      note: "Confirm skips are expected optional paths, not missing configuration.",
+      kind: "warn",
+      target: "#surfaces",
+      priority: 30,
+    });
+
+    const audioProven = numberValue(audioProof.current_run_qdrant_proven);
+    const audioScope = numberValue(audioProof.scene_scope_count ?? audioProof.scenes_total ?? runScenes);
+    if (audioProven !== null && audioScope !== null && audioScope > audioProven) {
+      addFocusItem(items, {
+        label: "Audio proof gap",
+        count: audioScope - audioProven,
+        value: `${audioScope - audioProven} scene${audioScope - audioProven === 1 ? "" : "s"}`,
+        note: "Current-run audio proof is strict; inspect the missing CLAP/Qdrant scene.",
+        kind: "warn",
+        target: "#proof-panel",
+        priority: 35,
+      });
+    }
+
+    const projectionMissing = numberValue(projection.missing_projection_count);
+    addFocusItem(items, {
+      label: "Projection gaps",
+      count: projectionMissing,
+      value: `${projectionMissing} gap${projectionMissing === 1 ? "" : "s"}`,
+      note: "Source truth exists without a matching read-model projection.",
+      kind: "error",
+      target: "#proof-panel",
+      priority: 12,
+    });
+
+    const sceneContext = numberValue(temporal.segments_with_scene_context_llm);
+    if (sceneContext !== null && cognitiveTotal !== null && cognitiveTotal > sceneContext) {
+      addFocusItem(items, {
+        label: "Scene-context gaps",
+        count: cognitiveTotal - sceneContext,
+        value: `${cognitiveTotal - sceneContext} scenes`,
+        note: "These scenes have less narrative meaning density than the rest of the run.",
+        kind: "warn",
+        target: "#scene-inspector",
+        priority: 45,
+      });
+    }
+
+    const textSentiment = numberValue(sentiment.segments_with_sentiment);
+    if (textSentiment !== null && cognitiveTotal !== null && cognitiveTotal > textSentiment) {
+      addFocusItem(items, {
+        label: "Sentiment coverage gap",
+        count: cognitiveTotal - textSentiment,
+        value: `${cognitiveTotal - textSentiment} scenes`,
+        note: "Text sentiment is missing for this scope; audio emotion rankings may still be reviewable.",
+        kind: "warn",
+        target: "#surfaces",
+        priority: 55,
+      });
+    }
+
+    const entitySegments = numberValue(entityEvidence.segments_with_any_entity_evidence);
+    if (entitySegments !== null && cognitiveTotal !== null && cognitiveTotal > entitySegments) {
+      addFocusItem(items, {
+        label: "Entity evidence sparse scenes",
+        count: cognitiveTotal - entitySegments,
+        value: `${cognitiveTotal - entitySegments} scenes`,
+        note: "Some scenes have no entity channel evidence; this may be content-dependent.",
+        kind: "info",
+        target: "#surfaces",
+        priority: 70,
+      });
+    }
+
+    return items.sort((a, b) => a.priority - b.priority).slice(0, 6);
+  }
+
+  function renderOperatorFocusPanel() {
+    const list = qs("#operator-focus-list");
+    if (!list) return;
+    clear(list);
+    list.setAttribute("aria-label", "What Should I Look At?");
+
+    if (state.errors.runEvidence) {
+      appendInlineError(list, `Focus queue unavailable: ${state.errors.runEvidence}`);
+      return;
+    }
+
+    const items = focusReviewItems();
+    if (!items.length) {
+      const empty = document.createElement("article");
+      empty.className = "focus-review-item ok";
+      empty.setAttribute("data-testid", "operator-focus-empty");
+      empty.appendChild(makeStatusDot("ok", "No priority review items"));
+      const body = document.createElement("div");
+      appendText(body, "strong", "No priority review items");
+      appendText(body, "span", "Latest evidence did not surface terminal failures, projection gaps, or major coverage misses.", "focus-review-note");
+      empty.appendChild(body);
+      list.appendChild(empty);
+      return;
+    }
+
+    items.forEach((item) => {
+      const card = document.createElement("a");
+      card.className = `focus-review-item ${item.kind || "warn"}`;
+      card.href = item.target || "#surfaces";
+      card.setAttribute("data-testid", "operator-focus-item");
+      card.setAttribute("aria-label", `${item.label}: ${item.value}. ${item.note}`);
+      card.appendChild(makeStatusDot(item.kind || "warn", `${item.label}: ${item.value}`));
+      const body = document.createElement("div");
+      appendText(body, "strong", item.label);
+      appendText(body, "span", item.note, "focus-review-note");
+      card.appendChild(body);
+      appendText(card, "span", item.value, "focus-review-value");
+      list.appendChild(card);
+    });
+  }
+
+  function renderWitnessSpine() {
+    const grid = qs("#witness-spine-grid");
+    if (!grid) return;
+    clear(grid);
+
+    if (state.errors.runEvidence) {
+      appendInlineError(grid, `Witness Spine evidence unavailable: ${state.errors.runEvidence}`);
+      return;
+    }
+
+    const status = state.data.status || {};
+    const runPreview = state.data.run || {};
+    const evidence = state.data.runEvidence || {};
+    const evidenceRun = evidence.run || {};
+    const latestEpisode = evidence.latest_episode || runPreview.latest_episode || {};
+    const steps = evidence.step_runs || {};
+    const statusCounts = steps.status_counts || {};
+    const runtimeErrors = evidence.runtime_step_errors || {};
+    const temporal = evidence.temporal_index || {};
+    const sentiment = evidence.sentiment || {};
+    const entityEvidence = evidence.entity_evidence || {};
+    const graph = evidence.knowledge_graph || {};
+    const projection = evidence.projection_gaps || {};
+    const audioProof = evidence.audio_vector_proof || {};
+    const memory = state.data.memory || {};
+
+    const runStatus = String(evidenceRun.status || runPreview.status || latestEpisode.status || "").toLowerCase();
+    const runScenes = numberValue(evidenceRun.scenes_processed ?? latestEpisode.scene_count ?? temporal.total_scenes ?? runPreview.scenes_processed);
+    const stepRows = numberValue(steps.row_count);
+    const okSteps = numberValue(statusCounts.ok);
+    const skippedSteps = numberValue(steps.skipped_count ?? latestEpisode.step_skipped_count);
+    const failedSteps = numberValue(steps.failed_count ?? latestEpisode.step_failed_count);
+    const optionalFailed = numberValue(steps.optional_failed_count);
+    const recoveredSteps = numberValue(latestEpisode.recovered_step_error_count ?? runtimeErrors.recovered_count);
+    const terminalSteps = numberValue(runtimeErrors.terminal_count ?? latestEpisode.step_failed_count);
+    const audioProven = numberValue(audioProof.current_run_qdrant_proven);
+    const audioScope = numberValue(audioProof.scene_scope_count ?? audioProof.scenes_total ?? runScenes);
+    const projectionMissing = numberValue(projection.missing_projection_count);
+    const projectionOk = projection.status === "ok" || projectionMissing === 0;
+    const textSentiment = numberValue(sentiment.segments_with_sentiment);
+    const transcriptScenes = numberValue(sentiment.segments_with_transcript ?? temporal.segments_with_transcript);
+    const sceneContext = numberValue(temporal.segments_with_scene_context_llm);
+    const entitySegments = numberValue(entityEvidence.segments_with_any_entity_evidence);
+    const cognitiveTotal = numberValue(sentiment.segments_total ?? temporal.total_scenes ?? runScenes);
+    const audioRankings = numberValue(sentiment.segments_with_audio_emotion_ranking ?? sentiment.segments_with_audio_emotion_scores);
+    const qdrantReady = graph.qdrant_ok === true || graph.phase6_qdrant_ok === true || memory.qdrant?.available === true;
+    const faissReady = graph.faiss_ok === true || graph.phase6_faiss_ok === true || memory.faiss?.available === true || numberValue(memory.faiss?.audio_vectors) !== null;
+    const sqliteReady = status.database?.exists === true;
+    const kgReady = hasOkStatus(graph.status) || numberValue(graph.total_entities) !== null || numberValue(graph.scene_count) !== null;
+    const corePersistenceReady = qdrantReady && faissReady && sqliteReady && kgReady;
+    const hasFollowUp = (failedSteps !== null && failedSteps > 0)
+      || (optionalFailed !== null && optionalFailed > 0)
+      || (skippedSteps !== null && skippedSteps > 0)
+      || (terminalSteps !== null && terminalSteps > 0)
+      || (audioProven !== null && audioScope !== null && audioProven < audioScope)
+      || !projectionOk;
+    const runCompleted = ["completed", "ok", "success", "passed"].includes(runStatus) || evidenceRun.status === "completed";
+    const verdict = runCompleted && projectionOk
+      ? (hasFollowUp ? "Passed with visible follow-up" : "Passed")
+      : runCompleted
+        ? "Completed with review items"
+        : "Needs Explanation";
+    const verdictKind = runCompleted && projectionOk ? (hasFollowUp ? "warn" : "ok") : "unknown";
+    const stepValue = okSteps !== null && stepRows !== null
+      ? `${okSteps}/${stepRows} ok`
+      : stepRows !== null
+        ? `${stepRows} rows`
+        : "Not observed";
+    const stepNote = [
+      skippedSteps !== null ? `${skippedSteps} skipped` : null,
+      failedSteps !== null ? `${failedSteps} failed` : null,
+      optionalFailed !== null ? `${optionalFailed} optional` : null,
+      recoveredSteps !== null ? `${recoveredSteps} recovered` : null,
+    ].filter(Boolean).join(" | ") || "Step ledger did not expose status counts";
+    const cognitiveSignals = [
+      textSentiment !== null ? `sentiment ${countOfTotal(textSentiment, cognitiveTotal, "scenes")}` : null,
+      transcriptScenes !== null ? `transcript ${countOfTotal(transcriptScenes, cognitiveTotal, "scenes")}` : null,
+      sceneContext !== null ? `context ${countOfTotal(sceneContext, cognitiveTotal, "scenes")}` : null,
+      entitySegments !== null ? `entities ${countOfTotal(entitySegments, cognitiveTotal, "scenes")}` : null,
+      audioRankings !== null ? `audio rankings ${countOfTotal(audioRankings, cognitiveTotal, "scenes")}` : null,
+    ].filter(Boolean);
+
+    const verdictCard = document.createElement("article");
+    verdictCard.className = `witness-verdict-card ${verdictKind}`;
+    verdictCard.setAttribute("data-testid", "witness-verdict-card");
+    appendText(verdictCard, "span", "Witness verdict", "witness-card-label");
+    appendText(verdictCard, "strong", verdict, "witness-verdict-value");
+    appendText(
+      verdictCard,
+      "small",
+      runScenes !== null
+        ? `${runScenes} scenes; read-only evidence from latest run`
+        : "Latest run scene count not exposed",
+      "witness-card-note"
+    );
+    grid.appendChild(verdictCard);
+
+    appendWitnessCard(grid, {
+      label: "Run scope",
+      value: runScenes !== null ? `${runScenes} scenes` : "Not observed",
+      note: `${runScopeDescriptor(evidenceRun, runPreview).label}; ${safeString(evidenceRun.epoch || "epoch not exposed", "epoch")}`,
+      kind: runScenes !== null && runScenes > 0 ? "ok" : "unknown",
+      testId: "witness-run-scope",
+    });
+    appendWitnessCard(grid, {
+      label: "Step ledger",
+      value: stepValue,
+      note: stepNote,
+      tokens: [
+        skippedSteps !== null ? { label: "skipped", value: skippedSteps, kind: skippedSteps > 0 ? "warn" : "ok" } : null,
+        failedSteps !== null ? { label: "failed", value: failedSteps, kind: failedSteps > 0 ? "error" : "ok" } : null,
+        optionalFailed !== null ? { label: "optional", value: optionalFailed, kind: optionalFailed > 0 ? "warn" : "ok" } : null,
+        recoveredSteps !== null ? { label: "recovered", value: recoveredSteps, kind: recoveredSteps > 0 ? "warn" : "ok" } : null,
+      ].filter(Boolean),
+      kind: failedSteps && failedSteps > 0 ? "warn" : stepRows !== null ? "ok" : "unknown",
+      testId: "witness-step-ledger",
+    });
+    appendWitnessCard(grid, {
+      label: "Current-run audio proof",
+      value: countOfTotal(audioProven, audioScope, "scenes"),
+      note: audioProof.label || audioProof.impact || "strict run-matched CLAP/Qdrant verdict",
+      kind: witnessMetricKind(audioProven, audioScope),
+      testId: "witness-audio-proof",
+    });
+    appendWitnessCard(grid, {
+      label: "Projection gaps",
+      value: projectionMissing !== null ? String(projectionMissing) : "Not exposed",
+      note: projectionGapNote(projection),
+      kind: projectionOk ? "ok" : projection.status === "gap_detected" ? "warn" : "unknown",
+      testId: "witness-projection-gaps",
+    });
+    appendWitnessCard(grid, {
+      label: "Cognitive signal coverage",
+      value: cognitiveSignals.length ? `${cognitiveSignals.length} channels` : "Not observed",
+      note: cognitiveSignals.join(" | ") || "No sentiment, entity, transcript, context, or audio ranking counts exposed",
+      kind: cognitiveSignals.length >= 4 ? "ok" : cognitiveSignals.length ? "warn" : "unknown",
+      testId: "witness-cognitive-coverage",
+    });
+    appendWitnessCard(grid, {
+      label: "Persistence agreement",
+      value: "Qdrant + FAISS + SQLite + KG",
+      note: `Qdrant ${qdrantReady ? "ready" : "not observed"} | FAISS ${faissReady ? "ready" : "not observed"} | SQLite ${sqliteReady ? "ready" : "not observed"} | KG ${kgReady ? "ready" : "not observed"}`,
+      kind: corePersistenceReady ? "ok" : "warn",
+      testId: "witness-persistence-agreement",
+    });
+    appendWitnessCard(grid, {
+      label: "Privacy boundary",
+      value: "No private labels shown here",
+      note: "Counts only; inspect selected scenes locally for names, transcripts, and frame evidence",
+      kind: "info",
+      testId: "witness-privacy-boundary",
+    });
   }
 
   function renderFlightDeck() {
@@ -3298,7 +3678,11 @@
       appendText(label, "span", resultSummary(result), "retrieval-result-summary");
       row.appendChild(label);
       const percent = scorePercent(result);
-      row.appendChild(makeConfidenceBadge(percent));
+      const status = document.createElement("div");
+      status.className = "retrieval-result-status";
+      status.appendChild(makeConfidenceBadge(percent));
+      status.appendChild(makeSceneHealthBadge(previewSceneLike(result, retrievalContext(result))));
+      row.appendChild(status);
       list.appendChild(row);
     });
 
@@ -4179,6 +4563,58 @@
     ];
   }
 
+  function sceneHealthState(segment) {
+    const families = sceneEvidenceSignalFamilies(segment || {});
+    const observed = families.filter((item) => item.observed).length;
+    const coreLabels = new Set(["Meaning lens", "Transcript", "Visual proof", "Audio review"]);
+    const coreObserved = families.filter((item) => coreLabels.has(item.label) && item.observed).length;
+    const total = families.length || 1;
+    if (coreObserved === 0) {
+      return {
+        label: "Core missing",
+        value: `${observed}/${total}`,
+        kind: "error",
+        note: "Scene health: no meaning, transcript, visual, or audio review signal exposed",
+      };
+    }
+    if (observed >= Math.ceil(total * 0.75)) {
+      return {
+        label: "Healthy",
+        value: `${observed}/${total}`,
+        kind: "ok",
+        note: "Scene health: core evidence and most optional signal families are present",
+      };
+    }
+    if (observed >= Math.ceil(total * 0.5)) {
+      return {
+        label: "Partial",
+        value: `${observed}/${total}`,
+        kind: "warn",
+        note: "Scene health: core evidence is present with optional gaps",
+      };
+    }
+    return {
+      label: "Sparse",
+      value: `${observed}/${total}`,
+      kind: "warn",
+      note: "Scene health: review this scene before relying on downstream meaning",
+    };
+  }
+
+  function makeSceneHealthBadge(segmentOrState) {
+    const health = segmentOrState && segmentOrState.label && segmentOrState.kind
+      ? segmentOrState
+      : sceneHealthState(segmentOrState || {});
+    const badge = document.createElement("span");
+    badge.className = `scene-health-badge ${health.kind || "unknown"}`;
+    badge.title = health.note || "Scene health";
+    badge.setAttribute("aria-label", `Scene health: ${health.label}; ${health.value}`);
+    badge.appendChild(makeStatusDot(health.kind || "unknown", health.note || "Scene health"));
+    appendText(badge, "span", health.label);
+    appendText(badge, "strong", health.value);
+    return badge;
+  }
+
   function appendSceneEvidenceSummary(container, segment) {
     const panel = document.createElement("section");
     panel.className = "scene-evidence-summary-panel";
@@ -4769,9 +5205,7 @@
       sceneTitle.title = safeString(fullSceneId, "scene_id");
       appendText(body, "span", segmentSummary(segment));
       row.appendChild(body);
-      row.appendChild(
-        makeStatusDot(selected ? "ok" : statusKind(segment.content_state || "state"), selected ? "Selected scene" : `Scene state: ${safeString(segment.content_state || "state", "content_state")}`)
-      );
+      row.appendChild(makeSceneHealthBadge(sceneHealthState(segment)));
       list.appendChild(row);
     });
     node.appendChild(list);
@@ -4823,6 +5257,8 @@
     qs("#api-base").value = state.apiBase;
     renderConnection();
     renderScopeBanner();
+    renderOperatorFocusPanel();
+    renderWitnessSpine();
     renderFlightDeck();
     renderProofPanel();
     renderRetrievalConsole();

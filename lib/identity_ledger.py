@@ -137,6 +137,10 @@ def rebuild_identity_graph_from_manifests(
             )
             total_scenes += 1
 
+    from lib.knowledge_graph import KnowledgeGraph
+    with KnowledgeGraph(str(graph_db_path)) as kg:
+        apply_manual_mappings(kg, graph_db_path)
+
     return {
         "generated_at": _utc_now_iso(),
         "processing_root": str(processing_root),
@@ -388,3 +392,88 @@ def write_identity_ledger_markdown(ledger: Dict[str, Any], path: Path) -> None:
         )
 
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def load_manual_mappings(graph_db_path: Path) -> Dict[str, Any]:
+    """Load operator manual identity mappings from a json file next to knowledge_graph.db."""
+    mappings_file = Path(graph_db_path).parent / "manual_identity_mappings.json"
+    if not mappings_file.is_file():
+        return {"version": 1, "mappings": []}
+    try:
+        with mappings_file.open("r", encoding="utf-8") as f:
+            data = json.load(f)
+            if isinstance(data, dict) and "mappings" in data:
+                return data
+    except Exception as e:
+        logger.warning("Failed to load manual identity mappings from %s: %s", mappings_file, e)
+    return {"version": 1, "mappings": []}
+
+
+def save_manual_mappings(graph_db_path: Path, data: Dict[str, Any]) -> None:
+    """Save operator manual identity mappings to a json file next to knowledge_graph.db."""
+    mappings_file = Path(graph_db_path).parent / "manual_identity_mappings.json"
+    try:
+        mappings_file.parent.mkdir(parents=True, exist_ok=True)
+        # Write to temporary file first and rename to ensure atomicity
+        temp_file = mappings_file.with_suffix(".tmp")
+        with temp_file.open("w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+        if temp_file.exists():
+            if mappings_file.exists():
+                mappings_file.unlink()
+            temp_file.rename(mappings_file)
+    except Exception as e:
+        logger.error("Failed to save manual identity mappings to %s: %s", mappings_file, e)
+        raise RuntimeError(f"Failed to save manual identity mappings: {e}")
+
+
+def apply_manual_mappings(kg: KnowledgeGraph, graph_db_path: Path) -> int:
+    """Read active manual overrides and insert them as identity_evidence edges in the knowledge graph."""
+    data = load_manual_mappings(graph_db_path)
+    mappings = data.get("mappings") or []
+    applied_count = 0
+    cur = kg.conn.cursor()
+
+    for mapping in mappings:
+        if mapping.get("status") != "active":
+            continue
+        source_name = mapping.get("source_node_name")
+        target_name = mapping.get("target_person_name")
+        source_type = mapping.get("source_node_type", "speaker_pattern")
+        
+        if not source_name or not target_name:
+            continue
+            
+        # Resolve source_id in SQLite nodes
+        source_row = cur.execute(
+            "SELECT id FROM nodes WHERE node_type = ? AND name = ?",
+            (source_type, source_name)
+        ).fetchone()
+        
+        if not source_row:
+            continue
+        source_id = int(source_row["id"])
+        
+        # Resolve or create target_id for the person node
+        target_id = kg.add_node(
+            node_type="person",
+            name=target_name,
+            properties={"source": "operator_manual_override"},
+            timestamp=None
+        )
+        
+        # Add the manual identity_evidence edge
+        kg.add_edge(
+            source_id=source_id,
+            target_id=target_id,
+            edge_type="identity_evidence",
+            weight=1.0,
+            properties={
+                "source": "operator_manual_override",
+                "mapping_id": mapping.get("mapping_id"),
+                "operator_note": mapping.get("history", [{}])[-1].get("operator_note", "")
+            }
+        )
+        applied_count += 1
+        
+    return applied_count

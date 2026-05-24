@@ -327,3 +327,45 @@ class IngestStatusResponse(BaseModel):
     created_at: str
     last_observed_at: Optional[str] = None
     completed_at: Optional[str] = None
+
+
+class UnstitchedPattern(BaseModel):
+    """Details of an unstitched speaker pattern."""
+    node_id: int
+    node_name: str
+    occurrence_count: int
+    voiced_seconds: float
+    segment_count: int
+    sample_transcript: Optional[str] = None
+
+
+class StitchPreviewRequest(BaseModel):
+    """Request model for mapping preview."""
+    source_node_name: str
+    target_person_name: str
+
+
+class StitchPreviewResponse(BaseModel):
+    """Preview response outlining potential changes and conflicts."""
+    success: bool
+    source_node_name: str
+    target_person_name: str
+    scenes_affected: int
+    episodes_affected: int
+    conflicts: List[Dict[str, Any]] = Field(default_factory=list)
+
+
+class StitchRequest(BaseModel):
+    """Request model to persist a mapping."""
+    source_node_name: str
+    target_person_name: str
+    confirm: bool = False
+    operator_note: Optional[str] = None
+
+
+class StitchResponse(BaseModel):
+    """Response model for a successful mapping commit."""
+    success: bool
+    message: str
+    mapping_id: str
+    edge_id: int

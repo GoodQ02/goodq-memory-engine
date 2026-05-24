@@ -6,6 +6,7 @@ from __future__ import annotations
 from typing import List
 import logging
 import os
+import json
 import subprocess
 from datetime import datetime
 from fastapi import APIRouter, HTTPException, Body
@@ -18,6 +19,11 @@ from api.utils.response_models import (
     VideoListItem,
     SystemMutationResponse,
     MutationPolicy,
+    UnstitchedPattern,
+    StitchPreviewRequest,
+    StitchPreviewResponse,
+    StitchRequest,
+    StitchResponse,
 )
 from api.utils.loaders import DataLoader
 from api.utils.media_projection import thumbnail_projection
@@ -292,3 +298,282 @@ async def reload_config():
             "treat it as a casual API mutation."
         ),
     )
+
+
+def _get_kg_db_path() -> Path:
+    from steps.common.config_loader import load_configs
+    cfg = load_configs({})
+    return Path(cfg.get("paths", {}).get("knowledge_graph_db", "data/knowledge_graph.db"))
+
+
+@router.get("/identity/unstitched", response_model=List[UnstitchedPattern])
+async def get_unstitched_patterns():
+    """Get all speaker patterns that are not mapped/stitched to any person."""
+    db_path = _get_kg_db_path()
+    from lib.knowledge_graph import KnowledgeGraph
+    
+    if not db_path.exists():
+        raise HTTPException(status_code=404, detail=f"Knowledge graph database not found at {db_path}")
+
+    try:
+        with KnowledgeGraph(str(db_path)) as kg:
+            cur = kg.conn.cursor()
+            rows = cur.execute(
+                """
+                SELECT id, name, properties, occurrence_count
+                FROM nodes
+                WHERE node_type = 'speaker_pattern'
+                  AND id NOT IN (
+                      SELECT DISTINCT e.source_id
+                      FROM edges e
+                      JOIN nodes target ON e.target_id = target.id
+                      WHERE e.edge_type IN ('identity_evidence', 'identity_supported')
+                        AND target.node_type = 'person'
+                  )
+                ORDER BY occurrence_count DESC
+                """
+            ).fetchall()
+            
+            results = []
+            for row in rows:
+                props = json.loads(row["properties"]) if isinstance(row["properties"], str) else (row["properties"] or {})
+                voiced_seconds = float(props.get("total_voiced_seconds") or 0.0)
+                segment_count = int(props.get("signature_count") or 0)
+                
+                # Fetch a sample transcript excerpt
+                pattern_id = int(row["id"])
+                sample_rows = cur.execute(
+                    """
+                    SELECT nm.context
+                    FROM node_media nm
+                    JOIN edges e ON nm.node_id = e.source_id
+                    WHERE e.target_id = ? AND e.edge_type = 'voice_pattern_match'
+                    """,
+                    (pattern_id,)
+                ).fetchall()
+                
+                sample_transcript = None
+                for r in sample_rows:
+                    ctx = json.loads(r["context"]) if isinstance(r["context"], str) else (r["context"] or {})
+                    text = ctx.get("text")
+                    if isinstance(text, str) and text.strip():
+                        sample_transcript = text.strip()
+                        break
+                        
+                results.append(
+                    UnstitchedPattern(
+                        node_id=pattern_id,
+                        node_name=str(row["name"]),
+                        occurrence_count=int(row["occurrence_count"] or 1),
+                        voiced_seconds=voiced_seconds,
+                        segment_count=segment_count,
+                        sample_transcript=sample_transcript,
+                    )
+                )
+            return results
+    except Exception as e:
+        logger.error(f"Failed to get unstitched patterns: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/identity/stitch/preview", response_model=StitchPreviewResponse)
+async def preview_stitch(request: StitchPreviewRequest):
+    """Preview mapping impact and identify potential name or mapping conflicts."""
+    db_path = _get_kg_db_path()
+    from lib.knowledge_graph import KnowledgeGraph
+    
+    if not db_path.exists():
+        raise HTTPException(status_code=404, detail=f"Knowledge graph database not found at {db_path}")
+
+    try:
+        with KnowledgeGraph(str(db_path)) as kg:
+            cur = kg.conn.cursor()
+            
+            # Find the source pattern id
+            source_row = cur.execute(
+                "SELECT id FROM nodes WHERE node_type = 'speaker_pattern' AND name = ?",
+                (request.source_node_name,)
+            ).fetchone()
+            
+            if not source_row:
+                raise HTTPException(status_code=404, detail=f"Source speaker pattern not found: {request.source_node_name}")
+                
+            source_id = int(source_row["id"])
+            
+            # Calculate affected scenes and episodes
+            counts_row = cur.execute(
+                """
+                SELECT COUNT(DISTINCT nm.media_id) AS scene_count,
+                       COUNT(DISTINCT mn.media_path) AS episode_count
+                FROM node_media nm
+                JOIN media_nodes mn ON nm.media_id = mn.id
+                WHERE nm.node_id = ?
+                """,
+                (source_id,)
+            ).fetchone()
+            
+            scenes_affected = int(counts_row["scene_count"] or 0) if counts_row else 0
+            episodes_affected = int(counts_row["episode_count"] or 0) if counts_row else 0
+            
+            # Identify conflicts (any existing mappings from this pattern to a different person name)
+            conflict_rows = cur.execute(
+                """
+                SELECT t.name AS person_name, e.edge_type, e.weight
+                FROM edges e
+                JOIN nodes t ON e.target_id = t.id
+                WHERE e.source_id = ?
+                  AND e.edge_type IN ('identity_evidence', 'identity_supported')
+                  AND t.node_type = 'person'
+                  AND t.name != ?
+                """,
+                (source_id, request.target_person_name)
+            ).fetchall()
+            
+            conflicts = []
+            for row in conflict_rows:
+                conflicts.append({
+                    "conflicting_person": str(row["person_name"]),
+                    "edge_type": str(row["edge_type"]),
+                    "weight": float(row["weight"])
+                })
+                
+            return StitchPreviewResponse(
+                success=True,
+                source_node_name=request.source_node_name,
+                target_person_name=request.target_person_name,
+                scenes_affected=scenes_affected,
+                episodes_affected=episodes_affected,
+                conflicts=conflicts
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to preview stitch: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/identity/stitch", response_model=StitchResponse)
+async def execute_stitch(request: StitchRequest):
+    """Commit a manual identity mapping, save it to persistent store, and rebuild the identity ledger."""
+    if not request.confirm:
+        raise HTTPException(status_code=400, detail="Explicit confirmation required. Call /preview first.")
+        
+    db_path = _get_kg_db_path()
+    from lib.knowledge_graph import KnowledgeGraph
+    from lib.identity_ledger import load_manual_mappings, save_manual_mappings, build_identity_ledger
+    import sqlite3
+    
+    if not db_path.exists():
+        raise HTTPException(status_code=404, detail=f"Knowledge graph database not found at {db_path}")
+
+    try:
+        with KnowledgeGraph(str(db_path)) as kg:
+            cur = kg.conn.cursor()
+            
+            # Find the source pattern id
+            source_row = cur.execute(
+                "SELECT id FROM nodes WHERE node_type = 'speaker_pattern' AND name = ?",
+                (request.source_node_name,)
+            ).fetchone()
+            
+            if not source_row:
+                raise HTTPException(status_code=404, detail=f"Source speaker pattern not found: {request.source_node_name}")
+                
+            source_id = int(source_row["id"])
+            
+            # Resolve or create target_id for the person node
+            target_id = kg.add_node(
+                node_type="person",
+                name=request.target_person_name,
+                properties={"source": "operator_manual_override"},
+                timestamp=None
+            )
+            
+            # Load, update, and save manual mappings JSON
+            mappings_data = load_manual_mappings(db_path)
+            mappings = mappings_data.setdefault("mappings", [])
+            
+            # Find if there is an existing mapping for this source_node_name
+            existing_mapping = next(
+                (m for m in mappings if m.get("source_node_name") == request.source_node_name),
+                None
+            )
+            
+            mapping_id = f"map_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
+            history_entry = {
+                "status": "active",
+                "timestamp_utc": datetime.utcnow().isoformat() + "Z",
+                "operator_note": request.operator_note or ""
+            }
+            
+            if existing_mapping:
+                mapping_id = existing_mapping.get("mapping_id", mapping_id)
+                existing_mapping["target_person_name"] = request.target_person_name
+                existing_mapping["status"] = "active"
+                existing_mapping.setdefault("history", []).append(history_entry)
+            else:
+                mappings.append({
+                    "mapping_id": mapping_id,
+                    "source_node_type": "speaker_pattern",
+                    "source_node_name": request.source_node_name,
+                    "target_person_name": request.target_person_name,
+                    "status": "active",
+                    "history": [history_entry]
+                })
+                
+            save_manual_mappings(db_path, mappings_data)
+            
+            # Add mapping to graph database
+            edge_id = kg.add_edge(
+                source_id=source_id,
+                target_id=target_id,
+                edge_type="identity_evidence",
+                weight=1.0,
+                properties={
+                    "source": "operator_manual_override",
+                    "mapping_id": mapping_id,
+                    "operator_note": request.operator_note or ""
+                }
+            )
+            
+            # Build scene_episode_map from media_nodes table to refresh ledger metrics
+            media_rows = cur.execute("SELECT scene_id, properties FROM media_nodes").fetchall()
+            scene_episode_map = {}
+            episodes_set = set()
+            for r in media_rows:
+                scene_id = r["scene_id"]
+                if not scene_id:
+                    continue
+                props = json.loads(r["properties"]) if isinstance(r["properties"], str) else (r["properties"] or {})
+                video_id = props.get("video_id")
+                if video_id:
+                    scene_episode_map[scene_id] = video_id
+                    episodes_set.add(video_id)
+                    
+            episodes = [{"episode": ep} for ep in sorted(episodes_set)]
+            
+            # Regenerate ledger reports
+            ledger = build_identity_ledger(
+                graph_db_path=db_path,
+                scene_episode_map=scene_episode_map,
+                episodes=episodes,
+            )
+            
+            # Save ledger json and markdown next to knowledge_graph.db
+            ledger_json_path = db_path.parent / "identity_ledger.json"
+            ledger_json_path.write_text(json.dumps(ledger, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+            
+            from lib.identity_ledger import write_identity_ledger_markdown
+            write_identity_ledger_markdown(ledger, db_path.parent / "identity_ledger.md")
+            
+            return StitchResponse(
+                success=True,
+                message=f"Successfully stitched {request.source_node_name} to {request.target_person_name}.",
+                mapping_id=mapping_id,
+                edge_id=edge_id
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to execute stitch: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))

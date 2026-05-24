@@ -471,7 +471,7 @@ def apply_manual_mappings(kg: KnowledgeGraph, graph_db_path: Path) -> int:
             properties={
                 "source": "operator_manual_override",
                 "mapping_id": mapping.get("mapping_id"),
-                "operator_note": mapping.get("history", [{}])[-1].get("operator_note", "")
+                "operator_note": (mapping.get("history")[-1].get("operator_note", "") if mapping.get("history") else "")
             }
         )
         applied_count += 1

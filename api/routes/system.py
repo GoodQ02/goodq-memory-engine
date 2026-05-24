@@ -24,6 +24,9 @@ from api.utils.response_models import (
     StitchPreviewResponse,
     StitchRequest,
     StitchResponse,
+    StitchRevokeRequest,
+    StitchRevokeResponse,
+    ManualMappingsResponse,
 )
 from api.utils.loaders import DataLoader
 from api.utils.media_projection import thumbnail_projection
@@ -523,6 +526,21 @@ async def execute_stitch(request: StitchRequest):
                 
             save_manual_mappings(db_path, mappings_data)
             
+            # Delete any existing manual override edges for this source pattern in the graph database
+            rows = cur.execute(
+                "SELECT id, properties FROM edges WHERE source_id = ? AND edge_type = 'identity_evidence'",
+                (source_id,)
+            ).fetchall()
+            edge_ids_to_delete = []
+            for r in rows:
+                props = json.loads(r["properties"]) if isinstance(r["properties"], str) else (r["properties"] or {})
+                if props.get("source") == "operator_manual_override":
+                    edge_ids_to_delete.append(int(r["id"]))
+            if edge_ids_to_delete:
+                placeholders = ",".join("?" for _ in edge_ids_to_delete)
+                cur.execute(f"DELETE FROM edges WHERE id IN ({placeholders})", edge_ids_to_delete)
+                kg.conn.commit()
+
             # Add mapping to graph database
             edge_id = kg.add_edge(
                 source_id=source_id,
@@ -577,3 +595,141 @@ async def execute_stitch(request: StitchRequest):
     except Exception as e:
         logger.error(f"Failed to execute stitch: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/identity/mappings", response_model=ManualMappingsResponse)
+async def get_manual_mappings():
+    """Get all manual mappings stored in manual_identity_mappings.json."""
+    db_path = _get_kg_db_path()
+    from lib.identity_ledger import load_manual_mappings
+    try:
+        data = load_manual_mappings(db_path)
+        return data
+    except Exception as e:
+        logger.error(f"Failed to load manual mappings: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/identity/stitch/revoke", response_model=StitchRevokeResponse)
+async def revoke_stitch(request: StitchRevokeRequest):
+    """Revoke a manual identity mapping using mapping_id (primary) or legacy source_node_name (optional)."""
+    db_path = _get_kg_db_path()
+    from lib.knowledge_graph import KnowledgeGraph
+    from lib.identity_ledger import load_manual_mappings, save_manual_mappings, build_identity_ledger
+    
+    if not db_path.exists():
+        raise HTTPException(status_code=404, detail=f"Knowledge graph database not found at {db_path}")
+
+    try:
+        mappings_data = load_manual_mappings(db_path)
+        mappings = mappings_data.setdefault("mappings", [])
+        
+        target_mapping = None
+        
+        # 1. Lookup by mapping_id
+        if request.mapping_id:
+            target_mapping = next(
+                (m for m in mappings if m.get("mapping_id") == request.mapping_id),
+                None
+            )
+            if not target_mapping:
+                raise HTTPException(status_code=404, detail=f"Mapping not found for id: {request.mapping_id}")
+                
+        # 2. Lookup by legacy source_node_name
+        elif request.source_node_name:
+            matching_mappings = [
+                m for m in mappings
+                if m.get("source_node_name") == request.source_node_name and m.get("status") == "active"
+            ]
+            
+            if len(matching_mappings) > 1:
+                # Ambiguous legacy lookup conflict (409)
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Ambiguous mapping request: multiple active mappings match source_node_name '{request.source_node_name}'. Please specify mapping_id."
+                )
+            elif len(matching_mappings) == 1:
+                target_mapping = matching_mappings[0]
+            else:
+                raise HTTPException(status_code=404, detail=f"No active mapping found for source_node_name: {request.source_node_name}")
+                
+        else:
+            raise HTTPException(status_code=400, detail="Either mapping_id or source_node_name must be provided.")
+            
+        # Revoke the mapping (idempotency support)
+        if target_mapping.get("status") == "revoked":
+            return StitchRevokeResponse(
+                success=True,
+                message=f"Mapping {target_mapping.get('mapping_id')} is already revoked."
+            )
+            
+        # Update status and append to history (retaining previous history)
+        target_mapping["status"] = "revoked"
+        history_entry = {
+            "status": "revoked",
+            "timestamp_utc": datetime.utcnow().isoformat() + "Z",
+            "operator_note": request.operator_note or "Revoked by operator"
+        }
+        target_mapping.setdefault("history", []).append(history_entry)
+        
+        # Save JSON changes
+        save_manual_mappings(db_path, mappings_data)
+        
+        # Database changes must be projection-only.
+        # Find and delete matching manual override edge in graph database
+        with KnowledgeGraph(str(db_path)) as kg:
+            cur = kg.conn.cursor()
+            
+            rows = cur.execute(
+                "SELECT id, properties FROM edges WHERE edge_type = 'identity_evidence'"
+            ).fetchall()
+            
+            edge_ids_to_delete = []
+            for r in rows:
+                props = json.loads(r["properties"]) if isinstance(r["properties"], str) else (r["properties"] or {})
+                if props.get("source") == "operator_manual_override" and props.get("mapping_id") == target_mapping["mapping_id"]:
+                    edge_ids_to_delete.append(int(r["id"]))
+                    
+            if edge_ids_to_delete:
+                placeholders = ",".join("?" for _ in edge_ids_to_delete)
+                cur.execute(f"DELETE FROM edges WHERE id IN ({placeholders})", edge_ids_to_delete)
+                kg.conn.commit()
+                
+            # Rebuild the identity ledger / read-model only
+            media_rows = cur.execute("SELECT scene_id, properties FROM media_nodes").fetchall()
+            scene_episode_map = {}
+            episodes_set = set()
+            for r in media_rows:
+                scene_id = r["scene_id"]
+                if not scene_id:
+                    continue
+                props = json.loads(r["properties"]) if isinstance(r["properties"], str) else (r["properties"] or {})
+                video_id = props.get("video_id")
+                if video_id:
+                    scene_episode_map[scene_id] = video_id
+                    episodes_set.add(video_id)
+                    
+            episodes = [{"episode": ep} for ep in sorted(episodes_set)]
+            
+            ledger = build_identity_ledger(
+                graph_db_path=db_path,
+                scene_episode_map=scene_episode_map,
+                episodes=episodes,
+            )
+            
+            ledger_json_path = db_path.parent / "identity_ledger.json"
+            ledger_json_path.write_text(json.dumps(ledger, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+            
+            from lib.identity_ledger import write_identity_ledger_markdown
+            write_identity_ledger_markdown(ledger, db_path.parent / "identity_ledger.md")
+            
+        return StitchRevokeResponse(
+            success=True,
+            message=f"Successfully revoked mapping {target_mapping.get('mapping_id')} for {target_mapping.get('source_node_name')}."
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to revoke stitch: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+

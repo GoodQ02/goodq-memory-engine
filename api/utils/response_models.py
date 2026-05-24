@@ -369,3 +369,40 @@ class StitchResponse(BaseModel):
     message: str
     mapping_id: str
     edge_id: int
+
+
+class StitchRevokeRequest(BaseModel):
+    """Request model to revoke a mapping."""
+    mapping_id: Optional[str] = None
+    source_node_name: Optional[str] = None
+    operator_note: Optional[str] = None
+
+
+class StitchRevokeResponse(BaseModel):
+    """Response model for mapping revocation."""
+    success: bool
+    message: str
+
+
+class ManualMappingHistoryEntry(BaseModel):
+    """History entry for manual mappings."""
+    status: str
+    timestamp_utc: str
+    operator_note: Optional[str] = None
+
+
+class ManualMappingEntry(BaseModel):
+    """Single manual mapping entry."""
+    mapping_id: str
+    source_node_type: str
+    source_node_name: str
+    target_person_name: str
+    status: str
+    history: List[ManualMappingHistoryEntry] = Field(default_factory=list)
+
+
+class ManualMappingsResponse(BaseModel):
+    """Full manual mappings response."""
+    version: int
+    mappings: List[ManualMappingEntry] = Field(default_factory=list)
+

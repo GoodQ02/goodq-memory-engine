@@ -258,8 +258,8 @@ The consoles are inspection surfaces only. They do not trigger ingestion, reinde
 UI status & details:
 
 - [`docs/guides/ui/JUSTIFICATION_UI.md`](docs/guides/ui/JUSTIFICATION_UI.md)
-- [ui/operator_console_v1/README.md](file:///L:/GOODCUBE/projects/goodq4all/ui/operator_console_v1/README.md)
-- [ui/retro_console_v1/README.md](file:///L:/GOODCUBE/projects/goodq4all/ui/retro_console_v1/README.md)
+- [ui/operator_console_v1/README.md](ui/operator_console_v1/README.md)
+- [ui/retro_console_v1/README.md](ui/retro_console_v1/README.md)
 
 ## What Makes It Different
 

@@ -185,7 +185,7 @@ The Justification Channel remains the literal envelope renderer at `ui/justifica
 - UI status & justification:
   [`docs/guides/ui/JUSTIFICATION_UI.md`](guides/ui/JUSTIFICATION_UI.md)
 - Retro UI README:
-  [ui/retro_console_v1/README.md](file:///L:/GOODCUBE/projects/goodq4all/ui/retro_console_v1/README.md)
+  [ui/retro_console_v1/README.md](../ui/retro_console_v1/README.md)
 
 ## Historical Material
 

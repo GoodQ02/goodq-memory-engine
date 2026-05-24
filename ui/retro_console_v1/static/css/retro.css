@@ -2924,4 +2924,29 @@ h4 {
   height: 100%;
 }
 
+/* ─── Sprint 4 (P2): Cognitive Arbitration styles ──────────────── */
+.cognitive-section {
+  border: 1px dashed rgba(0, 220, 200, 0.2) !important;
+  border-radius: 4px;
+  background-color: rgba(0, 220, 200, 0.02);
+  padding: 8px;
+  margin-bottom: 12px;
+}
+
+.cognitive-body ul {
+  margin-top: 4px;
+  margin-bottom: 8px;
+  padding-left: 18px;
+}
+
+.cognitive-body li {
+  margin-bottom: 4px;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.cognitive-body li strong {
+  color: #fff;
+}
+
+
 

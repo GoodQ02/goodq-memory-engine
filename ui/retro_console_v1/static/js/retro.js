@@ -1643,7 +1643,186 @@
       details.appendChild(disagSection);
     }
 
+    // ── Sprint 4+: Cognitive Arbitration Details (Epistemic & Arbitration payload) ──
+    const arb = scene.scene_context_arbitration;
+    if ((ctx_epistemic && typeof ctx_epistemic === "object") || (arb && typeof arb === "object")) {
+      const cogSection = document.createElement("div");
+      cogSection.className = "disag-section cognitive-section";
+
+      const cogHeader = document.createElement("div");
+      cogHeader.className = "disag-header";
+      const cogTitle = document.createElement("h4");
+      cogTitle.textContent = "🧠 Cognitive Arbitration";
+      cogTitle.style.color = "rgba(0, 220, 200, 0.85)";
+      cogTitle.style.margin = "0";
+      cogHeader.appendChild(cogTitle);
+
+      const cogToggle = document.createElement("button");
+      cogToggle.className = "disag-toggle-btn";
+      cogToggle.textContent = "Show";
+      cogHeader.appendChild(cogToggle);
+      cogSection.appendChild(cogHeader);
+
+      const cogBody = document.createElement("div");
+      cogBody.className = "cognitive-body";
+      cogBody.hidden = true;
+      cogBody.style.marginTop = "8px";
+      cogBody.style.fontSize = "11px";
+      cogBody.style.lineHeight = "1.5";
+      cogBody.style.fontFamily = "var(--font-mono)";
+
+      // Render Epistemic Metadata
+      if (ctx_epistemic && typeof ctx_epistemic === "object") {
+        const epistemicTitle = document.createElement("div");
+        epistemicTitle.style.fontWeight = "bold";
+        epistemicTitle.style.color = "#00ff66";
+        epistemicTitle.style.marginBottom = "4px";
+        epistemicTitle.textContent = `[EPISTEMIC STATE: ${String(ctx_epistemic.state || "").toUpperCase()}]`;
+        cogBody.appendChild(epistemicTitle);
+
+        const epistemicGrid = document.createElement("div");
+        epistemicGrid.style.display = "grid";
+        epistemicGrid.style.gridTemplateColumns = "120px 1fr";
+        epistemicGrid.style.gap = "4px 8px";
+        epistemicGrid.style.marginBottom = "8px";
+        epistemicGrid.style.paddingLeft = "8px";
+        epistemicGrid.style.borderLeft = "1px solid rgba(0, 255, 102, 0.2)";
+
+        const epistemicDetails = [
+          ["Evidence Family", ctx_epistemic.evidence_family],
+          ["Dominant Source", ctx_epistemic.dominant_evidence],
+          ["Conflict Status", ctx_epistemic.conflict_detected ? "CONFLICT DETECTED" : "CLEAR (No conflicts)"],
+        ];
+
+        epistemicDetails.forEach(([k, v]) => {
+          if (v !== undefined && v !== null) {
+            const keyEl = document.createElement("span");
+            keyEl.style.color = "rgba(0, 255, 102, 0.65)";
+            keyEl.textContent = k + ":";
+            const valEl = document.createElement("span");
+            valEl.textContent = String(v);
+            epistemicGrid.appendChild(keyEl);
+            epistemicGrid.appendChild(valEl);
+          }
+        });
+        cogBody.appendChild(epistemicGrid);
+
+        // Render Evidence Support Trail
+        const evidenceList = Array.isArray(ctx_epistemic.evidence) ? ctx_epistemic.evidence : [];
+        if (evidenceList.length > 0) {
+          const evHeader = document.createElement("div");
+          evHeader.style.fontWeight = "bold";
+          evHeader.style.color = "rgba(0, 210, 255, 0.85)";
+          evHeader.style.margin = "6px 0 2px 0";
+          evHeader.textContent = "Evidence Trail:";
+          cogBody.appendChild(evHeader);
+
+          const evList = document.createElement("ul");
+          evList.style.margin = "0";
+          evList.style.paddingLeft = "16px";
+          evList.style.listStyleType = "square";
+          evidenceList.forEach((ev) => {
+            const li = document.createElement("li");
+            const kind = ev.kind ? `[${ev.kind}] ` : "";
+            const role = ev.role ? `(${ev.role}) ` : "";
+            li.innerHTML = `<span style="color:rgba(0, 210, 255, 0.7)">${kind}</span>${role}<strong>${ev.value || ev}</strong>`;
+            evList.appendChild(li);
+          });
+          cogBody.appendChild(evList);
+        }
+
+        // Render Limits
+        const limitsList = Array.isArray(ctx_epistemic.limits) ? ctx_epistemic.limits : [];
+        if (limitsList.length > 0) {
+          const limHeader = document.createElement("div");
+          limHeader.style.fontWeight = "bold";
+          limHeader.style.color = "rgba(255, 180, 0, 0.85)";
+          limHeader.style.margin = "6px 0 2px 0";
+          limHeader.textContent = "System Limits:";
+          cogBody.appendChild(limHeader);
+
+          const limList = document.createElement("ul");
+          limList.style.margin = "0";
+          limList.style.paddingLeft = "16px";
+          limList.style.listStyleType = "square";
+          limitsList.forEach((lim) => {
+            const li = document.createElement("li");
+            li.textContent = typeof lim === "string" ? lim : JSON.stringify(lim);
+            limList.appendChild(li);
+          });
+          cogBody.appendChild(limList);
+        }
+      }
+
+      // Render Arbitration Metadata
+      if (arb && typeof arb === "object") {
+        const arbTitle = document.createElement("div");
+        arbTitle.style.fontWeight = "bold";
+        arbTitle.style.color = "rgba(0, 220, 200, 0.85)";
+        arbTitle.style.margin = "10px 0 4px 0";
+        arbTitle.textContent = `[RESOLVED BY: ${String(arb.resolved_by || "unknown").toUpperCase()}]`;
+        cogBody.appendChild(arbTitle);
+
+        // Hypotheses
+        const hyps = Array.isArray(arb.hypotheses) ? arb.hypotheses : [];
+        if (hyps.length > 0) {
+          const hypHeader = document.createElement("div");
+          hypHeader.style.fontWeight = "bold";
+          hypHeader.style.color = "rgba(0, 220, 200, 0.7)";
+          hypHeader.style.margin = "4px 0 2px 0";
+          hypHeader.textContent = "Hypotheses & Claims:";
+          cogBody.appendChild(hypHeader);
+
+          const hypList = document.createElement("ul");
+          hypList.style.margin = "0";
+          hypList.style.paddingLeft = "16px";
+          hypList.style.listStyleType = "circle";
+          hyps.forEach((h) => {
+            const li = document.createElement("li");
+            const axis = h.axis ? `[${h.axis}] ` : "";
+            const family = h.evidence_family ? `via ${h.evidence_family} ` : "";
+            const weight = h.weight ? `(${h.weight})` : "";
+            li.innerHTML = `<span style="color:rgba(0, 220, 200, 0.6)">${axis}</span>${family}claim: <strong>${h.claim}</strong> <span style="font-style:italic;color:rgba(255,255,255,0.5)">${weight}</span>`;
+            hypList.appendChild(li);
+          });
+          cogBody.appendChild(hypList);
+        }
+
+        // Conflicts
+        const conflicts = Array.isArray(arb.evidence_conflicts) ? arb.evidence_conflicts : [];
+        if (conflicts.length > 0) {
+          const confHeader = document.createElement("div");
+          confHeader.style.fontWeight = "bold";
+          confHeader.style.color = "rgba(255, 80, 80, 0.85)";
+          confHeader.style.margin = "6px 0 2px 0";
+          confHeader.textContent = "Evidence Conflicts:";
+          cogBody.appendChild(confHeader);
+
+          const confList = document.createElement("ul");
+          confList.style.margin = "0";
+          confList.style.paddingLeft = "16px";
+          confList.style.listStyleType = "square";
+          conflicts.forEach((c) => {
+            const li = document.createElement("li");
+            li.textContent = typeof c === "string" ? c : JSON.stringify(c);
+            confList.appendChild(li);
+          });
+          cogBody.appendChild(confList);
+        }
+      }
+
+      cogToggle.addEventListener("click", () => {
+        const hidden = cogBody.hidden;
+        cogBody.hidden = !hidden;
+        cogToggle.textContent = hidden ? "Hide" : "Show";
+      });
+
+      cogSection.appendChild(cogBody);
+      details.appendChild(cogSection);
+    }
+
     // ── Transcript ─────────────────────────────────────────────────────────────
+
     if (scene.tags && scene.tags.length > 0) {
       const tagsRow = document.createElement("div");
       tagsRow.className = "scene-tags-row";

@@ -1376,8 +1376,7 @@ a {
 }
 
 .retrieval-header,
-.retrieval-card-header,
-.retrieval-preview {
+.retrieval-card-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1526,6 +1525,11 @@ a {
   margin-left: 6px;
   color: var(--flight-muted);
   font-size: 10px;
+}
+
+.retrieval-suggestion-mode {
+  color: var(--flight-green) !important;
+  text-transform: uppercase;
 }
 
 .retrieval-button {
@@ -2007,8 +2011,16 @@ a {
 }
 
 .retrieval-preview {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.9fr) minmax(260px, 1.1fr) minmax(190px, auto);
+  align-items: start;
+  gap: 18px;
   margin-top: 18px;
   padding: 16px;
+}
+
+.retrieval-preview-summary {
+  min-width: 0;
 }
 
 .retrieval-preview p {
@@ -2023,7 +2035,8 @@ a {
   grid-template-columns: minmax(96px, 150px) minmax(0, 1fr);
   gap: 12px;
   align-items: center;
-  margin: 14px 0;
+  min-width: 0;
+  margin: 0;
   padding: 10px;
   border: 1px solid rgba(255, 179, 0, 0.16);
   border-radius: 6px;
@@ -2076,10 +2089,13 @@ a {
 .retrieval-preview-actions {
   display: flex;
   flex-wrap: wrap;
+  align-content: start;
+  justify-content: flex-start;
   gap: 10px;
 }
 
 .retrieval-lineage-strip {
+  grid-column: 1 / -1;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
@@ -2113,6 +2129,10 @@ a {
   font-size: 12px;
   line-height: 1.25;
   overflow-wrap: anywhere;
+}
+
+.retrieval-transcript-panel.empty {
+  border-color: rgba(255, 171, 0, 0.28);
 }
 
 .media-preview-panel {
@@ -3565,7 +3585,7 @@ h3 {
 
   .retrieval-preview {
     align-items: start;
-    flex-direction: column;
+    grid-template-columns: 1fr;
   }
 
   .scope-banner {

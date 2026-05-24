@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE_RUNBOOK -->
-<!-- DOC_LAST_VERIFIED: 2026-05-21 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-24 -->
 
 # Clean Memory Start Workflow
 
@@ -116,6 +116,14 @@ That epoch is the current evidence surface for the Windows Ollama fallback,
 configured WSL `faster-whisper` probe, current-run audio proof, sentiment,
 entity hygiene, Qdrant, and explicit-ID FAISS validation. It is occupied probe
 evidence, not a broad home-memory seed.
+
+The completed full family home-movie validation run then used:
+
+```text
+epoch_2026_05_22_family_full_01
+```
+
+That epoch contains the full 141-scene FAMILY run, complete SQLite/KG projections, audio vector proofs, and is served by the Retro Memory Explorer UI. It is the current baseline validation surface and must not seed the next clean pass.
 
 For the next broad home-memory run, create or select a fresh epoch and confirm
 its configured collections follow this pattern:

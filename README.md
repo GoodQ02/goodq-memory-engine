@@ -216,7 +216,8 @@ Then open:
 
 - `http://127.0.0.1:30000/api/health/summary`
 - `http://127.0.0.1:30000/docs`
-- `http://127.0.0.1:30000/ui/operator_console_v1/`
+- `http://127.0.0.1:30000/ui/operator_console_v1/` (Classic Operator Console)
+- `http://127.0.0.1:30000/ui/retro_console_v1/` (Retro Memory Explorer)
 
 The host and port default to `GOODQ_API_HOST=127.0.0.1` and
 `GOODQ_API_PORT=30000` and can be overridden in `.env.local`.
@@ -248,20 +249,17 @@ GoodQ4All currently supports:
 - SQLite + knowledge graph + Qdrant-backed persisted memory
 - CPU-safe baseline execution with optional GPU / WSL acceleration
 
-GoodQ4All now ships a local read-only operator console at
-`/ui/operator_console_v1/`. It exposes the Current Scope strip, Flight Deck,
-proof/evidence status, retrieval inspection, storage/runtime summaries,
-recurrence reports, video inventory, and scene/timeline read models.
+GoodQ4All now ships two local read-only operator console variants:
+- **Classic Operator Console** served at `/ui/operator_console_v1/`. It exposes the Current Scope strip, Flight Deck, proof/evidence status, recurrence reports, and video inventories.
+- **Retro Memory Explorer (v1.4.7)** served at `/ui/retro_console_v1/`. A premium cyber-CRT dashboard featuring a four-panel resizable/collapsible layout with floating restore tabs, an entity co-occurrence graph with dynamic spacing zoom and flight transitions, an Inspector panel containing keyframe image/transcript views with resizable logs splitters, and bidirectional timeline checklists.
 
-The console is an inspection surface only. It does not trigger ingestion,
-reindex memory, heal configs, mutate persistence, generate reports, or activate
-ControlAgent. A polished consumer memory browser and confirmation-gated
-mutation UI remain future layers, not current product claims.
+The consoles are inspection surfaces only. They do not trigger ingestion, reindex memory, heal configs, mutate database structures, generate reports, or activate ControlAgent. A polished consumer memory browser and confirmation-gated mutation UI remain future layers.
 
-UI status:
+UI status & details:
 
 - [`docs/guides/ui/JUSTIFICATION_UI.md`](docs/guides/ui/JUSTIFICATION_UI.md)
-- [`ui/operator_console_v1/README.md`](ui/operator_console_v1/README.md)
+- [ui/operator_console_v1/README.md](file:///L:/GOODCUBE/projects/goodq4all/ui/operator_console_v1/README.md)
+- [ui/retro_console_v1/README.md](file:///L:/GOODCUBE/projects/goodq4all/ui/retro_console_v1/README.md)
 
 ## What Makes It Different
 

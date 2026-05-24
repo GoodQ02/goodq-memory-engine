@@ -50,6 +50,42 @@
       "ollama_model": "phi4:latest",
       "ollama_windows_logon_task": "GoodQ4All Ollama Fallback Startup",
       "ollama_start_script": "scripts/start_ollama_fallback.ps1"
+    },
+    "retro_console": {
+      "path": "/ui/retro_console_v1/",
+      "status": "implemented",
+      "version": "1.4.7",
+      "authority": "read_only",
+      "features": [
+        "selected_cyber_blue_highlighting",
+        "canvas_zoom_magnify_flight",
+        "entity_co_occurrence_graph_with_pan_drag_and_wheel_zoom",
+        "forensic_data_trail_logs",
+        "human_readable_search_modes",
+        "reduced_motion_media_queries",
+        "dynamic_four_panel_layout_with_resizable_and_collapsible_panels",
+        "restore_tabs_for_collapsed_panels",
+        "entity_filter_checklist_with_bidirectional_canvas_sync",
+        "deterministic_single_click_select_double_click_deselect",
+        "empty_canvas_click_resets_entity_selection_preserves_search",
+        "multi_entity_filter_narrows_timeline_scenes_incrementally",
+        "inspector_subsection_splitter_vscode_style",
+        "data_trail_logs_collapsible_with_inspector_expand_on_collapse",
+        "canvas_resize_observer_prevents_egg_distortion_on_panel_resize",
+        "timeline_heading_reflects_active_search_and_entity_filters",
+        "scene_transcript_display_in_inspector",
+        "search_query_centers_and_zooms_matching_entity_node",
+        "reset_view_button_clears_all_filters_including_search",
+        "keyframe_image_viewer_in_inspector",
+        "dynamic_spacing_zoom_for_canvas_graph"
+      ],
+      "interaction_model": {
+        "single_click_entity": "selects_entity_clears_other_selections_zooms_canvas",
+        "checkbox_click_entity": "toggles_multi_selection",
+        "double_click_entity": "deselects_entity",
+        "empty_canvas_click": "resets_entity_selection_only_preserves_search_results",
+        "reset_view_button": "full_reset_search_plus_entities_plus_zoom"
+      }
     }
   },
   "clean_start": {

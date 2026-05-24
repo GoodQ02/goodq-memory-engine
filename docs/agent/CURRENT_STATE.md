@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE_AGENT_STATE -->
-<!-- DOC_LAST_VERIFIED: 2026-05-23 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-24 -->
 
 # GoodQ4All Current Agent State
 
@@ -30,6 +30,22 @@ test runs, is disposable and should not seed the next run.
 - Current profile from runtime config: `BASELINE`
 - WSL distro from runtime config: `Ubuntu-22.04`
 - Operator console: read-only UI, no ingestion/control authority
+  - Retro Memory Explorer: read-only memory viewer, served at `/ui/retro_console_v1/`
+    (v1.4.7). Features: four-panel dynamic layout (Search · Map · Inspector · Timeline)
+    with individually resizable and collapsible panels and floating restore tabs; entity
+    co-occurrence canvas graph with pan/drag/wheel zoom, dynamic coordinate-level spacing zoom
+    (separating nodes on zoom without bloating shapes or text labels), and smooth zoom-flight to
+    selected nodes; entity filter checklist with bidirectional canvas sync; deterministic
+    interaction model (single-click selects and zooms, checkbox toggles multi-select,
+    double-click deselects, empty canvas click resets entity selection while preserving
+    search results, Reset View button clears everything); multi-entity filter narrows
+    timeline scene cards incrementally; Inspector with VS Code-style subsection splitter
+    for the Data Trail Logs section (collapsible, resizable, fills remaining space when
+    collapsed); canvas ResizeObserver prevents aspect-ratio distortion during panel
+    resizes; forensic data trail query logging; search query centers and zooms to
+    matching entity node; cyber-blue (`#00d2ff`) selection highlights; reduced-motion
+    media query support; dynamic keyframe image viewer (CRT animated standby / fallback) and
+    transcript display positioned directly below the keyframe in the Inspector.
 - Local vLLM primary: `http://127.0.0.1:38005/v1`, systemd unit
   `vllm-llama1b.service`, model
   `/home/jdben/models/Qwen2.5-0.5B-Instruct`

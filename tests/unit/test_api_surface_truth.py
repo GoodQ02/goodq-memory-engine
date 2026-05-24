@@ -7,7 +7,9 @@ import sys
 from pathlib import Path
 
 import pytest
+from fastapi import FastAPI
 from fastapi import HTTPException
+from fastapi.testclient import TestClient
 
 
 def _load_route_module(module_name: str):
@@ -356,6 +358,27 @@ def test_list_scenes_surfaces_persisted_audio_truth(monkeypatch: pytest.MonkeyPa
         "source": "interaction_chain",
         "continuity_key": "SPEAKER_00",
     }
+
+
+def test_get_scene_route_accepts_hash_ids_and_transcript_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
+    temporal_index = _sample_temporal_index()
+    segment = temporal_index["segments"][0]
+    segment["scene_id"] = "scene_hash_abc123"
+    segment.pop("full_transcript")
+    segment["transcript"] = "Transcript persisted under the temporal transcript key only."
+    loader = _FakeLoader(temporal_index)
+    monkeypatch.setattr(scenes_module, "get_data_loader", lambda: loader)
+
+    app = FastAPI()
+    app.include_router(scenes_module.router)
+    client = TestClient(app)
+
+    response = client.get("/api/videos/video_001/scenes/scene_hash_abc123")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["scene_id"] == "scene_hash_abc123"
+    assert payload["transcript"] == "Transcript persisted under the temporal transcript key only."
 
 
 def test_full_timeline_surfaces_persisted_audio_truth(monkeypatch: pytest.MonkeyPatch) -> None:

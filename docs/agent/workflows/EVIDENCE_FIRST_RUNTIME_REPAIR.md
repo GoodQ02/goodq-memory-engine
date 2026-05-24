@@ -1,12 +1,12 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE_AGENT_WORKFLOW -->
-<!-- DOC_LAST_VERIFIED: 2026-05-22 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-24 -->
 
 # Evidence-First Runtime Repair
 
 Use this workflow when a runtime capability looks absent, stale, or partially
 proven, especially around WSL audio, local LLM fallback, Qdrant/FAISS proof,
-sentiment, entities, or operator-console visibility.
+sentiment, entities, operator-console visibility, or Retro Memory Explorer views.
 
 ## Purpose
 
@@ -39,7 +39,7 @@ Invoke-RestMethod -Uri 'http://127.0.0.1:30000/api/status' -TimeoutSec 10
    - Runtime truth: API status, service health, WSL preflight, Qdrant status
    - Persistence truth: scene manifests, temporal index, Qdrant payloads, FAISS
      indexes, SQLite/KG rows
-   - UI truth: operator console labels and evidence panels
+   - UI truth: operator console labels, Retro Memory Explorer views/logs, and evidence panels
 
 4. **Patch the boundary, not the symptom**
    - If an API probe checks the wrong environment, fix the probe.

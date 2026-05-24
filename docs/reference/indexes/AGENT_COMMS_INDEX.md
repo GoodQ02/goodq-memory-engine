@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE_POINTER -->
-<!-- DOC_LAST_VERIFIED: 2026-05-20 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-23 -->
 
 # GoodQ4All Agent & Copilot Communications Index
 
@@ -17,7 +17,7 @@ The former active agent-communications and Copilot communications directories ha
 
 ## Current Pause Point
 
-As of 2026-05-20, the active agent first-read has moved to
+As of 2026-05-23, the active agent first-read has moved to
 `docs/agent/CURRENT_STATE.md` with a machine-readable mirror at
 `docs/agent/current_state.json`. Use this index only to interpret archived
 agent/Copilot notes. Do not route fresh agents through archived communications
@@ -64,6 +64,8 @@ For canonical status and current runtime truth, prefer:
 - `docs/agent/CURRENT_STATE.md`
 - `docs/agent/current_state.json`
 - `docs/agent/README.md`
+- `docs/agent/workflows/CLEAN_MEMORY_START.md`
+- `docs/agent/workflows/EVIDENCE_FIRST_RUNTIME_REPAIR.md`
 - `docs/architecture/INGEST_ORCHESTRATION_CONTRACT.md`
 - `docs/architecture/IDENTITY_STITCHING_CONTRACT.md`
 - `docs/reference/WSL_AUDIO_RUNTIME.md`
@@ -106,6 +108,8 @@ Release-level session summary:
   - `docs/agent/CURRENT_STATE.md`
   - `docs/agent/current_state.json`
   - `docs/agent/README.md`
+  - `docs/agent/workflows/CLEAN_MEMORY_START.md`
+  - `docs/agent/workflows/EVIDENCE_FIRST_RUNTIME_REPAIR.md`
   - `docs/architecture/INGEST_ORCHESTRATION_CONTRACT.md`
   - `docs/architecture/IDENTITY_STITCHING_CONTRACT.md`
   - `docs/reference/WSL_AUDIO_RUNTIME.md`

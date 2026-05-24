@@ -112,6 +112,7 @@
 
   const diagnosticEndpointNames = new Set(["engines", "gpu", "wsl", "queue"]);
   const optionalEndpointNames = new Set(["envelope"]);
+  const operatorTargetIds = new Set(["overview", "runs", "surfaces", "diagnostics", "storage-panel", "memory", "evidence"]);
   const endpointTimeoutMs = {
     status: 30000,
     health: 30000,
@@ -199,6 +200,16 @@
     return normalizeViewMode(params.get("mode") || readStoredViewMode() || "guided");
   }
 
+  function writeViewModeUrl(mode) {
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.set("mode", mode);
+      window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+    } catch (error) {
+      console.warn("View mode URL could not be updated.", error);
+    }
+  }
+
   function applyViewMode() {
     const shell = qs("#app-shell");
     if (shell) shell.dataset.viewMode = state.viewMode;
@@ -233,8 +244,19 @@
   function setViewMode(mode) {
     state.viewMode = normalizeViewMode(mode);
     writeStoredViewMode(state.viewMode);
+    writeViewModeUrl(state.viewMode);
     applyViewMode();
     updateActiveRail();
+  }
+
+  function navigateHashTarget(event, hash) {
+    if (!hash || !hash.startsWith("#")) return;
+    const targetId = hash.slice(1);
+    if (state.viewMode === "guided" && operatorTargetIds.has(targetId)) {
+      event.preventDefault();
+      setViewMode("operator");
+      window.location.hash = hash;
+    }
   }
 
   function updateActiveRail() {
@@ -303,7 +325,7 @@
 
   function safeString(value, key) {
     if (value === null || value === undefined) return "null";
-    if (PATH_KEY_RE.test(String(key || "")) || hasPathValue(value)) {
+    if (state.viewMode !== "operator" && (PATH_KEY_RE.test(String(key || "")) || hasPathValue(value))) {
       return "[local-only]";
     }
     if (typeof value === "boolean") return value ? "true" : "false";
@@ -313,14 +335,29 @@
     }
     if (typeof value === "object") {
       const entries = Object.entries(value)
-        .filter(([childKey, childValue]) => !PATH_KEY_RE.test(childKey) && !hasPathValue(childValue))
+        .filter(([childKey, childValue]) => state.viewMode === "operator" || (!PATH_KEY_RE.test(childKey) && !hasPathValue(childValue)))
         .slice(0, 4)
         .map(([childKey, childValue]) => `${childKey}=${safeString(childValue, childKey)}`);
       return entries.length ? entries.join(", ") : "{}";
     }
     const text = String(value).replace(/\u0000/g, "").trim();
-    if (hasPathValue(text)) return "[local-only]";
+    if (state.viewMode !== "operator" && hasPathValue(text)) return "[local-only]";
     return text.length > 96 ? `${text.slice(0, 93)}...` : text;
+  }
+
+  function safeTranscriptString(value, key) {
+    if (value === null || value === undefined) return "";
+    if (state.viewMode !== "operator" && (PATH_KEY_RE.test(String(key || "")) || hasPathValue(value))) return "[local-only]";
+    if (typeof value === "boolean" || typeof value === "number") return safeString(value, key);
+    if (Array.isArray(value) || (typeof value === "object" && value !== null)) return safeString(value, key);
+    const text = String(value).replace(/\u0000/g, "").trim();
+    return state.viewMode !== "operator" && hasPathValue(text) ? "[local-only]" : text;
+  }
+
+  function transcriptExcerpt(value, limit = 118) {
+    const text = safeTranscriptString(value, "transcript");
+    if (!text) return "";
+    return text.length > limit ? `${text.slice(0, Math.max(0, limit - 3))}...` : text;
   }
 
   function valueClass(value, key) {
@@ -661,6 +698,49 @@
 
   function latestRunTimestamp(run) {
     return run?.latest_episode?.ts_utc || run?.end_time || run?.start_time || null;
+  }
+
+  function readableState(value, fallback) {
+    const raw = safeString(value || fallback || "Observed", "status").replace(/[_-]+/g, " ").trim();
+    return raw.replace(/\b[a-z]/g, (letter) => letter.toUpperCase());
+  }
+
+  function latestRunDisplay(run) {
+    if (!run || run.available !== true) return grammarState("NO_CURRENT_RUN_EVIDENCE", "No run preview");
+    const timestamp = latestRunTimestamp(run);
+    const status = readableState(run.status || "observed");
+    const when = relativeTime(timestamp);
+    const hasTimestamp = when !== "Not observed";
+    return {
+      label: hasTimestamp ? when : status,
+      kind: "ok",
+      note: hasTimestamp ? status : "timestamp not exposed",
+    };
+  }
+
+  function audioProofDisplay(audioProof) {
+    const proof = audioProof || {};
+    const status = String(proof.status || "").toLowerCase();
+    const proven = numberValue(proof.current_run_qdrant_proven);
+    const scope = numberValue(proof.scene_scope_count ?? proof.scenes_total);
+    const clapOk = numberValue(proof.clap_ok);
+    const denominator = scope !== null ? scope : clapOk;
+    const gap = proven !== null && denominator !== null ? Math.max(0, denominator - proven) : null;
+    const observed = status === "current_run_audio_vector_proven";
+    const partial = status === "partial" || (gap !== null && gap > 0 && proven !== null && proven > 0);
+    const label = proven !== null && denominator !== null
+      ? `${proven}/${denominator} proven`
+      : proof.label || (observed ? "Proven" : "No Current-Run Evidence");
+    const gapNote = gap !== null && gap > 0
+      ? (gap === 1 ? "1 scene still needs current-run proof" : `${gap} scenes still need current-run proof`)
+      : "";
+    return {
+      label,
+      kind: observed && !partial ? "ok" : partial ? "warn" : "unknown",
+      note: [gapNote, proof.impact || "strict run-matched CLAP/Qdrant verdict"].filter(Boolean).join("; "),
+      status,
+      observed,
+    };
   }
 
   function hasOkStatus(value) {
@@ -1109,9 +1189,7 @@
     const sceneCount = numberValue(run.scenes_processed ?? latestEpisode.scene_count ?? evidence.temporal_index?.total_scenes);
     const temporalCount = numberValue(evidence.temporal_index?.total_scenes);
     const audioProof = evidence.audio_vector_proof || {};
-    const audioProofStatus = String(audioProof.status || "").toLowerCase();
-    const audioProofKind = audioProofStatus === "current_run_audio_vector_proven" ? "ok" : audioProofStatus === "partial" ? "warn" : "unknown";
-    const audioProofLabel = audioProof.label || (audioProofKind === "ok" ? "Proven" : "No Current-Run Evidence");
+    const audioProofInfo = audioProofDisplay(audioProof);
     const browsingValue = state.selectedVideoId || latestEpisode.timeline_video_id || latestEpisode.episode || "";
     const selectedSceneValue = selected
       ? `${sceneDisplayLabel(selectedSegment.scene_id || selectedSegment.index || selected.key, selected.index)} ${formatTime(selectedSegment.start)}-${formatTime(selectedSegment.end)}`
@@ -1157,10 +1235,10 @@
     appendScopeItem(
       grid,
       "Audio Proof",
-      audioProofLabel,
-      audioProofKind,
-      audioProof.impact || "strict run-matched CLAP/Qdrant verdict",
-      audioProofStatus
+      audioProofInfo.label,
+      audioProofInfo.kind,
+      audioProofInfo.note,
+      audioProofInfo.status
     );
     appendScopeItem(
       grid,
@@ -1604,7 +1682,7 @@
     const stepRows = numberValue(evidence.step_runs?.row_count);
     const sceneCount = numberValue(run.scenes_processed);
     const firstMemoryCreated = run.available === true && sceneCount !== null && sceneCount > 0;
-    const latestRunAgo = relativeTime(latestRunTimestamp(run));
+    const latestRunState = latestRunDisplay(run);
     const pipelineStatus = String(status.processing?.status || status.components?.pipeline || "").toLowerCase();
     const pipelineRunning = Boolean(pipelineStatus && !["idle", "inactive", "unknown", "unavailable"].includes(pipelineStatus));
     const processingFolderNote =
@@ -1711,13 +1789,7 @@
     appendFlightRow(
       firstRun,
       "Latest Run",
-      run.available
-        ? {
-            label: latestRunAgo,
-            kind: "ok",
-            note: safeString(run.status || "observed", "status"),
-          }
-        : grammarState("NO_CURRENT_RUN_EVIDENCE", "No run preview"),
+      latestRunState,
       "flight-latest-run"
     );
     appendFlightRow(
@@ -1873,11 +1945,10 @@
     const audioProofStatus = String(audioProof.status || "unavailable");
     const audioProofObserved = audioProofStatus === "current_run_audio_vector_proven";
     const audioProofPartial = audioProofStatus === "partial";
-    const audioProofKind = audioProofObserved ? "ok" : audioProofPartial ? "warn" : "unknown";
-    const audioProofLabel = audioProof.label || (audioProofObserved ? "Proven" : "No Current-Run Evidence");
-    const audioProofNote = provenAudioCount !== null && clapOkCount !== null
-      ? `${provenAudioCount} / ${clapOkCount} CLAP-ok scenes`
-      : audioProof.impact || "Run-matched Qdrant proof not reported";
+    const audioProofInfo = audioProofDisplay(audioProof);
+    const audioProofKind = audioProofInfo.kind || (audioProofObserved ? "ok" : audioProofPartial ? "warn" : "unknown");
+    const audioProofLabel = audioProofInfo.label;
+    const audioProofNote = audioProofInfo.note || "Run-matched Qdrant proof not reported";
     const provenanceCapablePoints = numberValue(audioProvenance.provenance_capable_points);
     const runTaggedAudioRuns = numberValue(audioProvenance.run_tagged_audio_runs);
     const latestInventoryPoints = numberValue(latestAudioInventoryRun.provenance_capable_points);
@@ -3254,11 +3325,23 @@
     return chips.slice(0, 10);
   }
 
+  function retrievalSuggestionChipMode() {
+    const current = normalizeRetrievalModalityMode(state.retrieval.modalityMode);
+    return current === "audio" ? "all" : current;
+  }
+
+  function retrievalSuggestionHelpText() {
+    return state.retrieval.modalityMode === "audio"
+      ? "Try searches from observed tags/entities (lexical chips run All surfaces; Audio-only is for sound similarity)"
+      : "Try searches from observed tags/entities";
+  }
+
   function renderRetrievalSuggestionChips() {
     const strip = qs("#retrieval-suggestion-strip");
     if (!strip) return;
     clear(strip);
-    appendText(strip, "span", "Try searches from observed tags/entities", "retrieval-suggestion-label");
+    const chipMode = retrievalSuggestionChipMode();
+    appendText(strip, "span", retrievalSuggestionHelpText(), "retrieval-suggestion-label");
     const chips = retrievalSuggestionChips();
     if (!chips.length) {
       appendText(strip, "span", "No observed tag/entity suggestions exposed yet.", "retrieval-context-empty");
@@ -3269,12 +3352,19 @@
       button.type = "button";
       button.className = "retrieval-suggestion-chip";
       button.setAttribute("data-retrieval-suggestion", chip.label);
-      button.title = `Observed ${chip.source}; runs a read-only retrieval query.`;
+      button.setAttribute("data-retrieval-suggestion-mode", chipMode);
+      button.title = state.retrieval.modalityMode === "audio"
+        ? "Lexical chip; Audio-only mode switches to All surfaces."
+        : `Observed ${chip.source}; runs a read-only retrieval query.`;
       button.appendChild(document.createTextNode(chip.label));
       if (chip.count !== null) appendText(button, "small", String(chip.count));
+      if (chipMode !== normalizeRetrievalModalityMode(state.retrieval.modalityMode)) {
+        appendText(button, "small", "All", "retrieval-suggestion-mode");
+      }
       button.addEventListener("click", () => {
         const input = qs("#retrieval-query-input");
         if (input) input.value = chip.label;
+        state.retrieval.modalityMode = retrievalSuggestionChipMode();
         state.retrieval.limit = 10;
         runRetrievalQuery({ resetLimit: true });
       });
@@ -3302,8 +3392,7 @@
   function resultSummary(result) {
     const context = result && result.context && typeof result.context === "object" ? result.context : {};
     const candidates = [
-      result && result.transcript,
-      context.transcript,
+      transcriptExcerpt(retrievalFullTranscript(result)),
       retrievalLlmSummary(result),
       context.summary,
       context.caption,
@@ -3314,15 +3403,22 @@
     return safeString(candidates.find(Boolean) || "No transcript or scene context returned.", "summary");
   }
 
+  function retrievalTranscriptText(value) {
+    const text = safeTranscriptString(value || "", "transcript").trim();
+    const placeholder = text.replace(/\s+/g, "").toLowerCase();
+    if (!text || placeholder === "..." || placeholder === "\u2026" || placeholder === "[redacted]") return "";
+    return text;
+  }
+
   function retrievalFullTranscript(result) {
     const context = retrievalContext(result);
-    return safeString(
-      (result && result.transcript) ||
+    return retrievalTranscriptText(
       context.full_transcript ||
+      (result && result.full_transcript) ||
+      (result && result.transcript) ||
       context.transcript ||
-      "",
-      "transcript"
-    ).trim();
+      ""
+    );
   }
 
   function resultTimeLabel(result) {
@@ -3658,17 +3754,26 @@
 
   function appendRetrievalFullTranscript(container, result) {
     const transcript = retrievalFullTranscript(result);
-    if (!container || !transcript) return;
+    if (!container) return;
     const panel = document.createElement("details");
-    panel.className = "retrieval-transcript-panel";
+    panel.className = `retrieval-transcript-panel ${transcript ? "" : "empty"}`.trim();
     panel.setAttribute("data-testid", "retrieval-transcript-panel");
+    panel.setAttribute("aria-label", transcript ? "Full scene transcript" : "Transcript detail");
     const summary = document.createElement("summary");
-    summary.textContent = "Show Full Transcript";
+    summary.title = transcript ? "Full scene transcript from the local API response." : "Transcript detail is not exposed for this result.";
+    summary.textContent = transcript ? "Show Full Transcript" : "Transcript Detail";
     panel.addEventListener("toggle", () => {
-      summary.textContent = panel.open ? "Hide Full Transcript" : "Show Full Transcript";
+      summary.textContent = transcript
+        ? (panel.open ? "Hide Full Transcript" : "Show Full Transcript")
+        : "Transcript Detail";
     });
     panel.appendChild(summary);
-    appendText(panel, "p", transcript, "retrieval-transcript-text");
+    appendText(
+      panel,
+      "p",
+      transcript || "No transcript returned for this result. Placeholder transcript was omitted.",
+      "retrieval-transcript-text"
+    );
     container.appendChild(panel);
   }
 
@@ -5837,6 +5942,9 @@
     document.querySelectorAll("[data-mode]").forEach((button) => {
       button.addEventListener("click", () => setViewMode(button.getAttribute("data-mode")));
     });
+    document.querySelectorAll('a[href^="#"]').forEach((link) => {
+      link.addEventListener("click", (event) => navigateHashTarget(event, link.getAttribute("href")));
+    });
     window.addEventListener("hashchange", updateActiveRail);
     updateActiveRail();
     qs("#api-form").addEventListener("submit", (event) => {
@@ -5871,8 +5979,9 @@
       findSimilarScenesForSelected();
     });
     qs("#retrieval-view-timeline").addEventListener("click", (event) => {
-      if (!selectedRetrievalEntry()) return;
       event.preventDefault();
+      const selected = selectedRetrievalEntry();
+      if (!selected) return;
       selectRetrievalResultSurface("videos");
     });
     refreshAll();

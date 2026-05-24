@@ -1,4 +1,4 @@
-# Retro Memory Explorer (v1.4.7)
+# Retro Memory Explorer (v1.5.1)
 
 Welcome to the **Retro Memory Explorer**, the operator-centric cognitive local-first visualization dashboard for GoodQ4All. This interface provides an interactive dashboard to explore ingested memories, audit semantic models, and trace epistemic evidence paths.
 
@@ -27,7 +27,7 @@ The workspace is organized into a **four-panel resizable grid shell**:
 | Text search, mode    | Entity co-occurrence network graph.  |
 | selector (Text/      | Features pan, drag, and dynamic      |
 | Visual/Audio/All),   | spacing zoom controls.               |
-| suggestions.         |                                      |
+| suggestions.         | Supports 2D/3D dual layout modes.   |
 |----------------------+--------------------------------------|
 | [ TIMELINE PANEL ]   | [ INSPECTOR PANEL ]                  |
 |                      |                                      |
@@ -45,12 +45,16 @@ The workspace is organized into a **four-panel resizable grid shell**:
 
 ### B. Map (Canvas) Panel
 The central entity co-occurrence graph visualized on an HTML5 `<canvas>` element.
-* **Dynamic Spacing Zoom:** Spreads node coordinates apart dynamically on zoom rather than scaling the canvas rendering context (`ctx.scale()`). This keeps font rendering and icon lines razor-sharp without element bloating or overlapping.
-* **Zoom Flight:** Selecting a node triggers a smooth camera flight animation centering and focusing on the target entity.
+* **Dual Display Layouts**: Supports toggling between a 2D Circular Map and an immersive 3D Spinning Globe via buttons on the bottom margin.
+* **Immersive 3D Globe**: In 3D mode, nodes are mapped onto a spherical shell using a golden angle Fibonacci distribution.
+* **Dynamic Spacing Zoom:** Spreads node coordinates apart dynamically on zoom rather than scaling the canvas rendering context (`ctx.scale()`). This keeps font rendering and icon lines razor-sharp without element bloating or overlapping, both in 2D and 3D.
+* **Autopilot Zoom Flight:** Selecting a node triggers a smooth camera flight animation centering and focusing on the target entity. In 3D mode, the autopilot automatically rotates the sphere so the selected entity faces directly towards the viewer on the front hemisphere.
+* **Momentum Spin Physics**: Left-click dragging on empty canvas space in 3D mode rotates the globe. On release, it preserves mouse movement velocity for inertia-based momentum spinning, slowly decelerating into a gentle ambient drift rotation.
+* **Depth Perception Sorting (Painter's Algorithm)**: Sorts nodes by depth before drawing, ensuring closer nodes overlay further ones. Far-side edges and nodes fade out, and text labels hide when `rotatedZ < -10` to avoid layout clutter.
 * **Interaction Hooks:**
-  * **Single-click:** Selects the target entity and centers it.
+  * **Single-click:** Selects the target entity and centers/focuses it. In 3D, only front-facing nodes can be selected to prevent accidental back-side selection.
   * **Deselect:** Double-click any node or click on empty canvas to clear the selection state.
-  * **Drag & Pan:** Left-click and drag the canvas to pan. Mouse scroll-wheel zooms in/out.
+  * **Drag & Pan:** Left-click and drag the canvas to pan (in 2D) or spin the globe (in 3D). Mouse scroll-wheel zooms in/out.
 
 ### C. Timeline Panel
 * Displays scene-level cards in order of timestamp.

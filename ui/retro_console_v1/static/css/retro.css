@@ -945,6 +945,21 @@ h1, h2, h3, h4, h5, strong, .blink {
   box-shadow: 0 0 5px var(--accent-glow);
 }
 
+.retro-btn-mini.active {
+  color: #00d2ff !important;
+  border-color: #00d2ff !important;
+  background-color: rgba(0, 210, 255, 0.08) !important;
+  text-shadow: 0 0 4px rgba(0, 210, 255, 0.5) !important;
+  box-shadow: 0 0 5px rgba(0, 210, 255, 0.15) !important;
+}
+
+.legend-divider {
+  color: var(--border-faint);
+  margin: 0 6px;
+  user-select: none;
+  font-size: 11px;
+}
+
 /* ─── Entity Filter Section (Left Panel) ─────────────────────── */
 .entity-filter-section {
   margin-top: 10px;

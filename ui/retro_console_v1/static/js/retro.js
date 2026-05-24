@@ -24,6 +24,12 @@
     lastQuery: "",
     intelVisible: false,   // Sprint 3: Intel panel open state
     intelFilter: null,     // Sprint 3+: {type, value} filter from intel panel
+    graphMode: "2D",       // "2D" or "3D"
+    graphRotation: { alpha: 0.2, beta: 0.15 },
+    graphSpinSpeed: { alpha: 0.0025, beta: 0.0008 },
+    targetRotation: { alpha: 0.2, beta: 0.15 },
+    isSpinning: true,
+    isAutoRotating: false,
   };
 
   // ─── Text-to-Speech (Web Speech API) ──────────────────────────
@@ -343,16 +349,67 @@
     };
   }
 
-  // Calculate Node Layout Coordinates
+  // 3D rotation matrix calculation
+  function rotate3d(x, y, z, alpha, beta) {
+    // Rotate around Y-axis (yaw)
+    const cosA = Math.cos(alpha);
+    const sinA = Math.sin(alpha);
+    const x1 = x * cosA - z * sinA;
+    const z1 = x * sinA + z * cosA;
+
+    // Rotate around X-axis (pitch)
+    const cosB = Math.cos(beta);
+    const sinB = Math.sin(beta);
+    const y2 = y * cosB - z1 * sinB;
+    const z2 = y * sinB + z1 * cosB;
+
+    return { x: x1, y: y2, z: z2 };
+  }
+
+  // Calculate Node Layout Coordinates (2D and 3D)
   function calculateLayout(graph) {
     const nodes = graph.nodes;
     const radius = 160;
 
+    // 2D Circular Layout
     nodes.forEach((node, index) => {
       const angle = (index / nodes.length) * 2 * Math.PI;
       node.x = radius * Math.cos(angle);
       node.y = radius * Math.sin(angle);
     });
+
+    // 3D Fibonacci Sphere Layout
+    const phi = Math.PI * (Math.sqrt(5.0) - 1.0); // golden angle in radians
+    const sphereRadius = 140;
+    nodes.forEach((node, index) => {
+      const y = 1.0 - (index / (nodes.length - 1 || 1)) * 2.0; // y goes from 1 to -1
+      const radiusAtY = Math.sqrt(1.0 - y * y);
+      const theta = phi * index;
+
+      node.base3dX = sphereRadius * radiusAtY * Math.cos(theta);
+      node.base3dY = sphereRadius * y;
+      node.base3dZ = sphereRadius * radiusAtY * Math.sin(theta);
+
+      node.rotatedX = node.base3dX;
+      node.rotatedY = node.base3dY;
+      node.rotatedZ = node.base3dZ;
+    });
+  }
+
+  // Helper to apply opacity to colors in canvas
+  function applyOpacity(color, opacity) {
+    if (color.startsWith("#")) {
+      const r = parseInt(color.slice(1, 3), 16);
+      const g = parseInt(color.slice(3, 5), 16);
+      const b = parseInt(color.slice(5, 7), 16);
+      return `rgba(${r}, ${g}, ${b}, ${opacity})`;
+    }
+    if (color.startsWith("rgba")) {
+      return color.replace(/rgba\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*([\d\.]+)\s*\)/, (match, r, g, b, origOpacity) => {
+        return `rgba(${r}, ${g}, ${b}, ${parseFloat(origOpacity) * opacity})`;
+      });
+    }
+    return color;
   }
 
   // Draw Co-occurrence Canvas Map
@@ -361,6 +418,22 @@
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Update 3D rotation projections if needed
+    if (state.graphMode === "3D") {
+      state.graph.nodes.forEach((node) => {
+        const proj = rotate3d(
+          node.base3dX || 0,
+          node.base3dY || 0,
+          node.base3dZ || 0,
+          state.graphRotation.alpha,
+          state.graphRotation.beta
+        );
+        node.rotatedX = proj.x;
+        node.rotatedY = proj.y;
+        node.rotatedZ = proj.z;
+      });
+    }
 
     ctx.save();
     ctx.translate(canvas.width / 2 + state.canvasOffset.x, canvas.height / 2 + state.canvasOffset.y);
@@ -373,35 +446,75 @@
       const targetNode = state.graph.nodes.find((n) => n.id === edge.target);
       if (!sourceNode || !targetNode) return;
 
-      const isSelected = (state.selectedEntities && state.selectedEntities.includes(edge.source)) || (state.selectedEntities && state.selectedEntities.includes(edge.target));
+      const isSelected = (state.selectedEntities && state.selectedEntities.includes(edge.source)) || 
+                         (state.selectedEntities && state.selectedEntities.includes(edge.target));
+
+      let sx, sy, tx, ty;
+      let opacityMultiplier = 1.0;
+
+      if (state.graphMode === "3D") {
+        sx = sourceNode.rotatedX * state.canvasScale;
+        sy = sourceNode.rotatedY * state.canvasScale;
+        tx = targetNode.rotatedX * state.canvasScale;
+        ty = targetNode.rotatedY * state.canvasScale;
+
+        // Fade out edges based on depth (average Z of endpoints)
+        const avgZ = (sourceNode.rotatedZ + targetNode.rotatedZ) / 2;
+        // sphereRadius is 140. avgZ ranges from -140 to 140.
+        // Let's fade out linearly as avgZ goes from 140 to -140.
+        opacityMultiplier = Math.max(0.04, Math.min(1.0, (avgZ + 120) / 200));
+      } else {
+        sx = sourceNode.x * state.canvasScale;
+        sy = sourceNode.y * state.canvasScale;
+        tx = targetNode.x * state.canvasScale;
+        ty = targetNode.y * state.canvasScale;
+      }
 
       ctx.beginPath();
-      ctx.moveTo(sourceNode.x * state.canvasScale, sourceNode.y * state.canvasScale);
-      ctx.lineTo(targetNode.x * state.canvasScale, targetNode.y * state.canvasScale);
+      ctx.moveTo(sx, sy);
+      ctx.lineTo(tx, ty);
 
       // Selected blue color difference
       if (isSelected) {
-        ctx.strokeStyle = "rgba(0, 210, 255, 0.7)";
+        ctx.strokeStyle = applyOpacity("rgba(0, 210, 255, 0.7)", opacityMultiplier);
         ctx.lineWidth = Math.min(8, 2 + edge.weight * 2);
       } else {
-        ctx.strokeStyle = "rgba(0, 255, 102, 0.15)";
+        ctx.strokeStyle = applyOpacity("rgba(0, 255, 102, 0.15)", opacityMultiplier);
         ctx.lineWidth = Math.min(3, 0.5 + edge.weight / 2);
       }
       ctx.stroke();
     });
 
-    // Draw Nodes
-    state.graph.nodes.forEach((node) => {
-      const radius = 6 + Math.min(12, node.count * 1.5);
+    // Draw Nodes (sorted by rotatedZ from back to front in 3D mode)
+    let nodesToDraw = [...state.graph.nodes];
+    if (state.graphMode === "3D") {
+      nodesToDraw.sort((a, b) => a.rotatedZ - b.rotatedZ);
+    }
+
+    nodesToDraw.forEach((node) => {
+      let depthScale = 1.0;
+      let opacityMultiplier = 1.0;
+      let nx, ny;
+
+      if (state.graphMode === "3D") {
+        nx = node.rotatedX * state.canvasScale;
+        ny = node.rotatedY * state.canvasScale;
+
+        // sphereRadius is 140. rotatedZ ranges from -140 to 140.
+        // Scale nodes from 0.5 (back) to 1.15 (front)
+        depthScale = 0.5 + 0.65 * ((node.rotatedZ + 140) / 280);
+        // Fade nodes in background (Z < 0)
+        opacityMultiplier = Math.max(0.12, Math.min(1.0, (node.rotatedZ + 120) / 200));
+      } else {
+        nx = node.x * state.canvasScale;
+        ny = node.y * state.canvasScale;
+      }
+
+      const radius = (6 + Math.min(12, node.count * 1.5)) * depthScale;
       const isSelected = state.selectedEntities && state.selectedEntities.includes(node.id);
       const ch = node.channel || "generic";
 
-      const nx = node.x * state.canvasScale;
-      const ny = node.y * state.canvasScale;
-
       // ── Channel color scheme ──────────────────────────────────
-      // scene_present: cyan  |  dialogue_mentioned: pale-blue  |  candidate: amber
-      // location: green  |  event: orange-red  |  generic: green (legacy)
       const channelStroke = isSelected ? "#00d2ff" :
         ch === "scene_present"       ? "#00d2ff" :
         ch === "dialogue_mentioned"  ? "#5ba3ff" :
@@ -410,18 +523,21 @@
         node.type === "event"        ? "#ff6644" :
                                        "#00ff66";
 
-      // Fill: scene_present + selected get a bright inner fill; mentioned is near-black (hollow look)
-      const channelFill = isSelected ? "#00d2ff" :
+      const channelFill = isSelected ? "rgba(0, 210, 255, 1.0)" :
         ch === "scene_present"       ? "rgba(0, 210, 255, 0.25)" :
         ch === "dialogue_mentioned"  ? "rgba(91, 163, 255, 0.08)" :
         ch === "candidate"           ? "rgba(255, 170, 0, 0.18)" :
-                                       "#020502";
+                                       "rgba(2, 5, 2, 1.0)";
 
       const channelLabel = isSelected ? "#00d2ff" :
         ch === "scene_present"       ? "#00d2ff" :
         ch === "dialogue_mentioned"  ? "#7ab8ff" :
         ch === "candidate"           ? "#ffcc55" :
                                        "rgba(0, 255, 102, 0.85)";
+
+      const strokeColor = applyOpacity(channelStroke, opacityMultiplier);
+      const fillColor = applyOpacity(channelFill, opacityMultiplier);
+      const labelColor = applyOpacity(channelLabel, opacityMultiplier);
 
       ctx.beginPath();
 
@@ -444,25 +560,28 @@
         ctx.arc(nx, ny, radius, 0, 2 * Math.PI);
       }
 
-      ctx.fillStyle = channelFill;
+      ctx.fillStyle = fillColor;
       ctx.fill();
-      ctx.strokeStyle = channelStroke;
-      ctx.lineWidth = isSelected ? 3.5 : (ch === "scene_present" ? 2 : 1.5);
+      ctx.strokeStyle = strokeColor;
+      ctx.lineWidth = (isSelected ? 3.5 : (ch === "scene_present" ? 2 : 1.5)) * (state.graphMode === "3D" ? depthScale : 1.0);
       ctx.stroke();
 
-      // Glow effect
-      if (isEffects) {
-        ctx.shadowBlur = isSelected ? 12 : (ch === "scene_present" ? 5 : 0);
-        ctx.shadowColor = channelStroke;
+      // Glow effect (only if glows are enabled and node is not in background)
+      if (isEffects && opacityMultiplier > 0.4) {
+        ctx.shadowBlur = (isSelected ? 12 : (ch === "scene_present" ? 5 : 0)) * depthScale;
+        ctx.shadowColor = strokeColor;
       } else {
         ctx.shadowBlur = 0;
       }
 
-      // Text label
-      ctx.fillStyle = channelLabel;
-      ctx.font = isSelected ? "bold 13px monospace" : (ch === "scene_present" ? "bold 11px monospace" : "11px monospace");
-      ctx.textAlign = "center";
-      ctx.fillText(node.label, nx, ny + radius + 14);
+      // Text label (hide/fade on back hemisphere)
+      const showLabel = !(state.graphMode === "3D" && node.rotatedZ < -10);
+      if (showLabel) {
+        ctx.fillStyle = labelColor;
+        ctx.font = isSelected ? "bold 13px monospace" : (ch === "scene_present" ? "bold 11px monospace" : "11px monospace");
+        ctx.textAlign = "center";
+        ctx.fillText(node.label, nx, ny + radius + 14);
+      }
     });
 
     ctx.restore();
@@ -492,6 +611,47 @@
       needsRedraw = true;
     } else {
       state.canvasScale = state.targetScale;
+    }
+
+    // 3D rotation and spinning logic
+    if (state.graphMode === "3D") {
+      needsRedraw = true; // Always redraw in 3D mode for continuous spin/auto-rotation
+
+      if (state.isAutoRotating && state.targetRotation) {
+        // Smoothly lerp towards target rotation
+        const dAlpha = state.targetRotation.alpha - state.graphRotation.alpha;
+        const dBeta = state.targetRotation.beta - state.graphRotation.beta;
+
+        // Take shortest angular path
+        let deltaAlpha = ((dAlpha + Math.PI) % (2 * Math.PI)) - Math.PI;
+        if (deltaAlpha < -Math.PI) deltaAlpha += 2 * Math.PI;
+
+        let deltaBeta = ((dBeta + Math.PI) % (2 * Math.PI)) - Math.PI;
+        if (deltaBeta < -Math.PI) deltaBeta += 2 * Math.PI;
+
+        if (Math.abs(deltaAlpha) > 0.001 || Math.abs(deltaBeta) > 0.001) {
+          state.graphRotation.alpha += deltaAlpha * 0.1;
+          state.graphRotation.beta += deltaBeta * 0.1;
+        } else {
+          state.graphRotation.alpha = state.targetRotation.alpha;
+          state.graphRotation.beta = state.targetRotation.beta;
+          state.isAutoRotating = false;
+        }
+      } else if (state.isSpinning) {
+        if (!state.isDragging) {
+          // Spin using velocity
+          state.graphRotation.alpha += state.graphSpinSpeed.alpha;
+          state.graphRotation.beta += state.graphSpinSpeed.beta;
+
+          // Gentle ambient drift speed targets
+          const driftAlpha = 0.0015;
+          const driftBeta = 0.0005;
+
+          // Friction: slow down or speed up towards ambient drift speed
+          state.graphSpinSpeed.alpha += (driftAlpha - state.graphSpinSpeed.alpha) * 0.05;
+          state.graphSpinSpeed.beta += (driftBeta - state.graphSpinSpeed.beta) * 0.05;
+        }
+      }
     }
 
     if (needsRedraw) {
@@ -769,9 +929,23 @@
     if (canvas && state.selectedEntity) {
       const node = state.graph.nodes.find((n) => n.id === state.selectedEntity);
       if (node) {
-        state.targetScale = 1.8;
-        state.targetOffset.x = -node.x * 1.8;
-        state.targetOffset.y = -node.y * 1.8;
+        if (state.graphMode === "3D") {
+          const alpha = -Math.atan2(node.base3dX || 0, node.base3dZ || 0);
+          const beta = -Math.atan2(node.base3dY || 0, Math.hypot(node.base3dX || 0, node.base3dZ || 0));
+
+          state.targetRotation = { alpha, beta };
+          state.graphSpinSpeed = { alpha: 0, beta: 0 };
+          state.isAutoRotating = true;
+
+          const projected = rotate3d(node.base3dX || 0, node.base3dY || 0, node.base3dZ || 0, alpha, beta);
+          state.targetScale = 1.8;
+          state.targetOffset.x = -projected.x * 1.8;
+          state.targetOffset.y = -projected.y * 1.8;
+        } else {
+          state.targetScale = 1.8;
+          state.targetOffset.x = -node.x * 1.8;
+          state.targetOffset.y = -node.y * 1.8;
+        }
         triggerGraphAnimation();
       }
     }
@@ -802,9 +976,23 @@
     if (canvas && state.selectedEntity) {
       const node = state.graph.nodes.find((n) => n.id === state.selectedEntity);
       if (node) {
-        state.targetScale = 1.8;
-        state.targetOffset.x = -node.x * 1.8;
-        state.targetOffset.y = -node.y * 1.8;
+        if (state.graphMode === "3D") {
+          const alpha = -Math.atan2(node.base3dX || 0, node.base3dZ || 0);
+          const beta = -Math.atan2(node.base3dY || 0, Math.hypot(node.base3dX || 0, node.base3dZ || 0));
+
+          state.targetRotation = { alpha, beta };
+          state.graphSpinSpeed = { alpha: 0, beta: 0 };
+          state.isAutoRotating = true;
+
+          const projected = rotate3d(node.base3dX || 0, node.base3dY || 0, node.base3dZ || 0, alpha, beta);
+          state.targetScale = 1.8;
+          state.targetOffset.x = -projected.x * 1.8;
+          state.targetOffset.y = -projected.y * 1.8;
+        } else {
+          state.targetScale = 1.8;
+          state.targetOffset.x = -node.x * 1.8;
+          state.targetOffset.y = -node.y * 1.8;
+        }
         triggerGraphAnimation();
       }
     }
@@ -2243,9 +2431,23 @@
       // Zoom and center graph canvas on matching node
       const canvas = document.getElementById("graph-canvas");
       if (canvas) {
-        state.targetScale = 1.8;
-        state.targetOffset.x = -matchingNode.x * 1.8;
-        state.targetOffset.y = -matchingNode.y * 1.8;
+        if (state.graphMode === "3D") {
+          const alpha = -Math.atan2(matchingNode.base3dX || 0, matchingNode.base3dZ || 0);
+          const beta = -Math.atan2(matchingNode.base3dY || 0, Math.hypot(matchingNode.base3dX || 0, matchingNode.base3dZ || 0));
+
+          state.targetRotation = { alpha, beta };
+          state.graphSpinSpeed = { alpha: 0, beta: 0 };
+          state.isAutoRotating = true;
+
+          const projected = rotate3d(matchingNode.base3dX || 0, matchingNode.base3dY || 0, matchingNode.base3dZ || 0, alpha, beta);
+          state.targetScale = 1.8;
+          state.targetOffset.x = -projected.x * 1.8;
+          state.targetOffset.y = -projected.y * 1.8;
+        } else {
+          state.targetScale = 1.8;
+          state.targetOffset.x = -matchingNode.x * 1.8;
+          state.targetOffset.y = -matchingNode.y * 1.8;
+        }
         triggerGraphAnimation();
       }
       renderEntityFilterChecklist(false);
@@ -2714,10 +2916,24 @@
 
       // Find node under current scale/offset
       const hit = state.graph.nodes.find((node) => {
-        const nodeScreenX = canvas.width / 2 + state.canvasOffset.x + node.x * state.canvasScale;
-        const nodeScreenY = canvas.height / 2 + state.canvasOffset.y + node.y * state.canvasScale;
+        let nx, ny;
+        if (state.graphMode === "3D") {
+          if ((node.rotatedZ || 0) < 0) return false; // Only front-facing nodes in 3D
+          nx = (node.rotatedX || 0) * state.canvasScale;
+          ny = (node.rotatedY || 0) * state.canvasScale;
+        } else {
+          nx = node.x * state.canvasScale;
+          ny = node.y * state.canvasScale;
+        }
+        const nodeScreenX = canvas.width / 2 + state.canvasOffset.x + nx;
+        const nodeScreenY = canvas.height / 2 + state.canvasOffset.y + ny;
         const dist = Math.hypot(nodeScreenX - mouseX, nodeScreenY - mouseY);
-        const radius = 6 + Math.min(12, node.count * 1.5);
+        
+        let depthScale = 1.0;
+        if (state.graphMode === "3D") {
+          depthScale = 0.5 + 0.65 * (((node.rotatedZ || 0) + 140) / 280);
+        }
+        const radius = (6 + Math.min(12, node.count * 1.5)) * depthScale;
         return dist <= radius + 6;
       });
 
@@ -2725,8 +2941,15 @@
         // Mark intent — selection happens on mouseup only if we didn't drag
         state.activeNode = hit;
         canvas.style.cursor = "grab";
+
+        // In 3D mode, dragging a node starts a globe rotation drag instead of moving the node
+        if (state.graphMode === "3D") {
+          state.isDragging = true;
+          state.dragStart = { x: e.clientX - state.canvasOffset.x, y: e.clientY - state.dragStart.y };
+          canvas.style.cursor = "grabbing";
+        }
       } else {
-        // Start canvas pan
+        // Start canvas pan / globe rotation
         state.isDragging = true;
         state.dragStart = { x: e.clientX - state.canvasOffset.x, y: e.clientY - state.canvasOffset.y };
         canvas.style.cursor = "grabbing";
@@ -2734,11 +2957,12 @@
     });
 
     canvas.addEventListener("mousemove", (e) => {
-      if (state.activeNode) {
+      dragMoveOffset += Math.hypot(e.movementX, e.movementY);
+
+      if (state.activeNode && state.graphMode !== "3D") {
         const rect = canvas.getBoundingClientRect();
         const mouseX = e.clientX - rect.left;
         const mouseY = e.clientY - rect.top;
-        dragMoveOffset += Math.hypot(e.movementX, e.movementY);
         if (dragMoveOffset > 4) {
           // Drag node to reposition it
           state.activeNode.x = (mouseX - canvas.width / 2 - state.canvasOffset.x) / state.canvasScale;
@@ -2746,12 +2970,30 @@
           drawGraph();
         }
       } else if (state.isDragging) {
-        dragMoveOffset += Math.hypot(e.movementX, e.movementY);
-        state.canvasOffset.x = e.clientX - state.dragStart.x;
-        state.canvasOffset.y = e.clientY - state.dragStart.y;
-        state.targetOffset.x = state.canvasOffset.x;
-        state.targetOffset.y = state.canvasOffset.y;
-        drawGraph();
+        if (state.graphMode === "3D") {
+          // Cancel auto-rotation on manual drag
+          state.isAutoRotating = false;
+
+          // Convert mouse movement to 3D rotation angles
+          const dx = e.movementX * 0.007;
+          const dy = e.movementY * 0.007;
+
+          state.graphRotation.alpha += dx;
+          state.graphRotation.beta += dy;
+
+          // Capture momentum for continuous spin
+          state.graphSpinSpeed.alpha = dx;
+          state.graphSpinSpeed.beta = dy;
+          state.isSpinning = true;
+
+          drawGraph();
+        } else {
+          state.canvasOffset.x = e.clientX - state.dragStart.x;
+          state.canvasOffset.y = e.clientY - state.dragStart.y;
+          state.targetOffset.x = state.canvasOffset.x;
+          state.targetOffset.y = state.canvasOffset.y;
+          drawGraph();
+        }
       }
     });
 
@@ -2791,10 +3033,24 @@
 
       // Find node under current scale/offset
       const hit = state.graph.nodes.find((node) => {
-        const nodeScreenX = canvas.width / 2 + state.canvasOffset.x + node.x * state.canvasScale;
-        const nodeScreenY = canvas.height / 2 + state.canvasOffset.y + node.y * state.canvasScale;
+        let nx, ny;
+        if (state.graphMode === "3D") {
+          if ((node.rotatedZ || 0) < 0) return false;
+          nx = (node.rotatedX || 0) * state.canvasScale;
+          ny = (node.rotatedY || 0) * state.canvasScale;
+        } else {
+          nx = node.x * state.canvasScale;
+          ny = node.y * state.canvasScale;
+        }
+        const nodeScreenX = canvas.width / 2 + state.canvasOffset.x + nx;
+        const nodeScreenY = canvas.height / 2 + state.canvasOffset.y + ny;
         const dist = Math.hypot(nodeScreenX - mouseX, nodeScreenY - mouseY);
-        const radius = 6 + Math.min(12, node.count * 1.5);
+        
+        let depthScale = 1.0;
+        if (state.graphMode === "3D") {
+          depthScale = 0.5 + 0.65 * (((node.rotatedZ || 0) + 140) / 280);
+        }
+        const radius = (6 + Math.min(12, node.count * 1.5)) * depthScale;
         return dist <= radius + 6;
       });
 
@@ -2833,6 +3089,35 @@
     if (resetBtn) {
       resetBtn.addEventListener("click", () => {
         resetAllFilters(); // Full reset (search + entities) on explicit Reset View
+      });
+    }
+
+    const toggle2dBtn = document.getElementById("toggle-graph-2d-btn");
+    const toggle3dBtn = document.getElementById("toggle-graph-3d-btn");
+
+    if (toggle2dBtn && toggle3dBtn) {
+      toggle2dBtn.addEventListener("click", () => {
+        if (state.graphMode === "2D") return;
+        state.graphMode = "2D";
+        toggle2dBtn.classList.add("active");
+        toggle3dBtn.classList.remove("active");
+
+        // Reset scale and offset to center
+        state.targetScale = 1.0;
+        state.targetOffset = { x: 0, y: 0 };
+        triggerGraphAnimation();
+      });
+
+      toggle3dBtn.addEventListener("click", () => {
+        if (state.graphMode === "3D") return;
+        state.graphMode = "3D";
+        toggle3dBtn.classList.add("active");
+        toggle2dBtn.classList.remove("active");
+
+        // Reset scale and offset, preserve 3D rotations
+        state.targetScale = 1.0;
+        state.targetOffset = { x: 0, y: 0 };
+        triggerGraphAnimation();
       });
     }
   }

@@ -23,6 +23,7 @@ _API_CFG: Dict[str, Any] = _CFG.get("api", {}) or {}
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _OPERATOR_CONSOLE_DIR = _REPO_ROOT / "ui" / "operator_console_v1"
 _RETRO_CONSOLE_DIR = _REPO_ROOT / "ui" / "retro_console_v1"
+_STITCHING_WORKBENCH_DIR = _REPO_ROOT / "ui" / "stitching_workbench"
 
 
 def _resolve_allowed_origins() -> List[str]:
@@ -83,6 +84,13 @@ if _RETRO_CONSOLE_DIR.exists():
         "/ui/retro_console_v1",
         StaticFiles(directory=str(_RETRO_CONSOLE_DIR), html=True),
         name="retro_console_v1",
+    )
+
+if _STITCHING_WORKBENCH_DIR.exists():
+    app.mount(
+        "/ui/stitching_workbench",
+        StaticFiles(directory=str(_STITCHING_WORKBENCH_DIR), html=True),
+        name="stitching_workbench",
     )
 
 # Enforce CONFIG_LOADING_CONTRACT: reuse the already-loaded cfg in submodules.

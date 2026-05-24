@@ -2945,7 +2945,7 @@
         // In 3D mode, dragging a node starts a globe rotation drag instead of moving the node
         if (state.graphMode === "3D") {
           state.isDragging = true;
-          state.dragStart = { x: e.clientX - state.canvasOffset.x, y: e.clientY - state.dragStart.y };
+          state.dragStart = { x: e.clientX - state.canvasOffset.x, y: e.clientY - state.canvasOffset.y };
           canvas.style.cursor = "grabbing";
         }
       } else {

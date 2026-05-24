@@ -2798,6 +2798,117 @@
     }
   }
 
+  // ─── Status Polling Loop & Ingestion Progress ─────────
+  let wasIngesting = false;
+  let ingestionStartTime = null;
+  let pollingIntervalId = null;
+
+  function startStatusPolling() {
+    // Poll immediately, then every 3 seconds
+    pollStatus();
+    pollingIntervalId = setInterval(pollStatus, 3000);
+  }
+
+  async function pollStatus() {
+    try {
+      const statusPayload = await apiGet("/api/status");
+      const processing = statusPayload.processing || {};
+      const cliProgress = processing.cli_progress || {};
+      const isActive = cliProgress.active === true;
+
+      const progressWidget = document.getElementById("ingestion-progress-widget");
+      const headerStatus = document.querySelector(".header-status");
+
+      if (isActive) {
+        if (!wasIngesting) {
+          wasIngesting = true;
+          ingestionStartTime = Date.now();
+          if (progressWidget) progressWidget.hidden = false;
+          if (headerStatus) {
+            headerStatus.classList.add("ingesting");
+          }
+        }
+
+        const pct = cliProgress.progress_percent !== undefined ? cliProgress.progress_percent : (processing.progress_percent || 0);
+        const currentFile = cliProgress.current_video || processing.current_video || "02. 1988 - 1989.mp4";
+        const currentStep = cliProgress.current_step || "processing";
+        const stage = cliProgress.stage || "ingestion";
+        const sceneIndex = cliProgress.scene_index || 0;
+        const scenesTotal = cliProgress.scenes_total || "?";
+
+        // Update widget UI
+        const fileEl = document.getElementById("progress-file");
+        if (fileEl) fileEl.textContent = `File: ${currentFile}`;
+
+        const stepEl = document.getElementById("progress-step");
+        if (stepEl) stepEl.textContent = `Step: ${currentStep}`;
+
+        const barFill = document.getElementById("progress-bar-fill");
+        if (barFill) barFill.style.width = `${pct}%`;
+
+        const textEl = document.getElementById("progress-text");
+        if (textEl) textEl.textContent = `${pct}%`;
+
+        const stageEl = document.getElementById("progress-stage");
+        if (stageEl) stageEl.textContent = `Stage: ${stage}`;
+
+        const sceneEl = document.getElementById("progress-scene-count");
+        if (sceneEl) sceneEl.textContent = `Scene: ${sceneIndex} of ${scenesTotal}`;
+
+        const elapsedSec = Math.floor((Date.now() - ingestionStartTime) / 1000);
+        const elapsedEl = document.getElementById("progress-elapsed");
+        if (elapsedEl) elapsedEl.textContent = `Elapsed: ${elapsedSec}s`;
+
+        if (headerStatus) {
+          headerStatus.textContent = `Status: INGESTING (${pct}%)`;
+        }
+      } else {
+        if (wasIngesting) {
+          // Transitioning from active to idle: Show 100% completed
+          wasIngesting = false;
+          
+          const barFill = document.getElementById("progress-bar-fill");
+          if (barFill) barFill.style.width = "100%";
+
+          const textEl = document.getElementById("progress-text");
+          if (textEl) textEl.textContent = "100%";
+
+          const stepEl = document.getElementById("progress-step");
+          if (stepEl) stepEl.textContent = "Step: COMPLETED";
+
+          const stageEl = document.getElementById("progress-stage");
+          if (stageEl) stageEl.textContent = "Stage: finished";
+
+          if (headerStatus) {
+            headerStatus.textContent = "Status: ONLINE";
+          }
+
+          // Wait 3 seconds then hide and reload dataset
+          setTimeout(async () => {
+            if (progressWidget) progressWidget.hidden = true;
+            if (headerStatus) {
+              headerStatus.classList.remove("ingesting");
+              headerStatus.textContent = "Status: ONLINE";
+            }
+            // Trigger boot loader to refresh dropdown and grid
+            await bootRetroConsole();
+          }, 3000);
+        } else {
+          // Normal idle state, make sure widget is hidden and status is normal
+          if (progressWidget && !progressWidget.hidden) {
+            progressWidget.hidden = true;
+          }
+          if (headerStatus && headerStatus.classList.contains("ingesting")) {
+            headerStatus.classList.remove("ingesting");
+            headerStatus.textContent = "Status: ONLINE";
+          }
+        }
+      }
+    } catch (err) {
+      console.warn("Status polling error: ", err);
+    }
+  }
+
   document.addEventListener("DOMContentLoaded", () => {
     bootRetroConsole()
       .then(() => {
@@ -2805,6 +2916,7 @@
         initLayoutControls();
         initCanvasControls();
         initTTS();
+        startStatusPolling();
 
         // Canvas resize observer for responsive scaling without stretching
         const canvas = document.getElementById("graph-canvas");

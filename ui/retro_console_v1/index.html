@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Retro Memory Explorer</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%23050d06'/%3E%3Ctext x='32' y='40' text-anchor='middle' font-family='monospace' font-weight='bold' font-size='24' fill='%2300ff66'%3ERM%3C/text%3E%3C/svg%3E" />
-    <link rel="stylesheet" href="./static/css/retro.css?v=1.4.7" />
+    <link rel="stylesheet" href="./static/css/retro.css?v=1.5.0" />
   </head>
   <body>
     <div class="crt-screen" id="crt-screen">
@@ -37,6 +37,32 @@
           <button class="panel-collapse-btn" id="collapse-top-btn" title="Collapse Header">▲</button>
         </div>
       </header>
+
+      <!-- Real-Time Ingestion Progress Widget -->
+      <div id="ingestion-progress-widget" class="ingestion-progress-widget" hidden>
+        <div class="progress-terminal">
+          <div class="progress-header">
+            <span class="progress-title">🛰 PIPELINE INGESTION ACTIVE</span>
+            <span id="progress-elapsed" class="progress-meta">Elapsed: 0s</span>
+          </div>
+          <div class="progress-body">
+            <div class="progress-info-row">
+              <span id="progress-file" class="progress-file">File: ...</span>
+              <span id="progress-step" class="progress-step">Step: ...</span>
+            </div>
+            <div class="progress-bar-container">
+              <div class="progress-bar-fill-wrapper">
+                <div id="progress-bar-fill" class="progress-bar-fill" style="width: 0%;"></div>
+              </div>
+              <span id="progress-text" class="progress-text">0%</span>
+            </div>
+            <div class="progress-status-row">
+              <span id="progress-stage" class="progress-stage">Stage: ...</span>
+              <span id="progress-scene-count" class="progress-scenes">Scene: ...</span>
+            </div>
+          </div>
+        </div>
+      </div>
 
       <!-- Video Intelligence Panel (Sprint 3: timeline/full metadata rollup) -->
       <div id="video-intel-panel" class="video-intel-panel" hidden>
@@ -237,10 +263,10 @@
 
       <footer class="app-footer">
         <span>READ-ONLY MODE // NO INGESTION // NO MUTATION // MEMORY VIEWER ACTIVE</span>
-        <span id="footer-version">v1.4.7</span>
+        <span id="footer-version">v1.5.0</span>
       </footer>
     </div>
     
-    <script src="./static/js/retro.js?v=1.4.7"></script>
+    <script src="./static/js/retro.js?v=1.5.0"></script>
   </body>
 </html>

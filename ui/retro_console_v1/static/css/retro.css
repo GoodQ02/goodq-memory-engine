@@ -2453,3 +2453,423 @@ h4 {
 .disag-matched   { color: rgba(0, 200, 120, 0.75); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .disag-reason    { color: var(--text-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 8px; }
 
+/* ─── Sprint 3 (P2): Ingestion Progress Widget ──────────────── */
+.ingestion-progress-widget {
+  background-color: var(--bg-soft);
+  border-bottom: 1px solid var(--border-color);
+  box-shadow: 0 4px 15px rgba(0, 210, 255, 0.15);
+  padding: 8px 20px;
+  z-index: 90;
+  animation: slide-down 0.25s cubic-bezier(0.1, 0.9, 0.2, 1);
+  flex-shrink: 0;
+}
+
+@keyframes slide-down {
+  from { transform: translateY(-100%); }
+  to { transform: translateY(0); }
+}
+
+.progress-terminal {
+  max-width: 1000px;
+  margin: 0 auto;
+  font-family: var(--font-mono);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.progress-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+}
+
+.progress-title {
+  color: #00d2ff;
+  font-weight: bold;
+  text-shadow: 0 0 5px rgba(0, 210, 255, 0.4);
+  letter-spacing: 1px;
+}
+
+.progress-meta {
+  color: var(--text-faint);
+}
+
+.progress-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.progress-info-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.progress-file {
+  color: #fff;
+  font-weight: bold;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 60%;
+}
+
+.progress-step {
+  color: var(--text-dim);
+}
+
+.progress-bar-container {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.progress-bar-fill-wrapper {
+  flex: 1;
+  height: 8px;
+  background-color: var(--bg-color);
+  border: 1px solid var(--border-dim);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #00ff66, #00d2ff);
+  box-shadow: 0 0 8px rgba(0, 210, 255, 0.6);
+  transition: width 0.3s ease;
+}
+
+.progress-text {
+  font-size: 13px;
+  font-weight: bold;
+  color: #00d2ff;
+  width: 40px;
+  text-align: right;
+  text-shadow: 0 0 4px rgba(0, 210, 255, 0.3);
+}
+
+.progress-status-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.progress-stage {
+  text-transform: capitalize;
+}
+
+/* Status Blink Modifier for Ingesting State */
+.header-status.ingesting {
+  color: #00d2ff !important;
+  text-shadow: 0 0 8px rgba(0, 210, 255, 0.6);
+  animation: blink-cyber 1.5s infinite ease-in-out;
+}
+
+@keyframes blink-cyber {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+/* ─── Sprint 3 (P2): Video Intelligence Panel ────────────────── */
+.video-intel-panel {
+  background-color: #020703;
+  border-bottom: 1px solid var(--border-dim);
+  padding: 10px 15px;
+  z-index: 85;
+  overflow-x: auto;
+  flex-shrink: 0;
+}
+
+.intel-inner {
+  display: flex;
+  gap: 15px;
+  align-items: stretch;
+  min-width: max-content;
+}
+
+.intel-section {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 140px;
+}
+
+.intel-section-header {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: bold;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+}
+
+.intel-divider {
+  width: 1px;
+  background-color: var(--border-faint);
+  align-self: stretch;
+}
+
+/* Emotions Group */
+.intel-bar-group {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 170px;
+}
+
+.intel-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+}
+
+.intel-bar-label {
+  width: 65px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-color);
+}
+
+.intel-bar-track {
+  flex: 1;
+  height: 5px;
+  background-color: var(--bg-color);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.intel-bar-fill {
+  height: 100%;
+  background-color: var(--selected-color);
+  box-shadow: 0 0 3px var(--selected-glow);
+}
+
+.intel-bar-fill.text-mode {
+  background-color: var(--accent-color);
+  box-shadow: 0 0 3px var(--accent-glow);
+}
+
+.intel-bar-val {
+  width: 30px;
+  text-align: right;
+  color: var(--text-dim);
+  font-size: 10px;
+}
+
+/* Sentiment Row */
+.intel-sentiment-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 160px;
+  height: 100%;
+}
+
+.intel-sentiment-bar {
+  display: flex;
+  height: 8px;
+  width: 100%;
+  border-radius: 4px;
+  overflow: hidden;
+  background-color: var(--bg-color);
+  border: 1px solid var(--border-dim);
+}
+
+.intel-sent-part {
+  height: 100%;
+}
+
+.intel-sent-part.pos { background-color: #00ff66; }
+.intel-sent-part.neu { background-color: #888888; }
+.intel-sent-part.neg { background-color: #ff6b6b; }
+
+.intel-sentiment-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 10px;
+  font-family: var(--font-mono);
+  justify-content: center;
+}
+
+.intel-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.intel-legend-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+}
+
+.intel-legend-dot.pos { background-color: #00ff66; }
+.intel-legend-dot.neu { background-color: #888888; }
+.intel-legend-dot.neg { background-color: #ff6b6b; }
+
+/* Leaderboards */
+.intel-people-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 160px;
+}
+
+.intel-people-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  cursor: pointer;
+  padding: 1px 4px;
+  border-radius: 3px;
+  border: 1px solid transparent;
+  transition: all 0.12s;
+}
+
+.intel-people-row:hover {
+  background-color: rgba(0, 255, 102, 0.08);
+  border-color: var(--border-dim);
+  color: var(--selected-color);
+}
+
+.intel-people-name {
+  color: #fff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 110px;
+}
+
+.intel-people-count {
+  color: var(--text-dim);
+  font-size: 10px;
+}
+
+/* Tag Cloud */
+.intel-tags-cloud {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  max-width: 250px;
+  min-width: 180px;
+}
+
+.intel-tag-chip {
+  font-size: 9.5px;
+  font-family: var(--font-mono);
+  padding: 1px 5px;
+  border-radius: 3px;
+  border: 1px solid rgba(0, 255, 102, 0.18);
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: all 0.12s;
+}
+
+.intel-tag-chip:hover {
+  color: #fff;
+  background-color: rgba(0, 255, 102, 0.08);
+  border-color: var(--border-color);
+}
+
+/* Coverage Grid */
+.intel-coverage-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 4px 8px;
+  min-width: 180px;
+}
+
+.intel-cov-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  border: 1px solid var(--border-faint);
+  border-radius: 3px;
+  padding: 3px 6px;
+  background-color: rgba(255, 255, 255, 0.01);
+  min-width: 80px;
+}
+
+.intel-cov-val {
+  font-size: 12px;
+  font-family: var(--font-mono);
+  font-weight: bold;
+  color: #00d2ff;
+  text-shadow: 0 0 3px rgba(0, 210, 255, 0.3);
+}
+
+.intel-cov-lbl {
+  font-size: 9px;
+  color: var(--text-faint);
+  text-transform: uppercase;
+}
+
+/* Health and Empty States */
+.intel-health-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 180px;
+}
+
+.intel-health-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.intel-health-chip {
+  font-size: 9.5px;
+  font-family: var(--font-mono);
+  padding: 1px 5px;
+  border-radius: 3px;
+  border: 1px solid;
+}
+
+.intel-health-chip.ok {
+  border-color: rgba(0, 255, 102, 0.3);
+  color: #00ff66;
+  background-color: rgba(0, 255, 102, 0.04);
+}
+
+.intel-health-chip.warn {
+  border-color: rgba(255, 180, 0, 0.3);
+  color: #ffaa00;
+  background-color: rgba(255, 180, 0, 0.04);
+}
+
+.intel-health-chip.neutral {
+  border-color: var(--border-faint);
+  color: var(--text-dim);
+  background-color: rgba(255, 255, 255, 0.02);
+}
+
+.intel-health-chip.conflict {
+  border-color: rgba(255, 80, 80, 0.3);
+  color: #ff6b6b;
+  background-color: rgba(255, 80, 80, 0.04);
+}
+
+.intel-empty {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-style: italic;
+  color: var(--text-faint);
+  display: flex;
+  align-items: center;
+  height: 100%;
+}
+
+

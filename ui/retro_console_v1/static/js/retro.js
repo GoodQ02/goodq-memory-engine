@@ -2322,6 +2322,10 @@
       toggleIntel.addEventListener("click", () => {
         state.intelVisible = !state.intelVisible;
         intelPanel.hidden = !state.intelVisible;
+        
+        const resizerIntel = document.getElementById("resizer-intel");
+        if (resizerIntel) resizerIntel.hidden = !state.intelVisible;
+
         toggleIntel.textContent = state.intelVisible ? "Intel: ON" : "Intel: OFF";
         toggleIntel.classList.toggle("intel-active", state.intelVisible);
         if (state.intelVisible && state.videoMeta) renderVideoIntelPanel();
@@ -2593,6 +2597,41 @@
             grid.style.setProperty("--bottom-height", `${height}px`);
             resizeCanvas();
           }
+        }
+
+        function stopResizing() {
+          document.removeEventListener("mousemove", onMouseMove);
+          document.removeEventListener("mouseup", stopResizing);
+          document.body.style.cursor = "";
+          document.body.style.userSelect = "";
+        }
+
+        document.addEventListener("mousemove", onMouseMove);
+        document.addEventListener("mouseup", stopResizing);
+      });
+    }
+
+    // Drag Resizing Logic for Top Video Intelligence Panel
+    const resizerIntel = document.getElementById("resizer-intel");
+    const intelPanel = document.getElementById("video-intel-panel");
+    if (resizerIntel && intelPanel) {
+      resizerIntel.addEventListener("mousedown", (e) => {
+        e.preventDefault();
+        document.body.style.cursor = "row-resize";
+        document.body.style.userSelect = "none";
+
+        const startHeight = intelPanel.offsetHeight;
+        const startY = e.clientY;
+
+        function onMouseMove(moveEvent) {
+          const deltaY = moveEvent.clientY - startY;
+          let newHeight = startHeight + deltaY;
+          
+          // Bound height between 80px and 450px
+          newHeight = Math.max(80, Math.min(newHeight, 450));
+          
+          intelPanel.style.height = `${newHeight}px`;
+          resizeCanvas(); // Trigger canvas redraw
         }
 
         function stopResizing() {

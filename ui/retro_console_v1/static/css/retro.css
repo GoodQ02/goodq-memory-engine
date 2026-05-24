@@ -2578,11 +2578,46 @@ h4 {
 /* ─── Sprint 3 (P2): Video Intelligence Panel ────────────────── */
 .video-intel-panel {
   background-color: #020703;
-  border-bottom: 1px solid var(--border-dim);
   padding: 10px 15px;
   z-index: 85;
   overflow-x: auto;
+  overflow-y: hidden;
   flex-shrink: 0;
+  box-sizing: border-box;
+}
+
+/* Resizer for Top Video Intelligence Panel */
+.resizer-intel {
+  height: 8px;
+  cursor: row-resize;
+  background-color: var(--bg-color);
+  border-top: 1px solid var(--border-faint);
+  border-bottom: 1px solid var(--border-dim);
+  position: relative;
+  z-index: 80;
+  flex-shrink: 0;
+  user-select: none;
+  transition: background-color 0.15s;
+}
+
+.resizer-intel:hover {
+  background-color: rgba(0, 255, 102, 0.08);
+}
+
+.resizer-intel::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 40px;
+  height: 2px;
+  background-color: var(--border-dim);
+  border-radius: 1px;
+}
+
+.resizer-intel:hover::after {
+  background-color: var(--text-color);
 }
 
 .intel-inner {
@@ -2590,6 +2625,8 @@ h4 {
   gap: 15px;
   align-items: stretch;
   min-width: max-content;
+  height: 100%;
+  box-sizing: border-box;
 }
 
 .intel-section {

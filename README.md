@@ -17,24 +17,32 @@
 
 GoodQ4All is a local-first multimodal memory system for long-running video, audio, and text intelligence.
 
+
 It ingests media into scene-level memory, persists what it learns locally, and keeps the proof path visible. The system is built around deterministic Windows-first execution, with CPU-safe baseline behavior and optional GPU / WSL2 acceleration when you want more throughput.
 
 GoodQ4All's thesis is simple: machine memory should earn every claim it makes.
 
-## Watch The Guided Demo
+## Watch The Guided Demos
 
-Start with the two-minute onboarding film if you want to see the install and first ingestion path before reading the deeper docs.
+Explore GoodQ4All's capabilities with these high-resolution walkthrough films:
+
+1. **Interactive UI Walkthrough**: Ingest Apollo 11, explore the Retro Memory Explorer's 3D spinning entity globe, perform human-in-the-loop voice stitching, and save custom memory collections.
+2. **Terminal & Installation Walkthrough**: Bootstrap the local dependencies, validate the host environment, start the background watchdog, and import media files in real-time.
 
 <p align="center">
-  <a href="https://github.com/GoodQ02/.github/releases/download/welcome-aboard-goodq4all-2026-05-17/GOODQ4ALL_DEMO_FINAL.mp4">
-    <img src="samples/assets/goodq4all-demo-poster.jpg" alt="Watch Welcome Aboard GoodQ4All" width="760" />
+  <a href="samples/assets/ui_onboarding_walkthrough.mp4">
+    <img src="samples/assets/ui_onboarding_walkthrough.gif" alt="Watch Interactive UI Walkthrough" width="375" />
+  </a>
+  &nbsp;&nbsp;
+  <a href="samples/assets/install_walkthrough.mp4">
+    <img src="samples/assets/install_walkthrough.gif" alt="Watch Terminal & Installation Walkthrough" width="375" />
   </a>
 </p>
 
 <p align="center">
-  <a href="https://github.com/GoodQ02/.github/releases/download/welcome-aboard-goodq4all-2026-05-17/GOODQ4ALL_DEMO_FINAL.mp4">Watch the 2-minute guided demo</a>
-  ·
-  <a href="docs/guides/DEMO.md">Read the demo guide</a>
+  <strong>Interactive UI Walkthrough</strong>: <a href="samples/assets/ui_onboarding_walkthrough.mp4">Watch 1080p Video</a> · <a href="samples/assets/manifest.json">View Manifest</a>
+  <br>
+  <strong>Terminal & Installation</strong>: <a href="samples/assets/install_walkthrough.mp4">Watch 1080p Video</a> · <a href="docs/guides/install/INSTALL.md">Read Install Guide</a>
 </p>
 
 ## Before You Start
@@ -216,7 +224,8 @@ Then open:
 
 - `http://127.0.0.1:30000/api/health/summary`
 - `http://127.0.0.1:30000/docs`
-- `http://127.0.0.1:30000/ui/operator_console_v1/`
+- `http://127.0.0.1:30000/ui/operator_console_v1/` (Classic Operator Console)
+- `http://127.0.0.1:30000/ui/retro_console_v1/` (Retro Memory Explorer)
 
 The host and port default to `GOODQ_API_HOST=127.0.0.1` and
 `GOODQ_API_PORT=30000` and can be overridden in `.env.local`.
@@ -248,20 +257,17 @@ GoodQ4All currently supports:
 - SQLite + knowledge graph + Qdrant-backed persisted memory
 - CPU-safe baseline execution with optional GPU / WSL acceleration
 
-GoodQ4All now ships a local read-only operator console at
-`/ui/operator_console_v1/`. It exposes the Current Scope strip, Flight Deck,
-proof/evidence status, retrieval inspection, storage/runtime summaries,
-recurrence reports, video inventory, and scene/timeline read models.
+GoodQ4All now ships two local read-only operator console variants:
+- **Classic Operator Console** served at `/ui/operator_console_v1/`. It exposes the Current Scope strip, Flight Deck, proof/evidence status, recurrence reports, and video inventories.
+- **Retro Memory Explorer (v1.4.7)** served at `/ui/retro_console_v1/`. A premium cyber-CRT dashboard featuring a four-panel resizable/collapsible layout with floating restore tabs, an entity co-occurrence graph with dynamic spacing zoom and flight transitions, an Inspector panel containing keyframe image/transcript views with resizable logs splitters, and bidirectional timeline checklists.
 
-The console is an inspection surface only. It does not trigger ingestion,
-reindex memory, heal configs, mutate persistence, generate reports, or activate
-ControlAgent. A polished consumer memory browser and confirmation-gated
-mutation UI remain future layers, not current product claims.
+The consoles are inspection surfaces only. They do not trigger ingestion, reindex memory, heal configs, mutate database structures, generate reports, or activate ControlAgent. A polished consumer memory browser and confirmation-gated mutation UI remain future layers.
 
-UI status:
+UI status & details:
 
 - [`docs/guides/ui/JUSTIFICATION_UI.md`](docs/guides/ui/JUSTIFICATION_UI.md)
-- [`ui/operator_console_v1/README.md`](ui/operator_console_v1/README.md)
+- [ui/operator_console_v1/README.md](ui/operator_console_v1/README.md)
+- [ui/retro_console_v1/README.md](ui/retro_console_v1/README.md)
 
 ## What Makes It Different
 

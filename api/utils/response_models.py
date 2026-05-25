@@ -327,3 +327,205 @@ class IngestStatusResponse(BaseModel):
     created_at: str
     last_observed_at: Optional[str] = None
     completed_at: Optional[str] = None
+
+
+class UnstitchedPattern(BaseModel):
+    """Details of an unstitched speaker pattern."""
+    node_id: int
+    node_name: str
+    occurrence_count: int
+    voiced_seconds: float
+    segment_count: int
+    sample_transcript: Optional[str] = None
+
+
+class StitchPreviewRequest(BaseModel):
+    """Request model for mapping preview."""
+    source_node_name: str
+    target_person_name: str
+
+
+class StitchPreviewResponse(BaseModel):
+    """Preview response outlining potential changes and conflicts."""
+    success: bool
+    source_node_name: str
+    target_person_name: str
+    scenes_affected: int
+    episodes_affected: int
+    conflicts: List[Dict[str, Any]] = Field(default_factory=list)
+
+
+class StitchRequest(BaseModel):
+    """Request model to persist a mapping."""
+    source_node_name: str
+    target_person_name: str
+    confirm: bool = False
+    operator_note: Optional[str] = None
+
+
+class StitchResponse(BaseModel):
+    """Response model for a successful mapping commit."""
+    success: bool
+    message: str
+    mapping_id: str
+    edge_id: int
+
+
+class StitchRevokeRequest(BaseModel):
+    """Request model to revoke a mapping."""
+    mapping_id: Optional[str] = None
+    source_node_name: Optional[str] = None
+    operator_note: Optional[str] = None
+
+
+class StitchRevokeResponse(BaseModel):
+    """Response model for mapping revocation."""
+    success: bool
+    message: str
+
+
+class ManualMappingHistoryEntry(BaseModel):
+    """History entry for manual mappings."""
+    status: str
+    timestamp_utc: str
+    operator_note: Optional[str] = None
+
+
+class ManualMappingEntry(BaseModel):
+    """Single manual mapping entry."""
+    mapping_id: str
+    source_node_type: str
+    source_node_name: str
+    target_person_name: str
+    status: str
+    history: List[ManualMappingHistoryEntry] = Field(default_factory=list)
+
+
+class ManualMappingsResponse(BaseModel):
+    """Full manual mappings response."""
+    version: int
+    mappings: List[ManualMappingEntry] = Field(default_factory=list)
+
+
+class ScopeMetadata(BaseModel):
+    """Execution scope metadata for all summary operations."""
+    epoch: str
+    db_path: str
+    video_count: int
+    scene_count: int
+    temporal_index_count: int
+    generated_at_utc: str
+    source_surfaces_used: List[str] = Field(default_factory=list)
+
+
+class OccasionItem(BaseModel):
+    """Read model for Occasions (replaces Holidays)."""
+    entity_id: str
+    name: str
+    occurrence_count: int
+    occasion_type: str
+    source: str
+    confidence: float
+
+
+class EntitySummaryItem(BaseModel):
+    """Summary metrics for major entities (people, places)."""
+    entity_id: str
+    name: str
+    occurrence_count: int
+    first_seen: Optional[float] = None
+    last_seen: Optional[float] = None
+
+
+class BuiltInHighlights(BaseModel):
+    """Predefined static/deterministic highlight collections."""
+    positive_moments: List[Dict[str, Any]] = Field(default_factory=list)
+    negative_moments: List[Dict[str, Any]] = Field(default_factory=list)
+    multi_person_gatherings: List[Dict[str, Any]] = Field(default_factory=list)
+
+
+class SummaryDashboardResponse(BaseModel):
+    """Response model for cumulative dashboard metrics."""
+    scope_metadata: ScopeMetadata
+    people: List[EntitySummaryItem] = Field(default_factory=list)
+    places: List[EntitySummaryItem] = Field(default_factory=list)
+    occasions: List[OccasionItem] = Field(default_factory=list)
+    sentiment_distribution: Dict[str, int] = Field(default_factory=dict)
+    top_emotions: List[Dict[str, Any]] = Field(default_factory=list)
+    built_in_highlights: BuiltInHighlights
+
+
+class CoOccurrenceItem(BaseModel):
+    """Represents an entity that co-occurs with the target entity."""
+    entity_id: str
+    node_type: str
+    name: str
+    co_occurrence_count: int
+
+
+class SceneRef(BaseModel):
+    """Reference to a scene segment featuring the entity."""
+    video_id: str
+    scene_id: str
+    start: float
+    end: float
+    representative_frame: Optional[str] = None
+    transcript: Optional[str] = None
+
+
+class EntityProfileResponse(BaseModel):
+    """Full detail profile response for a major entity."""
+    scope_metadata: ScopeMetadata
+    entity_id: str
+    node_type: str
+    name: str
+    occurrence_count: int
+    first_seen: Optional[float] = None
+    last_seen: Optional[float] = None
+    co_occurrences: List[CoOccurrenceItem] = Field(default_factory=list)
+    scenes: List[SceneRef] = Field(default_factory=list)
+    sentiment_distribution: Dict[str, int] = Field(default_factory=dict)
+    top_emotions: List[Dict[str, Any]] = Field(default_factory=list)
+
+
+class CollectionHistoryEntry(BaseModel):
+    """Change log history entry for custom collections."""
+    action: str
+    timestamp_utc: str
+    operator_note: Optional[str] = None
+
+
+class SavedCollectionItem(BaseModel):
+    """Custom manual playlist/collection persisted object."""
+    collection_id: str
+    name: str
+    description: Optional[str] = None
+    status: str
+    collection_type: str
+    query_params: Dict[str, Any] = Field(default_factory=dict)
+    scene_refs: List[Dict[str, Any]] = Field(default_factory=list)
+    source_epoch: str
+    created_at_utc: str
+    created_by: str
+    updated_at_utc: str
+    deleted_at_utc: Optional[str] = None
+    history: List[CollectionHistoryEntry] = Field(default_factory=list)
+
+
+class SaveCollectionRequest(BaseModel):
+    """Request payload to create/update custom collections."""
+    name: str
+    description: Optional[str] = None
+    collection_type: str = "manual_playlist"
+    query_params: Dict[str, Any] = Field(default_factory=dict)
+    scene_refs: List[Dict[str, Any]] = Field(default_factory=list)
+    operator_note: Optional[str] = None
+
+
+class SaveCollectionResponse(BaseModel):
+    """API response model after saving a custom collection."""
+    success: bool
+    message: str
+    collection: SavedCollectionItem
+
+

@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="en" style="background-color: #0a0a0c;">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Retro Memory Explorer</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%23050d06'/%3E%3Ctext x='32' y='40' text-anchor='middle' font-family='monospace' font-weight='bold' font-size='24' fill='%2300ff66'%3ERM%3C/text%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="./static/css/retro.css?v=1.5.1" />
+  </head>
+  <body style="background-color: #0a0a0c;">
+    <div class="crt-screen" id="crt-screen">
+      <div class="scanlines" id="scanlines-layer"></div>
+
+      <!-- Floating Restore Tabs -->
+      <button class="restore-tab restore-top" id="restore-top-btn" hidden>▼ SHOW HEADER</button>
+      <button class="restore-tab restore-left" id="restore-left-btn" hidden>▶ SEARCH</button>
+      <button class="restore-tab restore-right" id="restore-right-btn" hidden>INSPECTOR ◀</button>
+      <button class="restore-tab restore-bottom" id="restore-bottom-btn" hidden>▲ TIMELINE</button>
+      
+      <header class="app-header">
+        <div class="header-brand">
+          <span class="header-logo">RETRO MEMORY EXPLORER</span>
+          <span class="header-status blink">Status: ONLINE</span>
+        </div>
+        
+        <div class="header-controls">
+          <label for="dataset-select" class="header-label">Dataset:</label>
+          <select id="dataset-select" class="retro-select">
+            <option value="">Loading datasets...</option>
+          </select>
+          
+          <div class="accessibility-menu">
+            <button id="toggle-intel-btn" class="accessibility-btn intel-btn" title="Toggle Video Intelligence Panel">Intel: OFF</button>
+            <button id="toggle-scanlines" class="accessibility-btn" title="Toggle Scanline Grid Effect">Scanlines: ON</button>
+            <button id="toggle-effects" class="accessibility-btn" title="Toggle Glow / Pulsing Effects">Effects: ON</button>
+          </div>
+          <button class="panel-collapse-btn" id="collapse-top-btn" title="Collapse Header">▲</button>
+        </div>
+      </header>
+
+      <!-- Real-Time Ingestion Progress Widget -->
+      <div id="ingestion-progress-widget" class="ingestion-progress-widget" hidden>
+        <div class="progress-terminal">
+          <div class="progress-header">
+            <span class="progress-title">🛰 PIPELINE INGESTION ACTIVE</span>
+            <span id="progress-elapsed" class="progress-meta">Elapsed: 0s</span>
+          </div>
+          <div class="progress-body">
+            <div class="progress-info-row">
+              <span id="progress-file" class="progress-file">File: ...</span>
+              <span id="progress-step" class="progress-step">Step: ...</span>
+            </div>
+            <div class="progress-bar-container">
+              <div class="progress-bar-fill-wrapper">
+                <div id="progress-bar-fill" class="progress-bar-fill" style="width: 0%;"></div>
+              </div>
+              <span id="progress-text" class="progress-text">0%</span>
+            </div>
+            <div class="progress-status-row">
+              <span id="progress-stage" class="progress-stage">Stage: ...</span>
+              <span id="progress-scene-count" class="progress-scenes">Scene: ...</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Video Intelligence Panel (Sprint 3: timeline/full metadata rollup) -->
+      <div id="video-intel-panel" class="video-intel-panel" hidden>
+        <div class="intel-inner">
+
+          <!-- Row 1: Emotion Arc + Sentiment -->
+          <div class="intel-section intel-emotions">
+            <div class="intel-section-header">🎭 Emotion Arc</div>
+            <div id="intel-audio-emotions" class="intel-bar-group">
+              <span class="intel-empty">No emotion data.</span>
+            </div>
+          </div>
+
+          <div class="intel-divider"></div>
+
+          <div class="intel-section intel-sentiment">
+            <div class="intel-section-header">💬 Sentiment</div>
+            <div id="intel-sentiment" class="intel-sentiment-row">
+              <span class="intel-empty">No sentiment data.</span>
+            </div>
+          </div>
+
+          <div class="intel-divider"></div>
+
+          <!-- Row 2: Most Mentioned People -->
+          <div class="intel-section intel-people">
+            <div class="intel-section-header">👤 Most Discussed</div>
+            <div id="intel-people" class="intel-people-list">
+              <span class="intel-empty">No people data.</span>
+            </div>
+          </div>
+
+          <div class="intel-divider"></div>
+
+          <!-- Row 3: Scene Context Tags -->
+          <div class="intel-section intel-tags">
+            <div class="intel-section-header">🏷 Context Tags</div>
+            <div id="intel-tags" class="intel-tags-cloud">
+              <span class="intel-empty">No context tags.</span>
+            </div>
+          </div>
+
+          <div class="intel-divider"></div>
+
+          <!-- Row 4: Coverage Counters -->
+          <div class="intel-section intel-coverage">
+            <div class="intel-section-header">📊 Coverage</div>
+            <div id="intel-coverage" class="intel-coverage-grid">
+              <span class="intel-empty">No coverage data.</span>
+            </div>
+          </div>
+
+          <div class="intel-divider"></div>
+
+          <!-- Row 5: Pipeline Health (Sprint 3+) -->
+          <div class="intel-section intel-health-section">
+            <div class="intel-section-header">⚙ Pipeline Health</div>
+            <div id="intel-health" class="intel-health-body">
+              <span class="intel-empty">No health data.</span>
+            </div>
+          </div>
+
+        </div>
+      </div>
+      <!-- Resizer for Top Video Intelligence Panel -->
+      <div id="resizer-intel" class="resizer-intel" hidden></div>
+
+      <main class="grid-layout">
+        <!-- Section 1: Search Console -->
+        <section class="panel search-panel" aria-labelledby="search-heading">
+          <div class="panel-header">
+            <h2 id="search-heading">Search Console</h2>
+            <button class="panel-collapse-btn" id="collapse-left-btn" title="Collapse Search Console">◀</button>
+          </div>
+          <div class="panel-content">
+            <form id="search-form" class="retro-form" onsubmit="return false;">
+              <div class="form-group">
+                <label for="query-input">Search query:</label>
+                <input type="text" id="query-input" placeholder="Type memory search prompt..." autocomplete="off" spellcheck="false" class="retro-input" />
+              </div>
+              
+              <div class="form-group">
+                <span class="field-label">Search Modes:</span>
+                <div class="mode-selectors" role="group" aria-label="Search Modes">
+                  <button type="button" class="mode-btn active" data-mode="text">Text</button>
+                  <button type="button" class="mode-btn active" data-mode="visual">Visual</button>
+                  <button type="button" class="mode-btn active" data-mode="audio">Audio</button>
+                  <button type="button" class="mode-btn active" data-mode="all">All Evidence</button>
+                </div>
+              </div>
+              
+              <button type="submit" id="search-submit" class="retro-btn primary-btn">Run Query</button>
+            </form>
+            <div class="entity-filter-section">
+              <span class="field-label">Entity Filter List:</span>
+              <div id="entity-filter-list" class="entity-filter-list">
+                <span class="placeholder-filter">No active entities loaded.</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Vertical Resizer (Left) -->
+        <div class="resizer resizer-v resizer-left" id="resizer-left"></div>
+
+        <!-- Section 2: Entity Co-occurrence Map -->
+        <section class="panel map-panel" aria-labelledby="map-heading">
+          <div class="panel-header">
+            <h2 id="map-heading">Entity Co-occurrence Map</h2>
+          </div>
+          <div class="panel-content canvas-wrapper">
+            <canvas id="graph-canvas" width="600" height="400"></canvas>
+            <div class="graph-legend">
+              <span class="legend-present">◉ In Scene</span>
+              <span class="legend-mentioned">○ Mentioned</span>
+              <span class="legend-candidate">◇ Candidate</span>
+              <span class="legend-location">■ Location</span>
+              <span class="legend-event">▲ Event</span>
+              <button id="reset-graph-btn" class="retro-btn-mini">Reset View</button>
+              <span class="legend-divider">|</span>
+              <button id="toggle-graph-2d-btn" class="retro-btn-mini active" title="Switch to 2D Flat Layout">2D Map</button>
+              <button id="toggle-graph-3d-btn" class="retro-btn-mini" title="Switch to 3D Spinning Globe">3D Globe</button>
+            </div>
+          </div>
+        </section>
+
+        <!-- Vertical Resizer (Right) -->
+        <div class="resizer resizer-v resizer-right" id="resizer-right"></div>
+
+        <!-- Section 3: Detail Inspector & Data Trail -->
+        <section class="panel inspector-panel" aria-labelledby="inspector-heading">
+          <div class="panel-header">
+            <h2 id="inspector-heading">Inspector</h2>
+            <button class="panel-collapse-btn" id="collapse-right-btn" title="Collapse Inspector">▶</button>
+          </div>
+          <div class="panel-content inspector-content">
+            <!-- Keyframe Zone (Always visible, houses empty state default) -->
+            <div id="inspector-keyframe-zone" class="inspector-keyframe-zone">
+              <div id="inspector-default-message" class="keyframe-placeholder empty-state-cyber">
+                <div class="keyframe-placeholder-crt">
+                  <div class="scanner-line"></div>
+                  <div class="empty-state-icon">📡</div>
+                  <div class="empty-state-title">INSPECTOR STANDBY</div>
+                  <div class="empty-state-text">SELECT TIMELINE CARD OR NODE TO INSPECT</div>
+                </div>
+              </div>
+              
+              <!-- Keyframe Viewer (Active state) -->
+              <div id="inspector-keyframe-active" class="keyframe-active-container" style="width: 100%; height: 100%;" hidden>
+                <div id="keyframe-active-visuals" style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; position: relative;">
+                  <div class="inspector-keyframe-overlay"></div>
+                  <img id="inspector-keyframe-img" class="inspector-keyframe-img" src="" alt="Keyframe image" />
+                  <span id="inspector-keyframe-timecode" class="inspector-keyframe-timecode"></span>
+                  <div id="inspector-keyframe-no-image" class="keyframe-placeholder empty-state-cyber" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; z-index: 1;" hidden>
+                    <div class="keyframe-placeholder-crt">
+                      <div class="scanner-line"></div>
+                      <div class="empty-state-icon">📷</div>
+                      <div class="empty-state-title" id="no-keyframe-title">NO VISUAL DATA</div>
+                      <div class="empty-state-text" id="no-keyframe-text">SCENE CONTAINS NO KEYFRAME IMAGE</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Transcript Zone (Populated/Shown only when scene selected) -->
+            <div id="inspector-transcript-zone" class="transcript-zone" hidden></div>
+            
+            <div id="inspector-details" class="inspector-details" hidden>
+              <!-- Details Content Dynamically Injected -->
+            </div>
+
+            <!-- Subsection Resizer Splitter -->
+            <div class="resizer resizer-h subsection-resizer" id="resizer-subsection" style="display: none;"></div>
+
+            <div class="data-trail-section" id="data-trail-section">
+              <h3 class="subsection-header" id="toggle-data-trail-btn">
+                <span class="chevron-icon">▼</span> Data Trail Logs
+              </h3>
+              <div id="data-trail-logs" class="data-trail-logs">
+                <span class="placeholder-log">No search query or inspect event logged.</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Horizontal Resizer (Bottom) -->
+        <div class="resizer resizer-h resizer-bottom" id="resizer-bottom"></div>
+
+        <!-- Section 4: Interstellar Grid Index / Timeline -->
+        <section class="panel timeline-panel" aria-labelledby="timeline-heading">
+          <div class="panel-header">
+            <h2 id="timeline-heading">Timeline  //  All Scenes</h2>
+            <button class="panel-collapse-btn" id="collapse-bottom-btn" title="Collapse Timeline">▼</button>
+          </div>
+          <div class="panel-content timeline-content">
+            <div id="timeline-grid" class="timeline-grid">
+              <!-- Timeline Grid Cards Injected -->
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <footer class="app-footer">
+        <span>READ-ONLY MODE // NO INGESTION // NO MUTATION // MEMORY VIEWER ACTIVE</span>
+        <span id="footer-version">v1.5.1</span>
+      </footer>
+    </div>
+    
+    <script src="./static/js/retro.js?v=1.5.1"></script>
+  </body>
+</html>

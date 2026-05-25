@@ -1,0 +1,46 @@
+{
+  "version": "1.4.0",
+  "timestamp": "2026-05-25T23:17:02Z",
+  "final_output": {
+    "mp4": "ui_onboarding_walkthrough.mp4",
+    "gif": "ui_onboarding_walkthrough.gif",
+    "resolution": "1920x1080",
+    "duration_seconds": 138.167,
+    "video_codec": "h264",
+    "audio_codec": "aac"
+  },
+  "source_clips": [
+    {
+      "name": "boot_intro_video.mp4",
+      "duration": 3.0,
+      "source": "PIL boot text frame + synthesized 60Hz hum"
+    },
+    {
+      "name": "nasa_descent_video.mp4",
+      "duration": 13.0,
+      "source": "apollo_full.ogv",
+      "cut": "35s-48s",
+      "audio_splice": "35-39s + 47-56s"
+    },
+    {
+      "name": "countdown_video.mp4",
+      "duration": 3.5,
+      "source": "PIL countdown leader frames + synthesized projector clicks/beep"
+    },
+    {
+      "name": "glitch_video.mp4",
+      "duration": 0.8,
+      "source": "Warm organic analog film burn transition + pink noise"
+    },
+    {
+      "name": "browser_video.mp4",
+      "duration": 111.867,
+      "source": "Playwright capture + synthesized lounge loop"
+    },
+    {
+      "name": "end_card.mp4",
+      "duration": 6.0,
+      "source": "PIL end card frame + music fade-out"
+    }
+  ]
+}

@@ -7,7 +7,9 @@ import sys
 from pathlib import Path
 
 import pytest
+from fastapi import FastAPI
 from fastapi import HTTPException
+from fastapi.testclient import TestClient
 
 
 def _load_route_module(module_name: str):
@@ -176,6 +178,15 @@ def _sample_temporal_index() -> dict:
                     {"text": "trumpet", "type": "OBJECT", "source": "caption"},
                     {"text": "music", "type": "CONCEPT", "source": "tagger"},
                 ],
+                "entities": [
+                    {"text": "trumpet", "type": "OBJECT", "source": "caption"},
+                    {"text": "Jerry", "type": "PERSON", "source": "transcript_ner"},
+                ],
+                "dialogue_mentioned_entities": [
+                    {"text": "Jerry", "type": "PERSON", "source": "transcript_ner"}
+                ],
+                "mentioned_people": [{"text": "Jerry", "type": "PERSON"}],
+                "visible_people": [{"text": "anonymous_person_1", "type": "PERSON"}],
                 "scene_context_llm": {
                     "narrative_summary": "A young musician performs indoors during a dated family recording.",
                     "context_tags": ["performance", "music"],
@@ -300,6 +311,15 @@ def test_list_scenes_surfaces_persisted_audio_truth(monkeypatch: pytest.MonkeyPa
         {"text": "trumpet", "type": "OBJECT", "source": "caption"},
         {"text": "music", "type": "CONCEPT", "source": "tagger"},
     ]
+    assert scene.entities == [
+        {"text": "trumpet", "type": "OBJECT", "source": "caption"},
+        {"text": "Jerry", "type": "PERSON", "source": "transcript_ner"},
+    ]
+    assert scene.dialogue_mentioned_entities == [
+        {"text": "Jerry", "type": "PERSON", "source": "transcript_ner"}
+    ]
+    assert scene.mentioned_people == [{"text": "Jerry", "type": "PERSON"}]
+    assert scene.visible_people == [{"text": "anonymous_person_1", "type": "PERSON"}]
     assert scene.scene_context_llm == {
         "narrative_summary": "A young musician performs indoors during a dated family recording.",
         "context_tags": ["performance", "music"],
@@ -338,6 +358,27 @@ def test_list_scenes_surfaces_persisted_audio_truth(monkeypatch: pytest.MonkeyPa
         "source": "interaction_chain",
         "continuity_key": "SPEAKER_00",
     }
+
+
+def test_get_scene_route_accepts_hash_ids_and_transcript_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
+    temporal_index = _sample_temporal_index()
+    segment = temporal_index["segments"][0]
+    segment["scene_id"] = "scene_hash_abc123"
+    segment.pop("full_transcript")
+    segment["transcript"] = "Transcript persisted under the temporal transcript key only."
+    loader = _FakeLoader(temporal_index)
+    monkeypatch.setattr(scenes_module, "get_data_loader", lambda: loader)
+
+    app = FastAPI()
+    app.include_router(scenes_module.router)
+    client = TestClient(app)
+
+    response = client.get("/api/videos/video_001/scenes/scene_hash_abc123")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["scene_id"] == "scene_hash_abc123"
+    assert payload["transcript"] == "Transcript persisted under the temporal transcript key only."
 
 
 def test_full_timeline_surfaces_persisted_audio_truth(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -462,6 +503,15 @@ def test_full_timeline_surfaces_persisted_audio_truth(monkeypatch: pytest.Monkey
         {"text": "trumpet", "type": "OBJECT", "source": "caption"},
         {"text": "music", "type": "CONCEPT", "source": "tagger"},
     ]
+    assert segment.entities == [
+        {"text": "trumpet", "type": "OBJECT", "source": "caption"},
+        {"text": "Jerry", "type": "PERSON", "source": "transcript_ner"},
+    ]
+    assert segment.dialogue_mentioned_entities == [
+        {"text": "Jerry", "type": "PERSON", "source": "transcript_ner"}
+    ]
+    assert segment.mentioned_people == [{"text": "Jerry", "type": "PERSON"}]
+    assert segment.visible_people == [{"text": "anonymous_person_1", "type": "PERSON"}]
     assert segment.scene_context_llm == {
         "narrative_summary": "A young musician performs indoors during a dated family recording.",
         "context_tags": ["performance", "music"],

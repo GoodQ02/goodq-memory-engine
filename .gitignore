@@ -202,6 +202,30 @@ archive/deprecated_*/
 archive/**/raw/
 archive/**/legacy_data/
 
+
+# ===== PACKAGE MANAGER =====
+node_modules/
+package-lock.json
+yarn.lock
+
+# ===== KEEP THESE =====
+# Explicitly include important files
+!README.md
+!QUICK_REFERENCE.md
+!*.bat
+!envs/locks/*.txt
+!docs/**/*.md
+!scripts/**/*.ps1
+!configs/**/*.yaml
+!LICENSE
+configs/config.local.yaml
+
+# ===== ARCHIVE DIRECTORIES =====
+# Archive deprecated code but not the large binary artifacts
+archive/deprecated_*/
+archive/**/raw/
+archive/**/legacy_data/
+
 # ===== QDRANT STORAGE =====
 # Don't commit Qdrant database files - regenerate on install
 vendor/qdrant/storage/
@@ -210,3 +234,16 @@ vendor/qdrant/*.log
 # ===== NARRATIVE TEST ARTIFACTS =====
 narrative*.txt
 narrative*.err
+
+# ===== WSL2 DISTRO EXPORTS =====
+*.tar
+*.tar.gz
+*.vhdx
+wsl_export/
+wsl-distro/
+wsl2-backup/
+*.wsl
+wsl_backup/
+wsl2_backup/
+wsl-exports/
+wsl2-exports/

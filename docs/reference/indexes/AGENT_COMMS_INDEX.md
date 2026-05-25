@@ -1,3 +1,7 @@
+<!-- DOC_BADGE: OPERATIONAL -->
+<!-- DOC_STATUS: ACTIVE_POINTER -->
+<!-- DOC_LAST_VERIFIED: 2026-05-23 -->
+
 # GoodQ4All Agent & Copilot Communications Index
 
 **Purpose:** Explain the archived agent/Copilot communication records and point agents back to the current restart truth surfaces.
@@ -10,6 +14,14 @@
 - `docs/archive/releases/SESSION_SUMMARY.md` – Historical release-focused session summary.
 
 The former active agent-communications and Copilot communications directories have been retired. Treat archived files as historical snapshots only. Canonical technical behavior is defined in the primary architecture, status, platform, WSL, and troubleshooting docs.
+
+## Current Pause Point
+
+As of 2026-05-23, the active agent first-read has moved to
+`docs/agent/CURRENT_STATE.md` with a machine-readable mirror at
+`docs/agent/current_state.json`. Use this index only to interpret archived
+agent/Copilot notes. Do not route fresh agents through archived communications
+or the sealed basement handoff before the current agent state layer.
 
 ---
 
@@ -49,7 +61,11 @@ These are snapshots, not canonical runtime docs:
 
 For canonical status and current runtime truth, prefer:
 
-- `docs/HANDOFF_BASEMENT_PHASE.md`
+- `docs/agent/CURRENT_STATE.md`
+- `docs/agent/current_state.json`
+- `docs/agent/README.md`
+- `docs/agent/workflows/CLEAN_MEMORY_START.md`
+- `docs/agent/workflows/EVIDENCE_FIRST_RUNTIME_REPAIR.md`
 - `docs/architecture/INGEST_ORCHESTRATION_CONTRACT.md`
 - `docs/architecture/IDENTITY_STITCHING_CONTRACT.md`
 - `docs/reference/WSL_AUDIO_RUNTIME.md`
@@ -65,6 +81,7 @@ For canonical status and current runtime truth, prefer:
 - `docs/PHASE6_MULTIMODAL_FUSION.md`
 - `docs/CLI-REFERENCE.md`
 - `docs/technical/LIB_COMPONENTS.md`
+- `docs/HANDOFF_BASEMENT_PHASE.md` only as sealed historical basement record
 - `CHANGELOG.md`
 
 ---
@@ -88,7 +105,11 @@ Release-level session summary:
 ## How Agents Should Treat These Docs
 
 - Primary truth first:
-  - `docs/HANDOFF_BASEMENT_PHASE.md`
+  - `docs/agent/CURRENT_STATE.md`
+  - `docs/agent/current_state.json`
+  - `docs/agent/README.md`
+  - `docs/agent/workflows/CLEAN_MEMORY_START.md`
+  - `docs/agent/workflows/EVIDENCE_FIRST_RUNTIME_REPAIR.md`
   - `docs/architecture/INGEST_ORCHESTRATION_CONTRACT.md`
   - `docs/architecture/IDENTITY_STITCHING_CONTRACT.md`
   - `docs/reference/WSL_AUDIO_RUNTIME.md`

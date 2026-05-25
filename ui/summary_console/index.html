@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en" style="background-color: #0a0a0c;">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>GoodQ Summary Console</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%23030704'/%3E%3Ctext x='32' y='40' text-anchor='middle' font-family='monospace' font-weight='bold' font-size='24' fill='%2300ff66'%3ESC%3C/text%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="./static/css/summary.css" />
+  </head>
+  <body style="background-color: #0a0a0c;">
+    <div class="crt-screen">
+      <div class="scanlines"></div>
+
+      <!-- Scope Metadata Header Bar -->
+      <header class="app-header">
+        <div class="header-brand">
+          <span class="header-logo">GOODQ // CUMULATIVE SUMMARY CONSOLE</span>
+          <span class="header-status" id="system-status">Status: ONLINE</span>
+        </div>
+        
+        <div class="scope-info-container" id="scope-info">
+          <!-- Populated dynamically: Epoch, Db Path, Video Count, Scene Count -->
+          <span>Loading scope metadata...</span>
+        </div>
+
+        <div class="header-controls">
+          <a class="nav-back-link" href="/ui/retro_console_v1/" title="Return to Retro Memory Explorer">&lt; RETRO EXPLORER</a>
+        </div>
+      </header>
+
+      <main class="grid-layout">
+        <!-- Panel 1: Entity Leaderboards & Occasions (Left) -->
+        <section class="panel panel-left" aria-labelledby="leaderboards-header">
+          <div class="panel-header" id="leaderboards-header">
+            <span>ENTITY LEADERBOARDS</span>
+          </div>
+          
+          <div class="panel-tabs">
+            <button class="tab-btn active" data-tab="people-list-container">PEOPLE</button>
+            <button class="tab-btn" data-tab="places-list-container">PLACES</button>
+            <button class="tab-btn" data-tab="occasions-list-container">OCCASIONS</button>
+            <button class="tab-btn" data-tab="moods-list-container">MOODS</button>
+          </div>
+
+          <div class="panel-content overflow-y">
+            <!-- People Tab -->
+            <div class="tab-content" id="people-list-container">
+              <div class="list-section-title">MAJOR PEOPLE ENTITIES</div>
+              <div id="people-list" class="entity-list-items"></div>
+            </div>
+
+            <!-- Places Tab -->
+            <div class="tab-content" id="places-list-container" hidden>
+              <div class="list-section-title">RECORDED PLACES</div>
+              <div id="places-list" class="entity-list-items"></div>
+            </div>
+
+            <!-- Occasions Tab -->
+            <div class="tab-content" id="occasions-list-container" hidden>
+              <div class="list-section-title">OCCASIONS & MILESTONES</div>
+              <div id="occasions-list" class="entity-list-items"></div>
+            </div>
+
+            <!-- Moods Tab -->
+            <div class="tab-content" id="moods-list-container" hidden>
+              <div class="list-section-title">SENTIMENT BALANCE</div>
+              <div class="sentiment-bar-container">
+                <div class="sentiment-bar">
+                  <div class="bar-segment pos" id="sent-pos-bar" style="width: 0%"></div>
+                  <div class="bar-segment neu" id="sent-neu-bar" style="width: 0%"></div>
+                  <div class="bar-segment neg" id="sent-neg-bar" style="width: 0%"></div>
+                </div>
+                <div class="sentiment-legend">
+                  <span class="legend-item text-green">POS: <span id="sent-pos-val">0</span></span>
+                  <span class="legend-item text-gray">NEU: <span id="sent-neu-val">0</span></span>
+                  <span class="legend-item text-red">NEG: <span id="sent-neg-val">0</span></span>
+                </div>
+              </div>
+
+              <div class="list-section-title">TOP EMOTIONAL MARKERS</div>
+              <div id="emotions-list" class="emotions-ranking-items"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Panel 2: Profile Inspector & Playlist Viewer (Middle) -->
+        <section class="panel panel-middle" aria-labelledby="profile-header">
+          <div class="panel-header" id="profile-header">
+            <span>PROFILE INSPECTOR & PLAYLIST</span>
+          </div>
+          <div class="panel-content overflow-y" id="profile-viewer-content">
+            <!-- Standby View -->
+            <div class="empty-state-select" id="no-profile-selected">
+              <span class="pulse-icon">📊</span>
+              <span>SELECT AN ENTITY, OCCASION, OR HIGHLIGHT TO COMPILE PROFILE & PLAYLIST</span>
+            </div>
+
+            <!-- Active Profile View -->
+            <div class="profile-layout" id="profile-details-view" hidden>
+              <div class="profile-card">
+                <h2 class="profile-name highlight-cyan" id="profile-name">...</h2>
+                <div class="profile-meta-row">
+                  <span class="meta-badge" id="profile-type">TYPE</span>
+                  <span class="meta-label">Occurrences: <strong id="profile-occurrences">0</strong></span>
+                  <span class="meta-label" id="profile-span-label">Span: <strong id="profile-span">N/A</strong></span>
+                </div>
+
+                <div class="co-occurrences-box">
+                  <div class="box-header">CO-OCCURRING ENTITIES (TAG CLOUD)</div>
+                  <div class="tag-cloud" id="profile-tag-cloud">
+                    <!-- Tags go here -->
+                  </div>
+                </div>
+              </div>
+
+              <div class="playlist-header">
+                <span>SCENE TIMELINE PLAYLIST</span>
+                <button class="save-playlist-btn" id="save-playlist-btn">SAVE AS COLLECTION 💾</button>
+              </div>
+
+              <div class="playlist-grid" id="playlist-grid">
+                <!-- Scene cards loaded here -->
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Panel 3: Collections Ledger (Right) -->
+        <section class="panel panel-right" aria-labelledby="collections-header">
+          <div class="panel-header" id="collections-header">
+            <span>COLLECTIONS LEDGER</span>
+          </div>
+
+          <div class="panel-content overflow-y">
+            <!-- Section A: Built-in Highlights -->
+            <div class="collection-section">
+              <div class="list-section-title">BUILT-IN AUTOMATED HIGHLIGHTS</div>
+              <div class="collection-list-items" id="built-in-highlights-list">
+                <div class="collection-item built-in" data-highlight="positive">
+                  <div class="col-title">All Positive Moments</div>
+                  <div class="col-desc">Timeline filter compiled from scenes with positive sentiments</div>
+                </div>
+                <div class="collection-item built-in" data-highlight="negative">
+                  <div class="col-title">All Negative Moments</div>
+                  <div class="col-desc">Timeline filter compiled from scenes with negative sentiments</div>
+                </div>
+                <div class="collection-item built-in" data-highlight="gatherings">
+                  <div class="col-title">Multi-Person Gatherings</div>
+                  <div class="col-desc">Clips with 3 or more distinct speakers or visible people</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Section B: Custom Operator Saved Collections -->
+            <div class="collection-section" style="border-top: 1px solid var(--border-faint);">
+              <div class="list-section-title">OPERATOR CUSTOM OVERLAYS</div>
+              <div class="collection-list-items" id="custom-collections-list">
+                <div class="empty-state">Loading custom collections...</div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <!-- Save Collection Overlay Form -->
+      <div class="modal-backdrop" id="save-collection-modal" hidden>
+        <div class="modal-content">
+          <div class="modal-header">
+            <span>💾 SAVE CUSTOM PLAYLIST COLLECTION</span>
+            <button class="close-btn" id="modal-close-btn">&times;</button>
+          </div>
+          <div class="modal-body">
+            <form id="save-collection-form" class="inputs-form">
+              <div class="form-group">
+                <label for="col-name-input">COLLECTION NAME</label>
+                <input type="text" id="col-name-input" placeholder="e.g. Christmas 1988 Dinner" required autocomplete="off" spellcheck="false" />
+              </div>
+              <div class="form-group">
+                <label for="col-desc-input">DESCRIPTION / NOTE</label>
+                <textarea id="col-desc-input" rows="3" placeholder="Describe the contents or reasoning for this playlist..."></textarea>
+              </div>
+              
+              <div class="modal-summary-box">
+                <p>Creating custom collection with <strong class="highlight-cyan" id="save-scenes-count">0</strong> scenes.</p>
+              </div>
+              
+              <div class="modal-footer">
+                <button type="button" class="modal-btn cancel-btn" id="modal-cancel-btn">CANCEL</button>
+                <button type="submit" class="modal-btn confirm-btn" id="modal-submit-btn">SAVE COLLECTION</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+
+      <!-- Toast Notifications -->
+      <div class="toast-container" id="toast-container"></div>
+    </div>
+
+    <script src="./static/js/summary.js"></script>
+  </body>
+</html>

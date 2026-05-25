@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en" style="background-color: #0a0a0c;">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>GoodQ Identity Stitching Workbench</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%23050c1e'/%3E%3Ctext x='32' y='40' text-anchor='middle' font-family='monospace' font-weight='bold' font-size='24' fill='%2300d2ff'%3EIS%3C/text%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="./static/css/stitching.css" />
+  </head>
+  <body style="background-color: #0a0a0c;">
+    <div class="crt-screen">
+      <div class="scanlines"></div>
+
+      <!-- Permanent Mutation Workbench Warning Banner -->
+      <div class="mutation-warning-banner">
+        <span class="warning-blink">⚠️ MUTATION WORKBENCH ACTIVE</span>
+        <span>— OPERATOR WRITE MODIFICATIONS WILL REBUILD LEDGER GRAPH READ-MODEL IN REAL-TIME</span>
+      </div>
+
+      <header class="app-header">
+        <div class="header-brand">
+          <span class="header-logo">GOODQ // IDENTITY STITCHING WORKBENCH</span>
+          <span class="header-status" id="system-status">Status: CONNECTING</span>
+        </div>
+        
+        <div class="header-controls">
+          <span class="db-indicator" id="db-indicator" title="SQLite Database Path">Database: ...</span>
+          <a class="nav-back-link" href="/ui/retro_console_v1/" title="Return to Retro Memory Explorer">&lt; RETRO EXPLORER</a>
+        </div>
+      </header>
+
+      <main class="grid-layout">
+        <!-- Panel 1: Unstitched Patterns List -->
+        <section class="panel panel-left" aria-labelledby="unstitched-header">
+          <div class="panel-header" id="unstitched-header">
+            <span>UNSTITCHED SPEAKER PATTERNS</span>
+            <span class="count-badge" id="unstitched-count">0</span>
+          </div>
+          <div class="panel-search">
+            <input type="search" id="pattern-search" placeholder="Filter speaker patterns..." spellcheck="false" autocomplete="off" />
+          </div>
+          <div class="panel-content overflow-y" id="unstitched-list">
+            <div class="empty-state">Loading patterns...</div>
+          </div>
+        </section>
+
+        <!-- Panel 2: Stitching Controls -->
+        <section class="panel panel-middle" aria-labelledby="controls-header">
+          <div class="panel-header" id="controls-header">
+            <span>STITCHING OPERATOR MODULE</span>
+          </div>
+          <div class="panel-content overflow-y" id="controls-panel">
+            <div class="empty-state-select" id="no-pattern-selected">
+              <span class="pulse-icon">🛰</span>
+              <span>SELECT AN UNSTITCHED PATTERN FROM THE LEFT PANEL TO BEGIN OPERATOR OVERRIDE</span>
+            </div>
+
+            <div class="stitch-form-container" id="stitch-form" hidden>
+              <div class="selected-pattern-card">
+                <div class="card-row">
+                  <span class="card-label">SPEAKER PATTERN:</span>
+                  <span class="card-value highlight-cyan" id="selected-pattern-name">...</span>
+                </div>
+                <div class="card-grid">
+                  <div class="card-metric">
+                    <span class="metric-label">Scenes</span>
+                    <span class="metric-val" id="selected-pattern-scenes">-</span>
+                  </div>
+                  <div class="card-metric">
+                    <span class="metric-label">Voiced</span>
+                    <span class="metric-val" id="selected-pattern-voiced">-</span>
+                  </div>
+                  <div class="card-metric">
+                    <span class="metric-label">Segments</span>
+                    <span class="metric-val" id="selected-pattern-segments">-</span>
+                  </div>
+                </div>
+                <div class="transcript-excerpt-box">
+                  <div class="box-header">SAMPLE TRANSCRIPT EXCERPT:</div>
+                  <div class="box-body" id="selected-pattern-transcript">"No transcript available."</div>
+                </div>
+              </div>
+
+              <form id="stitch-inputs-form" class="inputs-form">
+                <div class="form-group autocomplete-container">
+                  <label for="target-person-input">TARGET PERSON IDENTITY NAME</label>
+                  <input 
+                    type="text" 
+                    id="target-person-input" 
+                    placeholder="Enter name (e.g. Joe, Charlie, Tony...)" 
+                    required 
+                    autocomplete="off" 
+                    spellcheck="false" 
+                  />
+                  <div class="autocomplete-dropdown" id="autocomplete-suggestions" hidden></div>
+                </div>
+
+                <div class="form-group">
+                  <label for="operator-note-input">OPERATOR AUDIT NOTE</label>
+                  <textarea 
+                    id="operator-note-input" 
+                    rows="4" 
+                    placeholder="Provide justification note for identity stitching..." 
+                    required
+                  ></textarea>
+                </div>
+
+                <button type="submit" class="action-btn" id="preview-stitch-btn">
+                  PREVIEW IDENTITY STITCHING ▶
+                </button>
+              </form>
+            </div>
+          </div>
+        </section>
+
+        <!-- Panel 3: Mappings Ledger -->
+        <section class="panel panel-right" aria-labelledby="ledger-header">
+          <div class="panel-header" id="ledger-header">
+            <span>STITCHED MAPPINGS LEDGER</span>
+            <span class="count-badge" id="mappings-count">0</span>
+          </div>
+          <div class="panel-search">
+            <input type="search" id="mapping-search" placeholder="Filter active/revoked mappings..." spellcheck="false" autocomplete="off" />
+          </div>
+          <div class="panel-content overflow-y" id="mappings-list">
+            <div class="empty-state">Loading mappings ledger...</div>
+          </div>
+        </section>
+      </main>
+
+      <!-- Rebuild / Processing Block Overlay -->
+      <div class="rebuild-overlay" id="rebuild-overlay" hidden>
+        <div class="rebuild-spinner-box">
+          <div class="spinner"></div>
+          <h2 class="rebuild-title">REGENERATING READ-MODEL LEDGER</h2>
+          <p class="rebuild-subtitle">SQLite Knowledge Graph and metrics reports are updating. Please wait...</p>
+        </div>
+      </div>
+
+      <!-- Preview Confirmation Modal (Two-Stage Transaction Enforcer) -->
+      <div class="modal-backdrop" id="preview-modal" hidden>
+        <div class="modal-content">
+          <div class="modal-header">
+            <span>🛡️ CONFIRM STITCH TRANSACTION</span>
+            <button class="close-btn" id="modal-close-btn">&times;</button>
+          </div>
+          <div class="modal-body">
+            <div class="modal-summary-box">
+              <p>Stitching pattern <strong class="highlight-cyan" id="modal-source-name">...</strong> to identity <strong class="highlight-cyan" id="modal-target-name">...</strong></p>
+            </div>
+
+            <div class="modal-metrics-grid">
+              <div class="modal-metric">
+                <span class="m-label">AFFECTED SCENES:</span>
+                <span class="m-val" id="modal-scenes-count">0</span>
+              </div>
+              <div class="modal-metric">
+                <span class="m-label">AFFECTED EPISODES:</span>
+                <span class="m-val" id="modal-episodes-count">0</span>
+              </div>
+            </div>
+
+            <!-- Conflicts Section -->
+            <div class="conflicts-alert-container" id="modal-conflicts-section" hidden>
+              <div class="alert-title">⚠️ IDENTIFIED GRAPH CONFLICTS</div>
+              <div class="alert-body" id="modal-conflicts-list">
+                <!-- Conflicts will be injected here -->
+              </div>
+            </div>
+
+            <!-- Note Summary -->
+            <div class="note-summary-box">
+              <span class="note-lbl">AUDIT NOTE:</span>
+              <p class="note-val" id="modal-operator-note">...</p>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="modal-btn cancel-btn" id="modal-cancel-btn">CANCEL</button>
+            <button class="modal-btn confirm-btn" id="modal-confirm-btn">CONFIRM AND COMMIT STITCH</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Toast Notifications -->
+      <div class="toast-container" id="toast-container"></div>
+    </div>
+
+    <script src="./static/js/stitching.js"></script>
+  </body>
+</html>

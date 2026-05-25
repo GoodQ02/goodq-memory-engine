@@ -456,6 +456,45 @@ def test_retrieval_console_surfaces_observed_search_chips() -> None:
     assert ".retrieval-suggestion-chip" in app_css
 
 
+def test_retrieval_clarity_pass_marks_lexical_chips_and_empty_transcripts() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    app_js = (repo_root / "ui" / "operator_console_v1" / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    app_css = (repo_root / "ui" / "operator_console_v1" / "static" / "css" / "app.css").read_text(encoding="utf-8")
+
+    assert "retrievalSuggestionChipMode" in app_js
+    assert "Lexical chip; Audio-only mode switches to All surfaces." in app_js
+    assert "data-retrieval-suggestion-mode" in app_js
+    assert "retrieval-suggestion-mode" in app_js
+    assert "No transcript returned for this result." in app_js
+    assert "Placeholder transcript" in app_js
+    assert ".retrieval-suggestion-mode" in app_css
+    assert ".retrieval-transcript-panel.empty" in app_css
+
+
+def test_retrieval_preview_layout_has_dedicated_grid_regions() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    index_html = (repo_root / "ui" / "operator_console_v1" / "index.html").read_text(encoding="utf-8")
+    app_css = (repo_root / "ui" / "operator_console_v1" / "static" / "css" / "app.css").read_text(encoding="utf-8")
+
+    assert "retrieval-preview-summary" in index_html
+    assert "grid-template-columns: minmax(220px, 0.9fr) minmax(260px, 1.1fr) minmax(190px, auto)" in app_css
+    assert ".retrieval-preview-summary" in app_css
+    assert ".retrieval-similar-panel" in app_css
+    assert ".retrieval-lineage-strip" in app_css
+    assert "grid-column: 1 / -1" in app_css
+
+
+def test_flight_deck_and_audio_proof_use_scoped_copy() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    app_js = (repo_root / "ui" / "operator_console_v1" / "static" / "js" / "app.js").read_text(encoding="utf-8")
+
+    assert "latestRunDisplay" in app_js
+    assert "timestamp not exposed" in app_js
+    assert "audioProofDisplay" in app_js
+    assert "scene still needs current-run proof" in app_js
+    assert "scenes still need current-run proof" in app_js
+
+
 def test_retrieval_console_splits_match_explanation_by_use() -> None:
     repo_root = Path(__file__).resolve().parents[2]
     app_js = (repo_root / "ui" / "operator_console_v1" / "static" / "js" / "app.js").read_text(encoding="utf-8")
@@ -514,6 +553,30 @@ def test_retrieval_console_surfaces_diagnostics_and_full_transcript() -> None:
     assert ".retrieval-diagnostics" in app_css
     assert ".retrieval-transcript-panel" in app_css
     assert ".retrieval-transcript-text" in app_css
+
+
+def test_retrieval_full_transcript_uses_unclipped_sanitizer_and_excerpt_split() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    app_js = (repo_root / "ui" / "operator_console_v1" / "static" / "js" / "app.js").read_text(encoding="utf-8")
+
+    assert "function safeTranscriptString" in app_js
+    assert "function transcriptExcerpt" in app_js
+    assert "retrievalFullTranscript(result)" in app_js
+    assert "safeTranscriptString(" in app_js
+    assert "transcriptExcerpt(retrievalFullTranscript(result))" in app_js
+    assert "Full scene transcript" in app_js
+
+
+def test_guided_mode_hash_links_and_disabled_timeline_are_explicit() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    index_html = (repo_root / "ui" / "operator_console_v1" / "index.html").read_text(encoding="utf-8")
+    app_js = (repo_root / "ui" / "operator_console_v1" / "static" / "js" / "app.js").read_text(encoding="utf-8")
+
+    assert 'data-guided-action="operator-target"' in index_html
+    assert "navigateHashTarget" in app_js
+    assert "operatorTargetIds" in app_js
+    assert "setViewMode(\"operator\")" in app_js
+    assert "event.preventDefault();\n      const selected = selectedRetrievalEntry();" in app_js
 
 
 def test_retrieval_load_more_uses_requested_window_not_reported_total() -> None:

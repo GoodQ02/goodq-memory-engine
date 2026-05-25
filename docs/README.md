@@ -174,23 +174,18 @@ changes.
 
 ## Current UI Surface
 
-GoodQ4All now ships a local read-only operator console at
-`ui/operator_console_v1/`, served by the API process at
-`/ui/operator_console_v1/`. It is an inspection cockpit for current scope,
-runtime state, proof/evidence, retrieval, storage, recurrence reports, video
-inventory, and scene/timeline projections.
+GoodQ4All now ships two local read-only operator console variants:
+- **Classic Operator Console** served by the API process at `/ui/operator_console_v1/`. It is an inspection cockpit for current scope, runtime state, proof/evidence, retrieval, storage, recurrence reports, and video inventory.
+- **Retro Memory Explorer (v1.4.7)** served by the API process at `/ui/retro_console_v1/`. A premium cyber-CRT dashboard featuring a four-panel resizable/collapsible layout with floating restore tabs, an entity co-occurrence graph with dynamic spacing zoom and flight transitions, an Inspector panel containing keyframe image/transcript views with resizable logs splitters, and bidirectional timeline checklists.
 
-The console is not a control plane. It does not trigger ingestion, reindex
-memory, heal configs, mutate persistence, generate recurrence reports, or
-activate ControlAgent. Operational write paths remain CLI, watchdog,
-`import_inbox`, persisted runtime artifacts, and the deliberately constrained
-ingest request facade.
+The consoles are not control planes. They do not trigger ingestion, reindex memory, heal configs, mutate database structures, generate recurrence reports, or activate ControlAgent. Operational write paths remain CLI, watchdog, `import_inbox`, persisted runtime artifacts, and the deliberately constrained ingest request facade.
 
-The Justification Channel remains the literal envelope renderer at
-`ui/justification_v1/`.
+The Justification Channel remains the literal envelope renderer at `ui/justification_v1/`.
 
-- UI status:
+- UI status & justification:
   [`docs/guides/ui/JUSTIFICATION_UI.md`](guides/ui/JUSTIFICATION_UI.md)
+- Retro UI README:
+  [ui/retro_console_v1/README.md](../ui/retro_console_v1/README.md)
 
 ## Historical Material
 

@@ -95,7 +95,7 @@ def _build_scene_response(video_id: str, segment: dict) -> SceneResponse:
         dino_id=segment.get("dino_id"),
         keywords=segment.get("keywords", []),
         objects=_segment_object_labels(segment),
-        transcript=segment.get("full_transcript"),
+        transcript=segment.get("full_transcript") or segment.get("transcript"),
         speakers=segment.get("speaker_ids", []),
         audio_chunks=segment.get("audio_chunks", []),
         speaker_count=segment.get("speaker_count"),
@@ -198,7 +198,7 @@ async def list_scenes(
 @router.get("/{scene_id}", response_model=SceneResponse)
 async def get_scene(
     video_id: str = PathParam(..., description="Video identifier"),
-    scene_id: int = PathParam(..., description="Scene identifier")
+    scene_id: str = PathParam(..., description="Scene identifier")
 ):
     """
     Get detailed metadata for a specific scene.
@@ -217,10 +217,9 @@ async def get_scene(
         if not temporal_index:
             raise HTTPException(status_code=404, detail=f"Video not found: {video_id}")
         
-        # Find the scene
-        for segment in temporal_index.get('segments', []):
-            if segment.get('scene_id') == scene_id:
-                return _build_scene_response(video_id, segment)
+        segment = _find_temporal_segment(temporal_index, scene_id)
+        if segment is not None:
+            return _build_scene_response(video_id, segment)
         
         raise HTTPException(status_code=404, detail=f"Scene not found: {scene_id}")
         

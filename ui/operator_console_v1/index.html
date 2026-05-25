@@ -5,12 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>GoodQ4All Operator Console</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='8' fill='%23161a20'/%3E%3Ctext x='32' y='40' text-anchor='middle' font-family='monospace' font-size='22' fill='%23ffb300'%3EGQ%3C/text%3E%3C/svg%3E" />
-    <link rel="stylesheet" href="./static/css/app.css?v=20260521-emotion-ranking-1-witness-spine-1-focus-queue-1-guided-mode-2-readability-1-retrieval-scope-1-modality-selector-1-search-chips-1-explain-groups-1-retrieval-diagnostics-1" />
+    <link rel="stylesheet" href="./static/css/app.css?v=20260521-emotion-ranking-1-witness-spine-1-focus-queue-1-guided-mode-2-readability-1-retrieval-scope-1-modality-selector-1-search-chips-1-explain-groups-1-retrieval-diagnostics-1-clarity-4" />
   </head>
   <body>
     <div class="app-shell" id="app-shell" data-view-mode="guided" data-testid="app-shell">
       <header class="topbar">
-        <a class="brand" href="#overview" aria-label="GoodQ4All Operator Console">
+        <a class="brand" href="#overview" aria-label="GoodQ4All Operator Console" data-guided-action="operator-target">
           <span class="brand-mark" aria-hidden="true">GQ</span>
           <span>
             <strong>GoodQ4All</strong>
@@ -141,7 +141,7 @@
               <div class="flight-status-list flight-status-list-roomy" id="flight-first-run" data-testid="flight-first-run"></div>
               <div class="first-run-guide" id="first-run-guide" data-testid="first-run-guide" aria-label="Make one memory checklist"></div>
               <div class="flight-actions">
-                <a class="flight-button primary" href="#runs" data-testid="open-latest-run">Open Latest Run</a>
+                <a class="flight-button primary" href="#runs" data-testid="open-latest-run" data-guided-action="operator-target">Open Latest Run</a>
                 <a
                   class="flight-button"
                   href="https://github.com/GoodQ02/goodq4all/blob/main/docs/guides/FIRST_RUN.md"
@@ -198,7 +198,7 @@
             </div>
             <div class="proof-inspector-grid" id="proof-inspector-grid" data-testid="proof-inspector-grid"></div>
             <div class="proof-actions">
-              <a class="proof-button primary" href="#surfaces" data-testid="open-evidence-surfaces">Open Evidence</a>
+              <a class="proof-button primary" href="#surfaces" data-testid="open-evidence-surfaces" data-guided-action="operator-target">Open Evidence</a>
               <a class="proof-button" href="#videos" data-testid="open-timeline-surface">Open Timeline</a>
               <a class="proof-button" id="proof-api-docs" href="/docs" target="_blank" rel="noreferrer" data-testid="open-api-docs">Open API Docs</a>
             </div>
@@ -269,7 +269,7 @@
           </div>
 
           <article class="retrieval-preview" aria-labelledby="retrieval-preview-title" data-testid="retrieval-preview">
-            <div>
+            <div class="retrieval-preview-summary">
               <h3 id="retrieval-preview-title">Selected Result Preview</h3>
               <p id="retrieval-preview-copy">Run a query to inspect one memory result.</p>
             </div>
@@ -382,6 +382,6 @@
       </div>
     </template>
 
-    <script src="./static/js/app.js?v=20260521-emotion-ranking-1-witness-spine-1-focus-queue-1-guided-mode-2-readability-1-retrieval-scope-1-modality-selector-1-search-chips-1-explain-groups-1-retrieval-diagnostics-1"></script>
+    <script src="./static/js/app.js?v=20260521-emotion-ranking-1-witness-spine-1-focus-queue-1-guided-mode-2-readability-1-retrieval-scope-1-modality-selector-1-search-chips-1-explain-groups-1-retrieval-diagnostics-1-clarity-4"></script>
   </body>
 </html>

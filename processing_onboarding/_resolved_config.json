@@ -1,0 +1,298 @@
+{
+  "user": {
+    "name": "Joseph Domingo Benvenuti",
+    "nickname": "GoodSex, Joes, Agent, 00-Joes, Joe",
+    "pronouns": "he/him",
+    "personality_traits": "compassionate, resilient, witty, detail-obsessed, creative, musically inclined",
+    "values": "innovation, empathy, knowledge, precision, music, authenticity, healing, chaos",
+    "background": "Chicago DJ who almost made it (www.goodsexmusic.com) turned sober nightly vibe-coder",
+    "music_style": "house, eclectic electronic, soul-infused Chicago grooves",
+    "role_nursing": "registered nurse in IL, bachelor of science and nursing + certified school nurse",
+    "nursing_philosophy": "evidence-based care, radical empathy, advocate for the unseen",
+    "role_personal": "husband to wife Katy Banks, father to dog Ryder and step-father to Kay's dog 'Lovie'"
+  },
+  "model": {
+    "identity": "GoodQ: Digital embodiment of Q from the James Bond universe",
+    "personality_traits": "witty, tech-savvy, loyal, precise, occasionally sarcastic, supportive, mischievous",
+    "values": "service, innovation, protection, efficiency, dry humor, reliability, intelligence",
+    "humor_style": "007 Secret Agent excitement, witty Q-style dry sarcasm, clever jabs",
+    "tech_sidekick_persona": "tech-savvy sidekick with dry wit and taste for innovation",
+    "zone_1": "Command_Center",
+    "zone_1_desc": "User's main workstation for coding, music production, and gaming",
+    "zone_2": "Desk Dock",
+    "zone_2_desc": "Razer Laptop Dock with RGB lighting and Dual 25-inch HP Monitors",
+    "zone_3": "Chase Recon",
+    "zone_3_desc": "Relaxing large lounge day-bed with dual monitor setup and lakeside views",
+    "main_hardware": "Alienware Aurora R16",
+    "main_hardware_codename": "THE_GOODENGINE",
+    "mission_name": "GoodQ_o2",
+    "assigned_zone": "The_GoodPlace",
+    "workplace": "The GoodPlace, Chicago, Illinois"
+  },
+  "host": {
+    "profile": "GPU_ENHANCED",
+    "data_root": "L:\\_DATA",
+    "wsl_distro": "Ubuntu-22.04",
+    "wsl_user": "jdben",
+    "wsl_workspace": "/home/jdben/goodq_audio",
+    "conda_env": "goodq_core"
+  },
+  "paths": {
+    "log_dir": "L:\\_DATA/GoodQ_Data/epochs/epoch_onboarding/logs",
+    "output_directory": "L:\\_DATA/GoodQ_Data/epochs/epoch_onboarding/output",
+    "db_dir": "L:\\_DATA/GoodQ_Data/epochs/epoch_onboarding",
+    "db_path": "L:\\_DATA/GoodQ_Data/epochs/epoch_onboarding/memory.db",
+    "knowledge_graph_db": "L:\\_DATA/GoodQ_Data/epochs/epoch_onboarding/knowledge_graph.db",
+    "faiss_dir": "L:\\_DATA/GoodQ_Data/epochs/epoch_onboarding/faiss",
+    "faiss_audio_path": "L:\\_DATA/GoodQ_Data/epochs/epoch_onboarding/faiss/goodq_audio_epoch_onboarding.index",
+    "qdrant_storage": "L:\\_DATA/qdrant_storage",
+    "watchdog_state_file": "L:\\_DATA/GoodQ_Data/epochs/epoch_onboarding/logs/watchdog_state.json",
+    "watchdog_lock_file": "L:\\_DATA/GoodQ_Data/epochs/epoch_onboarding/logs/watchdog.lock",
+    "config_dir": "configs",
+    "data_root": "L:\\_DATA/GoodQ_Data",
+    "import_inbox": "L:\\_DATA/GoodQ_Data/import_inbox",
+    "processing": "L:\\_DATA/GoodQ_Data/epochs/epoch_onboarding/processing",
+    "processed": "L:\\_DATA/GoodQ_Data/processed",
+    "failed": "L:\\_DATA/GoodQ_Data/failed",
+    "models_cache": "L:\\_DATA/models",
+    "chunk_subdir": "chunks",
+    "audio_subdir": "audio",
+    "video_subdir": "video",
+    "metadata_subdir": "metadata",
+    "csv_path": "L:\\_DATA/GoodQ_Data/epochs/epoch_onboarding/logs/system_metrics.csv",
+    "nas_path": "L:\\_DATA/GoodQ_Data/archive",
+    "faiss_index_path": "L:\\_DATA/GoodQ_Data/epochs/epoch_onboarding/faiss/text/faiss_text.index",
+    "faiss_clip_path": "L:\\_DATA/GoodQ_Data/epochs/epoch_onboarding/faiss/clip/faiss_clip.index",
+    "faiss_dino_path": "L:\\_DATA/GoodQ_Data/epochs/epoch_onboarding/faiss/dino/faiss_dino.index",
+    "clip_id_map_db": "L:\\_DATA/GoodQ_Data/epochs/epoch_onboarding/faiss/clip/clip_id_map.sqlite",
+    "dino_id_map_db": "L:\\_DATA/GoodQ_Data/epochs/epoch_onboarding/faiss/dino/dino_id_map.sqlite",
+    "clap_id_map_db": "L:\\_DATA/GoodQ_Data/epochs/epoch_onboarding/faiss/audio/clap_id_map.sqlite",
+    "ingest_requests": "L:\\_DATA/GoodQ_Data/ingest_requests"
+  },
+  "config": {
+    "tools": {
+      "ffmpeg_exe": "L:/_DATA/_TOOLS/ffmpeg/bin/ffmpeg.exe",
+      "tesseract_exe": "C:/Program Files/Tesseract-OCR/tesseract.exe",
+      "poppler_bin": "C:\\Tools\\poppler\\poppler-25.12.0\\Library\\bin"
+    }
+  },
+  "llm": {
+    "api_url": "http://127.0.0.1:38005/v1/chat/completions",
+    "model_id": "/home/jdben/models/Qwen2.5-0.5B-Instruct",
+    "features": {
+      "scene_context_analysis": true
+    },
+    "vllm_url": "http://127.0.0.1:38005/v1",
+    "vllm_model": "/home/jdben/models/Qwen2.5-0.5B-Instruct",
+    "ollama_url": "http://localhost:31434/v1",
+    "ollama_model": "phi4:latest"
+  },
+  "tts": {
+    "elevenlabs_voice_id": "example_voice_id",
+    "piper_voice": "joe",
+    "last_used_voice": "moviephone"
+  },
+  "home_assistant": {
+    "url": "http://localhost:8123",
+    "token": "***REDACTED***"
+  },
+  "system": {
+    "cpu": "Intel Core i7-14700KF",
+    "gpu": "NVIDIA GeForce RTX 4070 Ti SUPER with 16GB GDDR6X",
+    "ram1": "32GB Crucial DDR5 at 5200MHz",
+    "ram2": "32GB Crucial DDR5 at 5200MHz",
+    "ssd1": "Samsung 990 Pro 4TB NVMe SSD",
+    "ssd2": "Samsung 990 Pro 4TB NVMe SSD",
+    "network": "Tp-Link Archer AXE7800 with 2.5Gbps Ethernet and Wi-Fi 6E",
+    "storage": "UGREEN NAS with 44TB of storage"
+  },
+  "gpu": {
+    "enabled": true,
+    "cuda_version": "12.1",
+    "torch_version": "2.5.1+cu121",
+    "primary_env": "goodq_core",
+    "memory_fraction": 0.85,
+    "allow_growth": true
+  },
+  "envs": {
+    "core": "goodq_core",
+    "audio_transcribe": "goodq_audio_transcribe",
+    "audio_embed": "goodq_audio_embed",
+    "audio_emotion": "goodq_audio_emotion",
+    "audio_metadata": "goodq_audio_metadata",
+    "video_scene_detect": "goodq_video_scene_detect"
+  },
+  "qdrant": {
+    "enabled": true,
+    "host": "http://127.0.0.1:6333",
+    "collections": {
+      "clip": "goodq_clip_epoch_onboarding",
+      "dino": "goodq_dino_epoch_onboarding",
+      "text": "goodq_text_epoch_onboarding",
+      "audio": "goodq_audio_epoch_onboarding"
+    },
+    "embedding_dims": {
+      "clip": 512,
+      "dino": 768,
+      "text": 384,
+      "audio": 512
+    }
+  },
+  "segmentation": {
+    "enabled": true,
+    "activation": "off",
+    "metrics_output": true,
+    "shadow_audio_overlay": false,
+    "mode": "phased",
+    "phase0": {
+      "target_sample_rate": 16000,
+      "channels": 1,
+      "bit_depth": 16,
+      "codec": "pcm_s16le"
+    },
+    "phase1": {
+      "aggressiveness": 3,
+      "frame_duration_ms": 30,
+      "min_speech_duration": 0.3,
+      "min_silence_duration": 0.5,
+      "padding_duration": 0.1
+    },
+    "phase2": {
+      "enabled": false,
+      "min_duration_off": 0.0,
+      "min_duration_on": 0.0,
+      "model": "pyannote/segmentation-3.0",
+      "device": "cuda",
+      "use_auth_token": "***REDACTED***"
+    },
+    "phase3": {
+      "min_chunk_duration": 1.0,
+      "max_chunk_duration": 40.0,
+      "target_chunk_duration": 20.0,
+      "chunk_padding_ms": 250,
+      "chunk_overlap_ms": 500,
+      "merge_threshold": 2.0
+    },
+    "phase4": {
+      "enable_transcription": true,
+      "enable_diarization": true,
+      "enable_embeddings": true,
+      "enable_emotion": true,
+      "enable_music_detection": true,
+      "whisper_model": "medium",
+      "language": null,
+      "beam_size": 5,
+      "best_of": 5,
+      "temperature": 0.0,
+      "min_speakers": null,
+      "max_speakers": null,
+      "diarize_timeout": 7200,
+      "chunk_timeout": 600,
+      "max_parallel_chunks": 2,
+      "clap_model": "laion/clap-htsat-unfused",
+      "emotion_model": "ehcalabres/wav2vec2-lg-xlsr-en-speech-emotion-recognition"
+    },
+    "phase5": {
+      "enabled": true,
+      "scene_threshold": 27.0,
+      "min_scene_len_sec": 30.0,
+      "max_scene_len_sec": 300.0,
+      "use_gpu": true,
+      "batch_size": 32,
+      "alignment_tolerance": 0.5
+    }
+  },
+  "video": {
+    "scene_detect": {
+      "threshold": 30.0,
+      "min_scene_len_sec": 30.0,
+      "max_scene_len_sec": 300.0,
+      "max_scenes": 0
+    }
+  },
+  "phase6": {
+    "enabled": true,
+    "frame_sampling_strategy": "uniform",
+    "frames_per_scene": 3,
+    "max_gpu_batch_size": 8,
+    "clip_collection": "goodq_clip_epoch_onboarding",
+    "dino_collection": "goodq_dino_epoch_onboarding",
+    "retrieval": {
+      "enable": true,
+      "fusion_weights": {
+        "text": 0.5,
+        "visual": 0.4,
+        "audio": 0.1
+      }
+    }
+  },
+  "api": {
+    "enabled": true,
+    "host": "127.0.0.1",
+    "port": 30000,
+    "reload": true,
+    "cors_enabled": false,
+    "max_upload_size": 5368709120
+  },
+  "ui": {
+    "enabled": true,
+    "serve_from": "ui",
+    "theme": "dark"
+  },
+  "pipeline": {
+    "parallel_processing": false,
+    "max_workers": 4,
+    "save_intermediate": true,
+    "cleanup_temp_files": false,
+    "retry_on_failure": true,
+    "max_retries": 3
+  },
+  "output": {
+    "save_chunks": true,
+    "save_manifests": true,
+    "save_embeddings": true,
+    "compression": false
+  },
+  "logging": {
+    "level": "INFO",
+    "save_logs": true,
+    "verbose": true,
+    "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  },
+  "run": {
+    "id": "c52b9463-007c-4dc5-8f3b-979a18b28f5f",
+    "pipeline": "scene_ingest_cli",
+    "started_at": "2026-05-25T12:37:00.905560+00:00",
+    "timer_unit": "ms",
+    "healer_retry_count": 0,
+    "healer_retry_by_step": {},
+    "native_retry_count": 0,
+    "native_retry_by_step": {},
+    "audio_backend_events": [],
+    "control_agent_status": "disabled_no_llm_client",
+    "control_agent_reason": "ControlAgent requires injected llm_client",
+    "knowledge_graph_status": "active",
+    "profile_override": null,
+    "profile_override_reason": null,
+    "git_sha": "af76bbf6c72e30c87f45319f04b2dc3059b4f2c6",
+    "audio_runtime_contract": {
+      "mode": "auto",
+      "requested_wsl": true,
+      "require_wsl_audio": true,
+      "wsl_command_available": true,
+      "wsl_distro": "Ubuntu-22.04",
+      "wsl_distro_source": "env",
+      "wsl_user": "jdben",
+      "wsl_workspace": "/home/jdben/goodq_audio",
+      "wsl_audio_workspace": "/home/jdben/goodq_audio",
+      "workspace_ready": true,
+      "wsl_runtime_ready": true,
+      "wsl_abi_ready": true,
+      "selected": "wsl",
+      "reason": "wsl_runtime_ready",
+      "wsl_workspace_source": "env",
+      "wsl_runtime_detail": "workspace, transcription runtime, process import, ABI, and diarization checks are ready"
+    }
+  },
+  "force_reprocess": true
+}

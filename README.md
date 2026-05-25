@@ -17,22 +17,25 @@
 
 GoodQ4All is a local-first multimodal memory system for long-running video, audio, and text intelligence.
 
+
 It ingests media into scene-level memory, persists what it learns locally, and keeps the proof path visible. The system is built around deterministic Windows-first execution, with CPU-safe baseline behavior and optional GPU / WSL2 acceleration when you want more throughput.
 
 GoodQ4All's thesis is simple: machine memory should earn every claim it makes.
 
 ## Watch The Guided Demo
 
-Start with the two-minute onboarding film if you want to see the install and first ingestion path before reading the deeper docs.
+Start with the two-minute onboarding film if you want to see the install, live ingestion, 3D node map navigation, stitching workbench, and summary console.
 
 <p align="center">
-  <a href="https://github.com/GoodQ02/.github/releases/download/welcome-aboard-goodq4all-2026-05-17/GOODQ4ALL_DEMO_FINAL.mp4">
-    <img src="samples/assets/goodq4all-demo-poster.jpg" alt="Watch Welcome Aboard GoodQ4All" width="760" />
+  <a href="samples/assets/ui_onboarding_walkthrough.mp4">
+    <img src="samples/assets/ui_onboarding_walkthrough.gif" alt="Watch GoodQ4All Onboarding Walkthrough" width="760" />
   </a>
 </p>
 
 <p align="center">
-  <a href="https://github.com/GoodQ02/.github/releases/download/welcome-aboard-goodq4all-2026-05-17/GOODQ4ALL_DEMO_FINAL.mp4">Watch the 2-minute guided demo</a>
+  <a href="samples/assets/ui_onboarding_walkthrough.mp4">Watch the 2-minute high-resolution guided demo video</a>
+  ·
+  <a href="samples/assets/manifest.json">View output manifest</a>
   ·
   <a href="docs/guides/DEMO.md">Read the demo guide</a>
 </p>

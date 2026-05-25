@@ -406,3 +406,126 @@ class ManualMappingsResponse(BaseModel):
     version: int
     mappings: List[ManualMappingEntry] = Field(default_factory=list)
 
+
+class ScopeMetadata(BaseModel):
+    """Execution scope metadata for all summary operations."""
+    epoch: str
+    db_path: str
+    video_count: int
+    scene_count: int
+    temporal_index_count: int
+    generated_at_utc: str
+    source_surfaces_used: List[str] = Field(default_factory=list)
+
+
+class OccasionItem(BaseModel):
+    """Read model for Occasions (replaces Holidays)."""
+    entity_id: str
+    name: str
+    occurrence_count: int
+    occasion_type: str
+    source: str
+    confidence: float
+
+
+class EntitySummaryItem(BaseModel):
+    """Summary metrics for major entities (people, places)."""
+    entity_id: str
+    name: str
+    occurrence_count: int
+    first_seen: Optional[float] = None
+    last_seen: Optional[float] = None
+
+
+class BuiltInHighlights(BaseModel):
+    """Predefined static/deterministic highlight collections."""
+    positive_moments: List[Dict[str, Any]] = Field(default_factory=list)
+    negative_moments: List[Dict[str, Any]] = Field(default_factory=list)
+    multi_person_gatherings: List[Dict[str, Any]] = Field(default_factory=list)
+
+
+class SummaryDashboardResponse(BaseModel):
+    """Response model for cumulative dashboard metrics."""
+    scope_metadata: ScopeMetadata
+    people: List[EntitySummaryItem] = Field(default_factory=list)
+    places: List[EntitySummaryItem] = Field(default_factory=list)
+    occasions: List[OccasionItem] = Field(default_factory=list)
+    sentiment_distribution: Dict[str, int] = Field(default_factory=dict)
+    top_emotions: List[Dict[str, Any]] = Field(default_factory=list)
+    built_in_highlights: BuiltInHighlights
+
+
+class CoOccurrenceItem(BaseModel):
+    """Represents an entity that co-occurs with the target entity."""
+    entity_id: str
+    node_type: str
+    name: str
+    co_occurrence_count: int
+
+
+class SceneRef(BaseModel):
+    """Reference to a scene segment featuring the entity."""
+    video_id: str
+    scene_id: str
+    start: float
+    end: float
+    representative_frame: Optional[str] = None
+    transcript: Optional[str] = None
+
+
+class EntityProfileResponse(BaseModel):
+    """Full detail profile response for a major entity."""
+    scope_metadata: ScopeMetadata
+    entity_id: str
+    node_type: str
+    name: str
+    occurrence_count: int
+    first_seen: Optional[float] = None
+    last_seen: Optional[float] = None
+    co_occurrences: List[CoOccurrenceItem] = Field(default_factory=list)
+    scenes: List[SceneRef] = Field(default_factory=list)
+    sentiment_distribution: Dict[str, int] = Field(default_factory=dict)
+    top_emotions: List[Dict[str, Any]] = Field(default_factory=list)
+
+
+class CollectionHistoryEntry(BaseModel):
+    """Change log history entry for custom collections."""
+    action: str
+    timestamp_utc: str
+    operator_note: Optional[str] = None
+
+
+class SavedCollectionItem(BaseModel):
+    """Custom manual playlist/collection persisted object."""
+    collection_id: str
+    name: str
+    description: Optional[str] = None
+    status: str
+    collection_type: str
+    query_params: Dict[str, Any] = Field(default_factory=dict)
+    scene_refs: List[Dict[str, Any]] = Field(default_factory=list)
+    source_epoch: str
+    created_at_utc: str
+    created_by: str
+    updated_at_utc: str
+    deleted_at_utc: Optional[str] = None
+    history: List[CollectionHistoryEntry] = Field(default_factory=list)
+
+
+class SaveCollectionRequest(BaseModel):
+    """Request payload to create/update custom collections."""
+    name: str
+    description: Optional[str] = None
+    collection_type: str = "manual_playlist"
+    query_params: Dict[str, Any] = Field(default_factory=dict)
+    scene_refs: List[Dict[str, Any]] = Field(default_factory=list)
+    operator_note: Optional[str] = None
+
+
+class SaveCollectionResponse(BaseModel):
+    """API response model after saving a custom collection."""
+    success: bool
+    message: str
+    collection: SavedCollectionItem
+
+

@@ -40,6 +40,10 @@
   padding: 0;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 body {
   background-color: #000;
   color: var(--text-color);

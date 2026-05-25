@@ -922,7 +922,7 @@
   function singleSelectEntity(entityId, skipScrollChecklist = false) {
     state.selectedEntities = [entityId];
     state.selectedEntity = entityId;
-    state.selectedSceneId = null;
+    // Keep selected scene active so keyframe remains visible
 
     // Zoom and center graph canvas on this node
     const canvas = document.getElementById("graph-canvas");
@@ -969,7 +969,7 @@
     }
 
     state.selectedEntity = state.selectedEntities.length > 0 ? state.selectedEntities[state.selectedEntities.length - 1] : null;
-    state.selectedSceneId = null;
+    // Keep selected scene active so keyframe remains visible
 
     // Zoom and center graph canvas on latest selected node
     const canvas = document.getElementById("graph-canvas");
@@ -1010,7 +1010,7 @@
     }
     state.selectedEntities = state.selectedEntities.filter(id => id !== entityId);
     state.selectedEntity = state.selectedEntities.length > 0 ? state.selectedEntities[state.selectedEntities.length - 1] : null;
-    state.selectedSceneId = null;
+    // Keep selected scene active so keyframe remains visible
 
     renderTimelineGrid();
     drawGraph();
@@ -1110,10 +1110,51 @@
 
     // Case 1: Active Entity Node Selection
     if (state.selectedEntity) {
-      if (keyframeZone) keyframeZone.hidden = true;
-      if (transcriptZone) {
-        transcriptZone.innerHTML = "";
-        transcriptZone.hidden = true;
+      if (state.selectedSceneId) {
+        const scene = state.scenes.find((s) => s.id === state.selectedSceneId);
+        if (scene) {
+          if (keyframeZone) keyframeZone.hidden = false;
+          if (keyframeActive) keyframeActive.hidden = false;
+          if (scene.keyframe_url) {
+            if (keyframeImg) {
+              keyframeImg.src = `${window.location.origin}${scene.keyframe_url}`;
+              keyframeImg.alt = `Scene ${scene.id} keyframe`;
+              keyframeImg.style.display = "block";
+            }
+            if (keyframeNoImage) keyframeNoImage.hidden = true;
+          } else {
+            if (keyframeImg) {
+              keyframeImg.src = "";
+              keyframeImg.style.display = "none";
+            }
+            if (keyframeNoImage) {
+              keyframeNoImage.hidden = false;
+              if (noKeyframeTitle) noKeyframeTitle.textContent = `NO VISUAL CARRIER // SCENE #${scene.id}`;
+              if (noKeyframeText) noKeyframeText.textContent = `TIMECODE: ${formatTime(scene.start)} - ${formatTime(scene.end)}`;
+            }
+          }
+          if (keyframeTimecode) {
+            keyframeTimecode.textContent = `${formatTime(scene.start)} - ${formatTime(scene.end)}`;
+          }
+          if (transcriptZone) {
+            transcriptZone.hidden = false;
+            transcriptZone.innerHTML = "";
+            const tHeader = document.createElement("div");
+            tHeader.className = "transcript-header";
+            tHeader.textContent = "TRANSCRIPT LOG";
+            transcriptZone.appendChild(tHeader);
+            const tBody = document.createElement("div");
+            tBody.className = "transcript-body";
+            tBody.textContent = scene.transcript || "No transcript recorded.";
+            transcriptZone.appendChild(tBody);
+          }
+        }
+      } else {
+        if (keyframeZone) keyframeZone.hidden = true;
+        if (transcriptZone) {
+          transcriptZone.innerHTML = "";
+          transcriptZone.hidden = true;
+        }
       }
       const node = state.graph.nodes.find((n) => n.id === state.selectedEntity);
       if (!node) return;
@@ -2096,6 +2137,7 @@
     state.searchResults = [];
     state.selectedSceneId = null;
     state.selectedEntity = null;
+    state.selectedEntities = [];
     state.videoMeta = null;
     state.intelFilter = null;   // clear any intel filter from previous dataset
 
@@ -3356,7 +3398,13 @@
         if (stageEl) stageEl.textContent = `Stage: ${stage}`;
 
         const sceneEl = document.getElementById("progress-scene-count");
-        if (sceneEl) sceneEl.textContent = `Scene: ${sceneIndex} of ${scenesTotal}`;
+        if (sceneEl) {
+          if (stage === "Processing additional scenes..." || scenesTotal === "..." || sceneIndex === "...") {
+            sceneEl.textContent = "Analyzing...";
+          } else {
+            sceneEl.textContent = `Scene: ${sceneIndex} of ${scenesTotal}`;
+          }
+        }
 
         const elapsedSec = Math.floor((Date.now() - ingestionStartTime) / 1000);
         const elapsedEl = document.getElementById("progress-elapsed");

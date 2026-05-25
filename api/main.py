@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from api.routes import control_recurrence, ingest, media, meta, runtime, scenes, search, system, timeline
+from api.routes import control_recurrence, ingest, media, meta, runtime, scenes, search, system, timeline, summary
 from goodq_version import GOODQ_VERSION
 from steps.common.config_loader import load_configs
 
@@ -24,6 +24,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 _OPERATOR_CONSOLE_DIR = _REPO_ROOT / "ui" / "operator_console_v1"
 _RETRO_CONSOLE_DIR = _REPO_ROOT / "ui" / "retro_console_v1"
 _STITCHING_WORKBENCH_DIR = _REPO_ROOT / "ui" / "stitching_workbench"
+_SUMMARY_CONSOLE_DIR = _REPO_ROOT / "ui" / "summary_console"
 
 
 def _resolve_allowed_origins() -> List[str]:
@@ -68,6 +69,7 @@ app.include_router(scenes.router)
 app.include_router(timeline.router)
 app.include_router(media.router)
 app.include_router(system.router)
+app.include_router(summary.router)
 app.include_router(ingest.router)
 app.include_router(runtime.router)
 app.include_router(control_recurrence.router)
@@ -91,6 +93,13 @@ if _STITCHING_WORKBENCH_DIR.exists():
         "/ui/stitching_workbench",
         StaticFiles(directory=str(_STITCHING_WORKBENCH_DIR), html=True),
         name="stitching_workbench",
+    )
+
+if _SUMMARY_CONSOLE_DIR.exists():
+    app.mount(
+        "/ui/summary_console",
+        StaticFiles(directory=str(_SUMMARY_CONSOLE_DIR), html=True),
+        name="summary_console",
     )
 
 # Enforce CONFIG_LOADING_CONTRACT: reuse the already-loaded cfg in submodules.

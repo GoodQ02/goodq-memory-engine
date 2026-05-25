@@ -22,22 +22,27 @@ It ingests media into scene-level memory, persists what it learns locally, and k
 
 GoodQ4All's thesis is simple: machine memory should earn every claim it makes.
 
-## Watch The Guided Demo
+## Watch The Guided Demos
 
-Start with the two-minute onboarding film if you want to see the install, live ingestion, 3D node map navigation, stitching workbench, and summary console.
+Explore GoodQ4All's capabilities with these high-resolution walkthrough films:
+
+1. **Interactive UI Walkthrough**: Ingest Apollo 11, explore the Retro Memory Explorer's 3D spinning entity globe, perform human-in-the-loop voice stitching, and save custom memory collections.
+2. **Terminal & Installation Walkthrough**: Bootstrap the local dependencies, validate the host environment, start the background watchdog, and import media files in real-time.
 
 <p align="center">
   <a href="samples/assets/ui_onboarding_walkthrough.mp4">
-    <img src="samples/assets/ui_onboarding_walkthrough.gif" alt="Watch GoodQ4All Onboarding Walkthrough" width="760" />
+    <img src="samples/assets/ui_onboarding_walkthrough.gif" alt="Watch Interactive UI Walkthrough" width="375" />
+  </a>
+  &nbsp;&nbsp;
+  <a href="samples/assets/install_walkthrough.mp4">
+    <img src="samples/assets/install_walkthrough.gif" alt="Watch Terminal & Installation Walkthrough" width="375" />
   </a>
 </p>
 
 <p align="center">
-  <a href="samples/assets/ui_onboarding_walkthrough.mp4">Watch the 2-minute high-resolution guided demo video</a>
-  ·
-  <a href="samples/assets/manifest.json">View output manifest</a>
-  ·
-  <a href="docs/guides/DEMO.md">Read the demo guide</a>
+  <strong>Interactive UI Walkthrough</strong>: <a href="samples/assets/ui_onboarding_walkthrough.mp4">Watch 1080p Video</a> · <a href="samples/assets/manifest.json">View Manifest</a>
+  <br>
+  <strong>Terminal & Installation</strong>: <a href="samples/assets/install_walkthrough.mp4">Watch 1080p Video</a> · <a href="docs/guides/install/INSTALL.md">Read Install Guide</a>
 </p>
 
 ## Before You Start

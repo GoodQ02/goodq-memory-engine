@@ -20,6 +20,8 @@ cd goodq4all
 
 ## 2. Run Bootstrap
 
+*(Expect roughly 10–30 minutes on first install, depending on network speed and whether model prefetching is enabled)*
+
 ```powershell
 python scripts/bootstrap_install.py
 ```

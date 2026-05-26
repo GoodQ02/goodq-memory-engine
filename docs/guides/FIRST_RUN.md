@@ -53,6 +53,8 @@ operator console, and persisted artifacts.
 
 ## 1. Bootstrap
 
+*(Expect roughly 10–30 minutes on first install, depending on network speed and whether model prefetching is enabled)*
+
 Open PowerShell in the repo root:
 
 ```powershell

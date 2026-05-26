@@ -25,6 +25,7 @@ _OPERATOR_CONSOLE_DIR = _REPO_ROOT / "ui" / "operator_console_v1"
 _RETRO_CONSOLE_DIR = _REPO_ROOT / "ui" / "retro_console_v1"
 _STITCHING_WORKBENCH_DIR = _REPO_ROOT / "ui" / "stitching_workbench"
 _SUMMARY_CONSOLE_DIR = _REPO_ROOT / "ui" / "summary_console"
+_JUSTIFICATION_DIR = _REPO_ROOT / "ui" / "justification_v1"
 
 
 def _resolve_allowed_origins() -> List[str]:
@@ -100,6 +101,13 @@ if _SUMMARY_CONSOLE_DIR.exists():
         "/ui/summary_console",
         StaticFiles(directory=str(_SUMMARY_CONSOLE_DIR), html=True),
         name="summary_console",
+    )
+
+if _JUSTIFICATION_DIR.exists():
+    app.mount(
+        "/ui/justification_v1",
+        StaticFiles(directory=str(_JUSTIFICATION_DIR), html=True),
+        name="justification_v1",
     )
 
 # Enforce CONFIG_LOADING_CONTRACT: reuse the already-loaded cfg in submodules.

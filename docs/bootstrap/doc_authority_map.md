@@ -85,6 +85,7 @@ These documents define current runtime, architecture, identity, and operator tru
 
 These docs are safe discovery/index surfaces for humans and agents, but they do not override canonical contracts.
 
+- [USER_INTERFACE_WALKTHROUGH.md](../guides/ui/USER_INTERFACE_WALKTHROUGH.md)
 - [AGENT_FILE_INDEX.md](../reference/indexes/AGENT_FILE_INDEX.md)
 - [CORPUS_PACK_INVENTORY_LEDGER.md](./CORPUS_PACK_INVENTORY_LEDGER.md)
 - [REFERENCE_PACK_V0_SELECTION_PROPOSAL.md](./REFERENCE_PACK_V0_SELECTION_PROPOSAL.md)

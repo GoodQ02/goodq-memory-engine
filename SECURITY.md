@@ -47,7 +47,7 @@ Preferred path:
 
 Fallback path:
 
-- contact the maintainers privately through GitHub and include a concise report
+- contact the maintainers privately through the email address listed on the repository owner's GitHub profile and include a concise report
 
 Please include:
 

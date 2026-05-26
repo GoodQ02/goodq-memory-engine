@@ -34,6 +34,9 @@ macOS and Linux are not supported first-run hosts for this repository today.
 Use [`docs/reference/PLATFORM_SUPPORT.md`](../reference/PLATFORM_SUPPORT.md) for
 the current platform contract.
 
+> [!TIP]
+> **Start with video or audio:** For the cleanest first success loop, use a small video (`.mp4`) or audio (`.mp3`/`.wav`) file. Text extraction from documents (`.pdf`, `.doc`, `.docx`) requires additional local extraction utilities (like Poppler) or desktop office tools.
+
 ## Mental Model
 
 - `LAUNCH_GOODQ.ps1` checks readiness and opens operator monitors.

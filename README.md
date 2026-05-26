@@ -35,36 +35,34 @@ Turn raw media into structured multimodal memory locally:
 
 <table width="100%" border="0" cellspacing="0" cellpadding="10">
   <tr>
-    <td align="center" width="50%">
-      <img src="samples/assets/nasa_descent.gif" alt="Raw Moon Landing Input" width="450" style="max-width: 100%; border-radius: 6px;" />
-    </td>
-    <td align="center" valign="middle" width="50%">
+    <td align="center">
       <h1><b>TURN THIS...</b></h1>
+      <br />
+      <img src="samples/assets/nasa_descent.gif" alt="Raw Moon Landing Input" width="850" style="max-width: 100%; border-radius: 8px;" />
     </td>
   </tr>
   <tr>
-    <td align="center" valign="middle" width="50%">
+    <td align="center">
       <h1><b>INTO THIS,</b></h1>
       <p><a href="samples/assets/ui_onboarding_walkthrough.mp4">Watch 1080p Video</a> · <a href="samples/assets/manifest.json">View Manifest</a></p>
-    </td>
-    <td align="center" width="50%">
+      <br />
       <a href="samples/assets/ui_onboarding_walkthrough.mp4">
-        <img src="samples/assets/ui_onboarding_walkthrough.gif" alt="Watch Interactive UI Walkthrough" width="450" style="max-width: 100%; border-radius: 6px;" />
+        <img src="samples/assets/ui_onboarding_walkthrough.gif" alt="Watch Interactive UI Walkthrough" width="850" style="max-width: 100%; border-radius: 8px;" />
       </a>
     </td>
   </tr>
   <tr>
-    <td align="center" width="50%">
-      <a href="samples/assets/install_walkthrough.mp4">
-        <img src="samples/assets/install_walkthrough.gif" alt="Watch Terminal & Installation Walkthrough" width="450" style="max-width: 100%; border-radius: 6px;" />
-      </a>
-    </td>
-    <td align="center" valign="middle" width="50%">
+    <td align="center">
       <h1><b>WITH THIS.</b></h1>
       <p><a href="samples/assets/install_walkthrough.mp4">Watch 1080p Video</a> · <a href="docs/guides/install/INSTALL.md">Read Install Guide</a></p>
+      <br />
+      <a href="samples/assets/install_walkthrough.mp4">
+        <img src="samples/assets/install_walkthrough.gif" alt="Watch Terminal & Installation Walkthrough" width="850" style="max-width: 100%; border-radius: 8px;" />
+      </a>
     </td>
   </tr>
 </table>
+
 
 ## Before You Start
 

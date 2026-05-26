@@ -6,8 +6,9 @@ before posting.
 
 ## Where to Start
 
-- First install or one-file ingestion trouble: read
-  [`docs/guides/FIRST_RUN.md`](docs/guides/FIRST_RUN.md), then use the
+- First install, reset, or ingestion trouble: read
+  [`docs/guides/FIRST_RUN.md`](docs/guides/FIRST_RUN.md) or the
+  [Clean Memory Start Guide](docs/guides/CLEAN_MEMORY_START.md) / [Uninstall Guide](docs/guides/install/UNINSTALL.md), then use the
   **First-Run Problem** issue template if the problem persists.
 - Reproducible runtime or documentation bug: use the **Bug Report** issue
   template.

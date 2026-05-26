@@ -338,6 +338,8 @@ If you want the deeper technical picture:
 - Install: [`docs/guides/install/INSTALL.md`](docs/guides/install/INSTALL.md)
 - Quickstart: [`docs/guides/install/QUICKSTART.md`](docs/guides/install/QUICKSTART.md)
 - Laptop profile: [`docs/guides/install/LAPTOP.md`](docs/guides/install/LAPTOP.md)
+- Clean memory start: [`docs/guides/CLEAN_MEMORY_START.md`](docs/guides/CLEAN_MEMORY_START.md)
+- Uninstall / clean-slate: [`docs/guides/install/UNINSTALL.md`](docs/guides/install/UNINSTALL.md)
 - Docs landing page: [`docs/README.md`](docs/README.md)
 - API reference: [`docs/reference/API.md`](docs/reference/API.md)
 - Current release checkpoint: [`docs/releases/RELEASE_0.1.1.md`](docs/releases/RELEASE_0.1.1.md)

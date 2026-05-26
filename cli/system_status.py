@@ -4,6 +4,11 @@ Quick diagnostic tool to check system health.
 """
 from __future__ import annotations
 import sys
+# Global encoding safeguard for Windows consoles
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(errors="replace")
 import os
 import logging
 from pathlib import Path
@@ -152,9 +157,9 @@ def check_recent_ingestions(cfg: Dict[str, Any] | None):
         
         if temporal_index.exists():
             try:
-                with open(temporal_index, 'r') as f:
+                with open(temporal_index, 'r', encoding='utf-8') as f:
                     ti = json.load(f)
-                scene_count = len(ti.get('scenes', []))
+                scene_count = len(ti.get('segments', ti.get('scenes', [])))
                 phase5 = "[PASS]" if ti.get('phase5_complete') else "[FAIL]"
                 phase6 = "[PASS]" if ti.get('phase6_complete') else "[FAIL]"
                 status_items.append(f"{scene_count} scenes, P5:{phase5}, P6:{phase6}")

@@ -1,4 +1,11 @@
 from __future__ import annotations
+import sys
+# Global encoding safeguard for Windows consoles
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(errors="replace")
+
 from typing import Any, Dict, List, Optional, Set
 import hashlib
 import json
@@ -6,7 +13,6 @@ import logging
 import os
 import shutil
 import subprocess
-import sys
 import tempfile
 import time
 import uuid
@@ -5060,7 +5066,14 @@ def run(
                     typer.echo(f'[DEBUG] has transcript: {bool(audio_data.get("transcript"))}')
                     typer.echo(f'[DEBUG] has full_text: {bool(audio_data.get("full_text"))}')
                     if audio_data.get('transcript'):
-                        typer.echo(f'[DEBUG] transcript preview: {str(audio_data.get("transcript"))[:50]}...')
+                        import sys
+                        preview = str(audio_data.get("transcript"))[:50]
+                        encoding = sys.stdout.encoding or 'utf-8'
+                        try:
+                            safe_preview = preview.encode(encoding, errors='replace').decode(encoding)
+                        except Exception:
+                            safe_preview = preview.encode('ascii', errors='replace').decode('ascii')
+                        typer.echo(f'[DEBUG] transcript preview: {safe_preview}...')
                 kg_scene_data = _build_kg_scene_data(
                     scene,
                     scene_id=scene_id,

@@ -277,7 +277,7 @@ def image_embed_dino(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
             scene_id = item.get("scene_id") or item.get("scene_index")
             if scene_id is not None and not isinstance(scene_id, str):
                 scene_id = f"scene_{int(scene_id):04d}"
-            upsert_embedding(cfg, h, faiss_id, path, "dino", scene_id=scene_id)
+            upsert_embedding(cfg, h, faiss_id, path, "dino", scene_id=scene_id, vector=feats[0].tolist())
             embedding_ok = True
         except Exception as e:
             embedding_reason = f"exception:{type(e).__name__}"

@@ -132,6 +132,7 @@ def _write_scene_faiss_points(
                     "hash": hash_hex,
                     "source_path": str(source_path or ""),
                     "scene_id": str(payload.get("scene_id")) if payload.get("scene_id") is not None else None,
+                    "vector": vector,
                 }
             )
 
@@ -192,6 +193,7 @@ def _write_scene_faiss_points(
                     row["source_path"],
                     modality,
                     scene_id=row["scene_id"],
+                    vector=row.get("vector"),
                 )
             except Exception as e:
                 logger.warning(

@@ -28,7 +28,7 @@ except Exception:  # noqa: BLE001
 ENV_NAME = "goodq_core"
 BASELINE_ENV_FILE = "environment.yml"
 GPU_ENV_FILE = "environment.gpu.yml"
-DEFAULT_DATA_ROOT = Path(r"C:\GoodQ_Data")
+DEFAULT_DATA_ROOT = Path.home() / "GoodQ_Data"
 DEFAULT_WSL_DISTRO = "Ubuntu"
 MIN_FREE_SPACE_GB = 25
 QDRANT_SERVICE_NAME = "GoodQ_Qdrant"
@@ -2092,7 +2092,7 @@ def launch_goodq(ctx: BootstrapContext) -> int:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Portable bootstrap installer for GoodQ4All")
-    parser.add_argument("--data-root", help=r"override data root (default: C:\GoodQ_Data)")
+    parser.add_argument("--data-root", help=r"override data root (default: %USERPROFILE%\GoodQ_Data)")
     parser.add_argument("--wsl-distro", help="override WSL distro name")
     parser.add_argument("--enable-gpu", dest="enable_gpu", action="store_true", help="enable GPU_ENHANCED profile if supported")
     parser.add_argument("--disable-gpu", dest="enable_gpu", action="store_false", help="force BASELINE profile")

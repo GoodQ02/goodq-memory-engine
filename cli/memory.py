@@ -1,6 +1,12 @@
 from __future__ import annotations
-import json
 import sys
+# Global encoding safeguard for Windows consoles
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(errors="replace")
+
+import json
 from pathlib import Path
 from typing import Optional
 

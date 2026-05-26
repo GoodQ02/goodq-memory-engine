@@ -63,6 +63,16 @@ def _connect(db_path: str) -> sqlite3.Connection:
         cols = {row[1] for row in cur.fetchall()}
         if 'scene_id' not in cols:
             conn.execute("ALTER TABLE embeddings ADD COLUMN scene_id TEXT")
+        if 'vector' not in cols:
+            conn.execute("ALTER TABLE embeddings ADD COLUMN vector BLOB")
+        if 'tq_indices' not in cols:
+            conn.execute("ALTER TABLE embeddings ADD COLUMN tq_indices BLOB")
+        if 'tq_norm' not in cols:
+            conn.execute("ALTER TABLE embeddings ADD COLUMN tq_norm REAL")
+        if 'tq_qjl_sign' not in cols:
+            conn.execute("ALTER TABLE embeddings ADD COLUMN tq_qjl_sign BLOB")
+        if 'tq_norm_residual' not in cols:
+            conn.execute("ALTER TABLE embeddings ADD COLUMN tq_norm_residual REAL")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_embeddings_scene ON embeddings(scene_id)")
     except Exception as e:
         logger.warning(
@@ -159,7 +169,7 @@ def _legacy_collision_hash(conn: sqlite3.Connection, hash_hex: str, modality: st
     return f"{hash_hex}:{modality or 'unknown'}"
 
 
-def upsert_embedding(cfg: Dict[str, Any], hash_hex: str, faiss_id: Optional[int], source_path: str, modality: str, scene_id: Optional[str] = None) -> None:
+def upsert_embedding(cfg: Dict[str, Any], hash_hex: str, faiss_id: Optional[int], source_path: str, modality: str, scene_id: Optional[str] = None, vector: Optional[List[float]] = None) -> None:
 
     db_path = (cfg.get("paths", {}) or {}).get("db_path")
 
@@ -174,14 +184,50 @@ def upsert_embedding(cfg: Dict[str, Any], hash_hex: str, faiss_id: Optional[int]
         now = datetime.utcnow().isoformat()
         modality_value = str(modality or "")
 
+        vector_bytes = None
+        tq_indices_bytes = None
+        tq_norm_val = None
+        tq_qjl_sign_bytes = None
+        tq_norm_residual_val = None
+
+        if vector is not None:
+            import numpy as np
+            vector_bytes = np.array(vector, dtype=np.float32).tobytes()
+
+            quant_routing = cfg.get("memory", {}).get("routing", {})
+            quant_enabled = bool(quant_routing.get("quantization_enabled", False))
+            if os.environ.get("GOODQ_QUANTIZATION_ENABLED", "").strip().lower() in ("1", "true", "yes", "y", "on"):
+                quant_enabled = True
+
+            if quant_enabled:
+                try:
+                    from steps.common.quantization import TurboQuantEncoder
+                    encoder = TurboQuantEncoder()
+                    tq_res = encoder.encode(np.array(vector, dtype=np.float32))
+                    if tq_res["tq_indices"] is not None:
+                         tq_indices_bytes = tq_res["tq_indices"].tobytes()
+                         tq_norm_val = tq_res["tq_norm"]
+                         tq_qjl_sign_bytes = tq_res["tq_qjl_sign"].tobytes()
+                         tq_norm_residual_val = tq_res["tq_norm_residual"]
+                except Exception as ex:
+                    logger.warning(
+                        "memory operation failed operation=%s exc_type=%s exc=%s",
+                        "upsert_embedding.quantize",
+                        type(ex).__name__,
+                        ex,
+                    )
+
         if _embeddings_use_modality_key(conn):
             conn.execute(
 
                 """
 
-                INSERT INTO embeddings(hash, faiss_id, source_path, modality, scene_id, created_at)
+                INSERT INTO embeddings(
+                    hash, faiss_id, source_path, modality, scene_id, created_at,
+                    vector, tq_indices, tq_norm, tq_qjl_sign, tq_norm_residual
+                )
 
-                VALUES (?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 
                 ON CONFLICT(hash, modality) DO UPDATE SET
 
@@ -189,13 +235,26 @@ def upsert_embedding(cfg: Dict[str, Any], hash_hex: str, faiss_id: Optional[int]
 
                   source_path=excluded.source_path,
 
-                  scene_id=COALESCE(excluded.scene_id, embeddings.scene_id)
+                  scene_id=COALESCE(excluded.scene_id, embeddings.scene_id),
+
+                  vector=COALESCE(excluded.vector, embeddings.vector),
+
+                  tq_indices=COALESCE(excluded.tq_indices, embeddings.tq_indices),
+
+                  tq_norm=COALESCE(excluded.tq_norm, embeddings.tq_norm),
+
+                  tq_qjl_sign=COALESCE(excluded.tq_qjl_sign, embeddings.tq_qjl_sign),
+
+                  tq_norm_residual=COALESCE(excluded.tq_norm_residual, embeddings.tq_norm_residual)
 
                 """
 
                 ,
 
-                (hash_hex, faiss_id, source_path, modality_value, scene_id, now),
+                (
+                    hash_hex, faiss_id, source_path, modality_value, scene_id, now,
+                    vector_bytes, tq_indices_bytes, tq_norm_val, tq_qjl_sign_bytes, tq_norm_residual_val
+                ),
 
             )
         else:
@@ -204,9 +263,12 @@ def upsert_embedding(cfg: Dict[str, Any], hash_hex: str, faiss_id: Optional[int]
 
                 """
 
-                INSERT INTO embeddings(hash, faiss_id, source_path, modality, scene_id, created_at)
+                INSERT INTO embeddings(
+                    hash, faiss_id, source_path, modality, scene_id, created_at,
+                    vector, tq_indices, tq_norm, tq_qjl_sign, tq_norm_residual
+                )
 
-                VALUES (?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 
                 ON CONFLICT(hash) DO UPDATE SET
 
@@ -216,13 +278,26 @@ def upsert_embedding(cfg: Dict[str, Any], hash_hex: str, faiss_id: Optional[int]
 
                   modality=excluded.modality,
 
-                  scene_id=COALESCE(excluded.scene_id, embeddings.scene_id)
+                  scene_id=COALESCE(excluded.scene_id, embeddings.scene_id),
+
+                  vector=COALESCE(excluded.vector, embeddings.vector),
+
+                  tq_indices=COALESCE(excluded.tq_indices, embeddings.tq_indices),
+
+                  tq_norm=COALESCE(excluded.tq_norm, embeddings.tq_norm),
+
+                  tq_qjl_sign=COALESCE(excluded.tq_qjl_sign, embeddings.tq_qjl_sign),
+
+                  tq_norm_residual=COALESCE(excluded.tq_norm_residual, embeddings.tq_norm_residual)
 
                 """
 
                 ,
 
-                (storage_hash, faiss_id, source_path, modality_value, scene_id, now),
+                (
+                    storage_hash, faiss_id, source_path, modality_value, scene_id, now,
+                    vector_bytes, tq_indices_bytes, tq_norm_val, tq_qjl_sign_bytes, tq_norm_residual_val
+                ),
 
             )
 

@@ -176,12 +176,14 @@ class FaissMemory(MemoryStore):
         *,
         log_dir: Optional[str] = None,
         log_retrieval_events: bool = True,
+        cfg: Optional[Dict[str, Any]] = None,
     ):
         self.index_path = index_path
         self.dim = dim
         self.db_path = db_path
         self.log_dir = log_dir
         self.log_retrieval_events = log_retrieval_events
+        self.cfg = cfg
 
     def _load_index(self):
         import faiss  # type: ignore
@@ -269,6 +271,104 @@ class FaissMemory(MemoryStore):
                     type(e).__name__,
                     e,
                 )
+
+            # Shadow-Mode scoring comparison
+            if self.db_path and os.path.isfile(self.db_path) and len(out) > 0:
+                try:
+                    quant_routing = (self.cfg or {}).get("memory", {}).get("routing", {}) if self.cfg else {}
+                    shadow_mode = bool(quant_routing.get("quantization_shadow_mode", True))
+                    if shadow_mode:
+                        valid_ids = [h["id"] for h in out if h["id"] is not None]
+                        if valid_ids:
+                            import sqlite3
+                            conn = sqlite3.connect(self.db_path)
+                            placeholders = ",".join("?" for _ in valid_ids)
+                            cursor = conn.execute(
+                                f"""
+                                SELECT faiss_id, tq_indices, tq_norm, tq_qjl_sign, tq_norm_residual
+                                FROM embeddings
+                                WHERE faiss_id IN ({placeholders})
+                                """,
+                                valid_ids
+                            )
+                            rows = cursor.fetchall()
+                            conn.close()
+
+                            sidecars = {}
+                            for r_id, tq_idx_b, tq_norm_val, tq_sign_b, tq_res_val in rows:
+                                if (tq_idx_b is not None and tq_norm_val is not None 
+                                        and tq_sign_b is not None and tq_res_val is not None):
+                                    sidecars[r_id] = {
+                                        "tq_indices": np.frombuffer(tq_idx_b, dtype=np.uint8),
+                                        "tq_norm": tq_norm_val,
+                                        "tq_qjl_sign": np.frombuffer(tq_sign_b, dtype=np.int8),
+                                        "tq_norm_residual": tq_res_val
+                                    }
+
+                            if sidecars:
+                                from steps.common.quantization import TurboQuantEncoder
+                                encoder = TurboQuantEncoder()
+                                q_arr = np.array(query_vector, dtype=np.float32)
+                                norm_q_sq = float(np.linalg.norm(q_arr) ** 2)
+
+                                quant_scores = []
+                                for h in out:
+                                    fid = h["id"]
+                                    if fid in sidecars:
+                                        sc = sidecars[fid]
+                                        try:
+                                            est_ip = encoder.estimate_inner_product(
+                                                q_arr,
+                                                sc["tq_indices"],
+                                                sc["tq_norm"],
+                                                sc["tq_qjl_sign"],
+                                                sc["tq_norm_residual"]
+                                            )
+                                            tq_norm_sq = float(sc["tq_norm"] ** 2)
+                                            # FAISS index is L2 metric (IndexHNSWFlat): distance squared
+                                            est_score = norm_q_sq + tq_norm_sq - 2.0 * est_ip
+                                            quant_scores.append((fid, h["score"], est_score))
+                                        except Exception as est_exc:
+                                            logger.debug("Failed to estimate inner product: %s", est_exc)
+
+                                if len(quant_scores) >= 2:
+                                    # Sort both by score ascending (smaller L2 distance is better)
+                                    baseline_sorted = sorted(quant_scores, key=lambda x: x[1])
+                                    quant_sorted = sorted(quant_scores, key=lambda x: x[2])
+
+                                    # Rank Overlap (Precision at K)
+                                    K = min(len(quant_scores), 5)
+                                    baseline_top_k = {item[0] for item in baseline_sorted[:K]}
+                                    quant_top_k = {item[0] for item in quant_sorted[:K]}
+                                    rank_overlap = len(baseline_top_k.intersection(quant_top_k)) / K
+
+                                    # Score Drift: Mean Absolute Difference (MAD)
+                                    differences = [abs(orig - est) for _, orig, est in quant_scores]
+                                    score_drift = float(np.mean(differences)) if differences else 0.0
+
+                                    # Spearman's Rank Correlation (rho_s)
+                                    baseline_ranks = {item[0]: idx for idx, item in enumerate(baseline_sorted)}
+                                    quant_ranks = {item[0]: idx for idx, item in enumerate(quant_sorted)}
+
+                                    n = len(quant_scores)
+                                    d_squared_sum = sum((baseline_ranks[fid] - quant_ranks[fid]) ** 2 for fid in baseline_ranks)
+                                    spearman_rho = 1.0 - (6.0 * d_squared_sum) / (n * (n**2 - 1)) if n > 1 else 1.0
+
+                                    logger.info(
+                                        "TurboQuant shadow mode query metrics: rank_overlap=%.4f score_drift=%.4f spearman_rho=%.4f candidates=%d",
+                                        rank_overlap,
+                                        score_drift,
+                                        spearman_rho,
+                                        len(quant_scores)
+                                    )
+                except Exception as shadow_exc:
+                    logger.warning(
+                        "memory_stores operation failed store=%s operation=%s exc_type=%s exc=%s",
+                        "faiss",
+                        "shadow_mode_evaluation",
+                        type(shadow_exc).__name__,
+                        shadow_exc,
+                    )
             try:
                 from steps.common.retrieval_events import (
                     RetrievalEvent,
@@ -419,6 +519,7 @@ def build_text_stores(cfg: Dict[str, Any]) -> Dict[str, MemoryStore]:
             db_path=paths.get("db_path"),
             log_dir=paths.get("log_dir"),
             log_retrieval_events=log_retrieval,
+            cfg=cfg,
         )
     q_client = None
     try:

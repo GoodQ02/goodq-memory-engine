@@ -364,6 +364,18 @@ class LoggingConfig(BaseModel):
 
 
 # ============================================================================
+# MEMORY CONFIGURATION
+# ============================================================================
+class MemoryRoutingConfig(BaseModel):
+    quantization_enabled: bool = False
+    quantization_shadow_mode: bool = True
+
+
+class MemoryConfigSection(BaseModel):
+    routing: MemoryRoutingConfig
+
+
+# ============================================================================
 # ROOT CONFIG
 # ============================================================================
 class GoodQConfig(BaseModel):
@@ -391,6 +403,7 @@ class GoodQConfig(BaseModel):
     pipeline: PipelineConfig
     output: OutputConfig
     logging: LoggingConfig
+    memory: Optional[MemoryConfigSection] = None
 
     class Config:
         extra = "forbid"  # Reject unknown keys

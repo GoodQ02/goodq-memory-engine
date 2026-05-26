@@ -211,9 +211,18 @@ python scripts/bootstrap_install.py
 The launcher also has `LAUNCH_GOODQ.bat` for double-click or classic Command
 Prompt use. Both wrappers reach the same readiness surface.
 
-If you skipped the Qdrant service prompt during bootstrap, the first launcher
-run may report one Qdrant readiness warning. Install or repair the service later
-with `scripts\qdrant\INSTALL_QDRANT_SERVICE.bat`.
+If you skipped the Qdrant service prompt during bootstrap, the launcher health check will display:
+```text
+  [!] Qdrant: Not responding
+      Attempting to start Qdrant service...
+  [!!] Qdrant: Failed to start - manual intervention required
+```
+- **When is it safe to ignore?** During your first install verify or when running purely CPU-safe dry runs where vector index lookups are not required.
+- **When must it be fixed?** Before running active ingestion (`-StartIngestion` or Watchdog importing files) that updates vector stores, or when executing retrieval queries. Fix it by running:
+  ```powershell
+  .\scripts\qdrant\INSTALL_QDRANT_SERVICE.bat
+  ```
+  (Requires Administrator shell).
 
 Leave Watchdog running in one terminal:
 

@@ -209,9 +209,18 @@ Optional enrichments can fail on individual scenes without invalidating the
 entire run. Treat the manifest, temporal index, step logs, and API health as
 the first truth surfaces.
 
-If you skipped Qdrant service installation during bootstrap, the launcher may
-show one Qdrant readiness warning. That is expected until the service is
-installed or repaired with `scripts\qdrant\INSTALL_QDRANT_SERVICE.bat`.
+If you skipped Qdrant service installation during bootstrap, the launcher health check will display:
+```text
+  [!] Qdrant: Not responding
+      Attempting to start Qdrant service...
+  [!!] Qdrant: Failed to start - manual intervention required
+```
+- **When is it safe to ignore?** During your first install verify or when running purely CPU-safe dry runs where vector index lookups are not required.
+- **When must it be fixed?** Before running active ingestion (`-StartIngestion` or Watchdog importing files) that updates vector stores, or when executing retrieval queries. Fix it by running:
+  ```powershell
+  .\scripts\qdrant\INSTALL_QDRANT_SERVICE.bat
+  ```
+  (Requires Administrator shell).
 
 ## After First Success
 

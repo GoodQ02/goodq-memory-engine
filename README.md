@@ -22,6 +22,9 @@ It ingests media into scene-level memory, persists what it learns locally, and k
 
 GoodQ4All's thesis is simple: machine memory should earn every claim it makes.
 
+> [!IMPORTANT]
+> **Supported Host: Windows 11 only.** GoodQ4All is built for Windows-first local execution (CPU-safe baseline by default; GPU and WSL2 are optional). Other platforms are not first-run targets today.
+
 ## Watch The Guided Demos
 
 Turn raw media into structured multimodal memory locally:

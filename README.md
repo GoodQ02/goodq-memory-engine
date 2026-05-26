@@ -30,19 +30,19 @@ Explore GoodQ4All's capabilities with these high-resolution walkthrough films:
 2. **Terminal & Installation Walkthrough**: Bootstrap the local dependencies, validate the host environment, start the background watchdog, and import media files in real-time.
 
 <p align="center">
-  <a href="samples/assets/ui_onboarding_walkthrough.mp4?raw=true">
+  <a href="https://raw.githubusercontent.com/GoodQ02/goodq4all/main/samples/assets/ui_onboarding_walkthrough.mp4">
     <img src="samples/assets/ui_onboarding_walkthrough.gif" alt="Watch Interactive UI Walkthrough" width="375" />
   </a>
   &nbsp;&nbsp;
-  <a href="samples/assets/install_walkthrough.mp4?raw=true">
+  <a href="https://raw.githubusercontent.com/GoodQ02/goodq4all/main/samples/assets/install_walkthrough.mp4">
     <img src="samples/assets/install_walkthrough.gif" alt="Watch Terminal & Installation Walkthrough" width="375" />
   </a>
 </p>
 
 <p align="center">
-  <strong>Interactive UI Walkthrough</strong>: <a href="samples/assets/ui_onboarding_walkthrough.mp4?raw=true">Watch 1080p Video</a> · <a href="samples/assets/manifest.json">View Manifest</a>
+  <strong>Interactive UI Walkthrough</strong>: <a href="https://raw.githubusercontent.com/GoodQ02/goodq4all/main/samples/assets/ui_onboarding_walkthrough.mp4">Watch 1080p Video</a> · <a href="samples/assets/manifest.json">View Manifest</a>
   <br>
-  <strong>Terminal & Installation</strong>: <a href="samples/assets/install_walkthrough.mp4?raw=true">Watch 1080p Video</a> · <a href="docs/guides/install/INSTALL.md">Read Install Guide</a>
+  <strong>Terminal & Installation</strong>: <a href="https://raw.githubusercontent.com/GoodQ02/goodq4all/main/samples/assets/install_walkthrough.mp4">Watch 1080p Video</a> · <a href="docs/guides/install/INSTALL.md">Read Install Guide</a>
 </p>
 
 ## Before You Start

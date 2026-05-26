@@ -190,4 +190,4 @@ The Justification Channel remains the literal envelope renderer at `ui/justifica
 ## Historical Material
 
 Historical audits, rollout notes, and legacy implementation artifacts are kept
-under [`docs/archive/`](archive/).
+under [`archive/docs/`](../archive/docs/).

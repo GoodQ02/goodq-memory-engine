@@ -112,7 +112,7 @@ expectations:
 These can guide audits, but must not be treated as live authority without
 rerunning or verifying the underlying surface:
 
-- `docs/bootstrap/SCRIPT_REGISTRY.md`
+- `docs/reference/indexes/AGENT_FILE_INDEX.md`
 - `docs/diagnostics/ENV_DISCOVERY_REPORT.md`
 - `docs/diagnostics/ENV_RECONCILIATION_REPORT.md`
 - `docs/diagnostics/LAUNCHER_PORTABILITY_DISCOVERY.md`
@@ -124,6 +124,7 @@ rerunning or verifying the underlying surface:
 These names sound important, but they are historical/reference-only unless a
 current canonical doc restates the claim:
 
+- `archive/docs/bootstrap/SCRIPT_REGISTRY.md`
 - `docs/RUNTIME_AUTHORITY_MEMO.md`
 - `docs/architecture/DOCUMENTATION_REORGANIZATION_PLAN.md`
 - `docs/architecture/AGENT_SYSTEM.md`
@@ -164,7 +165,7 @@ repo-root audits:
     explicitly promoted
 - legacy test and archive folders outside `docs/archive/`
 - script registry entries classified as unclear/obsolete
-  - 2026-05-07 audit found `docs/bootstrap/SCRIPT_REGISTRY.md` stale as a
+  - 2026-05-07 audit found `archive/docs/bootstrap/SCRIPT_REGISTRY.md` stale as a
     generated snapshot; use it as an audit aid, not execution authority
 - source files with broad `except:` or placeholder `TODO` comments
   - next source seam is silent observability/provenance loss in observer,

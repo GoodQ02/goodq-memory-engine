@@ -1,0 +1,54 @@
+WARNING: ARCHIVE / NON-CANONICAL / DO NOT COPY PATHS
+This file is preserved as historical evidence and may contain obsolete fixed-drive paths, host-specific assumptions, stale commands, or superseded runtime guidance.
+Do not use it for current runtime, setup, migration, or copy-paste path decisions.
+Use active documentation, config_loader, and canonical path abstractions such as <project_root>, <GOODQ_DATA_ROOT>, and <GOODQ_WSL_WORKSPACE> instead.
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: ARCHIVED -->
+<!-- DOC_ARCHIVED_ON: 2026-02-12 -->
+
+====================================================
+POLISH SESSION COMPLETE - 6 Oct 2025
+====================================================
+
+✅ ALL PRIORITIES RESOLVED! Project is production-ready.
+
+- Audio emotion UNBLOCKED (Full CUDA support operational)
+- All 22 environments verified with strict isolation  
+- System & cache readiness checks: PERFECT SCORES
+- End-to-end lite ingestion: PASSES in 158 seconds
+- Telemetry pipeline: 15,208 step runs captured
+
+See POLISH_SUMMARY.md for comprehensive details.
+
+====================================================
+
+Latest Snapshot � 4 Oct 2025
+============================
+
+What was just finished
+- CLI ingestion now ships with smart memory: scenes are checked against SQLite hashes before work begins, duplicate keyframes/audio are skipped, and every skipped step is logged with `extra.reason="dedupe"` for an audit-ready trail.
+- Run fingerprinting is active end-to-end. Each invocation records a UUID, pipeline name, start timestamp, optional git SHA, and a scene-manifest hash; the metadata lands in `_resolved_config.json` and surfaces in every `step_runs.jsonl` row.
+- Dataset foundations were expanded: `scripts/download_datasets.py` now prefetches sentiment/NLP corpora, math & science benchmarks, geospatial/astronomy references, and baseline ASR sets into `L:\models\hf\datasets`.
+- Gated datasets follow a three-tier flow: vendored caches are reused first, authenticated downloads run next (via `hf_transfer` + `HF_TOKEN`), and the scripts now log a clear skip when neither path is available.
+- L:\ cleaned and reorganized � historical logs/datasets parked under `L:\Legacy`, empty shells removed, and astronomy/sun datasets staged for future ambient context work.
+
+What still needs attention
+- SER weights remain gated: add `hf_transfer` (or vendor the wheels) inside `goodq_audio_emotion` so the emotion classifier stops short-circuiting.
+- Scene detection still reruns even when manifests match; next improvement is to short-circuit `_detect_scenes` when the stored manifest hash equals the current video fingerprint.
+- Common Voice and other gated HF datasets now expose a vendor-first path: keep corpora under `L:/datasets/vendor/...`, or export `HF_DOWNLOAD_GATED=1` when you explicitly want the downloader to fetch them.
+
+Next-in-line actions
+1. Activate `goodq_audio_emotion` and install `hf_transfer` (or drop the wheels into `L:\models\hub`) so SER downloads finish once and cache locally.
+2. Teach the orchestrator to reuse existing scene manifests/video hashes to skip the expensive detection pass when inputs are unchanged.
+3. Re-run the capped ingest (`pwsh scripts\ingest_videos_lite.ps1 -InputDir import_inbox -VerboseSteps -StepTimeoutSeconds 1200`) and confirm `step_runs.jsonl` reflects `status="skipped"` for every previously materialized scene.
+4. Optional: vendor the critical gated corpora (Common Voice, NOAA buoy) into `L:\models\hf\datasets` so fortress-mode runs never need the network.
+
+Handy references
+- Readiness: `python scripts\system_readiness_check.py`, `python scripts\cache_readiness_check.py`
+- Dataset warm-up: `conda run -n goodq_text_embed python scripts\download_datasets.py`
+- Logs: `L:\GoodQ_Data\logs\step_runs.csv` & `step_runs.jsonl`
+- Run metadata snapshots: `logs/scene_ingest_test/_resolved_config.json`
+- Staging assets: `L:\models` (HF/Torch home, YOLO, lexicons, datasets)
+
+Passing the baton: the pipeline is idempotent, telemetry is fingerprinted, and the dataset backbone is stocked. Unblocking audio emotion is the last prerequisite before pushing the rebuilt stack through a full production ingest.
+

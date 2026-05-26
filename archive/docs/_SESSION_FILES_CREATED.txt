@@ -1,0 +1,30 @@
+WARNING: ARCHIVE / NON-CANONICAL / DO NOT COPY PATHS
+This file is preserved as historical evidence and may contain obsolete fixed-drive paths, host-specific assumptions, stale commands, or superseded runtime guidance.
+Do not use it for current runtime, setup, migration, or copy-paste path decisions.
+Use active documentation, config_loader, and canonical path abstractions such as <project_root>, <GOODQ_DATA_ROOT>, and <GOODQ_WSL_WORKSPACE> instead.
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: ARCHIVED -->
+<!-- DOC_ARCHIVED_ON: 2026-02-12 -->
+
+Documentation Reorganization - Files Created
+======================================================================
+Date: December 2, 2025
+Session: Overnight Documentation Consolidation
+
+NEW FILES CREATED:
+======================================================================
+  START_HERE.md (15.07 KB)
+  MASTER_DOCUMENTATION_TIMELINE.md (13.24 KB)
+  CURRENT_SYSTEM_STATUS_2025-12-02.md (11.49 KB)
+  PROJECT_DEEP_ANALYSIS_2025-12-02.md (22.08 KB)
+  DOCUMENTATION_REORGANIZATION_PLAN.md (11.41 KB)
+  DOCUMENTATION_REORGANIZATION_REPORT.md (11.99 KB)
+  MORNING_BRIEFING_2025-12-02.md (8.12 KB)
+  OVERNIGHT_SESSION_HANDOFF.md (11.84 KB)
+  history\status_reports_archive\INDEX.md (1.95 KB)
+  history\session_summaries_archive\INDEX.md (2.2 KB)
+
+TOTAL: 109.38 KB across 10 files
+
+======================================================================
+All files located in L:\goodq4all\docs\

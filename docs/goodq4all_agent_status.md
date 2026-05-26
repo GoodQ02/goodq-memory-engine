@@ -228,7 +228,7 @@ truth for live claims. Do not treat this document as a live witness monitor.
   - latest local docs-clearance commit: `103b17f` (`docs: add documentation forensics index`)
   - docs folder is now indexed for future agent lookup through `docs/reference/indexes/DOCS_FORENSICS_INDEX.md`
   - every active Markdown/text doc under `docs/` has an explicit `DOC_STATUS` marker as of the docs-clearance pass
-  - the old WSL audio emotion sample output was preserved as `docs/archive/diagnostics/wsl2_audio_emotion_sample_output.json`; treat it as a historical diagnostic relic, not current runtime truth
+  - the old WSL audio emotion sample output was preserved as `archive/docs/diagnostics/wsl2_audio_emotion_sample_output.json`; treat it as a historical diagnostic relic, not current runtime truth
   - only expected untracked local artifacts at pause were recurrence report artifacts under `reports/control_recurrence/`
   - immediate next action after pause: analyze the incoming laptop bootstrap audit before continuing project-root cleanup
 - Current local workspace:
@@ -333,7 +333,7 @@ truth for live claims. Do not treat this document as a live witness monitor.
   1. Completed: the `17` tracked `steps/*/step.py.backup_*` files beside active modules were removed after audit proved no active runtime/test consumers; `*.backup*` is now ignored.
   2. Completed: the retired root `config.json` scene-detection override and its obsolete fixer/monitor helper scripts were removed after audit proved canonical runtime config flows through `configs/config.yaml` and `steps.common.config_loader`.
   3. Completed: local repo-root scratch/workspace directories are root-ignored; do not stage local scratch contents or recurrence artifacts unless intentionally promoted.
-  4. Refresh or clearly quarantine `docs/bootstrap/SCRIPT_REGISTRY.md`; it is a stale generated aid, not runtime authority.
+  4. Refresh or clearly quarantine `archive/docs/bootstrap/SCRIPT_REGISTRY.md`; it is a stale generated aid, not runtime authority.
   5. Keep default pytest on the canonical wrapper; avoid broad `pytest .` until archived script harnesses are explicitly excluded.
   6. Next source seam after cleanup triage: silent observability/provenance drops in observer, memory commit, retrieval event, provenance, API status, and audio helper paths.
 

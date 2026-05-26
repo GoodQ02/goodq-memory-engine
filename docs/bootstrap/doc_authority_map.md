@@ -85,7 +85,7 @@ These documents define current runtime, architecture, identity, and operator tru
 
 These docs are safe discovery/index surfaces for humans and agents, but they do not override canonical contracts.
 
-- [SCRIPT_REGISTRY.md](./SCRIPT_REGISTRY.md)
+- [AGENT_FILE_INDEX.md](../reference/indexes/AGENT_FILE_INDEX.md)
 - [CORPUS_PACK_INVENTORY_LEDGER.md](./CORPUS_PACK_INVENTORY_LEDGER.md)
 - [REFERENCE_PACK_V0_SELECTION_PROPOSAL.md](./REFERENCE_PACK_V0_SELECTION_PROPOSAL.md)
 - [REFERENCE_PACK_V0_LICENSE_REVIEW_MATRIX.md](./REFERENCE_PACK_V0_LICENSE_REVIEW_MATRIX.md)
@@ -98,6 +98,7 @@ These docs are safe discovery/index surfaces for humans and agents, but they do 
 
 These docs remain in the repo because they are useful historical records, but they must never be treated as current operator or runtime authority.
 
+- [SCRIPT_REGISTRY.md](../../archive/docs/bootstrap/SCRIPT_REGISTRY.md)
 - [HANDOFF_BASEMENT_PHASE.md](../HANDOFF_BASEMENT_PHASE.md)
 - [ARTIFACT_LOCATION_CONTRACT.md](../technical/ARTIFACT_LOCATION_CONTRACT.md)
 - [PIPELINE_RESTORATION_BACKLOG.md](../technical/PIPELINE_RESTORATION_BACKLOG.md)

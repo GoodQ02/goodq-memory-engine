@@ -1,0 +1,417 @@
+[
+  {
+    "file": "steps\\graph_builder\\graph_builder.py",
+    "issues": [
+      {
+        "line": 267,
+        "type": "placeholder",
+        "content": "# Placeholder for location extraction"
+      },
+      {
+        "line": 382,
+        "type": "placeholder",
+        "content": "# This is a placeholder - could be enhanced with NLP"
+      },
+      {
+        "line": 397,
+        "type": "placeholder",
+        "content": "# Placeholder for NER - would use spaCy or similar"
+      }
+    ]
+  },
+  {
+    "file": "steps\\image_ocr\\step.py",
+    "issues": [
+      {
+        "line": 8,
+        "type": "placeholder",
+        "content": "\"\"\"Tesseract OCR if available, else placeholder."
+      }
+    ]
+  },
+  {
+    "file": "pipelines\\goodq_chat.py",
+    "issues": [
+      {
+        "line": 1,
+        "type": "placeholder",
+        "content": "\"\"\"ZenML scaffold for GoodQ chat pipeline.\"\"\""
+      }
+    ]
+  },
+  {
+    "file": "pipelines\\ingest_multimodal.py",
+    "issues": [
+      {
+        "line": 2,
+        "type": "placeholder",
+        "content": "ZenML pipeline definition (scaffold) for multimodal ingestion."
+      },
+      {
+        "line": 5,
+        "type": "placeholder",
+        "content": "scaffold runnable without ZenML installed. Replace placeholders when ZenML is"
+      },
+      {
+        "line": 5,
+        "type": "placeholder",
+        "content": "scaffold runnable without ZenML installed. Replace placeholders when ZenML is"
+      },
+      {
+        "line": 12,
+        "type": "placeholder",
+        "content": "\"\"\"Returns a callable that wires placeholder steps together."
+      },
+      {
+        "line": 43,
+        "type": "placeholder",
+        "content": "pass  # placeholder: raw text ingestion"
+      },
+      {
+        "line": 43,
+        "type": "placeholder",
+        "content": "pass  # placeholder: raw text ingestion"
+      }
+    ]
+  },
+  {
+    "file": "lib\\graph_query.py",
+    "issues": [
+      {
+        "line": 111,
+        "type": "placeholder",
+        "content": "placeholders = ','.join('?' * len(node_ids))"
+      },
+      {
+        "line": 118,
+        "type": "placeholder",
+        "content": "WHERE nm.node_id IN ({placeholders})"
+      },
+      {
+        "line": 215,
+        "type": "placeholder",
+        "content": "placeholders = ','.join('?' * len(node_ids))"
+      },
+      {
+        "line": 222,
+        "type": "placeholder",
+        "content": "WHERE e.source_id IN ({placeholders})"
+      },
+      {
+        "line": 223,
+        "type": "placeholder",
+        "content": "AND e.target_id IN ({placeholders})"
+      },
+      {
+        "line": 268,
+        "type": "placeholder",
+        "content": "placeholders = ','.join('?' * len(objects))"
+      },
+      {
+        "line": 269,
+        "type": "placeholder",
+        "content": "query += f\" AND n.name IN ({placeholders})\""
+      },
+      {
+        "line": 275,
+        "type": "placeholder",
+        "content": "placeholders = ','.join('?' * len(emotions))"
+      },
+      {
+        "line": 276,
+        "type": "placeholder",
+        "content": "query += f\" AND EXISTS (SELECT 1 FROM node_media nm2 JOIN nodes n2 ON nm2.node_id = n2.id WHERE nm2.media_id = m.id AND n2.node_type = 'emotion' AND n2.name IN ({placeholders}))\""
+      }
+    ]
+  },
+  {
+    "file": "lib\\knowledge_graph.py",
+    "issues": [
+      {
+        "line": 470,
+        "type": "placeholder",
+        "content": "# For now, returning empty - this is a placeholder for complex graph queries"
+      }
+    ]
+  },
+  {
+    "file": "cli\\memory.py",
+    "issues": [
+      {
+        "line": 77,
+        "type": "placeholder",
+        "content": "one row, using placeholder entries if needed."
+      },
+      {
+        "line": 137,
+        "type": "placeholder",
+        "content": "(1, \"placeholder\", sample_path, now),"
+      },
+      {
+        "line": 222,
+        "type": "placeholder",
+        "content": "@app.command(\"cleanup-placeholders\")"
+      },
+      {
+        "line": 223,
+        "type": "placeholder",
+        "content": "def cleanup_placeholders() -> None:"
+      },
+      {
+        "line": 224,
+        "type": "placeholder",
+        "content": "\"\"\"Remove any seeded placeholder rows from ID-map DBs.\"\"\""
+      },
+      {
+        "line": 240,
+        "type": "placeholder",
+        "content": "con.execute(f\"DELETE FROM {table} WHERE hash='placeholder'\")"
+      }
+    ]
+  },
+  {
+    "file": "scripts\\audit_pipeline_bugs.py",
+    "issues": [
+      {
+        "line": 25,
+        "type": "placeholder",
+        "content": "self.check_placeholder_code()"
+      },
+      {
+        "line": 112,
+        "type": "placeholder",
+        "content": "def check_placeholder_code(self):"
+      },
+      {
+        "line": 113,
+        "type": "placeholder",
+        "content": "\"\"\"Look for placeholder/scaffold code\"\"\""
+      },
+      {
+        "line": 113,
+        "type": "placeholder",
+        "content": "\"\"\"Look for placeholder/scaffold code\"\"\""
+      },
+      {
+        "line": 114,
+        "type": "placeholder",
+        "content": "print(\"\ud83d\udd0d Checking for placeholder code...\")"
+      },
+      {
+        "line": 121,
+        "type": "placeholder",
+        "content": "'pass  # implement',"
+      },
+      {
+        "line": 123,
+        "type": "suspicious",
+        "content": "'raise NotImplementedError',"
+      },
+      {
+        "line": 124,
+        "type": "placeholder",
+        "content": "'placeholder',"
+      },
+      {
+        "line": 136,
+        "type": "placeholder",
+        "content": "self.issues['placeholders'].append({"
+      }
+    ]
+  },
+  {
+    "file": "scripts\\comprehensive_code_audit.py",
+    "issues": [
+      {
+        "line": 4,
+        "type": "placeholder",
+        "content": "- Placeholder code"
+      },
+      {
+        "line": 21,
+        "type": "placeholder",
+        "content": "PLACEHOLDER_PATTERNS = ["
+      },
+      {
+        "line": 22,
+        "type": "placeholder",
+        "content": "r'TODO:',"
+      },
+      {
+        "line": 23,
+        "type": "placeholder",
+        "content": "r'FIXME:',"
+      },
+      {
+        "line": 24,
+        "type": "placeholder",
+        "content": "r'XXX:',"
+      },
+      {
+        "line": 25,
+        "type": "placeholder",
+        "content": "r'placeholder',"
+      },
+      {
+        "line": 26,
+        "type": "placeholder",
+        "content": "r'scaffold',"
+      },
+      {
+        "line": 27,
+        "type": "placeholder",
+        "content": "r'stub',"
+      },
+      {
+        "line": 28,
+        "type": "placeholder",
+        "content": "r'not implemented',"
+      },
+      {
+        "line": 33,
+        "type": "suspicious",
+        "content": "r'raise NotImplementedError',"
+      },
+      {
+        "line": 34,
+        "type": "suspicious",
+        "content": "r'return None  # ',"
+      },
+      {
+        "line": 35,
+        "type": "suspicious",
+        "content": "r'return {}  # ',"
+      },
+      {
+        "line": 47,
+        "type": "placeholder",
+        "content": "# Check for placeholder patterns"
+      },
+      {
+        "line": 49,
+        "type": "placeholder",
+        "content": "for pattern in PLACEHOLDER_PATTERNS:"
+      },
+      {
+        "line": 53,
+        "type": "placeholder",
+        "content": "'type': 'placeholder',"
+      }
+    ]
+  },
+  {
+    "file": "scripts\\file_watchdog.py",
+    "issues": [
+      {
+        "line": 194,
+        "type": "placeholder",
+        "content": "# TODO: Implement image-only pipeline"
+      },
+      {
+        "line": 200,
+        "type": "placeholder",
+        "content": "# TODO: Implement audio-only pipeline"
+      },
+      {
+        "line": 206,
+        "type": "placeholder",
+        "content": "# TODO: Implement document processing"
+      },
+      {
+        "line": 212,
+        "type": "placeholder",
+        "content": "# TODO: Implement data file processing"
+      }
+    ]
+  },
+  {
+    "file": "scripts\\pin_model_versions.py",
+    "issues": [
+      {
+        "line": 114,
+        "type": "placeholder",
+        "content": "# Check if it's a placeholder hash (all same character repeated)"
+      },
+      {
+        "line": 116,
+        "type": "placeholder",
+        "content": "print(f\"  \u2192 Updating placeholder revision to actual commit SHA\")"
+      },
+      {
+        "line": 126,
+        "type": "placeholder",
+        "content": "print(f\"\\nUpdated {updated_count} model(s) with placeholder revisions\")"
+      },
+      {
+        "line": 144,
+        "type": "placeholder",
+        "content": "print(f\"    \u2192 Updating placeholder SHA256\")"
+      }
+    ]
+  },
+  {
+    "file": "scripts\\validate_models.py",
+    "issues": [
+      {
+        "line": 90,
+        "type": "suspicious",
+        "content": "return None  # Not necessarily a failure"
+      }
+    ]
+  },
+  {
+    "file": "scripts\\verify_model_lockdown.py",
+    "issues": [
+      {
+        "line": 77,
+        "type": "placeholder",
+        "content": "# Check if revision is a placeholder (all same character)"
+      },
+      {
+        "line": 80,
+        "type": "placeholder",
+        "content": "check['issues'].append(\"Placeholder revision detected (not real commit SHA)\")"
+      },
+      {
+        "line": 129,
+        "type": "placeholder",
+        "content": "# Check SHA256 (only for smaller files and non-placeholder hashes)"
+      },
+      {
+        "line": 130,
+        "type": "placeholder",
+        "content": "if expected_sha and 'placeholder' not in expected_sha.lower() and len(set(expected_sha)) > 1:"
+      },
+      {
+        "line": 143,
+        "type": "placeholder",
+        "content": "elif expected_sha and 'placeholder' in expected_sha.lower():"
+      },
+      {
+        "line": 144,
+        "type": "placeholder",
+        "content": "check['issues'].append(\"Placeholder SHA256 (hash not yet computed)\")"
+      }
+    ]
+  },
+  {
+    "file": "scripts\\watchdog_ingest.py",
+    "issues": [
+      {
+        "line": 369,
+        "type": "placeholder",
+        "content": "# TODO: Implement audio ingestion"
+      },
+      {
+        "line": 375,
+        "type": "placeholder",
+        "content": "# TODO: Implement image ingestion"
+      },
+      {
+        "line": 381,
+        "type": "placeholder",
+        "content": "# TODO: Implement document ingestion"
+      }
+    ]
+  }
+]

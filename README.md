@@ -31,21 +31,21 @@ Turn raw media into structured multimodal memory locally:
 3. **Terminal & Installation Walkthrough**: Bootstrap the local dependencies, validate the host environment, start the background watchdog, and import media files in real-time.
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/GoodQ02/goodq4all/main/samples/assets/nasa_descent.gif?v=1" alt="Raw Moon Landing Input" width="270" />
+  <img src="https://raw.githubusercontent.com/JoesDomingo/goodq4all/dev/samples/assets/nasa_descent.gif?v=1" alt="Raw Moon Landing Input" width="270" />
   &nbsp;&nbsp;
-  <a href="https://raw.githubusercontent.com/GoodQ02/goodq4all/main/samples/assets/ui_onboarding_walkthrough.mp4?v=2">
-    <img src="https://raw.githubusercontent.com/GoodQ02/goodq4all/main/samples/assets/ui_onboarding_walkthrough.gif?v=2" alt="Watch Interactive UI Walkthrough" width="270" />
+  <a href="https://raw.githubusercontent.com/JoesDomingo/goodq4all/dev/samples/assets/ui_onboarding_walkthrough.mp4?v=2">
+    <img src="https://raw.githubusercontent.com/JoesDomingo/goodq4all/dev/samples/assets/ui_onboarding_walkthrough.gif?v=2" alt="Watch Interactive UI Walkthrough" width="270" />
   </a>
   &nbsp;&nbsp;
-  <a href="https://raw.githubusercontent.com/GoodQ02/goodq4all/main/samples/assets/install_walkthrough.mp4?v=2">
-    <img src="https://raw.githubusercontent.com/GoodQ02/goodq4all/main/samples/assets/install_walkthrough.gif?v=3" alt="Watch Terminal & Installation Walkthrough" width="270" />
+  <a href="https://raw.githubusercontent.com/JoesDomingo/goodq4all/dev/samples/assets/install_walkthrough.mp4?v=2">
+    <img src="https://raw.githubusercontent.com/JoesDomingo/goodq4all/dev/samples/assets/install_walkthrough.gif?v=3" alt="Watch Terminal & Installation Walkthrough" width="270" />
   </a>
 </p>
 
 <p align="center">
-  <strong>Interactive UI Walkthrough</strong>: <a href="https://raw.githubusercontent.com/GoodQ02/goodq4all/main/samples/assets/ui_onboarding_walkthrough.mp4?v=2">Watch 1080p Video</a> · <a href="samples/assets/manifest.json">View Manifest</a>
+  <strong>Interactive UI Walkthrough</strong>: <a href="https://raw.githubusercontent.com/JoesDomingo/goodq4all/dev/samples/assets/ui_onboarding_walkthrough.mp4?v=2">Watch 1080p Video</a> · <a href="samples/assets/manifest.json">View Manifest</a>
   <br>
-  <strong>Terminal & Installation</strong>: <a href="https://raw.githubusercontent.com/GoodQ02/goodq4all/main/samples/assets/install_walkthrough.mp4?v=2">Watch 1080p Video</a> · <a href="docs/guides/install/INSTALL.md">Read Install Guide</a>
+  <strong>Terminal & Installation</strong>: <a href="https://raw.githubusercontent.com/JoesDomingo/goodq4all/dev/samples/assets/install_walkthrough.mp4?v=2">Watch 1080p Video</a> · <a href="docs/guides/install/INSTALL.md">Read Install Guide</a>
 </p>
 
 ## Before You Start

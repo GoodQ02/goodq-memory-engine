@@ -269,6 +269,7 @@ This is the canonical file registry for the GoodQ4All codebase. It indexes every
 | `/docs/guides/llm/VLLM_WSL_INSTALL_VERIFY_2026-04-10.md` | Documentation | System guide, architecture reference, or release notes. |
 | `/docs/guides/llm/WSL2_AUDIO_SETUP.md` | Documentation | System guide, architecture reference, or release notes. |
 | `/docs/guides/ui/JUSTIFICATION_UI.md` | Documentation | System guide, architecture reference, or release notes. |
+| `/docs/guides/ui/USER_INTERFACE_WALKTHROUGH.md` | Documentation | Central discovery walkthrough guide for the five read-only UI consoles. |
 | `/docs/guides/watchdog/WATCHDOG_CHANGELOG.md` | Documentation | System guide, architecture reference, or release notes. |
 | `/docs/guides/watchdog/WATCHDOG_GUIDE.md` | Documentation | System guide, architecture reference, or release notes. |
 | `/docs/guides/watchdog/WATCHDOG_INDEX.md` | Documentation | System guide, architecture reference, or release notes. |
@@ -959,17 +960,18 @@ This is the canonical file registry for the GoodQ4All codebase. It indexes every
 | `/tests/unit/test_wsl_audio_unified_bridge.py` | Testing Suite | Unit or integration test for verified capability checkpoints. |
 | `/tests/unit/test_wsl_diarization_model_authority.py` | Testing Suite | Unit or integration test for verified capability checkpoints. |
 | `/tests/unit/test_wsl_process_audio_diarization.py` | Testing Suite | Unit or integration test for verified capability checkpoints. |
-| `/ui/justification_v1/index.html` | Generic | No description provided. |
-| `/ui/justification_v1/inspector/README.md` | Generic | No description provided. |
-| `/ui/justification_v1/inspector/inspector.js` | Generic | No description provided. |
-| `/ui/justification_v1/inspector/inspector_log.jsonl` | Generic | No description provided. |
-| `/ui/justification_v1/static/css/app.css` | Generic | No description provided. |
-| `/ui/justification_v1/static/js/app.js` | Generic | No description provided. |
-| `/ui/justification_v1/static/js/integrity.js` | Generic | No description provided. |
-| `/ui/justification_v1/static/js/test_render.js` | Generic | No description provided. |
-| `/ui/justification_v1/static/js/types_epistemic.js` | Generic | No description provided. |
-| `/ui/justification_v1/static/js/types_non_action.js` | Generic | No description provided. |
-| `/ui/operator_console_v1/README.md` | Generic | No description provided. |
+| `/ui/justification_v1/README.md` | Frontend UI | Monospaced epistemic envelope and comparative diff walkthrough. |
+| `/ui/justification_v1/index.html` | Frontend UI | Monospaced viewport layout for envelope rendering and audits. |
+| `/ui/justification_v1/inspector/README.md` | Frontend UI | Details of the observer-only Justification Inspector logging harness. |
+| `/ui/justification_v1/inspector/inspector.js` | Frontend UI | Passive logger capturing initial renders and state changes to JSONL. |
+| `/ui/justification_v1/inspector/inspector_log.jsonl` | Frontend UI | Circular JSONL log file bounded to 500 records. |
+| `/ui/justification_v1/static/css/app.css` | Frontend UI | Monospaced visual rules and high-contrast diagnostic CSS grids. |
+| `/ui/justification_v1/static/js/app.js` | Frontend UI | Core comparison logic and string rendering coordinator. |
+| `/ui/justification_v1/static/js/integrity.js` | Frontend UI | EpistemicReadEnvelope validation and FNV-1a32 hashing routines. |
+| `/ui/justification_v1/static/js/test_render.js` | Frontend UI | Golden verification tests run from the developer console. |
+| `/ui/justification_v1/static/js/types_epistemic.js` | Frontend UI | Monospaced envelope typing specifications. |
+| `/ui/justification_v1/static/js/types_non_action.js` | Frontend UI | Non-action decision schema definitions. |
+| `/ui/operator_console_v1/README.md` | Frontend UI | Sizing limits, query parameters, and panel guides for operator cockpit. |
 | `/ui/operator_console_v1/index.html` | Frontend UI | Guided and Operator modes cockpit layout for system diagnostics. |
 | `/ui/operator_console_v1/static/css/app.css` | Frontend UI | Styling sheet for the Classic Operator Console. |
 | `/ui/operator_console_v1/static/js/app.js` | Frontend UI | Dashboard rendering logic for Classic Operator Console. |
@@ -977,9 +979,11 @@ This is the canonical file registry for the GoodQ4All codebase. It indexes every
 | `/ui/retro_console_v1/index.html` | Frontend UI | CRT-themed Retro Memory Explorer viewport container. |
 | `/ui/retro_console_v1/static/css/retro.css` | Frontend UI | Vibrant phosphor-green and cyber-blue styling rules for the Retro UI. |
 | `/ui/retro_console_v1/static/js/retro.js` | Frontend UI | Autopilot graph flight, 3D Spinning Globe, and timeline checklists logic. |
+| `/ui/stitching_workbench/README.md` | Frontend UI | Two-stage stitch verification, layout columns, and API binding details. |
 | `/ui/stitching_workbench/index.html` | Frontend UI | Interactive manual voice stitching workbench view. |
 | `/ui/stitching_workbench/static/css/stitching.css` | Frontend UI | Styling rules for the stitching workbench UI. |
 | `/ui/stitching_workbench/static/js/stitching.js` | Frontend UI | Renders unstitched voice patterns and confirms database-mutation stitch requests. |
+| `/ui/summary_console/README.md` | Frontend UI | Detailed guide for cumulative metric tabs, profile tag clouds, and custom playlists. |
 | `/ui/summary_console/index.html` | Frontend UI | Unified memory summary browser cockpit. |
 | `/ui/summary_console/static/css/summary.css` | Frontend UI | Styling sheet for the Summary Console layout. |
 | `/ui/summary_console/static/js/summary.js` | Frontend UI | Exposes PEOPLE, PLACES, MOODS, and OCCASIONS tabs and collection exports. |

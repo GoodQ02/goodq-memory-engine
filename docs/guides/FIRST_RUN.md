@@ -188,7 +188,7 @@ A successful scene-level ingestion produces a `scene_manifest.json` structured l
 ```json
 {
   "video_id": "7215a98e...",
-  "video_path": "C:\\Users\\username\\GoodQ_Data\\import_inbox\\sample.mp4",
+  "video_path": "<USERPROFILE>\\GoodQ_Data\\import_inbox\\sample.mp4",
   "phase6_status": "complete",
   "phase6_complete": true,
   "scenes": [

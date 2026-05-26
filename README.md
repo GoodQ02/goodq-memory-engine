@@ -38,7 +38,7 @@ Turn raw media into structured multimodal memory locally:
     <td align="center">
       <h1><b>TURN THIS...</b></h1>
       <br />
-      <img src="samples/assets/nasa_descent.gif" alt="Raw Moon Landing Input" width="850" style="max-width: 100%; border-radius: 8px;" />
+      <img src="samples/assets/nasa_descent.gif?raw=true" alt="Raw Moon Landing Input" width="850" style="max-width: 100%; border-radius: 8px;" />
     </td>
   </tr>
   <tr>
@@ -47,7 +47,7 @@ Turn raw media into structured multimodal memory locally:
       <p><a href="samples/assets/ui_onboarding_walkthrough.mp4">Watch 1080p Video</a> · <a href="samples/assets/manifest.json">View Manifest</a></p>
       <br />
       <a href="samples/assets/ui_onboarding_walkthrough.mp4">
-        <img src="samples/assets/ui_onboarding_walkthrough.gif" alt="Watch Interactive UI Walkthrough" width="850" style="max-width: 100%; border-radius: 8px;" />
+        <img src="samples/assets/ui_onboarding_walkthrough.gif?raw=true" alt="Watch Interactive UI Walkthrough" width="850" style="max-width: 100%; border-radius: 8px;" />
       </a>
     </td>
   </tr>
@@ -57,11 +57,12 @@ Turn raw media into structured multimodal memory locally:
       <p><a href="samples/assets/install_walkthrough.mp4">Watch 1080p Video</a> · <a href="docs/guides/install/INSTALL.md">Read Install Guide</a></p>
       <br />
       <a href="samples/assets/install_walkthrough.mp4">
-        <img src="samples/assets/install_walkthrough.gif" alt="Watch Terminal & Installation Walkthrough" width="850" style="max-width: 100%; border-radius: 8px;" />
+        <img src="samples/assets/install_walkthrough.gif?raw=true" alt="Watch Terminal & Installation Walkthrough" width="850" style="max-width: 100%; border-radius: 8px;" />
       </a>
     </td>
   </tr>
 </table>
+
 
 
 ## Before You Start

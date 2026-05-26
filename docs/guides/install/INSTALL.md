@@ -17,7 +17,7 @@ Prerequisites:
 - Git
 - Miniconda or Anaconda visible to the shell
 - Python 3.10 or newer
-- at least 25 GB free for the baseline path
+- at least 25 GB free for the baseline path (breakdown: ~4 GB conda environments, ~12 GB model cache prefetch, ~6 GB processing workspace, ~3 GB database storage; space required is lower if model prefetch is skipped)
 - optional: NVIDIA GPU and WSL2 Ubuntu for accelerated lanes
 
 ```powershell

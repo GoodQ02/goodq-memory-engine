@@ -166,6 +166,11 @@ them in `.env.local` only when you intentionally change the local API binding.
 
 For a successful first run, expect:
 
+
+## 6. Confirm Success
+
+For a successful first run, expect:
+
 - the file leaves `import_inbox`
 - the file appears under `processed` or the run output clearly explains why it
   did not
@@ -173,6 +178,30 @@ For a successful first run, expect:
 - scene outputs include `scene_manifest.json`
 - scene outputs include `temporal_index.json`
 - API health remains reachable
+
+### Successful Manifest Example
+
+A successful scene-level ingestion produces a `scene_manifest.json` structured like this:
+
+```json
+{
+  "video_id": "7215a98e...",
+  "video_path": "C:\\Users\\username\\GoodQ_Data\\import_inbox\\sample.mp4",
+  "phase6_status": "complete",
+  "phase6_complete": true,
+  "scenes": [
+    {
+      "scene_id": "7fde117a...",
+      "index": 0,
+      "start": 0.0,
+      "end": 4.17,
+      "duration": 4.17,
+      "qdrant_ok": true,
+      "speaker_ids": ["SPEAKER_00"]
+    }
+  ]
+}
+```
 
 Optional enrichments can fail on individual scenes without invalidating the
 entire run. Treat the manifest, temporal index, step logs, and API health as

@@ -43,15 +43,24 @@ def test_validated_config_preserves_llm_runtime_contract():
         sys.path.insert(0, scripts_path)
         inserted = True
     try:
-        result = load_configs({})
+        result = load_configs({
+            "llm": {
+                "vllm_url": "http://localhost:38005/v1",
+                "ollama_url": "http://localhost:31434/v1",
+                "vllm_model": "meta-llama/Llama-3.2-1B-Instruct",
+                "features": {
+                    "scene_context_analysis": True
+                }
+            }
+        })
     finally:
         if inserted:
             sys.path.remove(scripts_path)
 
     llm = result.get("llm", {})
-    assert llm.get("vllm_url")
-    assert llm.get("ollama_url")
-    assert llm.get("vllm_model")
+    assert llm.get("vllm_url") == "http://localhost:38005/v1"
+    assert llm.get("ollama_url") == "http://localhost:31434/v1"
+    assert llm.get("vllm_model") == "meta-llama/Llama-3.2-1B-Instruct"
     assert llm.get("features", {}).get("scene_context_analysis") is True
 
 

@@ -9,10 +9,10 @@
 # GoodQ4All
 
 <p align="center">
-  <a href="https://github.com/GoodQ02/goodq4all/actions/workflows/ci.yml"><img src="https://github.com/GoodQ02/goodq4all/actions/workflows/ci.yml/badge.svg?branch=main" alt="ci" /></a>
-  <a href="https://github.com/GoodQ02/goodq4all/actions/workflows/doc-drift-lint.yml"><img src="https://github.com/GoodQ02/goodq4all/actions/workflows/doc-drift-lint.yml/badge.svg?branch=main" alt="doc-drift-lint" /></a>
-  <a href="https://github.com/GoodQ02/goodq4all/actions/workflows/codeql.yml"><img src="https://github.com/GoodQ02/goodq4all/actions/workflows/codeql.yml/badge.svg?branch=main" alt="codeql" /></a>
-  <a href="https://github.com/GoodQ02/goodq4all/actions/workflows/dependency-review.yml"><img src="https://github.com/GoodQ02/goodq4all/actions/workflows/dependency-review.yml/badge.svg?branch=main" alt="dependency-review" /></a>
+  <a href="https://github.com/GoodQ02/goodq4all/actions/workflows/ci.yml"><img src="https://github.com/GoodQ02/goodq4all/actions/workflows/ci.yml/badge.svg" alt="ci" /></a>
+  <a href="https://github.com/GoodQ02/goodq4all/actions/workflows/doc-drift-lint.yml"><img src="https://github.com/GoodQ02/goodq4all/actions/workflows/doc-drift-lint.yml/badge.svg" alt="doc-drift-lint" /></a>
+  <a href="https://github.com/GoodQ02/goodq4all/actions/workflows/codeql.yml"><img src="https://github.com/GoodQ02/goodq4all/actions/workflows/codeql.yml/badge.svg" alt="codeql" /></a>
+  <a href="https://github.com/GoodQ02/goodq4all/actions/workflows/dependency-review.yml"><img src="https://github.com/GoodQ02/goodq4all/actions/workflows/dependency-review.yml/badge.svg" alt="dependency-review" /></a>
 </p>
 
 GoodQ4All is a local-first multimodal memory system for long-running video, audio, and text intelligence.
@@ -21,6 +21,9 @@ GoodQ4All is a local-first multimodal memory system for long-running video, audi
 It ingests media into scene-level memory, persists what it learns locally, and keeps the proof path visible. The system is built around deterministic Windows-first execution, with CPU-safe baseline behavior and optional GPU / WSL2 acceleration when you want more throughput.
 
 GoodQ4All's thesis is simple: machine memory should earn every claim it makes.
+
+> [!IMPORTANT]
+> **Supported Host: Windows 11 only.** GoodQ4All is built for Windows-first local execution (CPU-safe baseline by default; GPU and WSL2 are optional). Other platforms are not first-run targets today.
 
 ## Watch The Guided Demos
 
@@ -31,21 +34,21 @@ Turn raw media into structured multimodal memory locally:
 3. **Terminal & Installation Walkthrough**: Bootstrap the local dependencies, validate the host environment, start the background watchdog, and import media files in real-time.
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/JoesDomingo/goodq4all/dev/samples/assets/nasa_descent.gif?v=1" alt="Raw Moon Landing Input" width="270" />
+  <img src="samples/assets/nasa_descent.gif" alt="Raw Moon Landing Input" width="270" />
   &nbsp;&nbsp;
-  <a href="https://raw.githubusercontent.com/JoesDomingo/goodq4all/dev/samples/assets/ui_onboarding_walkthrough.mp4?v=2">
-    <img src="https://raw.githubusercontent.com/JoesDomingo/goodq4all/dev/samples/assets/ui_onboarding_walkthrough.gif?v=2" alt="Watch Interactive UI Walkthrough" width="270" />
+  <a href="samples/assets/ui_onboarding_walkthrough.mp4">
+    <img src="samples/assets/ui_onboarding_walkthrough.gif" alt="Watch Interactive UI Walkthrough" width="270" />
   </a>
   &nbsp;&nbsp;
-  <a href="https://raw.githubusercontent.com/JoesDomingo/goodq4all/dev/samples/assets/install_walkthrough.mp4?v=2">
-    <img src="https://raw.githubusercontent.com/JoesDomingo/goodq4all/dev/samples/assets/install_walkthrough.gif?v=3" alt="Watch Terminal & Installation Walkthrough" width="270" />
+  <a href="samples/assets/install_walkthrough.mp4">
+    <img src="samples/assets/install_walkthrough.gif" alt="Watch Terminal & Installation Walkthrough" width="270" />
   </a>
 </p>
 
 <p align="center">
-  <strong>Interactive UI Walkthrough</strong>: <a href="https://raw.githubusercontent.com/JoesDomingo/goodq4all/dev/samples/assets/ui_onboarding_walkthrough.mp4?v=2">Watch 1080p Video</a> · <a href="samples/assets/manifest.json">View Manifest</a>
+  <strong>Interactive UI Walkthrough</strong>: <a href="samples/assets/ui_onboarding_walkthrough.mp4">Watch 1080p Video</a> · <a href="samples/assets/manifest.json">View Manifest</a>
   <br>
-  <strong>Terminal & Installation</strong>: <a href="https://raw.githubusercontent.com/JoesDomingo/goodq4all/dev/samples/assets/install_walkthrough.mp4?v=2">Watch 1080p Video</a> · <a href="docs/guides/install/INSTALL.md">Read Install Guide</a>
+  <strong>Terminal & Installation</strong>: <a href="samples/assets/install_walkthrough.mp4">Watch 1080p Video</a> · <a href="docs/guides/install/INSTALL.md">Read Install Guide</a>
 </p>
 
 ## Before You Start
@@ -59,7 +62,7 @@ Have these ready before running the installer:
 - Git
 - Miniconda or Anaconda available to the current shell
 - Python 3.10 or newer
-- at least 25 GB free for the baseline install path
+- at least 25 GB free for the baseline install path (breakdown: ~4 GB conda environments, ~12 GB model cache prefetch, ~6 GB processing workspace, ~3 GB database storage; space required is lower if model prefetch is skipped)
 - optional: NVIDIA GPU and WSL2 Ubuntu for accelerated lanes
 
 macOS and Linux are not first-run hosts for this repository today. See
@@ -75,10 +78,10 @@ Each frame below is pulled from the final onboarding film and paired with the ac
 | 1 | Clone the official source:<br>`git clone https://github.com/GoodQ02/goodq4all.git` | <a href="samples/assets/demo-steps/01-clone-official-source.jpg"><img src="samples/assets/demo-steps/01-clone-official-source.jpg" alt="Clone the GoodQ4All repository" width="300" /></a> |
 | 2 | Enter the project cabin:<br>`cd goodq4all` | <a href="samples/assets/demo-steps/02-enter-project-cabin.jpg"><img src="samples/assets/demo-steps/02-enter-project-cabin.jpg" alt="Enter the GoodQ4All project folder" width="300" /></a> |
 | 3 | Run the bootstrap installer:<br>`python scripts/bootstrap_install.py`<br><sub>CPU-safe first-run variant: `python scripts/bootstrap_install.py --disable-gpu --disable-wsl-audio --skip-model-prefetch`.</sub> | <a href="samples/assets/demo-steps/03-bootstrap-installer.jpg"><img src="samples/assets/demo-steps/03-bootstrap-installer.jpg" alt="Run the bootstrap installer" width="300" /></a> |
-| 4 | Optional local config:<br>copy `.env.local.template` to `.env.local` when using local model, cache, or provider settings. | <a href="samples/assets/demo-steps/04-env-local-root.jpg"><img src="samples/assets/demo-steps/04-env-local-root.jpg" alt="Place env local configuration in the repo root" width="300" /></a> |
+| 4 | Customize local config:<br>edit the bootstrap-created `.env.local` when using local model, cache, or provider settings. | <a href="samples/assets/demo-steps/04-env-local-root.jpg"><img src="samples/assets/demo-steps/04-env-local-root.jpg" alt="Place env local configuration in the repo root" width="300" /></a> |
 | 5 | Validate the bootstrap:<br>`.\scripts\bootstrap_validate.bat` | <a href="samples/assets/demo-steps/05-bootstrap-validator.jpg"><img src="samples/assets/demo-steps/05-bootstrap-validator.jpg" alt="Run the bootstrap validator" width="300" /></a> |
 | 6 | Run the launcher/readiness check:<br>`.\LAUNCH_GOODQ.ps1` | <a href="samples/assets/demo-steps/06-launch-goodq.jpg"><img src="samples/assets/demo-steps/06-launch-goodq.jpg" alt="Launch GoodQ4All readiness checks" width="300" /></a> |
-| 7 | Start Watchdog, then drop one small media file into `import_inbox`:<br>`conda run --no-capture-output -n goodq_core python -m cli.watchdog` | <a href="samples/assets/demo-steps/07-watchdog-observes.jpg"><img src="samples/assets/demo-steps/07-watchdog-observes.jpg" alt="Watchdog observes the imported media file" width="300" /></a> |
+| 7 | Start Watchdog, then copy one small media file into the import inbox zone (defaults to `%USERPROFILE%\GoodQ_Data\import_inbox\`):<br>`conda run --no-capture-output -n goodq_core python -m cli.watchdog` | <a href="samples/assets/demo-steps/07-watchdog-observes.jpg"><img src="samples/assets/demo-steps/07-watchdog-observes.jpg" alt="Watchdog observes the imported media file" width="300" /></a> |
 | 8 | Start the API and inspect proof:<br>`conda run --no-capture-output -n goodq_core python -m api.server` | <a href="samples/assets/demo-steps/08-proof-recorded.jpg"><img src="samples/assets/demo-steps/08-proof-recorded.jpg" alt="Ingestion completes and proof is recorded" width="300" /></a> |
 
 ## First Success Loop
@@ -200,14 +203,26 @@ python scripts/bootstrap_install.py
 .\LAUNCH_GOODQ.ps1
 ```
 
-`LAUNCH_GOODQ.ps1` checks readiness and opens operator monitors. It does not start ingestion by itself.
+`LAUNCH_GOODQ.ps1` checks readiness and opens operator monitors. It does not start ingestion by itself. To launch with background watchdog ingestion enabled:
+```powershell
+.\LAUNCH_GOODQ.ps1 -StartIngestion
+```
 
 The launcher also has `LAUNCH_GOODQ.bat` for double-click or classic Command
 Prompt use. Both wrappers reach the same readiness surface.
 
-If you skipped the Qdrant service prompt during bootstrap, the first launcher
-run may report one Qdrant readiness warning. Install or repair the service later
-with `scripts\qdrant\INSTALL_QDRANT_SERVICE.bat`.
+If you skipped the Qdrant service prompt during bootstrap, the launcher health check will display:
+```text
+  [!] Qdrant: Not responding
+      Attempting to start Qdrant service...
+  [!!] Qdrant: Failed to start - manual intervention required
+```
+- **When is it safe to ignore?** During your first install verify or when running purely CPU-safe dry runs where vector index lookups are not required.
+- **When must it be fixed?** Before running active ingestion (`-StartIngestion` or Watchdog importing files) that updates vector stores, or when executing retrieval queries. Fix it by running:
+  ```powershell
+  .\scripts\qdrant\INSTALL_QDRANT_SERVICE.bat
+  ```
+  (Requires Administrator shell).
 
 Leave Watchdog running in one terminal:
 
@@ -240,13 +255,6 @@ Reference:
 - [`docs/bootstrap/INSTALL_BOOTSTRAP.md`](docs/bootstrap/INSTALL_BOOTSTRAP.md)
 - [`docs/reference/API.md`](docs/reference/API.md)
 
-### Full Proof Path
-
-If you want to verify the stronger claims, use the proving witness and release evidence directly:
-
-- [`docs/releases/RELEASE_0.1.1.md`](docs/releases/RELEASE_0.1.1.md)
-- [`reports/README.md`](reports/README.md)
-- [`docs/diagnostics/README.md`](docs/diagnostics/README.md)
 
 ## Supported Surface Today
 
@@ -263,6 +271,10 @@ GoodQ4All currently supports:
 GoodQ4All now ships two local read-only operator console variants:
 - **Classic Operator Console** served at `/ui/operator_console_v1/`. It exposes the Current Scope strip, Flight Deck, proof/evidence status, recurrence reports, and video inventories.
 - **Retro Memory Explorer (v1.4.7)** served at `/ui/retro_console_v1/`. A premium cyber-CRT dashboard featuring a four-panel resizable/collapsible layout with floating restore tabs, an entity co-occurrence graph with dynamic spacing zoom and flight transitions, an Inspector panel containing keyframe image/transcript views with resizable logs splitters, and bidirectional timeline checklists.
+
+<p align="center">
+  <img src="samples/assets/retro_console_preview.png" alt="Retro Memory Explorer Premium CRT Console Dashboard" width="600" />
+</p>
 
 The consoles are inspection surfaces only. They do not trigger ingestion, reindex memory, heal configs, mutate database structures, generate reports, or activate ControlAgent. A polished consumer memory browser and confirmation-gated mutation UI remain future layers.
 
@@ -323,6 +335,8 @@ If you want the deeper technical picture:
 - Install: [`docs/guides/install/INSTALL.md`](docs/guides/install/INSTALL.md)
 - Quickstart: [`docs/guides/install/QUICKSTART.md`](docs/guides/install/QUICKSTART.md)
 - Laptop profile: [`docs/guides/install/LAPTOP.md`](docs/guides/install/LAPTOP.md)
+- Clean memory start: [`docs/guides/CLEAN_MEMORY_START.md`](docs/guides/CLEAN_MEMORY_START.md)
+- Uninstall / clean-slate: [`docs/guides/install/UNINSTALL.md`](docs/guides/install/UNINSTALL.md)
 - Docs landing page: [`docs/README.md`](docs/README.md)
 - API reference: [`docs/reference/API.md`](docs/reference/API.md)
 - Current release checkpoint: [`docs/releases/RELEASE_0.1.1.md`](docs/releases/RELEASE_0.1.1.md)
@@ -349,16 +363,16 @@ Reference:
 - [`SECURITY.md`](SECURITY.md)
 - [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)
 
-## Documentation and Evidence
+## For Maintainers & Advanced Operators
 
-If you only read a few things, read these:
+These resources are for reviewing release validation reports, agent status logs, system snapshots, and advanced audit trails:
 
-- [`docs/releases/RELEASE_0.1.1.md`](docs/releases/RELEASE_0.1.1.md)
-- [`docs/releases/SHIP_PROFILE.md`](docs/releases/SHIP_PROFILE.md)
-- [`docs/goodq4all_agent_status.md`](docs/goodq4all_agent_status.md)
-- [`docs/SYSTEM_SNAPSHOT.md`](docs/SYSTEM_SNAPSHOT.md)
-- [`reports/README.md`](reports/README.md)
-- [`docs/diagnostics/README.md`](docs/diagnostics/README.md)
+- **Release Proving Witness:** [`docs/releases/RELEASE_0.1.1.md`](docs/releases/RELEASE_0.1.1.md)
+- **Active Ship Profile:** [`docs/releases/SHIP_PROFILE.md`](docs/releases/SHIP_PROFILE.md)
+- **Agent Status Log:** [`docs/goodq4all_agent_status.md`](docs/goodq4all_agent_status.md)
+- **System Snapshot:** [`docs/SYSTEM_SNAPSHOT.md`](docs/SYSTEM_SNAPSHOT.md)
+- **Validation Run Reports:** [`reports/README.md`](reports/README.md)
+- **Diagnostics Guide:** [`docs/diagnostics/README.md`](docs/diagnostics/README.md)
 
 Historical and superseded material is intentionally preserved under [`docs/archive/`](docs/archive/), but it is not the front door.
 

@@ -1,0 +1,50 @@
+name: First-Run / Installation Problem
+description: Report an issue during scripts/bootstrap_install.py or LAUNCH_GOODQ.ps1
+title: "[First-Run]: "
+labels: ["first-run", "installation"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting your first-run installation issue. Please provide the details below so we can assist you.
+  - type: dropdown
+    id: host-profile
+    attributes:
+      label: Host Performance Profile
+      description: Which profile were you trying to configure?
+      options:
+        - BASELINE (CPU-safe)
+        - GPU_ENHANCED (CUDA/WSL audio)
+        - Unsure
+    validations:
+      required: true
+  - type: textarea
+    id: system-info
+    attributes:
+      label: Host Environment Details
+      description: OS version, Conda/Python version, CPU/GPU specs.
+      placeholder: |
+        - OS: Windows 11 Version 23H2
+        - Conda: Miniconda3 23.5.2
+        - Python: 3.10.12
+        - GPU: NVIDIA RTX 4070
+    validations:
+      required: true
+  - type: textarea
+    id: bootstrap-output
+    attributes:
+      label: Bootstrap/Validation Console Output
+      description: Copy the console output from scripts/bootstrap_install.py or scripts/bootstrap_validate.bat.
+      placeholder: Paste output logs here...
+    validations:
+      required: true
+  - type: textarea
+    id: steps-to-reproduce
+    attributes:
+      label: Steps to Reproduce
+      description: What commands did you run?
+      placeholder: |
+        1. Run `python scripts/bootstrap_install.py`
+        2. ...
+    validations:
+      required: true

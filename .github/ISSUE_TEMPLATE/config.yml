@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Ask a Question / General Discussion
+    url: https://github.com/GoodQ02/goodq4all/discussions
+    about: Ask a question, share tips, or discuss ideas with the community.
+  - name: Report a Security Vulnerability
+    url: https://github.com/GoodQ02/goodq4all/security/policy
+    about: Please report security concerns privately rather than opening an issue.

@@ -35,7 +35,7 @@ Explore GoodQ4All's capabilities with these high-resolution walkthrough films:
   </a>
   &nbsp;&nbsp;
   <a href="https://raw.githubusercontent.com/GoodQ02/goodq4all/main/samples/assets/install_walkthrough.mp4?v=2">
-    <img src="samples/assets/install_walkthrough.gif?v=2" alt="Watch Terminal & Installation Walkthrough" width="375" />
+    <img src="samples/assets/install_walkthrough.gif?v=3" alt="Watch Terminal & Installation Walkthrough" width="375" />
   </a>
 </p>
 

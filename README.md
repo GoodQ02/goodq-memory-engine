@@ -24,18 +24,21 @@ GoodQ4All's thesis is simple: machine memory should earn every claim it makes.
 
 ## Watch The Guided Demos
 
-Explore GoodQ4All's capabilities with these high-resolution walkthrough films:
+Turn raw media into structured multimodal memory locally:
 
-1. **Interactive UI Walkthrough**: Ingest Apollo 11, explore the Retro Memory Explorer's 3D spinning entity globe, perform human-in-the-loop voice stitching, and save custom memory collections.
-2. **Terminal & Installation Walkthrough**: Bootstrap the local dependencies, validate the host environment, start the background watchdog, and import media files in real-time.
+1. **Raw Media Input**: A sample clip of the Apollo 11 moon landing.
+2. **Interactive UI Walkthrough**: Ingest the clip, explore the Retro Memory Explorer's 3D spinning entity globe, perform human-in-the-loop voice stitching, and save custom memory collections.
+3. **Terminal & Installation Walkthrough**: Bootstrap the local dependencies, validate the host environment, start the background watchdog, and import media files in real-time.
 
 <p align="center">
+  <img src="https://raw.githubusercontent.com/GoodQ02/goodq4all/main/samples/assets/nasa_descent.gif?v=1" alt="Raw Moon Landing Input" width="270" />
+  &nbsp;&nbsp;
   <a href="https://raw.githubusercontent.com/GoodQ02/goodq4all/main/samples/assets/ui_onboarding_walkthrough.mp4?v=2">
-    <img src="https://raw.githubusercontent.com/GoodQ02/goodq4all/main/samples/assets/ui_onboarding_walkthrough.gif?v=2" alt="Watch Interactive UI Walkthrough" width="420" />
+    <img src="https://raw.githubusercontent.com/GoodQ02/goodq4all/main/samples/assets/ui_onboarding_walkthrough.gif?v=2" alt="Watch Interactive UI Walkthrough" width="270" />
   </a>
   &nbsp;&nbsp;
   <a href="https://raw.githubusercontent.com/GoodQ02/goodq4all/main/samples/assets/install_walkthrough.mp4?v=2">
-    <img src="https://raw.githubusercontent.com/GoodQ02/goodq4all/main/samples/assets/install_walkthrough.gif?v=3" alt="Watch Terminal & Installation Walkthrough" width="420" />
+    <img src="https://raw.githubusercontent.com/GoodQ02/goodq4all/main/samples/assets/install_walkthrough.gif?v=3" alt="Watch Terminal & Installation Walkthrough" width="270" />
   </a>
 </p>
 

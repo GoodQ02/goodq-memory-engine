@@ -255,13 +255,6 @@ Reference:
 - [`docs/bootstrap/INSTALL_BOOTSTRAP.md`](docs/bootstrap/INSTALL_BOOTSTRAP.md)
 - [`docs/reference/API.md`](docs/reference/API.md)
 
-### Full Proof Path
-
-If you want to verify the stronger claims, use the proving witness and release evidence directly:
-
-- [`docs/releases/RELEASE_0.1.1.md`](docs/releases/RELEASE_0.1.1.md)
-- [`reports/README.md`](reports/README.md)
-- [`docs/diagnostics/README.md`](docs/diagnostics/README.md)
 
 ## Supported Surface Today
 
@@ -366,16 +359,16 @@ Reference:
 - [`SECURITY.md`](SECURITY.md)
 - [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)
 
-## Documentation and Evidence
+## For Maintainers & Advanced Operators
 
-If you only read a few things, read these:
+These resources are for reviewing release validation reports, agent status logs, system snapshots, and advanced audit trails:
 
-- [`docs/releases/RELEASE_0.1.1.md`](docs/releases/RELEASE_0.1.1.md)
-- [`docs/releases/SHIP_PROFILE.md`](docs/releases/SHIP_PROFILE.md)
-- [`docs/goodq4all_agent_status.md`](docs/goodq4all_agent_status.md)
-- [`docs/SYSTEM_SNAPSHOT.md`](docs/SYSTEM_SNAPSHOT.md)
-- [`reports/README.md`](reports/README.md)
-- [`docs/diagnostics/README.md`](docs/diagnostics/README.md)
+- **Release Proving Witness:** [`docs/releases/RELEASE_0.1.1.md`](docs/releases/RELEASE_0.1.1.md)
+- **Active Ship Profile:** [`docs/releases/SHIP_PROFILE.md`](docs/releases/SHIP_PROFILE.md)
+- **Agent Status Log:** [`docs/goodq4all_agent_status.md`](docs/goodq4all_agent_status.md)
+- **System Snapshot:** [`docs/SYSTEM_SNAPSHOT.md`](docs/SYSTEM_SNAPSHOT.md)
+- **Validation Run Reports:** [`reports/README.md`](reports/README.md)
+- **Diagnostics Guide:** [`docs/diagnostics/README.md`](docs/diagnostics/README.md)
 
 Historical and superseded material is intentionally preserved under [`docs/archive/`](docs/archive/), but it is not the front door.
 

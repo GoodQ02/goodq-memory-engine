@@ -1,3 +1,8 @@
+<!-- DOC_BADGE: OPERATIONAL -->
+<!-- DOC_STATUS: REFERENCE_ONLY -->
+<!-- DOC_CANONICAL_POINTER: docs/architecture/SYSTEM_MAP_v1.md -->
+<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
+
 # Narrative Layer (Read-Only)
 
 Status: descriptive, non-authoritative

@@ -1,3 +1,8 @@
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: REFERENCE_ONLY -->
+<!-- DOC_CANONICAL_POINTER: docs/reference/WSL_AUDIO_RUNTIME.md -->
+<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
+
 # VAD & GPU Optimization - COMPLETE ✅
 
 > Role: Canonical completion report for the combined VAD + GPU optimization work across audio steps. For implementation details see `docs/AUDIO_GPU_OPTIMIZATION.md`; for broader GPU context see `docs/GPU_OPTIMIZATION_GUIDE.md`.
@@ -348,4 +353,3 @@ wave, sr = librosa.load(audio_path_to_use, sr=16000)
 **Date**: 2025-11-13  
 **Author**: GitHub Copilot  
 **Status**: ✅ **COMPLETE - READY FOR PRODUCTION**
-

@@ -408,7 +408,7 @@ memory, generated witnesses, or unselected memory snapshots.
 
 The offline bootstrap must not route through helpers that are marked
 `Unclear/Obsolete`, archived, retired, or network-installing in
-`docs/bootstrap/SCRIPT_REGISTRY.md`.
+`archive/docs/bootstrap/SCRIPT_REGISTRY.md`.
 
 Known surfaces needing exclusion or explicit review before packaging:
 

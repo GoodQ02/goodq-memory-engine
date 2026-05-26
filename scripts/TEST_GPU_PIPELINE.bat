@@ -52,7 +52,7 @@ if not defined DB_PATH (
 
 REM Step 1: Diagnostic
 echo [1/5] Running diagnostics...
-"%CONDA_EXE%" run --no-capture-output -n %GOODQ_CONDA_ENV% python -m cli.goodq_doctor
+"%CONDA_EXE%" run --no-capture-output -n %GOODQ_CONDA_ENV% python scripts\diagnose_gpu_issue.py
 if errorlevel 1 (
     echo.
     echo [ERROR] Diagnostics failed
@@ -84,10 +84,9 @@ if errorlevel 1 (
     echo.
     echo [!] No videos in import inbox
     echo.
-    echo   Provide a local sample video path or press Enter to cancel.
-    set /p test_video="Test video path: "
-    if defined test_video (
-        copy "!test_video!" "%IMPORT_INBOX%\" >nul
+    set /p copy_video="Copy test video? (y/N): "
+    if /i "!copy_video!"=="y" (
+        copy "%GOODQ_DATA_ROOT%\FAMILY_FEAST\09. 2002 - 2003.mp4" "%IMPORT_INBOX%\" >nul
         echo   [OK] Copied test video
     ) else (
         echo.
@@ -138,9 +137,9 @@ REM Start the watchdog in current window to see output
 "%CONDA_EXE%" run --no-capture-output -n %GOODQ_CONDA_ENV% python -m cli.watchdog
 
 echo.
-echo ================================================================================
+echo ================================================================================ 
 echo  Processing Complete
-echo ================================================================================
+echo ================================================================================ 
 echo.
 
 echo [5/5] Checking results...

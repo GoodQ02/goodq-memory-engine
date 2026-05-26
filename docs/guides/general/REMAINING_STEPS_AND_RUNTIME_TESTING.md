@@ -1,3 +1,8 @@
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: HISTORICAL_PLANNING_DRAFT -->
+<!-- DOC_CANONICAL_POINTER: docs/README.md -->
+<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
+
 # OSD Integration - Remaining Steps & Runtime Testing Plan
 
 **Date**: 2025-11-18  
@@ -449,4 +454,3 @@ The implementation is:
 - Optional: **1-2 hours** (full benchmarking & tuning)
 
 **You choose how deep you want to go!** 🚀
-

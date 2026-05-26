@@ -119,6 +119,49 @@ def test_update_kg_for_scene_persists_scene_location_character_edges(tmp_path: P
     conn.close()
 
 
+def test_update_kg_for_scene_resolves_entity_details_and_reports_count(tmp_path: Path):
+    kg_db = tmp_path / "kg_entity_details.db"
+    cfg = {"paths": {"knowledge_graph_db": str(kg_db)}}
+
+    result = update_kg_for_scene(
+        scene_data={
+            "index": 8,
+            "start": 30.0,
+            "end": 40.0,
+            "entities": [
+                {"label": "Avery", "type": "PERSON", "score": 9.5, "sources": ["ner"]},
+                {"label": "Backyard", "type": "LOCATION", "score": 7.0, "sources": ["vision_semantic"]},
+            ],
+        },
+        scene_id="scene_entity_details_0008",
+        video_id="video_test",
+        video_path="samples/ingestion/family.mp4",
+        cfg=cfg,
+    )
+
+    assert result["status"] == "success"
+    assert result["entities_resolved"] == 2
+    assert result["ingest_counts"]["entities_resolved"] == 2
+    assert result["ingest_counts"]["person_entities_resolved"] == 1
+    assert result["ingest_counts"]["location_entities_resolved"] == 1
+
+    conn = sqlite3.connect(str(kg_db))
+    cur = conn.cursor()
+
+    person_node = cur.execute(
+        "SELECT id FROM nodes WHERE node_type = ? AND name = ?",
+        ("person", "Avery"),
+    ).fetchone()
+    location_node = cur.execute(
+        "SELECT id FROM nodes WHERE node_type = ? AND name = ?",
+        ("location", "Backyard"),
+    ).fetchone()
+    assert person_node is not None
+    assert location_node is not None
+
+    conn.close()
+
+
 def test_update_kg_for_scene_links_named_speaker_to_person_identity(tmp_path: Path):
     kg_db = tmp_path / "kg_identity.db"
     cfg = {"paths": {"knowledge_graph_db": str(kg_db)}}

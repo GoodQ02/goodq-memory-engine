@@ -1,0 +1,105 @@
+WARNING: ARCHIVE / NON-CANONICAL / DO NOT COPY PATHS
+This file is preserved as historical evidence and may contain obsolete fixed-drive paths, host-specific assumptions, stale commands, or superseded runtime guidance.
+Do not use it for current runtime, setup, migration, or copy-paste path decisions.
+Use active documentation, config_loader, and canonical path abstractions such as <project_root>, <GOODQ_DATA_ROOT>, and <GOODQ_WSL_WORKSPACE> instead.
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: ARCHIVED -->
+<!-- DOC_ARCHIVED_ON: 2026-02-12 -->
+
+═══════════════════════════════════════════════════════════════════
+                    GoodQ4All - Quick Reference
+═══════════════════════════════════════════════════════════════════
+
+📍 PROJECT ROOT:  L:\goodq4all\
+
+═══════════════════════════════════════════════════════════════════
+🚀 QUICK START
+═══════════════════════════════════════════════════════════════════
+
+1. Launch System:
+   L:\goodq4all\LAUNCH_GOODQ.bat
+
+2. Start Watchdog (in new window):
+   L:\goodq4all\START_WATCHDOG.bat
+
+3. Drop files here:
+   L:\goodq4all\import_inbox\
+
+4. Files will be automatically processed!
+
+═══════════════════════════════════════════════════════════════════
+📋 ALL LAUNCHERS (.bat files)
+═══════════════════════════════════════════════════════════════════
+
+LAUNCH_GOODQ.bat          - Full launch (API + Command Center)
+LAUNCH_GOODQ_SIMPLE.bat   - Simple launch (no dashboard)
+START_WATCHDOG.bat        - Start file monitor
+STOP_GOODQ.bat            - Stop all services
+CHECK_WATCHDOG.bat        - Check watchdog status
+MONITOR_WATCHDOG.bat      - Live watchdog logs
+RUN_HEALTH_CHECK.bat      - System health check
+
+═══════════════════════════════════════════════════════════════════
+🔧 USEFUL PYTHON SCRIPTS
+═══════════════════════════════════════════════════════════════════
+
+check_production_status.py    - See ingestion progress
+system_readiness_check.py     - Validate all systems
+check_memory_db.py            - Query memory database
+test_knowledge_graph.py       - Test knowledge graph
+clear_databases.py            - Clean slate for fresh run
+monitor_overnight.py          - Monitor long-running jobs
+
+Run with: conda run -n goodq_zenml python L:\goodq4all\scripts\SCRIPT_NAME.py
+
+═══════════════════════════════════════════════════════════════════
+📂 KEY DIRECTORIES
+═══════════════════════════════════════════════════════════════════
+
+import_inbox\     - Drop files here to ingest
+logs\             - All output logs
+data\             - Processed data
+api\              - FastAPI server code
+scripts\          - All Python/PowerShell scripts
+configs\          - Configuration files
+envs\             - Environment definitions
+pipelines\        - ZenML pipeline definitions
+steps\            - ZenML step implementations
+
+═══════════════════════════════════════════════════════════════════
+📊 MONITORING & STATUS
+═══════════════════════════════════════════════════════════════════
+
+API Docs:         http://localhost:30000/docs
+Command Center:   Launched in separate PowerShell window
+Watchdog Logs:    L:\goodq4all\logs\watchdog.log
+Ingestion Logs:   L:\goodq4all\logs\ingest_full\
+
+═══════════════════════════════════════════════════════════════════
+🆘 TROUBLESHOOTING
+═══════════════════════════════════════════════════════════════════
+
+Port 8000 in use:
+  → Run: L:\goodq4all\STOP_GOODQ.bat
+
+Watchdog not working:
+  → Check: L:\goodq4all\MONITOR_WATCHDOG.bat
+
+Environment issues:
+  → Run: L:\goodq4all\RUN_HEALTH_CHECK.bat
+
+Need fresh start:
+  → conda run -n goodq_zenml python L:\goodq4all\scripts\clear_databases.py
+
+═══════════════════════════════════════════════════════════════════
+📖 DOCUMENTATION
+═══════════════════════════════════════════════════════════════════
+
+SCRIPTS_GUIDE.md      - Complete scripts documentation
+CLEANUP_SUMMARY.md    - Recent cleanup changes
+README.md             - Full project documentation
+QUICKSTART.md         - Step-by-step getting started
+
+═══════════════════════════════════════════════════════════════════
+✨ ONE TRUTH: Everything lives in L:\goodq4all\
+═══════════════════════════════════════════════════════════════════

@@ -1,3 +1,8 @@
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: REFERENCE_ONLY -->
+<!-- DOC_CANONICAL_POINTER: docs/reference/API.md -->
+<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
+
 # 🔧 Quick API Debug Instructions
 
 ## The Issue:
@@ -44,7 +49,10 @@ Solution: API might be returning different structure than expected
 
 Current settings in the canonical API server (`api/server.py` + `api/main.py`):
 ```python
-# Canonical localhost-only CORS middleware
+# Safe-by-default local bind and localhost-only CORS middleware
+host = os.environ.get("GOODQ_API_HOST", "127.0.0.1")
+port = int(os.environ.get("GOODQ_API_PORT", "30000"))
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -57,7 +65,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+uvicorn.run(app, host=host, port=port, log_level="info")
 ```
+
+If you intentionally need LAN access for a local network test, set
+`GOODQ_API_HOST=0.0.0.0` explicitly before starting the canonical API helper.
 
 ## Manual Test (Bypass UI Completely):
 

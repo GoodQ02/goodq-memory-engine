@@ -1,3 +1,7 @@
+<!-- DOC_BADGE: CANONICAL -->
+<!-- DOC_STATUS: AUTHORITATIVE -->
+<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
+
 # Vault Token Resolver Contract (v1)
 
 **Status:** ✅ Contract (local-only; no ingestion)  
@@ -59,4 +63,3 @@ The vault root must never be persisted into public conduits.
 
 - This contract does **not** define ingestion/parsing, only resolution of pointers.
 - This contract intentionally avoids defining file extensions or raw export formats.
-

@@ -1,6 +1,10 @@
 """
 LLM-Enhanced Tagger Step
-Uses LLM for intelligent tagging when available, falls back to NER
+
+Secondary / off-path perception surface.
+This module supports the legacy Phase 2 LLM tagging workflow and dedicated
+tests, but it is not part of the canonical scene-centric ingestion runtime.
+The default ingestion path continues to rely on the standard tagger surfaces.
 """
 from __future__ import annotations
 from typing import Any, Dict, List

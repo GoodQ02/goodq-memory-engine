@@ -344,12 +344,12 @@ def _expect_profile_case(label: str, snap: Dict[str, Any]) -> List[Dict[str, Any
 
     paths = parsed.get("paths") or {}
     data_root = paths.get("data_root")
-    path_default_ok = _path_root_match(data_root, "./_DATA")
+    path_default_ok = _path_root_match(data_root, "L:/_DATA")
     rows.append(
         {
             "test_case": "path_resolution_default_root",
             "profile": label,
-            "expected_result": "paths.data_root resolves from default ./_DATA when GOODQ_DATA_ROOT unset",
+            "expected_result": "paths.data_root resolves from default L:/_DATA when GOODQ_DATA_ROOT unset",
             "actual_result": f"paths.data_root={data_root}",
             "pass": path_default_ok,
         }

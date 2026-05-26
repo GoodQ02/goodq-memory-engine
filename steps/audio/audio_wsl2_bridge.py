@@ -213,6 +213,7 @@ def audio_unified_wsl2(audio_path: str, scene_id: str = None, duration: float = 
             'gpu_used': result.get('device') == 'cuda',
             'gpu_name': result.get('gpu_name'),
             'bridge_env_warnings': result.get('bridge_env_warnings', []),
+            'bridge_runtime_probe': result.get('bridge_runtime_probe', {}),
             'stderr_warnings': result.get('stderr_warnings', []),
         }
     else:
@@ -227,6 +228,7 @@ def audio_unified_wsl2(audio_path: str, scene_id: str = None, duration: float = 
             'bridge_error_reason': result.get('bridge_error_reason'),
             'bridge_error_details': result.get('bridge_error_details'),
             'bridge_env_warnings': result.get('bridge_env_warnings', []),
+            'bridge_runtime_probe': result.get('bridge_runtime_probe', {}),
             'stderr_warnings': result.get('stderr_warnings', []),
             'wsl_returncode': result.get('wsl_returncode'),
             'transcript_meta': {

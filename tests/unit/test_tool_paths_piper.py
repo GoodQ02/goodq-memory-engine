@@ -10,9 +10,9 @@ def test_resolve_piper_prefers_env_and_top_level_tts(monkeypatch):
 
     cfg = {
         "tts": {
-            "piper_exe": "tools/piper/piper.exe",
-            "voice_path": "tools/piper/voices/en_US-joe-medium/en_US-joe-medium.onnx",
-            "out_dir": "data/tts",
+            "piper_exe": "C:/Tools/piper/piper.exe",
+            "voice_path": "C:/Tools/piper/voices/en_US-joe-medium/en_US-joe-medium.onnx",
+            "out_dir": "L:/_DATA/GoodQ_Data/tts",
         },
         "config": {
             "tools": {
@@ -23,15 +23,15 @@ def test_resolve_piper_prefers_env_and_top_level_tts(monkeypatch):
     }
 
     exe, voice, out_dir = resolve_piper(cfg)
-    assert exe == "tools/piper/piper.exe"
-    assert voice == "tools/piper/voices/en_US-joe-medium/en_US-joe-medium.onnx"
-    assert out_dir == "data/tts"
+    assert exe == "C:/Tools/piper/piper.exe"
+    assert voice == "C:/Tools/piper/voices/en_US-joe-medium/en_US-joe-medium.onnx"
+    assert out_dir == "L:/_DATA/GoodQ_Data/tts"
 
-    monkeypatch.setenv("GOODQ_PIPER_EXE", "override/piper.exe")
-    monkeypatch.setenv("GOODQ_PIPER_VOICE_PATH", "override/voice.onnx")
-    monkeypatch.setenv("GOODQ_PIPER_OUT_DIR", "override/out")
+    monkeypatch.setenv("GOODQ_PIPER_EXE", "C:/override/piper.exe")
+    monkeypatch.setenv("GOODQ_PIPER_VOICE_PATH", "C:/override/voice.onnx")
+    monkeypatch.setenv("GOODQ_PIPER_OUT_DIR", "C:/override/out")
 
     exe, voice, out_dir = resolve_piper(cfg)
-    assert exe == "override/piper.exe"
-    assert voice == "override/voice.onnx"
-    assert out_dir == "override/out"
+    assert exe == "C:/override/piper.exe"
+    assert voice == "C:/override/voice.onnx"
+    assert out_dir == "C:/override/out"

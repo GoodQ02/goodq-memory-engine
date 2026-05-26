@@ -38,7 +38,7 @@ def configure_from_cfg(cfg: Dict[str, Any]) -> None:
     global _DEFAULT_PROCESSING_ROOT
     try:
         paths_cfg = (cfg.get("paths") or {}) if isinstance(cfg, dict) else {}
-        processing_root = os.environ.get("GOODQ_PROCESSING_ROOT") or paths_cfg.get("processing")
+        processing_root = paths_cfg.get("processing")
         if processing_root:
             _DEFAULT_PROCESSING_ROOT = Path(processing_root)
     except Exception:

@@ -8,7 +8,7 @@ echo   GoodQ4All - Test Frame Extraction
 echo ================================================================================
 echo.
 
-cd /d "%~dp0.."
+cd /d L:\goodq4all
 
 "%CONDA_EXE%" run -n goodq_core python scripts\extract_test_frame.py
 

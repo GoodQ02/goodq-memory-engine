@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>GoodQ API Test</title>
+    <style>
+        body { font-family: monospace; padding: 20px; background: #1a1a1a; color: #00ff00; }
+        button { padding: 10px 20px; margin: 5px; font-size: 14px; cursor: pointer; }
+        .result { background: #000; padding: 15px; margin: 10px 0; border: 1px solid #00ff00; white-space: pre-wrap; }
+        .success { color: #00ff00; }
+        .error { color: #ff0000; }
+    </style>
+</head>
+<body>
+    <h1>GoodQ API Connection Test</h1>
+    <p>API Endpoint: <span id="endpoint"></span></p>
+    
+    <h2>Tests:</h2>
+    <button onclick="testStatus()">1. Test Status Endpoint</button>
+    <button onclick="testChat()">2. Test Chat Endpoint</button>
+    <button onclick="testCommand()">3. Test Command Endpoint</button>
+    <button onclick="clearResults()">Clear Results</button>
+    
+    <div id="results"></div>
+
+    <script>
+        const API_BASE = 'http://localhost:30000/api';
+        document.getElementById('endpoint').textContent = API_BASE;
+
+        function log(message, type = 'info') {
+            const div = document.createElement('div');
+            div.className = `result ${type}`;
+            div.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            document.getElementById('results').appendChild(div);
+        }
+
+        function clearResults() {
+            document.getElementById('results').innerHTML = '';
+        }
+
+        async function testStatus() {
+            log('Testing GET /api/status...', 'info');
+            try {
+                const response = await fetch(`${API_BASE}/status`);
+                const data = await response.json();
+                log(`SUCCESS! Response:\n${JSON.stringify(data, null, 2)}`, 'success');
+            } catch (error) {
+                log(`ERROR: ${error.message}`, 'error');
+            }
+        }
+
+        async function testChat() {
+            log('Testing POST /api/chat...', 'info');
+            try {
+                const response = await fetch(`${API_BASE}/chat`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query: 'How many scenes do I have?', mode: 'natural' })
+                });
+                const data = await response.json();
+                log(`SUCCESS! Response:\n${JSON.stringify(data, null, 2)}`, 'success');
+            } catch (error) {
+                log(`ERROR: ${error.message}`, 'error');
+            }
+        }
+
+        async function testCommand() {
+            log('Testing POST /api/command (get_video_list)...', 'info');
+            try {
+                const response = await fetch(`${API_BASE}/command`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ command: 'get_video_list' })
+                });
+                const data = await response.json();
+                log(`SUCCESS! Response:\n${JSON.stringify(data, null, 2)}`, 'success');
+            } catch (error) {
+                log(`ERROR: ${error.message}`, 'error');
+            }
+        }
+
+        // Auto-run tests on load
+        window.onload = () => {
+            log('API Test Page Loaded', 'success');
+            log('Click buttons above to test each endpoint', 'info');
+        };
+    </script>
+</body>
+</html>

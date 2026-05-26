@@ -1,3 +1,7 @@
+<!-- DOC_BADGE: OPERATIONAL -->
+<!-- DOC_STATUS: ACTIVE -->
+<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
+
 # GoodQ4All Watchdog Documentation Index
 
 **Purpose:** Central entrypoint for all Watchdog (automatic ingestion) documentation. Use this to understand how to start, monitor, and maintain the Watchdog system.

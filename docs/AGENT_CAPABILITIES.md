@@ -1,3 +1,7 @@
+<!-- DOC_BADGE: OPERATIONAL -->
+<!-- DOC_STATUS: GENERATED_SNAPSHOT -->
+<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
+
 # GoodQ4All Agent Capabilities
 
 This document defines practical boundaries for repo-scoped agents. It complements `docs/AGENTS.md`.

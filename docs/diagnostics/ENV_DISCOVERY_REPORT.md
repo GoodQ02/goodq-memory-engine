@@ -1,8 +1,14 @@
-# Environment Variable Inventory
-> Public branch note: private legacy script archives are omitted from public. Any scripts/archive references below are retained as historical scan evidence only, not current files.
+<!-- DOC_BADGE: OPERATIONAL -->
+<!-- DOC_STATUS: GENERATED_SNAPSHOT -->
+<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
 
+# Environment Variable Inventory
 
 Generated: 2026-02-18 (static scan)
+
+This is a static discovery snapshot, not the current environment contract.
+Re-run the relevant audit before using it for package, bootstrap, or runtime
+changes.
 
 Scan scope: `configs/`, `api/`, `steps/`, `lib/`, `scripts/`, `wsl2_audio/`, `cli/`, `agents/`, `LAUNCH_GOODQ.ps1`, `LAUNCH_GOODQ.bat`.
 
@@ -418,7 +424,7 @@ Scan exclusions: `**/archive/**`, `**/__pycache__/**`, `*.pyc`, `*.backup*`, `*.
 ## GOODQ_WSL_MODEL_PATH
 
 - Surfaces: scripts/wsl/install_vllm_service.sh:9
-- Default in code: <GOODQ_WSL_MODEL_PATH>
+- Default in code: /mnt/l/_DATA/models/llm/huggingface/Llama-3.2-1B-Instruct
 - Required in strict mode: No
 - Affects: install/service
 - Safe if unset: Yes (script default path)

@@ -42,6 +42,9 @@ def test_build_scene_context_prompts_enforces_grounded_dry_contract() -> None:
             "face_count": 2,
             "emotions": [{"label": "angry", "score": 0.72}],
             "speakers": ["SPEAKER_00", "SPEAKER_01"],
+            "ocr_text": "DEC 16 2002",
+            "music_events": [{"label": "applause", "context": "APPLAUSE"}],
+            "time_hints": {"explicit_dates": ["2002-12-16"], "months": ["december"]},
         }
     )
 
@@ -56,6 +59,9 @@ def test_build_scene_context_prompts_enforces_grounded_dry_contract() -> None:
 
     assert "Visible caption:" in user_prompt
     assert "Visible objects:" in user_prompt
+    assert "Visible text: DEC 16 2002" in user_prompt
+    assert "Audio/music events: applause, APPLAUSE" in user_prompt
+    assert "Time hints: 2002-12-16, december" in user_prompt
     assert "Transcript excerpt:" in user_prompt
     assert "Transcript topic hints:" in user_prompt
     assert "Audio emotion signal:" in user_prompt
@@ -336,6 +342,178 @@ def test_normalize_scene_context_payload_filters_generic_tags_and_promotes_topic
     }, primary_tags=["rental car"], contextual_tags=["living room", "air conditioning", "florida"], structural_tags=[])
 
 
+def test_normalize_scene_context_payload_promotes_grounded_activity_over_minimal_summary() -> None:
+    result = analyzer._normalize_scene_context_payload(  # type: ignore[attr-defined]
+        {
+            "narrative_summary": "Minimal visual or dialogue content.",
+            "key_moments": ["Minimal visual or dialogue content."],
+            "emotional_arc": "Positive emotions as she performs and receives applause",
+            "context_tags": ["applause"],
+            "activity_description": "A girl plays the trumpet in a room, receiving applause from others.",
+        },
+        {
+            "caption": "a girl playing a trumpet in a room",
+            "transcript": "Thank you. Thank you very much. APPLAUSE",
+            "objects": [{"label": "person"}],
+            "ocr_text": "DEC 16 2002",
+            "music_events": [{"label": "applause", "context": "APPLAUSE"}],
+            "time_hints": {"explicit_dates": ["2002-12-16"], "months": ["december"]},
+        },
+    )
+
+    _assert_context_payload(result, {
+        "narrative_summary": "A girl plays the trumpet in a room, receiving applause from others.",
+        "key_moments": ["A girl plays the trumpet in a room, receiving applause from others."],
+        "emotional_arc": "Positive emotions as she performs and receives applause",
+        "context_tags": ["applause"],
+        "activity_description": "A girl plays the trumpet in a room, receiving applause from others.",
+    }, primary_tags=[], contextual_tags=["applause"], structural_tags=[])
+
+
+def test_normalize_scene_context_payload_drops_grounded_fragment_residue() -> None:
+    result = analyzer._normalize_scene_context_payload(  # type: ignore[attr-defined]
+        {
+            "narrative_summary": "Conversation about convertible sofa.",
+            "key_moments": [
+                "The man sleeps on the convertible sofa",
+                "The speaker talks about his back problems",
+            ],
+            "emotional_arc": "calm tone as the man sleeps",
+            "context_tags": ["convertible sofa", "negotiating negotiation", "business leave"],
+            "activity_description": "Conversation about convertible sofa.",
+        },
+        {
+            "caption": "a man and woman sitting at a table",
+            "transcript": (
+                "You know, I never had a back problem until that night I slept on the convertible sofa. "
+                "Now listen to me. I'm negotiating. Negotiation. This is what you do in business. "
+                "Leave all my stuff here? Leave it."
+            ),
+            "objects": [{"label": "person"}, {"label": "dining table"}],
+        },
+    )
+
+    _assert_context_payload(result, {
+        "narrative_summary": "Conversation about convertible sofa.",
+        "key_moments": [
+            "The man sleeps on the convertible sofa",
+            "The speaker talks about his back problems",
+        ],
+        "emotional_arc": "calm tone as the man sleeps",
+        "context_tags": ["convertible sofa"],
+        "activity_description": "Conversation about convertible sofa.",
+    }, primary_tags=["convertible sofa"], contextual_tags=[], structural_tags=[])
+
+
+def test_normalize_scene_context_payload_keeps_grounded_domain_topic() -> None:
+    result = analyzer._normalize_scene_context_payload(  # type: ignore[attr-defined]
+        {
+            "narrative_summary": "Table conversation about clothing business.",
+            "key_moments": [
+                "They mention clothing business.",
+                "She speaks about the new clothing design",
+            ],
+            "emotional_arc": "Surprised and excited",
+            "context_tags": ["clothing business", "designer", "new look"],
+            "activity_description": "Table conversation about clothing business.",
+        },
+        {
+            "caption": "people sitting at a restaurant table",
+            "transcript": (
+                "You know that Leslie's in the clothing business? She's a designer. "
+                "She's come up with a new one that's gonna be the big new look in men's fashions."
+            ),
+            "objects": [{"label": "person"}, {"label": "dining table"}],
+        },
+    )
+
+    _assert_context_payload(result, {
+        "narrative_summary": "Table conversation about clothing business.",
+        "key_moments": [
+            "They mention clothing business.",
+            "She speaks about the new clothing design",
+        ],
+        "emotional_arc": "Surprised and excited",
+        "context_tags": ["clothing business", "designer", "new look"],
+        "activity_description": "Table conversation about clothing business.",
+    }, primary_tags=["clothing business"], contextual_tags=["designer", "new look"], structural_tags=[])
+
+
+def test_normalize_scene_context_payload_rewrites_business_end_to_business_deal() -> None:
+    result = analyzer._normalize_scene_context_payload(  # type: ignore[attr-defined]
+        {
+            "narrative_summary": "Conversation about business end.",
+            "key_moments": [
+                "They mention business end.",
+                "The man accuses the woman of insubordination",
+            ],
+            "emotional_arc": "anger and frustration escalate as the argument intensifies",
+            "context_tags": ["business end", "business deal"],
+            "activity_description": "Conversation about business end.",
+        },
+        {
+            "caption": "a man and woman in a dark room",
+            "transcript": (
+                "He was pretty emphatic. Pounded on his desk. I told you to take the offer. "
+                "I'm not the creative guy. He handles the business end. "
+                "Take a counter offer? How can I just cancel a whole deal?"
+            ),
+            "objects": [{"label": "person"}, {"label": "person"}],
+        },
+    )
+
+    _assert_context_payload(result, {
+        "narrative_summary": "Conversation about business deal.",
+        "key_moments": [
+            "They mention business deal.",
+        ],
+        "emotional_arc": "anger and frustration escalate as the argument intensifies",
+        "context_tags": ["business deal"],
+        "activity_description": "Conversation about business deal.",
+    }, primary_tags=["business deal"], contextual_tags=[], structural_tags=[])
+
+
+def test_normalize_scene_context_payload_rewrites_position_he_was_to_deformed_hand() -> None:
+    result = analyzer._normalize_scene_context_payload(  # type: ignore[attr-defined]
+        {
+            "narrative_summary": "Conversation about position he was.",
+            "key_moments": [
+                "They mention position he was.",
+                "Tie hangs from their hands",
+            ],
+            "emotional_arc": "Fear and disgust",
+            "context_tags": ["position he was"],
+            "activity_description": "Conversation about position he was.",
+        },
+        {
+            "caption": "a man wearing a tie indoors",
+            "transcript": (
+                "Yes, he was not master of his domain. But how the muscles became so strained with overuse "
+                "that eventually the hand locked into a deformed position. "
+                "He was left with nothing but a claw. Traveled the world seeking a cure."
+            ),
+            "objects": [{"label": "person"}, {"label": "tie"}],
+        },
+    )
+
+    _assert_context_payload(result, {
+        "narrative_summary": "Conversation about deformed hand.",
+        "key_moments": [
+            "They mention deformed hand.",
+            "Tie hangs from their hands",
+        ],
+        "emotional_arc": "Fear and disgust",
+        "context_tags": ["deformed hand"],
+        "activity_description": "Conversation about deformed hand.",
+    }, primary_tags=["deformed hand"], contextual_tags=[], structural_tags=[])
+
+
+def test_extract_transcript_topic_hints_keeps_coherent_rehabilitation_phrase() -> None:
+    assert analyzer._extract_transcript_topic_hints(
+        "In the opinion of the board, you'd need further rehabilitation, I'm afraid."
+    ) == ["further rehabilitation"]
+
+
 def test_extract_transcript_topic_hints_suppresses_low_value_fragments() -> None:
     assert analyzer._extract_transcript_topic_hints("Are you people aware? There must be some mistake.") == []
     assert analyzer._extract_transcript_topic_hints(
@@ -411,6 +589,36 @@ def test_extract_transcript_topic_hints_suppresses_low_value_fragments() -> None
     assert analyzer._extract_transcript_topic_hints(
         "Peanut brittle, peanut butter, peanut oil. I wonder what happened to my fiancé."
     ) == ["peanut"]
+
+    assert analyzer._extract_transcript_topic_hints(
+        "But to have a good pickle, you gotta understand the process. "
+        "I don't understand this jewel that Jimmy Shar-"
+    ) == []
+    assert analyzer._extract_transcript_topic_hints(
+        "The phone machine is like this relationship respirator keeping "
+        "these marginal brain-dead relationships alive."
+    ) == []
+    assert analyzer._extract_transcript_topic_hints(
+        "It has a slight sing-songy quality."
+    ) == []
+    assert analyzer._extract_transcript_topic_hints(
+        "Operation Yeah. Yeah. Dr. Yeah."
+    ) == []
+    assert analyzer._extract_transcript_topic_hints(
+        "The thing about stand-up was, it always encouraged experimentation."
+    ) == []
+    assert analyzer._extract_transcript_topic_hints(
+        "Got a nice girl in a clean apartment. Yep. Just one little problem."
+    ) == []
+    assert analyzer._extract_transcript_topic_hints(
+        "Well, maybe she just wanted to move on to other business. "
+        "No, no, this wasn't moving on."
+    ) == []
+    assert analyzer._extract_transcript_topic_hints(
+        "So what do you want me to do? I want restitution. Restitution? You want restitution? "
+        "Why should I give you restitution? Because it's no good. Well, I got a perfect solution "
+        "for you. Take your business elsewhere. I don't want your business."
+    ) == ["restitution"]
 
 
     assert analyzer._extract_transcript_topic_hints(

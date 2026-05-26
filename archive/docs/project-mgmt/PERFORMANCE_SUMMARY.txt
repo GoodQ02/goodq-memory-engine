@@ -1,0 +1,90 @@
+WARNING: ARCHIVE / NON-CANONICAL / DO NOT COPY PATHS
+This file is preserved as historical evidence and may contain obsolete fixed-drive paths, host-specific assumptions, stale commands, or superseded runtime guidance.
+Do not use it for current runtime, setup, migration, or copy-paste path decisions.
+Use active documentation, config_loader, and canonical path abstractions such as <project_root>, <GOODQ_DATA_ROOT>, and <GOODQ_WSL_WORKSPACE> instead.
+╔═══════════════════════════════════════════════════════════════════════╗
+║                   🎯 GOODQ PERFORMANCE ANALYSIS                        ║
+╚═══════════════════════════════════════════════════════════════════════╝
+
+🔍 ISSUE DISCOVERED
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Your pipeline is NOT broken - it's EXTREMELY SLOW!
+
+Video: 1987_1988.mp4 (7.5GB)
+├─ Detected: 2,729 scenes  
+├─ Processed: 15 scenes (0.5%)
+├─ Time Elapsed: 26 minutes
+├─ Rate: ~1.7 minutes/scene
+└─ Estimated Total: **77 HOURS** 🚨
+
+📊 ROOT CAUSES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. Scene detection TOO aggressive (threshold: 32.0)
+   → Creates thousands of tiny scenes
+   
+2. Entity refine samples EVERY scene for people/faces
+   → Adds ~30s overhead per scene
+   
+3. Sequential processing (no parallelization)
+   → Each scene waits for previous to complete
+   
+4. Silent failures masked as "partial" or "ok"
+   → Empty transcripts, failed models reported as success
+
+✅ FIXES APPLIED
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✓ Audio transcription: Empty results now marked "failed"
+✓ Error reporting: Added validation script for silent failures
+✓ Unicode logging: Fixed emoji encoding errors
+✓ Documentation: Created PERFORMANCE_FIXES.md
+
+📁 NEW FILES CREATED
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📄 L:\goodq4all\docs\PERFORMANCE_FIXES.md
+   └─ Comprehensive analysis and solutions
+   
+📄 L:\goodq4all\scripts\apply_performance_fixes.py
+   └─ Automated config optimization
+   
+📄 L:\goodq4all\scripts\validate_results.py
+   └─ Detect silent failures in results
+
+🎯 RECOMMENDED ACTION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STOP current processing (will take 77 hours!) and optimize:
+
+1️⃣  STOP CURRENT JOB
+   Get-Process python* | Where-Object {$_.StartTime -gt (Get-Date).AddHours(-1)} | Stop-Process
+
+2️⃣  APPLY OPTIMIZATIONS
+   cd L:\goodq4all
+   conda activate goodq_zenml
+   python scripts\apply_performance_fixes.py
+
+3️⃣  CLEAR DATABASES
+   L:\goodq4all\CLEAR_AND_REINGEST.bat
+
+4️⃣  TEST WITH 10 SCENES
+   python -m goodq4all.cli.run_ingestion --input-dir import_inbox --max-scenes 10 --force
+
+5️⃣  MONITOR PROGRESS
+   L:\goodq4all\MONITOR_PROGRESS.bat
+
+📈 EXPECTED IMPROVEMENTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Scenes:      2,729 → ~200-300 (90% reduction)
+Time/scene:  102s → ~60s (40% faster)
+Total time:  77h → 5-8h (90% faster)
+
+🔧 CONFIG CHANGES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+threshold:         32.0 → 15.0  (less sensitive)
+min_scene_len:      3.0 → 5.0   (skip short scenes)
+max_scenes:         500 → 100   (test cap)
+entity_refine:     true → false (disable splitting)
+entity_samples:     120 → 30    (fewer samples)
+chunk_seconds:       10 → 30    (larger chunks)
+
+╔═══════════════════════════════════════════════════════════════════════╗
+║  Ready to proceed? Run the 5 steps above to optimize your pipeline!  ║
+╚═══════════════════════════════════════════════════════════════════════╝

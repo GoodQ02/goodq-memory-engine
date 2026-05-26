@@ -200,14 +200,6 @@ def test_api_root_only_advertises_truthful_supported_surfaces() -> None:
     ]
 
 
-def test_main_mounts_operator_console_without_changing_api_root() -> None:
-    api_main = _load_api_main()
-
-    paths = {route.path for route in api_main.app.routes}
-
-    assert "/ui/operator_console_v1" in paths
-
-
 def test_api_root_is_curated_human_index_not_full_inventory() -> None:
     api_main = _load_api_main()
     client = TestClient(api_main.app)

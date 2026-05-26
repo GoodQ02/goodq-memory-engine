@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 from pathlib import Path
 import sys
 
@@ -21,12 +20,12 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Build a clean identity ledger from persisted scene manifests.")
     parser.add_argument(
         "--processing-root",
-        default=os.environ.get("GOODQ_PROCESSING_ROOT", ""),
-        help="Root processing directory containing per-episode folders. Defaults to GOODQ_PROCESSING_ROOT.",
+        default=r"L:\_DATA\GoodQ_Data\epochs\epoch_2025_12_22\processing",
+        help="Root processing directory containing per-episode folders.",
     )
     parser.add_argument(
         "--output-dir",
-        default=str(PROJECT_ROOT / "reports" / "identity_control" / "season_control"),
+        default=r"L:\GOODCUBE\projects\goodq4all\reports\identity_control\season1_control",
         help="Directory for the rebuilt control graph and ledger outputs.",
     )
     parser.add_argument(
@@ -35,9 +34,6 @@ def main() -> None:
         help="Episode directory prefix to include.",
     )
     args = parser.parse_args()
-
-    if not args.processing_root:
-        parser.error("--processing-root or GOODQ_PROCESSING_ROOT is required")
 
     processing_root = Path(args.processing_root)
     output_dir = Path(args.output_dir)

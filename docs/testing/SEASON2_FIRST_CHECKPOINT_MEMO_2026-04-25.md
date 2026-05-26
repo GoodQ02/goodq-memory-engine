@@ -8,10 +8,10 @@
 
 - Witness root:
   - `reports/fresh_ingest_runs/20260424_182406_season2_fresh_witness/`
-- Branch: `public`
+- Branch: `main`
 - Commit context:
   - read-only visibility layer already shipped
-  - read-only operator run projection layer mirrored onto the public branch
+  - read-only operator run projection layer already shipped
 - Inputs: `02x01` through `02x12`
 - Feature under witness: `scene_context_llm`
 

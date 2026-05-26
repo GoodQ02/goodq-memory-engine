@@ -1,12 +1,23 @@
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: REFERENCE_ONLY -->
+<!-- DOC_CANONICAL_POINTER: docs/reference/WSL_AUDIO_RUNTIME.md -->
+<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
+
 # Audio Pipeline GPU Optimization - Implementation Summary
 
-> Role: Canonical implementation summary for audio pipeline GPU optimization (diarization + transcription). For configuration and environment setup, see `docs/GPU_SETUP.md` and `docs/GPU_OPTIMIZATION_GUIDE.md`.
+> Role: Historical implementation summary for audio pipeline GPU optimization
+> (diarization + transcription). For current configuration and environment
+> setup, see `docs/guides/gpu/GPU_SETUP.md`,
+> `docs/guides/gpu/GPU_OPTIMIZATION_GUIDE.md`, and
+> `docs/reference/WSL_AUDIO_RUNTIME.md`.
 
 ## 🎯 Objective
 
 Optimize audio processing (speaker diarization + transcription) with GPU acceleration while preserving stability, accuracy, and observable fallback behavior.
 
-> Current status note: the speedup numbers below are historical/expected targets, not a fresh same-scene CPU-vs-WSL witness result. Current runtime truth should be taken from `step_runs.jsonl` and the read-only control recurrence latency summary.
+> Current status note: the speedup numbers below are historical/expected targets, not a fresh same-scene CPU-vs-WSL witness result. Current runtime truth should be taken from `step_runs.jsonl`, `docs/reference/WSL_AUDIO_RUNTIME.md`, and the read-only control recurrence latency summary.
+>
+> As of the 2026-05-01 through 2026-05-03 controlled witnesses, unified WSL audio is healthy but scheduling-expensive: about `58.2s` p50 and `62.1s` p95 per scene across `234` observed `audio_unified_wsl2` rows, consuming roughly `61.6%` to `63.9%` of summed step duration in recent one- and two-episode witnesses.
 
 ## ✅ What Was Implemented
 
@@ -75,7 +86,7 @@ Optimize audio processing (speaker diarization + transcription) with GPU acceler
 - CSV data export
 - Summary statistics
 
-#### Performance Reporter (`scripts/audio_gpu_report.py`, private/internal)
+#### Performance Reporter (`scripts/audio_gpu_report.py`)
 - GPU status check
 - Performance metrics breakdown
 - Per-step analysis
@@ -111,7 +122,7 @@ Optimize audio processing (speaker diarization + transcription) with GPU acceler
 
 ## 📊 Historical / Expected Performance Targets
 
-These figures are retained as implementation targets and historical expectations. Treat them as verified only after a same-scene CPU-vs-WSL timing witness for the current environment.
+These figures are retained as implementation targets and historical expectations. They are not the current scheduling contract. Treat them as verified only after a same-scene CPU-vs-WSL timing witness for the current environment.
 
 ### Typical Results (NVIDIA RTX 3060 12GB)
 
@@ -169,7 +180,10 @@ python scripts/audio_gpu_monitor.py
 
 ### Check Performance
 
-On the OSS branch, inspect `step_runs.jsonl`, ingestion logs, and the run bundle for performance validation. The historical `audio_gpu_report.py` helper remains private/internal.
+```batch
+conda activate goodq_core
+python scripts/audio_gpu_report.py
+```
 
 ## 🎛️ Configuration Options
 
@@ -266,7 +280,7 @@ The system tracks performance and:
 ```
 steps/common/audio_gpu_optimizer.py         # Core optimizer (14KB)
 scripts/audio_gpu_monitor.py                # Real-time monitor (7KB)
-scripts/audio_gpu_report.py                 # Private/internal performance report helper (not published in OSS branch)
+scripts/audio_gpu_report.py                 # Performance report (4KB)
 scripts/test_audio_gpu_optimization.py      # Test suite (7KB)
 docs/AUDIO_GPU_OPTIMIZATION.md              # Full docs (8KB)
 docs/AUDIO_GPU_QUICK_START.md               # Quick start (5KB)
@@ -297,7 +311,7 @@ steps/audio_transcribe/step.py              # GPU optimization integrated
 ### For Users
 
 1. ✅ Run `LAUNCH_GOODQ.bat` on a video
-2. ✅ Check performance with `step_runs.jsonl` and the ingestion logs
+2. ✅ Check performance with `audio_gpu_report.py`
 3. ✅ Monitor with `audio_gpu_monitor.py` (optional)
 4. ✅ Review optimization suggestions
 5. ✅ Compare current timing evidence before making speedup claims
@@ -344,4 +358,4 @@ For issues:
 **Status:** ✅ Complete and ready for real-world testing  
 **Version:** 1.0.0  
 **Date:** 2025-11-12  
-**Impact:** observable acceleration path; speedup claims require current timing evidence
+**Impact:** 2-5x speedup on audio processing

@@ -1,3 +1,8 @@
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: REFERENCE_ONLY -->
+<!-- DOC_CANONICAL_POINTER: docs/README.md -->
+<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
+
 # GoodQ4All - Session Summary Report
 ## December 5, 2025
 

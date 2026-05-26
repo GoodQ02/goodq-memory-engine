@@ -8,7 +8,7 @@ This directory contains documentation assets and optional local sample scaffoldi
   - Documentation/demo media assets (for example, reference PNG assets).
 - `samples/ingestion/`
   - Optional local location for operator-provided ingestion examples. It is not
-    a first-run inbox and may be absent from public checkouts until created.
+    a first-run inbox and may contain ignored local media on developer machines.
 
 ## Usage Notes
 

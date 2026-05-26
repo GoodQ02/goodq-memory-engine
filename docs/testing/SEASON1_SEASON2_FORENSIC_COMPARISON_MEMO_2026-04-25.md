@@ -11,7 +11,7 @@
   - `reports/fresh_ingest_runs/20260424_065027_season1_remaining_witness/`
 - Season 2 witness root:
   - `reports/fresh_ingest_runs/20260424_182406_season2_fresh_witness/`
-- Branch: `public`
+- Branch: `main`
 - Comparison target:
   - `docs/testing/SEASON1_RECOMPARE_WITNESS_MEMO_2026-04-24.md`
   - `docs/testing/SEASON2_FIRST_CHECKPOINT_MEMO_2026-04-25.md`

@@ -72,7 +72,7 @@ These items are not cleared for Reference Pack v0:
 - Control recurrence reports.
 - Memory snapshots.
 - Local `broad_sample.mp4`.
-- Local non-cleared PDF samples unless source and license are resolved.
+- Local `anger_elimination.pdf` unless source and license are resolved.
 - Runtime model cache assets; those belong in `model_cache_pack`, not Reference
   Pack v0.
 

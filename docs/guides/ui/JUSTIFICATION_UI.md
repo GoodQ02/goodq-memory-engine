@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE_NOTE -->
-<!-- DOC_LAST_VERIFIED: 2026-05-21 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-19 -->
 
 # GoodQ4All UI Status
 
@@ -16,8 +16,8 @@ literal envelope rendering.
 - The API process serves supported read-only browser surfaces under `/ui/*`.
 - `GET /` remains JSON discovery, not a browser shell.
 - The Operator Console reads only local API routes and persisted artifacts. It
-  is the current scope / Flight Deck / proof / retrieval / storage /
-  recurrence / timeline inspection cockpit.
+  is the current Flight Deck / proof / retrieval / storage / recurrence /
+  timeline inspection cockpit.
 - The Justification Channel may load only explicit read-only sources: bundled
   example data, a user-selected local JSON file, or `GET /api/read/envelope`
   through an explicit API base.
@@ -30,13 +30,14 @@ literal envelope rendering.
 - `ui/operator_console_v1/index.html`
 - Operator console local route:
   `http://127.0.0.1:30000/ui/operator_console_v1/`
-- Operator console contract:
-  [`docs/guides/ui/OPERATOR_CONSOLE_V1.md`](OPERATOR_CONSOLE_V1.md)
+- Operator console README:
+  [`ui/operator_console_v1/README.md`](../../../ui/operator_console_v1/README.md)
 - `ui/justification_v1/index.html`
 - Golden render smoke:
   `ui/justification_v1/static/js/test_render.js`
 - Optional inspector mode:
   `ui/justification_v1/inspector/inspector.js`
+
 ## Not Supported
 
 - No browser shell is served from the API root.
@@ -50,17 +51,12 @@ literal envelope rendering.
 - Consume UI-safe conduits and read-only API routes only.
 - Keep every source explicit to the operator.
 - Do not introduce a second runtime contract or hidden execution path.
-- Keep control/mutation routes out of browser UI unless a separate
-  control-surface design is approved.
 
-## UI Audit Snapshot
+## Pre-UI Audit Snapshot
 
-Last checked: 2026-05-21.
+Last checked: 2026-05-19.
 
 - The operator console is active as a read-only local inspection surface.
-- The Current Scope strip is the top-level context surface for API base,
-  latest run, run source, temporal scope, strict audio proof, browsing target,
-  selected scene, and read-only mode.
 - Keep future UI work observer-only until a separate control-surface design is
   approved.
 - Use `docs/architecture/OUTPUT_SCHEMA_INVENTORY.md` and

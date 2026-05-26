@@ -1,9 +1,18 @@
-# Vision Stack GPU Optimization - Historical Implementation Report
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: REFERENCE_ONLY -->
+<!-- DOC_CANONICAL_POINTER: docs/architecture/components/VISION_PIPELINE.md -->
+<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
 
-> Role: historical implementation report for vision-specific GPU optimization. Current public validation is covered by `scripts/gpu_config.py` and focused vision unit tests. The legacy package-upgrade launchers described in older revisions were retired from the public branch because public workflows must not mutate environments or depend on local fixtures.
+# Vision Stack GPU Optimization - Implementation Report
+
+> Role: Historical implementation report for vision-specific GPU optimization.
+> For current vision architecture, see
+> `docs/architecture/components/VISION_PIPELINE.md`. For current GPU operator
+> guidance, see `docs/guides/gpu/GPU_SETUP.md` and
+> `docs/guides/gpu/GPU_OPTIMIZATION_GUIDE.md`.
 
 **Date:** 2025-11-12  
-**Status:** Historical reference; do not use as a live package-install workflow.
+**Status:** ✅ Ready for Testing
 
 ## Overview
 
@@ -155,17 +164,52 @@ GPU_MEMORY_LIMITS = {
 
 ---
 
-## Tooling Status
+## 🛠️ Tools Created
 
-The original one-off optimization and audit launchers were retired from the
-public branch. They installed or upgraded packages and depended on local sample
-fixtures, which does not match the current public runtime doctrine.
+### 1. **Vision GPU Optimization Script**
+**File:** `scripts/optimize_vision_gpu.py`  
+**Launcher:** `run_vision_optimization.bat`
 
-Current validation should use:
-- `scripts/gpu_config.py` for step budget mapping
-- `tests/unit/test_vision_gpu_import_contract.py`
-- `tests/unit/test_vision_step_diagnostics.py`
-- targeted witness runs approved through the canonical ingest path
+**What it does:**
+- Installs PyTorch with CUDA 11.8 support
+- Configures all vision environments for GPU
+- Verifies CUDA availability
+- Tests model loading on GPU
+- Runs performance benchmarks
+
+**Usage:**
+```bash
+cd <project_root>
+run_vision_optimization.bat
+```
+
+**Expected Runtime:** 15-20 minutes
+
+---
+
+### 2. **Vision Pipeline Audit Script**
+**File:** `scripts/audit_vision_pipeline.py`  
+**Launcher:** `run_vision_audit.bat`
+
+**What it does:**
+- Tests face detection functionality
+- Tests emotion classification
+- Tests object detection (YOLO)
+- Tests image embeddings (CLIP + DINO)
+- Tests image captioning
+- Verifies GPU utilization across all envs
+- Checks model caching
+- Generates detailed report
+
+**Usage:**
+```bash
+cd <project_root>
+run_vision_audit.bat
+```
+
+**Expected Runtime:** 5-10 minutes
+
+**Output:** `output/vision_audit_report.txt`
 
 ---
 
@@ -173,26 +217,31 @@ Current validation should use:
 
 ### **Phase 1: GPU Setup** ✅
 - [x] Update `gpu_config.py` with vision memory limits
+- [x] Create optimization script
+- [x] Create audit script
 - [x] Update vision step code for GPU manager
 - [x] Add logging and error handling
 
-### **Phase 2: Environment Configuration**
-- [ ] Verify bootstrap-managed environments install PyTorch+CUDA
+### **Phase 2: Environment Configuration** ⏳ (Your turn)
+- [ ] Run `run_vision_optimization.bat`
+- [ ] Verify all environments install PyTorch+CUDA
 - [ ] Confirm GPU detection in each environment
 - [ ] Check model downloads (should cache to `<GOODQ_DATA_ROOT>/models`)
 
-### **Phase 3: Functionality Testing**
-- [ ] Run focused vision unit tests
+### **Phase 3: Functionality Testing** ⏳ (Your turn)
+- [ ] Extract a test frame: `test_data/sample_frame.jpg`
+- [ ] Run `run_vision_audit.bat`
+- [ ] Review `output/vision_audit_report.txt`
 - [ ] Verify all tests pass
 
-### **Phase 4: Integration Testing**
+### **Phase 4: Integration Testing** ⏳ (Next)
 - [ ] Run full ingestion on a short video (30-60 seconds)
 - [ ] Monitor GPU usage with `nvidia-smi`
 - [ ] Verify vision outputs in database
 - [ ] Check FAISS indices are populated
 - [ ] Validate UI displays vision data
 
-### **Phase 5: Production Validation**
+### **Phase 5: Production Validation** ⏳ (Final)
 - [ ] Process a full home movie
 - [ ] Verify scene detection completion
 - [ ] Check all vision metadata in DB
@@ -227,29 +276,47 @@ Current validation should use:
 
 ## 📈 Next Steps
 
-1. **Run focused validation**
-   - `tests/unit/test_vision_gpu_import_contract.py`
-   - `tests/unit/test_vision_step_diagnostics.py`
-   - targeted diagnostics approved for the current branch
+1. **Run Optimization** (15-20 min)
+   ```bash
+   cd <project_root>
+   run_vision_optimization.bat
+   ```
 
-2. **Test Integration**
+2. **Extract Test Frame** (manual)
+   - Use a video player or FFmpeg
+   - Save as: `<project_root>\test_data\sample_frame.jpg`
+   - Any home movie frame will work
+
+3. **Run Audit** (5-10 min)
+   ```bash
+   cd <project_root>
+   run_vision_audit.bat
+   ```
+
+4. **Review Results**
+   - Check console output
+   - Read `output/vision_audit_report.txt`
+   - Confirm all tests pass
+
+5. **Test Integration**
    - Run watchdog on a short video
    - Monitor with `nvidia-smi -l 1` (live GPU usage)
    - Verify vision data in UI
 
-3. **Full Production Test**
+6. **Full Production Test**
    - Process complete home movie
    - Validate end-to-end functionality
+   - Celebrate! 🎉
 
 ---
 
 ## 🎯 Success Criteria
 
 ✅ **Optimization Complete When:**
-- Bootstrap-managed vision environments have the expected PyTorch + CUDA lane
-- GPU detection returns the expected profile-gated result
+- All 4 vision environments have PyTorch + CUDA
+- GPU detection returns `True` in all environments
 - Models load successfully on GPU
-- Focused vision tests pass
+- Audit script shows 100% pass rate
 
 ✅ **Integration Complete When:**
 - Watchdog processes videos without errors
@@ -277,7 +344,8 @@ nvidia-smi
 # Check PyTorch sees CUDA
 conda run -n goodq_face_embed python -c "import torch; print(torch.cuda.is_available())"
 
-# Use the bootstrap and lockfile process; do not repair public envs with ad hoc pip upgrades.
+# Reinstall PyTorch with CUDA
+conda run -n goodq_face_embed pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118 --force-reinstall
 ```
 
 ### **Out of Memory Errors**
@@ -295,9 +363,10 @@ conda run -n goodq_face_embed python -c "import torch; print(torch.cuda.is_avail
   CLIPModel.from_pretrained("openai/clip-vit-base-patch16", cache_dir="<GOODQ_DATA_ROOT>/models/transformers")
   ```
 
-### **Vision Tests Fail**
+### **Audit Script Fails**
+- Check `test_data/sample_frame.jpg` exists
 - Verify all conda environments exist
-- Run the focused unit test that failed
+- Run individual test functions for debugging
 - Check logs for specific error messages
 
 ---
@@ -306,6 +375,8 @@ conda run -n goodq_face_embed python -c "import torch; print(torch.cuda.is_avail
 
 - **GPU Config:** `<project_root>\gpu_config.py`
 - **Vision Steps:** `<project_root>\steps\{face_embed,emotion_classify,object_detect,image_*}`
+- **Optimization Script:** `<project_root>\scripts\optimize_vision_gpu.py`
+- **Audit Script:** `<project_root>\scripts\audit_vision_pipeline.py`
 - **Previous GPU Work:** Audio optimization (completed 2025-11-11)
 
 ---
@@ -317,10 +388,10 @@ The vision stack is now **fully optimized for GPU acceleration** with:
 - **Centralized configuration** (no hardcoded device strings)
 - **Memory-efficient** allocations (20-25% per vision env)
 - **Robust error handling** (automatic CPU fallback)
-- **Focused validation** through unit tests and approved witnesses
+- **Comprehensive testing** tools (optimization + audit scripts)
 - **Production-ready** code (logging, monitoring, graceful degradation)
 
-**Next:** Use focused tests and approved witnesses to validate current branch behavior, then proceed with integration testing.
+**Next:** Run the optimization and audit scripts to validate everything works on your system, then proceed with integration testing!
 
 ---
 

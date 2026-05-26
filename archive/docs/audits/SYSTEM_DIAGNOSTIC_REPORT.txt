@@ -1,0 +1,190 @@
+WARNING: ARCHIVE / NON-CANONICAL / DO NOT COPY PATHS
+This file is preserved as historical evidence and may contain obsolete fixed-drive paths, host-specific assumptions, stale commands, or superseded runtime guidance.
+Do not use it for current runtime, setup, migration, or copy-paste path decisions.
+Use active documentation, config_loader, and canonical path abstractions such as <project_root>, <GOODQ_DATA_ROOT>, and <GOODQ_WSL_WORKSPACE> instead.
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: ARCHIVED -->
+<!-- DOC_ARCHIVED_ON: 2026-02-12 -->
+
+========================================
+GOODQ SYSTEM CONFIGURATION AUDIT
+COMPLETE DIAGNOSTIC REPORT
+========================================
+
+Generated: 2025-11-08 17:47:32
+System: Windows 10.0.26200.0
+PowerShell: 7.5.4
+
+========================================
+ROOT CAUSE ANALYSIS
+========================================
+
+PROBLEM IDENTIFIED:
+  Double-clicking .BAT files launches them in CMD.exe
+  CMD.exe only sees System + User PATH from registry
+  Your conda was NOT in registry PATH (only in PowerShell session)
+  
+  Additionally: Windows Store python.exe alias interferes
+  
+IMPACT:
+  • .BAT files say "conda is not recognized"
+  • .BAT files say "Python was not found"
+  • Works fine in PowerShell (has conda in session)
+  • Confusing because "conda --version" works in terminal!
+
+========================================
+FIXES APPLIED
+========================================
+
+[1] ADDED CONDA TO USER PATH (Permanent)
+    ✓ C:\Users\jdben\miniconda3
+    ✓ C:\Users\jdben\miniconda3\Scripts
+    ✓ C:\Users\jdben\miniconda3\Library\bin
+    ✓ C:\Users\jdben\miniconda3\Library\mingw-w64\bin  
+    ✓ C:\Users\jdben\miniconda3\Library\usr\bin
+    ✓ C:\Users\jdben\miniconda3\condabin
+
+[2] INITIALIZED CONDA FOR BOTH SHELLS
+    ✓ conda init powershell (for PowerShell 7)
+    ✓ conda init cmd.exe (for .BAT files)
+
+[3] CREATED IMPROVED LAUNCHERS
+    ✓ LAUNCH_WEB_INTERFACE_FIXED.bat
+      (Uses full paths, doesn't rely on PATH)
+
+[4] CREATED FIX UTILITIES
+    ✓ FIX_SYSTEM_PATH.ps1
+    ✓ FIX_PYTHON_ALIAS.ps1
+    ✓ TEST_CONDA_PATH.bat
+
+========================================
+VERIFICATION STATUS
+========================================
+
+Conda in PowerShell:        ✓ WORKING (v25.9.0)
+Conda in CMD:               ✓ WORKING (v25.9.0)
+Python in PowerShell:       ⚠ BLOCKED (Store alias)
+Python in CMD:              ⚠ BLOCKED (Store alias)
+Conda in User PATH:         ✓ ADDED
+Conda in System PATH:       ✗ NOT NEEDED (User PATH sufficient)
+Conda hooks installed:      ✓ YES (PowerShell + CMD)
+
+========================================
+REMAINING ISSUE: WINDOWS STORE ALIAS
+========================================
+
+Windows 10/11 has "App Execution Aliases" that redirect
+'python' and 'python3' commands to Microsoft Store.
+
+This causes: "Python was not found; run without arguments 
+to install from the Microsoft Store..."
+
+FIX (30 seconds):
+  1. Press Win+I (Settings)
+  2. Apps > Apps & features
+  3. Click "App execution aliases"
+  4. Turn OFF: python.exe
+  5. Turn OFF: python3.exe
+  6. Close settings
+  7. Restart terminal
+
+OR run: .\FIX_PYTHON_ALIAS.ps1 for guided steps
+
+========================================
+TESTING CHECKLIST
+========================================
+
+After disabling Windows Store aliases and restarting:
+
+[ ] 1. Open NEW PowerShell window
+[ ] 2. Run: conda --version
+        Expected: conda 25.9.0
+        
+[ ] 3. Run: python --version  
+        Expected: Python 3.13.x (NOT Store error)
+        
+[ ] 4. Double-click: TEST_CONDA_PATH.bat
+        Expected: Shows conda and python versions
+        
+[ ] 5. Double-click: LAUNCH_WEB_INTERFACE_FIXED.bat
+        Expected: Starts server on port 30000
+        
+[ ] 6. Open browser: http://localhost:30000
+        Expected: GoodQ interface loads
+
+========================================
+WHY THIS HAPPENED
+========================================
+
+CONDA PATH WAS TEMPORARY:
+  • Conda installer added paths to current session only
+  • OR paths were added to System PATH temporarily
+  • Windows requires User/System registry PATH for .BAT files
+  • PowerShell sessions can have different PATH than CMD
+
+WINDOWS STORE INTERFERENCE:
+  • Windows 10/11 includes python.exe stub
+  • Located in: %LOCALAPPDATA%\Microsoft\WindowsApps
+  • This folder is in PATH by default
+  • Redirects to Store installer page
+  • Blocks your real Python installation
+
+THE CONFUSION:
+  • Works in PowerShell = PATH is right in that session
+  • Fails in .BAT = PATH not in registry
+  • Works when using full paths = bypasses PATH entirely
+
+========================================
+FILES CREATED BY THIS FIX
+========================================
+
+FIX_SYSTEM_PATH.ps1              - Adds conda to permanent PATH
+FIX_PYTHON_ALIAS.ps1             - Disables Store aliases (guided)
+LAUNCH_WEB_INTERFACE_FIXED.bat   - PATH-independent launcher
+TEST_CONDA_PATH.bat              - Quick conda availability test
+SYSTEM_CONFIG_AUDIT.md           - Detailed markdown report
+UI_AUDIT_COMPLETE.md             - UI port configuration report
+
+========================================
+NEXT STEPS (IN ORDER)
+========================================
+
+STEP 1: Close this window
+
+STEP 2: Run FIX_PYTHON_ALIAS.ps1
+   pwsh -File L:\goodq4all\FIX_PYTHON_ALIAS.ps1
+
+STEP 3: Log out and back in to Windows
+   (or restart computer)
+   
+STEP 4: Open NEW PowerShell and test:
+   conda --version
+   python --version
+   
+STEP 5: Double-click test file:
+   L:\goodq4all\TEST_CONDA_PATH.bat
+   
+STEP 6: If working, launch UI:
+   L:\goodq4all\LAUNCH_WEB_INTERFACE_FIXED.bat
+
+========================================
+SUCCESS!
+========================================
+
+After these steps, ALL of these will work:
+  ✓ conda command in PowerShell
+  ✓ conda command in CMD  
+  ✓ python command in PowerShell
+  ✓ python command in CMD
+  ✓ Double-clicking .BAT files
+  ✓ Running batch launchers
+  ✓ Starting GoodQ UI
+  
+No more PATH issues!
+No more "not recognized" errors!
+No more "Python was not found" messages!
+
+========================================
+AUDIT COMPLETE - ALL FIXES APPLIED
+========================================
+

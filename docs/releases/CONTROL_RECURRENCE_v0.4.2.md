@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: RELEASE -->
 <!-- DOC_STATUS: OPERATOR_NOTE -->
-<!-- DOC_LAST_VERIFIED: 2026-04-28 -->
+<!-- DOC_LAST_VERIFIED: 2026-04-29 -->
 
 # Control Recurrence v0.4.2
 
@@ -13,6 +13,20 @@ This release is still read-only control recurrence observability. It does not
 activate `ControlAgent`, enable healing, mutate configs, execute commands,
 trigger ingestion, use LLMs, generate reports from the API, or create a second
 execution path.
+
+## Current State After Post-Seal Audit
+
+- `control-recurrence-v0.4.1` remains the direct-run discoverability seal.
+- `control-recurrence-v0.4.2` is the retry attribution and coalescing
+  tightening pass.
+- Current status is a read-only operational control room over existing
+  recurrence artifacts.
+- It is not self-healing and is not mutation-capable.
+- The API does not trigger ingestion or generate recurrence reports.
+- Bounded direct-run discovery limits are expected when required artifacts are
+  absent; they are not control-plane boundary violations.
+- Local `reports/control_recurrence/index.json` state is workspace artifact
+  hygiene unless explicitly tracked.
 
 ## What Changed
 

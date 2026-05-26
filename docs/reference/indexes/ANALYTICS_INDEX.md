@@ -1,3 +1,7 @@
+<!-- DOC_BADGE: OPERATIONAL -->
+<!-- DOC_STATUS: ACTIVE_POINTER -->
+<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
+
 # GoodQ4All Analytics Index
 
 **Purpose:** Central entrypoint for analytics-related documentation and tools. Use this to navigate the secondary analytics/reporting stack, not the canonical runtime authority.
@@ -42,7 +46,7 @@ See `docs/ANALYTICS_QUICK_REFERENCE.md` for usage examples and parameters.
 
 - Start with:
   - `docs/ANALYTICS_QUICK_REFERENCE.md` for commands, scripts, and basic workflows.
-  - `docs/ANALYTICS_PAGES_COMPLETE.md` to understand how the analytics pages and APIs are wired into the web UI and backend.
+  - `docs/ANALYTICS_PAGES_COMPLETE.md` to understand the historical analytics page rollout and retired HTTP surfaces.
 - Use:
   - `scripts/analytics_dashboard.py` and `scripts/analytics_query.py` for day-to-day analytics work.
   - Phase and audit docs (Phase 7 and UI audits) when validating or extending analytics features.

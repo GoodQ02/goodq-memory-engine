@@ -32,7 +32,7 @@ except Exception:  # pragma: no cover
 def _default_models_dir() -> Path:
     if load_configs and get_runtime_paths:
         try:
-            return Path(get_runtime_paths(load_configs({}), "models_cache"))
+            return Path(get_runtime_paths(load_configs({}), "models_cache")["models_cache"])
         except Exception:
             pass
     return REPO_ROOT / "_DATA" / "models"

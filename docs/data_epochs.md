@@ -1,3 +1,7 @@
+<!-- DOC_BADGE: OPERATIONAL -->
+<!-- DOC_STATUS: ACTIVE -->
+<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
+
 # GoodQ Data Epochs (Legacy Preservation + Clean Starts)
 
 This document marks existing data stores as **legacy** (preserved) and defines how to start a **new, empty epoch** for a clean first ingestion on the hardened system.

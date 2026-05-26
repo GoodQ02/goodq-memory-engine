@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-05-17 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-19 -->
 
 # First Run
 
@@ -40,10 +40,13 @@ the current platform contract.
 - Watchdog watches the configured `import_inbox`.
 - `cli.run_ingestion` owns actual ingestion.
 - The API is a local read and inspection surface.
+- The operator console is a read-only cockpit over the API and persisted
+  artifacts.
 - Runtime artifacts are the durable proof.
 
-GoodQ4All does not currently ship a polished production UI. The supported first
-run surface is CLI plus Watchdog plus API docs plus persisted artifacts.
+GoodQ4All does not currently ship a polished consumer memory browser. The
+supported first-run surface is CLI plus Watchdog plus API docs, the read-only
+operator console, and persisted artifacts.
 
 ## 1. Bootstrap
 
@@ -139,6 +142,7 @@ Then open:
 
 - `http://127.0.0.1:30000/api/health/summary`
 - `http://127.0.0.1:30000/docs`
+- `http://127.0.0.1:30000/ui/operator_console_v1/`
 
 These default to `GOODQ_API_HOST=127.0.0.1` and `GOODQ_API_PORT=30000`. Override
 them in `.env.local` only when you intentionally change the local API binding.

@@ -1,3 +1,8 @@
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: REFERENCE_ONLY -->
+<!-- DOC_CANONICAL_POINTER: docs/guides/llm/LLM_INFRASTRUCTURE.md -->
+<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
+
 ⚠ Historical planning document.
 
 Contains legacy absolute path examples reflecting the system state at time of writing.

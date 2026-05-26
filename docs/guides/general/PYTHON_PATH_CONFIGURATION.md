@@ -1,3 +1,7 @@
+<!-- DOC_BADGE: OPERATIONAL -->
+<!-- DOC_STATUS: ACTIVE_GUIDE -->
+<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
+
 # Python Path Configuration
 
 ## Overview
@@ -69,10 +73,10 @@ The shell helpers follow the same contract for PowerShell and batch launchers.
 
 ## Testing
 
-Run the maintained interpreter-binding coverage inside `goodq_core`:
+Run the validation test inside `goodq_core`:
 
 ```powershell
-.\scripts\dev\run_pytest.ps1 tests\unit\test_run_ingestion_step_observer_metadata.py -q
+conda run -n goodq_core python tests/legacy/root_harnesses/test_python_paths.py
 ```
 
 Expected result:
@@ -105,7 +109,7 @@ cmd = get_conda_run_command("goodq_core")
 If interpreter binding fails:
 
 1. Verify Conda is installed: `conda --version`
-2. Run `.\scripts\dev\run_pytest.ps1 tests\unit\test_run_ingestion_step_observer_metadata.py -q`
+2. Run `python tests/legacy/root_harnesses/test_python_paths.py`
 3. Check `from configs.python_paths import get_config; print(get_config().get_info_dict())`
 4. For shell launchers, use `scripts/diagnostics/quick_laptop_test.ps1`
 

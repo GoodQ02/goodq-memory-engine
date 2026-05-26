@@ -1,3 +1,8 @@
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: REFERENCE_ONLY -->
+<!-- DOC_CANONICAL_POINTER: docs/guides/llm/LLM_INFRASTRUCTURE.md -->
+<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
+
 # 🚀 GoodQ Production LLM Integration - COMPLETE!
 
 ## ✅ WHAT WAS DONE:

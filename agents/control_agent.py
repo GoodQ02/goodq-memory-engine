@@ -850,17 +850,40 @@ Format your response as JSON:
         error_msg = None
         
         try:
-            # Apply config changes if provided
-            if config_changes:
-                print(f"   Applying {len(config_changes)} config changes...")
-                for key, value in config_changes.items():
+            action_context = config_changes or {}
+            if action_context:
+                print(f"   Applying {len(action_context)} config changes...")
+                for key, value in action_context.items():
                     print(f"     - {key}: {value}")
-                # TODO: Actually apply config changes via ConfigHealer
-            
-            # Here you would trigger the actual recovery action
-            # For now, we just simulate and record
-            success = True  # Placeholder
-            
+
+            strategy_aliases = {
+                "retry_with_backoff": "enable_retry",
+                "fallback_to_cpu": "switch_to_cpu",
+                "fallback_local_model": "downgrade_model",
+                "skip_missing_file": "skip_step",
+                "adjust_thresholds": "adjust_thresholds",
+            }
+            normalized_strategy = strategy_aliases.get(strategy, strategy)
+
+            supported_actions = {
+                "reduce_batch_size",
+                "switch_to_cpu",
+                "enable_retry",
+                "skip_step",
+                "partition_audio",
+                "downgrade_model",
+                "adjust_thresholds",
+            }
+
+            if normalized_strategy not in supported_actions:
+                error_msg = f"Unknown recovery strategy: {strategy}"
+                print(f"   [FAIL] Recovery failed: {error_msg}")
+                success = False
+            else:
+                success, error_msg = self.healer.apply_healing_action(normalized_strategy, action_context)
+                if not success:
+                    print(f"   [FAIL] Recovery failed: {error_msg}")
+        
         except Exception as e:
             success = False
             error_msg = str(e)

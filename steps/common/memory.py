@@ -44,15 +44,16 @@ def _connect(db_path: str) -> sqlite3.Connection:
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS embeddings (
-            hash TEXT NOT NULL PRIMARY KEY,
+            hash TEXT NOT NULL,
             faiss_id INTEGER,
             source_path TEXT,
-            modality TEXT,
+            modality TEXT NOT NULL DEFAULT '',
             scene_id TEXT,
             created_at TEXT,
             sentiment_label TEXT,
             sentiment_score REAL,
-            emotions_json TEXT
+            emotions_json TEXT,
+            PRIMARY KEY (hash, modality)
         )
         """
     )
@@ -132,6 +133,32 @@ def _connect(db_path: str) -> sqlite3.Connection:
     return conn
 
 
+def _embeddings_use_modality_key(conn: sqlite3.Connection) -> bool:
+    try:
+        rows = conn.execute("PRAGMA table_info('embeddings')").fetchall()
+    except Exception:
+        return False
+    pk_cols = [
+        (int(row[5]), str(row[1]))
+        for row in rows
+        if len(row) > 5 and row[5]
+    ]
+    return [name for _order, name in sorted(pk_cols)] == ["hash", "modality"]
+
+
+def _legacy_collision_hash(conn: sqlite3.Connection, hash_hex: str, modality: str) -> str:
+    try:
+        row = conn.execute("SELECT modality FROM embeddings WHERE hash=? LIMIT 1", (hash_hex,)).fetchone()
+    except Exception:
+        return hash_hex
+    if not row:
+        return hash_hex
+    existing_modality = str(row[0] or "")
+    if existing_modality == str(modality or ""):
+        return hash_hex
+    return f"{hash_hex}:{modality or 'unknown'}"
+
+
 def upsert_embedding(cfg: Dict[str, Any], hash_hex: str, faiss_id: Optional[int], source_path: str, modality: str, scene_id: Optional[str] = None) -> None:
 
     db_path = (cfg.get("paths", {}) or {}).get("db_path")
@@ -145,32 +172,59 @@ def upsert_embedding(cfg: Dict[str, Any], hash_hex: str, faiss_id: Optional[int]
     try:
 
         now = datetime.utcnow().isoformat()
+        modality_value = str(modality or "")
 
-        conn.execute(
+        if _embeddings_use_modality_key(conn):
+            conn.execute(
 
-            """
+                """
 
-            INSERT INTO embeddings(hash, faiss_id, source_path, modality, scene_id, created_at)
+                INSERT INTO embeddings(hash, faiss_id, source_path, modality, scene_id, created_at)
 
-            VALUES (?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?)
 
-            ON CONFLICT(hash) DO UPDATE SET
+                ON CONFLICT(hash, modality) DO UPDATE SET
 
-              faiss_id=excluded.faiss_id,
+                  faiss_id=excluded.faiss_id,
 
-              source_path=excluded.source_path,
+                  source_path=excluded.source_path,
 
-              modality=excluded.modality,
+                  scene_id=COALESCE(excluded.scene_id, embeddings.scene_id)
 
-              scene_id=COALESCE(excluded.scene_id, embeddings.scene_id)
+                """
 
-            """
+                ,
 
-            ,
+                (hash_hex, faiss_id, source_path, modality_value, scene_id, now),
 
-            (hash_hex, faiss_id, source_path, modality, scene_id, now),
+            )
+        else:
+            storage_hash = _legacy_collision_hash(conn, hash_hex, modality_value)
+            conn.execute(
 
-        )
+                """
+
+                INSERT INTO embeddings(hash, faiss_id, source_path, modality, scene_id, created_at)
+
+                VALUES (?, ?, ?, ?, ?, ?)
+
+                ON CONFLICT(hash) DO UPDATE SET
+
+                  faiss_id=excluded.faiss_id,
+
+                  source_path=excluded.source_path,
+
+                  modality=excluded.modality,
+
+                  scene_id=COALESCE(excluded.scene_id, embeddings.scene_id)
+
+                """
+
+                ,
+
+                (storage_hash, faiss_id, source_path, modality_value, scene_id, now),
+
+            )
 
         conn.commit()
 
@@ -187,12 +241,13 @@ def update_fields(cfg: Dict[str, Any], hash_hex: str, *, emotions_json: Optional
         return
     conn = _connect(db_path)
     try:
+        hash_pattern = f"{hash_hex}:%"
         if emotions_json is not None:
-            conn.execute("UPDATE embeddings SET emotions_json=? WHERE hash=?", (emotions_json, hash_hex))
+            conn.execute("UPDATE embeddings SET emotions_json=? WHERE hash=? OR hash LIKE ?", (emotions_json, hash_hex, hash_pattern))
         if sentiment_label is not None:
-            conn.execute("UPDATE embeddings SET sentiment_label=? WHERE hash=?", (sentiment_label, hash_hex))
+            conn.execute("UPDATE embeddings SET sentiment_label=? WHERE hash=? OR hash LIKE ?", (sentiment_label, hash_hex, hash_pattern))
         if sentiment_score is not None:
-            conn.execute("UPDATE embeddings SET sentiment_score=? WHERE hash=?", (sentiment_score, hash_hex))
+            conn.execute("UPDATE embeddings SET sentiment_score=? WHERE hash=? OR hash LIKE ?", (sentiment_score, hash_hex, hash_pattern))
         conn.commit()
     finally:
         conn.close()

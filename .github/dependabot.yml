@@ -1,32 +1,6 @@
 version: 2
 updates:
-  # GoodQ4All keeps runtime and WSL/CUDA dependency surfaces intentionally
-  # pinned. Broad version-update PRs are disabled here; Dependabot security
-  # update PRs remain enabled through the repository security setting.
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
-    target-branch: "main"
-    open-pull-requests-limit: 0
-
-  - package-ecosystem: "pip"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-    target-branch: "main"
-    open-pull-requests-limit: 0
-
-  - package-ecosystem: "pip"
-    directory: "/api"
-    schedule:
-      interval: "weekly"
-    target-branch: "main"
-    open-pull-requests-limit: 0
-
-  - package-ecosystem: "pip"
-    directory: "/wsl2_audio"
-    schedule:
-      interval: "weekly"
-    target-branch: "main"
-    open-pull-requests-limit: 0

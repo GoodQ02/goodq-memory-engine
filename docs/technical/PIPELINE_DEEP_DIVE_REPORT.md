@@ -1,8 +1,14 @@
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: HISTORICAL_REFERENCE -->
+<!-- DOC_LAST_VERIFIED: 2026-04-22 -->
+
 # 🔬 GOODQ PIPELINE DEEP DIVE - COMPREHENSIVE RESEARCH REPORT
 **Date:** November 8, 2025  
 **Analyst:** GitHub Copilot  
 **Duration:** Complete System Analysis  
 **Status:** ✅ **COMPLETE - ZERO GUESSWORK**
+
+> Historical audit snapshot. Older endpoint references in this report, including legacy scene-listing paths, should not be treated as the active API contract. For the current runtime surface, use `docs/reference/API.md` and `/openapi.json`.
 
 ---
 

@@ -10,7 +10,7 @@ The supported automated test suite is the `pytest` unit suite under `tests/unit`
 - Discovery is governed by `pytest.ini`
 - CI runs `python -m pytest -q`
 - `pytest` currently collects `tests/unit`
-- `tests/integration` and `tests/utils` are excluded from default collection
+- `tests/integration`, `tests/legacy`, and `tests/utils` are excluded from default collection
 
 ## Active Test Surfaces
 
@@ -51,13 +51,17 @@ python -m pytest tests/integration/test_watchdog.py -q
 
 ## Historical Surfaces
 
-Legacy test harnesses from earlier workstation-specific phases are not part of
-the public branch. They remain private historical material on the development
-line when needed for archaeology, but public validation should use the active
-unit suite or an explicitly documented integration check.
+The following areas are preserved for reference and one-off forensic work, but they are not part of the supported automated contract:
+
+- `tests/legacy/root_harnesses/`
+- `tests/legacy/integration_harnesses/`
+- `tests/legacy/utilities/`
+- `tests/legacy/` older archived diagnostics
+
+Many of those files were created to validate intermediate build steps, old path assumptions, or retired runtime phases. They may still be useful as historical notes, but they should not be treated as current acceptance tests.
 
 ## Guidance
 
 - Prefer `python -m pytest -q` for routine verification.
-- Retired harnesses are historical unless explicitly re-promoted.
-- If a retired harness becomes valuable again, reintroduce it deliberately as a maintained test instead of relying on drift.
+- Treat anything under `tests/legacy/` as historical unless explicitly re-promoted.
+- If a legacy harness becomes valuable again, reintroduce it deliberately instead of relying on drift.

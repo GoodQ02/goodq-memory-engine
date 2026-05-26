@@ -278,6 +278,11 @@ Ingestion writes to:
 - Qdrant vector collections
 - FAISS only when configured as an additional target
 
+For audio retrieval health, count Qdrant audio payloads by matching `run_id`,
+not by `scene_id` alone. The supported CLAP audio provenance marker includes
+`run_id`, `embedding_id`, `component`, `step`, `model`, `created_at`, and
+`commit_ts_utc` when available.
+
 ### Important Constraint
 
 Storage docs must not describe a FAISS-first world or a root-level DB world as if it were current runtime truth.
@@ -304,7 +309,9 @@ The storage contract is healthy when:
 2. `scene_manifest.json` exists under the epoch processing tree.
 3. `scene_ingest_results.json` exists under the epoch output tree.
 4. successful witnesses show `qdrant_ok = true`.
-5. fresh stitching-era runs can persist speaker voice signatures and pattern edges without breaking the scene bundle contract.
+5. current-run CLAP audio coverage equals scenes where `clap_meta.status == ok`
+   and Qdrant audio payloads have matching `run_id` provenance.
+6. fresh stitching-era runs can persist speaker voice signatures and pattern edges without breaking the scene bundle contract.
 
 ---
 

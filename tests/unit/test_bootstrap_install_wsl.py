@@ -130,6 +130,37 @@ def test_wsl_audio_env_values_share_model_cache_and_tokens(monkeypatch, tmp_path
     assert values["HF_HOME"] == "/mnt/c/models"
     assert values["TORCH_HOME"] == "/mnt/c/models"
     assert values["HUGGINGFACE_HUB_CACHE"] == "/mnt/c/models/hub"
+    assert values["HF_HUB_CACHE"] == "/mnt/c/models/hub"
+    assert values["PYANNOTE_CACHE"] == "/mnt/c/models/hub"
+
+
+def test_write_wsl_audio_env_file_uses_lf_line_endings(tmp_path: Path):
+    from scripts import bootstrap_install
+
+    wsl_ctx = bootstrap_install.WslAudioContext(
+        distro="Ubuntu-22.04",
+        user="goodq",
+        home="/home/goodq",
+        workspace="/home/goodq/goodq_audio",
+        windows_workspace=tmp_path / "wsl_stage",
+    )
+
+    env_path = bootstrap_install._write_wsl_audio_env_file(
+        wsl_ctx,
+        {
+            "HF_HOME": "/mnt/c/models",
+            "HUGGINGFACE_HUB_CACHE": "/mnt/c/models/hub",
+            "HF_HUB_CACHE": "/mnt/c/models/hub",
+            "PYANNOTE_CACHE": "/mnt/c/models/hub",
+        },
+    )
+
+    raw = env_path.read_bytes()
+    assert b"\r" not in raw
+    assert raw.endswith(b'\n')
+    assert b'HUGGINGFACE_HUB_CACHE="/mnt/c/models/hub"\n' in raw
+    assert b'HF_HUB_CACHE="/mnt/c/models/hub"\n' in raw
+    assert b'PYANNOTE_CACHE="/mnt/c/models/hub"\n' in raw
 
 
 def test_sync_wsl_audio_assets_normalizes_shell_line_endings(monkeypatch, tmp_path: Path):
@@ -232,6 +263,20 @@ def test_wsl_audio_installers_use_bootstrap_constraints_and_post_install_validat
     ):
         assert "torchvision.ops import nms" in content
 
+    for content in (shell_content, quick_content):
+        assert "transformers" in content
+        assert "tokenizers" in content
+        assert "safetensors" in content
+
+
+def test_wsl_setup_exports_pyannote_cache_alias_for_nested_model_loads() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    setup_content = (repo_root / "wsl2_audio" / "setup_cuda_env.sh").read_text(encoding="utf-8")
+
+    assert "export HF_HUB_CACHE=\"${HF_HUB_CACHE:-$HUGGINGFACE_HUB_CACHE}\"" in setup_content
+    assert "export PYANNOTE_CACHE=\"${PYANNOTE_CACHE:-$HUGGINGFACE_HUB_CACHE}\"" in setup_content
+    assert "unset PYANNOTE_CACHE" in setup_content
+
 
 def test_wsl_bootstrap_constraints_match_python310_cu121_lane() -> None:
     repo_root = Path(__file__).resolve().parents[2]
@@ -257,18 +302,10 @@ def test_wsl_bootstrap_constraints_match_python310_cu121_lane() -> None:
 
     assert "pyannote.audio==4.0.3" not in constraints
     assert "huggingface-hub==1.13.0" not in constraints
+    assert "transformers==4.57.3" not in constraints
+    assert "tokenizers==0.22.1" not in constraints
     assert "numpy==2.3.5" not in constraints
     assert "scipy==1.16.3" not in constraints
-
-
-def test_wsl_audio_installers_include_qualified_wav2vec_enrichment_lane() -> None:
-    repo_root = Path(__file__).resolve().parents[2]
-    shell_content = (repo_root / "wsl2_audio/setup_wsl2_audio.sh").read_text(encoding="utf-8")
-    quick_content = (repo_root / "scripts/wsl2_quick_install.sh").read_text(encoding="utf-8")
-
-    for package in ("transformers", "tokenizers", "safetensors"):
-        assert package in shell_content
-        assert package in quick_content
 
 
 def test_resolve_wsl_python_prefers_venv(monkeypatch):
@@ -475,7 +512,14 @@ def test_ensure_wsl_audio_ready_preauths_sudo_before_heartbeat_setup(monkeypatch
     probe_results = iter([(False, "diarization unavailable"), (True, "ready")])
     events: list[str] = []
 
+    class TtyStdin:
+        @staticmethod
+        def isatty():
+            return True
+
     def fake_run_wsl_bash(_wsl_ctx, script, **kwargs):
+        if script == "sudo -n true":
+            return subprocess.CompletedProcess(["wsl"], 1, "", "sudo: a password is required")
         if "setup_wsl2_audio.sh" in script:
             events.append(f"setup:{kwargs.get('heartbeat_label')}")
         if script == "test -d /run/systemd/system":
@@ -484,7 +528,7 @@ def test_ensure_wsl_audio_ready_preauths_sudo_before_heartbeat_setup(monkeypatch
 
     def fake_preauth(_wsl_ctx):
         events.append("preauth")
-        return True, "sudo authentication cached"
+        return True, "sudo credentials cached"
 
     monkeypatch.setattr(bootstrap_install, "_resolve_wsl_audio_context", lambda _ctx: wsl_ctx)
     monkeypatch.setattr(bootstrap_install, "_run_wsl_bash", fake_run_wsl_bash)
@@ -493,11 +537,54 @@ def test_ensure_wsl_audio_ready_preauths_sudo_before_heartbeat_setup(monkeypatch
     monkeypatch.setattr(bootstrap_install, "_probe_wsl_audio_workspace_ready", lambda *_args, **_kwargs: next(probe_results))
     monkeypatch.setattr(bootstrap_install, "_wsl_interactive_sudo_preauth", fake_preauth)
     monkeypatch.setattr(bootstrap_install, "resolve_models_cache_root", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(bootstrap_install.sys, "stdin", TtyStdin())
 
-    ready = bootstrap_install.ensure_wsl_audio_ready(ctx, assume_yes=True)
+    ready = bootstrap_install.ensure_wsl_audio_ready(ctx, assume_yes=False)
 
     assert ready is True
     assert events == ["preauth", "setup:WSL audio bootstrap"]
+
+
+def test_ensure_wsl_audio_ready_yes_mode_does_not_enter_interactive_sudo(monkeypatch, tmp_path: Path):
+    from scripts import bootstrap_install
+
+    ctx = _ctx(tmp_path)
+    wsl_ctx = bootstrap_install.WslAudioContext(
+        distro="Ubuntu-22.04",
+        user="goodq",
+        home="/home/goodq",
+        workspace="/home/goodq/goodq_audio",
+        windows_workspace=tmp_path / "wsl_stage",
+    )
+    messages: list[str] = []
+    seen_scripts: list[str] = []
+
+    def fake_run_wsl_bash(_wsl_ctx, script, **_kwargs):
+        seen_scripts.append(script)
+        if script == "sudo -n true":
+            return subprocess.CompletedProcess(["wsl"], 1, "", "sudo: a password is required")
+        return subprocess.CompletedProcess(["wsl"], 0, "", "")
+
+    def fail_interactive(_wsl_ctx):
+        raise AssertionError("interactive sudo preauth must not run in --yes mode")
+
+    monkeypatch.setattr(bootstrap_install, "_resolve_wsl_audio_context", lambda _ctx: wsl_ctx)
+    monkeypatch.setattr(bootstrap_install, "_run_wsl_bash", fake_run_wsl_bash)
+    monkeypatch.setattr(bootstrap_install, "_sync_wsl_audio_assets", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(bootstrap_install, "_write_wsl_audio_env_file", lambda *_args, **_kwargs: tmp_path / ".goodq_env")
+    monkeypatch.setattr(bootstrap_install, "_probe_wsl_audio_workspace_ready", lambda *_args, **_kwargs: (False, "diarization unavailable"))
+    monkeypatch.setattr(bootstrap_install, "_wsl_interactive_sudo_preauth", fail_interactive)
+    monkeypatch.setattr(bootstrap_install, "_print", messages.append)
+    monkeypatch.setattr(bootstrap_install, "resolve_models_cache_root", lambda *_args, **_kwargs: None)
+
+    ready = bootstrap_install.ensure_wsl_audio_ready(ctx, assume_yes=True)
+
+    assert ready is False
+    assert "sudo -n true" in seen_scripts
+    assert not any("setup_wsl2_audio.sh" in script for script in seen_scripts)
+    joined = "\n".join(messages)
+    assert "PENDING_SUDO" in joined
+    assert "diarization unavailable" in joined
 
 
 def test_wsl_interactive_sudo_preauth_uses_interactive_runner(monkeypatch):
@@ -516,10 +603,12 @@ def test_wsl_interactive_sudo_preauth_uses_interactive_runner(monkeypatch):
         windows_workspace=Path("wsl_workspace_placeholder"),
     )
     seen_scripts: list[str] = []
+    seen_timeouts: list[int | None] = []
     messages: list[str] = []
 
-    def fake_interactive(_wsl_ctx, script):
+    def fake_interactive(_wsl_ctx, script, **kwargs):
         seen_scripts.append(script)
+        seen_timeouts.append(kwargs.get("timeout_sec"))
         return subprocess.CompletedProcess(["wsl"], 0, "", "")
 
     monkeypatch.setattr(bootstrap_install.sys, "stdin", TtyStdin())
@@ -529,7 +618,7 @@ def test_wsl_interactive_sudo_preauth_uses_interactive_runner(monkeypatch):
     ready, detail = bootstrap_install._wsl_interactive_sudo_preauth(wsl_ctx)
 
     assert ready is True
-    assert detail == "sudo authentication cached"
+    assert detail == "sudo credentials cached"
     assert seen_scripts == ["sudo -v"]
+    assert seen_timeouts == [120]
     assert "If WSL asks for sudo" in "\n".join(messages)
-    assert "authentication" in "\n".join(messages)

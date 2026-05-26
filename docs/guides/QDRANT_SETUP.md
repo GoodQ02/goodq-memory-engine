@@ -63,7 +63,7 @@ results = search_scenes(
 
 ✅ **Qdrant binary installed:** `<project_root>\vendor\qdrant\qdrant.exe`  
 ✅ **Configuration created:** `<project_root>\vendor\qdrant\config.yaml`  
-✅ **Data directory:** resolved from canonical config as `qdrant_storage`
+✅ **Data directory:** `<GOODQ_DATA_ROOT>\qdrant_storage`  
 ✅ **Config updated:** `configs/config.yaml` (qdrant.enabled = true)
 
 ---
@@ -88,9 +88,7 @@ This will:
 - Install Qdrant as a Windows service named `GoodQ_Qdrant`
 - Configure auto-start on system boot
 - Reuse an existing service if one is already present and refresh its settings
-- Set the resolved Qdrant storage path from canonical config
-- Disable Qdrant usage telemetry for local-first operation
-- Set up logging in the resolved GoodQ log directory
+- Set up logging to `<project_root>\logs\qdrant_*.log`
 
 ### Option 2: Run Manually (Foreground Testing Fallback)
 
@@ -170,15 +168,13 @@ These names come from `configs/config.yaml`; trust the config if the active epoc
 
 ```yaml
 storage:
-  storage_path: ./storage
+  storage_path: <GOODQ_DATA_ROOT>/qdrant_storage
 
 service:
   http_port: 6333      # REST API
   grpc_port: 6334      # gRPC API
   host: 127.0.0.1      # Localhost only (secure)
   enable_cors: true    # For web dashboard
-
-telemetry_disabled: true
 
 optimizer:
   memmap_threshold: 50000
@@ -290,21 +286,21 @@ Features:
 │   │   ├── qdrant.exe          # Main executable
 │   │   └── config.yaml         # Qdrant configuration
 │   └── nssm.exe                # Service manager (if installed)
-└── scripts\
-    └── qdrant\
-        ├── START_QDRANT.bat             # Manual start script
-        ├── INSTALL_QDRANT_SERVICE.bat   # Service installer
-        ├── UNINSTALL_QDRANT_SERVICE.bat # Service uninstaller
-        └── INIT_QDRANT.bat              # Collection initializer
+├── logs\
+│   ├── qdrant_stdout.log       # Service output (if using service)
+│   └── qdrant_stderr.log       # Service errors (if using service)
+├── scripts\
+│   └── qdrant\
+│       ├── START_QDRANT.bat             # Manual start script
+│       ├── INSTALL_QDRANT_SERVICE.bat   # Service installer
+│       ├── UNINSTALL_QDRANT_SERVICE.bat # Service uninstaller
+│       └── INIT_QDRANT.bat              # Collection initializer
 
-<GOODQ_LOG_DIR>\
-├── qdrant_stdout.log           # Service output (if using service)
-└── qdrant_stderr.log           # Service errors (if using service)
-
-<resolved qdrant_storage>\
-├── collections\
-├── wal\
-└── snapshots\
+<GOODQ_DATA_ROOT>\
+└── qdrant_storage\             # Database files
+    ├── collections\
+    ├── wal\
+    └── snapshots\
 ```
 
 ---
@@ -323,7 +319,7 @@ taskkill /PID <PID> /F
 
 ### Service Won't Start
 
-1. Check logs in the resolved GoodQ log directory, especially `qdrant_stderr.log`
+1. Check logs: `<project_root>\logs\qdrant_stderr.log`
 2. Re-run `scripts\qdrant\INSTALL_QDRANT_SERVICE.bat` as Administrator to repair the Windows service
 3. Check config syntax: `vendor\qdrant\config.yaml`
 4. Use `scripts\qdrant\START_QDRANT.bat` only as a foreground diagnostic fallback

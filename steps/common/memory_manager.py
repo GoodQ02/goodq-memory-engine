@@ -3,16 +3,20 @@ from __future__ import annotations
 from typing import Dict
 
 from steps.common.memory_router import MemoryRouter
-from steps.common.memory_store import MemoryConfig, MemoryDims
+from steps.common.memory_store import MemoryConfig, MemoryDims, normalize_memory_tier_list
 from steps.common.memory_stores import build_text_stores
 
 
 def build_memory_router(cfg: Dict) -> MemoryRouter:
-    """Construct a multi-tier MemoryRouter with Chroma (tier-0), FAISS (tier-1), Qdrant (tier-2)."""
+    """Construct the active memory router with an ephemeral cache, optional FAISS parity, and canonical Qdrant retrieval."""
     memory_cfg = (cfg.get("memory") or {}) if isinstance(cfg, dict) else {}
     dims_cfg = memory_cfg.get("dims", {})
-    read_priority = memory_cfg.get("routing", {}).get("read_priority", ["qdrant", "faiss", "chroma"])
-    write_targets = memory_cfg.get("routing", {}).get("write_targets", ["faiss", "qdrant"])
+    read_priority = normalize_memory_tier_list(
+        memory_cfg.get("routing", {}).get("read_priority", ["qdrant", "faiss", "ephemeral"])
+    )
+    write_targets = normalize_memory_tier_list(
+        memory_cfg.get("routing", {}).get("write_targets", ["faiss", "qdrant"])
+    )
     ttl_seconds = memory_cfg.get("ttl_seconds", 900)
     max_ephemeral = memory_cfg.get("max_ephemeral_items", 512)
 

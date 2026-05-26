@@ -1,10 +1,10 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-04-25 -->
+<!-- DOC_LAST_VERIFIED: 2026-04-01 -->
 
 # Core Library Components (`lib/`)
 
-**Last Updated:** April 25, 2026  
+**Last Updated:** April 1, 2026  
 **Status:** ✅ Current active library surface  
 **Purpose:** Reference for the shared runtime modules that remain active in `lib/`
 
@@ -137,7 +137,7 @@ This doc intentionally does not freeze provider/model combinations; those may ev
 - read-only discovery over structured run artifact roots in `reports/fresh_ingest_runs`
 
 **Used By**
-- `api/main.py`
+- `api/routes/runtime.py`
 - future operator-facing run listing/reporting surfaces
 
 **Current Truth**
@@ -154,7 +154,7 @@ This doc intentionally does not freeze provider/model combinations; those may ev
 - read-only stitched summary over root ledgers, per-episode run ledgers, and canonical episode artifact pointers
 
 **Used By**
-- `api/main.py`
+- `api/routes/runtime.py`
 - future narrative-formatting surfaces
 
 **Current Truth**
@@ -208,8 +208,6 @@ If those concepts still matter historically, they should live in archive or desi
 | `llm_client.py` | selected runtime helpers | shared LLM access |
 | `goodq_logger.py` | runtime helpers and steps | shared logging |
 | `mission_components.py` | runtime helpers and presentation surfaces | shared labels |
-| `run_index.py` | `api/main.py` | read-only run discovery |
-| `run_summary.py` | `api/main.py` | read-only run projection |
 
 ---
 

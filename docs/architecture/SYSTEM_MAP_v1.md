@@ -1,3 +1,7 @@
+<!-- DOC_BADGE: CANONICAL -->
+<!-- DOC_STATUS: AUTHORITATIVE -->
+<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
+
 # SYSTEM_MAP_v1 — GoodQ (Authoritative System Map)
 
 This document is an orientation and preservation artifact.

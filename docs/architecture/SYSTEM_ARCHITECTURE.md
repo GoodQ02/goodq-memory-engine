@@ -235,6 +235,7 @@ That workspace is a compute extension, not the canonical storage root.
 - scene-first persistence
 - visible backend truth for audio and Phase 6
 - canonical Qdrant commits when vector persistence succeeds
+- current-run CLAP audio vector success defined by run-provenanced Qdrant payloads, not scene-id presence alone
 - conservative identity formation
 
 ### What The System Does Not Guarantee
@@ -265,7 +266,8 @@ Use this architecture only if current witnesses confirm:
 2. `scene_manifest.json` exists under the epoch processing tree.
 3. successful episodes show `phase6_complete = true` and `qdrant_ok = true`.
 4. audio backend truth matches the actual runtime path used.
-5. stitching-era fields appear in fresh manifests when enough voiced speech exists.
+5. current-run audio-vector counts equal scenes with `clap_meta.status == ok` and matching Qdrant `run_id` provenance.
+6. stitching-era fields appear in fresh manifests when enough voiced speech exists.
 
 ---
 

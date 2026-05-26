@@ -112,3 +112,65 @@ def test_load_run_summary_projects_active_pending_lane_as_running_without_episod
     assert summary["outcome_classification"]["status"] == "running"
     assert summary["latest_episode"]["episode"] == "02x02 - The Pony Remark.mp4"
     assert summary["latest_episode"]["status"] == "running"
+
+
+def test_load_run_summary_reads_standalone_scene_results_without_experiment_log(tmp_path: Path) -> None:
+    reports_root = tmp_path / "reports" / "fresh_ingest_runs"
+    run_root = reports_root / "20260519_home_memory_scene_probe"
+    scene_results_path = run_root / "output" / "scene_ingest_results.json"
+
+    _write_json(
+        scene_results_path,
+        {
+            "video_name": "home-memory.mp4",
+            "scenes": [
+                {"scene_id": "scene-a", "video_id": "home-video"},
+                {"scene_id": "scene-b", "video_id": "home-video"},
+            ],
+        },
+    )
+
+    summary = load_run_summary(run_root=run_root)
+
+    assert summary["run_header"]["run_id"] == "20260519_home_memory_scene_probe"
+    assert summary["run_header"]["status"] == "completed"
+    assert summary["run_header"]["scope"] == "scene_ingest_results"
+    assert summary["file_job_overview"]["episodes_total"] == 1
+    assert summary["file_job_overview"]["episodes_completed"] == 1
+    assert summary["file_job_overview"]["scenes_processed"] == 2
+    assert summary["latest_episode"]["episode"] == "home-memory.mp4"
+    assert summary["latest_episode"]["scene_count"] == 2
+    assert str(scene_results_path) in summary["latest_episode"]["files_read"]
+    assert str(scene_results_path) in summary["evidence"]["files_read"]
+
+
+def test_load_run_summary_reads_resolved_config_only_interruption(tmp_path: Path) -> None:
+    reports_root = tmp_path / "reports" / "fresh_ingest_runs"
+    run_root = reports_root / "20260520_power_loss_interrupted"
+    config_path = run_root / "_resolved_config.json"
+
+    _write_json(
+        config_path,
+        {
+            "run": {"id": "runtime-power-loss"},
+            "qdrant": {"collections": {"audio": "goodq_audio_epoch_power_loss"}},
+            "paths": {"data_root": "GoodQ_Data/epochs/epoch_home_clean"},
+        },
+    )
+    (run_root / "output").mkdir(parents=True, exist_ok=True)
+
+    summary = load_run_summary(run_root=run_root)
+
+    assert summary["run_header"]["run_id"] == "20260520_power_loss_interrupted"
+    assert summary["run_header"]["run_kind"] == "interrupted_ingestion"
+    assert summary["run_header"]["scope"] == "resolved_config_only"
+    assert summary["run_header"]["status"] == "interrupted"
+    assert summary["run_header"]["runtime_run_id"] == "runtime-power-loss"
+    assert summary["run_header"]["qdrant_collections"]["audio"] == "goodq_audio_epoch_power_loss"
+    assert summary["file_job_overview"]["episodes_total"] == 1
+    assert summary["file_job_overview"]["episodes_completed"] == 0
+    assert summary["file_job_overview"]["scenes_processed"] == 0
+    assert summary["outcome_classification"]["status"] == "interrupted"
+    assert summary["latest_episode"]["status"] == "interrupted"
+    assert summary["latest_episode"]["scene_count"] == 0
+    assert str(config_path) in summary["evidence"]["files_read"]

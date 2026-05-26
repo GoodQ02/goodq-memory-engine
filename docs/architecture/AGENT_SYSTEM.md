@@ -1,3 +1,8 @@
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: REFERENCE_ONLY -->
+<!-- DOC_CANONICAL_POINTER: docs/CONTROL_AGENT.md -->
+<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
+
 # GoodQ4All Agent System
 
 > Historical architecture reference. Use this file to understand the shape of the older agent initiative, not as the current runtime contract.
@@ -39,9 +44,11 @@ The original agent push experimented with:
 
 Those surfaces are now archived or retired because they no longer match the supported runtime contract.
 
-Historical validation harnesses are retained only on the private development
-line when needed for archaeology. They are not part of the public branch or the
-supported acceptance surface.
+Historical validation harnesses live under:
+
+- `scripts/archive/legacy_validation/root/test_recovery_system.py`
+- `scripts/archive/legacy_validation/root/test_phase3_healing.py`
+- `scripts/archive/legacy_validation/root/test_phase2_integration.py`
 
 ## Practical Guidance
 

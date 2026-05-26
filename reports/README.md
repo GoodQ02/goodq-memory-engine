@@ -23,13 +23,13 @@ need the underlying evidence path.
 
 ### Curated Reference Anchors
 
-Public release artifacts document methodology and aggregate metrics only.
-Copyrighted third-party reference anchors are not shipped in the public release.
+These are the release-tracked episode anchors used for offline evaluation:
 
-See [`reports/reference_anchors/README.md`](reference_anchors/README.md) for the
-public anchor boundary. Runtime scene truth is generated locally from
-user-provided media, and public examples must use fictional, owned, synthetic,
-or permissively licensed fixtures.
+- [`reports/reference_anchors/seinfeld/episodes/03x10_the_stranded.reference.json`](reference_anchors/seinfeld/episodes/03x10_the_stranded.reference.json)
+- [`reports/reference_anchors/seinfeld/episodes/03x11_the_alternate_side.reference.json`](reference_anchors/seinfeld/episodes/03x11_the_alternate_side.reference.json)
+
+They support the local episode-reference eval lane used for witness scoring and
+audit. They are anchors, not runtime truth overrides.
 
 ### Released Witness Evidence
 
@@ -43,9 +43,10 @@ The released, front-door proof surfaces are:
 Those documents summarize the proving witness, current checkpoint, and what the
 project is willing to claim publicly.
 
-Public-safe reference-anchor policy lives here:
+Repo-tracked anchors that support the current eval lane live here:
 
-- [`reports/reference_anchors/README.md`](reference_anchors/README.md)
+- [`reports/reference_anchors/seinfeld/episodes/03x10_the_stranded.reference.json`](reference_anchors/seinfeld/episodes/03x10_the_stranded.reference.json)
+- [`reports/reference_anchors/seinfeld/episodes/03x11_the_alternate_side.reference.json`](reference_anchors/seinfeld/episodes/03x11_the_alternate_side.reference.json)
 
 ### Local Proving Runs
 
@@ -71,8 +72,8 @@ Important:
 - promote only deliberately selected, sanitized audit packs
 - current source status belongs in
   [`docs/releases/CONTROL_RECURRENCE_v0.5_STATUS.md`](../docs/releases/CONTROL_RECURRENCE_v0.5_STATUS.md)
-- public proof should use released summaries and public-safe methodology, not
-  local generated recurrence artifacts by default
+- the API and CLI may read local recurrence artifacts, but those artifacts are
+  not product docs, installer content, or public proof by default
 
 ## Historical and Exploratory Families
 
@@ -92,7 +93,7 @@ When deciding what is true **now**, prefer:
 
 1. release and ship-profile docs
 2. current agent status and system snapshot
-3. released methodology, aggregate metrics, and public-safe anchor policy
+3. tracked anchors and released witness artifacts
 4. local witness history and older diagnostic families
 
 That order keeps the repo outcome-forward while preserving the full evidence

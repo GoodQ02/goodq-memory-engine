@@ -28,7 +28,6 @@ Current Reference Pack v0 proposal:
 Current Reference Pack v0 license/source review:
 
 - `docs/bootstrap/REFERENCE_PACK_V0_LICENSE_REVIEW_MATRIX.md`
-- `docs/bootstrap/REFERENCE_PACK_V0_SOURCE_EVIDENCE_APPENDIX.md`
 
 ## Doctrine
 
@@ -88,7 +87,7 @@ manifest. Use the portable tokens from `OFFLINE_BUNDLE_CONTRACT.md`.
 | Owned synthetic debug kit | `%GOODQ_SYNTHETIC_DEBUG_KIT_ROOT%` | `optional_synthetic_debug_kit_pack` | no | no | optional | yes | yes if owner-approved | not created | fixture absence | create short owned fixture and expected-output contract |
 | Tracked sample artifacts | `<repo-root>/samples/ingestion` tracked files | source-pack test/demo artifacts | no | source-pack only | optional | no, unless selected | unknown | source hash only | unclear fixture rights | do not treat as public debug kit until ownership is clear |
 | Ignored Seinfeld scaffold media | `<repo-root>/samples/ingestion/Sein_Experiment` local ignored media | foreign scaffold evidence / exclude | no | no | no | no | no | none | legal / cognitive contamination | keep out of product, installer, memory, and demo paths |
-| Third-party reference anchors | `reports/reference_anchors/README.md` public boundary only | private audit aid / exclude | no | no | no | no | no | none | legal / public-product confusion | exclude payloads; public examples must use fictional, owned, synthetic, or permissively licensed fixtures |
+| Tracked Seinfeld reference anchors | `<repo-root>/reports/reference_anchors/seinfeld` | audit scoring evidence only | no | no | no | no unless explicitly public-reviewed | unknown | tracked source hash only | public/product confusion | keep as witness scoring evidence, not runtime memory |
 | Ignored private home media | `<repo-root>/samples/ingestion/FAMILY` local ignored media | private source media / exclude from base | no | no | operator-owned only | private pack only | no | none | privacy | use only as future user-owned ingestion target |
 | Fresh-ingest witness outputs | `%GOODQ_DATA_ROOT%/reports/fresh_ingest_runs` | generated witness evidence / exclude from base | no | no | optional evidence | private/archive only | no unless sanitized | per-run only | privacy / size / stale state | never seed base memory from witnesses |
 | Control recurrence outputs | `%GOODQ_DATA_ROOT%/reports/control_recurrence` | generated observer evidence / exclude from base | no | no | optional evidence | private/archive only | no unless sanitized | local artifact | stale operator state | stage only intentionally selected docs |

@@ -957,9 +957,63 @@ def _extract_music_event_labels(music_events: List[Any]) -> List[str]:
     return labels
 
 
-def _resolve_scene_time_hints(scene_audio_payload: Dict[str, Any]) -> Dict[str, Any]:
-    time_hints = scene_audio_payload.get("time_hints")
-    return time_hints if isinstance(time_hints, dict) else {}
+def _time_hints_have_values(time_hints: Any) -> bool:
+    if not isinstance(time_hints, dict):
+        return False
+    for key, value in time_hints.items():
+        if str(key).strip().lower() == "first_seen_ts":
+            continue
+        if isinstance(value, list) and value:
+            return True
+        if isinstance(value, dict) and value:
+            return True
+        if isinstance(value, str) and value.strip():
+            return True
+    return False
+
+
+def _merge_time_hint_dicts(*hint_sources: Any) -> Dict[str, Any]:
+    merged: Dict[str, Any] = {}
+    for hints in hint_sources:
+        if not isinstance(hints, dict):
+            continue
+        for key, value in hints.items():
+            if value in (None, "", []):
+                continue
+            if isinstance(value, list):
+                existing = merged.setdefault(key, [])
+                if not isinstance(existing, list):
+                    continue
+                for item in value:
+                    if item not in existing:
+                        existing.append(item)
+                continue
+            if isinstance(value, dict):
+                existing_dict = merged.setdefault(key, {})
+                if isinstance(existing_dict, dict):
+                    existing_dict.update(value)
+                continue
+            merged[key] = value
+    return merged
+
+
+def _resolve_scene_time_hints(scene_audio_payload: Dict[str, Any], scene_payload: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    audio_hints = scene_audio_payload.get("time_hints")
+    frame_hints: Any = None
+    if isinstance(scene_payload, dict):
+        if isinstance(scene_payload.get("time_hints"), dict):
+            frame_hints = scene_payload.get("time_hints")
+        keyframe = scene_payload.get("keyframe")
+        if not _time_hints_have_values(frame_hints) and isinstance(keyframe, dict):
+            frame_hints = keyframe.get("time_hints")
+
+    if _time_hints_have_values(audio_hints) and _time_hints_have_values(frame_hints):
+        return _merge_time_hint_dicts(audio_hints, frame_hints)
+    if _time_hints_have_values(audio_hints):
+        return audio_hints
+    if _time_hints_have_values(frame_hints):
+        return frame_hints
+    return audio_hints if isinstance(audio_hints, dict) else {}
 
 
 def _resolve_scene_metadata_time_hints(scene_audio_payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -2822,7 +2876,7 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
             ocr_date_candidates = [candidate_text] if candidate_text else []
         scene_objects = _resolve_scene_objects(scene, scene_id, objects_data)
         music_events = _resolve_scene_music_events(scene_audio_payload)
-        time_hints = _resolve_scene_time_hints(scene_audio_payload)
+        time_hints = _resolve_scene_time_hints(scene_audio_payload, scene)
         metadata_time_hints = _resolve_scene_metadata_time_hints(scene_audio_payload)
         audio_emotion, audio_emotion_scores = _resolve_audio_emotion(scene_audio_payload)
         audio_emotion_ranking = _rank_audio_emotion_scores(audio_emotion_scores, promoted_label=audio_emotion)

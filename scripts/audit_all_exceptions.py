@@ -198,8 +198,7 @@ class ExceptionAuditor:
 def main():
     import argparse
     parser = argparse.ArgumentParser(description="Audit exception handling in Python code")
-    default_path = Path(__file__).resolve().parents[1] / "steps"
-    parser.add_argument('--path', default=str(default_path), help='Path to audit')
+    parser.add_argument('--path', default='L:\\goodq4all\\steps', help='Path to audit')
     parser.add_argument('--export', help='Export findings to JSON file')
     args = parser.parse_args()
     

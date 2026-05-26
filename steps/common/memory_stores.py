@@ -9,12 +9,19 @@ from steps.common.memory import to_faiss_id
 from steps.common.faiss_utils import add_with_required_ids, create_hnsw_id_index
 from steps.common.memory_store import MemoryStore
 from steps.common.qdrant_client import QdrantClient, build_qdrant_client
+from steps.common.retrieval_events import (
+    RetrievalEvent,
+    emit_retrieval_events,
+    normalize_retrieval_context,
+    retrieval_events_enabled,
+    utc_now_iso,
+)
 
 logger = logging.getLogger(__name__)
 
 
-class ChromaMemory(MemoryStore):
-    """Lightweight in-memory store for short-term embeddings."""
+class EphemeralMemory(MemoryStore):
+    """In-memory TTL cache for short-term embeddings, used as the tier-0 ephemeral store."""
 
     def __init__(
         self,
@@ -101,13 +108,6 @@ class ChromaMemory(MemoryStore):
         else:
             self._misses += 1
         try:
-            from steps.common.retrieval_events import (
-                RetrievalEvent,
-                emit_retrieval_events,
-                normalize_retrieval_context,
-                utc_now_iso,
-            )
-
             context = normalize_retrieval_context(os.environ.get("GOODQ_RETRIEVAL_CONTEXT"))
             ts = utc_now_iso()
             events: List[RetrievalEvent] = []
@@ -125,7 +125,7 @@ class ChromaMemory(MemoryStore):
                 events.append(
                     RetrievalEvent(
                         ts_utc=ts,
-                        store="chroma",
+                        store="ephemeral",
                         retrieval_context=context,
                         embedding_id=embedding_id_s,
                         scene_id=str(scene_id) if scene_id is not None else None,
@@ -133,8 +133,8 @@ class ChromaMemory(MemoryStore):
                         model=str(model) if model is not None else None,
                         score=h.get("score") if isinstance(h.get("score"), (int, float)) else None,
                         details={
-                            "store_type": "chroma",
-                            "store_ref": "chroma_memory",
+                            "store_type": "ephemeral_cache",
+                            "store_ref": "ephemeral_memory",
                             "ttl_seconds": self.ttl_seconds,
                         },
                     )
@@ -143,7 +143,7 @@ class ChromaMemory(MemoryStore):
         except Exception as e:
             logger.warning(
                 "memory_stores operation failed store=%s operation=%s exc_type=%s exc=%s",
-                "chroma",
+                "ephemeral",
                 "emit_retrieval_events",
                 type(e).__name__,
                 e,
@@ -162,6 +162,9 @@ class ChromaMemory(MemoryStore):
             "ttl_seconds": self.ttl_seconds,
             "max_items": self.max_items,
         }
+
+
+ChromaMemory = EphemeralMemory
 
 
 class FaissMemory(MemoryStore):
@@ -390,8 +393,6 @@ def build_text_stores(cfg: Dict[str, Any]) -> Dict[str, MemoryStore]:
     text_dim = dims_cfg.get("text", 384)
     log_retrieval = True
     try:
-        from steps.common.retrieval_events import retrieval_events_enabled
-
         log_retrieval = retrieval_events_enabled(cfg, default=True)
     except Exception as e:
         logger.warning(
@@ -402,7 +403,7 @@ def build_text_stores(cfg: Dict[str, Any]) -> Dict[str, MemoryStore]:
             e,
         )
         log_retrieval = True
-    stores["chroma"] = ChromaMemory(
+    stores["ephemeral"] = EphemeralMemory(
         text_dim,
         ttl_seconds=ttl_seconds,
         max_items=max_ephemeral,
@@ -433,5 +434,5 @@ def build_text_stores(cfg: Dict[str, Any]) -> Dict[str, MemoryStore]:
         q_client = None
     if q_client:
         stores["qdrant"] = QdrantMemory(q_client)
-    # Chroma placeholder (not implemented)
+    # The tier-0 ephemeral cache remains intentionally local and in-memory.
     return stores

@@ -293,7 +293,6 @@ def snapshot(
                 revision=revision,
                 token=auth_token,
             )
-            _normalize_main_ref_for_pinned_snapshot(target_models_root, repo_id, revision, resolved_dir)
             if not _cache_snapshot_present(target_models_root, repo_id):
                 if progress_cb:
                     progress_cb(current_attempt=attempt, last_event="cache_layout_incomplete")
@@ -303,6 +302,7 @@ def snapshot(
                     "error": f"cache layout incomplete for {repo_id} under {cache_dir}",
                     "attempts": str(attempt),
                 }
+            _normalize_main_ref_for_pinned_snapshot(target_models_root, repo_id, revision, resolved_dir)
             elapsed_sec = round(time.time() - started, 1)
             if progress_cb:
                 progress_cb(current_attempt=attempt, last_event="snapshot_ready")

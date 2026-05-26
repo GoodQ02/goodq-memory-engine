@@ -60,12 +60,18 @@ http://localhost:6333/dashboard
 
 | Name | Dim | Purpose |
 |------|-----|---------|
-| goodq_clip_epoch_2025_12_22 | 512 | Visual scenes (CLIP) |
-| goodq_dino_epoch_2025_12_22 | 768 | Visual scenes (DINO) |
-| goodq_text_epoch_2025_12_22 | 384 | Transcripts/captions |
-| goodq_audio_epoch_2025_12_22 | 512 | Audio embeddings (CLAP) |
+| goodq_clip_epoch_<epoch> | 512 | Visual scenes (CLIP) |
+| goodq_dino_epoch_<epoch> | 768 | Visual scenes (DINO) |
+| goodq_text_epoch_<epoch> | 384 | Transcripts/captions |
+| goodq_audio_epoch_<epoch> | 512 | Audio embeddings (CLAP) |
 
 Collection names are configured in `configs/config.yaml`; trust config if the active epoch changes.
+
+For CLAP audio coverage, do not treat a matching `scene_id` as current-run
+success by itself. Current-run audio-vector success requires `clap_meta.status
+== ok` plus a Qdrant audio payload with matching `run_id` and required
+provenance fields. See
+`docs/architecture/AUDIO_VECTOR_PROVENANCE_CONTRACT.md`.
 
 ---
 
@@ -105,8 +111,8 @@ results = engine.search_audio(
 ```
 Binary:  <project_root>\vendor\qdrant\qdrant.exe
 Config:  <project_root>\vendor\qdrant\config.yaml
-Data:    resolved qdrant_storage path from canonical config
-Logs:    <GOODQ_LOG_DIR>\qdrant_*.log (if service)
+Data:    <GOODQ_DATA_ROOT>\qdrant_storage
+Logs:    <project_root>\logs\qdrant_*.log (if service)
 ```
 
 ---
@@ -125,7 +131,7 @@ taskkill /PID <PID> /F
 ### Check Logs
 ```powershell
 # Service logs
-Get-Content <GOODQ_LOG_DIR>\qdrant_stderr.log -Tail 50
+Get-Content <project_root>\logs\qdrant_stderr.log -Tail 50
 
 # Or run manual to see output
 scripts\qdrant\START_QDRANT.bat
@@ -137,7 +143,7 @@ scripts\qdrant\START_QDRANT.bat
 net stop GoodQ_Qdrant
 
 # Delete data (WARNING: loses all vectors!)
-rmdir /s /q <resolved qdrant_storage>
+rmdir /s /q <GOODQ_DATA_ROOT>\qdrant_storage
 
 # Reinitialize
 scripts\qdrant\START_QDRANT.bat

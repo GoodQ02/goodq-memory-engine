@@ -1,3 +1,8 @@
+<!-- DOC_BADGE: OPERATIONAL -->
+<!-- DOC_STATUS: ACTIVE_POINTER -->
+<!-- DOC_CANONICAL_POINTER: docs/architecture/INGEST_ORCHESTRATION_CONTRACT.md -->
+<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
+
 # Pipelines Architecture
 
 **Status:** Active (Compatibility Reference)  
@@ -28,21 +33,6 @@ result = run_direct_ingestion(video_path="path/to/video.mp4", cfg=config_dict)
 
 **Implementation:** Imports and delegates to `cli.run_ingestion.run()` with scene-based processing.
 
-## Placeholder/Future Components
-
-### goodq_chat.py
-**Status:** 🚧 PLACEHOLDER (Not Implemented)  
-**Purpose:** Future conversational interface pipeline  
-**Priority:** LOW - Focus is on ingestion stability  
-
-Stub exists for:
-- LLM chat integration (`steps.llm_chat.step`)
-- TTS output (`steps.tts.step`)
-- System metrics context
-- Home Assistant integration
-
-**Do Not Use:** This is a design placeholder only.
-
 ## Architecture Flow
 
 ```
@@ -68,7 +58,7 @@ Vision + Audio + Entity + KG Steps
 
 1. **Decoupling:** CLI tools can call ingestion without importing CLI-specific code
 2. **Testing:** Test harnesses can invoke processing programmatically
-3. **Future Flexibility:** Can add new pipeline types (streaming, batch, chat) without changing core logic
+3. **Future Flexibility:** Can add new programmatic entry points without changing core logic
 4. **Legacy Compatibility:** Existing code calling `pipelines.*` continues to work
 
 ## Non-Action Rules

@@ -19,10 +19,10 @@ This file classifies scripts that were previously ambiguous in audits so they ar
 | `scripts/wsl/install_audio_service.sh` | Active utility | Installs and configures WSL audio service components. |
 | `scripts/wsl/smoke_wsl_memory.sh` | Active utility | WSL smoke probe for memory/runtime readiness. |
 | `scripts/test_all_endpoints.py` | Active validation | Quick endpoint availability validation across configured services. |
+| `scripts/archive/migrations/CRITICAL_EMOJI_PURGE.py` | Historical | One-time emoji purge migration tool from early stabilization work. |
+| `scripts/archive/migrations/Fix-SystemPaths.ps1` | Historical | One-time host PATH repair helper for legacy workstation setup. |
+| `scripts/archive/migrations/migrate_data_paths.ps1` | Historical | One-time migration of legacy data roots to canonical data location. |
 
 ## Archive Rule
 
-One-time, host-specific, or migration-only scripts are not part of the public
-branch. Keep public scripts limited to supported runtime, bootstrap, diagnostic,
-and developer utilities. Preserve private historical scripts on the development
-line only when they still have forensic value.
+If a script is one-time, host-specific, or migration-only, place it under `scripts/archive/` and classify it here as `Historical`.

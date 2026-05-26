@@ -1,3 +1,8 @@
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: REFERENCE_ONLY -->
+<!-- DOC_CANONICAL_POINTER: docs/SCENE_MANIFEST_SPECIFICATION.md -->
+<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
+
 # Scene Optimization Guide
 
 ## Overview

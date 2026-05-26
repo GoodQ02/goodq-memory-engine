@@ -85,7 +85,7 @@ Do not select these for Reference Pack v0:
 - COCO, Common Voice, or other gated datasets unless separately reviewed.
 - Red Cross preparedness material unless separate-license review is complete.
 - Local `broad_sample.mp4` unless source and redistribution status are resolved.
-- Local non-cleared PDF samples unless source and redistribution status are
+- Local `anger_elimination.pdf` unless source and redistribution status are
   resolved.
 - Any runtime model cache asset; runtime models belong in `model_cache_pack`,
   not Reference Pack v0.

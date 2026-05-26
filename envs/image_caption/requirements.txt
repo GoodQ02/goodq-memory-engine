@@ -1,7 +1,12 @@
-torch==2.3.1
+# Canonical reproducible install recipe: ../locks/image_caption.lock.txt
+# Keep these direct-install hints aligned with the lock's base Torch lane.
+torch==2.5.1
+torchvision==0.20.1
+torchaudio==2.5.1
 transformers==4.43.3
 accelerate==0.33.0
 Pillow==12.0.0
+pytesseract==0.3.10
 sentencepiece==0.2.0
 tokenizers==0.19.1
 timm==0.9.5

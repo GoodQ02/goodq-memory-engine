@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-04-17 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-20 -->
 
 # GoodQ4All Agent Operating Protocol
 
@@ -95,14 +95,16 @@ Preferred escalation order:
 - multi-episode witness only after the smaller gates pass
 
 ## Documentation Reading Order (authoritative)
-- docs/HANDOFF_BASEMENT_PHASE.md
+- docs/agent/CURRENT_STATE.md
+- docs/agent/current_state.json
+- docs/agent/README.md
+- docs/agent/workflows/EVIDENCE_FIRST_RUNTIME_REPAIR.md
+- docs/agent/workflows/CLEAN_MEMORY_START.md
 - docs/architecture/AGENT_DECISION_PROTOCOL.md
 - docs/architecture/INGEST_ORCHESTRATION_CONTRACT.md
 - docs/architecture/IDENTITY_STITCHING_CONTRACT.md
 - docs/reference/WSL_AUDIO_RUNTIME.md
 - docs/SCENE_MANIFEST_SPECIFICATION.md
-- docs/goodq4all_agent_status.md
-- docs/SYSTEM_SNAPSHOT.md
 - docs/architecture/SYSTEM_ARCHITECTURE.md
 - docs/architecture/ARCHITECTURE_REFERENCE.md
 - docs/architecture/MEMORY_STORAGE.md
@@ -112,7 +114,12 @@ Preferred escalation order:
 - docs/PHASE6_MULTIMODAL_FUSION.md
 - docs/CLI-REFERENCE.md
 - docs/technical/LIB_COMPONENTS.md
+- docs/goodq4all_agent_status.md
+- docs/SYSTEM_SNAPSHOT.md
+- docs/HANDOFF_BASEMENT_PHASE.md
 - Do not contradict these without explicit instruction.
+- Treat `docs/HANDOFF_BASEMENT_PHASE.md` as a sealed basement-era record, not
+  the active scratchpad for new-agent restart state.
 
 ## Security and Data Handling
 - Secrets: `.env.local` only; never in logs, code, or docs.

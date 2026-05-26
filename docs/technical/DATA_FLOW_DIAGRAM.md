@@ -1,4 +1,11 @@
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: REFERENCE_ONLY -->
+<!-- DOC_CANONICAL_POINTER: docs/architecture/SYSTEM_ARCHITECTURE.md -->
+<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
+
 # 📊 GoodQ Data Flow - Current vs. Fixed
+
+> Historical architecture snapshot. Older API examples in this document, including the legacy `GET /api/search?q=...` surface, are preserved to explain the original repair narrative and should not be treated as the active contract. Current search/retrieval truth lives under `POST /api/search/multimodal`, `GET /api/search/text`, `GET /api/search/visual`, and the router-backed scene surfaces documented in `docs/reference/API.md`.
 
 ## 🔴 CURRENT STATE (Broken)
 
@@ -397,7 +404,7 @@ objects: 1000+
 transcription: present
 ```
 
-### 5. API Test
+### 5. Historical API Test
 ```bash
 curl http://localhost:30000/api/search?q=person
 
@@ -446,4 +453,3 @@ Week 3+: Advanced
 ---
 
 **The fix is simple. The impact is huge. Let's do this!** 🚀
-

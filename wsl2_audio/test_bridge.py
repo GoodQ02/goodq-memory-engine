@@ -2,7 +2,6 @@
 Test script for WSL2 audio bridge
 """
 
-import os
 import sys
 import time
 from pathlib import Path
@@ -11,46 +10,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from wsl2_audio.audio_bridge import WSL2AudioBridge
-
-
-REPO_ROOT = Path(__file__).resolve().parents[1]
-AUDIO_EXTENSIONS = ("*.wav", "*.mp3", "*.mp4", "*.m4a")
-
-
-def _configured_audio_locations():
-    """Return explicit, bounded locations for local bridge smoke inputs."""
-    direct_file = os.environ.get("GOODQ_TEST_AUDIO")
-    if direct_file:
-        yield Path(direct_file)
-
-    for env_name in ("GOODQ_AUDIO_TEST_DIR", "GOODQ_IMPORT_INBOX"):
-        value = os.environ.get(env_name)
-        if value:
-            yield Path(value)
-
-    data_root = os.environ.get("GOODQ_DATA_ROOT")
-    if data_root:
-        root = Path(data_root)
-        yield root / "GoodQ_Data" / "processing"
-        yield root / "GoodQ_Data" / "import_inbox"
-
-    yield REPO_ROOT / "import_inbox"
-    yield REPO_ROOT / "samples" / "ingestion"
-
-
-def _find_audio_file():
-    checked = []
-    for location in _configured_audio_locations():
-        checked.append(location)
-        if location.is_file():
-            return location, checked
-        if location.is_dir():
-            for ext in AUDIO_EXTENSIONS:
-                files = sorted(location.glob(ext))
-                if files:
-                    return files[0], checked
-    return None, checked
-
 
 def main():
     print("="*80)
@@ -81,14 +40,27 @@ def main():
     # Find a test audio file
     print("[3/3] Looking for test audio...")
     
-    audio_file, checked_paths = _find_audio_file()
+    test_paths = [
+        Path("L:/_DATA/GoodQ_Data/processing"),
+        Path("L:/goodq4all/import_inbox"),
+        Path("L:/_DATA/FAMILY_FEAST")
+    ]
+    
+    audio_file = None
+    for test_path in test_paths:
+        if test_path.exists():
+            for ext in ['*.wav', '*.mp3', '*.mp4', '*.m4a']:
+                files = list(test_path.glob(ext))
+                if files:
+                    audio_file = files[0]
+                    break
+            if audio_file:
+                break
     
     if not audio_file:
         print("[SYMBOL] No test audio file found")
-        print("  Provide an audio file through GOODQ_TEST_AUDIO, GOODQ_AUDIO_TEST_DIR,")
-        print("  GOODQ_IMPORT_INBOX, GOODQ_DATA_ROOT, or the repo samples/ingestion folder.")
-        print("  Checked:")
-        for p in checked_paths:
+        print("  Please place an audio file in one of these locations:")
+        for p in test_paths:
             print(f"    {p}")
         return
     

@@ -16,9 +16,6 @@ service:
   # Enable CORS for local development
   enable_cors: true
 
-# Disable upstream usage reporting for local-first operation.
-telemetry_disabled: true
-
 # Performance tuning for your RTX 4070 Ti SUPER
 optimizer:
   # Number of segments to keep in memory

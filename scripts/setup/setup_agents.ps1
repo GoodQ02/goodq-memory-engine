@@ -9,7 +9,7 @@ $condaExe = Get-GoodQCondaExe
 $script:RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\\..")).Path
 $script:RepoRootPosix = $script:RepoRoot.Replace('\', '/')
 $script:DataRootBase = if ([string]::IsNullOrWhiteSpace($env:GOODQ_DATA_ROOT)) { "C:/GoodQ_Data" } else { $env:GOODQ_DATA_ROOT.Replace('\', '/') }
-$script:ModelsRoot = if ([string]::IsNullOrWhiteSpace($env:GOODQ_MODELS_DIR)) { (Join-Path $script:DataRootBase "models").Replace('\', '/') } else { $env:GOODQ_MODELS_DIR.Replace('\', '/') }
+$script:ModelsRoot = if ([string]::IsNullOrWhiteSpace($env:GOODQ_MODELS_DIR)) { "$script:DataRootBase/models" } else { $env:GOODQ_MODELS_DIR.Replace('\', '/') }
 
 # Check prerequisites
 Write-Host "1. Checking prerequisites..." -ForegroundColor Yellow

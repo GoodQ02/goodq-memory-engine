@@ -1,3 +1,8 @@
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: REFERENCE_ONLY -->
+<!-- DOC_CANONICAL_POINTER: docs/reference/WSL_AUDIO_RUNTIME.md -->
+<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
+
 # 🔍 WSL2 Script Consistency Audit Report
 
 **Date:** December 15, 2025 01:32 UTC  

@@ -91,7 +91,10 @@ def test_image_embed_dino_reports_diagnostics_on_python_error(monkeypatch, tmp_p
     monkeypatch.setattr(module, "_load", lambda: False)
     monkeypatch.setattr(module, "_DINO", {"model": _FakeModel(), "proc": _FakeProc(), "device": "cuda"})
 
-    result = module.image_embed_dino({"source_path": str(image_path)}, {"paths": {}})
+    result = module.image_embed_dino(
+        {"source_path": str(image_path)},
+        {"paths": {"faiss_dino_path": str(tmp_path / "dino.index")}},
+    )
     dino_meta = result["dino_meta"]
 
     assert dino_meta["status"] == "error"

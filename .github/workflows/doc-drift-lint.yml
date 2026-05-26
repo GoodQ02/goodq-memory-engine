@@ -3,14 +3,22 @@ name: doc-drift-lint
 on:
   push:
     branches:
+      - dev
       - main
+    paths:
+      - ".github/workflows/doc-drift-lint.yml"
+      - "README*.md"
+      - "docs/**"
+      - "AGENTS.md"
+      - "scripts/docs/doc_drift_lint.py"
   pull_request:
-    branches:
-      - main
+    paths:
+      - ".github/workflows/doc-drift-lint.yml"
+      - "README*.md"
+      - "docs/**"
+      - "AGENTS.md"
+      - "scripts/docs/doc_drift_lint.py"
   workflow_dispatch:
-
-permissions:
-  contents: read
 
 jobs:
   docs-drift-lint:

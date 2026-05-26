@@ -285,7 +285,7 @@ Healthy verification should show:
 2. `temporal_index.json` exists under the epoch processing tree.
 3. `phase6_complete = true` on successful episodes.
 4. `qdrant_ok = true` for successful scene-vector commits.
-5. `temporal_index.json` matches the fresh semantic outputs rather than collapsing to placeholders.
+5. `temporal_index.json` matches the fresh semantic outputs rather than collapsing to empty generic summaries.
 6. harmonized scene fields in `scene_manifest.json` match the per-segment truth in `temporal_index.json`.
 
 ### Practical Inspection

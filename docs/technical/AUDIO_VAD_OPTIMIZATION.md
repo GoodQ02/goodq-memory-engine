@@ -1,3 +1,8 @@
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: REFERENCE_ONLY -->
+<!-- DOC_CANONICAL_POINTER: docs/reference/WSL_AUDIO_RUNTIME.md -->
+<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
+
 # Audio Diarization VAD Optimization
 
 ## Overview
@@ -259,7 +264,7 @@ This prevents memory issues with extremely long recordings.
 
 ### Before VAD
 ```
-[INFO] Starting diarization for a large local benchmark video (7.3GB, 240.0min) on cuda
+[INFO] Starting diarization for 01. 1987 - 1988.mp4 (7.3GB, 240.0min) on cuda
 [INFO] Long audio (240.0min) - splitting into 16 chunks of 15.0min each
 [INFO] Estimated processing time: 360.0-480.0 minutes (6-8 hours)
 [INFO] Chunk 1/16: Processing...
@@ -270,7 +275,7 @@ This prevents memory issues with extremely long recordings.
 ### After VAD
 ```
 [INFO] Running VAD preprocessing to filter silence and noise...
-[VAD] Analyzing audio: large local benchmark video
+[VAD] Analyzing audio: 01. 1987 - 1988.mp4
 [VAD] ✓ Found 234 speech segments
 [VAD] Total speech: 80.0min of 240.0min (33.3%)
 [INFO] VAD complete in 45s
@@ -310,4 +315,3 @@ VAD preprocessing is a **game-changer** for audio diarization:
 ✓ **Easy to configure** - enabled by default with smart defaults  
 
 The optimization is **transparent** - just enable it in config and enjoy faster, more accurate diarization!
-

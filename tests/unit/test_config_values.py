@@ -49,11 +49,10 @@ def test_validated_config_preserves_llm_runtime_contract():
             sys.path.remove(scripts_path)
 
     llm = result.get("llm", {})
-    assert llm.get("api_url") or llm.get("vllm_url")
-    assert llm.get("model_id") or llm.get("vllm_model")
-    if llm.get("vllm_url"):
-        assert llm.get("ollama_url")
-        assert llm.get("features", {}).get("scene_context_analysis") is True
+    assert llm.get("vllm_url")
+    assert llm.get("ollama_url")
+    assert llm.get("vllm_model")
+    assert llm.get("features", {}).get("scene_context_analysis") is True
 
 
 def test_config_derives_modality_faiss_paths_from_faiss_dir(tmp_path):
@@ -101,13 +100,12 @@ def test_config_values():
     threshold = scene_detect.get('threshold', 'NOT SET')
     min_scene = scene_detect.get('min_scene_len_sec', 'NOT SET')
     max_scenes = scene_detect.get('max_scenes', 'NOT SET')
-    entity_samples = scene_detect.get('entity_max_samples', 'NOT SET')
-    
+
     print(f"   Scene Threshold: {threshold}")
     print(f"   Min Scene Length: {min_scene}s")
     max_scenes_display = max_scenes if isinstance(max_scenes, (int, float)) and max_scenes > 0 else "unlimited"
     print(f"   Max Scenes: {max_scenes_display}")
-    print(f"   Entity Max Samples: {entity_samples}")
+    print("   Entity Refinement: retired")
     
     # Validate
     if threshold == 15.0:

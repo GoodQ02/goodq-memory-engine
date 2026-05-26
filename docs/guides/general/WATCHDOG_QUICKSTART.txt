@@ -1,3 +1,8 @@
+<!-- DOC_BADGE: OPERATIONAL -->
+<!-- DOC_STATUS: ACTIVE_POINTER -->
+<!-- DOC_POINTER: docs/guides/watchdog/WATCHDOG_INDEX.md -->
+<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
+
 ╔══════════════════════════════════════════════════════════════╗
 ║                  GOODQ WATCHDOG QUICK START                  ║
 ╚══════════════════════════════════════════════════════════════╝
@@ -48,3 +53,7 @@ NOTE: This is a text-mode quickstart helper and may reflect an earlier directory
    Press Ctrl+C in the watchdog window
 
 💡 TIP: Leave watchdog running and just drop files!
+<!-- DOC_BADGE: OPERATIONAL -->
+<!-- DOC_STATUS: ACTIVE_POINTER -->
+<!-- DOC_CANONICAL_POINTER: docs/guides/watchdog/WATCHDOG_INDEX.md -->
+<!-- DOC_LAST_VERIFIED: 2026-05-07 -->

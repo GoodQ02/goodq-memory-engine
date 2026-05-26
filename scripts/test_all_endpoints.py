@@ -5,13 +5,10 @@ Tests all UI-required endpoints for proper response structure
 
 import requests
 import json
-import os
-from pathlib import Path
 from typing import Dict, Any, List
 from datetime import datetime
 
 API_BASE = "http://localhost:30000/api"
-REPO_ROOT = Path(__file__).resolve().parents[1]
 
 # Color codes for output
 GREEN = "\033[92m"
@@ -173,13 +170,9 @@ def main():
     tester.print_summary()
     
     # Save detailed results
-    results_file = Path(
-        os.environ.get(
-            "GOODQ_ENDPOINT_VALIDATION_REPORT",
-            REPO_ROOT / "reports" / "endpoint_validation_phase2.json",
-        )
-    )
-    results_file.parent.mkdir(parents=True, exist_ok=True)
+    results_file = "L:/goodq4all/reports/endpoint_validation_phase2.json"
+    import os
+    os.makedirs(os.path.dirname(results_file), exist_ok=True)
     with open(results_file, 'w') as f:
         json.dump({
             "timestamp": datetime.now().isoformat(),

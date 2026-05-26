@@ -1,3 +1,7 @@
+<!-- DOC_BADGE: OPERATIONAL -->
+<!-- DOC_STATUS: ACTIVE -->
+<!-- DOC_LAST_VERIFIED: 2026-03-20 -->
+
 # Error Handling & Recovery System
 
 **Status:** Operational with conditional Control Agent support  
@@ -52,16 +56,18 @@ If no `llm_client` is injected:
 
 ## Historical Surfaces
 
-The original Phase 2 / Phase 3 self-healing campaign produced standalone
-validation harnesses that are no longer part of the active support surface. They
-are retained only on the private development line when needed for historical
-forensics.
+The original Phase 2 / Phase 3 self-healing campaign produced standalone validation harnesses that are no longer part of the active support surface:
+
+- `scripts/archive/legacy_validation/root/test_recovery_system.py`
+- `scripts/archive/legacy_validation/root/test_phase3_healing.py`
+- `scripts/archive/legacy_validation/root/test_phase2_integration.py`
+
+These are preserved as historical reference only.
 
 ## Operator Guidance
 
 - Use canonical runtime commands first.
-- Treat retired recovery harnesses as historical evidence, not current
-  acceptance tests.
+- Treat archived recovery harnesses as historical evidence, not current acceptance tests.
 - When debugging current runtime behavior, prefer:
   - `python scripts/utils/check_watchdog_status.py`
   - `python scripts/test_llm_client.py`

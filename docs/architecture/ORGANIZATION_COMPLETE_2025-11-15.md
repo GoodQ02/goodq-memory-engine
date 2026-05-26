@@ -98,7 +98,8 @@ Successfully reorganized the entire GoodQ4All repository structure, consolidatin
 ✓ INSTALL_WSL2_AUDIO.bat
 ✓ PRE_LAUNCH_CHECK.bat
 ✓ RUN_GPU_OPTIMIZATION.bat
-✓ legacy vision audit/optimization launchers retired from public branch
+✓ run_vision_audit.bat
+✓ run_vision_optimization.bat
 ✓ TEST_AUDIO_DIARIZE_BREAKDOWN.bat
 ✓ TEST_AUDIO_GPU.bat
 ✓ TEST_GPU_PIPELINE.bat
@@ -180,8 +181,7 @@ Updated all references from `config.*` to `configs.*`:
    # After:  from configs.python_paths import get_conda_run_command
    ```
 
-2. Historical interpreter-path harness now retained only on the private
-   development line; public coverage lives in 	ests/unit/.
+2. `tests/legacy/root_harnesses/test_python_paths.py`
    ```python
    # Before: from config.python_paths import ...
    # After:  from configs.python_paths import ...

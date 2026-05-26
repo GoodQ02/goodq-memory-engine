@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-03-26 -->
+<!-- DOC_LAST_VERIFIED: 2026-04-22 -->
 
 # Ingest Orchestration Contract
 
@@ -58,6 +58,29 @@ runner:
 - `pipelines/direct_ingestion.py` is a thin wrapper around `cli/run_ingestion.py`
 - `cli.watchdog` is an orchestration surface, not an alternate ingest engine
 - launchers and wrappers may start ingestion, but they do not redefine pipeline order
+
+### 2a. API mutation boundary
+
+The active API does not currently own ingest orchestration.
+
+Rules:
+
+1. `POST /api/system/ingest` must remain disabled unless it can act as a controlled facade over the canonical watchdog / CLI runtime.
+2. The active API may expose a narrow ingest facade only if it:
+   - validates a single supported local file
+   - writes a durable request record
+   - stages the file into the canonical inbox
+   - returns a request handle
+   - resolves status from the request ledger outward into watchdog/runtime artifacts
+3. Any ingest API surface must be:
+   - explicit
+   - confirmation-gated
+   - policy-driven
+   - budgeted
+   - checkpointed
+   - auditable
+4. An ingest route must hand work into the canonical runtime path rather than introducing a second ingest engine.
+5. `POST /api/system/reindex` and `POST /api/system/reload` remain operator-only until a real policy-driven control plane exists for those maintenance actions.
 
 ### 3. Step system role
 

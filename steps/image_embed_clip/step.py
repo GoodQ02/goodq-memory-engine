@@ -80,10 +80,13 @@ def _load() -> None:
 
 
 def image_embed_clip(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
-    _debug_env()
     path = item.get("source_path")
     if not isinstance(path, str) or not os.path.isfile(path):
         return {"clip_meta": {"status": "no_file"}}
+    index_path = (cfg.get("paths", {}) or {}).get("faiss_clip_path")
+    if not index_path:
+        return {"clip_meta": {"status": "no_index_path", "reason": "direct_faiss_index_unconfigured"}}
+    _debug_env()
     _load()
     if _CLIP["model"] is None:
         return {"clip_meta": {"status": "unavailable"}}
@@ -106,9 +109,6 @@ def image_embed_clip(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
             else:
                 out = _CLIP["model"].get_image_features(**ipt)
         feats = out.detach().cpu().numpy().astype("float32")
-        index_path = (cfg.get("paths", {}) or {}).get("faiss_clip_path")
-        if not index_path:
-            return {"clip_meta": {"status": "no_index_path"}}
         os.makedirs(os.path.dirname(index_path), exist_ok=True)
         if os.path.isfile(index_path):
             index = faiss.read_index(index_path)

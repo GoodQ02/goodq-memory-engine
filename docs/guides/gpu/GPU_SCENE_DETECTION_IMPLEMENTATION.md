@@ -1,3 +1,8 @@
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: REFERENCE_ONLY -->
+<!-- DOC_CANONICAL_POINTER: docs/architecture/components/VISION_PIPELINE.md -->
+<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
+
 # GPU Scene Detection Implementation Complete ✅
 
 **Date**: 2025-11-13  
@@ -29,7 +34,7 @@ Created custom GPU-accelerated scene detection using PyTorch CUDA:
 
 ### Performance Results
 
-**Test Video**: large local benchmark video
+**Test Video**: `01. 1987 - 1988.mp4`
 - Duration: 8801 seconds (2.44 hours)
 - Frames: 263,780 frames @ 29.97 fps
 - Size: 7.46 GB
@@ -137,4 +142,3 @@ python <project_root>\scripts\test_gpu_scene_detection.py
 ---
 
 **This is a game-changing improvement that eliminates the primary bottleneck in the entire pipeline!** 🚀
-

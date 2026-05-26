@@ -1,5 +1,9 @@
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: HISTORICAL_REFERENCE -->
+<!-- DOC_LAST_VERIFIED: 2026-04-22 -->
+
 # GPU Monitoring & Process Control - COMPLETE ✅
-> Historical implementation report — documents a 2025 process-manager and `api_server.py` integration that is no longer part of the canonical supported runtime. References to `process_manager.py` and `api_server.py` are preserved for context only.
+> Historical implementation report — documents a 2025 process-manager and `api_server.py` integration that is no longer part of the canonical supported runtime. References to `process_manager.py`, `api_server.py`, and `GET /api/processes` are preserved for context only. The active line now uses `GET /api/gpu/stats`, `GET /api/engines`, and watchdog/runtime artifacts for truthful observability.
 
 ## Date: 2025-11-12
 **Status:** Historical implementation snapshot
@@ -33,11 +37,8 @@ Comprehensive GPU monitoring and pipeline process tracking is now fully integrat
   - Text Embedding (goodq_text_embed)
 
 ### 2. **API Integration** (`api_server.py`)
-- New endpoint: `GET /api/processes`
-  - Returns real-time GPU status
-  - Lists all core processes with status
-  - Shows all pipeline engines with models and environments
-  - Auto-refreshes every 5 seconds
+- Historical endpoint: `GET /api/processes`
+  - This endpoint was part of the 2025 rollout and is no longer part of the active supported API surface.
 
 ### 3. **UI Enhancement** (`index.html`)
 - **GPU Status Card**
@@ -67,7 +68,7 @@ Comprehensive GPU monitoring and pipeline process tracking is now fully integrat
 ```
 nvidia-smi (CLI) → ProcessManager.get_gpu_info()
                 → ProcessManager.get_pipeline_processes()
-                → API /api/processes endpoint
+                → Historical API /api/processes endpoint
                 → UI refreshProcesses()
                 → Real-time dashboard display
 ```
@@ -277,4 +278,3 @@ pip install psutil          # Process monitoring (already installed)
 **The GoodQ Pipeline Engines page is now a comprehensive real-time monitoring dashboard for GPU utilization and process management.**
 
 Next test: Run a full ingestion to watch the engines activate in real-time! 🎬🔥
-

@@ -48,7 +48,7 @@ def _safe_str(v: Any) -> Optional[str]:
         return None
 
 
-def _confidence_stub() -> Dict[str, Any]:
+def _default_confidence_payload() -> Dict[str, Any]:
     return {
         "intrinsic": None,
         "source": None,
@@ -175,7 +175,7 @@ def _infer_store_ref(hit: Dict[str, Any]) -> Optional[str]:
 def _infer_evidence_hit(hit: Dict[str, Any], *, intents: set[str]) -> Dict[str, Any]:
     payload = hit.get("payload") if isinstance(hit.get("payload"), dict) else {}
     prov = hit.get("provenance") if isinstance(hit.get("provenance"), dict) else None
-    confidence = hit.get("confidence") if isinstance(hit.get("confidence"), dict) else _confidence_stub()
+    confidence = hit.get("confidence") if isinstance(hit.get("confidence"), dict) else _default_confidence_payload()
 
     evidence_limits: List[str] = []
 
@@ -214,7 +214,7 @@ def _infer_evidence_hit(hit: Dict[str, Any], *, intents: set[str]) -> Dict[str, 
         "score": None,
         "payload": payload,
         "provenance": prov if isinstance(prov, dict) else None,
-        "confidence": confidence if isinstance(confidence, dict) else _confidence_stub(),
+        "confidence": confidence if isinstance(confidence, dict) else _default_confidence_payload(),
         "limits": evidence_limits,
     }
 
@@ -393,7 +393,7 @@ def format_epistemic_read(
                 "candidate_id": cand.candidate_id,
                 "state": state,
                 "answer_text": f"candidate_scene video_id={cand.video_id} scene_id={cand.scene_id}",
-                "confidence": _confidence_stub(),
+                "confidence": _default_confidence_payload(),
                 "evidence": cand.evidence,
                 "source_hit_order": list(cand.source_hit_order),
                 "limits": limits,

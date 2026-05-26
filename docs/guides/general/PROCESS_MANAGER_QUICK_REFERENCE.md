@@ -1,3 +1,8 @@
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: HISTORICAL_POINTER -->
+<!-- DOC_CANONICAL_POINTER: docs/guides/general/LAUNCH_INSTRUCTIONS.md -->
+<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
+
 # GoodQ4All Process Manager - Historical Note
 > Historical note — `process_manager.py` and `TEST_PROCESS_MANAGER.bat` were retired from the tracked surface on 2026-03-14 because they targeted deleted legacy launchers and were no longer part of the supported runtime.
 

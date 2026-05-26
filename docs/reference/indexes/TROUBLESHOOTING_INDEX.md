@@ -1,3 +1,7 @@
+<!-- DOC_BADGE: OPERATIONAL -->
+<!-- DOC_STATUS: ACTIVE -->
+<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
+
 # GoodQ4All Troubleshooting & Fixes Index
 
 **Purpose:** Central entrypoint for current troubleshooting guides and archived fix-specific reports.

@@ -110,6 +110,11 @@ class RuntimeConfigSection(BaseModel):
 class LLMConfig(BaseModel):
     api_url: str
     model_id: str
+    features: Dict[str, Any] = Field(default_factory=dict)
+    vllm_url: Optional[str] = None
+    vllm_model: Optional[str] = None
+    ollama_url: Optional[str] = None
+    ollama_model: Optional[str] = None
 
 
 class TTSConfig(BaseModel):
@@ -277,10 +282,6 @@ class VideoSceneDetectConfig(BaseModel):
     threshold: float = 30.0
     min_scene_len_sec: float = 300.0
     max_scenes: int = 0
-    entity_refine: bool = False
-    entity_sample_rate: float = 0.5
-    entity_min_duration: float = 300.0
-    entity_max_samples: int = 300
 
 
 class VideoConfig(BaseModel):

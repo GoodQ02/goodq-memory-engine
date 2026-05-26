@@ -1,3 +1,7 @@
+<!-- DOC_BADGE: CANONICAL -->
+<!-- DOC_STATUS: AUTHORITATIVE -->
+<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
+
 # Non-Action Contract (v1)
 
 **Status:** ✅ Contract (declarative; no enforcement wiring)  

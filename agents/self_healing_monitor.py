@@ -9,12 +9,15 @@ import os
 import sqlite3
 import json
 from pathlib import Path
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
 import time
 
 logger = logging.getLogger(__name__)
 
+from agents.config_healer import ConfigHealer
+from lib.llm_client import LLMClient
+from steps.common.llm_model_factory import build_llm_models
 from steps.common.config_loader import load_configs
 
 
@@ -41,7 +44,7 @@ def _default_log_dir(config: Dict[str, Any]) -> Path:
 class SelfHealingMonitor:
     """Monitors pipeline health and applies automatic fixes."""
     
-    def __init__(self, cfg: Dict[str, Any], db_path: str | None = None):
+    def __init__(self, cfg: Dict[str, Any], db_path: str | None = None, healer: Optional[ConfigHealer] = None):
         self.config = cfg
         paths = (self.config.get("paths") or {}) if isinstance(self.config, dict) else {}
         resolved_db_path = db_path or (paths.get("db_path") if isinstance(paths, dict) else None) or _default_memory_db_path()
@@ -50,6 +53,7 @@ class SelfHealingMonitor:
         self.llm_config = self.config.get('llm', {})
         self.healing_history = []
         self.patterns = self._load_error_patterns()
+        self.healer = healer
     
     def _load_error_patterns(self) -> List[Dict]:
         """Load known error patterns and their fixes."""
@@ -69,7 +73,7 @@ class SelfHealingMonitor:
             {
                 "pattern": "model_not_found",
                 "keywords": ["model not found", "cannot find model", "no such file"],
-                "fix_type": "download_model",
+                "fix_type": "fallback_local_model",
                 "params": {}
             },
             {
@@ -227,8 +231,8 @@ class SelfHealingMonitor:
             elif fix_type == "reduce_batch_size":
                 return await self._fix_reduce_batch_size(issue, params)
             
-            elif fix_type == "download_model":
-                return await self._fix_download_model(issue, params)
+            elif fix_type == "fallback_local_model":
+                return await self._fix_fallback_local_model(issue, params)
             
             elif fix_type == "fallback_to_cpu":
                 return await self._fix_fallback_cpu(issue, params)
@@ -245,73 +249,75 @@ class SelfHealingMonitor:
         except Exception as e:
             logger.error(f"Fix application failed: {str(e)}", exc_info=True)
             return {"success": False, "error": str(e)}
+
+    def _failed_step_name(self, issue: Dict) -> str:
+        result = issue.get("result") if isinstance(issue.get("result"), dict) else {}
+        return str(result.get("failed_step") or issue.get("workflow_name") or "unknown")
+
+    async def _delegate_healing_action(self, issue: Dict, action: str, context: Dict[str, Any]) -> Dict:
+        if self.healer is None:
+            return {"success": False, "error": f"No ConfigHealer available for action={action}"}
+
+        success, message = self.healer.apply_healing_action(action, context)
+        return {"success": success, "action": action, "message": message}
     
     async def _fix_retry_with_backoff(self, issue: Dict, params: Dict) -> Dict:
         """Retry failed step with exponential backoff."""
-        
-        max_retries = params.get('max_retries', 3)
-        backoff_factor = params.get('backoff_factor', 2)
-        
-        # TODO: Implement retry logic
-        # Would need to rerun the specific failed step
-        
-        return {
-            "success": True,
-            "action": "retry_scheduled",
-            "params": params
-        }
+        return await self._delegate_healing_action(
+            issue,
+            "enable_retry",
+            {
+                "step_name": self._failed_step_name(issue),
+                "max_retries": params.get("max_retries", 3),
+                "backoff_factor": params.get("backoff_factor", 2),
+            },
+        )
     
     async def _fix_reduce_batch_size(self, issue: Dict, params: Dict) -> Dict:
         """Reduce batch size to fix memory errors."""
-        
-        # Update config with smaller batch size
-        reduction = params.get('reduction_factor', 0.5)
-        
-        # TODO: Modify step config
-        
-        return {
-            "success": True,
-            "action": "batch_size_reduced",
-            "reduction_factor": reduction
-        }
+        return await self._delegate_healing_action(
+            issue,
+            "reduce_batch_size",
+            {
+                "step_name": self._failed_step_name(issue),
+                "reduction_factor": params.get("reduction_factor", 0.5),
+            },
+        )
     
-    async def _fix_download_model(self, issue: Dict, params: Dict) -> Dict:
-        """Download missing model."""
-        
-        # TODO: Trigger model download
-        
-        return {
-            "success": True,
-            "action": "model_download_initiated"
-        }
+    async def _fix_fallback_local_model(self, issue: Dict, params: Dict) -> Dict:
+        """Use a smaller local fallback model instead of attempting network downloads."""
+        return await self._delegate_healing_action(
+            issue,
+            "downgrade_model",
+            {"step_name": self._failed_step_name(issue)},
+        )
     
     async def _fix_fallback_cpu(self, issue: Dict, params: Dict) -> Dict:
         """Fallback to CPU processing."""
-        
-        # TODO: Update step config to use CPU
-        
-        return {
-            "success": True,
-            "action": "fallback_to_cpu_configured"
-        }
+        return await self._delegate_healing_action(
+            issue,
+            "switch_to_cpu",
+            {"step_name": self._failed_step_name(issue)},
+        )
     
     async def _fix_adjust_thresholds(self, issue: Dict, params: Dict) -> Dict:
         """Adjust detection thresholds."""
-        
-        # TODO: Modify threshold parameters
-        
-        return {
-            "success": True,
-            "action": "thresholds_adjusted"
-        }
+        return await self._delegate_healing_action(
+            issue,
+            "adjust_thresholds",
+            {
+                "step_name": self._failed_step_name(issue),
+                "error_text": str(issue.get("error", "")),
+            },
+        )
     
     async def _fix_skip_missing(self, issue: Dict, params: Dict) -> Dict:
         """Skip missing file and continue."""
-        
-        return {
-            "success": True,
-            "action": "file_skipped"
-        }
+        return await self._delegate_healing_action(
+            issue,
+            "skip_step",
+            {"step_name": self._failed_step_name(issue)},
+        )
     
     async def _llm_analyze_error(self, issue: Dict):
         """Use LLM to analyze unknown error."""
@@ -349,7 +355,21 @@ class SelfHealingMonitor:
 async def run_monitor():
     """Run the self-healing monitor."""
     cfg = load_configs({})
-    monitor = SelfHealingMonitor(cfg)
+    healer = None
+    try:
+        llm = LLMClient(
+            models=build_llm_models(cfg),
+            health_check_interval=60,
+            max_retries=3,
+            timeout=30,
+            cache_ttl=300,
+            enable_health_checks=False,
+        )
+        healer = ConfigHealer(llm_client=llm)
+    except Exception as exc:
+        logger.warning("Self-healing monitor starting without ConfigHealer: %s", exc)
+
+    monitor = SelfHealingMonitor(cfg, healer=healer)
     await monitor.monitor_and_heal(check_interval=60)
 
 

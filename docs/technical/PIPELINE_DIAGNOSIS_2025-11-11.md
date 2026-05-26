@@ -1,3 +1,8 @@
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: REFERENCE_ONLY -->
+<!-- DOC_CANONICAL_POINTER: docs/architecture/INGEST_ORCHESTRATION_CONTRACT.md -->
+<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
+
 # GoodQ4All Pipeline Diagnosis - 2025-11-11
 
 > Historical planning document. Preserved as a readable summary of the original
@@ -51,7 +56,7 @@ Exit code: 0
 
 ```text
 2025-11-10 20:29:57,492 [INFO] Mission timeout: 78668s (21.9h) for 7.28GB asset
-2025-11-10 20:29:57,492 [INFO] Asset: large local benchmark video
+2025-11-10 20:29:57,492 [INFO] Asset: 01. 1987 - 1988.mp4
 [CRASH within 1 minute]
 ```
 

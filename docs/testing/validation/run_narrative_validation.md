@@ -1,3 +1,8 @@
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: REFERENCE_ONLY -->
+<!-- DOC_CANONICAL_POINTER: docs/architecture/narrative_layer.md -->
+<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
+
 # Run Narrative Validation (Historical Only)
 
 STATUS: HISTORICAL (not active runtime truth)

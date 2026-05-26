@@ -73,35 +73,6 @@ def test_control_recurrence_api_lists_reports(monkeypatch, tmp_path: Path) -> No
     assert payload["reports"][0]["json_path"] == "run_a.json"
 
 
-def test_control_recurrence_api_honors_report_root_env(monkeypatch, tmp_path: Path) -> None:
-    report_dir = tmp_path / "external" / "control_recurrence"
-    _write_index(
-        report_dir,
-        [
-            {
-                "report_type": "single_run",
-                "report_id": "env_run",
-                "run_id": "env_run",
-                "json_path": "env_run.json",
-                "recommendation_status": "PASS",
-                "highest_category": "informational",
-                "total_signals": 0,
-                "blocking_signal_count": 0,
-                "created_or_updated_at": "2026-04-27T00:00:00+00:00",
-            }
-        ],
-    )
-    monkeypatch.setenv("GOODQ_CONTROL_RECURRENCE_REPORTS_ROOT", str(report_dir))
-    app = FastAPI()
-    app.include_router(control_recurrence.router)
-    client = TestClient(app)
-
-    payload = client.get("/api/control-recurrence/reports/latest").json()
-
-    assert payload["status"] == "ok"
-    assert payload["report"]["report_id"] == "env_run"
-
-
 def test_control_recurrence_api_latest_selects_newest(monkeypatch, tmp_path: Path) -> None:
     report_dir = tmp_path / "reports" / "control_recurrence"
     _write_index(

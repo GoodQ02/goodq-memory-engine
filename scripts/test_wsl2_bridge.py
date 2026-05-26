@@ -1,7 +1,6 @@
 """Test WSL2 Audio Bridge End-to-End"""
 from wsl2_audio_bridge import WSL2AudioBridge
-import os
-from pathlib import Path
+import json
 
 def test_audio_processing():
     print("="*60)
@@ -21,14 +20,7 @@ def test_audio_processing():
     print()
     
     # Process test audio
-    test_file = os.environ.get("GOODQ_TEST_AUDIO")
-    if not test_file:
-        print("   [FAIL] GOODQ_TEST_AUDIO must point to a local audio fixture")
-        return False
-    if not Path(test_file).is_file():
-        print(f"   [FAIL] GOODQ_TEST_AUDIO does not exist: {test_file}")
-        return False
-
+    test_file = r"L:\_DATA\GoodQ_Data\temp\test_chunk.wav"
     print(f"2. Processing test audio: {test_file}")
     
     try:

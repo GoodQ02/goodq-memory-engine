@@ -157,7 +157,7 @@ Those persisted outputs are then consumed by:
 - semantic entities surfaced through the scene bundle and KG
 
 **Current Runtime Truth**
-- placeholder scaffolding is suppressed
+- thin semantic scaffolding noise is suppressed
 - the taste layer now rejects filler/fragments and known joke aliases
 - conservative place inference from captions/objects is active
 
@@ -258,8 +258,7 @@ On a healthy witness:
 3. `phase6_complete = true` and `qdrant_ok = true` for healthy episodes.
 4. `faiss_ok = true` only when configured CLIP/DINO FAISS parity writes used
    explicit stable IDs.
-5. `temporal_index.json` reflects the visual evidence rather than collapsing to
-   placeholder summaries.
+5. `temporal_index.json` reflects the visual evidence rather than collapsing to generic summaries.
 6. Placeholder semantic junk does not dominate `top_entities`.
 
 ---

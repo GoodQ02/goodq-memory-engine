@@ -1,4 +1,13 @@
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: HISTORICAL_POINTER -->
+<!-- DOC_CANONICAL_POINTER: docs/reference/WSL_AUDIO_RUNTIME.md -->
+<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
+
 # WSL2 Audio Processing - Quick Reference Card
+
+> Historical bridge-era quick reference. For current WSL audio setup and
+> runtime authority, use `docs/reference/WSL_AUDIO_RUNTIME.md`,
+> `docs/guides/install/INSTALL.md`, and `wsl2_audio/README.md`.
 
 ## Installation (First Time)
 

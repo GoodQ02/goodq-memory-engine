@@ -1,0 +1,69 @@
+@echo off
+REM GoodQ Web Interface Launcher - IMPROVED VERSION
+REM Uses full paths to avoid PATH issues
+
+echo ================================================================================
+echo   GoodQ4All Web Interface Launcher (PATH-Independent)
+echo ================================================================================
+echo.
+
+cd /d L:\goodq4all
+
+REM Use full path to conda and python
+SET CONDA_PATH=C:\Users\jdben\miniconda3
+SET CONDA_EXE=%CONDA_PATH%\Scripts\conda.exe
+SET PYTHON_EXE=%CONDA_PATH%\python.exe
+
+REM Check if conda exists
+if not exist "%CONDA_EXE%" (
+    echo [ERROR] Conda not found at: %CONDA_EXE%
+    echo.
+    echo Please run: FIX_SYSTEM_PATH.ps1
+    echo.
+    pause
+    exit /b 1
+)
+
+echo [1/3] Activating conda environment...
+REM Use call to run conda activate in batch context
+call "%CONDA_PATH%\Scripts\activate.bat" goodq_zenml
+if errorlevel 1 (
+    echo [ERROR] Failed to activate goodq_zenml environment
+    echo.
+    echo Make sure the environment exists:
+    echo   %CONDA_EXE% env list
+    echo.
+    pause
+    exit /b 1
+)
+
+echo [2/3] Checking Python...
+where python >nul 2>&1
+if errorlevel 1 (
+    echo [WARNING] python not in PATH, using full path
+    SET PYTHON_CMD=%PYTHON_EXE%
+) else (
+    SET PYTHON_CMD=python
+)
+
+echo [3/3] Starting API server...
+echo.
+echo ================================================================================
+echo   Interface will be available at: http://localhost:30000
+echo   Press Ctrl+C to stop the server
+echo ================================================================================
+echo.
+
+REM Run the API server
+%PYTHON_CMD% api_server.py
+
+if errorlevel 1 (
+    echo.
+    echo [ERROR] Server failed to start
+    echo Check the error messages above
+    echo.
+    pause
+    exit /b 1
+)
+
+pause

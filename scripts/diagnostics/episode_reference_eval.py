@@ -43,10 +43,9 @@ def _extract_projected_scenes(projected_output: Any) -> List[Dict[str, Any]]:
 def _resolve_processing_root(epoch: str) -> Path:
     cfg = load_configs({})
     host_cfg = cfg.get("host") if isinstance(cfg.get("host"), dict) else {}
-    data_root = os.environ.get("GOODQ_DATA_ROOT") or host_cfg.get("data_root")
-    if not isinstance(data_root, str) or not data_root.strip():
-        raise RuntimeError("GOODQ_DATA_ROOT or host.data_root is required for episode reference evaluation")
-    data_root = data_root.rstrip("/\\")
+    data_root = str(
+        (os.environ.get("GOODQ_DATA_ROOT") or host_cfg.get("data_root") or "L:/_DATA")
+    ).rstrip("/\\")
     return Path(f"{data_root}/GoodQ_Data/epochs/{epoch}/processing")
 
 
@@ -316,9 +315,9 @@ def main() -> int:
     parser.add_argument("--run-root", required=True, type=Path, help="Path to a witness run root.")
     parser.add_argument(
         "--reference-root",
-        required=True,
         type=Path,
-        help="Directory containing local *.reference.json anchor files.",
+        default=Path("reports/reference_anchors/seinfeld/episodes"),
+        help="Directory containing *.reference.json anchor files.",
     )
     args = parser.parse_args()
 

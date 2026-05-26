@@ -51,7 +51,7 @@
 /**
  * @typedef {Object} EvidenceHit
  * @property {"support"|"contradict"|"related"|"meta"} [role]
- * @property {string|null} [store]                    // "qdrant" | "faiss" | "chroma" | ...
+ * @property {string|null} [store]                    // "qdrant" | "faiss" | "ephemeral" | ...
  * @property {string|null} [store_ref]                // collection/index name
  * @property {string|null} [embedding_id]
  * @property {number|null} [score]

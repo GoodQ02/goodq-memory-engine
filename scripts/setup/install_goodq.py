@@ -214,7 +214,6 @@ def install_python_packages():
         "pyannote.audio",
         "opencv-python",
         "pillow",
-        "chromadb",
         "faiss-cpu"
     ]
     

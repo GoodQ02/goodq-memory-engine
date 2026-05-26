@@ -1,3 +1,7 @@
+<!-- DOC_BADGE: OPERATIONAL -->
+<!-- DOC_STATUS: ACTIVE_GUIDE -->
+<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
+
 # GoodQ Analytics Quick Reference Guide
 
 > Role: Active quick reference for the analytics sidecar (dashboards, queries, and configuration). This is not the canonical runtime authority for ingest, retrieval, or system status. For historical web analytics pages, see `docs/ANALYTICS_PAGES_COMPLETE.md`; for related scripts and reports, see `docs/ANALYTICS_INDEX.md`.

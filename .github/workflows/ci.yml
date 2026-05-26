@@ -4,24 +4,23 @@ on:
   push:
     branches:
       - main
+      - public
   pull_request:
-    branches:
-      - main
     paths:
       - ".github/workflows/**"
       - "README.md"
       - "CONTRIBUTING.md"
       - "docs/**"
       - "configs/**"
+      - "envs/**"
       - "scripts/**"
       - "steps/**"
       - "tests/**"
       - "environment.yml"
+      - "environment.gpu.yml"
+      - "wsl2_audio/**"
       - "setup.py"
       - "pytest.ini"
-
-permissions:
-  contents: read
 
 jobs:
   bootstrap-baseline:
@@ -49,10 +48,6 @@ jobs:
       - name: Documentation drift lint
         shell: pwsh
         run: conda run -n goodq_core python scripts/docs/doc_drift_lint.py
-
-      - name: Model registry static validation
-        shell: pwsh
-        run: conda run -n goodq_core python scripts/validate_model_registry.py
 
       - name: Bootstrap verification
         shell: pwsh

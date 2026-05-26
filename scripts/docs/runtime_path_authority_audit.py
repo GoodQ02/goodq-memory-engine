@@ -44,6 +44,7 @@ ACTIVE_RUNTIME_FILES = [
     Path("scripts/analytics_query.py"),
     Path("scripts/build_knowledge_graph_from_db.py"),
     Path("scripts/build_kg_standalone.py"),
+    Path("scripts/build_unified_kg.py"),
     Path("scripts/monitor_ingestion.py"),
     Path("scripts/monitor_ingestion_realtime.py"),
     Path("scripts/monitor_ingestion_progress.py"),
@@ -145,14 +146,10 @@ ACTIVE_EXPECTATIONS = {
 }
 
 
-LEGACY_DATA_TOKEN = "L:" + "/_DATA"
-LEGACY_DATA_WIN_TOKEN = "L:" + "\\_DATA"
-LEGACY_REPO_CONFIG_TOKEN = "L:" + "/goodq4all/config.yaml"
-
 LEGACY_SCAN_TOKENS = [
-    LEGACY_DATA_TOKEN,
-    LEGACY_DATA_WIN_TOKEN,
-    LEGACY_REPO_CONFIG_TOKEN,
+    "L:/_DATA",
+    "L:\\_DATA",
+    "L:/goodq4all/config.yaml",
     "with open('config.yaml'",
     'with open("config.yaml"',
     "GOODQ_DATA_ROOT",
@@ -216,6 +213,8 @@ def _scan_legacy_scripts() -> list[Finding]:
             continue
         rel_path = file_path.relative_to(REPO_ROOT).as_posix()
         if "__pycache__" in rel_path or file_path.suffix == ".pyc":
+            continue
+        if rel_path.startswith("scripts/archive/"):
             continue
         if rel_path in protected:
             continue

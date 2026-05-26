@@ -57,7 +57,11 @@ logger = logging.getLogger(__name__)
 
 def _resolve_hf_cache_dir() -> Optional[str]:
     """Return the canonical HF cache path exported by bootstrap, when present."""
-    return os.getenv("HUGGINGFACE_HUB_CACHE") or os.getenv("HF_HUB_CACHE") or None
+    cache_dir = os.getenv("HUGGINGFACE_HUB_CACHE") or os.getenv("HF_HUB_CACHE") or None
+    if cache_dir:
+        os.environ.setdefault("HF_HUB_CACHE", cache_dir)
+        os.environ.setdefault("PYANNOTE_CACHE", cache_dir)
+    return cache_dir
 
 
 def _load_pyannote_pipeline(

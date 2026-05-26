@@ -6,36 +6,7 @@ import os
 from pathlib import Path
 
 # Add steps to path
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(PROJECT_ROOT / "steps"))
-
-
-def _find_test_video():
-    direct_file = os.environ.get("GOODQ_TEST_VIDEO")
-    if direct_file and Path(direct_file).is_file():
-        return Path(direct_file)
-
-    candidate_dirs = []
-    for env_name in ("GOODQ_TEST_VIDEO_DIR", "GOODQ_IMPORT_INBOX"):
-        value = os.environ.get(env_name)
-        if value:
-            candidate_dirs.append(Path(value))
-
-    data_root = os.environ.get("GOODQ_DATA_ROOT")
-    if data_root:
-        candidate_dirs.append(Path(data_root) / "GoodQ_Data" / "processing")
-
-    candidate_dirs.extend([
-        PROJECT_ROOT / "import_inbox",
-        PROJECT_ROOT / "samples" / "ingestion",
-    ])
-
-    for candidate_dir in candidate_dirs:
-        if not candidate_dir.exists():
-            continue
-        for video in sorted(candidate_dir.rglob("*.mp4")):
-            return video
-    return None
+sys.path.insert(0, str(Path(__file__).parent.parent / "steps"))
 
 def test_gpu_scene_detection():
     print("="*80)
@@ -51,11 +22,19 @@ def test_gpu_scene_detection():
         print(f"  VRAM: {torch.cuda.get_device_properties(0).total_memory / 1024**3:.2f} GB")
     
     # Test video path
-    test_video = _find_test_video()
+    test_video = Path("L:/_DATA/GoodQ_Data/processing")
+    if test_video.exists():
+        videos = list(test_video.rglob("*.mp4"))
+        if videos:
+            test_video = videos[0]
+        else:
+            test_video = None
+    else:
+        test_video = None
     
     if not test_video or not test_video.exists():
-        print("\n[ERROR] No test video found")
-        print("Set GOODQ_TEST_VIDEO or GOODQ_TEST_VIDEO_DIR, or place a sample in import_inbox.")
+        print("\n[ERROR] No test video found in L:/_DATA/GoodQ_Data/processing")
+        print("Please place a video file in the import_inbox and let it start processing")
         return
     
     print(f"\n[2/4] Test Video:")

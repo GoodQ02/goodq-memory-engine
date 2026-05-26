@@ -1,0 +1,46 @@
+{
+  "id": "dc83af63-b97e-5cfc-b947-8f953b7d50e3",
+  "score": 0.024096193,
+  "payload": {
+    "model": "clip",
+    "scene_id": "763a72addd689401301713fae77bfab83f11df15a8f9a034d3652dec374c6f94",
+    "type": "scene",
+    "video_id": "sample"
+  },
+  "confidence": {
+    "intrinsic": null,
+    "source": null,
+    "temporal": null,
+    "consistency": null,
+    "overall": null
+  },
+  "provenance": {
+    "provenance_version": 1,
+    "ts_utc": "2025-12-19T10:25:13+00:00",
+    "scene_id": "763a72addd689401301713fae77bfab83f11df15a8f9a034d3652dec374c6f94",
+    "video_id": "sample",
+    "modality": "clip",
+    "model": "clip",
+    "component": "scene_visual_embeddings.clip",
+    "attempted": true,
+    "committed": true,
+    "reason": null,
+    "targets": {
+      "qdrant": {
+        "attempted": true,
+        "committed": true,
+        "ref": "goodq_clip",
+        "reason": null,
+        "count": 3
+      }
+    },
+    "confidence": {
+      "intrinsic": null,
+      "source": null,
+      "temporal": null,
+      "consistency": null,
+      "overall": null
+    }
+  }
+}
+

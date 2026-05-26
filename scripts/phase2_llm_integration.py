@@ -1,6 +1,17 @@
 """
 Phase 2: LLM-Enhanced Semantic Analysis Integration
-Integrates context analysis, intelligent tagging, and relationship mapping
+
+LEGACY / OFF-PATH NOTICE
+This script is not part of the canonical scene-centric ingestion runtime.
+It is retained only as a historical / experimental harness for the older
+Phase 2 LLM workflow and must not be treated as a supported production path.
+
+Use the canonical runtime surfaces instead:
+- cli.run_ingestion
+- steps.video.cross_modal_harmonizer
+
+Direct execution now requires an explicit acknowledgement flag so this script
+cannot be mistaken for a supported operational tool.
 """
 import sys
 import sqlite3
@@ -22,6 +33,12 @@ from steps.tagger.step_llm_enhanced import tagger_llm_enhanced
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+
+LEGACY_PHASE2_NOTICE = (
+    "LEGACY / OFF-PATH: scripts/phase2_llm_integration.py is not on the canonical "
+    "scene-memory ingestion path. Re-run with --allow-legacy-run only if you "
+    "explicitly intend to use this historical workflow."
+)
 
 
 def apply_context_analysis_to_scenes(cfg: Dict[str, Any], video_hash: str = None) -> Dict[str, Any]:
@@ -411,8 +428,13 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Phase 2: LLM-Enhanced Semantic Analysis")
     parser.add_argument('--video-hash', help='Process specific video hash only')
     parser.add_argument('--test', action='store_true', help='Run on sample.mp4 only')
+    parser.add_argument('--allow-legacy-run', action='store_true', help='Acknowledge that this script is a legacy off-path workflow')
     
     args = parser.parse_args()
+
+    if not args.allow_legacy_run:
+        logger.error(LEGACY_PHASE2_NOTICE)
+        sys.exit(2)
     
     # If test mode, get sample video hash
     video_hash = args.video_hash

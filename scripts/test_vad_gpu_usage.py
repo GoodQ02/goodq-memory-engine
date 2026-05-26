@@ -18,40 +18,6 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-
-def find_test_media(patterns=("*.wav", "*.mp4", "*.m4a", "*.mp3")):
-    """Find bounded local media fixtures without relying on private sample paths."""
-    direct_file = os.environ.get("GOODQ_TEST_AUDIO") or os.environ.get("GOODQ_TEST_VIDEO")
-    if direct_file and Path(direct_file).is_file():
-        return [Path(direct_file)]
-
-    candidate_dirs = []
-    for env_name in ("GOODQ_TEST_AUDIO_DIR", "GOODQ_TEST_VIDEO_DIR", "GOODQ_IMPORT_INBOX"):
-        value = os.environ.get(env_name)
-        if value:
-            candidate_dirs.append(Path(value))
-
-    data_root = os.environ.get("GOODQ_DATA_ROOT")
-    if data_root:
-        candidate_dirs.append(Path(data_root) / "GoodQ_Data" / "processing")
-
-    candidate_dirs.extend([
-        project_root / "data" / "processing",
-        project_root / "import_inbox",
-        project_root / "samples" / "ingestion",
-    ])
-
-    matches = []
-    for candidate_dir in candidate_dirs:
-        if not candidate_dir.exists():
-            continue
-        for pattern in patterns:
-            matches.extend(sorted(candidate_dir.rglob(pattern)))
-        if matches:
-            break
-    return matches
-
-
 def test_vad_basic():
     """Test basic VAD functionality"""
     print("=" * 80)
@@ -68,7 +34,8 @@ def test_vad_basic():
         print(f"[SYMBOL] Model loaded in {time.time() - start:.2f}s")
         
         # Find a test audio file
-        test_files = find_test_media(("*.wav", "*.mp4", "*.m4a", "*.mp3"))
+        test_files = list(Path(project_root / "data" / "processing").rglob("*.wav"))
+        test_files.extend(list(Path(project_root / "_DATA" / "FAMILY_FEAST").rglob("*.mp4"))[:1])
         
         if not test_files:
             print("[SYMBOL] No test audio files found")
@@ -144,7 +111,7 @@ def test_audio_emotion_with_vad():
         from steps.audio_emotion.step import audio_emotion
         
         # Find test audio
-        test_files = find_test_media(("*.mp4", "*.wav", "*.m4a", "*.mp3"))
+        test_files = list(Path(project_root / "_DATA" / "FAMILY_FEAST").rglob("*.mp4"))[:1]
         if not test_files:
             print("[SYMBOL] No test files found")
             return False

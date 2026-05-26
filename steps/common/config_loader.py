@@ -168,6 +168,7 @@ def _ensure_runtime_path_defaults(cfg: Dict[str, Any]) -> Dict[str, Any]:
     if isinstance(data_root, str) and data_root.strip():
         base_data_root = data_root.rstrip("/\\")
         paths_cfg.setdefault("import_inbox", f"{base_data_root}/import_inbox")
+        paths_cfg.setdefault("ingest_requests", f"{base_data_root}/ingest_requests")
         paths_cfg.setdefault("processed", f"{base_data_root}/processed")
         paths_cfg.setdefault("failed", f"{base_data_root}/failed")
 

@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-04-20 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-20 -->
 
 # Troubleshooting Guide
 
@@ -16,7 +16,7 @@ Run these first before changing anything:
 ```powershell
 conda run -n goodq_core python scripts/system_readiness_check.py
 conda run -n goodq_core python scripts/cache_readiness_check.py
-Invoke-WebRequest http://127.0.0.1:6333/health
+Invoke-WebRequest http://127.0.0.1:6333/collections
 ```
 
 If the issue involves accelerated audio, also verify the WSL truth surface:
@@ -54,7 +54,7 @@ Check:
 
 ```powershell
 conda run -n goodq_core python scripts/system_readiness_check.py
-Invoke-WebRequest http://127.0.0.1:6333/health
+Invoke-WebRequest http://127.0.0.1:6333/collections
 ```
 
 Most common current causes:
@@ -108,12 +108,11 @@ Symptoms:
 
 - `qdrant_ok = false`
 - vector persistence fails
-- health check on port `6333` fails
+- collection check on port `6333` fails
 
 Check:
 
 ```powershell
-Invoke-WebRequest http://127.0.0.1:6333/health
 Invoke-WebRequest http://127.0.0.1:6333/collections
 ```
 

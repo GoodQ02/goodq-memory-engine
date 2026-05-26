@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>GoodQ API Test - Simple Debug</title>
+    <style>
+        body { font-family: monospace; padding: 20px; background: #1a1a1a; color: #00ff00; }
+        button { padding: 15px 30px; margin: 10px; font-size: 16px; cursor: pointer; }
+        .result { background: #000; padding: 15px; margin: 10px 0; border: 1px solid #00ff00; white-space: pre-wrap; }
+        .success { color: #00ff00; }
+        .error { color: #ff0000; }
+        input { padding: 10px; width: 400px; font-size: 14px; }
+    </style>
+</head>
+<body>
+    <h1>GoodQ API Direct Test</h1>
+    <p>This bypasses all the complex UI and tests the API directly.</p>
+    
+    <h2>Quick Tests:</h2>
+    <button onclick="testStatus()">1. Test /api/status</button>
+    <button onclick="testChatHardcoded()">2. Test Chat (hardcoded)</button>
+    <br><br>
+    
+    <h2>Custom Chat Test:</h2>
+    <input type="text" id="chatInput" placeholder="Type your message..." value="how many scenes">
+    <button onclick="testChatCustom()">3. Send Custom Message</button>
+    <button onclick="clearResults()">Clear</button>
+    
+    <div id="results"></div>
+
+    <script>
+        function log(message, type = 'info') {
+            const div = document.createElement('div');
+            div.className = `result ${type}`;
+            div.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            document.getElementById('results').appendChild(div);
+            console.log(message);
+        }
+
+        function clearResults() {
+            document.getElementById('results').innerHTML = '';
+        }
+
+        async function testStatus() {
+            log('Testing GET /api/status...', 'info');
+            try {
+                const response = await fetch('/api/status');
+                log(`Response status: ${response.status} ${response.statusText}`, 'info');
+                
+                const data = await response.json();
+                log(`SUCCESS!\n${JSON.stringify(data, null, 2)}`, 'success');
+            } catch (error) {
+                log(`ERROR: ${error.message}\nStack: ${error.stack}`, 'error');
+            }
+        }
+
+        async function testChatHardcoded() {
+            log('Testing POST /api/chat with: "how many scenes"', 'info');
+            
+            const body = {
+                message: "how many scenes",
+                context: { mode: "natural" }
+            };
+            
+            log(`Request body: ${JSON.stringify(body, null, 2)}`, 'info');
+            
+            try {
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(body)
+                });
+                
+                log(`Response status: ${response.status} ${response.statusText}`, 'info');
+                
+                if (!response.ok) {
+                    const text = await response.text();
+                    log(`ERROR Response: ${text}`, 'error');
+                    return;
+                }
+                
+                const data = await response.json();
+                log(`SUCCESS!\nMessage: ${data.message}\nContext: ${JSON.stringify(data.context, null, 2)}`, 'success');
+                
+                if (data.suggestions) {
+                    log(`Suggestions: ${data.suggestions.join(', ')}`, 'info');
+                }
+            } catch (error) {
+                log(`ERROR: ${error.message}\nStack: ${error.stack}`, 'error');
+            }
+        }
+
+        async function testChatCustom() {
+            const input = document.getElementById('chatInput');
+            const message = input.value.trim();
+            
+            if (!message) {
+                log('ERROR: Please enter a message', 'error');
+                return;
+            }
+            
+            log(`Testing POST /api/chat with: "${message}"`, 'info');
+            
+            const body = {
+                message: message,
+                context: { mode: "natural" }
+            };
+            
+            try {
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(body)
+                });
+                
+                log(`Response status: ${response.status} ${response.statusText}`, 'info');
+                
+                if (!response.ok) {
+                    const text = await response.text();
+                    log(`ERROR Response: ${text}`, 'error');
+                    return;
+                }
+                
+                const data = await response.json();
+                log(`SUCCESS!\nMessage: ${data.message}`, 'success');
+            } catch (error) {
+                log(`ERROR: ${error.message}\nStack: ${error.stack}`, 'error');
+            }
+        }
+
+        // Auto-run on load
+        window.onload = () => {
+            log('='.repeat(60), 'info');
+            log('GoodQ API Direct Test Page Loaded', 'success');
+            log('API Base URL: ' + window.location.origin, 'info');
+            log('='.repeat(60), 'info');
+            log('', 'info');
+            log('Click button 2 to test the exact same query that failed in the main UI', 'info');
+        };
+    </script>
+</body>
+</html>

@@ -11,7 +11,7 @@
   - `reports/fresh_ingest_runs/20260424_065027_season1_remaining_witness/`
 - Supporting launcher history:
   - `reports/fresh_ingest_runs/20260424_080533_season1_followon_witness/`
-- Branch: `public`
+- Branch: `main`
 - Commit context:
   - visibility layer already shipped
   - legacy runtime-shell cleanup already shipped

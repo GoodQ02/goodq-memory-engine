@@ -4,24 +4,32 @@ import logging
 import os
 from typing import Any, Dict, List, Optional
 
-from steps.common.memory_store import MemoryStore, MemoryConfig, MemoryDims
+from steps.common.memory_store import (
+    MemoryStore,
+    MemoryConfig,
+    MemoryDims,
+    normalize_memory_tier_list,
+    normalize_memory_tier_name,
+)
 
 logger = logging.getLogger(__name__)
 
 
 class MemoryRouter:
     """
-    Simple router placeholder for tiered memory.
-    Intent-aware routing to be filled in alongside read/write paths.
+    Tiered vector memory router for canonical Qdrant retrieval, optional FAISS parity,
+    and a legacy-named in-memory cache tier.
     """
 
     def __init__(self, stores: Dict[str, MemoryStore], config: Optional[MemoryConfig] = None):
         self.stores = stores
         self.config = config or MemoryConfig(
-            read_priority=["qdrant", "faiss", "chroma"],
+            read_priority=["qdrant", "faiss", "ephemeral"],
             write_targets=["faiss", "qdrant"],
             dims=MemoryDims(),
         )
+        self.config.read_priority = normalize_memory_tier_list(self.config.read_priority)
+        self.config.write_targets = normalize_memory_tier_list(self.config.write_targets)
         self._hits: Dict[str, int] = {k: 0 for k in stores.keys()}
         self._misses: Dict[str, int] = {k: 0 for k in stores.keys()}
         self._promotions: int = 0
@@ -71,19 +79,20 @@ class MemoryRouter:
                     e,
                 )
         for target in self.config.write_targets:
-            store = self.stores.get(target)
+            canonical_target = normalize_memory_tier_name(target) or target
+            store = self.stores.get(canonical_target)
             if not store:
-                results[target] = False
+                results[canonical_target] = False
                 logger.warning(
                     "memory_router store unavailable operation=%s target=%s",
                     "insert",
-                    target,
+                    canonical_target,
                 )
-                print("[STAGE10_16_DEBUG] memory_router_target:", target)
+                print("[STAGE10_16_DEBUG] memory_router_target:", canonical_target)
                 print("[STAGE10_16_DEBUG] memory_router_vector_len:", 0)
-                print("[STAGE10_16_DEBUG] memory_router_upsert_return:", results[target])
+                print("[STAGE10_16_DEBUG] memory_router_upsert_return:", results[canonical_target])
                 if debug:
-                    print(f"[VECTOR_DEBUG] router.target missing target={target}")
+                    print(f"[VECTOR_DEBUG] router.target missing target={canonical_target}")
                 continue
             try:
                 payload = self._filter_vectors_for_store(vectors, store)
@@ -93,37 +102,38 @@ class MemoryRouter:
                     first_vec = first.get("vector") if isinstance(first, dict) else None
                     if isinstance(first_vec, list):
                         vector_len = len(first_vec)
-                print("[STAGE10_16_DEBUG] memory_router_target:", target)
+                print("[STAGE10_16_DEBUG] memory_router_target:", canonical_target)
                 print("[STAGE10_16_DEBUG] memory_router_vector_len:", vector_len)
                 if debug:
                     print(
-                        f"[VECTOR_DEBUG] router.target target={target} store={store.__class__.__name__}"
+                        f"[VECTOR_DEBUG] router.target target={canonical_target} store={store.__class__.__name__}"
                         f" dim={getattr(store, 'dim', None)} filtered={len(payload)}"
                     )
-                results[target] = store.insert(payload) if payload else False
-                print("[STAGE10_16_DEBUG] memory_router_upsert_return:", results[target])
+                results[canonical_target] = store.insert(payload) if payload else False
+                print("[STAGE10_16_DEBUG] memory_router_upsert_return:", results[canonical_target])
                 if debug:
-                    print(f"[VECTOR_DEBUG] router.target result target={target} ok={results[target]}")
+                    print(f"[VECTOR_DEBUG] router.target result target={canonical_target} ok={results[canonical_target]}")
             except Exception as e:
                 logger.warning(
                     "memory_router operation failed operation=%s target=%s exc_type=%s exc=%s",
                     "insert",
-                    target,
+                    canonical_target,
                     type(e).__name__,
                     e,
                 )
-                results[target] = False
-                print("[STAGE10_16_DEBUG] memory_router_target:", target)
+                results[canonical_target] = False
+                print("[STAGE10_16_DEBUG] memory_router_target:", canonical_target)
                 print("[STAGE10_16_DEBUG] memory_router_vector_len:", 0)
-                print("[STAGE10_16_DEBUG] memory_router_upsert_return:", results[target])
+                print("[STAGE10_16_DEBUG] memory_router_upsert_return:", results[canonical_target])
                 if debug:
-                    print(f"[VECTOR_DEBUG] router.target exception target={target}")
+                    print(f"[VECTOR_DEBUG] router.target exception target={canonical_target}")
         return results
 
     def query(self, query_vector: List[float], top_k: int = 5, filter: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         # Iterate by read priority; return first non-empty result
         for tier in self.config.read_priority:
-            store = self.stores.get(tier)
+            canonical_tier = normalize_memory_tier_name(tier) or tier
+            store = self.stores.get(canonical_tier)
             if not store:
                 continue
             try:
@@ -132,24 +142,32 @@ class MemoryRouter:
                     continue
                 hits = store.query(query_vector, top_k=top_k, filter=filter)
                 if hits:
-                    self._hits[tier] = self._hits.get(tier, 0) + 1
+                    self._hits[canonical_tier] = self._hits.get(canonical_tier, 0) + 1
                     # Promotion: if we hit tier-0, push to higher tiers
-                    if tier == "chroma":
-                        promote_targets = [t for t in self.config.write_targets if t != "chroma"]
+                    if canonical_tier == "ephemeral":
+                        promote_targets = [t for t in self.config.write_targets if t != "ephemeral"]
                         if promote_targets:
-                            promoted = self.insert([{"vector": h.get("vector", query_vector), "payload": h.get("payload", {})} for h in hits])
-                            if any(promoted.values()):
+                            promote_vectors = [{"vector": h.get("vector", query_vector), "payload": h.get("payload", {})} for h in hits]
+                            promoted_any = False
+                            for promote_target in promote_targets:
+                                promote_store = self.stores.get(promote_target)
+                                if not promote_store:
+                                    continue
+                                payload = self._filter_vectors_for_store(promote_vectors, promote_store)
+                                if payload and promote_store.insert(payload):
+                                    promoted_any = True
+                            if promoted_any:
                                 self._promotions += 1
                     return hits
             except Exception as e:
                 logger.warning(
                     "memory_router operation failed operation=%s target=%s exc_type=%s exc=%s",
                     "query",
-                    tier,
+                    canonical_tier,
                     type(e).__name__,
                     e,
                 )
-            self._misses[tier] = self._misses.get(tier, 0) + 1
+            self._misses[canonical_tier] = self._misses.get(canonical_tier, 0) + 1
         return []
 
     def stats(self) -> Dict[str, Any]:

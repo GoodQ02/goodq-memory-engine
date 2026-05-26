@@ -1,0 +1,35 @@
+# Codex focus rules: hide local/generated noise without masking source.
+
+# Tooling and build caches
+.git/
+node_modules/
+venv/
+dist/
+build/
+out/
+__pycache__/
+.pytest_cache/
+.pytest_tmp/
+
+# Local runtime/output surfaces
+data/
+logs/
+tmp/
+cache/
+reports/seinfeld_experiment/reruns/
+reports/audit_pdf_extract_*.txt
+scripts/internal/
+
+# Local-only overrides
+configs/config.local.yaml
+.env.local
+.env.*.local
+bootstrap_report.json
+
+# Heavy generated artifacts
+*.log
+*.db
+*.sqlite
+*.sqlite3
+*.pt
+*.onnx

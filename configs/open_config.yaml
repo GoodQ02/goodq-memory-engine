@@ -65,6 +65,11 @@ models:
   cloud:
     llm_provider: openai
     embedding_provider: openai
+
+# Optional local LLM feature flags
+llm:
+  features:
+    scene_context_analysis: false
     
 # ============================================================================
 # PIPELINE SETTINGS

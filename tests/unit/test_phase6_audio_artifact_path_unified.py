@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any, Dict
 
 from steps.video import cross_modal_harmonizer as harmonizer_module
 from steps.video.cross_modal_harmonizer import run_cross_modal_harmonization
@@ -561,7 +562,10 @@ def test_harmonizer_applies_scene_context_llm_when_feature_enabled(tmp_path: Pat
                         "segments": [{"start": 0.0, "end": 2.0, "text": "Jerry tells George the plan."}],
                         "emotion": "anxious",
                         "emotion_scores": {"anxious": 0.7, "neutral": 0.3},
+                        "music_events": [{"label": "applause", "context": "APPLAUSE"}],
+                        "time_hints": {"explicit_dates": ["2002-12-16"], "months": ["december"]},
                     },
+                    "ocr_text": "DEC 16 2002",
                     "keyframe": {
                         "objects": [{"label": "person", "score": 0.95}],
                         "faces": [{"bbox": [0, 0, 10, 10], "confidence": 0.9}],
@@ -577,17 +581,23 @@ def test_harmonizer_applies_scene_context_llm_when_feature_enabled(tmp_path: Pat
     _write_json(audio_artifact_dir / "segmentation.json", {"segments": []})
 
     monkeypatch.setattr(harmonizer_module, "SCENE_CONTEXT_LLM_AVAILABLE", True)
-    monkeypatch.setattr(
-        harmonizer_module,
-        "analyze_scene_context_llm",
-        lambda scene_meta, cfg: {
+    captured_scene_meta: Dict[str, Any] = {}
+
+    def _fake_analyze_scene_context_llm(scene_meta: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
+        captured_scene_meta.update(scene_meta)
+        return {
             "narrative_summary": "Jerry outlines a tense plan to George in the kitchen.",
             "key_moments": ["Jerry explains the plan", "George listens carefully"],
             "emotional_arc": "tense but controlled",
             "context_tags": ["planning", "kitchen", "conversation"],
             "activity_description": "Two friends discuss their next move.",
             "relationships": [{"entities": ["Jerry", "George"], "type": "conversation"}],
-        },
+        }
+
+    monkeypatch.setattr(
+        harmonizer_module,
+        "analyze_scene_context_llm",
+        _fake_analyze_scene_context_llm,
     )
 
     item = {
@@ -607,6 +617,10 @@ def test_harmonizer_applies_scene_context_llm_when_feature_enabled(tmp_path: Pat
 
     temporal_index = json.loads((processing_dir / "temporal_index.json").read_text(encoding="utf-8"))
     segment = temporal_index["segments"][0]
+
+    assert captured_scene_meta["ocr_text"] == "DEC 16 2002"
+    assert captured_scene_meta["music_events"] == [{"label": "applause", "context": "APPLAUSE"}]
+    assert captured_scene_meta["time_hints"] == {"explicit_dates": ["2002-12-16"], "months": ["december"]}
 
     assert segment["scene_context_llm"] == {
         "narrative_summary": "Jerry outlines a tense plan to George in the kitchen.",
@@ -2989,9 +3003,8 @@ def test_harmonizer_reports_transcript_entity_disagreement_hotspots_read_only(
         ("title_bearing_transcript_name_not_resolved", "title_unresolved::mrs swedler")
     ]["example"]["transcript_candidate"] == "Mrs. Swedler"
     assert temporal_index["top_transcript_full_name_partial_entity_families"] == []
-
-    persisted_segments = {
-        segment["scene_id"]: segment
+    segment_disagreements = {
+        segment["scene_id"]: segment.get("transcript_entity_disagreements", [])
         for segment in temporal_index["segments"]
     }
     segment_normalization = {
@@ -3001,7 +3014,7 @@ def test_harmonizer_reports_transcript_entity_disagreement_hotspots_read_only(
         }
         for segment in temporal_index["segments"]
     }
-    assert persisted_segments["scene_0000"]["transcript_entity_disagreements"] == [
+    assert segment_disagreements["scene_0000"] == [
         {
             "category": "title_elision_in_entity_projection",
             "family_key": "title::costanza",
@@ -3013,8 +3026,8 @@ def test_harmonizer_reports_transcript_entity_disagreement_hotspots_read_only(
             "reason": "transcript title form collapses cleanly to existing local person surface",
         }
     ]
-    assert persisted_segments["scene_0001"]["transcript_entity_disagreements"] == []
-    assert persisted_segments["scene_0002"]["transcript_entity_disagreements"] == [
+    assert segment_disagreements["scene_0001"] == []
+    assert segment_disagreements["scene_0002"] == [
         {
             "category": "transcript_spelling_drift_vs_entity_name",
             "family_key": "spelling::monica selis",
@@ -3026,7 +3039,7 @@ def test_harmonizer_reports_transcript_entity_disagreement_hotspots_read_only(
             "reason": "transcript person surface differs slightly from local person entity wording",
         }
     ]
-    assert persisted_segments["scene_0003"]["transcript_entity_disagreements"] == [
+    assert segment_disagreements["scene_0003"] == [
         {
             "category": "title_bearing_transcript_name_not_resolved",
             "family_key": "title_unresolved::mrs swedler",

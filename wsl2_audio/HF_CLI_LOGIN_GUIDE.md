@@ -1,30 +1,29 @@
-# HuggingFace CLI Login Guide - Token Setup
+# HuggingFace CLI Login Guide - Permanent Token Setup
 
 ## Summary
 
-Use this guide to configure a local Hugging Face token for gated model downloads in
-WSL. It is written for a fresh machine and does not assume an existing token state.
+You **already have a working HF token** setup! Here's the current state and how to manage it.
 
-## Example Healthy State
+## Current Status ✅
 
 ```
-✓ Logged in as: <your_huggingface_username>
-✓ HF_TOKEN in environment: <from .env.local or shell profile>
-✓ HF_HOME configured: <GOODQ_MODEL_CACHE>
+✓ Logged in as: JoesDomingo
+✓ HF_TOKEN in environment: <from .env.local>
+✓ HF_HOME configured: /mnt/l/models
 ✓ Token accessible via HuggingFace CLI
 ```
 
 ## How Your Token is Currently Managed
 
 ### 1. Environment Variable (Primary)
-Set `HF_TOKEN` in your shell environment, for example in:
+Your `HF_TOKEN` is set in your shell environment, probably in:
 - `~/.bashrc`
 - `~/.bash_profile`
 - `~/.profile`
 - Windows environment (passed to WSL)
 
 ### 2. HuggingFace CLI (Secondary/Fallback)
-You can also log in via `huggingface-cli`, which stores the token in the local HF cache.
+You're also logged in via `huggingface-cli`, which stores the token in HF's cache.
 
 ## When to Use `hf auth login`
 
@@ -71,7 +70,7 @@ Enter your token (input will not be visible): [paste token here]
 Add token as git credential? (Y/n) Y
   
 Token is valid (permission: read).
-Your token has been saved to ~/.cache/huggingface/token
+Your token has been saved to /home/joesdomingo/.cache/huggingface/token
 Login successful
 ```
 
@@ -80,7 +79,7 @@ Login successful
 Verify:
 ```bash
 hf auth whoami
-# Output: user: <your_huggingface_username>
+# Output: user: JoesDomingo
 ```
 
 Test:
@@ -125,7 +124,7 @@ fi
 
 ## Recommended Setup (Choose One)
 
-### Option A: Environment Variable
+### Option A: Environment Variable (Your Current Setup) ✅
 
 **Pros:**
 - Token available across all shells/sessions
@@ -133,7 +132,7 @@ fi
 - Works with WSL environment variables from Windows
 
 **Setup:**
-Store `HF_TOKEN` in your local shell configuration or `.env.local`.
+Already done! Your `HF_TOKEN` is in your environment.
 
 ### Option B: HF CLI Login Only
 
@@ -161,20 +160,18 @@ hf auth login
 - Falls back gracefully
 
 **Setup:**
-Keep both if you want an environment-variable primary path with CLI fallback.
+Keep both! (This is what you have now)
 
-## Recommended Setup
+## My Recommendation for You
 
-The most portable setup is:
-1. `HF_TOKEN` in your local environment
-2. optional `hf auth login` fallback
-3. `setup_cuda_env.sh` handling either source automatically
+**Keep your current setup!** You have both:
+1. ✅ `HF_TOKEN` in environment (primary)
+2. ✅ Logged in via HF CLI (fallback)
+3. ✅ `setup_cuda_env.sh` handles both automatically
 
-What you still need to do on a new machine:
-1. configure a valid token
-2. accept any upstream gated-model agreements you plan to use
-
-Common gated-model examples:
+**What you need to do NOW:**
+1. ✅ Token setup: DONE (nothing needed)
+2. ⚠️ Accept model agreements: **THIS IS WHAT YOU NEED**
    - https://huggingface.co/pyannote/speaker-diarization-3.1
    - https://huggingface.co/pyannote/speaker-diarization-community-1
 
@@ -234,9 +231,18 @@ python3 ~/goodq_audio/check_hf_token.py
 
 ## Next Steps
 
-1. Configure `HF_TOKEN` locally
-2. Accept any required upstream model agreements
-3. Verify access with:
+Since your token is already properly configured:
+
+1. ✅ Token setup: **COMPLETE** (no action needed)
+2. ⚠️ Model access: **PENDING** (accept agreements)
+3. ✅ Environment setup: **COMPLETE** (setup_cuda_env.sh works)
+
+**Your only remaining task:**
+Accept the pyannote model user agreements, then you're done!
+
+---
+
+**Questions?** Run the diagnostic:
 ```bash
 python3 ~/goodq_audio/check_hf_token.py
 ```

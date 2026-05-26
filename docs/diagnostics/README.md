@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-04-17 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-20 -->
 
 # Diagnostics Index
 
@@ -11,9 +11,10 @@ investigations.
 
 Read diagnostics only after you have the current supported context from:
 
-1. [`docs/releases/RELEASE_0.1.1.md`](../releases/RELEASE_0.1.1.md)
-2. [`docs/goodq4all_agent_status.md`](../goodq4all_agent_status.md)
-3. [`docs/SYSTEM_SNAPSHOT.md`](../SYSTEM_SNAPSHOT.md)
+1. [`docs/agent/CURRENT_STATE.md`](../agent/CURRENT_STATE.md)
+2. [`docs/releases/RELEASE_0.1.1.md`](../releases/RELEASE_0.1.1.md)
+3. [`docs/goodq4all_agent_status.md`](../goodq4all_agent_status.md)
+4. [`docs/SYSTEM_SNAPSHOT.md`](../SYSTEM_SNAPSHOT.md)
 
 Diagnostics explain *why* a fix was made or *how* a seam was discovered. They
 do not override the release checkpoint.
@@ -40,6 +41,7 @@ currently proven.
 
 ### Environment and Portability
 
+- [`MEMORY_CLEAN_START_AUDIT_2026-05-20.md`](MEMORY_CLEAN_START_AUDIT_2026-05-20.md)
 - [`ENV_DISCOVERY_REPORT.md`](ENV_DISCOVERY_REPORT.md)
 - [`ENV_RECONCILIATION_REPORT.md`](ENV_RECONCILIATION_REPORT.md)
 - [`HOST_COMPAT_DISCOVERY_REPORT.md`](HOST_COMPAT_DISCOVERY_REPORT.md)

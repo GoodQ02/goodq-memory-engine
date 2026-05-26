@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-05-21 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-19 -->
 
 # GoodQ4All Quick Reference Card
 
@@ -14,7 +14,7 @@ Compact operational quick reference for the current release surface.
 | Intentional ingestion | `.\LAUNCH_GOODQ.ps1 -StartIngestion` | Start direct ingestion from the configured inbox |
 | API | `python -m api.server` | Start the local API explicitly |
 | API helper | `pwsh .\scripts\start_api.ps1` | Windows wrapper for the local API |
-| Operator console | `http://127.0.0.1:30000/ui/operator_console_v1/` | Read-only local inspection cockpit with Current Scope preflight |
+| Operator console | `http://127.0.0.1:30000/ui/operator_console_v1/` | Read-only local inspection cockpit |
 | Watchdog | `conda run -n goodq_core python -m cli.watchdog` | Start inbox monitoring explicitly |
 | Watchdog status | `python .\scripts\utils\check_watchdog_status.py` | One-time watchdog snapshot |
 

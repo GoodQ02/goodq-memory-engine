@@ -30,17 +30,14 @@ class PipelineOptimizationRunner:
         
     def find_test_video(self):
         """Find a suitable test video"""
-        # Check only explicit or repo/runtime-local sample locations.
+        # Check for sample video
         sample_paths = [
-            Path(os.environ["GOODQ_TEST_VIDEO"]) if os.environ.get("GOODQ_TEST_VIDEO") else None,
-            Path(os.environ["GOODQ_TEST_VIDEO_DIR"]) if os.environ.get("GOODQ_TEST_VIDEO_DIR") else None,
             self.import_inbox / "sample.mp4",
             self.base_dir / "samples" / "ingestion" / "sample.mp4",
+            Path(os.environ.get("GOODQ_DATA_ROOT", "L:/_DATA")) / "FAMILY_FEAST",
         ]
         
         for path in sample_paths:
-            if path is None:
-                continue
             if path.exists():
                 if path.is_file():
                     return path
@@ -340,10 +337,8 @@ class PipelineOptimizationRunner:
         if not self.test_video:
             print("\n[FAIL] No test video found!")
             print("Please place a video in one of these locations:")
-            print("  - GOODQ_TEST_VIDEO=<path to file>")
-            print("  - GOODQ_TEST_VIDEO_DIR=<path to directory>")
             print(f"  - {self.import_inbox / 'sample.mp4'}")
-            print(f"  - {self.base_dir / 'samples' / 'ingestion' / 'sample.mp4'}")
+            print(f"  - {Path(os.environ.get('GOODQ_DATA_ROOT', 'L:/_DATA')) / 'FAMILY_FEAST'}/*.mp4")
             return False
         
         print(f"Test video: {self.test_video}")

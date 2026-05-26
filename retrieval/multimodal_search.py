@@ -1118,9 +1118,12 @@ class MultimodalSearchEngine:
             log_retrieval = True
         
         # Determine dimension based on collection type
-        dim = 512 if 'clip' in collection else 384  # CLIP: 512, SBERT: 384, DINO: 768
-        if 'dino' in collection:
-            dim = 768
+        dim = self.collection_dims.get(collection)
+        if dim is None:
+            lower_collection = collection.lower()
+            dim = 512 if 'clip' in lower_collection or 'audio' in lower_collection else 384
+            if 'dino' in lower_collection:
+                dim = 768
         
         client = QdrantClient(QdrantConfig(
             host=self.qdrant_host,

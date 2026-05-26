@@ -1,12 +1,18 @@
+<!-- DOC_BADGE: OPERATIONAL -->
+<!-- DOC_STATUS: ACTIVE_POINTER -->
+<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
+
 # GoodQ4All Code Cleanup Index
 
 **Purpose:** Maintain a truthful map of the remaining manual-review utility surface after the large archive and quarantine passes.
 
 ## Current State
 
-Large legacy validation packs have been removed from the public branch. Private
-development history may still retain them for forensic lookup, but they are not
-part of the public support surface.
+Large legacy validation packs have already been quarantined into:
+
+- `tests/legacy/`
+- `scripts/archive/legacy_validation/`
+- `docs/archive/`
 
 This index now tracks the smaller set of still-visible helper surfaces that may deserve future audit, not the already-archived legacy pack.
 
@@ -56,10 +62,10 @@ The following broad legacy families were removed from the active surface and pre
 - obsolete `scripts/utils/check_*` and `scripts/utils/validate_*` probes
 - obsolete phase-era `scripts/test_*.py` validation helpers
 
-Public readers should use the maintained test and script registries instead:
+See:
 
-- [`tests/README.md`](../../../tests/README.md)
-- [`scripts/README.md`](../../../scripts/README.md)
+- `tests/legacy/README.md`
+- `scripts/archive/legacy_validation/README.md`
 
 ## Suggested Next Actions
 

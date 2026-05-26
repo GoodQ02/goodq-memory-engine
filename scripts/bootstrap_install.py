@@ -7,7 +7,6 @@ import ctypes
 import json
 import os
 import platform
-import re
 import shutil
 import subprocess
 import sys
@@ -15,10 +14,9 @@ import threading
 import textwrap
 import time
 import urllib.error
-import urllib.parse
 import urllib.request
 from dataclasses import dataclass
-from pathlib import Path, PureWindowsPath
+from pathlib import Path
 from typing import Callable, Iterable, Optional
 
 try:
@@ -45,18 +43,6 @@ CHOCO_FFMPEG_PACKAGE = "ffmpeg"
 CHOCO_NSSM_PACKAGE = "nssm"
 STEP_ENV_PYTHON = "3.10"
 TORCH_CUDA_INDEX_URL = "https://download.pytorch.org/whl/cu121"
-PIP_DOWNLOAD_RETRIES = "5"
-PIP_DOWNLOAD_TIMEOUT_SEC = "60"
-PIP_DOWNLOAD_RESUME_RETRIES = "20"
-SENSITIVE_ASSIGNMENT_RE = re.compile(
-    r"(?i)\b(token|secret|password|authorization|credential|api[_-]?key)(\s*[:=]\s*)([^\s,;]+)"
-)
-BEARER_TOKEN_RE = re.compile(r"(?i)\bbearer\s+[A-Za-z0-9._~+/=-]+")
-TOKEN_SHAPE_RE = re.compile(r"\b(?:hf_[A-Za-z0-9]{20,}|sk-[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9_]{20,})\b")
-CONSOLE_SECURITY_NOTICE = (
-    "[INFO] Secret values are redacted from bootstrap console output; "
-    "generated local config stores placeholders or environment references, not raw tokens."
-)
 
 
 @dataclass
@@ -194,31 +180,13 @@ WSL_AUDIO_ASSET_RELATIVE_PATHS: tuple[str, ...] = (
 )
 
 
-def _redact_console_text(value: object) -> str:
-    text = str(value)
-    text = BEARER_TOKEN_RE.sub("Bearer ***REDACTED***", text)
-    text = TOKEN_SHAPE_RE.sub("***REDACTED***", text)
-    return SENSITIVE_ASSIGNMENT_RE.sub(lambda match: f"{match.group(1)}{match.group(2)}***REDACTED***", text)
-
-
-def _encode_console_text(value: str) -> str:
-    encoding = getattr(sys.stdout, "encoding", None)
-    if not encoding:
-        return value
+def _print(msg: str) -> None:
     try:
-        return value.encode(encoding, errors="replace").decode(encoding, errors="replace")
-    except LookupError:
-        return value
-
-
-def _print(text: str) -> None:
-    console_text = _encode_console_text(_redact_console_text(text))
-    # codeql[py/clear-text-logging-sensitive-data]
-    print(console_text, flush=True)
-
-
-def print_console_security_notice() -> None:
-    _print(CONSOLE_SECURITY_NOTICE)
+        print(msg, flush=True)
+    except UnicodeEncodeError:
+        encoding = getattr(sys.stdout, "encoding", None) or "utf-8"
+        safe = str(msg).encode(encoding, errors="replace").decode(encoding, errors="replace")
+        print(safe, flush=True)
 
 
 def _fail(msg: str, exit_code: int = 1) -> int:
@@ -726,42 +694,6 @@ def _conda_tos_commands(conda_exe: Path) -> list[list[str]]:
     ]
 
 
-def _conda_tos_view_command(conda_exe: Path) -> list[str]:
-    cmd = [str(conda_exe), "tos", "view", "--override-channels", "--json"]
-    for channel in CONDA_TOS_CHANNELS:
-        cmd.extend(["--channel", channel])
-    return cmd
-
-
-def _collect_conda_tos_accepted_values(payload: object) -> list[bool]:
-    values: list[bool] = []
-    if isinstance(payload, dict):
-        for key, value in payload.items():
-            if str(key).lower() == "tos_accepted":
-                if isinstance(value, bool):
-                    values.append(value)
-                elif isinstance(value, str) and value.strip().lower() in {"true", "false"}:
-                    values.append(value.strip().lower() == "true")
-                continue
-            values.extend(_collect_conda_tos_accepted_values(value))
-    elif isinstance(payload, list):
-        for item in payload:
-            values.extend(_collect_conda_tos_accepted_values(item))
-    return values
-
-
-def _conda_tos_acceptance_needed(stdout: str) -> Optional[bool]:
-    try:
-        payload = json.loads(stdout or "")
-    except json.JSONDecodeError:
-        return None
-
-    accepted_values = _collect_conda_tos_accepted_values(payload)
-    if not accepted_values:
-        return None
-    return any(value is False for value in accepted_values)
-
-
 def _conda_tos_instruction_block() -> str:
     commands = "\n".join(
         f"  conda tos accept --override-channels --channel {channel}" for channel in CONDA_TOS_CHANNELS
@@ -774,16 +706,8 @@ def _is_conda_tos_block(detail: str) -> bool:
     return (
         "terms of service" in lowered
         or "conda tos" in lowered
-        or (_has_conda_tos_channel_url(detail) and "accept" in lowered and "channel" in lowered)
+        or ("repo.anaconda.com" in lowered and "accept" in lowered and "channel" in lowered)
     )
-
-
-def _has_conda_tos_channel_url(detail: str) -> bool:
-    for raw_url in re.findall(r"https?://[^\s)>\]]+", str(detail or "")):
-        parsed = urllib.parse.urlparse(raw_url.rstrip(".,;:"))
-        if parsed.hostname == "repo.anaconda.com" and parsed.path.startswith("/pkgs/"):
-            return True
-    return False
 
 
 def _is_transient_conda_network_error(detail: str) -> bool:
@@ -801,32 +725,6 @@ def _is_transient_conda_network_error(detail: str) -> bool:
     )
 
 
-def _is_transient_pip_network_error(detail: str) -> bool:
-    lowered = detail.lower()
-    if re.search(r"\b(?:http|status(?: code)?)\s*(?:500|502|503|504)\b", lowered):
-        return True
-    return any(
-        token in lowered
-        for token in (
-            "incompleteread",
-            "protocolerror",
-            "connection broken",
-            "readtimeout",
-            "read timed out",
-            "connectionreseterror",
-            "connection reset",
-            "chunkedencodingerror",
-            "sslerror",
-            "tls handshake",
-            "temporary failure in name resolution",
-            "name or service not known",
-            "temporarily unavailable",
-            "remote end closed connection",
-            "connection aborted",
-        )
-    )
-
-
 def _accept_conda_tos(conda_exe: Path, *, assume_yes: bool) -> None:
     _print("")
     _print("[WARN] Conda channel Terms of Service are not yet accepted for this machine.")
@@ -839,34 +737,6 @@ def _accept_conda_tos(conda_exe: Path, *, assume_yes: bool) -> None:
             detail = _completed_output(completed) or "conda tos accept failed"
             raise RuntimeError(f"{detail}\n\n{_conda_tos_instruction_block()}")
     _print("[OK] Accepted required Conda channel Terms of Service")
-
-
-def preflight_conda_tos(conda_exe: Path, *, assume_yes: bool) -> None:
-    try:
-        completed = _run(_conda_tos_view_command(conda_exe))
-    except Exception as exc:  # noqa: BLE001
-        _print(f"[WARN] Conda Terms of Service preflight was inconclusive: {exc}")
-        _print("[INFO] Bootstrap will continue and fall back to Conda environment-creation ToS retry if needed.")
-        return
-
-    if completed.returncode != 0:
-        detail = _completed_output(completed) or "conda tos view returned a non-zero exit code"
-        _print(f"[WARN] Conda Terms of Service preflight was inconclusive: {detail}")
-        _print("[INFO] Bootstrap will continue and fall back to Conda environment-creation ToS retry if needed.")
-        return
-
-    acceptance_needed = _conda_tos_acceptance_needed(completed.stdout or "")
-    if acceptance_needed is None:
-        _print("[WARN] Conda Terms of Service preflight was inconclusive: no usable tos_accepted state returned.")
-        _print("[INFO] Bootstrap will continue and fall back to Conda environment-creation ToS retry if needed.")
-        return
-
-    if acceptance_needed:
-        _print("[INFO] Bootstrap is paused for operator consent before package installation can continue.")
-        _accept_conda_tos(conda_exe, assume_yes=assume_yes)
-        return
-
-    _print("[OK] Conda Terms of Service preflight passed")
 
 
 def _run_conda_with_tos_retry(
@@ -970,12 +840,6 @@ def _isolated_process_env() -> dict[str, str]:
     return env
 
 
-def _cached_pip_process_env() -> dict[str, str]:
-    env = _isolated_process_env()
-    env.pop("PIP_NO_CACHE_DIR", None)
-    return env
-
-
 def _read_lock_lines(lock_path: Path) -> list[str]:
     return [
         line.strip()
@@ -1029,31 +893,8 @@ def _ensure_step_env_conda_packages(conda_exe: Path, repo_root: Path, spec: Step
 
 def _install_step_env_from_lock(conda_exe: Path, repo_root: Path, spec: StepEnvSpec) -> None:
     lock_path = repo_root / spec.lock_rel_path
-    pip_env = _cached_pip_process_env()
-
-    def _run_pip_with_retry(cmd: list[str], *, phase: str) -> None:
-        for attempt in range(1, 4):
-            completed = _run(
-                cmd,
-                cwd=repo_root,
-                env=pip_env,
-                heartbeat_label=f"Step env {phase} ({spec.name})",
-                heartbeat_artifacts=(lock_path,),
-            )
-            if completed.returncode == 0:
-                return
-
-            detail = _completed_output(completed) or f"{phase} failed for {spec.name}"
-            if attempt < 3 and _is_transient_pip_network_error(detail):
-                _print(
-                    f"[WARN] Transient pip download failure for {spec.name} "
-                    f"during {phase} (attempt {attempt}/3). Retrying..."
-                )
-                time.sleep(attempt * 2)
-                continue
-            raise RuntimeError(detail)
-
-    _run_pip_with_retry(
+    pip_env = _isolated_process_env()
+    upgrade = _run(
         [
             str(conda_exe),
             "run",
@@ -1063,18 +904,20 @@ def _install_step_env_from_lock(conda_exe: Path, repo_root: Path, spec: StepEnvS
             "-m",
             "pip",
             "install",
-            "--retries",
-            PIP_DOWNLOAD_RETRIES,
-            "--timeout",
-            PIP_DOWNLOAD_TIMEOUT_SEC,
             "--upgrade",
             "pip",
             "--no-cache-dir",
             "--no-user",
             "--isolated",
         ],
-        phase="pip upgrade",
+        cwd=repo_root,
+        env=pip_env,
+        heartbeat_label=f"Step env pip upgrade ({spec.name})",
+        heartbeat_artifacts=(lock_path,),
     )
+    if upgrade.returncode != 0:
+        detail = (upgrade.stderr or upgrade.stdout).strip() or f"pip upgrade failed for {spec.name}"
+        raise RuntimeError(detail)
 
     install_cmd = [
         str(conda_exe),
@@ -1085,16 +928,9 @@ def _install_step_env_from_lock(conda_exe: Path, repo_root: Path, spec: StepEnvS
         "-m",
         "pip",
         "install",
-        "--retries",
-        PIP_DOWNLOAD_RETRIES,
-        "--timeout",
-        PIP_DOWNLOAD_TIMEOUT_SEC,
-        "--resume-retries",
-        PIP_DOWNLOAD_RESUME_RETRIES,
-        "--build-constraint",
-        str(lock_path),
         "-r",
         str(lock_path),
+        "--no-cache-dir",
         "--no-user",
         "--isolated",
         "--no-deps",
@@ -1102,7 +938,16 @@ def _install_step_env_from_lock(conda_exe: Path, repo_root: Path, spec: StepEnvS
     if _lock_uses_cuda_wheels(lock_path):
         install_cmd.extend(["--extra-index-url", TORCH_CUDA_INDEX_URL])
 
-    _run_pip_with_retry(install_cmd, phase="lock install")
+    install = _run(
+        install_cmd,
+        cwd=repo_root,
+        env=pip_env,
+        heartbeat_label=f"Step env lock install ({spec.name})",
+        heartbeat_artifacts=(lock_path,),
+    )
+    if install.returncode != 0:
+        detail = (install.stderr or install.stdout).strip() or f"lock install failed for {spec.name}"
+        raise RuntimeError(detail)
 
 
 def _validate_step_env(conda_exe: Path, repo_root: Path, spec: StepEnvSpec) -> list[str]:
@@ -1405,6 +1250,8 @@ def _wsl_audio_env_values(ctx: BootstrapContext, wsl_ctx: WslAudioContext) -> di
         values["HF_HOME"] = wsl_models_root
         values["TORCH_HOME"] = wsl_models_root
         values["HUGGINGFACE_HUB_CACHE"] = f"{wsl_models_root.rstrip('/')}/hub"
+        values["HF_HUB_CACHE"] = values["HUGGINGFACE_HUB_CACHE"]
+        values["PYANNOTE_CACHE"] = values["HUGGINGFACE_HUB_CACHE"]
 
     return values
 
@@ -1420,7 +1267,7 @@ def _write_wsl_audio_env_file(wsl_ctx: WslAudioContext, values: dict[str, str]) 
     lines = ["# Generated by scripts/bootstrap_install.py"]
     for key in sorted(values):
         lines.append(f"{key}={_render_env_assignment(values[key])}")
-    env_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    env_path.write_bytes(("\n".join(lines) + "\n").encode("utf-8"))
     return env_path
 
 
@@ -1438,8 +1285,27 @@ def _run_wsl_bash(
     )
 
 
-def _run_wsl_bash_interactive(wsl_ctx: WslAudioContext, script: str) -> subprocess.CompletedProcess[str]:
-    return _run(["wsl", "-d", wsl_ctx.distro, "--", "bash", "-lc", script], capture=False)
+def _run_wsl_bash_interactive(
+    wsl_ctx: WslAudioContext,
+    script: str,
+    *,
+    timeout_sec: int | None = None,
+) -> subprocess.CompletedProcess[str]:
+    try:
+        return subprocess.run(
+            ["wsl", "-d", wsl_ctx.distro, "--", "bash", "-lc", script],
+            capture_output=False,
+            text=True,
+            timeout=timeout_sec,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as exc:
+        return subprocess.CompletedProcess(
+            exc.cmd,
+            124,
+            stdout="",
+            stderr=f"WSL interactive command timed out after {timeout_sec}s",
+        )
 
 
 def _normalize_wsl_shell_asset(path: Path) -> bool:
@@ -1500,19 +1366,41 @@ def _wsl_has_systemd(wsl_ctx: WslAudioContext) -> bool:
 def _wsl_passwordless_sudo_ready(wsl_ctx: WslAudioContext) -> tuple[bool, str]:
     completed = _run_wsl_bash(wsl_ctx, "sudo -n true")
     if completed.returncode == 0:
-        return True, "sudo available without prompt"
-    return False, _completed_output(completed) or "sudo prompt required"
+        return True, "passwordless sudo available"
+    return False, _completed_output(completed) or "sudo password required"
 
 
 def _wsl_interactive_sudo_preauth(wsl_ctx: WslAudioContext) -> tuple[bool, str]:
     if not sys.stdin.isatty():
-        return False, "stdin is not interactive; cannot show WSL sudo prompt"
-    _print("[INFO] WSL audio setup may ask for Linux sudo authentication.")
-    _print("[INFO] If WSL asks for sudo, respond in this terminal and press Enter. Input will not echo.")
-    completed = _run_wsl_bash_interactive(wsl_ctx, "sudo -v")
+        return False, "stdin is not interactive; cannot show WSL sudo password prompt"
+    _print("[INFO] WSL audio setup may ask for your Linux sudo password.")
+    _print("[INFO] If WSL asks for sudo, type the password in this terminal and press Enter. Input will not echo.")
+    completed = _run_wsl_bash_interactive(wsl_ctx, "sudo -v", timeout_sec=120)
     if completed.returncode == 0:
-        return True, "sudo authentication cached"
+        return True, "sudo credentials cached"
     return False, _completed_output(completed) or "WSL sudo pre-authentication failed"
+
+
+def _wsl_sudo_ready_for_setup(wsl_ctx: WslAudioContext, *, assume_yes: bool) -> tuple[bool, str]:
+    sudo_ready, sudo_detail = _wsl_passwordless_sudo_ready(wsl_ctx)
+    if sudo_ready:
+        return True, sudo_detail
+    if assume_yes or not sys.stdin.isatty():
+        mode = "--yes mode" if assume_yes else "non-interactive stdin"
+        return False, f"{sudo_detail}; {mode} cannot prompt for WSL sudo password"
+    return _wsl_interactive_sudo_preauth(wsl_ctx)
+
+
+def _print_wsl_audio_setup_sudo_handoff(wsl_ctx: WslAudioContext, detail: str, workspace_detail: str) -> None:
+    _print(f"[WARN] WSL audio workspace is not ready: {workspace_detail}")
+    _print("[WARN] WSL audio runtime setup requires a Linux sudo password.")
+    _print("[INFO] WSL audio setup status: PENDING_SUDO")
+    if detail:
+        _print(f"[INFO] WSL sudo preflight detail: {detail}")
+    _print("[INFO] Complete this once inside WSL, then rerun bootstrap:")
+    _print(f"  wsl -d {wsl_ctx.distro}")
+    _print(f"  cd {wsl_ctx.workspace}")
+    _print("  bash ./setup_wsl2_audio.sh")
 
 
 def ensure_wsl_audio_ready(ctx: BootstrapContext, *, assume_yes: bool) -> bool:
@@ -1546,12 +1434,13 @@ def ensure_wsl_audio_ready(ctx: BootstrapContext, *, assume_yes: bool) -> bool:
 
     ready, detail = _probe_wsl_audio_workspace_ready(wsl_ctx)
     if not ready:
-        _print("[INFO] Provisioning WSL audio runtime. Sudo may request Linux authentication.")
-        sudo_ready, sudo_detail = _wsl_interactive_sudo_preauth(wsl_ctx)
+        _print("[INFO] Provisioning WSL audio runtime. Your Linux password may be requested by sudo.")
+        sudo_ready, sudo_detail = _wsl_sudo_ready_for_setup(wsl_ctx, assume_yes=assume_yes)
         if sudo_ready:
             _print(f"[OK] WSL sudo preflight: {sudo_detail}")
         else:
-            _print(f"[WARN] WSL sudo preflight did not complete: {sudo_detail}")
+            _print_wsl_audio_setup_sudo_handoff(wsl_ctx, sudo_detail, detail)
+            return False
         setup_script = (
             f"cd {_bash_quote(wsl_ctx.workspace)} && "
             "set -a && [ -f ./.goodq_env ] && source ./.goodq_env; set +a && "
@@ -1575,7 +1464,7 @@ def ensure_wsl_audio_ready(ctx: BootstrapContext, *, assume_yes: bool) -> bool:
     if _wsl_has_systemd(wsl_ctx):
         sudo_ready, sudo_detail = _wsl_passwordless_sudo_ready(wsl_ctx)
         if not sudo_ready:
-            _print("[WARN] WSL audio workspace is ready, but persistent service install requires Linux sudo authentication.")
+            _print("[WARN] WSL audio workspace is ready, but persistent service install requires a Linux sudo password.")
             _print("[INFO] WSL audio service status: PENDING_SUDO")
             if sudo_detail:
                 _print(f"[INFO] WSL sudo preflight detail: {sudo_detail}")
@@ -1819,22 +1708,6 @@ def inspect_windows_service(name: str) -> dict[str, str]:
         f"  $cim = Get-CimInstance Win32_Service -Filter \"Name='{name}'\"; "
         "  if ($cim) { 'start_mode=' + $cim.StartMode } "
         "} catch { } "
-        f"$paramPath = 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\{_quote_ps(name)}\\Parameters'; "
-        "if (Test-Path $paramPath) { "
-        "  try { "
-        "    $params = Get-ItemProperty -Path $paramPath; "
-        "    foreach ($key in @('AppEnvironmentExtra','AppStdout','AppStderr','AppDirectory')) { "
-        "      $value = $params.$key; "
-        "      if ($null -ne $value) { "
-        "        if ($value -is [array]) { $rendered = ($value -join ';;') } else { $rendered = [string]$value } "
-        "        if ($key -eq 'AppEnvironmentExtra') { 'app_environment_extra=' + $rendered } "
-        "        elseif ($key -eq 'AppStdout') { 'app_stdout=' + $rendered } "
-        "        elseif ($key -eq 'AppStderr') { 'app_stderr=' + $rendered } "
-        "        elseif ($key -eq 'AppDirectory') { 'app_directory=' + $rendered } "
-        "      } "
-        "    } "
-        "  } catch { } "
-        "} "
         "}"
     )
     completed = _run_powershell(command)
@@ -1845,56 +1718,6 @@ def inspect_windows_service(name: str) -> dict[str, str]:
         key, value = line.split("=", 1)
         info[key.strip()] = value.strip()
     return info
-
-
-def _normalize_service_path(value: str) -> str:
-    cleaned = str(value or "").strip().strip("\"'")
-    return cleaned.replace("/", "\\").rstrip("\\").lower()
-
-
-def _service_path_matches(actual: str, expected: str) -> bool:
-    return _normalize_service_path(actual) == _normalize_service_path(expected)
-
-
-def _parse_service_environment_extra(raw_value: str) -> dict[str, str]:
-    env: dict[str, str] = {}
-    normalized = str(raw_value or "").replace("\x00", ";;")
-    for entry in re.split(r";;|;", normalized):
-        if "=" not in entry:
-            continue
-        key, value = entry.split("=", 1)
-        env[key.strip().upper()] = value.strip()
-    return env
-
-
-def _qdrant_service_alignment_issues(
-    service_info: dict[str, str],
-    qdrant_storage: str,
-    log_dir: str,
-) -> list[str]:
-    if service_info.get("exists") != "true":
-        return []
-
-    expected_stdout = str(PureWindowsPath(log_dir) / "qdrant_stdout.log")
-    expected_stderr = str(PureWindowsPath(log_dir) / "qdrant_stderr.log")
-    env_extra = _parse_service_environment_extra(service_info.get("app_environment_extra", ""))
-    issues: list[str] = []
-
-    storage_path = env_extra.get("QDRANT__STORAGE__STORAGE_PATH", "")
-    if not storage_path or not _service_path_matches(storage_path, qdrant_storage):
-        issues.append("storage path does not match active runtime root")
-
-    telemetry_disabled = env_extra.get("QDRANT__TELEMETRY_DISABLED", "")
-    if telemetry_disabled.lower() != "true":
-        issues.append("telemetry disabled flag is missing from service environment")
-
-    if not _service_path_matches(service_info.get("app_stdout", ""), expected_stdout):
-        issues.append("stdout log path does not match active runtime log root")
-
-    if not _service_path_matches(service_info.get("app_stderr", ""), expected_stderr):
-        issues.append("stderr log path does not match active runtime log root")
-
-    return issues
 
 
 def _qdrant_repair_instruction(ctx: BootstrapContext) -> str:
@@ -1995,10 +1818,28 @@ def _wait_for_qdrant(url: str, timeout_sec: int = 20) -> tuple[bool, str]:
     return False, last_detail
 
 
-def _repair_qdrant_service(ctx: BootstrapContext, *, assume_yes: bool, elevated: bool, qdrant_url: str) -> bool:
+def ensure_qdrant_ready(ctx: BootstrapContext, *, assume_yes: bool) -> bool:
+    qdrant_url = resolve_qdrant_url(ctx.conda_exe, ctx.repo_root)
+    qdrant_ok, qdrant_detail = check_qdrant(qdrant_url)
+    service_info = inspect_windows_service(QDRANT_SERVICE_NAME)
+    elevated = _is_admin()
+    lifecycle_state = _qdrant_lifecycle_state(qdrant_ok, service_info)
+    if qdrant_ok:
+        _print(f"[OK] qdrant: {qdrant_detail}")
+        _print_qdrant_handoff(ctx, state=lifecycle_state, elevated=elevated, qdrant_url=qdrant_url)
+        return True
+
     qdrant_exe = ctx.repo_root / "vendor" / "qdrant" / "qdrant.exe"
     qdrant_cfg = ctx.repo_root / "vendor" / "qdrant" / "config.yaml"
 
+    _print(f"[WARN] qdrant: {qdrant_detail}")
+    _print_qdrant_handoff(ctx, state=lifecycle_state, elevated=elevated, qdrant_url=qdrant_url)
+    if service_info.get("exists") == "true":
+        status = service_info.get("status", "unknown")
+        start_mode = service_info.get("start_mode", "unknown")
+        _print(f"[INFO] Qdrant service status: {status} (start mode: {start_mode})")
+    else:
+        _print("[INFO] Qdrant service status: not installed")
     _print(f"[INFO] Repo Qdrant binary: {'present' if qdrant_exe.exists() else 'missing'} at {qdrant_exe}")
     _print(f"[INFO] Repo Qdrant config: {'present' if qdrant_cfg.exists() else 'missing'} at {qdrant_cfg}")
 
@@ -2037,39 +1878,6 @@ def _repair_qdrant_service(ctx: BootstrapContext, *, assume_yes: bool, elevated:
     _print_qdrant_handoff(ctx, state=lifecycle_state, elevated=elevated, qdrant_url=qdrant_url)
     _print(_qdrant_repair_instruction(ctx))
     return False
-
-
-def ensure_qdrant_ready(ctx: BootstrapContext, *, assume_yes: bool) -> bool:
-    qdrant_url = resolve_qdrant_url(ctx.conda_exe, ctx.repo_root)
-    qdrant_ok, qdrant_detail = check_qdrant(qdrant_url)
-    service_info = inspect_windows_service(QDRANT_SERVICE_NAME)
-    elevated = _is_admin()
-    lifecycle_state = _qdrant_lifecycle_state(qdrant_ok, service_info)
-    if qdrant_ok:
-        _print(f"[OK] qdrant: {qdrant_detail}")
-        _print_qdrant_handoff(ctx, state=lifecycle_state, elevated=elevated, qdrant_url=qdrant_url)
-        try:
-            qdrant_storage, log_dir = resolve_qdrant_runtime_paths(ctx.conda_exe, ctx.repo_root)
-            alignment_issues = _qdrant_service_alignment_issues(service_info, qdrant_storage, log_dir)
-        except Exception as exc:  # noqa: BLE001
-            _print(f"[WARN] Qdrant service alignment check was inconclusive: {exc}")
-            return True
-        if alignment_issues:
-            _print("[WARN] QDRANT_RUNNING_BUT_STALE_CONFIG: reachable service does not match active runtime paths.")
-            for issue in alignment_issues:
-                _print(f"[WARN] Qdrant service alignment: {issue}")
-            return _repair_qdrant_service(ctx, assume_yes=assume_yes, elevated=elevated, qdrant_url=qdrant_url)
-        return True
-
-    _print(f"[WARN] qdrant: {qdrant_detail}")
-    _print_qdrant_handoff(ctx, state=lifecycle_state, elevated=elevated, qdrant_url=qdrant_url)
-    if service_info.get("exists") == "true":
-        status = service_info.get("status", "unknown")
-        start_mode = service_info.get("start_mode", "unknown")
-        _print(f"[INFO] Qdrant service status: {status} (start mode: {start_mode})")
-    else:
-        _print("[INFO] Qdrant service status: not installed")
-    return _repair_qdrant_service(ctx, assume_yes=assume_yes, elevated=elevated, qdrant_url=qdrant_url)
 
 
 def run_bootstrap_verify(conda_exe: Path, repo_root: Path) -> tuple[bool, str]:
@@ -2196,7 +2004,6 @@ def print_inspection(ctx: BootstrapContext) -> None:
     _print("")
     _print("GoodQ Bootstrap Inspection")
     _print("=========================")
-    print_console_security_notice()
     _print(f"repo_root        : {ctx.repo_root}")
     _print(f"windows_host     : {_is_windows()}")
     _print(f"python           : {sys.version.split()[0]} ({sys.executable})")
@@ -2323,7 +2130,6 @@ def main() -> int:
     wsl_ready = True
     if not args.verify_only:
         try:
-            preflight_conda_tos(ctx.conda_exe, assume_yes=args.yes)
             ensure_conda_env(ctx.conda_exe, ctx.repo_root, ctx.environment_yml, assume_yes=args.yes)
             ensure_supported_step_envs(ctx, assume_yes=args.yes)
             prepare_local_files(ctx)

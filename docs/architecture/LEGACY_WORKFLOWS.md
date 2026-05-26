@@ -1,3 +1,8 @@
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: REFERENCE_ONLY -->
+<!-- DOC_CANONICAL_POINTER: docs/architecture/INGEST_ORCHESTRATION_CONTRACT.md -->
+<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
+
 # Legacy Workflows (Historical)
 
 **Status:** Archived December 15, 2024  

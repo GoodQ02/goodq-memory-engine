@@ -30,18 +30,16 @@ Release `0.1.0` is a pre-1.0 checkpoint focused on:
 
 ## Validation Anchors
 
-- Local CI-equivalent baseline passed for the active release branch:
+- Local CI-equivalent baseline passed on both active branches:
   `python -m pytest -q`
 - Active doc-governance lint passed:
   `python scripts/docs/doc_drift_lint.py`
 - Fresh Windows laptop bootstrap succeeded after the current bootstrap
   hardening pass.
 - Forced ingest sanity rerun succeeded after the Windows audio fallback repair.
-- Season 1 witness baseline remains represented by the sanitized public
-  benchmark summary in
-  [`docs/experiments/SEINFELD_EXPERIMENT_SUMMARY.md`](../experiments/SEINFELD_EXPERIMENT_SUMMARY.md).
-  The underlying reports, media, transcripts, runtime snapshots, and
-  scene-level artifacts are not shipped in the public repository.
+- Season 1 witness baseline remains the principal published runtime evidence:
+  - `reports/seinfeld_experiment/diagnostics/SEASON1_WITNESS_RUN_2026-03-09.md`
+  - `reports/seinfeld_experiment/diagnostics/POST_WITNESS_ANALYTICS_COMPARISON_2026-03-09.md`
 
 ## Supported Entry Surface
 

@@ -54,6 +54,6 @@ echo.
 echo Next steps:
 echo   - View dashboard: http://localhost:6333/dashboard
 echo   - Initialize collections: INIT_QDRANT.bat
-echo   - Run bootstrap validation: scripts\bootstrap_validate.bat
+echo   - Run test: test_system.bat
 echo.
 pause

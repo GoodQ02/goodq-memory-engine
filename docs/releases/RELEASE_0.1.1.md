@@ -50,18 +50,15 @@ Representative repaired scenes:
 - `03x11/5` -> `Kitchen conversation about alternate side.`
 - `03x11/23` -> `Living room conversation about rental car.`
 
-## Evaluation Methodology
+## Evaluation Anchors
 
 Release `0.1.1` also formalizes the local episode-reference eval lane:
 
 - `scripts/diagnostics/episode_reference_eval.py`
-- `reports/reference_anchors/README.md`
+- `reports/reference_anchors/seinfeld/episodes/`
 
-Public release artifacts document methodology and aggregate metrics only.
-Copyrighted third-party reference anchors are not shipped in the public release.
-Private anchors, when used locally for audit and witness scoring, do not
-override runtime scene truth. Public examples must use fictional, owned,
-synthetic, or permissively licensed fixtures.
+These curated IMDb-backed anchors are used only for audit and witness scoring.
+They do not override runtime scene truth.
 
 On the proving witness, the local eval improved to:
 

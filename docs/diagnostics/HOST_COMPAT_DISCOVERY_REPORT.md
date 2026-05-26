@@ -1,3 +1,7 @@
+<!-- DOC_BADGE: OPERATIONAL -->
+<!-- DOC_STATUS: GENERATED_SNAPSHOT -->
+<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
+
 # Host Compatibility Discovery Report
 
 Date: 2026-02-18
@@ -64,7 +68,7 @@ Decision:
 
 #### Must-fix for portability
 - `scripts/wsl2_audio_bridge.py:16-18`
-  - Hardcoded user `<wsl_user>`, workspace `/home/<wsl_user>/goodq_audio`, distro `Ubuntu`
+  - Hardcoded user `joesdomingo`, workspace `/home/joesdomingo/goodq_audio`, distro `Ubuntu`
   - Classification: must-fix
   - Resolution: `GOODQ_WSL_USER`, `GOODQ_WSL_WORKSPACE`, `GOODQ_WSL_DISTRO` with dynamic user fallback when unset.
 
@@ -74,7 +78,7 @@ Decision:
   - Resolution: centralized WSL distro resolver with env/config fallback.
 
 - `api/main.py:1065,1067,1075`
-  - Hardcoded WSL UNC and Linux home path with fixed user `<wsl_user>`
+  - Hardcoded WSL UNC and Linux home path with fixed user `joesdomingo`
   - Classification: must-fix
   - Resolution: construct paths from resolved `wsl_user` + `wsl_workspace`.
 
@@ -100,7 +104,7 @@ Decision:
 
 #### Must-fix for portability
 - `configs/python_paths.py:95-96`
-  - Hardcoded `/mnt/c/Users/<user>/miniconda3` fallback family
+  - Hardcoded `/mnt/c/Users/jdben/miniconda3` and `/mnt/c/Users/Administrator/miniconda3`
   - Classification: must-fix
   - Resolution: user-agnostic `/mnt/c/Users/*/miniconda3` discovery.
 

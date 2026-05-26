@@ -1,3 +1,7 @@
+<!-- DOC_BADGE: CANONICAL -->
+<!-- DOC_STATUS: AUTHORITATIVE -->
+<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
+
 # Epistemic Read Model Contract (v1)
 
 **Purpose:** Freeze a shared, stable language for how GoodQ represents answers, evidence, uncertainty, and explicit limits.  
@@ -62,7 +66,7 @@ class ProvenancePointer(TypedDict, total=False):
 
 class EvidenceHit(TypedDict, total=False):
   role: EvidenceRole
-  store: Optional[str]                # e.g. "qdrant" | "faiss" | "chroma"
+  store: Optional[str]                # e.g. "qdrant" | "faiss" | "ephemeral"
   store_ref: Optional[str]            # e.g. Qdrant collection / FAISS index name
   embedding_id: Optional[str]
   score: Optional[float]

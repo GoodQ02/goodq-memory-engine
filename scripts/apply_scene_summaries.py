@@ -5,24 +5,15 @@ Generates and saves summaries for all scenes in the database
 """
 import sqlite3
 import json
-import os
-import sys
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
-
-from steps.common.config_loader import get_runtime_paths, load_configs
 from steps.common.scene_summarizer import generate_scene_summary
 from steps.common.memory import append_long_term_summary
 
 # Configuration
-loaded_cfg = load_configs({})
-runtime_paths = get_runtime_paths(loaded_cfg)
 cfg = {
     'paths': {
-        'db_path': os.environ.get("GOODQ_MEMORY_DB", runtime_paths["db_path"])
+        'db_path': 'L:/_DATA/GoodQ_Data/memory.db'
     },
     'llm': {
         'api_url': 'http://localhost:1234/v1/chat/completions'

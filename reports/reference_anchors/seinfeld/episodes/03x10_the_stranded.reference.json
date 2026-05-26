@@ -1,0 +1,70 @@
+{
+  "series": "Seinfeld",
+  "season": 3,
+  "episode": 10,
+  "episode_code": "03x10",
+  "title": "The Stranded",
+  "status": "curated",
+  "last_verified": "2026-04-17",
+  "sources": [
+    {
+      "provider": "IMDb",
+      "source_type": "official_summary",
+      "url": "https://www.imdb.com/title/tt0697789/",
+      "notes": "Locally distilled for eval only; never fetched during runtime."
+    }
+  ],
+  "reference_summary": "George takes Jerry and Elaine to a Long Island party and leaves them stranded, while a dispute about medicine and a drugstore cashier becomes one of the episode's defining threads.",
+  "beats": [
+    {
+      "id": "beat_party_stranded",
+      "text": "George brings Jerry and Elaine to a party on Long Island and strands them there.",
+      "importance": "core",
+      "aliases": ["party", "Long Island", "stranded", "ride home"]
+    },
+    {
+      "id": "beat_medicine_cashier",
+      "text": "George gets into a dispute about medicine and money with a drugstore cashier.",
+      "importance": "core",
+      "aliases": ["medicine", "cold medication", "drug store", "cashier", "ten dollars"]
+    },
+    {
+      "id": "beat_steve_visit",
+      "text": "Steve Pocatillo later takes Jerry's casual invitation seriously and shows up at the apartment.",
+      "importance": "supporting",
+      "aliases": ["Steve Pocatillo", "Jerry Baby", "apartment visit"]
+    }
+  ],
+  "salient_concepts": [
+    {
+      "concept": "party",
+      "tier": "contextual",
+      "weight": 0.8,
+      "aliases": ["Long Island party"]
+    },
+    {
+      "concept": "Long Island Expressway",
+      "tier": "contextual",
+      "weight": 0.7,
+      "aliases": ["Long Island", "LIE"]
+    },
+    {
+      "concept": "cold medication",
+      "tier": "primary",
+      "weight": 1.0,
+      "aliases": ["medicine", "cold meds"]
+    },
+    {
+      "concept": "drug store",
+      "tier": "contextual",
+      "weight": 0.8,
+      "aliases": ["drugstore", "cashier"]
+    },
+    {
+      "concept": "Steve Pocatillo",
+      "tier": "primary",
+      "weight": 0.6,
+      "aliases": ["Jerry Baby", "Steve"]
+    }
+  ]
+}

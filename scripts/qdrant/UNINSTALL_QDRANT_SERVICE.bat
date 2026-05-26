@@ -34,9 +34,9 @@ echo Removing Qdrant service...
 echo.
 echo [OK] Qdrant service uninstalled
 echo.
-echo Note: Qdrant data remains at the resolved qdrant_storage path from canonical config.
-echo To completely remove Qdrant, delete the service helper files and the resolved qdrant_storage directory:
+echo Note: Data remains at %GOODQ_DATA_ROOT%\qdrant_storage
+echo To completely remove Qdrant, delete:
 echo   - %QDRANT_DIR%
-echo   - resolved qdrant_storage path shown by LAUNCH_GOODQ.ps1
+echo   - %GOODQ_DATA_ROOT%\qdrant_storage
 echo.
 pause

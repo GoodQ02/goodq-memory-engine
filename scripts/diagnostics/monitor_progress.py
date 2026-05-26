@@ -4,19 +4,10 @@ Real-time progress monitor for GoodQ pipeline
 Displays live progress updates from the progress.json file
 """
 import json
-import os
 import time
 import sys
-import argparse
 from pathlib import Path
 from datetime import datetime
-
-
-REPO_ROOT = Path(__file__).resolve().parents[2]
-
-
-def _default_progress_file():
-    return Path(os.environ.get("GOODQ_PROGRESS_FILE", REPO_ROOT / "logs" / "progress.json"))
 
 
 def clear_screen():
@@ -156,14 +147,7 @@ def display_progress(progress_data):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Monitor a GoodQ progress.json file.")
-    parser.add_argument(
-        "--progress-file",
-        default=str(_default_progress_file()),
-        help="Progress JSON path. Defaults to GOODQ_PROGRESS_FILE or repo logs/progress.json.",
-    )
-    args = parser.parse_args()
-    progress_file = Path(args.progress_file)
+    progress_file = Path("L:/goodq4all/logs/progress.json")
     
     print("GoodQ Progress Monitor")
     print(f"Monitoring: {progress_file}")

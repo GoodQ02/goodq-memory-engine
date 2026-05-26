@@ -1,3 +1,8 @@
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: REFERENCE_ONLY -->
+<!-- DOC_CANONICAL_POINTER: docs/architecture/MEMORY_STORAGE.md -->
+<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
+
 # Knowledge Graph System
 
 > Status note: knowledge graph persistence remains active, but the historical

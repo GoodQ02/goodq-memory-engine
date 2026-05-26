@@ -65,12 +65,124 @@ def _format_objects(objects: list, max_items: int = 5) -> str:
     return ", ".join(formatted)
 
 
+def _scene_keyframe(scene_meta: Dict[str, Any]) -> Dict[str, Any]:
+    keyframe = scene_meta.get("keyframe")
+    return keyframe if isinstance(keyframe, dict) else {}
+
+
+def _scene_audio(scene_meta: Dict[str, Any]) -> Dict[str, Any]:
+    audio = scene_meta.get("audio")
+    return audio if isinstance(audio, dict) else {}
+
+
+def _first_non_empty(*values: Any) -> Any:
+    for value in values:
+        if value is None:
+            continue
+        if isinstance(value, str) and not value.strip():
+            continue
+        if isinstance(value, (list, dict)) and not value:
+            continue
+        return value
+    return None
+
+
+def _coerce_numeric(value: Any, default: int = 0) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _emotion_entries(scene_meta: Dict[str, Any], audio_meta: Dict[str, Any]) -> list:
+    emotions = _first_non_empty(
+        scene_meta.get("emotions"),
+        audio_meta.get("emotions"),
+    )
+    if isinstance(emotions, list):
+        return emotions
+
+    emotion_scores = _first_non_empty(
+        scene_meta.get("emotion_scores"),
+        audio_meta.get("emotion_scores"),
+    )
+    if isinstance(emotion_scores, dict):
+        ranked = []
+        for label, score in emotion_scores.items():
+            try:
+                ranked.append({"label": str(label), "score": float(score)})
+            except (TypeError, ValueError):
+                continue
+        ranked.sort(key=lambda item: item["score"], reverse=True)
+        return ranked
+
+    return []
+
+
+def _dominant_emotion(scene_meta: Dict[str, Any], audio_meta: Dict[str, Any], emotions: list) -> str:
+    dominant = _first_non_empty(
+        scene_meta.get("dominant_emotion"),
+        scene_meta.get("emotion"),
+        audio_meta.get("emotion"),
+        scene_meta.get("audio_emotion"),
+        audio_meta.get("audio_emotion"),
+    )
+
+    if isinstance(dominant, str) and dominant.strip():
+        return dominant.strip()
+
+    if isinstance(dominant, list) and dominant:
+        first = dominant[0]
+        if isinstance(first, dict):
+            label = first.get("label")
+            if isinstance(label, str) and label.strip():
+                return label.strip()
+
+    if isinstance(dominant, dict):
+        label = dominant.get("label")
+        if isinstance(label, str) and label.strip():
+            return label.strip()
+
+    if emotions:
+        first = emotions[0]
+        if isinstance(first, dict):
+            label = first.get("label")
+            if isinstance(label, str) and label.strip():
+                return label.strip()
+
+    return "neutral"
+
+
+def _sentiment(scene_meta: Dict[str, Any], audio_meta: Dict[str, Any]) -> tuple[str, float]:
+    label = scene_meta.get("sentiment_label")
+    score = scene_meta.get("sentiment_score")
+
+    sentiment_payload = _first_non_empty(scene_meta.get("sentiment"), audio_meta.get("sentiment"))
+    if isinstance(sentiment_payload, dict):
+        label = _first_non_empty(label, sentiment_payload.get("label"))
+        score = _first_non_empty(score, sentiment_payload.get("score"))
+    elif isinstance(sentiment_payload, str):
+        label = _first_non_empty(label, sentiment_payload)
+
+    sentiment_label = str(label).strip() if label is not None else "neutral"
+    try:
+        sentiment_score = float(score)
+    except (TypeError, ValueError):
+        sentiment_score = 0.5
+
+    return sentiment_label, sentiment_score
+
+
 def _semantic_tags(scene_meta: Dict[str, Any]) -> list[str]:
     labels = []
     for detail in scene_meta.get("tag_details") or []:
         if isinstance(detail, dict):
             labels.append(detail.get("label"))
     labels.extend(scene_meta.get("tags") or [])
+    keyframe = _scene_keyframe(scene_meta)
+    audio = _scene_audio(scene_meta)
+    labels.extend(keyframe.get("tags") or [])
+    labels.extend(audio.get("tags") or [])
     return dedupe_tokens(
         labels,
         validator=is_valid_tag_token,
@@ -84,6 +196,13 @@ def _semantic_entities(scene_meta: Dict[str, Any]) -> list[str]:
         if isinstance(entity, dict):
             labels.append(entity.get("name") or entity.get("text"))
     labels.extend(scene_meta.get("entities") or [])
+    keyframe = _scene_keyframe(scene_meta)
+    audio = _scene_audio(scene_meta)
+    labels.extend(keyframe.get("entities") or [])
+    labels.extend(audio.get("entities") or [])
+    for entity in audio.get("ner_entities") or []:
+        if isinstance(entity, dict):
+            labels.append(entity.get("name") or entity.get("text"))
     return dedupe_tokens(
         labels,
         validator=is_valid_entity_token,
@@ -112,8 +231,9 @@ def _normalize_speaker_label(raw: Any) -> Optional[str]:
 def _speaker_summary(scene_meta: Dict[str, Any]) -> Optional[str]:
     speaker_labels: list[str] = []
     anonymous_ids: set[str] = set()
+    audio_meta = _scene_audio(scene_meta)
 
-    raw_speakers = scene_meta.get("speakers")
+    raw_speakers = _first_non_empty(scene_meta.get("speakers"), audio_meta.get("speakers"))
     if isinstance(raw_speakers, list):
         for raw in raw_speakers:
             label = _normalize_speaker_label(raw)
@@ -124,9 +244,23 @@ def _speaker_summary(scene_meta: Dict[str, Any]) -> Optional[str]:
                 continue
             speaker_labels.append(label)
 
-    raw_segments = scene_meta.get("speaker_transcript")
+    raw_segments = _first_non_empty(
+        scene_meta.get("speaker_transcript"),
+        audio_meta.get("speaker_transcript"),
+    )
     if isinstance(raw_segments, list):
         for raw in raw_segments:
+            label = _normalize_speaker_label(raw)
+            if not label:
+                continue
+            if _PLACEHOLDER_SPEAKER_PATTERN.fullmatch(label):
+                anonymous_ids.add(label.casefold())
+                continue
+            speaker_labels.append(label)
+
+    raw_ids = _first_non_empty(scene_meta.get("speaker_ids"), audio_meta.get("speaker_ids"))
+    if isinstance(raw_ids, list):
+        for raw in raw_ids:
             label = _normalize_speaker_label(raw)
             if not label:
                 continue
@@ -163,33 +297,28 @@ def generate_scene_summary_template(scene_meta: Dict[str, Any]) -> str:
     start = scene_meta.get('start', 0.0)
     end = scene_meta.get('end', 0.0)
     duration = scene_meta.get('duration', end - start)
+    keyframe_meta = _scene_keyframe(scene_meta)
+    audio_meta = _scene_audio(scene_meta)
     
     # Visual information
-    caption = scene_meta.get('caption', '')
-    objects = scene_meta.get('objects', [])
-    face_count = scene_meta.get('face_count', 0)
+    caption = _first_non_empty(scene_meta.get('caption'), keyframe_meta.get('caption')) or ''
+    objects = _first_non_empty(scene_meta.get('objects'), keyframe_meta.get('objects')) or []
+    face_count = _coerce_numeric(
+        _first_non_empty(
+            scene_meta.get('face_count'),
+            scene_meta.get('visible_face_count'),
+            keyframe_meta.get('face_count'),
+        ),
+        default=0,
+    )
     
     # Audio information
-    transcript = scene_meta.get('transcript', '')
-    speakers = scene_meta.get('speakers', [])
-    speaker_transcript = scene_meta.get('speaker_transcript', [])
+    transcript = _first_non_empty(scene_meta.get('transcript'), audio_meta.get('transcript')) or ''
     
     # Emotional context - check both top level and audio nested
-    sentiment_label = scene_meta.get('sentiment_label', 'neutral')
-    sentiment_score = scene_meta.get('sentiment_score', 0.5)
-    emotions = scene_meta.get('emotions', [])
-    dominant_emotion = scene_meta.get('dominant_emotion', 'neutral')
-    
-    # Check audio metadata for emotions if not at top level
-    audio_meta = scene_meta.get('audio', {})
-    if isinstance(audio_meta, dict) and not emotions:
-        emotions = audio_meta.get('emotions', [])
-        sentiment_label = audio_meta.get('sentiment', sentiment_label)
-    if isinstance(audio_meta, dict) and not dominant_emotion or dominant_emotion == 'neutral':
-        # Get dominant from audio_emotion
-        audio_emotion = audio_meta.get('audio_emotion', [])
-        if audio_emotion and isinstance(audio_emotion, list) and len(audio_emotion) > 0:
-            dominant_emotion = audio_emotion[0].get('label', dominant_emotion) if isinstance(audio_emotion[0], dict) else dominant_emotion
+    sentiment_label, sentiment_score = _sentiment(scene_meta, audio_meta)
+    emotions = _emotion_entries(scene_meta, audio_meta)
+    dominant_emotion = _dominant_emotion(scene_meta, audio_meta, emotions)
     
     # Tags and entities
     tags = _semantic_tags(scene_meta)

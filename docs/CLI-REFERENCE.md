@@ -1,10 +1,10 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-04-28 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-01 -->
 
 # GoodQ CLI Reference
 
-**Last Updated:** April 28, 2026
+**Last Updated:** May 1, 2026
 **Status:** Runtime-conditional; verify behavior from current config, artifacts, and health checks
 
 This document is the active command-surface reference for the `cli/` package. It describes the current supported CLI layer, not historical launch paths.
@@ -132,7 +132,7 @@ redacts all secret-bearing values. There is no supported raw-secret print mode.
 - `scene_manifest.json`
 - `temporal_index.json`
 - `experiment_log.json`
-- `operator_run_metadata.json` plus captured ingestion stdout/stderr events for direct canonical run roots that do not have a wrapper `experiment_log.json`
+- `operator_run_metadata.json` plus captured ingestion stdout/stderr events for direct canonical run roots that do not have a wrapper `experiment_log.json`; shared stdout events are scoped by persisted video/scene identity before recurrence aggregation
 
 **Usage**
 
@@ -196,6 +196,12 @@ Recommendation draft as JSON:
 conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --recommendations-for 20260424_003250_season1_recompare_witness__vs__20260424_182406_season2_fresh_witness --json
 ```
 
+Derived read-only trend over indexed durable JSON reports:
+
+```powershell
+conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_report --trend --json
+```
+
 **Outputs**
 - human-readable summary by default
 - stable JSON with `--json`
@@ -203,6 +209,7 @@ conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_rep
 - durable JSON artifact with `--write-json-file`
 - durable artifact index at `reports/control_recurrence/index.json`
 - deterministic read-only inspection draft with `--recommendations-for <report_id>`
+- derived read-only trend summary with `--trend`
 - default markdown path:
   - single run: `reports/control_recurrence/<run_id>.md`
   - comparison: `reports/control_recurrence/<baseline_run_id>__vs__<candidate_run_id>.md`
@@ -218,7 +225,12 @@ conda run --no-capture-output -n goodq_core python -m cli.control_recurrence_rep
 - marks legacy markdown-only index entries explicitly with `artifact_status=markdown_only`
 - supports direct canonical run roots with one or more videos, including metadata-described output/workspace paths
 - drafts deterministic operator inspection steps from existing durable JSON reports without executing commands, healing, mutating configs, triggering ingestion, or generating reports
+- derives conservative trends only from `reports/control_recurrence/index.json` and durable JSON artifacts referenced by that index
 - reports Phase 6 and Qdrant health without inferring beyond persisted artifacts
+- must apply the audio-vector provenance contract for CLAP/Qdrant coverage:
+  current-run audio vector success requires `clap_meta.status == ok` plus a
+  Qdrant audio payload with matching `run_id`; scene-id-only matches are not
+  current-run proof
 
 ---
 
@@ -286,7 +298,7 @@ If the legacy `lib.memory_management` package is absent, this command now fails 
 The current `cli.memory` surface also includes:
 - `seed-missing-assets`
 - `rebuild-id-maps`
-- `cleanup-placeholders`
+- `cleanup-seed-sentinels`
 - `register-scene-bundle`
 
 These are maintenance/support commands, not the primary user-facing memory flow.

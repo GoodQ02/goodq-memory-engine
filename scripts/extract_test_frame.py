@@ -4,52 +4,30 @@ Quick script to extract a test frame from video for vision testing
 
 import subprocess
 import sys
-import os
 from pathlib import Path
-
-
-REPO_ROOT = Path(__file__).resolve().parents[1]
-VIDEO_EXTENSIONS = ("*.mp4", "*.avi", "*.mov", "*.mkv")
-
-
-def _candidate_video_locations():
-    direct_file = os.environ.get("GOODQ_TEST_VIDEO")
-    if direct_file:
-        yield Path(direct_file)
-
-    for env_name in ("GOODQ_TEST_VIDEO_DIR", "GOODQ_IMPORT_INBOX"):
-        value = os.environ.get(env_name)
-        if value:
-            yield Path(value)
-
-    data_root = os.environ.get("GOODQ_DATA_ROOT")
-    if data_root:
-        yield Path(data_root) / "GoodQ_Data" / "processing"
-
-    yield REPO_ROOT / "import_inbox"
-    yield REPO_ROOT / "samples" / "ingestion"
-
 
 def extract_frame():
     """Extract a single frame from the first available video"""
     
     # Check for videos
+    video_dirs = [
+        Path("L:/_DATA/FAMILY_FEAST"),
+        Path("L:/goodq4all/import_inbox"),
+        Path("L:/_DATA/GoodQ_Data/processing")
+    ]
+    
     video_files = []
-    checked_locations = []
-    for location in _candidate_video_locations():
-        checked_locations.append(location)
-        if location.is_file():
-            video_files.append(location)
-        elif location.is_dir():
-            for pattern in VIDEO_EXTENSIONS:
-                video_files.extend(sorted(location.glob(pattern)))
+    for vdir in video_dirs:
+        if vdir.exists():
+            video_files.extend(list(vdir.glob("*.mp4")))
+            video_files.extend(list(vdir.glob("*.avi")))
+            video_files.extend(list(vdir.glob("*.mov")))
     
     if not video_files:
         print("[FAIL] No video files found in:")
-        for location in checked_locations:
-            print(f"   {location}")
-        print("\nProvide a video with GOODQ_TEST_VIDEO, GOODQ_TEST_VIDEO_DIR,")
-        print("GOODQ_IMPORT_INBOX, GOODQ_DATA_ROOT, or samples/ingestion.")
+        for vdir in video_dirs:
+            print(f"   {vdir}")
+        print("\nPlease place a video file in one of these directories")
         return False
     
     # Use first video
@@ -57,7 +35,7 @@ def extract_frame():
     print(f"[VIDEO] Using video: {video_path.name}")
     
     # Output path
-    output_dir = Path(os.environ.get("GOODQ_TEST_FRAME_DIR", REPO_ROOT / "test_data"))
+    output_dir = Path("L:/goodq4all/test_data")
     output_dir.mkdir(parents=True, exist_ok=True)
     output_path = output_dir / "sample_frame.jpg"
     
@@ -111,14 +89,15 @@ def main():
         print("\n" + "="*80)
         print("Next Step:")
         print("="*80)
-        print("Run focused vision tests or an approved witness for the current branch.")
+        print("Run the vision audit to test all components:")
+        print("  > run_vision_audit.bat")
         print("="*80)
     else:
         print("\n[WARN]  Manual extraction required:")
         print("1. Open a video in VLC or similar")
         print("2. Pause at any frame")
         print("3. Take a screenshot")
-        print("4. Save as: test_data\\sample_frame.jpg")
+        print("4. Save as: L:\\goodq4all\\test_data\\sample_frame.jpg")
     
     input("\nPress ENTER to exit...")
 

@@ -1,3 +1,8 @@
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: REFERENCE_ONLY -->
+<!-- DOC_CANONICAL_POINTER: docs/guides/gpu/GPU_SETUP.md -->
+<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
+
 # GPU Allocation - Complete Fix Summary
 
 ## 🎯 Mission Accomplished
@@ -119,7 +124,7 @@ steps/common/
 scripts/
 ├── test_gpu_allocation.py   # Test GPU setup across environments
 ├── test_gpu_pipeline.py     # Test pipeline GPU usage
-├── cli.goodq_doctor         # Supported runtime diagnostic
+├── diagnose_gpu_issue.py    # Full system diagnostic
 └── fix_gpu_allocation.py    # One-time setup script
 ```
 
@@ -142,7 +147,7 @@ docs/
 ### Quick Test
 ```bash
 # 1. Run diagnostic
-python -m cli.goodq_doctor
+python scripts\diagnose_gpu_issue.py
 
 # 2. Check GPU allocation
 python scripts\test_gpu_allocation.py
@@ -323,7 +328,7 @@ If issues persist:
 
 1. **Run diagnostics:**
    ```bash
-   python -m cli.goodq_doctor > diagnostic_output.txt
+   python scripts\diagnose_gpu_issue.py > diagnostic_output.txt
    ```
 
 2. **Check GPU health:**

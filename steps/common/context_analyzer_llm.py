@@ -226,21 +226,30 @@ _LOW_VALUE_TOPIC_PHRASES = {
     "a question",
     "a question sure",
     "alarmed god",
+    "always encouraged experimentation",
+    "apartment yep",
+    "apartment yep just",
     "attention yeah",
     "ask mark",
+    "business no",
+    "business no no",
     "business listen",
     "cable station lov",
     "cable station lough",
     "certain pain",
+    "clean apartment",
+    "clean apartment yep",
     "compartment wait",
     "compartment wait hold",
     "different interpretation",
+    "encouraged experimentation",
     "ever mention",
     "fianc‚",
     "go off oppression",
     "glove compartment",
     "glove compartment wait",
     "hell happened",
+    "jimmy shar",
     "jerry baby",
     "lasting impression",
     "like a car",
@@ -251,16 +260,32 @@ _LOW_VALUE_TOPIC_PHRASES = {
     "move cars",
     "must some",
     "no job",
+    "operation yeah",
+    "operation yeah yeah",
     "pocketing cars",
     "people aware",
+    "position he was",
     "question do",
+    "restitution because",
+    "restitution restitution",
+    "relationship respirator",
+    "relationship respirator keeping",
     "s a community",
+    "sing songy quality",
+    "songy quality",
     "some mistake",
     "station lov",
     "st street apartment",
     "show business listen",
     "off oppression wild",
     "off oppression",
+    "other business",
+    "business elsewhere",
+    "business end",
+    "business end take",
+    "business leave",
+    "other business no",
+    "negotiating negotiation",
     "oppression don",
     "oppression don t",
     "oppression wild",
@@ -406,6 +431,9 @@ _TRANSCRIPT_TOPIC_PATTERNS = (
     (re.compile(r"\bpretzel(?:s|\s+guy)?\b", re.IGNORECASE), "pretzel"),
     (re.compile(r"\bpresident\b", re.IGNORECASE), "president"),
     (re.compile(r"\breservation\b", re.IGNORECASE), "reservation"),
+    (re.compile(r"\brestitution\b", re.IGNORECASE), "restitution"),
+    (re.compile(r"\b(?:counter offer|whole deal)\b", re.IGNORECASE), "business deal"),
+    (re.compile(r"\b(?:deformed position|nothing but a claw|a claw)\b", re.IGNORECASE), "deformed hand"),
     (re.compile(r"\bflorida\b", re.IGNORECASE), "florida"),
     (re.compile(r"\bpen\b", re.IGNORECASE), "pen"),
     (re.compile(r"\bbathing suits?\b", re.IGNORECASE), "bathing suit"),
@@ -456,6 +484,21 @@ _CAPITALIZED_TOPIC_EXCLUSIONS = {
     "goodbye",
     "maybe",
 }
+_TOPIC_FRAGMENT_EDGE_TOKENS = {
+    "always",
+    "he",
+    "i",
+    "just",
+    "no",
+    "other",
+    "she",
+    "they",
+    "we",
+    "yeah",
+    "yep",
+    "you",
+}
+_TOPIC_GERUND_HEAD_ALLOWLIST = {"meeting"}
 _STAGE_MONOLOGUE_VISUAL_HINTS = {
     "microphone",
     "stage",
@@ -529,6 +572,39 @@ def _speaker_prompt_summary(speakers: List[Any]) -> str:
     return "unknown"
 
 
+def _prompt_evidence_values(value: Any, *, limit: int = 8) -> List[str]:
+    values: List[str] = []
+
+    def _append(raw: Any) -> None:
+        if raw is None or len(values) >= limit:
+            return
+        text = str(raw).strip()
+        if not text:
+            return
+        if text not in values:
+            values.append(text)
+
+    def _walk(raw: Any) -> None:
+        if len(values) >= limit:
+            return
+        if isinstance(raw, dict):
+            for key in ("label", "event", "context", "text", "value", "name"):
+                _append(raw.get(key))
+            for key in ("explicit_dates", "times", "weekdays", "months", "relative_phrases"):
+                _walk(raw.get(key))
+            return
+        if isinstance(raw, (list, tuple, set)):
+            for item in raw:
+                _walk(item)
+                if len(values) >= limit:
+                    break
+            return
+        _append(raw)
+
+    _walk(value)
+    return values[:limit]
+
+
 def _caption_is_low_signal(caption: str) -> bool:
     normalized = str(caption or "").strip().lower()
     if not normalized:
@@ -555,13 +631,15 @@ def _extract_transcript_topic_hints(transcript: str) -> List[str]:
                 return hints
 
     if not hints:
-        proper_name_matches = re.findall(
+        proper_name_matches = re.finditer(
             r"\b(?:[A-Z][a-z]+(?:\s+(?:von|van|de|da))?)(?:\s+[A-Z][a-z]+){0,2}\b",
             transcript_text,
         )
         for match in proper_name_matches:
-            raw_candidate = str(match or "").strip()
+            raw_candidate = str(match.group(0) or "").strip()
             if not raw_candidate:
+                continue
+            if transcript_text[match.end() : match.end() + 1] == "-":
                 continue
             tokens = [token for token in raw_candidate.split() if token]
             while tokens and tokens[0].casefold() in _CAPITALIZED_TOPIC_EXCLUSIONS.union(_TOPIC_STOPWORDS):
@@ -586,9 +664,19 @@ def _extract_transcript_topic_hints(transcript: str) -> List[str]:
         for window_size in (3, 2):
             for index in range(0, len(words) - window_size + 1):
                 phrase_tokens = words[index : index + window_size]
+                while phrase_tokens and phrase_tokens[0] in _TOPIC_FRAGMENT_EDGE_TOKENS:
+                    phrase_tokens = phrase_tokens[1:]
+                while phrase_tokens and phrase_tokens[-1] in _TOPIC_FRAGMENT_EDGE_TOKENS:
+                    phrase_tokens = phrase_tokens[:-1]
+                if len(phrase_tokens) < 2:
+                    continue
                 if any(token in _TOPIC_STOPWORDS or token in _LOW_VALUE_TOPIC_TOKENS for token in phrase_tokens):
                     continue
+                if phrase_tokens[0].endswith("ly") or phrase_tokens[0].endswith("ed"):
+                    continue
                 head = phrase_tokens[-1]
+                if head.endswith("ing") and head not in _TOPIC_GERUND_HEAD_ALLOWLIST:
+                    continue
                 singular_head = head[:-1] if head.endswith("s") and len(head) > 3 else head
                 if singular_head not in _LOWERCASE_TOPIC_HEADS and not any(
                     token.endswith(_TOPIC_NOUN_SUFFIXES) for token in phrase_tokens
@@ -1154,6 +1242,13 @@ def _normalize_scene_context_payload(raw_context: Dict[str, Any], scene_meta: Di
 
     transcript = str(scene_meta.get("transcript") or "").strip()
     caption = str(scene_meta.get("caption") or "").strip()
+    visible_text_values = _prompt_evidence_values(
+        scene_meta.get("ocr_text") or scene_meta.get("visible_text"),
+        limit=4,
+    )
+    music_event_values = _prompt_evidence_values(scene_meta.get("music_events"), limit=8)
+    time_hint_values = _prompt_evidence_values(scene_meta.get("time_hints"), limit=8)
+    metadata_time_hint_values = _prompt_evidence_values(scene_meta.get("metadata_time_hints"), limit=8)
     objects = scene_meta.get("objects", [])
     object_labels = []
     if isinstance(objects, list):
@@ -1164,7 +1259,17 @@ def _normalize_scene_context_payload(raw_context: Dict[str, Any], scene_meta: Di
                 label = str(obj).strip()
             if label:
                 object_labels.append(label)
-    evidence_blob = " ".join([transcript, caption, " ".join(object_labels)]).casefold()
+    evidence_blob = " ".join(
+        [
+            transcript,
+            caption,
+            " ".join(object_labels),
+            " ".join(visible_text_values),
+            " ".join(music_event_values),
+            " ".join(time_hint_values),
+            " ".join(metadata_time_hint_values),
+        ]
+    ).casefold()
 
     context_tags = _clean_list(raw_context.get("context_tags"), limit=8)
     topic_hints = _extract_transcript_topic_hints(transcript)
@@ -1309,6 +1414,28 @@ def _normalize_scene_context_payload(raw_context: Dict[str, Any], scene_meta: Di
         narrative_summary=narrative_summary,
     )
 
+    activity_description = _rewrite_scene_text(
+        raw_activity,
+        setting_hint=setting_hint,
+        topic_hint=topic_hint,
+        force_rewrite=force_activity_rewrite,
+    )
+    promoted_activity_summary = False
+    if (
+        narrative_summary == "Minimal visual or dialogue content."
+        and activity_description != "Minimal visual or dialogue content."
+        and not _has_excess_ungrounded_content(
+            activity_description,
+            evidence_blob=evidence_blob,
+            topic_hint=topic_hint,
+            setting_hint=setting_hint,
+        )
+    ):
+        narrative_summary = activity_description
+        promoted_activity_summary = True
+    if promoted_activity_summary and not key_moments:
+        key_moments = [activity_description]
+
     sanitized = {
         "narrative_summary": narrative_summary,
         "key_moments": key_moments,
@@ -1317,12 +1444,7 @@ def _normalize_scene_context_payload(raw_context: Dict[str, Any], scene_meta: Di
         "primary_tags": tag_payload["primary_tags"],
         "contextual_tags": tag_payload["contextual_tags"],
         "structural_tags": tag_payload["structural_tags"],
-        "activity_description": _rewrite_scene_text(
-            raw_activity,
-            setting_hint=setting_hint,
-            topic_hint=topic_hint,
-            force_rewrite=force_activity_rewrite,
-        ),
+        "activity_description": activity_description,
     }
     if sanitized["narrative_summary"] == "Minimal visual or dialogue content.":
         sanitized["key_moments"] = ["Minimal visual or dialogue content."]
@@ -1348,6 +1470,13 @@ def _build_scene_context_prompts(scene_meta: Dict[str, Any]) -> tuple[str, str]:
     end = float(scene_meta.get("end", 0.0) or 0.0)
     caption = str(scene_meta.get("caption") or "").strip()
     transcript = str(scene_meta.get("transcript") or "").strip()
+    visible_text_values = _prompt_evidence_values(
+        scene_meta.get("ocr_text") or scene_meta.get("visible_text"),
+        limit=4,
+    )
+    music_event_values = _prompt_evidence_values(scene_meta.get("music_events"), limit=8)
+    time_hint_values = _prompt_evidence_values(scene_meta.get("time_hints"), limit=8)
+    metadata_time_hint_values = _prompt_evidence_values(scene_meta.get("metadata_time_hints"), limit=8)
     objects = scene_meta.get("objects", [])
     face_count = int(scene_meta.get("face_count", 0) or 0)
     emotions = scene_meta.get("emotions", [])
@@ -1362,6 +1491,12 @@ def _build_scene_context_prompts(scene_meta: Dict[str, Any]) -> tuple[str, str]:
         if label:
             object_labels.append(label)
     objects_str = ", ".join(object_labels) if object_labels else "none"
+    visible_text_str = ", ".join(visible_text_values) if visible_text_values else "none"
+    music_events_str = ", ".join(music_event_values) if music_event_values else "none"
+    all_time_hint_values = time_hint_values + [
+        value for value in metadata_time_hint_values if value not in time_hint_values
+    ]
+    time_hints_str = ", ".join(all_time_hint_values) if all_time_hint_values else "none"
 
     emotion_labels: List[str] = []
     for emotion in emotions[:3] if isinstance(emotions, list) else []:
@@ -1408,6 +1543,9 @@ SCENE:
 EVIDENCE:
 - Visible caption: {caption or "No visual description"}
 - Visible objects: {objects_str}
+- Visible text: {visible_text_str}
+- Audio/music events: {music_events_str}
+- Time hints: {time_hints_str}
 - Face count: {face_count}
 - Transcript excerpt: {transcript_excerpt}
 - Transcript topic hints: {topic_hints_str}

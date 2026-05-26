@@ -218,11 +218,6 @@ function Test-QdrantService {
         
     } catch {
         Write-StatusLine "Qdrant" "Not responding" "WARN"
-        if ($DryRun) {
-            Write-StatusLine "Qdrant Service" "Not started (dry run)" "INFO"
-            $script:IssuesFound++
-            return
-        }
         Write-Host "    Attempting to start Qdrant service..." -ForegroundColor $Yellow
         
         try {
@@ -262,15 +257,10 @@ function Test-Directories {
         if (Test-Path $dir) {
             Write-StatusLine (Split-Path $dir -Leaf) "Exists" "SUCCESS"
         } else {
-            if ($DryRun) {
-                Write-StatusLine (Split-Path $dir -Leaf) "Missing (dry run; not created)" "WARN"
-                $script:IssuesFound++
-            } else {
-                Write-StatusLine (Split-Path $dir -Leaf) "Missing - creating..." "WARN"
-                New-Item -ItemType Directory -Path $dir -Force | Out-Null
-                Write-StatusLine (Split-Path $dir -Leaf) "Created" "SUCCESS"
-                $script:IssuesAutoFixed++
-            }
+            Write-StatusLine (Split-Path $dir -Leaf) "Missing - creating..." "WARN"
+            New-Item -ItemType Directory -Path $dir -Force | Out-Null
+            Write-StatusLine (Split-Path $dir -Leaf) "Created" "SUCCESS"
+            $script:IssuesAutoFixed++
         }
     }
 }
@@ -386,11 +376,11 @@ function Main {
     Write-Host " | (_ / _ \ _ \/ _  | (_) |_  _|/ _ \| |__| |__ " -ForegroundColor $Magenta
     Write-Host "  \___\___\___/\__\_|\__\_\ |_|/_/ \_\____|____|" -ForegroundColor $Magenta
     Write-Host ""
-    Write-Host "  Local-First Multimodal Memory Runtime" -ForegroundColor $Cyan
+    Write-Host "  Production-Ready Multimodal AI Pipeline" -ForegroundColor $Cyan
     Write-Host ""
     
     if ($DryRun) {
-        Write-Host "  MODE: DRY RUN READINESS CHECK (no services, ingestion, log windows, or directory repairs will start)" -ForegroundColor $Yellow
+        Write-Host "  MODE: DRY RUN (no services will start)" -ForegroundColor $Yellow
         Write-Host ""
     }
 
@@ -416,15 +406,11 @@ function Main {
         } elseif ($script:IssuesFound -eq 0) {
             Write-Host "  [OK] All issues auto-fixed ($script:IssuesAutoFixed fixes applied)" -ForegroundColor $Green
         } else {
-            if ($DryRun) {
-                Write-Host "  [!!] $script:IssuesFound readiness issues found - review above" -ForegroundColor $Red
-            } else {
-                Write-Host "  [!!] $script:IssuesFound critical issues found - review above" -ForegroundColor $Red
-                Write-Host ""
-                $continue = Read-Host "Continue anyway? (y/N)"
-                if ($continue -ne 'y') {
-                    exit 1
-                }
+            Write-Host "  [!!] $script:IssuesFound critical issues found - review above" -ForegroundColor $Red
+            Write-Host ""
+            $continue = Read-Host "Continue anyway? (y/N)"
+            if ($continue -ne 'y') {
+                exit 1
             }
         }
     } else {
@@ -432,18 +418,15 @@ function Main {
     }
     
     # LAUNCH SERVICES
-    $launchHeader = if ($DryRun) { "SERVICE LAUNCH PREVIEW" } else { "LAUNCHING SERVICES" }
-    Write-Header $launchHeader
+    Write-Header "LAUNCHING SERVICES"
     
     Start-LogMonitor
     Start-IngestionService
     
     # SUMMARY
-    $summaryTitle = if ($DryRun) { "GOODQ4ALL READINESS SUMMARY" } else { "GOODQ4ALL IS RUNNING" }
-    Write-Header $summaryTitle
+    Write-Header "GOODQ4ALL IS RUNNING"
     
     Write-Host "  Qdrant API:    $script:QdrantURL" -ForegroundColor $Cyan
-    Write-Host "  Qdrant Store:  $script:QdrantStoragePath" -ForegroundColor $Cyan
     Write-Host "  Inbox Path:    $script:InboxPath" -ForegroundColor $Cyan
     Write-Host "  Processing:    $script:ProcessingRoot" -ForegroundColor $Cyan
     Write-Host "  Memory DB:     $script:MemoryDbPath" -ForegroundColor $Cyan

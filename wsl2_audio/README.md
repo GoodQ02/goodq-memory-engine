@@ -23,9 +23,9 @@ Windows ingestion/runtime surface.
 4. **Stability**: Fewer environment conflicts, no Windows-specific issues
 5. **Scalability**: Easy to add more processing power or distribute across machines
 
-### Performance Gains
+### Performance Notes
 
-Typical speedups compared to Windows-native processing:
+Historical speedup targets compared to Windows-native processing:
 - Transcription: **3-5x faster**
 - Diarization: **2-3x faster**
 - Combined: **Overall 4x faster** with VAD
@@ -34,6 +34,12 @@ Example: 1 hour of audio
 - Windows (CPU): ~60 minutes
 - Windows (GPU): ~20 minutes
 - WSL2 (GPU + VAD): **~5 minutes**
+
+These are not the current scheduling contract. Use
+`docs/reference/WSL_AUDIO_RUNTIME.md` plus `step_runs.jsonl` / control
+recurrence latency summaries for current runtime cost. Recent full-scene
+witnesses show the unified WSL worker is stable and truthful, but expensive
+because it produces the full audio bundle, not just a transcript.
 
 ## Installation
 
@@ -79,6 +85,11 @@ This will:
   `huggingface-hub==0.35.3`, Silero VAD, and related audio packages through
   `wsl2_audio/requirements-bootstrap-constraints.txt`
 - Generate default configuration
+
+The active sourced worker must be verified on the target machine. If the
+runtime recorder reports a different installed torch lane, treat that as
+observed environment truth and inspect it before claiming the bootstrap target
+is actually installed.
 
 ### Step 3: Configure HuggingFace Token
 

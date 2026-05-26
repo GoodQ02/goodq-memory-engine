@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: CURATED_AUTHORITY_INDEX -->
-<!-- DOC_LAST_VERIFIED: 2026-04-02 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-20 -->
 
 # Documentation Authority Map
 
@@ -40,7 +40,6 @@ These documents define current runtime, architecture, identity, and operator tru
 
 ### Runtime And Architecture Contracts
 
-- [HANDOFF_BASEMENT_PHASE.md](../HANDOFF_BASEMENT_PHASE.md)
 - [INGEST_ORCHESTRATION_CONTRACT.md](../architecture/INGEST_ORCHESTRATION_CONTRACT.md)
 - [IDENTITY_STITCHING_CONTRACT.md](../architecture/IDENTITY_STITCHING_CONTRACT.md)
 - [SYSTEM_ARCHITECTURE.md](../architecture/SYSTEM_ARCHITECTURE.md)
@@ -50,9 +49,23 @@ These documents define current runtime, architecture, identity, and operator tru
 - [SCENE_MANIFEST_SPECIFICATION.md](../SCENE_MANIFEST_SPECIFICATION.md)
 - [VISION_PIPELINE.md](../architecture/components/VISION_PIPELINE.md)
 - [LIB_COMPONENTS.md](../technical/LIB_COMPONENTS.md)
+- [CONFIG_LOADING_CONTRACT.md](../architecture/CONFIG_LOADING_CONTRACT.md)
+
+### Read Model, Restraint, And Sensitive Source Contracts
+
+- [EPISTEMIC_READ_MODEL.md](../architecture/EPISTEMIC_READ_MODEL.md)
+- [NON_ACTION_CONTRACT.md](../architecture/NON_ACTION_CONTRACT.md)
+- [VISUAL_PROJECTION_CONTRACT_v1.md](../architecture/VISUAL_PROJECTION_CONTRACT_v1.md)
+- [CANONICAL_SENSITIVE_EVENTS.md](../architecture/CANONICAL_SENSITIVE_EVENTS.md)
+- [VAULT_TOKEN_RESOLVER_CONTRACT.md](../architecture/VAULT_TOKEN_RESOLVER_CONTRACT.md)
+- [LLM_CLIENT_INJECTION_CONTRACT.md](../architecture/LLM_CLIENT_INJECTION_CONTRACT.md)
 
 ### Runtime Operator Authority
 
+- [Agent current state](../agent/CURRENT_STATE.md)
+- [Agent current state JSON](../agent/current_state.json)
+- [Agent office index](../agent/README.md)
+- [Clean memory start workflow](../agent/workflows/CLEAN_MEMORY_START.md)
 - [WSL_AUDIO_RUNTIME.md](../reference/WSL_AUDIO_RUNTIME.md)
 - [WATCHDOG_SYSTEM.md](../systems/WATCHDOG_SYSTEM.md)
 - [CONTROL_AGENT.md](../CONTROL_AGENT.md)
@@ -63,6 +76,7 @@ These documents define current runtime, architecture, identity, and operator tru
 ### Documentation Governance Authority
 
 - [CORPUS_PACK_MANIFEST.md](./CORPUS_PACK_MANIFEST.md)
+- [INSTALL_BOOTSTRAP.md](./INSTALL_BOOTSTRAP.md)
 - [doc_authority_policy.md](./doc_authority_policy.md)
 - [doc_archive_plan.md](./doc_archive_plan.md)
 - [doc_governance_summary.md](./doc_governance_summary.md)
@@ -71,8 +85,12 @@ These documents define current runtime, architecture, identity, and operator tru
 
 These docs are safe discovery/index surfaces for humans and agents, but they do not override canonical contracts.
 
-- [SCRIPT_REGISTRY.md](./SCRIPT_REGISTRY.md)
+- [AGENT_FILE_INDEX.md](../reference/indexes/AGENT_FILE_INDEX.md)
+- [CORPUS_PACK_INVENTORY_LEDGER.md](./CORPUS_PACK_INVENTORY_LEDGER.md)
+- [REFERENCE_PACK_V0_SELECTION_PROPOSAL.md](./REFERENCE_PACK_V0_SELECTION_PROPOSAL.md)
+- [REFERENCE_PACK_V0_LICENSE_REVIEW_MATRIX.md](./REFERENCE_PACK_V0_LICENSE_REVIEW_MATRIX.md)
 - [QUICK_INDEX.md](../reference/indexes/QUICK_INDEX.md)
+- [DOCS_FORENSICS_INDEX.md](../reference/indexes/DOCS_FORENSICS_INDEX.md)
 - [AGENT_COMMS_INDEX.md](../reference/indexes/AGENT_COMMS_INDEX.md)
 - [REPO_GROUNDED_CLEANUP_CHECKLIST.md](./REPO_GROUNDED_CLEANUP_CHECKLIST.md)
 
@@ -80,6 +98,8 @@ These docs are safe discovery/index surfaces for humans and agents, but they do 
 
 These docs remain in the repo because they are useful historical records, but they must never be treated as current operator or runtime authority.
 
+- [SCRIPT_REGISTRY.md](../../archive/docs/bootstrap/SCRIPT_REGISTRY.md)
+- [HANDOFF_BASEMENT_PHASE.md](../HANDOFF_BASEMENT_PHASE.md)
 - [ARTIFACT_LOCATION_CONTRACT.md](../technical/ARTIFACT_LOCATION_CONTRACT.md)
 - [PIPELINE_RESTORATION_BACKLOG.md](../technical/PIPELINE_RESTORATION_BACKLOG.md)
 - [PHASE5_FINAL_ACTIVATION_SUMMARY.md](../technical/PHASE5_FINAL_ACTIVATION_SUMMARY.md)

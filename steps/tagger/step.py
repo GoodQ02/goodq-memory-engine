@@ -484,6 +484,80 @@ def _iter_time_tokens(item: Dict[str, Any]) -> List[str]:
     return tokens
 
 
+_CAPTION_TAG_PATTERNS: tuple[tuple[str, str], ...] = (
+    (r"\btrumpet\b", "trumpet"),
+    (r"\btrombone\b", "trombone"),
+    (r"\bsaxophone\b", "saxophone"),
+    (r"\bclarinet\b", "clarinet"),
+    (r"\bflute\b", "flute"),
+    (r"\bviolin\b", "violin"),
+    (r"\bcello\b", "cello"),
+    (r"\bguitar\b", "guitar"),
+    (r"\bpiano\b", "piano"),
+    (r"\bkeyboard\b", "keyboard"),
+    (r"\bdrums?\b", "drums"),
+    (r"\bchoir\b", "choir"),
+    (r"\bband\b", "band"),
+    (r"\borchestra\b", "orchestra"),
+    (r"\bstage\b", "stage"),
+    (r"\bclassroom\b", "classroom"),
+    (r"\bkitchen\b", "kitchen"),
+    (r"\broom\b", "indoor"),
+    (r"\boutside\b|\boutdoors?\b", "outdoor"),
+    (r"\bbeach\b", "beach"),
+    (r"\bpark\b", "park"),
+    (r"\byard\b", "yard"),
+)
+
+_MUSIC_CAPTION_TAGS = {
+    "trumpet",
+    "trombone",
+    "saxophone",
+    "clarinet",
+    "flute",
+    "violin",
+    "cello",
+    "guitar",
+    "piano",
+    "keyboard",
+    "drums",
+    "choir",
+    "band",
+    "orchestra",
+}
+
+
+def _iter_caption_tags(item: Dict[str, Any]) -> List[tuple[str, str]]:
+    caption = item.get("caption")
+    if not isinstance(caption, str) or not caption.strip():
+        return []
+
+    text = caption.casefold()
+    labels: List[tuple[str, str]] = []
+    seen: set[str] = set()
+    for pattern, label in _CAPTION_TAG_PATTERNS:
+        if not re.search(pattern, text):
+            continue
+        key = label.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        labels.append((label, "caption"))
+
+    music_labels = {label for label, _source in labels if label in _MUSIC_CAPTION_TAGS}
+    if music_labels:
+        if "music" not in seen:
+            seen.add("music")
+            labels.append(("music", "caption_inference"))
+        if (
+            re.search(r"\b(play|playing|perform|performing|sing|singing|concert|recital)\b", text)
+            and "performance" not in seen
+        ):
+            labels.append(("performance", "caption_inference"))
+
+    return labels
+
+
 def _rank_entities(text: str, ner_entities: List[Dict[str, str]], fallback_entities: List[str]) -> List[Dict[str, Any]]:
     bucket: Dict[str, Dict[str, Any]] = {}
     for entity in ner_entities:
@@ -552,6 +626,20 @@ def _rank_tags(
             label,
             2.5,
             "time",
+            validator=is_valid_tag_token,
+            normalizer=normalize_tag_token,
+        )
+    for label, source in _iter_caption_tags(item):
+        normalized = normalize_tag_token(label)
+        key = normalized.casefold() if isinstance(normalized, str) else None
+        if key and key in bucket:
+            bucket[key]["sources"].add(source)
+            continue
+        _add_candidate(
+            bucket,
+            label,
+            3.5,
+            source,
             validator=is_valid_tag_token,
             normalizer=normalize_tag_token,
         )

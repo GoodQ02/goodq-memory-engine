@@ -37,18 +37,18 @@ To verify that your offline download package matches the canonical build output,
 ### PowerShell (Windows Host)
 ```powershell
 # Verify Host Tools Zip
-Get-FileHash -Algorithm SHA256 "L:\GOODCUBE\scratch\release_assets\goodq4all-0.1.1-host-tools-windows-x86_64.zip"
+Get-FileHash -Algorithm SHA256 "%GOODQ_REPO_ROOT%\scratch\release_assets\goodq4all-0.1.1-host-tools-windows-x86_64.zip"
 
 # Verify Manifests
-Get-FileHash -Algorithm SHA256 "L:\GOODCUBE\scratch\offline_bundle\current\manifests\windows_pip_wheelhouse_manifest.json"
-Get-FileHash -Algorithm SHA256 "L:\GOODCUBE\scratch\offline_bundle\current\manifests\windows_pip_wheelhouse_files.json"
+Get-FileHash -Algorithm SHA256 "%GOODQ_REPO_ROOT%\scratch\offline_bundle\current\manifests\windows_pip_wheelhouse_manifest.json"
+Get-FileHash -Algorithm SHA256 "%GOODQ_REPO_ROOT%\scratch\offline_bundle\current\manifests\windows_pip_wheelhouse_files.json"
 ```
 
 ### Bash (WSL2 / Linux Environment)
 ```bash
 # Verify Host Tools Zip
-sha256sum /mnt/l/GOODCUBE/scratch/release_assets/goodq4all-0.1.1-host-tools-windows-x86_64.zip
+sha256sum $GOODQ_REPO_ROOT/scratch/release_assets/goodq4all-0.1.1-host-tools-windows-x86_64.zip
 
 # Verify Manifests
-sha256sum /mnt/l/GOODCUBE/scratch/offline_bundle/current/manifests/windows_pip_wheelhouse_manifest.json
+sha256sum $GOODQ_REPO_ROOT/scratch/offline_bundle/current/manifests/windows_pip_wheelhouse_manifest.json
 ```

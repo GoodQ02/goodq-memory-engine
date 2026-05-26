@@ -6,16 +6,16 @@
 # USER & MODEL IDENTITY
 # ============================================================================
 user:
-  name: Example User
-  nickname: Example Operator
-  pronouns: they/them
-  personality_traits: curious, resilient, precise, privacy-minded
-  values: reliability, privacy, observability, local-first computing
-  background: Example GoodQ local-first deployment for public documentation
-  music_style: eclectic
-  role_nursing: example professional context
-  nursing_philosophy: example only
-  role_personal: local-only overrides belong in config.local.yaml
+  name: Joseph Domingo Benvenuti
+  nickname: GoodSex, Joes, Agent, 00-Joes, Joe
+  pronouns: he/him
+  personality_traits: compassionate, resilient, witty, detail-obsessed, creative, musically inclined
+  values: innovation, empathy, knowledge, precision, music, authenticity, healing, chaos
+  background: Chicago DJ who almost made it (www.goodsexmusic.com) turned sober nightly vibe-coder
+  music_style: house, eclectic electronic, soul-infused Chicago grooves
+  role_nursing: registered nurse in IL, bachelor of science and nursing + certified school nurse
+  nursing_philosophy: evidence-based care, radical empathy, advocate for the unseen
+  role_personal: husband to wife Katy Banks, father to dog Ryder and step-father to Kay's dog 'Lovie'
 
 model:
   identity: 'GoodQ: Digital embodiment of Q from the James Bond universe'
@@ -24,23 +24,23 @@ model:
   humor_style: 007 Secret Agent excitement, witty Q-style dry sarcasm, clever jabs
   tech_sidekick_persona: tech-savvy sidekick with dry wit and taste for innovation
   zone_1: Command_Center
-  zone_1_desc: Primary workstation
+  zone_1_desc: User's main workstation for coding, music production, and gaming
   zone_2: Desk Dock
-  zone_2_desc: Secondary desk setup
+  zone_2_desc: Razer Laptop Dock with RGB lighting and Dual 25-inch HP Monitors
   zone_3: Chase Recon
-  zone_3_desc: Alternate workspace
-  main_hardware: Example Windows workstation
-  main_hardware_codename: EXAMPLE_HOST
-  mission_name: GoodQ_Public
-  assigned_zone: Example_Zone
-  workplace: Example Workspace
+  zone_3_desc: Relaxing large lounge day-bed with dual monitor setup and lakeside views
+  main_hardware: Alienware Aurora R16
+  main_hardware_codename: THE_GOODENGINE
+  mission_name: GoodQ_o2
+  assigned_zone: The_GoodPlace
+  workplace: The GoodPlace, Chicago, Illinois
 
 # ============================================================================
 # HOST IDENTITY (PORTABILITY LAYER)
 # ============================================================================
 host:
   profile: ${GOODQ_HOST_PROFILE:-UNSET}
-  data_root: ${GOODQ_DATA_ROOT:-./_DATA}
+  data_root: ${GOODQ_DATA_ROOT:-L:/_DATA}
   wsl_distro: ${GOODQ_WSL_DISTRO:-Ubuntu}
   wsl_user: ${GOODQ_WSL_USER:-auto}
   wsl_workspace: ${GOODQ_WSL_WORKSPACE:-auto}
@@ -51,25 +51,25 @@ host:
 # ============================================================================
 paths:
   # Core directories
-  log_dir: ${GOODQ_DATA_ROOT:-./_DATA}/GoodQ_Data/epochs/epoch_2025_12_22/logs
-  output_directory: ${GOODQ_DATA_ROOT:-./_DATA}/GoodQ_Data/epochs/epoch_2025_12_22/output
-  db_dir: ${GOODQ_DATA_ROOT:-./_DATA}/GoodQ_Data/epochs/epoch_2025_12_22
-  db_path: ${GOODQ_DATA_ROOT:-./_DATA}/GoodQ_Data/epochs/epoch_2025_12_22/memory.db
-  knowledge_graph_db: ${GOODQ_DATA_ROOT:-./_DATA}/GoodQ_Data/epochs/epoch_2025_12_22/knowledge_graph.db
-  faiss_dir: ${GOODQ_DATA_ROOT:-./_DATA}/GoodQ_Data/epochs/epoch_2025_12_22/faiss
-  faiss_audio_path: ${GOODQ_DATA_ROOT:-./_DATA}/GoodQ_Data/epochs/epoch_2025_12_22/faiss/goodq_audio_epoch_2025_12_22.index
-  qdrant_storage: ${GOODQ_DATA_ROOT:-./_DATA}/qdrant_storage
-  watchdog_state_file: ${GOODQ_DATA_ROOT:-./_DATA}/GoodQ_Data/epochs/epoch_2025_12_22/logs/watchdog_state.json
-  watchdog_lock_file: ${GOODQ_DATA_ROOT:-./_DATA}/GoodQ_Data/epochs/epoch_2025_12_22/logs/watchdog.lock
+  log_dir: ${GOODQ_DATA_ROOT:-L:/_DATA}/GoodQ_Data/epochs/epoch_2025_12_22/logs
+  output_directory: ${GOODQ_DATA_ROOT:-L:/_DATA}/GoodQ_Data/epochs/epoch_2025_12_22/output
+  db_dir: ${GOODQ_DATA_ROOT:-L:/_DATA}/GoodQ_Data/epochs/epoch_2025_12_22
+  db_path: ${GOODQ_DATA_ROOT:-L:/_DATA}/GoodQ_Data/epochs/epoch_2025_12_22/memory.db
+  knowledge_graph_db: ${GOODQ_DATA_ROOT:-L:/_DATA}/GoodQ_Data/epochs/epoch_2025_12_22/knowledge_graph.db
+  faiss_dir: ${GOODQ_DATA_ROOT:-L:/_DATA}/GoodQ_Data/epochs/epoch_2025_12_22/faiss
+  faiss_audio_path: ${GOODQ_DATA_ROOT:-L:/_DATA}/GoodQ_Data/epochs/epoch_2025_12_22/faiss/goodq_audio_epoch_2025_12_22.index
+  qdrant_storage: ${GOODQ_DATA_ROOT:-L:/_DATA}/qdrant_storage
+  watchdog_state_file: ${GOODQ_DATA_ROOT:-L:/_DATA}/GoodQ_Data/epochs/epoch_2025_12_22/logs/watchdog_state.json
+  watchdog_lock_file: ${GOODQ_DATA_ROOT:-L:/_DATA}/GoodQ_Data/epochs/epoch_2025_12_22/logs/watchdog.lock
   config_dir: configs
   
   # Data paths
-  data_root: ${GOODQ_DATA_ROOT:-./_DATA}/GoodQ_Data
-  import_inbox: ${GOODQ_DATA_ROOT:-./_DATA}/GoodQ_Data/import_inbox
-  processing: ${GOODQ_DATA_ROOT:-./_DATA}/GoodQ_Data/epochs/epoch_2025_12_22/processing
-  processed: ${GOODQ_DATA_ROOT:-./_DATA}/GoodQ_Data/processed
-  failed: ${GOODQ_DATA_ROOT:-./_DATA}/GoodQ_Data/failed
-  models_cache: ${GOODQ_DATA_ROOT:-./_DATA}/models
+  data_root: ${GOODQ_DATA_ROOT:-L:/_DATA}/GoodQ_Data
+  import_inbox: ${GOODQ_DATA_ROOT:-L:/_DATA}/GoodQ_Data/import_inbox
+  processing: ${GOODQ_DATA_ROOT:-L:/_DATA}/GoodQ_Data/epochs/epoch_2025_12_22/processing
+  processed: ${GOODQ_DATA_ROOT:-L:/_DATA}/GoodQ_Data/processed
+  failed: ${GOODQ_DATA_ROOT:-L:/_DATA}/GoodQ_Data/failed
+  models_cache: ${GOODQ_DATA_ROOT:-L:/_DATA}/models
   
   # Segmentation output paths
   chunk_subdir: chunks
@@ -78,8 +78,8 @@ paths:
   metadata_subdir: metadata
   
   # External paths
-  csv_path: ${GOODQ_DATA_ROOT:-./_DATA}/GoodQ_Data/epochs/epoch_2025_12_22/logs/system_metrics.csv
-  nas_path: ${GOODQ_DATA_ROOT:-./_DATA}/GoodQ_Data/archive
+  csv_path: ${GOODQ_DATA_ROOT:-L:/_DATA}/GoodQ_Data/epochs/epoch_2025_12_22/logs/system_metrics.csv
+  nas_path: ${GOODQ_DATA_ROOT:-L:/_DATA}/GoodQ_Data/archive
 
 # ============================================================================
 # TOOL BINDINGS
@@ -97,6 +97,8 @@ llm:
   # LM Studio (primary for chat/dialogue)
   api_url: http://localhost:1234/v1/chat/completions
   model_id: LM_STUDIO_GOODQ
+  features:
+    scene_context_analysis: false
   
   # vLLM Server (WSL2, high-performance inference)
   vllm_url: http://localhost:38005/v1
@@ -107,29 +109,29 @@ llm:
   ollama_model: phi4:latest
 
 tts:
-  elevenlabs_voice_id: ${ELEVENLABS_VOICE_ID:-example_voice_id}
-  piper_voice: example
-  last_used_voice: example
+  elevenlabs_voice_id: 4YYIPFl9wE5c4L2eu2Gb
+  piper_voice: joe
+  last_used_voice: moviephone
 
 # ============================================================================
 # HOME ASSISTANT
 # ============================================================================
 home_assistant:
-  url: ${GOODQ_HOME_ASSISTANT_URL:-http://localhost:8123}
-  token: ${HA_TOKEN:-}
+  url: http://192.168.0.154:8123
+  token: ${HA_TOKEN}
 
 # ============================================================================
 # SYSTEM HARDWARE
 # ============================================================================
 system:
-  cpu: Example CPU
-  gpu: Optional NVIDIA GPU
-  ram1: Example RAM Slot A
-  ram2: Example RAM Slot B
-  ssd1: Example NVMe 1
-  ssd2: Example NVMe 2
-  network: Example local network
-  storage: Example local storage
+  cpu: Intel Core i7-14700KF
+  gpu: NVIDIA GeForce RTX 4070 Ti SUPER with 16GB GDDR6X
+  ram1: 32GB Crucial DDR5 at 5200MHz
+  ram2: 32GB Crucial DDR5 at 5200MHz
+  ssd1: Samsung 990 Pro 4TB NVMe SSD
+  ssd2: Samsung 990 Pro 4TB NVMe SSD
+  network: Tp-Link Archer AXE7800 with 2.5Gbps Ethernet and Wi-Fi 6E
+  storage: UGREEN NAS with 44TB of storage
 
 # ============================================================================
 # GPU CONFIGURATION
@@ -265,10 +267,6 @@ video:
     min_scene_len_sec: 30.0  # Optimized for GPU processing
     max_scene_len_sec: 300.0  # Force split scenes > 5min
     max_scenes: 0
-    entity_refine: false
-    entity_sample_rate: 0.5
-    entity_min_duration: 300.0
-    entity_max_samples: 300
 
 # ============================================================================
 # PHASE 6: SCENE VISUAL EMBEDDINGS & CROSS-MODAL FUSION

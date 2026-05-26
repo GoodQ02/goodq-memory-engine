@@ -69,7 +69,7 @@
 **CRITICAL FINDING**: vLLM IS WORKING and responding successfully to:
 - Health checks (`/v1/models`)
 - Chat completions (`/v1/chat/completions`)
-- Connections from both localhost (127.0.0.1) and the local network
+- Connections from both localhost (127.0.0.1) and network (192.168.0.229)
 
 ### The Real Issue is NOT Port Configuration
 
@@ -82,7 +82,7 @@ The localhost issues you're experiencing are likely:
 
 2. **Request Routing**
    - Client code may not be using the correct model IDs
-   - vLLM expects a configured model path such as `<GOODQ_WSL_MODEL_PATH>`
+   - vLLM expects full model paths: `/mnt/l/_DATA/models/llm/huggingface/Llama-3.2-1B-Instruct`
    - Not short names like "Llama-1B"
 
 3. **WSL Network State**
@@ -125,7 +125,7 @@ The localhost issues you're experiencing are likely:
 # Test vLLM connectivity
 curl http://localhost:38005/v1/models
 curl http://localhost:38005/v1/chat/completions -X POST -H "Content-Type: application/json" \
-  -d '{"model": "<GOODQ_WSL_MODEL_PATH>", "messages": [{"role": "user", "content": "test"}]}'
+  -d '{"model": "/mnt/l/_DATA/models/llm/huggingface/Llama-3.2-1B-Instruct", "messages": [{"role": "user", "content": "test"}]}'
 
 # Test from Windows
 python <project_root>\scripts\test_llm_client.py
@@ -221,3 +221,4 @@ Would you like me to:
 4. **Investigate the specific error** you're experiencing?
 
 Please describe the actual localhost issue you're seeing so we can fix the root cause.
+

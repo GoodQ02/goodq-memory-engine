@@ -88,6 +88,12 @@ contract reference, not the first file new users should edit.
 Run the safe launcher first:
 
 ```powershell
+
+## 2. Check Readiness
+
+Run the safe launcher first:
+
+```powershell
 .\LAUNCH_GOODQ.ps1
 ```
 
@@ -97,6 +103,9 @@ and logs. Ingestion starts only when explicitly requested.
 ## 3. Start Watchdog
 
 In a terminal you can leave open:
+
+> [!IMPORTANT]
+> **Leave this terminal open.** Watchdog must remain running in the background to monitor the inbox.
 
 ```powershell
 conda run --no-capture-output -n goodq_core python -m cli.watchdog
@@ -133,6 +142,9 @@ first run.
 ## 5. Start The API
 
 In another terminal:
+
+> [!IMPORTANT]
+> **Open a second, separate terminal window/session.** Do not close the Watchdog terminal. Run the API server here.
 
 ```powershell
 conda run --no-capture-output -n goodq_core python -m api.server

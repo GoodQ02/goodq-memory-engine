@@ -203,7 +203,10 @@ python scripts/bootstrap_install.py
 .\LAUNCH_GOODQ.ps1
 ```
 
-`LAUNCH_GOODQ.ps1` checks readiness and opens operator monitors. It does not start ingestion by itself.
+`LAUNCH_GOODQ.ps1` checks readiness and opens operator monitors. It does not start ingestion by itself. To launch with background watchdog ingestion enabled:
+```powershell
+.\LAUNCH_GOODQ.ps1 -StartIngestion
+```
 
 The launcher also has `LAUNCH_GOODQ.bat` for double-click or classic Command
 Prompt use. Both wrappers reach the same readiness surface.

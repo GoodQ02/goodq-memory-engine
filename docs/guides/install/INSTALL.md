@@ -114,7 +114,11 @@ installer.
 5. Launch:
 
 ```powershell
+# Safe-mode check (readiness only)
 .\LAUNCH_GOODQ.ps1
+
+# Launch with watchdog-driven Ingestion enabled
+.\LAUNCH_GOODQ.ps1 -StartIngestion
 ```
 
 ## Smoke Matrix

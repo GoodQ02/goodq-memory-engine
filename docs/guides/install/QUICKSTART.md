@@ -38,11 +38,15 @@ runtime compatibility.
 
 ```powershell
 .\scripts\bootstrap_validate.bat
+# Safe-mode check (readiness only)
 .\LAUNCH_GOODQ.ps1
+
+# Launch with active background watchdog ingestion
+.\LAUNCH_GOODQ.ps1 -StartIngestion
 ```
 
 The launcher is safe by default. It checks readiness and opens operator
-monitors; it does not start ingestion unless you explicitly request it.
+monitors; it does not start ingestion unless you explicitly request it by passing `-StartIngestion`.
 
 ## 4. Process One File
 

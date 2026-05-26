@@ -33,23 +33,38 @@ Turn raw media into structured multimodal memory locally:
 2. **Interactive UI Walkthrough**: Ingest the clip, explore the Retro Memory Explorer's 3D spinning entity globe, perform human-in-the-loop voice stitching, and save custom memory collections.
 3. **Terminal & Installation Walkthrough**: Bootstrap the local dependencies, validate the host environment, start the background watchdog, and import media files in real-time.
 
-<p align="center">
-  <img src="samples/assets/nasa_descent.gif" alt="Raw Moon Landing Input" width="270" />
-  &nbsp;&nbsp;
-  <a href="samples/assets/ui_onboarding_walkthrough.mp4">
-    <img src="samples/assets/ui_onboarding_walkthrough.gif" alt="Watch Interactive UI Walkthrough" width="270" />
-  </a>
-  &nbsp;&nbsp;
-  <a href="samples/assets/install_walkthrough.mp4">
-    <img src="samples/assets/install_walkthrough.gif" alt="Watch Terminal & Installation Walkthrough" width="270" />
-  </a>
-</p>
-
-<p align="center">
-  <strong>Interactive UI Walkthrough</strong>: <a href="samples/assets/ui_onboarding_walkthrough.mp4">Watch 1080p Video</a> · <a href="samples/assets/manifest.json">View Manifest</a>
-  <br>
-  <strong>Terminal & Installation</strong>: <a href="samples/assets/install_walkthrough.mp4">Watch 1080p Video</a> · <a href="docs/guides/install/INSTALL.md">Read Install Guide</a>
-</p>
+<table width="100%" border="0" cellspacing="0" cellpadding="10">
+  <tr>
+    <td align="center" width="50%">
+      <img src="samples/assets/nasa_descent.gif" alt="Raw Moon Landing Input" width="450" style="max-width: 100%; border-radius: 6px;" />
+    </td>
+    <td align="center" valign="middle" width="50%">
+      <h1><b>TURN THIS...</b></h1>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" valign="middle" width="50%">
+      <h1><b>INTO THIS,</b></h1>
+      <p><a href="samples/assets/ui_onboarding_walkthrough.mp4">Watch 1080p Video</a> · <a href="samples/assets/manifest.json">View Manifest</a></p>
+    </td>
+    <td align="center" width="50%">
+      <a href="samples/assets/ui_onboarding_walkthrough.mp4">
+        <img src="samples/assets/ui_onboarding_walkthrough.gif" alt="Watch Interactive UI Walkthrough" width="450" style="max-width: 100%; border-radius: 6px;" />
+      </a>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="50%">
+      <a href="samples/assets/install_walkthrough.mp4">
+        <img src="samples/assets/install_walkthrough.gif" alt="Watch Terminal & Installation Walkthrough" width="450" style="max-width: 100%; border-radius: 6px;" />
+      </a>
+    </td>
+    <td align="center" valign="middle" width="50%">
+      <h1><b>WITH THIS.</b></h1>
+      <p><a href="samples/assets/install_walkthrough.mp4">Watch 1080p Video</a> · <a href="docs/guides/install/INSTALL.md">Read Install Guide</a></p>
+    </td>
+  </tr>
+</table>
 
 ## Before You Start
 

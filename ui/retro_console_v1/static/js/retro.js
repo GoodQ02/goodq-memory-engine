@@ -3361,6 +3361,14 @@
       const cliProgress = processing.cli_progress || {};
       const isActive = cliProgress.active === true;
 
+      // Update header fingerprint
+      const fingerprintEl = document.getElementById("header-fingerprint");
+      if (fingerprintEl) {
+        const epoch = (statusPayload.database && statusPayload.database.epoch) || "N/A";
+        const runId = cliProgress.run_id || (processing.cli_progress && processing.cli_progress.run_id) || processing.run_id || "None";
+        fingerprintEl.textContent = `Epoch: ${epoch} | Run: ${runId}`;
+      }
+
       const progressWidget = document.getElementById("ingestion-progress-widget");
       const headerStatus = document.querySelector(".header-status");
 

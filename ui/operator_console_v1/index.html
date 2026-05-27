@@ -383,5 +383,40 @@
     </template>
 
     <script src="./static/js/app.js?v=20260521-emotion-ranking-1-witness-spine-1-focus-queue-1-guided-mode-2-readability-1-retrieval-scope-1-modality-selector-1-search-chips-1-explain-groups-1-retrieval-diagnostics-1-clarity-4"></script>
+    <script type="text/javascript">
+      (async function() {
+        try {
+          let apiBase = "";
+          try {
+            const stored = localStorage.getItem("goodq_api_base");
+            if (stored) {
+              apiBase = stored.trim().replace(/\/+$/, "");
+            }
+          } catch (e) {}
+
+          const res = await fetch(apiBase + "/api/status");
+          if (res.ok) {
+            const data = await res.json();
+            const agentId = data.elevenlabs_agent_id;
+            if (agentId) {
+              console.log("Initializing ElevenLabs ConvAI widget for agent:", agentId);
+              const widget = document.createElement("elevenlabs-convai");
+              widget.setAttribute("agent-id", agentId);
+              document.body.appendChild(widget);
+
+              const script = document.createElement("script");
+              script.src = "https://elevenlabs.io/convai-widget/index.js";
+              script.async = true;
+              script.type = "text/javascript";
+              document.body.appendChild(script);
+            } else {
+              console.warn("ElevenLabs agent ID not configured in API status.");
+            }
+          }
+        } catch (err) {
+          console.error("Failed to load ElevenLabs agent ID:", err);
+        }
+      })();
+    </script>
   </body>
 </html>

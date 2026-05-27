@@ -617,6 +617,7 @@ def get_status() -> Dict[str, Any]:
         "processing": processing_data,
         "database": database_data,
         "wsl": wsl_status,
+        "elevenlabs_agent_id": os.environ.get("ELEVENLABS_AGENT_ID"),
     }
 
 

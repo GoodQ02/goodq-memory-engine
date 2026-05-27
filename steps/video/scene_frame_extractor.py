@@ -31,10 +31,11 @@ def extract_frame_at_timestamp(
     output_path: str,
     ffmpeg_exe: str,
     width: int = 224,
-    height: int = 224
+    height: int = 224,
+    cap: Optional[Any] = None
 ) -> bool:
     """
-    Extract a single frame at specified timestamp using FFmpeg.
+    Extract a single frame at specified timestamp using OpenCV or FFmpeg fallback.
     
     Args:
         video_path: Path to source video
@@ -42,6 +43,7 @@ def extract_frame_at_timestamp(
         output_path: Where to save the frame
         width: Frame width for resize
         height: Frame height for resize
+        cap: Optional pre-opened cv2.VideoCapture instance
         
     Returns:
         True if extraction succeeded
@@ -52,6 +54,42 @@ def extract_frame_at_timestamp(
             logger.info("scene_frame_extractor reuse existing frame output=%s timestamp=%s", output_path, timestamp)
             return True
 
+        # Try OpenCV first
+        use_opencv = True
+        local_cap = None
+        active_cap = None
+        if cap is not None:
+            active_cap = cap
+        else:
+            try:
+                import cv2
+                local_cap = cv2.VideoCapture(video_path)
+                active_cap = local_cap
+            except Exception:
+                use_opencv = False
+
+        if use_opencv and active_cap is not None and active_cap.isOpened():
+            try:
+                import cv2
+                # Seek to timestamp in milliseconds
+                active_cap.set(cv2.CAP_PROP_POS_MSEC, timestamp * 1000.0)
+                ret, frame = active_cap.read()
+                if ret and frame is not None:
+                    # Resize frame
+                    resized = cv2.resize(frame, (width, height))
+                    # Save frame
+                    cv2.imwrite(output_path, resized)
+                    logger.debug("scene_frame_extractor OpenCV extraction succeeded output=%s timestamp=%s", output_path, timestamp)
+                    return True
+                else:
+                    logger.warning("OpenCV read failed at timestamp=%s; falling back to FFmpeg", timestamp)
+            except Exception as cv_err:
+                logger.warning("OpenCV extraction error at timestamp=%s: %s; falling back to FFmpeg", timestamp, cv_err)
+            finally:
+                if local_cap is not None:
+                    local_cap.release()
+
+        # Fallback to FFmpeg subprocess
         suffix = Path(output_path).suffix or ".jpg"
         temp_handle = tempfile.NamedTemporaryFile(
             prefix="frame_extract_",
@@ -105,7 +143,8 @@ def extract_frames_uniform(
     num_frames: int,
     output_dir: str,
     scene_id: int,
-    ffmpeg_exe: str
+    ffmpeg_exe: str,
+    cap: Optional[Any] = None
 ) -> List[Dict[str, Any]]:
     """
     Extract uniformly spaced frames from a scene.
@@ -117,6 +156,8 @@ def extract_frames_uniform(
         num_frames: Number of frames to extract
         output_dir: Directory for frame outputs
         scene_id: Scene identifier
+        ffmpeg_exe: Path to FFmpeg executable
+        cap: Optional pre-opened cv2.VideoCapture instance
         
     Returns:
         List of frame metadata dicts
@@ -152,7 +193,7 @@ def extract_frames_uniform(
         frame_filename = f"scene_{scene_id:04d}_frame_{idx:02d}.jpg"
         frame_path = os.path.join(output_dir, frame_filename)
         
-        if extract_frame_at_timestamp(video_path, ts, frame_path, ffmpeg_exe):
+        if extract_frame_at_timestamp(video_path, ts, frame_path, ffmpeg_exe, cap=cap):
             frames.append({
                 'frame_id': idx,
                 'timestamp': ts,
@@ -169,7 +210,8 @@ def extract_frames_middle(
     end: float,
     output_dir: str,
     scene_id: int,
-    ffmpeg_exe: str
+    ffmpeg_exe: str,
+    cap: Optional[Any] = None
 ) -> List[Dict[str, Any]]:
     """
     Extract the middle frame from a scene (fallback strategy).
@@ -180,6 +222,8 @@ def extract_frames_middle(
         end: Scene end time
         output_dir: Output directory
         scene_id: Scene identifier
+        ffmpeg_exe: Path to FFmpeg executable
+        cap: Optional pre-opened cv2.VideoCapture instance
         
     Returns:
         List with single frame metadata
@@ -188,7 +232,7 @@ def extract_frames_middle(
     frame_filename = f"scene_{scene_id:04d}_middle.jpg"
     frame_path = os.path.join(output_dir, frame_filename)
     
-    if extract_frame_at_timestamp(video_path, middle, frame_path, ffmpeg_exe):
+    if extract_frame_at_timestamp(video_path, middle, frame_path, ffmpeg_exe, cap=cap):
         return [{
             'frame_id': 0,
             'timestamp': middle,
@@ -206,7 +250,8 @@ def extract_keyframe_candidates(
     output_dir: str,
     scene_id: int,
     ffmpeg_exe: str,
-    max_frames: int = 5
+    max_frames: int = 5,
+    cap: Optional[Any] = None
 ) -> List[Dict[str, Any]]:
     """
     Extract keyframe candidates using FFmpeg scene detection.
@@ -218,14 +263,16 @@ def extract_keyframe_candidates(
         end: Scene end time
         output_dir: Output directory
         scene_id: Scene identifier
+        ffmpeg_exe: Path to FFmpeg executable
         max_frames: Maximum frames to extract
+        cap: Optional pre-opened cv2.VideoCapture instance
         
     Returns:
         List of frame metadata
     """
     # For now, use uniform sampling as keyframe detection requires more complex FFmpeg analysis
     # This can be enhanced with optical flow or motion vectors in future iterations
-    return extract_frames_uniform(video_path, start, end, max_frames, output_dir, scene_id, ffmpeg_exe)
+    return extract_frames_uniform(video_path, start, end, max_frames, output_dir, scene_id, ffmpeg_exe, cap=cap)
 
 
 def extract_scene_frames(
@@ -245,6 +292,7 @@ def extract_scene_frames(
         output_base_dir: Base directory for frame storage
         strategy: Extraction strategy ('uniform', 'keyframe', 'middle')
         frames_per_scene: Number of frames to extract per scene
+        cfg: Optional configuration dict
         
     Returns:
         Dictionary mapping scene IDs to frame metadata
@@ -270,37 +318,58 @@ def extract_scene_frames(
     if ffmpeg_exe is None:
         raise RuntimeError("FFmpeg not resolved")
     
-    scene_frames = {}
-    total_extracted = 0
-    
-    for scene_idx, scene in enumerate(scenes):
-        scene_id = scene.get('id', scene.get('scene_id', 0))
-        start = scene.get('start', 0.0)
-        end = scene.get('end', start + 1.0)
-
-        logger.info(f"Extracting frames for scene {scene_id}: {start:.2f}s - {end:.2f}s")
-
-        # scene_id may be a string (e.g., a hash); filenames expect an int id.
-        scene_id_for_filename = scene.get('index', scene_id)
-        try:
-            scene_id_for_filename = int(scene_id_for_filename)
-        except (TypeError, ValueError):
-            scene_id_for_filename = scene_idx
-        
-        # Select extraction strategy
-        if strategy == 'middle':
-            frames = extract_frames_middle(video_path, start, end, frames_dir, scene_id_for_filename, ffmpeg_exe)
-        elif strategy == 'keyframe':
-            frames = extract_keyframe_candidates(video_path, start, end, frames_dir, scene_id_for_filename, ffmpeg_exe, frames_per_scene)
-        else:  # uniform (default)
-            frames = extract_frames_uniform(video_path, start, end, frames_per_scene, frames_dir, scene_id_for_filename, ffmpeg_exe)
-        
-        if frames:
-            scene_frames[scene_id] = frames
-            total_extracted += len(frames)
-            logger.info(f"  [SYMBOL] Extracted {len(frames)} frames")
+    # Open shared cv2 VideoCapture context for fast seeking in Python
+    cap = None
+    try:
+        import cv2
+        cap = cv2.VideoCapture(video_path)
+        if not cap.isOpened():
+            cap = None
+            logger.warning("[SCENE-FRAME] OpenCV could not open video; falling back to FFmpeg process extraction")
         else:
-            logger.warning(f"  [SYMBOL] No frames extracted for scene {scene_id}")
+            logger.info("[SCENE-FRAME] Using OpenCV-native frame extraction")
+    except Exception as e:
+        cap = None
+        logger.warning(f"[SCENE-FRAME] OpenCV import/open failed: {e}; using FFmpeg process extraction")
+
+    try:
+        scene_frames = {}
+        total_extracted = 0
+        
+        for scene_idx, scene in enumerate(scenes):
+            scene_id = scene.get('id', scene.get('scene_id', 0))
+            start = scene.get('start', 0.0)
+            end = scene.get('end', start + 1.0)
+
+            logger.info(f"Extracting frames for scene {scene_id}: {start:.2f}s - {end:.2f}s")
+
+            # scene_id may be a string (e.g., a hash); filenames expect an int id.
+            scene_id_for_filename = scene.get('index', scene_id)
+            try:
+                scene_id_for_filename = int(scene_id_for_filename)
+            except (TypeError, ValueError):
+                scene_id_for_filename = scene_idx
+            
+            # Select extraction strategy
+            if strategy == 'middle':
+                frames = extract_frames_middle(video_path, start, end, frames_dir, scene_id_for_filename, ffmpeg_exe, cap=cap)
+            elif strategy == 'keyframe':
+                frames = extract_keyframe_candidates(video_path, start, end, frames_dir, scene_id_for_filename, ffmpeg_exe, frames_per_scene, cap=cap)
+            else:  # uniform (default)
+                frames = extract_frames_uniform(video_path, start, end, frames_per_scene, frames_dir, scene_id_for_filename, ffmpeg_exe, cap=cap)
+            
+            if frames:
+                scene_frames[scene_id] = frames
+                total_extracted += len(frames)
+                logger.info(f"  [SYMBOL] Extracted {len(frames)} frames")
+            else:
+                logger.warning(f"  [SYMBOL] No frames extracted for scene {scene_id}")
+    finally:
+        if cap is not None:
+            try:
+                cap.release()
+            except Exception:
+                pass
     
     logger.info(f"Total frames extracted: {total_extracted} from {len(scenes)} scenes")
     

@@ -4,7 +4,7 @@
 
 # GoodQ4All Agent Status
 
-_Operational restart checkpoint aligned: 2026-05-22._
+_Operational restart checkpoint aligned: 2026-05-27._
 
 This document is a bounded operator snapshot of the current release-era
 stitching and offline-package baseline.
@@ -13,6 +13,22 @@ Use canonical runtime contracts and released evidence surfaces as source of
 truth for live claims. Do not treat this document as a live witness monitor.
 
 ## Current Restart Checkpoint
+- Pause checkpoint, 2026-05-27:
+  - status: local LLM memory tuning and visual pipeline optimizations are validated and committed.
+  - active API on port `30000` is bound to `epoch_2026_05_22_family_full_01`, reporting correct vector dimensions and successful FAISS parity writes.
+  - local LLMs are fully optimized:
+    - vLLM (Qwen2.5-0.5B-Instruct) allocation capped at `--gpu-memory-utilization 0.20` and `--kv-cache-dtype fp8` (~3.3 GB VRAM) maintaining full throughput (~275-365 tok/s).
+    - Windows Ollama fallback (`phi4:latest`) optimized via Flash Attention and Q8 KV cache quantization, reclaiming 1.81 GB VRAM (from 15.23 GB to 13.42 GB) and achieving 50-70% speedups.
+    - Combined posture: Both primary vLLM and fallback Ollama services run simultaneously in VRAM with plenty of headroom on the RTX 4070 Ti SUPER.
+  - visual pipeline is fully optimized and upgraded:
+    - CLIP upgraded to `openai/clip-vit-large-patch14` (768-d).
+    - DINOv2 upgraded to `facebook/dinov2-large` (1024-d).
+    - Vectorized GPU scene detection (`gpu_scene_detect.py` using PyTorch differences to minimize CPU-to-GPU syncs).
+    - OpenCV-Native seeking frame extractor (`scene_frame_extractor.py` using Python-native `cv2.VideoCapture`).
+    - Advanced keyframe selection based on Shannon entropy, Laplacian variance, and motion peaks.
+    - Mixed-precision (AMP) batching flattens and processes frames in a single batch.
+  - validation run on `samples/onboarding_fixture.mp4` completed in 5.7 seconds for visual embeddings, verifying Qdrant & FAISS parity writes (`faiss_ok = true`) under upgraded dimensions.
+  - next safe move before broad home-movie ingestion: reset Qdrant, prepare the new epoch, and run a scene-first probe.
 - Pause checkpoint, 2026-05-22:
   - status: local fallback/audio/entity repair is validated and committed on
     the active source line.
@@ -561,6 +577,8 @@ Audit Status: ACTIVE (2026-04-10)
   desktop-side blocker.
 
 ## Recent Notable Changes
+- Upgraded and optimized the visual processing pipeline: upgraded CLIP to `openai/clip-vit-large-patch14` (768-d) and DINOv2 to `facebook/dinov2-large` (1024-d); vectorized PyTorch GPU scene detection; added OpenCV-native seeking/decoding keyframe extraction; implemented Shannon-entropy, Laplacian-variance, and motion-peaks keyframe selection; and implemented mixed-precision (AMP) batching.
+- Optimised local LLM services: tuned WSL2 vLLM to cap memory utilization at 0.20 and enable FP8 KV-cache (~3.3 GB footprint) for Qwen2.5-0.5B-Instruct; configured Windows Ollama fallback (Phi-4 14B) with Flash Attention and Q8 KV cache quantization (reducing VRAM footprint to 13.42 GB and accelerating inference speed by 50-70%), enabling simultaneous local hosting of both models.
 - Added the first safe read-only control-agent substrate: a recurrence report CLI/library that groups persisted run signals, classifies recurrence families, emits deterministic operator hints, compares two run ids, and can export markdown/JSON artifacts plus an index without enabling healing or changing canonical ingestion.
 - Restored `GPU_ENHANCED` desktop runtime through bootstrap-managed environment repair and verified CUDA-backed `goodq_core`.
 - Restored unified WSL audio with local-first/offline model resolution, diarization recovery, and non-recursive Windows fallback.

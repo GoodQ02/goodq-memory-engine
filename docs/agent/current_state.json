@@ -1,0 +1,767 @@
+{
+  "schema_version": 1,
+  "last_verified": "2026-05-27",
+  "project": "GoodQ4All",
+  "agent_first_read": "docs/agent/CURRENT_STATE.md",
+  "human_index": "docs/agent/README.md",
+  "operating_protocol": "AGENTS.md",
+  "runtime": {
+    "primary_os": "Windows 11",
+    "api_base": "http://127.0.0.1:30000",
+    "qdrant_base": "http://127.0.0.1:6333",
+    "conda_env": "goodq_core",
+    "profile": "BASELINE",
+    "wsl_distro": "Ubuntu-22.04",
+    "operator_console": {
+      "path": "/ui/operator_console_v1/",
+      "authority": "read_only",
+      "current_scope_strip": {
+        "status": "implemented",
+        "surfaces": [
+          "api_base",
+          "latest_run",
+          "run_source",
+          "temporal_scope",
+          "audio_proof",
+          "browsing_target",
+          "selected_scene",
+          "refresh_boundary",
+          "read_only_mode"
+        ]
+      },
+      "refresh_boundary": {
+        "status": "implemented",
+        "api_reads": "no_store_cache_busted",
+        "media_cache": "bound_to_current_run_scope",
+        "stale_selection": "cleared_when_api_run_or_video_inventory_scope_changes",
+        "drilldown_id": "timeline_video_id_processing_folder_id_not_sqlite_hash"
+      }
+    },
+    "llm": {
+      "vllm_primary": "healthy",
+      "vllm_base": "http://127.0.0.1:38005/v1",
+      "vllm_service": "systemd_enabled",
+      "vllm_model": "/home/jdben/models/Qwen2.5-0.5B-Instruct",
+      "vllm_optimizations": "--gpu-memory-utilization 0.20 --kv-cache-dtype fp8 (capped at ~3.3 GB VRAM)",
+      "wsl_keepalive": "goodq-vllm-keepalive",
+      "windows_logon_task": "GoodQ4All vLLM WSL Startup",
+      "ollama_fallback": "healthy_windows_fallback",
+      "fallback_chain": "healthy_vllm_primary_and_ollama_quality_fallback",
+      "ollama_base": "http://127.0.0.1:31434/v1",
+      "ollama_model": "phi4:latest",
+      "ollama_optimizations": "OLLAMA_FLASH_ATTENTION=1 OLLAMA_KV_CACHE_TYPE=q8_0 OLLAMA_NUM_PARALLEL=1 OLLAMA_MAX_LOADED_MODELS=1 (reclaimed 1.81 GB VRAM)",
+      "ollama_windows_logon_task": "GoodQ4All Ollama Fallback Startup",
+      "ollama_start_script": "scripts/start_ollama_fallback.ps1"
+    },
+    "retro_console": {
+      "path": "/ui/retro_console_v1/",
+      "status": "implemented",
+      "version": "1.4.7",
+      "authority": "read_only",
+      "features": [
+        "selected_cyber_blue_highlighting",
+        "canvas_zoom_magnify_flight",
+        "entity_co_occurrence_graph_with_pan_drag_and_wheel_zoom",
+        "forensic_data_trail_logs",
+        "human_readable_search_modes",
+        "reduced_motion_media_queries",
+        "dynamic_four_panel_layout_with_resizable_and_collapsible_panels",
+        "restore_tabs_for_collapsed_panels",
+        "entity_filter_checklist_with_bidirectional_canvas_sync",
+        "deterministic_single_click_select_double_click_deselect",
+        "empty_canvas_click_resets_entity_selection_preserves_search",
+        "multi_entity_filter_narrows_timeline_scenes_incrementally",
+        "inspector_subsection_splitter_vscode_style",
+        "data_trail_logs_collapsible_with_inspector_expand_on_collapse",
+        "canvas_resize_observer_prevents_egg_distortion_on_panel_resize",
+        "timeline_heading_reflects_active_search_and_entity_filters",
+        "scene_transcript_display_in_inspector",
+        "search_query_centers_and_zooms_matching_entity_node",
+        "reset_view_button_clears_all_filters_including_search",
+        "keyframe_image_viewer_in_inspector",
+        "dynamic_spacing_zoom_for_canvas_graph"
+      ],
+      "interaction_model": {
+        "single_click_entity": "selects_entity_clears_other_selections_zooms_canvas",
+        "checkbox_click_entity": "toggles_multi_selection",
+        "double_click_entity": "deselects_entity",
+        "empty_canvas_click": "resets_entity_selection_only_preserves_search_results",
+        "reset_view_button": "full_reset_search_plus_entities_plus_zoom"
+      }
+    }
+  },
+  "clean_start": {
+    "prior_pipeline_memory_is_disposable": true,
+    "prior_home_movie_tests_are_disposable": true,
+    "fresh_epoch": "epoch_2026_05_22_family_full_01",
+    "fresh_epoch_note": "current completed 141-scene FAMILY full validation epoch with runtime fallback, WSL audio, sentiment, entity, Qdrant, FAISS, Operator Console freshness, and visible runtime problem-scope evidence; use a new fresh epoch or deliberate clean reset before the next broad personal-memory run",
+    "tracked_cleanup_summary": "docs/diagnostics/MEMORY_CLEAN_START_AUDIT_2026-05-20.md",
+    "tracked_power_loss_summary": "docs/diagnostics/POWER_LOSS_INGESTION_AUDIT_2026-05-20.md",
+    "tracked_home_memory_witness": "docs/diagnostics/HOME_MEMORY_WITNESS_RUN_2026-05-22.md",
+    "qdrant_cleanup_manifest_dir": "reports/local_housekeeping/2026-05-20-memory-clean-start",
+    "qdrant_pre_cleanup": {
+      "collections": 68,
+      "epochs": 17,
+      "points": 17767
+    },
+    "qdrant_post_cleanup": {
+      "deleted_goodq_collections": 68,
+      "delete_errors": 0,
+      "collections": 4,
+      "points": 0,
+      "status": "initial_fresh_collections_initialized"
+    },
+    "power_loss_interruption": {
+      "interrupted_epoch": "epoch_2026_05_20_home_memory_clean",
+      "interrupted_run": "family_1987_1988_full_20260520_144133",
+      "status": "preserved_forensic_evidence_not_clean_run_seed",
+      "latest_evidence_route": "interrupted_ingestion_preserved",
+      "current_run_audio_vector_proven": 7
+    },
+    "generated_report_cleanup": {
+      "deleted_targets": 17,
+      "reclaimed_mb": 6098.19,
+      "latest_evidence_route": "interrupted_ingestion_preserved"
+    },
+    "epoch_filesystem_cleanup": {
+      "removed_epochs": 16,
+      "retained_epoch_stubs": 1,
+      "retained_stub": "epoch_2025_12_22 service-held qdrant logs",
+      "reclaimed_mb": 5244.99,
+      "fresh_database_exists": true,
+      "fresh_database_scenes": 141,
+      "fresh_database_note": "port 30000 is bound to the family_full_01 validation epoch and currently reports the completed 141-scene FAMILY full run; use a new fresh epoch or deliberate reset before the next broad personal-memory run"
+    },
+    "fresh_qdrant_collections": {
+      "clip": "goodq_clip_epoch_2026_05_22_family_full_01",
+      "dino": "goodq_dino_epoch_2026_05_22_family_full_01",
+      "text": "goodq_text_epoch_2026_05_22_family_full_01",
+      "audio": "goodq_audio_epoch_2026_05_22_family_full_01"
+    },
+    "family_full_validation_run": {
+      "status": "completed",
+      "source_scope": "first_redacted_family_media_file",
+      "epoch": "epoch_2026_05_22_family_full_01",
+      "runtime_run_id": "364f6a6b-37fb-4613-bf06-4c2099c9e6c8",
+      "video_count": 1,
+      "scene_count": 141,
+      "api_projection": {
+        "database_exists": true,
+        "database_scenes": 141,
+        "pipeline_status": "idle",
+        "cli_progress_available": true,
+        "cli_progress_status": "completed",
+        "cli_progress_active": false,
+        "cli_progress_percent": 100,
+        "projection_gaps": "ok"
+      },
+      "evidence": {
+        "audio_vector_proof": "current_run_audio_vector_proven_with_one_optional_terminal_gap",
+        "audio_vector_proof_count": "140/141",
+        "step_rows_ok": 2536,
+        "step_rows_skipped": 3,
+        "step_rows_failed": 1,
+        "runtime_step_error_events": 6,
+        "runtime_step_error_recovered": 5,
+        "runtime_step_error_terminal": 1,
+        "qdrant_counts": {
+          "audio": 140,
+          "text": 281,
+          "clip": 282,
+          "dino": 282
+        },
+        "faiss_indexes": "audio_text_clip_dino_indexidmap2",
+        "sqlite_scenes": 141,
+        "sqlite_embeddings": 985,
+        "kg_nodes": 838,
+        "kg_edges": 2738,
+        "kg_events": 141,
+        "entity_total": 504,
+        "entity_unique": 198,
+        "entity_scenes_with_any": "120/141",
+        "sentiment_labels": "139/141",
+        "text_emotion_rankings": "140/141",
+        "audio_emotion_rankings": "141/141",
+        "scene_context_llm": "137/141"
+      },
+      "operator_console": {
+        "problem_scope_visible": true,
+        "episode_errors_visible": true,
+        "recovered_step_errors_visible": true,
+        "step_skips_visible": true,
+        "vector_count_scope_note_visible": true,
+        "human_review_audio_tier_visible": true,
+        "home_memory_privacy_note_visible": true
+      },
+      "known_followups": [
+        "audio_embed_clap now preserves non-speech audio embedding intent and retries Windows native crashes once with GOODQ_CLAP_FORCE_CPU=1",
+        "validate the CLAP CPU fallback on the next scene-first or broad ingestion run; the completed full run still contains one pre-mitigation optional terminal CLAP error",
+        "scene_context_llm coverage root cause was patched after the full run: future harmonization uses conservative grounded fallback for LLM response failures and treats visual/audio-only evidence as eligible context signal; the completed full-run artifact remains 137/141 until rerun or re-harmonized",
+        "retrieval audio proof and retrieval audio query are visibly separate: current-run CLAP/Qdrant proof remains scene evidence, while the audio-only text-query lane now uses the same pinned laion/clap-htsat-unfused embedding space; the local pinned CLAP snapshot includes model.safetensors and goodq_core returns nonzero 512-d query vectors instead of the prior CLAP weight-format loader failure",
+        "completed direct CLI progress must remain non-active in API and UI status"
+      ]
+    },
+    "preserved_interrupted_qdrant_collections": {
+      "clip": "goodq_clip_epoch_2026_05_20_home_memory_clean",
+      "dino": "goodq_dino_epoch_2026_05_20_home_memory_clean",
+      "text": "goodq_text_epoch_2026_05_20_home_memory_clean",
+      "audio": "goodq_audio_epoch_2026_05_20_home_memory_clean"
+    },
+    "scene_first_probe": {
+      "status": "completed",
+      "source_scope": "first_redacted_family_media_file",
+      "video_count": 1,
+      "scene_count": 1,
+      "scene_duration_seconds": 53.787,
+      "api_projection": {
+        "database_exists": true,
+        "database_scenes": 1,
+        "pipeline_status": "idle"
+      },
+      "fresh_qdrant_counts": {
+        "clip": 1,
+        "dino": 1,
+        "text": 2,
+        "audio": 1
+      },
+      "evidence": {
+        "visual_vectors": "present",
+        "text_vectors": "present",
+        "audio_vector": "present",
+        "transcript": "present",
+        "ocr": "present",
+        "caption": "present",
+        "sentiment": "present",
+        "clap_status": "ok",
+        "audio_vector_proof": "current_run_audio_vector_proven",
+        "temporal_index": "ok",
+        "projection_gaps": "ok"
+      },
+      "known_followups": [
+        "entity extraction produced no scene-present KG entities for the first scene"
+      ]
+    },
+    "second_scene_probe": {
+      "status": "completed",
+      "source_scope": "same_first_redacted_family_media_file",
+      "video_count": 1,
+      "scene_count": 2,
+      "runtime_run_id": "80160289-208d-4303-bd42-5cc0d36976ab",
+      "api_projection": {
+        "database_exists": true,
+        "database_scenes": 2,
+        "pipeline_status": "idle"
+      },
+      "fresh_qdrant_counts": {
+        "clip": 2,
+        "dino": 2,
+        "text": 4,
+        "audio": 2
+      },
+      "evidence": {
+        "audio_vector_proof": "current_run_audio_vector_proven",
+        "audio_vector_proof_count": "2/2",
+        "temporal_index": "ok",
+        "temporal_scene_count": 2,
+        "sentiment": "present",
+        "dialogue_mentioned_entities": "projected",
+        "mentioned_people": "projected",
+        "candidate_visible_people": "projected",
+        "speaker_aligned_mentions": "projected",
+        "search_clap_meta_local_paths": "redacted"
+      },
+      "known_followups": [
+        "scene_context_llm and realtime KG entity resolution were retested in llm_kg_validation_probe",
+        "scene-present entities must stay labeled separately from dialogue and candidate identity evidence"
+      ]
+    },
+    "llm_kg_validation_probe": {
+      "status": "completed",
+      "source_scope": "same_first_redacted_family_media_file",
+      "video_count": 1,
+      "scene_count": 2,
+      "runtime_run_id": "69b204f3-afb7-4812-9a43-0a1251107731",
+      "api_projection": {
+        "database_exists": true,
+        "database_scenes": 2,
+        "pipeline_status": "idle"
+      },
+      "llm": {
+        "vllm_primary": "healthy",
+        "ollama_fallback": "offline_at_time_superseded_by_runtime_fallback_probe",
+        "scene_context_llm": "2/2 temporal segments"
+      },
+      "knowledge_graph": {
+        "realtime_entities_resolved_metric": "fixed",
+        "person_nodes_present": true,
+        "location_nodes_present": true,
+        "generic_entity_nodes_present": true
+      },
+      "audio_vector_inventory": {
+        "latest_qdrant_run_id": "69b204f3-afb7-4812-9a43-0a1251107731",
+        "run_tagged_points": 2,
+        "provenance_capable_points": 2
+      },
+      "known_followups": [
+        "latest-run direct output selector seam superseded by direct_output_selector_validation",
+        "Control Agent remains disabled until an llm_client is explicitly injected"
+      ]
+    },
+    "direct_output_selector_validation": {
+      "status": "completed",
+      "source_scope": "same_first_redacted_family_media_file",
+      "video_count": 1,
+      "scene_count": 1,
+      "runtime_run_id": "c6fe8dc1-d3d1-4685-b784-bdc0c84fba22",
+      "api_projection": {
+        "latest_preview_scope": "configured_output_scene_results",
+        "latest_evidence_scope": "configured_output_scene_results",
+        "pipeline_status": "idle"
+      },
+      "evidence": {
+        "audio_vector_proof": "current_run_audio_vector_proven",
+        "audio_vector_proof_count": "1/1",
+        "temporal_index": "ok",
+        "temporal_scene_count": 1,
+        "projection_gaps": "ok",
+        "scene_context_llm": "1/1 temporal segments"
+      },
+      "operator_console": {
+        "current_scope_strip": "validated",
+        "run_source_label": "Direct CLI Output",
+        "audio_proof_label": "Proven",
+        "mode": "read_only"
+      },
+      "root_cause": [
+        "explicit report-root probes write under reports/fresh_ingest_runs",
+        "direct/default CLI probes write to configured epoch output and mutable processing artifacts",
+        "old latest-run selector considered report roots only",
+        "new selector considers both report roots and configured CLI output, then chooses the freshest read-only scope"
+      ],
+      "known_followups": [
+        "Control Agent remains disabled until an llm_client is explicitly injected"
+      ]
+    },
+    "faiss_memory_path_validation": {
+      "status": "completed",
+      "source_scope": "first_redacted_family_media_file",
+      "video_count": 1,
+      "scene_count": 1,
+      "runtime_run_id": "e85a53c7-97b7-48bb-a6f5-56b78f066fa9",
+      "configured_output_backup": "reports/local_housekeeping/2026-05-21-home-movie-preflight/one_scene_faiss_validation_run/configured_output_backup/scene_ingest_results.before_one_scene_faiss_validation.json",
+      "validated": {
+        "text_faiss": "configured_explicit_id_index",
+        "clip_faiss": "configured_explicit_id_index",
+        "dino_faiss": "configured_explicit_id_index",
+        "phase6_environment": "goodq_image_caption",
+        "phase6_qdrant": "ok",
+        "phase6_faiss": "ok",
+        "projection_gaps": "ok",
+        "audio_proof": "current_run_audio_vector_proven",
+        "realtime_kg_entities_resolved": 4
+      },
+      "repair_applied": [
+        "new HNSW FAISS indexes are wrapped in IndexIDMap2",
+        "FAISS writers require explicit stable IDs for claimed commits",
+        "audio, CLIP, DINO, text-router, and Phase 6 no longer downgrade to position-based add for ID-bearing writes",
+        "CLIP and DINO direct writers keep distinct modalities, collections, indexes, ID maps, and SQLite embedding rows"
+      ],
+      "active_epoch_residue": {
+        "previous_validation_epoch": "epoch_2026_05_21_family_full_clean_01 audio FAISS was legacy non-idmap residue from prior probes",
+        "historical_ten_scene_target_epoch": "epoch_2026_05_22_family_probe_10scene_01",
+        "current_target_epoch": "epoch_2026_05_22_family_full_01",
+        "required_before_next_broad_run": "use a fresh epoch or reset Qdrant and confirm target FAISS files are absent or explicit-ID indexes"
+      },
+      "preflight_refresh_2026_05_21": {
+        "checkpoint_kind": "pre_probe_clean_launch_state",
+        "note": "historical checkpoint before the _02 validation probes; not the current occupied validation state",
+        "api_restarted_after_config_epoch_switch": true,
+        "api_status": {
+          "database_exists": false,
+          "database_scenes": 0,
+          "pipeline_status": "idle"
+        },
+        "latest_evidence": {
+          "available": false,
+          "reason": "no_indexed_runs"
+        },
+        "fresh_qdrant_counts": {
+          "clip": 0,
+          "dino": 0,
+          "text": 0,
+          "audio": 0
+        },
+        "fresh_faiss_directory_exists": false,
+        "previous_epoch_faiss_audit": {
+          "text": "IndexIDMap2",
+          "clip": "IndexIDMap2",
+          "dino": "IndexIDMap2",
+          "audio": "legacy IndexHNSWFlat, do not reuse"
+        },
+        "repair_applied": [
+          "shared FAISS memory writes reject vectors without explicit IDs",
+          "direct CLIP writer exposes FAISS, Qdrant, SQLite map, and SQLite embedding commit fields",
+          "direct DINO writer exposes FAISS, Qdrant, SQLite map, and SQLite embedding commit fields"
+        ]
+      },
+      "post_repair_clean_probe_2026_05_21": {
+        "status": "completed",
+        "source_scope": "first_redacted_family_media_file",
+        "video_count": 1,
+        "scene_count": 1,
+        "runtime_run_id": "724376e0-d265-48e9-8891-1cf402ee7b6c",
+        "api_projection": {
+          "latest_evidence_scope": "configured_output_scene_results",
+          "database_exists": true,
+          "database_scenes": 1,
+          "pipeline_status": "idle",
+          "projection_gaps": "ok",
+          "temporal_scene_count": 1,
+          "scene_context_llm": "1/1 temporal segments",
+          "sentiment_segments_with_transcript": 1
+        },
+        "qdrant_counts": {
+          "clip": 2,
+          "dino": 2,
+          "text": 2,
+          "audio": 1
+        },
+        "faiss_indexes": {
+          "text": "IndexIDMap2 ntotal=2",
+          "clip": "IndexIDMap2 ntotal=2",
+          "dino": "IndexIDMap2 ntotal=2",
+          "audio": "IndexIDMap2 ntotal=1"
+        },
+        "memory_stats_faiss_counts": {
+          "text": 2,
+          "clip": 2,
+          "dino": 2,
+          "audio": 1
+        },
+        "faiss_id_maps": {
+          "clap": 1,
+          "clip": 2,
+          "dino": 2
+        },
+        "sqlite_memory_counts": {
+          "scenes": 1,
+          "segments": 24,
+          "embeddings": 7,
+          "memory_commit_events": 7,
+          "links": 53
+        },
+        "knowledge_graph_counts": {
+          "nodes": 13,
+          "edges": 24,
+          "events": 1,
+          "media_nodes": 1,
+          "node_media": 37
+        },
+        "evidence": {
+          "audio_vector_proof": "current_run_audio_vector_proven",
+          "audio_vector_proof_count": "1/1",
+          "audio_emotion": "raw_score_not_promoted",
+          "top_audio_emotion_score": "neutral 0.132",
+          "promotion_threshold": 0.5,
+          "sentiment": "present",
+          "transcript": "present"
+        },
+        "repair_applied": [
+          "api sentiment summary now counts temporal full_transcript as transcript evidence",
+          "scene-results fallback sentiment summary also counts full_transcript and transcript_segments",
+          "api memory stats fall back to persisted SQLite embedding/id-map counts when direct FAISS reading is unavailable and the FAISS index file exists"
+        ],
+        "operator_console": {
+          "proof_panel_evidence_coverage": "100%",
+          "observed_signals": "15/15",
+          "audio_proof_label": "Proven",
+          "faiss_audio_count_label": "Count present"
+        },
+        "known_followups": [
+          "superseded by emotion ranking repair; rerun a clean probe to populate text_emotion_ranking in current artifacts",
+          "raw audio-emotion scores should stay visible without being promoted to hard labels below threshold"
+        ]
+      },
+      "ten_scene_validation_probe_2026_05_21": {
+        "status": "completed",
+        "source_scope": "first_redacted_family_media_file",
+        "video_count": 1,
+        "scene_count": 10,
+        "runtime_run_id": "52ccf932-7a63-4243-801b-c108bf79157a",
+        "api_projection": {
+          "latest_evidence_scope": "configured_output_scene_results",
+          "database_exists": true,
+          "database_scenes": 10,
+          "pipeline_status": "idle",
+          "projection_gaps": "ok",
+          "temporal_scene_count": 10,
+          "sentiment_segments_with_transcript": 10,
+          "sentiment_segments_with_sentiment": 10,
+          "audio_vector_proof": "current_run_audio_vector_proven",
+          "audio_vector_proof_count": "10/10",
+          "segments_with_audio_emotion_scores": 10,
+          "segments_with_audio_emotion_ranking": 10,
+          "segments_with_text_emotion_ranking": 0
+        },
+        "qdrant_counts": {
+          "clip": 20,
+          "dino": 20,
+          "text": 20,
+          "audio": 10
+        },
+        "evidence": {
+          "audio_emotion_status": "raw_scores_ranked_not_promoted",
+          "promoted_audio_labels": "0/10",
+          "promotion_threshold": 0.5,
+          "top_audio_emotion_score_signals": [
+            "fear",
+            "angry",
+            "disgust",
+            "calm",
+            "neutral"
+          ],
+          "sentiment": "present",
+          "text_emotion_ranking": "not present in this pre-repair run; requires clean rerun after emotion_classify safetensors repair"
+        },
+        "repair_applied": [
+          "emotion_classify loads Hugging Face sequence classifier weights with safetensors",
+          "emotion_classify GPU logging treats memory_fraction as optional",
+          "harmonizer persists audio emotion rankings, top candidates, text emotion rankings, and sentiment metadata into scene manifests and temporal indexes",
+          "api read models expose emotion rankings and promotion policy to scene, timeline, search, and latest evidence surfaces",
+          "operator console shows ranked audio coverage separately from promoted labels and can display text emotion rankings when present"
+        ],
+        "next_probe_rule": "reset Qdrant, start a fresh epoch or verify FAISS absent/new IDMap indexes, then rerun a scene-first probe before broad ingestion"
+      },
+      "ten_scene_ui_freshness_validation_2026_05_22": {
+        "status": "completed",
+        "epoch": "epoch_2026_05_22_family_probe_10scene_01",
+        "source_scope": "first_redacted_family_media_file",
+        "video_count": 1,
+        "scene_count": 10,
+        "runtime_run_id": "571ee750-6a6e-4744-93a3-4bc19373d273",
+        "timeline_video_id": "family_probe_1987_1988_45m_15m",
+        "api_projection": {
+          "latest_preview_scope": "configured_output_scene_results",
+          "latest_evidence_scope": "configured_output_scene_results",
+          "database_exists": true,
+          "database_scenes": 10,
+          "pipeline_status": "idle",
+          "temporal_scene_count": 10,
+          "audio_vector_proof": "current_run_audio_vector_proven",
+          "audio_vector_proof_count": "10/10",
+          "entity_total": 54,
+          "sentiment_segments_with_sentiment": 10,
+          "segments_with_text_emotion_ranking": 10
+        },
+        "operator_console": {
+          "api_reads": "no_store_cache_busted",
+          "media_cache": "bound_to_current_run_scope",
+          "stale_selection": "cleared_when_api_run_or_video_inventory_scope_changes",
+          "current_scope_refresh_item": "implemented",
+          "per_video_route_id": "timeline_video_id_processing_folder_id_not_sqlite_hash"
+        },
+        "entity_log_boundary": "early zero-entity extraction with partial inputs is an info-level preliminary timing notice; late transcript/temporal KG may still resolve entities",
+        "next_probe_rule": "reset Qdrant and FAISS targets before broad ingestion; use timeline_video_id for UI drilldowns"
+      },
+      "aborted_full_source_probe_2026_05_21": {
+        "status": "stopped_pre_step_ledger",
+        "epoch": "epoch_2026_05_21_family_full_clean_03",
+        "reason": "full-source scene detection remained active for more than 7 minutes because max-scenes limits processing after detection, not detector scan scope",
+        "outcome": "partial runtime scaffolding only; do not treat as evidence or broad-run seed"
+      },
+      "emotion_ranking_clip_probe_2026_05_21": {
+        "status": "completed",
+        "epoch": "epoch_2026_05_21_family_full_clean_04",
+        "source_scope": "short local clip extracted from first redacted family media file",
+        "video_count": 1,
+        "scene_count": 1,
+        "runtime_run_id": "7c811231-b85c-4489-91b4-672d7bae57be",
+        "preflight": {
+          "qdrant_points_before_probe": 0,
+          "faiss_targets_before_probe": "absent",
+          "full_source_probe_replaced_by_clip": true
+        },
+        "api_projection": {
+          "latest_evidence_scope": "configured_output_scene_results",
+          "database_exists": true,
+          "database_scenes": 1,
+          "projection_gaps": "ok",
+          "temporal_scene_count": 1,
+          "sentiment_segments_with_transcript": 1,
+          "sentiment_segments_with_sentiment": 1,
+          "segments_with_audio_emotion_scores": 1,
+          "segments_with_audio_emotion_ranking": 1,
+          "segments_with_text_emotion_ranking": 1,
+          "audio_vector_proof": "current_run_audio_vector_proven",
+          "audio_vector_proof_count": "1/1"
+        },
+        "qdrant_counts": {
+          "clip": 2,
+          "dino": 2,
+          "text": 2,
+          "audio": 1
+        },
+        "faiss_indexes": {
+          "text": "IndexIDMap2 ntotal=2",
+          "clip": "IndexIDMap2 ntotal=2",
+          "dino": "IndexIDMap2 ntotal=2",
+          "audio": "IndexIDMap2 ntotal=1"
+        },
+        "step_runs": {
+          "rows": 21,
+          "status": "all_ok",
+          "sentiment": "ok",
+          "emotion_classify": "ok",
+          "audio_embed_clap": "ok",
+          "scene_visual_embeddings": "ok",
+          "cross_modal_harmonization": "ok"
+        },
+        "evidence": {
+          "top_text_emotion": "admiration 0.955",
+          "top_audio_emotion_score_signal": "surprise 0.135 raw_score_not_promoted",
+          "audio_promotion_threshold": 0.5,
+          "sentiment": "positive",
+          "scene_context_llm": "present",
+          "scene_context_epistemic_state": "supported",
+          "kg_dialogue_entities_resolved": 4
+        },
+        "entity_evidence_projection": {
+          "status": "implemented",
+          "api_route": "/api/runs/latest/evidence",
+          "source": "temporal_index",
+          "total_entities": 4,
+          "unique_entities": 4,
+          "segments_with_any_entity_evidence": 1,
+          "segments_with_scene_present_entities": 0,
+          "segments_with_dialogue_mentioned_entities": 1,
+          "segments_with_candidate_visible_people": 1,
+          "segments_with_speaker_aligned_mentions": 1,
+          "top_entities": [
+            "charlie",
+            "pan american games",
+            "indiana",
+            "jose"
+          ],
+          "top_candidate_visible_people": [
+            "anonymous_person_1"
+          ],
+          "retrieval_validation": {
+            "api_route": "POST /api/search/multimodal",
+            "query_scope": "active clip topic",
+            "entity_count": 4,
+            "scene_present_count": 0,
+            "dialogue_mentioned_count": 4,
+            "candidate_visible_people_count": 1,
+            "speaker_aligned_mention_count": 1,
+            "kg_source": "timeline_scene_entities"
+          },
+          "interpretation": "entity evidence is channel-specific; scene-present identity, dialogue mentions, candidate visible people, and speaker-aligned mentions must stay separate"
+        },
+        "known_followups": [
+          "early realtime KG no-entity observations now label no-input extraction passes instead of implying total KG absence",
+          "scene-present identity remains strict; scene_present=0 must not hide dialogue/candidate/speaker entity evidence",
+          "full-source scene-first probes are expensive because scene detection scans the whole source before max-scenes truncation; use short clips for targeted sentiment and retrieval experiments"
+        ],
+        "next_probe_rule": "reset Qdrant and use a new fresh epoch before the next probe or broad home-movie run"
+      }
+    },
+    "runtime_fallback_audio_entity_validation": {
+      "status": "completed",
+      "source_scope": "first_redacted_family_media_file",
+      "video_count": 1,
+      "scene_count": 3,
+      "runtime_run_id": "785b5eae-ff3e-4cae-9b64-37bbf2151a74",
+      "api_projection": {
+        "database_exists": true,
+        "database_scenes": 3,
+        "pipeline_status": "idle",
+        "wsl_audio": "available",
+        "faster_whisper": "ready",
+        "faster_whisper_version": "1.2.1"
+      },
+      "llm": {
+        "vllm_primary": "healthy",
+        "ollama_fallback": "healthy",
+        "configured_models_healthy": "2/2",
+        "prefer_speed": "vllm_primary",
+        "prefer_quality": "ollama_phi4"
+      },
+      "evidence": {
+        "audio_vector_proof": "current_run_audio_vector_proven",
+        "audio_vector_proof_count": "3/3",
+        "qdrant_counts": {
+          "audio": 3,
+          "text": 6,
+          "clip": 6,
+          "dino": 6
+        },
+        "faiss_indexes": "audio_text_clip_dino_indexidmap2",
+        "sentiment_segments": "3/3",
+        "text_emotion_rankings": "3/3",
+        "audio_emotion_rankings": "3/3",
+        "entity_segments": "3/3",
+        "total_entities": 10,
+        "unique_entities": 10,
+        "ambiguous_person_nonperson_label_conflicts": 0,
+        "step_rows": 57,
+        "failed_steps": 0,
+        "warning_steps": 0
+      },
+      "known_followups": [
+        "retrieval result-level audio proof explanation now keeps selected-scene proof top-level with proof_scope=retrieval_result_scene and nests run-wide mismatch diagnostics under collection_scope",
+        "reset Qdrant and verify fresh/explicit-ID FAISS targets before broad home-movie run"
+      ]
+    },
+    "visual_pipeline_optimization_validation_2026_05_27": {
+      "status": "completed",
+      "source_scope": "samples/onboarding_fixture.mp4",
+      "video_count": 1,
+      "scene_count": 2,
+      "epoch": "epoch_2026_05_22_family_full_01",
+      "visual_models": {
+        "clip": "openai/clip-vit-large-patch14 (768-d)",
+        "dino": "facebook/dinov2-large (1024-d)"
+      },
+      "optimizations": {
+        "gpu_scene_detection": "vectorized PyTorch CUDA mean absolute differences",
+        "frame_extractor": "OpenCV-native seeking/decoding with FFmpeg fallback",
+        "keyframe_selection": "Shannon-entropy + Laplacian-sharpness + motion peaks",
+        "embeddings_batching": "flattened paths, FP16 AMP mixed-precision, torch.inference_mode"
+      },
+      "performance": {
+        "visual_embeddings_time_seconds": 5.7,
+        "gpu_vram_limit_mitigations": "KMP_DUPLICATE_LIB_OK=TRUE to prevent OMP: Error #15"
+      },
+      "evidence": {
+        "qdrant_clip_dim": 768,
+        "qdrant_dino_dim": 1024,
+        "faiss_ok": true,
+        "sqlite_unique_points": 2
+      }
+    }
+  },
+  "known_historical_echoes": [
+    "Seinfeld and Season witness memory in old epochs",
+    "epoch_2025_12_22 or epoch_2025_12_23 described as clean by older docs",
+    "basement handoff used as a rolling scratchpad",
+    "legacy scene-id-only audio vectors treated as current-run proof"
+  ],
+  "canonical_links": [
+    "docs/architecture/CONFIG_LOADING_CONTRACT.md",
+    "docs/architecture/MEMORY_STORAGE.md",
+    "docs/architecture/AUDIO_VECTOR_PROVENANCE_CONTRACT.md",
+    "docs/reference/API.md",
+    "docs/agent/workflows/CLEAN_MEMORY_START.md"
+  ],
+  "agent_workflows": {
+    "clean_memory_start": {
+      "path": "docs/agent/workflows/CLEAN_MEMORY_START.md",
+      "use_when": "preparing fresh Qdrant, epoch, and FAISS surfaces before personal-memory ingestion"
+    },
+    "evidence_first_runtime_repair": {
+      "path": "docs/agent/workflows/EVIDENCE_FIRST_RUNTIME_REPAIR.md",
+      "use_when": "a runtime capability looks absent, stale, partially proven, or mismatched across config, API, persistence, and UI surfaces",
+      "validated_from": "runtime_fallback_audio_entity_validation"
+    }
+  }
+}

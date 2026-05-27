@@ -11,13 +11,13 @@ huggingface_models:
     required: false
     fallback_for: blip_caption
   clip_vit:
-    repo_id: openai/clip-vit-base-patch16
-    revision: 57c216476eefef5ab752ec549e440a49ae4ae5f3
+    repo_id: openai/clip-vit-large-patch14
+    revision: null
     model_type: multimodal-embedding
     required: true
   dinov2:
-    repo_id: facebook/dinov2-base
-    revision: f9e44c814b77203eaa57a6bdbbd535f21ede1415
+    repo_id: facebook/dinov2-large
+    revision: null
     model_type: vision-embedding
     required: true
   sentence_transformer:

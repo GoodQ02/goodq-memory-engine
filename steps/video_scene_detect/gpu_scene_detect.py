@@ -69,24 +69,31 @@ def detect_scenes_gpu(
         
         # Process batch when full
         if len(frames_buffer) >= batch_size or frame_idx == total_frames - 1:
-            if prev_frame is not None:
+            if frames_buffer:
                 # Convert to torch tensors
                 frames_tensor = torch.stack([
                     torch.from_numpy(f).float() / 255.0 
                     for f in frames_buffer
                 ]).to(device)
                 
-                prev_tensor = torch.from_numpy(prev_frame).float().to(device) / 255.0
+                # Compute frame differences (GPU accelerated and vectorized)
+                if prev_frame is not None:
+                    prev_tensor = torch.from_numpy(prev_frame).float().to(device) / 255.0
+                    combined = torch.cat([prev_tensor.unsqueeze(0), frames_tensor], dim=0)
+                    diffs_tensor = torch.mean(torch.abs(combined[1:] - combined[:-1]), dim=(1, 2)) * 100.0
+                else:
+                    # First batch of the video - compute differences within the batch
+                    if len(frames_tensor) > 1:
+                        diffs_tensor = torch.mean(torch.abs(frames_tensor[1:] - frames_tensor[:-1]), dim=(1, 2)) * 100.0
+                        diffs_tensor = torch.cat([torch.tensor([0.0], device=device), diffs_tensor])
+                    else:
+                        diffs_tensor = torch.tensor([0.0], device=device)
                 
-                # Compute frame differences (GPU accelerated)
-                diffs = []
-                for i in range(len(frames_tensor)):
-                    current = frames_tensor[i]
-                    prev = prev_tensor if i == 0 else frames_tensor[i-1]
-                    
-                    # Mean absolute difference
-                    diff = torch.mean(torch.abs(current - prev)).item() * 100.0
-                    diffs.append(diff)
+                # Single GPU-to-CPU sync per batch
+                diffs = diffs_tensor.cpu().tolist()
+                
+                for i in range(len(diffs)):
+                    diff = diffs[i]
                     
                     # Check for scene cut
                     if diff > threshold:

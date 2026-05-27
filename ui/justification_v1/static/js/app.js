@@ -2567,7 +2567,13 @@ function normalizeDiffSourceKey(raw) {
  * @returns {string|null}
  */
 function sanitizeLocalJsonPath(raw) {
-  const s = String(raw || "").trim();
+  let s = String(raw || "").trim();
+  // Strip quotes if wrapped
+  if (s.startsWith('"') && s.endsWith('"')) {
+    s = s.slice(1, -1).trim();
+  } else if (s.startsWith("'") && s.endsWith("'")) {
+    s = s.slice(1, -1).trim();
+  }
   if (!s) return null;
 
   const p = s.replace(/\\/g, "/");

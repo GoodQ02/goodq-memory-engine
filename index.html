@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Ask GoodQ - Interactive Voice Agent</title>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
+    
+    <!-- Icon representation -->
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23110d1a'/%3E%3Ccircle cx='32' cy='32' r='20' fill='none' stroke='%23ffb300' stroke-width='3'/%3E%3Cpath d='M32 20v24M24 32h16' stroke='%23ff6f00' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E" />
+
+    <style>
+      :root {
+        --bg-color: #0c0817;
+        --card-bg: rgba(18, 12, 33, 0.4);
+        --card-border: rgba(255, 255, 255, 0.07);
+        --text-primary: #f5f3f7;
+        --text-secondary: #a39cb0;
+        --accent-gold: #ffb300;
+        --accent-orange: #ff5722;
+        --accent-purple: #9c27b0;
+        --glow: rgba(255, 179, 0, 0.15);
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        font-family: 'Inter', sans-serif;
+        background-color: var(--bg-color);
+        color: var(--text-primary);
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow-x: hidden;
+        background-image: 
+          radial-gradient(circle at 10% 20%, rgba(156, 39, 176, 0.12) 0%, transparent 40%),
+          radial-gradient(circle at 90% 80%, rgba(255, 87, 34, 0.08) 0%, transparent 40%),
+          radial-gradient(circle at 50% 50%, rgba(255, 179, 0, 0.03) 0%, transparent 60%);
+      }
+
+      .container {
+        max-width: 600px;
+        width: 100%;
+        padding: 24px;
+        z-index: 10;
+        text-align: center;
+      }
+
+      /* Glassmorphic Portal Card */
+      .portal-card {
+        background: var(--card-bg);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border: 1px solid var(--card-border);
+        border-radius: 32px;
+        padding: 48px 32px;
+        box-shadow: 
+          0 24px 64px rgba(0, 0, 0, 0.5),
+          inset 0 0 20px rgba(255, 255, 255, 0.02);
+        position: relative;
+        overflow: hidden;
+        transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      }
+
+      .portal-card::before {
+        content: '';
+        position: absolute;
+        top: -50%;
+        left: -50%;
+        width: 200%;
+        height: 200%;
+        background: conic-gradient(from 0deg at 50% 50%, transparent 0%, rgba(255, 179, 0, 0.05) 25%, transparent 50%);
+        animation: rotate-conic 12s linear infinite;
+        z-index: -1;
+        pointer-events: none;
+      }
+
+      @keyframes rotate-conic {
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+
+      /* Avatar / Pulse section */
+      .avatar-container {
+        position: relative;
+        width: 110px;
+        height: 110px;
+        margin: 0 auto 32px;
+      }
+
+      .avatar-glow {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        border-radius: 50%;
+        background: linear-gradient(135deg, var(--accent-gold), var(--accent-orange));
+        opacity: 0.15;
+        filter: blur(12px);
+        animation: pulse-glow 3s ease-in-out infinite alternate;
+      }
+
+      .avatar-circle {
+        position: absolute;
+        top: 5px;
+        left: 5px;
+        width: 100px;
+        height: 100px;
+        border-radius: 50%;
+        background: #120c22;
+        border: 2px solid var(--card-border);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: inset 0 4px 12px rgba(0, 0, 0, 0.4);
+        z-index: 2;
+      }
+
+      .avatar-icon {
+        font-size: 40px;
+        animation: float-icon 4s ease-in-out infinite;
+      }
+
+      @keyframes float-icon {
+        0%, 100% { transform: translateY(0); }
+        50% { transform: translateY(-4px); }
+      }
+
+      /* Wave Pulse Ring */
+      .pulse-ring {
+        position: absolute;
+        top: -10px;
+        left: -10px;
+        right: -10px;
+        bottom: -10px;
+        border: 1px solid var(--accent-gold);
+        border-radius: 50%;
+        opacity: 0;
+        animation: pulse-wave 3s cubic-bezier(0.215, 0.610, 0.355, 1.000) infinite;
+        pointer-events: none;
+      }
+
+      @keyframes pulse-glow {
+        0% { transform: scale(0.9); opacity: 0.1; }
+        100% { transform: scale(1.1); opacity: 0.25; }
+      }
+
+      @keyframes pulse-wave {
+        0% { transform: scale(0.7); opacity: 0.8; }
+        100% { transform: scale(1.3); opacity: 0; }
+      }
+
+      /* Typography styles */
+      h1 {
+        font-family: 'Outfit', sans-serif;
+        font-weight: 800;
+        font-size: 38px;
+        letter-spacing: -0.5px;
+        margin-bottom: 12px;
+        background: linear-gradient(135deg, #ffffff 0%, #e1dbe9 50%, var(--accent-gold) 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+
+      .sub-title {
+        font-family: 'Outfit', sans-serif;
+        font-weight: 600;
+        font-size: 16px;
+        text-transform: uppercase;
+        letter-spacing: 2px;
+        color: var(--accent-gold);
+        margin-bottom: 24px;
+      }
+
+      p.description {
+        font-size: 15px;
+        line-height: 1.6;
+        color: var(--text-secondary);
+        margin-bottom: 32px;
+      }
+
+      /* Dynamic CTA button pointing to widget */
+      .cta-button {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        background: linear-gradient(135deg, rgba(255, 179, 0, 0.1) 0%, rgba(255, 87, 34, 0.05) 100%);
+        border: 1px solid rgba(255, 179, 0, 0.2);
+        color: var(--text-primary);
+        padding: 14px 28px;
+        border-radius: 50px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      }
+
+      .cta-button:hover {
+        border-color: var(--accent-gold);
+        background: linear-gradient(135deg, rgba(255, 179, 0, 0.18) 0%, rgba(255, 87, 34, 0.1) 100%);
+        transform: translateY(-2px);
+        box-shadow: 
+          0 8px 24px rgba(255, 179, 0, 0.1),
+          inset 0 0 10px rgba(255, 255, 255, 0.02);
+      }
+
+      .cta-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background-color: var(--accent-gold);
+        position: relative;
+      }
+
+      .cta-dot::after {
+        content: '';
+        position: absolute;
+        top: -4px;
+        left: -4px;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        border: 1px solid var(--accent-gold);
+        animation: pulse-wave 1.5s infinite;
+      }
+
+      /* Footer links styling */
+      .footer-links {
+        margin-top: 36px;
+        display: flex;
+        justify-content: center;
+        gap: 20px;
+      }
+
+      .footer-links a {
+        color: var(--text-secondary);
+        font-size: 13px;
+        text-decoration: none;
+        transition: color 0.2s ease;
+      }
+
+      .footer-links a:hover {
+        color: var(--text-primary);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="portal-card">
+        <div class="avatar-container">
+          <div class="avatar-glow"></div>
+          <div class="pulse-ring"></div>
+          <div class="avatar-circle">
+            <span class="avatar-icon">🎙️</span>
+          </div>
+        </div>
+
+        <h1>Ask GoodQ</h1>
+        <div class="sub-title">Interactive Voice Agent</div>
+        
+        <p class="description">
+          Welcome to the Q-Branch intelligence console. Ask GoodQ is a conversational voice assistant trained directly on the documentation, architecture specifications, and runtime contracts of the GoodQ4All local-first multimodal memory system.
+        </p>
+
+        <button class="cta-button" onclick="startVoiceAgent()">
+          <span class="cta-dot"></span>
+          <span>Click the microphone in the corner to begin</span>
+        </button>
+      </div>
+
+      <div class="footer-links">
+        <a href="https://github.com/GoodQ02/goodq4all" target="_blank" rel="noopener">GitHub Repository</a>
+        <a href="https://github.com/GoodQ02/goodq4all#getting-started" target="_blank" rel="noopener">Setup Guide</a>
+        <a href="https://github.com/GoodQ02/goodq4all/blob/main/docs/guides/FIRST_RUN.md" target="_blank" rel="noopener">First Run Docs</a>
+      </div>
+    </div>
+
+    <!-- ElevenLabs Conversational Agent Element -->
+    <elevenlabs-convai agent-id="agent_7001k4kmz3fqfxvb6q29q0b879ar"></elevenlabs-convai>
+    <script src="https://elevenlabs.io/convai-widget/index.js" async type="text/javascript"></script>
+
+    <script type="text/javascript">
+      function startVoiceAgent() {
+        console.log("Guiding attention to ElevenLabs floating mic button.");
+        alert("Click the orange microphone button floating in the bottom-right corner of your screen to start speaking with Ask GoodQ!");
+      }
+    </script>
+  </body>
+</html>

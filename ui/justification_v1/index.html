@@ -4,14 +4,31 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>GoodQ — Justification Channel v1</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700&family=Share+Tech+Mono&display=swap" />
     <link rel="stylesheet" href="./static/css/app.css" />
   </head>
   <body>
-    <main id="app" aria-label="Justification Channel v1">
-      <section id="jc-controls" aria-label="Data source controls"></section>
-      <div id="jc-view" aria-label="Justification view"></div>
-      <pre id="jc-output" class="jc-raw-output" aria-label="Justification output (canonical text)"></pre>
-    </main>
+    <div class="crt-screen">
+      <div class="scanlines"></div>
+
+      <header class="app-header">
+        <div class="header-brand">
+          <span class="header-logo">GOODQ // JUSTIFICATION CHANNEL v1</span>
+          <span class="header-status" id="header-status">Status: CONNECTING</span>
+          <span class="header-fingerprint" id="header-fingerprint"></span>
+        </div>
+        <div class="header-controls">
+          <section id="jc-controls" aria-label="Data source controls"></section>
+          <a class="nav-back-link" href="/ui/retro_console_v1/" title="Return to Retro Memory Explorer">&lt; RETRO EXPLORER</a>
+        </div>
+      </header>
+
+      <main id="app" aria-label="Justification Channel v1">
+        <div id="jc-view" aria-label="Justification view"></div>
+        <pre id="jc-output" class="jc-raw-output" aria-label="Justification output (canonical text)"></pre>
+      </main>
+    </div>
+
     <script src="./static/js/types_epistemic.js"></script>
     <script src="./static/js/types_non_action.js"></script>
     <script src="./static/js/integrity.js"></script>

@@ -453,7 +453,7 @@ def _collect_wsl_status() -> Dict[str, Any]:
 
 def _database_status(db_path: str | Path | None = None) -> Dict[str, Any]:
     path = Path(db_path) if db_path is not None else _DB_PATH
-    data = {"exists": False, "scenes": 0}
+    data = {"exists": False, "scenes": 0, "db_name": path.name, "epoch": path.parent.name}
     try:
         data["exists"] = path.exists()
         if not data["exists"]:

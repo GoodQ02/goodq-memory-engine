@@ -9,6 +9,12 @@
 # GoodQ4All
 
 <p align="center">
+  <a href="https://GoodQ02.github.io/goodq4all/">
+    <img src="https://img.shields.io/badge/Ask_GoodQ-Speak_to_Q--Branch_Now-ffb300?style=for-the-badge&logo=microphone&logoColor=ffb300&labelColor=110d1a" alt="Ask GoodQ Voice Agent - Click Here to Speak" height="42" />
+  </a>
+</p>
+
+<p align="center">
   <a href="https://GoodQ02.github.io/goodq4all/"><img src="https://img.shields.io/badge/Ask_GoodQ-Voice_Agent-ffb300?style=flat-square" alt="Ask GoodQ Voice Agent" /></a>
   <a href="https://github.com/GoodQ02/goodq4all/actions/workflows/ci.yml"><img src="https://github.com/GoodQ02/goodq4all/actions/workflows/ci.yml/badge.svg" alt="ci" /></a>
   <a href="https://github.com/GoodQ02/goodq4all/actions/workflows/doc-drift-lint.yml"><img src="https://github.com/GoodQ02/goodq4all/actions/workflows/doc-drift-lint.yml/badge.svg" alt="doc-drift-lint" /></a>

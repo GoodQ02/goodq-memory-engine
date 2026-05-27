@@ -1,0 +1,120 @@
+{
+  "envelope": {
+    "read_model_version": 1,
+    "retrieval_context": "human.ui.search",
+    "question": { "text": "Is there music playing in scene 0007?" },
+    "outcome": "answer",
+    "candidates": [
+      {
+        "candidate_id": "a2",
+        "state": "conflicted",
+        "answer_text": "Evidence is mixed about whether music is present in scene 0007.",
+        "confidence": {
+          "intrinsic": null,
+          "source": null,
+          "temporal": null,
+          "consistency": null,
+          "overall": null
+        },
+        "limits": [
+          "conflict:audio_support_vs_text_contradict"
+        ],
+        "next_steps": [
+          {
+            "action": "inspect scene audio clip",
+            "rationale": "Resolve conflict by direct listening/inspection",
+            "scope": { "video_id": "video_001", "scene_id": "0007" }
+          }
+        ],
+        "evidence": [
+          {
+            "role": "support",
+            "store": "qdrant",
+            "store_ref": "goodq_audio",
+            "embedding_id": "8b1a...",
+            "score": 0.08,
+            "payload": {
+              "video_id": "video_001",
+              "scene_id": "0007",
+              "model": "clap"
+            },
+            "provenance": {
+              "provenance_version": 1,
+              "ts_utc": "2025-12-17T04:12:03Z",
+              "video_id": "video_001",
+              "scene_id": "0007",
+              "modality": "audio",
+              "model": "clap",
+              "component": "audio_embed_clap",
+              "attempted": true,
+              "committed": true,
+              "reason": "—",
+              "targets": {
+                "qdrant": { "attempted": true, "committed": true, "ref": "goodq_audio" },
+                "faiss": { "attempted": true, "committed": true, "ref": "goodq_audio.index" }
+              }
+            },
+            "confidence": {
+              "temporal": 0.61,
+              "temporal_explanation": "age_bucket: 30-90d",
+              "intrinsic": null,
+              "source": null,
+              "consistency": null,
+              "overall": null
+            },
+            "limits": []
+          },
+          {
+            "role": "contradict",
+            "store": "qdrant",
+            "store_ref": "goodq_text",
+            "embedding_id": "4f22...",
+            "score": 0.13,
+            "payload": {
+              "video_id": "video_001",
+              "scene_id": "0007",
+              "model": "all-MiniLM-L6-v2",
+              "transcript": "[REDACTED]"
+            },
+            "provenance": {
+              "provenance_version": 1,
+              "ts_utc": "2025-12-20T10:31:55Z",
+              "video_id": "video_001",
+              "scene_id": "0007",
+              "modality": "text",
+              "model": "all-MiniLM-L6-v2",
+              "component": "text_embed",
+              "attempted": true,
+              "committed": true,
+              "reason": "—",
+              "targets": {
+                "qdrant": { "attempted": true, "committed": true, "ref": "goodq_text" }
+              }
+            },
+            "confidence": {
+              "temporal": 0.92,
+              "temporal_explanation": "age_bucket: 0-7d",
+              "intrinsic": null,
+              "source: null": null,
+              "consistency": null,
+              "overall": null
+            },
+            "limits": [
+              "payload_redacted:transcript"
+            ]
+          }
+        ]
+      }
+    ],
+    "dont_know": null
+  },
+  "nonActionDecisions": [
+    {
+      "contract_version": 1,
+      "domain": "act",
+      "condition": "act_blocked_on_conflict",
+      "required_response": "defer",
+      "rationale": { "candidate_state": "conflicted" }
+    }
+  ]
+}

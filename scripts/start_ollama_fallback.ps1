@@ -25,6 +25,12 @@ if (-not [string]::IsNullOrWhiteSpace($Models)) {
 
 $env:OLLAMA_HOST = $ListenHost
 
+# Memory and performance optimizations for single-user fallback use cases
+$env:OLLAMA_FLASH_ATTENTION = "1"
+$env:OLLAMA_NUM_PARALLEL = "1"
+$env:OLLAMA_MAX_LOADED_MODELS = "1"
+$env:OLLAMA_KV_CACHE_TYPE = "q8_0"
+
 $alreadyListening = Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue |
     Where-Object { $_.LocalAddress -in @("127.0.0.1", "::1") -and $_.LocalPort -eq ([Uri]"http://$ListenHost").Port } |
     Select-Object -First 1

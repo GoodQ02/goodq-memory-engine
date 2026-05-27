@@ -31,7 +31,7 @@ User=<wsl_user>
 WorkingDirectory=<wsl_vllm_home>
 Environment="PATH=<wsl_vllm_home>/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 Environment="CUDA_VISIBLE_DEVICES=0"
-ExecStart=<wsl_vllm_home>/venv/bin/python -m vllm.entrypoints.openai.api_server --model <wsl_model_path> --host 127.0.0.1 --port 38005 --gpu-memory-utilization 0.7 --max-model-len 8192
+ExecStart=<wsl_vllm_home>/venv/bin/python -m vllm.entrypoints.openai.api_server --model <wsl_model_path> --host 127.0.0.1 --port 38005 --gpu-memory-utilization 0.20 --max-model-len 8192 --kv-cache-dtype fp8
 Restart=on-failure
 RestartSec=10
 KillMode=mixed
@@ -174,8 +174,9 @@ python -m vllm.entrypoints.openai.api_server \
     --model <wsl_model_path> \
     --host 127.0.0.1 \
     --port 38005 \
-    --gpu-memory-utilization 0.7 \
-    --max-model-len 8192
+    --gpu-memory-utilization 0.20 \
+    --max-model-len 8192 \
+    --kv-cache-dtype fp8
 ```
 
 ### Restart after crash
@@ -226,13 +227,12 @@ User=${WSL_USER}
 WorkingDirectory=${VLLM_HOME}
 Environment="PATH=${VLLM_HOME}/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 Environment="CUDA_VISIBLE_DEVICES=0"
-ExecStart=${VLLM_HOME}/venv/bin/python -m vllm.entrypoints.openai.api_server --model ${MODEL_PATH} --host 127.0.0.1 --port 38005 --gpu-memory-utilization 0.7 --max-model-len 8192
+ExecStart=${VLLM_HOME}/venv/bin/python -m vllm.entrypoints.openai.api_server --model ${MODEL_PATH} --host 127.0.0.1 --port 38005 --gpu-memory-utilization 0.20 --max-model-len 8192 --kv-cache-dtype fp8
 Restart=on-failure
 RestartSec=10
 KillMode=mixed
 TimeoutStopSec=45
 StandardOutput=append:${VLLM_HOME}/logs/vllm-service.log
-StandardError=append:${VLLM_HOME}/logs/vllm-service-error.log
 
 [Install]
 WantedBy=multi-user.target

@@ -3043,4 +3043,44 @@ async function main() {
   await loadExampleSource(params.view);
 }
 
+async function pollApiStatus() {
+  const statusEl = document.getElementById("header-status");
+  const fingerprintEl = document.getElementById("header-fingerprint");
+  if (!statusEl && !fingerprintEl) return;
+
+  try {
+    const resp = await fetch("/api/status", { cache: "no-store" });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+    
+    if (statusEl) {
+      statusEl.textContent = "Status: ONLINE";
+      statusEl.className = "header-status online";
+    }
+    if (fingerprintEl) {
+      const epoch = (data.database && data.database.epoch) || "N/A";
+      const runId = (data.processing && data.processing.cli_progress && data.processing.cli_progress.run_id) || (data.processing && data.processing.run_id) || "None";
+      fingerprintEl.textContent = `Epoch: ${epoch} | Run: ${runId}`;
+    }
+  } catch (e) {
+    if (statusEl) {
+      statusEl.textContent = "Status: OFFLINE";
+      statusEl.className = "header-status offline";
+    }
+    if (fingerprintEl) {
+      fingerprintEl.textContent = "API unreachable";
+    }
+  }
+}
+
+function startStatusPolling() {
+  pollApiStatus();
+  setInterval(pollApiStatus, 3000);
+}
+
+// Start status polling when DOM is loaded
+document.addEventListener("DOMContentLoaded", () => {
+  startStatusPolling();
+});
+
 main();

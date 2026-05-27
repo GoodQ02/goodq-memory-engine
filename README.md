@@ -9,6 +9,7 @@
 # GoodQ4All
 
 <p align="center">
+  <a href="https://GoodQ02.github.io/goodq4all/"><img src="https://img.shields.io/badge/Ask_GoodQ-Voice_Agent-ffb300?style=flat-square" alt="Ask GoodQ Voice Agent" /></a>
   <a href="https://github.com/GoodQ02/goodq4all/actions/workflows/ci.yml"><img src="https://github.com/GoodQ02/goodq4all/actions/workflows/ci.yml/badge.svg" alt="ci" /></a>
   <a href="https://github.com/GoodQ02/goodq4all/actions/workflows/doc-drift-lint.yml"><img src="https://github.com/GoodQ02/goodq4all/actions/workflows/doc-drift-lint.yml/badge.svg" alt="doc-drift-lint" /></a>
   <a href="https://github.com/GoodQ02/goodq4all/actions/workflows/codeql.yml"><img src="https://github.com/GoodQ02/goodq4all/actions/workflows/codeql.yml/badge.svg" alt="codeql" /></a>
@@ -21,6 +22,9 @@ GoodQ4All is a local-first multimodal memory system for long-running video, audi
 It ingests media into scene-level memory, persists what it learns locally, and keeps the proof path visible. The system is built around deterministic Windows-first execution, with CPU-safe baseline behavior and optional GPU / WSL2 acceleration when you want more throughput.
 
 GoodQ4All's thesis is simple: machine memory should earn every claim it makes.
+
+> [!TIP]
+> **Have questions? Ask GoodQ!** Try our interactive conversational voice agent at the [GoodQ4All Landing Page](https://GoodQ02.github.io/goodq4all/) to speak with a virtual Q-Branch operator trained on this repository.
 
 > [!IMPORTANT]
 > **Supported Host: Windows 11 only.** GoodQ4All is built for Windows-first local execution (CPU-safe baseline by default; GPU and WSL2 are optional). Other platforms are not first-run targets today.

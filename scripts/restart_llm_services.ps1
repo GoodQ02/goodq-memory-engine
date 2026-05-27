@@ -2,7 +2,13 @@
 # ==============================================================================
 # GoodQ4All LLM Services Recycler & Warmup Script
 # Gracefully recycles vLLM and Ollama to clear VRAM and restore clean posture.
+#
+# Supports -GamingMode: Stops vLLM (off) and starts Ollama on CPU only (VRAM free).
 # ==============================================================================
+
+param(
+    [switch]$GamingMode = $false
+)
 
 $ErrorActionPreference = "Stop"
 
@@ -69,28 +75,39 @@ try {
 Write-Output ""
 Write-Output "[3/4] Re-starting LLM Services..."
 
-# Check if GoodQ4All Task Scheduler tasks exist
-$Tasks = schtasks /query /fo CSV 2>&1
-$vLlmTaskExists = $Tasks -match "GoodQ4All vLLM WSL Startup"
-$OllamaTaskExists = $Tasks -match "GoodQ4All Ollama Fallback Startup"
-
-if ($vLlmTaskExists) {
-    Write-Output "Starting WSL vLLM via Windows Task Scheduler..."
-    schtasks /run /tn "GoodQ4All vLLM WSL Startup" | Out-Null
-} else {
-    Write-Output "Starting WSL vLLM service directly..."
-    wsl -d $WslDistro -u root -- systemctl start vllm-llama1b
-    wsl -d $WslDistro -- bash -lc "pgrep -f '[g]oodq-vllm-keepalive' >/dev/null || (nohup bash -c 'exec -a goodq-vllm-keepalive sleep infinity' >/dev/null 2>&1 &)"
-}
-
-if ($OllamaTaskExists) {
-    Write-Output "Starting Windows host Ollama via Windows Task Scheduler..."
-    schtasks /run /tn "GoodQ4All Ollama Fallback Startup" | Out-Null
-} else {
+if ($GamingMode) {
+    Write-Output "Gaming Mode Active: Keeping WSL vLLM service offline to preserve GPU VRAM."
+    
+    # Start host Ollama on CPU only
     $StartOllamaScript = Join-Path $ScriptDir "start_ollama_fallback.ps1"
     if (Test-Path $StartOllamaScript) {
-        Write-Output "Starting Windows host Ollama fallback directly..."
-        powershell -NoProfile -ExecutionPolicy Bypass -File $StartOllamaScript
+        Write-Output "Starting Windows host Ollama in CPU-only mode..."
+        powershell -NoProfile -ExecutionPolicy Bypass -File $StartOllamaScript -CpuOnly
+    }
+} else {
+    # Check if GoodQ4All Task Scheduler tasks exist
+    $Tasks = schtasks /query /fo CSV 2>&1
+    $vLlmTaskExists = $Tasks -match "GoodQ4All vLLM WSL Startup"
+    $OllamaTaskExists = $Tasks -match "GoodQ4All Ollama Fallback Startup"
+
+    if ($vLlmTaskExists) {
+        Write-Output "Starting WSL vLLM via Windows Task Scheduler..."
+        schtasks /run /tn "GoodQ4All vLLM WSL Startup" | Out-Null
+    } else {
+        Write-Output "Starting WSL vLLM service directly..."
+        wsl -d $WslDistro -u root -- systemctl start vllm-llama1b
+        wsl -d $WslDistro -- bash -lc "pgrep -f '[g]oodq-vllm-keepalive' >/dev/null || (nohup bash -c 'exec -a goodq-vllm-keepalive sleep infinity' >/dev/null 2>&1 &)"
+    }
+
+    if ($OllamaTaskExists) {
+        Write-Output "Starting Windows host Ollama via Windows Task Scheduler..."
+        schtasks /run /tn "GoodQ4All Ollama Fallback Startup" | Out-Null
+    } else {
+        $StartOllamaScript = Join-Path $ScriptDir "start_ollama_fallback.ps1"
+        if (Test-Path $StartOllamaScript) {
+            Write-Output "Starting Windows host Ollama fallback directly..."
+            powershell -NoProfile -ExecutionPolicy Bypass -File $StartOllamaScript
+        }
     }
 }
 
@@ -112,16 +129,24 @@ function Test-Endpoint {
     return $false
 }
 
-$vLlmReady = Test-Endpoint -Url "http://127.0.0.1:38005/v1/models" -TimeoutSeconds 55
-if ($vLlmReady) {
-    Write-Output "[OK] Primary vLLM is active at http://127.0.0.1:38005/v1"
+if (-not $GamingMode) {
+    $vLlmReady = Test-Endpoint -Url "http://127.0.0.1:38005/v1/models" -TimeoutSeconds 55
+    if ($vLlmReady) {
+        Write-Output "[OK] Primary vLLM is active at http://127.0.0.1:38005/v1"
+    } else {
+        Write-Warning "[WARN] Primary vLLM failed to respond on port 38005 within timeout."
+    }
 } else {
-    Write-Warning "[WARN] Primary vLLM failed to respond on port 38005 within timeout."
+    Write-Output "[INFO] WSL vLLM is offline (VRAM preserved)."
 }
 
 $OllamaReady = Test-Endpoint -Url "http://127.0.0.1:31434/v1/models" -TimeoutSeconds 15
 if ($OllamaReady) {
-    Write-Output "[OK] Fallback Ollama is active at http://127.0.0.1:31434/v1"
+    if ($GamingMode) {
+        Write-Output "[OK] Fallback Ollama is active on CPU at http://127.0.0.1:31434/v1"
+    } else {
+        Write-Output "[OK] Fallback Ollama is active at http://127.0.0.1:31434/v1"
+    }
 } else {
     Write-Warning "[WARN] Fallback Ollama failed to respond on port 31434 within timeout."
 }

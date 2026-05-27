@@ -1,7 +1,8 @@
 param(
     [string]$OllamaExe = "$env:LOCALAPPDATA\Programs\Ollama\ollama.exe",
     [string]$ListenHost = $env:OLLAMA_HOST,
-    [string]$Models = $env:OLLAMA_MODELS
+    [string]$Models = $env:OLLAMA_MODELS,
+    [switch]$CpuOnly = $false
 )
 
 $ErrorActionPreference = "Stop"
@@ -24,6 +25,11 @@ if (-not [string]::IsNullOrWhiteSpace($Models)) {
 }
 
 $env:OLLAMA_HOST = $ListenHost
+
+if ($CpuOnly -or $env:GOODQ_OLLAMA_CPU_ONLY -eq "1") {
+    $env:CUDA_VISIBLE_DEVICES = ""
+    Write-Output "Hiding GPU devices. Forcing Ollama to run on CPU."
+}
 
 # Memory and performance optimizations for single-user fallback use cases
 $env:OLLAMA_FLASH_ATTENTION = "1"

@@ -11,6 +11,7 @@ VLLM_HOST="${GOODQ_WSL_VLLM_HOST:-127.0.0.1}"
 VLLM_PORT="${GOODQ_WSL_VLLM_PORT:-38005}"
 VLLM_GPU_MEMORY_UTILIZATION="${GOODQ_WSL_VLLM_GPU_MEMORY_UTILIZATION:-0.7}"
 VLLM_MAX_MODEL_LEN="${GOODQ_WSL_VLLM_MAX_MODEL_LEN:-8192}"
+VLLM_KV_CACHE_DTYPE="${GOODQ_WSL_VLLM_KV_CACHE_DTYPE:-fp8}"
 LOG_DIR="${VLLM_HOME}/logs"
 if [[ "${EUID}" -eq 0 ]]; then
     SUDO=()
@@ -60,7 +61,7 @@ WorkingDirectory=${VLLM_HOME}
 Environment="PATH=${VLLM_HOME}/venv/bin:/usr/local/cuda-12.1/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 Environment="CUDA_HOME=/usr/local/cuda-12.1"
 Environment="CUDA_VISIBLE_DEVICES=0"
-ExecStart=${VLLM_HOME}/venv/bin/python -m vllm.entrypoints.openai.api_server --model ${MODEL_PATH} --host ${VLLM_HOST} --port ${VLLM_PORT} --gpu-memory-utilization ${VLLM_GPU_MEMORY_UTILIZATION} --max-model-len ${VLLM_MAX_MODEL_LEN} --kv-cache-dtype fp8
+ExecStart=${VLLM_HOME}/venv/bin/python -m vllm.entrypoints.openai.api_server --model ${MODEL_PATH} --host ${VLLM_HOST} --port ${VLLM_PORT} --gpu-memory-utilization ${VLLM_GPU_MEMORY_UTILIZATION} --max-model-len ${VLLM_MAX_MODEL_LEN} --kv-cache-dtype ${VLLM_KV_CACHE_DTYPE}
 Restart=on-failure
 RestartSec=10
 KillMode=mixed

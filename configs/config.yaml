@@ -172,8 +172,8 @@ qdrant:
     text: goodq_text_epoch_2025_12_22
     audio: goodq_audio_epoch_2025_12_22
   embedding_dims:
-    clip: 512
-    dino: 768
+    clip: 768
+    dino: 1024
     text: 384
     audio: 512
 

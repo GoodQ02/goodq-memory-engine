@@ -277,6 +277,17 @@ def run_scene_visual_embeddings(item: Dict[str, Any], cfg: Dict[str, Any]) -> Di
         logger.info("Phase 6 disabled in config")
         return {"phase6_status": "disabled"}
     
+    # Dynamically retrieve CLIP and DINO dimensions from configuration
+    try:
+        clip_dim = int(cfg.get('qdrant', {}).get('embedding_dims', {}).get('clip', 512))
+    except (ValueError, TypeError):
+        clip_dim = 512
+
+    try:
+        dino_dim = int(cfg.get('qdrant', {}).get('embedding_dims', {}).get('dino', 768))
+    except (ValueError, TypeError):
+        dino_dim = 768
+    
     # Get video path and output directory
     video_path = item.get('source_path')
     if not video_path or not os.path.exists(video_path):
@@ -547,7 +558,7 @@ def run_scene_visual_embeddings(item: Dict[str, Any], cfg: Dict[str, Any]) -> Di
             clip_client = QdrantClient(QdrantConfig(
                 host=host_value,
                 collection=clip_collection,
-                dim=512,
+                dim=clip_dim,
                 distance='Cosine'
             ))
             
@@ -622,7 +633,7 @@ def run_scene_visual_embeddings(item: Dict[str, Any], cfg: Dict[str, Any]) -> Di
             dino_client = QdrantClient(QdrantConfig(
                 host=host_value,
                 collection=dino_collection,
-                dim=768,
+                dim=dino_dim,
                 distance='Cosine'
             ))
             
@@ -700,7 +711,7 @@ def run_scene_visual_embeddings(item: Dict[str, Any], cfg: Dict[str, Any]) -> Di
                 id_map_db=paths_cfg.get("clip_id_map_db"),
                 map_table="clip_id_map",
                 modality="clip",
-                dim=512,
+                dim=clip_dim,
             )
             dino_faiss_result = _write_scene_faiss_points(
                 cfg,
@@ -709,7 +720,7 @@ def run_scene_visual_embeddings(item: Dict[str, Any], cfg: Dict[str, Any]) -> Di
                 id_map_db=paths_cfg.get("dino_id_map_db"),
                 map_table="dino_id_map",
                 modality="dino",
-                dim=768,
+                dim=dino_dim,
             )
             try:
                 from steps.common.memory_commit_events import MemoryCommitEvent, emit_memory_commit_events, utc_now_iso
@@ -760,11 +771,11 @@ def run_scene_visual_embeddings(item: Dict[str, Any], cfg: Dict[str, Any]) -> Di
             
             if scene_id in pooled_clip:
                 scene['clip_id'] = f"clip_scene_{video_id}_{scene_id}"
-                scene['clip_dim'] = 512
+                scene['clip_dim'] = clip_dim
             
             if scene_id in pooled_dino:
                 scene['dino_id'] = f"dino_scene_{video_id}_{scene_id}"
-                scene['dino_dim'] = 768
+                scene['dino_dim'] = dino_dim
             
             # Add frame info
             if scene_id in scene_frames:

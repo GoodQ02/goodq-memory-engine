@@ -67,11 +67,25 @@ def _load() -> None:
     try:
         import torch  # type: ignore
         from transformers import CLIPModel, CLIPProcessor  # type: ignore
+        from pathlib import Path
+        import yaml
         
-        proc = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch16")
-        model = CLIPModel.from_pretrained("openai/clip-vit-base-patch16").to(device).eval()
+        # Resolve repo_id from registry
+        repo_root = Path(__file__).resolve().parents[2]
+        registry_path = repo_root / "configs" / "model_registry.yaml"
+        repo_id = "openai/clip-vit-large-patch14"  # Default fallback
+        if registry_path.exists():
+            try:
+                with open(registry_path, "r", encoding="utf-8") as f:
+                    registry = yaml.safe_load(f) or {}
+                repo_id = registry.get("huggingface_models", {}).get("clip_vit", {}).get("repo_id") or repo_id
+            except Exception:
+                pass
+        
+        proc = CLIPProcessor.from_pretrained(repo_id)
+        model = CLIPModel.from_pretrained(repo_id).to(device).eval()
         _CLIP.update({"model": model, "proc": proc, "device": device})
-        logger.info(f"[OK] CLIP model loaded on {device} (GPU config: {gpu_config['memory_fraction']:.1%} memory)")
+        logger.info(f"[OK] CLIP model ({repo_id}) loaded on {device} (GPU config: {gpu_config['memory_fraction']:.1%} memory)")
     except Exception as e:
         logger.error(f"[FAIL] Failed to load CLIP model: {str(e)}")
         logger.info("[WARN]  Falling back to CPU mode")

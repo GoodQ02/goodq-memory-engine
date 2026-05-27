@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE_AGENT_STATE -->
-<!-- DOC_LAST_VERIFIED: 2026-05-24 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-27 -->
 
 # GoodQ4All Current Agent State
 
@@ -48,15 +48,21 @@ test runs, is disposable and should not seed the next run.
     transcript display positioned directly below the keyframe in the Inspector.
 - Local vLLM primary: `http://127.0.0.1:38005/v1`, systemd unit
   `vllm-llama1b.service`, model
-  `/home/jdben/models/Qwen2.5-0.5B-Instruct`
+  `/home/jdben/models/Qwen2.5-0.5B-Instruct` (optimized with memory allocation
+  capped at `--gpu-memory-utilization 0.20` and FP8 KV-cache `--kv-cache-dtype fp8`,
+  limiting the active pool to ~3.3 GB of VRAM while maintaining ~275 - 365 tok/sec
+  generation speeds and ~14ms TTFT).
 - WSL vLLM lifetime: Windows operator sessions should start through
   `scripts/start_vllm_servers.bat`, which starts one named
   `goodq-vllm-keepalive` anchor so WSL remains alive while vLLM serves.
 - Windows logon fixture: Task Scheduler task `GoodQ4All vLLM WSL Startup`
   invokes the same wrapper with pauses disabled.
 - Ollama fallback: healthy Windows fallback on `http://127.0.0.1:31434/v1`
-  when started through `scripts/start_ollama_fallback.ps1`; Windows logon
-  fixture `GoodQ4All Ollama Fallback Startup` invokes the same wrapper.
+  running `phi4:latest` (14.6B), optimized via Flash Attention (`OLLAMA_FLASH_ATTENTION=1`),
+  quantized KV cache (`OLLAMA_KV_CACHE_TYPE=q8_0`), and single-model constraints.
+  Optimizations reclaimed 1.81 GB VRAM (reducing peak usage from 15.23 GB to 13.42 GB)
+  and yielded a 50% to 70% speedup (up to ~59 tok/sec) and a 12-14% decrease in TTFT.
+  Windows logon fixture `GoodQ4All Ollama Fallback Startup` invokes the same wrapper.
 
 ## Clean-Start Checkpoint
 
@@ -587,6 +593,23 @@ Operator Console freshness and route-id pass on 2026-05-22:
 - Early `[ENTITY]` zero-entity messages with available partial inputs are now
   preliminary extraction notices at info level. They do not mean the late
   transcript/temporal KG pass failed.
+
+## Visual Processing and Model Dimension Optimization on 2026-05-27
+
+A complete visual pipeline and model dimension optimization run was completed, upgrading core visual embeddings (CLIP and DINOv2) to higher-fidelity variants and vectorizing scene processing for maximum GPU efficiency.
+
+Optimizations implemented:
+- **Model Upgrades**: CLIP was upgraded from base to `openai/clip-vit-large-patch14` (expanding vectors from 512 to 768 dimensions). DINOv2 was upgraded from base to `facebook/dinov2-large` (expanding vectors from 768 to 1024 dimensions). Config and registry schemas are updated dynamically to support these dimensions.
+- **Vectorized GPU Scene Detection**: Migrated `gpu_scene_detect.py` to use batched CUDA PyTorch mean absolute difference calculations, reducing CPU-GPU sync calls to one per batch.
+- **OpenCV-Native Seeking**: Upgraded `scene_frame_extractor.py` to seek and decode keyframes natively using `cv2.VideoCapture` in Python, significantly reducing subprocess overhead. FFmpeg remains a structured fallback.
+- **Advanced Keyframe Selection**: Keyframe extraction now ranks candidate frames in each scene using Shannon entropy (texture density), Laplacian variance (sharpness), and motion peaks (visual change).
+- **Mixed-Precision (AMP) Batching**: Streamlined visual embedding generation in `scene_embedder.py` by pooling and flattening frame extraction tasks into a single batch processed under mixed-precision FP16 AMP and inference mode.
+
+Validated memory/evidence posture:
+- **Validation Run**: Executed end-to-end on `samples/onboarding_fixture.mp4` under the new posture. The visual embedding phase completed in 5.7 seconds on the RTX 4070 Ti SUPER.
+- **Vector Parity**: Fresh Qdrant collections initialized with upgraded dimensions: CLIP (768) and DINOv2 (1024).
+- **FAISS Parity**: FAISS indices successfully committed vectors using explicit, stable IDs with expected dimensions (`faiss_ok = true`).
+- **OpenMP Collision Mitigation**: In pipelines, `KMP_DUPLICATE_LIB_OK=TRUE` is explicitly set to prevent duplicate OpenMP library crashes during torch/faiss imports.
 
 ## Do Not Investigate First
 

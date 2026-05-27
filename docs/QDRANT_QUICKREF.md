@@ -60,8 +60,8 @@ http://localhost:6333/dashboard
 
 | Name | Dim | Purpose |
 |------|-----|---------|
-| goodq_clip_epoch_<epoch> | 512 | Visual scenes (CLIP) |
-| goodq_dino_epoch_<epoch> | 768 | Visual scenes (DINO) |
+| goodq_clip_epoch_<epoch> | 768 | Visual scenes (CLIP) |
+| goodq_dino_epoch_<epoch> | 1024 | Visual scenes (DINO) |
 | goodq_text_epoch_<epoch> | 384 | Transcripts/captions |
 | goodq_audio_epoch_<epoch> | 512 | Audio embeddings (CLAP) |
 

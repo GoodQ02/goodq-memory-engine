@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_verified": "2026-05-23",
+  "last_verified": "2026-05-27",
   "project": "GoodQ4All",
   "agent_first_read": "docs/agent/CURRENT_STATE.md",
   "human_index": "docs/agent/README.md",
@@ -42,12 +42,14 @@
       "vllm_base": "http://127.0.0.1:38005/v1",
       "vllm_service": "systemd_enabled",
       "vllm_model": "/home/jdben/models/Qwen2.5-0.5B-Instruct",
+      "vllm_optimizations": "--gpu-memory-utilization 0.20 --kv-cache-dtype fp8 (capped at ~3.3 GB VRAM)",
       "wsl_keepalive": "goodq-vllm-keepalive",
       "windows_logon_task": "GoodQ4All vLLM WSL Startup",
       "ollama_fallback": "healthy_windows_fallback",
       "fallback_chain": "healthy_vllm_primary_and_ollama_quality_fallback",
       "ollama_base": "http://127.0.0.1:31434/v1",
       "ollama_model": "phi4:latest",
+      "ollama_optimizations": "OLLAMA_FLASH_ATTENTION=1 OLLAMA_KV_CACHE_TYPE=q8_0 OLLAMA_NUM_PARALLEL=1 OLLAMA_MAX_LOADED_MODELS=1 (reclaimed 1.81 GB VRAM)",
       "ollama_windows_logon_task": "GoodQ4All Ollama Fallback Startup",
       "ollama_start_script": "scripts/start_ollama_fallback.ps1"
     },
@@ -709,6 +711,33 @@
         "retrieval result-level audio proof explanation now keeps selected-scene proof top-level with proof_scope=retrieval_result_scene and nests run-wide mismatch diagnostics under collection_scope",
         "reset Qdrant and verify fresh/explicit-ID FAISS targets before broad home-movie run"
       ]
+    },
+    "visual_pipeline_optimization_validation_2026_05_27": {
+      "status": "completed",
+      "source_scope": "samples/onboarding_fixture.mp4",
+      "video_count": 1,
+      "scene_count": 2,
+      "epoch": "epoch_2026_05_22_family_full_01",
+      "visual_models": {
+        "clip": "openai/clip-vit-large-patch14 (768-d)",
+        "dino": "facebook/dinov2-large (1024-d)"
+      },
+      "optimizations": {
+        "gpu_scene_detection": "vectorized PyTorch CUDA mean absolute differences",
+        "frame_extractor": "OpenCV-native seeking/decoding with FFmpeg fallback",
+        "keyframe_selection": "Shannon-entropy + Laplacian-sharpness + motion peaks",
+        "embeddings_batching": "flattened paths, FP16 AMP mixed-precision, torch.inference_mode"
+      },
+      "performance": {
+        "visual_embeddings_time_seconds": 5.7,
+        "gpu_vram_limit_mitigations": "KMP_DUPLICATE_LIB_OK=TRUE to prevent OMP: Error #15"
+      },
+      "evidence": {
+        "qdrant_clip_dim": 768,
+        "qdrant_dino_dim": 1024,
+        "faiss_ok": true,
+        "sqlite_unique_points": 2
+      }
     }
   },
   "known_historical_echoes": [

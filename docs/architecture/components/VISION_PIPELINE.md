@@ -1,34 +1,55 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-05-21 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-27 -->
 
 # Vision Processing Pipeline
 
-**Status:** ✅ Production operational
-**Last Verified:** May 21, 2026
-**Scope:** Keyframe processing during scene ingestion and the visual outputs consumed by Phase 6 and realtime KG updates
+**Status:** ✅ Production operational (optimized)
+**Last Verified:** May 27, 2026
+**Scope:** Scene detection, keyframe extraction, visual embedding generation, and Phase 6a/6b integration
 
 ---
 
 ## Overview
 
-The vision pipeline processes one representative keyframe per scene and contributes visual evidence into the canonical scene bundle.
+The vision pipeline performs video segmentation, extracts optimal keyframes, processes representative visual cues, and commits embeddings for search parity.
 
-The current flow is:
-
+The flow consists of:
+1. **Scene Detection (`gpu_scene_detect.py`)**: Vectorized GPU-accelerated frame difference calculations in PyTorch.
+2. **Keyframe Extraction (`scene_frame_extractor.py`)**: OpenCV-native seeking and multi-criteria keyframe selection (Entropy, Laplacian, Motion).
+3. **Visual Extraction Steps**:
 ```text
 scene keyframe
   -> OCR
-  -> image caption
-  -> object detection
+  -> image caption (BLIP)
+  -> object detection (YOLO)
   -> face embedding / face metadata
-  -> DINO embedding
-  -> CLIP embedding
+  -> DINOv2-Large embedding (1024-d)
+  -> CLIP-ViT-Large embedding (768-d)
   -> tagger / semantic lift
   -> scene bundle + KG + Phase 6
 ```
 
 These steps are operational. They are not latent or “future” capabilities.
+
+---
+
+## Pre-Extraction and Segmentation
+
+Before individual scene analysis begins, the video source undergoes high-performance preprocessing:
+
+### 1. Vectorized GPU Scene Detection (`gpu_scene_detect.py`)
+- **Acceleration**: Frame differences are calculated directly on the GPU using PyTorch tensors.
+- **Batching**: Reduces CPU-GPU synchronization bottlenecks by processing frame buffers in batches and performing a single GPU-to-CPU sync per batch.
+- **Robustness**: Automatically handles initialization edges and flags cuts when mean absolute difference exceeds the dynamic threshold.
+
+### 2. OpenCV-Native Keyframe Seeking (`scene_frame_extractor.py`)
+- **OpenCV Direct Path**: Uses native `cv2.VideoCapture` seeking and frame decoding in Python to bypass FFmpeg subprocess spawning overhead.
+- **Fallback**: Spawns an FFmpeg child process only if OpenCV cannot open or seek within the media container.
+- **Advanced Keyframe Selection**: Evaluates candidate frames in each scene across three visual dimensions to pick the single most representative frame:
+  - *Shannon Entropy*: Selects frames with the highest informational texture and color complexity.
+  - *Laplacian Variance*: Rejects motion-blurred or out-of-focus frames in favor of high sharpness.
+  - *Motion Peaks*: Captures frames corresponding to high action or change.
 
 ---
 
@@ -118,12 +139,11 @@ Those persisted outputs are then consumed by:
 - `dino_meta`
 
 **Current Runtime Truth**
-- DINO is operational
+- DINO is operational using **`facebook/dinov2-large`** (producing **1024-dimensional** vectors)
+- processes frame paths in a single flattened batch wrapped in `torch.inference_mode()` and half-precision FP16 Autocast for optimal performance
 - direct DINO writes to the configured DINO FAISS index and `dino_id_map`
-- direct DINO requires explicit-ID FAISS support; legacy non-IDMap indexes fail
-  visibly instead of falling back to position-based writes
-- generic embedding metadata uses modality `dino`, not a collapsed `image`
-  label
+- direct DINO requires explicit-ID FAISS support; legacy non-IDMap indexes fail visibly instead of falling back to position-based writes
+- generic embedding metadata uses modality `dino`, not a collapsed `image` label
 - native crashes may still occur
 - ingestion now contains staged containment:
   - first attempt: normal GPU
@@ -140,11 +160,11 @@ Those persisted outputs are then consumed by:
 - `clip_meta`
 
 **Behavior**
+- CLIP is operational using **`openai/clip-vit-large-patch14`** (producing **768-dimensional** vectors)
+- processes frame paths in a single flattened batch under `torch.inference_mode()` and mixed-precision Autocast
 - direct CLIP writes to the configured CLIP FAISS index and `clip_id_map`
-- direct CLIP requires explicit-ID FAISS support; legacy non-IDMap indexes fail
-  visibly instead of falling back to position-based writes
-- generic embedding metadata uses modality `clip`, not a collapsed `image`
-  label
+- direct CLIP requires explicit-ID FAISS support; legacy non-IDMap indexes fail visibly instead of falling back to position-based writes
+- generic embedding metadata uses modality `clip`, not a collapsed `image` label
 - CLIP and DINO are committed during Phase 6a when successful
 
 ### 7. `tagger`

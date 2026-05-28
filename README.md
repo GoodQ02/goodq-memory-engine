@@ -68,7 +68,7 @@ Turn raw media into structured multimodal memory locally:
       <p><a href="docs/guides/install/INSTALL.md">Read Install Guide</a></p>
       <br />
       <a href="https://github.com/GoodQ02/goodq4all/releases/download/v1.0.0/GoodQ4All_Setup_1.0.0.exe">
-        <img src="samples/assets/retro_console_preview.png" alt="Retro Memory Explorer Dashboard" width="850" style="max-width: 100%; border-radius: 8px; border: 1px solid #ffb300;" />
+        <img src="samples/assets/one_click_installer_mockup.png" alt="GoodQ4All One-Click Setup Installer" width="550" style="max-width: 100%; border-radius: 8px;" />
       </a>
     </td>
   </tr>

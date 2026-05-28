@@ -169,6 +169,28 @@ func main() {
 		defer apiCmd.Process.Kill()
 	}
 
+	// 6b. Launch Python Ingestion Watchdog (cli.watchdog)
+	fmt.Println("[LAUNCHER] Starting GoodQ4All Ingestion Watchdog...")
+	watchdogCmd := exec.Command(pythonExe, "-m", "cli.watchdog")
+
+	// Redirect Watchdog logs to file
+	watchdogLogFile, err := os.OpenFile(filepath.Join(logsDir, "watchdog_startup.log"), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	if err == nil {
+		watchdogCmd.Stdout = watchdogLogFile
+		watchdogCmd.Stderr = watchdogLogFile
+		defer watchdogLogFile.Close()
+	}
+	if runtime.GOOS == "windows" {
+		watchdogCmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	}
+
+	if err := watchdogCmd.Start(); err != nil {
+		fmt.Printf("[WARN] Failed to start Python Ingestion Watchdog: %v\n", err)
+	} else {
+		// Ensure watchdog process terminates if the launcher is killed
+		defer watchdogCmd.Process.Kill()
+	}
+
 	// 7. Launch browser dashboard after backend is listening
 	fmt.Println("[LAUNCHER] Waiting for GoodQ4All dashboard service to start...")
 	dashboardReady := false

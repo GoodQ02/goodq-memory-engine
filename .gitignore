@@ -124,10 +124,14 @@ $RECYCLE.BIN/
 *.tiff
 *.webp
 
-# Exception: Keep documentation images
+# Exception: Keep documentation images and onboarding assets
 !docs/**/*.png
 !docs/**/*.jpg
 !docs/**/*.svg
+!samples/assets/*.png
+!samples/assets/*.jpg
+!samples/assets/*.gif
+!samples/assets/*.mp4
 
 # ===== WORKSPACE DIRECTORIES =====
 /_DATA/

@@ -59,9 +59,9 @@ Turn raw media into structured multimodal memory locally:
   <tr>
     <td align="center">
       <h1><b>INTO THIS,</b></h1>
-      <p><a href="https://raw.githubusercontent.com/JoesDomingo/goodq4all/dev/samples/assets/ui_onboarding_walkthrough.mp4">Watch 1080p Video</a> · <a href="samples/assets/manifest.json">View Manifest</a></p>
+      <p><a href="samples/assets/ui_onboarding_walkthrough.mp4">Watch 1080p Video</a> · <a href="samples/assets/manifest.json">View Manifest</a></p>
       <br />
-      <a href="https://raw.githubusercontent.com/JoesDomingo/goodq4all/dev/samples/assets/ui_onboarding_walkthrough.mp4">
+      <a href="samples/assets/ui_onboarding_walkthrough.mp4">
         <img src="samples/assets/ui_onboarding_walkthrough.gif?raw=true" alt="Watch Interactive UI Walkthrough" width="850" style="max-width: 100%; border-radius: 8px;" />
       </a>
     </td>
@@ -69,9 +69,9 @@ Turn raw media into structured multimodal memory locally:
   <tr>
     <td align="center">
       <h1><b>WITH THIS.</b></h1>
-      <p><a href="https://raw.githubusercontent.com/JoesDomingo/goodq4all/dev/samples/assets/install_walkthrough.mp4">Watch 1080p Video</a> · <a href="docs/guides/install/INSTALL.md">Read Install Guide</a></p>
+      <p><a href="samples/assets/install_walkthrough.mp4">Watch 1080p Video</a> · <a href="docs/guides/install/INSTALL.md">Read Install Guide</a></p>
       <br />
-      <a href="https://raw.githubusercontent.com/JoesDomingo/goodq4all/dev/samples/assets/install_walkthrough.mp4">
+      <a href="samples/assets/install_walkthrough.mp4">
         <img src="samples/assets/install_walkthrough.gif?raw=true" alt="Watch Terminal & Installation Walkthrough" width="850" style="max-width: 100%; border-radius: 8px;" />
       </a>
     </td>

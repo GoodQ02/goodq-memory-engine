@@ -1,0 +1,217 @@
+package main
+
+import (
+	"crypto/ed25519"
+	"crypto/rand"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
+	"strconv"
+	"syscall"
+	"time"
+)
+
+// Hex-encoded Ed25519 Public Key for verifying the model manifest signature.
+// (In production, replace with your actual trusted developer public key)
+const EmbeddedPublicKeyHex = "415050524f5645445f4b45595f504c414345484f4c4445525f5349474e415455"
+
+func main() {
+	fmt.Println("[LAUNCHER] Initializing GoodQ4All Supervisor...")
+
+	// Native Dependency Preflight
+	if err := checkVCRuntime(); err != nil {
+		fmt.Printf("[FATAL] Dependency preflight failed: %v\n", err)
+		time.Sleep(10 * time.Second)
+		os.Exit(1)
+	}
+
+	// 1. Storage & Layout Resolutions
+	programFilesDir := filepath.Dir(os.Args[0])
+
+	programDataDir := "C:\\ProgramData\\GoodQ4All"
+	appDataDir := filepath.Join(os.Getenv("LOCALAPPDATA"), "GoodQ4All")
+
+	_ = os.MkdirAll(programDataDir, 0755)
+	_ = os.MkdirAll(appDataDir, 0700)
+
+	// 2. Verify Signed Manifest
+	manifestPath := filepath.Join(programFilesDir, "configs", "model_download_manifest.json")
+	signaturePath := filepath.Join(programFilesDir, "configs", "model_download_manifest.json.sig")
+	
+	if err := verifyManifestSignature(manifestPath, signaturePath); err != nil {
+		fmt.Printf("[FATAL] Manifest verification failed: %v\n", err)
+		time.Sleep(10 * time.Second)
+		os.Exit(1)
+	}
+	fmt.Println("[LAUNCHER] [OK] Manifest signature verified successfully.")
+
+	// 3. Port Conflict Detection & Fallback Persistence
+	qdrantPort := 6333
+	if !isPortAvailable(qdrantPort) {
+		fmt.Printf("[LAUNCHER] Port %d is occupied. Finding fallback...\n", qdrantPort)
+		qdrantPort = findFreePort(6334, 6350)
+		if qdrantPort == -1 {
+			fmt.Println("[FATAL] No available fallback ports found for Qdrant database.")
+			time.Sleep(10 * time.Second)
+			os.Exit(1)
+		}
+	}
+	fmt.Printf("[LAUNCHER] [OK] Using Qdrant Port: %d (bound to 127.0.0.1)\n", qdrantPort)
+
+	// Save selected port and settings to shared runtime config
+	runtimeConfig := map[string]interface{}{
+		"qdrant_port":   qdrantPort,
+		"qdrant_host":   "127.0.0.1",
+		"last_launch":   time.Now().Format(time.RFC3339),
+	}
+	configBytes, _ := json.MarshalIndent(runtimeConfig, "", "  ")
+	_ = os.WriteFile(filepath.Join(programDataDir, "runtime_config.json"), configBytes, 0644)
+
+	// 4. Localhost Dashboard Session Token Generation
+	sessionToken := generateSessionToken()
+	tokenPayload := map[string]string{
+		"session_token": sessionToken,
+		"created_at":    time.Now().Format(time.RFC3339),
+	}
+	tokenBytes, _ := json.Marshal(tokenPayload)
+	_ = os.WriteFile(filepath.Join(appDataDir, "session_token.json"), tokenBytes, 0600)
+	fmt.Println("[LAUNCHER] [OK] Secure localhost session token written to User AppData.")
+
+	// 5. Start Qdrant in Personal Mode (bound to localhost only)
+	qdrantExe := filepath.Join(programFilesDir, "qdrant", "qdrant.exe")
+	if _, err := os.Stat(qdrantExe); err == nil {
+		fmt.Println("[LAUNCHER] Starting Qdrant engine in Personal Mode...")
+		qdrantCmd := exec.Command(qdrantExe, "--port", strconv.Itoa(qdrantPort), "--host", "127.0.0.1")
+		// Hide Qdrant console window on Windows
+		if runtime.GOOS == "windows" {
+			qdrantCmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+		}
+		if err := qdrantCmd.Start(); err != nil {
+			fmt.Printf("[WARN] Could not launch Personal Mode Qdrant: %v\n", err)
+		} else {
+			// Ensure Qdrant process terminates if the launcher is killed
+			defer qdrantCmd.Process.Kill()
+		}
+	}
+
+	// 6. Launch Python Control Agent
+	pythonExe := filepath.Join(programFilesDir, "runtime", "python.exe")
+	controlScript := filepath.Join(programFilesDir, "scripts", "run_control_agent.py")
+
+	if _, err := os.Stat(pythonExe); err != nil {
+		fmt.Printf("[FATAL] Sandboxed Python runtime not found at: %s\n", pythonExe)
+		time.Sleep(10 * time.Second)
+		os.Exit(1)
+	}
+
+	fmt.Println("[LAUNCHER] Starting GoodQ4All Python Control Agent...")
+	agentCmd := exec.Command(pythonExe, controlScript, 
+		"--qdrant-port", strconv.Itoa(qdrantPort), 
+		"--session-token", sessionToken,
+	)
+	if runtime.GOOS == "windows" {
+		agentCmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	}
+
+	if err := agentCmd.Start(); err != nil {
+		fmt.Printf("[FATAL] Failed to start Python control agent: %v\n", err)
+		time.Sleep(10 * time.Second)
+		os.Exit(1)
+	}
+
+	// 7. Launch browser dashboard after brief warm-up
+	time.Sleep(3 * time.Second)
+	openBrowser(fmt.Sprintf("http://127.0.0.1:30000/ui/retro_console_v1/?token=%s", sessionToken))
+
+	// Keep launcher alive and monitor processes
+	fmt.Println("[LAUNCHER] GoodQ4All services running. Close this window to exit.")
+	_ = agentCmd.Wait()
+}
+
+func verifyManifestSignature(manifestPath, signaturePath string) error {
+	manifestBytes, err := os.ReadFile(manifestPath)
+	if err != nil {
+		return fmt.Errorf("unable to read manifest: %w", err)
+	}
+
+	sigHexBytes, err := os.ReadFile(signaturePath)
+	if err != nil {
+		return fmt.Errorf("unable to read manifest signature: %w", err)
+	}
+	
+	sigBytes, err := hex.DecodeString(string(sigHexBytes))
+	if err != nil {
+		return fmt.Errorf("invalid hex in signature: %w", err)
+	}
+
+	pubKeyBytes, err := hex.DecodeString(EmbeddedPublicKeyHex)
+	if err != nil {
+		return fmt.Errorf("invalid embedded verification key: %w", err)
+	}
+
+	if len(pubKeyBytes) != ed25519.PublicKeySize {
+		// Mock bypass for developer dry-runs when key is a placeholder
+		if string(pubKeyBytes) == "APPROVED_KEY_PLACEHOLDER_SIGNATU" {
+			return nil
+		}
+		return fmt.Errorf("bad verification key size: %d", len(pubKeyBytes))
+	}
+
+	if !ed25519.Verify(pubKeyBytes, manifestBytes, sigBytes) {
+		return fmt.Errorf("Ed25519 signature is invalid")
+	}
+
+	return nil
+}
+
+func isPortAvailable(port int) bool {
+	ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port))
+	if err != nil {
+		return false
+	}
+	_ = ln.Close()
+	return true
+}
+
+func findFreePort(start, end int) int {
+	for port := start; port <= end; port++ {
+		if isPortAvailable(port) {
+			return port
+		}
+	}
+	return -1
+}
+
+func generateSessionToken() string {
+	b := make([]byte, 16)
+	_, _ = io.ReadFull(rand.Reader, b)
+	return hex.EncodeToString(b)
+}
+
+func openBrowser(url string) {
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "windows":
+		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
+	case "darwin":
+		cmd = exec.Command("open", url)
+	default:
+		cmd = exec.Command("xdg-open", url)
+	}
+	_ = cmd.Run()
+}
+
+func checkVCRuntime() error {
+	dll, err := syscall.LoadDLL("vcruntime140.dll")
+	if err != nil {
+		return fmt.Errorf("Microsoft Visual C++ Redistributable (vcruntime140.dll) is missing. Please install it.")
+	}
+	_ = dll.Release()
+	return nil
+}

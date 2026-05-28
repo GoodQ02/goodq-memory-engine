@@ -247,3 +247,11 @@ wsl_backup/
 wsl2_backup/
 wsl-exports/
 wsl2-exports/
+
+# ===== INSTALLER BUILD TOOLCHAIN & ASSETS =====
+scripts/install/go_compiler/
+scripts/install/nsis_compiler/
+scripts/install/nssm_bin/
+scripts/install/staged/
+LAUNCH_GOODQ.exe
+GoodQ4All_Setup_1.0.0.exe

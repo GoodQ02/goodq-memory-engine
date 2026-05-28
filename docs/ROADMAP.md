@@ -77,18 +77,17 @@ Status: recommended next polish after the public-preview checkpoint.
 
 ### P2: Packaging And Portability
 
-Status: design and evidence work only unless separately approved.
+Status: Active v1.0.0 release development.
 
-- Continue moving large host tools and offline payloads toward GitHub Release
-  assets with manifests, checksums, source URLs, license evidence, restore
-  locations, and validation commands.
-- Keep required runtime model caches separate from optional dataset, corpus,
-  reference-pack, witness, and private-memory payloads.
-- Explore Linux support only after the Windows-first path remains stable and
-  observable.
+- Implement a unified Windows Installer (`.exe`) compiled via NSIS, ensuring clean directory separations (binaries under Program Files, storage under ProgramData, user preferences under AppData).
+- Hydrate a locked Python runtime from a verified offline wheelhouse, using pip strictly inside a sandboxed environment.
+- Compile a supervising native Go launcher (`LAUNCH_GOODQ.exe`) to execute system readiness/port health checks and run background daemons silently without PowerShell execution warnings.
+- Build a manifest-driven, resumable model downloader (with SHA256 chunk/merged validation and mirror-ready url fallback abstractions) supporting optional, selectable model packs (Core, Vision, Audio Standard, Audio Heavy, and Diarization).
+- Keep required runtime model caches separate from optional dataset, corpus, reference-pack, witness, and private-memory payloads.
+- Explore Linux support only after the Windows-first path remains stable and observable.
 - Treat macOS as a future portability target, not a current promise.
-- Treat Docker or Docker Compose as an experimental future lane, not a
-  supported public-preview install path.
+- Treat Docker or Docker Compose as an experimental future lane, not a supported public-preview install path.
+
 
 ### P3: Contributor Growth
 

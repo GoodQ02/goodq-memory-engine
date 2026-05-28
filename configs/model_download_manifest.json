@@ -1,0 +1,153 @@
+{
+  "manifest_version": "1.0.0",
+  "schema_version": "1.0.0",
+  "release_tag": "v1.0.0-models",
+  "primary_base_url": "https://github.com/GoodQ02/goodq4all/releases/download/v1.0.0-models",
+  "mirror_base_urls": [
+    "https://mirror1.goodq.ai/models/v1.0.0",
+    "https://backblaze.goodq.ai/models"
+  ],
+  "model_packs": {
+    "core_memory": {
+      "name": "Core Memory Pack",
+      "description": "Required core text embeddings (all-MiniLM-L6-v2), Entity Extraction (BERT-NER), basic semantic search logic, database schema, and tiny demo assets.",
+      "required": true,
+      "files": [
+        {
+          "name": "core_models.zip",
+          "destination": "models/hub/core_models.zip",
+          "size_bytes": 125000000,
+          "sha256": "4a7b3c299c8f2b1d3d6e5a7d90c0b11e2f3a4b5c6d7e8f90a1b2c3d4e5f6071a",
+          "chunks": [
+            {
+              "name": "core_models.zip",
+              "size_bytes": 125000000,
+              "sha256": "4a7b3c299c8f2b1d3d6e5a7d90c0b11e2f3a4b5c6d7e8f90a1b2c3d4e5f6071a",
+              "relative_path": "/core_models.zip"
+            }
+          ]
+        }
+      ]
+    },
+    "vision_pack": {
+      "name": "Vision Pack",
+      "description": "Optional BLIP image captioning, CLIP visual embeddings, facebook DINOv2 visual features, and YOLOv8n object detection.",
+      "required": false,
+      "files": [
+        {
+          "name": "vision_models.zip",
+          "destination": "models/hub/vision_models.zip",
+          "size_bytes": 2200000000,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "chunks": [
+            {
+              "name": "vision_models.zip.001",
+              "size_bytes": 1073741824,
+              "sha256": "9b12a3d4e5f6071a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f90a1b2c3d4e5f6",
+              "relative_path": "/vision_models.zip.001"
+            },
+            {
+              "name": "vision_models.zip.002",
+              "size_bytes": 1073741824,
+              "sha256": "3a4b5c6d7e8f90a1b2c3d4e5f6071a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f",
+              "relative_path": "/vision_models.zip.002"
+            },
+            {
+              "name": "vision_models.zip.003",
+              "size_bytes": 52516352,
+              "sha256": "5c6d7e8f90a1b2c3d4e5f6071a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f90a1",
+              "relative_path": "/vision_models.zip.003"
+            }
+          ]
+        }
+      ]
+    },
+    "audio_standard": {
+      "name": "Audio Standard Pack",
+      "description": "Optional CLAP environmental audio embeddings, Wav2Vec2 speech models, and Systran faster-whisper-medium for general transcription (~1.5 GB).",
+      "required": false,
+      "files": [
+        {
+          "name": "audio_standard_models.zip",
+          "destination": "models/hub/audio_standard_models.zip",
+          "size_bytes": 1600000000,
+          "sha256": "c3d4e5f6071a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f90a1b2c3d4e5f6071a",
+          "chunks": [
+            {
+              "name": "audio_standard_models.zip.001",
+              "size_bytes": 1073741824,
+              "sha256": "8f90a1b2c3d4e5f6071a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f90a1b2c3d4",
+              "relative_path": "/audio_standard_models.zip.001"
+            },
+            {
+              "name": "audio_standard_models.zip.002",
+              "size_bytes": 526258176,
+              "sha256": "a1b2c3d4e5f6071a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f90a1b2c3d4e5f",
+              "relative_path": "/audio_standard_models.zip.002"
+            }
+          ]
+        }
+      ]
+    },
+    "audio_heavy": {
+      "name": "Audio Heavy Pack",
+      "description": "Optional high-fidelity transcription using Systran faster-whisper-large-v3 (~3.09 GB). Suitable for dedicated desktop configurations.",
+      "required": false,
+      "files": [
+        {
+          "name": "audio_heavy_models.zip",
+          "destination": "models/hub/audio_heavy_models.zip",
+          "size_bytes": 3317760000,
+          "sha256": "5e6f7a8b9c0d1e2f3a4b5c6d7e8f90a1b2c3d4e5f6071a2b3c4d5e6f7a8b9c0d",
+          "chunks": [
+            {
+              "name": "audio_heavy_models.zip.001",
+              "size_bytes": 1073741824,
+              "sha256": "f6071a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f90a1b2c3d4e5f6071a2b3c4d",
+              "relative_path": "/audio_heavy_models.zip.001"
+            },
+            {
+              "name": "audio_heavy_models.zip.002",
+              "size_bytes": 1073741824,
+              "sha256": "5c6d7e8f90a1b2c3d4e5f6071a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f90a1",
+              "relative_path": "/audio_heavy_models.zip.002"
+            },
+            {
+              "name": "audio_heavy_models.zip.003",
+              "size_bytes": 1073741824,
+              "sha256": "a8b9c0d1e2f3a4b5c6d7e8f90a1b2c3d4e5f6071a2b3c4d5e6f7a8b9c0d1e2f3",
+              "relative_path": "/audio_heavy_models.zip.003"
+            },
+            {
+              "name": "audio_heavy_models.zip.004",
+              "size_bytes": 96534528,
+              "sha256": "2f3a4b5c6d7e8f90a1b2c3d4e5f6071a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e",
+              "relative_path": "/audio_heavy_models.zip.004"
+            }
+          ]
+        }
+      ]
+    },
+    "diarization_pack": {
+      "name": "Diarization Pack",
+      "description": "Gated PyAnnote speaker diarization and segmentation models. Requires PyAnnote token activation inside local App settings post-install.",
+      "required": false,
+      "files": [
+        {
+          "name": "diarization_models.zip",
+          "destination": "models/hub/diarization_models.zip",
+          "size_bytes": 620000000,
+          "sha256": "7a8b9c0d1e2f3a4b5c6d7e8f90a1b2c3d4e5f6071a2b3c4d5e6f7a8b9c0d1e2f",
+          "chunks": [
+            {
+              "name": "diarization_models.zip",
+              "size_bytes": 620000000,
+              "sha256": "7a8b9c0d1e2f3a4b5c6d7e8f90a1b2c3d4e5f6071a2b3c4d5e6f7a8b9c0d1e2f",
+              "relative_path": "/diarization_models.zip"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

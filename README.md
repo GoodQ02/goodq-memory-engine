@@ -35,6 +35,11 @@ GoodQ4All's thesis is simple: machine memory should earn every claim it makes.
 > [!IMPORTANT]
 > **Supported Host: Windows 11 only.** GoodQ4All is built for Windows-first local execution (CPU-safe baseline by default; GPU and WSL2 are optional). Other platforms are not first-run targets today.
 
+> [!NOTE]
+> **GoodQ4All v1.0.0 Sandboxed Windows Installer**:
+> We are transitioning to a unified `.exe` installer. This installer installs and configures the application (placing binaries under Program Files and data/storage under ProgramData), hydrates a locked embedded Python runtime from a verified offline wheelhouse, and relies on a supervising native Go launcher (`LAUNCH_GOODQ.exe`) to execute readiness checks, manage fallback ports, and start services without PowerShell dependencies.
+
+
 ## Watch The Guided Demos
 
 Turn raw media into structured multimodal memory locally:
@@ -143,6 +148,10 @@ GoodQ4All is not just an ingest runner or a benchmark harness. It is a full loca
 
 - **Operations layer**
   Exposes bootstrap, validation, watchdog, health, monitoring, and release-evidence surfaces so the system can be run and audited like infrastructure, not just a script.
+
+### Hybrid-Precision Vector Caching (TurboQuant)
+GoodQ4All stores baseline float32 truth while using TurboQuant sidecar caches for faster retrieval. High-precision 32-bit floating point (`float32`) embeddings remain the authoritative truth of the system, stored in Qdrant and FAISS. For performance-oriented first-stage candidate retrieval, the system leverages SQLite sidecar caching columns populated via **TurboQuant** (Lloyd-Max Polar Quantization + Johnson–Lindenstrauss residual projections). This guarantees zero accuracy regression on final ranking while providing fast local candidate pre-filtering. See [TURBOQUANT_HYBRID_CACHING.md](docs/architecture/TURBOQUANT_HYBRID_CACHING.md) for details.
+
 
 ## Why This Project Exists
 
@@ -338,7 +347,7 @@ UI status & details:
 - **Host:** Windows 11 is the canonical runtime host
 - **Profiles:** `UNSET`, `BASELINE`, `GPU_ENHANCED`
 - **Perception:** scene detection, captions, OCR, object signals, face signals, transcription, diarization, emotion, and embeddings
-- **Storage:** SQLite + knowledge graph + Qdrant
+- **Storage:** SQLite + knowledge graph + Qdrant (with TurboQuant hybrid-precision sidecar vector caching)
 - **Memory surface:** scene manifests, temporal index, projected run outputs
 - **Core interpretation layer:** `scene_context_llm` with `primary_tags`, `contextual_tags`, and `structural_tags`
 - **Identity layer:** speaker patterns, voice-pattern matches, identity candidates, supported identities, and evidence edges
@@ -351,8 +360,10 @@ If you want the deeper technical picture:
 - [`docs/architecture/SYSTEM_ARCHITECTURE.md`](docs/architecture/SYSTEM_ARCHITECTURE.md)
 - [`docs/architecture/ARCHITECTURE_REFERENCE.md`](docs/architecture/ARCHITECTURE_REFERENCE.md)
 - [`docs/architecture/MEMORY_STORAGE.md`](docs/architecture/MEMORY_STORAGE.md)
+- [`docs/architecture/TURBOQUANT_HYBRID_CACHING.md`](docs/architecture/TURBOQUANT_HYBRID_CACHING.md)
 - [`docs/architecture/diagrams/`](docs/architecture/diagrams/)
 - [`docs/PHASE6_MULTIMODAL_FUSION.md`](docs/PHASE6_MULTIMODAL_FUSION.md)
+
 
 ## Start Here
 

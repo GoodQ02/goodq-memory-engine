@@ -94,6 +94,21 @@ runtime_ok:
   SetOutPath "$INSTDIR\agents"
   File /r "..\..\agents\*.*"
 
+  SetOutPath "$INSTDIR\lib"
+  File /r "..\..\lib\*.*"
+
+  SetOutPath "$INSTDIR\common"
+  File /r "..\..\common\*.*"
+
+  SetOutPath "$INSTDIR\retrieval"
+  File /r "..\..\retrieval\*.*"
+
+  SetOutPath "$INSTDIR\pipelines"
+  File /r "..\..\pipelines\*.*"
+
+  SetOutPath "$INSTDIR\vendor"
+  File /r "..\..\vendor\*.*"
+
   ; Create data directories under ProgramData
   CreateDirectory "$APPDATA\GoodQ4All"
   CreateDirectory "$APPDATA\GoodQ4All\qdrant\storage"
@@ -197,6 +212,11 @@ skip_service_cleanup:
   RMDir /r "$INSTDIR\steps"
   RMDir /r "$INSTDIR\ui"
   RMDir /r "$INSTDIR\agents"
+  RMDir /r "$INSTDIR\lib"
+  RMDir /r "$INSTDIR\common"
+  RMDir /r "$INSTDIR\retrieval"
+  RMDir /r "$INSTDIR\pipelines"
+  RMDir /r "$INSTDIR\vendor"
   RMDir "$INSTDIR"
 
   ; Delete shortcuts

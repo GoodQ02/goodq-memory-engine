@@ -42,6 +42,15 @@ if not exist "staged\python-3.10-embed-amd64.zip" (
     powershell -NoProfile -Command "Expand-Archive -Path 'staged\python-3.10-embed-amd64.zip' -DestinationPath 'staged\runtime' -Force"
 )
 
+:: Ensure python310._pth includes project root and vendor paths
+(
+echo python310.zip
+echo .
+echo ..
+echo ..\vendor
+) > staged\runtime\python310._pth
+
+
 :: Download Qdrant Windows binary if not present
 if not exist "staged\qdrant\qdrant.exe" (
     echo Downloading Qdrant Windows x64 binary...

@@ -79,11 +79,21 @@ func main() {
 	_ = os.WriteFile(filepath.Join(appDataDir, "session_token.json"), tokenBytes, 0600)
 	fmt.Println("[LAUNCHER] [OK] Secure localhost session token written to User AppData.")
 
+	logsDir := filepath.Join(programDataDir, "logs")
+	_ = os.MkdirAll(logsDir, 0755)
+
 	// 5. Start Qdrant in Personal Mode (bound to localhost only)
 	qdrantExe := filepath.Join(programFilesDir, "qdrant", "qdrant.exe")
 	if _, err := os.Stat(qdrantExe); err == nil {
 		fmt.Println("[LAUNCHER] Starting Qdrant engine in Personal Mode...")
 		qdrantCmd := exec.Command(qdrantExe, "--port", strconv.Itoa(qdrantPort), "--host", "127.0.0.1")
+		// Redirect Qdrant logs to file
+		qdrantLogFile, err := os.OpenFile(filepath.Join(logsDir, "qdrant.log"), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+		if err == nil {
+			qdrantCmd.Stdout = qdrantLogFile
+			qdrantCmd.Stderr = qdrantLogFile
+			defer qdrantLogFile.Close()
+		}
 		// Hide Qdrant console window on Windows
 		if runtime.GOOS == "windows" {
 			qdrantCmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
@@ -109,6 +119,13 @@ func main() {
 		"--qdrant-port", strconv.Itoa(qdrantPort), 
 		"--session-token", sessionToken,
 	)
+	// Redirect Agent logs to file
+	agentLogFile, err := os.OpenFile(filepath.Join(logsDir, "agent.log"), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	if err == nil {
+		agentCmd.Stdout = agentLogFile
+		agentCmd.Stderr = agentLogFile
+		defer agentLogFile.Close()
+	}
 	if runtime.GOOS == "windows" {
 		agentCmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 	}
@@ -117,9 +134,25 @@ func main() {
 		fatalError("Service Startup Failed", fmt.Sprintf("Failed to start Python control agent: %v", err))
 	}
 
-	// 7. Launch browser dashboard after brief warm-up
-	time.Sleep(3 * time.Second)
-	openBrowser(fmt.Sprintf("http://127.0.0.1:30000/ui/retro_console_v1/?token=%s", sessionToken))
+	// 7. Launch browser dashboard after backend is listening
+	fmt.Println("[LAUNCHER] Waiting for GoodQ4All dashboard service to start...")
+	dashboardReady := false
+	for i := 0; i < 30; i++ {
+		conn, err := net.DialTimeout("tcp", "127.0.0.1:30000", 500*time.Millisecond)
+		if err == nil {
+			_ = conn.Close()
+			dashboardReady = true
+			break
+		}
+		time.Sleep(1 * time.Second)
+	}
+
+	if dashboardReady {
+		fmt.Println("[LAUNCHER] Dashboard is online. Opening browser...")
+		openBrowser(fmt.Sprintf("http://127.0.0.1:30000/ui/retro_console_v1/?token=%s", sessionToken))
+	} else {
+		fatalError("Service Startup Timeout", "The GoodQ4All API service failed to start on port 30000 within 30 seconds.\nCheck logs at C:\\ProgramData\\GoodQ4All\\logs\\agent.log for details.")
+	}
 
 	// Keep launcher alive and monitor processes
 	fmt.Println("[LAUNCHER] GoodQ4All services running. Close this window to exit.")

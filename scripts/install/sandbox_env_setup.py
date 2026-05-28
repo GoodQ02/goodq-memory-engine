@@ -190,9 +190,28 @@ def main() -> None:
     parser.add_argument("--data-dir", default="C:\\ProgramData\\GoodQ4All", help="Authoritative data root")
     parser.add_argument("--verify-only", action="store_true", help="Perform checksum checks without downloading")
     parser.add_argument("--cache-dir", default=None, help="Local directory to check for model files/chunks before downloading")
+    parser.add_argument("--write-receipt", action="store_true", help="Write installation receipt to data directory")
+    parser.add_argument("--install-dir", default="", help="Directory where GoodQ4All is installed")
+    parser.add_argument("--service-mode", default="0", help="Service mode selection (0=Personal, 1=Always-On)")
     args = parser.parse_args()
 
     data_root = Path(args.data_dir)
+    
+    if args.write_receipt:
+        receipt_path = data_root / "install_receipt.json"
+        install_dir_clean = args.install_dir.replace("\\", "/")
+        data_dir_clean = str(data_root).replace("\\", "/")
+        receipt_data = {
+            "status": "installed",
+            "version": "1.0.0",
+            "install_dir": install_dir_clean,
+            "data_dir": data_dir_clean,
+            "service_mode": args.service_mode
+        }
+        with open(receipt_path, "w", encoding="utf-8") as f:
+            json.dump(receipt_data, f, indent=2)
+        print(f"[OK] Installation receipt written successfully to: {receipt_path}")
+        sys.exit(0)
     models_root = data_root / "models"
     models_root.mkdir(parents=True, exist_ok=True)
     

@@ -44,7 +44,11 @@ _BLOCKING_FAMILIES = {
     "qdrant_unhealthy",
 }
 _REPO_ROOT = Path(__file__).resolve().parents[1]
-_DEFAULT_MARKDOWN_OUTPUT_DIR = _REPO_ROOT / "reports" / "control_recurrence"
+_DATA_ROOT = os.environ.get("GOODQ_DATA_ROOT")
+if _DATA_ROOT:
+    _DEFAULT_MARKDOWN_OUTPUT_DIR = Path(_DATA_ROOT) / "reports" / "control_recurrence"
+else:
+    _DEFAULT_MARKDOWN_OUTPUT_DIR = _REPO_ROOT / "reports" / "control_recurrence"
 _INDEX_FILENAME = "index.json"
 _DEFAULT_STEP_TIMEOUT_BOUNDARY_MS = 1_800_000
 _SLOW_STEP_OUTLIER_MS = 60_000

@@ -113,19 +113,31 @@ async def get_system_status():
     try:
         loader = get_data_loader()
         
-        # Check if goodq_core environment is available
+        # Check if goodq_core environment or sandboxed Python is available
         goodq_core_available = False
         try:
-            from steps.common.tool_paths import resolve_conda
+            # Check if we are running in a sandboxed installation
+            app_root = Path(__file__).resolve().parents[2]  # api/routes/system.py -> app root
+            sandbox_python = app_root / "runtime" / "python.exe"
+            if sandbox_python.exists():
+                result = subprocess.run(
+                    [str(sandbox_python), "-c", "import goodq_version; print('OK')"],
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
+                goodq_core_available = (result.returncode == 0)
+            else:
+                from steps.common.tool_paths import resolve_conda
 
-            conda_exe = resolve_conda()
-            result = subprocess.run(
-                [conda_exe, 'run', '-n', 'goodq_core', 'python', '-c', 'print("OK")'],
-                capture_output=True,
-                text=True,
-                timeout=5
-            )
-            goodq_core_available = (result.returncode == 0)
+                conda_exe = resolve_conda()
+                result = subprocess.run(
+                    [conda_exe, 'run', '-n', 'goodq_core', 'python', '-c', 'print("OK")'],
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
+                goodq_core_available = (result.returncode == 0)
         except Exception:
             pass
         

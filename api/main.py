@@ -9,6 +9,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
+from fastapi.openapi.docs import get_swagger_ui_html, get_redoc_html
 
 from api.routes import control_recurrence, ingest, media, meta, runtime, scenes, search, system, timeline, summary
 from goodq_version import GOODQ_VERSION
@@ -17,7 +18,12 @@ from steps.common.config_loader import load_configs
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="GoodQ Retrieval API", version=GOODQ_VERSION)
+app = FastAPI(
+    title="GoodQ Retrieval API",
+    version=GOODQ_VERSION,
+    docs_url=None,
+    redoc_url=None,
+)
 _CFG = load_configs({})
 _API_CFG: Dict[str, Any] = _CFG.get("api", {}) or {}
 _REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -108,6 +114,43 @@ if _JUSTIFICATION_DIR.exists():
         "/ui/justification_v1",
         StaticFiles(directory=str(_JUSTIFICATION_DIR), html=True),
         name="justification_v1",
+    )
+
+_DOCS_OFFLINE_DIR = _REPO_ROOT / "ui" / "docs_offline"
+if _DOCS_OFFLINE_DIR.exists():
+    app.mount(
+        "/ui/docs_static",
+        StaticFiles(directory=str(_DOCS_OFFLINE_DIR)),
+        name="docs_static",
+    )
+
+@app.get("/docs", include_in_schema=False)
+async def custom_swagger_ui_html():
+    if _DOCS_OFFLINE_DIR.exists():
+        return get_swagger_ui_html(
+            openapi_url=app.openapi_url or "/openapi.json",
+            title=app.title + " - Swagger UI",
+            swagger_js_url="/ui/docs_static/swagger-ui-bundle.js",
+            swagger_css_url="/ui/docs_static/swagger-ui.css",
+            swagger_favicon_url="/ui/docs_static/favicon.ico",
+        )
+    return get_swagger_ui_html(
+        openapi_url=app.openapi_url or "/openapi.json",
+        title=app.title + " - Swagger UI",
+    )
+
+@app.get("/redoc", include_in_schema=False)
+async def custom_redoc_html():
+    if _DOCS_OFFLINE_DIR.exists():
+        return get_redoc_html(
+            openapi_url=app.openapi_url or "/openapi.json",
+            title=app.title + " - ReDoc",
+            redoc_js_url="/ui/docs_static/redoc.standalone.js",
+            redoc_favicon_url="/ui/docs_static/favicon.ico",
+        )
+    return get_redoc_html(
+        openapi_url=app.openapi_url or "/openapi.json",
+        title=app.title + " - ReDoc",
     )
 
 # Enforce CONFIG_LOADING_CONTRACT: reuse the already-loaded cfg in submodules.

@@ -20,7 +20,7 @@ import (
 
 // Hex-encoded Ed25519 Public Key for verifying the model manifest signature.
 // (In production, replace with your actual trusted developer public key)
-const EmbeddedPublicKeyHex = "415050524f5645445f4b45595f504c414345484f4c4445525f5349474e415455"
+const EmbeddedPublicKeyHex = "815e163ff7ef0a527175efdaaaa078f9282a97f6ab4af9678176d7b3438ac7b6"
 
 func main() {
 	fmt.Println("[LAUNCHER] Initializing GoodQ4All Supervisor...")
@@ -92,6 +92,7 @@ func main() {
 		qdrantCmd.Env = append(os.Environ(),
 			"QDRANT__SERVICE__HTTP_PORT="+strconv.Itoa(qdrantPort),
 			"QDRANT__SERVICE__HOST=127.0.0.1",
+			"QDRANT__TELEMETRY_DISABLED=true",
 		)
 		// Redirect Qdrant logs to file
 		qdrantLogFile, err := os.OpenFile(filepath.Join(logsDir, "qdrant.log"), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
@@ -140,6 +141,28 @@ func main() {
 		fatalError("Service Startup Failed", fmt.Sprintf("Failed to start Python control agent: %v", err))
 	}
 
+	// 6a. Launch Python API Server (FastAPI / Uvicorn)
+	fmt.Println("[LAUNCHER] Starting GoodQ4All Python API Server...")
+	apiCmd := exec.Command(pythonExe, "-m", "api.server")
+	
+	// Redirect API logs to file
+	apiLogFile, err := os.OpenFile(filepath.Join(logsDir, "api.log"), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	if err == nil {
+		apiCmd.Stdout = apiLogFile
+		apiCmd.Stderr = apiLogFile
+		defer apiLogFile.Close()
+	}
+	if runtime.GOOS == "windows" {
+		apiCmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	}
+
+	if err := apiCmd.Start(); err != nil {
+		fatalError("Service Startup Failed", fmt.Sprintf("Failed to start Python API server: %v", err))
+	} else {
+		// Ensure API process terminates if the launcher is killed
+		defer apiCmd.Process.Kill()
+	}
+
 	// 7. Launch browser dashboard after backend is listening
 	fmt.Println("[LAUNCHER] Waiting for GoodQ4All dashboard service to start...")
 	dashboardReady := false
@@ -157,12 +180,12 @@ func main() {
 		fmt.Println("[LAUNCHER] Dashboard is online. Opening browser...")
 		openBrowser(fmt.Sprintf("http://127.0.0.1:30000/ui/retro_console_v1/?token=%s", sessionToken))
 	} else {
-		fatalError("Service Startup Timeout", "The GoodQ4All API service failed to start on port 30000 within 30 seconds.\nCheck logs at C:\\ProgramData\\GoodQ4All\\logs\\agent.log for details.")
+		fatalError("Service Startup Timeout", "The GoodQ4All API service failed to start on port 30000 within 30 seconds.\nCheck logs at C:\\ProgramData\\GoodQ4All\\logs\\api.log for details.")
 	}
 
 	// Keep launcher alive and monitor processes
 	fmt.Println("[LAUNCHER] GoodQ4All services running. Close this window to exit.")
-	_ = agentCmd.Wait()
+	_ = apiCmd.Wait()
 }
 
 func verifyManifestSignature(manifestPath, signaturePath string) error {

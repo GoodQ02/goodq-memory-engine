@@ -101,7 +101,7 @@ class ControlAgent:
         
         # Setup directories
         self.logs_dir = self.data_dir / "workflow_logs"
-        self.reports_dir = self.root / "reports"
+        self.reports_dir = self.data_dir / "reports"
         self.reports_dir.mkdir(exist_ok=True)
         
         # Initialize memory database
@@ -554,7 +554,7 @@ Keep it concise and technical. Focus on actionable solutions.
         log_files = sorted(self.logs_dir.glob("*.log"), key=lambda p: p.stat().st_mtime)
         
         if not log_files:
-            return {"error": "No log files found"}
+            return {"status": "no_runs_found"}
         
         latest_log = log_files[-1]
         print(f"[SYMBOL] Analyzing: {latest_log.name}")
@@ -1170,6 +1170,8 @@ def main():
         print(f"   View report: {result['report']}")
     elif result.get('status') == 'success':
         print("\n[PASS] Latest pipeline run completed successfully")
+    elif result.get('status') == 'no_runs_found':
+        print("\n[INFO] No pipeline run logs found (fresh installation or clean start)")
     else:
         print(f"\n[FAIL] {result.get('error', 'Unknown error')}")
 

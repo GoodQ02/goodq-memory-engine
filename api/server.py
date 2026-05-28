@@ -41,6 +41,28 @@ def main() -> None:
     repo_root = here.parents[1]  # .../goodq4all/api/server.py -> goodq4all root
     sys.path.insert(0, str(repo_root))
 
+    # Apply token redaction filters to uvicorn loggers to protect session tokens in logs
+    import logging
+    class TokenRedactingFilter(logging.Filter):
+        def filter(self, record: logging.LogRecord) -> bool:
+            import re
+            if isinstance(record.msg, str):
+                record.msg = re.sub(r'token=[a-zA-Z0-9_-]+', 'token=REDACTED', record.msg)
+            if record.args:
+                new_args = []
+                for arg in record.args:
+                    if isinstance(arg, str):
+                        new_args.append(re.sub(r'token=[a-zA-Z0-9_-]+', 'token=REDACTED', arg))
+                    else:
+                        new_args.append(arg)
+                record.args = tuple(new_args)
+            return True
+
+    for name in ("uvicorn.access", "uvicorn", "uvicorn.error"):
+        logger_obj = logging.getLogger(name)
+        if not any(isinstance(f, TokenRedactingFilter) for f in logger_obj.filters):
+            logger_obj.addFilter(TokenRedactingFilter())
+
     host, port = _resolve_api_bind_defaults()
 
     from uvicorn import run  # type: ignore

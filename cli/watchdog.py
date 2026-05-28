@@ -583,9 +583,7 @@ class WatchdogProcessor:
             logger.info(f"[COPY] From: {video_path}")
             logger.info(f"[COPY] To: {temp_video}")
             
-            # For large files, copy with progress
             if file_size_mb > 100:
-                import shutil
                 with open(video_path, 'rb') as fsrc:
                     with open(temp_video, 'wb') as fdst:
                         copied = 0

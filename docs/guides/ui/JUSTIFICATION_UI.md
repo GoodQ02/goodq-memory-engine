@@ -40,10 +40,9 @@ literal envelope rendering.
 
 ## Not Supported
 
-- No browser shell is served from the API root.
-- No polished consumer memory browser is shipped yet.
-- No UI surface may rerun ingestion, reindex memory, mutate memory, heal
-  configs, generate recurrence reports, or activate ControlAgent.
+- No browser shell is served from the API root (use the explicit `/ui/*` mounts).
+- The dashboard is read-only. No UI surface may rerun ingestion, reindex memory, mutate memory, heal configs, generate recurrence reports, or activate ControlAgent.
+- No control-mutating configuration editor is shipped yet.
 - Archived UI notes are historical only and should not override this page.
 
 ## Before Future UI Work

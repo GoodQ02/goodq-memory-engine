@@ -37,7 +37,7 @@ GoodQ4All's thesis is simple: machine memory should earn every claim it makes.
 
 > [!NOTE]
 > **GoodQ4All v1.0.0 Sandboxed Windows Installer**:
-> We are transitioning to a unified `.exe` installer. This installer installs and configures the application (placing binaries under Program Files and data/storage under ProgramData), hydrates a locked embedded Python runtime from a verified offline wheelhouse, and relies on a supervising native Go launcher (`LAUNCH_GOODQ.exe`) to execute readiness checks, manage fallback ports, and start services without PowerShell dependencies.
+> GoodQ4All now ships a unified setup installer (`GoodQ4All_Setup_1.0.0.exe`). This installer installs and configures the application (placing binaries under Program Files and data/storage under ProgramData), hydrates a locked embedded Python runtime from a verified offline wheelhouse, and relies on a supervising native Go launcher (`LAUNCH_GOODQ.exe`) to execute readiness checks, manage fallback ports, and start services automatically without PowerShell or external shell dependencies.
 
 
 ## Watch The Guided Demos
@@ -84,23 +84,39 @@ Turn raw media into structured multimodal memory locally:
 
 ## Before You Start
 
-GoodQ4All's supported first-run host is Windows 11 with PowerShell. The runtime
-is local-first and CPU-safe by default; GPU and WSL2 acceleration are optional.
+GoodQ4All's supported host is Windows 11. The runtime is local-first and CPU-safe by default; GPU and WSL2 acceleration are optional.
 
-Have these ready before running the installer:
+### A. Standalone User Installation (Recommended)
+GoodQ4All is packaged as a self-contained sandboxed Windows Installer. Regular users do not need to install Git, Conda, Python, or manage environment variables. Everything is packaged and automated.
+* **Operating System**: Windows 11
+* **Disk Space**: At least 25 GB free space (to host local database, processing workspace, and model prefetch caches).
+* **Optional**: NVIDIA GPU and WSL2 Ubuntu for accelerated lanes.
 
-- Windows 11
-- Git
-- Miniconda or Anaconda available to the current shell
-- Python 3.10 or newer
-- at least 25 GB free for the baseline install path (breakdown: ~4 GB conda environments, ~12 GB model cache prefetch, ~6 GB processing workspace, ~3 GB database storage; space required is lower if model prefetch is skipped)
-- optional: NVIDIA GPU and WSL2 Ubuntu for accelerated lanes
+### B. Developer Workspace Setup (Advanced)
+If you are developing or running from source code, ensure you have:
+* **Operating System**: Windows 11 with PowerShell
+* **Git**: To clone the repository
+* **Miniconda or Anaconda**: Available to the current shell
+* **Python**: Version 3.10 or newer
+* **Disk Space**: At least 25 GB free space (breakdown: ~4 GB conda environments, ~12 GB model cache prefetch, ~6 GB processing workspace, ~3 GB database storage).
 
-macOS and Linux are not first-run hosts for this repository today. See
-[`docs/reference/PLATFORM_SUPPORT.md`](docs/reference/PLATFORM_SUPPORT.md) for
-the current platform contract.
+macOS and Linux are not first-run hosts for this repository today. See [`docs/reference/PLATFORM_SUPPORT.md`](docs/reference/PLATFORM_SUPPORT.md) for the current platform contract.
 
-## Visual First Run
+## First Run (Installer Flow)
+
+If you installed GoodQ4All using the sandboxed Windows Installer (`GoodQ4All_Setup_1.0.0.exe`):
+
+1. **Launch the App**: Double-click the **GoodQ4All** shortcut on your Desktop or Start Menu. This launches the native supervisor launcher ([LAUNCH_GOODQ.exe](file:///C:/Program%20Files/GoodQ4All/LAUNCH_GOODQ.exe)), which verifies the model manifest signature, spins up the local Qdrant database, and starts the API/Control processes.
+2. **View the Dashboard**: The launcher automatically opens your default web browser to the **Retro Memory Explorer** (served locally on port `30000` with a secure localhost session token).
+3. **Drop Media**: Copy a short video or audio file (like an `.mp4` or `.mp3`) into your inbox drop zone at:
+   ```text
+   %USERPROFILE%\GoodQ_Data\import_inbox\
+   ```
+4. **Observe Ingestion**: The background watchdog service will automatically detect the file, run the perception and harmonization pipelines, and populate the Retro Memory Explorer console in real-time.
+
+---
+
+## Visual First Run (Developer Source Flow)
 
 Each frame below is pulled from the final onboarding film and paired with the action it narrates. Click any frame to enlarge it.
 
@@ -119,12 +135,11 @@ Each frame below is pulled from the final onboarding film and paired with the ac
 
 If you are new here, start by making one memory:
 
-1. Confirm the Windows 11, Conda, Git, and free-space prerequisites above.
-2. Bootstrap and validate the repo.
-3. Start Watchdog.
-4. Drop one small media file into the configured `import_inbox`.
-5. Open the local API docs.
-6. Confirm scene artifacts were written.
+1. Confirm you have installed GoodQ4All (either via the Setup Installer or via the Developer Source Setup).
+2. Start the services (either by double-clicking the **GoodQ4All** Desktop shortcut or by running the developer launcher).
+3. Drop one small media file (video or audio) into the configured `import_inbox`.
+4. Open the local **Retro Memory Explorer** dashboard in your browser.
+5. Verify that scene artifacts and manifestations are successfully written to your local data folder.
 
 Guide:
 
@@ -381,8 +396,8 @@ If you want the deeper technical picture:
 
 ## Current Limitations
 
-- This is pre-1.0 software. The supported runtime path is stable enough to use, but surrounding helpers and APIs may still evolve.
-- A polished product UI is not part of the current shipping surface.
+- While surrounding plugin integrations and helper scripts continue to evolve, the core v1.0.0 release is stable, signed, and fully package-installed.
+- The visual UI consoles (Retro Memory Explorer and Classic Operator Console) are fully functional read-only inspection surfaces. A control-mutating dashboard for modifying database structures remains a future roadmap layer.
 - Some optional enrichments can still fail on individual scenes without invalidating the whole ingest.
 - Audio-vector success is provenance-defined: current-run CLAP/Qdrant coverage requires `clap_meta.status == ok` plus a Qdrant audio payload with matching `run_id` and required provenance fields. Legacy scene-id matches are not current-run proof.
 - Context weighting is now strong, but the project still treats some interpretation choices as policy-level texture rather than frozen truth.

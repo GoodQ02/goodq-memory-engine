@@ -4,14 +4,21 @@
 
 # GoodQ4All Quickstart
 
-Use this when you need the shortest clean path from clone to launch on Windows.
-If this is your first time with the repo, run the full first-success loop in
-[`docs/guides/FIRST_RUN.md`](../FIRST_RUN.md) after bootstrap validation.
+This guide gets you up and running as quickly as possible on Windows 11.
 
-Supported quickstart host: Windows 11 with Git, Conda, Python 3.10+, and enough
-local disk space for the selected install path.
+## Method A: Packaged Setup Installer (Recommended)
+Use this if you want the easiest, self-contained standalone installation.
 
-## 1. Clone and Open the Repo
+1. **Install**: Run `GoodQ4All_Setup_1.0.0.exe` and complete the installation wizard.
+2. **Launch**: Double-click the **GoodQ4All** Desktop or Start Menu shortcut to run the supervisor launcher (`LAUNCH_GOODQ.exe`). This automatically boots the background database/API and opens the **Retro Memory Explorer** UI.
+3. **Ingest**: Drop a media file (`.mp4`, `.mp3`) into `%USERPROFILE%\GoodQ_Data\import_inbox\`.
+
+---
+
+## Method B: Developer Source Setup (Advanced)
+Use this if you are running or developing directly from the source repository.
+
+### 1. Clone and Open the Repo
 
 ```powershell
 git clone <repo_url>

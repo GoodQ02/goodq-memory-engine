@@ -2,43 +2,51 @@
 <!-- DOC_STATUS: AUTHORITATIVE -->
 <!-- DOC_LAST_VERIFIED: 2026-05-17 -->
 
-# GoodQ4All Install
+# GoodQ4All Installation
 
-This is the canonical install and bootstrap guide.
+This is the canonical installation guide.
 
-## Preferred Fresh-Machine Path
+## 1. Standalone User Installation (Recommended)
 
-For a fresh Windows 11 machine, use the bootstrap installer first. macOS and
-Linux are not supported first-run hosts for this repository today; see
-[`docs/reference/PLATFORM_SUPPORT.md`](../../reference/PLATFORM_SUPPORT.md).
+GoodQ4All is packaged as a unified sandboxed Windows Installer. This is the simplest path and does not require pre-existing Git, Conda, or Python environments on the host.
 
-Prerequisites:
+### Prerequisites
+* **Operating System**: Windows 11
+* **Disk Space**: At least 25 GB free space (to host local database, processing workspace, and model prefetch caches).
+* **Optional**: An NVIDIA GPU and WSL2 Ubuntu for accelerated lanes.
 
-- Git
-- Miniconda or Anaconda visible to the shell
-- Python 3.10 or newer
-- at least 25 GB free for the baseline path (breakdown: ~4 GB conda environments, ~12 GB model cache prefetch, ~6 GB processing workspace, ~3 GB database storage; space required is lower if model prefetch is skipped)
-- optional: NVIDIA GPU and WSL2 Ubuntu for accelerated lanes
+### Installation Steps
+1. Run the setup installer: `GoodQ4All_Setup_1.0.0.exe`.
+2. Choose your installation path (defaults to `C:\Program Files\GoodQ4All`).
+3. Complete the setup. This installs the binary files, configures registry keys (for Add/Remove Programs and shortcuts), and provisions the isolated python runtime, branding resources, and database.
+4. Double-click the **GoodQ4All** Desktop or Start Menu shortcut to run the supervisor launcher ([LAUNCH_GOODQ.exe](file:///C:/Program%20Files/GoodQ4All/LAUNCH_GOODQ.exe)).
+5. The launcher will automatically perform preflight checks, verify the model signature, start local background services, and open your default browser to the **Retro Memory Explorer** (served at `http://127.0.0.1:30000/ui/retro_console_v1/`).
 
+---
+
+## 2. Developer Workspace Setup (Advanced / Run From Source)
+
+For developers or advanced operators who want to run the project from source code:
+
+### Prerequisites
+* Windows 11 with PowerShell
+* Git
+* Miniconda or Anaconda visible to the shell
+* Python 3.10 or newer
+* At least 25 GB free space (breakdown: ~4 GB conda environments, ~12 GB model cache prefetch, ~6 GB processing workspace, ~3 GB database storage).
+
+macOS and Linux are not supported first-run hosts for this repository today; see [`docs/reference/PLATFORM_SUPPORT.md`](../../reference/PLATFORM_SUPPORT.md).
+
+### Bootstrap Steps
 ```powershell
 python scripts/bootstrap_install.py
 ```
 
-That path creates or updates the `goodq_core` orchestration environment,
-provisions the supported specialized step-env pack required by the active
-pipeline from the pinned stable recipes under `envs/locks/`, writes local-only
-overrides when missing, performs lightweight verification, and launches the
-canonical launcher surface.
+This path creates or updates the `goodq_core` orchestration environment, provisions the supported specialized step-env pack required by the active pipeline from the pinned stable recipes under `envs/locks/`, writes local-only overrides when missing, performs lightweight verification, and launches the canonical launcher surface.
 
-For local secrets or provider settings, copy `.env.local.template` to
-`.env.local` and edit `.env.local`. The broader `.env.template` is a contract
-reference for maintainers and advanced operators.
+For local secrets or provider settings, copy `.env.local.template` to `.env.local` and edit `.env.local`. The broader `.env.template` is a contract reference for maintainers and advanced operators.
 
-When `GPU_ENHANCED` / WSL audio is enabled, the bootstrap path stages the WSL
-audio constraints from `wsl2_audio/requirements-bootstrap-constraints.txt`.
-Do not repair WSL audio with unpinned package upgrades; use the bootstrap/setup
-path so the `pyannote.audio==3.3.2` / `huggingface-hub==0.35.3` pair remains
-intact.
+When `GPU_ENHANCED` / WSL audio is enabled, the bootstrap path stages the WSL audio constraints from `wsl2_audio/requirements-bootstrap-constraints.txt`. Do not repair WSL audio with unpinned package upgrades; use the bootstrap/setup path so the `pyannote.audio==3.3.2` / `huggingface-hub==0.35.3` pair remains intact.
 
 ## Performance Profiles
 

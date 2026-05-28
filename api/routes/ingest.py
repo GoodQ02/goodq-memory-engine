@@ -8,7 +8,7 @@ import logging
 import shutil
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, Body
+from fastapi import APIRouter, HTTPException, Body, UploadFile, File
 
 from api.utils.ingest_requests import (
     DEFAULT_PICKUP_ESTIMATE,
@@ -135,3 +135,28 @@ async def get_ingest_status(request_id: str):
     resolved = resolve_ingest_request_status(record, runtime_paths)
     resolved.setdefault("pickup_estimate", DEFAULT_PICKUP_ESTIMATE)
     return IngestStatusResponse(**resolved)
+
+
+@router.post("/upload")
+async def upload_file(file: UploadFile = File(...)):
+    """Directly upload a media file and save it to the import inbox folder."""
+    filename = file.filename
+    if not filename:
+        raise HTTPException(status_code=400, detail="Filename is missing")
+    
+    if not is_supported_ingest_path(Path(filename)):
+        raise HTTPException(status_code=400, detail="Unsupported ingest file type")
+
+    runtime_paths = get_ingest_runtime_paths()
+    import_inbox = runtime_paths["import_inbox"]
+    import_inbox.mkdir(parents=True, exist_ok=True)
+    
+    staged_path = import_inbox / filename
+    try:
+        with staged_path.open("wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+    except Exception as exc:
+        logger.error("Failed to upload file=%s error=%s", filename, exc)
+        raise HTTPException(status_code=500, detail=f"Failed to upload file: {exc}")
+        
+    return {"status": "success", "filename": filename, "staged_path": str(staged_path)}

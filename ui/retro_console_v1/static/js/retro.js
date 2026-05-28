@@ -23,6 +23,7 @@
     activeNode: null,
     lastQuery: "",
     intelVisible: false,   // Sprint 3: Intel panel open state
+    droppadVisible: false, // Sprint 4: Drop pad panel open state
     intelFilter: null,     // Sprint 3+: {type, value} filter from intel panel
     graphMode: "2D",       // "2D" or "3D"
     graphRotation: { alpha: 0.2, beta: 0.15 },
@@ -2737,6 +2738,8 @@
     const toggleEffects = document.getElementById("toggle-effects");
     const toggleIntel = document.getElementById("toggle-intel-btn");
     const intelPanel = document.getElementById("video-intel-panel");
+    const toggleDroppad = document.getElementById("toggle-droppad-btn");
+    const droppadPanel = document.getElementById("droppad-panel");
 
     if (!screen || !toggleScanlines || !toggleEffects) return;
 
@@ -2752,6 +2755,126 @@
         toggleIntel.textContent = state.intelVisible ? "Intel: ON" : "Intel: OFF";
         toggleIntel.classList.toggle("intel-active", state.intelVisible);
         if (state.intelVisible && state.videoMeta) renderVideoIntelPanel();
+      });
+    }
+
+    // Drop Pad Panel toggle & drag handlers
+    let dropZoneInitialized = false;
+    function initDropZoneHandlers() {
+      if (dropZoneInitialized) return;
+      const dropZone = document.getElementById("drop-zone");
+      const fileInput = document.getElementById("droppad-file-input");
+      const uploadStatus = document.getElementById("upload-status");
+      if (!dropZone || !fileInput) return;
+
+      dropZone.addEventListener("click", (e) => {
+        if (e.target.closest("#upload-status")) return;
+        fileInput.click();
+      });
+
+      fileInput.addEventListener("change", () => {
+        if (fileInput.files.length > 0) {
+          handleUpload(fileInput.files[0]);
+        }
+      });
+
+      ["dragenter", "dragover"].forEach((eventName) => {
+        dropZone.addEventListener(eventName, (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          dropZone.classList.add("dragover");
+        }, false);
+      });
+
+      ["dragleave", "drop"].forEach((eventName) => {
+        dropZone.addEventListener(eventName, (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          dropZone.classList.remove("dragover");
+        }, false);
+      });
+
+      dropZone.addEventListener("drop", (e) => {
+        const dt = e.dataTransfer;
+        const files = dt.files;
+        if (files.length > 0) {
+          handleUpload(files[0]);
+        }
+      }, false);
+
+      function handleUpload(file) {
+        if (!file) return;
+        const supportedExts = [
+          ".mp4", ".avi", ".mov", ".mkv", ".wmv", ".flv", ".webm", ".m4v",
+          ".mp3", ".wav", ".flac", ".m4a", ".aac", ".ogg", ".wma",
+          ".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tiff", ".webp",
+          ".pdf", ".txt", ".md", ".doc", ".docx"
+        ];
+        const ext = "." + file.name.split(".").pop().toLowerCase();
+        if (!supportedExts.includes(ext)) {
+          showStatus(`[ERROR] Unsupported file format: ${ext}`, true);
+          return;
+        }
+
+        showStatus(`[STAGING] Preparing upload for ${file.name}...`, false);
+        const formData = new FormData();
+        formData.append("file", file);
+
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", "/api/ingest/upload", true);
+
+        xhr.upload.addEventListener("progress", (e) => {
+          if (e.lengthComputable) {
+            const percent = Math.round((e.loaded / e.total) * 100);
+            showStatus(`[UPLOADING] ${file.name} (${percent}%)`, false);
+          }
+        });
+
+        xhr.addEventListener("load", () => {
+          if (xhr.status === 200) {
+            showStatus(`[OK] Upload complete. staged: ${file.name}. Ingestion starting...`, false);
+            fileInput.value = "";
+            setTimeout(() => {
+              state.droppadVisible = false;
+              if (droppadPanel) droppadPanel.hidden = true;
+              if (toggleDroppad) toggleDroppad.classList.remove("droppad-active");
+              uploadStatus.hidden = true;
+            }, 4000);
+          } else {
+            try {
+              const resp = JSON.parse(xhr.responseText);
+              showStatus(`[ERROR] ${resp.detail || "Upload failed"}`, true);
+            } catch {
+              showStatus(`[ERROR] Upload failed with code ${xhr.status}`, true);
+            }
+          }
+        });
+
+        xhr.addEventListener("error", () => {
+          showStatus(`[ERROR] Network upload error occurred.`, true);
+        });
+
+        xhr.send(formData);
+      }
+
+      function showStatus(msg, isError) {
+        if (!uploadStatus) return;
+        uploadStatus.hidden = false;
+        uploadStatus.textContent = msg;
+        uploadStatus.classList.toggle("error", isError);
+      }
+
+      dropZoneInitialized = true;
+    }
+
+    if (toggleDroppad && droppadPanel) {
+      toggleDroppad.addEventListener("click", () => {
+        state.droppadVisible = !state.droppadVisible;
+        droppadPanel.hidden = !state.droppadVisible;
+        toggleDroppad.classList.toggle("droppad-active", state.droppadVisible);
+        if (state.droppadVisible) {
+          initDropZoneHandlers();
+        }
       });
     }
 

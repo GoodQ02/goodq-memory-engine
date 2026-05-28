@@ -258,6 +258,17 @@ def main() -> None:
                 _log(f"File already downloaded and verified: {final_file.name}")
                 continue
 
+            # Fallback verification: if the zip was unlinked after successful extraction
+            if not final_file.exists() and args.verify_only:
+                if installed_state.get(pack_key, {}).get("status") == "verified":
+                    extract_dir = models_root / "hub"
+                    has_files = False
+                    if extract_dir.exists() and any(extract_dir.iterdir()):
+                        has_files = True
+                    if has_files:
+                        _log(f"File {final_file.name} was unlinked after extraction. Verified via registry.")
+                        continue
+
             if args.verify_only:
                 _err(f"Verification failure: {final_file.name} is missing or corrupted.")
                 pack_verified = False

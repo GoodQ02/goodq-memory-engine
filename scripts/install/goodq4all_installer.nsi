@@ -77,7 +77,7 @@ runtime_ok:
   File /r "..\..\scripts\*.*"
 
   SetOutPath "$INSTDIR\configs"
-  File /r "..\..\configs\*.*"
+  File /r /x "config.local.yaml" "..\..\configs\*.*"
 
   SetOutPath "$INSTDIR\api"
   File /r "..\..\api\*.*"
@@ -90,6 +90,9 @@ runtime_ok:
 
   SetOutPath "$INSTDIR\ui"
   File /r "..\..\ui\*.*"
+
+  SetOutPath "$INSTDIR\agents"
+  File /r "..\..\agents\*.*"
 
   ; Create data directories under ProgramData
   CreateDirectory "$APPDATA\GoodQ4All"
@@ -151,12 +154,21 @@ runtime_ok:
 
   ; --- STATE 10: enable launch ---
   DetailPrint "Step 10/10: Creating shortcuts and enabling launcher..."
+  SetOutPath "$INSTDIR"
   CreateDirectory "$SMPROGRAMS\GoodQ4All"
   CreateShortcut "$SMPROGRAMS\GoodQ4All\GoodQ4All.lnk" "$INSTDIR\LAUNCH_GOODQ.exe"
   CreateShortcut "$DESKTOP\GoodQ4All.lnk" "$INSTDIR\LAUNCH_GOODQ.exe"
 
   ; Write Uninstaller
   WriteUninstaller "$INSTDIR\uninstall.exe"
+
+  ; Write uninstall keys to Windows Registry for Add/Remove Programs
+  SetRegView 64
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\GoodQ4All" "DisplayName" "GoodQ4All"
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\GoodQ4All" "UninstallString" '"$INSTDIR\uninstall.exe"'
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\GoodQ4All" "DisplayVersion" "1.0.0"
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\GoodQ4All" "Publisher" "GoodQ4All Team"
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\GoodQ4All" "DisplayIcon" '"$INSTDIR\LAUNCH_GOODQ.exe"'
 SectionEnd
 
 Section "Always-On Background Service" SecService
@@ -184,6 +196,7 @@ skip_service_cleanup:
   RMDir /r "$INSTDIR\cli"
   RMDir /r "$INSTDIR\steps"
   RMDir /r "$INSTDIR\ui"
+  RMDir /r "$INSTDIR\agents"
   RMDir "$INSTDIR"
 
   ; Delete shortcuts
@@ -203,4 +216,7 @@ preserve_data:
   Delete "$APPDATA\GoodQ4All\install_receipt.json"
 
 end_uninstall:
+  ; Remove uninstall keys from registry
+  SetRegView 64
+  DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\GoodQ4All"
 SectionEnd

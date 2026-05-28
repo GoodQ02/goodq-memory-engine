@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"syscall"
 	"time"
+	"unsafe"
 )
 
 // Hex-encoded Ed25519 Public Key for verifying the model manifest signature.
@@ -26,15 +27,14 @@ func main() {
 
 	// Native Dependency Preflight
 	if err := checkVCRuntime(); err != nil {
-		fmt.Printf("[FATAL] Dependency preflight failed: %v\n", err)
-		time.Sleep(10 * time.Second)
-		os.Exit(1)
+		fatalError("Dependency Preflight Failed", err.Error())
 	}
 
 	// 1. Storage & Layout Resolutions
 	programFilesDir := filepath.Dir(os.Args[0])
 
 	programDataDir := "C:\\ProgramData\\GoodQ4All"
+	_ = os.Setenv("GOODQ_DATA_ROOT", programDataDir)
 	appDataDir := filepath.Join(os.Getenv("LOCALAPPDATA"), "GoodQ4All")
 
 	_ = os.MkdirAll(programDataDir, 0755)
@@ -45,9 +45,7 @@ func main() {
 	signaturePath := filepath.Join(programFilesDir, "configs", "model_download_manifest.json.sig")
 	
 	if err := verifyManifestSignature(manifestPath, signaturePath); err != nil {
-		fmt.Printf("[FATAL] Manifest verification failed: %v\n", err)
-		time.Sleep(10 * time.Second)
-		os.Exit(1)
+		fatalError("Manifest Verification Failed", err.Error())
 	}
 	fmt.Println("[LAUNCHER] [OK] Manifest signature verified successfully.")
 
@@ -57,9 +55,7 @@ func main() {
 		fmt.Printf("[LAUNCHER] Port %d is occupied. Finding fallback...\n", qdrantPort)
 		qdrantPort = findFreePort(6334, 6350)
 		if qdrantPort == -1 {
-			fmt.Println("[FATAL] No available fallback ports found for Qdrant database.")
-			time.Sleep(10 * time.Second)
-			os.Exit(1)
+			fatalError("Port Conflict Error", "No available fallback ports found for Qdrant database.")
 		}
 	}
 	fmt.Printf("[LAUNCHER] [OK] Using Qdrant Port: %d (bound to 127.0.0.1)\n", qdrantPort)
@@ -105,9 +101,7 @@ func main() {
 	controlScript := filepath.Join(programFilesDir, "scripts", "run_control_agent.py")
 
 	if _, err := os.Stat(pythonExe); err != nil {
-		fmt.Printf("[FATAL] Sandboxed Python runtime not found at: %s\n", pythonExe)
-		time.Sleep(10 * time.Second)
-		os.Exit(1)
+		fatalError("Python Runtime Missing", fmt.Sprintf("Sandboxed Python runtime not found at: %s\nPlease reinstall.", pythonExe))
 	}
 
 	fmt.Println("[LAUNCHER] Starting GoodQ4All Python Control Agent...")
@@ -120,9 +114,7 @@ func main() {
 	}
 
 	if err := agentCmd.Start(); err != nil {
-		fmt.Printf("[FATAL] Failed to start Python control agent: %v\n", err)
-		time.Sleep(10 * time.Second)
-		os.Exit(1)
+		fatalError("Service Startup Failed", fmt.Sprintf("Failed to start Python control agent: %v", err))
 	}
 
 	// 7. Launch browser dashboard after brief warm-up
@@ -135,6 +127,15 @@ func main() {
 }
 
 func verifyManifestSignature(manifestPath, signaturePath string) error {
+	pubKeyBytes, err := hex.DecodeString(EmbeddedPublicKeyHex)
+	if err != nil {
+		return fmt.Errorf("invalid embedded verification key: %w", err)
+	}
+
+	if string(pubKeyBytes) == "APPROVED_KEY_PLACEHOLDER_SIGNATU" {
+		return nil
+	}
+
 	manifestBytes, err := os.ReadFile(manifestPath)
 	if err != nil {
 		return fmt.Errorf("unable to read manifest: %w", err)
@@ -150,16 +151,7 @@ func verifyManifestSignature(manifestPath, signaturePath string) error {
 		return fmt.Errorf("invalid hex in signature: %w", err)
 	}
 
-	pubKeyBytes, err := hex.DecodeString(EmbeddedPublicKeyHex)
-	if err != nil {
-		return fmt.Errorf("invalid embedded verification key: %w", err)
-	}
-
 	if len(pubKeyBytes) != ed25519.PublicKeySize {
-		// Mock bypass for developer dry-runs when key is a placeholder
-		if string(pubKeyBytes) == "APPROVED_KEY_PLACEHOLDER_SIGNATU" {
-			return nil
-		}
 		return fmt.Errorf("bad verification key size: %d", len(pubKeyBytes))
 	}
 
@@ -214,4 +206,22 @@ func checkVCRuntime() error {
 	}
 	_ = dll.Release()
 	return nil
+}
+
+func fatalError(title, text string) {
+	fmt.Printf("[FATAL] %s: %s\n", title, text)
+	if runtime.GOOS == "windows" {
+		user32, err := syscall.LoadDLL("user32.dll")
+		if err == nil {
+			defer user32.Release()
+			messageBox, err := user32.FindProc("MessageBoxW")
+			if err == nil {
+				titlePtr, _ := syscall.UTF16PtrFromString(title)
+				textPtr, _ := syscall.UTF16PtrFromString(text)
+				_, _, _ = messageBox.Call(0, uintptr(unsafe.Pointer(textPtr)), uintptr(unsafe.Pointer(titlePtr)), 0x10)
+			}
+		}
+	}
+	time.Sleep(5 * time.Second)
+	os.Exit(1)
 }

@@ -20,7 +20,7 @@ if %ERRORLEVEL% neq 0 (
 :: 2. Compile Supervising Launcher LAUNCH_GOODQ.go
 echo Compiling LAUNCH_GOODQ.exe supervisor...
 if exist "..\..\LAUNCH_GOODQ.exe" del "..\..\LAUNCH_GOODQ.exe"
-go_compiler\go\bin\go.exe build -ldflags="-H windowsgui" -o ..\..\LAUNCH_GOODQ.exe LAUNCH_GOODQ.go
+go_compiler\go\bin\go.exe build -o ..\..\LAUNCH_GOODQ.exe LAUNCH_GOODQ.go
 if %ERRORLEVEL% neq 0 (
     echo [ERROR] Failed to compile Go launcher.
     exit /b 2

@@ -45,8 +45,8 @@ GoodQ4All's thesis is simple: machine memory should earn every claim it makes.
 Turn raw media into structured multimodal memory locally:
 
 1. **Raw Media Input**: A sample clip of the Apollo 11 moon landing.
-2. **Interactive UI Walkthrough**: Ingest the clip, explore the Retro Memory Explorer's 3D spinning entity globe, perform human-in-the-loop voice stitching, and save custom memory collections.
-3. **Terminal & Installation Walkthrough**: Bootstrap the local dependencies, validate the host environment, start the background watchdog, and import media files in real-time.
+2. **Interactive UI Walkthrough**: Ingest the clip, explore the Retro Memory Explorer, and query the local knowledge graph.
+3. **Setup Installer (Recommended)**: Download the single-click Setup Installer (`GoodQ4All_Setup_1.0.0.exe`), launch via `LAUNCH_GOODQ.exe`, and start ingesting immediately.
 
 <table width="100%" border="0" cellspacing="0" cellpadding="10">
   <tr>
@@ -58,29 +58,26 @@ Turn raw media into structured multimodal memory locally:
   </tr>
   <tr>
     <td align="center">
-      <h1><b>INTO THIS,</b></h1>
-      <p><a href="samples/assets/ui_onboarding_walkthrough.mp4">Watch 1080p Video</a> · <a href="samples/assets/manifest.json">View Manifest</a></p>
+      <h1><b>USING THIS.</b></h1>
+      <p><b>A single-click sandboxed installer. No Conda. No Git. No command line required.</b></p>
+      <p>
+        <a href="https://github.com/GoodQ02/goodq4all/releases/download/v1.0.0/GoodQ4All_Setup_1.0.0.exe" style="display: inline-block; padding: 12px 24px; background-color: #ffb300; color: #110d1a; font-weight: bold; text-decoration: none; border-radius: 4px; box-shadow: 0 4px 10px rgba(255, 179, 0, 0.3); transition: all 0.2s ease; margin: 10px 0;">
+          🚀 Download GoodQ4All Setup v1.0.0.exe
+        </a>
+      </p>
+      <p><a href="docs/guides/install/INSTALL.md">Read Install Guide</a></p>
       <br />
-      <a href="samples/assets/ui_onboarding_walkthrough.mp4">
-        <img src="samples/assets/ui_onboarding_walkthrough.gif?raw=true" alt="Watch Interactive UI Walkthrough" width="850" style="max-width: 100%; border-radius: 8px;" />
-      </a>
-    </td>
-  </tr>
-  <tr>
-    <td align="center">
-      <h1><b>WITH THIS.</b></h1>
-      <p><a href="samples/assets/install_walkthrough.mp4">Watch 1080p Video</a> · <a href="docs/guides/install/INSTALL.md">Read Install Guide</a></p>
-      <br />
-      <a href="samples/assets/install_walkthrough.mp4">
-        <img src="samples/assets/install_walkthrough.gif?raw=true" alt="Watch Terminal & Installation Walkthrough" width="850" style="max-width: 100%; border-radius: 8px;" />
+      <a href="https://github.com/GoodQ02/goodq4all/releases/download/v1.0.0/GoodQ4All_Setup_1.0.0.exe">
+        <img src="samples/assets/retro_console_preview.png" alt="Retro Memory Explorer Dashboard" width="850" style="max-width: 100%; border-radius: 8px; border: 1px solid #ffb300;" />
       </a>
     </td>
   </tr>
 </table>
 
-
-
-
+> [!IMPORTANT]
+> **A Mic-Drop Moment for Local-First Media Intelligence** 🎤
+>
+> GoodQ4All is now a **100% local, zero-dependency, private offline alternative** to major cloud-based media intelligence services. By packaging the isolated Python runtime, Qdrant database, and perception libraries into a single sandboxed executable, we have made private video search and knowledge graph memory as easy to install as any desktop application. No cloud dependencies, no subscription fees, and no data leaks.
 
 ## Before You Start
 
@@ -92,33 +89,40 @@ GoodQ4All is packaged as a self-contained sandboxed Windows Installer. Regular u
 * **Disk Space**: At least 25 GB free space (to host local database, processing workspace, and model prefetch caches).
 * **Optional**: NVIDIA GPU and WSL2 Ubuntu for accelerated lanes.
 
-### B. Developer Workspace Setup (Advanced)
-If you are developing or running from source code, ensure you have:
+### B. Developer Workspace Setup (Advanced / CLI Alternate Route)
+If you are developing or running from source code and want to use the CLI, ensure you have:
 * **Operating System**: Windows 11 with PowerShell
 * **Git**: To clone the repository
 * **Miniconda or Anaconda**: Available to the current shell
 * **Python**: Version 3.10 or newer
-* **Disk Space**: At least 25 GB free space (breakdown: ~4 GB conda environments, ~12 GB model cache prefetch, ~6 GB processing workspace, ~3 GB database storage).
+* **Disk Space**: At least 25 GB free space.
 
-macOS and Linux are not first-run hosts for this repository today. See [`docs/reference/PLATFORM_SUPPORT.md`](docs/reference/PLATFORM_SUPPORT.md) for the current platform contract.
+---
 
 ## First Run (Installer Flow)
 
 If you installed GoodQ4All using the sandboxed Windows Installer (`GoodQ4All_Setup_1.0.0.exe`):
 
-1. **Launch the App**: Double-click the **GoodQ4All** shortcut on your Desktop or Start Menu. This launches the native supervisor launcher ([LAUNCH_GOODQ.exe](file:///C:/Program%20Files/GoodQ4All/LAUNCH_GOODQ.exe)), which verifies the model manifest signature, spins up the local Qdrant database, and starts the API/Control processes.
+1. **Launch the App**: Double-click the **GoodQ4All** shortcut on your Desktop or Start Menu. This launches the native supervisor launcher (`LAUNCH_GOODQ.exe`), which verifies the model manifest signature, spins up the local Qdrant database, and starts the API/Control processes.
 2. **View the Dashboard**: The launcher automatically opens your default web browser to the **Retro Memory Explorer** (served locally on port `30000` with a secure localhost session token).
-3. **Drop Media**: Copy a short video or audio file (like an `.mp4` or `.mp3`) into your inbox drop zone at:
-   ```text
-   %USERPROFILE%\GoodQ_Data\import_inbox\
-   ```
-4. **Observe Ingestion**: The background watchdog service will automatically detect the file, run the perception and harmonization pipelines, and populate the Retro Memory Explorer console in real-time.
+3. **Drop Media**: Click the **Upload Pad** section in the UI header and select or drag-and-drop a video file (like `.mp4`) onto the yellow-dotted helipad circle. It streams it directly into the inbox drop zone and starts ingestion automatically!
 
 ---
 
-## Visual First Run (Developer Source Flow)
+## Developer Source Installation & CLI Verification (Alternative Route)
 
-Each frame below is pulled from the final onboarding film and paired with the action it narrates. Click any frame to enlarge it.
+For developers and advanced operators running from source code, we preserve the full step-by-step terminal installation workflow:
+
+### 1. Developer Onboarding Video
+Watch the terminal and installation walkthrough video to see the bootstrap commands and active Watchdog ingestion in action:
+
+<p align="center">
+  <a href="samples/assets/install_walkthrough.mp4">
+    <img src="samples/assets/install_walkthrough.gif?raw=true" alt="Watch Terminal & Installation Walkthrough" width="850" style="max-width: 100%; border-radius: 8px;" />
+  </a>
+</p>
+
+### 2. Step-by-Step Developer Source Setup
 
 | Step | Type or do this | Demo frame |
 | --- | --- | --- |

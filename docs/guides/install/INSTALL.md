@@ -10,17 +10,29 @@ This is the canonical installation guide.
 
 GoodQ4All is packaged as a unified sandboxed Windows Installer. This is the simplest path and does not require pre-existing Git, Conda, or Python environments on the host.
 
+<p align="left">
+  <a href="https://github.com/GoodQ02/goodq4all/releases/download/v1.0.0/GoodQ4All_Setup_1.0.0.exe" style="display: inline-block; padding: 12px 24px; background-color: #ffb300; color: #110d1a; font-weight: bold; text-decoration: none; border-radius: 4px; box-shadow: 0 4px 10px rgba(255, 179, 0, 0.3); transition: all 0.2s ease; margin: 10px 0;">
+    🚀 Download GoodQ4All Setup v1.0.0.exe
+  </a>
+</p>
+
+> [!IMPORTANT]
+> **A Mic-Drop Moment for Local-First Media Intelligence** 🎤
+>
+> GoodQ4All is a **100% local, zero-dependency, private offline alternative** to major cloud-based media intelligence services. By packaging the isolated Python runtime, Qdrant database, and perception libraries into a single sandboxed executable, we have made private video search and knowledge graph memory as easy to install as any desktop application. No cloud dependencies, no subscription fees, and no data leaks.
+
 ### Prerequisites
 * **Operating System**: Windows 11
 * **Disk Space**: At least 25 GB free space (to host local database, processing workspace, and model prefetch caches).
 * **Optional**: An NVIDIA GPU and WSL2 Ubuntu for accelerated lanes.
 
 ### Installation Steps
-1. Run the setup installer: `GoodQ4All_Setup_1.0.0.exe`.
+1. Download and run the setup installer: `GoodQ4All_Setup_1.0.0.exe`.
 2. Choose your installation path (defaults to `C:\Program Files\GoodQ4All`).
 3. Complete the setup. This installs the binary files, configures registry keys (for Add/Remove Programs and shortcuts), and provisions the isolated python runtime, branding resources, and database.
 4. Double-click the **GoodQ4All** Desktop or Start Menu shortcut to run the supervisor launcher ([LAUNCH_GOODQ.exe](file:///C:/Program%20Files/GoodQ4All/LAUNCH_GOODQ.exe)).
 5. The launcher will automatically perform preflight checks, verify the model signature, start local background services, and open your default browser to the **Retro Memory Explorer** (served at `http://127.0.0.1:30000/ui/retro_console_v1/`).
+6. **Start Ingesting**: In the Retro Memory Explorer UI header, click the **Upload Pad** and drag-and-drop or select any media file onto the yellow-dotted helipad circle to start ingestion instantly!
 
 ---
 

@@ -3,11 +3,14 @@
 
 # Welcome Aboard GoodQ4All
 
-This short onboarding film walks through the first local GoodQ4All procedure: clone the repo, enter the project, run bootstrap install, keep `.env.local` in the project root when using local model/cache configuration, validate the bootstrap, run the launcher/readiness check, start Watchdog, drop media into the import inbox, start the API, and watch ingestion produce proof artifacts.
+> [!TIP]
+> **Recommended User Setup**: For the easiest path, download and run the [GoodQ4All Standalone Setup Installer](https://github.com/GoodQ02/goodq4all/releases/download/v1.0.0/GoodQ4All_Setup_1.0.0.exe) which does not require Git, Conda, or Python. Refer to the [Installation Guide](install/INSTALL.md).
 
-[![Watch Welcome Aboard GoodQ4All](../../samples/assets/goodq4all-demo-poster.jpg)](https://github.com/GoodQ02/.github/releases/download/welcome-aboard-goodq4all-2026-05-17/GOODQ4ALL_DEMO_FINAL.mp4)
+For developers and advanced operators who want to run the project from source and use the CLI, we preserve the full walk-through demo video below as an alternative installation route.
 
-- [Watch the final demo](https://github.com/GoodQ02/.github/releases/download/welcome-aboard-goodq4all-2026-05-17/GOODQ4ALL_DEMO_FINAL.mp4)
+[![Watch Welcome Aboard GoodQ4All (Developer Alternative Route)](../../samples/assets/goodq4all-demo-poster.jpg)](https://github.com/GoodQ02/.github/releases/download/welcome-aboard-goodq4all-2026-05-17/GOODQ4ALL_DEMO_FINAL.mp4)
+
+- [Watch the final demo (Developer CLI Route)](https://github.com/GoodQ02/.github/releases/download/welcome-aboard-goodq4all-2026-05-17/GOODQ4ALL_DEMO_FINAL.mp4)
 - Runtime: `2:06.8`
 - SHA256: `695C17AC42208397E370875EF2B14229BF16758EEC0B14350271CD35C38C4780`
 

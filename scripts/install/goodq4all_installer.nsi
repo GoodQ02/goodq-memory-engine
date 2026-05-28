@@ -120,7 +120,7 @@ runtime_ok:
   DetailPrint "Step 6/10: Hydrating sandboxed runtime and downloading model packs..."
   ; Note: Core Memory Pack is downloaded by default. Other selected components trigger additional flags.
   DetailPrint "Executing environment setup and downloading Core Memory Pack..."
-  nsExec::ExecToLog '"$INSTDIR\runtime\python.exe" "$INSTDIR\scripts\install\sandbox_env_setup.py" --packs core --data-dir "$APPDATA\GoodQ4All"'
+  nsExec::ExecToLog '"$INSTDIR\runtime\python.exe" "$INSTDIR\scripts\install\sandbox_env_setup.py" --packs core_memory --data-dir "$APPDATA\GoodQ4All"'
   Pop $0
   ${If} $0 != 0
     MessageBox MB_OK|MB_ICONSTOP "Error: Hydration or Core Model Pack download failed. Code $0"

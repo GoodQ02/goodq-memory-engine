@@ -1553,7 +1553,10 @@ def multimodal_search(query: str, config: Dict[str, Any], top_k: int = 10) -> Li
 def main():
     """Command-line interface for multimodal search."""
     import argparse
-    from goodq4all.steps.common.config_loader import load_configs
+    try:
+        from steps.common.config_loader import load_configs
+    except ModuleNotFoundError:
+        from goodq4all.steps.common.config_loader import load_configs
     
     parser = argparse.ArgumentParser(description='GoodQ Multimodal Search')
     parser.add_argument('query', type=str, help='Search query')

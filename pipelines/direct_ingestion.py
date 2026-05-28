@@ -85,7 +85,10 @@ def run_direct_ingestion(video_path: str | Path, cfg: Dict[str, Any] | None = No
     
     # The actual ingestion uses the canonical scene-based runner
     # Import and use the working scene ingestion system
-    from goodq4all.cli.run_ingestion import run as scene_ingest_run
+    try:
+        from cli.run_ingestion import run as scene_ingest_run
+    except ModuleNotFoundError:
+        from goodq4all.cli.run_ingestion import run as scene_ingest_run
     import typer
     
     # Get processing directory from config

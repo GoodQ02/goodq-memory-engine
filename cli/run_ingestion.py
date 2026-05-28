@@ -4895,6 +4895,17 @@ def run(
                 else:
                     try:
                         typer.echo(f'  [EXTRACT] Extracting keyframe...')
+                        if tracker is not None:
+                            tracker.update_step(
+                                f"Scene {scene_num}/{total_scenes} - Extracting keyframe",
+                                1 + scene_num,
+                                {
+                                    "scene_index": scene_index,
+                                    "scenes_total": total_scenes,
+                                    "video_id": video_hash,
+                                    "stage": "keyframe_extraction"
+                                },
+                            )
                         frame_info = _process_frame(cfg_json, ffmpeg, video_path, scene, frame_dir, video_hash, scene_id)
                         typer.echo(f'  [OK] Keyframe processed')
                     except Exception as exc:  # noqa: BLE001
@@ -4945,6 +4956,17 @@ def run(
                         if VERBOSE:
                             typer.echo(f'[DEBUG] Processing audio (not skipped, force={force})')
                         typer.echo(f'  [EXTRACT] Extracting audio...')
+                        if tracker is not None:
+                            tracker.update_step(
+                                f"Scene {scene_num}/{total_scenes} - Transcribing audio",
+                                1 + scene_num,
+                                {
+                                    "scene_index": scene_index,
+                                    "scenes_total": total_scenes,
+                                    "video_id": video_hash,
+                                    "stage": "audio_transcription"
+                                },
+                            )
                         audio_info = _process_audio(
                             cfg_json,
                             ffmpeg,
@@ -5082,6 +5104,17 @@ def run(
                     audio_data=audio_data,
                 )
                 try:
+                    if tracker is not None:
+                        tracker.update_step(
+                            f"Scene {scene_num}/{total_scenes} - Resolving entities",
+                            1 + scene_num,
+                            {
+                                "scene_index": scene_index,
+                                "scenes_total": total_scenes,
+                                "video_id": video_hash,
+                                "stage": "knowledge_graph_update"
+                            },
+                        )
                     kg_stats = update_kg_for_scene(
                         kg_scene_data,
                         scene_id=scene_id,

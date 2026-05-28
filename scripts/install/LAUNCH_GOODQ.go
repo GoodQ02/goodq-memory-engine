@@ -35,6 +35,7 @@ func main() {
 
 	programDataDir := "C:\\ProgramData\\GoodQ4All"
 	_ = os.Setenv("GOODQ_DATA_ROOT", programDataDir)
+	_ = os.Setenv("GOODQ_SANDBOXED", "1")
 	appDataDir := filepath.Join(os.Getenv("LOCALAPPDATA"), "GoodQ4All")
 
 	_ = os.MkdirAll(programDataDir, 0755)

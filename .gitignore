@@ -11,7 +11,7 @@
 *.key
 *.pem
 secrets.yaml
-*token*
+session_token.json
 *secret*
 
 # ===== DATA & ARTIFACTS =====

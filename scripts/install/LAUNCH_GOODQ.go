@@ -86,7 +86,12 @@ func main() {
 	qdrantExe := filepath.Join(programFilesDir, "qdrant", "qdrant.exe")
 	if _, err := os.Stat(qdrantExe); err == nil {
 		fmt.Println("[LAUNCHER] Starting Qdrant engine in Personal Mode...")
-		qdrantCmd := exec.Command(qdrantExe, "--port", strconv.Itoa(qdrantPort), "--host", "127.0.0.1")
+		qdrantConfig := filepath.Join(programDataDir, "qdrant", "config", "qdrant_config.yaml")
+		qdrantCmd := exec.Command(qdrantExe, "--config-path", qdrantConfig)
+		qdrantCmd.Env = append(os.Environ(),
+			"QDRANT__SERVICE__HTTP_PORT="+strconv.Itoa(qdrantPort),
+			"QDRANT__SERVICE__HOST=127.0.0.1",
+		)
 		// Redirect Qdrant logs to file
 		qdrantLogFile, err := os.OpenFile(filepath.Join(logsDir, "qdrant.log"), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 		if err == nil {

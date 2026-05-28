@@ -110,7 +110,7 @@ runtime_ok:
   File /r "..\..\pipelines\*.*"
 
   SetOutPath "$INSTDIR\vendor"
-  File /r "..\..\vendor\*.*"
+  File /r "staged\vendor\*.*"
 
   SetOutPath "$INSTDIR\branding"
   File /r "..\..\branding\*.*"

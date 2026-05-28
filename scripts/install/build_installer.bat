@@ -104,6 +104,18 @@ copy /y "..\..\branding\favicon.ico" "..\..\ui\docs_offline\favicon.ico" >nul
 
 powershell -NoProfile -Command "$files = @{'swagger-ui-bundle.js' = 'https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-bundle.js'; 'swagger-ui.css' = 'https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css'; 'redoc.standalone.js' = 'https://cdn.jsdelivr.net/npm/redoc/bundles/redoc.standalone.js'}; foreach ($name in $files.Keys) { $path = Join-Path '..\..\ui\docs_offline' $name; if (-not (Test-Path $path)) { Write-Host \"Downloading $name to $path...\" -ForegroundColor Cyan; try { Invoke-WebRequest -UserAgent 'Wget' -UseBasicParsing -Uri $files[$name] -OutFile $path -TimeoutSec 15 } catch { Write-Host \"Warning: Failed to download $name. Docs might not render offline. error: $_\" -ForegroundColor Yellow } } else { Write-Host \"$name is already cached offline.\" -ForegroundColor Yellow } }"
 
+:: 3b. Stage Vendor Directory and Sandboxed Dependencies
+echo Staging vendor packages...
+if not exist "staged\vendor" mkdir "staged\vendor"
+xcopy /s /e /i /y "..\..\vendor" "staged\vendor" >nul
+
+echo Installing extra sandboxed dependencies (opencv-python, scenedetect, imageio-ffmpeg)...
+pip install --target "staged\vendor" --python-version 3.10 --only-binary=:all: --platform win_amd64 --implementation cp opencv-python==4.10.0.84 scenedetect==0.6.2 imageio-ffmpeg==0.5.1
+if %ERRORLEVEL% neq 0 (
+    echo [ERROR] Failed to install sandboxed dependencies.
+    exit /b 4
+)
+
 :: 4. Compile NSIS setup package
 echo Compiling final NSIS Setup Installer package...
 nsis_compiler\nsis-3.09\makensis.exe goodq4all_installer.nsi

@@ -3281,6 +3281,10 @@ def _run_step(
                 _PREFER_DIRECT_ENV_PYTHON_ON_WINDOWS
                 and direct_env_python is not None
             )
+            or (
+                not conda_available
+                and direct_env_python is not None
+            )
         )
 
         def _build_step_runner_cmd(*, prefer_direct_env_python: bool) -> tuple[List[str], str]:

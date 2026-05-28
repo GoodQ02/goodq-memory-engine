@@ -88,6 +88,7 @@ func main() {
 		fmt.Println("[LAUNCHER] Starting Qdrant engine in Personal Mode...")
 		qdrantConfig := filepath.Join(programDataDir, "qdrant", "config", "qdrant_config.yaml")
 		qdrantCmd := exec.Command(qdrantExe, "--config-path", qdrantConfig)
+		qdrantCmd.Dir = filepath.Join(programDataDir, "qdrant")
 		qdrantCmd.Env = append(os.Environ(),
 			"QDRANT__SERVICE__HTTP_PORT="+strconv.Itoa(qdrantPort),
 			"QDRANT__SERVICE__HOST=127.0.0.1",

@@ -40,6 +40,12 @@ func main() {
 	_ = os.MkdirAll(programDataDir, 0755)
 	_ = os.MkdirAll(appDataDir, 0700)
 
+	// Ensure GoodQ_Data and import/export/processed/failed directories exist
+	goodqDataDir := filepath.Join(programDataDir, "GoodQ_Data")
+	_ = os.MkdirAll(filepath.Join(goodqDataDir, "import_inbox"), 0755)
+	_ = os.MkdirAll(filepath.Join(goodqDataDir, "processed"), 0755)
+	_ = os.MkdirAll(filepath.Join(goodqDataDir, "failed"), 0755)
+
 	// 2. Verify Signed Manifest
 	manifestPath := filepath.Join(programFilesDir, "configs", "model_download_manifest.json")
 	signaturePath := filepath.Join(programFilesDir, "configs", "model_download_manifest.json.sig")

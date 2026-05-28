@@ -121,6 +121,10 @@ runtime_ok:
   CreateDirectory "$APPDATA\GoodQ4All\qdrant\logs"
   CreateDirectory "$APPDATA\GoodQ4All\qdrant\config"
   CreateDirectory "$APPDATA\GoodQ4All\models"
+  CreateDirectory "$APPDATA\GoodQ4All\GoodQ_Data"
+  CreateDirectory "$APPDATA\GoodQ4All\GoodQ_Data\import_inbox"
+  CreateDirectory "$APPDATA\GoodQ4All\GoodQ_Data\processed"
+  CreateDirectory "$APPDATA\GoodQ4All\GoodQ_Data\failed"
 
   ; Write default config to ProgramData
   SetOutPath "$APPDATA\GoodQ4All\qdrant\config"

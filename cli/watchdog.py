@@ -295,6 +295,7 @@ class WatchdogProcessor:
             logger.info("[BOT] Control Agent disabled: no llm_client injection")
         
         # Ensure directories exist
+        self.watch_dir.mkdir(parents=True, exist_ok=True)
         self.processing_dir.mkdir(parents=True, exist_ok=True)
         self.processed_dir.mkdir(parents=True, exist_ok=True)
         self.failed_dir.mkdir(parents=True, exist_ok=True)

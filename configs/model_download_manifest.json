@@ -16,13 +16,13 @@
         {
           "name": "core_models.zip",
           "destination": "models/hub/core_models.zip",
-          "size_bytes": 125000000,
-          "sha256": "4a7b3c299c8f2b1d3d6e5a7d90c0b11e2f3a4b5c6d7e8f90a1b2c3d4e5f6071a",
+          "size_bytes": 3477495164,
+          "sha256": "409c857bf968b7fc2a7b4d92a5c851080ed891be63a5eaac861ec12aef16f475",
           "chunks": [
             {
               "name": "core_models.zip",
-              "size_bytes": 125000000,
-              "sha256": "4a7b3c299c8f2b1d3d6e5a7d90c0b11e2f3a4b5c6d7e8f90a1b2c3d4e5f6071a",
+              "size_bytes": 3477495164,
+              "sha256": "409c857bf968b7fc2a7b4d92a5c851080ed891be63a5eaac861ec12aef16f475",
               "relative_path": "/core_models.zip"
             }
           ]

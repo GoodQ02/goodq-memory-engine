@@ -189,6 +189,7 @@ def main() -> None:
     parser.add_argument("--packs", default="core", help="Comma-separated model packs to download")
     parser.add_argument("--data-dir", default="C:\\ProgramData\\GoodQ4All", help="Authoritative data root")
     parser.add_argument("--verify-only", action="store_true", help="Perform checksum checks without downloading")
+    parser.add_argument("--cache-dir", default=None, help="Local directory to check for model files/chunks before downloading")
     args = parser.parse_args()
 
     data_root = Path(args.data_dir)
@@ -262,6 +263,28 @@ def main() -> None:
                 pack_verified = False
                 continue
 
+            # Check local cache directory for final file first
+            final_file_copied = False
+            if args.cache_dir:
+                local_candidate = Path(args.cache_dir) / file_info["name"]
+                if local_candidate.exists():
+                    _log(f"Found local candidate for {file_info['name']} in cache-dir: {local_candidate}")
+                    if compute_sha256(local_candidate) == file_info["sha256"]:
+                        _log(f"Local candidate verified successfully. Copying to destination...")
+                        shutil.copy2(local_candidate, final_file)
+                        final_file_copied = True
+                    else:
+                        _log(f"Local candidate in cache-dir has incorrect hash. Skipping.")
+
+            if final_file_copied:
+                # Extract ZIP package
+                extract_dir = models_root / "hub"
+                if not extract_archive(final_file, extract_dir):
+                    pack_verified = False
+                    sys.exit(5)
+                final_file.unlink(missing_ok=True)
+                continue
+
             # Download chunks
             chunks_paths = []
             chunk_ok = True
@@ -270,16 +293,30 @@ def main() -> None:
                 chunk_temp_file = models_root / "hub" / chunk_info["name"]
                 chunk_temp_file.parent.mkdir(parents=True, exist_ok=True)
 
-                if not download_chunk(
-                    chunk_url,
-                    chunk_temp_file,
-                    chunk_info["size_bytes"],
-                    chunk_info["sha256"],
-                    manifest.get("mirror_base_urls")
-                ):
-                    chunk_ok = False
-                    pack_verified = False
-                    break
+                # Check cache-dir first for individual chunks
+                found_local_chunk = False
+                if args.cache_dir:
+                    local_chunk_candidate = Path(args.cache_dir) / chunk_info["name"]
+                    if local_chunk_candidate.exists():
+                        _log(f"Found local chunk candidate for {chunk_info['name']} in cache-dir.")
+                        if compute_sha256(local_chunk_candidate) == chunk_info["sha256"]:
+                            _log(f"Local chunk verified successfully. Copying to destination...")
+                            shutil.copy2(local_chunk_candidate, chunk_temp_file)
+                            found_local_chunk = True
+                        else:
+                            _log(f"Local chunk in cache-dir has incorrect hash. Skipping.")
+
+                if not found_local_chunk:
+                    if not download_chunk(
+                        chunk_url,
+                        chunk_temp_file,
+                        chunk_info["size_bytes"],
+                        chunk_info["sha256"],
+                        manifest.get("mirror_base_urls")
+                    ):
+                        chunk_ok = False
+                        pack_verified = False
+                        break
                 chunks_paths.append(chunk_temp_file)
 
             if not chunk_ok:

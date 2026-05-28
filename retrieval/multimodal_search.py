@@ -1553,10 +1553,21 @@ def multimodal_search(query: str, config: Dict[str, Any], top_k: int = 10) -> Li
 def main():
     """Command-line interface for multimodal search."""
     import argparse
+    import sys
+    from pathlib import Path
+    repo_root = Path(__file__).resolve().parents[1]
+    if str(repo_root) not in sys.path:
+        sys.path.insert(0, str(repo_root))
+    if str(repo_root.parent) not in sys.path:
+        sys.path.insert(0, str(repo_root.parent))
+        
     try:
         from steps.common.config_loader import load_configs
-    except ModuleNotFoundError:
-        from goodq4all.steps.common.config_loader import load_configs
+    except ModuleNotFoundError as e:
+        if e.name in {'steps', 'steps.common', 'steps.common.config_loader'}:
+            from goodq4all.steps.common.config_loader import load_configs
+        else:
+            raise
     
     parser = argparse.ArgumentParser(description='GoodQ Multimodal Search')
     parser.add_argument('query', type=str, help='Search query')

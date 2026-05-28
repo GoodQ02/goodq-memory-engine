@@ -23,10 +23,12 @@ class PythonPathConfig:
         if self._initialized:
             return True
             
+        import sys
+        is_sandboxed = os.environ.get("GOODQ_SANDBOXED") == "1" or "Program Files" in sys.executable or "runtime" in sys.executable
         try:
             self._conda_base = self._find_conda_base()
             if not self._conda_base:
-                if os.environ.get("GOODQ_SANDBOXED") == "1":
+                if is_sandboxed:
                     logger.debug("Could not locate conda installation (running in sandboxed mode)")
                 else:
                     logger.error("Could not locate conda installation")
@@ -45,7 +47,7 @@ class PythonPathConfig:
                     self._conda_exe = self._conda_base / 'condabin' / 'conda.bat'
                 
             if not self._conda_exe.exists():
-                if os.environ.get("GOODQ_SANDBOXED") == "1":
+                if is_sandboxed:
                     logger.debug("Conda executable not found (running in sandboxed mode)")
                 else:
                     logger.error(f"Conda executable not found at {self._conda_exe}")

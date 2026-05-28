@@ -11,8 +11,10 @@ import sys
 import os
 import logging
 
-# Ensure goodq4all can be imported
+# Ensure goodq4all and local modules can be imported
 REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 if str(REPO_ROOT.parent) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT.parent))
 
@@ -87,8 +89,11 @@ def run_direct_ingestion(video_path: str | Path, cfg: Dict[str, Any] | None = No
     # Import and use the working scene ingestion system
     try:
         from cli.run_ingestion import run as scene_ingest_run
-    except ModuleNotFoundError:
-        from goodq4all.cli.run_ingestion import run as scene_ingest_run
+    except ModuleNotFoundError as e:
+        if e.name in {'cli', 'cli.run_ingestion'}:
+            from goodq4all.cli.run_ingestion import run as scene_ingest_run
+        else:
+            raise
     import typer
     
     # Get processing directory from config

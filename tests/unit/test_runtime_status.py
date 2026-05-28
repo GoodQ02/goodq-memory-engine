@@ -49,7 +49,12 @@ def test_database_status_counts_sqlite_scenes(tmp_path: Path, monkeypatch) -> No
 
     runtime = _load_runtime_route_module(repo_root, monkeypatch, db_path)
 
-    assert runtime._database_status(db_path) == {"exists": True, "scenes": 3}
+    assert runtime._database_status(db_path) == {
+        "exists": True,
+        "scenes": 3,
+        "db_name": "memory.db",
+        "epoch": tmp_path.name,
+    }
 
 
 def test_database_status_reports_zero_for_missing_database(tmp_path: Path, monkeypatch) -> None:
@@ -58,7 +63,12 @@ def test_database_status_reports_zero_for_missing_database(tmp_path: Path, monke
 
     runtime = _load_runtime_route_module(repo_root, monkeypatch, db_path)
 
-    assert runtime._database_status(db_path) == {"exists": False, "scenes": 0}
+    assert runtime._database_status(db_path) == {
+        "exists": False,
+        "scenes": 0,
+        "db_name": "missing.db",
+        "epoch": tmp_path.name,
+    }
 
 
 def test_wsl_status_probes_configured_audio_worker(tmp_path: Path, monkeypatch) -> None:

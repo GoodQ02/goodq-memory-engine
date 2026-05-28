@@ -17,10 +17,32 @@ if %ERRORLEVEL% neq 0 (
     exit /b 1
 )
 
+:: 1a. Sign the model manifest
+echo Compiling and running manifest signer...
+go_compiler\go\bin\go.exe run sign_manifest.go
+if %ERRORLEVEL% neq 0 (
+    echo [ERROR] Failed to sign model manifest.
+    exit /b 11
+)
+
+:: 1b. Embed Version Info & Icon Resource
+echo Embedding version metadata and icon into launcher...
+if not exist "go_bin\goversioninfo.exe" (
+    echo Building goversioninfo compiler helper...
+    set GOBIN=%cd%\go_bin
+    go_compiler\go\bin\go.exe install github.com/josephspurrier/goversioninfo/cmd/goversioninfo@latest
+)
+go_bin\goversioninfo.exe
+if %ERRORLEVEL% neq 0 (
+    echo [ERROR] Failed to compile version resource.
+    exit /b 12
+)
+
 :: 2. Compile Supervising Launcher LAUNCH_GOODQ.go
 echo Compiling LAUNCH_GOODQ.exe supervisor...
 if exist "..\..\LAUNCH_GOODQ.exe" del "..\..\LAUNCH_GOODQ.exe"
-go_compiler\go\bin\go.exe build -ldflags="-H windowsgui" -o ..\..\LAUNCH_GOODQ.exe LAUNCH_GOODQ.go
+go_compiler\go\bin\go.exe build -o ..\..\LAUNCH_GOODQ.exe LAUNCH_GOODQ.go
+if exist "resource.syso" del "resource.syso"
 if %ERRORLEVEL% neq 0 (
     echo [ERROR] Failed to compile Go launcher.
     exit /b 2
@@ -42,6 +64,15 @@ if not exist "staged\python-3.10-embed-amd64.zip" (
     powershell -NoProfile -Command "Expand-Archive -Path 'staged\python-3.10-embed-amd64.zip' -DestinationPath 'staged\runtime' -Force"
 )
 
+:: Ensure python310._pth includes project root and vendor paths
+(
+echo python310.zip
+echo .
+echo ..
+echo ..\vendor
+) > staged\runtime\python310._pth
+
+
 :: Download Qdrant Windows binary if not present
 if not exist "staged\qdrant\qdrant.exe" (
     echo Downloading Qdrant Windows x64 binary...
@@ -54,6 +85,7 @@ if not exist "staged\qdrant\qdrant.exe" (
 if not exist "staged\qdrant\config\qdrant_config.yaml" (
     (
     echo log_level: INFO
+    echo telemetry_disabled: true
     echo storage:
     echo   storage_path: C:\ProgramData\GoodQ4All\qdrant\storage
     echo service:
@@ -64,6 +96,25 @@ if not exist "staged\qdrant\config\qdrant_config.yaml" (
 
 :: Copy NSSM binary from toolchain directory
 copy /y nssm_bin\nssm-2.24-103-gdee49fc\win64\nssm.exe staged\nssm\nssm.exe >nul
+
+:: 3a. Stage Swagger / ReDoc Offline Documentation assets
+echo Staging offline swagger/redoc assets...
+if not exist "..\..\ui\docs_offline" mkdir "..\..\ui\docs_offline"
+copy /y "..\..\branding\favicon.ico" "..\..\ui\docs_offline\favicon.ico" >nul
+
+powershell -NoProfile -Command "$files = @{'swagger-ui-bundle.js' = 'https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-bundle.js'; 'swagger-ui.css' = 'https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css'; 'redoc.standalone.js' = 'https://cdn.jsdelivr.net/npm/redoc/bundles/redoc.standalone.js'}; foreach ($name in $files.Keys) { $path = Join-Path '..\..\ui\docs_offline' $name; if (-not (Test-Path $path)) { Write-Host \"Downloading $name to $path...\" -ForegroundColor Cyan; try { Invoke-WebRequest -UserAgent 'Wget' -UseBasicParsing -Uri $files[$name] -OutFile $path -TimeoutSec 15 } catch { Write-Host \"Warning: Failed to download $name. Docs might not render offline. error: $_\" -ForegroundColor Yellow } } else { Write-Host \"$name is already cached offline.\" -ForegroundColor Yellow } }"
+
+:: 3b. Stage Vendor Directory and Sandboxed Dependencies
+echo Staging vendor packages...
+if not exist "staged\vendor" mkdir "staged\vendor"
+xcopy /s /e /i /y "..\..\vendor" "staged\vendor" >nul
+
+echo Installing extra sandboxed dependencies (opencv-python, scenedetect, imageio-ffmpeg)...
+pip install --target "staged\vendor" --python-version 3.10 --only-binary=:all: --platform win_amd64 --implementation cp opencv-python==4.10.0.84 scenedetect==0.6.2 imageio-ffmpeg==0.5.1
+if %ERRORLEVEL% neq 0 (
+    echo [ERROR] Failed to install sandboxed dependencies.
+    exit /b 4
+)
 
 :: 4. Compile NSIS setup package
 echo Compiling final NSIS Setup Installer package...

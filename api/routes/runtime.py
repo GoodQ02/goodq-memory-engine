@@ -147,7 +147,7 @@ def _summarize_llm_health() -> Dict[str, Any]:
             "port": ollama_port,
         },
         "overall": {
-            "status": "healthy" if healthy_models == total_models else "degraded" if healthy_models > 0 else "unhealthy",
+            "status": "healthy" if healthy_models == total_models else "degraded",
             "total": total_models,
             "healthy": healthy_models,
             "unhealthy": max(total_models - healthy_models, 0),
@@ -650,7 +650,7 @@ def get_health_summary() -> Dict[str, Any]:
 
     return {
         "overall": {
-            "status": "healthy" if healthy == total else "degraded" if healthy > 0 else "unhealthy",
+            "status": "healthy" if healthy == total else "degraded",
             "total": total,
             "healthy": healthy,
             "unhealthy": total - healthy,

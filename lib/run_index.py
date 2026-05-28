@@ -9,7 +9,11 @@ from typing import Any, Dict, Iterable, Iterator, List, Optional
 logger = logging.getLogger(__name__)
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
-_DEFAULT_REPORTS_ROOT = _REPO_ROOT / "reports" / "fresh_ingest_runs"
+_DATA_ROOT = os.environ.get("GOODQ_DATA_ROOT")
+if _DATA_ROOT:
+    _DEFAULT_REPORTS_ROOT = Path(_DATA_ROOT) / "reports" / "fresh_ingest_runs"
+else:
+    _DEFAULT_REPORTS_ROOT = _REPO_ROOT / "reports" / "fresh_ingest_runs"
 
 _COMPLETED_STATUSES = {"passed", "completed", "success"}
 _FAILED_STATUSES = {"failed", "error"}

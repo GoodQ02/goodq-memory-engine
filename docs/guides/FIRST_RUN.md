@@ -4,172 +4,102 @@
 
 # First Run
 
-Use this path when you want to prove GoodQ4All can turn one local media file
-into persisted scene memory.
+Use this guide to verify that GoodQ4All can turn a local media file into persisted scene memory on your Windows 11 machine.
 
-This guide is intentionally short. It is for the first success loop, not for
-architecture, release proof, or broad tuning.
-
-## What You Will Prove
-
-- The repo can bootstrap on a Windows 11 host.
-- The local runtime can validate itself.
-- Watchdog can see one file in the configured inbox.
-- Ingestion can create scene memory.
-- The API can expose local inspection routes.
-
-## Before You Start
-
-Supported first-run host: Windows 11 with PowerShell.
-
-Have these available before running the installer:
-
-- Git
-- Miniconda or Anaconda visible to the shell
-- Python 3.10 or newer
-- at least 25 GB free for the baseline path (breakdown: ~4 GB conda environments, ~12 GB model cache prefetch, ~6 GB processing workspace, ~3 GB database storage; space required is lower if model prefetch is skipped)
-- optional: NVIDIA GPU and WSL2 Ubuntu for accelerated lanes
-
-macOS and Linux are not supported first-run hosts for this repository today.
-Use [`docs/reference/PLATFORM_SUPPORT.md`](../reference/PLATFORM_SUPPORT.md) for
-the current platform contract.
-
-> [!TIP]
-> **Start with video or audio:** For the cleanest first success loop, use a small video (`.mp4`) or audio (`.mp3`/`.wav`) file. Text extraction from documents (`.pdf`, `.doc`, `.docx`) requires additional local extraction utilities (like Poppler) or desktop office tools.
+---
 
 ## Mental Model
 
-- `LAUNCH_GOODQ.ps1` checks readiness and opens operator monitors.
-- Watchdog watches the configured `import_inbox`.
-- `cli.run_ingestion` owns actual ingestion.
-- The API is a local read and inspection surface.
-- The operator console is a read-only cockpit over the API and persisted
-  artifacts.
-- Runtime artifacts are the durable proof.
+GoodQ4All runs as a set of coordinated local services:
+1. **Database Service**: Qdrant running locally to index vector embeddings.
+2. **API & Engine Process**: A FastAPI backend performing scene perception, audio transcription, speaker diarization, and Phase 6 memory harmonization.
+3. **Control Plane**: The Control Agent supervising execution and generating health reports.
+4. **Visual Cockpit**: The **Retro Memory Explorer** (and Classic Operator Console), served locally to let you browse your media, view transcripts, and inspect the knowledge graph.
 
-GoodQ4All does not currently ship a polished consumer memory browser. The
-supported first-run surface is CLI plus Watchdog plus API docs, the read-only
-operator console, and persisted artifacts.
+---
 
-## 1. Bootstrap
+## Method A: Installer Onboarding (Recommended)
 
-*(Expect roughly 10–30 minutes on first install, depending on network speed and whether model prefetching is enabled)*
+If you are running the packaged release of GoodQ4All, this is the quickest and easiest way to verify the system.
 
-Open PowerShell in the repo root:
+### 1. Launch the Application
+Double-click the **GoodQ4All** shortcut on your Desktop or Start Menu.
+* **What happens behind the scenes**: This executes [LAUNCH_GOODQ.exe](file:///C:/Program%20Files/GoodQ4All/LAUNCH_GOODQ.exe) which performs native VC++ checks, verifies the model manifest signature, launches Qdrant, starts the Python API/Control processes, and automatically launches your browser.
+* **Expected Result**: Your default web browser will open automatically to the **Retro Memory Explorer** served at:
+  ```text
+  http://127.0.0.1:30000/ui/retro_console_v1/?token=<secure_session_token>
+  ```
 
+### 2. Drop a Media File
+Copy a small audio (`.mp3`/`.wav`) or video (`.mp4`) file and drop it into your import drop zone:
+```text
+%USERPROFILE%\GoodQ_Data\import_inbox\
+```
+
+### 3. Observe Ingestion
+The background watchdog service automatically detects the file and starts processing. You can:
+* Inspect real-time status in the **Classic Operator Console** served at `http://127.0.0.1:30000/ui/operator_console_v1/`.
+* Watch the **Retro Memory Explorer** update its timeline and knowledge graph once ingestion completes.
+
+---
+
+## Method B: Developer Source Onboarding (Advanced)
+
+If you are developing or running GoodQ4All directly from the source repository:
+
+### Prerequisites
+* Windows 11 with PowerShell
+* Git
+* Miniconda or Anaconda visible to the shell
+* Python 3.10 or newer
+* At least 25 GB free disk space (baseline path with model prefetch)
+
+### 1. Bootstrap the Environment
+Open PowerShell in your cloned repository root:
 ```powershell
 python scripts/bootstrap_install.py
 .\scripts\bootstrap_validate.bat
 ```
+*(If you want a CPU-safe run without GPU or model prefetch: `python scripts/bootstrap_install.py --disable-gpu --disable-wsl-audio --skip-model-prefetch`)*
 
-If you want a CPU-safe installer pass without GPU, WSL audio, or model prefetch:
-
-```powershell
-python scripts/bootstrap_install.py --disable-gpu --disable-wsl-audio --skip-model-prefetch
-```
-
-Expected result:
-
-- bootstrap completes without blocking errors
-- validation reports pass, possibly with documented warnings for optional
-  components
-
-During an interactive run, the installer may ask for:
-
-- the base data root directory
-- whether to enable GPU acceleration
-- whether to enable WSL audio acceleration
-- whether to install the supported step environment pack
-- whether to prefetch local model caches
-- Conda Terms of Service acceptance when Conda requires it
-- FFmpeg and Qdrant service installation or repair when missing
-
-For local secrets or provider settings, copy `.env.local.template` to
-`.env.local` and edit `.env.local` only. `.env.template` is a broad environment
-contract reference, not the first file new users should edit.
-
-## 2. Check Readiness
-
-Run the safe launcher first:
-
-```powershell
-
-## 2. Check Readiness
-
-Run the safe launcher first:
-
+### 2. Check Readiness
+Run the PowerShell launcher script:
 ```powershell
 .\LAUNCH_GOODQ.ps1
 ```
+This performs a dry-run check of Conda, Qdrant, environment configurations, and writes the `GOODQ_DATA_ROOT` parameters.
 
-This does not start ingestion. It checks configuration, Qdrant, runtime paths,
-and logs. Ingestion starts only when explicitly requested.
-
-## 3. Start Watchdog
-
-In a terminal you can leave open:
-
-> [!IMPORTANT]
-> **Leave this terminal open.** Watchdog must remain running in the background to monitor the inbox.
-
+### 3. Start Watchdog
+Open a PowerShell window, ensure you are in the project root, and start the Watchdog:
 ```powershell
 conda run --no-capture-output -n goodq_core python -m cli.watchdog
 ```
-
-Watchdog watches:
-
+*Leave this terminal open. It monitors the inbox drop zone:*
 ```text
 <GOODQ_DATA_ROOT>\GoodQ_Data\import_inbox\
 ```
 
-`GOODQ_DATA_ROOT` is the base root selected by bootstrap or `.env.local`. The
-runtime derives `GoodQ_Data` beneath it, so the first-run drop zone is always
-the path shape shown above.
-If bootstrap reports a selected data root that already ends in `GoodQ_Data`,
-use that folder directly; do not append a second `GoodQ_Data` segment.
-
-## 4. Drop One File
-
-Copy one small local media file into the inbox:
-
-```powershell
-Copy-Item .\path\to\sample.mp4 <GOODQ_DATA_ROOT>\GoodQ_Data\import_inbox\
-```
-
-Use a short file for the first run. Larger videos are normal later, but the
-first success loop should be easy to inspect.
-
-PDF ingestion requires Poppler / `pdftotext`. `.doc` and `.docx` extraction
-depends on the local document extraction tools available on the host, so use a
-small video, audio, image, text, or known-supported PDF file for the cleanest
-first run.
-
-## 5. Start The API
-
-In another terminal:
-
-> [!IMPORTANT]
-> **Open a second, separate terminal window/session.** Do not close the Watchdog terminal. Run the API server here.
-
+### 4. Start the API Server
+Open a second PowerShell window, change to the project root, and run the API:
 ```powershell
 conda run --no-capture-output -n goodq_core python -m api.server
 ```
+*Leave this terminal open as well. It serves the UI consoles.*
 
-Then open:
+### 5. Drop a Media File
+Copy a small media file into:
+```text
+<GOODQ_DATA_ROOT>\GoodQ_Data\import_inbox\
+```
 
-- `http://127.0.0.1:30000/api/health/summary`
-- `http://127.0.0.1:30000/docs`
-- `http://127.0.0.1:30000/ui/operator_console_v1/`
+### 6. Open UI Dashboard
+Open your web browser and navigate to:
+* **Retro Memory Explorer**: `http://127.0.0.1:30000/ui/retro_console_v1/`
+* **Classic Operator Console**: `http://127.0.0.1:30000/ui/operator_console_v1/`
 
-These default to `GOODQ_API_HOST=127.0.0.1` and `GOODQ_API_PORT=30000`. Override
-them in `.env.local` only when you intentionally change the local API binding.
+---
 
-## 6. Confirm Success
-
-For a successful first run, expect:
-
-
-## 6. Confirm Success
+## 3. Confirming Success
 
 For a successful first run, expect:
 

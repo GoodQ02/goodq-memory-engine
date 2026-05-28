@@ -73,8 +73,10 @@ class ConfigHealer:
             raise ValueError("ConfigHealer requires an injected llm_client")
         self.llm = llm_client
         
-        # Backup directory for config safety
-        self.backup_dir = self.root / "data" / "config_backups"
+        # Backup directory for config safety (resolve under writeable GOODQ_DATA_ROOT)
+        import os
+        data_root = os.environ.get("GOODQ_DATA_ROOT") or "C:\\ProgramData\\GoodQ4All"
+        self.backup_dir = Path(data_root) / "config_backups"
         self.backup_dir.mkdir(parents=True, exist_ok=True)
         
         # Load current configs

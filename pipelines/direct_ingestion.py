@@ -11,8 +11,10 @@ import sys
 import os
 import logging
 
-# Ensure goodq4all can be imported
+# Ensure goodq4all and local modules can be imported
 REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 if str(REPO_ROOT.parent) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT.parent))
 
@@ -85,7 +87,13 @@ def run_direct_ingestion(video_path: str | Path, cfg: Dict[str, Any] | None = No
     
     # The actual ingestion uses the canonical scene-based runner
     # Import and use the working scene ingestion system
-    from goodq4all.cli.run_ingestion import run as scene_ingest_run
+    try:
+        from cli.run_ingestion import run as scene_ingest_run
+    except ModuleNotFoundError as e:
+        if e.name in {'cli', 'cli.run_ingestion'}:
+            from goodq4all.cli.run_ingestion import run as scene_ingest_run
+        else:
+            raise
     import typer
     
     # Get processing directory from config
@@ -96,7 +104,9 @@ def run_direct_ingestion(video_path: str | Path, cfg: Dict[str, Any] | None = No
     try:
         # Create a temporary directory with just this video to ensure only it gets processed
         import shutil
-        temp_inbox = Path(f"logs/temp_inbox_{video_path.stem}")
+        from configs.paths import LOGS_DIR
+        LOGS_DIR.mkdir(parents=True, exist_ok=True)
+        temp_inbox = LOGS_DIR / f"temp_inbox_{video_path.stem}"
         temp_inbox.mkdir(parents=True, exist_ok=True)
         
         # Symlink the video file
@@ -108,7 +118,7 @@ def run_direct_ingestion(video_path: str | Path, cfg: Dict[str, Any] | None = No
         try:
             scene_ingest_run(
                 input_dir=temp_inbox,
-                output=Path(f"logs/direct_ingest_{video_path.stem}.json"),
+                output=LOGS_DIR / f"direct_ingest_{video_path.stem}.json",
                 workspace=processing_root,  # Use configured processing directory
                 max_videos=1,  # Process only this video
                 verbose=True,
@@ -121,7 +131,7 @@ def run_direct_ingestion(video_path: str | Path, cfg: Dict[str, Any] | None = No
         print(f"[INGEST] [PASS] Ingestion complete for {video_path.name}")
         
         # Read the actual result JSON to get the correct video_id and paths
-        output_json = Path(f"logs/direct_ingest_{video_path.stem}.json")
+        output_json = LOGS_DIR / f"direct_ingest_{video_path.stem}.json"
         actual_video_id = None
         actual_processing_dir = None
         video_hash = None

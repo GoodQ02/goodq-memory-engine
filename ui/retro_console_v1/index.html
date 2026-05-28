@@ -12,7 +12,6 @@
       <div class="scanlines" id="scanlines-layer"></div>
 
       <!-- Floating Restore Tabs -->
-      <button class="restore-tab restore-top" id="restore-top-btn" hidden>▼ SHOW HEADER</button>
       <button class="restore-tab restore-left" id="restore-left-btn" hidden>▶ SEARCH</button>
       <button class="restore-tab restore-right" id="restore-right-btn" hidden>INSPECTOR ◀</button>
       <button class="restore-tab restore-bottom" id="restore-bottom-btn" hidden>▲ TIMELINE</button>
@@ -31,13 +30,27 @@
           </select>
           
           <div class="accessibility-menu">
+            <button id="toggle-droppad-btn" class="accessibility-btn droppad-btn" title="Toggle File Ingestion Upload Pad">Upload Pad</button>
             <button id="toggle-intel-btn" class="accessibility-btn intel-btn" title="Toggle Video Intelligence Panel">Intel: OFF</button>
             <button id="toggle-scanlines" class="accessibility-btn" title="Toggle Scanline Grid Effect">Scanlines: ON</button>
             <button id="toggle-effects" class="accessibility-btn" title="Toggle Glow / Pulsing Effects">Effects: ON</button>
           </div>
-          <button class="panel-collapse-btn" id="collapse-top-btn" title="Collapse Header">▲</button>
         </div>
       </header>
+
+      <!-- Drop Pad Section (Sprint 4) -->
+      <div id="droppad-panel" class="droppad-panel" hidden>
+        <div class="droppad-inner">
+          <div id="drop-zone" class="drop-zone">
+            <div class="helipad-square">
+              <div class="helipad-h">H</div>
+            </div>
+            <p class="drop-zone-text">DRAG & DROP VIDEO/AUDIO HERE OR <span class="browse-link">CLICK TO BROWSE</span></p>
+            <input type="file" id="droppad-file-input" style="display: none;" accept="video/*,audio/*" />
+            <div id="upload-status" class="upload-status" hidden></div>
+          </div>
+        </div>
+      </div>
 
       <!-- Real-Time Ingestion Progress Widget -->
       <div id="ingestion-progress-widget" class="ingestion-progress-widget" hidden>

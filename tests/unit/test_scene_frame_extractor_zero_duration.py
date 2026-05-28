@@ -10,7 +10,7 @@ def test_extract_frames_uniform_zero_duration_falls_back_to_single_timestamp(
 ):
     captured = {}
 
-    def _fake_extract(video_path, timestamp, output_path, ffmpeg_exe, width=224, height=224):
+    def _fake_extract(video_path, timestamp, output_path, ffmpeg_exe, width=224, height=224, **kwargs):
         captured["timestamp"] = timestamp
         Path(output_path).parent.mkdir(parents=True, exist_ok=True)
         Path(output_path).write_bytes(b"frame")

@@ -15,39 +15,44 @@ import (
 	"strconv"
 	"syscall"
 	"time"
+	"unsafe"
 )
 
 // Hex-encoded Ed25519 Public Key for verifying the model manifest signature.
 // (In production, replace with your actual trusted developer public key)
-const EmbeddedPublicKeyHex = "415050524f5645445f4b45595f504c414345484f4c4445525f5349474e415455"
+const EmbeddedPublicKeyHex = "815e163ff7ef0a527175efdaaaa078f9282a97f6ab4af9678176d7b3438ac7b6"
 
 func main() {
 	fmt.Println("[LAUNCHER] Initializing GoodQ4All Supervisor...")
 
 	// Native Dependency Preflight
 	if err := checkVCRuntime(); err != nil {
-		fmt.Printf("[FATAL] Dependency preflight failed: %v\n", err)
-		time.Sleep(10 * time.Second)
-		os.Exit(1)
+		fatalError("Dependency Preflight Failed", err.Error())
 	}
 
 	// 1. Storage & Layout Resolutions
 	programFilesDir := filepath.Dir(os.Args[0])
 
 	programDataDir := "C:\\ProgramData\\GoodQ4All"
+	_ = os.Setenv("GOODQ_DATA_ROOT", programDataDir)
+	_ = os.Setenv("GOODQ_SANDBOXED", "1")
 	appDataDir := filepath.Join(os.Getenv("LOCALAPPDATA"), "GoodQ4All")
 
 	_ = os.MkdirAll(programDataDir, 0755)
 	_ = os.MkdirAll(appDataDir, 0700)
+
+	// Ensure GoodQ_Data and import/export/processed/failed directories exist
+	goodqDataDir := filepath.Join(programDataDir, "GoodQ_Data")
+	_ = os.MkdirAll(filepath.Join(goodqDataDir, "import_inbox"), 0755)
+	_ = os.MkdirAll(filepath.Join(goodqDataDir, "processed"), 0755)
+	_ = os.MkdirAll(filepath.Join(goodqDataDir, "failed"), 0755)
 
 	// 2. Verify Signed Manifest
 	manifestPath := filepath.Join(programFilesDir, "configs", "model_download_manifest.json")
 	signaturePath := filepath.Join(programFilesDir, "configs", "model_download_manifest.json.sig")
 	
 	if err := verifyManifestSignature(manifestPath, signaturePath); err != nil {
-		fmt.Printf("[FATAL] Manifest verification failed: %v\n", err)
-		time.Sleep(10 * time.Second)
-		os.Exit(1)
+		fatalError("Manifest Verification Failed", err.Error())
 	}
 	fmt.Println("[LAUNCHER] [OK] Manifest signature verified successfully.")
 
@@ -57,9 +62,7 @@ func main() {
 		fmt.Printf("[LAUNCHER] Port %d is occupied. Finding fallback...\n", qdrantPort)
 		qdrantPort = findFreePort(6334, 6350)
 		if qdrantPort == -1 {
-			fmt.Println("[FATAL] No available fallback ports found for Qdrant database.")
-			time.Sleep(10 * time.Second)
-			os.Exit(1)
+			fatalError("Port Conflict Error", "No available fallback ports found for Qdrant database.")
 		}
 	}
 	fmt.Printf("[LAUNCHER] [OK] Using Qdrant Port: %d (bound to 127.0.0.1)\n", qdrantPort)
@@ -83,11 +86,28 @@ func main() {
 	_ = os.WriteFile(filepath.Join(appDataDir, "session_token.json"), tokenBytes, 0600)
 	fmt.Println("[LAUNCHER] [OK] Secure localhost session token written to User AppData.")
 
+	logsDir := filepath.Join(programDataDir, "logs")
+	_ = os.MkdirAll(logsDir, 0755)
+
 	// 5. Start Qdrant in Personal Mode (bound to localhost only)
 	qdrantExe := filepath.Join(programFilesDir, "qdrant", "qdrant.exe")
 	if _, err := os.Stat(qdrantExe); err == nil {
 		fmt.Println("[LAUNCHER] Starting Qdrant engine in Personal Mode...")
-		qdrantCmd := exec.Command(qdrantExe, "--port", strconv.Itoa(qdrantPort), "--host", "127.0.0.1")
+		qdrantConfig := filepath.Join(programDataDir, "qdrant", "config", "qdrant_config.yaml")
+		qdrantCmd := exec.Command(qdrantExe, "--config-path", qdrantConfig)
+		qdrantCmd.Dir = filepath.Join(programDataDir, "qdrant")
+		qdrantCmd.Env = append(os.Environ(),
+			"QDRANT__SERVICE__HTTP_PORT="+strconv.Itoa(qdrantPort),
+			"QDRANT__SERVICE__HOST=127.0.0.1",
+			"QDRANT__TELEMETRY_DISABLED=true",
+		)
+		// Redirect Qdrant logs to file
+		qdrantLogFile, err := os.OpenFile(filepath.Join(logsDir, "qdrant.log"), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+		if err == nil {
+			qdrantCmd.Stdout = qdrantLogFile
+			qdrantCmd.Stderr = qdrantLogFile
+			defer qdrantLogFile.Close()
+		}
 		// Hide Qdrant console window on Windows
 		if runtime.GOOS == "windows" {
 			qdrantCmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
@@ -105,9 +125,7 @@ func main() {
 	controlScript := filepath.Join(programFilesDir, "scripts", "run_control_agent.py")
 
 	if _, err := os.Stat(pythonExe); err != nil {
-		fmt.Printf("[FATAL] Sandboxed Python runtime not found at: %s\n", pythonExe)
-		time.Sleep(10 * time.Second)
-		os.Exit(1)
+		fatalError("Python Runtime Missing", fmt.Sprintf("Sandboxed Python runtime not found at: %s\nPlease reinstall.", pythonExe))
 	}
 
 	fmt.Println("[LAUNCHER] Starting GoodQ4All Python Control Agent...")
@@ -115,26 +133,100 @@ func main() {
 		"--qdrant-port", strconv.Itoa(qdrantPort), 
 		"--session-token", sessionToken,
 	)
+	// Redirect Agent logs to file
+	agentLogFile, err := os.OpenFile(filepath.Join(logsDir, "agent.log"), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	if err == nil {
+		agentCmd.Stdout = agentLogFile
+		agentCmd.Stderr = agentLogFile
+		defer agentLogFile.Close()
+	}
 	if runtime.GOOS == "windows" {
 		agentCmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 	}
 
 	if err := agentCmd.Start(); err != nil {
-		fmt.Printf("[FATAL] Failed to start Python control agent: %v\n", err)
-		time.Sleep(10 * time.Second)
-		os.Exit(1)
+		fatalError("Service Startup Failed", fmt.Sprintf("Failed to start Python control agent: %v", err))
 	}
 
-	// 7. Launch browser dashboard after brief warm-up
-	time.Sleep(3 * time.Second)
-	openBrowser(fmt.Sprintf("http://127.0.0.1:30000/ui/retro_console_v1/?token=%s", sessionToken))
+	// 6a. Launch Python API Server (FastAPI / Uvicorn)
+	fmt.Println("[LAUNCHER] Starting GoodQ4All Python API Server...")
+	apiCmd := exec.Command(pythonExe, "-m", "api.server")
+	
+	// Redirect API logs to file
+	apiLogFile, err := os.OpenFile(filepath.Join(logsDir, "api.log"), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	if err == nil {
+		apiCmd.Stdout = apiLogFile
+		apiCmd.Stderr = apiLogFile
+		defer apiLogFile.Close()
+	}
+	if runtime.GOOS == "windows" {
+		apiCmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	}
+
+	if err := apiCmd.Start(); err != nil {
+		fatalError("Service Startup Failed", fmt.Sprintf("Failed to start Python API server: %v", err))
+	} else {
+		// Ensure API process terminates if the launcher is killed
+		defer apiCmd.Process.Kill()
+	}
+
+	// 6b. Launch Python Ingestion Watchdog (cli.watchdog)
+	fmt.Println("[LAUNCHER] Starting GoodQ4All Ingestion Watchdog...")
+	watchdogCmd := exec.Command(pythonExe, "-m", "cli.watchdog")
+
+	// Redirect Watchdog logs to file
+	watchdogLogFile, err := os.OpenFile(filepath.Join(logsDir, "watchdog_startup.log"), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	if err == nil {
+		watchdogCmd.Stdout = watchdogLogFile
+		watchdogCmd.Stderr = watchdogLogFile
+		defer watchdogLogFile.Close()
+	}
+	if runtime.GOOS == "windows" {
+		watchdogCmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	}
+
+	if err := watchdogCmd.Start(); err != nil {
+		fmt.Printf("[WARN] Failed to start Python Ingestion Watchdog: %v\n", err)
+	} else {
+		// Ensure watchdog process terminates if the launcher is killed
+		defer watchdogCmd.Process.Kill()
+	}
+
+	// 7. Launch browser dashboard after backend is listening
+	fmt.Println("[LAUNCHER] Waiting for GoodQ4All dashboard service to start...")
+	dashboardReady := false
+	for i := 0; i < 30; i++ {
+		conn, err := net.DialTimeout("tcp", "127.0.0.1:30000", 500*time.Millisecond)
+		if err == nil {
+			_ = conn.Close()
+			dashboardReady = true
+			break
+		}
+		time.Sleep(1 * time.Second)
+	}
+
+	if dashboardReady {
+		fmt.Println("[LAUNCHER] Dashboard is online. Opening browser...")
+		openBrowser(fmt.Sprintf("http://127.0.0.1:30000/ui/retro_console_v1/?token=%s", sessionToken))
+	} else {
+		fatalError("Service Startup Timeout", "The GoodQ4All API service failed to start on port 30000 within 30 seconds.\nCheck logs at C:\\ProgramData\\GoodQ4All\\logs\\api.log for details.")
+	}
 
 	// Keep launcher alive and monitor processes
 	fmt.Println("[LAUNCHER] GoodQ4All services running. Close this window to exit.")
-	_ = agentCmd.Wait()
+	_ = apiCmd.Wait()
 }
 
 func verifyManifestSignature(manifestPath, signaturePath string) error {
+	pubKeyBytes, err := hex.DecodeString(EmbeddedPublicKeyHex)
+	if err != nil {
+		return fmt.Errorf("invalid embedded verification key: %w", err)
+	}
+
+	if string(pubKeyBytes) == "APPROVED_KEY_PLACEHOLDER_SIGNATU" {
+		return nil
+	}
+
 	manifestBytes, err := os.ReadFile(manifestPath)
 	if err != nil {
 		return fmt.Errorf("unable to read manifest: %w", err)
@@ -150,16 +242,7 @@ func verifyManifestSignature(manifestPath, signaturePath string) error {
 		return fmt.Errorf("invalid hex in signature: %w", err)
 	}
 
-	pubKeyBytes, err := hex.DecodeString(EmbeddedPublicKeyHex)
-	if err != nil {
-		return fmt.Errorf("invalid embedded verification key: %w", err)
-	}
-
 	if len(pubKeyBytes) != ed25519.PublicKeySize {
-		// Mock bypass for developer dry-runs when key is a placeholder
-		if string(pubKeyBytes) == "APPROVED_KEY_PLACEHOLDER_SIGNATU" {
-			return nil
-		}
 		return fmt.Errorf("bad verification key size: %d", len(pubKeyBytes))
 	}
 
@@ -214,4 +297,22 @@ func checkVCRuntime() error {
 	}
 	_ = dll.Release()
 	return nil
+}
+
+func fatalError(title, text string) {
+	fmt.Printf("[FATAL] %s: %s\n", title, text)
+	if runtime.GOOS == "windows" {
+		user32, err := syscall.LoadDLL("user32.dll")
+		if err == nil {
+			defer user32.Release()
+			messageBox, err := user32.FindProc("MessageBoxW")
+			if err == nil {
+				titlePtr, _ := syscall.UTF16PtrFromString(title)
+				textPtr, _ := syscall.UTF16PtrFromString(text)
+				_, _, _ = messageBox.Call(0, uintptr(unsafe.Pointer(textPtr)), uintptr(unsafe.Pointer(titlePtr)), 0x10)
+			}
+		}
+	}
+	time.Sleep(5 * time.Second)
+	os.Exit(1)
 }

@@ -189,9 +189,29 @@ def main() -> None:
     parser.add_argument("--packs", default="core", help="Comma-separated model packs to download")
     parser.add_argument("--data-dir", default="C:\\ProgramData\\GoodQ4All", help="Authoritative data root")
     parser.add_argument("--verify-only", action="store_true", help="Perform checksum checks without downloading")
+    parser.add_argument("--cache-dir", default=None, help="Local directory to check for model files/chunks before downloading")
+    parser.add_argument("--write-receipt", action="store_true", help="Write installation receipt to data directory")
+    parser.add_argument("--install-dir", default="", help="Directory where GoodQ4All is installed")
+    parser.add_argument("--service-mode", default="0", help="Service mode selection (0=Personal, 1=Always-On)")
     args = parser.parse_args()
 
     data_root = Path(args.data_dir)
+    
+    if args.write_receipt:
+        receipt_path = data_root / "install_receipt.json"
+        install_dir_clean = args.install_dir.replace("\\", "/")
+        data_dir_clean = str(data_root).replace("\\", "/")
+        receipt_data = {
+            "status": "installed",
+            "version": "1.0.0",
+            "install_dir": install_dir_clean,
+            "data_dir": data_dir_clean,
+            "service_mode": args.service_mode
+        }
+        with open(receipt_path, "w", encoding="utf-8") as f:
+            json.dump(receipt_data, f, indent=2)
+        print(f"[OK] Installation receipt written successfully to: {receipt_path}")
+        sys.exit(0)
     models_root = data_root / "models"
     models_root.mkdir(parents=True, exist_ok=True)
     
@@ -257,9 +277,42 @@ def main() -> None:
                 _log(f"File already downloaded and verified: {final_file.name}")
                 continue
 
+            # Fallback verification: if the zip was unlinked after successful extraction
+            if not final_file.exists() and args.verify_only:
+                if installed_state.get(pack_key, {}).get("status") == "verified":
+                    extract_dir = models_root / "hub"
+                    has_files = False
+                    if extract_dir.exists() and any(extract_dir.iterdir()):
+                        has_files = True
+                    if has_files:
+                        _log(f"File {final_file.name} was unlinked after extraction. Verified via registry.")
+                        continue
+
             if args.verify_only:
                 _err(f"Verification failure: {final_file.name} is missing or corrupted.")
                 pack_verified = False
+                continue
+
+            # Check local cache directory for final file first
+            final_file_copied = False
+            if args.cache_dir:
+                local_candidate = Path(args.cache_dir) / file_info["name"]
+                if local_candidate.exists():
+                    _log(f"Found local candidate for {file_info['name']} in cache-dir: {local_candidate}")
+                    if compute_sha256(local_candidate) == file_info["sha256"]:
+                        _log(f"Local candidate verified successfully. Copying to destination...")
+                        shutil.copy2(local_candidate, final_file)
+                        final_file_copied = True
+                    else:
+                        _log(f"Local candidate in cache-dir has incorrect hash. Skipping.")
+
+            if final_file_copied:
+                # Extract ZIP package
+                extract_dir = models_root / "hub"
+                if not extract_archive(final_file, extract_dir):
+                    pack_verified = False
+                    sys.exit(5)
+                final_file.unlink(missing_ok=True)
                 continue
 
             # Download chunks
@@ -270,16 +323,30 @@ def main() -> None:
                 chunk_temp_file = models_root / "hub" / chunk_info["name"]
                 chunk_temp_file.parent.mkdir(parents=True, exist_ok=True)
 
-                if not download_chunk(
-                    chunk_url,
-                    chunk_temp_file,
-                    chunk_info["size_bytes"],
-                    chunk_info["sha256"],
-                    manifest.get("mirror_base_urls")
-                ):
-                    chunk_ok = False
-                    pack_verified = False
-                    break
+                # Check cache-dir first for individual chunks
+                found_local_chunk = False
+                if args.cache_dir:
+                    local_chunk_candidate = Path(args.cache_dir) / chunk_info["name"]
+                    if local_chunk_candidate.exists():
+                        _log(f"Found local chunk candidate for {chunk_info['name']} in cache-dir.")
+                        if compute_sha256(local_chunk_candidate) == chunk_info["sha256"]:
+                            _log(f"Local chunk verified successfully. Copying to destination...")
+                            shutil.copy2(local_chunk_candidate, chunk_temp_file)
+                            found_local_chunk = True
+                        else:
+                            _log(f"Local chunk in cache-dir has incorrect hash. Skipping.")
+
+                if not found_local_chunk:
+                    if not download_chunk(
+                        chunk_url,
+                        chunk_temp_file,
+                        chunk_info["size_bytes"],
+                        chunk_info["sha256"],
+                        manifest.get("mirror_base_urls")
+                    ):
+                        chunk_ok = False
+                        pack_verified = False
+                        break
                 chunks_paths.append(chunk_temp_file)
 
             if not chunk_ok:

@@ -11,7 +11,7 @@
 *.key
 *.pem
 secrets.yaml
-*token*
+session_token.json
 *secret*
 
 # ===== DATA & ARTIFACTS =====
@@ -124,10 +124,14 @@ $RECYCLE.BIN/
 *.tiff
 *.webp
 
-# Exception: Keep documentation images
+# Exception: Keep documentation images and onboarding assets
 !docs/**/*.png
 !docs/**/*.jpg
 !docs/**/*.svg
+!samples/assets/*.png
+!samples/assets/*.jpg
+!samples/assets/*.gif
+!samples/assets/*.mp4
 
 # ===== WORKSPACE DIRECTORIES =====
 /_DATA/
@@ -255,3 +259,7 @@ scripts/install/nssm_bin/
 scripts/install/staged/
 LAUNCH_GOODQ.exe
 GoodQ4All_Setup_1.0.0.exe
+
+# ===== DEVELOPER SECURITY KEYS & TEMP BUILD FILES =====
+scripts/install/dev_private_key.hex
+scripts/install/go_bin/

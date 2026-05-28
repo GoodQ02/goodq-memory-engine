@@ -18,11 +18,20 @@ class PythonPathConfig:
         self._conda_exe = None
         self._env_pythons = {}
         self._initialized = False
+        import sys
+        self.is_sandboxed = os.environ.get("GOODQ_SANDBOXED") == "1" or "Program Files" in sys.executable or "runtime" in sys.executable
         
     def initialize(self) -> bool:
         if self._initialized:
             return True
             
+        if self.is_sandboxed:
+            logger.info("Running in sandboxed/standalone mode (no conda needed)")
+            self._conda_base = None
+            self._conda_exe = None
+            self._initialized = True
+            return True
+
         try:
             self._conda_base = self._find_conda_base()
             if not self._conda_base:
@@ -156,12 +165,13 @@ class PythonPathConfig:
         if not self._initialized:
             self.initialize()
             
+        if self.is_sandboxed or not self._conda_base:
+            import sys
+            return Path(sys.executable)
+            
         if env_name in self._env_pythons:
             return self._env_pythons[env_name]
         
-        if not self._conda_base:
-            return None
-            
         envs_dir = self._conda_base / 'envs' / env_name
         if platform.system() == 'Windows':
             python_exe = envs_dir / 'python.exe'
@@ -189,6 +199,10 @@ class PythonPathConfig:
             self.initialize()
             
         if not self._conda_exe:
+            if self.is_sandboxed:
+                import sys
+                # Return a python script wrapper that ignores the first 'python' argument to run_in_conda
+                return [sys.executable, "-c", "import sys, subprocess; subprocess.run([sys.executable] + sys.argv[2:])"]
             raise RuntimeError("Conda executable not found")
             
         return [str(self._conda_exe), 'run', '-n', env_name]

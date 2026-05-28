@@ -14,6 +14,8 @@ RequestExecutionLevel admin
 
 ; MUI Configuration
 !define MUI_ABORTWARNING
+!define MUI_ICON "..\..\branding\favicon.ico"
+!define MUI_UNICON "..\..\branding\favicon.ico"
 !define MUI_WELCOMEPAGE_TITLE "Welcome to the GoodQ4All v1.0.0 Installer"
 !define MUI_WELCOMEPAGE_TEXT "This installer will set up your local-first personal memory engine.\r\n\r\nIt will configure a sandboxed runtime environment (No Conda required) and download selected model weights."
 
@@ -69,15 +71,16 @@ runtime_ok:
   DetailPrint "Step 4/10: Copying application binaries and codefiles..."
   SetOutPath "$INSTDIR"
   File "..\..\LAUNCH_GOODQ.exe"
+  File "..\..\goodq_version.py"
   
   SetOutPath "$INSTDIR\qdrant"
   File "staged\qdrant\qdrant.exe"
 
   SetOutPath "$INSTDIR\scripts"
-  File /r "..\..\scripts\*.*"
+  File /r /x "go_compiler" /x "nsis_compiler" /x "nssm_bin" /x "staged" /x "go_bin" /x "dev_private_key.hex" "..\..\scripts\*.*"
 
   SetOutPath "$INSTDIR\configs"
-  File /r "..\..\configs\*.*"
+  File /r /x "config.local.yaml" "..\..\configs\*.*"
 
   SetOutPath "$INSTDIR\api"
   File /r "..\..\api\*.*"
@@ -91,12 +94,37 @@ runtime_ok:
   SetOutPath "$INSTDIR\ui"
   File /r "..\..\ui\*.*"
 
+  SetOutPath "$INSTDIR\agents"
+  File /r "..\..\agents\*.*"
+
+  SetOutPath "$INSTDIR\lib"
+  File /r "..\..\lib\*.*"
+
+  SetOutPath "$INSTDIR\common"
+  File /r "..\..\common\*.*"
+
+  SetOutPath "$INSTDIR\retrieval"
+  File /r "..\..\retrieval\*.*"
+
+  SetOutPath "$INSTDIR\pipelines"
+  File /r "..\..\pipelines\*.*"
+
+  SetOutPath "$INSTDIR\vendor"
+  File /r "staged\vendor\*.*"
+
+  SetOutPath "$INSTDIR\branding"
+  File /r "..\..\branding\*.*"
+
   ; Create data directories under ProgramData
   CreateDirectory "$APPDATA\GoodQ4All"
   CreateDirectory "$APPDATA\GoodQ4All\qdrant\storage"
   CreateDirectory "$APPDATA\GoodQ4All\qdrant\logs"
   CreateDirectory "$APPDATA\GoodQ4All\qdrant\config"
   CreateDirectory "$APPDATA\GoodQ4All\models"
+  CreateDirectory "$APPDATA\GoodQ4All\GoodQ_Data"
+  CreateDirectory "$APPDATA\GoodQ4All\GoodQ_Data\import_inbox"
+  CreateDirectory "$APPDATA\GoodQ4All\GoodQ_Data\processed"
+  CreateDirectory "$APPDATA\GoodQ4All\GoodQ_Data\failed"
 
   ; Write default config to ProgramData
   SetOutPath "$APPDATA\GoodQ4All\qdrant\config"
@@ -120,7 +148,7 @@ runtime_ok:
   DetailPrint "Step 6/10: Hydrating sandboxed runtime and downloading model packs..."
   ; Note: Core Memory Pack is downloaded by default. Other selected components trigger additional flags.
   DetailPrint "Executing environment setup and downloading Core Memory Pack..."
-  nsExec::ExecToLog '"$INSTDIR\runtime\python.exe" "$INSTDIR\scripts\install\sandbox_env_setup.py" --packs core --data-dir "$APPDATA\GoodQ4All"'
+  nsExec::ExecToLog '"$INSTDIR\runtime\python.exe" "$INSTDIR\scripts\install\sandbox_env_setup.py" --packs core_memory --data-dir "$APPDATA\GoodQ4All" --cache-dir "$EXEDIR"'
   Pop $0
   ${If} $0 != 0
     MessageBox MB_OK|MB_ICONSTOP "Error: Hydration or Core Model Pack download failed. Code $0"
@@ -145,18 +173,25 @@ runtime_ok:
 
   ; --- STATE 9: write install receipt ---
   DetailPrint "Step 9/10: Writing installation receipt..."
-  FileOpen $4 "$APPDATA\GoodQ4All\install_receipt.json" "w"
-  FileWrite $4 '{"status": "installed", "version": "1.0.0", "install_dir": "$INSTDIR", "data_dir": "$APPDATA\GoodQ4All", "service_mode": "$AlwaysOnService"}'
-  FileClose $4
+  nsExec::ExecToLog '"$INSTDIR\runtime\python.exe" "$INSTDIR\scripts\install\sandbox_env_setup.py" --write-receipt --install-dir "$INSTDIR" --data-dir "$APPDATA\GoodQ4All" --service-mode "$AlwaysOnService"'
 
   ; --- STATE 10: enable launch ---
   DetailPrint "Step 10/10: Creating shortcuts and enabling launcher..."
+  SetOutPath "$INSTDIR"
   CreateDirectory "$SMPROGRAMS\GoodQ4All"
-  CreateShortcut "$SMPROGRAMS\GoodQ4All\GoodQ4All.lnk" "$INSTDIR\LAUNCH_GOODQ.exe"
-  CreateShortcut "$DESKTOP\GoodQ4All.lnk" "$INSTDIR\LAUNCH_GOODQ.exe"
+  CreateShortcut "$SMPROGRAMS\GoodQ4All\GoodQ4All.lnk" "$INSTDIR\LAUNCH_GOODQ.exe" "" "$INSTDIR\branding\favicon.ico" 0
+  CreateShortcut "$DESKTOP\GoodQ4All.lnk" "$INSTDIR\LAUNCH_GOODQ.exe" "" "$INSTDIR\branding\favicon.ico" 0
 
   ; Write Uninstaller
   WriteUninstaller "$INSTDIR\uninstall.exe"
+
+  ; Write uninstall keys to Windows Registry for Add/Remove Programs
+  SetRegView 64
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\GoodQ4All" "DisplayName" "GoodQ4All"
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\GoodQ4All" "UninstallString" '"$INSTDIR\uninstall.exe"'
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\GoodQ4All" "DisplayVersion" "1.0.0"
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\GoodQ4All" "Publisher" "GoodQ4All Team"
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\GoodQ4All" "DisplayIcon" '"$INSTDIR\branding\favicon.ico"'
 SectionEnd
 
 Section "Always-On Background Service" SecService
@@ -175,6 +210,7 @@ skip_service_cleanup:
 
   ; Delete binaries and application directories from Program Files
   Delete "$INSTDIR\LAUNCH_GOODQ.exe"
+  Delete "$INSTDIR\goodq_version.py"
   Delete "$INSTDIR\uninstall.exe"
   RMDir /r "$INSTDIR\runtime"
   RMDir /r "$INSTDIR\qdrant"
@@ -184,6 +220,13 @@ skip_service_cleanup:
   RMDir /r "$INSTDIR\cli"
   RMDir /r "$INSTDIR\steps"
   RMDir /r "$INSTDIR\ui"
+  RMDir /r "$INSTDIR\agents"
+  RMDir /r "$INSTDIR\lib"
+  RMDir /r "$INSTDIR\common"
+  RMDir /r "$INSTDIR\retrieval"
+  RMDir /r "$INSTDIR\pipelines"
+  RMDir /r "$INSTDIR\vendor"
+  RMDir /r "$INSTDIR\branding"
   RMDir "$INSTDIR"
 
   ; Delete shortcuts
@@ -203,4 +246,7 @@ preserve_data:
   Delete "$APPDATA\GoodQ4All\install_receipt.json"
 
 end_uninstall:
+  ; Remove uninstall keys from registry
+  SetRegView 64
+  DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\GoodQ4All"
 SectionEnd

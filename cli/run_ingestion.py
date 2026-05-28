@@ -3281,6 +3281,10 @@ def _run_step(
                 _PREFER_DIRECT_ENV_PYTHON_ON_WINDOWS
                 and direct_env_python is not None
             )
+            or (
+                not conda_available
+                and direct_env_python is not None
+            )
         )
 
         def _build_step_runner_cmd(*, prefer_direct_env_python: bool) -> tuple[List[str], str]:
@@ -3917,6 +3921,8 @@ def _process_frame(
     frame_dir: Path,
     video_hash: str,
     scene_id: str,
+    scene_num: int = 1,
+    total_scenes: int = 1,
 ) -> Dict[str, Any]:
     frame_path = _extract_keyframe(
         ffmpeg,
@@ -3947,6 +3953,19 @@ def _process_frame(
     }
 
     def merge(env_name: str, step_name: str) -> None:
+        from steps.common.progress_tracker import get_tracker
+        tracker = get_tracker()
+        step_index = 1 + scene_num
+        tracker.update_step(
+            f"Scene {scene_num}/{total_scenes} - Running {step_name}",
+            step_index,
+            {
+                "scene_index": scene_index,
+                "scenes_total": total_scenes,
+                "video_id": video_hash,
+                "stage": f"frame_{step_name}"
+            }
+        )
         result = _run_step(env_name, step_name, item, cfg_json)
         if isinstance(result, dict):
             item.update(result)
@@ -4011,6 +4030,8 @@ def _process_audio(
     video_hash: str,
     scene_id: str,
     audio_runtime_contract: Optional[Dict[str, Any]] = None,
+    scene_num: int = 1,
+    total_scenes: int = 1,
 ) -> Optional[Dict[str, Any]]:
     """Process audio for scene - returns None if video has no audio"""
     audio_path = _extract_audio_chunk(
@@ -4079,6 +4100,19 @@ def _process_audio(
         return step_log_cfg
 
     def merge(env_name: str, step_name: str) -> None:
+        from steps.common.progress_tracker import get_tracker
+        tracker = get_tracker()
+        step_index = 1 + scene_num
+        tracker.update_step(
+            f"Scene {scene_num}/{total_scenes} - Running {step_name}",
+            step_index,
+            {
+                "scene_index": scene.get('index'),
+                "scenes_total": total_scenes,
+                "video_id": video_hash,
+                "stage": f"audio_{step_name}"
+            }
+        )
         result = _run_step(env_name, step_name, item, cfg_json)
         if isinstance(result, dict):
             item.update(result)
@@ -4167,6 +4201,18 @@ def _process_audio(
     def run_local_audio_fallback(reason: str) -> None:
         logger.info(
             "[AUDIO] WSL2 unified path disabled or unavailable; using local CPU-safe transcription fallback"
+        )
+        from steps.common.progress_tracker import get_tracker
+        tracker = get_tracker()
+        tracker.update_step(
+            f"Scene {scene_num}/{total_scenes} - Transcribing audio (Windows CPU fallback)",
+            1 + scene_num,
+            {
+                "scene_index": scene.get('index'),
+                "scenes_total": total_scenes,
+                "video_id": video_hash,
+                "stage": "audio_transcribe_local"
+            }
         )
         try:
             from steps.audio_transcribe.step import audio_transcribe as local_audio_transcribe
@@ -4287,6 +4333,18 @@ def _process_audio(
 
         if use_wsl_unified_audio:
             from steps.audio.audio_wsl2_bridge import audio_unified_wsl2
+            from steps.common.progress_tracker import get_tracker
+            tracker = get_tracker()
+            tracker.update_step(
+                f"Scene {scene_num}/{total_scenes} - Transcribing audio (WSL2)",
+                1 + scene_num,
+                {
+                    "scene_index": scene.get('index'),
+                    "scenes_total": total_scenes,
+                    "video_id": video_hash,
+                    "stage": "audio_transcribe_wsl2"
+                }
+            )
 
             # Single unified call gets transcription, diarization, emotion, embeddings
             try:
@@ -4895,7 +4953,28 @@ def run(
                 else:
                     try:
                         typer.echo(f'  [EXTRACT] Extracting keyframe...')
-                        frame_info = _process_frame(cfg_json, ffmpeg, video_path, scene, frame_dir, video_hash, scene_id)
+                        if tracker is not None:
+                            tracker.update_step(
+                                f"Scene {scene_num}/{total_scenes} - Extracting keyframe",
+                                1 + scene_num,
+                                {
+                                    "scene_index": scene_index,
+                                    "scenes_total": total_scenes,
+                                    "video_id": video_hash,
+                                    "stage": "keyframe_extraction"
+                                },
+                            )
+                        frame_info = _process_frame(
+                            cfg_json,
+                            ffmpeg,
+                            video_path,
+                            scene,
+                            frame_dir,
+                            video_hash,
+                            scene_id,
+                            scene_num=scene_num,
+                            total_scenes=total_scenes,
+                        )
                         typer.echo(f'  [OK] Keyframe processed')
                     except Exception as exc:  # noqa: BLE001
                         frame_failure = _extract_step_failure_details(exc, stage_label='Keyframe')
@@ -4945,6 +5024,17 @@ def run(
                         if VERBOSE:
                             typer.echo(f'[DEBUG] Processing audio (not skipped, force={force})')
                         typer.echo(f'  [EXTRACT] Extracting audio...')
+                        if tracker is not None:
+                            tracker.update_step(
+                                f"Scene {scene_num}/{total_scenes} - Transcribing audio",
+                                1 + scene_num,
+                                {
+                                    "scene_index": scene_index,
+                                    "scenes_total": total_scenes,
+                                    "video_id": video_hash,
+                                    "stage": "audio_transcription"
+                                },
+                            )
                         audio_info = _process_audio(
                             cfg_json,
                             ffmpeg,
@@ -4955,6 +5045,8 @@ def run(
                             video_hash,
                             scene_id,
                             audio_runtime_contract=audio_runtime_contract,
+                            scene_num=scene_num,
+                            total_scenes=total_scenes,
                         )
                         if audio_info is None:
                             typer.echo(f'  [OK] No audio track in video (video-only)')
@@ -5082,6 +5174,17 @@ def run(
                     audio_data=audio_data,
                 )
                 try:
+                    if tracker is not None:
+                        tracker.update_step(
+                            f"Scene {scene_num}/{total_scenes} - Resolving entities",
+                            1 + scene_num,
+                            {
+                                "scene_index": scene_index,
+                                "scenes_total": total_scenes,
+                                "video_id": video_hash,
+                                "stage": "knowledge_graph_update"
+                            },
+                        )
                     kg_stats = update_kg_for_scene(
                         kg_scene_data,
                         scene_id=scene_id,
@@ -5395,11 +5498,16 @@ def run(
             
             try:
                 # Phase 6a: Scene Visual Embeddings (CLIP + DINO)
-                typer.echo('[PHASE 6a] Generating scene visual embeddings...')
+                if tracker is not None:
+                    tracker.update_step(
+                        "Phase 6a - Generating visual embeddings",
+                        total_scenes + 2,
+                        {"stage": "scene_visual_embeddings_start", "video_id": video_hash},
+                    )
                 embeddings_result = _run_step('goodq_image_caption', 'scene_visual_embeddings', phase6_item, cfg_json)
                 if tracker is not None:
                     tracker.update_step(
-                        "Phase 6a",
+                        "Phase 6a Complete",
                         total_scenes + 2,
                         {"stage": "scene_visual_embeddings", "video_id": video_hash},
                     )
@@ -5439,11 +5547,16 @@ def run(
                     typer.echo('[PHASE 6a] [WARN] Visual embeddings returned non-dict result', err=True)
                 
                 # Phase 6b: Cross-Modal Harmonization
-                typer.echo('[PHASE 6b] Running multimodal harmonization...')
+                if tracker is not None:
+                    tracker.update_step(
+                        "Phase 6b - Running harmonization",
+                        total_scenes + 3,
+                        {"stage": "cross_modal_harmonization_start", "video_id": video_hash},
+                    )
                 harmonization_result = _run_step('goodq_core', 'cross_modal_harmonization', phase6_item, cfg_json)
                 if tracker is not None:
                     tracker.update_step(
-                        "Phase 6b",
+                        "Phase 6b Complete",
                         total_scenes + 3,
                         {"stage": "cross_modal_harmonization", "video_id": video_hash},
                     )

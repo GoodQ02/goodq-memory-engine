@@ -251,11 +251,12 @@ def extract_keyframe_candidates(
     scene_id: int,
     ffmpeg_exe: str,
     max_frames: int = 5,
-    cap: Optional[Any] = None
+    cap: Optional[Any] = None,
+    cfg: Optional[Dict[str, Any]] = None
 ) -> List[Dict[str, Any]]:
     """
-    Extract keyframe candidates using FFmpeg scene detection.
-    Falls back to uniform sampling if keyframe detection fails.
+    Extract keyframe candidates using advanced Shannon-entropy, Laplacian-variance, or motion-peaks.
+    Falls back to uniform sampling if candidate evaluation fails.
     
     Args:
         video_path: Path to source video
@@ -266,13 +267,141 @@ def extract_keyframe_candidates(
         ffmpeg_exe: Path to FFmpeg executable
         max_frames: Maximum frames to extract
         cap: Optional pre-opened cv2.VideoCapture instance
+        cfg: Optional configuration dictionary
         
     Returns:
         List of frame metadata
     """
-    # For now, use uniform sampling as keyframe detection requires more complex FFmpeg analysis
-    # This can be enhanced with optical flow or motion vectors in future iterations
-    return extract_frames_uniform(video_path, start, end, max_frames, output_dir, scene_id, ffmpeg_exe, cap=cap)
+    if cap is None:
+        try:
+            import cv2
+            cap_local = cv2.VideoCapture(video_path)
+            if cap_local.isOpened():
+                use_cap = cap_local
+            else:
+                use_cap = None
+        except Exception:
+            use_cap = None
+    else:
+        cap_local = None
+        use_cap = cap
+
+    if use_cap is None:
+        logger.warning("Keyframe extraction fallback to uniform: no VideoCapture context available")
+        return extract_frames_uniform(video_path, start, end, max_frames, output_dir, scene_id, ffmpeg_exe, cap=cap)
+
+    try:
+        import cv2
+    except ImportError:
+        if cap_local is not None:
+            cap_local.release()
+        return extract_frames_uniform(video_path, start, end, max_frames, output_dir, scene_id, ffmpeg_exe, cap=cap)
+
+    # Read configuration
+    phase6_cfg = cfg.get('phase6', {}) if isinstance(cfg, dict) else {}
+    selection_mode = phase6_cfg.get('keyframe_selection_mode', 'entropy') # entropy | motion_peaks | sharpness
+    
+    duration = end - start
+    if duration <= 0:
+        if cap_local is not None:
+            cap_local.release()
+        return extract_frames_uniform(video_path, start, end, max_frames, output_dir, scene_id, ffmpeg_exe, cap=cap)
+        
+    num_candidates = max(max_frames * 3, 10)
+    candidate_ts = [start + (duration * i / (num_candidates - 1)) for i in range(num_candidates)]
+    
+    candidates = []
+    prev_frame_gray = None
+    
+    for ts in candidate_ts:
+        use_cap.set(cv2.CAP_PROP_POS_MSEC, ts * 1000.0)
+        ret, frame = use_cap.read()
+        if not ret or frame is None:
+            continue
+            
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        
+        # Calculate scores
+        score = 0.0
+        if selection_mode == 'entropy':
+            # Calculate Shannon Entropy
+            hist = cv2.calcHist([gray], [0], None, [256], [0, 256])
+            hist = hist / hist.sum()
+            score = float(-np.sum(hist * np.log2(hist + 1e-7)))
+        elif selection_mode == 'sharpness':
+            # Calculate Laplacian variance
+            score = float(cv2.Laplacian(gray, cv2.CV_64F).var())
+        elif selection_mode == 'motion_peaks':
+            # Calculate mean absolute difference from previous frame
+            if prev_frame_gray is not None:
+                score = float(np.mean(np.abs(gray.astype(np.int16) - prev_frame_gray.astype(np.int16))))
+            else:
+                score = 0.0
+            prev_frame_gray = gray
+        else:
+            # Default to entropy
+            hist = cv2.calcHist([gray], [0], None, [256], [0, 256])
+            hist = hist / hist.sum()
+            score = float(-np.sum(hist * np.log2(hist + 1e-7)))
+            
+        candidates.append({'timestamp': ts, 'score': score, 'frame': frame})
+        
+    if cap_local is not None:
+        cap_local.release()
+        
+    if not candidates:
+        logger.warning("Keyframe extraction found no valid candidate frames, falling back to uniform")
+        return extract_frames_uniform(video_path, start, end, max_frames, output_dir, scene_id, ffmpeg_exe, cap=cap)
+        
+    # Sort candidates by score descending
+    candidates.sort(key=lambda x: x['score'], reverse=True)
+    
+    # Select max_frames ensuring a minimum temporal separation to avoid clustering
+    selected_candidates = []
+    min_separation = max(0.5, duration / (max_frames * 2)) # at least 0.5s or proportional
+    
+    for cand in candidates:
+        if len(selected_candidates) >= max_frames:
+            break
+        # Check separation from already selected
+        too_close = False
+        for sel in selected_candidates:
+            if abs(cand['timestamp'] - sel['timestamp']) < min_separation:
+                too_close = True
+                break
+        if not too_close:
+            selected_candidates.append(cand)
+            
+    # If we couldn't get enough separated frames, fill up with the highest score remaining
+    if len(selected_candidates) < max_frames:
+        for cand in candidates:
+            if len(selected_candidates) >= max_frames:
+                break
+            if cand not in selected_candidates:
+                selected_candidates.append(cand)
+                
+    # Sort selected candidates by timestamp to keep chronological order
+    selected_candidates.sort(key=lambda x: x['timestamp'])
+    
+    # Save the selected frames
+    frames = []
+    for idx, cand in enumerate(selected_candidates):
+        frame_filename = f"scene_{scene_id:04d}_frame_{idx:02d}.jpg"
+        frame_path = os.path.join(output_dir, frame_filename)
+        
+        # Resize to 224x224 (default visual embedding size)
+        resized = cv2.resize(cand['frame'], (224, 224))
+        cv2.imwrite(frame_path, resized)
+        
+        frames.append({
+            'frame_id': idx,
+            'timestamp': cand['timestamp'],
+            'path': frame_path,
+            'extraction_method': f'keyframe_{selection_mode}',
+            'selection_score': cand['score']
+        })
+        
+    return frames
 
 
 def extract_scene_frames(
@@ -354,7 +483,7 @@ def extract_scene_frames(
             if strategy == 'middle':
                 frames = extract_frames_middle(video_path, start, end, frames_dir, scene_id_for_filename, ffmpeg_exe, cap=cap)
             elif strategy == 'keyframe':
-                frames = extract_keyframe_candidates(video_path, start, end, frames_dir, scene_id_for_filename, ffmpeg_exe, frames_per_scene, cap=cap)
+                frames = extract_keyframe_candidates(video_path, start, end, frames_dir, scene_id_for_filename, ffmpeg_exe, frames_per_scene, cap=cap, cfg=cfg)
             else:  # uniform (default)
                 frames = extract_frames_uniform(video_path, start, end, frames_per_scene, frames_dir, scene_id_for_filename, ffmpeg_exe, cap=cap)
             

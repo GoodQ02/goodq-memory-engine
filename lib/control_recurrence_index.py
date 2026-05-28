@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 from datetime import datetime, timezone
 from pathlib import Path
@@ -8,7 +9,11 @@ from typing import Any, Dict, Optional, Tuple
 
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_REPORT_DIR = _REPO_ROOT / "reports" / "control_recurrence"
+_DATA_ROOT = os.environ.get("GOODQ_DATA_ROOT")
+if _DATA_ROOT:
+    DEFAULT_REPORT_DIR = Path(_DATA_ROOT) / "reports" / "control_recurrence"
+else:
+    DEFAULT_REPORT_DIR = _REPO_ROOT / "reports" / "control_recurrence"
 _INDEX_FILENAME = "index.json"
 _DRIVE_ROOT_RE = re.compile(r"[A-Za-z]:[\\/][^\s,\"'`<>)]*")
 

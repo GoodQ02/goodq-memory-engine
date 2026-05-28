@@ -15,13 +15,13 @@ def test_clip_loader_falls_back_when_safetensors_weights_are_unavailable(monkeyp
     class _FakeProcessor:
         @classmethod
         def from_pretrained(cls, model_id):
-            assert model_id == "openai/clip-vit-base-patch16"
+            assert model_id in ("openai/clip-vit-base-patch16", "openai/clip-vit-large-patch14")
             return object()
 
     class _FakeModel:
         @classmethod
         def from_pretrained(cls, model_id, **kwargs):
-            assert model_id == "openai/clip-vit-base-patch16"
+            assert model_id in ("openai/clip-vit-base-patch16", "openai/clip-vit-large-patch14")
             calls.append(kwargs)
             if kwargs.get("use_safetensors"):
                 raise OSError("safetensors missing")

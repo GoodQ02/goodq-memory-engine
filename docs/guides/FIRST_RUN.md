@@ -30,16 +30,14 @@ Double-click the **GoodQ4All** shortcut on your Desktop or Start Menu.
   http://127.0.0.1:30000/ui/retro_console_v1/?token=<secure_session_token>
   ```
 
-### 2. Drop a Media File
-Copy a small audio (`.mp3`/`.wav`) or video (`.mp4`) file and drop it into your import drop zone:
-```text
-%USERPROFILE%\GoodQ_Data\import_inbox\
-```
+### 2. Ingest a Media File
+Once the Retro Memory Explorer UI loads, locate the **Upload Pad** in the header. Drag-and-drop a small audio (`.mp3`/`.wav`) or video (`.mp4`) file directly onto the yellow-dotted helipad area (or click to browse your computer).
+* **What happens behind the scenes**: The UI streams the file directly to the local sandbox import inbox drop zone, triggering the watchdog ingestion sequence automatically.
 
 ### 3. Observe Ingestion
-The background watchdog service automatically detects the file and starts processing. You can:
-* Inspect real-time status in the **Classic Operator Console** served at `http://127.0.0.1:30000/ui/operator_console_v1/`.
-* Watch the **Retro Memory Explorer** update its timeline and knowledge graph once ingestion completes.
+The background watchdog service detects the uploaded file and starts processing immediately. You can:
+* Inspect real-time status/logs in the UI, or check the **Classic Operator Console** served at `http://127.0.0.1:30000/ui/operator_console_v1/`.
+* Watch the **Retro Memory Explorer** automatically update its timeline checklist, co-occurrence graph, and keyframe inspector once ingestion completes.
 
 ---
 

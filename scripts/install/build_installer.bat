@@ -109,8 +109,8 @@ echo Staging vendor packages...
 if not exist "staged\vendor" mkdir "staged\vendor"
 xcopy /s /e /i /y "..\..\vendor" "staged\vendor" >nul
 
-echo Installing extra sandboxed dependencies (opencv-python, scenedetect, imageio-ffmpeg)...
-pip install --target "staged\vendor" --python-version 3.10 --only-binary=:all: --platform win_amd64 --implementation cp opencv-python==4.10.0.84 scenedetect==0.6.2 imageio-ffmpeg==0.5.1
+echo Installing extra sandboxed dependencies (opencv-python, scenedetect, imageio-ffmpeg, faster-whisper)...
+pip install --target "staged\vendor" --python-version 3.10 --only-binary=:all: --platform win_amd64 --implementation cp opencv-python==4.10.0.84 scenedetect==0.6.2 imageio-ffmpeg==0.5.1 faster-whisper==1.0.3
 if %ERRORLEVEL% neq 0 (
     echo [ERROR] Failed to install sandboxed dependencies.
     exit /b 4

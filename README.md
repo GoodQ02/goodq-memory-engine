@@ -179,10 +179,6 @@ GoodQ4All ships two local read-only operator console variants:
 - **Classic Operator Console** served at `/ui/operator_console_v1/`. Exposes the Current Scope strip, Flight Deck, proof/evidence status, recurrence reports, and video inventories.
 - **Retro Memory Explorer (v1.4.7)** served at `/ui/retro_console_v1/`. A premium cyber-CRT dashboard featuring a four-panel resizable/collapsible layout with floating restore tabs, an entity co-occurrence graph with dynamic spacing zoom and flight transitions, an Inspector panel containing keyframe image/transcript views with resizable logs splitters, and bidirectional timeline checklists.
 
-<p align="center">
-  <img src="samples/assets/retro_console_preview.png" alt="Retro Memory Explorer Premium CRT Console Dashboard" width="600" style="border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.2);" />
-</p>
-
 ---
 
 ## Verify It Yourself

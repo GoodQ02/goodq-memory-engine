@@ -53,8 +53,8 @@ test runs, is disposable and should not seed the next run.
 - Local vLLM primary: `http://127.0.0.1:38005/v1`, systemd unit
   `vllm-llama1b.service`, model
   `/home/jdben/models/Qwen2.5-0.5B-Instruct` (optimized with memory allocation
-  capped at `--gpu-memory-utilization 0.20` and FP8 KV-cache `--kv-cache-dtype fp8`,
-  limiting the active pool to ~3.3 GB of VRAM while maintaining ~275 - 365 tok/sec
+  capped at `--gpu-memory-utilization 0.60` and FP8 KV-cache `--kv-cache-dtype fp8`,
+  limiting the active pool to ~9.6 GB of VRAM while maintaining ~275 - 365 tok/sec
   generation speeds and ~14ms TTFT).
 - WSL vLLM lifetime: Windows operator sessions should start through
   `scripts/start_vllm_servers.bat`, which starts one named

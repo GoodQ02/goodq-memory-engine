@@ -202,10 +202,11 @@ def main():
     print("\n[BRIEFING] Scanning codebase for silent failures and suspicious patterns\n")
     
     # Scan directories
+    repo_root = Path(__file__).parent.parent
     scan_dirs = [
-        Path("L:/goodq4all/steps"),
-        Path("L:/goodq4all/cli"),
-        Path("L:/goodq4all/lib"),
+        repo_root / "steps",
+        repo_root / "cli",
+        repo_root / "lib",
     ]
     
     all_results = []

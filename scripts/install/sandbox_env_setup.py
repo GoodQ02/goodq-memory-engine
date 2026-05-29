@@ -227,6 +227,16 @@ def main() -> None:
         manifest = json.load(f)
 
     selected_pack_keys = [p.strip() for p in args.packs.split(",") if p.strip()]
+    if args.cache_dir:
+        cache_path = Path(args.cache_dir)
+        if cache_path.exists():
+            for p_key, p_manifest in manifest["model_packs"].items():
+                for f_info in p_manifest.get("files", []):
+                    zip_name = f_info["name"]
+                    first_chunk = f_info.get("chunks", [{}])[0].get("name", "")
+                    if (cache_path / zip_name).exists() or (first_chunk and (cache_path / first_chunk).exists()):
+                        if p_key not in selected_pack_keys:
+                            selected_pack_keys.append(p_key)
     if args.verify_only:
         # Verification runs over all registered/installed packs
         registry_path = data_root / ".model_packs_installed.json"

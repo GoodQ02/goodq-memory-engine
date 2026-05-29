@@ -16,13 +16,13 @@
         {
           "name": "core_models.zip",
           "destination": "models/hub/core_models.zip",
-          "size_bytes": 3477495164,
-          "sha256": "409c857bf968b7fc2a7b4d92a5c851080ed891be63a5eaac861ec12aef16f475",
+          "size_bytes": 886003366,
+          "sha256": "0adb2f68c85c8241ec3135e39ce6df24882ecb98bdf8bbafae3560c44d5cd154",
           "chunks": [
             {
               "name": "core_models.zip",
-              "size_bytes": 3477495164,
-              "sha256": "409c857bf968b7fc2a7b4d92a5c851080ed891be63a5eaac861ec12aef16f475",
+              "size_bytes": 886003366,
+              "sha256": "0adb2f68c85c8241ec3135e39ce6df24882ecb98bdf8bbafae3560c44d5cd154",
               "relative_path": "/core_models.zip"
             }
           ]
@@ -37,25 +37,25 @@
         {
           "name": "vision_models.zip",
           "destination": "models/hub/vision_models.zip",
-          "size_bytes": 2200000000,
-          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "size_bytes": 3117602008,
+          "sha256": "697ce84f9135ec807cef02ae2869f4eeb06d7583e791068af76da06fd16896c0",
           "chunks": [
             {
               "name": "vision_models.zip.001",
               "size_bytes": 1073741824,
-              "sha256": "9b12a3d4e5f6071a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f90a1b2c3d4e5f6",
+              "sha256": "4a0389ce273b847cc7f35615a38cd13a6730d5ef5bb4f76f4fe27efa8f3dc6b0",
               "relative_path": "/vision_models.zip.001"
             },
             {
               "name": "vision_models.zip.002",
               "size_bytes": 1073741824,
-              "sha256": "3a4b5c6d7e8f90a1b2c3d4e5f6071a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f",
+              "sha256": "1c656ad8a1d0529c475ca2ce2c90494bf0552bafe2af1d7ab95e4f7acc9750bb",
               "relative_path": "/vision_models.zip.002"
             },
             {
               "name": "vision_models.zip.003",
-              "size_bytes": 52516352,
-              "sha256": "5c6d7e8f90a1b2c3d4e5f6071a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f90a1",
+              "size_bytes": 970118360,
+              "sha256": "1853098884cbe308725e39d9e26b29cda2336a41ddacd93ffbdda4a8b0da8cb7",
               "relative_path": "/vision_models.zip.003"
             }
           ]
@@ -70,20 +70,26 @@
         {
           "name": "audio_standard_models.zip",
           "destination": "models/hub/audio_standard_models.zip",
-          "size_bytes": 1600000000,
-          "sha256": "c3d4e5f6071a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f90a1b2c3d4e5f6071a",
+          "size_bytes": 3154215832,
+          "sha256": "bbaef0b6506d7fbaeff22c52624d8b36ec7db6707de83c0844d162ab31158d34",
           "chunks": [
             {
               "name": "audio_standard_models.zip.001",
               "size_bytes": 1073741824,
-              "sha256": "8f90a1b2c3d4e5f6071a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f90a1b2c3d4",
+              "sha256": "71f597a9b2202df96c19e5db3b1b1d96ff0bb4709d4f3472246edbc6a91f481a",
               "relative_path": "/audio_standard_models.zip.001"
             },
             {
               "name": "audio_standard_models.zip.002",
-              "size_bytes": 526258176,
-              "sha256": "a1b2c3d4e5f6071a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f90a1b2c3d4e5f",
+              "size_bytes": 1073741824,
+              "sha256": "861e33fb32366ca3fda2ef7a57cd304af4f0daa43cf7aefd2cb234c905ccc761",
               "relative_path": "/audio_standard_models.zip.002"
+            },
+            {
+              "name": "audio_standard_models.zip.003",
+              "size_bytes": 1006732184,
+              "sha256": "9fc5319f0723b2587656668231f0f7bd54c15ae57a08929bba28132693700766",
+              "relative_path": "/audio_standard_models.zip.003"
             }
           ]
         }

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_verified": "2026-05-28",
+  "last_verified": "2026-05-29",
   "project": "GoodQ4All",
   "agent_first_read": "docs/agent/CURRENT_STATE.md",
   "human_index": "docs/agent/README.md",
@@ -103,8 +103,8 @@
   "clean_start": {
     "prior_pipeline_memory_is_disposable": true,
     "prior_home_movie_tests_are_disposable": true,
-    "fresh_epoch": "epoch_2026_05_22_family_full_01",
-    "fresh_epoch_note": "current completed 141-scene FAMILY full validation epoch with runtime fallback, WSL audio, sentiment, entity, Qdrant, FAISS, Operator Console freshness, and visible runtime problem-scope evidence; use a new fresh epoch or deliberate clean reset before the next broad personal-memory run",
+    "fresh_epoch": "epoch_2026_05_29_family_clean_01",
+    "fresh_epoch_note": "wiped all legacy memory stores, initialized fresh collections, and verified blank slate with a 1-scene onboarding fixture probe run",
     "tracked_cleanup_summary": "docs/diagnostics/MEMORY_CLEAN_START_AUDIT_2026-05-20.md",
     "tracked_power_loss_summary": "docs/diagnostics/POWER_LOSS_INGESTION_AUDIT_2026-05-20.md",
     "tracked_home_memory_witness": "docs/diagnostics/HOME_MEMORY_WITNESS_RUN_2026-05-22.md",
@@ -143,10 +143,10 @@
       "fresh_database_note": "port 30000 is bound to the family_full_01 validation epoch and currently reports the completed 141-scene FAMILY full run; use a new fresh epoch or deliberate reset before the next broad personal-memory run"
     },
     "fresh_qdrant_collections": {
-      "clip": "goodq_clip_epoch_2026_05_22_family_full_01",
-      "dino": "goodq_dino_epoch_2026_05_22_family_full_01",
-      "text": "goodq_text_epoch_2026_05_22_family_full_01",
-      "audio": "goodq_audio_epoch_2026_05_22_family_full_01"
+      "clip": "goodq_clip_epoch_2026_05_29_family_clean_01",
+      "dino": "goodq_dino_epoch_2026_05_29_family_clean_01",
+      "text": "goodq_text_epoch_2026_05_29_family_clean_01",
+      "audio": "goodq_audio_epoch_2026_05_29_family_clean_01"
     },
     "family_full_validation_run": {
       "status": "completed",

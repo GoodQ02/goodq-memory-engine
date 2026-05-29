@@ -28,9 +28,9 @@ GoodQ4All is packaged as a unified sandboxed Windows Installer. This is the simp
 
 ### Installation Steps
 1. Download and run the setup installer: `GoodQ4All_Setup_1.0.0.exe`.
-2. Choose your installation path (defaults to `C:\Program Files\GoodQ4All`).
+2. Choose your installation path (defaults to `%PROGRAMFILES%\GoodQ4All`).
 3. Complete the setup. This installs the binary files, configures registry keys (for Add/Remove Programs and shortcuts), and provisions the isolated python runtime, branding resources, and database.
-4. Double-click the **GoodQ4All** Desktop or Start Menu shortcut to run the supervisor launcher ([LAUNCH_GOODQ.exe](file:///C:/Program%20Files/GoodQ4All/LAUNCH_GOODQ.exe)).
+4. Double-click the **GoodQ4All** Desktop or Start Menu shortcut to run the supervisor launcher (**LAUNCH_GOODQ.exe** located in `%PROGRAMFILES%\GoodQ4All\`).
 5. The launcher will automatically perform preflight checks, verify the model signature, start local background services, and open your default browser to the **Retro Memory Explorer** (served at `http://127.0.0.1:30000/ui/retro_console_v1/`).
 6. **Start Ingesting**: In the Retro Memory Explorer UI header, click the **Upload Pad** and drag-and-drop or select any media file onto the yellow-dotted helipad circle to start ingestion instantly!
 

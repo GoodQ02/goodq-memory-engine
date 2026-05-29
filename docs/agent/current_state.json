@@ -52,7 +52,7 @@
       "vllm_base": "http://127.0.0.1:38005/v1",
       "vllm_service": "systemd_enabled",
       "vllm_model": "/home/jdben/models/Qwen2.5-0.5B-Instruct",
-      "vllm_optimizations": "--gpu-memory-utilization 0.20 --kv-cache-dtype fp8 (capped at ~3.3 GB VRAM)",
+      "vllm_optimizations": "--gpu-memory-utilization 0.60 --kv-cache-dtype fp8 (capped at ~9.6 GB VRAM)",
       "wsl_keepalive": "goodq-vllm-keepalive",
       "windows_logon_task": "GoodQ4All vLLM WSL Startup",
       "ollama_fallback": "healthy_windows_fallback",

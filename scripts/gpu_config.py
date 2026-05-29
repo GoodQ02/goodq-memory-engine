@@ -27,30 +27,48 @@ STEP_MEMORY_LIMITS = {
 # Apply memory limit for current environment
 def configure_gpu_memory():
     '''Call this at the start of each step to configure GPU memory'''
-    import torch
+    try:
+        import torch
+    except (ImportError, ModuleNotFoundError):
+        print("[GPU] WARNING: PyTorch not available, falling back to CPU")
+        return False
+        
     env_name = os.environ.get('CONDA_DEFAULT_ENV', 'unknown')
     
     if env_name in GPU_MEMORY_LIMITS:
         fraction = GPU_MEMORY_LIMITS[env_name]
-        torch.cuda.set_per_process_memory_fraction(fraction, 0)
-        print(f"[GPU] Configured {env_name} to use {fraction*100:.0f}% of GPU memory")
+        try:
+            torch.cuda.set_per_process_memory_fraction(fraction, 0)
+            print(f"[GPU] Configured {env_name} to use {fraction*100:.0f}% of GPU memory")
+        except Exception as e:
+            print(f"[GPU] WARNING: Failed to configure memory: {e}")
     
     # Enable memory growth
-    torch.backends.cudnn.benchmark = True
+    try:
+        torch.backends.cudnn.benchmark = True
+    except Exception:
+        pass
     
     # Verify CUDA is available
     if torch.cuda.is_available():
-        device_name = torch.cuda.get_device_name(0)
-        total_memory = torch.cuda.get_device_properties(0).total_memory / 1024**3
-        print(f"[GPU] Using {device_name} ({total_memory:.1f} GB total memory)")
-        return True
+        try:
+            device_name = torch.cuda.get_device_name(0)
+            total_memory = torch.cuda.get_device_properties(0).total_memory / 1024**3
+            print(f"[GPU] Using {device_name} ({total_memory:.1f} GB total memory)")
+            return True
+        except Exception:
+            return False
     else:
         print("[GPU] WARNING: CUDA not available, falling back to CPU")
         return False
 
 def setup_step_gpu(step_name):
     '''Setup GPU configuration for a specific step'''
-    import torch
+    try:
+        import torch
+        cuda_available = torch.cuda.is_available()
+    except (ImportError, ModuleNotFoundError):
+        cuda_available = False
     
     # Map step names to environment names
     step_to_env = {
@@ -70,7 +88,7 @@ def setup_step_gpu(step_name):
     fraction = STEP_MEMORY_LIMITS.get(step_name, GPU_MEMORY_LIMITS.get(env_name, 0.15))
     
     # Determine device
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = "cuda" if cuda_available else "cpu"
     
     # Configure memory if using GPU
     if device == "cuda":

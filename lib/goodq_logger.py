@@ -154,14 +154,17 @@ class GoodQLogger:
         
         # File handler (always uncolored, detailed format)
         if log_file:
-            log_file.parent.mkdir(parents=True, exist_ok=True)
-            file_handler = logging.FileHandler(log_file, encoding='utf-8')
-            file_handler.setLevel(logging.DEBUG)  # Always capture debug in files
-            file_handler.setFormatter(logging.Formatter(
-                '%(asctime)s [%(levelname)s] %(name)s: %(message)s',
-                datefmt='%Y-%m-%d %H:%M:%S'
-            ))
-            self.logger.addHandler(file_handler)
+            try:
+                log_file.parent.mkdir(parents=True, exist_ok=True)
+                file_handler = logging.FileHandler(log_file, encoding='utf-8')
+                file_handler.setLevel(logging.DEBUG)  # Always capture debug in files
+                file_handler.setFormatter(logging.Formatter(
+                    '%(asctime)s [%(levelname)s] %(name)s: %(message)s',
+                    datefmt='%Y-%m-%d %H:%M:%S'
+                ))
+                self.logger.addHandler(file_handler)
+            except Exception as e:
+                print(f"[WARN] Could not initialize file logger at {log_file} due to {type(e).__name__}: {e}. Logging to console only.", file=sys.stderr, flush=True)
     
     def _log_with_component(self, level: int, msg: str, **kwargs):
         """Log with component context"""
@@ -349,7 +352,11 @@ def get_goodq_logger(
         GoodQLogger instance
     """
     if log_dir is None:
-        log_dir = Path(__file__).resolve().parents[1] / "logs"
+        try:
+            from configs.paths import LOGS_DIR
+            log_dir = LOGS_DIR
+        except ImportError:
+            log_dir = Path(__file__).resolve().parents[1] / "logs"
     
     # Create log file based on component or name
     log_file = log_dir / f"{component or name.replace('.', '_')}.log"

@@ -12,11 +12,11 @@ If you installed GoodQ4All using the Sandboxed Windows Installer setup:
 2. **Uninstall GoodQ4All**: Locate **GoodQ4All** in the list, click the three dots, and choose **Uninstall**.
    * Alternatively, run the uninstaller binary directly:
      ```text
-     C:\Program Files\GoodQ4All\Uninstall.exe
+     %PROGRAMFILES%\GoodQ4All\Uninstall.exe
      ```
-3. **Preservation of User Database**: The uninstaller will delete all binaries, registry keys, shortcuts, and sandboxed python configurations. By default, it **preserves** your local media data, manifests, and database files stored in `C:\ProgramData\GoodQ4All` and `%USERPROFILE%\GoodQ_Data`.
+3. **Preservation of User Database**: The uninstaller will delete all binaries, registry keys, shortcuts, and sandboxed python configurations. By default, it **preserves** your local media data, manifests, and database files stored in `%PROGRAMDATA%\GoodQ4All` and `%USERPROFILE%\GoodQ_Data`.
 4. **Complete Cleanup**: If you wish to delete all user data and local memory files as well, manually delete the following directories after the uninstaller completes:
-   * `C:\ProgramData\GoodQ4All\`
+   * `%PROGRAMDATA%\GoodQ4All\`
    * `%USERPROFILE%\GoodQ_Data\`
 
 ---

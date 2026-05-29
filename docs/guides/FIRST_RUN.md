@@ -24,7 +24,7 @@ If you are running the packaged release of GoodQ4All, this is the quickest and e
 
 ### 1. Launch the Application
 Double-click the **GoodQ4All** shortcut on your Desktop or Start Menu.
-* **What happens behind the scenes**: This executes [LAUNCH_GOODQ.exe](file:///C:/Program%20Files/GoodQ4All/LAUNCH_GOODQ.exe) which performs native VC++ checks, verifies the model manifest signature, launches Qdrant, starts the Python API/Control processes, and automatically launches your browser.
+* **What happens behind the scenes**: This executes **LAUNCH_GOODQ.exe** (located under `%PROGRAMFILES%\GoodQ4All\`) which performs native VC++ checks, verifies the model manifest signature, launches Qdrant, starts the Python API/Control processes, and automatically launches your browser.
 * **Expected Result**: Your default web browser will open automatically to the **Retro Memory Explorer** served at:
   ```text
   http://127.0.0.1:30000/ui/retro_console_v1/?token=<secure_session_token>

@@ -4,7 +4,7 @@
 
 # GoodQ4All Agent Status
 
-_Operational restart checkpoint aligned: 2026-05-27._
+_Operational restart checkpoint aligned: 2026-05-28._
 
 This document is a bounded operator snapshot of the current release-era
 stitching and offline-package baseline.
@@ -13,6 +13,17 @@ Use canonical runtime contracts and released evidence surfaces as source of
 truth for live claims. Do not treat this document as a live witness monitor.
 
 ## Current Restart Checkpoint
+- Pause checkpoint, 2026-05-28:
+  - status: unified sandboxed Setup Installer and local logs/GPU config mitigations are validated and committed.
+  - Setup Installer features:
+    - Zero-dependency sandbox installer (`GoodQ4All_Setup_1.0.0.exe`) bundling base PyPI packages, perception libraries (`opencv-python`, `scenedetect`, `imageio-ffmpeg`), and pre-allocated model/offline-document folders.
+    - Go launcher supervisor (`LAUNCH_GOODQ.exe`) managing model signatures, booting Qdrant/API/Watchdog, and launching the browser console.
+    - Bypasses Conda lookup (`python_paths.py`) and resolves modules dynamically relative to runtime when sandboxed.
+  - Hardening & CPU-safe fallback:
+    - Wrapped PyTorch imports in `scripts/gpu_config.py` in try-except blocks, allowing baseline steps to run on CPU-only clean machines without throwing ModuleNotFoundError.
+    - Log redirection: mapped logger paths to writeable ProgramData (`%PROGRAMDATA%\GoodQ4All\logs`) and wrapped file handler creation in try-except to fail-safe gracefully to stdout.
+    - Swagger/ReDoc served offline locally.
+  - UI additions: Collapsible glowing cyber-helipad **Upload Pad** panel integrated into Retro Memory Explorer header, enabling seamless drag-and-drop file imports directly to watchdog.
 - Pause checkpoint, 2026-05-27:
   - status: local LLM memory tuning and visual pipeline optimizations are validated and committed.
   - active API on port `30000` is bound to `epoch_2026_05_22_family_full_01`, reporting correct vector dimensions and successful FAISS parity writes.

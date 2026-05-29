@@ -1,10 +1,10 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: GENERATED_SNAPSHOT -->
-<!-- DOC_LAST_VERIFIED: 2026-05-22 -->
+<!-- DOC_LAST_VERIFIED: 2026-05-28 -->
 
 # System Snapshot
 
-_Operational operator-state alignment refreshed: 2026-05-22._
+_Operational operator-state alignment refreshed: 2026-05-28._
 
 This is a bounded release-era system snapshot. It is useful for understanding
 the supported host/runtime baseline, but it is not a live witness monitor.
@@ -54,7 +54,7 @@ the supported host/runtime baseline, but it is not a live witness monitor.
 ## Offline Packaging State
 - Workspace-adjacent machine-audit pack: removed from active scratch; do not use it as rebuild authority
 - Previous offline bundle payload and self-extracting installer: retired from circulation after stale-bundle audit
-- Current validated offline bundle / installer: none in circulation
+- Current validated offline bundle / installer: Standalone Setup Installer (`GoodQ4All_Setup_1.0.0.exe`) bundling base PyPI packages, perception libraries (`opencv-python`, `scenedetect`, `imageio-ffmpeg`), and pre-allocated model/offline-document folders. Go launcher supervisor (`LAUNCH_GOODQ.exe`) manages model signatures, boots Qdrant/API/Watchdog, and launches the browser console.
 - Active rebuild plan: `docs/bootstrap/OFFLINE_BUNDLE_REBUILD_PLAN.md`
 - Active offline bundle contract: `docs/bootstrap/OFFLINE_BUNDLE_CONTRACT.md`
 - Closure state:
@@ -126,6 +126,33 @@ the supported host/runtime baseline, but it is not a live witness monitor.
     - `51` transcript/entity disagreement segments
 
 ## Current Operator State
+- Pause checkpoint, 2026-05-28:
+  - status: unified sandboxed Setup Installer and local logs/GPU config mitigations are validated and committed.
+  - Setup Installer features:
+    - Zero-dependency sandbox installer (`GoodQ4All_Setup_1.0.0.exe`) bundling base PyPI packages, perception libraries (`opencv-python`, `scenedetect`, `imageio-ffmpeg`), and pre-allocated model/offline-document folders.
+    - Go launcher supervisor (`LAUNCH_GOODQ.exe`) managing model signatures, booting Qdrant/API/Watchdog, and launching the browser console.
+    - Bypasses Conda lookup (`python_paths.py`) and resolves modules dynamically relative to runtime when sandboxed.
+  - Hardening & CPU-safe fallback:
+    - Wrapped PyTorch imports in `scripts/gpu_config.py` in try-except blocks, allowing baseline steps to run on CPU-only clean machines without throwing ModuleNotFoundError.
+    - Log redirection: mapped logger paths to writeable ProgramData (`%PROGRAMDATA%\GoodQ4All\logs`) and wrapped file handler creation in try-except to fail-safe gracefully to stdout.
+    - Swagger/ReDoc served offline locally.
+  - UI additions: Collapsible glowing cyber-helipad **Upload Pad** panel integrated into Retro Memory Explorer header, enabling seamless drag-and-drop file imports directly to watchdog.
+- Pause checkpoint, 2026-05-27:
+  - status: local LLM memory tuning and visual pipeline optimizations are validated and committed.
+  - active API on port `30000` is bound to `epoch_2026_05_22_family_full_01`, reporting correct vector dimensions and successful FAISS parity writes.
+  - local LLMs are fully optimized:
+    - vLLM (Qwen2.5-0.5B-Instruct) allocation capped at `--gpu-memory-utilization 0.20` and `--kv-cache-dtype fp8` (~3.3 GB VRAM) maintaining full throughput (~275-365 tok/s).
+    - Windows Ollama fallback (`phi4:latest`) optimized via Flash Attention and Q8 KV cache quantization, reclaiming 1.81 GB VRAM (from 15.23 GB to 13.42 GB) and achieving 50-70% speedups.
+    - Combined posture: Both primary vLLM and fallback Ollama services run simultaneously in VRAM with plenty of headroom on the RTX 4070 Ti SUPER.
+  - visual pipeline is fully optimized and upgraded:
+    - CLIP upgraded to `openai/clip-vit-large-patch14` (768-d).
+    - DINOv2 upgraded to `facebook/dinov2-large` (1024-d).
+    - Vectorized GPU scene detection (`gpu_scene_detect.py` using PyTorch differences to minimize CPU-to-GPU syncs).
+    - OpenCV-Native seeking frame extractor (`scene_frame_extractor.py` using Python-native `cv2.VideoCapture`).
+    - Advanced keyframe selection based on Shannon entropy, Laplacian variance, and motion peaks.
+    - Mixed-precision (AMP) batching flattens and processes frames in a single batch.
+  - validation run on `samples/onboarding_fixture.mp4` completed in 5.7 seconds for visual embeddings, verifying Qdrant & FAISS parity writes (`faiss_ok = true`) under upgraded dimensions.
+  - next safe move before broad home-movie ingestion: reset Qdrant, prepare the new epoch, and run a scene-first probe.
 - Pause checkpoint, 2026-05-22:
   - Windows Ollama fallback is installed and reachable on `127.0.0.1:31434`;
     startup is managed by the user-level task

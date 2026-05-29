@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_verified": "2026-05-27",
+  "last_verified": "2026-05-28",
   "project": "GoodQ4All",
   "agent_first_read": "docs/agent/CURRENT_STATE.md",
   "human_index": "docs/agent/README.md",
@@ -12,6 +12,16 @@
     "conda_env": "goodq_core",
     "profile": "BASELINE",
     "wsl_distro": "Ubuntu-22.04",
+    "setup_installer": {
+      "status": "implemented",
+      "executable": "GoodQ4All_Setup_1.0.0.exe",
+      "launcher": "LAUNCH_GOODQ.exe",
+      "sandboxed": true,
+      "preflight_packages": ["opencv-python", "scenedetect", "imageio-ffmpeg"],
+      "logs_dir": "C:\\ProgramData\\GoodQ4All\\logs",
+      "gpu_fallback_cpu_safe": true,
+      "offline_api_docs": true
+    },
     "operator_console": {
       "path": "/ui/operator_console_v1/",
       "authority": "read_only",

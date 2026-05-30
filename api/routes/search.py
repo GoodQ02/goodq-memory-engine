@@ -762,3 +762,125 @@ async def search_visual(
     except Exception as e:
         logger.error(f"Visual search failed: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Visual search failed: {str(e)}")
+
+
+class TemporalSearchRequest(BaseModel):
+    entities: Optional[List[str]] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    time_hint: Optional[str] = None
+    source_file: Optional[str] = None
+    modality: Optional[List[str]] = None
+    max_results: int = 25
+    grouping: str = "semantic_episode"
+
+
+class TemporalSearchQueryInfo(BaseModel):
+    entities: List[str]
+    grouping: str
+
+
+class TemporalEvidence(BaseModel):
+    transcript: str
+    visual_tags: List[str]
+    artifact_paths: List[str]
+
+
+class TemporalSearchResult(BaseModel):
+    scene_id: str
+    source_file: str
+    start_time: float
+    end_time: float
+    timestamp_label: str
+    entities: List[str]
+    summary: str
+    evidence: TemporalEvidence
+    temporal_distance_from_previous: float
+    semantic_similarity_from_previous: float
+
+
+class TemporalSearchResponse(BaseModel):
+    query: TemporalSearchQueryInfo
+    results: List[TemporalSearchResult]
+
+
+@router.post("/temporal", response_model=TemporalSearchResponse)
+async def search_temporal(request: TemporalSearchRequest = Body(...)):
+    """
+    Execute chronological narrative search.
+    """
+    try:
+        from retrieval.temporal_reasoning import temporal_search
+        
+        result_dict = temporal_search(
+            entities=request.entities,
+            start_date=request.start_date,
+            end_date=request.end_date,
+            time_hint=request.time_hint,
+            source_file=request.source_file,
+            modality=request.modality,
+            max_results=request.max_results,
+            grouping=request.grouping,
+        )
+        return result_dict
+    except Exception as e:
+        logger.error(f"Temporal search failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Temporal search failed: {str(e)}")
+
+
+class TemporalSummarizeRequest(TemporalSearchRequest):
+    summary_style: str = "narrative"
+
+
+class TemporalSummarizeQueryInfo(BaseModel):
+    entities: Optional[List[str]] = None
+    time_hint: Optional[str] = None
+    summary_style: str
+
+
+class TemporalSummarizeSegment(BaseModel):
+    scene_index: Optional[int] = None
+    scene_id: Optional[str] = None
+    text: str
+    source_file: Optional[str] = None
+    start_time: Optional[float] = None
+    end_time: Optional[float] = None
+
+
+class TemporalSummarizeResponse(BaseModel):
+    query: TemporalSummarizeQueryInfo
+    summary: str
+    segments: Optional[List[TemporalSummarizeSegment]] = None
+    model_used: str
+    status: str
+    source_scene_ids: List[str]
+    source_count: int
+    truncated: bool
+    warnings: List[str]
+
+
+@router.post("/temporal/summarize", response_model=TemporalSummarizeResponse)
+async def summarize_temporal(request: TemporalSummarizeRequest = Body(...)):
+    """
+    Synthesize chronological narrative summary using local LLMs.
+    """
+    try:
+        from retrieval.narrative_summarizer import synthesize_narrative
+        
+        result_dict = synthesize_narrative(
+            entities=request.entities,
+            start_date=request.start_date,
+            end_date=request.end_date,
+            time_hint=request.time_hint,
+            source_file=request.source_file,
+            modality=request.modality,
+            max_results=request.max_results,
+            grouping=request.grouping,
+            summary_style=request.summary_style,
+        )
+        return result_dict
+    except Exception as e:
+        logger.error(f"Narrative summarization failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Narrative summarization failed: {str(e)}")
+
+

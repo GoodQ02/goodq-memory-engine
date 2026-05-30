@@ -651,18 +651,24 @@ class WatchdogProcessor:
                     logger.error(f"STDERR: {result.stderr}")
                 # Keep temp files for debugging on failure
                 logger.warning(f"Temp files preserved for debugging: {temp_input}")
-                return False
+                from steps.common.progress_tracker import add_error
+                add_error(f"Video ingestion failed with code {result.returncode}", "ingestion")
+                raise RuntimeError(f"Video ingestion failed: code {result.returncode}")
                 
-        except subprocess.TimeoutExpired:
+        except subprocess.TimeoutExpired as e:
             logger.error(f"[TIMER]  Mission timeout: Video ingestion exceeded {timeout_seconds}s")
             # Keep temp files for debugging on timeout
             logger.warning(f"Temp files preserved for debugging: {temp_input}")
-            return False
+            from steps.common.progress_tracker import add_error
+            add_error(f"Video ingestion exceeded timeout of {timeout_seconds}s", "ingestion")
+            raise e
         except Exception as e:
             logger.error(f"[FAIL] Mission error: {e}", exc_info=True)
             # Keep temp files for debugging on error
             logger.warning(f"Temp files preserved for debugging: {temp_input}")
-            return False
+            from steps.common.progress_tracker import add_error
+            add_error(str(e), "ingestion")
+            raise e
     
     def ingest_audio(self, audio_path: Path, run_id: str) -> bool:
         """Ingest standalone audio file via conda step runner pipeline."""
@@ -724,8 +730,7 @@ class WatchdogProcessor:
 
             for env_name, step_name in step_plan:
                 if not _check_timeout():
-                    success = False
-                    break
+                    raise TimeoutError(f"Audio ingestion exceeded timeout of {timeout_seconds}s")
                 logger.info(f"[AUDIO] Running step {step_name} in {env_name}")
                 result = run_conda_step(env_name, step_name, item, cfg)
                 if isinstance(result, dict):
@@ -735,10 +740,14 @@ class WatchdogProcessor:
                 canonicalize_taxonomy(item)
         except StepExecutionError as e:
             logger.error(f"[FAIL] Mission failed during audio pipeline: {e}")
-            success = False
+            from steps.common.progress_tracker import add_error
+            add_error(f"Audio pipeline step failed: {e}", "ingestion")
+            raise e
         except Exception as e:
             logger.error(f"[FAIL] Mission error during audio pipeline: {e}", exc_info=True)
-            success = False
+            from steps.common.progress_tracker import add_error
+            add_error(f"Audio pipeline error: {e}", "ingestion")
+            raise e
         finally:
             if success:
                 try:
@@ -816,8 +825,7 @@ class WatchdogProcessor:
 
             for env_name, step_name in step_plan:
                 if not _check_timeout():
-                    success = False
-                    break
+                    raise TimeoutError(f"Image ingestion exceeded timeout of {timeout_seconds}s")
                 logger.info(f"[IMAGE] Running step {step_name} in {env_name}")
                 result = run_conda_step(env_name, step_name, item, cfg)
                 if isinstance(result, dict):
@@ -827,10 +835,14 @@ class WatchdogProcessor:
                 canonicalize_taxonomy(item)
         except StepExecutionError as e:
             logger.error(f"[FAIL] Mission failed during image pipeline: {e}")
-            success = False
+            from steps.common.progress_tracker import add_error
+            add_error(f"Image pipeline step failed: {e}", "ingestion")
+            raise e
         except Exception as e:
             logger.error(f"[FAIL] Mission error during image pipeline: {e}", exc_info=True)
-            success = False
+            from steps.common.progress_tracker import add_error
+            add_error(f"Image pipeline error: {e}", "ingestion")
+            raise e
         finally:
             if success:
                 try:
@@ -913,7 +925,9 @@ class WatchdogProcessor:
                     text_content = temp_doc.read_text(encoding="utf-8", errors="ignore")
                 except Exception as e:
                     logger.error(f"Failed to read document text: {e}")
-                    return False
+                    from steps.common.progress_tracker import add_error
+                    add_error(f"Failed to read document text: {e}", "ingestion")
+                    raise e
                 item["frame_text"] = text_content
 
             step_plan = [
@@ -925,8 +939,7 @@ class WatchdogProcessor:
 
             for env_name, step_name in step_plan:
                 if not _check_timeout():
-                    success = False
-                    break
+                    raise TimeoutError(f"Document ingestion exceeded timeout of {timeout_seconds}s")
                 logger.info(f"[DOC] Running step {step_name} in {env_name}")
                 result = run_conda_step(env_name, step_name, item, cfg)
                 if isinstance(result, dict):
@@ -936,10 +949,14 @@ class WatchdogProcessor:
                 canonicalize_taxonomy(item)
         except StepExecutionError as e:
             logger.error(f"[FAIL] Mission failed during document pipeline: {e}")
-            success = False
+            from steps.common.progress_tracker import add_error
+            add_error(f"Document pipeline step failed: {e}", "ingestion")
+            raise e
         except Exception as e:
             logger.error(f"[FAIL] Mission error during document pipeline: {e}", exc_info=True)
-            success = False
+            from steps.common.progress_tracker import add_error
+            add_error(f"Document pipeline error: {e}", "ingestion")
+            raise e
         finally:
             if success:
                 try:

@@ -30,6 +30,7 @@
           </select>
           
           <div class="accessibility-menu">
+            <a href="/ui/stitching_workbench/" target="_blank" class="accessibility-btn stitching-btn" title="Open Identity Stitching Workbench">Stitcher</a>
             <button id="toggle-droppad-btn" class="accessibility-btn droppad-btn" title="Toggle File Ingestion Upload Pad">Upload Pad</button>
             <button id="toggle-intel-btn" class="accessibility-btn intel-btn" title="Toggle Video Intelligence Panel">Intel: OFF</button>
             <button id="toggle-scanlines" class="accessibility-btn" title="Toggle Scanline Grid Effect">Scanlines: ON</button>
@@ -57,7 +58,10 @@
         <div class="progress-terminal">
           <div class="progress-header">
             <span class="progress-title">🛰 PIPELINE INGESTION ACTIVE</span>
-            <span id="progress-elapsed" class="progress-meta">Elapsed: 0s</span>
+            <div style="display: flex; align-items: center;">
+              <span id="progress-elapsed" class="progress-meta">Elapsed: 0s</span>
+              <button id="progress-close-btn" class="progress-close-btn" style="display: none;" title="Dismiss Ingestion State">×</button>
+            </div>
           </div>
           <div class="progress-body">
             <div class="progress-info-row">
@@ -152,10 +156,19 @@
             <button class="panel-collapse-btn" id="collapse-left-btn" title="Collapse Search Console">◀</button>
           </div>
           <div class="panel-content">
+            <div class="retro-tabs">
+              <button type="button" id="tab-multimodal" class="tab-btn active">Multimodal</button>
+              <button type="button" id="tab-narrative" class="tab-btn narrative-tab">Narrative Explorer</button>
+            </div>
+            
+            <div class="tab-helper-text" id="tab-helper-msg">
+              Search for specific moments using natural language. Fits video content, speech transcripts, and visual elements.
+            </div>
+
             <form id="search-form" class="retro-form" onsubmit="return false;">
               <div class="form-group">
-                <label for="query-input">Search query:</label>
-                <input type="text" id="query-input" placeholder="Type memory search prompt..." autocomplete="off" spellcheck="false" class="retro-input" />
+                <label for="query-input">⌨ Enter Semantic or Keyword Query:</label>
+                <input type="text" id="query-input" placeholder="e.g., joe's first steps, christmas in the kitchen..." autocomplete="off" spellcheck="false" class="retro-input" />
               </div>
               
               <div class="form-group">
@@ -169,6 +182,39 @@
               </div>
               
               <button type="submit" id="search-submit" class="retro-btn primary-btn">Run Query</button>
+            </form>
+
+            <form id="narrative-form" class="retro-form" onsubmit="return false;" hidden>
+              <div class="form-group">
+                <label for="narrative-entities">⌨ Enter Target People / Places (comma-separated):</label>
+                <input type="text" id="narrative-entities" placeholder="e.g., Joe, Mom, kitchen..." autocomplete="off" spellcheck="false" class="retro-input" />
+              </div>
+              
+              <div class="form-group">
+                <label for="narrative-time-hint">🕒 Enter Optional Time Range Hint:</label>
+                <input type="text" id="narrative-time-hint" placeholder="e.g., 1988-1989, 1987, or leave blank..." autocomplete="off" spellcheck="false" class="retro-input" />
+              </div>
+
+              <div class="form-group">
+                <label for="narrative-style">Summary Style:</label>
+                <select id="narrative-style" class="retro-input" style="background-color: var(--bg-color); color: var(--text-color); border: 1px solid var(--border-dim); font-family: var(--font-mono); font-size: 13px; padding: 5px;">
+                  <option value="narrative" selected>Cohesive Story</option>
+                  <option value="bullets">Key Highlights</option>
+                  <option value="executive">Executive Briefing</option>
+                </select>
+              </div>
+
+              <div class="form-group row-group" style="flex-direction: row; align-items: center; gap: 8px; margin-top: 4px; margin-bottom: 4px;">
+                <input type="checkbox" id="narrative-enable-summary" style="cursor: pointer; width: 14px; height: 14px;" />
+                <label for="narrative-enable-summary" style="margin: 0; cursor: pointer; text-transform: none; font-size: 12px; color: var(--selected-color); text-shadow: 0 0 3px var(--selected-glow); font-family: var(--font-mono);">Synthesize Narrative Summary</label>
+              </div>
+              
+              <div class="form-group">
+                <label for="narrative-max-results">Max Results:</label>
+                <input type="number" id="narrative-max-results" value="25" min="1" max="100" class="retro-input" />
+              </div>
+              
+              <button type="submit" id="narrative-submit" class="retro-btn primary-btn">Run Narrative Explorer</button>
             </form>
             <div class="entity-filter-section">
               <span class="field-label">Entity Filter List:</span>
@@ -218,9 +264,20 @@
               <div id="inspector-default-message" class="keyframe-placeholder empty-state-cyber">
                 <div class="keyframe-placeholder-crt">
                   <div class="scanner-line"></div>
-                  <div class="empty-state-icon">📡</div>
-                  <div class="empty-state-title">INSPECTOR STANDBY</div>
-                  <div class="empty-state-text">SELECT TIMELINE CARD OR NODE TO INSPECT</div>
+                  <!-- Radar Sweep Animation -->
+                  <svg class="radar-svg" viewBox="0 0 200 100" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="100" cy="50" r="45" stroke="rgba(0, 210, 255, 0.15)" stroke-width="1" fill="none" />
+                    <circle cx="100" cy="50" r="30" stroke="rgba(0, 210, 255, 0.1)" stroke-width="1" fill="none" stroke-dasharray="3,3" />
+                    <circle cx="100" cy="50" r="15" stroke="rgba(0, 210, 255, 0.08)" stroke-width="1" fill="none" />
+                    <line x1="50" y1="50" x2="150" y2="50" stroke="rgba(0, 210, 255, 0.1)" stroke-width="1" />
+                    <line x1="100" y1="5" x2="100" y2="95" stroke="rgba(0, 210, 255, 0.1)" stroke-width="1" />
+                    <line class="radar-sweep" x1="100" y1="50" x2="100" y2="5" stroke="rgba(0, 210, 255, 0.7)" stroke-width="1.5" stroke-linecap="round" />
+                    <circle class="radar-dot dot1" cx="80" cy="30" r="2" fill="#00ff66" />
+                    <circle class="radar-dot dot2" cx="125" cy="65" r="1.5" fill="#ffaa00" />
+                  </svg>
+                  <div class="empty-state-icon" style="z-index: 1;">📡</div>
+                  <div class="empty-state-title" style="z-index: 1;">INSPECTOR STANDBY</div>
+                  <div class="empty-state-text" style="z-index: 1;">SELECT TIMELINE CARD OR NODE TO INSPECT</div>
                 </div>
               </div>
               
@@ -233,31 +290,51 @@
                   <div id="inspector-keyframe-no-image" class="keyframe-placeholder empty-state-cyber" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; z-index: 1;" hidden>
                     <div class="keyframe-placeholder-crt">
                       <div class="scanner-line"></div>
-                      <div class="empty-state-icon">📷</div>
-                      <div class="empty-state-title" id="no-keyframe-title">NO VISUAL DATA</div>
-                      <div class="empty-state-text" id="no-keyframe-text">SCENE CONTAINS NO KEYFRAME IMAGE</div>
+                      <div class="static-noise-bg"></div>
+                      <div class="empty-state-icon" style="z-index: 1;">📷</div>
+                      <div class="empty-state-title" id="no-keyframe-title" style="z-index: 1;">NO VISUAL DATA</div>
+                      <div class="empty-state-text" id="no-keyframe-text" style="z-index: 1;">SCENE CONTAINS NO KEYFRAME IMAGE</div>
                     </div>
                   </div>
                 </div>
               </div>
             </div>
 
-            <!-- Transcript Zone (Populated/Shown only when scene selected) -->
-            <div id="inspector-transcript-zone" class="transcript-zone" hidden></div>
-            
-            <div id="inspector-details" class="inspector-details" hidden>
-              <!-- Details Content Dynamically Injected -->
+            <!-- Inspector Tab Bar -->
+            <div id="inspector-tabs" class="retro-tabs inspector-tabs" hidden>
+              <button type="button" id="inspect-tab-overview" class="tab-btn active" data-tab="overview">Overview</button>
+              <button type="button" id="inspect-tab-transcript" class="tab-btn" data-tab="transcript">Transcript</button>
+              <button type="button" id="inspect-tab-entities" class="tab-btn" data-tab="entities">Entities</button>
+              <button type="button" id="inspect-tab-logs" class="tab-btn" data-tab="logs">Logs</button>
             </div>
 
-            <!-- Subsection Resizer Splitter -->
-            <div class="resizer resizer-h subsection-resizer" id="resizer-subsection" style="display: none;"></div>
+            <!-- Tab Content: Overview -->
+            <div id="inspector-content-overview" class="inspector-tab-content" hidden>
+              <div id="inspector-details-overview" class="inspector-details-sub"></div>
+            </div>
 
-            <div class="data-trail-section" id="data-trail-section">
-              <h3 class="subsection-header" id="toggle-data-trail-btn">
-                <span class="chevron-icon">▼</span> Data Trail Logs
-              </h3>
-              <div id="data-trail-logs" class="data-trail-logs">
-                <span class="placeholder-log">No search query or inspect event logged.</span>
+            <!-- Tab Content: Transcript -->
+            <div id="inspector-content-transcript" class="inspector-tab-content" hidden>
+              <div id="inspector-transcript-zone" class="transcript-zone-sub"></div>
+            </div>
+
+            <!-- Tab Content: Entities & Objects -->
+            <div id="inspector-content-entities" class="inspector-tab-content" hidden>
+              <div id="inspector-details-entities" class="inspector-details-sub"></div>
+            </div>
+
+            <!-- Tab Content: Arbitration & Logs -->
+            <div id="inspector-content-logs" class="inspector-tab-content" hidden>
+              <div id="inspector-details-logs" class="inspector-details-sub"></div>
+              <!-- Subsection Resizer Splitter -->
+              <div class="resizer resizer-h subsection-resizer" id="resizer-subsection" style="display: none;"></div>
+              <div class="data-trail-section" id="data-trail-section">
+                <h3 class="subsection-header" id="toggle-data-trail-btn">
+                  <span class="chevron-icon">▼</span> Data Trail Logs
+                </h3>
+                <div id="data-trail-logs" class="data-trail-logs">
+                  <span class="placeholder-log">No search query or inspect event logged.</span>
+                </div>
               </div>
             </div>
           </div>
@@ -272,6 +349,18 @@
             <h2 id="timeline-heading">Timeline  //  All Scenes</h2>
             <button class="panel-collapse-btn" id="collapse-bottom-btn" title="Collapse Timeline">▼</button>
           </div>
+
+          <div id="narrative-summary-container" class="narrative-summary-container" hidden>
+            <div class="summary-header">
+              <span class="summary-title">🗎 Chronological Narrative Synthesis</span>
+              <span class="summary-model-badge" id="summary-model-badge">unknown</span>
+              <button class="close-btn" id="close-summary-btn" title="Close Summary">×</button>
+            </div>
+            <div class="summary-body" id="narrative-summary-text">
+              Waiting for search trigger...
+            </div>
+          </div>
+
           <div class="panel-content timeline-content">
             <div id="timeline-grid" class="timeline-grid">
               <!-- Timeline Grid Cards Injected -->

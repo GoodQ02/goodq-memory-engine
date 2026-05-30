@@ -336,16 +336,26 @@ def _collect_wsl_status() -> Dict[str, Any]:
         return status
 
     try:
-        result = subprocess.run(["wsl", "--status"], capture_output=True, text=True, timeout=3)
+        result = subprocess.run(["wsl", "--status"], capture_output=True, text=True, timeout=1.0)
         status["status"] = "running" if result.returncode == 0 else "stopped"
         status["status_output"] = result.stdout
+    except subprocess.TimeoutExpired as e:
+        logger.warning(f"WSL status check timed out (frozen): {e}")
+        status["status"] = "frozen"
+        status["audio_processing"] = "unresponsive"
+        return status
     except Exception as e:
         logger.debug(f"WSL status check failed: {e}")
         status["status"] = "unknown"
 
     try:
-        list_result = subprocess.run(["wsl", "-l", "-v"], capture_output=True, text=True, timeout=5)
+        list_result = subprocess.run(["wsl", "-l", "-v"], capture_output=True, text=True, timeout=1.0)
         status["list_output"] = list_result.stdout
+    except subprocess.TimeoutExpired as e:
+        logger.warning(f"WSL list check timed out (frozen): {e}")
+        status["status"] = "frozen"
+        status["audio_processing"] = "unresponsive"
+        return status
     except Exception:
         pass
 
@@ -354,9 +364,14 @@ def _collect_wsl_status() -> Dict[str, Any]:
             ["wsl", "-d", _WSL_DISTRO, "--", "systemctl", "is-active", "vllm-llama1b.service"],
             capture_output=True,
             text=True,
-            timeout=3,
+            timeout=1.0,
         )
         status["vllm_service"] = "active" if vllm_check.returncode == 0 else "inactive"
+    except subprocess.TimeoutExpired as e:
+        logger.warning(f"WSL service check timed out (frozen): {e}")
+        status["status"] = "frozen"
+        status["audio_processing"] = "unresponsive"
+        return status
     except Exception as e:
         logger.debug(f"vLLM service check failed: {e}")
 
@@ -390,7 +405,7 @@ def _collect_wsl_status() -> Dict[str, Any]:
             ],
             capture_output=True,
             text=True,
-            timeout=10,
+            timeout=2.0,
         )
         status["audio_probe"] = "configured_worker"
         audio_stdout = (audio_check.stdout or "").strip()
@@ -402,6 +417,11 @@ def _collect_wsl_status() -> Dict[str, Any]:
         else:
             status["audio_processing"] = "unavailable"
             status["faster_whisper"] = "not_installed"
+    except subprocess.TimeoutExpired as e:
+        logger.warning(f"WSL audio check timed out (frozen): {e}")
+        status["status"] = "frozen"
+        status["audio_processing"] = "unresponsive"
+        return status
     except Exception as e:
         logger.debug(f"WSL2 audio check skipped: {e}")
 
@@ -418,7 +438,7 @@ def _collect_wsl_status() -> Dict[str, Any]:
             ],
             capture_output=True,
             text=True,
-            timeout=5,
+            timeout=1.5,
         )
         if gpu_info.returncode == 0 and gpu_info.stdout.strip():
             parts = [p.strip() for p in gpu_info.stdout.strip().split(",")]
@@ -440,10 +460,15 @@ def _collect_wsl_status() -> Dict[str, Any]:
             ],
             capture_output=True,
             text=True,
-            timeout=5,
+            timeout=1.5,
         )
         if cuda_info.returncode == 0 and cuda_info.stdout.strip():
             status["cuda_version"] = cuda_info.stdout.strip()
+    except subprocess.TimeoutExpired as e:
+        logger.warning(f"WSL GPU query timed out (frozen): {e}")
+        status["status"] = "frozen"
+        status["audio_processing"] = "unresponsive"
+        return status
     except Exception as e:
         logger.debug(f"WSL2 GPU probe failed: {e}")
 

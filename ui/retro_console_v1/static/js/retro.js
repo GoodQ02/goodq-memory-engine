@@ -12,6 +12,7 @@
     selectedEntities: [],
     searchActive: false,
     selectedSceneId: null,
+    activeInspectorTab: "overview",
     modes: new Set(["text", "visual", "audio"]),
     graph: { nodes: [], edges: [] },
     canvasOffset: { x: 0, y: 0 },
@@ -31,6 +32,7 @@
     targetRotation: { alpha: 0.2, beta: 0.15 },
     isSpinning: true,
     isAutoRotating: false,
+    activeSearchTab: "multimodal",
   };
 
   // ─── Text-to-Speech (Web Speech API) ──────────────────────────
@@ -777,36 +779,115 @@
         : "Timeline  //  All Scenes";
     }
 
-    const filteredScenes = state.scenes.filter((scene) => {
-      // 1. If search is active, check if this scene is in search results
-      if (state.searchActive) {
-        const isMatched = state.searchResults.some((res) => res.scene_id === scene.id);
-        if (!isMatched) return false;
+    let scenesToRender = [];
+    const isNarrativeSearchActive = state.searchActive && state.activeSearchTab === "narrative";
+
+    if (isNarrativeSearchActive) {
+      // In narrative mode, render search results directly, preserving order
+      scenesToRender = state.searchResults.map((res) => {
+        const found = state.scenes.find((s) => {
+          if (!s) return false;
+          const sId = String(s.id || "").trim().toLowerCase();
+          const rId = String(res.scene_id || "").trim().toLowerCase();
+          return sId && rId && sId === rId;
+        });
+        return {
+          id: res.scene_id,
+          start: typeof res.start_time === "number" ? res.start_time : 0.0,
+          end: typeof res.end_time === "number" ? res.end_time : 0.0,
+          summary: res.summary || (found ? found.summary : "No description available."),
+          keyframe_url: found ? found.keyframe_url : resolveKeyframeUrl(res.evidence ? res.evidence.artifact_paths : null, res.source_file),
+          entities: Array.isArray(res.entities) ? res.entities.map(e => ({ name: e, type: "generic" })) : (found ? found.entities : []),
+          dialogue: res.evidence && typeof res.evidence.transcript === "string" ? [{ text: res.evidence.transcript }] : (found ? found.dialogue : []),
+          transcript: (res.evidence && res.evidence.transcript) || "",
+          source_file: res.source_file || "",
+          sentiment_label: found ? found.sentiment_label : "NEUTRAL",
+          audio_emotion: found ? found.audio_emotion : "calm",
+          content_state: found ? found.content_state : "signal",
+          transcript_entity_disagreements: found ? found.transcript_entity_disagreements : [],
+          temporal_distance_from_previous: typeof res.temporal_distance_from_previous === "number" ? res.temporal_distance_from_previous : 0.0,
+          semantic_similarity_from_previous: typeof res.semantic_similarity_from_previous === "number" ? res.semantic_similarity_from_previous : 0.0
+        };
+      });
+    } else {
+      scenesToRender = state.scenes.filter((scene) => {
+        // 1. If search is active, check if this scene is in search results
+        if (state.searchActive) {
+          const isMatched = state.searchResults.some((res) => {
+            const rId = String(res.scene_id || "").trim().toLowerCase();
+            const sId = String(scene.id || "").trim().toLowerCase();
+            return rId && sId && rId === sId;
+          });
+          if (!isMatched) return false;
+        }
+
+        // 2. Entity filter: check ALL channel arrays so Sprint 2 channels are included
+        if (state.selectedEntities && state.selectedEntities.length > 0) {
+          // Collect every entity name across all four channels
+          const allChannelEntities = [
+            ...(scene.entities || []),
+            ...(scene.scene_present_entities || []),
+            ...(scene.dialogue_mentioned_entities || []),
+            ...(scene.candidate_visible_people || []),
+          ];
+          const sceneEntityNames = allChannelEntities.map(e =>
+            typeof e === 'string' ? normalizeEntityName(e) : normalizeEntityName(e.name || '')
+          );
+          const hasAllSelected = state.selectedEntities.every(entityId => sceneEntityNames.includes(entityId));
+          if (!hasAllSelected) return false;
+        }
+
+        return true;
+      });
+    }
+
+    scenesToRender.forEach((scene, index) => {
+      // If it's a narrative search and index > 0, insert a narrative connector line/bubble
+      if (isNarrativeSearchActive && index > 0) {
+        const connector = document.createElement("div");
+        connector.className = "narrative-connector";
+
+        const line1 = document.createElement("div");
+        line1.className = "connector-line";
+        connector.appendChild(line1);
+
+        const metrics = document.createElement("div");
+        metrics.className = "connector-metrics";
+
+        const gapVal = scene.temporal_distance_from_previous;
+        const gapSpan = document.createElement("span");
+        gapSpan.className = "metric-gap";
+        gapSpan.textContent = gapVal > 0 ? `+${gapVal}s` : "0.0s";
+        metrics.appendChild(gapSpan);
+
+        const simVal = scene.semantic_similarity_from_previous;
+        const simSpan = document.createElement("span");
+        simSpan.className = "metric-sim";
+        simSpan.textContent = `~${simVal.toFixed(4)}`;
+        metrics.appendChild(simSpan);
+
+        connector.appendChild(metrics);
+
+        const line2 = document.createElement("div");
+        line2.className = "connector-line";
+        connector.appendChild(line2);
+
+        const arrow = document.createElement("span");
+        arrow.className = "connector-arrow";
+        arrow.textContent = "▶";
+        connector.appendChild(arrow);
+
+        grid.appendChild(connector);
       }
 
-      // 2. Entity filter: check ALL channel arrays so Sprint 2 channels are included
-      if (state.selectedEntities && state.selectedEntities.length > 0) {
-        // Collect every entity name across all four channels
-        const allChannelEntities = [
-          ...(scene.entities || []),
-          ...(scene.scene_present_entities || []),
-          ...(scene.dialogue_mentioned_entities || []),
-          ...(scene.candidate_visible_people || []),
-        ];
-        const sceneEntityNames = allChannelEntities.map(e =>
-          typeof e === 'string' ? normalizeEntityName(e) : normalizeEntityName(e.name || '')
-        );
-        const hasAllSelected = state.selectedEntities.every(entityId => sceneEntityNames.includes(entityId));
-        if (!hasAllSelected) return false;
-      }
-
-      return true;
-    });
-
-    filteredScenes.forEach((scene) => {
       const card = document.createElement("article");
-      const isSelected = scene.id === state.selectedSceneId;
-      const isMatched = state.searchResults.some((res) => res.scene_id === scene.id);
+      const isSelected = scene.id && state.selectedSceneId && 
+        (String(scene.id).trim().toLowerCase() === String(state.selectedSceneId).trim().toLowerCase());
+      const isMatched = state.searchResults.some((res) => {
+        const rId = String(res.scene_id || "").trim().toLowerCase();
+        const sId = String(scene.id || "").trim().toLowerCase();
+        return rId && sId && rId === sId;
+      });
 
       const passesIntel = scenePassesIntelFilter(scene);
       card.className = `scene-card ${isSelected ? "selected" : ""} ${isMatched ? "matched" : ""} ${state.intelFilter && !passesIntel ? "intel-dim" : ""}`;
@@ -840,7 +921,11 @@
 
       const cardId = document.createElement("div");
       cardId.className = "scene-card-id";
-      cardId.textContent = `SCENE #${scene.id}`;
+      if (isNarrativeSearchActive && scene.source_file) {
+        cardId.textContent = `${scene.source_file.replace(/\.[^/.]+$/, "")} // SCENE #${scene.id}`;
+      } else {
+        cardId.textContent = `SCENE #${scene.id}`;
+      }
       body.appendChild(cardId);
 
       const summary = document.createElement("p");
@@ -916,6 +1001,48 @@
     const selectedCard = document.querySelector(`.scene-card[data-scene-id="${sceneId}"]`);
     if (selectedCard) {
       selectedCard.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+    }
+
+    // Forensic logging of claims verification / scene selection data trail
+    let scene = state.scenes.find((s) => {
+      if (!s) return false;
+      const sId = String(s.id || "").trim().toLowerCase();
+      const selId = String(sceneId || "").trim().toLowerCase();
+      return (sId && selId && sId === selId) || (s.scene_index != null && String(s.scene_index) === selId);
+    });
+
+    if (!scene && state.searchResults && state.searchResults.length > 0) {
+      const res = state.searchResults.find((r) => {
+        const rId = String(r.scene_id || "").trim().toLowerCase();
+        const selId = String(sceneId || "").trim().toLowerCase();
+        return rId && selId && rId === selId;
+      });
+      if (res) {
+        scene = {
+          id: res.scene_id,
+          start: typeof res.start_time === "number" ? res.start_time : 0.0,
+          end: typeof res.end_time === "number" ? res.end_time : 0.0,
+          summary: res.summary || "No description available.",
+          source_file: res.source_file || "",
+          sentiment_label: "NEUTRAL",
+          audio_emotion: "calm"
+        };
+      }
+    }
+
+    if (scene) {
+      const timeRangeStr = `${formatTime(scene.start)} - ${formatTime(scene.end)}`;
+      const source = scene.source_file || state.activeVideoId;
+      const shortId = scene.id ? String(scene.id).substring(0, 8) : "N/A";
+      logDataTrail(
+        `Verify Claim / Select Scene #${shortId}`,
+        "Narrative Verification / Claims Linkage",
+        state.activeVideoId,
+        source,
+        `Verified narrative claim linked to scene: "${scene.summary || 'No description available.'}"`,
+        1.0,
+        timeRangeStr
+      );
     }
   }
 
@@ -1072,7 +1199,11 @@
   // Render Metadata Detail Inspector Panel
   function renderInspector() {
     const defaultMsg = document.getElementById("inspector-default-message");
-    const details = document.getElementById("inspector-details");
+    const tabsBar = document.getElementById("inspector-tabs");
+    const overviewDiv = document.getElementById("inspector-details-overview");
+    const entitiesDiv = document.getElementById("inspector-details-entities");
+    const logsDiv = document.getElementById("inspector-details-logs");
+    const transcriptZone = document.getElementById("inspector-transcript-zone");
     const subResizer = document.getElementById("resizer-subsection");
     const keyframeZone = document.getElementById("inspector-keyframe-zone");
     const keyframeActive = document.getElementById("inspector-keyframe-active");
@@ -1081,38 +1212,58 @@
     const keyframeNoImage = document.getElementById("inspector-keyframe-no-image");
     const noKeyframeTitle = document.getElementById("no-keyframe-title");
     const noKeyframeText = document.getElementById("no-keyframe-text");
-    const transcriptZone = document.getElementById("inspector-transcript-zone");
 
-    if (!defaultMsg || !details) return;
+    if (!defaultMsg) return;
 
     // Reset zones
     if (keyframeZone) keyframeZone.hidden = false;
     if (keyframeActive) keyframeActive.hidden = true;
+    if (overviewDiv) overviewDiv.innerHTML = "";
+    if (entitiesDiv) entitiesDiv.innerHTML = "";
+    if (logsDiv) logsDiv.innerHTML = "";
     if (transcriptZone) {
       transcriptZone.innerHTML = "";
-      transcriptZone.hidden = true;
     }
 
     if (!state.selectedSceneId && !state.selectedEntity) {
       defaultMsg.hidden = false;
-      details.hidden = true;
+      if (tabsBar) tabsBar.hidden = true;
+      const contents = document.querySelectorAll(".inspector-tab-content");
+      contents.forEach(c => {
+        c.hidden = true;
+        c.classList.remove("active-content");
+      });
       if (subResizer) subResizer.style.display = "none";
       return;
     }
 
     defaultMsg.hidden = true;
-    details.hidden = false;
-    if (subResizer) {
-      const dataTrailSection = document.getElementById("data-trail-section");
-      const isCollapsed = dataTrailSection && dataTrailSection.classList.contains("collapsed");
-      subResizer.style.display = isCollapsed ? "none" : "";
-    }
-    details.innerHTML = "";
+    if (tabsBar) tabsBar.hidden = false;
 
     // Case 1: Active Entity Node Selection
     if (state.selectedEntity) {
+      // Toggle tab buttons visibility for entity selection
+      const tabOverviewBtn = document.getElementById("inspect-tab-overview");
+      const tabEntitiesBtn = document.getElementById("inspect-tab-entities");
+      const tabTranscriptBtn = document.getElementById("inspect-tab-transcript");
+      const tabLogsBtn = document.getElementById("inspect-tab-logs");
+
+      if (tabOverviewBtn) tabOverviewBtn.style.display = "";
+      if (tabEntitiesBtn) tabEntitiesBtn.style.display = "";
+      if (tabTranscriptBtn) tabTranscriptBtn.style.display = "none";
+      if (tabLogsBtn) tabLogsBtn.style.display = "none";
+
+      if (state.activeInspectorTab !== "overview" && state.activeInspectorTab !== "entities") {
+        state.activeInspectorTab = "overview";
+      }
+
       if (state.selectedSceneId) {
-        const scene = state.scenes.find((s) => s.id === state.selectedSceneId);
+        const scene = state.scenes.find((s) => {
+          if (!s) return false;
+          const sId = String(s.id || "").trim().toLowerCase();
+          const selId = String(state.selectedSceneId || "").trim().toLowerCase();
+          return (sId && selId && sId === selId) || (s.scene_index != null && String(s.scene_index) === selId);
+        });
         if (scene) {
           if (keyframeZone) keyframeZone.hidden = false;
           if (keyframeActive) keyframeActive.hidden = false;
@@ -1138,8 +1289,6 @@
             keyframeTimecode.textContent = `${formatTime(scene.start)} - ${formatTime(scene.end)}`;
           }
           if (transcriptZone) {
-            transcriptZone.hidden = false;
-            transcriptZone.innerHTML = "";
             const tHeader = document.createElement("div");
             tHeader.className = "transcript-header";
             tHeader.textContent = "TRANSCRIPT LOG";
@@ -1152,10 +1301,6 @@
         }
       } else {
         if (keyframeZone) keyframeZone.hidden = true;
-        if (transcriptZone) {
-          transcriptZone.innerHTML = "";
-          transcriptZone.hidden = true;
-        }
       }
       const node = state.graph.nodes.find((n) => n.id === state.selectedEntity);
       if (!node) return;
@@ -1164,12 +1309,12 @@
       header.className = "details-header";
       appendText(header, "h3", `Entity: ${node.label}`, "details-title");
       appendText(header, "p", `Category: ${node.type.toUpperCase()}`, "details-subtitle");
-      details.appendChild(header);
+      if (overviewDiv) overviewDiv.appendChild(header);
 
       const countInfo = document.createElement("div");
       countInfo.className = "details-summary";
       countInfo.textContent = `Entity Co-occurrence Map counts: This entity appears in ${node.count} scene${node.count === 1 ? "" : "s"} across the timeline.`;
-      details.appendChild(countInfo);
+      if (overviewDiv) overviewDiv.appendChild(countInfo);
 
       // List related entities (co-occurrences)
       const cooccurrences = state.graph.edges
@@ -1187,7 +1332,7 @@
         .sort((a, b) => b.weight - a.weight);
 
       if (cooccurrences.length) {
-        appendText(details, "h4", "Entity Co-occurrence Grid");
+        if (entitiesDiv) appendText(entitiesDiv, "h4", "Entity Co-occurrence Grid");
         const list = document.createElement("div");
         list.className = "details-entities-list";
         cooccurrences.forEach((co) => {
@@ -1204,7 +1349,7 @@
           });
           list.appendChild(pill);
         });
-        details.appendChild(list);
+        if (entitiesDiv) entitiesDiv.appendChild(list);
       }
 
       // Show filter trigger
@@ -1224,12 +1369,54 @@
           ""
         );
       });
-      details.appendChild(filterBtn);
+      if (overviewDiv) overviewDiv.appendChild(filterBtn);
+      
+      switchInspectorTab(state.activeInspectorTab || "overview");
       return;
     }
 
     // Case 2: Active Scene Selection
-    const scene = state.scenes.find((s) => s.id === state.selectedSceneId);
+    // Toggle all tab buttons visible
+    const tabOverviewBtn = document.getElementById("inspect-tab-overview");
+    const tabEntitiesBtn = document.getElementById("inspect-tab-entities");
+    const tabTranscriptBtn = document.getElementById("inspect-tab-transcript");
+    const tabLogsBtn = document.getElementById("inspect-tab-logs");
+
+    if (tabOverviewBtn) tabOverviewBtn.style.display = "";
+    if (tabEntitiesBtn) tabEntitiesBtn.style.display = "";
+    if (tabTranscriptBtn) tabTranscriptBtn.style.display = "";
+    if (tabLogsBtn) tabLogsBtn.style.display = "";
+
+    let scene = state.scenes.find((s) => {
+      if (!s) return false;
+      const sId = String(s.id || "").trim().toLowerCase();
+      const selId = String(state.selectedSceneId || "").trim().toLowerCase();
+      return (sId && selId && sId === selId) || (s.scene_index != null && String(s.scene_index) === selId);
+    });
+    if (!scene && state.searchResults && state.searchResults.length > 0) {
+      const res = state.searchResults.find((r) => {
+        const rId = String(r.scene_id || "").trim().toLowerCase();
+        const selId = String(state.selectedSceneId || "").trim().toLowerCase();
+        return rId && selId && rId === selId;
+      });
+      if (res) {
+        scene = {
+          id: res.scene_id,
+          start: typeof res.start_time === "number" ? res.start_time : 0.0,
+          end: typeof res.end_time === "number" ? res.end_time : 0.0,
+          summary: res.summary || "No description available.",
+          keyframe_url: resolveKeyframeUrl(res.evidence ? res.evidence.artifact_paths : null, res.source_file),
+          entities: Array.isArray(res.entities) ? res.entities.map(e => ({ name: e, type: "generic" })) : [],
+          dialogue: res.evidence && typeof res.evidence.transcript === "string" ? [{ text: res.evidence.transcript }] : [],
+          transcript: (res.evidence && res.evidence.transcript) || "",
+          source_file: res.source_file || "",
+          sentiment_label: "NEUTRAL",
+          audio_emotion: "calm",
+          content_state: "signal",
+          transcript_entity_disagreements: []
+        };
+      }
+    }
     if (!scene) return;
 
     // Render keyframe active state
@@ -1263,7 +1450,7 @@
     header.className = "details-header";
     appendText(header, "h3", `SCENE INDEX #${scene.id}`, "details-title");
     appendText(header, "p", `Timecode: ${formatTime(scene.start)} - ${formatTime(scene.end)}`, "details-subtitle");
-    details.appendChild(header);
+    if (overviewDiv) overviewDiv.appendChild(header);
 
     // ── Scene Context LLM (tag groups: primary_tags / contextual_tags / structural_tags) ──
     const ctx_llm = scene.scene_context_llm;
@@ -1279,14 +1466,9 @@
       ctxLabel.style.marginBottom = "0";
       ctxHeader.appendChild(ctxLabel);
 
-      // Epistemic state badge — actual field uses top-level .state (simplified internal format)
-      // per _derive_scene_context_epistemic in cross_modal_harmonizer.py:
-      // { state, dominant_evidence, evidence_family, fallback_mode, conflict_detected, evidence, limits, next_steps }
       let epistemicState = null;
       if (ctx_epistemic && typeof ctx_epistemic === "object") {
-        // Prefer top-level .state (internal simplified format)
         epistemicState = ctx_epistemic.state || ctx_epistemic.epistemic_state || null;
-        // Fallback: EpistemicReadEnvelope format (candidates[0].state)
         if (!epistemicState) {
           const candidates = Array.isArray(ctx_epistemic.candidates) ? ctx_epistemic.candidates : [];
           if (candidates.length > 0 && candidates[0].state) epistemicState = candidates[0].state;
@@ -1309,7 +1491,6 @@
         ctxHeader.appendChild(badge);
       }
 
-      // Sprint 4 (P2): scene_context_arbitration resolved_by badge
       const arb = scene.scene_context_arbitration;
       if (arb && typeof arb === "object" && arb.resolved_by) {
         const arbBadge = document.createElement("span");
@@ -1322,7 +1503,6 @@
       }
       ctxWrap.appendChild(ctxHeader);
 
-      // Render {primary_tags, contextual_tags, structural_tags} as labelled pill groups
       const tagGroups = [
         { key: "primary_tags",     label: "Primary" },
         { key: "contextual_tags",  label: "Context" },
@@ -1347,20 +1527,19 @@
         });
         ctxWrap.appendChild(groupRow);
       });
-      // Fallback: if none of the three tag arrays exist, show raw text if it's a string
       if (!hasAnyTags && typeof ctx_llm === "string") {
         const ctxText = document.createElement("p");
         ctxText.className = "scene-context-block";
         ctxText.textContent = ctx_llm;
         ctxWrap.appendChild(ctxText);
       }
-      details.appendChild(ctxWrap);
+      if (overviewDiv) overviewDiv.appendChild(ctxWrap);
     }
 
     const summary = document.createElement("div");
     summary.className = "details-summary";
     summary.textContent = scene.summary || "No description available.";
-    details.appendChild(summary);
+    if (overviewDiv) overviewDiv.appendChild(summary);
 
     // Metadata grid details
     const dl = document.createElement("dl");
@@ -1377,7 +1556,7 @@
       dl.appendChild(dt);
       dl.appendChild(dd);
     });
-    details.appendChild(dl);
+    if (overviewDiv) overviewDiv.appendChild(dl);
 
     // Scene entities — split into channel groups
     const scenePresent  = scene.scene_present_entities  || [];
@@ -1385,10 +1564,9 @@
     const candidates    = scene.candidate_visible_people || [];
     const fallbackAll   = scene.entities || [];
 
-    // Helper: render one channel group of entity pills (const arrow avoids strict-mode block-fn issue)
     const renderEntityGroup = (heading, list, pillClass, enableSelect) => {
       if (!list.length) return;
-      appendText(details, "h4", heading);
+      if (entitiesDiv) appendText(entitiesDiv, "h4", heading);
       const grp = document.createElement("div");
       grp.className = "details-entities-list";
       list.forEach((entity) => {
@@ -1410,7 +1588,7 @@
         }
         grp.appendChild(pill);
       });
-      details.appendChild(grp);
+      if (entitiesDiv) entitiesDiv.appendChild(grp);
     };
 
     const hasChannels = scenePresent.length || mentioned.length || candidates.length;
@@ -1419,8 +1597,7 @@
       renderEntityGroup("Mentioned in Dialogue", mentioned, "mentioned", true);
       renderEntityGroup("Visible / Unconfirmed", candidates, "candidate-visible", false);
     } else if (fallbackAll.length) {
-      // Fallback: render merged entities list when no channels populated
-      appendText(details, "h4", "Detected Entities");
+      if (entitiesDiv) appendText(entitiesDiv, "h4", "Detected Entities");
       const list = document.createElement("div");
       list.className = "details-entities-list";
       fallbackAll.forEach((entity) => {
@@ -1437,12 +1614,12 @@
         });
         list.appendChild(pill);
       });
-      details.appendChild(list);
+      if (entitiesDiv) entitiesDiv.appendChild(list);
     }
 
-    // ── Sprint 4 (P2): Keywords ───────────────────────────────────
+    // Keywords
     if (scene.keywords && scene.keywords.length > 0) {
-      appendText(details, "h4", "Keywords");
+      if (entitiesDiv) appendText(entitiesDiv, "h4", "Keywords");
       const kwRow = document.createElement("div");
       kwRow.className = "details-entities-list keywords-list";
       scene.keywords.forEach((kw) => {
@@ -1451,12 +1628,12 @@
         pill.textContent = typeof kw === "string" ? kw : String(kw);
         kwRow.appendChild(pill);
       });
-      details.appendChild(kwRow);
+      if (entitiesDiv) entitiesDiv.appendChild(kwRow);
     }
 
-    // ── Detected Objects (separate from people/entity pills) ──────
+    // Detected Objects
     if (scene.objects && scene.objects.length > 0) {
-      appendText(details, "h4", "Detected Objects");
+      if (entitiesDiv) appendText(entitiesDiv, "h4", "Detected Objects");
       const objList = document.createElement("div");
       objList.className = "details-entities-list objects-list";
       scene.objects.forEach((label) => {
@@ -1466,10 +1643,10 @@
         pill.title = `Detected object: ${label}`;
         objList.appendChild(pill);
       });
-      details.appendChild(objList);
+      if (entitiesDiv) entitiesDiv.appendChild(objList);
     }
 
-    // ── P1: Time Hints + P2: OCR Date Candidates ─────────────────
+    // Time Hints
     const hasTimeHints = scene.time_hints && typeof scene.time_hints === "object";
     const hasOcrDates = scene.ocr_date_candidates && scene.ocr_date_candidates.length > 0;
     if (hasTimeHints || hasOcrDates) {
@@ -1480,14 +1657,13 @@
             .map(([k, v]) => [k.replace(/_/g, " "), Array.isArray(v) ? v.join(", ") : String(v)])
         : [];
 
-      // Merge OCR date candidates into hint display
       const dateEntries = hasOcrDates
         ? scene.ocr_date_candidates.map(d => ["ocr date", String(d)])
         : [];
 
       const allEntries = [...hintEntries, ...dateEntries];
       if (allEntries.length > 0) {
-        appendText(details, "h4", "Time Hints");
+        if (entitiesDiv) appendText(entitiesDiv, "h4", "Time Hints");
         const hintsRow = document.createElement("div");
         hintsRow.className = "time-hints-row";
         hintEntries.forEach(([key, val]) => {
@@ -1503,20 +1679,19 @@
           pill.title = "OCR-extracted date candidate";
           hintsRow.appendChild(pill);
         });
-        details.appendChild(hintsRow);
+        if (entitiesDiv) entitiesDiv.appendChild(hintsRow);
       }
     }
 
-    // ── P1: Conversation Dynamics (interaction_dominance + conversation_owner + speaker_aligned_mentions) ─
+    // Conversation Dynamics
     const hasDynamics = scene.interaction_dominance || scene.conversation_owner ||
       (scene.speaker_aligned_mentions && scene.speaker_aligned_mentions.length > 0);
 
     if (hasDynamics) {
-      appendText(details, "h4", "Conversation Dynamics");
+      if (entitiesDiv) appendText(entitiesDiv, "h4", "Conversation Dynamics");
       const dynWrap = document.createElement("div");
       dynWrap.className = "conv-dynamics-wrap";
 
-      // interaction_dominance: { speaker_id, dominant_share, segments, stability, confidence, continuity_key }
       if (scene.interaction_dominance && typeof scene.interaction_dominance === "object") {
         const dom = scene.interaction_dominance;
         const domRow = document.createElement("div");
@@ -1530,7 +1705,6 @@
         const share = typeof dom.dominant_share === "number" ? `${(dom.dominant_share * 100).toFixed(0)}%` : null;
         const conf = dom.confidence || null;
         const stability = typeof dom.stability === "number" ? `stability ${(dom.stability * 100).toFixed(0)}%` : null;
-        // P2: speaker_count
         const spkCount = typeof scene.speaker_count === "number" ? `${scene.speaker_count} spk` : null;
 
         const speakerChip = document.createElement("span");
@@ -1548,7 +1722,6 @@
         dynWrap.appendChild(domRow);
       }
 
-      // conversation_owner: { name, text, type, confidence, mention_dominance_ratio, chain_length, ... }
       if (scene.conversation_owner && typeof scene.conversation_owner === "object") {
         const owner = scene.conversation_owner;
         const ownerName = owner.name || owner.text || null;
@@ -1589,7 +1762,6 @@
         }
       }
 
-      // speaker_aligned_mentions: [{ text, type, count }] — who the dominant speaker mentioned
       if (scene.speaker_aligned_mentions && scene.speaker_aligned_mentions.length > 0) {
         const mentionRow = document.createElement("div");
         mentionRow.className = "conv-dynamics-row";
@@ -1613,11 +1785,10 @@
         });
         dynWrap.appendChild(mentionRow);
       }
-
-      details.appendChild(dynWrap);
+      if (entitiesDiv) entitiesDiv.appendChild(dynWrap);
     }
 
-    // ── Sprint 4 (P2): Transcript Entity Disagreements ───────────
+    // Name Conflicts
     if (scene.transcript_entity_disagreements && scene.transcript_entity_disagreements.length > 0) {
       const disags = scene.transcript_entity_disagreements;
       const disagSection = document.createElement("div");
@@ -1643,9 +1814,6 @@
       disags.forEach((d) => {
         const row = document.createElement("div");
         row.className = "disag-row";
-        // transcript_candidate: surface form found in transcript
-        // entity_names: person entity list for this segment (string[])
-        // reason: human-readable description of the conflict type
         const candidate = d.transcript_candidate || d.candidate || "?";
         const inScene = Array.isArray(d.entity_names) ? d.entity_names.join(" / ") : String(d.entity_names || "?");
         const reason = (d.reason || d.category || "").replace(/_/g, " ");
@@ -1682,10 +1850,10 @@
         disagToggle.textContent = hidden ? "Hide" : "Show";
       });
       disagSection.appendChild(disagTable);
-      details.appendChild(disagSection);
+      if (logsDiv) logsDiv.appendChild(disagSection);
     }
 
-    // ── Sprint 4+: Cognitive Arbitration Details (Epistemic & Arbitration payload) ──
+    // Cognitive Arbitration Details
     const arb = scene.scene_context_arbitration;
     if ((ctx_epistemic && typeof ctx_epistemic === "object") || (arb && typeof arb === "object")) {
       const cogSection = document.createElement("div");
@@ -1713,7 +1881,6 @@
       cogBody.style.lineHeight = "1.5";
       cogBody.style.fontFamily = "var(--font-mono)";
 
-      // Render Epistemic Metadata
       if (ctx_epistemic && typeof ctx_epistemic === "object") {
         const epistemicTitle = document.createElement("div");
         epistemicTitle.style.fontWeight = "bold";
@@ -1749,7 +1916,6 @@
         });
         cogBody.appendChild(epistemicGrid);
 
-        // Render Evidence Support Trail
         const evidenceList = Array.isArray(ctx_epistemic.evidence) ? ctx_epistemic.evidence : [];
         if (evidenceList.length > 0) {
           const evHeader = document.createElement("div");
@@ -1773,7 +1939,6 @@
           cogBody.appendChild(evList);
         }
 
-        // Render Limits
         const limitsList = Array.isArray(ctx_epistemic.limits) ? ctx_epistemic.limits : [];
         if (limitsList.length > 0) {
           const limHeader = document.createElement("div");
@@ -1796,7 +1961,6 @@
         }
       }
 
-      // Render Arbitration Metadata
       if (arb && typeof arb === "object") {
         const arbTitle = document.createElement("div");
         arbTitle.style.fontWeight = "bold";
@@ -1805,7 +1969,6 @@
         arbTitle.textContent = `[RESOLVED BY: ${String(arb.resolved_by || "unknown").toUpperCase()}]`;
         cogBody.appendChild(arbTitle);
 
-        // Hypotheses
         const hyps = Array.isArray(arb.hypotheses) ? arb.hypotheses : [];
         if (hyps.length > 0) {
           const hypHeader = document.createElement("div");
@@ -1830,7 +1993,6 @@
           cogBody.appendChild(hypList);
         }
 
-        // Conflicts
         const conflicts = Array.isArray(arb.evidence_conflicts) ? arb.evidence_conflicts : [];
         if (conflicts.length > 0) {
           const confHeader = document.createElement("div");
@@ -1860,11 +2022,10 @@
       });
 
       cogSection.appendChild(cogBody);
-      details.appendChild(cogSection);
+      if (logsDiv) logsDiv.appendChild(cogSection);
     }
 
-    // ── Transcript ─────────────────────────────────────────────────────────────
-
+    // Tags
     if (scene.tags && scene.tags.length > 0) {
       const tagsRow = document.createElement("div");
       tagsRow.className = "scene-tags-row";
@@ -1874,17 +2035,16 @@
         t.textContent = typeof tag === "string" ? tag : (tag.label || tag.name || String(tag));
         tagsRow.appendChild(t);
       });
-      details.appendChild(tagsRow);
+      if (overviewDiv) overviewDiv.appendChild(tagsRow);
     }
 
-    // ── Emotion + Sentiment Summary Row ──────────────────────────
+    // Emotion + Sentiment Summary Row
     const hasEmotionData = scene.audio_emotion || (scene.audio_emotion_ranking && scene.audio_emotion_ranking.length > 0)
                         || (scene.text_emotion_ranking && scene.text_emotion_ranking.length > 0);
     if (hasEmotionData || scene.sentiment_label) {
       const emoRow = document.createElement("div");
       emoRow.className = "inspector-emo-row";
 
-      // Sentiment chip
       if (scene.sentiment_label) {
         const sl = scene.sentiment_label.toLowerCase();
         const chip = document.createElement("span");
@@ -1894,9 +2054,7 @@
         emoRow.appendChild(chip);
       }
 
-      // ── Audio emotion ─────────────────────────────────────────
       if (scene.audio_emotion_ranking && scene.audio_emotion_ranking.length > 0) {
-        // Label row header
         const audioHdr = document.createElement("span");
         audioHdr.className = "emo-channel-label";
         audioHdr.textContent = "Audio:";
@@ -1906,7 +2064,6 @@
           const label = entry.label || entry;
           const score = typeof entry.score === "number" ? entry.score : null;
           const eb = document.createElement("span");
-          // audio_emotion null means threshold not met — top ranked shown with tilde
           const isPromoted = scene.audio_emotion && scene.audio_emotion.toLowerCase() === String(label).toLowerCase();
           eb.className = `emotion-badge${isPromoted ? " promoted" : " candidate"}`;
           eb.textContent = (idx === 0 && !isPromoted) ? `~${label}` : label;
@@ -1920,7 +2077,6 @@
         emoRow.appendChild(eb);
       }
 
-      // ── Text emotion (CardiffNLP) ──────────────────────────────
       if (scene.text_emotion_ranking && scene.text_emotion_ranking.length > 0) {
         const textHdr = document.createElement("span");
         textHdr.className = "emo-channel-label";
@@ -1937,32 +2093,30 @@
           emoRow.appendChild(eb);
         });
       }
-
-      details.appendChild(emoRow);
+      if (overviewDiv) overviewDiv.appendChild(emoRow);
     }
 
-    // ── Visual Caption ────────────────────────────────────────────
+    // Visual Caption
     if (scene.visual_caption) {
-      appendText(details, "h4", "Visual Description");
+      if (overviewDiv) appendText(overviewDiv, "h4", "Visual Description");
       const captionBlock = document.createElement("p");
       captionBlock.className = "visual-caption-block";
       captionBlock.textContent = scene.visual_caption;
-      details.appendChild(captionBlock);
+      if (overviewDiv) overviewDiv.appendChild(captionBlock);
     }
 
-    // ── OCR / Screen Text ─────────────────────────────────────────
+    // OCR / Screen Text
     if (scene.ocr_text && scene.ocr_text.trim().length > 2) {
-      appendText(details, "h4", "Screen Text (OCR)");
+      if (overviewDiv) appendText(overviewDiv, "h4", "Screen Text (OCR)");
       const ocrBlock = document.createElement("pre");
       ocrBlock.className = "ocr-text-block";
       ocrBlock.textContent = scene.ocr_text.trim();
-      details.appendChild(ocrBlock);
+      if (overviewDiv) overviewDiv.appendChild(ocrBlock);
     }
 
-    // Scene transcripts / dialogue list with TTS controls
+    // Dialogue List
     const lines = scene.dialogue || [];
     if (lines.length) {
-      // Transcript heading row with Play All button
       const transcriptHeader = document.createElement("div");
       transcriptHeader.className = "transcript-header";
       const transcriptLabel = document.createElement("h4");
@@ -1976,7 +2130,6 @@
       playAllBtn.title = "Read full transcript aloud";
       transcriptHeader.appendChild(playAllBtn);
 
-      // Voice picker dropdown
       if (tts.supported && tts.voices.length > 0) {
         const enVoices = tts.voices.filter(v => v.lang.startsWith('en'));
         if (enVoices.length > 0) {
@@ -1998,7 +2151,6 @@
         }
       }
 
-
       const container = document.createElement("div");
       container.className = "scene-transcript-box";
 
@@ -2009,14 +2161,11 @@
         container.appendChild(hint);
       }
 
-      // Collect row metadata for play-all sequencing
       const rowMeta = [];
-
       lines.forEach((line) => {
         const row = document.createElement("div");
         row.className = "transcript-row";
 
-        // Per-line play button
         let rowBtn = null;
         if (tts.supported) {
           rowBtn = document.createElement("button");
@@ -2049,13 +2198,11 @@
         }
       });
 
-      // Play All button handler
       playAllBtn.addEventListener("click", (e) => {
         e.stopPropagation();
         ttsPlayAll(rowMeta, playAllBtn);
       });
 
-      // Highlight-to-speak: speak selected text on mouseup inside transcript box
       if (tts.supported) {
         container.addEventListener("mouseup", () => {
           const sel = window.getSelection();
@@ -2067,15 +2214,14 @@
         });
       }
 
-      // Wrap header + transcript box in a dedicated zone for proper layout
-      const tZone = document.getElementById("inspector-transcript-zone");
-      if (tZone) {
-        tZone.innerHTML = "";
-        tZone.hidden = false;
-        tZone.appendChild(transcriptHeader);
-        tZone.appendChild(container);
+      if (transcriptZone) {
+        transcriptZone.innerHTML = "";
+        transcriptZone.appendChild(transcriptHeader);
+        transcriptZone.appendChild(container);
       }
     }
+    
+    switchInspectorTab(state.activeInspectorTab || "overview");
   }
 
   // Format entity labels neatly
@@ -2590,8 +2736,17 @@
       if (policy) {
         const polChip = document.createElement("span");
         polChip.className = "intel-health-chip neutral";
-        polChip.textContent = `policy: ${String(policy).replace(/_/g, " ")}`;
-        polChip.title = `Audio emotion selection policy: ${policy}`;
+        let polText = "";
+        let polTitle = "";
+        if (typeof policy === "object" && policy !== null) {
+          polText = `policy: ${policy.scope ? String(policy.scope).replace(/_/g, " ") : "active"}`;
+          polTitle = `Audio emotion policy:\n` + Object.entries(policy).map(([k, v]) => `- ${k.replace(/_/g, " ")}: ${v}`).join("\n");
+        } else {
+          polText = `policy: ${String(policy).replace(/_/g, " ")}`;
+          polTitle = `Audio emotion selection policy: ${policy}`;
+        }
+        polChip.textContent = polText;
+        polChip.title = polTitle;
         statusRow.appendChild(polChip);
       }
       healthEl.appendChild(statusRow);
@@ -2704,7 +2859,12 @@
       // Log matching results data trail details
       if (state.searchResults.length) {
         state.searchResults.forEach((res, i) => {
-          const matchedScene = state.scenes.find((s) => s.id === res.scene_id);
+          const matchedScene = state.scenes.find((s) => {
+            if (!s) return false;
+            const sId = String(s.id || "").trim().toLowerCase();
+            const rId = String(res.scene_id || "").trim().toLowerCase();
+            return sId && rId && sId === rId;
+          });
           const timeRangeStr = matchedScene ? `${formatTime(matchedScene.start)} - ${formatTime(matchedScene.end)}` : "";
           
           // Map evidence source to nice labels
@@ -2728,6 +2888,222 @@
     } catch (err) {
       console.error("Search failed: ", err);
       logDataTrail(query, "POST /api/search/multimodal", state.activeVideoId, "network error", err.message, 0.0, "");
+    }
+  }
+
+  // Resolve keyframe URLs for cross-tape search results
+  function resolveKeyframeUrl(artifactPaths, sourceFile) {
+    if (artifactPaths && artifactPaths.length > 0) {
+      const pathStr = artifactPaths[0];
+      const normalized = pathStr.replace(/\\/g, "/");
+      const parts = normalized.split("/");
+      const filename = parts[parts.length - 1]; // e.g. "scene_0000.jpg"
+      if (parts.length >= 4 && parts[parts.length - 3] === "video" && parts[parts.length - 2] === "frames") {
+        const videoId = parts[parts.length - 4];
+        return `/api/media/video/${encodeURIComponent(videoId)}/frame/${encodeURIComponent(filename)}`;
+      }
+    }
+    if (sourceFile) {
+      const videoId = sourceFile.replace(/\.[^/.]+$/, "");
+      return `/api/media/video/${encodeURIComponent(videoId)}/frame/scene_0000.jpg`;
+    }
+    return null;
+  }
+
+  // Execute Narrative Explorer (Temporal Reasoning) Queries
+  async function executeNarrativeSearch() {
+    const entitiesInput = document.getElementById("narrative-entities");
+    const entities = entitiesInput ? entitiesInput.value.split(",").map(e => e.trim()).filter(Boolean) : [];
+
+    const timeHintInput = document.getElementById("narrative-time-hint");
+    const timeHint = timeHintInput ? timeHintInput.value.trim() : "";
+
+    const maxResultsInput = document.getElementById("narrative-max-results");
+    const maxResults = maxResultsInput ? parseInt(maxResultsInput.value) || 25 : 25;
+
+    const styleInput = document.getElementById("narrative-style");
+    const summaryStyle = styleInput ? styleInput.value : "narrative";
+
+    const enableSummaryInput = document.getElementById("narrative-enable-summary");
+    const enableSummary = enableSummaryInput ? enableSummaryInput.checked : false;
+
+    state.lastQuery = entities.length > 0 ? entities.join(", ") : "All Scenes Sequential";
+    if (timeHint) {
+      state.lastQuery += ` (${timeHint})`;
+    }
+    state.searchActive = true;
+
+    logDataTrail(
+      state.lastQuery,
+      "POST /api/search/temporal",
+      state.activeVideoId,
+      "user narrative search input",
+      `Executing narrative search for entities: [${entities.join(", ")}], time hint: "${timeHint}"`,
+      1.0,
+      ""
+    );
+
+    // Dynamic Summary Container Handling
+    const summaryContainer = document.getElementById("narrative-summary-container");
+    const summaryBody = document.getElementById("narrative-summary-text");
+    const summaryModelBadge = document.getElementById("summary-model-badge");
+
+    if (summaryContainer && summaryBody && summaryModelBadge) {
+      if (enableSummary) {
+        summaryContainer.hidden = false;
+        summaryBody.className = "summary-body loading";
+        summaryBody.textContent = "Synthesizing narrative path...";
+        summaryModelBadge.textContent = "THINKING";
+        summaryModelBadge.style.backgroundColor = "var(--selected-color)";
+      } else {
+        summaryContainer.hidden = true;
+      }
+    }
+
+    try {
+      const searchResponse = await apiPost("/api/search/temporal", {
+        entities: entities.length > 0 ? entities : null,
+        time_hint: timeHint || null,
+        max_results: maxResults,
+        grouping: "semantic_episode"
+      });
+
+      state.searchResults = searchResponse.results || [];
+      renderTimelineGrid();
+
+      if (state.searchResults.length) {
+        state.searchResults.forEach((res, i) => {
+          const timeRangeStr = `${formatTime(res.start_time)} - ${formatTime(res.end_time)}`;
+          logDataTrail(
+            state.lastQuery,
+            "POST /api/search/temporal",
+            state.activeVideoId,
+            res.source_file,
+            `Narrative Scene #${i + 1}: ${res.summary || "Segment summary"} (gap: ${res.temporal_distance_from_previous}s, similarity: ${res.semantic_similarity_from_previous})`,
+            1.0,
+            timeRangeStr
+          );
+        });
+      } else {
+        logDataTrail(state.lastQuery, "POST /api/search/temporal", state.activeVideoId, "search response", "No narrative scenes returned.", 0.0, "");
+      }
+
+      // If summarization is requested, fire the summarize request
+      if (enableSummary && summaryContainer && summaryBody && summaryModelBadge) {
+        try {
+          const summaryResponse = await apiPost("/api/search/temporal/summarize", {
+            entities: entities.length > 0 ? entities : null,
+            time_hint: timeHint || null,
+            max_results: maxResults,
+            grouping: "semantic_episode",
+            summary_style: summaryStyle
+          });
+
+          summaryBody.className = "summary-body";
+          if (summaryResponse.status === "success") {
+            const summaryText = summaryResponse.summary || "No summary returned.";
+            const segments = summaryResponse.segments || [];
+            const sourceSceneIds = summaryResponse.source_scene_ids || [];
+
+            if (summaryStyle === "narrative" && segments.length > 0) {
+              summaryBody.innerHTML = "";
+              segments.forEach((seg) => {
+                const span = document.createElement("span");
+                span.textContent = seg.text + " ";
+                if (seg.scene_id) {
+                  span.className = "narrative-segment clickable";
+                  span.setAttribute("data-scene-id", seg.scene_id);
+                  span.title = `Click to view Scene ${seg.scene_index || ''}`;
+                  span.addEventListener("click", () => {
+                    selectScene(seg.scene_id);
+                  });
+                } else {
+                  span.className = "narrative-segment";
+                }
+                summaryBody.appendChild(span);
+              });
+            } else if (summaryStyle === "narrative" && sourceSceneIds.length > 0) {
+              // Legacy/fallback regex parsing of [Scene X] markers inside summaryText
+              const regex = /\[Scene\s+(\d+)\]/gi;
+              let match;
+              let matches = [];
+              while ((match = regex.exec(summaryText)) !== null) {
+                matches.push({
+                  index: match.index,
+                  text: match[0],
+                  sceneNum: parseInt(match[1], 10)
+                });
+              }
+
+              if (matches.length > 0) {
+                summaryBody.innerHTML = "";
+                if (matches[0].index > 0) {
+                  const leadingText = summaryText.substring(0, matches[0].index).trim();
+                  if (leadingText) {
+                    const textNode = document.createTextNode(leadingText + " ");
+                    summaryBody.appendChild(textNode);
+                  }
+                }
+                for (let i = 0; i < matches.length; i++) {
+                  const m = matches[i];
+                  const nextIndex = (i + 1 < matches.length) ? matches[i + 1].index : summaryText.length;
+                  const startOffset = m.index + m.text.length;
+                  let segmentText = summaryText.substring(startOffset, nextIndex).trim();
+
+                  if (segmentText) {
+                    const sceneIdx = m.sceneNum - 1;
+                    const sceneId = (sceneIdx >= 0 && sceneIdx < sourceSceneIds.length) ? sourceSceneIds[sceneIdx] : null;
+
+                    const span = document.createElement("span");
+                    span.textContent = segmentText + " ";
+                    if (sceneId) {
+                      span.className = "narrative-segment clickable";
+                      span.setAttribute("data-scene-id", sceneId);
+                      span.title = `Click to view Scene ${m.sceneNum}`;
+                      span.addEventListener("click", () => {
+                        selectScene(sceneId);
+                      });
+                    } else {
+                      span.className = "narrative-segment";
+                    }
+                    summaryBody.appendChild(span);
+                  }
+                }
+              } else {
+                summaryBody.textContent = summaryText;
+              }
+            } else {
+              summaryBody.textContent = summaryText;
+            }
+
+            let badgeText = (summaryResponse.model_used || "unknown").toUpperCase();
+            if (summaryResponse.truncated) {
+              badgeText += " [TRUNCATED]";
+            }
+            summaryModelBadge.textContent = badgeText;
+            summaryModelBadge.style.backgroundColor = "var(--selected-color)";
+          } else if (summaryResponse.status === "llm_unavailable") {
+            summaryBody.innerHTML = `<span style="color: var(--error-color)">⚠ LLM OFFLINE</span>: ${summaryResponse.summary}`;
+            summaryModelBadge.textContent = "OFFLINE";
+            summaryModelBadge.style.backgroundColor = "var(--error-color)";
+          }
+        } catch (sumErr) {
+          console.error("Narrative summarization failed: ", sumErr);
+          summaryBody.className = "summary-body";
+          summaryBody.innerHTML = `<span style="color: var(--error-color)">⚠ REQUEST FAILED</span>: ${sumErr.message}`;
+          summaryModelBadge.textContent = "ERROR";
+          summaryModelBadge.style.backgroundColor = "var(--error-color)";
+        }
+      }
+    } catch (err) {
+      console.error("Narrative search failed: ", err);
+      logDataTrail(state.lastQuery, "POST /api/search/temporal", state.activeVideoId, "network error", err.message, 0.0, "");
+      if (summaryBody && summaryModelBadge && enableSummary) {
+        summaryBody.className = "summary-body";
+        summaryBody.innerHTML = `<span style="color: var(--error-color)">⚠ SEARCH ERROR</span>: ${err.message}`;
+        summaryModelBadge.textContent = "ERROR";
+        summaryModelBadge.style.backgroundColor = "var(--error-color)";
+      }
     }
   }
 
@@ -3195,7 +3571,7 @@
     // Collapsible Data Trail Logs Subsection Toggle
     const toggleDataTrailBtn = document.getElementById("toggle-data-trail-btn");
     const dataTrailSection = document.getElementById("data-trail-section");
-    const inspectorDetails = document.getElementById("inspector-details");
+    const inspectorDetails = document.getElementById("inspector-details-logs");
     if (toggleDataTrailBtn && dataTrailSection) {
       toggleDataTrailBtn.addEventListener("click", () => {
         const isCollapsed = dataTrailSection.classList.toggle("collapsed");
@@ -3242,6 +3618,56 @@
         document.addEventListener("mousemove", onMouseMove);
         document.addEventListener("mouseup", stopResizing);
       });
+    }
+  }
+
+  // Initialize Inspector tab buttons
+  function initInspectorTabs() {
+    const tabs = ["overview", "transcript", "entities", "logs"];
+    tabs.forEach(tabName => {
+      const btn = document.getElementById(`inspect-tab-${tabName}`);
+      if (btn) {
+        btn.addEventListener("click", () => {
+          switchInspectorTab(tabName);
+        });
+      }
+    });
+  }
+
+  function switchInspectorTab(tabName) {
+    state.activeInspectorTab = tabName;
+
+    const tabs = ["overview", "transcript", "entities", "logs"];
+    tabs.forEach(name => {
+      const btn = document.getElementById(`inspect-tab-${name}`);
+      const content = document.getElementById(`inspector-content-${name}`);
+      
+      if (btn) {
+        if (name === tabName) {
+          btn.classList.add("active");
+        } else {
+          btn.classList.remove("active");
+        }
+      }
+
+      if (content) {
+        content.hidden = (name !== tabName);
+        if (name === tabName) {
+          content.classList.add("active-content");
+        } else {
+          content.classList.remove("active-content");
+        }
+      }
+    });
+
+    // Handle subsection resizer display based on Collapsed state in logs tab
+    if (tabName === "logs") {
+      const dataTrailSection = document.getElementById("data-trail-section");
+      const subResizer = document.getElementById("resizer-subsection");
+      if (subResizer) {
+        const isCollapsed = dataTrailSection && dataTrailSection.classList.contains("collapsed");
+        subResizer.style.display = isCollapsed ? "none" : "";
+      }
     }
   }
 
@@ -3469,44 +3895,86 @@
   // ─── Status Polling Loop & Ingestion Progress ─────────
   let wasIngesting = false;
   let ingestionStartTime = null;
-  let pollingIntervalId = null;
+  let pollingTimeoutId = null;
+  let currentPollInterval = 3000;
+  let manuallyDismissedRunId = null;
 
   function startStatusPolling() {
-    // Poll immediately, then every 3 seconds
     pollStatus();
-    pollingIntervalId = setInterval(pollStatus, 3000);
   }
 
   async function pollStatus() {
     try {
-      const statusPayload = await apiGet("/api/status");
+      const statusPayload = await apiGet("/api/status") || {};
       const processing = statusPayload.processing || {};
       const cliProgress = processing.cli_progress || {};
       const isActive = cliProgress.active === true;
+      const isFailed = cliProgress.status === "failed";
+      const wsl = statusPayload.wsl || {};
+      const isWslFrozen = wsl.status === "frozen" || wsl.audio_processing === "unresponsive";
+
+      // Update adaptive polling interval based on active state
+      currentPollInterval = isActive ? 1500 : 3000;
+
+      // Extract GPU details defensively
+      const gpu = statusPayload.gpu || {};
+      const gpuUtil = gpu.gpu_utilization !== undefined ? gpu.gpu_utilization : "unknown";
+      const gpuMemUsed = gpu.gpu_memory_used !== undefined ? Math.round(gpu.gpu_memory_used / 1024 * 10) / 10 : "unknown";
+      const gpuMemTotal = gpu.gpu_memory_total !== undefined ? Math.round(gpu.gpu_memory_total / 1024 * 10) / 10 : "unknown";
+      const telemetryStr = `[GPU: ${gpuUtil}% | VRAM: ${gpuMemUsed}GB/${gpuMemTotal}GB]`;
 
       // Update header fingerprint
       const fingerprintEl = document.getElementById("header-fingerprint");
+      const runId = cliProgress.run_id || (processing.cli_progress && processing.cli_progress.run_id) || processing.run_id || "None";
       if (fingerprintEl) {
-        const epoch = (statusPayload.database && statusPayload.database.epoch) || "N/A";
-        const runId = cliProgress.run_id || (processing.cli_progress && processing.cli_progress.run_id) || processing.run_id || "None";
+        const db = statusPayload.database || {};
+        const epoch = db.epoch || "N/A";
         fingerprintEl.textContent = `Epoch: ${epoch} | Run: ${runId}`;
       }
 
       const progressWidget = document.getElementById("ingestion-progress-widget");
       const headerStatus = document.querySelector(".header-status");
 
+      // Handle WSL Frozen Header Status
+      if (headerStatus) {
+        if (isWslFrozen) {
+          headerStatus.classList.add("wsl-frozen");
+          headerStatus.textContent = `Status: WSL FROZEN ${telemetryStr}`;
+        } else {
+          headerStatus.classList.remove("wsl-frozen");
+          if (isActive) {
+            const pct = cliProgress.progress_percent !== undefined ? cliProgress.progress_percent : (processing.progress_percent || 0);
+            headerStatus.textContent = `Status: INGESTING (${pct}%) ${telemetryStr}`;
+          } else {
+            headerStatus.textContent = `Status: ONLINE ${telemetryStr}`;
+          }
+        }
+      }
+
       if (isActive) {
+        // Reset manual dismissal and failed state when active
+        if (manuallyDismissedRunId === runId) {
+          manuallyDismissedRunId = null;
+        }
+
         if (!wasIngesting) {
           wasIngesting = true;
           ingestionStartTime = Date.now();
-          if (progressWidget) progressWidget.hidden = false;
+          if (progressWidget) {
+            progressWidget.hidden = false;
+            progressWidget.classList.remove("failed-state");
+            const titleEl = progressWidget.querySelector(".progress-title");
+            if (titleEl) titleEl.textContent = "🛰 PIPELINE INGESTION ACTIVE";
+          }
+          const closeBtn = document.getElementById("progress-close-btn");
+          if (closeBtn) closeBtn.style.display = "none";
           if (headerStatus) {
             headerStatus.classList.add("ingesting");
           }
         }
 
         const pct = cliProgress.progress_percent !== undefined ? cliProgress.progress_percent : (processing.progress_percent || 0);
-        const currentFile = cliProgress.current_video || processing.current_video || "02. 1988 - 1989.mp4";
+        const currentFile = cliProgress.current_video || processing.current_video || "unknown";
         const currentStep = cliProgress.current_step || "processing";
         const stage = cliProgress.stage || "ingestion";
         const sceneIndex = cliProgress.scene_index || 0;
@@ -3540,9 +4008,47 @@
         const elapsedSec = Math.floor((Date.now() - ingestionStartTime) / 1000);
         const elapsedEl = document.getElementById("progress-elapsed");
         if (elapsedEl) elapsedEl.textContent = `Elapsed: ${elapsedSec}s`;
-
+      } else if (isFailed) {
+        wasIngesting = false;
         if (headerStatus) {
-          headerStatus.textContent = `Status: INGESTING (${pct}%)`;
+          headerStatus.classList.remove("ingesting");
+        }
+        if (progressWidget && manuallyDismissedRunId !== runId) {
+          progressWidget.hidden = false;
+          progressWidget.classList.add("failed-state");
+          const titleEl = progressWidget.querySelector(".progress-title");
+          if (titleEl) titleEl.textContent = "🛰 PIPELINE INGESTION FAILED";
+
+          const pct = cliProgress.progress_percent !== undefined ? cliProgress.progress_percent : (processing.progress_percent || 0);
+          const currentFile = cliProgress.current_video || processing.current_video || "unknown";
+          const stage = cliProgress.stage || "ingestion";
+
+          const fileEl = document.getElementById("progress-file");
+          if (fileEl) fileEl.textContent = `File: ${currentFile}`;
+
+          const barFill = document.getElementById("progress-bar-fill");
+          if (barFill) barFill.style.width = `${pct}%`;
+
+          const textEl = document.getElementById("progress-text");
+          if (textEl) textEl.textContent = `${pct}%`;
+
+          const errors = cliProgress.errors || [];
+          const errorMsg = errors.length > 0 ? errors[errors.length - 1].message : "Unknown error";
+          const stepEl = document.getElementById("progress-step");
+          if (stepEl) stepEl.textContent = `Step: FAILED - ${errorMsg}`;
+
+          const stageEl = document.getElementById("progress-stage");
+          if (stageEl) stageEl.textContent = `Stage: ${stage}`;
+
+          const closeBtn = document.getElementById("progress-close-btn");
+          if (closeBtn) {
+            closeBtn.style.display = "inline-block";
+            closeBtn.onclick = async () => {
+              manuallyDismissedRunId = runId;
+              progressWidget.hidden = true;
+              await bootRetroConsole();
+            };
+          }
         }
       } else {
         if (wasIngesting) {
@@ -3561,16 +4067,11 @@
           const stageEl = document.getElementById("progress-stage");
           if (stageEl) stageEl.textContent = "Stage: finished";
 
-          if (headerStatus) {
-            headerStatus.textContent = "Status: ONLINE";
-          }
-
           // Wait 3 seconds then hide and reload dataset
           setTimeout(async () => {
             if (progressWidget) progressWidget.hidden = true;
             if (headerStatus) {
               headerStatus.classList.remove("ingesting");
-              headerStatus.textContent = "Status: ONLINE";
             }
             // Trigger boot loader to refresh dropdown and grid
             await bootRetroConsole();
@@ -3580,14 +4081,19 @@
           if (progressWidget && !progressWidget.hidden) {
             progressWidget.hidden = true;
           }
-          if (headerStatus && headerStatus.classList.contains("ingesting")) {
-            headerStatus.classList.remove("ingesting");
-            headerStatus.textContent = "Status: ONLINE";
+          if (headerStatus) {
+            if (headerStatus.classList.contains("ingesting")) {
+              headerStatus.classList.remove("ingesting");
+            }
           }
         }
       }
     } catch (err) {
       console.warn("Status polling error: ", err);
+      currentPollInterval = 3000;
+    } finally {
+      if (pollingTimeoutId) clearTimeout(pollingTimeoutId);
+      pollingTimeoutId = setTimeout(pollStatus, currentPollInterval);
     }
   }
 
@@ -3598,6 +4104,7 @@
         initLayoutControls();
         initCanvasControls();
         initTTS();
+        initInspectorTabs();
         startStatusPolling();
 
         // Canvas resize observer for responsive scaling without stretching
@@ -3634,12 +4141,67 @@
           });
         }
 
+        // Tab switching controls
+        const tabMultimodal = document.getElementById("tab-multimodal");
+        const tabNarrative = document.getElementById("tab-narrative");
+        const searchForm = document.getElementById("search-form");
+        const narrativeForm = document.getElementById("narrative-form");
+        const tabHelperMsg = document.getElementById("tab-helper-msg");
+
+        if (tabMultimodal && tabNarrative && searchForm && narrativeForm) {
+          tabMultimodal.addEventListener("click", () => {
+            tabMultimodal.classList.add("active");
+            tabNarrative.classList.remove("active");
+            searchForm.hidden = false;
+            narrativeForm.hidden = true;
+            state.activeSearchTab = "multimodal";
+            if (tabHelperMsg) {
+              tabHelperMsg.textContent = "Search for specific moments using natural language. Fits video content, speech transcripts, and visual elements.";
+              tabHelperMsg.style.borderColor = "var(--border-color)";
+            }
+            resetAllFilters();
+          });
+
+          tabNarrative.addEventListener("click", () => {
+            tabNarrative.classList.add("active");
+            tabMultimodal.classList.remove("active");
+            searchForm.hidden = true;
+            narrativeForm.hidden = false;
+            state.activeSearchTab = "narrative";
+            if (tabHelperMsg) {
+              tabHelperMsg.textContent = "Synthesize a chronological history/briefing of events based on target people/places and temporal hints.";
+              tabHelperMsg.style.borderColor = "var(--border-selected)";
+            }
+            resetAllFilters();
+          });
+        }
+
         // Search Form Submission
         const form = document.getElementById("search-form");
         if (form) {
           form.addEventListener("submit", (e) => {
             e.preventDefault();
             executeSearch();
+          });
+        }
+
+        // Narrative Form Submission
+        const narrForm = document.getElementById("narrative-form");
+        if (narrForm) {
+          narrForm.addEventListener("submit", (e) => {
+            e.preventDefault();
+            executeNarrativeSearch();
+          });
+        }
+
+        // Narrative summary close button
+        const closeSummaryBtn = document.getElementById("close-summary-btn");
+        if (closeSummaryBtn) {
+          closeSummaryBtn.addEventListener("click", () => {
+            const summaryContainer = document.getElementById("narrative-summary-container");
+            if (summaryContainer) {
+              summaryContainer.hidden = true;
+            }
           });
         }
 

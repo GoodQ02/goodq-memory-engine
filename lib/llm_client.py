@@ -216,6 +216,29 @@ class LLMClient:
                 prev_status = self.health_status.get(model.name)
                 failures = prev_status.consecutive_failures + 1 if prev_status else 1
                 
+                # Auto-activate local model services on the first consecutive failure
+                if failures == 1:
+                    logger.info(f"Model service {model.name} ({model.backend}) is offline. Attempting auto-activation...")
+                    if self._attempt_auto_activation(model):
+                        try:
+                            start_retry = time.time()
+                            response = self.session.get(
+                                f"{model.endpoint}/models",
+                                timeout=10
+                            )
+                            response_time = (time.time() - start_retry) * 1000
+                            if response.status_code == 200:
+                                self.health_status[model.name] = HealthStatus(
+                                    is_healthy=True,
+                                    last_check=now,
+                                    response_time_ms=response_time,
+                                    consecutive_failures=0
+                                )
+                                logger.info(f"[OK] {model.name} healthy after auto-activation ({response_time:.0f}ms)")
+                                continue
+                        except Exception as retry_err:
+                            logger.warning(f"Retry health check failed after auto-activation: {retry_err}")
+                
                 self.health_status[model.name] = HealthStatus(
                     is_healthy=False,
                     last_check=now,
@@ -229,6 +252,52 @@ class LLMClient:
         
         self.last_health_check = now
         return self.health_status
+
+    def _attempt_auto_activation(self, model: ModelConfig) -> bool:
+        """Attempt to launch/activate the service for a model backend if it's down."""
+        import subprocess
+        from pathlib import Path
+        
+        if model.backend == "vllm":
+            distro = os.environ.get("GOODQ_WSL_DISTRO", "Ubuntu-22.04")
+            logger.info(f"Auto-activating WSL vLLM service in distro '{distro}'...")
+            try:
+                cmd = ["wsl", "-d", distro, "-u", "root", "--", "systemctl", "start", "vllm-llama1b"]
+                subprocess.run(cmd, capture_output=True, text=True, timeout=15, check=True)
+                logger.info("WSL vLLM systemd start command completed. Polling for readiness...")
+                for i in range(45):
+                    time.sleep(1)
+                    try:
+                        res = self.session.get(f"{model.endpoint}/models", timeout=1)
+                        if res.status_code == 200:
+                            logger.info("WSL vLLM service responded successfully.")
+                            return True
+                    except Exception:
+                        pass
+            except Exception as start_err:
+                logger.warning(f"Failed to auto-activate WSL vLLM: {start_err}")
+                
+        elif model.backend == "ollama":
+            repo_root = Path(__file__).resolve().parent.parent
+            script_path = repo_root / "scripts" / "start_ollama_fallback.ps1"
+            logger.info(f"Auto-activating Ollama host service via {script_path}...")
+            try:
+                cmd = ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(script_path)]
+                subprocess.run(cmd, capture_output=True, text=True, timeout=15, check=True)
+                logger.info("Ollama fallback start command completed. Polling for readiness...")
+                for i in range(10):
+                    time.sleep(1)
+                    try:
+                        res = self.session.get(f"{model.endpoint}/models", timeout=1)
+                        if res.status_code == 200:
+                            logger.info("Ollama host service responded successfully.")
+                            return True
+                    except Exception:
+                        pass
+            except Exception as start_err:
+                logger.warning(f"Failed to auto-activate Ollama fallback: {start_err}")
+                
+        return False
     
     def get_healthy_models(
         self,
@@ -371,6 +440,9 @@ class LLMClient:
         for attempt in range(self.max_retries):
             try:
                 logger.debug(f"Chat request to {model.name} (attempt {attempt + 1}/{self.max_retries})")
+                
+                # Dynamically update model ID in case of failover
+                payload["model"] = model.model_id
                 
                 response = self.session.post(
                     f"{model.endpoint}/chat/completions",

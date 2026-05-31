@@ -37,7 +37,7 @@ GoodQ4All's thesis is simple: machine memory should earn every claim it makes.
 
 *Get this:*
 <p align="center">
-  <video src="samples/assets/ui_onboarding_walkthrough.mp4" width="850" autoplay loop muted playsinline style="max-width: 100%; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.3);"></video>
+  <video src="https://github.com/JoesDomingo/goodq4all/raw/dev/samples/assets/ui_onboarding_walkthrough.mp4" width="850" autoplay loop muted playsinline style="max-width: 100%; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.3);"></video>
 </p>
 
 *From this:*

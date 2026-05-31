@@ -21,7 +21,6 @@ This directory contains documentation assets and optional local sample scaffoldi
   scaffold material only. It is not base installer content, product memory, or
   a public demo fixture unless a separate owned-fixture manifest explicitly
   selects it.
-- There is no public `sample.mp4` fixture. Use your own small owned media file
-  for video ingestion tests.
+- Public Onboarding Demo Fixture: Use `samples/onboarding_fixture.mp4` (~1MB) included in the repository. You can drag-and-drop this video directly onto the Retro console's **Upload Pad** for a quick 10-second first-use ingestion run.
 - The future public preflight/demo lane should use an owned synthetic debug kit,
   not Seinfeld/test-run media or private home media.

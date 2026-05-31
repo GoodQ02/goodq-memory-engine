@@ -12,6 +12,8 @@
   <a href="https://GoodQ02.github.io/goodq4all/">
     <img src="https://img.shields.io/badge/Ask_GoodQ-Speak_to_Q--Branch_Now-ffb300?style=for-the-badge&logo=microphone&logoColor=ffb300&labelColor=110d1a" alt="Ask GoodQ Voice Agent - Click Here to Speak" height="42" />
   </a>
+  <br />
+  <sub style="color: #a39cb0;">(Note: The optional Ask GoodQ voice agent is a hosted extension using ElevenLabs APIs. The core GoodQ4All memory system itself is 100% local and offline.)</sub>
 </p>
 
 <p align="center">
@@ -29,16 +31,13 @@ GoodQ4All's thesis is simple: machine memory should earn every claim it makes.
 > [!TIP]
 > **Have questions? Ask GoodQ!** Try our interactive conversational voice agent at the [GoodQ4All Landing Page](https://GoodQ02.github.io/goodq4all/) to speak with a virtual Q-Branch operator trained on this repository.
 
-> [!IMPORTANT]
-> **Supported Host: Windows 11 only.** GoodQ4All is built for Windows-first local execution (CPU-safe baseline by default; GPU and WSL2 are optional). Other platforms are not first-run targets today.
+
 
 ---
 
 *Get this:*
 <p align="center">
-  <a href="samples/assets/ui_onboarding_walkthrough.mp4">
-    <img src="samples/assets/ui_onboarding_walkthrough.gif" alt="UI Onboarding Walkthrough" width="850" style="max-width: 100%; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.3);" />
-  </a>
+  <video src="samples/assets/ui_onboarding_walkthrough.mp4" width="850" autoplay loop muted playsinline style="max-width: 100%; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.3);"></video>
 </p>
 
 *From this:*
@@ -61,6 +60,10 @@ GoodQ4All's thesis is simple: machine memory should earn every claim it makes.
     🚀 Download GoodQ4All Setup v1.0.0.exe
   </a>
 </p>
+
+> [!IMPORTANT]
+> **Supported Host: Windows 11 only.** GoodQ4All is built for Windows-first local execution (CPU-safe baseline by default; GPU and WSL2 are optional). Other platforms are not first-run targets today.
+
 <p align="center">
   <a href="https://github.com/GoodQ02/goodq4all/releases/download/v1.0.0/GoodQ4All_Setup_1.0.0.exe">
     <img src="samples/assets/one_click_installer_mockup.png" alt="GoodQ4All One-Click Setup Installer" width="550" style="max-width: 100%; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.15);" />
@@ -125,6 +128,10 @@ Watch the terminal and installation walkthrough video featuring the avatar prese
 
 ### 2. Step-by-Step Developer Source Setup
 
+<details>
+<summary><b>Developer Source Setup Steps (Advanced)</b></summary>
+<br />
+
 | Step | Type or do this | Demo frame |
 | --- | --- | --- |
 | 1 | Clone the official source:<br>`git clone https://github.com/GoodQ02/goodq4all.git` | <a href="samples/assets/demo-steps/01-clone-official-source.jpg"><img src="samples/assets/demo-steps/01-clone-official-source.jpg" alt="Clone the GoodQ4All repository" width="300" /></a> |
@@ -135,6 +142,8 @@ Watch the terminal and installation walkthrough video featuring the avatar prese
 | 6 | Run the launcher/readiness check:<br>`.\LAUNCH_GOODQ.ps1` | <a href="samples/assets/demo-steps/06-launch-goodq.jpg"><img src="samples/assets/demo-steps/06-launch-goodq.jpg" alt="Launch GoodQ4All readiness checks" width="300" /></a> |
 | 7 | Start Watchdog, then copy one small media file into the import inbox zone (defaults to `%USERPROFILE%\GoodQ_Data\import_inbox\`):<br>`conda run --no-capture-output -n goodq_core python -m cli.watchdog` | <a href="samples/assets/demo-steps/07-watchdog-observes.jpg"><img src="samples/assets/demo-steps/07-watchdog-observes.jpg" alt="Watchdog observes the imported media file" width="300" /></a> |
 | 8 | Start the API and inspect proof:<br>`conda run --no-capture-output -n goodq_core python -m api.server` | <a href="samples/assets/demo-steps/08-proof-recorded.jpg"><img src="samples/assets/demo-steps/08-proof-recorded.jpg" alt="Ingestion completes and proof is recorded" width="300" /></a> |
+
+</details>
 
 ---
 

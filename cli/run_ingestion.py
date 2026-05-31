@@ -3228,6 +3228,53 @@ def _run_step(
 ) -> Dict[str, Any]:
     work_env = _base_env(cfg_json)
     
+    # VRAM preflight allocation check
+    from steps.common.profile_config import is_baseline, require_gpu
+    from common.vram_allocator import VRAMAllocator, STEP_VRAM_FRACTIONS
+    
+    is_gpu_step = step_name in STEP_VRAM_FRACTIONS
+    gpu_enabled = (
+        not is_baseline()
+        and os.getenv("GOODQ_NO_AUTO_GPU") != "1"
+        and (not _step_env_overrides or _step_env_overrides.get("GOODQ_NO_AUTO_GPU") != "1")
+        and ("PYTEST_CURRENT_TEST" not in os.environ or os.getenv("GOODQ_TEST_VRAM_ALLOCATOR") == "1")
+    )
+    
+    allocator = None
+    vram_reserved = False
+    parent_pid = os.getpid()
+    
+    if is_gpu_step and gpu_enabled:
+        allocator = VRAMAllocator()
+        cmd_str = f"python cli/step_runner.py --step {step_name}"
+        vram_reserved = allocator.wait_and_reserve(
+            step_name=step_name,
+            pid=parent_pid,
+            command=cmd_str,
+            timeout_seconds=60.0
+        )
+        if not vram_reserved:
+            if require_gpu():
+                raise RuntimeError(
+                    f"VRAM allocation failed for GPU-required step '{step_name}'. Bounds breached."
+                )
+            else:
+                logger.warning(
+                    f"VRAM allocation limits breached for step '{step_name}'. Falling back to CPU."
+                )
+                if _step_env_overrides is None:
+                    _step_env_overrides = {}
+                _step_env_overrides = dict(_step_env_overrides)
+                _step_env_overrides["GOODQ_NO_AUTO_GPU"] = "1"
+                if step_name == 'image_caption':
+                    _step_env_overrides['GOODQ_IMAGE_CAPTION_FORCE_CPU'] = '1'
+                elif step_name == 'object_detect':
+                    _step_env_overrides['GOODQ_OBJECT_DETECT_FORCE_CPU'] = '1'
+                elif step_name == 'audio_embed_clap':
+                    _step_env_overrides['GOODQ_CLAP_FORCE_CPU'] = '1'
+                elif step_name == 'image_embed_dino':
+                    _step_env_overrides['GOODQ_DINO_FORCE_CPU'] = '1'
+
     # Convert payload to JSON-serializable format
     def make_json_serializable(obj):
         # Handle typer OptionInfo objects - extract the actual default value
@@ -3421,6 +3468,8 @@ def _run_step(
                 env=step_env,
             )
             observer_meta["subprocess_pid"] = int(process.pid)
+            if vram_reserved and allocator is not None:
+                allocator.update_pid(parent_pid, process.pid)
             if observer:
                 observer.step_start(observer_step, metadata=observer_meta)
                 stop_heartbeat = observer.begin_heartbeat(observer_step, metadata=observer_meta)
@@ -3706,6 +3755,17 @@ def _run_step(
             source="stdout",
         )
     finally:
+        if 'vram_reserved' in locals() and vram_reserved and 'allocator' in locals() and allocator is not None:
+            try:
+                allocator.release(parent_pid)
+                if 'process' in locals() and process is not None and process.pid is not None:
+                    allocator.release(process.pid)
+            except Exception as e:
+                logger.warning(
+                    "run_ingestion warning context=%s error=%s",
+                    "vram_release_failed",
+                    e,
+                )
         try:
             for child in tmp_dir.iterdir():
                 child.unlink(missing_ok=True)

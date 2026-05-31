@@ -201,6 +201,7 @@ class MultimodalSearchEngine:
         self.data_root = paths_cfg.get("data_root") or config.get("data_root") or _default_data_root()
         self.processing_root = paths_cfg.get("processing") or os.path.join(self.data_root, "processing")
         self.kg_db_path = paths_cfg.get("knowledge_graph_db") or config.get("knowledge_graph_db")
+        self.db_path = paths_cfg.get("db_path") or config.get("db_path")
         self.text_collection = collections_cfg.get("text") or "goodq_text"
         self.visual_collection = phase6_cfg.get("clip_collection") or collections_cfg.get("clip") or "goodq_clip_scenes"
         self.audio_collection = collections_cfg.get("audio") or "goodq_audio"
@@ -1232,28 +1233,236 @@ class MultimodalSearchEngine:
         embedding = embedding / (np.linalg.norm(embedding) + 1e-8)
         return embedding
     
+    def _is_fts5_available(self, conn: sqlite3.Connection) -> bool:
+        try:
+            cur = conn.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='scene_text_fts'")
+            row = cur.fetchone()
+            if row and row[0] and 'fts5' in row[0].lower():
+                return True
+            return False
+        except Exception:
+            return False
+
+    def search_fts(self, query: str, top_k: int = 5) -> List[Dict[str, Any]]:
+        """
+        Search exact phrases using FTS5 (or fallback substring search).
+        """
+        if not self.db_path or not os.path.exists(self.db_path):
+            logger.warning("FTS search skipped because database path is invalid or missing.")
+            return []
+
+        sanitized_query = re.sub(r'[^\w\s]', ' ', query).strip()
+        if not sanitized_query:
+            return []
+
+        results = []
+        conn = sqlite3.connect(self.db_path)
+        try:
+            is_fts = self._is_fts5_available(conn)
+            if is_fts:
+                try:
+                    cur = conn.execute(
+                        """
+                        SELECT f.scene_id, f.video_hash, f.content_type, f.text, f.rank, s.start, s.end, s.meta
+                        FROM scene_text_fts f
+                        JOIN scenes s ON s.id = f.scene_id
+                        WHERE scene_text_fts MATCH ?
+                        ORDER BY rank ASC
+                        LIMIT ?
+                        """,
+                        (sanitized_query, top_k),
+                    )
+                    rows = cur.fetchall()
+                    for scene_id, video_hash, content_type, text, rank, start, end, meta_json in rows:
+                        score = float(-rank) if rank is not None else 1.0
+                        try:
+                            meta = json.loads(meta_json) if meta_json else {}
+                        except Exception:
+                            meta = {}
+                        
+                        results.append({
+                            "id": scene_id,
+                            "score": score,
+                            "payload": {
+                                "scene_id": scene_id,
+                                "video_id": str(video_hash),
+                                "video_hash": video_hash,
+                                "modality": "fts",
+                                "start": float(start or 0.0),
+                                "end": float(end or 0.0),
+                                "text": text,
+                                "content_type": content_type,
+                                "meta": meta
+                            }
+                        })
+                except sqlite3.OperationalError as match_err:
+                    logger.warning(f"FTS5 MATCH failed, falling back to LIKE: {match_err}")
+                    like_pattern = f"%{query}%"
+                    cur = conn.execute(
+                        """
+                        SELECT f.scene_id, f.video_hash, f.content_type, f.text, s.start, s.end, s.meta
+                        FROM scene_text_fts f
+                        JOIN scenes s ON s.id = f.scene_id
+                        WHERE f.text LIKE ?
+                        LIMIT ?
+                        """,
+                        (like_pattern, top_k),
+                    )
+                    rows = cur.fetchall()
+                    for scene_id, video_hash, content_type, text, start, end, meta_json in rows:
+                        try:
+                            meta = json.loads(meta_json) if meta_json else {}
+                        except Exception:
+                            meta = {}
+                        results.append({
+                            "id": scene_id,
+                            "score": 1.0,
+                            "payload": {
+                                "scene_id": scene_id,
+                                "video_id": str(video_hash),
+                                "video_hash": video_hash,
+                                "modality": "fts",
+                                "start": float(start or 0.0),
+                                "end": float(end or 0.0),
+                                "text": text,
+                                "content_type": content_type,
+                                "meta": meta
+                            }
+                        })
+            else:
+                like_pattern = f"%{query}%"
+                cur = conn.execute(
+                    """
+                    SELECT f.scene_id, f.video_hash, f.content_type, f.text, s.start, s.end, s.meta
+                    FROM scene_text_fts f
+                    JOIN scenes s ON s.id = f.scene_id
+                    WHERE f.text LIKE ?
+                    LIMIT ?
+                    """,
+                    (like_pattern, top_k),
+                )
+                rows = cur.fetchall()
+                for scene_id, video_hash, content_type, text, start, end, meta_json in rows:
+                    try:
+                        meta = json.loads(meta_json) if meta_json else {}
+                    except Exception:
+                        meta = {}
+                    results.append({
+                        "id": scene_id,
+                        "score": 1.0,
+                        "payload": {
+                            "scene_id": scene_id,
+                            "video_id": str(video_hash),
+                            "video_hash": video_hash,
+                            "modality": "fts",
+                            "start": float(start or 0.0),
+                            "end": float(end or 0.0),
+                            "text": text,
+                            "content_type": content_type,
+                            "meta": meta
+                        }
+                    })
+        except Exception as e:
+            logger.error(f"FTS search encountered error: {e}")
+        finally:
+            conn.close()
+
+        return results
+
+    def reciprocal_rank_fusion(
+        self,
+        runs: List[List[Dict[str, Any]]],
+        k: int = 60,
+        top_k: int = 5
+    ) -> List[Dict[str, Any]]:
+        """
+        Reciprocal Rank Fusion (RRF) to fuse semantic and lexical runs.
+        """
+        rrf_scores: Dict[str, float] = {}
+        best_results: Dict[str, Dict[str, Any]] = {}
+        
+        for run in runs:
+            for rank_idx, item in enumerate(run):
+                item_id = item.get('id') or (item.get('payload') or {}).get('scene_id')
+                if not item_id:
+                    continue
+                
+                rank = rank_idx + 1
+                score = 1.0 / (k + rank)
+                rrf_scores[item_id] = rrf_scores.get(item_id, 0.0) + score
+                
+                if item_id not in best_results:
+                    best_results[item_id] = item
+                else:
+                    current_payload = best_results[item_id].get('payload') or {}
+                    new_payload = item.get('payload') or {}
+                    if not current_payload.get('text') and new_payload.get('text'):
+                        best_results[item_id] = item
+
+        sorted_ids = sorted(rrf_scores.keys(), key=lambda x: rrf_scores[x], reverse=True)
+        
+        num_runs = len(runs)
+        max_possible_rrf = float(num_runs) / (k + 1)
+        
+        fused_results = []
+        for item_id in sorted_ids[:top_k]:
+            original_item = best_results[item_id]
+            raw_rrf = rrf_scores[item_id]
+            norm_score = raw_rrf / max_possible_rrf if max_possible_rrf > 0 else raw_rrf
+            
+            fused_results.append({
+                "id": item_id,
+                "score": norm_score,
+                "payload": original_item.get("payload", {}),
+                "modality": "text"
+            })
+            
+        return fused_results
+
     def search_text(self, query: str, top_k: int = 5) -> List[Dict[str, Any]]:
         """
-        Search text embeddings (transcripts, captions, etc.).
+        Search text embeddings (transcripts, captions, etc.) with FTS5 hybrid fusion.
         
         Args:
             query: Search query
             top_k: Number of results to return
             
         Returns:
-            List of search results with scores
+            List of fused search results with normalized RRF scores
         """
         logger.info(f"Searching text: '{query}'")
         
+        candidate_k = max(top_k * 3, 20)
+        
+        # 1. Semantic search
+        results_semantic = []
         query_embedding = self.encode_text_query(query)
-        if not np.any(query_embedding):
-            logger.warning("Text search skipped because query embedding is unavailable")
-            return []
+        if np.any(query_embedding):
+            try:
+                client = self._get_qdrant_client(self.text_collection)
+                results_semantic = client.query(query_embedding.tolist(), top_k=candidate_k)
+                for r in results_semantic:
+                    r['modality'] = 'text'
+            except Exception as e:
+                logger.warning(f"Semantic text search failed: {e}")
+        else:
+            logger.warning("Text search skipped semantic pathway because query embedding is unavailable")
+
+        # 2. FTS search
+        results_fts = self.search_fts(query, top_k=candidate_k)
         
-        client = self._get_qdrant_client(self.text_collection)
-        results = client.query(query_embedding.tolist(), top_k=top_k)
+        # 3. Reciprocal Rank Fusion
+        runs = []
+        if results_semantic:
+            runs.append(results_semantic)
+        if results_fts:
+            runs.append(results_fts)
+            
+        if runs:
+            fused = self.reciprocal_rank_fusion(runs, k=60, top_k=top_k)
+            return fused
         
-        return results
+        return []
     
     def search_visual(self, query: str, top_k: int = 5) -> List[Dict[str, Any]]:
         """

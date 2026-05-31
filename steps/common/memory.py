@@ -36,6 +36,83 @@ def to_faiss_id(raw_id: Any) -> int:
         return uuid.uuid5(_FAISS_ID_NAMESPACE, str(raw_id)).int & _FAISS_ID_MAX
 
 
+_migrations_checked = set()
+
+
+def _run_migrations(conn: sqlite3.Connection, db_path: str) -> None:
+    global _migrations_checked
+    abs_path = os.path.abspath(db_path)
+    if abs_path in _migrations_checked:
+        return
+
+    # 1. Create schema_migrations table
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS schema_migrations (
+            name TEXT PRIMARY KEY,
+            applied_at TEXT NOT NULL
+        )
+        """
+    )
+    conn.commit()
+
+    # 2. Check if migration 'create_scene_text_fts' is applied
+    cur = conn.execute("SELECT 1 FROM schema_migrations WHERE name = 'create_scene_text_fts'")
+    if not cur.fetchone():
+        now = datetime.utcnow().isoformat()
+        
+        # Check if the table already exists from a manual or legacy schema
+        table_exists_cur = conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='scene_text_fts'")
+        if table_exists_cur.fetchone():
+            conn.execute("INSERT INTO schema_migrations (name, applied_at) VALUES ('create_scene_text_fts', ?)", (now,))
+            conn.commit()
+            logger.info("Table scene_text_fts already exists; migration marked as applied.")
+            _migrations_checked.add(abs_path)
+            return
+
+        try:
+            conn.execute(
+                """
+                CREATE VIRTUAL TABLE scene_text_fts USING fts5(
+                    scene_id,
+                    video_hash,
+                    content_type,
+                    text
+                )
+                """
+            )
+            conn.execute("INSERT INTO schema_migrations (name, applied_at) VALUES ('create_scene_text_fts', ?)", (now,))
+            conn.commit()
+            logger.info("Successfully created FTS5 virtual table scene_text_fts")
+        except sqlite3.OperationalError as e:
+            if "no such module: fts5" in str(e).lower():
+                logger.warning("FTS5 is not supported by this SQLite build. Falling back to standard table.")
+                try:
+                    conn.execute(
+                        """
+                        CREATE TABLE scene_text_fts (
+                            scene_id TEXT,
+                            video_hash TEXT,
+                            content_type TEXT,
+                            text TEXT
+                        )
+                        """
+                    )
+                    conn.execute("CREATE INDEX IF NOT EXISTS idx_scene_text_fts_scene ON scene_text_fts(scene_id)")
+                    conn.execute("CREATE INDEX IF NOT EXISTS idx_scene_text_fts_video ON scene_text_fts(video_hash)")
+                    conn.execute("INSERT INTO schema_migrations (name, applied_at) VALUES ('create_scene_text_fts', ?)", (now,))
+                    conn.commit()
+                    logger.info("Successfully created fallback standard table scene_text_fts")
+                except Exception as e2:
+                    logger.error(f"Failed to create fallback table scene_text_fts: {e2}")
+                    conn.rollback()
+            else:
+                logger.error(f"Failed to create FTS5 table scene_text_fts: {e}")
+                conn.rollback()
+
+    _migrations_checked.add(abs_path)
+
+
 def _connect(db_path: str) -> sqlite3.Connection:
     os.makedirs(os.path.dirname(db_path), exist_ok=True)
     conn = sqlite3.connect(db_path, check_same_thread=False)
@@ -140,7 +217,9 @@ def _connect(db_path: str) -> sqlite3.Connection:
         """
     )
     conn.commit()
+    _run_migrations(conn, db_path)
     return conn
+
 
 
 def _embeddings_use_modality_key(conn: sqlite3.Connection) -> bool:
@@ -471,6 +550,7 @@ def register_scene_bundle(
 
     frame_hash = None
     frame_timestamp = scene_start + (scene_duration / 2.0) if scene_duration > 0 else scene_start
+    ocr_text = None
     if isinstance(frame, dict):
         frame_path = frame.get('path')
         frame_hash = compute_file_hash(frame_path)
@@ -484,6 +564,7 @@ def register_scene_bundle(
                 'caption': frame_data.get('caption'),
                 'ocr_text': frame_data.get('ocr_text'),
             })
+            ocr_text = frame_data.get('ocr_text')
             if frame_data.get('timestamp') is not None:
                 frame_timestamp = float(frame_data.get('timestamp'))
         elif frame and frame.get('timestamp') is not None:
@@ -494,6 +575,7 @@ def register_scene_bundle(
     audio_start = scene_start
     audio_end = scene_end
     diarization: List[Dict[str, Any]] = []
+    transcript_text = None
     if isinstance(audio, dict):
         audio_path = audio.get('path')
         audio_hash = compute_file_hash(audio_path)
@@ -511,6 +593,7 @@ def register_scene_bundle(
                 'entities': audio_data.get('entities'),
                 'audio_emotion': audio_data.get('audio_emotion'),
             }
+            transcript_text = audio_data.get('transcript')
             if audio_data.get('transcript_meta') is not None:
                 audio_meta['transcript_meta'] = audio_data.get('transcript_meta')
             scene_meta['audio'] = audio_meta
@@ -548,6 +631,26 @@ def register_scene_bundle(
                     "INSERT OR REPLACE INTO scenes(id, video_hash, start, end, meta, created_at) VALUES (?,?,?,?,?,?)",
                     (persisted_scene_id, video_hash, float(scene_start), float(scene_end), merged_scene_meta_json, now),
                 )
+
+                # Update FTS text index inside the transaction
+                try:
+                    conn.execute("DELETE FROM scene_text_fts WHERE scene_id=?", (persisted_scene_id,))
+                    if ocr_text:
+                        conn.execute(
+                            "INSERT INTO scene_text_fts(scene_id, video_hash, content_type, text) VALUES (?,?,?,?)",
+                            (persisted_scene_id, video_hash, 'ocr', str(ocr_text)),
+                        )
+                    if transcript_text:
+                        conn.execute(
+                            "INSERT INTO scene_text_fts(scene_id, video_hash, content_type, text) VALUES (?,?,?,?)",
+                            (persisted_scene_id, video_hash, 'transcript', str(transcript_text)),
+                        )
+                except Exception as e:
+                    logger.warning(
+                        "FTS index update failed for scene_id=%s exc=%s",
+                        persisted_scene_id,
+                        e
+                    )
 
                 scene_of_meta = {'duration': scene_duration, 'index': scene_index}
                 scene_of_meta_payload = json.dumps(scene_of_meta, ensure_ascii=False)

@@ -16,7 +16,7 @@ Use this if you want the easiest, self-contained standalone installation.
 </p>
 
 > [!IMPORTANT]
-> **A Mic-Drop Moment for Local-First Media Intelligence** 🎤
+> **Zero-Dependency Offline Architecture**
 >
 > GoodQ4All is a **100% local, zero-dependency, private offline alternative** to major cloud-based media intelligence services. By packaging the isolated Python runtime, Qdrant database, and perception libraries into a single sandboxed executable, we have made private video search and knowledge graph memory as easy to install as any desktop application. No cloud dependencies, no subscription fees, and no data leaks.
 

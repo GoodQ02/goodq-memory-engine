@@ -9,11 +9,11 @@
 <h1 align="center">GoodQ4All</h1>
 
 <p align="center">
-  <strong>Local-First Multimodal Epistemic Memory & Private AI Intelligence for Windows 11</strong>
+  <strong>Local Multimodal Video Search, Offline Scene Memory & Private AI Ingestion System for Windows 11</strong>
 </p>
 
 <p align="center">
-  <a href="https://GoodQ02.github.io/goodq4all/">
+  <a href="https://askgoodq.com/">
     <img src="https://img.shields.io/badge/Ask_GoodQ-Speak_to_Q--Branch_Now-ffb300?style=for-the-badge&logo=microphone&logoColor=ffb300&labelColor=110d1a" alt="Ask GoodQ Voice Agent - Click Here to Speak" height="42" />
   </a>
   <br />
@@ -70,7 +70,14 @@ Following a strict **"proof-backed" system doctrine**, GoodQ4All documents every
     
     > [!IMPORTANT]
     > **System Requirement: Windows 11 only.** GoodQ4All is built for Windows-first local execution. It requires at least **25 GB** of free space to store local database structures, models, and cache files.
-    
+    >
+    > *   **SmartScreen Workaround:** Since the setup installer is currently self-signed, Windows SmartScreen may show an "Unknown Publisher" dialog. Click **More info** and select **Run anyway** to proceed.
+    > *   **Integrity Checksum:** Verify your download authenticity by running the following command in PowerShell:
+    >     ```powershell
+    >     Get-FileHash GoodQ4All_Setup_1.0.0.exe
+    >     ```
+    >     Expected SHA256 hash: `3FFCEA024C75FA85BA52BD00FDD4BA83FFABF0E4A3720F3750199D9A556A44C6`
+
     <p align="center">
       <a href="https://github.com/GoodQ02/goodq4all/releases/download/v1.0.0/GoodQ4All_Setup_1.0.0.exe">
         <img src="samples/assets/one_click_installer_mockup.png" alt="GoodQ4All One-Click Setup Installer" width="550" style="max-width: 100%; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.15);" />

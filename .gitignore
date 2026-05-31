@@ -263,3 +263,6 @@ GoodQ4All_Setup_1.0.0.exe
 # ===== DEVELOPER SECURITY KEYS & TEMP BUILD FILES =====
 scripts/install/dev_private_key.hex
 scripts/install/go_bin/
+
+# ===== PUBLIC ONBOARDING DEMO FIXTURE =====
+!samples/onboarding_fixture.mp4

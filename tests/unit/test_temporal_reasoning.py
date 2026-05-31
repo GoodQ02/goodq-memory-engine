@@ -1,7 +1,9 @@
 from __future__ import annotations
+import json
 import sqlite3
-import pytest
 from pathlib import Path
+import numpy as np
+import pytest
 from fastapi.testclient import TestClient
 
 from api.main import app
@@ -9,6 +11,138 @@ from steps.common.config_loader import load_configs, get_runtime_paths
 from retrieval.temporal_reasoning import temporal_search
 
 client = TestClient(app)
+
+@pytest.fixture(autouse=True)
+def setup_test_databases(monkeypatch, tmp_path):
+    # Set GOODQ_DATA_ROOT to the temporary path to isolate configurations
+    monkeypatch.setenv("GOODQ_DATA_ROOT", str(tmp_path))
+    
+    # Setup directory structure for mock epoch
+    epoch_dir = tmp_path / "GoodQ_Data" / "epochs" / "epoch_2025_12_22"
+    epoch_dir.mkdir(parents=True, exist_ok=True)
+    (epoch_dir / "faiss").mkdir(parents=True, exist_ok=True)
+    
+    db_path = epoch_dir / "memory.db"
+    kg_path = epoch_dir / "knowledge_graph.db"
+    
+    # 1. Populate mock memory.db
+    conn = sqlite3.connect(db_path)
+    conn.execute(
+        """
+        CREATE TABLE scenes (
+            id TEXT PRIMARY KEY,
+            video_hash TEXT,
+            start REAL,
+            end REAL,
+            meta TEXT
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE summaries (
+            category TEXT,
+            content TEXT
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE embeddings (
+            scene_id TEXT,
+            modality TEXT,
+            vector BLOB
+        )
+        """
+    )
+    
+    # Insert two mock scenes (scene_1 and scene_2)
+    conn.execute(
+        "INSERT INTO scenes (id, video_hash, start, end, meta) VALUES (?, ?, ?, ?, ?)",
+        ("scene_1", "hash_1", 10.0, 20.0, json.dumps({
+            "entities": ["Jay"],
+            "primary_tags": ["laughing"],
+            "keyframe": {"path": "/mock/path/scene_1.jpg"}
+        }))
+    )
+    conn.execute(
+        "INSERT INTO scenes (id, video_hash, start, end, meta) VALUES (?, ?, ?, ?, ?)",
+        ("scene_2", "hash_1", 30.0, 40.0, json.dumps({
+            "entities": ["Jay"],
+            "primary_tags": ["coding"],
+            "keyframe": {"path": "/mock/path/scene_2.jpg"}
+        }))
+    )
+    
+    # Insert scene summaries
+    conn.execute(
+        "INSERT INTO summaries (category, content) VALUES (?, ?)",
+        ("scene_summary", json.dumps({
+            "scene_id": "scene_1",
+            "summary": "Jay is laughing at the desk"
+        }))
+    )
+    conn.execute(
+        "INSERT INTO summaries (category, content) VALUES (?, ?)",
+        ("scene_summary", json.dumps({
+            "scene_id": "scene_2",
+            "summary": "Jay is coding on his computer"
+        }))
+    )
+    
+    # Insert float32 embeddings for similarity calculation tests
+    vec_blob = np.ones(384, dtype=np.float32).tobytes()
+    conn.execute(
+        "INSERT INTO embeddings (scene_id, modality, vector) VALUES (?, ?, ?)",
+        ("scene_1", "text", sqlite3.Binary(vec_blob))
+    )
+    conn.execute(
+        "INSERT INTO embeddings (scene_id, modality, vector) VALUES (?, ?, ?)",
+        ("scene_2", "text", sqlite3.Binary(vec_blob))
+    )
+    
+    conn.commit()
+    conn.close()
+    
+    # 2. Populate mock knowledge_graph.db
+    conn_kg = sqlite3.connect(kg_path)
+    conn_kg.execute(
+        """
+        CREATE TABLE media_nodes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            scene_id TEXT,
+            media_path TEXT
+        )
+        """
+    )
+    conn_kg.execute(
+        """
+        CREATE TABLE nodes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT,
+            node_type TEXT
+        )
+        """
+    )
+    conn_kg.execute(
+        """
+        CREATE TABLE node_media (
+            node_id INTEGER,
+            media_id INTEGER
+        )
+        """
+    )
+    
+    # Insert node "Jay" (id=1)
+    conn_kg.execute("INSERT INTO nodes (id, name, node_type) VALUES (?, ?, ?)", (1, "Jay", "person"))
+    # Map "Jay" node to "scene_1" (media_id=1) and "scene_2" (media_id=2)
+    conn_kg.execute("INSERT INTO media_nodes (id, scene_id, media_path) VALUES (?, ?, ?)", (1, "scene_1", "/mock/path/video.mp4"))
+    conn_kg.execute("INSERT INTO media_nodes (id, scene_id, media_path) VALUES (?, ?, ?)", (2, "scene_2", "/mock/path/video.mp4"))
+    conn_kg.execute("INSERT INTO node_media (node_id, media_id) VALUES (?, ?)", (1, 1))
+    conn_kg.execute("INSERT INTO node_media (node_id, media_id) VALUES (?, ?)", (1, 2))
+    
+    conn_kg.commit()
+    conn_kg.close()
 
 def test_sqlite_read_only_protection():
     """

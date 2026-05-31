@@ -529,6 +529,7 @@ def register_scene_bundle(
     audio: Optional[Dict[str, Any]] = None,
     errors: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
+    summary_text = None
     scene_start = _coerce_time(scene.get('start'), 0.0)
     scene_end = _coerce_time(scene.get('end'), scene_start)
     scene_duration = max(0.0, scene_end - scene_start)
@@ -861,6 +862,112 @@ def register_scene_bundle(
                         'text': frame_data.get('ocr_text', '') or frame_data.get('caption', ''),
                     }
                 })
+
+        # Extract summary text embedding (Phase 2)
+        summary_mismatch = False
+        if summary_text:
+            try:
+                from steps.text_embed.step import _load_st
+                from steps.common.qdrant_client import build_qdrant_client
+                
+                model = _load_st()
+                if model is not None:
+                    vec = model.encode([summary_text], normalize_embeddings=True)
+                    summary_vector = vec.astype("float32")[0].tolist()
+                    
+                    # Qdrant dimension guard
+                    qdrant_dim = None
+                    q_store = router.stores.get("qdrant")
+                    q_client = getattr(q_store, "client", None) if q_store else None
+                    if q_client and q_client.cfg.enabled:
+                        try:
+                            r = q_client.session.get(f"{q_client.cfg.host}/collections/{q_client.cfg.collection}", timeout=3)
+                            if r.status_code == 200:
+                                payload = r.json()
+                                res = payload.get("result", {}) or {}
+                                cfg_res = res.get("config", {}) or {}
+                                params = cfg_res.get("params", {}) or {}
+                                vectors = params.get("vectors", {}) or {}
+                                if isinstance(vectors, dict) and isinstance(vectors.get("size"), int):
+                                    qdrant_dim = int(vectors.get("size"))
+                        except Exception as e:
+                            logger.warning("Failed to retrieve Qdrant collection dimension: %s", e)
+                            
+                    # FAISS dimension guard
+                    faiss_dim = None
+                    f_store = router.stores.get("faiss")
+                    if f_store and os.path.isfile(f_store.index_path):
+                        try:
+                            import faiss
+                            idx = faiss.read_index(f_store.index_path)
+                            faiss_dim = int(getattr(idx, "d", 0))
+                        except Exception as e:
+                            logger.warning("Failed to retrieve FAISS index dimension: %s", e)
+                            
+                    if qdrant_dim is not None and qdrant_dim != 384:
+                        summary_mismatch = True
+                        logger.warning(
+                            "Qdrant collection %s dimension mismatch for summary: expected 384, got %s. Routing to fallback.",
+                            q_client.cfg.collection if q_client else "",
+                            qdrant_dim
+                        )
+                    if faiss_dim is not None and faiss_dim != 384:
+                        summary_mismatch = True
+                        logger.warning(
+                            "FAISS index %s dimension mismatch for summary: expected 384, got %s. Routing to fallback.",
+                            f_store.index_path if f_store else "",
+                            faiss_dim
+                        )
+                        
+                    summary_point = {
+                        'id': f"{scene_id}_summary",
+                        'vector': summary_vector,
+                        'payload': {
+                            'scene_id': scene_id,
+                            'video_id': canonical_video_id,
+                            'video_hash': video_hash,
+                            'modality': 'text',
+                            'start': scene_start,
+                            'end': scene_end,
+                            'text': summary_text,
+                        }
+                    }
+                    
+                    if not summary_mismatch:
+                        # Append as a standard text modality point in goodq_text
+                        points.append(summary_point)
+                    else:
+                        # Route vector writes directly to the fallback collection
+                        try:
+                            fallback_cfg = dict(cfg)
+                            fallback_cfg["qdrant"] = dict(fallback_cfg.get("qdrant", {}) or {})
+                            fallback_cfg["qdrant"]["collections"] = dict(fallback_cfg["qdrant"].get("collections", {}) or {})
+                            fallback_cfg["qdrant"]["collections"]["text"] = "goodq_scene_summaries_384"
+                            
+                            fallback_client = build_qdrant_client(fallback_cfg, dim=384, key="text")
+                            if fallback_client:
+                                fallback_client.upsert([summary_point])
+                                logger.info("Successfully routed summary vector to fallback collection goodq_scene_summaries_384")
+                                vector_store_results["qdrant_fallback"] = True
+                        except Exception as fallback_err:
+                            logger.warning("Failed to write to fallback Qdrant collection: %s", fallback_err)
+                            
+                    # Register summary embedding in SQLite
+                    try:
+                        f_id = to_faiss_id(summary_point["id"])
+                        upsert_embedding(
+                            cfg,
+                            summary_point["id"],
+                            f_id,
+                            source_path="",
+                            modality="text",
+                            scene_id=scene_id,
+                            vector=summary_point["vector"]
+                        )
+                    except Exception as sql_err:
+                        logger.warning("Failed to register summary embedding in SQLite: %s", sql_err)
+            except Exception as embed_err:
+                logger.warning("Failed to generate and index summary embedding for scene_id=%s: %s", scene_id, embed_err)
         
         if points:
             vector_points_attempted = len(points)
@@ -885,11 +992,70 @@ def register_scene_bundle(
                     )
             insert_results = router.insert(points)
             if isinstance(insert_results, dict):
-                vector_store_results = {str(k): bool(v) for k, v in insert_results.items()}
+                vector_store_results.update({str(k): bool(v) for k, v in insert_results.items()})
                 qdrant_ok = bool(vector_store_results.get('qdrant', False))
                 faiss_ok = bool(vector_store_results.get('faiss', False))
             success_count = sum(1 for v in vector_store_results.values() if v)
             print(f'[VECTOR] Inserted {success_count}/{len(points)} embeddings for scene {scene_id}')
+
+        # Emit MemoryCommitEvent for the summary vector if it was generated (Phase 2)
+        if summary_text and 'summary_point' in locals():
+            try:
+                from steps.common.memory_commit_events import MemoryCommitEvent, emit_memory_commit_event, utc_now_iso
+                
+                targets = {}
+                if not summary_mismatch:
+                    q_store = router.stores.get("qdrant")
+                    q_ref = getattr(getattr(q_store, "client", None), "cfg", None).collection if q_store else None
+                    f_store = router.stores.get("faiss")
+                    f_ref = getattr(f_store, "index_path", None) if f_store else None
+                    
+                    targets["qdrant"] = {
+                        "attempted": bool(q_store),
+                        "committed": bool(vector_store_results.get("qdrant", False)),
+                        "ref": q_ref,
+                        "count": 1
+                    }
+                    targets["faiss"] = {
+                        "attempted": bool(f_store),
+                        "committed": bool(vector_store_results.get("faiss", False)),
+                        "ref": f_ref,
+                        "count": 1
+                    }
+                else:
+                    targets["qdrant_fallback"] = {
+                        "attempted": True,
+                        "committed": bool(vector_store_results.get("qdrant_fallback", False)),
+                        "ref": "goodq_scene_summaries_384",
+                        "count": 1
+                    }
+                
+                targets["sqlite_embeddings"] = {
+                    "attempted": True,
+                    "committed": True,
+                    "ref": (cfg.get("paths", {}) or {}).get("db_path"),
+                }
+                
+                emit_memory_commit_event(
+                    cfg,
+                    MemoryCommitEvent(
+                        ts_utc=utc_now_iso(),
+                        scene_id=scene_id,
+                        video_id=canonical_video_id,
+                        modality="text",
+                        model="all-MiniLM-L6-v2",
+                        embedding_id=summary_point["id"],
+                        component="register_scene_bundle",
+                        targets=targets,
+                        details={
+                            "text_len": len(summary_text),
+                            "is_summary": True,
+                            "is_fallback": summary_mismatch,
+                        }
+                    )
+                )
+            except Exception as event_err:
+                logger.warning("Failed to emit memory commit event for summary: %s", event_err)
         
     except Exception as e:
         logger.warning(

@@ -203,3 +203,172 @@ def test_search_text_hybrid_blend(monkeypatch: pytest.MonkeyPatch, temp_db_path:
     # RRF fuses both semantic (scene_01) and lexical (scene_02)
     assert len(fused_results) == 2
     assert {r["id"] for r in fused_results} == {"scene_01", "scene_02"}
+
+
+def test_register_scene_bundle_summary_embedding_and_routing(monkeypatch: pytest.MonkeyPatch, temp_db_path: str) -> None:
+    cfg = {
+        "paths": {"db_path": temp_db_path},
+        "qdrant": {
+            "enabled": True,
+            "host": "http://mock_qdrant",
+            "collections": {
+                "text": "goodq_text"
+            }
+        }
+    }
+    
+    # Stub compute_file_hash to return dummy hashes
+    import steps.common.memory as mem
+    monkeypatch.setattr(mem, "compute_file_hash", lambda path: "dummy_hash_" + Path(path).name)
+
+    # Mock _load_st
+    class FakeST:
+        def encode(self, texts, normalize_embeddings=True):
+            return np.ones((len(texts), 384), dtype=np.float32)
+    monkeypatch.setattr("steps.text_embed.step._load_st", lambda: FakeST())
+
+    # Stub scene summarizer to return a summary
+    import steps.common.scene_summarizer
+    monkeypatch.setattr(steps.common.scene_summarizer, "generate_scene_summary", lambda *args, **kwargs: "Mock summary text")
+
+    # Mock the router
+    class FakeStore:
+        def __init__(self, dim, index_path=None):
+            self.dim = dim
+            self.index_path = index_path
+            self.inserted = []
+        def insert(self, points):
+            self.inserted.extend(points)
+            return True
+
+    class FakeRouter:
+        def __init__(self):
+            self.stores = {
+                "qdrant": FakeStore(384),
+                "faiss": FakeStore(384, "mock_faiss.index")
+            }
+        def insert(self, points):
+            res = {}
+            for k, store in self.stores.items():
+                res[k] = store.insert(points)
+            return res
+
+    fake_router = FakeRouter()
+    monkeypatch.setattr("steps.common.memory_manager.build_memory_router", lambda c: fake_router)
+
+    # 1. Normal case: dimension matches 384
+    # Mock Qdrant client to report 384 dim
+    q_client = fake_router.stores["qdrant"]
+    class FakeQClient:
+        def __init__(self):
+            self.cfg = type("Cfg", (), {"host": "http://mock_qdrant", "collection": "goodq_text", "enabled": True})()
+            class FakeSession:
+                def get(self, url, timeout=None):
+                    pass
+            self.session = FakeSession()
+            self.upsert_called = []
+        def upsert(self, points):
+            self.upsert_called.extend(points)
+            return True
+            
+    fake_q_client = FakeQClient()
+    q_client.client = fake_q_client
+    
+    # Mock session.get to return 200 with dim=384
+    class FakeResponse:
+        status_code = 200
+        def json(self):
+            return {"result": {"config": {"params": {"vectors": {"size": 384}}}}}
+    monkeypatch.setattr(fake_q_client.session, "get", lambda url, timeout=None: FakeResponse())
+
+    # Register scene bundle
+    bundle = {
+        "video_hash": "test_video_summary",
+        "scene": {"start": 0.0, "end": 10.0, "index": 1},
+        "scene_id": "scene_summary_01"
+    }
+
+    res = register_scene_bundle(
+        cfg,
+        video_hash=bundle["video_hash"],
+        scene=bundle["scene"],
+        scene_id=bundle["scene_id"]
+    )
+
+    # Verify summary vector is appended in normal points
+    inserted_points = fake_router.stores["qdrant"].inserted
+    summary_point = next((p for p in inserted_points if p["id"] == "scene_summary_01_summary"), None)
+    assert summary_point is not None
+    assert summary_point["vector"] == [1.0] * 384
+    assert summary_point["payload"]["text"] == "Mock summary text"
+
+    # Verify SQLite row exists in embeddings table
+    conn = sqlite3.connect(temp_db_path)
+    cur = conn.execute("SELECT hash, modality, scene_id FROM embeddings WHERE hash='scene_summary_01_summary'")
+    row = cur.fetchone()
+    assert row is not None
+    assert row[1] == "text"
+    assert row[2] == "scene_summary_01"
+    
+    # Verify MemoryCommitEvent table contains the event
+    cur = conn.execute("SELECT scene_id, modality, embedding_id, targets_json FROM memory_commit_events WHERE embedding_id='scene_summary_01_summary'")
+    row = cur.fetchone()
+    assert row is not None
+    assert row[0] == "scene_summary_01"
+    assert row[1] == "text"
+    targets = json.loads(row[3])
+    assert targets["qdrant"]["committed"] is True
+    assert targets["faiss"]["committed"] is True
+    conn.close()
+
+    # 2. Mismatch case: dimension matches 512 (mismatch!)
+    fake_router_mismatch = FakeRouter()
+    monkeypatch.setattr("steps.common.memory_manager.build_memory_router", lambda c: fake_router_mismatch)
+
+    q_client_m = fake_router_mismatch.stores["qdrant"]
+    fake_q_client_m = FakeQClient()
+    q_client_m.client = fake_q_client_m
+    
+    # Mock session.get to return 200 with dim=512
+    class FakeResponseMismatch:
+        status_code = 200
+        def json(self):
+            return {"result": {"config": {"params": {"vectors": {"size": 512}}}}}
+    monkeypatch.setattr(fake_q_client_m.session, "get", lambda url, timeout=None: FakeResponseMismatch())
+
+    # Mock build_qdrant_client to return a mock client for fallback collection
+    fallback_q_client = FakeQClient()
+    monkeypatch.setattr("steps.common.qdrant_client.build_qdrant_client", lambda c, dim, key: fallback_q_client)
+
+    bundle_m = {
+        "video_hash": "test_video_summary",
+        "scene": {"start": 0.0, "end": 10.0, "index": 2},
+        "scene_id": "scene_summary_02"
+    }
+
+    res_m = register_scene_bundle(
+        cfg,
+        video_hash=bundle_m["video_hash"],
+        scene=bundle_m["scene"],
+        scene_id=bundle_m["scene_id"]
+    )
+
+    # Verify summary vector is NOT in standard inserted points (since it was mismatch and routed to fallback)
+    inserted_points_m = fake_router_mismatch.stores["qdrant"].inserted
+    summary_point_m = next((p for p in inserted_points_m if p["id"] == "scene_summary_02_summary"), None)
+    assert summary_point_m is None
+
+    # Verify summary vector was routed to fallback client's upsert
+    assert len(fallback_q_client.upsert_called) == 1
+    assert fallback_q_client.upsert_called[0]["id"] == "scene_summary_02_summary"
+    assert fallback_q_client.upsert_called[0]["vector"] == [1.0] * 384
+
+    # Verify MemoryCommitEvent specifies fallback target
+    conn = sqlite3.connect(temp_db_path)
+    cur = conn.execute("SELECT targets_json FROM memory_commit_events WHERE embedding_id='scene_summary_02_summary'")
+    row = cur.fetchone()
+    assert row is not None
+    targets_m = json.loads(row[0])
+    assert "qdrant_fallback" in targets_m
+    assert targets_m["qdrant_fallback"]["committed"] is True
+    conn.close()

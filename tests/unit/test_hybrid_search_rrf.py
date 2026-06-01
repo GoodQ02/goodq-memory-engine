@@ -80,16 +80,20 @@ def test_register_scene_bundle_populates_fts(temp_db_path: str) -> None:
 
     # Stub compute_file_hash to return dummy hashes
     import steps.common.memory as mem
-    mem.compute_file_hash = lambda path: "dummy_hash_" + Path(path).name
+    orig_compute_file_hash = mem.compute_file_hash
+    mem.compute_file_hash = lambda path: "dummy_hash_" + Path(path).name if path else None
 
-    register_scene_bundle(
-        cfg,
-        video_hash=bundle["video_hash"],
-        scene=bundle["scene"],
-        scene_id=bundle["scene_id"],
-        frame=bundle["frame"],
-        audio=bundle["audio"]
-    )
+    try:
+        register_scene_bundle(
+            cfg,
+            video_hash=bundle["video_hash"],
+            scene=bundle["scene"],
+            scene_id=bundle["scene_id"],
+            frame=bundle["frame"],
+            audio=bundle["audio"]
+        )
+    finally:
+        mem.compute_file_hash = orig_compute_file_hash
 
     # Verify database contents
     conn = sqlite3.connect(temp_db_path)

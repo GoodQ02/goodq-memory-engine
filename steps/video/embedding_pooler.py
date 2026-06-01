@@ -140,30 +140,59 @@ def pool_scene_embeddings(
         return pool_embeddings_mean(frame_embeddings)
 
 
+MIN_VALID_VISUAL_FRAMES = 1
+
+
 def pool_multiple_scenes(
-    scene_frame_embeddings: Dict[int, List[np.ndarray]],
+    scene_frame_embeddings: Dict[int, List[Any]],
     strategy: str = 'mean',
     **kwargs
 ) -> Dict[int, np.ndarray]:
     """
-    Pool embeddings for multiple scenes.
+    Pool embeddings for multiple scenes, enforcing MIN_VALID_VISUAL_FRAMES and validating array types.
     
     Args:
-        scene_frame_embeddings: Dict mapping scene_id -> list of frame embeddings
+        scene_frame_embeddings: Dict mapping scene_id -> list of frame embeddings/errors
         strategy: Pooling strategy
-        **kwargs: Additional pooling parameters
+        **kwargs: Additional pooling parameters (e.g. cfg, min_valid_visual_frames)
         
     Returns:
         Dict mapping scene_id -> pooled scene embedding
     """
     pooled_scenes = {}
     
+    cfg = kwargs.get('cfg')
+    min_valid = MIN_VALID_VISUAL_FRAMES
+    if isinstance(cfg, dict):
+        min_valid = cfg.get('phase6', {}).get('min_valid_visual_frames', min_valid)
+    # Support direct kwarg override
+    min_valid = kwargs.get('min_valid_visual_frames', min_valid)
+    
     for scene_id, frame_embeds in scene_frame_embeddings.items():
         if frame_embeds:
+            # Coerce lists of floats (e.g. from mock tests) to numpy arrays for compatibility
+            coerced_embeds = [
+                np.array(emb, dtype=np.float32) if isinstance(emb, list) else emb
+                for emb in frame_embeds
+            ]
+            
+            # Filter and validate arrays strictly (must be 1D, containing only finite numbers)
+            valid_embeds = [
+                emb for emb in coerced_embeds 
+                if isinstance(emb, np.ndarray) and emb.ndim == 1 and np.all(np.isfinite(emb))
+            ]
+            
+            if len(valid_embeds) < min_valid:
+                logger.warning(
+                    f"Scene {scene_id} skipped: Insufficient valid frame embeddings "
+                    f"({len(valid_embeds)} valid arrays found, required minimum is {min_valid})"
+                )
+                continue
+                
             try:
-                pooled = pool_scene_embeddings(frame_embeds, strategy, **kwargs)
+                pooled = pool_scene_embeddings(valid_embeds, strategy, **kwargs)
                 pooled_scenes[scene_id] = pooled
-                logger.info(f"Scene {scene_id}: Pooled {len(frame_embeds)} frames -> {pooled.shape}")
+                logger.info(f"Scene {scene_id}: Pooled {len(valid_embeds)} frames -> {pooled.shape}")
             except Exception as e:
                 logger.error(f"Failed to pool embeddings for scene {scene_id}: {e}")
     

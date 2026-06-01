@@ -156,16 +156,16 @@ def _load_dino_model():
         _MODELS["dino"].update({"model": None, "processor": None, "device": "cpu"})
 
 
-def embed_frames_clip(frame_paths: List[str], batch_size: int = 8) -> List[np.ndarray]:
+def embed_frames_clip(frame_paths: List[str], batch_size: int = 8) -> List[np.ndarray | Dict[str, Any]]:
     """
-    Generate CLIP embeddings for a list of frame images with AMP and zero-vector fallbacks.
+    Generate CLIP embeddings for a list of frame images with AMP and individual fallbacks.
     
     Args:
         frame_paths: List of paths to frame images
         batch_size: Batch size for GPU processing
         
     Returns:
-        List of CLIP embedding vectors
+        List of CLIP embedding vectors or structured error dictionaries
     """
     _load_clip_model()
     
@@ -195,6 +195,8 @@ def embed_frames_clip(frame_paths: List[str], batch_size: int = 8) -> List[np.nd
         # Load images
         images = []
         valid_indices = []
+        item_statuses = [None] * len(batch_paths)
+        
         for idx, path in enumerate(batch_paths):
             try:
                 img = Image.open(path).convert("RGB")
@@ -202,10 +204,25 @@ def embed_frames_clip(frame_paths: List[str], batch_size: int = 8) -> List[np.nd
                 valid_indices.append(idx)
             except Exception as e:
                 logger.warning(f"Failed to load frame {path}: {e}")
+                item_statuses[idx] = {
+                    "status": "error",
+                    "error": f"Failed to load image: {str(e)}",
+                    "exc_type": type(e).__name__,
+                    "path": path,
+                    "modality": "clip"
+                }
         
         if not images:
-            # All frames in batch failed to load - pad with zero vectors
-            embeddings.extend([np.zeros(dim) for _ in range(len(batch_paths))])
+            # All frames in batch failed to load - populate remaining None slots with errors
+            for idx in range(len(batch_paths)):
+                if item_statuses[idx] is None:
+                    item_statuses[idx] = {
+                        "status": "error",
+                        "error": "Failed to load image",
+                        "path": batch_paths[idx],
+                        "modality": "clip"
+                    }
+            embeddings.extend(item_statuses)
             continue
         
         # Process batch
@@ -234,36 +251,65 @@ def embed_frames_clip(frame_paths: List[str], batch_size: int = 8) -> List[np.nd
             norms = np.linalg.norm(batch_embeddings, axis=1, keepdims=True)
             batch_embeddings = batch_embeddings / (norms + 1e-8)
 
-            # Re-align in case some images failed to load during batch loop
-            aligned_batch = []
+            # Re-align
             img_idx = 0
             for idx in range(len(batch_paths)):
                 if idx in valid_indices:
-                    aligned_batch.append(batch_embeddings[img_idx])
+                    item_statuses[idx] = batch_embeddings[img_idx]
                     img_idx += 1
-                else:
-                    aligned_batch.append(np.zeros(dim))
-            embeddings.extend(aligned_batch)
+            embeddings.extend(item_statuses)
 
         except Exception as e:
-            logger.error(f"CLIP embedding batch failed: {e}")
-            # Pad entire batch with zero vectors to prevent index misalignment
-            embeddings.extend([np.zeros(dim) for _ in range(len(batch_paths))])
+            logger.warning(f"CLIP embedding batch failed: {e}. Retrying individually to isolate failures.")
+            # Fallback to individual inference to isolate the failing item
+            for idx, path in enumerate(batch_paths):
+                if item_statuses[idx] is not None:
+                    continue
+                try:
+                    img = Image.open(path).convert("RGB")
+                    inputs = processor(images=[img], return_tensors="pt")
+                    inputs = {k: v.to(device) for k, v in inputs.items()}
+                    
+                    with torch.inference_mode():
+                        with autocast_ctx:
+                            outputs = model.get_image_features(**inputs)
+                            
+                    if hasattr(outputs, "pooler_output"):
+                        features = outputs.pooler_output
+                    elif isinstance(outputs, tuple):
+                        features = outputs[0]
+                    else:
+                        features = outputs
+                        
+                    feats = features.detach().cpu().numpy().astype("float32")
+                    norm = np.linalg.norm(feats, axis=1, keepdims=True)
+                    feats = feats / (norm + 1e-8)
+                    item_statuses[idx] = feats[0]
+                except Exception as individual_exc:
+                    logger.error(f"CLIP individual inference failed for {path}: {individual_exc}")
+                    item_statuses[idx] = {
+                        "status": "error",
+                        "error": f"Inference failed: {str(individual_exc)}",
+                        "exc_type": type(individual_exc).__name__,
+                        "path": path,
+                        "modality": "clip"
+                    }
+            embeddings.extend(item_statuses)
     
-    logger.info(f"Generated {len(embeddings)} CLIP embeddings")
+    logger.info(f"Generated {len(embeddings)} CLIP embeddings/statuses")
     return embeddings
 
 
-def embed_frames_dino(frame_paths: List[str], batch_size: int = 8) -> List[np.ndarray]:
+def embed_frames_dino(frame_paths: List[str], batch_size: int = 8) -> List[np.ndarray | Dict[str, Any]]:
     """
-    Generate DINO embeddings for a list of frame images with AMP and dynamic dims.
+    Generate DINO embeddings for a list of frame images with AMP and individual fallbacks.
     
     Args:
         frame_paths: List of paths to frame images
         batch_size: Batch size for GPU processing
         
     Returns:
-        List of DINO embedding vectors
+        List of DINO embedding vectors or structured error dictionaries
     """
     _load_dino_model()
     
@@ -293,6 +339,8 @@ def embed_frames_dino(frame_paths: List[str], batch_size: int = 8) -> List[np.nd
         # Load images
         images = []
         valid_indices = []
+        item_statuses = [None] * len(batch_paths)
+        
         for idx, path in enumerate(batch_paths):
             try:
                 img = Image.open(path).convert("RGB")
@@ -300,10 +348,25 @@ def embed_frames_dino(frame_paths: List[str], batch_size: int = 8) -> List[np.nd
                 valid_indices.append(idx)
             except Exception as e:
                 logger.warning(f"Failed to load frame {path}: {e}")
+                item_statuses[idx] = {
+                    "status": "error",
+                    "error": f"Failed to load image: {str(e)}",
+                    "exc_type": type(e).__name__,
+                    "path": path,
+                    "modality": "dino"
+                }
         
         if not images:
-            # All frames in batch failed to load - pad with zero vectors
-            embeddings.extend([np.zeros(dim) for _ in range(len(batch_paths))])
+            # All frames in batch failed to load - populate remaining None slots with errors
+            for idx in range(len(batch_paths)):
+                if item_statuses[idx] is None:
+                    item_statuses[idx] = {
+                        "status": "error",
+                        "error": "Failed to load image",
+                        "path": batch_paths[idx],
+                        "modality": "dino"
+                    }
+            embeddings.extend(item_statuses)
             continue
         
         # Process batch
@@ -321,23 +384,45 @@ def embed_frames_dino(frame_paths: List[str], batch_size: int = 8) -> List[np.nd
             norms = np.linalg.norm(batch_embeddings, axis=1, keepdims=True)
             batch_embeddings = batch_embeddings / (norms + 1e-8)
             
-            # Re-align in case some images failed to load during batch loop
-            aligned_batch = []
+            # Re-align
             img_idx = 0
             for idx in range(len(batch_paths)):
                 if idx in valid_indices:
-                    aligned_batch.append(batch_embeddings[img_idx])
+                    item_statuses[idx] = batch_embeddings[img_idx]
                     img_idx += 1
-                else:
-                    aligned_batch.append(np.zeros(dim))
-            embeddings.extend(aligned_batch)
+            embeddings.extend(item_statuses)
             
         except Exception as e:
-            logger.error(f"DINO embedding batch failed: {e}")
-            # Add zero embeddings for failed batch to keep alignment
-            embeddings.extend([np.zeros(dim) for _ in range(len(batch_paths))])
+            logger.warning(f"DINO embedding batch failed: {e}. Retrying individually to isolate failures.")
+            # Fallback to individual inference to isolate the failing item
+            for idx, path in enumerate(batch_paths):
+                if item_statuses[idx] is not None:
+                    continue
+                try:
+                    img = Image.open(path).convert("RGB")
+                    inputs = processor(images=[img], return_tensors="pt")
+                    inputs = {k: v.to(device) for k, v in inputs.items()}
+                    
+                    with torch.inference_mode():
+                        with autocast_ctx:
+                            outputs = model(**inputs)
+                            feats = outputs.last_hidden_state[:, 0].cpu().numpy().astype("float32")
+                            
+                    norm = np.linalg.norm(feats, axis=1, keepdims=True)
+                    feats = feats / (norm + 1e-8)
+                    item_statuses[idx] = feats[0]
+                except Exception as individual_exc:
+                    logger.error(f"DINO individual inference failed for {path}: {individual_exc}")
+                    item_statuses[idx] = {
+                        "status": "error",
+                        "error": f"Inference failed: {str(individual_exc)}",
+                        "exc_type": type(individual_exc).__name__,
+                        "path": path,
+                        "modality": "dino"
+                    }
+            embeddings.extend(item_statuses)
     
-    logger.info(f"Generated {len(embeddings)} DINO embeddings")
+    logger.info(f"Generated {len(embeddings)} DINO embeddings/statuses")
     return embeddings
 
 
@@ -345,7 +430,7 @@ def embed_scene_frames(
     scene_frames: Dict[int, List[Dict[str, Any]]],
     model_type: str = 'clip',
     batch_size: int = 8
-) -> Dict[int, List[np.ndarray]]:
+) -> Dict[int, List[np.ndarray | Dict[str, Any]]]:
     """
     Generate embeddings for all frames across multiple scenes in flattened batches.
     
@@ -355,7 +440,7 @@ def embed_scene_frames(
         batch_size: Batch size for GPU processing
         
     Returns:
-        Dict mapping scene_id -> list of embedding vectors
+        Dict mapping scene_id -> list of embedding vectors or structured error dictionaries
     """
     # 1. Flatten all frames across all scenes to process in a single unified sequence
     flat_frames = []  # list of tuples (scene_id, frame_idx, path)
@@ -387,8 +472,12 @@ def embed_scene_frames(
         if i < len(all_embeddings):
             scene_embeddings[scene_id].append(all_embeddings[i])
         else:
-            # Fallback in case of list length mismatch (should not happen with zero-vector padding)
-            dim = 1024 if model_type == 'dino' else 768
-            scene_embeddings[scene_id].append(np.zeros(dim))
+            # Fallback in case of list length mismatch
+            scene_embeddings[scene_id].append({
+                "status": "error",
+                "error": "Length mismatch during batch mapping",
+                "path": path,
+                "modality": model_type
+            })
             
     return scene_embeddings

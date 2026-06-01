@@ -400,7 +400,10 @@ def run_scene_visual_embeddings(item: Dict[str, Any], cfg: Dict[str, Any]) -> Di
         clip_embeddings = embed_scene_frames(scene_frames, model_type='clip', batch_size=batch_size)
         clip_model_loaded = False
         try:
-            from steps.video import scene_embedder as _scene_embedder
+            import sys
+            _scene_embedder = sys.modules.get("steps.video.scene_embedder")
+            if _scene_embedder is None:
+                from steps.video import scene_embedder as _scene_embedder
             clip_state = _scene_embedder._MODELS.get("clip") or {}
             clip_model_loaded = bool(clip_state.get("model") is not None)
             clip_device = str(clip_state.get("device") or clip_device)
@@ -432,7 +435,10 @@ def run_scene_visual_embeddings(item: Dict[str, Any], cfg: Dict[str, Any]) -> Di
         dino_embeddings = embed_scene_frames(scene_frames, model_type='dino', batch_size=batch_size)
         dino_model_loaded = False
         try:
-            from steps.video import scene_embedder as _scene_embedder
+            import sys
+            _scene_embedder = sys.modules.get("steps.video.scene_embedder")
+            if _scene_embedder is None:
+                from steps.video import scene_embedder as _scene_embedder
             dino_model_loaded = bool((_scene_embedder._MODELS.get("dino") or {}).get("model") is not None)
         except Exception as e:
             _stage10_18_debug("dino_model_probe_error:", f"{type(e).__name__}: {e}")
@@ -481,12 +487,58 @@ def run_scene_visual_embeddings(item: Dict[str, Any], cfg: Dict[str, Any]) -> Di
         
         logger.info(f"[PHASE6] Pooling embeddings using '{pooling_strategy}' strategy")
         
-        pooled_clip = pool_multiple_scenes(clip_embeddings, strategy=pooling_strategy)
-        pooled_dino = pool_multiple_scenes(dino_embeddings, strategy=pooling_strategy)
+        import inspect
+        sig = inspect.signature(pool_multiple_scenes)
+        if 'cfg' in sig.parameters or any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()):
+            pooled_clip = pool_multiple_scenes(clip_embeddings, strategy=pooling_strategy, cfg=cfg)
+            pooled_dino = pool_multiple_scenes(dino_embeddings, strategy=pooling_strategy, cfg=cfg)
+        else:
+            pooled_clip = pool_multiple_scenes(clip_embeddings, strategy=pooling_strategy)
+            pooled_dino = pool_multiple_scenes(dino_embeddings, strategy=pooling_strategy)
         print("[STAGE10_16_DEBUG] pooled_clip_len:", len(pooled_clip))
         print("[STAGE10_16_DEBUG] pooled_dino_len:", len(pooled_dino))
         scene_clip_vectors_written = 0
         scene_dino_vectors_written = 0
+
+        # Collect and aggregate frame-level errors
+        frame_errors = []
+        for scene_id, embeds in clip_embeddings.items():
+            for emb in embeds:
+                if isinstance(emb, dict) and emb.get("status") == "error":
+                    frame_errors.append(emb)
+        for scene_id, embeds in dino_embeddings.items():
+            for emb in embeds:
+                if isinstance(emb, dict) and emb.get("status") == "error":
+                    frame_errors.append(emb)
+
+        # Build error summary
+        error_summary = None
+        if frame_errors:
+            total_errs = len(frame_errors)
+            clip_errs = sum(1 for e in frame_errors if e.get("modality") == "clip")
+            dino_errs = sum(1 for e in frame_errors if e.get("modality") == "dino")
+            by_exc = {}
+            for e in frame_errors:
+                exc = e.get("exc_type") or "UnknownError"
+                by_exc[exc] = by_exc.get(exc, 0) + 1
+            
+            error_summary = {
+                "total": total_errs,
+                "clip": clip_errs,
+                "dino": dino_errs,
+                "by_exc_type": by_exc,
+                "truncated": total_errs > 50
+            }
+            
+            logger.warning(
+                f"[PHASE6] Encountered {total_errs} frame embedding errors during batch execution. "
+                f"Summary: {error_summary}"
+            )
+            scene_data['phase6_frame_errors'] = frame_errors[:50]
+            scene_data['phase6_frame_error_summary'] = error_summary
+        else:
+            scene_data.pop('phase6_frame_errors', None)
+            scene_data.pop('phase6_frame_error_summary', None)
 
         expected_scene_ids = {
             scene_id for scene_id, frames in scene_frames.items()
@@ -527,6 +579,8 @@ def run_scene_visual_embeddings(item: Dict[str, Any], cfg: Dict[str, Any]) -> Di
                 "clip_vector_dim": clip_vector_dim,
                 "dino_vector_dim": dino_vector_dim,
                 "gpu_device": clip_device,
+                "frame_errors": frame_errors[:50],
+                "frame_error_summary": error_summary,
             }
         
         # === STEP 5: Store in Qdrant ===
@@ -866,6 +920,8 @@ def run_scene_visual_embeddings(item: Dict[str, Any], cfg: Dict[str, Any]) -> Di
             "faiss_clip_reason": clip_faiss_result.get("reason"),
             "faiss_dino_reason": dino_faiss_result.get("reason"),
             "gpu_device": clip_device,
+            "frame_errors": frame_errors[:50],
+            "frame_error_summary": error_summary,
         }
     except Exception as e:
         logger.exception("[PHASE6] Unhandled exception after manifest load")

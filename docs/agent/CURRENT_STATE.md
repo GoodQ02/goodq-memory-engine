@@ -613,6 +613,28 @@ Validated memory/evidence posture:
 - **FAISS Parity**: FAISS indices successfully committed vectors using explicit, stable IDs with expected dimensions (`faiss_ok = true`).
 - **OpenMP Collision Mitigation**: In pipelines, `KMP_DUPLICATE_LIB_OK=TRUE` is explicitly set to prevent duplicate OpenMP library crashes during torch/faiss imports.
 
+## Ingestion Pipeline and Concurrency Optimization on 2026-05-31
+
+A complete performance, retrieval, and VRAM optimization cycle was completed to harden the relational and vector database systems under concurrency.
+
+Optimizations implemented:
+- **Hybrid Retrieval + FTS5 RRF Blending**: Registered FTS5 virtual tables inside SQLite `memory.db` for full-text transcripts and frame OCR data, blended with Qdrant vector retrieval scores using Reciprocal Rank Fusion (RRF).
+- **Summary Vector Indexing**: Encoded theme-synthesized scene summaries into 384-dimensional SentenceTransformer embeddings, routed to explicit FAISS/Qdrant collection targets under dynamic dimension validation checks.
+- **Heartbeat VRAM Allocator**: Programmed a process-safe locking system mapping PID reservations and Heartbeat timestamps to prevent OOM errors on concurrent deep learning steps, routing dynamically to CPU-safe overrides when VRAM thresholds are breached.
+- **Failure Isolation**: Intercepted single-frame load errors in batch CLIP/DINO inference, falling back to individual frame decodes and enforcing strict numpy verification to isolate pipeline failures.
+- **Async DAG Ingestion Loop**: Migrated the orchestrator to an asynchronous DAG process utilizing gather-level concurrency for non-dependent steps, serializing index database writes under asyncio locks to eliminate database locking errors.
+- **CI Test Isolation**: Injected autouse pytest database isolation fixtures, mocking relational SQLite schemas and vector targets to allow clean CI test execution without local directory residue.
+
+## Progressive Chunk Ingestion & Recovery Checkpointing on 2026-06-01
+
+The ingestion loop was evolved from full-file batch ingestion to a timeline-sliced progressive ingestion architecture.
+
+Features implemented:
+- **Sliding Windows**: Added CLI parameters (`--chunk-size` and `--chunk-overlap`) to partition media files deterministically into progressive analysis windows.
+- **Recovery Checkpoints**: Updates to a durable `progressive_ingestion_state.json` track committed window indices. On orchestrator restarts, completed windows are bypassed, resuming from the first uncompleted window.
+- **Deduplication Scene Guard**: Configured the orchestrator to bypass database scene list reuse if a progressive checkpoint file exists, loading the complete scene boundaries from the authoritative segmentation cache instead.
+- **Sequential-Progressive Parity Check**: Validated sequential and progressive ingestion paths on `samples/onboarding_fixture.mp4`, generating `progressive_parity_report.json` to confirm exact database, Qdrant, and KG node alignment.
+
 ## Do Not Investigate First
 
 These are known historical/proving-ground echoes unless a current audit proves
@@ -635,19 +657,7 @@ they are active again:
 
 ## Safe Next Actions
 
-1. Capture or inspect the cleanup manifest in
-   `reports/local_housekeeping/2026-05-20-memory-clean-start/` if working on
-   this local machine.
-2. Confirm local config points to the intended fresh home-memory epoch.
-3. Use the Operator Console Current Scope strip as the preflight check: API
-   `30000`, run source, temporal scope, audio proof, selected browsing target,
-   and read-only mode should be visible before broad ingestion.
-4. Start local LLM support with `scripts/start_vllm_servers.bat` and verify
-   `http://127.0.0.1:38005/v1/models` before LLM-backed scene analysis.
-5. Validate the new CLAP native-crash CPU fallback on the next scene-first or
-   broad ingestion run.
-6. Restart the API process before browser-level retrieval verification if it was
-   already running before the CLAP retrieval encoder patch.
-7. If the current full-run evidence remains acceptable in the Operator Console,
-   start the next personal-memory source in a fresh epoch or deliberate reset
-   scope.
+1. Run the setup installer `GoodQ4All_Setup_1.0.0.exe` to deploy on a clean follower machine (laptop).
+2. Test watchdog folder drop events under progressive chunk parameters.
+3. Validate search blending results via `/api/search/temporal` using the local Retro UI.
+

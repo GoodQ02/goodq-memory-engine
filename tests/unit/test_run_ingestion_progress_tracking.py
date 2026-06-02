@@ -109,6 +109,15 @@ def test_run_updates_and_finishes_progress_tracker(monkeypatch, tmp_path: Path):
         "_process_audio",
         lambda *a, **k: {"path": "scene.wav", "start": 0.0, "end": 1.0, "data": {"transcript": "hello"}},
     )
+
+    async def fake_process_frame_async(*a, **k):
+        return {"path": "frame.jpg", "data": {"caption": "frame"}}
+
+    async def fake_process_audio_async(*a, **k):
+        return {"path": "scene.wav", "start": 0.0, "end": 1.0, "data": {"transcript": "hello"}}
+
+    monkeypatch.setattr(run_ingestion, "_process_frame_async", fake_process_frame_async)
+    monkeypatch.setattr(run_ingestion, "_process_audio_async", fake_process_audio_async)
     monkeypatch.setattr(run_ingestion, "register_scene_bundle", lambda *a, **k: {"vector_points_attempted": 0})
 
     run_ingestion.run(

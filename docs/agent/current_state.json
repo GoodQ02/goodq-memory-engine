@@ -748,6 +748,22 @@
         "faiss_ok": true,
         "sqlite_unique_points": 2
       }
+    },
+    "ingestion_concurrency_optimization_validation_2026_05_31": {
+      "status": "completed",
+      "hybrid_retrieval": "SQLite FTS5 + Qdrant RRF rank fusion",
+      "summary_embeddings": "SentenceTransformer 384-d summary vectors registered with fallback routing",
+      "vram_allocator": "heartbeat reservations + CPU-safe fallbacks",
+      "failure_isolation": "CLIP/DINO batch inference frame error isolation",
+      "async_dag": "asyncio gather step execution + SQLite/FAISS write locks"
+    },
+    "progressive_chunk_ingestion_validation_2026_06_01": {
+      "status": "completed",
+      "sliding_windows": "implemented with deterministic window indices",
+      "checkpointing": "progressive_ingestion_state.json durably tracks committed windows",
+      "recovery_resume": "skips completed windows, verified via test_recovery.py",
+      "deduplication_guard": "bypasses database scene reuse if checkpoint exists",
+      "parity_status": "PASS on samples/onboarding_fixture.mp4"
     }
   },
   "known_historical_echoes": [

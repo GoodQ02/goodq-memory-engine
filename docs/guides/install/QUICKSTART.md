@@ -32,7 +32,7 @@ Use this if you are running or developing directly from the source repository.
 ### 1. Clone and Open the Repo
 
 ```powershell
-git clone <repo_url>
+git clone https://github.com/GoodQ02/goodq4all.git
 cd goodq4all
 ```
 

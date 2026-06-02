@@ -5902,6 +5902,12 @@ def run(
     VERBOSE = verbose
     STEP_TIMEOUT = _resolve_step_timeout_value(step_timeout)
 
+    # Resolve chunk_size and chunk_overlap if they are Typer OptionInfo wrappers (as in direct Python calls/tests)
+    if not isinstance(chunk_size, (int, float)):
+        chunk_size = getattr(chunk_size, 'default', 300.0)
+    if not isinstance(chunk_overlap, (int, float)):
+        chunk_overlap = getattr(chunk_overlap, 'default', 10.0)
+
     base_cfg = load_configs({})
     cfg: Dict[str, Any] = dict(base_cfg) if isinstance(base_cfg, dict) else {}
     cfg['progressive_chunk_size'] = chunk_size
@@ -6624,6 +6630,9 @@ def run(
                             errors=scene_res['error_payload'] or None,
                         )
                         scene_res['persistence'] = persist_res
+                else:
+                    for scene_res in window_results:
+                        scene_res['persistence'] = {'vector_points_attempted': 0, 'status': 'skipped_no_db'}
 
                 if KNOWLEDGE_GRAPH_AVAILABLE and cfg.get('knowledge_graph', {}).get('enabled', True):
                     graph_db_path = _resolve_graph_db_path(cfg).resolve()

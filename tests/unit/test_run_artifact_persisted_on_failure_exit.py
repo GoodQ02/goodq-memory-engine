@@ -95,8 +95,16 @@ def test_run_artifact_written_before_failure_exit(monkeypatch: pytest.MonkeyPatc
     def _raise_audio(*args, **kwargs):
         raise RuntimeError("audio_fail")
 
+    async def _raise_frame_async(*args, **kwargs):
+        raise RuntimeError("frame_fail")
+
+    async def _raise_audio_async(*args, **kwargs):
+        raise RuntimeError("audio_fail")
+
     monkeypatch.setattr(run_ingestion, "_process_frame", _raise_frame)
     monkeypatch.setattr(run_ingestion, "_process_audio", _raise_audio)
+    monkeypatch.setattr(run_ingestion, "_process_frame_async", _raise_frame_async)
+    monkeypatch.setattr(run_ingestion, "_process_audio_async", _raise_audio_async)
 
     typer_mod = importlib.import_module("typer")
     with pytest.raises(typer_mod.Exit):

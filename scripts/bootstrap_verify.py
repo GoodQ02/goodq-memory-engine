@@ -189,6 +189,8 @@ def _run_powershell(command: str) -> subprocess.CompletedProcess[str]:
 
 
 def _inspect_windows_service(name: str) -> Dict[str, str]:
+    if sys.platform != "win32":
+        return {"exists": "false"}
     command = (
         f"$svc = Get-Service -Name '{name}' -ErrorAction SilentlyContinue; "
         "if ($null -eq $svc) { 'exists=false' } "

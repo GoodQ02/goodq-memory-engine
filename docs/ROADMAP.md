@@ -25,6 +25,7 @@ The supported public-preview surface is:
 - scene manifests, temporal indexes, SQLite memory, knowledge graph state, and
   Qdrant vectors as local truth surfaces
 - CPU-safe baseline behavior with optional GPU and WSL acceleration
+- Timeline-sliced progressive chunk ingestion with durable recovery checkpointing and resumption
 - visible failure states for optional enrichments
 - source, docs, configs, manifests, and small examples in Git
 - versioned host-tool and offline payload evidence through release asset

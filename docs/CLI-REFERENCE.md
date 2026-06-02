@@ -35,6 +35,14 @@ python -m cli.run_ingestion --input-dir <path> [OPTIONS]
 - `--force` / `--force-reprocess`
 - `--verbose`
 - `--step-timeout`
+- `--chunk-size` (default `300.0` seconds)
+- `--chunk-overlap` (default `10.0` seconds)
+
+**Progressive Ingestion & Interruption Resumption**
+- **Sliding Windows**: Video files are partitioned into timeline-sliced progressive analysis windows.
+- **Durable Checkpoints**: A state checkpoint `progressive_ingestion_state.json` tracks committed windows.
+- **Interruption Recovery**: If interrupted, the orchestrator resumes from the first uncompleted window index, skipping already-processed segments.
+- **Deduplication Scene Guard**: Bypasses SQLite database scene list rehydration on recovery, loading complete scene boundaries from the scene detection cache instead.
 
 **Current Truth**
 - owns orchestration

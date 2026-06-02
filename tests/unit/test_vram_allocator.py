@@ -146,6 +146,7 @@ def test_run_step_integration_with_vram_allocator_fallback(monkeypatch, tmp_path
     monkeypatch.setenv("GOODQ_TEST_VRAM_ALLOCATOR", "1")
     monkeypatch.setenv("GOODQ_HOST_PROFILE", "GPU_ENHANCED")
     monkeypatch.setenv("GOODQ_REQUIRE_GPU", "0")
+    monkeypatch.delenv("GOODQ_NO_AUTO_GPU", raising=False)
     
     # Mock wait_and_reserve to return False (indicating VRAM limit breached)
     with patch("common.vram_allocator.VRAMAllocator.wait_and_reserve", return_value=False):

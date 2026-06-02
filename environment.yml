@@ -26,6 +26,7 @@ dependencies:
       - sentence-transformers
       - qdrant-client
       - faster-whisper
+      - faiss-cpu
 #
 # Public BASELINE environment only.
 # GPU_ENHANCED uses environment.gpu.yml to add CUDA-backed throughput packages.

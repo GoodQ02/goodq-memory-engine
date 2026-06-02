@@ -6,10 +6,10 @@
   <img src="samples/assets/q-git-square.png" alt="GoodQ4All Logo" width="130" />
 </p>
 
-<h1 align="center">GoodQ4All</h1>
+<h1 align="center">GoodQ4All: Local-First Multimodal AI Memory & Video Intelligence Stack</h1>
 
 <p align="center">
-  <strong>Local Multimodal Video Search, Offline Scene Memory & Private AI Ingestion System for Windows 11</strong>
+  <strong>Offline Video Search, Scene Segmentation, Speech Transcription (Whisper), Speaker Diarization, and SQLite + Qdrant Semantic Search on Windows 11</strong>
 </p>
 
 <p align="center">

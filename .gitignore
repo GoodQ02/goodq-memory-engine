@@ -94,6 +94,8 @@ zenml_store/
 *.backup
 *.backup*
 ~*
+.tmp.driveupload/
+processing/
 
 # ===== WINDOWS =====
 Thumbs.db

@@ -212,6 +212,7 @@ async def list_videos():
                     if metadata.get('processed_date')
                     else None
                 ),
+                phase6_complete=metadata.get('phase6_complete', False),
                 **projected_thumbnail,
             )
             videos.append(video_item)

@@ -138,6 +138,7 @@ class SearchResult(BaseModel):
     scene_context_arbitration: Optional[Dict[str, Any]] = None
     provenance: Optional[Dict[str, Any]] = None
     confidence: Dict[str, Any] = Field(default_factory=default_confidence_payload)
+    phase6_complete: Optional[bool] = None
 
 
 class SearchResponse(BaseModel):
@@ -235,6 +236,7 @@ class VideoListItem(BaseModel):
     thumbnail_available: bool = False
     thumbnail_endpoint: Optional[str] = None
     thumbnail_path_redacted: bool = False
+    phase6_complete: Optional[bool] = None
 
 
 class SystemStatus(BaseModel):

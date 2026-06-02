@@ -549,6 +549,15 @@ def _build_search_result(result: dict, modality: Optional[str] = None) -> Search
     context = _merge_dicts(enrichment.get("context"), result_context)
     provenance = _merge_dicts(enrichment.get("provenance"), result.get("provenance") if isinstance(result.get("provenance"), dict) else None)
     video_id = payload.get("video_id")
+    loader = get_data_loader()
+    phase6_complete = False
+    if video_id:
+        try:
+            metadata = loader.get_video_metadata(str(video_id))
+            phase6_complete = bool(metadata.get('phase6_complete', False))
+        except Exception:
+            pass
+
     clap_meta = enrichment.get("clap_meta")
     safe_clap_meta = _sanitize_read_model_mapping(clap_meta) if isinstance(clap_meta, dict) else None
     audio_vector_proof = _search_audio_vector_proof(payload, enrichment)
@@ -612,6 +621,7 @@ def _build_search_result(result: dict, modality: Optional[str] = None) -> Search
         scene_context_arbitration=enrichment.get("scene_context_arbitration"),
         provenance=_sanitize_read_model_mapping(provenance),
         confidence=_enriched_confidence(result, enrichment),
+        phase6_complete=phase6_complete,
     )
 
 

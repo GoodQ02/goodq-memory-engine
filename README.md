@@ -76,7 +76,7 @@ Following a strict **"proof-backed" system doctrine**, GoodQ4All documents every
     >     ```powershell
     >     Get-FileHash GoodQ4All_Setup_1.0.0.exe
     >     ```
-    >     Expected SHA256 hash: `3FFCEA024C75FA85BA52BD00FDD4BA83FFABF0E4A3720F3750199D9A556A44C6`
+    >     Expected SHA256 hash: `A7AEB97DD3D4060174C3DDA2EDDFF430E365731B93D066CA24160738C39C97BE`
 
     <p align="center">
       <a href="https://github.com/GoodQ02/goodq4all/releases/download/v1.0.0/GoodQ4All_Setup_1.0.0.exe">

@@ -76,7 +76,7 @@ Following a strict **"proof-backed" system doctrine**, GoodQ4All documents every
     >     ```powershell
     >     Get-FileHash GoodQ4All_Setup_1.0.0.exe
     >     ```
-    >     Expected SHA256 hash: `3FFCEA024C75FA85BA52BD00FDD4BA83FFABF0E4A3720F3750199D9A556A44C6`
+    >     Expected SHA256 hash: `A7AEB97DD3D4060174C3DDA2EDDFF430E365731B93D066CA24160738C39C97BE`
 
     <p align="center">
       <a href="https://github.com/GoodQ02/goodq4all/releases/download/v1.0.0/GoodQ4All_Setup_1.0.0.exe">
@@ -139,7 +139,7 @@ If you are developing, customizing the pipeline, or running from source:
 | 4 | Customize local config:<br>edit the bootstrap-created `.env.local` when using local model, cache, or provider settings. | <a href="samples/assets/demo-steps/04-env-local-root.jpg"><img src="samples/assets/demo-steps/04-env-local-root.jpg" alt="Place env local configuration in the repo root" width="300" /></a> |
 | 5 | Validate the bootstrap:<br>`.\scripts\bootstrap_validate.bat` | <a href="samples/assets/demo-steps/05-bootstrap-validator.jpg"><img src="samples/assets/demo-steps/05-bootstrap-validator.jpg" alt="Run the bootstrap validator" width="300" /></a> |
 | 6 | Run the launcher/readiness check:<br>`.\LAUNCH_GOODQ.ps1` | <a href="samples/assets/demo-steps/06-launch-goodq.jpg"><img src="samples/assets/demo-steps/06-launch-goodq.jpg" alt="Launch GoodQ4All readiness checks" width="300" /></a> |
-| 7 | Start Watchdog, then copy one small media file into the import inbox zone (defaults to %USERPROFILE%\GoodQ_Data\import_inbox\):<br>`conda run --no-capture-output -n goodq_core python -m cli.watchdog` | <a href="samples/assets/demo-steps/07-watchdog-notes.jpg"><img src="samples/assets/demo-steps/07-watchdog-observes.jpg" alt="Watchdog observes the imported media file" width="300" /></a> |
+| 7 | Start Watchdog, then copy one small media file into the import inbox zone (defaults to %USERPROFILE%\GoodQ_Data\import_inbox\):<br>`conda run --no-capture-output -n goodq_core python -m cli.watchdog` | <a href="samples/assets/demo-steps/07-watchdog-observes.jpg"><img src="samples/assets/demo-steps/07-watchdog-observes.jpg" alt="Watchdog observes the imported media file" width="300" /></a> |
 | 8 | Start the API and inspect proof:<br>`conda run --no-capture-output -n goodq_core python -m api.server` | <a href="samples/assets/demo-steps/08-proof-recorded.jpg"><img src="samples/assets/demo-steps/08-proof-recorded.jpg" alt="Ingestion completes and proof is recorded" width="300" /></a> |
 
 </details>

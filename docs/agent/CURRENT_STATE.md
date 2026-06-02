@@ -98,19 +98,19 @@ Pre-clean audit found and cleared:
 - Prior filesystem epochs were removed except for a small
   `epoch_2025_12_22` log stub held open by the Qdrant Windows service.
 - Active API status on port `30000` is bound to the
-  `epoch_2026_05_29_family_clean_01` epoch. It currently reports the onboarding
+  `epoch_2026_06_02_family_clean_01` epoch. It currently reports the onboarding
   verification run (1 video, 1 scene) under a completely fresh, wiped blank slate.
 
 Latest full home-memory validation epoch:
 
-- `epoch_2026_05_29_family_clean_01`
+- `epoch_2026_06_02_family_clean_01`
 
 The active validation epoch uses these Qdrant collections:
 
-- `goodq_clip_epoch_2026_05_29_family_clean_01`
-- `goodq_dino_epoch_2026_05_29_family_clean_01`
-- `goodq_text_epoch_2026_05_29_family_clean_01`
-- `goodq_audio_epoch_2026_05_29_family_clean_01`
+- `goodq_clip_epoch_2026_06_02_family_clean_01`
+- `goodq_dino_epoch_2026_06_02_family_clean_01`
+- `goodq_text_epoch_2026_06_02_family_clean_01`
+- `goodq_audio_epoch_2026_06_02_family_clean_01`
 
 This epoch now contains runtime fallback, WSL audio, sentiment, entity, Qdrant,
 FAISS, Operator Console freshness validation, and runtime problem-scope

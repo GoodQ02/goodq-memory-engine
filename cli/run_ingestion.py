@@ -5201,6 +5201,8 @@ async def _process_frame_async(
     scene_num: int = 1,
     total_scenes: int = 1,
 ) -> Dict[str, Any]:
+    step_timings = {}
+    extract_start = time.perf_counter()
     frame_path = await asyncio.to_thread(
         _extract_keyframe,
         ffmpeg,
@@ -5210,6 +5212,7 @@ async def _process_frame_async(
         scene_id=scene_id,
         video_id=video_hash,
     )
+    step_timings['extract_keyframe'] = time.perf_counter() - extract_start
     
     scene_index = scene.get('index')
     duration = float(scene.get('duration', 0.0) or 0.0)
@@ -5247,7 +5250,10 @@ async def _process_frame_async(
                 }
             )
         step_payload = dict(item)
-        return await _run_step_async(env_name, step_name, step_payload, cfg_json)
+        t_start = time.perf_counter()
+        res = await _run_step_async(env_name, step_name, step_payload, cfg_json)
+        step_timings[step_name] = time.perf_counter() - t_start
+        return res
 
     step_calls = [
         run_frame_step('goodq_image_caption', 'image_ocr'),
@@ -5321,7 +5327,9 @@ async def _process_frame_async(
         }
         
         async with faiss_write_lock:
+            embed_start = time.perf_counter()
             text_embed_res = await _run_step_async('goodq_text_embed', 'text_embed', text_payload, cfg_json)
+            step_timings['text_embed'] = time.perf_counter() - embed_start
             
         if isinstance(text_embed_res, dict):
             status = text_embed_res.get("status")
@@ -5339,7 +5347,8 @@ async def _process_frame_async(
         'path': str(frame_path),
         'timestamp': frame_timestamp,
         'data': item,
-        'errors': step_errors if step_errors else None
+        'errors': step_errors if step_errors else None,
+        'step_timings': step_timings
     }
 
 
@@ -5358,6 +5367,7 @@ async def _process_audio_async(
     scene_num: int = 1,
     total_scenes: int = 1,
 ) -> Optional[Dict[str, Any]]:
+    extract_start = time.perf_counter()
     audio_path = await asyncio.to_thread(
         _extract_audio_chunk,
         ffmpeg,
@@ -5367,6 +5377,8 @@ async def _process_audio_async(
         scene_id=scene_id,
         video_id=video_hash,
     )
+    step_timings = {}
+    step_timings['extract_audio_chunk'] = time.perf_counter() - extract_start
     
     if audio_path is None:
         return None
@@ -5442,7 +5454,10 @@ async def _process_audio_async(
                 }
             )
         step_payload = dict(item)
-        return await _run_step_async(env_name, step_name, step_payload, cfg_json)
+        res = await _run_step_async(env_name, step_name, step_payload, cfg_json)
+        if isinstance(res, dict) and 'duration_seconds' in res:
+            step_timings[step_name] = res['duration_seconds']
+        return res
 
     def log_unified_audio_attempt(
         result_payload: Optional[Dict[str, Any]],
@@ -5605,7 +5620,9 @@ async def _process_audio_async(
             prior_require_wsl_audio = os.environ.get('GOODQ_REQUIRE_WSL_AUDIO')
             os.environ['GOODQ_REQUIRE_WSL_AUDIO'] = '0'
             try:
+                local_start = time.perf_counter()
                 local_result = await asyncio.to_thread(local_audio_transcribe, local_item, cfg_payload)
+                step_timings['audio_transcribe_local'] = time.perf_counter() - local_start
             finally:
                 if prior_require_wsl_audio is None:
                     os.environ.pop('GOODQ_REQUIRE_WSL_AUDIO', None)
@@ -5688,6 +5705,7 @@ async def _process_audio_async(
                 unified_started = time.perf_counter()
                 unified_result = await asyncio.to_thread(audio_unified_wsl2, str(audio_path), scene_id=scene_id, duration=end-start)
                 unified_duration_ms = (time.perf_counter() - unified_started) * 1000.0
+                step_timings['audio_unified_wsl2'] = unified_duration_ms / 1000.0
                 
                 if isinstance(unified_result, dict):
                     item.update(unified_result)
@@ -5819,7 +5837,9 @@ async def _process_audio_async(
         }
         
         async with faiss_write_lock:
+            text_embed_start = time.perf_counter()
             text_embed_res = await _run_step_async('goodq_text_embed', 'text_embed', text_payload, cfg_json)
+            step_timings['text_embed'] = time.perf_counter() - text_embed_start
             
         if isinstance(text_embed_res, dict) and text_embed_res.get("status") == "ok":
             embed_outputs = text_embed_res.get("outputs", {})
@@ -5832,6 +5852,7 @@ async def _process_audio_async(
         'start': start,
         'end': end,
         'data': item,
+        'step_timings': step_timings,
     }
 
 
@@ -6374,6 +6395,7 @@ def run(
                 frame_error_raw: Optional[str] = None
                 frame_error_step: Optional[str] = None
                 frame_error_env: Optional[str] = None
+                frame_processing_error: Optional[str] = None
                 audio_error: Optional[str] = None
 
                 force = cfg.get('force_reprocess', False)
@@ -6517,7 +6539,7 @@ def run(
                             if kind == 'frame':
                                 frame_info = task_res
                                 if isinstance(frame_info, dict) and frame_info.get('errors'):
-                                    frame_error = "; ".join(frame_info['errors']) if isinstance(frame_info['errors'], list) else str(frame_info['errors'])
+                                    frame_processing_error = "; ".join(frame_info['errors']) if isinstance(frame_info['errors'], list) else str(frame_info['errors'])
                             else:
                                 audio_info = task_res
                                 audio_data_check = audio_info.get('data', {}) if isinstance(audio_info, dict) else {}
@@ -6579,6 +6601,8 @@ def run(
                         error_payload['frame_step'] = frame_error_step
                     if frame_error_env:
                         error_payload['frame_env'] = frame_error_env
+                if frame_processing_error:
+                    error_payload['frame_processing'] = frame_processing_error
                 if audio_error:
                     error_payload['audio'] = audio_error
 
@@ -6601,14 +6625,31 @@ def run(
                 if w_idx <= last_completed_window_idx and not force_reprocess:
                     continue
                 
+                window_start_time = time.perf_counter()
+                
                 window_scenes = grouped_scenes[w_idx]
                 typer.echo(f"\n[WINDOW {w_idx}] Processing progressive window index {w_idx} with {len(window_scenes)} scenes...")
                 
                 scene_tasks = [process_scene(idx + 1, s) for idx, s in enumerate(window_scenes)]
                 window_results = await asyncio.gather(*scene_tasks, return_exceptions=False)
                 
+                audio_timings = {}
+                frame_timings = {}
+                for scene_res in window_results:
+                    scene_idx = scene_res['scene'].get('index')
+                    s_id = scene_res['scene_id']
+                    if scene_res.get('audio_info') and isinstance(scene_res['audio_info'], dict):
+                        a_timings = scene_res['audio_info'].get('step_timings')
+                        if isinstance(a_timings, dict):
+                            audio_timings[f"scene_{scene_idx}_id_{s_id}"] = a_timings
+                    if scene_res.get('frame_info') and isinstance(scene_res['frame_info'], dict):
+                        f_timings = scene_res['frame_info'].get('step_timings')
+                        if isinstance(f_timings, dict):
+                            frame_timings[f"scene_{scene_idx}_id_{s_id}"] = f_timings
+
                 typer.echo(f"[WINDOW {w_idx}] Committing database transactions staged for window index {w_idx}...")
                 
+                sqlite_start = time.perf_counter()
                 db_path = (cfg.get("paths", {}) or {}).get("db_path")
                 if db_path:
                     for scene_res in window_results:
@@ -6633,7 +6674,9 @@ def run(
                 else:
                     for scene_res in window_results:
                         scene_res['persistence'] = {'vector_points_attempted': 0, 'status': 'skipped_no_db'}
+                sqlite_duration = time.perf_counter() - sqlite_start
 
+                kg_start = time.perf_counter()
                 if KNOWLEDGE_GRAPH_AVAILABLE and cfg.get('knowledge_graph', {}).get('enabled', True):
                     graph_db_path = _resolve_graph_db_path(cfg).resolve()
                     graph_db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -6665,6 +6708,7 @@ def run(
                                     logger.warning(f"[WINDOW {w_idx}] KG update failed for scene {scene_res['scene_id']}: {kg_err}")
                     finally:
                         kg_instance.__exit__(None, None, None)
+                kg_duration = time.perf_counter() - kg_start
 
                 for scene_res in window_results:
                     persist_result = scene_res['persistence']
@@ -6791,6 +6835,7 @@ def run(
 
                     scene_outputs.append(scene_record)
 
+                manifest_start = time.perf_counter()
                 scene_manifest = {
                     'video_id': video_hash,
                     'video_path': str(video_path),
@@ -6837,6 +6882,7 @@ def run(
                     scene_manifest_path,
                     _merge_prior_phase6_manifest_state(scene_manifest, existing_manifest),
                 )
+                manifest_duration = time.perf_counter() - manifest_start
 
                 phase6_item = {
                     'id': video_hash,
@@ -6855,9 +6901,14 @@ def run(
                 manifest_updated = False
                 temporal_index_updated = False
 
+                p6a_duration = 0.0
+                p6b_duration = 0.0
+
                 if phase6_enabled:
                     try:
+                        p6a_start = time.perf_counter()
                         embeddings_result = _run_step('goodq_image_caption', 'scene_visual_embeddings', phase6_item, cfg_json)
+                        p6a_duration = time.perf_counter() - p6a_start
                         if isinstance(embeddings_result, dict) and embeddings_result.get('phase6_status') == 'complete':
                             vectors_committed = True
                             manifest_updated = True
@@ -6867,11 +6918,51 @@ def run(
                         logger.warning(f"[WINDOW {w_idx}] Phase 6a incremental run failed: {p6a_err}")
 
                     try:
+                        p6b_start = time.perf_counter()
                         harmonization_result = _run_step('goodq_core', 'cross_modal_harmonization', phase6_item, cfg_json)
+                        p6b_duration = time.perf_counter() - p6b_start
                         if isinstance(harmonization_result, dict) and harmonization_result.get('harmonization_status') != 'skipped':
                             temporal_index_updated = True
                     except Exception as p6b_err:
                         logger.warning(f"[WINDOW {w_idx}] Phase 6b incremental run failed: {p6b_err}")
+
+                window_total_duration = time.perf_counter() - window_start_time
+
+                # Write progressive ingestion timings
+                timings_path = processing_dir / 'video' / 'progressive_ingestion_timings.json'
+                timings_data = {
+                    'video_id': video_hash,
+                    'video_path': str(video_path),
+                    'windows': {}
+                }
+                if timings_path.exists():
+                    try:
+                        existing_timings = json.loads(timings_path.read_text(encoding='utf-8'))
+                        if isinstance(existing_timings, dict):
+                            timings_data['windows'] = existing_timings.get('windows') or {}
+                    except Exception as e:
+                        logger.warning(f"Failed to load existing timings: {e}")
+                
+                timings_data['windows'][str(w_idx)] = {
+                    'window_index': w_idx,
+                    'window_start': w_idx * step_val,
+                    'window_end': (w_idx * step_val) + chunk_size_val,
+                    'timing_seconds': {
+                        'audio_processing': audio_timings,
+                        'frame_processing': frame_timings,
+                        'sqlite_persistence': sqlite_duration,
+                        'knowledge_graph': kg_duration,
+                        'phase6a_visual_embeddings': p6a_duration,
+                        'phase6b_cross_modal_harmonization': p6b_duration,
+                        'manifest_write': manifest_duration,
+                    },
+                    'total_window_duration_seconds': window_total_duration,
+                }
+                
+                try:
+                    atomic_write_json(timings_path, timings_data)
+                except Exception as e:
+                    logger.warning(f"Failed to write progressive ingestion timings: {e}")
 
                 state_record = {
                     'run_id': run_id,
@@ -7047,7 +7138,9 @@ def run(
     # Report errors
     total_scenes = 0
     scenes_with_errors = 0
+    scenes_with_critical_errors = 0
     frame_errors = 0
+    frame_processing_errors = 0
     audio_errors = 0
     
     for result in results:
@@ -7056,8 +7149,12 @@ def run(
             errors = scene.get('errors', {})
             if errors:
                 scenes_with_errors += 1
+                if 'frame' in errors or 'audio' in errors:
+                    scenes_with_critical_errors += 1
                 if 'frame' in errors:
                     frame_errors += 1
+                if 'frame_processing' in errors:
+                    frame_processing_errors += 1
                 if 'audio' in errors:
                     audio_errors += 1
 
@@ -7068,15 +7165,18 @@ def run(
     
     if scenes_with_errors > 0:
         error_rate = (scenes_with_errors / total_scenes * 100) if total_scenes > 0 else 0
+        critical_error_rate = (scenes_with_critical_errors / total_scenes * 100) if total_scenes > 0 else 0
         typer.echo(f'\n[WARNING] Extraction errors occurred:', err=True)
         typer.echo(f'  Total scenes: {total_scenes}', err=True)
         typer.echo(f'  Scenes with errors: {scenes_with_errors} ({error_rate:.1f}%)', err=True)
         typer.echo(f'  Frame extraction errors: {frame_errors}', err=True)
+        if frame_processing_errors > 0:
+            typer.echo(f'  Frame processing errors (downstream): {frame_processing_errors}', err=True)
         typer.echo(f'  Audio extraction errors: {audio_errors}', err=True)
         
-        # Fail if more than 50% of scenes have errors
-        if error_rate > 50:
-            typer.echo(f'\n[CRITICAL] Over 50% of scenes failed extraction - this indicates a serious problem!', err=True)
+        # Fail if more than 50% of scenes have critical extraction errors
+        if critical_error_rate > 50:
+            typer.echo(f'\n[CRITICAL] Over 50% of scenes failed critical extraction - this indicates a serious problem!', err=True)
             typer.echo(f'Common causes:', err=True)
             typer.echo(f'  - Video file was deleted or moved during processing', err=True)
             typer.echo(f'  - Incorrect file path', err=True)

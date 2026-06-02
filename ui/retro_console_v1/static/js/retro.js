@@ -680,7 +680,11 @@
     state.videos.forEach((video) => {
       const option = document.createElement("option");
       option.value = video.video_id || video.id;
-      option.textContent = video.title || video.video_id || video.id;
+      let suffix = "";
+      if (video.phase6_complete === false) {
+        suffix = " [PARTIAL INDEX]";
+      }
+      option.textContent = (video.title || video.video_id || video.id) + suffix;
       if (video.video_id === state.activeVideoId || video.id === state.activeVideoId) {
         option.selected = true;
       }
@@ -805,6 +809,7 @@
           audio_emotion: found ? found.audio_emotion : "calm",
           content_state: found ? found.content_state : "signal",
           transcript_entity_disagreements: found ? found.transcript_entity_disagreements : [],
+          phase6_complete: res.phase6_complete,
           temporal_distance_from_previous: typeof res.temporal_distance_from_previous === "number" ? res.temporal_distance_from_previous : 0.0,
           semantic_similarity_from_previous: typeof res.semantic_similarity_from_previous === "number" ? res.semantic_similarity_from_previous : 0.0
         };
@@ -816,7 +821,11 @@
           const isMatched = state.searchResults.some((res) => {
             const rId = String(res.scene_id || "").trim().toLowerCase();
             const sId = String(scene.id || "").trim().toLowerCase();
-            return rId && sId && rId === sId;
+            if (rId && sId && rId === sId) {
+              scene.phase6_complete = res.phase6_complete;
+              return true;
+            }
+            return false;
           });
           if (!isMatched) return false;
         }
@@ -926,6 +935,20 @@
       } else {
         cardId.textContent = `SCENE #${scene.id}`;
       }
+      
+      const activeVideo = state.videos.find(v => (v.video_id || v.id) === state.activeVideoId);
+      const isVideoPartial = activeVideo && activeVideo.phase6_complete === false;
+      const isPartial = (scene.phase6_complete === false) || (scene.phase6_complete === undefined && isVideoPartial);
+      if (isPartial) {
+        const partialBadge = document.createElement("span");
+        partialBadge.className = "ingestion-active-badge blink";
+        partialBadge.style.fontSize = "9px";
+        partialBadge.style.padding = "1px 4px";
+        partialBadge.style.marginLeft = "6px";
+        partialBadge.textContent = "[PARTIAL INDEX]";
+        cardId.appendChild(partialBadge);
+      }
+      
       body.appendChild(cardId);
 
       const summary = document.createElement("p");
@@ -2281,6 +2304,18 @@
   // Fetch and Load selected Video scenes
   async function loadDataset(videoId) {
     state.activeVideoId = videoId;
+    
+    // Toggle active ingestion / partial index badge
+    const activeVideo = state.videos.find(v => (v.video_id || v.id) === videoId);
+    const badge = document.getElementById("active-ingestion-badge");
+    if (badge) {
+      if (activeVideo && activeVideo.phase6_complete === false) {
+        badge.hidden = false;
+      } else {
+        badge.hidden = true;
+      }
+    }
+
     state.searchResults = [];
     state.selectedSceneId = null;
     state.selectedEntity = null;

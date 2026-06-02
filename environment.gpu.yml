@@ -27,6 +27,7 @@ dependencies:
       - sentence-transformers
       - qdrant-client
       - faster-whisper
+      - faiss-cpu
 #
 # Public GPU_ENHANCED environment overlay.
 # This keeps the shared goodq_core name but allows bootstrap_install.py

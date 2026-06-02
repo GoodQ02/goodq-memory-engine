@@ -38,20 +38,20 @@
     "conda_env": "goodq_core"
   },
   "paths": {
-    "log_dir": "L:\\_DATA/GoodQ_Data/epochs/epoch_onboarding/logs",
-    "output_directory": "L:\\_DATA/GoodQ_Data/epochs/epoch_onboarding/output",
-    "db_dir": "L:\\_DATA/GoodQ_Data/epochs/epoch_onboarding",
-    "db_path": "L:\\_DATA/GoodQ_Data/epochs/epoch_onboarding/memory.db",
-    "knowledge_graph_db": "L:\\_DATA/GoodQ_Data/epochs/epoch_onboarding/knowledge_graph.db",
-    "faiss_dir": "L:\\_DATA/GoodQ_Data/epochs/epoch_onboarding/faiss",
-    "faiss_audio_path": "L:\\_DATA/GoodQ_Data/epochs/epoch_onboarding/faiss/goodq_audio_epoch_onboarding.index",
+    "log_dir": "L:\\_DATA/GoodQ_Data/epochs/epoch_2026_06_02_family_clean_01/logs",
+    "output_directory": "L:\\_DATA/GoodQ_Data/epochs/epoch_2026_06_02_family_clean_01/output",
+    "db_dir": "L:\\_DATA/GoodQ_Data/epochs/epoch_2026_06_02_family_clean_01",
+    "db_path": "L:\\_DATA/GoodQ_Data/epochs/epoch_2026_06_02_family_clean_01/memory.db",
+    "knowledge_graph_db": "L:\\_DATA/GoodQ_Data/epochs/epoch_2026_06_02_family_clean_01/knowledge_graph.db",
+    "faiss_dir": "L:\\_DATA/GoodQ_Data/epochs/epoch_2026_06_02_family_clean_01/faiss",
+    "faiss_audio_path": "L:\\_DATA/GoodQ_Data/epochs/epoch_2026_06_02_family_clean_01/faiss/goodq_audio_epoch_2026_06_02_family_clean_01.index",
     "qdrant_storage": "L:\\_DATA/qdrant_storage",
-    "watchdog_state_file": "L:\\_DATA/GoodQ_Data/epochs/epoch_onboarding/logs/watchdog_state.json",
-    "watchdog_lock_file": "L:\\_DATA/GoodQ_Data/epochs/epoch_onboarding/logs/watchdog.lock",
+    "watchdog_state_file": "L:\\_DATA/GoodQ_Data/epochs/epoch_2026_06_02_family_clean_01/logs/watchdog_state.json",
+    "watchdog_lock_file": "L:\\_DATA/GoodQ_Data/epochs/epoch_2026_06_02_family_clean_01/logs/watchdog.lock",
     "config_dir": "configs",
     "data_root": "L:\\_DATA/GoodQ_Data",
     "import_inbox": "L:\\_DATA/GoodQ_Data/import_inbox",
-    "processing": "L:\\_DATA/GoodQ_Data/epochs/epoch_onboarding/processing",
+    "processing": "L:\\_DATA/GoodQ_Data/epochs/epoch_2026_06_02_family_clean_01/processing",
     "processed": "L:\\_DATA/GoodQ_Data/processed",
     "failed": "L:\\_DATA/GoodQ_Data/failed",
     "models_cache": "L:\\_DATA/models",
@@ -59,14 +59,14 @@
     "audio_subdir": "audio",
     "video_subdir": "video",
     "metadata_subdir": "metadata",
-    "csv_path": "L:\\_DATA/GoodQ_Data/epochs/epoch_onboarding/logs/system_metrics.csv",
+    "csv_path": "L:\\_DATA/GoodQ_Data/epochs/epoch_2026_06_02_family_clean_01/logs/system_metrics.csv",
     "nas_path": "L:\\_DATA/GoodQ_Data/archive",
-    "faiss_index_path": "L:\\_DATA/GoodQ_Data/epochs/epoch_onboarding/faiss/text/faiss_text.index",
-    "faiss_clip_path": "L:\\_DATA/GoodQ_Data/epochs/epoch_onboarding/faiss/clip/faiss_clip.index",
-    "faiss_dino_path": "L:\\_DATA/GoodQ_Data/epochs/epoch_onboarding/faiss/dino/faiss_dino.index",
-    "clip_id_map_db": "L:\\_DATA/GoodQ_Data/epochs/epoch_onboarding/faiss/clip/clip_id_map.sqlite",
-    "dino_id_map_db": "L:\\_DATA/GoodQ_Data/epochs/epoch_onboarding/faiss/dino/dino_id_map.sqlite",
-    "clap_id_map_db": "L:\\_DATA/GoodQ_Data/epochs/epoch_onboarding/faiss/audio/clap_id_map.sqlite",
+    "faiss_index_path": "L:\\_DATA/GoodQ_Data/epochs/epoch_2026_06_02_family_clean_01/faiss/text/faiss_text.index",
+    "faiss_clip_path": "L:\\_DATA/GoodQ_Data/epochs/epoch_2026_06_02_family_clean_01/faiss/clip/faiss_clip.index",
+    "faiss_dino_path": "L:\\_DATA/GoodQ_Data/epochs/epoch_2026_06_02_family_clean_01/faiss/dino/faiss_dino.index",
+    "clip_id_map_db": "L:\\_DATA/GoodQ_Data/epochs/epoch_2026_06_02_family_clean_01/faiss/clip/clip_id_map.sqlite",
+    "dino_id_map_db": "L:\\_DATA/GoodQ_Data/epochs/epoch_2026_06_02_family_clean_01/faiss/dino/dino_id_map.sqlite",
+    "clap_id_map_db": "L:\\_DATA/GoodQ_Data/epochs/epoch_2026_06_02_family_clean_01/faiss/audio/clap_id_map.sqlite",
     "ingest_requests": "L:\\_DATA/GoodQ_Data/ingest_requests"
   },
   "config": {
@@ -84,11 +84,11 @@
     },
     "vllm_url": "http://127.0.0.1:38005/v1",
     "vllm_model": "/home/jdben/models/Qwen2.5-0.5B-Instruct",
-    "ollama_url": "http://localhost:31434/v1",
-    "ollama_model": "phi4:latest"
+    "ollama_url": "http://127.0.0.1:31434/v1",
+    "ollama_model": "llama3.2:latest"
   },
   "tts": {
-    "elevenlabs_voice_id": "example_voice_id",
+    "elevenlabs_voice_id": "4YYIPFl9wE5c4L2eu2Gb",
     "piper_voice": "joe",
     "last_used_voice": "moviephone"
   },
@@ -126,14 +126,14 @@
     "enabled": true,
     "host": "http://127.0.0.1:6333",
     "collections": {
-      "clip": "goodq_clip_epoch_onboarding",
-      "dino": "goodq_dino_epoch_onboarding",
-      "text": "goodq_text_epoch_onboarding",
-      "audio": "goodq_audio_epoch_onboarding"
+      "clip": "goodq_clip_epoch_2026_06_02_family_clean_01",
+      "dino": "goodq_dino_epoch_2026_06_02_family_clean_01",
+      "text": "goodq_text_epoch_2026_06_02_family_clean_01",
+      "audio": "goodq_audio_epoch_2026_06_02_family_clean_01"
     },
     "embedding_dims": {
-      "clip": 512,
-      "dino": 768,
+      "clip": 768,
+      "dino": 1024,
       "text": 384,
       "audio": 512
     }
@@ -215,8 +215,8 @@
     "frame_sampling_strategy": "uniform",
     "frames_per_scene": 3,
     "max_gpu_batch_size": 8,
-    "clip_collection": "goodq_clip_epoch_onboarding",
-    "dino_collection": "goodq_dino_epoch_onboarding",
+    "clip_collection": "goodq_clip_epoch_2026_06_02_family_clean_01",
+    "dino_collection": "goodq_dino_epoch_2026_06_02_family_clean_01",
     "retrieval": {
       "enable": true,
       "fusion_weights": {
@@ -259,10 +259,18 @@
     "verbose": true,
     "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
   },
+  "memory": {
+    "routing": {
+      "quantization_enabled": false,
+      "quantization_shadow_mode": true
+    }
+  },
+  "progressive_chunk_size": 300.0,
+  "progressive_chunk_overlap": 10.0,
   "run": {
-    "id": "c52b9463-007c-4dc5-8f3b-979a18b28f5f",
+    "id": "320effa8-2c9d-4499-939f-2c78693c4092",
     "pipeline": "scene_ingest_cli",
-    "started_at": "2026-05-25T12:37:00.905560+00:00",
+    "started_at": "2026-06-02T10:06:07.134681+00:00",
     "timer_unit": "ms",
     "healer_retry_count": 0,
     "healer_retry_by_step": {},
@@ -274,7 +282,7 @@
     "knowledge_graph_status": "active",
     "profile_override": null,
     "profile_override_reason": null,
-    "git_sha": "af76bbf6c72e30c87f45319f04b2dc3059b4f2c6",
+    "git_sha": "9ff5f0faec5d221323720c6a9a2078d43b81e0aa",
     "audio_runtime_contract": {
       "mode": "auto",
       "requested_wsl": true,

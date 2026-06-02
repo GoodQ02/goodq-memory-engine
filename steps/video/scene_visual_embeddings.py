@@ -63,17 +63,18 @@ def _mirror_scene_vector_status(
 ) -> None:
     for scene in scenes:
         scene_id = scene.get('id', scene.get('scene_id', 0))
-        scene_points_attempted = int(
-            (1 if scene_id in pooled_clip else 0) +
-            (1 if scene_id in pooled_dino else 0)
-        )
-        scene['vector_points_attempted'] = scene_points_attempted
-        if scene_points_attempted <= 0:
-            scene['qdrant_ok'] = 'not_attempted'
-            scene['faiss_ok'] = 'not_attempted'
-        else:
-            scene['qdrant_ok'] = bool(qdrant_ok is True)
-            scene['faiss_ok'] = faiss_ok
+        if scene_id in pooled_clip or scene_id in pooled_dino:
+            scene_points_attempted = int(
+                (1 if scene_id in pooled_clip else 0) +
+                (1 if scene_id in pooled_dino else 0)
+            )
+            scene['vector_points_attempted'] = scene_points_attempted
+            if scene_points_attempted <= 0:
+                scene['qdrant_ok'] = 'not_attempted'
+                scene['faiss_ok'] = 'not_attempted'
+            else:
+                scene['qdrant_ok'] = bool(qdrant_ok is True)
+                scene['faiss_ok'] = faiss_ok
 
 
 def _write_scene_faiss_points(
@@ -344,7 +345,25 @@ def run_scene_visual_embeddings(item: Dict[str, Any], cfg: Dict[str, Any]) -> Di
         logger.warning("No scenes found in manifest")
         return {"video_id": video_id, "phase6_status": "skipped", "reason": "no_scenes"}
     
-    logger.info(f"[PHASE6] Processing {len(scenes)} scenes for video: {video_id}")
+    force_reprocess = cfg.get('force_reprocess', False)
+    if not force_reprocess:
+        scenes_to_process = [s for s in scenes if s.get('qdrant_ok') != True]
+    else:
+        scenes_to_process = list(scenes)
+
+    if not scenes_to_process:
+        logger.info("[PHASE6] All scenes already processed incrementally (qdrant_ok is True). Skipping extraction and upserts.")
+        return {
+            "video_id": video_id,
+            "phase6_status": "complete",
+            "scenes_processed": 0,
+            "clip_embeddings": 0,
+            "dino_embeddings": 0,
+            "total_frames": 0,
+            "scene_manifest_path": scene_manifest_path,
+        }
+
+    logger.info(f"[PHASE6] Processing {len(scenes_to_process)} scenes for video: {video_id}")
     try:
         # === STEP 1: Extract Frames ===
         extraction_strategy = phase6_cfg.get('frame_sampling_strategy', 'uniform')
@@ -354,7 +373,7 @@ def run_scene_visual_embeddings(item: Dict[str, Any], cfg: Dict[str, Any]) -> Di
         
         scene_frames = extract_scene_frames(
             video_path=video_path,
-            scenes=scenes,
+            scenes=scenes_to_process,
             output_base_dir=os.path.join(processing_dir, 'video'),
             strategy=extraction_strategy,
             frames_per_scene=frames_per_scene,

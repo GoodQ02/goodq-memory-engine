@@ -2091,15 +2091,20 @@ def _apply_scene_context_llm(
     scene_lookup: Dict[str, Dict[str, Any]],
     cfg: Dict[str, Any],
 ) -> None:
+    force = cfg.get("force_reprocess", False)
     for segment in unified_segments:
-        segment["scene_context_llm"] = None
-        segment["scene_context_epistemic"] = None
-        segment["scene_context_arbitration"] = None
+        if force:
+            segment["scene_context_llm"] = None
+            segment["scene_context_epistemic"] = None
+            segment["scene_context_arbitration"] = None
 
     if not SCENE_CONTEXT_LLM_AVAILABLE or not _scene_context_llm_enabled(cfg):
         return
 
     for segment in unified_segments:
+        if not force and segment.get("scene_context_llm") is not None:
+            continue
+
         if _normalize_content_state(segment.get("content_state")) != "signal":
             continue
 
@@ -2974,9 +2979,9 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
             'sentiment_meta': sentiment_meta,
             'emotion_status': scene_audio_payload.get('emotion_status'),
             'emotion_error': scene_audio_payload.get('emotion_error'),
-            'scene_context_llm': None,
-            'scene_context_epistemic': None,
-            'scene_context_arbitration': None,
+            'scene_context_llm': scene.get('scene_context_llm'),
+            'scene_context_epistemic': scene.get('scene_context_epistemic'),
+            'scene_context_arbitration': scene.get('scene_context_arbitration'),
             'speaker_count': candidate_visibility['speaker_count'],
             'dominant_speaker_id': candidate_visibility['dominant_speaker_id'],
             'dominant_speaker_share': candidate_visibility['dominant_speaker_share'],

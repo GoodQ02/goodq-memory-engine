@@ -88,7 +88,7 @@ class FileLock:
                 os.close(fd)
                 self.has_lock = True
                 return self
-            except FileExistsError:
+            except (FileExistsError, PermissionError):
                 # Check for stale lock file (>30 seconds)
                 try:
                     if time.time() - LOCK_PATH.stat().st_mtime > 30.0:

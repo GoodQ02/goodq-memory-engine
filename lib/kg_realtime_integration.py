@@ -1689,6 +1689,7 @@ def update_kg_for_scene(
     video_id: str,
     video_path: str,
     cfg: Optional[Dict[str, Any]] = None,
+    kg: Optional[KnowledgeGraph] = None,
 ) -> Dict[str, Any]:
     graph_db_path = _resolve_graph_db_path(cfg).resolve()
     graph_db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1697,7 +1698,13 @@ def update_kg_for_scene(
     end_time = float(scene_data.get("end_time", scene_data.get("end", start_time)) or start_time)
     duration = max(0.0, end_time - start_time)
 
-    with KnowledgeGraph(str(graph_db_path)) as kg:
+    local_kg = False
+    if kg is None:
+        kg = KnowledgeGraph(str(graph_db_path))
+        kg.__enter__()
+        local_kg = True
+
+    try:
         canonical_video_id = str(video_id)
         speaker_ids = _extract_speaker_ids(scene_data)
         raw_speaker_count = scene_data.get("speaker_count")
@@ -1757,6 +1764,13 @@ def update_kg_for_scene(
 
         rel_counts = build_scene_relationships(kg, min_cooccurrence=2)
         stats = kg.get_statistics()
+        
+        if not local_kg:
+            kg.conn.commit()
+
+    finally:
+        if local_kg:
+            kg.__exit__(None, None, None)
 
     return {
         "status": "success",

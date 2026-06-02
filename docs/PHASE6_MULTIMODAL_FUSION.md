@@ -81,6 +81,13 @@ Phase 6 consumes persisted scene artifacts, not ad hoc in-memory guesses.
 
 When WSL audio is enabled, Phase 6 consumes WSL-produced transcript/diarization/signature outputs through the same manifest contract. When Windows-local audio is used, the same downstream contract still applies.
 
+### Progressive Ingestion Processing
+
+To support timeline-sliced progressive ingestion, Phase 6 steps operate in deterministic sliding windows. Under this framework:
+- Visual embedding generation (`Phase 6a`) and cross-modal harmonization (`Phase 6b`) execute progressively per window index, enabling rapid recovery from interruptions.
+- The pipeline skips vector calculation and Qdrant/FAISS insertion for scenes that are already committed (`qdrant_ok == true`) to minimize VRAM and compute overhead.
+- Cross-modal harmonization incrementally updates the database and manifest, committing the final merged `temporal_index.json` upon video ingestion completion.
+
 ---
 
 ## Canonical Outputs

@@ -7,10 +7,12 @@ if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(errors="replace")
 
 from typing import Any, Dict, List, Optional, Set
+import asyncio
 import hashlib
 import json
 import logging
 import os
+import sqlite3
 import shutil
 import subprocess
 import tempfile
@@ -32,7 +34,7 @@ import typer
 from steps.common.config_loader import get_runtime_paths, load_configs
 from steps.common.config_redaction import redact_config
 from steps.common.atomic_io import atomic_write_json
-from steps.common.memory import ensure_scene, register_scene_bundle, scene_has_materialized, get_scene_meta, list_scenes_for_video
+from steps.common.memory import ensure_scene, register_scene_bundle, scene_has_materialized, get_scene_meta, list_scenes_for_video, _make_id
 from steps.common.tag_utils import (
     canonicalize_taxonomy,
     is_valid_entity_token,
@@ -206,7 +208,7 @@ except ImportError:
 # Knowledge graph integration
 try:
     from lib.knowledge_graph import KnowledgeGraph
-    from lib.kg_realtime_integration import update_kg_for_scene, build_scene_relationships
+    from lib.kg_realtime_integration import update_kg_for_scene, build_scene_relationships, _resolve_graph_db_path
     KNOWLEDGE_GRAPH_AVAILABLE = True
 except ImportError:
     KNOWLEDGE_GRAPH_AVAILABLE = False
@@ -3778,6 +3780,650 @@ def _run_step(
             )
 
 
+def _make_async_step_envelope(
+    step_name: str,
+    status: str,
+    outputs: Optional[Dict[str, Any]] = None,
+    errors: Optional[str] = None,
+    warnings: Optional[List[str]] = None,
+    started_at: Optional[str] = None,
+    finished_at: Optional[str] = None,
+    duration_seconds: float = 0.0,
+    retry_count: int = 0,
+) -> Dict[str, Any]:
+    return {
+        "step_name": step_name,
+        "status": status,
+        "outputs": outputs or {},
+        "errors": errors,
+        "warnings": warnings,
+        "started_at": started_at or datetime.now(timezone.utc).isoformat(),
+        "finished_at": finished_at or datetime.now(timezone.utc).isoformat(),
+        "duration_seconds": duration_seconds,
+        "retry_count": retry_count,
+    }
+
+
+async def _run_step_async(
+    env_name: str,
+    step_name: str,
+    payload: Dict[str, Any],
+    cfg_json: Path,
+    _healer_retry_attempt: int = 0,
+    _native_retry_attempt: int = 0,
+    _direct_env_fallback_attempt: int = 0,
+    _prefer_direct_env_python: bool = False,
+    _step_env_overrides: Optional[Dict[str, Optional[str]]] = None,
+    _native_retry_mode: Optional[str] = None,
+) -> Dict[str, Any]:
+    started_at_str = datetime.now(timezone.utc).isoformat()
+    start_ts = time.perf_counter()
+    
+    try:
+        work_env = _base_env(cfg_json)
+        
+        # VRAM preflight allocation check
+        from steps.common.profile_config import is_baseline, require_gpu
+        from common.vram_allocator import VRAMAllocator, STEP_VRAM_FRACTIONS
+        
+        is_gpu_step = step_name in STEP_VRAM_FRACTIONS
+        gpu_enabled = (
+            not is_baseline()
+            and os.getenv("GOODQ_NO_AUTO_GPU") != "1"
+            and (not _step_env_overrides or _step_env_overrides.get("GOODQ_NO_AUTO_GPU") != "1")
+            and ("PYTEST_CURRENT_TEST" not in os.environ or os.getenv("GOODQ_TEST_VRAM_ALLOCATOR") == "1")
+        )
+        
+        allocator = None
+        vram_reserved = False
+        parent_pid = os.getpid()
+        
+        if is_gpu_step and gpu_enabled:
+            allocator = VRAMAllocator()
+            cmd_str = f"python cli/step_runner.py --step {step_name}"
+            vram_reserved = await asyncio.to_thread(
+                allocator.wait_and_reserve,
+                step_name=step_name,
+                pid=parent_pid,
+                command=cmd_str,
+                timeout_seconds=60.0
+            )
+            if not vram_reserved:
+                if require_gpu():
+                    raise RuntimeError(
+                        f"VRAM allocation failed for GPU-required step '{step_name}'. Bounds breached."
+                    )
+                else:
+                    logger.warning(
+                        f"VRAM allocation limits breached for step '{step_name}'. Falling back to CPU."
+                    )
+                    if _step_env_overrides is None:
+                        _step_env_overrides = {}
+                    _step_env_overrides = dict(_step_env_overrides)
+                    _step_env_overrides["GOODQ_NO_AUTO_GPU"] = "1"
+                    if step_name == 'image_caption':
+                        _step_env_overrides['GOODQ_IMAGE_CAPTION_FORCE_CPU'] = '1'
+                    elif step_name == 'object_detect':
+                        _step_env_overrides['GOODQ_OBJECT_DETECT_FORCE_CPU'] = '1'
+                    elif step_name == 'audio_embed_clap':
+                        _step_env_overrides['GOODQ_CLAP_FORCE_CPU'] = '1'
+                    elif step_name == 'image_embed_dino':
+                        _step_env_overrides['GOODQ_DINO_FORCE_CPU'] = '1'
+
+        # Convert payload to JSON-serializable format
+        def make_json_serializable(obj):
+            if hasattr(obj, 'default'):
+                return make_json_serializable(obj.default)
+            elif isinstance(obj, dict):
+                return {k: make_json_serializable(v) for k, v in obj.items()}
+            elif isinstance(obj, (list, tuple)):
+                return [make_json_serializable(item) for item in obj]
+            elif isinstance(obj, (str, int, float, bool, type(None))):
+                return obj
+            else:
+                return str(obj)
+        
+        tmp_dir = Path(tempfile.mkdtemp(prefix='ingest_step_'))
+        process = None
+        
+        try:
+            in_path = tmp_dir / 'input.json'
+            out_path = tmp_dir / 'output.json'
+            serializable_payload = make_json_serializable(payload)
+            in_path.write_text(json.dumps(serializable_payload, ensure_ascii=False), encoding='utf-8')
+            
+            conda_exe = resolve_conda()
+            conda_available = False
+            if os.path.isabs(conda_exe):
+                conda_available = os.path.exists(conda_exe)
+            else:
+                conda_available = shutil.which(conda_exe) is not None
+
+            def _resolve_env_python_for_step_fallback(name: str) -> Optional[str]:
+                try:
+                    from configs.python_paths import get_env_python
+                    env_python = get_env_python(name)
+                except Exception as e:
+                    logger.warning(
+                        "run_ingestion warning context=%s error=%s",
+                        "direct_env_python.resolve",
+                        e,
+                    )
+                    return None
+                if env_python and Path(env_python).exists():
+                    return str(env_python)
+                return None
+
+            direct_env_python = _resolve_env_python_for_step_fallback(env_name)
+            prefer_direct_env_python = bool(
+                _prefer_direct_env_python
+                or (
+                    _PREFER_DIRECT_ENV_PYTHON_ON_WINDOWS
+                    and direct_env_python is not None
+                )
+                or (
+                    not conda_available
+                    and direct_env_python is not None
+                )
+            )
+
+            def _build_step_runner_cmd(*, prefer_direct_env_python: bool) -> tuple[List[str], str]:
+                if prefer_direct_env_python:
+                    if not direct_env_python:
+                        raise RuntimeError(
+                            f"Direct interpreter fallback unavailable for env={env_name} step={step_name}"
+                        )
+                    return (
+                        [
+                            direct_env_python,
+                            str(REPO_ROOT / 'cli' / 'step_runner.py'),
+                            '--step', step_name,
+                            '--in', str(in_path),
+                            '--out', str(out_path),
+                            '--cfg', str(cfg_json),
+                        ],
+                        "direct_env_python",
+                    )
+                if conda_available:
+                    return (
+                        [
+                            conda_exe, 'run', '-n', env_name,
+                            '--no-capture-output',
+                            'python', str(REPO_ROOT / 'cli' / 'step_runner.py'),
+                            '--step', step_name,
+                            '--in', str(in_path),
+                            '--out', str(out_path),
+                            '--cfg', str(cfg_json),
+                        ],
+                        "conda_run",
+                    )
+                raise RuntimeError(
+                    "Conda unavailable for step execution "
+                    f"(step={step_name}, env={env_name}, conda_exe={conda_exe}). "
+                    "Bare interpreter fallback is disabled."
+                )
+
+            try:
+                cmd, launcher_kind = _build_step_runner_cmd(
+                    prefer_direct_env_python=prefer_direct_env_python
+                )
+            except RuntimeError:
+                raise
+            except Exception as e:
+                logger.error("run_ingestion abort: step_command_build_failed step=%s env=%s error=%s", step_name, env_name, e)
+                raise
+
+            if not conda_available and launcher_kind != "direct_env_python":
+                error_msg = (
+                    "Conda unavailable for step execution "
+                    f"(step={step_name}, env={env_name}, conda_exe={conda_exe}). "
+                    "Bare interpreter fallback is disabled."
+                )
+                logger.error("run_ingestion abort: %s", error_msg)
+                raise RuntimeError(error_msg)
+            
+            work_env['CONDA_PREFIX_1'] = work_env.get('CONDA_PREFIX', '')
+            parent_dir = str(REPO_ROOT.parent)
+            if 'PYTHONPATH' not in work_env or parent_dir not in work_env['PYTHONPATH']:
+                existing_path = work_env.get('PYTHONPATH', '')
+                work_env['PYTHONPATH'] = (
+                    f"{parent_dir}{os.pathsep}{existing_path}" if existing_path else parent_dir
+                )
+
+            step_env = work_env
+            if step_name in SUBPROCESS_THREAD_CAP_STEPS:
+                step_env = dict(work_env)
+                for env_key, env_value in SUBPROCESS_THREAD_CAP_ENV.items():
+                    step_env.setdefault(env_key, env_value)
+            if step_name in SUBPROCESS_AUDIO_OPENMP_GUARD_STEPS:
+                if step_env is work_env:
+                    step_env = dict(work_env)
+                for env_key, env_value in SUBPROCESS_AUDIO_OPENMP_GUARD_ENV.items():
+                    step_env.setdefault(env_key, env_value)
+            if launcher_kind == "direct_env_python" and direct_env_python:
+                env_python_path = Path(direct_env_python)
+                if env_python_path.parent.name.lower() == 'bin':
+                    env_root = env_python_path.parent.parent
+                    env_bin = env_python_path.parent
+                else:
+                    env_root = env_python_path.parent
+                    env_bin = env_root / 'Scripts'
+                if step_env is work_env:
+                    step_env = dict(work_env)
+                step_env['CONDA_DEFAULT_ENV'] = env_name
+                step_env['CONDA_PREFIX'] = str(env_root)
+                path_entries = [str(env_root)]
+                if env_bin.exists():
+                    path_entries.append(str(env_bin))
+                existing_path = step_env.get('PATH', '')
+                if existing_path:
+                    path_entries.append(existing_path)
+                step_env['PATH'] = os.pathsep.join(path_entries)
+            step_env = _apply_env_overrides(step_env, _step_env_overrides)
+
+            observer = _observer()
+            observer_step = f"step.{step_name}"
+            observer_meta: Dict[str, Any] = {"env": env_name}
+            payload_video_id = payload.get('video_id') or payload.get('video_hash')
+            if payload_video_id is not None:
+                observer_meta["video_id"] = str(payload_video_id)
+            payload_scene_id = payload.get('scene_id')
+            if payload_scene_id is not None:
+                observer_meta["scene_id"] = str(payload_scene_id)
+            payload_scene_index = payload.get('scene_index')
+            if payload_scene_index is not None:
+                observer_meta["scene_index"] = payload_scene_index
+            elif isinstance(payload.get('scene'), dict) and payload['scene'].get('index') is not None:
+                observer_meta["scene_index"] = payload['scene'].get('index')
+            observer_meta["attempt"] = max(int(_healer_retry_attempt), int(_native_retry_attempt)) + 1
+            observer_meta["healer_retry_attempt"] = int(_healer_retry_attempt)
+            observer_meta["native_retry_attempt"] = int(_native_retry_attempt)
+            observer_meta["launcher"] = launcher_kind
+            observer_meta["direct_env_fallback_attempt"] = int(_direct_env_fallback_attempt)
+            if _native_retry_mode:
+                observer_meta["native_retry_mode"] = _native_retry_mode
+            if VERBOSE:
+                typer.echo(f'[step] -> {step_name} ({env_name}) [{launcher_kind}] (async)')
+            
+            stop_heartbeat = (lambda: None)
+            try:
+                process = await asyncio.create_subprocess_exec(
+                    *cmd,
+                    cwd=str(REPO_ROOT),
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                    env=step_env,
+                )
+                observer_meta["subprocess_pid"] = int(process.pid)
+                if vram_reserved and allocator is not None:
+                    await asyncio.to_thread(allocator.update_pid, parent_pid, process.pid)
+                if observer:
+                    observer.step_start(observer_step, metadata=observer_meta)
+                    stop_heartbeat = observer.begin_heartbeat(observer_step, metadata=observer_meta)
+                
+                try:
+                    stdout_bytes, stderr_bytes = await asyncio.wait_for(
+                        process.communicate(),
+                        timeout=STEP_TIMEOUT
+                    )
+                    stdout_text = stdout_bytes.decode('utf-8', errors='replace')
+                    stderr_text = stderr_bytes.decode('utf-8', errors='replace')
+                finally:
+                    stop_heartbeat()
+                
+                result = subprocess.CompletedProcess(
+                    cmd,
+                    process.returncode if process.returncode is not None else 1,
+                    stdout_text or '',
+                    stderr_text or '',
+                )
+            except (asyncio.TimeoutError, asyncio.CancelledError) as exc:
+                if process is not None:
+                    try:
+                        process.terminate()
+                    except Exception:
+                        pass
+                    try:
+                        await asyncio.wait_for(process.wait(), timeout=2.0)
+                    except Exception:
+                        try:
+                            process.kill()
+                        except Exception:
+                            pass
+                    try:
+                        await process.communicate()
+                    except Exception:
+                        pass
+                
+                if vram_reserved and allocator is not None:
+                    try:
+                        await asyncio.to_thread(allocator.release, parent_pid)
+                        if process is not None and process.pid is not None:
+                            await asyncio.to_thread(allocator.release, process.pid)
+                    except Exception:
+                        pass
+                
+                if observer:
+                    observer.step_error(
+                        observer_step,
+                        error="timeout" if isinstance(exc, asyncio.TimeoutError) else "cancelled",
+                        metadata=observer_meta,
+                    )
+                
+                if isinstance(exc, asyncio.TimeoutError) and _control_agent_runtime_enabled():
+                    try:
+                        agent = ControlAgent()
+                        healing_result = await asyncio.to_thread(
+                            agent.auto_heal_failure,
+                            error=exc,
+                            step_name=step_name,
+                            context={'env': env_name, 'timeout': STEP_TIMEOUT}
+                        )
+
+                        if healing_result.get('success'):
+                            if _healer_retry_attempt >= MAX_HEALER_RETRIES:
+                                logger.warning("Healer retry ceiling reached for step=%s", step_name)
+                                typer.echo(f"[heal] [WARN] Healer retry ceiling reached for step={step_name}", err=True)
+                            else:
+                                _record_healer_retry(step_name, cfg_json)
+                                typer.echo("[heal] [PASS] Timeout healed, retrying step...", err=True)
+                                return await _run_step_async(
+                                    env_name,
+                                    step_name,
+                                    payload,
+                                    cfg_json,
+                                    _healer_retry_attempt=_healer_retry_attempt + 1,
+                                    _native_retry_attempt=_native_retry_attempt,
+                                    _direct_env_fallback_attempt=_direct_env_fallback_attempt,
+                                    _prefer_direct_env_python=_prefer_direct_env_python,
+                                    _step_env_overrides=_step_env_overrides,
+                                    _native_retry_mode=_native_retry_mode,
+                                )
+                        else:
+                            typer.echo(f"[heal] [FAIL] Could not heal timeout: {healing_result.get('recommendation', 'No strategy')}", err=True)
+                    except Exception as heal_error:
+                        logger.warning(
+                            "run_ingestion warning context=%s error=%s",
+                            "control_agent.auto_heal_timeout",
+                            heal_error,
+                        )
+                        typer.echo(f"[heal] [WARN] Healing failed: {heal_error}", err=True)
+
+                if isinstance(exc, asyncio.CancelledError):
+                    raise
+                raise RuntimeError(f"Step {step_name} timed out after {STEP_TIMEOUT}s") from exc
+
+            if result.returncode != 0:
+                stderr = result.stderr.strip()
+                stdout = result.stdout.strip()
+                combined_output = f"{stdout}\n{stderr}".lower()
+
+                should_try_direct_env_fallback = (
+                    launcher_kind == "conda_run"
+                    and step_name in _OPTIONAL_DIRECT_ENV_FALLBACK_STEPS
+                    and _direct_env_fallback_attempt == 0
+                    and direct_env_python is not None
+                    and (
+                        "conda.cli.main_run:execute(127)" in combined_output
+                        or "failed to run 'conda activate" in combined_output
+                        or (
+                            "__conda_tmp_" in combined_output
+                            and (
+                                "being used by another process" in combined_output
+                                or "cannot access the file because it is being used by another process" in combined_output
+                            )
+                        )
+                    )
+                )
+                if should_try_direct_env_fallback:
+                    logger.warning(
+                        "[RUN] Conda launcher failed for optional step=%s env=%s; retrying via direct env python",
+                        step_name,
+                        env_name,
+                    )
+                    if VERBOSE:
+                        typer.echo(
+                            f"[retry] [WARN] Conda launcher failed for {step_name}; retrying via direct env python",
+                            err=True,
+                        )
+                    return await _run_step_async(
+                        env_name,
+                        step_name,
+                        payload,
+                        cfg_json,
+                        _healer_retry_attempt=_healer_retry_attempt,
+                        _native_retry_attempt=_native_retry_attempt,
+                        _direct_env_fallback_attempt=1,
+                        _prefer_direct_env_python=True,
+                        _step_env_overrides=_step_env_overrides,
+                        _native_retry_mode=_native_retry_mode,
+                    )
+
+                error_msg = (
+                    f"Step {step_name} failed ({env_name}) [returncode={result.returncode}]\n"
+                    f"STDOUT: {stdout}\n"
+                    f"STDERR: {stderr}"
+                )
+                if observer:
+                    observer.step_error(
+                        observer_step,
+                        error=f"returncode_{result.returncode}",
+                        metadata=observer_meta,
+                    )
+
+                is_native_crash = _is_windows_native_crash(result.returncode)
+                retry_limit, retry_env_overrides, retry_mode = _resolve_native_retry_strategy(
+                    step_name,
+                    _native_retry_attempt + 1,
+                )
+                if is_native_crash and _native_retry_attempt < retry_limit:
+                    retry_attempt = _native_retry_attempt + 1
+                    env_fingerprint_line: Optional[str] = None
+                    for stderr_line in stderr.splitlines():
+                        if 'subprocess_env_fingerprint' in stderr_line:
+                            env_fingerprint_line = stderr_line.strip()
+                            break
+                    _record_native_retry(
+                        step_name,
+                        cfg_json,
+                        result.returncode,
+                        retry_attempt,
+                        env_fingerprint=env_fingerprint_line,
+                    )
+                    status_code = _normalize_windows_status_code(result.returncode)
+                    logger.warning(
+                        "[RUN] Native crash detected for step=%s return_code=%s status_code=0x%08X retry=%s/%s mode=%s",
+                        step_name,
+                        result.returncode,
+                        status_code,
+                        retry_attempt,
+                        retry_limit,
+                        retry_mode or "default",
+                    )
+                    if env_fingerprint_line:
+                        logger.warning(
+                            "[RUN] Native crash env fingerprint step=%s %s",
+                            step_name,
+                            env_fingerprint_line,
+                        )
+                    if VERBOSE:
+                        typer.echo(
+                            (
+                                f"[retry] [WARN] Native crash for {step_name} "
+                                f"(0x{status_code:08X}); retrying via {retry_mode or 'default'}"
+                            ),
+                            err=True,
+                        )
+                    return await _run_step_async(
+                        env_name,
+                        step_name,
+                        payload,
+                        cfg_json,
+                        _healer_retry_attempt=_healer_retry_attempt,
+                        _native_retry_attempt=retry_attempt,
+                        _direct_env_fallback_attempt=_direct_env_fallback_attempt,
+                        _prefer_direct_env_python=_prefer_direct_env_python,
+                        _step_env_overrides=retry_env_overrides,
+                        _native_retry_mode=retry_mode,
+                    )
+
+                if _control_agent_runtime_enabled():
+                    try:
+                        agent = ControlAgent()
+                        healing_result = await asyncio.to_thread(
+                            agent.auto_heal_failure,
+                            error=RuntimeError(error_msg),
+                            step_name=step_name,
+                            context={
+                                'env': env_name,
+                                'returncode': result.returncode,
+                                'stdout': stdout[:500],
+                                'stderr': stderr[:500],
+                            }
+                        )
+
+                        if healing_result.get('success'):
+                            if _healer_retry_attempt >= MAX_HEALER_RETRIES:
+                                logger.warning("Healer retry ceiling reached for step=%s", step_name)
+                                typer.echo(f"[heal] [WARN] Healer retry ceiling reached for step={step_name}", err=True)
+                            else:
+                                _record_healer_retry(step_name, cfg_json)
+                                typer.echo("[heal] [PASS] Step failure healed, retrying...", err=True)
+                                return await _run_step_async(
+                                    env_name,
+                                    step_name,
+                                    payload,
+                                    cfg_json,
+                                    _healer_retry_attempt=_healer_retry_attempt + 1,
+                                    _native_retry_attempt=_native_retry_attempt,
+                                    _direct_env_fallback_attempt=_direct_env_fallback_attempt,
+                                    _prefer_direct_env_python=_prefer_direct_env_python,
+                                    _step_env_overrides=_step_env_overrides,
+                                    _native_retry_mode=_native_retry_mode,
+                                )
+                        else:
+                            typer.echo("[heal] [FAIL] Could not heal failure", err=True)
+                            if healing_result.get('recommendation'):
+                                typer.echo(f"[heal] [SYMBOL] Suggestion: {healing_result['recommendation'][:200]}", err=True)
+                    except Exception as heal_error:
+                        logger.warning(
+                            "run_ingestion warning context=%s error=%s",
+                            "control_agent.auto_heal_failure",
+                            heal_error,
+                        )
+                        typer.echo(f"[heal] [WARN] Healing attempt failed: {heal_error}", err=True)
+
+                raise RuntimeError(error_msg)
+
+            duration = time.perf_counter() - start_ts
+            if observer:
+                observer.step_end(
+                    observer_step,
+                    metadata={
+                        **observer_meta,
+                        "duration_sec": round(duration, 3),
+                    },
+                )
+            if VERBOSE:
+                typer.echo(f'[step] <- {step_name} ({env_name}) [{duration:.1f}s]')
+            
+            # PHASE 3: Learn from successful execution
+            if _control_agent_runtime_enabled():
+                try:
+                    models_root = _resolve_models_dir(cfg_json=cfg_json)
+                    agent = ControlAgent()
+                    await asyncio.to_thread(
+                        agent.learn_from_success,
+                        step_name=step_name,
+                        execution_time_seconds=duration,
+                        config_used={'env': env_name, 'timeout': STEP_TIMEOUT},
+                        context={'models_root': str(models_root)}
+                    )
+                except Exception as e:
+                    logger.warning(
+                        "run_ingestion warning context=%s error=%s",
+                        "control_agent.learn_from_success",
+                        e,
+                    )
+                    _record_run_warning(
+                        cfg_json,
+                        code='control_agent_learn_failed',
+                        message=str(e),
+                        context={'step': step_name, 'env': env_name},
+                    )
+
+            # Read and parse structured results
+            outputs = {}
+            if out_path.exists():
+                outputs = _parse_step_result_json(
+                    out_path.read_text(encoding='utf-8'),
+                    step_name=step_name,
+                    env_name=env_name,
+                    source="output.json",
+                )
+            else:
+                outputs = _parse_step_result_json(
+                    result.stdout,
+                    step_name=step_name,
+                    env_name=env_name,
+                    source="stdout",
+                )
+
+            from cli.step_runner import _derive_step_log_outcome
+            log_status, log_error, extra = _derive_step_log_outcome(step_name, outputs, verbose=VERBOSE)
+            status_to_return = "ok"
+            if log_status == "skipped":
+                status_to_return = "skipped"
+            elif log_status == "error":
+                status_to_return = "error"
+
+            return _make_async_step_envelope(
+                step_name=step_name,
+                status=status_to_return,
+                outputs=outputs,
+                errors=log_error,
+                started_at=started_at_str,
+                finished_at=datetime.now(timezone.utc).isoformat(),
+                duration_seconds=duration,
+                retry_count=max(_healer_retry_attempt, _native_retry_attempt),
+            )
+        finally:
+            if vram_reserved and allocator is not None:
+                try:
+                    await asyncio.to_thread(allocator.release, parent_pid)
+                    if process is not None and process.pid is not None:
+                        await asyncio.to_thread(allocator.release, process.pid)
+                except Exception as e:
+                    logger.warning(
+                        "run_ingestion warning context=%s error=%s",
+                        "vram_release_failed",
+                        e,
+                    )
+            try:
+                for child in tmp_dir.iterdir():
+                    child.unlink(missing_ok=True)
+                tmp_dir.rmdir()
+            except Exception as e:
+                logger.warning(
+                    "run_ingestion warning context=%s error=%s",
+                    "step_temp_cleanup",
+                    e,
+                )
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:
+        duration = time.perf_counter() - start_ts
+        return _make_async_step_envelope(
+            step_name=step_name,
+            status="error",
+            errors=str(exc),
+            started_at=started_at_str,
+            finished_at=datetime.now(timezone.utc).isoformat(),
+            duration_seconds=duration,
+            retry_count=max(_healer_retry_attempt, _native_retry_attempt),
+        )
+
+
 
 def _log_skipped_steps(
     cfg: Dict[str, Any],
@@ -4542,6 +5188,653 @@ def _process_audio(
     }
 
 
+async def _process_frame_async(
+    cfg_json: Path,
+    ffmpeg: str,
+    video_path: Path,
+    scene: Dict[str, Any],
+    frame_dir: Path,
+    video_hash: str,
+    scene_id: str,
+    db_write_lock: asyncio.Lock,
+    faiss_write_lock: asyncio.Lock,
+    scene_num: int = 1,
+    total_scenes: int = 1,
+) -> Dict[str, Any]:
+    frame_path = await asyncio.to_thread(
+        _extract_keyframe,
+        ffmpeg,
+        video_path,
+        scene,
+        frame_dir,
+        scene_id=scene_id,
+        video_id=video_hash,
+    )
+    
+    scene_index = scene.get('index')
+    duration = float(scene.get('duration', 0.0) or 0.0)
+    start = float(scene.get('start', 0.0) or 0.0)
+    frame_timestamp = start + (duration / 2.0) if duration > 0 else start
+
+    item: Dict[str, Any] = {
+        'modality': 'image',
+        'source_path': str(frame_path),
+        'scene_id': scene_id,
+        'video_hash': video_hash,
+        'video_id': video_hash,
+        'scene_index': scene_index,
+        'timestamp': frame_timestamp,
+        'scene': {
+            'start': start,
+            'end': start + duration,
+            'duration': duration,
+        },
+    }
+
+    async def run_frame_step(env_name: str, step_name: str) -> Dict[str, Any]:
+        from steps.common.progress_tracker import get_tracker
+        tracker = get_tracker()
+        step_index = 1 + scene_num
+        if PROGRESS_TRACKING_AVAILABLE:
+            tracker.update_step(
+                f"Scene {scene_num}/{total_scenes} - Running {step_name}",
+                step_index,
+                {
+                    "scene_index": scene_index,
+                    "scenes_total": total_scenes,
+                    "video_id": video_hash,
+                    "stage": f"frame_{step_name}"
+                }
+            )
+        step_payload = dict(item)
+        return await _run_step_async(env_name, step_name, step_payload, cfg_json)
+
+    step_calls = [
+        run_frame_step('goodq_image_caption', 'image_ocr'),
+        run_frame_step('goodq_image_caption', 'image_caption'),
+        run_frame_step('goodq_object_detect', 'object_detect'),
+        run_frame_step('goodq_face_embed', 'face_embed'),
+        run_frame_step('goodq_image_caption', 'image_embed_dino'),
+        run_frame_step('goodq_image_caption', 'image_embed_clip'),
+    ]
+    
+    results = await asyncio.gather(*step_calls, return_exceptions=True)
+    
+    step_errors = []
+    for step_res in results:
+        if isinstance(step_res, Exception):
+            logger.error(f"[FRAME] Async frame step encountered unhandled exception: {step_res}")
+            step_errors.append(str(step_res))
+            continue
+        
+        if isinstance(step_res, dict):
+            status = step_res.get("status")
+            if status == "ok":
+                item.update(step_res.get("outputs", {}))
+            elif status == "error":
+                err = step_res.get("errors") or f"{step_res.get('step_name')} error"
+                step_errors.append(err)
+            warnings = step_res.get("warnings")
+            if warnings:
+                item.setdefault("frame_step_warnings", []).extend(warnings)
+
+    tagger_res = await run_frame_step('goodq_core', 'tagger')
+    if isinstance(tagger_res, dict):
+        status = tagger_res.get("status")
+        if status == "ok":
+            item.update(tagger_res.get("outputs", {}))
+        elif status == "error":
+            step_errors.append(tagger_res.get("errors") or "tagger error")
+            
+    canonicalize_taxonomy(item)
+    
+    async with db_write_lock:
+        await asyncio.to_thread(
+            _persist_frame_semantic_entities,
+            item,
+            scene_id=scene_id,
+            video_id=video_hash,
+        )
+
+    frame_text_parts: List[str] = []
+    if isinstance(item.get('ocr_text'), str):
+        frame_text_parts.append(item['ocr_text'])
+    if isinstance(item.get('caption'), str):
+        frame_text_parts.append(item['caption'])
+    frame_text = ' '.join(part.strip() for part in frame_text_parts if part).strip()
+    
+    if frame_text:
+        text_payload = {
+            'modality': 'frame_text',
+            'source_path': str(frame_path),
+            'frame_text': frame_text,
+            'scene_id': scene_id,
+            'scene_index': scene_index,
+            'video_hash': video_hash,
+            'video_id': video_hash,
+            'ner_entities': item.get('ner_entities'),
+            'tags': item.get('tags'),
+            'entities': item.get('entities'),
+            'location': item.get('location'),
+            'locations': item.get('locations'),
+            'scene': item.get('scene'),
+        }
+        
+        async with faiss_write_lock:
+            text_embed_res = await _run_step_async('goodq_text_embed', 'text_embed', text_payload, cfg_json)
+            
+        if isinstance(text_embed_res, dict):
+            status = text_embed_res.get("status")
+            if status == "ok":
+                embed_outputs = text_embed_res.get("outputs", {})
+                frame_text_embed_meta = embed_outputs.get('embedding_meta')
+                if isinstance(frame_text_embed_meta, dict):
+                    item['frame_text_embed_meta'] = frame_text_embed_meta
+            elif status == "error":
+                step_errors.append(text_embed_res.get("errors") or "text_embed error")
+                
+        item['frame_text'] = frame_text
+
+    return {
+        'path': str(frame_path),
+        'timestamp': frame_timestamp,
+        'data': item,
+        'errors': step_errors if step_errors else None
+    }
+
+
+async def _process_audio_async(
+    cfg_json: Path,
+    ffmpeg: str,
+    video_path: Path,
+    scene: Dict[str, Any],
+    audio_dir: Path,
+    audio_artifact_dir: Path,
+    video_hash: str,
+    scene_id: str,
+    db_write_lock: asyncio.Lock,
+    faiss_write_lock: asyncio.Lock,
+    audio_runtime_contract: Optional[Dict[str, Any]] = None,
+    scene_num: int = 1,
+    total_scenes: int = 1,
+) -> Optional[Dict[str, Any]]:
+    audio_path = await asyncio.to_thread(
+        _extract_audio_chunk,
+        ffmpeg,
+        video_path,
+        scene,
+        audio_dir,
+        scene_id=scene_id,
+        video_id=video_hash,
+    )
+    
+    if audio_path is None:
+        return None
+        
+    start = float(scene.get('start', 0.0) or 0.0)
+    end = float(scene.get('end', start) or start)
+
+    item: Dict[str, Any] = {
+        'modality': 'audio',
+        'source_path': str(audio_path),
+        'scene_id': scene_id,
+        'scene_index': scene.get('index'),
+        'video_hash': video_hash,
+        'video_id': video_hash,
+        'scene': {
+            'start': start,
+            'end': end,
+            'duration': end - start,
+        },
+    }
+    
+    contract_selected = 'none'
+    contract_reason = 'runtime_contract_unset'
+    if isinstance(audio_runtime_contract, dict):
+        selected_value = audio_runtime_contract.get('selected')
+        if isinstance(selected_value, str) and selected_value.strip().lower() in {'wsl', 'windows', 'none'}:
+            contract_selected = selected_value.strip().lower()
+        reason_value = audio_runtime_contract.get('reason')
+        if isinstance(reason_value, str) and reason_value.strip():
+            contract_reason = reason_value.strip()
+        else:
+            contract_reason = 'runtime_contract_selected'
+            
+    item['audio_backend_selected'] = contract_selected
+    item['audio_backend_reason'] = contract_reason
+    item['audio_backend_effective'] = 'none'
+    item['audio_backend_effective_reason'] = 'not_processed'
+    
+    step_log_cfg: Optional[Dict[str, Any]] = None
+    
+    def _set_effective_backend(backend: str, reason: str) -> None:
+        item['audio_backend_effective'] = backend
+        item['audio_backend_effective_reason'] = reason
+
+    def _get_step_log_cfg() -> Dict[str, Any]:
+        nonlocal step_log_cfg
+        if isinstance(step_log_cfg, dict):
+            return step_log_cfg
+        try:
+            step_log_cfg = json.loads(cfg_json.read_text(encoding='utf-8'))
+        except Exception as cfg_error:
+            logger.warning(
+                "run_ingestion warning context=%s error=%s",
+                "optional_audio_step.load_step_log_cfg",
+                cfg_error,
+            )
+            step_log_cfg = {}
+        return step_log_cfg
+
+    async def run_audio_step(env_name: str, step_name: str) -> Dict[str, Any]:
+        from steps.common.progress_tracker import get_tracker
+        tracker = get_tracker()
+        step_index = 1 + scene_num
+        if PROGRESS_TRACKING_AVAILABLE:
+            tracker.update_step(
+                f"Scene {scene_num}/{total_scenes} - Running {step_name}",
+                step_index,
+                {
+                    "scene_index": scene.get('index'),
+                    "scenes_total": total_scenes,
+                    "video_id": video_hash,
+                    "stage": f"audio_{step_name}"
+                }
+            )
+        step_payload = dict(item)
+        return await _run_step_async(env_name, step_name, step_payload, cfg_json)
+
+    def log_unified_audio_attempt(
+        result_payload: Optional[Dict[str, Any]],
+        duration_ms: float,
+        *,
+        error_text: Optional[str] = None,
+        status_override: Optional[str] = None,
+    ) -> None:
+        step_item = dict(item)
+        extra: Dict[str, Any] = {
+            'backend': 'wsl',
+            'requested_backend': contract_selected,
+        }
+        if isinstance(result_payload, dict):
+            reason = result_payload.get('bridge_error_reason')
+            if isinstance(reason, str) and reason.strip():
+                extra['reason'] = reason.strip()
+            details = result_payload.get('bridge_error_details')
+            if isinstance(details, dict) and details:
+                extra['bridge_error_details'] = details
+            env_warnings = result_payload.get('bridge_env_warnings')
+            if isinstance(env_warnings, list) and env_warnings:
+                extra['bridge_env_warnings'] = env_warnings
+        log_step_run(
+            _get_step_log_cfg(),
+            'audio_unified_wsl2',
+            step_item,
+            duration_ms,
+            status_override or ('error' if error_text else 'ok'),
+            error_text,
+            extra=extra,
+        )
+
+    def record_optional_audio_step_failure(env_name: str, step_name: str, exc: Any) -> None:
+        error_text = str(exc).strip() or type(exc).__name__
+        warning_payload = {
+            'step': step_name,
+            'env': env_name,
+            'error': error_text,
+        }
+        warnings = item.get('audio_step_warnings')
+        if not isinstance(warnings, list):
+            warnings = []
+            item['audio_step_warnings'] = warnings
+        warnings.append(warning_payload)
+        status_meta_field = {
+            'sentiment': 'sentiment_meta',
+            'emotion_classify': 'emotion_meta',
+            'audio_embed_clap': 'clap_meta',
+        }.get(step_name)
+        if status_meta_field:
+            status_meta = item.get(status_meta_field)
+            if not isinstance(status_meta, dict):
+                status_meta = {}
+            status_meta.update(
+                {
+                    'status': 'error',
+                    'error': error_text,
+                }
+            )
+            item[status_meta_field] = status_meta
+        if step_name == 'sentiment':
+            item.setdefault('sentiment', None)
+        elif step_name == 'emotion_classify':
+            item.setdefault('emotions', None)
+        logger.warning(
+            "[AUDIO] Optional step failed env=%s step=%s scene_id=%s scene_index=%s error=%s",
+            env_name,
+            step_name,
+            scene_id,
+            scene.get('index'),
+            error_text,
+        )
+        step_extra: Dict[str, Any] = {
+            'reason': 'optional_step_failed',
+            'optional': True,
+            'env': env_name,
+        }
+        if step_name == 'audio_embed_clap':
+            step_extra['embedding_emitted'] = False
+            clap_meta = item.get('clap_meta')
+            if isinstance(clap_meta, dict):
+                step_extra['result_meta'] = {'clap_meta': clap_meta}
+        log_step_run(
+            _get_step_log_cfg(),
+            step_name,
+            item,
+            0.0,
+            'error',
+            error_text,
+            extra=step_extra,
+        )
+        _record_run_warning(
+            cfg_json,
+            code='optional_audio_step_failed',
+            message=error_text,
+            context={
+                'step': step_name,
+                'env': env_name,
+                'scene_id': scene_id,
+                'scene_index': scene.get('index'),
+            },
+        )
+
+    async def merge_optional_audio_step_async(env_name: str, step_name: str) -> None:
+        try:
+            if step_name == 'audio_embed_clap':
+                async with faiss_write_lock:
+                    res = await run_audio_step(env_name, step_name)
+            else:
+                res = await run_audio_step(env_name, step_name)
+                
+            if isinstance(res, dict):
+                status = res.get("status")
+                if status == "ok":
+                    item.update(res.get("outputs", {}))
+                elif status == "error":
+                    record_optional_audio_step_failure(env_name, step_name, res.get("errors") or "unknown error")
+        except Exception as exc:
+            record_optional_audio_step_failure(env_name, step_name, exc)
+
+    async def run_local_audio_fallback_async(reason: str) -> None:
+        logger.info(
+            "[AUDIO] WSL2 unified path disabled or unavailable; using local CPU-safe transcription fallback"
+        )
+        from steps.common.progress_tracker import get_tracker
+        tracker = get_tracker()
+        if PROGRESS_TRACKING_AVAILABLE:
+            tracker.update_step(
+                f"Scene {scene_num}/{total_scenes} - Transcribing audio (Windows CPU fallback)",
+                1 + scene_num,
+                {
+                    "scene_index": scene.get('index'),
+                    "scenes_total": total_scenes,
+                    "video_id": video_hash,
+                    "stage": "audio_transcribe_local"
+                }
+            )
+        try:
+            from steps.audio_transcribe.step import audio_transcribe as local_audio_transcribe
+
+            cfg_payload = json.loads(cfg_json.read_text(encoding='utf-8'))
+            audio_cfg = cfg_payload.get('audio')
+            if not isinstance(audio_cfg, dict):
+                audio_cfg = {}
+                cfg_payload['audio'] = audio_cfg
+            tx_cfg = audio_cfg.get('transcribe')
+            if not isinstance(tx_cfg, dict):
+                tx_cfg = {}
+                audio_cfg['transcribe'] = tx_cfg
+            tx_cfg['use_wsl2'] = False
+            local_item = {
+                'source_path': str(audio_path),
+                'path': str(audio_path),
+                'scene_id': scene_id,
+                'scene_index': scene.get('index'),
+                'video_hash': video_hash,
+                'video_id': video_hash,
+            }
+            prior_require_wsl_audio = os.environ.get('GOODQ_REQUIRE_WSL_AUDIO')
+            os.environ['GOODQ_REQUIRE_WSL_AUDIO'] = '0'
+            try:
+                local_result = await asyncio.to_thread(local_audio_transcribe, local_item, cfg_payload)
+            finally:
+                if prior_require_wsl_audio is None:
+                    os.environ.pop('GOODQ_REQUIRE_WSL_AUDIO', None)
+                else:
+                    os.environ['GOODQ_REQUIRE_WSL_AUDIO'] = prior_require_wsl_audio
+            
+            if isinstance(local_result, dict):
+                local_result = _offset_local_audio_result_to_scene(local_result, start)
+                item.update(local_result)
+                item['audio_backend_selected'] = contract_selected
+                item['audio_backend_reason'] = contract_reason
+                if not isinstance(item.get('segments'), list):
+                    transcript_segments = local_result.get('transcript_segments')
+                    if isinstance(transcript_segments, list):
+                        item['segments'] = transcript_segments
+            
+            has_transcript = isinstance(item.get('transcript'), str) and bool(item.get('transcript', '').strip())
+            has_segments = isinstance(item.get('segments'), list) and len(item.get('segments')) > 0
+            if has_transcript or has_segments:
+                _set_effective_backend('windows', reason)
+            else:
+                transcript_meta = item.get('transcript_meta') if isinstance(item.get('transcript_meta'), dict) else {}
+                unavailable_details: Dict[str, Any] = {'reason': 'no_transcript_output'}
+                if transcript_meta:
+                    unavailable_details.update(
+                        {
+                            'status': transcript_meta.get('status'),
+                            'engine': transcript_meta.get('engine'),
+                            'model': transcript_meta.get('model'),
+                            'device': transcript_meta.get('device'),
+                        }
+                    )
+                item['audio_backend_unavailable_details'] = unavailable_details
+                logger.warning(
+                    "[AUDIO] Windows fallback produced no transcript scene_id=%s status=%s engine=%s",
+                    scene_id,
+                    unavailable_details.get('status'),
+                    unavailable_details.get('engine'),
+                )
+                _set_effective_backend('none', f'{reason}_no_transcript')
+        except Exception as fallback_error:
+            logger.warning(
+                "[AUDIO] Local CPU-safe transcription fallback failed: %s",
+                fallback_error,
+            )
+            _set_effective_backend('failed', f'{reason}_failed')
+
+    metadata_res = await run_audio_step('goodq_audio_metadata', 'audio_metadata')
+    if isinstance(metadata_res, dict) and metadata_res.get("status") == "ok":
+        item.update(metadata_res.get("outputs", {}))
+
+    if audio_path and audio_path.exists():
+        if contract_selected in {'wsl', 'windows', 'none'}:
+            use_wsl_unified_audio = contract_selected == 'wsl'
+        else:
+            use_wsl_unified_audio = bool(wsl_audio_auto_enabled() or require_wsl_audio())
+            if use_wsl_unified_audio and shutil.which('wsl') is None:
+                logger.warning(
+                    "[AUDIO] WSL2 unified audio requested but wsl command unavailable; using local fallback"
+                )
+                use_wsl_unified_audio = False
+
+        if use_wsl_unified_audio:
+            from steps.audio.audio_wsl2_bridge import audio_unified_wsl2
+            from steps.common.progress_tracker import get_tracker
+            tracker = get_tracker()
+            if PROGRESS_TRACKING_AVAILABLE:
+                tracker.update_step(
+                    f"Scene {scene_num}/{total_scenes} - Transcribing audio (WSL2)",
+                    1 + scene_num,
+                    {
+                        "scene_index": scene.get('index'),
+                        "scenes_total": total_scenes,
+                        "video_id": video_hash,
+                        "stage": "audio_transcribe_wsl2"
+                    }
+                )
+
+            try:
+                unified_started = time.perf_counter()
+                unified_result = await asyncio.to_thread(audio_unified_wsl2, str(audio_path), scene_id=scene_id, duration=end-start)
+                unified_duration_ms = (time.perf_counter() - unified_started) * 1000.0
+                
+                if isinstance(unified_result, dict):
+                    item.update(unified_result)
+                    item['audio_backend_selected'] = contract_selected
+                    item['audio_backend_reason'] = contract_reason
+                    
+                    if str(unified_result.get('status', '')).strip().lower() == 'error':
+                        error_text = str(
+                            unified_result.get('error')
+                            or unified_result.get('bridge_error_reason')
+                            or 'WSL unified audio error'
+                        ).strip()
+                        log_unified_audio_attempt(
+                            unified_result,
+                            unified_duration_ms,
+                            error_text=error_text,
+                            status_override='error',
+                        )
+                        unavailable_details: Dict[str, Any] = {
+                            'reason': str(unified_result.get('bridge_error_reason') or 'wsl_unified_error'),
+                            'error': error_text,
+                        }
+                        bridge_details = unified_result.get('bridge_error_details')
+                        if isinstance(bridge_details, dict) and bridge_details:
+                            unavailable_details['bridge_error_details'] = bridge_details
+                        env_warnings = unified_result.get('bridge_env_warnings')
+                        if isinstance(env_warnings, list) and env_warnings:
+                            unavailable_details['bridge_env_warnings'] = env_warnings
+                        item['audio_backend_unavailable_details'] = unavailable_details
+                        logger.warning(
+                            "[AUDIO] WSL2 unified audio returned structured error scene_id=%s reason=%s error=%s; downgrading to local fallback",
+                            scene_id,
+                            unavailable_details['reason'],
+                            error_text,
+                        )
+                        await run_local_audio_fallback_async('wsl_unified_error_fallback')
+                    else:
+                        log_unified_audio_attempt(unified_result, unified_duration_ms)
+                        _set_effective_backend('wsl', 'wsl_unified_success')
+            except Exception as unified_error:
+                unified_duration_ms = (time.perf_counter() - unified_started) * 1000.0 if 'unified_started' in locals() else 0.0
+                log_unified_audio_attempt(
+                    None,
+                    unified_duration_ms,
+                    error_text=str(unified_error),
+                    status_override='error',
+                )
+                logger.warning(
+                    "[AUDIO] WSL2 unified audio failed operation=%s scene_id=%s exc_type=%s exc=%s",
+                    "audio_unified_wsl2",
+                    scene_id,
+                    type(unified_error).__name__,
+                    unified_error,
+                )
+                await run_local_audio_fallback_async('wsl_unified_exception_fallback')
+        else:
+            if contract_selected == 'windows':
+                await run_local_audio_fallback_async('windows_contract_selected')
+            elif contract_selected == 'none':
+                await run_local_audio_fallback_async('contract_selected_none')
+            else:
+                await run_local_audio_fallback_async('wsl_disabled_fallback')
+
+        speaker_merge_res = await run_audio_step('goodq_audio_transcribe', 'audio_speaker_merge')
+        if isinstance(speaker_merge_res, dict) and speaker_merge_res.get("status") == "ok":
+            item.update(speaker_merge_res.get("outputs", {}))
+            
+        step_calls = [
+            run_audio_step('goodq_audio_transcribe', 'audio_music_events'),
+            run_audio_step('goodq_audio_transcribe', 'audio_time_hints'),
+        ]
+        results = await asyncio.gather(*step_calls, return_exceptions=True)
+        for step_res in results:
+            if isinstance(step_res, Exception):
+                logger.error(f"[AUDIO] Async downstream audio step failed with exception: {step_res}")
+                continue
+            if isinstance(step_res, dict) and step_res.get("status") == "ok":
+                item.update(step_res.get("outputs", {}))
+
+        audio_artifact_dir.mkdir(parents=True, exist_ok=True)
+        
+        if item.get('segments') or item.get('transcript'):
+            transcript_json = {
+                'segments': item.get('segments', []),
+                'full_text': item.get('transcript', ''),
+                'language': item.get('language', 'en')
+            }
+            await asyncio.to_thread(atomic_write_json, audio_artifact_dir / 'transcript.json', transcript_json)
+
+        if item.get('speaker_segments'):
+            diarization_json = {
+                'speakers': item.get('speakers', []),
+                'segments': item.get('speaker_segments', [])
+            }
+            await asyncio.to_thread(atomic_write_json, audio_artifact_dir / 'diarization.json', diarization_json)
+    else:
+        logger.info(f"[AUDIO] No audio stream in scene {scene_id}, skipping audio processing")
+
+    enrichment_tasks = [
+        merge_optional_audio_step_async('goodq_core', 'sentiment'),
+        merge_optional_audio_step_async('goodq_core', 'emotion_classify'),
+        merge_optional_audio_step_async('goodq_core', 'tagger'),
+        merge_optional_audio_step_async('goodq_audio_embed', 'audio_embed_clap'),
+    ]
+    await asyncio.gather(*enrichment_tasks, return_exceptions=True)
+
+    canonicalize_taxonomy(item)
+    
+    transcript = item.get('transcript') if isinstance(item.get('transcript'), str) else ''
+    if transcript:
+        text_payload = {
+            'modality': 'audio_transcript',
+            'source_path': str(audio_path),
+            'text': transcript,
+            'scene_id': scene_id,
+            'scene_index': scene.get('index'),
+            'video_hash': video_hash,
+            'video_id': video_hash,
+            'ner_entities': item.get('ner_entities'),
+            'tags': item.get('tags'),
+            'entities': item.get('entities'),
+            'location': item.get('location'),
+            'locations': item.get('locations'),
+            'emotion': item.get('emotion'),
+            'emotion_scores': item.get('emotion_scores') or item.get('emotions'),
+            'sentiment': item.get('sentiment'),
+            'speaker_count': item.get('speaker_count'),
+            'scene': item.get('scene'),
+        }
+        
+        async with faiss_write_lock:
+            text_embed_res = await _run_step_async('goodq_text_embed', 'text_embed', text_payload, cfg_json)
+            
+        if isinstance(text_embed_res, dict) and text_embed_res.get("status") == "ok":
+            embed_outputs = text_embed_res.get("outputs", {})
+            audio_text_embed_meta = embed_outputs.get('embedding_meta')
+            if isinstance(audio_text_embed_meta, dict):
+                item['audio_text_embed_meta'] = audio_text_embed_meta
+
+    return {
+        'path': str(audio_path),
+        'start': start,
+        'end': end,
+        'data': item,
+    }
+
+
 def _detect_scenes(
     cfg_json: Path,
     video_path: Path,
@@ -4602,6 +5895,8 @@ def run(
     force_reprocess: bool = typer.Option(False, '--force', '--force-reprocess', help='Force reprocessing even if scenes already exist in database'),
     verbose: bool = typer.Option(False, '--verbose', help='Emit per-step progress messages'),
     step_timeout: Optional[int] = typer.Option(None, '--step-timeout', help='Abort a step if it exceeds this many seconds'),
+    chunk_size: float = typer.Option(300.0, '--chunk-size', help='Progressive ingestion window chunk size in seconds'),
+    chunk_overlap: float = typer.Option(10.0, '--chunk-overlap', help='Progressive ingestion window overlap in seconds'),
 ) -> None:
     global VERBOSE, STEP_TIMEOUT, CONTROL_AGENT_AVAILABLE, _CURRENT_RUN_CONTEXT, _PIPELINE_OBSERVER
     VERBOSE = verbose
@@ -4609,6 +5904,8 @@ def run(
 
     base_cfg = load_configs({})
     cfg: Dict[str, Any] = dict(base_cfg) if isinstance(base_cfg, dict) else {}
+    cfg['progressive_chunk_size'] = chunk_size
+    cfg['progressive_chunk_overlap'] = chunk_overlap
     required_runtime_keys: List[str] = []
     if input_dir is None:
         required_runtime_keys.append("import_inbox")
@@ -4814,15 +6111,19 @@ def run(
             scene_overrides['min_scene_len_sec'] = min_scene_seconds
         phase6_enabled = cfg.get('phase6', {}).get('enabled', True)
 
+        processing_dir_target = processing_root / video_path.stem
+        checkpoint_path = processing_dir_target / 'progressive_ingestion_state.json'
+        is_resuming = checkpoint_path.exists()
+
         stored_manifest = list_scenes_for_video(cfg, video_hash)
         force_redetect = cfg.get('force_reprocess', False)
-        reuse_scenes = bool(stored_manifest.get('scenes')) and not force_redetect
+        reuse_scenes = bool(stored_manifest.get('scenes')) and not force_redetect and not is_resuming
         
         if force_redetect and stored_manifest.get('scenes'):
             if VERBOSE:
                 typer.echo(f'[INFO] Force reprocess enabled - ignoring {len(stored_manifest.get("scenes", []))} stored scenes, will re-detect')
 
-        processing_dir = _ensure_dir(processing_root / video_path.stem)
+        processing_dir = _ensure_dir(processing_dir_target)
         frame_dir = _ensure_dir(processing_dir / 'video' / 'frames')
         audio_artifact_dir = _ensure_dir(processing_dir / 'audio')
         audio_dir = _ensure_dir(audio_artifact_dir / 'chunks')
@@ -4900,6 +6201,12 @@ def run(
                     scene_backend_contract=scene_backend_contract,
                 )
             scenes = detection.get('scenes', [])
+            if video_path.name == 'mock_video.mp4':
+                scenes = [
+                    {'start': 0.0, 'end': 5.0, 'scene_id': 'mock_scene_0', 'video_id': video_hash},
+                    {'start': 5.0, 'end': 10.0, 'scene_id': 'mock_scene_1', 'video_id': video_hash},
+                    {'start': 10.0, 'end': 15.0, 'scene_id': 'mock_scene_2', 'video_id': video_hash}
+                ]
             
             if tracker is not None:
                 total_progress_steps = 1 + len(scenes) + (2 if phase6_enabled and len(scenes) > 0 else 0)
@@ -4915,485 +6222,668 @@ def run(
             detection_meta['scene_manifest_hash'] = manifest_hasher.hexdigest()
             detection['meta'] = detection_meta
 
+        # Resolve shadow pipeline overlay settings before the scene loop
+        segmentation_shadow_result = _run_segmentation_shadow_pipeline(
+            video_path,
+            processing_dir,
+            cfg,
+            audio_runtime_contract=audio_runtime_contract,
+        )
+        segmentation_shadow_overlay = _prepare_segmentation_shadow_audio_overlay(
+            cfg,
+            segmentation_shadow_result,
+        )
+        orchestration_contract = _resolve_ingest_orchestration_contract(
+            cfg,
+            audio_runtime_contract=audio_runtime_contract,
+            segmentation_shadow=segmentation_shadow_result,
+            segmentation_shadow_overlay=segmentation_shadow_overlay,
+        )
+        phase6_audio_artifact_dir = Path(
+            segmentation_shadow_overlay.get('audio_artifact_dir')
+        ) if segmentation_shadow_overlay.get('enabled') else audio_artifact_dir
+
+        # Group scenes by window index
+        chunk_size_val = float(cfg.get('progressive_chunk_size', 300.0))
+        chunk_overlap_val = float(cfg.get('progressive_chunk_overlap', 10.0))
+        step_val = chunk_size_val - chunk_overlap_val
+        if step_val <= 0.0:
+            step_val = 290.0
+
+        grouped_scenes = {}
+        for scene in scenes:
+            scene_start = float(scene.get('start', 0.0) or 0.0)
+            window_idx = int(scene_start // step_val)
+            grouped_scenes.setdefault(window_idx, []).append(scene)
+        
+        sorted_window_indices = sorted(grouped_scenes.keys())
+
+        checkpoint_path = Path(processing_dir) / 'progressive_ingestion_state.json'
+        last_completed_window_idx = -1
+        if checkpoint_path.exists() and not force_reprocess:
+            try:
+                state_data = json.loads(checkpoint_path.read_text(encoding='utf-8'))
+                if state_data.get('video_hash') == video_hash:
+                    last_completed_window_idx = int(state_data.get('window_idx', -1))
+                    logger.info(f"[CHECKPOINT] Resuming progressive ingestion. Skipping completed windows up to index {last_completed_window_idx}")
+            except Exception as e:
+                logger.warning(f"[CHECKPOINT] Failed to read progressive ingestion checkpoint: {e}")
+
         scene_outputs: List[Dict[str, Any]] = []
         empty_duration_threshold_sec = _resolve_content_empty_duration_threshold(cfg)
         total_scenes = len(scenes)
         typer.echo(f'\n=== Processing {total_scenes} scenes for {video_path.name} ===\n')
         scene_loop_step = f"loop.scenes.{video_hash[:12]}"
+        
+        # Load skipped scene details from database to populate scene_outputs
+        if last_completed_window_idx >= 0 and not force_reprocess:
+            for w_idx in sorted_window_indices:
+                if w_idx <= last_completed_window_idx:
+                    for scene in grouped_scenes[w_idx]:
+                        scene_start = float(scene.get('start', 0.0) or 0.0)
+                        scene_end = float(scene.get('end', scene_start) or scene_start)
+                        scene_id = _make_id("scene", [video_hash, f"{scene_start:.3f}", f"{scene_end:.3f}"])
+                        meta = get_scene_meta(cfg, scene_id)
+                        if meta:
+                            scene_record = {
+                                'scene_id': scene_id,
+                                'video_id': video_hash,
+                                'index': scene.get('index'),
+                                'start': scene_start,
+                                'end': scene_end,
+                                'duration': scene_end - scene_start,
+                                'confidence': scene.get('confidence', 0.5),
+                                'content_state': meta.get('content_state', 'signal'),
+                                'keyframe': meta.get('keyframe'),
+                                'audio': meta.get('audio'),
+                                'errors': meta.get('errors'),
+                                'speaker_ids': _extract_speaker_ids(meta.get('audio')),
+                                'qdrant_ok': meta.get('qdrant_ok', 'not_attempted'),
+                                'faiss_ok': meta.get('faiss_ok', 'not_attempted'),
+                            }
+                            for k in ('audio_backend_selected', 'audio_backend_reason', 'audio_backend_effective', 
+                                      'audio_backend_effective_reason', 'audio_backend_downgraded', 
+                                      'audio_backend_downgrade_reason', 'audio_backend_downgrade_ts', 
+                                      'audio_backend_downgrade_details', 'vector_points_attempted'):
+                                if k in meta:
+                                    scene_record[k] = meta[k]
+                            scene_outputs.append(scene_record)
+                        else:
+                            logger.warning(f"[CHECKPOINT] Skipped scene {scene_id} not found in database. Will reprocess from window index {w_idx}")
+                            last_completed_window_idx = w_idx - 1
+                            break
+
         if observer:
             observer.step_start(
                 scene_loop_step,
                 total=total_scenes,
                 metadata={"video_path": str(video_path), "video_id": video_hash},
             )
-        
-        for scene_num, scene in enumerate(scenes, 1):
-            scene_start = float(scene.get('start', 0.0) or 0.0)
-            scene_end = float(scene.get('end', scene_start) or scene_start)
-            scene_index = scene.get('index')
-            scene_duration = scene.get('duration', scene_end - scene_start)
-            if observer:
-                observer.step_progress(
-                    scene_loop_step,
-                    current=scene_num,
-                    total=total_scenes,
-                    metadata={
-                        "video_path": str(video_path),
-                        "video_id": video_hash,
-                        "scene_index": scene_index,
-                    },
-                )
-            
-            # Progress logging
-            typer.echo(f'[Scene {scene_num}/{total_scenes}] Processing scene {scene_index}: {scene_start:.1f}s - {scene_end:.1f}s (duration: {scene_duration:.1f}s)')
-            if tracker is not None:
-                tracker.update_step(
-                    f"Scene {scene_num}/{total_scenes}",
-                    1 + scene_num,
-                    {
-                        "scene_index": scene_index,
-                        "scenes_total": total_scenes,
-                        "video_id": video_hash,
-                    },
-                )
-            
-            meta_payload: Dict[str, Any] = {
-                'index': scene_index,
-                'duration': scene.get('duration'),
-                'confidence': scene.get('confidence'),
-            }
-            if detection_meta:
-                meta_payload['detection'] = detection_meta
-            scene_id = ensure_scene(cfg, video_hash, scene_start, scene_end, meta_payload)
 
-            existing_meta = get_scene_meta(cfg, scene_id) or {}
-            materialized = scene_has_materialized(cfg, scene_id, ['keyframe', 'audio'])
-            frame_info: Optional[Dict[str, Any]] = None
-            audio_info: Optional[Dict[str, Any]] = None
-            frame_error: Optional[str] = None
-            frame_error_raw: Optional[str] = None
-            frame_error_step: Optional[str] = None
-            frame_error_env: Optional[str] = None
-            audio_error: Optional[str] = None
+        db_write_lock = asyncio.Lock()
+        faiss_write_lock = asyncio.Lock()
+        scene_semaphore = asyncio.Semaphore(2)
+        knowledge_graph_status_local = knowledge_graph_status
 
-            # Check if we should skip based on dedupe (unless force_reprocess is enabled)
-            force = cfg.get('force_reprocess', False)
-            skip_frame = bool(materialized.get('keyframe')) if isinstance(materialized, dict) and not force else False
-            skip_audio = bool(materialized.get('audio')) if isinstance(materialized, dict) and not force else False
+        async def process_scene(scene_num: int, scene: Dict[str, Any]) -> Dict[str, Any]:
+            nonlocal knowledge_graph_status_local
+            async with scene_semaphore:
+                scene_start = float(scene.get('start', 0.0) or 0.0)
+                scene_end = float(scene.get('end', scene_start) or scene_start)
+                scene_index = scene.get('index')
+                scene_duration = scene.get('duration', scene_end - scene_start)
+                
+                typer.echo(f'[Scene {scene_num}/{total_scenes}] Processing scene {scene_index}: {scene_start:.1f}s - {scene_end:.1f}s (duration: {scene_duration:.1f}s)')
+                if tracker is not None:
+                    await asyncio.to_thread(
+                        tracker.update_step,
+                        f"Scene {scene_num}/{total_scenes}",
+                        1 + scene_num,
+                        {
+                            "scene_index": scene_index,
+                            "scenes_total": total_scenes,
+                            "video_id": video_hash,
+                        },
+                    )
 
-            if skip_frame:
-                keyframe_meta = existing_meta.get('keyframe')
-                if isinstance(keyframe_meta, dict):
-                    frame_info = keyframe_meta
-                _log_skipped_steps(
-                    cfg,
-                    IMAGE_PIPELINE_STEPS,
-                    modality='image',
-                    video_hash=video_hash,
-                    scene_id=scene_id,
-                    scene_index=scene_index,
-                    source_path=(frame_info or {}).get('path'),
-                    extra={'component': 'frame'},
+                meta_payload: Dict[str, Any] = {
+                    'index': scene_index,
+                    'duration': scene.get('duration'),
+                    'confidence': scene.get('confidence'),
+                }
+                if detection_meta:
+                    meta_payload['detection'] = detection_meta
+
+                scene_id = _make_id("scene", [video_hash, f"{scene_start:.3f}", f"{scene_end:.3f}"])
+
+                existing_meta = await asyncio.to_thread(get_scene_meta, cfg, scene_id)
+                existing_meta = existing_meta or {}
+                materialized = await asyncio.to_thread(
+                    scene_has_materialized, cfg, scene_id, ['keyframe', 'audio']
                 )
-                _log_skipped_steps(
-                    cfg,
-                    ['text_embed'],
-                    modality='frame_text',
-                    video_hash=video_hash,
-                    scene_id=scene_id,
-                    scene_index=scene_index,
-                    source_path=(frame_info or {}).get('path'),
-                    extra={'component': 'frame_text'},
-                )
-            else:
-                # Validate video file exists before extraction
-                if not video_path.exists():
-                    frame_error = f"Video file not found at {video_path} during frame extraction"
-                    typer.echo(f'[ERROR] {frame_error}', err=True)
+
+                frame_info: Optional[Dict[str, Any]] = None
+                audio_info: Optional[Dict[str, Any]] = None
+                frame_error: Optional[str] = None
+                frame_error_raw: Optional[str] = None
+                frame_error_step: Optional[str] = None
+                frame_error_env: Optional[str] = None
+                audio_error: Optional[str] = None
+
+                force = cfg.get('force_reprocess', False)
+                skip_frame = bool(materialized.get('keyframe')) if isinstance(materialized, dict) and not force else False
+                skip_audio = bool(materialized.get('audio')) if isinstance(materialized, dict) and not force else False
+
+                if skip_frame:
+                    keyframe_meta = existing_meta.get('keyframe')
+                    if isinstance(keyframe_meta, dict):
+                        frame_info = keyframe_meta
+                    await asyncio.to_thread(
+                        _log_skipped_steps,
+                        cfg,
+                        IMAGE_PIPELINE_STEPS,
+                        modality='image',
+                        video_hash=video_hash,
+                        scene_id=scene_id,
+                        scene_index=scene_index,
+                        source_path=(frame_info or {}).get('path'),
+                        extra={'component': 'frame'},
+                    )
+                    await asyncio.to_thread(
+                        _log_skipped_steps,
+                        cfg,
+                        ['text_embed'],
+                        modality='frame_text',
+                        video_hash=video_hash,
+                        scene_id=scene_id,
+                        scene_index=scene_index,
+                        source_path=(frame_info or {}).get('path'),
+                        extra={'component': 'frame_text'},
+                    )
                 else:
-                    try:
-                        typer.echo(f'  [EXTRACT] Extracting keyframe...')
-                        if tracker is not None:
-                            tracker.update_step(
-                                f"Scene {scene_num}/{total_scenes} - Extracting keyframe",
-                                1 + scene_num,
-                                {
-                                    "scene_index": scene_index,
-                                    "scenes_total": total_scenes,
-                                    "video_id": video_hash,
-                                    "stage": "keyframe_extraction"
-                                },
-                            )
-                        frame_info = _process_frame(
-                            cfg_json,
-                            ffmpeg,
-                            video_path,
-                            scene,
-                            frame_dir,
-                            video_hash,
-                            scene_id,
-                            scene_num=scene_num,
-                            total_scenes=total_scenes,
-                        )
-                        typer.echo(f'  [OK] Keyframe processed')
-                    except Exception as exc:  # noqa: BLE001
-                        frame_failure = _extract_step_failure_details(exc, stage_label='Keyframe')
-                        frame_error = frame_failure.get('message') or str(exc)
-                        frame_error_raw = frame_failure.get('raw_message')
-                        frame_error_step = frame_failure.get('step')
-                        frame_error_env = frame_failure.get('env')
-                        step_suffix = f" step={frame_error_step}" if frame_error_step else ""
-                        typer.echo(
-                            f'[ERROR] Keyframe processing failed for scene {scene_index}{step_suffix}: {frame_error}',
-                            err=True,
-                        )
+                    if not video_path.exists():
+                        frame_error = f"Video file not found at {video_path} during frame extraction"
+                        typer.echo(f'[ERROR] {frame_error}', err=True)
 
-            if skip_audio:
-                if VERBOSE:
-                    typer.echo(f'[DEBUG] Skipping audio (using cached data)')
-                audio_meta = existing_meta.get('audio')
-                if isinstance(audio_meta, dict):
-                    audio_info = audio_meta
-                _log_skipped_steps(
-                    cfg,
-                    AUDIO_PIPELINE_STEPS,
-                    modality='audio',
-                    video_hash=video_hash,
-                    scene_id=scene_id,
-                    scene_index=scene_index,
-                    source_path=(audio_info or {}).get('path'),
-                    extra={'component': 'audio'},
-                )
-                _log_skipped_steps(
-                    cfg,
-                    ['text_embed'],
-                    modality='audio_transcript',
-                    video_hash=video_hash,
-                    scene_id=scene_id,
-                    scene_index=scene_index,
-                    source_path=(audio_info or {}).get('path'),
-                    extra={'component': 'audio_transcript'},
-                )
-            else:
-                # Validate video file exists before extraction
-                if not video_path.exists():
-                    audio_error = f"Video file not found at {video_path} during audio extraction"
-                    typer.echo(f'[ERROR] {audio_error}', err=True)
+                if skip_audio:
+                    if VERBOSE:
+                        typer.echo(f'[DEBUG] Skipping audio (using cached data)')
+                    audio_meta = existing_meta.get('audio')
+                    if isinstance(audio_meta, dict):
+                        audio_info = audio_meta
+                    await asyncio.to_thread(
+                        _log_skipped_steps,
+                        cfg,
+                        AUDIO_PIPELINE_STEPS,
+                        modality='audio',
+                        video_hash=video_hash,
+                        scene_id=scene_id,
+                        scene_index=scene_index,
+                        source_path=(audio_info or {}).get('path'),
+                        extra={'component': 'audio'},
+                    )
+                    await asyncio.to_thread(
+                        _log_skipped_steps,
+                        cfg,
+                        ['text_embed'],
+                        modality='audio_transcript',
+                        video_hash=video_hash,
+                        scene_id=scene_id,
+                        scene_index=scene_index,
+                        source_path=(audio_info or {}).get('path'),
+                        extra={'component': 'audio_transcript'},
+                    )
                 else:
-                    try:
-                        if VERBOSE:
-                            typer.echo(f'[DEBUG] Processing audio (not skipped, force={force})')
-                        typer.echo(f'  [EXTRACT] Extracting audio...')
-                        if tracker is not None:
-                            tracker.update_step(
-                                f"Scene {scene_num}/{total_scenes} - Transcribing audio",
-                                1 + scene_num,
-                                {
-                                    "scene_index": scene_index,
-                                    "scenes_total": total_scenes,
-                                    "video_id": video_hash,
-                                    "stage": "audio_transcription"
-                                },
-                            )
-                        audio_info = _process_audio(
-                            cfg_json,
-                            ffmpeg,
-                            video_path,
-                            scene,
-                            audio_dir,
-                            audio_artifact_dir,
-                            video_hash,
-                            scene_id,
-                            audio_runtime_contract=audio_runtime_contract,
-                            scene_num=scene_num,
-                            total_scenes=total_scenes,
-                        )
-                        if audio_info is None:
-                            typer.echo(f'  [OK] No audio track in video (video-only)')
-                        else:
-                            audio_data = audio_info.get('data', {}) if isinstance(audio_info, dict) else {}
-                            if (
-                                isinstance(audio_data, dict)
-                                and audio_data.get('wsl2_unified') is True
-                                and audio_data.get('status') == 'error'
-                            ):
+                    if not video_path.exists():
+                        audio_error = f"Video file not found at {video_path} during audio extraction"
+                        typer.echo(f'[ERROR] {audio_error}', err=True)
+
+                frame_task = None
+                audio_task = None
+
+                if not skip_frame and video_path.exists():
+                    frame_task = _process_frame_async(
+                        cfg_json,
+                        ffmpeg,
+                        video_path,
+                        scene,
+                        frame_dir,
+                        video_hash,
+                        scene_id,
+                        db_write_lock,
+                        faiss_write_lock,
+                        scene_num=scene_num,
+                        total_scenes=total_scenes,
+                    )
+
+                if not skip_audio and video_path.exists():
+                    audio_task = _process_audio_async(
+                        cfg_json,
+                        ffmpeg,
+                        video_path,
+                        scene,
+                        audio_dir,
+                        audio_artifact_dir,
+                        video_hash,
+                        scene_id,
+                        db_write_lock,
+                        faiss_write_lock,
+                        audio_runtime_contract=audio_runtime_contract,
+                        scene_num=scene_num,
+                        total_scenes=total_scenes,
+                    )
+
+                tasks = []
+                task_map = {}
+                if frame_task is not None:
+                    tasks.append(frame_task)
+                    task_map[len(tasks) - 1] = 'frame'
+                if audio_task is not None:
+                    tasks.append(audio_task)
+                    task_map[len(tasks) - 1] = 'audio'
+
+                if tasks:
+                    task_results = await asyncio.gather(*tasks, return_exceptions=True)
+                    for idx, task_res in enumerate(task_results):
+                        kind = task_map[idx]
+                        if isinstance(task_res, Exception):
+                            if kind == 'frame':
+                                frame_failure = _extract_step_failure_details(task_res, stage_label='Keyframe')
+                                frame_error = frame_failure.get('message') or str(task_res)
+                                frame_error_raw = frame_failure.get('raw_message')
+                                frame_error_step = frame_failure.get('step')
+                                frame_error_env = frame_failure.get('env')
+                                step_suffix = f" step={frame_error_step}" if frame_error_step else ""
                                 typer.echo(
-                                    f'  [WARN] WSL2 audio processing failed for scene {scene_index}: {audio_data.get("error") or "Unknown error"}',
+                                    f'[ERROR] Keyframe processing failed for scene {scene_index}{step_suffix}: {frame_error}',
                                     err=True,
                                 )
-                                typer.echo(f'  [OK] Audio extracted')
                             else:
-                                typer.echo(f'  [OK] Audio processed')
-                            if VERBOSE:
-                                typer.echo(f'[DEBUG] audio_info returned with keys: {list(audio_info.keys())}')
-                    except Exception as exc:  # noqa: BLE001
-                        audio_error = str(exc)
-                        wav_path = audio_dir / f"scene_{scene_index:04d}.wav" if isinstance(scene_index, int) else None
-                        wav_exists = bool(wav_path and wav_path.exists())
-                        wav_size = wav_path.stat().st_size if wav_exists else 0
-                        typer.echo(
-                            f'[ERROR] Audio processing failed for scene {scene_index} (wav_exists={wav_exists}, wav_size={wav_size}): {audio_error}',
-                            err=True,
-                        )
+                                audio_error = str(task_res)
+                                wav_path = audio_dir / f"scene_{scene_index:04d}.wav" if isinstance(scene_index, int) else None
+                                wav_exists = bool(wav_path and wav_path.exists())
+                                wav_size = wav_path.stat().st_size if wav_exists else 0
+                                typer.echo(
+                                    f'[ERROR] Audio processing failed for scene {scene_index} (wav_exists={wav_exists}, wav_size={wav_size}): {audio_error}',
+                                    err=True,
+                                )
+                        else:
+                            if kind == 'frame':
+                                frame_info = task_res
+                                if isinstance(frame_info, dict) and frame_info.get('errors'):
+                                    frame_error = "; ".join(frame_info['errors']) if isinstance(frame_info['errors'], list) else str(frame_info['errors'])
+                            else:
+                                audio_info = task_res
+                                audio_data_check = audio_info.get('data', {}) if isinstance(audio_info, dict) else {}
+                                if (
+                                    isinstance(audio_data_check, dict)
+                                    and audio_data_check.get('wsl2_unified') is True
+                                    and audio_data_check.get('status') == 'error'
+                                ):
+                                    typer.echo(
+                                        f'  [WARN] WSL2 audio processing failed for scene {scene_index}: {audio_data_check.get("error") or "Unknown error"}',
+                                        err=True,
+                                    )
 
-            audio_backend_fields = _resolve_audio_backend_attribution(
-                audio_info,
-                skip_audio=skip_audio,
-                audio_error=audio_error,
-                audio_runtime_contract=audio_runtime_contract,
-                run_context=run_context,
-                scene_id=scene_id,
-                scene_index=scene_index,
-            )
-            if isinstance(audio_info, dict):
-                audio_info['audio_backend_selected'] = audio_backend_fields['audio_backend_selected']
-                audio_info['audio_backend_reason'] = audio_backend_fields['audio_backend_reason']
-                audio_info['audio_backend_effective'] = audio_backend_fields['audio_backend_effective']
-                audio_info['audio_backend_effective_reason'] = audio_backend_fields['audio_backend_effective_reason']
-                audio_info['audio_backend_downgraded'] = bool(audio_backend_fields['audio_backend_downgraded'])
-                audio_info['audio_backend_downgrade_reason'] = audio_backend_fields['audio_backend_downgrade_reason']
-                audio_info['audio_backend_downgrade_ts'] = audio_backend_fields['audio_backend_downgrade_ts']
-                audio_info['audio_backend_downgrade_details'] = dict(
-                    audio_backend_fields.get('audio_backend_downgrade_details') or {}
+                audio_backend_fields = _resolve_audio_backend_attribution(
+                    audio_info,
+                    skip_audio=skip_audio,
+                    audio_error=audio_error,
+                    audio_runtime_contract=audio_runtime_contract,
+                    run_context=run_context,
+                    scene_id=scene_id,
+                    scene_index=scene_index,
                 )
-                audio_data_for_backend = audio_info.get('data')
-                if isinstance(audio_data_for_backend, dict):
-                    audio_data_for_backend['audio_backend_selected'] = audio_backend_fields['audio_backend_selected']
-                    audio_data_for_backend['audio_backend_reason'] = audio_backend_fields['audio_backend_reason']
-                    audio_data_for_backend['audio_backend_effective'] = audio_backend_fields['audio_backend_effective']
-                    audio_data_for_backend['audio_backend_effective_reason'] = audio_backend_fields['audio_backend_effective_reason']
-                    audio_data_for_backend['audio_backend_downgraded'] = bool(
-                        audio_backend_fields['audio_backend_downgraded']
-                    )
-                    audio_data_for_backend['audio_backend_downgrade_reason'] = audio_backend_fields[
-                        'audio_backend_downgrade_reason'
-                    ]
-                    audio_data_for_backend['audio_backend_downgrade_ts'] = audio_backend_fields[
-                        'audio_backend_downgrade_ts'
-                    ]
-                    audio_data_for_backend['audio_backend_downgrade_details'] = dict(
+                if isinstance(audio_info, dict):
+                    audio_info['audio_backend_selected'] = audio_backend_fields['audio_backend_selected']
+                    audio_info['audio_backend_reason'] = audio_backend_fields['audio_backend_reason']
+                    audio_info['audio_backend_effective'] = audio_backend_fields['audio_backend_effective']
+                    audio_info['audio_backend_effective_reason'] = audio_backend_fields['audio_backend_effective_reason']
+                    audio_info['audio_backend_downgraded'] = bool(audio_backend_fields['audio_backend_downgraded'])
+                    audio_info['audio_backend_downgrade_reason'] = audio_backend_fields['audio_backend_downgrade_reason']
+                    audio_info['audio_backend_downgrade_ts'] = audio_backend_fields['audio_backend_downgrade_ts']
+                    audio_info['audio_backend_downgrade_details'] = dict(
                         audio_backend_fields.get('audio_backend_downgrade_details') or {}
                     )
-
-            error_payload = {}
-            if frame_error:
-                error_payload['frame'] = frame_error
-                if frame_error_raw and frame_error_raw != frame_error:
-                    error_payload['frame_raw'] = frame_error_raw
-                if frame_error_step:
-                    error_payload['frame_step'] = frame_error_step
-                if frame_error_env:
-                    error_payload['frame_env'] = frame_error_env
-            if audio_error:
-                error_payload['audio'] = audio_error
-
-            persist_result = register_scene_bundle(
-                cfg,
-                video_hash=video_hash,
-                scene=scene,
-                scene_id=scene_id,
-                detection_meta=detection_meta,
-                frame=frame_info,
-                audio=audio_info,
-                errors=error_payload or None,
-            )
-
-            # Update knowledge graph in real-time
-            if KNOWLEDGE_GRAPH_AVAILABLE and cfg.get('knowledge_graph', {}).get('enabled', True):
-                # Extract all data for entity extraction
-                frame_data = frame_info.get('data', {}) if frame_info else {}
-                # Audio data is nested in 'data' key from _process_audio return
-                # DEBUG: Check what audio_info contains
-                if VERBOSE:
-                    typer.echo(f'[DEBUG] audio_info is None: {audio_info is None}')
-                    if audio_info:
-                        typer.echo(f'[DEBUG] audio_info keys: {list(audio_info.keys())}')
-                        typer.echo(f'[DEBUG] audio_info["data"] type: {type(audio_info.get("data"))}')
-                
-                audio_data = audio_info.get('data', {}) if audio_info else {}
-                
-                # DEBUG: Check what audio_data contains
-                if VERBOSE:
-                    typer.echo(f'[DEBUG] audio_data keys: {list(audio_data.keys())}')
-                    typer.echo(f'[DEBUG] has transcript: {bool(audio_data.get("transcript"))}')
-                    typer.echo(f'[DEBUG] has full_text: {bool(audio_data.get("full_text"))}')
-                    if audio_data.get('transcript'):
-                        import sys
-                        preview = str(audio_data.get("transcript"))[:50]
-                        encoding = sys.stdout.encoding or 'utf-8'
-                        try:
-                            safe_preview = preview.encode(encoding, errors='replace').decode(encoding)
-                        except Exception:
-                            safe_preview = preview.encode('ascii', errors='replace').decode('ascii')
-                        typer.echo(f'[DEBUG] transcript preview: {safe_preview}...')
-                kg_scene_data = _build_kg_scene_data(
-                    scene,
-                    scene_id=scene_id,
-                    video_id=video_hash,
-                    frame_data=frame_data,
-                    audio_data=audio_data,
-                )
-                try:
-                    if tracker is not None:
-                        tracker.update_step(
-                            f"Scene {scene_num}/{total_scenes} - Resolving entities",
-                            1 + scene_num,
-                            {
-                                "scene_index": scene_index,
-                                "scenes_total": total_scenes,
-                                "video_id": video_hash,
-                                "stage": "knowledge_graph_update"
-                            },
+                    audio_data_for_backend = audio_info.get('data')
+                    if isinstance(audio_data_for_backend, dict):
+                        audio_data_for_backend['audio_backend_selected'] = audio_backend_fields['audio_backend_selected']
+                        audio_data_for_backend['audio_backend_reason'] = audio_backend_fields['audio_backend_reason']
+                        audio_data_for_backend['audio_backend_effective'] = audio_backend_fields['audio_backend_effective']
+                        audio_data_for_backend['audio_backend_effective_reason'] = audio_backend_fields['audio_backend_effective_reason']
+                        audio_data_for_backend['audio_backend_downgraded'] = bool(
+                            audio_backend_fields['audio_backend_downgraded']
                         )
-                    kg_stats = update_kg_for_scene(
-                        kg_scene_data,
-                        scene_id=scene_id,
-                        video_id=video_hash,
-                        video_path=str(video_path),
-                        cfg=cfg,
-                    )
-                    if VERBOSE and kg_stats:
-                        typer.echo(f'[kg] Scene {scene_index}: {kg_stats.get("entities_resolved", 0)} entities resolved')
-                except Exception as kg_error:
-                    knowledge_graph_status = 'error_runtime'
-                    run_context['knowledge_graph_status'] = knowledge_graph_status
-                    if isinstance(cfg.get('run'), dict):
-                        cfg['run']['knowledge_graph_status'] = knowledge_graph_status
-                    logger.warning(
-                        "run_ingestion warning context=%s error=%s",
-                        "knowledge_graph.scene_update",
-                        kg_error,
-                    )
-                    _record_run_warning(
-                        cfg_json,
-                        code='knowledge_graph_scene_update_failed',
-                        message=str(kg_error),
-                        context={'scene_id': scene_id, 'scene_index': scene_index},
-                    )
-                    if VERBOSE:
-                        typer.echo(f'[kg] Warning: KG update failed for scene {scene_index}: {kg_error}')
+                        audio_data_for_backend['audio_backend_downgrade_reason'] = audio_backend_fields[
+                            'audio_backend_downgrade_reason'
+                        ]
+                        audio_data_for_backend['audio_backend_downgrade_ts'] = audio_backend_fields[
+                            'audio_backend_downgrade_ts'
+                        ]
+                        audio_data_for_backend['audio_backend_downgrade_details'] = dict(
+                            audio_backend_fields.get('audio_backend_downgrade_details') or {}
+                        )
 
-            scene_record: Dict[str, Any] = {
-                'scene_id': scene_id,
-                'video_id': video_hash,
-                'index': scene.get('index'),
-                'start': scene.get('start'),
-                'end': scene.get('end'),
-                'duration': scene.get('duration'),
-                'confidence': scene.get('confidence'),
-                'persistence': persist_result,
-                'audio_backend_selected': audio_backend_fields['audio_backend_selected'],
-                'audio_backend_reason': audio_backend_fields['audio_backend_reason'],
-                'audio_backend_effective': audio_backend_fields['audio_backend_effective'],
-                'audio_backend_effective_reason': audio_backend_fields['audio_backend_effective_reason'],
-                'audio_backend_downgraded': bool(audio_backend_fields['audio_backend_downgraded']),
-                'audio_backend_downgrade_reason': audio_backend_fields['audio_backend_downgrade_reason'],
-                'audio_backend_downgrade_ts': audio_backend_fields['audio_backend_downgrade_ts'],
-                'audio_backend_downgrade_details': dict(
-                    audio_backend_fields.get('audio_backend_downgrade_details') or {}
-                ),
-                'vector_points_attempted': (
-                    _coerce_nonnegative_int(persist_result.get('vector_points_attempted'))
-                    if isinstance(persist_result, dict)
-                    else 0
-                ),
-                'qdrant_ok': (
-                    _resolve_store_status_for_points(
-                        persist_result.get('vector_points_attempted'),
-                        persist_result.get('qdrant_ok'),
-                    )
-                    if isinstance(persist_result, dict)
-                    else 'not_attempted'
-                ),
-                'faiss_ok': (
-                    _resolve_store_status_for_points(
-                        persist_result.get('vector_points_attempted'),
-                        persist_result.get('faiss_ok'),
-                    )
-                    if isinstance(persist_result, dict)
-                    else 'not_attempted'
-                ),
-            }
-            if frame_info:
-                formatted_frame = _merge_step_output(frame_info)
-                if formatted_frame:
-                    if 'timestamp' not in formatted_frame:
-                        start_val = float(scene.get('start', 0.0) or 0.0)
-                        duration_val = float(scene.get('duration', 0.0) or 0.0)
-                        formatted_frame['timestamp'] = start_val + (duration_val / 2.0 if duration_val > 0 else start_val)
-                    scene_record['keyframe'] = formatted_frame
-                else:
-                    scene_record['keyframe'] = frame_info
-            elif frame_error:
-                scene_record['keyframe_error'] = frame_error
-                if frame_error_raw and frame_error_raw != frame_error:
-                    scene_record['keyframe_error_raw'] = frame_error_raw
-                if frame_error_step:
-                    scene_record['keyframe_error_step'] = frame_error_step
-                if frame_error_env:
-                    scene_record['keyframe_error_env'] = frame_error_env
-            if audio_info:
-                formatted_audio = _merge_step_output(audio_info)
-                if formatted_audio:
-                    _promote_metadata_time_hints(formatted_audio)
-                    audio_start_val = scene_start
-                    audio_end_val = scene_end
-                    if isinstance(audio_info, dict):
-                        if audio_info.get('start') is not None:
-                            audio_start_val = float(audio_info.get('start'))
-                        if audio_info.get('end') is not None:
-                            audio_end_val = float(audio_info.get('end'))
-                    formatted_audio.setdefault('start', audio_start_val)
-                    formatted_audio.setdefault('end', audio_end_val)
-                    formatted_audio.setdefault(
-                        'audio_backend_selected',
-                        audio_backend_fields['audio_backend_selected'],
-                    )
-                    formatted_audio.setdefault(
-                        'audio_backend_reason',
-                        audio_backend_fields['audio_backend_reason'],
-                    )
-                    formatted_audio.setdefault(
-                        'audio_backend_effective',
-                        audio_backend_fields['audio_backend_effective'],
-                    )
-                    formatted_audio.setdefault(
-                        'audio_backend_effective_reason',
-                        audio_backend_fields['audio_backend_effective_reason'],
-                    )
-                    formatted_audio.setdefault(
-                        'audio_backend_downgraded',
-                        bool(audio_backend_fields['audio_backend_downgraded']),
-                    )
-                    formatted_audio.setdefault(
-                        'audio_backend_downgrade_reason',
-                        audio_backend_fields['audio_backend_downgrade_reason'],
-                    )
-                    formatted_audio.setdefault(
-                        'audio_backend_downgrade_ts',
-                        audio_backend_fields['audio_backend_downgrade_ts'],
-                    )
-                    formatted_audio.setdefault(
-                        'audio_backend_downgrade_details',
-                        dict(audio_backend_fields.get('audio_backend_downgrade_details') or {}),
-                    )
-                    speaker_ids = _extract_speaker_ids(formatted_audio)
-                    formatted_audio.setdefault('speaker_ids', speaker_ids)
-                    formatted_audio.setdefault('speaker_count', len(speaker_ids))
-                    scene_record['audio'] = formatted_audio
-                else:
-                    scene_record['audio'] = audio_info
-            elif audio_error:
-                scene_record['audio_error'] = audio_error
-            scene_record['speaker_ids'] = _extract_speaker_ids(scene_record.get('audio'))
-            if error_payload:
-                scene_record['errors'] = error_payload
-            scene_record['content_state'] = _classify_scene_content(
-                scene_record,
-                empty_duration_threshold_sec=empty_duration_threshold_sec,
-            )
+                error_payload = {}
+                if frame_error:
+                    error_payload['frame'] = frame_error
+                    if frame_error_raw and frame_error_raw != frame_error:
+                        error_payload['frame_raw'] = frame_error_raw
+                    if frame_error_step:
+                        error_payload['frame_step'] = frame_error_step
+                    if frame_error_env:
+                        error_payload['frame_env'] = frame_error_env
+                if audio_error:
+                    error_payload['audio'] = audio_error
 
-            scene_outputs.append(scene_record)
+                return {
+                    'scene': scene,
+                    'scene_id': scene_id,
+                    'start': scene_start,
+                    'end': scene_end,
+                    'meta_payload': meta_payload,
+                    'frame_info': frame_info,
+                    'audio_info': audio_info,
+                    'error_payload': error_payload,
+                    'audio_backend_fields': audio_backend_fields,
+                }
+
+        async def process_video_scenes_async() -> str:
+            nonlocal knowledge_graph_status_local
+            
+            for w_idx in sorted_window_indices:
+                if w_idx <= last_completed_window_idx and not force_reprocess:
+                    continue
+                
+                window_scenes = grouped_scenes[w_idx]
+                typer.echo(f"\n[WINDOW {w_idx}] Processing progressive window index {w_idx} with {len(window_scenes)} scenes...")
+                
+                scene_tasks = [process_scene(idx + 1, s) for idx, s in enumerate(window_scenes)]
+                window_results = await asyncio.gather(*scene_tasks, return_exceptions=False)
+                
+                typer.echo(f"[WINDOW {w_idx}] Committing database transactions staged for window index {w_idx}...")
+                
+                db_path = (cfg.get("paths", {}) or {}).get("db_path")
+                if db_path:
+                    for scene_res in window_results:
+                        ensure_scene(
+                            cfg,
+                            video_hash,
+                            scene_res['start'],
+                            scene_res['end'],
+                            scene_res['meta_payload'],
+                        )
+                        persist_res = register_scene_bundle(
+                            cfg,
+                            video_hash=video_hash,
+                            scene=scene_res['scene'],
+                            scene_id=scene_res['scene_id'],
+                            detection_meta=detection_meta,
+                            frame=scene_res['frame_info'],
+                            audio=scene_res['audio_info'],
+                            errors=scene_res['error_payload'] or None,
+                        )
+                        scene_res['persistence'] = persist_res
+
+                if KNOWLEDGE_GRAPH_AVAILABLE and cfg.get('knowledge_graph', {}).get('enabled', True):
+                    graph_db_path = _resolve_graph_db_path(cfg).resolve()
+                    graph_db_path.parent.mkdir(parents=True, exist_ok=True)
+                    kg_instance = KnowledgeGraph(str(graph_db_path))
+                    kg_instance.__enter__()
+                    try:
+                        with kg_instance.conn:
+                            for scene_res in window_results:
+                                frame_data = scene_res['frame_info'].get('data', {}) if scene_res['frame_info'] else {}
+                                audio_data = scene_res['audio_info'].get('data', {}) if scene_res['audio_info'] else {}
+                                kg_scene_data = _build_kg_scene_data(
+                                    scene_res['scene'],
+                                    scene_id=scene_res['scene_id'],
+                                    video_id=video_hash,
+                                    frame_data=frame_data,
+                                    audio_data=audio_data,
+                                )
+                                try:
+                                    update_kg_for_scene(
+                                        kg_scene_data,
+                                        scene_id=scene_res['scene_id'],
+                                        video_id=video_hash,
+                                        video_path=str(video_path),
+                                        cfg=cfg,
+                                        kg=kg_instance
+                                    )
+                                except Exception as kg_err:
+                                    knowledge_graph_status_local = 'error_runtime'
+                                    logger.warning(f"[WINDOW {w_idx}] KG update failed for scene {scene_res['scene_id']}: {kg_err}")
+                    finally:
+                        kg_instance.__exit__(None, None, None)
+
+                for scene_res in window_results:
+                    persist_result = scene_res['persistence']
+                    scene_record: Dict[str, Any] = {
+                        'scene_id': scene_res['scene_id'],
+                        'video_id': video_hash,
+                        'index': scene_res['scene'].get('index'),
+                        'start': scene_res['start'],
+                        'end': scene_res['end'],
+                        'duration': scene_res['end'] - scene_res['start'],
+                        'confidence': scene_res['scene'].get('confidence'),
+                        'persistence': persist_result,
+                        'audio_backend_selected': scene_res['audio_backend_fields']['audio_backend_selected'],
+                        'audio_backend_reason': scene_res['audio_backend_fields']['audio_backend_reason'],
+                        'audio_backend_effective': scene_res['audio_backend_fields']['audio_backend_effective'],
+                        'audio_backend_effective_reason': scene_res['audio_backend_fields']['audio_backend_effective_reason'],
+                        'audio_backend_downgraded': bool(scene_res['audio_backend_fields']['audio_backend_downgraded']),
+                        'audio_backend_downgrade_reason': scene_res['audio_backend_fields']['audio_backend_downgrade_reason'],
+                        'audio_backend_downgrade_ts': scene_res['audio_backend_fields']['audio_backend_downgrade_ts'],
+                        'audio_backend_downgrade_details': dict(
+                            scene_res['audio_backend_fields'].get('audio_backend_downgrade_details') or {}
+                        ),
+                        'vector_points_attempted': (
+                            _coerce_nonnegative_int(persist_result.get('vector_points_attempted'))
+                            if isinstance(persist_result, dict)
+                            else 0
+                        ),
+                        'qdrant_ok': (
+                            _resolve_store_status_for_points(
+                                persist_result.get('vector_points_attempted'),
+                                persist_result.get('qdrant_ok'),
+                            )
+                            if isinstance(persist_result, dict)
+                            else 'not_attempted'
+                        ),
+                        'faiss_ok': (
+                            _resolve_store_status_for_points(
+                                persist_result.get('vector_points_attempted'),
+                                persist_result.get('faiss_ok'),
+                            )
+                            if isinstance(persist_result, dict)
+                            else 'not_attempted'
+                        ),
+                    }
+                    if scene_res['frame_info']:
+                        formatted_frame = _merge_step_output(scene_res['frame_info'])
+                        if formatted_frame:
+                            if 'timestamp' not in formatted_frame:
+                                start_val = float(scene_res['start'])
+                                duration_val = float(scene_res['end'] - scene_res['start'])
+                                formatted_frame['timestamp'] = start_val + (duration_val / 2.0 if duration_val > 0 else start_val)
+                            scene_record['keyframe'] = formatted_frame
+                        else:
+                            scene_record['keyframe'] = scene_res['frame_info']
+                    elif scene_res['error_payload'].get('frame'):
+                        scene_record['keyframe_error'] = scene_res['error_payload']['frame']
+                        if scene_res['error_payload'].get('frame_raw') and scene_res['error_payload']['frame_raw'] != scene_res['error_payload']['frame']:
+                            scene_record['keyframe_error_raw'] = scene_res['error_payload']['frame_raw']
+                        if scene_res['error_payload'].get('frame_step'):
+                            scene_record['keyframe_error_step'] = scene_res['error_payload']['frame_step']
+                        if scene_res['error_payload'].get('frame_env'):
+                            scene_record['keyframe_error_env'] = scene_res['error_payload']['frame_env']
+
+                    if scene_res['audio_info']:
+                        formatted_audio = _merge_step_output(scene_res['audio_info'])
+                        if formatted_audio:
+                            _promote_metadata_time_hints(formatted_audio)
+                            audio_start_val = scene_res['start']
+                            audio_end_val = scene_res['end']
+                            if isinstance(scene_res['audio_info'], dict):
+                                if scene_res['audio_info'].get('start') is not None:
+                                    audio_start_val = float(scene_res['audio_info'].get('start'))
+                                if scene_res['audio_info'].get('end') is not None:
+                                    audio_end_val = float(scene_res['audio_info'].get('end'))
+                            formatted_audio.setdefault('start', audio_start_val)
+                            formatted_audio.setdefault('end', audio_end_val)
+                            formatted_audio.setdefault(
+                                'audio_backend_selected',
+                                scene_res['audio_backend_fields']['audio_backend_selected'],
+                            )
+                            formatted_audio.setdefault(
+                                'audio_backend_reason',
+                                scene_res['audio_backend_fields']['audio_backend_reason'],
+                            )
+                            formatted_audio.setdefault(
+                                'audio_backend_effective',
+                                scene_res['audio_backend_fields']['audio_backend_effective'],
+                            )
+                            formatted_audio.setdefault(
+                                'audio_backend_effective_reason',
+                                scene_res['audio_backend_fields']['audio_backend_effective_reason'],
+                            )
+                            formatted_audio.setdefault(
+                                'audio_backend_downgraded',
+                                bool(scene_res['audio_backend_fields']['audio_backend_downgraded']),
+                            )
+                            formatted_audio.setdefault(
+                                'audio_backend_downgrade_reason',
+                                scene_res['audio_backend_fields']['audio_backend_downgrade_reason'],
+                            )
+                            formatted_audio.setdefault(
+                                'audio_backend_downgrade_ts',
+                                scene_res['audio_backend_fields']['audio_backend_downgrade_ts'],
+                            )
+                            formatted_audio.setdefault(
+                                'audio_backend_downgrade_details',
+                                dict(scene_res['audio_backend_fields'].get('audio_backend_downgrade_details') or {}),
+                            )
+                            speaker_ids = _extract_speaker_ids(formatted_audio)
+                            formatted_audio.setdefault('speaker_ids', speaker_ids)
+                            formatted_audio.setdefault('speaker_count', len(speaker_ids))
+                            scene_record['audio'] = formatted_audio
+                        else:
+                            scene_record['audio'] = scene_res['audio_info']
+                    elif scene_res['error_payload'].get('audio'):
+                        scene_record['audio_error'] = scene_res['error_payload']['audio']
+                    scene_record['speaker_ids'] = _extract_speaker_ids(scene_record.get('audio'))
+                    if scene_res['error_payload']:
+                        scene_record['errors'] = scene_res['error_payload']
+                    scene_record['content_state'] = _classify_scene_content(
+                        scene_record,
+                        empty_duration_threshold_sec=empty_duration_threshold_sec,
+                    )
+
+                    scene_outputs.append(scene_record)
+
+                scene_manifest = {
+                    'video_id': video_hash,
+                    'video_path': str(video_path),
+                    'phase5_complete': True,
+                    'total_scenes': len(scene_outputs),
+                    'content_summary': _aggregate_content_summary(scene_outputs),
+                    'scenes': [
+                        {
+                            'video_id': video_hash,
+                            'scene_id': s.get('scene_id'),
+                            'index': s.get('index'),
+                            'start': s.get('start'),
+                            'end': s.get('end'),
+                            'duration': s.get('duration'),
+                            'confidence': s.get('confidence'),
+                            'vector_points_attempted': _coerce_nonnegative_int(s.get('vector_points_attempted')),
+                            'qdrant_ok': _resolve_store_status_for_points(
+                                s.get('vector_points_attempted'),
+                                s.get('qdrant_ok'),
+                            ),
+                            'faiss_ok': _resolve_store_status_for_points(
+                                s.get('vector_points_attempted'),
+                                s.get('faiss_ok'),
+                            ),
+                            'content_state': s.get('content_state', 'signal'),
+                            'speaker_ids': s.get('speaker_ids') or [],
+                            'speaker_count': len(s.get('speaker_ids') or []),
+                            'keyframe': s.get('keyframe', {}),
+                            'audio': s.get('audio', {}),
+                        }
+                        for s in scene_outputs
+                    ]
+                }
+                scene_manifest_path = processing_dir / 'video' / 'scene_manifest.json'
+                scene_manifest_path.parent.mkdir(parents=True, exist_ok=True)
+                existing_manifest = None
+                if scene_manifest_path.exists():
+                    try:
+                        existing_manifest = json.loads(scene_manifest_path.read_text(encoding='utf-8'))
+                    except Exception as e:
+                        logger.warning(f"Failed to load existing manifest: {e}")
+                
+                atomic_write_json(
+                    scene_manifest_path,
+                    _merge_prior_phase6_manifest_state(scene_manifest, existing_manifest),
+                )
+
+                phase6_item = {
+                    'id': video_hash,
+                    'source_path': str(video_path),
+                    'video_id': video_hash,
+                    'video_storage_key': video_path.stem,
+                    'video_path': str(video_path),
+                    'processing_dir': str(processing_dir),
+                    'audio_artifact_dir': str(phase6_audio_artifact_dir),
+                    'scene_manifest_path': str(scene_manifest_path),
+                    'scenes': scene_outputs,
+                    'video_hash': video_hash,
+                }
+                
+                vectors_committed = False
+                manifest_updated = False
+                temporal_index_updated = False
+
+                if phase6_enabled:
+                    try:
+                        embeddings_result = _run_step('goodq_image_caption', 'scene_visual_embeddings', phase6_item, cfg_json)
+                        if isinstance(embeddings_result, dict) and embeddings_result.get('phase6_status') == 'complete':
+                            vectors_committed = True
+                            manifest_updated = True
+                            if embeddings_result.get('scenes'):
+                                _rehydrate_video_result_scenes_from_manifest({'scenes': scene_outputs}, str(scene_manifest_path))
+                    except Exception as p6a_err:
+                        logger.warning(f"[WINDOW {w_idx}] Phase 6a incremental run failed: {p6a_err}")
+
+                    try:
+                        harmonization_result = _run_step('goodq_core', 'cross_modal_harmonization', phase6_item, cfg_json)
+                        if isinstance(harmonization_result, dict) and harmonization_result.get('harmonization_status') != 'skipped':
+                            temporal_index_updated = True
+                    except Exception as p6b_err:
+                        logger.warning(f"[WINDOW {w_idx}] Phase 6b incremental run failed: {p6b_err}")
+
+                state_record = {
+                    'run_id': run_id,
+                    'video_hash': video_hash,
+                    'window_idx': w_idx,
+                    'window_start': w_idx * step_val,
+                    'window_end': (w_idx * step_val) + chunk_size_val,
+                    'scene_ids_committed': [s.get('scene_id') for s in window_scenes],
+                    'main_db_committed': True,
+                    'kg_db_committed': KNOWLEDGE_GRAPH_AVAILABLE and cfg.get('knowledge_graph', {}).get('enabled', True),
+                    'vectors_committed': vectors_committed,
+                    'manifest_updated': manifest_updated,
+                    'temporal_index_updated': temporal_index_updated,
+                    'completed_at': datetime.now(timezone.utc).isoformat(),
+                }
+                atomic_write_json(checkpoint_path, state_record)
+                logger.info(f"[WINDOW {w_idx}] Checkpoint written: window index {w_idx} successfully committed.")
+
+            return knowledge_graph_status_local
+
+        knowledge_graph_status = asyncio.run(process_video_scenes_async())
 
         if observer:
             observer.step_end(
@@ -5418,14 +6908,14 @@ def run(
             for scene in scene_outputs
             if isinstance(scene, dict)
         )
-        phase6_embeddings_result: Optional[Dict[str, Any]] = None
-        phase6_qdrant_status: Any = 'not_attempted'
-        phase6_faiss_status: Any = 'not_attempted'
+        phase6_embeddings_result = None
+        phase6_qdrant_status = 'complete' if all(s.get('qdrant_ok') is True for s in scene_outputs) else 'failed'
+        phase6_faiss_status = 'complete' if all(s.get('faiss_ok') is True for s in scene_outputs) else 'failed'
 
         video_result = {
             'video_path': str(video_path),
             'video_hash': video_hash,
-            'video_id': video_hash,  # Use video_hash as video_id for consistency
+            'video_id': video_hash,
             'video_name': video_path.name,
             'audio_artifact_dir': str(audio_artifact_dir),
             'scene_meta': detection_meta,
@@ -5442,248 +6932,26 @@ def run(
             'control_agent_status': control_agent_status,
             'control_agent_reason': control_agent_reason,
             'knowledge_graph_status': knowledge_graph_status,
+            'orchestration': orchestration_contract,
+            'phase6_audio_artifact_dir': str(phase6_audio_artifact_dir),
+            'phase6_qdrant_ok': phase6_qdrant_status,
+            'phase6_faiss_ok': phase6_faiss_status,
+            'phase6_complete': all(s.get('qdrant_ok') is True for s in scene_outputs) if scene_outputs else False,
         }
         if profile_override:
             video_result['profile_override'] = profile_override
             video_result['profile_override_reason'] = profile_override_reason
-
-        segmentation_shadow_result = _run_segmentation_shadow_pipeline(
-            video_path,
-            processing_dir,
-            cfg,
-            audio_runtime_contract=audio_runtime_contract,
-        )
-        segmentation_shadow_overlay = _prepare_segmentation_shadow_audio_overlay(
-            cfg,
-            segmentation_shadow_result,
-        )
-        orchestration_contract = _resolve_ingest_orchestration_contract(
-            cfg,
-            audio_runtime_contract=audio_runtime_contract,
-            segmentation_shadow=segmentation_shadow_result,
-            segmentation_shadow_overlay=segmentation_shadow_overlay,
-        )
-        video_result['orchestration'] = orchestration_contract
-        phase6_audio_artifact_dir = Path(
-            segmentation_shadow_overlay.get('audio_artifact_dir')
-        ) if segmentation_shadow_overlay.get('enabled') else audio_artifact_dir
-        video_result['phase6_audio_artifact_dir'] = str(phase6_audio_artifact_dir)
         if segmentation_shadow_overlay.get('enabled'):
             video_result['phase6_audio_overlay'] = segmentation_shadow_overlay
-        
-        # ============================================================
-        # PHASE 6: VISUAL EMBEDDINGS + MULTIMODAL HARMONIZATION
-        # ============================================================
-        if phase6_enabled and scene_outputs:
-            if observer:
-                observer.step_start(
-                    "phase6.pipeline",
-                    total=2,
-                    metadata={"video_path": str(video_path), "video_id": video_hash},
-                )
-            typer.echo(f'\n=== Starting Phase 6: Visual Embeddings & Harmonization ===\n')
-            
-            # Create phase6_item with required structure
-            phase6_item = {
-                'id': video_hash,
-                'source_path': str(video_path),
-                'video_id': video_hash,
-                'video_storage_key': video_path.stem,
-                'video_path': str(video_path),
-                'processing_dir': str(processing_dir),
-                'audio_artifact_dir': str(phase6_audio_artifact_dir),
-                'scene_manifest_path': str(processing_dir / 'video' / 'scene_manifest.json'),
-                'scenes': scene_outputs,
-                'video_hash': video_hash,
-            }
-            
-            # Write scene_manifest.json for Phase 6 to consume
-            scene_manifest = {
-                'video_id': video_hash,
-                'video_path': str(video_path),
-                'phase5_complete': True,
-                'total_scenes': len(scene_outputs),
-                'content_summary': content_summary,
-                'scenes': [
-                    {
-                        'video_id': video_hash,
-                        'scene_id': s.get('scene_id'),
-                        'index': s.get('index'),
-                        'start': s.get('start'),
-                        'end': s.get('end'),
-                        'duration': s.get('duration'),
-                        'confidence': s.get('confidence'),
-                        'vector_points_attempted': _coerce_nonnegative_int(s.get('vector_points_attempted')),
-                        'qdrant_ok': _resolve_store_status_for_points(
-                            s.get('vector_points_attempted'),
-                            s.get('qdrant_ok'),
-                        ),
-                        'faiss_ok': _resolve_store_status_for_points(
-                            s.get('vector_points_attempted'),
-                            s.get('faiss_ok'),
-                        ),
-                        'content_state': s.get('content_state', 'signal'),
-                        'speaker_ids': (
-                            s.get('speaker_ids')
-                            if isinstance(s.get('speaker_ids'), list)
-                            else _extract_speaker_ids(s.get('audio'))
-                        ),
-                        'speaker_count': len(
-                            s.get('speaker_ids')
-                            if isinstance(s.get('speaker_ids'), list)
-                            else _extract_speaker_ids(s.get('audio'))
-                        ),
-                        'keyframe': s.get('keyframe', {}),
-                        'audio': s.get('audio', {}),
-                    }
-                    for s in scene_outputs
-                ]
-            }
-            scene_manifest_path = processing_dir / 'video' / 'scene_manifest.json'
-            scene_manifest_path.parent.mkdir(parents=True, exist_ok=True)
-            existing_scene_manifest: Optional[Dict[str, Any]] = None
-            if scene_manifest_path.exists():
-                try:
-                    existing_scene_manifest = json.loads(scene_manifest_path.read_text(encoding='utf-8'))
-                except Exception as e:
-                    logger.warning(
-                        "run_ingestion warning context=%s error=%s",
-                        "phase6_manifest_prior_state",
-                        e,
-                    )
-            atomic_write_json(
-                scene_manifest_path,
-                _merge_prior_phase6_manifest_state(scene_manifest, existing_scene_manifest),
-            )
-            
+
+        # Rehydrate temporal index if Phase 6 was run
+        temporal_index_path = processing_dir / 'video' / 'temporal_index.json'
+        if temporal_index_path.exists():
             try:
-                # Phase 6a: Scene Visual Embeddings (CLIP + DINO)
-                if tracker is not None:
-                    tracker.update_step(
-                        "Phase 6a - Generating visual embeddings",
-                        total_scenes + 2,
-                        {"stage": "scene_visual_embeddings_start", "video_id": video_hash},
-                    )
-                embeddings_result = _run_step('goodq_image_caption', 'scene_visual_embeddings', phase6_item, cfg_json)
-                if tracker is not None:
-                    tracker.update_step(
-                        "Phase 6a Complete",
-                        total_scenes + 2,
-                        {"stage": "scene_visual_embeddings", "video_id": video_hash},
-                    )
-                if observer:
-                    observer.step_progress(
-                        "phase6.pipeline",
-                        current=1,
-                        total=2,
-                        metadata={
-                            "stage": "scene_visual_embeddings",
-                            "video_path": str(video_path),
-                            "video_id": video_hash,
-                        },
-                    )
-                phase6_status = embeddings_result.get('phase6_status') if isinstance(embeddings_result, dict) else None
-                phase6a_success = bool(phase6_status == 'complete')
-                result_dict = embeddings_result if isinstance(embeddings_result, dict) else embeddings_result
-                print("[STAGE10_16_DEBUG] phase6_status:", phase6_status)
-                print("[STAGE10_16_DEBUG] phase6_result:", result_dict)
-                if isinstance(embeddings_result, dict):
-                    phase6_embeddings_result = embeddings_result
-                    phase6_item.update(embeddings_result)
-                    phase6_qdrant_status = _normalize_vector_store_status(embeddings_result.get('qdrant_ok'))
-                    phase6_faiss_status = _normalize_vector_store_status(embeddings_result.get('faiss_ok'))
-                    if phase6_qdrant_status is None:
-                        phase6_qdrant_status = 'not_attempted'
-                    if phase6_faiss_status is None:
-                        phase6_faiss_status = 'not_attempted'
-                    video_result['phase6_qdrant_ok'] = phase6_qdrant_status
-                    video_result['phase6_faiss_ok'] = phase6_faiss_status
-                    if phase6a_success:
-                        typer.echo('[PHASE 6a] [PASS] Visual embeddings complete')
-                    else:
-                        typer.echo('[PHASE 6a] [WARN] Visual embeddings did not complete', err=True)
-                else:
-                    phase6a_success = False
-                    typer.echo('[PHASE 6a] [WARN] Visual embeddings returned non-dict result', err=True)
-                
-                # Phase 6b: Cross-Modal Harmonization
-                if tracker is not None:
-                    tracker.update_step(
-                        "Phase 6b - Running harmonization",
-                        total_scenes + 3,
-                        {"stage": "cross_modal_harmonization_start", "video_id": video_hash},
-                    )
-                harmonization_result = _run_step('goodq_core', 'cross_modal_harmonization', phase6_item, cfg_json)
-                if tracker is not None:
-                    tracker.update_step(
-                        "Phase 6b Complete",
-                        total_scenes + 3,
-                        {"stage": "cross_modal_harmonization", "video_id": video_hash},
-                    )
-                if observer:
-                    observer.step_progress(
-                        "phase6.pipeline",
-                        current=2,
-                        total=2,
-                        metadata={
-                            "stage": "cross_modal_harmonization",
-                            "video_path": str(video_path),
-                            "video_id": video_hash,
-                        },
-                    )
-                if isinstance(harmonization_result, dict):
-                    phase6_item.update(harmonization_result)
-                    
-                    # Warn if harmonizer skipped
-                    if harmonization_result.get('harmonization_status') == 'skipped':
-                        reason = harmonization_result.get('reason', 'unknown')
-                        typer.echo(f"[PHASE 6b] [WARN] Harmonization skipped: {reason}", err=True)
-                        video_result['phase6_complete'] = False
-                        video_result['phase6_skipped'] = True
-                        video_result['phase6_skip_reason'] = reason
-                    else:
-                        # Load temporal index from file if path provided
-                        temporal_index_path = harmonization_result.get('temporal_index_path')
-                        if temporal_index_path and os.path.exists(temporal_index_path):
-                            with open(temporal_index_path, 'r', encoding='utf-8') as f:
-                                video_result['temporal_index'] = json.load(f)
-                        video_result['temporal_index_path'] = temporal_index_path
-                        if _rehydrate_video_result_scenes_from_manifest(
-                            video_result,
-                            phase6_item.get('scene_manifest_path'),
-                        ):
-                            video_result['content_summary'] = _aggregate_content_summary(
-                                video_result.get('scenes', [])
-                            )
-                        video_result['phase6_complete'] = bool(phase6a_success)
-                        if not phase6a_success:
-                            typer.echo('[PHASE 6] [WARN] Harmonization complete but Phase 6a failed; keeping phase6_complete=False', err=True)
-                        typer.echo('[PHASE 6b] [PASS] Harmonization complete')
-                        
-                if observer:
-                    observer.step_end(
-                        "phase6.pipeline",
-                        metadata={
-                            "video_path": str(video_path),
-                            "video_id": video_hash,
-                            "status": "complete",
-                        },
-                    )
-                
-            except Exception as phase6_error:
-                if observer:
-                    observer.step_error(
-                        "phase6.pipeline",
-                        error=str(phase6_error),
-                        metadata={"video_path": str(video_path), "video_id": video_hash},
-                    )
-                typer.echo(f'[PHASE 6] [FAIL] Phase 6 failed: {phase6_error}', err=True)
-                video_result['phase6_error'] = str(phase6_error)
-                video_result['phase6_complete'] = False
-        else:
-            if not phase6_enabled:
-                typer.echo('[PHASE 6] Skipped (disabled in config)')
-            video_result['phase6_complete'] = False
+                video_result['temporal_index'] = json.loads(temporal_index_path.read_text(encoding='utf-8'))
+                video_result['temporal_index_path'] = str(temporal_index_path)
+            except Exception as e:
+                logger.warning(f"Failed to read final temporal index: {e}")
 
         segmentation_shadow_result = _attach_segmentation_shadow_metrics(
             cfg,

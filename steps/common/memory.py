@@ -453,9 +453,9 @@ def compute_file_hash(path: Optional[str]) -> Optional[str]:
 
 
 
-def ensure_scene(cfg: Dict[str, Any], video_hash: str, start: float, end: float, meta: Optional[Dict[str, Any]] = None) -> str:
+def ensure_scene(cfg: Dict[str, Any], video_hash: str, start: float, end: float, meta: Optional[Dict[str, Any]] = None, conn: Optional[sqlite3.Connection] = None) -> str:
 
-    return upsert_scene(cfg, video_hash, start, end, meta)
+    return upsert_scene(cfg, video_hash, start, end, meta, conn=conn)
 
 
 
@@ -528,6 +528,7 @@ def register_scene_bundle(
     frame: Optional[Dict[str, Any]] = None,
     audio: Optional[Dict[str, Any]] = None,
     errors: Optional[Dict[str, Any]] = None,
+    conn: Optional[sqlite3.Connection] = None,
 ) -> Dict[str, Any]:
     summary_text = None
     scene_start = _coerce_time(scene.get('start'), 0.0)
@@ -604,9 +605,14 @@ def register_scene_bundle(
     segments_created: List[str] = []
     db_path = (cfg.get('paths', {}) or {}).get('db_path')
     if db_path:
-        conn = _connect(db_path)
+        local_conn = False
+        if conn is None:
+            conn = _connect(db_path)
+            local_conn = True
         try:
-            with conn:
+            import contextlib
+            ctx = conn if local_conn else contextlib.nullcontext()
+            with ctx:
                 now = datetime.utcnow().isoformat()
                 persisted_scene_id = _make_id("scene", [video_hash, f"{scene_start:.3f}", f"{scene_end:.3f}"])
                 merged_scene_meta: Dict[str, Any] = {}
@@ -747,7 +753,8 @@ def register_scene_bundle(
                             (scene_id, seg_id, 'overlaps', None, overlap_meta_payload, now),
                         )
         finally:
-            conn.close()
+            if local_conn:
+                conn.close()
 
     # Generate and save scene summary
     try:
@@ -1194,7 +1201,7 @@ def _make_id(prefix: str, parts: list[str]) -> str:
     return h.hexdigest()
 
 
-def upsert_scene(cfg: Dict[str, Any], video_hash: str, start: float, end: float, meta: Optional[Dict[str, Any]] = None) -> str:
+def upsert_scene(cfg: Dict[str, Any], video_hash: str, start: float, end: float, meta: Optional[Dict[str, Any]] = None, conn: Optional[sqlite3.Connection] = None) -> str:
 
     db_path = (cfg.get("paths", {}) or {}).get("db_path")
 
@@ -1204,7 +1211,10 @@ def upsert_scene(cfg: Dict[str, Any], video_hash: str, start: float, end: float,
 
     sid = _make_id("scene", [video_hash, f"{start:.3f}", f"{end:.3f}"])
 
-    conn = _connect(db_path)
+    local_conn = False
+    if conn is None:
+        conn = _connect(db_path)
+        local_conn = True
 
     try:
 
@@ -1249,11 +1259,13 @@ def upsert_scene(cfg: Dict[str, Any], video_hash: str, start: float, end: float,
 
         )
 
-        conn.commit()
+        if local_conn:
+            conn.commit()
 
     finally:
 
-        conn.close()
+        if local_conn:
+            conn.close()
 
     return sid
 

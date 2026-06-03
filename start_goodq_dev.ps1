@@ -11,12 +11,12 @@ Start-Service -Name "GoodQ_Qdrant"
 
 # 2. Start API Server (in background, minimized/hidden)
 Write-Host "Starting API Server..."
-Start-Process powershell -ArgumentList "-NoExit", "-WindowStyle", "Minimized", "-Command", "conda run -n goodq_core --no-capture-output python -m api.server" -WorkingDirectory $rootDir
+Start-Process powershell -ArgumentList "-NoExit", "-WindowStyle", "Minimized", "-Command", "C:\Users\jdben\miniconda3\envs\goodq_core\python.exe -m api.server" -WorkingDirectory $rootDir
 
-Start-Sleep -Seconds 3
+Start-Sleep -Seconds 2
 
 # 3. Start Watchdog (in background, minimized/hidden)
 Write-Host "Starting Ingestion Watchdog..."
-Start-Process powershell -ArgumentList "-NoExit", "-WindowStyle", "Minimized", "-Command", "conda run -n goodq_core --no-capture-output python -m cli.watchdog" -WorkingDirectory $rootDir
+Start-Process powershell -ArgumentList "-NoExit", "-WindowStyle", "Minimized", "-Command", "C:\Users\jdben\miniconda3\envs\goodq_core\python.exe -m cli.watchdog" -WorkingDirectory $rootDir
 
 Write-Host "GoodQ4All developer services triggered in background!"

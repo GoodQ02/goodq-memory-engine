@@ -302,6 +302,52 @@ class WatchdogProcessor:
         self.log_dir.mkdir(parents=True, exist_ok=True)
         
         logger.info(f"Watching directory: {self.watch_dir}")
+
+    def cleanup_stale_processing_files(self):
+        """Clean up leftover temp files or folders in the processing directory from previous runs."""
+        logger.info("Checking for stale temporary files in processing directory...")
+        if not self.processing_dir.exists():
+            return
+        
+        cleaned_count = 0
+        try:
+            for item in self.processing_dir.iterdir():
+                if item.name.startswith('.'):
+                    continue
+                
+                # Check if it's a temp/processing folder or file
+                is_stale = False
+                if item.is_dir():
+                    # Temporary folders start with prefixes or match standard subdirs
+                    if (item.name.startswith("video_") or 
+                        item.name.startswith("audio_") or 
+                        item.name.startswith("image_") or 
+                        item.name.startswith("doc_") or
+                        item.name in ("chunks", "audio", "video", "metadata")):
+                        is_stale = True
+                elif item.is_file():
+                    # Direct ingestion leaves files directly in processing dir
+                    ext = item.suffix.lower()
+                    if ext in SUPPORTED_VIDEO.union(SUPPORTED_AUDIO) or ext == ".tmp":
+                        is_stale = True
+                
+                if is_stale:
+                    try:
+                        logger.info(f"Removing stale processing item: {item.name}")
+                        if item.is_dir():
+                            shutil.rmtree(item)
+                        else:
+                            item.unlink()
+                        cleaned_count += 1
+                    except Exception as e:
+                        logger.warning(f"Failed to remove stale item {item.name}: {e}")
+        except Exception as e:
+            logger.error(f"Error scanning processing directory: {e}")
+            
+        if cleaned_count > 0:
+            logger.info(f"Cleaned up {cleaned_count} stale items from the processing directory.")
+        else:
+            logger.info("Processing directory is clean.")
     
     def _build_run_config(self, pipeline_name: str, run_id: Optional[str] = None) -> Dict[str, Any]:
         """Load configs and attach a run context for mission logging."""
@@ -1038,6 +1084,85 @@ class WatchdogProcessor:
             logger.info("Watchdog stopped")
 
 
+def _pid_exists(pid: int) -> bool:
+    """Check if a process ID exists on the system."""
+    try:
+        import psutil
+        return psutil.pid_exists(pid)
+    except ImportError:
+        # Fallback for when psutil is not available
+        if os.name == 'nt':
+            import subprocess
+            try:
+                proc = subprocess.run(
+                    ["tasklist", "/FI", f"PID eq {pid}", "/NH"],
+                    capture_output=True,
+                    text=True,
+                    check=False
+                )
+                return str(pid) in proc.stdout and "INFO:" not in proc.stdout
+            except Exception:
+                pass
+        else:
+            # POSIX standard fallback
+            try:
+                os.kill(pid, 0)
+                return True
+            except OSError:
+                return False
+        return False
+
+
+def _check_system_restart_events():
+    """Query Windows Event Log to check for recent shutdown or restart events."""
+    if os.name != 'nt':
+        return
+    try:
+        import subprocess
+        # Get the latest shutdown event (1074 or 6008)
+        ps_command = (
+            "Get-WinEvent -FilterHashtable @{LogName='System'; Id=1074,6008} -MaxEvents 1 | "
+            "Select-Object TimeCreated, Id, Message | ConvertTo-Json"
+        )
+        proc = subprocess.run(
+            ["powershell", "-NoProfile", "-Command", ps_command],
+            capture_output=True,
+            text=True,
+            encoding='utf-8',
+            errors='ignore',
+            check=False
+        )
+        if proc.returncode == 0 and proc.stdout.strip():
+            import json
+            try:
+                event = json.loads(proc.stdout.strip())
+                if isinstance(event, list):
+                    event = event[0] if event else {}
+                
+                time_str = event.get("TimeCreated")
+                event_id = event.get("Id")
+                message = event.get("Message", "")
+                
+                if time_str and "Date(" in time_str:
+                    try:
+                        ms = int(time_str.split("Date(")[1].split(")")[0])
+                        dt = datetime.fromtimestamp(ms / 1000.0, timezone.utc)
+                        time_str = dt.strftime("%Y-%m-%d %H:%M:%S UTC")
+                    except Exception:
+                        pass
+                
+                logger.info(
+                    "[RESTART_DETECTOR] Detected last system shutdown/restart event ID %s at %s. Details: %s",
+                    event_id, time_str, message.strip().replace('\r', '').replace('\n', ' ')
+                )
+            except Exception as e:
+                logger.debug("Failed to parse Event Log JSON: %s", e)
+        else:
+            logger.debug("No recent shutdown events found in Event Log.")
+    except Exception as e:
+        logger.debug("Failed to query Event Log for system restarts: %s", e)
+
+
 def main():
     """Main entry point with file lock to prevent multiple instances"""
     try:
@@ -1065,8 +1190,7 @@ def main():
             with open(lockfile, 'r') as f:
                 old_pid = int(f.read().strip())
             # Check if process still exists
-            import psutil
-            if psutil.pid_exists(old_pid):
+            if _pid_exists(old_pid):
                 logger.error(f"Watchdog already running (PID {old_pid}). Exiting.")
                 sys.exit(1)
             else:
@@ -1086,7 +1210,15 @@ def main():
         logger.info(f"Import inbox (resolved): {cfg['paths']['import_inbox']}")
         logger.info(f"Active epoch: {Path(cfg['paths']['db_dir']).name}")
         logger.info(f"Watchdog log file: {log_file}")
+        
+        # Check system events for recent restarts
+        _check_system_restart_events()
+        
         watchdog = WatchdogProcessor(cfg, resolved_paths=runtime_paths)
+        
+        # Clean up any leftover temporary files from interrupted runs
+        watchdog.cleanup_stale_processing_files()
+        
         watchdog.run()
     finally:
         # Remove lock on exit

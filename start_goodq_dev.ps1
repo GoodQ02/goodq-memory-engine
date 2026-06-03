@@ -13,6 +13,8 @@ Start-Service -Name "GoodQ_Qdrant"
 Write-Host "Starting API Server..."
 Start-Process powershell -ArgumentList "-NoExit", "-WindowStyle", "Minimized", "-Command", "conda run -n goodq_core --no-capture-output python -m api.server" -WorkingDirectory $rootDir
 
+Start-Sleep -Seconds 3
+
 # 3. Start Watchdog (in background, minimized/hidden)
 Write-Host "Starting Ingestion Watchdog..."
 Start-Process powershell -ArgumentList "-NoExit", "-WindowStyle", "Minimized", "-Command", "conda run -n goodq_core --no-capture-output python -m cli.watchdog" -WorkingDirectory $rootDir

@@ -80,6 +80,47 @@ _BOOTSTRAP_FILE_HANDLER.addFilter(ASCIIFilter())
 logger = logging.getLogger(__name__)
 
 
+def safe_move_file(src: Path, dst: Path) -> Path:
+    """
+    Safely move a file from src to dst.
+    - If dst exists, finds a unique name by appending _1, _2, etc.
+    - If cross-device or permission issue with rename, falls back to copy2 + unlink.
+    """
+    src = Path(src)
+    dst = Path(dst)
+    
+    # 1. Resolve naming collision
+    if dst.exists():
+        parent = dst.parent
+        stem = dst.stem
+        suffix = dst.suffix
+        counter = 1
+        while True:
+            candidate = parent / f"{stem}_{counter}{suffix}"
+            if not candidate.exists():
+                dst = candidate
+                break
+            counter += 1
+
+    # 2. Ensure parent directory exists
+    dst.parent.mkdir(parents=True, exist_ok=True)
+
+    # 3. Attempt move
+    try:
+        # Standard fast rename
+        src.rename(dst)
+        return dst
+    except Exception as e:
+        # Fallback to copy + delete (robust across partitions/drives)
+        logger.warning(f"Rename failed ({e}), falling back to copy+unlink for {src.name}")
+        try:
+            shutil.copy2(src, dst)
+            src.unlink(missing_ok=True)
+            return dst
+        except Exception as copy_err:
+            raise OSError(f"Failed to move file from {src} to {dst} via rename or copy/delete fallback: {copy_err}")
+
+
 def _resolve_watchdog_paths(cfg: Dict[str, Any]) -> Dict[str, Path]:
     runtime_paths = get_runtime_paths(
         cfg,
@@ -477,9 +518,8 @@ class WatchdogProcessor:
                 return
             new_name = f"PROCESSED_{file_path.name}"
             new_path = file_path.parent / new_name
-            if not new_path.exists():
-                file_path.rename(new_path)
-                logger.debug(f"Marked as processed: {new_name}")
+            actual_path = safe_move_file(file_path, new_path)
+            logger.debug(f"Marked as processed: {actual_path.name}")
         except Exception as e:
             logger.error(f"Failed to rename processed file: {e}")
     
@@ -572,8 +612,8 @@ class WatchdogProcessor:
             # Move original to processed
             processed_path = self.processed_dir / f"PROCESSED_{file_path.name}"
             try:
-                file_path.rename(processed_path)
-                logger.debug(f"Moved to processed: {processed_path}")
+                actual_processed_path = safe_move_file(file_path, processed_path)
+                logger.debug(f"Moved to processed: {actual_processed_path}")
             except Exception as e:
                 logger.error(f"Failed to move to processed: {e}")
             
@@ -596,8 +636,8 @@ class WatchdogProcessor:
             # Move to failed
             failed_path = self.failed_dir / f"FAILED_{file_path.name}"
             try:
-                file_path.rename(failed_path)
-                logger.debug(f"Moved to failed: {failed_path}")
+                actual_failed_path = safe_move_file(file_path, failed_path)
+                logger.debug(f"Moved to failed: {actual_failed_path}")
             except Exception as e:
                 logger.error(f"Failed to move to failed: {e}")
             

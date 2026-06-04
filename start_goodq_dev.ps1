@@ -5,19 +5,24 @@ $ErrorActionPreference = 'SilentlyContinue'
 
 $rootDir = 'L:\GOODCUBE\projects\goodq4all_public'
 
+# Import interpreter bindings to locate conda executable
+. "$rootDir\scripts\_lib\interpreter_bindings.ps1"
+$condaExe = Get-GoodQCondaExe
+
 # 1. Start Qdrant service if present
 Write-Host "Checking Qdrant service..."
 Start-Service -Name "GoodQ_Qdrant"
 
 # 2. Start API Server (in background, minimized/hidden)
 Write-Host "Starting API Server..."
-Start-Process powershell -ArgumentList "-NoExit -WindowStyle Minimized -Command conda run -n goodq_core python -m api.server" -WorkingDirectory $rootDir
+Start-Process powershell -ArgumentList "-NoExit -WindowStyle Minimized -Command `"& '$condaExe' run -n goodq_core python -m api.server`"" -WorkingDirectory $rootDir
 
 Start-Sleep -Seconds 2
 
 # 3. Start Watchdog (in background, minimized/hidden)
 Write-Host "Starting Ingestion Watchdog..."
-Start-Process powershell -ArgumentList "-NoExit -WindowStyle Minimized -Command conda run -n goodq_core python -m cli.watchdog" -WorkingDirectory $rootDir
+Start-Process powershell -ArgumentList "-NoExit -WindowStyle Minimized -Command `"& '$condaExe' run -n goodq_core python -m cli.watchdog`"" -WorkingDirectory $rootDir
 
 Write-Host "GoodQ4All developer services triggered in background!"
+
 
